@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Toast } from './toast'
 
@@ -158,5 +158,146 @@ describe('Toast', () => {
       vi.advanceTimersByTime(500)
     })
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  describe('swipe to dismiss', () => {
+    const elapse = (ms: number) =>
+      act(() => {
+        vi.advanceTimersByTime(ms)
+      })
+    const press = (el: HTMLElement, pointerId = 1, button = 0) =>
+      fireEvent.pointerDown(el, {
+        button,
+        pointerId,
+        clientX: 100,
+        clientY: 100,
+      })
+    const move = (el: HTMLElement, x: number, y: number, pointerId = 1) =>
+      fireEvent.pointerMove(el, {
+        pointerId,
+        clientX: 100 + x,
+        clientY: 100 + y,
+      })
+    const release = (el: HTMLElement, x: number, y: number) =>
+      fireEvent.pointerUp(el, {
+        pointerId: 1,
+        clientX: 100 + x,
+        clientY: 100 + y,
+      })
+    const swipe = (el: HTMLElement, x: number, y: number) => {
+      press(el)
+      move(el, x, y)
+      release(el, x, y)
+    }
+
+    it.each([
+      ['left', -60, 0],
+      ['right', 60, 0],
+      ['up', 0, -60],
+    ])('closes once after a swipe %s', (_, x, y) => {
+      const onClose = vi.fn()
+      render(<Toast message="Hi" onClose={onClose} duration={1000} />)
+      const status = screen.getByRole('status')
+      swipe(status, x, y)
+      expect(status).toHaveClass('opacity-0')
+      expect(status).not.toHaveClass('motion-safe:-translate-y-2')
+      expect(onClose).not.toHaveBeenCalled()
+      elapse(150)
+      expect(onClose).toHaveBeenCalledTimes(1)
+      // The auto-dismiss timer does not close it a second time
+      elapse(1000)
+      expect(onClose).toHaveBeenCalledTimes(1)
+    })
+
+    it.each([
+      ['a short swipe', 20, -20],
+      ['a pull down', 0, 100],
+    ])('springs back from %s', (_, x, y) => {
+      const onClose = vi.fn()
+      render(<Toast message="Hi" onClose={onClose} />)
+      const status = screen.getByRole('status')
+      swipe(status, x, y)
+      expect(status).not.toHaveClass('opacity-0')
+      expect(status.style.translate).toBe('')
+      elapse(1000)
+      expect(onClose).not.toHaveBeenCalled()
+    })
+
+    it('follows the finger while held, but not down', () => {
+      render(<Toast message="Hi" onClose={vi.fn()} />)
+      const status = screen.getByRole('status')
+      press(status)
+      move(status, 30, -10)
+      expect(status.style.translate).toBe('30px -10px')
+      move(status, 0, 50)
+      expect(status.style.translate).toBe('0px 0px')
+    })
+
+    it('waits while held and starts its time again on release', () => {
+      const onClose = vi.fn()
+      render(<Toast message="Hi" onClose={onClose} duration={1000} />)
+      const status = screen.getByRole('status')
+      elapse(800)
+      press(status)
+      elapse(5000)
+      expect(onClose).not.toHaveBeenCalled()
+      release(status, 0, 0)
+      elapse(999)
+      expect(onClose).not.toHaveBeenCalled()
+      elapse(1)
+      expect(onClose).toHaveBeenCalledTimes(1)
+    })
+
+    it.each([
+      ['cancelled', fireEvent.pointerCancel],
+      ['loses its capture', fireEvent.lostPointerCapture],
+    ])('springs back when the gesture is %s', (_, interrupt) => {
+      const onClose = vi.fn()
+      render(<Toast message="Hi" onClose={onClose} />)
+      const status = screen.getByRole('status')
+      press(status)
+      move(status, 60, 0)
+      interrupt(status, { pointerId: 1, clientX: 160 })
+      expect(status.style.translate).toBe('')
+      elapse(1000)
+      expect(onClose).not.toHaveBeenCalled()
+    })
+
+    it('follows only the first finger', () => {
+      render(<Toast message="Hi" onClose={vi.fn()} />)
+      const status = screen.getByRole('status')
+      press(status, 1)
+      move(status, 30, 0)
+      press(status, 2)
+      move(status, 90, 0, 2)
+      expect(status.style.translate).toBe('30px 0px')
+    })
+
+    it('ignores a press on the action and a secondary button', () => {
+      const onClose = vi.fn()
+      render(
+        <Toast
+          message="Hi"
+          onClose={onClose}
+          action={{ label: 'Undo', onClick: vi.fn() }}
+        />,
+      )
+      swipe(screen.getByRole('button', { name: 'Undo' }), 60, 0)
+      const status = screen.getByRole('status')
+      press(status, 1, 2)
+      move(status, 100, 0)
+      release(status, 100, 0)
+      elapse(1000)
+      expect(onClose).not.toHaveBeenCalled()
+    })
+
+    it('cannot be grabbed while it fades out', () => {
+      render(<Toast message="Hi" onClose={vi.fn()} duration={1000} />)
+      const status = screen.getByRole('status')
+      elapse(900)
+      press(status)
+      move(status, 30, 0)
+      expect(status.style.translate).toBe('')
+    })
   })
 })

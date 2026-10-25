@@ -243,6 +243,7 @@ There is no Quick actions sheet and no floating button.
 - Durations and easing come from the motion tokens (`duration-fast`, `duration-base`,
   `ease-standard`, `ease-emphasized`); Terminal is the fastest style and Native the slowest
 - Animate opacity, transform and colours
-- Toasts appear near the top, with status colours, so they never cover the toolbar
+- Toasts appear near the top, with status colours, so they never cover the toolbar; a swipe up or
+  sideways dismisses one, and holding it pauses its timer
 - Sidebar: collapsible on desktop (icon-only when collapsed)
 - Fullscreen: desktop only (Fullscreen API), toggle in the header, syncs with F11/Esc
