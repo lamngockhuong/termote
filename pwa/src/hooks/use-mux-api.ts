@@ -1205,6 +1205,86 @@ export async function findFiles(
   return res.json()
 }
 
+// One matching line of files/search. text is the line, or a window of it
+// around its first match when long; col is where that window starts in the
+// line and ranges the matches inside it ([start, end)), both in UTF-16 code
+// units, so they index text as a JS string. line is 1-based.
+export interface SearchMatch {
+  line: number
+  text: string
+  col: number
+  ranges: [number, number][]
+}
+
+// more: matching lines of this file past the 100 sent
+export interface SearchFile {
+  path: string
+  matches: SearchMatch[]
+  more: number
+}
+
+// Files of the list the search did not read: sensitive names, dot-paths
+// under a home folder, binary (or not UTF-8) and larger than 1 MiB.
+export interface SearchSkipped {
+  sensitive: number
+  hidden: number
+  binary: number
+  tooLarge: number
+}
+
+// truncated: 2000 lines were sent and more matched. incomplete: some files
+// were not searched (time or size budget, a list cut short) or a very long
+// line was matched on its start only.
+export interface SearchResponse {
+  root: string
+  isRepo: boolean
+  files: SearchFile[]
+  truncated: boolean
+  incomplete: boolean
+  skipped: SearchSkipped
+}
+
+export interface SearchQuery {
+  // Searched as typed, never trimmed
+  q: string
+  root?: string
+  matchCase: boolean
+  wholeWord: boolean
+  regex: boolean
+  // Globs a path must match one of / must match none of
+  files: string[]
+  skip: string[]
+  // Directory names never walked outside a repo (find's, shares its list)
+  exclude: string[]
+  // Read the file list again (the user refreshed)
+  fresh?: boolean
+}
+
+// The lines of the files under the pane's root that match q, grouped by
+// file in path order. A refusal is a RequestError with the server's code
+// (invalid_regex, invalid_glob, invalid_exclude, busy), or a 409 with the
+// root once it moved.
+export async function searchFiles(
+  paneId: string,
+  query: SearchQuery,
+  signal?: AbortSignal,
+): Promise<SearchResponse> {
+  const url = filesUrl(paneId, 'search', {
+    q: query.q,
+    root: query.root,
+    case: query.matchCase ? '1' : undefined,
+    word: query.wholeWord ? '1' : undefined,
+    regex: query.regex ? '1' : undefined,
+    files: query.files,
+    skip: query.skip,
+    exclude: query.exclude,
+    fresh: query.fresh ? '1' : undefined,
+  })
+  const res = await fetch(url, { signal })
+  if (!res.ok) throw await requestError(res, true)
+  return res.json()
+}
+
 // A file's size and the sha256 a delete takes as its baseHash, never its
 // contents (a sensitive file's too). hash is absent past 512 MiB, or for
 // something other than a regular file.

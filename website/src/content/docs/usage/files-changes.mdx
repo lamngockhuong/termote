@@ -119,8 +119,9 @@ shows the path.
 - A file that git ignores is not searched unless **Include ignored** (the switch next to the box,
   shown only in a git repository) is on. Those results are dimmed and tagged `ignored`. The
   choice is remembered on this device.
-- A name that usually holds secrets shows a lock, as in the tree. Only names are searched, never
-  contents.
+- A name that usually holds secrets shows a lock, as in the tree. Only names are searched here;
+  the contents of files are searched in the **Search** tab (see
+  [Searching File Contents](#searching-file-contents)).
 - Only the first 200 matches are shown (`More than 200 matches — type more to narrow`). In a very
   large repository or folder the search can stop early, and the list says
   `Search stopped early in a large tree`.
@@ -134,6 +135,51 @@ The folders never searched for ignored files are set in Settings → Files →
 always found, even under one of them.
 
 Paths Termote never serves (see [Never Shown](#never-shown)) never appear in the results.
+
+## Searching File Contents
+
+The **Files | Search** switch at the top of Files shows the **Search** tab, which searches the
+text of the files under the root. On a desktop, Ctrl+Shift+F (Cmd+Shift+F on a Mac) opens it and
+puts the cursor in the box, from anywhere in Files; from the terminal the keys stay the
+terminal's.
+
+- The search runs as you type, after a short pause, once the box holds at least 2 characters.
+  The text is searched as typed: spaces at either end count.
+- **Match case**, **Whole word** and **Regular expression** (the buttons next to the box) change
+  how the text matches; they are remembered on this device. Without Match case, case is ignored.
+  A regular expression uses Go's syntax (RE2); whole words are made of the letters `A`–`Z`,
+  `a`–`z`, digits and `_`. A regular expression that can match empty text, such as `a*`, is
+  refused (`This pattern matches empty text`): write `a+` instead.
+- The **…** button shows two more boxes: **Files to include** and **Files to exclude**, each a
+  comma-separated list of patterns such as `*.ts, src/`. A pattern without `/` matches the file
+  name in any folder; `**` stands for any number of folders; a pattern ending in `/` matches
+  everything in that folder.
+- Results are grouped by file, with the number of matching lines; each line shows its number and
+  the matches highlighted. Groups past the first 50 files start closed. Tap a line, or press Enter
+  on it, to open the file at that line, highlighted in the middle of the view. Markdown, CSV/TSV
+  and SVG files open as their source in that tab, whatever the preview settings say. Back returns
+  to the same results. The arrow keys move between the box and the results, and Escape goes back
+  to the box.
+- At most 2000 lines are shown (`Showing the first 2000 lines`), and 100 lines per file (the rest
+  is counted under the file). A search stops after 5 seconds or 256 MiB read
+  (`Stopped early: some files were not searched`); a line longer than 16 KiB is searched on its
+  start only. Two searches can run at once on the server; a third says `Search busy, try again`.
+- If the pane's directory changed since the search, the results are dimmed and cannot be opened
+  until the next search.
+
+The files searched are the ones **Find a file** lists without **Include ignored**. These are
+never searched:
+
+- files git ignores, in a git repository;
+- files that may contain secrets (see
+  [Files That May Contain Secrets](#files-that-may-contain-secrets)), counted under the results
+  (`2 sensitive files not searched`);
+- dot-files and dot-folders when the folder shown is your home folder or holds it (shell
+  histories and tool settings hold secrets under ordinary names), also counted;
+- binary files, files that are not UTF-8 text, and files larger than 1 MiB;
+- paths Termote never serves (see [Never Shown](#never-shown)).
+
+A view-only device searches the same files it can open.
 
 ## Editing a File
 

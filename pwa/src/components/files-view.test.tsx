@@ -23,6 +23,7 @@ const mockHash = vi.fn()
 const mockDelete = vi.fn()
 const mockRestore = vi.fn()
 const mockRename = vi.fn()
+const mockSearch = vi.fn()
 vi.mock('../hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-mux-api')>()),
   fetchFilesTree: (...a: unknown[]) => mockTree(...a),
@@ -33,6 +34,7 @@ vi.mock('../hooks/use-mux-api', async (orig) => ({
   deleteFile: (...a: unknown[]) => mockDelete(...a),
   restoreFile: (...a: unknown[]) => mockRestore(...a),
   renameFile: (...a: unknown[]) => mockRename(...a),
+  searchFiles: (...a: unknown[]) => mockSearch(...a),
 }))
 const mockDownload = vi.fn()
 vi.mock('../utils/download-file', () => ({
@@ -620,6 +622,127 @@ describe('FilesView search', () => {
     // Cleared: the tree as it was, src opened down to the file
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: '' } })
     expect(item('src')).toHaveAttribute('aria-expanded', 'true')
+  })
+})
+
+describe('FilesView content search', () => {
+  const answer = (root = '/home/kim/app') => ({
+    root,
+    isRepo: true,
+    files: [
+      {
+        path: 'src/a.ts',
+        matches: [{ line: 2, text: 'foo', col: 0, ranges: [[0, 3]] }],
+        more: 0,
+      },
+    ],
+    truncated: false,
+    incomplete: false,
+    skipped: { sensitive: 0, hidden: 0, binary: 0, tooLarge: 0 },
+  })
+
+  beforeEach(() => {
+    mockSearch.mockReset()
+    mockSearch.mockResolvedValue(answer())
+    mockContent.mockResolvedValue({
+      root: '/home/kim/app',
+      path: 'src/a.ts',
+      size: 9,
+      text: 'x\nfoo\ny',
+      hash: 'h',
+      editable: true,
+    })
+  })
+
+  const searchBox = () =>
+    screen.getByRole('searchbox', { name: 'Search file contents' })
+
+  it('a result opens its file at the line, and Back shows the same results without a request', async () => {
+    await show()
+    fireEvent.click(screen.getByRole('radio', { name: 'Search' }))
+    expect(screen.queryByRole('tree')).toBeNull()
+    fireEvent.change(searchBox(), { target: { value: 'foo' } })
+    const hit = await screen.findByRole('button', { name: /^2foo/ })
+    fireEvent.click(hit)
+    const code = await screen.findByTestId('code-block')
+    await waitFor(() =>
+      expect(code.querySelector('[data-line="2"]')).toHaveClass('bg-accent/15'),
+    )
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({
+      block: 'center',
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Back to files' }))
+    expect(searchBox()).toHaveValue('foo')
+    expect(screen.getByRole('button', { name: /^2foo/ })).toBeInTheDocument()
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 350))
+    })
+    expect(mockSearch).toHaveBeenCalledTimes(1)
+    // The Files tab keeps the tree
+    fireEvent.click(screen.getByRole('radio', { name: 'Files' }))
+    expect(screen.getByRole('tree')).toBeInTheDocument()
+  })
+
+  it('Ctrl+Shift+F from inside Files shows and focuses the search, from a file too', async () => {
+    await show()
+    fireEvent.keyDown(item('src'), {
+      key: 'F',
+      code: 'KeyF',
+      ctrlKey: true,
+      shiftKey: true,
+    })
+    expect(searchBox()).toHaveFocus()
+    fireEvent.click(screen.getByRole('radio', { name: 'Files' }))
+    fireEvent.click(item('README.md'))
+    await screen.findByRole('button', { name: 'Back to files' })
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Back to files' }), {
+      key: 'f',
+      code: 'KeyF',
+      metaKey: true,
+      shiftKey: true,
+    })
+    expect(searchBox()).toHaveFocus()
+  })
+
+  it('other keys, and the shortcut from a dialog, are left alone', async () => {
+    await show()
+    const tree = screen.getByRole('tree')
+    for (const k of [
+      { key: 'F', code: 'KeyF', ctrlKey: true },
+      { key: 'F', code: 'KeyF', shiftKey: true },
+      { key: 'F', code: 'KeyF', ctrlKey: true, shiftKey: true, altKey: true },
+      { key: 'G', code: 'KeyG', ctrlKey: true, shiftKey: true },
+    ])
+      fireEvent.keyDown(tree, k)
+    expect(
+      screen.queryByRole('searchbox', { name: 'Search file contents' }),
+    ).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'New file' }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.keyDown(within(dialog).getByRole('textbox'), {
+      key: 'F',
+      code: 'KeyF',
+      ctrlKey: true,
+      shiftKey: true,
+    })
+    expect(
+      screen.queryByRole('searchbox', { name: 'Search file contents' }),
+    ).toBeNull()
+  })
+
+  it('a refresh with a content query searches again with fresh', async () => {
+    await show()
+    fireEvent.click(screen.getByRole('radio', { name: 'Search' }))
+    fireEvent.change(searchBox(), { target: { value: 'foo' } })
+    await screen.findByRole('button', { name: /^2foo/ })
+    fireEvent.click(screen.getByRole('button', { name: /refresh/i }))
+    await waitFor(() =>
+      expect(mockSearch).toHaveBeenLastCalledWith(
+        '%1',
+        expect.objectContaining({ fresh: true }),
+        expect.any(AbortSignal),
+      ),
+    )
   })
 })
 

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -216,5 +217,57 @@ func TestFilesHoldsHome(t *testing.T) {
 	f.homeDirs = []string{home}
 	if !f.holdsHome(home) || f.holdsHome(filepath.Join(home, "src")) {
 		t.Error("homeDirs not counted")
+	}
+}
+
+// A view-only client searches what it may read: tracked and untracked files
+// git does not ignore, never through a link to an ignored one, and never
+// makes the server rebuild the list.
+func TestViewOnlyFilesSearch(t *testing.T) {
+	repo, links := viewOnlyRepo(t)
+	_, h := viewFilesFixture(t, repo)
+	const base = "/api/mux/panes/0/files/search?q="
+	search := func(req *http.Request) []string {
+		t.Helper()
+		rec := serve(h, req)
+		return searchPaths(decodeSearch(t, rec.Code, rec.Body.Bytes()))
+	}
+	if got := search(viewRequest("GET", base+"TOKEN", "")); len(got) != 0 {
+		t.Errorf("view search of an ignored file: %q", got)
+	}
+	// A full client searches no ignored file either, but reads a link to
+	// one, as its tree and content do.
+	var want []string
+	if links {
+		want = []string{"link"}
+	}
+	if got := search(fullRequest(base + "TOKEN")); !slices.Equal(got, want) {
+		t.Errorf("full search = %q, want %q", got, want)
+	}
+	// A link the list holds that leads out of the root is never read
+	outside := t.TempDir()
+	writeFile(t, filepath.Join(outside, "o.txt"), "hello outside\n")
+	if os.Symlink(filepath.Join(outside, "o.txt"), filepath.Join(repo, "out")) == nil {
+		// The full request reads the list again, holding the link
+		if got := search(fullRequest(base + "outside&fresh=1")); len(got) != 0 {
+			t.Errorf("full search through a link out of the root: %q", got)
+		}
+		if got := search(viewRequest("GET", base+"outside", "")); len(got) != 0 {
+			t.Errorf("view search through a link out of the root: %q", got)
+		}
+		os.Remove(filepath.Join(repo, "out"))
+	}
+	if got := search(viewRequest("GET", base+"hello", "")); !slices.Equal(got, []string{"a.txt"}) {
+		t.Errorf("view search of an untracked file = %q", got)
+	}
+	writeFile(t, filepath.Join(repo, "later.txt"), "hello later\n")
+	if got := search(viewRequest("GET", base+"later&fresh=1", "")); len(got) != 0 {
+		t.Errorf("view fresh rebuilt the list: %q", got)
+	}
+	if got := search(fullRequest(base + "later&fresh=1")); !slices.Equal(got, []string{"later.txt"}) {
+		t.Errorf("full fresh = %q", got)
+	}
+	if got := search(viewRequest("GET", base+"later", "")); !slices.Equal(got, []string{"later.txt"}) {
+		t.Errorf("view after a full fresh = %q", got)
 	}
 }

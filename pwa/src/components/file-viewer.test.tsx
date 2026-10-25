@@ -2004,3 +2004,155 @@ describe('a draft found when the file is read', () => {
     ).toBeNull()
   })
 })
+
+describe('FileViewer at a search result', () => {
+  const rerenderAt = (
+    view: ReturnType<typeof show>,
+    over: Partial<Parameters<typeof FileViewer>[0]>,
+  ) =>
+    view.rerender(
+      <ThemeProvider>
+        <FileViewer {...view} {...over} />
+      </ThemeProvider>,
+    )
+
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn()
+  })
+
+  it('shows Markdown as its source for this tab only, the setting unchanged', async () => {
+    mockContent.mockResolvedValue({
+      root: '/r',
+      path: 'a.md',
+      size: 9,
+      text: '# A\n\nfoo',
+    })
+    const view = show({ path: 'a.md', line: 3, jump: 1 })
+    expect(await screen.findByTestId('code-block')).toHaveTextContent('foo')
+    const row = screen
+      .getByTestId('code-block')
+      .querySelector('[data-line="3"]')
+    expect(row).toHaveClass('bg-accent/15')
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({
+      block: 'center',
+    })
+    const toggle = screen.getByRole('button', { name: 'Preview' })
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    expect(localStorage.getItem('termote-settings')).toBeNull()
+    // The user's toggle brings the preview back, the setting as it was
+    fireEvent.click(toggle)
+    expect(
+      await screen.findByRole('heading', { name: 'A' }),
+    ).toBeInTheDocument()
+    expect(localStorage.getItem('termote-settings')).toBeNull()
+    // Another pick: the source again, at its line
+    rerenderAt(view, { path: 'a.md', line: 1, jump: 2 })
+    expect(await screen.findByTestId('code-block')).toBeInTheDocument()
+    expect(
+      screen.getByTestId('code-block').querySelector('[data-line="1"]'),
+    ).toHaveClass('bg-accent/15')
+  })
+
+  it('with Markdown shown as source already, the toggle turns the preview on', async () => {
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ markdownPreview: false }),
+    )
+    mockContent.mockResolvedValue({
+      root: '/r',
+      path: 'a.md',
+      size: 3,
+      text: '# A',
+    })
+    show({ path: 'a.md', line: 1, jump: 1 })
+    await screen.findByTestId('code-block')
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+    expect(
+      await screen.findByRole('heading', { name: 'A' }),
+    ).toBeInTheDocument()
+    expect(
+      JSON.parse(localStorage.getItem('termote-settings')!).markdownPreview,
+    ).toBe(true)
+  })
+
+  it('shows a CSV table as its source; the toggle brings the table back', async () => {
+    mockContent.mockResolvedValue({
+      root: '/r',
+      path: 'd.csv',
+      size: 7,
+      text: 'a,b\n1,2\n',
+    })
+    show({ path: 'd.csv', line: 2, jump: 1 })
+    expect(await screen.findByTestId('code-block')).toHaveTextContent('1,2')
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+    expect(await screen.findByRole('grid')).toBeInTheDocument()
+    expect(localStorage.getItem('termote-settings')).toBeNull()
+  })
+
+  it('shows an SVG as text; the Image toggle brings the image back', async () => {
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ svgPreview: true }),
+    )
+    mockImage.mockResolvedValue({
+      url: 'blob:u1',
+      size: 6,
+      type: 'image/svg+xml',
+    })
+    mockContent.mockResolvedValue({
+      root: '/r',
+      path: 'logo.svg',
+      size: 6,
+      text: '<svg/>',
+    })
+    show({ path: 'logo.svg', line: 1, jump: 1 })
+    expect(await screen.findByTestId('code-block')).toHaveTextContent('<svg/>')
+    const toggle = screen.getByRole('button', { name: 'Image' })
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    expect(
+      JSON.parse(localStorage.getItem('termote-settings')!).svgPreview,
+    ).toBe(true)
+  })
+
+  it('an SVG shown as text by the setting: the Image toggle turns the image on', async () => {
+    mockImage.mockResolvedValue({
+      url: 'blob:u1',
+      size: 6,
+      type: 'image/svg+xml',
+    })
+    mockContent.mockResolvedValue({
+      root: '/r',
+      path: 'logo.svg',
+      size: 6,
+      text: '<svg/>',
+    })
+    show({ path: 'logo.svg', line: 1, jump: 1 })
+    await screen.findByTestId('code-block')
+    fireEvent.click(screen.getByRole('button', { name: 'Image' }))
+    expect(
+      JSON.parse(localStorage.getItem('termote-settings')!).svgPreview,
+    ).toBe(true)
+  })
+
+  it('a line picked while editing without changes is not told', async () => {
+    mockContent.mockResolvedValue(editable('x\ny'))
+    const view = await startEdit()
+    rerenderAt(view, { canEdit: true, line: 2, jump: 5 })
+    expect(view.notify).not.toHaveBeenCalledWith(
+      'Unsaved changes: line 2 may have moved',
+    )
+  })
+
+  it('a line picked over unsaved changes is told, the draft shown as it is', async () => {
+    mockContent.mockResolvedValue(editable('x\ny'))
+    const view = await startEdit()
+    type('changed')
+    rerenderAt(view, { canEdit: true, line: 2, jump: 5 })
+    expect(view.notify).toHaveBeenCalledWith(
+      'Unsaved changes: line 2 may have moved',
+    )
+    expect(textarea()).toHaveValue('changed')
+  })
+})

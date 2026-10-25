@@ -745,6 +745,40 @@ describe('tabs', () => {
     expect(result.current.active).toBeUndefined()
   })
 
+  it('opens at a line: a new tab, an open one, the same line again', async () => {
+    const { result } = await loaded()
+    act(() => result.current.open('a.ts', { line: 12, col: 4 }))
+    const first = result.current.active
+    expect(first).toMatchObject({ line: 12, col: 4, scrollTop: undefined })
+    expect(first?.jump).toBeGreaterThan(0)
+    // The same line again moves there again
+    act(() => result.current.open('a.ts', { line: 12, col: 4 }))
+    expect(result.current.active?.jump).toBeGreaterThan(first?.jump as number)
+    // A tab scrolled by the user drops the line, keeps where it is
+    result.current.setScroll(result.current.activeId as string, 30)
+    expect(result.current.tabs[0]).toMatchObject({
+      line: undefined,
+      col: undefined,
+      scrollTop: 30,
+    })
+    // An open tab goes to the line asked for, its offset dropped
+    act(() => result.current.open('a.ts', { line: 3 }))
+    expect(result.current.active).toMatchObject({
+      line: 3,
+      scrollTop: undefined,
+      anchor: undefined,
+    })
+    // A link followed in the tab, and Back, start without it
+    await act(() => result.current.follow({ path: 'docs/guide.md' }, 0))
+    expect(result.current.active?.line).toBeUndefined()
+    act(() => result.current.open('docs/guide.md', { line: 5 }))
+    act(() => result.current.back())
+    expect(result.current.active).toMatchObject({
+      path: 'a.ts',
+      line: undefined,
+    })
+  })
+
   it('setScroll keeps the offset without telling readers', async () => {
     const { result } = await loaded()
     act(() => result.current.open('a.md', { anchor: 'usage' }))

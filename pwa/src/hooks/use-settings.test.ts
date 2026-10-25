@@ -238,6 +238,16 @@ describe('useSettings', () => {
     expect(saved.findExcludes).toEqual(['x'])
   })
 
+  it('searches contents without the options until turned on, and keeps them', () => {
+    const { result } = renderHook(() => useSettings())
+    const { searchCase, searchWord, searchRegex } = result.current.settings
+    expect([searchCase, searchWord, searchRegex]).toEqual([false, false, false])
+    act(() => result.current.updateSetting('searchRegex', true))
+    const saved = JSON.parse(localStorage.getItem('termote-settings')!)
+    expect(saved.searchRegex).toBe(true)
+    expect(saved.searchCase).toBe(false)
+  })
+
   it('reads a broken saved search setting as its default', () => {
     localStorage.setItem(
       'termote-settings',

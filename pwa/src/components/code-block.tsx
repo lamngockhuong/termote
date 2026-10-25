@@ -54,20 +54,37 @@ interface Props {
   wrap: boolean
   // Where it starts scrolled to (a tab shown again)
   scrollTop?: number
+  // A line (1-based) to show in the middle and highlight instead, each
+  // time jump changes (a search result picked, the same one again too)
+  line?: number
+  jump?: number
 }
 
 // A text file with line numbers, highlighted once the worker answers; plain
 // until then and whenever it does not.
-export function CodeBlock({ text, path, wrap, scrollTop }: Props) {
+export function CodeBlock({ text, path, wrap, scrollTop, line, jump }: Props) {
   const { resolvedTheme } = useTheme()
   const lines = useMemo(() => splitLines(text), [text])
   const [tokens, setTokens] = useState<Token[][] | null>(null)
   const frame = useRef<HTMLDivElement>(null)
+  // The line picked last, highlighted until the next pick
+  const [marked, setMarked] = useState<number>()
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: only where it opens
   useLayoutEffect(() => {
+    if (line) return
     if (scrollTop && frame.current) frame.current.scrollTop = scrollTop
   }, [])
+
+  // The rows are there before the tokens (plain text first): once per pick
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once per pick
+  useLayoutEffect(() => {
+    if (!line) return
+    setMarked(line)
+    frame.current
+      ?.querySelector(`[data-line="${line}"]`)
+      ?.scrollIntoView?.({ block: 'center' })
+  }, [jump])
 
   useEffect(() => {
     let live = true
@@ -101,8 +118,12 @@ export function CodeBlock({ text, path, wrap, scrollTop }: Props) {
             ))
           }
           return (
-            // biome-ignore lint/suspicious/noArrayIndexKey: a line is its number
-            <div key={i} className="flex bg-bg">
+            <div
+              // biome-ignore lint/suspicious/noArrayIndexKey: a line is its number
+              key={i}
+              data-line={i + 1}
+              className={`flex ${marked === i + 1 ? 'bg-accent/15' : 'bg-bg'}`}
+            >
               <span
                 aria-hidden="true"
                 className={`${GUTTER} text-fg-subtle`}

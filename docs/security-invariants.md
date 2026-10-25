@@ -320,8 +320,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   directory (WSL `/mnt/c`, casefold, vfat), so `--workspace /users/a` with the home
   `/Users/a` sets `.`, and a path that only matches without case keeps the home's own spelling;
   `container up` first spells each existing name of `--workspace` as its directory lists it
-  (`diskSpelling`), since a runtime's VM shares `/Users` and compares names with case), never with `reveal=1` (`requireFilesRead`), and `files/find` ignores `fresh=1` and
-  `ignored=1`. Tree, content, raw and diff serve a view-only client only the paths of the root's
+  (`diskSpelling`), since a runtime's VM shares `/Users` and compares names with case), never with `reveal=1` (`requireFilesRead`), `files/find` ignores `fresh=1` and
+  `ignored=1`, and `files/search` searches exactly that tracked list and ignores `fresh=1`. Tree, content, raw and diff serve a view-only client only the paths of the root's
   tracked list (`git ls-files -co --exclude-standard`, Find's 30 s cache: a new file shows up to
   30 s late) and the directories above them, by the path and by where its symlinks lead (a diff or
   a version from git status: where it leads only, so a deleted file's diff shows); names match
@@ -838,6 +838,40 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `context.WithoutCancel` (the PWA aborts the previous request at each key), cached 30 s per
   root + `SafeDir` + kind (+ the sorted excludes; a failure is not kept), dropped by `forgetRoot` on a save, a create, a
   delete and a restore, and by `fresh=1` (the PWA's refresh)
+- **Searching file contents** (`GET files/search?q=&root=&case=1&word=1&regex=1&files=…&skip=…&exclude=…&fresh=1`,
+  `server/files_search.go`, `server/files_search_glob.go`): the GET guards of the other files
+  routes. `q` is 1–256 bytes, never trimmed. `files`/`skip` (repeated) are at most 20 globs
+  each, of at most 255 bytes, no NUL or `\`, at most 4 `**` (400 `invalid_glob`), matched by
+  dynamic programming over (pattern part, path component), so a `**` pattern costs parts ×
+  depth `path.Match` calls; `exclude` is Find's (same parser, 400 `invalid_exclude`). The
+  pattern is Go `regexp` (RE2): a regex is parsed alone before any wrapping (whole word, case),
+  so wrapping never makes an invalid one valid, and a program past `searchMaxProg` (1000)
+  instructions is refused; every failure is 400 `invalid_regex` with a generic message, never
+  Go's text. A regex that can match empty text (`a*`, `^`, `x*|foo`) is 400 `empty_match`: its
+  non-empty matches would take a scan of the line per position. RE2 costs input × program size,
+  so a line is matched on its first 16 KiB only (a cut line → `incomplete`), once to tell whether
+  it matches; its other matches are looked for in the 240-rune window sent, at most 240 of
+  them, never in the whole line (no search costs a scan of the line per match). There is no
+  whole-file search: the deadline is checked before each line, so a scan overruns its budget by
+  at most one line's search. Nothing reaches git
+  argv: a query starting with `-` is text. The list is Find's (`findLists`, the same cache key
+  with the PWA's excludes; a view-only client searches its `req.view`, tracked + untracked not
+  ignored, and `fresh=1` is ignored for it), sorted by path. Per file, before anything is
+  opened: the `files`/`skip` globs; under a root holding a home dir (`holdsHome`) every
+  dot-path is skipped (`skipped.hidden`: shell histories hold secrets under ordinary names);
+  then one `EvalSymlinks` shared by `deniedPaths` (deny dirs, the git dir, `.git` parts, on
+  both paths), the view-only target check (where a link leads must be listed), the dot-path
+  rule on where a link leads (a link of an ordinary name to `.bash_history`) and
+  `isSensitive` on both paths (never opened, `skipped.sensitive`). Only then `os.Root`
+  `OpenFile` with `openNonblock`, and every check on the handle (`readTextFile`, shared with
+  content): regular, at most 1 MiB (`skipped.tooLarge`), a NUL in the first 8 KiB stops the read
+  (`skipped.binary`), not UTF-8 → `skipped.binary`. Caps: 2000 matching lines (`truncated`), 100
+  per file (`more`), 256 MiB read and 5 s from the scan's start, kept 500 ms short of the
+  request deadline (`incomplete`: answered with what was found, never an empty body), 2 scans
+  server-wide without waiting (429 `busy`), 4 workers at most 8 files ahead of the merge.
+  A client that leaves gets nothing written; the response ends once every worker has (each
+  stops at its next line, or when a read returns), and the slot is freed after that. No git runs beyond Find's `ls-files`. Matches are sent as a window
+  of 240 runes of the line with UTF-16 ranges; Go's `\b` is ASCII only
 - **Deleting a file** (`POST files/delete?root=`, `POST files/restore?root=`,
   `server/files_delete.go`, `server/files_trash*.go`): the guards of a create (`writeGuard`, the
   handler's cross-site check, `requireWriteRole`, `root` required), body read first (8 KB);
