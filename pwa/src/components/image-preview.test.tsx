@@ -8,11 +8,11 @@ import { ImagePreview, imageErrorText } from './image-preview'
 
 const opened = vi.fn()
 // Where the viewer returns focus when its opener is gone
-const returned: { ref?: RefObject<HTMLElement | null> } = {}
+const returned: { ref?: RefObject<HTMLElement | null>; failed?: boolean } = {}
 vi.mock('../hooks/use-image-viewer', () => ({
   useImageViewer: (_src: string, ref: RefObject<HTMLElement | null>) => {
     returned.ref = ref
-    return { open: opened, viewer: null }
+    return { open: opened, viewer: null, failed: !!returned.failed }
   },
 }))
 
@@ -227,5 +227,18 @@ describe('imageErrorText', () => {
     expect(imageErrorText(new TypeError('offline'))).toBe(
       'Could not load the image',
     )
+  })
+
+  it('says so, under the image, when the full-screen viewer could not load', () => {
+    returned.failed = true
+    const view = render(
+      <ImagePreview state={ready()} alt="logo.png" missing="" />,
+    )
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Could not open the image',
+    )
+    returned.failed = false
+    view.rerender(<ImagePreview state={ready()} alt="logo.png" missing="" />)
+    expect(screen.queryByRole('status')).toBeNull()
   })
 })

@@ -118,13 +118,17 @@ export function MermaidBlock({
   // The block takes focus when the image button goes (the diagram is drawn
   // again and fails, or the text changed), whether it had focus then or the
   // viewer it opened returns focus later
-  const { open, viewer } = useImageViewer(
+  const { open, viewer, failed } = useImageViewer(
     result?.ok ? result.url : undefined,
     ref,
     result?.ok
       ? (say) => <MermaidExport image={result} name={name} notify={say} />
       : undefined,
   )
+  // The viewer's code could not be loaded: it closed, the diagram stays
+  useEffect(() => {
+    if (failed) notify('Could not open the image')
+  }, [failed, notify])
   const keepFocus = useCallback(
     (el: HTMLButtonElement | null) => () => {
       if (document.activeElement === el) ref.current?.focus()
