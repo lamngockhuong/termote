@@ -143,7 +143,7 @@ func TestListCodexSkillsJunctions(t *testing.T) {
 	mklinkJ(t, filepath.Join(codexHome, "skills/gone"), filepath.Join(codexHome, "nope"))
 	mklinkJ(t, filepath.Join(root, ".codex/skills/proj"), filepath.Join(root, "shared/real"))
 
-	got := listCodexSkills(root, codexHome, home, nil).Commands
+	got := listCodexSkills(filesRoot{Root: root}, codexHome, home, nil).Commands
 	want := []agentCommand{
 		{"real", "in the project", "project", "skill"},
 		{"managed", "installed by a manager", "user", "skill"},

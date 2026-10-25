@@ -80,7 +80,7 @@ func (a *agentAPI) handleCommands(w http.ResponseWriter, r *http.Request) {
 	var res commandsResponse
 	switch s.Agent {
 	case "claude":
-		root := a.paneRoot(r, paneID)
+		root := a.paneRoot(r, paneID).Root
 		if root != "" && a.files.denied(root, ".claude") {
 			root = ""
 		}
@@ -88,9 +88,9 @@ func (a *agentAPI) handleCommands(w http.ResponseWriter, r *http.Request) {
 			return listAgentCommands(root, s.ClaudeDir, a.home, a.commandSkip), nil
 		})
 	case "codex":
-		root := a.paneRoot(r, paneID)
-		res, _ = a.commands.do("codex\x00"+root+"\x00"+s.CodexHome, func() (commandsResponse, error) {
-			return listCodexSkills(root, s.CodexHome, a.home, a.commandSkip), nil
+		pr := a.paneRoot(r, paneID)
+		res, _ = a.commands.do("codex\x00"+pr.Root+"\x00"+pr.Dir+"\x00"+s.CodexHome, func() (commandsResponse, error) {
+			return listCodexSkills(pr, s.CodexHome, a.home, a.commandSkip), nil
 		})
 	default:
 		// Only the dirs of an agent read here are ever opened.
@@ -100,20 +100,21 @@ func (a *agentAPI) handleCommands(w http.ResponseWriter, r *http.Request) {
 }
 
 // paneRoot returns the pane's root as the files routes find it (its git
-// toplevel), or "" without one (a backend without pane directories, a
-// directory gone): the user's commands are still listed then.
-func (a *agentAPI) paneRoot(r *http.Request, paneID string) string {
+// toplevel) with the pane's directory, or no root without one (a backend
+// without pane directories, a directory gone): the user's commands are still
+// listed then.
+func (a *agentAPI) paneRoot(r *http.Request, paneID string) filesRoot {
 	f := a.files
 	if f == nil || f.dirs == nil || !f.m.Caps().Files {
-		return ""
+		return filesRoot{}
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), filesTimeout)
 	defer cancel()
 	pr, err := f.roots.paneRoot(ctx, f.dirs, paneID)
 	if err != nil {
-		return ""
+		return filesRoot{}
 	}
-	return pr.Root
+	return pr
 }
 
 // commandSkip refuses a file the files routes would not show either: under
@@ -181,9 +182,6 @@ type commandOpts struct {
 	prefix string   // put before each name: "<plugin>:" for a plugin's
 	allow  []string // resolved dirs a symlinked skill dir may lead into
 	skip   func(dir, rel string) bool
-	// visits, when set, is a commandsMaxVisited budget shared by every
-	// reader given it, instead of one budget per dir.
-	visits *int
 }
 
 // commandReader lists one dir's commands and skills. The dir is opened as an
@@ -223,10 +221,6 @@ func readSkillDir(dir, rel string, opts commandOpts) []agentCommand {
 	}
 	defer rt.Close()
 	r := &commandReader{commandOpts: opts, rt: rt, dir: dir}
-	if opts.visits != nil {
-		r.visited = *opts.visits
-		defer func() { *opts.visits = r.visited }()
-	}
 	r.readSkills(rel)
 	return r.out
 }
@@ -368,12 +362,22 @@ func (r *commandReader) readLinkedSkill(p string) (commandMeta, bool) {
 // readHead reads the start of p when it is a regular file, not a symlink,
 // and skip does not refuse it.
 func (r *commandReader) readHead(p string) (commandMeta, bool) {
-	fi, err := r.rt.Lstat(p)
-	if err != nil || !fi.Mode().IsRegular() {
+	head, ok := r.readHeadBytes(p)
+	if !ok {
 		return commandMeta{}, false
 	}
+	return parseCommandMeta(head), true
+}
+
+// readHeadBytes returns the first commandHeadSize bytes of p, as readHead
+// reads them.
+func (r *commandReader) readHeadBytes(p string) ([]byte, bool) {
+	fi, err := r.rt.Lstat(p)
+	if err != nil || !fi.Mode().IsRegular() {
+		return nil, false
+	}
 	if r.skip != nil && r.skip(r.dir, filepath.FromSlash(p)) {
-		return commandMeta{}, false
+		return nil, false
 	}
 	return readCommandHead(r.rt, p, fi)
 }
@@ -388,18 +392,18 @@ type commandMeta struct {
 // opened is still the one checked as checked (p can be replaced in between,
 // by a FIFO or a symlink to a file that is never read). A read that fails
 // part way leaves the description to what was read.
-func readCommandHead(rt *os.Root, p string, checked os.FileInfo) (commandMeta, bool) {
+func readCommandHead(rt *os.Root, p string, checked os.FileInfo) ([]byte, bool) {
 	f, err := rt.OpenFile(p, os.O_RDONLY|openNonblock, 0)
 	if err != nil {
-		return commandMeta{}, false
+		return nil, false
 	}
 	defer f.Close()
 	if fi, err := f.Stat(); err != nil || !os.SameFile(fi, checked) {
-		return commandMeta{}, false
+		return nil, false
 	}
 	head := make([]byte, commandHeadSize)
 	n, _ := io.ReadFull(f, head)
-	return parseCommandMeta(head[:n]), true
+	return head[:n], true
 }
 
 // parseCommandMeta reads name, description and user-invocable from YAML

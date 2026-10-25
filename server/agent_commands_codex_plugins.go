@@ -14,8 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-
-	"github.com/BurntSushi/toml"
+	"time"
 )
 
 // codexPluginMaxSkillRoots caps the skill dirs one plugin's manifest may name.
@@ -26,135 +25,6 @@ const codexPluginMaxSkillRoots = 8
 // config.toml of CODEX_HOME only: a project's .codex/config.toml, -c overrides
 // and the requirements an admin sets are not read. When Termote cannot tell
 // whether Codex would load a plugin, its skills are left out.
-
-// codexConfigFile is the part of config.toml read here. Codex decodes the
-// plugins table as a whole: one entry of the wrong type and no plugin loads.
-type codexConfigFile struct {
-	Features map[string]any            `toml:"features"`
-	Plugins  map[string]toml.Primitive `toml:"plugins"`
-}
-
-// codexPluginsDefault is [plugins._default] (PluginsDefaultConfig).
-type codexPluginsDefault struct {
-	Enabled *bool `toml:"enabled"`
-}
-
-// codexPluginConfig is one [plugins."<name>@<marketplace>"] entry
-// (PluginConfig). Only enabled is used; the others are decoded for their
-// types. Keys Codex does not know are ignored, by Codex too.
-type codexPluginConfig struct {
-	Enabled        *bool                           `toml:"enabled"`
-	RemotePluginID *string                         `toml:"remote_plugin_id"`
-	ReleaseID      *string                         `toml:"release_id"`
-	AutoProvision  *bool                           `toml:"auto_provision"`
-	MCPServers     map[string]codexPluginMCPServer `toml:"mcp_servers"`
-}
-
-// codexPluginMCPServer is PluginMcpServerConfig; ema_auth takes any value.
-type codexPluginMCPServer struct {
-	Enabled                  *bool                         `toml:"enabled"`
-	EMAAuth                  any                           `toml:"ema_auth"`
-	DefaultToolsApprovalMode *string                       `toml:"default_tools_approval_mode"`
-	EnabledTools             []string                      `toml:"enabled_tools"`
-	DisabledTools            []string                      `toml:"disabled_tools"`
-	Tools                    map[string]codexPluginMCPTool `toml:"tools"`
-}
-
-// codexPluginMCPTool is McpServerToolConfig.
-type codexPluginMCPTool struct {
-	ApprovalMode     *string `toml:"approval_mode"`
-	OutputTokenLimit *int64  `toml:"output_token_limit"`
-}
-
-// validApprovalMode reports whether m names an AppToolApproval.
-func validApprovalMode(m *string) bool {
-	return m == nil || *m == "auto" || *m == "prompt" || *m == "writes" || *m == "approve"
-}
-
-// valid reports whether Codex would decode the entry: the enum values and
-// the positive output_token_limit (a NonZeroUsize) are not checked by the
-// TOML decoder.
-func (c codexPluginConfig) valid() bool {
-	for _, s := range c.MCPServers {
-		if !validApprovalMode(s.DefaultToolsApprovalMode) {
-			return false
-		}
-		for _, tool := range s.Tools {
-			if !validApprovalMode(tool.ApprovalMode) || (tool.OutputTokenLimit != nil && *tool.OutputTokenLimit <= 0) {
-				return false
-			}
-		}
-	}
-	return true
-}
-
-// codexPluginID is a parsed "<name>@<marketplace>" key.
-type codexPluginID struct{ name, marketplace string }
-
-// codexEnabledPlugins returns, in key order, the plugins config.toml turns
-// on: an entry's enabled, else [plugins._default] enabled, else on. config.toml
-// may be a symlink (dotfile managers link it); it must be a regular file of
-// at most pluginJSONMax, opened without blocking. A file that does not
-// decode, [features] plugins = false, or an entry Codex would refuse turns
-// every plugin off. Keys that are not a valid plugin id and the openai-*
-// marketplaces (curated, bundled and remote ones, loaded by Codex only for
-// some sign-ins) are left out.
-func codexEnabledPlugins(codexHome string) []codexPluginID {
-	f, err := os.OpenFile(filepath.Join(codexHome, "config.toml"), os.O_RDONLY|openNonblock, 0)
-	if err != nil {
-		return nil
-	}
-	defer f.Close()
-	if fi, err := f.Stat(); err != nil || !fi.Mode().IsRegular() || fi.Size() > pluginJSONMax {
-		return nil
-	}
-	b, err := io.ReadAll(io.LimitReader(f, pluginJSONMax))
-	if err != nil {
-		return nil
-	}
-	var cfg codexConfigFile
-	md, err := toml.Decode(string(b), &cfg)
-	if err != nil {
-		return nil
-	}
-	if v, ok := cfg.Features["plugins"]; ok {
-		if on, isBool := v.(bool); !isBool || !on {
-			return nil
-		}
-	}
-	defaultOn := true
-	if p, ok := cfg.Plugins["_default"]; ok {
-		var d codexPluginsDefault
-		if md.PrimitiveDecode(p, &d) != nil {
-			return nil
-		}
-		if d.Enabled != nil {
-			defaultOn = *d.Enabled
-		}
-	}
-	var out []codexPluginID
-	for key, p := range cfg.Plugins {
-		if key == "_default" {
-			continue
-		}
-		var c codexPluginConfig
-		if md.PrimitiveDecode(p, &c) != nil || !c.valid() {
-			return nil
-		}
-		on := defaultOn
-		if c.Enabled != nil {
-			on = *c.Enabled
-		}
-		id, ok := parseCodexPluginID(key)
-		if on && ok && !strings.HasPrefix(id.marketplace, "openai-") {
-			out = append(out, id)
-		}
-	}
-	sort.Slice(out, func(i, j int) bool {
-		return out[i].name+"@"+out[i].marketplace < out[j].name+"@"+out[j].marketplace
-	})
-	return out
-}
 
 // parseCodexPluginID splits key at its last "@" (PluginId::parse).
 func parseCodexPluginID(key string) (codexPluginID, bool) {
@@ -394,28 +264,35 @@ const (
 	manifestStop // Codex stops here: the plugin has no manifest
 )
 
+// codexManifest is what a plugin's manifest says of its skills.
+type codexManifest struct {
+	ns    string
+	roots []string // skill dirs, relative to the plugin's dir
+	agent bool     // an Agent Plugin: one level of each dir is read
+}
+
 // codexPluginManifest reads the manifest of the plugin at dir (resolved) in
 // Codex's order (find_plugin_manifest_path): plugin.json when its $schema is
 // an agent-plugins.org one (an AgentPlugin), else .codex-plugin/,
 // .claude-plugin/ then .cursor-plugin/plugin.json (Legacy). A candidate
 // whose dir or file is a symlink or not a real dir or regular file ends the
-// search. It returns the namespace and the skill dirs, relative to dir.
-func codexPluginManifest(dir string, skip func(dir, rel string) bool) (string, []string, bool) {
+// search.
+func codexPluginManifest(dir string, skip func(dir, rel string) bool) (codexManifest, bool) {
 	rt, err := os.OpenRoot(dir)
 	if err != nil {
-		return "", nil, false
+		return codexManifest{}, false
 	}
 	defer rt.Close()
 	b, st := readPluginManifest(rt, dir, "plugin.json", skip)
 	if st == manifestStop {
-		return "", nil, false
+		return codexManifest{}, false
 	}
 	if st == manifestFound {
 		if head, ok := jsonObject(b, false); ok {
 			var s string
 			if json.Unmarshal(head["$schema"], &s) == nil && strings.HasPrefix(s, agentPluginSchemaPrefix) {
 				ns, ok := parseAgentPluginManifest(b)
-				return ns, []string{"skills"}, ok
+				return codexManifest{ns: ns, roots: []string{"skills"}, agent: true}, ok
 			}
 		}
 	}
@@ -423,12 +300,13 @@ func codexPluginManifest(dir string, skip func(dir, rel string) bool) (string, [
 		b, st := readPluginManifest(rt, dir, rel, skip)
 		switch st {
 		case manifestStop:
-			return "", nil, false
+			return codexManifest{}, false
 		case manifestFound:
-			return parseLegacyPluginManifest(b, dir)
+			ns, roots, ok := parseLegacyPluginManifest(b, dir)
+			return codexManifest{ns: ns, roots: roots}, ok
 		}
 	}
-	return "", nil, false
+	return codexManifest{}, false
 }
 
 // readPluginManifest reads rel under rt when its dir is a real dir and it is
@@ -603,33 +481,44 @@ func validLegacyManifest(b []byte) bool {
 // twice keeps its last value, as in a serde_json Value, or with noDup refuses
 // the object, as serde does decoding a struct.
 func jsonObject(b []byte, noDup bool) (map[string]json.RawMessage, bool) {
-	dec := json.NewDecoder(bytes.NewReader(b))
-	if t, err := dec.Token(); err != nil || t != json.Delim('{') {
+	m, dups, ok := jsonMembers(b)
+	if !ok || noDup && len(dups) > 0 {
 		return nil, false
 	}
+	return m, true
+}
+
+// jsonMembers decodes a JSON object as jsonObject does, a key met twice
+// keeping its last value, and returns the keys met twice.
+func jsonMembers(b []byte) (map[string]json.RawMessage, map[string]bool, bool) {
+	dec := json.NewDecoder(bytes.NewReader(b))
+	if t, err := dec.Token(); err != nil || t != json.Delim('{') {
+		return nil, nil, false
+	}
 	m := map[string]json.RawMessage{}
+	dups := map[string]bool{}
 	for dec.More() {
 		t, err := dec.Token()
 		if err != nil {
-			return nil, false
+			return nil, nil, false
 		}
 		k, _ := t.(string)
 		var v json.RawMessage
 		if err := dec.Decode(&v); err != nil {
-			return nil, false
+			return nil, nil, false
 		}
-		if _, dup := m[k]; dup && noDup {
-			return nil, false
+		if _, dup := m[k]; dup {
+			dups[k] = true
 		}
 		m[k] = v
 	}
 	if t, err := dec.Token(); err != nil || t != json.Delim('}') {
-		return nil, false
+		return nil, nil, false
 	}
 	if _, err := dec.Token(); err != io.EOF {
-		return nil, false
+		return nil, nil, false
 	}
-	return m, true
+	return m, dups, true
 }
 
 func isJSONNull(raw json.RawMessage) bool { return string(raw) == "null" }
@@ -696,19 +585,20 @@ func validCodexMention(name string) bool {
 	return name != ""
 }
 
-// readCodexPluginSkills lists the skills of the plugins config.toml enables
-// that are installed under codexHome/plugins/cache, each named
-// "<namespace>:<skill>", from one level of each skill dir (Codex walks a
-// Legacy plugin's dirs deeper). At most commandsMaxPlugins plugins and
-// commandsMaxPerSource skills are read, and the listings of every plugin
-// share one commandsMaxVisited budget. Every file inside a plugin is read
-// through an os.Root of its resolved dir, never through a symlink, and a
-// symlinked skill dir may only lead elsewhere in its own plugin.
-func readCodexPluginSkills(codexHome string, skip func(dir, rel string) bool) []agentCommand {
+// readCodexPluginSkills lists the skills of the plugins cfg enables that are
+// installed under codexHome/plugins/cache, each named "<namespace>:<skill>":
+// a Legacy plugin's skill dirs are walked as deep as Codex walks them, an
+// Agent Plugin's one level. At most commandsMaxPlugins plugins are read; the
+// version listings of every plugin share one commandsMaxVisited budget, and
+// each plugin's skill dirs a codexBudget of their own, under deadline. Every
+// file inside a plugin is read through an os.Root of its resolved dir, never
+// through a symlink, and a symlinked skill dir may only lead elsewhere in its
+// own plugin.
+func readCodexPluginSkills(cfg codexConfig, codexHome string, skip func(dir, rel string) bool, deadline time.Time) []codexSkill {
 	if codexHome == "" {
 		return nil
 	}
-	ids := codexEnabledPlugins(codexHome)
+	ids := codexEnabledPlugins(cfg)
 	if len(ids) == 0 {
 		return nil
 	}
@@ -723,9 +613,9 @@ func readCodexPluginSkills(codexHome string, skip func(dir, rel string) bool) []
 	defer cache.Close()
 	visits := 0
 	plugins := 0
-	var out []agentCommand
+	var out []codexSkill
 	for _, id := range ids {
-		if plugins == commandsMaxPlugins || visits >= commandsMaxVisited {
+		if plugins == commandsMaxPlugins || visits >= commandsMaxVisited || !codexNow().Before(deadline) {
 			break
 		}
 		dir := codexActivePluginDir(cache, cacheDir, id, &visits)
@@ -733,22 +623,16 @@ func readCodexPluginSkills(codexHome string, skip func(dir, rel string) bool) []
 			continue
 		}
 		plugins++
-		ns, roots, ok := codexPluginManifest(dir, skip)
-		if !ok || !validCodexMention(ns) {
+		m, ok := codexPluginManifest(dir, skip)
+		if !ok || !validCodexMention(m.ns) {
 			continue
 		}
-		opts := commandOpts{source: "plugin", prefix: ns + ":", allow: []string{dir}, skip: skip, visits: &visits}
-		for _, rel := range roots {
-			if skip != nil && skip(dir, filepath.FromSlash(rel)) {
-				continue
-			}
-			for _, c := range readSkillDir(dir, rel, opts) {
-				if validCodexMention(c.Name) {
-					out = append(out, c)
-				}
-			}
-			if len(out) >= commandsMaxPerSource {
-				return out[:commandsMaxPerSource]
+		o := codexWalkOpts{source: "plugin", prefix: m.ns + ":", recursive: !m.agent, allow: []string{dir},
+			skip: skip, budget: &codexBudget{deadline: deadline}}
+		for _, rel := range m.roots {
+			out = append(out, walkCodexSkills(dir, rel, o)...)
+			if len(out) >= codexSkillMaxTotal {
+				return out[:codexSkillMaxTotal]
 			}
 		}
 	}

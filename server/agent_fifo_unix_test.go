@@ -107,8 +107,8 @@ func TestReadCommandHeadSwapped(t *testing.T) {
 	// Not swapped: read.
 	writeTestFile(t, dir, "ok.md")
 	ok, _ := os.Lstat(filepath.Join(dir, "ok.md"))
-	if m, read := readCommandHead(rt, "ok.md", ok); !read || m.description != "hi" {
-		t.Errorf("ok.md = %+v, %v", m, read)
+	if b, read := readCommandHead(rt, "ok.md", ok); !read || parseCommandMeta(b).description != "hi" {
+		t.Errorf("ok.md = %q, %v", b, read)
 	}
 }
 
@@ -140,13 +140,13 @@ func TestCodexUserThreadReplaced(t *testing.T) {
 func TestCodexPluginFilesFIFO(t *testing.T) {
 	home := t.TempDir()
 	mkfifo(t, home, "config.toml", false)
-	if returnsSoon(t, func() bool { return len(codexEnabledPlugins(home)) != 0 }) {
+	if returnsSoon(t, func() bool { return len(codexEnabledPlugins(readCodexConfig(home))) != 0 }) {
 		t.Error("FIFO config accepted")
 	}
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, ".codex-plugin"), 0o755)
 	mkfifo(t, filepath.Join(dir, ".codex-plugin"), "plugin.json", false)
-	if returnsSoon(t, func() bool { _, _, ok := codexPluginManifest(dir, nil); return ok }) {
+	if returnsSoon(t, func() bool { _, ok := codexPluginManifest(dir, nil); return ok }) {
 		t.Error("FIFO manifest accepted")
 	}
 }
@@ -162,7 +162,24 @@ func TestCommandDirsFIFO(t *testing.T) {
 	writeFile(t, filepath.Join(dir, ".codex-plugin/plugin.json"), `{"name":"b"}`)
 	mkfifo(t, dir, "skills", false)
 	mkfifo(t, home, "skills", false)
-	if returnsSoon(t, func() bool { return len(listCodexSkills("", home, "", nil).Commands) != 0 }) {
+	if returnsSoon(t, func() bool { return len(listCodexSkills(filesRoot{}, home, "", nil).Commands) != 0 }) {
 		t.Error("a FIFO was listed")
+	}
+}
+
+// A FIFO deep in a skill dir, in place of a dir, a SKILL.md or a namespace
+// manifest, never holds a walk.
+func TestWalkCodexSkillsFIFO(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "a/b/c"), 0o755)
+	mkfifo(t, filepath.Join(dir, "a/b/c"), "d", false)
+	os.MkdirAll(filepath.Join(dir, "a/s"), 0o755)
+	mkfifo(t, filepath.Join(dir, "a/s"), "SKILL.md", false)
+	os.MkdirAll(filepath.Join(dir, "a/p/.codex-plugin"), 0o755)
+	mkfifo(t, filepath.Join(dir, "a/p/.codex-plugin"), "plugin.json", false)
+	writeFile(t, filepath.Join(dir, "a/p/ok/SKILL.md"), skill("ok", "x"))
+	got := ""
+	if returnsSoon(t, func() bool { got = walkNames(dir, ".", codexWalkOpts{recursive: true}); return true }); got != "ok" {
+		t.Errorf("skills = %q", got)
 	}
 }

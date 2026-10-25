@@ -657,3 +657,86 @@ func TestGitLazyFetchRunsNothingWithoutNoLazyFetch(t *testing.T) {
 		}
 	}
 }
+
+// The pane's directory comes with its root, and settles as the root does:
+// a foreground process passing through a subdir does not move it.
+func TestPaneRootDir(t *testing.T) {
+	requireGit(t)
+	ctx := context.Background()
+	repo, _ := filepath.EvalSymlinks(t.TempDir())
+	gitInit(t, repo)
+	sub := filepath.Join(repo, "a", "b")
+	os.MkdirAll(sub, 0o755)
+	rr := newRootResolver(newGitRunner())
+	now := time.Now()
+	rr.now = func() time.Time { return now }
+	d := &fakePaneDirer{dir: repo, key: "%1"}
+	get := func() filesRoot {
+		t.Helper()
+		r, err := rr.paneRoot(ctx, d, "0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	if r := get(); r.Root != repo || r.Dir != repo || !r.IsRepo {
+		t.Fatalf("first = %+v", r)
+	}
+	d.dir = sub
+	if r := get(); r.Root != repo || r.Dir != repo {
+		t.Errorf("one read of a subdir moved the dir: %+v", r)
+	}
+	now = now.Add(rootSettle)
+	if r := get(); r.Root != repo || r.Dir != sub {
+		t.Errorf("subdir seen for rootSettle: %+v", r)
+	}
+}
+
+// A git that outlasts its timeout is an error: the resolver decides no root
+// from it, and does not fall back to a plain directory.
+func TestResolveGitTimeoutIsAnError(t *testing.T) {
+	requireUnixShell(t)
+	g := newGitRunner()
+	g.bin = writeScript(t, "sleep 5")
+	g.timeout = 200 * time.Millisecond
+	rr := newRootResolver(g)
+	if _, err := rr.resolve(context.Background(), t.TempDir()); !errors.Is(err, errGitTimeout) {
+		t.Errorf("err = %v, want timeout", err)
+	}
+}
+
+// A .git file that is not a "gitdir:" line does not lead to the git dir.
+func TestGitEntryLeadsToNotAGitfile(t *testing.T) {
+	top := t.TempDir()
+	gitDir := filepath.Join(top, ".git")
+	writeFile(t, gitDir, "not a gitfile\n")
+	if gitEntryLeadsTo(top, gitDir) {
+		t.Error("a .git file without gitdir: leads to the git dir")
+	}
+}
+
+// A pane moving between dirs of a new repo still moves the root once the
+// repo has been seen for rootSettle: the directory settles apart.
+func TestPaneRootSettlesAcrossSubdirs(t *testing.T) {
+	requireGit(t)
+	ctx := context.Background()
+	a, _ := filepath.EvalSymlinks(t.TempDir())
+	b, _ := filepath.EvalSymlinks(t.TempDir())
+	gitInit(t, b)
+	sub := filepath.Join(b, "sub")
+	os.MkdirAll(sub, 0o755)
+	rr := newRootResolver(newGitRunner())
+	now := time.Now()
+	rr.now = func() time.Time { return now }
+	d := &fakePaneDirer{dir: a, key: "%1"}
+	rr.paneRoot(ctx, d, "0")
+	var r filesRoot
+	for i := range 6 {
+		d.dir = []string{b, sub}[i%2]
+		r, _ = rr.paneRoot(ctx, d, "0")
+		now = now.Add(rootSettle * 3 / 4)
+	}
+	if r.Root != b {
+		t.Errorf("root still %q after moving within the new repo", r.Root)
+	}
+}

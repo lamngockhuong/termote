@@ -600,30 +600,52 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `commands` (`server/agent_commands_codex.go`) lists skills only, suggested after `$` at the
   start of any word (`/` offers Codex 0.162.0's built-ins from the PWA's static list, `/exit` and
   `/logout` confirmed; a message ending with `$name` is sent with a trailing space, else Codex's
-  own list takes the Enter): `.codex/skills`/`.agents/skills` under the pane root (`project`),
-  `CODEX_HOME/skills` and `~/.agents/skills` (`user`), `CODEX_HOME/skills/.system` and
-  `/etc/codex/skills` (`system`), each through `readSkillDir` under the Claude Code rules
-  (`os.Root`, 8 KB, no file symlink, the files routes' skip); a symlinked skill dir is followed
-  only into those dirs or the root (a Windows junction too, with the Windows rules above). Plugin
-  skills (`plugin`, `server/agent_commands_codex_plugins.go`, as Codex 0.164.0 loads them):
-  only the plugins `CODEX_HOME/config.toml` enables (opened nonblocking, a regular file of at
-  most 1 MB, a symlink allowed, decoded with `BurntSushi/toml`; a file that does not decode,
-  `[features] plugins = false` or an entry of the wrong type → no plugin), keys checked as
-  `validate_plugin_segment`, every `openai-*` marketplace left out; the install is a version dir
-  under the resolved `CODEX_HOME/plugins/cache/<marketplace>/<name>` that is a real directory
-  (no symlink, no junction), resolves inside the cache, and whose listing did not fill the visit
-  budget; its manifest is read through an `os.Root` of it, never through a symlink (a symlinked
-  manifest or manifest dir ends the search: no skill), with the skip and a 1 MB cap and the
-  `SameFile` check, its keys matched exactly (a Legacy manifest naming a key twice is refused);
-  manifest `skills` paths start with `./`, have no `..`, are not absolute and
-  stay inside the plugin (sorted, deduplicated, at most 8); each is read with `readSkillDir`,
-  a symlinked skill dir allowed only into the plugin itself; at most 50 plugins and 500 skills,
-  one 5000-entry visit budget for every plugin's listings; names must be `[A-Za-z0-9_:-]` and
-  pass `validCommandName`; a `project`/`user`/`system` skill named as a plugin's is left out.
-  Nothing from `config.toml` or a manifest but these names and the skills' descriptions leaves
-  the server, and their errors are not returned. Custom prompts (gone from Codex), the project's
-  `.codex/config.toml`, `[[skills.config]]` toggles, project trust and nested skill dirs (also a
-  Legacy plugin's, which Codex walks) are not read
+  own list takes the Enter), as Codex 0.164.0 loads them. The roots: `.codex/skills` and
+  `.agents/skills` of the pane root and, when the root is a repo holding the pane's directory
+  (`filesRoot.Dir`, settled with the root), of each dir down to it, at most 32, none at or below
+  a `.git` or inside the repo's git dir, each opened through an `os.Root` of the root and refused
+  when it resolves outside it (`project`; Codex's trust is not looked at, it does not gate
+  skills); `CODEX_HOME/skills` and `~/.agents/skills` (`user`); `CODEX_HOME/skills/.system`
+  (unless `[skills.bundled] enabled = false`) and `/etc/codex/skills` (`system`). A project dir
+  that resolves to a user one is read once, as the user's. Each root is walked breadth first
+  (`walkCodexSkills`, `server/agent_commands_codex_walk.go`): a `SKILL.md` regular file at most
+  6 dirs down (the root's own too), hidden dirs and anything the files routes' skip refuses left
+  out, a dir of more than 4096 entries skipped whole; at most 2000 dirs and 20000 entries per
+  root (every project root sharing one budget, every plugin a budget of its own), 64 followed
+  links per walk, 2000 skills per reply, and 2 s for the whole listing, which then returns what
+  it read. A symlinked dir (a Windows junction too, with the Windows rules above) is followed,
+  through an `os.Root` of its target, only into the dirs of its own scope (the pane root; the two
+  user dirs; `/etc/codex/skills`; a plugin's dir), never into `CODEX_HOME/plugins` or
+  `CODEX_HOME/skills/.system` nor to a target behind a hidden dir, never twice; the system root
+  follows none. Only the first 8 KB of a `SKILL.md` is read (no file symlink, the `SameFile`
+  check); a skill without Codex's front matter (`---` lines, a description) is left out. A plugin
+  manifest above a skill (`.codex-plugin`/`.claude-plugin`/`.cursor-plugin/plugin.json`, a real
+  dir and a regular file of at most 1 MB, through the same `os.Root`) names it `<plugin>:<skill>`;
+  above the root, it is looked for no higher than the dir the root belongs to (the pane root,
+  home, `CODEX_HOME`, `/etc/codex`). Plugin skills (`plugin`,
+  `server/agent_commands_codex_plugins.go`): only the plugins `CODEX_HOME/config.toml` enables,
+  every `openai-*` marketplace left out. `config.toml` is opened nonblocking, a regular file of
+  at most 1 MB, a symlink allowed, decoded with `BurntSushi/toml` into plain values whose keys
+  are matched exactly, as serde does (`Enabled` is not `enabled`); a file that does not decode,
+  `[features] plugins = false` or a plugin entry of the wrong type → no plugin. Keys are checked
+  as `validate_plugin_segment`; the install is a version dir under the resolved
+  `CODEX_HOME/plugins/cache/<marketplace>/<name>` that is a real directory (no symlink, no
+  junction), resolves inside the cache, and whose listing did not fill the 5000-entry visit
+  budget shared by every plugin's listing; its manifest is read through an `os.Root` of it, never
+  through a symlink (a symlinked manifest or manifest dir ends the search: no skill), with the
+  skip, a 1 MB cap and the `SameFile` check, its keys matched exactly (a Legacy manifest naming a
+  key twice is refused); manifest `skills` paths start with `./`, have no `..`, are not absolute
+  and stay inside the plugin (sorted, deduplicated, at most 8); a Legacy plugin's are walked 6
+  dirs down without nested manifests, an Agent Plugin's one level; at most 50 plugins. Names must
+  be `[A-Za-z0-9_:-]`, at most 64 runes before the namespace and 129 with it. `[[skills.config]]`
+  (at most 1000 entries, else none applies; any value of the wrong type → none applies) turns
+  skills off by name or by `SKILL.md` path, before names are deduplicated; a rule's path is
+  expanded (`~`, relative to `config.toml`'s dir), cleaned, and its links resolved only when it
+  lies in a dir listed here, never opened. A skill named as a plugin's is left out. Nothing from
+  `config.toml` or a manifest but these names and the skills' descriptions leaves the server,
+  and their errors are not returned. Custom prompts (gone from Codex), the project's
+  `.codex/config.toml`, profiles, `-c`, `project_root_markers` and `agents/openai.yaml` are not
+  read
 - **Files/Changes** (`/api/mux/panes/{id}/files/*`): GETs that also check
   `Sec-Fetch-Site`/`Origin` (and one write, `PUT files/content`, below); every path is opened through `os.Root` under the pane's root (its
   git toplevel when a `.git` sits at it, else its directory); termote's config/state dirs, the
