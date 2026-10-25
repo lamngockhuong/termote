@@ -256,6 +256,8 @@ export function DeleteFileDialog({
         title="Delete permanently?"
         confirmLabel="Delete permanently"
         destructive
+        // A second ask never defaults to the destructive button
+        defaultAction="cancel"
         onConfirm={() => {
           setAskPermanent(false)
           send(true)

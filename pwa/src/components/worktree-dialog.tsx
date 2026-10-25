@@ -440,6 +440,8 @@ export function WorktreeRemoveDialog({
         title={`Remove worktree "${visibleUnsafe(force.branch)}" anyway?`}
         confirmLabel="Remove anyway"
         destructive
+        // A second ask never defaults to the destructive button
+        defaultAction="cancel"
         onConfirm={() => onConfirm({ force: true, ...force })}
         onCancel={onCancel}
       >

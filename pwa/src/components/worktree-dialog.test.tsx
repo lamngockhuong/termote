@@ -436,6 +436,7 @@ describe('WorktreeRemoveDialog', () => {
       force: { path: '/wt/repo/feat-x', branch: 'feat/x' },
     })
     expect(screen.getByText(/uncommitted or untracked changes/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus()
     fireEvent.click(screen.getByRole('button', { name: 'Remove anyway' }))
     expect(p.onConfirm).toHaveBeenCalledWith({
       force: true,
