@@ -538,6 +538,36 @@ describe('ChatComposer', () => {
     expect(mockSend).toHaveBeenCalledTimes(2)
   })
 
+  it('the buttons sit on a row under the box, the hint only with a keyboard', () => {
+    const actions = () => screen.getByTestId('composer-actions')
+    const after = (a: Node, b: Node) =>
+      !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
+    const { unmount } = render(
+      <ChatComposer {...uploadsProps({ isMobile: true })} />,
+    )
+    expect(actions().contains(box())).toBe(false)
+    expect(after(box(), actions())).toBe(true)
+    expect(actions()).toContainElement(attachButton())
+    expect(actions()).toContainElement(
+      screen.getByRole('button', { name: 'Send' }),
+    )
+    expect(box()).toHaveAttribute('placeholder', 'Message')
+    expect(box()).not.toHaveAttribute('aria-describedby')
+    expect(screen.queryByText('Ctrl+Enter to send')).toBeNull()
+    unmount()
+    render(<ChatComposer {...uploadsProps()} />)
+    expect(box()).toHaveAccessibleDescription('Ctrl+Enter to send')
+  })
+
+  it('a tap on the empty part of the card focuses the box', () => {
+    render(<ChatComposer {...uploadsProps({ isMobile: true })} />)
+    fireEvent.pointerDown(screen.getByTestId('composer-actions'))
+    expect(box()).toHaveFocus()
+    box().blur()
+    fireEvent.pointerDown(attachButton())
+    expect(box()).not.toHaveFocus()
+  })
+
   it('on a phone Enter is a new line, even with Ctrl', () => {
     render(<ChatComposer {...props({ isMobile: true })} />)
     type('hi')
@@ -586,8 +616,7 @@ describe('ChatComposer', () => {
     await send()
     expect(live).toHaveTextContent('Not sent: a dialog is open.')
     type('ệ'.repeat(Math.floor(MAX_MESSAGE_BYTES / 3) + 1))
-    const id = box().getAttribute('aria-describedby')!
-    expect(document.getElementById(id)).toHaveTextContent(/shorten the message/)
+    expect(box()).toHaveAccessibleDescription(/shorten the message/)
   })
 
   it('asks before sending a shell command', async () => {
