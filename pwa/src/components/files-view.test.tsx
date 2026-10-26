@@ -11,8 +11,13 @@ import {
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ViewProps } from '../app-views'
 import { ThemeProvider } from '../contexts/theme-context'
-import { resetFilesStores, useFileDraft } from '../hooks/use-files'
+import {
+  requestFilesFocus,
+  resetFilesStores,
+  useFileDraft,
+} from '../hooks/use-files'
 import { type FileEntry, RequestError } from '../hooks/use-mux-api'
+import { resetAllShortcuts, setShortcut } from '../hooks/use-shortcuts'
 import { FilesView, TREE_DOUBLE_CLICK_MS } from './files-view'
 
 const mockTree = vi.fn()
@@ -728,6 +733,90 @@ describe('FilesView content search', () => {
     expect(
       screen.queryByRole('searchbox', { name: 'Search file contents' }),
     ).toBeNull()
+  })
+
+  it('Ctrl+Shift+F works on a narrow layout too', async () => {
+    await show({ isMobile: true })
+    fireEvent.keyDown(screen.getByRole('tree'), {
+      key: 'F',
+      code: 'KeyF',
+      ctrlKey: true,
+      shiftKey: true,
+    })
+    expect(searchBox()).toHaveFocus()
+  })
+
+  it('follows the content search key the user set', async () => {
+    try {
+      setShortcut('files.searchContent', { key: 'Mod+Alt+F' })
+      await show()
+      const tree = screen.getByRole('tree')
+      fireEvent.keyDown(tree, {
+        key: 'F',
+        code: 'KeyF',
+        ctrlKey: true,
+        shiftKey: true,
+      })
+      expect(
+        screen.queryByRole('searchbox', { name: 'Search file contents' }),
+      ).toBeNull()
+      fireEvent.keyDown(tree, {
+        key: 'f',
+        code: 'KeyF',
+        ctrlKey: true,
+        altKey: true,
+      })
+      expect(searchBox()).toHaveFocus()
+    } finally {
+      resetAllShortcuts()
+    }
+  })
+
+  it('has no content search key once the user removed it', async () => {
+    try {
+      setShortcut('files.searchContent', { key: null })
+      await show()
+      fireEvent.keyDown(screen.getByRole('tree'), {
+        key: 'F',
+        code: 'KeyF',
+        ctrlKey: true,
+        shiftKey: true,
+      })
+      expect(
+        screen.queryByRole('searchbox', { name: 'Search file contents' }),
+      ).toBeNull()
+    } finally {
+      resetAllShortcuts()
+    }
+  })
+
+  it('focuses the file shown when asked from outside', async () => {
+    await show()
+    fireEvent.click(item('README.md'))
+    await screen.findByRole('button', { name: 'Back to files' })
+    act(() => requestFilesFocus('%1', 'file'))
+    expect(document.activeElement).toHaveAttribute('tabindex', '-1')
+    expect(document.activeElement).toContainElement(
+      screen.getByRole('button', { name: 'Back to files' }),
+    )
+  })
+
+  it('focuses the search once when asked from outside, shown or not yet', async () => {
+    requestFilesFocus('%1', 'search')
+    const { unmount } = await show()
+    expect(searchBox()).toHaveFocus()
+    unmount()
+    await show()
+    expect(
+      screen.queryByRole('searchbox', { name: 'Search file contents' }),
+    ).toBeNull()
+    act(() => requestFilesFocus('%1', 'search'))
+    expect(searchBox()).toHaveFocus()
+    // Another pane's request is left for that pane
+    act(() => requestFilesFocus('%2', 'search'))
+    fireEvent.click(screen.getByRole('radio', { name: 'Files' }))
+    act(() => requestFilesFocus('%9', 'search'))
+    expect(screen.getByRole('tree')).toBeInTheDocument()
   })
 
   it('a refresh with a content query searches again with fresh', async () => {

@@ -763,13 +763,17 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `instanceId` (16 random hex digits made once with `crypto/rand`, kept in `<stateDir>/instance-id`
   0600 through `writeStateFile`, made again when unreadable as one; not a secret, never logged;
   the state dir is in `FilesDenyDirs`) names the server. The PWA keeps in `localStorage`, under
-  `termote-{files-tabs,changes-tabs,file-drafts,pane-view}:<instanceId>:<pane key>[:<path>]`
+  `termote-{files-tabs,changes-tabs,file-drafts,pane-view,recent-files}:<instanceId>:<pane key>[:<path>]`
   with the pane's key and group name in each record: the open Files and Changes tabs (paths,
-  scroll offsets, history, table layout), each pane's last view, and the unsaved draft of a file
-  (`root, path, baseHash, base, crlf, text, cells`). Never kept: a tab or draft of a sensitive
-  file the user chose to show (`reveal`/`revealed`: neither its name nor its text), nor such a
-  file in a tab's Back history (an entry marked `reveal`, set by a link or a rename), `intent`,
-  the tree's open directories. A draft is written at once (never delayed) while it differs from
+  scroll offsets, history, table layout), each pane's last view, the unsaved draft of a file
+  (`root, path, baseHash, base, crlf, text, cells`), and the files the user opened lately (at
+  most 20 `root, path` pairs, written when the user opens a file from the tree, a search, a link
+  or the command palette, never when tabs are restored or a file is created). Never kept: a tab
+  or draft of a sensitive file the user chose to show (`reveal`/`revealed`: neither its name nor
+  its text), nor such a file in a tab's Back history (an entry marked `reveal`, set by a link or
+  a rename) or in the files opened lately (showing it, or a rename to it marked `reveal`, takes
+  it out; a sensitive file not shown keeps its path, as its tab does), `intent`, the tree's open
+  directories. A draft is written at once (never delayed) while it differs from
   the text read, removed at once on Save, Discard or back to that text; at most 1,000,000
   characters each and 1,500,000 for all, measured as stored JSON; too big, no room or a
   sensitive file's → in memory only, and `beforeunload` asks (it asks only for such drafts, for
@@ -797,6 +801,28 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   psmux keys panes by window index, so after windows are renumbered tabs and drafts may not come
   back; a group renamed while the PWA is closed (tmux, Herdr) leaves its records unread; another
   tab of the browser editing the same file: the last write wins
+- **Command palette and app shortcuts** (`pwa/src/components/command-palette.tsx`,
+  `shortcuts-section.tsx`, `pwa/src/utils/shortcuts.ts`, `app-commands.ts`,
+  `pwa/src/hooks/use-shortcuts.ts`; desktop only: `(pointer: fine)` and not the phone layout):
+  no server change and no route of its own. Files are found through `GET files/find` with the
+  Files store's `root` (a 409 moves the store to the pane's root and searches again), and open
+  through the same store as the tree. The keys the user set are kept in `localStorage`
+  `termote-shortcuts` (`{v:1, keys:{<command id>:{key, inTerminal}}}`, one per browser like
+  `termote-settings`, kept after signing out: it holds command ids and key names only, nothing
+  of a server). Read back, an id is kept only when it is in the static list of command ids
+  (`Object.hasOwn`, so `__proto__` and the like are dropped), a key only when it parses, holds
+  Ctrl or Meta (or is F1-F12) and is not one the browser, the editor (Mod+S), the terminal
+  (Ctrl+Shift+C, Ctrl+Shift+V) or text editing (Mod+A/C/V/X/Z) keeps; nothing is written back on reading. One
+  listener on `window` (bubble phase, after the focused element's own handlers) runs a command:
+  never from a dialog, menu or `inert` content (its key is only kept from the browser there),
+  and in the terminal only a command marked to run there, which only a key xterm sends nothing
+  for and the terminal does not use can be (Ctrl+Shift+letter but C and V; on Apple Cmd with a
+  letter, digit or punctuation key, without Ctrl): no key the program in the pane would get is
+  taken. A sensitive file shown (`reveal`) is not written to the files opened lately when its
+  tab opens it again. An agent's command (`/name`, a Codex skill `$name`) is put in front of the
+  Chat draft, or typed into the terminal without Enter only when the pane's command is that
+  agent; nothing is sent, and a view-only client gets neither. Tab, pane and file names are
+  shown through `visibleUnsafe`
 - **Creating a file** (`POST files/create?root=`, `server/files_create.go`): an empty file and
   the directories missing above it (0666/0777 under the umask; directories made before a later
   failure stay, as with `mkdir -p`); the text then goes through `PUT files/content`. Same guards

@@ -15,10 +15,12 @@ import {
   hydrateDrafts,
   isDraftDirty,
   isOpenable,
+  requestFilesFocus,
   resetFilesStores,
   useDirtyCheck,
   useFileDraft,
   useFiles,
+  useFilesFocusRequest,
 } from './use-files'
 import { type FileEntry, type MuxSnapshot, RequestError } from './use-mux-api'
 
@@ -1422,6 +1424,175 @@ describe('tabs kept on the device', () => {
     snapshot('i1', 'other')
     expect(renderHook(() => useFiles('%1')).result.current.tabs).toEqual([])
     expect(localStorage.getItem('termote-files-tabs:i1:@1')).toBeNull()
+  })
+})
+
+describe('files opened lately', () => {
+  beforeEach(() =>
+    setPaneKeys(
+      {
+        instanceId: 'i1',
+        groups: [{ id: '$0', name: 'main', tabs: [{ id: '%1', panes: [] }] }],
+      } as unknown as MuxSnapshot,
+      new Map([['%1', '@1']]),
+    ),
+  )
+  const listing: Record<string, FileEntry[]> = {
+    '': [dir('docs'), file('a.md'), file('b.md')],
+    docs: [file('guide.md')],
+  }
+  const loaded = async () => {
+    mockTree.mockImplementation(async (_p, path: string, root?: string) =>
+      tree(path, listing[path] ?? [], root ?? '/r'),
+    )
+    const hook = renderHook(() => useFiles('%1'))
+    act(() => hook.result.current.load())
+    await waitFor(() => expect(hook.result.current.root).toBe('/r'))
+    return hook
+  }
+  const paths = (r: { current: { recent: { path: string }[] } }) =>
+    r.current.recent.map((f) => f.path)
+
+  it('lists the files the user opened, the latest first, kept on the device', async () => {
+    const { result, unmount } = await loaded()
+    act(() => result.current.open('a.md'))
+    act(() => result.current.open('b.md'))
+    act(() => result.current.open('a.md'))
+    expect(result.current.recent).toEqual([
+      { root: '/r', path: 'a.md' },
+      { root: '/r', path: 'b.md' },
+    ])
+    unmount()
+    flushAll()
+    resetFilesStores()
+    const again = renderHook(() => useFiles('%1'))
+    expect(paths(again.result)).toEqual(['a.md', 'b.md'])
+  })
+
+  it('remembers nothing before the root is known', () => {
+    const { result } = renderHook(() => useFiles('%1'))
+    act(() => result.current.open('a.md'))
+    expect(result.current.recent).toEqual([])
+  })
+
+  it('remembers a followed link and a search pick, not a created file', async () => {
+    const { result } = await loaded()
+    act(() => result.current.open('a.md'))
+    await act(() => result.current.follow({ path: 'b.md' }, 0))
+    await act(() =>
+      result.current.follow({ path: 'docs/guide.md' }, 0, { newTab: true }),
+    )
+    await act(() => result.current.reveal('a.md'))
+    await act(() => result.current.created('new.md', '/r', false))
+    await act(() => result.current.restored('docs/guide.md'))
+    expect(paths(result)).toEqual(['a.md', 'docs/guide.md', 'b.md'])
+  })
+
+  it('drops a file shown as sensitive, and does not take it back', async () => {
+    const { result } = await loaded()
+    act(() => result.current.open('a.md'))
+    act(() => result.current.open('b.md'))
+    act(() => result.current.setReveal(result.current.activeId!))
+    expect(paths(result)).toEqual(['a.md'])
+    act(() => result.current.setReveal(result.current.activeId!))
+    act(() => result.current.setReveal('nope'))
+    expect(paths(result)).toEqual(['a.md'])
+    expect(localStorage.getItem('termote-recent-files:i1:@1')).not.toContain(
+      'b.md',
+    )
+  })
+
+  it('does not take back a file still shown as sensitive when opened again', async () => {
+    const { result } = await loaded()
+    act(() => result.current.open('a.md', { pin: true }))
+    act(() => result.current.open('s.env', { pin: true }))
+    act(() => result.current.setReveal(result.current.activeId!))
+    act(() => result.current.open('a.md'))
+    // Its tab, still showing it
+    act(() => result.current.open('s.env'))
+    act(() => result.current.openFromFind('/r', 's.env'))
+    expect(paths(result)).toEqual(['a.md'])
+    expect(localStorage.getItem('termote-recent-files:i1:@1')).not.toContain(
+      's.env',
+    )
+  })
+
+  it('follows a rename, and drops a file renamed as sensitive or deleted', async () => {
+    const { result } = await loaded()
+    act(() => result.current.open('docs/guide.md'))
+    act(() => result.current.open('a.md'))
+    act(() => fileRenamed('/r', 'a.md', 'c.md', false))
+    expect(paths(result)).toEqual(['c.md', 'docs/guide.md'])
+    // A file not in the list changes nothing
+    act(() => fileRenamed('/r', 'x.md', 'y.md', false))
+    expect(paths(result)).toEqual(['c.md', 'docs/guide.md'])
+    act(() => fileRenamed('/r', 'c.md', 's.env', true))
+    expect(paths(result)).toEqual(['docs/guide.md'])
+    act(() => result.current.deleted('docs'))
+    expect(result.current.recent).toEqual([])
+    // Nothing to drop
+    act(() => result.current.deleted('zz'))
+  })
+
+  it('a find result opens under its root, moving the store there first', async () => {
+    mockTree.mockImplementation(async (_p, path: string, root?: string) =>
+      tree(path, [], root ?? '/r'),
+    )
+    const { result } = renderHook(() => useFiles('%1'))
+    // Not loaded yet: the tab gets the root of the result
+    act(() => result.current.openFromFind('/r', 'a.md'))
+    expect(result.current.root).toBe('/r')
+    expect(result.current.active).toMatchObject({ root: '/r', path: 'a.md' })
+    expect(paths(result)).toEqual(['a.md'])
+    // On that root already
+    act(() => result.current.openFromFind('/r', 'b.md', { pin: true }))
+    expect(result.current.active).toMatchObject({ path: 'b.md', pinned: true })
+    // Another root: the store moves first
+    act(() => result.current.openFromFind('/other', 'c.md'))
+    expect(result.current.root).toBe('/other')
+    expect(result.current.active).toMatchObject({
+      root: '/other',
+      path: 'c.md',
+    })
+  })
+
+  it('a deletion before the root is known changes nothing', () => {
+    mockTree.mockResolvedValue(tree('', []))
+    const { result } = renderHook(() => useFiles('%1'))
+    act(() => result.current.deleted('a.md'))
+    expect(result.current.recent).toEqual([])
+  })
+
+  it('are removed when the user signs out', async () => {
+    const { result } = await loaded()
+    act(() => result.current.open('a.md'))
+    expect(localStorage.getItem('termote-recent-files:i1:@1')).not.toBeNull()
+    signedOut()
+    expect(localStorage.getItem('termote-recent-files:i1:@1')).toBeNull()
+  })
+})
+
+describe('focus asked for from outside Files', () => {
+  it('reaches the pane once, now or when its view mounts', () => {
+    const onRequest = vi.fn()
+    requestFilesFocus('%1', 'search')
+    const { unmount } = renderHook(() => useFilesFocusRequest('%1', onRequest))
+    expect(onRequest).toHaveBeenCalledExactlyOnceWith('search')
+    act(() => requestFilesFocus('%2', 'file'))
+    expect(onRequest).toHaveBeenCalledOnce()
+    act(() => requestFilesFocus('%1', 'file'))
+    expect(onRequest).toHaveBeenLastCalledWith('file')
+    unmount()
+    renderHook(() => useFilesFocusRequest('%1', onRequest))
+    expect(onRequest).toHaveBeenCalledTimes(2)
+  })
+
+  it('is forgotten with the stores', () => {
+    const onRequest = vi.fn()
+    requestFilesFocus('%1', 'search')
+    resetFilesStores()
+    renderHook(() => useFilesFocusRequest('%1', onRequest))
+    expect(onRequest).not.toHaveBeenCalled()
   })
 })
 

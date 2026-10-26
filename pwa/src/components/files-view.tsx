@@ -32,6 +32,7 @@ import {
   joinPath,
   useDirtyCheck,
   useFiles,
+  useFilesFocusRequest,
 } from '../hooks/use-files'
 import { changesMoved } from '../hooks/use-git-changes'
 import { useLongPress } from '../hooks/use-long-press'
@@ -42,10 +43,13 @@ import {
   restoreFile,
 } from '../hooks/use-mux-api'
 import { useSettings } from '../hooks/use-settings'
+import { useShortcutKey } from '../hooks/use-shortcuts'
 import { downloadFile } from '../utils/download-file'
 import { fileNameProblem } from '../utils/file-name'
 import { splitPath } from '../utils/files-format'
 import type { LinkPath } from '../utils/markdown-links'
+import { isApplePlatform } from '../utils/platform'
+import { chordFromEvent, SEARCH_CONTENT_KEY } from '../utils/shortcuts'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import {
   CONTENT_SEARCH_INITIAL,
@@ -305,20 +309,44 @@ function PaneFiles({
     if (query.trim() || search.query) setRefreshTick((n) => n + 1)
   }
 
-  // Ctrl/Cmd+Shift+F from anywhere in Files (never from the terminal, whose
-  // keys stay the pane's, nor from a dialog): the content search, focused
+  const showSearch = () => {
+    f.activate(null)
+    setPane('search')
+    setFocusSearch((n) => n + 1)
+  }
+  // Asked for from outside Files: the content search (its shortcut), or
+  // the file just opened (the command palette)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const [focusPanel, setFocusPanel] = useState(0)
+  useFilesFocusRequest(paneId, (target) => {
+    if (target === 'search') showSearch()
+    else setFocusPanel((n) => n + 1)
+  })
+  useEffect(() => {
+    if (focusPanel) panelRef.current?.focus()
+  }, [focusPanel])
+
+  // The content search's key (Ctrl/Cmd+Shift+F unless the user changed it)
+  // from anywhere in Files, on every layout (never from the terminal, whose
+  // keys stay the pane's, nor from a dialog): the content search, focused.
+  // Handled here, so the app's shortcut dispatcher leaves it.
+  const searchKey = useShortcutKey('files.searchContent', SEARCH_CONTENT_KEY)
+  const isSearchKey = (e: KeyboardEvent) =>
+    searchKey === SEARCH_CONTENT_KEY
+      ? (e.ctrlKey || e.metaKey) &&
+        e.shiftKey &&
+        !e.altKey &&
+        e.key.toLowerCase() === 'f'
+      : !!searchKey && chordFromEvent(e, isApplePlatform()) === searchKey
   const onKeyDown = (e: KeyboardEvent) => {
-    if (!(e.ctrlKey || e.metaKey) || !e.shiftKey || e.altKey) return
-    if (e.key.toLowerCase() !== 'f') return
+    if (!isSearchKey(e)) return
     const target = e.target as HTMLElement
     if (
       target.closest?.('[role="dialog"], [role="alertdialog"], dialog, [inert]')
     )
       return
     e.preventDefault()
-    f.activate(null)
-    setPane('search')
-    setFocusSearch((n) => n + 1)
+    showSearch()
   }
 
   // An entry of the tree to delete: a folder only once it is known empty
@@ -592,13 +620,15 @@ function PaneFiles({
       )}
       <RootCloseDialog count={moved} onResolve={f.resolveRootClose} />
       <div
+        ref={panelRef}
         id={panelId}
+        tabIndex={-1}
         // A tab panel only below the tab bar
         {...(tabBar && {
           role: 'tabpanel',
           'aria-labelledby': tabElementId(panelId, f.activeId),
         })}
-        className="flex min-h-0 flex-1 flex-col"
+        className="flex min-h-0 flex-1 flex-col outline-none"
       >
         {tab ? (
           <FileViewer

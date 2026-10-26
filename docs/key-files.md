@@ -18,6 +18,12 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/hooks/use-pane-text.ts`                  | Pane text for the sheet: server history, else xterm buffer    |
 | `pwa/src/utils/copy-text.ts`                      | Clipboard write, `execCommand('copy')` fallback over HTTP     |
 | `pwa/src/components/app-header.tsx`               | Header: session chip / tabs, More menu                        |
+| `pwa/src/components/command-palette.tsx`          | Desktop palette: files, `>` commands, `:` line, `@` tabs      |
+| `pwa/src/utils/app-commands.ts`                   | The app's commands, for the palette, keys and Settings        |
+| `pwa/src/utils/palette-match.ts`                  | Palette prefixes, letter matching and ranking, `:line:col`    |
+| `pwa/src/utils/shortcuts.ts`                      | Key chords: parse, show, refused keys, the keymap             |
+| `pwa/src/hooks/use-shortcuts.ts`                  | Saved keys, the one key listener, keys taken in the terminal  |
+| `pwa/src/components/shortcuts-section.tsx`        | Settings > Shortcuts: change, remove, reset keys              |
 | `pwa/src/components/brand-mark.tsx`               | Prompt Owl symbol inline (sidebar, header when collapsed)     |
 | `pwa/src/components/session-switcher-chip.tsx`    | Mobile header chip that opens the sessions sheet              |
 | `pwa/src/utils/reorder.ts`                        | Move up/down and drop indexes, groups that can move           |
@@ -26,7 +32,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/utils/pane-remap.ts`                     | Tab keys: state by pane id follows a shifted tmux id          |
 | `pwa/src/utils/chat-draft.ts`                     | Chat view drafts per pane (sessionStorage), remapped          |
 | `pwa/src/utils/pane-view.ts`                      | View and side panel each pane was left on, kept on the device |
-| `pwa/src/utils/files-persist.ts`                  | Files/Changes tabs, drafts, pane views kept on the device     |
+| `pwa/src/utils/files-persist.ts`                  | Files/Changes tabs, drafts, views, recent files on the device |
 | `pwa/src/utils/persisted-tabs.ts`                 | Which tab fields are kept, checked when read back             |
 | `pwa/src/components/ui/`                          | Shared UI primitives (Button, Sheet, Menu, Switch, ...)       |
 | `pwa/src/app-views.ts`                            | Views of a pane (terminal, chat, files, changes)              |

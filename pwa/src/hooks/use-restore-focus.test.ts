@@ -19,6 +19,20 @@ describe('useRestoreFocus', () => {
     expect(document.activeElement).toBe(a)
   })
 
+  it('leaves focus alone when told to skip at unmount', () => {
+    document.body.innerHTML =
+      '<button id="a">a</button><button id="b">b</button>'
+    const a = document.getElementById('a') as HTMLElement
+    a.focus()
+    const skip = { current: false }
+    const view = renderHook(() => useRestoreFocus(undefined, skip))
+    const b = document.getElementById('b') as HTMLElement
+    b.focus()
+    skip.current = true
+    view.unmount()
+    expect(document.activeElement).toBe(b)
+  })
+
   it('leaves focus alone when that element is gone', () => {
     document.body.innerHTML =
       '<button id="a">a</button><button id="b">b</button>'

@@ -1,4 +1,4 @@
-import { Maximize, Minimize } from 'lucide-react'
+import { Command, Maximize, Minimize } from 'lucide-react'
 import type { ComponentProps, ReactNode } from 'react'
 import type { Session } from '../types/session'
 import { visibleUnsafe } from '../utils/unsafe-chars'
@@ -62,6 +62,9 @@ interface Props {
   panelViews?: ViewOption<string>[]
   sidePanelId?: string | null
   onTogglePanel?: (id: string | null) => void
+  // Desktop: opens the command palette; its key as shown, if it has one
+  onOpenPalette?: () => void
+  paletteKey?: string
   menu: MenuProps
 }
 
@@ -223,6 +226,20 @@ function DesktopHeader(p: Props) {
             ) : (
               <Maximize size={16} aria-hidden="true" />
             )}
+          </IconButton>
+        )}
+        {p.onOpenPalette && (
+          <IconButton
+            size="sm"
+            onClick={p.onOpenPalette}
+            aria-label="Command palette"
+            title={
+              p.paletteKey
+                ? `Command palette (${p.paletteKey})`
+                : 'Command palette'
+            }
+          >
+            <Command size={16} aria-hidden="true" />
           </IconButton>
         )}
         <ConnectionIndicator state={p.connectionState} onRetry={p.onRetry} />

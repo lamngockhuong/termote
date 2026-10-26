@@ -13,6 +13,7 @@ import {
 } from '../hooks/use-settings'
 import { UI_STYLES, type UiStyle } from '../ui-style'
 import { STUCK_MINUTES_OPTIONS } from '../utils/agent-stuck'
+import type { AppCommand } from '../utils/app-commands'
 import type { ServerInfo } from '../utils/app-update'
 import {
   needsHomeScreenApp,
@@ -21,6 +22,7 @@ import {
   requestNotify,
 } from '../utils/notify-permission'
 import { DevicesSection } from './devices-section'
+import { ShortcutsSection } from './shortcuts-section'
 import { SigninsSection } from './signins-section'
 import { Button, FOCUS_RING, IconButton } from './ui/button'
 import { SegmentedControl } from './ui/segmented-control'
@@ -70,6 +72,8 @@ interface Props {
   onLogout?: () => Promise<void> | void
   // Group to show when the sheet opens (About's "Check for updates")
   initialGroup?: string
+  // Desktop: the commands whose keys the Shortcuts group changes
+  shortcuts?: AppCommand[]
 }
 
 const CONTROL =
@@ -457,6 +461,7 @@ export function SettingsModal({
   signins = false,
   onLogout,
   initialGroup,
+  shortcuts,
 }: Props) {
   const [activeGroup, setActiveGroup] = useState('appearance')
 
@@ -549,6 +554,15 @@ export function SettingsModal({
         </>
       ),
     },
+    ...(shortcuts
+      ? [
+          {
+            id: 'shortcuts',
+            title: 'Shortcuts',
+            rows: <ShortcutsSection commands={shortcuts} />,
+          },
+        ]
+      : []),
     {
       id: 'terminal',
       title: 'Terminal',

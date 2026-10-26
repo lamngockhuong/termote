@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
 import type { TableOp } from '../utils/csv-edits'
 import type { Delimiter } from '../utils/csv-parse'
 import {
@@ -11,12 +11,16 @@ import {
 import {
   clearDrafts,
   loadDrafts,
+  loadRecent,
   loadTabs,
   onDraftChangedElsewhere,
   onSignedOutElsewhere,
   onSignedOutHere,
   persistKey,
+  RECENT_LIMIT,
+  type RecentFile,
   removeDraft,
+  saveRecent,
   saveTabs,
   writeDraft,
 } from '../utils/files-persist'
@@ -112,6 +116,8 @@ export interface FilesState {
   pendingRootClose?: string[]
   // Bumped each time the pane's root moves while the view is open
   rootChanges: number
+  // Files the user opened lately, the latest first (kept on the device)
+  recent: RecentFile[]
 }
 
 const INITIAL: FilesState = {
@@ -121,6 +127,7 @@ const INITIAL: FilesState = {
   tabs: [],
   activeId: null,
   rootChanges: 0,
+  recent: [],
 }
 
 // The tab shown, if any
@@ -208,6 +215,9 @@ interface Store {
   created: (path: string, root: string, reveal: boolean) => Promise<void>
   // Another request saw the root move to root
   rootChanged: (root: string) => void
+  // A file found by a search of root (the command palette): the store
+  // moves to that root first when it is not on it, then opens the file
+  openFromFind: (root: string, path: string, opts?: FileOpenOptions) => void
   // A search result chosen: the tree opened down to it and, for a file, the
   // file opened (a new trail of links); a directory shows in the tree
   reveal: (path: string, kind?: 'file' | 'dir') => Promise<void>
@@ -229,6 +239,7 @@ function createStore(id: string): Store {
   // read sends their root, and a pane that moved meanwhile answers 409
   // (rootChanged)
   const fromDevice = restoreFilesState(loadTabs('files', paneId))
+  const recent = loadRecent(paneId)
   let state: FilesState = fromDevice
     ? {
         ...INITIAL,
@@ -236,8 +247,9 @@ function createStore(id: string): Store {
         tabs: fromDevice.tabs.map((t) => ({ ...t, reveal: false })),
         activeId: fromDevice.activeId,
         pendingRootClose: fromDevice.pendingRootClose,
+        recent,
       }
-    : INITIAL
+    : { ...INITIAL, recent }
   const listeners = new Set<() => void>()
   // Bumped when the root moves: a read sent for the old one is dropped.
   let generation = 0
@@ -292,7 +304,41 @@ function createStore(id: string): Store {
     })
   }
 
-  function open(path: string, opts: FileOpenOptions = {}) {
+  // The files opened lately, changed and kept on the device
+  function setRecent(files: RecentFile[]) {
+    set({ recent: files })
+    saveRecent(paneId, files)
+  }
+
+  // The user opened path under the root: first in the list
+  function remember(path: string) {
+    const root = state.root
+    if (root === undefined) return
+    setRecent(
+      [
+        { root, path },
+        ...state.recent.filter((f) => f.root !== root || f.path !== path),
+      ].slice(0, RECENT_LIMIT),
+    )
+  }
+
+  // Out of the list: path under root, and what is under it
+  function forget(root: string, path: string) {
+    const files = state.recent.filter(
+      (f) =>
+        f.root !== root || (f.path !== path && !f.path.startsWith(`${path}/`)),
+    )
+    if (files.length !== state.recent.length) setRecent(files)
+  }
+
+  // Opened by the user (not restored or created): remembered, unless its
+  // tab shows it as a sensitive file the user chose to show
+  function openByUser(path: string, opts?: FileOpenOptions) {
+    openFile(path, opts)
+    if (!activeTab(state)?.reveal) remember(path)
+  }
+
+  function openFile(path: string, opts: FileOpenOptions = {}) {
     const now = ++clock
     const r = openTab(
       state.tabs,
@@ -411,7 +457,7 @@ function createStore(id: string): Store {
       read(path)
       return
     }
-    open(path, { pin: true })
+    openFile(path, { pin: true })
     // The viewer mounts with the intent already there
     patchTab(state.activeId as string, { root, intent: true, reveal })
   }
@@ -460,7 +506,7 @@ function createStore(id: string): Store {
       (t) => t.path === target.path && t !== current,
     )
     if (opts.newTab || opts.fresh || elsewhere || !current) {
-      open(target.path, { pin: opts.newTab, anchor: target.anchor })
+      openByUser(target.path, { pin: opts.newTab, anchor: target.anchor })
       return 'opened'
     }
     // On in the same tab, which remembers where it was
@@ -485,6 +531,7 @@ function createStore(id: string): Store {
               },
             ],
     })
+    remember(target.path)
     return 'opened'
   }
 
@@ -508,7 +555,7 @@ function createStore(id: string): Store {
       set({ activeId: null })
       return
     }
-    open(path)
+    openByUser(path)
   }
 
   async function list(path: string) {
@@ -561,6 +608,15 @@ function createStore(id: string): Store {
       return at < 0 ? '' : p.slice(0, at)
     }
     set({ expanded: expandTo(parentOf(to)) })
+    // The list follows it; one shown as sensitive is not kept
+    const root = state.root as string
+    if (reveal) forget(root, from)
+    else if (state.recent.some((f) => f.root === root && f.path === from))
+      setRecent(
+        state.recent.map((f) =>
+          f.root === root && f.path === from ? { root, path: to } : f,
+        ),
+      )
     read(parentOf(from))
     if (parentOf(to) !== parentOf(from)) readDown(parentOf(to))
   }
@@ -579,6 +635,7 @@ function createStore(id: string): Store {
     )
     const { [path]: _, ...dirs } = state.dirs
     set({ expanded, dirs })
+    if (state.root !== undefined) forget(state.root, path)
     read(parent)
   }
 
@@ -630,7 +687,7 @@ function createStore(id: string): Store {
       generation++
       for (const path of Object.keys(state.dirs)) read(path)
     },
-    open,
+    open: openByUser,
     activate,
     pin(id) {
       // Pinned once editing starts: the intent is used up then too
@@ -687,7 +744,16 @@ function createStore(id: string): Store {
       tab.table = layout
       persist()
     },
-    setReveal: (id) => patchTab(id, { reveal: true }),
+    // A file the user chose to show as sensitive is not kept in the list
+    setReveal(id) {
+      patchTab(id, { reveal: true })
+      const tab = state.tabs.find((t) => t.id === id)
+      if (tab) forget(tab.root, tab.path)
+    },
+    openFromFind(root, path, opts) {
+      if (state.root !== root) rootChanged(root)
+      openByUser(path, opts)
+    },
     resolveRootClose(closing) {
       const ids = state.pendingRootClose ?? []
       set({ pendingRootClose: undefined })
@@ -756,6 +822,11 @@ export function useFiles(paneId: string) {
       [store],
     ),
     rootChanged: useCallback((r: string) => store.rootChanged(r), [store]),
+    openFromFind: useCallback(
+      (r: string, p: string, opts?: FileOpenOptions) =>
+        store.openFromFind(r, p, opts),
+      [store],
+    ),
     reveal: useCallback(
       (p: string, kind?: 'file' | 'dir') => store.reveal(p, kind),
       [store],
@@ -779,6 +850,41 @@ export function fileRenamed(
   moveDrafts(root, from, to, reveal)
   for (const s of stores.values())
     if (s.get().root === root) s.renamed(from, to, reveal)
+}
+
+// Where focus goes in paneId's Files view, asked for from outside it (the
+// content search's shortcut, a file opened from the command palette): the
+// view takes the request when it is shown, or at once when it already is.
+// Once per request, never a counter, so a later mount does not focus.
+export type FilesFocus = 'search' | 'file'
+const focusRequests = new Map<string, FilesFocus>()
+const focusListeners = new Set<() => void>()
+
+export function requestFilesFocus(paneId: string, target: FilesFocus) {
+  focusRequests.set(paneId, target)
+  for (const fn of focusListeners) fn()
+}
+
+// Calls onRequest for each request for paneId's Files view
+export function useFilesFocusRequest(
+  paneId: string,
+  onRequest: (target: FilesFocus) => void,
+) {
+  const ref = useRef(onRequest)
+  ref.current = onRequest
+  useEffect(() => {
+    const take = () => {
+      const target = focusRequests.get(paneId)
+      if (!target) return
+      focusRequests.delete(paneId)
+      ref.current(target)
+    }
+    take()
+    focusListeners.add(take)
+    return () => {
+      focusListeners.delete(take)
+    }
+  }, [paneId])
 }
 
 // Follows a link into the Files view of paneId from elsewhere (the Changes
@@ -1047,6 +1153,7 @@ function unkeepDraft(key: string) {
 
 function forgetAll() {
   stores.clear()
+  focusRequests.clear()
   drafts.clear()
   draftsChanged()
 }

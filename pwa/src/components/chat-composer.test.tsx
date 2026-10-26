@@ -7,6 +7,7 @@ import {
   type AgentPrompt,
   AgentRequestError,
 } from '../hooks/use-mux-api'
+import { requestDraftInsert } from '../utils/chat-draft'
 import { byteLength, ChatComposer, MAX_MESSAGE_BYTES } from './chat-composer'
 
 const transcript = {
@@ -405,6 +406,69 @@ describe('ChatComposer', () => {
     render(<ChatComposer {...props()} />)
     type('1\n2\n3\n4\n5\n6\n7\n8')
     expect(box()).toHaveAttribute('rows', '6')
+  })
+
+  describe('a command from the command palette', () => {
+    const compact = { name: 'compact', source: 'builtin' as const }
+
+    it('goes in front of the draft, caret after it, nothing sent', () => {
+      sessionStorage.setItem('termote-chat-draft:%3', 'keep this')
+      render(<ChatComposer {...props()} />)
+      act(() => requestDraftInsert('%3', compact))
+      expect(box()).toHaveValue('/compact keep this')
+      expect(box()).toHaveFocus()
+      expect((box() as HTMLTextAreaElement).selectionStart).toBe(9)
+      expect(sessionStorage.getItem('termote-chat-draft:%3')).toBe(
+        '/compact keep this',
+      )
+      expect(mockSend).not.toHaveBeenCalled()
+    })
+
+    it('only focuses the box when asked with no command', () => {
+      sessionStorage.setItem('termote-chat-draft:%3', 'keep')
+      render(<ChatComposer {...props()} />)
+      act(() => requestDraftInsert('%3'))
+      expect(box()).toHaveValue('keep')
+      expect(box()).toHaveFocus()
+    })
+
+    it('reaches a composer mounted later, or on another pane once shown', () => {
+      requestDraftInsert('%3', compact)
+      requestDraftInsert('%4', { ...compact, name: 'review' })
+      const { rerender } = render(<ChatComposer {...props()} />)
+      expect(box()).toHaveValue('/compact ')
+      rerender(
+        <ChatComposer
+          {...props({ session: { ...props().session, paneId: '%4' } })}
+        />,
+      )
+      expect(box()).toHaveValue('/review ')
+    })
+
+    it('uses the agent trigger ($ for a Codex skill), storage failing', () => {
+      vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+        throw new Error('blocked')
+      })
+      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw new Error('blocked')
+      })
+      const codex = {
+        ...props().session,
+        name: 'codex',
+        agentName: 'codex',
+      }
+      render(<ChatComposer {...props({ session: codex })} />)
+      type('hi')
+      act(() =>
+        requestDraftInsert('%3', {
+          name: 'review',
+          source: 'user',
+          trigger: '$',
+        }),
+      )
+      expect(box()).toHaveValue('$review hi')
+      vi.restoreAllMocks()
+    })
   })
 
   it('keeps a draft per pane across remounts', () => {

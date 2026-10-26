@@ -326,3 +326,26 @@ describe('AppHeader side panel toggles', () => {
     expect(screen.queryByRole('button', { name: 'Files' })).toBeNull()
   })
 })
+
+describe('AppHeader — command palette', () => {
+  it('opens it from a desktop button that names its key', () => {
+    const onOpenPalette = vi.fn()
+    renderHeader({ onOpenPalette, paletteKey: 'Ctrl+Shift+P' })
+    const button = screen.getByRole('button', { name: 'Command palette' })
+    expect(button).toHaveAttribute('title', 'Command palette (Ctrl+Shift+P)')
+    fireEvent.click(button)
+    expect(onOpenPalette).toHaveBeenCalledOnce()
+  })
+
+  it('names no key when it has none, and has no button without a handler', () => {
+    renderHeader({ onOpenPalette: vi.fn() })
+    expect(
+      screen.getByRole('button', { name: 'Command palette' }),
+    ).toHaveAttribute('title', 'Command palette')
+  })
+
+  it('is not on the phone header', () => {
+    renderHeader({ isMobile: true, onOpenPalette: vi.fn() })
+    expect(screen.queryByRole('button', { name: 'Command palette' })).toBeNull()
+  })
+})

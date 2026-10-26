@@ -5,6 +5,7 @@
 import type { Terminal } from '@xterm/xterm'
 import type { TerminalHandle } from '../components/terminal-view'
 import { copyText } from './copy-text'
+import { isApplePlatform } from './platform'
 import { type UploadErrorReason, uploadImage } from './upload-image'
 
 // Key mappings for special keys (xterm escape sequences)
@@ -443,11 +444,7 @@ export function readTerminalBufferText(handle: TerminalHandle | null): string {
 
 // Apple keyboards copy with Cmd+C, which xterm leaves to the browser; there
 // Ctrl+Shift+C stays a terminal key.
-export function isApplePlatform(): boolean {
-  const nav = navigator as Navigator & { userAgentData?: { platform?: string } }
-  const platform = nav.userAgentData?.platform || navigator.platform || ''
-  return /mac|iphone|ipad|ipod/i.test(platform)
-}
+export { isApplePlatform }
 
 // Ctrl+Shift+C pressed (not on an Apple platform)
 export function isCopyShortcut(
