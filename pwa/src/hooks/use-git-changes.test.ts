@@ -571,6 +571,33 @@ describe('Changes tabs', () => {
     expect(result.current.gone).toEqual({ count: 2, names: ['b'] })
   })
 
+  it('a side the user acted on closes without a notice, once seen gone', async () => {
+    const { result } = await loaded()
+    for (const p of ['a', 'b', 'c'])
+      act(() => result.current.open(side(p), { pin: true }))
+    // A poll already running when the action was made answers first, with
+    // the side still listed: still expected gone after it
+    let answer: (c: GitChanges) => void = () => {}
+    mockChanges.mockReturnValueOnce(new Promise((r) => (answer = r)))
+    act(() => result.current.refresh())
+    await tick()
+    act(() => result.current.expectGone([changeKey(side('b'))]))
+    act(() => result.current.refresh())
+    await act(async () => answer(changes({ entries: ENTRIES })))
+    expect(result.current.gone.count).toBe(0)
+    mockChanges.mockResolvedValue(changes({ entries: [ENTRIES[0]] }))
+    await tick()
+    expect(result.current.tabs.map((t) => t.path)).toEqual(['a'])
+    expect(result.current.gone).toEqual({ count: 1, names: ['c'] })
+    // Seen gone once: the same side going again later is told
+    mockChanges.mockResolvedValue(changes({ entries: ENTRIES }))
+    await tick(CHANGES_POLL)
+    act(() => result.current.open(side('b'), { pin: true }))
+    mockChanges.mockResolvedValue(changes({ entries: [ENTRIES[0]] }))
+    await tick(CHANGES_POLL)
+    expect(result.current.gone).toEqual({ count: 2, names: ['b'] })
+  })
+
   it('both sides of a file closing at once are one file to tell about', async () => {
     const { result } = await loaded()
     act(() => result.current.open(side('a'), { pin: true }))

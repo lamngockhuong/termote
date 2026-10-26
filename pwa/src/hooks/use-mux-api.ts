@@ -1066,6 +1066,9 @@ export interface DiffLine {
 export interface DiffHunk {
   header: string
   lines: DiffLine[]
+  // Names the hunk for applyChange; absent when it can only be applied with
+  // the whole file (rename, mode change, binary, cut diff)
+  id?: string
 }
 
 export interface FileDiff {
@@ -1078,6 +1081,9 @@ export interface FileDiff {
   // A file read whole (untracked, conflict) that cannot be shown
   reason?: 'too-large' | 'not-regular'
   hunks: DiffHunk[] | null
+  // The sha256 of the worktree file an unstaged diff was taken against: the
+  // baseHash a discard of the whole file sends
+  worktreeHash?: string
 }
 
 // A list sends the parameter once per value (exclude=a&exclude=b)
@@ -1401,6 +1407,48 @@ export async function restoreFile(
 ): Promise<CreatedFile> {
   const { root, ...body } = restore
   const res = await fetch(filesUrl(paneId, 'restore', { root }), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(SAVE_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res)
+  return res.json()
+}
+
+export type ChangeAction = 'stage' | 'unstage' | 'discard'
+
+export interface AppliedChange {
+  root: string
+  path: string
+  // A discard kept the previous file in the trash under this id, for
+  // restoreFile; absent for a deleted file made again or a permanent delete
+  trashId?: string
+  permanent?: boolean
+}
+
+// Stages, unstages or discards one entry of fetchGitChanges, or one hunk of
+// its diff (hunk: DiffHunk.id). A discard of a whole changed or untracked
+// file sends the hash of the file the user saw (baseHash). A refusal is a
+// RequestError with the server's code (stale_hunk, index_locked, filtered,
+// conflict, unsupported, hunk_unsupported, not_changed, too_large, busy,
+// changed, sensitive, cross_device, trash_unavailable, not_editable), or a
+// 409 with the root once it moved.
+export async function applyChange(
+  paneId: string,
+  change: {
+    root: string
+    action: ChangeAction
+    path: string
+    orig?: string
+    hunk?: string
+    baseHash?: string
+    reveal: boolean
+    permanent?: boolean
+  },
+): Promise<AppliedChange> {
+  const { root, ...body } = change
+  const res = await fetch(filesUrl(paneId, 'changes/apply', { root }), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	"os/exec"
 
 	"golang.org/x/sys/windows"
 )
@@ -47,3 +48,10 @@ func isStorageFull(err error) bool {
 
 // isReadOnlyFS reports whether err is a write to write-protected media.
 func isReadOnlyFS(err error) bool { return errors.Is(err, windows.ERROR_WRITE_PROTECT) }
+
+// interruptProcess kills git: a console signal cannot reach a process
+// without its own console. Accepted risk: a git killed past gitWriteTimeout
+// can leave index.lock behind.
+func interruptProcess(cmd *exec.Cmd) func() error {
+	return func() error { return cmd.Process.Kill() }
+}

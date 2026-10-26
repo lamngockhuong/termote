@@ -647,7 +647,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `.codex/config.toml`, profiles, `-c`, `project_root_markers` and `agents/openai.yaml` are not
   read
 - **Files/Changes** (`/api/mux/panes/{id}/files/*`): GETs that also check
-  `Sec-Fetch-Site`/`Origin` (and one write, `PUT files/content`, below); every path is opened through `os.Root` under the pane's root (its
+  `Sec-Fetch-Site`/`Origin` (and the writes below; none is read-only any more, Changes included: `POST files/changes/apply` writes the index); every path is opened through `os.Root` under the pane's root (its
   git toplevel when a `.git` sits at it, else its directory); termote's config/state dirs, the
   upload store and the trash (a pane in the home dir would otherwise serve a deleted `.env` under
   its random name),
@@ -657,7 +657,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   sensitive names (`.env`, keys, ...) return contents or a diff only with `reveal=1`. git runs
   without a shell, with `GIT_*`/`TERMOTE_*` stripped, hooks (`core.hooksPath` to the null
   device), index refresh on diff, fsmonitor, filter drivers, external diff and textconv off,
-  submodules ignored, 10s timeout, 2 at a time.
+  submodules ignored, 10s timeout, 2 at a time (a command that writes the index runs under the
+  same `-c` overrides but another timeout and cancellation: Staging and discarding a change).
   `files/raw` serves an image's bytes (Files: the worktree file, streamed from the open handle;
   Changes: `side=old|new` of an entry git status lists, picked like `diff`, never a client rev):
   the index is always `:0:<path>` (git reads `:1:a.png` as stage 1), `HEAD:<orig‖path>` for the
@@ -939,7 +940,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   directory → 403 `symlink`, a missing one 404). A file must be regular (409 `not_file`), the
   one opened (`SameFile`), one link (409 `hardlink`), the server user's (403 `permission`), and
   its sha256 (streamed, at most 512 MiB, else 413 `too_large`) must equal `baseHash` (409
-  `changed`). A record `<32 hex>.json` (`{root, path, kind, deletedAt, size, mode}`, `.part`
+  `changed`). A record `<32 hex>.json` (`{root, path, kind, deletedAt, size, mode[, after]}`, `.part`
   0600 `O_EXCL` then rename) is written, then the file is renamed into
   `os.UserCacheDir()/termote/trash/<32 hex>` (0700, refused when a symlink or another user's →
   503 `trash_unavailable`, `Caps.trash` false) by directory descriptors (`renameat2`
@@ -956,19 +957,99 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `os.Root.Remove`, which unlinks before trying rmdir. Restore `{trashId, reveal}`: a 32-hex id
   (400), its record (404 `not_in_trash`), the record's root (409 with the root), its path
   checked as a create's but not its name (`a.` must come back), parents made, then renamed back
-  never replacing (409 `exists` with `path`; `cross_device`); the trash's mutex is held from
+  never replacing (409 `exists` with `path`; `cross_device`), with one controlled exception: a
+  record of `kind: discard` (below) replaces the file, and only while it still holds exactly what
+  the discard left; the trash's mutex is held from
   reading the record again to removing it. The sweep (at start and before every delete) ages an
   entry by `deletedAt` only, never the mtime a rename keeps: 7 days, then the oldest past 1 GiB,
   never one younger than an hour; names left half done (a payload or a record alone, a `.part`)
   go 10 minutes after the sweep first sees them; a payload that is the restored file itself (a
   `linkat` restore that died) is only unlinked; only `^[0-9a-f]{32}(\.json(\.part)?)?$` names
-  are removed, never through a directory or a symlink. `GET files/content?hash=1` answers
+  are removed, never through a directory or a symlink; a `discard` record without its payload is
+  swept like a `file` one. `GET files/content?hash=1` answers
   `{root, path, size, hash}` with no text for any regular file (no `hash` past 512 MiB), even a
   sensitive one not revealed, so deleting a `.env` never sends its secret to the browser
   (accepted risk: a short secret's hash can be guessed by a signed-in user, who has a shell);
   it takes one of the 4 `files/raw` slots (429 `busy`). `termote uninstall` keeps the trash
   (the user's files) and says where; `--purge` removes it. A view-only client gets 403 `view_only`
   for deletes and restores, and `content?hash=1`
+- **Staging and discarding a change** (`POST files/changes/apply?root=`,
+  `server/files_git_apply.go`, `server/files_git_patch.go`): a file git status lists, or one hunk
+  of its diff, is staged, unstaged or discarded. Guards in order: `writeGuard`, POST, `root`
+  required, the handler's cross-site check, `requireWriteRole` (a view-only client gets 403
+  `view_only`), the body (8 KB), then the action (`invalid_action`), a discard with no trash
+  (503 `trash_unavailable`), the path (`.`/`""` → 400 `invalid_path`), the create's deny lists for
+  `path` and for `orig` too (403 `not_allowed`), a root that is no repo (404 `not_changed`),
+  and the root's lock, the file's lock and a write slot without waiting (429 `busy`), shared with
+  saves and deletes. The root's cached status is dropped, then a fresh one is read. Body
+  `{action: stage|unstage|discard, path, orig, hunk, baseHash, reveal, permanent}`: only a path
+  (and `orig`) that status lists, on the side the action acts on (the index side for `unstage`),
+  else 404 `not_changed`; a conflicted path or `orig` → 409 `conflict`, checked first because a
+  conflict has no staged side. The status letter must be one of `MD?` for `stage`, `MADRC` for
+  `unstage`, `MD?` for `discard`, and a discard refuses any entry whose index or worktree mode is
+  `120000` or `160000` (a symlink, a submodule): 409 `unsupported`. A sensitive name without
+  `reveal` → 403 `sensitive`. Every read (status, `check-attr`, diff, the index version) comes
+  before the first write.
+  - **Filters.** A path (and `orig`) with any `filter` attribute other than unset or unspecified
+    → 409 `filtered` (LFS, `git-crypt`): the filter drivers are off, so `git add` would stage what
+    the clean filter should have turned into something else, and a driver set at the system level
+    cannot even be seen. `git check-attr --stdin -z` takes names, not pathspecs.
+  - **Whole file.** Stage is `git add -- :(literal)<path>`; unstage is `git restore --staged`
+    (with `orig` for a rename, so both sides go back), or `git reset -q` when there is no commit
+    yet (`rev-parse --verify HEAD` exits 1). Every path is a `:(literal)` pathspec.
+  - **One hunk** (`hunk` is an id, never text). `files/diff` gives a hunk an `id`, the sha256 of
+    its header and lines as git printed them, only when the side is a change in place (`M`, no
+    rename or copy, a regular file, the same mode on both sides, not binary, not truncated) and
+    git's `---`/`+++` lines name the path itself (`hunkHeadOK`); else no `id`, and an apply
+    by hunk → 409 `hunk_unsupported`. The diff runs with fixed `--src-prefix=a/ --dst-prefix=b/`,
+    whatever `diff.noprefix` the user set. An apply takes the diff again and finds the id in it:
+    not found → 409 `stale_hunk`. The patch is built by the server: the `diff --git`, `---` and
+    `+++` lines are written from the path, always C-quoted (`quoteC`), never copied from git's
+    output, and there is no `index` line; then the hunk, as git printed it. It goes to
+    `git -c apply.ignoreWhitespace=no apply --cached -p1 --whitespace=nowarn` (`-R` to unstage) on
+    **stdin**, never as a file or argv: only the index is written. Any git failure → 409
+    `stale_hunk`. A name with `\r` or `\n` needs no 400: `cat-file` gets the name in argv, not
+    stdin.
+  - **Discard** writes the worktree, which git never does here. Untracked (`?`): the delete
+    route's code (`deleteFileLocked`, kind `file`, `baseHash` required, `permanent` as for a
+    delete: `cross_device` and its record), so it is one entry in the trash. Deleted (`D`): the
+    file is made again from the index (`recreate`: the parents made as a create makes them,
+    `O_EXCL`, never over a file that came back → 409 `changed`; 0644 or 0755 from the index mode,
+    set on the handle). Changed (`M`), whole file: `baseHash` required (400), the file is
+    opened as a save opens it (`openEditDir`, `readEditTarget`: no symlink on the way, a regular
+    file, one link, the server user's, at most 1 MiB: 422 `not_editable` with `reason`, 403
+    `permission`, 413 `too_large`; a binary file is discarded whole too), its sha256 must equal
+    `baseHash` (409 `changed`); the new text is the index version. A copy of what it replaces is
+    kept first (`keepCopy`: payload `O_EXCL` 0600, then the record `{kind: discard, mode, after}`,
+    `after` the sha256 of the new text), then `replaceFile` writes it. That write narrows the race
+    with another writer as a save does, and does not close it. If the write fails the entry is
+    removed. Changed, one hunk: not `M` → 409 `hunk_unsupported`; the hunk is undone **in Go**
+    (`reverseHunk`) on the bytes just read, not with `git apply -R`, because `apply` writes the
+    worktree through paths, filters and `core.autocrlf` this server does not control, and the
+    save's checks and `replaceFile` must be the only writer. Each line is compared (one trailing
+    `\r` ignored, written with the file's own line break); any line that differs, a count or a
+    missing newline that does not fit → 409 `stale_hunk`, nothing is guessed. The response has
+    `{root, path, trashId[, permanent]}`.
+  - **Restore** of a discard (`files/restore`, `restoreDiscard`) is the one restore that
+    replaces a file. Under the restore's locks it reads the file as a save does and puts the copy
+    back only when the file's sha256 equals the record's `after`; a directory on the way gone or
+    turned into a file or a symlink, a missing, oversize, hard-linked or non-regular file, or any
+    other hash → 409 `changed`, the file and the entry stay. The payload is opened with
+    `os.Open` like the record (the store is private), at most 1 MiB, written by `replaceFile`
+    with the recorded mode, then the entry goes.
+  - **Size.** An index version is read at most 1 MiB (`too_large` 413): `cat-file -s` first, and
+    nothing is read when it is larger; then `cat-file --filters` with the same limit, because the
+    line breaks can make it grow (cut → 413 `too_large`). The save's own checks apply to the
+    worktree file.
+  - **Index writes** (`gitCall.write`: `add`, `apply --cached`, `restore --staged`, `reset`) do
+    not end with the request (`context.WithoutCancel`): a half-finished index is worse than one
+    that took a moment. They run under a 30 s timeout and, on Unix, are interrupted (SIGINT)
+    rather than killed, so git removes its own `index.lock`. On Windows the process is killed
+    after 30 s: an accepted risk, a stale `index.lock` may stay. They take a git slot (no
+    backoff) like the diff. `index.lock` in git's message → 409 `index_locked`. Git's own text is
+    logged, never returned; every other failure is a `codedError` or a generic 500. The root's
+    caches are dropped (`forgetRoot`) before the status and after the write, so Changes reads the
+    new state; the PWA refetches.
 - **Renaming a file** (`POST files/rename?root=`, `server/files_rename.go`): a regular file moved
   to a new path under the same root (a rename, or a move whose missing directories are made, and
   stay if a later step fails, as with `mkdir -p`); never a directory. The guards of a create

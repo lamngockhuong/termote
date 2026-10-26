@@ -158,6 +158,10 @@ interface Store {
   // not list that side (a link to a diff committed or reverted since), null
   // when a newer link took its place first
   openLink: (side: ChangeSide) => Promise<boolean | null>
+  // The user just staged, unstaged or discarded these sides (changeKey):
+  // their tabs close without a notice, which would replace the action's
+  // own (its Undo)
+  expectGone: (keys: string[]) => void
 }
 
 function createStore(id: string): Store {
@@ -185,6 +189,10 @@ function createStore(id: string): Store {
   let inFlight = false
   let again = false
   let failures = 0
+  // Polls started so far, and the sides expectGone named, by the count when
+  // it was called: kept until a poll started after that has been read
+  let polls = 0
+  const expected = new Map<string, number>()
   // Bumped when the root moves: an answer to a poll sent for the old one is
   // dropped, so the list never flips back to the previous repo.
   let generation = 0
@@ -215,7 +223,7 @@ function createStore(id: string): Store {
     for (const fn of listeners) fn()
   }
 
-  const apply = (c: GitChanges) => {
+  const apply = (c: GitChanges, started: number) => {
     const next = {
       root: c.root,
       isRepo: c.isRepo,
@@ -237,6 +245,8 @@ function createStore(id: string): Store {
         })
     if (!same) set({ ...next, loaded: true, error: undefined })
     prune()
+    // This poll started after those actions: it has seen what they did
+    for (const [k, at] of expected) if (started > at) expected.delete(k)
     takeLink()
   }
 
@@ -249,6 +259,7 @@ function createStore(id: string): Store {
       if (t.root !== state.root) close(t.id)
       else if (!findEntry(state.entries, t)) {
         close(t.id)
+        if (expected.has(changeKey(t))) continue
         // Both sides of a file are one file to tell about
         const name = baseName(t.path)
         if (!names.includes(name)) names.push(name)
@@ -449,9 +460,10 @@ function createStore(id: string): Store {
     }
     inFlight = true
     const gen = generation
+    const started = ++polls
     try {
       const res = await fetchGitChanges(paneId, state.root)
-      if (gen === generation) apply(res)
+      if (gen === generation) apply(res, started)
       failures = 0
     } catch (err) {
       // A failure for the old root is dropped too: the next poll reads the new
@@ -536,6 +548,9 @@ function createStore(id: string): Store {
       if (state.loaded) takeLink()
       return shown
     },
+    expectGone(keys) {
+      for (const k of keys) expected.set(k, polls)
+    },
     resolveRootClose(closing) {
       const ids = state.pendingRootClose ?? []
       set({ pendingRootClose: undefined })
@@ -588,6 +603,10 @@ export function useGitChanges(paneId: string) {
       [store],
     ),
     saved: useCallback((id: string) => store.saved(id), [store]),
+    expectGone: useCallback(
+      (keys: string[]) => store.expectGone(keys),
+      [store],
+    ),
     resolveRootClose: useCallback(
       (close: boolean) => store.resolveRootClose(close),
       [store],

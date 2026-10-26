@@ -49,11 +49,15 @@ var (
 type trashRecord struct {
 	Root      string    `json:"root"`
 	Path      string    `json:"path"` // '/'-separated, relative to Root
-	Kind      string    `json:"kind"` // file | dir
+	Kind      string    `json:"kind"` // file | dir | discard
 	DeletedAt time.Time `json:"deletedAt"`
 	Size      int64     `json:"size"`
-	// Mode is a directory's permissions, made again by a restore.
+	// Mode is a directory's permissions, or a discarded file's, made again
+	// by a restore.
 	Mode fs.FileMode `json:"mode,omitempty"`
+	// After is the sha256 of what a discard left in the file: a restore
+	// puts the copy back only over exactly that.
+	After string `json:"after,omitempty"`
 }
 
 // trashStore keeps deleted files so a delete can be undone: a file is
@@ -131,6 +135,43 @@ func (s *trashStore) writeRecordLocked(id string, rec trashRecord) error {
 		os.Remove(part)
 	}
 	return err
+}
+
+// keepCopy keeps b, the contents of a file a discard is about to replace,
+// as a new entry: the payload (0600, O_EXCL) first, then its record.
+func (s *trashStore) keepCopy(rec trashRecord, b []byte) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.sweepLocked()
+	id := randomHex(16)
+	p := filepath.Join(s.dir, id)
+	fh, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err == nil {
+		_, err = fh.Write(b)
+		if cerr := fh.Close(); err == nil {
+			err = cerr
+		}
+	}
+	if err == nil {
+		err = s.writeRecordLocked(id, rec)
+	}
+	if err != nil {
+		os.Remove(p)
+		return "", err
+	}
+	return id, nil
+}
+
+// removeEntry removes the entry id, payload and record.
+func (s *trashStore) removeEntry(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.removeEntryLocked(id)
+}
+
+func (s *trashStore) removeEntryLocked(id string) {
+	os.Remove(filepath.Join(s.dir, id))
+	s.removeRecordLocked(id)
 }
 
 // readRecordLocked reads id's record; errNotInTrash when there is none.
@@ -224,7 +265,7 @@ func (s *trashStore) sweepLocked() {
 			remove(id)
 			remove(id + ".json")
 			delete(payloads, id)
-		case rec.Kind == "file" && !hasPayload:
+		case (rec.Kind == "file" || rec.Kind == "discard") && !hasPayload:
 			if orphan(id + ".json") {
 				remove(id + ".json")
 			}

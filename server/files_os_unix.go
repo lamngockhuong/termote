@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	"os/exec"
 	"syscall"
 )
 
@@ -50,3 +51,9 @@ func isStorageFull(err error) bool {
 
 // isReadOnlyFS reports whether err is a write to a read-only mount.
 func isReadOnlyFS(err error) bool { return errors.Is(err, syscall.EROFS) }
+
+// interruptProcess stops a git that writes the index with SIGINT: git
+// removes its index.lock before it exits (WaitDelay kills it past that).
+func interruptProcess(cmd *exec.Cmd) func() error {
+	return func() error { return cmd.Process.Signal(os.Interrupt) }
+}

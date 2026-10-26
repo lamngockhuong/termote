@@ -29,6 +29,9 @@ const (
 	// gitTimeout bounds one git command. Longer than muxTimeout: git status
 	// on a large repo is slow, and the reply is cached for every client.
 	gitTimeout = 10 * time.Second
+	// gitWriteTimeout bounds a command that writes the index: it never
+	// ends with the request (gitCall.write).
+	gitWriteTimeout = 30 * time.Second
 	// gitMaxRunning caps the git processes the server runs at once.
 	gitMaxRunning = 2
 	// gitFailBackoff: after a timeout, git is not run again in that root for
@@ -76,10 +79,11 @@ type filesRoot struct {
 // filtered environment, config overrides that keep a repo's own config from
 // running programs, a timeout and a slot of a server-wide semaphore.
 type gitRunner struct {
-	bin     string
-	timeout time.Duration
-	sem     chan struct{}
-	filters *ttlCache[[]string]
+	bin          string
+	timeout      time.Duration
+	writeTimeout time.Duration
+	sem          chan struct{}
+	filters      *ttlCache[[]string]
 
 	mu       sync.Mutex
 	failedAt map[string]time.Time // root → last timeout
@@ -87,11 +91,12 @@ type gitRunner struct {
 
 func newGitRunner() *gitRunner {
 	return &gitRunner{
-		bin:      "git",
-		timeout:  gitTimeout,
-		sem:      make(chan struct{}, gitMaxRunning),
-		filters:  newTTLCache[[]string](filesRootTTL),
-		failedAt: map[string]time.Time{},
+		bin:          "git",
+		timeout:      gitTimeout,
+		writeTimeout: gitWriteTimeout,
+		sem:          make(chan struct{}, gitMaxRunning),
+		filters:      newTTLCache[[]string](filesRootTTL),
+		failedAt:     map[string]time.Time{},
 	}
 }
 
@@ -118,6 +123,11 @@ type gitCall struct {
 	tryOnly bool
 	// stdin is fed to git (cat-file --batch); nil gives it none.
 	stdin []byte
+	// write: the command writes the index (add, apply --cached, restore
+	// --staged, reset). It runs to its end even when the request ends, under
+	// gitWriteTimeout, and is interrupted rather than killed on Unix, so git
+	// removes its index.lock itself.
+	write bool
 }
 
 // gitEnv is the server environment without anything that configures git or
@@ -249,6 +259,10 @@ func (g *gitRunner) backingOff(root string) bool {
 }
 
 func (g *gitRunner) exec(ctx context.Context, c gitCall, filters []string, args ...string) ([]byte, bool, error) {
+	timeout := g.timeout
+	if c.write {
+		ctx, timeout = context.WithoutCancel(ctx), g.writeTimeout
+	}
 	if c.heavy && c.tryOnly {
 		// It takes a slot only when another stays free for a client, and
 		// never waits for one.
@@ -272,9 +286,12 @@ func (g *gitRunner) exec(ctx context.Context, c gitCall, filters []string, args 
 		defer func() { <-g.sem }()
 	}
 
-	run, cancel := context.WithTimeout(ctx, g.timeout)
+	run, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	cmd := exec.CommandContext(run, g.bin, g.argv(c, filters, args)...)
+	if c.write {
+		cmd.Cancel = interruptProcess(cmd)
+	}
 	cmd.Env = gitEnv()
 	cmd.Dir = c.root
 	if c.stdin != nil {
@@ -302,7 +319,7 @@ func (g *gitRunner) exec(ctx context.Context, c gitCall, filters []string, args 
 			g.failedAt[c.root] = time.Now()
 			g.mu.Unlock()
 		}
-		log.Printf("git %s in %s: timed out after %s", strings.Join(args, " "), c.root, g.timeout)
+		log.Printf("git %s in %s: timed out after %s", strings.Join(args, " "), c.root, timeout)
 		return nil, false, errGitTimeout
 	}
 	if err != nil {

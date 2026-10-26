@@ -135,7 +135,7 @@ test.describe('files and changes views', () => {
     await page.getByRole('group', { name: 'Side panel' }).getByRole('button', { name: 'Changes' }).click()
     const changes = page.getByRole('complementary', { name: 'Changes' })
     await expect(changes.getByRole('region', { name: 'Untracked' })).toContainText('notes.txt')
-    await changes.getByRole('region', { name: 'Changes' }).getByRole('button', { name: /app\.ts/ }).click()
+    await changes.getByRole('region', { name: 'Changes' }).getByRole('button', { name: /:\s*app\.ts/ }).click()
     await expect(changes.locator('[data-kind="add"]')).toContainText('return b + a')
     await expect(changes.locator('[data-kind="del"]')).toContainText('return a + b')
   })
@@ -169,7 +169,7 @@ test.describe('files and changes views', () => {
 
     await page.getByRole('button', { name: 'View: Files' }).click()
     await page.getByRole('menuitemradio', { name: 'Changes' }).click()
-    await page.getByRole('region', { name: 'Changes' }).getByRole('button', { name: /app\.ts/ }).click()
+    await page.getByRole('region', { name: 'Changes' }).getByRole('button', { name: /:\s*app\.ts/ }).click()
     await expect(page.locator('[data-kind="add"]')).toBeVisible()
     expect(await noPageScroll(page)).toBe(true)
   })
@@ -194,7 +194,7 @@ test.describe('files and changes views', () => {
 
     await page.getByRole('group', { name: 'Side panel' }).getByRole('button', { name: 'Changes' }).click()
     const changes = page.getByRole('complementary', { name: 'Changes' })
-    await changes.getByRole('region', { name: 'Changes' }).getByRole('button', { name: /logo\.png/ }).click()
+    await changes.getByRole('region', { name: 'Changes' }).getByRole('button', { name: /:\s*logo\.png/ }).click()
     await expect(changes.getByText('Before · Index')).toBeVisible()
     await expect(changes.getByText('After · Working tree')).toBeVisible()
     const sides = changes.locator('img[src^="blob:"]')
@@ -422,7 +422,7 @@ test.describe('files and changes views', () => {
     await page.setViewportSize({ width: 1280, height: 800 })
     await page.goto(`${link}?view=changes`)
     const changes = page.getByRole('complementary', { name: 'Changes' })
-    const row = changes.getByRole('region', { name: 'Changes' }).getByRole('button', { name: /app\.ts/ })
+    const row = changes.getByRole('region', { name: 'Changes' }).getByRole('button', { name: /:\s*app\.ts/ })
     await row.click()
     await changes.getByRole('button', { name: 'Edit', exact: true }).click()
     const box = changes.getByRole('textbox', { name: 'Text of src/app.ts' })
@@ -439,6 +439,62 @@ test.describe('files and changes views', () => {
     await expect(changes.getByRole('button', { name: /app\.ts/ })).toHaveCount(0)
     await expect(changes.getByRole('region', { name: 'Untracked' })).toBeVisible()
     expect(readFileSync(app, 'utf-8')).toBe(original)
+  })
+
+  test('desktop: stages one hunk, unstages the file, discards it and undoes', async ({ page }) => {
+    const file = path.join(repo, 'src/hunks.ts')
+    const lines = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`)
+    const committed = `${lines.join('\n')}\n`
+    writeFileSync(file, committed)
+    git(repo, 'add', 'src/hunks.ts')
+    git(repo, 'commit', '-q', '-m', 'hunks')
+    const changed = committed.replace('line 2\n', 'TWO\n').replace('line 19\n', 'NINETEEN\n')
+    writeFileSync(file, changed)
+    const staged = () => git(repo, 'diff', '--cached', '--name-only')
+
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.goto(`${link}?view=changes`)
+    const changes = page.getByRole('complementary', { name: 'Changes' })
+    await changes.getByRole('region', { name: 'Changes' }).getByRole('button', { name: /:\s*hunks\.ts/ }).click()
+    await changes.getByRole('button', { name: 'Stage change 1' }).click()
+    await expect.poll(staged).toBe('src/hunks.ts\n')
+    const index = git(repo, 'diff', '--cached')
+    expect(index).toContain('+TWO')
+    expect(index).not.toContain('NINETEEN')
+    expect(readFileSync(file, 'utf-8')).toBe(changed)
+
+    // The whole file, from the list: shown on hover, reached by the keyboard
+    await changes.getByRole('button', { name: 'Back to changes' }).click()
+    const unstage = changes.getByRole('region', { name: 'Staged' }).getByRole('button', { name: 'Unstage hunks.ts' })
+    await unstage.focus()
+    await page.keyboard.press('Enter')
+    await expect.poll(staged).toBe('')
+
+    await changes.getByRole('region', { name: 'Changes' }).getByRole('button', { name: 'Discard hunks.ts' }).click()
+    const box = page.getByRole('dialog', { name: 'Discard changes in hunks.ts?' })
+    await box.getByRole('button', { name: 'Discard', exact: true }).click()
+    await expect.poll(() => readFileSync(file, 'utf-8')).toBe(committed)
+    await expect(page.getByText('Discarded changes in hunks.ts')).toBeVisible()
+    // The notice keeps its Undo while the list is read again
+    await expect(page.getByText(/No changes left/)).toHaveCount(0)
+    await page.getByRole('button', { name: 'Undo' }).click()
+    await expect.poll(() => readFileSync(file, 'utf-8')).toBe(changed)
+    await expect(page.getByText('Restored hunks.ts')).toBeVisible()
+    writeFileSync(file, committed)
+  })
+
+  test('mobile: the actions of a change show on its row and fit the screen', async ({ page }) => {
+    const file = path.join(repo, 'src/app.ts')
+    const original = readFileSync(file, 'utf-8')
+    writeFileSync(file, `${original}// a change with a long enough line to need truncating on a phone\n`)
+    await page.setViewportSize({ width: 360, height: 740 })
+    await page.goto(`${link}?view=changes`)
+    const list = page.getByRole('region', { name: 'Changes' })
+    // git status is cached 2s on the server and polled every 5s here
+    await expect(list.getByRole('button', { name: 'Stage app.ts' })).toBeVisible({ timeout: 15000 })
+    await expect(list.getByRole('button', { name: 'Discard app.ts' })).toBeVisible()
+    expect(await noPageScroll(page)).toBe(true)
+    writeFileSync(file, original)
   })
 
   test('desktop editor: find, replace all and go to a line from the keyboard', async ({ page }) => {
@@ -1728,7 +1784,7 @@ test.describe('files and changes views', () => {
       const changes = page.getByRole('complementary', { name: 'Changes' })
       const bar = changes.getByRole('tablist', { name: 'Open files' })
       const list = (group: string, name: RegExp) =>
-        changes.getByRole('region', { name: group }).getByRole('button', { name })
+        changes.getByRole('region', { name: group }).getByRole('button', { name: new RegExp(`:\\s*${name.source}`) })
 
       // A single click opens the preview tab, a double click on it keeps it
       await list('Changes', /long\.txt/).click()
@@ -1779,7 +1835,7 @@ test.describe('files and changes views', () => {
       )
       await page.goto(`${link}?view=changes`)
       const list = (group: string, name: RegExp) =>
-        page.getByRole('region', { name: group }).getByRole('button', { name })
+        page.getByRole('region', { name: group }).getByRole('button', { name: new RegExp(`:\\s*${name.source}`) })
       await list('Changes', /long\.txt/).click()
       await expect(page.getByTestId('diff')).toContainText('new line 1')
       await expect(page.getByRole('tablist', { name: 'Open files' })).toHaveCount(0)
@@ -2156,7 +2212,7 @@ test.describe('files and changes views', () => {
       await page.waitForTimeout(2500)
       await page.getByRole('group', { name: 'Side panel' }).getByRole('button', { name: 'Changes' }).click()
       const changes = page.getByRole('complementary', { name: 'Changes' })
-      await changes.getByRole('region', { name: 'Changes' }).getByRole('button', { name: /red\.png/ }).click()
+      await changes.getByRole('region', { name: 'Changes' }).getByRole('button', { name: /:\s*red\.png/ }).click()
       const after = changes.getByRole('button', { name: /^Open e2e-viewer\/red\.png \(After · Working tree\) full screen$/ })
       await expect(after).toBeEnabled()
       await after.click()

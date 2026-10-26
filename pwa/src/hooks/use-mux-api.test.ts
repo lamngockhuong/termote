@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AgentRequestError,
   answerAgentPrompt,
+  applyChange,
   checkFileDownload,
   closeGroup,
   closePane,
@@ -1093,6 +1094,43 @@ describe('files API client', () => {
     await expect(
       restoreFile('1', { root: '/r', trashId: 'x', reveal: false }),
     ).rejects.toMatchObject({ code: 'exists', path: 'a' })
+  })
+
+  it('applies a change with POST, the root in the query, with a timeout', async () => {
+    const { calls } = mockFetch(
+      { body: { root: '/r', path: 'a', trashId: 'x' } },
+      { body: { error: 'x', code: 'stale_hunk' }, status: 409 },
+    )
+    const timeout = vi.spyOn(AbortSignal, 'timeout')
+    expect(
+      await applyChange('%1', {
+        root: '/r',
+        action: 'discard',
+        path: 'a',
+        hunk: 'h1',
+        reveal: false,
+      }),
+    ).toEqual({ root: '/r', path: 'a', trashId: 'x' })
+    expect(calls[0].url).toBe(
+      '/api/mux/panes/%251/files/changes/apply?root=%2Fr',
+    )
+    expect(calls[0].init?.method).toBe('POST')
+    expect(JSON.parse(calls[0].init?.body as string)).toEqual({
+      action: 'discard',
+      path: 'a',
+      hunk: 'h1',
+      reveal: false,
+    })
+    expect(timeout).toHaveBeenCalledWith(SAVE_TIMEOUT_MS)
+    timeout.mockRestore()
+    await expect(
+      applyChange('1', {
+        root: '/r',
+        action: 'stage',
+        path: 'a',
+        reveal: false,
+      }),
+    ).rejects.toMatchObject({ status: 409, code: 'stale_hunk' })
   })
 
   it('reads the changes and the diff of one side of an entry', async () => {

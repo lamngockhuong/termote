@@ -325,7 +325,7 @@ func TestFilesRawWorktree(t *testing.T) {
 		"climbs":              {url.Values{"path": {"../outside/passwd"}}, 400, ""},
 		"bad side":            {url.Values{"path": {"img/a.png"}, "side": {"x"}}, 400, ""},
 		"root changed":        {url.Values{"path": {"img/a.png"}, "root": {"/elsewhere"}}, 409, ""},
-		"side outside a repo": {url.Values{"path": {"img/a.png"}, "side": {"new"}}, 404, ""},
+		"side outside a repo": {url.Values{"path": {"img/a.png"}, "side": {"new"}}, 404, "not_changed"},
 	} {
 		code, key := rawCode(t, rawGet(fx.h, c.q))
 		if code != c.code || key != c.key {

@@ -291,6 +291,7 @@ PUT    /api/mux/panes/{id}/files/content?root=  body: {path, baseHash, text, rev
 POST   /api/mux/panes/{id}/files/create?root=   body: {path, reveal}           → 201 {root, path} | {error, code[, path]}
 POST   /api/mux/panes/{id}/files/delete?root=   body: {path, kind, baseHash, reveal, permanent} → {root, path[, trashId, size, permanent]} | {error, code}
 POST   /api/mux/panes/{id}/files/restore?root=  body: {trashId, reveal}         → {root, path} | {error, code}
+POST   /api/mux/panes/{id}/files/changes/apply?root= body: {action, path, orig, hunk, baseHash, reveal, permanent} → {root, path[, trashId, permanent]} | {error, code}
 POST   /api/mux/panes/{id}/files/rename?root=   body: {path, newPath, reveal}  → {root, path} | {error, code[, path]}
 GET    /api/mux/panes/{id}/files/find?q=&root=&ignored=1&exclude=&fresh=1 → {root, isRepo, results, truncated, incomplete} | {error, code}
 GET    /api/mux/panes/{id}/files/search?q=&root=&case=1&word=1&regex=1&files=&skip=&exclude=&fresh=1 → {root, isRepo, files, truncated, incomplete, skipped} | {error, code}
@@ -798,7 +799,8 @@ Zellij on Linux and macOS (the pane's cwd as Zellij lists it).
 psmux does not report the directory, so `caps.files` is off on Windows tmux. Every route is
 registered for every backend and answers 501 where it is off. Eight are read-only GETs (`find`, `search` and
 `download` included); `PUT files/content` saves a text file, `POST files/create` creates an empty one and
-`POST files/delete` / `files/restore` remove a file and put it back, `POST files/rename` moves a
+`POST files/delete` / `files/restore` remove a file and put it back, `POST files/changes/apply` stages,
+unstages or discards a change (Staging and discarding a change), `POST files/rename` moves a
 file to a new path, never replacing anything, and `GET files/download` sends a file as an
 attachment (see Saving a file, Creating a file, Finding a file, Searching file contents, Deleting a file,
 Renaming a file, Downloading a file).

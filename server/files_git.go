@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"errors"
+	"io"
 	"io/fs"
 	"net/http"
 	"os"
@@ -20,9 +20,10 @@ const (
 	maxDiffOutput = 1 << 20
 )
 
-// errNotChanged: a diff asked for a path git status does not list. Only
-// listed paths reach git, so a client cannot steer it at anything else.
-var errNotChanged = errors.New("not changed")
+// errNotChanged: a diff or an apply asked for a path git status does not
+// list. Only listed paths reach git, so a client cannot steer it at anything
+// else.
+var errNotChanged = &codedError{"not_changed", "not changed", http.StatusNotFound}
 
 type changeEntry struct {
 	Path string `json:"path"`
@@ -33,6 +34,9 @@ type changeEntry struct {
 	Unstaged  string `json:"unstaged"`
 	Conflict  bool   `json:"conflict,omitempty"`
 	Sensitive bool   `json:"sensitive"`
+	// The file's mode in HEAD, the index and the worktree (porcelain v2,
+	// "100644"); empty for an untracked or conflicted entry.
+	modeHead, modeIndex, modeWorktree string
 }
 
 type gitStatus struct {
@@ -60,6 +64,11 @@ type diffLine struct {
 type diffHunk struct {
 	Header string     `json:"header"`
 	Lines  []diffLine `json:"lines"`
+	// ID names the hunk for files/changes/apply; set only on a hunk that can
+	// be applied alone (hunkID).
+	ID string `json:"id,omitempty"`
+	// raw is the hunk as git printed it, header included.
+	raw string
 }
 
 type diffResponse struct {
@@ -71,6 +80,12 @@ type diffResponse struct {
 	Sensitive bool       `json:"sensitive,omitempty"`
 	Reason    string     `json:"reason,omitempty"` // too-large | not-regular, for a file read whole
 	Hunks     []diffHunk `json:"hunks"`
+	// WorktreeHash is the sha256 of the worktree file an unstaged diff was
+	// taken against (hashed before it), the baseHash a discard of the whole
+	// file sends.
+	WorktreeHash string `json:"worktreeHash,omitempty"`
+	// head is every line before the first hunk.
+	head []string
 }
 
 // parseStatus reads `git status --porcelain=v2 -z --branch` output. A record
@@ -98,7 +113,7 @@ func parseStatus(out []byte, cut bool) gitStatus {
 			if len(f) != 9 {
 				continue
 			}
-			e = changeEntry{Path: f[8]}
+			e = changeEntry{Path: f[8], modeHead: f[3], modeIndex: f[4], modeWorktree: f[5]}
 			e.Staged, e.Unstaged = statusXY(f[1])
 		case strings.HasPrefix(r, "2 "):
 			// The source path is the next NUL-separated record.
@@ -107,7 +122,7 @@ func parseStatus(out []byte, cut bool) gitStatus {
 				continue
 			}
 			i++
-			e = changeEntry{Path: f[9], Orig: recs[i]}
+			e = changeEntry{Path: f[9], Orig: recs[i], modeHead: f[3], modeIndex: f[4], modeWorktree: f[5]}
 			e.Staged, e.Unstaged = statusXY(f[1])
 		case strings.HasPrefix(r, "u "):
 			f := strings.SplitN(r, " ", 11)
@@ -140,33 +155,39 @@ func statusXY(xy string) (staged, unstaged string) {
 }
 
 // parseUnifiedDiff turns one file's `git diff` output into hunks with line
-// numbers. Each hunk is read by its header's line counts, so a removed line
-// that reads "--- x" is still a line. A line cut by the output limit is
-// dropped.
-func parseUnifiedDiff(out []byte) (hunks []diffHunk, binary bool) {
+// numbers, and the lines before the first one (head). Each hunk is read by
+// its header's line counts, so a removed line that reads "--- x" is still a
+// line. A line cut by the output limit is dropped.
+func parseUnifiedDiff(out []byte) (hunks []diffHunk, head []string, binary bool) {
 	lines := strings.Split(string(out), "\n")
 	// The element after the final '\n' is empty, or the cut line.
 	lines = lines[:len(lines)-1]
 	var cur *diffHunk
+	var raw strings.Builder
 	var oldN, newN, oldLeft, newLeft int
+	// end closes the hunk being read: its text as git printed it.
+	end := func() {
+		if cur != nil {
+			cur.raw = raw.String()
+		}
+		raw.Reset()
+	}
 	for _, l := range lines {
 		if cur != nil && (oldLeft > 0 || newLeft > 0 || strings.HasPrefix(l, `\`)) {
+			in := true
 			switch {
 			case strings.HasPrefix(l, `\`):
 				if n := len(cur.Lines); n > 0 {
 					cur.Lines[n-1].NoNewline = true
 				}
-				continue
 			case strings.HasPrefix(l, "+") && newLeft > 0:
 				cur.Lines = append(cur.Lines, diffLine{Kind: "add", New: newN, Text: l[1:]})
 				newN++
 				newLeft--
-				continue
 			case strings.HasPrefix(l, "-") && oldLeft > 0:
 				cur.Lines = append(cur.Lines, diffLine{Kind: "del", Old: oldN, Text: l[1:]})
 				oldN++
 				oldLeft--
-				continue
 			case (strings.HasPrefix(l, " ") || l == "") && oldLeft > 0 && newLeft > 0:
 				text := ""
 				if l != "" {
@@ -177,10 +198,16 @@ func parseUnifiedDiff(out []byte) (hunks []diffHunk, binary bool) {
 				newN++
 				oldLeft--
 				newLeft--
+			default:
+				in = false
+			}
+			if in {
+				raw.WriteString(l + "\n")
 				continue
 			}
 		}
 		if strings.HasPrefix(l, "@@ ") {
+			end()
 			o, oc, n, nc, ok := parseHunkHeader(l)
 			if !ok {
 				cur = nil
@@ -188,14 +215,19 @@ func parseUnifiedDiff(out []byte) (hunks []diffHunk, binary bool) {
 			}
 			hunks = append(hunks, diffHunk{Header: l, Lines: []diffLine{}})
 			cur = &hunks[len(hunks)-1]
+			raw.WriteString(l + "\n")
 			oldN, newN, oldLeft, newLeft = o, n, oc, nc
 			continue
+		}
+		if len(hunks) == 0 && cur == nil {
+			head = append(head, l)
 		}
 		if strings.HasPrefix(l, "Binary files ") && strings.HasSuffix(l, " differ") {
 			binary = true
 		}
 	}
-	return hunks, binary
+	end()
+	return hunks, head, binary
 }
 
 // parseHunkHeader reads "@@ -a[,b] +c[,d] @@".
@@ -355,12 +387,19 @@ func (f *filesAPI) diff(ctx context.Context, root filesRoot, path, orig string, 
 		}
 		return res, nil
 	}
+	if !staged {
+		// Before the diff: a file written after it is refused by a discard
+		// rather than replaced unseen.
+		res.WorktreeHash = worktreeHash(root.Root, rel)
+	}
 	args := []string{"diff"}
 	if staged {
 		args = append(args, "--cached")
 	}
+	// The prefixes are fixed: an apply builds its patch from this output,
+	// whatever diff.noprefix or diff.mnemonicPrefix the user set.
 	args = append(args, "--no-ext-diff", "--no-textconv", "--no-color", "--ignore-submodules=all",
-		"-M", "--unified=3", "--")
+		"--src-prefix=a/", "--dst-prefix=b/", "-M", "--unified=3", "--")
 	// orig only names a rename's source, which only the index side has.
 	if staged && orig != "" {
 		args = append(args, ":(literal)"+orig)
@@ -370,12 +409,53 @@ func (f *filesAPI) diff(ctx context.Context, root filesRoot, path, orig string, 
 	if err != nil {
 		return diffResponse{}, err
 	}
-	res.Hunks, res.Binary = parseUnifiedDiff(out)
+	res.Hunks, res.head, res.Binary = parseUnifiedDiff(out)
 	if res.Hunks == nil {
 		res.Hunks = []diffHunk{}
 	}
 	res.Truncated = cut
+	if !res.Truncated && !res.Binary && hunksApply(entry, staged) && hunkHeadOK(res.head, path) {
+		for i := range res.Hunks {
+			res.Hunks[i].ID = hunkID(res.Hunks[i].raw)
+		}
+	}
 	return res, nil
+}
+
+// hunksApply reports whether the hunks of entry's diff on that side can be
+// applied one at a time: a change in place (M), of a regular file whose mode
+// stays the same. A rename, a copy, a mode change or a symlink is applied
+// whole only.
+func hunksApply(e *changeEntry, staged bool) bool {
+	letter, from, to := e.Unstaged, e.modeIndex, e.modeWorktree
+	if staged {
+		letter, from, to = e.Staged, e.modeHead, e.modeIndex
+	}
+	regular := from == "100644" || from == "100755"
+	return letter == "M" && e.Orig == "" && !e.Conflict && regular && from == to
+}
+
+// worktreeHash is the sha256 of the regular file rel under root, read
+// through os.Root; "" for one that is missing, not regular or larger than
+// maxPreviewSize (no discard of the whole file takes it), or when the root
+// cannot be opened (the diff then fails).
+func worktreeHash(root, rel string) string {
+	rt, err := os.OpenRoot(root)
+	if err != nil {
+		return ""
+	}
+	defer rt.Close()
+	fh, err := rt.OpenFile(rel, os.O_RDONLY|openNonblock, 0)
+	if err != nil {
+		return ""
+	}
+	defer fh.Close()
+	if fi, err := fh.Stat(); err != nil || !fi.Mode().IsRegular() || fi.Size() > maxPreviewSize {
+		return ""
+	}
+	// A read cut short hashes to what no discard matches: it is refused.
+	b, _ := io.ReadAll(io.LimitReader(fh, maxPreviewSize))
+	return hashHex(b)
 }
 
 // findChange returns the status entry for path (and orig) when it is listed

@@ -756,6 +756,39 @@ có đường dẫn chứa chuỗi bạn gõ, không phân biệt hoa thường 
 `No changes match`. Escape xoá ô. Bộ lọc chỉ nằm trong trang: nó được xoá khi bạn rời view hoặc
 khi gốc đổi.
 
+### Đưa vào index, bỏ khỏi index và bỏ thay đổi
+
+Mỗi dòng của danh sách có nút **Stage**, **Unstage** hoặc **Discard**, và đầu một diff đang mở
+cũng có các nút đó. Trong diff, mỗi hunk có nút riêng, nên có thể đưa một hunk vào index hoặc vứt
+riêng nó đi.
+
+- **Stage** đưa file (hoặc hunk) vào index, **Unstage** lấy nó ra lại. Chỉ index thay đổi; file
+  trong thư mục làm việc không bị động tới.
+- **Discard** bỏ thay đổi trong thư mục làm việc, đưa file về đúng như index đang giữ. Một hộp
+  thoại hỏi trước và hiện đường dẫn. File đã xoá được tạo lại, file chưa theo dõi thì bị xoá.
+- Discard không phải là mất hẳn. Phần bị thay thế được giữ trong thùng rác của Termote (thời gian
+  giữ xem ở [Xoá file](#xoá-file)), và toast có nút **Undo** đặt nó về. Undo chỉ chạy khi file
+  vẫn đúng như lúc discard để lại: nếu từ đó có thứ gì (thường là agent) sửa nó, không có gì bị
+  ghi đè.
+- File chưa theo dõi bị discard theo đường của việc xoá: nếu nó nằm trên hệ thống file khác với
+  thùng rác, Termote hỏi lần thứ hai trước khi xoá hẳn.
+
+Một số thay đổi chỉ áp dụng được cho cả file, hoặc không áp dụng được:
+
+- Chỉ khi thay đổi nằm ngay trong file thường, không đổi tên, không sao chép, không đổi quyền
+  hay chế độ file và không phải nhị phân thì mới áp dụng riêng được từng hunk. File đổi tên chỉ được dùng
+  **Stage** và **Unstage** cho cả file (đường dẫn cũ và mới cùng lúc).
+- File đang xung đột merge không dùng được **Stage**, **Unstage** hay **Discard** ở đây; link
+  tượng trưng và repo con thì không dùng được **Discard**. Hãy dùng terminal.
+- File đi qua một filter của git (như Git LFS) cũng không đổi được ở đây: filter đang tắt, nên
+  đưa nó vào index sẽ lưu nhầm nội dung.
+- File đã sửa hoặc đã xóa mà lớn hơn 1 MiB thì không dùng được **Discard** ở đây. File chưa
+  theo dõi thì vẫn được, vì nó bị xóa vào thùng rác.
+- Khi file đã đổi sau lúc đọc diff (hunk đã mất hoặc đã dời chỗ), app từ chối và danh sách được
+  đọc lại. Khi lệnh git khác đang giữ khoá index của repo, hãy thử lại sau giây lát.
+- File có thể chứa bí mật được hỏi xác nhận trước, giống như với diff của nó.
+- Phiên chỉ xem không đổi được gì.
+
 ## File có thể chứa bí mật
 
 File có tên thường dùng để chứa bí mật được đánh dấu bằng ổ khoá và chữ `Sensitive`: ví dụ
@@ -791,7 +824,9 @@ chối.
 ## Termote chạy git ra sao
 
 Termote tự chạy `git status` và `git diff` để lấy dữ liệu cho Changes, và `git cat-file` để đọc
-bản trước và bản sau của ảnh. Cấu hình riêng của một repo
+bản trước và bản sau của ảnh. Stage và Unstage là các lệnh duy nhất có ghi, và chúng chỉ ghi index
+(`git add`, `git restore --staged`, `git reset`, `git apply --cached`); bản vá của một hunk do Termote tự dựng,
+không bao giờ lấy từ trình duyệt. Cấu hình riêng của một repo
 không thể khiến Termote chạy chương trình nào: với các lệnh này, Termote tắt bộ theo dõi hệ thống
 file, filter driver, công cụ diff bên ngoài và bước chuyển đổi văn bản, đồng thời bỏ qua repo con.
-Mỗi lúc chạy tối đa hai lệnh git, mỗi lệnh giới hạn 10 giây.
+Mỗi lúc chạy tối đa hai lệnh git, mỗi lệnh giới hạn 10 giây (lệnh ghi index thì 30 giây).
