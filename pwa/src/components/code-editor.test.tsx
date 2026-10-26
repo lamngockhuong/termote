@@ -105,6 +105,30 @@ describe('CodeEditor', () => {
     expect(props.onChange).toHaveBeenCalledWith('x\none\ntwo\nthree\n')
   })
 
+  it('tells a selection, even one that changes no text', () => {
+    const onSelectText = vi.fn()
+    const { view } = setup({ onSelectText })
+    view.dispatch({ selection: { anchor: 0, head: 3 } })
+    expect(onSelectText).toHaveBeenCalledWith('one')
+    // A cursor moved: no text
+    view.dispatch({ selection: { anchor: 5 } })
+    // A change that keeps the selection where it is
+    view.dispatch({ changes: { from: 0, insert: 'x' } })
+    expect(onSelectText).toHaveBeenCalledTimes(1)
+    // Without a listener, nothing breaks
+    setup().view.dispatch({ selection: { anchor: 0, head: 3 } })
+  })
+
+  it('a text set from the props selects nothing for the user', () => {
+    const onSelectText = vi.fn()
+    const { view, rerender } = setup({ onSelectText })
+    view.dispatch({ selection: { anchor: 0, head: 3 } })
+    onSelectText.mockClear()
+    rerender({ onSelectText, text: 'ABCDEF\n' })
+    expect(view.state.doc.toString()).toBe('ABCDEF\n')
+    expect(onSelectText).not.toHaveBeenCalled()
+  })
+
   it('shows a text changed elsewhere without telling onChange, out of undo', () => {
     const { view, props, rerender } = setup()
     view.dispatch({

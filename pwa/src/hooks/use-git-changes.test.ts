@@ -15,6 +15,7 @@ import {
   changeKey,
   changesMoved,
   findEntry,
+  peekGitChanges,
   resetGitChangesStores,
   useGitChanges,
 } from './use-git-changes'
@@ -64,6 +65,15 @@ const tick = async (ms = 0) => {
     await vi.advanceTimersByTimeAsync(ms)
   })
 }
+
+describe('peekGitChanges', () => {
+  it('reads a store without making one', async () => {
+    expect(peekGitChanges('%9')).toBeNull()
+    renderHook(() => useGitChanges('%9'))
+    await tick()
+    expect(peekGitChanges('%9')?.root).toBe('/r')
+  })
+})
 
 describe('useGitChanges', () => {
   it('polls every 5s while shown, sending the root it saw', async () => {
@@ -158,7 +168,7 @@ describe('useGitChanges', () => {
     await tick()
     mockChanges
       .mockRejectedValueOnce(
-        new RequestError(409, '', 'root changed', undefined, undefined, '/n'),
+        new RequestError(409, '', 'root changed', { root: '/n' }),
       )
       .mockResolvedValue(changes({ root: '/n', isRepo: false, entries: [] }))
     await tick(CHANGES_POLL)
@@ -769,7 +779,7 @@ describe('tabs kept on the device', () => {
     act(() => hydrateDrafts(['%1']))
     mockChanges
       .mockRejectedValueOnce(
-        new RequestError(409, '', 'root changed', undefined, undefined, '/n'),
+        new RequestError(409, '', 'root changed', { root: '/n' }),
       )
       .mockResolvedValue(changes({ root: '/n', entries: [] }))
     const { result } = renderHook(() => useGitChanges('%1'))

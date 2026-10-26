@@ -25,6 +25,7 @@ import {
 } from '../hooks/use-files'
 import { RequestError } from '../hooks/use-mux-api'
 import type { TableOp } from '../utils/csv-edits'
+import { paneSelection, resetPaneSelections } from '../utils/pane-selection'
 import { FileViewer, rebaseDraft } from './file-viewer'
 
 const mockContent = vi.fn()
@@ -203,7 +204,7 @@ describe('FileViewer', () => {
 
   it('a moved root is handed to the tree, which reads the file again', async () => {
     mockContent.mockRejectedValue(
-      new RequestError(409, '', 'root changed', undefined, undefined, '/n'),
+      new RequestError(409, '', 'root changed', { root: '/n' }),
     )
     const p = show()
     await act(async () => {})
@@ -492,7 +493,7 @@ describe('FileViewer: images', () => {
 
   it('hands a moved root to the caller', async () => {
     mockImage.mockRejectedValue(
-      new RequestError(409, '', 'root changed', undefined, undefined, '/new'),
+      new RequestError(409, '', 'root changed', { root: '/new' }),
     )
     const p = show({ path: 'a.png' })
     await waitFor(() => expect(p.onRootChanged).toHaveBeenCalledWith('/new'))
@@ -701,7 +702,7 @@ describe('FileViewer editing', () => {
   it('a moved root keeps the text and disables Save; Discard hands the root on', async () => {
     mockContent.mockResolvedValue(editable('x'))
     mockSave.mockRejectedValue(
-      new RequestError(409, '', 'root changed', undefined, undefined, '/n'),
+      new RequestError(409, '', 'root changed', { root: '/n' }),
     )
     const p = await startEdit()
     type('y')
@@ -857,6 +858,59 @@ describe('FileViewer editing', () => {
       '%1',
       expect.objectContaining({ reveal: true }),
     )
+  })
+
+  it('keeps text selected in the file or its editor for a template, never from a file shown as sensitive', async () => {
+    resetPaneSelections()
+    const selectIn = (node: Node, from: number, to: number) => {
+      const range = document.createRange()
+      range.setStart(node, from)
+      range.setEnd(node, to)
+      const sel = document.getSelection() as Selection
+      sel.removeAllRanges()
+      sel.addRange(range)
+      act(() => {
+        document.dispatchEvent(new Event('selectionchange'))
+      })
+    }
+    mockContent.mockResolvedValue({
+      root: '/r',
+      path: 'src/a.ts',
+      size: 5,
+      text: 'hello',
+    })
+    const a = show()
+    const code = await screen.findByText('hello')
+    selectIn(code.firstChild as Node, 1, 4)
+    expect(paneSelection('%1')).toEqual({ text: 'ell', source: 'src/a.ts' })
+    a.unmount()
+
+    resetPaneSelections()
+    mockContent.mockResolvedValue(editable('A=1', { path: '.env' }))
+    show({
+      canEdit: true,
+      path: '.env',
+      initialReveal: true,
+      startEditing: true,
+    })
+    const box = (await screen.findByRole('textbox', {
+      name: 'Text of .env',
+    })) as HTMLTextAreaElement
+    box.setSelectionRange(0, 3)
+    fireEvent.select(box)
+    selectIn(screen.getByText(/secrets|\.env/).firstChild as Node, 0, 1)
+    expect(paneSelection('%1')).toBeNull()
+    document.getSelection()?.removeAllRanges()
+  })
+
+  it('keeps text selected in the editor', async () => {
+    resetPaneSelections()
+    mockContent.mockResolvedValue(editable('hello'))
+    await startEdit()
+    const box = screen.getByRole('textbox') as HTMLTextAreaElement
+    box.setSelectionRange(0, 2)
+    fireEvent.select(box)
+    expect(paneSelection('%1')).toEqual({ text: 'he', source: 'src/a.ts' })
   })
 
   it("editing another file keeps the first file's unsaved changes", async () => {

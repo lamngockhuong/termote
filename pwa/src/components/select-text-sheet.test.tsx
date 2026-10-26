@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PaneTextState } from '../hooks/use-pane-text'
+import { paneSelection, resetPaneSelections } from '../utils/pane-selection'
 import { rangeText, SelectTextSheet } from './select-text-sheet'
 
 const paneText = vi.hoisted(() => ({
@@ -113,6 +114,30 @@ describe('SelectTextSheet', () => {
     document.getSelection()!.removeAllRanges()
     fireEvent.click(copy)
     expect(copyText).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps a selection in the text for a template', () => {
+    resetPaneSelections()
+    const { unmount } = render(
+      <SelectTextSheet
+        onClose={vi.fn()}
+        paneId={undefined}
+        useServer={false}
+        readBuffer={() => ''}
+        onCopied={vi.fn()}
+      />,
+    )
+    select(screen.getByTestId('select-text'))
+    expect(paneSelection('0')).toBeNull()
+    unmount()
+    renderSheet()
+    select(screen.getByRole('heading'))
+    expect(paneSelection('0')).toBeNull()
+    select(screen.getByTestId('select-text'))
+    expect(paneSelection('0')).toEqual({
+      text: 'one\ntwo',
+      source: 'the terminal',
+    })
   })
 
   it('shows hidden characters and copies them as they are', () => {

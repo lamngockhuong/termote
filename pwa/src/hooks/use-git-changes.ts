@@ -527,6 +527,11 @@ function storeFor(paneId: string): Store {
   return s
 }
 
+// paneId's changes as last read, without making a store for it (null when
+// nothing read them yet): a template's {{branch}}
+export const peekGitChanges = (paneId: string): ChangesState | null =>
+  stores.get(paneId)?.get() ?? null
+
 // The changes of paneId's root, polled every CHANGES_POLL while a component
 // shows them and the page is visible; failures back off up to a minute.
 export function useGitChanges(paneId: string) {

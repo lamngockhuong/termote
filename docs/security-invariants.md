@@ -821,8 +821,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   taken. A sensitive file shown (`reveal`) is not written to the files opened lately when its
   tab opens it again. An agent's command (`/name`, a Codex skill `$name`) is put in front of the
   Chat draft, or typed into the terminal without Enter only when the pane's command is that
-  agent; nothing is sent, and a view-only client gets neither. Tab, pane and file names are
-  shown through `visibleUnsafe`
+  agent; nothing is sent, and a view-only client gets neither. A prompt template (the `Template:`
+  entries, `caps.templates`) is filled in, then put in the Chat draft where the caret was, never
+  sent nor typed into the terminal; disabled for a view-only client and a pane without the Chat
+  composer. Tab, pane, file and template names are shown through `visibleUnsafe`
 - **Creating a file** (`POST files/create?root=`, `server/files_create.go`): an empty file and
   the directories missing above it (0666/0777 under the umask; directories made before a later
   failure stay, as with `mkdir -p`); the text then goes through `PUT files/content`. Same guards
@@ -1073,6 +1075,50 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   on load, every 10 minutes while shown and when shown again. Log out deletes this device's subscription first.
   The CSP is unchanged: the server, not the page, talks to push services. The container opens
   `/home/termote/.local/state` 1777 like `.cache`/`.config`
+- **Prompt templates** (`/api/mux/templates*`, `server/template_store.go`,
+  `server/template_routes.go`, `caps.templates`; PWA `pwa/src/hooks/use-prompt-templates.ts`,
+  `utils/prompt-templates.ts`, `template-fill-dialog.tsx`, `prompt-templates-section.tsx`): one
+  file `<stateDir>/templates/templates.json` (dir 0700 through `checkPrivateDir`, file 0600
+  through `writeStateFile`, a symlinked file or dir refused, stale `.templates-*.part` removed;
+  the state dir is in `FilesDenyDirs`; `uninstall --purge` removes it with the state dir). The
+  templates are what the user typed: a file that cannot be read (corrupt JSON, no `v`, larger
+  than 16 MiB) is never renamed or written over: at start it turns the store off
+  (`caps.templates` false, every route 503 `templates_unavailable`), later every write fails
+  (500) and reads keep what was read; a `v` above 1 (a newer
+  version's) is read only (every write 409 `newer_format`), so a rollback of `update` keeps
+  them. Every write takes `templates.lock` (`lockStateFile`, 2 s, then 503 `busy`), reads the
+  file again, applies one change and writes, so a second `serve` on the same state dir loses
+  nothing; a read never waits for another process's lock and reads the file again when its time
+  or size changed. `GET` (every role) goes through `crossSiteRejection` and `no-store`;
+  `POST /templates`, `PUT|DELETE /templates/{id}` (16 hex digits, else 404) and
+  `POST /templates/import[?dryRun=1]` through `writeGuard`, `requireWriteRole` (403
+  `view_only`) and a body limit (40 KiB, an import 100 × 40 KiB; over it 413 `too_large`): the
+  largest template whose every byte JSON escapes to two fits. Limits, checked on writes only: 100
+  templates (409 `too_many`); a name of 1-64 characters once trimmed, unique case aside
+  (`EqualFold`, 409 `name_taken`); a text of 1-16384 bytes once line breaks are `\n`; both
+  refuse control characters (the text keeps tab and newline) and characters that show nothing
+  (format characters but ZWJ/ZWNJ, tags U+E0000-E007F, variation selectors U+E0100-E01EF): 400
+  `invalid_template` with `field`, so a shared template cannot carry an instruction its reader
+  cannot see (`server/testdata/template-hidden-chars.json`, read by the Go and PWA tests). `PUT`
+  and `DELETE` name the `updated` they read: another one is 409 `conflict` with the template as it
+  is now, a missing one 404 `not_found`. An import is one write or none: every entry checked
+  first (400 `invalid_template` or `duplicate_name` with `index`), a name already there
+  (`EqualFold`) replaced, the rest added; the dry run says which by name, and the import names
+  what it replaces (`replace`): another set is 409 `import_changed`. An error carries its code, a
+  fixed message and what it is about (`field`, `index`, the current `template`), never OS text or a
+  path; anything else is logged and answered with a generic 500; no
+  name or text is logged, and there is no `audit:` line. The PWA never sends a template: it is
+  filled in a dialog and put in the Chat draft (`requestDraftInsert`), only for the pane and agent
+  it was picked for; a view-only client has no composer and in Settings only lists and exports.
+  Names and texts are shown through `visibleUnsafe`. The templates read are kept in memory for the
+  server of the snapshot's `instanceId` and dropped when it changes, when `caps.templates` goes,
+  and on sign-out. `{{selection}}` is the text last selected in the terminal, the select-text
+  sheet, the editor, a file shown or the Chat transcript, kept per pane in memory only, never
+  from a sensitive file shown (`reveal`), dropped on another server and on sign-out; the Chat
+  drafts (`sessionStorage` `termote-chat-draft:*`) are cleared on sign-out too. Limits: native and
+  container keep separate templates; a name differing only by a look-alike character is another
+  name (the import confirmation lists every name); with tmux, a selection in another split of the
+  window is kept for the pane shown
 - Exclude sensitive dirs (.ssh, .gnupg, .aws, .config/gcloud) from container volume mounts
   (warned at `container up`)
 - Serve mode uses constant-time comparison for password verification

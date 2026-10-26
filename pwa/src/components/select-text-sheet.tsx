@@ -8,6 +8,7 @@ import {
 } from 'react'
 import { usePaneText } from '../hooks/use-pane-text'
 import { copyText } from '../utils/copy-text'
+import { recordSelection } from '../utils/pane-selection'
 import { splitUnsafe } from '../utils/unsafe-chars'
 import { Button } from './ui/button'
 import { Sheet } from './ui/sheet'
@@ -63,10 +64,16 @@ export function SelectTextSheet({
   }, [])
 
   useEffect(() => {
-    const onChange = () => setSelected(!!selectionRange())
+    const onChange = () => {
+      const range = selectionRange()
+      setSelected(!!range)
+      // Kept for a prompt template's {{selection}}
+      if (range && paneId)
+        recordSelection(paneId, rangeText(range), 'the terminal')
+    }
     document.addEventListener('selectionchange', onChange)
     return () => document.removeEventListener('selectionchange', onChange)
-  }, [selectionRange])
+  }, [selectionRange, paneId])
 
   const copy = (value: string) => {
     void copyText(value).then(onCopied)

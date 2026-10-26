@@ -1,0 +1,84 @@
+---
+title: Prompt Templates
+description: Save the prompts you type again and again, with variables, and insert them into the Chat
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+A prompt template is a name and a text you save once and insert into the
+[Chat view](/usage/agent-chat/) whenever you need it: a review request, a bug report, a release
+check. The text can hold variables that are filled in when you insert it. Templates are kept on the
+server, so every device that signs in to it sees the same ones.
+
+## Making a Template
+
+Open **Settings > Prompt templates** and press **New template**. Give it a name (up to 64
+characters, unique whatever the case) and a text (up to 16 KB, the most a Chat message can be). The
+buttons under the text put a variable where the cursor is. **Edit** and **Delete** on each row
+change or remove one.
+
+A template cannot hold control characters (other than tab and new line) or characters that show
+nothing, such as zero-width spaces or bidi marks: a template you share must not carry an instruction
+its reader cannot see. The editor says which character it found and where. A server keeps up to 100
+templates.
+
+If another device changed the template while you were editing it, saving says so: **Load theirs**
+takes their version, **Keep mine** saves yours over it. If it was deleted meanwhile, **Save as new**
+saves yours as a new template.
+
+## Variables
+
+| Variable        | Filled with                                                                              |
+| --------------- | ---------------------------------------------------------------------------------------- |
+| `{{file}}`      | The path of the file the pane's Files view shows, relative to its folder                 |
+| `{{selection}}` | The text you selected last for the pane: in the terminal, a file, the editor or the Chat |
+| `{{branch}}`    | The git branch of the pane's folder, or of its Herdr worktree                            |
+| `{{input}}`     | Nothing: you type it when you insert the template                                        |
+
+Each variable is filled once, however many times it appears. Anything else between `{{` and `}}`
+stays as it is. A selection is kept in the page's memory only, never saved, and is not taken from a
+sensitive file you chose to show.
+
+<Aside>
+  With tmux, the terminal shows the whole window: text selected in another split of it counts for the
+  pane on screen. Check the selection in the dialog before you insert it.
+</Aside>
+
+## Inserting a Template
+
+Open the agent's Chat, then pick a template in any of three ways:
+
+- **The Templates button** next to the message box: search by any word of a name.
+- **The `/` list**: templates come after the agent's commands, under **Templates**. They are never
+  picked by Enter alone: move to one with the arrow keys, or tap it. With no command to pick, Enter
+  does what it always does.
+- **The command palette** on a computer (`>`): templates are listed with the commands.
+
+A template with variables opens a dialog first. **Your text** (`{{input}}`) has the focus; the other
+fields come filled in, each saying where its value came from, and you can change any of them. The
+preview shows the result. **Insert** (or Ctrl+Enter, Cmd+Enter on a Mac) puts the text in the message box where the
+cursor was, or in place of the `/name` you typed. A template without variables goes in at once.
+
+<Aside type="caution">
+  Nothing is ever sent for you: the text waits in the message box until you read it and send it.
+</Aside>
+
+## Export and Import
+
+**Export** saves every template as a JSON file (`termote-templates-YYYY-MM-DD.json`): names and texts
+only. **Import…** reads such a file (up to 4 MB) and lists, before anything changes, which templates
+are new and which replace one of the same name. An import is all or nothing, and it cannot be undone:
+export first to keep a copy.
+
+## Who Can Change Them
+
+A device with full access makes, changes, deletes and imports templates. A
+[view-only device](/usage/devices/) lists and exports them, and has no message box to insert them
+into. If a newer version of Termote saved the templates, an older one shows them but cannot change
+them until it is updated.
+
+The templates are kept in the server's state folder: `~/.local/state/termote/templates/templates.json`
+on Linux and macOS (under `$XDG_STATE_HOME` when it is set), `%LOCALAPPDATA%\termote\state\templates`
+on Windows, and the `termote-state-<uid>` volume in a container. A native server and a container on the
+same computer each keep their own, and they are not shared between servers. `termote uninstall --purge`
+deletes them with the rest of the state folder: export them first if you want to keep them.

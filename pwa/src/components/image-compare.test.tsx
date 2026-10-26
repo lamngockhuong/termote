@@ -230,7 +230,7 @@ describe('ImageCompare', () => {
 
   it('hands a moved root to the caller', async () => {
     mockImage.mockRejectedValue(
-      new RequestError(409, '', 'root changed', undefined, undefined, '/new'),
+      new RequestError(409, '', 'root changed', { root: '/new' }),
     )
     const p = show()
     await waitFor(() => expect(p.onRootChanged).toHaveBeenCalledWith('/new'))

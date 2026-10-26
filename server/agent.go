@@ -360,6 +360,9 @@ type agentAPI struct {
 	// signins: password sessions can be listed and revoked (the
 	// snapshot's caps.signins); set by buildServer.
 	signins bool
+	// templates: the prompt templates are usable (the snapshot's
+	// caps.templates); set by buildServer.
+	templates bool
 	// instanceID: this server's id (the snapshot's instanceId); set by
 	// buildServer.
 	instanceID string

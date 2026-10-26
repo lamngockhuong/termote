@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { createRef } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StreamControl, TermSize } from '../hooks/use-term-socket'
+import { paneSelection, resetPaneSelections } from '../utils/pane-selection'
 import { terminalFontFamily } from '../utils/terminal-font'
 import {
   bracketPaste,
@@ -51,7 +52,11 @@ const { FakeTerminal, FakeFit } = vi.hoisted(() => {
     selection = ''
     hasSelection = () => this.selection !== ''
     getSelection = () => this.selection
-    selectionCb: Listener<void> = () => {}
+    // Every selection listener (the copy and the template ones)
+    selectionCbs: Listener<void>[] = []
+    selectionCb = () => {
+      for (const cb of this.selectionCbs) cb()
+    }
     resizeCb: Listener<TermSize> = () => {}
     disposables: Array<{ dispose: ReturnType<typeof vi.fn> }> = []
     write = vi.fn()
@@ -86,7 +91,9 @@ const { FakeTerminal, FakeFit } = vi.hoisted(() => {
     onData = this.sub<string>((cb) => (this.dataCb = cb))
     onBinary = this.sub<string>((cb) => (this.binaryCb = cb))
     onResize = this.sub<TermSize>((cb) => (this.resizeCb = cb))
-    onSelectionChange = this.sub<void>((cb) => (this.selectionCb = cb))
+    onSelectionChange = this.sub<void>((cb) => {
+      this.selectionCbs.push(cb)
+    })
   }
 
   class FakeFit {
@@ -1261,6 +1268,26 @@ describe('TerminalView', () => {
         expect(bridge.copyTerminalSelection).toHaveBeenCalledTimes(2),
       )
       expect(onCopy).toHaveBeenCalledTimes(1)
+    })
+
+    it('keeps the selection for a template whatever the copy setting', () => {
+      resetPaneSelections()
+      const { term, rerender, ref } = renderView()
+      term.selection = 'picked'
+      term.selectionCb()
+      expect(paneSelection('0')).toEqual({
+        text: 'picked',
+        source: 'the terminal',
+      })
+      // Cleared: the last one stays
+      term.selection = ''
+      term.selectionCb()
+      expect(paneSelection('0')?.text).toBe('picked')
+      // No stream: no pane to keep it for
+      rerender(<TerminalView ref={ref} />)
+      term.selection = 'other'
+      term.selectionCb()
+      expect(paneSelection('0')?.text).toBe('picked')
     })
 
     it('copies at the end of a drag only with copyOnSelect, once per selection', async () => {

@@ -43,6 +43,7 @@ import {
 } from './components/session-sidebar'
 import { SettingsModal } from './components/settings-modal'
 import { SidePanel } from './components/side-panel'
+import { TemplateFillDialog } from './components/template-fill-dialog'
 import { type TerminalHandle, TerminalView } from './components/terminal-view'
 import { Toast, type ToastAction, type ToastVariant } from './components/toast'
 import { Banner } from './components/ui/banner'
@@ -126,6 +127,7 @@ import {
   scrollTmux,
   sendKeyToTerminal,
   sendTextToTerminal,
+  terminalSelection,
   toggleTmuxCopyMode,
 } from './utils/terminal-bridge'
 import { visibleUnsafe } from './utils/unsafe-chars'
@@ -543,11 +545,16 @@ export default function App({
       setSidePanelId(null)
     }
   }, [isMobile, viewId, sidePanelId, views])
+  const openSettings = useCallback((group?: string) => {
+    setSettingsGroup(group)
+    setSettingsOpen(true)
+  }, [])
   const viewProps = {
     ...viewContext,
     isMobile,
     notify,
     showView,
+    openSettings,
   }
   const sidePanelView = panelViews.find((v) => v.id === sidePanelId && v.Panel)
   const hasSidePanel = !!sidePanelView
@@ -1315,10 +1322,7 @@ export default function App({
         },
         newTab: () => void addTab('New'),
         selectTab: (id) => void selectFromList(id),
-        openSettings: (group) => {
-          setSettingsGroup(group)
-          setSettingsOpen(true)
-        },
+        openSettings,
         openHelp: () => setHelpOpen(true),
         openAbout: () => setAboutOpen(true),
         toggleSidebar: toggleSidebarCollapsed,
@@ -1353,6 +1357,7 @@ export default function App({
       increase,
       decrease,
       setTheme,
+      openSettings,
     ],
   )
   useShortcutDispatcher(commands, desktop)
@@ -1909,6 +1914,7 @@ export default function App({
         readOnly={readOnly}
         devices={!!mux.caps.devices && !readOnly}
         signins={!!mux.caps.signins && !readOnly}
+        templates={!!mux.caps.templates}
         shortcuts={desktop ? commands : undefined}
         onLogout={handleLogout}
         onEnableNotify={push.enable}
@@ -1950,6 +1956,7 @@ export default function App({
               }
               showFilesPanel={showFilesPanel}
               composer={composerOffered}
+              templates={!!mux.caps.templates}
               showChat={() => changeView(CHAT_VIEW_ID)}
               sendToTerminal={(text) => {
                 changeView(TERMINAL_VIEW_ID)
@@ -1966,6 +1973,22 @@ export default function App({
         <GestureHintsOverlay
           isOpen={gestureHintsOpen}
           onDismiss={dismissGestureHints}
+        />
+      )}
+      {mux.caps.templates && (
+        <TemplateFillDialog
+          pane={(paneId) => {
+            const s = sessions.find((x) => x.paneId === paneId)
+            if (!s) return null
+            const g = groups.find((x) => x.id === s.groupId)
+            return { agent: s.agentName, branch: g?.worktree?.branch }
+          }}
+          terminalText={(paneId) =>
+            paneId === activeSession.paneId
+              ? terminalSelection(getTerminal())
+              : ''
+          }
+          notify={notify}
         />
       )}
       {selectTextOpen && (

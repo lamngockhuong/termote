@@ -162,3 +162,22 @@ export async function downloadFile(
     notify(downloadErrorMessage(err, shown), { variant: 'danger' })
   }
 }
+
+// Saves a file the page made (an export): a blob: link, or in the iOS
+// home-screen app the share sheet when it takes the file.
+export async function saveMadeFile(
+  file: File,
+  deps: Partial<Pick<DownloadDeps, 'iosStandalone' | 'nav'>> = {},
+): Promise<void> {
+  const nav = deps.nav ?? navigator
+  if (
+    (deps.iosStandalone ?? isIosStandalone()) &&
+    nav.canShare?.({ files: [file] })
+  ) {
+    await shareFile(nav, file)
+    return
+  }
+  const href = URL.createObjectURL(file)
+  clickLink(href, file.name)
+  setTimeout(() => URL.revokeObjectURL(href), BLOB_REVOKE_MS)
+}

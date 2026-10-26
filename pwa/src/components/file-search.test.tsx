@@ -165,7 +165,7 @@ describe('FileSearch', () => {
     const onRootChanged = vi.fn()
     mockFind.mockRejectedValueOnce(new RequestError(403, '', 'x'))
     mockFind.mockRejectedValueOnce(
-      new RequestError(409, '', 'root changed', undefined, undefined, '/n'),
+      new RequestError(409, '', 'root changed', { root: '/n' }),
     )
     render(<Harness onRootChanged={onRootChanged} />)
     await type('a')

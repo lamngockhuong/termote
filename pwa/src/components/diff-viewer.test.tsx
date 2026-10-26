@@ -224,7 +224,7 @@ describe('DiffViewer', () => {
     let finish!: (v: unknown) => void
     mockDiff
       .mockRejectedValueOnce(
-        new RequestError(409, '', 'root changed', undefined, undefined, '/n'),
+        new RequestError(409, '', 'root changed', { root: '/n' }),
       )
       .mockReturnValueOnce(new Promise((_, r) => (fail = r)))
       .mockReturnValueOnce(new Promise((r) => (finish = r)))

@@ -38,6 +38,12 @@ vi.mock('./updates-section', () => ({
 vi.mock('./devices-section', () => ({
   DevicesSection: () => <div data-testid="devices-section" />,
 }))
+// And Prompt templates' in prompt-templates-section.test.tsx.
+vi.mock('./prompt-templates-section', () => ({
+  PromptTemplatesSection: ({ readOnly }: { readOnly?: boolean }) => (
+    <div data-testid="templates-section" data-read-only={String(readOnly)} />
+  ),
+}))
 // And the Signed-in browsers group's in signins-section.test.tsx.
 vi.mock('./signins-section', () => ({
   SigninsSection: ({ logOut }: { logOut?: () => void }) => (
@@ -937,6 +943,20 @@ describe('SettingsModal for a view-only device or with devices', () => {
     // Signing this browser out is the app's Log out
     fireEvent.click(screen.getByTestId('signins-section'))
     expect(onLogout).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows the Prompt templates group only when the server keeps them', () => {
+    const { unmount } = renderWith({})
+    expect(
+      screen.queryByRole('button', { name: 'Prompt templates' }),
+    ).toBeNull()
+    unmount()
+    renderWith({ templates: true, readOnly: true })
+    fireEvent.click(screen.getByRole('button', { name: 'Prompt templates' }))
+    expect(screen.getByTestId('templates-section')).toHaveAttribute(
+      'data-read-only',
+      'true',
+    )
   })
 
   it('offers notifications to a full device', async () => {

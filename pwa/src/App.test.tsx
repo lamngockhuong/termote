@@ -1,5 +1,6 @@
 import {
   act,
+  cleanup,
   fireEvent,
   render,
   renderHook,
@@ -267,7 +268,10 @@ vi.mock('./utils/terminal-bridge', () => ({
     mockReadTerminalBufferText(...args),
 
   sendTextToTerminal: (...args: any[]) => mockSendTextToTerminal(...args),
+
+  terminalSelection: (h: any) => mockTerminalSelection(h),
 }))
+const mockTerminalSelection = vi.fn((_h: unknown) => 'selected')
 
 const mockCheckServerVersion = vi.fn()
 const mockReloadToNewVersion = vi.fn()
@@ -327,6 +331,22 @@ vi.mock('./components/terminal-view', () => ({
       return <div data-testid="terminal-view">Terminal</div>
     },
   ),
+}))
+
+// The template fill dialog's props, while templates are on
+interface FillDialogProps {
+  pane: (paneId: string) => { agent?: string; branch?: string } | null
+  terminalText: (paneId: string) => string
+  notify: (message: string) => void
+}
+const fillDialog = vi.hoisted(() => ({
+  props: null as null | FillDialogProps,
+}))
+vi.mock('./components/template-fill-dialog', () => ({
+  TemplateFillDialog: (props: FillDialogProps) => {
+    fillDialog.props = props
+    return null
+  },
 }))
 
 // The Select text sheet's props, while it is open
@@ -5485,5 +5505,50 @@ describe('App command palette and shortcuts', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('App prompt templates', () => {
+  it('mounts the fill dialog only with templates, telling it each pane', async () => {
+    const got = () => fillDialog.props
+    fillDialog.props = null
+    render(<App />)
+    await screen.findByTestId('terminal-view')
+    expect(got()).toBeNull()
+    cleanup()
+
+    const base = mockUseLocalSessions()
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      activeSession: { ...base.activeSession, paneId: 'pane1' },
+      sessions: [
+        {
+          ...base.sessions[0],
+          paneId: 'pane1',
+          groupId: 'g1',
+          hasAgent: true,
+          agentName: 'claude',
+        },
+        { ...base.sessions[0], id: '2', paneId: 'pane2', groupId: 'gone' },
+      ],
+      groups: [
+        { id: 'g1', name: 'main', worktree: { linked: true, branch: 'feat' } },
+      ],
+      mux: {
+        backend: 'herdr',
+        caps: { clientSideSelect: true, copyMode: false, templates: true },
+      },
+    } as any)
+    render(<App />)
+    await screen.findByTestId('terminal-view')
+    const props = got() as FillDialogProps
+    expect(props.pane('pane1')).toEqual({ agent: 'claude', branch: 'feat' })
+    expect(props.pane('pane2')).toEqual({ agent: undefined, branch: undefined })
+    expect(props.pane('nope')).toBeNull()
+    // Only the pane the terminal shows has its selection
+    expect(props.terminalText('pane1')).toBe('selected')
+    expect(mockTerminalSelection).toHaveBeenCalled()
+    expect(props.terminalText('pane2')).toBe('')
+    mockUseLocalSessions.mockReturnValue(base as any)
   })
 })

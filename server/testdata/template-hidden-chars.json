@@ -1,0 +1,32 @@
+{
+  "comment": "Characters a prompt template's name and text may hold. Shared by template_store_test.go and pwa/src/utils/prompt-templates.test.ts, so the PWA warns about what the server refuses.",
+  "cases": [
+    { "codePoint": "0041", "inName": true, "inText": true, "why": "a letter" },
+    { "codePoint": "00E9", "inName": true, "inText": true, "why": "an accented letter" },
+    { "codePoint": "1F600", "inName": true, "inText": true, "why": "an emoji" },
+    { "codePoint": "FE0F", "inName": true, "inText": true, "why": "variation selector 16, for emoji" },
+    { "codePoint": "200C", "inName": true, "inText": true, "why": "zero width non-joiner, some scripts need it" },
+    { "codePoint": "200D", "inName": true, "inText": true, "why": "zero width joiner, emoji sequences need it" },
+    { "codePoint": "0009", "inName": false, "inText": true, "why": "tab" },
+    { "codePoint": "000A", "inName": false, "inText": true, "why": "newline" },
+    { "codePoint": "0000", "inName": false, "inText": false, "why": "NUL" },
+    { "codePoint": "001B", "inName": false, "inText": false, "why": "escape" },
+    { "codePoint": "007F", "inName": false, "inText": false, "why": "delete" },
+    { "codePoint": "0085", "inName": false, "inText": false, "why": "next line, C1" },
+    { "codePoint": "00AD", "inName": false, "inText": false, "why": "soft hyphen" },
+    { "codePoint": "061C", "inName": false, "inText": false, "why": "Arabic letter mark" },
+    { "codePoint": "180E", "inName": false, "inText": false, "why": "Mongolian vowel separator" },
+    { "codePoint": "200B", "inName": false, "inText": false, "why": "zero width space" },
+    { "codePoint": "200E", "inName": false, "inText": false, "why": "left-to-right mark" },
+    { "codePoint": "202E", "inName": false, "inText": false, "why": "right-to-left override" },
+    { "codePoint": "2060", "inName": false, "inText": false, "why": "word joiner" },
+    { "codePoint": "2064", "inName": false, "inText": false, "why": "invisible plus" },
+    { "codePoint": "2066", "inName": false, "inText": false, "why": "left-to-right isolate" },
+    { "codePoint": "FEFF", "inName": false, "inText": false, "why": "byte order mark" },
+    { "codePoint": "E0001", "inName": false, "inText": false, "why": "language tag" },
+    { "codePoint": "E0041", "inName": false, "inText": false, "why": "tag latin capital A" },
+    { "codePoint": "E007F", "inName": false, "inText": false, "why": "cancel tag" },
+    { "codePoint": "E0100", "inName": false, "inText": false, "why": "variation selector 17" },
+    { "codePoint": "E01EF", "inName": false, "inText": false, "why": "variation selector 256" }
+  ]
+}

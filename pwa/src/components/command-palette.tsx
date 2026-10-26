@@ -18,8 +18,10 @@ import {
 import {
   type FindResponse,
   findFiles,
+  type PromptTemplate,
   RequestError,
 } from '../hooks/use-mux-api'
+import { usePromptTemplates } from '../hooks/use-prompt-templates'
 import { useSettings } from '../hooks/use-settings'
 import { useKeymap } from '../hooks/use-shortcuts'
 import type { Session, SessionGroup } from '../types/session'
@@ -35,6 +37,7 @@ import {
 } from '../utils/palette-match'
 import { onPaneRemap } from '../utils/pane-remap'
 import { isApplePlatform } from '../utils/platform'
+import { firstLine } from '../utils/prompt-templates'
 import {
   type CommandId,
   chordFromEvent,
@@ -48,6 +51,7 @@ import {
   mergeSlashCommands,
   type SlashCommand,
 } from '../utils/slash-commands'
+import { requestTemplateFill } from '../utils/template-fill-request'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { FIND_DEBOUNCE_MS, FIND_ERRORS } from './file-search'
 import { Sheet } from './ui/sheet'
@@ -73,6 +77,8 @@ export interface CommandPaletteProps {
   showFilesPanel: () => void
   // The pane's agent has a Chat composer to type a command into
   composer: boolean
+  // The server keeps prompt templates (caps.templates)
+  templates?: boolean
   showChat: () => void
   // Types text into the terminal (no Enter) and focuses it
   sendToTerminal: (text: string) => void
@@ -131,6 +137,7 @@ export function CommandPalette({
   filesAvailable,
   showFilesPanel,
   composer,
+  templates = false,
   showChat,
   sendToTerminal,
   selectSession,
@@ -365,6 +372,25 @@ export function CommandPalette({
     }
   }
 
+  // Prompt templates, read again as the commands list opens: another
+  // device may have changed them. They go into the Chat's draft, filled in.
+  const prompts = usePromptTemplates()
+  const listTemplates = templates && current === 'commands'
+  const { refresh: refreshPrompts } = prompts
+  useEffect(() => {
+    if (listTemplates) void refreshPrompts()
+  }, [listTemplates, refreshPrompts])
+  const templateReason = readOnly
+    ? 'View only'
+    : composer
+      ? undefined
+      : "Open the agent's Chat to use templates"
+  const runTemplate = (t: PromptTemplate) =>
+    run(() => {
+      showChat()
+      requestTemplateFill({ paneId, templateId: t.id, agent: agentName })
+    })
+
   const runCommand = (c: AppCommand) => {
     const next = MODE_OF[c.id]
     if (next) {
@@ -395,6 +421,14 @@ export function CommandPalette({
         group: 'Agent',
         disabledReason: agentReason,
         run: () => runAgentCommand(c),
+      })),
+      ...(listTemplates ? prompts.templates : []).map((t) => ({
+        key: `template:${t.id}`,
+        label: visibleUnsafe(t.name),
+        description: visibleUnsafe(firstLine(t.text)),
+        group: 'Template',
+        disabledReason: templateReason,
+        run: () => runTemplate(t),
       })),
     ]
     return rankByMatch(items, query, (i) => `${i.group} ${i.label}`)

@@ -21,6 +21,7 @@ import {
   setPaneKeys,
   shiftedIds,
 } from '../utils/pane-remap'
+import { setSelectionServer } from '../utils/pane-selection'
 import { uniqueNames } from '../utils/running-commands'
 import { zellijGroupId } from '../utils/zellij-group'
 import { renameActivityGroup } from './use-activity-log'
@@ -44,6 +45,7 @@ import {
   renameTab,
   selectTab,
 } from './use-mux-api'
+import { setTemplatesServer } from './use-prompt-templates'
 
 export type MuxInfo = Pick<MuxSnapshot, 'backend' | 'caps'>
 
@@ -366,6 +368,9 @@ export function useLocalSessions(pollInterval = 5) {
       // Records kept on the device follow a group renamed elsewhere (tmux,
       // Herdr: the panes' keys stay)
       regroupPersisted(setPaneKeys(snap, keys))
+      // The templates read belong to one server
+      setTemplatesServer(snap.instanceId ?? null, !!snap.caps.templates)
+      setSelectionServer(snap.instanceId ?? null)
       if (shift.stale.size) {
         remapPanes(shift)
         remapChatDrafts(shift)

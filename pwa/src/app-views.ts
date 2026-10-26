@@ -44,6 +44,8 @@ export interface ViewProps extends ViewContext {
   notify: (message: string, options?: NotifyOptions) => void
   // Switches to another view of the pane (the terminal, as a way out)
   showView: (id: string) => void
+  // Opens Settings, at a group when given (the composer's Manage templates)
+  openSettings?: (group?: string) => void
 }
 
 // A view component, or a lazy one with retry() for a chunk that failed to load

@@ -52,16 +52,7 @@ const create = async () => {
 const dialog = (name: string) => screen.getByRole('dialog', { name })
 
 const refused = (status: number, code: string, root?: string, path?: string) =>
-  new RequestError(
-    status,
-    code,
-    'x',
-    undefined,
-    undefined,
-    root,
-    undefined,
-    path,
-  )
+  new RequestError(status, code, 'x', { root, path })
 
 // A draft of another file in the pane, changed or not
 function draft(text: string) {
