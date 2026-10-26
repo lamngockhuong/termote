@@ -329,13 +329,25 @@ export function ChatComposer({
     setSending(true)
     setNotice(null)
     try {
-      await sendAgentMessage(paneId, message, t.cursor, imageIds)
+      const { queued } = await sendAgentMessage(
+        paneId,
+        message,
+        t.cursor,
+        imageIds,
+      )
+      if (queued) {
+        setNotice({
+          variant: 'info',
+          text: `Queued: ${agent} reads it when it is ready.`,
+        })
+      }
       setText('')
       setCaret(0)
       saveDraft(latest.current.paneId, '')
       if (imageIds.length > 0) latest.current.images.clear()
       t.refresh()
-      if (cmd?.terminal && message.trim() === `/${cmd.name}`) {
+      // A queued command opens its screen only after the turn: stay here
+      if (!queued && cmd?.terminal && message.trim() === `/${cmd.name}`) {
         showView(TERMINAL_VIEW_ID)
       }
     } catch (err) {

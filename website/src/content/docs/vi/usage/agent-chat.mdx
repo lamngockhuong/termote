@@ -38,12 +38,15 @@ Codex dùng được theo cách tương tự, có yêu cầu riêng và một đ
 Gõ vào ô ở dưới cùng rồi bấm nút gửi (trên desktop dùng Ctrl+Enter). Tin nhiều dòng tới Claude
 Code thành một lượt, giữ nguyên văn.
 
-Termote chỉ gửi khi màn hình cho thấy Claude Code đang chờ ở ô nhập trống. Nếu không, tin bị từ
-chối và pane không nhận phím nào:
+Termote chỉ gửi khi màn hình cho thấy ô nhập của Claude Code đang trống. Lúc Claude Code đang
+chạy, tin vẫn được gửi: Claude Code xếp nó vào hàng đợi của chính nó và đọc khi sẵn sàng, còn view
+Chat báo `Queued: Claude Code reads it when it is ready.` Trong terminal, tin hiện ở dạng đang
+chờ, và bạn sửa được nó ở đó (phím Up). Các trường hợp khác thì tin bị từ chối và pane không nhận
+phím nào:
 
 | Thông báo                                                  | Mã                        | Ý nghĩa                                                                              |
 | ---------------------------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------ |
-| `Not sent: the agent is working / waiting for an answer`    | `input_not_ready`         | Claude Code đang chạy hoặc đang mở hộp thoại                                         |
+| `Not sent: the agent is waiting for an answer`              | `input_not_ready`         | Claude Code đang mở hộp thoại                                                        |
 | `Not sent: the input box already holds a draft`             | `input_not_ready`         | Ô nhập trong terminal đang có chữ; gửi hoặc xoá nó trong terminal                    |
 | `Not sent: the pane is in copy mode`                       | `input_not_ready`         | Pane tmux đang cuộn lại trong copy mode; thoát nó (`q`) trong terminal               |
 | `Not sent: the text did not show in the input box`          | `paste_not_confirmed`     | Enter chưa được gửi; có thể chữ đã nằm trong ô nhập                                  |
@@ -144,8 +147,11 @@ khung xem trước chỉ hiện trong terminal.
 
 Pane chạy Codex cũng có view Chat với hội thoại của phiên: tin nhắn của bạn, câu trả lời dạng
 markdown, lệnh đã chạy kèm kết quả, các thay đổi file dạng diff. Bạn gửi tin từ ô ở dưới cùng,
-theo cùng quy tắc như với Claude Code: Termote chỉ gửi khi màn hình cho thấy Codex đang ở ô nhập
-trống và không chạy gì, còn bị từ chối thì pane không nhận phím nào.
+theo cùng quy tắc như với Claude Code: Termote chỉ gửi khi màn hình cho thấy ô nhập của Codex đang
+trống, còn bị từ chối thì pane không nhận phím nào. Lúc Codex đang chạy, tin được gửi bằng Tab để
+Codex xếp nó vào hàng, chạy sau khi xong lượt (Codex liệt kê ở mục `Queued follow-up inputs`),
+thay vì Enter, vì Enter sẽ chen tin vào lượt đang chạy. Lệnh bắt đầu bằng `/` thì không được xếp
+hàng: hãy gửi khi Codex đã xong lượt.
 
 Hộp thoại xin duyệt (chạy lệnh, sửa file) khác nhau tuỳ bộ quản lý phiên:
 

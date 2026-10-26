@@ -1,0 +1,40 @@
+
+  [38;2;99;168;248m>_ [1m[39mOpenAI Codex[0;2m (v0.164.0)[0m
+     [2m/tmp/lab[0m
+
+[2m• [0mQueued follow-up inputs
+[2m  ↳ [3mRun the shell command: sleep 25. Then reply with just: done[0m
+    [1mshift+←[0;2m edit last queued message[0m
+
+[1m›[0m [2mAsk Codex to do anything[0m
+
+  [38;2;246;226;183mGPT-5.6-Terra default[39m · [38;2;171;223;167m/tmp/lab
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -98,6 +98,11 @@ func (f *fakeWriter) Paste(_ context.Context, _ string, text string) error {
 }
 
 func (f *fakeWriter) SendKeySequence(_ context.Context, _ string, keys []string) error {
+	// Every backend refuses a key outside agentKeys; so does the fake, so a
+	// route sending a new key fails here first.
+	if !validAgentKeys(keys) {
+		return inputError("invalid keys")
+	}
 	f.mu.Lock()
 	f.keys = append(f.keys, keys)
 	hook, err := f.onKeys, f.keyErr
@@ -200,12 +205,116 @@ func TestMessageWaitsForRedraw(t *testing.T) {
 	}
 }
 
-// What a redraw settles into is checked as before, and the session is read
-// again after the wait: nothing is pasted unless the same agent is idle.
-func TestMessageRedrawRefusals(t *testing.T) {
+// A message sent while the agent works goes into its queue: pasted and
+// submitted as when it is idle, answered 202 so the client says so.
+func TestMessageQueuedWhileWorking(t *testing.T) {
 	shortConfirm(t)
 	working := labSession
 	working.Status = "working"
+	tests := []struct {
+		name   string
+		setup  func(f *fakeWriter)
+		status int
+	}{
+		{"working from the start", func(f *fakeWriter) {
+			f.session = working
+			f.screen = fixtureScreen(t, "2.1.310-working")
+		}, http.StatusAccepted},
+		{"a message already queued", func(f *fakeWriter) {
+			f.session = working
+			f.screen = fixtureScreen(t, "2.1.310-working-queued")
+		}, http.StatusAccepted},
+		{"starts working before paste", func(f *fakeWriter) { f.sessions = []AgentSession{labSession, working} }, http.StatusAccepted},
+		{"starts working before enter", func(f *fakeWriter) { f.sessions = []AgentSession{labSession, labSession, working} }, http.StatusAccepted},
+		// Done before Enter: read now, not queued
+		{"done before enter", func(f *fakeWriter) { f.sessions = []AgentSession{working, working, labSession} }, http.StatusNoContent},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFakeWriter()
+			tt.setup(f)
+			code, body := postJSON(t, agentMux(f), "/api/mux/panes/0/agent/message", map[string]string{"text": "hello", "cursor": cursorFor(testSessionID)})
+			if code != tt.status {
+				t.Fatalf("POST = %d %v, want %d", code, body, tt.status)
+			}
+			if len(f.pasted) != 1 || f.pasted[0] != "hello" || len(f.keys) != 1 || f.keys[0][0] != "Enter" {
+				t.Errorf("pasted %q keys %v", f.pasted, f.keys)
+			}
+		})
+	}
+	// A draft the user typed in the box while it works is theirs.
+	f := newFakeWriter()
+	f.session = working
+	f.screen = fixtureScreen(t, "2.1.310-working-draft")
+	code, body := postJSON(t, agentMux(f), "/api/mux/panes/0/agent/message", map[string]string{"text": "hello", "cursor": cursorFor(testSessionID)})
+	if code != http.StatusConflict || body["code"] != "input_not_ready" || len(f.pasted) != 0 {
+		t.Errorf("draft: POST = %d %v pasted %q", code, body, f.pasted)
+	}
+}
+
+// A failed image paste to a working agent: an empty box gets the real
+// reason, and a box holding the paste is left as is (C-c would interrupt
+// the agent) as partial_paste.
+func TestMessageImageFailureWhileWorking(t *testing.T) {
+	working := labSession
+	working.Status = "working"
+	type paster = func(*fakeWriter, string)
+	for name, tt := range map[string]struct {
+		onPaste func(agent paster) paster // from the agent's own
+		code    string
+	}{
+		"box empty": {func(paster) paster { return func(*fakeWriter, string) {} }, "paste_not_confirmed"},
+		// The first image shows, the second never does
+		"box holds some": {func(agent paster) paster {
+			return func(f *fakeWriter, text string) {
+				if len(f.pasted) == 1 {
+					agent(f, text)
+				}
+			}
+		}, "partial_paste"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			shortImageWait(t)
+			f := newFakeWriter()
+			imageAgent(f, 0)
+			f.session = working
+			f.onPaste = tt.onPaste(f.onPaste)
+			mux, ids, _ := imageMux(t, f, 2)
+			code, body := postMessage(t, mux, "hello", ids)
+			if code != http.StatusConflict || body["code"] != tt.code {
+				t.Errorf("POST = %d %v, want 409 %s", code, body, tt.code)
+			}
+			if len(f.keys) != 0 {
+				t.Errorf("keys = %v", f.keys)
+			}
+		})
+	}
+}
+
+func TestMessageImagesQueuedWhileWorking(t *testing.T) {
+	shortImageWait(t)
+	working := labSession
+	working.Status = "working"
+	f := newFakeWriter()
+	imageAgent(f, 0)
+	f.session = working
+	mux, ids, paths := imageMux(t, f, 1)
+	code, body := postMessage(t, mux, "hello", ids)
+	if code != http.StatusAccepted {
+		t.Fatalf("POST = %d %v", code, body)
+	}
+	if len(f.pasted) != 2 || f.pasted[0] != paths[0] || f.pasted[1] != " hello" || len(f.keys) != 1 || f.keys[0][0] != "Enter" {
+		t.Errorf("pasted %q keys %v", f.pasted, f.keys)
+	}
+}
+
+// What a redraw settles into is checked as before, and the session is read
+// again after the wait: nothing is pasted unless the same agent still takes
+// a message.
+func TestMessageRedrawRefusals(t *testing.T) {
+	shortConfirm(t)
+	blocked := labSession
+	blocked.Status = "blocked"
 	moved := labSession
 	moved.Target = "%9"
 	dialog := fixtureScreen(t, "2.1.286-permission-bash")
@@ -218,7 +327,7 @@ func TestMessageRedrawRefusals(t *testing.T) {
 	}{
 		{"settles into a dialog", dialog, nil, "input_not_ready", "a dialog is open"},
 		{"pane changed during the redraw", boxScreen(""), []AgentSession{labSession, moved}, "session_changed", "the pane runs another session now"},
-		{"agent started working during the redraw", boxScreen(""), []AgentSession{labSession, working}, "input_not_ready", "the agent is working"},
+		{"agent asks something during the redraw", boxScreen(""), []AgentSession{labSession, blocked}, "input_not_ready", "the agent is waiting for an answer"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -239,8 +348,6 @@ func TestMessageRedrawRefusals(t *testing.T) {
 
 func TestMessageRefusals(t *testing.T) {
 	shortConfirm(t)
-	working := labSession
-	working.Status = "working"
 	blocked := labSession
 	blocked.Status = "blocked"
 	moved := labSession
@@ -257,7 +364,6 @@ func TestMessageRefusals(t *testing.T) {
 		{"session changed", nil, cursorFor("99999999-2222-4333-8444-555555555555"), 409, "session_changed", false, false},
 		{"cursor from before a restart", nil, "forged.cursor", 409, "session_changed", false, false},
 		{"agent gone", func(f *fakeWriter) { f.found = false }, "", 409, "target_changed", false, false},
-		{"working", func(f *fakeWriter) { f.session = working }, "", 409, "input_not_ready", false, false},
 		{"waiting on a dialog", func(f *fakeWriter) { f.session = blocked }, "", 409, "input_not_ready", false, false},
 		{"draft in the box", func(f *fakeWriter) { f.screen = boxScreen("half typed") }, "", 409, "input_not_ready", false, false},
 		{"dialog open", func(f *fakeWriter) { f.screen = fixtureScreen(t, "2.1.286-permission-bash") }, "", 409, "input_not_ready", false, false},
@@ -266,9 +372,9 @@ func TestMessageRefusals(t *testing.T) {
 		// Read again right before the paste: an agent that exited since the
 		// screen check leaves a shell, which runs each line of the text.
 		{"pane changed before paste", func(f *fakeWriter) { f.sessions = []AgentSession{labSession, moved} }, "", 409, "session_changed", false, false},
-		{"agent started working before paste", func(f *fakeWriter) { f.sessions = []AgentSession{labSession, working} }, "", 409, "input_not_ready", false, false},
+		{"agent asks something before paste", func(f *fakeWriter) { f.sessions = []AgentSession{labSession, blocked} }, "", 409, "input_not_ready", false, false},
 		{"pane changed before enter", func(f *fakeWriter) { f.sessions = []AgentSession{labSession, labSession, moved} }, "", 502, "delivered_not_submitted", true, false},
-		{"agent started working before enter", func(f *fakeWriter) { f.sessions = []AgentSession{labSession, labSession, working} }, "", 502, "delivered_not_submitted", true, false},
+		{"agent asks something before enter", func(f *fakeWriter) { f.sessions = []AgentSession{labSession, labSession, blocked} }, "", 502, "delivered_not_submitted", true, false},
 		{"copy mode", func(f *fakeWriter) { f.session.InMode = true }, "", 409, "input_not_ready", false, false},
 		{"pane gone", func(f *fakeWriter) { f.nowErr = inputError("unknown pane") }, "", 409, "target_changed", false, false},
 		{"enter fails", func(f *fakeWriter) { f.keyErr = errors.New("tmux gone") }, "", 502, "delivered_not_submitted", true, true},
@@ -1011,8 +1117,8 @@ func TestMessageImageRequests(t *testing.T) {
 }
 
 func TestMessageImageFailures(t *testing.T) {
-	working := labSession
-	working.Status = "working"
+	blocked := labSession
+	blocked.Status = "blocked"
 	moved := labSession
 	moved.Target = "%9"
 	tests := []struct {
@@ -1054,7 +1160,7 @@ func TestMessageImageFailures(t *testing.T) {
 			}
 		}, 409, "paste_not_confirmed", true, false},
 		{"session changes between images", func(f *fakeWriter) { f.sessions = []AgentSession{labSession, moved} }, 409, "partial_paste", false, false},
-		{"agent starts working between images", func(f *fakeWriter) { f.sessions = []AgentSession{labSession, working} }, 409, "partial_paste", false, false},
+		{"agent asks something between images", func(f *fakeWriter) { f.sessions = []AgentSession{labSession, blocked} }, 409, "partial_paste", false, false},
 		{"paste fails", func(f *fakeWriter) { f.pasteErr = errors.New("tmux gone") }, 502, "paste_not_confirmed", false, false},
 		{"C-c does not clear", func(f *fakeWriter) {
 			agent := f.onPaste
@@ -1150,14 +1256,14 @@ func TestMessageTextPasteFailsAfterImages(t *testing.T) {
 	}
 }
 
-// The agent turns busy after the last image: the text is not pasted.
+// The agent asks something after the last image: the text is not pasted.
 func TestMessageRechecksBeforeText(t *testing.T) {
 	shortImageWait(t)
-	working := labSession
-	working.Status = "working"
+	blocked := labSession
+	blocked.Status = "blocked"
 	f := newFakeWriter()
 	imageAgent(f, 0)
-	f.sessions = []AgentSession{labSession, working}
+	f.sessions = []AgentSession{labSession, blocked}
 	mux, ids, paths := imageMux(t, f, 1)
 	code, body := postMessage(t, mux, "hello", ids)
 	if code != http.StatusConflict || body["code"] != "partial_paste" {
@@ -1169,15 +1275,15 @@ func TestMessageRechecksBeforeText(t *testing.T) {
 }
 
 // With images, the session read after a redraw is the only check before the
-// first paste: an agent that started working meanwhile gets nothing.
+// first paste: an agent that opened a dialog meanwhile gets nothing.
 func TestMessageImagesRecheckAfterRedraw(t *testing.T) {
 	shortImageWait(t)
-	working := labSession
-	working.Status = "working"
+	blocked := labSession
+	blocked.Status = "blocked"
 	f := newFakeWriter()
 	imageAgent(f, 0)
 	f.screens = []string{"", ""}
-	f.sessions = []AgentSession{labSession, working}
+	f.sessions = []AgentSession{labSession, blocked}
 	mux, ids, _ := imageMux(t, f, 1)
 	code, body := postMessage(t, mux, "hello", ids)
 	if code != http.StatusConflict || body["code"] != "input_not_ready" {

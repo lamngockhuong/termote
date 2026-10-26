@@ -502,8 +502,10 @@ Chạy trên tmux (Linux/macOS), psmux (Windows) và Herdr (đã chạy `herdr i
 ### Gửi Tin Nhắn
 
 - [ ] Tin nhắn nhiều dòng (có tiếng Việt) tới Claude Code nguyên văn, thành một lượt
-- [ ] Khi Claude Code đang làm, đang mở hộp thoại hoặc ô nhập còn bản nháp: lệnh gửi bị từ chối với
-      `input not ready` và pane không nhận phím nào
+- [ ] Khi Claude Code đang làm, tin được xếp hàng (view Chat báo `Queued: ...`, terminal hiện
+      "Press up to edit queued messages") và Claude Code đọc nó khi sẵn sàng
+- [ ] Đang mở hộp thoại hoặc ô nhập còn bản nháp: lệnh gửi bị từ chối với `input not ready` và
+      pane không nhận phím nào
 - [ ] Tin nhắn gõ trước khi một client khác chạy `/clear` thì bị từ chối, ô soạn báo hội thoại đã
       đổi
 - [ ] `/` ở đầu tin nhắn liệt kê các lệnh (`/exit` đầu tiên, rồi lệnh có sẵn, lệnh và skill của dự
@@ -561,8 +563,9 @@ Trên psmux, gửi tin từ Chat view chưa được cho đến khi xong #408.
       trong vòng 2 giây
 - [ ] Tin nhắn có tiếng Việt tới Codex thành một lượt; tin dài hơn 1000 ký tự cũng vậy (Codex hiện
       `[Pasted Content N chars]` trước khi Enter)
-- [ ] Khi Codex đang làm hoặc ô soạn của Codex còn bản nháp, lệnh gửi bị từ chối (`Not sent: ...`)
-      và pane không nhận phím nào
+- [ ] Khi Codex đang làm, tin được xếp hàng bằng Tab (hiện ở mục `Queued follow-up inputs` dưới
+      lượt đang chạy, view Chat báo `Queued: ...`) và chạy sau khi xong lượt; khi ô soạn của Codex
+      còn bản nháp, lệnh gửi bị từ chối (`Not sent: ...`) và pane không nhận phím nào
 - [ ] `/` ở đầu tin nhắn không liệt kê lệnh nào
 - [ ] tmux: chạy `/new` trong terminal thì Chat view biến mất cho đến khi khởi động lại Codex
 - [ ] tmux: hộp thoại xin duyệt (chạy lệnh, sửa file) hiện thành thẻ chỉ xem, kèm dòng `Answer this dialog in the

@@ -40,6 +40,11 @@ func TestReadClaudeScreenInput(t *testing.T) {
 		{"collie-2.1.278-statusline-prompt-row--w82", inputEmpty, ""},
 		{"collie-2.1.278-transcript-dialog-lookalike--w82", inputEmpty, ""},
 		{"collie-2.1.278-working-queued-message--w82", inputEmpty, ""},
+		// Working, the box still takes a message for the queue; once queued
+		// it shows the hint to edit it, not a draft.
+		{"2.1.310-working", inputEmpty, ""},
+		{"2.1.310-working-draft", inputDraft, "second message while working"},
+		{"2.1.310-working-queued", inputEmpty, ""},
 		{"collie-2.1.278-mode-bash--w82", inputDraft, "!ls -1 src | head -3"},
 		// The popup is taller than the statusline allowance: not ready either way.
 		{"collie-2.1.278-popup-slash-all--w82", inputNone, ""},

@@ -37,6 +37,7 @@ func TestReadCodexScreenRecorded(t *testing.T) {
 		screen, input, draft, kind, title string
 		options                           string
 		pointer                           int
+		working                           bool
 	}{
 		{screen: "0.159.3-input-empty", input: inputEmpty},
 		{screen: "0.159.3-input-draft", input: inputDraft, draft: "draft text not sent"},
@@ -44,8 +45,10 @@ func TestReadCodexScreenRecorded(t *testing.T) {
 		// at column 0 in reverse video: the draft under them still reads.
 		{screen: "0.162.0-slash-popup", input: inputDraft, draft: "/mo"},
 		{screen: "0.162.0-skill-popup", input: inputDraft, draft: "$de"},
-		// Working with the composer empty: not ready.
-		{screen: "0.159.3-working-empty", input: inputNone},
+		// Working with the composer empty: it takes a message for the queue.
+		{screen: "0.159.3-working-empty", input: inputEmpty, working: true},
+		// A queued message above an idle composer is not the working line.
+		{screen: "0.164.0-queued-followup", input: inputEmpty},
 		// The model's reply reads like a dialog; the composer under it is empty.
 		{screen: "0.159.3-idle-dialog-like-text", input: inputEmpty},
 		{
@@ -70,7 +73,7 @@ func TestReadCodexScreenRecorded(t *testing.T) {
 		{screen: "0.160.0-herdr-input-empty", input: inputEmpty},
 		{screen: "0.160.0-herdr-input-draft", input: inputDraft, draft: "bản nháp chưa gửi"},
 		// The working line goes on with a background terminal.
-		{screen: "0.160.0-herdr-working-empty", input: inputNone},
+		{screen: "0.160.0-herdr-working-empty", input: inputEmpty, working: true},
 		{
 			screen: "0.160.0-herdr-approval-exec", kind: "permission", title: "Would you like to run the following command?",
 			options: "1:Yes, proceed|2:Yes, and don't ask again for commands that start with `touch`|3:No, and tell Codex what to do differently",
@@ -80,8 +83,8 @@ func TestReadCodexScreenRecorded(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.screen, func(t *testing.T) {
 			sc := readCodexScreen(codexCapture(t, tt.screen))
-			if sc.input != tt.input || sc.draft != tt.draft {
-				t.Fatalf("input %q draft %q, want %q %q", sc.input, sc.draft, tt.input, tt.draft)
+			if sc.input != tt.input || sc.draft != tt.draft || sc.working != tt.working {
+				t.Fatalf("input %q draft %q working %v, want %q %q %v", sc.input, sc.draft, sc.working, tt.input, tt.draft, tt.working)
 			}
 			if tt.kind == "" {
 				if sc.prompt != nil || sc.sig != "" {
@@ -288,7 +291,8 @@ func TestReadCodexScreenComposer(t *testing.T) {
 		{"draft", codexRows("› fix the bug", "", codexModelRow), inputDraft, "fix the bug"},
 		// Typed text that reads like an option is a draft.
 		{"numbered draft", codexRows("› 1. Yes, proceed (y)", "", codexModelRow), inputDraft, "1. Yes, proceed (y)"},
-		{"working with a draft", codexRows("• Working (9s • esc to interrupt)", "", "› next", "", codexModelRow), inputNone, ""},
+		// Working: the draft still reads, for a paste into the queue.
+		{"working with a draft", codexRows("• Working (9s • esc to interrupt)", "", "› next", "", codexModelRow), inputDraft, "next"},
 		// More rows under it than the footer: a popup or an unknown screen.
 		{"popup", codexRows("› /m", "", "  /model", "  /mention", "  /mcp", "  /more", codexModelRow), inputNone, ""},
 		// The last row at column 0 is not the composer.
@@ -442,5 +446,20 @@ func TestCodexApprovalShownWhole(t *testing.T) {
 	// The real title scrolled off: the command's rows reach the top.
 	if k := kind(dialog([]string{"  rm -rf /tmp/x", "  more of the command"}, "  $ ls")); k != "unsupported" {
 		t.Errorf("top off the screen = %q", k)
+	}
+}
+
+// Messages queued under the working line push it up: the queue block is
+// looked over, however many rows it takes; a reply's text is not a queue.
+func TestReadCodexScreenWorkingOverQueue(t *testing.T) {
+	queue := []string{"• Queued follow-up inputs", "  ↳ one", "  ↳ two", "  ↳ three", "  ↳ four", "  ↳ five",
+		"    shift+← edit last queued message", ""}
+	rows := append([]string{"• Working (9s • esc to interrupt)", ""}, queue...)
+	if sc := readCodexScreen(codexRows(append(rows, codexEmptyRow, "", codexModelRow)...)); sc.input != inputEmpty || !sc.working {
+		t.Errorf("queue: input %q working %v", sc.input, sc.working)
+	}
+	reply := []string{"• Working (9s • esc to interrupt)", "", "• a reply", "  one", "  two", "  three", "  four", "  five", ""}
+	if sc := readCodexScreen(codexRows(append(reply, codexEmptyRow, "", codexModelRow)...)); sc.working {
+		t.Errorf("reply: working %v", sc.working)
 	}
 }

@@ -29,6 +29,10 @@ const (
 	// codexMaxStatusRows: how far above the composer the working line is
 	// looked for (it sits over a blank row and the usage warning).
 	codexMaxStatusRows = 6
+	// codexQueueHeader heads the messages Codex queued for after its turn,
+	// as Codex 0.164.0 words it (0.164.0-queued-followup): renamed, the
+	// working line over a long queue is missed and the rollout status decides
+	codexQueueHeader = "• Queued follow-up inputs"
 	// codexMaxDialogRows bounds how far up a dialog is searched for.
 	codexMaxDialogRows = 80
 )
@@ -119,9 +123,8 @@ func findCodexComposer(lines []screenLine) (agentScreen, bool) {
 			return agentScreen{}, false
 		}
 		sc := readCodexComposer(lines[p:end])
-		if codexWorking(lines[max(0, p-codexMaxStatusRows):p]) {
-			sc = agentScreen{}
-		}
+		top := codexQueueTop(lines, p)
+		sc.working = codexWorking(lines[max(0, top-codexMaxStatusRows):p])
 		return sc, true
 	}
 	return agentScreen{}, false
@@ -154,6 +157,24 @@ func readCodexComposer(rows []screenLine) agentScreen {
 		return agentScreen{input: inputEmpty}
 	}
 	return agentScreen{input: inputDraft, draft: draft}
+}
+
+// codexQueueTop is the header row of the "Queued follow-up inputs" block
+// right above the composer at row p (each queued message and the edit hint
+// indented under it), or p without one: the working line is looked for above
+// the block, which grows with every message queued.
+func codexQueueTop(lines []screenLine, p int) int {
+	for i := p - 1; i >= 0 && i >= p-codexMaxBoxRows; i-- {
+		t := lines[i].text
+		if strings.TrimSpace(t) == "" || strings.HasPrefix(t, " ") {
+			continue
+		}
+		if strings.TrimSpace(t) == codexQueueHeader {
+			return i
+		}
+		break
+	}
+	return p
 }
 
 // codexWorking: the rows above the composer show the working line
