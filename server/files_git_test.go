@@ -24,11 +24,11 @@ func TestParseStatus(t *testing.T) {
 		"? sp ace\x00? line\nbreak\x00! ignored\x00"
 	st := parseStatus([]byte(out), false)
 	want := []changeEntry{
-		{Path: "a", Staged: "M", Unstaged: "M"},
-		{Path: "new name", Orig: "old", Staged: "R"},
+		{Path: "a", Staged: "M", Unstaged: "M", modeHead: "100644", modeIndex: "100644", modeWorktree: "100644"},
+		{Path: "new name", Orig: "old", Staged: "R", modeHead: "100644", modeIndex: "100644", modeWorktree: "100644"},
 		{Path: "c", Conflict: true},
-		{Path: "gone", Unstaged: "D"},
-		{Path: "added", Staged: "A"},
+		{Path: "gone", Unstaged: "D", modeHead: "100644", modeIndex: "100644", modeWorktree: "000000"},
+		{Path: "added", Staged: "A", modeHead: "000000", modeIndex: "100644", modeWorktree: "100644"},
 		{Path: "sp ace", Unstaged: "?"},
 		{Path: "line\nbreak", Unstaged: "?"},
 	}
@@ -61,9 +61,17 @@ func TestParseUnifiedDiff(t *testing.T) {
 	out := "diff --git a/f b/f\nindex 1..2 100644\n--- a/f\n+++ b/f\n" +
 		"@@ -1,3 +1,3 @@ func x\n ctx\n--- removed dashes\n+++ added pluses\n \n" +
 		"@@ -10 +10,2 @@\n-old\n+new\n+tail\n\\ No newline at end of file\n"
-	hunks, binary := parseUnifiedDiff([]byte(out))
+	hunks, head, binary := parseUnifiedDiff([]byte(out))
 	if binary || len(hunks) != 2 {
 		t.Fatalf("hunks = %+v binary=%v", hunks, binary)
+	}
+	if strings.Join(head, "|") != "diff --git a/f b/f|index 1..2 100644|--- a/f|+++ b/f" {
+		t.Errorf("head = %q", head)
+	}
+	// Each hunk keeps its text as git printed it, the marker line included.
+	if hunks[0].raw != "@@ -1,3 +1,3 @@ func x\n ctx\n--- removed dashes\n+++ added pluses\n \n" ||
+		hunks[1].raw != "@@ -10 +10,2 @@\n-old\n+new\n+tail\n\\ No newline at end of file\n" {
+		t.Errorf("raw = %q, %q", hunks[0].raw, hunks[1].raw)
 	}
 	h := hunks[0]
 	want := []diffLine{
@@ -83,15 +91,20 @@ func TestParseUnifiedDiff(t *testing.T) {
 	if fmt.Sprint(hunks[1].Lines) != fmt.Sprint(want) {
 		t.Errorf("hunk 1 = %+v", hunks[1].Lines)
 	}
-	if _, binary := parseUnifiedDiff([]byte("diff --git a/x b/x\nBinary files a/x and b/x differ\n")); !binary {
+	if _, _, binary := parseUnifiedDiff([]byte("diff --git a/x b/x\nBinary files a/x and b/x differ\n")); !binary {
 		t.Error("binary not detected")
 	}
 	// A cut last line is dropped; a bad header starts no hunk.
-	hunks, _ = parseUnifiedDiff([]byte("@@ -1,2 +1,2 @@\n-a\n+b\n-cu"))
+	hunks, _, _ = parseUnifiedDiff([]byte("@@ -1,2 +1,2 @@\n-a\n+b\n-cu"))
 	if len(hunks) != 1 || len(hunks[0].Lines) != 2 {
 		t.Errorf("cut = %+v", hunks)
 	}
-	if hunks, _ = parseUnifiedDiff([]byte("@@ -x +1 @@\n+a\n@@ -1,y +1 @@\n@@ -1 +z @@\n@@ bad\n")); len(hunks) != 0 {
+	// A line that does not fit the counts left ends the hunk's text.
+	hunks, _, _ = parseUnifiedDiff([]byte("@@ -1,2 +1 @@\n+b\n+c\n-a\n"))
+	if len(hunks) != 1 || len(hunks[0].Lines) != 2 || hunks[0].raw != "@@ -1,2 +1 @@\n+b\n-a\n" {
+		t.Errorf("overflow = %+v", hunks)
+	}
+	if hunks, _, _ = parseUnifiedDiff([]byte("@@ -x +1 @@\n+a\n@@ -1,y +1 @@\n@@ -1 +z @@\n@@ bad\n")); len(hunks) != 0 {
 		t.Errorf("bad headers = %+v", hunks)
 	}
 }

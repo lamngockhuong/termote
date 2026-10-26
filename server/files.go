@@ -48,7 +48,8 @@ func (e *rootChangedError) Error() string { return "root changed" }
 // pane's root (its git toplevel, else its directory), saves of a text file's
 // whole contents (PUT files/content), creates of an empty file (POST
 // files/create), renames (POST files/rename), deletes into a trash and
-// back (POST files/delete, files/restore) and downloads (GET files/download).
+// back (POST files/delete, files/restore), downloads (GET files/download)
+// and stages, unstages or discards of a change (POST files/changes/apply).
 type filesAPI struct {
 	m        Mux
 	dirs     PaneDirer // nil when the backend has none
@@ -118,6 +119,7 @@ func registerFilesRoutes(mux *http.ServeMux, m Mux, allowed hostAllowlist, denyD
 	mux.HandleFunc("/api/mux/panes/{id}/files/find", f.handleFind)
 	mux.HandleFunc("/api/mux/panes/{id}/files/search", f.handleSearch)
 	mux.HandleFunc("/api/mux/panes/{id}/files/changes", f.handleChanges)
+	mux.HandleFunc("/api/mux/panes/{id}/files/changes/apply", f.handleApplyChange)
 	mux.HandleFunc("/api/mux/panes/{id}/files/diff", f.handleDiff)
 	mux.HandleFunc("/api/mux/panes/{id}/files/raw", f.handleRaw)
 	mux.HandleFunc("/api/mux/panes/{id}/files/download", f.handleDownload)
@@ -708,8 +710,6 @@ func (f *filesAPI) error(w http.ResponseWriter, op string, err error) {
 		jsonError(w, ie.Error(), http.StatusBadRequest)
 	case isPathEscape(err):
 		jsonError(w, "path outside root", http.StatusBadRequest)
-	case errors.Is(err, errNotChanged):
-		jsonError(w, errNotChanged.Error(), http.StatusNotFound)
 	case errors.Is(err, fs.ErrNotExist), errors.Is(err, syscall.ENOTDIR):
 		jsonError(w, "not found", http.StatusNotFound)
 	case errors.Is(err, fs.ErrPermission):

@@ -193,6 +193,7 @@ func TestViewRefusedByEveryWriteHandler(t *testing.T) {
 		{"POST", "/api/mux/panes/0/files/delete?root=/x", `{"path":"a"}`},
 		{"POST", "/api/mux/panes/0/files/rename?root=/x", `{"path":"a","newPath":"b"}`},
 		{"POST", "/api/mux/panes/0/files/restore?root=/x", `{"trashId":"a"}`},
+		{"POST", "/api/mux/panes/0/files/changes/apply?root=/x", `{"action":"stage","path":"a"}`},
 		{"POST", "/api/mux/panes/0/agent/message", `{"text":"hi"}`},
 		{"POST", "/api/mux/panes/0/agent/answer", `{"promptId":"p"}`},
 		{"POST", "/api/mux/panes/0/agent/start", `{"kind":"claude"}`},

@@ -100,6 +100,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/content-search.tsx`           | Files: Search tab, file contents, options, globs, results      |
 | `pwa/src/components/delete-file-dialog.tsx`       | Files: asks before a delete, second ask for a permanent one    |
 | `pwa/src/components/rename-file-dialog.tsx`       | Files: a file's new path, renames/moves it, says why not       |
+| `pwa/src/components/discard-change-dialog.tsx`    | Changes: asks before a discard of a file or a hunk             |
 | `pwa/src/utils/file-name.ts`                      | Name checks of New file and Rename, the base name selected     |
 | `pwa/src/utils/download-file.ts`                  | Download: preflight, refusal messages, iOS share sheet         |
 | `pwa/src/components/markdown-preview.tsx`         | Markdown file rendered in Files/Changes (links, code blocks)   |
@@ -178,6 +179,8 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/files.go`                                 | `/api/mux/panes/{id}/files/*` routes, tree and file contents   |
 | `server/files_root.go`                            | Pane root (git toplevel), safe git runner                      |
 | `server/files_git.go`                             | git status and diff for the Changes view                       |
+| `server/files_git_apply.go`                       | `POST files/changes/apply`: stage, unstage, discard a change   |
+| `server/files_git_patch.go`                       | Hunk ids, the patch of one hunk, a hunk undone in Go           |
 | `server/files_sensitive.go`                       | Names of files that usually hold secrets                       |
 | `server/files_raw.go`                             | `files/raw`: an image's bytes (worktree, or a git version)     |
 | `server/files_write.go`                           | `PUT files/content`: saves a text file (baseHash, rename)      |

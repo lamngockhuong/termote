@@ -176,6 +176,13 @@ func (f *filesAPI) deleteFile(root filesRoot, in deleteRequest) (deleteResponse,
 		return deleteResponse{}, err
 	}
 	defer unlock()
+	return f.deleteFileLocked(root, rel, in)
+}
+
+// deleteFileLocked is deleteFile once its checks passed and its locks are
+// held (lockWrite does not nest): a discard of an untracked file runs it
+// under its own.
+func (f *filesAPI) deleteFileLocked(root filesRoot, rel string, in deleteRequest) (deleteResponse, error) {
 	rt, err := os.OpenRoot(root.Root)
 	if err != nil {
 		return deleteResponse{}, err
@@ -378,7 +385,8 @@ func deleteError(err error) error {
 }
 
 // handleRestoreFile serves POST files/restore?root=: an entry of the trash
-// goes back to its path, never replacing anything there.
+// goes back to its path, never replacing anything there but the file a
+// discard changed.
 func (f *filesAPI) handleRestoreFile(w http.ResponseWriter, r *http.Request) {
 	var in restoreRequest
 	req, cancel, ok := f.startWrite(w, r, "files restore", &in)
@@ -433,6 +441,16 @@ func (f *filesAPI) restoreFile(root filesRoot, in restoreRequest) (restoreRespon
 	defer s.mu.Unlock()
 	if again, err := s.readRecordLocked(in.TrashID); err != nil || again != rec {
 		return restoreResponse{}, errNotInTrash
+	}
+	if rec.Kind == "discard" {
+		// The one restore that replaces a file: only while it still holds
+		// what the discard left (restoreDiscard).
+		if err := f.restoreDiscard(root, rel, in.TrashID, rec); err != nil {
+			return restoreResponse{}, err
+		}
+		s.removeEntryLocked(in.TrashID)
+		f.forgetRoot(root.Root)
+		return restoreResponse{Root: root.Root, Path: filepath.ToSlash(rel)}, nil
 	}
 	rt, err := os.OpenRoot(root.Root)
 	if err != nil {
