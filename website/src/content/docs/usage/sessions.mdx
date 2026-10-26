@@ -156,7 +156,8 @@ the desktop sidebar and in the mobile sessions sheet):
 Every screen has an address you can copy and open later or on another device:
 
 ```text
-<base>/#/s/<group>/<tab>[/<pane>][?view=terminal|chat|files]
+<base>/#/s/<group>/<tab>[/<pane>][?view=terminal|chat|files|changes][&solo=1][&file=<path>[&staged=1][&orig=<path>]]
+<base>/#/overview[?solo=1]
 ```
 
 - `group`, `tab` and `pane` are the IDs from `/api/mux/snapshot`. With tmux and Termote's own
@@ -168,6 +169,12 @@ Every screen has an address you can copy and open later or on another device:
 - Opening a link selects that group, tab and pane once the session list has loaded. An unknown ID
   keeps the current session and shows a toast.
 - `view` is used only when that view is available; otherwise the terminal opens.
+- `file` opens a file in the **Files** view (`view=files`), or its diff in **Changes**
+  (`view=changes`; `staged=1` for the staged side, `orig` for a rename's old path). The path is
+  relative to the pane's directory, URI-encoded, and the server opens it under that directory as
+  it does any other file: a path that leaves it, or a file that is not there, shows "File not
+  found or not allowed" and nothing else.
+- `solo=1` opens the link in a focus window (see [Open in a New Window](#open-in-a-new-window)).
 - A link only selects. It never sends keys and never creates or closes a session. With tmux,
   selecting changes the current window, which every client of that tmux session shares.
 - Switching session, tab or pane updates the address bar without adding history entries, so
@@ -175,6 +182,48 @@ Every screen has an address you can copy and open later or on another device:
   clipboard.
 - `termote url` prints a link from the command line, and the [Herdr plugin](/usage/herdr-plugin/)
   opens one on the Herdr pane you are on.
+
+### Open in a New Window
+
+On a desktop (a mouse and a wide screen), a file, a diff, a tab, a pane or the agent overview can
+open in a window of its own, next to the one you work in:
+
+- **A file**: **Open in new window** in the file's header in the Files panel.
+- **A diff**: the **Open in new window** button next to **Copy path** in the Changes panel.
+- **What is on screen** (the pane, its tab, or the overview): **Open in new window** in the
+  **More** (⋯) menu, or the **Open in new window** command of the command palette.
+- **Any tab or pane**: in the command palette's tab list (`@`), <kbd>Ctrl</kbd>+<kbd>Enter</kbd>
+  (<kbd>⌘</kbd>+<kbd>Enter</kbd> on a Mac) opens the highlighted one in a new window instead of
+  switching to it.
+
+Installed as an app (Chrome or Edge), it opens a new app window; in a browser, a new tab.
+<kbd>Shift</kbd>+click asks for a separate, sized window instead. A blocked pop-up says so. Phones
+and tablets have no second window, so the action is not offered there.
+
+The new window is a **focus window** (`solo=1` in its address): it shows only that target, without
+the sessions sidebar, the tab bar or the pane strip. A file or diff fills the window; restoring its
+panel shows the terminal next to it. It keeps nothing on the device: the main window's open file
+tabs, selected tab, pane views and unsaved drafts stay as they were, whatever you open or close in
+the focus window. Settings such as the theme or the font size are this device's and are saved as
+usual. **Open in main window** in its header hands the target back to the window that opened it (or
+a new one when that window is gone) and closes the focus window. A focus window opens no further
+windows and does not switch to another tab or pane: those actions are offered in the main window.
+
+Files open editable, as in the main window. When the same file is open in both and one saves first,
+the other's save is refused with "changed on the host", as with any other change made elsewhere.
+
+<Aside type="caution">
+  With tmux, a focus window on a tab that is not the current window of its session switches that
+  session's window, for every client attached to it, including the main window and other devices
+  (see [the link rules](#deep-links) above). Herdr and Zellij pick the pane per window and are not
+  affected.
+</Aside>
+
+Each window that shows a terminal holds one terminal stream; a focus window on a file holds none
+while the file covers the terminal. The server keeps at most 8 streams and closes the oldest for a
+new one. Only that window's stream closes, never the session or what runs in it, and the window
+shows **Disconnected by a newer window — Reconnect** instead of reconnecting on its own (two windows
+would otherwise push each other out in turn). Click it, or the connection indicator, to reconnect.
 
 ## Herdr Backend
 
@@ -236,6 +285,7 @@ The header displays a real-time connection status indicator showing your link to
 | Connecting    | Blue dot  | Establishing connection to server            |
 | Disconnected  | Red dot   | No connection to server (clickable to retry) |
 | Error         | Red X     | Connection error occurred                   |
+| Disconnected by a newer window | Red dot | A newer window took this window's stream (clickable to reconnect) |
 
 The indicator auto-detects disconnects on both the snapshot polling and the terminal
 WebSocket. Click it when disconnected to manually retry.

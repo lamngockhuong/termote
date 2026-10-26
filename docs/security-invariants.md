@@ -825,6 +825,23 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   entries, `caps.templates`) is filled in, then put in the Chat draft where the caret was, never
   sent nor typed into the terminal; disabled for a view-only client and a pane without the Chat
   composer. Tab, pane, file and template names are shown through `visibleUnsafe`
+- **Focus windows and file links** (`pwa/src/utils/deep-link.ts`, `focus-mode.ts`,
+  `open-window.ts`, `App.tsx`; desktop only for the action): no server change and no route of its
+  own; the link is a hash, which never reaches the server. `file` and `orig` are dropped as a bad
+  file (one short notice, "File not found or not allowed") when empty, absolute (`/`, a drive), or
+  holding a backslash, NUL or an empty, `.` or `..` segment; otherwise the path is only a hint,
+  opened through the Files store's `follow` (`GET files/tree` of its parent) or the Changes list
+  (the side must be one git lists), so `os.Root`, the deny lists and `reveal` apply as to any
+  other file. A failure shows the same notice, never the path or the server's text. A link only
+  selects: it never sends keys, creates or closes anything. A focus window (`solo=1`, read once
+  when the page loads) reads and writes none of the `files-persist.ts` records, nor the tab
+  selection, tab metadata or sidebar folding, and sweeps nothing (this device's preferences, such
+  as settings, theme, font size, keys and command history, are still saved); signing out from it
+  still removes everything. It offers no new window of its own and no tab or pane to switch to
+  (the palette's `@` rows are disabled), so it never leaves its target. **Open in new window** keeps the new window's `opener` (this app's own
+  page); **Open in main window** drives an opener only when reading its `location.origin` works
+  and equals this one, else it opens a new window. A stream closed with 4001 (evicted) shows
+  `Disconnected by a newer window` and reconnects only when asked
 - **Creating a file** (`POST files/create?root=`, `server/files_create.go`): an empty file and
   the directories missing above it (0666/0777 under the umask; directories made before a later
   failure stay, as with `mkdir -p`); the text then goes through `PUT files/content`. Same guards

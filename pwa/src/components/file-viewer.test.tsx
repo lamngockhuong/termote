@@ -147,6 +147,27 @@ describe('FileViewer', () => {
     expect(p.notify).toHaveBeenLastCalledWith('Could not copy the path')
   })
 
+  it('opens the file in a new window when offered, Shift as a popup', async () => {
+    mockContent.mockResolvedValue({ root: '/r', path: 'a', size: 1, text: 'x' })
+    const onOpenWindow = vi.fn()
+    show({ onOpenWindow })
+    const button = screen.getByRole('button', { name: 'Open in new window' })
+    fireEvent.click(button)
+    fireEvent.click(button, { shiftKey: true })
+    expect(onOpenWindow.mock.calls).toEqual([
+      [{ shiftKey: false }],
+      [{ shiftKey: true }],
+    ])
+  })
+
+  it('offers no new window unless given', async () => {
+    mockContent.mockResolvedValue({ root: '/r', path: 'a', size: 1, text: 'x' })
+    show()
+    expect(
+      screen.queryByRole('button', { name: 'Open in new window' }),
+    ).toBeNull()
+  })
+
   it('explains a file it cannot preview', async () => {
     mockContent.mockResolvedValue({
       root: '/r',

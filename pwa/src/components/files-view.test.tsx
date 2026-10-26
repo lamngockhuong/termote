@@ -233,6 +233,27 @@ describe('FilesView', () => {
     expect(!!screen.queryByRole('button', { name: 'Edit' })).toBe(offered)
   })
 
+  it('offers a file in a new window where the App can open one', async () => {
+    mockContent.mockResolvedValue({
+      root: '/home/kim/app',
+      path: 'README.md',
+      size: 3,
+      text: 'hi',
+    })
+    const openWindow = vi.fn()
+    await show({ openWindow })
+    fireEvent.click(item('README.md'))
+    await screen.findByTestId('markdown-preview')
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Open in new window' }),
+      { shiftKey: true },
+    )
+    expect(openWindow).toHaveBeenCalledWith(
+      { view: 'files', file: 'README.md' },
+      { shiftKey: true },
+    )
+  })
+
   it('moves through the tree with the keyboard', async () => {
     mockContent.mockResolvedValue({
       root: '/home/kim/app',

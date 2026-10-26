@@ -58,6 +58,7 @@ described in [`system-architecture.md`](system-architecture.md), conventions in
 | Concern                                      | Start at                                                                                                                           |
 | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | App shell: layout, header, menus, deep links | `pwa/src/App.tsx`, `components/app-header.tsx`, `utils/deep-link.ts`                                                               |
+| Focus windows (Open in new window)           | `utils/focus-mode.ts`, `utils/open-window.ts`, `App.tsx` (`openLinkFile`, `openInMain`), `hooks/use-git-changes.ts` (`openLink`)   |
 | Terminal stream and keys                     | `components/terminal-view.tsx`, `hooks/use-term-socket.ts`, `utils/terminal-bridge.ts`                                             |
 | Sessions (group → tab → pane)                | `hooks/use-local-sessions.ts`, `hooks/use-mux-api.ts`, `components/session-*.tsx`, `pane-strip.tsx`                                |
 | Mobile input                                 | `components/keyboard-toolbar.tsx`, `quick-actions-menu.tsx`, `hooks/use-gestures.ts`                                               |

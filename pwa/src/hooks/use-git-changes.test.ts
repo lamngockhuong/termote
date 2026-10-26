@@ -15,6 +15,7 @@ import {
   changeKey,
   changesMoved,
   findEntry,
+  openChangeFromLink,
   peekGitChanges,
   resetGitChangesStores,
   useGitChanges,
@@ -314,6 +315,42 @@ describe('Changes tabs', () => {
     expect(h.result.current.root).toBe('/r')
     return h
   }
+
+  it('a link opens its diff pinned once the list is read', async () => {
+    let shown: boolean | null | undefined
+    void openChangeFromLink('%1', side('d', true)).then((r) => {
+      shown = r
+    })
+    const h = renderHook(() => useGitChanges('%1'))
+    await tick()
+    expect(shown).toBe(true)
+    expect(h.result.current.active).toMatchObject({
+      path: 'd',
+      staged: true,
+      pinned: true,
+    })
+  })
+
+  it('a link to a side git does not list opens nothing', async () => {
+    const { result } = await loaded()
+    let shown: boolean | null | undefined
+    await act(async () => {
+      shown = await openChangeFromLink('%1', side('d'))
+    })
+    expect(shown).toBe(false)
+    expect(result.current.tabs).toEqual([])
+  })
+
+  it('a newer link replaces one still waiting', async () => {
+    const first = openChangeFromLink('%1', side('a'))
+    const second = openChangeFromLink('%1', side('b'))
+    // Replaced, not missing: nothing to tell the user
+    expect(await first).toBeNull()
+    const h = renderHook(() => useGitChanges('%1'))
+    await tick()
+    expect(await second).toBe(true)
+    expect(keys(h.result.current.tabs)).toEqual(keys([side('b')]))
+  })
 
   it('a single click replaces the preview tab; both sides of a file are two tabs', async () => {
     const { result } = await loaded()

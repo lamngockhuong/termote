@@ -85,6 +85,12 @@ export interface CommandPaletteProps {
   selectSession: (id: string) => void
   // Only where the client picks the pane (Herdr, Zellij)
   selectPane?: (paneId: string) => void
+  // Mod+Enter on a tab or pane: it opens in a window of its own (desktop,
+  // where a link names it)
+  openInWindow?: (target: { tabId: string; paneId?: string }) => void
+  // Why no tab or pane can be picked here (a focus window shows one target):
+  // the `@` list stays, every row dimmed with this reason
+  sessionsOff?: string
 }
 
 interface Item {
@@ -97,7 +103,7 @@ interface Item {
   hint?: string
   sensitive?: boolean
   disabledReason?: string
-  // Mod+Enter: a file opens in a pinned tab
+  // Mod+Enter: a file opens in a pinned tab, a tab or pane in a new window
   run?: (pin: boolean) => void
 }
 
@@ -142,6 +148,8 @@ export function CommandPalette({
   sendToTerminal,
   selectSession,
   selectPane,
+  openInWindow,
+  sessionsOff,
 }: CommandPaletteProps) {
   const apple = isApplePlatform()
   const keymap = useKeymap(commands)
@@ -485,7 +493,10 @@ export function CommandPalette({
           ? 'Current tab'
           : s.groupId && groupName.get(s.groupId),
       // The terminal, focused before, shows the new tab
-      run: () => run(() => selectSession(s.id), false),
+      run: (mod) =>
+        mod && openInWindow
+          ? run(() => openInWindow({ tabId: s.id }), false)
+          : run(() => selectSession(s.id), false),
     }))
     if (selectPane)
       for (const p of session.panes ?? [])
@@ -493,9 +504,18 @@ export function CommandPalette({
           key: `pane:${p.id}`,
           label: p.label || p.command || p.id,
           description: p.id === session.paneId ? 'Current pane' : 'Pane',
-          run: () => run(() => selectPane(p.id), false),
+          run: (mod) =>
+            mod && openInWindow
+              ? run(
+                  () => openInWindow({ tabId: session.id, paneId: p.id }),
+                  false,
+                )
+              : run(() => selectPane(p.id), false),
         })
-    return rankByMatch(items, query, (i) => `${i.label} ${i.description ?? ''}`)
+    const shown = sessionsOff
+      ? items.map((i) => ({ ...i, disabledReason: sessionsOff }))
+      : items
+    return rankByMatch(shown, query, (i) => `${i.label} ${i.description ?? ''}`)
   }
 
   const items =

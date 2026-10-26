@@ -135,6 +135,7 @@ export function ChangesView({
   notify,
   showView,
   readOnly,
+  openWindow,
 }: ViewProps) {
   if (!session.paneId) return <ViewMessage>Loading…</ViewMessage>
   return (
@@ -144,6 +145,7 @@ export function ChangesView({
       notify={notify}
       showView={showView}
       readOnly={readOnly}
+      openWindow={openWindow}
     />
   )
 }
@@ -154,9 +156,10 @@ function PaneChanges({
   notify,
   showView,
   readOnly,
+  openWindow,
 }: { paneId: string } & Pick<
   ViewProps,
-  'isMobile' | 'notify' | 'showView' | 'readOnly'
+  'isMobile' | 'notify' | 'showView' | 'readOnly' | 'openWindow'
 >) {
   const c = useGitChanges(paneId)
   const { settings } = useSettings()
@@ -328,6 +331,21 @@ function PaneChanges({
         scrollTop={tab.scrollTop}
         onScroll={(top) => c.setScroll(tab.id, top)}
         headerExtra={openFiles}
+        // A diff of a root the pane has left closes: the side is under the
+        // root a link names
+        onOpenWindow={
+          openWindow &&
+          ((e) =>
+            openWindow(
+              {
+                view: 'changes',
+                file: tab.path,
+                staged: tab.staged,
+                orig: tab.orig,
+              },
+              e,
+            ))
+        }
         // The server refuses a view-only client both as well
         canReveal={!readOnly}
         onEdit={

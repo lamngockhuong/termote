@@ -149,6 +149,7 @@ export function FilesView({
   notify,
   readOnly,
   mux,
+  openWindow,
 }: ViewProps) {
   // Before the first snapshot there is no pane to read
   if (!session.paneId) return <ViewMessage>Loading…</ViewMessage>
@@ -164,6 +165,7 @@ export function FilesView({
       canRename={!readOnly}
       // and its downloads
       canDownload={!readOnly}
+      openWindow={openWindow}
     />
   )
 }
@@ -193,12 +195,13 @@ function PaneFiles({
   canDelete,
   canRename,
   canDownload,
+  openWindow,
 }: {
   paneId: string
   canDelete: boolean
   canRename: boolean
   canDownload: boolean
-} & Pick<ViewProps, 'isMobile' | 'notify' | 'readOnly'>) {
+} & Pick<ViewProps, 'isMobile' | 'notify' | 'readOnly' | 'openWindow'>) {
   const f = useFiles(paneId)
   const { settings } = useSettings()
   const { load, rootChanges, follow } = f
@@ -670,6 +673,13 @@ function PaneFiles({
               canRename
                 ? ({ revealed }) => askRename(tab.path, revealed)
                 : undefined
+            }
+            // A tab of a root the pane has left closes, unless edited, and
+            // the viewer offers this only while not editing: the path is
+            // under the root a link names
+            onOpenWindow={
+              openWindow &&
+              ((e) => openWindow({ view: 'files', file: tab.path }, e))
             }
             // A sensitive file offers it only once shown. Never through a
             // link the tree knows of: the server refuses it

@@ -1,4 +1,5 @@
 import {
+  AppWindow,
   ArrowLeft,
   Check,
   Copy,
@@ -50,6 +51,7 @@ import { HIGHLIGHT_MAX_BYTES } from '../utils/highlight'
 import { isImagePath, isSvgPath } from '../utils/image-path'
 import { lazyRetry } from '../utils/lazy-retry'
 import { isMarkdownPath, type LinkPath } from '../utils/markdown-links'
+import type { OpenWindowEvent } from '../utils/open-window'
 import { recordSelection } from '../utils/pane-selection'
 import type { TableLayout } from '../utils/table-columns'
 import { visibleUnsafe } from '../utils/unsafe-chars'
@@ -328,6 +330,9 @@ interface Props {
   // Offered in the header's menu when downloading is allowed, for any file
   // but a sensitive one not shown (revealed: the user chose to show it)
   onDownload?: (file: { revealed: boolean }) => void
+  // Offered in the header's menu on a desktop: the file in a window of its
+  // own (Shift: a popup)
+  onOpenWindow?: (e: OpenWindowEvent) => void
   // The file's tab is the preview one: Keep open (and editing) pins it
   pinned?: boolean
   onPin?: () => void
@@ -355,7 +360,7 @@ interface HeaderAction {
   icon: ReactNode
   pressed?: boolean
   danger?: boolean
-  onClick: () => void
+  onClick: (e: OpenWindowEvent) => void
 }
 
 // One file of the tree: its text with line numbers, or why it cannot be
@@ -391,6 +396,7 @@ export function FileViewer({
   onDelete,
   onRename,
   onDownload,
+  onOpenWindow,
   pinned = true,
   onPin,
   onRevealed,
@@ -789,6 +795,13 @@ export function FileViewer({
       icon: <Copy size={15} />,
       onClick: copyPath,
     })
+  if (!mine && onOpenWindow)
+    extras.push({
+      label: 'Open in new window',
+      title: 'Open in new window (Shift: a popup)',
+      icon: <AppWindow size={15} />,
+      onClick: onOpenWindow,
+    })
   if (!mine && (canPreview || canTable))
     extras.push({
       label: 'Preview',
@@ -927,7 +940,7 @@ export function FileViewer({
               <IconButton
                 key={a.label}
                 size="sm"
-                onClick={a.onClick}
+                onClick={(e) => a.onClick({ shiftKey: e.shiftKey })}
                 aria-label={a.label}
                 aria-pressed={a.pressed}
                 title={a.title ?? a.label}

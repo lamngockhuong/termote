@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { isFocusWindow } from '../utils/focus-mode'
 
 const STORAGE_KEY = 'sidebar-collapsed'
 
@@ -10,7 +11,7 @@ export function useSidebarCollapsed() {
   const toggle = useCallback(() => {
     setIsCollapsed((prev) => {
       const next = !prev
-      localStorage.setItem(STORAGE_KEY, String(next))
+      if (!isFocusWindow()) localStorage.setItem(STORAGE_KEY, String(next))
       return next
     })
   }, [])

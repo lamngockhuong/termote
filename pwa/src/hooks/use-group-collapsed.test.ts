@@ -1,5 +1,6 @@
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { setFocusWindowForTest } from '../utils/focus-mode'
 import { useGroupCollapsed } from './use-group-collapsed'
 
 describe('useGroupCollapsed', () => {
@@ -45,5 +46,13 @@ describe('useGroupCollapsed', () => {
     const { result } = renderHook(() => useGroupCollapsed())
     act(() => result.current.toggle('w1'))
     expect(localStorage.getItem('sidebar-collapsed')).toBeNull()
+  })
+
+  it('a focus window toggles without keeping it', () => {
+    setFocusWindowForTest(true)
+    const { result } = renderHook(() => useGroupCollapsed())
+    act(() => result.current.toggle('g1'))
+    expect(result.current.isCollapsed('g1')).toBe(true)
+    expect(localStorage.getItem('termote-group-collapsed')).toBeNull()
   })
 })

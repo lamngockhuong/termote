@@ -181,8 +181,8 @@ export function Menu({
 
 interface MenuItemProps {
   // Without it the item only closes the menu: a disabled item that says why
-  // something is not offered
-  onSelect?: () => void
+  // something is not offered. Shift says whether it was held (a popup).
+  onSelect?: (e: { shiftKey: boolean }) => void
   children: ReactNode
   icon?: ReactNode
   danger?: boolean
@@ -219,8 +219,8 @@ function ItemButton({
       tabIndex={-1}
       disabled={disabled}
       title={title}
-      onClick={() => {
-        onSelect?.()
+      onClick={(e) => {
+        onSelect?.({ shiftKey: e.shiftKey })
         if (!keepOpen) close()
       }}
       className={`flex h-10 w-full items-center gap-3 px-3 text-left text-[14px] hover:bg-surface focus:bg-surface disabled:opacity-50 pointer-coarse:h-touch ui-terminal:font-label ui-terminal:text-[13px] ${FOCUS_RING} focus-visible:-outline-offset-2 ${danger ? 'text-danger' : 'text-fg'}`}

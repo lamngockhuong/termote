@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { isFocusWindow } from '../utils/focus-mode'
 
 // Collapsed state of each sidebar group, keyed by group id. Separate from
 // use-sidebar-collapsed, which folds the whole sidebar.
@@ -23,7 +24,8 @@ export function useGroupCollapsed() {
       const next = { ...prev }
       if (next[groupId]) delete next[groupId]
       else next[groupId] = true
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+      if (!isFocusWindow())
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
       return next
     })
   }, [])

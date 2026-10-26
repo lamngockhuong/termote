@@ -29,6 +29,7 @@ export const COMMAND_IDS = {
   'app.about': true,
   'app.toggleSidebar': true,
   'app.fullscreen': true,
+  'window.openNew': true,
   'terminal.fontIncrease': true,
   'terminal.fontDecrease': true,
   'theme.light': true,

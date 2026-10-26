@@ -1178,6 +1178,16 @@ describe('TerminalView', () => {
     socket.state = 'error'
     rerender(<TerminalView paneId="0" />)
     expect(screen.getByRole('button', { name: /Connection lost/ })).toBeTruthy()
+
+    // Pushed out by a newer window's stream: says so, reconnects on demand
+    socket.state = 'evicted'
+    rerender(<TerminalView paneId="0" />)
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Disconnected by a newer window — Reconnect',
+      }),
+    )
+    expect(socket.reconnect).toHaveBeenCalledTimes(2)
   })
 
   it('paints its box with the terminal background token', () => {

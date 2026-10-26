@@ -34,6 +34,9 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/utils/pane-view.ts`                      | View and side panel each pane was left on, kept on the device  |
 | `pwa/src/utils/files-persist.ts`                  | Files/Changes tabs, drafts, views, recent files on the device  |
 | `pwa/src/utils/persisted-tabs.ts`                 | Which tab fields are kept, checked when read back              |
+| `pwa/src/utils/deep-link.ts`                      | Links: `#/s/…`, `#/overview`, `solo`, `file`, `staged`, `orig` |
+| `pwa/src/utils/focus-mode.ts`                     | Focus window (`solo=1`): read once, keeps nothing on device    |
+| `pwa/src/utils/open-window.ts`                    | Open in new window: `window.open`, Shift for a popup           |
 | `pwa/src/components/ui/`                          | Shared UI primitives (Button, Sheet, Menu, Switch, ...)        |
 | `pwa/src/app-views.ts`                            | Views of a pane (terminal, chat, files, changes)               |
 | `pwa/src/utils/lazy-retry.tsx`                    | `lazy()` whose failed import can be retried (`retry()`)        |

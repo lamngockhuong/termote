@@ -29,6 +29,7 @@ import {
   TABS_DELAY,
   writeDraft,
 } from './files-persist'
+import { setFocusWindowForTest } from './focus-mode'
 import { setPaneKeys } from './pane-remap'
 
 // Server i1: tmux panes 1, 2 (keys @1, @2) in group main, Zellij-like pane
@@ -592,5 +593,63 @@ describe('review follow-ups', () => {
     signedOut()
     expect(here).toHaveBeenCalledOnce()
     off()
+  })
+})
+
+describe('a focus window', () => {
+  // What the main window kept, as written before the focus window opened
+  function keptByMain() {
+    saveTabs('files', '1', { n: 1 })
+    flushAll()
+    writeDraft('1', draft('a.ts'), 5)
+    saveView('1', { view: 'files' })
+    saveRecent('1', [{ root: '/r', path: 'a.ts' }])
+    return { ...localStorage }
+  }
+
+  it('reads nothing the main window kept', () => {
+    keptByMain()
+    setFocusWindowForTest(true)
+    expect(loadTabs('files', '1')).toBeNull()
+    expect(loadDrafts('1')).toEqual([])
+    expect(loadView('1')).toBeNull()
+    expect(loadRecent('1')).toEqual([])
+  })
+
+  it('writes, moves and removes nothing', () => {
+    const before = keptByMain()
+    saveTabs('changes', '1', { n: 1 })
+    setFocusWindowForTest(true)
+    // A tab change waiting from before is not read back either
+    expect(loadTabs('changes', '1')).toBeNull()
+    saveTabs('files', '1', { n: 2 })
+    vi.advanceTimersByTime(TABS_DELAY)
+    flushAll()
+    expect(writeDraft('1', draft('b.ts'), 6)).toBe(false)
+    removeDraft('1', 'a.ts')
+    saveView('1', { view: 'chat' })
+    saveView('1', null)
+    saveRecent('1', [])
+    renamePersistedGroup('main', 'other', 'other')
+    regroupPersisted(new Map([['@1', 'renamed']]))
+    const after = { ...localStorage }
+    // The changes tabs saved before the focus flag were still waiting
+    delete after['termote-changes-tabs:i1:@1']
+    expect(after).toEqual(before)
+  })
+
+  it('sweeps nothing when the page loads', async () => {
+    localStorage.setItem(
+      'termote-pane-view:i1:@1',
+      JSON.stringify({ v: 1, pane: '@1', group: 'main', savedAt: 0, view: 1 }),
+    )
+    window.location.hash = '#/overview?solo=1'
+    vi.resetModules()
+    try {
+      await import('./files-persist')
+      expect(localStorage.getItem('termote-pane-view:i1:@1')).not.toBeNull()
+    } finally {
+      window.location.hash = ''
+    }
   })
 })

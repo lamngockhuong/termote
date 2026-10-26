@@ -153,7 +153,8 @@ phiên trên mobile) có thêm thanh lọc:
 Mỗi màn hình có một địa chỉ để bạn sao chép, rồi mở lại sau hoặc trên thiết bị khác:
 
 ```text
-<base>/#/s/<group>/<tab>[/<pane>][?view=terminal|chat|files]
+<base>/#/s/<group>/<tab>[/<pane>][?view=terminal|chat|files|changes][&solo=1][&file=<path>[&staged=1][&orig=<path>]]
+<base>/#/overview[?solo=1]
 ```
 
 - `group`, `tab` và `pane` là các ID lấy từ `/api/mux/snapshot`. Với tmux, session riêng của
@@ -165,6 +166,12 @@ Mỗi màn hình có một địa chỉ để bạn sao chép, rồi mở lại 
 - Mở liên kết sẽ chọn đúng group, tab và pane sau khi danh sách phiên tải xong. Nếu ID không tồn
   tại, phiên hiện tại được giữ nguyên và một toast báo lại.
 - `view` chỉ được dùng khi view đó có sẵn; nếu không thì terminal được mở.
+- `file` mở một file trong view **Files** (`view=files`), hoặc diff của file đó trong **Changes**
+  (`view=changes`; thêm `staged=1` để xem phần đã `git add`, `orig` là đường dẫn cũ của file đổi tên).
+  Đường dẫn tính từ thư mục của pane, đã mã hoá URI, và server mở nó trong thư mục đó như mọi file
+  khác. Đường dẫn đi ra ngoài thư mục, hoặc file không có, chỉ hiện thông báo
+  `File not found or not allowed`, không kèm chi tiết nào khác.
+- `solo=1` mở liên kết trong một cửa sổ focus (xem [Mở trong cửa sổ mới](#mở-trong-cửa-sổ-mới)).
 - Liên kết chỉ chọn. Nó không bao giờ gửi phím, tạo hay đóng phiên. Với tmux, việc chọn đổi
   window hiện tại, và mọi client của session tmux đó dùng chung window này.
 - Khi bạn chuyển phiên, tab hoặc pane, thanh địa chỉ tự cập nhật mà không thêm mục vào lịch sử,
@@ -172,6 +179,48 @@ Mỗi màn hình có một địa chỉ để bạn sao chép, rồi mở lại 
   vào clipboard.
 - `termote url` in liên kết từ dòng lệnh, còn [plugin Herdr](/vi/usage/herdr-plugin/) mở liên
   kết tới pane Herdr bạn đang dùng.
+
+### Mở trong cửa sổ mới
+
+Trên máy tính (có chuột và màn hình rộng), bạn có thể mở riêng một file, một diff, một tab, một pane
+hoặc màn hình tổng quan agent sang cửa sổ khác, đặt cạnh cửa sổ đang làm việc:
+
+- **File**: mục **Open in new window** ở thanh đầu của file trong panel Files.
+- **Diff**: nút **Open in new window** cạnh **Copy path** trong panel Changes.
+- **Thứ đang hiện trên màn hình** (pane, tab chứa nó, hoặc màn hình tổng quan): mục **Open in new
+  window** trong menu **More** (⋯), hoặc lệnh **Open in new window** của bảng lệnh.
+- **Tab hay pane bất kỳ**: trong danh sách tab của bảng lệnh (`@`), <kbd>Ctrl</kbd>+<kbd>Enter</kbd>
+  (<kbd>⌘</kbd>+<kbd>Enter</kbd> trên macOS) mở dòng đang chọn sang cửa sổ mới thay vì chuyển tới nó.
+
+Khi Termote được cài như ứng dụng (Chrome hoặc Edge), nó mở một cửa sổ ứng dụng mới; trên trình
+duyệt thì mở tab mới. Giữ <kbd>Shift</kbd> khi nhấn để mở một cửa sổ riêng có kích thước cố định.
+Trình duyệt chặn cửa sổ bật lên thì Termote báo lại. Điện thoại và máy tính bảng không mở được cửa
+sổ thứ hai, nên không có hành động này.
+
+Cửa sổ mới là **cửa sổ focus** (địa chỉ có `solo=1`): chỉ hiện đúng thứ được mở, không có thanh bên
+liệt kê phiên, thanh tab hay dải pane. File hoặc diff chiếm cả cửa sổ; thu panel lại thì terminal
+hiện bên cạnh. Cửa sổ này không lưu gì trên thiết bị: tab file đang mở, tab đang chọn, view của
+từng pane và bản nháp chưa lưu của cửa sổ chính giữ nguyên, dù bạn mở hay đóng gì trong cửa sổ
+focus. Tuỳ chọn như giao diện sáng tối hay cỡ chữ thuộc về thiết bị nên vẫn được lưu như thường.
+Nút **Open in main window** trên thanh đầu trả thứ đang mở về cửa sổ đã mở ra nó (hoặc một cửa sổ
+mới nếu cửa sổ đó đã đóng), rồi đóng cửa sổ focus. Cửa sổ focus không mở thêm cửa sổ nào và không
+chuyển sang tab hay pane khác; các thao tác đó chỉ có ở cửa sổ chính.
+
+File mở ra vẫn sửa được như ở cửa sổ chính. Nếu cùng một file đang mở ở cả hai nơi, bên nào lưu
+sau sẽ bị từ chối với lỗi "changed on the host", giống như khi file bị sửa ở chỗ khác.
+
+<Aside type="caution">
+  Với tmux, cửa sổ focus mở một tab không phải window hiện tại của session sẽ đổi window của session
+  đó cho mọi client đang gắn vào, kể cả cửa sổ chính và thiết bị khác (xem
+  [quy tắc của liên kết](#liên-kết-trực-tiếp) ở trên). Herdr và Zellij chọn pane riêng cho từng cửa
+  sổ nên không bị ảnh hưởng.
+</Aside>
+
+Mỗi cửa sổ có terminal giữ một luồng terminal; cửa sổ focus mở file thì không giữ luồng nào khi file
+đang che terminal. Server giữ tối đa 8 luồng và đóng luồng cũ nhất khi có luồng mới. Chỉ luồng của
+cửa sổ đó bị đóng, phiên và chương trình đang chạy trong phiên không bị ảnh hưởng. Cửa sổ bị đóng
+luồng hiện nút `Disconnected by a newer window — Reconnect` và không tự kết nối lại, vì nếu tự kết nối
+thì hai cửa sổ sẽ lần lượt đẩy nhau ra mãi. Nhấn vào nút đó, hoặc vào chỉ báo kết nối, để kết nối lại.
 
 ## Backend Herdr
 
@@ -235,6 +284,7 @@ Header hiển thị chỉ báo trạng thái kết nối thời gian thực vớ
 | Connecting   | Chấm xanh dương | Đang kết nối đến server                  |
 | Disconnected | Chấm đỏ    | Mất kết nối (nhấn để thử lại)               |
 | Error        | X đỏ       | Lỗi kết nối                                 |
+| `Disconnected by a newer window` | Chấm đỏ | Cửa sổ mới hơn đã lấy luồng terminal của cửa sổ này (nhấn để kết nối lại) |
 
 Chỉ báo tự động phát hiện mất kết nối ở cả hai kênh: các lần hỏi snapshot định kỳ và WebSocket của
 terminal. Nhấn vào khi mất kết nối để thử lại thủ công.

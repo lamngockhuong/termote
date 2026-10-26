@@ -154,6 +154,10 @@ interface Store {
   // The user chose for the tabs in pendingRootClose: close them (and drop
   // their changes) or keep them
   resolveRootClose: (close: boolean) => void
+  // Opens side's diff, pinned, once the list is read: false when git does
+  // not list that side (a link to a diff committed or reverted since), null
+  // when a newer link took its place first
+  openLink: (side: ChangeSide) => Promise<boolean | null>
 }
 
 function createStore(id: string): Store {
@@ -172,6 +176,11 @@ function createStore(id: string): Store {
       }
     : INITIAL
   const listeners = new Set<() => void>()
+  // A link's diff waiting for the list (openLink)
+  let link: {
+    side: ChangeSide
+    done: (shown: boolean | null) => void
+  } | null = null
   let timer: ReturnType<typeof setTimeout> | undefined
   let inFlight = false
   let again = false
@@ -228,6 +237,7 @@ function createStore(id: string): Store {
         })
     if (!same) set({ ...next, loaded: true, error: undefined })
     prune()
+    takeLink()
   }
 
   // Tabs whose side git no longer lists (committed, staged, reverted)
@@ -294,6 +304,15 @@ function createStore(id: string): Store {
         state.pendingRootClose?.filter((id) => !gone.has(id)),
       ),
     })
+  }
+
+  function takeLink() {
+    if (!link) return
+    const { side, done } = link
+    link = null
+    const listed = !!findEntry(state.entries, side)
+    if (listed) open(side, { pin: true })
+    done(listed)
   }
 
   function activate(id: string | null) {
@@ -508,6 +527,15 @@ function createStore(id: string): Store {
     },
     saved,
     moved,
+    openLink(side) {
+      // A link waiting before is dropped: the newer one is what is shown
+      link?.done(null)
+      const shown = new Promise<boolean | null>((done) => {
+        link = { side, done }
+      })
+      if (state.loaded) takeLink()
+      return shown
+    },
     resolveRootClose(closing) {
       const ids = state.pendingRootClose ?? []
       set({ pendingRootClose: undefined })
@@ -565,6 +593,13 @@ export function useGitChanges(paneId: string) {
       [store],
     ),
   }
+}
+
+// Opens side's diff in paneId's Changes view, from a link: false when git
+// does not list that side, null when a newer link replaced it. Waits for the
+// view to read the list.
+export function openChangeFromLink(paneId: string, side: ChangeSide) {
+  return storeFor(paneId).openLink(side)
 }
 
 // The file from under root was renamed to to: the Changes tabs of every

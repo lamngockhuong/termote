@@ -6,6 +6,13 @@ export type ConnectionState =
   | 'connected'
   | 'disconnected'
   | 'error'
+  // Closed for a newer stream (the server holds a few at most): not retried
+  // on its own, so two windows never push each other out in turn
+  | 'evicted'
+
+// The stream is down and not coming back on its own right now
+export const isDown = (state: ConnectionState | undefined) =>
+  state === 'disconnected' || state === 'error' || state === 'evicted'
 
 interface Props {
   state: ConnectionState
@@ -17,6 +24,7 @@ const STATUS_COLORS: Record<ConnectionState, string> = {
   connected: 'bg-success',
   disconnected: 'bg-danger',
   error: 'bg-danger',
+  evicted: 'bg-danger',
 }
 
 export const STATUS_TEXT: Record<ConnectionState, string> = {
@@ -24,6 +32,7 @@ export const STATUS_TEXT: Record<ConnectionState, string> = {
   connected: 'Connected',
   disconnected: 'Disconnected',
   error: 'Connection error',
+  evicted: 'Disconnected by a newer window',
 }
 
 // The coloured dot alone, for places that show the state without the retry

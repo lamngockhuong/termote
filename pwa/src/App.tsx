@@ -11,8 +11,10 @@ import {
   APP_VIEWS,
   type AppView,
   availableViews,
+  CHANGES_VIEW_ID,
   CHAT_VIEW_ID,
   FILES_VIEW_ID,
+  type FileWindowTarget,
   type NotifyOptions,
   startOffered,
   TERMINAL_VIEW_ID,
@@ -25,7 +27,7 @@ import { AboutModal } from './components/about-modal'
 import { AppHeader } from './components/app-header'
 import { CommandHistoryDropdown } from './components/command-history-dropdown'
 import type { CommandPaletteProps } from './components/command-palette'
-import type { ConnectionState } from './components/connection-indicator'
+import { type ConnectionState, isDown } from './components/connection-indicator'
 import { GestureHintsOverlay } from './components/gesture-hints-overlay'
 import { GroupDialog } from './components/group-dialog'
 import { HelpModal } from './components/help-modal'
@@ -58,10 +60,11 @@ import {
 import { useTheme } from './contexts/theme-context'
 import { useAgentNotifications } from './hooks/use-agent-notifications'
 import { useCommandHistory } from './hooks/use-command-history'
-import { requestFilesFocus } from './hooks/use-files'
+import { followInFiles, requestFilesFocus } from './hooks/use-files'
 import { useFontSize } from './hooks/use-font-size'
 import { useFullscreen } from './hooks/use-fullscreen'
 import { useGestures } from './hooks/use-gestures'
+import { openChangeFromLink } from './hooks/use-git-changes'
 import {
   dropStaleViewerEntry,
   onViewerEntryGone,
@@ -94,17 +97,21 @@ import {
 } from './utils/app-update'
 import { requestDraftInsert } from './utils/chat-draft'
 import {
+  type DeepLink,
   formatDeepLink,
+  formatOverviewLink,
   OVERVIEW_HASH,
   parseDeepLink,
   parseScreenLink,
 } from './utils/deep-link'
 import { signOutPage } from './utils/files-persist'
+import { isFocusWindow } from './utils/focus-mode'
 import {
   LARGE_PACKET_HELP_URL,
   onLargePacketLoss,
 } from './utils/large-packet-loss'
 import { lazyRetry } from './utils/lazy-retry'
+import { type OpenWindowEvent, openInWindow } from './utils/open-window'
 import { loadPaneView, savePaneView } from './utils/pane-view'
 import { isApplePlatform } from './utils/platform'
 import { formatRunning, uniqueNames } from './utils/running-commands'
@@ -177,10 +184,40 @@ interface AppProps {
   readOnly?: boolean
 }
 
-// The overview's address; the hash change opens it.
+// The overview's address; the hash change opens it. A focus window keeps
+// solo=1 in it, so a reload is a focus window again.
 function showOverviewAddress() {
-  if (window.location.hash !== OVERVIEW_HASH) {
-    window.location.hash = OVERVIEW_HASH
+  const hash = formatOverviewLink({ solo: isFocusWindow() })
+  if (window.location.hash !== hash) window.location.hash = hash
+}
+
+// The file a focus window was opened on: a file in the Files panel, or a
+// side's diff in the Changes panel
+type FocusFile = Required<Pick<DeepLink, 'view' | 'file'>> &
+  Pick<DeepLink, 'staged' | 'orig'>
+
+// The address of the main window for link: the same target, without solo
+function mainWindowURL(link: string | null) {
+  const { origin, pathname, search } = window.location
+  const parsed = link && parseDeepLink(link)
+  const hash = parsed
+    ? formatDeepLink({ ...parsed, solo: undefined })
+    : link
+      ? OVERVIEW_HASH
+      : ''
+  return `${origin}${pathname}${search}${hash}`
+}
+
+// The window that opened this one, when it is this app's
+function openerWindow(): Window | null {
+  try {
+    const w = window.opener as Window | null
+    return w && !w.closed && w.location.origin === window.location.origin
+      ? w
+      : null
+  } catch {
+    // Another origin's window: not ours to drive
+    return null
   }
 }
 
@@ -253,6 +290,11 @@ export default function App({
   const { history, addCommand, removeCommand, clearHistory } =
     useCommandHistory()
   const isMobile = useIsMobile()
+  // Opened from "Open in new window": only the link's target, nothing kept
+  const focus = isFocusWindow()
+  // Desktop only: the command palette, app shortcuts and other windows
+  const finePointer = useMediaQuery('(pointer: fine)')
+  const desktop = finePointer && !isMobile
   const {
     isVisible: keyboardVisible,
     keyboardHeight,
@@ -523,10 +565,18 @@ export default function App({
   // view never flashes on the new one.
   const viewPaneId = activeSession.paneId ?? activeSession.id
   const viewPaneRef = useRef(viewPaneId)
+  // The view a link asked for a pane not on screen yet: a focus window
+  // keeps no pane view to find it in once the pane shows
+  const linkViewRef = useRef<{ paneId: string; view: string } | null>(null)
   useLayoutEffect(() => {
     if (viewPaneRef.current !== viewPaneId) {
       viewPaneRef.current = viewPaneId
-      const saved = loadPaneView(viewPaneId)
+      const asked = linkViewRef.current
+      linkViewRef.current = null
+      const saved =
+        asked?.paneId === viewPaneId
+          ? { view: asked.view, panel: null }
+          : loadPaneView(viewPaneId)
       setViewId(saved?.view ?? TERMINAL_VIEW_ID)
       setSidePanelId(saved?.panel ?? null)
       return
@@ -549,12 +599,64 @@ export default function App({
     setSettingsGroup(group)
     setSettingsOpen(true)
   }, [])
+  // "Open in new window" (desktop): a link with solo=1 in a window of its
+  // own; a phone has no second window to open
+  const openLinkWindow = useCallback(
+    (hash: string, popup: boolean) => {
+      if (!openInWindow(hash, popup)) showToast('Pop-up blocked', 'warning')
+    },
+    [showToast],
+  )
+  // The link of a tab (and pane) of this server, in a focus window
+  const soloLink = useCallback(
+    (session: Session, paneId?: string, rest: Partial<DeepLink> = {}) =>
+      session.groupId
+        ? formatDeepLink({
+            group: session.groupId,
+            tab: session.id,
+            pane: mux.caps.clientSideSelect ? paneId : undefined,
+            solo: true,
+            ...rest,
+          })
+        : null,
+    [mux.caps.clientSideSelect],
+  )
+  // A file or diff of the pane in its own window: on a desktop, where a link
+  // names the pane (its tab has a group), and not from a focus window, whose
+  // Open in main window would then lead back to that window, not the main one
+  const openFileWindow = useMemo(() => {
+    const group = activeSession.groupId
+    if (!desktop || focus || !group) return undefined
+    return (target: FileWindowTarget, e: OpenWindowEvent) =>
+      openLinkWindow(
+        formatDeepLink({
+          group,
+          tab: activeSession.id,
+          pane: mux.caps.clientSideSelect ? activeSession.paneId : undefined,
+          view: target.view,
+          solo: true,
+          file: target.file,
+          ...(target.staged && { staged: true as const }),
+          orig: target.orig,
+        }),
+        e.shiftKey,
+      )
+  }, [
+    desktop,
+    focus,
+    activeSession.groupId,
+    activeSession.id,
+    activeSession.paneId,
+    mux.caps.clientSideSelect,
+    openLinkWindow,
+  ])
   const viewProps = {
     ...viewContext,
     isMobile,
     notify,
     showView,
     openSettings,
+    openWindow: openFileWindow,
   }
   const sidePanelView = panelViews.find((v) => v.id === sidePanelId && v.Panel)
   const hasSidePanel = !!sidePanelView
@@ -567,6 +669,9 @@ export default function App({
     setPanelResizing(false)
   }, [hasSidePanel])
   const holdTerminalSize = hasSidePanel && (panelResizing || panelMaximized)
+  // A focus window's file covers the terminal: no stream there, which would
+  // only take one of the server's
+  const streamOff = focus && hasSidePanel && panelMaximized
   const setSidePanelWidth = useCallback(
     (width: number) => updateSetting('sidePanelWidth', width),
     [updateSetting],
@@ -605,9 +710,13 @@ export default function App({
   // The indicator follows the stream; a failing session poll can only mark
   // it down, never up, so it does not show "connected" while the stream is
   // still backing off.
-  const connectionState: ConnectionState = isServerReachable
-    ? streamState
-    : 'disconnected'
+  // Without a stream on purpose (a focus window's file covers the terminal)
+  // the server's own state is all there is to show.
+  const connectionState: ConnectionState = !isServerReachable
+    ? 'disconnected'
+    : streamOff
+      ? 'connected'
+      : streamState
 
   // The server's version, read on start, whenever the terminal stream comes
   // back (an update restarts the server) and when the app is shown again:
@@ -615,7 +724,7 @@ export default function App({
   // offers the reload (the banner).
   const droppedRef = useRef(false)
   useEffect(() => {
-    if (streamState === 'disconnected' || streamState === 'error') {
+    if (isDown(streamState)) {
       droppedRef.current = true
     } else if (streamState === 'connected' && droppedRef.current) {
       droppedRef.current = false
@@ -1044,6 +1153,43 @@ export default function App({
     if (await addTab(name, icon, description)) setSidebarOpen(false)
   }
 
+  // A link's file or diff, opened in its pane's Files or Changes panel; a
+  // focus window shows that panel maximized over the terminal and keeps the
+  // file in its address. A path that cannot be one, or one the server does
+  // not open, gets one short notice, never the server's reason or the path.
+  const [focusFile, setFocusFile] = useState<FocusFile | null>(null)
+  const openLinkFile = (link: DeepLink, paneId: string) => {
+    if (focus) setFocusFile(null)
+    if (link.badFile) {
+      showToast('File not found or not allowed', 'warning')
+      return
+    }
+    if (!link.file || !link.view) return
+    if (focus) {
+      setFocusFile({
+        view: link.view,
+        file: link.file,
+        ...(link.staged && { staged: link.staged }),
+        ...(link.orig && { orig: link.orig }),
+      })
+      setPanelMaximized(true)
+    }
+    if (link.view === CHANGES_VIEW_ID) {
+      void openChangeFromLink(paneId, {
+        path: link.file,
+        orig: link.orig,
+        staged: !!link.staged,
+      }).then((shown) => {
+        if (shown === false) showToast('No changes for this file', 'warning')
+      })
+      return
+    }
+    void followInFiles(paneId, { path: link.file }).then((result) => {
+      if (result === 'missing' || result === 'failed')
+        showToast('File not found or not allowed', 'warning')
+    })
+  }
+
   // Deep link: opened once the first snapshot is in, and again on each
   // hashchange. It only selects a tab, pane and view.
   const pendingLinkRef = useRef(parseDeepLink(window.location.hash))
@@ -1098,30 +1244,47 @@ export default function App({
       settledHashRef.current = hash
       setLinkSettled((n) => n + 1)
     })
+    const paneId =
+      link.pane && target.panes?.some((p) => p.id === link.pane)
+        ? link.pane
+        : (target.paneId ?? target.id)
     if (link.view) {
       // Kept for the pane too: switching to it restores its saved view.
-      const paneId =
-        link.pane && target.panes?.some((p) => p.id === link.pane)
-          ? link.pane
-          : (target.paneId ?? target.id)
       savePaneView(paneId, {
         view: link.view,
         panel: loadPaneView(paneId)?.panel ?? null,
       })
+      // A focus window keeps none: the pane takes it from here once shown
+      if (focus) linkViewRef.current = { paneId, view: link.view }
       // Another pane picks it up from there once selected; setting it now
       // would save it for the pane being left.
       if (paneId === viewPaneRef.current) setViewId(link.view)
     }
+    openLinkFile(link, paneId)
   }, [linkRequest, sessionsLoaded, sessions, selectSession, showToast])
 
   // The address bar follows what is on screen, without adding history
   // entries, so copying it gives a link to this very pane.
+  // On desktop the Files and Changes views show in the side panel: a focus
+  // window's file names the panel's view, while that panel shows.
+  const linkView =
+    focus && focusFile && sidePanelId === focusFile.view
+      ? focusFile.view
+      : currentView.id
   const currentLink = activeSession.groupId
     ? formatDeepLink({
         group: activeSession.groupId,
         tab: activeSession.id,
         pane: mux.caps.clientSideSelect ? activeSession.paneId : undefined,
-        view: currentView.id,
+        view: linkView,
+        ...(focus && { solo: true as const }),
+        ...(focus &&
+          focusFile &&
+          linkView === focusFile.view && {
+            file: focusFile.file,
+            staged: focusFile.staged,
+            orig: focusFile.orig,
+          }),
       })
     : null
   const currentLinkRef = useRef(currentLink)
@@ -1159,7 +1322,30 @@ export default function App({
 
   // Built from what is on screen, not read from the address bar, which may
   // still hold a link that did not open.
-  const shownLink = overviewOpen ? OVERVIEW_HASH : currentLink
+  const shownLink = overviewOpen
+    ? formatOverviewLink({ solo: focus })
+    : currentLink
+  // What is on screen, in a window of its own: offered on a desktop, where
+  // a link names it, and not in a focus window (it has Open in main window)
+  const shownSoloLink = overviewOpen
+    ? formatOverviewLink({ solo: true })
+    : soloLink(activeSession, activeSession.paneId, { view: currentView.id })
+  const openShownWindow = useMemo(
+    () =>
+      desktop && !focus && shownSoloLink
+        ? (e?: OpenWindowEvent) => openLinkWindow(shownSoloLink, !!e?.shiftKey)
+        : undefined,
+    [desktop, focus, shownSoloLink, openLinkWindow],
+  )
+  // A tab or pane picked in the palette with Mod+Enter
+  const openPickWindow = useCallback(
+    ({ tabId, paneId }: { tabId: string; paneId?: string }) => {
+      const session = sessions.find((s) => s.id === tabId)
+      const hash = session && soloLink(session, paneId)
+      if (hash) openLinkWindow(hash, false)
+    },
+    [sessions, soloLink, openLinkWindow],
+  )
   const copyLink = useCallback(async () => {
     const { origin, pathname, search } = window.location
     try {
@@ -1170,6 +1356,36 @@ export default function App({
     } catch {
       showToast('Could not copy the link', 'danger')
     }
+  }, [shownLink, showToast])
+  // A focus window is named for its file, or its tab, among the others
+  const focusTitle = focus
+    ? overviewOpen
+      ? 'Overview'
+      : focusFile && linkView === focusFile.view
+        ? focusFile.file.slice(focusFile.file.lastIndexOf('/') + 1)
+        : activeSession.name
+    : null
+  useEffect(() => {
+    if (!focusTitle) return
+    const before = document.title
+    document.title = `${focusTitle} — Termote`
+    return () => {
+      document.title = before
+    }
+  }, [focusTitle])
+  // A focus window hands its target (its file too) to the window that opened
+  // it, or a new one when that is gone, without solo, then closes.
+  const openInMain = useCallback(() => {
+    const url = mainWindowURL(shownLink)
+    const main = openerWindow()
+    if (main) {
+      main.location.href = url
+      main.focus()
+    } else if (!window.open(url, '_blank')) {
+      showToast('Pop-up blocked', 'warning')
+      return
+    }
+    window.close()
   }, [shownLink, showToast])
 
   // Opening and closing go through the address, so each is a history entry.
@@ -1218,9 +1434,10 @@ export default function App({
         tab: session.id,
         pane: mux.caps.clientSideSelect ? pane.id : undefined,
         view,
+        ...(focus && { solo: true as const }),
       })
     },
-    [mux.caps.clientSideSelect, selectSession],
+    [mux.caps.clientSideSelect, selectSession, focus],
   )
   const overviewOpensChat = useCallback(
     (pane: SessionPane) => !!mux.caps.agentChat && chatAgent(pane.agentName),
@@ -1273,9 +1490,6 @@ export default function App({
     [selectSession],
   )
 
-  // Desktop only: the command palette and app shortcuts
-  const finePointer = useMediaQuery('(pointer: fine)')
-  const desktop = finePointer && !isMobile
   const [paletteMode, setPaletteMode] = useState<PaletteMode | null>(null)
   const groupTabs = sessions.filter((s) => s.groupId === activeSession.groupId)
   const tabIndex = groupTabs.findIndex((s) => s.id === activeSession.id)
@@ -1294,6 +1508,7 @@ export default function App({
       buildAppCommands({
         apple: isApplePlatform(),
         readOnly,
+        focus,
         viewIds: switcherViews.map((v) => v.id),
         panelIds: searchPaneId ? panelViews.map((v) => v.id) : [],
         sidePanelId: sidePanelView ? sidePanelId : null,
@@ -1327,12 +1542,14 @@ export default function App({
         openAbout: () => setAboutOpen(true),
         toggleSidebar: toggleSidebarCollapsed,
         toggleFullscreen,
+        openWindow: openShownWindow,
         fontIncrease: increase,
         fontDecrease: decrease,
         setTheme,
       }),
     [
       readOnly,
+      focus,
       switcherViews,
       panelViews,
       searchPaneId,
@@ -1354,6 +1571,7 @@ export default function App({
       selectFromList,
       toggleSidebarCollapsed,
       toggleFullscreen,
+      openShownWindow,
       increase,
       decrease,
       setTheme,
@@ -1415,8 +1633,8 @@ export default function App({
       }}
     >
       <div className="flex flex-1 min-h-0">
-        {/* Desktop sidebar */}
-        {!isMobile && (
+        {/* Desktop sidebar; a focus window has none */}
+        {!isMobile && !focus && (
           <SessionSidebar
             sessions={sessions}
             groups={groups}
@@ -1438,7 +1656,7 @@ export default function App({
         )}
 
         {/* Mobile sessions sheet, opened from the session chip */}
-        {isMobile && (
+        {isMobile && !focus && (
           <SessionSidebar
             sessions={sessions}
             groups={groups}
@@ -1465,11 +1683,11 @@ export default function App({
             groupSessions={groupSessions}
             groupName={groupName}
             blockedElsewhere={blockedElsewhere}
-            showBrand={sidebarCollapsed}
-            showSessionTabs={settings.showSessionTabs}
+            showBrand={focus || sidebarCollapsed}
+            showSessionTabs={!focus && settings.showSessionTabs}
             canRemoveTab={!readOnly && sessions.length > 1}
             onSelectTab={selectFromList}
-            onAddTab={readOnly ? undefined : () => addTab('New')}
+            onAddTab={readOnly || focus ? undefined : () => addTab('New')}
             onRemoveTab={requestRemove}
             connectionState={connectionState}
             onRetry={() => terminalRef.current?.reconnect()}
@@ -1485,7 +1703,8 @@ export default function App({
             views={switcherViews}
             viewId={currentView.id}
             onViewChange={changeView}
-            onOpenOverview={openOverview}
+            onOpenOverview={focus ? undefined : openOverview}
+            onOpenInMain={focus ? openInMain : undefined}
             usageChip={
               <HeaderUsageChip
                 paneId={activeSession.paneId}
@@ -1514,6 +1733,7 @@ export default function App({
                 setSettingsOpen(true)
               },
               onCopyLink: shownLink ? copyLink : undefined,
+              onOpenWindow: openShownWindow,
               onLogout: mux.caps.auth ? handleLogout : undefined,
               updateVersion: notifyUpdate ? updateVersion : null,
               onOpenUpdates: openUpdates,
@@ -1556,7 +1776,8 @@ export default function App({
           {/* Split tab: pick the pane to stream (herdr) */}
           {mux.caps.clientSideSelect &&
             activeSession.panes &&
-            !overviewOpen && (
+            !overviewOpen &&
+            !focus && (
               <PaneStrip
                 panes={activeSession.panes}
                 activePaneId={activeSession.paneId}
@@ -1588,8 +1809,13 @@ export default function App({
                 <div className="h-full">
                   <TerminalView
                     ref={terminalRef}
-                    // No stream at all where the server would refuse it
-                    paneId={viewStreamOff ? undefined : activeSession.paneId}
+                    // No stream at all where the server would refuse it, nor
+                    // while a focus window's file covers the terminal
+                    paneId={
+                      viewStreamOff || streamOff
+                        ? undefined
+                        : activeSession.paneId
+                    }
                     backend={mux.backend}
                     followPane={mux.caps.clientSideSelect}
                     // tmux attaches a whole session: another session needs
@@ -1965,6 +2191,8 @@ export default function App({
               }}
               selectSession={(id) => void selectFromList(id)}
               selectPane={mux.caps.clientSideSelect ? selectPane : undefined}
+              openInWindow={focus ? undefined : openPickWindow}
+              sessionsOff={focus ? 'Not in a focus window' : undefined}
             />
           </Suspense>
         </LazyBoundary>

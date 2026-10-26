@@ -1,4 +1,4 @@
-import { Command, Maximize, Minimize } from 'lucide-react'
+import { AppWindow, Command, Maximize, Minimize } from 'lucide-react'
 import type { ComponentProps, ReactNode } from 'react'
 import type { Session } from '../types/session'
 import { visibleUnsafe } from '../utils/unsafe-chars'
@@ -6,6 +6,7 @@ import { BrandMark } from './brand-mark'
 import {
   ConnectionIndicator,
   type ConnectionState,
+  isDown,
 } from './connection-indicator'
 import { PanelToggles } from './panel-toggles'
 import { SessionSwitcherChip } from './session-switcher-chip'
@@ -65,6 +66,9 @@ interface Props {
   // Desktop: opens the command palette; its key as shown, if it has one
   onOpenPalette?: () => void
   paletteKey?: string
+  // A focus window: its session can't be switched here, and this hands its
+  // target back to the main window
+  onOpenInMain?: () => void
   menu: MenuProps
 }
 
@@ -82,8 +86,7 @@ export function AppHeader(props: Props) {
 
 function MobileHeader(p: Props) {
   // The chip's dot shows the state; the retry button appears once it is down.
-  const down =
-    p.connectionState === 'disconnected' || p.connectionState === 'error'
+  const down = isDown(p.connectionState)
   return (
     <header
       className="relative z-10 flex shrink-0 items-center gap-1 border-b border-border bg-bg px-2 ui-native:border-0"
@@ -92,15 +95,22 @@ function MobileHeader(p: Props) {
         minHeight: 'calc(3rem + env(safe-area-inset-top))',
       }}
     >
-      <SessionSwitcherChip
-        session={p.session}
-        groupName={p.groupName}
-        sessionCount={p.groupSessions.length}
-        blockedElsewhere={p.blockedElsewhere}
-        connectionState={p.connectionState}
-        expanded={p.sessionsOpen}
-        onClick={p.onOpenSessions}
-      />
+      {p.onOpenInMain ? (
+        <>
+          <SessionName session={p.session} />
+          <OpenInMainButton onClick={p.onOpenInMain} />
+        </>
+      ) : (
+        <SessionSwitcherChip
+          session={p.session}
+          groupName={p.groupName}
+          sessionCount={p.groupSessions.length}
+          blockedElsewhere={p.blockedElsewhere}
+          connectionState={p.connectionState}
+          expanded={p.sessionsOpen}
+          onClick={p.onOpenSessions}
+        />
+      )}
       {down && (
         <ConnectionIndicator state={p.connectionState} onRetry={p.onRetry} />
       )}
@@ -156,20 +166,7 @@ function DesktopHeader(p: Props) {
           canRemove={p.canRemoveTab}
         />
       ) : (
-        <div
-          className="mb-2 flex min-w-0 flex-1 items-center gap-2 px-1"
-          title={`${visibleUnsafe(session.name)}${session.description ? ` - ${session.description}` : ''}`}
-        >
-          <span className="shrink-0 text-lg leading-none">{session.icon}</span>
-          <span className="truncate font-medium ui-terminal:font-label">
-            {visibleUnsafe(session.name)}
-          </span>
-          {session.description && (
-            <span className="truncate text-sm text-fg-muted">
-              {session.description}
-            </span>
-          )}
-        </div>
+        <SessionName session={session} className="mb-2" />
       )}
       {/* 2px above the border: the controls' middle then sits between the
           middle of the active tab (on the border) and of the others (4px up) */}
@@ -242,9 +239,49 @@ function DesktopHeader(p: Props) {
             <Command size={16} aria-hidden="true" />
           </IconButton>
         )}
+        {p.onOpenInMain && <OpenInMainButton onClick={p.onOpenInMain} />}
         <ConnectionIndicator state={p.connectionState} onRetry={p.onRetry} />
         <SettingsMenu {...p.menu} />
       </div>
     </header>
+  )
+}
+
+// The tab's icon, name and description, where its tabs are not shown
+function SessionName({
+  session,
+  className = '',
+}: {
+  session: Session
+  className?: string
+}) {
+  return (
+    <div
+      className={`flex min-w-0 flex-1 items-center gap-2 px-1 ${className}`}
+      title={`${visibleUnsafe(session.name)}${session.description ? ` - ${session.description}` : ''}`}
+    >
+      <span className="shrink-0 text-lg leading-none">{session.icon}</span>
+      <span className="truncate font-medium ui-terminal:font-label">
+        {visibleUnsafe(session.name)}
+      </span>
+      {session.description && (
+        <span className="truncate text-sm text-fg-muted">
+          {session.description}
+        </span>
+      )}
+    </div>
+  )
+}
+
+function OpenInMainButton({ onClick }: { onClick: () => void }) {
+  return (
+    <IconButton
+      size="sm"
+      onClick={onClick}
+      aria-label="Open in main window"
+      title="Open in main window"
+    >
+      <AppWindow size={16} aria-hidden="true" />
+    </IconButton>
   )
 }

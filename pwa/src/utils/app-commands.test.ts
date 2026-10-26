@@ -46,6 +46,38 @@ function command(ctx: AppCommandContext, id: string): AppCommand {
 }
 
 describe('buildAppCommands', () => {
+  it('opens what is on screen in a new window, where a link names it', () => {
+    const openWindow = vi.fn()
+    const on = command(context({ openWindow }), 'window.openNew')
+    expect(on.disabledReason).toBeUndefined()
+    on.run?.()
+    expect(openWindow).toHaveBeenCalled()
+    const off = command(context(), 'window.openNew')
+    expect(off.disabledReason).toBe('No link names this pane')
+    expect(() => off.run?.()).not.toThrow()
+  })
+
+  it('turns off what leaves a focus window, and nothing else', () => {
+    const left = new Set([
+      'palette.sessions',
+      'view.overview',
+      'tab.new',
+      'tab.previous',
+      'tab.next',
+      'app.toggleSidebar',
+      'window.openNew',
+    ])
+    const normal = buildAppCommands(context({ previousTab: 'a', nextTab: 'b' }))
+    const focus = buildAppCommands(
+      context({ previousTab: 'a', nextTab: 'b', focus: true }),
+    )
+    expect(focus.map((c) => c.id)).toEqual(normal.map((c) => c.id))
+    for (const [i, c] of focus.entries()) {
+      if (left.has(c.id)) expect(c.disabledReason).toBe('Not in a focus window')
+      else expect(c.disabledReason).toBe(normal[i].disabledReason)
+    }
+  })
+
   it('lists each id once, with a title and a category', () => {
     const list = buildAppCommands(context())
     expect(new Set(list.map((c) => c.id)).size).toBe(list.length)

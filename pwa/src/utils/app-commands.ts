@@ -41,6 +41,9 @@ export interface AppCommandContext {
   hasAgent: boolean
   devices: boolean
   canFullscreen: boolean
+  // A focus window (focus-mode.ts): it shows one target, so commands that
+  // move to another session, tab or screen are off
+  focus?: boolean
   // The tabs before and after the current one in its group
   previousTab?: string
   nextTab?: string
@@ -60,6 +63,8 @@ export interface AppCommandContext {
   openAbout: () => void
   toggleSidebar: () => void
   toggleFullscreen: () => void
+  // What is on screen in a window of its own; unset where no link names it
+  openWindow?: () => void
   fontIncrease: () => void
   fontDecrease: () => void
   setTheme: (theme: ThemeChoice) => void
@@ -67,8 +72,28 @@ export interface AppCommandContext {
 
 const VIEW_ONLY = 'View only'
 const NO_FILES = 'Not available for this pane'
+const IN_FOCUS = 'Not in a focus window'
+
+// Commands that leave a focus window's target (or fold a sidebar it has not)
+const LEAVE_FOCUS = new Set([
+  'palette.sessions',
+  'view.overview',
+  'tab.new',
+  'tab.previous',
+  'tab.next',
+  'app.toggleSidebar',
+  'window.openNew',
+])
 
 export function buildAppCommands(ctx: AppCommandContext): AppCommand[] {
+  const commands = allCommands(ctx)
+  if (!ctx.focus) return commands
+  return commands.map((c) =>
+    LEAVE_FOCUS.has(c.id) ? { ...c, disabledReason: IN_FOCUS } : c,
+  )
+}
+
+function allCommands(ctx: AppCommandContext): AppCommand[] {
   const panel = (id: string, title: string): AppCommand => ({
     id: id === FILES_VIEW_ID ? 'view.filesPanel' : 'view.changesPanel',
     title,
@@ -237,6 +262,13 @@ export function buildAppCommands(ctx: AppCommandContext): AppCommand[] {
         : 'Not supported by this browser',
       restoreFocus: true,
       run: ctx.toggleFullscreen,
+    },
+    {
+      id: 'window.openNew',
+      title: 'Open in new window',
+      category: 'App',
+      disabledReason: ctx.openWindow ? undefined : 'No link names this pane',
+      run: () => ctx.openWindow?.(),
     },
     {
       id: 'terminal.fontIncrease',

@@ -671,6 +671,62 @@ describe('CommandPalette', () => {
       expect(selectPane).toHaveBeenCalledWith('%9')
     })
 
+    it('Mod+Enter opens a tab or pane in a new window', () => {
+      const openInWindow = vi.fn()
+      const selectPane = vi.fn()
+      const split = {
+        ...SESSION,
+        panes: [{ id: '%9', label: 'vim', hasAgent: false }],
+      }
+      const p = renderPalette({
+        mode: 'sessions',
+        session: split,
+        selectPane,
+        openInWindow,
+      })
+      type('@logs')
+      key('Enter', { ctrlKey: true })
+      expect(openInWindow).toHaveBeenLastCalledWith({ tabId: '2' })
+      type('@vim')
+      key('Enter', { ctrlKey: true })
+      expect(openInWindow).toHaveBeenLastCalledWith({
+        tabId: SESSION.id,
+        paneId: '%9',
+      })
+      expect(p.selectSession).not.toHaveBeenCalled()
+      expect(selectPane).not.toHaveBeenCalled()
+    })
+
+    it('a focus window lists the tabs and panes but picks none', () => {
+      const selectPane = vi.fn()
+      const split = {
+        ...SESSION,
+        panes: [{ id: '%9', label: 'vim', hasAgent: false }],
+      }
+      const p = renderPalette({
+        mode: 'sessions',
+        session: split,
+        selectPane,
+        sessionsOff: 'Not in a focus window',
+      })
+      expect(screen.getByRole('option', { name: /Logs/ })).toHaveTextContent(
+        'Not in a focus window',
+      )
+      type('@logs')
+      key('Enter')
+      type('@vim')
+      key('Enter')
+      expect(p.selectSession).not.toHaveBeenCalled()
+      expect(selectPane).not.toHaveBeenCalled()
+    })
+
+    it('Mod+Enter picks as Enter does without new windows', () => {
+      const p = renderPalette({ mode: 'sessions' })
+      type('@logs')
+      key('Enter', { ctrlKey: true })
+      expect(p.selectSession).toHaveBeenCalledWith('2')
+    })
+
     it('lists a tab without a group, and no pane when the tab has none', () => {
       renderPalette({
         mode: 'sessions',

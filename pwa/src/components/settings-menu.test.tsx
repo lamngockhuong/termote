@@ -199,6 +199,20 @@ describe('SettingsMenu', () => {
     expect(onCopyLink).toHaveBeenCalledOnce()
   })
 
+  it('Open in new window passes Shift for a popup, and is offered only when given', () => {
+    const onOpenWindow = vi.fn()
+    const { unmount } = renderWithTheme({ onOpenWindow })
+    open()
+    fireEvent.click(item('Open in new window'), { shiftKey: true })
+    expect(onOpenWindow).toHaveBeenCalledWith({ shiftKey: true })
+    unmount()
+    renderWithTheme()
+    open()
+    expect(
+      screen.queryByRole('menuitem', { name: 'Open in new window' }),
+    ).toBeNull()
+  })
+
   it('clears cache and reloads when clear cache button clicked', async () => {
     renderWithTheme()
     fireEvent.click(screen.getByLabelText('More'))

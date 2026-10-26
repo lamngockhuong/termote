@@ -27,7 +27,7 @@ import {
 } from '../utils/terminal-bridge'
 import { terminalFontFamily } from '../utils/terminal-font'
 import { imageFromClipboard } from '../utils/upload-image'
-import type { ConnectionState } from './connection-indicator'
+import { type ConnectionState, isDown } from './connection-indicator'
 import { FOCUS_RING } from './ui/button'
 
 // What terminal-bridge drives. The object is stable for the component's
@@ -99,6 +99,13 @@ interface Props {
   // copyOnSelect ('select').
   onCopy?: (result: 'ok' | 'failed', how: 'key' | 'select') => void
 }
+
+// What the Reconnect button says, by why the stream is down
+const FAILED_TEXT = {
+  disconnected: 'Disconnected',
+  error: 'Connection lost',
+  evicted: 'Disconnected by a newer window',
+} as const
 
 // Foreground colours reach WCAG AA (4.5:1) on the terminal background of every
 // UI style (ANSI black stays black: programs use it as a background). On the
@@ -789,7 +796,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
     }, [disableContextMenu])
 
     const { state } = socket
-    const failed = state === 'error' || state === 'disconnected'
+    const failed = isDown(state)
     return (
       <div
         ref={scrollerRef}
@@ -811,8 +818,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
               onClick={socket.reconnect}
               className={`pointer-events-auto h-9 rounded-control border border-border bg-surface-raised px-3 text-sm text-fg shadow-lg hover:border-border-strong pointer-coarse:h-touch ${FOCUS_RING}`}
             >
-              {state === 'error' ? 'Connection lost' : 'Disconnected'} —
-              Reconnect
+              {FAILED_TEXT[state as keyof typeof FAILED_TEXT]} — Reconnect
             </button>
           </div>
         )}
