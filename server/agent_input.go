@@ -120,7 +120,7 @@ type agentWriter interface {
 // agentKeys are the only keys a route sends, with the bytes a raw-input
 // backend (herdr) types for them.
 var agentKeys = map[string]string{
-	"Enter": "\r", "Escape": "\x1b", "C-c": "\x03", "Left": "\x1b[D", "Right": "\x1b[C", "Up": "\x1b[A", "Down": "\x1b[B",
+	"Enter": "\r", "Tab": "\t", "Escape": "\x1b", "C-c": "\x03", "Left": "\x1b[D", "Right": "\x1b[C", "Up": "\x1b[A", "Down": "\x1b[B",
 	"1": "1", "2": "2", "3": "3", "4": "4", "5": "5", "6": "6", "7": "7", "8": "8", "9": "9",
 }
 
@@ -155,7 +155,10 @@ var (
 	errFreeTooLong    = &agentFailure{status: http.StatusRequestEntityTooLarge, code: "text_too_long", msg: "text is longer than 1 KB", limit: agentMaxFreeText}
 	errTargetChanged  = fail(http.StatusConflict, "target_changed", "the agent is no longer in this pane")
 	errSessionChanged = fail(http.StatusConflict, "session_changed", "the pane runs another session now")
-	errPartialPaste   = fail(http.StatusConflict, "partial_paste", "the input box holds part of this message; clear it in the terminal")
+	// errQueued is no failure: the working agent took the message into its
+	// queue, and the route answers 202
+	errQueued       = errors.New("queued by the agent")
+	errPartialPaste = fail(http.StatusConflict, "partial_paste", "the input box holds part of this message; clear it in the terminal")
 )
 
 // promptRecord is a dialog a client was shown, bound to the pane, the
@@ -432,11 +435,15 @@ func (a *agentAPI) handleMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), budget)
 	defer cancel()
-	if err := a.sendMessage(ctx, wr, paneID, c.Session, text, paths); err != nil {
+	switch err := a.sendMessage(ctx, wr, paneID, c.Session, text, paths); {
+	case errors.Is(err, errQueued):
+		// The agent took the message into its queue, to read when ready
+		w.WriteHeader(http.StatusAccepted)
+	case err != nil:
 		a.writeFailure(w, err)
-		return
+	default:
+		w.WriteHeader(http.StatusNoContent)
 	}
-	w.WriteHeader(http.StatusNoContent)
 }
 
 // messageBudget is how long a message with n images may take: a redraw to
@@ -489,9 +496,9 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 	if s.ID != session {
 		return errSessionChanged
 	}
-	// The agent queues a message sent while it works; a message the user
-	// cannot see land is not sent.
-	if err := inputReady(s); err != nil {
+	// A message sent while the agent works goes into its own queue, which
+	// it reads when it is ready; one waiting on a dialog is not sent.
+	if err := agentReady(s, true); err != nil {
 		return err
 	}
 	screen, err := wr.Capture(ctx, s.Target)
@@ -514,9 +521,12 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 		if !sameAgent(now, s) {
 			return errSessionChanged
 		}
-		if err := inputReady(now); err != nil {
+		if err := agentReady(now, true); err != nil {
 			return err
 		}
+	}
+	if agentWorking(s, sc) && !agentQueueing[s.Agent].commands && len(paths) == 0 && strings.HasPrefix(strings.TrimSpace(text), "/") {
+		return fail(http.StatusConflict, "input_not_ready", "the agent is working; send a command once it is done")
 	}
 	switch sc.input {
 	case inputEmpty:
@@ -528,10 +538,11 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 		}
 		return fail(http.StatusConflict, "input_not_ready", "the screen is not the input box")
 	}
-	// The same idle agent before every paste that follows an image.
+	// The same agent, still taking a message, before every paste that
+	// follows an image.
 	stillReady := func() bool {
 		now, err := sessionNow(ctx, wr, paneID)
-		return err == nil && sameAgent(now, s) && inputReady(now) == nil
+		return err == nil && sameAgent(now, s) && agentReady(now, true) == nil
 	}
 	// An image path becomes the agent's token only when pasted alone, so
 	// each goes in its own paste, confirmed before the next.
@@ -568,7 +579,7 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 		if !sameAgent(now, s) {
 			return errSessionChanged
 		}
-		if err := inputReady(now); err != nil {
+		if err := agentReady(now, true); err != nil {
 			return err
 		}
 	}
@@ -583,7 +594,10 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 			return err
 		}
 	}
+	// shown: the screen that confirmed the paste, read right before the key
+	var shown agentScreen
 	shows := func(sc agentScreen) bool {
+		shown = sc
 		if n == 0 {
 			return sc.input == inputDraft && draftShows(sc.draft, text)
 		}
@@ -601,22 +615,50 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 		}
 		return notShown
 	}
-	// The same process and session, still idle, right before the key that
-	// submits; otherwise the text stays in the box for the user to see.
-	if now, err := sessionNow(ctx, wr, paneID); err != nil || !sameAgent(now, s) || inputReady(now) != nil {
+	// The same process and session, still taking a message, right before
+	// the key that submits; otherwise the text stays in the box for the
+	// user to see.
+	now, err := sessionNow(ctx, wr, paneID)
+	if err != nil || !sameAgent(now, s) || agentReady(now, true) != nil {
 		return fail(http.StatusBadGateway, "delivered_not_submitted", "the text is in the input box but was not submitted")
 	}
-	if err := wr.SendKeySequence(ctx, s.Target, []string{"Enter"}); err != nil {
-		log.Printf("agent message: enter: %v", err)
+	key, queued := "Enter", agentWorking(now, shown)
+	if queued {
+		key = agentQueueing[s.Agent].key
+	}
+	if err := wr.SendKeySequence(ctx, s.Target, []string{key}); err != nil {
+		log.Printf("agent message: %s: %v", key, err)
 		return fail(http.StatusBadGateway, "delivered_not_submitted", "the text was pasted but not submitted")
 	}
-	// Submitted: the box holds no draft. A different draft is no submit:
-	// Enter can take a completion instead (Codex's `@` mention popup turns
-	// "@a" into a file or plugin name and keeps the text in the composer).
+	// Submitted (or queued): the box holds no draft. A different draft is no
+	// submit: Enter can take a completion instead (Codex's `@` mention popup
+	// turns "@a" into a file or plugin name and keeps the text in the
+	// composer).
 	if !pollScreen(ctx, wr, s.Agent, s.Target, func(sc agentScreen) bool { return sc.input != inputDraft }) {
 		return fail(http.StatusBadGateway, "delivered_not_submitted", "the text was pasted but not submitted")
 	}
+	if queued {
+		return errQueued
+	}
 	return nil
+}
+
+// agentQueueing is how each agent takes a message while it works, into a
+// queue it reads when ready: Claude Code queues what Enter submits. Codex's
+// Enter steers the turn it runs and Tab queues; Tab also takes the "/"
+// popup's pick, so a command waits until Codex is idle.
+var agentQueueing = map[string]struct {
+	key      string
+	commands bool
+}{
+	"claude": {"Enter", true},
+	"codex":  {"Tab", false},
+}
+
+// agentWorking: the agent works, by its status or by the screen (Codex's
+// working line: its rollout lags the screen).
+func agentWorking(s AgentSession, sc agentScreen) bool {
+	return s.Status == "working" || sc.working
 }
 
 // abandon ends a message with images that failed after its first paste. The
@@ -630,9 +672,8 @@ func (a *agentAPI) abandon(ctx context.Context, wr agentWriter, paneID string, s
 		log.Printf("agent message: paste: %v", failure)
 		failure = fail(http.StatusBadGateway, "paste_not_confirmed", "the message could not be pasted")
 	}
-	// C-c to a working agent would interrupt it.
 	now, err := sessionNow(ctx, wr, paneID)
-	if err != nil || !sameAgent(now, s) || inputReady(now) != nil {
+	if err != nil || !sameAgent(now, s) || agentReady(now, true) != nil {
 		return errPartialPaste
 	}
 	screen, err := wr.Capture(ctx, s.Target)
@@ -643,7 +684,8 @@ func (a *agentAPI) abandon(ctx context.Context, wr agentWriter, paneID string, s
 	if sc.input == inputEmpty {
 		return failure
 	}
-	if sc.input != inputDraft || !ownDraft(sc.draft, k, pasted) {
+	// C-c to a working agent would interrupt it: its box is left as is.
+	if sc.input != inputDraft || !ownDraft(sc.draft, k, pasted) || agentReady(now, false) != nil {
 		return errPartialPaste
 	}
 	if err := wr.SendKeySequence(ctx, s.Target, []string{"C-c"}); err != nil {
@@ -666,13 +708,15 @@ func ownDraft(draft string, k int, pasted string) bool {
 	return pasted != "" && draftShowsImages(draft, k, pasted)
 }
 
-// inputReady: the agent waits for a message and the pane passes keys to it.
-// A message sent while it works is queued, out of the user's sight.
-func inputReady(s AgentSession) error {
+// agentReady: the agent waits for a message (or, with queue, takes one into
+// its queue while it works) and the pane passes keys to it. One waiting on
+// a dialog does not: the text would go into the dialog. A C-c that clears
+// the box needs it idle: it would interrupt a working one.
+func agentReady(s AgentSession, queue bool) error {
 	if s.InMode {
 		return fail(http.StatusConflict, "input_not_ready", "the pane is in copy mode")
 	}
-	if s.Status != "idle" && s.Status != "done" {
+	if s.Status != "idle" && s.Status != "done" && (!queue || s.Status != "working") {
 		return fail(http.StatusConflict, "input_not_ready", "the agent is "+agentStatusWord(s.Status))
 	}
 	return nil

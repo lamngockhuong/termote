@@ -171,6 +171,9 @@ type agentScreen struct {
 	draft  string // the box's text, rows joined by a space
 	prompt *AgentPrompt
 	sig    string // identity of the open dialog
+	// working: Codex shows its working line over the composer, which then
+	// takes a message for its queue (Tab), not one to read now
+	working bool
 }
 
 // AgentPrompt is a dialog the PWA shows as a card.

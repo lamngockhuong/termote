@@ -500,8 +500,10 @@ Run on tmux (Linux/macOS), psmux (Windows) and Herdr (`herdr integration install
 ### Sending
 
 - [ ] A multi-line message (with Vietnamese text) reaches Claude Code verbatim, as one turn
-- [ ] While Claude Code works, a dialog is open or the input box holds a draft: sending is refused
-      with `input not ready` and the pane gets no key
+- [ ] While Claude Code works, a message is queued (`Queued: ...` in the Chat view, "Press up to
+      edit queued messages" in the terminal) and Claude Code reads it when it is ready
+- [ ] A dialog is open or the input box holds a draft: sending is refused with `input not ready`
+      and the pane gets no key
 - [ ] A message typed before `/clear` in another client is refused and the composer says the
       conversation changed
 - [ ] `/` at the start of the message lists the commands (`/exit` first, then built-ins, the
@@ -558,8 +560,9 @@ On psmux, Chat messages work; a long one may take seconds to show (the paste is 
 - [ ] User and Codex messages, commands and file changes show; a new turn appears within 2 seconds
 - [ ] A message with Vietnamese text reaches Codex as one turn; one over 1000 characters too
       (Codex shows `[Pasted Content N chars]` before Enter)
-- [ ] While Codex works or its composer holds a draft, sending is refused (`Not sent: ...`) and the
-      pane gets no key
+- [ ] While Codex works, a message is queued with Tab ("Queued follow-up inputs" under the
+      turn, `Queued: ...` in the Chat view) and runs after the turn; while its composer holds a
+      draft, sending is refused (`Not sent: ...`) and the pane gets no key
 - [ ] `/` at the start of the message lists Codex's built-ins (`/exit` first, no skill);
       `/model` is marked `opens in Terminal` and switches to the terminal; `/exit` and `/logout`
       ask first

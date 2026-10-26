@@ -466,7 +466,12 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   server user's config dir. The session id must be a UUID. Every write (Claude Code or Codex)
   takes a lock on the pane, re-checks the process, session and screen, and sends nothing unless
   the screen shows the expected state (an empty input box, the dialog the client saw with a
-  single-use `promptId`). Claude Code writes its transcript only with the first message: until
+  single-use `promptId`). A message also goes while the agent works (status `working`): the
+  agent takes it into its own queue (Claude Code: Enter; Codex: Tab, since its Enter steers the
+  running turn), and the route answers 202 instead of 204; an agent waiting on a dialog
+  (`blocked`) or of unknown status still gets nothing, and so does a `/` command to a working
+  Codex (Tab would take the popup's pick). Clearing a failed paste (C-c) still needs the agent
+  idle, since C-c interrupts a working one: a working agent's box is left as `partial_paste`. Claude Code writes its transcript only with the first message: until
   then `transcript` answers an empty conversation whose cursor names the session, so the Chat
   view can send it.
   `agent/message` may carry `images`: at most 5 upload ids, each resolved through the upload
@@ -571,7 +576,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   has no Chat view, nor (expected, not checked live) an elevated one. `message` and `answer` write under the Claude Code rules: the
   pane lock (keyed by the pane address alone), then the process, session, rollout (path and
   dev:inode) and screen read again right before each write. A message is pasted (bracketed)
-  only onto an empty composer with no working line and status idle/done, and must show in the
+  only onto an empty composer with status idle/done/working (status working, or a working line
+  above it right before the key, looked for above the queued messages, submits with Tab: queued
+  for after the turn), and must show in the
   composer (`[Pasted Content N chars]` over 1000 characters) before Enter. psmux sends Chat
   messages: its `paste-buffer -b` finds no buffer (3.3.8), so `Paste` there types the bracketed
   paste (`ESC[200~` … `ESC[201~`, LF sent as CR) as hex bytes through `send-keys -H -t <exact

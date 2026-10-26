@@ -141,7 +141,7 @@ beforeEach(() => {
   promptStore.prompt = null
   promptStore.loaded = true
   mockAnswerPrompt.mockResolvedValue(undefined)
-  mockSend.mockResolvedValue(undefined)
+  mockSend.mockResolvedValue({ queued: false })
   commandsStore.enabled = false
   commandsStore.list = []
   mockThumb.mockResolvedValue(null)
@@ -401,8 +401,8 @@ describe('ChatComposer', () => {
     let finish: () => void = () => {}
     mockSend.mockImplementationOnce(
       () =>
-        new Promise<void>((r) => {
-          finish = r
+        new Promise((r) => {
+          finish = () => r({ queued: false })
         }),
     )
     const { rerender } = render(<ChatComposer {...props()} />)
@@ -727,8 +727,8 @@ describe('ChatComposer', () => {
     let resolve!: () => void
     mockSend.mockImplementation(
       () =>
-        new Promise<void>((r) => {
-          resolve = r
+        new Promise((r) => {
+          resolve = () => r({ queued: false })
         }),
     )
     render(<ChatComposer {...props()} />)
@@ -1486,5 +1486,37 @@ describe('ChatComposer prompt templates', () => {
     requestDraftInsert('%3', { text: 'more' }, 'claude')
     render(<ChatComposer {...withTemplates()} />)
     expect(box()).toHaveValue('draft more')
+  })
+})
+
+describe('ChatComposer while the agent works', () => {
+  it('sends to the agent, which queues it, and says so', async () => {
+    transcript.status = 'working'
+    mockSend.mockResolvedValueOnce({ queued: true })
+    render(<ChatComposer {...props()} />)
+    type('next step')
+    await send()
+    expect(mockSend).toHaveBeenCalledWith('%3', 'next step', 'cur1', [])
+    expect(box()).toHaveValue('')
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Queued: Claude Code reads it when it is ready.',
+    )
+  })
+
+  it('a queued command that opens a screen keeps the Chat view', async () => {
+    transcript.status = 'working'
+    mockSend.mockResolvedValueOnce({ queued: true })
+    render(<ChatComposer {...props()} />)
+    type('/model')
+    await send()
+    expect(mockSend).toHaveBeenCalledWith('%3', '/model', 'cur1', [])
+    expect(showView).not.toHaveBeenCalled()
+  })
+
+  it('a message read right away shows no notice', async () => {
+    render(<ChatComposer {...props()} />)
+    type('hello')
+    await send()
+    expect(screen.queryByRole('status')).toBeNull()
   })
 })

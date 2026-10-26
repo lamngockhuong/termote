@@ -642,7 +642,7 @@ else is refused and sends nothing:
 | ------------------------- | ------ | -------------------------------------------------------------------------------------- |
 | `session_changed`         | 409    | The pane runs another session now (the client's `cursor` names the old one)            |
 | `target_changed`          | 409    | The agent is no longer in this pane, or its process, session or rollout changed        |
-| `input_not_ready`         | 409    | Not an empty input box: a dialog, a draft, the agent working, copy mode                |
+| `input_not_ready`         | 409    | Not an empty input box: a dialog, a draft, the agent waiting on a dialog, copy mode    |
 | `paste_not_confirmed`     | 409    | The pasted text did not show in the input box; Enter was not sent                      |
 | `delivered_not_submitted` | 502    | The text is in the input box but was not submitted; check the terminal                 |
 | `prompt_changed`          | 409    | The dialog on screen is not the one the client answered; the reply carries the new one |
@@ -656,7 +656,10 @@ else is refused and sends nothing:
 
 `message` pastes the text (bracketed paste, through a named tmux buffer or Herdr's writer) only
 when the screen shows an empty input box, waits until the text shows in it, checks the session
-again, then sends Enter. On psmux `paste-buffer -b` finds no buffer (3.3.8), so `Paste` types the
+again, then sends Enter. A working agent (status `working`) still shows its input box and takes
+the message into its own queue, read when it is ready (Claude Code 2.1.310 shows "Press up to
+edit queued messages" in the box, read as empty): the route then answers 202 instead of 204, and
+the Chat view says the message is queued. A `blocked` agent is still refused. On psmux `paste-buffer -b` finds no buffer (3.3.8), so `Paste` types the
 bracketed paste (`ESC[200~` … `ESC[201~`, LF sent as CR) as hex bytes through `send-keys -H -t
 <exact target>`, in chunks of at most 4096 bytes cut at rune starts (`send-keys -l` turns a line
 break into the text `\n`); a chunk failing after the first, or the first cut short by the
@@ -679,8 +682,11 @@ the rollout (resolved path and dev:inode), so a Codex that moved to another roll
 screens of Codex 0.159.3 and 0.160.0 on tmux and Herdr, `server/testdata/codex/screens`) draws
 no frame to lean on: the composer is a `›` row at column 0 not in reverse video, with at most
 four footer rows under it. A message is sent only onto an empty composer (Codex's faint
-placeholder counts as empty) with no working line (`• Working (… esc to interrupt)`) in the
-rows above it, and with status idle or done. The paste must show in the composer before Enter:
+placeholder counts as empty), with status idle, done or working. While Codex works (its status,
+or, since the rollout lags, a working line `• Working (… esc to interrupt)` in the rows above the
+composer, read right before the key and above the "Queued follow-up inputs" block) the message
+is submitted with Tab, which queues it for after the turn; Enter would steer the running turn.
+A `/` command is refused while Codex works: Tab would take the popup's pick instead. The paste must show in the composer before Enter:
 for a paste over 1000 characters Codex shows `[Pasted Content N chars]` instead of the text,
 and that token is matched against the text's length. A dialog-like text the model printed above
 the composer is never a dialog: an approval dialog is recognised only with its footer ("Press
@@ -782,7 +788,8 @@ top rule with Submit open, no other rule follows, and its options are the last r
 Every client polling one dialog gets the same single-use `promptId`. `answer` consumes it,
 checks the session, the agent's status (on tmux the session file must say a dialog is open)
 and the dialog's signature on screen, then sends the option's digit, Escape for `"cancel"`, or
-the arrows above. The keys a route may send are Enter, Escape, Left, Right and the digits 1–9.
+the arrows above. The keys a route may send are Enter, Tab (a Codex message queued while it
+works), Escape, C-c, Left, Right, Up, Down and the digits 1–9 (`agentKeys`).
 A screen the detector does not recognise is never written to.
 
 The Chat view renders the agent's markdown without raw HTML and never loads images: an image

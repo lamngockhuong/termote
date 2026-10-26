@@ -39,12 +39,15 @@ and one difference for dialogs (see [Codex](#codex)).
 Type in the box at the bottom and tap the send button (Ctrl+Enter on desktop). Multi-line
 messages arrive as one turn, exactly as written.
 
-Termote only sends when the screen shows Claude Code waiting at an empty input box. Otherwise
-the message is refused and the pane gets no key at all:
+Termote only sends when the screen shows Claude Code's input box empty. While Claude Code works,
+the message still goes: Claude Code puts it in its own queue and reads it when it is ready, and
+the Chat view says `Queued: Claude Code reads it when it is ready.` In the terminal it shows as a
+queued message, which you can edit there (Up). Otherwise the message is refused and the pane
+gets no key at all:
 
 | Message                                                    | Code                      | Meaning                                                                                      |
 | ---------------------------------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------- |
-| Not sent: the agent is working / waiting for an answer     | `input_not_ready`         | Claude Code is busy or a dialog is open                                                      |
+| Not sent: the agent is waiting for an answer               | `input_not_ready`         | A dialog is open                                                                             |
 | Not sent: the input box already holds a draft              | `input_not_ready`         | Something is typed in the terminal's input box; send or clear it there                       |
 | Not sent: the pane is in copy mode                         | `input_not_ready`         | The tmux pane is scrolled back in copy mode; leave it (`q`) in the terminal                  |
 | Not sent: the text did not show in the input box           | `paste_not_confirmed`     | Enter was not sent; the text may be in the input box now                                     |
@@ -148,7 +151,10 @@ option. The preview itself is only shown in the terminal.
 A pane running Codex gets the Chat view with its conversation: your messages, replies rendered
 as markdown, commands with their output, file changes as diffs. You send a message from the box
 at the bottom, under the same rules as for Claude Code: Termote only sends when the screen shows
-Codex at an empty input box with nothing running, and a refusal leaves the pane untouched.
+Codex's input box empty, and a refusal leaves the pane untouched. While Codex works, the message
+is sent with Tab, which queues it for after the turn (Codex lists it under "Queued follow-up
+inputs"), instead of Enter, which would steer the turn it is running. A `/` command is not
+queued: send it once Codex is done.
 
 Approval dialogs (run a command, make file edits) depend on the backend:
 

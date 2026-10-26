@@ -66,6 +66,73 @@ func TestCodexMessageSends(t *testing.T) {
 	}
 }
 
+// While Codex works, Tab queues the message for after the turn (Enter would
+// steer the turn it runs): by its status, or by the working line on the
+// screen right before the key when the rollout lags behind it.
+func TestCodexMessageQueuedWhileWorking(t *testing.T) {
+	shortConfirm(t)
+	working := codexSession
+	working.Status = "working"
+	line := "• Working (3s • esc to interrupt)"
+	tests := map[string]func(f *fakeWriter){
+		"status working": func(f *fakeWriter) { f.session = working },
+		"rollout lags": func(f *fakeWriter) {
+			f.screen = codexRows(line, "", codexEmptyRow, "", codexModelRow)
+			f.onPaste = func(f *fakeWriter, text string) {
+				f.setScreen(codexRows(line, "", "› "+text, "", codexModelRow))
+			}
+		},
+		"recorded screen": func(f *fakeWriter) {
+			f.session = working
+			f.screen = codexCapture(t, "0.159.3-working-empty")
+		},
+	}
+	for name, setup := range tests {
+		t.Run(name, func(t *testing.T) {
+			f := newCodexWriter()
+			setup(f)
+			f.onKeys = func(f *fakeWriter, keys []string) {
+				if keys[0] == "Tab" {
+					f.setScreen(codexRows(line, "", codexEmptyRow, "", codexModelRow))
+				}
+			}
+			code, body := postJSON(t, agentMux(f), "/api/mux/panes/0/agent/message", map[string]string{"text": "hello", "cursor": codexCursor()})
+			if code != http.StatusAccepted {
+				t.Fatalf("POST = %d %v", code, body)
+			}
+			if len(f.pasted) != 1 || f.pasted[0] != "hello" || len(f.keys) != 1 || f.keys[0][0] != "Tab" {
+				t.Errorf("pasted %q keys %v", f.pasted, f.keys)
+			}
+		})
+	}
+}
+
+// The turn ends while the text is pasted: the screen right before the key
+// shows no working line any more, so Enter submits it now.
+func TestCodexMessageTurnEndsDuringPaste(t *testing.T) {
+	shortConfirm(t)
+	f := newCodexWriter()
+	f.screen = codexRows("• Working (3s • esc to interrupt)", "", codexEmptyRow, "", codexModelRow)
+	code, body := postJSON(t, agentMux(f), "/api/mux/panes/0/agent/message", map[string]string{"text": "hello", "cursor": codexCursor()})
+	if code != http.StatusNoContent || len(f.keys) != 1 || f.keys[0][0] != "Enter" {
+		t.Fatalf("POST = %d %v keys %v", code, body, f.keys)
+	}
+}
+
+// Tab would take the "/" popup's pick instead of queuing a command, so a
+// command waits until Codex is idle; the same text as plain words goes.
+func TestCodexCommandWhileWorking(t *testing.T) {
+	shortConfirm(t)
+	working := codexSession
+	working.Status = "working"
+	f := newCodexWriter()
+	f.session = working
+	code, body := postJSON(t, agentMux(f), "/api/mux/panes/0/agent/message", map[string]string{"text": " /model", "cursor": codexCursor()})
+	if code != http.StatusConflict || body["code"] != "input_not_ready" || len(f.pasted) != 0 || len(f.keys) != 0 {
+		t.Fatalf("POST = %d %v pasted %q keys %v", code, body, f.pasted, f.keys)
+	}
+}
+
 func TestCodexMessageRefusals(t *testing.T) {
 	shortConfirm(t)
 	with := func(change func(*AgentSession)) AgentSession {
@@ -76,7 +143,6 @@ func TestCodexMessageRefusals(t *testing.T) {
 	unknown := with(func(s *AgentSession) { s.Status = "unknown" })
 	otherRollout := with(func(s *AgentSession) { s.Rollout = "/home/u/.codex/sessions/other.jsonl" })
 	otherFile := with(func(s *AgentSession) { s.RolloutID = "1:3" })
-	working := codexRows("• Working (3s • esc to interrupt)", "", codexEmptyRow, "", codexModelRow)
 	tests := []struct {
 		name   string
 		setup  func(f *fakeWriter)
@@ -86,8 +152,6 @@ func TestCodexMessageRefusals(t *testing.T) {
 		pasted bool
 	}{
 		{"draft in the composer", func(f *fakeWriter) { f.screen = codexBox("half typed") }, "", 409, "input_not_ready", false},
-		// The rollout lags; the screen already shows the turn running.
-		{"working, composer empty", func(f *fakeWriter) { f.screen = working }, "", 409, "input_not_ready", false},
 		{"status unknown", func(f *fakeWriter) { f.session = unknown }, "", 409, "input_not_ready", false},
 		{"dialog open", func(f *fakeWriter) { f.screen = codexCapture(t, "0.159.3-approval-exec") }, "", 409, "input_not_ready", false},
 		{"session changed", nil, cursorFor(testSessionID), 409, "session_changed", false},

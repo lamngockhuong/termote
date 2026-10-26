@@ -854,12 +854,14 @@ export async function fetchTranscript(
 // Sends text, after the uploaded images (ids from /uploads), to the agent as
 // one message. Throws AgentRequestError when the server refuses (the screen
 // is not an empty input box, the session changed, an image is gone).
+// Resolves queued: the agent was working and took the message into its own
+// queue (202), to read when it is ready.
 export async function sendAgentMessage(
   paneId: string,
   text: string,
   cursor: string,
   images: string[] = [],
-): Promise<void> {
+): Promise<{ queued: boolean }> {
   const res = await fetch(agentPath(paneId, 'message'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -868,6 +870,7 @@ export async function sendAgentMessage(
     ),
   })
   if (!res.ok) throw await requestError(res)
+  return { queued: res.status === 202 }
 }
 
 // The agents a pane can start, with the arguments the server picks.

@@ -685,7 +685,9 @@ describe('agent API client', () => {
         return new Response(null, { status: 204 })
       }),
     )
-    await sendAgentMessage('1', 'hi\nthere', 'cur')
+    await expect(sendAgentMessage('1', 'hi\nthere', 'cur')).resolves.toEqual({
+      queued: false,
+    })
     expect(calls[0].url).toBe('/api/mux/panes/1/agent/message')
     expect(calls[0].init).toMatchObject({
       method: 'POST',
@@ -714,6 +716,16 @@ describe('agent API client', () => {
     await expect(
       sendAgentMessage('1', '', 'cur', ['a1', 'b2']),
     ).rejects.toMatchObject({ code: 'invalid_request', images: ['b2'] })
+  })
+
+  it('202: the working agent queued the message', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(null, { status: 202 })),
+    )
+    await expect(sendAgentMessage('1', 'next', 'cur')).resolves.toEqual({
+      queued: true,
+    })
   })
 
   it('a refused message carries code and limit', async () => {
