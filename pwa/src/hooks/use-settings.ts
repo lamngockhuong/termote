@@ -58,6 +58,22 @@ export function resolveFindExcludes(value: unknown): string[] {
   return [...new Set(names)].slice(0, FIND_EXCLUDES_MAX)
 }
 
+// The sizes the desktop editor's text can be, in px
+export const EDITOR_FONT_SIZES = [11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+export const EDITOR_TAB_SIZES = [2, 4, 8] as const
+export type EditorTabSize = (typeof EDITOR_TAB_SIZES)[number]
+
+// A saved editor font size, kept only when it is one of EDITOR_FONT_SIZES
+export function resolveEditorFontSize(value: unknown): number {
+  return EDITOR_FONT_SIZES.includes(value as number) ? (value as number) : 13
+}
+
+export function resolveEditorTabSize(value: unknown): EditorTabSize {
+  return EDITOR_TAB_SIZES.includes(value as EditorTabSize)
+    ? (value as EditorTabSize)
+    : 4
+}
+
 export type ImeSendBehavior = 'send-only' | 'send-enter'
 export type PasteSource = 'clipboard' | 'tmux'
 
@@ -88,6 +104,10 @@ export interface Settings {
   notifyAgents: boolean // notify when an agent is blocked or ends a turn
   stuckMinutes: number // overview: a working agent quiet this long may be stuck
   showUsageChip: boolean // header: the open pane's agent's context and limits
+  editorFontSize: number // desktop editor (CodeMirror): px, EDITOR_FONT_SIZES
+  editorTabSize: EditorTabSize // desktop editor: columns of a tab, one indent
+  editorWrap: boolean // Files/Changes on desktop: lines wrapped by default
+  editorVim: boolean // desktop editor: Vim key bindings
 }
 
 const DEFAULTS: Settings = {
@@ -116,6 +136,10 @@ const DEFAULTS: Settings = {
   notifyAgents: false,
   stuckMinutes: DEFAULT_STUCK_MINUTES,
   showUsageChip: true,
+  editorFontSize: 13,
+  editorTabSize: 4,
+  editorWrap: false,
+  editorVim: false,
 }
 
 // Listeners for useSyncExternalStore
@@ -153,6 +177,10 @@ function getSnapshot(): Settings {
         stuckMinutes: resolveStuckMinutes(merged.stuckMinutes),
         copyOnSelect: merged.copyOnSelect === true,
         showUsageChip: merged.showUsageChip !== false,
+        editorFontSize: resolveEditorFontSize(merged.editorFontSize),
+        editorTabSize: resolveEditorTabSize(merged.editorTabSize),
+        editorWrap: merged.editorWrap === true,
+        editorVim: merged.editorVim === true,
       }
     } catch {
       cachedSettings = DEFAULTS

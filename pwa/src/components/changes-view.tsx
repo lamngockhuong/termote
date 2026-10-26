@@ -22,6 +22,7 @@ import {
   useGitChanges,
 } from '../hooks/use-git-changes'
 import type { ChangeEntry } from '../hooks/use-mux-api'
+import { useSettings } from '../hooks/use-settings'
 import { splitPath } from '../utils/files-format'
 import type { LinkPath } from '../utils/markdown-links'
 import { FILES_VIEW_ID } from '../view-ids'
@@ -158,6 +159,7 @@ function PaneChanges({
   'isMobile' | 'notify' | 'showView' | 'readOnly'
 >) {
   const c = useGitChanges(paneId)
+  const { settings } = useSettings()
   const isDirty = useDirtyCheck(paneId)
   const tab = c.active
   const [reload, setReload] = useState(0)
@@ -274,7 +276,7 @@ function PaneChanges({
         paneId={paneId}
         root={c.root}
         path={tab.path}
-        wrapByDefault={isMobile}
+        wrapByDefault={isMobile || settings.editorWrap}
         compact={isMobile}
         backLabel="Back to the diff"
         onClose={() => c.setEditing(tab.id, false)}
@@ -286,6 +288,12 @@ function PaneChanges({
         initialReveal={tab.revealed}
         onRevealed={() => c.setReveal(tab.id)}
         scrollTop={tab.editScrollTop}
+        // At the diff's first change, unless it was scrolled since
+        editAt={
+          tab.editLine && tab.editScrollTop === undefined
+            ? { line: tab.editLine, jump: 0 }
+            : undefined
+        }
         onScroll={(top) => c.setScroll(tab.id, top)}
         headerExtra={openFiles}
         onSaved={() => {
@@ -322,7 +330,9 @@ function PaneChanges({
         headerExtra={openFiles}
         // The server refuses a view-only client both as well
         canReveal={!readOnly}
-        onEdit={readOnly ? undefined : () => c.setEditing(tab.id, true)}
+        onEdit={
+          readOnly ? undefined : (line) => c.setEditing(tab.id, true, line)
+        }
       />
     )
   } else if (!c.loaded) {

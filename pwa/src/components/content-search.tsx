@@ -590,6 +590,12 @@ function Results({
   )
 }
 
+// Where on its line a match starts (UTF-16): the server's col is where the
+// text it sent starts, a window around the match
+export function matchStart(match: SearchMatch): number {
+  return match.col + (match.ranges[0]?.[0] ?? 0)
+}
+
 // A line with its matches marked. The ranges index text as a JS string
 // (UTF-16 units); a window that starts inside the line shows an ellipsis.
 export function Marked({ match }: { match: SearchMatch }) {

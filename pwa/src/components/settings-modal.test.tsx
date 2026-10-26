@@ -73,6 +73,10 @@ const DEFAULT_SETTINGS: Settings = {
   notifyAgents: false,
   stuckMinutes: 10,
   showUsageChip: true,
+  editorFontSize: 13,
+  editorTabSize: 4,
+  editorWrap: false,
+  editorVim: false,
 }
 
 describe('SettingsModal', () => {
@@ -339,6 +343,23 @@ describe('SettingsModal', () => {
     expect(section('keyboard')).not.toHaveClass('md:hidden')
     expect(section('appearance')).toHaveClass('md:hidden')
     expect(keyboard).toHaveAttribute('aria-current', 'true')
+  })
+
+  it('sets how files are edited on desktop', () => {
+    const { onUpdateSetting } = renderModal()
+    const group = document.querySelector('[data-group="files"]') as HTMLElement
+    fireEvent.change(within(group).getByLabelText('Editor font size'), {
+      target: { value: '16' },
+    })
+    expect(onUpdateSetting).toHaveBeenLastCalledWith('editorFontSize', 16)
+    fireEvent.change(within(group).getByLabelText('Tab size'), {
+      target: { value: '2' },
+    })
+    expect(onUpdateSetting).toHaveBeenLastCalledWith('editorTabSize', 2)
+    fireEvent.click(within(group).getByRole('switch', { name: 'Wrap lines' }))
+    expect(onUpdateSetting).toHaveBeenLastCalledWith('editorWrap', true)
+    fireEvent.click(within(group).getByRole('switch', { name: 'Vim mode' }))
+    expect(onUpdateSetting).toHaveBeenLastCalledWith('editorVim', true)
   })
 
   it('edits the folders a file search never enters', () => {

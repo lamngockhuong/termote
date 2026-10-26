@@ -12,6 +12,7 @@ import {
   ContentSearch,
   type ContentSearchState,
   Marked,
+  matchStart,
   SEARCH_DEBOUNCE_MS,
   splitGlobs,
 } from './content-search'
@@ -119,6 +120,15 @@ describe('splitGlobs', () => {
   it('splits on commas, trims and drops empty ones', () => {
     expect(splitGlobs(' *.ts, src/ ,,')).toEqual(['*.ts', 'src/'])
     expect(splitGlobs('')).toEqual([])
+  })
+})
+
+describe('matchStart', () => {
+  it('is where the match starts on its line, not the text sent', () => {
+    expect(
+      matchStart({ line: 1, text: 'foo', col: 40, ranges: [[3, 6]] }),
+    ).toBe(43)
+    expect(matchStart({ line: 1, text: '', col: 7, ranges: [] })).toBe(7)
   })
 })
 

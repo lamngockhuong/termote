@@ -4,6 +4,8 @@ import {
   FIND_EXCLUDES_DEFAULT,
   FIND_EXCLUDES_MAX,
   findExcludeProblem,
+  resolveEditorFontSize,
+  resolveEditorTabSize,
   resolveFindExcludes,
   useSettings,
 } from './use-settings'
@@ -341,5 +343,54 @@ describe('excluded folder names', () => {
     )
     expect(resolveFindExcludes(many)).toHaveLength(FIND_EXCLUDES_MAX)
     expect(resolveFindExcludes(null)).toBe(FIND_EXCLUDES_DEFAULT)
+  })
+})
+
+describe('editor settings', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('keeps a saved size only when it is one offered', () => {
+    expect(resolveEditorFontSize(16)).toBe(16)
+    expect(resolveEditorFontSize(40)).toBe(13)
+    expect(resolveEditorFontSize('14')).toBe(13)
+    expect(resolveEditorTabSize(2)).toBe(2)
+    expect(resolveEditorTabSize(3)).toBe(4)
+    expect(resolveEditorTabSize(undefined)).toBe(4)
+  })
+
+  it('reads a saved config, and repairs a broken one', () => {
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({
+        editorFontSize: 18,
+        editorTabSize: 8,
+        editorWrap: true,
+        editorVim: true,
+      }),
+    )
+    const { result, unmount } = renderHook(() => useSettings())
+    expect(result.current.settings).toMatchObject({
+      editorFontSize: 18,
+      editorTabSize: 8,
+      editorWrap: true,
+      editorVim: true,
+    })
+    unmount()
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({
+        editorFontSize: 99,
+        editorTabSize: 'x',
+        editorWrap: 'yes',
+        editorVim: 1,
+      }),
+    )
+    const again = renderHook(() => useSettings())
+    expect(again.result.current.settings).toMatchObject({
+      editorFontSize: 13,
+      editorTabSize: 4,
+      editorWrap: false,
+      editorVim: false,
+    })
   })
 })

@@ -19,6 +19,7 @@ import {
 import { type FilesError, filesError } from '../hooks/use-files'
 import {
   type ChangeEntry,
+  type DiffHunk,
   type DiffLine,
   type FileDiff,
   fetchFileContent,
@@ -89,8 +90,9 @@ interface Props {
   onReveal?: () => void
   // Off for a view-only client: the server never shows it a sensitive file
   canReveal?: boolean
-  // Edits the working tree's file; absent for a view-only client
-  onEdit?: () => void
+  // Edits the working tree's file, at line when the diff has one;
+  // absent for a view-only client
+  onEdit?: (line?: number) => void
   // Not showing the sensitive file after all (Back when not given)
   onCancelReveal?: () => void
   // Where the diff starts scrolled to (its tab shown again), and where it
@@ -223,6 +225,10 @@ export function DiffViewer({
     !shown.diff.binary &&
     !shown.diff.reason
   const editLabel = staged ? 'Edit working copy' : 'Edit'
+  // The editor opens at the first change; the staged side's new lines are
+  // the index's, not the file's
+  const editLine =
+    !staged && shown.kind === 'diff' ? firstChange(shown.diff.hunks) : undefined
   const copyPath = async () => {
     try {
       await navigator.clipboard.writeText(path)
@@ -262,10 +268,10 @@ export function DiffViewer({
             {staged ? 'Staged' : 'Not staged'}
           </span>
         </div>
-        {editable && (
+        {editable && onEdit && (
           <IconButton
             size="sm"
-            onClick={onEdit}
+            onClick={() => onEdit(editLine)}
             aria-label={editLabel}
             title={editLabel}
           >
@@ -540,6 +546,20 @@ function DiffBody({
       )}
     </>
   )
+}
+
+// The line of the file where its first change is: an added line, or where
+// lines were removed
+export function firstChange(hunks: DiffHunk[] | null): number | undefined {
+  const hunk = hunks?.[0]
+  if (!hunk) return
+  // The line before the hunk, from its header (@@ -a,b +c,d @@)
+  let last = Number(/\+(\d+)/.exec(hunk.header)?.[1] ?? 1) - 1
+  for (const l of hunk.lines) {
+    if (l.kind === 'add') return l.new
+    if (l.kind === 'del') return last + 1
+    last = l.new as number
+  }
 }
 
 function Num({ n }: { n?: number }) {

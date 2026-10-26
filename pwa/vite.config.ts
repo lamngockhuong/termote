@@ -4,6 +4,21 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import pkg from './package.json'
 
+// The packages of the editor's languages and of Vim mode, each imported the
+// first time it is needed (@lezer/lr runs only their grammars). The syntax
+// tree and its tags (@lezer/common, highlight) are the editor's own and stay
+// with it.
+const EDITOR_EXTRA =
+  /\/node_modules\/(@codemirror\/(lang-[^/]+|legacy-modes|autocomplete|lint)|@replit\/codemirror-vim(-core)?|@lezer\/(?!common\/|highlight\/)[^/]+)\//
+
+// Where a chunk goes: one made only of those packages under assets/cm/,
+// never installed upfront by the service worker; any other where Vite puts it
+function chunkFileName({ moduleIds }: { moduleIds: string[] }) {
+  const extra =
+    moduleIds.length > 0 && moduleIds.every((id) => EDITOR_EXTRA.test(id))
+  return extra ? 'assets/cm/[name]-[hash].js' : 'assets/[name]-[hash].js'
+}
+
 export default defineConfig({
   define: {
     __APP_NAME__: JSON.stringify(pkg.name),
@@ -57,7 +72,8 @@ export default defineConfig({
         // themes and grammars; the CSV workers; Pele and its diagram types):
         // fetched (then cached) the first time they are needed, never
         // installed upfront.
-        globIgnores: ['**/assets/shiki/**'],
+        // Likewise the editor's languages and Vim mode (assets/cm/).
+        globIgnores: ['**/assets/shiki/**', '**/assets/cm/**'],
         // Notification click (and push) handlers: public/notify-sw.js
         importScripts: ['notify-sw.js'],
         runtimeCaching: [
@@ -69,6 +85,15 @@ export default defineConfig({
               // Hashed names: a new build adds entries, so old ones expire
               // Grammars, themes and Pele's diagram types: about 115 files
               expiration: { maxEntries: 250, maxAgeSeconds: 30 * 24 * 3600 },
+            },
+          },
+          {
+            urlPattern: ({ url }) => url.pathname.startsWith('/assets/cm/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'cm',
+              // About 50 language chunks and Vim mode
+              expiration: { maxEntries: 150, maxAgeSeconds: 30 * 24 * 3600 },
             },
           },
         ],
@@ -85,6 +110,11 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    rolldownOptions: {
+      output: { chunkFileNames: chunkFileName },
+    },
+  },
   worker: {
     // A module worker, so each grammar or diagram type it imports is a chunk
     // of its own

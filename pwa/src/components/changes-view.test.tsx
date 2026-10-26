@@ -6,7 +6,15 @@ import {
   screen,
   within,
 } from '@testing-library/react'
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest'
 import type { ViewProps } from '../app-views'
 import { ThemeProvider } from '../contexts/theme-context'
 import { resetFilesStores, useFiles } from '../hooks/use-files'
@@ -29,6 +37,19 @@ const mockContent = vi.fn()
 const mockTree = vi.fn()
 const mockSave = vi.fn()
 const mockImage = vi.fn()
+// The desktop editor: shows where it opens and whether lines wrap
+vi.mock('./code-editor', () => ({
+  default: (p: {
+    at?: { line: number }
+    wrap: boolean
+    scrollTop?: number
+  }) => (
+    <div data-testid="code-editor">
+      at {p.at?.line ?? 'none'} wrap {String(p.wrap)} top {p.scrollTop ?? 0}
+    </div>
+  ),
+}))
+
 vi.mock('../hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-mux-api')>()),
   saveFileContent: (...a: unknown[]) => mockSave(...a),
@@ -438,6 +459,70 @@ describe('ChangesView editing', () => {
     await show()
     await openDiff(g, path)
     expect(screen.queryByRole('button', { name: /^Edit/ })).toBeNull()
+  })
+
+  describe('on a device with a fine pointer', () => {
+    const matchMedia = window.matchMedia
+    beforeEach(() => {
+      window.matchMedia = ((q: string) => ({
+        ...matchMedia(q),
+        matches: q === '(pointer: fine)',
+      })) as typeof matchMedia
+      mockContent.mockResolvedValue({
+        root: '/r',
+        path: 'mod.ts',
+        size: 1,
+        text: 'a',
+        hash: 'h',
+        editable: true,
+      })
+    })
+    afterEach(() => {
+      window.matchMedia = matchMedia
+    })
+
+    it('Edit opens the editor at the first change', async () => {
+      mockDiff.mockResolvedValue({
+        ...textDiff('mod.ts'),
+        hunks: [
+          {
+            header: '@@ -7,3 +7,4 @@',
+            lines: [
+              { kind: 'ctx', old: 7, new: 7, text: 'a' },
+              { kind: 'add', new: 8, text: 'b' },
+            ],
+          },
+        ],
+      })
+      await show()
+      await openDiff('Changes', 'mod.ts')
+      fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+      expect(await screen.findByTestId('code-editor')).toHaveTextContent(
+        'at 8 wrap false',
+      )
+    })
+
+    it('Edit working copy of the staged side opens at no line', async () => {
+      await show()
+      await openDiff('Staged', 'to.ts')
+      fireEvent.click(screen.getByRole('button', { name: 'Edit working copy' }))
+      expect(await screen.findByTestId('code-editor')).toHaveTextContent(
+        'at none',
+      )
+    })
+
+    it('wraps lines when the setting says so', async () => {
+      localStorage.setItem(
+        'termote-settings',
+        JSON.stringify({ editorWrap: true }),
+      )
+      await show()
+      await openDiff('Changes', 'mod.ts')
+      fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+      expect(await screen.findByTestId('code-editor')).toHaveTextContent(
+        'wrap true',
+      )
+    })
   })
 
   it('a view-only client gets no Edit', async () => {

@@ -71,6 +71,9 @@ export interface ChangeTab extends TabBase, ChangeSide {
   // editor (which starts at the top each time)
   scrollTop?: number
   editScrollTop?: number
+  // The line the editor opens at (the diff's first change), until it is
+  // scrolled; never kept across a reload
+  editLine?: number
 }
 
 export interface ChangesState {
@@ -139,7 +142,7 @@ interface Store {
   close: (id: string) => void
   // Edits the working tree's file of tab id (pinning it), or goes back to
   // its diff
-  setEditing: (id: string, on: boolean) => void
+  setEditing: (id: string, on: boolean, line?: number) => void
   // The user chose to show tab id's sensitive file
   setReveal: (id: string) => void
   // Where tab id's diff, or its editor, is scrolled to: kept for when it
@@ -481,13 +484,15 @@ function createStore(id: string): Store {
     activate,
     pin: (id) => set({ tabs: pinTab(state.tabs, id) }),
     close,
-    setEditing(id, on) {
+    setEditing(id, on, line) {
       const tab = state.tabs.find((t) => t.id === id)
       if (!tab) return
       patchTab(id, {
         editing: on,
-        // The editor starts at the top; the diff stays where it was
+        // The editor starts at the top, or at line; the diff stays where
+        // it was
         editScrollTop: undefined,
+        editLine: on ? line : undefined,
         pinned: tab.pinned || on,
       })
       // Back to a diff git no longer lists: the tab goes
@@ -540,7 +545,8 @@ export function useGitChanges(paneId: string) {
     pin: useCallback((id: string) => store.pin(id), [store]),
     close: useCallback((id: string) => store.close(id), [store]),
     setEditing: useCallback(
-      (id: string, on: boolean) => store.setEditing(id, on),
+      (id: string, on: boolean, line?: number) =>
+        store.setEditing(id, on, line),
       [store],
     ),
     setReveal: useCallback((id: string) => store.setReveal(id), [store]),

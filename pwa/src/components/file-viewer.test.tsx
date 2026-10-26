@@ -30,6 +30,15 @@ import { FileViewer, rebaseDraft } from './file-viewer'
 const mockContent = vi.fn()
 const mockImage = vi.fn()
 const mockSave = vi.fn()
+// The desktop editor: shows where it was told to open
+vi.mock('./code-editor', () => ({
+  default: (p: { at?: { line: number; col?: number } }) => (
+    <div data-testid="code-editor">
+      at {p.at ? `${p.at.line}:${p.at.col ?? 0}` : 'none'}
+    </div>
+  ),
+}))
+
 vi.mock('../hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-mux-api')>()),
   fetchFileContent: (...a: unknown[]) => mockContent(...a),
@@ -2154,5 +2163,32 @@ describe('FileViewer at a search result', () => {
       'Unsaved changes: line 2 may have moved',
     )
     expect(textarea()).toHaveValue('changed')
+  })
+
+  describe('in the desktop editor', () => {
+    beforeEach(() => {
+      pointer.fine = true
+    })
+    afterEach(() => {
+      pointer.fine = false
+    })
+
+    it('a result picked while editing moves the cursor to its match', async () => {
+      mockContent.mockResolvedValue(editable('x\nabcdef'))
+      const view = await startEdit()
+      expect(await screen.findByTestId('code-editor')).toHaveTextContent(
+        'at none',
+      )
+      rerenderAt(view, { canEdit: true, line: 2, col: 3, jump: 5 })
+      expect(screen.getByTestId('code-editor')).toHaveTextContent('at 2:3')
+    })
+
+    it('a result picked before Edit leaves the editor where the text was', async () => {
+      mockContent.mockResolvedValue(editable('x\nabcdef'))
+      await startEdit({ line: 2, col: 3, jump: 1 })
+      expect(await screen.findByTestId('code-editor')).toHaveTextContent(
+        'at none',
+      )
+    })
   })
 })

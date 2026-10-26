@@ -748,6 +748,16 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   sensitive, and a save drops the root's cached git status. Saves of one file are serialised; an agent writing between the last read and the rename still loses its change (no
   compare-and-swap), and the rename drops ACLs/xattrs. A view-only client gets 403 `view_only`. The draft is kept in browser storage only as
   "Files/Changes state kept on the device" allows, never a sensitive file's
+- **Desktop editor** (`pwa/src/components/code-editor.tsx`, CodeMirror 6, lazy chunk; languages
+  and Vim mode in `assets/cm/`, never precached): shown only where `(pointer: fine)`; it edits
+  the same draft as the textarea and saves through the same `PUT files/content` (Ctrl+S, and `:w`
+  in Vim, only when there is something to save). No CSP source added: CodeMirror and
+  `@replit/codemirror-vim` run no `eval` or `new Function`, and their styles are inline
+  (`style-src 'unsafe-inline'`). Its `aria-label` is the app's text with the path, never the
+  file's. Vim keeps its registers and search and `:` histories in module state shared by every
+  editor: when the editor of a sensitive file the user chose to show (`reveal`) closes, they are
+  dropped (`Vim.resetVimGlobalState_`). Escape is stopped at the editor while Vim is on, so the
+  key that leaves insert mode does not restore a maximized panel
 - **Files/Changes state kept on the device** (`pwa/src/utils/files-persist.ts`,
   `persisted-tabs.ts`, `pane-view.ts`; server `server/instance_id.go`): the snapshot's
   `instanceId` (16 random hex digits made once with `crypto/rand`, kept in `<stateDir>/instance-id`

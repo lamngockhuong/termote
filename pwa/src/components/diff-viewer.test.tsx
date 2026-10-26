@@ -5,7 +5,7 @@ import {
   type FileDiff,
   RequestError,
 } from '../hooks/use-mux-api'
-import { DiffViewer } from './diff-viewer'
+import { DiffViewer, firstChange } from './diff-viewer'
 
 const mockDiff = vi.fn()
 const mockContent = vi.fn()
@@ -584,5 +584,37 @@ describe('DiffViewer for a view-only device', () => {
     ).toBeInTheDocument()
     expect(screen.queryByText('A view-only device cannot show it')).toBeNull()
     v.unmount()
+  })
+})
+
+describe('firstChange', () => {
+  const ctx = (n: number) => ({
+    kind: 'ctx' as const,
+    old: n,
+    new: n,
+    text: '',
+  })
+  it('is the first added line, or where lines were removed', () => {
+    expect(
+      firstChange([
+        {
+          header: '@@ -3,4 +3,4 @@ fn',
+          lines: [ctx(3), { kind: 'add', new: 4, text: '' }],
+        },
+      ]),
+    ).toBe(4)
+    expect(
+      firstChange([
+        {
+          header: '@@ -10,2 +12,1 @@',
+          lines: [{ kind: 'del', old: 10, text: '' }, ctx(12)],
+        },
+      ]),
+    ).toBe(12)
+    expect(
+      firstChange([{ header: '@@ -1 +1 @@', lines: [ctx(1), ctx(2)] }]),
+    ).toBeUndefined()
+    expect(firstChange([])).toBeUndefined()
+    expect(firstChange(null)).toBeUndefined()
   })
 })
