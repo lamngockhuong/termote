@@ -20,7 +20,12 @@ import { useAgentTranscript } from '../hooks/use-agent-transcript'
 import { useChatAttachments } from '../hooks/use-chat-attachments'
 import { AgentRequestError, sendAgentMessage } from '../hooks/use-mux-api'
 import { toAgentStatus } from '../types/session'
-import { loadDraft, saveDraft } from '../utils/chat-draft'
+import {
+  loadDraft,
+  onDraftInsert,
+  saveDraft,
+  takeDraftInsert,
+} from '../utils/chat-draft'
 import {
   applyPick,
   BUILTIN_COMMANDS,
@@ -202,9 +207,14 @@ export function ChatComposer({
   // biome-ignore lint/correctness/useExhaustiveDependencies: Escape holds for one word
   useEffect(() => setDismissed(false), [word])
 
+  // The draft as the effects below see it: the pane's own right after a
+  // move to another pane, before that render
+  const textRef = useRef(text)
+  textRef.current = text
   // Each pane keeps its own draft.
   useEffect(() => {
     const draft = loadDraft(paneId)
+    textRef.current = draft
     setText(draft)
     setCaret(draft.length)
     setNotice(null)
@@ -323,6 +333,27 @@ export function ChatComposer({
     caretAfterPick.current = null
     if (box.value === want.text) box.setSelectionRange(want.caret, want.caret)
   })
+
+  // A command picked in the command palette goes in front of the draft, the
+  // caret after it, nothing sent; the palette's Show Chat only focuses
+  // biome-ignore lint/correctness/useExhaustiveDependencies: update and the refs read the latest state
+  useEffect(() => {
+    const take = () => {
+      const c = takeDraftInsert(paneId)
+      if (c === undefined) return
+      if (c) {
+        const at = { trigger: c.trigger ?? '/', query: '', start: 0, end: 0 }
+        const next = applyPick(textRef.current, at, c)
+        caretAfterPick.current = next
+        textRef.current = next.text
+        update(next.text)
+        setCaret(next.caret)
+      }
+      boxRef.current?.focus()
+    }
+    take()
+    return onDraftInsert(take)
+  }, [paneId])
 
   // A picked command is typed in for its arguments, a picked skill in place
   // of the word being typed; a command that opens an interactive screen or

@@ -1,0 +1,89 @@
+---
+title: Phím tắt và bảng lệnh
+description: Mở file, chạy lệnh và đổi phím tắt bằng bàn phím trên máy tính
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Trên máy tính (dùng chuột hoặc bàn di chuột, cửa sổ rộng hơn màn hình điện thoại), một bảng lệnh duy
+nhất cho bạn mở file của pane và chạy mọi lệnh của ứng dụng mà không rời bàn phím. Điện thoại không
+có bảng lệnh, vẫn dùng [thanh công cụ bàn phím](/vi/usage/keyboard/).
+
+## Mở bảng lệnh
+
+| Phím                                  | Mở ra                              |
+| ------------------------------------- | ---------------------------------- |
+| Ctrl+P (Cmd+P trên macOS)             | Danh sách file của pane            |
+| Ctrl+Shift+P (Cmd+Shift+P trên macOS) | Mọi lệnh                           |
+| Ctrl+Shift+F (Cmd+Shift+F trên macOS) | Tìm trong nội dung file (panel Files) |
+| Nút ⌘ trên thanh tiêu đề              | Mọi lệnh                           |
+
+Ký tự đầu tiên trong ô nhập quyết định bảng lệnh liệt kê gì. Xoá ký tự đó hoặc gõ ký tự khác thì
+bảng đổi ngay:
+
+| Bắt đầu bằng  | Liệt kê                                                   |
+| ------------- | --------------------------------------------------------- |
+| (không có)    | File của pane đang hiện                                   |
+| `>`           | Các lệnh                                                  |
+| `:`           | Một dòng của file đang mở trong Files, `:120` hoặc `:120:5` |
+| `@`           | Tab của mọi nhóm, và các pane của tab này                 |
+
+Phím ↑ và ↓ chuyển giữa các dòng (từ dòng cuối quay lại dòng đầu), Page Up và Page Down nhảy mười
+dòng, Enter chạy dòng đang chọn, Escape đóng bảng. Nhấn lại phím đã mở một chế độ thì dòng chọn đi
+xuống một dòng.
+
+## Mở một file
+
+- Khi ô nhập trống, danh sách gồm những file bạn mở gần đây trong pane này, mới nhất ở trên (bỏ
+  file đang hiện), rồi tới các tab đang mở khác. Nhấn **Ctrl+P rồi Enter** là quay về file trước
+  đó.
+- Gõ một phần tên: Termote tìm file của pane giống ô tìm trong Files, file mở gần đây xếp trước.
+  Enter mở file trong panel Files; Ctrl+Enter (Cmd+Enter) mở file trong một tab được giữ lại. Nếu
+  bạn nhấn Enter khi danh sách chưa hiện, file đầu tiên tìm được sẽ mở ra.
+- Danh sách file mở gần đây lưu trên thiết bị này cho từng pane: tối đa 20 file, giữ 14 ngày, bị xoá
+  khi bạn đăng xuất. File nhạy cảm mà bạn đã chọn hiện ra không được giữ trong danh sách.
+
+## Các lệnh
+
+Mỗi lệnh có tên nhóm và phím tắt, nếu đã gán. Lệnh chưa chạy được lúc này (pane không có agent,
+thiết bị chỉ xem, chưa mở gì) vẫn nằm trong danh sách nhưng mờ đi, kèm lý do bên dưới; nhấn Enter
+không có tác dụng.
+
+Lệnh của agent trong pane cũng có mặt: `/tên` với Claude Code, `$tên` với skill của Codex. Khi bạn
+chọn, lệnh được chèn vào trước phần bạn đã gõ trong ô Chat và con trỏ nằm ở đó; chưa có gì được gửi.
+Nếu agent không có ô Chat mà chạy trong terminal, lệnh được gõ vào terminal, không kèm Enter. Thiết
+bị chỉ xem không dùng được các lệnh này.
+
+## Phím khi đang ở terminal
+
+Khi terminal đang nhận phím, phím vẫn thuộc về chương trình trong pane: trên Linux và Windows,
+Ctrl+P đi vào pane (với bash là lệnh trước đó). Từ terminal, chỉ Ctrl+Shift+P mở được bảng lệnh;
+trên macOS thêm Cmd+P và Cmd+Shift+P, vì terminal không bao giờ dùng hai phím này. Phím bạn tự gán
+chỉ chạy được trong terminal khi terminal không dùng tới nó: Ctrl+Shift kèm một chữ cái khác C và V,
+hoặc trên macOS là Cmd kèm một chữ cái, chữ số hay dấu câu.
+
+## Đổi phím tắt
+
+`Settings > Shortcuts` liệt kê mọi lệnh cùng phím của nó:
+
+- Nhấn `Change` rồi nhấn tổ hợp phím mới; Escape để huỷ. Phím phải có Ctrl (Cmd trên macOS), hoặc
+  là một phím từ F1 tới F12, để không bao giờ chặn mất ký tự bạn đang gõ.
+- `Remove` bỏ phím của lệnh; `Reset` trả lại phím mặc định, còn `Reset all shortcuts` trả lại cho
+  mọi lệnh.
+- `Also in the terminal` cho phím chạy cả khi terminal đang nhận phím, với những phím nói ở phần
+  trên.
+- Hai lệnh cùng một phím thì cả hai dòng được đánh dấu, và không lệnh nào chạy cho tới khi bạn đổi
+  một trong hai (riêng `Show all commands` vẫn chạy, để bạn luôn mở được bảng lệnh). Phím bạn gán thắng
+  phím mặc định: dòng của lệnh mặc định ghi rõ lệnh nào đã lấy phím đó.
+- Không gán được: phím trình duyệt giữ (Ctrl+W, Ctrl+T, Ctrl+N, Ctrl+Q, Ctrl+Shift+T,
+  Ctrl+Shift+N, Ctrl+Shift+W, Ctrl+Tab), Ctrl+S của trình soạn thảo, Ctrl+Shift+C và Ctrl+Shift+V
+  của terminal, và các phím soạn văn bản Ctrl+A, C, V, X, Z.
+
+Phím tắt lưu trong trình duyệt này, dùng chung cho mọi server mà trình duyệt mở, và vẫn còn sau khi
+bạn đăng xuất.
+
+<Aside type="caution">
+  Trình duyệt có thể giữ một phím trước khi trang nhận được. Trên Firefox, Ctrl+Shift+P mở cửa sổ
+  riêng tư nếu Termote chưa được cài như một ứng dụng: hãy dùng nút trên thanh tiêu đề, hoặc gán
+  phím khác cho `Show all commands`.
+</Aside>

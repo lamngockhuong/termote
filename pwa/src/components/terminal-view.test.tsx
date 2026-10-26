@@ -170,6 +170,15 @@ const bridge = vi.hoisted(() => ({
 }))
 vi.mock('../utils/terminal-bridge', () => bridge)
 
+// The palette's chord stands for a shortcut marked to run in the terminal
+const shortcuts = vi.hoisted(() => ({
+  terminalShortcut: vi.fn(
+    (ev: KeyboardEvent) =>
+      ev.ctrlKey && ev.shiftKey && !ev.altKey && ev.code === 'KeyP',
+  ),
+}))
+vi.mock('../hooks/use-shortcuts', () => shortcuts)
+
 let resizeObserverCb: () => void
 // The observer fits the terminal once the size settles.
 function resize() {
@@ -1218,6 +1227,25 @@ describe('TerminalView', () => {
       term.selection = 'x'
       expect(term.keyCb(key({ ctrlKey: true }))).toBe(true)
       expect(bridge.copyTerminalSelection).not.toHaveBeenCalled()
+    })
+
+    it('leaves an app shortcut marked for the terminal to the app', () => {
+      const { term } = renderView()
+      term.selection = 'x'
+      const palette = new KeyboardEvent('keydown', {
+        code: 'KeyP',
+        ctrlKey: true,
+        shiftKey: true,
+      })
+      expect(term.keyCb(palette)).toBe(false)
+      expect(
+        term.keyCb(
+          new KeyboardEvent('keydown', { code: 'KeyP', ctrlKey: true }),
+        ),
+      ).toBe(true)
+      // The copy key with a selection still copies first
+      expect(term.keyCb(key({ ctrlKey: true, shiftKey: true }))).toBe(false)
+      expect(bridge.copyTerminalSelection).toHaveBeenCalledOnce()
     })
 
     it('reports a failed copy, and nothing when the selection vanished', async () => {

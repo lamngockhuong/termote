@@ -890,6 +890,35 @@ describe('SettingsModal for a view-only device or with devices', () => {
     expect(screen.queryByRole('button', { name: 'Devices' })).toBeNull()
   })
 
+  it('shows the Shortcuts group after Keyboard on desktop only', () => {
+    const { unmount } = renderWith({})
+    expect(screen.queryByRole('button', { name: 'Shortcuts' })).toBeNull()
+    unmount()
+    renderWith({
+      shortcuts: [
+        {
+          id: 'app.help',
+          title: 'Show help',
+          category: 'App',
+          run: vi.fn(),
+        },
+      ],
+      initialGroup: 'shortcuts',
+    })
+    const rail = screen.getByRole('navigation', { name: 'Settings groups' })
+    const names = within(rail)
+      .getAllByRole('button')
+      .map((b) => b.textContent)
+    expect(names.indexOf('Shortcuts')).toBe(names.indexOf('Keyboard') + 1)
+    expect(screen.getByRole('button', { name: 'Shortcuts' })).toHaveAttribute(
+      'aria-current',
+      'true',
+    )
+    expect(
+      screen.getByRole('button', { name: 'Change the key of Show help' }),
+    ).toBeVisible()
+  })
+
   it('shows the Devices group with the section in it', () => {
     renderWith({ devices: true })
     fireEvent.click(screen.getByRole('button', { name: 'Devices' }))

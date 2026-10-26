@@ -12,7 +12,9 @@ import {
   type AppView,
   availableViews,
   CHAT_VIEW_ID,
+  FILES_VIEW_ID,
   type NotifyOptions,
+  startOffered,
   TERMINAL_VIEW_ID,
   type ViewContext,
   type ViewProps,
@@ -22,6 +24,7 @@ import { chatAgent, chatInputAgent } from './chat-agents'
 import { AboutModal } from './components/about-modal'
 import { AppHeader } from './components/app-header'
 import { CommandHistoryDropdown } from './components/command-history-dropdown'
+import type { CommandPaletteProps } from './components/command-palette'
 import type { ConnectionState } from './components/connection-indicator'
 import { GestureHintsOverlay } from './components/gesture-hints-overlay'
 import { GroupDialog } from './components/group-dialog'
@@ -54,6 +57,7 @@ import {
 import { useTheme } from './contexts/theme-context'
 import { useAgentNotifications } from './hooks/use-agent-notifications'
 import { useCommandHistory } from './hooks/use-command-history'
+import { requestFilesFocus } from './hooks/use-files'
 import { useFontSize } from './hooks/use-font-size'
 import { useFullscreen } from './hooks/use-fullscreen'
 import { useGestures } from './hooks/use-gestures'
@@ -64,7 +68,7 @@ import {
 } from './hooks/use-history-close'
 import { useKeyboardVisible } from './hooks/use-keyboard-visible'
 import { useLocalSessions } from './hooks/use-local-sessions'
-import { useIsMobile } from './hooks/use-media-query'
+import { useIsMobile, useMediaQuery } from './hooks/use-media-query'
 import {
   logout,
   onViewOnlyRefusal,
@@ -73,11 +77,13 @@ import {
 } from './hooks/use-mux-api'
 import { usePushSubscription } from './hooks/use-push-subscription'
 import { useSettings } from './hooks/use-settings'
+import { useKeymap, useShortcutDispatcher } from './hooks/use-shortcuts'
 import { useSidebarCollapsed } from './hooks/use-sidebar-collapsed'
 import { useStartAgent } from './hooks/use-start-agent'
 import { availableUpdate, useUpdateCheck } from './hooks/use-update-check'
 import type { Session, SessionPane } from './types/session'
 import { applyUiStyle, syncThemeColor } from './ui-style'
+import { buildAppCommands, type PaletteMode } from './utils/app-commands'
 import { APP_INFO } from './utils/app-info'
 import {
   checkOnShow,
@@ -85,6 +91,7 @@ import {
   reloadToNewVersion,
   useAppUpdate,
 } from './utils/app-update'
+import { requestDraftInsert } from './utils/chat-draft'
 import {
   formatDeepLink,
   OVERVIEW_HASH,
@@ -96,9 +103,12 @@ import {
   LARGE_PACKET_HELP_URL,
   onLargePacketLoss,
 } from './utils/large-packet-loss'
+import { lazyRetry } from './utils/lazy-retry'
 import { loadPaneView, savePaneView } from './utils/pane-view'
+import { isApplePlatform } from './utils/platform'
 import { formatRunning, uniqueNames } from './utils/running-commands'
 import { matchesFilter } from './utils/session-filter'
+import { formatChord } from './utils/shortcuts'
 import {
   attachImageToTerminal,
   blurTerminal,
@@ -559,7 +569,7 @@ export default function App({
   const panelRole =
     !isMobile && switcherViews.length > 1 ? 'tabpanel' : undefined
   const { fontSize, increase, decrease } = useFontSize()
-  const { resolvedTheme } = useTheme()
+  const { resolvedTheme, setTheme } = useTheme()
   // Before paint and before the terminal's effects read the tokens.
   useLayoutEffect(() => applyUiStyle(settings.uiStyle), [settings.uiStyle])
   // biome-ignore lint/correctness/useExhaustiveDependencies: the tokens it reads change with both
@@ -1256,6 +1266,129 @@ export default function App({
     [selectSession],
   )
 
+  // Desktop only: the command palette and app shortcuts
+  const finePointer = useMediaQuery('(pointer: fine)')
+  const desktop = finePointer && !isMobile
+  const [paletteMode, setPaletteMode] = useState<PaletteMode | null>(null)
+  const groupTabs = sessions.filter((s) => s.groupId === activeSession.groupId)
+  const tabIndex = groupTabs.findIndex((s) => s.id === activeSession.id)
+  const previousTab = groupTabs[tabIndex - 1]?.id
+  const nextTab = tabIndex < 0 ? undefined : groupTabs[tabIndex + 1]?.id
+  const filesPanelOpen = sidePanelId === FILES_VIEW_ID
+  const searchPaneId = activeSession.paneId
+  // The pane's agent has a Chat message box this device can type in
+  const composerOffered =
+    !readOnly &&
+    !!activeSession.hasAgent &&
+    chatInputAgent(activeSession.agentName) &&
+    switcherViews.some((v) => v.id === CHAT_VIEW_ID)
+  const commands = useMemo(
+    () =>
+      buildAppCommands({
+        apple: isApplePlatform(),
+        readOnly,
+        viewIds: switcherViews.map((v) => v.id),
+        panelIds: searchPaneId ? panelViews.map((v) => v.id) : [],
+        sidePanelId: sidePanelView ? sidePanelId : null,
+        startOffered: startOffered(viewContext),
+        hasAgent: !!activeSession.hasAgent,
+        devices: !!mux.caps.devices && !readOnly,
+        canFullscreen,
+        previousTab,
+        nextTab,
+        openPalette: setPaletteMode,
+        changeView,
+        showTerminal: () => {
+          changeView(TERMINAL_VIEW_ID)
+          focusTerminal(getTerminal())
+        },
+        showChat: () => {
+          changeView(CHAT_VIEW_ID)
+          if (composerOffered) requestDraftInsert(searchPaneId as string)
+        },
+        togglePanel,
+        openOverview,
+        searchContent: () => {
+          if (!filesPanelOpen) togglePanel(FILES_VIEW_ID)
+          // Offered only with a pane (panelIds is empty without one)
+          requestFilesFocus(searchPaneId as string, 'search')
+        },
+        newTab: () => void addTab('New'),
+        selectTab: (id) => void selectFromList(id),
+        openSettings: (group) => {
+          setSettingsGroup(group)
+          setSettingsOpen(true)
+        },
+        openHelp: () => setHelpOpen(true),
+        openAbout: () => setAboutOpen(true),
+        toggleSidebar: toggleSidebarCollapsed,
+        toggleFullscreen,
+        fontIncrease: increase,
+        fontDecrease: decrease,
+        setTheme,
+      }),
+    [
+      readOnly,
+      switcherViews,
+      panelViews,
+      searchPaneId,
+      sidePanelView,
+      sidePanelId,
+      viewContext,
+      activeSession.hasAgent,
+      mux.caps.devices,
+      canFullscreen,
+      previousTab,
+      nextTab,
+      changeView,
+      getTerminal,
+      composerOffered,
+      togglePanel,
+      openOverview,
+      filesPanelOpen,
+      addTab,
+      selectFromList,
+      toggleSidebarCollapsed,
+      toggleFullscreen,
+      increase,
+      decrease,
+      setTheme,
+    ],
+  )
+  useShortcutDispatcher(commands, desktop)
+  const keymap = useKeymap(commands)
+  const paletteKey = keymap.byId['palette.commands']?.key
+  // Run once the palette is gone: the focus a command moves is not taken
+  // back by the closing dialog
+  const afterPalette = useRef<(() => void) | null>(null)
+  const runFromPalette = useCallback((fn: () => void) => {
+    afterPalette.current = fn
+    setPaletteMode(null)
+  }, [])
+  const closePalette = useCallback(() => setPaletteMode(null), [])
+  useEffect(() => {
+    if (paletteMode) return
+    const fn = afterPalette.current
+    afterPalette.current = null
+    fn?.()
+  }, [paletteMode])
+  // Its chunk is fetched while the desktop is idle, so the first open has
+  // no wait during which keys would still go to the terminal
+  useEffect(() => {
+    if (!desktop) return
+    // A failure is shown when the palette opens, not here
+    const preload = () => void Promise.allSettled([loadCommandPalette()])
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(preload)
+      return () => window.cancelIdleCallback(id)
+    }
+    const timer = setTimeout(preload, PALETTE_PRELOAD_MS)
+    return () => clearTimeout(timer)
+  }, [desktop])
+  const showFilesPanel = useCallback(() => {
+    if (!filesPanelOpen) togglePanel(FILES_VIEW_ID)
+  }, [filesPanelOpen, togglePanel])
+
   return (
     <div
       // A size container: the history list caps its height at a share of
@@ -1362,6 +1495,12 @@ export default function App({
             panelViews={panelViews}
             sidePanelId={sidePanelView ? sidePanelId : null}
             onTogglePanel={togglePanel}
+            onOpenPalette={
+              desktop ? () => setPaletteMode('commands') : undefined
+            }
+            paletteKey={
+              paletteKey && formatChord(paletteKey, isApplePlatform())
+            }
             menu={{
               onOpenAbout: () => setAboutOpen(true),
               onOpenHelp: () => setHelpOpen(true),
@@ -1770,6 +1909,7 @@ export default function App({
         readOnly={readOnly}
         devices={!!mux.caps.devices && !readOnly}
         signins={!!mux.caps.signins && !readOnly}
+        shortcuts={desktop ? commands : undefined}
         onLogout={handleLogout}
         onEnableNotify={push.enable}
         onDisableNotify={push.disable}
@@ -1783,6 +1923,45 @@ export default function App({
         onClearHistory={clearHistory}
         historyCount={history.length}
       />
+      {desktop && paletteMode && (
+        <LazyBoundary
+          onRetry={CommandPalette.retry}
+          // Nothing out of place: a toast says so, and the next open tries
+          // the chunk again
+          fallback={() => null}
+          onError={() => {
+            showToast('Could not load the command palette', 'danger')
+            setPaletteMode(null)
+          }}
+        >
+          <Suspense fallback={null}>
+            <CommandPalette
+              mode={paletteMode}
+              onClose={closePalette}
+              onRun={runFromPalette}
+              commands={commands}
+              session={activeSession}
+              sessions={sessions}
+              groups={groups}
+              readOnly={readOnly}
+              filesAvailable={
+                !!activeSession.paneId &&
+                panelViews.some((v) => v.id === FILES_VIEW_ID)
+              }
+              showFilesPanel={showFilesPanel}
+              composer={composerOffered}
+              showChat={() => changeView(CHAT_VIEW_ID)}
+              sendToTerminal={(text) => {
+                changeView(TERMINAL_VIEW_ID)
+                sendTextToTerminal(getTerminal(), text)
+                focusTerminal(getTerminal())
+              }}
+              selectSession={(id) => void selectFromList(id)}
+              selectPane={mux.caps.clientSideSelect ? selectPane : undefined}
+            />
+          </Suspense>
+        </LazyBoundary>
+      )}
       {isMobile && (
         <GestureHintsOverlay
           isOpen={gestureHintsOpen}
@@ -1816,6 +1995,15 @@ export default function App({
     </div>
   )
 }
+
+// The command palette's chunk, and how long after start it is fetched where
+// the browser has no idle callback
+const loadCommandPalette = () => import('./components/command-palette')
+const PALETTE_PRELOAD_MS = 2000
+const CommandPalette = lazyRetry<CommandPaletteProps>(
+  loadCommandPalette,
+  'CommandPalette',
+)
 
 // A lazy view: while its chunk loads or after it failed to, the rest of the
 // app (the terminal, the header) stays usable. Another view takes the slot

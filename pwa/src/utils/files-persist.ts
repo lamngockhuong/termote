@@ -7,21 +7,27 @@ import {
 
 // What the PWA keeps on this device for a pane, so closing the app (or the
 // OS killing it) loses nothing: the Files and Changes tabs, the unsaved
-// drafts of files that are not sensitive, and the view the pane was left on.
+// drafts of files that are not sensitive, the view the pane was left on,
+// and the files opened lately (the command palette lists them first).
 // Each record is stored under the server's instance id and the pane's key
 // (pane-remap.ts), never its id: another server on the same origin, or a
 // tmux window move, never shows a record to the wrong pane. Records not
 // written for 14 days are swept when the module loads, and signing out
 // removes them all, in every tab of the origin.
 
-export type PersistKind = 'files' | 'changes' | 'drafts' | 'view'
+export type PersistKind = 'files' | 'changes' | 'drafts' | 'view' | 'recent'
 
 const PREFIXES: Record<PersistKind, string> = {
   files: 'termote-files-tabs:',
   changes: 'termote-changes-tabs:',
   drafts: 'termote-file-drafts:',
   view: 'termote-pane-view:',
+  recent: 'termote-recent-files:',
 }
+const ALL_KINDS = Object.keys(PREFIXES) as PersistKind[]
+
+// The most files kept in a pane's list of files opened lately
+export const RECENT_LIMIT = 20
 
 // Set (to the time) when a tab of the origin signs out: the others stop
 // writing and forget what they hold
@@ -61,6 +67,17 @@ interface DraftRecord<T> extends StoredRecord {
 interface ViewRecord<T> extends StoredRecord {
   savedAt: number
   view: T
+}
+
+// A file opened lately: its path under root
+export interface RecentFile {
+  root: string
+  path: string
+}
+
+interface RecentRecord extends StoredRecord {
+  savedAt: number
+  files: RecentFile[]
 }
 
 // A stored draft, as loadDrafts returns it
@@ -339,6 +356,41 @@ export function saveView<T>(paneId: string, view: T | null) {
   )
 }
 
+// Files opened lately
+
+const isRecentFile = (f: unknown): f is RecentFile =>
+  !!f &&
+  typeof (f as RecentFile).root === 'string' &&
+  typeof (f as RecentFile).path === 'string'
+
+// paneId's files opened lately, the latest first
+export function loadRecent(paneId: string): RecentFile[] {
+  const files = readFor<RecentRecord>(
+    persistKey('recent', paneId),
+    paneId,
+  )?.files
+  return Array.isArray(files)
+    ? files.filter(isRecentFile).slice(0, RECENT_LIMIT)
+    : []
+}
+
+export function saveRecent(paneId: string, files: RecentFile[]) {
+  const key = persistKey('recent', paneId)
+  if (!key || disabled) return
+  if (!files.length) {
+    remove(key)
+    return
+  }
+  write(
+    key,
+    JSON.stringify({
+      ...record(paneId),
+      savedAt: Date.now(),
+      files: files.slice(0, RECENT_LIMIT),
+    } satisfies RecentRecord),
+  )
+}
+
 // A Zellij group this client renamed from id from to id to, now called
 // name: its panes' keys change with it, so do the records kept under them.
 export function renamePersistedGroup(
@@ -348,7 +400,7 @@ export function renamePersistedGroup(
 ) {
   flushAll()
   if (disabled) return
-  for (const key of keysOf(['files', 'changes', 'drafts', 'view'])) {
+  for (const key of keysOf(ALL_KINDS)) {
     const head = key.slice(0, key.indexOf(':') + 1)
     const rest = key.slice(head.length)
     const instance = rest.slice(0, rest.indexOf(':'))
@@ -375,7 +427,7 @@ export function regroupPersisted(names: Map<string, string | null>) {
   flushAll()
   if (disabled) return
   const prefix = `:${paneInstance()}:`
-  for (const key of keysOf(['files', 'changes', 'drafts', 'view'])) {
+  for (const key of keysOf(ALL_KINDS)) {
     if (!key.includes(prefix)) continue
     const r = read<StoredRecord>(key)
     if (!r || !names.has(r.pane)) continue
@@ -440,7 +492,7 @@ function disable() {
 }
 
 function clearAll() {
-  for (const key of keysOf(['files', 'changes', 'drafts', 'view'])) remove(key)
+  for (const key of keysOf(ALL_KINDS)) remove(key)
 }
 
 // Another tab signed out: this one stops too and forgets what it holds
@@ -490,7 +542,7 @@ function detach() {
 // edited, anything else by when it was written) or not readable, and
 // measures the drafts left.
 export function sweepExpired(now: number) {
-  for (const key of keysOf(['files', 'changes', 'drafts', 'view'])) {
+  for (const key of keysOf(ALL_KINDS)) {
     const r = read<StoredRecord>(key)
     if (!r) continue
     const draft = key.startsWith(PREFIXES.drafts)

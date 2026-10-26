@@ -70,6 +70,11 @@ export default defineConfig({
             { label: "Gestures", link: "/usage/gestures/" },
             { label: "Herdr Plugin", link: "/usage/herdr-plugin/" },
             { label: "Keyboard", link: "/usage/keyboard/" },
+            {
+              label: "Keyboard Shortcuts",
+              link: "/usage/keyboard-shortcuts/",
+              translations: { vi: "Phím tắt và bảng lệnh" },
+            },
             { label: "Pair a Device", link: "/usage/devices/" },
             { label: "Security Model", link: "/usage/security/", translations: { vi: "Mô hình bảo mật" } },
             { label: "Sessions", link: "/usage/sessions/" },

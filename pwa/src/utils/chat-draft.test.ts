@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { loadDraft, remapChatDrafts, saveDraft } from './chat-draft'
+import {
+  loadDraft,
+  onDraftInsert,
+  remapChatDrafts,
+  requestDraftInsert,
+  saveDraft,
+  takeDraftInsert,
+} from './chat-draft'
 
 afterEach(() => {
   sessionStorage.clear()
@@ -46,5 +53,25 @@ describe('chat drafts', () => {
     })
     saveDraft('%1', 'x')
     expect(loadDraft('%1')).toBe('')
+  })
+})
+
+describe('commands asked for a composer', () => {
+  it('wait per pane until taken, once, and tell the listeners', () => {
+    const fn = vi.fn()
+    const off = onDraftInsert(fn)
+    const c = { name: 'compact', source: 'builtin' as const }
+    requestDraftInsert('%1', c)
+    expect(fn).toHaveBeenCalledOnce()
+    expect(takeDraftInsert('%2')).toBeUndefined()
+    expect(takeDraftInsert('%1')).toBe(c)
+    expect(takeDraftInsert('%1')).toBeUndefined()
+    off()
+    requestDraftInsert('%1', c)
+    expect(fn).toHaveBeenCalledOnce()
+    takeDraftInsert('%1')
+    // Focus only: no command
+    requestDraftInsert('%1')
+    expect(takeDraftInsert('%1')).toBeNull()
   })
 })

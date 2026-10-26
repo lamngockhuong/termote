@@ -153,6 +153,23 @@ describe('Sheet', () => {
     expect(document.activeElement).toBe(opener)
   })
 
+  it('leaves focus where an action put it when keepFocus is set', () => {
+    const opener = document.createElement('button')
+    const target = document.createElement('button')
+    document.body.append(opener, target)
+    opener.focus()
+    const keepFocus = { current: false }
+    const { rerender } = renderSheet({ keepFocus })
+    keepFocus.current = true
+    target.focus()
+    rerender(
+      <Sheet isOpen={false} onClose={vi.fn()} title="Sessions">
+        <p>Body</p>
+      </Sheet>,
+    )
+    expect(document.activeElement).toBe(target)
+  })
+
   it('does not focus an opener that has left the page', () => {
     const opener = document.createElement('button')
     document.body.append(opener)

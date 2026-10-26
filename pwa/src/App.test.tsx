@@ -19,6 +19,8 @@ import { TerminalView } from './components/terminal-view'
 import { useHistoryClose } from './hooks/use-history-close'
 import type { MuxSnapshot } from './hooks/use-mux-api'
 import { usePushSubscription } from './hooks/use-push-subscription'
+import { resetAllShortcuts, setShortcut } from './hooks/use-shortcuts'
+import { takeDraftInsert } from './utils/chat-draft'
 import {
   LARGE_PACKET_HELP_URL,
   reportLargePacketLoss,
@@ -105,10 +107,47 @@ vi.mock('./hooks/use-gestures', () => ({
 }))
 
 const mockIsMobile = vi.fn(() => false)
+// A fine pointer (a mouse) makes a desktop: the command palette and keys
+const mockFinePointer = vi.fn(() => false)
 vi.mock('./hooks/use-media-query', () => ({
   useIsMobile: () => mockIsMobile(),
-  useMediaQuery: () => false,
+  useMediaQuery: (q: string) => q === '(pointer: fine)' && mockFinePointer(),
 }))
+
+// The palette's props, to run what it would; fail throws as a chunk that
+// cannot load
+const palette = vi.hoisted(() => ({
+  props: null as
+    | null
+    | import('./components/command-palette').CommandPaletteProps,
+  fail: false,
+}))
+vi.mock('./components/command-palette', () => {
+  function CommandPalette(
+    p: import('./components/command-palette').CommandPaletteProps,
+  ) {
+    if (palette.fail) throw new Error('chunk')
+    palette.props = p
+    return (
+      <div data-testid="command-palette" data-mode={p.mode}>
+        {p.commands.map((c) => (
+          <button
+            key={c.id}
+            type="button"
+            disabled={!!c.disabledReason}
+            onClick={() => p.onRun(c.run)}
+          >
+            {c.title}
+          </button>
+        ))}
+        <button type="button" onClick={p.onClose}>
+          ClosePalette
+        </button>
+      </div>
+    )
+  }
+  return { CommandPalette, default: CommandPalette }
+})
 
 const mockUseKeyboardVisible = vi.fn(
   (): {
@@ -530,7 +569,9 @@ vi.mock('./components/settings-modal', () => ({
     signins,
     readOnly,
     initialGroup,
+    shortcuts,
   }: {
+    shortcuts?: unknown[]
     isOpen: boolean
     initialGroup?: string
     pasteBufferLabel?: string
@@ -549,6 +590,7 @@ vi.mock('./components/settings-modal', () => ({
         data-signins={String(!!signins)}
         data-read-only={String(!!readOnly)}
         data-initial-group={initialGroup ?? ''}
+        data-shortcuts={String(!!shortcuts)}
       >
         <button onClick={onClose}>CloseSettings</button>
         {updates && (
@@ -5147,5 +5189,301 @@ describe('App — group actions', () => {
       fireEvent.click(screen.getByText('ConfirmYes'))
     })
     expect(screen.queryByText('Could not close the workspace')).toBeNull()
+  })
+})
+
+describe('App command palette and shortcuts', () => {
+  const switchSession = vi.fn(async () => 'ok')
+  const addSession = vi.fn(async () => {})
+  const selectPane = vi.fn()
+  const toggleFullscreen = vi.fn()
+  const FILES: AppView = {
+    id: 'files',
+    label: 'Files',
+    Icon: Folder,
+    available: () => true,
+    placement: 'panel',
+    Main: () => <div data-testid="files-main" />,
+    Panel: () => <div data-testid="files-panel" />,
+  }
+  const CHAT: AppView = {
+    id: 'chat',
+    label: 'Chat',
+    Icon: MessageSquare,
+    available: () => true,
+    Main: () => <div data-testid="chat-main" />,
+  }
+  const tab = (id: string) => ({
+    id,
+    name: id,
+    icon: '📺',
+    description: '',
+    groupId: 'g',
+    paneId: `${id}:p`,
+    hasAgent: id === 'b',
+    agentName: id === 'b' ? 'claude' : undefined,
+  })
+
+  function mockSessions(active = 'b', clientSideSelect = false) {
+    const tabs = [tab('a'), tab('b'), tab('c')]
+    mockUseLocalSessions.mockReturnValue({
+      activeSession: tabs.find((t) => t.id === active) ?? tabs[0],
+      sessions: tabs,
+      groups: [{ id: 'g', name: 'main' }],
+      switchSession,
+      selectPane,
+      addSession,
+      removeSession: vi.fn(),
+      updateSession: vi.fn(),
+      isReady: true,
+      isServerReachable: true,
+      refreshSessions: vi.fn(),
+      mux: {
+        backend: 'tmux',
+        caps: {
+          clientSideSelect,
+          copyMode: true,
+          agentChat: true,
+          files: true,
+        },
+      },
+    } as any)
+  }
+
+  const press = (code: string, init: KeyboardEventInit = {}) =>
+    fireEvent.keyDown(document.body, { code, key: code.slice(3), ...init })
+  const openPalette = async () => {
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Command palette' }),
+    )
+    return screen.findByTestId('command-palette')
+  }
+  const run = async (title: string) => {
+    await openPalette()
+    fireEvent.click(screen.getByRole('button', { name: title }))
+    await waitFor(() =>
+      expect(screen.queryByTestId('command-palette')).toBeNull(),
+    )
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockIsMobile.mockReturnValue(false)
+    mockFinePointer.mockReturnValue(true)
+    mockUseFullscreen.mockReturnValue({
+      isFullscreen: false,
+      isSupported: true,
+      toggleFullscreen,
+    })
+    palette.fail = false
+    palette.props = null
+    resetAllShortcuts()
+    mockSessions()
+  })
+
+  afterEach(() => {
+    mockFinePointer.mockReturnValue(false)
+    mockUseFullscreen.mockReset()
+    mockUseFullscreen.mockImplementation(() => ({
+      isFullscreen: false,
+      isSupported: true,
+      toggleFullscreen: vi.fn(),
+    }))
+    resetAllShortcuts()
+  })
+
+  it('opens from the header button and the keys, desktop only', async () => {
+    render(<App />)
+    const button = await screen.findByRole('button', {
+      name: 'Command palette',
+    })
+    expect(button).toHaveAttribute('title', 'Command palette (Ctrl+Shift+P)')
+    press('KeyP', { ctrlKey: true })
+    expect(await screen.findByTestId('command-palette')).toHaveAttribute(
+      'data-mode',
+      'files',
+    )
+    fireEvent.click(screen.getByText('ClosePalette'))
+    expect(screen.queryByTestId('command-palette')).toBeNull()
+    press('KeyP', { ctrlKey: true, shiftKey: true })
+    expect(await screen.findByTestId('command-palette')).toHaveAttribute(
+      'data-mode',
+      'commands',
+    )
+  })
+
+  it('has no palette nor keys on a touch screen', async () => {
+    mockFinePointer.mockReturnValue(false)
+    render(<App />)
+    await screen.findByTestId('terminal-view')
+    expect(screen.queryByRole('button', { name: 'Command palette' })).toBeNull()
+    press('KeyP', { ctrlKey: true })
+    expect(screen.queryByTestId('command-palette')).toBeNull()
+  })
+
+  it('names no key on the button once the user removed it', async () => {
+    setShortcut('palette.commands', { key: null })
+    render(<App />)
+    expect(
+      await screen.findByRole('button', { name: 'Command palette' }),
+    ).toHaveAttribute('title', 'Command palette')
+  })
+
+  it('runs a command once the palette has closed: dialogs', async () => {
+    render(<App views={[APP_VIEWS[0], CHAT, FILES]} />)
+    await run('Show help')
+    expect(screen.getByTestId('help-modal')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('CloseHelp'))
+    await run('About Termote')
+    expect(screen.getByTestId('about-modal')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('CloseAbout'))
+    await run('Open Settings: Shortcuts')
+    expect(screen.getByTestId('settings-modal')).toHaveAttribute(
+      'data-initial-group',
+      'shortcuts',
+    )
+    expect(screen.getByTestId('settings-modal')).toHaveAttribute(
+      'data-shortcuts',
+      'true',
+    )
+    fireEvent.click(screen.getByText('CloseSettings'))
+    await run('Open Settings')
+    expect(screen.getByTestId('settings-modal')).toHaveAttribute(
+      'data-initial-group',
+      '',
+    )
+  })
+
+  it('runs a command once the palette has closed: tabs and views', async () => {
+    render(<App views={[APP_VIEWS[0], CHAT, FILES]} />)
+    await run('Show the terminal')
+    expect(mockFocusTerminal).toHaveBeenCalled()
+    await run('New tab')
+    expect(addSession).toHaveBeenCalledWith('New')
+    await run('Previous tab')
+    expect(switchSession).toHaveBeenLastCalledWith('a', undefined)
+    await run('Next tab')
+    expect(switchSession).toHaveBeenLastCalledWith('c', undefined)
+    await run('Show the agent overview')
+    await run('Toggle the Files panel')
+    expect(screen.getByTestId('files-panel')).toBeInTheDocument()
+  })
+
+  it('runs a command once the palette has closed: the app', async () => {
+    render(<App views={[APP_VIEWS[0], CHAT, FILES]} />)
+    await run('Toggle the sidebar')
+    await run('Toggle full screen')
+    expect(toggleFullscreen).toHaveBeenCalled()
+    await run('Terminal: larger text')
+    await run('Terminal: smaller text')
+    await run('Theme: dark')
+    expect(screen.queryByTestId('command-palette')).toBeNull()
+  })
+
+  it('searches file contents from outside Files, opening the panel once', async () => {
+    render(<App views={[APP_VIEWS[0], FILES]} />)
+    await screen.findByTestId('terminal-view')
+    press('KeyF', { ctrlKey: true, shiftKey: true })
+    expect(await screen.findByTestId('files-panel')).toBeInTheDocument()
+    // Open already: it stays open
+    press('KeyF', { ctrlKey: true, shiftKey: true })
+    expect(screen.getByTestId('files-panel')).toBeInTheDocument()
+  })
+
+  it('gives the palette what it needs to act on the pane', async () => {
+    mockSessions('b', true)
+    render(<App views={[APP_VIEWS[0], CHAT, FILES]} />)
+    await openPalette()
+    const p = palette.props!
+    expect(p.composer).toBe(true)
+    expect(p.filesAvailable).toBe(true)
+    expect(p.selectPane).toBe(selectPane)
+    act(() => p.onRun(() => p.showFilesPanel()))
+    expect(await screen.findByTestId('files-panel')).toBeInTheDocument()
+    await openPalette()
+    // Open already: stays
+    act(() => palette.props!.onRun(() => palette.props!.showFilesPanel()))
+    expect(await screen.findByTestId('files-panel')).toBeInTheDocument()
+    await openPalette()
+    act(() => palette.props!.onRun(() => palette.props!.showChat()))
+    expect(await screen.findByTestId('chat-main')).toBeInTheDocument()
+    // Show Chat from the commands asks the message box for focus
+    await run('Show Chat')
+    expect(takeDraftInsert('b:p')).toBeNull()
+    await openPalette()
+    act(() =>
+      palette.props!.onRun(() => palette.props!.sendToTerminal('/compact ')),
+    )
+    expect(mockSendTextToTerminal.mock.lastCall?.[1]).toBe('/compact ')
+    expect(mockFocusTerminal).toHaveBeenCalled()
+    await openPalette()
+    act(() => palette.props!.onRun(() => palette.props!.selectSession('a')))
+    await waitFor(() =>
+      expect(switchSession).toHaveBeenLastCalledWith('a', undefined),
+    )
+  })
+
+  it('offers no pane pick where the backend picks the pane', async () => {
+    mockSessions('a')
+    render(<App views={[APP_VIEWS[0], CHAT]} />)
+    await openPalette()
+    expect(palette.props!.selectPane).toBeUndefined()
+    expect(palette.props!.composer).toBe(false)
+    // No message box: Show Chat asks nothing of it
+    await run('Show Chat')
+    expect(takeDraftInsert('a:p')).toBeUndefined()
+  })
+
+  it('says so when the palette cannot load, and tries again next time', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    palette.fail = true
+    render(<App />)
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Command palette' }),
+    )
+    expect(
+      await screen.findByText('Could not load the command palette'),
+    ).toBeInTheDocument()
+    expect(screen.queryByTestId('command-palette')).toBeNull()
+    palette.fail = false
+    expect(await openPalette()).toBeInTheDocument()
+    error.mockRestore()
+  })
+
+  it('fetches the palette while the desktop is idle', async () => {
+    const idle = vi.fn((cb: () => void) => {
+      cb()
+      return 7
+    })
+    const cancel = vi.fn()
+    Object.assign(window, {
+      requestIdleCallback: idle,
+      cancelIdleCallback: cancel,
+    })
+    try {
+      const { unmount } = render(<App />)
+      await screen.findByTestId('terminal-view')
+      expect(idle).toHaveBeenCalled()
+      unmount()
+      expect(cancel).toHaveBeenCalledWith(7)
+    } finally {
+      Object.assign(window, {
+        requestIdleCallback: undefined,
+        cancelIdleCallback: undefined,
+      })
+    }
+  })
+
+  it('fetches the palette after a while without an idle callback', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      const { unmount } = render(<App />)
+      await act(async () => {
+        vi.advanceTimersByTime(2000)
+      })
+      unmount()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

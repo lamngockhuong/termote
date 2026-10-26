@@ -1,0 +1,87 @@
+---
+title: Keyboard Shortcuts & Command Palette
+description: Open files, run commands and change keys from the keyboard on a desktop
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+On a desktop (a mouse or a trackpad, and a window wider than a phone's), one palette reaches the
+pane's files and every command of the app from the keyboard. A phone keeps the
+[keyboard toolbar](/usage/keyboard/) and has no palette.
+
+## Opening the Palette
+
+| Keys                                  | Opens                          |
+| ------------------------------------- | ------------------------------ |
+| Ctrl+P (Cmd+P on a Mac)               | Go to a file of the pane       |
+| Ctrl+Shift+P (Cmd+Shift+P on a Mac)   | Every command                  |
+| Ctrl+Shift+F (Cmd+Shift+F on a Mac)   | Search in files (Files panel)  |
+| The ⌘ button in the header            | Every command                  |
+
+What the palette lists depends on the first character typed in its box; delete it, or type
+another, to switch on the spot:
+
+| Starts with | Lists                                                    |
+| ----------- | -------------------------------------------------------- |
+| (nothing)   | Files of the pane on screen                              |
+| `>`         | Commands                                                 |
+| `:`         | A line of the file open in Files, `:120` or `:120:5`     |
+| `@`         | Tabs of every group, and the panes of this tab           |
+
+↑ and ↓ move through the list (from the last row back to the first), Page Up and Page Down move
+ten rows, Enter runs the row and Escape closes the palette. Pressing the key that opened a mode
+again moves down the list.
+
+## Going to a File
+
+- With nothing typed, the list holds the files you opened lately in this pane, latest first (the
+  one on screen left out), then the other open tabs. **Ctrl+P, Enter** goes back to the file
+  before.
+- Type part of a name: the pane's files are found as in the Files search, the ones you opened
+  lately first. Enter opens the file in the Files panel; Ctrl+Enter (Cmd+Enter) opens it in a tab
+  that stays. Enter pressed before the list arrives opens the first file found.
+- The files opened lately are kept on this device for each pane: at most 20, for 14 days, removed
+  when you log out. A sensitive file you chose to show is not kept in the list.
+
+## Commands
+
+Every command shows its group and its key, if it has one. One that cannot run now (no agent in
+the pane, a view-only device, nothing open) stays in the list, dimmed, with the reason under it,
+and Enter does nothing.
+
+The commands of the pane's agent are listed too: `/name` for Claude Code, `$name` for a Codex
+skill. Picked, the command goes in front of what you already typed in the Chat box, which then
+has the cursor; nothing is sent. Where the agent has no Chat box but runs in the terminal, the
+command is typed there, without Enter. A view-only device cannot use them.
+
+## Keys in the Terminal
+
+While the terminal has focus, its keys stay the program's: Ctrl+P on Linux and Windows goes to the
+pane (in bash, the previous command). Only Ctrl+Shift+P opens the palette from there, and on a Mac
+Cmd+P and Cmd+Shift+P, which the terminal never uses. A key you set can also work in the terminal
+only when it is one the terminal never uses: Ctrl+Shift with a letter other than C and V, or on a
+Mac Cmd with a letter, a digit or a punctuation key.
+
+## Changing Keys
+
+**Settings > Shortcuts** lists every command with its key:
+
+- **Change**, then press the new keys; Escape gives up. A key needs Ctrl (Cmd on a Mac) or is one
+  of F1 to F12, so typing is never taken over.
+- **Remove** leaves the command without a key; **Reset** gives it its default back, and **Reset
+  all shortcuts** every command.
+- **Also in the terminal** lets the key work while the terminal has focus, for the keys above.
+- A key two commands share is marked on both rows, and neither runs until you change one (Show
+  all commands always runs, so the palette stays reachable). Your own key takes over from a
+  default: that row says which command took it.
+- Refused: the keys the browser keeps (Ctrl+W, Ctrl+T, Ctrl+N, Ctrl+Q, Ctrl+Shift+T, Ctrl+Shift+N,
+  Ctrl+Shift+W, Ctrl+Tab), the editor's Ctrl+S, the terminal's Ctrl+Shift+C and Ctrl+Shift+V, and the text
+  keys Ctrl+A, C, V, X and Z.
+
+The keys are kept in this browser, for every server it opens, and stay after you log out.
+
+<Aside type="caution">
+  A browser can take a key before the page sees it. In Firefox, Ctrl+Shift+P opens a private
+  window unless Termote is installed as an app: use the header button, or give **Show all
+  commands** another key.
+</Aside>

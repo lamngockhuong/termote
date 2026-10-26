@@ -6,6 +6,7 @@ import {
   DRAFTS_LIMIT,
   flushAll,
   loadDrafts,
+  loadRecent,
   loadTabs,
   loadView,
   onDraftChangedElsewhere,
@@ -13,11 +14,13 @@ import {
   onSignedOutHere,
   PERSIST_TTL,
   persistKey,
+  RECENT_LIMIT,
   regroupPersisted,
   removeDraft,
   renamePersistedGroup,
   resetFilesPersist,
   SIGNED_OUT_KEY,
+  saveRecent,
   saveTabs,
   saveView,
   signedOut,
@@ -291,6 +294,46 @@ describe('views', () => {
   })
 })
 
+describe('files opened lately', () => {
+  const file = (path: string) => ({ root: '/r', path })
+
+  it('are written at once under the instance and pane key, and read back', () => {
+    saveRecent('1', [file('a'), file('b')])
+    expect(loadRecent('1')).toEqual([file('a'), file('b')])
+    const r = stored('termote-recent-files:i1:@1')
+    expect(r.savedAt).toBe(Date.now())
+    expect(loadRecent('2')).toEqual([])
+    saveRecent('1', [])
+    expect(localStorage.getItem('termote-recent-files:i1:@1')).toBeNull()
+    saveRecent('nope', [file('a')])
+    expect(localStorage.length).toBe(0)
+  })
+
+  it('keep at most the limit, and only well formed entries', () => {
+    const many = Array.from({ length: RECENT_LIMIT + 5 }, (_, i) =>
+      file(`f${i}`),
+    )
+    saveRecent('1', many)
+    expect(loadRecent('1')).toHaveLength(RECENT_LIMIT)
+    localStorage.setItem(
+      'termote-recent-files:i1:@1',
+      JSON.stringify({
+        v: 1,
+        pane: '@1',
+        group: 'main',
+        savedAt: Date.now(),
+        files: [file('ok'), { root: 1, path: 'x' }, null, { root: '/r' }],
+      }),
+    )
+    expect(loadRecent('1')).toEqual([file('ok')])
+    localStorage.setItem(
+      'termote-recent-files:i1:@1',
+      JSON.stringify({ v: 1, pane: '@1', group: 'main', files: 'x' }),
+    )
+    expect(loadRecent('1')).toEqual([])
+  })
+})
+
 describe('renamePersistedGroup', () => {
   it('moves the records of the renamed group to its new keys', () => {
     saveTabs('files', 'z:1', { n: 1 })
@@ -333,6 +376,7 @@ describe('signing out', () => {
     flushAll()
     writeDraft('1', draft('a'), 1)
     saveView('1', { view: 'files' })
+    saveRecent('1', [{ root: '/r', path: 'a' }])
     // Waiting to be written when the user signs out
     saveTabs('changes', '1', { n: 2 })
     signedOut()
@@ -354,6 +398,8 @@ describe('signing out', () => {
     expect(loadTabs('files', '1')).toBeNull()
     expect(loadView('1')).toBeNull()
     expect(loadDrafts('1')).toEqual([])
+    saveRecent('1', [{ root: '/r', path: 'a' }])
+    expect(loadRecent('1')).toEqual([])
   })
 
   it('in another tab stops this one and clears what it holds', () => {
@@ -403,6 +449,8 @@ describe('sweepExpired', () => {
     put('termote-files-tabs:i1:@1', { savedAt: old })
     put('termote-changes-tabs:i1:@1', { savedAt: now })
     put('termote-pane-view:i1:@1', {})
+    put('termote-recent-files:i1:@1', { savedAt: old })
+    put('termote-recent-files:i1:@2', { savedAt: now })
     // Written recently, edited long ago
     put('termote-file-drafts:i1:@1:a', { savedAt: now, editedAt: old })
     put('termote-file-drafts:i1:@1:b', { editedAt: now })
@@ -412,6 +460,7 @@ describe('sweepExpired', () => {
     expect(Object.keys(localStorage).sort()).toEqual([
       'termote-changes-tabs:i1:@1',
       'termote-file-drafts:i1:@1:b',
+      'termote-recent-files:i1:@2',
       'termote-settings',
     ])
   })

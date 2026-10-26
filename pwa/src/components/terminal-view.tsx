@@ -10,6 +10,7 @@ import {
 } from 'react'
 import { DEFAULT_SIZE } from '../hooks/use-font-size'
 import { MAX_SCROLL_LINES, scrollPane } from '../hooks/use-mux-api'
+import { terminalShortcut } from '../hooks/use-shortcuts'
 import { type StreamControl, useTermSocket } from '../hooks/use-term-socket'
 import { readToken, type UiStyle } from '../ui-style'
 import { safeUrl } from '../utils/markdown-safety'
@@ -588,9 +589,11 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
 
       // Ctrl+Shift+C with a selection copies it and sends nothing; without
       // one the keys go to the pane as before. Allowed view-only too: it
-      // only reads what the screen shows.
+      // only reads what the screen shows. Then an app shortcut marked to
+      // run in the terminal is left to the window's dispatcher.
       term.attachCustomKeyEventHandler((ev) => {
-        if (!isCopyShortcut(ev) || !term.hasSelection()) return true
+        if (!isCopyShortcut(ev) || !term.hasSelection())
+          return !terminalShortcut(ev)
         ev.preventDefault()
         void copyTerminalSelection(handleRef.current).then((result) => {
           if (result !== 'empty') onCopyRef.current?.(result, 'key')

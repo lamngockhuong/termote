@@ -1,5 +1,12 @@
 import { X } from 'lucide-react'
-import { type ReactNode, useCallback, useEffect, useId, useRef } from 'react'
+import {
+  type ReactNode,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+} from 'react'
 import { useDialogModal } from '../../hooks/use-dialog-modal'
 import { useIsMobile } from '../../hooks/use-media-query'
 import { useRestoreFocus } from '../../hooks/use-restore-focus'
@@ -19,11 +26,14 @@ interface Props {
   // dialog itself. Called in the same commit as the opening, so nothing typed
   // into the control can land between the focus and a selection it sets.
   focusOnOpen?: () => void
+  // Set to true before closing to leave focus where an action put it, not
+  // on the control that opened the sheet
+  keepFocus?: RefObject<boolean>
 }
 
 // A modal <dialog>: a bottom sheet on phones, a centred dialog on desktop.
 // Escape, the close button and a tap on the scrim close it; focus returns to
-// whatever had it when the sheet opened.
+// whatever had it when the sheet opened, unless keepFocus says otherwise.
 export function Sheet({ isOpen, onClose, ...rest }: Props) {
   if (!isOpen) return null
   return <OpenSheet onClose={onClose} {...rest} />
@@ -37,12 +47,13 @@ function OpenSheet({
   actions,
   className = '',
   focusOnOpen,
+  keepFocus,
 }: Omit<Props, 'isOpen'>) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const titleId = useId()
   const isMobile = useIsMobile()
 
-  useRestoreFocus()
+  useRestoreFocus(undefined, keepFocus)
   // A stable callback: callers pass inline functions, and a new one would
   // re-run useDialogModal (showModal on an open dialog, listener churn).
   const onCloseRef = useRef(onClose)

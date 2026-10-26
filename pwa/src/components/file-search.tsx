@@ -21,7 +21,7 @@ import { Switch } from './ui/switch'
 // Typing waits this long before a search is sent
 export const FIND_DEBOUNCE_MS = 150
 
-const ERRORS: Record<FilesError, string> = {
+export const FIND_ERRORS: Record<FilesError, string> = {
   unsupported: 'Not supported by this backend',
   'not-found': 'Directory not found',
   'not-allowed': "This directory can't be searched",
@@ -141,7 +141,7 @@ export function FileSearch({
   let body: ReactNode = children
   if (q) {
     if (found.status === 'error') {
-      body = <Note>{ERRORS[found.error]}</Note>
+      body = <Note>{FIND_ERRORS[found.error]}</Note>
     } else if (found.status !== 'done') {
       body = <Note>Searching…</Note>
     } else if (found.res.results.length === 0) {
