@@ -256,9 +256,28 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --filter termote...
 
+      # The browser comes from the Actions cache, keyed on the installed
+      # Playwright version. No --with-deps: the runner image already has
+      # every library Chromium needs, and that apt step only added fonts the
+      # specs never render while waiting minutes on a slow Ubuntu mirror.
+      - name: Playwright version
+        id: playwright
+        working-directory: pwa
+        run: |
+          v="$(node -p "require('@playwright/test/package.json').version")"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      # The runner image is in the key: a new image gets a fresh browser
+      # rather than one checked against the previous image's libraries
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ env.ImageOS }}-${{ steps.playwright.outputs.version }}
+
+      # A no-op when the cache restored this version's browser
       - name: Install Playwright browser
         working-directory: pwa
-        run: pnpm exec playwright install --with-deps chromium
+        run: pnpm exec playwright install chromium
 
       - name: Build PWA and server
         run: |
@@ -387,9 +406,28 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --filter termote...
 
+      # The browser comes from the Actions cache, keyed on the installed
+      # Playwright version. No --with-deps: the runner image already has
+      # every library Chromium needs, and that apt step only added fonts the
+      # specs never render while waiting minutes on a slow Ubuntu mirror.
+      - name: Playwright version
+        id: playwright
+        working-directory: pwa
+        run: |
+          v="$(node -p "require('@playwright/test/package.json').version")"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      # The runner image is in the key: a new image gets a fresh browser
+      # rather than one checked against the previous image's libraries
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ env.ImageOS }}-${{ steps.playwright.outputs.version }}
+
+      # A no-op when the cache restored this version's browser
       - name: Install Playwright browser
         working-directory: pwa
-        run: pnpm exec playwright install --with-deps chromium
+        run: pnpm exec playwright install chromium
 
       - name: Build PWA and server
         run: |
@@ -509,9 +547,28 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --filter termote...
 
+      # The browser comes from the Actions cache, keyed on the installed
+      # Playwright version. No --with-deps: the runner image already has
+      # every library Chromium needs, and that apt step only added fonts the
+      # specs never render while waiting minutes on a slow Ubuntu mirror.
+      - name: Playwright version
+        id: playwright
+        working-directory: pwa
+        run: |
+          v="$(node -p "require('@playwright/test/package.json').version")"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      # The runner image is in the key: a new image gets a fresh browser
+      # rather than one checked against the previous image's libraries
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ env.ImageOS }}-${{ steps.playwright.outputs.version }}
+
+      # A no-op when the cache restored this version's browser
       - name: Install Playwright browser
         working-directory: pwa
-        run: pnpm exec playwright install --with-deps chromium
+        run: pnpm exec playwright install chromium
 
       - name: Build PWA and server
         run: |
