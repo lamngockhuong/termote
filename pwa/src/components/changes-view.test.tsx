@@ -321,7 +321,7 @@ describe('ChangesView', () => {
     expect(await screen.findByTestId('diff')).toBeInTheDocument()
     mockChanges
       .mockRejectedValueOnce(
-        new RequestError(409, '', 'root changed', undefined, undefined, '/n'),
+        new RequestError(409, '', 'root changed', { root: '/n' }),
       )
       .mockResolvedValue(changes({ root: '/n' }))
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
@@ -341,7 +341,7 @@ describe('ChangesView', () => {
   it('tells once when the pane directory moved', async () => {
     const v = await show()
     mockChanges.mockRejectedValueOnce(
-      new RequestError(409, '', 'root changed', undefined, undefined, '/n'),
+      new RequestError(409, '', 'root changed', { root: '/n' }),
     )
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
     await settle()
@@ -964,7 +964,7 @@ describe('ChangesView tabs', () => {
     })
     mockChanges
       .mockRejectedValueOnce(
-        new RequestError(409, '', 'root changed', undefined, undefined, '/n'),
+        new RequestError(409, '', 'root changed', { root: '/n' }),
       )
       .mockResolvedValue(changes({ root: '/n', entries: TABS }))
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))

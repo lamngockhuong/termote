@@ -113,7 +113,7 @@ describe('PromptCard', () => {
   it('a changed screen replaces the card and says why', async () => {
     const next = { ...permission, promptId: 'id2', body: 'rm -rf build' }
     mockAnswer.mockRejectedValue(
-      new AgentRequestError(409, 'prompt_changed', 'x', undefined, next),
+      new AgentRequestError(409, 'prompt_changed', 'x', { prompt: next }),
     )
     renderCard(permission)
     await click(/1\.\s*Yes$/)
@@ -426,7 +426,7 @@ describe('PromptCard with several questions', () => {
   it('a tab that did not open says so and shows the dialog on screen', async () => {
     const now = { ...tab, promptId: 'id9' }
     mockAnswer.mockRejectedValueOnce(
-      new AgentRequestError(502, 'step_not_confirmed', 'x', undefined, now),
+      new AgentRequestError(502, 'step_not_confirmed', 'x', { prompt: now }),
     )
     renderCard(tab)
     await act(async () => {
@@ -569,7 +569,7 @@ describe('PromptCard free-text answer', () => {
     expect(field()).toHaveValue('a\tb')
     expect(onAnswered).not.toHaveBeenCalled()
     mockAnswer.mockRejectedValueOnce(
-      new AgentRequestError(413, 'text_too_long', 'long', 512),
+      new AgentRequestError(413, 'text_too_long', 'long', { limit: 512 }),
     )
     await click('Send')
     expect(

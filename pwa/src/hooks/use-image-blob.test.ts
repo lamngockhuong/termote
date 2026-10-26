@@ -220,14 +220,7 @@ describe('useImageBlob', () => {
   })
 
   it('hands a 409 to onRootChanged, else reports it', async () => {
-    const moved = new RequestError(
-      409,
-      '',
-      'root changed',
-      undefined,
-      undefined,
-      '/new',
-    )
+    const moved = new RequestError(409, '', 'root changed', { root: '/new' })
     mockImage.mockRejectedValue(moved)
     const onRootChanged = vi.fn()
     const { result } = hook({

@@ -10,8 +10,10 @@ import {
   createGroup,
   createPairingCode,
   createTab,
+  createTemplate,
   createWorktree,
   deleteFile,
+  deleteTemplate,
   fetchActivity,
   fetchAgentCommands,
   fetchAgentPrompt,
@@ -29,16 +31,19 @@ import {
   fetchSignins,
   fetchSnapshot,
   fetchSubagents,
+  fetchTemplates,
   fetchTerminalToken,
   fetchTranscript,
   findFiles,
   getPushKey,
+  importTemplates,
   listWorktrees,
   logout,
   moveGroup,
   moveTab,
   onViewOnlyRefusal,
   openWorktree,
+  previewTemplateImport,
   REQUEST_TIMEOUT_MS,
   RequestError,
   removeWorktree,
@@ -59,6 +64,7 @@ import {
   signInUrl,
   subscribePush,
   unsubscribePush,
+  updateTemplate,
   WORKTREE_REQUEST_TIMEOUT_MS,
 } from './use-mux-api'
 
@@ -1388,5 +1394,132 @@ describe('view-only refusals and paired devices', () => {
     await expect(revokeOtherSignins()).rejects.toMatchObject({
       code: 'full_needs_password',
     })
+  })
+})
+
+describe('prompt templates API', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  const tpl = {
+    id: '0123456789abcdef',
+    name: 'Review',
+    text: 'Review {{file}}',
+    updated: '2026-10-26T00:00:00Z',
+  }
+
+  it('lists the templates, or none from an answer without a list', async () => {
+    const { calls } = mockFetch(
+      { body: { templates: [tpl], readOnly: false } },
+      { body: { readOnly: true } },
+    )
+    expect(await fetchTemplates()).toEqual({
+      templates: [tpl],
+      readOnly: false,
+    })
+    expect(calls[0].url).toBe('/api/mux/templates')
+    expect(await fetchTemplates()).toEqual({ templates: [], readOnly: true })
+  })
+
+  it('a refused list is a read: no view-only toast', async () => {
+    const heard = vi.fn()
+    const off = onViewOnlyRefusal(heard)
+    mockFetch({ body: { code: 'templates_unavailable' }, status: 503 })
+    await expect(fetchTemplates()).rejects.toMatchObject({
+      status: 503,
+      code: 'templates_unavailable',
+    })
+    off()
+    expect(heard).not.toHaveBeenCalled()
+  })
+
+  it('creates, updates and deletes as JSON', async () => {
+    const { calls } = mockFetch(
+      { body: { template: tpl }, status: 201 },
+      { body: { template: tpl } },
+      { body: { ok: true } },
+    )
+    expect(await createTemplate({ name: 'Review', text: 't' })).toEqual(tpl)
+    expect(calls[0]).toMatchObject({
+      url: '/api/mux/templates',
+      init: { method: 'POST', headers: { 'Content-Type': 'application/json' } },
+    })
+    expect(JSON.parse(calls[0].init?.body as string)).toEqual({
+      name: 'Review',
+      text: 't',
+    })
+    await updateTemplate('a/b', { name: 'n', text: 't', updated: 'u' })
+    expect(calls[1].url).toBe('/api/mux/templates/a%2Fb')
+    expect(calls[1].init?.method).toBe('PUT')
+    expect(JSON.parse(calls[1].init?.body as string)).toEqual({
+      name: 'n',
+      text: 't',
+      updated: 'u',
+    })
+    await deleteTemplate(tpl.id, '2026-10-26T00:00:00.5+07:00')
+    expect(calls[2].url).toBe(
+      `/api/mux/templates/${tpl.id}?updated=2026-10-26T00%3A00%3A00.5%2B07%3A00`,
+    )
+    expect(calls[2].init).toMatchObject({ method: 'DELETE', body: undefined })
+  })
+
+  it('a conflict carries the template as it is now', async () => {
+    mockFetch({
+      body: { code: 'conflict', error: 'changed', template: tpl },
+      status: 409,
+    })
+    const err = await updateTemplate(tpl.id, {
+      name: 'n',
+      text: 't',
+      updated: 'old',
+    }).catch((e) => e)
+    expect(err).toBeInstanceOf(RequestError)
+    expect(err).toMatchObject({ status: 409, code: 'conflict', template: tpl })
+  })
+
+  it('an invalid template names its place and field', async () => {
+    mockFetch({
+      body: { code: 'invalid_template', error: 'x', index: 3, field: 'text' },
+      status: 400,
+    })
+    await expect(previewTemplateImport([])).rejects.toMatchObject({
+      code: 'invalid_template',
+      index: 3,
+      field: 'text',
+    })
+  })
+
+  it('previews an import, then imports with what it replaces', async () => {
+    const list = [{ name: 'a', text: 'b' }]
+    const { calls } = mockFetch(
+      { body: { added: ['a'], replaced: [] } },
+      { body: {} },
+      { body: { added: 1, replaced: 0 } },
+      { body: {} },
+    )
+    expect(await previewTemplateImport(list)).toEqual({
+      added: ['a'],
+      replaced: [],
+    })
+    expect(calls[0].url).toBe('/api/mux/templates/import?dryRun=1')
+    expect(JSON.parse(calls[0].init?.body as string)).toEqual({
+      templates: list,
+    })
+    expect(await previewTemplateImport(list)).toEqual({
+      added: [],
+      replaced: [],
+    })
+    expect(await importTemplates(list, ['x'])).toEqual({
+      added: 1,
+      replaced: 0,
+    })
+    expect(calls[2].url).toBe('/api/mux/templates/import')
+    expect(JSON.parse(calls[2].init?.body as string)).toEqual({
+      templates: list,
+      replace: ['x'],
+    })
+    expect(await importTemplates(list, [])).toEqual({ added: 0, replaced: 0 })
   })
 })

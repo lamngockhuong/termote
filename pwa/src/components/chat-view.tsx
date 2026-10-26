@@ -11,6 +11,7 @@ import type { ViewProps } from '../app-views'
 import { agentLabel, chatInputAgent } from '../chat-agents'
 import { useAgentPrompt } from '../hooks/use-agent-prompt'
 import { useAgentTranscript } from '../hooks/use-agent-transcript'
+import { useDomSelection } from '../hooks/use-dom-selection'
 import type { TranscriptEntry } from '../hooks/use-mux-api'
 import type { StartRecord } from '../hooks/use-start-agent'
 import { toAgentStatus } from '../types/session'
@@ -141,6 +142,8 @@ function AgentChat({
   )
   const agent = agentLabel(session.agentName)
   const listRef = useRef<HTMLDivElement>(null)
+  // Text selected in the conversation, for a template's {{selection}}
+  useDomSelection(listRef, session.paneId, 'the Chat')
   const contentRef = useRef<HTMLDivElement>(null)
   // The first entry on screen while reading above the bottom, and how far
   // below the list's top it was

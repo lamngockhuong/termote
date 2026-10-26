@@ -15,6 +15,7 @@ import {
   hydrateDrafts,
   isDraftDirty,
   isOpenable,
+  peekFilesState,
   requestFilesFocus,
   resetFilesStores,
   useDirtyCheck,
@@ -60,6 +61,14 @@ describe('filesError', () => {
     [new Error('offline'), 'unavailable'],
   ])('%s is %s', (err, want) => {
     expect(filesError(err)).toBe(want)
+  })
+})
+
+describe('peekFilesState', () => {
+  it('reads a store without making one', () => {
+    expect(peekFilesState('%9')).toBeNull()
+    renderHook(() => useFiles('%9'))
+    expect(peekFilesState('%9')?.tabs).toEqual([])
   })
 })
 
@@ -156,7 +165,7 @@ describe('useFiles', () => {
     mockTree
       .mockResolvedValueOnce(tree('', [dir('src')]))
       .mockRejectedValueOnce(
-        new RequestError(409, '', 'root changed', undefined, undefined, '/n'),
+        new RequestError(409, '', 'root changed', { root: '/n' }),
       )
       .mockResolvedValueOnce(tree('', [file('n')], '/n'))
     const { result } = renderHook(() => useFiles('%1'))
@@ -1345,7 +1354,7 @@ describe('tabs kept on the device', () => {
     edit('b.md')
     mockTree
       .mockRejectedValueOnce(
-        new RequestError(409, '', 'root changed', undefined, undefined, '/n'),
+        new RequestError(409, '', 'root changed', { root: '/n' }),
       )
       .mockResolvedValue(tree('', [], '/n'))
     const { result } = renderHook(() => useFiles('%1'))

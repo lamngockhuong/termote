@@ -780,6 +780,11 @@ function storeFor(paneId: string): Store {
   return s
 }
 
+// paneId's files state as it is, without making a store for it (null when
+// nothing read it yet): a template's {{file}}
+export const peekFilesState = (paneId: string): FilesState | null =>
+  stores.get(paneId)?.get() ?? null
+
 // The file tree of paneId's root
 export function useFiles(paneId: string) {
   const store = storeFor(paneId)

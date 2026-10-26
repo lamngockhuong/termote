@@ -62,6 +62,8 @@ interface Props {
   notify: (message: string) => void
   // A sensitive file the user chose to show
   reveal?: boolean
+  // Text the user selected (not for a sensitive file shown)
+  onSelectText?: (text: string) => void
   // Where it starts scrolled to (a tab shown again)
   scrollTop?: number
   // Where the desktop editor puts the cursor (a search result, a diff's
@@ -169,6 +171,7 @@ export function FileEditor(props: Props) {
               onSave={props.onSave}
               notify={props.notify}
               reveal={props.reveal}
+              onSelectText={props.onSelectText}
               scrollTop={props.scrollTop}
               at={props.at}
             />
@@ -191,6 +194,7 @@ function PlainEditor({
   rootMoved,
   dirty,
   onSave,
+  onSelectText,
   scrollTop,
 }: Props) {
   const area = useRef<HTMLTextAreaElement>(null)
@@ -214,6 +218,11 @@ function PlainEditor({
       value={text}
       onChange={(e) => onChange(e.target.value)}
       onKeyDown={onKeyDown}
+      onSelect={(e) => {
+        const el = e.currentTarget
+        if (el.selectionStart !== el.selectionEnd)
+          onSelectText?.(el.value.slice(el.selectionStart, el.selectionEnd))
+      }}
       readOnly={saving}
       aria-busy={saving}
       wrap={wrap ? 'soft' : 'off'}

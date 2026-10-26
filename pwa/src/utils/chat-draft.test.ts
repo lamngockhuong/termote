@@ -1,5 +1,8 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  clearChatDrafts,
+  clearChatDraftsOnSignOut,
+  isTextInsert,
   loadDraft,
   onDraftInsert,
   remapChatDrafts,
@@ -7,6 +10,7 @@ import {
   saveDraft,
   takeDraftInsert,
 } from './chat-draft'
+import { resetFilesPersist, SIGNED_OUT_KEY, signedOut } from './files-persist'
 
 afterEach(() => {
   sessionStorage.clear()
@@ -73,5 +77,67 @@ describe('commands asked for a composer', () => {
     // Focus only: no command
     requestDraftInsert('%1')
     expect(takeDraftInsert('%1')).toBeNull()
+  })
+})
+
+describe('signing out', () => {
+  beforeEach(() => clearChatDraftsOnSignOut())
+  afterEach(() => resetFilesPersist())
+
+  it('clears every draft of this tab and what waits for one', () => {
+    saveDraft('1', 'a')
+    saveDraft('2', 'b')
+    sessionStorage.setItem('other', 'kept')
+    requestDraftInsert('1')
+    signedOut()
+    expect(loadDraft('1')).toBe('')
+    expect(loadDraft('2')).toBe('')
+    expect(sessionStorage.getItem('other')).toBe('kept')
+    expect(takeDraftInsert('1')).toBeUndefined()
+  })
+
+  it('in another tab clears them too', () => {
+    saveDraft('1', 'a')
+    window.dispatchEvent(
+      new StorageEvent('storage', { key: SIGNED_OUT_KEY, newValue: '1' }),
+    )
+    expect(loadDraft('1')).toBe('')
+  })
+
+  it('without storage clears what it can', () => {
+    vi.spyOn(Object, 'keys').mockImplementationOnce(() => {
+      throw new Error('denied')
+    })
+    requestDraftInsert('1')
+    clearChatDrafts()
+    expect(takeDraftInsert('1')).toBeUndefined()
+  })
+})
+
+describe('text for the draft', () => {
+  it('waits for its pane, for the agent it was asked for only', () => {
+    requestDraftInsert('1', { text: 'a' }, 'claude')
+    expect(isTextInsert({ text: 'a' })).toBe(true)
+    expect(isTextInsert(null)).toBe(false)
+    expect(isTextInsert({ name: 'x', source: 'user' })).toBe(false)
+    expect(takeDraftInsert('1', 'codex')).toBeUndefined()
+    expect(takeDraftInsert('1', 'claude')).toBeUndefined()
+    requestDraftInsert('1', { text: 'a' }, 'claude')
+    expect(takeDraftInsert('1', 'claude')).toEqual({ text: 'a' })
+    // Asked without an agent: any takes it
+    requestDraftInsert('1', { text: 'b' })
+    expect(takeDraftInsert('1', 'codex')).toEqual({ text: 'b' })
+  })
+
+  it('follows its pane when ids shift; one whose pane is gone is dropped', () => {
+    requestDraftInsert('1', { text: 'a' })
+    requestDraftInsert('3', { text: 'c' })
+    remapChatDrafts({
+      moved: new Map([['1', '2']]),
+      stale: new Set(['1', '2', '3']),
+    })
+    expect(takeDraftInsert('1')).toBeUndefined()
+    expect(takeDraftInsert('2')).toEqual({ text: 'a' })
+    expect(takeDraftInsert('3')).toBeUndefined()
   })
 })

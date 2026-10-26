@@ -57,16 +57,7 @@ const rename = async () => {
   })
 }
 const refused = (status: number, code: string, root?: string, path?: string) =>
-  new RequestError(
-    status,
-    code,
-    'x',
-    undefined,
-    undefined,
-    root,
-    undefined,
-    path,
-  )
+  new RequestError(status, code, 'x', { root, path })
 
 describe('RenameFileDialog', () => {
   it('starts with the path, the name without its extension selected', () => {

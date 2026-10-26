@@ -22,6 +22,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { useDomSelection } from '../hooks/use-dom-selection'
 import {
   type FileDraft,
   type FilesError,
@@ -49,6 +50,7 @@ import { HIGHLIGHT_MAX_BYTES } from '../utils/highlight'
 import { isImagePath, isSvgPath } from '../utils/image-path'
 import { lazyRetry } from '../utils/lazy-retry'
 import { isMarkdownPath, type LinkPath } from '../utils/markdown-links'
+import { recordSelection } from '../utils/pane-selection'
 import type { TableLayout } from '../utils/table-columns'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { CodeBlock } from './code-block'
@@ -487,6 +489,11 @@ export function FileViewer({
   const sensitive = asImage
     ? imageErrorCode(image) === 'sensitive'
     : state.kind === 'sensitive'
+  // Text selected in the file, for a template's {{selection}}: never from a
+  // sensitive file the user chose to show
+  const selectionPane = reveal || mine?.reveal ? undefined : paneId
+  const rootRef = useRef<HTMLDivElement>(null)
+  useDomSelection(rootRef, selectionPane, path)
   const size = asImage
     ? image.status === 'ready'
       ? image.size
@@ -814,6 +821,7 @@ export function FileViewer({
 
   return (
     <div
+      ref={rootRef}
       className="flex min-h-0 flex-1 flex-col"
       // Each view of the text marks the element it scrolls
       onScrollCapture={(e) => {
@@ -971,6 +979,11 @@ export function FileViewer({
           onCopy={() => copyText(mine.text)}
           notify={notify}
           reveal={mine.reveal}
+          onSelectText={
+            selectionPane === undefined
+              ? undefined
+              : (text) => recordSelection(selectionPane, text, path)
+          }
           scrollTop={scrolled.current}
           at={pickInEditor ? pick : editAt}
         />

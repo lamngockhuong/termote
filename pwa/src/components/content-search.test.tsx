@@ -325,7 +325,7 @@ describe('ContentSearch', () => {
   it('a moved root goes to the caller', async () => {
     const onRootChanged = vi.fn()
     mockSearch.mockRejectedValueOnce(
-      new RequestError(409, '', 'x', undefined, undefined, '/new'),
+      new RequestError(409, '', 'x', { root: '/new' }),
     )
     render(<Harness onRootChanged={onRootChanged} />)
     await type('foo')

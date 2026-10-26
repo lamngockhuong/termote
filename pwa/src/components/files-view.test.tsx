@@ -306,14 +306,7 @@ describe('FilesView', () => {
     expect(await screen.findByTestId('code-block')).toBeInTheDocument()
     // The pane moved to another repo: the same .env there must ask again
     mockTree.mockRejectedValueOnce(
-      new RequestError(
-        409,
-        '',
-        'root changed',
-        undefined,
-        undefined,
-        '/home/kim/other',
-      ),
+      new RequestError(409, '', 'root changed', { root: '/home/kim/other' }),
     )
     // The server answers with the root it has now
     mockTree.mockImplementation(async (_p: string, path: string) => ({
@@ -362,7 +355,7 @@ describe('FilesView', () => {
   it('tells once when the pane directory moved', async () => {
     const p = await show()
     mockTree.mockRejectedValueOnce(
-      new RequestError(409, '', 'root changed', undefined, undefined, '/n'),
+      new RequestError(409, '', 'root changed', { root: '/n' }),
     )
     fireEvent.click(item('src'))
     await act(async () => {})
@@ -947,20 +940,11 @@ describe('FilesView delete', () => {
     mockDelete.mockResolvedValue({ root: '/r', path: '.env', trashId: 't' })
     mockRestore
       .mockRejectedValueOnce(
-        new RequestError(
-          409,
-          'exists',
-          'x',
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          'n/.env',
-        ),
+        new RequestError(409, 'exists', 'x', { path: 'n/.env' }),
       )
       .mockRejectedValueOnce(new RequestError(409, 'exists', 'x'))
       .mockRejectedValueOnce(
-        new RequestError(409, '', 'root changed', undefined, undefined, '/n'),
+        new RequestError(409, '', 'root changed', { root: '/n' }),
       )
       .mockRejectedValueOnce(new Error('offline'))
     const p = await withTrash()
@@ -1008,17 +992,7 @@ describe('FilesView delete', () => {
 
   it('a swapped file in the trash still gets an Undo', async () => {
     mockDelete.mockRejectedValue(
-      new RequestError(
-        409,
-        'changed',
-        'x',
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        'sw',
-      ),
+      new RequestError(409, 'changed', 'x', { trashId: 'sw' }),
     )
     const p = await withTrash()
     await choose('README.md')
@@ -1323,17 +1297,7 @@ describe('FilesView rename', () => {
       code: string,
       root?: string,
       path?: string,
-    ) =>
-      new RequestError(
-        status,
-        code,
-        'x',
-        undefined,
-        undefined,
-        root,
-        undefined,
-        path,
-      )
+    ) => new RequestError(status, code, 'x', { root, path })
     expect(
       (await undo(refused(409, 'exists', undefined, 'README.md')))[0],
     ).toBe('A file now exists at README.md; not renamed back')
@@ -1396,16 +1360,7 @@ describe('FilesView rename', () => {
 
   it('a name taken: Open it opens that file in a tab', async () => {
     mockRename.mockRejectedValue(
-      new RequestError(
-        409,
-        'exists',
-        'x',
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        'src/a.ts',
-      ),
+      new RequestError(409, 'exists', 'x', { path: 'src/a.ts' }),
     )
     mockContent.mockResolvedValue({
       root: ROOT,
@@ -1430,16 +1385,7 @@ describe('FilesView rename', () => {
 
   it('a file swapped while renamed: told where it is', async () => {
     mockRename.mockRejectedValue(
-      new RequestError(
-        409,
-        'changed',
-        'x',
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        'X.md',
-      ),
+      new RequestError(409, 'changed', 'x', { path: 'X.md' }),
     )
     const p = await show()
     ask('README.md')
@@ -1761,7 +1707,7 @@ describe('FilesView tabs', () => {
 
   async function moveRoot() {
     mockTree.mockRejectedValueOnce(
-      new RequestError(409, '', 'root changed', undefined, undefined, '/n'),
+      new RequestError(409, '', 'root changed', { root: '/n' }),
     )
     mockTree.mockImplementation(async (_p: string, path: string) => ({
       root: '/n',

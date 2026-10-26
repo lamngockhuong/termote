@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ViewProps } from '../app-views'
 import { resetChatAttachments } from '../hooks/use-chat-attachments'
 import {
@@ -8,6 +8,11 @@ import {
   AgentRequestError,
 } from '../hooks/use-mux-api'
 import { requestDraftInsert } from '../utils/chat-draft'
+import {
+  onTemplateFill,
+  type TemplateFill,
+  takeTemplateFill,
+} from '../utils/template-fill-request'
 import { byteLength, ChatComposer, MAX_MESSAGE_BYTES } from './chat-composer'
 
 const transcript = {
@@ -57,6 +62,25 @@ vi.mock('../hooks/use-agent-commands', () => ({
   },
 }))
 
+const promptTemplates = vi.hoisted(() => ({
+  templates: [] as {
+    id: string
+    name: string
+    text: string
+    updated: string
+  }[],
+  refresh: vi.fn(async () => {}),
+}))
+vi.mock('../hooks/use-prompt-templates', () => ({
+  usePromptTemplates: () => ({
+    templates: promptTemplates.templates,
+    readOnly: false,
+    loaded: true,
+    loading: false,
+    error: false,
+    refresh: promptTemplates.refresh,
+  }),
+}))
 const mockSend = vi.fn()
 vi.mock('../hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-mux-api')>()),
@@ -281,10 +305,7 @@ describe('ChatComposer images', () => {
         400,
         'invalid_request',
         'an image is no longer on the server',
-        undefined,
-        undefined,
-        undefined,
-        ['id2'],
+        { images: ['id2'] },
       ),
     )
     await send()
@@ -619,12 +640,9 @@ describe('ChatComposer', () => {
     'a %s refusal keeps the draft and says why',
     async (code, status, msg, shown, terminal) => {
       mockSend.mockRejectedValue(
-        new AgentRequestError(
-          status,
-          code,
-          msg,
-          code === 'text_too_long' ? 16384 : undefined,
-        ),
+        new AgentRequestError(status, code, msg, {
+          limit: code === 'text_too_long' ? 16384 : undefined,
+        }),
       )
       render(<ChatComposer {...props()} />)
       type('hello')
@@ -810,7 +828,7 @@ describe('ChatComposer', () => {
       options: [{ index: 1, label: 'Yes' }],
     }
     mockAnswerPrompt.mockRejectedValueOnce(
-      new AgentRequestError(409, 'prompt_changed', 'x', undefined, next),
+      new AgentRequestError(409, 'prompt_changed', 'x', { prompt: next }),
     )
     render(<ChatComposer {...props()} />)
     await act(async () => {
@@ -1259,5 +1277,185 @@ describe('ChatComposer', () => {
       })
       expect(mockSend).not.toHaveBeenCalled()
     })
+  })
+})
+
+describe('ChatComposer prompt templates', () => {
+  const withTemplates = (over: Partial<ViewProps> = {}) =>
+    props({
+      mux: {
+        backend: 'tmux',
+        caps: {
+          clientSideSelect: false,
+          copyMode: true,
+          agentChat: true,
+          templates: true,
+        },
+      },
+      ...over,
+    })
+  const review = {
+    id: 't1',
+    name: 'Code review',
+    text: 'Review {{input}}',
+    updated: 'u',
+  }
+  const deploy = {
+    id: 't2',
+    name: 'Zebra deploy',
+    text: 'ship it',
+    updated: 'u',
+  }
+  const options = () => screen.queryAllByRole('option')
+  const key = (k: string, init: Partial<KeyboardEventInit> = {}) =>
+    fireEvent.keyDown(box(), { key: k, ...init })
+  // Picks made, as the fill dialog takes them
+  let fills: TemplateFill[] = []
+  let off = () => {}
+
+  beforeEach(() => {
+    promptTemplates.templates = [review, deploy]
+    fills = []
+    off = onTemplateFill(() => {
+      const f = takeTemplateFill()
+      if (f) fills.push(f)
+    })
+    HTMLDialogElement.prototype.showModal = vi.fn(function (
+      this: HTMLDialogElement,
+    ) {
+      this.setAttribute('open', '')
+    })
+    HTMLDialogElement.prototype.close = vi.fn()
+  })
+  afterEach(() => off())
+
+  it('has no Templates button or group without them on the server', () => {
+    render(<ChatComposer {...props()} />)
+    expect(screen.queryByRole('button', { name: 'Templates' })).toBeNull()
+    type('/zeb')
+    expect(screen.queryByText('Templates')).toBeNull()
+    expect(promptTemplates.refresh).not.toHaveBeenCalled()
+  })
+
+  it('the Templates button picks one for the fill dialog; Manage opens Settings', () => {
+    const openSettings = vi.fn()
+    const { rerender } = render(
+      <ChatComposer {...withTemplates({ openSettings })} />,
+    )
+    const button = screen.getByRole('button', { name: 'Templates' })
+    expect(button).toHaveAttribute('aria-haspopup', 'dialog')
+    fireEvent.click(button)
+    expect(promptTemplates.refresh).toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('option', { name: /Zebra deploy/ }))
+    expect(fills).toEqual([{ paneId: '%3', templateId: 't2', agent: 'claude' }])
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(mockSend).not.toHaveBeenCalled()
+
+    fireEvent.click(button)
+    fireEvent.click(screen.getByRole('button', { name: 'Manage templates…' }))
+    expect(openSettings).toHaveBeenCalledWith('templates')
+    expect(screen.queryByRole('dialog')).toBeNull()
+    fireEvent.click(button)
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+
+    // No Settings to open: no Manage
+    rerender(<ChatComposer {...withTemplates()} />)
+    fireEvent.click(button)
+    expect(
+      screen.queryByRole('button', { name: 'Manage templates…' }),
+    ).toBeNull()
+  })
+
+  it('lists them after the commands in the / list, never highlighted first', () => {
+    render(<ChatComposer {...withTemplates()} />)
+    type('/zeb')
+    expect(promptTemplates.refresh).toHaveBeenCalled()
+    const group = screen.getByRole('group', { name: 'Templates' })
+    expect(group).toHaveTextContent('Zebra deploy')
+    // No command matches: nothing highlighted, Enter does what it did
+    expect(box()).not.toHaveAttribute('aria-activedescendant')
+    key('Enter', { ctrlKey: true })
+    expect(fills).toEqual([])
+    key('Enter')
+    expect(fills).toEqual([])
+    expect(box()).toHaveValue('/zeb')
+    // An arrow goes there; Enter picks it, the draft kept until Insert
+    key('ArrowDown')
+    expect(box()).toHaveAttribute('aria-activedescendant', options()[0].id)
+    key('Enter')
+    expect(fills).toEqual([
+      {
+        paneId: '%3',
+        templateId: 't2',
+        agent: 'claude',
+        at: { start: 0, end: 4, was: '/zeb' },
+      },
+    ])
+    expect(box()).toHaveValue('/zeb')
+    expect(screen.queryByRole('listbox')).toBeNull()
+  })
+
+  it('a command found is highlighted first; arrows reach a template', () => {
+    render(<ChatComposer {...withTemplates()} />)
+    promptTemplates.templates = [review, { ...deploy, name: 'compact notes' }]
+    type('/comp')
+    const all = options()
+    expect(all.map((o) => o.textContent?.slice(0, 8))).toEqual([
+      '/compact',
+      'compact ',
+    ])
+    expect(box()).toHaveAttribute('aria-activedescendant', all[0].id)
+    key('ArrowUp')
+    expect(box()).toHaveAttribute('aria-activedescendant', all[1].id)
+    key('Tab')
+    expect(fills[0]).toMatchObject({ templateId: 't2' })
+    // The other way round: ArrowUp from nothing highlighted ends on the last
+    // A pick holds the list shut while the draft is a "/" word
+    fills = []
+    type('')
+    promptTemplates.templates = [review, deploy]
+    type('/zeb')
+    expect(box()).not.toHaveAttribute('aria-activedescendant')
+    key('ArrowUp')
+    expect(box()).toHaveAttribute('aria-activedescendant', options()[0].id)
+    fireEvent.click(options()[0])
+    expect(fills[0]).toMatchObject({ templateId: 't2' })
+  })
+
+  it('a filled template replaces the /name, or goes where the caret was', () => {
+    render(<ChatComposer {...withTemplates()} />)
+    type('/de')
+    act(() =>
+      requestDraftInsert(
+        '%3',
+        { text: 'ship it', at: { start: 0, end: 3, was: '/de' } },
+        'claude',
+      ),
+    )
+    expect(box()).toHaveValue('ship it')
+    expect(box()).toHaveFocus()
+    expect((box() as HTMLTextAreaElement).selectionStart).toBe(7)
+    // The /name changed meanwhile: at the caret instead
+    ;(box() as HTMLTextAreaElement).setSelectionRange(4, 4)
+    act(() =>
+      requestDraftInsert(
+        '%3',
+        { text: 'X', at: { start: 0, end: 3, was: '/de' } },
+        'claude',
+      ),
+    )
+    expect(box()).toHaveValue('shipX it')
+    expect(mockSend).not.toHaveBeenCalled()
+    // Asked for another agent: dropped
+    act(() => requestDraftInsert('%3', { text: 'nope' }, 'codex'))
+    expect(box()).toHaveValue('shipX it')
+  })
+
+  it('a template for a composer never focused goes at the end of the draft', () => {
+    sessionStorage.setItem('termote-chat-draft:%3', 'draft ')
+    requestDraftInsert('%3', { text: 'more' }, 'claude')
+    render(<ChatComposer {...withTemplates()} />)
+    expect(box()).toHaveValue('draft more')
   })
 })

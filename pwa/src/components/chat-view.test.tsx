@@ -5,6 +5,7 @@ import { ThemeProvider } from '../contexts/theme-context'
 import type { TranscriptState } from '../hooks/use-agent-transcript'
 import { resetChatAttachments } from '../hooks/use-chat-attachments'
 import type { AgentPrompt, TranscriptEntry } from '../hooks/use-mux-api'
+import { paneSelection, resetPaneSelections } from '../utils/pane-selection'
 import ChatView, { chatLayout, RENDER_WINDOW } from './chat-view'
 import { OpenTerminalButton } from './open-terminal-button'
 
@@ -127,6 +128,25 @@ describe('ChatView', () => {
     expect(screen.getByText('Claude Code · claude')).toBeInTheDocument()
     expect(screen.getByText('message 2')).toBeInTheDocument()
     expect(screen.getByText('Reconnecting…')).toBeInTheDocument()
+  })
+
+  it('keeps text selected in the conversation for a template', () => {
+    resetPaneSelections()
+    set({ entries: entries(1) })
+    render(<ChatView {...props} />)
+    const range = document.createRange()
+    range.selectNodeContents(screen.getByText('message 0'))
+    const sel = document.getSelection() as Selection
+    sel.removeAllRanges()
+    sel.addRange(range)
+    act(() => {
+      document.dispatchEvent(new Event('selectionchange'))
+    })
+    expect(paneSelection('0')).toEqual({
+      text: 'message 0',
+      source: 'the Chat',
+    })
+    sel.removeAllRanges()
   })
 
   it('shows the hidden characters of the session name', () => {

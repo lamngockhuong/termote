@@ -66,6 +66,9 @@ export interface CodeEditorProps {
   // A sensitive file the user chose to show: what Vim kept of it (its
   // registers, its search history) is dropped when the editor closes
   reveal?: boolean
+  // Text the user selected; the editor's DOM holds only the lines on screen,
+  // so a page's selection would miss the rest
+  onSelectText?: (text: string) => void
   // Where it starts scrolled to (a tab shown again)
   scrollTop?: number
   at?: EditorAt
@@ -173,6 +176,7 @@ export default function CodeEditor({
   onSave,
   notify,
   reveal,
+  onSelectText,
   scrollTop,
   at,
 }: CodeEditorProps) {
@@ -183,8 +187,24 @@ export default function CodeEditor({
   const view = useRef<EditorView>(null)
   // The latest props, read by the key bindings, the listener and the effects
   // that run later, so the editor never has to be configured again for them
-  const latest = useRef({ onChange, onSave, canSave, notify, text, reveal })
-  latest.current = { onChange, onSave, canSave, notify, text, reveal }
+  const latest = useRef({
+    onChange,
+    onSave,
+    canSave,
+    notify,
+    text,
+    reveal,
+    onSelectText,
+  })
+  latest.current = {
+    onChange,
+    onSave,
+    canSave,
+    notify,
+    text,
+    reveal,
+    onSelectText,
+  }
   // What the editor told onChange last: a render with it is no change
   const lastEmitted = useRef(text)
   const parts = useRef({
@@ -250,6 +270,18 @@ export default function CodeEditor({
         const next = u.state.doc.toString()
         lastEmitted.current = next
         latest.current.onChange(next)
+      }),
+      // Apart from the one above, which leaves out a change of selection alone
+      EditorView.updateListener.of((u) => {
+        // A selection moved by a text set from the props is not the user's
+        if (
+          !u.selectionSet ||
+          u.transactions.some((t) => t.annotation(external))
+        )
+          return
+        const { from, to } = u.state.selection.main
+        if (from !== to)
+          latest.current.onSelectText?.(u.state.sliceDoc(from, to))
       }),
     ]
     const v = new EditorView({

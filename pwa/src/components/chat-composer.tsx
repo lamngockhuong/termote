@@ -1,4 +1,4 @@
-import { ImagePlus, SendHorizontal } from 'lucide-react'
+import { FileText, ImagePlus, SendHorizontal } from 'lucide-react'
 import {
   type ChangeEvent,
   type ClipboardEvent,
@@ -18,14 +18,21 @@ import { useAgentCommands } from '../hooks/use-agent-commands'
 import { useAgentPrompt } from '../hooks/use-agent-prompt'
 import { useAgentTranscript } from '../hooks/use-agent-transcript'
 import { useChatAttachments } from '../hooks/use-chat-attachments'
-import { AgentRequestError, sendAgentMessage } from '../hooks/use-mux-api'
+import {
+  AgentRequestError,
+  type PromptTemplate,
+  sendAgentMessage,
+} from '../hooks/use-mux-api'
+import { usePromptTemplates } from '../hooks/use-prompt-templates'
 import { toAgentStatus } from '../types/session'
 import {
+  isTextInsert,
   loadDraft,
   onDraftInsert,
   saveDraft,
   takeDraftInsert,
 } from '../utils/chat-draft'
+import { matchTemplates } from '../utils/prompt-templates'
 import {
   applyPick,
   BUILTIN_COMMANDS,
@@ -38,12 +45,14 @@ import {
   mergeSlashCommands,
   type SlashCommand,
 } from '../utils/slash-commands'
+import { requestTemplateFill } from '../utils/template-fill-request'
 import { imageFromClipboard, pickImageFile } from '../utils/upload-image'
 import { TERMINAL_VIEW_ID } from '../view-ids'
 import { ChatAttachments } from './chat-attachments'
 import { OpenTerminalButton } from './open-terminal-button'
 import { PromptCard, WaitingCard } from './prompt-card'
 import { SlashCommandList, slashOptionId } from './slash-command-list'
+import { TemplatePicker } from './template-picker'
 import { Banner, type BannerVariant } from './ui/banner'
 import { IconButton } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
@@ -136,6 +145,7 @@ export function ChatComposer({
   showView,
   mux,
   readOnly,
+  openSettings,
 }: ViewProps) {
   const paneId = session.paneId ?? ''
   const agent = agentLabel(session.agentName)
@@ -179,7 +189,6 @@ export function ChatComposer({
   // The word being typed: another one opens the list again after Escape
   const word = q ? `${q.trigger}${q.start}` : null
   const [dismissed, setDismissed] = useState(false)
-  const [active, setActive] = useState(0)
   const listOpen = q !== null && !dismissed
   const custom = useAgentCommands(paneId, listOpen && q?.trigger === trigger)
   const builtins = BUILTIN_COMMANDS[agentName] ?? NO_COMMANDS
@@ -192,6 +201,34 @@ export function ChatComposer({
     [builtins, custom, trigger],
   )
   const listTrigger = q?.trigger ?? '/'
+  // Prompt templates, after the commands in the "/" list (never highlighted
+  // first, so Enter does what it did) and behind the Templates button
+  const templatesOn = !!mux.caps.templates
+  const prompts = usePromptTemplates()
+  const [pickerOpen, setPickerOpen] = useState(false)
+  // The template picked, asked for once the picker is gone: its text, or
+  // the fill dialog, would else open while the picker's modal makes the
+  // message box unfocusable
+  const picked = useRef<string | null>(null)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs as the picker closes, with the pane and agent of that render
+  useEffect(() => {
+    const id = picked.current
+    if (pickerOpen || id === null) return
+    picked.current = null
+    requestTemplateFill({ paneId, templateId: id, agent: session.agentName })
+  }, [pickerOpen])
+  const slashTemplates = listOpen && listTrigger === '/' && templatesOn
+  const { refresh: refreshPrompts } = prompts
+  useEffect(() => {
+    if (slashTemplates) void refreshPrompts()
+  }, [slashTemplates, refreshPrompts])
+  const templateMatches = useMemo(
+    () =>
+      slashTemplates && query !== null
+        ? matchTemplates(prompts.templates, query)
+        : [],
+    [slashTemplates, prompts.templates, query],
+  )
   const matches = useMemo(
     () =>
       listOpen && query !== null
@@ -202,8 +239,20 @@ export function ChatComposer({
         : [],
     [listOpen, commands, query, listTrigger],
   )
-  // biome-ignore lint/correctness/useExhaustiveDependencies: a new query or list starts at the top
-  useEffect(() => setActive(0), [query, matches.length])
+  // Every row of the list: the commands, then the templates
+  const listRows = matches.length + templateMatches.length
+  // The highlighted row (-1: none): the one the arrows or the pointer chose
+  // in this very list, else the first command. With no command nothing is,
+  // so Enter does what it did; a new query or list starts again.
+  const listKey = `${query}\n${matches.length}\n${templateMatches.length}`
+  const [chosen, setChosen] = useState<{ key: string; i: number } | null>(null)
+  const at =
+    chosen?.key === listKey
+      ? Math.min(chosen.i, listRows - 1)
+      : matches.length
+        ? 0
+        : -1
+  const setActive = (i: number) => setChosen({ key: listKey, i })
   // biome-ignore lint/correctness/useExhaustiveDependencies: Escape holds for one word
   useEffect(() => setDismissed(false), [word])
 
@@ -334,14 +383,39 @@ export function ChatComposer({
     if (box.value === want.text) box.setSelectionRange(want.caret, want.caret)
   })
 
+  // The box was focused once on this page: its selection is where the user
+  // left the caret, read when text is put in
+  const focusedOnce = useRef(false)
+  const agentRef = useRef(session.agentName)
+  agentRef.current = session.agentName
+
   // A command picked in the command palette goes in front of the draft, the
-  // caret after it, nothing sent; the palette's Show Chat only focuses
+  // caret after it, nothing sent; the palette's Show Chat only focuses. A
+  // filled template goes where the caret was (or in place of the "/name" it
+  // was picked with, or at the end), nothing sent either.
   // biome-ignore lint/correctness/useExhaustiveDependencies: update and the refs read the latest state
   useEffect(() => {
     const take = () => {
-      const c = takeDraftInsert(paneId)
+      const c = takeDraftInsert(paneId, agentRef.current)
       if (c === undefined) return
-      if (c) {
+      if (isTextInsert(c)) {
+        const draft = textRef.current
+        const box = boxRef.current
+        const [start, end] =
+          c.at && draft.slice(c.at.start, c.at.end) === c.at.was
+            ? [c.at.start, c.at.end]
+            : box && focusedOnce.current
+              ? [box.selectionStart, box.selectionEnd]
+              : [draft.length, draft.length]
+        const next = {
+          text: draft.slice(0, start) + c.text + draft.slice(end),
+          caret: start + c.text.length,
+        }
+        caretAfterPick.current = next
+        textRef.current = next.text
+        update(next.text)
+        setCaret(next.caret)
+      } else if (c) {
         const at = { trigger: c.trigger ?? '/', query: '', start: 0, end: 0 }
         const next = applyPick(textRef.current, at, c)
         caretAfterPick.current = next
@@ -371,23 +445,41 @@ export function ChatComposer({
     boxRef.current?.focus()
   }
 
+  // A template picked in the "/" list: its text replaces the "/name" once
+  // filled in (Cancel leaves the draft as it is)
+  const pickTemplate = (t: PromptTemplate) => {
+    const typed = q as NonNullable<typeof q>
+    setDismissed(true)
+    requestTemplateFill({
+      paneId,
+      templateId: t.id,
+      agent: session.agentName,
+      at: {
+        start: typed.start,
+        end: typed.end,
+        was: text.slice(typed.start, typed.end),
+      },
+    })
+  }
+
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (listOpen && matches.length > 0 && !e.ctrlKey && !e.metaKey) {
-      const n = matches.length
+    if (listOpen && listRows > 0 && !e.ctrlKey && !e.metaKey) {
+      const n = listRows
       switch (e.key) {
         case 'ArrowDown':
           e.preventDefault()
-          setActive((i) => (i + 1) % n)
+          setActive(at < 0 ? 0 : (at + 1) % n)
           return
         case 'ArrowUp':
           e.preventDefault()
-          setActive((i) => (i - 1 + n) % n)
+          setActive(at < 0 ? n - 1 : (at - 1 + n) % n)
           return
         case 'Enter':
         case 'Tab':
-          if (e.shiftKey) break
+          if (e.shiftKey || at < 0) break
           e.preventDefault()
-          pick(matches[Math.min(active, n - 1)])
+          if (at < matches.length) pick(matches[at])
+          else pickTemplate(templateMatches[at - matches.length])
           return
       }
     }
@@ -468,6 +560,21 @@ export function ChatComposer({
           {notice.text}
         </Banner>
       )}
+      <TemplatePicker
+        isOpen={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onPick={(t) => {
+          picked.current = t.id
+          setPickerOpen(false)
+        }}
+        onManage={
+          openSettings &&
+          (() => {
+            setPickerOpen(false)
+            openSettings('templates')
+          })
+        }
+      />
       <ConfirmDialog
         isOpen={confirming !== null}
         title={`Exit ${agent}?`}
@@ -487,9 +594,11 @@ export function ChatComposer({
           id={listId}
           trigger={listTrigger}
           commands={matches}
-          active={active}
+          templates={templateMatches}
+          active={at}
           onActive={setActive}
           onPick={pick}
+          onPickTemplate={pickTemplate}
         />
       )}
       {tooLong && (
@@ -513,16 +622,24 @@ export function ChatComposer({
             <ImagePlus size={18} aria-hidden="true" />
           </IconButton>
         )}
+        {templatesOn && (
+          <IconButton
+            aria-label="Templates"
+            aria-haspopup="dialog"
+            disabled={sending}
+            onClick={() => setPickerOpen(true)}
+          >
+            <FileText size={18} aria-hidden="true" />
+          </IconButton>
+        )}
         <textarea
           ref={boxRef}
           aria-label={`Message to ${agent}`}
           aria-describedby={tooLong ? limitId : undefined}
           aria-autocomplete="list"
-          aria-controls={listOpen && matches.length > 0 ? listId : undefined}
+          aria-controls={listOpen && listRows > 0 ? listId : undefined}
           aria-activedescendant={
-            listOpen && matches.length > 0
-              ? slashOptionId(listId, Math.min(active, matches.length - 1))
-              : undefined
+            listOpen && at >= 0 ? slashOptionId(listId, at) : undefined
           }
           value={text}
           rows={rows}
@@ -530,6 +647,9 @@ export function ChatComposer({
           aria-busy={sending}
           onChange={onChange}
           onSelect={track}
+          onFocus={() => {
+            focusedOnce.current = true
+          }}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
           placeholder={isMobile ? 'Message' : 'Message (Ctrl+Enter to send)'}

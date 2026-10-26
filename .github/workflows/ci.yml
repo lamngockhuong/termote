@@ -291,8 +291,8 @@ jobs:
       # Pairing, the view-only role and the sign-in list need sign-in: a
       # second server with a password, on its own port, tmux socket, session
       # and state dir (the paired devices), for devices.spec.ts,
-      # signins.spec.ts and login-link.spec.ts alone. The password is made
-      # here and never printed.
+      # signins.spec.ts, login-link.spec.ts and prompt-templates.spec.ts
+      # alone. The password is made here and never printed.
       - name: Start server with sign-in
         run: |
           pass="$(openssl rand -hex 16)"
@@ -319,7 +319,7 @@ jobs:
           TERMOTE_PORT: "7681"
           TERMOTE_PASS: ${{ env.E2E_AUTH_PASS }}
           TMUX_SESSION: e2e-auth
-        run: TMUX_SOCKET="$RUNNER_TEMP/tmux-auth.sock" pnpm exec playwright test devices signins login-link --workers=1
+        run: TMUX_SOCKET="$RUNNER_TEMP/tmux-auth.sock" pnpm exec playwright test devices signins login-link prompt-templates --workers=1
 
       - name: Server log
         if: failure()

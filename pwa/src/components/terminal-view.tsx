@@ -14,6 +14,7 @@ import { terminalShortcut } from '../hooks/use-shortcuts'
 import { type StreamControl, useTermSocket } from '../hooks/use-term-socket'
 import { readToken, type UiStyle } from '../ui-style'
 import { safeUrl } from '../utils/markdown-safety'
+import { recordSelection } from '../utils/pane-selection'
 import {
   blockContextMenu,
   copyTerminalSelection,
@@ -759,6 +760,20 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
         sub.dispose()
       }
     }, [copyOnSelect])
+
+    // Whatever the copy setting, a selection is kept for the pane shown,
+    // for a prompt template's {{selection}}.
+    useEffect(() => {
+      const term = termRef.current
+      /* v8 ignore next */
+      if (!term) return
+      const sub = term.onSelectionChange(() => {
+        const pane = paneIdRef.current
+        if (pane && term.hasSelection())
+          recordSelection(pane, term.getSelection(), 'the terminal')
+      })
+      return () => sub.dispose()
+    }, [])
 
     // No cursor or keyboard focus for input that would go nowhere.
     useEffect(() => {

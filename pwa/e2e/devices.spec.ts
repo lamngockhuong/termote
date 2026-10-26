@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process'
-import { type APIRequestContext, type Browser, expect, type Page, test } from './fixtures'
+import { expect, type Page, test } from './fixtures'
+import { type Code, deviceId, makeCode, pairStranger, stranger } from './pairing'
 
 // Pairing a device and the view-only role, against a server with sign-in on:
 // the e2e CI job starts a second server with a password (TERMOTE_PASS) on its
@@ -19,46 +20,6 @@ const tmux = (...args: string[]) =>
 // The server's current window of the session, and what it shows
 const currentWindow = () => tmux('display-message', '-p', '-t', `=${session}:`, '#{window_index}')
 const screen = () => tmux('capture-pane', '-p', '-J', '-t', `=${session}:`)
-
-interface Code {
-  code: string
-  url: string
-}
-
-// A code made the way the CLI makes one: Basic auth, JSON, no Origin.
-async function makeCode(request: APIRequestContext, role: 'view' | 'full', name: string) {
-  const res = await request.post('/api/mux/devices/pair', { data: { role, name } })
-  expect(res.status(), await res.text()).toBe(200)
-  return (await res.json()) as Code
-}
-
-async function deviceId(request: APIRequestContext, name: string): Promise<string> {
-  const res = await request.get('/api/mux/devices')
-  expect(res.status()).toBe(200)
-  const { devices } = (await res.json()) as { devices: { id: string; name: string }[] }
-  const id = devices.find((d) => d.name === name)?.id
-  expect(id, `device ${name} listed`).toBeTruthy()
-  return id as string
-}
-
-// A browser that never had the password: no Basic credentials, no cookie.
-async function stranger(browser: Browser, baseURL: string | undefined): Promise<Page> {
-  const context = await browser.newContext({ baseURL })
-  // The first-visit gesture tour would cover the page on a phone
-  await context.addInitScript(() => {
-    localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true }))
-  })
-  return context.newPage()
-}
-
-// Pairs a new browser with code, from the link the QR code carries.
-async function pairStranger(browser: Browser, baseURL: string | undefined, code: string) {
-  const page = await stranger(browser, baseURL)
-  await page.goto(`/pair?code=${encodeURIComponent(code)}`)
-  await page.getByRole('button', { name: 'Pair' }).click()
-  await expect(page).toHaveURL(/\/(#.*)?$/)
-  return page
-}
 
 // A same-site JSON write from page's browser (its device cookie).
 const writeAs = (page: Page, baseURL: string | undefined, path: string, data: object) =>

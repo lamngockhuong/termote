@@ -15,6 +15,11 @@ import type { AppCommand } from '../utils/app-commands'
 import { takeDraftInsert } from '../utils/chat-draft'
 import { flushAll as flushKept } from '../utils/files-persist'
 import { remapPanes } from '../utils/pane-remap'
+import {
+  onTemplateFill,
+  type TemplateFill,
+  takeTemplateFill,
+} from '../utils/template-fill-request'
 import { CommandPalette, type CommandPaletteProps } from './command-palette'
 
 const platform = vi.hoisted(() => ({ apple: false }))
@@ -37,6 +42,25 @@ vi.mock('../hooks/use-mux-api', async (orig) => ({
 const agent = vi.hoisted(() => ({
   list: [] as { name: string; source: string; kind: string }[],
   enabled: false,
+}))
+const prompts = vi.hoisted(() => ({
+  templates: [] as {
+    id: string
+    name: string
+    text: string
+    updated: string
+  }[],
+  refresh: vi.fn(async () => {}),
+}))
+vi.mock('../hooks/use-prompt-templates', () => ({
+  usePromptTemplates: () => ({
+    templates: prompts.templates,
+    readOnly: false,
+    loaded: true,
+    loading: false,
+    error: false,
+    refresh: prompts.refresh,
+  }),
 }))
 vi.mock('../hooks/use-agent-commands', () => ({
   useAgentCommands: (_p: string, enabled: boolean) => {
@@ -353,7 +377,7 @@ describe('CommandPalette', () => {
       await filesStore()
       mockFind
         .mockRejectedValueOnce(
-          new RequestError(409, '', 'moved', undefined, undefined, '/new'),
+          new RequestError(409, '', 'moved', { root: '/new' }),
         )
         .mockResolvedValueOnce(found(['a.md'], '/new'))
       renderPalette()
@@ -786,5 +810,75 @@ describe('CommandPalette', () => {
     expect(options()[0]).toHaveAccessibleDescription(
       'Not available for this pane',
     )
+  })
+})
+
+describe('CommandPalette prompt templates', () => {
+  const claude: Session = {
+    ...SESSION,
+    hasAgent: true,
+    agentName: 'claude',
+    panes: [{ id: '%1', label: 'claude', hasAgent: true, command: 'claude' }],
+  }
+  let fills: TemplateFill[] = []
+  let off = () => {}
+  beforeEach(() => {
+    prompts.refresh.mockClear()
+    prompts.templates = [
+      {
+        id: 't1',
+        name: 'Zebra\u202e review',
+        text: 'Look at {{file}}\nnow',
+        updated: 'u',
+      },
+    ]
+    fills = []
+    off = onTemplateFill(() => {
+      const f = takeTemplateFill()
+      if (f) fills.push(f)
+    })
+  })
+  afterEach(() => off())
+
+  it('are listed with the commands, read again, and filled for the Chat', () => {
+    const p = renderPalette({
+      mode: 'commands',
+      session: claude,
+      composer: true,
+      templates: true,
+    })
+    expect(prompts.refresh).toHaveBeenCalled()
+    type('>zebra')
+    expect(options()[0]).toHaveTextContent('Template: Zebra⟨U+202E⟩ review')
+    expect(options()[0]).toHaveTextContent('Look at {{file}}')
+    key('Enter')
+    expect(p.showChat).toHaveBeenCalled()
+    expect(fills).toEqual([{ paneId: '%1', templateId: 't1', agent: 'claude' }])
+  })
+
+  it('say why they cannot be used', () => {
+    const { unmount } = renderPalette({
+      mode: 'commands',
+      session: claude,
+      templates: true,
+      readOnly: true,
+    })
+    type('>zebra')
+    expect(options()[0]).toHaveAccessibleDescription('View only')
+    unmount()
+    renderPalette({ mode: 'commands', session: claude, templates: true })
+    type('>zebra')
+    expect(options()[0]).toHaveAccessibleDescription(
+      "Open the agent's Chat to use templates",
+    )
+    key('Enter')
+    expect(fills).toEqual([])
+  })
+
+  it('are not there without them on the server, nor outside commands', () => {
+    renderPalette({ mode: 'commands', session: claude, composer: true })
+    type('>zebra')
+    expect(options()).toHaveLength(0)
+    expect(prompts.refresh).not.toHaveBeenCalled()
   })
 })

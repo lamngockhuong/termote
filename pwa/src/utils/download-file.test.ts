@@ -5,6 +5,7 @@ import {
   downloadErrorMessage,
   downloadFile,
   isIosStandalone,
+  saveMadeFile,
   startDownload,
 } from './download-file'
 
@@ -15,7 +16,7 @@ vi.mock('../hooks/use-mux-api', async (orig) => ({
 }))
 
 const err = (status: number, code = '', root?: string) =>
-  new RequestError(status, code, 'x', undefined, undefined, root)
+  new RequestError(status, code, 'x', { root })
 
 // The links clicked: href, download name, and whether it was in the page
 function watchLinks() {
@@ -313,5 +314,54 @@ describe('downloadFile', () => {
     expect(opts.action.label).toBe('Save')
     opts.action.onClick()
     expect(share).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('saveMadeFile', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it('saves through a blob: link, revoked later', async () => {
+    vi.useFakeTimers()
+    const created = vi.fn(() => 'blob:x')
+    const revoked = vi.fn()
+    Object.assign(URL, { createObjectURL: created, revokeObjectURL: revoked })
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(function (this: HTMLAnchorElement) {
+        expect(this.download).toBe('t.json')
+        expect(this.href).toBe('blob:x')
+      })
+    const file = new File(['{}'], 't.json')
+    await saveMadeFile(file, { iosStandalone: false })
+    expect(click).toHaveBeenCalled()
+    expect(document.querySelector('a[download]')).toBeNull()
+    vi.advanceTimersByTime(BLOB_REVOKE_MS)
+    expect(revoked).toHaveBeenCalledWith('blob:x')
+    click.mockRestore()
+  })
+
+  it('goes to the share sheet in the iOS home-screen app', async () => {
+    const share = vi.fn(async () => {})
+    const file = new File(['{}'], 't.json')
+    await saveMadeFile(file, {
+      iosStandalone: true,
+      nav: { share, canShare: () => true },
+    })
+    expect(share).toHaveBeenCalledWith({ files: [file] })
+  })
+
+  it('a sheet that takes no file, or the default navigator, use a link', async () => {
+    const created = vi.fn(() => 'blob:y')
+    Object.assign(URL, { createObjectURL: created, revokeObjectURL: vi.fn() })
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => {})
+    await saveMadeFile(new File(['{}'], 'a.json'), {
+      iosStandalone: true,
+      nav: { share: vi.fn(), canShare: () => false },
+    })
+    await saveMadeFile(new File(['{}'], 'b.json'))
+    expect(click).toHaveBeenCalledTimes(2)
+    click.mockRestore()
   })
 })

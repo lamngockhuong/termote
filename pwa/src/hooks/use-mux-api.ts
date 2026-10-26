@@ -111,6 +111,9 @@ export interface MuxSnapshot {
     // The browsers signed in with the password can be listed and signed
     // out (/api/mux/signins*): sign-in is on.
     signins?: boolean
+    // The prompt templates can be read, and changed by a full client
+    // (/api/mux/templates*): the server's state dir holds them.
+    templates?: boolean
     // View-only role: the backend can stream a pane to it (tmux 3.2 or
     // later, Herdr); off, the stream is refused.
     viewStream?: boolean
@@ -754,25 +757,47 @@ export interface TranscriptPage {
   reset: boolean
 }
 
+// What a refused request carries besides its code, by route
+export interface RequestErrorDetails {
+  limit?: number
+  // prompt_changed: the dialog now on screen (null when none)
+  prompt?: AgentPrompt | null
+  // files 409: the pane's root now
+  root?: string
+  // message 400: the attached upload ids the server no longer has
+  images?: string[]
+  // files/create 409 exists: the name taken, as the server cleaned it
+  path?: string
+  // files/delete 409 changed: a swapped file that stayed in the trash
+  trashId?: string
+  // templates 409 conflict: the template as another device saved it
+  template?: PromptTemplate
+  // templates import 400: the template the error is about
+  index?: number
+  // templates 400 invalid_template: what is wrong
+  field?: 'name' | 'text'
+}
+
 // A refused request: the HTTP status and the server's stable code.
-export class RequestError extends Error {
+export class RequestError extends Error implements RequestErrorDetails {
+  readonly limit?: number
+  readonly prompt?: AgentPrompt | null
+  readonly root?: string
+  readonly images?: string[]
+  readonly path?: string
+  readonly trashId?: string
+  readonly template?: PromptTemplate
+  readonly index?: number
+  readonly field?: 'name' | 'text'
+
   constructor(
     readonly status: number,
     readonly code: string,
     message: string,
-    readonly limit?: number,
-    // prompt_changed: the dialog now on screen (null when none)
-    readonly prompt?: AgentPrompt | null,
-    // files 409: the pane's root now
-    readonly root?: string,
-    // message 400: the attached upload ids the server no longer has
-    readonly images?: string[],
-    // files/create 409 exists: the name taken, as the server cleaned it
-    readonly path?: string,
-    // files/delete 409 changed: a swapped file that stayed in the trash
-    readonly trashId?: string,
+    details: RequestErrorDetails = {},
   ) {
     super(message)
+    Object.assign(this, details)
   }
 }
 
@@ -794,12 +819,17 @@ async function requestError(
     res.status,
     body.code ?? '',
     body.error ?? `request failed: ${res.status}`,
-    body.limit,
-    body.prompt,
-    body.root,
-    body.images,
-    body.path,
-    body.trashId,
+    {
+      limit: body.limit,
+      prompt: body.prompt,
+      root: body.root,
+      images: body.images,
+      path: body.path,
+      trashId: body.trashId,
+      template: body.template,
+      index: body.index,
+      field: body.field,
+    },
   )
 }
 
@@ -1633,4 +1663,125 @@ export async function revokeDevice(id: string): Promise<string[]> {
   if (!res.ok) throw await requestError(res)
   const body = await res.json().catch(() => ({}))
   return Array.isArray(body.revoked) ? body.revoked : [id]
+}
+
+// A prompt template every device of this server shares. updated changes
+// with each save: a change or a delete names the one it read.
+export interface PromptTemplate {
+  // 16 hex characters
+  id: string
+  name: string
+  text: string
+  updated: string
+}
+
+export interface PromptTemplates {
+  templates: PromptTemplate[]
+  // A newer Termote saved them: nothing can change them here
+  readOnly: boolean
+}
+
+const templatesPath = `${API_BASE}/templates`
+
+async function templateRequest(
+  url: string,
+  method: string,
+  body?: unknown,
+): Promise<Response> {
+  const res = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res)
+  return res
+}
+
+// Lists the templates by name. Throws RequestError (templates_unavailable).
+export async function fetchTemplates(
+  signal?: AbortSignal,
+): Promise<PromptTemplates> {
+  const res = await fetch(templatesPath, {
+    signal: signal ?? AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res, true)
+  const body = await res.json()
+  return { templates: body.templates ?? [], readOnly: body.readOnly === true }
+}
+
+// Saves a new template. Throws RequestError (invalid_template with field,
+// name_taken, too_many, newer_format, view_only).
+export async function createTemplate(t: {
+  name: string
+  text: string
+}): Promise<PromptTemplate> {
+  const res = await templateRequest(templatesPath, 'POST', t)
+  return (await res.json()).template
+}
+
+// Saves a change to the template as it was when updated was read. Throws
+// RequestError: conflict carries the template as it is now, not_found when
+// another device deleted it.
+export async function updateTemplate(
+  id: string,
+  t: { name: string; text: string; updated: string },
+): Promise<PromptTemplate> {
+  const res = await templateRequest(
+    `${templatesPath}/${encodeURIComponent(id)}`,
+    'PUT',
+    t,
+  )
+  return (await res.json()).template
+}
+
+// Deletes the template as it was when updated was read (conflict otherwise).
+export async function deleteTemplate(
+  id: string,
+  updated: string,
+): Promise<void> {
+  const q = new URLSearchParams({ updated })
+  await templateRequest(
+    `${templatesPath}/${encodeURIComponent(id)}?${q}`,
+    'DELETE',
+  )
+}
+
+export interface TemplateImportPreview {
+  // The names as imported: new ones, and those replacing a template of the
+  // same name (any case)
+  added: string[]
+  replaced: string[]
+}
+
+// What importing list would do, as the server works it out; nothing is
+// saved. Throws RequestError (invalid_template or duplicate_name with
+// index, too_many).
+export async function previewTemplateImport(
+  list: { name: string; text: string }[],
+): Promise<TemplateImportPreview> {
+  const res = await templateRequest(
+    `${templatesPath}/import?dryRun=1`,
+    'POST',
+    {
+      templates: list,
+    },
+  )
+  const body = await res.json()
+  return { added: body.added ?? [], replaced: body.replaced ?? [] }
+}
+
+// Imports list as one change: replace is what the preview said it
+// replaces; when that changed since, it throws RequestError import_changed
+// and saves nothing. Resolves to how many were added and replaced.
+export async function importTemplates(
+  list: { name: string; text: string }[],
+  replace: string[],
+): Promise<{ added: number; replaced: number }> {
+  const res = await templateRequest(`${templatesPath}/import`, 'POST', {
+    templates: list,
+    replace,
+  })
+  const body = await res.json()
+  return { added: body.added ?? 0, replaced: body.replaced ?? 0 }
 }

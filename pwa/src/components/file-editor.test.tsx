@@ -22,7 +22,7 @@ describe('saveErrorOf', () => {
   it.each([
     [new Error('offline'), { kind: 'unsure' }],
     [
-      new RequestError(409, '', 'x', undefined, undefined, '/n'),
+      new RequestError(409, '', 'x', { root: '/n' }),
       { kind: 'root', root: '/n' },
     ],
     [new RequestError(409, 'changed', 'x'), { kind: 'changed' }],
@@ -90,6 +90,22 @@ describe('FileEditor', () => {
     expect(box).toHaveClass('pointer-coarse:text-[16px]')
     fireEvent.change(box, { target: { value: 'y' } })
     expect(props.onChange).toHaveBeenCalledWith('y')
+  })
+
+  it('tells a selection made in the textarea', () => {
+    const onSelectText = vi.fn()
+    const view = render(
+      <FileEditor {...props} text="hello" onSelectText={onSelectText} />,
+    )
+    const box = screen.getByRole('textbox') as HTMLTextAreaElement
+    box.setSelectionRange(1, 1)
+    fireEvent.select(box)
+    expect(onSelectText).not.toHaveBeenCalled()
+    box.setSelectionRange(1, 4)
+    fireEvent.select(box)
+    expect(onSelectText).toHaveBeenCalledWith('ell')
+    view.rerender(<FileEditor {...props} text="hello" />)
+    fireEvent.select(box)
   })
 
   it('Ctrl+S saves only when there is something to save', () => {

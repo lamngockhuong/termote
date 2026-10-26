@@ -22,6 +22,7 @@ import {
   requestNotify,
 } from '../utils/notify-permission'
 import { DevicesSection } from './devices-section'
+import { PromptTemplatesSection } from './prompt-templates-section'
 import { ShortcutsSection } from './shortcuts-section'
 import { SigninsSection } from './signins-section'
 import { Button, FOCUS_RING, IconButton } from './ui/button'
@@ -68,6 +69,8 @@ interface Props {
   // The Signed-in browsers group: list and sign out the browsers signed in
   // with the password (caps.signins, full)
   signins?: boolean
+  // The Prompt templates group (caps.templates); view-only lists and exports
+  templates?: boolean
   // Log out, for Signed-in browsers to sign this browser out with
   onLogout?: () => Promise<void> | void
   // Group to show when the sheet opens (About's "Check for updates")
@@ -459,6 +462,7 @@ export function SettingsModal({
   readOnly = false,
   devices = false,
   signins = false,
+  templates = false,
   onLogout,
   initialGroup,
   shortcuts,
@@ -778,6 +782,14 @@ export function SettingsModal({
       id: 'signins',
       title: 'Signed-in browsers',
       rows: <SigninsSection logOut={onLogout} />,
+    })
+  }
+
+  if (templates) {
+    groups.push({
+      id: 'templates',
+      title: 'Prompt templates',
+      rows: <PromptTemplatesSection readOnly={readOnly} />,
     })
   }
 

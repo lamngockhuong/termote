@@ -174,6 +174,50 @@ test.describe('write guards on group routes', () => {
   }
 })
 
+test.describe('prompt template routes', () => {
+  // Bodies the server would refuse anyway (an empty name, an id that names
+  // nothing): a request that got past the guard changes no template.
+  const routes = [
+    { method: 'POST', path: '/api/mux/templates', data: { name: '', text: 'csrf-e2e' } },
+    { method: 'PUT', path: '/api/mux/templates/0000000000000000', data: { name: '', text: 'x', updated: 'x' } },
+    { method: 'DELETE', path: '/api/mux/templates/0000000000000000?updated=x', data: {} },
+    { method: 'POST', path: '/api/mux/templates/import', data: { templates: [], replace: [] } },
+  ]
+
+  test.beforeEach(async ({ request }) => {
+    const snap = await (await request.get('/api/mux/snapshot')).json()
+    // A store that failed to start would hide these routes behind a 503
+    expect(snap.caps.templates, 'the server keeps templates').toBe(true)
+  })
+
+  for (const r of routes) {
+    test(`${r.method} ${r.path}: text/plain, cross-site and a foreign Origin are rejected`, async ({ request }) => {
+      for (const [headers, status] of [
+        [{ 'Content-Type': 'text/plain' }, 415],
+        [{ 'Sec-Fetch-Site': 'cross-site' }, 403],
+        [{ Origin: 'https://evil.example' }, 403],
+      ] as const) {
+        const res = await request.fetch(r.path, {
+          method: r.method,
+          headers: { ...headers },
+          data: JSON.stringify(r.data),
+        })
+        expect(res.status(), JSON.stringify(headers)).toBe(status)
+      }
+    })
+  }
+
+  test('a cross-site or foreign-Origin read is rejected', async ({ request }) => {
+    for (const headers of [{ 'Sec-Fetch-Site': 'cross-site' }, { Origin: 'https://evil.example' }] as Record<string, string>[]) {
+      const res = await request.get('/api/mux/templates', { headers })
+      expect(res.status(), JSON.stringify(headers)).toBe(403)
+    }
+    const res = await request.get('/api/mux/templates')
+    expect(res.status()).toBe(200)
+    expect(res.headers()['cache-control']).toContain('no-store')
+  })
+})
+
 test.describe('files routes', () => {
   // Read-only GETs, guarded like writes: auth, Host, and a same-site check
   const filesPath = async (request: APIRequestContext, rest: string) =>
