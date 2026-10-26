@@ -25,11 +25,13 @@ test.describe('command palette', () => {
     'needs TMUX_SOCKET of the server under test (Linux, tmux job)',
   )
   test.skip(({ browserName }) => browserName !== 'chromium', 'desktop keys on Chromium')
-  test.describe.configure({ mode: 'serial' })
+  // Each test waits a session poll or two for the link's tab
+  test.describe.configure({ mode: 'serial', timeout: 90000 })
   test.use({ viewport: { width: 1280, height: 800 } })
 
   let dir = ''
   let windowId = ''
+  let windowName = ''
   let link = ''
 
   test.beforeAll(async ({ playwright }, testInfo) => {
@@ -47,6 +49,7 @@ test.describe('command palette', () => {
     writeFileSync(path.join(dir, 'beta.md'), '# Beta\n')
 
     const name = `palette-${Date.now()}`
+    windowName = name
     windowId = tmux(
       'new-window', '-d', '-P', '-F', '#{window_id}', '-t', `${tmuxSession}:`, '-n', name, '-c', dir, 'bash',
     ).trim()
@@ -77,7 +80,21 @@ test.describe('command palette', () => {
       localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true }))
     })
     await page.goto(link)
+    await showLinkTab(page)
+  }
+
+  async function showLinkTab(page: Page) {
     await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
+    // The link's tab, still shown one session poll later: the stream may
+    // attach to the window shown before the link and move tmux back to it,
+    // which the next poll then shows (and the palette closes on)
+    const tab = page.getByRole('tablist', { name: 'Sessions' }).getByRole('tab', { name: new RegExp(windowName) })
+    await expect(async () => {
+      if ((await tab.getAttribute('aria-selected')) !== 'true') await tab.click()
+      await expect(tab).toHaveAttribute('aria-selected', 'true', { timeout: 2000 })
+      await page.waitForResponse((r) => r.url().includes('/api/mux/snapshot'), { timeout: 8000 })
+      await expect(tab).toHaveAttribute('aria-selected', 'true', { timeout: 500 })
+    }).toPass({ timeout: 40000 })
     await expect(rows(page)).toHaveText(/\S/, { timeout: 15000 })
     await page.getByRole('button', { name: 'Command palette' }).focus()
   }
@@ -164,8 +181,7 @@ test.describe('command palette', () => {
     await settings.getByRole('button', { name: 'Remove the key of Show help' }).click()
 
     await page.reload()
-    await expect(rows(page)).toHaveText(/\S/, { timeout: 15000 })
-    await page.getByRole('button', { name: 'Command palette' }).focus()
+    await showLinkTab(page)
     await page.keyboard.press('Control+Alt+O')
     await expect(palette(page)).toBeVisible()
     await expect(palette(page).getByRole('combobox')).toHaveValue('')
