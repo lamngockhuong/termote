@@ -23,6 +23,11 @@ interface Props {
   // Escape, or the close button
   onClose: () => void
   inputRef: RefObject<HTMLInputElement | null>
+  // The toggles offered (all, by default) and what the bar finds in
+  toggles?: (keyof FindFlags)[]
+  label?: string
+  // F3 steps too (the table's own key)
+  f3?: boolean
 }
 
 const TOGGLES: { flag: keyof FindFlags; label: string; text: string }[] = [
@@ -57,6 +62,9 @@ export function TableFindBar({
   onStep,
   onClose,
   inputRef,
+  toggles = ['matchCase', 'wholeCell', 'regex'],
+  label = 'Find in table',
+  f3 = true,
 }: Props) {
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     // Escape while composing (IME) drops the word composed, not find
@@ -74,7 +82,7 @@ export function TableFindBar({
   const shown = visibleUnsafe(input)
   return (
     <search
-      aria-label="Find in table"
+      aria-label={label}
       className="flex shrink-0 flex-wrap items-center gap-1 border-b border-border px-2 py-1.5 text-[13px]"
       onKeyDown={onKeyDown}
     >
@@ -92,35 +100,37 @@ export function TableFindBar({
         autoComplete="off"
         className={`h-8 min-w-0 flex-1 basis-32 rounded-control border border-border bg-surface px-2 text-fg pointer-coarse:h-touch ${FOCUS_RING}`}
       />
-      {TOGGLES.map(({ flag, label, text }) => (
-        <IconButton
-          key={flag}
-          size="sm"
-          aria-label={label}
-          title={label}
-          aria-pressed={flags[flag]}
-          onClick={() => onFlags({ ...flags, [flag]: !flags[flag] })}
-          className={`font-term text-[12px] ${flags[flag] ? 'text-accent' : ''}`}
-        >
-          {/* Whole cell: the letters in a box, as a cell */}
-          <span
-            className={
-              flag === 'wholeCell'
-                ? 'rounded-sm border border-current px-0.5'
-                : ''
-            }
+      {TOGGLES.filter((t) => toggles.includes(t.flag)).map(
+        ({ flag, label, text }) => (
+          <IconButton
+            key={flag}
+            size="sm"
+            aria-label={label}
+            title={label}
+            aria-pressed={flags[flag]}
+            onClick={() => onFlags({ ...flags, [flag]: !flags[flag] })}
+            className={`font-term text-[12px] ${flags[flag] ? 'text-accent' : ''}`}
           >
-            {text}
-          </span>
-        </IconButton>
-      ))}
+            {/* Whole cell: the letters in a box, as a cell */}
+            <span
+              className={
+                flag === 'wholeCell'
+                  ? 'rounded-sm border border-current px-0.5'
+                  : ''
+              }
+            >
+              {text}
+            </span>
+          </IconButton>
+        ),
+      )}
       <span className="min-w-16 tabular-nums text-fg-muted" aria-live="polite">
         {input && statusText(status, count, current)}
       </span>
       <IconButton
         size="sm"
         aria-label="Previous match"
-        title="Previous match (Shift+Enter, Shift+F3)"
+        title={`Previous match (Shift+Enter${f3 ? ', Shift+F3' : ''})`}
         disabled={!count}
         onClick={() => onStep(-1)}
       >
@@ -129,7 +139,7 @@ export function TableFindBar({
       <IconButton
         size="sm"
         aria-label="Next match"
-        title="Next match (Enter, F3)"
+        title={`Next match (Enter${f3 ? ', F3' : ''})`}
         disabled={!count}
         onClick={() => onStep(1)}
       >

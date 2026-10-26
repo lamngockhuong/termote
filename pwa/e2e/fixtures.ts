@@ -2,12 +2,32 @@ import { test as base, expect, type Page } from '@playwright/test'
 
 export * from '@playwright/test'
 
+const CSP_MESSAGE = /Content[- ]Security[- ]Policy/i
+
 // Records every Content-Security-Policy violation on the page, from its first
-// script on, and every console message the browser logs for one.
+// script on, and every console message the browser logs for one, the page's
+// and each of its workers' (a worker has a policy of its own, from its
+// script's response: the document viewers parse in workers).
 export async function watchViolations(page: Page): Promise<string[]> {
   const violations: string[] = []
   page.on('console', (msg) => {
-    if (/Content[- ]Security[- ]Policy/i.test(msg.text())) violations.push(msg.text())
+    if (CSP_MESSAGE.test(msg.text())) violations.push(msg.text())
+  })
+  page.on('worker', (worker) => {
+    worker.on('console', (msg) => {
+      if (CSP_MESSAGE.test(msg.text())) violations.push(`worker ${worker.url()}: ${msg.text()}`)
+    })
+    // A violation the browser does not log is still an event in the worker:
+    // logged there, so the listener above sees it
+    worker
+      .evaluate(() => {
+        self.addEventListener('securitypolicyviolation', (e) => {
+          console.error(`Content-Security-Policy violation: ${e.violatedDirective} blocked ${e.blockedURI || 'inline'}`)
+        })
+      })
+      .catch(() => {
+        // The worker ended first
+      })
   })
   await page.exposeFunction('__cspViolation', (v: string) => violations.push(v))
   await page.addInitScript(() => {

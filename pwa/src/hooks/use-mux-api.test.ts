@@ -21,6 +21,7 @@ import {
   fetchDevices,
   fetchFileContent,
   fetchFileDiff,
+  fetchFileDocument,
   fetchFileDownload,
   fetchFileHash,
   fetchFileImage,
@@ -1169,6 +1170,110 @@ describe('files API client', () => {
         { signal: ctl.signal },
       ],
     ])
+  })
+
+  it('reads a document as a blob', async () => {
+    const spy = vi.fn(
+      async () => new Response('%PDF-', { headers: { 'Content-Length': '5' } }),
+    )
+    vi.stubGlobal('fetch', spy)
+    const ctl = new AbortController()
+    expect(await (await fetchFileDocument('1', 'a.pdf')).text()).toBe('%PDF-')
+    await fetchFileDocument(
+      '1',
+      'd/b.docx',
+      { reveal: true, root: '/r' },
+      ctl.signal,
+    )
+    expect(spy.mock.calls).toEqual([
+      ['/api/mux/panes/1/files/document?path=a.pdf', { signal: undefined }],
+      [
+        '/api/mux/panes/1/files/document?path=d%2Fb.docx&reveal=1&root=%2Fr',
+        { signal: ctl.signal },
+      ],
+    ])
+  })
+
+  it('reads a document without a Content-Length', async () => {
+    const res = new Response('PK')
+    res.headers.delete('Content-Length')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => res),
+    )
+    expect((await fetchFileDocument('1', 'a.xlsx')).size).toBe(2)
+  })
+
+  it('ignores the length of a compressed document', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response('%PDF-1.7', {
+            headers: { 'Content-Length': '3', 'Content-Encoding': 'gzip' },
+          }),
+      ),
+    )
+    expect((await fetchFileDocument('1', 'a.pdf')).size).toBe(8)
+  })
+
+  it('a document cut short is interrupted, not damaged', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response('%PDF', { headers: { 'Content-Length': '10' } }),
+      ),
+    )
+    await expect(fetchFileDocument('1', 'a.pdf')).rejects.toMatchObject({
+      status: 0,
+      code: 'interrupted',
+    })
+    const broken = new Response('x')
+    broken.blob = () => Promise.reject(new TypeError('network error'))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => broken),
+    )
+    await expect(fetchFileDocument('1', 'a.pdf')).rejects.toMatchObject({
+      code: 'interrupted',
+    })
+  })
+
+  it('an aborted document read rejects with the abort', async () => {
+    const ctl = new AbortController()
+    const res = new Response('x')
+    const abort = new DOMException('aborted', 'AbortError')
+    res.blob = () => {
+      ctl.abort()
+      return Promise.reject(abort)
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => res),
+    )
+    await expect(fetchFileDocument('1', 'a.pdf', {}, ctl.signal)).rejects.toBe(
+      abort,
+    )
+  })
+
+  it('a refused document carries the code and the size', async () => {
+    mockFetch({
+      body: { error: 'too large', code: 'too_large', size: 31457281 },
+      status: 413,
+    })
+    await expect(fetchFileDocument('1', 'a.pdf')).rejects.toMatchObject({
+      status: 413,
+      code: 'too_large',
+      size: 31457281,
+    })
+    mockFetch({
+      body: { error: 'x', code: 'encrypted', size: 'big' },
+      status: 415,
+    })
+    const err = await fetchFileDocument('1', 'a.xlsx').catch((e) => e)
+    expect(err).toMatchObject({ code: 'encrypted' })
+    expect(err.size).toBeUndefined()
   })
 
   it('checks a download, then reads its bytes', async () => {

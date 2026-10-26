@@ -29,6 +29,34 @@ function bar(over: Record<string, unknown> = {}) {
 const box = () => screen.getByRole('textbox', { name: 'Find' })
 
 describe('TableFindBar', () => {
+  it('offers only the toggles asked for, and names what it finds in', () => {
+    bar({ toggles: ['matchCase'], label: 'Find in document', f3: false })
+    expect(document.querySelector('search')).toHaveAttribute(
+      'aria-label',
+      'Find in document',
+    )
+    expect(screen.getByRole('button', { name: 'Match case' })).toBeDefined()
+    expect(screen.queryByRole('button', { name: 'Whole cell' })).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: 'Regular expression' }),
+    ).toBeNull()
+    expect(screen.getByRole('button', { name: 'Next match' })).toHaveAttribute(
+      'title',
+      'Next match (Enter)',
+    )
+    expect(
+      screen.getByRole('button', { name: 'Previous match' }),
+    ).toHaveAttribute('title', 'Previous match (Shift+Enter)')
+  })
+
+  it('tells F3 by default', () => {
+    bar()
+    expect(screen.getByRole('button', { name: 'Next match' })).toHaveAttribute(
+      'title',
+      'Next match (Enter, F3)',
+    )
+  })
+
   it('counts the matches, the current one first, in a live region', () => {
     const p = bar()
     // <search>: the search role in a browser, though not in jsdom

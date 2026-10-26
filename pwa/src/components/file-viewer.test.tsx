@@ -30,6 +30,7 @@ import { FileViewer, rebaseDraft } from './file-viewer'
 
 const mockContent = vi.fn()
 const mockImage = vi.fn()
+const mockDocument = vi.fn()
 const mockSave = vi.fn()
 // The desktop editor: shows where it was told to open
 vi.mock('./code-editor', () => ({
@@ -40,10 +41,15 @@ vi.mock('./code-editor', () => ({
   ),
 }))
 
+// The PDF viewer (pdf.js) does not run in jsdom: its own tests stand it in
+vi.mock('./pdf-preview', () => ({
+  default: (p: { path: string }) => <div data-testid="pdf">{p.path}</div>,
+}))
 vi.mock('../hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-mux-api')>()),
   fetchFileContent: (...a: unknown[]) => mockContent(...a),
   fetchFileImage: (...a: unknown[]) => mockImage(...a),
+  fetchFileDocument: (...a: unknown[]) => mockDocument(...a),
   saveFileContent: (...a: unknown[]) => mockSave(...a),
 }))
 vi.mock('../utils/highlight', async (orig) => ({
@@ -547,6 +553,66 @@ describe('FileViewer: images', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Image' }))
     expect(await screen.findByTestId('code-block')).toBeInTheDocument()
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:u2')
+  })
+})
+
+describe('FileViewer: documents', () => {
+  beforeEach(() => {
+    mockDocument.mockReset()
+    mockDocument.mockResolvedValue(new Blob(['%PDF-1.7']))
+  })
+
+  it('reads a PDF through files/document, never as text', async () => {
+    show({ path: 'docs/spec.PDF', canEdit: true })
+    // Its size once read; the viewer in its place
+    expect(await screen.findAllByText('8 B')).not.toHaveLength(0)
+    expect(mockContent).not.toHaveBeenCalled()
+    expect(mockDocument).toHaveBeenCalledWith(
+      '%1',
+      'docs/spec.PDF',
+      expect.objectContaining({ root: '/r', reveal: false }),
+      expect.any(AbortSignal),
+    )
+    expect(await screen.findByTestId('pdf')).toHaveTextContent('docs/spec.PDF')
+    expect(screen.queryByText(/Not previewable/)).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Wrap lines' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull()
+  })
+
+  it('says why a document cannot be shown, with its size and Download', async () => {
+    mockDocument.mockRejectedValueOnce(
+      new RequestError(413, 'too_large', 'big', { size: 40 << 20 }),
+    )
+    const onDownload = vi.fn()
+    show({ path: 'big.xlsx', onDownload })
+    expect(
+      await screen.findByText('Larger than 30 MiB (40.0 MiB)'),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Download' })[1])
+    expect(onDownload).toHaveBeenCalledWith({ revealed: false })
+  })
+
+  it('retries a busy server, without Download for a view-only device', async () => {
+    mockDocument.mockRejectedValueOnce(new RequestError(429, 'busy', 'busy'))
+    show({ path: 'memo.docx' })
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(mockDocument).toHaveBeenCalledTimes(2))
+    expect(screen.queryByRole('button', { name: 'Download' })).toBeNull()
+  })
+
+  it('asks before showing a sensitive document, then reads it revealed', async () => {
+    mockDocument.mockRejectedValueOnce(
+      new RequestError(403, 'sensitive', 'sensitive'),
+    )
+    show({ path: 'secrets.pdf' })
+    expect(
+      await screen.findByText('This file may contain secrets'),
+    ).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: 'Show' }))
+    await waitFor(() =>
+      expect(mockDocument.mock.calls[1][2]).toMatchObject({ reveal: true }),
+    )
   })
 })
 
