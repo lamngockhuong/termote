@@ -161,7 +161,7 @@ test.describe('focus window', () => {
     // A focus window has Open in main window instead
     await expect(page.getByRole('button', { name: 'Open in main window' })).toHaveCount(0)
     const opened = context.waitForEvent('page')
-    await page.getByRole('button', { name: 'More' }).click()
+    await page.getByRole('button', { name: 'More', exact: true }).click()
     await page.getByRole('menuitem', { name: 'Open in new window' }).click()
     const focus = await opened
     await expect(focus).toHaveURL(/\?solo=1$/)
@@ -184,7 +184,7 @@ test.describe('focus window', () => {
     await expect(page.getByRole('menuitem', { name: 'Copy path' })).toBeVisible()
     await expect(page.getByRole('menuitem', { name: 'Open in new window' })).toHaveCount(0)
     await page.keyboard.press('Escape')
-    await page.getByRole('button', { name: 'More' }).click()
+    await page.getByRole('button', { name: 'More', exact: true }).click()
     await expect(page.getByRole('menuitem', { name: 'Copy link' })).toBeVisible()
     await expect(page.getByRole('menuitem', { name: 'Open in new window' })).toHaveCount(0)
   })
