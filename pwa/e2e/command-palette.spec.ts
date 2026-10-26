@@ -19,6 +19,13 @@ const xterm = (page: Page) => page.locator('[data-testid="terminal-view"] .xterm
 const palette = (page: Page) => page.getByRole('dialog').filter({ has: page.getByRole('combobox') })
 const filesPanel = (page: Page) => page.getByRole('complementary', { name: 'Files' })
 
+// Opens the palette with keys, once its input has focus: keys typed while
+// its chunk still loads land nowhere
+async function openWith(page: Page, keys: string) {
+  await page.keyboard.press(keys)
+  await expect(palette(page).getByRole('combobox')).toBeFocused()
+}
+
 test.describe('command palette', () => {
   test.skip(
     !socket || process.platform !== 'linux' || !!process.env.TERMOTE_E2E_HERDR,
@@ -102,7 +109,7 @@ test.describe('command palette', () => {
   test('Ctrl+P opens a file typed in two keys, Enter before the results', async ({ page }) => {
     await open(page)
     await expect(filesPanel(page)).toHaveCount(0)
-    await page.keyboard.press('Control+P')
+    await openWith(page, 'Control+P')
     await expect(palette(page)).toBeVisible()
     await page.keyboard.type('ap')
     // At once, not waiting for the list
@@ -116,13 +123,13 @@ test.describe('command palette', () => {
   test('Ctrl+P then Enter goes back to the file before', async ({ page }) => {
     await open(page)
     for (const name of ['alpha', 'beta']) {
-      await page.keyboard.press('Control+P')
+      await openWith(page, 'Control+P')
       await page.keyboard.type(name)
       await expect(palette(page).getByRole('option', { name: new RegExp(`^${name}\\.md`) })).toBeVisible()
       await page.keyboard.press('Enter')
       await expect(filesPanel(page).getByRole('heading', { name: name[0].toUpperCase() + name.slice(1) })).toBeVisible()
     }
-    await page.keyboard.press('Control+P')
+    await openWith(page, 'Control+P')
     await expect(palette(page).getByRole('option').first()).toContainText('alpha.md')
     await page.keyboard.press('Enter')
     await expect(filesPanel(page).getByRole('heading', { name: 'Alpha' })).toBeVisible()
@@ -130,7 +137,7 @@ test.describe('command palette', () => {
 
   test('Ctrl+Shift+P runs a command; one that cannot run says why', async ({ page }) => {
     await open(page)
-    await page.keyboard.press('Control+Shift+P')
+    await openWith(page, 'Control+Shift+P')
     const box = palette(page).getByRole('combobox')
     await expect(box).toHaveValue('>')
     await box.fill('>show chat')
@@ -147,7 +154,7 @@ test.describe('command palette', () => {
 
   test('the palette keeps its keys from the browser while open', async ({ page }) => {
     await open(page)
-    await page.keyboard.press('Control+Shift+P')
+    await openWith(page, 'Control+Shift+P')
     const options = palette(page).getByRole('option')
     await expect(options.first()).toHaveAttribute('aria-selected', 'true')
     // Its own key again moves down the list
@@ -167,7 +174,7 @@ test.describe('command palette', () => {
 
   test('a changed key works after a reload; a shared one is marked', async ({ page }) => {
     await open(page)
-    await page.keyboard.press('Control+Shift+P')
+    await openWith(page, 'Control+Shift+P')
     await palette(page).getByRole('combobox').fill('>settings: shortcuts')
     await page.keyboard.press('Enter')
     const settings = page.getByRole('dialog', { name: 'Settings' })
@@ -182,7 +189,7 @@ test.describe('command palette', () => {
 
     await page.reload()
     await showLinkTab(page)
-    await page.keyboard.press('Control+Alt+O')
+    await openWith(page, 'Control+Alt+O')
     await expect(palette(page)).toBeVisible()
     await expect(palette(page).getByRole('combobox')).toHaveValue('')
   })
