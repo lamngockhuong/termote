@@ -526,31 +526,44 @@ func (m *zellijMux) NewTab(ctx context.Context, groupID, name string) (string, e
 	if name != "" && !validZellijTabName(name) {
 		return "", inputError("invalid tab name")
 	}
+	id, _, err := m.newTab(ctx, session, name, "")
+	if err != nil {
+		return "", err
+	}
+	return zellijTabID(session, id), nil
+}
+
+// newTab opens a tab in session, its shell in dir when given, and returns
+// its id and its terminal pane's.
+func (m *zellijMux) newTab(ctx context.Context, session, name, dir string) (int, int, error) {
 	if _, err := zellijTabs(ctx, session); errors.Is(err, errZellijNoSession) {
-		return "", inputError("unknown group")
+		return 0, 0, inputError("unknown group")
 	}
 	unlock, err := m.lockSession(ctx, session)
 	if err != nil {
-		return "", err
+		return 0, 0, err
 	}
 	defer unlock()
 	clients, err := zellijClients(ctx, session)
 	if errors.Is(err, errZellijNoSession) {
-		return "", inputError("unknown group")
+		return 0, 0, inputError("unknown group")
 	}
 	if err != nil {
-		return "", err
+		return 0, 0, err
 	}
 	if len(clients) == 0 {
-		return "", errZellijNoClient
+		return 0, 0, errZellijNoClient
 	}
 	before, err := zellijTabs(ctx, session)
 	if err != nil {
-		return "", err
+		return 0, 0, err
 	}
 	args := []string{"new-tab", "--no-focus"}
 	if name != "" {
 		args = append(args, "--name="+name)
+	}
+	if dir != "" {
+		args = append(args, "--cwd="+dir)
 	}
 	// The command can fail, or not print the id, after it made the tab
 	// (zellijGate): the one new tab in the listing is it. Running it again
@@ -559,7 +572,7 @@ func (m *zellijMux) NewTab(ctx context.Context, groupID, name string) (string, e
 	id, idErr := strconv.Atoi(strings.TrimSpace(string(out)))
 	after, err := zellijTabs(ctx, session)
 	if err != nil {
-		return "", err
+		return 0, 0, err
 	}
 	if runErr != nil || idErr != nil {
 		var added []int
@@ -570,20 +583,21 @@ func (m *zellijMux) NewTab(ctx context.Context, groupID, name string) (string, e
 		}
 		if len(added) != 1 {
 			if runErr != nil {
-				return "", runErr
+				return 0, 0, runErr
 			}
-			return "", errors.New("new tab: id not found")
+			return 0, 0, errors.New("new tab: id not found")
 		}
 		id = added[0]
 	}
 	panes, err := zellijPanes(ctx, session)
 	if err != nil {
-		return "", err
+		return 0, 0, err
 	}
-	if !slices.ContainsFunc(panes, func(p zellijPaneInfo) bool { return !p.IsPlugin && p.TabID == id && !p.Exited }) {
-		return "", errors.New("new tab: no terminal pane")
+	i := slices.IndexFunc(panes, func(p zellijPaneInfo) bool { return !p.IsPlugin && p.TabID == id && !p.Exited })
+	if i < 0 {
+		return 0, 0, errors.New("new tab: no terminal pane")
 	}
-	return zellijTabID(session, id), nil
+	return id, panes[i].ID, nil
 }
 
 func (m *zellijMux) CloseTab(ctx context.Context, tabID, key string) error {

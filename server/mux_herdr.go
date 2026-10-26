@@ -362,6 +362,12 @@ func (m *herdrMux) paneIdleShell(ctx context.Context, paneID string) (bool, erro
 	if err != nil {
 		return false, herdrInputError(err)
 	}
+	return herdrIdle(info)
+}
+
+// herdrIdle reports whether info shows only the pane's shell, waiting for
+// input.
+func herdrIdle(info herdrProcessInfo) (bool, error) {
 	if !info.idleShell() || herdrStartGOOS != "windows" {
 		return info.idleShell(), nil
 	}

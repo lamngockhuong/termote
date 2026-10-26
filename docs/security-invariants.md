@@ -1266,6 +1266,69 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   container keep separate templates; a name differing only by a look-alike character is another
   name (the import confirmation lists every name); with tmux, a selection in another split of the
   window is kept for the pane shown
+- **Tasks** (`/api/mux/panes/{id}/tasks`, `/api/mux/panes/{id}/tasks/run`,
+  `/api/mux/tasks/runs/{runId}`, `/api/mux/tasks[/{id}]`; `server/tasks.go`,
+  `tasks_discover.go`, `tasks_shell.go`, `tasks_run.go`, `tasks_run_state.go`, `task_store.go`,
+  `task_routes.go`, `mux_{tmux,herdr,zellij}_tasks.go`; `caps.tasks`: the Files routes work and
+  the backend runs tasks (`taskMux`: tmux, Herdr, Zellij; never psmux, which has no Files);
+  `caps.userTasks`: the store is usable). Every route is a full client's only, reads included
+  (403 `view_only`): a script's command, a user task's command and a run's output can hold a
+  token or a path. **Listing** (`GET .../tasks`): `requireMethod(GET)`, then the Files routes'
+  `start` with `requireWriteRole` (never `begin`, which lets a view-only client through and runs
+  git for it), so cross-site, the role and `?root=` (409 with the current root) are checked
+  before anything is read; `no-store`. Nothing runs: `package.json` and one Makefile (the one make
+  picks: `GNUmakefile`, `makefile`, `Makefile`) are read through `os.Root` under the pane's root,
+  never under a Files deny dir, opened non-blocking, a regular file only (a FIFO answers at once),
+  at most 1 MiB (else named in `tooLarge`, read as empty). Script and target names must match
+  `^[A-Za-z0-9][A-Za-z0-9:_.@/+-]{0,99}$` (others counted in `skipped`), at most 500 of each;
+  Makefile targets are explicit rules only (no assignment `=`, `:=`, `::=`, `?=`, `+=`, `!=`, no
+  directive or `define` block, no `.`-special, `%` pattern or `$` name). A script's command is
+  shown (cut at 4096 bytes) with its `pre`/`post` hooks, which npm, pnpm and bun run too.
+  **Run** (`POST .../tasks/run`, body ≤ 4 KiB `{kind, name|id, root, newTab}`): `writeGuard`,
+  `requireWriteRole`, then `start` as above; the client only names the task, never sends a
+  command: the server reads the root again and runs only a name in that list (404
+  `task_not_found`, nothing opened or typed), a user task by its id from the store; a `root`
+  other than the current one is 409. It builds the line itself: `<pm> run <name>`, `make <name>`
+  or the user's one-line command handed whole to `eval` (`Invoke-Expression` in pwsh), the name or
+  command quoted for the shell found (POSIX `'…'`, fish `'…'` with `\\` and `\'`, pwsh `'…'`
+  doubling `'` and U+2018–U+201B), wrapped between `[termote-task <nonce> start]` and
+  `[termote-task <nonce> exit <code>]` (a fresh 16-hex nonce per run). Only bash, zsh, sh, dash,
+  ash, ksh, mksh, yash, fish and pwsh are typed into; any other shell (PowerShell 5.1, cmd, nu,
+  csh) is 409 `unsupported_shell` with nothing typed. The root goes to the backend as the new
+  tab's directory, never into the line (tmux `new-window -d -c` and `-n` through `tmuxLiteral`,
+  Herdr `tab.create` `cwd`, Zellij `new-tab --cwd=`); one holding a control, invisible or invalid
+  character is 400 `invalid_root`. The line is typed as keystrokes, never pasted (tmux `send-keys
+  -l` then `Enter`, Herdr `pane.send_text`, Zellij through a Termote client), into the pane by its
+  own target (tmux `%N`). A lock per task (root, kind, name or id) is held from looking up its last
+  run until the line is typed, so two devices pressing Run open one tab (the other gets 409
+  `task_running` with its `runId`); typing holds the pane's input lock the agent routes take. The
+  last run's tab is used again only when its shell waits at its prompt (the shell itself in its
+  terminal's foreground, tmux not in copy mode): C-c clears its input line first and the shell is
+  checked again; a new tab is never sent C-c (its rc files may still run) and is typed into once
+  its shell is idle and its text stopped changing (up to 15 s); a shell still busy after the wait
+  is 409 `shell_busy`. A new tab whose line could not be typed (`shell_busy`,
+  `unsupported_shell`) stays open and is kept, shown to no client, as the task's next tab, so
+  Run never piles tabs up. A user task's command is checked again before it is typed (400
+  `invalid_task`: the file can be edited by hand). Zellij without a client is 409 `no_client`; a
+  tab closed meanwhile 409 `tab_gone`. pwsh resets `$LASTEXITCODE` before the command and reports
+  it first (`Invoke-Expression` leaves `$?` true after a failed native command). An `audit: task-run` line names the
+  kind and the name (or the user task's id), never a command. **State** (`GET
+  /api/mux/tasks/runs/{runId}`, same-site, `no-store`): runs live in memory only (at most 200, 24
+  h; a restart forgets them: 404 `run_not_found`), checked at most every 2 s whoever asks; a
+  shell still running something is `running` without its text being read; else the last 400
+  lines are searched for the run's end marker (`exited` with its code); a shell back at its prompt
+  for 2 s without it (the screen cleared) is `ended`, a closed pane `gone`. The markers are a hint:
+  a program in the same terminal can print one. **User tasks** (`/api/mux/tasks*`): a store
+  of its own, `<stateDir>/tasks/tasks.json`, kept as the prompt templates' (dir 0700, file 0600,
+  symlinks refused, `.tasks-*.part` removed, `tasks.lock` 2 s then 503 `busy`, read again before
+  every write, a corrupt or oversized file never written over: 503 `tasks_unavailable` at start,
+  500 on a later write; `v` above 1 read only, 409 `newer_format`); `GET` is same-site; writes
+  `writeGuard`, `requireWriteRole`, a 16 KiB body (413 `too_large`). Limits: 100 tasks (409
+  `too_many`), a name of 1–64 characters unique case aside (409 `name_taken`), a command of
+  1–4096 bytes on one line with no control or invisible character (400 `invalid_task` with
+  `field`); `PUT`/`DELETE` name the `updated` they read (409 `conflict` with the task as it is,
+  404 `not_found`). Errors carry a fixed code and message, never OS, backend or path text; no
+  name or command is logged
 - Exclude sensitive dirs (.ssh, .gnupg, .aws, .config/gcloud) from container volume mounts
   (warned at `container up`)
 - Serve mode uses constant-time comparison for password verification
