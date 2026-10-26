@@ -99,3 +99,55 @@ describe('CodeBlock scroll', () => {
     expect(frame).toHaveAttribute('data-scroll-restore')
   })
 })
+
+describe('CodeBlock at a line', () => {
+  const at = (
+    line: number | undefined,
+    jump: number | undefined,
+    scrollTop?: number,
+  ) => (
+    <ThemeProvider>
+      <CodeBlock
+        text={'a\nb\nc\n'}
+        path="a.ts"
+        wrap={false}
+        line={line}
+        jump={jump}
+        scrollTop={scrollTop}
+      />
+    </ThemeProvider>
+  )
+  const row = (n: number) =>
+    screen.getByTestId('code-block').querySelector(`[data-line="${n}"]`)
+
+  it('scrolls the line to the middle and highlights it, at each pick', () => {
+    mockHighlight.mockResolvedValue(null)
+    const scroll = vi.fn()
+    Element.prototype.scrollIntoView = scroll
+    const view = render(at(2, 1, 50))
+    expect(scroll).toHaveBeenCalledTimes(1)
+    expect(scroll.mock.contexts[0]).toBe(row(2))
+    expect(scroll).toHaveBeenCalledWith({ block: 'center' })
+    expect(screen.getByTestId('code-block').scrollTop).toBe(0)
+    expect(row(2)).toHaveClass('bg-accent/15')
+    expect(row(1)).toHaveClass('bg-bg')
+    // The same line again: once more
+    view.rerender(at(2, 2))
+    expect(scroll).toHaveBeenCalledTimes(2)
+    // The line dropped (the user scrolled): the highlight stays until a pick
+    view.rerender(at(undefined, 2))
+    expect(scroll).toHaveBeenCalledTimes(2)
+    expect(row(2)).toHaveClass('bg-accent/15')
+    view.rerender(at(3, 3))
+    expect(row(3)).toHaveClass('bg-accent/15')
+    expect(row(2)).toHaveClass('bg-bg')
+  })
+
+  it('without a line, starts at the offset kept', () => {
+    mockHighlight.mockResolvedValue(null)
+    const scroll = vi.fn()
+    Element.prototype.scrollIntoView = scroll
+    render(at(undefined, undefined, 50))
+    expect(scroll).not.toHaveBeenCalled()
+  })
+})

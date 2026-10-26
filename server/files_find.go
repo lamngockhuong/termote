@@ -135,7 +135,17 @@ func parseFindQuery(v url.Values) (findQuery, error) {
 	if len(q) > findMaxQuery {
 		return findQuery{}, errFindQueryTooLong
 	}
-	names := v["exclude"]
+	in, err := parseFindExcludes(v["exclude"])
+	if err != nil {
+		return findQuery{}, err
+	}
+	in.q, in.ignored, in.fresh = q, v.Get("ignored") == "1", v.Get("fresh") == "1"
+	return in, nil
+}
+
+// parseFindExcludes reads the excluded directory names of a find (or a
+// search, which shares its list) into excludes and excludeKey.
+func parseFindExcludes(names []string) (findQuery, error) {
 	if len(names) > findMaxExcludes {
 		return findQuery{}, errFindInvalidExclude
 	}
@@ -151,10 +161,7 @@ func parseFindQuery(v url.Values) (findQuery, error) {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	return findQuery{
-		q: q, ignored: v.Get("ignored") == "1", fresh: v.Get("fresh") == "1",
-		excludes: ex, excludeKey: strings.Join(keys, "\x00"),
-	}, nil
+	return findQuery{excludes: ex, excludeKey: strings.Join(keys, "\x00")}, nil
 }
 
 // validFindExclude: one directory name, never a path or a pattern.

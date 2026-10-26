@@ -82,6 +82,9 @@ export interface Settings {
   sidePanelWidth: number // desktop Files/Changes panel, in px
   findIncludeIgnored: boolean // Files search: a repo's ignored files too
   findExcludes: string[] // Files search: folder names never searched (above)
+  searchCase: boolean // Files content search: Match case
+  searchWord: boolean // Files content search: Whole word
+  searchRegex: boolean // Files content search: a regular expression
   notifyAgents: boolean // notify when an agent is blocked or ends a turn
   stuckMinutes: number // overview: a working agent quiet this long may be stuck
   showUsageChip: boolean // header: the open pane's agent's context and limits
@@ -107,6 +110,9 @@ const DEFAULTS: Settings = {
   sidePanelWidth: SIDE_PANEL_DEFAULT,
   findIncludeIgnored: false,
   findExcludes: FIND_EXCLUDES_DEFAULT,
+  searchCase: false,
+  searchWord: false,
+  searchRegex: false,
   notifyAgents: false,
   stuckMinutes: DEFAULT_STUCK_MINUTES,
   showUsageChip: true,

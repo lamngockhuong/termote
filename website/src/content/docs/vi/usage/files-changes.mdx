@@ -114,8 +114,9 @@ gốc. Kết quả thay chỗ cây thư mục sau một nhịp ngừng gõ ngắ
 - File mà git bỏ qua (ignored) chỉ được tìm khi bật **Include ignored** (công tắc cạnh ô nhập, chỉ
   hiện trong repo git). Kết quả loại này hiện mờ, kèm nhãn `ignored`. Thiết bị này nhớ lựa chọn của
   bạn.
-- File có tên thường dùng để chứa bí mật có ổ khoá, giống trong cây thư mục. Termote chỉ tìm theo
-  tên, không bao giờ tìm trong nội dung.
+- File có tên thường dùng để chứa bí mật có ổ khoá, giống trong cây thư mục. Ô này chỉ tìm theo
+  tên; muốn tìm trong nội dung file thì dùng tab **Search** (xem
+  [Tìm trong nội dung file](#tìm-trong-nội-dung-file)).
 - Chỉ hiện 200 kết quả đầu (`More than 200 matches — type more to narrow`). Trong repo hoặc thư
   mục rất lớn, việc tìm có thể dừng sớm, và danh sách ghi `Search stopped early in a large tree`.
 - Danh sách file được giữ 30 giây; lưu, tạo hoặc xoá một file thì danh sách bị bỏ đi. Nút
@@ -129,6 +130,49 @@ luôn tìm được, kể cả nằm dưới một trong các thư mục đó.
 
 Những đường dẫn Termote không bao giờ trả về (xem [Không bao giờ hiện](#không-bao-giờ-hiện)) cũng
 không bao giờ xuất hiện trong kết quả.
+
+## Tìm trong nội dung file
+
+Ở đầu Files có công tắc **Files | Search**; chọn **Search** để tìm trong văn bản của các file dưới
+gốc. Trên máy tính, đang ở bất kỳ đâu trong Files, nhấn Ctrl+Shift+F (Cmd+Shift+F trên macOS) sẽ mở
+tab này và đặt con trỏ vào ô nhập. Khi con trỏ đang ở terminal, tổ hợp phím đó vẫn thuộc về terminal.
+
+- Termote tìm ngay khi bạn gõ, sau một nhịp ngừng ngắn, miễn là ô nhập có từ 2 ký tự trở lên. Chuỗi
+  được tìm đúng như bạn gõ, kể cả khoảng trắng ở hai đầu.
+- Ba nút cạnh ô nhập, `Match case`, `Whole word` và `Regular expression`, đổi cách so khớp;
+  thiết bị này nhớ lựa chọn của bạn. Khi tắt `Match case`, chữ hoa và chữ thường được coi như nhau.
+  Biểu thức chính quy viết theo cú pháp của Go (RE2). Với `Whole word`, một từ chỉ gồm chữ cái `A`–`Z`,
+  `a`–`z`, chữ số và `_`. Biểu thức có thể khớp chuỗi rỗng, chẳng hạn `a*`, bị từ chối
+  (`This pattern matches empty text`); hãy viết `a+`.
+- Nút **…** mở thêm hai ô: `Files to include` và `Files to exclude`. Mỗi ô nhận một danh sách
+  mẫu cách nhau bằng dấu phẩy, chẳng hạn `*.ts, src/`. Mẫu không chứa `/` khớp tên file ở mọi thư
+  mục, `**` thay cho bao nhiêu cấp thư mục cũng được, còn mẫu kết thúc bằng `/` khớp mọi thứ trong
+  thư mục đó.
+- Kết quả được gom theo file, kèm số dòng khớp của từng file. Mỗi dòng hiện số dòng và phần khớp
+  được tô sáng. Từ file thứ 51 trở đi, nhóm kết quả mở ra ở trạng thái thu gọn. Chạm vào một dòng,
+  hoặc nhấn Enter khi đang chọn nó, để mở file ngay tại dòng đó: dòng nằm giữa khung nhìn và được
+  tô sáng. File Markdown, CSV/TSV và SVG mở ở dạng văn bản gốc trong tab đó, bất kể cài đặt xem
+  trước. Nút Back đưa bạn về đúng danh sách kết quả cũ. Phím mũi tên chuyển giữa ô nhập và các kết
+  quả, Escape đưa con trỏ về ô nhập.
+- Termote hiện tối đa 2000 dòng (`Showing the first 2000 lines`) và 100 dòng cho mỗi file; số dòng
+  còn lại được đếm dưới tên file. Một lượt tìm dừng sau 5 giây hoặc khi đã đọc 256 MiB
+  (`Stopped early: some files were not searched`). Dòng dài hơn 16 KiB chỉ được tìm ở phần đầu.
+  Máy chủ chạy tối đa hai lượt tìm cùng lúc; lượt thứ ba báo `Search busy, try again`.
+- Nếu thư mục của pane đã đổi từ lúc tìm, kết quả hiện mờ và không mở được cho tới lượt tìm sau.
+
+Termote tìm trong đúng những file mà **Find a file** liệt kê khi tắt **Include ignored**. Những file
+sau không bao giờ được tìm:
+
+- file mà git bỏ qua, khi ở trong repo git;
+- file có thể chứa bí mật (xem [File có thể chứa bí mật](#file-có-thể-chứa-bí-mật)); số lượng được
+  ghi dưới kết quả (`2 sensitive files not searched`);
+- file và thư mục bắt đầu bằng dấu chấm, khi thư mục đang xem là thư mục home của bạn hoặc chứa nó
+  (lịch sử shell và cấu hình công cụ giữ bí mật dưới những cái tên bình thường); số lượng cũng được
+  ghi lại;
+- file nhị phân, file không phải văn bản UTF-8 và file lớn hơn 1 MiB;
+- những đường dẫn Termote không bao giờ trả về (xem [Không bao giờ hiện](#không-bao-giờ-hiện)).
+
+Thiết bị chỉ xem (view-only) tìm trong đúng những file mà nó được mở.
 
 ## Sửa file
 

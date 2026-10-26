@@ -59,6 +59,8 @@ type filesAPI struct {
 	statuses *ttlCache[gitStatus] // root → git status
 	finds    *ttlCache[findList]  // root + list kind → file list (files/find)
 	rawSlots chan struct{}        // raw requests running, server-wide
+	// searchSlots are the content searches running, server-wide.
+	searchSlots chan struct{}
 	// writeDeny are directories a save never writes to, on top of deny:
 	// the install's data dir (its current pointer picks the binary the
 	// service runs) and the upload store.
@@ -96,12 +98,13 @@ func registerFilesRoutes(mux *http.ServeMux, m Mux, allowed hostAllowlist, denyD
 	git := newGitRunner()
 	f := &filesAPI{
 		m: m, dirs: dirs, allowed: allowed, git: git, roots: newRootResolver(git),
-		statuses:   newTTLCache[gitStatus](filesRootTTL),
-		finds:      newTTLCache[findList](findListTTL),
-		rawSlots:   make(chan struct{}, rawMaxRunning),
-		deny:       append(filesDenyDirs(systemDenyDirs...), filesDenyDirs(denyDirs...)...),
-		writeSlots: make(chan struct{}, writeMaxRunning),
-		writeLocks: &writeLocks{locks: map[string]*sync.Mutex{}},
+		statuses:    newTTLCache[gitStatus](filesRootTTL),
+		finds:       newTTLCache[findList](findListTTL),
+		rawSlots:    make(chan struct{}, rawMaxRunning),
+		searchSlots: make(chan struct{}, searchMaxRunning),
+		deny:        append(filesDenyDirs(systemDenyDirs...), filesDenyDirs(denyDirs...)...),
+		writeSlots:  make(chan struct{}, writeMaxRunning),
+		writeLocks:  &writeLocks{locks: map[string]*sync.Mutex{}},
 	}
 	mux.HandleFunc("/api/mux/panes/{id}/files/tree", f.handleTree)
 	mux.HandleFunc("/api/mux/panes/{id}/files/content", f.handleContent)
@@ -113,6 +116,7 @@ func registerFilesRoutes(mux *http.ServeMux, m Mux, allowed hostAllowlist, denyD
 	mux.HandleFunc("/api/mux/panes/{id}/files/restore", f.handleRestoreFile)
 	mux.HandleFunc("/api/mux/panes/{id}/files/rename", f.handleRenameFile)
 	mux.HandleFunc("/api/mux/panes/{id}/files/find", f.handleFind)
+	mux.HandleFunc("/api/mux/panes/{id}/files/search", f.handleSearch)
 	mux.HandleFunc("/api/mux/panes/{id}/files/changes", f.handleChanges)
 	mux.HandleFunc("/api/mux/panes/{id}/files/diff", f.handleDiff)
 	mux.HandleFunc("/api/mux/panes/{id}/files/raw", f.handleRaw)
@@ -259,8 +263,21 @@ func (f *filesAPI) viewHides(req *filesRequest, p string, dir, listed bool) bool
 // when that is outside root. A path that does not resolve (gone) is itself.
 func realRel(root, rel string) (string, bool) {
 	abs := filepath.Join(root, rel)
-	real, err := filepath.EvalSymlinks(abs)
-	if err != nil || real == abs {
+	return realRelOf(root, rel, resolvedPath(abs))
+}
+
+// resolvedPath is where abs leads through its symlinks; abs itself when it
+// does not resolve (gone).
+func resolvedPath(abs string) string {
+	if real, err := filepath.EvalSymlinks(abs); err == nil {
+		return real
+	}
+	return abs
+}
+
+// realRelOf is realRel with rel's resolved form (resolvedPath) known.
+func realRelOf(root, rel, real string) (string, bool) {
+	if real == filepath.Join(root, rel) {
 		return filepath.ToSlash(rel), true
 	}
 	to, err := filepath.Rel(root, real)
@@ -295,8 +312,13 @@ func cleanRelPath(p string) (string, error) {
 // can read the file itself anyway.
 func (f *filesAPI) denied(root, rel string, extra ...string) bool {
 	abs := filepath.Join(root, rel)
+	return f.deniedPaths(root, abs, resolvedPath(abs), extra...)
+}
+
+// deniedPaths is denied with abs's resolved form (resolvedPath) known.
+func (f *filesAPI) deniedPaths(root, abs, real string, extra ...string) bool {
 	paths := []string{abs}
-	if real, err := filepath.EvalSymlinks(abs); err == nil && real != abs {
+	if real != abs {
 		paths = append(paths, real)
 	}
 	for _, p := range paths {
@@ -362,11 +384,7 @@ func underDir(dir, p string) bool {
 // leads to: notes.txt -> .env is sensitive.
 func sensitivePath(root, rel string) bool {
 	abs := filepath.Join(root, rel)
-	if isSensitive(abs) {
-		return true
-	}
-	real, err := filepath.EvalSymlinks(abs)
-	return err == nil && isSensitive(real)
+	return isSensitive(abs) || isSensitive(resolvedPath(abs))
 }
 
 type fileEntry struct {
@@ -608,33 +626,50 @@ func readPreview(rt *os.Root, rel string) (text string, size int64, reason strin
 		return "", 0, "", err
 	}
 	defer fh.Close()
-	fi, err := fh.Stat()
-	if err != nil {
-		return "", 0, "", err
-	}
-	if !fi.Mode().IsRegular() {
-		return "", 0, "not-regular", nil
-	}
-	size = fi.Size()
-	if size > maxPreviewSize {
-		return "", size, "too-large", nil
-	}
-	b, err := io.ReadAll(io.LimitReader(fh, maxPreviewSize+1))
-	if err != nil {
-		return "", size, "", err
-	}
-	if len(b) > maxPreviewSize {
-		return "", size, "too-large", nil
-	}
-	if isBinary(b) {
-		return "", size, "binary", nil
+	b, size, reason, err := readTextFile(fh)
+	if err != nil || reason != "" {
+		return "", size, reason, err
 	}
 	return string(b), int64(len(b)), "", nil
 }
 
-// isBinary: a NUL byte near the start, or not UTF-8.
-func isBinary(b []byte) bool {
-	return bytes.IndexByte(b[:min(len(b), binarySniffSize)], 0) >= 0 || !utf8.Valid(b)
+// readTextFile reads the open file fh when it is a regular text file of at most
+// maxPreviewSize; reason says why not (not-regular, too-large, binary) and
+// size is its size then. A NUL byte in the first binarySniffSize bytes stops
+// the read there.
+func readTextFile(fh *os.File) (b []byte, size int64, reason string, err error) {
+	fi, err := fh.Stat()
+	if err != nil {
+		return nil, 0, "", err
+	}
+	if !fi.Mode().IsRegular() {
+		return nil, 0, "not-regular", nil
+	}
+	size = fi.Size()
+	if size > maxPreviewSize {
+		return nil, size, "too-large", nil
+	}
+	lr := io.LimitReader(fh, maxPreviewSize+1)
+	head := make([]byte, binarySniffSize)
+	n, err := io.ReadFull(lr, head)
+	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+		return nil, size, "", err
+	}
+	if bytes.IndexByte(head[:n], 0) >= 0 {
+		return head[:n], size, "binary", nil
+	}
+	rest, err := io.ReadAll(lr)
+	if err != nil {
+		return nil, size, "", err
+	}
+	b = append(head[:n], rest...)
+	if len(b) > maxPreviewSize {
+		return b, size, "too-large", nil
+	}
+	if !utf8.Valid(b) {
+		return b, size, "binary", nil
+	}
+	return b, size, "", nil
 }
 
 // error maps a files error to a response. Client mistakes are returned as

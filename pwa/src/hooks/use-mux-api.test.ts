@@ -52,6 +52,7 @@ import {
   SAVE_TIMEOUT_MS,
   saveFileContent,
   scrollPane,
+  searchFiles,
   selectTab,
   sendAgentMessage,
   sendKeys,
@@ -927,6 +928,65 @@ describe('files API client', () => {
     await expect(
       findFiles('1', { q: 'x', ignored: false, exclude: ['a/b'] }),
     ).rejects.toMatchObject({ status: 400, code: 'invalid_exclude' })
+  })
+
+  it('searches contents with the options, every glob and excluded name', async () => {
+    const found = {
+      root: '/r',
+      isRepo: true,
+      files: [],
+      truncated: false,
+      incomplete: false,
+      skipped: { sensitive: 0, hidden: 0, binary: 0, tooLarge: 0 },
+    }
+    const { calls } = mockFetch({ body: found }, { body: found })
+    const abort = new AbortController()
+    expect(
+      await searchFiles(
+        '%1',
+        {
+          q: ' -e x',
+          root: '/r',
+          matchCase: true,
+          wholeWord: true,
+          regex: true,
+          files: ['*.ts', 'src/'],
+          skip: ['*.test.ts'],
+          exclude: ['node_modules'],
+          fresh: true,
+        },
+        abort.signal,
+      ),
+    ).toEqual(found)
+    expect(calls[0].url).toBe(
+      '/api/mux/panes/%251/files/search?q=+-e+x&root=%2Fr&case=1&word=1&regex=1&files=*.ts&files=src%2F&skip=*.test.ts&exclude=node_modules&fresh=1',
+    )
+    expect(calls[0].init?.signal).toBe(abort.signal)
+    await searchFiles('1', {
+      q: 'x',
+      matchCase: false,
+      wholeWord: false,
+      regex: false,
+      files: [],
+      skip: [],
+      exclude: [],
+    })
+    expect(calls[1].url).toBe('/api/mux/panes/1/files/search?q=x')
+  })
+
+  it('a refused search throws its code', async () => {
+    mockFetch({ body: { error: 'x', code: 'invalid_regex' }, status: 400 })
+    await expect(
+      searchFiles('1', {
+        q: '(',
+        matchCase: false,
+        wholeWord: false,
+        regex: true,
+        files: [],
+        skip: [],
+        exclude: [],
+      }),
+    ).rejects.toMatchObject({ status: 400, code: 'invalid_regex' })
   })
 
   it('reads a hash without the contents', async () => {

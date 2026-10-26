@@ -46,6 +46,11 @@ import { fileNameProblem } from '../utils/file-name'
 import { splitPath } from '../utils/files-format'
 import type { LinkPath } from '../utils/markdown-links'
 import { visibleUnsafe } from '../utils/unsafe-chars'
+import {
+  CONTENT_SEARCH_INITIAL,
+  ContentSearch,
+  type ContentSearchState,
+} from './content-search'
 import { DeleteFileDialog, type DeleteOutcome } from './delete-file-dialog'
 import { FileSearch } from './file-search'
 import { FileTabBar, type TabListProps, tabElementId } from './file-tab-bar'
@@ -58,6 +63,7 @@ import { DiscardTabDialog, RootCloseDialog } from './tab-close-dialogs'
 import { FOCUS_RING, IconButton } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
 import { Menu, MenuItem } from './ui/menu'
+import { SegmentedControl } from './ui/segmented-control'
 
 const ERRORS: Record<FilesError, string> = {
   unsupported: 'Not supported by this backend',
@@ -222,6 +228,19 @@ function PaneFiles({
   // to the results
   const [query, setQuery] = useState('')
   const [refreshTick, setRefreshTick] = useState(0)
+  // Where the tree shows: the tree with the name box, or the content search,
+  // whose query, results and scroll are kept here the same way
+  const [pane, setPane] = useState<'files' | 'search'>('files')
+  const [search, setSearch] = useState<ContentSearchState>(
+    CONTENT_SEARCH_INITIAL,
+  )
+  const patchSearch = useCallback(
+    (patch: Partial<ContentSearchState>) =>
+      setSearch((s) => ({ ...s, ...patch })),
+    [],
+  )
+  // Bumped by Ctrl/Cmd+Shift+F: the search box takes the focus
+  const [focusSearch, setFocusSearch] = useState(0)
 
   const onFollow = useCallback(
     async (target: LinkPath, scrollTop: number, opts: { newTab: boolean }) => {
@@ -280,7 +299,23 @@ function PaneFiles({
 
   const refresh = () => {
     f.refresh()
-    if (query.trim()) setRefreshTick((n) => n + 1)
+    if (query.trim() || search.query) setRefreshTick((n) => n + 1)
+  }
+
+  // Ctrl/Cmd+Shift+F from anywhere in Files (never from the terminal, whose
+  // keys stay the pane's, nor from a dialog): the content search, focused
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (!(e.ctrlKey || e.metaKey) || !e.shiftKey || e.altKey) return
+    if (e.key.toLowerCase() !== 'f') return
+    const target = e.target as HTMLElement
+    if (
+      target.closest?.('[role="dialog"], [role="alertdialog"], dialog, [inert]')
+    )
+      return
+    e.preventDefault()
+    f.activate(null)
+    setPane('search')
+    setFocusSearch((n) => n + 1)
   }
 
   // An entry of the tree to delete: a folder only once it is known empty
@@ -359,7 +394,7 @@ function PaneFiles({
   ) => {
     fileRenamed(root, from, to, reveal)
     changesMoved(root, from, to, reveal)
-    if (query.trim()) setRefreshTick((n) => n + 1)
+    if (query.trim() || search.query) setRefreshTick((n) => n + 1)
   }
 
   // A file of the tree, or the one shown, to download. A sensitive one not
@@ -461,6 +496,7 @@ function PaneFiles({
     <div
       className="flex h-full min-h-0 flex-col"
       onDoubleClick={pinIfDoubleClick}
+      onKeyDown={onKeyDown}
     >
       <PaneDirHeader
         root={f.root}
@@ -573,6 +609,8 @@ function PaneFiles({
             compact={isMobile}
             anchor={tab.anchor}
             scrollTop={tab.scrollTop}
+            line={tab.line}
+            jump={tab.jump}
             tableLayout={tab.table}
             onTableLayout={(l) => f.setTableLayout(tab.id, l)}
             backTo={tab.history[tab.history.length - 1]?.path}
@@ -625,42 +663,70 @@ function PaneFiles({
         ) : !root?.entries ? (
           <ViewMessage>Loading…</ViewMessage>
         ) : (
-          <FileSearch
-            paneId={paneId}
-            root={f.root}
-            isRepo={f.isRepo}
-            query={query}
-            onQuery={setQuery}
-            refreshTick={refreshTick}
-            onPick={(p) => f.reveal(p)}
-            onRootChanged={f.rootChanged}
-            hideIgnored={readOnly}
-          >
-            {root.entries.length === 0 ? (
-              <ViewMessage>This directory is empty</ViewMessage>
-            ) : (
-              <FileTree
-                state={f}
-                focused={focused}
-                onFocus={setFocused}
-                onToggle={f.toggle}
-                onOpen={openFromTree}
-                onDelete={canDelete ? askDelete : undefined}
-                onDownload={
-                  canDownload
-                    ? (path, entry) => askDownload(path, entry.sensitive, false)
-                    : undefined
-                }
-                onRename={
-                  canRename
-                    ? // A sensitive name is asked about: renaming it to an
-                      // ordinary one would show what it holds
-                      (path) => askRename(path, false)
-                    : undefined
-                }
+          <>
+            <div className="flex shrink-0 justify-center border-b border-border px-2 py-1.5">
+              <SegmentedControl
+                label="Files view"
+                value={pane}
+                onChange={setPane}
+                options={[
+                  { value: 'files', content: 'Files' },
+                  { value: 'search', content: 'Search' },
+                ]}
+                className="w-full [&>button]:flex-1"
               />
+            </div>
+            {pane === 'search' ? (
+              <ContentSearch
+                paneId={paneId}
+                root={f.root}
+                state={search}
+                onState={patchSearch}
+                refreshTick={refreshTick}
+                focusTick={focusSearch}
+                onPick={(p, m) => f.open(p, { line: m.line, col: m.col })}
+                onRootChanged={f.rootChanged}
+              />
+            ) : (
+              <FileSearch
+                paneId={paneId}
+                root={f.root}
+                isRepo={f.isRepo}
+                query={query}
+                onQuery={setQuery}
+                refreshTick={refreshTick}
+                onPick={(p) => f.reveal(p)}
+                onRootChanged={f.rootChanged}
+                hideIgnored={readOnly}
+              >
+                {root.entries.length === 0 ? (
+                  <ViewMessage>This directory is empty</ViewMessage>
+                ) : (
+                  <FileTree
+                    state={f}
+                    focused={focused}
+                    onFocus={setFocused}
+                    onToggle={f.toggle}
+                    onOpen={openFromTree}
+                    onDelete={canDelete ? askDelete : undefined}
+                    onDownload={
+                      canDownload
+                        ? (path, entry) =>
+                            askDownload(path, entry.sensitive, false)
+                        : undefined
+                    }
+                    onRename={
+                      canRename
+                        ? // A sensitive name is asked about: renaming it to an
+                          // ordinary one would show what it holds
+                          (path) => askRename(path, false)
+                        : undefined
+                    }
+                  />
+                )}
+              </FileSearch>
             )}
-          </FileSearch>
+          </>
         )}
       </div>
     </div>

@@ -293,6 +293,7 @@ POST   /api/mux/panes/{id}/files/delete?root=   body: {path, kind, baseHash, rev
 POST   /api/mux/panes/{id}/files/restore?root=  body: {trashId, reveal}         → {root, path} | {error, code}
 POST   /api/mux/panes/{id}/files/rename?root=   body: {path, newPath, reveal}  → {root, path} | {error, code[, path]}
 GET    /api/mux/panes/{id}/files/find?q=&root=&ignored=1&exclude=&fresh=1 → {root, isRepo, results, truncated, incomplete} | {error, code}
+GET    /api/mux/panes/{id}/files/search?q=&root=&case=1&word=1&regex=1&files=&skip=&exclude=&fresh=1 → {root, isRepo, files, truncated, incomplete, skipped} | {error, code}
 GET    /api/mux/panes/{id}/files/changes?root=                  → {root, isRepo, branch, entries, truncated}
 GET    /api/mux/panes/{id}/files/diff?path=&orig=&staged=&root=&reveal= → {root, path, binary, conflict, truncated, sensitive, reason, hunks}
 GET    /api/mux/panes/{id}/files/raw?path=&root=&reveal=[&side=old|new&staged=&orig=] → image bytes | {error, code}
@@ -795,12 +796,12 @@ The PWA's Files and Changes views read a pane's directory, offered when the snap
 Herdr (`foreground_cwd`, else `cwd`, of the pane; a Herdr that reports neither answers 501) and
 Zellij on Linux and macOS (the pane's cwd as Zellij lists it).
 psmux does not report the directory, so `caps.files` is off on Windows tmux. Every route is
-registered for every backend and answers 501 where it is off. Seven are read-only GETs (`find` and `download`
-included); `PUT files/content` saves a text file, `POST files/create` creates an empty one and
+registered for every backend and answers 501 where it is off. Eight are read-only GETs (`find`, `search` and
+`download` included); `PUT files/content` saves a text file, `POST files/create` creates an empty one and
 `POST files/delete` / `files/restore` remove a file and put it back, `POST files/rename` moves a
 file to a new path, never replacing anything, and `GET files/download` sends a file as an
-attachment (see Saving a file, Creating a file, Finding a file, Deleting a file, Renaming a file,
-Downloading a file).
+attachment (see Saving a file, Creating a file, Finding a file, Searching file contents, Deleting a file,
+Renaming a file, Downloading a file).
 
 **Kept on the device.** The open Files and Changes tabs, each pane's last view and the unsaved
 drafts of files not shown as sensitive are kept in the browser's `localStorage`
@@ -976,6 +977,34 @@ required as elsewhere. It answers names only (`path`, `ignored`, `sensitive`), n
   and dropped by a save, create, delete or restore; the PWA's Refresh sends `fresh=1`.
 - `.git`, the git dir and the deny dirs (config and state, the upload store, the trash) never
   appear, checked through symlinks.
+
+**Searching file contents (`GET search`).** The lines of the files under the root that match a
+query, for the Files view's Search tab, in `server/files_search.go` and
+`server/files_search_glob.go`. It reads files in Go, not with `git grep`: one regex syntax in and
+out of a repository, match ranges for free, and the same deny, sensitive and binary checks as
+every other files read.
+
+- The files are Find's list (same cache entry: the PWA sends its `exclude` names), sorted by
+  path. A view-only client searches the list it may read (tracked and untracked files git does
+  not ignore). Ignored files are never searched.
+- `q` (1 to 256 bytes, not trimmed) is a literal unless `regex=1` (Go RE2 syntax); `case=1`
+  matches case, `word=1` adds `\b` (ASCII word characters). `files` and `skip` are globs (a glob
+  without `/` matches the base name, `**` any number of folders, a trailing `/` a folder). An
+  invalid pattern or glob answers 400 `invalid_regex` / `invalid_glob`, a regex that can match
+  empty text 400 `empty_match`. A line is searched once; its other matches only in the window
+  sent, so a long line's highlights past its first match are found without the text around the
+  window.
+- Sensitive files are never read (`skipped.sensitive`); under a root holding a home folder,
+  dot-files and dot-folders are skipped too (`skipped.hidden`); binary, non-UTF-8 and larger
+  than 1 MiB files are counted and skipped.
+- The answer groups matching lines by file: `line` (1-based), `text` (the line, or 240
+  characters of it around the first match), `col` and `ranges` in UTF-16 code units. Limits:
+  2000 lines (`truncated`), 100 per file (`more`), 16 KiB per line, 256 MiB and 5 s per search
+  (`incomplete`), two searches at once (429 `busy`).
+- The PWA searches as the user types (300 ms pause, from 2 characters), opens a result in the
+  preview tab at its line (`line`/`jump` on the tab; Markdown, CSV/TSV and SVG show their source
+  in that tab only) and keeps the results while a file is open, so Back shows them again without
+  a request.
 
 **Deleting a file (`POST delete`, `POST restore`).** `server/files_delete.go` and
 `server/files_trash.go`. As for a save, a signed-in user has a shell; what these guard is losing

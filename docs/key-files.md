@@ -86,6 +86,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/worktree-dialog.tsx`          | New/Open worktree, the Remove confirmations, why refused      |
 | `pwa/src/utils/git-ref.ts`                        | Branch names the server accepts (validBranchName)             |
 | `pwa/src/components/file-search.tsx`              | Files: find a file by name under the root, results, switch    |
+| `pwa/src/components/content-search.tsx`           | Files: Search tab, file contents, options, globs, results     |
 | `pwa/src/components/delete-file-dialog.tsx`       | Files: asks before a delete, second ask for a permanent one   |
 | `pwa/src/components/rename-file-dialog.tsx`       | Files: a file's new path, renames/moves it, says why not      |
 | `pwa/src/utils/file-name.ts`                      | Name checks of New file and Rename, the base name selected    |
@@ -171,6 +172,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/files_write.go`                           | `PUT files/content`: saves a text file (baseHash, rename)     |
 | `server/files_create.go`                          | `POST files/create`: an empty file, never replacing anything  |
 | `server/files_find*.go`                           | `GET files/find`: file lists (git, walk), cache, ranking      |
+| `server/files_search*.go`                         | `GET files/search`: lines of the listed files, globs, caps    |
 | `server/files_delete.go`                          | `POST files/delete`/`restore`, `content?hash=1`               |
 | `server/files_rename.go`                          | `POST files/rename`: a file moved, never replacing anything   |
 | `server/files_download.go`                        | `GET files/download`: a file as an attachment, `check=1`      |

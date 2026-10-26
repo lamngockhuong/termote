@@ -77,6 +77,12 @@ export interface FileTab extends TabBase {
   // Where the file starts: a heading, or the offset it was left at
   anchor?: string
   scrollTop?: number
+  // A search result's line (1-based) and column (UTF-16 units) the file
+  // opens at, dropped like anchor; jump is bumped at each pick, so picking
+  // the same line again moves there again
+  line?: number
+  col?: number
+  jump?: number
   // A CSV/TSV table's column widths and wrapped columns, with the scroll
   // offset they were left at; another path starts over
   table?: TableLayout
@@ -126,6 +132,9 @@ export interface FileOpenOptions {
   pin?: boolean
   // Where the file starts: a heading
   anchor?: string
+  // Where the file starts: a search result's line and column
+  line?: number
+  col?: number
 }
 
 export interface FollowOptions {
@@ -284,6 +293,7 @@ function createStore(id: string): Store {
   }
 
   function open(path: string, opts: FileOpenOptions = {}) {
+    const now = ++clock
     const r = openTab(
       state.tabs,
       state.activeId,
@@ -301,19 +311,26 @@ function createStore(id: string): Store {
       }),
       opts,
       isDirty,
-      ++clock,
+      now,
     )
     // Tabs closed to make room never had changes; an untouched draft of
     // theirs goes with them, so the file is read again when it reopens
     for (const t of r.closed) dropDraft(paneId, t.path)
     const gone = new Set(r.closed.map((t) => t.id))
-    // A file already open goes to the heading asked for
-    const tabs = opts.anchor
-      ? r.tabs.map((t) =>
-          t.id === r.activeId
-            ? { ...t, anchor: opts.anchor, scrollTop: undefined }
-            : t,
-        )
+    // A file already open goes to the heading or the line asked for
+    const at: Partial<FileTab> | undefined = opts.line
+      ? {
+          line: opts.line,
+          col: opts.col,
+          jump: now,
+          anchor: undefined,
+          scrollTop: undefined,
+        }
+      : opts.anchor
+        ? { anchor: opts.anchor, scrollTop: undefined }
+        : undefined
+    const tabs = at
+      ? r.tabs.map((t) => (t.id === r.activeId ? { ...t, ...at } : t))
       : r.tabs
     set({
       tabs,
@@ -451,6 +468,8 @@ function createStore(id: string): Store {
       path: target.path,
       anchor: target.anchor,
       scrollTop: undefined,
+      line: undefined,
+      col: undefined,
       table: undefined,
       reveal: false,
       intent: undefined,
@@ -643,6 +662,8 @@ function createStore(id: string): Store {
         path: prev.path,
         anchor: undefined,
         scrollTop: prev.scrollTop,
+        line: undefined,
+        col: undefined,
         table: undefined,
         reveal: false,
         intent: undefined,
@@ -653,8 +674,11 @@ function createStore(id: string): Store {
       const tab = state.tabs.find((t) => t.id === id)
       if (!tab) return
       tab.scrollTop = top
-      // Scrolled away from the heading it opened at: shown again here
+      // Scrolled away from the heading or line it opened at: shown again
+      // here
       tab.anchor = undefined
+      tab.line = undefined
+      tab.col = undefined
       persist()
     },
     setTableLayout(id, layout) {

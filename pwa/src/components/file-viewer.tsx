@@ -279,6 +279,10 @@ interface Props {
   // Where a Markdown preview starts: a heading, else an offset to restore
   anchor?: string
   scrollTop?: number
+  // A search result's line to open at, each time jump changes: this tab
+  // shows the source (not the Markdown, table or SVG image preview) there
+  line?: number
+  jump?: number
   // A CSV/TSV table's widths and wrapped columns this tab kept, and where
   // to keep them when they change
   tableLayout?: TableLayout
@@ -359,6 +363,8 @@ export function FileViewer({
   wrapByDefault,
   anchor,
   scrollTop,
+  line,
+  jump,
   tableLayout,
   onTableLayout,
   backTo,
@@ -412,20 +418,37 @@ export function FileViewer({
   const [reload, setReload] = useState(0)
   const [wrap, setWrap] = useState(wrapByDefault)
   const { settings, updateSetting } = useSettings()
+  // The search result picked last in this tab: its line shows in the
+  // source whatever the preview settings say (they are left as they are),
+  // until the user turns a preview on here
+  const asked = line && jump !== undefined ? { line, jump } : undefined
+  const [pick, setPick] = useState(asked)
+  const [seenJump, setSeenJump] = useState(jump)
+  if (jump !== seenJump) {
+    setSeenJump(jump)
+    setPick(asked)
+  }
+  const forceSource = !!pick
   // Markdown that can be previewed: the choice (remembered on this device)
   // says how it shows
   const markdown = isMarkdownPath(path)
   const tooLarge = state.kind === 'text' && state.size > PREVIEW_MAX_BYTES
   const canPreview = markdown && state.kind === 'text' && !tooLarge
-  const preview = canPreview && settings.markdownPreview
+  const preview = canPreview && settings.markdownPreview && !forceSource
   // Where the preview started (the link's heading, the offset Back restored)
   // is used up once the user leaves it: Source then Preview starts at the top
   const [leftPreview, setLeftPreview] = useState(false)
   // A CSV/TSV file is a table, whatever its size (up to the 1 MiB a read
   // returns), unless the user chose its source
   const canTable = isTablePath(path) && state.kind === 'text'
-  const tableView = canTable && settings.tablePreview
+  const tableView = canTable && settings.tablePreview && !forceSource
   const togglePreview = () => {
+    if (forceSource) {
+      setPick(undefined)
+      scrolled.current = undefined
+      // The setting shows the preview: back to it, the setting unchanged
+      if (canTable ? settings.tablePreview : settings.markdownPreview) return
+    }
     if (canTable) {
       scrolled.current = undefined
       updateSetting('tablePreview', !tableView)
@@ -439,7 +462,8 @@ export function FileViewer({
   const previewOn = preview || tableView
   // An image (or an SVG the user wants as one) is read through files/raw
   const svg = isSvgPath(path)
-  const asImage = isImagePath(path) || (svg && settings.svgPreview)
+  const asImage =
+    isImagePath(path) || (svg && settings.svgPreview && !forceSource)
   const [retry, setRetry] = useState(0)
   const image = useImageBlob(
     paneId,
@@ -476,6 +500,15 @@ export function FileViewer({
     canEdit && !asImage && state.kind === 'text' && state.editable
       ? state
       : undefined
+
+  // A line picked in a file being edited: the text shown is the draft,
+  // whose lines may no longer be the file's
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once per pick
+  useEffect(() => {
+    const d = mineRef.current
+    if (pick && d && d.text !== d.base)
+      notify(`Unsaved changes: line ${pick.line} may have moved`)
+  }, [pick?.jump])
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reload reads the file again
   useEffect(() => {
@@ -750,7 +783,13 @@ export function FileViewer({
       title: asImage ? 'Show the source' : 'Show as an image',
       icon: <ImageIcon size={15} />,
       pressed: asImage,
-      onClick: () => updateSetting('svgPreview', !asImage),
+      onClick: () => {
+        if (forceSource) {
+          setPick(undefined)
+          if (settings.svgPreview) return
+        }
+        updateSetting('svgPreview', !asImage)
+      },
     })
   if (!asImage)
     extras.push({
@@ -998,6 +1037,8 @@ export function FileViewer({
             path={path}
             wrap={wrap}
             scrollTop={scrolled.current}
+            line={pick?.line}
+            jump={pick?.jump}
           />
         </>
       )}
