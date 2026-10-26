@@ -1,5 +1,10 @@
 import type { ShortcutCommand } from '../hooks/use-shortcuts'
-import { CHANGES_VIEW_ID, CHAT_VIEW_ID, FILES_VIEW_ID } from '../view-ids'
+import {
+  CHANGES_VIEW_ID,
+  CHAT_VIEW_ID,
+  FILES_VIEW_ID,
+  TASKS_VIEW_ID,
+} from '../view-ids'
 import { SEARCH_CONTENT_KEY } from './shortcuts'
 
 // Where the palette opens: files (no prefix), commands (>), a line of the
@@ -160,6 +165,17 @@ function allCommands(ctx: AppCommandContext): AppCommand[] {
         ? undefined
         : 'No agent chat in this pane',
       run: ctx.showChat,
+    },
+    {
+      id: 'view.tasks',
+      title: 'Show Tasks',
+      category: 'View',
+      disabledReason: ctx.viewIds.includes(TASKS_VIEW_ID)
+        ? undefined
+        : ctx.readOnly
+          ? VIEW_ONLY
+          : 'No tasks for this pane',
+      run: () => ctx.changeView(TASKS_VIEW_ID),
     },
     panel(FILES_VIEW_ID, 'Toggle the Files panel'),
     panel(CHANGES_VIEW_ID, 'Toggle the Changes panel'),

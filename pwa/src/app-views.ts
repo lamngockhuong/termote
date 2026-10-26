@@ -1,6 +1,7 @@
 import {
   FolderTree,
   GitCompare,
+  ListChecks,
   MessagesSquare,
   SquareTerminal,
 } from 'lucide-react'
@@ -19,6 +20,7 @@ import {
   CHANGES_VIEW_ID,
   CHAT_VIEW_ID,
   FILES_VIEW_ID,
+  TASKS_VIEW_ID,
   TERMINAL_VIEW_ID,
 } from './view-ids'
 
@@ -50,6 +52,13 @@ export interface ViewProps extends ViewContext {
   // Opens a file of the pane, or a side's diff, in a window of its own
   // (desktop only; Shift asks for a popup)
   openWindow?: (target: FileWindowTarget, e: OpenWindowEvent) => void
+  // Every tab, for a view that names another pane (Tasks' agent picker)
+  sessions?: Session[]
+  // Shows a tab (and pane), then a view of it when given (a task's tab,
+  // the Chat of the agent its output went to)
+  openTab?: (id: string, paneId?: string, view?: string) => void
+  // Reads the tabs again (a tab the server just opened)
+  refreshSessions?: () => Promise<void>
 }
 
 // A file under the pane's root in the Files view, or its diff in Changes
@@ -81,7 +90,13 @@ export interface AppView extends ViewOption<string> {
   placement?: 'panel'
 }
 
-export { CHANGES_VIEW_ID, CHAT_VIEW_ID, FILES_VIEW_ID, TERMINAL_VIEW_ID }
+export {
+  CHANGES_VIEW_ID,
+  CHAT_VIEW_ID,
+  FILES_VIEW_ID,
+  TASKS_VIEW_ID,
+  TERMINAL_VIEW_ID,
+}
 
 // The chat view carries the markdown renderer: loaded on first use.
 const ChatView = lazyRetry<ViewProps>(
@@ -96,6 +111,10 @@ const FilesView = lazyRetry<ViewProps>(
 const ChangesView = lazyRetry<ViewProps>(
   () => import('./components/changes-view'),
   'ChangesView',
+)
+const TasksView = lazyRetry<ViewProps>(
+  () => import('./components/tasks-view'),
+  'TasksView',
 )
 
 export const APP_VIEWS: AppView[] = [
@@ -138,6 +157,15 @@ export const APP_VIEWS: AppView[] = [
     Main: ChangesView,
     Panel: ChangesView,
     placement: 'panel',
+  },
+  {
+    id: TASKS_VIEW_ID,
+    label: 'Tasks',
+    Icon: ListChecks,
+    // The server lists and runs the root's tasks; they run commands, so a
+    // full client only
+    available: ({ mux, readOnly }) => !!mux.caps.tasks && !readOnly,
+    Main: TasksView,
   },
 ]
 

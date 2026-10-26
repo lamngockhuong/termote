@@ -141,6 +141,23 @@ describe('TemplateEditor', () => {
     )
   })
 
+  it('a field the form does not have (a command) marks nothing', async () => {
+    renderEditor()
+    fireEvent.change(nameBox(), { target: { value: 'n' } })
+    fireEvent.change(textBox(), { target: { value: 't' } })
+    store.create.mockRejectedValueOnce(
+      new RequestError(400, 'invalid_template', 'the command is empty', {
+        field: 'command',
+      }),
+    )
+    await save()
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Not saved: the command is empty',
+    )
+    expect(nameBox()).not.toHaveAttribute('aria-invalid')
+    expect(textBox()).not.toHaveAttribute('aria-invalid')
+  })
+
   it('changed on another device: load theirs, or keep mine over it', async () => {
     const theirs = tpl({ name: 'Theirs', text: 'their text', updated: 'u2' })
     store.update.mockRejectedValueOnce(

@@ -7,6 +7,10 @@ import {
   resolveEditorFontSize,
   resolveEditorTabSize,
   resolveFindExcludes,
+  resolveTaskHistoryLines,
+  TASK_HISTORY_LINES_DEFAULT,
+  TASK_HISTORY_LINES_MAX,
+  TASK_HISTORY_LINES_MIN,
   useSettings,
 } from './use-settings'
 
@@ -392,5 +396,55 @@ describe('editor settings', () => {
       editorWrap: false,
       editorVim: false,
     })
+  })
+})
+
+describe('task history lines', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('keeps a saved count only when it is a whole number in range', () => {
+    expect(TASK_HISTORY_LINES_DEFAULT).toBe(400)
+    expect(resolveTaskHistoryLines(1000)).toBe(1000)
+    expect(resolveTaskHistoryLines(TASK_HISTORY_LINES_MIN)).toBe(
+      TASK_HISTORY_LINES_MIN,
+    )
+    expect(resolveTaskHistoryLines(TASK_HISTORY_LINES_MAX)).toBe(
+      TASK_HISTORY_LINES_MAX,
+    )
+    expect(resolveTaskHistoryLines(TASK_HISTORY_LINES_MIN - 1)).toBe(400)
+    expect(resolveTaskHistoryLines(TASK_HISTORY_LINES_MAX + 1)).toBe(400)
+    expect(resolveTaskHistoryLines(250.5)).toBe(400)
+    expect(resolveTaskHistoryLines('1000')).toBe(400)
+    expect(resolveTaskHistoryLines(undefined)).toBe(400)
+    expect(resolveTaskHistoryLines(Number.NaN)).toBe(400)
+  })
+
+  it('defaults in the snapshot, reads a saved value, repairs a bad one', () => {
+    const first = renderHook(() => useSettings())
+    expect(first.result.current.settings.taskHistoryLines).toBe(400)
+    first.unmount()
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ taskHistoryLines: 2000 }),
+    )
+    const saved = renderHook(() => useSettings())
+    expect(saved.result.current.settings.taskHistoryLines).toBe(2000)
+    saved.unmount()
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ taskHistoryLines: 7 }),
+    )
+    const bad = renderHook(() => useSettings())
+    expect(bad.result.current.settings.taskHistoryLines).toBe(400)
+  })
+
+  it('updates and persists the count', () => {
+    const { result } = renderHook(() => useSettings())
+    act(() => result.current.updateSetting('taskHistoryLines', 200))
+    expect(result.current.settings.taskHistoryLines).toBe(200)
+    expect(
+      JSON.parse(localStorage.getItem('termote-settings') ?? '{}')
+        .taskHistoryLines,
+    ).toBe(200)
   })
 })

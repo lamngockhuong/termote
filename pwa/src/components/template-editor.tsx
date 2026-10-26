@@ -89,7 +89,10 @@ export function TemplateEditor({ template, onClose }: Props) {
         setRefusal({ kind: 'gone' })
       else {
         setRefusal({ kind: 'other', text: templateErrorText(err) })
-        if (err instanceof RequestError) setBad(err.field ?? null)
+        if (err instanceof RequestError)
+          setBad(
+            err.field === 'name' || err.field === 'text' ? err.field : null,
+          )
       }
     }
   }

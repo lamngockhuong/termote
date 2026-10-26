@@ -44,6 +44,10 @@ vi.mock('./prompt-templates-section', () => ({
     <div data-testid="templates-section" data-read-only={String(readOnly)} />
   ),
 }))
+// And the Tasks group's in user-tasks-section.test.tsx.
+vi.mock('./user-tasks-section', () => ({
+  UserTasksSection: () => <div data-testid="user-tasks-section" />,
+}))
 // And the Signed-in browsers group's in signins-section.test.tsx.
 vi.mock('./signins-section', () => ({
   SigninsSection: ({ logOut }: { logOut?: () => void }) => (
@@ -83,6 +87,7 @@ const DEFAULT_SETTINGS: Settings = {
   editorTabSize: 4,
   editorWrap: false,
   editorVim: false,
+  taskHistoryLines: 400,
 }
 
 describe('SettingsModal', () => {
@@ -957,6 +962,51 @@ describe('SettingsModal for a view-only device or with devices', () => {
       'data-read-only',
       'true',
     )
+  })
+
+  it('shows the Tasks group only to a full device whose server has tasks', () => {
+    const { unmount } = renderWith({})
+    expect(screen.queryByRole('button', { name: 'Tasks' })).toBeNull()
+    unmount()
+    const view = renderWith({ tasks: true, userTasks: true, readOnly: true })
+    expect(screen.queryByRole('button', { name: 'Tasks' })).toBeNull()
+    view.unmount()
+    renderWith({ tasks: true })
+    expect(screen.getByRole('button', { name: 'Tasks' })).toBeInTheDocument()
+  })
+
+  it('the Tasks group offers the history read for Send to agent with tasks', () => {
+    const onUpdateSetting = vi.fn()
+    renderWith({ tasks: true, onUpdateSetting })
+    fireEvent.click(screen.getByRole('button', { name: 'Tasks' }))
+    const select = screen.getByRole('combobox', {
+      name: 'History read for Send to agent',
+    })
+    expect(select).toHaveValue('400')
+    expect(
+      Array.from((select as HTMLSelectElement).options).map((o) => o.text),
+    ).toEqual([
+      '100 lines',
+      '200 lines',
+      '400 lines',
+      '1000 lines',
+      '2000 lines',
+      '5000 lines',
+    ])
+    fireEvent.change(select, { target: { value: '1000' } })
+    expect(onUpdateSetting).toHaveBeenCalledWith('taskHistoryLines', 1000)
+    expect(screen.queryByTestId('user-tasks-section')).toBeNull()
+  })
+
+  it('the Tasks group lists the user tasks, without the history select, with userTasks only', () => {
+    renderWith({ userTasks: true })
+    fireEvent.click(screen.getByRole('button', { name: 'Tasks' }))
+    expect(screen.getByTestId('user-tasks-section')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('combobox', {
+        name: 'History read for Send to agent',
+      }),
+    ).toBeNull()
   })
 
   it('offers notifications to a full device', async () => {

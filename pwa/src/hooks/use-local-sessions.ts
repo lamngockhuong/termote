@@ -47,6 +47,7 @@ import {
   selectTab,
 } from './use-mux-api'
 import { setTemplatesServer } from './use-prompt-templates'
+import { setUserTasksServer } from './use-user-tasks'
 
 export type MuxInfo = Pick<MuxSnapshot, 'backend' | 'caps'>
 
@@ -374,6 +375,7 @@ export function useLocalSessions(pollInterval = 5) {
       regroupPersisted(setPaneKeys(snap, keys))
       // The templates read belong to one server
       setTemplatesServer(snap.instanceId ?? null, !!snap.caps.templates)
+      setUserTasksServer(snap.instanceId ?? null, !!snap.caps.userTasks)
       setSelectionServer(snap.instanceId ?? null)
       if (shift.stale.size) {
         remapPanes(shift)

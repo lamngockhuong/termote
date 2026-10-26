@@ -131,6 +131,21 @@ describe('buildAppCommands', () => {
     expect(ctx.openOverview).toHaveBeenCalled()
   })
 
+  it('shows Tasks where the view is offered, and says why when it is not', () => {
+    const on = context({ viewIds: ['terminal', 'tasks'] })
+    const show = command(on, 'view.tasks')
+    expect(show.title).toBe('Show Tasks')
+    expect(show.disabledReason).toBeUndefined()
+    show.run()
+    expect(on.changeView).toHaveBeenCalledWith('tasks')
+    expect(
+      command(context({ readOnly: true }), 'view.tasks').disabledReason,
+    ).toBe('View only')
+    expect(command(context(), 'view.tasks').disabledReason).toBe(
+      'No tasks for this pane',
+    )
+  })
+
   it('says why a view or panel is not offered', () => {
     const ctx = context({ viewIds: ['terminal'], panelIds: [] })
     expect(command(ctx, 'view.chat').disabledReason).toBe(

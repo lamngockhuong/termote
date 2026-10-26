@@ -1,0 +1,280 @@
+import { useState } from 'react'
+import type { ViewProps } from '../app-views'
+import { agentLabel } from '../chat-agents'
+import {
+  fetchPaneText,
+  fetchTranscript,
+  RequestError,
+  sendAgentMessage,
+} from '../hooks/use-mux-api'
+import { useSettings } from '../hooks/use-settings'
+import {
+  type TaskItem,
+  type TaskRunView,
+  taskItems,
+  useTasks,
+} from '../hooks/use-tasks'
+import {
+  taskFailureMessage,
+  taskRunOutput,
+} from '../utils/task-failure-message'
+import { CHAT_VIEW_ID } from '../view-ids'
+import {
+  type AgentPaneChoice,
+  AgentPanePicker,
+  agentPanes,
+  rememberAgent,
+  rememberedAgent,
+} from './agent-pane-picker'
+import { PaneDirHeader, ViewMessage } from './pane-dir-header'
+import { TaskRow } from './task-row'
+import { Banner } from './ui/banner'
+
+// What a refused Run tells, by the server's code
+const RUN_ERRORS: Record<string, string> = {
+  no_client: 'Open this session in Zellij first',
+  unsupported_shell: 'This shell is not supported (bash, zsh, sh, fish, pwsh)',
+  shell_busy: "The tab's shell is busy",
+  task_not_found: 'This task is no longer in the folder',
+  tab_gone: "The task's tab was closed",
+  invalid_task: 'This task cannot be run: edit it in Settings',
+  invalid_root: "This folder's name cannot be used for a task",
+}
+
+const LIST_ERRORS: Record<number, string> = {
+  400: 'Directory not found',
+  403: "This directory can't be shown",
+  501: 'Not supported by this backend',
+}
+
+// Tasks: what the pane's root offers to run (package.json scripts, Makefile
+// targets, the user's tasks), each run in a tab at that root, and the
+// output of a finished run sent to an agent pane. A full client only.
+export function TasksView({
+  session,
+  mux,
+  notify,
+  sessions,
+  openTab,
+  refreshSessions,
+}: ViewProps) {
+  const { settings } = useSettings()
+  const { data, error, loading, runs, reload, run } = useTasks(session.paneId)
+  const [filter, setFilter] = useState('')
+  const [starting, setStarting] = useState<string | null>(null)
+  const [sending, setSending] = useState<string | null>(null)
+  const [picking, setPicking] = useState<{
+    item: TaskItem
+    run: TaskRunView
+  } | null>(null)
+  const canSend = !!mux.caps.paneText && !!mux.caps.agentChat
+  const groupId = session.groupId ?? ''
+
+  if (!session.paneId) return <ViewMessage>Loading…</ViewMessage>
+
+  const onRun = async (item: TaskItem, newTab = false) => {
+    setStarting(item.key)
+    try {
+      const start = await run(item, newTab)
+      void refreshSessions?.()
+      notify(`Running in tab task:${item.name}`, {
+        variant: 'success',
+        action: {
+          label: 'Open',
+          onClick: () => openTab?.(start.tabId, start.paneId),
+        },
+      })
+    } catch (err) {
+      const code = err instanceof RequestError ? err.code : ''
+      if (code === 'task_running') {
+        notify('Already running', {
+          action: {
+            label: 'Run in new tab',
+            onClick: () => void onRun(item, true),
+          },
+        })
+      } else if (err instanceof RequestError && err.root) {
+        notify("The pane's folder changed: the list was read again", {
+          variant: 'warning',
+        })
+      } else {
+        if (code === 'task_not_found') void reload()
+        notify(RUN_ERRORS[code] ?? 'Could not run the task', {
+          variant: 'danger',
+        })
+      }
+    } finally {
+      setStarting(null)
+    }
+  }
+
+  // The output of r, between its markers, as one message to the agent pane
+  // root: the root the task was listed in
+  const send = async (
+    item: TaskItem,
+    r: TaskRunView,
+    to: AgentPaneChoice,
+    root: string,
+  ) => {
+    rememberAgent(groupId, to.paneId)
+    setPicking(null)
+    setSending(item.key)
+    const openChat = {
+      label: 'Open chat',
+      onClick: () => openTab?.(to.sessionId, to.paneId, CHAT_VIEW_ID),
+    }
+    try {
+      const text = await fetchPaneText(r.paneId, settings.taskHistoryLines)
+      const output = taskRunOutput(text.text, r.nonce)
+      if (!output) {
+        notify("The run's output is no longer in its tab", {
+          variant: 'warning',
+        })
+        return
+      }
+      const message = taskFailureMessage({
+        label: item.label,
+        root,
+        code: r.state === 'exited' ? r.code : undefined,
+        output,
+      })
+      const page = await fetchTranscript(to.paneId)
+      try {
+        await sendAgentMessage(to.paneId, message, page.cursor)
+      } catch (err) {
+        if (!(err instanceof RequestError && err.code === 'session_changed'))
+          throw err
+        // The agent's session moved on: its cursor once more
+        const again = await fetchTranscript(to.paneId)
+        await sendAgentMessage(to.paneId, message, again.cursor)
+      }
+      notify(`Sent to ${agentLabel(to.agentName)}`, {
+        variant: 'success',
+        action: openChat,
+      })
+    } catch (err) {
+      notify(
+        err instanceof RequestError
+          ? `Not sent: ${err.message}`
+          : 'Could not send the output',
+        { variant: 'danger', action: openChat },
+      )
+    } finally {
+      setSending(null)
+    }
+  }
+
+  const onSend = (item: TaskItem, r: TaskRunView, root: string) => {
+    const choices = agentPanes(sessions ?? [], r.paneId)
+    const last = rememberedAgent(groupId)
+    const known = choices.find((c) => c.paneId === last)
+    if (known) void send(item, r, known, root)
+    else setPicking({ item, run: r })
+  }
+
+  if (!data) {
+    if (error) {
+      const status = error instanceof RequestError ? error.status : 0
+      return (
+        <ViewMessage>
+          {LIST_ERRORS[status] ?? 'Could not read the tasks'}
+        </ViewMessage>
+      )
+    }
+    return <ViewMessage>Loading…</ViewMessage>
+  }
+
+  const items = taskItems(data)
+  const needle = filter.trim().toLowerCase()
+  const shown = (list: TaskItem[]) =>
+    needle
+      ? list.filter(
+          (t) =>
+            t.name.toLowerCase().includes(needle) ||
+            t.command.toLowerCase().includes(needle),
+        )
+      : list
+  const groups: [string, TaskItem[]][] = [
+    [`Scripts (${data.packageManager || 'npm'})`, shown(items.scripts)],
+    [`Make (${data.makefile})`, shown(items.make)],
+    ['My tasks', shown(items.user)],
+  ]
+  const total = items.scripts.length + items.make.length + items.user.length
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col" data-testid="tasks-view">
+      <PaneDirHeader
+        root={data.root}
+        onRefresh={() => void reload()}
+        refreshing={loading}
+      />
+      {data.tooLarge.length > 0 && (
+        <Banner variant="warning" live={false}>
+          Too large to read: {data.tooLarge.join(', ')}
+        </Banner>
+      )}
+      {total > 0 && (
+        <div className="shrink-0 border-b border-border px-3 py-1.5">
+          <input
+            type="search"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Filter tasks"
+            aria-label="Filter tasks"
+            className="h-8 w-full rounded-control border border-border bg-surface px-2 text-sm text-fg pointer-coarse:h-touch"
+          />
+        </div>
+      )}
+      {total === 0 ? (
+        <ViewMessage>
+          No package.json script, Makefile target or task of yours here
+        </ViewMessage>
+      ) : (
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+          {groups
+            .filter(([, list]) => list.length > 0)
+            .map(([title, list]) => (
+              <section key={title} aria-label={title}>
+                <h3 className="bg-surface px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-fg-muted">
+                  {title}
+                </h3>
+                <ul>
+                  {list.map((item) => (
+                    <TaskRow
+                      key={item.key}
+                      item={item}
+                      run={runs[item.key]}
+                      starting={starting === item.key}
+                      sending={sending === item.key}
+                      canSend={canSend}
+                      onRun={() => void onRun(item)}
+                      onOpen={() => {
+                        const r = runs[item.key]
+                        openTab?.(r.tabId, r.paneId)
+                      }}
+                      onSend={() => onSend(item, runs[item.key], data.root)}
+                    />
+                  ))}
+                </ul>
+              </section>
+            ))}
+          {data.skipped > 0 && (
+            <p className="px-3 py-2 text-[12px] text-fg-muted">
+              {data.skipped} left out: a name Termote does not run
+            </p>
+          )}
+        </div>
+      )}
+      <AgentPanePicker
+        isOpen={!!picking}
+        choices={picking ? agentPanes(sessions ?? [], picking.run.paneId) : []}
+        onPick={(c) =>
+          picking && void send(picking.item, picking.run, c, data.root)
+        }
+        onClose={() => setPicking(null)}
+      />
+    </div>
+  )
+}
+
+export default TasksView

@@ -513,6 +513,19 @@ export default function App({
     },
     [mux.caps.clientSideSelect, readOnly, activeSession.id],
   )
+  // Shows a tab and a view of it (the terminal unless named) for a view
+  // that points elsewhere: a task's tab, the agent its output went to. The
+  // ref holds the latest selectSession (defined further down), so a toast's
+  // action pressed later still finds a tab read since.
+  // Set on every render, once selectSession exists (below)
+  const openTabRef = useRef<
+    (id: string, paneId?: string, view?: string) => void
+  >(undefined as never)
+  const openTab = useCallback(
+    (id: string, paneId?: string, view?: string) =>
+      openTabRef.current(id, paneId, view),
+    [],
+  )
   const notify = useCallback(
     (m: string, o?: NotifyOptions) =>
       showToast(m, o?.variant, o?.action, o?.duration),
@@ -657,6 +670,9 @@ export default function App({
     showView,
     openSettings,
     openWindow: openFileWindow,
+    sessions,
+    openTab,
+    refreshSessions,
   }
   const sidePanelView = panelViews.find((v) => v.id === sidePanelId && v.Panel)
   const hasSidePanel = !!sidePanelView
@@ -1079,6 +1095,19 @@ export default function App({
     },
     [switchSession, showToast],
   )
+
+  // The view is kept for the pane, as a link's is: the pane comes up on it
+  // once shown, and nothing selects the tab being left again (tmux shares
+  // its current window).
+  openTabRef.current = (id, paneId, view = TERMINAL_VIEW_ID) => {
+    const target = paneId ?? id
+    savePaneView(target, {
+      view,
+      panel: loadPaneView(target)?.panel ?? null,
+    })
+    if (target === viewPaneRef.current) setViewId(view)
+    void selectSession(id, paneId)
+  }
 
   // The sheet stays open on a tab a view-only device cannot watch.
   const handleMobileSelect = async (id: string) => {
@@ -2141,6 +2170,8 @@ export default function App({
         devices={!!mux.caps.devices && !readOnly}
         signins={!!mux.caps.signins && !readOnly}
         templates={!!mux.caps.templates}
+        tasks={!!mux.caps.tasks}
+        userTasks={!!mux.caps.userTasks}
         shortcuts={desktop ? commands : undefined}
         onLogout={handleLogout}
         onEnableNotify={push.enable}

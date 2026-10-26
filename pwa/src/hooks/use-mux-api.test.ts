@@ -12,9 +12,11 @@ import {
   createPairingCode,
   createTab,
   createTemplate,
+  createUserTask,
   createWorktree,
   deleteFile,
   deleteTemplate,
+  deleteUserTask,
   fetchActivity,
   fetchAgentCommands,
   fetchAgentPrompt,
@@ -33,9 +35,12 @@ import {
   fetchSignins,
   fetchSnapshot,
   fetchSubagents,
+  fetchTaskRun,
+  fetchTasks,
   fetchTemplates,
   fetchTerminalToken,
   fetchTranscript,
+  fetchUserTasks,
   findFiles,
   getPushKey,
   importTemplates,
@@ -56,6 +61,7 @@ import {
   revokeDevice,
   revokeOtherSignins,
   revokeSignin,
+  runTask,
   SAVE_TIMEOUT_MS,
   saveFileContent,
   scrollPane,
@@ -65,8 +71,10 @@ import {
   sendKeys,
   signInUrl,
   subscribePush,
+  TASK_RUN_TIMEOUT_MS,
   unsubscribePush,
   updateTemplate,
+  updateUserTask,
   WORKTREE_REQUEST_TIMEOUT_MS,
 } from './use-mux-api'
 
@@ -1676,5 +1684,290 @@ describe('prompt templates API', () => {
       replace: ['x'],
     })
     expect(await importTemplates(list, [])).toEqual({ added: 0, replaced: 0 })
+  })
+})
+
+describe('tasks API', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  const task = {
+    id: '0123456789abcdef',
+    name: 'Lint',
+    command: 'pnpm lint',
+    updated: '2026-10-26T00:00:00Z',
+  }
+  const run = {
+    runId: 'r1',
+    tabId: 't1',
+    paneId: 'p1',
+    nonce: 'n1',
+    state: 'running',
+  }
+
+  it('lists a pane tasks, with the root the client saw when it has one', async () => {
+    const full = {
+      root: '/repo',
+      packageManager: 'pnpm',
+      scripts: [{ name: 'test', command: 'vitest' }],
+      makefile: 'Makefile',
+      makeTargets: [{ name: 'build' }],
+      userTasks: [task],
+      runs: { 'script:test': run },
+      skipped: 2,
+      tooLarge: ['package.json'],
+    }
+    const { calls } = mockFetch({ body: full }, { body: full })
+    expect(await fetchTasks('%1')).toEqual(full)
+    expect(calls[0].url).toBe('/api/mux/panes/%251/tasks')
+    expect(await fetchTasks('%1', '/re po&x')).toEqual(full)
+    expect(calls[1].url).toBe('/api/mux/panes/%251/tasks?root=%2Fre+po%26x')
+  })
+
+  it('fills what the answer leaves out', async () => {
+    mockFetch({ body: {} })
+    expect(await fetchTasks('p')).toEqual({
+      root: '',
+      packageManager: '',
+      scripts: [],
+      makefile: '',
+      makeTargets: [],
+      userTasks: [],
+      runs: {},
+      skipped: 0,
+      tooLarge: [],
+    })
+  })
+
+  it('a refused listing is a read (no view-only toast) and carries the new root', async () => {
+    const heard = vi.fn()
+    const off = onViewOnlyRefusal(heard)
+    mockFetch({
+      body: { code: 'root_changed', error: 'moved', root: '/other' },
+      status: 409,
+    })
+    const err = await fetchTasks('p', '/old').catch((e) => e)
+    expect(err).toBeInstanceOf(RequestError)
+    expect(err).toMatchObject({
+      status: 409,
+      code: 'root_changed',
+      root: '/other',
+    })
+    mockFetch({ body: { code: 'view_only' }, status: 403 })
+    await expect(fetchTasks('p')).rejects.toMatchObject({ status: 403 })
+    off()
+    expect(heard).not.toHaveBeenCalled()
+  })
+
+  it('runs a task by name or id as JSON and returns the run', async () => {
+    const start = {
+      runId: 'r1',
+      tabId: 't1',
+      paneId: 'p1',
+      nonce: 'n1',
+      reused: false,
+    }
+    const { calls } = mockFetch({ body: start }, { body: start })
+    const req = { kind: 'script' as const, name: 'test', root: '/repo' }
+    expect(await runTask('%1', req)).toEqual(start)
+    expect(calls[0]).toMatchObject({
+      url: '/api/mux/panes/%251/tasks/run',
+      init: { method: 'POST', headers: { 'Content-Type': 'application/json' } },
+    })
+    expect(JSON.parse(calls[0].init?.body as string)).toEqual(req)
+    const user = {
+      kind: 'user' as const,
+      id: task.id,
+      root: '/r',
+      newTab: true,
+    }
+    await runTask('p', user)
+    expect(JSON.parse(calls[1].init?.body as string)).toEqual(user)
+  })
+
+  it('waits longer for a run than for a read', async () => {
+    const timeout = vi.spyOn(AbortSignal, 'timeout')
+    mockFetch({ body: {} }, { body: {} })
+    await runTask('p', { kind: 'make', name: 'b', root: '/' })
+    expect(timeout).toHaveBeenLastCalledWith(TASK_RUN_TIMEOUT_MS)
+    expect(TASK_RUN_TIMEOUT_MS).toBeGreaterThan(REQUEST_TIMEOUT_MS)
+    await fetchTaskRun('r')
+    expect(timeout).toHaveBeenLastCalledWith(REQUEST_TIMEOUT_MS)
+  })
+
+  it('a task still running carries its run and tab', async () => {
+    mockFetch({
+      body: { code: 'task_running', error: 'busy', runId: 'r9', tabId: 't9' },
+      status: 409,
+    })
+    const err = await runTask('p', {
+      kind: 'make',
+      name: 'b',
+      root: '/',
+    }).catch((e) => e)
+    expect(err).toBeInstanceOf(RequestError)
+    expect(err).toMatchObject({
+      status: 409,
+      code: 'task_running',
+      runId: 'r9',
+      tabId: 't9',
+    })
+  })
+
+  it('a refused run is a write: a view-only device is told', async () => {
+    const heard = vi.fn()
+    const off = onViewOnlyRefusal(heard)
+    mockFetch({ body: { code: 'view_only' }, status: 403 })
+    await expect(
+      runTask('p', { kind: 'make', name: 'b', root: '/' }),
+    ).rejects.toMatchObject({ status: 403, code: 'view_only' })
+    off()
+    expect(heard).toHaveBeenCalledTimes(1)
+  })
+
+  it('reads a run state, with its exit code', async () => {
+    const { calls } = mockFetch(
+      { body: { state: 'exited', code: 2 } },
+      { body: { state: 'running' } },
+    )
+    expect(await fetchTaskRun('a/b')).toEqual({ state: 'exited', code: 2 })
+    expect(calls[0].url).toBe('/api/mux/tasks/runs/a%2Fb')
+    expect(await fetchTaskRun('r')).toEqual({ state: 'running' })
+  })
+
+  it('a run the server forgot is a read refusal with its code', async () => {
+    const heard = vi.fn()
+    const off = onViewOnlyRefusal(heard)
+    mockFetch(
+      { body: { code: 'run_not_found', error: 'gone' }, status: 404 },
+      { body: { code: 'view_only' }, status: 403 },
+    )
+    await expect(fetchTaskRun('r')).rejects.toMatchObject({
+      status: 404,
+      code: 'run_not_found',
+    })
+    await expect(fetchTaskRun('r')).rejects.toMatchObject({ status: 403 })
+    off()
+    expect(heard).not.toHaveBeenCalled()
+  })
+
+  it('lists the user tasks, or none from an answer without a list', async () => {
+    const { calls } = mockFetch(
+      { body: { tasks: [task], readOnly: false } },
+      { body: { readOnly: true } },
+      { body: {} },
+    )
+    expect(await fetchUserTasks()).toEqual({ tasks: [task], readOnly: false })
+    expect(calls[0].url).toBe('/api/mux/tasks')
+    expect(await fetchUserTasks()).toEqual({ tasks: [], readOnly: true })
+    expect(await fetchUserTasks()).toEqual({ tasks: [], readOnly: false })
+  })
+
+  it('lists with the signal it is given', async () => {
+    const { spy } = mockFetch({ body: {} })
+    const ctl = new AbortController()
+    await fetchUserTasks(ctl.signal)
+    expect(spy.mock.calls[0][1]?.signal).toBe(ctl.signal)
+  })
+
+  it('a refused user tasks list is a read: no view-only toast', async () => {
+    const heard = vi.fn()
+    const off = onViewOnlyRefusal(heard)
+    mockFetch({ body: { code: 'tasks_unavailable' }, status: 503 })
+    await expect(fetchUserTasks()).rejects.toMatchObject({
+      status: 503,
+      code: 'tasks_unavailable',
+    })
+    off()
+    expect(heard).not.toHaveBeenCalled()
+  })
+
+  it('creates, updates and deletes user tasks as JSON', async () => {
+    const { calls } = mockFetch(
+      { body: { task }, status: 201 },
+      { body: { task } },
+      { body: { ok: true } },
+    )
+    expect(
+      await createUserTask({ name: 'Lint', command: 'pnpm lint' }),
+    ).toEqual(task)
+    expect(calls[0]).toMatchObject({
+      url: '/api/mux/tasks',
+      init: { method: 'POST', headers: { 'Content-Type': 'application/json' } },
+    })
+    expect(JSON.parse(calls[0].init?.body as string)).toEqual({
+      name: 'Lint',
+      command: 'pnpm lint',
+    })
+    expect(
+      await updateUserTask('a/b', { name: 'n', command: 'c', updated: 'u' }),
+    ).toEqual(task)
+    expect(calls[1].url).toBe('/api/mux/tasks/a%2Fb')
+    expect(calls[1].init?.method).toBe('PUT')
+    expect(JSON.parse(calls[1].init?.body as string)).toEqual({
+      name: 'n',
+      command: 'c',
+      updated: 'u',
+    })
+    await expect(
+      deleteUserTask(task.id, '2026-10-26T00:00:00.5+07:00'),
+    ).resolves.toBeUndefined()
+    expect(calls[2].url).toBe(
+      `/api/mux/tasks/${task.id}?updated=2026-10-26T00%3A00%3A00.5%2B07%3A00`,
+    )
+    expect(calls[2].init).toMatchObject({ method: 'DELETE', body: undefined })
+  })
+
+  it('a conflict carries the task as it is now', async () => {
+    mockFetch({
+      body: { code: 'conflict', error: 'changed', task },
+      status: 409,
+    })
+    const err = await updateUserTask(task.id, {
+      name: 'n',
+      command: 'c',
+      updated: 'old',
+    }).catch((e) => e)
+    expect(err).toBeInstanceOf(RequestError)
+    expect(err).toMatchObject({ status: 409, code: 'conflict', task })
+  })
+
+  it('an invalid task names its field, and a write refusal reaches the toast', async () => {
+    const heard = vi.fn()
+    const off = onViewOnlyRefusal(heard)
+    mockFetch(
+      {
+        body: { code: 'invalid_task', error: 'x', field: 'command' },
+        status: 400,
+      },
+      { body: { code: 'view_only' }, status: 403 },
+    )
+    await expect(
+      createUserTask({ name: '', command: '' }),
+    ).rejects.toMatchObject({
+      status: 400,
+      code: 'invalid_task',
+      field: 'command',
+    })
+    await expect(deleteUserTask('i', 'u')).rejects.toMatchObject({
+      code: 'view_only',
+    })
+    off()
+    expect(heard).toHaveBeenCalledTimes(1)
+  })
+
+  it('RequestError keeps task, runId and tabId from its details', () => {
+    const err = new RequestError(409, 'task_running', 'busy', {
+      task,
+      runId: 'r',
+      tabId: 't',
+    })
+    expect(err).toMatchObject({ status: 409, task, runId: 'r', tabId: 't' })
+    const bare = new RequestError(500, 'x', 'y')
+    expect(bare.task).toBeUndefined()
+    expect(bare.runId).toBeUndefined()
+    expect(bare.tabId).toBeUndefined()
   })
 })
