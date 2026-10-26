@@ -1784,7 +1784,7 @@ test.describe('files and changes views', () => {
       const changes = page.getByRole('complementary', { name: 'Changes' })
       const bar = changes.getByRole('tablist', { name: 'Open files' })
       const list = (group: string, name: RegExp) =>
-        changes.getByRole('region', { name: group }).getByRole('button', { name })
+        changes.getByRole('region', { name: group }).getByRole('button', { name: new RegExp(`:\\s*${name.source}`) })
 
       // A single click opens the preview tab, a double click on it keeps it
       await list('Changes', /long\.txt/).click()
@@ -1835,7 +1835,7 @@ test.describe('files and changes views', () => {
       )
       await page.goto(`${link}?view=changes`)
       const list = (group: string, name: RegExp) =>
-        page.getByRole('region', { name: group }).getByRole('button', { name })
+        page.getByRole('region', { name: group }).getByRole('button', { name: new RegExp(`:\\s*${name.source}`) })
       await list('Changes', /long\.txt/).click()
       await expect(page.getByTestId('diff')).toContainText('new line 1')
       await expect(page.getByRole('tablist', { name: 'Open files' })).toHaveCount(0)
