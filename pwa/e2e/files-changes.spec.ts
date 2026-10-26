@@ -490,7 +490,8 @@ test.describe('files and changes views', () => {
     await page.setViewportSize({ width: 360, height: 740 })
     await page.goto(`${link}?view=changes`)
     const list = page.getByRole('region', { name: 'Changes' })
-    await expect(list.getByRole('button', { name: 'Stage app.ts' })).toBeVisible()
+    // git status is cached 2s on the server and polled every 5s here
+    await expect(list.getByRole('button', { name: 'Stage app.ts' })).toBeVisible({ timeout: 15000 })
     await expect(list.getByRole('button', { name: 'Discard app.ts' })).toBeVisible()
     expect(await noPageScroll(page)).toBe(true)
     writeFileSync(file, original)
