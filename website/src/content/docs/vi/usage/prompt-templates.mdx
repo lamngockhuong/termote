@@ -1,0 +1,82 @@
+---
+title: Mẫu prompt
+description: Lưu những prompt bạn gõ đi gõ lại, có biến, rồi chèn chúng vào Chat
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Mẫu prompt gồm một tên và một đoạn văn bản bạn lưu một lần, rồi chèn vào
+[Chat](/vi/usage/agent-chat/) mỗi khi cần: yêu cầu review, báo lỗi, kiểm tra trước khi phát hành.
+Văn bản có thể chứa biến, được điền khi chèn. Mẫu nằm trên server, nên mọi thiết bị đăng nhập vào
+server đó đều thấy cùng một bộ.
+
+## Tạo mẫu
+
+Mở **Settings > Prompt templates** rồi bấm **New template**. Đặt tên (tối đa 64 ký tự, không trùng
+với tên khác dù khác chữ hoa chữ thường) và nhập văn bản (tối đa 16 KB, bằng giới hạn của một tin nhắn
+Chat). Các nút dưới ô văn bản chèn biến vào chỗ con trỏ. **Edit** và **Delete** trên mỗi dòng dùng để
+sửa hoặc xoá mẫu.
+
+Mẫu không được chứa ký tự điều khiển (trừ tab và xuống dòng) hay ký tự không hiện ra, như khoảng trắng
+độ rộng 0 hoặc dấu điều khiển hướng chữ: mẫu bạn chia sẻ không được mang chỉ thị mà người đọc không thấy. Trình soạn thảo báo
+ký tự nào và nằm ở đâu. Mỗi server giữ tối đa 100 mẫu.
+
+Trong lúc bạn sửa, nếu thiết bị khác đã đổi mẫu đó thì khi lưu bạn sẽ được báo: **Load theirs** lấy
+bản của họ, **Keep mine** lưu bản của bạn đè lên. Nếu mẫu đã bị xoá trong lúc đó, **Save as new** lưu
+bản của bạn thành mẫu mới.
+
+## Biến
+
+| Biến            | Được điền bằng                                                                     |
+| --------------- | ---------------------------------------------------------------------------------- |
+| `{{file}}`      | Đường dẫn của file đang hiện trong Files của pane, tính từ thư mục của pane        |
+| `{{selection}}` | Đoạn bạn chọn gần nhất trong pane: ở terminal, trong file, trong trình soạn thảo hay ở Chat |
+| `{{branch}}`    | Nhánh git của thư mục pane, hoặc của worktree Herdr chứa pane                      |
+| `{{input}}`     | Để trống: bạn gõ khi chèn mẫu                                                      |
+
+Mỗi biến được điền một lần, dù xuất hiện bao nhiêu chỗ. Mọi thứ khác nằm giữa `{{` và `}}` giữ
+nguyên. Vùng chọn chỉ nằm trong bộ nhớ của trang, không bao giờ được lưu, và không lấy từ file nhạy
+cảm mà bạn đã chọn cho hiện.
+
+<Aside>
+  Với tmux, terminal hiện cả cửa sổ: đoạn chọn trong một split khác của cửa sổ đó được tính cho pane
+  đang hiện. Hãy xem lại vùng chọn trong hộp điền trước khi chèn.
+</Aside>
+
+## Chèn mẫu
+
+Mở Chat của agent, rồi chọn mẫu theo một trong ba cách:
+
+- **Nút Templates** cạnh ô tin nhắn: tìm theo bất kỳ từ nào trong tên.
+- **Danh sách `/`**: mẫu nằm sau các lệnh của agent, trong nhóm **Templates**. Chỉ bấm Enter thì không
+  chọn mẫu: dùng phím mũi tên để tới mẫu, hoặc chạm vào nó. Khi không có lệnh nào để chọn, Enter vẫn
+  làm như trước nay.
+- **Bảng lệnh** trên máy tính (`>`): mẫu được liệt kê cùng các lệnh.
+
+Mẫu có biến thì mở một hộp điền trước. Con trỏ nằm sẵn ở ô **Your text** (`{{input}}`); các ô khác được điền
+sẵn, ghi rõ giá trị lấy từ đâu, và bạn sửa ô nào cũng được. Phần xem trước cho thấy kết quả. **Insert**
+(hoặc Ctrl+Enter, trên máy Mac là Cmd+Enter) đặt văn bản vào ô tin nhắn tại chỗ con trỏ, hoặc thay cho `/tên` bạn đã gõ. Mẫu
+không có biến được chèn ngay.
+
+<Aside type="caution">
+  Không có gì được gửi thay bạn: văn bản nằm trong ô tin nhắn chờ bạn đọc lại và tự gửi.
+</Aside>
+
+## Xuất và nhập
+
+**Export** lưu mọi mẫu thành một file JSON (`termote-templates-YYYY-MM-DD.json`), chỉ gồm tên và văn
+bản. **Import…** đọc một file như vậy (tối đa 4 MB) và, trước khi đổi gì, liệt kê mẫu nào là mới và mẫu
+nào sẽ thay một mẫu trùng tên. Một lần nhập hoặc thành công trọn vẹn hoặc không đổi gì, và không hoàn
+tác được: hãy xuất trước để giữ một bản.
+
+## Ai được thay đổi
+
+Thiết bị có toàn quyền được tạo, sửa, xoá và nhập mẫu. [Thiết bị chỉ xem](/vi/usage/devices/) được xem
+danh sách và xuất mẫu, và không có ô tin nhắn để chèn. Nếu một bản Termote mới hơn đã lưu bộ mẫu, bản
+cũ hơn vẫn hiện chúng nhưng không sửa được cho tới khi được cập nhật.
+
+Mẫu nằm trong thư mục trạng thái của server: `~/.local/state/termote/templates/templates.json` trên
+Linux và macOS (trong `$XDG_STATE_HOME` nếu biến này được đặt), `%LOCALAPPDATA%\termote\state\templates`
+trên Windows, và ổ lưu trữ `termote-state-<uid>` khi chạy container. Server native và container trên cùng
+một máy giữ bộ mẫu riêng, và các server không dùng chung mẫu với nhau. `termote uninstall --purge` xoá
+chúng cùng phần còn lại của thư mục trạng thái: muốn giữ thì hãy xuất trước.
