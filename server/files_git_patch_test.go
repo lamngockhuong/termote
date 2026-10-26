@@ -178,7 +178,7 @@ func TestReverseHunkMatchesGitApply(t *testing.T) {
 	for _, c := range []struct {
 		name, config, index, work string
 	}{
-		{"lf", "", lf, worktree},
+		{"lf", "false", lf, worktree},
 		{"autocrlf", "true", lf, strings.ReplaceAll(worktree, "\n", "\r\n")},
 		{"crlf in index", "false", strings.ReplaceAll(lf, "\n", "\r\n"), strings.ReplaceAll(worktree, "\n", "\r\n")},
 	} {
@@ -206,6 +206,9 @@ func TestReverseHunkMatchesGitApply(t *testing.T) {
 				}
 				patch := hunkPatch(h.raw, name)
 				cmd := exec.Command("git", "-C", r, "apply", "-R", "-p1", "-")
+				// As the server runs git: Git for Windows sets core.autocrlf
+				// in its system config
+				cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1")
 				cmd.Stdin = bytes.NewReader(patch)
 				if out, err := cmd.CombinedOutput(); err != nil {
 					t.Fatalf("git apply -R: %v\n%s\n%s", err, out, patch)

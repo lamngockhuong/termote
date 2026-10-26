@@ -463,12 +463,12 @@ func TestApplyRestoreDiscardRefused(t *testing.T) {
 	if _, err := os.Stat(p); err == nil {
 		t.Error("restore made a missing file")
 	}
-	ax.git(t, "checkout", "--", "a.txt")
+	ax.write(t, "a.txt", "one\n")
 	if err := os.WriteFile(p, make([]byte, maxPreviewSize+1), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	restore(id, "changed")
-	ax.git(t, "checkout", "--", "a.txt")
+	ax.write(t, "a.txt", "one\n")
 	if runtime.GOOS != "windows" {
 		other := filepath.Join(ax.repo, "other.txt")
 		writeFile(t, other, "one\n")
@@ -483,7 +483,7 @@ func TestApplyRestoreDiscardRefused(t *testing.T) {
 		}
 		os.Remove(p)
 		os.Remove(other)
-		ax.git(t, "checkout", "--", "a.txt")
+		ax.write(t, "a.txt", "one\n")
 	}
 	// The payload went: nothing to put back.
 	os.Remove(filepath.Join(ax.trashDir, id))
