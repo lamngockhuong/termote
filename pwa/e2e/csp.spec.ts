@@ -54,3 +54,34 @@ base('an injected inline script is blocked and reported', async ({ page }) => {
   expect(ran).toBe(false)
   await expect.poll(() => violations.some((v) => v.includes('script-src'))).toBe(true)
 })
+
+// A worker's own policy (from its script's response) is watched too: eval in
+// a worker of this origin is refused and reported.
+base('an eval in a worker is blocked and reported', async ({ page }) => {
+  const violations = await watchViolations(page)
+  await page.goto('/')
+  const started = page.waitForEvent('worker')
+  // A classic script of this origin, sent with the server's policy
+  await page.evaluate(() => {
+    ;(window as unknown as { __w: Worker }).__w = new Worker('/notify-sw.js')
+  })
+  const worker = await started
+  // Let the fixture's listener reach the worker first
+  await expect.poll(() => worker.evaluate(() => typeof self)).toBe('object')
+  // Code run by worker.evaluate itself is exempt (DevTools): the eval runs
+  // later, from a timer, as the worker's own code would
+  const ran = await worker.evaluate(
+    () =>
+      new Promise<boolean>((resolve) =>
+        setTimeout(() => {
+          try {
+            resolve((0, eval)('1 + 1') === 2)
+          } catch {
+            resolve(false)
+          }
+        }, 0),
+      ),
+  )
+  expect(ran).toBe(false)
+  await expect.poll(() => violations.some((v) => v.startsWith('worker '))).toBe(true)
+})

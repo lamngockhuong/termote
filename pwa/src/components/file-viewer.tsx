@@ -23,6 +23,10 @@ import {
   useRef,
   useState,
 } from 'react'
+import {
+  documentErrorCode,
+  useDocumentBytes,
+} from '../hooks/use-document-bytes'
 import { useDomSelection } from '../hooks/use-dom-selection'
 import {
   type FileDraft,
@@ -46,6 +50,7 @@ import {
   isTablePath,
 } from '../utils/csv-parse'
 import { CsvClient } from '../utils/csv-parse-client'
+import { isDocumentPath } from '../utils/document-path'
 import { formatSize, keepOrder, TRUNCATE_START } from '../utils/files-format'
 import { HIGHLIGHT_MAX_BYTES } from '../utils/highlight'
 import { isImagePath, isSvgPath } from '../utils/image-path'
@@ -118,6 +123,22 @@ export function LazyTablePreview(props: ComponentProps<typeof TablePreview>) {
     <PreviewBoundary retry={TablePreview.retry}>
       <Suspense fallback={<ViewMessage>Loading…</ViewMessage>}>
         <TablePreview {...props} />
+      </Suspense>
+    </PreviewBoundary>
+  )
+}
+
+// A PDF, .xlsx or .docx: its viewers load the first time one is opened
+const DocumentPreview = lazyRetry(
+  () => import('./document-preview'),
+  'DocumentPreview',
+)
+
+function LazyDocumentPreview(props: ComponentProps<typeof DocumentPreview>) {
+  return (
+    <PreviewBoundary retry={DocumentPreview.retry}>
+      <Suspense fallback={<ViewMessage>Loading…</ViewMessage>}>
+        <DocumentPreview {...props} />
       </Suspense>
     </PreviewBoundary>
   )
@@ -492,9 +513,22 @@ export function FileViewer({
     String(retry),
     onRootChanged,
   )
+  // A PDF, .xlsx or .docx is read through files/document, for its viewer
+  const docKind = isDocumentPath(path)
+  const asDocument = docKind !== undefined
+  // Neither is read as text: no Wrap, no Edit, no files/content
+  const binaryView = asImage || asDocument
+  const doc = useDocumentBytes(
+    paneId,
+    asDocument ? { path, root, reveal } : null,
+    String(retry),
+    onRootChanged,
+  )
   const sensitive = asImage
     ? imageErrorCode(image) === 'sensitive'
-    : state.kind === 'sensitive'
+    : asDocument
+      ? documentErrorCode(doc) === 'sensitive'
+      : state.kind === 'sensitive'
   // Text selected in the file, for a template's {{selection}}: never from a
   // sensitive file the user chose to show
   const selectionPane = reveal || mine?.reveal ? undefined : paneId
@@ -504,9 +538,13 @@ export function FileViewer({
     ? image.status === 'ready'
       ? image.size
       : undefined
-    : 'size' in state
-      ? state.size
-      : undefined
+    : asDocument
+      ? doc.status === 'ready'
+        ? doc.size
+        : undefined
+      : 'size' in state
+        ? state.size
+        : undefined
   const back =
     backLabel ??
     (backTo
@@ -523,7 +561,7 @@ export function FileViewer({
   const cells = mine?.cells
   // The file as read, when a save of it would be taken
   const editable =
-    canEdit && !asImage && state.kind === 'text' && state.editable
+    canEdit && !binaryView && state.kind === 'text' && state.editable
       ? state
       : undefined
 
@@ -538,7 +576,7 @@ export function FileViewer({
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reload reads the file again
   useEffect(() => {
-    if (asImage) return
+    if (binaryView) return
     let live = true
     setState({ kind: 'loading' })
     fetchFileContent(paneId, path, { root, reveal }).then(
@@ -561,7 +599,7 @@ export function FileViewer({
     return () => {
       live = false
     }
-  }, [paneId, root, path, reveal, asImage, onRootChanged, reload])
+  }, [paneId, root, path, reveal, binaryView, onRootChanged, reload])
 
   // A draft found when the file is read (one kept from before the app
   // closed, or from before a remount) is checked against the file: one the
@@ -824,7 +862,7 @@ export function FileViewer({
         updateSetting('svgPreview', !asImage)
       },
     })
-  if (!asImage)
+  if (!binaryView)
     extras.push({
       label: 'Wrap lines',
       icon: <WrapText size={15} />,
@@ -952,7 +990,7 @@ export function FileViewer({
         {headerExtra}
       </div>
       {mine &&
-        !asImage &&
+        !binaryView &&
         state.kind === 'error' &&
         state.error === 'not-found' && (
           // The file of a draft is gone from the host (deleted or renamed
@@ -1010,7 +1048,21 @@ export function FileViewer({
           />
         </div>
       )}
-      {!mine && !asImage && state.kind === 'text' && preview && (
+      {!mine && docKind && !sensitive && (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <LazyDocumentPreview
+            kind={docKind}
+            path={path}
+            state={doc}
+            notify={notify}
+            onRetry={() => setRetry((n) => n + 1)}
+            onDownload={
+              onDownload ? () => onDownload({ revealed: reveal }) : undefined
+            }
+          />
+        </div>
+      )}
+      {!mine && !binaryView && state.kind === 'text' && preview && (
         <LazyMarkdownPreview
           text={state.text}
           path={path}
@@ -1035,7 +1087,7 @@ export function FileViewer({
       )}
       {/* One element for viewing and editing, so entering edits keeps the
           view's sort, filter and header row */}
-      {(cells || (!mine && !asImage && tableView)) && (
+      {(cells || (!mine && !binaryView && tableView)) && (
         <LazyTablePreview
           text={cells ? mine.text : (state as TextLoaded).text}
           path={path}
@@ -1069,7 +1121,7 @@ export function FileViewer({
           }
         />
       )}
-      {!mine && !asImage && state.kind === 'text' && !previewOn && (
+      {!mine && !binaryView && state.kind === 'text' && !previewOn && (
         <>
           {markdown && tooLarge && (
             <Banner>Too large to preview: shown as source</Banner>
@@ -1084,15 +1136,15 @@ export function FileViewer({
           />
         </>
       )}
-      {!mine && !asImage && state.kind === 'loading' && (
+      {!mine && !binaryView && state.kind === 'loading' && (
         <ViewMessage>Loading…</ViewMessage>
       )}
-      {!mine && !asImage && state.kind === 'unpreviewable' && (
+      {!mine && !binaryView && state.kind === 'unpreviewable' && (
         <ViewMessage>
           Not previewable (binary, special file or larger than 1 MiB)
         </ViewMessage>
       )}
-      {!mine && !asImage && state.kind === 'error' && (
+      {!mine && !binaryView && state.kind === 'error' && (
         <ViewMessage>
           {ERRORS[state.error]}
           {state.error === 'not-found' && onCloseTab && (

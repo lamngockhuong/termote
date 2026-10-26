@@ -120,6 +120,22 @@ export function useSettings() {
 </button>
 ```
 
+## Document Viewer Dependencies
+
+The PDF, Excel and Word previews pin their parsers exactly; upgrade them on purpose:
+
+- **SheetJS** comes from its own CDN, not the npm registry (the registry's `xlsx` stops at
+  0.18.5, which has known vulnerabilities), so Renovate does not propose it. Upgrade with
+  `pnpm --filter termote add -E https://cdn.sheetjs.com/xlsx-<version>/xlsx-<version>.tgz`; the
+  lockfile keeps the tarball's integrity.
+- **pdf.js** (`pdfjs-dist`): its character maps, standard fonts and JS decoders are copied to
+  `assets/doc/pdfjs-<version>/` at build (`vite.config.ts`), a path named by the version because
+  `/assets` is cached for a year. After an upgrade, check the `getDocument` options in
+  `pwa/src/utils/pdf-options.ts` against the package's own `types/src/display/api.d.ts`, and that
+  the E2E document specs see no CSP violation.
+- **mammoth** and **`@xmldom/xmldom`**: keep xmldom at the version mammoth depends on, so the
+  lockfile holds one copy.
+
 ## Imports Order
 
 1. React/external libraries

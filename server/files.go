@@ -48,8 +48,9 @@ func (e *rootChangedError) Error() string { return "root changed" }
 // pane's root (its git toplevel, else its directory), saves of a text file's
 // whole contents (PUT files/content), creates of an empty file (POST
 // files/create), renames (POST files/rename), deletes into a trash and
-// back (POST files/delete, files/restore), downloads (GET files/download)
-// and stages, unstages or discards of a change (POST files/changes/apply).
+// back (POST files/delete, files/restore), downloads (GET files/download),
+// stages, unstages or discards of a change (POST files/changes/apply) and
+// the bytes of a document to preview (GET files/document).
 type filesAPI struct {
 	m        Mux
 	dirs     PaneDirer // nil when the backend has none
@@ -123,6 +124,7 @@ func registerFilesRoutes(mux *http.ServeMux, m Mux, allowed hostAllowlist, denyD
 	mux.HandleFunc("/api/mux/panes/{id}/files/diff", f.handleDiff)
 	mux.HandleFunc("/api/mux/panes/{id}/files/raw", f.handleRaw)
 	mux.HandleFunc("/api/mux/panes/{id}/files/download", f.handleDownload)
+	mux.HandleFunc("/api/mux/panes/{id}/files/document", f.handleDocument)
 	return f
 }
 
@@ -684,6 +686,7 @@ func (f *filesAPI) error(w http.ResponseWriter, op string, err error) {
 	var ee *createExistsError
 	var dc *deleteChangedError
 	var mc *renameChangedError
+	var dt *documentTooLargeError
 	switch {
 	case errors.As(err, &ee):
 		// The name taken, cleaned, so the client opens what is there.
@@ -696,6 +699,11 @@ func (f *filesAPI) error(w http.ResponseWriter, op string, err error) {
 		// The file was swapped while it was renamed, and what was moved
 		// could not go back: where it is now, so the client follows it.
 		jsonCodeBody(w, errEditChanged.status, map[string]string{"error": errEditChanged.msg, "code": errEditChanged.code, "path": mc.path})
+	case errors.As(err, &dt):
+		// The size, so the client can say how large the file is.
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(errDocumentTooLarge.status)
+		json.NewEncoder(w).Encode(map[string]any{"error": dt.Error(), "code": errDocumentTooLarge.code, "size": dt.size})
 	case errors.As(err, &re):
 		jsonErrorCode(w, re.code, re.msg, re.status)
 	case errors.As(err, &ne):

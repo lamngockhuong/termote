@@ -776,6 +776,8 @@ export interface RequestErrorDetails {
   index?: number
   // templates 400 invalid_template: what is wrong
   field?: 'name' | 'text'
+  // files/document 413 too_large: the file's size in bytes
+  size?: number
 }
 
 // A refused request: the HTTP status and the server's stable code.
@@ -789,6 +791,7 @@ export class RequestError extends Error implements RequestErrorDetails {
   readonly template?: PromptTemplate
   readonly index?: number
   readonly field?: 'name' | 'text'
+  readonly size?: number
 
   constructor(
     readonly status: number,
@@ -828,6 +831,7 @@ async function requestError(
       trashId: body.trashId,
       template: body.template,
       index: body.index,
+      size: typeof body.size === 'number' ? body.size : undefined,
       field: body.field,
     },
   )
@@ -1516,6 +1520,50 @@ export async function fetchFileImage(
   )
   if (!res.ok) throw await requestError(res, true)
   return res.blob()
+}
+
+// Which document files/document reads: the file in the working tree.
+export interface DocumentQuery {
+  root?: string
+  reveal?: boolean
+}
+
+// A PDF, .xlsx or .docx under the pane's root (server/files_document.go),
+// for a worker to parse. A refusal is a RequestError with the server's code
+// (too_large with size, not_document, encrypted, lfs_pointer, busy,
+// sensitive); a body cut short (fewer bytes than the server announced) is
+// one with code interrupted and status 0.
+export async function fetchFileDocument(
+  paneId: string,
+  path: string,
+  opts: DocumentQuery = {},
+  signal?: AbortSignal,
+): Promise<Blob> {
+  const res = await fetch(
+    filesUrl(paneId, 'document', {
+      path,
+      reveal: opts.reveal ? '1' : undefined,
+      root: opts.root,
+    }),
+    { signal },
+  )
+  if (!res.ok) throw await requestError(res, true)
+  const interrupted = () =>
+    new RequestError(0, 'interrupted', 'the download was cut off')
+  let blob: Blob
+  try {
+    blob = await res.blob()
+  } catch (err) {
+    if (signal?.aborted) throw err
+    throw interrupted()
+  }
+  // Content-Length counts the bytes as sent: compressed by a proxy, it says
+  // nothing of the file's size
+  const length = res.headers.has('Content-Encoding')
+    ? Number.NaN
+    : Number(res.headers.get('Content-Length') ?? Number.NaN)
+  if (Number.isFinite(length) && blob.size !== length) throw interrupted()
+  return blob
 }
 
 // Which file files/download sends (server/files_download.go).
