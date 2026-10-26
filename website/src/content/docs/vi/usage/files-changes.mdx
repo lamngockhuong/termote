@@ -9,7 +9,8 @@ Muốn biết agent đã sửa gì, thường bạn phải gõ `ls`, `cat`, `git
 đọc kết quả trong terminal. Termote có hai view để xem nhanh:
 
 - **Files**: thư mục của pane dạng cây, mở từng thư mục một. File văn bản mở ra có số dòng và tô
-  màu cú pháp, file CSV hoặc TSV mở ra thành bảng, file ảnh mở ra thành hình.
+  màu cú pháp, file CSV hoặc TSV mở ra thành bảng, file ảnh mở ra thành hình, còn tài liệu PDF,
+  Excel hay Word mở ra thành bản xem trước chỉ đọc.
 - **Changes**: khi thư mục nằm trong một repo git, danh sách file git báo đã đổi, kèm diff của
   từng file (với ảnh thì là bản trước và bản sau khi đổi).
 
@@ -72,7 +73,7 @@ Các bộ quản lý phiên hỗ trợ:
 | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | Chữ có màu                                                    | File văn bản tối đa 256 KiB, tối đa 5000 dòng, không dòng nào quá 2000 ký tự                     |
 | Chữ thường, không màu                                         | File văn bản lớn hơn (tới 1 MiB), ngôn ngữ chưa hỗ trợ, hoặc tô màu mất quá 3 giây              |
-| `Not previewable (binary, special file or larger than 1 MiB)`  | File nhị phân không phải ảnh, file lớn hơn 1 MiB, hoặc thứ không phải file thường                |
+| `Not previewable (binary, special file or larger than 1 MiB)`  | File nhị phân không phải ảnh hay tài liệu, file lớn hơn 1 MiB, hoặc thứ không phải file thường |
 | `This file can't be shown`                                     | Đường dẫn Termote không bao giờ trả về (xem bên dưới)                                            |
 
 ## Mở nhiều file theo tab
@@ -707,6 +708,47 @@ nằm trong thư mục làm việc. Hình được đọc lại khi bạn bấm 
 Tên file thường chứa bí mật thì được hỏi trước, giống như với văn bản. File SVG mở thẳng bằng địa
 chỉ của nó không bao giờ chạy script: server gửi file kèm một chính sách cấm script, và gửi dưới
 dạng file tải về.
+
+## Tài liệu PDF, Excel và Word
+
+File `.pdf`, `.xlsx` hoặc `.docx` mở ra thành bản xem trước chỉ đọc, không sửa được gì trong đó.
+Muốn mở bằng ứng dụng của nó thì bấm **Download** để lưu cả file về máy. Trình duyệt đọc và tách
+file trong một worker chạy nền, nên file lớn không làm app đứng; file đọc quá lâu thì bị bỏ, kèm
+lý do và nút Download.
+
+- **PDF**: các trang nối nhau theo chiều dọc, trang nào cuộn tới mới được vẽ. Thanh phía trên
+  ghi trang đang xem, mức zoom với hai nút **−** và **+**, nút **Fit width** và nút **Find**
+  (Enter sang kết quả sau, Shift+Enter về kết quả trước, **Aa** phân biệt hoa thường). Chọn và
+  chép được chữ. Liên kết tới trang web mở trong tab mới, liên kết trong tài liệu nhảy tới trang
+  của nó. Biểu mẫu, script và file đính kèm trong PDF không bao giờ chạy.
+- **Excel**: mỗi sheet hiện trong Excel có một tab (phím mũi tên chuyển qua lại giữa các tab);
+  sheet bị ẩn thì không có tab, một dòng ghi chú cho biết có bao nhiêu sheet ẩn. Sheet mở ra
+  trong cùng bảng với file CSV, lọc, sắp xếp, tìm và xem từng bản ghi được, nhưng không sửa được.
+  Ô hiện giá trị đúng như Excel hiện: ngày và phần trăm theo định dạng của ô, công thức hiện giá
+  trị lúc file được lưu lần cuối (công thức Excel chưa từng tính thì ô trống), ô lỗi hiện mã lỗi
+  như `#DIV/0!`. Ô gộp có giá trị ở ô đầu tiên. Sheet có chữ quá 1 MiB, hoặc rộng quá 200 cột,
+  chỉ hiện những hàng hay cột đầu, kèm ghi chú và nút Download.
+- **Word**: chữ cùng heading, đậm, nghiêng, danh sách, bảng (kể cả ô gộp), liên kết tới trang web
+  và hình. Hộp chữ, chia cột, header, footer, bình luận và các thay đổi được theo dõi không được
+  hiện. Liên kết trỏ vào chính tài liệu và dấu chú thích cuối trang hiện thành chữ thường. Tìm chữ
+  bằng chức năng tìm của trình duyệt (Ctrl+F hoặc menu của trình duyệt).
+
+Trên điện thoại vẫn là những view này; PDF zoom bằng nút, không zoom bằng hai ngón tay.
+
+| Hiện ra                                                  | Lý do                                                                        |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `Larger than 30 MiB (…)`                                 | Tài liệu lớn hơn 30 MiB không được xem trước; dung lượng file được ghi kèm   |
+| `Password-protected or encrypted file`                   | File Office được lưu kèm mật khẩu (PDF có mật khẩu thì hiện `Password-protected PDF`) |
+| `Not previewable (not a valid PDF, .xlsx or .docx file)` | Nội dung không khớp với tên file                                             |
+| `The file could not be read (damaged or not supported)`  | File hỏng, hoặc có phần bản xem trước không đọc được                         |
+| `Too large to preview once unpacked`                     | File Excel hay Word tự khai rằng giải nén ra hơn 200 MiB                     |
+| `Took too long to open`                                  | Bản xem trước đã bỏ cuộc; nút **Retry** đọc lại                              |
+| `The download was cut off`                               | Kết nối bị ngắt lúc đang đọc file; nút **Retry** đọc lại                     |
+
+Định dạng cũ (`.xls`, `.doc`, `.ppt`, `.pptx`) không có bản xem trước: chúng hiện như file nhị
+phân, có nút Download. Trong Changes, tài liệu cũng hiện như file nhị phân. Tên file thường chứa
+bí mật thì được hỏi trước, giống như với văn bản. Phiên chỉ xem vẫn xem trước được nhưng không
+có nút Download; mỗi lần đọc một tài liệu đều được ghi vào log của server.
 
 ## Changes
 

@@ -1121,6 +1121,48 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   path through a link the tree has read) and on each regular file's row menu (a sensitive one asks
   first); never on a directory or a symlink row, never for a view-only client. Out of scope:
   directories, git versions, ranges
+- **Reading a document to preview** (`GET files/document?root=&path=&reveal=`,
+  `server/files_document.go`): the bytes of a `.pdf`, `.xlsx` or `.docx` under the pane root, for
+  the PWA to parse in a worker. Read like `files/raw`'s worktree file: `begin`, `viewHides` (a
+  view-only client reads it too, as it reads `files/raw` and `content`, only what git lists, and
+  never with `reveal=1`, refused 403 for it as on every read route),
+  `cleanRelPath`, the read deny list, `os.Root` `O_NONBLOCK` and every check on the open handle in
+  `content()`'s order (missing → 404 even for a sensitive name; a sensitive name without
+  `reveal=1` → 403 `sensitive`; not a regular file → 415 `not_document`). `side` is refused (400):
+  Changes keeps showing these as binary. The kind comes from the name and is checked on the first
+  1 024 bytes: a PDF holds `%PDF-`, an `.xlsx`/`.docx` starts `PK\x03\x04`, else 415
+  `not_document`; an OLE compound file (a password-protected or IRM Office file) → 415 `encrypted`;
+  a Git LFS pointer → 415 `lfs_pointer`. Over 30 MiB → 413 `too_large` with `size` in the body
+  (`documentTooLargeError`). It shares the 4 `files/raw` slots (429 `busy`, "too many files at
+  once"). Sent by `writeDownload` (256 KiB chunks, 2-minute idle deadline each, 30 minutes in
+  all) with its headers and a second CSP `sandbox; default-src 'none'` on every answer. One
+  `audit: document path="<relative>" size by via` line before the bytes, none for a refusal
+- **Office and PDF previews** (`pwa/src/components/document-preview.tsx` and its viewers): the
+  page's CSP is not loosened for them (no `'unsafe-eval'`, no `'wasm-unsafe-eval'`, no `font-src
+  data:`); every E2E spec fails on a violation of the page or of any worker
+  (`pwa/e2e/fixtures.ts`). Parsing runs in workers only, each request with a timeout (30 s to load
+  the worker, 20 s per request, `DocumentWorkerClient`); on timeout or failure the worker is
+  `terminate()`d and the viewer says why with Download (full clients). PDF: one worker per
+  document, owned by the viewer (`new PDFWorker({port})`; pdf.js never terminates a port it was
+  given), ended on close, failure or a 20 s open timeout; `getDocument` gets fixed options only
+  (`pdf-options.ts`: `enableXfa: false`, `useWasm: false`, `wasmUrl`/`cMapUrl`/
+  `standardFontDataUrl` under `/assets/doc/pdfjs-<version>/`, `maxImageSize` 40 MP), no scripting
+  manager, annotations shown but not editable, `maxCanvasPixels` 16 M; `wasmUrl` only serves the
+  JS fallback decoders of JPEG 2000 and JBIG2. External links open in a new tab with `noopener
+  noreferrer nofollow`; internal ones move between pages without touching `location.hash`.
+  `.xlsx`/`.docx`: `zip-guard.ts` runs first in the worker and checks only what the zip declares
+  (no ZIP64, no data descriptor, local header equal to the central one, no repeated name, at most
+  2 000 entries, 100 MiB per entry and 200 MiB in all); what really bounds a zip bomb is the
+  timeout and `terminate()`, and an entry that inflates past the worker's memory before the
+  timeout ends the worker (or, at worst, the tab), never the page's data. A sheet is read by the
+  cells it holds, not by the range it declares (rows up to the last with data, 201 columns), a
+  row at a time until its TSV reaches 1 MiB: it reaches the table view as at most 1 MiB and 200
+  columns (the size its main-thread fallback was built for), cut by rows with a note. A `.docx` is
+  converted by mammoth, parsed by xmldom and filtered by an allowlist in the worker
+  (`docx-sanitize.ts`: no `id`, no `#` link, `href` only `http(s)`/`mailto`, images only
+  `data:image/(png|jpeg|gif|webp)`, spans 1–1000; limits of 5 Mi UTF-16 units of text, 50 000 nodes, depth
+  64, 20 MiB of images); the page gets a JSON tree, checks each tag and attribute again and builds
+  React elements. No `innerHTML` or `dangerouslySetInnerHTML` in `pwa/src` outside tests
 - **Image uploads** (`POST /api/mux/uploads`): the PWA sends an image so an agent can read it by
   path (the host clipboard is empty when the image sits on a phone). Same auth, Host allowlist,
   `Sec-Fetch-Site`/`Origin` check and `requireWriteRole` as every write; the body is a raw

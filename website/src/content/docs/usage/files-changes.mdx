@@ -9,7 +9,8 @@ To see what an agent changed, you would otherwise type `ls`, `cat` and `git diff
 keyboard and read the output in a terminal. Termote has two views for this:
 
 - **Files**: the pane's directory as a tree, opened one folder at a time. A text file opens with
-  line numbers and syntax highlighting, a CSV or TSV file as a table, an image as the picture.
+  line numbers and syntax highlighting, a CSV or TSV file as a table, an image as the picture,
+  and a PDF, Excel or Word document as a read-only preview.
 - **Changes**: when the directory is in a git repository, the files git reports as changed, and
   the diff of each one (for an image, the version before and after).
 
@@ -75,7 +76,7 @@ Supported backends:
 | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | Text with colours                                             | A text file of up to 256 KiB, up to 5000 lines, no line over 2000 characters                     |
 | Plain text, no colours                                        | A larger text file (up to 1 MiB), a language not covered, or highlighting that took over 3 seconds |
-| `Not previewable (binary, special file or larger than 1 MiB)`  | A binary file that is not an image, a file over 1 MiB, or something that is not a regular file   |
+| `Not previewable (binary, special file or larger than 1 MiB)`  | A binary file that is not an image or a document, a file over 1 MiB, or something that is not a regular file |
 | `This file can't be shown`                                     | A path termote never serves (see below)                                                          |
 
 ## Open Files as Tabs
@@ -717,6 +718,47 @@ again when you press Refresh or when the file's status changes, not every 5 seco
 
 A name that usually holds secrets asks first, as for text. An SVG opened by its address never
 runs a script: the server sends it with a policy that forbids scripts, and as a download.
+
+## PDF, Excel and Word Documents
+
+A `.pdf`, `.xlsx` or `.docx` file opens as a read-only preview. Nothing can be edited in it;
+**Download** saves the whole file to open it in its own app. The file is read and taken apart
+in a background worker of the browser, so a large file does not freeze the app, and a file that
+takes too long is given up on with the reason and Download.
+
+- **PDF**: the pages scroll one after another and are drawn as they come into view. The bar
+  above shows the page you are on, the zoom with **−** and **+**, **Fit width**, and **Find**
+  (Enter and Shift+Enter go to the next and previous match, **Aa** matches case). Text can be
+  selected and copied. A link to a web page opens in a new tab; a link inside the document goes
+  to its page. Forms, scripts and attachments in the PDF are not run.
+- **Excel**: each sheet shown in Excel has a tab (the arrow keys move between tabs); hidden
+  sheets have none, and a note counts them. A sheet opens in the same table as a CSV file, with
+  filter, sort, find and records, but without editing. A cell shows its value as Excel shows it:
+  dates and percentages formatted, a formula as its value when the file was last saved (a
+  formula never calculated by Excel shows empty), an error as `#DIV/0!`. A merged cell has its
+  value in its first cell. A sheet whose text is over 1 MiB, or wider than 200 columns, shows
+  its first rows or columns, with a note and Download.
+- **Word**: the text with its headings, bold, italic, lists, tables (merged cells included),
+  links to web pages and images. Text boxes, columns, headers, footers, comments and tracked
+  changes are not shown. Links inside the document and footnote marks show as plain text. Find
+  with the browser's own find (Ctrl+F or the browser menu).
+
+On a phone the same views show, with buttons to zoom a PDF (no pinch).
+
+| Shown                                                    | Why                                                                         |
+| -------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `Larger than 30 MiB (…)`                                 | Documents over 30 MiB are not previewed; the size is shown                  |
+| `Password-protected or encrypted file`                   | An Office file saved with a password (a PDF with one says `Password-protected PDF`) |
+| `Not previewable (not a valid PDF, .xlsx or .docx file)` | The contents do not match the name                                          |
+| `The file could not be read (damaged or not supported)`  | The file is damaged, or uses something the preview cannot read              |
+| `Too large to preview once unpacked`                     | An Excel or Word file that says it unpacks to more than 200 MiB             |
+| `Took too long to open`                                  | The preview gave up; **Retry** reads it again                               |
+| `The download was cut off`                               | The connection dropped while the file was read; **Retry** reads it again    |
+
+Older formats (`.xls`, `.doc`, `.ppt`, `.pptx`) are not previewed: they show as binary files,
+with Download. Changes shows documents as binary too. A document with a name that usually holds
+secrets asks first, as for text. A view-only session sees the preview, without Download; each
+read of a document is written to the server's log.
 
 ## Changes
 

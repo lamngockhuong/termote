@@ -134,6 +134,20 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/image-preview.tsx`            | One image of Files/Changes (sizes, why it cannot be shown)     |
 | `pwa/src/components/image-compare.tsx`            | Changes: an image's old and new versions side by side          |
 | `pwa/src/hooks/use-image-blob.ts`                 | Reads `files/raw` into a `blob:` URL (SVG: `data:`), revokes   |
+| `pwa/src/components/document-preview.tsx`         | A PDF, .xlsx or .docx: its viewer, or why, with Download       |
+| `pwa/src/components/document-message.tsx`         | Why a document cannot be shown (server and viewer codes)       |
+| `pwa/src/hooks/use-document-bytes.ts`             | Reads `files/document` into a Blob, read again per worker      |
+| `pwa/src/utils/document-worker-client.ts`         | A document's worker: queue, timeouts, terminate                |
+| `pwa/src/utils/zip-guard.ts`                      | Checks a zip's declared entries before SheetJS or mammoth      |
+| `pwa/src/components/pdf-preview.tsx`              | pdf.js viewer: one worker per document, find, zoom             |
+| `pwa/src/utils/pdf-options.ts`                    | Fixed `getDocument` options (no XFA, no wasm, own assets)      |
+| `pwa/src/utils/pdf-runtime.ts`                    | Loads pdf.js, then its viewer; makes a document's worker       |
+| `pwa/src/components/xlsx-preview.tsx`             | Sheet tabs over the table view, a sheet read at a time         |
+| `pwa/src/utils/xlsx-worker.ts`                    | SheetJS in a worker: sheet names, then one sheet as TSV        |
+| `pwa/src/utils/sheet-tsv.ts`                      | A sheet as TSV of at most 1 MiB and 200 columns                |
+| `pwa/src/components/docx-preview.tsx`             | A Word document from the worker's tree as React elements       |
+| `pwa/src/utils/docx-worker.ts`                    | mammoth and xmldom in a worker, the result sanitized           |
+| `pwa/src/utils/docx-sanitize.ts`                  | Allowlist of tags and attributes, limits, as a JSON tree       |
 | `pwa/src/components/panel-toggles.tsx`            | Desktop header toggles of the side panel (Files, Changes)      |
 | `pwa/src/hooks/use-files.ts`                      | File tree of a pane's root, one store per pane                 |
 | `pwa/src/hooks/use-git-changes.ts`                | Polls a pane's git status, the Changes tabs, one store a pane  |
@@ -183,6 +197,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/files_git_patch.go`                       | Hunk ids, the patch of one hunk, a hunk undone in Go           |
 | `server/files_sensitive.go`                       | Names of files that usually hold secrets                       |
 | `server/files_raw.go`                             | `files/raw`: an image's bytes (worktree, or a git version)     |
+| `server/files_document.go`                        | `files/document`: a document's bytes to preview, 30 MiB        |
 | `server/files_write.go`                           | `PUT files/content`: saves a text file (baseHash, rename)      |
 | `server/files_create.go`                          | `POST files/create`: an empty file, never replacing anything   |
 | `server/files_find*.go`                           | `GET files/find`: file lists (git, walk), cache, ranking       |
