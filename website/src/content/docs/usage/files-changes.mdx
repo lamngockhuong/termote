@@ -767,6 +767,41 @@ Groups with nothing left are hidden, the counts show the filtered numbers, and
 `No changes match` shows when nothing is left. Escape clears the box. The filter lives in the
 page only: it is cleared when you leave the view or when the root moves.
 
+### Staging, Unstaging and Discarding
+
+A row of the list has **Stage**, **Unstage** or **Discard** buttons, and the same ones are in
+the header of an open diff. On a diff, each hunk has its own, so one hunk can go to the index or
+be thrown away alone.
+
+- **Stage** adds the file (or the hunk) to the index, **Unstage** takes it out again. Only the
+  index changes; the file in the working tree is never touched.
+- **Discard** throws away the change in the working tree and makes the file what the index
+  holds. A dialog asks first and shows the path. A deleted file is made again, and an untracked
+  file is deleted.
+- Discard is not final. What it replaces is kept in Termote's trash (see
+  [Deleting a File](#deleting-a-file) for how long), and a toast with **Undo** puts it back. Undo
+  works only while the file still holds what the discard left: if something (often the agent)
+  changed it since, nothing is overwritten.
+- An untracked file is discarded as a delete: on another file system than the trash it asks a
+  second time before deleting it for good.
+
+Some changes are applied as a whole file only, or not at all:
+
+- A hunk can be applied alone only for a change in place of a regular file, with no rename,
+  copy, mode change or binary content. A renamed file is staged and unstaged whole (the old and
+  the new path together).
+- A file with a merge conflict cannot be staged, unstaged or discarded here, nor can a symbolic
+  link or a submodule be discarded; use a terminal.
+- A file that goes through a git filter (such as Git LFS) cannot be changed here either: the
+  filters are off, so staging it would store the wrong content.
+- A changed or deleted file larger than 1 MiB cannot be discarded here (an untracked one can:
+  it is deleted into the trash).
+- When the file changed after the diff was read (a hunk is gone or moved), the app refuses and
+  the list is read again. When another git command holds the repository's index lock, try again
+  in a moment.
+- A file that may contain secrets asks for confirmation first, as for its diff.
+- A view-only session cannot change anything.
+
 ## Files That May Contain Secrets
 
 Files whose names usually mean secrets are listed with a lock and the word `Sensitive`: for
@@ -800,7 +835,9 @@ outside the root are refused.
 ## How git Is Run
 
 Termote runs `git status` and `git diff` itself to fill Changes, and `git cat-file` to read the
-before and after versions of an image. A repository's own settings
+before and after versions of an image. Stage and Unstage are the only commands that write, and
+they write the index only (`git add`, `git restore --staged`, `git reset`, `git apply --cached`); the
+patch of a hunk is built by Termote, never taken from the browser. A repository's own settings
 cannot make it run a program: file system monitors, filter drivers, external diff tools and text
 conversion are turned off for these commands, and submodules are skipped. At most two git
-commands run at a time, each limited to 10 seconds.
+commands run at a time, each limited to 10 seconds (30 seconds for one that writes the index).
