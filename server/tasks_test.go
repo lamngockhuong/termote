@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -147,7 +148,8 @@ func TestTasksListGuards(t *testing.T) {
 		}
 	}
 	// A root that cannot be opened: a fixed error, no path.
-	if os.Geteuid() != 0 {
+	// (Unix modes: Windows has none to take the read away)
+	if runtime.GOOS != "windows" && os.Geteuid() != 0 {
 		locked, _ := filepath.EvalSymlinks(t.TempDir())
 		h := tasksHandler(t, &filesFakeMux{dir: locked, files: true})
 		os.Chmod(locked, 0)

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"unicode/utf8"
 )
@@ -198,11 +199,28 @@ func detectPackageManager(rt *os.Root, field string) string {
 // makefileNames are the files make reads, in the order it looks for them.
 var makefileNames = []string{"GNUmakefile", "makefile", "Makefile"}
 
-// pickMakefile returns the file make would read in the root, "" for none.
+// pickMakefile returns the file make would read in the root, as the
+// directory names it, "" for none. On a file system that ignores case
+// (macOS, Windows) make's "makefile" opens a "Makefile": the name listed is
+// the one shown.
 func pickMakefile(rt *os.Root) string {
+	d, err := rt.Open(".")
+	if err != nil {
+		return ""
+	}
+	defer d.Close()
+	names, _ := d.Readdirnames(-1)
 	for _, n := range makefileNames {
-		if _, err := rt.Lstat(n); err == nil {
+		if slices.Contains(names, n) {
 			return n
+		}
+	}
+	for _, n := range makefileNames {
+		if _, err := rt.Lstat(n); err != nil {
+			continue
+		}
+		if i := slices.IndexFunc(names, func(e string) bool { return strings.EqualFold(e, n) }); i >= 0 {
+			return names[i]
 		}
 	}
 	return ""

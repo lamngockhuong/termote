@@ -165,6 +165,23 @@ func TestPickMakefileAndPackageManager(t *testing.T) {
 	if got := pickMakefile(rt); got != "GNUmakefile" {
 		t.Errorf("all = %q", got)
 	}
+	// A root that cannot be listed has none
+	closed, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	closed.Close()
+	if got := pickMakefile(closed); got != "" {
+		t.Errorf("closed root = %q", got)
+	}
+	// Where the file system ignores case, the name shown is the file's
+	if runtime.GOOS != "linux" {
+		cased := t.TempDir()
+		writeFile(t, filepath.Join(cased, "MAKEFILE"), "a:\n")
+		if got := pickMakefile(openTestRoot(t, cased)); got != "MAKEFILE" {
+			t.Errorf("MAKEFILE = %q", got)
+		}
+	}
 
 	if got := detectPackageManager(rt, ""); got != "npm" {
 		t.Errorf("default = %s", got)
