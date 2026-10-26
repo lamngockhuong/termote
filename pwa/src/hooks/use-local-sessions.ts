@@ -9,6 +9,7 @@ import {
 } from '../types/session'
 import { remapChatDrafts } from '../utils/chat-draft'
 import { regroupPersisted, renamePersistedGroup } from '../utils/files-persist'
+import { isFocusWindow } from '../utils/focus-mode'
 import {
   isTimeoutError,
   reportLargePacketLoss,
@@ -135,7 +136,9 @@ function renameGroupMeta(
   if (changed) saveMeta(meta)
 }
 
+// A focus window keeps neither (focus-mode.ts)
 function saveMeta(meta: Record<string, SessionMeta>) {
+  if (isFocusWindow()) return
   localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(meta))
 }
 
@@ -176,6 +179,7 @@ function loadSelection(backend: string): Selection | null {
 }
 
 function saveSelection(backend: string, sel: Selection) {
+  if (isFocusWindow()) return
   localStorage.setItem(selectionKey(backend), JSON.stringify(sel))
 }
 

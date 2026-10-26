@@ -1,5 +1,6 @@
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { setFocusWindowForTest } from '../utils/focus-mode'
 import { useSidebarCollapsed } from './use-sidebar-collapsed'
 
 describe('useSidebarCollapsed', () => {
@@ -28,5 +29,13 @@ describe('useSidebarCollapsed', () => {
     act(() => result.current.toggle())
     expect(result.current.isCollapsed).toBe(false)
     expect(localStorage.getItem('sidebar-collapsed')).toBe('false')
+  })
+
+  it('a focus window toggles without keeping it', () => {
+    setFocusWindowForTest(true)
+    const { result } = renderHook(() => useSidebarCollapsed())
+    act(() => result.current.toggle())
+    expect(result.current.isCollapsed).toBe(true)
+    expect(localStorage.getItem('sidebar-collapsed')).toBeNull()
   })
 })

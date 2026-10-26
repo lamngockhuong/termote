@@ -1,4 +1,5 @@
 import {
+  AppWindow,
   ArrowUpCircle,
   Info,
   LifeBuoy,
@@ -15,6 +16,7 @@ import { useState } from 'react'
 import { useTheme } from '../contexts/theme-context'
 import { logout } from '../hooks/use-mux-api'
 import { signedOut } from '../utils/files-persist'
+import type { OpenWindowEvent } from '../utils/open-window'
 import {
   Menu,
   MenuGroup,
@@ -37,6 +39,8 @@ interface Props {
   fontSize?: FontSizeControls
   // Copies a link to the session on screen
   onCopyLink?: () => void
+  // Opens it in a window of its own (desktop; Shift: a popup)
+  onOpenWindow?: (e: OpenWindowEvent) => void
   // Ends the session (only when the server has sign-in on)
   onLogout?: () => void
   // A newer release than the server runs: a dot on the trigger and an item
@@ -84,6 +88,7 @@ export function SettingsMenu({
   onOpenSettings,
   fontSize,
   onCopyLink,
+  onOpenWindow,
   onLogout,
   updateVersion,
   onOpenUpdates,
@@ -170,6 +175,15 @@ export function SettingsMenu({
       {onCopyLink && (
         <MenuItem icon={<Link size={17} />} onSelect={onCopyLink}>
           Copy link
+        </MenuItem>
+      )}
+      {onOpenWindow && (
+        <MenuItem
+          icon={<AppWindow size={17} />}
+          onSelect={onOpenWindow}
+          title="Shift: a popup"
+        >
+          Open in new window
         </MenuItem>
       )}
       {onLogout && (

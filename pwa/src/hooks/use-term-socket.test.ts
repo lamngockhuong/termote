@@ -296,7 +296,7 @@ describe('useTermSocket', () => {
     await flush()
     act(() => last().open())
     act(() => last().closeWith(CLOSE_EVICTED))
-    expect(result.current.state).toBe('error')
+    expect(result.current.state).toBe('evicted')
     await act(async () => {
       vi.advanceTimersByTime(60_000)
     })
@@ -503,7 +503,7 @@ describe('useTermSocket', () => {
     act(() => {
       vi.advanceTimersByTime(HIDDEN_CLOSE_MS)
     })
-    expect(result.current.state).toBe('error')
+    expect(result.current.state).toBe('evicted')
   })
 
   it('retries at once when shown or back online during a backoff', async () => {
@@ -649,7 +649,7 @@ describe('useTermSocket', () => {
     })
     await flush()
     expect(FakeWS.instances).toHaveLength(1)
-    expect(result.current.state).toBe('error')
+    expect(result.current.state).toBe('evicted')
     expect(mockReportLargePacketLoss).not.toHaveBeenCalled()
   })
 })

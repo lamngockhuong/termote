@@ -436,6 +436,25 @@ describe('DiffViewer: Copy path', () => {
   })
 })
 
+describe('DiffViewer: new window', () => {
+  it('opens the diff in a new window when offered, Shift as a popup', async () => {
+    const onOpenWindow = vi.fn()
+    show({ onOpenWindow })
+    await screen.findByTestId('diff')
+    const button = screen.getByRole('button', { name: 'Open in new window' })
+    fireEvent.click(button, { shiftKey: true })
+    expect(onOpenWindow).toHaveBeenCalledWith({ shiftKey: true })
+  })
+
+  it('offers none unless given', async () => {
+    show()
+    await screen.findByTestId('diff')
+    expect(
+      screen.queryByRole('button', { name: 'Open in new window' }),
+    ).toBeNull()
+  })
+})
+
 describe('DiffViewer: images', () => {
   const PNG: ChangeEntry = { ...ENTRY, path: 'img/a.png' }
   const SVG: ChangeEntry = { ...ENTRY, path: 'logo.svg' }

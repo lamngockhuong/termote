@@ -1,4 +1,5 @@
 import {
+  AppWindow,
   ArrowLeft,
   Copy,
   Eye,
@@ -31,6 +32,7 @@ import { isTablePath } from '../utils/csv-parse'
 import { keepOrder, TRUNCATE_START } from '../utils/files-format'
 import { isImagePath, isSvgPath } from '../utils/image-path'
 import { isMarkdownPath, type LinkPath } from '../utils/markdown-links'
+import type { OpenWindowEvent } from '../utils/open-window'
 import { CODE_FRAME, codeText, GUTTER } from './code-block'
 import {
   LazyMarkdownPreview,
@@ -101,6 +103,8 @@ interface Props {
   onScroll?: (top: number) => void
   // More buttons at the end of the header
   headerExtra?: ReactNode
+  // On a desktop: the diff in a window of its own (Shift: a popup)
+  onOpenWindow?: (e: OpenWindowEvent) => void
 }
 
 // The unified diff of one changed file, one side (staged or not), with
@@ -126,6 +130,7 @@ export function DiffViewer({
   scrollTop,
   onScroll,
   headerExtra,
+  onOpenWindow,
 }: Props) {
   const [state, setState] = useState<Loaded>({ kind: 'loading' })
   const [ownReveal, setOwnReveal] = useState(false)
@@ -286,6 +291,16 @@ export function DiffViewer({
         >
           <Copy size={15} aria-hidden="true" />
         </IconButton>
+        {onOpenWindow && (
+          <IconButton
+            size="sm"
+            onClick={(e) => onOpenWindow({ shiftKey: e.shiftKey })}
+            aria-label="Open in new window"
+            title="Open in new window (Shift: a popup)"
+          >
+            <AppWindow size={15} aria-hidden="true" />
+          </IconButton>
+        )}
         {canPreview && (
           <IconButton
             size="sm"

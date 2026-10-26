@@ -3,6 +3,7 @@
  * its public API. Input goes straight to the terminal stream.
  */
 import type { Terminal } from '@xterm/xterm'
+import { isDown } from '../components/connection-indicator'
 import type { TerminalHandle } from '../components/terminal-view'
 import { copyText } from './copy-text'
 import { isApplePlatform } from './platform'
@@ -36,8 +37,7 @@ function getModifierValue(shift: boolean, ctrl: boolean, alt = false): number {
 // True while the stream is down (dropped, backing off, or stopped); Enter
 // then asks for a reconnect instead of being sent.
 export function isTerminalDisconnected(handle: TerminalHandle | null): boolean {
-  const state = handle?.connectionState
-  return state === 'disconnected' || state === 'error'
+  return isDown(handle?.connectionState)
 }
 
 // Send a key to the terminal with modifier support

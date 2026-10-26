@@ -1,3 +1,4 @@
+import { isFocusWindow } from './focus-mode'
 import {
   paneGroupOf,
   paneInstance,
@@ -203,7 +204,8 @@ function readFor<T extends StoredRecord>(
   paneId: string,
   keepOtherGroup = false,
 ): T | null {
-  if (!key || disabled) return null
+  // A focus window starts from its link, never from what the main one kept
+  if (!key || disabled || isFocusWindow()) return null
   const r = read<T>(key)
   if (!r || r.pane !== paneKeyOf(paneId)) return null
   if (r.group !== paneGroupOf(paneId)) {
@@ -229,7 +231,7 @@ export function saveTabs<T>(
   state: T | null,
 ) {
   const key = persistKey(kind, paneId)
-  if (!key || disabled) return
+  if (!key || disabled || isFocusWindow()) return
   pending.set(
     key,
     state === null
@@ -268,7 +270,7 @@ export function loadTabs<T>(
   paneId: string,
 ): T | null {
   const key = persistKey(kind, paneId)
-  if (key && pending.has(key)) {
+  if (key && pending.has(key) && !isFocusWindow()) {
     const p = pending.get(key) as TabsRecord<T> | null
     return p?.state ?? null
   }
@@ -285,7 +287,7 @@ export function writeDraft<T extends { path: string }>(
   editedAt: number,
 ): boolean {
   const key = persistKey('drafts', paneId, draft.path)
-  if (!key || disabled) return false
+  if (!key || disabled || isFocusWindow()) return false
   const value = JSON.stringify({
     ...record(paneId),
     editedAt,
@@ -309,13 +311,13 @@ export function writeDraft<T extends { path: string }>(
 
 export function removeDraft(paneId: string, path: string) {
   const key = persistKey('drafts', paneId, path)
-  if (key) remove(key)
+  if (key && !isFocusWindow()) remove(key)
 }
 
 // Every draft kept for paneId
 export function loadDrafts<T>(paneId: string): StoredDraft<T>[] {
   const prefix = persistKey('drafts', paneId, '')
-  if (!prefix || disabled) return []
+  if (!prefix || disabled || isFocusWindow()) return []
   const out: StoredDraft<T>[] = []
   for (const key of keysOf(['drafts'])) {
     if (!key.startsWith(prefix)) continue
@@ -341,7 +343,7 @@ export function loadView<T>(paneId: string): T | null {
 
 export function saveView<T>(paneId: string, view: T | null) {
   const key = persistKey('view', paneId)
-  if (!key || disabled) return
+  if (!key || disabled || isFocusWindow()) return
   if (view === null) {
     remove(key)
     return
@@ -376,7 +378,7 @@ export function loadRecent(paneId: string): RecentFile[] {
 
 export function saveRecent(paneId: string, files: RecentFile[]) {
   const key = persistKey('recent', paneId)
-  if (!key || disabled) return
+  if (!key || disabled || isFocusWindow()) return
   if (!files.length) {
     remove(key)
     return
@@ -399,7 +401,7 @@ export function renamePersistedGroup(
   name: string | null,
 ) {
   flushAll()
-  if (disabled) return
+  if (disabled || isFocusWindow()) return
   for (const key of keysOf(ALL_KINDS)) {
     const head = key.slice(0, key.indexOf(':') + 1)
     const rest = key.slice(head.length)
@@ -425,7 +427,7 @@ export function renamePersistedGroup(
 export function regroupPersisted(names: Map<string, string | null>) {
   if (!names.size) return
   flushAll()
-  if (disabled) return
+  if (disabled || isFocusWindow()) return
   const prefix = `:${paneInstance()}:`
   for (const key of keysOf(ALL_KINDS)) {
     if (!key.includes(prefix)) continue
@@ -573,4 +575,5 @@ export function resetFilesPersist() {
 
 signedOutMark = readMark()
 attach()
-sweepExpired(Date.now())
+// The main window sweeps; a focus window removes nothing
+if (!isFocusWindow()) sweepExpired(Date.now())

@@ -22,11 +22,13 @@ import type { MuxSnapshot } from './hooks/use-mux-api'
 import { usePushSubscription } from './hooks/use-push-subscription'
 import { resetAllShortcuts, setShortcut } from './hooks/use-shortcuts'
 import { takeDraftInsert } from './utils/chat-draft'
+import { setFocusWindowForTest } from './utils/focus-mode'
 import {
   LARGE_PACKET_HELP_URL,
   reportLargePacketLoss,
 } from './utils/large-packet-loss'
 import { lazyRetry } from './utils/lazy-retry'
+import { POPUP_FEATURES } from './utils/open-window'
 import { setPaneKeys } from './utils/pane-remap'
 
 // ─── Mock all hooks ───────────────────────────────────────────────────────────
@@ -85,6 +87,17 @@ vi.mock('./hooks/use-push-subscription', async (orig) => {
   const real = await orig<typeof import('./hooks/use-push-subscription')>()
   return { ...real, usePushSubscription: vi.fn(real.usePushSubscription) }
 })
+// A link's file and diff: what the App asks the Files and Changes stores
+const mockFollowInFiles = vi.fn(async (..._a: unknown[]) => 'opened')
+const mockOpenChangeFromLink = vi.fn(async (..._a: unknown[]) => true)
+vi.mock('./hooks/use-files', async (orig) => ({
+  ...(await orig<typeof import('./hooks/use-files')>()),
+  followInFiles: (...a: unknown[]) => mockFollowInFiles(...a),
+}))
+vi.mock('./hooks/use-git-changes', async (orig) => ({
+  ...(await orig<typeof import('./hooks/use-git-changes')>()),
+  openChangeFromLink: (...a: unknown[]) => mockOpenChangeFromLink(...a),
+}))
 vi.mock('./hooks/use-local-sessions', () => ({
   useLocalSessions: (...args: any[]) =>
     (mockUseLocalSessions as (...a: any[]) => unknown)(...args),
@@ -657,6 +670,7 @@ vi.mock('./components/settings-menu', () => ({
     onOpenSettings,
     fontSize,
     onCopyLink,
+    onOpenWindow,
     onLogout,
     updateVersion,
     onOpenUpdates,
@@ -666,6 +680,7 @@ vi.mock('./components/settings-menu', () => ({
     onOpenSettings: () => void
     fontSize?: { value: number; onDecrease: () => void; onIncrease: () => void }
     onCopyLink?: () => void
+    onOpenWindow?: (e: { shiftKey: boolean }) => void
     onLogout?: () => void
     updateVersion?: string | null
     onOpenUpdates?: () => void
@@ -686,12 +701,18 @@ vi.mock('./components/settings-menu', () => ({
         </>
       )}
       {onCopyLink && <button onClick={onCopyLink}>CopyLink</button>}
+      {onOpenWindow && (
+        <button onClick={(e) => onOpenWindow({ shiftKey: e.shiftKey })}>
+          OpenWindow
+        </button>
+      )}
       {onLogout && <button onClick={onLogout}>LogOut</button>}
     </div>
   ),
 }))
 
-vi.mock('./components/connection-indicator', () => ({
+vi.mock('./components/connection-indicator', async (orig) => ({
+  ...(await orig<typeof import('./components/connection-indicator')>()),
   ConnectionDot: ({ state }: { state: string }) => (
     <span data-testid="connection-dot" data-state={state} />
   ),
@@ -4517,6 +4538,459 @@ describe('App views, view-only and deep links', () => {
       const toast = await screen.findByTestId('toast')
       expect(toast).toHaveTextContent('Could not copy the link')
       expect(toast).toHaveAttribute('data-variant', 'danger')
+    })
+  })
+
+  describe('focus window', () => {
+    const P1 = '#/s/w1/w1%3At1/w1%3At1%3Ap1'
+    const CHANGES: AppView = {
+      ...FILES,
+      id: 'changes',
+      label: 'Changes',
+      Main: () => <div data-testid="changes-main" />,
+      Panel: () => <div data-testid="changes-panel" />,
+    }
+    const FOCUS_VIEWS = [...APP_VIEWS, CHAT, FILES, CHANGES]
+    const streamedPane = () =>
+      (vi.mocked(TerminalView).mock.lastCall![0] as { paneId?: string }).paneId
+    const toast = () => screen.findByTestId('toast')
+
+    function openFocus(hash: string, views = FOCUS_VIEWS) {
+      setFocusWindowForTest(true)
+      window.history.replaceState(null, '', `/${hash}`)
+      return render(<App views={views} />)
+    }
+
+    beforeEach(() => {
+      mockFollowInFiles.mockResolvedValue('opened')
+      mockOpenChangeFromLink.mockResolvedValue(true)
+    })
+    afterEach(() => {
+      document.title = ''
+      vi.unstubAllGlobals()
+    })
+
+    it('shows only its pane: no sidebar, tabs or pane strip', async () => {
+      openFocus(`${P1}?solo=1`)
+      await waitFor(() =>
+        expect(switchSession).toHaveBeenCalledWith('w1:t1', 'w1:t1:p1'),
+      )
+      expect(screen.queryByTestId('session-sidebar')).toBeNull()
+      expect(screen.queryByTestId('session-tabs')).toBeNull()
+      expect(screen.queryByRole('button', { name: /logs/ })).toBeNull()
+      expect(
+        screen.getByRole('button', { name: 'Open in main window' }),
+      ).toBeInTheDocument()
+      expect(streamedPane()).toBe('w1:t1:p1')
+      // The address keeps solo, so a reload is a focus window again
+      await act(async () => {})
+      expect(window.location.hash).toBe(`${P1}?solo=1`)
+      expect(document.title).toBe('w1:t1 — Termote')
+    })
+
+    it('a file opens in the Files panel over the terminal, with no stream', async () => {
+      openFocus(`${P1}?view=files&solo=1&file=src%2Fa.ts`)
+      await screen.findByTestId('files-panel')
+      expect(mockFollowInFiles).toHaveBeenCalledWith('w1:t1:p1', {
+        path: 'src/a.ts',
+      })
+      expect(screen.getByRole('complementary', { name: 'Files' })).toHaveClass(
+        'absolute',
+        'inset-0',
+      )
+      expect(streamedPane()).toBeUndefined()
+      // No stream on purpose: the server's state shows, not "connecting"
+      expect(screen.getByTestId('connection-indicator')).toHaveAttribute(
+        'data-state',
+        'connected',
+      )
+      await act(async () => {})
+      expect(window.location.hash).toBe(
+        `${P1}?view=files&solo=1&file=src%2Fa.ts`,
+      )
+      expect(document.title).toBe('a.ts — Termote')
+    })
+
+    it('a diff opens its side in the Changes panel', async () => {
+      openFocus(`${P1}?view=changes&solo=1&file=b.ts&staged=1&orig=a.ts`)
+      await screen.findByTestId('changes-panel')
+      expect(mockOpenChangeFromLink).toHaveBeenCalledWith('w1:t1:p1', {
+        path: 'b.ts',
+        orig: 'a.ts',
+        staged: true,
+      })
+      await act(async () => {})
+      expect(window.location.hash).toBe(
+        `${P1}?view=changes&solo=1&file=b.ts&staged=1&orig=a.ts`,
+      )
+    })
+
+    it('a side git no longer lists says so', async () => {
+      mockOpenChangeFromLink.mockResolvedValueOnce(false)
+      openFocus(`${P1}?view=changes&solo=1&file=b.ts`)
+      expect(await toast()).toHaveTextContent('No changes for this file')
+    })
+
+    it.each([
+      ['missing', 'secret%2Fkey.pem'],
+      ['failed', 'secret%2Fkey.pem'],
+    ])(
+      'a file the server does not open (%s) gets a short notice, no path',
+      async (result, file) => {
+        mockFollowInFiles.mockResolvedValueOnce(result)
+        openFocus(`${P1}?view=files&solo=1&file=${file}`)
+        const t = await toast()
+        expect(t).toHaveTextContent('File not found or not allowed')
+        expect(t.textContent).not.toMatch(/secret|key\.pem/)
+      },
+    )
+
+    it('a path that leaves the root is never asked for', async () => {
+      openFocus(`${P1}?view=files&solo=1&file=..%2F..%2Fetc%2Fpasswd`)
+      const t = await toast()
+      expect(t).toHaveTextContent('File not found or not allowed')
+      expect(t.textContent).not.toMatch(/passwd|etc/)
+      expect(mockFollowInFiles).not.toHaveBeenCalled()
+    })
+
+    it('leaving the file for the terminal streams again and drops it from the address', async () => {
+      openFocus(`${P1}?view=files&solo=1&file=a.ts`)
+      await screen.findByTestId('files-panel')
+      fireEvent.click(screen.getByRole('button', { name: 'Files' }))
+      expect(streamedPane()).toBe('w1:t1:p1')
+      await act(async () => {})
+      expect(window.location.hash).toBe(`${P1}?solo=1`)
+      expect(document.title).toBe('w1:t1 — Termote')
+    })
+
+    it('hands its target to the window that opened it, then closes', async () => {
+      const opener = {
+        closed: false,
+        location: { origin: window.location.origin, href: '' },
+        focus: vi.fn(),
+      }
+      vi.stubGlobal('opener', opener)
+      const close = vi.spyOn(window, 'close').mockImplementation(() => {})
+      openFocus(`${P1}?view=files&solo=1&file=a.ts`)
+      await screen.findByTestId('files-panel')
+      await act(async () => {})
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Open in main window' }),
+      )
+      expect(opener.location.href).toBe(
+        `${window.location.origin}/${P1}?view=files&file=a.ts`,
+      )
+      expect(opener.focus).toHaveBeenCalled()
+      expect(close).toHaveBeenCalled()
+    })
+
+    it('without its opener, opens a new window; blocked, it stays', async () => {
+      vi.stubGlobal('opener', null)
+      const close = vi.spyOn(window, 'close').mockImplementation(() => {})
+      const open = vi
+        .spyOn(window, 'open')
+        .mockReturnValueOnce({} as Window)
+        .mockReturnValueOnce(null)
+      openFocus(`${P1}?solo=1`)
+      await act(async () => {})
+      const button = await screen.findByRole('button', {
+        name: 'Open in main window',
+      })
+      fireEvent.click(button)
+      expect(open).toHaveBeenCalledWith(
+        `${window.location.origin}/${P1}`,
+        '_blank',
+      )
+      expect(close).toHaveBeenCalledTimes(1)
+      fireEvent.click(button)
+      expect(await toast()).toHaveTextContent('Pop-up blocked')
+      expect(close).toHaveBeenCalledTimes(1)
+    })
+
+    it("another origin's opener is never driven", async () => {
+      vi.stubGlobal('opener', {
+        closed: false,
+        get location(): never {
+          throw new DOMException('cross-origin', 'SecurityError')
+        },
+      })
+      vi.spyOn(window, 'close').mockImplementation(() => {})
+      const open = vi.spyOn(window, 'open').mockReturnValue({} as Window)
+      openFocus(`${P1}?solo=1`)
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Open in main window' }),
+      )
+      expect(open).toHaveBeenCalled()
+    })
+
+    it('a card opens its pane in the focus window, solo kept', async () => {
+      openFocus('#/overview?solo=1')
+      fireEvent.click(
+        await screen.findByRole('button', { name: /^Open terminal: Agent/ }),
+      )
+      await waitFor(() =>
+        expect(switchSession).toHaveBeenCalledWith('w1:t1', 'w1:t1:p1'),
+      )
+      await act(async () => {})
+      expect(window.location.hash).toBe(`${P1}?solo=1`)
+    })
+
+    it('hands the overview, or no link at all, to a new main window', async () => {
+      vi.stubGlobal('opener', null)
+      vi.spyOn(window, 'close').mockImplementation(() => {})
+      const open = vi.spyOn(window, 'open').mockReturnValue({} as Window)
+      const { unmount } = openFocus('#/overview?solo=1')
+      await screen.findByRole('region', { name: 'Agents' })
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Open in main window' }),
+      )
+      expect(open).toHaveBeenLastCalledWith(
+        `${window.location.origin}/#/overview`,
+        '_blank',
+      )
+      unmount()
+      // A backend without groups: no link names the pane
+      mockSessions({ grouped: false })
+      openFocus('')
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Open in main window' }),
+      )
+      expect(open).toHaveBeenLastCalledWith(
+        `${window.location.origin}/`,
+        '_blank',
+      )
+    })
+
+    it("a link's view waits in memory for its pane to show", async () => {
+      const { rerender } = openFocus('#/s/w2/w2%3At1?view=chat&solo=1')
+      await waitFor(() =>
+        expect(switchSession).toHaveBeenCalledWith('w2:t1', undefined),
+      )
+      expect(screen.queryByTestId('chat-main')).toBeNull()
+      // The pick is shown: the view the link asked for comes with it
+      const base = mockUseLocalSessions()
+      mockUseLocalSessions.mockReturnValue({
+        ...base,
+        activeSession: base.sessions[1],
+      } as any)
+      rerender(<App views={FOCUS_VIEWS} />)
+      expect(await screen.findByTestId('chat-main')).toBeInTheDocument()
+    })
+
+    it('the overview shows alone and keeps solo', async () => {
+      openFocus('#/overview?solo=1')
+      expect(
+        await screen.findByRole('region', { name: 'Agents' }),
+      ).toBeInTheDocument()
+      expect(screen.queryByTestId('session-sidebar')).toBeNull()
+      await act(async () => {})
+      expect(window.location.hash).toBe('#/overview?solo=1')
+      expect(document.title).toBe('Overview — Termote')
+    })
+
+    it("a main window opens a link's file in the panel, not maximized", async () => {
+      window.history.replaceState(null, '', `/${P1}?view=files&file=a.ts`)
+      render(<App views={FOCUS_VIEWS} />)
+      await screen.findByTestId('files-panel')
+      expect(mockFollowInFiles).toHaveBeenCalledWith('w1:t1:p1', {
+        path: 'a.ts',
+      })
+      expect(
+        screen.getByRole('complementary', { name: 'Files' }),
+      ).not.toHaveClass('absolute')
+      expect(screen.getByTestId('session-sidebar')).toBeInTheDocument()
+      expect(streamedPane()).toBe('w1:t1:p1')
+      expect(document.title).toBe('')
+    })
+  })
+
+  describe('open in new window', () => {
+    const P1 = '#/s/w1/w1%3At1/w1%3At1%3Ap1'
+    const origin = () => window.location.origin
+    // A Files panel that asks the App for a window, as the real one does
+    const WINDOWED: AppView = {
+      ...FILES,
+      Panel: (p) => (
+        <>
+          <button
+            type="button"
+            onClick={(e) =>
+              p.openWindow?.(
+                { view: 'files', file: 'a b.ts' },
+                { shiftKey: e.shiftKey },
+              )
+            }
+          >
+            {p.openWindow ? 'OpenFileWindow' : 'NoFileWindow'}
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              p.openWindow?.(
+                { view: 'changes', file: 'b.ts', staged: true, orig: 'a.ts' },
+                { shiftKey: false },
+              )
+            }
+          >
+            OpenDiffWindow
+          </button>
+        </>
+      ),
+    }
+    let open: ReturnType<typeof vi.spyOn>
+    beforeEach(() => {
+      mockFinePointer.mockReturnValue(true)
+      open = vi.spyOn(window, 'open').mockReturnValue({} as Window)
+    })
+    afterEach(() => {
+      mockFinePointer.mockReturnValue(false)
+      open.mockRestore()
+    })
+
+    it('the menu opens the pane on screen in a focus window, Shift a popup', async () => {
+      render(<App />)
+      const item = await screen.findByRole('button', { name: 'OpenWindow' })
+      fireEvent.click(item)
+      expect(open).toHaveBeenLastCalledWith(
+        `${origin()}/${P1}?solo=1`,
+        '_blank',
+        undefined,
+      )
+      fireEvent.click(item, { shiftKey: true })
+      expect(open).toHaveBeenLastCalledWith(
+        `${origin()}/${P1}?solo=1`,
+        '_blank',
+        POPUP_FEATURES,
+      )
+    })
+
+    it('the overview opens as the overview', async () => {
+      window.history.replaceState(null, '', '/#/overview')
+      render(<App />)
+      await screen.findByRole('region', { name: 'Agents' })
+      fireEvent.click(screen.getByRole('button', { name: 'OpenWindow' }))
+      expect(open).toHaveBeenLastCalledWith(
+        `${origin()}/#/overview?solo=1`,
+        '_blank',
+        undefined,
+      )
+    })
+
+    it('a blocked window says so', async () => {
+      open.mockReturnValue(null)
+      render(<App />)
+      fireEvent.click(await screen.findByRole('button', { name: 'OpenWindow' }))
+      expect(await screen.findByTestId('toast')).toHaveTextContent(
+        'Pop-up blocked',
+      )
+    })
+
+    it('a file of the panel opens with its path', async () => {
+      render(<App views={[...APP_VIEWS, WINDOWED]} />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Files' }))
+      fireEvent.click(screen.getByRole('button', { name: 'OpenFileWindow' }), {
+        shiftKey: true,
+      })
+      expect(open).toHaveBeenLastCalledWith(
+        `${origin()}/${P1}?view=files&solo=1&file=a%20b.ts`,
+        '_blank',
+        POPUP_FEATURES,
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'OpenDiffWindow' }))
+      expect(open).toHaveBeenLastCalledWith(
+        `${origin()}/${P1}?view=changes&solo=1&file=b.ts&staged=1&orig=a.ts`,
+        '_blank',
+        undefined,
+      )
+    })
+
+    it('a file of a tmux pane names its tab only', async () => {
+      mockSessions({ backend: 'tmux' })
+      render(<App views={[...APP_VIEWS, WINDOWED]} />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Files' }))
+      fireEvent.click(screen.getByRole('button', { name: 'OpenFileWindow' }))
+      expect(open).toHaveBeenLastCalledWith(
+        `${origin()}/#/s/w1/w1%3At1?view=files&solo=1&file=a%20b.ts`,
+        '_blank',
+        undefined,
+      )
+    })
+
+    it('a tab or pane picked in the palette opens in its own window', async () => {
+      render(<App />)
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Command palette' }),
+      )
+      await screen.findByTestId('command-palette')
+      act(() => palette.props!.openInWindow!({ tabId: 'w2:t1' }))
+      expect(open).toHaveBeenLastCalledWith(
+        `${origin()}/#/s/w2/w2%3At1?solo=1`,
+        '_blank',
+        undefined,
+      )
+      act(() =>
+        palette.props!.openInWindow!({ tabId: 'w1:t1', paneId: 'w1:t1:p2' }),
+      )
+      expect(open).toHaveBeenLastCalledWith(
+        `${origin()}/#/s/w1/w1%3At1/w1%3At1%3Ap2?solo=1`,
+        '_blank',
+        undefined,
+      )
+      // A tab gone meanwhile opens nothing
+      open.mockClear()
+      act(() => palette.props!.openInWindow!({ tabId: 'gone' }))
+      expect(open).not.toHaveBeenCalled()
+      // The command opens what is on screen
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Open in new window' }),
+      )
+      await act(async () => {})
+      expect(open).toHaveBeenLastCalledWith(
+        `${origin()}/${P1}?solo=1`,
+        '_blank',
+        undefined,
+      )
+    })
+
+    it('a focus window offers none of these, its files neither', async () => {
+      setFocusWindowForTest(true)
+      window.history.replaceState(null, '', `/${P1}?solo=1`)
+      render(<App views={[...APP_VIEWS, WINDOWED]} />)
+      await screen.findByRole('button', { name: 'Open in main window' })
+      expect(screen.queryByRole('button', { name: 'OpenWindow' })).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: 'Command palette' }))
+      await screen.findByTestId('command-palette')
+      expect(palette.props!.openInWindow).toBeUndefined()
+      expect(
+        screen.getByRole('button', { name: 'Open in new window' }),
+      ).toBeDisabled()
+      // Its Open in main window would lead back to this window
+      fireEvent.click(screen.getByRole('button', { name: 'ClosePalette' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Files' }))
+      expect(
+        screen.getByRole('button', { name: 'NoFileWindow' }),
+      ).toBeInTheDocument()
+    })
+
+    it.each([
+      ['a phone', () => mockIsMobile.mockReturnValue(true)],
+      ['a touch screen', () => mockFinePointer.mockReturnValue(false)],
+      ['tabs no link names', () => mockSessions({ grouped: false })],
+    ])('%s offers no new window', async (_, setup) => {
+      setup()
+      render(<App views={[...APP_VIEWS, WINDOWED]} />)
+      await screen.findByTestId('terminal-view')
+      expect(screen.queryByRole('button', { name: 'OpenWindow' })).toBeNull()
+      mockIsMobile.mockReturnValue(false)
+    })
+
+    it('a panel without a link to its pane offers no file window', async () => {
+      mockSessions({ grouped: false })
+      render(<App views={[...APP_VIEWS, WINDOWED]} />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Files' }))
+      expect(
+        screen.getByRole('button', { name: 'NoFileWindow' }),
+      ).toBeInTheDocument()
     })
   })
 

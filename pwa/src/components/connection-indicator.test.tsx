@@ -34,6 +34,13 @@ describe('ConnectionIndicator', () => {
     expect(onRetry).toHaveBeenCalledTimes(1)
   })
 
+  it('names an evicted stream, and retries it on click', () => {
+    const onRetry = vi.fn()
+    render(<ConnectionIndicator state="evicted" onRetry={onRetry} />)
+    fireEvent.click(screen.getByLabelText('Disconnected by a newer window'))
+    expect(onRetry).toHaveBeenCalledTimes(1)
+  })
+
   it('does not call onRetry when connected (onClick is undefined)', () => {
     const onRetry = vi.fn()
     render(<ConnectionIndicator state="connected" onRetry={onRetry} />)

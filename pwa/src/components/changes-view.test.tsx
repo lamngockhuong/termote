@@ -212,6 +212,23 @@ describe('ChangesView', () => {
     )
   })
 
+  it('offers a diff in a new window where the App can open one', async () => {
+    const openWindow = vi.fn()
+    await show({ openWindow })
+    fireEvent.click(within(group('Staged')).getAllByRole('button')[1])
+    await act(async () => {})
+    fireEvent.click(screen.getByRole('button', { name: 'Open in new window' }))
+    expect(openWindow).toHaveBeenCalledWith(
+      {
+        view: 'changes',
+        file: 'src/new.ts',
+        staged: true,
+        orig: 'src/old.ts',
+      },
+      { shiftKey: false },
+    )
+  })
+
   it('an open diff whose file is no longer changed closes its tab', async () => {
     vi.useFakeTimers()
     try {

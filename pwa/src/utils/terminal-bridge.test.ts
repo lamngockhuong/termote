@@ -274,6 +274,11 @@ describe('isTerminalDisconnected', () => {
     expect(isTerminalDisconnected(handle)).toBe(true)
   })
 
+  it('returns true for a stream pushed out by a newer one', () => {
+    const handle = createMockHandle({ connectionState: 'evicted' })
+    expect(isTerminalDisconnected(handle)).toBe(true)
+  })
+
   it('returns false for connecting state', () => {
     const handle = createMockHandle({ connectionState: 'connecting' })
     expect(isTerminalDisconnected(handle)).toBe(false)

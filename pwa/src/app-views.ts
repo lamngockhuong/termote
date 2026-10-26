@@ -14,6 +14,7 @@ import type { AgentStartControl } from './hooks/use-start-agent'
 import type { Session } from './types/session'
 import { canStartAgent } from './utils/agent-start'
 import { lazyRetry, type Retryable } from './utils/lazy-retry'
+import type { OpenWindowEvent } from './utils/open-window'
 import {
   CHANGES_VIEW_ID,
   CHAT_VIEW_ID,
@@ -46,6 +47,17 @@ export interface ViewProps extends ViewContext {
   showView: (id: string) => void
   // Opens Settings, at a group when given (the composer's Manage templates)
   openSettings?: (group?: string) => void
+  // Opens a file of the pane, or a side's diff, in a window of its own
+  // (desktop only; Shift asks for a popup)
+  openWindow?: (target: FileWindowTarget, e: OpenWindowEvent) => void
+}
+
+// A file under the pane's root in the Files view, or its diff in Changes
+export interface FileWindowTarget {
+  view: 'files' | 'changes'
+  file: string
+  staged?: boolean
+  orig?: string
 }
 
 // A view component, or a lazy one with retry() for a chunk that failed to load

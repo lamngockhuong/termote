@@ -209,7 +209,7 @@ export function useTermSocket({
       if (ev.code === CLOSE_EVICTED || exited) {
         stopRef.current = 'stopped'
         exitedRef.current = exited
-        setState(exited ? 'disconnected' : 'error')
+        setState(exited ? 'disconnected' : 'evicted')
         return
       }
       scheduleRetry('disconnected')

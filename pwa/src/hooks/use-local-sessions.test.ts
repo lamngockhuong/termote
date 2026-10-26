@@ -1,5 +1,6 @@
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { setFocusWindowForTest } from '../utils/focus-mode'
 
 // vi.mock is hoisted — use vi.hoisted to declare mocks before the factory runs
 const {
@@ -368,6 +369,21 @@ describe('useLocalSessions', () => {
     })
     expect(mockCreateTab).toHaveBeenCalledWith('vim', 'main')
     expect(result.current.sessions).toHaveLength(2)
+  })
+
+  it('a focus window keeps neither the selection nor metadata', async () => {
+    setFocusWindowForTest(true)
+    mockFetchTabs
+      .mockResolvedValueOnce([WIN_SHELL])
+      .mockResolvedValueOnce([WIN_SHELL, WIN_VIM])
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    await act(async () => {
+      await result.current.addSession('vim', '🖥️', 'My editor')
+    })
+    expect(result.current.sessions).toHaveLength(2)
+    expect(localStorage.getItem('termote-sessions')).toBeNull()
+    expect(localStorage.getItem('termote-selection-tmux')).toBeNull()
   })
 
   it('addSession stores metadata in localStorage', async () => {

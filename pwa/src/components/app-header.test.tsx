@@ -349,3 +349,32 @@ describe('AppHeader — command palette', () => {
     expect(screen.queryByRole('button', { name: 'Command palette' })).toBeNull()
   })
 })
+
+describe('AppHeader — focus window', () => {
+  it.each([false, true])(
+    'names the session and hands back to the main window (mobile: %s)',
+    (isMobile) => {
+      const onOpenInMain = vi.fn()
+      const props = renderHeader({
+        isMobile,
+        showSessionTabs: false,
+        onOpenInMain,
+      })
+      expect(screen.getByText('Shell')).toBeInTheDocument()
+      // No way to switch to another session from here
+      expect(screen.queryByRole('tab', { name: /Code/ })).toBeNull()
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Open in main window' }),
+      )
+      expect(onOpenInMain).toHaveBeenCalled()
+      expect(props.onOpenSessions).not.toHaveBeenCalled()
+    },
+  )
+
+  it('has no such button in the main window', () => {
+    renderHeader({ isMobile: true })
+    expect(
+      screen.queryByRole('button', { name: 'Open in main window' }),
+    ).toBeNull()
+  })
+})
