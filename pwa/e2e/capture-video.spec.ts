@@ -204,7 +204,7 @@ test.describe('Capture screenshots for the intro video', () => {
       })
       await page.getByRole('group', { name: 'Side panel' }).getByRole('button', { name: 'Changes' }).click()
       const changes = page.getByRole('complementary', { name: 'Changes' })
-      await changes.getByRole('region', { name: 'Changes' }).getByRole('button', { name: /login\.go/ }).click()
+      await changes.getByRole('region', { name: 'Changes' }).getByRole('button', { name: /:\s*login\.go/ }).click()
       await page.waitForTimeout(1500)
       await shot(page, 'desktop-chat-changes')
       await page.context().close()

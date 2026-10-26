@@ -1,4 +1,4 @@
-import { Lock } from 'lucide-react'
+import { Lock, Minus, Plus, Undo2 } from 'lucide-react'
 import {
   type ReactNode,
   useCallback,
@@ -21,19 +21,35 @@ import {
   findEntry,
   useGitChanges,
 } from '../hooks/use-git-changes'
-import type { ChangeEntry } from '../hooks/use-mux-api'
+import {
+  type AppliedChange,
+  applyChange,
+  type ChangeAction,
+  type ChangeEntry,
+  type DiffHunk,
+  type FileDiff,
+  RequestError,
+  restoreFile,
+} from '../hooks/use-mux-api'
 import { useSettings } from '../hooks/use-settings'
 import { splitPath } from '../utils/files-format'
 import type { LinkPath } from '../utils/markdown-links'
+import { visibleUnsafe } from '../utils/unsafe-chars'
 import { FILES_VIEW_ID } from '../view-ids'
 import { DiffViewer } from './diff-viewer'
+import {
+  APPLY_REFUSED,
+  APPLY_STALE,
+  DiscardChangeDialog,
+} from './discard-change-dialog'
 import { FileTabBar, type TabListProps, tabElementId } from './file-tab-bar'
 import { FileViewer } from './file-viewer'
 import { OpenFilesButton, OpenFilesSheet } from './open-files-sheet'
 import { PaneDirHeader, ViewMessage } from './pane-dir-header'
 import { DiscardTabDialog, RootCloseDialog } from './tab-close-dialogs'
 import { Banner } from './ui/banner'
-import { FOCUS_RING } from './ui/button'
+import { FOCUS_RING, IconButton } from './ui/button'
+import { ConfirmDialog } from './ui/confirm-dialog'
 
 const ERRORS: Record<ChangesError, string> = {
   unsupported: 'Not supported by this backend',
@@ -98,6 +114,58 @@ interface Item {
   code: string
 }
 
+const ACTION_ICON = { stage: Plus, unstage: Minus, discard: Undo2 }
+const ACTION_LABEL = { stage: 'Stage', unstage: 'Unstage', discard: 'Discard' }
+
+// The buttons of a side's actions; what names what they act on for a
+// screen reader ("Stage a.ts", "Discard change 2")
+function ChangeActions({
+  actions,
+  what,
+  disabled,
+  onAction,
+}: {
+  actions: ChangeAction[]
+  what: string
+  disabled: boolean
+  onAction: (a: ChangeAction) => void
+}) {
+  return actions.map((a) => {
+    const Icon = ACTION_ICON[a]
+    const label = `${ACTION_LABEL[a]} ${what}`
+    return (
+      <IconButton
+        key={a}
+        size="sm"
+        aria-label={label}
+        title={label}
+        disabled={disabled}
+        onClick={() => onAction(a)}
+        className={a === 'discard' ? 'hover:text-danger' : ''}
+      >
+        <Icon size={15} aria-hidden="true" />
+      </IconButton>
+    )
+  })
+}
+
+// A Discard box open for a side, or one hunk of it
+interface Discarding {
+  root: string
+  entry: ChangeEntry
+  hunk?: DiffHunk
+  // The hash of the file the diff shown was read against
+  hash?: string
+}
+
+// A stage or unstage of a sensitive file, asked about first
+interface Asking {
+  action: ChangeAction
+  entry: ChangeEntry
+  staged: boolean
+  hunk?: DiffHunk
+}
+
 // Staged and unstaged changes of one file show in both groups, each opening
 // its own side's diff.
 function groups(entries: ChangeEntry[]): [string, Item[]][] {
@@ -136,6 +204,7 @@ export function ChangesView({
   showView,
   readOnly,
   openWindow,
+  mux,
 }: ViewProps) {
   if (!session.paneId) return <ViewMessage>Loading…</ViewMessage>
   return (
@@ -146,6 +215,9 @@ export function ChangesView({
       showView={showView}
       readOnly={readOnly}
       openWindow={openWindow}
+      // The server refuses a view-only client's discards as well, and any
+      // discard without a trash to keep the file in
+      canDiscard={!readOnly && !!mux.caps.trash}
     />
   )
 }
@@ -157,7 +229,8 @@ function PaneChanges({
   showView,
   readOnly,
   openWindow,
-}: { paneId: string } & Pick<
+  canDiscard,
+}: { paneId: string; canDiscard: boolean } & Pick<
   ViewProps,
   'isMobile' | 'notify' | 'showView' | 'readOnly' | 'openWindow'
 >) {
@@ -232,6 +305,111 @@ function PaneChanges({
   const refresh = () => {
     c.refresh()
     setReload((n) => n + 1)
+  }
+
+  // A stage, unstage or discard running: one at a time per pane
+  const [running, setRunning] = useState(false)
+  const [discarding, setDiscarding] = useState<Discarding>()
+  const [asking, setAsking] = useState<Asking>()
+  const busy = running || !!discarding
+  // What a side offers: only what the server takes for its letter (no
+  // conflict, type change or intent to add), nothing to a view-only client
+  const actionsOf = (entry: ChangeEntry, staged: boolean): ChangeAction[] => {
+    if (readOnly || entry.conflict) return []
+    if (staged) return 'MADRC'.includes(entry.staged) ? ['unstage'] : []
+    if (!'MD?'.includes(entry.unstaged)) return []
+    return canDiscard ? ['stage', 'discard'] : ['stage']
+  }
+  // Done: the side acted on may be gone, which is no news to tell
+  const applied = (entry: ChangeEntry, staged: boolean) => {
+    c.expectGone([changeKey({ path: entry.path, orig: entry.orig, staged })])
+    refresh()
+  }
+  const run = async (
+    action: ChangeAction,
+    entry: ChangeEntry,
+    staged: boolean,
+    opts: { hunk?: DiffHunk; hash?: string; revealed?: boolean } = {},
+  ) => {
+    // The list shows only once the root is read
+    const root = c.root as string
+    if (action === 'discard') {
+      setDiscarding({ root, entry, hunk: opts.hunk, hash: opts.hash })
+      return
+    }
+    if (entry.sensitive && !opts.revealed) {
+      setAsking({ action, entry, staged, hunk: opts.hunk })
+      return
+    }
+    const name = visibleUnsafe(splitPath(entry.path)[1])
+    setRunning(true)
+    try {
+      await applyChange(paneId, {
+        root,
+        action,
+        path: entry.path,
+        orig: entry.orig,
+        hunk: opts.hunk?.id,
+        reveal: entry.sensitive,
+      })
+      applied(entry, staged)
+    } catch (err) {
+      if (err instanceof RequestError && err.status === 409 && err.root) {
+        c.rootChanged(err.root)
+        return
+      }
+      const code = err instanceof RequestError ? err.code : ''
+      // No answer (a timeout): it may have been applied all the same
+      if (!code || APPLY_STALE.has(code)) refresh()
+      notify(APPLY_REFUSED[code] ?? `Could not ${action} ${name}`, {
+        variant: 'danger',
+      })
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  const undo = async (d: Discarding, trashId: string) => {
+    const name = visibleUnsafe(splitPath(d.entry.path)[1])
+    try {
+      await restoreFile(paneId, {
+        root: d.root,
+        trashId,
+        reveal: d.entry.sensitive,
+      })
+      refresh()
+      notify(`Restored ${name}`, { variant: 'success' })
+    } catch (err) {
+      const e = err instanceof RequestError ? err : undefined
+      if (e?.status === 409 && e.root) {
+        c.rootChanged(e.root)
+        notify(`The pane's directory changed; ${name} was not restored`, {
+          variant: 'warning',
+        })
+      } else if (e?.code === 'changed') {
+        notify(`${name} changed since; not restored`, { variant: 'warning' })
+      } else if (e?.code === 'exists') {
+        notify(`A file now exists at ${name}; not restored`, {
+          variant: 'warning',
+        })
+      } else {
+        notify(`Could not restore ${name}`, { variant: 'danger' })
+      }
+    }
+  }
+
+  const discarded = (d: Discarding, res: AppliedChange) => {
+    applied(d.entry, false)
+    const name = visibleUnsafe(splitPath(d.entry.path)[1])
+    const untracked = d.entry.unstaged === '?'
+    if (res.permanent) notify(`Deleted ${name} permanently`)
+    else if (!res.trashId) notify(`Restored ${name}`)
+    else {
+      const id = res.trashId
+      notify(untracked ? `Deleted ${name}` : `Discarded changes in ${name}`, {
+        action: { label: 'Undo', onClick: () => undo(d, id) },
+      })
+    }
   }
 
   // Only an editor holds unsaved changes
@@ -351,6 +529,29 @@ function PaneChanges({
         onEdit={
           readOnly ? undefined : (line) => c.setEditing(tab.id, true, line)
         }
+        renderActions={(entry: ChangeEntry, diff?: FileDiff) => (
+          <ChangeActions
+            actions={actionsOf(entry, tab.staged)}
+            what="file"
+            disabled={busy}
+            onAction={(a) =>
+              run(a, entry, tab.staged, {
+                hash: diff?.worktreeHash,
+                revealed: tab.revealed,
+              })
+            }
+          />
+        )}
+        renderHunkActions={(entry: ChangeEntry, hunk: DiffHunk, i: number) => (
+          <ChangeActions
+            actions={actionsOf(entry, tab.staged)}
+            what={`change ${i + 1}`}
+            disabled={busy}
+            onAction={(a) =>
+              run(a, entry, tab.staged, { hunk, revealed: tab.revealed })
+            }
+          />
+        )}
       />
     )
   } else if (!c.loaded) {
@@ -414,6 +615,14 @@ function PaneChanges({
                         staged: it.staged,
                       })
                     }
+                    actions={
+                      <ChangeActions
+                        actions={actionsOf(it.entry, it.staged)}
+                        what={splitPath(it.entry.path)[1]}
+                        disabled={busy}
+                        onAction={(a) => run(a, it.entry, it.staged)}
+                      />
+                    }
                   />
                 </li>
               ))}
@@ -450,6 +659,36 @@ function PaneChanges({
         />
       )}
       <RootCloseDialog count={moved} onResolve={c.resolveRootClose} />
+      {discarding && (
+        <DiscardChangeDialog
+          paneId={paneId}
+          root={discarding.root}
+          entry={discarding.entry}
+          hunk={discarding.hunk}
+          hash={discarding.hash}
+          onClose={() => setDiscarding(undefined)}
+          onDiscarded={(res) => discarded(discarding, res)}
+          onRootChanged={c.rootChanged}
+          onRefresh={refresh}
+        />
+      )}
+      {asking && (
+        <ConfirmDialog
+          isOpen
+          title={`${ACTION_LABEL[asking.action]} a sensitive file?`}
+          confirmLabel={ACTION_LABEL[asking.action]}
+          onConfirm={() => {
+            setAsking(undefined)
+            run(asking.action, asking.entry, asking.staged, {
+              hunk: asking.hunk,
+              revealed: true,
+            })
+          }}
+          onCancel={() => setAsking(undefined)}
+        >
+          {visibleUnsafe(asking.entry.path)} may contain secrets.
+        </ConfirmDialog>
+      )}
       <div
         id={panelId}
         // A tab panel only below the tab bar
@@ -465,39 +704,54 @@ function PaneChanges({
   )
 }
 
-function ChangeRow({ item, onOpen }: { item: Item; onOpen: () => void }) {
+// A side in the list: a button that opens its diff, and its actions,
+// shown on hover or focus (always on a touch screen)
+function ChangeRow({
+  item,
+  onOpen,
+  actions,
+}: {
+  item: Item
+  onOpen: () => void
+  actions: ReactNode
+}) {
   const { entry, code } = item
   const [dir, name] = splitPath(entry.path)
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className={`flex min-h-9 w-full items-center gap-2 px-3 text-left text-[13px] hover:bg-surface pointer-coarse:min-h-touch ${FOCUS_RING} focus-visible:-outline-offset-2`}
-    >
-      <span
-        aria-hidden="true"
-        className={`w-3 shrink-0 font-term font-semibold ${TONE[code] ?? 'text-info'}`}
+    <div className="group flex items-center hover:bg-surface">
+      <button
+        type="button"
+        onClick={onOpen}
+        className={`flex min-h-9 min-w-0 flex-1 items-center gap-2 px-3 text-left text-[13px] pointer-coarse:min-h-touch ${FOCUS_RING} focus-visible:-outline-offset-2`}
       >
-        {code}
-      </span>
-      <span className="sr-only">{STATUS[code] ?? code}: </span>
-      <span className="flex min-w-0 flex-1 items-baseline gap-1.5 truncate">
-        <span className="shrink-0 font-medium text-fg">{name}</span>
-        <span className="truncate text-[12px] text-fg-subtle">
-          {entry.orig ? `${entry.orig} → ` : ''}
-          {dir}
-        </span>
-      </span>
-      {entry.sensitive && (
         <span
-          className="flex shrink-0 items-center text-warning"
-          title="May contain secrets"
+          aria-hidden="true"
+          className={`w-3 shrink-0 font-term font-semibold ${TONE[code] ?? 'text-info'}`}
         >
-          <Lock size={12} aria-hidden="true" />
-          <span className="sr-only">Sensitive</span>
+          {code}
         </span>
-      )}
-    </button>
+        <span className="sr-only">{STATUS[code] ?? code}: </span>
+        <span className="flex min-w-0 flex-1 items-baseline gap-1.5 truncate">
+          <span className="shrink-0 font-medium text-fg">{name}</span>
+          <span className="truncate text-[12px] text-fg-subtle">
+            {entry.orig ? `${entry.orig} → ` : ''}
+            {dir}
+          </span>
+        </span>
+        {entry.sensitive && (
+          <span
+            className="flex shrink-0 items-center text-warning"
+            title="May contain secrets"
+          >
+            <Lock size={12} aria-hidden="true" />
+            <span className="sr-only">Sensitive</span>
+          </span>
+        )}
+      </button>
+      <span className="flex shrink-0 items-center pr-1 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100">
+        {actions}
+      </span>
+    </div>
   )
 }
 

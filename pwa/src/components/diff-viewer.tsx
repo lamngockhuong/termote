@@ -105,6 +105,14 @@ interface Props {
   headerExtra?: ReactNode
   // On a desktop: the diff in a window of its own (Shift: a popup)
   onOpenWindow?: (e: OpenWindowEvent) => void
+  // The actions on the whole file, in the header, given the diff once read
+  renderActions?: (entry: ChangeEntry, diff?: FileDiff) => ReactNode
+  // The actions on one hunk, in its header; only a hunk with an id has any
+  renderHunkActions?: (
+    entry: ChangeEntry,
+    hunk: DiffHunk,
+    i: number,
+  ) => ReactNode
 }
 
 // The unified diff of one changed file, one side (staged or not), with
@@ -131,6 +139,8 @@ export function DiffViewer({
   onScroll,
   headerExtra,
   onOpenWindow,
+  renderActions,
+  renderHunkActions,
 }: Props) {
   const [state, setState] = useState<Loaded>({ kind: 'loading' })
   const [ownReveal, setOwnReveal] = useState(false)
@@ -337,6 +347,11 @@ export function DiffViewer({
             <WrapText size={15} aria-hidden="true" />
           </IconButton>
         )}
+        {entry &&
+          renderActions?.(
+            entry,
+            shown.kind === 'diff' ? shown.diff : undefined,
+          )}
         {headerExtra}
       </div>
       {shown.kind === 'loading' && !previewing && (
@@ -383,6 +398,11 @@ export function DiffViewer({
           wrap={wrap}
           oneColumn={isMobile}
           scrollTop={scrolled.current}
+          hunkActions={
+            entry &&
+            renderHunkActions &&
+            ((h, i) => renderHunkActions(entry, h, i))
+          }
         />
       )}
       <SensitiveConfirm
@@ -485,12 +505,14 @@ function DiffBody({
   wrap,
   oneColumn,
   scrollTop,
+  hunkActions,
 }: {
   diff: FileDiff
   wrap: boolean
   oneColumn: boolean
   // Where it starts scrolled to
   scrollTop?: number
+  hunkActions?: (h: DiffHunk, i: number) => ReactNode
 }) {
   const hunks = diff.hunks ?? []
   const frame = useRef<HTMLDivElement>(null)
@@ -527,9 +549,20 @@ function DiffBody({
             {hunks.map((h, i) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: hunks of one diff never move
               <Fragment key={i}>
-                <div className="bg-surface px-2 py-0.5 text-fg-muted">
-                  {h.header}
-                </div>
+                {h.id && hunkActions ? (
+                  // The buttons stay at the left edge of the frame, however
+                  // far a long line scrolls it
+                  <div className="flex items-center bg-surface text-fg-muted">
+                    <span className="sticky left-0 z-[1] flex shrink-0 bg-surface">
+                      {hunkActions(h, i)}
+                    </span>
+                    <span className="px-2 py-0.5">{h.header}</span>
+                  </div>
+                ) : (
+                  <div className="bg-surface px-2 py-0.5 text-fg-muted">
+                    {h.header}
+                  </div>
+                )}
                 {h.lines.map((l) => (
                   <div
                     // One hunk numbers each line once on its side

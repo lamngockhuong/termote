@@ -37,6 +37,9 @@ const mockContent = vi.fn()
 const mockTree = vi.fn()
 const mockSave = vi.fn()
 const mockImage = vi.fn()
+const mockApply = vi.fn()
+const mockRestore = vi.fn()
+const mockHash = vi.fn()
 // The desktop editor: shows where it opens and whether lines wrap
 vi.mock('./code-editor', () => ({
   default: (p: {
@@ -58,6 +61,9 @@ vi.mock('../hooks/use-mux-api', async (orig) => ({
   fetchFileDiff: (...a: unknown[]) => mockDiff(...a),
   fetchFileContent: (...a: unknown[]) => mockContent(...a),
   fetchFilesTree: (...a: unknown[]) => mockTree(...a),
+  applyChange: (...a: unknown[]) => mockApply(...a),
+  restoreFile: (...a: unknown[]) => mockRestore(...a),
+  fetchFileHash: (...a: unknown[]) => mockHash(...a),
 }))
 
 const c = (
@@ -95,7 +101,12 @@ function props(over: Partial<ViewProps> = {}): ViewProps {
   return {
     mux: {
       backend: 'tmux',
-      caps: { clientSideSelect: false, copyMode: true, files: true },
+      caps: {
+        clientSideSelect: false,
+        copyMode: true,
+        files: true,
+        trash: true,
+      },
     },
     session: {
       id: '1',
@@ -128,10 +139,13 @@ async function show(over: Partial<ViewProps> = {}) {
 }
 
 const group = (name: string) => screen.getByRole('region', { name })
-const names = (name: string) =>
+// The buttons of a group that open a side, without its actions
+const ACTION = /^(Stage|Unstage|Discard) /
+const rows = (name: string) =>
   within(group(name))
     .getAllByRole('button')
-    .map((b) => b.textContent)
+    .filter((b) => !ACTION.test(b.getAttribute('aria-label') ?? ''))
+const names = (name: string) => rows(name).map((b) => b.textContent)
 
 // The lazy Markdown renderer, loaded once up front: its first load can
 // outlast a find under coverage
@@ -185,7 +199,7 @@ describe('ChangesView', () => {
 
   it('opens the diff of the side chosen, and goes back', async () => {
     await show()
-    fireEvent.click(within(group('Staged')).getAllByRole('button')[1])
+    fireEvent.click(rows('Staged')[1])
     await act(async () => {})
     expect(mockDiff).toHaveBeenCalledWith(
       '%1',
@@ -194,7 +208,7 @@ describe('ChangesView', () => {
     )
     expect(screen.getByText('No content changes')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Back to changes' }))
-    fireEvent.click(within(group('Changes')).getAllByRole('button')[0])
+    fireEvent.click(rows('Changes')[0])
     await act(async () => {})
     expect(mockDiff).toHaveBeenLastCalledWith(
       '%1',
@@ -215,7 +229,7 @@ describe('ChangesView', () => {
   it('offers a diff in a new window where the App can open one', async () => {
     const openWindow = vi.fn()
     await show({ openWindow })
-    fireEvent.click(within(group('Staged')).getAllByRole('button')[1])
+    fireEvent.click(rows('Staged')[1])
     await act(async () => {})
     fireEvent.click(screen.getByRole('button', { name: 'Open in new window' }))
     expect(openWindow).toHaveBeenCalledWith(
@@ -237,7 +251,7 @@ describe('ChangesView', () => {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(0)
       })
-      fireEvent.click(within(group('Changes')).getAllByRole('button')[1])
+      fireEvent.click(rows('Changes')[1])
       mockChanges.mockResolvedValue(
         changes({ entries: ENTRIES.filter((e) => e.path !== 'gone.txt') }),
       )
@@ -255,7 +269,7 @@ describe('ChangesView', () => {
 
   it('refresh reads the status and the open diff again', async () => {
     await show()
-    fireEvent.click(within(group('Changes')).getAllByRole('button')[1])
+    fireEvent.click(rows('Changes')[1])
     await act(async () => {})
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
     await settle()
@@ -333,7 +347,7 @@ describe('ChangesView', () => {
             },
     )
     await show()
-    fireEvent.click(screen.getByRole('button', { name: /\.env/ }))
+    fireEvent.click(screen.getByRole('button', { name: /:\s*\.env/ }))
     fireEvent.click(await screen.findByRole('button', { name: 'Show' }))
     expect(await screen.findByTestId('diff')).toBeInTheDocument()
     mockChanges
@@ -346,7 +360,7 @@ describe('ChangesView', () => {
     await settle()
     // The tab of the old root closed: opened again, the file asks again
     expect(screen.queryByRole('tab', { name: /\.env/ })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: /\.env/ }))
+    fireEvent.click(screen.getByRole('button', { name: /:\s*\.env/ }))
     await settle()
     expect(mockDiff).toHaveBeenLastCalledWith(
       '%1',
@@ -393,7 +407,7 @@ describe('ChangesView', () => {
       truncated: false,
     })
     const p = await show()
-    fireEvent.click(screen.getByRole('button', { name: /todo\.md/ }))
+    fireEvent.click(screen.getByRole('button', { name: /:\s*todo\.md/ }))
     fireEvent.click(await screen.findByRole('button', { name: 'Preview' }))
     fireEvent.click(await screen.findByRole('button', { name: 'gone' }))
     await settle()
@@ -421,7 +435,7 @@ async function openDiff(groupName: string, path: string) {
   const name = path.slice(path.lastIndexOf('/') + 1)
   fireEvent.click(
     within(group(groupName)).getByRole('button', {
-      name: new RegExp(name.replace('.', '\\.')),
+      name: new RegExp(`:\\s*${name.replace('.', '\\.')}`),
     }),
   )
   await act(async () => {})
@@ -674,7 +688,7 @@ describe('ChangesView editing', () => {
       editable: true,
     })
     await show()
-    fireEvent.click(screen.getByRole('button', { name: /\.env/ }))
+    fireEvent.click(screen.getByRole('button', { name: /:\s*\.env/ }))
     fireEvent.click(await screen.findByRole('button', { name: 'Show' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Edit' }))
     expect(
@@ -704,18 +718,18 @@ describe('ChangesView editing', () => {
             },
     )
     await show()
-    fireEvent.click(screen.getByRole('button', { name: /\.env/ }))
+    fireEvent.click(screen.getByRole('button', { name: /:\s*\.env/ }))
     fireEvent.click(await screen.findByRole('button', { name: 'Show' }))
     expect(await screen.findByTestId('diff')).toBeInTheDocument()
     // Back to the list and in again: still shown
     fireEvent.click(screen.getByRole('button', { name: 'Back to changes' }))
-    fireEvent.click(screen.getByRole('button', { name: /\.env/ }))
+    fireEvent.click(screen.getByRole('button', { name: /:\s*\.env/ }))
     expect(await screen.findByTestId('diff')).toBeInTheDocument()
     // Closed and opened again: asked again
     fireEvent.keyDown(screen.getByRole('tab', { name: /\.env/ }), {
       key: 'Delete',
     })
-    fireEvent.click(screen.getByRole('button', { name: /\.env/ }))
+    fireEvent.click(screen.getByRole('button', { name: /:\s*\.env/ }))
     expect(
       await screen.findByText(
         'This file may contain secrets. Show its contents?',
@@ -943,7 +957,7 @@ describe('ChangesView tabs', () => {
       hunks: null,
     })
     await show()
-    fireEvent.click(screen.getByRole('button', { name: /\.env/ }))
+    fireEvent.click(screen.getByRole('button', { name: /:\s*\.env/ }))
     fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
     expect(screen.queryAllByRole('tab')).toEqual([])
   })
@@ -1078,5 +1092,326 @@ describe('ChangesView tab editor', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Edit' }))
     expect(await screen.findByRole('textbox')).toHaveValue('a')
     expect(screen.queryByRole('button', { name: 'Show' })).toBeNull()
+  })
+})
+
+describe('ChangesView actions', () => {
+  beforeEach(() => {
+    mockApply.mockReset()
+    mockRestore.mockReset()
+    mockHash.mockReset()
+    mockApply.mockResolvedValue({ root: '/r', path: 'x' })
+    mockHash.mockResolvedValue({ root: '/r', path: 'x', size: 1, hash: 'h1' })
+  })
+
+  const labels = (name: string) =>
+    within(group(name))
+      .getAllByRole('button')
+      .map((b) => b.getAttribute('aria-label'))
+      .filter((l) => l && ACTION.test(l))
+  const click = (name: string) =>
+    act(async () => fireEvent.click(screen.getByRole('button', { name })))
+  const notified = (p: ViewProps) =>
+    (p.notify as ReturnType<typeof vi.fn>).mock.calls
+
+  it('offers each side its actions, none to a conflict', async () => {
+    await show()
+    expect(labels('Conflicts')).toEqual([])
+    // A letter the server takes no action for gets no button
+    expect(labels('Staged')).toEqual(['Unstage both.ts', 'Unstage new.ts'])
+    expect(labels('Changes')).toEqual([
+      'Stage both.ts',
+      'Discard both.ts',
+      'Stage gone.txt',
+      'Discard gone.txt',
+      'Stage .env',
+      'Discard .env',
+    ])
+    expect(labels('Untracked')).toEqual(['Stage todo.md', 'Discard todo.md'])
+  })
+
+  it('offers nothing for a type change or an intent to add', async () => {
+    mockChanges.mockResolvedValue(
+      changes({
+        entries: [c('ln', 'T', ''), c('t2', '', 'T'), c('ita', '', 'A')],
+      }),
+    )
+    await show()
+    expect(screen.queryByRole('button', { name: ACTION })).toBeNull()
+  })
+
+  it('offers nothing to a view-only client, and no Discard without a trash', async () => {
+    const { unmount } = await show({ readOnly: true })
+    expect(screen.queryByRole('button', { name: /^Stage / })).toBeNull()
+    unmount()
+    resetGitChangesStores()
+    await show({
+      mux: {
+        backend: 'tmux',
+        caps: { clientSideSelect: false, copyMode: true, files: true },
+      },
+    })
+    expect(screen.getAllByRole('button', { name: /^Stage / }).length).toBe(4)
+    expect(screen.queryByRole('button', { name: /^Discard / })).toBeNull()
+  })
+
+  it('stages and unstages a whole file, then reads the list again', async () => {
+    await show()
+    const polls = mockChanges.mock.calls.length
+    await click('Stage both.ts')
+    expect(mockApply).toHaveBeenCalledWith('%1', {
+      root: '/r',
+      action: 'stage',
+      path: 'src/both.ts',
+      orig: undefined,
+      hunk: undefined,
+      reveal: false,
+    })
+    await settle()
+    expect(mockChanges.mock.calls.length).toBeGreaterThan(polls)
+    await click('Unstage new.ts')
+    expect(mockApply.mock.calls[1][1]).toMatchObject({
+      action: 'unstage',
+      path: 'src/new.ts',
+      orig: 'src/old.ts',
+    })
+  })
+
+  it('one action at a time', async () => {
+    let done: (v: unknown) => void = () => {}
+    mockApply.mockReturnValueOnce(new Promise((r) => (done = r)))
+    await show()
+    fireEvent.click(screen.getByRole('button', { name: 'Stage both.ts' }))
+    expect(
+      screen.getByRole('button', { name: 'Stage gone.txt' }),
+    ).toBeDisabled()
+    await act(async () => done({ root: '/r', path: 'src/both.ts' }))
+    expect(screen.getByRole('button', { name: 'Stage gone.txt' })).toBeEnabled()
+  })
+
+  it('asks before staging a sensitive file, then sends it revealed', async () => {
+    await show()
+    await click('Stage .env')
+    expect(mockApply).not.toHaveBeenCalled()
+    expect(screen.getByText('Stage a sensitive file?')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(mockApply).not.toHaveBeenCalled()
+    await click('Stage .env')
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Stage' })),
+    )
+    expect(mockApply.mock.calls[0][1]).toMatchObject({
+      path: '.env',
+      reveal: true,
+    })
+  })
+
+  it('says why the server refused, reading the list again when stale', async () => {
+    const p = await show()
+    for (const [code, text] of [
+      ['index_locked', 'Another git command holds the index. Try again'],
+      [
+        'stale_hunk',
+        'The file changed since the diff was read; it was read again',
+      ],
+      ['odd', 'Could not stage both.ts'],
+    ]) {
+      mockApply.mockRejectedValueOnce(new RequestError(409, code, code))
+      await click('Stage both.ts')
+      expect(notified(p).at(-1)).toEqual([text, { variant: 'danger' }])
+    }
+    mockApply.mockRejectedValueOnce(new TypeError('network'))
+    await click('Stage both.ts')
+    expect(notified(p).at(-1)?.[0]).toBe('Could not stage both.ts')
+    // A moved root: the list starts again from it
+    mockApply.mockRejectedValueOnce(
+      new RequestError(409, '', 'x', { root: '/new' }),
+    )
+    await click('Stage both.ts')
+    await settle()
+    expect(mockChanges).toHaveBeenLastCalledWith('%1', '/new')
+  })
+
+  it('discards a whole file from the list, with an Undo that puts it back', async () => {
+    mockApply.mockResolvedValue({
+      root: '/r',
+      path: 'src/both.ts',
+      trashId: 't1',
+    })
+    const p = await show()
+    await click('Discard both.ts')
+    expect(screen.getByText('Discard changes in both.ts?')).toBeInTheDocument()
+    await act(async () => {})
+    await click('Discard')
+    expect(mockHash).toHaveBeenCalledWith('%1', 'src/both.ts', '/r')
+    expect(mockApply.mock.calls[0][1]).toMatchObject({
+      action: 'discard',
+      baseHash: 'h1',
+    })
+    const [text, opts] = notified(p).at(-1) as [
+      string,
+      { action: { label: string; onClick: () => void } },
+    ]
+    expect(text).toBe('Discarded changes in both.ts')
+    expect(opts.action.label).toBe('Undo')
+    mockRestore.mockResolvedValueOnce({ root: '/r', path: 'src/both.ts' })
+    await act(async () => opts.action.onClick())
+    expect(mockRestore).toHaveBeenCalledWith('%1', {
+      root: '/r',
+      trashId: 't1',
+      reveal: false,
+    })
+    expect(notified(p).at(-1)).toEqual([
+      'Restored both.ts',
+      { variant: 'success' },
+    ])
+    // An Undo the server refuses says why
+    for (const [err, text] of [
+      [
+        new RequestError(409, 'changed', 'x'),
+        'both.ts changed since; not restored',
+      ],
+      [
+        new RequestError(409, 'exists', 'x'),
+        'A file now exists at both.ts; not restored',
+      ],
+      [
+        new RequestError(409, '', 'x', { root: '/new' }),
+        "The pane's directory changed; both.ts was not restored",
+      ],
+      [new TypeError('x'), 'Could not restore both.ts'],
+    ] as const) {
+      mockRestore.mockRejectedValueOnce(err)
+      await act(async () => opts.action.onClick())
+      // A moved root is told of by the view too
+      expect(notified(p).map((c) => c[0])).toContain(text)
+    }
+  })
+
+  it('tells what a discard did when nothing went to the trash', async () => {
+    const p = await show()
+    mockApply.mockResolvedValueOnce({ root: '/r', path: 'gone.txt' })
+    await click('Discard gone.txt')
+    await click('Restore')
+    expect(notified(p).at(-1)).toEqual(['Restored gone.txt'])
+    mockApply.mockResolvedValueOnce({
+      root: '/r',
+      path: 'notes/todo.md',
+      permanent: true,
+    })
+    await click('Discard todo.md')
+    await act(async () => {})
+    await click('Delete')
+    expect(notified(p).at(-1)).toEqual(['Deleted todo.md permanently'])
+    mockApply.mockResolvedValueOnce({
+      root: '/r',
+      path: 'notes/todo.md',
+      trashId: 't',
+    })
+    await click('Discard todo.md')
+    await act(async () => {})
+    await click('Delete')
+    expect(notified(p).at(-1)?.[0]).toBe('Deleted todo.md')
+  })
+
+  it('a hunk is staged or discarded from the diff, the file from its header', async () => {
+    mockDiff.mockResolvedValue({
+      root: '/r',
+      path: 'src/both.ts',
+      truncated: false,
+      worktreeHash: 'seen',
+      hunks: [
+        {
+          id: 'h1',
+          header: '@@ -1 +1 @@',
+          lines: [{ kind: 'add', new: 1, text: 'x' }],
+        },
+        { header: '@@ -9 +9 @@', lines: [{ kind: 'add', new: 9, text: 'y' }] },
+      ],
+    })
+    await show()
+    fireEvent.click(rows('Changes')[0])
+    await act(async () => {})
+    // Only the hunk with an id has buttons
+    expect(
+      screen
+        .getAllByRole('button', { name: /change \d/ })
+        .map((b) => b.getAttribute('aria-label')),
+    ).toEqual(['Stage change 1', 'Discard change 1'])
+    await click('Stage change 1')
+    expect(mockApply.mock.calls[0][1]).toMatchObject({
+      action: 'stage',
+      hunk: 'h1',
+    })
+    await click('Discard change 1')
+    expect(screen.getByText('Discard this change?')).toBeInTheDocument()
+    await click('Cancel')
+    // The whole file sends the hash of the diff shown
+    await click('Discard file')
+    await click('Discard')
+    expect(mockHash).not.toHaveBeenCalled()
+    expect(mockApply.mock.calls[1][1]).toMatchObject({
+      action: 'discard',
+      baseHash: 'seen',
+    })
+  })
+
+  it('the staged side offers Unstage, by hunk too', async () => {
+    mockDiff.mockResolvedValue({
+      root: '/r',
+      path: 'src/both.ts',
+      truncated: false,
+      hunks: [
+        {
+          id: 'h1',
+          header: '@@ -1 +1 @@',
+          lines: [{ kind: 'add', new: 1, text: 'x' }],
+        },
+      ],
+    })
+    await show()
+    fireEvent.click(rows('Staged')[0])
+    await act(async () => {})
+    expect(
+      screen.getByRole('button', { name: 'Unstage file' }),
+    ).toBeInTheDocument()
+    await click('Unstage change 1')
+    expect(mockApply.mock.calls[0][1]).toMatchObject({
+      action: 'unstage',
+      hunk: 'h1',
+    })
+  })
+
+  it('the tab a discard closes is not told about, so its Undo stays', async () => {
+    mockDiff.mockResolvedValue({
+      root: '/r',
+      path: 'gone.txt',
+      truncated: false,
+      hunks: [],
+    })
+    mockApply.mockResolvedValue({
+      root: '/r',
+      path: 'src/both.ts',
+      trashId: 't1',
+    })
+    const p = await show()
+    fireEvent.click(rows('Changes')[0])
+    await act(async () => {})
+    mockChanges.mockResolvedValue(
+      changes({
+        entries: ENTRIES.map((e) =>
+          e.path === 'src/both.ts' ? { ...e, unstaged: '' } : e,
+        ),
+      }),
+    )
+    await click('Discard file')
+    await act(async () => {})
+    await click('Discard')
+    await settle()
+    expect(screen.queryByRole('button', { name: 'Back to changes' })).toBeNull()
+    expect(notified(p).map((c) => c[0])).not.toContain(
+      'No changes left in both.ts',
+    )
+    expect(notified(p).at(-1)?.[0]).toBe('Discarded changes in both.ts')
   })
 })
