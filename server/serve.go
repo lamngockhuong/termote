@@ -77,6 +77,9 @@ type serveConfig struct {
 	// DevicesDir holds the paired devices; empty disables pairing. Never
 	// read or written with NoAuth.
 	DevicesDir string
+	// TemplatesDir holds the prompt templates every device shares; empty
+	// disables them.
+	TemplatesDir string
 	// InstanceDir keeps the server's instance id (the snapshot's
 	// instanceId); empty gives one that lasts until the server stops.
 	InstanceDir string
@@ -441,6 +444,15 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 	registerSigninRoutes(mux, sessions, devices, allowed)
 	registerLoginLinkRoutes(mux, sessions)
 	registerPushRoutes(mux, push)
+	var templates *templateStore
+	if cfg.TemplatesDir != "" {
+		var err error
+		if templates, err = newTemplateStore(cfg.TemplatesDir); err != nil {
+			log.Printf("prompt templates disabled: %v", err)
+		}
+	}
+	agent.templates = templates != nil
+	registerTemplateRoutes(mux, templates, allowed)
 	registerStreamRoutes(mux, m, tokenStore, allowed, hub, agent.activity)
 	if z, ok := m.(*zellijMux); ok {
 		// A Zellij group's ids change with its session's name.
