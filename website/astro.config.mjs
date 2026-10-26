@@ -80,6 +80,7 @@ export default defineConfig({
             { label: "Security Model", link: "/usage/security/", translations: { vi: "Mô hình bảo mật" } },
             { label: "Sessions", link: "/usage/sessions/" },
             { label: "Settings", link: "/usage/settings/" },
+            { label: "Tasks", link: "/usage/tasks/", translations: { vi: "Task" } },
           ],
         },
       ],

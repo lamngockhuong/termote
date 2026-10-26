@@ -140,6 +140,13 @@ type Caps struct {
 	// Templates: the prompt templates can be read and, by a full client,
 	// changed (/api/mux/templates*). Set by the snapshot route.
 	Templates bool `json:"templates"`
+	// Tasks: a pane's package.json scripts, Makefile targets and the user's
+	// tasks can be listed and run (/api/mux/panes/{id}/tasks*): the files
+	// routes work. Set by the snapshot route.
+	Tasks bool `json:"tasks"`
+	// UserTasks: the user's tasks can be read and changed by a full client
+	// (/api/mux/tasks*). Set by the snapshot route.
+	UserTasks bool `json:"userTasks"`
 	// ViewStream: a view-only client can stream a pane here (the backend
 	// attaches a client that changes nothing: Herdr, tmux 3.2 or later).
 	// Set by the snapshot route for that role only: the stream refuses it
@@ -350,6 +357,8 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 		snap.Caps.Devices = agent.devices
 		snap.Caps.Signins = agent.signins
 		snap.Caps.Templates = agent.templates
+		snap.Caps.Tasks = agent.tasks && snap.Caps.Files
+		snap.Caps.UserTasks = agent.userTasks
 		snap.InstanceID = agent.instanceID
 		if snap.Groups == nil {
 			snap.Groups = []Group{}

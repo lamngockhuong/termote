@@ -5,6 +5,7 @@ import {
   type AppView,
   availableViews,
   CHAT_VIEW_ID,
+  TASKS_VIEW_ID,
   TERMINAL_VIEW_ID,
   type ViewContext,
   viewPanelId,
@@ -114,6 +115,18 @@ describe('app views', () => {
     expect(
       ids({ ...following, session: { ...busy.session, paneId: undefined } }),
     ).not.toContain(CHAT_VIEW_ID)
+  })
+
+  it('offers Tasks only with caps.tasks and to a full client', () => {
+    const ids = (c: ViewContext) =>
+      availableViews(APP_VIEWS, c).map((v) => v.id)
+    const withTasks: ViewContext = {
+      ...ctx,
+      mux: { ...ctx.mux, caps: { ...ctx.mux.caps, tasks: true } },
+    }
+    expect(ids(ctx)).not.toContain(TASKS_VIEW_ID)
+    expect(ids(withTasks)).toContain(TASKS_VIEW_ID)
+    expect(ids({ ...withTasks, readOnly: true })).not.toContain(TASKS_VIEW_ID)
   })
 
   it('names the element that shows a view', () => {

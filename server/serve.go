@@ -80,6 +80,9 @@ type serveConfig struct {
 	// TemplatesDir holds the prompt templates every device shares; empty
 	// disables them.
 	TemplatesDir string
+	// TasksDir holds the tasks the user defined, shared by every device;
+	// empty disables them.
+	TasksDir string
 	// InstanceDir keeps the server's instance id (the snapshot's
 	// instanceId); empty gives one that lasts until the server stops.
 	InstanceDir string
@@ -453,6 +456,15 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 	}
 	agent.templates = templates != nil
 	registerTemplateRoutes(mux, templates, allowed)
+	var userTasks *taskStore
+	if cfg.TasksDir != "" {
+		var err error
+		if userTasks, err = newTaskStore(cfg.TasksDir); err != nil {
+			log.Printf("tasks disabled: %v", err)
+		}
+	}
+	agent.userTasks = userTasks != nil
+	registerUserTaskRoutes(mux, userTasks, allowed)
 	registerStreamRoutes(mux, m, tokenStore, allowed, hub, agent.activity)
 	if z, ok := m.(*zellijMux); ok {
 		// A Zellij group's ids change with its session's name.
@@ -471,6 +483,8 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 		}
 	}
 	agent.registerCommandsRoute(mux, files, allowed)
+	registerTaskRoutes(mux, files, userTasks, agent.input)
+	_, agent.tasks = m.(taskMux)
 	registerGroupRoutes(mux, m, files.deny)
 	registerReorderRoutes(mux, m)
 	registerWorktreeRoutes(mux, m, files.git, allowed)

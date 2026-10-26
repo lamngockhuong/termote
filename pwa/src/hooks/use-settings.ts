@@ -74,6 +74,24 @@ export function resolveEditorTabSize(value: unknown): EditorTabSize {
     : 4
 }
 
+// Lines of a task's tab read to find its run's output for Send to agent
+// (only the part between the run's markers is sent); the pane text route
+// takes up to PANE_TEXT_MAX_LINES
+export const TASK_HISTORY_LINES_DEFAULT = 400
+export const TASK_HISTORY_LINES_MIN = 100
+export const TASK_HISTORY_LINES_MAX = 5000
+// What Settings offers
+export const TASK_HISTORY_LINE_CHOICES = [100, 200, 400, 1000, 2000, 5000]
+
+// A saved line count, kept when it is a whole number in range
+export function resolveTaskHistoryLines(value: unknown): number {
+  return Number.isInteger(value) &&
+    (value as number) >= TASK_HISTORY_LINES_MIN &&
+    (value as number) <= TASK_HISTORY_LINES_MAX
+    ? (value as number)
+    : TASK_HISTORY_LINES_DEFAULT
+}
+
 export type ImeSendBehavior = 'send-only' | 'send-enter'
 export type PasteSource = 'clipboard' | 'tmux'
 
@@ -108,6 +126,7 @@ export interface Settings {
   editorTabSize: EditorTabSize // desktop editor: columns of a tab, one indent
   editorWrap: boolean // Files/Changes on desktop: lines wrapped by default
   editorVim: boolean // desktop editor: Vim key bindings
+  taskHistoryLines: number // Tasks: lines read for Send to agent (above)
 }
 
 const DEFAULTS: Settings = {
@@ -140,6 +159,7 @@ const DEFAULTS: Settings = {
   editorTabSize: 4,
   editorWrap: false,
   editorVim: false,
+  taskHistoryLines: TASK_HISTORY_LINES_DEFAULT,
 }
 
 // Listeners for useSyncExternalStore
@@ -181,6 +201,7 @@ function getSnapshot(): Settings {
         editorTabSize: resolveEditorTabSize(merged.editorTabSize),
         editorWrap: merged.editorWrap === true,
         editorVim: merged.editorVim === true,
+        taskHistoryLines: resolveTaskHistoryLines(merged.taskHistoryLines),
       }
     } catch {
       cachedSettings = DEFAULTS

@@ -603,7 +603,11 @@ vi.mock('./components/settings-modal', () => ({
     readOnly,
     initialGroup,
     shortcuts,
+    tasks,
+    userTasks,
   }: {
+    tasks?: boolean
+    userTasks?: boolean
     shortcuts?: unknown[]
     isOpen: boolean
     initialGroup?: string
@@ -624,6 +628,8 @@ vi.mock('./components/settings-modal', () => ({
         data-read-only={String(!!readOnly)}
         data-initial-group={initialGroup ?? ''}
         data-shortcuts={String(!!shortcuts)}
+        data-tasks={String(tasks)}
+        data-user-tasks={String(userTasks)}
       >
         <button onClick={onClose}>CloseSettings</button>
         {updates && (
@@ -3950,6 +3956,112 @@ describe('App views, view-only and deep links', () => {
     // Switching to a view other than the terminal never reselects either
     act(() => showViewFrom.current!('chat'))
     expect(mockSelectTab).not.toHaveBeenCalled()
+  })
+
+  describe('views that point at another tab', () => {
+    const probe: { current?: ViewProps } = {}
+    const PROBE: AppView = {
+      id: 'probe',
+      label: 'Probe',
+      Icon: MessageSquare,
+      available: () => true,
+      Main: (p) => {
+        probe.current = p
+        return <div data-testid="probe-main" />
+      },
+    }
+    const open = async () => {
+      render(<App views={[...APP_VIEWS, PROBE]} />)
+      fireEvent.click(await screen.findByRole('tab', { name: 'Probe' }))
+      return probe.current!
+    }
+
+    it('a view gets the tabs and a way to read them again', async () => {
+      const props = await open()
+      const mux = mockUseLocalSessions()
+      expect(props.sessions).toBe(mux.sessions)
+      expect(props.sessions!.map((t: { id: string }) => t.id)).toEqual([
+        'w1:t1',
+        'w2:t1',
+      ])
+      expect(props.refreshSessions).toBe(mux.refreshSessions)
+    })
+
+    it('openTab keeps the view for the pane it selects, and leaves this one alone', async () => {
+      setPaneKeys(
+        { instanceId: 'i1', groups: [] } as unknown as MuxSnapshot,
+        new Map(
+          ['w1:t1', 'w1:t1:p1', 'w2:t1', 'w2:t1:p1'].map((id) => [id, id]),
+        ),
+      )
+      const props = await open()
+      mockSelectTab.mockClear()
+      await act(async () => props.openTab!('w2:t1', 'w2:t1:p1', 'probe'))
+      expect(switchSession).toHaveBeenCalledWith('w2:t1', 'w2:t1:p1')
+      expect(
+        JSON.parse(localStorage.getItem('termote-pane-view:i1:w2:t1:p1')!).view
+          .view,
+      ).toBe('probe')
+      // tmux shares its current window: the tab left is not selected again
+      expect(mockSelectTab).not.toHaveBeenCalled()
+      expect(screen.getByTestId('probe-main')).toBeInTheDocument()
+    })
+
+    it('openTab on the pane on screen shows the view, the terminal unless named', async () => {
+      const props = await open()
+      await act(async () =>
+        props.openTab!(props.session.id, props.session.paneId),
+      )
+      expect(switchSession).toHaveBeenCalledWith(
+        props.session.id,
+        props.session.paneId,
+      )
+      expect(screen.queryByTestId('probe-main')).toBeNull()
+      expect(screen.getByTestId('keyboard-toolbar')).toBeInTheDocument()
+      // Its tab id stands for the pane when none is named
+      await act(async () =>
+        props.openTab!(props.session.paneId ?? '', undefined, 'probe'),
+      )
+      expect(screen.getByTestId('probe-main')).toBeInTheDocument()
+    })
+
+    it('openTab on a tab a view-only device cannot watch only explains', async () => {
+      const props = await open()
+      switchSession.mockResolvedValueOnce('view-only')
+      await act(async () => props.openTab!('w2:t1', undefined, 'terminal'))
+      expect(await screen.findByTestId('toast')).toHaveTextContent(
+        'View only: follows the active window',
+      )
+      expect(screen.getByTestId('probe-main')).toBeInTheDocument()
+    })
+
+    it('Settings is told whether the server has tasks and user tasks', async () => {
+      const base = mockUseLocalSessions()
+      const settingsFlags = () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+        const m = screen.getByTestId('settings-modal')
+        return [m.dataset.tasks, m.dataset.userTasks]
+      }
+      const { unmount } = render(<App />)
+      await screen.findByTestId('terminal-view')
+      expect(settingsFlags()).toEqual(['false', 'false'])
+      unmount()
+      mockUseLocalSessions.mockReturnValue({
+        ...base,
+        mux: { ...base.mux, caps: { ...base.mux.caps, tasks: true } },
+      } as typeof base)
+      const second = render(<App />)
+      await screen.findByTestId('terminal-view')
+      expect(settingsFlags()).toEqual(['true', 'false'])
+      second.unmount()
+      mockUseLocalSessions.mockReturnValue({
+        ...base,
+        mux: { ...base.mux, caps: { ...base.mux.caps, userTasks: true } },
+      } as typeof base)
+      render(<App />)
+      await screen.findByTestId('terminal-view')
+      expect(settingsFlags()).toEqual(['false', 'true'])
+    })
   })
 
   describe('select text', () => {

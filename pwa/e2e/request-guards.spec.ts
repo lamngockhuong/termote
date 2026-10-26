@@ -218,6 +218,59 @@ test.describe('prompt template routes', () => {
   })
 })
 
+test.describe('tasks routes', () => {
+  // Every write is a JSON write of a full client; a bad body or id changes
+  // nothing, and nothing runs: a request that got past the guard is refused
+  // further in.
+  const routes = async (request: APIRequestContext) => {
+    const pane = encodeURIComponent(await firstPane(request))
+    return [
+      { method: 'POST', path: '/api/mux/tasks', data: { name: '', command: 'csrf-e2e' } },
+      { method: 'PUT', path: '/api/mux/tasks/0000000000000000', data: { name: '', command: 'x', updated: 'x' } },
+      { method: 'DELETE', path: '/api/mux/tasks/0000000000000000?updated=x', data: {} },
+      { method: 'POST', path: `/api/mux/panes/${pane}/tasks/run`, data: { kind: 'make', name: 'csrf-e2e', root: '/' } },
+    ]
+  }
+
+  test.beforeEach(async ({ request }) => {
+    const snap = await (await request.get('/api/mux/snapshot')).json()
+    test.skip(!snap.caps.tasks, 'the backend runs no tasks')
+  })
+
+  test('text/plain, cross-site and a foreign Origin are rejected', async ({ request }) => {
+    for (const r of await routes(request)) {
+      for (const [headers, status] of [
+        [{ 'Content-Type': 'text/plain' }, 415],
+        [{ 'Sec-Fetch-Site': 'cross-site' }, 403],
+        [{ Origin: 'https://evil.example' }, 403],
+      ] as const) {
+        const res = await request.fetch(r.path, {
+          method: r.method,
+          headers: { ...headers },
+          data: JSON.stringify(r.data),
+        })
+        expect(res.status(), `${r.method} ${r.path} ${JSON.stringify(headers)}`).toBe(status)
+      }
+    }
+  })
+
+  test('a cross-site or foreign-Origin read is rejected', async ({ request }) => {
+    const pane = encodeURIComponent(await firstPane(request))
+    for (const p of [`/api/mux/panes/${pane}/tasks`, '/api/mux/tasks', '/api/mux/tasks/runs/0000000000000000']) {
+      for (const headers of [{ 'Sec-Fetch-Site': 'cross-site' }, { Origin: 'https://evil.example' }] as Record<
+        string,
+        string
+      >[]) {
+        const res = await request.get(p, { headers })
+        expect(res.status(), `${p} ${JSON.stringify(headers)}`).toBe(403)
+      }
+    }
+    const res = await request.get(`/api/mux/panes/${pane}/tasks`)
+    expect(res.status()).toBe(200)
+    expect(res.headers()['cache-control']).toContain('no-store')
+  })
+})
+
 test.describe('files routes', () => {
   // Read-only GETs, guarded like writes: auth, Host, and a same-site check
   const filesPath = async (request: APIRequestContext, rest: string) =>

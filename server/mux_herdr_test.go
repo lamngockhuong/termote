@@ -57,6 +57,9 @@ type fakeHerdr struct {
 	readFail  string         // pane.read fails with this code when set
 	getFail   string         // pane.get fails with this code when set
 	createID  string         // workspace.create workspace_id, "wNEW" when empty
+	// noRootPane: tab.create's reply has no root_pane (it always has one
+	// from Herdr 0.9.3 on)
+	noRootPane bool
 	// pane.process_info: the process_info per pane (a bash shell when
 	// missing), a delay per pane, and an error code for every call.
 	procs     map[string]any
@@ -265,7 +268,11 @@ func (f *fakeHerdr) handle(c net.Conn) {
 			reply(map[string]string{"type": "ok"})
 			return
 		}
-		reply(map[string]any{"type": "tab_created", "tab": map[string]any{"tab_id": "wR:tNEW", "workspace_id": "wR"}})
+		res := map[string]any{"type": "tab_created", "tab": map[string]any{"tab_id": "wR:tNEW", "workspace_id": "wR"}}
+		if !f.noRootPane {
+			res["root_pane"] = map[string]any{"pane_id": "wR:pNEW", "tab_id": "wR:tNEW"}
+		}
+		reply(res)
 	case "tab.move", "workspace.move_block":
 		if failCode != "" {
 			fail(failCode)

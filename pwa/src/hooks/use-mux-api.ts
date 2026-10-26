@@ -114,6 +114,11 @@ export interface MuxSnapshot {
     // The prompt templates can be read, and changed by a full client
     // (/api/mux/templates*): the server's state dir holds them.
     templates?: boolean
+    // A pane's package.json scripts, Makefile targets and the user's tasks
+    // can be listed and run in a tab (/panes/{id}/tasks*): a full client.
+    tasks?: boolean
+    // The user's tasks can be listed and changed (/api/mux/tasks*).
+    userTasks?: boolean
     // View-only role: the backend can stream a pane to it (tmux 3.2 or
     // later, Herdr); off, the stream is refused.
     viewStream?: boolean
@@ -774,10 +779,15 @@ export interface RequestErrorDetails {
   template?: PromptTemplate
   // templates import 400: the template the error is about
   index?: number
-  // templates 400 invalid_template: what is wrong
-  field?: 'name' | 'text'
+  // templates 400 invalid_template, tasks 400 invalid_task: what is wrong
+  field?: 'name' | 'text' | 'command'
   // files/document 413 too_large: the file's size in bytes
   size?: number
+  // tasks 409 conflict: the task as another device saved it
+  task?: UserTask
+  // tasks/run 409 task_running: the run still running, and its tab
+  runId?: string
+  tabId?: string
 }
 
 // A refused request: the HTTP status and the server's stable code.
@@ -790,8 +800,11 @@ export class RequestError extends Error implements RequestErrorDetails {
   readonly trashId?: string
   readonly template?: PromptTemplate
   readonly index?: number
-  readonly field?: 'name' | 'text'
+  readonly field?: 'name' | 'text' | 'command'
   readonly size?: number
+  readonly task?: UserTask
+  readonly runId?: string
+  readonly tabId?: string
 
   constructor(
     readonly status: number,
@@ -833,6 +846,9 @@ async function requestError(
       index: body.index,
       size: typeof body.size === 'number' ? body.size : undefined,
       field: body.field,
+      task: body.task,
+      runId: body.runId,
+      tabId: body.tabId,
     },
   )
 }
@@ -1883,4 +1899,194 @@ export async function importTemplates(
   })
   const body = await res.json()
   return { added: body.added ?? 0, replaced: body.replaced ?? 0 }
+}
+
+// Tasks (/api/mux/panes/{id}/tasks*, /api/mux/tasks*). Shapes match
+// server/tasks.go and server/task_store.go.
+
+// A script of package.json; hooks names its pre and post scripts, which
+// the package manager runs around it
+export interface ScriptTask {
+  name: string
+  command: string
+  hooks?: string[]
+  // The command was cut for the list (it runs whole)
+  truncated?: boolean
+}
+
+// A task the user defined: a name and the command line it runs in the
+// pane's root. updated changes with each save.
+export interface UserTask {
+  // 16 hex characters
+  id: string
+  name: string
+  command: string
+  updated: string
+}
+
+export type TaskKind = 'script' | 'make' | 'user'
+
+// running until it printed its end marker (exited, with its code), its
+// shell came back without one (ended: the screen was cleared) or its tab
+// closed (gone). The server forgets runs when it restarts.
+export type TaskRunState = 'running' | 'exited' | 'ended' | 'gone'
+
+export interface TaskRun {
+  runId: string
+  tabId: string
+  paneId: string
+  // Names the run's markers in the pane's text
+  nonce: string
+  state: TaskRunState
+  code?: number
+}
+
+export interface PaneTasks {
+  root: string
+  // What runs the scripts (npm, pnpm, yarn, bun); empty without
+  // package.json
+  packageManager: string
+  scripts: ScriptTask[]
+  // The Makefile make reads, empty without one
+  makefile: string
+  makeTargets: { name: string }[]
+  userTasks: UserTask[]
+  // The last run of each task, by kind:name (user:id)
+  runs: Record<string, TaskRun>
+  // Scripts and targets left out (a name the view cannot run)
+  skipped: number
+  // package.json or the Makefile, too large to read
+  tooLarge: string[]
+}
+
+const tasksUrl = (paneId: string, op = '') =>
+  `${API_BASE}/panes/${encodeURIComponent(paneId)}/tasks${op}`
+
+// What the pane's root offers to run. root: the root the client saw, if
+// any (409 root_changed with the new one otherwise).
+export async function fetchTasks(
+  paneId: string,
+  root?: string,
+): Promise<PaneTasks> {
+  const qs = root ? `?${new URLSearchParams({ root })}` : ''
+  const res = await fetch(tasksUrl(paneId) + qs, {
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res, true)
+  const body = await res.json()
+  return {
+    root: body.root ?? '',
+    packageManager: body.packageManager ?? '',
+    scripts: body.scripts ?? [],
+    makefile: body.makefile ?? '',
+    makeTargets: body.makeTargets ?? [],
+    userTasks: body.userTasks ?? [],
+    runs: body.runs ?? {},
+    skipped: body.skipped ?? 0,
+    tooLarge: body.tooLarge ?? [],
+  }
+}
+
+export interface TaskRunStart {
+  runId: string
+  tabId: string
+  paneId: string
+  nonce: string
+  // The tab of the task's last run was used again
+  reused: boolean
+}
+
+// A run waits for a new tab's shell to start (rc files): longer than a read
+export const TASK_RUN_TIMEOUT_MS = 40_000
+
+// Runs a task of the pane's root in a tab at that root. The task is named,
+// never sent: the server reads the root again. Throws RequestError
+// (task_running with runId and tabId, root_changed, task_not_found,
+// unsupported_shell, shell_busy, no_client, tab_gone).
+export async function runTask(
+  paneId: string,
+  req: {
+    kind: TaskKind
+    name?: string
+    id?: string
+    root: string
+    newTab?: boolean
+  },
+): Promise<TaskRunStart> {
+  const res = await fetch(tasksUrl(paneId, '/run'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+    signal: AbortSignal.timeout(TASK_RUN_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res)
+  return res.json()
+}
+
+// A run's state now. Throws RequestError run_not_found once the server
+// forgot it (it restarted).
+export async function fetchTaskRun(
+  runId: string,
+): Promise<{ state: TaskRunState; code?: number }> {
+  const res = await fetch(
+    `${API_BASE}/tasks/runs/${encodeURIComponent(runId)}`,
+    {
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    },
+  )
+  if (!res.ok) throw await requestError(res, true)
+  return res.json()
+}
+
+const userTasksPath = `${API_BASE}/tasks`
+
+export interface UserTasks {
+  tasks: UserTask[]
+  // A newer Termote saved them: nothing can change them here
+  readOnly: boolean
+}
+
+// Lists the user's tasks by name. Throws RequestError (tasks_unavailable).
+export async function fetchUserTasks(signal?: AbortSignal): Promise<UserTasks> {
+  const res = await fetch(userTasksPath, {
+    signal: signal ?? AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res, true)
+  const body = await res.json()
+  return { tasks: body.tasks ?? [], readOnly: body.readOnly === true }
+}
+
+// Saves a new task. Throws RequestError (invalid_task with field,
+// name_taken, too_many, newer_format, busy).
+export async function createUserTask(t: {
+  name: string
+  command: string
+}): Promise<UserTask> {
+  const res = await templateRequest(userTasksPath, 'POST', t)
+  return (await res.json()).task
+}
+
+// Saves a change to the task as it was when updated was read: conflict
+// carries the task as it is now, not_found when another device deleted it.
+export async function updateUserTask(
+  id: string,
+  t: { name: string; command: string; updated: string },
+): Promise<UserTask> {
+  const res = await templateRequest(
+    `${userTasksPath}/${encodeURIComponent(id)}`,
+    'PUT',
+    t,
+  )
+  return (await res.json()).task
+}
+
+export async function deleteUserTask(
+  id: string,
+  updated: string,
+): Promise<void> {
+  const q = new URLSearchParams({ updated })
+  await templateRequest(
+    `${userTasksPath}/${encodeURIComponent(id)}?${q}`,
+    'DELETE',
+  )
 }

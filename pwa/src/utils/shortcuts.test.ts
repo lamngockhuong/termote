@@ -35,6 +35,7 @@ function press(
 describe('command ids', () => {
   it('are the static catalogue, never an inherited name', () => {
     expect(isCommandId('palette.commands')).toBe(true)
+    expect(isCommandId('view.tasks')).toBe(true)
     expect(isCommandId('nope')).toBe(false)
     expect(isCommandId('__proto__')).toBe(false)
     expect(isCommandId('constructor')).toBe(false)

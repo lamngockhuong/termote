@@ -10,6 +10,7 @@ import {
   type ImeSendBehavior,
   type PasteSource,
   type Settings,
+  TASK_HISTORY_LINE_CHOICES,
 } from '../hooks/use-settings'
 import { UI_STYLES, type UiStyle } from '../ui-style'
 import { STUCK_MINUTES_OPTIONS } from '../utils/agent-stuck'
@@ -30,6 +31,7 @@ import { SegmentedControl } from './ui/segmented-control'
 import { Sheet } from './ui/sheet'
 import { Switch } from './ui/switch'
 import { UpdatesSection } from './updates-section'
+import { UserTasksSection } from './user-tasks-section'
 
 interface Props {
   isOpen: boolean
@@ -71,6 +73,10 @@ interface Props {
   signins?: boolean
   // The Prompt templates group (caps.templates); view-only lists and exports
   templates?: boolean
+  // The Tasks group: the lines read for Send to agent (caps.tasks) and the
+  // user's tasks (caps.userTasks); a full client only
+  tasks?: boolean
+  userTasks?: boolean
   // Log out, for Signed-in browsers to sign this browser out with
   onLogout?: () => Promise<void> | void
   // Group to show when the sheet opens (About's "Check for updates")
@@ -463,6 +469,8 @@ export function SettingsModal({
   devices = false,
   signins = false,
   templates = false,
+  tasks = false,
+  userTasks = false,
   onLogout,
   initialGroup,
   shortcuts,
@@ -790,6 +798,39 @@ export function SettingsModal({
       id: 'templates',
       title: 'Prompt templates',
       rows: <PromptTemplatesSection readOnly={readOnly} />,
+    })
+  }
+
+  if (!readOnly && (tasks || userTasks)) {
+    groups.push({
+      id: 'tasks',
+      title: 'Tasks',
+      rows: (
+        <>
+          {tasks && (
+            <SettingsRow
+              title="History read for Send to agent"
+              desc="Lines of a task's tab searched for its run's output; only the run's own output is sent"
+            >
+              <select
+                aria-label="History read for Send to agent"
+                value={settings.taskHistoryLines}
+                onChange={(e) =>
+                  onUpdateSetting('taskHistoryLines', Number(e.target.value))
+                }
+                className={`px-2 ${CONTROL} ${FOCUS_RING}`}
+              >
+                {TASK_HISTORY_LINE_CHOICES.map((v) => (
+                  <option key={v} value={v}>
+                    {v} lines
+                  </option>
+                ))}
+              </select>
+            </SettingsRow>
+          )}
+          {userTasks && <UserTasksSection />}
+        </>
+      ),
     })
   }
 

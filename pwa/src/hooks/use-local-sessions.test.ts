@@ -91,6 +91,19 @@ vi.mock('./use-activity-log', async (orig) => ({
   renameActivityGroup: mockRenameActivity,
 }))
 
+const { mockSetTemplatesServer, mockSetUserTasksServer } = vi.hoisted(() => ({
+  mockSetTemplatesServer: vi.fn(),
+  mockSetUserTasksServer: vi.fn(),
+}))
+vi.mock('./use-prompt-templates', async (orig) => ({
+  ...(await orig<typeof import('./use-prompt-templates')>()),
+  setTemplatesServer: mockSetTemplatesServer,
+}))
+vi.mock('./use-user-tasks', async (orig) => ({
+  ...(await orig<typeof import('./use-user-tasks')>()),
+  setUserTasksServer: mockSetUserTasksServer,
+}))
+
 import { isDraftDirty, resetFilesStores } from './use-files'
 import { nextClockOffset, useLocalSessions } from './use-local-sessions'
 import { RequestError } from './use-mux-api'
@@ -637,6 +650,33 @@ describe('useLocalSessions', () => {
     const { result } = renderHook(() => useLocalSessions(1))
     await act(async () => {})
     expect(result.current.mux.caps.agentChat).toBe(true)
+  })
+
+  it('names the server and its user tasks cap to the user tasks copy, as the templates', async () => {
+    mockSnapshot.extra = {
+      instanceId: 'i1',
+      caps: {
+        clientSideSelect: false,
+        copyMode: true,
+        templates: true,
+        userTasks: true,
+      },
+    }
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    expect(mockSetUserTasksServer).toHaveBeenLastCalledWith('i1', true)
+    expect(mockSetTemplatesServer).toHaveBeenLastCalledWith('i1', true)
+    expect(mockSetTemplatesServer.mock.invocationCallOrder[0]).toBeLessThan(
+      mockSetUserTasksServer.mock.invocationCallOrder[0],
+    )
+
+    // A server without the cap, or without an instance id
+    mockSnapshot.extra = {}
+    await act(async () => {
+      await result.current.refreshSessions()
+    })
+    expect(mockSetUserTasksServer).toHaveBeenLastCalledWith(null, false)
+    expect(mockSetTemplatesServer).toHaveBeenLastCalledWith(null, false)
   })
 
   it('the active pane carries the agent name', async () => {

@@ -16,6 +16,7 @@ export const COMMAND_IDS = {
   'view.chat': true,
   'view.filesPanel': true,
   'view.changesPanel': true,
+  'view.tasks': true,
   'view.overview': true,
   'files.searchContent': true,
   'tab.new': true,

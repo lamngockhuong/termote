@@ -1,0 +1,107 @@
+---
+title: Tasks
+description: Run a pane's package.json scripts, Makefile targets and your own commands in a tab, and send a failed run's output to an agent
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+The **Tasks** view of a pane lists what its folder offers to run: the scripts of its `package.json`,
+the targets of its Makefile and the tasks you saved yourself. **Run** starts one in a tab of its own,
+in the pane's folder. When a run fails, **Send to agent** passes its output to a coding agent in one
+tap, so you do not copy it out of the terminal.
+
+## What Is Listed
+
+The folder is the one Files and Changes show: the git repository the pane is in, else the pane's
+folder. Nothing runs to list the tasks: Termote reads the files.
+
+- **Scripts**, from `package.json`, in the file's order, each with the command it runs. When the file
+  also has `pre<name>` or `post<name>` scripts, the row names them: `npm`, `pnpm` and `bun` run them
+  around the script. The package manager is the one `packageManager`
+  names, else the one whose lock file is there (`pnpm-lock.yaml`, `yarn.lock`, `bun.lock`), else npm.
+- **Make targets**, from the Makefile make would read (`GNUmakefile`, `makefile`, then `Makefile`).
+  Only targets written out are listed: not variables, special targets such as `.PHONY`, pattern rules
+  or targets built from variables. `make` itself is never run to find them.
+- **My tasks**: the tasks saved in [Settings](#your-own-tasks), in every pane.
+
+A script or target name with a space or another character a shell would read (`;`, `$`, a quote) is
+left out, and the list says how many were. A `package.json` or Makefile larger than 1 MB is not read.
+Only the folder's own files count: the `package.json` of a package inside a monorepo is not listed.
+
+## Running a Task
+
+**Run** opens a tab named `task:<name>` in the pane's folder and types the command into its shell, as
+if you had: your `PATH`, nvm and other shell settings apply. The toast's **Open** shows the tab.
+
+Run the task again and its tab is used again when its shell is waiting at its prompt; a line you left
+half typed there is cleared first. If the last run is still running, Termote says so and offers
+**Run in new tab**. When two devices press Run at the same time, one tab opens and the other device is
+told the task is running.
+
+The shell must be `bash`, `zsh`, `sh` (`dash`, `ash`), `ksh`, `mksh`, `yash`, `fish` or PowerShell 7 (`pwsh`). In
+any other shell (Windows PowerShell 5.1, `cmd`, `nu`, `csh`) a task is refused: Termote could not quote the
+command for it, nor tell its exit status. A new tab's shell gets up to 15 seconds to start; if it is
+still busy then, run the task again.
+
+<Aside>
+  With Zellij, a tab can only be added to a session that a terminal is attached to: open the session
+  in a terminal (or in Termote) first.
+</Aside>
+
+## The Run's Status
+
+Each task shows its last run: `running`, `exit 0`, `exit 3` and so on, `ended` (the shell came back
+without saying how, for example after `clear`), `tab closed`, or `unknown` when the server was
+restarted since. Every device sees the same status.
+
+Termote finds the exit status from two lines it prints around the command, each with a code of its
+own for the run. A program in the same terminal could print such a line, so the status is a hint: Send
+to agent is offered whatever the status says.
+
+## Send to Agent
+
+Once a run is over, **Send to agent** is offered (highlighted when it failed). The first time, pick the
+pane whose agent should receive it: any pane running Claude Code or Codex. Termote remembers the pick
+for the tabs of that group on this device, so the next send takes one tap.
+
+What is sent:
+
+- one line naming the task, its exit status and the folder,
+- then the run's output: only what the run printed between its own two lines, never what was in the
+  tab before it, nor what was typed after it.
+
+Characters that change or hide text without showing, such as zero-width spaces or bidi marks, are
+written out as `⟨U+200B⟩`. The message is marked as terminal output, not instructions, and it is cut
+from its start to fit a Chat message (16 KB). If the start of the run is no longer in the lines read,
+the end of its output is sent with a note; read more lines in Settings. If the tab no longer shows the
+run's end, nothing is sent.
+
+<Aside type="caution">
+  The output goes to the agent as it was printed: a token or a password the task printed goes too.
+</Aside>
+
+If the agent is busy or its session changed, the message is not sent, and **Open chat** takes you to
+it.
+
+## Your Own Tasks
+
+**Settings > Tasks** keeps commands you run often: a name (up to 64 characters, unique whatever the
+case) and a command of one line (up to 4 KB, no control or hidden characters). They are saved on the
+server, shared by every device that signs in to it, and listed in every pane's Tasks view. A command
+runs in the shell of the task's tab as you wrote it, so `&&`, pipes and a trailing `&` work as they
+would there.
+
+The same group sets how many lines of a task's tab are read to find its output for Send to agent (400
+by default).
+
+## Who Can Use Tasks
+
+Tasks run commands, so only a device with full access has the Tasks view and the Tasks group in
+Settings. A [view-only device](/usage/devices/) sees neither. Tasks need a backend that reports a pane's
+folder: tmux, Herdr or Zellij, not psmux on Windows.
+
+The tasks you saved are kept in the server's state folder, next to the
+[prompt templates](/usage/prompt-templates/): `~/.local/state/termote/tasks/tasks.json` on Linux and
+macOS (under `$XDG_STATE_HOME` when it is set), `%LOCALAPPDATA%\termote\state\tasks` on Windows, and
+the `termote-state-<uid>` volume in a container. `termote uninstall --purge` deletes them with the rest
+of the state folder.

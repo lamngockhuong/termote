@@ -43,7 +43,7 @@ export function fillTemplate(
 // Characters the server refuses, as it does: controls (the text keeps tab
 // and newline), format characters but the joiners (bidi marks, zero width
 // space, BOM), tags and the variation selectors supplement.
-const HIDDEN =
+export const HIDDEN =
   /(?![\u200c\u200d])(?:[\p{Cc}\p{Cf}]|[\u{E0000}-\u{E007F}]|[\u{E0100}-\u{E01EF}])/gu
 
 export interface HiddenChar {
