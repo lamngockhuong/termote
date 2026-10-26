@@ -162,6 +162,7 @@ export function ChatComposer({
   const [confirming, setConfirming] = useState<string | null>(null)
   const limitId = useId()
   const listId = useId()
+  const hintId = useId()
   const boxRef = useRef<HTMLTextAreaElement>(null)
   // Images go to the host first; view-only sends nothing, so none either.
   const uploadsOn = !!mux.caps.uploads && !readOnly
@@ -549,6 +550,67 @@ export function ChatComposer({
       </>
     )
   }
+  const extras = (
+    <>
+      {uploadsOn && (
+        <IconButton
+          aria-label="Attach image"
+          disabled={sending || images.full}
+          onClick={attach}
+        >
+          <ImagePlus size={18} aria-hidden="true" />
+        </IconButton>
+      )}
+      {templatesOn && (
+        <IconButton
+          aria-label="Templates"
+          aria-haspopup="dialog"
+          disabled={sending}
+          onClick={() => setPickerOpen(true)}
+        >
+          <FileText size={18} aria-hidden="true" />
+        </IconButton>
+      )}
+    </>
+  )
+  const box = (
+    <textarea
+      ref={boxRef}
+      aria-label={`Message to ${agent}`}
+      aria-describedby={
+        [!isMobile && hintId, tooLong && limitId].filter(Boolean).join(' ') ||
+        undefined
+      }
+      aria-autocomplete="list"
+      aria-controls={listOpen && listRows > 0 ? listId : undefined}
+      aria-activedescendant={
+        listOpen && at >= 0 ? slashOptionId(listId, at) : undefined
+      }
+      value={text}
+      rows={rows}
+      readOnly={sending}
+      aria-busy={sending}
+      onChange={onChange}
+      onSelect={track}
+      onFocus={() => {
+        focusedOnce.current = true
+      }}
+      onKeyDown={onKeyDown}
+      onPaste={onPaste}
+      placeholder="Message"
+      className="block w-full min-w-0 resize-none border-0 bg-transparent px-3 pt-2.5 pb-1 text-[15px] text-fg placeholder:text-fg-subtle focus:outline-hidden"
+    />
+  )
+  const sendButton = (
+    <IconButton
+      aria-label="Send"
+      variant="primary"
+      disabled={!canSend}
+      onClick={send}
+    >
+      <SendHorizontal size={18} aria-hidden="true" />
+    </IconButton>
+  )
   return (
     <div className="shrink-0 border-t border-border bg-surface pb-safe ui-terminal:bg-bg">
       {live}
@@ -612,57 +674,36 @@ export function ChatComposer({
         onRemove={images.remove}
         disabled={sending}
       />
-      <div className="flex items-end gap-2 p-2">
-        {uploadsOn && (
-          <IconButton
-            aria-label="Attach image"
-            disabled={sending || images.full}
-            onClick={attach}
-          >
-            <ImagePlus size={18} aria-hidden="true" />
-          </IconButton>
-        )}
-        {templatesOn && (
-          <IconButton
-            aria-label="Templates"
-            aria-haspopup="dialog"
-            disabled={sending}
-            onClick={() => setPickerOpen(true)}
-          >
-            <FileText size={18} aria-hidden="true" />
-          </IconButton>
-        )}
-        <textarea
-          ref={boxRef}
-          aria-label={`Message to ${agent}`}
-          aria-describedby={tooLong ? limitId : undefined}
-          aria-autocomplete="list"
-          aria-controls={listOpen && listRows > 0 ? listId : undefined}
-          aria-activedescendant={
-            listOpen && at >= 0 ? slashOptionId(listId, at) : undefined
-          }
-          value={text}
-          rows={rows}
-          readOnly={sending}
-          aria-busy={sending}
-          onChange={onChange}
-          onSelect={track}
-          onFocus={() => {
-            focusedOnce.current = true
-          }}
-          onKeyDown={onKeyDown}
-          onPaste={onPaste}
-          placeholder={isMobile ? 'Message' : 'Message (Ctrl+Enter to send)'}
-          className="min-h-touch min-w-0 flex-1 resize-none rounded-control border border-border bg-bg px-3 py-2 text-[15px] text-fg focus-visible:border-accent focus-visible:outline-none"
-        />
-        <IconButton
-          aria-label="Send"
-          variant="primary"
-          disabled={!canSend}
-          onClick={send}
+      {/* One card: the box over a row of its buttons, so the text keeps the
+          whole width and the buttons stay at the bottom as it grows. The card
+          draws the box's focus ring; a tap on its empty space focuses the box (a pointer shortcut
+          only: the box and every button are reachable by keyboard). */}
+      <div
+        onPointerDown={(e) => {
+          if ((e.target as Element).closest('button, textarea')) return
+          e.preventDefault()
+          boxRef.current?.focus()
+        }}
+        className="m-2 flex cursor-text flex-col rounded-panel border border-border-strong bg-surface-raised focus-within:border-accent has-[textarea:focus-visible]:outline-2 has-[textarea:focus-visible]:outline-accent ui-terminal:bg-bg"
+      >
+        {box}
+        <div
+          data-testid="composer-actions"
+          className="flex items-center gap-1 px-1 pb-1"
         >
-          <SendHorizontal size={18} aria-hidden="true" />
-        </IconButton>
+          {extras}
+          <div className="ml-auto flex items-center gap-2">
+            {!isMobile && (
+              <span
+                id={hintId}
+                className="whitespace-nowrap text-[12px] text-fg-subtle"
+              >
+                Ctrl+Enter to send
+              </span>
+            )}
+            {sendButton}
+          </div>
+        </div>
       </div>
     </div>
   )
