@@ -68,13 +68,20 @@ base('an eval in a worker is blocked and reported', async ({ page }) => {
   const worker = await started
   // Let the fixture's listener reach the worker first
   await expect.poll(() => worker.evaluate(() => typeof self)).toBe('object')
-  const ran = await worker.evaluate(() => {
-    try {
-      return (0, eval)('1 + 1') === 2
-    } catch {
-      return false
-    }
-  })
+  // Code run by worker.evaluate itself is exempt (DevTools): the eval runs
+  // later, from a timer, as the worker's own code would
+  const ran = await worker.evaluate(
+    () =>
+      new Promise<boolean>((resolve) =>
+        setTimeout(() => {
+          try {
+            resolve((0, eval)('1 + 1') === 2)
+          } catch {
+            resolve(false)
+          }
+        }, 0),
+      ),
+  )
   expect(ran).toBe(false)
   await expect.poll(() => violations.some((v) => v.startsWith('worker '))).toBe(true)
 })

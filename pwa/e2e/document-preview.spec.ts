@@ -60,7 +60,6 @@ test.describe('document previews', () => {
     const fd = openSync(path.join(repo, 'huge.pdf'), 'w')
     ftruncateSync(fd, 31 << 20)
     closeSync(fd)
-    writeFileSync(path.join(repo, 'notes.txt'), 'plain text\n')
 
     const name = `docs-${Date.now()}`
     windowId = tmux(
@@ -128,6 +127,8 @@ test.describe('document previews', () => {
     await panel.getByRole('treeitem', { name: 'japanese.pdf' }).click()
     await expect(panel.locator('.textLayer').first()).toContainText('日本語のテスト', { timeout: 20_000 })
 
+    // An open file takes the panel's place: back to the tree first
+    await panel.getByRole('button', { name: 'Back to files' }).click()
     await panel.getByRole('treeitem', { name: 'jpx.pdf' }).click()
     const canvas = panel.locator('.pdfViewer canvas').first()
     // The middle of the page is the image: red, not blank
@@ -149,8 +150,8 @@ test.describe('document previews', () => {
     for (let i = 0; i < 3; i++) {
       await panel.getByRole('treeitem', { name: 'pages.pdf' }).click()
       await expect(panel.getByText('Page 1 of 3')).toBeVisible({ timeout: 20_000 })
-      await panel.getByRole('treeitem', { name: 'notes.txt' }).click()
-      await expect(panel.getByTestId('code-block')).toContainText('plain text')
+      // Leaving the file closes its viewer
+      await panel.getByRole('button', { name: 'Back to files' }).click()
       await expect.poll(pdfWorkers).toBe(0)
     }
   })
@@ -203,6 +204,7 @@ test.describe('document previews', () => {
     await expect(panel.getByText('Larger than 30 MiB (31.0 MiB)')).toBeVisible()
     await expect(panel.getByRole('button', { name: 'Download' }).last()).toBeVisible()
 
+    await panel.getByRole('button', { name: 'Back to files' }).click()
     await panel.getByRole('treeitem', { name: 'locked.xlsx' }).click()
     await expect(panel.getByText('Password-protected or encrypted file')).toBeVisible()
     await expect(panel.getByRole('button', { name: 'Download' }).last()).toBeVisible()
