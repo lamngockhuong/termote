@@ -1,0 +1,108 @@
+---
+title: Task
+description: Chạy script trong package.json, target của Makefile và lệnh của riêng bạn trong một tab, rồi gửi đầu ra của lần chạy thất bại cho agent
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+View **Tasks** của một pane liệt kê những gì thư mục của nó có thể chạy: các script trong
+`package.json`, các target trong Makefile và các task bạn tự lưu. **Run** chạy một task trong tab riêng,
+ngay tại thư mục của pane. Khi lần chạy thất bại, **Send to agent** chuyển đầu ra của nó cho một agent viết
+code chỉ bằng một chạm, bạn không phải chép từ terminal ra.
+
+## Những gì được liệt kê
+
+Thư mục ở đây là thư mục mà Files và Changes đang hiện: git repository chứa pane, nếu không có thì
+chính thư mục của pane. Termote chỉ đọc file để lập danh sách, không chạy gì cả.
+
+- **Scripts** lấy từ `package.json`, giữ đúng thứ tự trong file, mỗi dòng kèm lệnh mà script chạy. Nếu
+  file còn có script `pre<name>` hay `post<name>`, dòng đó ghi tên chúng, vì `npm`,
+  `pnpm` và `bun` chạy chúng trước và sau script. Trình quản lý gói là cái được ghi trong
+  `packageManager`; không có thì theo lock file trong thư mục (`pnpm-lock.yaml`, `yarn.lock`,
+  `bun.lock`); không có nữa thì dùng `npm`.
+- **Target của make** lấy từ Makefile mà make sẽ đọc (`GNUmakefile`, rồi `makefile`, rồi `Makefile`).
+  Chỉ những target được viết ra tường minh mới có mặt: biến, target đặc biệt như `.PHONY`, quy tắc
+  dạng mẫu hay target dựng từ biến đều bị bỏ qua. Termote không bao giờ chạy `make` để tìm chúng.
+- **My tasks** là các task lưu trong [Settings](#task-của-riêng-bạn), có mặt ở mọi pane.
+
+Tên script hay target có dấu cách hoặc ký tự mà shell sẽ hiểu theo nghĩa khác (`;`, `$`, dấu nháy) bị
+bỏ ra, và danh sách cho biết bỏ bao nhiêu cái. `package.json` hay Makefile lớn hơn 1 MB thì không được
+đọc. Chỉ file nằm ngay trong thư mục mới tính: `package.json` của một package con trong repo chứa nhiều
+package không có trong danh sách.
+
+## Chạy task
+
+**Run** mở một tab tên `task:<name>` tại thư mục của pane rồi gõ lệnh vào shell của tab, y như bạn tự
+gõ: `PATH`, `nvm` và các thiết lập shell khác của bạn vẫn áp dụng. Nút **Open** trên thông báo chuyển sang
+tab đó.
+
+Chạy lại task thì tab cũ được dùng lại nếu shell ở đó đang chờ ở dấu nhắc; dòng bạn gõ dở trong tab sẽ
+được xoá trước. Nếu lần chạy trước vẫn chưa xong, Termote báo điều đó và đưa ra **Run in new tab**. Khi
+hai thiết bị cùng bấm Run một lúc, chỉ một tab được mở, thiết bị kia được báo là task đang chạy.
+
+Shell phải là `bash`, `zsh`, `sh` (`dash`, `ash`), `ksh`, `mksh`, `yash`, `fish` hoặc PowerShell 7
+(`pwsh`). Ở shell khác (Windows PowerShell 5.1, `cmd`, `nu`, `csh`), task bị từ chối: Termote không quote được lệnh cho shell đó và
+cũng không biết được mã thoát. Shell của tab mới có tối đa 15 giây để khởi động; nếu sau đó nó vẫn bận,
+hãy chạy task lần nữa.
+
+<Aside>
+  Với Zellij, chỉ thêm được tab vào phiên đang có terminal gắn vào: hãy mở phiên đó trong một terminal
+  (hoặc trong Termote) trước.
+</Aside>
+
+## Trạng thái lần chạy
+
+Mỗi task hiện lần chạy gần nhất của nó: `running`, `exit 0`, `exit 3` và các mã khác, `ended` (shell
+đã trở lại mà không cho biết kết quả, chẳng hạn sau lệnh `clear`), `tab closed`, hoặc `unknown` khi
+server đã khởi động lại kể từ lần chạy đó. Mọi thiết bị đều thấy cùng một trạng thái.
+
+Termote đọc mã thoát từ hai dòng nó in ra trước và sau lệnh, mỗi dòng mang một mã riêng của lần chạy.
+Một chương trình chạy trong cùng terminal cũng có thể in ra dòng như vậy, nên trạng thái chỉ để tham
+khảo: Send to agent luôn có mặt, dù trạng thái báo gì.
+
+## Gửi cho agent
+
+Khi lần chạy kết thúc, nút **Send to agent** xuất hiện (được tô nổi khi chạy thất bại). Lần đầu, bạn
+chọn pane có agent sẽ nhận: bất kỳ pane nào đang chạy Claude Code hoặc Codex. Termote nhớ lựa chọn này
+cho các tab cùng nhóm trên thiết bị này, nên lần gửi sau chỉ cần một chạm.
+
+Nội dung được gửi gồm:
+
+- một dòng nêu tên task, mã thoát và thư mục,
+- tiếp theo là đầu ra của lần chạy: chỉ phần lần chạy in ra giữa hai dòng riêng của nó, không bao giờ
+  có những gì đã nằm trong tab trước đó hay những gì được gõ sau đó.
+
+Ký tự làm đổi hoặc che chữ mà không hiện ra, như khoảng trắng độ rộng 0 hay dấu điều khiển hướng chữ,
+được viết ra dưới dạng `⟨U+200B⟩`. Tin nhắn được ghi rõ là đầu ra của terminal, không phải chỉ thị, và
+bị cắt bớt từ đầu cho vừa một tin nhắn Chat (16 KB). Nếu phần đầu lần chạy đã nằm ngoài số dòng được
+đọc, Termote gửi phần cuối của đầu ra kèm một ghi chú; muốn đọc nhiều dòng hơn thì chỉnh trong Settings.
+Nếu tab không còn hiện phần kết thúc của lần chạy, không có gì được gửi.
+
+<Aside type="caution">
+  Đầu ra đến tay agent đúng như lúc được in ra: token hay mật khẩu mà task in ra cũng đi theo.
+</Aside>
+
+Nếu agent đang bận hoặc phiên của nó đã đổi, tin nhắn không được gửi, và nút **Open chat** đưa bạn tới
+đó.
+
+## Task của riêng bạn
+
+**Settings > Tasks** giữ những lệnh bạn hay chạy: một tên (tối đa 64 ký tự, không trùng với tên khác
+dù khác chữ hoa chữ thường) và một lệnh trên một dòng (tối đa 4 KB, không có ký tự điều khiển hay ký tự
+ẩn). Chúng được lưu trên server, dùng chung cho mọi thiết bị đăng nhập vào server đó, và có mặt trong
+view Tasks của mọi pane. Lệnh chạy trong shell của tab task đúng như bạn viết, nên `&&`, pipe và dấu `&`
+ở cuối hoạt động như khi gõ ở đó.
+
+Cũng trong mục này, bạn chỉnh số dòng của tab task được đọc để tìm đầu ra cho Send to agent (mặc định
+400).
+
+## Ai dùng được Tasks
+
+Task chạy lệnh, nên chỉ thiết bị có toàn quyền mới có view Tasks và mục Tasks trong Settings.
+[Thiết bị chỉ xem](/vi/usage/devices/) không thấy cả hai. Tasks chỉ có khi tmux, Herdr hoặc Zellij báo được thư mục của pane;
+psmux trên Windows thì không.
+
+Các task bạn lưu nằm trong thư mục state của server, cạnh [mẫu prompt](/vi/usage/prompt-templates/):
+`~/.local/state/termote/tasks/tasks.json` trên Linux và macOS (trong `$XDG_STATE_HOME` nếu biến này
+được đặt), `%LOCALAPPDATA%\termote\state\tasks` trên Windows, và `termote-state-<uid>` (nơi lưu dữ liệu
+của container). `termote uninstall --purge` xoá chúng cùng phần còn lại của thư mục state.

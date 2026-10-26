@@ -289,7 +289,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `device-expired` (once per id and process) and `login via=form`; Basic sign-ins are not logged.
   What this does and does not protect: `docs/security-model.md`
 - **Pane text** (`GET /api/mux/panes/{id}/text?lines=N` → `{text, lines, truncated, more}`,
-  `server/mux_pane_text.go`, `caps.paneText`: tmux, never psmux, and Herdr): a same-site read
+  `server/mux_pane_text.go`, `caps.paneText`: tmux, never psmux, Herdr and Zellij): a same-site read
   (`crossSiteRejection`, `Sec-Fetch-Site: none` included, as the snapshot), `requireMethod(GET)`,
   then `requireWriteRole` (a view-only client gets 403 `view_only`: its role shows the screen,
   never the history; the PWA copies it from the xterm.js buffer). `lines` 1–5000, default 1000,
@@ -297,7 +297,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   -<lines> -t` the exact window target (no `-e`, so no escapes), a missing window → 400; psmux →
   501 `unsupported` (its targets never match exactly). Herdr: `pane.read` `{pane_id, source:
   recent_unwrapped, lines, format: text}` after `requirePane`, `invalid_request` (an older Herdr)
-  → 501. `more` (history rows past `lines`: tmux `#{history_size}`, Herdr `pane.get`) offers Load
+  → 501. Zellij: `dump-screen --pane-id terminal_<n> --full` after `requirePane`, wrapped rows
+  joined, its last `lines` rows kept. `more` (history rows past `lines`: tmux `#{history_size}`, Herdr `pane.get`) offers Load
   more. The output is kept to its last 2 MiB while read (`tailBuffer`; Herdr's reply itself is
   bounded by `herdrMaxReply`), cut after a line break (`truncated`, then never `more`); control characters other than tab and line feed, CR and invalid UTF-8 are
   removed, trailing spaces and the blank rows at the bottom dropped; format characters (bidi,
@@ -1318,7 +1319,18 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   shell still running something is `running` without its text being read; else the last 400
   lines are searched for the run's end marker (`exited` with its code); a shell back at its prompt
   for 2 s without it (the screen cleared) is `ended`, a closed pane `gone`. The markers are a hint:
-  a program in the same terminal can print one. **User tasks** (`/api/mux/tasks*`): a store
+  a program in the same terminal can print one. **Send to agent** has no route of its own: the PWA
+  reads the task pane through `panes/{id}/text` (at most the Settings line count, 100-5000, default
+  400) and sends through `agent/message` (with a cursor from the transcript, `session_changed`
+  retried once), so both routes' invariants hold. It sends the run's output only: up to its end
+  marker (none: nothing is sent), from its last start marker before it, or, when that is past the
+  lines read, from the first line read with "(earlier output cut)"; never what was in the tab
+  before the run or typed after it. Characters that change or hide text without showing (controls
+  other than tab and newline, format characters but the joiners, tags) become `⟨U+XXXX⟩` (the cases
+  of `server/testdata/template-hidden-chars.json`); the output is fenced, introduced as terminal
+  output that is not to be trusted, and cut from its start to 16 KiB. Send is offered whatever exit
+  status the markers claim. The agent pane picked is kept per group in `localStorage`
+  (`termote-task-agent:<groupId>`), a pane id only. **User tasks** (`/api/mux/tasks*`): a store
   of its own, `<stateDir>/tasks/tasks.json`, kept as the prompt templates' (dir 0700, file 0600,
   symlinks refused, `.tasks-*.part` removed, `tasks.lock` 2 s then 503 `busy`, read again before
   every write, a corrupt or oversized file never written over: 503 `tasks_unavailable` at start,

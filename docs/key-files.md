@@ -257,6 +257,23 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/template-picker.tsx`          | Chat composer's Templates button: search and pick              |
 | `pwa/src/components/prompt-templates-section.tsx` | Settings > Prompt templates: list, delete, import, export      |
 | `pwa/src/components/template-editor.tsx`          | Make or change a template                                      |
+| `server/tasks.go`                                 | `/api/mux/panes/{id}/tasks`: a root's tasks and their runs     |
+| `server/tasks_discover.go`                        | Reads `package.json` and the Makefile (nothing runs)           |
+| `server/tasks_run.go`                             | `.../tasks/run`: per-task lock, tab reuse, the typed line      |
+| `server/tasks_run_state.go`                       | `/api/mux/tasks/runs/{id}`: running, exited, ended, gone       |
+| `server/tasks_shell.go`                           | `taskMux`, shells, quoting, the run's markers                  |
+| `server/mux_{tmux,herdr,zellij}_tasks.go`         | Each backend's task tab, idle shell, typing, text              |
+| `server/task_store.go`                            | User tasks (`<stateDir>/tasks`), limits, lock                  |
+| `server/task_routes.go`                           | `/api/mux/tasks*`: list, save, delete                          |
+| `pwa/src/components/tasks-view.tsx`               | Tasks view: list, Run, Send to agent                           |
+| `pwa/src/components/task-row.tsx`                 | One task: command, hooks, last run, buttons                    |
+| `pwa/src/components/agent-pane-picker.tsx`        | Which agent pane gets a run's output (kept per group)          |
+| `pwa/src/hooks/use-tasks.ts`                      | A pane's tasks, Run, the runs polled                           |
+| `pwa/src/utils/task-failure-message.ts`           | A run's output between its markers, made into a message        |
+| `pwa/src/hooks/use-user-tasks.ts`                 | User tasks read for this server, and the writes                |
+| `pwa/src/utils/user-tasks.ts`                     | User task checks and error texts                               |
+| `pwa/src/components/user-tasks-section.tsx`       | Settings > Tasks: list, delete                                 |
+| `pwa/src/components/user-task-editor.tsx`         | Make or change a user task                                     |
 | `server/push_routes.go`                           | `/api/mux/push/key`, `/api/mux/push/subscribe`                 |
 | `server/push_store.go`                            | VAPID key + subscriptions (`<stateDir>/push`, allowlist)       |
 | `server/instance_id.go`                           | The snapshot's `instanceId` (`<stateDir>/instance-id`)         |
