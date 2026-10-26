@@ -121,7 +121,8 @@ test.describe('focus window', () => {
   for (const file of ['..%2F..%2Fetc%2Fpasswd', 'nope.ts']) {
     test(`a file that cannot be opened (${file}) gets a short notice`, async ({ page }) => {
       await page.goto(`${link}?view=files&solo=1&file=${file}`)
-      const toast = page.getByRole('alert').filter({ hasText: 'File not found or not allowed' })
+      // A warning toast is a status, not an alert
+      const toast = page.getByRole('status').filter({ hasText: 'File not found or not allowed' })
       await expect(toast).toBeVisible()
       await expect(toast).not.toContainText(/passwd|nope|\//)
     })
