@@ -38,6 +38,19 @@ const decodedWidth = (img: Locator) =>
 const noPageScroll = (page: Page) =>
   page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
 
+// The desktop editor (CodeMirror) is a contenteditable, not a textarea: its
+// text is typed over all at once (no indent added on Enter), and read back
+// line by line. It renders only the lines in view: enough for the small files
+// here; what a save wrote is read on the disk.
+async function typeInEditor(box: Locator, text: string) {
+  await box.click()
+  await box.page().keyboard.press('ControlOrMeta+A')
+  await box.page().keyboard.insertText(text)
+}
+
+const expectEditorText = (box: Locator, text: string) =>
+  expect(box.locator('.cm-line')).toHaveText(text.split('\n'))
+
 test.describe('files and changes views', () => {
   test.skip(
     !socket || process.platform !== 'linux',
@@ -218,12 +231,20 @@ test.describe('files and changes views', () => {
     await panel.getByRole('button', { name: 'Edit', exact: true }).click()
     // The source, not the preview, with "\n" line breaks
     const box = panel.getByRole('textbox', { name: 'Text of docs/rec.md' })
-    await expect(box).toHaveValue('---\nstatus: review\n---\n# Record\n\nBody\n')
-    await box.fill('---\nstatus: approved\n---\n# Record\n\nBody\n')
+    await expectEditorText(box, '---\nstatus: review\n---\n# Record\n\nBody\n')
+    await typeInEditor(box, '---\nstatus: approved\n---\n# Record\n\nBody\n')
     await panel.getByRole('button', { name: 'Save', exact: true }).click()
     await expect(page.getByText('Saved', { exact: true })).toBeVisible()
     await expect(box).toHaveCount(0)
     expect(readFileSync(rec, 'utf-8')).toBe('---\r\nstatus: approved\r\n---\r\n# Record\r\n\r\nBody\r\n')
+    // Ctrl+S from the editor: CRLF again, never a lone "\n"
+    await panel.getByRole('button', { name: 'Edit', exact: true }).click()
+    await typeInEditor(box, '---\nstatus: done\n---\n# Record\n\nBody\n')
+    await page.keyboard.press('ControlOrMeta+s')
+    await expect(box).toHaveCount(0)
+    const saved = readFileSync(rec, 'utf-8')
+    expect(saved).toBe('---\r\nstatus: done\r\n---\r\n# Record\r\n\r\nBody\r\n')
+    expect(saved).not.toMatch(/[^\r]\n/)
   })
 
   test('a save after the host changed the file is a conflict, never an overwrite', async ({ page }) => {
@@ -235,11 +256,11 @@ test.describe('files and changes views', () => {
     await panel.getByRole('treeitem', { name: 'race.txt' }).click()
     await panel.getByRole('button', { name: 'Edit', exact: true }).click()
     const box = panel.getByRole('textbox', { name: 'Text of race.txt' })
-    await box.fill('mine\n')
+    await typeInEditor(box, 'mine\n')
     writeFileSync(f, 'agent\n')
     await panel.getByRole('button', { name: 'Save', exact: true }).click()
     await expect(panel.getByText('The file changed on the host since you opened it')).toBeVisible()
-    await expect(box).toHaveValue('mine\n')
+    await expectEditorText(box, 'mine\n')
     expect(readFileSync(f, 'utf-8')).toBe('agent\n')
     // Reload drops the text: asked first
     await panel.getByRole('button', { name: 'Reload' }).click()
@@ -298,7 +319,7 @@ test.describe('files and changes views', () => {
       await panel.getByRole('treeitem', { name: 'keep' }).click()
       await panel.getByRole('treeitem', { name: 'notes.md' }).click()
       await panel.getByRole('button', { name: 'Edit', exact: true }).click()
-      await panel.getByRole('textbox', { name: 'Text of keep/notes.md' }).fill('# Notes\n\nunsaved line\n')
+      await typeInEditor(panel.getByRole('textbox', { name: 'Text of keep/notes.md' }), '# Notes\n\nunsaved line\n')
       await expect.poll(() => kept(page)).toContain('unsaved line')
       // The tab is written within half a second (at once when the page hides)
       await expect.poll(() => kept(page)).toMatch(/termote-files-tabs:[^\n]*notes\.md/)
@@ -316,7 +337,7 @@ test.describe('files and changes views', () => {
         await reopened.goto(`${link}?view=files`)
         const p2 = reopened.getByRole('complementary', { name: 'Files' })
         const box = p2.getByRole('textbox', { name: 'Text of keep/notes.md' })
-        await expect(box).toHaveValue('# Notes\n\nunsaved line\n')
+        await expectEditorText(box, '# Notes\n\nunsaved line\n')
         await p2.getByRole('button', { name: 'Save', exact: true }).click()
         await expect(reopened.getByText('Saved', { exact: true })).toBeVisible()
         expect(readFileSync(f, 'utf-8')).toBe('# Notes\n\nunsaved line\n')
@@ -336,13 +357,13 @@ test.describe('files and changes views', () => {
       await panel.getByRole('treeitem', { name: 'keep' }).click()
       await panel.getByRole('treeitem', { name: 'clash.txt' }).click()
       await panel.getByRole('button', { name: 'Edit', exact: true }).click()
-      await panel.getByRole('textbox', { name: 'Text of keep/clash.txt' }).fill('mine\n')
+      await typeInEditor(panel.getByRole('textbox', { name: 'Text of keep/clash.txt' }), 'mine\n')
       await expect.poll(() => kept(page)).toContain('mine')
       writeFileSync(f, 'agent\n')
       await reopen(page)
       const again = page.getByRole('complementary', { name: 'Files' })
       await expect(again.getByText('The file changed on the host since you opened it')).toBeVisible()
-      await expect(again.getByRole('textbox', { name: 'Text of keep/clash.txt' })).toHaveValue('mine\n')
+      await expectEditorText(again.getByRole('textbox', { name: 'Text of keep/clash.txt' }), 'mine\n')
       expect(readFileSync(f, 'utf-8')).toBe('agent\n')
       await again.getByRole('button', { name: 'Reload' }).click()
       const ask = page.getByRole('dialog', { name: 'Discard changes?' })
@@ -359,7 +380,7 @@ test.describe('files and changes views', () => {
       await panel.getByRole('treeitem', { name: /^\.env/ }).click()
       await page.getByRole('button', { name: 'Show', exact: true }).click()
       await panel.getByRole('button', { name: 'Edit', exact: true }).click()
-      await panel.getByRole('textbox', { name: 'Text of .env' }).fill('TOKEN=typed-e2e\n')
+      await typeInEditor(panel.getByRole('textbox', { name: 'Text of .env' }), 'TOKEN=typed-e2e\n')
       // Leaving still asks: the text is only in memory
       let asked = false
       page.on('dialog', (d) => {
@@ -405,12 +426,12 @@ test.describe('files and changes views', () => {
     await row.click()
     await changes.getByRole('button', { name: 'Edit', exact: true }).click()
     const box = changes.getByRole('textbox', { name: 'Text of src/app.ts' })
-    await box.fill(original.replace('a + b', 'a * b'))
+    await typeInEditor(box, original.replace('a + b', 'a * b'))
     await changes.getByRole('button', { name: 'Save', exact: true }).click()
     await expect(changes.locator('[data-kind="add"]')).toContainText('return a * b', { timeout: 10000 })
 
     await changes.getByRole('button', { name: 'Edit', exact: true }).click()
-    await box.fill(original)
+    await typeInEditor(box, original)
     await changes.getByRole('button', { name: 'Save', exact: true }).click()
     // git status is cached 2s on the server and polled every 5s here
     await expect(page.getByText('No changes left in app.ts')).toBeVisible({ timeout: 15000 })
@@ -420,23 +441,117 @@ test.describe('files and changes views', () => {
     expect(readFileSync(app, 'utf-8')).toBe(original)
   })
 
-  test('mobile: Edit and the text box fit the screen', async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 800 })
-    await page.addInitScript(() =>
-      localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true })),
-    )
-    const f = path.join(repo, 'phone.txt')
-    writeFileSync(f, 'from the desk\n')
+  test('desktop editor: find, replace all and go to a line from the keyboard', async ({ page }) => {
+    const f = path.join(repo, 'keys.txt')
+    writeFileSync(f, 'one\ntwo\nthree two\nfour\n')
+    await page.setViewportSize({ width: 1280, height: 800 })
     await page.goto(`${link}?view=files`)
-    await page.getByRole('treeitem', { name: 'phone.txt' }).click()
-    await page.getByRole('button', { name: 'Edit', exact: true }).click()
-    const box = page.getByRole('textbox', { name: 'Text of phone.txt' })
-    await expect(box).toBeVisible()
-    expect(await noPageScroll(page)).toBe(true)
-    await box.fill('from the phone\n')
-    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    const panel = page.getByRole('complementary', { name: 'Files' })
+    await panel.getByRole('treeitem', { name: 'keys.txt' }).click()
+    await panel.getByRole('button', { name: 'Edit', exact: true }).click()
+    const box = panel.getByRole('textbox', { name: 'Text of keys.txt' })
+    await expectEditorText(box, 'one\ntwo\nthree two\nfour\n')
+    // Line numbers, unlike the textarea
+    await expect(panel.locator('.cm-lineNumbers')).toContainText('4')
+
+    await box.click()
+    await page.keyboard.press('Control+f')
+    await expect(panel.getByRole('textbox', { name: 'Find' })).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(panel.getByRole('textbox', { name: 'Find' })).toHaveCount(0)
+
+    await box.click()
+    await page.keyboard.press('Control+h')
+    await expect(panel.getByRole('textbox', { name: 'Replace' })).toBeFocused()
+    await panel.getByRole('textbox', { name: 'Find' }).fill('two')
+    await panel.getByRole('textbox', { name: 'Replace' }).fill('2')
+    await panel.getByRole('button', { name: 'replace all' }).click()
+    await expectEditorText(box, 'one\n2\nthree 2\nfour\n')
+
+    await box.click()
+    await page.keyboard.press('Control+g')
+    const line = panel.locator('.cm-goto-line input[name=line]')
+    await line.fill('4')
+    await line.press('Enter')
+    await expect(panel.locator('.cm-activeLine')).toHaveText('four')
+
+    await page.keyboard.press('Control+s')
     await expect(page.getByText('Saved', { exact: true })).toBeVisible()
-    expect(readFileSync(f, 'utf-8')).toBe('from the phone\n')
+    expect(readFileSync(f, 'utf-8')).toBe('one\n2\nthree 2\nfour\n')
+  })
+
+  test('desktop editor: Vim mode, where :w saves', async ({ page }) => {
+    const f = path.join(repo, 'vim.txt')
+    writeFileSync(f, 'abc\n')
+    await page.addInitScript(() =>
+      localStorage.setItem('termote-settings', JSON.stringify({ editorVim: true })),
+    )
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.goto(`${link}?view=files`)
+    const panel = page.getByRole('complementary', { name: 'Files' })
+    await panel.getByRole('treeitem', { name: 'vim.txt' }).click()
+    await panel.getByRole('button', { name: 'Edit', exact: true }).click()
+    const box = panel.getByRole('textbox', { name: 'Text of vim.txt' })
+    // Vim's status bar shows once its chunk loaded
+    await expect(panel.locator('.cm-vim-panel')).toBeVisible()
+    await box.click()
+    await page.keyboard.press('g')
+    await page.keyboard.press('g')
+    await page.keyboard.press('0')
+    await page.keyboard.press('i')
+    await page.keyboard.type('X')
+    await page.keyboard.press('Escape')
+    await expectEditorText(box, 'Xabc\n')
+    await page.keyboard.type(':w')
+    await page.keyboard.press('Enter')
+    await expect(page.getByText('Saved', { exact: true })).toBeVisible()
+    expect(readFileSync(f, 'utf-8')).toBe('Xabc\n')
+  })
+
+  test('the desktop editor is loaded only once a file is edited', async ({ page }) => {
+    writeFileSync(path.join(repo, 'lazy.txt'), 'lazy\n')
+    const scripts: string[] = []
+    page.on('request', (r) => {
+      if (r.resourceType() === 'script') scripts.push(new URL(r.url()).pathname)
+    })
+    const editorChunk = () => scripts.some((s) => /\/code-editor-[^/]+\.js$/.test(s))
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.goto(`${link}?view=files`)
+    const panel = page.getByRole('complementary', { name: 'Files' })
+    await panel.getByRole('treeitem', { name: 'lazy.txt' }).click()
+    await expect(panel.getByTestId('code-block')).toContainText('lazy')
+    expect(editorChunk()).toBe(false)
+    await panel.getByRole('button', { name: 'Edit', exact: true }).click()
+    await expect(panel.getByRole('textbox', { name: 'Text of lazy.txt' })).toBeVisible()
+    expect(editorChunk()).toBe(true)
+    // A language of its own, loaded when a file of it is edited
+    expect(scripts.some((s) => s.startsWith('/assets/cm/'))).toBe(false)
+    await panel.getByRole('button', { name: 'Cancel editing' }).click()
+  })
+
+  test.describe('on a touch screen', () => {
+    test.use({ hasTouch: true, isMobile: true })
+
+    test('mobile: Edit and the text box fit the screen', async ({ page }) => {
+      await page.setViewportSize({ width: 375, height: 800 })
+      await page.addInitScript(() =>
+        localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true })),
+      )
+      const f = path.join(repo, 'phone.txt')
+      writeFileSync(f, 'from the desk\n')
+      await page.goto(`${link}?view=files`)
+      await page.getByRole('treeitem', { name: 'phone.txt' }).click()
+      await page.getByRole('button', { name: 'Edit', exact: true }).click()
+      const box = page.getByRole('textbox', { name: 'Text of phone.txt' })
+      await expect(box).toBeVisible()
+      // A touch screen edits in the plain text box, not the desktop editor
+      expect(await box.evaluate((el) => el.tagName)).toBe('TEXTAREA')
+      expect(await noPageScroll(page)).toBe(true)
+      await box.fill('from the phone\n')
+      await page.getByRole('button', { name: 'Save', exact: true }).click()
+      await expect(page.getByText('Saved', { exact: true })).toBeVisible()
+      expect(readFileSync(f, 'utf-8')).toBe('from the phone\n')
+    })
   })
 
   test('creates a file, its directories too, and opens it to edit', async ({ page }) => {
@@ -454,9 +569,9 @@ test.describe('files and changes views', () => {
 
       await create('e2e-new/dir/note.md')
       const box = panel.getByRole('textbox', { name: 'Text of e2e-new/dir/note.md' })
-      await expect(box).toHaveValue('')
+      await expectEditorText(box, '')
       expect(readFileSync(path.join(made, 'dir/note.md'), 'utf-8')).toBe('')
-      await box.fill('# Note\n')
+      await typeInEditor(box, '# Note\n')
       await panel.getByRole('button', { name: 'Save', exact: true }).click()
       await expect(page.getByText('Saved', { exact: true })).toBeVisible()
       expect(readFileSync(path.join(made, 'dir/note.md'), 'utf-8')).toBe('# Note\n')
@@ -468,7 +583,7 @@ test.describe('files and changes views', () => {
       await create('e2e-new/dir/note.md')
       await expect(dialog.getByRole('alert')).toContainText('already exists')
       await dialog.getByRole('button', { name: 'Open it' }).click()
-      await expect(box).toHaveValue('# Note\n')
+      await expectEditorText(box, '# Note\n')
       expect(readFileSync(path.join(made, 'dir/note.md'), 'utf-8')).toBe('# Note\n')
       await panel.getByRole('button', { name: 'Cancel editing' }).click()
       await panel.getByRole('button', { name: 'Back to files' }).click()
@@ -511,7 +626,7 @@ test.describe('files and changes views', () => {
       // Unsaved changes, then a move from the tree: Save writes the new path
       await panel.getByRole('treeitem', { name: 'draft.md' }).click()
       await panel.getByRole('button', { name: 'Edit', exact: true }).click()
-      await panel.getByRole('textbox', { name: 'Text of e2e-rename/draft.md' }).fill('two\n')
+      await typeInEditor(panel.getByRole('textbox', { name: 'Text of e2e-rename/draft.md' }), 'two\n')
       // The tree, the editor kept in its tab
       await panel.getByRole('tab', { name: 'Files', exact: true }).click()
       await rowMenu('draft.md')
@@ -523,7 +638,7 @@ test.describe('files and changes views', () => {
       expect(readFileSync(path.join(dir, 'sub/moved.md'), 'utf-8')).toBe('one\n')
       await page.getByRole('tab', { name: /moved\.md/ }).click()
       const box = panel.getByRole('textbox', { name: 'Text of e2e-rename/sub/moved.md' })
-      await expect(box).toHaveValue('two\n')
+      await expectEditorText(box, 'two\n')
       await panel.getByRole('button', { name: 'Save', exact: true }).click()
       await expect(page.getByText('Saved', { exact: true })).toBeVisible()
       expect(readFileSync(path.join(dir, 'sub/moved.md'), 'utf-8')).toBe('two\n')
@@ -1496,7 +1611,7 @@ test.describe('files and changes views', () => {
       await expect(bar.getByRole('tab')).toHaveText(['Files', 'alpha.txt', 'beta.txt'])
       await panel.getByRole('button', { name: 'Edit', exact: true }).click()
       const box = panel.getByRole('textbox', { name: 'Text of e2e-tabs/beta.txt' })
-      await box.fill('draft of beta\n')
+      await typeInEditor(box, 'draft of beta\n')
       await expect(bar.getByRole('tab', { name: 'beta.txt (unsaved changes)' })).toBeVisible()
 
       // Back to alpha.txt: where it was left
@@ -1505,13 +1620,13 @@ test.describe('files and changes views', () => {
       await expect.poll(() => code.evaluate((el, at) => Math.abs(el.scrollTop - at), left)).toBeLessThan(2)
       // And beta.txt's draft is still there
       await bar.getByRole('tab', { name: /^beta\.txt/ }).click()
-      await expect(box).toHaveValue('draft of beta\n')
+      await expectEditorText(box, 'draft of beta\n')
 
       // Closing it asks first; Cancel keeps it
       await panel.getByLabel('Close beta.txt', { exact: true }).click()
       const ask = page.getByRole('dialog', { name: 'Discard changes?' })
       await ask.getByRole('button', { name: 'Cancel' }).click()
-      await expect(box).toHaveValue('draft of beta\n')
+      await expectEditorText(box, 'draft of beta\n')
       await panel.getByLabel('Close beta.txt', { exact: true }).click()
       await ask.getByRole('button', { name: 'Discard' }).click()
       await expect(bar.getByRole('tab')).toHaveText(['Files', 'alpha.txt'])
@@ -1534,7 +1649,7 @@ test.describe('files and changes views', () => {
       const { panel, bar } = await openPanel(page)
       await panel.getByRole('treeitem', { name: 'f0.txt' }).dblclick()
       await panel.getByRole('button', { name: 'Edit', exact: true }).click()
-      await panel.getByRole('textbox', { name: 'Text of e2e-tabs/f0.txt' }).fill('changed\n')
+      await typeInEditor(panel.getByRole('textbox', { name: 'Text of e2e-tabs/f0.txt' }), 'changed\n')
       for (let i = 1; i <= 10; i++) {
         await bar.getByRole('tab', { name: 'Files' }).click()
         await panel.getByRole('treeitem', { name: `f${i}.txt` }).dblclick()
@@ -1638,12 +1753,12 @@ test.describe('files and changes views', () => {
       // Edit in that tab, leave it, come back: the editor and its draft
       await changes.getByRole('button', { name: 'Edit', exact: true }).click()
       const box = changes.getByRole('textbox', { name: 'Text of e2e-ctabs/one.txt' })
-      await box.fill('draft of one\n')
+      await typeInEditor(box, 'draft of one\n')
       await expect(bar.getByRole('tab', { name: 'one.txt (unsaved changes)' })).toBeVisible()
       await bar.getByRole('tab', { name: 'long.txt', exact: true }).click()
       await expect.poll(() => diff.evaluate((el, at) => Math.abs(el.scrollTop - at), left)).toBeLessThan(2)
       await bar.getByRole('tab', { name: /^one\.txt \(unsaved/ }).click()
-      await expect(box).toHaveValue('draft of one\n')
+      await expectEditorText(box, 'draft of one\n')
 
       // Closing it asks first; nothing is written
       await changes.getByLabel('Close one.txt', { exact: true }).click()

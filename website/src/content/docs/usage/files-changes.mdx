@@ -183,10 +183,35 @@ A view-only device searches the same files it can open.
 
 ## Editing a File
 
-The pencil button (**Edit**) in a text file's bar turns its text into a plain text box, with
+The pencil button (**Edit**) in a text file's bar turns its text into an editor, with
 **Cancel** and **Save** in place of the other buttons. It is meant for small changes, such as
 turning `status: review` into `status: approved` in a record's front matter, without asking the
 agent or typing `sed`.
+
+On a computer with a mouse the editor shows line numbers and colors the code, and has the keys
+below. On a phone or a touch tablet the text is in a plain text box, as it always was. If the
+editor cannot load (the connection dropped), the plain text box takes its place with
+`Could not load the editor` and **Retry**: what you typed is kept either way.
+
+| Keys                                   | What they do                                                  |
+| -------------------------------------- | ------------------------------------------------------------- |
+| Ctrl+S (Cmd+S on a Mac)                | Save                                                          |
+| Ctrl+F (Cmd+F on a Mac)                | Find in the file; Enter or F3 goes to the next match, Escape closes |
+| Ctrl+H                                 | Find and replace (Cmd+Alt+F too on a Mac)                     |
+| Ctrl+G                                 | Go to a line                                                  |
+| Ctrl+D (Cmd+D on a Mac)                | Select the next occurrence of the selection                   |
+| Alt+drag, Ctrl+Alt+↑/↓ (Cmd+Alt+↑/↓ on a Mac)                 | Several cursors                                               |
+| Ctrl+Z, Ctrl+Shift+Z (Cmd+Z, Cmd+Shift+Z on a Mac)                   | Undo, redo                                                    |
+| Tab, Shift+Tab                         | Indent, unindent                                              |
+
+Ctrl+H and Ctrl+G are the Ctrl key on a Mac too: Cmd+H hides the browser there, and Cmd+G finds
+the next match. Tab indents inside the editor; to move the focus out with the keyboard, press
+Ctrl+M (Shift+Alt+M on a Mac), then Tab. Font size, tab size, line wrapping and Vim keys are in
+Settings → Files (see [Settings](/usage/settings/#editor)). With Vim keys on, the keys are Vim's
+(`/` finds, `:w` saves), except Ctrl+S, which still saves.
+
+A search result opens the editor at the match when the file is being edited, and Edit in
+Changes opens it at the first change of the diff.
 
 - A Markdown file is edited as its source, even when the preview is on. A CSV or TSV file shown
   as a table is edited in the table (see [Editing a Table](#editing-a-table)); shown as its

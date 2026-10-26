@@ -348,6 +348,16 @@ describe('Changes tabs', () => {
     expect(result.current.tabs).toHaveLength(2)
   })
 
+  it('editing keeps the line the editor opens at, until it ends', async () => {
+    const { result } = await loaded()
+    act(() => result.current.open(side('b')))
+    const id = result.current.activeId as string
+    act(() => result.current.setEditing(id, true, 8))
+    expect(result.current.active?.editLine).toBe(8)
+    act(() => result.current.setEditing(id, false, 8))
+    expect(result.current.active?.editLine).toBeUndefined()
+  })
+
   it('editing pins the tab; Back to the diff keeps the draft', async () => {
     const { result } = await loaded()
     act(() => result.current.open(side('b')))

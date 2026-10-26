@@ -41,6 +41,7 @@ import {
   renameFile,
   restoreFile,
 } from '../hooks/use-mux-api'
+import { useSettings } from '../hooks/use-settings'
 import { downloadFile } from '../utils/download-file'
 import { fileNameProblem } from '../utils/file-name'
 import { splitPath } from '../utils/files-format'
@@ -50,6 +51,7 @@ import {
   CONTENT_SEARCH_INITIAL,
   ContentSearch,
   type ContentSearchState,
+  matchStart,
 } from './content-search'
 import { DeleteFileDialog, type DeleteOutcome } from './delete-file-dialog'
 import { FileSearch } from './file-search'
@@ -194,6 +196,7 @@ function PaneFiles({
   canDownload: boolean
 } & Pick<ViewProps, 'isMobile' | 'notify' | 'readOnly'>) {
   const f = useFiles(paneId)
+  const { settings } = useSettings()
   const { load, rootChanges, follow } = f
   const isDirty = useDirtyCheck(paneId)
   const tab = f.active
@@ -605,11 +608,12 @@ function PaneFiles({
             paneId={paneId}
             root={f.root}
             path={tab.path}
-            wrapByDefault={isMobile}
+            wrapByDefault={isMobile || settings.editorWrap}
             compact={isMobile}
             anchor={tab.anchor}
             scrollTop={tab.scrollTop}
             line={tab.line}
+            col={tab.col}
             jump={tab.jump}
             tableLayout={tab.table}
             onTableLayout={(l) => f.setTableLayout(tab.id, l)}
@@ -684,7 +688,9 @@ function PaneFiles({
                 onState={patchSearch}
                 refreshTick={refreshTick}
                 focusTick={focusSearch}
-                onPick={(p, m) => f.open(p, { line: m.line, col: m.col })}
+                onPick={(p, m) =>
+                  f.open(p, { line: m.line, col: matchStart(m) })
+                }
                 onRootChanged={f.rootChanged}
               />
             ) : (

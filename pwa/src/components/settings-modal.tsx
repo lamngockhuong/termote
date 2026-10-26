@@ -1,6 +1,9 @@
 import { Trash2, X } from 'lucide-react'
 import { type ReactNode, useEffect, useId, useState } from 'react'
 import {
+  EDITOR_FONT_SIZES,
+  EDITOR_TAB_SIZES,
+  type EditorTabSize,
   FIND_EXCLUDES_DEFAULT,
   FIND_EXCLUDES_MAX,
   findExcludeProblem,
@@ -681,10 +684,70 @@ export function SettingsModal({
     id: 'files',
     title: 'Files',
     rows: (
-      <ExcludedFoldersRow
-        value={settings.findExcludes}
-        onSave={(v) => onUpdateSetting('findExcludes', v)}
-      />
+      <>
+        <ExcludedFoldersRow
+          value={settings.findExcludes}
+          onSave={(v) => onUpdateSetting('findExcludes', v)}
+        />
+        <SettingsRow
+          title="Wrap lines"
+          desc="Wrap long lines of a file at first, on desktop too"
+        >
+          <Switch
+            label="Wrap lines"
+            checked={settings.editorWrap}
+            onChange={(v) => onUpdateSetting('editorWrap', v)}
+          />
+        </SettingsRow>
+        <SettingsRow
+          title="Editor font size"
+          desc="Desktop editor (a phone edits in a plain text box)"
+        >
+          <select
+            aria-label="Editor font size"
+            value={settings.editorFontSize}
+            onChange={(e) =>
+              onUpdateSetting('editorFontSize', Number(e.target.value))
+            }
+            className={`px-2 ${CONTROL} ${FOCUS_RING}`}
+          >
+            {EDITOR_FONT_SIZES.map((v) => (
+              <option key={v} value={v}>
+                {v} px
+              </option>
+            ))}
+          </select>
+        </SettingsRow>
+        <SettingsRow
+          title="Tab size"
+          desc="Desktop editor: columns of a tab, and of one indent"
+        >
+          <select
+            aria-label="Tab size"
+            value={settings.editorTabSize}
+            onChange={(e) =>
+              onUpdateSetting(
+                'editorTabSize',
+                Number(e.target.value) as EditorTabSize,
+              )
+            }
+            className={`px-2 ${CONTROL} ${FOCUS_RING}`}
+          >
+            {EDITOR_TAB_SIZES.map((v) => (
+              <option key={v} value={v}>
+                {v}
+              </option>
+            ))}
+          </select>
+        </SettingsRow>
+        <SettingsRow title="Vim mode" desc="Desktop editor: Vim keys; :w saves">
+          <Switch
+            label="Vim mode"
+            checked={settings.editorVim}
+            onChange={(v) => onUpdateSetting('editorVim', v)}
+          />
+        </SettingsRow>
+      </>
     ),
   })
 

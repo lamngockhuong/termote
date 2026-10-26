@@ -1099,7 +1099,17 @@ Other methods get 405.
 the PWA, which hides Edit, New file and Delete in `readOnly` mode.
 
 **PWA.** Edit (Files, and the diff of a file the working tree still has as text in Changes)
-turns the file into a plain `<textarea>` (`file-editor.tsx`), a Markdown file as its source.
+turns the file into an editor (`file-editor.tsx`), a Markdown file as its source. Where the main
+pointer is fine (`(pointer: fine)`: a mouse) it is CodeMirror 6 (`code-editor.tsx`), a chunk
+loaded the first time a file is edited: line numbers, syntax colors, search and replace (Ctrl+F,
+Ctrl+H), go to line (Ctrl+G), several cursors, and Vim keys when Settings turns them on. Phones and
+touch tablets keep the plain `<textarea>`, as does a desktop whose editor chunk failed to load
+(with a Retry banner). Both give the text with `\n` line breaks. Each language
+(`utils/cm-languages.ts`, mapped from the `LanguageId`s of `highlight-langs.ts`) and Vim mode are
+chunks of their own under `assets/cm/` (`vite.config.ts`): the service worker never installs them
+upfront and caches each the first time it is fetched, like `assets/shiki/`. The editor opens at a
+content search result's match (line and column) and, from Changes' unstaged side, at the diff's
+first change.
 The draft is kept per pane and path in `use-files.ts` (`useFileDraft`), in memory only, so a
 remount, a switch of view or tab or a move of the root does not lose it (a draft read under an
 old root can no longer be saved, only copied); Files and Changes share the draft of a path.

@@ -52,6 +52,7 @@ import { isMarkdownPath, type LinkPath } from '../utils/markdown-links'
 import type { TableLayout } from '../utils/table-columns'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { CodeBlock } from './code-block'
+import type { EditorAt } from './code-editor'
 import {
   FileEditor,
   SaveBanner,
@@ -280,9 +281,14 @@ interface Props {
   anchor?: string
   scrollTop?: number
   // A search result's line to open at, each time jump changes: this tab
-  // shows the source (not the Markdown, table or SVG image preview) there
+  // shows the source (not the Markdown, table or SVG image preview) there.
+  // col: where on the line (UTF-16), for the desktop editor's cursor
   line?: number
+  col?: number
   jump?: number
+  // Where the desktop editor opens when editing starts here (Changes: the
+  // first changed line), without forcing the source view like line does
+  editAt?: EditorAt
   // A CSV/TSV table's widths and wrapped columns this tab kept, and where
   // to keep them when they change
   tableLayout?: TableLayout
@@ -364,7 +370,9 @@ export function FileViewer({
   anchor,
   scrollTop,
   line,
+  col,
   jump,
+  editAt,
   tableLayout,
   onTableLayout,
   backTo,
@@ -421,12 +429,17 @@ export function FileViewer({
   // The search result picked last in this tab: its line shows in the
   // source whatever the preview settings say (they are left as they are),
   // until the user turns a preview on here
-  const asked = line && jump !== undefined ? { line, jump } : undefined
+  const asked = line && jump !== undefined ? { line, col, jump } : undefined
   const [pick, setPick] = useState(asked)
   const [seenJump, setSeenJump] = useState(jump)
+  // The pick was made while the file was being edited: the editor moves
+  // there. One made before Edit only scrolled the source, and the editor
+  // opens where that was left.
+  const [pickInEditor, setPickInEditor] = useState(!!asked && !!mine)
   if (jump !== seenJump) {
     setSeenJump(jump)
     setPick(asked)
+    setPickInEditor(!!mine)
   }
   const forceSource = !!pick
   // Markdown that can be previewed: the choice (remembered on this device)
@@ -956,7 +969,10 @@ export function FileViewer({
           onSave={() => save(mine)}
           onReload={() => (dirty ? setDiscarding('reload') : reloadFile())}
           onCopy={() => copyText(mine.text)}
+          notify={notify}
+          reveal={mine.reveal}
           scrollTop={scrolled.current}
+          at={pickInEditor ? pick : editAt}
         />
       )}
       {!mine && asImage && !sensitive && (

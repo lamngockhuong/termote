@@ -1,5 +1,10 @@
-import { type KeyboardEvent, useLayoutEffect, useRef } from 'react'
+import { type KeyboardEvent, Suspense, useLayoutEffect, useRef } from 'react'
+import { useMediaQuery } from '../hooks/use-media-query'
 import { RequestError } from '../hooks/use-mux-api'
+import { lazyRetry } from '../utils/lazy-retry'
+import type { EditorAt } from './code-editor'
+import { LazyBoundary } from './lazy-boundary'
+import { ViewMessage } from './pane-dir-header'
 import { Banner } from './ui/banner'
 import { Button } from './ui/button'
 
@@ -54,8 +59,15 @@ interface Props {
   // Drops the draft and reads the file again
   onReload: () => void
   onCopy: () => void
+  notify: (message: string) => void
+  // A sensitive file the user chose to show
+  reveal?: boolean
   // Where it starts scrolled to (a tab shown again)
   scrollTop?: number
+  // Where the desktop editor puts the cursor (a search result, a diff's
+  // change); the textarea opens where it was, never moving the focus there
+  // (a phone's keyboard would come up)
+  at?: EditorAt
 }
 
 // Why the last save of a draft failed, and what the user can do about it:
@@ -106,21 +118,79 @@ export function SaveBanner({
   ) : null
 }
 
-// The text of a file being edited, in a plain textarea, with why the last
-// save failed above it. The draft lives with the pane (useFileDraft): this
-// only shows it.
-export function FileEditor({
+// The editor of a device with a fine pointer: loaded the first time a file
+// is edited there
+const CodeEditor = lazyRetry(() => import('./code-editor'), 'CodeEditor')
+
+// The text of a file being edited, with why the last save failed above it:
+// CodeMirror where the main pointer is fine (a mouse), else a plain textarea
+// (phones and touch tablets). The draft lives with the pane (useFileDraft):
+// this only shows it.
+export function FileEditor(props: Props) {
+  const { error, rootMoved, onReload, onCopy } = props
+  const fine = useMediaQuery('(pointer: fine)')
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <SaveBanner
+        error={error}
+        rootMoved={rootMoved}
+        onReload={onReload}
+        onCopy={onCopy}
+      />
+      {fine ? (
+        <LazyBoundary
+          onRetry={CodeEditor.retry}
+          // Its chunk could not load: the text is still edited and saved,
+          // in the textarea
+          fallback={(retry) => (
+            <>
+              <Banner
+                variant="warning"
+                action={
+                  <Button size="sm" variant="secondary" onClick={retry}>
+                    Retry
+                  </Button>
+                }
+              >
+                Could not load the editor
+              </Banner>
+              <PlainEditor {...props} />
+            </>
+          )}
+        >
+          <Suspense fallback={<ViewMessage>Loading…</ViewMessage>}>
+            <CodeEditor
+              path={props.path}
+              text={props.text}
+              onChange={props.onChange}
+              wrap={props.wrap}
+              saving={props.saving}
+              canSave={props.dirty && !props.saving && !rootMoved}
+              onSave={props.onSave}
+              notify={props.notify}
+              reveal={props.reveal}
+              scrollTop={props.scrollTop}
+              at={props.at}
+            />
+          </Suspense>
+        </LazyBoundary>
+      ) : (
+        <PlainEditor {...props} />
+      )}
+    </div>
+  )
+}
+
+// The text in a plain textarea
+function PlainEditor({
   path,
   text,
   onChange,
   wrap,
   saving,
-  error,
   rootMoved,
   dirty,
   onSave,
-  onReload,
-  onCopy,
   scrollTop,
 }: Props) {
   const area = useRef<HTMLTextAreaElement>(null)
@@ -137,29 +207,21 @@ export function FileEditor({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <SaveBanner
-        error={error}
-        rootMoved={rootMoved}
-        onReload={onReload}
-        onCopy={onCopy}
-      />
-      <textarea
-        ref={area}
-        data-scroll-restore
-        aria-label={`Text of ${path}`}
-        value={text}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={onKeyDown}
-        readOnly={saving}
-        aria-busy={saving}
-        wrap={wrap ? 'soft' : 'off'}
-        spellCheck={false}
-        autoCapitalize="off"
-        autoCorrect="off"
-        autoComplete="off"
-        className="min-h-0 w-full flex-1 resize-none bg-bg p-3 font-term text-[13px] leading-relaxed text-fg focus-visible:outline-none pointer-coarse:text-[16px]"
-      />
-    </div>
+    <textarea
+      ref={area}
+      data-scroll-restore
+      aria-label={`Text of ${path}`}
+      value={text}
+      onChange={(e) => onChange(e.target.value)}
+      onKeyDown={onKeyDown}
+      readOnly={saving}
+      aria-busy={saving}
+      wrap={wrap ? 'soft' : 'off'}
+      spellCheck={false}
+      autoCapitalize="off"
+      autoCorrect="off"
+      autoComplete="off"
+      className="min-h-0 w-full flex-1 resize-none bg-bg p-3 font-term text-[13px] leading-relaxed text-fg focus-visible:outline-none pointer-coarse:text-[16px]"
+    />
   )
 }

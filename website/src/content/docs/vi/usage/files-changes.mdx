@@ -176,10 +176,35 @@ Thiết bị chỉ xem (view-only) tìm trong đúng những file mà nó đư�
 
 ## Sửa file
 
-Nút bút chì (**Edit**) trên thanh của file văn bản biến nội dung file thành một ô nhập văn bản
-thường, thay các nút khác bằng **Cancel** và **Save**. Nút này dành cho sửa nhỏ, chẳng hạn đổi
+Nút bút chì (**Edit**) trên thanh của file văn bản mở nội dung file trong trình soạn thảo, thay
+các nút khác bằng **Cancel** và **Save**. Nút này dành cho sửa nhỏ, chẳng hạn đổi
 `status: review` thành `status: approved` trong front matter của một bản ghi, khỏi phải nhờ agent
 hay gõ `sed`.
+
+Trên máy tính dùng chuột, trình soạn thảo có số dòng, tô màu mã nguồn và nhận các phím ở bảng
+dưới. Trên điện thoại hay máy tính bảng cảm ứng, văn bản vẫn nằm trong ô nhập thường như trước.
+Khi không tải được trình soạn thảo (mất kết nối), ô nhập thường hiện ra thay cho nó, kèm dòng
+`Could not load the editor` và nút **Retry**; chữ bạn đã gõ không mất trong cả hai trường hợp.
+
+| Phím                                   | Tác dụng                                                      |
+| -------------------------------------- | ------------------------------------------------------------- |
+| Ctrl+S (Cmd+S trên macOS)              | Lưu                                                           |
+| Ctrl+F (Cmd+F trên macOS)              | Tìm trong file; Enter hoặc F3 sang chỗ khớp kế tiếp, Escape đóng ô tìm |
+| Ctrl+H                                 | Tìm và thay (trên macOS còn có Cmd+Alt+F)                     |
+| Ctrl+G                                 | Nhảy tới một dòng                                             |
+| Ctrl+D (Cmd+D trên macOS)              | Chọn thêm chỗ tiếp theo giống phần đang chọn                  |
+| Alt+kéo chuột, Ctrl+Alt+↑/↓ (Cmd+Alt+↑/↓ trên macOS)            | Nhiều con trỏ                                                 |
+| Ctrl+Z, Ctrl+Shift+Z (Cmd+Z, Cmd+Shift+Z trên macOS)                   | Hoàn tác, làm lại                                             |
+| Tab, Shift+Tab                         | Thụt lề, bỏ thụt lề                                           |
+
+Trên macOS, Ctrl+H và Ctrl+G vẫn là phím Ctrl: ở đó Cmd+H ẩn trình duyệt, còn Cmd+G sang chỗ khớp
+kế tiếp. Trong trình soạn thảo, Tab dùng để thụt lề; muốn đưa con trỏ bàn phím ra ngoài, nhấn
+Ctrl+M (Shift+Alt+M trên macOS) rồi Tab. Cỡ chữ, độ rộng tab, gói dòng và phím Vim nằm trong nhóm
+Files của Settings (xem [Cài đặt](/vi/usage/settings/#trình-soạn-thảo)). Khi bật phím Vim, mọi phím
+theo Vim (`/` để tìm, `:w` để lưu), riêng Ctrl+S vẫn lưu.
+
+Đang sửa một file mà chọn một kết quả tìm của chính file đó, con trỏ nhảy tới đúng chỗ khớp. Bấm
+Edit trong Changes thì trình soạn thảo mở ở chỗ thay đổi đầu tiên của diff.
 
 - File Markdown được sửa ở văn bản gốc, kể cả khi đang xem trước. File CSV hay TSV đang xem dạng
   bảng thì sửa ngay trong bảng (xem [Sửa trong bảng](#sửa-trong-bảng)); đang xem văn bản gốc,

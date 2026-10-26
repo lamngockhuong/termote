@@ -80,7 +80,9 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/tab-close-dialogs.tsx`        | Files/Changes: Discard a tab's changes, close on a root move  |
 | `pwa/src/hooks/use-long-press.ts`                 | Long press of a finger (a Markdown link opens a new tab)      |
 | `pwa/src/components/changes-view.tsx`             | Changes view: git status grouped, diffs as tabs, edits a file |
-| `pwa/src/components/file-editor.tsx`              | A file's text in a textarea, why a save failed                |
+| `pwa/src/components/file-editor.tsx`              | A file being edited: desktop editor or textarea, save errors  |
+| `pwa/src/components/code-editor.tsx`              | Desktop editor (CodeMirror, lazy chunk), Vim mode             |
+| `pwa/src/utils/cm-languages.ts`                   | The desktop editor's languages, one chunk each                |
 | `pwa/src/components/new-file-dialog.tsx`          | Files: asks for a new file's path, creates it, says why not   |
 | `pwa/src/components/group-dialog.tsx`             | New tmux session / workspace: name, directory, why refused    |
 | `pwa/src/components/worktree-dialog.tsx`          | New/Open worktree, the Remove confirmations, why refused      |

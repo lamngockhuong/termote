@@ -1,7 +1,22 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RequestError } from '../hooks/use-mux-api'
+import type { CodeEditorProps } from './code-editor'
 import { FileEditor, saveErrorOf } from './file-editor'
+
+// The desktop editor's chunk: a stand-in that shows what it was given, or
+// fails to load while fail is set
+const chunk = vi.hoisted(() => ({ fail: false }))
+vi.mock('./code-editor', () => {
+  if (chunk.fail) throw new Error('offline')
+  return {
+    default: (p: CodeEditorProps) => (
+      <div data-testid="code-editor" data-can-save={p.canSave}>
+        {p.path} {p.at?.line}
+      </div>
+    ),
+  }
+})
 
 describe('saveErrorOf', () => {
   it.each([
@@ -63,6 +78,7 @@ describe('FileEditor', () => {
     onSave: vi.fn(),
     onReload: vi.fn(),
     onCopy: vi.fn(),
+    notify: vi.fn(),
   }
 
   it('is a plain textarea that does not correct what is typed', () => {
@@ -117,11 +133,68 @@ describe('FileEditor scroll', () => {
         onSave={vi.fn()}
         onReload={vi.fn()}
         onCopy={vi.fn()}
+        notify={vi.fn()}
         scrollTop={33}
       />,
     )
     const box = screen.getByRole('textbox', { name: 'Text of a.txt' })
     expect(box.scrollTop).toBe(33)
     expect(box).toHaveAttribute('data-scroll-restore')
+  })
+})
+
+describe('FileEditor on a device with a fine pointer', () => {
+  const matchMedia = window.matchMedia
+  const fine = (query: string) => ({
+    ...matchMedia(query),
+    matches: query === '(pointer: fine)',
+  })
+  afterEach(() => {
+    window.matchMedia = matchMedia
+    chunk.fail = false
+  })
+  const props = {
+    path: 'a.txt',
+    text: 'x',
+    onChange: vi.fn(),
+    wrap: false,
+    saving: false,
+    rootMoved: false,
+    dirty: true,
+    onSave: vi.fn(),
+    onReload: vi.fn(),
+    onCopy: vi.fn(),
+    notify: vi.fn(),
+  }
+
+  it('falls back to the textarea when the editor cannot load, with Retry', async () => {
+    window.matchMedia = fine as typeof matchMedia
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    chunk.fail = true
+    render(<FileEditor {...props} />)
+    expect(await screen.findByText('Could not load the editor')).toBeVisible()
+    expect(screen.getByRole('textbox', { name: 'Text of a.txt' }).tagName).toBe(
+      'TEXTAREA',
+    )
+    chunk.fail = false
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(await screen.findByTestId('code-editor')).toBeInTheDocument()
+    expect(screen.queryByText('Could not load the editor')).toBeNull()
+    vi.mocked(console.error).mockRestore()
+  })
+
+  it('edits in CodeMirror, saving only when there is something to save', async () => {
+    window.matchMedia = fine as typeof matchMedia
+    const view = render(<FileEditor {...props} at={{ line: 3, jump: 1 }} />)
+    const editor = await screen.findByTestId('code-editor')
+    expect(editor).toHaveTextContent('a.txt 3')
+    expect(editor).toHaveAttribute('data-can-save', 'true')
+    expect(screen.queryByRole('textbox')).toBeNull()
+    view.rerender(<FileEditor {...props} rootMoved />)
+    expect(editor).toHaveAttribute('data-can-save', 'false')
+    view.rerender(<FileEditor {...props} saving />)
+    expect(editor).toHaveAttribute('data-can-save', 'false')
+    view.rerender(<FileEditor {...props} dirty={false} />)
+    expect(editor).toHaveAttribute('data-can-save', 'false')
   })
 })
