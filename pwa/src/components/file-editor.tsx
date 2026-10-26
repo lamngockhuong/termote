@@ -1,7 +1,15 @@
-import { type KeyboardEvent, Suspense, useLayoutEffect, useRef } from 'react'
+import {
+  type KeyboardEvent,
+  type RefObject,
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+} from 'react'
 import { useMediaQuery } from '../hooks/use-media-query'
 import { RequestError } from '../hooks/use-mux-api'
 import { lazyRetry } from '../utils/lazy-retry'
+import { selectedLines, type TextLines } from '../utils/line-range'
 import type { EditorAt } from './code-editor'
 import { LazyBoundary } from './lazy-boundary'
 import { ViewMessage } from './pane-dir-header'
@@ -70,6 +78,8 @@ interface Props {
   // change); the textarea opens where it was, never moving the focus there
   // (a phone's keyboard would come up)
   at?: EditorAt
+  // Set to what reads the whole lines selected, for a review comment
+  linesRef?: RefObject<(() => TextLines) | null>
 }
 
 // Why the last save of a draft failed, and what the user can do about it:
@@ -174,6 +184,7 @@ export function FileEditor(props: Props) {
               onSelectText={props.onSelectText}
               scrollTop={props.scrollTop}
               at={props.at}
+              linesRef={props.linesRef}
             />
           </Suspense>
         </LazyBoundary>
@@ -196,8 +207,19 @@ function PlainEditor({
   onSave,
   onSelectText,
   scrollTop,
+  linesRef,
 }: Props) {
   const area = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => {
+    if (!linesRef) return
+    linesRef.current = () => {
+      const el = area.current as HTMLTextAreaElement
+      return selectedLines(el.value, el.selectionStart, el.selectionEnd)
+    }
+    return () => {
+      linesRef.current = null
+    }
+  }, [linesRef])
   // biome-ignore lint/correctness/useExhaustiveDependencies: only where it opens
   useLayoutEffect(() => {
     if (scrollTop && area.current) area.current.scrollTop = scrollTop

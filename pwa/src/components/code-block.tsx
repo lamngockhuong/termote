@@ -8,7 +8,11 @@ import {
   useState,
 } from 'react'
 import { useTheme } from '../contexts/theme-context'
+import { useLinePick } from '../hooks/use-line-pick'
 import { highlight, type Token } from '../utils/highlight'
+import { inPick, pickSpan, type TextLines } from '../utils/line-range'
+import { lineLabel } from '../utils/review-message'
+import { LineCommentBar, LineGutterButton } from './line-comment-bar'
 
 // The code frame shared by Files and Changes: a gutter of line numbers that
 // stays put while the code scrolls sideways (or wraps), in the terminal font.
@@ -23,8 +27,8 @@ export function codeText(wrap: boolean) {
 
 // A line number column; the caller gives its colour (subtler on plain lines
 // than on diff backgrounds)
-export const GUTTER =
-  'sticky left-0 shrink-0 select-none bg-inherit px-2 text-right tabular-nums'
+export const GUTTER_CELL = 'shrink-0 select-none px-2 text-right tabular-nums'
+export const GUTTER = `sticky left-0 bg-inherit ${GUTTER_CELL}`
 
 // The lines of a file; a final newline does not open an empty last line.
 export function splitLines(text: string): string[] {
@@ -58,17 +62,34 @@ interface Props {
   // time jump changes (a search result picked, the same one again too)
   line?: number
   jump?: number
+  // Lines may be picked by their numbers for a review comment
+  onLineComment?: (lines: TextLines) => void
+  // The lines a comment is on
+  commentedLines?: Set<number>
 }
 
 // A text file with line numbers, highlighted once the worker answers; plain
 // until then and whenever it does not.
-export function CodeBlock({ text, path, wrap, scrollTop, line, jump }: Props) {
+export function CodeBlock({
+  text,
+  path,
+  wrap,
+  scrollTop,
+  line,
+  jump,
+  onLineComment,
+  commentedLines,
+}: Props) {
   const { resolvedTheme } = useTheme()
   const lines = useMemo(() => splitLines(text), [text])
   const [tokens, setTokens] = useState<Token[][] | null>(null)
   const frame = useRef<HTMLDivElement>(null)
   // The line picked last, highlighted until the next pick
   const [marked, setMarked] = useState<number>()
+  const { pick, press, clear } = useLinePick()
+  // Lines picked in a file read again may hold something else now
+  // biome-ignore lint/correctness/useExhaustiveDependencies: text is the trigger
+  useEffect(clear, [text, clear])
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: only where it opens
   useLayoutEffect(() => {
@@ -98,44 +119,78 @@ export function CodeBlock({ text, path, wrap, scrollTop, line, jump }: Props) {
   }, [text, path, resolvedTheme])
 
   const gutter = `${String(lines.length).length + 1}ch`
+  const span = pick && pickSpan(pick)
   return (
-    <div
-      ref={frame}
-      className={CODE_FRAME}
-      data-testid="code-block"
-      data-scroll-restore
-    >
-      <div className={wrap ? '' : 'w-max min-w-full'}>
-        {lines.map((line, i) => {
-          const parts = tokens?.[i]
-          let content: ReactNode = line
-          if (parts) {
-            content = parts.map((t, j) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: tokens of one line never move
-              <span key={j} style={tokenStyle(t)}>
-                {t[0]}
-              </span>
-            ))
-          }
-          return (
-            <div
-              // biome-ignore lint/suspicious/noArrayIndexKey: a line is its number
-              key={i}
-              data-line={i + 1}
-              className={`flex ${marked === i + 1 ? 'bg-accent/15' : 'bg-bg'}`}
-            >
-              <span
-                aria-hidden="true"
-                className={`${GUTTER} text-fg-subtle`}
-                style={{ minWidth: gutter }}
+    <>
+      <div
+        ref={frame}
+        className={CODE_FRAME}
+        data-testid="code-block"
+        data-scroll-restore
+      >
+        <div className={wrap ? '' : 'w-max min-w-full'}>
+          {lines.map((line, i) => {
+            const parts = tokens?.[i]
+            let content: ReactNode = line
+            if (parts) {
+              content = parts.map((t, j) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: tokens of one line never move
+                <span key={j} style={tokenStyle(t)}>
+                  {t[0]}
+                </span>
+              ))
+            }
+            return (
+              <div
+                // biome-ignore lint/suspicious/noArrayIndexKey: a line is its number
+                key={i}
+                data-line={i + 1}
+                className={`flex ${marked === i + 1 || inPick(pick, 0, i + 1) ? 'bg-accent/15' : 'bg-bg'}`}
               >
-                {i + 1}
-              </span>
-              <code className={codeText(wrap)}>{content || ' '}</code>
-            </div>
-          )
-        })}
+                {onLineComment ? (
+                  <LineGutterButton
+                    line={i + 1}
+                    commented={!!commentedLines?.has(i + 1)}
+                    onPress={(shift) => press(0, i + 1, shift)}
+                  >
+                    <span
+                      className={`${GUTTER_CELL} text-fg-subtle`}
+                      style={{ minWidth: gutter }}
+                    >
+                      {i + 1}
+                    </span>
+                  </LineGutterButton>
+                ) : (
+                  <span
+                    aria-hidden="true"
+                    className={`${GUTTER} text-fg-subtle`}
+                    style={{ minWidth: gutter }}
+                  >
+                    {i + 1}
+                  </span>
+                )}
+                <code className={codeText(wrap)}>{content || ' '}</code>
+              </div>
+            )
+          })}
+        </div>
       </div>
-    </div>
+      {onLineComment && span && (
+        <LineCommentBar
+          label={capitalized(lineLabel({ start: span[0], end: span[1] }))}
+          onComment={() => {
+            onLineComment({
+              from: span[0],
+              to: span[1],
+              lines: lines.slice(span[0] - 1, span[1]),
+            })
+            clear()
+          }}
+          onClear={clear}
+        />
+      )}
+    </>
   )
 }
+
+export const capitalized = (s: string) => s[0].toUpperCase() + s.slice(1)

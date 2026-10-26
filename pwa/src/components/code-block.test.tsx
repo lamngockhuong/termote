@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider } from '../contexts/theme-context'
 import { CodeBlock, splitLines } from './code-block'
@@ -149,5 +149,102 @@ describe('CodeBlock at a line', () => {
     Element.prototype.scrollIntoView = scroll
     render(at(undefined, undefined, 50))
     expect(scroll).not.toHaveBeenCalled()
+  })
+})
+
+describe('CodeBlock lines picked for a comment', () => {
+  const pickable = (onLineComment = vi.fn(), commentedLines?: Set<number>) => {
+    mockHighlight.mockResolvedValue(null)
+    render(
+      <ThemeProvider>
+        <CodeBlock
+          text={'a\nb\nc\nd\n'}
+          path="a.ts"
+          wrap={false}
+          onLineComment={onLineComment}
+          commentedLines={commentedLines}
+        />
+      </ThemeProvider>,
+    )
+    return onLineComment
+  }
+  const num = (n: number) => screen.getByRole('button', { name: `Line ${n}` })
+
+  it('has no buttons unless asked', () => {
+    mockHighlight.mockResolvedValue(null)
+    show('a\n')
+    expect(screen.queryByRole('button', { name: 'Line 1' })).toBeNull()
+  })
+
+  it('picks a line, extends with Shift, and comments on the range', () => {
+    const onLineComment = pickable()
+    fireEvent.click(num(3))
+    expect(screen.getByText('Line 3')).toBeInTheDocument()
+    fireEvent.click(num(2), { shiftKey: true })
+    expect(screen.getByText('Lines 2-3')).toBeInTheDocument()
+    expect(
+      screen.getByTestId('code-block').querySelector('[data-line="2"]'),
+    ).toHaveClass('bg-accent/15')
+    fireEvent.click(screen.getByRole('button', { name: 'Comment' }))
+    expect(onLineComment).toHaveBeenCalledWith({
+      from: 2,
+      to: 3,
+      lines: ['b', 'c'],
+    })
+    expect(screen.queryByRole('button', { name: 'Comment' })).toBeNull()
+  })
+
+  it('clears the pick, and a press on the line picked alone', () => {
+    pickable()
+    fireEvent.click(num(1))
+    fireEvent.click(screen.getByRole('button', { name: 'Clear the lines' }))
+    expect(screen.queryByRole('button', { name: 'Comment' })).toBeNull()
+    fireEvent.click(num(1))
+    fireEvent.click(num(1))
+    expect(screen.queryByRole('button', { name: 'Comment' })).toBeNull()
+  })
+
+  it('drops the pick when the file is read again', () => {
+    mockHighlight.mockResolvedValue(null)
+    const ui = (text: string) => (
+      <ThemeProvider>
+        <CodeBlock
+          text={text}
+          path="a.ts"
+          wrap={false}
+          onLineComment={vi.fn()}
+        />
+      </ThemeProvider>
+    )
+    const v = render(ui('a\nb'))
+    fireEvent.click(num(2))
+    expect(screen.getByRole('button', { name: 'Comment' })).toBeInTheDocument()
+    v.rerender(ui('b'))
+    expect(screen.queryByRole('button', { name: 'Comment' })).toBeNull()
+  })
+
+  it('marks the lines a comment is on', () => {
+    pickable(vi.fn(), new Set([4]))
+    expect(num(4)).toHaveAttribute('data-commented', 'true')
+    expect(num(3)).not.toHaveAttribute('data-commented')
+  })
+
+  it('keeps a double click on a number from the view around it', () => {
+    const onDoubleClick = vi.fn()
+    mockHighlight.mockResolvedValue(null)
+    render(
+      <ThemeProvider>
+        <div onDoubleClick={onDoubleClick}>
+          <CodeBlock
+            text="a"
+            path="a.ts"
+            wrap={false}
+            onLineComment={vi.fn()}
+          />
+        </div>
+      </ThemeProvider>,
+    )
+    fireEvent.doubleClick(num(1))
+    expect(onDoubleClick).not.toHaveBeenCalled()
   })
 })

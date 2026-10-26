@@ -7,6 +7,7 @@ import type { ComponentProps } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider, useTheme } from '../contexts/theme-context'
 import { type Settings, useSettings } from '../hooks/use-settings'
+import type { TextLines } from '../utils/line-range'
 import CodeEditor, { indentOf } from './code-editor'
 
 // Vim mode is a stand-in: what the editor does with it is tested, not Vim
@@ -360,5 +361,22 @@ describe('CodeEditor Vim mode', () => {
     shown.unmount()
     expect(vimMock.reset).toHaveBeenCalledTimes(1)
     setting('editorVim', false)
+  })
+})
+
+describe('CodeEditor lines for a comment', () => {
+  it('reads the whole lines of the main selection, the cursor line without one', () => {
+    const linesRef: { current: (() => TextLines) | null } = { current: null }
+    const { view, unmount } = setup({ linesRef })
+    view.dispatch({ selection: { anchor: 5, head: 9 } })
+    expect(linesRef.current?.()).toEqual({
+      from: 2,
+      to: 3,
+      lines: ['two', 'three'],
+    })
+    view.dispatch({ selection: { anchor: 1 } })
+    expect(linesRef.current?.()).toEqual({ from: 1, to: 1, lines: ['one'] })
+    unmount()
+    expect(linesRef.current).toBeNull()
   })
 })

@@ -898,6 +898,17 @@ export function followInFiles(paneId: string, target: LinkPath) {
   return storeFor(paneId).follow(target, 0, { fresh: true })
 }
 
+// Opens path (under root, which the store moves to when it is elsewhere) in
+// paneId's Files view, at line when given: a review comment's file
+export function openInFiles(
+  paneId: string,
+  root: string,
+  path: string,
+  opts?: FileOpenOptions,
+) {
+  storeFor(paneId).openFromFind(root, path, opts)
+}
+
 // A file being edited in a pane. It is kept here, out of the viewer, so a
 // remount (another view, the desktop panel, a move of the root) never loses
 // it. One with unsaved changes is kept on the device too (files-persist.ts),

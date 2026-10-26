@@ -2333,3 +2333,81 @@ describe('FileViewer at a search result', () => {
     })
   })
 })
+
+describe('FileViewer review comments', () => {
+  it('comments on lines of the file, quoted', async () => {
+    mockContent.mockResolvedValue(editable('a\nb\nc'))
+    const onLineComment = vi.fn()
+    show({ onLineComment, commentedLines: new Set([3]) })
+    fireEvent.click(await screen.findByRole('button', { name: 'Line 2' }))
+    expect(screen.getByRole('button', { name: 'Line 3' })).toHaveAttribute(
+      'data-commented',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Comment' }))
+    expect(onLineComment).toHaveBeenCalledWith({
+      start: 2,
+      end: 2,
+      quote: 'b',
+    })
+  })
+
+  it('never quotes a sensitive file shown', async () => {
+    mockContent.mockResolvedValue(editable('A=1', { path: '.env' }))
+    const onLineComment = vi.fn()
+    show({ onLineComment, path: '.env', initialReveal: true })
+    fireEvent.click(await screen.findByRole('button', { name: 'Line 1' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Comment' }))
+    expect(onLineComment).toHaveBeenCalledWith({
+      start: 1,
+      end: 1,
+      sensitive: true,
+    })
+  })
+
+  it('comments on the lines selected in the editor, marked unsaved once edited', async () => {
+    mockContent.mockResolvedValue(editable('a\nb\nc'))
+    const onLineComment = vi.fn()
+    await startEdit({ onLineComment })
+    const box = textarea() as HTMLTextAreaElement
+    box.setSelectionRange(0, 3)
+    const comment = screen.getByRole('button', { name: 'Comment on lines' })
+    fireEvent.click(comment)
+    expect(onLineComment).toHaveBeenLastCalledWith({
+      start: 1,
+      end: 2,
+      quote: 'a\nb',
+    })
+    type('a\nB\nc')
+    box.setSelectionRange(2, 3)
+    fireEvent.click(comment)
+    expect(onLineComment).toHaveBeenLastCalledWith({
+      start: 2,
+      end: 2,
+      quote: 'B',
+      unsaved: true,
+    })
+  })
+
+  it('comments on nothing before the desktop editor is there', async () => {
+    pointer.fine = true
+    try {
+      mockContent.mockResolvedValue(editable('a'))
+      const onLineComment = vi.fn()
+      await startEdit({ onLineComment })
+      await screen.findByTestId('code-editor')
+      fireEvent.click(screen.getByRole('button', { name: 'Comment on lines' }))
+      expect(onLineComment).not.toHaveBeenCalled()
+    } finally {
+      pointer.fine = false
+    }
+  })
+
+  it('offers no comment without a handler', async () => {
+    mockContent.mockResolvedValue(editable('a'))
+    await startEdit()
+    expect(
+      screen.queryByRole('button', { name: 'Comment on lines' }),
+    ).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Line 1' })).toBeNull()
+  })
+})

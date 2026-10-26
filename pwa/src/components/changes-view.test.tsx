@@ -24,11 +24,19 @@ import {
   type GitChanges,
   RequestError,
 } from '../hooks/use-mux-api'
+import { setFocusWindowForTest } from '../utils/focus-mode'
+import {
+  addReviewComment,
+  loadReview,
+  type ReviewComment,
+  resetReviewDrafts,
+} from '../utils/review-draft'
 import { FILES_VIEW_ID } from '../view-ids'
 import {
   CHANGES_FILTER_MIN,
   ChangesView,
   LIST_DOUBLE_CLICK_MS,
+  openCommentInChanges,
 } from './changes-view'
 
 const mockChanges = vi.fn()
@@ -1413,5 +1421,186 @@ describe('ChangesView actions', () => {
       'No changes left in both.ts',
     )
     expect(notified(p).at(-1)?.[0]).toBe('Discarded changes in both.ts')
+  })
+})
+
+describe('ChangesView review comments', () => {
+  const scroll = vi.fn()
+  beforeEach(() => {
+    scroll.mockReset()
+    Element.prototype.scrollIntoView = scroll
+    mockDiff.mockImplementation(async (_p: string, e: { path: string }) =>
+      textDiff(e.path),
+    )
+  })
+  afterEach(() => {
+    sessionStorage.clear()
+    resetReviewDrafts()
+  })
+
+  const review = (over: Partial<ReviewComment> = {}): ReviewComment => ({
+    id: 'c',
+    root: '/r',
+    path: 'src/both.ts',
+    source: 'unstaged',
+    start: 1,
+    end: 1,
+    text: 'Why?',
+    at: 1,
+    ...over,
+  })
+
+  const write = (text: string) => {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Comment' }), {
+      target: { value: text },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+  }
+
+  const openReview = () =>
+    fireEvent.click(screen.getByRole('button', { name: /^Review, / }))
+
+  it('comments on lines of a diff, marks them and opens them from the review', async () => {
+    await show()
+    await openDiff('Staged', 'src/new.ts')
+    fireEvent.click(screen.getByRole('button', { name: 'Line 1' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Comment' }))
+    write('Why?')
+    expect(loadReview('%1')).toMatchObject([
+      {
+        root: '/r',
+        path: 'src/new.ts',
+        orig: 'src/old.ts',
+        source: 'staged',
+        start: 1,
+        quote: '+x',
+        text: 'Why?',
+      },
+    ])
+    expect(screen.getByRole('button', { name: 'Line 1' })).toHaveAttribute(
+      'data-commented',
+    )
+    openReview()
+    fireEvent.click(screen.getByRole('button', { name: /^line 1/ }))
+    await settle()
+    expect(scroll).toHaveBeenCalledWith({ block: 'center' })
+  })
+
+  it('comments on lines selected in the editor of a diff', async () => {
+    mockContent.mockResolvedValue({
+      root: '/r',
+      path: 'src/both.ts',
+      size: 1,
+      text: 'x',
+      hash: 'h',
+      editable: true,
+    })
+    await show()
+    await openDiff('Changes', 'src/both.ts')
+    fireEvent.click(screen.getByRole('button', { name: 'Line 1' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Comment' }))
+    write('In the diff')
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    await screen.findByRole('textbox', { name: 'Text of src/both.ts' })
+    fireEvent.click(screen.getByRole('button', { name: 'Comment on lines' }))
+    write('Rename')
+    expect(loadReview('%1')).toMatchObject([
+      { path: 'src/both.ts', source: 'unstaged', quote: '+x' },
+      { path: 'src/both.ts', source: 'file', quote: 'x' },
+    ])
+    // The editor has no line numbers to press: its selection is used
+    expect(screen.queryByRole('button', { name: 'Line 1' })).toBeNull()
+  })
+
+  it('opens a comment on a file in Files, at its line', async () => {
+    addReviewComment('%1', review({ source: 'file', start: 4, end: 4 }))
+    mockTree.mockResolvedValue({ root: '/r', isRepo: true, entries: [] })
+    const p = await show()
+    openReview()
+    fireEvent.click(screen.getByRole('button', { name: /^line 4/ }))
+    expect(p.showView).toHaveBeenCalledWith(FILES_VIEW_ID)
+    const { result } = renderHook(() => useFiles('%1'))
+    expect(result.current.active).toMatchObject({
+      path: 'src/both.ts',
+      line: 4,
+    })
+  })
+
+  it('tells when a comment is under another folder, or its diff is gone', async () => {
+    addReviewComment('%1', review({ root: '/other' }))
+    addReviewComment(
+      '%1',
+      review({
+        id: 'g',
+        path: 'gone.ts',
+        removed: { start: 1, end: 1 },
+        removedOnly: true,
+      }),
+    )
+    const p = await show()
+    openReview()
+    fireEvent.click(screen.getAllByRole('button', { name: /^line 1/ })[0])
+    expect(p.notify).toHaveBeenCalledWith('The pane is in another folder now', {
+      variant: 'warning',
+    })
+    openReview()
+    fireEvent.click(screen.getByRole('button', { name: /^removed line 1/ }))
+    await settle()
+    expect(p.notify).toHaveBeenCalledWith('No changes for this file', {
+      variant: 'warning',
+    })
+    // Its line is dropped at the next render: never shown once the file
+    // changes again
+    openReview()
+    await openDiff('Changes', 'src/both.ts')
+    expect(scroll).not.toHaveBeenCalledWith({ block: 'center' })
+  })
+
+  it('shows a line asked for from another view once the diff shows, until another one does', async () => {
+    openCommentInChanges('%1', review(), vi.fn())
+    await show()
+    await settle()
+    const centred = () =>
+      scroll.mock.calls.filter(([o]) => o?.block === 'center').length
+    expect(centred()).toBe(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Back to changes' }))
+    await openDiff('Changes', 'src/both.ts')
+    expect(centred()).toBe(1)
+  })
+
+  it.each([
+    ['a view-only client', () => show({ readOnly: true })],
+    [
+      'a window of its own',
+      () => {
+        setFocusWindowForTest(true)
+        return show()
+      },
+    ],
+  ])('offers no comment to %s', async (_, open) => {
+    addReviewComment('%1', review())
+    await open()
+    await openDiff('Changes', 'src/both.ts')
+    expect(screen.queryByRole('button', { name: 'Line 1' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Review/ })).toBeNull()
+  })
+
+  it('offers no comment in the editor of a window of its own', async () => {
+    mockContent.mockResolvedValue({
+      root: '/r',
+      path: 'src/both.ts',
+      size: 1,
+      text: 'x',
+      hash: 'h',
+      editable: true,
+    })
+    setFocusWindowForTest(true)
+    await show()
+    await openDiff('Changes', 'src/both.ts')
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    await screen.findByRole('textbox', { name: 'Text of src/both.ts' })
+    expect(
+      screen.queryByRole('button', { name: 'Comment on lines' }),
+    ).toBeNull()
   })
 })

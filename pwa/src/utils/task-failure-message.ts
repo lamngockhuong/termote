@@ -54,14 +54,15 @@ export function revealHidden(text: string): string {
 }
 
 const encoder = new TextEncoder()
-const bytes = (s: string) => encoder.encode(s).length
+// s's size in UTF-8, as the server counts it
+export const utf8Bytes = (s: string) => encoder.encode(s).length
 
 // The longest run of backticks in s
-const longestRun = (s: string) =>
+export const longestRun = (s: string) =>
   Math.max(0, ...[...s.matchAll(/`+/g)].map((m) => m[0].length))
 
 // s as inline code, its delimiter longer than any backtick run in it
-function inlineCode(s: string): string {
+export function inlineCode(s: string): string {
   const tick = '`'.repeat(longestRun(s) + 1)
   return s.includes('`') ? `${tick} ${s} ${tick}` : `${tick}${s}${tick}`
 }
@@ -72,8 +73,8 @@ function tailBytes(s: string, room: number): string {
   const lines = s.split('\n')
   let size = 0
   let keep = lines.length
-  while (keep > 0 && size + bytes(lines[keep - 1]) + 1 <= room) {
-    size += bytes(lines[keep - 1]) + 1
+  while (keep > 0 && size + utf8Bytes(lines[keep - 1]) + 1 <= room) {
+    size += utf8Bytes(lines[keep - 1]) + 1
     keep--
   }
   if (keep < lines.length) return lines.slice(keep).join('\n')
@@ -115,10 +116,10 @@ export function taskFailureMessage({
   const notes = output.cut ? ['(earlier output cut)'] : []
   const build = () =>
     `${head}\n${fence}\n${notes.map((n) => `${n}\n`).join('')}${body}\n${fence}`
-  if (bytes(build()) > MAX_TASK_MESSAGE_BYTES) {
+  if (utf8Bytes(build()) > MAX_TASK_MESSAGE_BYTES) {
     notes.push('(earlier lines cut)')
     body = ''
-    const room = MAX_TASK_MESSAGE_BYTES - bytes(build())
+    const room = MAX_TASK_MESSAGE_BYTES - utf8Bytes(build())
     body = tailBytes(revealHidden(output.output), room)
   }
   return build()

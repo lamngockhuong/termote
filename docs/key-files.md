@@ -270,6 +270,16 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/agent-pane-picker.tsx`        | Which agent pane gets a run's output (kept per group)          |
 | `pwa/src/hooks/use-tasks.ts`                      | A pane's tasks, Run, the runs polled                           |
 | `pwa/src/utils/task-failure-message.ts`           | A run's output between its markers, made into a message        |
+| `pwa/src/utils/send-to-agent.ts`                  | One message to an agent pane, after its cursor (Tasks, Review) |
+| `pwa/src/utils/review-draft.ts`                   | Review comments: the draft per pane (`sessionStorage`)         |
+| `pwa/src/utils/review-message.ts`                 | A review made into one message, quotes, limits                 |
+| `pwa/src/utils/line-range.ts`                     | Lines picked in a diff, a file or an editor                    |
+| `pwa/src/hooks/use-review-draft.ts`               | A pane's review comments, as they change                       |
+| `pwa/src/hooks/use-review-composer.ts`            | A comment being written on lines, then added                   |
+| `pwa/src/hooks/use-line-pick.ts`                  | Lines picked by their numbers (Shift, touch)                   |
+| `pwa/src/components/line-comment-bar.tsx`         | Line number buttons and the bar under picked lines             |
+| `pwa/src/components/review-comment-sheet.tsx`     | Write or edit a review comment                                 |
+| `pwa/src/components/review-panel.tsx`             | Review button and panel: list, edit, Clear, Send               |
 | `pwa/src/hooks/use-user-tasks.ts`                 | User tasks read for this server, and the writes                |
 | `pwa/src/utils/user-tasks.ts`                     | User task checks and error texts                               |
 | `pwa/src/components/user-tasks-section.tsx`       | Settings > Tasks: list, delete                                 |

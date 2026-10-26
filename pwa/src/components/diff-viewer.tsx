@@ -18,6 +18,7 @@ import {
   useState,
 } from 'react'
 import { type FilesError, filesError } from '../hooks/use-files'
+import { useLinePick } from '../hooks/use-line-pick'
 import {
   type ChangeEntry,
   type DiffHunk,
@@ -31,9 +32,17 @@ import { useSettings } from '../hooks/use-settings'
 import { isTablePath } from '../utils/csv-parse'
 import { keepOrder, TRUNCATE_START } from '../utils/files-format'
 import { isImagePath, isSvgPath } from '../utils/image-path'
+import { diffRange, inPick, type LineRange } from '../utils/line-range'
 import { isMarkdownPath, type LinkPath } from '../utils/markdown-links'
 import type { OpenWindowEvent } from '../utils/open-window'
-import { CODE_FRAME, codeText, GUTTER } from './code-block'
+import { lineLabel } from '../utils/review-message'
+import {
+  CODE_FRAME,
+  capitalized,
+  codeText,
+  GUTTER,
+  GUTTER_CELL,
+} from './code-block'
 import {
   LazyMarkdownPreview,
   LazyTablePreview,
@@ -41,6 +50,7 @@ import {
   SensitiveConfirm,
 } from './file-viewer'
 import { ImageCompare } from './image-compare'
+import { LineCommentBar, LineGutterButton } from './line-comment-bar'
 import { ViewMessage } from './pane-dir-header'
 import { Banner } from './ui/banner'
 import { IconButton } from './ui/button'
@@ -113,6 +123,20 @@ interface Props {
     hunk: DiffHunk,
     i: number,
   ) => ReactNode
+  // Lines may be picked by their numbers for a review comment: the range,
+  // without its lines for a sensitive file
+  onLineComment?: (range: LineRange) => void
+  // The lines a comment is on: `n:<new line>`, `o:<old line>`
+  commentedLines?: Set<string>
+  // A line to show in the middle and highlight, each time jump changes:
+  // its new number, or its old one for a deleted line
+  line?: DiffLineAt
+}
+
+export interface DiffLineAt {
+  n: number
+  old?: boolean
+  jump: number
 }
 
 // The unified diff of one changed file, one side (staged or not), with
@@ -141,8 +165,14 @@ export function DiffViewer({
   onOpenWindow,
   renderActions,
   renderHunkActions,
+  onLineComment,
+  commentedLines,
+  line,
 }: Props) {
   const [state, setState] = useState<Loaded>({ kind: 'loading' })
+  // The jump to line already made: a diff read again (a refresh, a stage)
+  // opens where it was scrolled, not at the line again
+  const jumped = useRef<number>(undefined)
   const [ownReveal, setOwnReveal] = useState(false)
   const reveal = revealProp ?? ownReveal
   const setReveal = () => {
@@ -403,6 +433,21 @@ export function DiffViewer({
             renderHunkActions &&
             ((h, i) => renderHunkActions(entry, h, i))
           }
+          onLineComment={
+            onLineComment &&
+            ((r) => {
+              // A sensitive file was shown: never its lines
+              const { quote, ...rest } = r
+              onLineComment(
+                entry?.sensitive || reveal ? { ...rest, sensitive: true } : r,
+              )
+            })
+          }
+          commentedLines={commentedLines}
+          line={line && line.jump !== jumped.current ? line : undefined}
+          onLineShown={(jump) => {
+            jumped.current = jump
+          }}
         />
       )}
       <SensitiveConfirm
@@ -506,6 +551,10 @@ function DiffBody({
   oneColumn,
   scrollTop,
   hunkActions,
+  onLineComment,
+  commentedLines,
+  line,
+  onLineShown,
 }: {
   diff: FileDiff
   wrap: boolean
@@ -513,13 +562,33 @@ function DiffBody({
   // Where it starts scrolled to
   scrollTop?: number
   hunkActions?: (h: DiffHunk, i: number) => ReactNode
+  onLineComment?: (range: LineRange) => void
+  commentedLines?: Set<string>
+  line?: DiffLineAt
+  onLineShown?: (jump: number) => void
 }) {
   const hunks = diff.hunks ?? []
   const frame = useRef<HTMLDivElement>(null)
+  // Picked by index in its hunk: a deleted line has no new number
+  const { pick, press, clear } = useLinePick()
+  const range =
+    pick && hunks[pick.group] && diffRange(hunks[pick.group], pick.a, pick.b)
+  // The line asked for last, highlighted until the next one
+  const [marked, setMarked] = useState<string>()
   // biome-ignore lint/correctness/useExhaustiveDependencies: only where it opens
   useLayoutEffect(() => {
+    if (line) return
     if (scrollTop && frame.current) frame.current.scrollTop = scrollTop
   }, [])
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once per ask
+  useLayoutEffect(() => {
+    if (!line) return
+    setMarked(`${line.old ? 'o' : 'n'}:${line.n}`)
+    frame.current
+      ?.querySelector(`[data-${line.old ? 'old' : 'new'}="${line.n}"]`)
+      ?.scrollIntoView?.({ block: 'center' })
+    onLineShown?.(line.jump)
+  }, [line?.jump])
   return (
     <>
       {diff.conflict && (
@@ -563,38 +632,77 @@ function DiffBody({
                     {h.header}
                   </div>
                 )}
-                {h.lines.map((l) => (
-                  <div
-                    // One hunk numbers each line once on its side
-                    key={`${l.kind}${l.old ?? ''}:${l.new ?? ''}`}
-                    className={`flex ${ROW[l.kind]}`}
-                    data-kind={l.kind}
-                  >
-                    {/* Narrow screens keep one number: the old one on a deleted line */}
-                    {!oneColumn && <Num n={l.old} />}
-                    <Num n={oneColumn && l.kind === 'del' ? l.old : l.new} />
-                    <span className="w-4 shrink-0 select-none text-center text-fg-muted">
-                      {SIGN[l.kind]}
-                    </span>
-                    <code className={codeText(wrap)}>
-                      {l.text || ' '}
-                      {l.noNewline && (
-                        <span className="text-fg-muted">
-                          {' '}
-                          (no newline at end of file)
-                        </span>
+                {h.lines.map((l, j) => {
+                  const nums = (cell: boolean) => (
+                    <>
+                      {/* Narrow screens keep one number: the old one on a deleted line */}
+                      {!oneColumn && <Num n={l.old} cell={cell} />}
+                      <Num
+                        n={oneColumn && l.kind === 'del' ? l.old : l.new}
+                        cell={cell}
+                      />
+                    </>
+                  )
+                  return (
+                    <div
+                      // One hunk numbers each line once on its side
+                      key={`${l.kind}${l.old ?? ''}:${l.new ?? ''}`}
+                      className={`flex ${inPick(pick, i, j) || marked === lineKey(l) ? 'bg-accent/15' : ROW[l.kind]}`}
+                      data-kind={l.kind}
+                      // Where a comment opens the diff
+                      data-new={l.kind === 'del' ? undefined : l.new}
+                      data-old={l.kind === 'del' ? l.old : undefined}
+                    >
+                      {onLineComment ? (
+                        <LineGutterButton
+                          line={(l.kind === 'del' ? l.old : l.new) as number}
+                          removed={l.kind === 'del'}
+                          commented={!!commentedLines?.has(lineKey(l))}
+                          onPress={(shift) => press(i, j, shift)}
+                        >
+                          {nums(true)}
+                        </LineGutterButton>
+                      ) : (
+                        nums(false)
                       )}
-                    </code>
-                  </div>
-                ))}
+                      <span className="w-4 shrink-0 select-none text-center text-fg-muted">
+                        {SIGN[l.kind]}
+                      </span>
+                      <code className={codeText(wrap)}>
+                        {l.text || ' '}
+                        {l.noNewline && (
+                          <span className="text-fg-muted">
+                            {' '}
+                            (no newline at end of file)
+                          </span>
+                        )}
+                      </code>
+                    </div>
+                  )
+                })}
               </Fragment>
             ))}
           </div>
         </div>
       )}
+      {onLineComment && range && (
+        <LineCommentBar
+          label={capitalized(lineLabel(range))}
+          onComment={() => {
+            onLineComment(range)
+            clear()
+          }}
+          onClear={clear}
+        />
+      )}
     </>
   )
 }
+
+// A line as commentedLines and line name it: its new number, or its old
+// one when deleted
+const lineKey = (l: DiffLine) =>
+  l.kind === 'del' ? `o:${l.old}` : `n:${l.new}`
 
 // The line of the file where its first change is: an added line, or where
 // lines were removed
@@ -610,9 +718,13 @@ export function firstChange(hunks: DiffHunk[] | null): number | undefined {
   }
 }
 
-function Num({ n }: { n?: number }) {
+// cell: inside the gutter's button, which keeps it at the left edge
+function Num({ n, cell }: { n?: number; cell: boolean }) {
   return (
-    <span aria-hidden="true" className={`${GUTTER} min-w-[5ch] text-fg-muted`}>
+    <span
+      aria-hidden="true"
+      className={`${cell ? GUTTER_CELL : GUTTER} min-w-[5ch] text-fg-muted`}
+    >
       {n ?? ''}
     </span>
   )

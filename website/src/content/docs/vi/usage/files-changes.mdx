@@ -831,6 +831,45 @@ Một số thay đổi chỉ áp dụng được cho cả file, hoặc không á
 - File có thể chứa bí mật được hỏi xác nhận trước, giống như với diff của nó.
 - Phiên chỉ xem không đổi được gì.
 
+### Bình luận review
+
+Thay vì gõ lại tên file và số dòng vào Chat, bạn bình luận ngay trên các dòng rồi gửi cả bản review
+cho agent trong một lần.
+
+- **Chọn dòng**: bấm số dòng trong diff, hoặc trong file đang mở ở Files. Giữ Shift rồi bấm số khác
+  để kéo dài khoảng; trên màn cảm ứng thì chạm số thứ hai. Chạm lại dòng duy nhất đang chọn thì bỏ
+  chọn. Một khoảng chỉ nằm trong một hunk của diff. Trong trình soạn thảo, hãy chọn các dòng (hoặc
+  đặt con trỏ trên một dòng) rồi bấm **Comment on lines** ở đầu khung.
+- **Bình luận**: bấm **Comment** bên dưới mã, viết bình luận rồi bấm **Add** (Ctrl/Cmd+Enter). Dòng
+  đã có bình luận được đánh dấu cạnh số dòng.
+- **Review**: nút **Review** ở đầu khung cho biết có bao nhiêu bình luận đang chờ. Bảng của nó liệt
+  kê chúng theo file, mỗi bình luận kèm các dòng và nơi đọc ra chúng (`unstaged diff`, `staged diff`,
+  `file`, hoặc `file (unsaved edits)` khi lấy từ trình soạn thảo còn thay đổi chưa lưu). Bấm vào một
+  bình luận để mở diff hoặc file của nó tại dòng đó, hoặc sửa, xoá nó. **Clear** xoá hết.
+- **Gửi**: bản review đi thành một tin nhắn, mỗi bình luận nằm dưới file và các dòng của nó, các dòng
+  được trích đúng như lúc bạn bình luận. Pane đang chạy Claude Code hoặc Codex thì tin đi tới agent
+  đó. Nếu không, hãy chọn một pane đang chạy agent; Termote nhớ lựa chọn này cho các tab của nhóm, và
+  đây cũng là lựa chọn mà [Gửi cho agent](/vi/usage/tasks/#gửi-cho-agent) của Tasks dùng.
+
+Chỉ khi agent đã nhận tin (hoặc xếp vào hàng đợi lúc đang bận) thì các bình luận mới bị xoá. Server
+từ chối thì tất cả vẫn còn. Bình luận thêm vào trong lúc đang gửi cũng được giữ lại.
+
+| Hiện                                 | Lý do                                                                     |
+| ------------------------------------ | ------------------------------------------------------------------------- |
+| `No pane runs Claude Code or Codex`  | Không agent nào nhận được bản review; hãy chạy một agent trong pane trước |
+| `Too long for one message: …`        | Bản review dài quá 16 KiB; hãy xoá hoặc rút gọn bình luận, không có gì bị cắt |
+| `Review is full (50 comments)`       | Mỗi pane giữ tối đa 50 bình luận                                         |
+| `The pane is in another folder now`  | Bình luận được viết dưới thư mục gốc khác với thư mục hiện tại của pane   |
+
+Mỗi bình luận dài tối đa 4 KiB và trích tối đa 60 dòng (số dòng còn lại được đếm). Ký tự làm đổi hoặc
+che chữ mà không hiện ra được viết thành dạng `⟨U+200B⟩`, giống như Tasks.
+
+Bản review chỉ nằm trong tab trình duyệt này (như tin nhắn Chat chưa gửi): reload hay đổi tab vẫn còn,
+đóng tab trình duyệt hoặc đăng xuất thì mất. Cửa sổ riêng (**Open in new window**) và thiết bị chỉ
+xem không có bình luận review. File có thể chứa bí mật vẫn bình luận được sau khi đã cho hiện, nhưng
+các dòng của nó không bao giờ được trích, kể cả trong tin nhắn lẫn trong những gì tab giữ lại: chỉ
+có tên file và số dòng được gửi đi.
+
 ## File có thể chứa bí mật
 
 File có tên thường dùng để chứa bí mật được đánh dấu bằng ổ khoá và chữ `Sensitive`: ví dụ
