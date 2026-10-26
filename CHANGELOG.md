@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.10.0](https://github.com/lamngockhuong/termote/compare/v2.9.0...v2.10.0) (2026-10-26)
+
+
+### Features
+
+* prompt templates with variables, shared by every device ([#573](https://github.com/lamngockhuong/termote/issues/573)) ([#586](https://github.com/lamngockhuong/termote/issues/586)) ([770fa0f](https://github.com/lamngockhuong/termote/commit/770fa0f2343af8fbabe46d2bc06d2b35a056cb02))
+* **pwa:** command palette and custom shortcuts on desktop ([#572](https://github.com/lamngockhuong/termote/issues/572)) ([#585](https://github.com/lamngockhuong/termote/issues/585)) ([ad06ba6](https://github.com/lamngockhuong/termote/commit/ad06ba614b88731250fec07a1c171840e1b74357))
+* **pwa:** edit files in CodeMirror on desktop ([#571](https://github.com/lamngockhuong/termote/issues/571)) ([#584](https://github.com/lamngockhuong/termote/issues/584)) ([6369644](https://github.com/lamngockhuong/termote/commit/63696445fe1aa2f18c8a808b80359e7446b5fc5a))
+* search file contents from the Files view ([#582](https://github.com/lamngockhuong/termote/issues/582)) ([ca74483](https://github.com/lamngockhuong/termote/commit/ca74483a9e63e424db48ed309e141f959186aed3))
+
+
+### Bug Fixes
+
+* **pwa:** put the chat box and its buttons in one card ([#588](https://github.com/lamngockhuong/termote/issues/588)) ([deb7f2d](https://github.com/lamngockhuong/termote/commit/deb7f2d28f7f09aa619541a3e2c00f24cd3c4eef))
+
 ## [2.9.0](https://github.com/lamngockhuong/termote/compare/v2.8.0...v2.9.0) (2026-10-25)
 
 
