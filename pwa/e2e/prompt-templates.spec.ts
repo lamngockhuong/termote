@@ -169,7 +169,7 @@ test.describe('prompt templates', () => {
     await page.goto('/')
     await openTemplatesGroup(page)
     const download = page.waitForEvent('download')
-    await page.getByRole('button', { name: 'Export' }).click()
+    await page.getByRole('button', { name: 'Export', exact: true }).click()
     const file = await (await download).path()
     const exported = JSON.parse(readFileSync(file, 'utf-8')) as { v: number; templates: { name: string; text: string }[] }
     expect(exported.v).toBe(1)
@@ -253,7 +253,7 @@ test.describe('prompt templates on paired devices', () => {
       await expect(view.getByText(/view only: the templates can be read/)).toBeVisible()
       for (const name of ['New template', 'Import…', `Edit Shared-${tag}`, `Delete Shared-${tag}`])
         await expect(view.getByRole('button', { name })).toHaveCount(0)
-      await expect(view.getByRole('button', { name: 'Export' })).toBeEnabled()
+      await expect(view.getByRole('button', { name: 'Export', exact: true })).toBeEnabled()
 
       const refused = await view.request.post('/api/mux/templates', {
         data: { name: `Refused-${tag}`, text: 'x' },
