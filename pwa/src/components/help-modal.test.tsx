@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { APP_INFO } from '../utils/app-info'
 import { HelpModal } from './help-modal'
 
 describe('HelpModal', () => {
@@ -165,5 +166,13 @@ describe('HelpModal', () => {
     fireEvent.click(screen.getByText('Toolbar'))
     fireEvent.click(screen.getByText('Gestures'))
     expect(screen.getByText('Touch Gestures')).toBeInTheDocument()
+  })
+
+  it('links the full documentation in a new tab', () => {
+    render(<HelpModal isOpen={true} onClose={vi.fn()} />)
+    const link = screen.getByRole('link', { name: /Full documentation/ })
+    expect(link).toHaveAttribute('href', APP_INFO.links.usageDocs)
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
   })
 })

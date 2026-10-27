@@ -4,6 +4,7 @@ import {
   type AppCommandContext,
   buildAppCommands,
 } from './app-commands'
+import { APP_INFO } from './app-info'
 
 function context(over: Partial<AppCommandContext> = {}): AppCommandContext {
   return {
@@ -208,7 +209,7 @@ describe('buildAppCommands', () => {
     expect(reason({})).toBe('This pane cannot start an agent')
   })
 
-  it('opens Settings, its groups, Help and About', () => {
+  it('opens Settings, its groups, Help, About and the docs', () => {
     const ctx = context()
     command(ctx, 'settings.open').run()
     expect(ctx.openSettings).toHaveBeenLastCalledWith()
@@ -220,6 +221,14 @@ describe('buildAppCommands', () => {
     expect(ctx.openHelp).toHaveBeenCalled()
     command(ctx, 'app.about').run()
     expect(ctx.openAbout).toHaveBeenCalled()
+    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    command(ctx, 'app.docs').run()
+    expect(open).toHaveBeenCalledWith(
+      APP_INFO.links.docs,
+      '_blank',
+      'noopener,noreferrer',
+    )
+    open.mockRestore()
     expect(
       command(context({ devices: false }), 'settings.devices').disabledReason,
     ).toBe('Not available on this server')

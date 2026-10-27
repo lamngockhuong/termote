@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowUp,
+  ArrowUpRight,
   ChevronsDown,
   ChevronsUp,
   Clipboard,
@@ -16,7 +17,9 @@ import {
   TextSelect,
 } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
+import { APP_INFO } from '../utils/app-info'
 import { AgentStatusBadge } from './agent-status-badge'
+import { FOCUS_RING } from './ui/button'
 import { SegmentedControl } from './ui/segmented-control'
 import { Sheet } from './ui/sheet'
 
@@ -305,6 +308,16 @@ export function HelpModal({
             </div>
           </section>
         ))}
+        <a
+          href={APP_INFO.links.usageDocs}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`inline-flex items-center gap-1 rounded-control text-sm text-fg-muted hover:text-fg ${FOCUS_RING}`}
+        >
+          Full documentation
+          <ArrowUpRight size={ICON_SIZE} aria-hidden="true" />
+          <span className="sr-only"> (opens in a new tab)</span>
+        </a>
       </div>
     </Sheet>
   )

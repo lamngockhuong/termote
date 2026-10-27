@@ -16,6 +16,8 @@ export const APP_INFO = {
   repository: 'https://github.com/lamngockhuong/termote',
   license: 'MIT',
   links: {
+    docs: 'https://termote.ohnice.app/',
+    usageDocs: 'https://termote.ohnice.app/usage/overview/',
     changelog: 'https://github.com/lamngockhuong/termote/releases',
     issues: 'https://github.com/lamngockhuong/termote/issues',
   },
