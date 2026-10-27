@@ -122,8 +122,10 @@ There is no bottom navigation: the terminal takes that height.
   the sidebar and the side panel run the full height; a maximized side panel covers it too.
 - The Chat conversation and composer take the view's whole width; the reader's own messages sit on
   the right, as wide as their text up to 85%.
-- Scrollbars are 8px with a clear track and no arrows where there is a mouse (`pointer: fine`);
-  touch screens keep the system's overlay scrollbars. The sidebar's lists show the thumb only on
+- Where the system's scrollbars take room beside the content (Windows, Linux, macOS set to always
+  show them) they become 8px with a clear track and no arrows; overlay scrollbars (macOS by
+  default, phones) stay as the system draws them (`utils/classic-scrollbars.ts` measures which and
+  sets `data-classic-scrollbars` on `<html>`). The sidebar's lists show the thumb only on
   hover or with focus inside (`.scrollbar-hover`); tab rows hide theirs (`.scrollbar-hide`) and a
   vertical wheel scrolls them sideways.
 - An open menu sits in the top layer (Popover API), so a scrolling list such as the sidebar never

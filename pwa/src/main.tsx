@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import App from './App'
 import { ThemeProvider } from './contexts/theme-context'
 import { markStale, onChunkLoadError } from './utils/app-update'
+import { markClassicScrollbars } from './utils/classic-scrollbars'
 import './index.css'
 import { watchIPadWindow } from './utils/ipad-window'
 
@@ -18,6 +19,7 @@ registerSW({
 window.addEventListener('vite:preloadError', onChunkLoadError)
 
 watchIPadWindow()
+markClassicScrollbars()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <ThemeProvider>
