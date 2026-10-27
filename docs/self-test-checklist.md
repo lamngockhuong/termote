@@ -662,7 +662,8 @@ Run on tmux (Linux/macOS) and Herdr; psmux (Windows) offers neither view.
 - [ ] Phone: no tab bar; "Open files (N)" in the file's bar and above the tree opens a sheet to
       switch, keep open and close; a long press on a Markdown link opens a new tab; nothing scrolls
       sideways at 360 px
-- [ ] A file deleted outside Termote keeps its tab with "File not found" and "Close tab"; when the
+- [ ] A file deleted outside Termote keeps its tab with "File not found" and "Close tab", its name
+      struck through in the tab bar (tooltip "— File not found"); when the
       pane moves to another directory, clean tabs close and tabs with a draft ask (Discard and
       close / Keep)
 - [ ] `cd` out of the root in the pane, then Refresh: toast "The pane's directory changed" and the

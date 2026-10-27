@@ -666,7 +666,8 @@ Chạy trên tmux (Linux/macOS) và Herdr; psmux (Windows) không có hai view n
 - [ ] Điện thoại: không có thanh tab; "Open files (N)" trên thanh của file và phía trên cây mở một
       bảng để chuyển, giữ lại và đóng tab; nhấn giữ link Markdown thì mở tab mới; ở bề ngang 360 px
       không có gì cuộn ngang
-- [ ] File bị xóa bên ngoài Termote vẫn giữ tab, ghi "File not found" kèm "Close tab"; khi pane
+- [ ] File bị xóa bên ngoài Termote vẫn giữ tab, ghi "File not found" kèm "Close tab", tên tab bị
+      gạch ngang trên thanh tab (tooltip "— File not found"); khi pane
       chuyển sang thư mục khác, tab sạch tự đóng còn tab có bản nháp thì hỏi (Discard and close /
       Keep)
 - [ ] `cd` ra ngoài thư mục gốc trong pane rồi bấm Refresh: hiện toast "The pane's directory

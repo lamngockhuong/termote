@@ -108,14 +108,26 @@ There is no bottom navigation: the terminal takes that height.
 ### Desktop
 
 ```text
-┌──────────────────────────────────────────┐
-│ Session tabs · font · fullscreen · More  │
-├──────────┬───────────────────────────────┤
-│ Sidebar  │ Terminal                      │
-│(collapse)│                               │
-└──────────┴───────────────────────────────┘
+┌──────────┬───────────────────────────────────────────┐
+│ Sidebar  │ Session tabs · font · fullscreen · More   │
+│(collapse)├─────────────────────────────┬─────────────┤
+│          │ Terminal / view             │ Side panel  │
+│          │                             │ (Files,     │
+│          ├─────────────────────────────┤  Changes)   │
+│          │ Input area (toolbar, Chat)  │             │
+└──────────┴─────────────────────────────┴─────────────┘
 ```
 
+- The input area (key toolbar, Chat composer, view-only bar) sits under the view's column only, so
+  the sidebar and the side panel run the full height; a maximized side panel covers it too.
+- The Chat conversation and composer share one centred column of at most 896px (`CHAT_COLUMN`);
+  the reader's own messages sit on the right, as wide as their text up to 85%.
+- Scrollbars are 8px with a clear track and no arrows where there is a mouse (`pointer: fine`);
+  touch screens keep the system's overlay scrollbars. The sidebar's lists show the thumb only on
+  hover or with focus inside (`.scrollbar-hover`); tab rows hide theirs (`.scrollbar-hide`) and a
+  vertical wheel scrolls them sideways.
+- An open menu sits in the top layer (Popover API), so a scrolling list such as the sidebar never
+  cuts it; near the bottom of the screen it opens upward, and scrolling the list under it closes it.
 - A tab is a `role="tab"` button with a sibling close button; Delete closes the focused tab.
 - Settings uses a two-column dialog with a group rail; on a phone it is a full-screen sheet.
 
