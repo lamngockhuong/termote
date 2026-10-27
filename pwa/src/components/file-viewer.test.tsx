@@ -24,6 +24,7 @@ import {
   useFileDraft,
 } from '../hooks/use-files'
 import { RequestError } from '../hooks/use-mux-api'
+import type { SyncSide } from '../hooks/use-scroll-sync'
 import type { TableOp } from '../utils/csv-edits'
 import { paneSelection, resetPaneSelections } from '../utils/pane-selection'
 import {
@@ -38,25 +39,38 @@ const mockImage = vi.fn()
 const mockDocument = vi.fn()
 const mockSave = vi.fn()
 // The desktop editor: shows where it was told to open
-vi.mock('./code-editor', () => ({
-  default: (p: {
+// What the desktop editor gives a preview that scrolls with it, when set
+const sync = vi.hoisted(() => ({ side: undefined as SyncSide | undefined }))
+vi.mock('./code-editor', async () => {
+  const { useEffect } = await import('react')
+  return { default: MockCodeEditor }
+  function MockCodeEditor(p: {
     path: string
     text: string
     onChange: (text: string) => void
     at?: { line: number; col?: number }
     hidden?: boolean
-  }) => (
-    <div data-testid="code-editor" data-hidden={String(!!p.hidden)}>
-      at {p.at ? `${p.at.line}:${p.at.col ?? 0}` : 'none'}
-      <input
-        aria-label={`Text of ${p.path}`}
-        data-scroll-restore
-        value={p.text}
-        onChange={(e) => p.onChange(e.target.value)}
-      />
-    </div>
-  ),
-}))
+    onSyncSide?: (side: SyncSide | null) => void
+  }) {
+    // Given once, like the editor
+    useEffect(() => {
+      if (!p.onSyncSide || !sync.side) return
+      p.onSyncSide(sync.side)
+      return () => p.onSyncSide?.(null)
+    }, [])
+    return (
+      <div data-testid="code-editor" data-hidden={String(!!p.hidden)}>
+        at {p.at ? `${p.at.line}:${p.at.col ?? 0}` : 'none'}
+        <input
+          aria-label={`Text of ${p.path}`}
+          data-scroll-restore
+          value={p.text}
+          onChange={(e) => p.onChange(e.target.value)}
+        />
+      </div>
+    )
+  }
+})
 
 // The PDF viewer (pdf.js) does not run in jsdom: its own tests stand it in
 vi.mock('./pdf-preview', () => ({
@@ -1368,6 +1382,51 @@ describe('FileViewer: editing Markdown', () => {
     expect(p.onFollow).toHaveBeenCalledWith(expect.anything(), 0, {
       newTab: false,
     })
+  })
+
+  it('scrolls the editor with the preview side by side only', async () => {
+    const el = document.createElement('div')
+    const side = { el, topLine: () => 1, scrollToLine: vi.fn() }
+    sync.side = side
+    mockContent.mockResolvedValue(mdFile('# A\n\ntext\n'))
+    const p = await edit()
+    const preview = await screen.findByTestId('markdown-preview')
+    const frame = () =>
+      act(
+        () => new Promise<void>((done) => requestAnimationFrame(() => done())),
+      )
+    preview.scrollTop = 30
+    fireEvent.scroll(preview)
+    await frame()
+    expect(side.scrollToLine).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Show preview' }))
+    fireEvent.scroll(preview)
+    await frame()
+    expect(side.scrollToLine).toHaveBeenCalledTimes(1)
+    p.unmount()
+    sync.side = undefined
+  })
+
+  it('from the preview alone to side by side, the editor goes to where the preview was read', async () => {
+    const el = document.createElement('div')
+    const side = { el, topLine: () => 1, scrollToLine: vi.fn() }
+    sync.side = side
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ markdownEditLayout: 'preview' }),
+    )
+    mockContent.mockResolvedValue(mdFile('# A\n'))
+    const p = await edit({ compact: true })
+    const preview = await screen.findByTestId('markdown-preview')
+    const set = vi.spyOn(preview, 'scrollTop', 'set')
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }))
+    fireEvent.click(
+      screen.getByRole('menuitemradio', { name: 'Source and preview' }),
+    )
+    expect(side.scrollToLine).toHaveBeenCalledTimes(1)
+    expect(set).not.toHaveBeenCalled()
+    p.unmount()
+    sync.side = undefined
   })
 
   it('hides the desktop editor with the preview alone, never unmounting it', async () => {

@@ -38,6 +38,7 @@ import {
 } from '@codemirror/view'
 import { type RefObject, useEffect, useLayoutEffect, useRef } from 'react'
 import { useTheme } from '../contexts/theme-context'
+import type { SyncSide } from '../hooks/use-scroll-sync'
 import { useSettings } from '../hooks/use-settings'
 import { loadLanguage } from '../utils/cm-languages'
 import { baseTheme, darkCode, lightCode } from '../utils/cm-theme'
@@ -78,6 +79,9 @@ export interface CodeEditorProps {
   linesRef?: RefObject<(() => TextLines) | null>
   // Out of sight for now, kept mounted: measured again once it shows
   hidden?: boolean
+  // Given how to read and set the line at its top (a Markdown draft's
+  // preview scrolls with it); null once the editor is gone
+  onSyncSide?: (side: SyncSide | null) => void
 }
 
 // Marks a change made from the props, which onChange is not told about
@@ -187,6 +191,7 @@ export default function CodeEditor({
   at,
   linesRef,
   hidden = false,
+  onSyncSide,
 }: CodeEditorProps) {
   const { settings } = useSettings()
   const { editorFontSize, editorTabSize, editorVim } = settings
@@ -413,6 +418,42 @@ export default function CodeEditor({
     })
     v.focus()
   }, [at?.jump, at?.line, at?.col])
+
+  // Lines by their height in the document, which starts below the scroll
+  // box's padding
+  // biome-ignore lint/correctness/useExhaustiveDependencies: given once, for the editor's life
+  useEffect(() => {
+    if (!onSyncSide) return
+    const v = view.current as EditorView
+    const box = v.scrollDOM
+    // Where the document starts in the scroll box's content
+    const docTop = () =>
+      v.documentTop - box.getBoundingClientRect().top + box.scrollTop
+    onSyncSide({
+      el: box,
+      topLine: () => {
+        // Brings CodeMirror's measure up to date first: it may move the
+        // document (a scroll restored) as it measures
+        v.lineBlockAtHeight(0)
+        const h = Math.max(box.scrollTop - docTop(), 0)
+        const block = v.lineBlockAtHeight(h)
+        const into = block.height ? (h - block.top) / block.height : 0
+        return (
+          v.state.doc.lineAt(block.from).number +
+          Math.min(Math.max(into, 0), 0.99)
+        )
+      },
+      scrollToLine: (line) => {
+        const doc = v.state.doc
+        const n = Math.min(Math.max(Math.floor(line), 1), doc.lines)
+        const block = v.lineBlockAt(doc.line(n).from)
+        // Past the last line: at its top
+        const into = line >= n + 1 ? 0 : Math.max(line - n, 0)
+        box.scrollTop = docTop() + block.top + into * block.height
+      },
+    })
+    return () => onSyncSide(null)
+  }, [])
 
   // Opened hidden: where it starts (the offset it was left at, or the line
   // it opens at) waits until it shows

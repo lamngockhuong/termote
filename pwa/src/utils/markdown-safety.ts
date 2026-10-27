@@ -3,11 +3,20 @@
 // http(s) URLs may leave the app. The Files view also folds <details> blocks
 // into disclosures built from markdown nodes, never from the HTML itself.
 
+interface Point {
+  line: number
+  column?: number
+  offset?: number
+}
+
 interface MdNode {
   type: string
   value?: string
   children?: MdNode[]
   data?: { hName?: string; hProperties?: Record<string, unknown> }
+  // Where in the file the node is: a disclosure spans its tags, so the
+  // preview knows the line it starts on (rehypeSourceLines)
+  position?: { start: Point; end: Point }
 }
 
 // A remark plugin: raw HTML in the markdown is shown as the text it is.
@@ -83,27 +92,47 @@ function disclosure(
 
 // An HTML block runs to the next blank line, so one node can hold several
 // tags, "</details>\n<p>after</p>" say: each tag line of a disclosure becomes
-// its own node, the lines between stay together as they were.
+// its own node, the lines between stay together as they were. Each keeps the
+// lines of the file it came from.
 function splitTags(nodes: MdNode[]): MdNode[] {
   return nodes.flatMap((n) => {
     const lines = htmlValue(n).split('\n')
     const isTag = (l: string) => TAG_LINE.some((re) => re.test(l.trim()))
     if (lines.length < 2 || !lines.some(isTag)) return [n]
+    // The value was trimmed: its first line is the node's. A point needs a
+    // column too, or mdast-util-to-hast drops the position.
+    const first = n.position?.start.line
+    const at = (from: number, to: number) =>
+      first === undefined
+        ? {}
+        : {
+            position: {
+              start: { line: first + from, column: 1 },
+              end: { line: first + to, column: lines[to].length + 1 },
+            },
+          }
     const out: MdNode[] = []
     let rest: string[] = []
-    const flush = () => {
-      if (rest.length) out.push({ type: 'html', value: rest.join('\n') })
+    let restFrom = 0
+    const flush = (i: number) => {
+      if (rest.length)
+        out.push({
+          type: 'html',
+          value: rest.join('\n'),
+          ...at(restFrom, i - 1),
+        })
       rest = []
     }
-    for (const l of lines) {
+    lines.forEach((l, i) => {
       if (!isTag(l)) {
+        if (!rest.length) restFrom = i
         rest.push(l)
-        continue
+        return
       }
-      flush()
-      out.push({ type: 'html', value: l.trim() })
-    }
-    flush()
+      flush(i)
+      out.push({ type: 'html', value: l.trim(), ...at(i, i) })
+    })
+    flush(lines.length)
     return out
   })
 }
@@ -131,15 +160,16 @@ function fold(parent: MdNode, depth: number) {
     const whole = WHOLE.exec(v)
     if (whole) {
       const text = whole[3].trim()
-      out.push(
-        disclosure(
+      out.push({
+        ...disclosure(
           whole[1],
           whole[2],
           text
             ? [{ type: 'paragraph', children: [{ type: 'text', value: text }] }]
             : [],
         ),
-      )
+        position: nodes[i].position,
+      })
       continue
     }
     const end = ends.get(i)
@@ -153,6 +183,9 @@ function fold(parent: MdNode, depth: number) {
         body = body.slice(1)
       }
       const node = disclosure(open[1], summary, body)
+      const start = nodes[i].position?.start
+      const stop = nodes[end].position?.end
+      if (start && stop) node.position = { start, end: stop }
       fold(node, depth + 1)
       out.push(node)
       i = end

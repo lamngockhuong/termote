@@ -49,6 +49,7 @@ import {
   RequestError,
   saveFileContent,
 } from '../hooks/use-mux-api'
+import { type SyncSide, useScrollSync } from '../hooks/use-scroll-sync'
 import {
   type MarkdownEditLayout as EditLayout,
   useSettings,
@@ -169,6 +170,9 @@ function DraftPreview(props: ComponentProps<typeof MarkdownPreview>) {
         // Always given by the viewer
         followScrollTop={() =>
           (latest.current.followScrollTop as () => number)()
+        }
+        onSyncSide={(side) =>
+          (latest.current.onSyncSide as (s: SyncSide | null) => void)(side)
         }
       />
     ),
@@ -739,6 +743,20 @@ export function FileViewer({
     // Something to save is a draft
     if (dirty && !saving && !rootMoved) save(mine as FileDraft)
   }
+  // Side by side, the editor and the preview scroll together
+  const [editorSide, setEditorSide] = useState<SyncSide | null>(null)
+  const [previewSide, setPreviewSide] = useState<SyncSide | null>(null)
+  // Coming from the preview alone, where the user was reading: it leads
+  const shownBefore = useRef(editLayout)
+  const fromPreview = shownBefore.current === 'preview'
+  useEffect(() => {
+    shownBefore.current = editLayout
+  })
+  useScrollSync(
+    editLayout === 'split' ? editorSide : null,
+    previewSide,
+    fromPreview ? 'preview' : 'editor',
+  )
   const saveKey = useRef(saveDraft)
   saveKey.current = saveDraft
   // Ctrl/Cmd+S while the preview shows: the focus may be in it or on the
@@ -1249,6 +1267,7 @@ export function FileViewer({
               at={pickInEditor ? pick : editAt}
               linesRef={onLineComment && editorLines}
               hidden={editLayout === 'preview'}
+              onSyncSide={markdown ? setEditorSide : undefined}
             />
           )
           if (!markdown) return editor
@@ -1263,6 +1282,7 @@ export function FileViewer({
                   wrap={wrap}
                   // Back returns to where the editor was, not the preview
                   followScrollTop={() => scrolled.current ?? 0}
+                  onSyncSide={setPreviewSide}
                   onFollow={onFollow}
                   notify={notify}
                 />

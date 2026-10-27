@@ -6,6 +6,7 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react'
 import type { ComponentProps } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider, useTheme } from '../contexts/theme-context'
+import type { SyncSide } from '../hooks/use-scroll-sync'
 import { type Settings, useSettings } from '../hooks/use-settings'
 import type { TextLines } from '../utils/line-range'
 import CodeEditor, { indentOf } from './code-editor'
@@ -97,6 +98,44 @@ describe('indentOf', () => {
 })
 
 describe('CodeEditor', () => {
+  it('reads and sets the line at its top, for a preview that scrolls with it', () => {
+    let side: SyncSide | null = null
+    const onSyncSide = vi.fn((s: SyncSide | null) => {
+      side = s
+    })
+    const { view, unmount } = setup({
+      text: 'a\nb\nc\nd\n',
+      onSyncSide,
+    })
+    const s = side as unknown as SyncSide
+    expect(s.el).toBe(view.scrollDOM)
+    const line = (n: number) => view.lineBlockAt(view.state.doc.line(n).from)
+    s.scrollToLine(3)
+    expect(view.scrollDOM.scrollTop).toBe(line(3).top)
+    // Halfway down a line, and a line past the end: the last one
+    view.scrollDOM.scrollTop = 0
+    s.scrollToLine(2.5)
+    expect(view.scrollDOM.scrollTop).toBe(line(2).top + line(2).height / 2)
+    view.scrollDOM.scrollTop = 0
+    s.scrollToLine(40)
+    expect(view.scrollDOM.scrollTop).toBe(line(5).top)
+
+    // The document starts 100px up the box (scrolled): its height there is
+    // 100, halfway down line 3
+    view.scrollDOM.scrollTop = 0
+    Object.defineProperty(view, 'documentTop', { get: () => -100 })
+    const at = vi.spyOn(view, 'lineBlockAtHeight')
+    at.mockReturnValue({ ...line(3), top: 90, height: 20 } as never)
+    expect(s.topLine()).toBe(3.5)
+    expect(at).toHaveBeenCalledWith(100)
+    at.mockReturnValue({ ...line(3), top: 0, height: 20 } as never)
+    expect(s.topLine()).toBe(3.99)
+    at.mockReturnValue({ ...line(3), top: 100, height: 0 } as never)
+    expect(s.topLine()).toBe(3)
+    unmount()
+    expect(onSyncSide).toHaveBeenLastCalledWith(null)
+  })
+
   it('opened hidden, goes to where it was left once it shows', async () => {
     const { view, rerender } = setup({ hidden: true, scrollTop: 40 })
     await frame()

@@ -80,6 +80,8 @@ interface Props {
   notify: (message: string) => void
   // Its source is being edited (above)
   live?: boolean
+  // The line of the file it starts on (a Markdown draft's preview)
+  dataLine?: number
 }
 
 // A ```mermaid block: the diagram as an image once it nears the screen, the
@@ -96,6 +98,7 @@ export function MermaidBlock({
   name,
   notify,
   live = false,
+  dataLine,
 }: Props) {
   const { resolvedTheme } = useTheme()
   const ref = useRef<HTMLDivElement>(null)
@@ -239,6 +242,7 @@ export function MermaidBlock({
       tabIndex={-1}
       className="outline-none"
       data-testid="mermaid-block"
+      data-line={dataLine}
     >
       {frame(parts)}
       {viewer}

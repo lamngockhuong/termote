@@ -39,10 +39,13 @@ export function FencedCode({
   toolbar,
   note,
   body,
+  dataLine,
 }: {
   text: string
   lang?: LanguageId
   label: string
+  // The line of the file the block starts on (a Markdown draft's preview)
+  dataLine?: number
 } & Pick<FenceOptions, 'wrap' | 'notify' | 'copyButton'> &
   FrameParts) {
   const { resolvedTheme } = useTheme()
@@ -73,6 +76,7 @@ export function FencedCode({
     <div
       className="my-3 overflow-hidden rounded-control border border-border bg-bg"
       data-testid="fenced-code"
+      data-line={dataLine}
     >
       <div className="flex items-center justify-between border-b border-border bg-surface pl-3 text-[11px] text-fg-muted">
         <span className="truncate font-term">{label}</span>
@@ -135,8 +139,9 @@ export function CodeFence({
   scrollRoot,
   exportName,
   live,
+  dataLine,
   ...opts
-}: { node?: unknown } & FenceOptions) {
+}: { node?: unknown; dataLine?: number } & FenceOptions) {
   const code = (node as HastElement).children[0]
   const info =
     (code.properties.className ?? [])
@@ -154,6 +159,7 @@ export function CodeFence({
         name={exportName(index)}
         notify={opts.notify}
         live={live}
+        dataLine={dataLine}
         frame={(parts) => (
           <FencedCode
             text={text}
@@ -171,6 +177,7 @@ export function CodeFence({
       text={text}
       lang={languageForName(info)}
       label={info || 'text'}
+      dataLine={dataLine}
       {...opts}
     />
   )

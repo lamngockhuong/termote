@@ -13,10 +13,18 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useLongPress } from '../hooks/use-long-press'
 import {
+  type Anchor,
+  lineToOffset,
+  offsetToLine,
+  orderAnchors,
+  type SyncSide,
+} from '../hooks/use-scroll-sync'
+import {
   findAnchor,
   type LinkPath,
   rehypeHeadingIds,
   rehypeMermaidIndex,
+  rehypeSourceLines,
   resolveLink,
   splitFrontMatter,
 } from '../utils/markdown-links'
@@ -54,6 +62,9 @@ interface Props {
   // Where a link followed from the draft is left at (the editor's offset,
   // which Back restores), in place of the preview's own
   followScrollTop?: () => number
+  // Given how to read and set the line at its top, by the lines its blocks
+  // start on (a draft being edited); null once it is gone
+  onSyncSide?: (side: SyncSide | null) => void
 }
 
 interface Ctx {
@@ -186,11 +197,18 @@ function MdImage({ src, alt }: ComponentProps<'img'>) {
 }
 
 // A code block, or a Mermaid diagram, of the file
-function MdPre({ node }: { node?: unknown }) {
+function MdPre({
+  node,
+  'data-line': dataLine,
+}: {
+  node?: unknown
+  'data-line'?: number
+}) {
   const { scroller, path, wrap, editing, notify } = useContext(PreviewContext)
   return (
     <CodeFence
       node={node}
+      dataLine={dataLine}
       wrap={wrap}
       live={editing}
       notify={notify}
@@ -200,9 +218,14 @@ function MdPre({ node }: { node?: unknown }) {
   )
 }
 
-function MdTable(props: ComponentProps<'table'>) {
+// The line a table starts on goes on the box that scrolls it, which is
+// where it is laid out
+function MdTable({
+  'data-line': dataLine,
+  ...props
+}: ComponentProps<'table'> & { 'data-line'?: number }) {
   return (
-    <div className="my-3 overflow-x-auto">
+    <div className="my-3 overflow-x-auto" data-line={dataLine}>
       <table {...props} />
     </div>
   )
@@ -225,9 +248,13 @@ export default function MarkdownPreview({
   notify,
   editing = false,
   followScrollTop,
+  onSyncSide,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null)
-  const { frontMatter, body } = useMemo(() => splitFrontMatter(text), [text])
+  const { frontMatter, body, lines } = useMemo(
+    () => splitFrontMatter(text),
+    [text],
+  )
 
   // Only called once the preview is on screen
   const box = () => ref.current as HTMLDivElement
@@ -277,6 +304,38 @@ export default function MarkdownPreview({
     return stop
   }, [])
 
+  // The blocks that show, measured in one pass, with the top of the content
+  // as line 1 and its end as the line after the last
+  const lineCount = useRef(0)
+  lineCount.current = text.split('\n').length
+  const anchors = (): Anchor[] => {
+    const el = box()
+    const origin = el.getBoundingClientRect().top - el.scrollTop
+    const list: Anchor[] = [{ line: 1, top: 0 }]
+    for (const n of el.querySelectorAll<HTMLElement>('[data-line]')) {
+      // Inside a closed disclosure: not laid out
+      if (n.parentElement?.closest('details:not([open])')) continue
+      list.push({
+        line: Number(n.dataset.line),
+        top: n.getBoundingClientRect().top - origin,
+      })
+    }
+    list.push({ line: lineCount.current + 1, top: el.scrollHeight })
+    return orderAnchors(list)
+  }
+  // biome-ignore lint/correctness/useExhaustiveDependencies: given once, for the preview's life
+  useEffect(() => {
+    if (!onSyncSide) return
+    onSyncSide({
+      el: box(),
+      topLine: () => offsetToLine(anchors(), box().scrollTop),
+      scrollToLine: (line) => {
+        box().scrollTop = lineToOffset(anchors(), line)
+      },
+    })
+    return () => onSyncSide(null)
+  }, [])
+
   const ctx: Ctx = {
     path,
     wrap,
@@ -311,11 +370,20 @@ export default function MarkdownPreview({
               label="front matter"
               wrap={wrap}
               notify={notify}
+              dataLine={editing ? 1 : undefined}
             />
           )}
           <Markdown
             remarkPlugins={[remarkGfm, detailsBlocks, htmlAsText]}
-            rehypePlugins={[rehypeHeadingIds, rehypeMermaidIndex]}
+            rehypePlugins={
+              editing
+                ? [
+                    rehypeHeadingIds,
+                    rehypeMermaidIndex,
+                    [rehypeSourceLines, lines],
+                  ]
+                : [rehypeHeadingIds, rehypeMermaidIndex]
+            }
             components={COMPONENTS}
           >
             {body}

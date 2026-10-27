@@ -8,6 +8,7 @@ import {
 } from 'react'
 import { useMediaQuery } from '../hooks/use-media-query'
 import { RequestError } from '../hooks/use-mux-api'
+import type { SyncSide } from '../hooks/use-scroll-sync'
 import { lazyRetry } from '../utils/lazy-retry'
 import { selectedLines, type TextLines } from '../utils/line-range'
 import type { EditorAt } from './code-editor'
@@ -79,6 +80,9 @@ interface Props {
   // Out of sight for now (a Markdown file's preview shows alone), kept
   // mounted: the desktop editor measures itself again once it shows
   hidden?: boolean
+  // The desktop editor's line at its top, for a preview that scrolls with
+  // it (the textarea has none)
+  onSyncSide?: (side: SyncSide | null) => void
 }
 
 // Why the last save of a draft failed, and what the user can do about it:
@@ -179,6 +183,7 @@ export function FileEditor(props: Props) {
               at={props.at}
               linesRef={props.linesRef}
               hidden={props.hidden}
+              onSyncSide={props.onSyncSide}
             />
           </Suspense>
         </LazyBoundary>
