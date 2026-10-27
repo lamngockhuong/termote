@@ -46,6 +46,8 @@ type Hash =
 
 interface Props {
   paneId: string
+  // The Place the files are under (absent: the pane's folder)
+  place?: string
   root: string
   path: string
   kind: 'file' | 'dir'
@@ -65,6 +67,7 @@ interface Props {
 // only after a second ask.
 export function DeleteFileDialog({
   paneId,
+  place,
   root,
   path,
   kind,
@@ -113,7 +116,7 @@ export function DeleteFileDialog({
     if (kind === 'dir' || shown) return
     let live = true
     setHash({ status: 'loading' })
-    fetchFileHash(paneId, path, root).then(
+    fetchFileHash({ paneId, place }, path, root).then(
       (r) =>
         live &&
         setHash(
@@ -141,7 +144,7 @@ export function DeleteFileDialog({
     return () => {
       live = false
     }
-  }, [paneId, path, root, kind, shown, tries])
+  }, [paneId, place, path, root, kind, shown, tries])
 
   // Delete is offered only once this is known (a folder needs none)
   const baseHash =
@@ -150,14 +153,17 @@ export function DeleteFileDialog({
     setSending(true)
     setProblem(undefined)
     try {
-      const res: DeletedFile = await deleteFile(paneId, {
-        root,
-        path,
-        kind,
-        baseHash,
-        reveal: sensitive,
-        permanent,
-      })
+      const res: DeletedFile = await deleteFile(
+        { paneId, place },
+        {
+          root,
+          path,
+          kind,
+          baseHash,
+          reveal: sensitive,
+          permanent,
+        },
+      )
       // Told even when the box was closed meanwhile: the file is in the
       // trash, and only the notice carries its Undo
       if (!closed.current) onClose()

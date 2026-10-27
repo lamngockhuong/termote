@@ -476,7 +476,7 @@ function WorkingTreePreview({
   // biome-ignore lint/correctness/useExhaustiveDependencies: version re-reads the file
   useEffect(() => {
     let live = true
-    fetchFileContent(paneId, path, { root, reveal }).then(
+    fetchFileContent({ paneId }, path, { root, reveal }).then(
       (c) => {
         if (!live) return
         if ('sensitive' in c)

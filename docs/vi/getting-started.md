@@ -59,6 +59,12 @@ Server chỉ chấp nhận request có header `Host` nằm trong danh sách đư
 termote start --lan --allow-host mypc.local
 ```
 
+Files hiển thị thư mục của pane. Muốn sửa một thư mục nằm ngoài đó (thư mục cấu hình shell, ghi chú), hãy thêm nó thành một Place bằng `--allow-path <dir>` (lặp lại được; `--remove-path <dir>` để bỏ), rồi chọn nó trong menu **Places** ở đầu Files. Termote từ chối chính thư mục home, `~/.ssh` và các thư mục riêng của Termote; xem [Places](../deployment-guide.md#places-folders-outside-the-pane).
+
+```bash
+termote start --allow-path ~/.config/fish --allow-path ~/notes
+```
+
 ### Cài đặt dạng PWA
 
 Để có trải nghiệm di động tốt nhất, cài Termote dưới dạng Progressive Web App:

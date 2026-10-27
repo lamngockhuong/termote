@@ -436,8 +436,14 @@ func (f *filesAPI) findLists(ctx context.Context, root filesRoot, in findQuery) 
 // forgetRoot drops what is cached of root's files (git status, file
 // lists), so the next read sees a save, a create or a delete.
 func (f *filesAPI) forgetRoot(root string) {
-	f.statuses.forgetPrefix(root + "\x00")
-	f.finds.forgetPrefix(root + "\x00")
+	// A pane's root and a Place can hold one another: a write in one is a
+	// write in the other.
+	overlaps := func(key string) bool {
+		r, _, _ := strings.Cut(key, "\x00")
+		return underDir(r, root) || underDir(root, r)
+	}
+	f.statuses.forgetFunc(overlaps)
+	f.finds.forgetFunc(overlaps)
 }
 
 // handleFind serves GET files/find: the paths under the pane's root that

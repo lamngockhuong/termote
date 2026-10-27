@@ -84,6 +84,10 @@ type filesAPI struct {
 	// trash keeps what files/delete removed, for files/restore; nil when
 	// the server has no usable trash dir.
 	trash *trashStore
+	// places are the folders allowed with --allow-path (setPlaces);
+	// placeNow caches where each leads now, checked on every request.
+	places   []place
+	placeNow *ttlCache[string]
 }
 
 // filesDenyDirs returns the directories the files routes never serve, as
@@ -115,7 +119,8 @@ func registerFilesRoutes(mux *http.ServeMux, m Mux, allowed hostAllowlist, denyD
 		rawSlots:    make(chan struct{}, rawMaxRunning),
 		searchSlots: make(chan struct{}, searchMaxRunning),
 		decodeSlots: make(chan struct{}, decodeMaxRunning),
-		deny:        append(filesDenyDirs(systemDenyDirs...), filesDenyDirs(denyDirs...)...),
+		deny:        slices.Concat(filesDenyDirs(systemDenyDirs...), filesDenyDirs(keyDirs()...), filesDenyDirs(denyDirs...)),
+		placeNow:    newTTLCache[string](placeCheckTTL),
 		writeSlots:  make(chan struct{}, writeMaxRunning),
 		writeLocks:  &writeLocks{locks: map[string]*sync.Mutex{}},
 	}
@@ -139,6 +144,7 @@ func registerFilesRoutes(mux *http.ServeMux, m Mux, allowed hostAllowlist, denyD
 	mux.HandleFunc("/api/mux/panes/{id}/files/raw", f.handleRaw)
 	mux.HandleFunc("/api/mux/panes/{id}/files/download", f.handleDownload)
 	mux.HandleFunc("/api/mux/panes/{id}/files/document", f.handleDocument)
+	mux.HandleFunc("/api/mux/files/places", f.handlePlaces)
 	return f
 }
 
@@ -160,8 +166,9 @@ func (f *filesAPI) begin(w http.ResponseWriter, r *http.Request) (*filesRequest,
 }
 
 // start checks a files request (cross-site, then allow for the role) and
-// resolves the pane's root, refusing one the client saw as another (the root
-// query). writeGuard lets GETs through, and with --no-auth another page could
+// resolves the pane's root, or with place=<id> that Place (full clients
+// only, and not for Changes), refusing one the client saw as another (the
+// root query). writeGuard lets GETs through, and with --no-auth another page could
 // otherwise make the server run git in a pane's repo.
 func (f *filesAPI) start(w http.ResponseWriter, r *http.Request, allow func(http.ResponseWriter, *http.Request) bool) (*filesRequest, context.CancelFunc, bool) {
 	if msg := crossSiteRejection(f.allowed, r); msg != "" {
@@ -173,7 +180,21 @@ func (f *filesAPI) start(w http.ResponseWriter, r *http.Request, allow func(http
 	}
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	ctx, cancel := context.WithTimeout(r.Context(), filesTimeout)
-	root, err := f.paneRootForRead(ctx, r.PathValue("id"))
+	var root filesRoot
+	var err error
+	switch id := r.URL.Query().Get("place"); {
+	case id == "":
+		root, err = f.paneRootForRead(ctx, r.PathValue("id"))
+	case isViewOnly(r):
+		// A Place such as ~/dotfiles is not for every paired viewer.
+		cancel()
+		writeViewOnly(w)
+		return nil, nil, false
+	case placeRefused(r):
+		err = errPlaceNotSupported
+	default:
+		root, err = f.placeRoot(ctx, id)
+	}
 	if err == nil {
 		if seen := r.URL.Query().Get("root"); seen != "" && seen != root.Root {
 			err = &rootChangedError{root.Root}

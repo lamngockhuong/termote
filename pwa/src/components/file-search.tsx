@@ -37,6 +37,8 @@ type Found =
 
 interface Props {
   paneId: string
+  // The Place the files are under (absent: the pane's folder)
+  place?: string
   root?: string
   isRepo: boolean
   // The query, kept by the caller: Back from a file opened here returns to
@@ -59,6 +61,7 @@ interface Props {
 // and the matches in place of the tree while it holds a query.
 export function FileSearch({
   paneId,
+  place,
   root,
   isRepo,
   query,
@@ -93,7 +96,7 @@ export function FileSearch({
       setFound({ status: 'loading' })
       try {
         const res = await findFiles(
-          paneId,
+          { paneId, place },
           { q, root, ignored, exclude: excludes, fresh },
           abort.signal,
         )
@@ -112,7 +115,7 @@ export function FileSearch({
       clearTimeout(timer)
       abort.abort()
     }
-  }, [paneId, q, root, ignored, excludes, refreshTick, onRootChanged])
+  }, [paneId, place, q, root, ignored, excludes, refreshTick, onRootChanged])
 
   const focusRow = (i: number) => rows.current[i]?.focus()
 

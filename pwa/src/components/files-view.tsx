@@ -34,6 +34,7 @@ import {
   useDirtyCheck,
   useFiles,
   useFilesFocusRequest,
+  usePlaces,
 } from '../hooks/use-files'
 import { changesMoved } from '../hooks/use-git-changes'
 import { useLongPress } from '../hooks/use-long-press'
@@ -71,6 +72,7 @@ import { FileViewer } from './file-viewer'
 import { NewFileDialog } from './new-file-dialog'
 import { OpenFilesButton, OpenFilesSheet } from './open-files-sheet'
 import { PaneDirHeader, ViewMessage } from './pane-dir-header'
+import { PlacesMenu } from './places-menu'
 import { RenameFileDialog } from './rename-file-dialog'
 import { ReviewCommentSheet } from './review-comment-sheet'
 import { ReviewControl } from './review-panel'
@@ -182,6 +184,8 @@ export function FilesView({
       canRename={!readOnly}
       // and its downloads
       canDownload={!readOnly}
+      // and every Place
+      canPlaces={!readOnly && !!mux.caps.places}
       openWindow={openWindow}
     />
   )
@@ -190,6 +194,8 @@ export function FilesView({
 // What the Rename box is open for
 interface Renaming {
   root: string
+  // The Place root is, absent for the pane's folder
+  place?: string
   path: string
   // The user chose to show this sensitive file: no second ask
   revealed: boolean
@@ -198,6 +204,7 @@ interface Renaming {
 // What the Delete box is open for
 interface Deleting {
   root: string
+  place?: string
   path: string
   kind: 'file' | 'dir'
   sensitive: boolean
@@ -212,6 +219,7 @@ function PaneFiles({
   canDelete,
   canRename,
   canDownload,
+  canPlaces,
   openWindow,
   session,
   sessions,
@@ -223,6 +231,7 @@ function PaneFiles({
   canDelete: boolean
   canRename: boolean
   canDownload: boolean
+  canPlaces: boolean
   sessions: Session[]
   canSendToAgent: boolean
 } & Pick<
@@ -236,6 +245,7 @@ function PaneFiles({
   | 'showView'
 >) {
   const f = useFiles(paneId)
+  const places = usePlaces(canPlaces)
   const { settings } = useSettings()
   const { load, rootChanges, follow } = f
   const isDirty = useDirtyCheck(paneId)
@@ -250,7 +260,11 @@ function PaneFiles({
   )
   // A comment of the review opened: its file here, its diff in Changes
   const openComment = (cm: ReviewComment) => {
-    if (cm.root !== f.root) {
+    // A file comment of a Place opens it there
+    const ofPlace =
+      cm.source === 'file' && places.some((p) => p.path === cm.root)
+    // On a Place, a comment of another root is the pane's: its folder opens
+    if (cm.root !== f.root && !ofPlace && !f.place) {
       notify('The pane is in another folder now', { variant: 'warning' })
       return
     }
@@ -317,7 +331,7 @@ function PaneFiles({
   // A tab with unsaved changes closes only once the user says so
   const requestClose = (id: string) => {
     const t = f.tabs.find((x) => x.id === id)
-    if (t && isDirty(t.path)) setClosing(id)
+    if (t && isDirty(t.root, t.path)) setClosing(id)
     else f.close(id)
   }
 
@@ -333,7 +347,7 @@ function PaneFiles({
         title: t.path,
         detail: dir,
         pinned: t.pinned,
-        dirty: isDirty(t.path),
+        dirty: isDirty(t.root, t.path),
       }
     }),
     activeId: f.activeId,
@@ -353,13 +367,24 @@ function PaneFiles({
 
   useEffect(() => load(), [load])
 
-  // One notice per move of the root, not one per view that saw it
+  // One notice per move of the root, not one per view that saw it (the
+  // store does not count a move to a Place the user picked)
   const seenChanges = useRef(rootChanges)
   useEffect(() => {
     if (rootChanges > seenChanges.current)
       notify("The pane's directory changed")
     seenChanges.current = rootChanges
   }, [rootChanges, notify])
+  // The Place shown is gone (the server no longer offers it, or it leads
+  // elsewhere now): back to the pane's folder, said once
+  const seenLost = useRef(f.placeLost)
+  useEffect(() => {
+    if (f.placeLost > seenLost.current)
+      notify("That place isn't available; showing the pane's folder", {
+        variant: 'warning',
+      })
+    seenLost.current = f.placeLost
+  }, [f.placeLost, notify])
 
   const refresh = () => {
     f.refresh()
@@ -411,24 +436,34 @@ function PaneFiles({
     // The tree shows only once the root is read
     const root = f.root as string
     if (!isDir(entry)) {
-      setDeleting({ root, path, kind: 'file', sensitive: entry.sensitive })
+      setDeleting({
+        root,
+        place: f.place,
+        path,
+        kind: 'file',
+        sensitive: entry.sensitive,
+      })
       return
     }
     // A folder only once it is known to be empty: read now unless it was
     const dir = f.dirs[path]?.entries ? f.dirs[path] : await f.list(path)
     if (!dir.entries) notify("This folder can't be read")
     else if (dir.entries.length > 0) notify('The folder is not empty')
-    else setDeleting({ root, path, kind: 'dir', sensitive: false })
+    else
+      setDeleting({ root, place: f.place, path, kind: 'dir', sensitive: false })
   }
 
   const undo = async (d: Deleting, trashId: string) => {
     const name = visibleUnsafe(baseName(d.path))
     try {
-      const res = await restoreFile(paneId, {
-        root: d.root,
-        trashId,
-        reveal: d.sensitive,
-      })
+      const res = await restoreFile(
+        { paneId, place: d.place },
+        {
+          root: d.root,
+          trashId,
+          reveal: d.sensitive,
+        },
+      )
       await f.restored(res.path)
       notify(`Restored ${name}`, { variant: 'success' })
     } catch (err) {
@@ -460,7 +495,7 @@ function PaneFiles({
       return
     }
     // Its unsaved changes go with it: the user asked to delete it
-    dropDraft(paneId, o.path)
+    dropDraft(paneId, d.root, o.path)
     f.deleted(o.path)
     if (o.permanent || !o.trashId) {
       notify(`Deleted ${name} permanently`)
@@ -494,12 +529,16 @@ function PaneFiles({
     else download(root, path, revealed)
   }
   const download = (root: string, path: string, reveal: boolean) =>
-    downloadFile({ paneId, root, path, reveal }, notify, f.rootChanged)
+    downloadFile(
+      { paneId, place: f.place, root, path, reveal },
+      notify,
+      f.rootChanged,
+    )
 
   // A file of the tree, or the one shown, to rename
   const askRename = (path: string, revealed: boolean) =>
     // The tree and a file show once the root is read
-    setRenaming({ root: f.root as string, path, revealed })
+    setRenaming({ root: f.root as string, place: f.place, path, revealed })
 
   const undoRename = async (r: Renaming, to: string, reveal: boolean) => {
     const name = visibleUnsafe(baseName(r.path))
@@ -510,12 +549,15 @@ function PaneFiles({
       return
     }
     try {
-      const res = await renameFile(paneId, {
-        root: r.root,
-        path: to,
-        newPath: r.path,
-        reveal,
-      })
+      const res = await renameFile(
+        { paneId, place: r.place },
+        {
+          root: r.root,
+          path: to,
+          newPath: r.path,
+          reveal,
+        },
+      )
       followRename(r.root, to, res.path, reveal)
       notify(`Renamed back to ${name}`, { variant: 'success' })
     } catch (err) {
@@ -591,6 +633,7 @@ function PaneFiles({
         onRefresh={refresh}
         refreshing={root?.loading}
       >
+        <PlacesMenu places={places} place={f.place} onPick={f.openPlace} />
         {newFileRoot !== undefined && (
           <IconButton
             size="sm"
@@ -624,6 +667,7 @@ function PaneFiles({
       {creating !== undefined && (
         <NewFileDialog
           paneId={paneId}
+          place={f.place}
           root={creating}
           initialPath={focusedDir(f, focused)}
           onClose={() => setCreating(undefined)}
@@ -635,6 +679,7 @@ function PaneFiles({
       {renaming && (
         <RenameFileDialog
           paneId={paneId}
+          place={renaming.place}
           root={renaming.root}
           path={renaming.path}
           reveal={renaming.revealed}
@@ -665,6 +710,7 @@ function PaneFiles({
       {deleting && (
         <DeleteFileDialog
           paneId={paneId}
+          place={deleting.place}
           root={deleting.root}
           path={deleting.path}
           kind={deleting.kind}
@@ -709,7 +755,9 @@ function PaneFiles({
             // shown: a Show never carries over to another file
             key={`${tab.id}\u0000${f.root}\u0000${tab.path}`}
             paneId={paneId}
+            place={f.place}
             root={f.root}
+            draftRoot={tab.root}
             path={tab.path}
             wrapByDefault={isMobile || settings.editorWrap}
             compact={isMobile}
@@ -749,7 +797,11 @@ function PaneFiles({
             // under the root a link names
             onOpenWindow={
               openWindow &&
-              ((e) => openWindow({ view: 'files', file: tab.path }, e))
+              ((e) =>
+                openWindow(
+                  { view: 'files', file: tab.path, place: f.place },
+                  e,
+                ))
             }
             // A sensitive file offers it only once shown. Never through a
             // link the tree knows of: the server refuses it
@@ -764,6 +816,7 @@ function PaneFiles({
                     setDeleting({
                       // A file opens once the root is read
                       root: f.root as string,
+                      place: f.place,
                       path: tab.path,
                       kind: 'file',
                       sensitive,
@@ -797,6 +850,7 @@ function PaneFiles({
             {pane === 'search' ? (
               <ContentSearch
                 paneId={paneId}
+                place={f.place}
                 root={f.root}
                 state={search}
                 onState={patchSearch}
@@ -810,6 +864,7 @@ function PaneFiles({
             ) : (
               <FileSearch
                 paneId={paneId}
+                place={f.place}
                 root={f.root}
                 isRepo={f.isRepo}
                 query={query}

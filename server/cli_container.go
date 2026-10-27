@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -9,11 +10,13 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf16"
 )
 
@@ -37,6 +40,9 @@ const localImage = "termote:local"
 // working directory.
 const containerWorkspace = "/workspace"
 
+// containerPlacesDir holds the Places mounted in the container.
+const containerPlacesDir = "/places"
+
 // containerStartWait bounds the wait for a freshly started container (an
 // image pull happens before it, so this is only the server's start).
 var containerStartWait = 30 * time.Second
@@ -57,6 +63,12 @@ type containerOptions struct {
 	user        string // Basic auth username, shared with the native server
 	allowHosts  []string
 	removeHosts []string
+	// allowPaths are the host folders mounted as Places; newPaths the ones
+	// of this command line, mounted the ones that pass the checks now.
+	allowPaths  []string
+	removePaths []string
+	newPaths    []string
+	mounted     []string
 }
 
 func (c *cli) cmdContainer(args []string) error {
@@ -93,6 +105,9 @@ func (c *cli) parseContainerArgs(args []string) (containerOptions, map[string]bo
 	fs.StringVar(&o.user, "user", "", "")
 	fs.Var(&hosts, "allow-host", "")
 	fs.Var(&remove, "remove-host", "")
+	var paths, removePaths stringList
+	fs.Var(&paths, "allow-path", "")
+	fs.Var(&removePaths, "remove-path", "")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return o, nil, flagErr(err)
@@ -106,6 +121,12 @@ func (c *cli) parseContainerArgs(args []string) (containerOptions, map[string]bo
 		return o, nil, usageError("--tailscale and --no-tailscale cannot be combined")
 	}
 	o.allowHosts, o.removeHosts = hosts, remove
+	if o.newPaths, err = normalizeAllowPaths(paths); err != nil {
+		return o, nil, err
+	}
+	if o.removePaths, err = normalizeAllowPaths(removePaths); err != nil {
+		return o, nil, err
+	}
 	return o, set, nil
 }
 
@@ -145,6 +166,7 @@ func (c *cli) mergeContainer(o *containerOptions, set map[string]bool, s *contai
 		return slices.ContainsFunc(o.removeHosts, func(r string) bool { return strings.EqualFold(r, h) })
 	})
 	slices.Sort(o.allowHosts)
+	o.allowPaths = mergePaths(s.AllowPaths, o.newPaths, o.removePaths)
 
 	if o.port == 0 {
 		o.port = containerPort
@@ -180,6 +202,21 @@ func (c *cli) mergeContainer(o *containerOptions, set map[string]bool, s *contai
 	if strings.ContainsAny(o.workspace, "\"\n\r,") {
 		return usageError("invalid --workspace %q", o.workspace)
 	}
+	c.unknownRemovedPaths(s.AllowPaths, o.removePaths)
+	mounted, err := c.checkAllowPaths(o.allowPaths, o.newPaths, "container up", func(p string) error {
+		// The path goes in --mount's comma-separated value.
+		if strings.Contains(p, ",") {
+			return errors.New("',' cannot be mounted")
+		}
+		if underDir(p, o.workspace) || underDir(o.workspace, p) {
+			return errors.New("overlaps the workspace")
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	o.mounted = mounted
 	if o.mux == "" {
 		o.mux = c.chooseContainerMux()
 		return validateMux(o.mux, o.noAuth, o.herdrNoAuth)
@@ -327,8 +364,8 @@ func (c *cli) containerUp(args []string) error {
 		cfg.Password = pass
 	}
 	cfg.User = o.user
-	cfg.Container = &containerConfig{LAN: o.lan, NoAuth: o.noAuth, Port: o.port, Tailscale: o.tailscale, AllowHosts: o.allowHosts, Workspace: o.workspace,
-		Mux: o.mux, HerdrAllowNoAuth: o.herdrNoAuth}
+	cfg.Container = &containerConfig{LAN: o.lan, NoAuth: o.noAuth, Port: o.port, Tailscale: o.tailscale, AllowHosts: o.allowHosts, AllowPaths: o.allowPaths,
+		Workspace: o.workspace, Mux: o.mux, HerdrAllowNoAuth: o.herdrNoAuth}
 	if err := c.saveConfig(cfg); err != nil {
 		c.warnf("Could not save the container settings: %v", err)
 	}
@@ -346,7 +383,7 @@ func (c *cli) containerUp(args []string) error {
 		c.infof("Podman has no daemon to restart the container after a reboot; to keep it, run it as a Quadlet unit (see: https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html)")
 	}
 	c.infof("Container running (%s, image %s)", rt, image)
-	c.showAccessInfo(startOptions{lan: o.lan, noAuth: o.noAuth, port: o.port, tailscale: o.tailscale, mux: o.mux, user: o.user, allowHosts: o.allowHosts}, pass, reused)
+	c.showAccessInfo(startOptions{lan: o.lan, noAuth: o.noAuth, port: o.port, tailscale: o.tailscale, mux: o.mux, user: o.user, allowHosts: o.allowHosts, allowPaths: o.mounted}, pass, reused)
 	// One password and username for both: a new one also changes the native
 	// server's.
 	if !reused && pass != "" && saved != nil && saved.Password != "" {
@@ -372,6 +409,14 @@ func (c *cli) runContainer(rt, image, bind string, o containerOptions, pass stri
 		"TERMOTE_HERDR_ALLOW_NO_AUTH": strconv.FormatBool(o.herdrNoAuth),
 		"TERMOTE_WORKSPACE_HOME":      c.workspaceHome(o.workspace),
 	})
+	places, mounts := containerPlaces(o.mounted)
+	if len(places) > 0 {
+		b, err := json.Marshal(places)
+		if err != nil {
+			return err
+		}
+		env = append(env, "TERMOTE_PLACES="+string(b))
+	}
 	args := []string{"run", "-d", "--name", containerName, "--restart", "unless-stopped",
 		"-p", fmt.Sprintf("%s:%d:%d", bind, o.port, containerPort),
 		"--mount", "type=bind,src=" + o.workspace + ",dst=" + containerWorkspace, "-w", containerWorkspace,
@@ -379,11 +424,39 @@ func (c *cli) runContainer(rt, image, bind string, o containerOptions, pass stri
 		"--mount", "type=volume,src=" + containerStateVolume() + ",dst=/home/termote/.local/state",
 		"-e", "NO_AUTH", "-e", "TERMOTE_USER", "-e", "TERMOTE_PASS", "-e", "TERMOTE_ALLOWED_HOSTS",
 		"-e", "TERMOTE_MUX", "-e", "TERMOTE_HERDR_ALLOW_NO_AUTH", "-e", "TERMOTE_WORKSPACE_HOME"}
+	args = append(args, mounts...)
+	if len(places) > 0 {
+		args = append(args, "-e", "TERMOTE_PLACES")
+	}
 	args = append(args, c.containerUserArgs(rt)...)
 	if _, err := c.run.Output("", env, rt, append(args, image)...); err != nil {
 		return fmt.Errorf("%s run %s: %w", rt, image, withStderr(err))
 	}
 	return nil
+}
+
+// containerPlaces mounts each host folder at /places/<id>-<name>: the id is
+// the host path's, so a mount never moves when another Place is removed.
+// The server inside gets the host ids and names with the mount paths.
+func containerPlaces(hostPaths []string) ([]placeSpec, []string) {
+	var places []placeSpec
+	var mounts []string
+	for _, s := range placeSpecs(hostPaths) {
+		dst := path.Join(containerPlacesDir, s.ID+"-"+placeMountName(filepath.Base(s.Path)))
+		mounts = append(mounts, "--mount", "type=bind,src="+s.Path+",dst="+dst)
+		places = append(places, placeSpec{ID: s.ID, Name: s.Name, Path: dst})
+	}
+	return places, mounts
+}
+
+// placeMountName keeps [A-Za-z0-9._-] of a folder name, the rest as '_'.
+func placeMountName(name string) string {
+	return strings.Map(func(r rune) rune {
+		if r < 128 && (r == '.' || r == '_' || r == '-' || unicode.IsLetter(r) || unicode.IsDigit(r)) {
+			return r
+		}
+		return '_'
+	}, name)
 }
 
 // withStderr adds what a command that exited with an error wrote to stderr:

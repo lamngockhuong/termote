@@ -60,7 +60,7 @@ import {
 import { useTheme } from './contexts/theme-context'
 import { useAgentNotifications } from './hooks/use-agent-notifications'
 import { useCommandHistory } from './hooks/use-command-history'
-import { followInFiles, requestFilesFocus } from './hooks/use-files'
+import { followInFiles, requestFilesFocus, usePlaces } from './hooks/use-files'
 import { useFontSize } from './hooks/use-font-size'
 import { useFullscreen } from './hooks/use-fullscreen'
 import { useGestures } from './hooks/use-gestures'
@@ -194,7 +194,7 @@ function showOverviewAddress() {
 // The file a focus window was opened on: a file in the Files panel, or a
 // side's diff in the Changes panel
 type FocusFile = Required<Pick<DeepLink, 'view' | 'file'>> &
-  Pick<DeepLink, 'staged' | 'orig'>
+  Pick<DeepLink, 'staged' | 'orig' | 'place'>
 
 // The address of the main window for link: the same target, without solo
 function mainWindowURL(link: string | null) {
@@ -329,6 +329,9 @@ export default function App({
   } = useLocalSessions(settings.pollInterval)
   // The server refuses every write of a view-only device; the UI hides them.
   const readOnly = readOnlyProp || mux.caps.role === 'view'
+  // The Places, read once: a root found by a search or a file opened
+  // lately opens the Place it is the root of
+  usePlaces(!readOnly && !!mux.caps.places)
   // A view-only device on a backend that cannot stream to it (tmux before
   // 3.2, psmux): the terminal is not opened at all.
   const viewStreamOff = mux.caps.role === 'view' && !mux.caps.viewStream
@@ -657,6 +660,7 @@ export default function App({
           file: target.file,
           ...(target.staged && { staged: true as const }),
           orig: target.orig,
+          place: target.place,
         }),
         e.shiftKey,
       )
@@ -1206,6 +1210,7 @@ export default function App({
         file: link.file,
         ...(link.staged && { staged: link.staged }),
         ...(link.orig && { orig: link.orig }),
+        ...(link.place && { place: link.place }),
       })
       setPanelMaximized(true)
     }
@@ -1219,7 +1224,12 @@ export default function App({
       })
       return
     }
-    void followInFiles(paneId, { path: link.file }).then((result) => {
+    // A view-only client never opens a Place
+    void followInFiles(
+      paneId,
+      { path: link.file },
+      readOnly ? undefined : link.place,
+    ).then((result) => {
       if (result === 'missing' || result === 'failed')
         showToast('File not found or not allowed', 'warning')
     })
@@ -1319,6 +1329,7 @@ export default function App({
             file: focusFile.file,
             staged: focusFile.staged,
             orig: focusFile.orig,
+            place: focusFile.place,
           }),
       })
     : null

@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -26,13 +27,16 @@ import (
 // native server's settings come first; the container keeps its own, and the
 // password is shared by both.
 type savedConfig struct {
-	LAN              bool
-	NoAuth           bool
-	Port             int
-	Tailscale        string
-	Mux              string
-	AllowHosts       []string // hosts added with --allow-host only
-	AllowLocalUsers  []string // OS users added with --allow-local-user
+	LAN             bool
+	NoAuth          bool
+	Port            int
+	Tailscale       string
+	Mux             string
+	AllowHosts      []string // hosts added with --allow-host only
+	AllowLocalUsers []string // OS users added with --allow-local-user
+	// AllowPaths are the folders added with --allow-path, offered as Places
+	// in Files.
+	AllowPaths       []string
 	HerdrAllowNoAuth bool
 	// User is the Basic auth username, shared by native and container like
 	// the password; "" (a config saved before it existed) means admin.
@@ -53,6 +57,7 @@ type containerConfig struct {
 	Port       int
 	Tailscale  string
 	AllowHosts []string
+	AllowPaths []string // host folders mounted as Places
 	Workspace  string
 	// Mux is the backend inside the container, apart from the native one;
 	// "" until the first up picks one.
@@ -193,6 +198,7 @@ const (
 	keyHerdrAllowNoAuth = "TERMOTE_HERDR_ALLOW_NO_AUTH"
 	keyUser             = "TERMOTE_USER"
 	keyAllowLocalUsers  = "TERMOTE_ALLOWED_LOCAL_USERS"
+	keyAllowPaths       = "TERMOTE_ALLOWED_PATHS" // ':'-separated
 
 	// The container's keys; present once `container up` ran.
 	keyContainerLAN         = "TERMOTE_CONTAINER_LAN"
@@ -200,6 +206,7 @@ const (
 	keyContainerPort        = "TERMOTE_CONTAINER_PORT"
 	keyContainerTailscale   = "TERMOTE_CONTAINER_TAILSCALE"
 	keyContainerHosts       = "TERMOTE_CONTAINER_ALLOWED_HOSTS"
+	keyContainerPaths       = "TERMOTE_CONTAINER_ALLOWED_PATHS"
 	keyContainerWorkspace   = "TERMOTE_CONTAINER_WORKSPACE"
 	keyContainerMux         = "TERMOTE_CONTAINER_MUX"
 	keyContainerHerdrNoAuth = "TERMOTE_CONTAINER_HERDR_ALLOW_NO_AUTH"
@@ -230,6 +237,7 @@ func parseUnixConfig(data []byte, key func() string) (*savedConfig, error) {
 		Mux:              kv[keyMux],
 		AllowHosts:       splitHosts(kv[keyAllowedHosts]),
 		AllowLocalUsers:  splitHosts(kv[keyAllowLocalUsers]),
+		AllowPaths:       splitPaths(kv[keyAllowPaths]),
 		HerdrAllowNoAuth: kv[keyHerdrAllowNoAuth] == "true",
 		User:             kv[keyUser],
 	}
@@ -240,6 +248,7 @@ func parseUnixConfig(data []byte, key func() string) (*savedConfig, error) {
 			NoAuth:           kv[keyContainerNoAuth] == "true",
 			Tailscale:        kv[keyContainerTailscale],
 			AllowHosts:       splitHosts(kv[keyContainerHosts]),
+			AllowPaths:       splitPaths(kv[keyContainerPaths]),
 			Workspace:        kv[keyContainerWorkspace],
 			Mux:              kv[keyContainerMux],
 			HerdrAllowNoAuth: kv[keyContainerHerdrNoAuth] == "true",
@@ -268,10 +277,18 @@ func formatUnixConfig(cfg savedConfig, key string) ([]byte, error) {
 		mac = passwordMAC(enc, key)
 	}
 	values := []string{cfg.Tailscale, cfg.Mux, strings.Join(cfg.AllowHosts, ","), strings.Join(cfg.AllowLocalUsers, ","), cfg.User}
+	paths := slices.Clone(cfg.AllowPaths)
 	if cc := cfg.Container; cc != nil {
 		values = append(values, cc.Tailscale, strings.Join(cc.AllowHosts, ","), cc.Workspace, cc.Mux)
+		paths = append(paths, cc.AllowPaths...)
 	}
-	for _, v := range values {
+	// The path lists are ':'-separated.
+	for _, p := range paths {
+		if strings.Contains(p, ":") {
+			return nil, fmt.Errorf("--allow-path %s: ':' cannot be saved in the config on this system", p)
+		}
+	}
+	for _, v := range append(values, paths...) {
 		if strings.ContainsAny(v, "\"\n\r") {
 			return nil, fmt.Errorf("invalid config value %q", v)
 		}
@@ -292,12 +309,18 @@ func formatUnixConfig(cfg savedConfig, key string) ([]byte, error) {
 	if len(cfg.AllowLocalUsers) > 0 {
 		w(keyAllowLocalUsers, strings.Join(cfg.AllowLocalUsers, ","))
 	}
+	if len(cfg.AllowPaths) > 0 {
+		w(keyAllowPaths, strings.Join(cfg.AllowPaths, ":"))
+	}
 	if cc := cfg.Container; cc != nil {
 		w(keyContainerLAN, strconv.FormatBool(cc.LAN))
 		w(keyContainerNoAuth, strconv.FormatBool(cc.NoAuth))
 		w(keyContainerPort, strconv.Itoa(cc.Port))
 		w(keyContainerTailscale, cc.Tailscale)
 		w(keyContainerHosts, strings.Join(cc.AllowHosts, ","))
+		if len(cc.AllowPaths) > 0 {
+			w(keyContainerPaths, strings.Join(cc.AllowPaths, ":"))
+		}
 		w(keyContainerWorkspace, cc.Workspace)
 		w(keyContainerMux, cc.Mux)
 		w(keyContainerHerdrNoAuth, strconv.FormatBool(cc.HerdrAllowNoAuth))
@@ -316,6 +339,7 @@ type windowsConfigFile struct {
 	Mux              string               `json:"Mux,omitempty"`
 	AllowHost        []string             `json:"AllowHost,omitempty"`
 	AllowLocalUser   []string             `json:"AllowLocalUser,omitempty"`
+	AllowPath        []string             `json:"AllowPath,omitempty"`
 	HerdrAllowNoAuth bool                 `json:"HerdrAllowNoAuth,omitempty"`
 	User             string               `json:"User,omitempty"`
 	Container        *windowsContainerCfg `json:"Container,omitempty"`
@@ -328,6 +352,7 @@ type windowsContainerCfg struct {
 	Port             int      `json:"Port"`
 	Tailscale        string   `json:"Tailscale,omitempty"`
 	AllowHost        []string `json:"AllowHost,omitempty"`
+	AllowPath        []string `json:"AllowPath,omitempty"`
 	Workspace        string   `json:"Workspace,omitempty"`
 	Mux              string   `json:"Mux,omitempty"`
 	HerdrAllowNoAuth bool     `json:"HerdrAllowNoAuth,omitempty"`
@@ -355,12 +380,13 @@ func parseWindowsConfig(data []byte) (*savedConfig, error) {
 		Mux:              f.Mux,
 		AllowHosts:       f.AllowHost,
 		AllowLocalUsers:  f.AllowLocalUser,
+		AllowPaths:       f.AllowPath,
 		HerdrAllowNoAuth: f.HerdrAllowNoAuth,
 		User:             f.User,
 	}
 	if cc := f.Container; cc != nil {
-		cfg.Container = &containerConfig{LAN: cc.Lan, NoAuth: cc.NoAuth, Port: cc.Port, Tailscale: cc.Tailscale, AllowHosts: cc.AllowHost, Workspace: cc.Workspace,
-			Mux: cc.Mux, HerdrAllowNoAuth: cc.HerdrAllowNoAuth}
+		cfg.Container = &containerConfig{LAN: cc.Lan, NoAuth: cc.NoAuth, Port: cc.Port, Tailscale: cc.Tailscale, AllowHosts: cc.AllowHost, AllowPaths: cc.AllowPath,
+			Workspace: cc.Workspace, Mux: cc.Mux, HerdrAllowNoAuth: cc.HerdrAllowNoAuth}
 	}
 	if f.EncryptedPass != "" {
 		blob, err := base64.StdEncoding.DecodeString(f.EncryptedPass)
@@ -386,13 +412,14 @@ func formatWindowsConfig(cfg savedConfig, now time.Time) ([]byte, error) {
 		Mux:              cfg.Mux,
 		AllowHost:        cfg.AllowHosts,
 		AllowLocalUser:   cfg.AllowLocalUsers,
+		AllowPath:        cfg.AllowPaths,
 		HerdrAllowNoAuth: cfg.HerdrAllowNoAuth,
 		User:             cfg.User,
 		SavedAt:          now.Format(time.RFC3339),
 	}
 	if cc := cfg.Container; cc != nil {
-		f.Container = &windowsContainerCfg{Lan: cc.LAN, NoAuth: cc.NoAuth, Port: cc.Port, Tailscale: cc.Tailscale, AllowHost: cc.AllowHosts, Workspace: cc.Workspace,
-			Mux: cc.Mux, HerdrAllowNoAuth: cc.HerdrAllowNoAuth}
+		f.Container = &windowsContainerCfg{Lan: cc.LAN, NoAuth: cc.NoAuth, Port: cc.Port, Tailscale: cc.Tailscale, AllowHost: cc.AllowHosts, AllowPath: cc.AllowPaths,
+			Workspace: cc.Workspace, Mux: cc.Mux, HerdrAllowNoAuth: cc.HerdrAllowNoAuth}
 	}
 	if cfg.Password != "" {
 		blob, err := dpapiProtect([]byte(cfg.Password))

@@ -83,6 +83,8 @@ export interface MuxSnapshot {
     uploads?: boolean
     // The server keeps deleted files for an Undo (files/delete, files/restore).
     trash?: boolean
+    // Files offers folders besides the pane's (files/places): a full client.
+    places?: boolean
     // Sign-in is on: the session can be ended (/logout).
     auth?: boolean
     // Groups (tmux sessions, Herdr workspaces) can be created, renamed and
@@ -1139,46 +1141,70 @@ export interface FileDiff {
   worktreeHash?: string
 }
 
+// What a files request reads: the pane's root, or with place one of the
+// folders the operator allowed (a Place, by its id from fetchPlaces).
+// Changes (status, diff, apply, the last commit) is the pane's only.
+export interface FilesTarget {
+  paneId: string
+  place?: string
+}
+
 // A list sends the parameter once per value (exclude=a&exclude=b)
-function filesUrl(
-  paneId: string,
+export function filesUrl(
+  target: FilesTarget,
   op: string,
   query: Record<string, string | string[] | undefined>,
 ): string {
   const params = new URLSearchParams()
-  for (const [k, v] of Object.entries(query))
+  for (const [k, v] of Object.entries({ ...query, place: target.place }))
     for (const one of Array.isArray(v) ? v : [v]) if (one) params.append(k, one)
   const qs = params.toString()
-  return `${API_BASE}/panes/${encodeURIComponent(paneId)}/files/${op}${qs ? `?${qs}` : ''}`
+  return `${API_BASE}/panes/${encodeURIComponent(target.paneId)}/files/${op}${qs ? `?${qs}` : ''}`
 }
 
 async function filesGet<T>(
-  paneId: string,
+  target: FilesTarget,
   op: string,
   query: Record<string, string | undefined>,
 ): Promise<T> {
-  const res = await fetch(filesUrl(paneId, op, query))
+  const res = await fetch(filesUrl(target, op, query))
   if (!res.ok) throw await requestError(res, true)
   return res.json()
 }
 
+// A folder the operator allowed with --allow-path; path is its root as
+// files/tree reports it
+export interface FilesPlace {
+  id: string
+  name: string
+  path: string
+}
+
+// The Places a full client may open (none for a view-only one)
+export async function fetchPlaces(): Promise<FilesPlace[]> {
+  const res = await fetch(`${API_BASE}/files/places`)
+  if (!res.ok) throw await requestError(res, true)
+  const data: { places?: FilesPlace[] } = await res.json()
+  return data.places ?? []
+}
+
 // One directory ("" is the root). root: the root the client saw, if any.
 export function fetchFilesTree(
-  paneId: string,
+  target: FilesTarget,
   path: string,
   root?: string,
 ): Promise<FilesTree> {
-  return filesGet(paneId, 'tree', { path, root })
+  return filesGet(target, 'tree', { path, root })
 }
 
 // encoding: read the file as that instead of the one the server detects
 // (which also opens a file it would call binary).
 export function fetchFileContent(
-  paneId: string,
+  target: FilesTarget,
   path: string,
   opts: { root?: string; reveal?: boolean; encoding?: FileEncoding } = {},
 ): Promise<FileContent> {
-  return filesGet(paneId, 'content', {
+  return filesGet(target, 'content', {
     path,
     root: opts.root,
     reveal: opts.reveal ? '1' : undefined,
@@ -1211,7 +1237,7 @@ export interface SavedFile {
 // for a UTF-8 file alone); saveAs 'utf-8' writes it as UTF-8 without a BOM
 // instead.
 export async function saveFileContent(
-  paneId: string,
+  target: FilesTarget,
   save: {
     root: string
     path: string
@@ -1223,7 +1249,7 @@ export async function saveFileContent(
   },
 ): Promise<SavedFile> {
   const { root, ...body } = save
-  const res = await fetch(filesUrl(paneId, 'content', { root }), {
+  const res = await fetch(filesUrl(target, 'content', { root }), {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -1246,11 +1272,11 @@ export interface CreatedFile {
 // dropped connection throws something else, after which the file may or may
 // not have been made.
 export async function createFile(
-  paneId: string,
+  target: FilesTarget,
   create: { root: string; path: string; reveal: boolean },
 ): Promise<CreatedFile> {
   const { root, ...body } = create
-  const res = await fetch(filesUrl(paneId, 'create', { root }), {
+  const res = await fetch(filesUrl(target, 'create', { root }), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -1291,11 +1317,11 @@ export interface FindQuery {
 
 // Files under the pane's root whose path matches q, best first
 export async function findFiles(
-  paneId: string,
+  target: FilesTarget,
   query: FindQuery,
   signal?: AbortSignal,
 ): Promise<FindResponse> {
-  const url = filesUrl(paneId, 'find', {
+  const url = filesUrl(target, 'find', {
     q: query.q,
     root: query.root,
     ignored: query.ignored ? '1' : undefined,
@@ -1367,11 +1393,11 @@ export interface SearchQuery {
 // (invalid_regex, invalid_glob, invalid_exclude, busy), or a 409 with the
 // root once it moved.
 export async function searchFiles(
-  paneId: string,
+  target: FilesTarget,
   query: SearchQuery,
   signal?: AbortSignal,
 ): Promise<SearchResponse> {
-  const url = filesUrl(paneId, 'search', {
+  const url = filesUrl(target, 'search', {
     q: query.q,
     root: query.root,
     case: query.matchCase ? '1' : undefined,
@@ -1398,11 +1424,11 @@ export interface FileHash {
 }
 
 export function fetchFileHash(
-  paneId: string,
+  target: FilesTarget,
   path: string,
   root?: string,
 ): Promise<FileHash> {
-  return filesGet(paneId, 'content', { path, root, hash: '1' })
+  return filesGet(target, 'content', { path, root, hash: '1' })
 }
 
 export interface DeletedFile {
@@ -1421,7 +1447,7 @@ export interface DeletedFile {
 // symlink, not_allowed, sensitive, permission, read_only, hardlink,
 // too_large, busy, trash_unavailable), or a 409 with the root once it moved.
 export async function deleteFile(
-  paneId: string,
+  target: FilesTarget,
   del: {
     root: string
     path: string
@@ -1432,7 +1458,7 @@ export async function deleteFile(
   },
 ): Promise<DeletedFile> {
   const { root, ...body } = del
-  const res = await fetch(filesUrl(paneId, 'delete', { root }), {
+  const res = await fetch(filesUrl(target, 'delete', { root }), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -1451,11 +1477,11 @@ export async function deleteFile(
 // invalid_path, busy), a 404 once the file is gone, or a 409 with the root
 // once it moved.
 export async function renameFile(
-  paneId: string,
+  target: FilesTarget,
   rename: { root: string; path: string; newPath: string; reveal: boolean },
 ): Promise<CreatedFile> {
   const { root, ...body } = rename
-  const res = await fetch(filesUrl(paneId, 'rename', { root }), {
+  const res = await fetch(filesUrl(target, 'rename', { root }), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -1468,11 +1494,11 @@ export async function renameFile(
 // Puts a deleted file (or directory) back at its path, never replacing
 // anything there (409 exists).
 export async function restoreFile(
-  paneId: string,
+  target: FilesTarget,
   restore: { root: string; trashId: string; reveal: boolean },
 ): Promise<CreatedFile> {
   const { root, ...body } = restore
-  const res = await fetch(filesUrl(paneId, 'restore', { root }), {
+  const res = await fetch(filesUrl(target, 'restore', { root }), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -1514,7 +1540,7 @@ export async function applyChange(
   },
 ): Promise<AppliedChange> {
   const { root, ...body } = change
-  const res = await fetch(filesUrl(paneId, 'changes/apply', { root }), {
+  const res = await fetch(filesUrl({ paneId }, 'changes/apply', { root }), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -1528,7 +1554,7 @@ export function fetchGitChanges(
   paneId: string,
   root?: string,
 ): Promise<GitChanges> {
-  return filesGet(paneId, 'changes', { root })
+  return filesGet({ paneId }, 'changes', { root })
 }
 
 // The diff of one entry of fetchGitChanges, from its staged or unstaged side
@@ -1537,7 +1563,7 @@ export function fetchFileDiff(
   entry: { path: string; orig?: string },
   opts: { staged: boolean; root?: string; reveal?: boolean },
 ): Promise<FileDiff> {
-  return filesGet(paneId, 'diff', {
+  return filesGet({ paneId }, 'diff', {
     path: entry.path,
     orig: entry.orig,
     staged: opts.staged ? '1' : undefined,
@@ -1578,7 +1604,7 @@ export function fetchLastCommit(
   paneId: string,
   root?: string,
 ): Promise<LastCommit> {
-  return filesGet(paneId, 'commit', { root })
+  return filesGet({ paneId }, 'commit', { root })
 }
 
 // The diff of one file of fetchLastCommit; a 409 head_moved once HEAD is
@@ -1589,7 +1615,7 @@ export function fetchCommitDiff(
   file: { path: string; orig?: string },
   opts: { root?: string; reveal?: boolean },
 ): Promise<FileDiff> {
-  return filesGet(paneId, 'commit/diff', {
+  return filesGet({ paneId }, 'commit/diff', {
     commit: hash,
     path: file.path,
     orig: file.orig,
@@ -1613,13 +1639,13 @@ export interface ImageQuery {
 // A refusal is a RequestError with the server's code (too_large,
 // too_many_pixels, not_image, lfs_pointer, busy, no_version, sensitive).
 export async function fetchFileImage(
-  paneId: string,
+  target: FilesTarget,
   path: string,
   opts: ImageQuery = {},
   signal?: AbortSignal,
 ): Promise<Blob> {
   const res = await fetch(
-    filesUrl(paneId, 'raw', {
+    filesUrl(target, 'raw', {
       path,
       orig: opts.orig,
       side: opts.side,
@@ -1645,13 +1671,13 @@ export interface DocumentQuery {
 // sensitive); a body cut short (fewer bytes than the server announced) is
 // one with code interrupted and status 0.
 export async function fetchFileDocument(
-  paneId: string,
+  target: FilesTarget,
   path: string,
   opts: DocumentQuery = {},
   signal?: AbortSignal,
 ): Promise<Blob> {
   const res = await fetch(
-    filesUrl(paneId, 'document', {
+    filesUrl(target, 'document', {
       path,
       reveal: opts.reveal ? '1' : undefined,
       root: opts.root,
@@ -1691,11 +1717,11 @@ export interface DownloadCheck {
 }
 
 export function fileDownloadUrl(
-  paneId: string,
+  target: FilesTarget,
   path: string,
   opts: DownloadQuery = {},
 ): string {
-  return filesUrl(paneId, 'download', {
+  return filesUrl(target, 'download', {
     path,
     reveal: opts.reveal ? '1' : undefined,
     root: opts.root,
@@ -1707,11 +1733,11 @@ export function fileDownloadUrl(
 // RequestError with the server's code (sensitive, not_allowed, symlink,
 // not_file, too_large, busy, view_only, changed), a 404, or a 409 with root.
 export async function checkFileDownload(
-  paneId: string,
+  target: FilesTarget,
   path: string,
   opts: DownloadQuery = {},
 ): Promise<DownloadCheck> {
-  const res = await fetch(`${fileDownloadUrl(paneId, path, opts)}&check=1`)
+  const res = await fetch(`${fileDownloadUrl(target, path, opts)}&check=1`)
   if (!res.ok) throw await requestError(res, true)
   return res.json()
 }

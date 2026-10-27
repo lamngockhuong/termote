@@ -2096,7 +2096,7 @@ describe('useLocalSessions with zellij', () => {
     resetFilesStores()
     mockSnapshot.extra = { ...zellij(), instanceId: 'i1' }
     const first = await render()
-    expect(isDraftDirty('zZGV2:p0', 'a.md')).toBe(true)
+    expect(isDraftDirty('zZGV2:p0', '/r', 'a.md')).toBe(true)
     first.unmount()
     resetFilesStores()
     mockSnapshot.extra = {
@@ -2105,7 +2105,7 @@ describe('useLocalSessions with zellij', () => {
       caps: { ...zellij().caps, role: 'view' },
     }
     await render()
-    expect(isDraftDirty('zZGV2:p0', 'a.md')).toBe(false)
+    expect(isDraftDirty('zZGV2:p0', '/r', 'a.md')).toBe(false)
     expect(localStorage.getItem(key)).toBeNull()
   })
 

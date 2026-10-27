@@ -74,6 +74,15 @@ example the machine's name on your network), add it with `--allow-host <name>` (
 termote start --lan --allow-host mypc.local
 ```
 
+Files shows the pane's folder. To edit a folder outside it (a shell config folder, notes), add it
+as a Place with `--allow-path <dir>` (repeatable; `--remove-path <dir>` drops one) and pick it from
+**Places** in the Files header. Your home folder itself, `~/.ssh` and Termote's own folders are
+refused; see [Places](deployment-guide.md#places-folders-outside-the-pane).
+
+```bash
+termote start --allow-path ~/.config/fish --allow-path ~/notes
+```
+
 ### Install as PWA
 
 For the best mobile experience, install Termote as a Progressive Web App:

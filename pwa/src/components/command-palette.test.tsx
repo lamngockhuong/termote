@@ -274,7 +274,7 @@ describe('CommandPalette', () => {
       resetFilesStores()
       mockTree.mockClear()
       renderPalette()
-      expect(mockTree).toHaveBeenCalledWith('%1', '', undefined)
+      expect(mockTree).toHaveBeenCalledWith({ paneId: '%1' }, '', undefined)
       expect(options()).toHaveLength(0)
     })
 
@@ -315,7 +315,7 @@ describe('CommandPalette', () => {
       expect(mockFind).not.toHaveBeenCalled()
       await waitFor(() => expect(options()).toHaveLength(3))
       expect(mockFind).toHaveBeenCalledWith(
-        '%1',
+        { paneId: '%1' },
         { q: 'ts', root: '/r', ignored: false, exclude: expect.any(Array) },
         expect.any(AbortSignal),
       )
@@ -364,7 +364,7 @@ describe('CommandPalette', () => {
       renderPalette()
       type('a')
       await waitFor(() => expect(options()).toHaveLength(1))
-      expect(mockTree).toHaveBeenCalledWith('%1', '', undefined)
+      expect(mockTree).toHaveBeenCalledWith({ paneId: '%1' }, '', undefined)
       key('Enter')
       const store = renderHook(() => useFiles('%1')).result
       expect(store.current.active).toMatchObject({
@@ -384,7 +384,7 @@ describe('CommandPalette', () => {
       type('a')
       await waitFor(() => expect(options()).toHaveLength(1))
       expect(mockFind).toHaveBeenLastCalledWith(
-        '%1',
+        { paneId: '%1' },
         expect.objectContaining({ root: '/new' }),
         expect.any(AbortSignal),
       )

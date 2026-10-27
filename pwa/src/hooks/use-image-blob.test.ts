@@ -130,7 +130,7 @@ describe('useImageBlob', () => {
       stale: false,
     })
     expect(mockImage).toHaveBeenCalledWith(
-      '%1',
+      { paneId: '%1' },
       'b.png',
       { root: '/r', reveal: true, side: 'old', staged: true, orig: 'a.png' },
       expect.any(AbortSignal),

@@ -406,7 +406,12 @@ const ERRORS: Record<FilesError, string> = {
 
 interface Props {
   paneId: string
+  // The Place the file is under (Files only; absent: the pane's folder)
+  place?: string
   root?: string
+  // The root the tab was opened under, whose draft it shows: a tab kept
+  // with unsaved changes while the root moved (default: root)
+  draftRoot?: string
   path: string
   // Wrap long lines at first (mobile)
   wrapByDefault: boolean
@@ -565,7 +570,9 @@ export function HeaderActions({
 // (useFileDraft), so a remount opens it again where it was.
 export function FileViewer({
   paneId,
+  place,
   root,
+  draftRoot,
   path,
   wrapByDefault,
   anchor,
@@ -603,7 +610,8 @@ export function FileViewer({
   commentedLines,
 }: Props) {
   const [state, setState] = useState<Loaded>({ kind: 'loading' })
-  const [mine, setDraft] = useFileDraft(paneId, path)
+  const [mine, setDraft] = useFileDraft(paneId, draftRoot ?? root ?? '', path)
+  const target = { paneId, place }
   const [reveal, setReveal] = useState(initialReveal || !!mine?.reveal)
   // The encoding the user chose to read the file as (this tab only); a
   // draft found at mount was read as its own, which its save sends
@@ -687,7 +695,7 @@ export function FileViewer({
   const [retry, setRetry] = useState(0)
   const image = useImageBlob(
     paneId,
-    asImage ? { path, root, reveal } : null,
+    asImage ? { path, root, reveal, place } : null,
     String(retry),
     onRootChanged,
   )
@@ -698,7 +706,7 @@ export function FileViewer({
   const binaryView = asImage || asDocument
   const doc = useDocumentBytes(
     paneId,
-    asDocument ? { path, root, reveal } : null,
+    asDocument ? { path, root, reveal, place } : null,
     String(retry),
     onRootChanged,
   )
@@ -823,7 +831,7 @@ export function FileViewer({
     if (binaryView) return
     let live = true
     setState({ kind: 'loading' })
-    fetchFileContent(paneId, path, { root, reveal, encoding: override }).then(
+    fetchFileContent(target, path, { root, reveal, encoding: override }).then(
       (c) => {
         if (!live) return
         const file = loaded(c)
@@ -843,7 +851,17 @@ export function FileViewer({
     return () => {
       live = false
     }
-  }, [paneId, root, path, reveal, override, binaryView, onRootChanged, reload])
+  }, [
+    paneId,
+    place,
+    root,
+    path,
+    reveal,
+    override,
+    binaryView,
+    onRootChanged,
+    reload,
+  ])
 
   // A draft found when the file is read (one kept from before the app
   // closed, or from before a remount) is checked against the file: one the
@@ -942,7 +960,7 @@ export function FileViewer({
     setSaving(true)
     setSaveError(undefined)
     try {
-      const res = await saveFileContent(paneId, {
+      const res = await saveFileContent(target, {
         root: edit.root,
         path,
         baseHash: edit.baseHash,
@@ -1020,7 +1038,7 @@ export function FileViewer({
     setSaving(true)
     try {
       const file = loaded(
-        await fetchFileContent(paneId, path, {
+        await fetchFileContent(target, path, {
           root: edit.root,
           reveal: edit.reveal,
           encoding: edit.encoding,
@@ -1100,7 +1118,7 @@ export function FileViewer({
     pastes.current = pastes.current.then(async () => {
       try {
         const res = await uploadFileImage(
-          paneId,
+          target,
           { root: d.root, dir: dirOf(path), reveal: d.reveal },
           file,
         )

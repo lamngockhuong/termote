@@ -30,6 +30,9 @@ import (
 const helperEnv = "TEST_TERMOTE_HELPER"
 
 func TestMain(m *testing.M) {
+	// The tests' temp dirs are under /tmp, which a Place may not be in;
+	// TestAllowPathSocketDirs checks the real list.
+	allowPathSocketDirs = func(func(string) string) []string { return nil }
 	// No test ever starts a real herdr server; the autostart tests replace
 	// this with a fake.
 	herdrStartServer = func(string, []string, string) (herdrServerProc, error) {

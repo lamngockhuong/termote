@@ -210,7 +210,7 @@ export function CommandPalette({
       async () => {
         try {
           const res = await findFiles(
-            paneId,
+            { paneId, place: f.place },
             { q: query, root: rootRef.current, ignored, exclude: excludes },
             abort.signal,
           )

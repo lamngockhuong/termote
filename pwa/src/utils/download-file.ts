@@ -118,6 +118,8 @@ export async function startDownload(
 
 export interface DownloadTarget {
   paneId: string
+  // The Place the file is under
+  place?: string
   root?: string
   path: string
   reveal: boolean
@@ -144,8 +146,9 @@ export async function downloadFile(
   const opts = { root: t.root, reveal: t.reveal }
   const iosStandalone = deps.iosStandalone ?? isIosStandalone()
   try {
-    if (!iosStandalone) await checkFileDownload(t.paneId, t.path, opts)
-    await startDownload(fileDownloadUrl(t.paneId, t.path, opts), saveAs, {
+    const target = { paneId: t.paneId, place: t.place }
+    if (!iosStandalone) await checkFileDownload(target, t.path, opts)
+    await startDownload(fileDownloadUrl(target, t.path, opts), saveAs, {
       iosStandalone,
       fetchBlob: deps.fetchBlob ?? fetchFileDownload,
       nav: deps.nav ?? navigator,

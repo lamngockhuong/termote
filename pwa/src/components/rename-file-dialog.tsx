@@ -33,6 +33,8 @@ type Problem = {
 
 interface Props {
   paneId: string
+  // The Place the files are under (absent: the pane's folder)
+  place?: string
   root: string
   // The file renamed, from the root
   path: string
@@ -54,6 +56,7 @@ interface Props {
 // renamed only after a second ask.
 export function RenameFileDialog({
   paneId,
+  place,
   root,
   path,
   reveal,
@@ -95,12 +98,15 @@ export function RenameFileDialog({
     setSending(true)
     setProblem(undefined)
     try {
-      const res = await renameFile(paneId, {
-        root,
-        path,
-        newPath,
-        reveal: withReveal,
-      })
+      const res = await renameFile(
+        { paneId, place },
+        {
+          root,
+          path,
+          newPath,
+          reveal: withReveal,
+        },
+      )
       if (!closed.current) onClose()
       onRenamed(res.path, withReveal, false)
     } catch (err) {

@@ -60,7 +60,7 @@ describe('useDocumentBytes', () => {
     expect(result.current.status).toBe('loading')
     await waitFor(() => expect(result.current.status).toBe('ready'))
     expect(mockDocument).toHaveBeenCalledWith(
-      '%1',
+      { paneId: '%1' },
       'a.pdf',
       { root: '/r', reveal: true },
       expect.any(AbortSignal),

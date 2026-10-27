@@ -4,6 +4,8 @@ import { fetchFileImage, type ImageQuery, RequestError } from './use-mux-api'
 // One image read through files/raw: the path and the version asked for
 export interface ImageRequest extends ImageQuery {
   path: string
+  // The Place the file is under (the Files view only)
+  place?: string
 }
 
 export type ImageState =
@@ -46,7 +48,7 @@ export function useImageBlob(
   )
   const active = req !== null
   const path = req?.path ?? ''
-  const { root, reveal, side, staged, orig } = req ?? {}
+  const { root, reveal, side, staged, orig, place } = req ?? {}
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reloadKey reads the image again
   useEffect(() => {
@@ -59,7 +61,7 @@ export function useImageBlob(
       s.status === 'ready' ? { ...s, stale: true } : { status: 'loading' },
     )
     fetchFileImage(
-      paneId,
+      { paneId, place },
       path,
       { root, reveal, side, staged, orig },
       ctl.signal,
@@ -98,6 +100,7 @@ export function useImageBlob(
     return () => ctl.abort()
   }, [
     paneId,
+    place,
     active,
     path,
     root,

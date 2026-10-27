@@ -204,6 +204,8 @@ setup wizard, tips or release notes) and starts the session `main`.
 | `--remove-host <name>`        | Remove a previously allowed name (repeatable)                        | ✓       | ✓              |
 | `--allow-local-user <name>`   | Serve connections of another local OS user (repeatable)              | ✓       | -              |
 | `--remove-local-user <name>`  | Stop serving that user's connections (repeatable)                    | ✓       | -              |
+| `--allow-path <dir>`          | Offer a folder as a Place in Files (repeatable; see Places below)    | ✓       | ✓              |
+| `--remove-path <dir>`         | Remove an allowed folder (repeatable)                                | ✓       | ✓              |
 | `--allow-herdr-no-auth`       | Required together with `--mux herdr --no-auth`                       | ✓       | ✓              |
 | `--user <name>`               | Login username (default `admin`; shared by both)                     | ✓       | ✓              |
 | `--fresh`                     | Set a new password (ignore the saved one)                            | ✓       | ✓              |
@@ -225,11 +227,41 @@ PowerShell `-Flag` parameter names in 1.0.
 Saved settings include the port, network flags (`--lan`, `--tailscale`), auth setting
 (`--no-auth`), mux backend, the Host allowlist, the workspace (container only), the login
 username (`--user`, default `admin`), the local users allowed with `--allow-local-user` (native
-only) and the encrypted password.
+only), the folders allowed with `--allow-path` (each of native and container keeps its own list)
+and the encrypted password.
 
 Running `start` from 1.20.0 or older (a rollback) saves the config
 without those names; after updating again, give them back with `termote start --allow-local-user
 <name>` (`start` prints the list it keeps).
+
+## Places: Folders Outside the Pane
+
+Files shows the pane's folder (its git repository, else its directory). To edit a folder outside
+any repository, such as a shell config folder or notes, name it on the host; the PWA then lists it
+under **Places** in the Files header (full-access devices only, never a view-only one):
+
+```bash
+termote start --allow-path ~/.config/fish --allow-path ~/notes
+termote start --remove-path ~/notes          # drop one
+termote container up --allow-path ~/notes    # the container keeps its own list and mounts it
+```
+
+A Place is browsed, searched, edited and pasted into like the pane's folder, under the same rules
+(sensitive files ask before showing, `.git` is never served, deletes go to the trash). Changes
+(git status and diffs) stays the pane's. The PWA never adds or removes a Place.
+
+Refused, with a message naming why: a path that is not a directory; `/`, a drive root, your home
+folder or any folder above it; `~/.ssh`, `~/.gnupg`, Termote's own config, state, data and cache
+folders, anything inside them or any folder holding them (so `~/.config`, `~/.cache` and `~/.local`
+are refused, but `~/.config/fish` is not); `/proc`, `/sys`, `/dev`; on Linux and macOS the folders
+holding the host's control sockets (`/tmp`, `/run`, `/var/run`, `$TMPDIR`, `$XDG_RUNTIME_DIR`); a
+`.git` folder or a bare repository. Each is
+checked again at every `start` (a saved folder that now fails is shown as skipped, with the command
+that removes it) and by the server when it starts. On Unix a path holding `:` cannot be saved. In
+the container a path holding `,`, or holding or inside the workspace, is refused, and each Place is
+mounted at `/places/<id>-<name>`. A Place on another file system than Termote's trash can only be
+deleted permanently. On Windows the default tmux backend (psmux) has no Files, so Places need
+`--mux herdr` there; `start` says so.
 
 **Reusing saved config:**
 

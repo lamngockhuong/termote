@@ -81,11 +81,17 @@ interface RecentRecord extends StoredRecord {
   files: RecentFile[]
 }
 
-// A stored draft, as loadDrafts returns it
+// A stored draft, as loadDrafts returns it. legacy: kept under the key of
+// a version before Places (pane and path, no root), moved by the reader.
 export interface StoredDraft<T> {
   draft: T
   editedAt: number
+  legacy?: boolean
 }
+
+// A draft's key under its pane: its root and its path, so one path under
+// the pane's folder and under a Place are two drafts
+export const draftTail = (root: string, path: string) => `${root}\u0000${path}`
 
 // Set once this tab signed out, or saw another one do: every write is
 // dropped until the page loads again
@@ -281,12 +287,12 @@ export function loadTabs<T>(
 
 // Writes paneId's draft of draft.path now, edited at editedAt. False when it
 // is not kept: too big, no room, no storage, signed out, no pane key.
-export function writeDraft<T extends { path: string }>(
+export function writeDraft<T extends { root: string; path: string }>(
   paneId: string,
   draft: T,
   editedAt: number,
 ): boolean {
-  const key = persistKey('drafts', paneId, draft.path)
+  const key = persistKey('drafts', paneId, draftTail(draft.root, draft.path))
   if (!key || disabled || isFocusWindow()) return false
   const value = JSON.stringify({
     ...record(paneId),
@@ -309,7 +315,14 @@ export function writeDraft<T extends { path: string }>(
   return true
 }
 
-export function removeDraft(paneId: string, path: string) {
+export function removeDraft(paneId: string, root: string, path: string) {
+  const key = persistKey('drafts', paneId, draftTail(root, path))
+  if (key && !isFocusWindow()) remove(key)
+}
+
+// Removes a draft kept under the key of a version before Places (no root);
+// read back by loadDrafts for one release, then this goes
+export function removeLegacyDraft(paneId: string, path: string) {
   const key = persistKey('drafts', paneId, path)
   if (key && !isFocusWindow()) remove(key)
 }
@@ -323,7 +336,11 @@ export function loadDrafts<T>(paneId: string): StoredDraft<T>[] {
     if (!key.startsWith(prefix)) continue
     const r = readFor<DraftRecord<T>>(key, paneId, true)
     if (r && typeof r.editedAt === 'number' && r.draft)
-      out.push({ draft: r.draft, editedAt: r.editedAt })
+      out.push({
+        draft: r.draft,
+        editedAt: r.editedAt,
+        ...(!key.slice(prefix.length).includes('\u0000') && { legacy: true }),
+      })
   }
   return out
 }

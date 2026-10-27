@@ -835,8 +835,8 @@ describe('files API client', () => {
   it('reads a directory, sending the root it saw', async () => {
     const tree = { root: '/r', path: '', entries: [], truncated: false }
     const { calls } = mockFetch({ body: tree })
-    expect(await fetchFilesTree('%3', '')).toEqual(tree)
-    await fetchFilesTree('%3', 'src/a b', '/r')
+    expect(await fetchFilesTree({ paneId: '%3' }, '')).toEqual(tree)
+    await fetchFilesTree({ paneId: '%3' }, 'src/a b', '/r')
     expect(calls.map((c) => c.url)).toEqual([
       '/api/mux/panes/%253/files/tree',
       '/api/mux/panes/%253/files/tree?path=src%2Fa+b&root=%2Fr',
@@ -847,9 +847,12 @@ describe('files API client', () => {
 
   it('reads a file, revealing it only when asked', async () => {
     const { calls } = mockFetch({ body: { root: '/r', path: 'a', text: '' } })
-    await fetchFileContent('1', 'a')
-    await fetchFileContent('1', '.env', { root: '/r', reveal: true })
-    await fetchFileContent('1', 'j.txt', { encoding: 'shift_jis' })
+    await fetchFileContent({ paneId: '1' }, 'a')
+    await fetchFileContent({ paneId: '1' }, '.env', {
+      root: '/r',
+      reveal: true,
+    })
+    await fetchFileContent({ paneId: '1' }, 'j.txt', { encoding: 'shift_jis' })
     expect(calls.map((c) => c.url)).toEqual([
       '/api/mux/panes/1/files/content?path=a',
       '/api/mux/panes/1/files/content?path=.env&root=%2Fr&reveal=1',
@@ -868,7 +871,7 @@ describe('files API client', () => {
       text: 'x',
       reveal: false,
     }
-    expect(await saveFileContent('%1', save)).toEqual(saved)
+    expect(await saveFileContent({ paneId: '%1' }, save)).toEqual(saved)
     expect(calls[0].url).toBe('/api/mux/panes/%251/files/content?root=%2Fr')
     expect(calls[0].init?.method).toBe('PUT')
     expect(new Headers(calls[0].init?.headers).get('Content-Type')).toBe(
@@ -888,15 +891,18 @@ describe('files API client', () => {
     const { calls } = mockFetch({
       body: { root: '/r', path: 'a', size: 1, hash: 'h', encoding: 'utf-8' },
     })
-    await saveFileContent('1', {
-      root: '/r',
-      path: 'a',
-      baseHash: 'b',
-      text: 'x',
-      reveal: false,
-      encoding: 'shift_jis',
-      saveAs: 'utf-8',
-    })
+    await saveFileContent(
+      { paneId: '1' },
+      {
+        root: '/r',
+        path: 'a',
+        baseHash: 'b',
+        text: 'x',
+        reveal: false,
+        encoding: 'shift_jis',
+        saveAs: 'utf-8',
+      },
+    )
     expect(JSON.parse(calls[0].init?.body as string)).toEqual({
       path: 'a',
       baseHash: 'b',
@@ -919,7 +925,7 @@ describe('files API client', () => {
       text: '',
       reveal: false,
     }
-    await expect(saveFileContent('1', save)).rejects.toMatchObject({
+    await expect(saveFileContent({ paneId: '1' }, save)).rejects.toMatchObject({
       code: 'unencodable',
       line: 4,
       char: '😀',
@@ -928,7 +934,7 @@ describe('files API client', () => {
       body: { error: 'x', code: 'not_editable', reason: 'encoding-required' },
       status: 422,
     })
-    await expect(saveFileContent('1', save)).rejects.toMatchObject({
+    await expect(saveFileContent({ paneId: '1' }, save)).rejects.toMatchObject({
       code: 'not_editable',
       reason: 'encoding-required',
     })
@@ -937,7 +943,7 @@ describe('files API client', () => {
       body: { error: 'x', code: 'unencodable', line: '4', char: 1, reason: 2 },
       status: 422,
     })
-    const err = await saveFileContent('1', save).catch((e) => e)
+    const err = await saveFileContent({ paneId: '1' }, save).catch((e) => e)
     expect([err.line, err.char, err.reason]).toEqual([
       undefined,
       undefined,
@@ -948,13 +954,16 @@ describe('files API client', () => {
   it('a refused save throws its code', async () => {
     mockFetch({ body: { error: 'x', code: 'changed' }, status: 409 })
     await expect(
-      saveFileContent('1', {
-        root: '/r',
-        path: 'a',
-        baseHash: 'b',
-        text: '',
-        reveal: true,
-      }),
+      saveFileContent(
+        { paneId: '1' },
+        {
+          root: '/r',
+          path: 'a',
+          baseHash: 'b',
+          text: '',
+          reveal: true,
+        },
+      ),
     ).rejects.toMatchObject({ status: 409, code: 'changed' })
   })
 
@@ -963,7 +972,10 @@ describe('files API client', () => {
     const { calls } = mockFetch({ body: created, status: 201 })
     const timeout = vi.spyOn(AbortSignal, 'timeout')
     expect(
-      await createFile('%1', { root: '/r', path: 'd/n.md', reveal: false }),
+      await createFile(
+        { paneId: '%1' },
+        { root: '/r', path: 'd/n.md', reveal: false },
+      ),
     ).toEqual(created)
     expect(calls[0].url).toBe('/api/mux/panes/%251/files/create?root=%2Fr')
     expect(calls[0].init?.method).toBe('POST')
@@ -984,12 +996,12 @@ describe('files API client', () => {
       { body: { error: 'root changed', root: '/n' }, status: 409 },
     )
     const create = { root: '/r', path: 'a', reveal: true }
-    await expect(createFile('1', create)).rejects.toMatchObject({
+    await expect(createFile({ paneId: '1' }, create)).rejects.toMatchObject({
       status: 409,
       code: 'exists',
       path: 'w/a',
     })
-    await expect(createFile('1', create)).rejects.toMatchObject({
+    await expect(createFile({ paneId: '1' }, create)).rejects.toMatchObject({
       status: 409,
       root: '/n',
     })
@@ -1007,7 +1019,7 @@ describe('files API client', () => {
     const abort = new AbortController()
     expect(
       await findFiles(
-        '%1',
+        { paneId: '%1' },
         {
           q: 'ma in',
           root: '/r',
@@ -1022,14 +1034,14 @@ describe('files API client', () => {
       '/api/mux/panes/%251/files/find?q=ma+in&root=%2Fr&ignored=1&exclude=node_modules&exclude=dist&fresh=1',
     )
     expect(calls[0].init?.signal).toBe(abort.signal)
-    await findFiles('1', { q: 'x', ignored: false, exclude: [] })
+    await findFiles({ paneId: '1' }, { q: 'x', ignored: false, exclude: [] })
     expect(calls[1].url).toBe('/api/mux/panes/1/files/find?q=x')
   })
 
   it('a refused find throws its code', async () => {
     mockFetch({ body: { error: 'x', code: 'invalid_exclude' }, status: 400 })
     await expect(
-      findFiles('1', { q: 'x', ignored: false, exclude: ['a/b'] }),
+      findFiles({ paneId: '1' }, { q: 'x', ignored: false, exclude: ['a/b'] }),
     ).rejects.toMatchObject({ status: 400, code: 'invalid_exclude' })
   })
 
@@ -1046,7 +1058,7 @@ describe('files API client', () => {
     const abort = new AbortController()
     expect(
       await searchFiles(
-        '%1',
+        { paneId: '%1' },
         {
           q: ' -e x',
           root: '/r',
@@ -1065,37 +1077,43 @@ describe('files API client', () => {
       '/api/mux/panes/%251/files/search?q=+-e+x&root=%2Fr&case=1&word=1&regex=1&files=*.ts&files=src%2F&skip=*.test.ts&exclude=node_modules&fresh=1',
     )
     expect(calls[0].init?.signal).toBe(abort.signal)
-    await searchFiles('1', {
-      q: 'x',
-      matchCase: false,
-      wholeWord: false,
-      regex: false,
-      files: [],
-      skip: [],
-      exclude: [],
-    })
+    await searchFiles(
+      { paneId: '1' },
+      {
+        q: 'x',
+        matchCase: false,
+        wholeWord: false,
+        regex: false,
+        files: [],
+        skip: [],
+        exclude: [],
+      },
+    )
     expect(calls[1].url).toBe('/api/mux/panes/1/files/search?q=x')
   })
 
   it('a refused search throws its code', async () => {
     mockFetch({ body: { error: 'x', code: 'invalid_regex' }, status: 400 })
     await expect(
-      searchFiles('1', {
-        q: '(',
-        matchCase: false,
-        wholeWord: false,
-        regex: true,
-        files: [],
-        skip: [],
-        exclude: [],
-      }),
+      searchFiles(
+        { paneId: '1' },
+        {
+          q: '(',
+          matchCase: false,
+          wholeWord: false,
+          regex: true,
+          files: [],
+          skip: [],
+          exclude: [],
+        },
+      ),
     ).rejects.toMatchObject({ status: 400, code: 'invalid_regex' })
   })
 
   it('reads a hash without the contents', async () => {
     const { calls } = mockFetch({ body: { root: '/r', path: 'a', size: 1 } })
-    await fetchFileHash('1', 'a')
-    await fetchFileHash('1', '.env', '/r')
+    await fetchFileHash({ paneId: '1' }, 'a')
+    await fetchFileHash({ paneId: '1' }, '.env', '/r')
     expect(calls.map((c) => c.url)).toEqual([
       '/api/mux/panes/1/files/content?path=a&hash=1',
       '/api/mux/panes/1/files/content?path=.env&root=%2Fr&hash=1',
@@ -1109,14 +1127,17 @@ describe('files API client', () => {
     )
     const timeout = vi.spyOn(AbortSignal, 'timeout')
     expect(
-      await deleteFile('%1', {
-        root: '/r',
-        path: 'a',
-        kind: 'file',
-        baseHash: 'h',
-        reveal: false,
-        permanent: false,
-      }),
+      await deleteFile(
+        { paneId: '%1' },
+        {
+          root: '/r',
+          path: 'a',
+          kind: 'file',
+          baseHash: 'h',
+          reveal: false,
+          permanent: false,
+        },
+      ),
     ).toEqual({ root: '/r', path: 'a', trashId: 'f'.repeat(32) })
     expect(calls[0].url).toBe('/api/mux/panes/%251/files/delete?root=%2Fr')
     expect(calls[0].init?.method).toBe('POST')
@@ -1128,7 +1149,10 @@ describe('files API client', () => {
       permanent: false,
     })
     expect(
-      await restoreFile('%1', { root: '/r', trashId: 'x', reveal: true }),
+      await restoreFile(
+        { paneId: '%1' },
+        { root: '/r', trashId: 'x', reveal: true },
+      ),
     ).toEqual({ root: '/r', path: 'a' })
     expect(calls[1].url).toBe('/api/mux/panes/%251/files/restore?root=%2Fr')
     expect(JSON.parse(calls[1].init?.body as string)).toEqual({
@@ -1143,12 +1167,15 @@ describe('files API client', () => {
     const { calls } = mockFetch({ body: { root: '/r', path: 'x/b' } })
     const timeout = vi.spyOn(AbortSignal, 'timeout')
     expect(
-      await renameFile('%1', {
-        root: '/r',
-        path: 'a',
-        newPath: 'x/b',
-        reveal: true,
-      }),
+      await renameFile(
+        { paneId: '%1' },
+        {
+          root: '/r',
+          path: 'a',
+          newPath: 'x/b',
+          reveal: true,
+        },
+      ),
     ).toEqual({ root: '/r', path: 'x/b' })
     expect(calls[0].url).toBe('/api/mux/panes/%251/files/rename?root=%2Fr')
     expect(calls[0].init?.method).toBe('POST')
@@ -1167,7 +1194,10 @@ describe('files API client', () => {
       status: 409,
     })
     await expect(
-      renameFile('%1', { root: '/r', path: 'a', newPath: 'b', reveal: false }),
+      renameFile(
+        { paneId: '%1' },
+        { root: '/r', path: 'a', newPath: 'b', reveal: false },
+      ),
     ).rejects.toMatchObject({ status: 409, code: 'exists', path: 'b' })
   })
 
@@ -1183,12 +1213,12 @@ describe('files API client', () => {
       reveal: false,
       permanent: true,
     }
-    await expect(deleteFile('1', del)).rejects.toMatchObject({
+    await expect(deleteFile({ paneId: '1' }, del)).rejects.toMatchObject({
       code: 'changed',
       trashId: 'id',
     })
     await expect(
-      restoreFile('1', { root: '/r', trashId: 'x', reveal: false }),
+      restoreFile({ paneId: '1' }, { root: '/r', trashId: 'x', reveal: false }),
     ).rejects.toMatchObject({ code: 'exists', path: 'a' })
   })
 
@@ -1270,9 +1300,11 @@ describe('files API client', () => {
     const spy = vi.fn(async () => new Response('png'))
     vi.stubGlobal('fetch', spy)
     const ctl = new AbortController()
-    expect(await (await fetchFileImage('1', 'a.png')).text()).toBe('png')
+    expect(await (await fetchFileImage({ paneId: '1' }, 'a.png')).text()).toBe(
+      'png',
+    )
     await fetchFileImage(
-      '1',
+      { paneId: '1' },
       'b.png',
       { side: 'old', staged: true, orig: 'a.png', reveal: true, root: '/r' },
       ctl.signal,
@@ -1292,9 +1324,11 @@ describe('files API client', () => {
     )
     vi.stubGlobal('fetch', spy)
     const ctl = new AbortController()
-    expect(await (await fetchFileDocument('1', 'a.pdf')).text()).toBe('%PDF-')
+    expect(
+      await (await fetchFileDocument({ paneId: '1' }, 'a.pdf')).text(),
+    ).toBe('%PDF-')
     await fetchFileDocument(
-      '1',
+      { paneId: '1' },
       'd/b.docx',
       { reveal: true, root: '/r' },
       ctl.signal,
@@ -1315,7 +1349,7 @@ describe('files API client', () => {
       'fetch',
       vi.fn(async () => res),
     )
-    expect((await fetchFileDocument('1', 'a.xlsx')).size).toBe(2)
+    expect((await fetchFileDocument({ paneId: '1' }, 'a.xlsx')).size).toBe(2)
   })
 
   it('ignores the length of a compressed document', async () => {
@@ -1328,7 +1362,7 @@ describe('files API client', () => {
           }),
       ),
     )
-    expect((await fetchFileDocument('1', 'a.pdf')).size).toBe(8)
+    expect((await fetchFileDocument({ paneId: '1' }, 'a.pdf')).size).toBe(8)
   })
 
   it('a document cut short is interrupted, not damaged', async () => {
@@ -1339,7 +1373,9 @@ describe('files API client', () => {
           new Response('%PDF', { headers: { 'Content-Length': '10' } }),
       ),
     )
-    await expect(fetchFileDocument('1', 'a.pdf')).rejects.toMatchObject({
+    await expect(
+      fetchFileDocument({ paneId: '1' }, 'a.pdf'),
+    ).rejects.toMatchObject({
       status: 0,
       code: 'interrupted',
     })
@@ -1349,7 +1385,9 @@ describe('files API client', () => {
       'fetch',
       vi.fn(async () => broken),
     )
-    await expect(fetchFileDocument('1', 'a.pdf')).rejects.toMatchObject({
+    await expect(
+      fetchFileDocument({ paneId: '1' }, 'a.pdf'),
+    ).rejects.toMatchObject({
       code: 'interrupted',
     })
   })
@@ -1366,9 +1404,9 @@ describe('files API client', () => {
       'fetch',
       vi.fn(async () => res),
     )
-    await expect(fetchFileDocument('1', 'a.pdf', {}, ctl.signal)).rejects.toBe(
-      abort,
-    )
+    await expect(
+      fetchFileDocument({ paneId: '1' }, 'a.pdf', {}, ctl.signal),
+    ).rejects.toBe(abort)
   })
 
   it('a refused document carries the code and the size', async () => {
@@ -1376,7 +1414,9 @@ describe('files API client', () => {
       body: { error: 'too large', code: 'too_large', size: 31457281 },
       status: 413,
     })
-    await expect(fetchFileDocument('1', 'a.pdf')).rejects.toMatchObject({
+    await expect(
+      fetchFileDocument({ paneId: '1' }, 'a.pdf'),
+    ).rejects.toMatchObject({
       status: 413,
       code: 'too_large',
       size: 31457281,
@@ -1385,7 +1425,9 @@ describe('files API client', () => {
       body: { error: 'x', code: 'encrypted', size: 'big' },
       status: 415,
     })
-    const err = await fetchFileDocument('1', 'a.xlsx').catch((e) => e)
+    const err = await fetchFileDocument({ paneId: '1' }, 'a.xlsx').catch(
+      (e) => e,
+    )
     expect(err).toMatchObject({ code: 'encrypted' })
     expect(err.size).toBeUndefined()
   })
@@ -1398,9 +1440,12 @@ describe('files API client', () => {
     vi.stubGlobal('fetch', spy)
     const ctl = new AbortController()
     expect(
-      await checkFileDownload('1', 'd/a b', { root: '/r', reveal: true }),
+      await checkFileDownload({ paneId: '1' }, 'd/a b', {
+        root: '/r',
+        reveal: true,
+      }),
     ).toEqual({ root: '/r', path: 'a', size: 1 })
-    await checkFileDownload('1', 'a')
+    await checkFileDownload({ paneId: '1' }, 'a')
     expect(await (await fetchFileDownload('/x', ctl.signal)).text()).toContain(
       'root',
     )
@@ -1414,7 +1459,7 @@ describe('files API client', () => {
   })
 
   it.each([
-    ['check', () => checkFileDownload('1', 'a')],
+    ['check', () => checkFileDownload({ paneId: '1' }, 'a')],
     ['read', () => fetchFileDownload('/x')],
   ])('a refused download %s carries the server code', async (_, call) => {
     mockFetch({ body: { error: 'too large', code: 'too_large' }, status: 413 })
@@ -1426,7 +1471,9 @@ describe('files API client', () => {
 
   it('a refused image carries the server code', async () => {
     mockFetch({ body: { error: 'too large', code: 'too_large' }, status: 413 })
-    await expect(fetchFileImage('1', 'a.png')).rejects.toMatchObject({
+    await expect(
+      fetchFileImage({ paneId: '1' }, 'a.png'),
+    ).rejects.toMatchObject({
       status: 413,
       code: 'too_large',
     })
@@ -1438,7 +1485,7 @@ describe('files API client', () => {
     [501, { error: 'not supported' }, { message: 'not supported' }],
   ])('turns a %i into a RequestError', async (status, body, want) => {
     mockFetch({ body, status })
-    const err = await fetchFilesTree('1', '').catch((e) => e)
+    const err = await fetchFilesTree({ paneId: '1' }, '').catch((e) => e)
     expect(err).toBeInstanceOf(RequestError)
     // The agent routes' name is the same class
     expect(err).toBeInstanceOf(AgentRequestError)
@@ -1496,7 +1543,7 @@ describe('view-only refusals and paired devices', () => {
     expect(heard).toHaveBeenCalledTimes(1)
 
     mockFetch({ body: { error: 'view only', code: 'view_only' }, status: 403 })
-    const read = await fetchFilesTree('1', '').catch((e) => e)
+    const read = await fetchFilesTree({ paneId: '1' }, '').catch((e) => e)
     expect(read.code).toBe('view_only')
     off()
     expect(heard).toHaveBeenCalledTimes(1)

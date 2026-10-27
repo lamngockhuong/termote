@@ -338,3 +338,58 @@ func TestShowPassword(t *testing.T) {
 		t.Fatalf("no-auth: code %d out %q", code, tc.stdout.String())
 	}
 }
+
+func TestConfigAllowPathsRoundTrip(t *testing.T) {
+	key := strings.Repeat("ab", 32)
+	in := savedConfig{Port: 7680, AllowPaths: []string{"/home/a/my notes", "/home/a/x,y"},
+		Container: &containerConfig{Port: 7681, AllowPaths: []string{"/home/a/docs"}}}
+	data, err := formatUnixConfig(in, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "\nTERMOTE_ALLOWED_PATHS=\"/home/a/my notes:/home/a/x,y\"\n") ||
+		!strings.Contains(string(data), "\nTERMOTE_CONTAINER_ALLOWED_PATHS=\"/home/a/docs\"\n") {
+		t.Fatalf("paths not written:\n%s", data)
+	}
+	out, err := parseUnixConfig(data, func() string { return key })
+	if err != nil || strings.Join(out.AllowPaths, "|") != "/home/a/my notes|/home/a/x,y" ||
+		out.Container == nil || strings.Join(out.Container.AllowPaths, "|") != "/home/a/docs" {
+		t.Fatalf("unix round trip: %+v %v", out, err)
+	}
+	// None allowed writes no key, so older configs stay byte for byte.
+	if b, _ := formatUnixConfig(savedConfig{Container: &containerConfig{}}, key); strings.Contains(string(b), "ALLOWED_PATHS") {
+		t.Fatalf("empty paths written:\n%s", b)
+	}
+	for _, bad := range []savedConfig{
+		{AllowPaths: []string{"/a:b"}},
+		{Container: &containerConfig{AllowPaths: []string{"/a:b"}}},
+		{AllowPaths: []string{"/a\"b"}},
+	} {
+		if _, err := formatUnixConfig(bad, key); err == nil {
+			t.Errorf("%+v accepted", bad)
+		}
+	}
+
+	fakeDPAPI(t)
+	win := savedConfig{Port: 7690, AllowPaths: []string{`C:\x`, `\\server\share\x`},
+		Container: &containerConfig{Port: 7680, AllowPaths: []string{`D:\notes`}}}
+	data, err = formatWindowsConfig(win, time.Date(2026, 10, 27, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wout, err := parseWindowsConfig(data)
+	if err != nil || strings.Join(wout.AllowPaths, "|") != `C:\x|\\server\share\x` ||
+		wout.Container == nil || strings.Join(wout.Container.AllowPaths, "|") != `D:\notes` {
+		t.Fatalf("windows round trip: %+v %v\n%s", wout, err, data)
+	}
+	if b, _ := formatWindowsConfig(savedConfig{}, time.Now()); strings.Contains(string(b), "AllowPath") {
+		t.Fatalf("empty paths written:\n%s", b)
+	}
+}
+
+func TestServeConfigFromSavedAllowPaths(t *testing.T) {
+	cfg := serveConfigFromSaved(savedConfig{AllowPaths: []string{"/n"}}, 7680)
+	if len(cfg.Places) != 1 || cfg.Places[0].Path != "/n" || cfg.Places[0].ID != placeID("/n") || cfg.Places[0].Name != "n" {
+		t.Fatalf("AllowPaths not passed to serve: %+v", cfg.Places)
+	}
+}

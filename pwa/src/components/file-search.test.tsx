@@ -97,7 +97,7 @@ describe('FileSearch', () => {
     })
     expect(mockFind).toHaveBeenCalledTimes(1)
     expect(mockFind).toHaveBeenCalledWith(
-      '%1',
+      { paneId: '%1' },
       {
         q: 'main',
         root: '/r',
@@ -184,7 +184,7 @@ describe('FileSearch', () => {
       vi.advanceTimersByTime(FIND_DEBOUNCE_MS)
     })
     expect(mockFind).toHaveBeenLastCalledWith(
-      '%1',
+      { paneId: '%1' },
       expect.objectContaining({ ignored: true }),
       expect.any(AbortSignal),
     )
@@ -202,7 +202,7 @@ describe('FileSearch', () => {
     expect(screen.queryByRole('switch')).toBeNull()
     await type('p')
     expect(mockFind).toHaveBeenLastCalledWith(
-      '%1',
+      { paneId: '%1' },
       expect.objectContaining({ ignored: false }),
       expect.any(AbortSignal),
     )

@@ -63,6 +63,11 @@ type serveConfig struct {
 	// pane's root: the config and state dirs (the secret and the encrypted
 	// password).
 	FilesDenyDirs []string
+	// Places are the folders offered in Files besides the pane's: the
+	// saved --allow-path list (native), or TERMOTE_PLACES (the container).
+	// PlaceEnv is what each is checked against again before it is served.
+	Places   []placeSpec
+	PlaceEnv allowPathEnv
 	// FilesWriteDenyDirs are never written by a save from the Files view,
 	// on top of FilesDenyDirs and UploadDir: the install's data dir.
 	FilesWriteDenyDirs []string
@@ -109,6 +114,7 @@ func newServeConfigFromEnv() serveConfig {
 		MuxBackend:   envOr("TERMOTE_MUX", "tmux"),
 
 		HerdrAllowNoAuth: os.Getenv("TERMOTE_HERDR_ALLOW_NO_AUTH") == "true",
+		Places:           parsePlacesEnv(os.Getenv("TERMOTE_PLACES")),
 	}
 	// Where the host user's home dir sits in the container's workspace, when
 	// the workspace holds it ("." for the workspace itself).
@@ -125,7 +131,7 @@ func newServeConfigFromEnv() serveConfig {
 var termoteEnvKeys = []string{
 	"TERMOTE_PASS", "TERMOTE_USER", "TERMOTE_PORT", "TERMOTE_BIND", "TERMOTE_NO_AUTH",
 	"TERMOTE_PWA_DIR", "TERMOTE_ALLOWED_HOSTS", "TERMOTE_MUX", "TERMOTE_HERDR_ALLOW_NO_AUTH",
-	"TERMOTE_PROJECT_DIR", "TERMOTE_WORKSPACE_HOME",
+	"TERMOTE_PROJECT_DIR", "TERMOTE_WORKSPACE_HOME", "TERMOTE_PLACES",
 }
 
 // scrubTermoteEnv removes every TERMOTE_* variable from the process
@@ -476,6 +482,7 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 	files := registerFilesRoutes(mux, m, allowed, append(slices.Clone(cfg.FilesDenyDirs), cfg.UploadDir, cfg.TrashDir))
 	files.writeDeny = filesDenyDirs(append(cfg.FilesWriteDenyDirs, cfg.UploadDir, cfg.TrashDir)...)
 	files.homeDirs = cfg.ViewHomeDirs
+	files.setPlaces(buildPlaces(cfg.Places, cfg.PlaceEnv))
 	if cfg.TrashDir != "" {
 		var err error
 		if files.trash, err = newTrashStore(cfg.TrashDir); err != nil {

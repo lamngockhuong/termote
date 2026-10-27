@@ -76,12 +76,15 @@ describe('RenameFileDialog', () => {
     expect(screen.getByRole('button', { name: 'Rename' })).toBeDisabled()
     type('./docs/b.md')
     await rename()
-    expect(mockRename).toHaveBeenCalledWith('%1', {
-      root: '/r',
-      path: 'docs/report.final.md',
-      newPath: './docs/b.md',
-      reveal: false,
-    })
+    expect(mockRename).toHaveBeenCalledWith(
+      { paneId: '%1' },
+      {
+        root: '/r',
+        path: 'docs/report.final.md',
+        newPath: './docs/b.md',
+        reveal: false,
+      },
+    )
     expect(p.onClose).toHaveBeenCalled()
     expect(p.onRenamed).toHaveBeenCalledWith('docs/b.md', false, false)
   })
@@ -133,7 +136,7 @@ describe('RenameFileDialog', () => {
   })
 
   it('never renames onto a file with unsaved changes', async () => {
-    const { result } = renderHook(() => useFileDraft('%2', 'notes.md'))
+    const { result } = renderHook(() => useFileDraft('%2', '/r', 'notes.md'))
     act(() =>
       result.current[1]({
         root: '/r',

@@ -1,5 +1,5 @@
 // Links that open one session (and pane, and view) directly:
-//   #/s/<group>/<tab>[/<pane>][?view=<view>][&solo=1][&file=<path>[&staged=1][&orig=<path>]]
+//   #/s/<group>/<tab>[/<pane>][?view=<view>][&solo=1][&file=<path>[&staged=1][&orig=<path>][&place=<id>]]
 // group, tab and pane are the ids of /api/mux/snapshot, each URI-encoded. The
 // hash never reaches the server, so a link needs no route and stays out of
 // its logs. A link only selects: it never sends keys or creates or closes tabs.
@@ -7,8 +7,10 @@
 // solo=1 opens the link in a focus window, which shows only its target and
 // keeps nothing on the device. file is a path under the pane's root, shown in
 // the Files view, or its diff in the Changes view (staged and orig pick the
-// side). The server still opens it under the root; the path here is only a
-// hint, and one that could never name a file under a root is refused.
+// side). place names the Place a Files path is under (its id), absent for
+// the pane's folder. The server still opens it under the root; the path
+// here is only a hint, and one that could never name a file under a root is
+// refused.
 
 export interface DeepLink {
   group: string
@@ -20,6 +22,8 @@ export interface DeepLink {
   // A diff's side: the staged one, and a rename's or copy's source
   staged?: true
   orig?: string
+  // The Place a Files path is under (files/places id)
+  place?: string
   // The link named a file that cannot be one (absolute, or leaving the root)
   badFile?: true
 }
@@ -28,6 +32,8 @@ const PREFIX = '#/s/'
 
 // The views a file names a target in
 const FILE_VIEWS = new Set(['files', 'changes'])
+// What a Place id can be: the server's are 16 hex digits
+const PLACE_ID = /^[A-Za-z0-9_-]{1,64}$/
 
 // path when it can name a file under a root, else null: relative, no empty,
 // dot or dot-dot segment, no NUL, no drive or backslash.
@@ -77,12 +83,16 @@ export function parseDeepLink(hash: string): DeepLink | null {
 function fileTarget(
   params: URLSearchParams,
   view: string | undefined,
-): Pick<DeepLink, 'file' | 'staged' | 'orig' | 'badFile'> {
+): Pick<DeepLink, 'file' | 'staged' | 'orig' | 'place' | 'badFile'> {
   const raw = params.get('file')
   if (raw === null || !view || !FILE_VIEWS.has(view)) return {}
   const file = cleanFilePath(raw)
   if (!file) return { badFile: true }
-  if (view !== 'changes') return { file }
+  if (view !== 'changes') {
+    const place = params.get('place')
+    if (place && !PLACE_ID.test(place)) return { badFile: true }
+    return { file, ...(place && { place }) }
+  }
   const rawOrig = params.get('orig')
   const orig = rawOrig === null ? null : cleanFilePath(rawOrig)
   if (rawOrig !== null && !orig) return { badFile: true }
@@ -103,6 +113,7 @@ export function formatDeepLink({
   file,
   staged,
   orig,
+  place,
 }: DeepLink): string {
   const path = [group, tab, ...(pane ? [pane] : [])]
     .map(encodeURIComponent)
@@ -116,7 +127,7 @@ export function formatDeepLink({
     if (view === 'changes') {
       if (staged) params.push('staged=1')
       if (orig) params.push(`orig=${encodeURIComponent(orig)}`)
-    }
+    } else if (place) params.push(`place=${encodeURIComponent(place)}`)
   }
   const query = params.length ? `?${params.join('&')}` : ''
   return `${PREFIX}${path}${query}`

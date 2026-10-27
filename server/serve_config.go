@@ -42,6 +42,7 @@ func serveConfigFromSaved(s savedConfig, defaultPort int) serveConfig {
 		Tailscale:        s.Tailscale,
 		CheckLocalUsers:  true,
 		AllowLocalUsers:  s.AllowLocalUsers,
+		Places:           placeSpecs(s.AllowPaths),
 	}
 }
 

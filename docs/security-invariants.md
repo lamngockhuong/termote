@@ -315,7 +315,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   "view_only"}`) before a handler runs, except `POST /api/mux/logout`; handlers repeat it with
   `requireWriteRole`, so a route added later is closed without remembering to. Reads: transcript,
   commands, snapshot (`viewSnapshot`: no tmux default session, and Herdr is not started), push key and `worktrees` GET are allowed; `agent/prompt` carries no
-  `promptId`; `GET agent/start` and `files/content?hash=1` are 403; Files/Changes routes only when
+  `promptId`; `GET agent/start` and `files/content?hash=1` are 403; a Place never (`place=` → 403
+  `view_only` before the root is resolved, `files/places` lists none, `caps.places` false); Files/Changes routes only when
   the pane root is a git toplevel that is neither the server user's home dir nor above it (through
   symlinks; `$HOME`, else the user database, else every root counts as one; in the container also
   `/workspace/<TERMOTE_WORKSPACE_HOME>` (a local relative path, `.` for `/workspace`), which
@@ -668,7 +669,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   read
 - **Files/Changes** (`/api/mux/panes/{id}/files/*`): GETs that also check
   `Sec-Fetch-Site`/`Origin` (and the writes below; none is read-only any more, Changes included: `POST files/changes/apply` writes the index); every path is opened through `os.Root` under the pane's root (its
-  git toplevel when a `.git` sits at it, else its directory); termote's config/state dirs, the
+  git toplevel when a `.git` sits at it, else its directory) or a Place's (see Places); the server
+  user's `~/.ssh` and `~/.gnupg` (in every root, a pane at `~` included), termote's config/state dirs, the
   upload store and the trash (a pane in the home dir would otherwise serve a deleted `.env` under
   its random name),
   `/proc`, `/sys`, `/dev`, `.git` and the repo's git dir (`--separate-git-dir`) are never served
@@ -712,6 +714,43 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   goes in as `:(literal)` after `--`; a view-only client goes through `viewHides`. A commit's
   file list is kept 30 s per root and hash (a hash never changes what it names); a sensitive name
   is checked again when its diff is read. Message and author are shown with `visibleUnsafe`.
+- **Places** (`--allow-path`, `server/cli_allow_path.go`, `server/files_places.go`): folders the
+  operator names on the host with `termote start --allow-path <dir>` / `--remove-path <dir>`
+  (saved like `--allow-host`, `TERMOTE_ALLOWED_PATHS` `:`-separated on Unix, refused by the Unix
+  encoder when a path holds `:`; `AllowPath` in the Windows JSON) or `container up` (its own list).
+  No route adds, removes or widens one: the client only picks one by an opaque id, `place=<id>`
+  (the first 16 hex of the sha256 of the host path; the container passes the host ids), and an id
+  not in the list is 404 `unknown_place`, never a path lookup. `validateAllowPath` refuses, on the
+  path as typed and on its `EvalSymlinks` form: not a directory; a volume root, the home dir or one
+  above it; a path at, inside or above `~/.ssh`, `~/.gnupg`, termote's config, state, data and cache
+  dirs (the cache holds the trash and uploads), `/proc` `/sys` `/dev`, and on Unix the dirs holding
+  the host's control sockets (`/tmp`, `/run`, `/var/run`, `$TMPDIR`, `$XDG_RUNTIME_DIR`: mounted in
+  the container they would let a terminal drive the host's tmux or docker) (so `~/.config`,
+  `~/.cache` and `~/.local` are refused, `~/.config/fish` is not); a
+  component matching `isGitDirName`, or a dir git (through `gitRunner`) calls a git dir or a bare
+  repo; a quote, line break or NUL; an unknown home (fails closed). `start` refuses a new path that
+  fails (exit 2, nothing saved or stopped) and re-checks every saved one, printing a failing one as
+  skipped with the `--remove-path` that drops it; `serve` checks each again against its own user and
+  dirs and skips a failing one with a log line. Each request re-resolves the Place (1 s cache) and
+  refuses one that leads elsewhere than when `serve` started (403 `place_moved`, logged). The root is
+  the Place itself, never a repo around it (`isRepo` only when the git toplevel is the Place), and an
+  enclosing repo's git dir stays a deny extra. From there every Files check of a pane root applies
+  unchanged (`os.Root`, deny lists, `reveal=1`, trash, `writeDeny`, `requireWriteRole`). Full role
+  only (see View-only role). Changes stays pane-scoped: `changes`, `changes/apply`, `diff`,
+  `commit`, `commit/diff` and `raw` with `side=` refuse `place` (400 `place_not_supported`). A
+  file's write lock is keyed by its absolute path and a write drops the find/status caches of every
+  root that holds it or lies in it, so a pane root and a Place inside it never interleave saves of
+  one file (the per-root lock of creates, deletes and renames is still per root string: a create
+  in one and a rename in the other are not serialised, each still checked on its own handles).
+  The PWA sends no `place` from a view-only client, and a Place refused (`view_only`,
+  `unknown_place`, `place_moved`) sends the view back to the pane's folder.
+  `GET /api/mux/files/places` (`requireMethod` GET, `crossSiteRejection`, `requireFilesRead`)
+  lists `id`, `name` and the resolved path. In the container each Place is mounted at
+  `/places/<id>-<name>` (`[A-Za-z0-9._-]`), refused with `,` or overlapping the workspace, a saved
+  one failing on the host is not mounted; `TERMOTE_PLACES` (JSON id, name, container path) goes by
+  name with `-e`, is in `termoteEnvKeys`, and `trustRepo` trusts these mounts like `/workspace`.
+  `start` warns when the backend has no Files (psmux on Windows). A Place on another file system
+  than the trash gets permanent delete only (`cross_device`).
 - **`<details>` in a previewed Markdown file** (`detailsBlocks` in
   `pwa/src/utils/markdown-safety.ts`, Files/Changes only): raw HTML is never parsed or passed to
   React. A remark plugin, run before `htmlAsText`, folds an html node that is exactly a
@@ -820,9 +859,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `instanceId` (16 random hex digits made once with `crypto/rand`, kept in `<stateDir>/instance-id`
   0600 through `writeStateFile`, made again when unreadable as one; not a secret, never logged;
   the state dir is in `FilesDenyDirs`) names the server. The PWA keeps in `localStorage`, under
-  `termote-{files-tabs,changes-tabs,file-drafts,pane-view,recent-files}:<instanceId>:<pane key>[:<path>]`
+  `termote-{files-tabs,changes-tabs,file-drafts,pane-view,recent-files}:<instanceId>:<pane key>[:<root>\0<path>]`
   with the pane's key and group name in each record: the open Files and Changes tabs (paths,
-  scroll offsets, history, table layout), each pane's last view, the unsaved draft of a file
+  scroll offsets, history, table layout), the Place the Files view shows (its id, kept even
+  without a tab; one the server no longer offers falls back to the pane's folder), each pane's last view, the unsaved draft of a file
   (`root, path, baseHash, base, crlf, encoding, text, cells`; a draft whose `encoding` is not
   one of the fixed set of Files/Changes is not restored), and the files the user opened lately (at
   most 20 `root, path` pairs, written when the user opens a file from the tree, a search, a link
@@ -839,7 +879,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   out).
   Drafts are written and read back only for a client that may write: a snapshot with
   `caps.role` `view` removes every kept draft. They come back once per pane in `applySnapshot`
-  (`hydrateDrafts`), before any view reads a file, never over a draft in memory; a record of
+  (`hydrateDrafts`), before any view reads a file, never over a draft in memory (one kept under
+  the key of a version before Places, `:<path>`, is moved to its root's key; that read goes after
+  one release); a record of
   another instance, or whose group name differs (a tmux `@N` used again after tmux restarted),
   is not read (a tab or view record is removed, a draft left to expire). A group renamed while
   the PWA is open (tmux, Herdr: the keys stay; Zellij: they move with it) takes its records

@@ -59,6 +59,29 @@ Supported backends:
 - **psmux** on Windows is not supported: it does not report the pane's directory, and the two
   views are not offered.
 
+### Places
+
+Files can also show a folder outside the pane, such as a shell config folder or your notes, once
+it is named on the host:
+
+```bash
+termote start --allow-path ~/.config/fish --allow-path ~/notes
+termote start --remove-path ~/notes
+termote container up --allow-path ~/notes   # the container keeps its own list
+```
+
+Pick it from **Places** (the folder icon at the top of Files); **Pane folder** goes back. A Place
+works like the pane's folder: browse, search, edit, create, rename, delete with Undo, download and
+paste images. Changes always stays on the pane's repository. Places are listed only to a device
+with full access, never to a view-only one, and the app can never add or remove one.
+
+Termote refuses your home folder itself and any folder above it, `~/.ssh`, `~/.gnupg`, its own
+config, state, data and cache folders (and any folder holding them, such as `~/.config`, `~/.cache`
+or `~/.local`; `~/.config/fish` is fine), `/proc`, `/sys`, `/dev`, the folders holding the host's
+control sockets (`/tmp`, `/run`, `/var/run`), and a `.git` folder. A saved folder that is
+gone or now points somewhere refused is skipped, and `start` prints the `--remove-path` that drops
+it. On Windows, Places need the Herdr backend (`--mux herdr`).
+
 ## Files
 
 - Folders come first, then files, ignoring case. Tap a folder to open or close it.

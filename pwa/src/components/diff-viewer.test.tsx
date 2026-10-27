@@ -272,7 +272,7 @@ describe('DiffViewer: Markdown preview', () => {
     fireEvent.click(toggle)
     expect(await screen.findByRole('heading', { name: 'Now' })).toBeVisible()
     expect(screen.queryByTestId('diff')).toBeNull()
-    expect(mockContent).toHaveBeenCalledWith('%1', 'docs/a.md', {
+    expect(mockContent).toHaveBeenCalledWith({ paneId: '%1' }, 'docs/a.md', {
       root: '/r',
       reveal: false,
     })

@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useSyncExternalStore,
+} from 'react'
 import { isAbsolutePath, underRoot } from '../utils/chat-file-links'
 import type { TableOp } from '../utils/csv-edits'
 import type { Delimiter } from '../utils/csv-parse'
@@ -12,6 +18,7 @@ import {
 } from '../utils/file-tabs'
 import {
   clearDrafts,
+  draftTail,
   loadDrafts,
   loadRecent,
   loadTabs,
@@ -22,6 +29,7 @@ import {
   RECENT_LIMIT,
   type RecentFile,
   removeDraft,
+  removeLegacyDraft,
   saveRecent,
   saveTabs,
   writeDraft,
@@ -37,8 +45,11 @@ import type { TableLayout } from '../utils/table-columns'
 import {
   type FileEncoding,
   type FileEntry,
+  type FilesPlace,
+  type FilesTarget,
   type FilesTree,
   fetchFilesTree,
+  fetchPlaces,
   RequestError,
 } from './use-mux-api'
 
@@ -106,6 +117,12 @@ export interface FileTab extends TabBase {
 
 export interface FilesState {
   root?: string
+  // The Place shown (its id), absent for the pane's own folder. Switching
+  // works as the root moving: clean tabs of the old root close.
+  place?: string
+  // Bumped each time the Place shown is gone (removed, or it leads
+  // elsewhere now) and the view went back to the pane's folder
+  placeLost: number
   isRepo: boolean
   // Directories read so far, by path ("" is the root)
   dirs: Record<string, DirState>
@@ -117,13 +134,15 @@ export interface FilesState {
   // Tabs with unsaved changes opened under a root the pane has left, while
   // the user chooses to close or keep them
   pendingRootClose?: string[]
-  // Bumped each time the pane's root moves while the view is open
+  // Bumped each time the pane's root moves while the view is open (not
+  // when the user picks another Place)
   rootChanges: number
   // Files the user opened lately, the latest first (kept on the device)
   recent: RecentFile[]
 }
 
 const INITIAL: FilesState = {
+  placeLost: 0,
   isRepo: false,
   dirs: {},
   expanded: {},
@@ -220,6 +239,11 @@ interface Store {
   created: (path: string, root: string, reveal: boolean) => Promise<void>
   // Another request saw the root move to root
   rootChanged: (root: string) => void
+  // Shows the Place id (undefined: the pane's folder), whose root is root
+  // when known; otherwise the server says (409) and the tree starts again
+  switchTo: (place: string | undefined, root?: string) => void
+  // What a files request of this view reads
+  target: () => FilesTarget
   // A file found by a search of root (the command palette): the store
   // moves to that root first when it is not on it, then opens the file
   openFromFind: (root: string, path: string, opts?: FileOpenOptions) => void
@@ -249,6 +273,7 @@ function createStore(id: string): Store {
     ? {
         ...INITIAL,
         root: fromDevice.root,
+        place: fromDevice.place,
         tabs: fromDevice.tabs.map((t) => ({ ...t, reveal: false })),
         activeId: fromDevice.activeId,
         pendingRootClose: fromDevice.pendingRootClose,
@@ -258,9 +283,15 @@ function createStore(id: string): Store {
   const listeners = new Set<() => void>()
   // Bumped when the root moves: a read sent for the old one is dropped.
   let generation = 0
+  // Another source was picked and its root is not read yet
+  let switching = false
   // When each tab was last shown, and the ids of new ones
   let { clock, ids } = restoredCounters(state.tabs)
-  const isDirty = (t: FileTab) => isDraftDirty(paneId, t.path)
+  const isDirty = (t: FileTab) => isDraftDirty(paneId, t.root, t.path)
+  const target = (): FilesTarget => ({ paneId, place: state.place })
+  // A tab is one file: its root and its path
+  const tabKey = (t: FileTab) => `${t.root}\u0000${t.path}`
+  const here = (t: FileTab) => t.root === (state.root ?? '')
 
   // Kept on the device after every change of the tabs (and of where they
   // are scrolled to, which renders nothing)
@@ -275,6 +306,7 @@ function createStore(id: string): Store {
       state.tabs !== prev.tabs ||
       state.activeId !== prev.activeId ||
       state.root !== prev.root ||
+      state.place !== prev.place ||
       state.pendingRootClose !== prev.pendingRootClose
     )
       persist()
@@ -288,19 +320,36 @@ function createStore(id: string): Store {
     setDir(path, { ...state.dirs[path], loading: true })
     let tree: FilesTree
     try {
-      tree = await fetchFilesTree(paneId, path, state.root)
+      tree = await fetchFilesTree(target(), path, state.root)
     } catch (err) {
       if (gen !== generation) return
       if (err instanceof RequestError && err.status === 409 && err.root) {
         rootChanged(err.root)
         return
       }
+      // The Place is gone, leads elsewhere now, or is not this client's
+      // (view-only: a link or a record kept from a full role): back to the
+      // pane's folder
+      if (
+        state.place &&
+        err instanceof RequestError &&
+        (err.code === 'unknown_place' ||
+          err.code === 'place_moved' ||
+          err.code === 'view_only')
+      ) {
+        set({ placeLost: state.placeLost + 1 })
+        switchTo(undefined)
+        return
+      }
+      // A source picked whose read failed: the next move is the pane's own
+      if (!path) switching = false
       const { [path]: _, ...expanded } = state.expanded
       setDir(path, { loading: false, error: filesError(err) })
       if (path) set({ expanded })
       return
     }
     if (gen !== generation) return
+    if (!path) switching = false
     set({ root: tree.root, isRepo: tree.isRepo })
     setDir(path, {
       entries: tree.entries,
@@ -348,8 +397,8 @@ function createStore(id: string): Store {
     const r = openTab(
       state.tabs,
       state.activeId,
-      (t) => t.path,
-      path,
+      tabKey,
+      `${state.root ?? ''}\u0000${path}`,
       () => ({
         id: `t${++ids}`,
         pinned: false,
@@ -366,7 +415,7 @@ function createStore(id: string): Store {
     )
     // Tabs closed to make room never had changes; an untouched draft of
     // theirs goes with them, so the file is read again when it reopens
-    for (const t of r.closed) dropDraft(paneId, t.path)
+    for (const t of r.closed) dropDraft(paneId, t.root, t.path)
     const gone = new Set(r.closed.map((t) => t.id))
     // A file already open goes to the heading or the line asked for
     const at: Partial<FileTab> | undefined = opts.line
@@ -417,7 +466,7 @@ function createStore(id: string): Store {
   function close(id: string) {
     const tab = state.tabs.find((t) => t.id === id)
     if (!tab) return
-    dropDraft(paneId, tab.path)
+    dropDraft(paneId, tab.root, tab.path)
     const r = closeTab(state.tabs, state.activeId, id)
     set({
       tabs: r.tabs,
@@ -508,7 +557,7 @@ function createStore(id: string): Store {
     }
     const current = activeTab(state)
     const elsewhere = state.tabs.find(
-      (t) => t.path === target.path && t !== current,
+      (t) => t.path === target.path && here(t) && t !== current,
     )
     if (opts.newTab || opts.fresh || elsewhere || !current) {
       openByUser(target.path, {
@@ -635,7 +684,8 @@ function createStore(id: string): Store {
     const parent = at < 0 ? '' : path.slice(0, at)
     // Its tab closes, and for a directory every tab under it
     for (const t of state.tabs)
-      if (t.path === path || t.path.startsWith(`${path}/`)) close(t.id)
+      if (here(t) && (t.path === path || t.path.startsWith(`${path}/`)))
+        close(t.id)
     // A deleted directory is closed, and so is everything under it
     const expanded = Object.fromEntries(
       Object.entries(state.expanded).filter(
@@ -654,6 +704,8 @@ function createStore(id: string): Store {
   function rootChanged(root: string) {
     if (root === state.root) return
     generation++
+    const picked = switching
+    switching = false
     const moved = state.tabs.filter((t) => t.root !== root)
     for (const t of moved) if (!isDirty(t)) close(t.id)
     // Every tab still of another root: one asked about before that is of
@@ -663,9 +715,25 @@ function createStore(id: string): Store {
       root,
       dirs: {},
       expanded: {},
-      rootChanges: state.rootChanges + 1,
+      rootChanges: state.rootChanges + (picked ? 0 : 1),
       pendingRootClose: pendingOf(asked),
     })
+    read('')
+  }
+
+  function switchTo(place: string | undefined, root?: string) {
+    if (place !== state.place) set({ place })
+    else if (root === undefined || root === state.root) return
+    // The root moving now is the user's doing: no notice
+    switching = true
+    if (root !== undefined && root !== state.root) {
+      rootChanged(root)
+      return
+    }
+    // The root is not known yet: the read sends the old one, and the 409
+    // that answers it starts the tree again (rootChanged)
+    generation++
+    set({ dirs: {}, expanded: {} })
     read('')
   }
 
@@ -718,7 +786,7 @@ function createStore(id: string): Store {
       }
       // The file went back to has a tab of its own meanwhile: shown there,
       // this tab stays as it is, one step less to go back
-      const other = state.tabs.find((t) => t.path === prev.path)
+      const other = state.tabs.find((t) => t.path === prev.path && here(t))
       if (other) {
         patchTab(tab.id, { history: tab.history.slice(0, -1) })
         activate(other.id)
@@ -760,7 +828,9 @@ function createStore(id: string): Store {
       if (tab) forget(tab.root, tab.path)
     },
     openFromFind(root, path, opts) {
-      if (state.root !== root) rootChanged(root)
+      // A root that is a Place's opens that Place; another is the pane's
+      if (state.root !== root)
+        switchTo(knownPlaces.find((p) => p.path === root)?.id, root)
       openByUser(path, opts)
     },
     resolveRootClose(closing) {
@@ -769,6 +839,8 @@ function createStore(id: string): Store {
       if (closing) for (const id of ids) close(id)
     },
     rootChanged,
+    switchTo,
+    target,
     created,
     reveal,
     list,
@@ -779,6 +851,41 @@ function createStore(id: string): Store {
 }
 
 const stores = new Map<string, Store>()
+
+// The Places the server offers (files/places), read once a view asks: a
+// root found elsewhere (a search, a review comment, a file opened lately)
+// opens the Place it is the root of
+let knownPlaces: FilesPlace[] = []
+let placesRead: Promise<void> | undefined
+const placesListeners = new Set<() => void>()
+
+function subscribePlaces(fn: () => void) {
+  placesListeners.add(fn)
+  return () => {
+    placesListeners.delete(fn)
+  }
+}
+
+// The Places, read from the server once enabled (caps.places): none for a
+// view-only client or a server without any
+export function usePlaces(enabled: boolean): FilesPlace[] {
+  useEffect(() => {
+    if (!enabled || placesRead) return
+    placesRead = fetchPlaces().then(
+      (list) => {
+        knownPlaces = list
+        for (const fn of placesListeners) fn()
+      },
+      // Read again by the next view that asks
+      () => {
+        placesRead = undefined
+      },
+    )
+  }, [enabled])
+  const list = useSyncExternalStore(subscribePlaces, () => knownPlaces)
+  return enabled ? list : NO_PLACES
+}
+const NO_PLACES: FilesPlace[] = []
 
 function storeFor(paneId: string): Store {
   let s = stores.get(paneId)
@@ -836,6 +943,14 @@ export function useFiles(paneId: string) {
       [store],
     ),
     rootChanged: useCallback((r: string) => store.rootChanged(r), [store]),
+    openPlace: useCallback(
+      (id: string | undefined) => store.switchTo(id),
+      [store],
+    ),
+    target: useMemo<FilesTarget>(
+      () => ({ paneId, place: state.place }),
+      [paneId, state.place],
+    ),
     openFromFind: useCallback(
       (r: string, p: string, opts?: FileOpenOptions) =>
         store.openFromFind(r, p, opts),
@@ -901,10 +1016,18 @@ export function useFilesFocusRequest(
   }, [paneId])
 }
 
-// Follows a link into the Files view of paneId from elsewhere (the Changes
-// view's preview)
-export function followInFiles(paneId: string, target: LinkPath) {
-  return storeFor(paneId).follow(target, 0, { fresh: true })
+// Follows a link into the Files view of paneId from elsewhere: a path of
+// the pane's folder (the Changes view's preview), or of the Place place (a
+// link). A source other than the one shown replaces it: the read that
+// follows sees the root move, and tries once more from the new one.
+export function followInFiles(
+  paneId: string,
+  target: LinkPath,
+  place?: string,
+) {
+  const store = storeFor(paneId)
+  store.switchTo(place)
+  return store.follow(target, 0, { fresh: true })
 }
 
 // Opens a path the agent wrote in paneId's Files view, at line when given:
@@ -921,10 +1044,12 @@ export async function followPathInFiles(
   const store = storeFor(paneId)
   let here: { root: string; dir?: string }
   try {
-    here = await fetchFilesTree(paneId, '')
+    here = await fetchFilesTree({ paneId }, '')
   } catch {
     return 'failed'
   }
+  // A path of the pane: a Place shown gives way to the pane's folder
+  store.switchTo(undefined, here.root)
   const open = (rel: string) =>
     store.follow({ path: rel }, 0, { fresh: true, line })
   if (isAbsolutePath(path) || !here.dir) {
@@ -982,14 +1107,16 @@ type DraftUpdate =
   // may be stale)
   | ((now: FileDraft | undefined) => FileDraft | undefined)
 
-// By pane and path: one draft per file, shared by every view of the pane
-// (the Files tab, the Changes editor)
+// By pane, root and path: one draft per file, shared by every view of the
+// pane (the Files tab, the Changes editor); the same path under a Place is
+// another file
 const drafts = new Map<string, FileDraft>()
 const draftListeners = new Set<() => void>()
 // Bumped on every change, so readers of several drafts render again
 let draftsVersion = 0
 
-const draftKey = (paneId: string, path: string) => `${paneId}\u0000${path}`
+const draftKey = (paneId: string, root: string, path: string) =>
+  `${paneId}\u0000${root}\u0000${path}`
 
 // When each draft's text last changed: a draft kept on the device expires
 // 14 days after it, however often it is written again (a move, a rename)
@@ -1020,6 +1147,7 @@ function guardUnload() {
 // before the app closes never brings the old text back.
 function keepDraft(
   paneId: string,
+  root: string,
   path: string,
   prev: FileDraft | undefined,
   next: FileDraft | undefined,
@@ -1029,7 +1157,7 @@ function keepDraft(
     editedAt.set(next, same || Date.now())
   }
   if (!next || next.reveal || !isDirty(next) || !keepDrafts) {
-    removeDraft(paneId, path)
+    removeDraft(paneId, root, path)
     return
   }
   const { reveal: _, ...stored } = next
@@ -1073,14 +1201,19 @@ export function hydrateDrafts(paneIds: Iterable<string>, role?: string) {
     const pane = persistKey('drafts', paneId)
     if (!pane || hydrated.has(pane)) continue
     hydrated.add(pane)
-    for (const { draft, editedAt: at } of loadDrafts<unknown>(paneId)) {
+    for (const { draft, editedAt: at, legacy } of loadDrafts<unknown>(paneId)) {
       if (!isStoredDraft(draft)) continue
-      const key = draftKey(paneId, draft.path)
+      const key = draftKey(paneId, draft.root, draft.path)
       if (drafts.has(key)) continue
       const d: FileDraft = { ...draft, reveal: false }
       drafts.set(key, d)
       editedAt.set(d, at)
-      kept.add(d)
+      // Kept under its key from before Places: moved to the one with its
+      // root, which it always held
+      if (legacy) {
+        removeLegacyDraft(paneId, draft.path)
+        if (writeDraft(paneId, draft, at)) kept.add(d)
+      } else kept.add(d)
       changed = true
     }
   }
@@ -1100,38 +1233,43 @@ function subscribeDrafts(fn: () => void) {
   }
 }
 
-function setDraftOf(paneId: string, path: string, update: DraftUpdate) {
-  const key = draftKey(paneId, path)
+function setDraftOf(
+  paneId: string,
+  root: string,
+  path: string,
+  update: DraftUpdate,
+) {
+  const key = draftKey(paneId, root, path)
   const prev = drafts.get(key)
   const next = typeof update === 'function' ? update(prev) : update
   if (next === prev) return
   if (next) drafts.set(key, next)
   else drafts.delete(key)
-  keepDraft(paneId, path, prev, next)
+  keepDraft(paneId, root, path, prev, next)
   draftsChanged()
 }
 
-// The draft of path in paneId, and a setter that replaces it, or with
-// undefined drops it.
-export function useFileDraft(paneId: string, path: string) {
+// The draft of path under root in paneId, and a setter that replaces it,
+// or with undefined drops it.
+export function useFileDraft(paneId: string, root: string, path: string) {
   const draft = useSyncExternalStore(subscribeDrafts, () =>
-    drafts.get(draftKey(paneId, path)),
+    drafts.get(draftKey(paneId, root, path)),
   )
   const setDraft = useCallback(
-    (update: DraftUpdate) => setDraftOf(paneId, path, update),
-    [paneId, path],
+    (update: DraftUpdate) => setDraftOf(paneId, root, path, update),
+    [paneId, root, path],
   )
   return [draft, setDraft] as const
 }
 
-// path in paneId has unsaved changes
-export function isDraftDirty(paneId: string, path: string) {
-  const d = drafts.get(draftKey(paneId, path))
+// path under root in paneId has unsaved changes
+export function isDraftDirty(paneId: string, root: string, path: string) {
+  const d = drafts.get(draftKey(paneId, root, path))
   return !!d && d.text !== d.base
 }
 
-export function dropDraft(paneId: string, path: string) {
-  setDraftOf(paneId, path, undefined)
+export function dropDraft(paneId: string, root: string, path: string) {
+  setDraftOf(paneId, root, path, undefined)
 }
 
 // Whether any pane has unsaved changes of path under root: a rename onto it
@@ -1150,24 +1288,24 @@ function moveDrafts(root: string, from: string, to: string, reveal: boolean) {
     if (d.root !== root || d.path !== from) continue
     drafts.delete(key)
     const paneId = key.slice(0, key.indexOf('\u0000'))
-    removeDraft(paneId, from)
+    removeDraft(paneId, root, from)
     const next = { ...d, path: to, reveal: d.reveal || reveal }
-    const toKey = draftKey(paneId, to)
+    const toKey = draftKey(paneId, root, to)
     drafts.set(toKey, next)
-    keepDraft(paneId, to, d, next)
+    keepDraft(paneId, root, to, d, next)
     moved = true
   }
   if (!moved) return
   draftsChanged()
 }
 
-// Whether a path of paneId has unsaved changes, read again whenever a
-// draft changes
+// Whether a path under a root of paneId has unsaved changes, read again
+// whenever a draft changes
 export function useDirtyCheck(paneId: string) {
   const version = useSyncExternalStore(subscribeDrafts, () => draftsVersion)
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new check per change
   return useCallback(
-    (path: string) => isDraftDirty(paneId, path),
+    (root: string, path: string) => isDraftDirty(paneId, root, path),
     [paneId, version],
   )
 }
@@ -1207,13 +1345,16 @@ function unkeepAll() {
 function unkeepDraft(key: string) {
   for (const [k, d] of drafts) {
     const paneId = k.slice(0, k.indexOf('\u0000'))
-    if (persistKey('drafts', paneId, d.path) === key) kept.delete(d)
+    if (persistKey('drafts', paneId, draftTail(d.root, d.path)) === key)
+      kept.delete(d)
   }
   guardUnload()
 }
 
 function forgetAll() {
   stores.clear()
+  knownPlaces = []
+  placesRead = undefined
   focusRequests.clear()
   drafts.clear()
   draftsChanged()

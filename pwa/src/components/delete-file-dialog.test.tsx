@@ -55,7 +55,11 @@ describe('DeleteFileDialog', () => {
     expect(screen.getByText('/home/kim/app/src/a.ts')).toBeInTheDocument()
     expect(del()).toBeDisabled()
     await waitFor(() => expect(del()).toBeEnabled())
-    expect(mockHash).toHaveBeenCalledWith('%1', 'src/a.ts', '/home/kim/app')
+    expect(mockHash).toHaveBeenCalledWith(
+      { paneId: '%1' },
+      'src/a.ts',
+      '/home/kim/app',
+    )
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus(),
     )
@@ -82,14 +86,17 @@ describe('DeleteFileDialog', () => {
     expect(screen.getByText('This is a sensitive file')).toBeInTheDocument()
     await waitFor(() => expect(del()).toBeEnabled())
     await act(async () => fireEvent.click(del()))
-    expect(mockDelete).toHaveBeenCalledWith('%1', {
-      root: '/home/kim/app',
-      path: 'src/a.ts',
-      kind: 'file',
-      baseHash: 'h1',
-      reveal: true,
-      permanent: false,
-    })
+    expect(mockDelete).toHaveBeenCalledWith(
+      { paneId: '%1' },
+      {
+        root: '/home/kim/app',
+        path: 'src/a.ts',
+        kind: 'file',
+        baseHash: 'h1',
+        reveal: true,
+        permanent: false,
+      },
+    )
     expect(p.onClose).toHaveBeenCalled()
     expect(p.onDeleted).toHaveBeenCalledWith({
       path: 'src/a.ts',

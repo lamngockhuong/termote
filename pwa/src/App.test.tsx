@@ -4714,12 +4714,28 @@ describe('App views, view-only and deep links', () => {
       expect(document.title).toBe('w1:t1 — Termote')
     })
 
+    it('a file of a Place opens in that Place, which the address keeps', async () => {
+      openFocus(`${P1}?view=files&solo=1&file=a.md&place=ab12`)
+      await screen.findByTestId('files-panel')
+      expect(mockFollowInFiles).toHaveBeenCalledWith(
+        'w1:t1:p1',
+        { path: 'a.md' },
+        'ab12',
+      )
+      await act(async () => {})
+      expect(window.location.hash).toBe(
+        `${P1}?view=files&solo=1&file=a.md&place=ab12`,
+      )
+    })
+
     it('a file opens in the Files panel over the terminal, with no stream', async () => {
       openFocus(`${P1}?view=files&solo=1&file=src%2Fa.ts`)
       await screen.findByTestId('files-panel')
-      expect(mockFollowInFiles).toHaveBeenCalledWith('w1:t1:p1', {
-        path: 'src/a.ts',
-      })
+      expect(mockFollowInFiles).toHaveBeenCalledWith(
+        'w1:t1:p1',
+        { path: 'src/a.ts' },
+        undefined,
+      )
       expect(screen.getByRole('complementary', { name: 'Files' })).toHaveClass(
         'absolute',
         'inset-0',
@@ -4918,9 +4934,11 @@ describe('App views, view-only and deep links', () => {
       window.history.replaceState(null, '', `/${P1}?view=files&file=a.ts`)
       render(<App views={FOCUS_VIEWS} />)
       await screen.findByTestId('files-panel')
-      expect(mockFollowInFiles).toHaveBeenCalledWith('w1:t1:p1', {
-        path: 'a.ts',
-      })
+      expect(mockFollowInFiles).toHaveBeenCalledWith(
+        'w1:t1:p1',
+        { path: 'a.ts' },
+        undefined,
+      )
       expect(
         screen.getByRole('complementary', { name: 'Files' }),
       ).not.toHaveClass('absolute')

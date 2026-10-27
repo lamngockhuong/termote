@@ -8,6 +8,8 @@ import {
 // One document read through files/document
 export interface DocumentRequest extends DocumentQuery {
   path: string
+  // The Place the file is under
+  place?: string
 }
 
 export type DocumentBytes =
@@ -33,7 +35,7 @@ export function useDocumentBytes(
   )
   const active = req !== null
   const path = req?.path ?? ''
-  const { root, reveal } = req ?? {}
+  const { root, reveal, place } = req ?? {}
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reloadKey reads the file again
   useEffect(() => {
@@ -43,7 +45,12 @@ export function useDocumentBytes(
     }
     const ctl = new AbortController()
     setState({ status: 'loading' })
-    fetchFileDocument(paneId, path, { root, reveal }, ctl.signal).then(
+    fetchFileDocument(
+      { paneId, place },
+      path,
+      { root, reveal },
+      ctl.signal,
+    ).then(
       (blob) => {
         if (ctl.signal.aborted) return
         setState({ status: 'ready', blob, size: blob.size })
@@ -64,7 +71,7 @@ export function useDocumentBytes(
       },
     )
     return () => ctl.abort()
-  }, [paneId, active, path, root, reveal, reloadKey, onRootChanged])
+  }, [paneId, place, active, path, root, reveal, reloadKey, onRootChanged])
 
   return state
 }
