@@ -1,5 +1,6 @@
 import { FolderTree, X } from 'lucide-react'
 import { type KeyboardEvent, useEffect, useRef } from 'react'
+import { useWheelScrollX } from '../hooks/use-wheel-scroll-x'
 import { FOCUS_RING } from './ui/button'
 
 // A tab as the tab bar and the open-files sheet show it
@@ -53,6 +54,8 @@ export function FileTabBar({
   const tabIds = (id: string | null) =>
     panelId ? { id: tabElementId(panelId, id), 'aria-controls': panelId } : {}
   const items = useRef(new Map<string | null, HTMLElement>())
+  const barRef = useRef<HTMLDivElement>(null)
+  useWheelScrollX(barRef)
   const ids: (string | null)[] = [null, ...tabs.map((t) => t.id)]
 
   // The tab shown stays in view as the bar scrolls sideways
@@ -102,9 +105,10 @@ export function FileTabBar({
 
   return (
     <div
+      ref={barRef}
       role="tablist"
       aria-label="Open files"
-      className="flex shrink-0 overflow-x-auto border-b border-border bg-surface ui-terminal:bg-bg"
+      className="flex shrink-0 overflow-x-auto scrollbar-hide border-b border-border bg-surface ui-terminal:bg-bg"
     >
       <button
         ref={ref(null)}

@@ -228,6 +228,15 @@ describe('SessionTabs', () => {
     Element.prototype.getBoundingClientRect = originalGetBCR
   })
 
+  it('turns the mouse wheel sideways over the tabs', () => {
+    render(<SessionTabs {...defaultProps} />)
+    const bar = screen.getByRole('tablist', { name: 'Sessions' })
+    Object.defineProperty(bar, 'clientWidth', { value: 100 })
+    Object.defineProperty(bar, 'scrollWidth', { value: 300 })
+    fireEvent.wheel(bar, { deltaY: 40 })
+    expect(bar.scrollLeft).toBe(40)
+  })
+
   it('renders session icons', () => {
     render(<SessionTabs {...defaultProps} />)
     expect(screen.getByText('💻')).toBeInTheDocument()

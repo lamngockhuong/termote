@@ -303,6 +303,68 @@ body {
   display: none;
 }
 
+/* Thin scrollbars where there is a mouse: 8px, no arrow buttons, a clear
+   track. Touch screens keep the system's overlay scrollbars. Chrome 121+
+   ignores ::-webkit-scrollbar on an element that sets scrollbar-width or
+   scrollbar-color, so the standard properties only go to browsers without the
+   pseudo-elements (Firefox). .scrollbar-hover shows the thumb only while the
+   pointer is over the area or focus is inside it; the width never changes, so
+   the content does not shift. */
+@media (pointer: fine) {
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-button {
+    display: none;
+  }
+
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    border-radius: 4px;
+    background: var(--color-border-strong);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-fg-subtle);
+  }
+
+  .scrollbar-hover::-webkit-scrollbar-thumb {
+    background: transparent;
+  }
+
+  .scrollbar-hover:hover::-webkit-scrollbar-thumb,
+  .scrollbar-hover:focus-within::-webkit-scrollbar-thumb {
+    background: var(--color-border-strong);
+  }
+
+  .scrollbar-hover::-webkit-scrollbar-thumb:hover {
+    background: var(--color-fg-subtle);
+  }
+
+  @supports not selector(::-webkit-scrollbar) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--color-border-strong) transparent;
+    }
+
+    .scrollbar-hover {
+      scrollbar-color: transparent transparent;
+    }
+
+    .scrollbar-hover:hover,
+    .scrollbar-hover:focus-within {
+      scrollbar-color: var(--color-border-strong) transparent;
+    }
+
+  }
+}
+
 /* The brand mark's blink (brand-mark.tsx): the eyes, cut out through a mask,
    squash on their centre line, as the intro video's owl does. Keyframes end
    open, so a blink cut short below leaves the eyes as they were. The squash

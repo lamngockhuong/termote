@@ -147,4 +147,14 @@ describe('FileTabBar', () => {
       tab(/^c\.md/),
     )
   })
+
+  it('hides its scrollbar and turns the mouse wheel sideways', () => {
+    show()
+    const bar = screen.getByRole('tablist', { name: 'Open files' })
+    expect(bar).toHaveClass('scrollbar-hide')
+    Object.defineProperty(bar, 'clientWidth', { value: 100 })
+    Object.defineProperty(bar, 'scrollWidth', { value: 300 })
+    fireEvent.wheel(bar, { deltaY: 40 })
+    expect(bar.scrollLeft).toBe(40)
+  })
 })
