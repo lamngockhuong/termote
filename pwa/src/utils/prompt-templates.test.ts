@@ -186,6 +186,13 @@ describe('matchTemplates', () => {
     expect(names('de')).toEqual(['Deploy'])
     expect(names('view')).toEqual([])
   })
+
+  it('finds a name typed with its spaces, in full or in part', () => {
+    expect(names('code r')).toEqual(['Code review'])
+    expect(names('Code review')).toEqual(['Code review'])
+    expect(names('  code  review ')).toEqual(['Code review'])
+    expect(names('code w')).toEqual([])
+  })
 })
 
 describe('firstLine', () => {
