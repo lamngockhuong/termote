@@ -1289,12 +1289,15 @@ export function FileViewer({
             {keepOrder(path)}
           </span>
           {size !== undefined && (
-            <span className="flex items-center gap-1 text-[11px] text-fg-muted">
+            <span className="flex items-center gap-1 whitespace-nowrap text-[11px] text-fg-muted">
               {formatSize(size)}
               {encodingMenu && (
                 <>
                   <span aria-hidden="true">·</span>
-                  {encodingMenu}
+                  {/* One line, the encoding cut short in a narrow header:
+                      wrapped, the line makes the header taller; overflowing,
+                      it covers the buttons beside it */}
+                  <span className="min-w-0">{encodingMenu}</span>
                 </>
               )}
             </span>

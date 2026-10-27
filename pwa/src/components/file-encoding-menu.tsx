@@ -39,7 +39,7 @@ export function FileEncodingMenu({
       <Menu
         label={name ? `Encoding: ${name}` : 'Open with encoding'}
         trigger={name ?? 'Open with encoding…'}
-        textTrigger="rounded-control text-[11px] text-fg-muted underline decoration-dotted underline-offset-2 hover:text-fg pointer-coarse:py-1"
+        textTrigger="block max-w-full truncate rounded-control text-[11px] text-fg-muted underline decoration-dotted underline-offset-2 hover:text-fg pointer-coarse:py-1"
         align="start"
       >
         <MenuGroup
