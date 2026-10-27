@@ -350,6 +350,13 @@ func TestTaskRunUnknownPaneAndDir(t *testing.T) {
 	if code, _ := fx.run(t, map[string]any{"kind": "script", "name": "test"}); code != http.StatusBadRequest {
 		t.Errorf("unknown pane = %d", code)
 	}
+	// Where tabs are selected on the server (tmux), a tab id names its
+	// active pane.
+	tab := newTaskFixture(t)
+	tab.m.snap = Snapshot{Groups: []Group{{ID: "g", Tabs: []Tab{{ID: "0", Panes: []Pane{{ID: "%3"}, {ID: "%4", Active: true}}}}}}}
+	if code, body := tab.run(t, map[string]any{"kind": "script", "name": "test"}); code != http.StatusOK {
+		t.Errorf("tab id = %d %v", code, body)
+	}
 	fx.m.err = errors.New("snapshot failed")
 	if code, _ := fx.run(t, map[string]any{"kind": "script", "name": "test"}); code != http.StatusInternalServerError {
 		t.Errorf("snapshot error = %d", code)

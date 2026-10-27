@@ -43,7 +43,7 @@ func (tmuxMux) NewTaskTab(ctx context.Context, groupID, name, dir string) (taskT
 		return taskTab{}, fmt.Errorf("new-window printed %q", out)
 	}
 	id := formatTmuxID(parts[0], parts[3] == tmuxSession, parts[1])
-	return taskTab{TabID: id, PaneID: id, Target: parts[2]}, nil
+	return taskTab{TabID: id, PaneID: parts[2], Target: parts[2]}, nil
 }
 
 // IdleShell reads target's shell (its pane_pid) and whether it is the

@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"slices"
 	"strconv"
 	"time"
 )
@@ -236,6 +237,27 @@ func paneKey(p Pane) string {
 	return p.ID
 }
 
+// findSnapshotPane finds pane id in s. With tabIDs (tmux, whose tabs are
+// selected on the server), a tab's own id names the tab's active pane too,
+// as links, push notifications and clients from before panes were listed
+// name it.
+func findSnapshotPane(s Snapshot, id string, tabIDs bool) (Group, Tab, Pane, bool) {
+	for _, g := range s.Groups {
+		for _, t := range g.Tabs {
+			if tabIDs && t.ID == id && len(t.Panes) > 0 {
+				i := max(slices.IndexFunc(t.Panes, func(p Pane) bool { return p.Active }), 0)
+				return g, t, t.Panes[i], true
+			}
+			for _, p := range t.Panes {
+				if p.ID == id {
+					return g, t, p, true
+				}
+			}
+		}
+	}
+	return Group{}, Tab{}, Pane{}, false
+}
+
 // ProcessInfo is a pane's foreground process: the first word of the name the
 // OS reports, never its arguments or environment (processName).
 type ProcessInfo struct {
@@ -273,6 +295,9 @@ func (e *codedError) Error() string { return e.msg }
 
 // errUnsupported is returned by a backend for an operation it does not offer.
 var errUnsupported = errors.New("operation not supported by this backend")
+
+// errLastPane refuses to close a tab's last pane: that is closing the tab.
+var errLastPane = &codedError{"last_pane", "a tab's last pane is closed by closing the tab", http.StatusConflict}
 
 // registerMuxRoutes mounts /api/mux/* for the given backend. Patterns carry no
 // method so a wrong method gets a JSON 405 instead of falling through to the

@@ -57,7 +57,7 @@ React SPA with:
 - **Session Sidebar**: Switch between groups (tmux sessions, Herdr workspaces or Zellij sessions), add/edit/remove (collapsible on desktop)
 - **Session Tabs**: Browser-like tabs in the header row for tab switching (hidden/shown via setting), add/remove via UI
 - **Session Chip** (mobile): Header chip that opens the sessions list as a bottom sheet; there is no bottom navigation
-- **Pane Strip**: Second-level switcher shown only when a tab has more than one pane (Herdr and Zellij split panes)
+- **Pane Strip**: Second-level switcher shown only when a tab has more than one pane (split panes; on tmux it moves the shared focus, not the stream)
 - **Agent Status Badge**: Per-pane coding-agent status (idle/working/blocked/done) shown next to the pane, only ever set by the Herdr backend
 - **Keyboard Toolbar**: Virtual keys, Ctrl combos, scroll controls (respects default expanded setting)
 - **More Menu**: Font size (mobile), theme (light/dark/system), Settings, Help & gestures, About, Copy link, Clear cache & reload
@@ -115,8 +115,9 @@ For a native install, `termote start` computes the equivalent of `TERMOTE_ALLOWE
 attach a terminal, health) with three implementations:
 
 - **`mux_tmux.go`** (tmux on Unix, psmux on Windows): every session on the tmux server is a
-  group (sessions made outside Termote too), a window is a tab, and a tab shows its window's
-  active pane. The default session (`TMUX_SESSION`, `main`) is listed first, keeps its name as
+  group (sessions made outside Termote too), a window is a tab, and each pane of a window is a
+  pane, known by tmux's own id (`%N`, from one `list-panes -a` per snapshot); a tab id alone
+  still names the window's active pane. The stream shows the whole window. The default session (`TMUX_SESSION`, `main`) is listed first, keeps its name as
   group id and bare window indexes as tab ids (`0`), and is made again by the next snapshot when
   it is missing; any other session is addressed by tmux's session id (group `$3`, tab `$3:1`),
   which a rename keeps and a tmux server restart changes. Every command targets exactly (`$N:=i`,

@@ -6,8 +6,8 @@ description: Quản lý phiên terminal với tmux, Herdr hoặc Zellij
 import { Aside, Steps } from "@astrojs/starlight/components";
 
 Dù chạy trên tmux, Herdr hay Zellij, Termote cũng tổ chức terminal theo ba cấp: **group → tab → pane**.
-Với tmux (mặc định), mỗi group là một tmux session và mỗi tab là một tmux window; chỉ Herdr và
-Zellij mới dùng đến pane.
+Với tmux (mặc định), mỗi group là một tmux session, mỗi tab là một tmux window và mỗi pane là một
+pane trong window đó.
 
 Trên tmux, mọi session của tmux server đều hiện thành group, kể cả session bạn tự tạo ngoài
 Termote (`tmux new -s work`): ai đăng nhập Termote cũng chuyển sang và gõ vào được. Session riêng
@@ -70,6 +70,16 @@ session:
 Bước kiểm tra thư mục chỉ để bắt lỗi gõ nhầm: terminal mở ra vẫn `cd` đi đâu cũng được. Trên Windows,
 thư mục phải nằm trên một ổ đĩa (`C:\work`), và tên lẫn thư mục trên psmux không được chứa `#`. Tên phiên Zellij không được chứa `/`, bắt đầu bằng
 `-`, là `help` hay `options`, hoặc dài quá mức đường dẫn socket của Zellij cho phép.
+
+### Window chia nhiều pane (tmux)
+
+Khi một window tmux được chia thành nhiều pane, bên dưới thanh tab có **dải pane**: mỗi pane một
+nút, kèm lệnh nó đang chạy và huy hiệu agent. Terminal luôn hiện cả window, nên chọn một pane là
+đưa focus của tmux sang pane đó: phím bạn gõ đi vào pane ấy, còn view Chat và Files cũng chuyển
+theo. Focus này là của tmux và mọi client dùng chung: client tmux trên máy desktop cũng đổi theo,
+và khi focus đổi trên desktop thì Termote theo ở lần cập nhật kế tiếp. Trên thiết bị chỉ xem, dải
+pane chỉ để xem. Muốn đóng một pane, bấm dấu X cạnh tên pane rồi xác nhận; pane cuối cùng của
+window chỉ đóng được bằng cách đóng tab. psmux (Windows) mỗi window chỉ hiện một pane.
 
 ### Sắp xếp lại tab và workspace
 
@@ -229,8 +239,7 @@ Cả bản cài native ([`termote start --mux herdr`](/vi/installation/native/#b
 tmux. Mô hình phiên khi đó khác ở hai điểm:
 
 - **Pane**: một tab của Herdr có thể có nhiều pane. Khi đó, một **dải pane** xuất hiện bên dưới
-  thanh tab để chuyển qua lại giữa các pane; tab tmux không bao giờ hiện dải này (vì chỉ có một
-  pane). Mỗi pane hiện lệnh nó đang chạy dưới tên pane. Muốn đóng một pane, bấm dấu X cạnh tên pane (luôn hiện ở pane đang nhận luồng; các pane
+  thanh tab để chuyển qua lại giữa các pane. Mỗi pane hiện lệnh nó đang chạy dưới tên pane. Muốn đóng một pane, bấm dấu X cạnh tên pane (luôn hiện ở pane đang nhận luồng; các pane
   khác hiện khi rê chuột qua hoặc trên màn hình cảm ứng), rồi xác nhận bằng "Close pane". Các pane
   còn lại của tab vẫn mở; pane cuối cùng chỉ đóng được bằng cách đóng cả tab.
 - **Huy hiệu trạng thái agent**: mỗi pane có thể hiện một icon nhỏ (`idle`, `working`, `blocked`

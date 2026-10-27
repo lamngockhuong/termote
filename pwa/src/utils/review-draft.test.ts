@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { resetFilesPersist, SIGNED_OUT_KEY, signedOut } from './files-persist'
 import {
   addReviewComment,
+  adoptReviewDrafts,
   clearReviewDrafts,
   clearReviewDraftsOnSignOut,
   commentedDiffLines,
@@ -259,5 +260,25 @@ describe('commented lines', () => {
         'src/a.ts',
       ),
     ]).toEqual([])
+  })
+})
+
+describe('adoptReviewDrafts', () => {
+  it('moves a review to its new key unless one is kept there', () => {
+    addReviewComment('0', comment())
+    addReviewComment('1', comment({ id: 'c2' }))
+    addReviewComment('%5', comment({ id: 'c3' }))
+    adoptReviewDrafts(
+      new Map([
+        ['0', '%3'],
+        ['1', '%5'],
+        ['2', '%6'],
+      ]),
+    )
+    expect(loadReview('%3').map((c) => c.id)).toEqual(['c1'])
+    expect(loadReview('0')).toEqual([])
+    expect(loadReview('%5').map((c) => c.id)).toEqual(['c3'])
+    expect(loadReview('1')).toEqual([])
+    expect(loadReview('%6')).toEqual([])
   })
 })

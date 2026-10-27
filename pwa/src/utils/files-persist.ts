@@ -438,6 +438,37 @@ export function renamePersistedGroup(
   }
 }
 
+// Records kept under a pane key in moves (this server's) go to its value,
+// unless one is already kept there (tabPaneMoves).
+export function adoptPersisted(moves: Map<string, string>) {
+  if (!moves.size) return
+  flushAll()
+  if (disabled || isFocusWindow()) return
+  const s = storage()
+  for (const key of keysOf(ALL_KINDS)) {
+    const head = key.slice(0, key.indexOf(':') + 1)
+    const rest = key.slice(head.length)
+    const instance = rest.slice(0, rest.indexOf(':'))
+    if (instance !== paneInstance()) continue
+    const r = read<StoredRecord>(key)
+    const pane = r && moves.get(r.pane)
+    if (!r || pane === undefined) continue
+    const tail = rest.slice(instance.length + 1 + r.pane.length)
+    const next = `${head}${instance}:${pane}${tail}`
+    const value = JSON.stringify({ ...r, pane })
+    const size = draftSizes.get(key)
+    let taken: boolean
+    try {
+      taken = s?.getItem(next) != null
+    } catch {
+      continue // Unreadable: left where it is
+    }
+    remove(key)
+    if (!taken && write(next, value) && size !== undefined)
+      draftSizes.set(next, value.length)
+  }
+}
+
 // Panes whose group was renamed (tmux, Herdr: their keys stay), each with
 // its group's new name: their records follow, so they are not taken for
 // another group's when read back.

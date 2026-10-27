@@ -117,6 +117,13 @@ func (a *agentAPI) handleOverview(w http.ResponseWriter, r *http.Request) {
 	// Only a pane with an agent in the snapshot gets a cache entry, so an
 	// arbitrary id costs nothing.
 	only := r.URL.Query().Get("pane")
+	if only != "" {
+		// A tmux tab id names its active pane (findSnapshotPane).
+		snap, _ := a.activity.lastSnapshot()
+		if _, _, p, ok := findSnapshotPane(snap, only, !a.m.Caps().ClientSideSelect); ok {
+			only = p.ID
+		}
+	}
 	var read overviewRead
 	switch {
 	case only == "":

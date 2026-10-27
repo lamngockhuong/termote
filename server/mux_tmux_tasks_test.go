@@ -44,7 +44,7 @@ func TestTmuxTaskTabReal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tab.TabID != "1" || tab.PaneID != "1" || !tmuxPaneIDRe.MatchString(tab.Target) {
+	if tab.TabID != "1" || tab.PaneID != tab.Target || !tmuxPaneIDRe.MatchString(tab.Target) {
 		t.Fatalf("tab = %+v", tab)
 	}
 	shortStart(t)
@@ -97,7 +97,7 @@ func TestTmuxTaskArgvAndErrors(t *testing.T) {
 
 	args := useFakeTmuxScript(t, map[string]fakeTmuxReply{"new-window": {out: "$3:2:%7:work\n"}})
 	tab, err := tm.NewTaskTab(ctx, "$3", "task:a#b", "/r/#{x}")
-	if err != nil || tab != (taskTab{TabID: "$3:2", PaneID: "$3:2", Target: "%7"}) {
+	if err != nil || tab != (taskTab{TabID: "$3:2", PaneID: "%7", Target: "%7"}) {
 		t.Fatalf("NewTaskTab = %+v %v", tab, err)
 	}
 	if got := strings.TrimSpace(args()); got != "new-window -d -t $3: -c /r/##{x} -P -F #{session_id}:#{window_index}:#{pane_id}:#{session_name} -n task:a##b" {

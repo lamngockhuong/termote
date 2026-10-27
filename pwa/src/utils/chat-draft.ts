@@ -50,6 +50,17 @@ export function remapChatDrafts(shift: PaneShift) {
   remapEntries(inserts, shift)
 }
 
+// Each draft kept under a key in moves goes to its value, unless a draft is
+// already kept there (tabPaneMoves).
+export function adoptChatDrafts(moves: Map<string, string>) {
+  for (const [from, to] of moves) {
+    const text = loadDraft(from)
+    if (!text) continue
+    if (!loadDraft(to)) saveDraft(to, text)
+    saveDraft(from, '')
+  }
+}
+
 // Text for the draft (a filled prompt template), put where the caret is.
 // at: the "/name" typed in the draft that it replaces, when the draft
 // still holds was between start and end.

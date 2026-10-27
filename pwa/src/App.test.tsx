@@ -3261,7 +3261,7 @@ describe('App groups and panes', () => {
   const selectPane = vi.fn()
   const removePane = vi.fn()
 
-  function mockMux(backend: 'tmux' | 'herdr') {
+  function mockMux(backend: 'tmux' | 'herdr', role?: 'view') {
     const tabs = [
       tab('w1:t1', 'w1', PANES),
       tab('w1:t2', 'w1'),
@@ -3288,6 +3288,7 @@ describe('App groups and panes', () => {
         caps: {
           clientSideSelect: backend === 'herdr',
           copyMode: backend === 'tmux',
+          role,
         },
       },
     } as any)
@@ -3395,11 +3396,31 @@ describe('App groups and panes', () => {
     expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument()
   })
 
-  it('tmux: no pane strip', async () => {
+  it('tmux: the pane strip gives a pane the focus', async () => {
     mockMux('tmux')
     render(<App />)
-    await screen.findByTestId('terminal-view')
-    expect(screen.queryByRole('group', { name: 'Panes' })).toBeNull()
+    fireEvent.click(await screen.findByRole('button', { name: 'logs' }))
+    expect(selectPane).toHaveBeenCalledWith('w1:t1:p2')
+    expect(
+      screen.getByRole('button', { name: 'Close pane logs' }),
+    ).toBeInTheDocument()
+  })
+
+  it('tmux: a view-only device sees the panes but picks none', async () => {
+    mockMux('tmux', 'view')
+    render(<App />)
+    const logs = await screen.findByRole('button', { name: 'logs' })
+    expect(logs).toBeDisabled()
+    fireEvent.click(logs)
+    expect(selectPane).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: 'Close pane logs' })).toBeNull()
+  })
+
+  it('herdr: a view-only device still picks the pane it streams', async () => {
+    mockMux('herdr', 'view')
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'logs' }))
+    expect(selectPane).toHaveBeenCalledWith('w1:t1:p2')
   })
 })
 
@@ -6133,8 +6154,13 @@ describe('App command palette and shortcuts', () => {
     )
   })
 
-  it('offers no pane pick where the backend picks the pane', async () => {
+  it('offers no pane pick to a view-only device where the backend picks the pane', async () => {
     mockSessions('a')
+    const base = mockUseLocalSessions()
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      mux: { ...base.mux, caps: { ...base.mux.caps, role: 'view' } },
+    } as any)
     render(<App views={[APP_VIEWS[0], CHAT]} />)
     await openPalette()
     expect(palette.props!.selectPane).toBeUndefined()

@@ -104,3 +104,16 @@ describe('PaneStrip', () => {
     expect(onSelect).not.toHaveBeenCalled()
   })
 })
+
+describe('PaneStrip without onSelect', () => {
+  it('shows the panes, none of them pickable', () => {
+    render(<PaneStrip panes={PANES} activePaneId="p1" />)
+    const buttons = within(
+      screen.getByRole('group', { name: 'Panes' }),
+    ).getAllByRole('button')
+    expect(buttons).toHaveLength(2)
+    for (const b of buttons) expect(b).toBeDisabled()
+    fireEvent.click(buttons[1])
+    expect(buttons[0]).toHaveAttribute('aria-pressed', 'true')
+  })
+})

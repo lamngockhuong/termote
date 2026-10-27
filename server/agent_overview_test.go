@@ -269,6 +269,12 @@ func TestOverviewRoute(t *testing.T) {
 			t.Errorf("pane %s = %d %s", id, rec.Code, rec.Body)
 		}
 	}
+	// A tab id names its active pane (here its first) where tabs are
+	// selected on the server, as on tmux.
+	if err := json.Unmarshal(serve(mux, httptest.NewRequest(http.MethodGet, "/api/mux/overview?pane=w1:t1", nil)).Body.Bytes(), &one); err != nil ||
+		len(one.Panes) != 1 || one.Panes[0].PaneID != "w1:pa" {
+		t.Errorf("tab id = %+v %v", one.Panes, err)
+	}
 	agent.overview.mu.Lock()
 	_, cached := agent.overview.entries["pane\x00nope"]
 	agent.overview.mu.Unlock()

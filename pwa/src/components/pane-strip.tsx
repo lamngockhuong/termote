@@ -7,13 +7,17 @@ import { FOCUS_RING } from './ui/button'
 interface Props {
   panes: SessionPane[]
   activePaneId?: string
-  onSelect: (paneId: string) => void
+  // Picks a pane; without it (a view-only device on tmux, where picking
+  // moves the focus every client shares) the strip only shows the panes.
+  onSelect?: (paneId: string) => void
   // Asks to close a pane; without it no close button is shown.
   onClose?: (paneId: string) => void
 }
 
-// Picks which pane of a split tab the terminal streams. Only rendered for
-// tabs with more than one pane, so closing a pane here never closes the tab.
+// Picks which pane of a split tab the terminal streams (Herdr, Zellij) or
+// has the focus (tmux, whose stream shows the whole window). Only rendered
+// for tabs with more than one pane, so closing a pane here never closes the
+// tab.
 // Each close button is a sibling of its pane button, never nested in it.
 export function PaneStrip({ panes, activePaneId, onSelect, onClose }: Props) {
   if (panes.length < 2) return null
@@ -43,8 +47,9 @@ export function PaneStrip({ panes, activePaneId, onSelect, onClose }: Props) {
             <button
               type="button"
               aria-pressed={active}
-              onClick={() => onSelect(pane.id)}
-              className={`flex items-center gap-1.5 whitespace-nowrap px-2 text-[12px] rounded-control touch-manipulation pointer-coarse:h-touch ui-terminal:font-label ${FOCUS_RING} ${
+              disabled={!onSelect}
+              onClick={() => onSelect?.(pane.id)}
+              className={`flex items-center gap-1.5 whitespace-nowrap px-2 text-[12px] rounded-control touch-manipulation pointer-coarse:h-touch ui-terminal:font-label disabled:cursor-default ${FOCUS_RING} ${
                 twoLines ? 'h-9' : 'h-7'
               } ${onClose ? 'pr-1' : ''}`}
             >

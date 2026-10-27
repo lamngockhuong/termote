@@ -85,8 +85,10 @@ Two things the code does not explain on its own:
 - Selecting a tab on Herdr or Zellij changes only which pane this client streams
   (`caps.clientSideSelect`); Herdr's own focus and the user's own Zellij clients stay where they
   were (on Zellij only Termote's client is moved).
-- A tab has more than one pane only on Herdr and Zellij (split panes); tmux tabs always have one,
-  so the pane strip appears only there.
+- A split tab shows the pane strip on every backend. On tmux each pane is known by its `%N` and
+  the stream shows the whole window: picking a pane gives it tmux's focus, shared by every
+  client, and the pane shown follows that focus (a view-only device only sees the strip). psmux
+  tabs always have one pane.
 
 ## Data Flow
 

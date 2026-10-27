@@ -173,6 +173,29 @@ export function remapPanes(shift: PaneShift) {
   for (const fn of handlers) fn(shift)
 }
 
+// Each tmux tab whose panes no longer carry its id, with its active pane's
+// id: before panes were listed, a tmux tab's one pane had the tab's id and
+// key, so what this device kept under either belongs to that pane now.
+// ids: tab id → pane id; keys: tab key → pane id (a pane's key is its id).
+export function tabPaneMoves(snap: MuxSnapshot): {
+  ids: Map<string, string>
+  keys: Map<string, string>
+} {
+  const ids = new Map<string, string>()
+  const keys = new Map<string, string>()
+  if (snap.backend !== 'tmux' || snap.caps.clientSideSelect)
+    return { ids, keys }
+  for (const g of snap.groups ?? []) {
+    for (const t of g.tabs) {
+      if (!t.panes.length || t.panes.some((p) => p.id === t.id)) continue
+      const pane = t.panes.find((p) => p.active) ?? t.panes[0]
+      ids.set(t.id, pane.id)
+      if (t.key) keys.set(t.key, pane.id)
+    }
+  }
+  return { ids, keys }
+}
+
 // The key paneKeys gives a pane of a built session: its tab's key when the
 // pane has the tab's id (tmux), else its own id.
 export function sessionPaneKey(

@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -206,8 +207,13 @@ type streamServer struct {
 
 func newStreamServer(t *testing.T) *streamServer {
 	t.Helper()
+	return newStreamServerWith(t, &fakeMux{snap: oneTabSnapshot()})
+}
+
+// newStreamServerWith is newStreamServer on m, whose attach it sets.
+func newStreamServerWith(t *testing.T, m *fakeMux) *streamServer {
+	t.Helper()
 	s := &streamServer{}
-	m := &fakeMux{snap: oneTabSnapshot()}
 	m.attach = func(_ string, size Size) (TermStream, error) {
 		ft := newFakeTerm()
 		s.mu.Lock()
@@ -424,6 +430,28 @@ func TestStreamClampsSize(t *testing.T) {
 	}
 	if got := s.sizes[1]; got != (Size{Cols: defaultTermCols, Rows: defaultTermRows}) {
 		t.Errorf("default size = %+v", got)
+	}
+}
+
+// Where tabs are selected on the server (tmux), a tab's own id names its
+// active pane, as links and clients from before panes were listed name it;
+// elsewhere only a pane id does.
+func TestStreamTakesATabIDForItsActivePane(t *testing.T) {
+	split := Snapshot{Groups: []Group{{ID: "main", Name: "main", Tabs: []Tab{
+		{ID: "0", Name: "shell", Active: true, Panes: []Pane{{ID: "%3"}, {ID: "%4", Active: true}}},
+	}}}}
+	s := newStreamServerWith(t, &fakeMux{snap: split})
+	for _, pane := range []string{"0", "%3", "%4"} {
+		mustDial(t, s, "pane="+url.QueryEscape(pane))
+	}
+	s.term(t, 2)
+
+	c := newStreamServerWith(t, &fakeMux{snap: split, caps: &Caps{ClientSideSelect: true}})
+	hdr := authHeader()
+	hdr.Set("Origin", c.URL)
+	_, resp, err := dialStream(t, c.URL, "token="+fetchToken(t, c.URL, true)+"&pane=0", hdr)
+	if err == nil || resp == nil || resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("tab id on a client-side select backend = %v %v, want 400", resp, err)
 	}
 }
 

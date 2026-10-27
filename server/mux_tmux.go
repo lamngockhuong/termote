@@ -89,7 +89,8 @@ var tmuxHashRun = regexp.MustCompile(`#+\[?`)
 // saved selections still work: its group id is its name and its tab ids are
 // bare window indexes ("0"). Any other session is addressed by tmux's own
 // session id, which a rename does not change and which any session name can
-// have: group "$3", tabs "$3:1". A tab's single pane has the tab's id.
+// have: group "$3", tabs "$3:1". A pane is known by tmux's own id (%N),
+// except on psmux (see tmuxPaneRef).
 //
 // Every target built from them matches exactly: "$N" can only mean that
 // session and "=name" turns off tmux's prefix and pattern matching, so an id
@@ -179,6 +180,44 @@ func parseTmuxID(id string) (tmuxWindow, bool) {
 	return tmuxWindow{session: sid, sessionID: sid, index: index}, true
 }
 
+// tmuxPaneRef is what a pane id names: one pane by tmux's own id (%N), which
+// a kill, swap or window move never gives to another pane, or a window by
+// its tab id, meaning whichever pane is active in it (links, notifications
+// and clients from before panes were listed).
+type tmuxPaneRef struct {
+	win tmuxWindow
+	// paneID is "%N", empty for a tab id.
+	paneID string
+}
+
+// parseTmuxPaneID reads a pane id: "%N", or a tab id (parseTmuxID). psmux
+// numbers panes per session, so there a pane id is only ever a tab id.
+func parseTmuxPaneID(id string) (tmuxPaneRef, bool) {
+	if !tmuxIsPsmux && tmuxPaneIDRe.MatchString(id) {
+		return tmuxPaneRef{paneID: id}, true
+	}
+	w, ok := parseTmuxID(id)
+	return tmuxPaneRef{win: w}, ok
+}
+
+// target is the pane's exact tmux target.
+func (r tmuxPaneRef) target() string {
+	if r.paneID != "" {
+		return r.paneID
+	}
+	return r.win.target()
+}
+
+// matches reports whether a reply's session id, session name, window index
+// and pane id are this pane's: tmux answers a missing %N with nothing (exit
+// 0), and a missing window with another one.
+func (r tmuxPaneRef) matches(sessionID, sessionName, index, paneID string) bool {
+	if r.paneID != "" {
+		return paneID == r.paneID
+	}
+	return r.win.matches(sessionID, sessionName, index)
+}
+
 // parseTmuxGroupID reads a group id ("" is the default session) and returns
 // the session's exact target.
 func parseTmuxGroupID(id string) (string, bool) {
@@ -253,11 +292,12 @@ func isTmuxAttachCmdline(cmdline string) bool {
 }
 
 // tmuxMux drives every session on a tmux (or psmux on Windows) server. A
-// session is a group, each window is a tab, and each tab exposes its active
-// pane, so pane IDs equal window IDs. tmux's own pane id (%N) is used only
-// where the exact pane matters (the agent routes, except on psmux: see
-// agentTarget), since a window can be
-// split.
+// session is a group, each window is a tab, and each pane of a window is a
+// pane, known by tmux's own pane id (%N). A stream shows the whole window,
+// and the pane that has focus there is the one shown as active. psmux
+// numbers panes per session, so there a tab exposes only its active pane,
+// whose id is the tab's.
+
 type tmuxMux struct{}
 
 func (tmuxMux) Name() string { return "tmux" }
@@ -429,15 +469,19 @@ func tmuxSnapshot(ctx context.Context, create bool) (Snapshot, error) {
 	if len(groups) == 0 {
 		return Snapshot{}, errors.New("list-windows: no window could be read")
 	}
+	applyTmuxPanes(groups, listTmuxPanes(ctx))
 	var agentPanes []agentPane
 	for gi, g := range groups {
-		for ti := range g.Tabs {
-			agentPanes = append(agentPanes, agentPane{gi, ti, g.paneIDs[ti], g.panePIDs[ti]})
+		for ti, panes := range g.panes {
+			for pi, p := range panes {
+				agentPanes = append(agentPanes, agentPane{group: gi, tab: ti, pane: pi, paneID: p.id, panePID: p.pid})
+			}
 		}
 	}
 	for i, a := range lookupAgents(ctx, agentPanes) {
 		if a != nil {
-			groups[agentPanes[i].group].Tabs[agentPanes[i].tab].Panes[0].Agent = a
+			ap := agentPanes[i]
+			groups[ap.group].Tabs[ap.tab].Panes[ap.pane].Agent = a
 		}
 	}
 	attachTmuxProcesses(groups, tmuxPaneProcesses(ctx))
@@ -448,12 +492,23 @@ func tmuxSnapshot(ctx context.Context, create bool) (Snapshot, error) {
 	return snap, nil
 }
 
-// tmuxGroup is a group with the tmux pane of each tab, for the agent lookup,
-// and its session id and window indexes, for the process lookup.
+// tmuxGroup is a group with the tmux panes of each tab, for the agent
+// lookup, and its session id and window indexes, for the process lookup.
 type tmuxGroup struct {
 	Group
-	sessionID                    string
-	paneIDs, panePIDs, windowIdx []string
+	sessionID string
+	windowIdx []string
+	// panes holds each tab's panes, in the order of Tab.Panes.
+	panes [][]tmuxPaneInfo
+}
+
+// tmuxPaneInfo is one pane of a window. index is its pane_index, -1 for the
+// window's active pane as list-windows names it (psmux, or a window whose
+// panes could not be listed).
+type tmuxPaneInfo struct {
+	index   int
+	active  bool
+	id, pid string
 }
 
 // tmuxListLine is one line of tmuxListFormat.
@@ -510,18 +565,19 @@ func parseTmuxWindows(out string) []tmuxGroup {
 		// psmux keys a tab by its id: whether its window ids are unique on
 		// the server is unchecked (its pane ids are not), and it offers no
 		// move. A tmux that prints none does the same.
-		key, pkey := id, id
+		key := id
 		if !tmuxIsPsmux && tmuxWindowIDRe.MatchString(l.windowID) {
 			key = l.windowID
 		}
+		// Until listTmuxPanes reads them, a tab has its active pane only.
+		pid := id
 		if !tmuxIsPsmux && tmuxPaneIDRe.MatchString(l.paneID) {
-			pkey = l.paneID
+			pid = l.paneID
 		}
 		g := &groups[i]
 		g.Tabs = append(g.Tabs, Tab{ID: id, Key: key, Name: l.windowName, Active: l.active,
-			Panes: []Pane{{ID: id, Active: l.active, key: pkey}}})
-		g.paneIDs = append(g.paneIDs, l.paneID)
-		g.panePIDs = append(g.panePIDs, l.panePID)
+			Panes: []Pane{{ID: pid, Active: true}}})
+		g.panes = append(g.panes, []tmuxPaneInfo{{index: -1, active: true, id: l.paneID, pid: l.panePID}})
 		g.windowIdx = append(g.windowIdx, l.index)
 	}
 	for i := range groups {
@@ -533,6 +589,98 @@ func parseTmuxWindows(out string) []tmuxGroup {
 		}
 	}
 	return groups
+}
+
+// tmuxPaneListFormat is every pane of every session, for the snapshot's
+// panes: its window, its index, whether it is the active one, its id and
+// its shell's pid. None of these can hold a ':'.
+const tmuxPaneListFormat = "#{session_id}:#{window_index}:#{pane_index}:#{pane_active}:#{pane_id}:#{pane_pid}"
+
+// tmuxPaneListLogEvery spaces out the log line of a failing pane list.
+const tmuxPaneListLogEvery = time.Minute
+
+var tmuxPaneListLogged struct {
+	sync.Mutex
+	at time.Time
+}
+
+// listTmuxPanes reads every pane of every window, each window's in pane
+// order. It is read on every snapshot, never kept: a pane closed or split
+// shows at once, and a pane that runs nothing (no command name) is listed
+// too. nil on psmux, whose pane ids are not unique, and on a failure; a
+// window it lacks keeps its active pane only (applyTmuxPanes).
+func listTmuxPanes(ctx context.Context) map[tmuxWindowKey][]tmuxPaneInfo {
+	if tmuxIsPsmux {
+		return nil
+	}
+	out, err := tmuxCmd(ctx, "list-panes", "-a", "-F", tmuxPaneListFormat).Output()
+	if err != nil {
+		tmuxPaneListLogged.Lock()
+		if time.Since(tmuxPaneListLogged.at) >= tmuxPaneListLogEvery {
+			tmuxPaneListLogged.at = time.Now()
+			log.Printf("tmux list-panes: %v", err)
+		}
+		tmuxPaneListLogged.Unlock()
+		return nil
+	}
+	return parseTmuxPaneList(string(out))
+}
+
+// parseTmuxPaneList reads tmuxPaneListFormat output. A window with a line
+// that cannot be read, or a pane index or id listed twice, is left out
+// whole: a window missing a pane would hide it.
+func parseTmuxPaneList(out string) map[tmuxWindowKey][]tmuxPaneInfo {
+	windows := map[tmuxWindowKey][]tmuxPaneInfo{}
+	broken := map[tmuxWindowKey]bool{}
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimRight(line, "\r")
+		if line == "" {
+			continue
+		}
+		f := strings.Split(line, ":")
+		if len(f) != 6 || !tmuxSessionIDRe.MatchString(f[0]) || !tmuxIndexRe.MatchString(f[1]) {
+			continue
+		}
+		k := tmuxWindowKey{f[0], f[1]}
+		if !tmuxIndexRe.MatchString(f[2]) || (f[3] != "0" && f[3] != "1") || !tmuxPaneIDRe.MatchString(f[4]) {
+			broken[k] = true
+			continue
+		}
+		n, _ := strconv.Atoi(f[2])
+		for _, p := range windows[k] {
+			if p.index == n || p.id == f[4] {
+				broken[k] = true
+			}
+		}
+		windows[k] = append(windows[k], tmuxPaneInfo{index: n, active: f[3] == "1", id: f[4], pid: f[5]})
+	}
+	for k := range broken {
+		delete(windows, k)
+	}
+	for _, panes := range windows {
+		sort.Slice(panes, func(i, j int) bool { return panes[i].index < panes[j].index })
+	}
+	return windows
+}
+
+// applyTmuxPanes gives each tab every pane listTmuxPanes read for its
+// window; a tab whose window it lacks keeps its active pane.
+func applyTmuxPanes(groups []tmuxGroup, windows map[tmuxWindowKey][]tmuxPaneInfo) {
+	for gi := range groups {
+		g := &groups[gi]
+		for ti := range g.Tabs {
+			listed := windows[tmuxWindowKey{g.sessionID, g.windowIdx[ti]}]
+			if len(listed) == 0 {
+				continue
+			}
+			panes := make([]Pane, len(listed))
+			for i, p := range listed {
+				panes[i] = Pane{ID: p.id, Active: p.active}
+			}
+			g.Tabs[ti].Panes = panes
+			g.panes[ti] = listed
+		}
+	}
 }
 
 // tmuxPaneFormat is every pane of every session: its window, its index and
@@ -773,22 +921,25 @@ func tmuxPaneProcesses(ctx context.Context) map[tmuxWindowKey][]tmuxPaneProc {
 	return all
 }
 
-// attachTmuxProcesses gives each tab's pane (the window's active one) its
-// process, and the tab every pane's, in pane order.
+// attachTmuxProcesses gives each pane its process, matched by pane index
+// (a tab with its active pane only: the active one's), and the tab every
+// pane's, in pane order.
 func attachTmuxProcesses(groups []tmuxGroup, windows map[tmuxWindowKey][]tmuxPaneProc) {
 	for gi := range groups {
 		g := &groups[gi]
 		for ti := range g.Tabs {
-			panes := windows[tmuxWindowKey{g.sessionID, g.windowIdx[ti]}]
-			if len(panes) == 0 {
+			procs := windows[tmuxWindowKey{g.sessionID, g.windowIdx[ti]}]
+			if len(procs) == 0 {
 				continue
 			}
 			tab := &g.Tabs[ti]
-			tab.Processes = make([]ProcessInfo, len(panes))
-			for i, p := range panes {
+			tab.Processes = make([]ProcessInfo, len(procs))
+			for i, p := range procs {
 				tab.Processes[i] = p.proc
-				if p.active {
-					tab.Panes[0].Process = &p.proc
+				for pi, info := range g.panes[ti] {
+					if info.index == p.index || info.index < 0 && p.active {
+						tab.Panes[pi].Process = &p.proc
+					}
 				}
 			}
 		}
@@ -796,12 +947,20 @@ func attachTmuxProcesses(groups []tmuxGroup, windows map[tmuxWindowKey][]tmuxPan
 }
 
 // SelectTab switches its session's current window, so every client attached
-// to that session follows.
+// to that session follows. A pane id (%N) also gives that pane the focus in
+// its window: the focus is tmux's, shared with every client.
 func (tmuxMux) SelectTab(ctx context.Context, tabID string) error {
-	w, ok := parseTmuxID(tabID)
+	ref, ok := parseTmuxPaneID(tabID)
 	if !ok {
 		return inputError("invalid tab id")
 	}
+	if ref.paneID != "" {
+		if err := tmuxPaneRun(ctx, "select-window", "-t", ref.paneID); err != nil {
+			return err
+		}
+		return tmuxPaneRun(ctx, "select-pane", "-t", ref.paneID)
+	}
+	w := ref.win
 	// psmux answers select-window on a missing window with exit 0, so Attach
 	// would show the session's current window instead: ask for it first.
 	if tmuxIsPsmux {
@@ -1193,9 +1352,62 @@ func (tmuxMux) RenameGroup(ctx context.Context, groupID, name string) error {
 	return tmuxRun(ctx, "rename-session", "-t", s.id, tmuxLiteral(name))
 }
 
-// ClosePane is not offered: a tab here is one window shown as one pane, and
-// it is closed as a tab.
-func (tmuxMux) ClosePane(context.Context, string) error { return errUnsupported }
+// tmuxPaneRun runs a command on one pane (%N), a missing pane being a client
+// mistake.
+func tmuxPaneRun(ctx context.Context, args ...string) error {
+	_, err := tmuxCmd(ctx, args...).Output()
+	var ee *exec.ExitError
+	if errors.As(err, &ee) && strings.Contains(string(ee.Stderr), "can't find pane") {
+		return errTmuxUnknownPane
+	}
+	return err
+}
+
+// errTmuxUnknownPane is a pane id that names no pane (any more).
+var errTmuxUnknownPane = inputError("unknown pane")
+
+// tmuxPaneInfoFormat is what resolveTmuxPane reads of a pane: the session
+// name goes last, though tmux turns a ':' in it into '_'.
+const tmuxPaneInfoFormat = "#{session_id}:#{window_index}:#{pane_id}:#{window_panes}:#{session_name}"
+
+// tmuxResolvedPane is a pane as tmux reports it now.
+type tmuxResolvedPane struct {
+	sessionID, index, paneID string
+	// panes is how many panes its window has.
+	panes int
+}
+
+// resolveTmuxPane reads the pane ref names, checked against tmux's reply.
+func resolveTmuxPane(ctx context.Context, ref tmuxPaneRef) (tmuxResolvedPane, error) {
+	out, err := tmuxCmd(ctx, "display-message", "-p", "-t", ref.target(), tmuxPaneInfoFormat).Output()
+	f := strings.SplitN(strings.TrimRight(string(out), "\r\n"), ":", 5)
+	if err != nil || len(f) != 5 || !ref.matches(f[0], f[4], f[1], f[2]) || !tmuxPaneIDRe.MatchString(f[2]) {
+		return tmuxResolvedPane{}, errTmuxUnknownPane
+	}
+	n, _ := strconv.Atoi(f[3])
+	return tmuxResolvedPane{sessionID: f[0], index: f[1], paneID: f[2], panes: n}, nil
+}
+
+// ClosePane kills one pane, never its window's last: that closes the tab,
+// which CloseTab does. A tab id closes the window's active pane. Not on
+// psmux, whose pane ids are not unique.
+func (tmuxMux) ClosePane(ctx context.Context, paneID string) error {
+	if tmuxIsPsmux {
+		return errUnsupported
+	}
+	ref, ok := parseTmuxPaneID(paneID)
+	if !ok {
+		return inputError("invalid pane id")
+	}
+	p, err := resolveTmuxPane(ctx, ref)
+	if err != nil {
+		return err
+	}
+	if p.panes < 2 {
+		return errLastPane
+	}
+	return tmuxPaneRun(ctx, "kill-pane", "-t", p.paneID)
+}
 
 // Scroll is not offered: tmux history is scrolled in copy mode.
 func (tmuxMux) Scroll(context.Context, string, int) error { return errUnsupported }
@@ -1210,7 +1422,7 @@ func (tmuxMux) ReadText(ctx context.Context, paneID string, lines int, w io.Writ
 	if tmuxIsPsmux {
 		return false, errUnsupported
 	}
-	win, ok := parseTmuxID(paneID)
+	win, ok := parseTmuxPaneID(paneID)
 	if !ok {
 		return false, inputError("invalid pane id")
 	}
@@ -1238,25 +1450,46 @@ func (tmuxMux) ReadText(ctx context.Context, paneID string, lines int, w io.Writ
 // SendKeys passes keys as one tmux send-keys argument, so key names such as
 // "Enter" or "C-c" are interpreted by tmux.
 func (tmuxMux) SendKeys(ctx context.Context, paneID, keys string) error {
-	w, ok := parseTmuxID(paneID)
+	w, ok := parseTmuxPaneID(paneID)
 	if !ok {
 		return inputError("invalid pane id")
 	}
 	if strings.HasPrefix(keys, "-") {
 		return inputError("keys must not start with '-'")
 	}
-	return tmuxCmd(ctx, "send-keys", "-t", w.target(), keys).Run()
+	return tmuxPaneRun(ctx, "send-keys", "-t", w.target(), keys)
 }
 
-// Attach makes paneID its session's current window, then attaches a new tmux
-// client to that session. Every client of a session shares its current window
-// and the window follows the most recently active client's size.
+// Attach makes paneID's window its session's current one (and a pane id the
+// pane with focus), then attaches a new tmux client to that session. Every
+// client of a session shares its current window and the window follows the
+// most recently active client's size.
 func (m tmuxMux) Attach(ctx context.Context, paneID string, size Size) (TermStream, error) {
 	if err := m.SelectTab(ctx, paneID); err != nil {
 		return nil, err
 	}
-	w, _ := parseTmuxID(paneID)
-	return startTerminal(tmuxAttachArgv(w.session), size)
+	session, err := tmuxPaneSession(ctx, paneID)
+	if err != nil {
+		return nil, err
+	}
+	return startTerminal(tmuxAttachArgv(session), size)
+}
+
+// tmuxPaneSession is the exact target of the session paneID is in: a pane
+// id (%N) names none, so tmux is asked.
+func tmuxPaneSession(ctx context.Context, paneID string) (string, error) {
+	ref, ok := parseTmuxPaneID(paneID)
+	if !ok {
+		return "", inputError("invalid tab id")
+	}
+	if ref.paneID == "" {
+		return ref.win.session, nil
+	}
+	p, err := resolveTmuxPane(ctx, ref)
+	if err != nil {
+		return "", err
+	}
+	return p.sessionID, nil
 }
 
 // CanView: a read-only client needs tmux 3.2 (before it, -r keeps resizing
@@ -1266,12 +1499,12 @@ func (tmuxMux) CanView(ctx context.Context) bool { return tmuxServerFrom32(ctx) 
 // AttachView attaches a read-only client to paneID's session, without
 // selecting paneID: the client sees the session's current window, which the
 // stream checked paneID to be.
-func (tmuxMux) AttachView(_ context.Context, paneID string, size Size) (TermStream, error) {
-	w, ok := parseTmuxID(paneID)
-	if !ok {
-		return nil, inputError("invalid tab id")
+func (tmuxMux) AttachView(ctx context.Context, paneID string, size Size) (TermStream, error) {
+	session, err := tmuxPaneSession(ctx, paneID)
+	if err != nil {
+		return nil, err
 	}
-	return startTerminal(tmuxViewAttachArgv(w.session), size)
+	return startTerminal(tmuxViewAttachArgv(session), size)
 }
 
 // agentLookupWait bounds how long a snapshot waits for agent lookups, which
@@ -1279,8 +1512,8 @@ func (tmuxMux) AttachView(_ context.Context, paneID string, size Size) (TermStre
 const agentLookupWait = 300 * time.Millisecond
 
 type agentPane struct {
-	group, tab      int
-	paneID, panePID string
+	group, tab, pane int
+	paneID, panePID  string
 }
 
 // lastAgents is each pane's agent as the newest finished lookup found it
@@ -1380,14 +1613,14 @@ func (tmuxMux) AgentSessionNow(ctx context.Context, paneID string) (AgentSession
 }
 
 func tmuxAgentSession(ctx context.Context, paneID string, find func(string, int) (AgentSession, bool)) (AgentSession, bool, error) {
-	w, ok := parseTmuxID(paneID)
+	w, ok := parseTmuxPaneID(paneID)
 	if !ok {
 		return AgentSession{}, false, inputError("invalid pane id")
 	}
 	out, err := tmuxCmd(ctx, "display-message", "-p", "-t", w.target(),
 		"#{session_id}:#{window_index}:#{pane_in_mode}:#{pane_id}:#{pane_pid}:#{session_name}").Output()
 	parts := strings.SplitN(strings.TrimRight(string(out), "\r\n"), ":", 6)
-	if err != nil || len(parts) != 6 || !w.matches(parts[0], parts[5], parts[1]) {
+	if err != nil || len(parts) != 6 || !w.matches(parts[0], parts[5], parts[1], parts[3]) {
 		return AgentSession{}, false, inputError("unknown pane")
 	}
 	s, ok := tmuxPaneAgentWith(parts[3], parts[4], find)
@@ -1409,14 +1642,14 @@ func (tmuxMux) PaneDir(ctx context.Context, paneID string) (string, string, erro
 	if !tmuxFilesSupported {
 		return "", "", errUnsupported
 	}
-	w, ok := parseTmuxID(paneID)
+	w, ok := parseTmuxPaneID(paneID)
 	if !ok {
 		return "", "", inputError("invalid pane id")
 	}
 	out, err := tmuxCmd(ctx, "display-message", "-p", "-t", w.target(),
 		"#{session_id}:#{window_index}:#{pane_id}:#{session_name}:#{pane_current_path}").Output()
 	parts := strings.SplitN(strings.TrimRight(string(out), "\r\n"), ":", 5)
-	if err != nil || len(parts) != 5 || !w.matches(parts[0], parts[3], parts[1]) ||
+	if err != nil || len(parts) != 5 || !w.matches(parts[0], parts[3], parts[1], parts[2]) ||
 		!tmuxPaneIDRe.MatchString(parts[2]) {
 		return "", "", inputError("unknown pane")
 	}

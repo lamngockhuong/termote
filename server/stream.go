@@ -360,7 +360,9 @@ func handleStream(w http.ResponseWriter, r *http.Request, m Mux, tokens *tokenSt
 		return
 	}
 	activity.observe(gen, snap)
-	if !snapshotHasPane(snap, pane) {
+	serverSelect := !m.Caps().ClientSideSelect
+	_, tab, _, ok := findSnapshotPane(snap, pane, serverSelect)
+	if !ok {
 		jsonError(w, "unknown pane", http.StatusBadRequest)
 		return
 	}
@@ -368,7 +370,7 @@ func handleStream(w http.ResponseWriter, r *http.Request, m Mux, tokens *tokenSt
 	// watches the current window: attaching to another would switch it for
 	// every client. A switch between this check and the attach only shows
 	// it the window switched to.
-	if view && !m.Caps().ClientSideSelect && !snapshotPaneActive(snap, pane) {
+	if view && serverSelect && !tab.Active {
 		writeViewOnly(w)
 		return
 	}
@@ -449,20 +451,6 @@ func viewSnapshot(ctx context.Context, m Mux) (Snapshot, error) {
 		return m.Snapshot(ctx)
 	}
 	return peekSnapshot(ctx, m)
-}
-
-// snapshotPaneActive reports whether pane is in its group's active tab.
-func snapshotPaneActive(s Snapshot, pane string) bool {
-	for _, g := range s.Groups {
-		for _, t := range g.Tabs {
-			for _, p := range t.Panes {
-				if p.ID == pane {
-					return t.Active
-				}
-			}
-		}
-	}
-	return false
 }
 
 // runStream pumps bytes both ways until the terminal exits, the client goes
@@ -654,17 +642,4 @@ func queryDim(q url.Values, key string, def int) int {
 		return def
 	}
 	return clampDim(v)
-}
-
-func snapshotHasPane(s Snapshot, pane string) bool {
-	for _, g := range s.Groups {
-		for _, t := range g.Tabs {
-			for _, p := range t.Panes {
-				if p.ID == pane {
-					return true
-				}
-			}
-		}
-	}
-	return false
 }

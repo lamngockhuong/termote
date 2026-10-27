@@ -7,8 +7,12 @@ import {
   toAgentStatus,
   worstAgentStatus,
 } from '../types/session'
-import { remapChatDrafts } from '../utils/chat-draft'
-import { regroupPersisted, renamePersistedGroup } from '../utils/files-persist'
+import { adoptChatDrafts, remapChatDrafts } from '../utils/chat-draft'
+import {
+  adoptPersisted,
+  regroupPersisted,
+  renamePersistedGroup,
+} from '../utils/files-persist'
 import { isFocusWindow } from '../utils/focus-mode'
 import {
   isTimeoutError,
@@ -21,9 +25,10 @@ import {
   renameGroupKeys,
   setPaneKeys,
   shiftedIds,
+  tabPaneMoves,
 } from '../utils/pane-remap'
 import { setSelectionServer } from '../utils/pane-selection'
-import { remapReviewDrafts } from '../utils/review-draft'
+import { adoptReviewDrafts, remapReviewDrafts } from '../utils/review-draft'
 import { uniqueNames } from '../utils/running-commands'
 import { zellijGroupId } from '../utils/zellij-group'
 import { renameActivityGroup } from './use-activity-log'
@@ -323,6 +328,8 @@ export function useLocalSessions(pollInterval = 5) {
   const appliedSeqRef = useRef(0)
   // Every id of the last snapshot applied, with its key (pane-remap).
   const keysRef = useRef(new Map<string, string>())
+  // The servers whose tab-keyed records were adopted (tabPaneMoves)
+  const adoptedRef = useRef(new Set<string>())
   // A move is running, until a snapshot read after it is applied; another
   // one meanwhile would be computed on the old order.
   const movingRef = useRef(false)
@@ -374,6 +381,16 @@ export function useLocalSessions(pollInterval = 5) {
       // Records kept on the device follow a group renamed elsewhere (tmux,
       // Herdr: the panes' keys stay)
       regroupPersisted(setPaneKeys(snap, keys))
+      // Once per server and page: what was kept for a tmux tab's one pane
+      // under the tab's id or key goes to its active pane (tabPaneMoves)
+      const server = snap.instanceId ?? ''
+      if (!adoptedRef.current.has(server)) {
+        adoptedRef.current.add(server)
+        const moves = tabPaneMoves(snap)
+        adoptPersisted(moves.keys)
+        adoptChatDrafts(moves.ids)
+        adoptReviewDrafts(moves.ids)
+      }
       // The templates read belong to one server
       setTemplatesServer(snap.instanceId ?? null, !!snap.caps.templates)
       setUserTasksServer(snap.instanceId ?? null, !!snap.caps.userTasks)
@@ -529,9 +546,20 @@ export function useLocalSessions(pollInterval = 5) {
         select(session, known ? paneId : session.paneId)
         return
       }
-      if (isActive) return
+      // A pane of the tab other than the one shown (or focused) gets
+      // tmux's focus too (selectTab takes its %N): the stream shows the
+      // whole window.
+      const shown = isActive ? activeSession.paneId : session.paneId
+      const pane =
+        paneId !== undefined &&
+        paneId !== shown &&
+        session.panes?.some((p) => p.id === paneId)
+          ? paneId
+          : undefined
+      if (isActive && !pane) return
       if (muxRef.current.caps.role === 'view') {
-        if (!currentTabsRef.current.has(session.id)) return 'view-only'
+        // Moving the focus is a write
+        if (pane || !currentTabsRef.current.has(session.id)) return 'view-only'
         // Another session's current window: shown, nothing switched
         selectionVersionRef.current++
         storeSelection({ tabId: session.id, groupId: session.groupId })
@@ -542,9 +570,9 @@ export function useLocalSessions(pollInterval = 5) {
       // while the server switches window, must not undo it.
       selectionVersionRef.current++
       storeSelection({ tabId: session.id, groupId: session.groupId })
-      setActiveSession(session)
+      setActiveSession(pane ? withPane(session, pane) : session)
       /* v8 ignore next */
-      await selectTab(sessionId).catch(() => {})
+      await selectTab(pane ?? sessionId).catch(() => {})
       selectionVersionRef.current++
     },
     [
@@ -556,12 +584,27 @@ export function useLocalSessions(pollInterval = 5) {
     ],
   )
 
-  // Stream another pane of the current tab (client-side select only).
+  // Show another pane of the current tab. tmux streams the whole window:
+  // the pane gets the focus there, which every client shares (never from a
+  // view-only device), and the next snapshots follow it.
   const selectPane = useCallback(
     (paneId: string) => {
-      if (!activeSession || !muxRef.current.caps.clientSideSelect) return
-      if (!activeSession.panes?.some((p) => p.id === paneId)) return
-      select(activeSession, paneId)
+      if (!activeSession?.panes?.some((p) => p.id === paneId)) return
+      const { caps } = muxRef.current
+      if (caps.clientSideSelect) {
+        select(activeSession, paneId)
+        return
+      }
+      if (caps.role === 'view' || paneId === activeSession.paneId) return
+      // Show it right away: a snapshot read before the pick must not undo it
+      selectionVersionRef.current++
+      setActiveSession(withPane(activeSession, paneId))
+      // A failure shows on the next snapshot
+      selectTab(paneId)
+        .catch(() => {})
+        .finally(() => {
+          selectionVersionRef.current++
+        })
     },
     [activeSession, select],
   )
