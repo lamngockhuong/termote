@@ -44,6 +44,8 @@ import {
   GUTTER_CELL,
 } from './code-block'
 import {
+  type HeaderAction,
+  HeaderActions,
   LazyMarkdownPreview,
   LazyTablePreview,
   PREVIEW_MAX_BYTES,
@@ -282,6 +284,41 @@ export function DiffViewer({
       notify('Could not copy the path')
     }
   }
+  // After Edit: icons in the header, or a menu of them on a phone, where
+  // the file's name needs the room beside the stage and discard buttons
+  const extras: HeaderAction[] = [
+    { label: 'Copy path', icon: <Copy size={15} />, onClick: copyPath },
+  ]
+  if (onOpenWindow)
+    extras.push({
+      label: 'Open in new window',
+      title: 'Open in new window (Shift: a popup)',
+      icon: <AppWindow size={15} />,
+      onClick: onOpenWindow,
+    })
+  if (canPreview)
+    extras.push({
+      label: 'Preview',
+      title: previewing ? 'Show the diff' : 'Show the current version',
+      icon: <Eye size={15} />,
+      pressed: previewing,
+      onClick: () => setPreview((v) => !v),
+    })
+  if (svg)
+    extras.push({
+      label: 'Image',
+      title: asImage ? 'Show the diff' : 'Show as images',
+      icon: <ImageIcon size={15} />,
+      pressed: asImage,
+      onClick: () => updateSetting('svgPreview', !asImage),
+    })
+  if (!asImage)
+    extras.push({
+      label: 'Wrap lines',
+      icon: <WrapText size={15} />,
+      pressed: wrap,
+      onClick: () => setWrap((w) => !w),
+    })
   return (
     <div
       className="flex min-h-0 flex-1 flex-col"
@@ -323,60 +360,7 @@ export function DiffViewer({
             <Pencil size={15} aria-hidden="true" />
           </IconButton>
         )}
-        <IconButton
-          size="sm"
-          onClick={copyPath}
-          aria-label="Copy path"
-          title="Copy path"
-        >
-          <Copy size={15} aria-hidden="true" />
-        </IconButton>
-        {onOpenWindow && (
-          <IconButton
-            size="sm"
-            onClick={(e) => onOpenWindow({ shiftKey: e.shiftKey })}
-            aria-label="Open in new window"
-            title="Open in new window (Shift: a popup)"
-          >
-            <AppWindow size={15} aria-hidden="true" />
-          </IconButton>
-        )}
-        {canPreview && (
-          <IconButton
-            size="sm"
-            onClick={() => setPreview((v) => !v)}
-            aria-label="Preview"
-            aria-pressed={previewing}
-            title={previewing ? 'Show the diff' : 'Show the current version'}
-            className={previewing ? 'text-accent' : ''}
-          >
-            <Eye size={15} aria-hidden="true" />
-          </IconButton>
-        )}
-        {svg && (
-          <IconButton
-            size="sm"
-            onClick={() => updateSetting('svgPreview', !asImage)}
-            aria-label="Image"
-            aria-pressed={asImage}
-            title={asImage ? 'Show the diff' : 'Show as images'}
-            className={asImage ? 'text-accent' : ''}
-          >
-            <ImageIcon size={15} aria-hidden="true" />
-          </IconButton>
-        )}
-        {!asImage && (
-          <IconButton
-            size="sm"
-            onClick={() => setWrap((w) => !w)}
-            aria-label="Wrap lines"
-            aria-pressed={wrap}
-            title="Wrap lines"
-            className={wrap ? 'text-accent' : ''}
-          >
-            <WrapText size={15} aria-hidden="true" />
-          </IconButton>
-        )}
+        <HeaderActions actions={extras} compact={isMobile} />
         {entry &&
           renderActions?.(
             entry,

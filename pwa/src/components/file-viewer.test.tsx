@@ -26,7 +26,7 @@ import {
 import { RequestError } from '../hooks/use-mux-api'
 import type { TableOp } from '../utils/csv-edits'
 import { paneSelection, resetPaneSelections } from '../utils/pane-selection'
-import { FileViewer, rebaseDraft } from './file-viewer'
+import { FileViewer, HeaderActions, rebaseDraft } from './file-viewer'
 
 const mockContent = vi.fn()
 const mockImage = vi.fn()
@@ -1176,6 +1176,11 @@ describe('FileViewer in a tab', () => {
     // Preview off: the source shows
     fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Preview' }))
     expect(await screen.findByTestId('code-block')).toBeInTheDocument()
+  })
+
+  it('offers no empty More actions menu', () => {
+    render(<HeaderActions actions={[]} compact />)
+    expect(screen.queryByRole('button')).toBeNull()
   })
 
   it('an SVG on a narrow screen switches to its image from the menu', async () => {

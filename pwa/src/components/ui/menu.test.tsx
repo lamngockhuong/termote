@@ -53,6 +53,29 @@ describe('Menu', () => {
     expect(screen.getByRole('menu')).toHaveClass('left-0')
   })
 
+  it.each([
+    ['left', { left: -28, right: 228 }, 'translateX(36px)'],
+    ['right', { left: 300, right: 556 }, 'translateX(-174px)'],
+    ['neither', { left: 100, right: 356 }, ''],
+  ])('keeps itself on the screen past the %s edge', (_, box, transform) => {
+    const width = vi
+      .spyOn(document.documentElement, 'clientWidth', 'get')
+      .mockReturnValue(390)
+    const rect = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue({ ...box, width: 256 } as DOMRect)
+    renderMenu()
+    tapOpen()
+    expect(screen.getByRole('menu').style.transform).toBe(transform)
+    // Closed and opened again, it is measured again
+    rect.mockReturnValue({ left: 100, right: 356, width: 256 } as DOMRect)
+    tapOpen()
+    tapOpen()
+    expect(screen.getByRole('menu').style.transform).toBe('')
+    width.mockRestore()
+    rect.mockRestore()
+  })
+
   it('toggles closed from the trigger', () => {
     renderMenu()
     open()
