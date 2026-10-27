@@ -349,7 +349,9 @@ jobs:
       # environment like the others, offers one folder (TERMOTE_PLACES) on
       # its own port, tmux socket, session and XDG dirs; the other servers
       # have none. places.spec.ts runs only here (TERMOTE_E2E_PLACES), and
-      # fails (never skips) when the server offers no Place.
+      # fails (never skips) when the server offers no Place. So does
+      # acceptance-walk.spec.ts, a working day walked end to end on one
+      # project (it needs a Place and no sign-in).
       - name: Start server with a Place
         run: |
           P="$RUNNER_TEMP/places"
@@ -373,7 +375,7 @@ jobs:
           TERMOTE_PORT: "7682"
           TMUX_SESSION: e2e-places
           TERMOTE_E2E_PLACES: ${{ env.E2E_PLACE_DIR }}
-        run: TMUX_SOCKET="$RUNNER_TEMP/tmux-places.sock" pnpm exec playwright test places --workers=1
+        run: TMUX_SOCKET="$RUNNER_TEMP/tmux-places.sock" pnpm exec playwright test e2e/acceptance-walk places --workers=1
 
       - name: Server log
         if: failure()
