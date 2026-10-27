@@ -1543,6 +1543,58 @@ export function fetchFileDiff(
   })
 }
 
+export interface CommitFile {
+  path: string
+  // The source of a rename or copy
+  orig?: string
+  // M A D R C T, against the commit's first parent
+  status: string
+  sensitive: boolean
+}
+
+export interface CommitInfo {
+  hash: string
+  parents: string[]
+  author: string
+  // Author date, Unix seconds
+  time: number
+  message: string
+  files: CommitFile[]
+  truncated: boolean
+}
+
+export interface LastCommit {
+  root: string
+  isRepo: boolean
+  // Absent before the first commit
+  commit?: CommitInfo
+}
+
+// HEAD of the pane's repo and the files it changed (server/files_git_commit.go)
+export function fetchLastCommit(
+  paneId: string,
+  root?: string,
+): Promise<LastCommit> {
+  return filesGet(paneId, 'commit', { root })
+}
+
+// The diff of one file of fetchLastCommit; a 409 head_moved once HEAD is
+// another commit than hash
+export function fetchCommitDiff(
+  paneId: string,
+  hash: string,
+  file: { path: string; orig?: string },
+  opts: { root?: string; reveal?: boolean },
+): Promise<FileDiff> {
+  return filesGet(paneId, 'commit/diff', {
+    commit: hash,
+    path: file.path,
+    orig: file.orig,
+    reveal: opts.reveal ? '1' : undefined,
+    root: opts.root,
+  })
+}
+
 // Which version of an image files/raw reads. Without side, the file in the
 // working tree (Files view); with it, one side of a git status entry, as
 // fetchFileDiff picks the entry (Changes view).

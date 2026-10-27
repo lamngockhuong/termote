@@ -20,6 +20,7 @@ import {
   fetchActivity,
   fetchAgentCommands,
   fetchAgentPrompt,
+  fetchCommitDiff,
   fetchDevices,
   fetchFileContent,
   fetchFileDiff,
@@ -30,6 +31,7 @@ import {
   fetchFilesTree,
   fetchGitChanges,
   fetchHealth,
+  fetchLastCommit,
   fetchOverview,
   fetchPaneText,
   fetchSignins,
@@ -1242,6 +1244,25 @@ describe('files API client', () => {
       '/api/mux/panes/1/files/changes?root=%2Fr',
       '/api/mux/panes/1/files/diff?path=b',
       '/api/mux/panes/1/files/diff?path=b&orig=a&staged=1&reveal=1&root=%2Fr',
+    ])
+  })
+
+  it('reads the last commit and one file of it', async () => {
+    const { calls } = mockFetch({ body: {} })
+    await fetchLastCommit('1')
+    await fetchLastCommit('1', '/r')
+    await fetchCommitDiff('1', 'abc', { path: 'b' }, {})
+    await fetchCommitDiff(
+      '1',
+      'abc',
+      { path: 'b', orig: 'a' },
+      { root: '/r', reveal: true },
+    )
+    expect(calls.map((c) => c.url)).toEqual([
+      '/api/mux/panes/1/files/commit',
+      '/api/mux/panes/1/files/commit?root=%2Fr',
+      '/api/mux/panes/1/files/commit/diff?commit=abc&path=b',
+      '/api/mux/panes/1/files/commit/diff?commit=abc&path=b&orig=a&reveal=1&root=%2Fr',
     ])
   })
 

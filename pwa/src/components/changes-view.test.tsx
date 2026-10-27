@@ -48,6 +48,7 @@ const mockImage = vi.fn()
 const mockApply = vi.fn()
 const mockRestore = vi.fn()
 const mockHash = vi.fn()
+const mockLastCommit = vi.fn()
 // The desktop editor: shows where it opens and whether lines wrap
 vi.mock('./code-editor', () => ({
   default: (p: {
@@ -72,6 +73,7 @@ vi.mock('../hooks/use-mux-api', async (orig) => ({
   applyChange: (...a: unknown[]) => mockApply(...a),
   restoreFile: (...a: unknown[]) => mockRestore(...a),
   fetchFileHash: (...a: unknown[]) => mockHash(...a),
+  fetchLastCommit: (...a: unknown[]) => mockLastCommit(...a),
 }))
 
 const c = (
@@ -295,11 +297,70 @@ describe('ChangesView', () => {
       }),
       'Not a git repository: /tmp/x',
     ],
-    [changes({ entries: [] }), 'No changes'],
+    [changes({ entries: [] }), 'No changes since the last commit'],
   ])('says when there is nothing to list', async (res, text) => {
     mockChanges.mockResolvedValue(res)
     await show()
     expect(screen.getByText(text)).toBeInTheDocument()
+  })
+
+  it('shows the last commit from an empty list, and goes back', async () => {
+    mockChanges.mockResolvedValue(changes({ entries: [] }))
+    mockLastCommit.mockResolvedValue({
+      root: '/r',
+      isRepo: true,
+      commit: {
+        hash: 'a'.repeat(40),
+        parents: [],
+        author: 'Ada',
+        time: 1,
+        message: 'first',
+        files: [],
+        truncated: false,
+      },
+    })
+    await show()
+    fireEvent.click(screen.getByRole('button', { name: 'Show last commit' }))
+    await settle()
+    expect(mockLastCommit).toHaveBeenCalledWith('%1', '/r')
+    expect(screen.getByText('first')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Back to changes' }))
+    expect(
+      screen.getByText('No changes since the last commit'),
+    ).toBeInTheDocument()
+  })
+
+  it('closes the last commit once a diff opens', async () => {
+    mockChanges.mockResolvedValue(changes({ entries: [] }))
+    mockLastCommit.mockResolvedValue({ root: '/r', isRepo: true })
+    await show()
+    fireEvent.click(screen.getByRole('button', { name: 'Show last commit' }))
+    await settle()
+    expect(screen.getByText('No commits yet')).toBeInTheDocument()
+    mockChanges.mockResolvedValue(changes())
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+    await settle()
+    act(() => {
+      openCommentInChanges(
+        '%1',
+        {
+          id: 'c',
+          root: '/r',
+          path: 'src/both.ts',
+          source: 'unstaged',
+          start: 1,
+          end: 1,
+          text: 'Why?',
+          at: 1,
+        },
+        vi.fn(),
+      )
+    })
+    await settle()
+    expect(screen.queryByText('No commits yet')).toBeNull()
+    expect(
+      screen.getByRole('button', { name: 'Back to changes' }),
+    ).toBeInTheDocument()
   })
 
   it('notes a list cut at the server limit', async () => {
