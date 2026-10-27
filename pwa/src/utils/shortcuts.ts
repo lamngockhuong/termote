@@ -28,6 +28,7 @@ export const COMMAND_IDS = {
   'settings.shortcuts': true,
   'app.help': true,
   'app.about': true,
+  'app.docs': true,
   'app.toggleSidebar': true,
   'app.fullscreen': true,
   'window.openNew': true,

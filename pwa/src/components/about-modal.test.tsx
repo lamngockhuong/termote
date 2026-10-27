@@ -97,6 +97,7 @@ describe('AboutModal', () => {
   })
 
   it.each([
+    ['Documentation', APP_INFO.links.docs],
     ['GitHub', APP_INFO.repository],
     ['Changelog', APP_INFO.links.changelog],
     ['Report an issue', APP_INFO.links.issues],

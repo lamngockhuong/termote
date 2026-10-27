@@ -5,6 +5,7 @@ import {
   FILES_VIEW_ID,
   TASKS_VIEW_ID,
 } from '../view-ids'
+import { APP_INFO } from './app-info'
 import { SEARCH_CONTENT_KEY } from './shortcuts'
 
 // Where the palette opens: files (no prefix), commands (>), a line of the
@@ -261,6 +262,15 @@ function allCommands(ctx: AppCommandContext): AppCommand[] {
       category: 'App',
       restoreFocus: true,
       run: ctx.openAbout,
+    },
+    {
+      id: 'app.docs',
+      title: 'Open the documentation',
+      category: 'App',
+      restoreFocus: true,
+      run: () => {
+        window.open(APP_INFO.links.docs, '_blank', 'noopener,noreferrer')
+      },
     },
     {
       id: 'app.toggleSidebar',
