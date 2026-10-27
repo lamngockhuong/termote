@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.11.0](https://github.com/lamngockhuong/termote/compare/v2.10.0...v2.11.0) (2026-10-27)
+
+
+### Features
+
+* comment on lines in Changes and Files, send the review to an agent ([#575](https://github.com/lamngockhuong/termote/issues/575)) ([#596](https://github.com/lamngockhuong/termote/issues/596)) ([edee4e4](https://github.com/lamngockhuong/termote/commit/edee4e404b9d6e142b1e6e04daf95d1884e84c0b))
+* edit Markdown beside a live preview, paste images next to it ([#579](https://github.com/lamngockhuong/termote/issues/579)) ([#599](https://github.com/lamngockhuong/termote/issues/599)) ([e1bddc5](https://github.com/lamngockhuong/termote/commit/e1bddc57c732819439347207f19a12a23d3aa3b2))
+* open and save Shift-JIS, EUC-JP and UTF-16 files in Files ([#578](https://github.com/lamngockhuong/termote/issues/578)) ([#598](https://github.com/lamngockhuong/termote/issues/598)) ([4820fa9](https://github.com/lamngockhuong/termote/commit/4820fa98c303d38801383caf9602427363e23b51))
+* preview PDF, xlsx and docx files read-only in Files ([#577](https://github.com/lamngockhuong/termote/issues/577)) ([#593](https://github.com/lamngockhuong/termote/issues/593)) ([8ebf504](https://github.com/lamngockhuong/termote/commit/8ebf504564d474e59375e19653e9fc56d3a6811c))
+* **pwa:** open a file, diff, tab, pane or the overview in its own window ([#587](https://github.com/lamngockhuong/termote/issues/587)) ([#590](https://github.com/lamngockhuong/termote/issues/590)) ([755505b](https://github.com/lamngockhuong/termote/commit/755505b9247bffedb998ecb443162a4d796f3592))
+* queue a chat message while the agent works ([#594](https://github.com/lamngockhuong/termote/issues/594)) ([427b502](https://github.com/lamngockhuong/termote/commit/427b502b486368ce8f1907de5b4c0d7aec219734))
+* run a pane's scripts and make targets, send a failed run to an agent ([#576](https://github.com/lamngockhuong/termote/issues/576)) ([#595](https://github.com/lamngockhuong/termote/issues/595)) ([9e77be3](https://github.com/lamngockhuong/termote/commit/9e77be3323884c0cce7c64ae0d8b42d59d7085d2))
+* stage, unstage and discard a change by file or by hunk ([#574](https://github.com/lamngockhuong/termote/issues/574)) ([#592](https://github.com/lamngockhuong/termote/issues/592)) ([3be0d44](https://github.com/lamngockhuong/termote/commit/3be0d442294c5e55979348e766305d8465a4a282))
+
+
+### Bug Fixes
+
+* **pwa:** move a diff's extra header buttons into a menu on a phone ([#597](https://github.com/lamngockhuong/termote/issues/597)) ([c97aa74](https://github.com/lamngockhuong/termote/commit/c97aa74a67f6032d5b249726028e53f1081c1053))
+* send a chat message's images where they were pasted ([#600](https://github.com/lamngockhuong/termote/issues/600)) ([dcd0e2e](https://github.com/lamngockhuong/termote/commit/dcd0e2ea26c5a24e5066b3e590de0a3270a571d4))
+
 ## [2.10.0](https://github.com/lamngockhuong/termote/compare/v2.9.0...v2.10.0) (2026-10-26)
 
 
