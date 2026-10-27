@@ -155,7 +155,7 @@ function Part({ part }: { part: TranscriptPart }) {
 // One step of the agent's side, on a line down the left: a dot coloured by
 // what the step is (a tool by how it ended), and the line on to the next
 // step when there is one.
-function Step({
+export function Step({
   dot,
   line,
   children,
@@ -181,7 +181,7 @@ function Step({
   )
 }
 
-function Time({ ts }: { ts?: string }) {
+export function Time({ ts }: { ts?: string }) {
   if (!ts) return null
   const d = new Date(ts)
   if (Number.isNaN(d.getTime())) return null

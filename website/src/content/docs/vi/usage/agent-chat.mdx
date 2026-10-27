@@ -23,7 +23,10 @@ Codex dùng được theo cách tương tự, có yêu cầu riêng và một đ
 ## View Chat hiện gì
 
 - Toàn bộ hội thoại của phiên hiện tại, đọc từ transcript mà Claude Code ghi ra đĩa: tin nhắn của
-  bạn, câu trả lời hiển thị dạng markdown, các lần gọi tool thu gọn kèm kết quả.
+  bạn, câu trả lời hiển thị dạng markdown, và các lần gọi tool. Một lệnh hiện dạng `$ lệnh`, output
+  ẩn sau hàng `Output · N lines` (mở ra thấy 10 dòng cuối; lệnh lỗi thì mở sẵn). Từ ba bước liên
+  tiếp trở lên gập thành một dòng như `3 commands, 2 reads`; các bước agent đang chạy thì mở sẵn ở
+  những bước mới nhất.
 - Lượt mới hiện ra trong khoảng hai giây. Sau `/clear` hoặc khi resume, view chuyển sang phiên mới
   và không trộn hai phiên với nhau.
 - Khối code có khung ghi tên ngôn ngữ, được tô màu cú pháp và có nút Copy. Khối ` ```mermaid ` được
