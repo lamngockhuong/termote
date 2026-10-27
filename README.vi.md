@@ -48,6 +48,12 @@
 - **Backend Herdr** (native hoặc trong container): điều khiển workspace của Herdr thay cho tmux, kèm huy hiệu trạng thái của agent lập trình trên từng pane — xem [Cài đặt Native](https://termote.ohnice.app/vi/installation/native/)
 - **View Chat**: đọc và trả lời một pane đang chạy Claude Code (hoặc Codex khởi động với `--no-daemon`) như một cuộc trò chuyện, có gợi ý slash command và nút trả lời hộp thoại — xem [Chat với agent](https://termote.ohnice.app/vi/usage/agent-chat/)
 - **View Files và Changes**: duyệt thư mục của pane và các thay đổi git trong đó, xem trước file Markdown — xem [Files và Changes](https://termote.ohnice.app/vi/usage/files-changes/)
+- **Hàng đợi tin nhắn và link file trong Chat**: viết sẵn tin nhắn khi agent còn đang làm, tin nhắn được gửi khi agent xong; chạm vào đường dẫn file agent đã viết để mở file đó trong Files, đúng dòng
+- **Review và stage**: comment trên từng dòng trong Changes và Files rồi gửi bản review cho agent; stage, bỏ stage hoặc hủy thay đổi theo từng file hay từng hunk
+- **Xem và sửa trong Files**: xem PDF, .xlsx, .docx ở chế độ chỉ đọc; mở và lưu file Shift-JIS, EUC-JP, UTF-16; sửa Markdown cạnh bản xem trước cập nhật ngay khi gõ
+- **Places**: đưa một thư mục nằm ngoài pane vào Files bằng `termote start --allow-path <dir>` — xem [Places](https://termote.ohnice.app/vi/usage/files-changes/#places)
+- **Task**: chạy script trong `package.json` và target trong Makefile của pane, gửi lần chạy lỗi cho agent — xem [Task](https://termote.ohnice.app/vi/usage/tasks/)
+- **Cửa sổ riêng** (desktop): mở một file, diff, tab, pane hoặc trang tổng quan trong cửa sổ riêng
 - **Đính kèm ảnh**: gửi ảnh từ điện thoại vào terminal hoặc vào tin nhắn trong view Chat, agent đọc ảnh qua đường dẫn
 - **Plugin Herdr**: mở pane Herdr đang dùng trong Termote, hiện liên kết thành mã QR để quét bằng điện thoại, bật hoặc tắt server mà không rời Herdr — xem [Plugin Herdr](https://termote.ohnice.app/vi/usage/herdr-plugin/)
 - **Thân thiện mobile**: Bàn phím ảo (Tab/Ctrl/Shift/mũi tên, mở rộng được)
@@ -137,7 +143,7 @@ irm https://termote.ohnice.app/install.ps1 | iex
 termote start
 ```
 
-Trình cài đặt chỉ cần `curl`, `tar` và `sha256sum`/`shasum` (trên Windows là PowerShell), không cần sudo hay quyền admin. Nó kiểm tra mã băm SHA-256 của gói tải về, cài lệnh `termote` và không khởi động gì cả. `termote start` lưu các tùy chọn, tạo mật khẩu ở lần chạy đầu (chỉ in ra một lần; xem lại bằng `termote show-password`), đăng ký service rồi khởi động nó. Mở `http://localhost:7680` (Windows: `http://localhost:7690`).
+Trình cài đặt chỉ cần `curl`, `tar` và `sha256sum`/`shasum` (trên Windows là PowerShell), không cần sudo hay quyền admin. Nó kiểm tra mã băm SHA-256 của gói tải về, cài lệnh `termote` và không khởi động gì cả. `termote start` lưu các tùy chọn, tạo mật khẩu ở lần chạy đầu (chỉ in ra một lần; xem lại bằng `termote show-password`), đăng ký service rồi khởi động nó. Mở `http://127.0.0.1:7680` (Windows: `http://127.0.0.1:7690`).
 
 Cần cài sẵn một backend terminal: tmux (`sudo apt install tmux`, `brew install tmux`), psmux trên Windows (`winget install psmux`), hoặc [Herdr](https://termote.ohnice.app/vi/installation/native/). Lần `start` đầu tiên sẽ tự nhận ra nên dùng backend nào.
 
@@ -256,19 +262,23 @@ Server native chạy dưới dạng service của người dùng: systemd user u
 
 ### Tùy chọn của `start`
 
-| Flag                        | Mô Tả                                                                                              |
-| --------------------------- | -------------------------------------------------------------------------------------------------- |
-| `--port <port>`             | Port (mặc định: 7680, Windows: 7690)                                                               |
-| `--lan[=false]`             | Lắng nghe trên mọi interface (mặc định: chỉ localhost)                                             |
-| `--tailscale <host[:port]>` | Công bố qua Tailscale HTTPS (port mặc định 443)                                                    |
-| `--no-tailscale`            | Ngừng công bố qua Tailscale                                                                        |
-| `--no-auth[=false]`         | Tắt xác thực (basic auth)                                                                          |
-| `--mux <tmux\|herdr>`       | Backend terminal (mặc định: herdr nếu đang chạy, nếu không thì tmux)                               |
-| `--allow-host <name>`       | Cho phép thêm một giá trị header Host (lặp lại được; không có ký tự đại diện, xem ghi chú bảo mật) |
-| `--remove-host <name>`      | Bỏ một tên Host đã cho phép (lặp lại được)                                                         |
-| `--allow-herdr-no-auth`     | Bắt buộc khi dùng cùng `--mux herdr --no-auth`                                                     |
-| `--user <name>`             | Tên đăng nhập (mặc định: `admin`; dùng chung với container)                                        |
-| `--fresh`                   | Đặt mật khẩu mới                                                                                   |
+| Flag                         | Mô Tả                                                                                                         |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `--port <port>`              | Port (mặc định: 7680, Windows: 7690)                                                                          |
+| `--lan[=false]`              | Lắng nghe trên mọi interface (mặc định: chỉ localhost)                                                        |
+| `--tailscale <host[:port]>`  | Công bố qua Tailscale HTTPS (port mặc định 443)                                                               |
+| `--no-tailscale`             | Ngừng công bố qua Tailscale                                                                                   |
+| `--no-auth[=false]`          | Tắt xác thực (basic auth)                                                                                     |
+| `--mux <tmux\|herdr>`        | Backend terminal (mặc định: herdr nếu đang chạy, nếu không thì tmux)                                          |
+| `--allow-host <name>`        | Cho phép thêm một giá trị header Host (lặp lại được; không có ký tự đại diện, xem ghi chú bảo mật)            |
+| `--remove-host <name>`       | Bỏ một tên Host đã cho phép (lặp lại được)                                                                    |
+| `--allow-local-user <name>`  | Cho một người dùng hệ điều hành khác trên máy này kết nối, ví dụ reverse proxy (lặp lại được; Linux, Windows) |
+| `--remove-local-user <name>` | Thôi cho người dùng đó kết nối (lặp lại được)                                                                 |
+| `--allow-path <dir>`         | Đưa một thư mục vào Files, trong mục Places (lặp lại được)                                                    |
+| `--remove-path <dir>`        | Bỏ một thư mục đã cho phép (lặp lại được)                                                                     |
+| `--allow-herdr-no-auth`      | Bắt buộc khi dùng cùng `--mux herdr --no-auth`                                                                |
+| `--user <name>`              | Tên đăng nhập (mặc định: `admin`; dùng chung với container)                                                   |
+| `--fresh`                    | Đặt mật khẩu mới                                                                                              |
 
 ### Với Tailscale HTTPS
 

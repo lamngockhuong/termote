@@ -46,6 +46,12 @@
 - **Herdrバックエンド**（ネイティブまたはコンテナ内）: tmuxの代わりにHerdrのワークスペースを操作し、ペインごとにコーディングエージェントの状態バッジを表示 — [ネイティブインストール](https://termote.ohnice.app/installation/native/)を参照
 - **Chatビュー**: Claude Code（または`--no-daemon`で起動したCodex）を実行中のペインをチャットとして読み、返信できます。スラッシュコマンドの候補表示とダイアログへの応答に対応 — [Agent Chat](https://termote.ohnice.app/usage/agent-chat/)を参照
 - **Files・Changesビュー**: ペインのディレクトリとそのgitの変更を閲覧し、Markdownをプレビュー — [Files and Changes](https://termote.ohnice.app/usage/files-changes/)を参照
+- **Chatのメッセージキューとファイルリンク**: エージェントの作業中にメッセージをキューに入れられます。エージェントが書いたファイルパスをタップすると、Filesでそのファイルを該当行で開きます
+- **レビューとステージ**: ChangesとFilesで行にコメントし、レビューをエージェントに送信。変更をファイル単位またはhunk単位でステージ、アンステージ、破棄
+- **Filesでのプレビューと編集**: PDF・.xlsx・.docxを読み取り専用でプレビュー。Shift-JIS・EUC-JP・UTF-16のファイルを開いて保存。Markdownをライブプレビューの横で編集
+- **Places**: `termote start --allow-path <dir>`でペイン外のフォルダをFilesに表示 — [Places](https://termote.ohnice.app/usage/files-changes/#places)を参照
+- **Tasks**: ペインの`package.json`スクリプトとMakefileターゲットを実行し、失敗した実行をエージェントに送信 — [Tasks](https://termote.ohnice.app/usage/tasks/)を参照
+- **別ウィンドウ**（デスクトップ）: ファイル、diff、タブ、ペイン、概要を専用のウィンドウで開く
 - **画像の添付**: スマートフォンから画像をターミナルやChatビューのメッセージに送り、エージェントがパスから読み取れるようにします
 - **Herdrプラグイン**: Herdrを離れずに、フォーカス中のHerdrペインをTermoteで開く、そのリンクをスマートフォン用のQRコードで表示する、サーバーを起動・停止する — [Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/)を参照
 - **モバイル対応**: 仮想キーボードツールバー（Tab/Ctrl/Shift/矢印キー、展開可能）
@@ -135,7 +141,7 @@ irm https://termote.ohnice.app/install.ps1 | iex
 termote start
 ```
 
-インストーラーに必要なのは`curl`、`tar`、`sha256sum`/`shasum`（WindowsではPowerShell）だけで、sudoや管理者権限は不要です。アーカイブのチェックサムを検証して`termote`コマンドをインストールしますが、何も起動しません。`termote start`はオプションを保存し、初回はパスワードを作成して（一度だけ表示され、あとで`termote show-password`で再表示できます）、サービスを登録して起動します。`http://localhost:7680`（Windowsでは`http://localhost:7690`）を開いてください。
+インストーラーに必要なのは`curl`、`tar`、`sha256sum`/`shasum`（WindowsではPowerShell）だけで、sudoや管理者権限は不要です。アーカイブのチェックサムを検証して`termote`コマンドをインストールしますが、何も起動しません。`termote start`はオプションを保存し、初回はパスワードを作成して（一度だけ表示され、あとで`termote show-password`で再表示できます）、サービスを登録して起動します。`http://127.0.0.1:7680`（Windowsでは`http://127.0.0.1:7690`）を開いてください。
 
 先にターミナルバックエンドをインストールしておく必要があります: tmux（`sudo apt install tmux`、`brew install tmux`）、Windowsではpsmux（`winget install psmux`）、または[Herdr](https://termote.ohnice.app/installation/native/)。どれを使うかは最初の`start`が検出します。
 
@@ -254,19 +260,23 @@ flowchart LR
 
 ### `start`のオプション
 
-| フラグ                      | 説明                                                                                 |
-| --------------------------- | ------------------------------------------------------------------------------------ |
-| `--port <port>`             | ポート（デフォルト: 7680、Windows: 7690）                                            |
-| `--lan[=false]`             | すべてのインターフェースで待ち受け（デフォルト: localhostのみ）                      |
-| `--tailscale <host[:port]>` | Tailscale HTTPSで公開（デフォルトポート443）                                         |
-| `--no-tailscale`            | Tailscaleでの公開を停止                                                              |
-| `--no-auth[=false]`         | Basic認証を無効化                                                                    |
-| `--mux <tmux\|herdr>`       | ターミナルバックエンド（デフォルト: herdrが動作中ならherdr、なければtmux）           |
-| `--allow-host <name>`       | 追加のHostヘッダー値を許可（複数指定可。ワイルドカードなし、セキュリティ注意を参照） |
-| `--remove-host <name>`      | 許可済みのHost名を削除（複数指定可）                                                 |
-| `--allow-herdr-no-auth`     | `--mux herdr --no-auth`と併用する場合に必須                                          |
-| `--user <name>`             | ログインユーザー名（デフォルト: `admin`、コンテナと共有）                            |
-| `--fresh`                   | 新しいパスワードを設定                                                               |
+| フラグ                       | 説明                                                                                         |
+| ---------------------------- | -------------------------------------------------------------------------------------------- |
+| `--port <port>`              | ポート（デフォルト: 7680、Windows: 7690）                                                    |
+| `--lan[=false]`              | すべてのインターフェースで待ち受け（デフォルト: localhostのみ）                              |
+| `--tailscale <host[:port]>`  | Tailscale HTTPSで公開（デフォルトポート443）                                                 |
+| `--no-tailscale`             | Tailscaleでの公開を停止                                                                      |
+| `--no-auth[=false]`          | Basic認証を無効化                                                                            |
+| `--mux <tmux\|herdr>`        | ターミナルバックエンド（デフォルト: herdrが動作中ならherdr、なければtmux）                   |
+| `--allow-host <name>`        | 追加のHostヘッダー値を許可（複数指定可。ワイルドカードなし、セキュリティ注意を参照）         |
+| `--remove-host <name>`       | 許可済みのHost名を削除（複数指定可）                                                         |
+| `--allow-local-user <name>`  | このマシンの別のOSユーザー（リバースプロキシなど）の接続を許可（複数指定可、Linux・Windows） |
+| `--remove-local-user <name>` | そのユーザーの接続許可を取り消す（複数指定可）                                               |
+| `--allow-path <dir>`         | フォルダをFilesのPlacesに表示（複数指定可）                                                  |
+| `--remove-path <dir>`        | 許可済みのフォルダを削除（複数指定可）                                                       |
+| `--allow-herdr-no-auth`      | `--mux herdr --no-auth`と併用する場合に必須                                                  |
+| `--user <name>`              | ログインユーザー名（デフォルト: `admin`、コンテナと共有）                                    |
+| `--fresh`                    | 新しいパスワードを設定                                                                       |
 
 ### Tailscale HTTPS付き
 

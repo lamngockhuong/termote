@@ -48,6 +48,12 @@ Kendalikan alat CLI (Claude Code, GitHub Copilot, terminal apa pun) dari jarak j
 - **Backend Herdr** (native atau di dalam container): kendalikan workspace Herdr sebagai pengganti tmux, dengan lencana status coding agent di setiap pane — lihat [Instalasi Native](https://termote.ohnice.app/installation/native/)
 - **Tampilan Chat**: baca dan balas pane yang menjalankan Claude Code (atau Codex yang dijalankan dengan `--no-daemon`) sebagai obrolan, dengan saran slash command dan jawaban dialog — lihat [Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
 - **Tampilan Files dan Changes**: jelajahi direktori pane dan perubahan git-nya, dengan pratinjau Markdown — lihat [Files and Changes](https://termote.ohnice.app/usage/files-changes/)
+- **Antrean pesan dan tautan file di Chat**: antrekan pesan saat agent masih bekerja; ketuk path file yang ditulis agent untuk membukanya di Files, tepat di barisnya
+- **Review dan staging**: beri komentar pada baris di Changes dan Files lalu kirim review ke agent; stage, unstage, atau buang perubahan per file atau per hunk
+- **Pratinjau dan pengeditan di Files**: PDF, .xlsx, dan .docx hanya-baca; buka dan simpan file Shift-JIS, EUC-JP, dan UTF-16; edit Markdown di samping pratinjau langsung
+- **Places**: tawarkan folder di luar pane di Files dengan `termote start --allow-path <dir>` — lihat [Places](https://termote.ohnice.app/usage/files-changes/#places)
+- **Tasks**: jalankan script `package.json` dan target Makefile milik pane, kirim run yang gagal ke agent — lihat [Tasks](https://termote.ohnice.app/usage/tasks/)
+- **Jendela terpisah** (desktop): buka file, diff, tab, pane, atau ringkasan di jendelanya sendiri
 - **Lampiran gambar**: kirim gambar dari ponsel ke terminal atau ke pesan di tampilan Chat, agar agent dapat membacanya lewat path
 - **Plugin Herdr**: buka pane Herdr yang sedang aktif di Termote, tampilkan link-nya sebagai kode QR untuk ponsel, mulai atau hentikan server, tanpa meninggalkan Herdr — lihat [Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/)
 - **Ramah mobile**: Toolbar keyboard virtual (Tab/Ctrl/Shift/panah, dapat diperluas)
@@ -137,7 +143,7 @@ irm https://termote.ohnice.app/install.ps1 | iex
 termote start
 ```
 
-Installer hanya membutuhkan `curl`, `tar` dan `sha256sum`/`shasum` (PowerShell di Windows), tanpa sudo atau hak admin. Installer memverifikasi checksum arsip, memasang perintah `termote`, dan tidak menjalankan apa pun. `termote start` menyimpan opsi, membuat password saat pertama kali (ditampilkan sekali; `termote show-password` menampilkannya lagi), mendaftarkan service lalu menjalankannya. Buka `http://localhost:7680` (Windows: `http://localhost:7690`).
+Installer hanya membutuhkan `curl`, `tar` dan `sha256sum`/`shasum` (PowerShell di Windows), tanpa sudo atau hak admin. Installer memverifikasi checksum arsip, memasang perintah `termote`, dan tidak menjalankan apa pun. `termote start` menyimpan opsi, membuat password saat pertama kali (ditampilkan sekali; `termote show-password` menampilkannya lagi), mendaftarkan service lalu menjalankannya. Buka `http://127.0.0.1:7680` (Windows: `http://127.0.0.1:7690`).
 
 Backend terminal harus sudah terpasang lebih dulu: tmux (`sudo apt install tmux`, `brew install tmux`), psmux di Windows (`winget install psmux`), atau [Herdr](https://termote.ohnice.app/installation/native/). `start` yang pertama mendeteksi backend mana yang dipakai.
 
@@ -256,19 +262,23 @@ Server native berjalan sebagai service pengguna: unit systemd user di Linux (pro
 
 ### Opsi `start`
 
-| Flag                        | Deskripsi                                                                                  |
-| --------------------------- | ------------------------------------------------------------------------------------------ |
-| `--port <port>`             | Port (default: 7680, Windows: 7690)                                                        |
-| `--lan[=false]`             | Mendengarkan di semua interface (default: hanya localhost)                                 |
-| `--tailscale <host[:port]>` | Publikasikan melalui Tailscale HTTPS (port default 443)                                    |
-| `--no-tailscale`            | Berhenti memublikasikan melalui Tailscale                                                  |
-| `--no-auth[=false]`         | Nonaktifkan basic authentication                                                           |
-| `--mux <tmux\|herdr>`       | Backend terminal (default: herdr jika sedang berjalan, selain itu tmux)                    |
-| `--allow-host <name>`       | Izinkan nilai header Host tambahan (dapat diulang; tanpa wildcard, lihat catatan keamanan) |
-| `--remove-host <name>`      | Hapus nama Host yang diizinkan (dapat diulang)                                             |
-| `--allow-herdr-no-auth`     | Wajib bersama `--mux herdr --no-auth`                                                      |
-| `--user <name>`             | Username login (default: `admin`; sama dengan container)                                   |
-| `--fresh`                   | Buat password baru                                                                         |
+| Flag                         | Deskripsi                                                                                           |
+| ---------------------------- | --------------------------------------------------------------------------------------------------- |
+| `--port <port>`              | Port (default: 7680, Windows: 7690)                                                                 |
+| `--lan[=false]`              | Mendengarkan di semua interface (default: hanya localhost)                                          |
+| `--tailscale <host[:port]>`  | Publikasikan melalui Tailscale HTTPS (port default 443)                                             |
+| `--no-tailscale`             | Berhenti memublikasikan melalui Tailscale                                                           |
+| `--no-auth[=false]`          | Nonaktifkan basic authentication                                                                    |
+| `--mux <tmux\|herdr>`        | Backend terminal (default: herdr jika sedang berjalan, selain itu tmux)                             |
+| `--allow-host <name>`        | Izinkan nilai header Host tambahan (dapat diulang; tanpa wildcard, lihat catatan keamanan)          |
+| `--remove-host <name>`       | Hapus nama Host yang diizinkan (dapat diulang)                                                      |
+| `--allow-local-user <name>`  | Izinkan pengguna OS lain di mesin ini terhubung, mis. reverse proxy (dapat diulang; Linux, Windows) |
+| `--remove-local-user <name>` | Berhenti mengizinkan pengguna itu terhubung (dapat diulang)                                         |
+| `--allow-path <dir>`         | Tawarkan folder di Files, di bawah Places (dapat diulang)                                           |
+| `--remove-path <dir>`        | Hapus folder yang diizinkan (dapat diulang)                                                         |
+| `--allow-herdr-no-auth`      | Wajib bersama `--mux herdr --no-auth`                                                               |
+| `--user <name>`              | Username login (default: `admin`; sama dengan container)                                            |
+| `--fresh`                    | Buat password baru                                                                                  |
 
 ### Dengan Tailscale HTTPS
 

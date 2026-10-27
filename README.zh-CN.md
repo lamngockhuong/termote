@@ -46,6 +46,12 @@
 - **Herdr 后端**（原生或容器内）：用 Herdr 工作区代替 tmux，每个窗格都显示编码代理的状态徽标——参见[原生安装](https://termote.ohnice.app/installation/native/)
 - **Chat 视图**：以对话形式阅读并回复运行 Claude Code（或以 `--no-daemon` 启动的 Codex）的窗格，支持斜杠命令提示和对话框应答——参见[Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
 - **Files 和 Changes 视图**：浏览窗格所在目录及其 git 变更，支持 Markdown 预览——参见[Files and Changes](https://termote.ohnice.app/usage/files-changes/)
+- **Chat 消息队列和文件链接**：代理工作时可把消息排入队列；点击代理写出的文件路径，即可在 Files 中打开该文件并定位到对应行
+- **评审与暂存**：在 Changes 和 Files 中对代码行添加评论，并把评审发送给代理；按文件或按 hunk 暂存、取消暂存或丢弃变更
+- **Files 中的预览与编辑**：只读预览 PDF、.xlsx 和 .docx；打开并保存 Shift-JIS、EUC-JP 和 UTF-16 文件；在实时预览旁编辑 Markdown
+- **Places**：通过 `termote start --allow-path <dir>` 在 Files 中提供窗格之外的文件夹——参见[Places](https://termote.ohnice.app/usage/files-changes/#places)
+- **Tasks**：运行窗格的 `package.json` 脚本和 Makefile 目标，并把失败的运行发送给代理——参见[Tasks](https://termote.ohnice.app/usage/tasks/)
+- **独立窗口**（桌面端）：在独立窗口中打开文件、diff、标签页、窗格或概览
 - **图片附件**：从手机向终端或 Chat 视图消息发送图片，代理可通过路径读取
 - **Herdr 插件**：无需离开 Herdr，即可在 Termote 中打开当前聚焦的 Herdr 窗格、将其链接显示为二维码供手机扫描、启动或停止服务器——参见[Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/)
 - **移动端友好**：虚拟键盘工具栏（Tab/Ctrl/Shift/方向键，可展开）
@@ -135,7 +141,7 @@ irm https://termote.ohnice.app/install.ps1 | iex
 termote start
 ```
 
-安装程序只需要 `curl`、`tar` 和 `sha256sum`/`shasum`（Windows 上为 PowerShell），不需要 sudo 或管理员权限。它会校验压缩包的校验和，安装 `termote` 命令，但不会启动任何东西。`termote start` 会保存选项，首次运行时创建密码（只显示一次，之后可用 `termote show-password` 再次查看），然后注册服务并启动。打开 `http://localhost:7680`（Windows：`http://localhost:7690`）。
+安装程序只需要 `curl`、`tar` 和 `sha256sum`/`shasum`（Windows 上为 PowerShell），不需要 sudo 或管理员权限。它会校验压缩包的校验和，安装 `termote` 命令，但不会启动任何东西。`termote start` 会保存选项，首次运行时创建密码（只显示一次，之后可用 `termote show-password` 再次查看），然后注册服务并启动。打开 `http://127.0.0.1:7680`（Windows：`http://127.0.0.1:7690`）。
 
 需要先安装终端后端：tmux（`sudo apt install tmux`、`brew install tmux`），Windows 上为 psmux（`winget install psmux`），或者 [Herdr](https://termote.ohnice.app/installation/native/)。首次 `start` 会检测使用哪一个。
 
@@ -254,19 +260,23 @@ flowchart LR
 
 ### `start` 的选项
 
-| 参数                        | 说明                                                    |
-| --------------------------- | ------------------------------------------------------- |
-| `--port <port>`             | 端口（默认：7680，Windows：7690）                       |
-| `--lan[=false]`             | 在所有网络接口上监听（默认：仅 localhost）              |
-| `--tailscale <host[:port]>` | 通过 Tailscale HTTPS 发布（默认端口 443）               |
-| `--no-tailscale`            | 停止通过 Tailscale 发布                                 |
-| `--no-auth[=false]`         | 禁用基本认证                                            |
-| `--mux <tmux\|herdr>`       | 终端后端（默认：herdr 正在运行时用 herdr，否则用 tmux） |
-| `--allow-host <name>`       | 允许额外的 Host 头值（可重复；无通配符，参见安全说明）  |
-| `--remove-host <name>`      | 移除已允许的 Host 名称（可重复）                        |
-| `--allow-herdr-no-auth`     | 与 `--mux herdr --no-auth` 一起使用时必需               |
-| `--user <name>`             | 登录用户名（默认：`admin`；与容器共用）                 |
-| `--fresh`                   | 设置新密码                                              |
+| 参数                         | 说明                                                                 |
+| ---------------------------- | -------------------------------------------------------------------- |
+| `--port <port>`              | 端口（默认：7680，Windows：7690）                                    |
+| `--lan[=false]`              | 在所有网络接口上监听（默认：仅 localhost）                           |
+| `--tailscale <host[:port]>`  | 通过 Tailscale HTTPS 发布（默认端口 443）                            |
+| `--no-tailscale`             | 停止通过 Tailscale 发布                                              |
+| `--no-auth[=false]`          | 禁用基本认证                                                         |
+| `--mux <tmux\|herdr>`        | 终端后端（默认：herdr 正在运行时用 herdr，否则用 tmux）              |
+| `--allow-host <name>`        | 允许额外的 Host 头值（可重复；无通配符，参见安全说明）               |
+| `--remove-host <name>`       | 移除已允许的 Host 名称（可重复）                                     |
+| `--allow-local-user <name>`  | 允许本机的另一个系统用户连接，例如反向代理（可重复；Linux、Windows） |
+| `--remove-local-user <name>` | 不再允许该用户连接（可重复）                                         |
+| `--allow-path <dir>`         | 在 Files 的 Places 中提供一个文件夹（可重复）                        |
+| `--remove-path <dir>`        | 移除已允许的文件夹（可重复）                                         |
+| `--allow-herdr-no-auth`      | 与 `--mux herdr --no-auth` 一起使用时必需                            |
+| `--user <name>`              | 登录用户名（默认：`admin`；与容器共用）                              |
+| `--fresh`                    | 设置新密码                                                           |
 
 ### 使用 Tailscale HTTPS
 
