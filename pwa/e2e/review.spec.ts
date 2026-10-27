@@ -19,7 +19,7 @@ const fakeClaude = path.resolve(import.meta.dirname, '../../tests/fixtures/fake-
 
 interface Snapshot {
   caps: Record<string, unknown>
-  groups: { id: string; name: string; tabs: { id: string; name: string; panes: { id: string }[] }[] }[]
+  groups: { id: string; name: string; tabs: { id: string; name: string; panes: { id: string; agent?: unknown }[] }[] }[]
 }
 
 const snapshot = async (request: APIRequestContext): Promise<Snapshot> => {
@@ -110,6 +110,12 @@ test.describe('review comments', () => {
       ).trim(),
     )
     link = (await tabLink(request, repoWindow)).link
+    // Sending needs the agent seen, which takes the server a few seconds
+    await expect(async () => {
+      const s = await snapshot(request)
+      const tab = s.groups.flatMap((g) => g.tabs).find((t) => t.name === agentWindow)
+      expect(tab?.panes[0].agent).toBeDefined()
+    }).toPass({ timeout: 20000 })
   })
 
   test.afterAll(() => {
@@ -123,6 +129,9 @@ test.describe('review comments', () => {
 
   test.beforeEach(async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 })
+    // tmux shows every client its session's current window, which the page
+    // follows: the repo's window, or the page leaves it midway
+    tmux('select-window', '-t', windows[0])
   })
 
   test('comments on two files go to the agent as one message', async ({ page }) => {
@@ -220,6 +229,7 @@ test.describe('review comments on a view-only device', () => {
     test.setTimeout(60000)
     repo = makeRepo()
     windowId = tmux('new-window', '-d', '-P', '-F', '#{window_id}', '-t', `${tmuxSession}:`, '-n', repoWindow, '-c', repo, 'bash').trim()
+    tmux('select-window', '-t', windowId)
     const { link, pane } = await tabLink(request, repoWindow)
     const violations: string[][] = []
     const view = await pairStranger(browser, baseURL, (await makeCode(request, 'view', name)).code, async (p) => {
