@@ -6,10 +6,14 @@ import {
   useContext,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
 } from 'react'
 import { FOCUS_RING, IconButton } from './button'
+
+// The least room left between an open menu and the screen's edge, in px
+const MENU_MARGIN = 8
 
 const MenuContext = createContext<() => void>(() => {})
 
@@ -92,6 +96,22 @@ export function Menu({
     else listRef.current!.focus()
   }, [isOpen])
 
+  // Kept on the screen: a trigger away from the edge it is aligned to (a
+  // header with buttons after it) would push the menu past the other edge.
+  // Measured before paint, so it never shows cut off first.
+  const [shift, setShift] = useState(0)
+  useLayoutEffect(() => {
+    if (!isOpen) {
+      setShift(0)
+      return
+    }
+    const rect = listRef.current!.getBoundingClientRect()
+    if (rect.width === 0) return
+    const edge = document.documentElement.clientWidth - MENU_MARGIN
+    if (rect.left < MENU_MARGIN) setShift(MENU_MARGIN - rect.left)
+    else if (rect.right > edge) setShift(edge - rect.right)
+  }, [isOpen])
+
   // pointerdown, not mousedown: a touch that scrolls elsewhere sends no mouse events.
   useEffect(() => {
     if (!isOpen) return
@@ -170,6 +190,7 @@ export function Menu({
           aria-label={label}
           tabIndex={-1}
           onKeyDown={onKeyDown}
+          style={shift ? { transform: `translateX(${shift}px)` } : undefined}
           className={`absolute top-full z-50 mt-2 outline-none w-64 border border-border bg-surface-raised py-1 text-fg shadow-xl rounded-panel ui-native:border-0 transition-[opacity,translate] duration-(--duration-fast) ease-standard starting:-translate-y-1 starting:opacity-0 ${align === 'end' ? 'right-0' : 'left-0'} ${className}`}
         >
           <MenuContext.Provider value={close}>{children}</MenuContext.Provider>
