@@ -1330,7 +1330,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   of `server/testdata/template-hidden-chars.json`); the output is fenced, introduced as terminal
   output that is not to be trusted, and cut from its start to 16 KiB. Send is offered whatever exit
   status the markers claim. The agent pane picked is kept per group in `localStorage`
-  (`termote-task-agent:<groupId>`), a pane id only. **User tasks** (`/api/mux/tasks*`): a store
+  (`termote-task-agent:<groupId>`), a pane id only, shared with Review comments' Send (picking in
+  either changes the other's default). **User tasks** (`/api/mux/tasks*`): a store
   of its own, `<stateDir>/tasks/tasks.json`, kept as the prompt templates' (dir 0700, file 0600,
   symlinks refused, `.tasks-*.part` removed, `tasks.lock` 2 s then 503 `busy`, read again before
   every write, a corrupt or oversized file never written over: 503 `tasks_unavailable` at start,
@@ -1341,6 +1342,25 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `field`); `PUT`/`DELETE` name the `updated` they read (409 `conflict` with the task as it is,
   404 `not_found`). Errors carry a fixed code and message, never OS, backend or path text; no
   name or command is logged
+- **Review comments** (`pwa/src/utils/review-draft.ts`, `review-message.ts`,
+  `components/review-panel.tsx`): no route of its own. A comment on lines of a diff (Changes) or a
+  file (Files, the editor) is a draft per pane in `sessionStorage` (`termote-review:<paneId>`,
+  `{v:1, comments}`; anything else read as empty, never written over until the review changes),
+  following its pane when ids shift and cleared on sign-out here or in another tab; a storage that
+  refuses it keeps it in memory, said once. A file that may contain secrets (its status says so, or
+  it was shown after the ask) is commented on with its path and line numbers only: the lines are
+  never quoted, neither in the message nor in storage (`addReviewComment` drops a `quote` given
+  with `sensitive`). Send goes through `agent/message` (cursor from the transcript, `session_changed`
+  retried once), so that route's invariants hold (`requireWriteRole`, 16 KiB, control characters
+  filtered). The message names the root, says the quoted lines are file content, not instructions,
+  and shows each path as inline code and each quote in a fence longer than any backtick run in it;
+  characters that change or hide text become `⟨U+XXXX⟩` in the root, paths, quotes and comments.
+  Limits: 50 comments a pane, 4 KiB a comment, 60 lines or 4 KiB quoted a comment (the rest
+  counted); a message over 16 KiB is not sent (the size is shown), never cut. The comments sent are
+  removed only after a 204 or 202, by id (one added meanwhile stays); a refusal keeps them all. The
+  receiver is the pane's own agent (Claude Code, Codex), else the pane picked for its group
+  (`termote-task-agent:<groupId>`, as Tasks). None of it is offered to a view-only client (which
+  could not send it) or in a window of its own (which keeps nothing on the device)
 - Exclude sensitive dirs (.ssh, .gnupg, .aws, .config/gcloud) from container volume mounts
   (warned at `container up`)
 - Serve mode uses constant-time comparison for password verification

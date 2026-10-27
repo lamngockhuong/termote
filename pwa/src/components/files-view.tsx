@@ -16,6 +16,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useMemo,
   useRef,
   useState,
 } from 'react'
@@ -42,15 +43,21 @@ import {
   renameFile,
   restoreFile,
 } from '../hooks/use-mux-api'
+import { useReviewComposer } from '../hooks/use-review-composer'
 import { useSettings } from '../hooks/use-settings'
 import { useShortcutKey } from '../hooks/use-shortcuts'
+import type { Session } from '../types/session'
 import { downloadFile } from '../utils/download-file'
 import { fileNameProblem } from '../utils/file-name'
 import { splitPath } from '../utils/files-format'
+import { isFocusWindow } from '../utils/focus-mode'
 import type { LinkPath } from '../utils/markdown-links'
 import { isApplePlatform } from '../utils/platform'
+import { commentedFileLines, type ReviewComment } from '../utils/review-draft'
 import { chordFromEvent, SEARCH_CONTENT_KEY } from '../utils/shortcuts'
 import { visibleUnsafe } from '../utils/unsafe-chars'
+import { CHANGES_VIEW_ID } from '../view-ids'
+import { openCommentInChanges } from './changes-view'
 import {
   CONTENT_SEARCH_INITIAL,
   ContentSearch,
@@ -65,6 +72,8 @@ import { NewFileDialog } from './new-file-dialog'
 import { OpenFilesButton, OpenFilesSheet } from './open-files-sheet'
 import { PaneDirHeader, ViewMessage } from './pane-dir-header'
 import { RenameFileDialog } from './rename-file-dialog'
+import { ReviewCommentSheet } from './review-comment-sheet'
+import { ReviewControl } from './review-panel'
 import { DiscardTabDialog, RootCloseDialog } from './tab-close-dialogs'
 import { FOCUS_RING, IconButton } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
@@ -150,11 +159,19 @@ export function FilesView({
   readOnly,
   mux,
   openWindow,
+  showView,
+  sessions,
+  openTab,
 }: ViewProps) {
   // Before the first snapshot there is no pane to read
   if (!session.paneId) return <ViewMessage>Loading…</ViewMessage>
   return (
     <PaneFiles
+      session={session}
+      sessions={sessions ?? []}
+      openTab={openTab}
+      showView={showView}
+      canSendToAgent={!!mux.caps.agentChat}
       paneId={session.paneId}
       isMobile={isMobile}
       notify={notify}
@@ -196,17 +213,54 @@ function PaneFiles({
   canRename,
   canDownload,
   openWindow,
+  session,
+  sessions,
+  openTab,
+  showView,
+  canSendToAgent,
 }: {
   paneId: string
   canDelete: boolean
   canRename: boolean
   canDownload: boolean
-} & Pick<ViewProps, 'isMobile' | 'notify' | 'readOnly' | 'openWindow'>) {
+  sessions: Session[]
+  canSendToAgent: boolean
+} & Pick<
+  ViewProps,
+  | 'isMobile'
+  | 'notify'
+  | 'readOnly'
+  | 'openWindow'
+  | 'session'
+  | 'openTab'
+  | 'showView'
+>) {
   const f = useFiles(paneId)
   const { settings } = useSettings()
   const { load, rootChanges, follow } = f
   const isDirty = useDirtyCheck(paneId)
   const tab = f.active
+  // Review comments: never for a view-only client (it cannot send them) or
+  // in a window of its own (it keeps nothing on the device)
+  const commenting = !readOnly && !isFocusWindow()
+  const review = useReviewComposer(paneId, f.root, notify)
+  const commented = useMemo(
+    () => tab && commentedFileLines(review.comments, f.root, tab.path),
+    [review.comments, f.root, tab],
+  )
+  // A comment of the review opened: its file here, its diff in Changes
+  const openComment = (cm: ReviewComment) => {
+    if (cm.root !== f.root) {
+      notify('The pane is in another folder now', { variant: 'warning' })
+      return
+    }
+    if (cm.source === 'file') {
+      f.openFromFind(cm.root, cm.path, { line: cm.start })
+      return
+    }
+    openCommentInChanges(paneId, cm, notify)
+    showView(CHANGES_VIEW_ID)
+  }
   // The tab with unsaved changes the Discard box is open for
   const [closing, setClosing] = useState<string>()
   // The file a click in the tree just opened. The viewer takes the tree's
@@ -548,6 +602,17 @@ function PaneFiles({
             <FilePlus size={15} aria-hidden="true" />
           </IconButton>
         )}
+        {commenting && (
+          <ReviewControl
+            paneId={paneId}
+            session={session}
+            sessions={sessions}
+            canSend={canSendToAgent}
+            notify={notify}
+            openTab={openTab}
+            onOpenComment={openComment}
+          />
+        )}
         {!tab && openFiles}
       </PaneDirHeader>
       {tabBar && <FileTabBar {...tabList} />}
@@ -622,6 +687,11 @@ function PaneFiles({
         />
       )}
       <RootCloseDialog count={moved} onResolve={f.resolveRootClose} />
+      <ReviewCommentSheet
+        target={review.target}
+        onSave={review.save}
+        onClose={review.close}
+      />
       <div
         ref={panelRef}
         id={panelId}
@@ -701,6 +771,10 @@ function PaneFiles({
                     })
                 : undefined
             }
+            onLineComment={
+              commenting ? (r) => review.open(tab.path, 'file', r) : undefined
+            }
+            commentedLines={commented}
           />
         ) : root?.error ? (
           <ViewMessage>{ERRORS[root.error]}</ViewMessage>

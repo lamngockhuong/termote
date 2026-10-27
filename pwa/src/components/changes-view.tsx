@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useMemo,
   useRef,
   useState,
 } from 'react'
@@ -11,6 +12,7 @@ import type { ViewProps } from '../app-views'
 import {
   FOLLOW_NOTICES,
   followInFiles,
+  openInFiles,
   useDirtyCheck,
 } from '../hooks/use-files'
 import {
@@ -19,6 +21,7 @@ import {
   type ChangeTab,
   changeKey,
   findEntry,
+  openChangeFromLink,
   useGitChanges,
 } from '../hooks/use-git-changes'
 import {
@@ -31,12 +34,20 @@ import {
   RequestError,
   restoreFile,
 } from '../hooks/use-mux-api'
+import { useReviewComposer } from '../hooks/use-review-composer'
 import { useSettings } from '../hooks/use-settings'
+import type { Session } from '../types/session'
 import { splitPath } from '../utils/files-format'
+import { isFocusWindow } from '../utils/focus-mode'
 import type { LinkPath } from '../utils/markdown-links'
+import {
+  commentedDiffLines,
+  commentedFileLines,
+  type ReviewComment,
+} from '../utils/review-draft'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { FILES_VIEW_ID } from '../view-ids'
-import { DiffViewer } from './diff-viewer'
+import { type DiffLineAt, DiffViewer } from './diff-viewer'
 import {
   APPLY_REFUSED,
   APPLY_STALE,
@@ -46,6 +57,8 @@ import { FileTabBar, type TabListProps, tabElementId } from './file-tab-bar'
 import { FileViewer } from './file-viewer'
 import { OpenFilesButton, OpenFilesSheet } from './open-files-sheet'
 import { PaneDirHeader, ViewMessage } from './pane-dir-header'
+import { ReviewCommentSheet } from './review-comment-sheet'
+import { ReviewControl } from './review-panel'
 import { DiscardTabDialog, RootCloseDialog } from './tab-close-dialogs'
 import { Banner } from './ui/banner'
 import { FOCUS_RING, IconButton } from './ui/button'
@@ -197,6 +210,59 @@ function groups(entries: ChangeEntry[]): [string, Item[]][] {
 // diffs opened from it, one tab each (a tab bar on a desktop, a sheet of open
 // files on a phone). The same component is the mobile view and the desktop
 // panel.
+// A review comment's diff line asked for from another view, per pane: shown
+// once the Changes view shows that diff
+const pendingDiffLines = new Map<string, DiffLineWanted>()
+
+interface DiffLineWanted {
+  key: string
+  at: DiffLineAt
+  // Its diff was shown: leaving it drops the line
+  shown?: boolean
+  // git no longer lists its diff: never shown, even once it is changed again
+  gone?: boolean
+}
+
+// Where a review comment is in its diff
+function commentLine(c: ReviewComment): DiffLineWanted {
+  const side = { path: c.path, orig: c.orig, staged: c.source === 'staged' }
+  const at =
+    c.removedOnly && c.removed
+      ? { n: c.removed.start, old: true, jump: Date.now() }
+      : { n: c.start, jump: Date.now() }
+  return { key: changeKey(side), at }
+}
+
+// Opens the diff of review comment c in paneId's Changes view, telling when
+// git no longer lists it; returns where the comment is in it
+function openCommentDiff(
+  paneId: string,
+  c: ReviewComment,
+  notify: ViewProps['notify'],
+): DiffLineWanted {
+  const wanted = commentLine(c)
+  void openChangeFromLink(paneId, {
+    path: c.path,
+    orig: c.orig,
+    staged: c.source === 'staged',
+  }).then((shown) => {
+    if (shown !== false) return
+    wanted.gone = true
+    notify('No changes for this file', { variant: 'warning' })
+  })
+  return wanted
+}
+
+// The same from another view, which then shows Changes: the line is shown
+// once the view is
+export function openCommentInChanges(
+  paneId: string,
+  c: ReviewComment,
+  notify: ViewProps['notify'],
+) {
+  pendingDiffLines.set(paneId, openCommentDiff(paneId, c, notify))
+}
+
 export function ChangesView({
   session,
   isMobile,
@@ -205,10 +271,16 @@ export function ChangesView({
   readOnly,
   openWindow,
   mux,
+  sessions,
+  openTab,
 }: ViewProps) {
   if (!session.paneId) return <ViewMessage>Loading…</ViewMessage>
   return (
     <PaneChanges
+      session={session}
+      sessions={sessions ?? []}
+      openTab={openTab}
+      canSendToAgent={!!mux.caps.agentChat}
       paneId={session.paneId}
       isMobile={isMobile}
       notify={notify}
@@ -230,14 +302,77 @@ function PaneChanges({
   readOnly,
   openWindow,
   canDiscard,
-}: { paneId: string; canDiscard: boolean } & Pick<
+  session,
+  sessions,
+  openTab,
+  canSendToAgent,
+}: {
+  paneId: string
+  canDiscard: boolean
+  sessions: Session[]
+  canSendToAgent: boolean
+} & Pick<
   ViewProps,
-  'isMobile' | 'notify' | 'showView' | 'readOnly' | 'openWindow'
+  | 'isMobile'
+  | 'notify'
+  | 'showView'
+  | 'readOnly'
+  | 'openWindow'
+  | 'session'
+  | 'openTab'
 >) {
   const c = useGitChanges(paneId)
   const { settings } = useSettings()
   const isDirty = useDirtyCheck(paneId)
   const tab = c.active
+  // Review comments: never for a view-only client (it cannot send them) or
+  // in a window of its own (it keeps nothing on the device)
+  const commenting = !readOnly && !isFocusWindow()
+  const review = useReviewComposer(paneId, c.root, notify)
+  const commented = useMemo(
+    () =>
+      tab && !tab.editing
+        ? commentedDiffLines(
+            review.comments,
+            c.root,
+            tab.path,
+            tab.staged ? 'staged' : 'unstaged',
+          )
+        : undefined,
+    [review.comments, c.root, tab],
+  )
+  // A comment's line to show in its diff, until another diff shows
+  const [diffLine, setDiffLine] = useState(() => {
+    const wanted = pendingDiffLines.get(paneId)
+    pendingDiffLines.delete(paneId)
+    return wanted
+  })
+  const tabKey = tab && !tab.editing ? changeKey(tab) : undefined
+  if (diffLine?.gone && !diffLine.shown) setDiffLine(undefined)
+  else if (diffLine) {
+    const here = tabKey === diffLine.key
+    if (here && !diffLine.shown) setDiffLine({ ...diffLine, shown: true })
+    else if (!here && diffLine.shown) setDiffLine(undefined)
+  }
+  const openComment = (cm: ReviewComment) => {
+    if (cm.root !== c.root) {
+      notify('The pane is in another folder now', { variant: 'warning' })
+      return
+    }
+    if (cm.source === 'file') {
+      openInFiles(paneId, cm.root, cm.path, { line: cm.start })
+      showView(FILES_VIEW_ID)
+      return
+    }
+    setDiffLine(openCommentDiff(paneId, cm, notify))
+  }
+  const commentedInEditor = useMemo(
+    () =>
+      tab?.editing
+        ? commentedFileLines(review.comments, c.root, tab.path)
+        : undefined,
+    [review.comments, c.root, tab],
+  )
   const [reload, setReload] = useState(0)
   // The tab with unsaved changes the Discard box is open for
   const [closing, setClosing] = useState<string>()
@@ -482,6 +617,10 @@ function PaneChanges({
           c.saved(tab.id)
           refresh()
         }}
+        onLineComment={
+          commenting ? (r) => review.open(tab.path, 'file', r) : undefined
+        }
+        commentedLines={commentedInEditor}
       />
     )
   } else if (tab) {
@@ -552,6 +691,19 @@ function PaneChanges({
             }
           />
         )}
+        onLineComment={
+          commenting
+            ? (r) =>
+                review.open(
+                  tab.path,
+                  tab.staged ? 'staged' : 'unstaged',
+                  r,
+                  tab.orig,
+                )
+            : undefined
+        }
+        commentedLines={commented}
+        line={diffLine?.key === tabKey ? diffLine?.at : undefined}
       />
     )
   } else if (!c.loaded) {
@@ -640,6 +792,17 @@ function PaneChanges({
       onDoubleClick={pinIfDoubleClick}
     >
       <PaneDirHeader root={c.root} branch={c.branch} onRefresh={refresh}>
+        {commenting && (
+          <ReviewControl
+            paneId={paneId}
+            session={session}
+            sessions={sessions}
+            canSend={canSendToAgent}
+            notify={notify}
+            openTab={openTab}
+            onOpenComment={openComment}
+          />
+        )}
         {!tab && openFiles}
       </PaneDirHeader>
       {tabBar && <FileTabBar {...tabList} />}
@@ -659,6 +822,11 @@ function PaneChanges({
         />
       )}
       <RootCloseDialog count={moved} onResolve={c.resolveRootClose} />
+      <ReviewCommentSheet
+        target={review.target}
+        onSave={review.save}
+        onClose={review.close}
+      />
       {discarding && (
         <DiscardChangeDialog
           paneId={paneId}

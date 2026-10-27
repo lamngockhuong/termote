@@ -23,6 +23,7 @@ import {
   shiftedIds,
 } from '../utils/pane-remap'
 import { setSelectionServer } from '../utils/pane-selection'
+import { remapReviewDrafts } from '../utils/review-draft'
 import { uniqueNames } from '../utils/running-commands'
 import { zellijGroupId } from '../utils/zellij-group'
 import { renameActivityGroup } from './use-activity-log'
@@ -380,6 +381,7 @@ export function useLocalSessions(pollInterval = 5) {
       if (shift.stale.size) {
         remapPanes(shift)
         remapChatDrafts(shift)
+        remapReviewDrafts(shift)
         // Only a snapshot with tabs can shift ids, and applying one stores
         // a selection: this is a guard, never reached in practice.
         /* v8 ignore next */

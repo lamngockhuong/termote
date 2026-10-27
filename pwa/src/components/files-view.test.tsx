@@ -8,7 +8,15 @@ import {
   waitFor,
   within,
 } from '@testing-library/react'
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest'
 import type { ViewProps } from '../app-views'
 import { ThemeProvider } from '../contexts/theme-context'
 import {
@@ -18,6 +26,13 @@ import {
 } from '../hooks/use-files'
 import { type FileEntry, RequestError } from '../hooks/use-mux-api'
 import { resetAllShortcuts, setShortcut } from '../hooks/use-shortcuts'
+import {
+  addReviewComment,
+  loadReview,
+  type ReviewComment,
+  resetReviewDrafts,
+} from '../utils/review-draft'
+import { CHANGES_VIEW_ID } from '../view-ids'
 import { FilesView, TREE_DOUBLE_CLICK_MS } from './files-view'
 
 const mockTree = vi.fn()
@@ -1915,5 +1930,97 @@ describe('FilesView download', () => {
       path: 'README.md',
       reveal: false,
     })
+  })
+})
+
+describe('FilesView review comments', () => {
+  const ROOT = '/home/kim/app'
+  const review = (over: Partial<ReviewComment> = {}): ReviewComment => ({
+    id: 'c',
+    root: ROOT,
+    path: 'README.md',
+    source: 'file',
+    start: 2,
+    end: 2,
+    text: 'Why?',
+    at: 1,
+    ...over,
+  })
+  beforeEach(() => {
+    // The Markdown file as its source, with its line numbers
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ markdownPreview: false }),
+    )
+    mockContent.mockResolvedValue({
+      root: ROOT,
+      path: 'README.md',
+      size: 4,
+      text: 'a\nb\n',
+    })
+    HTMLDialogElement.prototype.showModal = vi.fn(function (
+      this: HTMLDialogElement,
+    ) {
+      this.setAttribute('open', '')
+    })
+    HTMLDialogElement.prototype.close = vi.fn()
+  })
+  afterEach(() => {
+    sessionStorage.clear()
+    resetReviewDrafts()
+  })
+
+  const openReview = () =>
+    fireEvent.click(screen.getByRole('button', { name: /^Review, / }))
+
+  it('comments on lines of a file, and opens the comment again at its line', async () => {
+    await show()
+    fireEvent.click(item('README.md'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Line 2' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Comment' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Comment' }), {
+      target: { value: 'Why?' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+    expect(loadReview('%1')).toMatchObject([
+      { root: ROOT, path: 'README.md', source: 'file', start: 2, quote: 'b' },
+    ])
+    expect(screen.getByRole('button', { name: 'Line 2' })).toHaveAttribute(
+      'data-commented',
+    )
+    openReview()
+    fireEvent.click(screen.getByRole('button', { name: /^line 2/ }))
+    await waitFor(() =>
+      expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({
+        block: 'center',
+      }),
+    )
+  })
+
+  it('opens a comment on a diff in Changes', async () => {
+    addReviewComment('%1', review({ source: 'unstaged' }))
+    const p = await show()
+    openReview()
+    fireEvent.click(screen.getByRole('button', { name: /^line 2/ }))
+    expect(p.showView).toHaveBeenCalledWith(CHANGES_VIEW_ID)
+  })
+
+  it('tells when a comment is under another folder', async () => {
+    addReviewComment('%1', review({ root: '/other' }))
+    const p = await show()
+    openReview()
+    fireEvent.click(screen.getByRole('button', { name: /^line 2/ }))
+    expect(p.notify).toHaveBeenCalledWith('The pane is in another folder now', {
+      variant: 'warning',
+    })
+  })
+
+  it('offers no comment to a view-only client', async () => {
+    addReviewComment('%1', review())
+    await show({ readOnly: true })
+    fireEvent.click(item('README.md'))
+    await screen.findByTestId('code-block')
+    expect(screen.queryByRole('button', { name: 'Line 1' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Review/ })).toBeNull()
   })
 })

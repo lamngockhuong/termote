@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RequestError } from '../hooks/use-mux-api'
+import type { TextLines } from '../utils/line-range'
 import type { CodeEditorProps } from './code-editor'
 import { FileEditor, saveErrorOf } from './file-editor'
 
@@ -106,6 +107,22 @@ describe('FileEditor', () => {
     expect(onSelectText).toHaveBeenCalledWith('ell')
     view.rerender(<FileEditor {...props} text="hello" />)
     fireEvent.select(box)
+  })
+
+  it('reads the whole lines selected in the textarea, for a comment', () => {
+    const linesRef: { current: (() => TextLines) | null } = { current: null }
+    const view = render(
+      <FileEditor {...props} text={'a\nb\nc'} linesRef={linesRef} />,
+    )
+    const box = screen.getByRole('textbox') as HTMLTextAreaElement
+    box.setSelectionRange(2, 5)
+    expect(linesRef.current?.()).toEqual({
+      from: 2,
+      to: 3,
+      lines: ['b', 'c'],
+    })
+    view.unmount()
+    expect(linesRef.current).toBeNull()
   })
 
   it('Ctrl+S saves only when there is something to save', () => {

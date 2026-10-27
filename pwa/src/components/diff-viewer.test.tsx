@@ -637,3 +637,76 @@ describe('firstChange', () => {
     expect(firstChange(null)).toBeUndefined()
   })
 })
+
+describe('DiffViewer lines picked for a comment', () => {
+  const num = (name: string) => screen.getByRole('button', { name })
+
+  it('comments on a range of one hunk, its lines quoted with their signs', async () => {
+    const onLineComment = vi.fn()
+    show({ onLineComment })
+    await screen.findByTestId('diff')
+    // ctx 1, del (old 2), add 2, add 3
+    fireEvent.click(num('Line 1'))
+    fireEvent.click(num('Line 2'), { shiftKey: true })
+    expect(screen.getByText('Lines 1-2')).toBeInTheDocument()
+    expect(rows()[1]).toHaveClass('bg-accent/15')
+    fireEvent.click(screen.getByRole('button', { name: 'Comment' }))
+    expect(onLineComment).toHaveBeenCalledWith({
+      start: 1,
+      end: 2,
+      removed: { start: 2, end: 2 },
+      quote: ' same\n-old\n+new',
+    })
+  })
+
+  it('labels deleted lines alone, and clears', async () => {
+    show({ onLineComment: vi.fn() })
+    await screen.findByTestId('diff')
+    // The deleted line: its old number
+    fireEvent.click(num('Removed line 2'))
+    expect(screen.getByText('Removed line 2')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Clear the lines' }))
+    expect(screen.queryByText('Removed line 2')).toBeNull()
+  })
+
+  it('never passes on the lines of a sensitive file shown', async () => {
+    const onLineComment = vi.fn()
+    show({ onLineComment, reveal: true })
+    await screen.findByTestId('diff')
+    fireEvent.click(num('Line 3'))
+    fireEvent.click(screen.getByRole('button', { name: 'Comment' }))
+    expect(onLineComment).toHaveBeenCalledWith({
+      start: 3,
+      end: 3,
+      sensitive: true,
+    })
+  })
+
+  it('marks the lines a comment is on', async () => {
+    show({ onLineComment: vi.fn(), commentedLines: new Set(['o:2', 'n:3']) })
+    await screen.findByTestId('diff')
+    const marked = screen
+      .getAllByRole('button', { name: /^(Removed line|Line) / })
+      .filter((b) => b.hasAttribute('data-commented'))
+      .map((b) => b.getAttribute('aria-label'))
+    expect(marked).toEqual(['Removed line 2', 'Line 3'])
+  })
+
+  it('shows the line a comment is on, its old number for a deleted one', async () => {
+    const scroll = vi.fn()
+    Element.prototype.scrollIntoView = scroll
+    const v = show({ line: { n: 3, jump: 1 }, scrollTop: 40 })
+    await screen.findByTestId('diff')
+    expect(rows()[3]).toHaveClass('bg-accent/15')
+    expect(scroll).toHaveBeenCalledWith({ block: 'center' })
+    v.again({ line: { n: 2, old: true, jump: 2 } })
+    await waitFor(() => expect(rows()[1]).toHaveClass('bg-accent/15'))
+    expect(rows()[3]).not.toHaveClass('bg-accent/15')
+    // Read again (a refresh): where it was scrolled, not the line again
+    scroll.mockClear()
+    v.again({ line: { n: 2, old: true, jump: 2 }, reload: 1 })
+    await waitFor(() => expect(mockDiff).toHaveBeenCalledTimes(2))
+    await screen.findByTestId('diff')
+    expect(scroll).not.toHaveBeenCalled()
+  })
+})

@@ -844,6 +844,45 @@ Some changes are applied as a whole file only, or not at all:
 - A file that may contain secrets asks for confirmation first, as for its diff.
 - A view-only session cannot change anything.
 
+### Review Comments
+
+Instead of typing a file name and line numbers into Chat, comment on the lines themselves and send
+the whole review to the agent at once.
+
+- **Pick lines**: click a line number in a diff, or in a file open in Files. Shift+click another
+  number to extend the range; on a touch screen, tap a second number. Tapping the only line picked
+  again clears it. A range stays inside one hunk of a diff. In the editor, select the lines (or put
+  the cursor on one) and press **Comment on lines** in the header.
+- **Comment**: press **Comment** under the code, write the comment and press **Add**
+  (Ctrl/Cmd+Enter). A line with a comment has a mark next to its number.
+- **Review**: the **Review** button in the header shows how many comments are waiting. It lists them
+  by file, each with its lines and where they were read (`unstaged diff`, `staged diff`, `file`, or
+  `file (unsaved edits)` from an editor with changes not saved yet). Click one to open its diff or
+  file at that line, or edit or delete it. **Clear** deletes them all.
+- **Send**: the review goes as one message: each comment under its file and lines, with the lines
+  quoted as they were when you commented. When the pane runs Claude Code or Codex, it goes to that
+  agent. Otherwise pick a pane running one; Termote remembers the pick for the tabs of that group, the
+  same pick as Tasks' [Send to agent](/usage/tasks/#send-to-agent).
+
+The comments are cleared only once the agent took the message (or queued it while busy). When the
+send is refused, they all stay. A comment added while a send is on its way stays too.
+
+| Shown                                | Why                                                            |
+| ------------------------------------ | -------------------------------------------------------------- |
+| `No pane runs Claude Code or Codex`  | No agent can receive the review; start one in a pane first     |
+| `Too long for one message: …`        | The review is over 16 KiB; delete or shorten comments, nothing is cut |
+| `Review is full (50 comments)`       | A pane's review holds up to 50 comments                        |
+| `The pane is in another folder now`  | The comment was made under another root than the pane's now    |
+
+Each comment holds up to 4 KiB, and quotes up to 60 lines (the rest is counted). Characters that
+change or hide text without showing are written out as `⟨U+200B⟩`, as for Tasks.
+
+The review lives in this browser tab only (like an unsent Chat message): it stays across a reload and
+when you switch tabs, and is gone when the browser tab closes or you sign out. A window of its own
+(**Open in new window**) and a view-only device have no review comments. A file that may contain
+secrets can be commented on once shown, but its lines are never quoted, neither in the message nor
+in what the tab keeps: only the file and line numbers go.
+
 ## Files That May Contain Secrets
 
 Files whose names usually mean secrets are listed with a lock and the word `Sensitive`: for

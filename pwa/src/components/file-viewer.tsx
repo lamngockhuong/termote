@@ -8,6 +8,7 @@ import {
   Eye,
   Image as ImageIcon,
   Lock,
+  MessageSquarePlus,
   Pencil,
   Pin,
   TextCursorInput,
@@ -55,9 +56,11 @@ import { formatSize, keepOrder, TRUNCATE_START } from '../utils/files-format'
 import { HIGHLIGHT_MAX_BYTES } from '../utils/highlight'
 import { isImagePath, isSvgPath } from '../utils/image-path'
 import { lazyRetry } from '../utils/lazy-retry'
+import type { LineRange, TextLines } from '../utils/line-range'
 import { isMarkdownPath, type LinkPath } from '../utils/markdown-links'
 import type { OpenWindowEvent } from '../utils/open-window'
 import { recordSelection } from '../utils/pane-selection'
+import { quoteLines } from '../utils/review-message'
 import type { TableLayout } from '../utils/table-columns'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { CodeBlock } from './code-block'
@@ -372,6 +375,11 @@ interface Props {
   // A narrow screen: the header keeps Back, the name and the main buttons,
   // the others go in a menu
   compact?: boolean
+  // Lines may be picked (or selected in the editor) for a review comment:
+  // the range, without its lines for a sensitive file shown
+  onLineComment?: (range: LineRange) => void
+  // The lines a comment is on
+  commentedLines?: Set<number>
 }
 
 // A header button after the main ones: pressed is set for an on/off one
@@ -426,6 +434,8 @@ export function FileViewer({
   onCloseTab,
   headerExtra,
   compact = false,
+  onLineComment,
+  commentedLines,
 }: Props) {
   const [state, setState] = useState<Loaded>({ kind: 'loading' })
   const [mine, setDraft] = useFileDraft(paneId, path)
@@ -534,6 +544,17 @@ export function FileViewer({
   const selectionPane = reveal || mine?.reveal ? undefined : paneId
   const rootRef = useRef<HTMLDivElement>(null)
   useDomSelection(rootRef, selectionPane, path)
+  // What reads the editor's selected lines, for a review comment
+  const editorLines = useRef<(() => TextLines) | null>(null)
+  // A review comment never quotes a sensitive file shown
+  const lineRange = (t: TextLines, unsaved: boolean): LineRange => ({
+    start: t.from,
+    end: t.to,
+    ...(reveal || mine?.reveal
+      ? { sensitive: true }
+      : { quote: quoteLines(t.lines) }),
+    ...(unsaved && { unsaved }),
+  })
   const size = asImage
     ? image.status === 'ready'
       ? image.size
@@ -862,6 +883,16 @@ export function FileViewer({
         updateSetting('svgPreview', !asImage)
       },
     })
+  if (mine && !cells && onLineComment)
+    extras.push({
+      label: 'Comment on lines',
+      title: 'Comment on the lines selected',
+      icon: <MessageSquarePlus size={15} />,
+      onClick: () => {
+        const t = editorLines.current?.()
+        if (t) onLineComment(lineRange(t, dirty))
+      },
+    })
   if (!binaryView)
     extras.push({
       label: 'Wrap lines',
@@ -1037,6 +1068,7 @@ export function FileViewer({
           }
           scrollTop={scrolled.current}
           at={pickInEditor ? pick : editAt}
+          linesRef={onLineComment && editorLines}
         />
       )}
       {!mine && asImage && !sensitive && (
@@ -1133,6 +1165,10 @@ export function FileViewer({
             scrollTop={scrolled.current}
             line={pick?.line}
             jump={pick?.jump}
+            onLineComment={
+              onLineComment && ((t) => onLineComment(lineRange(t, false)))
+            }
+            commentedLines={commentedLines}
           />
         </>
       )}

@@ -1,12 +1,7 @@
 import { useState } from 'react'
 import type { ViewProps } from '../app-views'
 import { agentLabel } from '../chat-agents'
-import {
-  fetchPaneText,
-  fetchTranscript,
-  RequestError,
-  sendAgentMessage,
-} from '../hooks/use-mux-api'
+import { fetchPaneText, RequestError } from '../hooks/use-mux-api'
 import { useSettings } from '../hooks/use-settings'
 import {
   type TaskItem,
@@ -14,6 +9,7 @@ import {
   taskItems,
   useTasks,
 } from '../hooks/use-tasks'
+import { sendToAgent } from '../utils/send-to-agent'
 import {
   taskFailureMessage,
   taskRunOutput,
@@ -138,16 +134,7 @@ export function TasksView({
         code: r.state === 'exited' ? r.code : undefined,
         output,
       })
-      const page = await fetchTranscript(to.paneId)
-      try {
-        await sendAgentMessage(to.paneId, message, page.cursor)
-      } catch (err) {
-        if (!(err instanceof RequestError && err.code === 'session_changed'))
-          throw err
-        // The agent's session moved on: its cursor once more
-        const again = await fetchTranscript(to.paneId)
-        await sendAgentMessage(to.paneId, message, again.cursor)
-      }
+      await sendToAgent(to.paneId, message)
       notify(`Sent to ${agentLabel(to.agentName)}`, {
         variant: 'success',
         action: openChat,

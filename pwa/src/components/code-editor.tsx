@@ -36,13 +36,14 @@ import {
   lineNumbers,
   rectangularSelection,
 } from '@codemirror/view'
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { type RefObject, useEffect, useLayoutEffect, useRef } from 'react'
 import { useTheme } from '../contexts/theme-context'
 import { useSettings } from '../hooks/use-settings'
 import { loadLanguage } from '../utils/cm-languages'
 import { baseTheme, darkCode, lightCode } from '../utils/cm-theme'
 import { HIGHLIGHT_MAX_LINE } from '../utils/highlight'
 import { languageFor } from '../utils/highlight-langs'
+import { selectedLines, type TextLines } from '../utils/line-range'
 
 // Where the editor opens a file, or moves to: a line (1-based) and a column
 // (UTF-16, 0-based), again each time jump changes
@@ -72,6 +73,9 @@ export interface CodeEditorProps {
   // Where it starts scrolled to (a tab shown again)
   scrollTop?: number
   at?: EditorAt
+  // Set to what reads the whole lines of the main selection (the cursor's
+  // line without one), for a review comment
+  linesRef?: RefObject<(() => TextLines) | null>
 }
 
 // Marks a change made from the props, which onChange is not told about
@@ -179,6 +183,7 @@ export default function CodeEditor({
   onSelectText,
   scrollTop,
   at,
+  linesRef,
 }: CodeEditorProps) {
   const { settings } = useSettings()
   const { editorFontSize, editorTabSize, editorVim } = settings
@@ -319,6 +324,18 @@ export default function CodeEditor({
       if (latest.current.reveal) vimModule?.Vim.resetVimGlobalState_()
     }
   }, [])
+
+  useEffect(() => {
+    if (!linesRef) return
+    linesRef.current = () => {
+      const state = (view.current as EditorView).state
+      const { from, to } = state.selection.main
+      return selectedLines(state.doc.toString(), from, to)
+    }
+    return () => {
+      linesRef.current = null
+    }
+  }, [linesRef])
 
   // The draft changed elsewhere (Reload, a save rebased it, another view of
   // the pane edited it): the editor shows it, kept out of the undo history.
