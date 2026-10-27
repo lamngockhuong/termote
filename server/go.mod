@@ -13,3 +13,5 @@ require (
 require rsc.io/qr v0.2.0
 
 require github.com/BurntSushi/toml v1.6.0
+
+require golang.org/x/text v0.43.0
