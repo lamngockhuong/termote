@@ -847,9 +847,11 @@ describe('files API client', () => {
     const { calls } = mockFetch({ body: { root: '/r', path: 'a', text: '' } })
     await fetchFileContent('1', 'a')
     await fetchFileContent('1', '.env', { root: '/r', reveal: true })
+    await fetchFileContent('1', 'j.txt', { encoding: 'shift_jis' })
     expect(calls.map((c) => c.url)).toEqual([
       '/api/mux/panes/1/files/content?path=a',
       '/api/mux/panes/1/files/content?path=.env&root=%2Fr&reveal=1',
+      '/api/mux/panes/1/files/content?path=j.txt&encoding=shift_jis',
     ])
   })
 
@@ -878,6 +880,67 @@ describe('files API client', () => {
     })
     expect(timeout).toHaveBeenCalledWith(SAVE_TIMEOUT_MS)
     timeout.mockRestore()
+  })
+
+  it('sends the encoding a file was read as, and a save as UTF-8', async () => {
+    const { calls } = mockFetch({
+      body: { root: '/r', path: 'a', size: 1, hash: 'h', encoding: 'utf-8' },
+    })
+    await saveFileContent('1', {
+      root: '/r',
+      path: 'a',
+      baseHash: 'b',
+      text: 'x',
+      reveal: false,
+      encoding: 'shift_jis',
+      saveAs: 'utf-8',
+    })
+    expect(JSON.parse(calls[0].init?.body as string)).toEqual({
+      path: 'a',
+      baseHash: 'b',
+      text: 'x',
+      reveal: false,
+      encoding: 'shift_jis',
+      saveAs: 'utf-8',
+    })
+  })
+
+  it('a save refused for a character keeps its line and the character', async () => {
+    mockFetch({
+      body: { error: 'x', code: 'unencodable', line: 4, char: '😀' },
+      status: 422,
+    })
+    const save = {
+      root: '/r',
+      path: 'a',
+      baseHash: 'b',
+      text: '',
+      reveal: false,
+    }
+    await expect(saveFileContent('1', save)).rejects.toMatchObject({
+      code: 'unencodable',
+      line: 4,
+      char: '😀',
+    })
+    mockFetch({
+      body: { error: 'x', code: 'not_editable', reason: 'encoding-required' },
+      status: 422,
+    })
+    await expect(saveFileContent('1', save)).rejects.toMatchObject({
+      code: 'not_editable',
+      reason: 'encoding-required',
+    })
+    // Fields of another shape are left out
+    mockFetch({
+      body: { error: 'x', code: 'unencodable', line: '4', char: 1, reason: 2 },
+      status: 422,
+    })
+    const err = await saveFileContent('1', save).catch((e) => e)
+    expect([err.line, err.char, err.reason]).toEqual([
+      undefined,
+      undefined,
+      undefined,
+    ])
   })
 
   it('a refused save throws its code', async () => {

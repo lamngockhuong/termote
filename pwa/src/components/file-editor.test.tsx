@@ -40,7 +40,7 @@ describe('saveErrorOf', () => {
       new RequestError(422, 'not_text', 'x'),
       {
         kind: 'refused',
-        message: 'Only UTF-8 text without NUL characters can be saved',
+        message: 'Only text without NUL characters can be saved',
       },
     ],
     [
@@ -63,8 +63,34 @@ describe('saveErrorOf', () => {
       new RequestError(500, '', 'x'),
       { kind: 'refused', message: 'Could not save the file' },
     ],
+    [
+      new RequestError(422, 'not_editable', 'x', {
+        reason: 'encoding-required',
+      }),
+      { kind: 'refused', message: 'Reload the app to save this file' },
+    ],
+    [
+      new RequestError(422, 'unencodable', 'x', { line: 3, char: '😀' }),
+      {
+        kind: 'refused',
+        message:
+          'Line 3 has "😀", which UTF-8 can\'t hold. Change it or save as UTF-8',
+      },
+    ],
   ])('%s', (err, want) => {
     expect(saveErrorOf(err)).toEqual(want)
+  })
+
+  it('names the encoding a character does not fit in', () => {
+    const err = new RequestError(422, 'unencodable', 'x', {
+      line: 12,
+      char: '😀',
+    })
+    expect(saveErrorOf(err, 'shift_jis')).toEqual({
+      kind: 'refused',
+      message:
+        'Line 12 has "😀", which Shift-JIS can\'t hold. Change it or save as UTF-8',
+    })
   })
 })
 

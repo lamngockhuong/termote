@@ -2549,11 +2549,12 @@ describe('rebaseDraft', () => {
 
   it('a text draft takes what was saved as its base', () => {
     const now = { ...base, text: 'a\n3\n' }
-    expect(rebaseDraft(now, base, '/r2', 'h2')).toEqual({
+    expect(rebaseDraft(now, base, '/r2', 'h2', 'utf-8')).toEqual({
       ...now,
       root: '/r2',
       baseHash: 'h2',
       base: 'a\n2\n',
+      encoding: 'utf-8',
       cells: undefined,
     })
   })
@@ -2565,7 +2566,9 @@ describe('rebaseDraft', () => {
     }
     const now = { ...saved, cells: { ...saved.cells, ops: [op(1), op(2)] } }
     now.cells.ops[0] = saved.cells.ops[0]
-    expect(rebaseDraft(now, saved, '/r', 'h2').cells?.ops).toEqual([op(2)])
+    expect(rebaseDraft(now, saved, '/r', 'h2', 'utf-8').cells?.ops).toEqual([
+      op(2),
+    ])
   })
 
   it('goes on as text when the edits no longer begin with the ones saved', () => {
@@ -2574,7 +2577,7 @@ describe('rebaseDraft', () => {
       cells: { delimiter: ',' as const, ops: [op(1)], redo: [] },
     }
     const now = { ...saved, cells: { ...saved.cells, ops: [op(3)] } }
-    expect(rebaseDraft(now, saved, '/r', 'h2').cells).toBeUndefined()
+    expect(rebaseDraft(now, saved, '/r', 'h2', 'utf-8').cells).toBeUndefined()
   })
 })
 
@@ -3069,5 +3072,529 @@ describe('FileViewer review comments', () => {
       screen.queryByRole('button', { name: 'Comment on lines' }),
     ).toBeNull()
     expect(screen.queryByRole('button', { name: 'Line 1' })).toBeNull()
+  })
+})
+
+describe('FileViewer: encodings', () => {
+  const sjis = (text: string, over: Record<string, unknown> = {}) =>
+    editable(text, { encoding: 'shift_jis', ...over })
+  const encodingButton = (name: string) =>
+    screen.getByRole('button', { name: `Encoding: ${name}` })
+  const choose = (name: string) =>
+    fireEvent.click(screen.getByRole('menuitemradio', { name }))
+  const saveAsUtf8 = () =>
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Save as UTF-8' }))
+  const confirm = () =>
+    act(async () =>
+      fireEvent.click(
+        within(screen.getByRole('dialog')).getByRole('button', {
+          name: 'Save as UTF-8',
+        }),
+      ),
+    )
+  const draftNow = (path = 'src/a.ts') =>
+    renderHook(() => useFileDraft('%1', path)).result.current[0]
+  // A draft found at mount (kept on the device, or from another view)
+  const putDraft = (d: FileDraft) => {
+    const h = renderHook(() => useFileDraft('%1', d.path))
+    act(() => h.result.current[1](d))
+  }
+
+  it.each([
+    [editable('x', { encoding: 'utf-8' }), 'UTF-8'],
+    [editable('x', { encoding: 'utf-8', bom: true }), 'UTF-8 with BOM'],
+    [sjis('x'), 'Shift-JIS'],
+    [editable('x', { encoding: 'utf-16le', bom: true }), 'UTF-16 LE with BOM'],
+  ])('names the encoding in the header: %#', async (content, name) => {
+    mockContent.mockResolvedValue(content)
+    show()
+    await screen.findByTestId('code-block')
+    expect(encodingButton(name)).toHaveTextContent(name)
+  })
+
+  it('reads the file again as another encoding, the one in use ticked', async () => {
+    mockContent.mockResolvedValue(sjis('x'))
+    show()
+    await screen.findByTestId('code-block')
+    fireEvent.click(encodingButton('Shift-JIS'))
+    expect(
+      screen.getByRole('menuitemradio', { name: 'Shift-JIS' }),
+    ).toHaveAttribute('aria-checked', 'true')
+    mockContent.mockResolvedValue(editable('y', { encoding: 'euc-jp' }))
+    await act(async () => choose('EUC-JP'))
+    expect(mockContent).toHaveBeenLastCalledWith('%1', 'src/a.ts', {
+      root: '/r',
+      reveal: false,
+      encoding: 'euc-jp',
+    })
+    expect(await screen.findByTestId('code-block')).toHaveTextContent('y')
+    expect(encodingButton('EUC-JP')).toBeInTheDocument()
+  })
+
+  it('offers no reopening while the draft has changes; without, drops it', async () => {
+    mockContent.mockResolvedValue(sjis('x'))
+    await startEdit()
+    fireEvent.click(encodingButton('Shift-JIS'))
+    expect(screen.getByRole('menuitemradio', { name: 'EUC-JP' })).toBeEnabled()
+    fireEvent.click(encodingButton('Shift-JIS'))
+    type('changed')
+    fireEvent.click(encodingButton('Shift-JIS'))
+    const item = screen.getByRole('menuitemradio', { name: 'EUC-JP' })
+    expect(item).toBeDisabled()
+    expect(item).toHaveAttribute('title', 'Save or discard your changes first')
+    fireEvent.click(encodingButton('Shift-JIS'))
+    type('x')
+    fireEvent.click(encodingButton('Shift-JIS'))
+    await act(async () => choose('UTF-8'))
+    expect(draftNow()).toBeUndefined()
+    expect(mockContent).toHaveBeenLastCalledWith(
+      '%1',
+      'src/a.ts',
+      expect.objectContaining({ encoding: 'utf-8' }),
+    )
+  })
+
+  it('opens a file read as binary with an encoding', async () => {
+    mockContent.mockResolvedValue({
+      root: '/r',
+      path: 'src/a.ts',
+      size: 4,
+      previewable: false,
+      reason: 'binary',
+    })
+    show()
+    const open = await screen.findByRole('button', {
+      name: 'Open with encoding',
+    })
+    expect(open).toHaveTextContent('Open with encoding…')
+    fireEvent.click(open)
+    mockContent.mockResolvedValue(editable('ab', { encoding: 'utf-16le' }))
+    await act(async () => choose('UTF-16 LE'))
+    expect(await screen.findByTestId('code-block')).toHaveTextContent('ab')
+    expect(encodingButton('UTF-16 LE')).toBeInTheDocument()
+  })
+
+  it('has no encoding to name for a file too large to show', async () => {
+    mockContent.mockResolvedValue({
+      root: '/r',
+      path: 'src/a.ts',
+      size: 4,
+      previewable: false,
+      reason: 'too-large',
+    })
+    show()
+    await screen.findByText(/Not previewable/)
+    expect(screen.queryByRole('button', { name: /encoding/i })).toBeNull()
+  })
+
+  it('saves the text in the encoding it was read as', async () => {
+    mockContent.mockResolvedValue(sjis('あ\n'))
+    mockSave.mockResolvedValue({
+      root: '/r',
+      path: 'src/a.ts',
+      size: 4,
+      hash: 'h2',
+      encoding: 'shift_jis',
+    })
+    await startEdit()
+    type('い\n')
+    await act(async () => fireEvent.click(saveButton()))
+    expect(mockSave).toHaveBeenCalledWith('%1', {
+      root: '/r',
+      path: 'src/a.ts',
+      baseHash: 'h:あ\n',
+      text: 'い\n',
+      reveal: false,
+      encoding: 'shift_jis',
+      saveAs: undefined,
+    })
+    expect(encodingButton('Shift-JIS')).toBeInTheDocument()
+  })
+
+  it('says which character the encoding cannot hold', async () => {
+    mockContent.mockResolvedValue(sjis('あ\n'))
+    mockSave.mockRejectedValue(
+      new RequestError(422, 'unencodable', 'x', { line: 2, char: '😀' }),
+    )
+    await startEdit()
+    type('あ\n😀\n')
+    await act(async () => fireEvent.click(saveButton()))
+    expect(
+      screen.getByText(
+        `Line 2 has "😀", which Shift-JIS can't hold. Change it or save as UTF-8`,
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('a draft kept from before encodings is saved without one', async () => {
+    const legacy: FileDraft = {
+      root: '/r',
+      path: 'src/a.ts',
+      baseHash: 'h:x',
+      base: 'x',
+      crlf: false,
+      text: 'mine',
+      reveal: false,
+    }
+    putDraft(legacy)
+    mockContent.mockResolvedValue(editable('x', { encoding: 'utf-8' }))
+    mockSave.mockResolvedValue({
+      root: '/r',
+      path: 'src/a.ts',
+      size: 4,
+      hash: 'h2',
+      encoding: 'utf-8',
+    })
+    show({ canEdit: true })
+    await waitFor(() => expect(mockContent).toHaveBeenCalled())
+    expect(mockContent).toHaveBeenCalledWith('%1', 'src/a.ts', {
+      root: '/r',
+      reveal: false,
+      encoding: undefined,
+    })
+    await act(async () => fireEvent.click(saveButton()))
+    expect(mockSave.mock.calls[0][1].encoding).toBeUndefined()
+  })
+
+  it('a kept draft of a file with a BOM, from before encodings, saves its BOM once', async () => {
+    putDraft({
+      root: '/r',
+      path: 'src/a.ts',
+      baseHash: 'h:x',
+      base: '\uFEFFx',
+      crlf: false,
+      text: '\uFEFFmine',
+      reveal: false,
+    })
+    mockContent.mockResolvedValue(
+      editable('x', { encoding: 'utf-8', bom: true }),
+    )
+    let done: (v: unknown) => void = () => {}
+    mockSave.mockReturnValue(new Promise((r) => (done = r)))
+    show({ canEdit: true })
+    await waitFor(() => expect(mockContent).toHaveBeenCalled())
+    fireEvent.click(saveButton())
+    expect(mockSave.mock.calls[0][1]).toMatchObject({ text: '\uFEFFmine' })
+    expect(mockSave.mock.calls[0][1].encoding).toBeUndefined()
+    // Edited elsewhere while it saved: rebased without the BOM, now UTF-8
+    const other = renderHook(() => useFileDraft('%1', 'src/a.ts'))
+    const sent = other.result.current[0] as FileDraft
+    act(() => other.result.current[1]({ ...sent, text: '\uFEFFmore' }))
+    await act(async () =>
+      done({
+        root: '/r',
+        path: 'src/a.ts',
+        size: 7,
+        hash: 'h2',
+        encoding: 'utf-8',
+        bom: true,
+      }),
+    )
+    expect(other.result.current[0]).toMatchObject({
+      base: 'mine',
+      text: 'more',
+      encoding: 'utf-8',
+    })
+    act(() => other.result.current[1](undefined))
+    // The text shown, and the next draft, leave the BOM to the server
+    expect(await screen.findByTestId('code-block')).toHaveTextContent(/^1mine$/)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    expect(draftNow()).toMatchObject({ base: 'mine', encoding: 'utf-8' })
+  })
+
+  it('a file with bytes not valid in its encoding is not edited, nor saved as UTF-8', async () => {
+    mockContent.mockResolvedValue(
+      editable('a\uFFFD', {
+        encoding: 'utf-8',
+        bom: true,
+        editable: false,
+        notEditable: 'invalid-encoding',
+      }),
+    )
+    show({ canEdit: true })
+    await screen.findByTestId('code-block')
+    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull()
+    fireEvent.click(encodingButton('UTF-8 with BOM'))
+    expect(
+      screen.getByText(/some bytes are not valid in this encoding/),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Save as UTF-8' })).toBeNull()
+  })
+
+  it('a kept draft of a file with a BOM, from before encodings, already in the file is done with', async () => {
+    const legacy: FileDraft = {
+      root: '/r',
+      path: 'src/a.ts',
+      baseHash: 'h:old',
+      base: '﻿old',
+      crlf: false,
+      text: '﻿new',
+      reveal: false,
+    }
+    putDraft(legacy)
+    mockContent.mockResolvedValue(
+      editable('new', { encoding: 'utf-8', bom: true }),
+    )
+    show({ canEdit: true })
+    expect(await screen.findByTestId('code-block')).toHaveTextContent('new')
+    expect(draftNow()).toBeUndefined()
+  })
+
+  it('a kept draft is read again in its own encoding, and named so', async () => {
+    const kept: FileDraft = {
+      root: '/r',
+      path: 'src/a.ts',
+      baseHash: 'h:x',
+      base: 'x',
+      crlf: false,
+      encoding: 'euc-jp',
+      text: 'mine',
+      reveal: false,
+    }
+    putDraft(kept)
+    mockContent.mockResolvedValue(editable('x', { encoding: 'euc-jp' }))
+    show({ canEdit: true })
+    await waitFor(() =>
+      expect(mockContent).toHaveBeenCalledWith('%1', 'src/a.ts', {
+        root: '/r',
+        reveal: false,
+        encoding: 'euc-jp',
+      }),
+    )
+    expect(
+      await screen.findByRole('button', { name: 'Encoding: EUC-JP' }),
+    ).toBeInTheDocument()
+  })
+
+  it('Save as UTF-8 asks first, and sends nothing when cancelled', async () => {
+    mockContent.mockResolvedValue(sjis('x', { bom: false }))
+    show({ canEdit: true })
+    await screen.findByTestId('code-block')
+    fireEvent.click(encodingButton('Shift-JIS'))
+    saveAsUtf8()
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveTextContent('instead of Shift-JIS.')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    expect(mockSave).not.toHaveBeenCalled()
+    expect(draftNow()).toBeUndefined()
+  })
+
+  it('names the BOM a save as UTF-8 drops', async () => {
+    mockContent.mockResolvedValue(
+      editable('x', { encoding: 'utf-16be', bom: true }),
+    )
+    show({ canEdit: true })
+    await screen.findByTestId('code-block')
+    fireEvent.click(encodingButton('UTF-16 BE with BOM'))
+    saveAsUtf8()
+    expect(screen.getByRole('dialog')).toHaveTextContent(
+      'without its byte order mark',
+    )
+  })
+
+  it('Save as UTF-8 while viewing saves the text shown, then names UTF-8', async () => {
+    mockContent.mockResolvedValue(sjis('a\r\nb\r\n'))
+    mockSave.mockResolvedValue({
+      root: '/r',
+      path: 'src/a.ts',
+      size: 6,
+      hash: 'h2',
+      encoding: 'utf-8',
+    })
+    const p = show({ canEdit: true, pinned: false, onPin: vi.fn() })
+    await screen.findByTestId('code-block')
+    fireEvent.click(encodingButton('Shift-JIS'))
+    saveAsUtf8()
+    await confirm()
+    expect(mockSave).toHaveBeenCalledWith('%1', {
+      root: '/r',
+      path: 'src/a.ts',
+      baseHash: 'h:a\r\nb\r\n',
+      text: 'a\nb\n',
+      reveal: false,
+      encoding: 'shift_jis',
+      saveAs: 'utf-8',
+    })
+    expect(p.onPin).toHaveBeenCalled()
+    expect(draftNow()).toBeUndefined()
+    expect(encodingButton('UTF-8')).toBeInTheDocument()
+    // Plain UTF-8 now: nothing to convert
+    fireEvent.click(encodingButton('UTF-8'))
+    expect(screen.queryByRole('menuitem', { name: 'Save as UTF-8' })).toBeNull()
+  })
+
+  it('a refused save as UTF-8 leaves the text in a draft, saying why', async () => {
+    mockContent.mockResolvedValue(sjis('x'))
+    mockSave.mockRejectedValue(new RequestError(409, 'changed', 'changed'))
+    show({ canEdit: true })
+    await screen.findByTestId('code-block')
+    fireEvent.click(encodingButton('Shift-JIS'))
+    saveAsUtf8()
+    await confirm()
+    expect(draftNow()).toMatchObject({ text: 'x', encoding: 'shift_jis' })
+    expect(
+      screen.getByText('The file changed on the host since you opened it'),
+    ).toBeInTheDocument()
+  })
+
+  it('Save as UTF-8 while editing saves the draft, after a reopen in another encoding', async () => {
+    mockContent.mockResolvedValue(editable('x', { encoding: 'utf-8' }))
+    show({ canEdit: true })
+    await screen.findByTestId('code-block')
+    fireEvent.click(encodingButton('UTF-8'))
+    mockContent.mockResolvedValue(sjis('x'))
+    await act(async () => choose('Shift-JIS'))
+    await screen.findByRole('button', { name: 'Encoding: Shift-JIS' })
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    type('y')
+    let done: (v: unknown) => void = () => {}
+    mockSave.mockReturnValue(new Promise((r) => (done = r)))
+    mockContent.mockResolvedValue(editable('y', { encoding: 'utf-8' }))
+    fireEvent.click(encodingButton('Shift-JIS'))
+    saveAsUtf8()
+    await confirm()
+    expect(mockSave).toHaveBeenLastCalledWith(
+      '%1',
+      expect.objectContaining({ text: 'y', saveAs: 'utf-8' }),
+    )
+    // Edited elsewhere while it saved: rebased on the UTF-8 file
+    const other = renderHook(() => useFileDraft('%1', 'src/a.ts'))
+    const sent = other.result.current[0] as FileDraft
+    act(() => other.result.current[1]({ ...sent, text: 'z' }))
+    await act(async () =>
+      done({
+        root: '/r',
+        path: 'src/a.ts',
+        size: 1,
+        hash: 'h2',
+        encoding: 'utf-8',
+      }),
+    )
+    expect(other.result.current[0]).toMatchObject({
+      base: 'y',
+      baseHash: 'h2',
+      encoding: 'utf-8',
+    })
+    // The choice of Shift-JIS is gone: read again as the server finds it
+    expect(mockContent).toHaveBeenLastCalledWith('%1', 'src/a.ts', {
+      root: '/r',
+      reveal: false,
+      encoding: undefined,
+    })
+  })
+
+  it('a file that would lose bytes is not edited, but can be saved as UTF-8', async () => {
+    mockContent.mockResolvedValue(
+      sjis('髙', { editable: false, notEditable: 'lossy-encoding' }),
+    )
+    mockSave.mockResolvedValue({
+      root: '/r',
+      path: 'src/a.ts',
+      size: 3,
+      hash: 'h2',
+      encoding: 'utf-8',
+    })
+    show({ canEdit: true })
+    await screen.findByTestId('code-block')
+    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull()
+    fireEvent.click(encodingButton('Shift-JIS'))
+    expect(
+      screen.getByText(/saving would change bytes you did not edit/),
+    ).toBeInTheDocument()
+    saveAsUtf8()
+    await confirm()
+    expect(mockSave).toHaveBeenCalledWith(
+      '%1',
+      expect.objectContaining({ encoding: 'shift_jis', saveAs: 'utf-8' }),
+    )
+    // Saved: editable now
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument()
+  })
+
+  it.each([
+    ['a view-only client', sjis('x'), { canEdit: false }],
+    [
+      'a file refused for another reason',
+      sjis('x', { editable: false, notEditable: 'symlink' }),
+      {},
+    ],
+  ])('offers no save as UTF-8 to %s', async (_, content, over) => {
+    mockContent.mockResolvedValue(content)
+    show({ canEdit: true, ...over })
+    await screen.findByTestId('code-block')
+    fireEvent.click(encodingButton('Shift-JIS'))
+    expect(screen.queryByRole('menuitem', { name: 'Save as UTF-8' })).toBeNull()
+  })
+
+  it('Reload after a conflict reads the file as the server finds it', async () => {
+    mockContent.mockResolvedValue(editable('x', { encoding: 'utf-8' }))
+    show({ canEdit: true })
+    await screen.findByTestId('code-block')
+    fireEvent.click(encodingButton('UTF-8'))
+    mockContent.mockResolvedValue(sjis('x'))
+    await act(async () => choose('Shift-JIS'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }))
+    type('y')
+    mockSave.mockRejectedValue(new RequestError(409, 'changed', 'changed'))
+    await act(async () => fireEvent.click(saveButton()))
+    mockContent.mockResolvedValue(editable('agent', { encoding: 'utf-8' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Reload' }))
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Discard' })),
+    )
+    expect(mockContent).toHaveBeenLastCalledWith('%1', 'src/a.ts', {
+      root: '/r',
+      reveal: false,
+      encoding: undefined,
+    })
+  })
+
+  it('tells a large Markdown file by its bytes, not its characters', async () => {
+    // Few characters, many bytes on disk (UTF-16)
+    mockContent.mockResolvedValue(
+      editable('# T\n', {
+        path: 'r.md',
+        encoding: 'utf-16le',
+        size: PREVIEW_MAX_BYTES + 2,
+      }),
+    )
+    show({ path: 'r.md' })
+    expect(
+      await screen.findByText('Too large to preview: shown as source'),
+    ).toBeInTheDocument()
+  })
+})
+
+describe('FileViewer: encodings of a table', () => {
+  it('Reload and reapply reads the file in the encoding the edits were made on', async () => {
+    mockContent.mockResolvedValue(
+      editable('a\n1\n', { path: 'd.csv', encoding: 'shift_jis' }),
+    )
+    mockSave.mockRejectedValueOnce(new RequestError(409, 'changed', 'changed'))
+    show({ canEdit: true, path: 'd.csv' })
+    await screen.findByRole('grid')
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    fireEvent.click(screen.getByRole('gridcell', { name: '1' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Value' }), {
+      target: { value: '2' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    await act(async () => fireEvent.click(saveButton()))
+    mockContent.mockResolvedValueOnce(
+      editable('a\n1\nb\n', { path: 'd.csv', encoding: 'shift_jis' }),
+    )
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Reload and reapply' }),
+      ),
+    )
+    expect(mockContent).toHaveBeenLastCalledWith('%1', 'd.csv', {
+      root: '/r',
+      reveal: false,
+      encoding: 'shift_jis',
+    })
+    expect(
+      renderHook(() => useFileDraft('%1', 'd.csv')).result.current[0],
+    ).toMatchObject({ encoding: 'shift_jis' })
   })
 })

@@ -357,6 +357,11 @@ describe('DiffViewer: Markdown preview', () => {
       'Not previewable (binary, special file or larger than 1 MiB)',
     ],
     [content('x', 300 * 1024), 'Too large to preview'],
+    // By the bytes on disk, not the text decoded from them (UTF-16 here)
+    [
+      { ...content('# T\n', 300 * 1024), encoding: 'utf-16le' },
+      'Too large to preview',
+    ],
   ])('says why it cannot preview %#', async (c, text) => {
     mockContent.mockResolvedValue(c)
     show({ entry: MD, path: 'docs/a.md' })

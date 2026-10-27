@@ -7,8 +7,9 @@ import {
   useRef,
 } from 'react'
 import { useMediaQuery } from '../hooks/use-media-query'
-import { RequestError } from '../hooks/use-mux-api'
+import { type FileEncoding, RequestError } from '../hooks/use-mux-api'
 import type { SyncSide } from '../hooks/use-scroll-sync'
+import { encodingLabel } from '../utils/file-encoding'
 import { lazyRetry } from '../utils/lazy-retry'
 import { selectedLines, type TextLines } from '../utils/line-range'
 import type { PasteEdit } from '../utils/markdown-image-paste'
@@ -33,17 +34,30 @@ const REFUSED: Record<string, string> = {
   sensitive: 'Show the file before saving it',
   permission: "The server can't write this file",
   not_editable: "This file can't be edited here",
-  not_text: 'Only UTF-8 text without NUL characters can be saved',
+  not_text: 'Only text without NUL characters can be saved',
   too_large: 'The file would be larger than 1 MiB',
   busy: 'Too many saves at once. Try again',
   storage_full: "The host's disk or quota is full",
   read_only: 'The file system there is read-only',
 }
 
-export function saveErrorOf(err: unknown): SaveError {
+// encoding: what the save wrote the text in, to name it when a character
+// does not fit
+export function saveErrorOf(
+  err: unknown,
+  encoding: FileEncoding = 'utf-8',
+): SaveError {
   if (!(err instanceof RequestError)) return { kind: 'unsure' }
   if (err.status === 409 && err.root) return { kind: 'root', root: err.root }
   if (err.code === 'changed') return { kind: 'changed' }
+  if (err.code === 'unencodable')
+    return {
+      kind: 'refused',
+      message: `Line ${err.line} has "${err.char}", which ${encodingLabel(encoding)} can't hold. Change it or save as UTF-8`,
+    }
+  // A draft kept from before encodings, of a file no longer UTF-8
+  if (err.code === 'not_editable' && err.reason === 'encoding-required')
+    return { kind: 'refused', message: 'Reload the app to save this file' }
   const message =
     REFUSED[err.code] ??
     (err.status === 404

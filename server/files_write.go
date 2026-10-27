@@ -93,13 +93,20 @@ type writeRequest struct {
 	BaseHash string `json:"baseHash"`
 	Text     string `json:"text"`
 	Reveal   bool   `json:"reveal"`
+	// Encoding is the one the content route read Text from. Without it
+	// (a client from before encodings) the file must be UTF-8 already.
+	Encoding string `json:"encoding"`
+	// SaveAs "utf-8" writes the file as UTF-8 without a BOM instead.
+	SaveAs string `json:"saveAs"`
 }
 
 type writeResponse struct {
-	Root string `json:"root"`
-	Path string `json:"path"`
-	Size int64  `json:"size"`
-	Hash string `json:"hash"`
+	Root     string `json:"root"`
+	Path     string `json:"path"`
+	Size     int64  `json:"size"`
+	Hash     string `json:"hash"`
+	Encoding string `json:"encoding"`
+	BOM      bool   `json:"bom,omitempty"`
 }
 
 // handleWriteContent serves PUT files/content?root=: it replaces the whole
@@ -157,6 +164,10 @@ func (f *filesAPI) writeContent(root filesRoot, in writeRequest) (writeResponse,
 	if in.BaseHash == "" {
 		return writeResponse{}, errBaseHashNeeded
 	}
+	enc, ok := parseEncoding(in.Encoding)
+	if !ok || (in.SaveAs != "" && (in.SaveAs != string(encUTF8) || enc == "")) {
+		return writeResponse{}, errBadEncoding
+	}
 	rel, err := cleanRelPath(in.Path)
 	if err != nil {
 		return writeResponse{}, err
@@ -196,21 +207,23 @@ func (f *filesAPI) writeContent(root filesRoot, in writeRequest) (writeResponse,
 	if err != nil {
 		return writeResponse{}, err
 	}
-	crlf, textReason := textEditReason(cur)
-	if reason == "" {
-		reason = textReason
-	}
 	if reason != "" {
 		return writeResponse{}, editReasonError(reason)
 	}
-	out := []byte(text)
-	if crlf {
-		out = []byte(strings.ReplaceAll(text, "\n", "\r\n"))
+	var w encodedText
+	if enc == "" {
+		w, err = legacyWrite(cur, text)
+	} else {
+		w, err = encodedWrite(cur, text, enc, in.SaveAs != "", in.BaseHash)
 	}
-	if len(out) > maxPreviewSize {
-		return writeResponse{}, errEditTooLarge
+	if err != nil {
+		return writeResponse{}, err
 	}
-	res := writeResponse{Root: root.Root, Path: filepath.ToSlash(rel), Size: int64(len(out)), Hash: hashHex(out)}
+	out := w.out
+	res := writeResponse{
+		Root: root.Root, Path: filepath.ToSlash(rel), Size: int64(len(out)), Hash: hashHex(out),
+		Encoding: string(w.enc), BOM: w.bom,
+	}
 	// Already what the client asks for: a second save after a reply that
 	// never arrived is not a conflict.
 	if bytes.Equal(cur, out) {
@@ -227,6 +240,93 @@ func (f *filesAPI) writeContent(root filesRoot, in writeRequest) (writeResponse,
 	// cached from before it, and find lists what it saved.
 	f.forgetRoot(root.Root)
 	return res, nil
+}
+
+// encodedText is what a save writes: out, in enc, with a BOM or not.
+type encodedText struct {
+	out []byte
+	enc textEncoding
+	bom bool
+}
+
+// legacyWrite is the save of a client that sends no encoding: text goes to
+// the file as it is, which only keeps a UTF-8 file what it was. A file in
+// another encoding, or whose BOM text does not keep (text starts with
+// U+FEFF exactly when the file starts with a UTF-8 BOM), is refused
+// (encoding-required).
+func legacyWrite(cur []byte, text string) (encodedText, error) {
+	bom := bytes.HasPrefix(cur, bomUTF8)
+	if !utf8.Valid(cur) || bom != strings.HasPrefix(text, "\uFEFF") {
+		return encodedText{}, &notEditableError{"encoding-required"}
+	}
+	crlf, reason := textEditReason(cur)
+	if reason != "" {
+		return encodedText{}, editReasonError(reason)
+	}
+	out, err := withLineBreaks(text, crlf, encUTF8, false)
+	return encodedText{out, encUTF8, bom}, err
+}
+
+// encodedWrite encodes text for the file cur, read as enc: back in enc
+// with cur's BOM, or as UTF-8 without one when saveAs. A result cur already
+// holds is returned before anything else is checked, so a save sent again
+// after a lost reply is taken even once cur has changed encoding. Then a cur
+// that changed since baseHash is a conflict before any of its own faults;
+// a cur that would not encode back to its bytes is refused (lossy-encoding)
+// unless saveAs, which keeps none of them; one with bytes not valid in enc
+// is refused even then (invalid-encoding): they would be lost.
+func encodedWrite(cur []byte, text string, enc textEncoding, saveAs bool, baseHash string) (encodedText, error) {
+	d := decodeText(cur, enc)
+	crlf, reason := textEditReason([]byte(d.Text))
+	w := encodedText{enc: enc, bom: d.BOM}
+	if saveAs {
+		w.enc, w.bom = encUTF8, false
+	}
+	out, encErr := withLineBreaks(text, crlf, w.enc, w.bom)
+	if encErr == nil && bytes.Equal(cur, out) {
+		w.out = out
+		return w, nil
+	}
+	if saveAs {
+		// cur may be the UTF-8 a first save as UTF-8 wrote, with the other
+		// line breaks than its decode from enc found.
+		if again, _ := withLineBreaks(text, !crlf, encUTF8, false); bytes.Equal(cur, again) {
+			w.out = again
+			return w, nil
+		}
+	}
+	if hashHex(cur) != baseHash {
+		return encodedText{}, errEditChanged
+	}
+	switch {
+	case reason != "":
+	case !d.Valid:
+		reason = "invalid-encoding"
+	case !d.Lossless && !saveAs:
+		reason = "lossy-encoding"
+	}
+	if reason != "" {
+		return encodedText{}, editReasonError(reason)
+	}
+	w.out = out
+	return w, encErr
+}
+
+// withLineBreaks encodes text, which has "\n" line breaks, in enc, with
+// "\r\n" ones when crlf; errEditTooLarge when the result is over
+// maxPreviewSize.
+func withLineBreaks(text string, crlf bool, enc textEncoding, bom bool) ([]byte, error) {
+	if crlf {
+		text = strings.ReplaceAll(text, "\n", "\r\n")
+	}
+	out, err := encodeText(text, enc, bom)
+	if err != nil {
+		return nil, err
+	}
+	if len(out) > maxPreviewSize {
+		return nil, errEditTooLarge
+	}
+	return out, nil
 }
 
 // saveError turns an OS error of writing the new text into the one the
@@ -400,9 +500,9 @@ func textEditReason(b []byte) (crlf bool, reason string) {
 }
 
 // editCheck is what the content route tells the PWA about editing rel: the
-// same checks a save runs on the file, given its bytes. reason is empty
-// when it can be edited.
-func (f *filesAPI) editCheck(rt *os.Root, root filesRoot, rel string, b []byte) string {
+// same checks a save runs on the file, given its decoded text. reason is
+// empty when it can be edited.
+func (f *filesAPI) editCheck(rt *os.Root, root filesRoot, rel string, d decoded) string {
 	if f.denied(root.Root, rel, f.writeDeny...) {
 		return "denied-write"
 	}
@@ -421,8 +521,16 @@ func (f *filesAPI) editCheck(rt *os.Root, root filesRoot, rel string, b []byte) 
 	if reason != "" {
 		return reason
 	}
-	_, reason = textEditReason(b)
-	return reason
+	if _, reason = textEditReason([]byte(d.Text)); reason != "" {
+		return reason
+	}
+	switch {
+	case !d.Valid:
+		return "invalid-encoding"
+	case !d.Lossless:
+		return "lossy-encoding"
+	}
+	return ""
 }
 
 // readBounded reads base in dir as a save checks it again: never waiting

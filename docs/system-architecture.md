@@ -285,9 +285,9 @@ GET    /api/mux/panes/{id}/agent/commands                        → {commands: 
 POST   /api/mux/panes/{id}/agent/start    body: {kind}          → {ok, state: "starting"} | {error, code}   (caps.agentStart; codex: caps.agentStartCodex)
 GET    /api/mux/panes/{id}/agent/start                           → {kind, state} | 404 no_start
 GET    /api/mux/panes/{id}/files/tree?path=&root=               → {root, isRepo, path, entries, truncated}
-GET    /api/mux/panes/{id}/files/content?path=&root=&reveal=    → {root, path, size, text, hash, editable, notEditable?} | {…, previewable: false, reason} | {…, sensitive: true}
+GET    /api/mux/panes/{id}/files/content?path=&root=&reveal=&encoding= → {root, path, size, text, hash, encoding, bom?, editable, notEditable?} | {…, previewable: false, reason} | {…, sensitive: true}
 GET    /api/mux/panes/{id}/files/content?path=&root=&hash=1     → {root, path, size, hash} (never the contents, sensitive or not)
-PUT    /api/mux/panes/{id}/files/content?root=  body: {path, baseHash, text, reveal} → {root, path, size, hash} | {error, code, reason?}
+PUT    /api/mux/panes/{id}/files/content?root=  body: {path, baseHash, text, reveal, encoding?, saveAs?} → {root, path, size, hash, encoding, bom?} | {error, code, reason?, line?, char?}
 POST   /api/mux/panes/{id}/files/create?root=   body: {path, reveal}           → 201 {root, path} | {error, code[, path]}
 POST   /api/mux/panes/{id}/files/image?root=&dir=&reveal=  body: raw PNG/JPEG/GIF/WebP → 201 {root, path} | {error, code}
 POST   /api/mux/panes/{id}/files/delete?root=   body: {path, kind, baseHash, reveal, permanent} → {root, path[, trashId, size, permanent]} | {error, code}
@@ -914,6 +914,11 @@ and not opening a write path into what the reads refuse.
   `reason` (`symlink`, `not-regular`, `hardlink`, `mixed-eol`, `nul`) or 403 `permission`
   (`not-writable`, `other-owner`, EACCES). GET `content` runs the same check and reports it as
   `editable`/`notEditable`, so the PWA offers Edit only where a save would be taken.
+- The PWA only handles UTF-8: `server/files_encoding.go` decodes a UTF-16 (with a BOM),
+  Shift-JIS or EUC-JP file on read and encodes the saved text back to the file's own encoding
+  and BOM (`encoding`), or to UTF-8 (`saveAs`), refusing a character it cannot hold (422
+  `unencodable`) and a file that would not encode back to its bytes (`lossy-encoding`); a save
+  without `encoding` is taken for a UTF-8 file only (`encoding-required`).
 - The text arrives with `\n` line breaks (a textarea's); a `\r\n` file gets them back. Text
   with NUL or a lone `\r` is 422 `not_text`; the file and the final bytes are at most 1 MiB
   (413 `too_large`). The body has its own limit, 6 MiB + 64 KiB (JSON writes a control

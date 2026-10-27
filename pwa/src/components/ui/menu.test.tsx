@@ -47,6 +47,16 @@ describe('Menu', () => {
     expect(menu).toHaveClass('right-0')
   })
 
+  it('can have a trigger of text, opened from the keyboard too', () => {
+    renderMenu({ trigger: 'Shift-JIS', textTrigger: 'text-[11px]' })
+    expect(trigger()).toHaveTextContent('Shift-JIS')
+    expect(trigger()).toHaveClass('text-[11px]')
+    expect(trigger()).not.toHaveClass('size-10')
+    open()
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+    expect(item('Settings')).toHaveFocus()
+  })
+
   it('aligns to the start when asked', () => {
     renderMenu({ align: 'start' })
     open()

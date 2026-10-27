@@ -31,12 +31,17 @@ const (
 	binarySniffSize = 8 << 10
 	// filesTimeout bounds one files request: the pane lookup plus git.
 	filesTimeout = muxTimeout + gitTimeout
+	// decodeMaxRunning reads of a file not in UTF-8 run at once,
+	// server-wide; the next gets 429.
+	decodeMaxRunning = 2
 )
 
 var (
 	errPathNotAllowed = errors.New("path not allowed")
 	errInvalidPath    = inputError("invalid path")
 	errNotADirectory  = inputError("not a directory")
+	errBadEncoding    = inputError("unknown encoding")
+	errDecodeBusy     = &codedError{"busy", "too many files being decoded at once; try again", http.StatusTooManyRequests}
 )
 
 // rootChangedError: the client sent a root other than the pane's current one.
@@ -63,6 +68,9 @@ type filesAPI struct {
 	rawSlots chan struct{}        // raw requests running, server-wide
 	// searchSlots are the content searches running, server-wide.
 	searchSlots chan struct{}
+	// decodeSlots are the reads of a file not in UTF-8 running,
+	// server-wide.
+	decodeSlots chan struct{}
 	// writeDeny are directories a save never writes to, on top of deny:
 	// the install's data dir (its current pointer picks the binary the
 	// service runs) and the upload store.
@@ -104,6 +112,7 @@ func registerFilesRoutes(mux *http.ServeMux, m Mux, allowed hostAllowlist, denyD
 		finds:       newTTLCache[findList](findListTTL),
 		rawSlots:    make(chan struct{}, rawMaxRunning),
 		searchSlots: make(chan struct{}, searchMaxRunning),
+		decodeSlots: make(chan struct{}, decodeMaxRunning),
 		deny:        append(filesDenyDirs(systemDenyDirs...), filesDenyDirs(denyDirs...)...),
 		writeSlots:  make(chan struct{}, writeMaxRunning),
 		writeLocks:  &writeLocks{locks: map[string]*sync.Mutex{}},
@@ -529,6 +538,10 @@ type contentResponse struct {
 	Text string `json:"text"`
 	// Hash is the sha256 of the bytes read, sent back as a save's baseHash.
 	Hash string `json:"hash"`
+	// Encoding is what Text was decoded from, sent back with a save; BOM:
+	// the file starts with that encoding's byte order mark.
+	Encoding string `json:"encoding"`
+	BOM      bool   `json:"bom,omitempty"`
 	// Editable: a save of this file would be taken; NotEditable says why not.
 	Editable    bool   `json:"editable"`
 	NotEditable string `json:"notEditable,omitempty"`
@@ -579,11 +592,16 @@ func (f *filesAPI) handleContent(w http.ResponseWriter, r *http.Request) {
 		jsonOK(w, res)
 		return
 	}
+	enc, ok := parseEncoding(q.Get("encoding"))
+	if !ok {
+		f.error(w, "files content", errBadEncoding)
+		return
+	}
 	if f.viewHides(req, q.Get("path"), false, false) {
 		f.error(w, "files content", fs.ErrNotExist)
 		return
 	}
-	res, err := f.content(req.root, q.Get("path"), q.Get("reveal") == "1")
+	res, err := f.content(req.root, q.Get("path"), q.Get("reveal") == "1", enc)
 	if err != nil {
 		f.error(w, "files content", err)
 		return
@@ -591,7 +609,9 @@ func (f *filesAPI) handleContent(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, res)
 }
 
-func (f *filesAPI) content(root filesRoot, p string, reveal bool) (any, error) {
+// content reads the file p for the content route, decoded from enc, or
+// from the encoding detectEncoding finds when enc is empty.
+func (f *filesAPI) content(root filesRoot, p string, reveal bool, enc textEncoding) (any, error) {
 	rel, err := cleanRelPath(p)
 	if err != nil {
 		return nil, err
@@ -604,21 +624,45 @@ func (f *filesAPI) content(root filesRoot, p string, reveal bool) (any, error) {
 		return nil, err
 	}
 	defer rt.Close()
-	text, size, reason, err := readPreview(rt, rel)
+	fh, err := rt.OpenFile(rel, os.O_RDONLY|openNonblock, 0)
+	if err != nil {
+		return nil, err
+	}
+	b, size, reason, err := readRawFile(fh)
+	fh.Close()
 	if err != nil {
 		return nil, err
 	}
 	slash := filepath.ToSlash(rel)
+	// Never decoded, nor holding a slot, before it is revealed.
 	if sensitivePath(root.Root, rel) && !reveal {
 		return sensitiveResponse{Root: root.Root, Path: slash, Sensitive: true}, nil
 	}
 	if reason != "" {
 		return unpreviewableResponse{Root: root.Root, Path: slash, Size: size, Reason: reason}, nil
 	}
-	why := f.editCheck(rt, root, rel, []byte(text))
+	// A UTF-8 file is read as it was before encodings: no slot. Anything
+	// else is detected or decoded, a few at once.
+	if enc != encUTF8 && (enc != "" || !utf8.Valid(b)) {
+		select {
+		case f.decodeSlots <- struct{}{}:
+			defer func() { <-f.decodeSlots }()
+		default:
+			return nil, errDecodeBusy
+		}
+	}
+	if enc == "" {
+		var ok bool
+		if enc, ok = detectEncoding(b); !ok {
+			return unpreviewableResponse{Root: root.Root, Path: slash, Size: size, Reason: "binary"}, nil
+		}
+	}
+	d := decodeText(b, enc)
+	why := f.editCheck(rt, root, rel, d)
 	return contentResponse{
-		Root: root.Root, Path: slash, Size: size, Text: text,
-		Hash: hashHex([]byte(text)), Editable: why == "", NotEditable: why,
+		Root: root.Root, Path: slash, Size: size, Text: d.Text,
+		Hash: hashHex(b), Encoding: string(d.Enc), BOM: d.BOM,
+		Editable: why == "", NotEditable: why,
 	}, nil
 }
 
@@ -638,21 +682,48 @@ func readPreview(rt *os.Root, rel string) (text string, size int64, reason strin
 	return string(b), int64(len(b)), "", nil
 }
 
-// readTextFile reads the open file fh when it is a regular text file of at most
-// maxPreviewSize; reason says why not (not-regular, too-large, binary) and
-// size is its size then. A NUL byte in the first binarySniffSize bytes stops
-// the read there.
-func readTextFile(fh *os.File) (b []byte, size int64, reason string, err error) {
+// statPreview checks that the open file fh can be previewed for what it is:
+// reason not-regular or too-large when not. size is its size.
+func statPreview(fh *os.File) (size int64, reason string, err error) {
 	fi, err := fh.Stat()
 	if err != nil {
-		return nil, 0, "", err
+		return 0, "", err
 	}
 	if !fi.Mode().IsRegular() {
-		return nil, 0, "not-regular", nil
+		return 0, "not-regular", nil
 	}
-	size = fi.Size()
-	if size > maxPreviewSize {
+	if fi.Size() > maxPreviewSize {
+		return fi.Size(), "too-large", nil
+	}
+	return fi.Size(), "", nil
+}
+
+// readRawFile reads the open file fh when it is a regular file of at most
+// maxPreviewSize, whatever its bytes are; reason says why not (not-regular,
+// too-large). size is its size, or the bytes read once read.
+func readRawFile(fh *os.File) (b []byte, size int64, reason string, err error) {
+	size, reason, err = statPreview(fh)
+	if err != nil || reason != "" {
+		return nil, size, reason, err
+	}
+	b, err = io.ReadAll(io.LimitReader(fh, maxPreviewSize+1))
+	if err != nil {
+		return nil, size, "", err
+	}
+	if len(b) > maxPreviewSize {
 		return nil, size, "too-large", nil
+	}
+	return b, int64(len(b)), "", nil
+}
+
+// readTextFile reads the open file fh when it is a regular UTF-8 text file
+// of at most maxPreviewSize; reason says why not (not-regular, too-large,
+// binary) and size is its size then. A NUL byte in the first
+// binarySniffSize bytes stops the read there.
+func readTextFile(fh *os.File) (b []byte, size int64, reason string, err error) {
+	size, reason, err = statPreview(fh)
+	if err != nil || reason != "" {
+		return nil, size, reason, err
 	}
 	lr := io.LimitReader(fh, maxPreviewSize+1)
 	head := make([]byte, binarySniffSize)
@@ -688,7 +759,14 @@ func (f *filesAPI) error(w http.ResponseWriter, op string, err error) {
 	var dc *deleteChangedError
 	var mc *renameChangedError
 	var dt *documentTooLargeError
+	var ue *unencodableError
 	switch {
+	case errors.As(err, &ue):
+		// Where the character is and which it is, from the text the
+		// client sent: never the file's own text.
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		json.NewEncoder(w).Encode(map[string]any{"error": ue.Error(), "code": "unencodable", "line": ue.line, "char": ue.char})
 	case errors.As(err, &ee):
 		// The name taken, cleaned, so the client opens what is there.
 		jsonCodeBody(w, errCreateExists.status, map[string]string{"error": ee.Error(), "code": errCreateExists.code, "path": ee.path})

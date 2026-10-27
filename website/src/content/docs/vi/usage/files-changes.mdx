@@ -172,7 +172,8 @@ sau không bao giờ được tìm:
 - file và thư mục bắt đầu bằng dấu chấm, khi thư mục đang xem là thư mục home của bạn hoặc chứa nó
   (lịch sử shell và cấu hình công cụ giữ bí mật dưới những cái tên bình thường); số lượng cũng được
   ghi lại;
-- file nhị phân, file không phải văn bản UTF-8 và file lớn hơn 1 MiB;
+- file nhị phân, file không phải văn bản UTF-8 (file Shift-JIS, EUC-JP hay UTF-16 vẫn mở được trong
+  Files, nhưng không được tìm) và file lớn hơn 1 MiB;
 - những đường dẫn Termote không bao giờ trả về (xem [Không bao giờ hiện](#không-bao-giờ-hiện)).
 
 Thiết bị chỉ xem (view-only) tìm trong đúng những file mà nó được mở.
@@ -234,11 +235,14 @@ Khi lưu không thành công, văn bản của bạn vẫn còn trong ô:
 | `The server can't write this file`                     | File chỉ đọc, thuộc người dùng khác, hoặc thư mục chứa nó không ghi được                                    |
 | `The file system there is read-only`                   | File nằm trên ổ đĩa hay mount chỉ đọc, ví dụ volume container gắn ở chế độ chỉ đọc                          |
 | `The host's disk or quota is full`                     | Ổ đĩa của máy chủ, hoặc hạn mức đĩa của bạn, đã hết chỗ                                                     |
+| `Line 3 has "😀", which Shift-JIS can't hold`          | Bảng mã của file không có ký tự này (xem [Bảng mã](#bảng-mã)). Đổi ký tự đó, hoặc lưu thành UTF-8           |
+| `Reload the app to save this file`                     | Văn bản do một bản Termote cũ giữ lại, cho một file giờ không còn là UTF-8. Chép văn bản ra, tải lại app rồi mở lại file |
 
 Có những file không có nút Edit, vì server sẽ từ chối khi lưu: liên kết mềm (hay file nằm dưới một
 thư mục là liên kết mềm), file có nhiều liên kết cứng, file trộn nhiều kiểu xuống dòng hoặc có ký tự NUL, file
-lớn hơn 1 MiB, ảnh, và file trong thư mục dữ liệu hay thư mục upload của chính Termote. File có
-thể chứa bí mật thì sửa được sau khi đã bấm hiện nội dung.
+lớn hơn 1 MiB, ảnh, và file trong thư mục dữ liệu hay thư mục upload của chính Termote. File mà
+mã hoá lại không ra đúng các byte cũ cũng vậy (xem [Bảng mã](#bảng-mã)). File có thể chứa bí mật
+thì sửa được sau khi đã bấm hiện nội dung.
 
 <Aside type="caution">
   Lưu là thay file bằng một file mới trong cùng thư mục. Nếu agent ghi đúng file đó vào khoảnh khắc
@@ -296,6 +300,44 @@ vẫn nằm trên máy chủ.
   nội dung.
 - Bản xem trước không bao giờ tải ảnh: ảnh hiện thành liên kết `image: <tên>`, bấm vào thì mở ảnh
   trong Files.
+
+### Bảng mã
+
+Dòng thứ hai trên thanh của một file văn bản ghi kích thước rồi tới bảng mã của file, ví dụ
+`12.0 KiB · Shift-JIS`. Files đọc và lưu được:
+
+- UTF-8, có hoặc không có BOM (`UTF-8 with BOM`);
+- UTF-16 LE và UTF-16 BE có BOM;
+- Shift-JIS và EUC-JP, được nhận ra khi các byte của file hợp lệ theo bảng mã đó và phần lớn văn
+  bản là chữ Nhật (kana và kanji).
+
+Khi lưu, file được ghi lại bằng chính bảng mã của nó, giữ nguyên BOM và kiểu xuống dòng: những byte
+bạn không sửa vẫn y như cũ.
+
+- Bấm vào tên bảng mã để đọc lại file bằng bảng mã khác (**Reopen with encoding**). File UTF-16
+  không có BOM, hay file Shift-JIS ngắn không có kana, mở theo cách này: ban đầu nó hiện
+  `Not previewable`, dưới tên file có **Open with encoding…**. Khi văn bản đang sửa còn thay đổi
+  chưa lưu thì không đọc lại được (`Save or discard your changes first`). Lựa chọn này chỉ áp
+  dụng cho tab đó: mở file trong cửa sổ mới, hay mở lại sau này, thì bảng mã được nhận diện lại từ
+  đầu.
+- **Save as UTF-8** nằm trong cùng menu, có ở file không phải UTF-8 thuần. Termote hỏi lại trước,
+  rồi ghi file thành UTF-8 không có BOM. Từ đó công cụ nào còn đọc file theo bảng mã cũ sẽ hiện sai
+  chữ.
+- Một số file Shift-JIS giải mã được, nhưng mã hoá lại thì không ra đúng các byte cũ, vì ký tự ở
+  vùng mở rộng của IBM (như 髙, 﨑) có hai mã. File như vậy không có nút Edit, trong menu ghi
+  `Can't be edited in this encoding`; muốn sửa thì lưu nó thành UTF-8 trước.
+- File có byte không hợp lệ theo bảng mã của nó (file bị hỏng, hoặc đọc nhầm bảng mã) sẽ hiện các
+  byte đó thành �. File như vậy không sửa được, cũng không lưu thành UTF-8 được, vì các byte đó sẽ
+  mất: menu ghi `Can't be edited: some bytes are not valid in this encoding`. Hãy thử bảng mã khác.
+- Với Shift-JIS và EUC-JP, ký tự gõ từ iPhone, iPad hay Mac mà file lưu ở dạng khác sẽ được lưu
+  theo dạng của file: 〜 → ～, − → －, ‖ → ∥, ¢ → ￠, £ → ￡, ¬ → ￢, — → ―, ¥ → ￥. Ký tự nào khác
+  mà bảng mã không chứa được, như biểu tượng cảm xúc, sẽ chặn việc lưu và báo dòng có nó:
+  `Line 3 has "😀", which Shift-JIS can't hold. Change it or save as UTF-8`. Ký tự đó không bao giờ
+  bị thay bằng `?`.
+- Các bảng mã khác (Windows-1252, Latin-1, GBK, Big5, ISO-2022-JP...) không đọc được: file như vậy
+  hiện `Not previewable`. Một file ngắn có thể tình cờ trông giống Shift-JIS; khi đó Reopen with
+  encoding cho xem nó theo bảng mã khác. Lưu cũng không âm thầm làm hỏng file, vì những byte bạn
+  không sửa được ghi lại y như cũ.
 
 ## Tạo file mới
 
@@ -811,7 +853,9 @@ Danh sách chia nhóm:
 Mỗi file có một chữ cái: `M` sửa, `A` thêm, `D` xoá, `R` đổi tên (kèm đường dẫn cũ), `C` sao chép,
 `T` đổi loại, `U` xung đột, `?` chưa theo dõi. File vừa có thay đổi đã vào index vừa có thay đổi
 chưa vào index nằm ở cả hai nhóm, mở từ nhóm nào thì thấy diff của phía đó. File chưa theo dõi mở ra thành
-toàn bộ là dòng thêm.
+toàn bộ là dòng thêm. Diff chỉ đọc các byte của file theo UTF-8: với bảng mã khác, các dòng sẽ lỗi
+chữ, còn file chưa theo dõi hay đang xung đột thì hiện như file nhị phân. Bản xem trước (phiên bản
+hiện tại của một file Markdown) thì được giải mã như trong Files.
 
 Diff hiện từng hunk với số dòng cũ và mới (trên màn hình điện thoại hẹp chỉ còn một cột), dòng
 thêm nền xanh, dòng xoá nền đỏ, vẫn giữ dấu `+` và `-` để không chỉ dựa vào màu.

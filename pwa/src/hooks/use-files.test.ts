@@ -1768,9 +1768,13 @@ describe('drafts kept on the device', () => {
       ...draft('f'),
       cells: { delimiter: ',', ops: [{ kind: 'cell' }], redo: [] },
     })
+    // An encoding the server does not know: never sent with a save
+    put('g', { ...draft('g'), encoding: 'latin1' })
+    put('h', { ...draft('h'), encoding: 'shift_jis' })
     act(() => hydrateDrafts(['%1']))
     expect(isDraftDirty('%1', 'f')).toBe(true)
-    for (const p of ['a', 'b', 'c', 'd', 'e'])
+    expect(isDraftDirty('%1', 'h')).toBe(true)
+    for (const p of ['a', 'b', 'c', 'd', 'e', 'g'])
       expect(isDraftDirty('%1', p)).toBe(false)
   })
 

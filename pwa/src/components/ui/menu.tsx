@@ -2,6 +2,7 @@ import { Check } from 'lucide-react'
 import {
   createContext,
   type KeyboardEvent,
+  type MouseEvent,
   type ReactNode,
   useContext,
   useEffect,
@@ -30,6 +31,8 @@ interface MenuProps {
   triggerTabIndex?: number
   // The trigger's size (a tree row's is small)
   triggerSize?: 'sm' | 'md'
+  // A trigger of text, styled by these classes, instead of an icon button
+  textTrigger?: string
   // Opened and closed from outside as well (a long press on a tree row);
   // left out, the menu keeps its own state
   open?: boolean
@@ -57,6 +60,7 @@ export function Menu({
   className = '',
   triggerTabIndex,
   triggerSize,
+  textTrigger,
   open,
   onOpenChange,
 }: MenuProps) {
@@ -147,6 +151,30 @@ export function Menu({
     list[next].focus()
   }
 
+  const triggerProps = {
+    ref: triggerRef,
+    tabIndex: triggerTabIndex,
+    'aria-label': label,
+    'aria-haspopup': 'menu' as const,
+    'aria-expanded': isOpen,
+    'aria-controls': isOpen ? menuId : undefined,
+    onPointerDown: () => {
+      openAtPressRef.current = isOpen
+    },
+    onClick: (e: MouseEvent) => {
+      openedByKeyRef.current = e.detail === 0
+      // Enter/Space has no press: a ref left by a press that ended
+      // elsewhere must not decide it.
+      const wasOpen =
+        e.detail !== 0 && openAtPressRef.current !== null
+          ? openAtPressRef.current
+          : isOpen
+      openAtPressRef.current = null
+      setIsOpen(!wasOpen)
+    },
+    children: trigger,
+  }
+
   return (
     <div
       ref={rootRef}
@@ -157,31 +185,15 @@ export function Menu({
           setIsOpen(false)
       }}
     >
-      <IconButton
-        ref={triggerRef}
-        tabIndex={triggerTabIndex}
-        size={triggerSize}
-        aria-label={label}
-        aria-haspopup="menu"
-        aria-expanded={isOpen}
-        aria-controls={isOpen ? menuId : undefined}
-        onPointerDown={() => {
-          openAtPressRef.current = isOpen
-        }}
-        onClick={(e) => {
-          openedByKeyRef.current = e.detail === 0
-          // Enter/Space has no press: a ref left by a press that ended
-          // elsewhere must not decide it.
-          const wasOpen =
-            e.detail !== 0 && openAtPressRef.current !== null
-              ? openAtPressRef.current
-              : isOpen
-          openAtPressRef.current = null
-          setIsOpen(!wasOpen)
-        }}
-      >
-        {trigger}
-      </IconButton>
+      {textTrigger === undefined ? (
+        <IconButton size={triggerSize} {...triggerProps} />
+      ) : (
+        <button
+          type="button"
+          className={`${FOCUS_RING} ${textTrigger}`}
+          {...triggerProps}
+        />
+      )}
       {isOpen && (
         <div
           ref={listRef}
