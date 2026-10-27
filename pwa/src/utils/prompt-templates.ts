@@ -190,19 +190,20 @@ export function parseImport(json: string): ParsedImport {
 }
 
 // The templates whose name has a word starting with query, or starts with
-// it once spaces are left out ("codere" finds "Code review"), case aside.
-// The / list's query stops at a space, so a name of several words is found
-// by any one of them.
+// it once spaces are left out of both ("codere", "code r" and "Code review"
+// find "Code review"), case aside. The / list's query stops at a space, so
+// a name of several words is found by any one of them.
 export function matchTemplates<T extends { name: string }>(
   list: T[],
   query: string,
 ): T[] {
   const q = query.trim().toLowerCase()
   if (!q) return list
+  const joined = q.replace(/\s+/g, '')
   return list.filter((t) => {
     const name = t.name.toLowerCase()
     return (
-      name.replace(/\s+/g, '').startsWith(q) ||
+      name.replace(/\s+/g, '').startsWith(joined) ||
       name.split(/[\s\-_/.:]+/).some((w) => w.startsWith(q))
     )
   })
