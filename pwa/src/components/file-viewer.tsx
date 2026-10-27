@@ -68,12 +68,25 @@ import { HIGHLIGHT_MAX_BYTES } from '../utils/highlight'
 import { isImagePath, isSvgPath } from '../utils/image-path'
 import { lazyRetry } from '../utils/lazy-retry'
 import type { LineRange, TextLines } from '../utils/line-range'
+import {
+  dirOf,
+  imageLink,
+  type PasteEdit,
+  pasteToken,
+  placeholder,
+  replacePlaceholder,
+} from '../utils/markdown-image-paste'
 import { isMarkdownPath, type LinkPath } from '../utils/markdown-links'
 import type { OpenWindowEvent } from '../utils/open-window'
 import { recordSelection } from '../utils/pane-selection'
 import { quoteLines } from '../utils/review-message'
 import type { TableLayout } from '../utils/table-columns'
 import { visibleUnsafe } from '../utils/unsafe-chars'
+import {
+  fileImageErrorMessage,
+  imageRefusal,
+  uploadFileImage,
+} from '../utils/upload-image'
 import { CodeBlock } from './code-block'
 import type { EditorAt } from './code-editor'
 import {
@@ -910,6 +923,10 @@ export function FileViewer({
         hash: res.hash,
         editable: true,
       })
+      // An image still uploading whose placeholder this wrote: its link
+      // can only go in a draft
+      for (const m of edit.text.matchAll(/!\[Uploading [0-9a-f]{8}…\]\(\)/g))
+        savedPlaceholders.current.add(m[0])
       // Only the draft sent is dropped: one changed meanwhile stays
       setDraft((now) =>
         now === edit
@@ -981,6 +998,65 @@ export function FileViewer({
     } finally {
       setSaving(false)
     }
+  }
+
+  // Images pasted into the Markdown file, saved one after another next to
+  // it. Each one's placeholder goes in at the cursor at once, and is swapped
+  // for the link in the editor while it is there (an undoable change), else
+  // in the draft: the editor may be gone by then. A draft discarded
+  // meanwhile, or a placeholder undone, gets no link; the image stays on the
+  // host, and the user is told where.
+  const pastes = useRef(Promise.resolve())
+  // Placeholders of images still uploading that a save wrote to the file
+  const savedPlaceholders = useRef(new Set<string>())
+  const pasteImage = (file: File, edit: PasteEdit) => {
+    // Refused at once: never a placeholder waiting behind another upload
+    const refused = imageRefusal(file)
+    if (refused) {
+      notify(fileImageErrorMessage(refused))
+      return
+    }
+    const d = mineRef.current as FileDraft
+    const token = pasteToken()
+    const ph = placeholder(token)
+    edit.insert(ph)
+    const put = (link: string) => {
+      if (edit.replace(ph, link)) return true
+      let found = false
+      setDraft((now) => {
+        if (!now) return now
+        const next = replacePlaceholder(now.text, token, link)
+        found = next.found
+        return next.found ? { ...now, text: next.text } : now
+      })
+      return found
+    }
+    pastes.current = pastes.current.then(async () => {
+      try {
+        const res = await uploadFileImage(
+          paneId,
+          { root: d.root, dir: dirOf(path), reveal: d.reveal },
+          file,
+        )
+        if (!res.ok) {
+          put('')
+          if (res.reason === 'root_changed')
+            setSaveError({ kind: 'root', root: res.root })
+          notify(fileImageErrorMessage(res.reason))
+        } else if (!put(imageLink(path, res.path))) {
+          notify(
+            savedPlaceholders.current.has(ph)
+              ? `Image saved as ${res.path}. The file still holds its placeholder`
+              : `Image saved as ${res.path}`,
+          )
+        }
+      } catch {
+        put('')
+        notify('Could not save the image')
+      } finally {
+        savedPlaceholders.current.delete(ph)
+      }
+    })
   }
 
   const copyText = async (text: string) => {
@@ -1268,6 +1344,11 @@ export function FileViewer({
               linesRef={onLineComment && editorLines}
               hidden={editLayout === 'preview'}
               onSyncSide={markdown ? setEditorSide : undefined}
+              onPasteImage={
+                markdown && canEdit && mine && !rootMoved && !saving
+                  ? pasteImage
+                  : undefined
+              }
             />
           )
           if (!markdown) return editor

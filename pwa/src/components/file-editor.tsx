@@ -11,6 +11,8 @@ import { RequestError } from '../hooks/use-mux-api'
 import type { SyncSide } from '../hooks/use-scroll-sync'
 import { lazyRetry } from '../utils/lazy-retry'
 import { selectedLines, type TextLines } from '../utils/line-range'
+import type { PasteEdit } from '../utils/markdown-image-paste'
+import { imageFromClipboard } from '../utils/upload-image'
 import type { EditorAt } from './code-editor'
 import { LazyBoundary } from './lazy-boundary'
 import { ViewMessage } from './pane-dir-header'
@@ -83,6 +85,9 @@ interface Props {
   // The desktop editor's line at its top, for a preview that scrolls with
   // it (the textarea has none)
   onSyncSide?: (side: SyncSide | null) => void
+  // An image pasted alone: edit puts text where the cursor is, then
+  // replaces it
+  onPasteImage?: (file: File, edit: PasteEdit) => void
 }
 
 // Why the last save of a draft failed, and what the user can do about it:
@@ -184,6 +189,7 @@ export function FileEditor(props: Props) {
               linesRef={props.linesRef}
               hidden={props.hidden}
               onSyncSide={props.onSyncSide}
+              onPasteImage={props.onPasteImage}
             />
           </Suspense>
         </LazyBoundary>
@@ -208,6 +214,7 @@ function PlainEditor({
   scrollTop,
   linesRef,
   hidden = false,
+  onPasteImage,
 }: Props) {
   const area = useRef<HTMLTextAreaElement>(null)
   useEffect(() => {
@@ -220,6 +227,16 @@ function PlainEditor({
       linesRef.current = null
     }
   }, [linesRef])
+  // Where the cursor goes once text inserted for the user (an image's
+  // placeholder) is shown
+  const caret = useRef<number>(undefined)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once the text with it shows
+  useLayoutEffect(() => {
+    if (caret.current === undefined) return
+    const el = area.current as HTMLTextAreaElement
+    el.setSelectionRange(caret.current, caret.current)
+    caret.current = undefined
+  }, [text])
   // Where it opens, once it shows: hidden, it has no height to scroll
   const pending = useRef(scrollTop)
   useLayoutEffect(() => {
@@ -243,6 +260,36 @@ function PlainEditor({
       value={text}
       onChange={(e) => onChange(e.target.value)}
       onKeyDown={onKeyDown}
+      onPaste={(e) => {
+        const file = onPasteImage && imageFromClipboard(e.clipboardData)
+        if (!onPasteImage || !file) return
+        e.preventDefault()
+        const el = e.currentTarget
+        // Through onChange, never the element's value: React would not know
+        // of the change, and could miss the next one. The cursor stays by
+        // the text it was next to.
+        onPasteImage(file, {
+          insert: (text) => {
+            const { selectionStart: from, selectionEnd: to, value } = el
+            caret.current = from + text.length
+            onChange(value.slice(0, from) + text + value.slice(to))
+          },
+          replace: (find, with_) => {
+            const at = el.isConnected ? el.value.indexOf(find) : -1
+            if (at < 0) return false
+            const pos = el.selectionStart
+            const shift = with_.length - find.length
+            caret.current =
+              pos >= at + find.length
+                ? pos + shift
+                : Math.min(pos, at + with_.length)
+            onChange(
+              el.value.slice(0, at) + with_ + el.value.slice(at + find.length),
+            )
+            return true
+          },
+        })
+      }}
       onSelect={(e) => {
         const el = e.currentTarget
         if (el.selectionStart !== el.selectionEnd)

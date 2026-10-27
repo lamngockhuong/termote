@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RequestError } from '../hooks/use-mux-api'
 import type { TextLines } from '../utils/line-range'
+import type { PasteEdit } from '../utils/markdown-image-paste'
 import type { CodeEditorProps } from './code-editor'
 import { FileEditor, SaveBanner, saveErrorOf } from './file-editor'
 
@@ -121,6 +122,85 @@ describe('FileEditor', () => {
     })
     view.unmount()
     expect(linesRef.current).toBeNull()
+  })
+
+  it('hands an image pasted alone to the viewer, which inserts where the cursor is, then swaps it', () => {
+    let text = 'abcd'
+    const onChange = vi.fn((t: string) => {
+      text = t
+    })
+    let edit: PasteEdit | undefined
+    const onPasteImage = vi.fn((_: File, e: PasteEdit) => {
+      edit = e
+      e.insert('[img]')
+    })
+    const ui = () => (
+      <FileEditor
+        {...props}
+        text={text}
+        onChange={onChange}
+        onPasteImage={onPasteImage}
+      />
+    )
+    const view = render(ui())
+    const box = screen.getByRole('textbox') as HTMLTextAreaElement
+    box.setSelectionRange(1, 3)
+    const file = new File(['x'], 'p', { type: 'image/png' })
+    const item = { kind: 'file', type: 'image/png', getAsFile: () => file }
+    fireEvent.paste(box, { clipboardData: { types: ['Files'], items: [item] } })
+    expect(onPasteImage).toHaveBeenCalledWith(file, expect.anything())
+    expect(text).toBe('a[img]d')
+    // Shown, the cursor after it
+    view.rerender(ui())
+    expect(box.selectionStart).toBe(6)
+    // Swapped: a cursor after it moves with it, one before it stays
+    const ed = edit as PasteEdit
+    box.setSelectionRange(7, 7)
+    expect(ed.replace('[img]', '![l](l.png)')).toBe(true)
+    view.rerender(ui())
+    expect(text).toBe('a![l](l.png)d')
+    expect(box.selectionStart).toBe(13)
+    ed.insert('[x]')
+    view.rerender(ui())
+    box.setSelectionRange(0, 0)
+    ed.replace('[x]', '')
+    view.rerender(ui())
+    expect(box.selectionStart).toBe(0)
+    // Inside it: after what replaced it
+    ed.insert('[yy]')
+    view.rerender(ui())
+    const at = text.indexOf('[yy]')
+    box.setSelectionRange(at + 2, at + 2)
+    ed.replace('[yy]', 'z')
+    view.rerender(ui())
+    expect(box.selectionStart).toBe(at + 1)
+    // Not there, or the textarea gone: the viewer changes the draft instead
+    expect(ed.replace('[nope]', 'x')).toBe(false)
+    ed.insert('[w]')
+    view.unmount()
+    expect(ed.replace('[w]', 'x')).toBe(false)
+    // Text with it: the textarea's own paste
+    render(ui())
+    onPasteImage.mockClear()
+    fireEvent.paste(screen.getByRole('textbox'), {
+      clipboardData: { types: ['Files', 'text/plain'], items: [item] },
+    })
+    expect(onPasteImage).not.toHaveBeenCalled()
+  })
+
+  it('leaves an image paste alone without a viewer to take it', () => {
+    render(<FileEditor {...props} />)
+    const box = screen.getByRole('textbox')
+    const item = {
+      kind: 'file',
+      type: 'image/png',
+      getAsFile: () => new File(['x'], 'p', { type: 'image/png' }),
+    }
+    expect(
+      fireEvent.paste(box, {
+        clipboardData: { types: ['Files'], items: [item] },
+      }),
+    ).toBe(true)
   })
 
   it('Ctrl+S saves only when there is something to save', () => {

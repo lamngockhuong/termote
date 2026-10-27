@@ -26,6 +26,7 @@ import {
 import { RequestError } from '../hooks/use-mux-api'
 import type { SyncSide } from '../hooks/use-scroll-sync'
 import type { TableOp } from '../utils/csv-edits'
+import type { PasteEdit } from '../utils/markdown-image-paste'
 import { paneSelection, resetPaneSelections } from '../utils/pane-selection'
 import {
   FileViewer,
@@ -51,6 +52,7 @@ vi.mock('./code-editor', async () => {
     at?: { line: number; col?: number }
     hidden?: boolean
     onSyncSide?: (side: SyncSide | null) => void
+    onPasteImage?: (file: File, edit: PasteEdit) => void
   }) {
     // Given once, like the editor
     useEffect(() => {
@@ -66,6 +68,17 @@ vi.mock('./code-editor', async () => {
           data-scroll-restore
           value={p.text}
           onChange={(e) => p.onChange(e.target.value)}
+          // An image pasted goes in at the end
+          onPaste={(e) => {
+            const file = e.clipboardData.items[0]?.getAsFile()
+            if (!file || !p.onPasteImage) return
+            e.preventDefault()
+            // Never swapped here: the viewer changes the draft
+            p.onPasteImage(file, {
+              insert: (text) => p.onChange(p.text + text),
+              replace: () => false,
+            })
+          }}
         />
       </div>
     )
@@ -82,6 +95,11 @@ vi.mock('../hooks/use-mux-api', async (orig) => ({
   fetchFileImage: (...a: unknown[]) => mockImage(...a),
   fetchFileDocument: (...a: unknown[]) => mockDocument(...a),
   saveFileContent: (...a: unknown[]) => mockSave(...a),
+}))
+const mockPasteUpload = vi.fn()
+vi.mock('../utils/upload-image', async (orig) => ({
+  ...(await orig<typeof import('../utils/upload-image')>()),
+  uploadFileImage: (...a: unknown[]) => mockPasteUpload(...a),
 }))
 vi.mock('../utils/highlight', async (orig) => ({
   ...(await orig<typeof import('../utils/highlight')>()),
@@ -1445,6 +1463,226 @@ describe('FileViewer: editing Markdown', () => {
     await startEdit()
     expect(textarea().closest('[data-layout]')).toBeNull()
     expect(screen.queryByRole('button', { name: /^Show / })).toBeNull()
+  })
+})
+
+describe('FileViewer: pasting an image into Markdown', () => {
+  const PH = /!\[Uploading [0-9a-f]{8}…\]\(\)/
+  const mdFile = (text: string) => editable(text, { path: 'docs/r.md' })
+  const area = () =>
+    screen.getByRole('textbox', {
+      name: 'Text of docs/r.md',
+    }) as HTMLTextAreaElement
+  const image = () => new File(['x'], 'shot.png', { type: 'image/png' })
+  const paste = (el: HTMLElement = area()) =>
+    fireEvent.paste(el, {
+      clipboardData: {
+        types: ['Files'],
+        items: [{ kind: 'file', type: 'image/png', getAsFile: image }],
+      },
+    })
+  // Pasted, and its upload started (after the ones before it)
+  const pasted = async (el?: HTMLElement) => {
+    paste(el)
+    await act(async () => {})
+  }
+  // An upload answered from the test
+  function pending() {
+    let answer: (v: unknown) => void = () => {}
+    mockPasteUpload.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve
+        }),
+    )
+    return (v: unknown) => act(async () => answer(v))
+  }
+  const saved = (path: string) => ({ ok: true, root: '/r', path })
+  const edit = async (over: Partial<Parameters<typeof FileViewer>[0]> = {}) => {
+    const p = show({ canEdit: true, path: 'docs/r.md', ...over })
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }))
+    await screen.findByRole('textbox', { name: 'Text of docs/r.md' })
+    return p
+  }
+  beforeEach(() => mockPasteUpload.mockReset())
+  afterEach(() => {
+    pointer.fine = false
+    pointer.width = 0
+  })
+
+  it('puts a placeholder at the cursor, saves the image next to the file, then links it', async () => {
+    mockContent.mockResolvedValue(mdFile('ab'))
+    const answer = pending()
+    await edit()
+    area().setSelectionRange(1, 1)
+    await pasted()
+    expect(area().value).toMatch(new RegExp(`^a${PH.source}b$`))
+    expect(mockPasteUpload).toHaveBeenCalledWith(
+      '%1',
+      { root: '/r', dir: 'docs', reveal: false },
+      expect.any(File),
+    )
+    await answer(saved('docs/assets/pasted-1.png'))
+    expect(area()).toHaveValue('a![pasted-1](assets/pasted-1.png)b')
+  })
+
+  it('takes the placeholder out and says why when the image is refused', async () => {
+    mockContent.mockResolvedValue(mdFile('ab'))
+    const answer = pending()
+    const p = await edit()
+    await pasted()
+    await answer({ ok: false, reason: 'sensitive' })
+    expect(area()).toHaveValue('ab')
+    expect(p.notify).toHaveBeenCalledWith(
+      'This folder may hold secrets: the image was not saved',
+    )
+  })
+
+  it('a placeholder undone, or a draft discarded, gets no link: the user is told where the image is', async () => {
+    mockContent.mockResolvedValue(mdFile('ab'))
+    let answer = pending()
+    const p = await edit()
+    await pasted()
+    fireEvent.change(area(), { target: { value: 'ab' } })
+    await answer(saved('docs/pasted-1.png'))
+    expect(area()).toHaveValue('ab')
+    expect(p.notify).toHaveBeenCalledWith('Image saved as docs/pasted-1.png')
+
+    answer = pending()
+    await pasted()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel editing' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
+    await answer(saved('docs/pasted-2.png'))
+    expect(screen.queryByRole('textbox')).toBeNull()
+    expect(p.notify).toHaveBeenLastCalledWith(
+      'Image saved as docs/pasted-2.png',
+    )
+  })
+
+  it('saves pasted images one after another', async () => {
+    mockContent.mockResolvedValue(mdFile(''))
+    const first = pending()
+    const second = pending()
+    await edit()
+    await pasted()
+    await pasted()
+    expect(mockPasteUpload).toHaveBeenCalledTimes(1)
+    await first(saved('docs/a.png'))
+    expect(mockPasteUpload).toHaveBeenCalledTimes(2)
+    await second(saved('docs/b.png'))
+    expect(area()).toHaveValue('![a](a.png)![b](b.png)')
+  })
+
+  it('a save while the image uploads keeps the placeholder, valid Markdown', async () => {
+    mockContent.mockResolvedValue(mdFile('x'))
+    mockSave.mockReturnValue(new Promise(() => {}))
+    pending()
+    await edit()
+    await pasted()
+    await act(async () =>
+      fireEvent.keyDown(area(), { key: 's', ctrlKey: true }),
+    )
+    expect(mockSave.mock.calls[0][1].text).toMatch(PH)
+  })
+
+  it('links the image even when the editor hid meanwhile', async () => {
+    pointer.fine = true
+    pointer.width = 1000
+    mockContent.mockResolvedValue(mdFile('a'))
+    const answer = pending()
+    await edit()
+    await pasted()
+    fireEvent.click(screen.getByRole('button', { name: 'Show preview' }))
+    await answer(saved('docs/p.png'))
+    fireEvent.click(screen.getByRole('button', { name: 'Show source' }))
+    expect(area()).toHaveValue('a![p](p.png)')
+  })
+
+  it('refuses a HEIC or a large image at once, without a placeholder', async () => {
+    mockContent.mockResolvedValue(mdFile('ab'))
+    const p = await edit()
+    fireEvent.paste(area(), {
+      clipboardData: {
+        types: ['Files'],
+        items: [
+          {
+            kind: 'file',
+            type: 'image/heic',
+            getAsFile: () => new File(['x'], 'p', { type: 'image/heic' }),
+          },
+        ],
+      },
+    })
+    expect(area()).toHaveValue('ab')
+    expect(mockPasteUpload).not.toHaveBeenCalled()
+    expect(p.notify).toHaveBeenCalledWith(
+      'HEIC images are not supported. Share the photo as JPEG',
+    )
+  })
+
+  it('a root that moved says so where saving would', async () => {
+    mockContent.mockResolvedValue(mdFile('ab'))
+    const answer = pending()
+    const p = await edit()
+    await pasted()
+    await answer({ ok: false, reason: 'root_changed', root: '/new' })
+    expect(area()).toHaveValue('ab')
+    expect(
+      screen.getByText(/This pane's folder changed. Copy your text/),
+    ).toBeInTheDocument()
+    expect(p.notify).toHaveBeenCalledWith(
+      "This pane's folder changed: the image was not saved",
+    )
+  })
+
+  it('an upload that breaks takes its placeholder out, and the next one still goes', async () => {
+    mockContent.mockResolvedValue(mdFile('ab'))
+    mockPasteUpload.mockRejectedValueOnce(new Error('boom'))
+    const answer = pending()
+    const p = await edit()
+    await pasted()
+    expect(area()).toHaveValue('ab')
+    expect(p.notify).toHaveBeenCalledWith('Could not save the image')
+    await pasted()
+    await answer(saved('docs/q.png'))
+    expect(area().value).toContain('![q](q.png)')
+    expect(area().value).not.toMatch(PH)
+  })
+
+  it('an image whose placeholder a save wrote says the file still holds it', async () => {
+    mockContent.mockResolvedValue(mdFile('x'))
+    mockSave.mockResolvedValue({ root: '/r', size: 1, hash: 'h2' })
+    const answer = pending()
+    const p = await edit()
+    await pasted()
+    await act(async () =>
+      fireEvent.keyDown(area(), { key: 's', ctrlKey: true }),
+    )
+    // Saved as it was: the draft is done with
+    expect(screen.queryByRole('textbox')).toBeNull()
+    await answer(saved('docs/p.png'))
+    expect(p.notify).toHaveBeenLastCalledWith(
+      'Image saved as docs/p.png. The file still holds its placeholder',
+    )
+  })
+
+  it('leaves the paste to the editor for another kind of file', async () => {
+    mockContent.mockResolvedValue(editable('x'))
+    await startEdit()
+    await pasted(textarea())
+    expect(mockPasteUpload).not.toHaveBeenCalled()
+  })
+
+  it('leaves the paste to the editor once the root moved', async () => {
+    mockContent.mockResolvedValue(mdFile('x'))
+    const p = await edit()
+    p.rerender(
+      <ThemeProvider>
+        <FileViewer {...p} root="/other" />
+      </ThemeProvider>,
+    )
+    await pasted()
+    expect(mockPasteUpload).not.toHaveBeenCalled()
   })
 })
 

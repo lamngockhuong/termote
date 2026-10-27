@@ -3,6 +3,7 @@ import {
   history,
   historyKeymap,
   indentWithTab,
+  isolateHistory,
 } from '@codemirror/commands'
 import {
   bracketMatching,
@@ -45,6 +46,8 @@ import { baseTheme, darkCode, lightCode } from '../utils/cm-theme'
 import { HIGHLIGHT_MAX_LINE } from '../utils/highlight'
 import { languageFor } from '../utils/highlight-langs'
 import { selectedLines, type TextLines } from '../utils/line-range'
+import type { PasteEdit } from '../utils/markdown-image-paste'
+import { imageFromClipboard } from '../utils/upload-image'
 
 // Where the editor opens a file, or moves to: a line (1-based) and a column
 // (UTF-16, 0-based), again each time jump changes
@@ -82,6 +85,9 @@ export interface CodeEditorProps {
   // Given how to read and set the line at its top (a Markdown draft's
   // preview scrolls with it); null once the editor is gone
   onSyncSide?: (side: SyncSide | null) => void
+  // An image pasted (alone: a paste with text is text): edit puts text at
+  // the cursor, then replaces it (pasteEdit)
+  onPasteImage?: (file: File, edit: PasteEdit) => void
 }
 
 // Marks a change made from the props, which onChange is not told about
@@ -163,6 +169,36 @@ function positionOf(state: EditorState, at: EditorAt): number {
   return line.from + Math.min(Math.max(at.col ?? 0, 0), line.length)
 }
 
+// The editing a pasted image gets, while live() says the editor is there:
+// text in place of the selection, a change the user can undo; then that text
+// swapped for other, the swap alone in the history (the text it replaces
+// leaves outside it). Undo then takes out the image's link, and the cursor
+// and the edits made meanwhile stay where they are.
+function pasteEdit(v: EditorView, live: () => boolean): PasteEdit {
+  return {
+    insert: (text) =>
+      v.dispatch(v.state.replaceSelection(text), {
+        userEvent: 'input.paste',
+        scrollIntoView: true,
+      }),
+    replace: (find, with_) => {
+      const at = live() ? v.state.doc.toString().indexOf(find) : -1
+      if (at < 0) return false
+      v.dispatch({
+        changes: { from: at, to: at + find.length },
+        annotations: Transaction.addToHistory.of(false),
+      })
+      if (with_)
+        v.dispatch({
+          changes: { from: at, insert: with_ },
+          userEvent: 'input.paste',
+          annotations: isolateHistory.of('full'),
+        })
+      return true
+    },
+  }
+}
+
 function reconfigure(
   view: EditorView | null,
   part: Compartment,
@@ -192,6 +228,7 @@ export default function CodeEditor({
   linesRef,
   hidden = false,
   onSyncSide,
+  onPasteImage,
 }: CodeEditorProps) {
   const { settings } = useSettings()
   const { editorFontSize, editorTabSize, editorVim } = settings
@@ -209,6 +246,7 @@ export default function CodeEditor({
     reveal,
     onSelectText,
     hidden,
+    onPasteImage,
   })
   latest.current = {
     onChange,
@@ -219,6 +257,7 @@ export default function CodeEditor({
     reveal,
     onSelectText,
     hidden,
+    onPasteImage,
   }
   // What the editor told onChange last: a render with it is no change
   const lastEmitted = useRef(text)
@@ -270,6 +309,19 @@ export default function CodeEditor({
         ...defaultKeymap,
         indentWithTab,
       ]),
+      EditorView.domEventHandlers({
+        paste: (e, v) => {
+          const paste = latest.current.onPasteImage
+          const file = paste && imageFromClipboard(e.clipboardData)
+          if (!paste || !file) return false
+          e.preventDefault()
+          paste(
+            file,
+            pasteEdit(v, () => v === view.current),
+          )
+          return true
+        },
+      }),
       baseTheme,
       c.fontSize.of(fontSizeOf(editorFontSize)),
       c.tabs.of(tabsOf(text, editorTabSize)),
