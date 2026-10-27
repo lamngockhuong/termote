@@ -402,6 +402,39 @@ test.describe('files and changes views', () => {
     })
   })
 
+  test('edits a Shift-JIS file, keeping it Shift-JIS byte for byte', async ({ page }) => {
+    // こんにちは / ソフト in Shift-JIS (ソ is 83 5C: a backslash as its second byte)
+    const hello = [0x82, 0xb1, 0x82, 0xf1, 0x82, 0xc9, 0x82, 0xbf, 0x82, 0xcd]
+    const f = path.join(repo, 'sjis.txt')
+    writeFileSync(f, Buffer.from([...hello, 0x0a, 0x83, 0x5c, 0x83, 0x74, 0x83, 0x67, 0x0a]))
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.goto(`${link}?view=files`)
+    const panel = page.getByRole('complementary', { name: 'Files' })
+    await panel.getByRole('treeitem', { name: 'sjis.txt' }).click()
+    await expect(panel.getByTestId('code-block')).toContainText('ソフト')
+    await expect(panel.getByRole('button', { name: 'Encoding: Shift-JIS' })).toBeVisible()
+    await panel.getByRole('button', { name: 'Edit', exact: true }).click()
+    await typeInEditor(panel.getByRole('textbox', { name: 'Text of sjis.txt' }), 'こんにちは\nテスト\n')
+    await panel.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(page.getByText('Saved', { exact: true })).toBeVisible()
+    // テスト in Shift-JIS; the first line's bytes untouched
+    expect([...readFileSync(f)]).toEqual([...hello, 0x0a, 0x83, 0x65, 0x83, 0x58, 0x83, 0x67, 0x0a])
+    await expect(panel.getByRole('button', { name: 'Encoding: Shift-JIS' })).toBeVisible()
+  })
+
+  test('opens UTF-16 without a byte order mark with an encoding', async ({ page }) => {
+    writeFileSync(path.join(repo, 'utf16.txt'), Buffer.from('wide text\n', 'utf16le'))
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.goto(`${link}?view=files`)
+    const panel = page.getByRole('complementary', { name: 'Files' })
+    await panel.getByRole('treeitem', { name: 'utf16.txt' }).click()
+    await expect(panel.getByText(/Not previewable/)).toBeVisible()
+    await panel.getByRole('button', { name: 'Open with encoding' }).click()
+    await panel.getByRole('menuitemradio', { name: 'UTF-16 LE' }).click()
+    await expect(panel.getByTestId('code-block')).toContainText('wide text')
+    await expect(panel.getByRole('button', { name: 'Encoding: UTF-16 LE' })).toBeVisible()
+  })
+
   test('no Edit for mixed line breaks or a symlink', async ({ page }) => {
     writeFileSync(path.join(repo, 'mixed.txt'), 'a\r\nb\n')
     symlinkSync('race.txt', path.join(repo, 'alias.txt'))

@@ -788,6 +788,12 @@ export interface RequestErrorDetails {
   // tasks/run 409 task_running: the run still running, and its tab
   runId?: string
   tabId?: string
+  // files/content 422 unencodable: the line (1-based) and the character the
+  // file's encoding cannot hold
+  line?: number
+  char?: string
+  // files/content 422 not_editable: why the file cannot be saved
+  reason?: string
 }
 
 // A refused request: the HTTP status and the server's stable code.
@@ -805,6 +811,9 @@ export class RequestError extends Error implements RequestErrorDetails {
   readonly task?: UserTask
   readonly runId?: string
   readonly tabId?: string
+  readonly line?: number
+  readonly char?: string
+  readonly reason?: string
 
   constructor(
     readonly status: number,
@@ -849,6 +858,9 @@ async function requestError(
       task: body.task,
       runId: body.runId,
       tabId: body.tabId,
+      line: typeof body.line === 'number' ? body.line : undefined,
+      char: typeof body.char === 'string' ? body.char : undefined,
+      reason: typeof body.reason === 'string' ? body.reason : undefined,
     },
   )
 }
@@ -1034,16 +1046,29 @@ export interface FilesTree {
   truncated: boolean
 }
 
+// The encodings the server reads and saves a text file in. The PWA only
+// sees UTF-8: the server decodes on read and encodes back on save.
+export type FileEncoding =
+  | 'utf-8'
+  | 'utf-16le'
+  | 'utf-16be'
+  | 'shift_jis'
+  | 'euc-jp'
+
 // A text file. hash: the sha256 of its bytes, sent back as a save's
-// baseHash. editable: a save would be taken; notEditable says why not
+// baseHash; size: their count. encoding: what text was decoded from, sent
+// back with a save; bom: the file starts with its byte order mark (not in
+// text). editable: a save would be taken; notEditable says why not
 // (symlink, hardlink, not-writable, other-owner, mixed-eol, nul,
-// denied-write, ...).
+// denied-write, lossy-encoding, ...).
 export interface TextFileContent {
   root: string
   path: string
   size: number
   text: string
   hash: string
+  encoding: FileEncoding
+  bom?: boolean
   editable: boolean
   notEditable?: string
 }
@@ -1143,15 +1168,18 @@ export function fetchFilesTree(
   return filesGet(paneId, 'tree', { path, root })
 }
 
+// encoding: read the file as that instead of the one the server detects
+// (which also opens a file it would call binary).
 export function fetchFileContent(
   paneId: string,
   path: string,
-  opts: { root?: string; reveal?: boolean } = {},
+  opts: { root?: string; reveal?: boolean; encoding?: FileEncoding } = {},
 ): Promise<FileContent> {
   return filesGet(paneId, 'content', {
     path,
     root: opts.root,
     reveal: opts.reveal ? '1' : undefined,
+    encoding: opts.encoding,
   })
 }
 
@@ -1163,14 +1191,22 @@ export interface SavedFile {
   path: string
   size: number
   hash: string
+  // What the file is in now: the one it was read from, or utf-8 after a
+  // save as UTF-8
+  encoding: FileEncoding
+  bom?: boolean
 }
 
 // Replaces the whole text of path, read with baseHash, under root (the root
 // it was read from: a 409 with the new one once it moved). A refusal is a
 // RequestError with the server's code (changed, sensitive, permission,
-// not_editable, not_text, too_large, busy); a timeout or a dropped
-// connection throws something else, after which the save may or may not
-// have been made (saving again is safe: the same text is not a conflict).
+// not_editable, not_text, too_large, busy, unencodable with line and
+// char); a timeout or a dropped connection throws something else, after
+// which the save may or may not have been made (saving again is safe: the
+// same text is not a conflict). encoding is the one text was read from
+// (absent only for a draft from before encodings, which the server takes
+// for a UTF-8 file alone); saveAs 'utf-8' writes it as UTF-8 without a BOM
+// instead.
 export async function saveFileContent(
   paneId: string,
   save: {
@@ -1179,6 +1215,8 @@ export async function saveFileContent(
     baseHash: string
     text: string
     reveal: boolean
+    encoding?: FileEncoding
+    saveAs?: 'utf-8'
   },
 ): Promise<SavedFile> {
   const { root, ...body } = save

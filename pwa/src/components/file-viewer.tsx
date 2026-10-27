@@ -45,6 +45,7 @@ import { imageErrorCode, useImageBlob } from '../hooks/use-image-blob'
 import { useMediaQuery } from '../hooks/use-media-query'
 import {
   type FileContent,
+  type FileEncoding,
   fetchFileContent,
   RequestError,
   saveFileContent,
@@ -95,6 +96,7 @@ import {
   type SaveError,
   saveErrorOf,
 } from './file-editor'
+import { FileEncodingMenu } from './file-encoding-menu'
 import { ImagePreview } from './image-preview'
 import { LazyBoundary, LoadFailed } from './lazy-boundary'
 import { MarkdownEditLayout } from './markdown-edit-layout'
@@ -245,9 +247,16 @@ type Loaded =
       text: string
       size: number
       hash: string
+      encoding: FileEncoding
+      bom?: boolean
       editable: boolean
+      notEditable?: string
     }
-  | { kind: 'unpreviewable'; size: number }
+  | {
+      kind: 'unpreviewable'
+      size: number
+      reason: 'binary' | 'too-large' | 'not-regular'
+    }
   | { kind: 'sensitive' }
   | { kind: 'error'; error: FilesError }
 
@@ -255,20 +264,25 @@ type TextLoaded = Extract<Loaded, { kind: 'text' }>
 
 function loaded(c: FileContent): Loaded {
   if ('sensitive' in c) return { kind: 'sensitive' }
-  if ('previewable' in c) return { kind: 'unpreviewable', size: c.size }
+  if ('previewable' in c)
+    return { kind: 'unpreviewable', size: c.size, reason: c.reason }
   return {
     kind: 'text',
     root: c.root,
     text: c.text,
     size: c.size,
     hash: c.hash,
+    encoding: c.encoding,
+    bom: c.bom,
     editable: c.editable,
+    notEditable: c.notEditable,
   }
 }
 
 // A draft of file: its text as read, with "\n" line breaks (a textarea turns
-// every one into "\n": compared, and sent, so). With a delimiter it is edited
-// in the table view, from edits already made on that text.
+// every one into "\n": compared, and sent, so), and the encoding it was read
+// as, which its save sends. With a delimiter it is edited in the table view,
+// from edits already made on that text.
 function draftOf(
   file: TextLoaded,
   path: string,
@@ -283,6 +297,7 @@ function draftOf(
     baseHash: file.hash,
     base,
     crlf: base !== file.text,
+    encoding: file.encoding,
     text: edits?.text ?? base,
     reveal,
     cells: delimiter && { delimiter, ops: edits?.ops ?? [], redo: [] },
@@ -290,14 +305,16 @@ function draftOf(
 }
 
 // A draft that changed while its save ran (another view of the pane edited
-// it): the text saved becomes its base. Its table edits stay only when they
-// began with the ones saved; else it goes on as text, since edits applied
-// again after a conflict must turn the base into the text.
+// it): the text saved becomes its base, in the encoding it was saved in.
+// Its table edits stay only when they began with the ones saved; else it
+// goes on as text, since edits applied again after a conflict must turn the
+// base into the text.
 export function rebaseDraft(
   now: FileDraft,
   saved: FileDraft,
   saveRoot: string,
   saveHash: string,
+  encoding: FileEncoding,
 ): FileDraft {
   const done = saved.cells?.ops ?? []
   const ops = now.cells?.ops
@@ -307,6 +324,7 @@ export function rebaseDraft(
     root: saveRoot,
     baseHash: saveHash,
     base: saved.text,
+    encoding,
     cells:
       now.cells && follows
         ? { ...now.cells, ops: now.cells.ops.slice(done.length) }
@@ -587,6 +605,9 @@ export function FileViewer({
   const [state, setState] = useState<Loaded>({ kind: 'loading' })
   const [mine, setDraft] = useFileDraft(paneId, path)
   const [reveal, setReveal] = useState(initialReveal || !!mine?.reveal)
+  // The encoding the user chose to read the file as (this tab only); a
+  // draft found at mount was read as its own, which its save sends
+  const [override, setOverride] = useState(mine?.encoding)
   const [saving, setSaving] = useState(false)
   // What a confirmed Discard goes on to do
   const [discarding, setDiscarding] = useState<'cancel' | 'back' | 'reload'>()
@@ -802,7 +823,7 @@ export function FileViewer({
     if (binaryView) return
     let live = true
     setState({ kind: 'loading' })
-    fetchFileContent(paneId, path, { root, reveal }).then(
+    fetchFileContent(paneId, path, { root, reveal, encoding: override }).then(
       (c) => {
         if (!live) return
         const file = loaded(c)
@@ -822,7 +843,7 @@ export function FileViewer({
     return () => {
       live = false
     }
-  }, [paneId, root, path, reveal, binaryView, onRootChanged, reload])
+  }, [paneId, root, path, reveal, override, binaryView, onRootChanged, reload])
 
   // A draft found when the file is read (one kept from before the app
   // closed, or from before a remount) is checked against the file: one the
@@ -841,7 +862,10 @@ export function FileViewer({
       return
     }
     if (file.kind !== 'text' || file.root !== d.root) return
-    if (d.text !== d.base && file.text.replace(/\r\n/g, '\n') === d.text) {
+    // A draft from before encodings kept a UTF-8 file's BOM in its text
+    const bom = !d.encoding && file.encoding === 'utf-8' && file.bom
+    const text = (bom ? '\uFEFF' : '') + file.text.replace(/\r\n/g, '\n')
+    if (d.text !== d.base && text === d.text) {
       done()
       return
     }
@@ -887,10 +911,19 @@ export function FileViewer({
       onRootChanged(saveError.root)
   }
 
-  // The draft dropped for the file as it is on the host now
+  // The draft dropped for the file as it is on the host now, read in the
+  // encoding the server finds
   const reloadFile = () => {
     discard()
+    setOverride(undefined)
     setReload((n) => n + 1)
+  }
+
+  // The file read again as encoding: offered only while the draft, if any,
+  // has no changes
+  const reopen = (encoding: FileEncoding) => {
+    if (mine) discard()
+    setOverride(encoding)
   }
 
   const cancel = () => (dirty ? setDiscarding('cancel') : discard())
@@ -903,8 +936,9 @@ export function FileViewer({
     }
   }
 
-  // Called only while no save runs (Save and Ctrl+S are off meanwhile)
-  const save = async (edit: FileDraft) => {
+  // Called only while no save runs (Save and Ctrl+S are off meanwhile).
+  // saveAs 'utf-8' writes the file as UTF-8 without a BOM.
+  const save = async (edit: FileDraft, saveAs?: 'utf-8') => {
     setSaving(true)
     setSaveError(undefined)
     try {
@@ -914,35 +948,66 @@ export function FileViewer({
         baseHash: edit.baseHash,
         text: edit.text,
         reveal: edit.reveal,
+        encoding: edit.encoding,
+        saveAs,
       })
+      // A draft from before encodings kept a UTF-8 file's BOM in its text,
+      // which the file read now leaves out
+      const noBom = (t: string) =>
+        !edit.encoding && res.bom && t.startsWith('\uFEFF') ? t.slice(1) : t
+      const saved = { ...edit, text: noBom(edit.text) }
+      // The file as saved: a save went through, so it can be edited again
+      // (one that would lose bytes is never saved but as UTF-8)
       setState({
         kind: 'text',
         root: res.root,
-        text: edit.crlf ? edit.text.replace(/\n/g, '\r\n') : edit.text,
+        text: saved.crlf ? saved.text.replace(/\n/g, '\r\n') : saved.text,
         size: res.size,
         hash: res.hash,
+        encoding: res.encoding,
+        bom: res.bom,
         editable: true,
       })
       // An image still uploading whose placeholder this wrote: its link
       // can only go in a draft
       for (const m of edit.text.matchAll(/!\[Uploading [0-9a-f]{8}…\]\(\)/g))
         savedPlaceholders.current.add(m[0])
+      // Now UTF-8: a choice of another encoding no longer applies
+      if (saveAs) setOverride(undefined)
       // Only the draft sent is dropped: one changed meanwhile stays
       setDraft((now) =>
         now === edit
           ? undefined
-          : now && rebaseDraft(now, edit, res.root, res.hash),
+          : now &&
+            rebaseDraft(
+              { ...now, text: noBom(now.text) },
+              saved,
+              res.root,
+              res.hash,
+              res.encoding,
+            ),
       )
       setSkipped([])
       notify('Saved')
       onSaved?.()
     } catch (err) {
-      setSaveError(saveErrorOf(err))
+      setSaveError(saveErrorOf(err, saveAs ?? edit.encoding))
     } finally {
       setSaving(false)
     }
   }
 
+  // Saves the file as UTF-8: the draft, or the text shown, through a draft
+  // that stays when the save is refused
+  const saveAsUtf8 = (file: TextLoaded) => {
+    let edit = mine
+    if (!edit) {
+      edit = draftOf(file, path, reveal)
+      setDraft(edit)
+      onPin?.()
+    }
+    void save(edit, 'utf-8')
+  }
   // The file changed on the host: read it again and apply the table edits
   // to it, each found by its row's values. The draft becomes the new file's,
   // so the next save never sends the old hash; what was not applied is
@@ -958,6 +1023,7 @@ export function FileViewer({
         await fetchFileContent(paneId, path, {
           root: edit.root,
           reveal: edit.reveal,
+          encoding: edit.encoding,
         }),
       )
       let res: Reapplied = { ok: false }
@@ -1058,6 +1124,33 @@ export function FileViewer({
       }
     })
   }
+  // The text shown, whose encoding the header names; a binary file gets a
+  // way to open it as text instead
+  const shown = !binaryView && state.kind === 'text' ? state : undefined
+  // Saved as UTF-8 from here: a file not in plain UTF-8 that a save would
+  // take, or that only loses bytes in its own encoding
+  const convertible =
+    canEdit &&
+    shown &&
+    (shown.encoding !== 'utf-8' || shown.bom) &&
+    (shown.editable || shown.notEditable === 'lossy-encoding') &&
+    (!mine || mine.encoding) &&
+    !saving &&
+    !rootMoved
+  const encodingMenu =
+    shown ||
+    (!binaryView &&
+      state.kind === 'unpreviewable' &&
+      state.reason === 'binary') ? (
+      <FileEncodingMenu
+        encoding={shown?.encoding}
+        bom={shown?.bom}
+        dirty={dirty}
+        notEditable={shown?.notEditable}
+        onReopen={reopen}
+        onSaveAsUtf8={convertible ? () => saveAsUtf8(shown) : undefined}
+      />
+    ) : undefined
 
   const copyText = async (text: string) => {
     try {
@@ -1196,8 +1289,14 @@ export function FileViewer({
             {keepOrder(path)}
           </span>
           {size !== undefined && (
-            <span className="text-[11px] text-fg-muted">
+            <span className="flex items-center gap-1 text-[11px] text-fg-muted">
               {formatSize(size)}
+              {encodingMenu && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  {encodingMenu}
+                </>
+              )}
             </span>
           )}
         </div>

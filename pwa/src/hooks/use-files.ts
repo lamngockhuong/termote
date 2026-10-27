@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
 import type { TableOp } from '../utils/csv-edits'
 import type { Delimiter } from '../utils/csv-parse'
+import { isFileEncoding } from '../utils/file-encoding'
 import {
   closeTab,
   openTab,
@@ -33,6 +34,7 @@ import {
 } from '../utils/persisted-tabs'
 import type { TableLayout } from '../utils/table-columns'
 import {
+  type FileEncoding,
   type FileEntry,
   type FilesTree,
   fetchFilesTree,
@@ -923,6 +925,10 @@ export interface FileDraft {
   base: string
   // The file uses "\r\n" throughout; the server writes them back
   crlf: boolean
+  // What the file was read as, sent back with the save. Absent in a draft
+  // kept from before encodings: its save sends none, which the server
+  // takes for a UTF-8 file only.
+  encoding?: FileEncoding
   text: string
   // A sensitive file the user chose to show
   reveal: boolean
@@ -1004,6 +1010,7 @@ function isStoredDraft(d: unknown): d is Omit<FileDraft, 'reveal'> {
     isString(o.base) &&
     isString(o.text) &&
     typeof o.crlf === 'boolean' &&
+    (o.encoding === undefined || isFileEncoding(o.encoding)) &&
     (o.cells === undefined ||
       (typeof o.cells === 'object' &&
         o.cells !== null &&
