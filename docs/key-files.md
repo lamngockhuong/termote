@@ -104,6 +104,11 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/utils/file-name.ts`                      | Name checks of New file and Rename, the base name selected     |
 | `pwa/src/utils/download-file.ts`                  | Download: preflight, refusal messages, iOS share sheet         |
 | `pwa/src/components/markdown-preview.tsx`         | Markdown file rendered in Files/Changes (links, code blocks)   |
+| `pwa/src/components/markdown-edit-layout.tsx`     | Markdown being edited: source, side by side, or preview alone  |
+| `pwa/src/hooks/use-scroll-sync.ts`                | Markdown editor and preview scrolled together, by source line  |
+| `pwa/src/hooks/use-debounced-value.ts`            | A value once it stops changing (the draft's preview)           |
+| `pwa/src/hooks/use-element-width.ts`              | An element's width, followed (side by side from 768px)         |
+| `pwa/src/utils/markdown-image-paste.ts`           | An image pasted into Markdown: placeholder, relative link      |
 | `pwa/src/components/fenced-code.tsx`              | Code block of rendered Markdown (preview, Chat): highlight     |
 | `pwa/src/components/mermaid-block.tsx`            | A mermaid block: the diagram image, Show source, fallback      |
 | `pwa/src/utils/mermaid-render.ts`                 | Diagram → `data:` SVG image: worker queue, timeouts, cache     |
@@ -152,7 +157,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/hooks/use-files.ts`                      | File tree of a pane's root, one store per pane                 |
 | `pwa/src/hooks/use-git-changes.ts`                | Polls a pane's git status, the Changes tabs, one store a pane  |
 | `pwa/src/utils/highlight.ts`                      | Syntax highlighting through a Shiki worker, with a timeout     |
-| `pwa/src/utils/upload-image.ts`                   | Uploads an image to the host, picks one, error messages        |
+| `pwa/src/utils/upload-image.ts`                   | Uploads an image to the host (Chat, Markdown), error messages  |
 | `pwa/src/hooks/use-chat-attachments.ts`           | Images attached to a Chat view message (upload, ids, errors)   |
 | `pwa/src/hooks/use-agent-commands.ts`             | A pane's custom slash commands, read once and cached           |
 | `server/main.go`                                  | Entry point (`serve` runs the server, no args opens the menu)  |
@@ -200,6 +205,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/files_document.go`                        | `files/document`: a document's bytes to preview, 30 MiB        |
 | `server/files_write.go`                           | `PUT files/content`: saves a text file (baseHash, rename)      |
 | `server/files_create.go`                          | `POST files/create`: an empty file, never replacing anything   |
+| `server/files_image.go`                           | `POST files/image`: a pasted image beside its Markdown file    |
 | `server/files_find*.go`                           | `GET files/find`: file lists (git, walk), cache, ranking       |
 | `server/files_search*.go`                         | `GET files/search`: lines of the listed files, globs, caps     |
 | `server/files_delete.go`                          | `POST files/delete`/`restore`, `content?hash=1`                |

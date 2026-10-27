@@ -209,7 +209,7 @@ theo Vim (`/` để tìm, `:w` để lưu), riêng Ctrl+S vẫn lưu.
 Đang sửa một file mà chọn một kết quả tìm của chính file đó, con trỏ nhảy tới đúng chỗ khớp. Bấm
 Edit trong Changes thì trình soạn thảo mở ở chỗ thay đổi đầu tiên của diff.
 
-- File Markdown được sửa ở văn bản gốc, kể cả khi đang xem trước. File CSV hay TSV đang xem dạng
+- File Markdown được sửa ngay cạnh bản xem trước (xem [Sửa Markdown](#sửa-markdown)). File CSV hay TSV đang xem dạng
   bảng thì sửa ngay trong bảng (xem [Sửa trong bảng](#sửa-trong-bảng)); đang xem văn bản gốc,
   hoặc mở từ Changes, thì sửa ở văn bản gốc.
 - Ctrl+S (Cmd+S trên macOS) để lưu. Bấm Cancel hoặc Back khi còn thay đổi chưa lưu thì app hỏi
@@ -248,6 +248,54 @@ thể chứa bí mật thì sửa được sau khi đã bấm hiện nội dung.
 
 Phiên chỉ xem (khi đã có quyền này) không có nút Edit. Chừng nào server chưa kiểm quyền, nút này
 chỉ được ẩn trong app.
+
+### Sửa Markdown
+
+Khi sửa file Markdown, nút cạnh **Save** (trên điện thoại thì nằm trong menu **More actions**) chọn
+một trong ba cách hiển thị. Lựa chọn được nhớ trên thiết bị này:
+
+| Cách hiển thị                    | Thấy gì                                                                                          |
+| -------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `Source and preview` (mặc định)  | Trình soạn thảo bên trái, file đã hiển thị bên phải                                              |
+| `Source`                         | Chỉ có trình soạn thảo                                                                           |
+| `Preview`                        | Chỉ có file đã hiển thị. Trình soạn thảo chỉ bị ẩn đi: khi quay lại vẫn hoàn tác được, con trỏ vẫn ở chỗ cũ, và Ctrl+S vẫn lưu |
+
+- Muốn xem song song thì cần chuột và view Files rộng từ 768 px trở lên: kéo rộng panel bên cạnh,
+  hoặc mở file trong cửa sổ riêng. Hẹp hơn, hoặc trên màn hình cảm ứng, nút chỉ chuyển qua lại
+  giữa văn bản gốc và bản xem trước; khi đủ chỗ, cách hiển thị đã chọn tự quay lại.
+- Gõ xong một lúc thì bản xem trước cập nhật theo (bản đang sửa dài hơn 65.536 ký tự thì chờ lâu
+  hơn một chút). Sơ
+  đồ Mermaid giữ hình cũ trong lúc bạn gõ mã của nó, và vẽ lại khi mã đứng yên một lúc; mã gõ dở
+  chưa vẽ được thì lý do hiện dưới thanh của sơ đồ.
+- Khi xem song song, hai bên cuộn cùng nhau: cuộn bên nào thì đoạn tương ứng của file lên đầu bên
+  kia.
+- Bấm một liên kết trong bản xem trước sẽ mở file kia; Back đưa bạn về bản đang sửa, trình soạn
+  thảo vẫn ở chỗ cũ.
+- Bản đang sửa dài hơn 262.144 ký tự thì chỉ hiện văn bản gốc, kèm dòng
+  `Too large to preview: shown as source`.
+
+#### Dán ảnh
+
+Dán một ảnh (ảnh chụp màn hình, ảnh chép từ app khác) vào trình soạn thảo của file Markdown, ảnh
+được lưu trên máy chủ cạnh file đó: vào thư mục `assets` của file nếu có, không thì vào chính thư
+mục chứa file, với tên `pasted-<ngày>-<giờ>.png` (hoặc `.jpg`, `.gif`, `.webp`). Trong lúc gửi,
+chỗ con trỏ có `![Uploading …]()`; gửi xong, chỗ đó thành liên kết tới ảnh, tính từ file, ví dụ
+`![pasted-20261027-090507](assets/pasted-20261027-090507.png)`. Hoàn tác thì liên kết mất, còn ảnh
+vẫn nằm trên máy chủ.
+
+- Nhận PNG, JPEG, GIF và WebP, tối đa 10 MB và 40 megapixel. Ảnh HEIC (ảnh chụp từ iPhone) bị từ
+  chối: hãy chia sẻ ảnh ở dạng JPEG.
+- Chép từ bảng tính hay trang web thì clipboard có cả văn bản: dán ra vẫn là văn bản.
+- Không thư mục nào được tạo, không file nào bị ghi đè: tên đã có thì ảnh mang thêm `-2`, `-3`, cứ
+  thế tiếp.
+- Dán liền nhiều ảnh thì chúng được gửi lần lượt.
+- Bỏ bản đang sửa, hoặc xoá chỗ giữ chỗ, trước khi ảnh tới thì không có liên kết nào được thêm: một
+  thông báo cho biết ảnh đã lưu ở đâu. Nếu lưu file trong lúc đó, chỗ giữ chỗ được ghi vào file, và
+  thông báo cũng nói điều này.
+- Thư mục có thể chứa bí mật (`.ssh` và tương tự) chỉ nhận ảnh khi file đang sửa đã được bấm hiện
+  nội dung.
+- Bản xem trước không bao giờ tải ảnh: ảnh hiện thành liên kết `image: <tên>`, bấm vào thì mở ảnh
+  trong Files.
 
 ## Tạo file mới
 

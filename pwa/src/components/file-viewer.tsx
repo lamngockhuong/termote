@@ -1243,7 +1243,8 @@ export function FileViewer({
           <IconButton
             size="sm"
             onClick={() => updateSetting('markdownEditLayout', nextLayout)}
-            aria-label={`Show ${LAYOUT_LABELS[nextLayout].toLowerCase()}`}
+            // Not "Show source": a diagram's own button is named so
+            aria-label={`Switch to ${LAYOUT_LABELS[nextLayout].toLowerCase()}`}
             title={`${LAYOUT_LABELS[editLayout]} (click: ${LAYOUT_LABELS[nextLayout].toLowerCase()})`}
           >
             {LAYOUT_ICONS[editLayout]}

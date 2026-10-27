@@ -806,7 +806,7 @@ describe('FileViewer editing', () => {
     expect(screen.queryByTestId('markdown-preview')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull()
     expect(
-      screen.getByRole('button', { name: 'Show preview' }),
+      screen.getByRole('button', { name: 'Switch to preview' }),
     ).toBeInTheDocument()
   })
 
@@ -1158,20 +1158,20 @@ describe('FileViewer: editing Markdown', () => {
     mockContent.mockResolvedValue(mdFile('# T\n'))
     const p = await edit()
     const editor = area()
-    fireEvent.click(screen.getByRole('button', { name: 'Show preview' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to preview' }))
     expect(layout()).toBe('preview')
     expect(saved()).toBe('preview')
     // Kept, hidden: the same textarea comes back
     expect(editor.closest('.hidden')).not.toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Show source' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to source' }))
     expect(area()).toBe(editor)
     expect(layout()).toBe('source')
     expect(screen.queryByTestId('markdown-preview')).toBeNull()
     fireEvent.click(
-      screen.getByRole('button', { name: 'Show source and preview' }),
+      screen.getByRole('button', { name: 'Switch to source and preview' }),
     )
     expect(layout()).toBe('split')
-    fireEvent.click(screen.getByRole('button', { name: 'Show preview' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to preview' }))
 
     // Opened again: still the preview alone
     p.unmount()
@@ -1190,9 +1190,9 @@ describe('FileViewer: editing Markdown', () => {
     // Split chosen (the default) shows as the source, left as chosen
     expect(layout()).toBe('source')
     expect(screen.queryByTestId('markdown-preview')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Show preview' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to preview' }))
     expect(layout()).toBe('preview')
-    fireEvent.click(screen.getByRole('button', { name: 'Show source' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to source' }))
     expect(layout()).toBe('source')
     expect(saved()).toBe('source')
   })
@@ -1201,7 +1201,9 @@ describe('FileViewer: editing Markdown', () => {
     pointer.width = 440
     mockContent.mockResolvedValue(mdFile('# T\n'))
     await edit({ compact: true })
-    expect(screen.queryByRole('button', { name: 'Show preview' })).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: 'Switch to preview' }),
+    ).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'More actions' }))
     const group = screen.getByRole('group', { name: 'Show' })
     const radios = within(group).getAllByRole('menuitemradio')
@@ -1227,7 +1229,7 @@ describe('FileViewer: editing Markdown', () => {
     mockSave.mockRejectedValue(new RequestError(409, 'changed', 'changed'))
     await edit()
     fireEvent.change(area(), { target: { value: 'b' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Show preview' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to preview' }))
     // A key outside the viewer is not its own
     const outside = document.createElement('input')
     document.body.append(outside)
@@ -1312,7 +1314,9 @@ describe('FileViewer: editing Markdown', () => {
     expect(
       screen.getByText('Too large to preview: shown as source'),
     ).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Show preview' })).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: 'Switch to preview' }),
+    ).toBeNull()
     fireEvent.change(editor, { target: { value: '# T\n' } })
     expect(area()).toBe(editor)
     expect(layout()).toBe('split')
@@ -1417,7 +1421,7 @@ describe('FileViewer: editing Markdown', () => {
     fireEvent.scroll(preview)
     await frame()
     expect(side.scrollToLine).toHaveBeenCalledTimes(1)
-    fireEvent.click(screen.getByRole('button', { name: 'Show preview' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to preview' }))
     fireEvent.scroll(preview)
     await frame()
     expect(side.scrollToLine).toHaveBeenCalledTimes(1)
@@ -1453,7 +1457,7 @@ describe('FileViewer: editing Markdown', () => {
     await edit()
     const editor = await screen.findByTestId('code-editor')
     expect(editor).toHaveAttribute('data-hidden', 'false')
-    fireEvent.click(screen.getByRole('button', { name: 'Show preview' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to preview' }))
     expect(screen.getByTestId('code-editor')).toBe(editor)
     expect(editor).toHaveAttribute('data-hidden', 'true')
   })
@@ -1462,7 +1466,7 @@ describe('FileViewer: editing Markdown', () => {
     mockContent.mockResolvedValue(editable('x'))
     await startEdit()
     expect(textarea().closest('[data-layout]')).toBeNull()
-    expect(screen.queryByRole('button', { name: /^Show / })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Switch to / })).toBeNull()
   })
 })
 
@@ -1592,9 +1596,9 @@ describe('FileViewer: pasting an image into Markdown', () => {
     const answer = pending()
     await edit()
     await pasted()
-    fireEvent.click(screen.getByRole('button', { name: 'Show preview' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to preview' }))
     await answer(saved('docs/p.png'))
-    fireEvent.click(screen.getByRole('button', { name: 'Show source' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to source' }))
     expect(area()).toHaveValue('a![p](p.png)')
   })
 
