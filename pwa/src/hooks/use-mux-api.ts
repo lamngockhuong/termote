@@ -888,9 +888,7 @@ export async function sendAgentMessage(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(
-      images.length > 0
-        ? { text, cursor, images, ...(at.length > 0 && { at }) }
-        : { text, cursor },
+      images.length > 0 ? { text, cursor, images, at } : { text, cursor },
     ),
   })
   if (!res.ok) throw await requestError(res)

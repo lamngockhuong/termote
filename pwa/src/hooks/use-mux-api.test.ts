@@ -716,7 +716,17 @@ describe('agent API client', () => {
     )
     await sendAgentMessage('1', '', 'cur', ['a1', 'b2'])
     expect(calls[0].init?.body).toBe(
-      JSON.stringify({ text: '', cursor: 'cur', images: ['a1', 'b2'] }),
+      JSON.stringify({ text: '', cursor: 'cur', images: ['a1', 'b2'], at: [] }),
+    )
+    // With where each image goes in the text
+    await sendAgentMessage('1', 'a b', 'cur', ['a1', 'b2'], [1, 3])
+    expect(calls[1].init?.body).toBe(
+      JSON.stringify({
+        text: 'a b',
+        cursor: 'cur',
+        images: ['a1', 'b2'],
+        at: [1, 3],
+      }),
     )
     mockFetch({
       body: { error: 'gone', code: 'invalid_request', images: ['b2'] },
