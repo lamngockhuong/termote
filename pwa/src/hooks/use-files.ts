@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
+import { isAbsolutePath, underRoot } from '../utils/chat-file-links'
 import type { TableOp } from '../utils/csv-edits'
 import type { Delimiter } from '../utils/csv-parse'
 import { isFileEncoding } from '../utils/file-encoding'
@@ -151,6 +152,8 @@ export interface FollowOptions {
   newTab?: boolean
   // Followed from another view: opened like a file picked in the tree
   fresh?: boolean
+  // The line to show (a path the agent wrote in the Chat view)
+  line?: number
 }
 
 export const joinPath = (dir: string, name: string) =>
@@ -508,7 +511,11 @@ function createStore(id: string): Store {
       (t) => t.path === target.path && t !== current,
     )
     if (opts.newTab || opts.fresh || elsewhere || !current) {
-      openByUser(target.path, { pin: opts.newTab, anchor: target.anchor })
+      openByUser(target.path, {
+        pin: opts.newTab,
+        anchor: target.anchor,
+        line: opts.line,
+      })
       return 'opened'
     }
     // On in the same tab, which remembers where it was
@@ -898,6 +905,38 @@ export function useFilesFocusRequest(
 // view's preview)
 export function followInFiles(paneId: string, target: LinkPath) {
   return storeFor(paneId).follow(target, 0, { fresh: true })
+}
+
+// Opens a path the agent wrote in paneId's Files view, at line when given:
+// an absolute one under the pane's root, or a relative one from the pane's
+// directory (where the agent runs), else from the root (a path the agent
+// wrote from the top of the repo). The root and directory are read now,
+// never the ones the store kept: the pane may have moved since. 'outside':
+// the path is elsewhere, nothing was opened.
+export async function followPathInFiles(
+  paneId: string,
+  path: string,
+  line?: number,
+): Promise<FollowResult | 'outside'> {
+  const store = storeFor(paneId)
+  let here: { root: string; dir?: string }
+  try {
+    here = await fetchFilesTree(paneId, '')
+  } catch {
+    return 'failed'
+  }
+  const open = (rel: string) =>
+    store.follow({ path: rel }, 0, { fresh: true, line })
+  if (isAbsolutePath(path) || !here.dir) {
+    const rel = underRoot(path, here.root)
+    return rel === null ? 'outside' : open(rel)
+  }
+  const fromDir = underRoot(`${here.dir}/${path}`, here.root)
+  const fromRoot = underRoot(path, here.root)
+  const result = fromDir === null ? 'outside' : await open(fromDir)
+  if (result !== 'missing' && result !== 'outside') return result
+  if (fromRoot === null || fromRoot === fromDir) return result
+  return open(fromRoot)
 }
 
 // Opens path (under root, which the store moves to when it is elsewhere) in

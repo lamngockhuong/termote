@@ -38,6 +38,12 @@ vi.mock('../hooks/use-agent-transcript', async (orig) => ({
   }),
 }))
 
+const mockFollowPath = vi.fn()
+vi.mock('../hooks/use-files', async (orig) => ({
+  ...(await orig<typeof import('../hooks/use-files')>()),
+  followPathInFiles: (...a: unknown[]) => mockFollowPath(...a),
+}))
+
 vi.mock('../utils/highlight', async (orig) => ({
   ...(await orig<typeof import('../utils/highlight')>()),
   highlightLang: () => Promise.resolve(null),
@@ -241,6 +247,129 @@ describe('ChatView', () => {
     set({ entries: entries(RENDER_WINDOW + 5), sessionId: 's2' })
     rerender(<ChatView {...props} />)
     expect(screen.queryByText('message 0')).toBeNull()
+  })
+})
+
+describe('ChatView file paths', () => {
+  const withFiles: ViewProps = {
+    ...props,
+    mux: { ...props.mux, caps: { ...props.mux.caps, files: true } },
+  }
+  const say = (text: string): TranscriptEntry => ({
+    id: 'a',
+    role: 'assistant',
+    parts: [{ kind: 'text', text }],
+  })
+  const tool = (name: string, input: string): TranscriptEntry => ({
+    id: 't',
+    role: 'assistant',
+    parts: [{ kind: 'tool', tool: name, toolId: '1', input, result: 'ok' }],
+  })
+
+  it('opens inline code that names a file in Files, at its line', async () => {
+    mockFollowPath.mockResolvedValue('opened')
+    set({ entries: [say('See `pwa/src/a.ts:12` and `window.location`.')] })
+    render(<ChatView {...withFiles} />)
+    const link = screen.getByRole('button', {
+      name: 'pwa/src/a.ts:12',
+    })
+    expect(link).toHaveAttribute('title', 'Open pwa/src/a.ts:12 in Files')
+    await act(async () => fireEvent.click(link))
+    expect(mockFollowPath).toHaveBeenCalledWith('0', 'pwa/src/a.ts', 12)
+    expect(showView).toHaveBeenCalledWith('files')
+    expect(
+      screen.queryByRole('button', { name: 'window.location' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('opens a relative Markdown link; an http one stays a link', async () => {
+    mockFollowPath.mockResolvedValue('opened')
+    set({
+      entries: [
+        say('[the guide](docs/guide.md#L4) and [`a/b.ts`](https://x.test/a)'),
+      ],
+    })
+    render(<ChatView {...withFiles} />)
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'the guide' })),
+    )
+    expect(mockFollowPath).toHaveBeenCalledWith('0', 'docs/guide.md', 4)
+    // Inline code inside a link is not a second link
+    expect(screen.getByRole('link', { name: 'a/b.ts' })).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'a/b.ts' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it.each([
+    ['Read', '/r/p/src/a.ts', '/r/p/src/a.ts', '/r/p/src/a.ts'],
+    ['Write', '/r/p/src/b.ts', 'b.ts', '/r/p/src/b.ts'],
+    ['Edit', 'src/old.ts → src/new.ts', 'new.ts', 'src/new.ts'],
+    ['MultiEdit', 'src/c.ts', 'c.ts', 'src/c.ts'],
+    ['ViewImage', '/r/p/shot.png', '/r/p/shot.png', '/r/p/shot.png'],
+  ])('opens the file of a %s card', async (name, input, label, path) => {
+    mockFollowPath.mockResolvedValue('opened')
+    set({ entries: [tool(name, input)] })
+    render(<ChatView {...withFiles} />)
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: label })),
+    )
+    expect(mockFollowPath).toHaveBeenCalledWith('0', path, undefined)
+  })
+
+  it('a path the server shortened is not a link', () => {
+    const cut = `src/${'a'.repeat(190)}…`
+    set({ entries: [tool('Edit', cut)] })
+    render(<ChatView {...withFiles} />)
+    const name = screen.getByTitle(cut)
+    expect(name.tagName).toBe('SPAN')
+    expect(name).toHaveClass('text-accent')
+  })
+
+  it('a code block and a tool without a file are no links', () => {
+    set({ entries: [say('```\nsrc/a.ts\n```'), tool('Grep', 'src/a.ts')] })
+    render(
+      <ThemeProvider>
+        <ChatView {...withFiles} />
+      </ThemeProvider>,
+    )
+    expect(
+      screen.queryByRole('button', { name: /src\/a\.ts/ }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('an image inside a file link is its label, not a link', () => {
+    set({ entries: [say('[![shot](https://h.test/a.png)](docs/a.md)')] })
+    render(<ChatView {...withFiles} />)
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: '[image: h.test]' }),
+    ).toBeInTheDocument()
+  })
+
+  it.each([
+    ['missing', 'Not found'],
+    ['failed', "This link can't be opened"],
+    ['outside', "This file is outside the pane's folder"],
+  ])('%s: says so and stays', async (result, notice) => {
+    mockFollowPath.mockResolvedValue(result)
+    set({ entries: [say('`src/a.ts`')] })
+    render(<ChatView {...withFiles} />)
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'src/a.ts' })),
+    )
+    expect(props.notify).toHaveBeenCalledWith(notice)
+    expect(showView).not.toHaveBeenCalled()
+  })
+
+  it('without a Files view, paths are plain text', () => {
+    set({ entries: [say('`src/a.ts` [g](docs/g.md)'), tool('Read', 'a/b.ts')] })
+    render(<ChatView {...props} />)
+    expect(screen.queryAllByRole('button', { name: /a\.ts|g|b\.ts/ })).toEqual(
+      [],
+    )
+    expect(screen.getByText('src/a.ts')).toBeInTheDocument()
+    expect(screen.getByText('a/b.ts')).toHaveAttribute('title', 'a/b.ts')
   })
 })
 

@@ -284,7 +284,7 @@ POST   /api/mux/panes/{id}/agent/answer   body: {promptId, choice} → 204
 GET    /api/mux/panes/{id}/agent/commands                        → {commands: [{name, description, source, kind}]}
 POST   /api/mux/panes/{id}/agent/start    body: {kind}          → {ok, state: "starting"} | {error, code}   (caps.agentStart; codex: caps.agentStartCodex)
 GET    /api/mux/panes/{id}/agent/start                           → {kind, state} | 404 no_start
-GET    /api/mux/panes/{id}/files/tree?path=&root=               → {root, isRepo, path, entries, truncated}
+GET    /api/mux/panes/{id}/files/tree?path=&root=               → {root, isRepo, dir?, path, entries, truncated}
 GET    /api/mux/panes/{id}/files/content?path=&root=&reveal=&encoding= → {root, path, size, text, hash, encoding, bom?, editable, notEditable?} | {…, previewable: false, reason} | {…, sensitive: true}
 GET    /api/mux/panes/{id}/files/content?path=&root=&hash=1     → {root, path, size, hash} (never the contents, sensitive or not)
 PUT    /api/mux/panes/{id}/files/content?root=  body: {path, baseHash, text, reveal, encoding?, saveAs?} → {root, path, size, hash, encoding, bom?} | {error, code, reason?, line?, char?}
