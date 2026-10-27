@@ -105,6 +105,10 @@ describe('runSummary and stepLine', () => {
     )
   })
 
+  it('a call with no tool name counts as another step', () => {
+    expect(runSummary([{ kind: 'tool' }])).toBe('1 other step')
+  })
+
   it('says a step by its description, its command or its tool', () => {
     expect(
       stepLine({
@@ -250,6 +254,31 @@ describe('toolRunRows', () => {
     expect(
       screen.queryByRole('button', { expanded: false, name: /commands/ }),
     ).toBeNull()
+  })
+
+  it('the tail names one earlier step, or earlier thinking without a count', () => {
+    const think = (id: string): TranscriptEntry => ({
+      id,
+      role: 'assistant',
+      parts: [{ kind: 'thinking', text: 'hm' }],
+    })
+    const seven = Array.from({ length: 7 }, (_, i) => bash(`${i}`, `cmd${i}`))
+    const { unmount } = render(<Run entries={seven} live />)
+    expect(screen.getByText('1 earlier step · 7 commands')).toBeInTheDocument()
+    unmount()
+    const six = Array.from({ length: 6 }, (_, i) => bash(`${i}`, `cmd${i}`))
+    render(<Run entries={[think('t'), ...six]} live />)
+    expect(screen.getByText('Earlier steps · 6 commands')).toBeInTheDocument()
+  })
+
+  it('folded, the newest step said by its description is in prose', () => {
+    const steps = [
+      bash('1', 'a'),
+      bash('2', 'b'),
+      bash('3', 'c', { detail: { command: 'c', description: 'Check it' } }),
+    ]
+    render(<Run entries={steps} live={false} />)
+    expect(screen.getByText('Check it')).not.toHaveClass('font-mono')
   })
 
   it('a live run short enough shows all of it and can be folded', () => {

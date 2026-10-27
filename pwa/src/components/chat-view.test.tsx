@@ -333,6 +333,26 @@ describe('ChatView runs of steps', () => {
     expect(screen.getByText(`cmd${last + 2}`)).toBeInTheDocument()
   })
 
+  it('a run the window hides whole is not drawn', () => {
+    set({
+      entries: [
+        bash('c1', 'r'),
+        bash('c2', 'r'),
+        bash('c3', 'r'),
+        ...entries(RENDER_WINDOW),
+      ],
+      status: 'idle',
+    })
+    render(<ChatView {...props} />)
+    expect(screen.queryByText('3 commands')).toBeNull()
+  })
+
+  it('without a status, a call waiting for its result keeps the last run open', () => {
+    set({ entries: [entry(0), bash('c1', 'r'), bash('c2', 'r'), bash('c3')] })
+    render(<ChatView {...props} />)
+    expect(screen.getByText('c1')).toBeInTheDocument()
+  })
+
   it('a run cut by the window down to its thinking shows that as it is', () => {
     const think: TranscriptEntry = {
       id: 'th',
