@@ -1252,12 +1252,23 @@ test.describe('files and changes views', () => {
         await page.getByRole('menuitem', { name: 'Fit columns' }).click()
         await expect(handle).toHaveAttribute('aria-valuenow', '79')
         await panel.getByRole('button', { name: 'Columns' }).click()
-        await expect(page.getByRole('menu')).toBeVisible()
-        const idHandle = await grid.getByRole('separator', { name: 'Resize column id' }).boundingBox()
-        if (!idHandle) throw new Error('no handle')
-        await page.mouse.move(idHandle.x + idHandle.width / 2, idHandle.y + 5)
+        const menu = (await page.getByRole('menu').boundingBox())!
+        // The menu shows whole above the grid: drag a handle it leaves uncovered
+        let free: { x: number; y: number; width: number } | undefined
+        for (const h of await grid.getByRole('separator').all()) {
+          const b = await h.boundingBox()
+          if (!b) continue
+          const x = b.x + b.width / 2
+          const y = b.y + 5
+          if (x < menu.x || x > menu.x + menu.width || y < menu.y || y > menu.y + menu.height) {
+            free = b
+            break
+          }
+        }
+        if (!free) throw new Error('no handle outside the menu')
+        await page.mouse.move(free.x + free.width / 2, free.y + 5)
         await page.mouse.down()
-        await page.mouse.move(idHandle.x + 40, idHandle.y + 5, { steps: 3 })
+        await page.mouse.move(free.x + 40, free.y + 5, { steps: 3 })
         await page.mouse.up()
         await expect(page.getByRole('menu')).toHaveCount(0)
       } finally {

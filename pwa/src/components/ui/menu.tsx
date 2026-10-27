@@ -151,14 +151,13 @@ export function Menu({
   // header with buttons after it) would push the menu past the other edge.
   // Measured before paint, so it never shows cut off first.
   const inTopLayer = topLayer()
-  // offsetHeight: as tall as the menu shows, a max-h class included
+  // offsetHeight: as tall as the menu shows, a max-h class included. Only
+  // called while the menu is open, so both elements are there.
   const placeInViewport = () => {
-    const list = listRef.current
-    const trigger = triggerRef.current
-    if (!list || !trigger) return
+    const list = listRef.current!
     const vv = window.visualViewport
     const at = placeMenu(
-      trigger.getBoundingClientRect(),
+      triggerRef.current!.getBoundingClientRect(),
       { width: list.offsetWidth, height: list.offsetHeight },
       align,
       {

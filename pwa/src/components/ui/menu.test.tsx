@@ -447,6 +447,25 @@ describe('Menu in the top layer', () => {
     expect(menu()).toBeNull()
   })
 
+  it('caps its height when neither side holds it, and scrolls inside', () => {
+    vi.spyOn(document.documentElement, 'clientWidth', 'get').mockReturnValue(
+      1000,
+    )
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(800)
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      left: 500,
+      top: 100,
+      right: 532,
+      bottom: 132,
+    } as DOMRect)
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(2000)
+    renderMenu()
+    tapOpen()
+    expect(menu()!.style.top).toBe('140px')
+    expect(menu()!.style.maxHeight).toBe('652px')
+    expect(menu()).toHaveClass('overflow-y-auto')
+  })
+
   it('places itself again when the window resizes', () => {
     const rect = vi
       .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
