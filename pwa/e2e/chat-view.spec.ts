@@ -141,15 +141,17 @@ test.describe('chat view', () => {
     await expect(conversation).toContainText('You said: hello from e2e')
     await expect(conversation).toContainText('second line')
 
-    // An image attached in the composer goes before the text, as the
-    // agent's own token; the transcript shows the image part
+    // An image attached in the composer goes where the caret is, as its
+    // token in the text, and reaches the agent there as the agent's own
+    // token; the transcript shows the image part
+    await composer.fill('what is in it?')
     const chooser = page.waitForEvent('filechooser')
     await page.getByRole('button', { name: 'Attach image' }).click()
     await (await chooser).setFiles({ name: 'dot.png', mimeType: 'image/png', buffer: PNG })
     await expect(page.getByRole('img', { name: 'Attachment 1, ready' })).toBeVisible()
-    await composer.fill('what is in it?')
+    await expect(composer).toHaveValue('what is in it? [Image #1]')
     await send.click()
-    await expect(conversation).toContainText('You said: [Image #1] what is in it? (images: 1)')
+    await expect(conversation).toContainText('You said: what is in it? [Image #1] (images: 1)')
     await expect(conversation).toContainText('[image]')
     await expect(page.getByRole('list', { name: 'Attached images' })).toBeHidden()
 

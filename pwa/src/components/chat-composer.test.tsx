@@ -201,18 +201,23 @@ describe('ChatComposer images', () => {
   it('attaches, shows a thumbnail and sends the ids with the text', async () => {
     mockThumb.mockResolvedValue('data:image/png;base64,AA==')
     render(<ChatComposer {...uploadsProps()} />)
+    type('what are these?')
     await attach()
     await attach()
     expect(mockUpload).toHaveBeenCalledTimes(2)
     expect(
       screen.getByRole('img', { name: 'Attachment 1, ready' }),
     ).toHaveAttribute('src', 'data:image/png;base64,AA==')
-    type('what are these?')
+    // Never focused: each token goes at the end
+    expect(box()).toHaveValue('what are these? [Image #1] [Image #2]')
     await send()
-    expect(mockSend).toHaveBeenCalledWith('%3', 'what are these?', 'cur1', [
-      'id1',
-      'id2',
-    ])
+    expect(mockSend).toHaveBeenCalledWith(
+      '%3',
+      'what are these?  ',
+      'cur1',
+      ['id1', 'id2'],
+      [16, 17],
+    )
     expect(screen.queryByRole('list', { name: 'Attached images' })).toBeNull()
   })
 
@@ -222,7 +227,7 @@ describe('ChatComposer images', () => {
     await attach()
     expect(sendButton()).toBeEnabled()
     await send()
-    expect(mockSend).toHaveBeenCalledWith('%3', '', 'cur1', ['id1'])
+    expect(mockSend).toHaveBeenCalledWith('%3', '', 'cur1', ['id1'], [0])
   })
 
   it('a cancelled picker attaches nothing', async () => {
@@ -297,9 +302,9 @@ describe('ChatComposer images', () => {
 
   it('a refusal keeps the images; ids the host lost are marked', async () => {
     render(<ChatComposer {...uploadsProps()} />)
-    await attach()
-    await attach()
     type('hi')
+    await attach()
+    await attach()
     mockSend.mockRejectedValueOnce(
       new AgentRequestError(
         400,
@@ -319,7 +324,7 @@ describe('ChatComposer images', () => {
       screen.getByRole('img', { name: 'Attachment 2, No longer on the host' }),
     ).toBeTruthy()
     expect(sendButton()).toBeDisabled()
-    expect(box()).toHaveValue('hi')
+    expect(box()).toHaveValue('hi [Image #1] [Image #2]')
   })
 
   it.each([
@@ -354,20 +359,112 @@ describe('ChatComposer images', () => {
   it('with images, "!" and "/" are text: no shell question, no terminal', async () => {
     const confirm = vi.spyOn(window, 'confirm')
     render(<ChatComposer {...uploadsProps()} />)
-    await attach()
     type('!ls')
+    await attach()
     await send()
     expect(confirm).not.toHaveBeenCalled()
-    expect(mockSend).toHaveBeenLastCalledWith('%3', '!ls', 'cur1', ['id1'])
-    await attach()
+    expect(mockSend).toHaveBeenLastCalledWith(
+      '%3',
+      '!ls ',
+      'cur1',
+      ['id1'],
+      [4],
+    )
     type('/model')
     await act(async () => {
       fireEvent.keyDown(box(), { key: 'Escape' })
     })
+    await attach()
     await send()
-    expect(mockSend).toHaveBeenLastCalledWith('%3', '/model', 'cur1', ['id2'])
+    expect(mockSend).toHaveBeenLastCalledWith(
+      '%3',
+      '/model ',
+      'cur1',
+      ['id2'],
+      [7],
+    )
     expect(showView).not.toHaveBeenCalled()
     confirm.mockRestore()
+  })
+
+  it('a token left in the draft keeps its number: a new image gets the next', async () => {
+    render(<ChatComposer {...uploadsProps()} />)
+    type('xem [Image #1] nhé')
+    await attach()
+    expect(box()).toHaveValue('xem [Image #1] nhé [Image #2]')
+    await send()
+    expect(mockSend).toHaveBeenCalledWith(
+      '%3',
+      'xem [Image #1] nhé ',
+      'cur1',
+      ['id1'],
+      [new TextEncoder().encode('xem [Image #1] nhé ').length],
+    )
+  })
+
+  it('an image picked as the pane changes goes to the pane shown', async () => {
+    let pick: (f: File) => void = () => {}
+    mockPick.mockImplementationOnce(
+      () =>
+        new Promise((r) => {
+          pick = r
+        }),
+    )
+    const { rerender } = render(<ChatComposer {...uploadsProps()} />)
+    type('first pane')
+    fireEvent.click(attachButton())
+    rerender(
+      <ChatComposer
+        {...uploadsProps({
+          session: { ...uploadsProps().session, paneId: '%4' },
+        })}
+      />,
+    )
+    await act(async () => {
+      pick(png())
+    })
+    expect(box()).toHaveValue('[Image #1]')
+    expect(screen.getAllByRole('listitem').length).toBe(1)
+    expect(sessionStorage.getItem('termote-chat-draft:%3')).toBe('first pane')
+    expect(sessionStorage.getItem('termote-chat-draft:%4')).toBe('[Image #1]')
+  })
+
+  it('a pasted image goes where the caret is, its token in the text', async () => {
+    render(<ChatComposer {...uploadsProps()} />)
+    type('ảnh số 1 ảnh số 2')
+    fireEvent.focus(box())
+    ;(box() as HTMLTextAreaElement).setSelectionRange(9, 9)
+    await pasteImage()
+    expect(box()).toHaveValue('ảnh số 1 [Image #1] ảnh số 2')
+    const end = (box() as HTMLTextAreaElement).value.length
+    ;(box() as HTMLTextAreaElement).setSelectionRange(end, end)
+    await pasteImage()
+    expect(box()).toHaveValue('ảnh số 1 [Image #1] ảnh số 2 [Image #2]')
+    await send()
+    const enc = new TextEncoder()
+    expect(mockSend).toHaveBeenCalledWith(
+      '%3',
+      'ảnh số 1  ảnh số 2 ',
+      'cur1',
+      ['id1', 'id2'],
+      [
+        enc.encode('ảnh số 1 ').length,
+        enc.encode('ảnh số 1  ảnh số 2 ').length,
+      ],
+    )
+  })
+
+  it('deleting a token removes its image; removing an image, its token', async () => {
+    render(<ChatComposer {...uploadsProps()} />)
+    type('a b')
+    await attach()
+    await attach()
+    expect(screen.getAllByRole('listitem').length).toBe(2)
+    fireEvent.click(screen.getByRole('button', { name: 'Remove image 1' }))
+    expect(box()).toHaveValue('a b [Image #2]')
+    expect(screen.getAllByRole('listitem').length).toBe(1)
+    type('a b ')
+    expect(screen.queryAllByRole('listitem').length).toBe(0)
   })
 
   it('a slash command picked from the list goes without the images', async () => {
@@ -377,7 +474,7 @@ describe('ChatComposer images', () => {
     await act(async () => {
       fireEvent.keyDown(box(), { key: 'Enter' })
     })
-    expect(mockSend).toHaveBeenCalledWith('%3', '/model', 'cur1', [])
+    expect(mockSend).toHaveBeenCalledWith('%3', '/model', 'cur1', [], [])
   })
 })
 
@@ -391,7 +488,13 @@ describe('ChatComposer', () => {
     )
     expect(box()).toHaveAttribute('rows', '2')
     await send()
-    expect(mockSend).toHaveBeenCalledWith('%3', 'line 1\nline 2', 'cur1', [])
+    expect(mockSend).toHaveBeenCalledWith(
+      '%3',
+      'line 1\nline 2',
+      'cur1',
+      [],
+      [],
+    )
     expect(box()).toHaveValue('')
     expect(sessionStorage.getItem('termote-chat-draft:%3')).toBeNull()
     expect(transcript.refresh).toHaveBeenCalled()
@@ -630,7 +733,7 @@ describe('ChatComposer', () => {
     expect(mockSend).not.toHaveBeenCalled()
     confirm.mockReturnValue(true)
     await send()
-    expect(mockSend).toHaveBeenCalledWith('%3', '!rm -rf build', 'cur1', [])
+    expect(mockSend).toHaveBeenCalledWith('%3', '!rm -rf build', 'cur1', [], [])
     confirm.mockRestore()
   })
 
@@ -755,7 +858,7 @@ describe('ChatComposer', () => {
     )
     type('x')
     await send()
-    expect(mockSend).toHaveBeenCalledWith('', 'x', 'cur1', [])
+    expect(mockSend).toHaveBeenCalledWith('', 'x', 'cur1', [], [])
   })
 
   it('502 delivered_not_submitted never retries, even after time passes', async () => {
@@ -970,7 +1073,7 @@ describe('ChatComposer', () => {
       await act(async () => {
         key('Enter', { ctrlKey: true })
       })
-      expect(mockSend).toHaveBeenCalledWith('%3', '/comp', 'cur1', [])
+      expect(mockSend).toHaveBeenCalledWith('%3', '/comp', 'cur1', [], [])
     })
 
     it('Escape closes it until the "/" is gone', () => {
@@ -1059,7 +1162,7 @@ describe('ChatComposer', () => {
       await act(async () => {
         key('Enter')
       })
-      expect(mockSend).toHaveBeenCalledWith('%3', '/model', 'cur1', [])
+      expect(mockSend).toHaveBeenCalledWith('%3', '/model', 'cur1', [], [])
       expect(showView).toHaveBeenCalledWith('terminal')
       expect(box()).toHaveValue('')
     })
@@ -1068,7 +1171,13 @@ describe('ChatComposer', () => {
       render(<ChatComposer {...props()} />)
       type('/model sonnet')
       await send()
-      expect(mockSend).toHaveBeenCalledWith('%3', '/model sonnet', 'cur1', [])
+      expect(mockSend).toHaveBeenCalledWith(
+        '%3',
+        '/model sonnet',
+        'cur1',
+        [],
+        [],
+      )
       expect(showView).not.toHaveBeenCalled()
       mockSend.mockRejectedValueOnce(
         new AgentRequestError(409, 'input_not_ready', 'busy'),
@@ -1096,7 +1205,7 @@ describe('ChatComposer', () => {
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: 'Exit' }))
       })
-      expect(mockSend).toHaveBeenCalledWith('%3', '/quit', 'cur1', [])
+      expect(mockSend).toHaveBeenCalledWith('%3', '/quit', 'cur1', [], [])
       expect(box()).toHaveValue('')
     })
 
@@ -1231,6 +1340,7 @@ describe('ChatComposer', () => {
           'dùng $skill-a đi',
           'cur1',
           [],
+          [],
         )
         expect(box()).toHaveValue('')
         expect(screen.queryByRole('listbox')).toBeNull()
@@ -1241,6 +1351,7 @@ describe('ChatComposer', () => {
           '%3',
           'dùng $skill-a ',
           'cur1',
+          [],
           [],
         )
       })
@@ -1263,7 +1374,7 @@ describe('ChatComposer', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
         type('/cwd')
         await send()
-        expect(mockSend).toHaveBeenCalledWith('%3', '/cwd', 'cur1', [])
+        expect(mockSend).toHaveBeenCalledWith('%3', '/cwd', 'cur1', [], [])
       })
 
       it('Claude Code opens nothing on "$", and sends it as typed', async () => {
@@ -1271,7 +1382,7 @@ describe('ChatComposer', () => {
         type('$sk')
         expect(screen.queryByRole('listbox')).toBeNull()
         await send()
-        expect(mockSend).toHaveBeenCalledWith('%3', '$sk', 'cur1', [])
+        expect(mockSend).toHaveBeenCalledWith('%3', '$sk', 'cur1', [], [])
       })
 
       it('follows the caret before the agent turns to Codex', () => {
@@ -1496,7 +1607,7 @@ describe('ChatComposer while the agent works', () => {
     render(<ChatComposer {...props()} />)
     type('next step')
     await send()
-    expect(mockSend).toHaveBeenCalledWith('%3', 'next step', 'cur1', [])
+    expect(mockSend).toHaveBeenCalledWith('%3', 'next step', 'cur1', [], [])
     expect(box()).toHaveValue('')
     expect(screen.getByRole('status')).toHaveTextContent(
       'Queued: Claude Code reads it when it is ready.',
@@ -1509,7 +1620,7 @@ describe('ChatComposer while the agent works', () => {
     render(<ChatComposer {...props()} />)
     type('/model')
     await send()
-    expect(mockSend).toHaveBeenCalledWith('%3', '/model', 'cur1', [])
+    expect(mockSend).toHaveBeenCalledWith('%3', '/model', 'cur1', [], [])
     expect(showView).not.toHaveBeenCalled()
   })
 

@@ -481,10 +481,13 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `agent/message` may carry `images`: at most 5 upload ids, each resolved through the upload
   store (a path is never taken from the client; unknown ids → 400 with the bad ids, no store →
   503 `uploads_unavailable`). Each path is pasted alone and the draft must show that many
-  `[Image #N]` tokens (11s wait each) before the next, then the text, then Enter, with the
-  process and session re-checked between pastes. If a step fails after the first paste, the
-  box is cleared with one `C-c` only when the same idle agent shows nothing but what this
-  request pasted; otherwise 409 `partial_paste` and nothing is touched.
+  `[Image #N]` tokens (11s wait each) before the next; `at` (byte offsets, checked: one per
+  image, in order, on a character boundary) puts parts of the text between them, each pasted
+  and confirmed on its own, then Enter, with the process and session re-checked between
+  pastes and before text pasted first. Text starting with `/` or `!` always goes after every
+  image. If a step fails after the first paste, the box is cleared with one `C-c` only when
+  the same idle agent shows nothing but one of the states this request pasted; otherwise 409
+  `partial_paste` and nothing is touched.
   Markdown images in the Chat view never load (shown as links), and raw HTML is not rendered;
   its code blocks and Mermaid diagrams use the preview's (see Mermaid diagrams).
   A tool call carries `detail` for its card: the model's description, a Bash/Codex command whole

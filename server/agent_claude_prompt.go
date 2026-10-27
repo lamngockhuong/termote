@@ -343,7 +343,7 @@ var (
 	// imageTokenRe: what Claude Code 2.1.288 and Codex 0.160.0 show for an
 	// image path pasted alone. Claude Code does not restart the number when
 	// the box is cleared, so it is never checked.
-	imageTokenRe = regexp.MustCompile(`^\[Image #\d+\]`)
+	imageTokenRe = regexp.MustCompile(`\[Image #\d+\]`)
 )
 
 // findDialog recognises a dialog whose footer is the last row. A footer
@@ -798,23 +798,28 @@ func draftShows(draft, text string) bool {
 	return draft != "" && strip(draft) == strip(text)
 }
 
-// draftShowsImages reports whether the box shows exactly n image tokens
-// followed by text (as draftShows reads it), or nothing after the tokens when
-// text is empty. Whitespace between the tokens is the agent's own.
-func draftShowsImages(draft string, n int, text string) bool {
+// draftShowsParts reports whether the box shows a message pasted around
+// image tokens: parts[0], a token, parts[1] and so on, each part as
+// draftShows reads it (nothing for a blank part). A token is not counted
+// twice: text that holds "[Image #N]" itself still matches. Whitespace
+// around the tokens is the agent's own.
+func draftShowsParts(draft string, parts []string) bool {
 	rest := strings.TrimSpace(draft)
-	for range n {
-		loc := imageTokenRe.FindStringIndex(rest)
-		if loc == nil {
-			return false
+	if len(parts) == 1 {
+		return partShows(rest, parts[0])
+	}
+	for _, loc := range imageTokenRe.FindAllStringIndex(rest, -1) {
+		if partShows(strings.TrimSpace(rest[:loc[0]]), parts[0]) && draftShowsParts(rest[loc[1]:], parts[1:]) {
+			return true
 		}
-		rest = strings.TrimSpace(rest[loc[1]:])
 	}
-	if imageTokenRe.MatchString(rest) {
-		return false // more images than this request pasted
+	return false
+}
+
+// partShows: seg, trimmed, shows part of a message.
+func partShows(seg, part string) bool {
+	if strings.TrimSpace(part) == "" {
+		return seg == ""
 	}
-	if strings.TrimSpace(text) == "" {
-		return rest == ""
-	}
-	return draftShows(rest, text)
+	return draftShows(seg, part)
 }

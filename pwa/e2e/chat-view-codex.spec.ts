@@ -205,15 +205,15 @@ test.describe('chat view of a Codex pane', () => {
     await expect(conversation).toContainText('You said: hello from e2e')
     await expect(conversation).toContainText('second line')
 
-    // An image attached in the composer goes before the text, as Codex's own
-    // token; the rollout's local_image shows as an image part
+    // An image attached in the composer goes where the caret is, as Codex's
+    // own token; the rollout's local_image shows as an image part
+    await composer.fill('what is in it?')
     const chooser = page.waitForEvent('filechooser')
     await page.getByRole('button', { name: 'Attach image' }).click()
     await (await chooser).setFiles({ name: 'dot.png', mimeType: 'image/png', buffer: PNG })
     await expect(page.getByRole('img', { name: 'Attachment 1, ready' })).toBeVisible()
-    await composer.fill('what is in it?')
     await send.click()
-    await expect(conversation).toContainText('what is in it? (images: 1)')
+    await expect(conversation).toContainText('what is in it? [Image #1] (images: 1)')
     await expect(conversation).toContainText('[image]')
     await expect(page.getByRole('list', { name: 'Attached images' })).toBeHidden()
 

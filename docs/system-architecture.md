@@ -278,7 +278,7 @@ GET    /api/mux/push/key                                        → {publicKey} 
 POST   /api/mux/push/subscribe     body: {endpoint, keys:{p256dh, auth}}  → {ok} | {error, code}
 DELETE /api/mux/push/subscribe     body: {endpoint}             → {ok}   (unknown endpoint too)
 GET    /api/mux/panes/{id}/agent/transcript?cursor=&before=     → {agent, sessionId, status, entries, cursor, before, reset}
-POST   /api/mux/panes/{id}/agent/message  body: {text, cursor, images?}  → 204
+POST   /api/mux/panes/{id}/agent/message  body: {text, cursor, images?, at?}  → 204
 GET    /api/mux/panes/{id}/agent/prompt                          → {prompt: null | {promptId, kind, title, body, options, steps, freeText}}
 POST   /api/mux/panes/{id}/agent/answer   body: {promptId, choice} → 204
 GET    /api/mux/panes/{id}/agent/commands                        → {commands: [{name, description, source, kind}]}
@@ -317,11 +317,18 @@ another type), `too_large` (413, over 10 MB), `busy` (429, two uploads already r
 
 The Chat view's composer uploads the same way (its image button, or an image pasted into the
 box) and sends the ids as `images` in `agent/message`, at most 5; `text` may then be empty.
+Each image puts an `[Image #n]` token in the box where the caret is; deleting the token removes
+the image, removing the image removes its token. On send the tokens are cut out of `text` and
+`at` gives each image's place, a UTF-8 byte offset into `text` in image order (none: every
+image before the text; offsets not one per image, in order, on a character boundary → 400
+`invalid_request`). Text starting with `/` or `!` still goes after every image, so it is never
+a command or a shell escape.
 The server resolves each id in the store (an unknown one → 400 `invalid_request` with the bad
 ids in `images`; no store → 503 `uploads_unavailable`), pastes each path on its own and waits
 until the draft shows that many `[Image #N]` tokens (Claude Code and Codex both draw this for a
-path pasted alone, not for a path inside other text), then pastes the text after a space and
-confirms the whole draft before and after Enter. The request's time budget grows with the
+path pasted alone, not for a path inside other text). The text around the images is pasted in
+turn, each part confirmed before the next (text after images alone gets a space first), and
+the whole draft is confirmed before and after Enter. The request's time budget grows with the
 number of images. When a step after the first paste fails, the box is cleared with one `C-c`
 only if the same idle agent shows nothing but this request's paste (the code is then the step's
 own, e.g. `paste_not_confirmed`); anything else answers 409 `partial_paste` and leaves the box.

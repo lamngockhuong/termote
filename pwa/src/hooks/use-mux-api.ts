@@ -881,12 +881,16 @@ export async function sendAgentMessage(
   text: string,
   cursor: string,
   images: string[] = [],
+  // Where each image goes in text: a UTF-8 byte offset (none: before it)
+  at: number[] = [],
 ): Promise<{ queued: boolean }> {
   const res = await fetch(agentPath(paneId, 'message'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(
-      images.length > 0 ? { text, cursor, images } : { text, cursor },
+      images.length > 0
+        ? { text, cursor, images, ...(at.length > 0 && { at }) }
+        : { text, cursor },
     ),
   })
   if (!res.ok) throw await requestError(res)

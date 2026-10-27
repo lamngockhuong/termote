@@ -64,11 +64,14 @@ Every refusal that leaves something to check offers **Open terminal**.
 Tap the image button next to the box to pick a photo (or take one on a phone), or paste an image
 into the box. Each image is uploaded to the host at once and shows as a thumbnail above the box;
 the send button waits until every upload has finished. Up to 5 images go with one message, with or
-without text. Remove one with the cross on its thumbnail.
+without text. Each image also puts an `[Image #N]` token in the box where the caret is, as Claude
+Code does, so you can write "this one [Image #1], that one [Image #2]". Remove an image with the
+cross on its thumbnail or by deleting its token.
 
-Termote pastes each image's path into Claude Code (or Codex) on its own, waits for the agent to show
-it as `[Image #N]`, then pastes the text and presses Enter, so the images reach the agent as
-attachments. If a step fails halfway, the input box is cleared only when it holds nothing but what
+Termote pastes the message into Claude Code (or Codex) in order: the text up to an image, then that
+image's path on its own, waiting each time for the agent to show it (an image as `[Image #N]`), and
+finally presses Enter, so the images reach the agent as attachments where you put them. A message
+that starts with `/` or `!` gets its images first, so it is never taken as a command. If a step fails halfway, the input box is cleared only when it holds nothing but what
 this message pasted; otherwise you get `partial_paste` and the box is left for you to check.
 
 The images are stored on the host as described in

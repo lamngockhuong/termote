@@ -62,11 +62,14 @@ Lần từ chối nào cần bạn kiểm tra lại đều có nút **Open termi
 
 Bấm nút ảnh cạnh ô nhập để chọn ảnh (trên điện thoại có thể chụp luôn), hoặc dán ảnh vào ô. Mỗi ảnh
 được tải lên máy chủ ngay và hiện thành ảnh thu nhỏ phía trên ô nhập; nút gửi chờ đến khi mọi ảnh tải
-xong. Một tin mang được tối đa 5 ảnh, có chữ hay không đều được. Bấm dấu nhân trên ảnh thu nhỏ để bỏ
-ảnh đó.
+xong. Một tin mang được tối đa 5 ảnh, có chữ hay không đều được. Giống Claude Code, mỗi ảnh còn chèn
+một token `[Image #N]` vào ô nhập ngay tại con trỏ, nên bạn viết được "ảnh này [Image #1], ảnh kia
+[Image #2]". Muốn bỏ ảnh thì bấm dấu nhân trên ảnh thu nhỏ hoặc xoá token của nó.
 
-Termote dán đường dẫn của từng ảnh vào Claude Code (hoặc Codex), mỗi lần một ảnh, chờ agent hiện nó
-thành `[Image #N]`, rồi mới dán chữ và nhấn Enter, nhờ vậy agent nhận ảnh dưới dạng tệp đính kèm. Khi
+Termote dán tin vào Claude Code (hoặc Codex) theo đúng thứ tự: phần chữ đứng trước một ảnh, rồi riêng
+đường dẫn của ảnh đó. Sau mỗi lần dán, Termote chờ agent hiện ra (ảnh hiện thành `[Image #N]`), cuối
+cùng mới nhấn Enter, nhờ vậy agent nhận ảnh dưới dạng tệp đính kèm và đúng chỗ bạn đặt. Tin bắt đầu
+bằng `/` hoặc `!` thì ảnh được dán lên trước, để tin không bị hiểu thành lệnh. Khi
 một bước hỏng giữa chừng, ô nhập chỉ được xoá nếu nó không chứa gì ngoài những gì tin này đã dán; nếu
 không, bạn nhận `partial_paste` và ô nhập được giữ nguyên để bạn tự xem.
 

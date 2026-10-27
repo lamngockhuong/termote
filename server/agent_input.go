@@ -8,6 +8,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -378,6 +379,9 @@ func (a *agentAPI) handleMessage(w http.ResponseWriter, r *http.Request) {
 		Text   string   `json:"text"`
 		Cursor string   `json:"cursor"`
 		Images []string `json:"images"`
+		// At: where each image goes, a byte offset into Text, in order.
+		// Without it the images go before the text.
+		At []int `json:"at"`
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, agentMessageBody)
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -389,7 +393,12 @@ func (a *agentAPI) handleMessage(w http.ResponseWriter, r *http.Request) {
 		a.writeFailure(w, fail(http.StatusBadRequest, "invalid_request", "invalid JSON body"))
 		return
 	}
-	text := cleanText(body.Text)
+	parts, ok := messageParts(body.Text, body.At, len(body.Images))
+	if !ok {
+		a.writeFailure(w, fail(http.StatusBadRequest, "invalid_request", "invalid image positions"))
+		return
+	}
+	text := strings.Join(parts, "")
 	if len(text) > agentMaxText {
 		a.writeFailure(w, errTextTooLong)
 		return
@@ -425,7 +434,13 @@ func (a *agentAPI) handleMessage(w http.ResponseWriter, r *http.Request) {
 	// away, or the text stays stranded in the input box.
 	// The text's longest wait for any agent: an upper bound of what
 	// sendMessage waits for it.
-	budget := messageBudget(len(paths), pasteGrowMost(text))
+	var textWait time.Duration
+	for _, p := range parts {
+		if strings.TrimSpace(p) != "" || len(parts) == 1 {
+			textWait += pasteGrowMost(p)
+		}
+	}
+	budget := messageBudget(len(paths), textWait)
 	if len(paths) > 0 || budget > messageBudget(0, agentConfirmWait) {
 		// The body is read: the read deadline only has to outlast the
 		// pastes, which may pass requestReadTimeout with several images
@@ -435,7 +450,7 @@ func (a *agentAPI) handleMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), budget)
 	defer cancel()
-	switch err := a.sendMessage(ctx, wr, paneID, c.Session, text, paths); {
+	switch err := a.sendMessage(ctx, wr, paneID, c.Session, parts, paths); {
 	case errors.Is(err, errQueued):
 		// The agent took the message into its queue, to read when ready
 		w.WriteHeader(http.StatusAccepted)
@@ -446,10 +461,39 @@ func (a *agentAPI) handleMessage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// messageParts splits a message's text at the offsets its n images go to:
+// parts[i] goes before image i, the last part after the last image. Without
+// offsets every image goes first, as for text that starts with "/" or "!":
+// after an image token it is text, never a command or a shell escape. Each
+// part is cleaned (cleanText). ok is false for offsets that are not one per
+// image, in order, on a character boundary of text.
+func messageParts(text string, at []int, n int) (parts []string, ok bool) {
+	if len(at) == 0 {
+		at = make([]int, n)
+	}
+	if len(at) != n {
+		return nil, false
+	}
+	prev := 0
+	for _, i := range at {
+		// Never inside a character, nor between the two bytes of a CRLF
+		if i < prev || i > len(text) || (i < len(text) && (!utf8.RuneStart(text[i]) || (i > 0 && text[i-1] == '\r' && text[i] == '\n'))) {
+			return nil, false
+		}
+		parts = append(parts, cleanText(text[prev:i]))
+		prev = i
+	}
+	parts = append(parts, cleanText(text[prev:]))
+	if lead := strings.TrimSpace(parts[0]); n > 0 && (strings.HasPrefix(lead, "/") || strings.HasPrefix(lead, "!")) {
+		return append(make([]string, n), strings.Join(parts, "")), true
+	}
+	return parts, true
+}
+
 // messageBudget is how long a message with n images may take: a redraw to
 // settle, each paste and the Enter wait for the screen, and the backend
-// calls around them. textWait is the wait for the text to show
-// (pasteConfirmWait).
+// calls around them. textWait is the wait for its text to show
+// (pasteGrowMost), summed over the parts pasted on their own.
 func messageBudget(n int, textWait time.Duration) time.Duration {
 	if n == 0 {
 		return 3*agentConfirmWait + max(agentConfirmWait, textWait) + muxTimeout
@@ -486,9 +530,11 @@ func (a *agentAPI) imagePaths(ids []string) ([]string, error) {
 	return paths, nil
 }
 
-// sendMessage pastes the images, each path on its own, then text into an
-// empty input box of session and submits it.
-func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, session, text string, paths []string) error {
+// sendMessage pastes a message into an empty input box of session and
+// submits it: parts[i] before the image at paths[i], the last part after the
+// last image (one part more than paths).
+func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, session string, parts, paths []string) error {
+	text := parts[len(parts)-1]
 	s, err := sessionNow(ctx, wr, paneID)
 	if err != nil {
 		return err
@@ -544,34 +590,40 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 		now, err := sessionNow(ctx, wr, paneID)
 		return err == nil && sameAgent(now, s) && agentReady(now, true) == nil
 	}
-	// An image path becomes the agent's token only when pasted alone, so
-	// each goes in its own paste, confirmed before the next.
-	for i, p := range paths {
-		if i > 0 && !stillReady() {
-			return a.abandon(ctx, wr, paneID, s, i, "", errPartialPaste)
+	// box: what the box shows once the pastes so far land, its text before
+	// each image token and after the last; tried: every such state, the
+	// ones abandon may clear.
+	box := []string{""}
+	var tried [][]string
+	pastes := 0
+	// pasteText pastes a part of the text and waits for the box to show it.
+	pasteText := func(part string) error {
+		if pastes > 0 && !stillReady() {
+			return a.abandon(ctx, wr, paneID, s, tried, errPartialPaste)
 		}
-		if err := wr.Paste(ctx, s.Target, pasteablePath(p)); err != nil {
-			return a.abandon(ctx, wr, paneID, s, i+1, "", err)
+		next := append(slices.Clone(box[:len(box)-1]), part)
+		tried = append(tried, next)
+		if err := wr.Paste(ctx, s.Target, part); err != nil {
+			return a.abandon(ctx, wr, paneID, s, tried, err)
 		}
-		n := i + 1
-		shown := pollScreenFor(ctx, wr, s.Agent, s.Target, agentImageWait, func(sc agentScreen) bool {
-			return sc.input == inputDraft && draftShowsImages(sc.draft, n, "")
-		})
-		if !shown {
-			return a.abandon(ctx, wr, paneID, s, n, "", fail(http.StatusConflict, "paste_not_confirmed", "the image did not show in the input box"))
+		wait := pasteConfirmWait(wr, s.Agent, part)
+		most := wait
+		if slowPaste(wr, s.Agent) {
+			most = pasteGrowMost(part)
 		}
+		if !pollPaste(ctx, wr, s.Agent, s.Target, wait, most, func(sc agentScreen) bool {
+			return sc.input == inputDraft && draftShowsParts(sc.draft, next)
+		}) {
+			return a.abandon(ctx, wr, paneID, s, tried, fail(http.StatusConflict, "paste_not_confirmed", "the pasted text did not show in the input box"))
+		}
+		box = next
+		pastes++
+		return nil
 	}
-	n := len(paths)
-	pasted := text
-	if n > 0 {
-		pasted = ""
-		if strings.TrimSpace(text) != "" {
-			pasted = " " + text // Claude Code adds no space after an image token
-		}
-	}
-	// Text alone is read again right before it goes: an agent that exited
-	// since the screen check leaves a shell, which runs each line of it.
-	if n == 0 {
+	// Text pasted first is read again right before it goes: an agent that
+	// exited since the screen check leaves a shell, which runs each line of
+	// it.
+	if strings.TrimSpace(parts[0]) != "" {
 		now, err := sessionNow(ctx, wr, paneID)
 		if err != nil {
 			return err
@@ -583,13 +635,53 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 			return err
 		}
 	}
+	// An image path becomes the agent's token only when pasted alone, so
+	// each goes in its own paste, confirmed before the next.
+	for i, p := range paths {
+		if part := parts[i]; strings.TrimSpace(part) != "" {
+			if err := pasteText(part); err != nil {
+				return err
+			}
+		}
+		if pastes > 0 && !stillReady() {
+			return a.abandon(ctx, wr, paneID, s, tried, errPartialPaste)
+		}
+		next := append(slices.Clone(box), "")
+		tried = append(tried, next)
+		if err := wr.Paste(ctx, s.Target, pasteablePath(p)); err != nil {
+			return a.abandon(ctx, wr, paneID, s, tried, err)
+		}
+		shown := pollScreenFor(ctx, wr, s.Agent, s.Target, agentImageWait, func(sc agentScreen) bool {
+			return sc.input == inputDraft && draftShowsParts(sc.draft, next)
+		})
+		if !shown {
+			return a.abandon(ctx, wr, paneID, s, tried, fail(http.StatusConflict, "paste_not_confirmed", "the image did not show in the input box"))
+		}
+		box = next
+		pastes++
+	}
+	n := len(paths)
+	pasted := text
+	if n > 0 {
+		pasted = ""
+		if strings.TrimSpace(text) != "" {
+			pasted = text
+			// Text after images alone: Claude Code adds no space after
+			// an image token. Text between them carries its own.
+			if !slices.ContainsFunc(parts[:n], func(p string) bool { return strings.TrimSpace(p) != "" }) && !unicode.IsSpace([]rune(text)[0]) {
+				pasted = " " + text
+			}
+		}
+	}
+	final := append(slices.Clone(box[:len(box)-1]), pasted)
 	if pasted != "" {
 		if n > 0 && !stillReady() {
-			return a.abandon(ctx, wr, paneID, s, n, "", errPartialPaste)
+			return a.abandon(ctx, wr, paneID, s, tried, errPartialPaste)
 		}
+		tried = append(tried, final)
 		if err := wr.Paste(ctx, s.Target, pasted); err != nil {
 			if n > 0 {
-				return a.abandon(ctx, wr, paneID, s, n, pasted, err)
+				return a.abandon(ctx, wr, paneID, s, tried, err)
 			}
 			return err
 		}
@@ -601,7 +693,7 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 		if n == 0 {
 			return sc.input == inputDraft && draftShows(sc.draft, text)
 		}
-		return sc.input == inputDraft && draftShowsImages(sc.draft, n, pasted)
+		return sc.input == inputDraft && draftShowsParts(sc.draft, final)
 	}
 	wait := pasteConfirmWait(wr, s.Agent, pasted)
 	most := wait
@@ -611,7 +703,7 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 	if !pollPaste(ctx, wr, s.Agent, s.Target, wait, most, shows) {
 		notShown := fail(http.StatusConflict, "paste_not_confirmed", "the pasted text did not show in the input box")
 		if n > 0 {
-			return a.abandon(ctx, wr, paneID, s, n, pasted, notShown)
+			return a.abandon(ctx, wr, paneID, s, tried, notShown)
 		}
 		return notShown
 	}
@@ -664,9 +756,9 @@ func agentWorking(s AgentSession, sc agentScreen) bool {
 // abandon ends a message with images that failed after its first paste. The
 // box is cleared (C-c, sent once: on an empty box it arms the agent's exit)
 // only when the same agent still runs and the box holds nothing but what this
-// request pasted, k images at most and then pasted; then failure is returned
-// as is. Anything else is left for the user, as partial_paste.
-func (a *agentAPI) abandon(ctx context.Context, wr agentWriter, paneID string, s AgentSession, k int, pasted string, failure error) error {
+// request pasted, one of the states tried (draftShowsParts); then failure is
+// returned as is. Anything else is left for the user, as partial_paste.
+func (a *agentAPI) abandon(ctx context.Context, wr agentWriter, paneID string, s AgentSession, tried [][]string, failure error) error {
 	var f *agentFailure
 	if !errors.As(failure, &f) {
 		log.Printf("agent message: paste: %v", failure)
@@ -685,7 +777,7 @@ func (a *agentAPI) abandon(ctx context.Context, wr agentWriter, paneID string, s
 		return failure
 	}
 	// C-c to a working agent would interrupt it: its box is left as is.
-	if sc.input != inputDraft || !ownDraft(sc.draft, k, pasted) || agentReady(now, false) != nil {
+	if sc.input != inputDraft || !ownDraft(sc.draft, tried) || agentReady(now, false) != nil {
 		return errPartialPaste
 	}
 	if err := wr.SendKeySequence(ctx, s.Target, []string{"C-c"}); err != nil {
@@ -697,15 +789,16 @@ func (a *agentAPI) abandon(ctx context.Context, wr agentWriter, paneID string, s
 	return failure
 }
 
-// ownDraft: the box holds part of what a request pasted, k images and then
-// pasted (empty when no text was pasted): k-1 or k image tokens, and with
-// k tokens the text or nothing. A path the agent left as text is not ours to
-// recognise, so it is not cleared.
-func ownDraft(draft string, k int, pasted string) bool {
-	if draftShowsImages(draft, k, "") || (k > 1 && draftShowsImages(draft, k-1, "")) {
-		return true
+// ownDraft: the box holds one of the states a request tried to paste, as
+// far as it got. A path the agent left as text is not ours to recognise, so
+// it is not cleared.
+func ownDraft(draft string, tried [][]string) bool {
+	for _, parts := range tried {
+		if draftShowsParts(draft, parts) {
+			return true
+		}
 	}
-	return pasted != "" && draftShowsImages(draft, k, pasted)
+	return false
 }
 
 // agentReady: the agent waits for a message (or, with queue, takes one into
