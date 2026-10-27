@@ -18,7 +18,7 @@ function handshake(
   path: string,
   headers: Record<string, string> = {},
 ): Promise<Handshake> {
-  const base = new URL(testInfo.project.use.baseURL ?? 'http://localhost:7680')
+  const base = new URL(testInfo.project.use.baseURL ?? 'http://127.0.0.1:7680')
   return new Promise((resolve, reject) => {
     const req = http.request({
       host: base.hostname,
