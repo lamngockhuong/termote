@@ -107,7 +107,10 @@ images=() # paths behind the draft's "[Image #N]" tokens
 pasted="" # a bracketed paste, until its end
 
 draw() {
-  printf '\e[H\e[2J\e[3J'
+  # No autowrap: the screens were recorded 119 columns wide, and Codex draws
+  # to the pane's width, never past it. A narrower pane clips a long row (the
+  # footer) instead of wrapping it into a row the screen reader misreads.
+  printf '\e[?7l\e[H\e[2J\e[3J'
   if [ $state = approval ]; then
     # The recording without its trailing blank rows: the footer is the last row.
     awk 'NF { for (; n; n--) print ""; print; next } { n++ }' "$screens/0.159.3-approval-exec.txt" | tail -n "$rows"
