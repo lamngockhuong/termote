@@ -20,8 +20,3 @@ export const chatInputAgent = (name?: string) =>
 // The agent's name as its users know it
 export const agentLabel = (name?: string) =>
   (name && AGENT_LABELS[name]) || 'agent'
-
-// The column the conversation and the composer share: at most 896px wide,
-// centred, so long lines stay readable on a wide screen and both edges line
-// up. Here because the composer loads with the app and the Chat view lazily.
-export const CHAT_COLUMN = 'mx-auto w-full max-w-4xl'

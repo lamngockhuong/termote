@@ -120,8 +120,8 @@ There is no bottom navigation: the terminal takes that height.
 
 - The input area (key toolbar, Chat composer, view-only bar) sits under the view's column only, so
   the sidebar and the side panel run the full height; a maximized side panel covers it too.
-- The Chat conversation and composer share one centred column of at most 896px (`CHAT_COLUMN`);
-  the reader's own messages sit on the right, as wide as their text up to 85%.
+- The Chat conversation and composer take the view's whole width; the reader's own messages sit on
+  the right, as wide as their text up to 85%.
 - Scrollbars are 8px with a clear track and no arrows where there is a mouse (`pointer: fine`);
   touch screens keep the system's overlay scrollbars. The sidebar's lists show the thumb only on
   hover or with focus inside (`.scrollbar-hover`); tab rows hide theirs (`.scrollbar-hide`) and a
