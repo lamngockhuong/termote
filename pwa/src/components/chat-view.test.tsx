@@ -137,6 +137,16 @@ describe('ChatView', () => {
     expect(screen.getByText('Reconnecting…')).toBeInTheDocument()
   })
 
+  it('keeps the messages in a centred column; the list scrolls full width', () => {
+    set({ entries: entries(1) })
+    render(<ChatView {...props} />)
+    const list = screen.getByRole('region', { name: 'Conversation' })
+    const column = list.querySelector('.max-w-4xl')
+    expect(column).toHaveClass('mx-auto', 'w-full')
+    expect(column).toContainElement(screen.getByText('message 0'))
+    expect(list).not.toHaveClass('max-w-4xl')
+  })
+
   it('keeps text selected in the conversation for a template', () => {
     resetPaneSelections()
     set({ entries: entries(1) })

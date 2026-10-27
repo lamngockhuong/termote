@@ -479,6 +479,13 @@ describe('ChatComposer images', () => {
 })
 
 describe('ChatComposer', () => {
+  it('the box sits in the centred column of the conversation', () => {
+    render(<ChatComposer {...props()} />)
+    const column = box().closest('.max-w-4xl')
+    expect(column).toHaveClass('mx-auto', 'w-full')
+    expect(column?.parentElement).toHaveClass('border-t')
+  })
+
   it('sends the text with the cursor, clears the draft and refreshes', async () => {
     render(<ChatComposer {...props()} />)
     expect(sendButton()).toBeDisabled()

@@ -13,7 +13,7 @@ import {
   useState,
 } from 'react'
 import type { ViewProps } from '../app-views'
-import { agentLabel } from '../chat-agents'
+import { agentLabel, CHAT_COLUMN } from '../chat-agents'
 import { useAgentCommands } from '../hooks/use-agent-commands'
 import { useAgentPrompt } from '../hooks/use-agent-prompt'
 import { useAgentTranscript } from '../hooks/use-agent-transcript'
@@ -707,57 +707,59 @@ export function ChatComposer({
       >
         This ends the agent in this pane; the app goes back to the terminal.
       </ConfirmDialog>
-      {listOpen && (
-        <SlashCommandList
-          id={listId}
-          trigger={listTrigger}
-          commands={matches}
-          templates={templateMatches}
-          active={at}
-          onActive={setActive}
-          onPick={pick}
-          onPickTemplate={pickTemplate}
+      <div className={CHAT_COLUMN}>
+        {listOpen && (
+          <SlashCommandList
+            id={listId}
+            trigger={listTrigger}
+            commands={matches}
+            templates={templateMatches}
+            active={at}
+            onActive={setActive}
+            onPick={pick}
+            onPickTemplate={pickTemplate}
+          />
+        )}
+        {tooLong && (
+          <p id={limitId} className="px-3 pt-2 text-[12px] text-danger">
+            {Math.ceil(bytes / 1024)} KB of {MAX_MESSAGE_BYTES / 1024} KB:
+            shorten the message to send it.
+          </p>
+        )}
+        <ChatAttachments
+          items={images.items}
+          onRemove={removeImage}
+          disabled={sending}
         />
-      )}
-      {tooLong && (
-        <p id={limitId} className="px-3 pt-2 text-[12px] text-danger">
-          {Math.ceil(bytes / 1024)} KB of {MAX_MESSAGE_BYTES / 1024} KB: shorten
-          the message to send it.
-        </p>
-      )}
-      <ChatAttachments
-        items={images.items}
-        onRemove={removeImage}
-        disabled={sending}
-      />
-      {/* One card: the box over a row of its buttons, so the text keeps the
-          whole width and the buttons stay at the bottom as it grows. The card
-          draws the box's focus ring; a tap on its empty space focuses the box (a pointer shortcut
-          only: the box and every button are reachable by keyboard). */}
-      <div
-        onPointerDown={(e) => {
-          if ((e.target as Element).closest('button, textarea')) return
-          e.preventDefault()
-          boxRef.current?.focus()
-        }}
-        className="m-2 flex cursor-text flex-col rounded-panel border border-border-strong bg-surface-raised focus-within:border-accent has-[textarea:focus-visible]:outline-2 has-[textarea:focus-visible]:outline-accent ui-terminal:bg-bg"
-      >
-        {box}
+        {/* One card: the box over a row of its buttons, so the text keeps the
+            whole width and the buttons stay at the bottom as it grows. The card
+            draws the box's focus ring; a tap on its empty space focuses the box (a pointer shortcut
+            only: the box and every button are reachable by keyboard). */}
         <div
-          data-testid="composer-actions"
-          className="flex items-center gap-1 px-1 pb-1"
+          onPointerDown={(e) => {
+            if ((e.target as Element).closest('button, textarea')) return
+            e.preventDefault()
+            boxRef.current?.focus()
+          }}
+          className="m-2 flex cursor-text flex-col rounded-panel border border-border-strong bg-surface-raised focus-within:border-accent has-[textarea:focus-visible]:outline-2 has-[textarea:focus-visible]:outline-accent ui-terminal:bg-bg"
         >
-          {extras}
-          <div className="ml-auto flex items-center gap-2">
-            {!isMobile && (
-              <span
-                id={hintId}
-                className="whitespace-nowrap text-[12px] text-fg-subtle"
-              >
-                Ctrl+Enter to send
-              </span>
-            )}
-            {sendButton}
+          {box}
+          <div
+            data-testid="composer-actions"
+            className="flex items-center gap-1 px-1 pb-1"
+          >
+            {extras}
+            <div className="ml-auto flex items-center gap-2">
+              {!isMobile && (
+                <span
+                  id={hintId}
+                  className="whitespace-nowrap text-[12px] text-fg-subtle"
+                >
+                  Ctrl+Enter to send
+                </span>
+              )}
+              {sendButton}
+            </div>
           </div>
         </div>
       </div>

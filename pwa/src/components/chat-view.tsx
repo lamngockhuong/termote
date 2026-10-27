@@ -8,7 +8,7 @@ import {
   useState,
 } from 'react'
 import type { ViewProps } from '../app-views'
-import { agentLabel, chatInputAgent } from '../chat-agents'
+import { agentLabel, CHAT_COLUMN, chatInputAgent } from '../chat-agents'
 import { useAgentPrompt } from '../hooks/use-agent-prompt'
 import { useAgentTranscript } from '../hooks/use-agent-transcript'
 import { useDomSelection } from '../hooks/use-dom-selection'
@@ -365,7 +365,7 @@ function AgentChat({
       >
         <ChatFileLinkContext.Provider value={openFile}>
           <ChatMarkdownContext.Provider value={markdown}>
-            <div ref={contentRef} className="space-y-3">
+            <div ref={contentRef} className={`${CHAT_COLUMN} space-y-3`}>
               {(hidden > 0 || t.before) && (
                 <div className="flex justify-center">
                   <Button
