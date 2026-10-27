@@ -48,6 +48,12 @@ Remote control CLI tools (Claude Code, GitHub Copilot, any terminal) from mobile
 - **Herdr backend** (native or in the container): drive Herdr workspaces instead of tmux, with per-pane coding-agent status badges — see [Native Installation](https://termote.ohnice.app/installation/native/)
 - **Chat view**: read and answer a pane running Claude Code (or Codex started with `--no-daemon`) as a chat, with slash command suggestions and dialog answers — see [Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
 - **Files and Changes views**: browse a pane's directory and its git changes, with a Markdown preview — see [Files and Changes](https://termote.ohnice.app/usage/files-changes/)
+- **Chat queue and file links**: queue a message while the agent works; tap a file path the agent wrote to open it in Files, at its line
+- **Review and staging**: comment on lines in Changes and Files and send the review to an agent; stage, unstage or discard a change by file or by hunk
+- **Previews and editing in Files**: PDF, .xlsx and .docx previewed read-only; Shift-JIS, EUC-JP and UTF-16 files opened and saved; Markdown edited beside a live preview
+- **Places**: offer a folder outside the pane in Files with `termote start --allow-path <dir>` — see [Places](https://termote.ohnice.app/usage/files-changes/#places)
+- **Tasks**: run a pane's `package.json` scripts and Makefile targets, send a failed run to an agent — see [Tasks](https://termote.ohnice.app/usage/tasks/)
+- **Separate windows** (desktop): open a file, diff, tab, pane or the overview in its own window
 - **Image attachments**: send an image from the phone to the terminal or to a Chat view message, so the agent can read it by path
 - **Zellij backend** (Linux, macOS, or the container): drive your Zellij sessions, tabs and panes instead of tmux (Zellij 0.45.0 or later), chosen with `--mux zellij` — see [Native Installation](https://termote.ohnice.app/installation/native/)
 - **Herdr plugin**: open the focused Herdr pane in Termote, show its link as a QR code for a phone, start or stop the server, without leaving Herdr — see [Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/)
@@ -259,19 +265,23 @@ The native server runs as a user service: a systemd user unit on Linux (a detach
 
 ### Options of `start`
 
-| Flag                          | Description                                                                     |
-| ----------------------------- | ------------------------------------------------------------------------------- |
-| `--port <port>`               | Port (default: 7680, Windows: 7690)                                             |
-| `--lan[=false]`               | Listen on every interface (default: localhost only)                             |
-| `--tailscale <host[:port]>`   | Publish over Tailscale HTTPS (default port 443)                                 |
-| `--no-tailscale`              | Stop publishing over Tailscale                                                  |
-| `--no-auth[=false]`           | Disable basic authentication                                                    |
-| `--mux <tmux\|herdr\|zellij>` | Terminal backend (default: herdr when it runs, else tmux; zellij: Linux, macOS) |
-| `--allow-host <name>`         | Allow an extra Host header value (repeatable; no wildcard, see security notes)  |
-| `--remove-host <name>`        | Remove an allowed Host name (repeatable)                                        |
-| `--allow-herdr-no-auth`       | Required together with `--mux herdr --no-auth`                                  |
-| `--user <name>`               | Login username (default: `admin`; shared with the container)                    |
-| `--fresh`                     | Set a new password                                                              |
+| Flag                          | Description                                                                                    |
+| ----------------------------- | ---------------------------------------------------------------------------------------------- |
+| `--port <port>`               | Port (default: 7680, Windows: 7690)                                                            |
+| `--lan[=false]`               | Listen on every interface (default: localhost only)                                            |
+| `--tailscale <host[:port]>`   | Publish over Tailscale HTTPS (default port 443)                                                |
+| `--no-tailscale`              | Stop publishing over Tailscale                                                                 |
+| `--no-auth[=false]`           | Disable basic authentication                                                                   |
+| `--mux <tmux\|herdr\|zellij>` | Terminal backend (default: herdr when it runs, else tmux; zellij: Linux, macOS)                |
+| `--allow-host <name>`         | Allow an extra Host header value (repeatable; no wildcard, see security notes)                 |
+| `--remove-host <name>`        | Remove an allowed Host name (repeatable)                                                       |
+| `--allow-local-user <name>`   | Let another OS user of this machine connect, e.g. a reverse proxy (repeatable; Linux, Windows) |
+| `--remove-local-user <name>`  | Stop letting that user connect (repeatable)                                                    |
+| `--allow-path <dir>`          | Offer a folder in Files, under Places (repeatable)                                             |
+| `--remove-path <dir>`         | Remove an allowed folder (repeatable)                                                          |
+| `--allow-herdr-no-auth`       | Required together with `--mux herdr --no-auth`                                                 |
+| `--user <name>`               | Login username (default: `admin`; shared with the container)                                   |
+| `--fresh`                     | Set a new password                                                                             |
 
 ### With Tailscale HTTPS
 

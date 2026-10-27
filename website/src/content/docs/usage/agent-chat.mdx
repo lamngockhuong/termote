@@ -34,6 +34,13 @@ and one difference for dialogs (see [Codex](#codex)).
   is drawn as a diagram, with the same Show source, export and full-screen buttons as the
   [Markdown preview](/usage/files-changes/#markdown-preview); one that cannot be drawn stays code
   with the reason.
+- File paths as links to the pane's [Files view](/usage/files-changes/): the path on a tool card,
+  inline code that names a file (`src/app.ts`, `./run.sh`, `src/app.ts:42`, `src/app.ts#L42`) and a
+  relative Markdown link. Tapping one opens that file in Files, at the line when one is given. A
+  relative path is taken from the pane's directory, then from its root; a path outside the root is
+  never requested and stays plain text, as every path does in a pane without a Files view. On desktop
+  the file opens in the side panel and the Chat stays where it is. A single name under `/`, such as
+  `/clear`, is a slash command, not a file.
 - Images in a reply as text links. They are never loaded, so a reply cannot make your browser
   contact another site.
 

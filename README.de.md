@@ -48,6 +48,12 @@ CLI-Tools (Claude Code, GitHub Copilot, jedes Terminal) per PWA von Mobilgeräte
 - **Herdr-Backend** (nativ oder im Container): Herdr-Workspaces statt tmux steuern, mit Statusabzeichen des Coding-Agents in jedem Pane — siehe [Native Installation](https://termote.ohnice.app/installation/native/)
 - **Chat-Ansicht**: Ein Pane, in dem Claude Code (oder mit `--no-daemon` gestartetes Codex) läuft, als Chat lesen und beantworten, mit Vorschlägen für Slash-Befehle und Antworten auf Dialoge — siehe [Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
 - **Files- und Changes-Ansicht**: Das Verzeichnis eines Panes und seine Git-Änderungen durchsuchen, mit Markdown-Vorschau — siehe [Files and Changes](https://termote.ohnice.app/usage/files-changes/)
+- **Warteschlange und Dateilinks im Chat**: eine Nachricht vormerken, während der Agent arbeitet; einen Dateipfad des Agenten antippen, um die Datei in Files an ihrer Zeile zu öffnen
+- **Review und Staging**: Zeilen in Changes und Files kommentieren und das Review an einen Agenten senden; eine Änderung pro Datei oder pro Hunk stagen, unstagen oder verwerfen
+- **Vorschau und Bearbeitung in Files**: PDF, .xlsx und .docx schreibgeschützt ansehen; Dateien in Shift-JIS, EUC-JP und UTF-16 öffnen und speichern; Markdown neben einer Live-Vorschau bearbeiten
+- **Places**: einen Ordner außerhalb des Panes mit `termote start --allow-path <dir>` in Files anbieten — siehe [Places](https://termote.ohnice.app/usage/files-changes/#places)
+- **Tasks**: die `package.json`-Skripte und Makefile-Targets eines Panes ausführen, einen fehlgeschlagenen Lauf an einen Agenten senden — siehe [Tasks](https://termote.ohnice.app/usage/tasks/)
+- **Eigene Fenster** (Desktop): eine Datei, einen Diff, einen Tab, ein Pane oder die Übersicht in einem eigenen Fenster öffnen
 - **Bildanhänge**: Ein Bild vom Handy an das Terminal oder an eine Nachricht in der Chat-Ansicht senden, damit der Agent es über seinen Pfad lesen kann
 - **Herdr-Plugin**: Das fokussierte Herdr-Pane in Termote öffnen, seinen Link als QR-Code fürs Handy anzeigen, den Server starten oder stoppen, ohne Herdr zu verlassen — siehe [Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/)
 - **Mobilfreundlich**: Virtuelle Tastatur-Toolbar (Tab/Ctrl/Shift/Pfeiltasten, erweiterbar)
@@ -137,7 +143,7 @@ irm https://termote.ohnice.app/install.ps1 | iex
 termote start
 ```
 
-Der Installer braucht nur `curl`, `tar` und `sha256sum`/`shasum` (unter Windows PowerShell), weder sudo noch Administratorrechte. Er prüft die Prüfsumme des Archivs, installiert den Befehl `termote` und startet nichts. `termote start` speichert die Optionen, erzeugt beim ersten Mal ein Passwort (einmal ausgegeben; `termote show-password` zeigt es erneut an), registriert den Dienst und startet ihn. Danach `http://localhost:7680` öffnen (Windows: `http://localhost:7690`).
+Der Installer braucht nur `curl`, `tar` und `sha256sum`/`shasum` (unter Windows PowerShell), weder sudo noch Administratorrechte. Er prüft die Prüfsumme des Archivs, installiert den Befehl `termote` und startet nichts. `termote start` speichert die Optionen, erzeugt beim ersten Mal ein Passwort (einmal ausgegeben; `termote show-password` zeigt es erneut an), registriert den Dienst und startet ihn. Danach `http://127.0.0.1:7680` öffnen (Windows: `http://127.0.0.1:7690`).
 
 Vorher muss ein Terminal-Backend installiert sein: tmux (`sudo apt install tmux`, `brew install tmux`), unter Windows psmux (`winget install psmux`) oder [Herdr](https://termote.ohnice.app/installation/native/). Der erste `start` erkennt, welches verwendet wird.
 
@@ -256,19 +262,23 @@ Der native Server läuft als Benutzerdienst: unter Linux als systemd-User-Unit (
 
 ### Optionen von `start`
 
-| Flag                        | Beschreibung                                                                                                   |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `--port <port>`             | Port (Standard: 7680, Windows: 7690)                                                                           |
-| `--lan[=false]`             | Auf allen Schnittstellen lauschen (Standard: nur localhost)                                                    |
-| `--tailscale <host[:port]>` | Über Tailscale HTTPS veröffentlichen (Standardport 443)                                                        |
-| `--no-tailscale`            | Veröffentlichung über Tailscale beenden                                                                        |
-| `--no-auth[=false]`         | Basis-Authentifizierung deaktivieren                                                                           |
-| `--mux <tmux\|herdr>`       | Terminal-Backend (Standard: herdr, wenn es läuft, sonst tmux)                                                  |
-| `--allow-host <name>`       | Zusätzlichen Wert für den Host-Header erlauben (mehrfach angebbar; keine Wildcards, siehe Sicherheitshinweise) |
-| `--remove-host <name>`      | Einen erlaubten Host-Namen entfernen (mehrfach angebbar)                                                       |
-| `--allow-herdr-no-auth`     | Zusammen mit `--mux herdr --no-auth` erforderlich                                                              |
-| `--user <name>`             | Login-Benutzername (Standard: `admin`; mit dem Container geteilt)                                              |
-| `--fresh`                   | Neues Passwort setzen                                                                                          |
+| Flag                         | Beschreibung                                                                                                                                 |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--port <port>`              | Port (Standard: 7680, Windows: 7690)                                                                                                         |
+| `--lan[=false]`              | Auf allen Schnittstellen lauschen (Standard: nur localhost)                                                                                  |
+| `--tailscale <host[:port]>`  | Über Tailscale HTTPS veröffentlichen (Standardport 443)                                                                                      |
+| `--no-tailscale`             | Veröffentlichung über Tailscale beenden                                                                                                      |
+| `--no-auth[=false]`          | Basis-Authentifizierung deaktivieren                                                                                                         |
+| `--mux <tmux\|herdr>`        | Terminal-Backend (Standard: herdr, wenn es läuft, sonst tmux)                                                                                |
+| `--allow-host <name>`        | Zusätzlichen Wert für den Host-Header erlauben (mehrfach angebbar; keine Wildcards, siehe Sicherheitshinweise)                               |
+| `--remove-host <name>`       | Einen erlaubten Host-Namen entfernen (mehrfach angebbar)                                                                                     |
+| `--allow-local-user <name>`  | Einem anderen Betriebssystem-Benutzer dieses Rechners die Verbindung erlauben, z. B. einem Reverse Proxy (mehrfach angebbar; Linux, Windows) |
+| `--remove-local-user <name>` | Diesem Benutzer die Verbindung nicht mehr erlauben (mehrfach angebbar)                                                                       |
+| `--allow-path <dir>`         | Einen Ordner in Files unter Places anbieten (mehrfach angebbar)                                                                              |
+| `--remove-path <dir>`        | Einen erlaubten Ordner entfernen (mehrfach angebbar)                                                                                         |
+| `--allow-herdr-no-auth`      | Zusammen mit `--mux herdr --no-auth` erforderlich                                                                                            |
+| `--user <name>`              | Login-Benutzername (Standard: `admin`; mit dem Container geteilt)                                                                            |
+| `--fresh`                    | Neues Passwort setzen                                                                                                                        |
 
 ### Mit Tailscale HTTPS
 

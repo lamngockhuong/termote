@@ -33,6 +33,13 @@ Codex dùng được theo cách tương tự, có yêu cầu riêng và một đ
   vẽ thành sơ đồ, với các nút Show source, xuất ảnh và xem toàn màn hình giống
   [bản xem trước Markdown](/vi/usage/files-changes/#xem-trước-markdown); sơ đồ không vẽ được thì vẫn
   hiện code kèm lý do.
+- Đường dẫn file thành link tới [view Files](/vi/usage/files-changes/) của pane: đường dẫn trên thẻ
+  tool, inline code chỉ tới một file (`src/app.ts`, `./run.sh`, `src/app.ts:42`, `src/app.ts#L42`) và
+  link Markdown tương đối. Chạm vào một link sẽ mở file đó trong Files, nhảy tới dòng nếu có ghi số
+  dòng. Đường dẫn tương đối được tính từ thư mục của pane, rồi mới tới thư mục gốc; đường dẫn nằm ngoài
+  thư mục gốc không bao giờ được gửi lên server và chỉ hiện thành chữ thường, giống mọi đường dẫn trong
+  một pane không có view Files. Trên desktop, file mở ở panel bên cạnh và Chat vẫn giữ nguyên chỗ cũ.
+  Một tên đơn lẻ ngay sau `/`, như `/clear`, là lệnh slash chứ không phải file.
 - Ảnh trong câu trả lời hiện thành link chữ. Ảnh không bao giờ được tải, nên một câu trả lời không
   thể khiến trình duyệt gửi yêu cầu tới trang khác.
 

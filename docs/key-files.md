@@ -11,9 +11,13 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/gesture-hints-overlay.tsx`    | First-time gesture tutorial overlay (mobile)                   |
 | `pwa/src/components/session-tabs.tsx`             | Session tab bar for window switching                           |
 | `pwa/src/components/connection-indicator.tsx`     | Connection status indicator with retry                         |
+| `pwa/src/components/localhost-notice.tsx`         | Offers a page opened through localhost the same at 127.0.0.1   |
+| `pwa/src/utils/loopback-address.ts`               | Why 127.0.0.1, not localhost (::1); the page's 127.0.0.1 URL   |
 | `pwa/src/components/command-history-dropdown.tsx` | Command search/recall UI                                       |
 | `pwa/src/components/quick-actions-menu.tsx`       | Quick actions (Actions row of the expanded toolbar, mobile)    |
 | `pwa/src/hooks/use-scroll-edges.ts`               | Which ends of a scroller hide content, the fading mask         |
+| `pwa/src/hooks/use-wheel-scroll-x.ts`             | A vertical wheel scrolls a row of tabs sideways                |
+| `pwa/src/utils/classic-scrollbars.ts`             | Measures classic scrollbars, which index.css makes thin        |
 | `pwa/src/components/select-text-sheet.tsx`        | Select text: the pane's text to select and copy (phone)        |
 | `pwa/src/hooks/use-pane-text.ts`                  | Pane text for the sheet: server history, else xterm buffer     |
 | `pwa/src/utils/copy-text.ts`                      | Clipboard write, `execCommand('copy')` fallback over HTTP      |
@@ -55,8 +59,11 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/chat-composer.tsx`            | Chat view message box                                          |
 | `pwa/src/components/chat-tool-card.tsx`           | Chat view tool call: `$` command, folded output, edit diff     |
 | `pwa/src/components/chat-tool-run.tsx`            | Chat view: steps in a row folded into one summary line         |
+| `pwa/src/components/chat-file-link.tsx`           | A file path in the Chat view, opened in Files on a click       |
+| `pwa/src/utils/chat-file-links.ts`                | Which inline code is a path, its line, the path under the root |
 | `pwa/src/utils/line-diff.ts`                      | Line diff of an edit's old and new text, its summary           |
 | `pwa/src/components/chat-attachments.tsx`         | Images attached to the next Chat message, above the box        |
+| `pwa/src/utils/chat-image-tokens.ts`              | `[Image #n]` tokens that place a message's images in its text  |
 | `pwa/src/chat-agents.ts`                          | Agents with a Chat view (claude, codex) and with input         |
 | `pwa/src/components/start-agent-panel.tsx`        | Chat view of an idle pane: start Claude Code or Codex          |
 | `pwa/src/hooks/use-start-agent.ts`                | Sends a start, follows it (`GET agent/start`), toasts          |
@@ -84,6 +91,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/hooks/use-agent-transcript.ts`           | Polls a pane's transcript, one store per pane                  |
 | `pwa/src/hooks/use-agent-prompt.ts`               | Polls a pane's open dialog, one store per pane                 |
 | `pwa/src/components/files-view.tsx`               | Files view: the pane's directory as a tree, opens a file       |
+| `pwa/src/components/places-menu.tsx`              | Files next to its root: the pane's folder or an allowed Place  |
 | `pwa/src/utils/file-tabs.ts`                      | Open files as tabs: preview tab, pin, close, cap of 10 (LRU)   |
 | `pwa/src/components/file-tab-bar.tsx`             | Desktop tab bar of the open files (keys, middle click, pin)    |
 | `pwa/src/components/open-files-sheet.tsx`         | Phone: "Open files (N)" button and the sheet listing them      |
@@ -91,6 +99,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/hooks/use-long-press.ts`                 | Long press of a finger (a Markdown link opens a new tab)       |
 | `pwa/src/components/changes-view.tsx`             | Changes view: git status grouped, diffs as tabs, edits a file  |
 | `pwa/src/components/commit-view.tsx`              | Last commit from an empty Changes list: message, files, diffs  |
+| `pwa/src/components/change-status.tsx`            | One changed file of a list: status letter, name, directory     |
 | `pwa/src/components/file-editor.tsx`              | A file being edited: desktop editor or textarea, save errors   |
 | `pwa/src/components/file-encoding-menu.tsx`       | A file's encoding in the header: reopen as another, as UTF-8   |
 | `pwa/src/utils/file-encoding.ts`                  | Encoding names the Files view shows, the fixed set             |
@@ -144,11 +153,14 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/image-compare.tsx`            | Changes: an image's old and new versions side by side          |
 | `pwa/src/hooks/use-image-blob.ts`                 | Reads `files/raw` into a `blob:` URL (SVG: `data:`), revokes   |
 | `pwa/src/components/document-preview.tsx`         | A PDF, .xlsx or .docx: its viewer, or why, with Download       |
+| `pwa/src/utils/document-path.ts`                  | Names shown as a document preview (PDF, .xlsx, .docx)          |
+| `pwa/src/utils/prose.ts`                          | Look of a rendered document: headings, lists, code, tables     |
 | `pwa/src/components/document-message.tsx`         | Why a document cannot be shown (server and viewer codes)       |
 | `pwa/src/hooks/use-document-bytes.ts`             | Reads `files/document` into a Blob, read again per worker      |
 | `pwa/src/utils/document-worker-client.ts`         | A document's worker: queue, timeouts, terminate                |
 | `pwa/src/utils/zip-guard.ts`                      | Checks a zip's declared entries before SheetJS or mammoth      |
 | `pwa/src/components/pdf-preview.tsx`              | pdf.js viewer: one worker per document, find, zoom             |
+| `pwa/src/components/pdf-toolbar.tsx`              | Above a PDF: page, zoom and find, buttons only                 |
 | `pwa/src/utils/pdf-options.ts`                    | Fixed `getDocument` options (no XFA, no wasm, own assets)      |
 | `pwa/src/utils/pdf-runtime.ts`                    | Loads pdf.js, then its viewer; makes a document's worker       |
 | `pwa/src/components/xlsx-preview.tsx`             | Sheet tabs over the table view, a sheet read at a time         |
@@ -201,6 +213,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/agent_proc_codex.go`                      | Finds the Codex process holding a rollout (tmux, Herdr)        |
 | `server/files.go`                                 | `/api/mux/panes/{id}/files/*` routes, tree and file contents   |
 | `server/files_root.go`                            | Pane root (git toplevel), safe git runner                      |
+| `server/files_places.go`                          | Places: folders allowed with `--allow-path`, served as roots   |
 | `server/files_git.go`                             | git status and diff for the Changes view                       |
 | `server/files_git_commit.go`                      | `files/commit`, `files/commit/diff`: HEAD and its file diffs   |
 | `server/files_git_apply.go`                       | `POST files/changes/apply`: stage, unstage, discard a change   |
@@ -242,6 +255,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/tailscale.go`                             | `tailscale serve` mapping (apply/remove, never sudo)           |
 | `server/release_tags.go`                          | Picks the newest published stable 1.x release                  |
 | `server/cli_start.go`                             | `start`/`stop`/`restart`: options, service registration        |
+| `server/cli_allow_path.go`                        | `--allow-path` checks: deny lists, home, termote's dirs, git   |
 | `server/cli_service*.go`                          | OS supervisor registration (systemd/launchd/Scheduled Task)    |
 | `server/cli_container.go`                         | `container up/down/logs/status`                                |
 | `server/cli_url.go`                               | `status --json`, `url` (deep link, open, copy, QR)             |

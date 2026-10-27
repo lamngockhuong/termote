@@ -46,6 +46,12 @@
 - **Herdr 백엔드** (네이티브 또는 컨테이너 안): tmux 대신 Herdr 워크스페이스를 제어하고, 패널마다 코딩 에이전트 상태 배지를 표시 — [네이티브 설치](https://termote.ohnice.app/installation/native/) 참고
 - **Chat 뷰**: Claude Code(또는 `--no-daemon`으로 시작한 Codex)를 실행 중인 pane을 채팅처럼 읽고 답할 수 있으며, 슬래시 명령 제안과 대화상자 응답을 지원 — [Agent Chat](https://termote.ohnice.app/usage/agent-chat/) 참고
 - **Files 및 Changes 뷰**: pane의 디렉터리와 git 변경 사항을 탐색하고 Markdown을 미리보기 — [Files and Changes](https://termote.ohnice.app/usage/files-changes/) 참고
+- **Chat 메시지 대기열과 파일 링크**: 에이전트가 작업하는 동안 메시지를 대기열에 넣고, 에이전트가 쓴 파일 경로를 탭하면 Files에서 해당 줄로 파일을 엶
+- **리뷰와 스테이징**: Changes와 Files에서 줄에 댓글을 달고 리뷰를 에이전트에게 보냄. 변경 사항을 파일 또는 hunk 단위로 stage, unstage, 폐기
+- **Files의 미리보기와 편집**: PDF, .xlsx, .docx를 읽기 전용으로 미리보기. Shift-JIS, EUC-JP, UTF-16 파일 열기와 저장. 실시간 미리보기 옆에서 Markdown 편집
+- **Places**: `termote start --allow-path <dir>`로 pane 밖의 폴더를 Files에 표시 — [Places](https://termote.ohnice.app/usage/files-changes/#places) 참고
+- **Tasks**: pane의 `package.json` 스크립트와 Makefile 타깃을 실행하고, 실패한 실행을 에이전트에게 보냄 — [Tasks](https://termote.ohnice.app/usage/tasks/) 참고
+- **별도 창** (데스크톱): 파일, diff, 탭, pane 또는 개요를 별도 창에서 열기
 - **이미지 첨부**: 휴대폰의 이미지를 터미널이나 Chat 뷰 메시지로 보내 에이전트가 경로로 읽을 수 있게 함
 - **Herdr 플러그인**: Herdr를 벗어나지 않고 포커스된 Herdr pane을 Termote에서 열고, 링크를 휴대폰용 QR 코드로 표시하고, 서버를 시작하거나 중지 — [Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/) 참고
 - **모바일 친화적**: 가상 키보드 툴바 (Tab/Ctrl/Shift/방향키, 확장 가능)
@@ -135,7 +141,7 @@ irm https://termote.ohnice.app/install.ps1 | iex
 termote start
 ```
 
-설치 프로그램에는 `curl`, `tar`, `sha256sum`/`shasum`(Windows에서는 PowerShell)만 필요하며 sudo나 관리자 권한은 필요 없습니다. 아카이브의 체크섬을 검증한 뒤 `termote` 명령을 설치하고, 아무것도 실행하지 않습니다. `termote start`는 옵션을 저장하고, 처음 실행할 때 비밀번호를 만들고(한 번만 표시되며 나중에 `termote show-password`로 다시 볼 수 있음), 서비스를 등록해 시작합니다. `http://localhost:7680`(Windows: `http://localhost:7690`)을 여세요.
+설치 프로그램에는 `curl`, `tar`, `sha256sum`/`shasum`(Windows에서는 PowerShell)만 필요하며 sudo나 관리자 권한은 필요 없습니다. 아카이브의 체크섬을 검증한 뒤 `termote` 명령을 설치하고, 아무것도 실행하지 않습니다. `termote start`는 옵션을 저장하고, 처음 실행할 때 비밀번호를 만들고(한 번만 표시되며 나중에 `termote show-password`로 다시 볼 수 있음), 서비스를 등록해 시작합니다. `http://127.0.0.1:7680`(Windows: `http://127.0.0.1:7690`)을 여세요.
 
 터미널 백엔드를 먼저 설치해야 합니다: tmux(`sudo apt install tmux`, `brew install tmux`), Windows에서는 psmux(`winget install psmux`), 또는 [Herdr](https://termote.ohnice.app/installation/native/). 어떤 것을 쓸지는 첫 `start`가 감지합니다.
 
@@ -254,19 +260,23 @@ flowchart LR
 
 ### `start` 옵션
 
-| 플래그                      | 설명                                                                |
-| --------------------------- | ------------------------------------------------------------------- |
-| `--port <port>`             | 포트 (기본값: 7680, Windows: 7690)                                  |
-| `--lan[=false]`             | 모든 인터페이스에서 수신 (기본값: localhost만)                      |
-| `--tailscale <host[:port]>` | Tailscale HTTPS로 공개 (기본 포트 443)                              |
-| `--no-tailscale`            | Tailscale 공개 중지                                                 |
-| `--no-auth[=false]`         | 기본 인증 비활성화                                                  |
-| `--mux <tmux\|herdr>`       | 터미널 백엔드 (기본값: herdr가 실행 중이면 herdr, 아니면 tmux)      |
-| `--allow-host <name>`       | 추가 Host 헤더 값 허용 (반복 가능, 와일드카드 없음, 보안 참고 참조) |
-| `--remove-host <name>`      | 허용된 Host 이름 제거 (반복 가능)                                   |
-| `--allow-herdr-no-auth`     | `--mux herdr --no-auth`와 함께 쓸 때 필수                           |
-| `--user <name>`             | 로그인 사용자 이름 (기본값: `admin`, 컨테이너와 공유)               |
-| `--fresh`                   | 새 비밀번호 설정                                                    |
+| 플래그                       | 설명                                                                                |
+| ---------------------------- | ----------------------------------------------------------------------------------- |
+| `--port <port>`              | 포트 (기본값: 7680, Windows: 7690)                                                  |
+| `--lan[=false]`              | 모든 인터페이스에서 수신 (기본값: localhost만)                                      |
+| `--tailscale <host[:port]>`  | Tailscale HTTPS로 공개 (기본 포트 443)                                              |
+| `--no-tailscale`             | Tailscale 공개 중지                                                                 |
+| `--no-auth[=false]`          | 기본 인증 비활성화                                                                  |
+| `--mux <tmux\|herdr>`        | 터미널 백엔드 (기본값: herdr가 실행 중이면 herdr, 아니면 tmux)                      |
+| `--allow-host <name>`        | 추가 Host 헤더 값 허용 (반복 가능, 와일드카드 없음, 보안 참고 참조)                 |
+| `--remove-host <name>`       | 허용된 Host 이름 제거 (반복 가능)                                                   |
+| `--allow-local-user <name>`  | 이 머신의 다른 OS 사용자(예: 리버스 프록시)의 연결 허용 (반복 가능; Linux, Windows) |
+| `--remove-local-user <name>` | 해당 사용자의 연결 허용 해제 (반복 가능)                                            |
+| `--allow-path <dir>`         | 폴더를 Files의 Places에 표시 (반복 가능)                                            |
+| `--remove-path <dir>`        | 허용된 폴더 제거 (반복 가능)                                                        |
+| `--allow-herdr-no-auth`      | `--mux herdr --no-auth`와 함께 쓸 때 필수                                           |
+| `--user <name>`              | 로그인 사용자 이름 (기본값: `admin`, 컨테이너와 공유)                               |
+| `--fresh`                    | 새 비밀번호 설정                                                                    |
 
 ### Tailscale HTTPS 사용
 

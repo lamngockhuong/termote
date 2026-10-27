@@ -48,6 +48,12 @@ Controla remotamente herramientas CLI (Claude Code, GitHub Copilot, cualquier te
 - **Backend Herdr** (nativo o en el contenedor): controla workspaces de Herdr en lugar de tmux, con insignias de estado del agente de codigo en cada panel — ver [Instalacion nativa](https://termote.ohnice.app/installation/native/)
 - **Vista Chat**: lee y responde como un chat a un panel que ejecuta Claude Code (o Codex iniciado con `--no-daemon`), con sugerencias de comandos slash y respuestas a dialogos — ver [Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
 - **Vistas Files y Changes**: explora el directorio de un panel y sus cambios de git, con vista previa de Markdown — ver [Files and Changes](https://termote.ohnice.app/usage/files-changes/)
+- **Cola de mensajes y enlaces a archivos en Chat**: deja un mensaje en cola mientras el agente trabaja; toca una ruta de archivo que escribio el agente para abrirlo en Files, en su linea
+- **Revision y staging**: comenta lineas en Changes y Files y envia la revision a un agente; haz stage, unstage o descarta un cambio por archivo o por hunk
+- **Vista previa y edicion en Files**: PDF, .xlsx y .docx en solo lectura; abre y guarda archivos Shift-JIS, EUC-JP y UTF-16; edita Markdown junto a una vista previa en vivo
+- **Places**: ofrece en Files una carpeta fuera del panel con `termote start --allow-path <dir>` — ver [Places](https://termote.ohnice.app/usage/files-changes/#places)
+- **Tasks**: ejecuta los scripts de `package.json` y los targets del Makefile de un panel, y envia una ejecucion fallida a un agente — ver [Tasks](https://termote.ohnice.app/usage/tasks/)
+- **Ventanas propias** (escritorio): abre un archivo, un diff, una pestana, un panel o la vista general en su propia ventana
 - **Imagenes adjuntas**: envia una imagen desde el movil a la terminal o a un mensaje de la vista Chat, para que el agente la lea por su ruta
 - **Plugin de Herdr**: abre en Termote el panel de Herdr enfocado, muestra su enlace como codigo QR para el movil e inicia o detiene el servidor, sin salir de Herdr — ver [Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/)
 - **Optimizado para movil**: Teclado virtual (Tab/Ctrl/Shift/flechas, expandible)
@@ -137,7 +143,7 @@ irm https://termote.ohnice.app/install.ps1 | iex
 termote start
 ```
 
-El instalador solo necesita `curl`, `tar` y `sha256sum`/`shasum` (PowerShell en Windows), sin sudo ni permisos de administrador. Verifica el checksum del archivo, instala el comando `termote` y no inicia nada. `termote start` guarda las opciones, crea una contrasena la primera vez (se muestra una sola vez; `termote show-password` la vuelve a mostrar), registra el servicio y lo inicia. Abre `http://localhost:7680` (Windows: `http://localhost:7690`).
+El instalador solo necesita `curl`, `tar` y `sha256sum`/`shasum` (PowerShell en Windows), sin sudo ni permisos de administrador. Verifica el checksum del archivo, instala el comando `termote` y no inicia nada. `termote start` guarda las opciones, crea una contrasena la primera vez (se muestra una sola vez; `termote show-password` la vuelve a mostrar), registra el servicio y lo inicia. Abre `http://127.0.0.1:7680` (Windows: `http://127.0.0.1:7690`).
 
 Antes hay que instalar un backend de terminal: tmux (`sudo apt install tmux`, `brew install tmux`), psmux en Windows (`winget install psmux`) o [Herdr](https://termote.ohnice.app/installation/native/). El primer `start` detecta cual usar.
 
@@ -256,19 +262,23 @@ El servidor nativo se ejecuta como servicio de usuario: una unidad de usuario de
 
 ### Opciones de `start`
 
-| Flag                        | Descripcion                                                                                        |
-| --------------------------- | -------------------------------------------------------------------------------------------------- |
-| `--port <port>`             | Puerto (por defecto: 7680, Windows: 7690)                                                          |
-| `--lan[=false]`             | Escuchar en todas las interfaces (por defecto: solo localhost)                                     |
-| `--tailscale <host[:port]>` | Publicar por Tailscale HTTPS (puerto por defecto 443)                                              |
-| `--no-tailscale`            | Dejar de publicar por Tailscale                                                                    |
-| `--no-auth[=false]`         | Deshabilitar autenticacion basica                                                                  |
-| `--mux <tmux\|herdr>`       | Backend de terminal (por defecto: herdr si esta en ejecucion, si no tmux)                          |
-| `--allow-host <name>`       | Permitir un valor adicional de la cabecera Host (repetible; sin comodines, ver notas de seguridad) |
-| `--remove-host <name>`      | Quitar un nombre de Host permitido (repetible)                                                     |
-| `--allow-herdr-no-auth`     | Obligatorio junto con `--mux herdr --no-auth`                                                      |
-| `--user <name>`             | Nombre de usuario de acceso (por defecto: `admin`; compartido con el container)                    |
-| `--fresh`                   | Establecer una nueva contrasena                                                                    |
+| Flag                         | Descripcion                                                                                                         |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `--port <port>`              | Puerto (por defecto: 7680, Windows: 7690)                                                                           |
+| `--lan[=false]`              | Escuchar en todas las interfaces (por defecto: solo localhost)                                                      |
+| `--tailscale <host[:port]>`  | Publicar por Tailscale HTTPS (puerto por defecto 443)                                                               |
+| `--no-tailscale`             | Dejar de publicar por Tailscale                                                                                     |
+| `--no-auth[=false]`          | Deshabilitar autenticacion basica                                                                                   |
+| `--mux <tmux\|herdr>`        | Backend de terminal (por defecto: herdr si esta en ejecucion, si no tmux)                                           |
+| `--allow-host <name>`        | Permitir un valor adicional de la cabecera Host (repetible; sin comodines, ver notas de seguridad)                  |
+| `--remove-host <name>`       | Quitar un nombre de Host permitido (repetible)                                                                      |
+| `--allow-local-user <name>`  | Permitir conectarse a otro usuario del sistema de esta maquina, p. ej. un proxy inverso (repetible; Linux, Windows) |
+| `--remove-local-user <name>` | Dejar de permitir que ese usuario se conecte (repetible)                                                            |
+| `--allow-path <dir>`         | Ofrecer una carpeta en Files, en Places (repetible)                                                                 |
+| `--remove-path <dir>`        | Quitar una carpeta permitida (repetible)                                                                            |
+| `--allow-herdr-no-auth`      | Obligatorio junto con `--mux herdr --no-auth`                                                                       |
+| `--user <name>`              | Nombre de usuario de acceso (por defecto: `admin`; compartido con el container)                                     |
+| `--fresh`                    | Establecer una nueva contrasena                                                                                     |
 
 ### Con Tailscale HTTPS
 
