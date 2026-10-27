@@ -321,6 +321,8 @@ describe('TerminalView', () => {
       '[&>.xterm]:px-1',
       'md:[&>.xterm]:px-2',
       'md:[&>.xterm]:pt-1',
+      // The padding shows the terminal's background, not xterm.css's black
+      '[&_.xterm-viewport]:bg-term!',
     )
   })
 
