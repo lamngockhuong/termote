@@ -63,9 +63,10 @@ type filesAPI struct {
 	deny     []string // absolute directories never served
 	git      *gitRunner
 	roots    *rootResolver
-	statuses *ttlCache[gitStatus] // root → git status
-	finds    *ttlCache[findList]  // root + list kind → file list (files/find)
-	rawSlots chan struct{}        // raw requests running, server-wide
+	statuses *ttlCache[gitStatus]  // root → git status
+	commits  *ttlCache[commitList] // root and commit hash → its files
+	finds    *ttlCache[findList]   // root + list kind → file list (files/find)
+	rawSlots chan struct{}         // raw requests running, server-wide
 	// searchSlots are the content searches running, server-wide.
 	searchSlots chan struct{}
 	// decodeSlots are the reads of a file not in UTF-8 running,
@@ -109,6 +110,7 @@ func registerFilesRoutes(mux *http.ServeMux, m Mux, allowed hostAllowlist, denyD
 	f := &filesAPI{
 		m: m, dirs: dirs, allowed: allowed, git: git, roots: newRootResolver(git),
 		statuses:    newTTLCache[gitStatus](filesRootTTL),
+		commits:     newTTLCache[commitList](commitFilesTTL),
 		finds:       newTTLCache[findList](findListTTL),
 		rawSlots:    make(chan struct{}, rawMaxRunning),
 		searchSlots: make(chan struct{}, searchMaxRunning),
@@ -132,6 +134,8 @@ func registerFilesRoutes(mux *http.ServeMux, m Mux, allowed hostAllowlist, denyD
 	mux.HandleFunc("/api/mux/panes/{id}/files/changes", f.handleChanges)
 	mux.HandleFunc("/api/mux/panes/{id}/files/changes/apply", f.handleApplyChange)
 	mux.HandleFunc("/api/mux/panes/{id}/files/diff", f.handleDiff)
+	mux.HandleFunc("/api/mux/panes/{id}/files/commit", f.handleCommit)
+	mux.HandleFunc("/api/mux/panes/{id}/files/commit/diff", f.handleCommitDiff)
 	mux.HandleFunc("/api/mux/panes/{id}/files/raw", f.handleRaw)
 	mux.HandleFunc("/api/mux/panes/{id}/files/download", f.handleDownload)
 	mux.HandleFunc("/api/mux/panes/{id}/files/document", f.handleDocument)
