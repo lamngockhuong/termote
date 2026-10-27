@@ -52,6 +52,8 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/hooks/use-update-check.ts`               | Newest stable release on GitHub (rule of `termote update`)     |
 | `pwa/src/utils/app-update.ts`                     | Server version vs this page, reload banner, SW skip waiting    |
 | `pwa/src/components/updates-section.tsx`          | Settings > Updates: running/newest version, update command     |
+| `pwa/src/utils/star-prompt.ts`                    | Version this browser last ran; star prompt after an update     |
+| `pwa/src/components/star-prompt-card.tsx`         | Settings > Updates: the one-time Star on GitHub card           |
 | `pwa/src/hooks/use-gestures.ts`                   | Hammer.js gesture handling                                     |
 | `pwa/src/components/terminal-view.tsx`            | xterm.js terminal component (stream, resize, reconnect)        |
 | `pwa/src/utils/terminal-bridge.ts`                | Drives the xterm.js terminal (key mapping, clipboard paste)    |

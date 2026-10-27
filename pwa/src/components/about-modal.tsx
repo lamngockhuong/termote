@@ -27,9 +27,11 @@ const ROW = `flex w-full min-h-10 items-center justify-between gap-3 px-4 py-2 t
 // The ↗ only shows it to sighted users
 const NEW_TAB = <span className="sr-only"> (opens in a new tab)</span>
 
+// The star link first: it is how people who find Termote useful help
+// others find it.
 const LINKS = [
+  { label: 'Star on GitHub', href: APP_INFO.repository },
   { label: 'Documentation', href: APP_INFO.links.docs },
-  { label: 'GitHub', href: APP_INFO.repository },
   { label: 'Changelog', href: APP_INFO.links.changelog },
   { label: 'Report an issue', href: APP_INFO.links.issues },
 ]

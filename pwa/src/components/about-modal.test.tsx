@@ -96,9 +96,18 @@ describe('AboutModal', () => {
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
   })
 
+  it('lists the star link first', () => {
+    render(<AboutModal isOpen={true} onClose={vi.fn()} />)
+    const links = screen
+      .getAllByRole('link')
+      .filter((l) => l.getAttribute('href') !== APP_INFO.author.url)
+    expect(links[0]).toHaveAttribute('href', APP_INFO.repository)
+    expect(links[0]).toHaveTextContent(/^Star on GitHub/)
+  })
+
   it.each([
+    ['Star on GitHub', APP_INFO.repository],
     ['Documentation', APP_INFO.links.docs],
-    ['GitHub', APP_INFO.repository],
     ['Changelog', APP_INFO.links.changelog],
     ['Report an issue', APP_INFO.links.issues],
   ])('links %s in a new tab', (name, href) => {

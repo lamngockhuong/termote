@@ -5,6 +5,7 @@ import { availableUpdate, useUpdateCheck } from '../hooks/use-update-check'
 import { APP_INFO } from '../utils/app-info'
 import type { ServerInfo } from '../utils/app-update'
 import { formatAgo } from '../utils/format-ago'
+import { StarPromptCard } from './star-prompt-card'
 import { Button, FOCUS_RING } from './ui/button'
 
 // How to update each kind of install. The container's image comes from the
@@ -111,6 +112,8 @@ export function UpdatesSection({
           {checking ? 'Checking…' : 'Check for updates'}
         </Button>
       </div>
+
+      <StarPromptCard version={APP_INFO.version} />
 
       {stale && server && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-control bg-info/12 px-3 py-2">

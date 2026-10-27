@@ -406,6 +406,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.prepare.outputs.version }}
         run: |
+          # A star line at the end of the notes, added while the release is
+          # still a draft; the marker keeps a re-run from adding it twice.
+          marker='<!-- star-footer -->'
+          body=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json body -q .body)
+          if ! grep -qF "$marker" <<<"$body"; then
+            printf '%s\n\n---\n\n%s\n⭐ If Termote is useful to you, [star it on GitHub](https://github.com/%s) so others can find it.\n' \
+              "$body" "$marker" "$GITHUB_REPOSITORY" > "$RUNNER_TEMP/notes.md"
+            gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/notes.md"
+          fi
           pre=false; latest=true
           case "$VERSION" in *-*) pre=true; latest=false ;; esac
           gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease="$pre" --latest="$latest"
