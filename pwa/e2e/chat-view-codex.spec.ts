@@ -195,7 +195,8 @@ test.describe('chat view of a Codex pane', () => {
     const conversation = page.getByRole('region', { name: 'Conversation' })
     await expect(conversation).toContainText('Count the files please')
     await expect(conversation.locator('strong')).toHaveText('2')
-    await expect(page.getByText('Codex ·', { exact: false })).toBeVisible()
+    // A desktop's header names the agent; the session's tab names the session
+    await expect(page.locator('header').getByText('Codex', { exact: true })).toBeVisible()
 
     // A message of two lines arrives as one turn
     const composer = page.getByRole('textbox', { name: 'Message to Codex' })
