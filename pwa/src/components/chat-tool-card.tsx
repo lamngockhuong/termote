@@ -15,8 +15,9 @@ import {
 // opened. Long lines wrap: on a phone a block scrolling sideways would carry
 // the whole list with it.
 
-// Lines a block shows before "Show all"
-const IO_LINES = 6
+// Lines a block shows before "Show all": a command only says what ran, its
+// output is a tap away
+const COMMAND_LINES = 3
 const DIFF_LINES = 12
 // Lines of an opened result shown first, from its end: where a command
 // says how it went
@@ -91,8 +92,9 @@ function CommandRow({ command }: { command: string }) {
   return (
     <Capped
       lines={lineCount(command)}
-      limit={IO_LINES}
-      maxClass="max-h-[9.6em]"
+      limit={COMMAND_LINES}
+      // The lines and the block's own padding (py-1.5)
+      maxClass="max-h-[calc(4.8em+0.75rem)]"
       className="overflow-hidden px-2 py-1.5 leading-[1.6]"
     >
       <pre className="whitespace-pre-wrap break-all">

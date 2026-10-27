@@ -272,6 +272,29 @@ describe('ChatMessage', () => {
     )
   })
 
+  it('a command longer than three lines is cut until opened', () => {
+    render(
+      <ChatMessage
+        entry={{
+          id: 't',
+          role: 'assistant',
+          parts: [
+            {
+              kind: 'tool',
+              tool: 'Bash',
+              toolId: '1',
+              detail: { command: 'a\nb\nc\nd' },
+            },
+          ],
+        }}
+      />,
+    )
+    const box = screen.getByText(/a b c d/).parentElement as HTMLElement
+    expect(box).toHaveClass('max-h-[calc(4.8em+0.75rem)]')
+    fireEvent.click(screen.getByText('Show all 4 lines'))
+    expect(box).not.toHaveClass('max-h-[calc(4.8em+0.75rem)]')
+  })
+
   it('a short command that wraps taller than its cap gets Show all', () => {
     const spy = vi
       .spyOn(HTMLElement.prototype, 'scrollHeight', 'get')
