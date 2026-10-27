@@ -535,6 +535,9 @@ func TestWithStderr(t *testing.T) {
 }
 
 func TestContainerUpPlaces(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the test CLI saves a Unix config, which refuses a path holding ':' (C:\\...)")
+	}
 	cc := newContainerCLI(t)
 	notes := mkdir(t, filepath.Join(cc.home, "notes"))
 	docs := mkdir(t, filepath.Join(cc.home, "my docs"))

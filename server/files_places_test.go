@@ -213,7 +213,10 @@ func TestPlaceRefusals(t *testing.T) {
 	if code, body := fx.get(t, "tree", url.Values{"place": {"0123456789abcdef"}}); code != http.StatusNotFound || errCode(body) != "unknown_place" {
 		t.Errorf("unknown place = %d %s", code, body)
 	}
-	if code, body := fx.get(t, "tree", fx.q("root", fx.pane)); code != http.StatusConflict || !strings.Contains(body, fx.place) {
+	code, body := fx.get(t, "tree", fx.q("root", fx.pane))
+	var moved struct{ Root string }
+	json.Unmarshal([]byte(body), &moved)
+	if code != http.StatusConflict || moved.Root != fx.place {
 		t.Errorf("root mismatch = %d %s", code, body)
 	}
 	for _, route := range []string{"changes", "diff", "commit", "commit/diff", "raw"} {

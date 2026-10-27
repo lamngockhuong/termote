@@ -5,6 +5,7 @@ import { setPaneKeys } from '../utils/pane-remap'
 import {
   type FileDraft,
   followInFiles,
+  followPathInFiles,
   hydrateDrafts,
   isDraftDirty,
   resetFilesStores,
@@ -220,6 +221,20 @@ describe('Places in the files store', () => {
   })
 })
 
+describe('a path the agent wrote', () => {
+  it('opens in the pane folder, leaving a Place shown', async () => {
+    const h = await loaded()
+    act(() => h.result.current.openPlace('n1'))
+    await waitFor(() => expect(h.result.current.root).toBe(NOTES))
+    await act(async () => {
+      await followPathInFiles('%1', `${PANE}/a.md`)
+    })
+    expect(h.result.current.place).toBeUndefined()
+    expect(h.result.current.root).toBe(PANE)
+    expect(h.result.current.active).toMatchObject({ root: PANE, path: 'a.md' })
+  })
+})
+
 describe('drafts by root', () => {
   it('one path under the pane folder and a Place keeps two drafts', () => {
     const pane = renderHook(() => useFileDraft('%1', PANE, 'a.md'))
@@ -257,5 +272,35 @@ describe('drafts by root', () => {
         persistKey('drafts', '%1', `${PANE}\u0000a.md`) as string,
       ),
     ).not.toBeNull()
+  })
+
+  it('a draft from before Places that cannot be written again stays in memory, asked about', () => {
+    const old = persistKey('drafts', '%1', 'b.md') as string
+    localStorage.setItem(
+      old,
+      JSON.stringify({
+        v: 1,
+        pane: '@1',
+        group: 'main',
+        editedAt: Date.now(),
+        role: 'full',
+        draft: { ...draft(PANE, 'b.md', 'unsaved'), reveal: undefined },
+      }),
+    )
+    const write = vi
+      .spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(() => {
+        throw new Error('QuotaExceededError')
+      })
+    try {
+      hydrateDrafts(['%1'])
+    } finally {
+      write.mockRestore()
+    }
+    const d = renderHook(() => useFileDraft('%1', PANE, 'b.md'))
+    expect(d.result.current[0]?.text).toBe('unsaved')
+    const ev = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(ev)
+    expect(ev.defaultPrevented).toBe(true)
   })
 })

@@ -4728,6 +4728,22 @@ describe('App views, view-only and deep links', () => {
       )
     })
 
+    it('a view-only client opens a Place link in the pane folder', async () => {
+      setFocusWindowForTest(true)
+      window.history.replaceState(
+        null,
+        '',
+        `/${P1}?view=files&solo=1&file=a.md&place=ab12`,
+      )
+      render(<App views={FOCUS_VIEWS} readOnly />)
+      await screen.findByTestId('files-panel')
+      expect(mockFollowInFiles).toHaveBeenCalledWith(
+        'w1:t1:p1',
+        { path: 'a.md' },
+        undefined,
+      )
+    })
+
     it('a file opens in the Files panel over the terminal, with no stream', async () => {
       openFocus(`${P1}?view=files&solo=1&file=src%2Fa.ts`)
       await screen.findByTestId('files-panel')

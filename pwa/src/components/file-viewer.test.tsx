@@ -976,6 +976,18 @@ describe('FileViewer editing', () => {
     expect(saveButton()).toBeEnabled()
   })
 
+  it('reads without a root before one is known', async () => {
+    mockContent.mockResolvedValue(editable('x'))
+    show({ root: undefined })
+    await waitFor(() =>
+      expect(mockContent).toHaveBeenCalledWith(
+        { paneId: '%1' },
+        'src/a.ts',
+        expect.objectContaining({ root: undefined }),
+      ),
+    )
+  })
+
   it('a draft from before the root moved shows the move and is not saved', async () => {
     mockContent.mockResolvedValue(editable('x'))
     const p = await startEdit()

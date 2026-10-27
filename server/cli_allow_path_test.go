@@ -56,7 +56,7 @@ func TestValidateAllowPath(t *testing.T) {
 			t.Errorf("%s refused: %v", p, err)
 		}
 	}
-	for p, want := range map[string]string{
+	refused := map[string]string{
 		root:                                "home directory",
 		home:                                "home directory",
 		filepath.Dir(home):                  "home directory",
@@ -71,7 +71,14 @@ func TestValidateAllowPath(t *testing.T) {
 		gitDir:                              "git directory",
 		filepath.Join(home, "missing"):      "not a directory",
 		filepath.Join(home, "file.txt"):     "not a directory",
-	} {
+	}
+	// Windows keeps termote's dirs under AppData instead
+	if runtime.GOOS == "windows" {
+		delete(refused, filepath.Join(home, ".local"))
+		delete(refused, filepath.Join(home, ".config"))
+		refused[filepath.Join(home, "AppData")] = "never serves"
+	}
+	for p, want := range refused {
 		if err := validateAllowPath(p, env); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%s: %v, want %q", p, err, want)
 		}
@@ -98,7 +105,10 @@ func TestValidateAllowPath(t *testing.T) {
 	}
 	probed := ""
 	env.isGitDir = func(d string) bool { probed = d; return true }
-	if err := validateAllowPath(notes, env); err == nil || !strings.Contains(err.Error(), "git directory") || probed != notes {
+	// The resolved form is probed (/private/var on macOS, a long name for
+	// RUNNER~1 on Windows)
+	realNotes, _ := filepath.EvalSymlinks(notes)
+	if err := validateAllowPath(notes, env); err == nil || !strings.Contains(err.Error(), "git directory") || probed != realNotes {
 		t.Errorf("git probe: %v, probed %q", err, probed)
 	}
 }
@@ -191,10 +201,13 @@ func TestStartAllowPaths(t *testing.T) {
 	if err := tc.startAllowPaths(o, nil); err == nil || !strings.Contains(err.Error(), "--allow-path "+tc.home+": is your home directory") {
 		t.Errorf("home accepted: %v", err)
 	}
-	colon := mkdir(t, filepath.Join(tc.home, "a:b"))
-	o = startOptions{mux: "tmux", allowPaths: []string{colon}, newPaths: []string{colon}}
-	if err := tc.startAllowPaths(o, nil); err == nil || !strings.Contains(err.Error(), "':' cannot be saved") {
-		t.Errorf("':' accepted on Unix: %v", err)
+	// Windows names cannot hold ':'
+	if runtime.GOOS != "windows" {
+		colon := mkdir(t, filepath.Join(tc.home, "a:b"))
+		o = startOptions{mux: "tmux", allowPaths: []string{colon}, newPaths: []string{colon}}
+		if err := tc.startAllowPaths(o, nil); err == nil || !strings.Contains(err.Error(), "':' cannot be saved") {
+			t.Errorf("':' accepted on Unix: %v", err)
+		}
 	}
 
 	// --remove-path of a path not saved says so.

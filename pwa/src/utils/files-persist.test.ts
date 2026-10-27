@@ -681,6 +681,8 @@ describe('drafts from before Places', () => {
     expect(both).toContainEqual({ draft: draft('a.md'), editedAt: 5 })
     removeLegacyDraft('1', 'a.md')
     expect(localStorage.getItem(old)).toBeNull()
+    // A pane without a key has nothing kept
+    expect(() => removeLegacyDraft('nope', 'a.md')).not.toThrow()
     expect(loadDrafts('1')).toEqual([{ draft: draft('a.md'), editedAt: 5 }])
   })
 })

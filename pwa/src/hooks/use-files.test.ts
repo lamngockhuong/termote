@@ -461,7 +461,7 @@ describe('following links', () => {
     await act(async () => {
       expect(await followPathInFiles('%1', '/r/docs/guide.md')).toBe('opened')
     })
-    expect(mockTree).toHaveBeenCalledWith('%1', '')
+    expect(mockTree).toHaveBeenCalledWith({ paneId: '%1' }, '')
     expect(result.current.active?.path).toBe('docs/guide.md')
   })
 
@@ -513,7 +513,7 @@ describe('following links', () => {
     await waitFor(() => expect(result.current.root).toBe('/r'))
     mockTree.mockClear()
     await act(() => followPathInFiles('%1', '/r/docs/guide.md'))
-    expect(mockTree).toHaveBeenCalledWith('%1', '')
+    expect(mockTree).toHaveBeenCalledWith({ paneId: '%1' }, '')
     expect(result.current.active?.path).toBe('docs/guide.md')
   })
 
