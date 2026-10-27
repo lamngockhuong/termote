@@ -67,6 +67,7 @@ const DEFAULT_SETTINGS: Settings = {
   showSessionTabs: false,
   pollInterval: 5,
   hasSeenGestureHints: false,
+  hasSeenLocalhostNotice: false,
   terminalFont: '',
   uiStyle: 'neutral',
   driveTerminalSize: false,

@@ -1809,7 +1809,11 @@ export default function App({
               </Banner>
             )}
           </div>
-          <LocalhostNotice />
+          {!settings.hasSeenLocalhostNotice && (
+            <LocalhostNotice
+              onDismiss={() => updateSetting('hasSeenLocalhostNotice', true)}
+            />
+          )}
           {readOnly &&
             (viewStreamOff ? (
               <Banner variant="warning">
