@@ -1045,6 +1045,8 @@ test.describe('files and changes views', () => {
       await page.keyboard.press('Control+z')
       await expect(cell('ripe')).toBeVisible()
       await page.keyboard.press('Control+End')
+      // The focus moves on a render: Backspace sent sooner clears the cell before
+      await expect(cell('dry')).toBeFocused()
       await page.keyboard.press('Backspace')
       await expect(cell('dry')).toHaveCount(0)
       await panel.getByRole('button', { name: 'Save' }).click()
