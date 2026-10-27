@@ -108,14 +108,28 @@ There is no bottom navigation: the terminal takes that height.
 ### Desktop
 
 ```text
-┌──────────────────────────────────────────┐
-│ Session tabs · font · fullscreen · More  │
-├──────────┬───────────────────────────────┤
-│ Sidebar  │ Terminal                      │
-│(collapse)│                               │
-└──────────┴───────────────────────────────┘
+┌──────────┬───────────────────────────────────────────┐
+│ Sidebar  │ Session tabs · font · fullscreen · More   │
+│(collapse)├─────────────────────────────┬─────────────┤
+│          │ Terminal / view             │ Side panel  │
+│          │                             │ (Files,     │
+│          ├─────────────────────────────┤  Changes)   │
+│          │ Input area (toolbar, Chat)  │             │
+└──────────┴─────────────────────────────┴─────────────┘
 ```
 
+- The input area (key toolbar, Chat composer, view-only bar) sits under the view's column only, so
+  the sidebar and the side panel run the full height; a maximized side panel covers it too.
+- The Chat conversation and composer take the view's whole width; the reader's own messages sit on
+  the right, as wide as their text up to 85%.
+- Where the system's scrollbars take room beside the content (Windows, Linux, macOS set to always
+  show them) they become 8px with a clear track and no arrows; overlay scrollbars (macOS by
+  default, phones) stay as the system draws them (`utils/classic-scrollbars.ts` measures which and
+  sets `data-classic-scrollbars` on `<html>`). The sidebar's lists show the thumb only on
+  hover or with focus inside (`.scrollbar-hover`); tab rows hide theirs (`.scrollbar-hide`) and a
+  vertical wheel scrolls them sideways.
+- An open menu sits in the top layer (Popover API), so a scrolling list such as the sidebar never
+  cuts it; near the bottom of the screen it opens upward, and scrolling the list under it closes it.
 - A tab is a `role="tab"` button with a sibling close button; Delete closes the focused tab.
 - Settings uses a two-column dialog with a group rail; on a phone it is a full-screen sheet.
 

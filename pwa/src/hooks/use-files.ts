@@ -113,6 +113,9 @@ export interface FileTab extends TabBase {
   // Opens straight into editing: a file this view just created. Dropped
   // once editing starts or the tab shows another path.
   intent?: boolean
+  // Its file was not found the last time the tab showed (deleted or renamed
+  // outside Termote): the tab bar marks it. Never kept on the device.
+  missing?: boolean
 }
 
 export interface FilesState {
@@ -230,6 +233,8 @@ interface Store {
   setTableLayout: (id: string, layout: TableLayout) => void
   // The user chose to show tab id's sensitive file
   setReveal: (id: string) => void
+  // Whether tab id's file was found when the tab last read it
+  setMissing: (id: string, missing: boolean) => void
   // The user chose for the tabs in pendingRootClose: close them (and drop
   // their changes) or keep them
   resolveRootClose: (close: boolean) => void
@@ -577,6 +582,7 @@ function createStore(id: string): Store {
       table: undefined,
       reveal: false,
       intent: undefined,
+      missing: undefined,
       history:
         current.path === target.path
           ? current.history
@@ -646,7 +652,8 @@ function createStore(id: string): Store {
       state.tabs,
       from,
       to,
-      (t) => ({ reveal: t.reveal || reveal }),
+      // The moved file is found again at to
+      (t) => ({ reveal: t.reveal || reveal, missing: undefined }),
       mine,
     )
     const gone = new Set(r.dropped.map((t) => t.id))
@@ -801,6 +808,7 @@ function createStore(id: string): Store {
         table: undefined,
         reveal: false,
         intent: undefined,
+        missing: undefined,
         history: tab.history.slice(0, -1),
       })
     },
@@ -826,6 +834,11 @@ function createStore(id: string): Store {
       patchTab(id, { reveal: true })
       const tab = state.tabs.find((t) => t.id === id)
       if (tab) forget(tab.root, tab.path)
+    },
+    setMissing(id, missing) {
+      const tab = state.tabs.find((t) => t.id === id)
+      if (tab && !!tab.missing !== missing)
+        patchTab(id, { missing: missing || undefined })
     },
     openFromFind(root, path, opts) {
       // A root that is a Place's opens that Place; another is the pane's
@@ -933,6 +946,10 @@ export function useFiles(paneId: string) {
       [store],
     ),
     setReveal: useCallback((id: string) => store.setReveal(id), [store]),
+    setMissing: useCallback(
+      (id: string, missing: boolean) => store.setMissing(id, missing),
+      [store],
+    ),
     resolveRootClose: useCallback(
       (close: boolean) => store.resolveRootClose(close),
       [store],

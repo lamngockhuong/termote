@@ -1,6 +1,13 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
-import { Menu, MenuGroup, MenuItem, MenuItemRadio, MenuSeparator } from './menu'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  Menu,
+  MenuGroup,
+  MenuItem,
+  MenuItemRadio,
+  MenuSeparator,
+  placeMenu,
+} from './menu'
 import { SegmentedControl } from './segmented-control'
 
 function renderMenu(props: Partial<Parameters<typeof Menu>[0]> = {}) {
@@ -321,5 +328,176 @@ describe('Menu', () => {
     renderMenu()
     open()
     expect(item('About')).not.toHaveAttribute('aria-checked')
+  })
+})
+
+describe('placeMenu', () => {
+  const view = { width: 1000, top: 0, height: 800 }
+  const menu = { width: 256, height: 200 }
+  const at = (left: number, top: number, w = 32, h = 32) =>
+    ({ left, top, right: left + w, bottom: top + h }) as DOMRect
+
+  it('opens under the trigger, aligned to its end or its start', () => {
+    expect(placeMenu(at(500, 100), menu, 'end', view)).toEqual({
+      left: 276,
+      top: 140,
+      maxHeight: undefined,
+    })
+    expect(placeMenu(at(500, 100), menu, 'start', view).left).toBe(500)
+  })
+
+  it('stays inside the screen sideways', () => {
+    expect(placeMenu(at(10, 100), menu, 'end', view).left).toBe(8)
+    expect(placeMenu(at(900, 100), menu, 'start', view).left).toBe(736)
+  })
+
+  it('opens above when there is no room below and more above', () => {
+    expect(placeMenu(at(500, 700), menu, 'end', view)).toEqual({
+      left: 276,
+      top: 492,
+      maxHeight: undefined,
+    })
+  })
+
+  it('caps its height on the roomier side when neither holds it', () => {
+    const tall = { width: 256, height: 900 }
+    expect(placeMenu(at(500, 600), tall, 'end', view)).toEqual({
+      left: 276,
+      top: 8,
+      maxHeight: 584,
+    })
+    expect(placeMenu(at(500, 100), tall, 'end', view)).toEqual({
+      left: 276,
+      top: 140,
+      maxHeight: 652,
+    })
+  })
+
+  it('counts only the visible part of the viewport (an open keyboard)', () => {
+    // 400px visible from 100px down: 260px left under a trigger at 200
+    const kb = { width: 1000, top: 100, height: 400 }
+    expect(placeMenu(at(500, 200), menu, 'end', kb).top).toBe(240)
+    expect(placeMenu(at(500, 300), menu, 'end', kb)).toEqual({
+      left: 276,
+      top: 108,
+      maxHeight: 184,
+    })
+  })
+})
+
+describe('Menu in the top layer', () => {
+  const show = vi.fn()
+  beforeEach(() => {
+    show.mockClear()
+    Object.defineProperty(HTMLElement.prototype, 'showPopover', {
+      configurable: true,
+      value: show,
+    })
+  })
+  // jsdom hides every [popover]: it has no :popover-open
+  const menu = () => screen.queryByRole('menu', { hidden: true })
+  afterEach(() => {
+    delete (HTMLElement.prototype as Partial<HTMLElement>).showPopover
+    vi.restoreAllMocks()
+  })
+
+  it('shows as a manual popover, placed in the viewport', () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      left: 500,
+      top: 100,
+      right: 532,
+      bottom: 132,
+    } as DOMRect)
+    vi.spyOn(document.documentElement, 'clientWidth', 'get').mockReturnValue(
+      1000,
+    )
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(256)
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(200)
+    renderMenu()
+    tapOpen()
+    const list = menu()!
+    expect(list).toHaveAttribute('popover', 'manual')
+    expect(show.mock.contexts[0]).toBe(list)
+    expect(list).toHaveClass('fixed', 'inset-auto', 'm-0')
+    expect(list).not.toHaveClass('absolute')
+    expect(list.style.left).toBe('276px')
+    expect(list.style.top).toBe('140px')
+    expect(list.style.maxHeight).toBe('')
+  })
+
+  it('closes when a list holding its trigger scrolls, not another', () => {
+    render(
+      <div>
+        <div data-testid="other" />
+        <div data-testid="list">
+          <Menu label="More" trigger="⋯">
+            <MenuItem>Settings</MenuItem>
+          </Menu>
+        </div>
+      </div>,
+    )
+    tapOpen()
+    fireEvent.scroll(menu()!)
+    fireEvent.scroll(screen.getByTestId('other'))
+    expect(menu()).toBeInTheDocument()
+    fireEvent.scroll(screen.getByTestId('list'))
+    expect(menu()).toBeNull()
+    tapOpen()
+    fireEvent.scroll(document)
+    expect(menu()).toBeNull()
+  })
+
+  it('caps its height when neither side holds it, and scrolls inside', () => {
+    vi.spyOn(document.documentElement, 'clientWidth', 'get').mockReturnValue(
+      1000,
+    )
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(800)
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      left: 500,
+      top: 100,
+      right: 532,
+      bottom: 132,
+    } as DOMRect)
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(2000)
+    renderMenu()
+    tapOpen()
+    expect(menu()!.style.top).toBe('140px')
+    expect(menu()!.style.maxHeight).toBe('652px')
+    expect(menu()).toHaveClass('overflow-y-auto')
+  })
+
+  it('places itself again when the window resizes', () => {
+    const rect = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue({
+        left: 500,
+        top: 100,
+        right: 532,
+        bottom: 132,
+      } as DOMRect)
+    renderMenu()
+    tapOpen()
+    expect(menu()!.style.top).toBe('140px')
+    rect.mockReturnValue({
+      left: 500,
+      top: 200,
+      right: 532,
+      bottom: 232,
+    } as DOMRect)
+    fireEvent(window, new Event('resize'))
+    expect(menu()).toBeInTheDocument()
+    expect(menu()!.style.top).toBe('240px')
+  })
+})
+
+describe('Menu without the top layer', () => {
+  it('stays absolute under its trigger, with no popover', () => {
+    renderMenu()
+    tapOpen()
+    const menu = screen.getByRole('menu')
+    expect(menu).not.toHaveAttribute('popover')
+    expect(menu).toHaveClass('absolute', 'top-full', 'right-0')
+    fireEvent.scroll(document.body)
+    expect(menu).toBeInTheDocument()
   })
 })

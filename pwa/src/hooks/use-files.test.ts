@@ -278,6 +278,18 @@ describe('following links', () => {
     expect(result.current.active).toBeUndefined()
   })
 
+  it('a tab marked missing is unmarked as it follows a link or goes back', async () => {
+    const { result } = renderHook(() => useFiles('%1'))
+    act(() => result.current.open('README.md'))
+    const id = result.current.activeId!
+    act(() => result.current.setMissing(id, true))
+    await act(() => result.current.follow({ path: 'docs/guide.md' }, 0))
+    expect(result.current.active?.missing).toBeUndefined()
+    act(() => result.current.setMissing(id, true))
+    act(() => result.current.back())
+    expect(result.current.active?.missing).toBeUndefined()
+  })
+
   it('opening from the tree starts a new trail', async () => {
     const { result } = renderHook(() => useFiles('%1'))
     act(() => result.current.open('README.md'))
@@ -1241,6 +1253,24 @@ describe('a renamed file', () => {
     return h
   }
 
+  it('a tab marked missing is found again at its new path', async () => {
+    const { result } = await loaded()
+    act(() => result.current.open('a.md'))
+    const id = result.current.activeId!
+    act(() => result.current.setMissing(id, true))
+    expect(result.current.tabs[0].missing).toBe(true)
+    // The same mark again changes nothing
+    const tabs = result.current.tabs
+    act(() => result.current.setMissing(id, true))
+    expect(result.current.tabs).toBe(tabs)
+    act(() => fileRenamed('/r', 'a.md', 'x/c.md', false))
+    expect(result.current.tabs[0].missing).toBeUndefined()
+    act(() => result.current.setMissing(id, true))
+    act(() => result.current.setMissing(id, false))
+    expect(result.current.tabs[0].missing).toBeUndefined()
+    act(() => result.current.setMissing('nope', true))
+  })
+
   it('its tab follows, keeping its place and pinned state', async () => {
     const { result } = await loaded()
     act(() => result.current.open('b.md', { pin: true }))
@@ -1391,6 +1421,24 @@ describe('tabs kept on the device', () => {
   }
 
   beforeEach(() => snapshot())
+
+  it('a missing mark is not kept', async () => {
+    mockTree.mockResolvedValue(tree('', [file('a.md')]))
+    const first = renderHook(() => useFiles('%1'))
+    act(() => first.result.current.load())
+    await waitFor(() => expect(first.result.current.root).toBe('/r'))
+    act(() => first.result.current.open('a.md', { pin: true }))
+    act(() =>
+      first.result.current.setMissing(first.result.current.activeId!, true),
+    )
+    first.unmount()
+    reopen()
+    expect(localStorage.getItem('termote-files-tabs:i1:@1')).not.toContain(
+      'missing',
+    )
+    const again = renderHook(() => useFiles('%1'))
+    expect(again.result.current.tabs[0]).not.toHaveProperty('missing')
+  })
 
   it('open again as they were left', async () => {
     mockTree.mockResolvedValue(tree('', [file('a.md')]))

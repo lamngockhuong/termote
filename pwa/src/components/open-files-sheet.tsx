@@ -1,5 +1,5 @@
 import { Files, FolderTree, Pin, X } from 'lucide-react'
-import type { TabListProps } from './file-tab-bar'
+import { type TabListProps, tabTitle } from './file-tab-bar'
 import { FOCUS_RING, IconButton } from './ui/button'
 import { Sheet } from './ui/sheet'
 
@@ -68,17 +68,18 @@ export function OpenFilesSheet({
             <button
               type="button"
               aria-current={t.id === activeId ? 'true' : undefined}
-              title={t.title}
+              title={tabTitle(t)}
               onClick={() => show(t.id)}
               className={ROW}
             >
               <span className="flex min-w-0 flex-1 flex-col py-1.5">
                 <span className="flex min-w-0 items-center gap-1.5">
                   <span
-                    className={`truncate ${t.id === activeId ? 'font-medium text-accent' : 'text-fg'} ${t.pinned ? '' : 'italic'}`}
+                    className={`truncate ${t.id === activeId ? 'font-medium text-accent' : t.missing ? 'text-fg-subtle' : 'text-fg'} ${t.pinned ? '' : 'italic'} ${t.missing ? 'line-through' : ''}`}
                   >
                     {t.name}
                   </span>
+                  {t.missing && <span className="sr-only"> (not found)</span>}
                   {t.dirty && (
                     <>
                       <span

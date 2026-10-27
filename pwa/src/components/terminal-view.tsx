@@ -807,10 +807,16 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
           disableContextMenu ? undefined : (e) => e.stopPropagation()
         }
       >
+        {/* The text keeps off the edges (4px on a phone, where every column
+            counts). On .xterm itself: FitAddon takes its padding out of the
+            room it measures here, so no column is cut. xterm.css paints its
+            viewport, which spans that padding, black: the terminal's own
+            background goes there instead (important: xterm.css is not in a
+            layer, so it beats a utility). */}
         <div
           ref={containerRef}
           data-testid="terminal-view"
-          className="w-full h-full"
+          className="w-full h-full [&>.xterm]:px-1 md:[&>.xterm]:px-2 md:[&>.xterm]:pt-1 [&_.xterm-viewport]:bg-term!"
         />
         {failed && (
           <div className="absolute inset-x-0 bottom-4 flex justify-center pointer-events-none">

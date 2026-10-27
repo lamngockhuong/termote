@@ -1,5 +1,6 @@
 import { FolderTree, X } from 'lucide-react'
 import { type KeyboardEvent, useEffect, useRef } from 'react'
+import { useWheelScrollX } from '../hooks/use-wheel-scroll-x'
 import { FOCUS_RING } from './ui/button'
 
 // A tab as the tab bar and the open-files sheet show it
@@ -14,7 +15,13 @@ export interface TabEntry {
   pinned: boolean
   // Has unsaved changes
   dirty: boolean
+  // Its file was not found when last read (deleted or renamed elsewhere)
+  missing?: boolean
 }
+
+// The tooltip of tab t: its path, and why it is struck through
+export const tabTitle = (t: TabEntry) =>
+  t.missing ? `${t.title} — File not found` : t.title
 
 // What the tab bar (desktop) and the open-files sheet (mobile) both take
 export interface TabListProps {
@@ -53,6 +60,8 @@ export function FileTabBar({
   const tabIds = (id: string | null) =>
     panelId ? { id: tabElementId(panelId, id), 'aria-controls': panelId } : {}
   const items = useRef(new Map<string | null, HTMLElement>())
+  const barRef = useRef<HTMLDivElement>(null)
+  useWheelScrollX(barRef)
   const ids: (string | null)[] = [null, ...tabs.map((t) => t.id)]
 
   // The tab shown stays in view as the bar scrolls sideways
@@ -102,9 +111,10 @@ export function FileTabBar({
 
   return (
     <div
+      ref={barRef}
       role="tablist"
       aria-label="Open files"
-      className="flex shrink-0 overflow-x-auto border-b border-border bg-surface ui-terminal:bg-bg"
+      className="flex shrink-0 overflow-x-auto scrollbar-hide border-b border-border bg-surface ui-terminal:bg-bg"
     >
       <button
         ref={ref(null)}
@@ -136,7 +146,7 @@ export function FileTabBar({
               aria-selected={shown}
               aria-keyshortcuts="Delete"
               tabIndex={tabbable === t.id ? 0 : -1}
-              title={t.title}
+              title={tabTitle(t)}
               onClick={() => onActivate(t.id)}
               onDoubleClick={() => onPin(t.id)}
               // No autoscroll: a middle click closes the tab
@@ -151,10 +161,13 @@ export function FileTabBar({
               onKeyDown={(e) => onKeyDown(e, t.id)}
               className={`${TAB} max-w-48 pr-1`}
             >
-              <span className={`truncate ${t.pinned ? '' : 'italic'}`}>
+              <span
+                className={`truncate ${t.pinned ? '' : 'italic'} ${t.missing ? 'text-fg-subtle line-through' : ''}`}
+              >
                 {t.name}
               </span>
               {!t.pinned && <span className="sr-only"> (preview)</span>}
+              {t.missing && <span className="sr-only"> (not found)</span>}
               {t.dirty && (
                 <>
                   <span

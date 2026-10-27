@@ -1692,12 +1692,47 @@ describe('SessionSidebar — worktree actions', () => {
     expect(w.onOpenWorktree).toHaveBeenCalledWith('w1')
   })
 
-  it('shows the branch after the name, in its own case, with a title', () => {
+  it('shows the branch under the name, in its own case, with a title', () => {
     renderWith(actions())
     const branch = screen.getByTitle('feat/Very-Long-Name')
     expect(branch).toHaveTextContent('feat/Very-Long-Name')
     expect(branch.className).toContain('normal-case')
+    expect(branch).toHaveClass('truncate')
+    // Its own line: a sibling of the name, in a column
+    const name = branch.previousElementSibling!
+    expect(name).toHaveTextContent('feature')
+    expect(name).toHaveClass('truncate')
+    expect(branch.parentElement).toHaveClass('flex-col')
     expect(screen.getByTitle('main')).toHaveTextContent('main')
+  })
+
+  it('shows the menu button on hover, focus or while open; always on a phone', () => {
+    const { unmount } = renderWith(actions())
+    const holder = screen
+      .getByRole('button', { name: 'Actions for workspace repo' })
+      .closest('.opacity-0')
+    expect(holder).toHaveClass(
+      'group-hover/grouphdr:opacity-100',
+      'group-focus-within/grouphdr:opacity-100',
+      'has-[[aria-expanded=true]]:opacity-100',
+    )
+    unmount()
+    render(
+      <SessionSidebar
+        sessions={[REPO, WT]}
+        groups={[{ id: 'w1', name: 'repo' }]}
+        activeId="w1:t1"
+        onSelect={vi.fn()}
+        groupActions={actions()}
+        isMobile
+        isOpen
+        onClose={vi.fn()}
+      />,
+    )
+    const button = screen.getByRole('button', {
+      name: 'Actions for workspace repo',
+    })
+    expect(button.closest('.opacity-0')).toBeNull()
   })
 
   it('keeps the branch sr-only label inside the truncated name', () => {

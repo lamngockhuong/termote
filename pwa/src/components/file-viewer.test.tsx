@@ -1755,6 +1755,26 @@ describe('FileViewer in a tab', () => {
     expect(screen.queryByRole('button', { name: 'Close tab' })).toBeNull()
   })
 
+  it('tells the tab whether its file was found', async () => {
+    mockContent.mockRejectedValue(new RequestError(404, '', 'x'))
+    const gone = vi.fn()
+    show({ onMissingChange: gone })
+    await waitFor(() => expect(gone).toHaveBeenCalledWith(true))
+    cleanup()
+    // Another error says nothing
+    mockContent.mockRejectedValue(new RequestError(403, '', 'x'))
+    const other = vi.fn()
+    show({ onMissingChange: other })
+    await screen.findByText("This file can't be shown")
+    expect(other).not.toHaveBeenCalled()
+    cleanup()
+    mockContent.mockResolvedValue(editable('x'))
+    const found = vi.fn()
+    show({ onMissingChange: found })
+    await screen.findByTestId('code-block')
+    expect(found).toHaveBeenCalledWith(false)
+  })
+
   it('reports where the text is scrolled, and starts there again', async () => {
     mockContent.mockResolvedValue(editable('x\ny'))
     const onScroll = vi.fn()

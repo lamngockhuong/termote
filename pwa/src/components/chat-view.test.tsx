@@ -129,10 +129,11 @@ describe('ChatView', () => {
     ).toBeInTheDocument()
   })
 
-  it('names the pane, lists the messages, and flags a failing poll', () => {
+  it('names the agent, lists the messages, and flags a failing poll', () => {
     set({ entries: entries(3), error: 'unavailable' })
     render(<ChatView {...props} />)
-    expect(screen.getByText('Claude Code · claude')).toBeInTheDocument()
+    // The session's tab names the session on a desktop
+    expect(screen.getByText('Claude Code')).toBeInTheDocument()
     expect(screen.getByText('message 2')).toBeInTheDocument()
     expect(screen.getByText('Reconnecting…')).toBeInTheDocument()
   })
@@ -156,11 +157,12 @@ describe('ChatView', () => {
     sel.removeAllRanges()
   })
 
-  it('shows the hidden characters of the session name', () => {
+  it('names the session on a phone, with its hidden characters', () => {
     set({ entries: entries(1) })
     render(
       <ChatView
         {...props}
+        isMobile
         session={{ ...props.session!, name: 'cla\u202eude' }}
       />,
     )
@@ -576,7 +578,7 @@ describe('ChatView agent state', () => {
       />,
     )
     expect(promptStore.pane).toBeUndefined()
-    expect(screen.getByText('agent · pi')).toBeInTheDocument()
+    expect(screen.getByText('agent')).toBeInTheDocument()
   })
 
   it('view-only reads the dialog of a Codex pane', () => {
@@ -589,7 +591,7 @@ describe('ChatView agent state', () => {
       />,
     )
     expect(promptStore.pane).toBe('0')
-    expect(screen.getByText('Codex · codex')).toBeInTheDocument()
+    expect(screen.getByText('Codex')).toBeInTheDocument()
   })
 
   it('names an agent it has no label for generically', () => {
@@ -687,7 +689,7 @@ describe('ChatView older entries', () => {
       />,
     )
     expect(
-      screen.getByText('Claude Code · claude · rev⟨U+202E⟩iewer'),
+      screen.getByText('Claude Code · rev⟨U+202E⟩iewer'),
     ).toBeInTheDocument()
   })
 
@@ -706,9 +708,7 @@ describe('ChatView older entries', () => {
         }}
       />,
     )
-    expect(
-      screen.getByText('Claude Code · claude · reviewer'),
-    ).toBeInTheDocument()
+    expect(screen.getByText('Claude Code · reviewer')).toBeInTheDocument()
   })
 })
 

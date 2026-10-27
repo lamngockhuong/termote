@@ -314,6 +314,18 @@ describe('TerminalView', () => {
     expect(fit.fit).toHaveBeenCalled()
   })
 
+  it('pads the terminal element, where FitAddon counts it', () => {
+    renderView()
+    // Padding on the container would be read as room for more columns
+    expect(screen.getByTestId('terminal-view')).toHaveClass(
+      '[&>.xterm]:px-1',
+      'md:[&>.xterm]:px-2',
+      'md:[&>.xterm]:pt-1',
+      // The padding shows the terminal's background, not xterm.css's black
+      '[&_.xterm-viewport]:bg-term!',
+    )
+  })
+
   it('opens only http(s) links the output printed, cut off from this tab', () => {
     const { term } = renderView()
     const open = vi.spyOn(window, 'open').mockReturnValue(null)

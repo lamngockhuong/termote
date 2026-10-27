@@ -472,6 +472,9 @@ interface Props {
   onPin?: () => void
   // The user chose to show the sensitive file
   onRevealed?: () => void
+  // Each read of the file: true when it was not found (deleted or renamed
+  // outside Termote), false when it was read; other errors say nothing
+  onMissingChange?: (missing: boolean) => void
   // Off for a view-only client: the server never shows it a sensitive file
   canReveal?: boolean
   // Not showing the sensitive file after all (Back when not given)
@@ -601,6 +604,7 @@ export function FileViewer({
   pinned = true,
   onPin,
   onRevealed,
+  onMissingChange,
   onCancelReveal,
   onScroll,
   onCloseTab,
@@ -826,6 +830,9 @@ export function FileViewer({
       notify(`Unsaved changes: line ${pick.line} may have moved`)
   }, [pick?.jump])
 
+  // Read by the load below without being one of its dependencies
+  const missingRef = useRef(onMissingChange)
+  missingRef.current = onMissingChange
   // biome-ignore lint/correctness/useExhaustiveDependencies: reload reads the file again
   useEffect(() => {
     if (binaryView) return
@@ -837,6 +844,7 @@ export function FileViewer({
         const file = loaded(c)
         setState(file)
         checkDraft(file)
+        missingRef.current?.(false)
       },
       (err) => {
         if (!live) return
@@ -845,7 +853,9 @@ export function FileViewer({
           onRootChanged(err.root)
           return
         }
-        setState({ kind: 'error', error: filesError(err) })
+        const error = filesError(err)
+        setState({ kind: 'error', error })
+        if (error === 'not-found') missingRef.current?.(true)
       },
     )
     return () => {

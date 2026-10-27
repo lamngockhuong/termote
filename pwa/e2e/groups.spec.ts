@@ -118,4 +118,31 @@ test.describe('tmux sessions from the PWA', () => {
       .poll(() => tmux('list-clients', '-F', '#{session_name}'), { timeout: 10000 })
       .toContain(name)
   })
+
+  test('the menu of the last session in the sidebar shows whole, over the view', async ({
+    page,
+    request,
+  }) => {
+    const snap = await (await request.get('/api/mux/snapshot')).json()
+    test.skip(!snap.caps.groups, 'the server cannot manage groups')
+    // Enough sessions, in a short window, for the last one to sit low
+    for (let i = 0; i < 4; i++) tmux('new-session', '-d', '-s', fresh('e2e-menu'), '-c', '/tmp')
+    await page.setViewportSize({ width: 1280, height: 480 })
+    await open(page)
+    const last = page.locator('aside section').last()
+    const button = last.getByRole('button', { name: /^Actions for tmux session / })
+    await last.hover()
+    await button.click()
+    const menu = page.getByRole('menu', { name: (await button.getAttribute('aria-label'))! })
+    await expect(menu).toBeInViewport({ ratio: 1 })
+    // Wider than the sidebar, it covers the view instead of being cut
+    const aside = (await page.locator('aside').boundingBox())!
+    const box = (await menu.boundingBox())!
+    expect(box.x + box.width).toBeGreaterThan(aside.x + aside.width)
+    const list = page.locator('aside .scrollbar-hover')
+    expect(await list.evaluate((el) => el.scrollWidth - el.clientWidth)).toBe(0)
+    // Scrolling the list under it closes it
+    await list.evaluate((el) => el.dispatchEvent(new Event('scroll')))
+    await expect(menu).toBeHidden()
+  })
 })

@@ -150,6 +150,12 @@ describe('ChatMessage', () => {
       '2026-10-08T09:39:00Z',
     )
     expect(screen.getByText('[image]')).toBeInTheDocument()
+    // On the right, as wide as its text up to 85%
+    expect(container.firstElementChild).toHaveClass('items-end')
+    expect(screen.getByText('[image]').closest('.rounded-control')).toHaveClass(
+      'w-fit',
+      'max-w-[85%]',
+    )
   })
 
   it('shows no time without showTime or with a bad timestamp', () => {

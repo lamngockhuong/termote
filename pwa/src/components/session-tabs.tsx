@@ -1,5 +1,6 @@
 import { Plus, X } from 'lucide-react'
 import { type KeyboardEvent, useEffect, useRef } from 'react'
+import { useWheelScrollX } from '../hooks/use-wheel-scroll-x'
 import type { Session } from '../types/session'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { AgentStatusBadge } from './agent-status-badge'
@@ -30,6 +31,7 @@ export function SessionTabs({
   canRemove = sessions.length > 1,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
+  useWheelScrollX(scrollRef)
   const activeRef = useRef<HTMLButtonElement>(null)
 
   // Scroll active tab into view only if not visible

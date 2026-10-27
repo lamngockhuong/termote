@@ -142,6 +142,7 @@ function AgentChat({
   readOnly,
   agentStart,
   notify,
+  isMobile,
 }: ViewProps) {
   const t = useAgentTranscript(session.paneId)
   const status = toAgentStatus(t.status)
@@ -352,8 +353,11 @@ function AgentChat({
       <header className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2 text-[13px]">
         <AgentStatusBadge status={status} />
         <span className="min-w-0 flex-1 truncate font-medium">
-          {agent} · {visibleUnsafe(session.name)}
-          {paneLabel && ` · ${visibleUnsafe(paneLabel)}`}
+          {/* The session's tab names it on a desktop; a phone has no tabs */}
+          {[agent, isMobile ? session.name : undefined, paneLabel]
+            .filter((part): part is string => !!part)
+            .map((part) => visibleUnsafe(part))
+            .join(' · ')}
         </span>
         {t.error && <span className="text-warning">Reconnecting…</span>}
       </header>

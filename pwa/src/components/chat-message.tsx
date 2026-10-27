@@ -277,9 +277,11 @@ export const ChatMessage = memo(function ChatMessage({
   const time = showTime && <Time ts={entry.ts} />
   if (user) {
     return (
-      <div data-role="user" className="flex flex-col gap-1">
+      // The reader's own messages sit on the right, as wide as their text up
+      // to 85% of the column
+      <div data-role="user" className="flex flex-col items-end gap-1">
         {time}
-        <div className="min-w-0 space-y-1.5 rounded-control border border-border bg-surface px-3 py-2">
+        <div className="w-fit min-w-0 max-w-[85%] space-y-1.5 rounded-control border border-border bg-surface px-3 py-2">
           {entry.parts.map((part, i) =>
             part.kind === 'image' ? (
               // biome-ignore lint/suspicious/noArrayIndexKey: parts never reorder

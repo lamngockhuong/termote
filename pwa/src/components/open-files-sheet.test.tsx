@@ -85,6 +85,16 @@ describe('OpenFilesButton', () => {
     ).not.toHaveAttribute('aria-current')
   })
 
+  it('strikes through a file that was not found, and says why', () => {
+    show({ tabs: [entry('a'), entry('b', { missing: true }), entry('c')] })
+    open()
+    const row = within(sheet()).getByRole('button', {
+      name: /^b\.md ?\(not found\)/,
+    })
+    expect(row).toHaveAttribute('title', 'docs/b.md — File not found')
+    expect(row.querySelector('.line-through')).toHaveTextContent('b.md')
+  })
+
   it('a row shows its file and closes the sheet', () => {
     const p = show()
     open()

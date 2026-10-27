@@ -3772,6 +3772,7 @@ describe('App views, view-only and deep links', () => {
     const main = () =>
       screen.getByTestId('terminal-view').closest('[id="view-panel-terminal"]')!
         .parentElement!
+    const toolbar = () => screen.getByTestId('keyboard-toolbar')
 
     it('opens at the saved width and saves a dragged one', async () => {
       const updateSetting = vi.fn()
@@ -3810,13 +3811,43 @@ describe('App views, view-only and deep links', () => {
       const panel = screen.getByRole('complementary', { name: 'Files' })
       expect(panel).toHaveClass('absolute', 'inset-0')
       expect(main()).toHaveAttribute('inert')
+      expect(toolbar().closest('[inert]')).not.toBeNull()
       expect(coveredNow()).toBe(true)
       fireEvent.keyDown(screen.getByRole('button', { name: 'Restore panel' }), {
         key: 'Escape',
       })
       expect(panel).not.toHaveClass('absolute')
       expect(main()).not.toHaveAttribute('inert')
+      expect(toolbar().closest('[inert]')).toBeNull()
       expect(coveredNow()).toBe(false)
+    })
+
+    it('maximizing the panel closes the command history', async () => {
+      render(<App views={[...APP_VIEWS, SIZED]} />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Files' }))
+      act(() => {
+        ;(
+          vi.mocked(KeyboardToolbar).mock.lastCall![0]
+            .onHistoryToggle as () => void
+        )()
+      })
+      expect(vi.mocked(KeyboardToolbar).mock.lastCall![0].historyOpen).toBe(
+        true,
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Maximize panel' }))
+      expect(vi.mocked(KeyboardToolbar).mock.lastCall![0].historyOpen).toBe(
+        false,
+      )
+    })
+
+    it('the input area sits under the view only, beside the panel', async () => {
+      render(<App views={[...APP_VIEWS, SIZED]} />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Files' }))
+      const panel = screen.getByRole('complementary', { name: 'Files' })
+      const column = panel.previousElementSibling
+      expect(column).toContainElement(main())
+      expect(column).toContainElement(toolbar())
+      expect(panel).not.toContainElement(toolbar())
     })
 
     it('closing the panel leaves the maximized state', async () => {

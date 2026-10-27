@@ -695,6 +695,11 @@ export default function App({
     setPanelMaximized(false)
     setPanelResizing(false)
   }, [hasSidePanel])
+  // The maximized panel covers the input area: the history dropdown over it
+  // would float above the panel, out of reach
+  useEffect(() => {
+    if (panelMaximized) setHistoryOpen(false)
+  }, [panelMaximized])
   const holdTerminalSize = hasSidePanel && (panelResizing || panelMaximized)
   // A focus window's file covers the terminal: no stream there, which would
   // only take one of the server's
@@ -1839,99 +1844,166 @@ export default function App({
             )}
           {/* isolate: the maximized side panel stays under the header's menus */}
           <div className="relative isolate flex min-h-0 flex-1">
-            {/* The terminal fits the space left above the toolbar, so an open
-                keyboard shrinks it rather than hiding its bottom rows. */}
-            <div
-              // Under the maximized side panel or the overview nothing here
-              // takes focus
-              inert={overviewOpen || (hasSidePanel && panelMaximized)}
-              className="relative min-w-0 flex-1 bg-term"
-            >
-              {/* Another view covers the terminal instead of unmounting or
-                  hiding it: it keeps its stream and its size (a display:none
-                  terminal would resize the tmux window to nothing). */}
+            {/* The view's column: the input area sits under the view only, so
+                the sidebar and the side panel run the full height. */}
+            <div className="flex min-w-0 flex-1 flex-col">
+              {/* The terminal fits the space left above the toolbar, so an open
+                  keyboard shrinks it rather than hiding its bottom rows. */}
               <div
-                id={viewPanelId(TERMINAL_VIEW_ID)}
-                role={panelRole}
-                // inert: a covered terminal must not keep keyboard focus
-                inert={!isTerminalView}
-                className={`relative h-full ${isTerminalView ? '' : 'invisible'}`}
-                onContextMenu={(e) => e.preventDefault()}
+                // Under the maximized side panel or the overview nothing here
+                // takes focus
+                inert={overviewOpen || (hasSidePanel && panelMaximized)}
+                className="relative min-h-0 flex-1 bg-term"
               >
-                <div className="h-full">
-                  <TerminalView
-                    ref={terminalRef}
-                    // No stream at all where the server would refuse it, nor
-                    // while a focus window's file covers the terminal
-                    paneId={
-                      viewStreamOff || streamOff
-                        ? undefined
-                        : activeSession.paneId
-                    }
-                    backend={mux.backend}
-                    followPane={mux.caps.clientSideSelect}
-                    // tmux attaches a whole session: another session needs
-                    // another stream.
-                    streamKey={
-                      mux.caps.clientSideSelect
-                        ? undefined
-                        : activeSession.groupId
-                    }
-                    paneSeen={mux.caps.clientSideSelect ? undefined : paneSeen}
-                    copyModeSupported={copyModeSupported}
-                    // A view-only device never moves the backend's view of
-                    // the pane (Herdr scrolls it for every client)
-                    serverScroll={!!mux.caps.scroll && !readOnly}
-                    bracketedPaste={
-                      (isHerdr || isZellij) && !!activeSession.hasAgent
-                    }
-                    fontSize={fontSize}
-                    fontFamily={settings.terminalFont}
-                    theme={resolvedTheme}
-                    uiStyle={settings.uiStyle}
-                    disableContextMenu={settings.disableContextMenu}
-                    copyOnSelect={settings.copyOnSelect}
-                    onCopy={onTerminalCopy}
-                    readOnly={readOnly}
-                    // Only while the terminal shows: under another view the
-                    // pane keeps the desktop's size, so a Claude Code dialog
-                    // taller than this device's screen is not cut by
-                    // Claude Code and the Chat view can still read it.
-                    driveSize={
-                      settings.driveTerminalSize &&
-                      !!mux.caps.driveSize &&
-                      !readOnly &&
-                      isTerminalView
-                    }
-                    onDriveLost={onDriveLost}
-                    // Also while the side panel is dragged (fitted once on
-                    // release) or covers it maximized (no resize at all)
-                    covered={!isTerminalView || holdTerminalSize}
-                    onConnectionStateChange={setStreamState}
-                    onPasteImage={uploadsOn ? attachImage : undefined}
-                  />
+                {/* Another view covers the terminal instead of unmounting or
+                    hiding it: it keeps its stream and its size (a display:none
+                    terminal would resize the tmux window to nothing). */}
+                <div
+                  id={viewPanelId(TERMINAL_VIEW_ID)}
+                  role={panelRole}
+                  // inert: a covered terminal must not keep keyboard focus
+                  inert={!isTerminalView}
+                  className={`relative h-full ${isTerminalView ? '' : 'invisible'}`}
+                  onContextMenu={(e) => e.preventDefault()}
+                >
+                  <div className="h-full">
+                    <TerminalView
+                      ref={terminalRef}
+                      // No stream at all where the server would refuse it, nor
+                      // while a focus window's file covers the terminal
+                      paneId={
+                        viewStreamOff || streamOff
+                          ? undefined
+                          : activeSession.paneId
+                      }
+                      backend={mux.backend}
+                      followPane={mux.caps.clientSideSelect}
+                      // tmux attaches a whole session: another session needs
+                      // another stream.
+                      streamKey={
+                        mux.caps.clientSideSelect
+                          ? undefined
+                          : activeSession.groupId
+                      }
+                      paneSeen={
+                        mux.caps.clientSideSelect ? undefined : paneSeen
+                      }
+                      copyModeSupported={copyModeSupported}
+                      // A view-only device never moves the backend's view of
+                      // the pane (Herdr scrolls it for every client)
+                      serverScroll={!!mux.caps.scroll && !readOnly}
+                      bracketedPaste={
+                        (isHerdr || isZellij) && !!activeSession.hasAgent
+                      }
+                      fontSize={fontSize}
+                      fontFamily={settings.terminalFont}
+                      theme={resolvedTheme}
+                      uiStyle={settings.uiStyle}
+                      disableContextMenu={settings.disableContextMenu}
+                      copyOnSelect={settings.copyOnSelect}
+                      onCopy={onTerminalCopy}
+                      readOnly={readOnly}
+                      // Only while the terminal shows: under another view the
+                      // pane keeps the desktop's size, so a Claude Code dialog
+                      // taller than this device's screen is not cut by
+                      // Claude Code and the Chat view can still read it.
+                      driveSize={
+                        settings.driveTerminalSize &&
+                        !!mux.caps.driveSize &&
+                        !readOnly &&
+                        isTerminalView
+                      }
+                      onDriveLost={onDriveLost}
+                      // Also while the side panel is dragged (fitted once on
+                      // release) or covers it maximized (no resize at all)
+                      covered={!isTerminalView || holdTerminalSize}
+                      onConnectionStateChange={setStreamState}
+                      onPasteImage={uploadsOn ? attachImage : undefined}
+                    />
+                  </div>
+                  {/* Gesture overlay - captures touch gestures (mobile only) */}
+                  {isMobile && (
+                    <div
+                      ref={gestureRef}
+                      className="absolute inset-0 touch-none"
+                    />
+                  )}
                 </div>
-                {/* Gesture overlay - captures touch gestures (mobile only) */}
-                {isMobile && (
+                {!isTerminalView && currentView.Main && (
                   <div
-                    ref={gestureRef}
-                    className="absolute inset-0 touch-none"
-                  />
+                    id={viewPanelId(currentView.id)}
+                    role={panelRole}
+                    className="absolute inset-0 overflow-auto bg-bg"
+                  >
+                    <ViewSlot
+                      key={currentView.id}
+                      View={currentView.Main}
+                      props={viewProps}
+                    />
+                  </div>
                 )}
               </div>
-              {!isTerminalView && currentView.Main && (
-                <div
-                  id={viewPanelId(currentView.id)}
-                  role={panelRole}
-                  className="absolute inset-0 overflow-auto bg-bg"
-                >
-                  <ViewSlot
-                    key={currentView.id}
-                    View={currentView.Main}
-                    props={viewProps}
+              {/* The maximized side panel covers the input area too */}
+              <div inert={hasSidePanel && panelMaximized} className="shrink-0">
+                {/* The bottom input area belongs to the view: the key
+                    toolbar for the terminal. View-only has no input at all. */}
+                {overviewOpen ? null : readOnly ? (
+                  <ReadOnlyBar
+                    label="View only"
+                    action={
+                      isTerminalView && (
+                        <Button size="sm" onClick={openSelectText}>
+                          Select text
+                        </Button>
+                      )
+                    }
                   />
-                </div>
-              )}
+                ) : isTerminalView ? (
+                  <div className="relative">
+                    {historyOpen && (
+                      <CommandHistoryDropdown
+                        history={history}
+                        onSelect={handleHistorySelect}
+                        onRemove={removeCommand}
+                        onClear={clearHistory}
+                        onClose={() => setHistoryOpen(false)}
+                      />
+                    )}
+                    <KeyboardToolbar
+                      onKey={handleKey}
+                      onCtrlKey={handleCtrlKey}
+                      onShiftKey={handleShiftKey}
+                      onCtrlShiftKey={handleCtrlShiftKey}
+                      onScroll={handleScroll}
+                      onTmuxCopy={handleTmuxCopy}
+                      showTmuxCopy={copyModeSupported}
+                      onSelectText={openSelectText}
+                      onPaste={handlePaste}
+                      onAttachImage={uploadsOn ? handleAttachImage : undefined}
+                      onToggleKeyboard={toggleKeyboard}
+                      onSendText={handleSendText}
+                      ctrlActive={ctrlActive}
+                      onCtrlChange={setCtrlActive}
+                      imeMode={imeMode}
+                      onImeModeChange={setImeMode}
+                      defaultExpanded={settings.toolbarDefaultExpanded}
+                      onHistoryToggle={() => setHistoryOpen((prev) => !prev)}
+                      historyOpen={historyOpen}
+                      keyboardVisible={keyboardVisible}
+                      quickActions={isMobile ? quickActions : undefined}
+                    />
+                  </div>
+                ) : (
+                  // Keyed by pane: a send still in flight never lands on another
+                  // pane's draft.
+                  currentView.Input && (
+                    <currentView.Input
+                      key={activeSession.paneId}
+                      {...viewProps}
+                    />
+                  )
+                )}
+              </div>
             </div>
             {sidePanelView?.Panel && (
               <SidePanel
@@ -1981,62 +2053,6 @@ export default function App({
           </div>
         </main>
       </div>
-
-      {/* The bottom input area belongs to the view: the key toolbar for the
-          terminal. View-only has no input at all. */}
-      {overviewOpen ? null : readOnly ? (
-        <ReadOnlyBar
-          label="View only"
-          action={
-            isTerminalView && (
-              <Button size="sm" onClick={openSelectText}>
-                Select text
-              </Button>
-            )
-          }
-        />
-      ) : isTerminalView ? (
-        <div className="relative">
-          {historyOpen && (
-            <CommandHistoryDropdown
-              history={history}
-              onSelect={handleHistorySelect}
-              onRemove={removeCommand}
-              onClear={clearHistory}
-              onClose={() => setHistoryOpen(false)}
-            />
-          )}
-          <KeyboardToolbar
-            onKey={handleKey}
-            onCtrlKey={handleCtrlKey}
-            onShiftKey={handleShiftKey}
-            onCtrlShiftKey={handleCtrlShiftKey}
-            onScroll={handleScroll}
-            onTmuxCopy={handleTmuxCopy}
-            showTmuxCopy={copyModeSupported}
-            onSelectText={openSelectText}
-            onPaste={handlePaste}
-            onAttachImage={uploadsOn ? handleAttachImage : undefined}
-            onToggleKeyboard={toggleKeyboard}
-            onSendText={handleSendText}
-            ctrlActive={ctrlActive}
-            onCtrlChange={setCtrlActive}
-            imeMode={imeMode}
-            onImeModeChange={setImeMode}
-            defaultExpanded={settings.toolbarDefaultExpanded}
-            onHistoryToggle={() => setHistoryOpen((prev) => !prev)}
-            historyOpen={historyOpen}
-            keyboardVisible={keyboardVisible}
-            quickActions={isMobile ? quickActions : undefined}
-          />
-        </div>
-      ) : (
-        // Keyed by pane: a send still in flight never lands on another
-        // pane's draft.
-        currentView.Input && (
-          <currentView.Input key={activeSession.paneId} {...viewProps} />
-        )
-      )}
 
       {/* Hidden input for Ctrl+key capture - programmatically focused only */}
       {!readOnly && (
