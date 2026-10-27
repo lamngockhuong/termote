@@ -157,4 +157,12 @@ describe('FileTabBar', () => {
     fireEvent.wheel(bar, { deltaY: 40 })
     expect(bar.scrollLeft).toBe(40)
   })
+
+  it('strikes through a tab whose file was not found, and says why', () => {
+    show({ tabs: [entry('a', { missing: true }), entry('b')] })
+    const gone = tab(/^a\.md ?\(not found\)$/)
+    expect(gone).toHaveAttribute('title', 'docs/a.md — File not found')
+    expect(gone.querySelector('.line-through')).toHaveTextContent('a.md')
+    expect(tab('b.md')).toHaveAttribute('title', 'docs/b.md')
+  })
 })

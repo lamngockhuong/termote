@@ -348,6 +348,7 @@ function PaneFiles({
         detail: dir,
         pinned: t.pinned,
         dirty: isDirty(t.root, t.path),
+        missing: t.missing,
       }
     }),
     activeId: f.activeId,
@@ -782,6 +783,7 @@ function PaneFiles({
             pinned={tab.pinned}
             onPin={() => f.pin(tab.id)}
             onRevealed={() => f.setReveal(tab.id)}
+            onMissingChange={(missing) => f.setMissing(tab.id, missing)}
             // Nothing to see in this tab: it closes, unless a link led here
             onCancelReveal={tab.history.length ? f.back : () => f.close(tab.id)}
             onScroll={(top) => f.setScroll(tab.id, top)}

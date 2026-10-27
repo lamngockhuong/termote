@@ -15,7 +15,13 @@ export interface TabEntry {
   pinned: boolean
   // Has unsaved changes
   dirty: boolean
+  // Its file was not found when last read (deleted or renamed elsewhere)
+  missing?: boolean
 }
+
+// The tooltip of tab t: its path, and why it is struck through
+export const tabTitle = (t: TabEntry) =>
+  t.missing ? `${t.title} — File not found` : t.title
 
 // What the tab bar (desktop) and the open-files sheet (mobile) both take
 export interface TabListProps {
@@ -140,7 +146,7 @@ export function FileTabBar({
               aria-selected={shown}
               aria-keyshortcuts="Delete"
               tabIndex={tabbable === t.id ? 0 : -1}
-              title={t.title}
+              title={tabTitle(t)}
               onClick={() => onActivate(t.id)}
               onDoubleClick={() => onPin(t.id)}
               // No autoscroll: a middle click closes the tab
@@ -155,10 +161,13 @@ export function FileTabBar({
               onKeyDown={(e) => onKeyDown(e, t.id)}
               className={`${TAB} max-w-48 pr-1`}
             >
-              <span className={`truncate ${t.pinned ? '' : 'italic'}`}>
+              <span
+                className={`truncate ${t.pinned ? '' : 'italic'} ${t.missing ? 'text-fg-subtle line-through' : ''}`}
+              >
                 {t.name}
               </span>
               {!t.pinned && <span className="sr-only"> (preview)</span>}
+              {t.missing && <span className="sr-only"> (not found)</span>}
               {t.dirty && (
                 <>
                   <span

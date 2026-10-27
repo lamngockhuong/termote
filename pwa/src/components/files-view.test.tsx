@@ -1751,6 +1751,15 @@ describe('FilesView tabs', () => {
     expect(screen.getByRole('tree')).toBeInTheDocument()
   })
 
+  it('a file gone from the host is struck through in the tab bar', async () => {
+    mockContent.mockRejectedValue(new RequestError(404, '', 'x'))
+    await show()
+    fireEvent.click(item('README.md'))
+    const gone = await screen.findByRole('tab', { name: /\(not found\)$/ })
+    expect(gone.getAttribute('title')).toMatch(/README\.md — File not found$/)
+    expect(gone.querySelector('.line-through')).toHaveTextContent('README.md')
+  })
+
   it('a file gone from the host keeps its tab until closed', async () => {
     mockContent.mockRejectedValue(new RequestError(404, '', 'x'))
     await show()
