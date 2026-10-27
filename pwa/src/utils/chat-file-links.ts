@@ -23,8 +23,8 @@ function lineOf(s: string | undefined) {
 // The path inline code names, or null when it does not look like one.
 // link: the text is a Markdown link's href, which is a path by being a link;
 // inline code is one only when it names a file (its last part has a dot),
-// says where it starts ("/", "./", "../") or names a line. "and/or",
-// "text/html" or "owner/repo" are not.
+// says where it starts ("/" with a directory, "./", "../") or names a line.
+// "and/or", "text/html", "owner/repo" or a slash command ("/clear") are not.
 export function parseFileRef(text: string, link = false): FileRef | null {
   let s = text.trim()
   if (!s || s.length > 1024) return null
@@ -52,10 +52,15 @@ export function parseFileRef(text: string, link = false): FileRef | null {
   if (!link) {
     if (NOT_A_PATH.test(s)) return null
     if (!/[\\/]/.test(s) || !/[A-Za-z_]/.test(s)) return null
-    const name = s.split(/[\\/]/).pop() ?? ''
+    const parts = s
+      .replace(/^[A-Za-z]:/, '')
+      .split(/[\\/]/)
+      .filter(Boolean)
+    const name = parts[parts.length - 1]
     const named = /.\.[^.]+$/.test(name) || /^\.[^.]/.test(name)
-    if (!named && !ABSOLUTE.test(s) && !/^\.\.?[\\/]/.test(s) && !line)
-      return null
+    // "/clear": one name under "/" is a command, not a file
+    const deep = ABSOLUTE.test(s) && parts.length > 1
+    if (!named && !deep && !/^\.\.?[\\/]/.test(s) && !line) return null
   }
   return { path: s, ...(line && { line }) }
 }

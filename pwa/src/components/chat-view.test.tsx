@@ -347,6 +347,17 @@ describe('ChatView file paths', () => {
     ).toBeInTheDocument()
   })
 
+  it('a link dropped for a newer one says nothing', async () => {
+    mockFollowPath.mockResolvedValue('stale')
+    set({ entries: [say('`src/a.ts`')] })
+    render(<ChatView {...withFiles} />)
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'src/a.ts' })),
+    )
+    expect(props.notify).not.toHaveBeenCalled()
+    expect(showView).not.toHaveBeenCalled()
+  })
+
   it.each([
     ['missing', 'Not found'],
     ['failed', "This link can't be opened"],

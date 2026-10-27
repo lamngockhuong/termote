@@ -935,8 +935,7 @@ export async function followPathInFiles(
   const fromRoot = underRoot(path, here.root)
   const result = fromDir === null ? 'outside' : await open(fromDir)
   if (result !== 'missing' && result !== 'outside') return result
-  if (fromRoot === null || fromRoot === fromDir) return result
-  return open(fromRoot)
+  return fromRoot === null ? result : open(fromRoot)
 }
 
 // Opens path (under root, which the store moves to when it is elsewhere) in

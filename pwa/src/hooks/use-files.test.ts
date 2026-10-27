@@ -496,6 +496,11 @@ describe('following links', () => {
       r = await followPathInFiles('%1', 'nope.md')
     })
     expect(r).toBe('missing')
+    // Out of the root from the directory, and from the root too
+    await act(async () => {
+      r = await followPathInFiles('%1', '../../a.md')
+    })
+    expect(r).toBe('outside')
   })
 
   it('followPathInFiles reads the root again when the store has one', async () => {
