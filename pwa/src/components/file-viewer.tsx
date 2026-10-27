@@ -383,13 +383,69 @@ interface Props {
 }
 
 // A header button after the main ones: pressed is set for an on/off one
-interface HeaderAction {
+export interface HeaderAction {
   label: string
   title?: string
   icon: ReactNode
   pressed?: boolean
   danger?: boolean
   onClick: (e: OpenWindowEvent) => void
+}
+
+// The header's buttons after the main ones: icons, or on a phone a menu of
+// them, where the file's name needs the room
+export function HeaderActions({
+  actions,
+  compact,
+}: {
+  actions: HeaderAction[]
+  compact: boolean
+}) {
+  if (!compact)
+    return actions.map((a) => (
+      <IconButton
+        key={a.label}
+        size="sm"
+        onClick={(e) => a.onClick({ shiftKey: e.shiftKey })}
+        aria-label={a.label}
+        aria-pressed={a.pressed}
+        title={a.title ?? a.label}
+        className={a.pressed ? 'text-accent' : ''}
+      >
+        {a.icon}
+      </IconButton>
+    ))
+  if (actions.length === 0) return null
+  return (
+    <Menu
+      label="More actions"
+      trigger={<Ellipsis size={16} aria-hidden="true" />}
+      triggerSize="sm"
+      align="end"
+    >
+      {actions.map((a) =>
+        a.pressed === undefined ? (
+          <MenuItem
+            key={a.label}
+            icon={a.icon}
+            danger={a.danger}
+            onSelect={a.onClick}
+          >
+            {a.label}
+          </MenuItem>
+        ) : (
+          <MenuItemCheckbox
+            key={a.label}
+            icon={a.icon}
+            checked={a.pressed}
+            onSelect={a.onClick}
+          >
+            {a.label}
+          </MenuItemCheckbox>
+        ),
+      )}
+    </Menu>
+  )
 }
 
 // One file of the tree: its text with line numbers, or why it cannot be
@@ -974,50 +1030,7 @@ export function FileViewer({
             <Pencil size={15} aria-hidden="true" />
           </IconButton>
         )}
-        {compact
-          ? extras.length > 0 && (
-              <Menu
-                label="More actions"
-                trigger={<Ellipsis size={16} aria-hidden="true" />}
-                triggerSize="sm"
-                align="end"
-              >
-                {extras.map((a) =>
-                  a.pressed === undefined ? (
-                    <MenuItem
-                      key={a.label}
-                      icon={a.icon}
-                      danger={a.danger}
-                      onSelect={a.onClick}
-                    >
-                      {a.label}
-                    </MenuItem>
-                  ) : (
-                    <MenuItemCheckbox
-                      key={a.label}
-                      icon={a.icon}
-                      checked={a.pressed}
-                      onSelect={a.onClick}
-                    >
-                      {a.label}
-                    </MenuItemCheckbox>
-                  ),
-                )}
-              </Menu>
-            )
-          : extras.map((a) => (
-              <IconButton
-                key={a.label}
-                size="sm"
-                onClick={(e) => a.onClick({ shiftKey: e.shiftKey })}
-                aria-label={a.label}
-                aria-pressed={a.pressed}
-                title={a.title ?? a.label}
-                className={a.pressed ? 'text-accent' : ''}
-              >
-                {a.icon}
-              </IconButton>
-            ))}
+        <HeaderActions actions={extras} compact={compact} />
         {headerExtra}
       </div>
       {mine &&

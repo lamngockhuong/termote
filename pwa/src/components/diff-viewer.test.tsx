@@ -129,10 +129,18 @@ describe('DiffViewer', () => {
     expect(add).toHaveTextContent('2+new')
     expect(screen.getByText(/src\/old\.ts → src\/a\.ts/)).toBeInTheDocument()
     expect(screen.getByText('Staged')).toBeInTheDocument()
-    const wrap = screen.getByRole('button', { name: 'Wrap lines' })
-    expect(wrap).toHaveAttribute('aria-pressed', 'true')
+    // The header's other buttons are in a menu, leaving the name the room
+    expect(screen.queryByRole('button', { name: 'Wrap lines' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Copy path' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }))
+    const wrap = screen.getByRole('menuitemcheckbox', { name: 'Wrap lines' })
+    expect(wrap).toHaveAttribute('aria-checked', 'true')
     fireEvent.click(wrap)
-    expect(wrap).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }))
+    expect(
+      screen.getByRole('menuitemcheckbox', { name: 'Wrap lines' }),
+    ).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByRole('menuitem', { name: 'Copy path' })).toBeVisible()
   })
 
   it.each([
