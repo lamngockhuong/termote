@@ -170,6 +170,7 @@ function AgentChat({
   // live on screen, by entry id
   const [runModes, setRunModes] = useState<Record<string, RunMode>>({})
   const heldRef = useRef(new Set<string>())
+  const tailsRef = useRef(new Map<string, string>())
 
   // Where the list was before older entries were put above it, so the entry
   // being read stays in place. fromServer: waiting for loadOlder's entries.
@@ -189,6 +190,7 @@ function AgentChat({
     setUnseen(false)
     setRunModes({})
     heldRef.current = new Set()
+    tailsRef.current = new Map()
     atBottomRef.current = true
     anchorRef.current = null
   }, [t.sessionId])
@@ -310,6 +312,8 @@ function AgentChat({
   const runs: RunState = {
     modes: runModes,
     held: heldRef.current,
+    tails: tailsRef.current,
+    follow: atBottom,
     setMode: (ids, mode) =>
       setRunModes((m) => ({
         ...m,

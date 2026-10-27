@@ -40,7 +40,8 @@ function basename(path: string) {
 }
 
 // A block cut to maxClass's height until opened: when it holds more than
-// lines, or once rendered taller (a long line wraps over several).
+// lines, or overflows the cut (a long line wraps over several). The cut is
+// on while closed, so the overflow can be measured against it.
 function Capped({
   lines,
   limit,
@@ -65,10 +66,7 @@ function Capped({
   const capped = lines > limit || tall
   return (
     <>
-      <div
-        ref={ref}
-        className={`${className} ${capped && !open ? maxClass : ''}`}
-      >
+      <div ref={ref} className={`${className} ${open ? '' : maxClass}`}>
         {children}
       </div>
       {capped && (

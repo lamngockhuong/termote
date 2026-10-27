@@ -124,11 +124,15 @@ type Layout = { showTime: boolean; joinsNext: boolean }
 
 export type RunMode = 'open' | 'closed'
 
-// What the list keeps for its runs, by entry id: the reader's choice, and
-// the runs that were live on screen
+// What the list keeps for its runs, by entry id: the reader's choice, the
+// runs that were live on screen, and where a live run's tail starts. follow:
+// the list is at its bottom; read above it, the tail stays where it was,
+// or each new step would move the lines being read.
 export interface RunState {
   modes: Record<string, RunMode>
   held: Set<string>
+  tails: Map<string, string>
+  follow: boolean
   setMode: (ids: string[], mode: RunMode) => void
 }
 
@@ -143,16 +147,34 @@ export function toolRunRows(
   live: boolean,
   state: RunState,
 ): ReactElement[] {
+  const tools = toolsOf(entries)
+  // Cut by the list's window down to thinking only: no run left to say
+  if (!tools.length) {
+    return entries.map((e, i) => (
+      <ChatMessage
+        key={e.id}
+        entry={e}
+        showTime={layout[i].showTime}
+        joinsNext={layout[i].joinsNext}
+      />
+    ))
+  }
   const ids = entries.map((e) => e.id)
   if (live) for (const id of ids) state.held.add(id)
   const chosen = ids.map((id) => state.modes[id]).find(Boolean)
-  const tools = toolsOf(entries)
   const summary = runSummary(tools)
   const dot = runDot(tools)
   const setMode = (mode: RunMode) => state.setMode(ids, mode)
   const tail = !chosen && ids.some((id) => state.held.has(id))
   if (chosen === 'open' || tail) {
-    const start = tail ? Math.max(0, entries.length - LIVE_TAIL) : 0
+    let start = 0
+    if (tail) {
+      const kept = state.follow
+        ? -1
+        : ids.indexOf(state.tails.get(ids[0]) ?? '')
+      start = kept >= 0 ? kept : Math.max(0, entries.length - LIVE_TAIL)
+      state.tails.set(ids[0], ids[start])
+    }
     const earlier = toolsOf(entries.slice(0, start)).length
     const label =
       start === 0

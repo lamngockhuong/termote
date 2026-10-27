@@ -131,14 +131,25 @@ describe('runSummary and stepLine', () => {
 })
 
 // The list's part: keeps what the reader chose and the runs seen live
-function Run({ entries, live }: { entries: TranscriptEntry[]; live: boolean }) {
+function Run({
+  entries,
+  live,
+  follow = true,
+}: {
+  entries: TranscriptEntry[]
+  live: boolean
+  follow?: boolean
+}) {
   const [modes, setModes] = useState<Record<string, RunMode>>({})
   const held = useRef(new Set<string>()).current
+  const tails = useRef(new Map<string, string>()).current
   return (
     <>
       {toolRunRows(entries, layoutOf(entries.length), live, {
         modes,
         held,
+        tails,
+        follow,
         setMode: (ids, mode) =>
           setModes((m) => ({
             ...m,
@@ -209,6 +220,36 @@ describe('toolRunRows', () => {
     expect(container.querySelector('span.rounded-full')).toHaveClass(
       'bg-success',
     )
+  })
+
+  it('read above the bottom, a live tail stays where it was', () => {
+    const steps = (n: number) =>
+      Array.from({ length: n }, (_, i) => bash(`${i}`, `cmd${i}`))
+    const { rerender } = render(<Run entries={steps(8)} live />)
+    expect(screen.getByText('cmd2')).toBeInTheDocument()
+    rerender(<Run entries={steps(10)} live follow={false} />)
+    // The lines being read stay; the new steps come in below them
+    expect(screen.getByText('cmd2')).toBeInTheDocument()
+    expect(screen.getByText('cmd9')).toBeInTheDocument()
+    expect(
+      screen.getByText('2 earlier steps · 10 commands'),
+    ).toBeInTheDocument()
+    // Back at the bottom, it follows the newest again
+    rerender(<Run entries={steps(10)} live />)
+    expect(screen.queryByText('cmd3')).toBeNull()
+  })
+
+  it('cut down to thinking only, the entries show as they are', () => {
+    const think: TranscriptEntry = {
+      id: 'th',
+      role: 'assistant',
+      parts: [{ kind: 'thinking', text: 'hm' }],
+    }
+    render(<Run entries={[think]} live={false} />)
+    expect(screen.getByText('Thinking')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { expanded: false, name: /commands/ }),
+    ).toBeNull()
   })
 
   it('a live run short enough shows all of it and can be folded', () => {

@@ -309,6 +309,29 @@ describe('ChatView runs of steps', () => {
     expect(screen.queryByText('c3')).toBeNull()
   })
 
+  it('a run cut by the window down to its thinking shows that as it is', () => {
+    const think: TranscriptEntry = {
+      id: 'th',
+      role: 'assistant',
+      parts: [{ kind: 'thinking', text: 'hm' }],
+    }
+    set({
+      entries: [
+        bash('c1', 'r'),
+        bash('c2', 'r'),
+        think,
+        ...entries(RENDER_WINDOW - 1),
+      ],
+      status: 'idle',
+    })
+    render(<ChatView {...props} />)
+    expect(screen.getByText('Thinking')).toBeInTheDocument()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Show earlier messages' }),
+    )
+    expect(screen.getByText('2 commands')).toBeInTheDocument()
+  })
+
   it('a run cut by the window shows its part, and grows as more is shown', () => {
     set({
       entries: [
