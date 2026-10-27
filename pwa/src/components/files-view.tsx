@@ -246,6 +246,7 @@ function PaneFiles({
 >) {
   const f = useFiles(paneId)
   const places = usePlaces(canPlaces)
+  const placeRoots = useMemo(() => places.map((p) => p.path), [places])
   const { settings } = useSettings()
   const { load, rootChanges, follow } = f
   const isDirty = useDirtyCheck(paneId)
@@ -261,8 +262,7 @@ function PaneFiles({
   // A comment of the review opened: its file here, its diff in Changes
   const openComment = (cm: ReviewComment) => {
     // A file comment of a Place opens it there
-    const ofPlace =
-      cm.source === 'file' && places.some((p) => p.path === cm.root)
+    const ofPlace = cm.source === 'file' && placeRoots.includes(cm.root)
     // On a Place, a comment of another root is the pane's: its folder opens
     if (cm.root !== f.root && !ofPlace && !f.place) {
       notify('The pane is in another folder now', { variant: 'warning' })

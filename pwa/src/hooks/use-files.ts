@@ -291,7 +291,7 @@ function createStore(id: string): Store {
   const target = (): FilesTarget => ({ paneId, place: state.place })
   // A tab is one file: its root and its path
   const tabKey = (t: FileTab) => `${t.root}\u0000${t.path}`
-  const here = (t: FileTab) => t.root === (state.root ?? '')
+  const here = (t: FileTab) => t.root === state.root
 
   // Kept on the device after every change of the tabs (and of where they
   // are scrolled to, which renders nothing)
