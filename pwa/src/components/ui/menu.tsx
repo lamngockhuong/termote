@@ -15,6 +15,49 @@ import { FOCUS_RING, IconButton } from './button'
 
 // The least room left between an open menu and the screen's edge, in px
 const MENU_MARGIN = 8
+// The gap between the trigger and the menu (mt-2), in px
+const MENU_GAP = 8
+
+// The top layer (Popover API) lifts the open menu out of every scrolling or
+// transformed ancestor: a sidebar list no longer cuts it. Without it (jsdom,
+// older browsers) the menu stays absolute under its trigger.
+const topLayer = () =>
+  typeof HTMLElement !== 'undefined' && 'showPopover' in HTMLElement.prototype
+
+// Where the menu goes in the viewport (position: fixed): under the trigger,
+// aligned to its edge as before and kept on the screen; above it when there
+// is not room below and more room above; capped in height, scrolling inside,
+// when neither side holds it. The visible part of the viewport counts, so an
+// open keyboard (visualViewport) is left out.
+export function placeMenu(
+  trigger: DOMRect,
+  menu: { width: number; height: number },
+  align: 'start' | 'end',
+  view: { width: number; top: number; height: number },
+) {
+  const left = Math.max(
+    MENU_MARGIN,
+    Math.min(
+      align === 'end' ? trigger.right - menu.width : trigger.left,
+      view.width - MENU_MARGIN - menu.width,
+    ),
+  )
+  const below = view.top + view.height - MENU_MARGIN - trigger.bottom - MENU_GAP
+  const above = trigger.top - MENU_GAP - MENU_MARGIN - view.top
+  if (menu.height <= below || below >= above)
+    return {
+      left,
+      top: trigger.bottom + MENU_GAP,
+      maxHeight: menu.height <= below ? undefined : below,
+    }
+  if (menu.height <= above)
+    return {
+      left,
+      top: trigger.top - MENU_GAP - menu.height,
+      maxHeight: undefined,
+    }
+  return { left, top: view.top + MENU_MARGIN, maxHeight: above }
+}
 
 const MenuContext = createContext<() => void>(() => {})
 
@@ -96,25 +139,81 @@ export function Menu({
   // work from the box.
   useEffect(() => {
     if (!isOpen) return
-    if (openedByKeyRef.current) items(listRef.current!)[0]?.focus()
-    else listRef.current!.focus()
+    // preventScroll: a menu in the top layer is already in view; scrolling
+    // a list under it to "show" it would close it.
+    if (openedByKeyRef.current)
+      items(listRef.current!)[0]?.focus({ preventScroll: true })
+    else listRef.current!.focus({ preventScroll: true })
   }, [isOpen])
 
-  // Kept on the screen: a trigger away from the edge it is aligned to (a
+  // In the top layer the menu is placed in the viewport (placeMenu). Else it
+  // is kept on the screen: a trigger away from the edge it is aligned to (a
   // header with buttons after it) would push the menu past the other edge.
   // Measured before paint, so it never shows cut off first.
+  const inTopLayer = topLayer()
+  // offsetHeight: as tall as the menu shows, a max-h class included
+  const placeInViewport = () => {
+    const list = listRef.current
+    const trigger = triggerRef.current
+    if (!list || !trigger) return
+    const vv = window.visualViewport
+    const at = placeMenu(
+      trigger.getBoundingClientRect(),
+      { width: list.offsetWidth, height: list.offsetHeight },
+      align,
+      {
+        width: document.documentElement.clientWidth,
+        top: vv?.offsetTop ?? 0,
+        height: vv?.height ?? window.innerHeight,
+      },
+    )
+    list.style.left = `${at.left}px`
+    list.style.top = `${at.top}px`
+    list.style.maxHeight = at.maxHeight === undefined ? '' : `${at.maxHeight}px`
+  }
+  const placeRef = useRef(placeInViewport)
+  placeRef.current = placeInViewport
   const [shift, setShift] = useState(0)
   useLayoutEffect(() => {
     if (!isOpen) {
       setShift(0)
       return
     }
-    const rect = listRef.current!.getBoundingClientRect()
+    const list = listRef.current!
+    if (inTopLayer) {
+      list.showPopover()
+      placeRef.current()
+      return
+    }
+    const rect = list.getBoundingClientRect()
     if (rect.width === 0) return
     const edge = document.documentElement.clientWidth - MENU_MARGIN
     if (rect.left < MENU_MARGIN) setShift(MENU_MARGIN - rect.left)
     else if (rect.right > edge) setShift(edge - rect.right)
-  }, [isOpen])
+  }, [isOpen, inTopLayer])
+
+  // Placed in the viewport, the menu would drift off its trigger as a list
+  // holding the trigger scrolls: that closes it. Any other scroll (a Chat
+  // following new messages, a table under its own menu) and a scroll inside
+  // the menu leave it; a resized window (a phone's keyboard closing) places
+  // it again.
+  useEffect(() => {
+    if (!isOpen || !inTopLayer) return
+    const onScroll = (e: Event) => {
+      const target = e.target as Node
+      if (listRef.current?.contains(target)) return
+      const trigger = triggerRef.current
+      if (trigger && (target === document || target.contains(trigger)))
+        setIsOpenRef.current(false)
+    }
+    const onResize = () => placeRef.current()
+    document.addEventListener('scroll', onScroll, true)
+    window.addEventListener('resize', onResize)
+    return () => {
+      document.removeEventListener('scroll', onScroll, true)
+      window.removeEventListener('resize', onResize)
+    }
+  }, [isOpen, inTopLayer])
 
   // pointerdown, not mousedown: a touch that scrolls elsewhere sends no mouse events.
   useEffect(() => {
@@ -202,8 +301,13 @@ export function Menu({
           aria-label={label}
           tabIndex={-1}
           onKeyDown={onKeyDown}
+          // manual: no light dismiss and no focus handling of its own; the
+          // menu keeps doing both
+          popover={inTopLayer ? 'manual' : undefined}
           style={shift ? { transform: `translateX(${shift}px)` } : undefined}
-          className={`absolute top-full z-50 mt-2 outline-none w-64 border border-border bg-surface-raised py-1 text-fg shadow-xl rounded-panel ui-native:border-0 transition-[opacity,translate] duration-(--duration-fast) ease-standard starting:-translate-y-1 starting:opacity-0 ${align === 'end' ? 'right-0' : 'left-0'} ${className}`}
+          // In the top layer: fixed, placed by style; the UA's popover inset,
+          // margin and padding reset so these classes decide the look
+          className={`z-50 outline-none w-64 border border-border bg-surface-raised py-1 text-fg shadow-xl rounded-panel ui-native:border-0 transition-[opacity,translate] duration-(--duration-fast) ease-standard starting:-translate-y-1 starting:opacity-0 ${inTopLayer ? 'fixed inset-auto m-0 overflow-y-auto px-0' : `absolute top-full mt-2 ${align === 'end' ? 'right-0' : 'left-0'}`} ${className}`}
         >
           <MenuContext.Provider value={close}>{children}</MenuContext.Provider>
         </div>
