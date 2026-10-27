@@ -5,6 +5,7 @@ import {
   isMermaidInfo,
   rehypeHeadingIds,
   rehypeMermaidIndex,
+  rehypeSourceLines,
   resolveLink,
   slugger,
   splitFrontMatter,
@@ -106,10 +107,12 @@ describe('splitFrontMatter', () => {
     expect(splitFrontMatter('---\ntitle: A\n---\n# Hi\n')).toEqual({
       frontMatter: 'title: A',
       body: '# Hi\n',
+      lines: 3,
     })
     expect(splitFrontMatter('---\r\na: 1\r\nb: 2\r\n---')).toEqual({
       frontMatter: 'a: 1\r\nb: 2',
       body: '',
+      lines: 3,
     })
   })
 
@@ -117,16 +120,25 @@ describe('splitFrontMatter', () => {
     expect(splitFrontMatter('---\n---\nx')).toEqual({
       frontMatter: '',
       body: 'x',
+      lines: 2,
     })
   })
 
   it('leaves text without one alone', () => {
     expect(splitFrontMatter('# A\n---\nb: 1\n---\n')).toEqual({
       body: '# A\n---\nb: 1\n---\n',
+      lines: 0,
     })
     expect(splitFrontMatter('---\nnot closed')).toEqual({
       body: '---\nnot closed',
+      lines: 0,
     })
+  })
+
+  it('counts the lines before the body, with CRLF and without a last line break', () => {
+    expect(splitFrontMatter('---\r\na: 1\r\n---\r\n# B').lines).toBe(3)
+    expect(splitFrontMatter('---\na: 1\n---').lines).toBe(2)
+    expect(splitFrontMatter('---\n---').lines).toBe(1)
   })
 })
 
@@ -260,5 +272,56 @@ describe('findAnchor', () => {
     expect(findAnchor(div, 'Usage')?.textContent).toBe('Usage')
     expect(findAnchor(div, 'user-content-fn-1')?.tagName).toBe('LI')
     expect(findAnchor(div, 'missing')).toBeUndefined()
+  })
+})
+
+describe('rehypeSourceLines', () => {
+  interface El {
+    type: string
+    tagName?: string
+    value?: string
+    properties: Record<string, unknown>
+    children: El[]
+    position?: { start: { line: number } }
+  }
+  const el = (tagName: string, line?: number, children: El[] = []): El => ({
+    type: 'element',
+    tagName,
+    properties: {},
+    children,
+    ...(line === undefined ? {} : { position: { start: { line } } }),
+  })
+  const line = (n: El) => n.properties.dataLine
+
+  it('marks the blocks at the top and in disclosures with their line in the file', () => {
+    const inner = el('p', 6)
+    const nested = el('ul', 8)
+    const tree: El = {
+      type: 'root',
+      properties: {},
+      children: [
+        el('h1', 1, [el('em', 1)]),
+        { type: 'text', value: '\n', properties: {}, children: [] },
+        el('details', 4, [el('summary'), inner, el('details', 7, [nested])]),
+        el('section'),
+      ],
+    }
+    rehypeSourceLines(3)(tree)
+    const [h1, text, details, footnotes] = tree.children
+    expect(line(h1)).toBe(4)
+    // Not a block: inside one, or text
+    expect(line(h1.children[0])).toBeUndefined()
+    expect(line(text)).toBeUndefined()
+    expect(line(details)).toBe(7)
+    expect(line(inner)).toBe(9)
+    expect(line(nested)).toBe(11)
+    // No position: no line
+    expect(line(footnotes)).toBeUndefined()
+  })
+
+  it('counts from the body without an offset', () => {
+    const tree: El = { type: 'root', properties: {}, children: [el('p', 2)] }
+    rehypeSourceLines()(tree)
+    expect(tree.children[0].properties).toEqual({ dataLine: 2 })
   })
 })

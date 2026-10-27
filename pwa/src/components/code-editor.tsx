@@ -3,6 +3,7 @@ import {
   history,
   historyKeymap,
   indentWithTab,
+  isolateHistory,
 } from '@codemirror/commands'
 import {
   bracketMatching,
@@ -38,12 +39,15 @@ import {
 } from '@codemirror/view'
 import { type RefObject, useEffect, useLayoutEffect, useRef } from 'react'
 import { useTheme } from '../contexts/theme-context'
+import type { SyncSide } from '../hooks/use-scroll-sync'
 import { useSettings } from '../hooks/use-settings'
 import { loadLanguage } from '../utils/cm-languages'
 import { baseTheme, darkCode, lightCode } from '../utils/cm-theme'
 import { HIGHLIGHT_MAX_LINE } from '../utils/highlight'
 import { languageFor } from '../utils/highlight-langs'
 import { selectedLines, type TextLines } from '../utils/line-range'
+import type { PasteEdit } from '../utils/markdown-image-paste'
+import { imageFromClipboard } from '../utils/upload-image'
 
 // Where the editor opens a file, or moves to: a line (1-based) and a column
 // (UTF-16, 0-based), again each time jump changes
@@ -76,6 +80,14 @@ export interface CodeEditorProps {
   // Set to what reads the whole lines of the main selection (the cursor's
   // line without one), for a review comment
   linesRef?: RefObject<(() => TextLines) | null>
+  // Out of sight for now, kept mounted: measured again once it shows
+  hidden?: boolean
+  // Given how to read and set the line at its top (a Markdown draft's
+  // preview scrolls with it); null once the editor is gone
+  onSyncSide?: (side: SyncSide | null) => void
+  // An image pasted (alone: a paste with text is text): edit puts text at
+  // the cursor, then replaces it (pasteEdit)
+  onPasteImage?: (file: File, edit: PasteEdit) => void
 }
 
 // Marks a change made from the props, which onChange is not told about
@@ -157,6 +169,36 @@ function positionOf(state: EditorState, at: EditorAt): number {
   return line.from + Math.min(Math.max(at.col ?? 0, 0), line.length)
 }
 
+// The editing a pasted image gets, while live() says the editor is there:
+// text in place of the selection, a change the user can undo; then that text
+// swapped for other, the swap alone in the history (the text it replaces
+// leaves outside it). Undo then takes out the image's link, and the cursor
+// and the edits made meanwhile stay where they are.
+function pasteEdit(v: EditorView, live: () => boolean): PasteEdit {
+  return {
+    insert: (text) =>
+      v.dispatch(v.state.replaceSelection(text), {
+        userEvent: 'input.paste',
+        scrollIntoView: true,
+      }),
+    replace: (find, with_) => {
+      const at = live() ? v.state.doc.toString().indexOf(find) : -1
+      if (at < 0) return false
+      v.dispatch({
+        changes: { from: at, to: at + find.length },
+        annotations: Transaction.addToHistory.of(false),
+      })
+      if (with_)
+        v.dispatch({
+          changes: { from: at, insert: with_ },
+          userEvent: 'input.paste',
+          annotations: isolateHistory.of('full'),
+        })
+      return true
+    },
+  }
+}
+
 function reconfigure(
   view: EditorView | null,
   part: Compartment,
@@ -184,6 +226,9 @@ export default function CodeEditor({
   scrollTop,
   at,
   linesRef,
+  hidden = false,
+  onSyncSide,
+  onPasteImage,
 }: CodeEditorProps) {
   const { settings } = useSettings()
   const { editorFontSize, editorTabSize, editorVim } = settings
@@ -200,6 +245,8 @@ export default function CodeEditor({
     text,
     reveal,
     onSelectText,
+    hidden,
+    onPasteImage,
   })
   latest.current = {
     onChange,
@@ -209,6 +256,8 @@ export default function CodeEditor({
     text,
     reveal,
     onSelectText,
+    hidden,
+    onPasteImage,
   }
   // What the editor told onChange last: a render with it is no change
   const lastEmitted = useRef(text)
@@ -260,6 +309,19 @@ export default function CodeEditor({
         ...defaultKeymap,
         indentWithTab,
       ]),
+      EditorView.domEventHandlers({
+        paste: (e, v) => {
+          const paste = latest.current.onPasteImage
+          const file = paste && imageFromClipboard(e.clipboardData)
+          if (!paste || !file) return false
+          e.preventDefault()
+          paste(
+            file,
+            pasteEdit(v, () => v === view.current),
+          )
+          return true
+        },
+      }),
       baseTheme,
       c.fontSize.of(fontSizeOf(editorFontSize)),
       c.tabs.of(tabsOf(text, editorTabSize)),
@@ -311,7 +373,9 @@ export default function CodeEditor({
     v.requestMeasure({
       read: () => null,
       write: () => {
-        if (scrollTop && !at) v.scrollDOM.scrollTop = scrollTop
+        // Hidden, it has no height to scroll: done once it shows
+        if (scrollTop && !at && !latest.current.hidden)
+          v.scrollDOM.scrollTop = scrollTop
         v.scrollDOM.dataset.scrollRestore = ''
       },
     })
@@ -406,6 +470,67 @@ export default function CodeEditor({
     })
     v.focus()
   }, [at?.jump, at?.line, at?.col])
+
+  // Lines by their height in the document, which starts below the scroll
+  // box's padding
+  // biome-ignore lint/correctness/useExhaustiveDependencies: given once, for the editor's life
+  useEffect(() => {
+    if (!onSyncSide) return
+    const v = view.current as EditorView
+    const box = v.scrollDOM
+    // Where the document starts in the scroll box's content
+    const docTop = () =>
+      v.documentTop - box.getBoundingClientRect().top + box.scrollTop
+    onSyncSide({
+      el: box,
+      topLine: () => {
+        // Brings CodeMirror's measure up to date first: it may move the
+        // document (a scroll restored) as it measures
+        v.lineBlockAtHeight(0)
+        const h = Math.max(box.scrollTop - docTop(), 0)
+        const block = v.lineBlockAtHeight(h)
+        const into = block.height ? (h - block.top) / block.height : 0
+        return (
+          v.state.doc.lineAt(block.from).number +
+          Math.min(Math.max(into, 0), 0.99)
+        )
+      },
+      scrollToLine: (line) => {
+        const doc = v.state.doc
+        const n = Math.min(Math.max(Math.floor(line), 1), doc.lines)
+        const block = v.lineBlockAt(doc.line(n).from)
+        // Past the last line: at its top
+        const into = line >= n + 1 ? 0 : Math.max(line - n, 0)
+        box.scrollTop = docTop() + block.top + into * block.height
+      },
+    })
+    return () => onSyncSide(null)
+  }, [])
+
+  // Opened hidden: where it starts (the offset it was left at, or the line
+  // it opens at) waits until it shows
+  const pending = useRef(hidden ? { scrollTop, at: !!at } : undefined)
+  // Its size and line heights read while it was hidden are wrong
+  useEffect(() => {
+    if (hidden) return
+    const v = view.current as EditorView
+    const start = pending.current
+    pending.current = undefined
+    if (start?.at) {
+      v.dispatch({
+        effects: EditorView.scrollIntoView(v.state.selection.main.head, {
+          y: 'center',
+        }),
+      })
+    }
+    v.requestMeasure({
+      read: () => null,
+      write: () => {
+        if (start?.scrollTop && !start.at)
+          v.scrollDOM.scrollTop = start.scrollTop
+      },
+    })
+  }, [hidden])
 
   useEffect(() => {
     reconfigure(view.current, parts.current.label, labelOf(path))

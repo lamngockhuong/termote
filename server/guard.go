@@ -157,15 +157,17 @@ func writeGuard(allowed hostAllowlist, next http.Handler) http.Handler {
 			jsonError(w, msg, http.StatusForbidden)
 			return
 		}
-		// An upload is a raw image body: image/* is not CORS-safelisted either,
-		// so another site still needs the preflight we never answer.
-		// Multipart stays refused: a form posts it without any preflight.
+		// An upload, and an image pasted into a Markdown file, is a raw
+		// image body: image/* is not CORS-safelisted either, so another site
+		// still needs the preflight we never answer. Multipart stays
+		// refused: a form posts it without any preflight.
+		image := r.URL.Path == "/api/mux/uploads" || isFilesImagePath(r.URL.Path)
 		mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-		if err == nil && r.URL.Path == "/api/mux/uploads" && isUploadType(mt) {
+		if err == nil && image && isUploadType(mt) {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if r.URL.Path == "/api/mux/uploads" {
+		if image {
 			writeUploadError(w, errUploadUnsupported)
 			return
 		}

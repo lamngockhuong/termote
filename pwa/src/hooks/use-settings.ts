@@ -92,6 +92,17 @@ export function resolveTaskHistoryLines(value: unknown): number {
     : TASK_HISTORY_LINES_DEFAULT
 }
 
+// How a Markdown file being edited shows: its source, the source with its
+// preview beside it, or the preview alone (the editor kept, hidden)
+export const MARKDOWN_EDIT_LAYOUTS = ['source', 'split', 'preview'] as const
+export type MarkdownEditLayout = (typeof MARKDOWN_EDIT_LAYOUTS)[number]
+
+export function resolveMarkdownEditLayout(value: unknown): MarkdownEditLayout {
+  return MARKDOWN_EDIT_LAYOUTS.includes(value as MarkdownEditLayout)
+    ? (value as MarkdownEditLayout)
+    : 'split'
+}
+
 export type ImeSendBehavior = 'send-only' | 'send-enter'
 export type PasteSource = 'clipboard' | 'tmux'
 
@@ -111,6 +122,7 @@ export interface Settings {
   sidebarFilter: SidebarFilter // which sessions the sidebar lists
   sortBlockedFirst: boolean // sessions waiting on the user first in each group
   markdownPreview: boolean // Files: Markdown rendered (else its source)
+  markdownEditLayout: MarkdownEditLayout // Files: Markdown being edited (above)
   tablePreview: boolean // Files: CSV/TSV shown as a table (else its source)
   svgPreview: boolean // Files/Changes: an SVG shown as an image (else as text)
   sidePanelWidth: number // desktop Files/Changes panel, in px
@@ -144,6 +156,7 @@ const DEFAULTS: Settings = {
   sidebarFilter: DEFAULT_SIDEBAR_FILTER,
   sortBlockedFirst: false,
   markdownPreview: true,
+  markdownEditLayout: 'split',
   tablePreview: true,
   svgPreview: false,
   sidePanelWidth: SIDE_PANEL_DEFAULT,
@@ -202,6 +215,9 @@ function getSnapshot(): Settings {
         editorWrap: merged.editorWrap === true,
         editorVim: merged.editorVim === true,
         taskHistoryLines: resolveTaskHistoryLines(merged.taskHistoryLines),
+        markdownEditLayout: resolveMarkdownEditLayout(
+          merged.markdownEditLayout,
+        ),
       }
     } catch {
       cachedSettings = DEFAULTS

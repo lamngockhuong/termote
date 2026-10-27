@@ -58,6 +58,7 @@ vi.mock('./signins-section', () => ({
 }))
 
 const DEFAULT_SETTINGS: Settings = {
+  markdownEditLayout: 'split',
   imeSendBehavior: 'send-only',
   pasteSource: 'clipboard',
   toolbarDefaultExpanded: false,

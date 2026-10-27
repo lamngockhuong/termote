@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider, useTheme } from '../contexts/theme-context'
 import type { MermaidResult } from '../utils/mermaid-render'
 import MarkdownPreview from './markdown-preview'
-import { MERMAID_REASONS } from './mermaid-block'
+import { LIVE_RENDER_DELAY, MERMAID_REASONS } from './mermaid-block'
 
 const mockRender = vi.fn()
 const mockPeek = vi.fn()
@@ -43,13 +43,14 @@ function ThemeHandle() {
   return null
 }
 
-function show(text: string) {
+function show(text: string, editing = false) {
   const props = {
     text,
     path: 'docs/a.md',
     wrap: false,
     onFollow: vi.fn(),
     notify: vi.fn(),
+    editing,
   }
   const view = render(
     <ThemeProvider>
@@ -330,6 +331,72 @@ describe('MermaidBlock', () => {
     show(md(GRAPH))
     await act(async () => {})
     expect(screen.getByText('Rendering diagram…')).toBeInTheDocument()
+  })
+})
+
+describe('MermaidBlock: while its source is edited', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  it('keeps the last diagram until the source has stayed the same, then draws it', async () => {
+    mockRender.mockResolvedValueOnce(ok(1)).mockResolvedValueOnce(ok(2))
+    const p = show(md('graph TD\n  Old'), true)
+    await act(async () => {})
+    expect(screen.getByAltText('Mermaid diagram 1')).toHaveAttribute(
+      'src',
+      urlOf(1),
+    )
+    p.again(md('graph TD\n  Ne'))
+    act(() => vi.advanceTimersByTime(LIVE_RENDER_DELAY - 100))
+    p.again(md('graph TD\n  New'))
+    act(() => vi.advanceTimersByTime(LIVE_RENDER_DELAY - 100))
+    // Still being typed: not sent, the old image stays without a note
+    expect(mockRender).toHaveBeenCalledTimes(1)
+    expect(screen.getByAltText('Mermaid diagram 1')).toHaveAttribute(
+      'src',
+      urlOf(1),
+    )
+    expect(screen.queryByText('Rendering diagram…')).toBeNull()
+    await act(async () => vi.advanceTimersByTime(100))
+    expect(mockRender).toHaveBeenCalledTimes(2)
+    expect(mockRender.mock.calls[1][0]).toBe('graph TD\n  New')
+    expect(screen.getByAltText('Mermaid diagram 1')).toHaveAttribute(
+      'src',
+      urlOf(2),
+    )
+  })
+
+  it('keeps the last diagram when a half-typed source fails, saying why', async () => {
+    mockRender
+      .mockResolvedValueOnce(ok(1))
+      .mockResolvedValueOnce({ ok: false, reason: 'syntax' })
+    const p = show(md(GRAPH), true)
+    await act(async () => {})
+    p.again(md('graph TD\n  A -->'))
+    await act(async () => vi.advanceTimersByTime(LIVE_RENDER_DELAY))
+    expect(screen.getByText(MERMAID_REASONS.syntax)).toBeInTheDocument()
+    expect(screen.getByAltText('Mermaid diagram 1')).toHaveAttribute(
+      'src',
+      urlOf(1),
+    )
+    // Its source can still be shown, the reason with it
+    fireEvent.click(screen.getByRole('button', { name: 'Show source' }))
+    expect(screen.queryByAltText('Mermaid diagram 1')).toBeNull()
+    expect(screen.getByText(MERMAID_REASONS.syntax)).toBeInTheDocument()
+  })
+
+  it('shows a diagram drawn before at once, and says it renders when none was', async () => {
+    mockPeek.mockImplementation((src: string) =>
+      src === 'graph TD\n  Old' ? ok(7) : undefined,
+    )
+    mockRender.mockReturnValue(new Promise(() => {}))
+    const p = show(md('graph TD\n  First'), true)
+    expect(screen.getByText('Rendering diagram…')).toBeInTheDocument()
+    p.again(md('graph TD\n  Old'))
+    expect(screen.getByAltText('Mermaid diagram 1')).toHaveAttribute(
+      'src',
+      urlOf(7),
+    )
   })
 })
 

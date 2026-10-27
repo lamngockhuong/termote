@@ -2,6 +2,8 @@ import {
   AppWindow,
   ArrowLeft,
   Check,
+  Code,
+  Columns2,
   Copy,
   Download,
   Ellipsis,
@@ -20,15 +22,19 @@ import {
   type ComponentProps,
   type ReactNode,
   Suspense,
+  useDeferredValue,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react'
+import { useDebouncedValue } from '../hooks/use-debounced-value'
 import {
   documentErrorCode,
   useDocumentBytes,
 } from '../hooks/use-document-bytes'
 import { useDomSelection } from '../hooks/use-dom-selection'
+import { useElementWidth } from '../hooks/use-element-width'
 import {
   type FileDraft,
   type FilesError,
@@ -36,13 +42,18 @@ import {
   useFileDraft,
 } from '../hooks/use-files'
 import { imageErrorCode, useImageBlob } from '../hooks/use-image-blob'
+import { useMediaQuery } from '../hooks/use-media-query'
 import {
   type FileContent,
   fetchFileContent,
   RequestError,
   saveFileContent,
 } from '../hooks/use-mux-api'
-import { useSettings } from '../hooks/use-settings'
+import { type SyncSide, useScrollSync } from '../hooks/use-scroll-sync'
+import {
+  type MarkdownEditLayout as EditLayout,
+  useSettings,
+} from '../hooks/use-settings'
 import type { Reapplied, Skipped, TableOp } from '../utils/csv-edits'
 import {
   DELIMITER_NAMES,
@@ -57,12 +68,25 @@ import { HIGHLIGHT_MAX_BYTES } from '../utils/highlight'
 import { isImagePath, isSvgPath } from '../utils/image-path'
 import { lazyRetry } from '../utils/lazy-retry'
 import type { LineRange, TextLines } from '../utils/line-range'
+import {
+  dirOf,
+  imageLink,
+  type PasteEdit,
+  pasteToken,
+  placeholder,
+  replacePlaceholder,
+} from '../utils/markdown-image-paste'
 import { isMarkdownPath, type LinkPath } from '../utils/markdown-links'
 import type { OpenWindowEvent } from '../utils/open-window'
 import { recordSelection } from '../utils/pane-selection'
 import { quoteLines } from '../utils/review-message'
 import type { TableLayout } from '../utils/table-columns'
 import { visibleUnsafe } from '../utils/unsafe-chars'
+import {
+  fileImageErrorMessage,
+  imageRefusal,
+  uploadFileImage,
+} from '../utils/upload-image'
 import { CodeBlock } from './code-block'
 import type { EditorAt } from './code-editor'
 import {
@@ -73,12 +97,20 @@ import {
 } from './file-editor'
 import { ImagePreview } from './image-preview'
 import { LazyBoundary, LoadFailed } from './lazy-boundary'
+import { MarkdownEditLayout } from './markdown-edit-layout'
 import { ViewMessage } from './pane-dir-header'
 import type { TableState } from './table-preview'
 import { Banner } from './ui/banner'
 import { Button, IconButton } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
-import { Menu, MenuItem, MenuItemCheckbox } from './ui/menu'
+import {
+  Menu,
+  MenuGroup,
+  MenuItem,
+  MenuItemCheckbox,
+  MenuItemRadio,
+  MenuSeparator,
+} from './ui/menu'
 
 // A preview whose chunk failed to load: said in its place, with a way to retry
 function PreviewBoundary({
@@ -116,6 +148,61 @@ export function LazyMarkdownPreview(
       </Suspense>
     </PreviewBoundary>
   )
+}
+
+// Narrower than this (a side panel, a phone), a Markdown draft and its
+// preview do not show side by side
+const SPLIT_MIN_WIDTH = 768
+
+// A draft over this many characters is rendered less often while typed
+const LONG_DRAFT = 64 * 1024
+
+// The preview of a Markdown draft, a step behind the typing: rendered once
+// the text has stayed the same for a moment, at a lower priority than the
+// keys, so a long file or a diagram never holds up the editor. The same
+// element until the text shown changes: each key renders the viewer again,
+// which must not parse the Markdown again.
+function DraftPreview(props: ComponentProps<typeof MarkdownPreview>) {
+  const settled = useDebouncedValue(
+    props.text,
+    props.text.length > LONG_DRAFT ? 600 : 250,
+  )
+  const text = useDeferredValue(settled)
+  const latest = useRef(props)
+  latest.current = props
+  const { path, wrap } = props
+  return useMemo(
+    () => (
+      <LazyMarkdownPreview
+        text={text}
+        path={path}
+        wrap={wrap}
+        editing
+        onFollow={(...a) => latest.current.onFollow(...a)}
+        notify={(message) => latest.current.notify(message)}
+        // Always given by the viewer
+        followScrollTop={() =>
+          (latest.current.followScrollTop as () => number)()
+        }
+        onSyncSide={(side) =>
+          (latest.current.onSyncSide as (s: SyncSide | null) => void)(side)
+        }
+      />
+    ),
+    [text, path, wrap],
+  )
+}
+
+const LAYOUT_LABELS: Record<EditLayout, string> = {
+  source: 'Source',
+  split: 'Source and preview',
+  preview: 'Preview',
+}
+
+const LAYOUT_ICONS: Record<EditLayout, ReactNode> = {
+  source: <Code size={15} />,
+  split: <Columns2 size={15} />,
+  preview: <Eye size={15} />,
 }
 
 // The table view of a CSV/TSV file: loaded the first time one is shown
@@ -397,9 +484,12 @@ export interface HeaderAction {
 export function HeaderActions({
   actions,
   compact,
+  menuStart,
 }: {
   actions: HeaderAction[]
   compact: boolean
+  // At the top of the phone's menu (a Markdown draft's layouts)
+  menuStart?: ReactNode
 }) {
   if (!compact)
     return actions.map((a) => (
@@ -423,6 +513,7 @@ export function HeaderActions({
       triggerSize="sm"
       align="end"
     >
+      {menuStart}
       {actions.map((a) =>
         a.pressed === undefined ? (
           <MenuItem
@@ -642,6 +733,61 @@ export function FileViewer({
       ? state
       : undefined
 
+  // A Markdown draft shows as the layout chosen on this device. Side by side
+  // only with a mouse and room for both in the viewer itself (a side panel
+  // is narrow): a touch screen edits in a textarea and, like a narrow viewer,
+  // switches between the source and the preview, the choice kept.
+  const fine = useMediaQuery('(pointer: fine)')
+  const viewerWidth = useElementWidth(rootRef)
+  const wide = fine && viewerWidth >= SPLIT_MIN_WIDTH
+  const layouts: EditLayout[] = wide
+    ? ['source', 'split', 'preview']
+    : ['source', 'preview']
+  const draftTooLarge =
+    markdown && !!mine && mine.text.length > PREVIEW_MAX_BYTES
+  const canPreviewDraft = markdown && !!mine && !cells && !draftTooLarge
+  const chosen = settings.markdownEditLayout
+  const editLayout: EditLayout =
+    canPreviewDraft && layouts.includes(chosen) ? chosen : 'source'
+  const nextLayout = layouts[(layouts.indexOf(editLayout) + 1) % layouts.length]
+  // For the listener below, which lives as long as the preview shows (a
+  // text draft: no table edits to be stuck on)
+  const saveDraft = () => {
+    // Something to save is a draft
+    if (dirty && !saving && !rootMoved) save(mine as FileDraft)
+  }
+  // Side by side, the editor and the preview scroll together
+  const [editorSide, setEditorSide] = useState<SyncSide | null>(null)
+  const [previewSide, setPreviewSide] = useState<SyncSide | null>(null)
+  // Coming from the preview alone, where the user was reading: it leads
+  const shownBefore = useRef(editLayout)
+  const fromPreview = shownBefore.current === 'preview'
+  useEffect(() => {
+    shownBefore.current = editLayout
+  })
+  useScrollSync(
+    editLayout === 'split' ? editorSide : null,
+    previewSide,
+    fromPreview ? 'preview' : 'editor',
+  )
+  const saveKey = useRef(saveDraft)
+  saveKey.current = saveDraft
+  // Ctrl/Cmd+S while the preview shows: the focus may be in it or on the
+  // page (the editor hidden), where no editor's own binding sees the key
+  useEffect(() => {
+    if (editLayout === 'source') return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || !(e.ctrlKey || e.metaKey)) return
+      if (e.key.toLowerCase() !== 's') return
+      const t = e.target as Node
+      if (t !== document.body && !rootRef.current?.contains(t)) return
+      e.preventDefault()
+      saveKey.current()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [editLayout])
+
   // A line picked in a file being edited: the text shown is the draft,
   // whose lines may no longer be the file's
   // biome-ignore lint/correctness/useExhaustiveDependencies: once per pick
@@ -777,6 +923,10 @@ export function FileViewer({
         hash: res.hash,
         editable: true,
       })
+      // An image still uploading whose placeholder this wrote: its link
+      // can only go in a draft
+      for (const m of edit.text.matchAll(/!\[Uploading [0-9a-f]{8}…\]\(\)/g))
+        savedPlaceholders.current.add(m[0])
       // Only the draft sent is dropped: one changed meanwhile stays
       setDraft((now) =>
         now === edit
@@ -848,6 +998,65 @@ export function FileViewer({
     } finally {
       setSaving(false)
     }
+  }
+
+  // Images pasted into the Markdown file, saved one after another next to
+  // it. Each one's placeholder goes in at the cursor at once, and is swapped
+  // for the link in the editor while it is there (an undoable change), else
+  // in the draft: the editor may be gone by then. A draft discarded
+  // meanwhile, or a placeholder undone, gets no link; the image stays on the
+  // host, and the user is told where.
+  const pastes = useRef(Promise.resolve())
+  // Placeholders of images still uploading that a save wrote to the file
+  const savedPlaceholders = useRef(new Set<string>())
+  const pasteImage = (file: File, edit: PasteEdit) => {
+    // Refused at once: never a placeholder waiting behind another upload
+    const refused = imageRefusal(file)
+    if (refused) {
+      notify(fileImageErrorMessage(refused))
+      return
+    }
+    const d = mineRef.current as FileDraft
+    const token = pasteToken()
+    const ph = placeholder(token)
+    edit.insert(ph)
+    const put = (link: string) => {
+      if (edit.replace(ph, link)) return true
+      let found = false
+      setDraft((now) => {
+        if (!now) return now
+        const next = replacePlaceholder(now.text, token, link)
+        found = next.found
+        return next.found ? { ...now, text: next.text } : now
+      })
+      return found
+    }
+    pastes.current = pastes.current.then(async () => {
+      try {
+        const res = await uploadFileImage(
+          paneId,
+          { root: d.root, dir: dirOf(path), reveal: d.reveal },
+          file,
+        )
+        if (!res.ok) {
+          put('')
+          if (res.reason === 'root_changed')
+            setSaveError({ kind: 'root', root: res.root })
+          notify(fileImageErrorMessage(res.reason))
+        } else if (!put(imageLink(path, res.path))) {
+          notify(
+            savedPlaceholders.current.has(ph)
+              ? `Image saved as ${res.path}. The file still holds its placeholder`
+              : `Image saved as ${res.path}`,
+          )
+        }
+      } catch {
+        put('')
+        notify('Could not save the image')
+      } finally {
+        savedPlaceholders.current.delete(ph)
+      }
+    })
   }
 
   const copyText = async (text: string) => {
@@ -1030,7 +1239,41 @@ export function FileViewer({
             <Pencil size={15} aria-hidden="true" />
           </IconButton>
         )}
-        <HeaderActions actions={extras} compact={compact} />
+        {!compact && canPreviewDraft && (
+          <IconButton
+            size="sm"
+            onClick={() => updateSetting('markdownEditLayout', nextLayout)}
+            // Not "Show source": a diagram's own button is named so
+            aria-label={`Switch to ${LAYOUT_LABELS[nextLayout].toLowerCase()}`}
+            title={`${LAYOUT_LABELS[editLayout]} (click: ${LAYOUT_LABELS[nextLayout].toLowerCase()})`}
+          >
+            {LAYOUT_ICONS[editLayout]}
+          </IconButton>
+        )}
+        <HeaderActions
+          actions={extras}
+          compact={compact}
+          menuStart={
+            canPreviewDraft && (
+              <>
+                <MenuGroup label="Show">
+                  {layouts.map((l) => (
+                    <MenuItemRadio
+                      key={l}
+                      icon={LAYOUT_ICONS[l]}
+                      checked={l === editLayout}
+                      onSelect={() => updateSetting('markdownEditLayout', l)}
+                    >
+                      {LAYOUT_LABELS[l]}
+                    </MenuItemRadio>
+                  ))}
+                </MenuGroup>
+                {/* Wrap lines is always among them */}
+                <MenuSeparator />
+              </>
+            )
+          }
+        />
         {headerExtra}
       </div>
       {mine &&
@@ -1060,30 +1303,75 @@ export function FileViewer({
           </Banner>
         )}
       {mine && !cells && (
-        <FileEditor
-          path={path}
-          text={mine.text}
-          onChange={(text) => setDraft({ ...mine, text })}
-          wrap={wrap}
-          saving={saving}
+        <SaveBanner
           error={saveError}
           rootMoved={rootMoved}
-          dirty={dirty}
-          onSave={() => save(mine)}
           onReload={() => (dirty ? setDiscarding('reload') : reloadFile())}
           onCopy={() => copyText(mine.text)}
-          notify={notify}
-          reveal={mine.reveal}
-          onSelectText={
-            selectionPane === undefined
-              ? undefined
-              : (text) => recordSelection(selectionPane, text, path)
-          }
-          scrollTop={scrolled.current}
-          at={pickInEditor ? pick : editAt}
-          linesRef={onLineComment && editorLines}
         />
       )}
+      {mine &&
+        !cells &&
+        draftTooLarge &&
+        layouts.includes(chosen) &&
+        chosen !== 'source' && (
+          <Banner>Too large to preview: shown as source</Banner>
+        )}
+      {mine &&
+        !cells &&
+        // One tree for every layout of a Markdown file, so a change of
+        // layout (or the draft growing past the preview's limit) never
+        // mounts the editor again
+        (() => {
+          const editor = (
+            <FileEditor
+              path={path}
+              text={mine.text}
+              onChange={(text) => setDraft({ ...mine, text })}
+              wrap={wrap}
+              saving={saving}
+              rootMoved={rootMoved}
+              dirty={dirty}
+              onSave={() => save(mine)}
+              notify={notify}
+              reveal={mine.reveal}
+              onSelectText={
+                selectionPane === undefined
+                  ? undefined
+                  : (text) => recordSelection(selectionPane, text, path)
+              }
+              scrollTop={scrolled.current}
+              at={pickInEditor ? pick : editAt}
+              linesRef={onLineComment && editorLines}
+              hidden={editLayout === 'preview'}
+              onSyncSide={markdown ? setEditorSide : undefined}
+              onPasteImage={
+                markdown && canEdit && mine && !rootMoved && !saving
+                  ? pasteImage
+                  : undefined
+              }
+            />
+          )
+          if (!markdown) return editor
+          return (
+            <MarkdownEditLayout
+              mode={editLayout}
+              editor={editor}
+              preview={
+                <DraftPreview
+                  text={mine.text}
+                  path={path}
+                  wrap={wrap}
+                  // Back returns to where the editor was, not the preview
+                  followScrollTop={() => scrolled.current ?? 0}
+                  onSyncSide={setPreviewSide}
+                  onFollow={onFollow}
+                  notify={notify}
+                />
+              }
+            />
+          )
+        })()}
       {!mine && asImage && !sensitive && (
         <div className="min-h-0 flex-1 overflow-auto">
           <ImagePreview

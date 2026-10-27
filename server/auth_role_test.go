@@ -209,6 +209,11 @@ func TestViewRefusedByEveryWriteHandler(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, upload)
 	assertViewOnly(t, "POST uploads", rec)
+	pasted := viewRequest("POST", "/api/mux/panes/0/files/image?root=/x&dir=.", "\x89PNG\r\n\x1a\n")
+	pasted.Header.Set("Content-Type", "image/png")
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, pasted)
+	assertViewOnly(t, "POST files/image", rec)
 	if slices.ContainsFunc(m.calls, func(c string) bool { return c != "snapshot" && c != "peek" }) {
 		t.Errorf("backend asked for a view-only client: %v", m.calls)
 	}

@@ -289,6 +289,7 @@ GET    /api/mux/panes/{id}/files/content?path=&root=&reveal=    → {root, path,
 GET    /api/mux/panes/{id}/files/content?path=&root=&hash=1     → {root, path, size, hash} (never the contents, sensitive or not)
 PUT    /api/mux/panes/{id}/files/content?root=  body: {path, baseHash, text, reveal} → {root, path, size, hash} | {error, code, reason?}
 POST   /api/mux/panes/{id}/files/create?root=   body: {path, reveal}           → 201 {root, path} | {error, code[, path]}
+POST   /api/mux/panes/{id}/files/image?root=&dir=&reveal=  body: raw PNG/JPEG/GIF/WebP → 201 {root, path} | {error, code}
 POST   /api/mux/panes/{id}/files/delete?root=   body: {path, kind, baseHash, reveal, permanent} → {root, path[, trashId, size, permanent]} | {error, code}
 POST   /api/mux/panes/{id}/files/restore?root=  body: {trashId, reveal}         → {root, path} | {error, code}
 POST   /api/mux/panes/{id}/files/changes/apply?root= body: {action, path, orig, hunk, baseHash, reveal, permanent} → {root, path[, trashId, permanent]} | {error, code}
@@ -926,6 +927,13 @@ and not opening a write path into what the reads refuse.
   are not kept (its owner is, since a file of another user is refused). File contents are never
   logged.
 
+**Pasting an image (`POST image`).** An image pasted into a Markdown file being edited, as its
+raw bytes, written by `server/files_image.go` as `pasted-YYYYMMDD-HHMMSS.<ext>` in the file's
+directory, or its `assets/` directory when that is a real one; opened `O_EXCL`, never replacing
+anything, and checked (type, 40 MP) as it streams to disk. `writeGuard` takes an image body on
+this path as on uploads. The guards, their order and the accepted risks are in
+[`security-invariants.md`](security-invariants.md) ("Pasting an image into Markdown").
+
 **Creating a file (`POST create`).** Creates an empty file, and the directories missing above
 it, in `server/files_create.go`; the text then goes through `PUT content`. As for a save, the
 route grants nothing a shell does not; what it guards is never replacing anything and never
@@ -1108,7 +1116,8 @@ Other methods get 405.
 the PWA, which hides Edit, New file and Delete in `readOnly` mode.
 
 **PWA.** Edit (Files, and the diff of a file the working tree still has as text in Changes)
-turns the file into an editor (`file-editor.tsx`), a Markdown file as its source. Where the main
+turns the file into an editor (`file-editor.tsx`); a Markdown file shows its source, its preview
+beside it, or the preview alone (`markdown-edit-layout.tsx`, see below). Where the main
 pointer is fine (`(pointer: fine)`: a mouse) it is CodeMirror 6 (`code-editor.tsx`), a chunk
 loaded the first time a file is edited: line numbers, syntax colors, search and replace (Ctrl+F,
 Ctrl+H), go to line (Ctrl+G), several cursors, and Vim keys when Settings turns them on. Phones and
@@ -1128,6 +1137,23 @@ file has one; a 409 `changed` keeps it with Reload and Copy my text, and a
 timeout says the save may have gone through (saving again is safe). In Changes the editor
 lives in the diff's tab; a save goes back to the unstaged diff, read again (in the tab that side
 already has, else this one), and the tab closes once git status no longer lists it.
+
+A Markdown draft shows as `markdownEditLayout` (Settings, per device: `source`, `split` by
+default, `preview`). Side by side only with a fine pointer and a viewer at least 768px wide
+(`use-element-width.ts`; the desktop side panel is 440px by default), else the source and the preview take
+turns, the saved choice kept. The preview alone hides the editor, never unmounts it (undo, the
+selection and Vim stay), and the save banner sits above both. The preview reads the draft
+debounced (250 ms, 600 ms past 65,536 characters) and deferred, as an element kept until that text changes,
+so a key never parses the Markdown; a Mermaid block being edited keeps its last image and draws
+again once its source has stayed the same for 800 ms. Its blocks carry `data-line` (the line of
+the file they start on: `rehypeSourceLines`, front matter counted) and the two sides scroll
+together through `use-scroll-sync.ts`, by interpolating between those lines; a scroll caused by
+the other side is ignored, and when the preview is laid out again the side the user works in
+stays put. Following a link of the preview leaves the file at the editor's offset, which Back
+restores. An image pasted alone (`imageFromClipboard`) is checked at once, a placeholder goes in
+at the cursor, and `POST files/image` saves it (one paste at a time); the placeholder becomes a
+relative link in the editor while it is open (one undoable change), else in the draft; a draft
+discarded or a placeholder undone gets no link, and the user is told the image's path.
 
 New file (the Files header, over the tree only) asks for a path from the root in a sheet
 (`new-file-dialog.tsx`), prefilled with the directory the tree has focus in. A sensitive name

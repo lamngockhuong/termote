@@ -6,8 +6,10 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react'
 import type { ComponentProps } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider, useTheme } from '../contexts/theme-context'
+import type { SyncSide } from '../hooks/use-scroll-sync'
 import { type Settings, useSettings } from '../hooks/use-settings'
 import type { TextLines } from '../utils/line-range'
+import type { PasteEdit } from '../utils/markdown-image-paste'
 import CodeEditor, { indentOf } from './code-editor'
 
 // Vim mode is a stand-in: what the editor does with it is tested, not Vim
@@ -96,7 +98,150 @@ describe('indentOf', () => {
   })
 })
 
+// A paste event carrying a file of type and, when given, text
+function pasteEvent(type: string, text?: string): Event {
+  const file = new File(['x'], 'p', { type })
+  const e = new Event('paste', { bubbles: true, cancelable: true })
+  Object.defineProperty(e, 'clipboardData', {
+    value: {
+      types: text === undefined ? ['Files'] : ['Files', 'text/plain'],
+      items: [{ kind: 'file', type, getAsFile: () => file }],
+      getData: () => text ?? '',
+    },
+  })
+  return e
+}
+
 describe('CodeEditor', () => {
+  it('hands an image pasted alone to the viewer, which inserts at the cursor, then swaps it as one undoable change', () => {
+    let edit: PasteEdit | undefined
+    const onPasteImage = vi.fn((_: File, e: PasteEdit) => {
+      edit = e
+      e.insert('[PH]')
+    })
+    const { view, content, props, unmount } = setup({
+      text: 'a hello',
+      onPasteImage,
+    })
+    view.dispatch({
+      changes: { from: 1, insert: 'X' },
+      selection: { anchor: 2 },
+    })
+    const e = pasteEvent('image/png')
+    content.dispatchEvent(e)
+    expect(e.defaultPrevented).toBe(true)
+    expect(onPasteImage.mock.calls[0][0].type).toBe('image/png')
+    expect(view.state.doc.toString()).toBe('aX[PH] hello')
+    // Typed after it while it uploads
+    view.dispatch({
+      changes: { from: 6, insert: 'T' },
+      selection: { anchor: 7 },
+      userEvent: 'input.type',
+    })
+    const ed = edit as PasteEdit
+    expect(ed.replace('[PH]', '![p](p.png)')).toBe(true)
+    expect(view.state.doc.toString()).toBe('aX![p](p.png)T hello')
+    expect(props.onChange).toHaveBeenLastCalledWith('aX![p](p.png)T hello')
+    // The cursor stayed after what was typed
+    expect(view.state.selection.main.head).toBe(14)
+    // Undo takes the link out, then what was typed before
+    undo(view)
+    expect(view.state.doc.toString()).toBe('aXT hello')
+    undo(view)
+    expect(view.state.doc.toString()).toBe('aX hello')
+    // Gone: nothing to replace, in the editor
+    expect(ed.replace('[PH]', 'x')).toBe(false)
+    ed.insert('[Q]')
+    expect(ed.replace('[Q]', '')).toBe(true)
+    expect(view.state.doc.toString()).toBe('aX hello')
+    ed.insert('[R]')
+    unmount()
+    expect(ed.replace('[R]', 'x')).toBe(false)
+  })
+
+  it('leaves a paste with text, or without a viewer to take it, to the editor', () => {
+    const onPasteImage = vi.fn()
+    const { content } = setup({ onPasteImage })
+    const withText = pasteEvent('image/png', 'cells')
+    content.dispatchEvent(withText)
+    expect(onPasteImage).not.toHaveBeenCalled()
+    // CodeMirror's own paste: the clipboard's text (none here)
+    const other = setup()
+    other.content.dispatchEvent(pasteEvent('image/png'))
+    expect(other.view.state.doc.toString()).toBe('one\ntwo\nthree\n')
+  })
+
+  it('reads and sets the line at its top, for a preview that scrolls with it', () => {
+    let side: SyncSide | null = null
+    const onSyncSide = vi.fn((s: SyncSide | null) => {
+      side = s
+    })
+    const { view, unmount } = setup({
+      text: 'a\nb\nc\nd\n',
+      onSyncSide,
+    })
+    const s = side as unknown as SyncSide
+    expect(s.el).toBe(view.scrollDOM)
+    const line = (n: number) => view.lineBlockAt(view.state.doc.line(n).from)
+    s.scrollToLine(3)
+    expect(view.scrollDOM.scrollTop).toBe(line(3).top)
+    // Halfway down a line, and a line past the end: the last one
+    view.scrollDOM.scrollTop = 0
+    s.scrollToLine(2.5)
+    expect(view.scrollDOM.scrollTop).toBe(line(2).top + line(2).height / 2)
+    view.scrollDOM.scrollTop = 0
+    s.scrollToLine(40)
+    expect(view.scrollDOM.scrollTop).toBe(line(5).top)
+
+    // The document starts 100px up the box (scrolled): its height there is
+    // 100, halfway down line 3
+    view.scrollDOM.scrollTop = 0
+    Object.defineProperty(view, 'documentTop', { get: () => -100 })
+    const at = vi.spyOn(view, 'lineBlockAtHeight')
+    at.mockReturnValue({ ...line(3), top: 90, height: 20 } as never)
+    expect(s.topLine()).toBe(3.5)
+    expect(at).toHaveBeenCalledWith(100)
+    at.mockReturnValue({ ...line(3), top: 0, height: 20 } as never)
+    expect(s.topLine()).toBe(3.99)
+    at.mockReturnValue({ ...line(3), top: 100, height: 0 } as never)
+    expect(s.topLine()).toBe(3)
+    unmount()
+    expect(onSyncSide).toHaveBeenLastCalledWith(null)
+  })
+
+  it('opened hidden, goes to where it was left once it shows', async () => {
+    const { view, rerender } = setup({ hidden: true, scrollTop: 40 })
+    await frame()
+    expect(view.scrollDOM.scrollTop).toBe(0)
+    rerender({ hidden: false, scrollTop: 40 })
+    await frame()
+    expect(view.scrollDOM.scrollTop).toBe(40)
+    // Only the first time it shows
+    view.scrollDOM.scrollTop = 5
+    rerender({ hidden: true, scrollTop: 40 })
+    rerender({ hidden: false, scrollTop: 40 })
+    await frame()
+    expect(view.scrollDOM.scrollTop).toBe(5)
+  })
+
+  it('opened hidden at a line, brings the line into view once it shows', () => {
+    const at = { line: 2, jump: 1 }
+    const { view, rerender } = setup({ hidden: true, at })
+    const dispatch = vi.spyOn(view, 'dispatch')
+    rerender({ hidden: false, at })
+    expect(dispatch).toHaveBeenCalledWith({ effects: expect.anything() })
+    expect(view.state.selection.main.head).toBe(4)
+  })
+
+  it('measures itself again once it shows after being hidden', () => {
+    const { view, rerender } = setup({ hidden: true })
+    const measure = vi.spyOn(view, 'requestMeasure')
+    rerender({ hidden: true })
+    expect(measure).not.toHaveBeenCalled()
+    rerender({ hidden: false })
+    expect(measure).toHaveBeenCalledTimes(1)
+  })
+
   it('is labeled like the textarea and sends what is typed with "\\n"', () => {
     const { view, content, props } = setup()
     expect(content).toHaveAttribute('aria-label', 'Text of a.txt')

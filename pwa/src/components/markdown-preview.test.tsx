@@ -279,6 +279,30 @@ describe('MarkdownPreview: links', () => {
     )
   })
 
+  it('a draft being edited follows a link from where the editor is, and is not kept as the scroll', () => {
+    const p = show('[readme](../../README.md)', {
+      editing: true,
+      followScrollTop: () => 75,
+    })
+    const box = screen.getByTestId('markdown-preview')
+    expect(box).not.toHaveAttribute('data-scroll-restore')
+    expect(box).toHaveAttribute('tabindex', '-1')
+    box.scrollTop = 40
+    fireEvent.click(screen.getByRole('button', { name: 'readme' }))
+    expect(p.onFollow).toHaveBeenCalledWith(
+      { kind: 'path', path: 'README.md', anchor: undefined },
+      75,
+      { newTab: false },
+    )
+  })
+
+  it('a file only viewed is kept as the scroll, and takes no focus', () => {
+    show('x')
+    const box = screen.getByTestId('markdown-preview')
+    expect(box).toHaveAttribute('data-scroll-restore')
+    expect(box).not.toHaveAttribute('tabindex')
+  })
+
   it('scrolls to a heading of the same file', () => {
     const p = show(
       '[go](#usage) [self](intro.md#Usage) [top](intro.md)\n\n## Usage',
@@ -499,5 +523,113 @@ describe('MarkdownPreview: images', () => {
   it('an image without a usable source or name says so', () => {
     show('![](javascript:x)')
     expect(screen.getByText('[image: unavailable]')).toBeInTheDocument()
+  })
+})
+
+describe('MarkdownPreview: lines of a draft', () => {
+  const FILE = [
+    '---', // 1
+    'title: T', // 2
+    '---', // 3
+    '# Head', // 4
+    '', // 5
+    '- a', // 6
+    '- b', // 7
+    '', // 8
+    '| x | y |', // 9
+    '|---|---|', // 10
+    '| 1 | 2 |', // 11
+    '', // 12
+    '```ts', // 13
+    'let a', // 14
+    '```', // 15
+    '', // 16
+    '```mermaid', // 17
+    'graph TD', // 18
+    '```', // 19
+    '', // 20
+    '<details>', // 21
+    '<summary>More</summary>', // 22
+    '', // 23
+    'Inside', // 24
+    '', // 25
+    '</details>', // 26
+  ].join('\n')
+
+  it('marks each block with the line of the file it starts on', () => {
+    const { container } = show(FILE, { editing: true })
+    const at = (sel: string) =>
+      (container.querySelector(sel) as HTMLElement).dataset.line
+    const blocks = screen.getAllByTestId('fenced-code')
+    expect(blocks[0]).toHaveAttribute('data-line', '1')
+    expect(at('h1')).toBe('4')
+    expect(at('ul')).toBe('6')
+    // On the box that scrolls the table
+    expect(screen.getByRole('table')).not.toHaveAttribute('data-line')
+    expect(screen.getByRole('table').parentElement).toHaveAttribute(
+      'data-line',
+      '9',
+    )
+    expect(blocks[1]).toHaveAttribute('data-line', '13')
+    expect(screen.getByTestId('mermaid-block')).toHaveAttribute(
+      'data-line',
+      '17',
+    )
+    expect(at('details')).toBe('21')
+    expect(at('details > p')).toBe('24')
+  })
+
+  it('marks nothing in a file only viewed', () => {
+    const { container } = show(FILE)
+    expect(container.querySelector('[data-line]')).toBeNull()
+  })
+
+  it('reads and sets the line at its top from where its blocks are laid out', () => {
+    let side: import('../hooks/use-scroll-sync').SyncSide | null = null
+    const onSyncSide = vi.fn((s) => {
+      side = s
+    })
+    const view = show(
+      [
+        '# A',
+        '',
+        'one',
+        '',
+        '# B',
+        '',
+        '<details>',
+        '',
+        'hid',
+        '',
+        '</details>',
+      ].join('\n'),
+      { editing: true, onSyncSide },
+    )
+    const box = screen.getByTestId('markdown-preview')
+    const tops: Record<string, number> = {
+      '1': 0,
+      '3': 40,
+      '5': 100,
+      '7': 200,
+      '9': 50,
+    }
+    for (const n of box.querySelectorAll<HTMLElement>('[data-line]')) {
+      const top = tops[n.dataset.line as string]
+      n.getBoundingClientRect = () => ({ top: top - box.scrollTop }) as DOMRect
+    }
+    box.getBoundingClientRect = () => ({ top: 0 }) as DOMRect
+    Object.defineProperty(box, 'scrollHeight', { value: 400 })
+    const s = side as unknown as import('../hooks/use-scroll-sync').SyncSide
+    expect(s.el).toBe(box)
+    // Line 4: halfway from the paragraph (line 3) to heading B (line 5)
+    s.scrollToLine(4)
+    expect(box.scrollTop).toBe(70)
+    expect(s.topLine()).toBe(4)
+    // The block inside the closed disclosure is not laid out: from the
+    // disclosure (7, at 200) to the end (line 12, at 400)
+    s.scrollToLine(9.5)
+    expect(box.scrollTop).toBe(300)
+    view.unmount()
+    expect(onSyncSide).toHaveBeenLastCalledWith(null)
   })
 })

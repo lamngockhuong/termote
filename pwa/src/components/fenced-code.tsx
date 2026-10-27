@@ -21,6 +21,9 @@ export interface FenceOptions {
   exportName: (index: number) => string
   // In place of the Copy button that reports through notify
   copyButton?: (text: string) => ReactNode
+  // The source is being edited: a diagram is drawn once its source stops
+  // changing, its last image shown meanwhile
+  live?: boolean
 }
 
 // A fenced code block: highlighted in its language once the worker answers,
@@ -36,10 +39,13 @@ export function FencedCode({
   toolbar,
   note,
   body,
+  dataLine,
 }: {
   text: string
   lang?: LanguageId
   label: string
+  // The line of the file the block starts on (a Markdown draft's preview)
+  dataLine?: number
 } & Pick<FenceOptions, 'wrap' | 'notify' | 'copyButton'> &
   FrameParts) {
   const { resolvedTheme } = useTheme()
@@ -70,6 +76,7 @@ export function FencedCode({
     <div
       className="my-3 overflow-hidden rounded-control border border-border bg-bg"
       data-testid="fenced-code"
+      data-line={dataLine}
     >
       <div className="flex items-center justify-between border-b border-border bg-surface pl-3 text-[11px] text-fg-muted">
         <span className="truncate font-term">{label}</span>
@@ -131,8 +138,10 @@ export function CodeFence({
   node,
   scrollRoot,
   exportName,
+  live,
+  dataLine,
   ...opts
-}: { node?: unknown } & FenceOptions) {
+}: { node?: unknown; dataLine?: number } & FenceOptions) {
   const code = (node as HastElement).children[0]
   const info =
     (code.properties.className ?? [])
@@ -149,6 +158,8 @@ export function CodeFence({
         scrollRoot={scrollRoot}
         name={exportName(index)}
         notify={opts.notify}
+        live={live}
+        dataLine={dataLine}
         frame={(parts) => (
           <FencedCode
             text={text}
@@ -166,6 +177,7 @@ export function CodeFence({
       text={text}
       lang={languageForName(info)}
       label={info || 'text'}
+      dataLine={dataLine}
       {...opts}
     />
   )

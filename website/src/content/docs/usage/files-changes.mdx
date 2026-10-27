@@ -215,7 +215,7 @@ Settings → Files (see [Settings](/usage/settings/#editor)). With Vim keys on, 
 A search result opens the editor at the match when the file is being edited, and Edit in
 Changes opens it at the first change of the diff.
 
-- A Markdown file is edited as its source, even when the preview is on. A CSV or TSV file shown
+- A Markdown file is edited beside its preview (see [Editing Markdown](#editing-markdown)). A CSV or TSV file shown
   as a table is edited in the table (see [Editing a Table](#editing-a-table)); shown as its
   source, or opened from Changes, it is edited as its source.
 - Ctrl+S (Cmd+S on a Mac) saves. Cancel, or Back, with unsaved changes asks
@@ -255,6 +255,53 @@ data or upload folders. A file that may contain secrets can be edited once it ha
 
 A view-only session (once that role exists) has no Edit button. Until the server enforces roles,
 this is only hidden in the app.
+
+### Editing Markdown
+
+A Markdown file being edited shows in one of three layouts, picked with the button next to
+**Save** (in the **More actions** menu on a phone) and remembered on this device:
+
+| Layout                           | What shows                                                                                       |
+| -------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Source and preview (the default) | The editor on the left, the file rendered on the right                                           |
+| Source                           | The editor alone                                                                                 |
+| Preview                          | The rendered file alone. The editor is only hidden: undo and the cursor are still there when it comes back, and Ctrl+S still saves |
+
+- Side by side needs a mouse and a Files view at least 768 px wide: widen the side panel, or open
+  the file in a window of its own. Narrower, or on a touch screen, the button switches between the
+  source and the preview, and the layout picked comes back once there is room.
+- The preview follows what you type a moment after you stop (a little later in a draft of more
+  than 65,536 characters). A Mermaid diagram keeps its last picture while its source is typed, and is drawn again
+  once the source has not changed for a moment; a source that cannot be drawn yet says why under
+  the diagram's bar.
+- Side by side, the two scroll together: scroll either one, and the same part of the file comes to
+  the top of the other.
+- A link of the preview opens the other file; Back returns to the draft, with the editor where it
+  was.
+- A draft of more than 262,144 characters shows as its source, with
+  `Too large to preview: shown as source`.
+
+#### Pasting an Image
+
+Paste an image (a screenshot, a picture copied from another app) into the editor of a Markdown
+file, and it is saved on the host next to the file: in the file's `assets` folder when there is
+one, else in the file's own folder, named `pasted-<date>-<time>.png` (or `.jpg`, `.gif`, `.webp`).
+`![Uploading …]()` stands at the cursor while it is sent, then turns into a link to the image,
+relative to the file, such as `![pasted-20261027-090507](assets/pasted-20261027-090507.png)`. Undo
+takes the link out; the image stays on the host.
+
+- PNG, JPEG, GIF and WebP, up to 10 MB and 40 megapixels. HEIC (an iPhone photo) is refused: share
+  the photo as JPEG.
+- Copying from a spreadsheet or a web page puts text on the clipboard too: that pastes as text.
+- No folder is made and no file is replaced: when the name is taken, the image gets `-2`, `-3` and
+  so on.
+- Several images pasted in a row are sent one after another.
+- When the draft is discarded, or the placeholder deleted, before the image arrives, no link is
+  added: a message says where the image was saved. A save meanwhile writes the placeholder into the
+  file, and the message says so.
+- A folder that may hold secrets (`.ssh` and the like) takes an image only when the file being
+  edited was shown on purpose.
+- The preview never loads an image: it shows as a link, `image: <name>`, that opens it in Files.
 
 ## Creating a File
 

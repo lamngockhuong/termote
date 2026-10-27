@@ -68,16 +68,23 @@ export function resolveLink(
   return { kind: 'path', path: parts.join('/'), anchor }
 }
 
-// Front matter: a "---" block at the very top, shown as code, not rendered
+// Front matter: a "---" block at the very top, shown as code, not rendered.
+// lines: how many lines of the file come before the body, so line n of the
+// body is line n + lines of the file.
 export function splitFrontMatter(text: string): {
   frontMatter?: string
   body: string
+  lines: number
 } {
   const m = text.match(
     /^---[ \t]*\r?\n(?:([\s\S]*?)\r?\n)?---[ \t]*(?:\r?\n|$)/,
   )
-  if (!m) return { body: text }
-  return { frontMatter: m[1] ?? '', body: text.slice(m[0].length) }
+  if (!m) return { body: text, lines: 0 }
+  return {
+    frontMatter: m[1] ?? '',
+    body: text.slice(m[0].length),
+    lines: m[0].split('\n').length - 1,
+  }
 }
 
 // Heading ids as GitHub makes them: lower case, punctuation dropped, spaces
@@ -110,6 +117,7 @@ interface HastNode {
   value?: string
   properties?: Record<string, unknown>
   children?: HastNode[]
+  position?: { start: { line: number } }
 }
 
 export function textOf(node: HastNode): string {
@@ -132,6 +140,25 @@ export function rehypeHeadingIds() {
     }
     walk(tree)
   }
+}
+
+// A rehype plugin: each block at the top of the file, and each block of a
+// disclosure there, gets the line of the file it starts on as data-line
+// (its line in the body, after offset lines of front matter), where the
+// Markdown editor and its preview scroll together. A block the parser gave
+// no position (a footnote list) gets none.
+export function rehypeSourceLines(offset = 0) {
+  const mark = (parent: HastNode) => {
+    // A root and an element always have their children
+    for (const node of parent.children as HastNode[]) {
+      if (node.type !== 'element') continue
+      const line = node.position?.start.line
+      if (line !== undefined)
+        node.properties = { ...node.properties, dataLine: line + offset }
+      if (node.tagName === 'details') mark(node)
+    }
+  }
+  return (tree: HastNode) => mark(tree)
 }
 
 // The info string of a fenced block names Mermaid (```mermaid, any case)

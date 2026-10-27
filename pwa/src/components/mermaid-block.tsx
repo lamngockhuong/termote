@@ -8,6 +8,7 @@ import {
   useState,
 } from 'react'
 import { useTheme } from '../contexts/theme-context'
+import { useDebouncedValue } from '../hooks/use-debounced-value'
 import { useImageViewer } from '../hooks/use-image-viewer'
 import {
   type MermaidFailure,
@@ -36,6 +37,11 @@ export const MERMAID_REASONS: Record<MermaidFailure, string> = {
   timeout: 'Diagram took too long to render',
   load_failed: 'Could not load the diagram renderer',
 }
+
+// While its source is edited, a diagram is drawn once the source has stayed
+// the same this long: each keystroke would push the file's other diagrams
+// out of the renderer's cache
+export const LIVE_RENDER_DELAY = 800
 
 // Within 200px of the scroll box's visible part, once; true at once without
 // IntersectionObserver
@@ -72,12 +78,18 @@ interface Props {
   // The file name an exported diagram is saved as, without its extension
   name: string
   notify: (message: string) => void
+  // Its source is being edited (above)
+  live?: boolean
+  // The line of the file it starts on (a Markdown draft's preview)
+  dataLine?: number
 }
 
 // A ```mermaid block: the diagram as an image once it nears the screen, the
 // source with the reason whenever it cannot be drawn. Copy always copies the
 // source; once drawn, the diagram can be shared, copied as an image or
-// downloaded, here and in the full-screen viewer.
+// downloaded, here and in the full-screen viewer. While its source is
+// edited, the last diagram drawn stays until a new one is, a source that
+// cannot be drawn (half typed) only saying why under the bar.
 export function MermaidBlock({
   text,
   index,
@@ -85,6 +97,8 @@ export function MermaidBlock({
   frame,
   name,
   notify,
+  live = false,
+  dataLine,
 }: Props) {
   const { resolvedTheme } = useTheme()
   const ref = useRef<HTMLDivElement>(null)
@@ -95,6 +109,9 @@ export function MermaidBlock({
     result: MermaidResult | null
   }>(() => ({ text, result: peekMermaid(text, resolvedTheme) ?? null }))
   const [source, setSource] = useState(false)
+  const settled = useDebouncedValue(text, LIVE_RENDER_DELAY)
+  // Still changing: not drawn yet
+  const waiting = live && settled !== text
 
   useEffect(() => {
     const hit = peekMermaid(text, resolvedTheme)
@@ -102,7 +119,7 @@ export function MermaidBlock({
       setState({ text, result: hit })
       return
     }
-    if (!near) return
+    if (!near || waiting) return
     const ac = new AbortController()
     renderMermaid(text, resolvedTheme, ac.signal).then(
       (result) => {
@@ -112,17 +129,21 @@ export function MermaidBlock({
       () => {},
     )
     return () => ac.abort()
-  }, [text, resolvedTheme, near])
+  }, [text, resolvedTheme, near, waiting])
 
   const result = state.text === text ? state.result : null
+  // The last diagram drawn, shown while the source is edited
+  const [drawn, setDrawn] = useState(result?.ok ? result : null)
+  if (result?.ok && result !== drawn) setDrawn(result)
+  const image = result?.ok ? result : live ? drawn : null
   // The block takes focus when the image button goes (the diagram is drawn
   // again and fails, or the text changed), whether it had focus then or the
   // viewer it opened returns focus later
   const { open, viewer, failed } = useImageViewer(
-    result?.ok ? result.url : undefined,
+    image?.url,
     ref,
-    result?.ok
-      ? (say) => <MermaidExport image={result} name={name} notify={say} />
+    image
+      ? (say) => <MermaidExport image={image} name={name} notify={say} />
       : undefined,
   )
   // The viewer's code could not be loaded: it closed, the diagram stays
@@ -136,11 +157,17 @@ export function MermaidBlock({
     [],
   )
   const alt = `Mermaid diagram ${index}`
+  // Why the source shown is not drawn (an older image may still show)
+  const note = !result
+    ? image
+      ? undefined
+      : 'Rendering diagram…'
+    : result.ok
+      ? undefined
+      : MERMAID_REASONS[result.reason]
   let parts: FrameParts
-  if (!result) {
-    parts = { note: 'Rendering diagram…' }
-  } else if (!result.ok) {
-    parts = { note: MERMAID_REASONS[result.reason] }
+  if (!image) {
+    parts = { note }
   } else {
     const toggle = (
       <IconButton
@@ -158,7 +185,7 @@ export function MermaidBlock({
       <>
         {toggle}
         <MermaidExport
-          image={result}
+          image={image}
           name={name}
           notify={notify}
           size="sm"
@@ -167,9 +194,10 @@ export function MermaidBlock({
       </>
     )
     parts = source
-      ? { toolbar }
+      ? { toolbar, note }
       : {
           toolbar,
+          note,
           body: (
             <div className="overflow-x-auto p-3">
               <button
@@ -179,18 +207,18 @@ export function MermaidBlock({
                 className="mx-auto block cursor-zoom-in"
                 onClick={() =>
                   open({
-                    src: result.url,
+                    src: image.url,
                     alt,
-                    width: result.width,
-                    height: result.height,
+                    width: image.width,
+                    height: image.height,
                     isSvg: true,
                   })
                 }
               >
                 <img
-                  src={result.url}
-                  width={result.width}
-                  height={result.height}
+                  src={image.url}
+                  width={image.width}
+                  height={image.height}
                   alt={alt}
                   className="block max-w-none"
                   draggable={false}
@@ -214,6 +242,7 @@ export function MermaidBlock({
       tabIndex={-1}
       className="outline-none"
       data-testid="mermaid-block"
+      data-line={dataLine}
     >
       {frame(parts)}
       {viewer}

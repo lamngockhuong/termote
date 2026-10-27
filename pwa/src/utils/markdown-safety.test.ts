@@ -55,6 +55,57 @@ describe('detailsBlocks', () => {
     })
   })
 
+  it('spans a disclosure from its opening tag to its closing one', () => {
+    const at = (start: number, end = start) => ({
+      position: { start: { line: start }, end: { line: end } },
+    })
+    const tree = {
+      type: 'root',
+      children: [
+        { ...html('<details>'), ...at(3) },
+        { ...para('Body'), ...at(5) },
+        { ...html('</details>'), ...at(7) },
+        { ...html('<details><summary>s</summary>x</details>'), ...at(9) },
+      ],
+    }
+    detailsBlocks()(tree)
+    expect(tree.children[0]).toMatchObject({ type: 'details', ...at(3, 7) })
+    expect(tree.children[1]).toMatchObject({ type: 'details', ...at(9) })
+  })
+
+  it('keeps the lines of each tag split out of one HTML node', () => {
+    const tree = {
+      type: 'root',
+      children: [
+        {
+          ...html('<details>\n<summary>s</summary>\n<p>a</p>\n<p>b</p>'),
+          position: { start: { line: 10 }, end: { line: 13 } },
+        },
+        para('Body'),
+        { ...html('</details>\n<p>after</p>') },
+      ],
+    }
+    detailsBlocks()(tree)
+    const [details, after] = tree.children as {
+      type: string
+      position?: unknown
+      children?: { type: string; position?: unknown }[]
+    }[]
+    // The closing node had no position: neither has the disclosure
+    expect(details.type).toBe('details')
+    expect(details.position).toBeUndefined()
+    // Its summary line came from line 11, the HTML after it from 12 to 13
+    expect(details.children?.[1]).toMatchObject({
+      type: 'html',
+      position: {
+        start: { line: 12, column: 1 },
+        end: { line: 13, column: 9 },
+      },
+    })
+    expect(after).toMatchObject({ type: 'html', value: '<p>after</p>' })
+    expect(after.position).toBeUndefined()
+  })
+
   it('never folds inside a paragraph, and drops the tags of a summary', () => {
     const inline = {
       type: 'paragraph',

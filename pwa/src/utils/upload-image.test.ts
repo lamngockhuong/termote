@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  type FileImageErrorReason,
+  fileImageErrorMessage,
   imageFromClipboard,
   MAX_UPLOAD_BYTES,
   pickImageFile,
   type UploadErrorReason,
   uploadErrorMessage,
+  uploadFileImage,
   uploadImage,
 } from './upload-image'
 
@@ -136,6 +139,149 @@ function clipboard(
     })),
   } as unknown as DataTransfer
 }
+
+describe('uploadFileImage', () => {
+  const at = { root: '/r', dir: 'docs', reveal: false }
+
+  it('posts the raw image for the directory and returns where it went', async () => {
+    const fetchMock = stubFetch(201, { root: '/r', path: 'docs/p.png' })
+    const image = png()
+    expect(await uploadFileImage('%1', at, image)).toEqual({
+      ok: true,
+      root: '/r',
+      path: 'docs/p.png',
+    })
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/mux/panes/%251/files/image?root=%2Fr&dir=docs',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'image/png' },
+        credentials: 'same-origin',
+        body: image,
+        signal: expect.any(AbortSignal),
+      },
+    )
+  })
+
+  it('asks to reveal for a file shown though it is sensitive', async () => {
+    const fetchMock = stubFetch(201, { root: '/r', path: '.ssh/p.png' })
+    await uploadFileImage('0', { root: '/r', dir: '.ssh', reveal: true }, png())
+    expect(fetchMock.mock.calls[0]).toEqual([
+      '/api/mux/panes/0/files/image?root=%2Fr&dir=.ssh&reveal=1',
+      expect.anything(),
+    ])
+  })
+
+  it.each([
+    'too_large',
+    'unsupported_image',
+    'busy',
+    'storage_full',
+    'view_only',
+    'sensitive',
+    'symlink',
+    'not_directory',
+    'exists',
+    'invalid_name',
+    'not_allowed',
+    'not_found',
+    'permission',
+    'read_only',
+    'too_many_pixels',
+  ] as const)('maps the code %s', async (code) => {
+    stubFetch(400, { error: 'x', code })
+    expect(await uploadFileImage('0', at, png())).toEqual({
+      ok: false,
+      reason: code,
+    })
+  })
+
+  it('tells a root that moved from a name taken', async () => {
+    stubFetch(409, { error: 'root changed', root: '/new' })
+    expect(await uploadFileImage('0', at, png())).toEqual({
+      ok: false,
+      reason: 'root_changed',
+      root: '/new',
+    })
+    stubFetch(409, { error: 'taken', code: 'exists', root: '/r' })
+    expect(await uploadFileImage('0', at, png())).toEqual({
+      ok: false,
+      reason: 'exists',
+    })
+  })
+
+  it('reports an unknown code, a bad reply or a reply without a path as failed', async () => {
+    for (const [status, body] of [
+      [500, { code: 'weird' }],
+      [500, 'not json'],
+      [201, { root: '/r' }],
+      [404, { error: 'not found' }],
+    ] as const) {
+      stubFetch(status, body)
+      expect(await uploadFileImage('0', at, png())).toEqual({
+        ok: false,
+        reason: 'failed',
+      })
+    }
+  })
+
+  it('refuses before sending, and reports the network', async () => {
+    const fetchMock = stubFetch(201, {})
+    const heic = new Blob([new Uint8Array(4)], { type: 'image/heic' })
+    expect(await uploadFileImage('0', at, heic)).toEqual({
+      ok: false,
+      reason: 'heic',
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('offline')
+      }),
+    )
+    expect(await uploadFileImage('0', at, png())).toEqual({
+      ok: false,
+      reason: 'network',
+    })
+  })
+})
+
+describe('fileImageErrorMessage', () => {
+  it('has a message of its own for the files reasons, an upload one else', () => {
+    const own: FileImageErrorReason[] = [
+      'view_only',
+      'sensitive',
+      'symlink',
+      'not_directory',
+      'exists',
+      'invalid_name',
+      'not_allowed',
+      'not_found',
+      'permission',
+      'read_only',
+      'too_many_pixels',
+      'storage_full',
+      'busy',
+      'root_changed',
+      'timeout',
+      'unsupported_image',
+    ]
+    for (const r of own) {
+      expect(fileImageErrorMessage(r)).toBeTruthy()
+      if (r !== 'busy' && r !== 'storage_full' && r !== 'timeout')
+        expect(fileImageErrorMessage(r)).not.toBe(
+          uploadErrorMessage(r as UploadErrorReason),
+        )
+    }
+    expect(fileImageErrorMessage('timeout')).toBe(
+      'Not sure the image was saved. Check the folder',
+    )
+    expect(fileImageErrorMessage('invalid_name')).toBe(
+      fileImageErrorMessage('not_allowed'),
+    )
+    expect(fileImageErrorMessage('heic')).toBe(uploadErrorMessage('heic'))
+  })
+})
 
 describe('imageFromClipboard', () => {
   const file = new File(['x'], 'a.png', { type: 'image/png' })
