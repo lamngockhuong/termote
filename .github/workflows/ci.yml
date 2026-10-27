@@ -343,7 +343,7 @@ jobs:
           TERMOTE_PORT: "7681"
           TERMOTE_PASS: ${{ env.E2E_AUTH_PASS }}
           TMUX_SESSION: e2e-auth
-        run: TMUX_SOCKET="$RUNNER_TEMP/tmux-auth.sock" pnpm exec playwright test devices signins login-link prompt-templates tasks review --workers=1
+        run: TMUX_SOCKET="$RUNNER_TEMP/tmux-auth.sock" pnpm exec playwright test devices signins login-link prompt-templates tasks e2e/review --workers=1
 
       - name: Server log
         if: failure()
