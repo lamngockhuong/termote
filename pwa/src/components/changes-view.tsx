@@ -1,4 +1,4 @@
-import { Lock, Minus, Plus, Undo2 } from 'lucide-react'
+import { GitCommitHorizontal, Minus, Plus, Undo2 } from 'lucide-react'
 import {
   type ReactNode,
   useCallback,
@@ -47,6 +47,8 @@ import {
 } from '../utils/review-draft'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { FILES_VIEW_ID } from '../view-ids'
+import { ChangeRowButton } from './change-status'
+import { CommitView } from './commit-view'
 import { type DiffLineAt, DiffViewer } from './diff-viewer'
 import {
   APPLY_REFUSED,
@@ -61,7 +63,7 @@ import { ReviewCommentSheet } from './review-comment-sheet'
 import { ReviewControl } from './review-panel'
 import { DiscardTabDialog, RootCloseDialog } from './tab-close-dialogs'
 import { Banner } from './ui/banner'
-import { FOCUS_RING, IconButton } from './ui/button'
+import { Button, IconButton } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
 
 const ERRORS: Record<ChangesError, string> = {
@@ -71,25 +73,6 @@ const ERRORS: Record<ChangesError, string> = {
   'view-only': 'View only: files show in a git repository only',
   timeout: 'git took too long; trying again',
   unavailable: 'Could not read the changes',
-}
-
-// Letters as git status writes them, and what a screen reader says
-export const STATUS: Record<string, string> = {
-  M: 'Modified',
-  A: 'Added',
-  D: 'Deleted',
-  R: 'Renamed',
-  C: 'Copied',
-  T: 'Type changed',
-  U: 'Conflict',
-  '?': 'Untracked',
-}
-
-const TONE: Record<string, string> = {
-  A: 'text-success',
-  '?': 'text-success',
-  D: 'text-danger',
-  U: 'text-warning',
 }
 
 // Past this many entries the list gets a filter box
@@ -579,13 +562,30 @@ function PaneChanges({
   }
   // A phone has a sheet of the open diffs in place of the tab bar
   const [listing, setListing] = useState(false)
+  // The last commit, asked for from an empty list; a diff opened (from a
+  // review comment) closes it
+  const [showCommit, setShowCommit] = useState(false)
+  useEffect(() => {
+    if (tab) setShowCommit(false)
+  }, [tab])
   const openFiles = isMobile && c.tabs.length > 0 && (
     <OpenFilesButton count={c.tabs.length} onClick={() => setListing(true)} />
   )
   const closingTab = c.tabs.find((t) => t.id === closing)
 
   let body: ReactNode
-  if (tab?.editing) {
+  if (showCommit && !tab) {
+    body = (
+      <CommitView
+        paneId={paneId}
+        root={c.root}
+        isMobile={isMobile}
+        canReveal={!readOnly}
+        onBack={() => setShowCommit(false)}
+        onRootChanged={c.rootChanged}
+      />
+    )
+  } else if (tab?.editing) {
     body = (
       <FileViewer
         key={`${tab.id}\u0000${c.root}\u0000${tab.path}`}
@@ -713,7 +713,15 @@ function PaneChanges({
   } else if (!c.isRepo) {
     body = <ViewMessage>Not a git repository: {c.root}</ViewMessage>
   } else if (c.entries.length === 0) {
-    body = <ViewMessage>No changes</ViewMessage>
+    body = (
+      <ViewMessage>
+        No changes since the last commit
+        <Button size="sm" onClick={() => setShowCommit(true)}>
+          <GitCommitHorizontal size={15} aria-hidden="true" />
+          Show last commit
+        </Button>
+      </ViewMessage>
+    )
   } else {
     const filtering = c.entries.length > CHANGES_FILTER_MIN
     const shown = groups(
@@ -884,38 +892,16 @@ function ChangeRow({
   actions: ReactNode
 }) {
   const { entry, code } = item
-  const [dir, name] = splitPath(entry.path)
   return (
     <div className="group flex items-center hover:bg-surface">
-      <button
-        type="button"
-        onClick={onOpen}
-        className={`flex min-h-9 min-w-0 flex-1 items-center gap-2 px-3 text-left text-[13px] pointer-coarse:min-h-touch ${FOCUS_RING} focus-visible:-outline-offset-2`}
-      >
-        <span
-          aria-hidden="true"
-          className={`w-3 shrink-0 font-term font-semibold ${TONE[code] ?? 'text-info'}`}
-        >
-          {code}
-        </span>
-        <span className="sr-only">{STATUS[code] ?? code}: </span>
-        <span className="flex min-w-0 flex-1 items-baseline gap-1.5 truncate">
-          <span className="shrink-0 font-medium text-fg">{name}</span>
-          <span className="truncate text-[12px] text-fg-subtle">
-            {entry.orig ? `${entry.orig} → ` : ''}
-            {dir}
-          </span>
-        </span>
-        {entry.sensitive && (
-          <span
-            className="flex shrink-0 items-center text-warning"
-            title="May contain secrets"
-          >
-            <Lock size={12} aria-hidden="true" />
-            <span className="sr-only">Sensitive</span>
-          </span>
-        )}
-      </button>
+      <ChangeRowButton
+        code={code}
+        path={entry.path}
+        orig={entry.orig}
+        sensitive={entry.sensitive}
+        onOpen={onOpen}
+        className="flex-1"
+      />
       <span className="flex shrink-0 items-center pr-1 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100">
         {actions}
       </span>

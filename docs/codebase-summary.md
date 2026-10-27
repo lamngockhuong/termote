@@ -77,7 +77,7 @@ described in [`system-architecture.md`](system-architecture.md), conventions in
 | Agent usage (context share, Codex limits)    | `server/agent_context_window.go`, `agent_claude_model.go`; PWA `usage-*.tsx`, `account-usage-strip.tsx`                                                                                                                     |
 | Agent history (PWA)                          | `components/status-timeline.tsx`, `subagent-tree.tsx`, `activity-log.tsx`, `hooks/use-activity-log.ts`                                                                                                                      |
 | Starting an agent in a Herdr pane            | `server/agent_start.go`, `pwa/src/hooks/use-start-agent.ts`, `components/start-agent-panel.tsx`                                                                                                                             |
-| Files and Changes (server)                   | `server/files.go`, `files_root.go`, `files_git.go`, `files_raw.go`, `files_write.go`, `files_create.go`, `files_image.go`                                                                                                   |
+| Files and Changes (server)                   | `server/files.go`, `files_root.go`, `files_git.go`, `files_git_commit.go`, `files_raw.go`, `files_write.go`, `files_create.go`, `files_image.go`                                                                            |
 | CLI                                          | `server/cli.go` (dispatch), then the `cli_<command>.go` file (see [CLI](#cli-go-servercligo))                                                                                                                               |
 
 Two things the code does not explain on its own:

@@ -529,7 +529,7 @@ function WorkingTreePreview({
   )
 }
 
-function DiffBody({
+export function DiffBody({
   diff,
   wrap,
   oneColumn,
