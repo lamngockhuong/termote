@@ -17,8 +17,9 @@ export function ChatAttachments({
   if (items.length === 0) return null
   return (
     <ul aria-label="Attached images" className="flex gap-2 px-2 pt-2">
-      {items.map((a, i) => {
-        const n = i + 1
+      {items.map((a) => {
+        // The number of its "[Image #n]" token in the text
+        const n = a.n
         const state = a.status === 'failed' ? a.error : a.status
         return (
           <li

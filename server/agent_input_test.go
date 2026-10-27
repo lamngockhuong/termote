@@ -1214,16 +1214,16 @@ func TestAbandonChecksBeforeClearing(t *testing.T) {
 	failure := fail(http.StatusConflict, "paste_not_confirmed", "x")
 	f := newFakeWriter()
 	f.nowErr = errors.New("gone")
-	if err := a.abandon(context.Background(), f, "0", labSession, 1, "", failure); err != errPartialPaste {
+	if err := a.abandon(context.Background(), f, "0", labSession, [][]string{{"", ""}}, failure); err != errPartialPaste {
 		t.Errorf("session read fails = %v", err)
 	}
 	c := &captureErrWriter{fakeWriter: newFakeWriter()}
-	if err := a.abandon(context.Background(), c, "0", labSession, 1, "", failure); err != errPartialPaste {
+	if err := a.abandon(context.Background(), c, "0", labSession, [][]string{{"", ""}}, failure); err != errPartialPaste {
 		t.Errorf("capture fails = %v", err)
 	}
 	f = newFakeWriter()
 	f.screen = fixtureScreen(t, "2.1.286-permission-bash")
-	if err := a.abandon(context.Background(), f, "0", labSession, 1, "", failure); err != errPartialPaste || len(f.keys) != 0 {
+	if err := a.abandon(context.Background(), f, "0", labSession, [][]string{{"", ""}}, failure); err != errPartialPaste || len(f.keys) != 0 {
 		t.Errorf("dialog open = %v keys %v", err, f.keys)
 	}
 }
@@ -1249,10 +1249,126 @@ func TestMessageTextPasteFailsAfterImages(t *testing.T) {
 	f := newFakeWriter()
 	imageAgent(f, 0)
 	_, _, paths := imageMux(t, f, 1)
-	err := newAgentAPI(nil).sendMessage(context.Background(), textPasteFails{f}, "0", testSessionID, "hello", paths)
+	err := newAgentAPI(nil).sendMessage(context.Background(), textPasteFails{f}, "0", testSessionID, []string{"", "hello"}, paths)
 	var af *agentFailure
 	if !errors.As(err, &af) || af.code != "paste_not_confirmed" || len(f.keys) != 1 || f.keys[0][0] != "C-c" {
 		t.Errorf("err = %v keys = %v", err, f.keys)
+	}
+}
+
+func postMessageAt(t *testing.T, mux http.Handler, text string, ids []string, at []int) (int, map[string]any) {
+	t.Helper()
+	return postJSON(t, mux, "/api/mux/panes/0/agent/message", map[string]any{"text": text, "cursor": cursorFor(testSessionID), "images": ids, "at": at})
+}
+
+// Images go where the user put them: the text around each is pasted in
+// turn, as is.
+func TestMessageImagesBetweenText(t *testing.T) {
+	shortImageWait(t)
+	f := newFakeWriter()
+	imageAgent(f, 0)
+	mux, ids, paths := imageMux(t, f, 2)
+	text := "ảnh số 1 , ảnh số 2 "
+	at := []int{len("ảnh số 1 "), len(text)}
+	if code, body := postMessageAt(t, mux, text, ids, at); code != http.StatusNoContent {
+		t.Fatalf("POST = %d %v", code, body)
+	}
+	want := []string{"ảnh số 1 ", paths[0], ", ảnh số 2 ", paths[1]}
+	if strings.Join(f.pasted, "|") != strings.Join(want, "|") {
+		t.Errorf("pasted %q, want %q", f.pasted, want)
+	}
+	if len(f.keys) != 1 || f.keys[0][0] != "Enter" {
+		t.Errorf("keys = %v", f.keys)
+	}
+}
+
+func TestMessageImagePositionsRefused(t *testing.T) {
+	f := newFakeWriter()
+	imageAgent(f, 0)
+	mux, ids, _ := imageMux(t, f, 2)
+	for name, at := range map[string][]int{
+		"one for two images": {0},
+		"out of order":       {3, 1},
+		"past the end":       {0, 99},
+		"negative":           {-1, 0},
+		"inside a character": {1, 2}, // "é" is two bytes
+	} {
+		code, body := postMessageAt(t, mux, "é et le reste", ids, at)
+		if code != http.StatusBadRequest || body["code"] != "invalid_request" {
+			t.Errorf("%s: POST = %d %v", name, code, body)
+		}
+	}
+	if len(f.pasted) != 0 {
+		t.Errorf("pasted %q", f.pasted)
+	}
+}
+
+func TestMessageParts(t *testing.T) {
+	tests := []struct {
+		text string
+		at   []int
+		n    int
+		want []string
+		ok   bool
+	}{
+		{"hi", nil, 0, []string{"hi"}, true},
+		{"hi", nil, 2, []string{"", "", "hi"}, true},
+		{"ab\r\ncd", []int{2}, 1, []string{"ab", "\ncd"}, true},
+		{"a\x00b", []int{3}, 1, []string{"ab", ""}, true},
+		{"abc", []int{0, 3}, 2, []string{"", "abc", ""}, true},
+		{" /model x", []int{7}, 1, []string{"", " /model x"}, true},
+		{"!ls ", []int{4}, 1, []string{"", "!ls "}, true},
+		{"/model", nil, 0, []string{"/model"}, true},
+		{"ab\r\ncd", []int{3}, 1, nil, false},
+		{"abc", []int{1}, 2, nil, false},
+		{"abc", []int{4}, 1, nil, false},
+	}
+	for _, tt := range tests {
+		got, ok := messageParts(tt.text, tt.at, tt.n)
+		if ok != tt.ok || strings.Join(got, "|") != strings.Join(tt.want, "|") || len(got) != len(tt.want) {
+			t.Errorf("messageParts(%q, %v, %d) = %q %v", tt.text, tt.at, tt.n, got, ok)
+		}
+	}
+}
+
+// The second image never shows after the text before it: the box holds only
+// what this request pasted, so it is cleared.
+func TestMessageImagesBetweenTextCleared(t *testing.T) {
+	shortImageWait(t)
+	f := newFakeWriter()
+	imageAgent(f, 0)
+	agent := f.onPaste
+	f.onPaste = func(f *fakeWriter, text string) {
+		if len(f.pasted) < 4 {
+			agent(f, text)
+		}
+	}
+	mux, ids, _ := imageMux(t, f, 2)
+	code, body := postMessageAt(t, mux, "one two", ids, []int{3, 7})
+	if code != http.StatusConflict || body["code"] != "paste_not_confirmed" {
+		t.Errorf("POST = %d %v", code, body)
+	}
+	if len(f.keys) != 1 || f.keys[0][0] != "C-c" {
+		t.Errorf("keys = %v", f.keys)
+	}
+}
+
+// Text before the first image is read again like text alone: an agent that
+// opened a dialog meanwhile gets nothing.
+func TestMessageRechecksBeforeLeadingText(t *testing.T) {
+	shortImageWait(t)
+	blocked := labSession
+	blocked.Status = "blocked"
+	f := newFakeWriter()
+	imageAgent(f, 0)
+	f.sessions = []AgentSession{labSession, blocked}
+	mux, ids, _ := imageMux(t, f, 1)
+	code, body := postMessageAt(t, mux, "look", ids, []int{4})
+	if code != http.StatusConflict || body["code"] != "input_not_ready" {
+		t.Errorf("POST = %d %v", code, body)
+	}
+	if len(f.pasted) != 0 {
+		t.Errorf("pasted %q", f.pasted)
 	}
 }
 

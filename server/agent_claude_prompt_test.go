@@ -428,7 +428,12 @@ func TestDraftShows(t *testing.T) {
 	}
 }
 
-func TestDraftShowsImages(t *testing.T) {
+// imagesThenText: the parts of n images followed by text.
+func imagesThenText(n int, text string) []string {
+	return append(make([]string, n), text)
+}
+
+func TestDraftShowsImagesThenText(t *testing.T) {
 	tests := []struct {
 		draft string
 		n     int
@@ -451,8 +456,32 @@ func TestDraftShowsImages(t *testing.T) {
 		{"", 1, "", false},
 	}
 	for _, tt := range tests {
-		if got := draftShowsImages(tt.draft, tt.n, tt.text); got != tt.want {
-			t.Errorf("draftShowsImages(%q, %d, %q) = %v", tt.draft, tt.n, tt.text, got)
+		if got := draftShowsParts(tt.draft, imagesThenText(tt.n, tt.text)); got != tt.want {
+			t.Errorf("draftShowsParts(%q, imagesThenText(%d, %q)) = %v", tt.draft, tt.n, tt.text, got)
+		}
+	}
+}
+
+func TestDraftShowsParts(t *testing.T) {
+	tests := []struct {
+		draft string
+		parts []string
+		want  bool
+	}{
+		{"one [Image #3] two [Image #4]", []string{"one ", " two ", ""}, true},
+		{"one [Image #3], two", []string{"one ", ", two"}, true},
+		{"one [Image #3]", []string{"one ", ""}, true},
+		{"one", []string{"one "}, true},
+		{"[Image #3] one two", []string{"one ", " two"}, false},
+		{"one [Image #3] two", []string{"one ", " two ", ""}, false},
+		{"one [Image #3] [Image #4]", []string{"one ", ""}, false},
+		// Text that holds a token itself
+		{"see [Image #9] here [Image #2]", []string{"see [Image #9] here ", ""}, true},
+		{"a [Image #1] [Pasted text #2 +3 lines]", []string{"a ", "x\ny\nz\nw"}, true},
+	}
+	for _, tt := range tests {
+		if got := draftShowsParts(tt.draft, tt.parts); got != tt.want {
+			t.Errorf("draftShowsParts(%q, %q) = %v", tt.draft, tt.parts, got)
 		}
 	}
 }
@@ -489,8 +518,8 @@ func TestImageTokenScreens(t *testing.T) {
 			t.Errorf("%s: input = %v", tt.file, sc.input)
 			continue
 		}
-		if got := draftShowsImages(sc.draft, tt.n, tt.text); got != tt.want {
-			t.Errorf("%s: draftShowsImages(%q, %d, %q) = %v", tt.file, sc.draft, tt.n, tt.text, got)
+		if got := draftShowsParts(sc.draft, imagesThenText(tt.n, tt.text)); got != tt.want {
+			t.Errorf("%s: draftShowsParts(%q, imagesThenText(%d, %q)) = %v", tt.file, sc.draft, tt.n, tt.text, got)
 		}
 	}
 }

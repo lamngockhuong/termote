@@ -8,6 +8,8 @@ export const MAX_CHAT_IMAGES = 5
 
 export type ChatAttachment = {
   key: number
+  // Its number in the message's "[Image #n]" token, from 1 in each list
+  n: number
   // A small data: URL preview; null until drawn, or when it cannot be
   thumb: string | null
   // The upload id, once the host has the file
@@ -77,26 +79,36 @@ export function useChatAttachments(
 ) {
   const items = useSyncExternalStore(subscribe, () => lists.get(paneId) ?? NONE)
 
+  // Adds file and starts its upload: its token number, null when the list
+  // is full. done settles once the upload has. taken: numbers already in the
+  // text (a token left from a reload), never given again.
   const add = useCallback(
-    async (file: File) => {
-      if ((lists.get(paneId)?.length ?? 0) >= MAX_CHAT_IMAGES) {
+    (
+      file: File,
+      taken: Iterable<number> = [],
+    ): { n: number; done: Promise<void> } | null => {
+      const list = lists.get(paneId) ?? NONE
+      if (list.length >= MAX_CHAT_IMAGES) {
         onError(`At most ${MAX_CHAT_IMAGES} images per message.`)
-        return
+        return null
       }
       const key = ++seq
-      setList(paneId, (list) => [
-        ...list,
-        { key, thumb: null, status: 'uploading' },
+      const n = Math.max(0, ...list.map((a) => a.n), ...taken) + 1
+      setList(paneId, (l) => [
+        ...l,
+        { key, n, thumb: null, status: 'uploading' },
       ])
       imageThumbnail(file).then((thumb) => thumb && patch(key, { thumb }))
-      const result = await uploadImage(file)
-      if (result.ok) {
-        patch(key, { status: 'ready', id: result.upload.id })
-        return
-      }
-      const error = uploadErrorMessage(result.reason)
-      patch(key, { status: 'failed', error })
-      onError(`${error}.`)
+      const done = uploadImage(file).then((result) => {
+        if (result.ok) {
+          patch(key, { status: 'ready', id: result.upload.id })
+          return
+        }
+        const error = uploadErrorMessage(result.reason)
+        patch(key, { status: 'failed', error })
+        onError(`${error}.`)
+      })
+      return { n, done }
     },
     [paneId, onError],
   )
@@ -126,10 +138,15 @@ export function useChatAttachments(
     [paneId],
   )
 
-  return useMemo(
-    () => ({
+  return useMemo(() => {
+    // The images uploaded, with their token numbers
+    const ready = items.flatMap((a) =>
+      a.status === 'ready' && a.id ? [{ n: a.n, id: a.id }] : [],
+    )
+    return {
       items,
-      ids: items.flatMap((a) => (a.status === 'ready' && a.id ? [a.id] : [])),
+      ready,
+      ids: ready.map((a) => a.id),
       uploading: items.some((a) => a.status === 'uploading'),
       failed: items.some((a) => a.status === 'failed'),
       full: items.length >= MAX_CHAT_IMAGES,
@@ -137,7 +154,6 @@ export function useChatAttachments(
       remove,
       clear,
       markGone,
-    }),
-    [items, add, remove, clear, markGone],
-  )
+    }
+  }, [items, add, remove, clear, markGone])
 }

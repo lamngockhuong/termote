@@ -32,6 +32,12 @@ import {
   saveDraft,
   takeDraftInsert,
 } from '../utils/chat-draft'
+import {
+  imageTokensIn,
+  insertImageToken,
+  messageWithImages,
+  removeImageToken,
+} from '../utils/chat-image-tokens'
 import { matchTemplates } from '../utils/prompt-templates'
 import {
   applyPick,
@@ -271,9 +277,14 @@ export function ChatComposer({
     setConfirming(null)
   }, [paneId])
 
+  // The pane now: an image picked while the pane moved goes to its draft
   const update = (value: string) => {
+    const { paneId, images } = latest.current
     setText(value)
     saveDraft(paneId, value)
+    // An image goes with its token: deleting "[Image #n]" removes it
+    const kept = imageTokensIn(value)
+    for (const a of images.items) if (!kept.has(a.n)) images.remove(a.key)
   }
 
   // Follows the caret from the event itself: a phone keyboard can report it
@@ -307,6 +318,7 @@ export function ChatComposer({
     message: string,
     confirmed = false,
     imageIds: string[] = [],
+    imageAt: number[] = [],
   ) => {
     if (sending || !t.cursor) return
     // With images the agent receives "[Image #1] /cmd": text, not a command.
@@ -334,6 +346,7 @@ export function ChatComposer({
         message,
         t.cursor,
         imageIds,
+        imageAt,
       )
       if (queued) {
         setNotice({
@@ -365,12 +378,35 @@ export function ChatComposer({
 
   const send = () => {
     if (!canSend) return
-    submit(dollar ? closeTrailingSkill(text) : text, false, images.ids)
+    const m = messageWithImages(
+      dollar ? closeTrailingSkill(text) : text,
+      images.ready,
+    )
+    submit(m.text, false, m.ids, m.at)
+  }
+
+  // An image attached goes where the caret is, as its "[Image #n]" token
+  // (at the end before the box was ever focused), the caret after it.
+  const attachImage = (file: File) => {
+    const draft = textRef.current
+    const added = latest.current.images.add(file, imageTokensIn(draft))
+    if (!added) return
+    const box = boxRef.current
+    const [start, end] =
+      box && focusedOnce.current
+        ? [box.selectionStart, box.selectionEnd]
+        : [draft.length, draft.length]
+    const next = insertImageToken(draft, start, end, added.n)
+    caretAfterPick.current = next
+    textRef.current = next.text
+    update(next.text)
+    setCaret(next.caret)
+    return added.done
   }
 
   const attach = async () => {
     const file = await pickImageFile()
-    if (file) await images.add(file)
+    if (file) await attachImage(file)
   }
 
   // An image pasted without text is attached; text pasted as usual.
@@ -379,7 +415,15 @@ export function ChatComposer({
     const file = imageFromClipboard(e.clipboardData)
     if (!file) return
     e.preventDefault()
-    images.add(file)
+    attachImage(file)
+  }
+
+  // An image removed takes its token out of the text.
+  const removeImage = (key: number) => {
+    for (const a of images.items) {
+      if (a.key === key) update(removeImageToken(textRef.current, a.n))
+    }
+    images.remove(key)
   }
 
   // The caret after a pick, set in the commit that writes the picked text:
@@ -683,7 +727,7 @@ export function ChatComposer({
       )}
       <ChatAttachments
         items={images.items}
-        onRemove={images.remove}
+        onRemove={removeImage}
         disabled={sending}
       />
       {/* One card: the box over a row of its buttons, so the text keeps the

@@ -35,7 +35,7 @@ describe('useChatAttachments', () => {
     const { result } = renderHook(() => useChatAttachments('%1', onError))
     let pending: Promise<void> = Promise.resolve()
     act(() => {
-      pending = result.current.add(png())
+      pending = result.current.add(png())?.done ?? pending
     })
     expect(result.current.uploading).toBe(true)
     const key = result.current.items[0].key
@@ -62,8 +62,8 @@ describe('useChatAttachments', () => {
       })
     const { result } = renderHook(() => useChatAttachments('%1', vi.fn()))
     await act(async () => {
-      await result.current.add(png())
-      await result.current.add(png())
+      await result.current.add(png())?.done
+      await result.current.add(png())?.done
     })
     expect(result.current.ids).toEqual(['a', 'b'])
     expect(result.current.items[0].thumb).toBe('data:thumb')
@@ -92,10 +92,10 @@ describe('useChatAttachments', () => {
     )
     let pending: Promise<void> = Promise.resolve()
     await act(async () => {
-      await three.result.current.add(png())
+      await three.result.current.add(png())?.done
     })
     act(() => {
-      pending = one.result.current.add(png())
+      pending = one.result.current.add(png())?.done ?? pending
     })
     expect(two.result.current.items).toEqual([])
     act(() =>
@@ -112,6 +112,28 @@ describe('useChatAttachments', () => {
     expect(three.result.current.ids).toEqual(['y'])
   })
 
+  it('numbers each image for its token, after the highest one left', async () => {
+    mockUpload.mockResolvedValue({
+      ok: true,
+      upload: { id: 'a', path: '', insert: '' },
+    })
+    const { result } = renderHook(() => useChatAttachments('%1', vi.fn()))
+    const ns: (number | undefined)[] = []
+    await act(async () => {
+      ns.push(result.current.add(png())?.n)
+      ns.push(result.current.add(png())?.n)
+    })
+    act(() => result.current.remove(result.current.items[0].key))
+    await act(async () => {
+      ns.push(result.current.add(png())?.n)
+    })
+    act(() => result.current.clear())
+    await act(async () => {
+      ns.push(result.current.add(png())?.n)
+    })
+    expect(ns).toEqual([1, 2, 3, 1])
+  })
+
   it('at most five images per pane', async () => {
     mockUpload.mockResolvedValue({
       ok: true,
@@ -120,7 +142,7 @@ describe('useChatAttachments', () => {
     const onError = vi.fn()
     const { result } = renderHook(() => useChatAttachments('%1', onError))
     await act(async () => {
-      for (let i = 0; i < 6; i++) await result.current.add(png())
+      for (let i = 0; i < 6; i++) await result.current.add(png())?.done
     })
     expect(result.current.items).toHaveLength(5)
     expect(result.current.full).toBe(true)
