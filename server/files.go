@@ -114,6 +114,7 @@ func registerFilesRoutes(mux *http.ServeMux, m Mux, allowed hostAllowlist, denyD
 	mux.HandleFunc("PUT /api/mux/panes/{id}/files/content", f.handleWriteContent)
 	// Without a method: a GET or PUT gets 405 here, not the /api/ 404.
 	mux.HandleFunc("/api/mux/panes/{id}/files/create", f.handleCreateFile)
+	mux.HandleFunc("/api/mux/panes/{id}/files/image", f.handleImage)
 	mux.HandleFunc("/api/mux/panes/{id}/files/delete", f.handleDeleteFile)
 	mux.HandleFunc("/api/mux/panes/{id}/files/restore", f.handleRestoreFile)
 	mux.HandleFunc("/api/mux/panes/{id}/files/rename", f.handleRenameFile)

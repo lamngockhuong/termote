@@ -34,7 +34,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   working as the LAN IP changes + the Tailscale name + `--allow-host` entries, with no
   wildcard to disable the check
 - **Write/CSRF guard** (`writeGuard`): state-changing `/api/mux/*` requests must be
-  same-site (`Sec-Fetch-Site`/`Origin` on the allowlist) with `Content-Type: application/json`
+  same-site (`Sec-Fetch-Site`/`Origin` on the allowlist) with `Content-Type: application/json`;
+  only the paths `/api/mux/uploads` and `.../files/image` (`isFilesImagePath`, anchored, on the
+  decoded path) take a raw `image/png|jpeg|gif|webp` body instead (their handlers take POST only),
+  any other type there → 415 `unsupported_image`
 - **Terminal stream** (`/api/mux/stream`): same Origin check plus a single-use, 30s-TTL token
   fetched via `/api/mux/stream-token`, consumed on WebSocket upgrade. Every paste into the
   terminal (native paste events are taken in capture phase, ahead of xterm) goes through
@@ -882,6 +885,36 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   has a shell anyway, and a view-only client gets 403 `view_only` for creates as well as saves.
   The root's lock is keyed `root + "\x01create"`: `"\x00create"` was the key of a file named
   `create` at the root, and a delete takes both
+- **Pasting an image into Markdown** (`POST files/image?root=&dir=[&reveal=1]`,
+  `server/files_image.go`): an image pasted into a `.md`/`.mdx` file being edited becomes a new
+  file next to it. Raw `image/png|jpeg|gif|webp` body (never SVG, never multipart: `writeGuard`
+  takes these types on this path and uploads only, anything else → 415 `unsupported_image`).
+  Order, as a save and a create: `root` required (400), then the handler's cross-site check,
+  `requireWriteRole` (403 `view_only`) and the root still the pane's (409), `dir` checked (400
+  `invalid_name`: `.` for the root, else `validPathShape`, no `\`, then `cleanRelPath`), a
+  `Content-Length` over 10 MB → 413 `too_large` unread, then one of the 2 write slots shared with
+  saves, creates, deletes, renames and restores (429 `busy`; held while the body streams), then the read deadline grows to 5
+  minutes and the body is capped at 10 MB (`MaxBytesReader`). The first 512 bytes must be the
+  declared type (415); the image's pixels are counted with `imageType` as it is written (over 40 MP
+  → 413 `too_many_pixels`, not an image → 415), the rest streamed to disk, never held whole. The
+  directory is walked as a create walks it, without making any (`walkParents`: a symlink or
+  junction → 403 `symlink`, deny dirs and the git dir → 403 `not_allowed`, missing → 404
+  `not_found`);
+  `dir/assets` is used when it is a real directory (a link, a file or nothing there → `dir` itself,
+  never through the link), checked against the deny lists too. The server names the file
+  (`pasted-YYYYMMDD-HHMMSS.<ext>`, then `-2` … `-99`, then 409 `exists`; the client's name is
+  never read) and opens it `O_CREATE|O_EXCL` on the directory's handle: nothing is ever replaced,
+  and there is no temporary name or rename. A sensitive path (`.ssh/…`) needs `reveal=1` (403
+  `sensitive`). The root's lock (`rootLockKey`) is held only while the name is chosen and opened,
+  never while the body streams; a failure after the open (a body cut short, over the cap, not an
+  image, a disk error: a write error is kept apart from the body's, so a full disk is 507
+  `storage_full`, and a body error is checked even when the GIF count took it for the file's end)
+  removes the file by name through the same directory handle (a local process renaming it and
+  making another of that name meanwhile would lose that one: accepted). A file being written can be
+  read half-written by another tool. 201 `{root, path}` (`/`-separated); the root's cached git
+  status is dropped. Accepted risk: no quota and no sweep (unlike uploads), at most 10 MB per
+  request and 2 at a time, since the file is the user's own in their repo, as a save is. No caps
+  flag: the PWA offers it where Edit is offered
 - **Finding a file** (`GET files/find?q=&root=&ignored=1&exclude=…&fresh=1`,
   `server/files_find.go`): the GET guards of the other files routes; only names are sent, as
   the tree does. `q` is trimmed, 1–256 bytes; `exclude` (repeated) is at most 50 directory
@@ -1174,7 +1207,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
 - **Image uploads** (`POST /api/mux/uploads`): the PWA sends an image so an agent can read it by
   path (the host clipboard is empty when the image sits on a phone). Same auth, Host allowlist,
   `Sec-Fetch-Site`/`Origin` check and `requireWriteRole` as every write; the body is a raw
-  `image/png|jpeg|gif|webp` (`writeGuard` takes these types on this path only: `image/*` is not
+  `image/png|jpeg|gif|webp` (`writeGuard` takes these types on this path and `files/image` only: `image/*` is not
   CORS-safelisted, so another site still needs the preflight; multipart stays 415, since a form
   posts it without one). At most 10 MB (a larger `Content-Length` is refused unread); once
   authenticated and given a slot its read deadline grows to 5 minutes; the type is read
