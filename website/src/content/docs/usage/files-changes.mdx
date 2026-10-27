@@ -178,7 +178,8 @@ never searched:
   (`2 sensitive files not searched`);
 - dot-files and dot-folders when the folder shown is your home folder or holds it (shell
   histories and tool settings hold secrets under ordinary names), also counted;
-- binary files, files that are not UTF-8 text, and files larger than 1 MiB;
+- binary files, files that are not UTF-8 text (a Shift-JIS, EUC-JP or UTF-16 file opens in Files,
+  but is not searched), and files larger than 1 MiB;
 - paths Termote never serves (see [Never Shown](#never-shown)).
 
 A view-only device searches the same files it can open.
@@ -241,11 +242,14 @@ When saving does not go through, your text stays in the box:
 | `The server can't write this file`                     | The file is read-only, belongs to another user, or its folder cannot be written                    |
 | `The file system there is read-only`                   | The file is on a read-only disk or mount, such as a container volume mounted read-only             |
 | `The host's disk or quota is full`                     | The host's disk, or your disk quota, has no room left                                              |
+| `Line 3 has "😀", which Shift-JIS can't hold`          | The file's encoding has no such character (see [Encodings](#encodings)). Change it, or save as UTF-8 |
+| `Reload the app to save this file`                     | The text was kept by an older version of Termote, for a file that is no longer UTF-8. Copy your text, reload the app and open the file again |
 
 Some files have no Edit button, because the server would refuse the save: a symbolic link (or a
 file reached through a linked folder), a file with several hard links, a file that mixes line
-break styles or holds a NUL character, a file over 1 MiB, an image, and a file in Termote's own
-data or upload folders. A file that may contain secrets can be edited once it has been shown.
+break styles or holds a NUL character, a file over 1 MiB, an image, a file that would not encode
+back to its own bytes (see [Encodings](#encodings)), and a file in Termote's own data or upload
+folders. A file that may contain secrets can be edited once it has been shown.
 
 <Aside type="caution">
   A save replaces the file with a new one in the same folder. If the agent writes the same file
@@ -302,6 +306,45 @@ takes the link out; the image stays on the host.
 - A folder that may hold secrets (`.ssh` and the like) takes an image only when the file being
   edited was shown on purpose.
 - The preview never loads an image: it shows as a link, `image: <name>`, that opens it in Files.
+
+### Encodings
+
+The second line of a text file's bar names its encoding after its size, such as
+`12.0 KiB · Shift-JIS`. Files reads and saves:
+
+- UTF-8, with or without a byte order mark (`UTF-8 with BOM`);
+- UTF-16 LE and UTF-16 BE with a byte order mark;
+- Shift-JIS and EUC-JP, recognised when their bytes are valid and enough of the text is Japanese
+  (kana and kanji).
+
+A save writes the file back in its own encoding, with its byte order mark and its line breaks:
+the bytes you did not edit stay exactly as they were.
+
+- Tap the encoding to read the file again as another one (**Reopen with encoding**). This is how
+  a UTF-16 file without a byte order mark, or a short Shift-JIS file without kana, opens: it shows
+  as `Not previewable`, with **Open with encoding…** under its name. Reopening is off while the
+  text being edited has unsaved changes (`Save or discard your changes first`). The choice lasts
+  for that tab only: a file opened in a new window, or opened again later, has its encoding found
+  again.
+- **Save as UTF-8**, in the same menu for a file not in plain UTF-8, asks first, then writes the
+  file as UTF-8 without a byte order mark. Tools that read it in the old encoding then show its
+  text wrongly.
+- A few Shift-JIS files decode but would not encode back to the same bytes: characters of the IBM
+  extension area, such as 髙 and 﨑, have two codes. Such a file has no Edit button, and the menu
+  says `Can't be edited in this encoding`; save it as UTF-8 to edit it.
+- A file with bytes that are not valid in its encoding (a damaged file, or one read as the wrong
+  encoding) shows them as �. It cannot be edited, nor saved as UTF-8, since those bytes would be
+  lost: the menu says `Can't be edited: some bytes are not valid in this encoding`. Try another
+  encoding.
+- In Shift-JIS and EUC-JP, characters an iPhone, iPad or Mac types that the file holds in another
+  form are saved in that form: 〜 → ～, − → －, ‖ → ∥, ¢ → ￠, £ → ￡, ¬ → ￢, — → ―, ¥ → ￥. Any
+  other character the encoding cannot hold, such as an emoji, stops the save with its line:
+  `Line 3 has "😀", which Shift-JIS can't hold. Change it or save as UTF-8`. It is never replaced
+  by `?`.
+- Other encodings (Windows-1252, Latin-1, GBK, Big5, ISO-2022-JP and so on) are not read: such a
+  file shows as `Not previewable`. A short one can pass for Shift-JIS by chance; Reopen with
+  encoding shows it as another one, and saving cannot damage it unnoticed, since the save writes
+  back exactly the bytes you did not edit.
 
 ## Creating a File
 
@@ -820,7 +863,9 @@ browser tab is visible. It is grouped:
 Each file shows a letter: `M` modified, `A` added, `D` deleted, `R` renamed (with the old path),
 `C` copied, `T` type changed, `U` conflict, `?` untracked. A file with both staged and unstaged
 changes is listed in both groups, and each opens the diff of its own side. An untracked file
-opens as all added lines.
+opens as all added lines. A diff reads the file's bytes as UTF-8 only: in another encoding its
+lines show garbled characters, and an untracked or conflicted one shows as a binary file. Its
+preview (a Markdown file's current version) is decoded as in Files.
 
 The diff shows each hunk with the old and new line numbers (one column on a narrow phone
 screen), added lines on green and removed lines on red, with `+` and `-` kept so the colour is

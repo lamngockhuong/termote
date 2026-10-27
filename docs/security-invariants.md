@@ -668,7 +668,17 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `/proc`, `/sys`, `/dev`, `.git` and the repo's git dir (`--separate-git-dir`) are never served
   (on Linux a path differing only in case is denied when its directory is the same one: WSL
   `/mnt/c`, casefold, vfat);
-  sensitive names (`.env`, keys, ...) return contents or a diff only with `reveal=1`. git runs
+  sensitive names (`.env`, keys, ...) return contents or a diff only with `reveal=1`.
+  `GET files/content` takes an `encoding` of a fixed set (`utf-8`, `utf-16le`, `utf-16be`,
+  `shift_jis`, `euc-jp`; another → 400, ignored by `?hash=1`) or detects one
+  (`server/files_encoding.go`: a BOM, then valid UTF-8, then Shift-JIS/EUC-JP only when the
+  bytes are valid in it and enough of the result is kana and kanji, a half-width katakana
+  counting as kana only next to another; UTF-16 without a BOM is never guessed); its `hash` is
+  the sha256 of the bytes read, never of the decoded text. A sensitive name without `reveal=1` is
+  answered before anything is decoded; a read as another encoding than UTF-8, or one that
+  detects the encoding of bytes not valid UTF-8, takes one of 2 server-wide slots (429 `busy`);
+  a UTF-8 read none. Content search and git
+  diffs stay UTF-8 only. git runs
   without a shell, with `GIT_*`/`TERMOTE_*` stripped, hooks (`core.hooksPath` to the null
   device), index refresh on diff, fsmonitor, filter drivers, external diff and textconv off,
   submodules ignored, 10s timeout, 2 at a time (a command that writes the index runs under the
@@ -745,18 +755,35 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
 - **Saving a file** (`PUT files/content?root=`, `server/files_write.go`): replaces the whole text
   of an existing file (a new one comes from `POST files/create`, see Creating a file). `writeGuard` (same-site JSON) plus the handler's own cross-site check and
   `requireWriteRole`; the `root` query is required (400, 409 once it moved). Body
-  `{path, baseHash, text, reveal}`: bytes on disk other than `baseHash` (GET `content`'s `hash`,
-  sha256) → 409 `changed`, unless they already equal the text (200: a repeated save is no
-  conflict); never an overwrite. The read's path checks plus a write-only deny list (the
+  `{path, baseHash, text, reveal, encoding?, saveAs?}`: `encoding` (what GET `content` read the
+  text as) from the fixed set of Files/Changes, `saveAs` only `utf-8` and only with `encoding`
+  (else 400). Bytes on disk that already equal what the text encodes to are 200 (a repeated save
+  is no conflict, a save as UTF-8 sent again too, with either line breaks), checked with
+  `encoding` before anything about those bytes, without it after the checks of the file and its
+  text; otherwise bytes other than `baseHash` (GET `content`'s `hash`, sha256 of the raw bytes) → 409
+  `changed` (with `encoding`, before any fault of the text they decode to); never an overwrite. The read's path checks plus a write-only deny list (the
   install's data dir, the upload store); a sensitive name needs `reveal: true` (403
   `sensitive`). No component of the path may be a symlink; the parent is opened once through
   `os.Root` and used for every step. The file must be regular, one link, owned by the server user
-  (Unix), owner-writable, UTF-8 without NUL, line breaks all `\n` or all `\r\n` (422
-  `not_editable` + `reason`, or 403 `permission`; writing the new text on a read-only mount → 403
+  (Unix), owner-writable, without NUL once decoded from `encoding`, line breaks all `\n` or all
+  `\r\n`, every byte valid in `encoding` (`invalid-encoding`, a save as UTF-8 too: those bytes
+  would be lost) and encoding back to the very bytes read (`lossy-encoding`, not asked of a save
+  as UTF-8) (422 `not_editable` + `reason`, or 403 `permission`; writing the new text on a read-only mount → 403
   `read_only`, on a full disk or quota → 507 `storage_full`, as a create); GET `content` reports the same check as
-  `editable`/`notEditable`. Text arrives with `\n` (a `\r\n` file gets them back), NUL or a lone
-  `\r` → 422 `not_text`, at most 1 MiB (413 `too_large`); body limit 6 MiB + 64 KiB, 2 saves at a
-  time (429 `busy`), read deadline 5 minutes once authenticated with a slot. Written to
+  `editable`/`notEditable`. Without `encoding` (a client or a kept draft from before encodings)
+  the file must be valid UTF-8 whose BOM the text keeps (text starts with U+FEFF exactly when the
+  file starts with `EF BB BF`), else 422 `not_editable` + `encoding-required`: no such save
+  writes UTF-8 over a Shift-JIS, EUC-JP or UTF-16 file or drops a BOM. Text arrives with `\n` (a
+  `\r\n` file gets them back), NUL or a lone `\r` → 422 `not_text`. It is encoded strictly, in
+  `encoding` with the file's BOM, or as UTF-8 without one for `saveAs`: for Shift-JIS and EUC-JP
+  a fixed table of characters an Apple keyboard types (〜 − ‖ ¢ £ ¬ — ¥) is first replaced by
+  their full-width forms, and a character still not held → 422 `unencodable` + `line` and `char`
+  (from the client's text, never the file's), never a `?`. At most 1 MiB once encoded (413
+  `too_large`); body limit 6 MiB + 64 KiB, unchanged: a 1 MiB file decodes to at most 3 MiB of
+  UTF-8 (half-width katakana) and JSON spells a control character in 6 bytes. 2 saves at a time
+  (429 `busy`), read deadline 5 minutes once authenticated with a slot. A release from before
+  encodings has none of these checks: a draft of a non-UTF-8 file kept on a device and saved
+  after `termote update --version` back to one is written as UTF-8. Written to
   `.termote-edit-<random>` in the same directory (`O_EXCL`, mode set on the handle, `fsync`),
   the file read again, then renamed over it; the temporary file goes on any failure, ones older
   than 10 minutes are swept (only names of that exact form), every `.termote-edit-*` name is
@@ -781,7 +808,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `termote-{files-tabs,changes-tabs,file-drafts,pane-view,recent-files}:<instanceId>:<pane key>[:<path>]`
   with the pane's key and group name in each record: the open Files and Changes tabs (paths,
   scroll offsets, history, table layout), each pane's last view, the unsaved draft of a file
-  (`root, path, baseHash, base, crlf, text, cells`), and the files the user opened lately (at
+  (`root, path, baseHash, base, crlf, encoding, text, cells`; a draft whose `encoding` is not
+  one of the fixed set of Files/Changes is not restored), and the files the user opened lately (at
   most 20 `root, path` pairs, written when the user opens a file from the tree, a search, a link
   or the command palette, never when tabs are restored or a file is created). Never kept: a tab
   or draft of a sensitive file the user chose to show (`reveal`/`revealed`: neither its name nor

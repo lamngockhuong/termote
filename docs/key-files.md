@@ -90,6 +90,8 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/hooks/use-long-press.ts`                 | Long press of a finger (a Markdown link opens a new tab)       |
 | `pwa/src/components/changes-view.tsx`             | Changes view: git status grouped, diffs as tabs, edits a file  |
 | `pwa/src/components/file-editor.tsx`              | A file being edited: desktop editor or textarea, save errors   |
+| `pwa/src/components/file-encoding-menu.tsx`       | A file's encoding in the header: reopen as another, as UTF-8   |
+| `pwa/src/utils/file-encoding.ts`                  | Encoding names the Files view shows, the fixed set             |
 | `pwa/src/components/code-editor.tsx`              | Desktop editor (CodeMirror, lazy chunk), Vim mode              |
 | `pwa/src/utils/cm-languages.ts`                   | The desktop editor's languages, one chunk each                 |
 | `pwa/src/components/new-file-dialog.tsx`          | Files: asks for a new file's path, creates it, says why not    |
@@ -204,6 +206,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/files_raw.go`                             | `files/raw`: an image's bytes (worktree, or a git version)     |
 | `server/files_document.go`                        | `files/document`: a document's bytes to preview, 30 MiB        |
 | `server/files_write.go`                           | `PUT files/content`: saves a text file (baseHash, rename)      |
+| `server/files_encoding.go`                        | Detects, decodes and encodes UTF-8/16, Shift-JIS, EUC-JP       |
 | `server/files_create.go`                          | `POST files/create`: an empty file, never replacing anything   |
 | `server/files_image.go`                           | `POST files/image`: a pasted image beside its Markdown file    |
 | `server/files_find*.go`                           | `GET files/find`: file lists (git, walk), cache, ranking       |
