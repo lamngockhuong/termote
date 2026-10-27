@@ -19,6 +19,13 @@ import { canStartAgent } from '../utils/agent-start'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { AgentStatusBadge } from './agent-status-badge'
 import { ChatMarkdownContext, ChatMessage, chatSide } from './chat-message'
+import {
+  chatItems,
+  hasPending,
+  type RunMode,
+  type RunState,
+  toolRunRows,
+} from './chat-tool-run'
 import { OpenTerminalButton } from './open-terminal-button'
 import { PromptCard } from './prompt-card'
 import { StartAgentPanel } from './start-agent-panel'
@@ -159,6 +166,11 @@ function AgentChat({
   atBottomRef.current = atBottom
   const [unseen, setUnseen] = useState(false)
   const lastId = t.entries[t.entries.length - 1]?.id
+  // What the reader opened or folded of each run, and the runs that were
+  // live on screen, by entry id
+  const [runModes, setRunModes] = useState<Record<string, RunMode>>({})
+  const heldRef = useRef(new Set<string>())
+  const tailsRef = useRef(new Map<string, string>())
 
   // Where the list was before older entries were put above it, so the entry
   // being read stays in place. fromServer: waiting for loadOlder's entries.
@@ -176,6 +188,9 @@ function AgentChat({
     setShown(RENDER_WINDOW)
     setAtBottom(true)
     setUnseen(false)
+    setRunModes({})
+    heldRef.current = new Set()
+    tailsRef.current = new Map()
     atBottomRef.current = true
     anchorRef.current = null
   }, [t.sessionId])
@@ -291,6 +306,23 @@ function AgentChat({
 
   const visible = t.entries.slice(hidden)
   const layout = chatLayout(visible)
+  // Runs are found over every entry held, so the one at the top keeps its
+  // place as earlier entries are shown
+  const items = chatItems(t.entries)
+  const runs: RunState = {
+    modes: runModes,
+    held: heldRef.current,
+    tails: tailsRef.current,
+    follow: atBottom,
+    setMode: (ids, mode) =>
+      setRunModes((m) => ({
+        ...m,
+        ...Object.fromEntries(ids.map((id) => [id, mode])),
+      })),
+  }
+  // A call left without a result (an interrupted one) keeps nothing open
+  // once the agent says it is done.
+  const settled = status === 'idle' || status === 'done'
   // A split tab (herdr) names the pane too.
   const paneLabel =
     session.panes && session.panes.length > 1
@@ -329,14 +361,35 @@ function AgentChat({
             {visible.length === 0 && (
               <p className="text-center text-fg-muted">No messages yet.</p>
             )}
-            {visible.map((e, i) => (
-              <ChatMessage
-                key={e.id}
-                entry={e}
-                showTime={layout[i].showTime}
-                joinsNext={layout[i].joinsNext}
-              />
-            ))}
+            {items.flatMap((item, k) => {
+              if (item.kind === 'entry') {
+                if (item.index < hidden) return []
+                const e = t.entries[item.index]
+                const l = layout[item.index - hidden]
+                return [
+                  <ChatMessage
+                    key={e.id}
+                    entry={e}
+                    showTime={l.showTime}
+                    joinsNext={l.joinsNext}
+                  />,
+                ]
+              }
+              if (item.end <= hidden) return []
+              const start = Math.max(item.start, hidden)
+              const run = t.entries.slice(start, item.end)
+              // The run the agent is in: open on its newest steps
+              const live =
+                k === items.length - 1 &&
+                (status === 'working' || (!settled && hasPending(run)))
+              return toolRunRows(
+                run,
+                layout.slice(start - hidden, item.end - hidden),
+                live,
+                runs,
+                t.entries[item.start].id,
+              )
+            })}
           </div>
         </ChatMarkdownContext.Provider>
       </section>

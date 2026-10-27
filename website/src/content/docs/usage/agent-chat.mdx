@@ -24,7 +24,10 @@ and one difference for dialogs (see [Codex](#codex)).
 ## What the Chat View Shows
 
 - The whole conversation of the current session, read from the transcript Claude Code writes to
-  disk: your messages, replies rendered as markdown, and tool calls collapsed with their result.
+  disk: your messages, replies rendered as markdown, and tool calls. A command shows as `$ command`
+  with its output folded behind `Output · N lines` (opened, the last 10 lines; a failed one is open
+  already). Three steps or more in a row fold into one line such as `3 commands, 2 reads`; the steps
+  the agent is running now stay open on the newest ones.
 - New turns within about two seconds. After `/clear` or a resume, the view switches to the new
   session without mixing the two.
 - Code blocks framed with their language, highlighted, with a Copy button. A ` ```mermaid ` block

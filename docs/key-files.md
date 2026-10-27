@@ -53,7 +53,8 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/utils/terminal-bridge.ts`                | Drives the xterm.js terminal (key mapping, clipboard paste)    |
 | `pwa/src/components/chat-view.tsx`                | Chat view of a pane running Claude Code (lazy-loaded)          |
 | `pwa/src/components/chat-composer.tsx`            | Chat view message box                                          |
-| `pwa/src/components/chat-tool-card.tsx`           | Chat view tool call: IN/OUT, an edit's diff, shown capped      |
+| `pwa/src/components/chat-tool-card.tsx`           | Chat view tool call: `$` command, folded output, edit diff     |
+| `pwa/src/components/chat-tool-run.tsx`            | Chat view: steps in a row folded into one summary line         |
 | `pwa/src/utils/line-diff.ts`                      | Line diff of an edit's old and new text, its summary           |
 | `pwa/src/components/chat-attachments.tsx`         | Images attached to the next Chat message, above the box        |
 | `pwa/src/chat-agents.ts`                          | Agents with a Chat view (claude, codex) and with input         |

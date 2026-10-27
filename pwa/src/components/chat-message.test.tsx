@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render as renderPlain,
   screen,
@@ -177,7 +178,7 @@ describe('ChatMessage', () => {
     expect(container.querySelector('time')).toBeNull()
   })
 
-  it('a Bash call shows its description, the command in and the result out', () => {
+  it('a Bash call shows its description and command, its result folded', () => {
     const { container } = render(
       <ChatMessage
         entry={{
@@ -203,9 +204,16 @@ describe('ChatMessage', () => {
     )
     expect(screen.getByText('Bash')).toBeInTheDocument()
     expect(screen.getByText('Run the tests')).toBeInTheDocument()
-    expect(screen.getByText('IN')).toBeInTheDocument()
+    expect(screen.getByText('$')).toBeInTheDocument()
     expect(screen.getByText(/npm run lint/).tagName).toBe('PRE')
+    // The result waits behind its row
+    expect(screen.queryByText('ok')).toBeNull()
+    const fold = screen.getByRole('button', { name: /Output · 1 line$/ })
+    expect(fold).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(fold)
     expect(screen.getByText('ok').tagName).toBe('PRE')
+    fireEvent.click(screen.getByRole('button', { name: /Hide output/ }))
+    expect(screen.queryByText('ok')).toBeNull()
     expect(screen.getByText('(shortened)')).toBeInTheDocument()
     // The call without a result has a hollow dot, the finished one a green
     const dots = container.querySelectorAll('span.rounded-full')
@@ -214,8 +222,8 @@ describe('ChatMessage', () => {
     expect(screen.getByText('a.ts')).toBeInTheDocument()
   })
 
-  it('a long result opens with Show all and closes again', () => {
-    const result = Array.from({ length: 9 }, (_, i) => `line ${i}`).join('\n')
+  it('an opened long result shows its last lines, then all of them', () => {
+    const result = Array.from({ length: 14 }, (_, i) => `line ${i}`).join('\n')
     render(
       <ChatMessage
         entry={{
@@ -227,18 +235,109 @@ describe('ChatMessage', () => {
         }}
       />,
     )
+    fireEvent.click(screen.getByText('Output · 14 lines'))
     // Long lines wrap instead of scrolling the list sideways
-    const pre = screen.getByText(/line 8/)
+    const pre = screen.getByText(/line 13/)
     expect(pre).toHaveClass('whitespace-pre-wrap')
-    const box = pre.parentElement as HTMLElement
-    expect(box).toHaveClass('max-h-[9.6em]')
-    fireEvent.click(screen.getByText('Show all 9 lines'))
-    expect(box).not.toHaveClass('max-h-[9.6em]')
-    fireEvent.click(screen.getByText('Show less'))
-    expect(box).toHaveClass('max-h-[9.6em]')
+    expect(pre.textContent).not.toMatch(/line 3\n/)
+    expect(pre.textContent?.startsWith('line 4')).toBe(true)
+    fireEvent.click(screen.getByText('Show all 14 lines'))
+    expect(pre.textContent?.startsWith('line 0')).toBe(true)
+    fireEvent.click(screen.getByText('Show last 10 lines'))
+    expect(pre.textContent?.startsWith('line 4')).toBe(true)
   })
 
-  it('a short result that wraps taller than its cap gets Show all', () => {
+  it('a failed result is open at once', () => {
+    render(
+      <ChatMessage
+        entry={{
+          id: 't',
+          role: 'assistant',
+          parts: [
+            {
+              kind: 'tool',
+              tool: 'Bash',
+              toolId: '1',
+              result: 'exit 1',
+              isError: true,
+              detail: { command: 'false' },
+            },
+          ],
+        }}
+      />,
+    )
+    expect(screen.getByText('exit 1')).toHaveClass('text-danger')
+    expect(screen.getByRole('button', { name: /Hide output/ })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+  })
+
+  it('a command longer than three lines is cut until opened', () => {
+    render(
+      <ChatMessage
+        entry={{
+          id: 't',
+          role: 'assistant',
+          parts: [
+            {
+              kind: 'tool',
+              tool: 'Bash',
+              toolId: '1',
+              detail: { command: 'a\nb\nc\nd' },
+            },
+          ],
+        }}
+      />,
+    )
+    const box = screen.getByText(/a b c d/).parentElement as HTMLElement
+    expect(box).toHaveClass('max-h-[calc(4.8em+0.75rem)]')
+    fireEvent.click(screen.getByText('Show all 4 lines'))
+    expect(box).not.toHaveClass('max-h-[calc(4.8em+0.75rem)]')
+  })
+
+  it('a command that wraps over its cut once the list narrows gets Show all', () => {
+    let fire: (() => void) | undefined
+    const disconnect = vi.fn()
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(cb: () => void) {
+          fire = cb
+        }
+        observe = vi.fn()
+        disconnect = disconnect
+      },
+    )
+    const { unmount } = render(
+      <ChatMessage
+        entry={{
+          id: 't',
+          role: 'assistant',
+          parts: [
+            {
+              kind: 'tool',
+              tool: 'Bash',
+              toolId: '1',
+              detail: { command: 'x'.repeat(200) },
+            },
+          ],
+        }}
+      />,
+    )
+    expect(screen.queryByText('Show all')).toBeNull()
+    const spy = vi
+      .spyOn(HTMLElement.prototype, 'scrollHeight', 'get')
+      .mockReturnValue(500)
+    act(() => fire?.())
+    spy.mockRestore()
+    expect(screen.getByText('Show all')).toBeInTheDocument()
+    unmount()
+    expect(disconnect).toHaveBeenCalled()
+    vi.unstubAllGlobals()
+  })
+
+  it('a short command that wraps taller than its cap gets Show all', () => {
     const spy = vi
       .spyOn(HTMLElement.prototype, 'scrollHeight', 'get')
       .mockReturnValue(500)
@@ -252,7 +351,7 @@ describe('ChatMessage', () => {
               kind: 'tool',
               tool: 'mcp__plugin_playwright_playwright__browser_navigate',
               toolId: '1',
-              result: 'x'.repeat(2000),
+              detail: { command: 'x'.repeat(2000) },
             },
           ],
         }}

@@ -1,3 +1,4 @@
+import { ChevronRight } from 'lucide-react'
 import { type ReactNode, useLayoutEffect, useRef, useState } from 'react'
 import { EDIT_TOOLS } from '../hooks/use-agent-transcript'
 import type { TranscriptPart } from '../hooks/use-mux-api'
@@ -9,13 +10,18 @@ import {
 } from '../utils/line-diff'
 
 // A tool call of the Chat view, as a card: its name and what it is about,
-// then what it ran and returned (IN/OUT), or for an edit the lines it
-// changed. Each block stays a few lines tall until opened. Long lines wrap:
-// on a phone a block scrolling sideways would carry the whole list with it.
+// then the command it ran and, folded until asked for, what it returned; or
+// for an edit the lines it changed. Each block stays a few lines tall until
+// opened. Long lines wrap: on a phone a block scrolling sideways would carry
+// the whole list with it.
 
-// Lines a block shows before "Show all"
-const IO_LINES = 6
+// Lines a block shows before "Show all": a command only says what ran, its
+// output is a tap away
+const COMMAND_LINES = 3
 const DIFF_LINES = 12
+// Lines of an opened result shown first, from its end: where a command
+// says how it went
+const OUT_TAIL = 10
 
 const ROW: Record<DiffRow['kind'], string> = {
   ctx: '',
@@ -34,7 +40,8 @@ function basename(path: string) {
 }
 
 // A block cut to maxClass's height until opened: when it holds more than
-// lines, or once rendered taller (a long line wraps over several).
+// lines, or overflows the cut (a long line wraps over several). The cut is
+// on while closed, so the overflow can be measured against it.
 function Capped({
   lines,
   limit,
@@ -54,22 +61,27 @@ function Capped({
   // biome-ignore lint/correctness/useExhaustiveDependencies: measured again when the content changes
   useLayoutEffect(() => {
     const el = ref.current
-    if (el && !open) setTall(el.scrollHeight > el.clientHeight + 1)
+    if (!el || open) return
+    const measure = () => setTall(el.scrollHeight > el.clientHeight + 1)
+    measure()
+    // A narrower list (a phone turned, a panel opened) wraps a line more
+    // often: measured again, or what the cut hides would have no way out.
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
   }, [children, open])
   const capped = lines > limit || tall
   return (
     <>
-      <div
-        ref={ref}
-        className={`${className} ${capped && !open ? maxClass : ''}`}
-      >
+      <div ref={ref} className={`${className} ${open ? '' : maxClass}`}>
         {children}
       </div>
       {capped && (
         <button
           type="button"
           onClick={() => setOpen(!open)}
-          className="w-full border-t border-border px-2 py-1 text-left font-sans text-[12px] text-fg-muted hover:text-fg"
+          className="w-full border-t border-border px-2 py-1 text-left font-sans text-[12px] text-fg-muted hover:text-fg pointer-coarse:min-h-touch"
         >
           {open
             ? 'Show less'
@@ -82,32 +94,71 @@ function Capped({
   )
 }
 
-function IoRow({
-  label,
-  text,
-  danger,
-}: {
-  label: string
-  text: string
-  danger?: boolean
-}) {
+function CommandRow({ command }: { command: string }) {
+  return (
+    <Capped
+      lines={lineCount(command)}
+      limit={COMMAND_LINES}
+      // The lines and the block's own padding (py-1.5)
+      maxClass="max-h-[calc(4.8em+0.75rem)]"
+      className="overflow-hidden px-2 py-1.5 leading-[1.6]"
+    >
+      <pre className="whitespace-pre-wrap break-all">
+        <span className="select-none text-success">$ </span>
+        {command}
+      </pre>
+    </Capped>
+  )
+}
+
+const FOLD_ROW =
+  'flex flex-1 items-center gap-1.5 px-2 py-1 font-sans text-[12px] text-fg-muted tabular-nums hover:text-fg pointer-coarse:min-h-touch'
+
+// What a call returned, behind one row until opened; a failure opens at
+// once. Opened, it shows its last lines, and all of them on request.
+function OutputFold({ text, danger }: { text: string; danger?: boolean }) {
+  const [open, setOpen] = useState(!!danger)
+  const [all, setAll] = useState(false)
+  const lines = text.replace(/\n+$/, '').split('\n')
+  const shown = all ? lines : lines.slice(-OUT_TAIL)
   return (
     <div className="border-t border-border first:border-t-0">
-      <Capped
-        lines={lineCount(text)}
-        limit={IO_LINES}
-        maxClass="max-h-[9.6em]"
-        className="flex min-w-0 overflow-hidden leading-[1.6]"
-      >
-        <span className="w-10 shrink-0 select-none px-2 py-1.5 text-[11px] text-fg-subtle">
-          {label}
-        </span>
+      {open && (
         <pre
-          className={`min-w-0 flex-1 whitespace-pre-wrap break-all py-1.5 pr-2 ${danger ? 'text-danger' : ''}`}
+          className={`whitespace-pre-wrap break-all px-2 py-1.5 leading-[1.6] ${danger ? 'text-danger' : ''}`}
         >
-          {text}
+          {shown.join('\n')}
         </pre>
-      </Capped>
+      )}
+      <div className={`flex ${open ? 'border-t border-border' : ''}`}>
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+          className={FOLD_ROW}
+        >
+          <ChevronRight
+            size={14}
+            aria-hidden="true"
+            className={`shrink-0 transition-transform ${open ? 'rotate-90' : ''}`}
+          />
+          {open
+            ? 'Hide output'
+            : `Output · ${lines.length} ${lines.length === 1 ? 'line' : 'lines'}`}
+        </button>
+        {open && lines.length > OUT_TAIL && (
+          <button
+            type="button"
+            aria-expanded={all}
+            onClick={() => setAll(!all)}
+            className={`${FOLD_ROW} justify-center border-l border-border`}
+          >
+            {all
+              ? `Show last ${OUT_TAIL} lines`
+              : `Show all ${lines.length} lines`}
+          </button>
+        )}
+      </div>
     </div>
   )
 }
@@ -231,8 +282,8 @@ export function ToolCard({ part }: { part: TranscriptPart }) {
       )}
       {(command || out) && (
         <Frame>
-          {command && <IoRow label="IN" text={command} />}
-          {out && <IoRow label="OUT" text={out} danger={part.isError} />}
+          {command && <CommandRow command={command} />}
+          {out && <OutputFold text={out} danger={part.isError} />}
         </Frame>
       )}
       {clipped && (
