@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render as renderPlain,
   screen,
@@ -293,6 +294,47 @@ describe('ChatMessage', () => {
     expect(box).toHaveClass('max-h-[calc(4.8em+0.75rem)]')
     fireEvent.click(screen.getByText('Show all 4 lines'))
     expect(box).not.toHaveClass('max-h-[calc(4.8em+0.75rem)]')
+  })
+
+  it('a command that wraps over its cut once the list narrows gets Show all', () => {
+    let fire: (() => void) | undefined
+    const disconnect = vi.fn()
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(cb: () => void) {
+          fire = cb
+        }
+        observe = vi.fn()
+        disconnect = disconnect
+      },
+    )
+    const { unmount } = render(
+      <ChatMessage
+        entry={{
+          id: 't',
+          role: 'assistant',
+          parts: [
+            {
+              kind: 'tool',
+              tool: 'Bash',
+              toolId: '1',
+              detail: { command: 'x'.repeat(200) },
+            },
+          ],
+        }}
+      />,
+    )
+    expect(screen.queryByText('Show all')).toBeNull()
+    const spy = vi
+      .spyOn(HTMLElement.prototype, 'scrollHeight', 'get')
+      .mockReturnValue(500)
+    act(() => fire?.())
+    spy.mockRestore()
+    expect(screen.getByText('Show all')).toBeInTheDocument()
+    unmount()
+    expect(disconnect).toHaveBeenCalled()
+    vi.unstubAllGlobals()
   })
 
   it('a short command that wraps taller than its cap gets Show all', () => {

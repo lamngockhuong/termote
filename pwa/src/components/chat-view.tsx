@@ -387,6 +387,7 @@ function AgentChat({
                 layout.slice(start - hidden, item.end - hidden),
                 live,
                 runs,
+                t.entries[item.start].id,
               )
             })}
           </div>

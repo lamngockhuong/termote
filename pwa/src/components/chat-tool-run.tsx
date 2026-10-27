@@ -140,12 +140,14 @@ const HEADER =
   'flex w-full min-w-0 items-center gap-1.5 text-left text-[12px] text-fg-muted hover:text-fg pointer-coarse:min-h-touch'
 
 // The rows of a run: its header, then the entries it shows. live: the
-// agent is in this run now.
+// agent is in this run now. runKey: the id of the run's first entry in the
+// whole list, which holds while the list's window cuts the run's top.
 export function toolRunRows(
   entries: TranscriptEntry[],
   layout: Layout[],
   live: boolean,
   state: RunState,
+  runKey = entries[0].id,
 ): ReactElement[] {
   const tools = toolsOf(entries)
   // Cut by the list's window down to thinking only: no run left to say
@@ -169,11 +171,14 @@ export function toolRunRows(
   if (chosen === 'open' || tail) {
     let start = 0
     if (tail) {
-      const kept = state.follow
-        ? -1
-        : ids.indexOf(state.tails.get(ids[0]) ?? '')
-      start = kept >= 0 ? kept : Math.max(0, entries.length - LIVE_TAIL)
-      state.tails.set(ids[0], ids[start])
+      const kept = state.tails.get(runKey)
+      // Read above the bottom, the tail starts where it did; once the window
+      // has moved past that entry, at the top of what is left
+      start =
+        state.follow || kept === undefined
+          ? Math.max(0, entries.length - LIVE_TAIL)
+          : Math.max(0, ids.indexOf(kept))
+      state.tails.set(runKey, ids[start])
     }
     const earlier = toolsOf(entries.slice(0, start)).length
     const label =
@@ -184,7 +189,7 @@ export function toolRunRows(
           : `Earlier steps · ${summary}`
     return [
       <div
-        key={`run:${ids[0]}`}
+        key={`run:${runKey}`}
         data-run
         data-role="assistant"
         className="flex flex-col gap-3"
@@ -222,7 +227,7 @@ export function toolRunRows(
   const last = tools[tools.length - 1]
   return [
     <div
-      key={`run:${ids[0]}`}
+      key={`run:${runKey}`}
       data-run
       data-role="assistant"
       className="flex flex-col gap-3"

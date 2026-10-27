@@ -309,6 +309,30 @@ describe('ChatView runs of steps', () => {
     expect(screen.queryByText('c3')).toBeNull()
   })
 
+  it('read above, a live run longer than the window keeps its tail as the window moves', () => {
+    const steps = (n: number) =>
+      Array.from({ length: n }, (_, i) => bash(`cmd${i}`, 'r'))
+    set({
+      entries: [entry(0), ...steps(RENDER_WINDOW + 10)],
+      status: 'working',
+    })
+    const { rerender } = render(<ChatView {...props} />)
+    const last = RENDER_WINDOW + 9
+    expect(screen.getByText(`cmd${last - 5}`)).toBeInTheDocument()
+    expect(screen.queryByText(`cmd${last - 6}`)).toBeNull()
+    const list = screen.getByRole('region', { name: 'Conversation' })
+    layout(list, { scrollTop: 100 })
+    fireEvent.scroll(list)
+    // Each new step moves the window down one entry
+    set({
+      entries: [entry(0), ...steps(RENDER_WINDOW + 12)],
+      status: 'working',
+    })
+    rerender(<ChatView {...props} />)
+    expect(screen.getByText(`cmd${last - 5}`)).toBeInTheDocument()
+    expect(screen.getByText(`cmd${last + 2}`)).toBeInTheDocument()
+  })
+
   it('a run cut by the window down to its thinking shows that as it is', () => {
     const think: TranscriptEntry = {
       id: 'th',

@@ -61,7 +61,15 @@ function Capped({
   // biome-ignore lint/correctness/useExhaustiveDependencies: measured again when the content changes
   useLayoutEffect(() => {
     const el = ref.current
-    if (el && !open) setTall(el.scrollHeight > el.clientHeight + 1)
+    if (!el || open) return
+    const measure = () => setTall(el.scrollHeight > el.clientHeight + 1)
+    measure()
+    // A narrower list (a phone turned, a panel opened) wraps a line more
+    // often: measured again, or what the cut hides would have no way out.
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
   }, [children, open])
   const capped = lines > limit || tall
   return (
