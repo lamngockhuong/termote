@@ -34,7 +34,7 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 - [ ] Dịch vụ được đăng ký (systemd user unit trên Linux có systemd người dùng, tiến trình tách
       rời + file PID trên WSL2 không có systemd, launchd agent trên macOS)
 - [ ] Tiến trình đang chạy: `pgrep -f "termote serve"`
-- [ ] PWA truy cập được tại <http://localhost:7680>
+- [ ] PWA truy cập được tại <http://127.0.0.1:7680>
 - [ ] `termote stop` rồi đăng nhập lại (hoặc `loginctl enable-linger`/khởi động lại máy) làm nó chạy lại
 
 ### Chế Độ Native (Windows)
@@ -42,12 +42,12 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 - [ ] `termote start` hoàn thành không lỗi
 - [ ] Scheduled Task `Termote` được đăng ký, chạy ẩn qua `wscript` (không hỏi quyền quản trị)
 - [ ] `psmux` + termote đang chạy
-- [ ] PWA truy cập được tại <http://localhost:7690>
+- [ ] PWA truy cập được tại <http://127.0.0.1:7690>
 
 ### Chế Độ Native + Herdr (Linux)
 
 - [ ] `termote start --mux herdr` hoàn thành không lỗi (có herdr trong `PATH`)
-- [ ] `curl localhost:7680/api/mux/health` trả về `"backend":"herdr"`
+- [ ] `curl 127.0.0.1:7680/api/mux/health` trả về `"backend":"herdr"`
 - [ ] Sau khi khởi động lại máy (hoặc `herdr server stop`), lúc Herdr chưa chạy: mở PWA ở một tab quyền full;
       sau khoảng 15 s (thời gian chờ đầu) cộng một chu kỳ poll 5 s, các workspace hiện lại và không có tab thừa,
       `herdr status server` báo running, `termote logs all` có `herdr-autostart.log`; `termote stop` không tắt
@@ -75,7 +75,7 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 ### Chế Độ Native + Herdr (Windows)
 
 - [ ] `termote start --mux herdr` hoàn thành không lỗi (có `herdr.exe` trong `PATH`)
-- [ ] `curl localhost:7690/api/mux/health` trả về `"backend":"herdr"` (kết nối tới `\\.\pipe\` cộng đường dẫn `%APPDATA%\herdr\herdr.sock`)
+- [ ] `curl 127.0.0.1:7690/api/mux/health` trả về `"backend":"herdr"` (kết nối tới `\\.\pipe\` cộng đường dẫn `%APPDATA%\herdr\herdr.sock`)
 - [ ] Lúc Herdr chưa chạy, mở PWA ở một tab quyền full thì `herdr server` lên mà không mở cửa sổ dòng lệnh nào; nó vẫn sống sau `schtasks /End /tn Termote` và `termote stop` (cờ tạo tiến trình chưa được kiểm trên máy Windows thật)
 - [ ] Khi có cả psmux và Herdr, lần `termote start` đầu tiên nhận ra Herdr và hỏi chọn (không có terminal để hỏi thì chọn psmux)
 - [ ] Stream, gõ phím, dán, cuộn và huy hiệu trạng thái agent chạy như trên Linux
@@ -90,7 +90,7 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 
 - [ ] `termote start --mux zellij` hoàn thành không lỗi (có zellij 0.45.0+ trong `PATH`); trên
       Windows lệnh bị từ chối trước khi lưu bất cứ gì
-- [ ] `curl localhost:7680/api/mux/health` trả về `"backend":"zellij"`
+- [ ] `curl 127.0.0.1:7680/api/mux/health` trả về `"backend":"zellij"`
 - [ ] PWA liệt kê đúng các phiên/tab/pane như `zellij list-sessions` và thanh tab của Zellij
       (không có pane plugin, không có phiên EXITED)
 - [ ] Gõ vào một pane từ PWA thì chữ đến đúng pane đó
@@ -109,7 +109,7 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 
 - [ ] `termote container up` hoàn thành không lỗi
 - [ ] Container đang chạy: `docker ps | grep termote` (hoặc `podman ps`)
-- [ ] PWA truy cập được tại <http://localhost:7680>
+- [ ] PWA truy cập được tại <http://127.0.0.1:7680>
 - [ ] Lần `container up` đầu tiên không có `--mux`: có terminal thì hỏi tmux/herdr/zellij, không có thì dùng tmux
 - [ ] `container up --mux herdr`: PWA hiện workspace `main`; gõ phím, đổi kích thước, tạo/đổi tên/đóng tab đều chạy
 - [ ] `container up --mux zellij`: PWA hiện phiên `main`; gõ phím, tạo/đổi tên/đóng tab đều chạy
@@ -479,7 +479,7 @@ Mở bằng nút lưới trên sidebar (máy tính) hoặc mục "Agent overview
 
 ### Session Qua API
 
-- [ ] Liệt kê session qua API: `curl localhost:7680/api/mux/snapshot`
+- [ ] Liệt kê session qua API: `curl 127.0.0.1:7680/api/mux/snapshot`
 - [ ] Chuyển session qua API hoạt động
 - [ ] `POST /api/mux/tabs/<id>/move {"index":0}` trả `{ok, id}` (trên tmux là id mới);
       `{"index":99}` → 400 `invalid_index`; di chuyển group trên tmux → 501 `unsupported`
@@ -1180,41 +1180,41 @@ Test trên thiết bị di động thật:
 
 ```bash
 # Kiểm tra health
-curl http://localhost:7680/api/mux/health
+curl http://127.0.0.1:7680/api/mux/health
 
 # Snapshot (group → tab → pane)
-curl http://localhost:7680/api/mux/snapshot
+curl http://127.0.0.1:7680/api/mux/snapshot
 
 # Tạo tab
-curl -X POST http://localhost:7680/api/mux/tabs \
+curl -X POST http://127.0.0.1:7680/api/mux/tabs \
   -H 'Content-Type: application/json' \
   -d '{"groupId":"main","name":"test"}'
 
 # Chọn tab
 # Mọi request ghi đều cần Content-Type JSON, kể cả khi không có body (nếu không sẽ nhận 415)
-curl -X POST http://localhost:7680/api/mux/tabs/<id>/select \
+curl -X POST http://127.0.0.1:7680/api/mux/tabs/<id>/select \
   -H 'Content-Type: application/json'
 
 # Đổi tên tab
-curl -X PATCH http://localhost:7680/api/mux/tabs/<id> \
+curl -X PATCH http://127.0.0.1:7680/api/mux/tabs/<id> \
   -H 'Content-Type: application/json' \
   -d '{"name":"newname"}'
 
 # Đóng tab
-curl -X DELETE http://localhost:7680/api/mux/tabs/<id> \
+curl -X DELETE http://127.0.0.1:7680/api/mux/tabs/<id> \
   -H 'Content-Type: application/json'
 
 # Đóng một pane (chỉ Herdr)
-curl -X DELETE http://localhost:7680/api/mux/panes/<id> \
+curl -X DELETE http://127.0.0.1:7680/api/mux/panes/<id> \
   -H 'Content-Type: application/json'
 
 # Gửi phím tới một pane
-curl -X POST http://localhost:7680/api/mux/panes/<id>/keys \
+curl -X POST http://127.0.0.1:7680/api/mux/panes/<id>/keys \
   -H 'Content-Type: application/json' \
   -d '{"keys":"ls\n"}'
 
 # Lấy token cho luồng terminal
-curl http://localhost:7680/api/mux/stream-token
+curl http://127.0.0.1:7680/api/mux/stream-token
 ```
 
 - [ ] Endpoint health trả về 200 kèm `apiVersion` và `backend`

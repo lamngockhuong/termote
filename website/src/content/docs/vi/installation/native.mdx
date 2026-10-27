@@ -89,8 +89,13 @@ Cho phép: **Icon Copy** → di chuyển → **Space** → chọn → **Enter** 
   </TabItem>
 </Tabs>
 
-Sau đó mở http://localhost:7680 (Windows: http://localhost:7690). Cách cố định phiên bản và vị trí các file nằm ở
+Sau đó mở http://127.0.0.1:7680 (Windows: http://127.0.0.1:7690). Cách cố định phiên bản và vị trí các file nằm ở
 trang [Bắt đầu](/vi/getting-started/).
+
+Hãy dùng `127.0.0.1` thay cho `localhost`. Với `localhost`, trình duyệt thử địa chỉ IPv6 `::1` trước, nhưng termote
+không lắng nghe ở đó. Nơi lần thử này bị treo thay vì báo lỗi ngay (Windows với WSL đặt `networkingMode=mirrored`), mỗi kết nối
+mới đều phải chờ nó, khoảng 300 ms cho mỗi lần chuyển tab. Trang mở qua `localhost` sẽ hiện một thông báo kèm liên kết
+tới đúng trang đó ở `127.0.0.1`; app đã cài phải được cài lại từ địa chỉ mới.
 
 ## `termote start` làm những gì
 
@@ -390,5 +395,5 @@ termote logs server     # last server log lines
 API nằm sau phần đăng nhập (`termote show-password` in ra mật khẩu):
 
 ```bash
-curl -u admin:<password> http://localhost:7680/api/mux/health   # or the name set with --user
+curl -u admin:<password> http://127.0.0.1:7680/api/mux/health   # or the name set with --user
 ```

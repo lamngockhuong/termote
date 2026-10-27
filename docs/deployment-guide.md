@@ -477,7 +477,7 @@ make health
 # Or manually:
 termote status
 termote status --json   # one JSON object for scripts (no password); exit 1 when not running
-curl http://localhost:7680/api/mux/health
+curl http://127.0.0.1:7680/api/mux/health
 ```
 
 ## Links and the Herdr Plugin
@@ -555,7 +555,7 @@ termote container up --port 7690
 docker exec -it termote /bin/sh
 # Inside container:
 ps aux                      # Check processes (termote, tmux)
-curl localhost:7680/api/mux/health  # Test API
+curl 127.0.0.1:7680/api/mux/health  # Test API
 ```
 
 #### Restart container
@@ -654,7 +654,7 @@ tmux or psmux, still reports that no backend was found; run `termote start --mux
 which herdr
 
 # Check the server picked the right backend
-curl http://localhost:7680/api/mux/health   # {"backend":"herdr",...}
+curl http://127.0.0.1:7680/api/mux/health   # {"backend":"herdr",...}
 ```
 
 #### Zellij backend issues
@@ -691,7 +691,7 @@ zellij list-sessions
 2. Confirm the server answers at all:
 
    ```bash
-   curl -v http://localhost:7680/  # Should return HTML
+   curl -v http://127.0.0.1:7680/  # Should return HTML
    ```
 
 3. A rejected Host header answers 403 with the exact `--allow-host <name>` to add; check the
@@ -701,7 +701,7 @@ zellij list-sessions
 
 ```bash
 # Check if auth is enabled
-curl -v http://localhost:7680/
+curl -v http://127.0.0.1:7680/
 
 # 401 = auth enabled, need credentials
 # 200 = auth disabled or credentials correct
@@ -746,13 +746,13 @@ termote container up --build
 
 ```bash
 # Health check
-curl http://localhost:7680/api/mux/health
+curl http://127.0.0.1:7680/api/mux/health
 
 # Snapshot (groups/tabs/panes)
-curl http://localhost:7680/api/mux/snapshot
+curl http://127.0.0.1:7680/api/mux/snapshot
 
 # With auth
-curl -u admin:password http://localhost:7680/api/mux/health   # or the name set with --user
+curl -u admin:password http://127.0.0.1:7680/api/mux/health   # or the name set with --user
 ```
 
 ## Updating

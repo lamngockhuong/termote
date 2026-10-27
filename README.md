@@ -139,7 +139,7 @@ irm https://termote.ohnice.app/install.ps1 | iex
 termote start
 ```
 
-The installer needs only `curl`, `tar` and `sha256sum`/`shasum` (PowerShell on Windows), no sudo or admin rights. It verifies the checksum of the archive, installs the `termote` command, and starts nothing. `termote start` saves the options, creates a password the first time (printed once; `termote show-password` shows it again), registers the service and starts it. Open `http://localhost:7680` (Windows: `http://localhost:7690`).
+The installer needs only `curl`, `tar` and `sha256sum`/`shasum` (PowerShell on Windows), no sudo or admin rights. It verifies the checksum of the archive, installs the `termote` command, and starts nothing. `termote start` saves the options, creates a password the first time (printed once; `termote show-password` shows it again), registers the service and starts it. Open `http://127.0.0.1:7680` (Windows: `http://127.0.0.1:7690`).
 
 A terminal backend must be installed first: tmux (`sudo apt install tmux`, `brew install tmux`), psmux on Windows (`winget install psmux`), or [Herdr](https://termote.ohnice.app/installation/native/). The first `start` detects which one to use. [Zellij](https://zellij.dev/documentation/installation) 0.45.0 or later (Linux, macOS) is never detected: choose it with `--mux zellij`.
 
