@@ -325,7 +325,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `/Users/a` sets `.`, and a path that only matches without case keeps the home's own spelling;
   `container up` first spells each existing name of `--workspace` as its directory lists it
   (`diskSpelling`), since a runtime's VM shares `/Users` and compares names with case), never with `reveal=1` (`requireFilesRead`), `files/find` ignores `fresh=1` and
-  `ignored=1`, and `files/search` searches exactly that tracked list and ignores `fresh=1`. Tree, content, raw and diff serve a view-only client only the paths of the root's
+  `ignored=1`, and `files/search` searches exactly that tracked list and ignores `fresh=1`. Tree, content, raw and diff (and `files/tree`'s `dir`, the pane's directory) serve a view-only client only the paths of the root's
   tracked list (`git ls-files -co --exclude-standard`, Find's 30 s cache: a new file shows up to
   30 s late) and the directories above them, by the path and by where its symlinks lead (a diff or
   a version from git status: where it leads only, so a deleted file's diff shows); names match
@@ -489,7 +489,13 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   the same idle agent shows nothing but one of the states this request pasted; otherwise 409
   `partial_paste` and nothing is touched.
   Markdown images in the Chat view never load (shown as links), and raw HTML is not rendered;
-  its code blocks and Mermaid diagrams use the preview's (see Mermaid diagrams).
+  its code blocks and Mermaid diagrams use the preview's (see Mermaid diagrams). A file path in
+  it (a file tool card's input, inline code naming a file, a relative link) opens on a click
+  only in the pane's Files view, through the files routes like any other open; a path outside
+  the pane's root, or one whose `..` leaves it, is never requested, and none is a link
+  without `caps.files`. A relative path starts from the pane's directory: `files/tree` names it
+  (`dir`, relative to the root, only when under it), and a view-only client gets `dir` only when
+  its tracked list holds that directory.
   A tool call carries `detail` for its card: the model's description, a Bash/Codex command whole
   (8 KiB) and an Edit/MultiEdit/Write's old and new text (16 KiB per call); the edits of a file
   `isSensitive` names are left out (`hidden`), as its diff is in Changes. A view-only client also

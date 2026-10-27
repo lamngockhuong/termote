@@ -12,12 +12,15 @@ import { agentLabel, chatInputAgent } from '../chat-agents'
 import { useAgentPrompt } from '../hooks/use-agent-prompt'
 import { useAgentTranscript } from '../hooks/use-agent-transcript'
 import { useDomSelection } from '../hooks/use-dom-selection'
+import { FOLLOW_NOTICES, followPathInFiles } from '../hooks/use-files'
 import type { TranscriptEntry } from '../hooks/use-mux-api'
 import type { StartRecord } from '../hooks/use-start-agent'
 import { toAgentStatus } from '../types/session'
 import { canStartAgent } from '../utils/agent-start'
 import { visibleUnsafe } from '../utils/unsafe-chars'
+import { FILES_VIEW_ID } from '../view-ids'
 import { AgentStatusBadge } from './agent-status-badge'
+import { ChatFileLinkContext } from './chat-file-link'
 import { ChatMarkdownContext, ChatMessage, chatSide } from './chat-message'
 import {
   chatItems,
@@ -133,6 +136,7 @@ function StartedNotice({
 }
 
 function AgentChat({
+  mux,
   session,
   showView,
   readOnly,
@@ -159,6 +163,21 @@ function AgentChat({
   const markdown = useMemo(
     () => ({ scrollRoot: () => listRef.current, notify }),
     [notify],
+  )
+  // A path the agent wrote, opened in the Files view; none without one
+  const paneId = session.paneId ?? ''
+  const openFile = useMemo(
+    () =>
+      mux.caps.files && paneId
+        ? async (path: string, line?: number) => {
+            const result = await followPathInFiles(paneId, path, line)
+            if (result === 'opened') showView(FILES_VIEW_ID)
+            else if (result === 'outside')
+              notify("This file is outside the pane's folder")
+            else if (FOLLOW_NOTICES[result]) notify(FOLLOW_NOTICES[result])
+          }
+        : undefined,
+    [mux.caps.files, paneId, showView, notify],
   )
   const [shown, setShown] = useState(RENDER_WINDOW)
   const [atBottom, setAtBottom] = useState(true)
@@ -344,54 +363,56 @@ function AgentChat({
         aria-label="Conversation"
         className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-3"
       >
-        <ChatMarkdownContext.Provider value={markdown}>
-          <div ref={contentRef} className="space-y-3">
-            {(hidden > 0 || t.before) && (
-              <div className="flex justify-center">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={t.loadingOlder}
-                  onClick={showEarlier}
-                >
-                  {t.loadingOlder ? 'Loading…' : 'Show earlier messages'}
-                </Button>
-              </div>
-            )}
-            {visible.length === 0 && (
-              <p className="text-center text-fg-muted">No messages yet.</p>
-            )}
-            {items.flatMap((item, k) => {
-              if (item.kind === 'entry') {
-                if (item.index < hidden) return []
-                const e = t.entries[item.index]
-                const l = layout[item.index - hidden]
-                return [
-                  <ChatMessage
-                    key={e.id}
-                    entry={e}
-                    showTime={l.showTime}
-                    joinsNext={l.joinsNext}
-                  />,
-                ]
-              }
-              if (item.end <= hidden) return []
-              const start = Math.max(item.start, hidden)
-              const run = t.entries.slice(start, item.end)
-              // The run the agent is in: open on its newest steps
-              const live =
-                k === items.length - 1 &&
-                (status === 'working' || (!settled && hasPending(run)))
-              return toolRunRows(
-                run,
-                layout.slice(start - hidden, item.end - hidden),
-                live,
-                runs,
-                t.entries[item.start].id,
-              )
-            })}
-          </div>
-        </ChatMarkdownContext.Provider>
+        <ChatFileLinkContext.Provider value={openFile}>
+          <ChatMarkdownContext.Provider value={markdown}>
+            <div ref={contentRef} className="space-y-3">
+              {(hidden > 0 || t.before) && (
+                <div className="flex justify-center">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={t.loadingOlder}
+                    onClick={showEarlier}
+                  >
+                    {t.loadingOlder ? 'Loading…' : 'Show earlier messages'}
+                  </Button>
+                </div>
+              )}
+              {visible.length === 0 && (
+                <p className="text-center text-fg-muted">No messages yet.</p>
+              )}
+              {items.flatMap((item, k) => {
+                if (item.kind === 'entry') {
+                  if (item.index < hidden) return []
+                  const e = t.entries[item.index]
+                  const l = layout[item.index - hidden]
+                  return [
+                    <ChatMessage
+                      key={e.id}
+                      entry={e}
+                      showTime={l.showTime}
+                      joinsNext={l.joinsNext}
+                    />,
+                  ]
+                }
+                if (item.end <= hidden) return []
+                const start = Math.max(item.start, hidden)
+                const run = t.entries.slice(start, item.end)
+                // The run the agent is in: open on its newest steps
+                const live =
+                  k === items.length - 1 &&
+                  (status === 'working' || (!settled && hasPending(run)))
+                return toolRunRows(
+                  run,
+                  layout.slice(start - hidden, item.end - hidden),
+                  live,
+                  runs,
+                  t.entries[item.start].id,
+                )
+              })}
+            </div>
+          </ChatMarkdownContext.Provider>
+        </ChatFileLinkContext.Provider>
       </section>
       {readOnly && p.prompt && (
         <PromptCard

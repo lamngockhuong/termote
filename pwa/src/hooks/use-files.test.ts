@@ -11,6 +11,7 @@ import {
   fileRenamed,
   filesError,
   followInFiles,
+  followPathInFiles,
   hasDirtyDraftAt,
   hydrateDrafts,
   isDraftDirty,
@@ -438,6 +439,95 @@ describe('following links', () => {
     await act(() => followInFiles('%1', { path: 'docs/guide.md' }))
     expect(result.current.active?.path).toBe('docs/guide.md')
     expect(result.current.active?.history).toEqual([])
+  })
+
+  it('followPathInFiles opens a path from the root at its line', async () => {
+    const { result } = renderHook(() => useFiles('%1'))
+    await act(async () => {
+      expect(await followPathInFiles('%1', './docs/guide.md', 7)).toBe('opened')
+    })
+    expect(result.current.active).toMatchObject({
+      path: 'docs/guide.md',
+      line: 7,
+    })
+  })
+
+  it('followPathInFiles reads the root for an absolute path', async () => {
+    const { result } = renderHook(() => useFiles('%1'))
+    await act(async () => {
+      expect(await followPathInFiles('%1', '/r/docs/guide.md')).toBe('opened')
+    })
+    expect(mockTree).toHaveBeenCalledWith('%1', '')
+    expect(result.current.active?.path).toBe('docs/guide.md')
+  })
+
+  // The pane is in docs: the tree names it
+  const inDocs = () => {
+    const plain = mockTree.getMockImplementation()
+    mockTree.mockImplementation(async (...a: unknown[]) => ({
+      ...(await plain?.(...a)),
+      dir: 'docs',
+    }))
+  }
+
+  it('followPathInFiles takes a relative path from the pane directory', async () => {
+    inDocs()
+    const { result } = renderHook(() => useFiles('%1'))
+    await act(async () => {
+      expect(await followPathInFiles('%1', 'img/a.png')).toBe('opened')
+    })
+    expect(result.current.active?.path).toBe('docs/img/a.png')
+    await act(() => followPathInFiles('%1', '../README.md'))
+    expect(result.current.active?.path).toBe('README.md')
+  })
+
+  it('followPathInFiles falls back to the root for a path from the top', async () => {
+    inDocs()
+    const { result } = renderHook(() => useFiles('%1'))
+    await act(async () => {
+      expect(await followPathInFiles('%1', 'docs/guide.md', 3)).toBe('opened')
+    })
+    expect(result.current.active).toMatchObject({
+      path: 'docs/guide.md',
+      line: 3,
+    })
+    let r = ''
+    await act(async () => {
+      r = await followPathInFiles('%1', 'nope.md')
+    })
+    expect(r).toBe('missing')
+    // Out of the root from the directory, and from the root too
+    await act(async () => {
+      r = await followPathInFiles('%1', '../../a.md')
+    })
+    expect(r).toBe('outside')
+  })
+
+  it('followPathInFiles reads the root again when the store has one', async () => {
+    const { result } = renderHook(() => useFiles('%1'))
+    act(() => result.current.load())
+    await waitFor(() => expect(result.current.root).toBe('/r'))
+    mockTree.mockClear()
+    await act(() => followPathInFiles('%1', '/r/docs/guide.md'))
+    expect(mockTree).toHaveBeenCalledWith('%1', '')
+    expect(result.current.active?.path).toBe('docs/guide.md')
+  })
+
+  it.each(['/elsewhere/a.md', '../a.md'])(
+    'followPathInFiles leaves %s alone',
+    async (path) => {
+      renderHook(() => useFiles('%1'))
+      let r = ''
+      await act(async () => {
+        r = await followPathInFiles('%1', path)
+      })
+      expect(r).toBe('outside')
+    },
+  )
+
+  it('followPathInFiles fails when the root cannot be read', async () => {
+    mockTree.mockRejectedValueOnce(new Error('offline'))
+    expect(await followPathInFiles('%1', '/r/a.md')).toBe('failed')
   })
 })
 

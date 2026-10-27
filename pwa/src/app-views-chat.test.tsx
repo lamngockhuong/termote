@@ -14,7 +14,8 @@ vi.mock('./components/chat-composer', () => ({
   ChatComposer: () => <textarea aria-label="Message" />,
 }))
 
-vi.mock('./hooks/use-agent-transcript', () => ({
+vi.mock('./hooks/use-agent-transcript', async (orig) => ({
+  ...(await orig<typeof import('./hooks/use-agent-transcript')>()),
   useAgentTranscript: () => ({
     entries: [
       {

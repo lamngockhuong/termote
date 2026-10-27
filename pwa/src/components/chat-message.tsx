@@ -9,21 +9,36 @@ import {
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { TranscriptEntry, TranscriptPart } from '../hooks/use-mux-api'
+import { fileRefFromHref, parseFileRef } from '../utils/chat-file-links'
 import { rehypeMermaidIndex } from '../utils/markdown-links'
 import { htmlAsText, safeUrl } from '../utils/markdown-safety'
 import { exportName } from '../utils/mermaid-export'
 import { CopyButton } from './chat-copy-button'
+import { FileRef } from './chat-file-link'
 import { ToolCard, toolDot } from './chat-tool-card'
 import { CodeFence } from './fenced-code'
 
 // One entry of an agent's transcript. Agent text is untrusted (a prompt
 // injection can write anything), so markdown is rendered without raw HTML,
 // links open only for http(s), and images never load: an image URL can carry
-// data out without a click.
+// data out without a click. A relative link, or inline code that names a
+// file, opens that file in the Files view, where the server checks it like
+// any other.
+
+// Inside a link: its inline code is not a link of its own
+const InLink = createContext(false)
 
 function MdLink({ href, children }: ComponentProps<'a'>) {
   const u = safeUrl(href)
-  if (!u) return <span>{children}</span>
+  if (!u) {
+    const file = fileRefFromHref(href)
+    if (!file) return <span>{children}</span>
+    return (
+      <FileRef path={file.path} line={file.line} className="inline">
+        <InLink.Provider value>{children}</InLink.Provider>
+      </FileRef>
+    )
+  }
   return (
     <a
       href={href}
@@ -33,15 +48,17 @@ function MdLink({ href, children }: ComponentProps<'a'>) {
       rel="noopener noreferrer"
       className="text-accent underline underline-offset-2"
     >
-      {children}
+      <InLink.Provider value>{children}</InLink.Provider>
     </a>
   )
 }
 
 function MdImage({ src, alt }: ComponentProps<'img'>) {
+  const inLink = useContext(InLink)
   const u = safeUrl(src)
   const label = `image: ${u ? u.host : alt || 'unavailable'}`
-  if (!u) return <span className="text-fg-muted">[{label}]</span>
+  // Inside a link, a link of its own would take the click too
+  if (!u || inLink) return <span className="text-fg-muted">[{label}]</span>
   return (
     <a
       href={u.href}
@@ -77,7 +94,20 @@ function MdPre({ node }: { node?: unknown }) {
   )
 }
 
-const MD_COMPONENTS = { a: MdLink, img: MdImage, pre: MdPre }
+// Inline code; a code block is MdPre's
+function MdCode({ children }: ComponentProps<'code'>) {
+  const inLink = useContext(InLink)
+  const file =
+    !inLink && typeof children === 'string' ? parseFileRef(children) : null
+  if (!file) return <code>{children}</code>
+  return (
+    <FileRef path={file.path} line={file.line} className="inline">
+      <code>{children}</code>
+    </FileRef>
+  )
+}
+
+const MD_COMPONENTS = { a: MdLink, img: MdImage, pre: MdPre, code: MdCode }
 
 export function MarkdownText({ text }: { text: string }) {
   return (

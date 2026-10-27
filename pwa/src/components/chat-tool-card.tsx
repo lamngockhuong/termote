@@ -8,6 +8,7 @@ import {
   diffSummary,
   parseUnifiedDiff,
 } from '../utils/line-diff'
+import { FileRef } from './chat-file-link'
 
 // A tool call of the Chat view, as a card: its name and what it is about,
 // then the command it ran and, folded until asked for, what it returned; or
@@ -32,6 +33,19 @@ const SIGN: Record<DiffRow['kind'], string> = { ctx: ' ', add: '+', del: '-' }
 
 function lineCount(text: string) {
   return text.replace(/\n$/, '').split('\n').length
+}
+
+// Tools whose input is the file they read or changed, opened in Files from
+// the card
+const FILE_TOOLS = new Set([...EDIT_TOOLS, 'Read', 'ViewImage'])
+
+// The file a call is about: a Codex move names both, the file is where it
+// went. None from an input the server shortened ("…"): the path is cut.
+function toolFile(part: TranscriptPart) {
+  const input = part.input
+  if (part.orphan || !input || !FILE_TOOLS.has(part.tool ?? '')) return
+  if (input.endsWith('…')) return
+  return input.split(' → ').pop()
 }
 
 function basename(path: string) {
@@ -230,6 +244,7 @@ export function ToolCard({ part }: { part: TranscriptPart }) {
   const hunks = edit ? editHunks(part) : null
   const command = d?.command
   const about = d?.description || part.input
+  const file = toolFile(part)
   const clipped = part.clipped || d?.clipped
   // An edit's result only repeats the file; shown when the edit failed
   const out = !hunks && (!edit || part.isError) ? part.result : undefined
@@ -243,12 +258,21 @@ export function ToolCard({ part }: { part: TranscriptPart }) {
           {name}
         </span>
         {edit && part.input ? (
-          <span
-            className="min-w-0 flex-1 truncate font-mono text-[12px] text-accent"
+          <FileRef
+            path={file}
             title={part.input}
+            className="min-w-0 flex-1 truncate font-mono text-[12px] text-accent"
           >
             {basename(part.input)}
-          </span>
+          </FileRef>
+        ) : file && !d?.description ? (
+          <FileRef
+            path={file}
+            className="min-w-0 flex-1 truncate font-mono text-[12px]"
+            plainClassName="text-fg-muted"
+          >
+            {part.input}
+          </FileRef>
         ) : (
           about && (
             <span

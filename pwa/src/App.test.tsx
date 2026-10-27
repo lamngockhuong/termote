@@ -3513,6 +3513,20 @@ describe('App views, view-only and deep links', () => {
     expect(decrease()).toBeInTheDocument()
   })
 
+  it('desktop: a panel view asked for from a view opens beside it', async () => {
+    render(<App views={PANEL_VIEWS} />)
+    await screen.findByRole('tablist', { name: 'View' })
+    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }))
+    // A file path opened from the Chat: Files in the side panel, the Chat stays
+    act(() => showViewFrom.current!('files'))
+    expect(screen.getByTestId('files-panel')).toBeInTheDocument()
+    expect(screen.getByTestId('chat-main')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Chat' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+  })
+
   it('mobile: drops the font size from the menu and pinches only the terminal', async () => {
     mockIsMobile.mockReturnValue(true)
     render(<App views={PANEL_VIEWS} />)

@@ -1041,6 +1041,9 @@ export interface FileEntry {
 export interface FilesTree {
   root: string
   isRepo: boolean
+  // The pane's directory under root ("/"-separated), absent at the root;
+  // absent from an older server
+  dir?: string
   path: string
   entries: FileEntry[]
   truncated: boolean

@@ -496,6 +496,8 @@ export default function App({
   // Views offered for this pane; one that stops being offered gives way to
   // the terminal.
   const [viewId, setViewId] = useState(TERMINAL_VIEW_ID)
+  // A view's content in the desktop side panel, next to the terminal
+  const [sidePanelId, setSidePanelId] = useState<string | null>(null)
   // The terminal is the way out of every view. tmux shares its current
   // window between clients, so the window is selected again first: another
   // device may have moved it while this one showed the chat.
@@ -509,9 +511,15 @@ export default function App({
       ) {
         selectTab(activeSession.id).catch(() => {})
       }
+      // A panel view on desktop opens in the side panel and the main view
+      // stays: the Chat a file path was opened from is still on screen
+      if (!isMobile && views.find((v) => v.id === id)?.placement) {
+        setSidePanelId(id)
+        return
+      }
       setViewId(id)
     },
-    [mux.caps.clientSideSelect, readOnly, activeSession.id],
+    [mux.caps.clientSideSelect, readOnly, activeSession.id, isMobile, views],
   )
   // Shows a tab and a view of it (the terminal unless named) for a view
   // that points elsewhere: a task's tab, the agent its output went to. The
@@ -571,8 +579,6 @@ export default function App({
   const currentView =
     switcherViews.find((v) => v.id === viewId) ?? switcherViews[0]
   const isTerminalView = currentView.id === TERMINAL_VIEW_ID
-  // A view's content in the desktop side panel, next to the terminal
-  const [sidePanelId, setSidePanelId] = useState<string | null>(null)
   // Each pane comes back on the view (and side panel) it was left on; one
   // never shown opens on the terminal. Before paint, so the previous pane's
   // view never flashes on the new one.

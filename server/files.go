@@ -416,8 +416,12 @@ type fileEntry struct {
 }
 
 type treeResponse struct {
-	Root      string      `json:"root"`
-	IsRepo    bool        `json:"isRepo"`
+	Root   string `json:"root"`
+	IsRepo bool   `json:"isRepo"`
+	// Dir is the pane's directory under Root ("/"-separated), absent at the
+	// root itself or outside it: what a relative path the agent wrote in the
+	// Chat view starts from.
+	Dir       string      `json:"dir,omitempty"`
 	Path      string      `json:"path"`
 	Entries   []fileEntry `json:"entries"`
 	Truncated bool        `json:"truncated"`
@@ -447,7 +451,26 @@ func (f *filesAPI) handleTree(w http.ResponseWriter, r *http.Request) {
 			return !req.view.listed(path.Join(base, e.Name), true)
 		})
 	}
+	res.Dir = paneDirRel(req.root)
+	// A view-only client learns no directory its list does not hold
+	if req.view != nil && res.Dir != "" && !req.view.listed(res.Dir, true) {
+		res.Dir = ""
+	}
 	jsonOK(w, res)
+}
+
+// paneDirRel is the pane's directory under root, "/"-separated; "" at the
+// root, outside it or when not known. Both are resolved (paneRoot), so a
+// symlink on the way does not hide one under the other.
+func paneDirRel(root filesRoot) string {
+	if root.Dir == "" {
+		return ""
+	}
+	rel, err := filepath.Rel(root.Root, root.Dir)
+	if err != nil || rel == "." || !filepath.IsLocal(rel) {
+		return ""
+	}
+	return filepath.ToSlash(rel)
 }
 
 func (f *filesAPI) tree(root filesRoot, p string) (treeResponse, error) {

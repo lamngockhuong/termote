@@ -503,3 +503,66 @@ func TestUnderDir(t *testing.T) {
 		t.Error("meta2 and META2 are two directories")
 	}
 }
+
+func TestPaneDirRel(t *testing.T) {
+	root := filepath.Join(string(filepath.Separator)+"r", "p")
+	for _, c := range []struct{ dir, want string }{
+		{"", ""},
+		{root, ""},
+		{filepath.Join(root, "pwa"), "pwa"},
+		{filepath.Join(root, "pwa", "src"), "pwa/src"},
+		{filepath.Join(root + "q"), ""},
+		{filepath.Dir(root), ""},
+	} {
+		if got := paneDirRel(filesRoot{Root: root, Dir: c.dir}); got != c.want {
+			t.Errorf("paneDirRel(%q) = %q, want %q", c.dir, got, c.want)
+		}
+	}
+}
+
+// The tree names the pane's directory under the root; a view-only client
+// learns it only when its list holds it (not an ignored one).
+func TestFilesTreePaneDir(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	repo, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	gitInit(t, repo)
+	writeFile(t, filepath.Join(repo, ".gitignore"), "build/\n")
+	writeFile(t, filepath.Join(repo, "pwa", "src", "a.ts"), "x\n")
+	writeFile(t, filepath.Join(repo, "build", "out.js"), "x\n")
+	dirOf := func(h http.Handler, req *http.Request) any {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("tree: %d %s", rec.Code, rec.Body)
+		}
+		return decodeBody(t, rec)["dir"]
+	}
+	full := func() *http.Request {
+		req := apiRequest("GET", "/api/mux/panes/0/files/tree", "")
+		req.Header.Del("Authorization")
+		return req
+	}
+	view := func() *http.Request { return viewRequest("GET", "/api/mux/panes/0/files/tree", "") }
+	for _, c := range []struct {
+		dir        string
+		full, view any
+	}{
+		{repo, nil, nil},
+		{filepath.Join(repo, "pwa", "src"), "pwa/src", "pwa/src"},
+		{filepath.Join(repo, "build"), "build", nil},
+	} {
+		_, h := viewFilesFixture(t, c.dir)
+		if got := dirOf(h, full()); got != c.full {
+			t.Errorf("%s: full dir = %v, want %v", c.dir, got, c.full)
+		}
+		if got := dirOf(h, view()); got != c.view {
+			t.Errorf("%s: view dir = %v, want %v", c.dir, got, c.view)
+		}
+	}
+}
