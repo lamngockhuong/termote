@@ -57,16 +57,12 @@ interface Props {
   onChange: (text: string) => void
   wrap: boolean
   saving: boolean
-  error?: SaveError
   // The draft was read under another root than the pane's now (or a save
   // was told so): it cannot be saved
   rootMoved: boolean
   // There is something to save
   dirty: boolean
   onSave: () => void
-  // Drops the draft and reads the file again
-  onReload: () => void
-  onCopy: () => void
   notify: (message: string) => void
   // A sensitive file the user chose to show
   reveal?: boolean
@@ -80,6 +76,9 @@ interface Props {
   at?: EditorAt
   // Set to what reads the whole lines selected, for a review comment
   linesRef?: RefObject<(() => TextLines) | null>
+  // Out of sight for now (a Markdown file's preview shows alone), kept
+  // mounted: the desktop editor measures itself again once it shows
+  hidden?: boolean
 }
 
 // Why the last save of a draft failed, and what the user can do about it:
@@ -134,21 +133,15 @@ export function SaveBanner({
 // is edited there
 const CodeEditor = lazyRetry(() => import('./code-editor'), 'CodeEditor')
 
-// The text of a file being edited, with why the last save failed above it:
-// CodeMirror where the main pointer is fine (a mouse), else a plain textarea
-// (phones and touch tablets). The draft lives with the pane (useFileDraft):
-// this only shows it.
+// The text of a file being edited: CodeMirror where the main pointer is fine
+// (a mouse), else a plain textarea (phones and touch tablets). The draft
+// lives with the pane (useFileDraft): this only shows it. Why the last save
+// failed shows above it, in the viewer (SaveBanner).
 export function FileEditor(props: Props) {
-  const { error, rootMoved, onReload, onCopy } = props
+  const { rootMoved } = props
   const fine = useMediaQuery('(pointer: fine)')
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <SaveBanner
-        error={error}
-        rootMoved={rootMoved}
-        onReload={onReload}
-        onCopy={onCopy}
-      />
       {fine ? (
         <LazyBoundary
           onRetry={CodeEditor.retry}
@@ -185,6 +178,7 @@ export function FileEditor(props: Props) {
               scrollTop={props.scrollTop}
               at={props.at}
               linesRef={props.linesRef}
+              hidden={props.hidden}
             />
           </Suspense>
         </LazyBoundary>
@@ -208,6 +202,7 @@ function PlainEditor({
   onSelectText,
   scrollTop,
   linesRef,
+  hidden = false,
 }: Props) {
   const area = useRef<HTMLTextAreaElement>(null)
   useEffect(() => {
@@ -220,10 +215,13 @@ function PlainEditor({
       linesRef.current = null
     }
   }, [linesRef])
-  // biome-ignore lint/correctness/useExhaustiveDependencies: only where it opens
+  // Where it opens, once it shows: hidden, it has no height to scroll
+  const pending = useRef(scrollTop)
   useLayoutEffect(() => {
-    if (scrollTop && area.current) area.current.scrollTop = scrollTop
-  }, [])
+    if (hidden || !pending.current) return
+    ;(area.current as HTMLTextAreaElement).scrollTop = pending.current
+    pending.current = undefined
+  }, [hidden])
 
   const onKeyDown = (e: KeyboardEvent) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {

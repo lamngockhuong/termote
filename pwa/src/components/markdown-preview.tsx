@@ -47,11 +47,19 @@ interface Props {
     opts: { newTab: boolean },
   ) => void
   notify: (message: string) => void
+  // The text is a draft being edited beside (or behind) it: it starts at
+  // the top, is not where the viewer keeps the file's scroll, and a diagram
+  // keeps its last image while its source changes
+  editing?: boolean
+  // Where a link followed from the draft is left at (the editor's offset,
+  // which Back restores), in place of the preview's own
+  followScrollTop?: () => number
 }
 
 interface Ctx {
   path: string
   wrap: boolean
+  editing: boolean
   // The scroll box, once mounted
   scroller: () => Element | null
   go: (target: LinkPath, newTab?: boolean) => void
@@ -179,11 +187,12 @@ function MdImage({ src, alt }: ComponentProps<'img'>) {
 
 // A code block, or a Mermaid diagram, of the file
 function MdPre({ node }: { node?: unknown }) {
-  const { scroller, path, wrap, notify } = useContext(PreviewContext)
+  const { scroller, path, wrap, editing, notify } = useContext(PreviewContext)
   return (
     <CodeFence
       node={node}
       wrap={wrap}
+      live={editing}
       notify={notify}
       scrollRoot={scroller}
       exportName={(index) => exportName(path, index)}
@@ -214,6 +223,8 @@ export default function MarkdownPreview({
   scrollTop,
   onFollow,
   notify,
+  editing = false,
+  followScrollTop,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const { frontMatter, body } = useMemo(() => splitFrontMatter(text), [text])
@@ -269,6 +280,7 @@ export default function MarkdownPreview({
   const ctx: Ctx = {
     path,
     wrap,
+    editing,
     notify,
     scroller: () => ref.current,
     go: (target, newTab = false) => {
@@ -277,7 +289,7 @@ export default function MarkdownPreview({
         else box().scrollTop = 0
         return
       }
-      onFollow(target, box().scrollTop, { newTab })
+      onFollow(target, followScrollTop?.() ?? box().scrollTop, { newTab })
     },
   }
 
@@ -287,7 +299,9 @@ export default function MarkdownPreview({
         ref={ref}
         className="min-h-0 flex-1 overflow-auto bg-bg"
         data-testid="markdown-preview"
-        data-scroll-restore
+        data-scroll-restore={editing ? undefined : ''}
+        // Focused when the editor hides (MarkdownEditLayout)
+        tabIndex={editing ? -1 : undefined}
       >
         <div className={PROSE}>
           {frontMatter !== undefined && (

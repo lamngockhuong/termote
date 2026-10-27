@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RequestError } from '../hooks/use-mux-api'
 import type { TextLines } from '../utils/line-range'
 import type { CodeEditorProps } from './code-editor'
-import { FileEditor, saveErrorOf } from './file-editor'
+import { FileEditor, SaveBanner, saveErrorOf } from './file-editor'
 
 // The desktop editor's chunk: a stand-in that shows what it was given, or
 // fails to load while fail is set
@@ -77,8 +77,6 @@ describe('FileEditor', () => {
     rootMoved: false,
     dirty: true,
     onSave: vi.fn(),
-    onReload: vi.fn(),
-    onCopy: vi.fn(),
     notify: vi.fn(),
   }
 
@@ -142,9 +140,11 @@ describe('FileEditor', () => {
 
   it('shows a refusal as a danger banner', () => {
     render(
-      <FileEditor
-        {...props}
+      <SaveBanner
         error={{ kind: 'refused', message: 'Could not save the file' }}
+        rootMoved={false}
+        onReload={vi.fn()}
+        onCopy={vi.fn()}
       />,
     )
     expect(screen.getByRole('status')).toHaveAttribute('data-variant', 'danger')
@@ -153,6 +153,33 @@ describe('FileEditor', () => {
 })
 
 describe('FileEditor scroll', () => {
+  it('opened hidden, goes to the offset once it shows', () => {
+    const ui = (hidden: boolean) => (
+      <FileEditor
+        path="a.txt"
+        text="x"
+        onChange={vi.fn()}
+        wrap={false}
+        saving={false}
+        rootMoved={false}
+        dirty={false}
+        onSave={vi.fn()}
+        notify={vi.fn()}
+        scrollTop={33}
+        hidden={hidden}
+      />
+    )
+    const view = render(ui(true))
+    const box = screen.getByRole('textbox', { name: 'Text of a.txt' })
+    expect(box.scrollTop).toBe(0)
+    view.rerender(ui(false))
+    expect(box.scrollTop).toBe(33)
+    box.scrollTop = 5
+    view.rerender(ui(true))
+    view.rerender(ui(false))
+    expect(box.scrollTop).toBe(5)
+  })
+
   it('starts at the offset it was left at, marked for the viewer', () => {
     render(
       <FileEditor
@@ -164,8 +191,6 @@ describe('FileEditor scroll', () => {
         rootMoved={false}
         dirty={false}
         onSave={vi.fn()}
-        onReload={vi.fn()}
-        onCopy={vi.fn()}
         notify={vi.fn()}
         scrollTop={33}
       />,
@@ -195,8 +220,6 @@ describe('FileEditor on a device with a fine pointer', () => {
     rootMoved: false,
     dirty: true,
     onSave: vi.fn(),
-    onReload: vi.fn(),
-    onCopy: vi.fn(),
     notify: vi.fn(),
   }
 

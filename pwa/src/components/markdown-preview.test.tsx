@@ -279,6 +279,30 @@ describe('MarkdownPreview: links', () => {
     )
   })
 
+  it('a draft being edited follows a link from where the editor is, and is not kept as the scroll', () => {
+    const p = show('[readme](../../README.md)', {
+      editing: true,
+      followScrollTop: () => 75,
+    })
+    const box = screen.getByTestId('markdown-preview')
+    expect(box).not.toHaveAttribute('data-scroll-restore')
+    expect(box).toHaveAttribute('tabindex', '-1')
+    box.scrollTop = 40
+    fireEvent.click(screen.getByRole('button', { name: 'readme' }))
+    expect(p.onFollow).toHaveBeenCalledWith(
+      { kind: 'path', path: 'README.md', anchor: undefined },
+      75,
+      { newTab: false },
+    )
+  })
+
+  it('a file only viewed is kept as the scroll, and takes no focus', () => {
+    show('x')
+    const box = screen.getByTestId('markdown-preview')
+    expect(box).toHaveAttribute('data-scroll-restore')
+    expect(box).not.toHaveAttribute('tabindex')
+  })
+
   it('scrolls to a heading of the same file', () => {
     const p = show(
       '[go](#usage) [self](intro.md#Usage) [top](intro.md)\n\n## Usage',

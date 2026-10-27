@@ -21,6 +21,9 @@ export interface FenceOptions {
   exportName: (index: number) => string
   // In place of the Copy button that reports through notify
   copyButton?: (text: string) => ReactNode
+  // The source is being edited: a diagram is drawn once its source stops
+  // changing, its last image shown meanwhile
+  live?: boolean
 }
 
 // A fenced code block: highlighted in its language once the worker answers,
@@ -131,6 +134,7 @@ export function CodeFence({
   node,
   scrollRoot,
   exportName,
+  live,
   ...opts
 }: { node?: unknown } & FenceOptions) {
   const code = (node as HastElement).children[0]
@@ -149,6 +153,7 @@ export function CodeFence({
         scrollRoot={scrollRoot}
         name={exportName(index)}
         notify={opts.notify}
+        live={live}
         frame={(parts) => (
           <FencedCode
             text={text}

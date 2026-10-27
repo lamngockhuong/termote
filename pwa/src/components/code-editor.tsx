@@ -76,6 +76,8 @@ export interface CodeEditorProps {
   // Set to what reads the whole lines of the main selection (the cursor's
   // line without one), for a review comment
   linesRef?: RefObject<(() => TextLines) | null>
+  // Out of sight for now, kept mounted: measured again once it shows
+  hidden?: boolean
 }
 
 // Marks a change made from the props, which onChange is not told about
@@ -184,6 +186,7 @@ export default function CodeEditor({
   scrollTop,
   at,
   linesRef,
+  hidden = false,
 }: CodeEditorProps) {
   const { settings } = useSettings()
   const { editorFontSize, editorTabSize, editorVim } = settings
@@ -200,6 +203,7 @@ export default function CodeEditor({
     text,
     reveal,
     onSelectText,
+    hidden,
   })
   latest.current = {
     onChange,
@@ -209,6 +213,7 @@ export default function CodeEditor({
     text,
     reveal,
     onSelectText,
+    hidden,
   }
   // What the editor told onChange last: a render with it is no change
   const lastEmitted = useRef(text)
@@ -311,7 +316,9 @@ export default function CodeEditor({
     v.requestMeasure({
       read: () => null,
       write: () => {
-        if (scrollTop && !at) v.scrollDOM.scrollTop = scrollTop
+        // Hidden, it has no height to scroll: done once it shows
+        if (scrollTop && !at && !latest.current.hidden)
+          v.scrollDOM.scrollTop = scrollTop
         v.scrollDOM.dataset.scrollRestore = ''
       },
     })
@@ -406,6 +413,31 @@ export default function CodeEditor({
     })
     v.focus()
   }, [at?.jump, at?.line, at?.col])
+
+  // Opened hidden: where it starts (the offset it was left at, or the line
+  // it opens at) waits until it shows
+  const pending = useRef(hidden ? { scrollTop, at: !!at } : undefined)
+  // Its size and line heights read while it was hidden are wrong
+  useEffect(() => {
+    if (hidden) return
+    const v = view.current as EditorView
+    const start = pending.current
+    pending.current = undefined
+    if (start?.at) {
+      v.dispatch({
+        effects: EditorView.scrollIntoView(v.state.selection.main.head, {
+          y: 'center',
+        }),
+      })
+    }
+    v.requestMeasure({
+      read: () => null,
+      write: () => {
+        if (start?.scrollTop && !start.at)
+          v.scrollDOM.scrollTop = start.scrollTop
+      },
+    })
+  }, [hidden])
 
   useEffect(() => {
     reconfigure(view.current, parts.current.label, labelOf(path))

@@ -7,6 +7,7 @@ import {
   resolveEditorFontSize,
   resolveEditorTabSize,
   resolveFindExcludes,
+  resolveMarkdownEditLayout,
   resolveTaskHistoryLines,
   TASK_HISTORY_LINES_DEFAULT,
   TASK_HISTORY_LINES_MAX,
@@ -396,6 +397,24 @@ describe('editor settings', () => {
       editorWrap: false,
       editorVim: false,
     })
+  })
+})
+
+describe('markdown edit layout', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('is split unless a saved layout is one of the three', () => {
+    expect(resolveMarkdownEditLayout('source')).toBe('source')
+    expect(resolveMarkdownEditLayout('preview')).toBe('preview')
+    expect(resolveMarkdownEditLayout('split')).toBe('split')
+    expect(resolveMarkdownEditLayout('wide')).toBe('split')
+    expect(resolveMarkdownEditLayout(undefined)).toBe('split')
+    const { result, unmount } = renderHook(() => useSettings())
+    expect(result.current.settings.markdownEditLayout).toBe('split')
+    act(() => result.current.updateSetting('markdownEditLayout', 'preview'))
+    unmount()
+    const again = renderHook(() => useSettings())
+    expect(again.result.current.settings.markdownEditLayout).toBe('preview')
   })
 })
 

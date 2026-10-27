@@ -26,7 +26,12 @@ import {
 import { RequestError } from '../hooks/use-mux-api'
 import type { TableOp } from '../utils/csv-edits'
 import { paneSelection, resetPaneSelections } from '../utils/pane-selection'
-import { FileViewer, HeaderActions, rebaseDraft } from './file-viewer'
+import {
+  FileViewer,
+  HeaderActions,
+  PREVIEW_MAX_BYTES,
+  rebaseDraft,
+} from './file-viewer'
 
 const mockContent = vi.fn()
 const mockImage = vi.fn()
@@ -34,9 +39,21 @@ const mockDocument = vi.fn()
 const mockSave = vi.fn()
 // The desktop editor: shows where it was told to open
 vi.mock('./code-editor', () => ({
-  default: (p: { at?: { line: number; col?: number } }) => (
-    <div data-testid="code-editor">
+  default: (p: {
+    path: string
+    text: string
+    onChange: (text: string) => void
+    at?: { line: number; col?: number }
+    hidden?: boolean
+  }) => (
+    <div data-testid="code-editor" data-hidden={String(!!p.hidden)}>
       at {p.at ? `${p.at.line}:${p.at.col ?? 0}` : 'none'}
+      <input
+        aria-label={`Text of ${p.path}`}
+        data-scroll-restore
+        value={p.text}
+        onChange={(e) => p.onChange(e.target.value)}
+      />
     </div>
   ),
 }))
@@ -57,11 +74,27 @@ vi.mock('../utils/highlight', async (orig) => ({
   highlight: async () => null,
   highlightLang: async () => null,
 }))
-// A fine pointer (a mouse) when set; no pointer the query names otherwise
-const pointer = vi.hoisted(() => ({ fine: false }))
+// Times the Markdown of a preview was parsed (its rehype plugins attached)
+const parses = vi.hoisted(() => ({ n: 0 }))
+vi.mock('../utils/markdown-links', async (orig) => {
+  const m = await orig<typeof import('../utils/markdown-links')>()
+  return {
+    ...m,
+    rehypeHeadingIds: (...a: Parameters<typeof m.rehypeHeadingIds>) => {
+      parses.n++
+      return m.rehypeHeadingIds(...a)
+    },
+  }
+})
+// A fine pointer (a mouse) when set; no pointer the query names otherwise.
+// The viewer's width: 0 as without ResizeObserver
+const pointer = vi.hoisted(() => ({ fine: false, width: 0 }))
 vi.mock('../hooks/use-media-query', () => ({
   useIsMobile: () => false,
   useMediaQuery: (query: string) => query === '(pointer: fine)' && pointer.fine,
+}))
+vi.mock('../hooks/use-element-width', () => ({
+  useElementWidth: () => pointer.width,
 }))
 
 function show(over: Partial<Parameters<typeof FileViewer>[0]> = {}) {
@@ -730,7 +763,7 @@ describe('FileViewer editing', () => {
     expect(screen.getByTestId('code-block')).toHaveTextContent(/^1a\s*2c\s*$/)
   })
 
-  it('a Markdown file is edited as its source, even when previewed', async () => {
+  it('a previewed Markdown file is edited as its source on a touch screen, with a switch to its preview', async () => {
     mockContent.mockResolvedValue(editable('# T\n', { path: 'r.md' }))
     show({ canEdit: true, path: 'r.md' })
     await screen.findByRole('heading', { name: 'T' })
@@ -738,7 +771,11 @@ describe('FileViewer editing', () => {
     expect(screen.getByRole('textbox', { name: 'Text of r.md' })).toHaveValue(
       '# T\n',
     )
+    expect(screen.queryByTestId('markdown-preview')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull()
+    expect(
+      screen.getByRole('button', { name: 'Show preview' }),
+    ).toBeInTheDocument()
   })
 
   it('a conflict keeps the text; Reload drops it and reads the file again', async () => {
@@ -1032,6 +1069,323 @@ describe('FileViewer editing', () => {
       await screen.findByRole('textbox', { name: 'Text of b.ts' }),
     ).toHaveValue('y')
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+})
+
+describe('FileViewer: editing Markdown', () => {
+  const mdFile = (text: string) => editable(text, { path: 'r.md' })
+  const area = () => screen.getByRole('textbox', { name: 'Text of r.md' })
+  const layout = () =>
+    (area().closest('[data-layout]') as HTMLElement).dataset.layout
+  const saved = () =>
+    JSON.parse(localStorage.getItem('termote-settings') ?? '{}')
+      .markdownEditLayout
+  const edit = async (over: Partial<Parameters<typeof FileViewer>[0]> = {}) => {
+    const p = show({ canEdit: true, path: 'r.md', ...over })
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }))
+    // The desktop editor loads in a chunk of its own
+    await screen.findByRole('textbox', { name: 'Text of r.md' })
+    return p
+  }
+  beforeEach(() => {
+    pointer.fine = true
+    pointer.width = 1000
+  })
+  afterEach(() => {
+    pointer.fine = false
+    pointer.width = 0
+  })
+
+  it('edits beside a preview of the draft, which follows the typing', async () => {
+    mockContent.mockResolvedValue(mdFile('# Old\n'))
+    await edit()
+    expect(layout()).toBe('split')
+    const preview = await screen.findByTestId('markdown-preview')
+    expect(within(preview).getByRole('heading', { name: 'Old' })).toBeVisible()
+    fireEvent.change(area(), { target: { value: '# New\n' } })
+    expect(
+      await within(preview).findByRole('heading', { name: 'New' }),
+    ).toBeInTheDocument()
+    expect(saved()).toBeUndefined()
+  })
+
+  it('never parses the draft again while it is being typed', async () => {
+    mockContent.mockResolvedValue(mdFile('# Old\n'))
+    await edit()
+    const preview = await screen.findByTestId('markdown-preview')
+    await within(preview).findByRole('heading', { name: 'Old' })
+    const before = parses.n
+    for (const t of ['# N', '# Ne', '# New'])
+      fireEvent.change(area(), { target: { value: `${t}\n` } })
+    expect(parses.n).toBe(before)
+    await within(preview).findByRole('heading', { name: 'New' })
+    expect(parses.n).toBe(before + 1)
+  })
+
+  it('cycles source and preview, preview alone, and source, remembered on this device', async () => {
+    mockContent.mockResolvedValue(mdFile('# T\n'))
+    const p = await edit()
+    const editor = area()
+    fireEvent.click(screen.getByRole('button', { name: 'Show preview' }))
+    expect(layout()).toBe('preview')
+    expect(saved()).toBe('preview')
+    // Kept, hidden: the same textarea comes back
+    expect(editor.closest('.hidden')).not.toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Show source' }))
+    expect(area()).toBe(editor)
+    expect(layout()).toBe('source')
+    expect(screen.queryByTestId('markdown-preview')).toBeNull()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Show source and preview' }),
+    )
+    expect(layout()).toBe('split')
+    fireEvent.click(screen.getByRole('button', { name: 'Show preview' }))
+
+    // Opened again: still the preview alone
+    p.unmount()
+    resetFilesStores()
+    await edit()
+    expect(layout()).toBe('preview')
+  })
+
+  it.each([
+    ['a touch screen', { fine: false, width: 1000 }],
+    ['a viewer narrower than 768px (a side panel)', { fine: true, width: 767 }],
+  ])('on %s, switches between source and preview only', async (_, at) => {
+    Object.assign(pointer, at)
+    mockContent.mockResolvedValue(mdFile('# T\n'))
+    await edit()
+    // Split chosen (the default) shows as the source, left as chosen
+    expect(layout()).toBe('source')
+    expect(screen.queryByTestId('markdown-preview')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Show preview' }))
+    expect(layout()).toBe('preview')
+    fireEvent.click(screen.getByRole('button', { name: 'Show source' }))
+    expect(layout()).toBe('source')
+    expect(saved()).toBe('source')
+  })
+
+  it('offers the layouts as a choice in the menu of a narrow header', async () => {
+    pointer.width = 440
+    mockContent.mockResolvedValue(mdFile('# T\n'))
+    await edit({ compact: true })
+    expect(screen.queryByRole('button', { name: 'Show preview' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }))
+    const group = screen.getByRole('group', { name: 'Show' })
+    const radios = within(group).getAllByRole('menuitemradio')
+    expect(radios.map((r) => r.textContent)).toEqual(['Source', 'Preview'])
+    expect(radios[0]).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('menuitemcheckbox', { name: 'Wrap lines' }))
+    fireEvent.click(radios[1])
+    expect(layout()).toBe('preview')
+    expect(saved()).toBe('preview')
+  })
+
+  it('offers all three in the menu when there is room', async () => {
+    mockContent.mockResolvedValue(mdFile('# T\n'))
+    await edit({ compact: true })
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }))
+    expect(
+      screen.getAllByRole('menuitemradio').map((r) => r.textContent),
+    ).toEqual(['Source', 'Source and preview', 'Preview'])
+  })
+
+  it('Ctrl+S saves while the preview shows alone, its banners still there', async () => {
+    mockContent.mockResolvedValue(mdFile('a'))
+    mockSave.mockRejectedValue(new RequestError(409, 'changed', 'changed'))
+    await edit()
+    fireEvent.change(area(), { target: { value: 'b' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Show preview' }))
+    // A key outside the viewer is not its own
+    const outside = document.createElement('input')
+    document.body.append(outside)
+    fireEvent.keyDown(outside, { key: 's', ctrlKey: true })
+    outside.remove()
+    // Another key, or one some other handler took, does nothing
+    fireEvent.keyDown(document.body, { key: 'a', ctrlKey: true })
+    fireEvent.keyDown(document.body, { key: 's' })
+    const taken = new KeyboardEvent('keydown', {
+      key: 's',
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    })
+    taken.preventDefault()
+    document.body.dispatchEvent(taken)
+    expect(mockSave).not.toHaveBeenCalled()
+    await act(async () =>
+      fireEvent.keyDown(screen.getByTestId('markdown-preview'), {
+        key: 's',
+        metaKey: true,
+      }),
+    )
+    expect(mockSave).toHaveBeenCalledWith(
+      '%1',
+      expect.objectContaining({ text: 'b' }),
+    )
+    expect(
+      screen.getByText('The file changed on the host since you opened it'),
+    ).toBeInTheDocument()
+    // After a conflict the draft is still there to save
+    await act(async () =>
+      fireEvent.keyDown(document.body, { key: 's', ctrlKey: true }),
+    )
+    expect(mockSave).toHaveBeenCalledTimes(2)
+  })
+
+  it('Ctrl+S in the preview saves only what can be saved', async () => {
+    mockContent.mockResolvedValue(mdFile('a'))
+    mockSave.mockReturnValue(new Promise(() => {}))
+    await edit()
+    const key = () =>
+      fireEvent.keyDown(screen.getByTestId('markdown-preview'), {
+        key: 's',
+        ctrlKey: true,
+      })
+    await screen.findByTestId('markdown-preview')
+    // Nothing changed yet
+    key()
+    expect(mockSave).not.toHaveBeenCalled()
+    fireEvent.change(area(), { target: { value: 'b' } })
+    await act(async () => key())
+    // One save at a time
+    await act(async () => key())
+    expect(mockSave).toHaveBeenCalledTimes(1)
+  })
+
+  it('Ctrl+S never saves a draft of a root that moved', async () => {
+    mockContent.mockResolvedValue(mdFile('a'))
+    const p = await edit()
+    fireEvent.change(area(), { target: { value: 'b' } })
+    p.rerender(
+      <ThemeProvider>
+        <FileViewer {...p} root="/other" />
+      </ThemeProvider>,
+    )
+    fireEvent.keyDown(await screen.findByTestId('markdown-preview'), {
+      key: 's',
+      ctrlKey: true,
+    })
+    expect(mockSave).not.toHaveBeenCalled()
+  })
+
+  it('a draft past the preview limit shows as its source, until it is back under', async () => {
+    mockContent.mockResolvedValue(mdFile('# T\n'))
+    await edit()
+    const editor = area()
+    fireEvent.change(editor, {
+      target: { value: 'x'.repeat(PREVIEW_MAX_BYTES + 1) },
+    })
+    expect(layout()).toBe('source')
+    expect(
+      screen.getByText('Too large to preview: shown as source'),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Show preview' })).toBeNull()
+    fireEvent.change(editor, { target: { value: '# T\n' } })
+    expect(area()).toBe(editor)
+    expect(layout()).toBe('split')
+    expect(screen.queryByText(/Too large/)).toBeNull()
+  })
+
+  it('previews a long draft too, a little later', async () => {
+    mockContent.mockResolvedValue(mdFile('# T\n'))
+    await edit()
+    const preview = await screen.findByTestId('markdown-preview')
+    fireEvent.change(area(), {
+      // One line: the editor stand-in is an input
+      target: { value: `# Long ${'x'.repeat(70_000)}` },
+    })
+    expect(
+      await within(preview).findByRole(
+        'heading',
+        { name: /^Long x/ },
+        { timeout: 5000 },
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('says nothing of the limit where the layout chosen does not show', async () => {
+    pointer.width = 440
+    mockContent.mockResolvedValue(mdFile('# T\n'))
+    await edit()
+    fireEvent.change(area(), {
+      target: { value: 'x'.repeat(PREVIEW_MAX_BYTES + 1) },
+    })
+    expect(screen.queryByText(/Too large/)).toBeNull()
+  })
+
+  it('says nothing of the limit when the source alone was chosen', async () => {
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ markdownEditLayout: 'source' }),
+    )
+    mockContent.mockResolvedValue(mdFile('# T\n'))
+    await edit()
+    fireEvent.change(area(), {
+      target: { value: 'x'.repeat(PREVIEW_MAX_BYTES + 1) },
+    })
+    expect(screen.queryByText(/Too large/)).toBeNull()
+  })
+
+  it('a link followed from the preview leaves the file where the editor was', async () => {
+    mockContent.mockResolvedValue(mdFile('[b](b.md)\n'))
+    const p = await edit()
+    const editor = area()
+    editor.scrollTop = 120
+    fireEvent.scroll(editor)
+    const preview = await screen.findByTestId('markdown-preview')
+    preview.scrollTop = 30
+    // The preview's own scroll is not the file's
+    fireEvent.scroll(preview)
+    fireEvent.click(within(preview).getByRole('button', { name: 'b' }))
+    expect(p.onFollow).toHaveBeenCalledWith(
+      { kind: 'path', path: 'b.md', anchor: undefined },
+      120,
+      { newTab: false },
+    )
+  })
+
+  it('tells what the preview of the draft reports', async () => {
+    mockContent.mockResolvedValue(mdFile('```sh\nls\n```\n'))
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    const p = await edit()
+    const preview = await screen.findByTestId('markdown-preview')
+    await act(async () =>
+      fireEvent.click(
+        within(preview).getByRole('button', { name: 'Copy code' }),
+      ),
+    )
+    expect(writeText).toHaveBeenCalledWith('ls')
+    expect(p.notify).toHaveBeenCalledWith('Code copied')
+  })
+
+  it('a link followed before the editor scrolled leaves it at the top', async () => {
+    mockContent.mockResolvedValue(mdFile('[b](b.md)\n'))
+    const p = await edit()
+    const preview = await screen.findByTestId('markdown-preview')
+    fireEvent.click(within(preview).getByRole('button', { name: 'b' }))
+    expect(p.onFollow).toHaveBeenCalledWith(expect.anything(), 0, {
+      newTab: false,
+    })
+  })
+
+  it('hides the desktop editor with the preview alone, never unmounting it', async () => {
+    pointer.fine = true
+    mockContent.mockResolvedValue(mdFile('# T\n'))
+    await edit()
+    const editor = await screen.findByTestId('code-editor')
+    expect(editor).toHaveAttribute('data-hidden', 'false')
+    fireEvent.click(screen.getByRole('button', { name: 'Show preview' }))
+    expect(screen.getByTestId('code-editor')).toBe(editor)
+    expect(editor).toHaveAttribute('data-hidden', 'true')
+  })
+
+  it('a file of another kind is edited without a layout', async () => {
+    mockContent.mockResolvedValue(editable('x'))
+    await startEdit()
+    expect(textarea().closest('[data-layout]')).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Show / })).toBeNull()
   })
 })
 

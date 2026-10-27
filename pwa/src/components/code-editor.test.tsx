@@ -97,6 +97,39 @@ describe('indentOf', () => {
 })
 
 describe('CodeEditor', () => {
+  it('opened hidden, goes to where it was left once it shows', async () => {
+    const { view, rerender } = setup({ hidden: true, scrollTop: 40 })
+    await frame()
+    expect(view.scrollDOM.scrollTop).toBe(0)
+    rerender({ hidden: false, scrollTop: 40 })
+    await frame()
+    expect(view.scrollDOM.scrollTop).toBe(40)
+    // Only the first time it shows
+    view.scrollDOM.scrollTop = 5
+    rerender({ hidden: true, scrollTop: 40 })
+    rerender({ hidden: false, scrollTop: 40 })
+    await frame()
+    expect(view.scrollDOM.scrollTop).toBe(5)
+  })
+
+  it('opened hidden at a line, brings the line into view once it shows', () => {
+    const at = { line: 2, jump: 1 }
+    const { view, rerender } = setup({ hidden: true, at })
+    const dispatch = vi.spyOn(view, 'dispatch')
+    rerender({ hidden: false, at })
+    expect(dispatch).toHaveBeenCalledWith({ effects: expect.anything() })
+    expect(view.state.selection.main.head).toBe(4)
+  })
+
+  it('measures itself again once it shows after being hidden', () => {
+    const { view, rerender } = setup({ hidden: true })
+    const measure = vi.spyOn(view, 'requestMeasure')
+    rerender({ hidden: true })
+    expect(measure).not.toHaveBeenCalled()
+    rerender({ hidden: false })
+    expect(measure).toHaveBeenCalledTimes(1)
+  })
+
   it('is labeled like the textarea and sends what is typed with "\\n"', () => {
     const { view, content, props } = setup()
     expect(content).toHaveAttribute('aria-label', 'Text of a.txt')
