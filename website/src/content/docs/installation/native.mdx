@@ -95,7 +95,8 @@ covered in [Getting Started](/getting-started/).
 Use `127.0.0.1` rather than `localhost`: termote does not listen on IPv6 `::1`, which a browser tries first for
 `localhost`. Where that attempt hangs instead of failing (Windows with WSL set to `networkingMode=mirrored`), every new connection
 waits for it, about 300 ms on each tab switch. A page opened through `localhost` shows a notice with a link to the
-same page at `127.0.0.1`; an installed app has to be installed again from there.
+same page at `127.0.0.1`. That is another address to the browser: you sign in again there, settings and
+unsaved drafts stay with `localhost`, and an installed app has to be installed again.
 
 ## What `termote start` Does
 
