@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.12.0](https://github.com/lamngockhuong/termote/compare/v2.11.0...v2.12.0) (2026-10-27)
+
+
+### Features
+
+* desktop layout polish: full-height sidebar, thin scrollbars, menus above scroll areas ([#607](https://github.com/lamngockhuong/termote/issues/607)) ([dda74eb](https://github.com/lamngockhuong/termote/commit/dda74eb9c7a09b17a91fae6318e977dd2a5a64c0))
+* fold command output and runs of steps in the Chat view ([#603](https://github.com/lamngockhuong/termote/issues/603)) ([8a2aa16](https://github.com/lamngockhuong/termote/commit/8a2aa16b8e348f6dc1f7ccacdf58fba1d28c573c))
+* link the documentation from About, the Usage Guide and the palette ([#608](https://github.com/lamngockhuong/termote/issues/608)) ([060c7bc](https://github.com/lamngockhuong/termote/commit/060c7bcc64544c6cb4ed81a6f0297cf6fc7079de))
+* open file paths from the Chat view in Files ([#604](https://github.com/lamngockhuong/termote/issues/604)) ([6fad328](https://github.com/lamngockhuong/termote/commit/6fad3289f6e55cbaca84ed087fdddfa9c69021c7))
+* open folders outside the pane in Files as Places ([#580](https://github.com/lamngockhuong/termote/issues/580)) ([#605](https://github.com/lamngockhuong/termote/issues/605)) ([c4c50ef](https://github.com/lamngockhuong/termote/commit/c4c50efdad21beb2322102cc1aa976c2409e0d96))
+* **pwa:** link the documentation from About, the Usage Guide and the palette ([060c7bc](https://github.com/lamngockhuong/termote/commit/060c7bcc64544c6cb4ed81a6f0297cf6fc7079de))
+* show the last commit from an empty Changes list ([#601](https://github.com/lamngockhuong/termote/issues/601)) ([49a768c](https://github.com/lamngockhuong/termote/commit/49a768cd399729f1e8a9e708a71bc97d667ff37c))
+* warn a page opened through localhost and open termote at 127.0.0.1 ([#606](https://github.com/lamngockhuong/termote/issues/606)) ([b8ef028](https://github.com/lamngockhuong/termote/commit/b8ef028190f2ecb2e9b45d9e4f61f9607b3780e2))
+
 ## [2.11.0](https://github.com/lamngockhuong/termote/compare/v2.10.0...v2.11.0) (2026-10-27)
 
 
