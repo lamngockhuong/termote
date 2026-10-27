@@ -1228,6 +1228,31 @@ describe('App', () => {
     expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument()
   })
 
+  // jsdom serves the tests from http://localhost:3000
+  describe('localhost notice', () => {
+    it('is saved as seen once dismissed', async () => {
+      const updateSetting = vi.fn()
+      mockUseSettings.mockReturnValue({
+        ...mockUseSettings(),
+        updateSetting,
+      })
+      render(<App />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Dismiss' }))
+      expect(updateSetting).toHaveBeenCalledWith('hasSeenLocalhostNotice', true)
+    })
+
+    it('stays hidden once seen', async () => {
+      const base = mockUseSettings()
+      mockUseSettings.mockReturnValue({
+        ...base,
+        settings: { ...base.settings, hasSeenLocalhostNotice: true },
+      } as typeof base)
+      render(<App />)
+      await screen.findByRole('button', { name: 'About' })
+      expect(screen.queryByText(/Opened through localhost/)).toBeNull()
+    })
+  })
+
   describe('log out', () => {
     const withAuth = () => {
       const base = mockUseLocalSessions()

@@ -34,7 +34,7 @@ Manual testing checklist for Termote features before release.
 - [ ] Service registered (systemd user unit on Linux with a user systemd, detached
       process + PID file on WSL2 without one, launchd agent on macOS)
 - [ ] Process running: `pgrep -f "termote serve"`
-- [ ] PWA accessible at <http://localhost:7680>
+- [ ] PWA accessible at <http://127.0.0.1:7680>
 - [ ] `termote stop` then a login (or `loginctl enable-linger`/reboot) starts it again
 
 ### Native Mode (Windows)
@@ -42,12 +42,12 @@ Manual testing checklist for Termote features before release.
 - [ ] `termote start` completes without error
 - [ ] Scheduled Task `Termote` registered, running hidden through wscript (no admin prompt)
 - [ ] psmux + termote running
-- [ ] PWA accessible at <http://localhost:7690>
+- [ ] PWA accessible at <http://127.0.0.1:7690>
 
 ### Native Mode + Herdr (Linux)
 
 - [ ] `termote start --mux herdr` completes without error (herdr on `PATH`)
-- [ ] `curl localhost:7680/api/mux/health` reports `"backend":"herdr"`
+- [ ] `curl 127.0.0.1:7680/api/mux/health` reports `"backend":"herdr"`
 - [ ] After a reboot (or `herdr server stop`) with Herdr not running: open the PWA in a full tab; within about 15 s
       (the start grace) plus the 5 s poll, the workspaces are back with no extra tab created, `herdr status server`
       is running, and `herdr-autostart.log` shows in `termote logs all`; `termote stop` leaves Herdr running;
@@ -78,7 +78,7 @@ Manual testing checklist for Termote features before release.
 ### Native Mode + Herdr (Windows)
 
 - [ ] `termote start --mux herdr` completes without error (`herdr.exe` on `PATH`)
-- [ ] `curl localhost:7690/api/mux/health` reports `"backend":"herdr"` (named pipe of `%APPDATA%\herdr\herdr.sock`)
+- [ ] `curl 127.0.0.1:7690/api/mux/health` reports `"backend":"herdr"` (named pipe of `%APPDATA%\herdr\herdr.sock`)
 - [ ] With Herdr not running, opening the PWA in a full tab starts `herdr server` with no console window; it survives `schtasks /End /tn Termote` and `termote stop` (creation flags not yet verified on a real machine)
 - [ ] With psmux and Herdr both present, the first `termote start` detects Herdr and asks (or picks psmux without a terminal)
 - [ ] Stream, typing, paste, scroll and agent status badge work as on Linux
@@ -93,7 +93,7 @@ Manual testing checklist for Termote features before release.
 
 - [ ] `termote start --mux zellij` completes without error (zellij 0.45.0+ on `PATH`); on Windows
       it is refused before anything is saved
-- [ ] `curl localhost:7680/api/mux/health` reports `"backend":"zellij"`
+- [ ] `curl 127.0.0.1:7680/api/mux/health` reports `"backend":"zellij"`
 - [ ] PWA lists the same sessions/tabs/panes as `zellij list-sessions` and Zellij's own tab bar
       (no plugin panes, no EXITED sessions)
 - [ ] Typing in a pane from the PWA lands in that pane
@@ -112,7 +112,7 @@ Manual testing checklist for Termote features before release.
 
 - [ ] `termote container up` completes without error
 - [ ] Container running: `docker ps | grep termote` (or `podman ps`)
-- [ ] PWA accessible at <http://localhost:7680>
+- [ ] PWA accessible at <http://127.0.0.1:7680>
 - [ ] First `container up` without `--mux`: asks tmux/herdr/zellij in a terminal, uses tmux without one
 - [ ] `container up --mux herdr`: PWA shows workspace `main`; typing, resize, create/rename/close tab work
 - [ ] `container up --mux zellij`: PWA shows session `main`; typing, create/rename/close tab work
@@ -476,7 +476,7 @@ Open it from the sidebar's grid button (desktop) or the view menu's "Agent overv
 
 ### Sessions via API
 
-- [ ] Sessions listed via API: `curl localhost:7680/api/mux/snapshot`
+- [ ] Sessions listed via API: `curl 127.0.0.1:7680/api/mux/snapshot`
 - [ ] Switch session via API works
 - [ ] `POST /api/mux/tabs/<id>/move {"index":0}` answers `{ok, id}` (the new id on tmux);
       `{"index":99}` → 400 `invalid_index`; a group move on tmux → 501 `unsupported`
@@ -1173,41 +1173,41 @@ Test on real mobile device:
 
 ```bash
 # Health check
-curl http://localhost:7680/api/mux/health
+curl http://127.0.0.1:7680/api/mux/health
 
 # Snapshot (groups → tabs → panes)
-curl http://localhost:7680/api/mux/snapshot
+curl http://127.0.0.1:7680/api/mux/snapshot
 
 # Create a tab
-curl -X POST http://localhost:7680/api/mux/tabs \
+curl -X POST http://127.0.0.1:7680/api/mux/tabs \
   -H 'Content-Type: application/json' \
   -d '{"groupId":"main","name":"test"}'
 
 # Select a tab
 # Every write needs the JSON Content-Type, even without a body (else 415)
-curl -X POST http://localhost:7680/api/mux/tabs/<id>/select \
+curl -X POST http://127.0.0.1:7680/api/mux/tabs/<id>/select \
   -H 'Content-Type: application/json'
 
 # Rename a tab
-curl -X PATCH http://localhost:7680/api/mux/tabs/<id> \
+curl -X PATCH http://127.0.0.1:7680/api/mux/tabs/<id> \
   -H 'Content-Type: application/json' \
   -d '{"name":"newname"}'
 
 # Close a tab
-curl -X DELETE http://localhost:7680/api/mux/tabs/<id> \
+curl -X DELETE http://127.0.0.1:7680/api/mux/tabs/<id> \
   -H 'Content-Type: application/json'
 
 # Close a pane (Herdr only)
-curl -X DELETE http://localhost:7680/api/mux/panes/<id> \
+curl -X DELETE http://127.0.0.1:7680/api/mux/panes/<id> \
   -H 'Content-Type: application/json'
 
 # Send keys to a pane
-curl -X POST http://localhost:7680/api/mux/panes/<id>/keys \
+curl -X POST http://127.0.0.1:7680/api/mux/panes/<id>/keys \
   -H 'Content-Type: application/json' \
   -d '{"keys":"ls\n"}'
 
 # Get a terminal stream token
-curl http://localhost:7680/api/mux/stream-token
+curl http://127.0.0.1:7680/api/mux/stream-token
 ```
 
 - [ ] Health endpoint returns 200 with `apiVersion`, `backend`, `version` and `install`

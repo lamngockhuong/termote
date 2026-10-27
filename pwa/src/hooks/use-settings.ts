@@ -113,6 +113,7 @@ export interface Settings {
   copyOnSelect: boolean // copy the terminal selection when a mouse drag ends
   pollInterval: number // seconds between session list refreshes
   hasSeenGestureHints: boolean // first-time gesture hints overlay
+  hasSeenLocalhostNotice: boolean // dismissed the notice of a page opened through localhost
   pasteSource: PasteSource // paste button source: system clipboard or tmux buffer
   showSessionTabs: boolean // show session tabs bar on desktop
   terminalFont: string // font installed on this device, tried before the defaults
@@ -148,6 +149,7 @@ const DEFAULTS: Settings = {
   copyOnSelect: false,
   pollInterval: 5,
   hasSeenGestureHints: false,
+  hasSeenLocalhostNotice: false,
   pasteSource: 'clipboard',
   showSessionTabs: true,
   terminalFont: '',

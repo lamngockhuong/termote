@@ -89,8 +89,14 @@ This enables: **Copy icon** → navigate → **Space** → select → **Enter** 
   </TabItem>
 </Tabs>
 
-Then open http://localhost:7680 (Windows: http://localhost:7690). Pinning a version and the file locations are
+Then open http://127.0.0.1:7680 (Windows: http://127.0.0.1:7690). Pinning a version and the file locations are
 covered in [Getting Started](/getting-started/).
+
+Use `127.0.0.1` rather than `localhost`: termote does not listen on IPv6 `::1`, which a browser tries first for
+`localhost`. Where that attempt hangs instead of failing (Windows with WSL set to `networkingMode=mirrored`), every new connection
+waits for it, about 300 ms on each tab switch. A page opened through `localhost` shows a notice with a link to the
+same page at `127.0.0.1`. That is another address to the browser: you sign in again there, settings and
+unsaved drafts stay with `localhost`, and an installed app has to be installed again.
 
 ## What `termote start` Does
 
@@ -390,5 +396,5 @@ termote logs server     # last server log lines
 The API is behind the login (`termote show-password` prints the password):
 
 ```bash
-curl -u admin:<password> http://localhost:7680/api/mux/health   # or the name set with --user
+curl -u admin:<password> http://127.0.0.1:7680/api/mux/health   # or the name set with --user
 ```

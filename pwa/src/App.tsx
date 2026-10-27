@@ -33,6 +33,7 @@ import { GroupDialog } from './components/group-dialog'
 import { HelpModal } from './components/help-modal'
 import { KeyboardToolbar } from './components/keyboard-toolbar'
 import { LazyBoundary, LoadFailed } from './components/lazy-boundary'
+import { LocalhostNotice } from './components/localhost-notice'
 import { OverviewScreen } from './components/overview-screen'
 import { PaneStrip } from './components/pane-strip'
 import { ReadOnlyBar } from './components/read-only-bar'
@@ -1808,6 +1809,11 @@ export default function App({
               </Banner>
             )}
           </div>
+          {!settings.hasSeenLocalhostNotice && (
+            <LocalhostNotice
+              onDismiss={() => updateSetting('hasSeenLocalhostNotice', true)}
+            />
+          )}
           {readOnly &&
             (viewStreamOff ? (
               <Banner variant="warning">

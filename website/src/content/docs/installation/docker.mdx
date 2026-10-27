@@ -25,7 +25,7 @@ it when the terminals do not need your host tools (like `claude` or `git` as ins
    termote container up
    ```
 
-2. Open http://localhost:7680 and log in as `admin` (or the name set with `--user`) with the password it prints.
+2. Open http://127.0.0.1:7680 and log in as `admin` (or the name set with `--user`) with the password it prints.
 
 3. (Optional) Expose it to the LAN; the option is saved like any other
 
@@ -191,7 +191,7 @@ Replace `docker` with `podman` if that is your runtime.
 ### API Test
 
 ```bash
-curl -u admin:<password> http://localhost:7680/api/mux/health   # or the name set with --user
+curl -u admin:<password> http://127.0.0.1:7680/api/mux/health   # or the name set with --user
 ```
 
 ## Uninstall

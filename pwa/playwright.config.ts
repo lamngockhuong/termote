@@ -32,7 +32,9 @@ export default defineConfig({
   testDir: './e2e',
   timeout: 30000,
   use: {
-    baseURL: `http://localhost:${process.env.TERMOTE_PORT || '7680'}`,
+    // 127.0.0.1, as `termote url` prints: through localhost the page shows
+    // a notice, and the browser tries ::1 first on every connection
+    baseURL: `http://127.0.0.1:${process.env.TERMOTE_PORT || '7680'}`,
     ...(credentials ? { httpCredentials: credentials } : {}),
     // There are no retries: a trace kept on failure is the only record of
     // what the page saw when a test fails now and then on CI

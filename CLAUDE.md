@@ -266,7 +266,7 @@ make test-git-hooks   # Test the git hooks installer (prepare)
 
 # Manual checks
 pnpm --filter termote exec tsc --noEmit     # Type check
-curl http://localhost:7680/api/mux/health   # Test API
+curl http://127.0.0.1:7680/api/mux/health   # Test API
 
 # E2E tests (requires running server)
 make start                      # or: ./scripts/termote.sh start
