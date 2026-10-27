@@ -89,6 +89,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/tab-close-dialogs.tsx`        | Files/Changes: Discard a tab's changes, close on a root move   |
 | `pwa/src/hooks/use-long-press.ts`                 | Long press of a finger (a Markdown link opens a new tab)       |
 | `pwa/src/components/changes-view.tsx`             | Changes view: git status grouped, diffs as tabs, edits a file  |
+| `pwa/src/components/commit-view.tsx`              | Last commit from an empty Changes list: message, files, diffs  |
 | `pwa/src/components/file-editor.tsx`              | A file being edited: desktop editor or textarea, save errors   |
 | `pwa/src/components/file-encoding-menu.tsx`       | A file's encoding in the header: reopen as another, as UTF-8   |
 | `pwa/src/utils/file-encoding.ts`                  | Encoding names the Files view shows, the fixed set             |
@@ -200,6 +201,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/files.go`                                 | `/api/mux/panes/{id}/files/*` routes, tree and file contents   |
 | `server/files_root.go`                            | Pane root (git toplevel), safe git runner                      |
 | `server/files_git.go`                             | git status and diff for the Changes view                       |
+| `server/files_git_commit.go`                      | `files/commit`, `files/commit/diff`: HEAD and its file diffs   |
 | `server/files_git_apply.go`                       | `POST files/changes/apply`: stage, unstage, discard a change   |
 | `server/files_git_patch.go`                       | Hunk ids, the patch of one hunk, a hunk undone in Go           |
 | `server/files_sensitive.go`                       | Names of files that usually hold secrets                       |

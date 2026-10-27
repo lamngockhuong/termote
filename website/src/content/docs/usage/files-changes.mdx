@@ -901,6 +901,21 @@ Groups with nothing left are hidden, the counts show the filtered numbers, and
 `No changes match` shows when nothing is left. Escape clears the box. The filter lives in the
 page only: it is cleared when you leave the view or when the root moves.
 
+### Last Commit
+
+When there is nothing left to list, Changes says `No changes since the last commit` with a
+**Show last commit** button. It opens the commit `HEAD` points at, read only: its message, its
+short hash, author and date, and the files it changed, each with the same letters as the list.
+Tap a file to see its diff; Back returns to the commit, then to Changes.
+
+- A merge commit shows what it brought into the branch: its diff against the first parent.
+- A file that may contain secrets asks first, as in the list; a view-only device never shows it.
+- When another commit lands while a diff is being opened, the view reads `HEAD` again and shows
+  the new commit.
+- A repository with no commit yet shows `No commits yet`.
+
+Only the last commit is shown: there is no history to walk back through.
+
 ### Staging, Unstaging and Discarding
 
 A row of the list has **Stage**, **Unstage** or **Discard** buttons, and the same ones are in
@@ -1007,7 +1022,8 @@ outside the root are refused.
 
 ## How git Is Run
 
-Termote runs `git status` and `git diff` itself to fill Changes, and `git cat-file` to read the
+Termote runs `git status` and `git diff` itself to fill Changes, `git rev-parse`, `git log` and
+`git diff-tree` for the last commit (of `HEAD` only, never a commit named by the browser), and `git cat-file` to read the
 before and after versions of an image. Stage and Unstage are the only commands that write, and
 they write the index only (`git add`, `git restore --staged`, `git reset`, `git apply --cached`); the
 patch of a hunk is built by Termote, never taken from the browser. A repository's own settings

@@ -890,6 +890,21 @@ có đường dẫn chứa chuỗi bạn gõ, không phân biệt hoa thường 
 `No changes match`. Escape xoá ô. Bộ lọc chỉ nằm trong trang: nó được xoá khi bạn rời view hoặc
 khi gốc đổi.
 
+### Commit cuối
+
+Khi không còn gì để liệt kê, Changes báo `No changes since the last commit` kèm nút
+**Show last commit**. Nút này mở commit mà `HEAD` đang trỏ tới, chỉ để xem: message, hash rút
+gọn, tác giả, thời điểm và các file commit đó đã đổi, mỗi file mang chữ cái giống trong danh sách.
+Chạm vào một file để xem diff của nó; Back quay về commit, rồi về Changes.
+
+- Với commit merge, view hiện những gì nó đưa vào nhánh, tức là diff so với commit cha đầu tiên.
+- File có thể chứa bí mật được hỏi trước, giống trong danh sách; thiết bị chỉ xem không bao giờ hiện
+  file đó.
+- Nếu có commit mới trong lúc diff đang mở, view đọc lại `HEAD` và hiện commit mới.
+- Repo chưa có commit nào thì hiện `No commits yet`.
+
+View chỉ hiện commit cuối, không có lịch sử để lùi lại các commit trước.
+
 ### Đưa vào index, bỏ khỏi index và bỏ thay đổi
 
 Mỗi dòng của danh sách có nút **Stage**, **Unstage** hoặc **Discard**, và đầu một diff đang mở
@@ -996,8 +1011,9 @@ chối.
 
 ## Termote chạy git ra sao
 
-Termote tự chạy `git status` và `git diff` để lấy dữ liệu cho Changes, và `git cat-file` để đọc
-bản trước và bản sau của ảnh. Stage và Unstage là các lệnh duy nhất có ghi, và chúng chỉ ghi index
+Termote tự chạy `git status` và `git diff` để lấy dữ liệu cho Changes, `git rev-parse`, `git log` và
+`git diff-tree` để đọc commit cuối (chỉ `HEAD`, không bao giờ là commit do trình duyệt chỉ định), và
+`git cat-file` để đọc bản trước và bản sau của ảnh. Stage và Unstage là các lệnh duy nhất có ghi, và chúng chỉ ghi index
 (`git add`, `git restore --staged`, `git reset`, `git apply --cached`); bản vá của một hunk do Termote tự dựng,
 không bao giờ lấy từ trình duyệt. Cấu hình riêng của một repo
 không thể khiến Termote chạy chương trình nào: với các lệnh này, Termote tắt bộ theo dõi hệ thống

@@ -696,7 +696,16 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   (429 `busy`), 2-minute write deadline, `Cross-Origin-Resource-Policy: same-origin`,
   `Cache-Control: no-store`; an SVG also gets a second CSP
   (`sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:`) and
-  `Content-Disposition: attachment`
+  `Content-Disposition: attachment`.
+  The last commit (`files/commit`, `files/commit/diff`, `server/files_git_commit.go`) reads `HEAD`
+  only: `rev-parse --verify --quiet HEAD^{commit}`, then `log -1` and `diff-tree` of that hash
+  against its first parent (`--root` for a root commit), never a client rev. `commit/diff` takes
+  the hash the client saw only to compare: another one than the current `HEAD` is 409
+  `head_moved`, before any path reaches git. The path (and a rename's source) must be one that
+  commit's `diff-tree` lists, under the same deny lists and `reveal=1` for a sensitive name, then
+  goes in as `:(literal)` after `--`; a view-only client goes through `viewHides`. A commit's
+  file list is kept 30 s per root and hash (a hash never changes what it names); a sensitive name
+  is checked again when its diff is read. Message and author are shown with `visibleUnsafe`.
 - **`<details>` in a previewed Markdown file** (`detailsBlocks` in
   `pwa/src/utils/markdown-safety.ts`, Files/Changes only): raw HTML is never parsed or passed to
   React. A remark plugin, run before `htmlAsText`, folds an html node that is exactly a
