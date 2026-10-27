@@ -254,3 +254,53 @@ describe('parseSolo', () => {
     expect(parseSolo(hash)).toBe(solo)
   })
 })
+
+describe('a Place in a link', () => {
+  it('keeps the Place of a Files path, both ways', () => {
+    const link = {
+      group: '$0',
+      tab: '@1',
+      view: 'files',
+      file: 'a.md',
+      place: 'ab12cd34ab12cd34',
+    }
+    const hash = formatDeepLink(link)
+    expect(hash).toBe(
+      '#/s/%240/%401?view=files&file=a.md&place=ab12cd34ab12cd34',
+    )
+    expect(parseDeepLink(hash)).toEqual(link)
+  })
+
+  it('never in Changes or without a file', () => {
+    expect(
+      formatDeepLink({
+        group: 'g',
+        tab: 't',
+        view: 'changes',
+        file: 'a',
+        place: 'p',
+      }),
+    ).toBe('#/s/g/t?view=changes&file=a')
+    expect(parseDeepLink('#/s/g/t?view=changes&file=a&place=p')).toEqual({
+      group: 'g',
+      tab: 't',
+      view: 'changes',
+      file: 'a',
+    })
+    expect(parseDeepLink('#/s/g/t?view=files&place=p')?.place).toBeUndefined()
+  })
+
+  it('refuses a Place that cannot be an id', () => {
+    expect(
+      parseDeepLink('#/s/g/t?view=files&file=a&place=a%2Fb'),
+    ).toMatchObject({
+      badFile: true,
+    })
+    expect(parseDeepLink('#/s/g/t?view=files&file=a&place=')).toEqual({
+      group: 'g',
+      tab: 't',
+      view: 'files',
+      file: 'a',
+    })
+  })
+})

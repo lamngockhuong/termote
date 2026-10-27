@@ -187,7 +187,7 @@ func (f *filesAPI) writeContent(root filesRoot, in writeRequest) (writeResponse,
 	if !utf8.ValidString(text) || strings.ContainsAny(text, "\x00\r") {
 		return writeResponse{}, errEditNotText
 	}
-	unlock := f.writeLocks.lock(root.Root + "\x00" + rel)
+	unlock := f.writeLocks.lock(fileLockKey(root.Root, rel))
 	defer unlock()
 
 	rt, err := os.OpenRoot(root.Root)

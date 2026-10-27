@@ -88,13 +88,13 @@ describe('useFiles', () => {
     expect(result.current.isRepo).toBe(true)
     // The first read does not know the root yet
     expect(mockTree).toHaveBeenCalledTimes(1)
-    expect(mockTree).toHaveBeenCalledWith('%1', '', undefined)
+    expect(mockTree).toHaveBeenCalledWith({ paneId: '%1' }, '', undefined)
 
     act(() => result.current.toggle('src'))
     expect(result.current.expanded.src).toBe(true)
     expect(result.current.dirs.src.loading).toBe(true)
     await waitFor(() => expect(result.current.dirs.src.entries).toHaveLength(1))
-    expect(mockTree).toHaveBeenLastCalledWith('%1', 'src', '/r')
+    expect(mockTree).toHaveBeenLastCalledWith({ paneId: '%1' }, 'src', '/r')
 
     // Closed and opened again: read already
     act(() => result.current.toggle('src'))
@@ -182,7 +182,7 @@ describe('useFiles', () => {
     await waitFor(() =>
       expect(result.current.dirs[''].entries).toEqual([file('n')]),
     )
-    expect(mockTree).toHaveBeenLastCalledWith('%1', '', '/n')
+    expect(mockTree).toHaveBeenLastCalledWith({ paneId: '%1' }, '', '/n')
     // Told again about the same root: nothing to do
     act(() => result.current.rootChanged('/n'))
     expect(result.current.rootChanges).toBe(1)
@@ -257,7 +257,11 @@ describe('following links', () => {
       )
     })
     expect(r).toBe('opened')
-    expect(mockTree).toHaveBeenLastCalledWith('%1', 'docs', undefined)
+    expect(mockTree).toHaveBeenLastCalledWith(
+      { paneId: '%1' },
+      'docs',
+      undefined,
+    )
     expect(result.current.active?.path).toBe('docs/guide.md')
     expect(result.current.active?.anchor).toBe('usage')
     expect(result.current.active?.history).toEqual([
@@ -357,7 +361,7 @@ describe('following links', () => {
       r = await pending
     })
     expect(r).toBe('opened')
-    expect(mockTree).toHaveBeenLastCalledWith('%1', 'docs', '/new')
+    expect(mockTree).toHaveBeenLastCalledWith({ paneId: '%1' }, 'docs', '/new')
     expect(result.current.active?.path).toBe('docs/guide.md')
   })
 
@@ -457,7 +461,7 @@ describe('following links', () => {
     await act(async () => {
       expect(await followPathInFiles('%1', '/r/docs/guide.md')).toBe('opened')
     })
-    expect(mockTree).toHaveBeenCalledWith('%1', '')
+    expect(mockTree).toHaveBeenCalledWith({ paneId: '%1' }, '')
     expect(result.current.active?.path).toBe('docs/guide.md')
   })
 
@@ -509,7 +513,7 @@ describe('following links', () => {
     await waitFor(() => expect(result.current.root).toBe('/r'))
     mockTree.mockClear()
     await act(() => followPathInFiles('%1', '/r/docs/guide.md'))
-    expect(mockTree).toHaveBeenCalledWith('%1', '')
+    expect(mockTree).toHaveBeenCalledWith({ paneId: '%1' }, '')
     expect(result.current.active?.path).toBe('docs/guide.md')
   })
 
@@ -678,7 +682,7 @@ describe('tabs', () => {
       text: changed ? 'y' : 'x',
       reveal: false,
     }
-    renderHook(() => useFileDraft('%1', path)).result.current[1](d)
+    renderHook(() => useFileDraft('%1', '/r', path)).result.current[1](d)
   }
 
   async function loaded() {
@@ -726,14 +730,14 @@ describe('tabs', () => {
       act(() => result.current.open(p, { pin: true }))
     edit('b.md')
     // Changes' editor of the same file reads the same draft
-    const changes = renderHook(() => useFileDraft('%1', 'b.md'))
+    const changes = renderHook(() => useFileDraft('%1', '/r', 'b.md'))
     expect(changes.result.current[0]?.text).toBe('y')
     const [, b] = result.current.tabs
     act(() => result.current.activate(b.id))
     act(() => result.current.close(b.id))
     expect(paths(result.current.tabs)).toEqual(['a.md', 'c.md'])
     expect(result.current.active?.path).toBe('c.md')
-    expect(isDraftDirty('%1', 'b.md')).toBe(false)
+    expect(isDraftDirty('%1', '/r', 'b.md')).toBe(false)
     // Closing the tab dropped it there too (the close asked first)
     expect(changes.result.current[0]).toBeUndefined()
     // Unknown: nothing happens
@@ -761,7 +765,7 @@ describe('tabs', () => {
     // The preview tab is replaced by another file
     act(() => result.current.open('b.md'))
     expect(
-      renderHook(() => useFileDraft('%1', 'a.md')).result.current[0],
+      renderHook(() => useFileDraft('%1', '/r', 'a.md')).result.current[0],
     ).toBeUndefined()
   })
 
@@ -953,7 +957,7 @@ describe('tabs', () => {
     act(() => result.current.resolveRootClose(false))
     expect(result.current.pendingRootClose).toBeUndefined()
     expect(result.current.tabs).toHaveLength(2)
-    expect(isDraftDirty('%1', 'b.md')).toBe(true)
+    expect(isDraftDirty('%1', '/r', 'b.md')).toBe(true)
     // Asked again on the next move, then closed with their changes
     act(() => result.current.rootChanged('/m'))
     expect(result.current.pendingRootClose).toEqual(ids)
@@ -961,7 +965,7 @@ describe('tabs', () => {
     expect(result.current.pendingRootClose).toEqual([ids[1]])
     act(() => result.current.resolveRootClose(true))
     expect(result.current.tabs).toEqual([])
-    expect(isDraftDirty('%1', 'c.md')).toBe(false)
+    expect(isDraftDirty('%1', '/r', 'c.md')).toBe(false)
     expect(result.current.active).toBeUndefined()
   })
 
@@ -982,7 +986,7 @@ describe('tabs', () => {
     act(() => result.current.rootChanged('/n'))
     const asked = result.current.tabs[0].id
     // Its changes are dropped elsewhere (Changes), then nine more open
-    dropDraft('%1', 'a.md')
+    dropDraft('%1', '/r', 'a.md')
     for (let i = 0; i < 10; i++)
       act(() => result.current.open(`n${i}`, { pin: true }))
     expect(result.current.tabs.map((t) => t.id)).not.toContain(asked)
@@ -1069,7 +1073,7 @@ describe('useFiles search, delete and restore', () => {
     act(() => result.current.deleted('x'))
     expect(result.current.expanded).toEqual({})
     expect(result.current.dirs.x).toBeUndefined()
-    expect(mockTree).toHaveBeenLastCalledWith('%1', '', '/r')
+    expect(mockTree).toHaveBeenLastCalledWith({ paneId: '%1' }, '', '/r')
     // Another file stays open
     await act(() => result.current.reveal('a.md'))
     act(() => result.current.deleted('x/y/z.md'))
@@ -1102,9 +1106,9 @@ describe('useFileDraft', () => {
   }
 
   it('keeps one draft per pane and path, shared by every reader, until dropped', () => {
-    const one = renderHook(() => useFileDraft('%1', 'a'))
-    const again = renderHook(() => useFileDraft('%1', 'a'))
-    const other = renderHook(() => useFileDraft('%2', 'a'))
+    const one = renderHook(() => useFileDraft('%1', '/r', 'a'))
+    const again = renderHook(() => useFileDraft('%1', '/r', 'a'))
+    const other = renderHook(() => useFileDraft('%2', '/r', 'a'))
     expect(one.result.current[0]).toBeUndefined()
     act(() => one.result.current[1](draft))
     expect(again.result.current[0]).toEqual(draft)
@@ -1112,7 +1116,7 @@ describe('useFileDraft', () => {
     // Outlives its readers
     one.unmount()
     again.unmount()
-    const later = renderHook(() => useFileDraft('%1', 'a'))
+    const later = renderHook(() => useFileDraft('%1', '/r', 'a'))
     expect(later.result.current[0]).toEqual(draft)
     act(() => later.result.current[1](undefined))
     expect(later.result.current[0]).toBeUndefined()
@@ -1125,8 +1129,8 @@ describe('useFileDraft', () => {
     await waitFor(() => expect(files.result.current.dirs['']).toBeDefined())
     act(() => files.result.current.open('a'))
     files.unmount()
-    const one = renderHook(() => useFileDraft('1', 'a'))
-    const two = renderHook(() => useFileDraft('2', 'a'))
+    const one = renderHook(() => useFileDraft('1', '/r', 'a'))
+    const two = renderHook(() => useFileDraft('2', '/r', 'a'))
     act(() => one.result.current[1](draft))
     act(() => two.result.current[1]({ ...draft, text: 'other' }))
     // 1 moved to 2; 2's pane is gone
@@ -1139,19 +1143,19 @@ describe('useFileDraft', () => {
     const moved = renderHook(() => useFiles('2'))
     expect(moved.result.current.tabs.map((t) => t.path)).toEqual(['a'])
     await waitFor(() =>
-      expect(mockTree).toHaveBeenLastCalledWith('2', '', '/r'),
+      expect(mockTree).toHaveBeenLastCalledWith({ paneId: '2' }, '', '/r'),
     )
     expect(renderHook(() => useFiles('1')).result.current.dirs).toEqual({})
   })
 
   it('keeps a draft of each file at once', () => {
-    const a = renderHook(() => useFileDraft('%1', 'a'))
-    const b = renderHook(() => useFileDraft('%1', 'b'))
+    const a = renderHook(() => useFileDraft('%1', '/r', 'a'))
+    const b = renderHook(() => useFileDraft('%1', '/r', 'b'))
     act(() => a.result.current[1](draft))
     act(() => b.result.current[1]({ ...draft, path: 'b', text: 'z' }))
     expect(a.result.current[0]?.text).toBe('y')
     expect(b.result.current[0]?.text).toBe('z')
-    act(() => dropDraft('%1', 'a'))
+    act(() => dropDraft('%1', '/r', 'a'))
     expect(a.result.current[0]).toBeUndefined()
     expect(b.result.current[0]?.text).toBe('z')
   })
@@ -1159,17 +1163,17 @@ describe('useFileDraft', () => {
   it('useDirtyCheck reads again whenever a draft changes', () => {
     const check = renderHook(() => useDirtyCheck('%1'))
     const first = check.result.current
-    expect(first('a')).toBe(false)
-    const h = renderHook(() => useFileDraft('%1', 'a'))
+    expect(first('/r', 'a')).toBe(false)
+    const h = renderHook(() => useFileDraft('%1', '/r', 'a'))
     act(() => h.result.current[1](draft))
     expect(check.result.current).not.toBe(first)
-    expect(check.result.current('a')).toBe(true)
+    expect(check.result.current('/r', 'a')).toBe(true)
     act(() => h.result.current[1]({ ...draft, text: draft.base }))
-    expect(check.result.current('a')).toBe(false)
+    expect(check.result.current('/r', 'a')).toBe(false)
   })
 
   it('updates from the draft in the store now', () => {
-    const h = renderHook(() => useFileDraft('%1', 'a'))
+    const h = renderHook(() => useFileDraft('%1', '/r', 'a'))
     act(() => h.result.current[1](draft))
     act(() =>
       h.result.current[1]((now) => now && { ...now, text: `${now.text}z` }),
@@ -1180,7 +1184,7 @@ describe('useFileDraft', () => {
   })
 
   it('is forgotten with the stores', () => {
-    const h = renderHook(() => useFileDraft('%1', 'a'))
+    const h = renderHook(() => useFileDraft('%1', '/r', 'a'))
     act(() => h.result.current[1](draft))
     act(() => resetFilesStores())
     h.rerender()
@@ -1193,16 +1197,16 @@ describe('useFileDraft', () => {
       window.dispatchEvent(ev)
       return ev.defaultPrevented
     }
-    const h = renderHook(() => useFileDraft('%1', 'a'))
+    const h = renderHook(() => useFileDraft('%1', '/r', 'a'))
     act(() => h.result.current[1]({ ...draft, text: draft.base }))
     expect(unload()).toBe(false)
     act(() => h.result.current[1](draft))
     h.unmount()
     expect(unload()).toBe(true)
     // Any file with changes keeps asking
-    const other = renderHook(() => useFileDraft('%1', 'b'))
+    const other = renderHook(() => useFileDraft('%1', '/r', 'b'))
     act(() => other.result.current[1]({ ...draft, path: 'b' }))
-    act(() => dropDraft('%1', 'a'))
+    act(() => dropDraft('%1', '/r', 'a'))
     expect(unload()).toBe(true)
     act(() => resetFilesStores())
     expect(unload()).toBe(false)
@@ -1290,31 +1294,31 @@ describe('a renamed file', () => {
     const two = await loaded('%2')
     act(() => one.result.current.open('a.md'))
     act(() => two.result.current.open('a.md'))
-    renderHook(() => useFileDraft('%1', 'a.md')).result.current[1](
+    renderHook(() => useFileDraft('%1', '/r', 'a.md')).result.current[1](
       draft('a.md'),
     )
-    renderHook(() => useFileDraft('%2', 'a.md')).result.current[1](
+    renderHook(() => useFileDraft('%2', '/r', 'a.md')).result.current[1](
       draft('a.md'),
     )
-    renderHook(() => useFileDraft('%3', 'a.md')).result.current[1](
+    renderHook(() => useFileDraft('%3', '/r', 'a.md')).result.current[1](
       draft('a.md', 'y', '/other'),
     )
-    const moved = renderHook(() => useFileDraft('%2', 'c.md'))
+    const moved = renderHook(() => useFileDraft('%2', '/r', 'c.md'))
     act(() => fileRenamed('/r', 'a.md', 'c.md', true))
     expect(moved.result.current[0]).toMatchObject({
       path: 'c.md',
       reveal: true,
     })
-    expect(isDraftDirty('%1', 'c.md')).toBe(true)
-    expect(isDraftDirty('%1', 'a.md')).toBe(false)
-    expect(isDraftDirty('%3', 'a.md')).toBe(true)
+    expect(isDraftDirty('%1', '/r', 'c.md')).toBe(true)
+    expect(isDraftDirty('%1', '/r', 'a.md')).toBe(false)
+    expect(isDraftDirty('%3', '/r', 'a.md')).toBe(true)
     expect(two.result.current.tabs[0].path).toBe('c.md')
   })
 
   it('a tab kept from another root is another file: it stays', async () => {
     const { result } = await loaded()
     act(() => result.current.open('a.md'))
-    renderHook(() => useFileDraft('%1', 'a.md')).result.current[1](
+    renderHook(() => useFileDraft('%1', '/r', 'a.md')).result.current[1](
       draft('a.md'),
     )
     // The pane moved: the edited tab is kept, asked about
@@ -1348,11 +1352,11 @@ describe('a renamed file', () => {
   })
 
   it('hasDirtyDraftAt sees unsaved changes of any pane of the root', () => {
-    renderHook(() => useFileDraft('%1', 'a.md')).result.current[1](
+    renderHook(() => useFileDraft('%1', '/r', 'a.md')).result.current[1](
       draft('a.md', 'x'),
     )
     expect(hasDirtyDraftAt('/r', 'a.md')).toBe(false)
-    renderHook(() => useFileDraft('%2', 'a.md')).result.current[1](
+    renderHook(() => useFileDraft('%2', '/r', 'a.md')).result.current[1](
       draft('a.md'),
     )
     expect(hasDirtyDraftAt('/r', 'a.md')).toBe(true)
@@ -1371,7 +1375,7 @@ describe('tabs kept on the device', () => {
       new Map([['%1', '@1']]),
     )
   const edit = (path: string) =>
-    renderHook(() => useFileDraft('%1', path)).result.current[1]({
+    renderHook(() => useFileDraft('%1', '/r', path)).result.current[1]({
       root: '/r',
       path,
       baseHash: 'h',
@@ -1425,7 +1429,7 @@ describe('tabs kept on the device', () => {
     expect(result.current.active?.scrollTop).toBe(120)
     // The first read names the root the tabs were opened under
     act(() => result.current.load())
-    expect(mockTree).toHaveBeenLastCalledWith('%1', '', '/r')
+    expect(mockTree).toHaveBeenLastCalledWith({ paneId: '%1' }, '', '/r')
     // A tab opened now takes an id of its own
     act(() => result.current.open('c.md', { pin: true }))
     const ids = result.current.tabs.map((t) => t.id)
@@ -1726,12 +1730,12 @@ describe('drafts kept on the device', () => {
     reveal: false,
   })
   const set = (paneId: string, path: string, d: FileDraft | undefined) => {
-    const setDraft = renderHook(() => useFileDraft(paneId, path)).result
+    const setDraft = renderHook(() => useFileDraft(paneId, '/r', path)).result
       .current[1]
     act(() => setDraft(d))
   }
   const key = (path: string, pane = '@1') =>
-    `termote-file-drafts:i1:${pane}:${path}`
+    `termote-file-drafts:i1:${pane}:/r\u0000${path}`
   const stored = (path: string, pane = '@1') =>
     JSON.parse(localStorage.getItem(key(path, pane)) ?? 'null')
   const unload = () => {
@@ -1761,7 +1765,7 @@ describe('drafts kept on the device', () => {
     expect(stored('a.md')).toBeNull()
     set('%1', 'a.md', draft('a.md'))
     // Saved (or discarded): gone at once, no timer
-    act(() => dropDraft('%1', 'a.md'))
+    act(() => dropDraft('%1', '/r', 'a.md'))
     expect(stored('a.md')).toBeNull()
   })
 
@@ -1770,7 +1774,7 @@ describe('drafts kept on the device', () => {
     expect(Object.keys(localStorage).join()).not.toContain('.env')
     expect(JSON.stringify(localStorage)).not.toContain('mine')
     expect(unload()).toBe(true)
-    act(() => dropDraft('%1', '.env'))
+    act(() => dropDraft('%1', '/r', '.env'))
     expect(unload()).toBe(false)
   })
 
@@ -1784,7 +1788,7 @@ describe('drafts kept on the device', () => {
     // Written once there is room: no longer asked about
     set('%1', 'a.md', draft('a.md', 'more'))
     expect(unload()).toBe(false)
-    act(() => dropDraft('%1', 'a.md'))
+    act(() => dropDraft('%1', '/r', 'a.md'))
   })
 
   it('keep when they were last edited, not last written', () => {
@@ -1822,15 +1826,15 @@ describe('drafts kept on the device', () => {
     set('%1', 'b.md', draft('b.md', 'newer'))
     act(() => hydrateDrafts(['%1', '%2', 'nope']))
     const read = (p: string, f: string) =>
-      renderHook(() => useFileDraft(p, f)).result.current[0]
+      renderHook(() => useFileDraft(p, '/r', f)).result.current[0]
     expect(read('%1', 'a.md')).toEqual(draft('a.md'))
     expect(read('%1', 'b.md')?.text).toBe('newer')
     expect(read('%2', 'c.md')).toEqual(draft('c.md'))
-    expect(isDraftDirty('%1', 'a.md')).toBe(true)
+    expect(isDraftDirty('%1', '/r', 'a.md')).toBe(true)
     // Kept on the device: no need to ask
     expect(unload()).toBe(false)
     // Read once: a draft dropped since does not come back
-    act(() => dropDraft('%1', 'a.md'))
+    act(() => dropDraft('%1', '/r', 'a.md'))
     act(() => hydrateDrafts(['%1']))
     expect(read('%1', 'a.md')).toBeUndefined()
   })
@@ -1862,10 +1866,10 @@ describe('drafts kept on the device', () => {
     put('g', { ...draft('g'), encoding: 'latin1' })
     put('h', { ...draft('h'), encoding: 'shift_jis' })
     act(() => hydrateDrafts(['%1']))
-    expect(isDraftDirty('%1', 'f')).toBe(true)
-    expect(isDraftDirty('%1', 'h')).toBe(true)
+    expect(isDraftDirty('%1', '/r', 'f')).toBe(true)
+    expect(isDraftDirty('%1', '/r', 'h')).toBe(true)
     for (const p of ['a', 'b', 'c', 'd', 'e', 'g'])
-      expect(isDraftDirty('%1', p)).toBe(false)
+      expect(isDraftDirty('%1', '/r', p)).toBe(false)
   })
 
   it('of another server do not come back; a view-only client keeps none', () => {
@@ -1873,10 +1877,10 @@ describe('drafts kept on the device', () => {
     resetFilesStores()
     snapshot('i2')
     act(() => hydrateDrafts(['%1']))
-    expect(isDraftDirty('%1', 'a.md')).toBe(false)
+    expect(isDraftDirty('%1', '/r', 'a.md')).toBe(false)
     reopen()
     act(() => hydrateDrafts(['%1'], 'view'))
-    expect(isDraftDirty('%1', 'a.md')).toBe(false)
+    expect(isDraftDirty('%1', '/r', 'a.md')).toBe(false)
     expect(stored('a.md')).toBeNull()
     // Nor writes any
     set('%1', 'b.md', draft('b.md'))
@@ -1888,12 +1892,12 @@ describe('drafts kept on the device', () => {
     set('%1', 'a.md', draft('a.md'))
     set('%1', 'b.md', draft('b.md'))
     // A saves a.md; B goes on editing b.md
-    act(() => dropDraft('%1', 'a.md'))
+    act(() => dropDraft('%1', '/r', 'a.md'))
     set('%1', 'b.md', draft('b.md', 'more'))
     reopen()
     act(() => hydrateDrafts(['%1']))
-    expect(isDraftDirty('%1', 'a.md')).toBe(false)
-    expect(isDraftDirty('%1', 'b.md')).toBe(true)
+    expect(isDraftDirty('%1', '/r', 'a.md')).toBe(false)
+    expect(isDraftDirty('%1', '/r', 'b.md')).toBe(true)
   })
 
   it('go from memory when another tab signs out', () => {
@@ -1904,7 +1908,7 @@ describe('drafts kept on the device', () => {
         newValue: '1',
       }),
     )
-    expect(isDraftDirty('%1', 'a.md')).toBe(false)
+    expect(isDraftDirty('%1', '/r', 'a.md')).toBe(false)
     expect(localStorage.getItem(key('a.md'))).toBeNull()
   })
 
@@ -1942,7 +1946,8 @@ describe('drafts kept on the device', () => {
     set('%1', 't.csv', { ...draft('t.csv', text), cells })
     reopen()
     act(() => hydrateDrafts(['%1']))
-    const back = renderHook(() => useFileDraft('%1', 't.csv')).result.current[0]
+    const back = renderHook(() => useFileDraft('%1', '/r', 't.csv')).result
+      .current[0]
     expect(back?.cells).toEqual(cells)
     expect(undoOp(back?.text as string, back?.cells?.ops[0] as TableOp)).toBe(
       base,
@@ -1959,7 +1964,8 @@ describe('drafts kept on the device', () => {
     reopen()
     act(() => hydrateDrafts(['%1']))
     expect(
-      renderHook(() => useFileDraft('%1', 't.csv')).result.current[0]?.cells,
+      renderHook(() => useFileDraft('%1', '/r', 't.csv')).result.current[0]
+        ?.cells,
     ).toEqual(cells)
   })
 })

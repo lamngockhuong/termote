@@ -151,6 +151,10 @@ func (f *filesAPI) createFile(root filesRoot, in createRequest) (createResponse,
 // locks root + "\x00create", and taking the same mutex twice would hang.
 func rootLockKey(root string) string { return root + "\x01create" }
 
+// fileLockKey is the lock of one file: its absolute path, so a pane's root
+// and a Place inside it (or around it) share it.
+func fileLockKey(root, rel string) string { return filepath.Join(root, rel) }
+
 // createDenied reports whether a create may not touch rel: the repo's git
 // dir, a deny dir, or a dir a save never writes to.
 func (f *filesAPI) createDenied(root filesRoot, rel string) bool {

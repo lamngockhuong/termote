@@ -490,11 +490,14 @@ function PaneChanges({
   const undo = async (d: Discarding, trashId: string) => {
     const name = visibleUnsafe(splitPath(d.entry.path)[1])
     try {
-      await restoreFile(paneId, {
-        root: d.root,
-        trashId,
-        reveal: d.entry.sensitive,
-      })
+      await restoreFile(
+        { paneId },
+        {
+          root: d.root,
+          trashId,
+          reveal: d.entry.sensitive,
+        },
+      )
       refresh()
       notify(`Restored ${name}`, { variant: 'success' })
     } catch (err) {
@@ -531,7 +534,7 @@ function PaneChanges({
   }
 
   // Only an editor holds unsaved changes
-  const tabDirty = (t: ChangeTab) => t.editing && isDirty(t.path)
+  const tabDirty = (t: ChangeTab) => t.editing && isDirty(t.root, t.path)
   // A tab with unsaved changes closes only once the user says so, unless
   // another tab edits the same file: the changes stay there
   const requestClose = (id: string) => {
@@ -591,6 +594,7 @@ function PaneChanges({
         key={`${tab.id}\u0000${c.root}\u0000${tab.path}`}
         paneId={paneId}
         root={c.root}
+        draftRoot={tab.root}
         path={tab.path}
         wrapByDefault={isMobile || settings.editorWrap}
         compact={isMobile}

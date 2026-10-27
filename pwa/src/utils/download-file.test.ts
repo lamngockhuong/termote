@@ -182,7 +182,7 @@ describe('downloadFile', () => {
     mockCheck.mockResolvedValue({ root: '/r', path: 'dir/a b.bin', size: 1 })
     const notify = vi.fn()
     await downloadFile(file, notify, undefined, { iosStandalone: false })
-    expect(mockCheck).toHaveBeenCalledWith('%1', 'dir/a b.bin', {
+    expect(mockCheck).toHaveBeenCalledWith({ paneId: '%1' }, 'dir/a b.bin', {
       root: '/r',
       reveal: true,
     })

@@ -102,6 +102,9 @@ type Caps struct {
 	// Trash: the server has a usable trash (files/delete, files/restore).
 	// Set by the snapshot route, not by the backend.
 	Trash bool `json:"trash"`
+	// Places: Files offers folders besides the pane's (files/places), to
+	// a full client only.
+	Places bool `json:"places"`
 	// Auth: sign-in is on, so the PWA offers Log out. Set by the snapshot
 	// route, from the request basicAuth let through.
 	Auth bool `json:"auth"`
@@ -345,6 +348,7 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 		snap.Caps = m.Caps()
 		snap.Caps.Uploads = uploads != nil
 		snap.Caps.Trash = agent.files != nil && agent.files.trash != nil
+		snap.Caps.Places = agent.files != nil && len(agent.files.places) > 0 && snap.Caps.Files && !isViewOnly(r)
 		snap.Caps.Auth = authenticated(r.Context())
 		if snap.Caps.Auth {
 			snap.Caps.Role = string(requestRole(r.Context()))

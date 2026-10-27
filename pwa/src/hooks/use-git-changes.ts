@@ -199,7 +199,8 @@ function createStore(id: string): Store {
   // When each tab was last shown, and the ids of new ones
   let { clock, ids } = restoredCounters(state.tabs)
   // Only an editor holds unsaved changes
-  const isDirty = (t: ChangeTab) => t.editing && isDraftDirty(paneId, t.path)
+  const isDirty = (t: ChangeTab) =>
+    t.editing && isDraftDirty(paneId, t.root, t.path)
   // No list at all once nothing waits for the user
   const pendingOf = (ids?: string[]) => (ids?.length ? ids : undefined)
 
@@ -272,9 +273,10 @@ function createStore(id: string): Store {
   function dropDraftOf(tab: ChangeTab) {
     if (!tab.editing) return
     const other = state.tabs.some(
-      (t) => t !== tab && t.editing && t.path === tab.path,
+      (t) =>
+        t !== tab && t.editing && t.path === tab.path && t.root === tab.root,
     )
-    if (!other) dropDraft(paneId, tab.path)
+    if (!other) dropDraft(paneId, tab.root, tab.path)
   }
 
   function patchTab(id: string, patch: Partial<ChangeTab>) {

@@ -131,7 +131,7 @@ describe('ImageCompare', () => {
     expect(screen.getByText('After · Working tree')).toBeInTheDocument()
     expect(container.querySelector('.grid-cols-2')).not.toBeNull()
     expect(mockImage).toHaveBeenCalledWith(
-      '%1',
+      { paneId: '%1' },
       'img/b.png',
       {
         side: 'old',

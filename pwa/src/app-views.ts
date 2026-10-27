@@ -67,6 +67,8 @@ export interface FileWindowTarget {
   file: string
   staged?: boolean
   orig?: string
+  // The Place a Files path is under
+  place?: string
 }
 
 // A view component, or a lazy one with retry() for a chunk that failed to load

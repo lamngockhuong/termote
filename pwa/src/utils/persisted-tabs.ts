@@ -35,6 +35,9 @@ export interface PersistedChangeTab {
 
 export interface PersistedTabs<T> {
   root?: string
+  // The Place the Files view shows (its id), absent for the pane's folder:
+  // kept even without a tab
+  place?: string
   tabs: T[]
   activeId: string | null
   pendingRootClose?: string[]
@@ -42,6 +45,7 @@ export interface PersistedTabs<T> {
 
 interface TabsState<T> {
   root?: string
+  place?: string
   tabs: T[]
   activeId: string | null
   pendingRootClose?: string[]
@@ -117,11 +121,12 @@ function persisted<T extends { id: string }, P>(
   pick: (t: T) => P,
 ): PersistedTabs<P> | null {
   const tabs = state.tabs.filter((t) => !hidden(t))
-  if (!tabs.length) return null
+  if (!tabs.length && !state.place) return null
   const ids = new Set(tabs.map((t) => t.id))
   const pending = state.pendingRootClose?.filter((id) => ids.has(id))
   return {
     root: state.root,
+    ...(state.place && { place: state.place }),
     tabs: tabs.map(pick),
     activeId:
       state.activeId !== null && ids.has(state.activeId)
@@ -131,7 +136,7 @@ function persisted<T extends { id: string }, P>(
   }
 }
 
-// The tabs of a record, checked: null when none is left
+// The tabs of a record, checked: null when none is left (and no Place)
 function restored<P extends { id: string }>(
   raw: unknown,
   isTab: (v: unknown) => v is P,
@@ -142,13 +147,15 @@ function restored<P extends { id: string }>(
     // One tab per id: a second would be closed with the first
     if (isTab(t) && !tabs.some((o) => o.id === t.id)) tabs.push(t)
   }
-  if (!tabs.length) return null
+  const place = isString(raw.place) && raw.place ? raw.place : undefined
+  if (!tabs.length && !place) return null
   const ids = new Set(tabs.map((t) => t.id))
   const pending = Array.isArray(raw.pendingRootClose)
     ? raw.pendingRootClose.filter((id): id is string => ids.has(id as string))
     : []
   return {
     root: isString(raw.root) ? raw.root : undefined,
+    ...(place && { place }),
     tabs,
     activeId:
       isString(raw.activeId) && ids.has(raw.activeId) ? raw.activeId : null,

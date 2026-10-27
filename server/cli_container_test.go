@@ -533,3 +533,104 @@ func TestWithStderr(t *testing.T) {
 		t.Fatal("an error without stderr changed")
 	}
 }
+
+func TestContainerUpPlaces(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the test CLI saves a Unix config, which refuses a path holding ':' (C:\\...)")
+	}
+	cc := newContainerCLI(t)
+	notes := mkdir(t, filepath.Join(cc.home, "notes"))
+	docs := mkdir(t, filepath.Join(cc.home, "my docs"))
+	ws := filepath.Join(t.TempDir(), "ws")
+	port := freePort(t)
+	up := func(args ...string) string {
+		t.Helper()
+		if cc.srv != nil {
+			cc.srv.Close()
+			cc.srv = nil
+		}
+		cc.runArgs = nil
+		if code := cc.main(append([]string{"container", "up"}, args...)); code != 0 {
+			t.Fatalf("up %v: code %d\n%s%s", args, code, cc.stdout.String(), cc.stderr.String())
+		}
+		return strings.Join(cc.runArgs, " ")
+	}
+	notesMount := "--mount type=bind,src=" + notes + ",dst=/places/" + placeID(notes) + "-notes"
+	docsMount := "--mount type=bind,src=" + docs + ",dst=/places/" + placeID(docs) + "-my_docs"
+
+	args := up("--port", strconv.Itoa(port), "--workspace", ws, "--allow-path", notes, "--allow-path", docs)
+	for _, want := range []string{notesMount, docsMount, "-e TERMOTE_PLACES"} {
+		if !strings.Contains(args, want) {
+			t.Errorf("run args miss %q: %s", want, args)
+		}
+	}
+	if strings.Contains(args, "TERMOTE_PLACES=") {
+		t.Fatalf("places on the command line: %s", args)
+	}
+	got := parsePlacesEnv(cc.runEnv["TERMOTE_PLACES"])
+	if len(got) != 2 || got[0] != (placeSpec{ID: placeID(docs), Name: "my docs", Path: "/places/" + placeID(docs) + "-my_docs"}) ||
+		got[1] != (placeSpec{ID: placeID(notes), Name: "notes", Path: "/places/" + placeID(notes) + "-notes"}) {
+		t.Fatalf("TERMOTE_PLACES = %+v", got)
+	}
+	if cfg, _ := cc.loadConfig(); cfg.Container == nil || strings.Join(cfg.Container.AllowPaths, "|") != docs+"|"+notes || len(cfg.AllowPaths) != 0 {
+		t.Fatalf("saved %+v", cfg.Container)
+	}
+
+	// A plain up keeps the list; removing one leaves the other's mount.
+	if args := up(); !strings.Contains(args, notesMount) || !strings.Contains(args, docsMount) {
+		t.Fatalf("plain up lost the places: %s", args)
+	}
+	args = up("--remove-path", docs)
+	if !strings.Contains(args, notesMount) || strings.Contains(args, "my_docs") {
+		t.Fatalf("after remove: %s", args)
+	}
+	if cfg, _ := cc.loadConfig(); strings.Join(cfg.Container.AllowPaths, "|") != notes {
+		t.Fatalf("saved after remove %+v", cfg.Container)
+	}
+
+	// A saved folder that fails now is not mounted.
+	os.RemoveAll(notes)
+	if args := up(); strings.Contains(args, "/places/") || strings.Contains(args, "TERMOTE_PLACES") {
+		t.Fatalf("a gone place mounted: %s", args)
+	}
+	if !strings.Contains(cc.stdout.String(), "termote container up --remove-path "+notes) {
+		t.Errorf("skipped place not reported:\n%s", cc.stdout.String())
+	}
+}
+
+func TestContainerUpRefusesPlaces(t *testing.T) {
+	cc := newContainerCLI(t)
+	mkdir(t, cc.stateDir())
+	ws := mkdir(t, filepath.Join(cc.home, "ws"))
+	comma := mkdir(t, filepath.Join(cc.home, "a,b"))
+	inWS := mkdir(t, filepath.Join(ws, "sub"))
+	for p, want := range map[string]string{
+		filepath.Join(cc.home, ".local"): "never serves",
+		comma:                            "',' cannot be mounted",
+		inWS:                             "overlaps the workspace",
+		cc.home:                          "home directory",
+	} {
+		cc.stderr.Reset()
+		cc.runArgs = nil
+		if code := cc.main([]string{"container", "up", "--workspace", ws, "--allow-path", p}); code == 0 || !strings.Contains(cc.stderr.String(), want) || cc.runArgs != nil {
+			t.Errorf("%s: code %d, stderr %q", p, code, cc.stderr.String())
+		}
+	}
+	// A workspace inside an allowed folder overlaps it as well.
+	outer := mkdir(t, filepath.Join(cc.home, "outer"))
+	cc.stderr.Reset()
+	if code := cc.main([]string{"container", "up", "--workspace", filepath.Join(outer, "ws"), "--allow-path", outer}); code == 0 || !strings.Contains(cc.stderr.String(), "overlaps the workspace") {
+		t.Errorf("workspace in place: code %d, %q", code, cc.stderr.String())
+	}
+	if cfg, _ := cc.loadConfig(); cfg != nil && cfg.Container != nil {
+		t.Fatalf("config saved for a refused up: %+v", cfg.Container)
+	}
+}
+
+func TestPlaceMountName(t *testing.T) {
+	for in, want := range map[string]string{"notes": "notes", "my docs": "my_docs", "a.b-c_d": "a.b-c_d", "ghi chú": "ghi_ch_", "x,y=z": "x_y_z"} {
+		if got := placeMountName(in); got != want {
+			t.Errorf("%q = %q, want %q", in, got, want)
+		}
+	}
+}

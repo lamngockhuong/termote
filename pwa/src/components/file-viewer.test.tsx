@@ -181,7 +181,7 @@ describe('FileViewer', () => {
     expect(screen.getByText('Loading…')).toBeInTheDocument()
     expect(await screen.findByTestId('code-block')).toHaveTextContent('1x2y')
     expect(screen.getByText('2.0 KiB')).toBeInTheDocument()
-    expect(mockContent).toHaveBeenCalledWith('%1', 'src/a.ts', {
+    expect(mockContent).toHaveBeenCalledWith({ paneId: '%1' }, 'src/a.ts', {
       root: '/r',
       reveal: false,
     })
@@ -280,7 +280,7 @@ describe('FileViewer', () => {
     // only accessible once it is open
     fireEvent.click(await screen.findByRole('button', { name: 'Show' }))
     expect(await screen.findByTestId('code-block')).toHaveTextContent('A=1')
-    expect(mockContent).toHaveBeenLastCalledWith('%1', '.env', {
+    expect(mockContent).toHaveBeenLastCalledWith({ paneId: '%1' }, '.env', {
       root: '/r',
       reveal: true,
     })
@@ -551,7 +551,7 @@ describe('FileViewer: images', () => {
     expect(screen.getAllByText('5 B')).toHaveLength(2)
     expect(mockContent).not.toHaveBeenCalled()
     expect(mockImage).toHaveBeenCalledWith(
-      '%1',
+      { paneId: '%1' },
       'img/a.PNG',
       expect.objectContaining({ root: '/r', reveal: false }),
       expect.any(AbortSignal),
@@ -633,7 +633,7 @@ describe('FileViewer: documents', () => {
     expect(await screen.findAllByText('8 B')).not.toHaveLength(0)
     expect(mockContent).not.toHaveBeenCalled()
     expect(mockDocument).toHaveBeenCalledWith(
-      '%1',
+      { paneId: '%1' },
       'docs/spec.PDF',
       expect.objectContaining({ root: '/r', reveal: false }),
       expect.any(AbortSignal),
@@ -746,13 +746,16 @@ describe('FileViewer editing', () => {
     expect(saveButton()).toBeDisabled()
     type('a\nc\n')
     await act(async () => fireEvent.click(saveButton()))
-    expect(mockSave).toHaveBeenCalledWith('%1', {
-      root: '/r',
-      path: 'src/a.ts',
-      baseHash: 'h:a\nb\n',
-      text: 'a\nc\n',
-      reveal: false,
-    })
+    expect(mockSave).toHaveBeenCalledWith(
+      { paneId: '%1' },
+      {
+        root: '/r',
+        path: 'src/a.ts',
+        baseHash: 'h:a\nb\n',
+        text: 'a\nc\n',
+        reveal: false,
+      },
+    )
     expect(p.notify).toHaveBeenCalledWith('Saved')
     expect(onSaved).toHaveBeenCalled()
     expect(screen.queryByRole('textbox')).toBeNull()
@@ -768,7 +771,7 @@ describe('FileViewer editing', () => {
     })
     await act(async () => fireEvent.click(saveButton()))
     expect(mockSave).toHaveBeenLastCalledWith(
-      '%1',
+      { paneId: '%1' },
       expect.objectContaining({ baseHash: 'h2' }),
     )
   })
@@ -789,7 +792,7 @@ describe('FileViewer editing', () => {
       fireEvent.keyDown(textarea(), { key: 's', ctrlKey: true }),
     )
     expect(mockSave).toHaveBeenCalledWith(
-      '%1',
+      { paneId: '%1' },
       expect.objectContaining({ text: 'a\nc\n' }),
     )
     expect(screen.getByTestId('code-block')).toHaveTextContent(/^1a\s*2c\s*$/)
@@ -973,13 +976,26 @@ describe('FileViewer editing', () => {
     expect(saveButton()).toBeEnabled()
   })
 
+  it('reads without a root before one is known', async () => {
+    mockContent.mockResolvedValue(editable('x'))
+    show({ root: undefined })
+    await waitFor(() =>
+      expect(mockContent).toHaveBeenCalledWith(
+        { paneId: '%1' },
+        'src/a.ts',
+        expect.objectContaining({ root: undefined }),
+      ),
+    )
+  })
+
   it('a draft from before the root moved shows the move and is not saved', async () => {
     mockContent.mockResolvedValue(editable('x'))
     const p = await startEdit()
     type('draft')
     p.unmount()
     mockContent.mockResolvedValue(editable('x', { root: '/n' }))
-    show({ canEdit: true, root: '/n' })
+    // The tab keeps the root it was opened under, whose draft it shows
+    show({ canEdit: true, root: '/n', draftRoot: '/r' })
     expect(textarea()).toHaveValue('draft')
     expect(screen.getByText(/This pane's folder changed/)).toBeInTheDocument()
     expect(saveButton()).toBeDisabled()
@@ -1004,14 +1020,14 @@ describe('FileViewer editing', () => {
       startEditing: true,
     })
     const box = await screen.findByRole('textbox', { name: 'Text of .env' })
-    expect(mockContent).toHaveBeenCalledWith('%1', '.env', {
+    expect(mockContent).toHaveBeenCalledWith({ paneId: '%1' }, '.env', {
       root: '/r',
       reveal: true,
     })
     fireEvent.change(box, { target: { value: 'A=2' } })
     await act(async () => fireEvent.click(saveButton()))
     expect(mockSave).toHaveBeenCalledWith(
-      '%1',
+      { paneId: '%1' },
       expect.objectContaining({ reveal: true }),
     )
   })
@@ -1254,7 +1270,7 @@ describe('FileViewer: editing Markdown', () => {
       }),
     )
     expect(mockSave).toHaveBeenCalledWith(
-      '%1',
+      { paneId: '%1' },
       expect.objectContaining({ text: 'b' }),
     )
     expect(
@@ -1293,7 +1309,7 @@ describe('FileViewer: editing Markdown', () => {
     fireEvent.change(area(), { target: { value: 'b' } })
     p.rerender(
       <ThemeProvider>
-        <FileViewer {...p} root="/other" />
+        <FileViewer {...p} root="/other" draftRoot="/r" />
       </ThemeProvider>,
     )
     fireEvent.keyDown(await screen.findByTestId('markdown-preview'), {
@@ -1522,7 +1538,7 @@ describe('FileViewer: pasting an image into Markdown', () => {
     await pasted()
     expect(area().value).toMatch(new RegExp(`^a${PH.source}b$`))
     expect(mockPasteUpload).toHaveBeenCalledWith(
-      '%1',
+      { paneId: '%1' },
       { root: '/r', dir: 'docs', reveal: false },
       expect.any(File),
     )
@@ -1682,7 +1698,7 @@ describe('FileViewer: pasting an image into Markdown', () => {
     const p = await edit()
     p.rerender(
       <ThemeProvider>
-        <FileViewer {...p} root="/other" />
+        <FileViewer {...p} root="/other" draftRoot="/r" />
       </ThemeProvider>,
     )
     await pasted()
@@ -1970,13 +1986,16 @@ describe('FileViewer: editing a table', () => {
     )
     // The draft's "\n" text, with only the cell's characters changed; the
     // server writes "\r\n" back
-    expect(mockSave).toHaveBeenCalledWith('%1', {
-      root: '/r',
-      path: 'd.csv',
-      baseHash: `h:${text}`,
-      text: '﻿name,price\npear,2.5\nplum,3\n',
-      reveal: false,
-    })
+    expect(mockSave).toHaveBeenCalledWith(
+      { paneId: '%1' },
+      {
+        root: '/r',
+        path: 'd.csv',
+        baseHash: `h:${text}`,
+        text: '﻿name,price\npear,2.5\nplum,3\n',
+        reveal: false,
+      },
+    )
     expect(p.notify).toHaveBeenCalledWith('Saved')
     expect(onSaved).toHaveBeenCalled()
     // Viewed again, with the view's own toolbar
@@ -2052,7 +2071,7 @@ describe('FileViewer: editing a table', () => {
     })
     await act(async () => fireEvent.click(saveButton()))
     expect(mockSave).toHaveBeenCalledWith(
-      '%1',
+      { paneId: '%1' },
       expect.objectContaining({ text: 'a,b;c\n1,2;"x;y"\n' }),
     )
   })
@@ -2079,12 +2098,12 @@ describe('FileViewer: editing a table', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Edit anyway' }))
     expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument()
     expect(screen.queryByRole('textbox', { name: /Text of/ })).toBeNull()
-    const draft = renderHook(() => useFileDraft('%1', 'd.csv'))
+    const draft = renderHook(() => useFileDraft('%1', '/r', 'd.csv'))
     expect(draft.result.current[0]).toMatchObject({
       path: 'd.csv',
       cells: { delimiter: ';', ops: [], redo: [] },
     })
-    const a = renderHook(() => useFileDraft('%1', 'src/a.ts'))
+    const a = renderHook(() => useFileDraft('%1', '/r', 'src/a.ts'))
     expect(a.result.current[0]?.text).toBe('draft of a')
   })
 
@@ -2125,8 +2144,8 @@ describe('FileViewer: editing a table', () => {
     setCell('1', '2')
     fireEvent.click(saveButton())
     // Another view of the pane edits another file meanwhile
-    const mine = renderHook(() => useFileDraft('%1', 'd.csv'))
-    const other = renderHook(() => useFileDraft('%1', 'b.ts'))
+    const mine = renderHook(() => useFileDraft('%1', '/r', 'd.csv'))
+    const other = renderHook(() => useFileDraft('%1', '/r', 'b.ts'))
     const theirs = {
       ...mine.result.current[0],
       path: 'b.ts',
@@ -2147,7 +2166,7 @@ describe('FileViewer: editing a table', () => {
     await editTable()
     setCell('1', '2')
     fireEvent.click(saveButton())
-    const other = renderHook(() => useFileDraft('%1', 'd.csv'))
+    const other = renderHook(() => useFileDraft('%1', '/r', 'd.csv'))
     const sent = other.result.current[0] as FileDraft
     act(() => other.result.current[1]({ ...sent, text: 'a\n3\n' }))
     await act(async () =>
@@ -2168,7 +2187,7 @@ describe('FileViewer: editing a table', () => {
     await editTable()
     setCell('1', '2')
     fireEvent.click(saveButton())
-    const other = renderHook(() => useFileDraft('%1', 'd.csv'))
+    const other = renderHook(() => useFileDraft('%1', '/r', 'd.csv'))
     act(() => other.result.current[1](undefined))
     await act(async () =>
       done({ root: '/r', path: 'd.csv', size: 1, hash: 'h2' }),
@@ -2200,12 +2219,12 @@ describe('FileViewer: editing a table', () => {
         screen.getByRole('button', { name: 'Reload and reapply' }),
       ),
     )
-    expect(mockContent).toHaveBeenLastCalledWith('%1', 'd.csv', {
+    expect(mockContent).toHaveBeenLastCalledWith({ paneId: '%1' }, 'd.csv', {
       root: '/r',
       reveal: false,
     })
     expect(screen.queryByText(/changed on the host/)).toBeNull()
-    const draft = renderHook(() => useFileDraft('%1', 'd.csv')).result
+    const draft = renderHook(() => useFileDraft('%1', '/r', 'd.csv')).result
       .current[0]
     expect(draft).toMatchObject({
       baseHash: `h:${agent}`,
@@ -2220,7 +2239,7 @@ describe('FileViewer: editing a table', () => {
     })
     await act(async () => fireEvent.click(saveButton()))
     expect(mockSave).toHaveBeenLastCalledWith(
-      '%1',
+      { paneId: '%1' },
       expect.objectContaining({
         baseHash: `h:${agent}`,
         text: 'name,price\nkiwi,2\npear,9\nplum,3\n',
@@ -2434,7 +2453,7 @@ describe('FileViewer: editing a table', () => {
     mockContent.mockReturnValueOnce(new Promise((r) => (done = r)))
     fireEvent.click(screen.getByRole('button', { name: 'Reload and reapply' }))
     // Another view of the pane replaced the draft of this file meanwhile
-    const other = renderHook(() => useFileDraft('%1', 'd.csv'))
+    const other = renderHook(() => useFileDraft('%1', '/r', 'd.csv'))
     const theirs = {
       ...(other.result.current[0] as FileDraft),
       text: 'a\n5\n',
@@ -2523,7 +2542,7 @@ describe('FileViewer: editing a table', () => {
         screen.getByRole('button', { name: 'Reload and reapply' }),
       ),
     )
-    const draft = renderHook(() => useFileDraft('%1', 'd.csv')).result
+    const draft = renderHook(() => useFileDraft('%1', '/r', 'd.csv')).result
       .current[0]
     expect(draft?.text.startsWith('id,v\n0,w\n1,v1\n')).toBe(true)
   })
@@ -2672,10 +2691,10 @@ describe('a draft found when the file is read', () => {
       reveal: false,
       ...over,
     }
-    renderHook(() => useFileDraft('%1', 'src/a.ts')).result.current[1](d)
+    renderHook(() => useFileDraft('%1', '/r', 'src/a.ts')).result.current[1](d)
   }
   const draftNow = () =>
-    renderHook(() => useFileDraft('%1', 'src/a.ts')).result.current[0]
+    renderHook(() => useFileDraft('%1', '/r', 'src/a.ts')).result.current[0]
 
   it('of a file unchanged opens in the editor, unsaved', async () => {
     keep()
@@ -2752,7 +2771,7 @@ describe('a draft found when the file is read', () => {
     mockContent.mockResolvedValue(editable('old'))
     show({ canEdit: true })
     await waitFor(() => expect(mockContent).toHaveBeenCalled())
-    expect(mockContent).toHaveBeenCalledWith('%1', 'src/a.ts', {
+    expect(mockContent).toHaveBeenCalledWith({ paneId: '%1' }, 'src/a.ts', {
       root: '/r',
       reveal: true,
     })
@@ -2808,8 +2827,8 @@ describe('a draft found when the file is read', () => {
     let answer!: (v: unknown) => void
     mockContent.mockImplementation(() => new Promise((r) => (answer = r)))
     show({ canEdit: true })
-    const setDraft = renderHook(() => useFileDraft('%1', 'src/a.ts')).result
-      .current[1]
+    const setDraft = renderHook(() => useFileDraft('%1', '/r', 'src/a.ts'))
+      .result.current[1]
     act(() => setDraft(undefined))
     await act(async () => answer(editable('agent')))
     expect(
@@ -3093,10 +3112,10 @@ describe('FileViewer: encodings', () => {
       ),
     )
   const draftNow = (path = 'src/a.ts') =>
-    renderHook(() => useFileDraft('%1', path)).result.current[0]
+    renderHook(() => useFileDraft('%1', '/r', path)).result.current[0]
   // A draft found at mount (kept on the device, or from another view)
   const putDraft = (d: FileDraft) => {
-    const h = renderHook(() => useFileDraft('%1', d.path))
+    const h = renderHook(() => useFileDraft('%1', '/r', d.path))
     act(() => h.result.current[1](d))
   }
 
@@ -3122,7 +3141,7 @@ describe('FileViewer: encodings', () => {
     ).toHaveAttribute('aria-checked', 'true')
     mockContent.mockResolvedValue(editable('y', { encoding: 'euc-jp' }))
     await act(async () => choose('EUC-JP'))
-    expect(mockContent).toHaveBeenLastCalledWith('%1', 'src/a.ts', {
+    expect(mockContent).toHaveBeenLastCalledWith({ paneId: '%1' }, 'src/a.ts', {
       root: '/r',
       reveal: false,
       encoding: 'euc-jp',
@@ -3148,7 +3167,7 @@ describe('FileViewer: encodings', () => {
     await act(async () => choose('UTF-8'))
     expect(draftNow()).toBeUndefined()
     expect(mockContent).toHaveBeenLastCalledWith(
-      '%1',
+      { paneId: '%1' },
       'src/a.ts',
       expect.objectContaining({ encoding: 'utf-8' }),
     )
@@ -3199,15 +3218,18 @@ describe('FileViewer: encodings', () => {
     await startEdit()
     type('い\n')
     await act(async () => fireEvent.click(saveButton()))
-    expect(mockSave).toHaveBeenCalledWith('%1', {
-      root: '/r',
-      path: 'src/a.ts',
-      baseHash: 'h:あ\n',
-      text: 'い\n',
-      reveal: false,
-      encoding: 'shift_jis',
-      saveAs: undefined,
-    })
+    expect(mockSave).toHaveBeenCalledWith(
+      { paneId: '%1' },
+      {
+        root: '/r',
+        path: 'src/a.ts',
+        baseHash: 'h:あ\n',
+        text: 'い\n',
+        reveal: false,
+        encoding: 'shift_jis',
+        saveAs: undefined,
+      },
+    )
     expect(encodingButton('Shift-JIS')).toBeInTheDocument()
   })
 
@@ -3247,7 +3269,7 @@ describe('FileViewer: encodings', () => {
     })
     show({ canEdit: true })
     await waitFor(() => expect(mockContent).toHaveBeenCalled())
-    expect(mockContent).toHaveBeenCalledWith('%1', 'src/a.ts', {
+    expect(mockContent).toHaveBeenCalledWith({ paneId: '%1' }, 'src/a.ts', {
       root: '/r',
       reveal: false,
       encoding: undefined,
@@ -3277,7 +3299,7 @@ describe('FileViewer: encodings', () => {
     expect(mockSave.mock.calls[0][1]).toMatchObject({ text: '\uFEFFmine' })
     expect(mockSave.mock.calls[0][1].encoding).toBeUndefined()
     // Edited elsewhere while it saved: rebased without the BOM, now UTF-8
-    const other = renderHook(() => useFileDraft('%1', 'src/a.ts'))
+    const other = renderHook(() => useFileDraft('%1', '/r', 'src/a.ts'))
     const sent = other.result.current[0] as FileDraft
     act(() => other.result.current[1]({ ...sent, text: '\uFEFFmore' }))
     await act(async () =>
@@ -3355,7 +3377,7 @@ describe('FileViewer: encodings', () => {
     mockContent.mockResolvedValue(editable('x', { encoding: 'euc-jp' }))
     show({ canEdit: true })
     await waitFor(() =>
-      expect(mockContent).toHaveBeenCalledWith('%1', 'src/a.ts', {
+      expect(mockContent).toHaveBeenCalledWith({ paneId: '%1' }, 'src/a.ts', {
         root: '/r',
         reveal: false,
         encoding: 'euc-jp',
@@ -3406,15 +3428,18 @@ describe('FileViewer: encodings', () => {
     fireEvent.click(encodingButton('Shift-JIS'))
     saveAsUtf8()
     await confirm()
-    expect(mockSave).toHaveBeenCalledWith('%1', {
-      root: '/r',
-      path: 'src/a.ts',
-      baseHash: 'h:a\r\nb\r\n',
-      text: 'a\nb\n',
-      reveal: false,
-      encoding: 'shift_jis',
-      saveAs: 'utf-8',
-    })
+    expect(mockSave).toHaveBeenCalledWith(
+      { paneId: '%1' },
+      {
+        root: '/r',
+        path: 'src/a.ts',
+        baseHash: 'h:a\r\nb\r\n',
+        text: 'a\nb\n',
+        reveal: false,
+        encoding: 'shift_jis',
+        saveAs: 'utf-8',
+      },
+    )
     expect(p.onPin).toHaveBeenCalled()
     expect(draftNow()).toBeUndefined()
     expect(encodingButton('UTF-8')).toBeInTheDocument()
@@ -3454,11 +3479,11 @@ describe('FileViewer: encodings', () => {
     saveAsUtf8()
     await confirm()
     expect(mockSave).toHaveBeenLastCalledWith(
-      '%1',
+      { paneId: '%1' },
       expect.objectContaining({ text: 'y', saveAs: 'utf-8' }),
     )
     // Edited elsewhere while it saved: rebased on the UTF-8 file
-    const other = renderHook(() => useFileDraft('%1', 'src/a.ts'))
+    const other = renderHook(() => useFileDraft('%1', '/r', 'src/a.ts'))
     const sent = other.result.current[0] as FileDraft
     act(() => other.result.current[1]({ ...sent, text: 'z' }))
     await act(async () =>
@@ -3476,7 +3501,7 @@ describe('FileViewer: encodings', () => {
       encoding: 'utf-8',
     })
     // The choice of Shift-JIS is gone: read again as the server finds it
-    expect(mockContent).toHaveBeenLastCalledWith('%1', 'src/a.ts', {
+    expect(mockContent).toHaveBeenLastCalledWith({ paneId: '%1' }, 'src/a.ts', {
       root: '/r',
       reveal: false,
       encoding: undefined,
@@ -3504,7 +3529,7 @@ describe('FileViewer: encodings', () => {
     saveAsUtf8()
     await confirm()
     expect(mockSave).toHaveBeenCalledWith(
-      '%1',
+      { paneId: '%1' },
       expect.objectContaining({ encoding: 'shift_jis', saveAs: 'utf-8' }),
     )
     // Saved: editable now
@@ -3542,7 +3567,7 @@ describe('FileViewer: encodings', () => {
     await act(async () =>
       fireEvent.click(screen.getByRole('button', { name: 'Discard' })),
     )
-    expect(mockContent).toHaveBeenLastCalledWith('%1', 'src/a.ts', {
+    expect(mockContent).toHaveBeenLastCalledWith({ paneId: '%1' }, 'src/a.ts', {
       root: '/r',
       reveal: false,
       encoding: undefined,
@@ -3588,13 +3613,13 @@ describe('FileViewer: encodings of a table', () => {
         screen.getByRole('button', { name: 'Reload and reapply' }),
       ),
     )
-    expect(mockContent).toHaveBeenLastCalledWith('%1', 'd.csv', {
+    expect(mockContent).toHaveBeenLastCalledWith({ paneId: '%1' }, 'd.csv', {
       root: '/r',
       reveal: false,
       encoding: 'shift_jis',
     })
     expect(
-      renderHook(() => useFileDraft('%1', 'd.csv')).result.current[0],
+      renderHook(() => useFileDraft('%1', '/r', 'd.csv')).result.current[0],
     ).toMatchObject({ encoding: 'shift_jis' })
   })
 })

@@ -650,7 +650,7 @@ describe('ChangesView editing', () => {
     await openDiff('Staged', 'to.ts')
     fireEvent.click(screen.getByRole('button', { name: 'Edit working copy' }))
     const box = await screen.findByRole('textbox', { name: 'Text of to.ts' })
-    expect(mockContent).toHaveBeenCalledWith('%1', 'to.ts', {
+    expect(mockContent).toHaveBeenCalledWith({ paneId: '%1' }, 'to.ts', {
       root: '/r',
       reveal: false,
     })
@@ -763,7 +763,7 @@ describe('ChangesView editing', () => {
     expect(
       await screen.findByRole('textbox', { name: 'Text of .env' }),
     ).toHaveValue('A=1')
-    expect(mockContent).toHaveBeenCalledWith('%1', '.env', {
+    expect(mockContent).toHaveBeenCalledWith({ paneId: '%1' }, '.env', {
       root: '/r',
       reveal: true,
     })
@@ -1312,7 +1312,7 @@ describe('ChangesView actions', () => {
     expect(screen.getByText('Discard changes in both.ts?')).toBeInTheDocument()
     await act(async () => {})
     await click('Discard')
-    expect(mockHash).toHaveBeenCalledWith('%1', 'src/both.ts', '/r')
+    expect(mockHash).toHaveBeenCalledWith({ paneId: '%1' }, 'src/both.ts', '/r')
     expect(mockApply.mock.calls[0][1]).toMatchObject({
       action: 'discard',
       baseHash: 'h1',
@@ -1325,11 +1325,14 @@ describe('ChangesView actions', () => {
     expect(opts.action.label).toBe('Undo')
     mockRestore.mockResolvedValueOnce({ root: '/r', path: 'src/both.ts' })
     await act(async () => opts.action.onClick())
-    expect(mockRestore).toHaveBeenCalledWith('%1', {
-      root: '/r',
-      trashId: 't1',
-      reveal: false,
-    })
+    expect(mockRestore).toHaveBeenCalledWith(
+      { paneId: '%1' },
+      {
+        root: '/r',
+        trashId: 't1',
+        reveal: false,
+      },
+    )
     expect(notified(p).at(-1)).toEqual([
       'Restored both.ts',
       { variant: 'success' },

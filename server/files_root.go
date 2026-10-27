@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -379,6 +380,8 @@ type rootResolver struct {
 	// inContainer and ownedByServer are replaced by tests.
 	inContainer   func() bool
 	ownedByServer func(path string) bool
+	// placeDirs are the Places, resolved: trusted in the container.
+	placeDirs []string
 
 	mu    sync.Mutex
 	panes map[string]*paneRootState // stableKey → settle state
@@ -578,7 +581,8 @@ func gitEntryLeadsTo(top, gitDir string) bool {
 
 // trustRepo decides whether to pass safe.directory for a repo git refused
 // for its owner: only when the server's own user owns it, or inside the
-// container for the mounted workspace (the host user's uid differs).
+// container for the mounted workspace or a Place (the host user's uid
+// differs).
 func (rr *rootResolver) trustRepo(path string) bool {
 	if rr.ownedByServer(path) {
 		return true
@@ -587,7 +591,11 @@ func (rr *rootResolver) trustRepo(path string) bool {
 		return false
 	}
 	rel, err := filepath.Rel(containerWorkspace, path)
-	return err == nil && filepath.IsLocal(rel)
+	if err == nil && filepath.IsLocal(rel) {
+		return true
+	}
+	// A Place is mounted from the host like the workspace.
+	return slices.ContainsFunc(rr.placeDirs, func(d string) bool { return underDir(d, path) })
 }
 
 // dubiousRepo extracts the repository path from git's "detected dubious

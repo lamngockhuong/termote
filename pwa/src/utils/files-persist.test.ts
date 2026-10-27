@@ -17,6 +17,7 @@ import {
   RECENT_LIMIT,
   regroupPersisted,
   removeDraft,
+  removeLegacyDraft,
   renamePersistedGroup,
   resetFilesPersist,
   SIGNED_OUT_KEY,
@@ -203,7 +204,7 @@ describe('drafts', () => {
     expect(writeDraft('1', draft('a.md'), 5)).toBe(true)
     expect(writeDraft('1', draft('b.md'), 6)).toBe(true)
     expect(writeDraft('2', draft('c.md'), 7)).toBe(true)
-    expect(stored('termote-file-drafts:i1:@1:a.md')).toMatchObject({
+    expect(stored('termote-file-drafts:i1:@1:/r\u0000a.md')).toMatchObject({
       v: 1,
       pane: '@1',
       group: 'main',
@@ -214,11 +215,11 @@ describe('drafts', () => {
       { draft: draft('a.md'), editedAt: 5 },
       { draft: draft('b.md'), editedAt: 6 },
     ])
-    removeDraft('1', 'a.md')
+    removeDraft('1', '/r', 'a.md')
     expect(loadDrafts<{ path: string }>('1').map((d) => d.draft.path)).toEqual([
       'b.md',
     ])
-    removeDraft('nope', 'a.md')
+    removeDraft('nope', '/r', 'a.md')
     expect(loadDrafts('nope')).toEqual([])
     expect(writeDraft('nope', draft('a.md'), 1)).toBe(false)
   })
@@ -240,7 +241,9 @@ describe('drafts', () => {
     expect(writeDraft('1', draft('a', '"'.repeat(DRAFT_LIMIT / 2)), 2)).toBe(
       false,
     )
-    expect(localStorage.getItem('termote-file-drafts:i1:@1:a')).toBeNull()
+    expect(
+      localStorage.getItem('termote-file-drafts:i1:@1:/r\u0000a'),
+    ).toBeNull()
     // Two drafts fit, a third would pass the total
     const third = 'x'.repeat(DRAFTS_LIMIT / 3)
     expect(writeDraft('1', draft('a', third), 1)).toBe(true)
@@ -256,7 +259,9 @@ describe('drafts', () => {
       throw new DOMException('full', 'QuotaExceededError')
     })
     expect(writeDraft('1', draft('a', 'new'), 2)).toBe(false)
-    expect(localStorage.getItem('termote-file-drafts:i1:@1:a')).toBeNull()
+    expect(
+      localStorage.getItem('termote-file-drafts:i1:@1:/r\u0000a'),
+    ).toBeNull()
   })
 
   it('are all removed for a view-only client', () => {
@@ -343,12 +348,12 @@ describe('renamePersistedGroup', () => {
     saveView('1', { view: 'files' })
     renamePersistedGroup('z', 'y', 'y')
     expect(Object.keys(localStorage).sort()).toEqual([
-      'termote-file-drafts:i1:y:1:a:b',
+      'termote-file-drafts:i1:y:1:/r\u0000a:b',
       'termote-files-tabs:i1:y:1',
       'termote-pane-view:i1:@1',
       'termote-pane-view:i1:y',
     ])
-    expect(stored('termote-file-drafts:i1:y:1:a:b')).toMatchObject({
+    expect(stored('termote-file-drafts:i1:y:1:/r\u0000a:b')).toMatchObject({
       pane: 'y:1',
       group: 'y',
       editedAt: 3,
@@ -453,7 +458,7 @@ describe('sweepExpired', () => {
     put('termote-recent-files:i1:@1', { savedAt: old })
     put('termote-recent-files:i1:@2', { savedAt: now })
     // Written recently, edited long ago
-    put('termote-file-drafts:i1:@1:a', { savedAt: now, editedAt: old })
+    put('termote-file-drafts:i1:@1:/r\u0000a', { savedAt: now, editedAt: old })
     put('termote-file-drafts:i1:@1:b', { editedAt: now })
     localStorage.setItem('termote-file-drafts:i1:@1:c', '{')
     localStorage.setItem('termote-settings', '{}')
@@ -493,7 +498,7 @@ describe('without storage', () => {
     expect(loadTabs('files', '1')).toBeNull()
     expect(writeDraft('1', draft('a'), 1)).toBe(false)
     expect(loadDrafts('1')).toEqual([])
-    removeDraft('1', 'a')
+    removeDraft('1', '/r', 'a')
     saveView('1', { view: 'x' })
     expect(loadView('1')).toBeNull()
     expect(() => sweepExpired(Date.now())).not.toThrow()
@@ -508,7 +513,7 @@ describe('without storage', () => {
       throw new Error('denied')
     })
     expect(loadView('1')).toBeNull()
-    removeDraft('1', 'a')
+    removeDraft('1', '/r', 'a')
     vi.spyOn(Storage.prototype, 'key').mockImplementation(() => {
       throw new Error('denied')
     })
@@ -536,7 +541,9 @@ describe('review follow-ups', () => {
     writeDraft('1', draft('a'), 1)
     snapshot([['1', '@1']], 'i1', [{ name: 'renamed', tabs: ['1'] }])
     expect(loadDrafts('1')).toEqual([])
-    expect(localStorage.getItem('termote-file-drafts:i1:@1:a')).not.toBeNull()
+    expect(
+      localStorage.getItem('termote-file-drafts:i1:@1:/r\u0000a'),
+    ).not.toBeNull()
   })
 
   it('records of a group renamed elsewhere follow it', () => {
@@ -549,7 +556,7 @@ describe('review follow-ups', () => {
     regroupPersisted(new Map())
     regroupPersisted(new Map([['@1', 'renamed']]))
     expect(stored('termote-files-tabs:i1:@1').group).toBe('renamed')
-    expect(stored('termote-file-drafts:i1:@1:a').group).toBe('renamed')
+    expect(stored('termote-file-drafts:i1:@1:/r\u0000a').group).toBe('renamed')
     expect(stored('termote-pane-view:i1:@2').group).toBe('main')
     expect(stored('termote-pane-view:i2:@1').group).toBeUndefined()
     snapshot([['1', '@1']], 'i1', [{ name: 'renamed', tabs: ['1'] }])
@@ -586,7 +593,7 @@ describe('review follow-ups', () => {
     const off = onSignedOutHere(here)
     const changed = vi.fn()
     const offChanged = onDraftChangedElsewhere(changed)
-    const key = 'termote-file-drafts:i1:@1:a'
+    const key = 'termote-file-drafts:i1:@1:/r\u0000a'
     window.dispatchEvent(new StorageEvent('storage', { key, newValue: 'x' }))
     expect(changed).toHaveBeenCalledWith(key)
     offChanged()
@@ -626,7 +633,7 @@ describe('a focus window', () => {
     vi.advanceTimersByTime(TABS_DELAY)
     flushAll()
     expect(writeDraft('1', draft('b.ts'), 6)).toBe(false)
-    removeDraft('1', 'a.ts')
+    removeDraft('1', '/r', 'a.ts')
     saveView('1', { view: 'chat' })
     saveView('1', null)
     saveRecent('1', [])
@@ -651,5 +658,31 @@ describe('a focus window', () => {
     } finally {
       window.location.hash = ''
     }
+  })
+})
+
+describe('drafts from before Places', () => {
+  it('a key without a root reads as legacy, and goes on its own', () => {
+    const old = persistKey('drafts', '1', 'a.md') as string
+    writeDraft('1', draft('a.md'), 5)
+    localStorage.setItem(
+      old,
+      localStorage.getItem(
+        persistKey('drafts', '1', '/r\u0000a.md') as string,
+      ) as string,
+    )
+    const both = loadDrafts('1')
+    expect(both).toHaveLength(2)
+    expect(both).toContainEqual({
+      draft: draft('a.md'),
+      editedAt: 5,
+      legacy: true,
+    })
+    expect(both).toContainEqual({ draft: draft('a.md'), editedAt: 5 })
+    removeLegacyDraft('1', 'a.md')
+    expect(localStorage.getItem(old)).toBeNull()
+    // A pane without a key has nothing kept
+    expect(() => removeLegacyDraft('nope', 'a.md')).not.toThrow()
+    expect(loadDrafts('1')).toEqual([{ draft: draft('a.md'), editedAt: 5 }])
   })
 })

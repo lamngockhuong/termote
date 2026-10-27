@@ -131,7 +131,7 @@ func (f *filesAPI) renameFile(root filesRoot, in renameRequest) (createResponse,
 // saves) in the order of their keys, so two renames crossing each other
 // never wait on each other, then a write slot without waiting.
 func (f *filesAPI) lockRename(root, src, dst string) (func(), error) {
-	first, second := root+"\x00"+src, root+"\x00"+dst
+	first, second := fileLockKey(root, src), fileLockKey(root, dst)
 	if second < first {
 		first, second = second, first
 	}

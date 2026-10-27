@@ -306,7 +306,7 @@ describe('Changes tabs', () => {
       text: changed ? 'y' : 'x',
       reveal: false,
     }
-    renderHook(() => useFileDraft('%1', path)).result.current[1](d)
+    renderHook(() => useFileDraft('%1', '/r', path)).result.current[1](d)
   }
 
   async function loaded() {
@@ -424,7 +424,7 @@ describe('Changes tabs', () => {
       editing: false,
       scrollTop: 40,
     })
-    expect(isDraftDirty('%1', 'b')).toBe(true)
+    expect(isDraftDirty('%1', '/r', 'b')).toBe(true)
   })
 
   it('closing an editor drops the draft unless another tab edits the file', async () => {
@@ -436,14 +436,14 @@ describe('Changes tabs', () => {
     act(() => result.current.setEditing(st.id, true))
     edit('a')
     act(() => result.current.close(st.id))
-    expect(isDraftDirty('%1', 'a')).toBe(true)
+    expect(isDraftDirty('%1', '/r', 'a')).toBe(true)
     act(() => result.current.close(un.id))
-    expect(isDraftDirty('%1', 'a')).toBe(false)
+    expect(isDraftDirty('%1', '/r', 'a')).toBe(false)
     // A diff alone never drops the file's draft (the Files tab may hold it)
     act(() => result.current.open(side('b')))
     edit('b')
     act(() => result.current.close(result.current.tabs[0].id))
-    expect(isDraftDirty('%1', 'b')).toBe(true)
+    expect(isDraftDirty('%1', '/r', 'b')).toBe(true)
   })
 
   it('a renamed file: its editors follow as untracked, its diffs close', async () => {
@@ -468,7 +468,7 @@ describe('Changes tabs', () => {
       revealed: true,
     })
     // The draft stays: moving it is the Files store's
-    expect(isDraftDirty('%1', 'a')).toBe(true)
+    expect(isDraftDirty('%1', '/r', 'a')).toBe(true)
     expect(result.current.gone.count).toBe(0)
     await tick()
     expect(mockChanges).toHaveBeenCalled()
@@ -548,7 +548,7 @@ describe('Changes tabs', () => {
       act(() => result.current.open(side(`g${i}`), { pin: true }))
     expect(result.current.tabs.map((t) => t.path)).not.toContain('a')
     expect(
-      renderHook(() => useFileDraft('%1', 'a')).result.current[0],
+      renderHook(() => useFileDraft('%1', '/r', 'a')).result.current[0],
     ).toBeUndefined()
   })
 
@@ -674,7 +674,7 @@ describe('Changes tabs', () => {
     act(() => result.current.resolveRootClose(false))
     await tick()
     expect(result.current.tabs).toHaveLength(2)
-    expect(isDraftDirty('%1', 'b')).toBe(true)
+    expect(isDraftDirty('%1', '/r', 'b')).toBe(true)
     // Asked again on the next move, then closed with their changes
     act(() => result.current.rootChanged('/m'))
     expect(result.current.pendingRootClose).toEqual([b.id, c.id])
@@ -682,7 +682,7 @@ describe('Changes tabs', () => {
     expect(result.current.pendingRootClose).toEqual([c.id])
     act(() => result.current.resolveRootClose(true))
     expect(result.current.tabs).toEqual([])
-    expect(isDraftDirty('%1', 'c')).toBe(false)
+    expect(isDraftDirty('%1', '/r', 'c')).toBe(false)
   })
 
   it('a kept editor of an old root closes once it goes back to its diff', async () => {
@@ -834,7 +834,8 @@ describe('tabs kept on the device', () => {
       text: 'y',
       reveal: false,
     }
-    const setDraft = renderHook(() => useFileDraft('%1', 'a')).result.current[1]
+    const setDraft = renderHook(() => useFileDraft('%1', '/r', 'a')).result
+      .current[1]
     act(() => setDraft(draft))
     first.unmount()
     reopen()
@@ -851,7 +852,7 @@ describe('tabs kept on the device', () => {
     expect(result.current.root).toBe('/n')
     expect(result.current.tabs).toHaveLength(1)
     expect(result.current.pendingRootClose).toEqual([result.current.tabs[0].id])
-    expect(isDraftDirty('%1', 'a')).toBe(true)
+    expect(isDraftDirty('%1', '/r', 'a')).toBe(true)
   })
 
   it('are forgotten when another tab of the app signs out', async () => {

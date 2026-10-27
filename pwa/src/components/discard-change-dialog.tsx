@@ -115,7 +115,7 @@ export function DiscardChangeDialog({
   useEffect(() => {
     if (!needsHash || known) return
     let live = true
-    fetchFileHash(paneId, entry.path, root).then(
+    fetchFileHash({ paneId }, entry.path, root).then(
       (r) =>
         live &&
         setHash(

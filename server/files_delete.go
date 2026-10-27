@@ -140,7 +140,7 @@ func (f *filesAPI) handleDeleteFile(w http.ResponseWriter, r *http.Request) {
 // wait on each other.
 func (f *filesAPI) lockWrite(root, rel string) (func(), error) {
 	unlockRoot := f.writeLocks.lock(rootLockKey(root))
-	unlockFile := f.writeLocks.lock(root + "\x00" + rel)
+	unlockFile := f.writeLocks.lock(fileLockKey(root, rel))
 	select {
 	case f.writeSlots <- struct{}{}:
 		return func() { <-f.writeSlots; unlockFile(); unlockRoot() }, nil

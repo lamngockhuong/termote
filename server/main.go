@@ -73,6 +73,7 @@ func runServe(args []string) int {
 	serverInstall = c.installKind()
 	cfg.FilesDenyDirs = filesDenyDirs(c.configDir(), c.stateDir())
 	cfg.FilesWriteDenyDirs = []string{c.dataDir()}
+	cfg.PlaceEnv = c.allowPathEnv()
 	cfg.UploadDir = uploadDir()
 	cfg.TrashDir = trashDir()
 	// Under the state dir, which FilesDenyDirs already keeps from the Files

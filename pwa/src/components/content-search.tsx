@@ -103,6 +103,8 @@ type Pending =
 
 interface Props {
   paneId: string
+  // The Place the files are under (absent: the pane's folder)
+  place?: string
   root?: string
   state: ContentSearchState
   onState: (patch: Partial<ContentSearchState>) => void
@@ -119,6 +121,7 @@ interface Props {
 // file globs; the matching lines grouped by file.
 export function ContentSearch({
   paneId,
+  place,
   root,
   state,
   onState,
@@ -169,7 +172,7 @@ export function ContentSearch({
       setPending({ status: 'loading' })
       try {
         const res = await searchFiles(
-          paneId,
+          { paneId, place },
           { q: query, root, ...opts, files, skip, exclude, fresh },
           abort.signal,
         )
@@ -201,7 +204,7 @@ export function ContentSearch({
       clearTimeout(timer)
       abort.abort()
     }
-  }, [paneId, key, short, answered, retry])
+  }, [paneId, place, key, short, answered, retry])
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: once per ask
   useEffect(() => {

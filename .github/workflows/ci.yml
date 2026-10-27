@@ -345,11 +345,42 @@ jobs:
           TMUX_SESSION: e2e-auth
         run: TMUX_SOCKET="$RUNNER_TEMP/tmux-auth.sock" pnpm exec playwright test devices signins login-link prompt-templates tasks e2e/review --workers=1
 
+      # Places (--allow-path): a third server, configured from the
+      # environment like the others, offers one folder (TERMOTE_PLACES) on
+      # its own port, tmux socket, session and XDG dirs; the other servers
+      # have none. places.spec.ts runs only here (TERMOTE_E2E_PLACES), and
+      # fails (never skips) when the server offers no Place.
+      - name: Start server with a Place
+        run: |
+          P="$RUNNER_TEMP/places"
+          mkdir -p "$P/notes"
+          echo "E2E_PLACE_DIR=$P/notes" >> "$GITHUB_ENV"
+          TERMOTE_PORT=7682 TMUX_SESSION=e2e-places TMUX_SOCKET="$RUNNER_TEMP/tmux-places.sock" \
+            XDG_CONFIG_HOME="$P/xdg-config" XDG_CACHE_HOME="$P/xdg-cache" \
+            XDG_STATE_HOME="$P/xdg-state" XDG_DATA_HOME="$P/xdg-data" \
+            TERMOTE_PLACES="[{\"path\":\"$P/notes\"}]" \
+            nohup ./server/termote-dev serve > "$RUNNER_TEMP/serve-places.log" 2>&1 &
+          for _ in $(seq 1 30); do
+            curl -fsS http://localhost:7682/api/mux/snapshot > /dev/null && exit 0
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/serve-places.log"
+          exit 1
+
+      - name: Run Playwright (Places)
+        working-directory: pwa
+        env:
+          TERMOTE_PORT: "7682"
+          TMUX_SESSION: e2e-places
+          TERMOTE_E2E_PLACES: ${{ env.E2E_PLACE_DIR }}
+        run: TMUX_SOCKET="$RUNNER_TEMP/tmux-places.sock" pnpm exec playwright test places --workers=1
+
       - name: Server log
         if: failure()
         run: |
           cat "$RUNNER_TEMP/serve.log"
           cat "$RUNNER_TEMP/serve-auth.log" 2>/dev/null || true
+          cat "$RUNNER_TEMP/serve-places.log" 2>/dev/null || true
 
       - name: Upload Playwright report
         if: failure()

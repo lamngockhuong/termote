@@ -820,6 +820,16 @@ file to a new path, never replacing anything, and `GET files/download` sends a f
 attachment (see Saving a file, Creating a file, Finding a file, Searching file contents, Deleting a file,
 Renaming a file, Downloading a file).
 
+**Places.** A Files request with `place=<id>` reads a folder the operator allowed with
+`--allow-path` instead of the pane's root (`server/files_places.go`): `filesAPI.start` picks the
+root, so every handler below it is unchanged. The list is fixed when `serve` starts (the saved
+config natively, `TERMOTE_PLACES` in the container, where each is mounted at
+`/places/<id>-<name>`); `GET /api/mux/files/places` lists it to a full client and `caps.places`
+says there is one. Changes never takes a Place. In the PWA a pane's Files store holds the Place it
+shows; switching works as the root moving (`rootChanged`), drafts and tabs are keyed by root and
+path, and the Place is kept with the pane's tabs. Rules: Places in
+[`security-invariants.md`](security-invariants.md).
+
 **Kept on the device.** The open Files and Changes tabs, each pane's last view and the unsaved
 drafts of files not shown as sensitive are kept in the browser's `localStorage`
 (`pwa/src/utils/files-persist.ts`) under the snapshot's `instanceId` (made once, kept in

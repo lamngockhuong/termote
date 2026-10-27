@@ -141,6 +141,18 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 - [ ] `--remove-host <name>` xóa một tên đã cho phép trước đó
 - [ ] Request từ hostname/IP LAN lạ bị từ chối (403) cho tới khi được thêm bằng
       `--allow-host`
+- [ ] `--allow-path ~/notes` lưu thư mục đó và Files hiện nó trong Places; `start` không kèm cờ
+      vẫn giữ nó; `--remove-path ~/notes` bỏ nó đi
+- [ ] `--allow-path` từ chối `~`, `/`, `~/.ssh`, `~/.local`, liên kết tượng trưng trỏ vào `~/.ssh` và thư mục
+      `.git`, có thông báo, không lưu gì; `~/.config/fish` được chấp nhận
+- [ ] Thư mục đã lưu nhưng sau đó bị xóa hiện là bị bỏ qua khi `start`, kèm lệnh `--remove-path`
+      để bỏ nó
+- [ ] Trong một Place: duyệt, mở, sửa rồi lưu, tìm file và tìm nội dung, tạo file, đổi tên, xóa
+      rồi Undo, tải xuống và dán ảnh đều diễn ra trong đúng thư mục đó; không mở được liên kết
+      tượng trưng trỏ ra ngoài
+- [ ] Thiết bị chỉ xem không thấy Places; Changes vẫn hiện repository của pane
+- [ ] `container up --allow-path ~/notes`: container hiện Place đó và chỉnh sửa tới được thư mục
+      trên máy host
 - [ ] Không có cờ `--ttyd` và không có tham số PowerShell dạng `-Flag` nào trong bản 1.0
 
 ### Lưu Trữ Cấu Hình

@@ -146,7 +146,7 @@ describe('uploadFileImage', () => {
   it('posts the raw image for the directory and returns where it went', async () => {
     const fetchMock = stubFetch(201, { root: '/r', path: 'docs/p.png' })
     const image = png()
-    expect(await uploadFileImage('%1', at, image)).toEqual({
+    expect(await uploadFileImage({ paneId: '%1' }, at, image)).toEqual({
       ok: true,
       root: '/r',
       path: 'docs/p.png',
@@ -165,7 +165,11 @@ describe('uploadFileImage', () => {
 
   it('asks to reveal for a file shown though it is sensitive', async () => {
     const fetchMock = stubFetch(201, { root: '/r', path: '.ssh/p.png' })
-    await uploadFileImage('0', { root: '/r', dir: '.ssh', reveal: true }, png())
+    await uploadFileImage(
+      { paneId: '0' },
+      { root: '/r', dir: '.ssh', reveal: true },
+      png(),
+    )
     expect(fetchMock.mock.calls[0]).toEqual([
       '/api/mux/panes/0/files/image?root=%2Fr&dir=.ssh&reveal=1',
       expect.anything(),
@@ -190,7 +194,7 @@ describe('uploadFileImage', () => {
     'too_many_pixels',
   ] as const)('maps the code %s', async (code) => {
     stubFetch(400, { error: 'x', code })
-    expect(await uploadFileImage('0', at, png())).toEqual({
+    expect(await uploadFileImage({ paneId: '0' }, at, png())).toEqual({
       ok: false,
       reason: code,
     })
@@ -198,13 +202,13 @@ describe('uploadFileImage', () => {
 
   it('tells a root that moved from a name taken', async () => {
     stubFetch(409, { error: 'root changed', root: '/new' })
-    expect(await uploadFileImage('0', at, png())).toEqual({
+    expect(await uploadFileImage({ paneId: '0' }, at, png())).toEqual({
       ok: false,
       reason: 'root_changed',
       root: '/new',
     })
     stubFetch(409, { error: 'taken', code: 'exists', root: '/r' })
-    expect(await uploadFileImage('0', at, png())).toEqual({
+    expect(await uploadFileImage({ paneId: '0' }, at, png())).toEqual({
       ok: false,
       reason: 'exists',
     })
@@ -218,7 +222,7 @@ describe('uploadFileImage', () => {
       [404, { error: 'not found' }],
     ] as const) {
       stubFetch(status, body)
-      expect(await uploadFileImage('0', at, png())).toEqual({
+      expect(await uploadFileImage({ paneId: '0' }, at, png())).toEqual({
         ok: false,
         reason: 'failed',
       })
@@ -228,7 +232,7 @@ describe('uploadFileImage', () => {
   it('refuses before sending, and reports the network', async () => {
     const fetchMock = stubFetch(201, {})
     const heic = new Blob([new Uint8Array(4)], { type: 'image/heic' })
-    expect(await uploadFileImage('0', at, heic)).toEqual({
+    expect(await uploadFileImage({ paneId: '0' }, at, heic)).toEqual({
       ok: false,
       reason: 'heic',
     })
@@ -239,7 +243,7 @@ describe('uploadFileImage', () => {
         throw new TypeError('offline')
       }),
     )
-    expect(await uploadFileImage('0', at, png())).toEqual({
+    expect(await uploadFileImage({ paneId: '0' }, at, png())).toEqual({
       ok: false,
       reason: 'network',
     })

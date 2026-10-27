@@ -230,3 +230,23 @@ describe('restoredCounters', () => {
     expect(restoredCounters([])).toEqual({ clock: 0, ids: 0 })
   })
 })
+
+describe('the Place of the Files view', () => {
+  it('is kept with the tabs, and alone without any', () => {
+    expect(
+      persistedFilesState({
+        root: '/n',
+        place: 'p1',
+        tabs: [],
+        activeId: null,
+      }),
+    ).toEqual({ root: '/n', place: 'p1', tabs: [], activeId: null })
+    expect(
+      persistedFilesState({ root: '/r', tabs: [], activeId: null }),
+    ).toBeNull()
+    expect(
+      restoreFilesState({ root: '/n', place: 'p1', tabs: [], activeId: null }),
+    ).toEqual({ root: '/n', place: 'p1', tabs: [], activeId: null })
+    expect(restoreFilesState({ place: 3, tabs: [] })).toBeNull()
+  })
+})

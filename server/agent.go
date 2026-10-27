@@ -297,6 +297,17 @@ func (c *ttlCache[V]) peek(key string) (V, bool) {
 	return zero, false
 }
 
+// forgetFunc drops every entry whose key drop matches, as forgetPrefix does.
+func (c *ttlCache[V]) forgetFunc(drop func(key string) bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for k := range c.entries {
+		if drop(k) {
+			delete(c.entries, k)
+		}
+	}
+}
+
 // forgetPrefix drops every entry whose key starts with prefix, so the next
 // do reads again. A read in flight still answers its own waiters.
 func (c *ttlCache[V]) forgetPrefix(prefix string) {

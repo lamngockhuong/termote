@@ -3,6 +3,8 @@
  * it by path: the host clipboard is empty when the image sits on a phone.
  */
 
+import { type FilesTarget, filesUrl } from '../hooks/use-mux-api'
+
 // Mirrors the server's limit; the server still decides.
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
@@ -152,14 +154,16 @@ const FILE_IMAGE_REASONS: readonly FileImageErrorReason[] = [
 // or the assets/ directory there; the server picks the name. reveal: the
 // file was shown though it is sensitive, so its folder may be too.
 export async function uploadFileImage(
-  paneId: string,
+  target: FilesTarget,
   at: { root: string; dir: string; reveal: boolean },
   blob: Blob,
 ): Promise<FileImageResult> {
-  const q = new URLSearchParams({ root: at.root, dir: at.dir })
-  if (at.reveal) q.set('reveal', '1')
   const sent = await postImage(
-    `/api/mux/panes/${encodeURIComponent(paneId)}/files/image?${q}`,
+    filesUrl(target, 'image', {
+      root: at.root,
+      dir: at.dir,
+      reveal: at.reveal ? '1' : undefined,
+    }),
     blob,
   )
   if (!sent.ok) return sent

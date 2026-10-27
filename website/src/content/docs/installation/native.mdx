@@ -145,6 +145,8 @@ server exactly as last time. A boolean option is turned off with `=false`.
 | `--remove-host <name>`      | Remove an allowed name (repeatable)                                    |
 | `--allow-local-user <name>` | Let another OS user of this machine connect, e.g. a reverse proxy      |
 | `--remove-local-user <name>`| Stop letting that user connect (repeatable)                            |
+| `--allow-path <dir>`        | Offer a folder in Files, under [Places](/usage/files-changes/#places) (repeatable) |
+| `--remove-path <dir>`       | Remove an allowed folder (repeatable)                                  |
 | `--allow-herdr-no-auth`     | Required together with `--mux herdr --no-auth`                         |
 | `--user <name>`             | Login username (default `admin`; shared with the container)            |
 | `--fresh`                   | Set a new password                                                     |
@@ -155,6 +157,7 @@ termote start                        # same options as last time
 termote start --lan=false            # back to this machine only
 termote start --allow-host box.local # accept another host name
 termote start --remove-host box.local
+termote start --allow-path ~/notes   # edit a folder outside the pane in Files
 termote start --fresh                # new password
 termote start --user alice           # log in as alice instead of admin
 ```

@@ -26,6 +26,8 @@ type Problem = {
 
 interface Props {
   paneId: string
+  // The Place the files are under (absent: the pane's folder)
+  place?: string
   root: string
   // What the box starts with: the directory the tree has focus in, with its /
   initialPath: string
@@ -41,6 +43,7 @@ interface Props {
 // ask.
 export function NewFileDialog({
   paneId,
+  place,
   root,
   initialPath,
   onClose,
@@ -79,7 +82,7 @@ export function NewFileDialog({
     setSending(true)
     setProblem(undefined)
     try {
-      const res = await createFile(paneId, { root, path, reveal })
+      const res = await createFile({ paneId, place }, { root, path, reveal })
       // Closed meanwhile: the file is there, so the tree shows it, but it
       // is not opened
       if (closed.current) {

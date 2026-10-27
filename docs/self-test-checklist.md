@@ -144,6 +144,17 @@ Manual testing checklist for Termote features before release.
 - [ ] `--remove-host <name>` removes a previously allowed name
 - [ ] A request from an unrecognised LAN hostname/IP is rejected (403) until added with
       `--allow-host`
+- [ ] `--allow-path ~/notes` saves the folder and Files offers it under Places; a plain `start`
+      keeps it; `--remove-path ~/notes` drops it
+- [ ] `--allow-path` refuses `~`, `/`, `~/.ssh`, `~/.local`, a symlink into `~/.ssh` and a `.git`
+      folder with a message, nothing saved; `~/.config/fish` is accepted
+- [ ] A saved folder removed since is shown as skipped at `start`, with the `--remove-path` to drop
+      it
+- [ ] In a Place: browse, open, edit and save, find and content search, new file, rename, delete and
+      Undo, download and paste an image land in that folder; a symlink out of it cannot be opened
+- [ ] A view-only device sees no Places; Changes still shows the pane's repository
+- [ ] `container up --allow-path ~/notes`: the container lists the Place and an edit reaches the host
+      folder
 - [ ] There is no `--ttyd` flag and no PowerShell `-Flag` parameter names in 1.0
 
 ### Config Persistence

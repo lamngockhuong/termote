@@ -36,6 +36,11 @@ type startOptions struct {
 	// root/SYSTEM, whose connections from this machine are served.
 	allowLocalUsers  []string
 	removeLocalUsers []string
+	// allowPaths are the folders offered as Places in Files; newPaths the
+	// ones of this command line, the only ones a failed check refuses.
+	allowPaths  []string
+	removePaths []string
+	newPaths    []string
 	// newLocalUsers are the --allow-local-user names of this command line,
 	// the only ones checked to exist: a saved user deleted from the OS
 	// since must not stop a plain start (the server skips it).
@@ -47,7 +52,7 @@ var serverStartWait = 15 * time.Second
 
 func (c *cli) parseStartArgs(args []string) (startOptions, map[string]bool, error) {
 	var o startOptions
-	var hosts, remove, localUsers, removeLocalUsers stringList
+	var hosts, remove, localUsers, removeLocalUsers, paths, removePaths stringList
 	fs := c.newFlagSet("start")
 	fs.BoolVar(&o.lan, "lan", false, "")
 	fs.BoolVar(&o.noAuth, "no-auth", false, "")
@@ -62,6 +67,8 @@ func (c *cli) parseStartArgs(args []string) (startOptions, map[string]bool, erro
 	fs.Var(&remove, "remove-host", "")
 	fs.Var(&localUsers, "allow-local-user", "")
 	fs.Var(&removeLocalUsers, "remove-local-user", "")
+	fs.Var(&paths, "allow-path", "")
+	fs.Var(&removePaths, "remove-path", "")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return o, nil, flagErr(err)
@@ -77,6 +84,12 @@ func (c *cli) parseStartArgs(args []string) (startOptions, map[string]bool, erro
 	o.allowHosts, o.removeHosts = hosts, remove
 	o.allowLocalUsers, o.removeLocalUsers = localUsers, removeLocalUsers
 	o.newLocalUsers = slices.Clone(localUsers)
+	if o.newPaths, err = normalizeAllowPaths(paths); err != nil {
+		return o, nil, err
+	}
+	if o.removePaths, err = normalizeAllowPaths(removePaths); err != nil {
+		return o, nil, err
+	}
 	return o, set, nil
 }
 
@@ -126,6 +139,7 @@ func mergeSaved(o *startOptions, set map[string]bool, s *savedConfig) {
 		return slices.Contains(o.removeLocalUsers, u)
 	})
 	slices.Sort(o.allowLocalUsers)
+	o.allowPaths = mergePaths(s.AllowPaths, o.newPaths, o.removePaths)
 }
 
 // lookupLocalUserFunc resolves a --allow-local-user name; tests replace it.
@@ -284,6 +298,9 @@ func (c *cli) cmdStart(args []string) error {
 	if err := c.preflight(o.mux); err != nil {
 		return err
 	}
+	if err := c.startAllowPaths(o, saved); err != nil {
+		return err
+	}
 	pass, reused, err := c.setupAuth(o, saved)
 	if err != nil {
 		return err
@@ -358,6 +375,7 @@ func (c *cli) cmdStart(args []string) error {
 		Mux:              o.mux,
 		AllowHosts:       o.allowHosts,
 		AllowLocalUsers:  o.allowLocalUsers,
+		AllowPaths:       o.allowPaths,
 		HerdrAllowNoAuth: o.herdrNoAuth,
 		User:             o.user,
 		Password:         c.keptPassword(pass, saved),
@@ -1045,6 +1063,12 @@ func (c *cli) showAccessInfo(o startOptions, pass string, reused bool) {
 	}
 	fmt.Fprintf(c.out, "Allowed hosts: %s\n", strings.Join(append(hosts, o.allowHosts...), ", "))
 	fmt.Fprintf(c.out, "%s\n", c.paint(ansiDim, "  (another name? add it with: termote start --allow-host <name>)"))
+	paths := "none"
+	if len(o.allowPaths) > 0 {
+		paths = strings.Join(o.allowPaths, ", ")
+	}
+	fmt.Fprintf(c.out, "Allowed paths: %s\n", paths)
+	fmt.Fprintf(c.out, "%s\n", c.paint(ansiDim, "  (add a folder to Files: termote start --allow-path <dir>)"))
 	c.warnExposure(o)
 	if pass == "" {
 		return
@@ -1091,4 +1115,23 @@ func tailFile(path string, n int) string {
 		lines = lines[len(lines)-n:]
 	}
 	return strings.Join(lines, "\n")
+}
+
+// startAllowPaths checks the --allow-path folders before anything stops:
+// a new one that fails refuses the start, a saved one is reported, and a
+// --remove-path that names no saved folder is said to.
+func (c *cli) startAllowPaths(o startOptions, saved *savedConfig) error {
+	var before []string
+	if saved != nil {
+		before = saved.AllowPaths
+	}
+	c.unknownRemovedPaths(before, o.removePaths)
+	if _, err := c.checkAllowPaths(o.allowPaths, o.newPaths, "start", nil); err != nil {
+		return err
+	}
+	// psmux reports no pane directory, so Files (and its Places) needs herdr.
+	if len(o.allowPaths) > 0 && o.mux == "tmux" && c.goos == "windows" {
+		c.warnf("Places need a backend with Files (on Windows: --mux herdr)")
+	}
+	return nil
 }

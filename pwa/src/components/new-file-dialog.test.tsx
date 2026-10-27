@@ -56,7 +56,7 @@ const refused = (status: number, code: string, root?: string, path?: string) =>
 
 // A draft of another file in the pane, changed or not
 function draft(text: string) {
-  const { result } = renderHook(() => useFileDraft('%1', 'notes.md'))
+  const { result } = renderHook(() => useFileDraft('%1', '/r', 'notes.md'))
   act(() =>
     result.current[1]({
       root: '/r',
@@ -80,11 +80,14 @@ describe('NewFileDialog', () => {
     expect((box() as HTMLInputElement).selectionStart).toBe(5)
     type('docs/a.md')
     await create()
-    expect(mockCreate).toHaveBeenCalledWith('%1', {
-      root: '/r',
-      path: 'docs/a.md',
-      reveal: false,
-    })
+    expect(mockCreate).toHaveBeenCalledWith(
+      { paneId: '%1' },
+      {
+        root: '/r',
+        path: 'docs/a.md',
+        reveal: false,
+      },
+    )
     expect(p.onClose).toHaveBeenCalled()
     expect(p.onCreated).toHaveBeenCalledWith('docs/a.md', '/r', false)
   })
@@ -137,11 +140,14 @@ describe('NewFileDialog', () => {
         }),
       )
     })
-    expect(mockCreate).toHaveBeenLastCalledWith('%1', {
-      root: '/r',
-      path: '.env.local',
-      reveal: true,
-    })
+    expect(mockCreate).toHaveBeenLastCalledWith(
+      { paneId: '%1' },
+      {
+        root: '/r',
+        path: '.env.local',
+        reveal: true,
+      },
+    )
     expect(p.onCreated).toHaveBeenCalledWith('.env.local', '/r', true)
   })
 

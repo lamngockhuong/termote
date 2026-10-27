@@ -359,7 +359,7 @@ describe('FilesView', () => {
     expect(screen.queryByRole('tab', { name: '.env' })).toBeNull()
     fireEvent.click(item('.env'))
     await act(async () => {})
-    expect(mockContent).toHaveBeenLastCalledWith('%1', '.env', {
+    expect(mockContent).toHaveBeenLastCalledWith({ paneId: '%1' }, '.env', {
       root: '/home/kim/other',
       reveal: false,
     })
@@ -528,18 +528,25 @@ describe('FilesView', () => {
         await act(async () => {
           fireEvent.click(screen.getByRole('button', { name: 'Create' }))
         })
-        expect(mockCreate).toHaveBeenCalledWith('%1', {
-          root: '/home/kim/app',
-          path: 'src/new.md',
-          reveal: false,
-        })
+        expect(mockCreate).toHaveBeenCalledWith(
+          { paneId: '%1' },
+          {
+            root: '/home/kim/app',
+            path: 'src/new.md',
+            reveal: false,
+          },
+        )
         expect(
           await screen.findByRole('textbox', { name: 'Text of src/new.md' }),
         ).toHaveValue('')
-        expect(mockContent).toHaveBeenLastCalledWith('%1', 'src/new.md', {
-          root: '/home/kim/app',
-          reveal: false,
-        })
+        expect(mockContent).toHaveBeenLastCalledWith(
+          { paneId: '%1' },
+          'src/new.md',
+          {
+            root: '/home/kim/app',
+            reveal: false,
+          },
+        )
         fireEvent.click(screen.getByRole('button', { name: 'Cancel editing' }))
         fireEvent.click(screen.getByRole('button', { name: 'Back to files' }))
         expect(item('src')).toHaveAttribute('aria-expanded', 'true')
@@ -585,7 +592,7 @@ describe('FilesView', () => {
         await screen.findByRole('textbox', { name: 'Text of .env.local' }),
       ).toBeInTheDocument()
       expect(mockContent).toHaveBeenCalledTimes(1)
-      expect(mockContent).toHaveBeenCalledWith('%1', '.env.local', {
+      expect(mockContent).toHaveBeenCalledWith({ paneId: '%1' }, '.env.local', {
         root: '/home/kim/app',
         reveal: true,
       })
@@ -633,7 +640,7 @@ describe('FilesView search', () => {
       await screen.findByRole('button', { name: 'Back to files' }),
     ).toBeInTheDocument()
     expect(mockContent).toHaveBeenCalledWith(
-      '%1',
+      { paneId: '%1' },
       'src/a.ts',
       expect.anything(),
     )
@@ -648,7 +655,7 @@ describe('FilesView search', () => {
     fireEvent.click(screen.getByRole('button', { name: /refresh/i }))
     await waitFor(() =>
       expect(mockFind).toHaveBeenLastCalledWith(
-        '%1',
+        { paneId: '%1' },
         expect.objectContaining({ fresh: true }),
         expect.any(AbortSignal),
       ),
@@ -856,7 +863,7 @@ describe('FilesView content search', () => {
     fireEvent.click(screen.getByRole('button', { name: /refresh/i }))
     await waitFor(() =>
       expect(mockSearch).toHaveBeenLastCalledWith(
-        '%1',
+        { paneId: '%1' },
         expect.objectContaining({ fresh: true }),
         expect.any(AbortSignal),
       ),
@@ -948,11 +955,14 @@ describe('FilesView delete', () => {
     })
     const undo = lastAction(p.notify)
     await act(async () => undo.onClick())
-    expect(mockRestore).toHaveBeenCalledWith('%1', {
-      root: '/home/kim/app',
-      trashId: 't1',
-      reveal: false,
-    })
+    expect(mockRestore).toHaveBeenCalledWith(
+      { paneId: '%1' },
+      {
+        root: '/home/kim/app',
+        trashId: 't1',
+        reveal: false,
+      },
+    )
     expect(p.notify).toHaveBeenLastCalledWith('Restored README.md', {
       variant: 'success',
     })
@@ -1171,7 +1181,9 @@ describe('FilesView delete', () => {
       path: 'README.md',
       trashId: 't',
     })
-    const draft = renderHook(() => useFileDraft('%1', 'README.md'))
+    const draft = renderHook(() =>
+      useFileDraft('%1', '/home/kim/app', 'README.md'),
+    )
     act(() =>
       draft.result.current[1]({
         root: '/home/kim/app',
@@ -1191,7 +1203,9 @@ describe('FilesView delete', () => {
 
   it("a deleted file keeps another file's draft", async () => {
     mockDelete.mockResolvedValue({ root: '/r', path: 'src', trashId: 't' })
-    const draft = renderHook(() => useFileDraft('%1', 'other.md'))
+    const draft = renderHook(() =>
+      useFileDraft('%1', '/home/kim/app', 'other.md'),
+    )
     const other = {
       root: '/home/kim/app',
       path: 'other.md',
@@ -1246,7 +1260,7 @@ describe('FilesView rename', () => {
     ask('README.md')
     await send('NOTES.md')
     expect(mockRename.mock.calls[0]).toEqual([
-      '%1',
+      { paneId: '%1' },
       { root: ROOT, path: 'README.md', newPath: 'NOTES.md', reveal: false },
     ])
     expect(toast(p.notify)[0]).toBe('Renamed README.md to NOTES.md')
@@ -1310,7 +1324,7 @@ describe('FilesView rename', () => {
     await send('docs/README.md')
     await waitFor(() =>
       expect(mockContent).toHaveBeenCalledWith(
-        '%1',
+        { paneId: '%1' },
         'docs/README.md',
         expect.anything(),
       ),
@@ -1358,7 +1372,9 @@ describe('FilesView rename', () => {
     const p = await show()
     ask('README.md')
     await send('B.md')
-    const draft = renderHook(() => useFileDraft('%1', 'README.md'))
+    const draft = renderHook(() =>
+      useFileDraft('%1', '/home/kim/app', 'README.md'),
+    )
     act(() =>
       draft.result.current[1]({
         root: ROOT,
@@ -1412,7 +1428,7 @@ describe('FilesView rename', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open it' }))
     await waitFor(() =>
       expect(mockContent).toHaveBeenCalledWith(
-        '%1',
+        { paneId: '%1' },
         'src/a.ts',
         expect.anything(),
       ),
@@ -1700,7 +1716,9 @@ describe('FilesView tabs', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
     expect(screen.queryByRole('tablist')).toBeNull()
     expect(screen.getByRole('tree')).toBeInTheDocument()
-    const draft = renderHook(() => useFileDraft('%1', 'src/a.ts'))
+    const draft = renderHook(() =>
+      useFileDraft('%1', '/home/kim/app', 'src/a.ts'),
+    )
     expect(draft.result.current[0]).toBeUndefined()
   })
 

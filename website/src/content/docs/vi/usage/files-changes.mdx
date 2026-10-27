@@ -56,6 +56,29 @@ Các bộ quản lý phiên hỗ trợ:
   báo thì view hiện `Not supported by this backend`.
 - **psmux** trên Windows chưa hỗ trợ: psmux không báo thư mục của pane, nên hai view này không có.
 
+### Places
+
+Files còn hiện được một thư mục nằm ngoài pane, như thư mục cấu hình shell hay ghi chú của bạn,
+sau khi bạn khai báo nó trên máy host:
+
+```bash
+termote start --allow-path ~/.config/fish --allow-path ~/notes
+termote start --remove-path ~/notes
+termote container up --allow-path ~/notes   # container giữ danh sách riêng
+```
+
+Chọn nó trong **Places** (biểu tượng thư mục ở đầu Files); chọn **Pane folder** để quay lại. Một
+Place dùng như thư mục của pane: duyệt, tìm kiếm, sửa, tạo, đổi tên, xóa có Undo, tải xuống và
+dán ảnh. Changes luôn chỉ hiện repository của pane. Chỉ thiết bị có toàn quyền mới thấy Places,
+thiết bị chỉ xem thì không, và ứng dụng không bao giờ tự thêm hay bỏ một Place.
+
+Termote từ chối chính thư mục home cùng mọi thư mục phía trên nó, `~/.ssh`, `~/.gnupg`, các thư
+mục cấu hình, trạng thái, dữ liệu và bộ nhớ đệm của Termote (cả thư mục chứa chúng, như
+`~/.config`, `~/.cache` hay `~/.local`; còn `~/.config/fish` thì được), `/proc`, `/sys`, `/dev`,
+các thư mục chứa socket điều khiển máy host (`/tmp`, `/run`, `/var/run`), và thư mục `.git`. Thư mục
+đã lưu mà nay không còn, hoặc trỏ tới chỗ bị từ chối, sẽ bị bỏ qua, và `start` in ra lệnh
+`--remove-path` để bỏ nó. Trên Windows, Places cần backend Herdr (`--mux herdr`).
+
 ## Files
 
 - Thư mục xếp trước, rồi tới file, không phân biệt hoa thường. Chạm vào thư mục để mở hoặc đóng.

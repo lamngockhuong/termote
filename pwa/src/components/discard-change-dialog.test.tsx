@@ -72,7 +72,11 @@ describe('DiscardChangeDialog', () => {
     ).toBeInTheDocument()
     expect(button('Discard')).toBeDisabled()
     await waitFor(() => expect(button('Discard')).toBeEnabled())
-    expect(mockHash).toHaveBeenCalledWith('%1', 'src/a.ts', '/home/kim/app')
+    expect(mockHash).toHaveBeenCalledWith(
+      { paneId: '%1' },
+      'src/a.ts',
+      '/home/kim/app',
+    )
     await waitFor(() => expect(button('Cancel')).toHaveFocus())
     await act(async () => fireEvent.click(button('Discard')))
     expect(mockApply).toHaveBeenCalledWith('%1', {

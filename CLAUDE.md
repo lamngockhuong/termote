@@ -45,6 +45,7 @@ termote start --fresh                      # native, force a new password
 termote start --mux herdr                  # native, Herdr backend instead of tmux
 termote start --mux zellij                 # native, Zellij backend (Linux, macOS)
 termote start --allow-host box.local       # native, add a Host allowlist entry
+termote start --allow-path ~/notes         # native, offer a folder as a Place in Files
 termote container up                       # container mode (podman/docker)
 termote container up --lan --port 7681     # container, LAN + custom port
 termote container up --mux herdr           # container, Herdr inside it instead of tmux
@@ -177,6 +178,8 @@ turned off with `=false`): `--port <port>` (default 7680, Windows 7690), `--lan[
 `--tailscale <host[:port]>`, `--no-tailscale`, `--no-auth[=false]`, `--mux <tmux|herdr|zellij>` (zellij refused natively on Windows),
 `--allow-host <name>` (repeatable), `--remove-host <name>` (repeatable),
 `--allow-local-user <name>`/`--remove-local-user <name>` (repeatable; native Linux and Windows),
+`--allow-path <dir>`/`--remove-path <dir>` (repeatable; a Place in Files, refused at or above home,
+`~/.ssh`, `~/.gnupg`, termote's dirs or a git dir; `container up` keeps its own list and mounts it),
 `--allow-herdr-no-auth`, `--user <name>` (default `admin`, shared with the container like the
 password), `--fresh`. `update` takes `--version <X.Y.Z>` and `--force`.
 `container up` additionally takes `--workspace <dir>` and `--build`. `url` prints `http://127.0.0.1:<port>` for this machine (never `localhost`, whose `::1` another

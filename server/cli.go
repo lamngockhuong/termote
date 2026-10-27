@@ -500,12 +500,17 @@ Options of start (saved; a flag not given keeps its saved value):
   --allow-local-user <name>  Serve connections of another OS user of this machine, e.g.
                              a reverse proxy (repeatable; Linux and Windows)
   --remove-local-user <name> Stop serving that user's connections (repeatable)
+  --allow-path <dir>         Offer a folder as a Place in Files (repeatable; not your
+                             home, ~/.ssh, ~/.gnupg, termote's own dirs or a .git)
+  --remove-path <dir>        Remove an allowed folder (repeatable)
   --allow-herdr-no-auth      Allow herdr without auth
   --user <name>              Login username (default: admin; shared with the container)
   --fresh                    Set a new password
 
 Options of container up (saved apart from start's; the username and password are shared):
   --port --lan --tailscale --no-tailscale --no-auth --allow-host --remove-host --user --fresh
+  --allow-path <dir>         Mount a host folder as a Place in Files (repeatable; not one
+                             holding or inside the workspace; --remove-path drops one)
   --workspace <dir>          Directory mounted at /workspace (default: ~/termote-workspace)
   --mux <tmux|herdr|zellij>  Backend inside the container (asked the first time, else tmux)
   --allow-herdr-no-auth      Allow herdr without auth
