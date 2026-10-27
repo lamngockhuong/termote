@@ -841,7 +841,7 @@ export function SessionSidebar({
           renderGroupRename(groupActions, group)
         ) : (
           <div
-            className="relative flex items-center gap-0.5"
+            className="group/grouphdr relative flex items-center gap-0.5"
             {...dragProps(
               { kind: 'group', id: group.id },
               !isMobile && canMoveGroup(group),
@@ -864,15 +864,17 @@ export function SessionSidebar({
               ) : (
                 <ChevronDown size={12} aria-hidden="true" />
               )}
-              {/* relative: the branch's sr-only label is absolute; without a
-                  containing block here it escapes the truncation and widens
-                  the list into a horizontal scroll past a long name */}
-              <span className="relative min-w-0 flex-1 truncate text-left">
-                {name}
+              {/* The name, and a worktree's branch on a line of its own, as a
+                  session's commands sit under its name */}
+              <span className="flex min-w-0 flex-1 flex-col text-left">
+                <span className="truncate">{name}</span>
                 {group.worktree?.branch && (
+                  // relative: the sr-only label is absolute; without a
+                  // containing block here it escapes the truncation and
+                  // widens the list into a horizontal scroll past a long name
                   <span
                     title={visibleUnsafe(group.worktree.branch)}
-                    className="ml-1.5 normal-case tracking-normal text-fg-subtle"
+                    className="relative truncate text-[11px] normal-case tracking-normal text-fg-subtle"
                   >
                     <GitBranch
                       size={11}
@@ -887,7 +889,18 @@ export function SessionSidebar({
               <AgentStatusBadge status={group.agentStatus} size={12} />
               <span className="ml-1 tabular-nums">{tabs.length}</span>
             </button>
-            {renderGroupMenu(group, name)}
+            {/* Shown on hover, with focus inside or while open, as a
+                session's buttons; a touch screen (no hover) always shows it. opacity, not
+                hidden: the button stays in the Tab order. */}
+            <span
+              className={
+                isMobile
+                  ? 'flex'
+                  : 'flex opacity-0 pointer-coarse:opacity-100 group-hover/grouphdr:opacity-100 group-focus-within/grouphdr:opacity-100 has-[[aria-expanded=true]]:opacity-100'
+              }
+            >
+              {renderGroupMenu(group, name)}
+            </span>
           </div>
         )}
         {!collapsed && (
