@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.13.0](https://github.com/lamngockhuong/termote/compare/v2.12.0...v2.13.0) (2026-10-28)
+
+
+### Features
+
+* **files:** upload files from the device with a button, a drop or a paste ([#618](https://github.com/lamngockhuong/termote/issues/618)) ([e17219d](https://github.com/lamngockhuong/termote/commit/e17219df68613011e0c49f50d0107ad6116c4000))
+* invite a GitHub star after an update, and in the README, site and About ([#612](https://github.com/lamngockhuong/termote/issues/612)) ([e41469c](https://github.com/lamngockhuong/termote/commit/e41469cdb85b88c6bd669b291eb0a7adda72b217))
+* **panes:** offer split and close alone on Herdr, and place the Pane menu after the font size ([#620](https://github.com/lamngockhuong/termote/issues/620)) ([18633bb](https://github.com/lamngockhuong/termote/commit/18633bb59a081a4ee0ceed0d2e27af0d160adaca))
+* **panes:** split, zoom, swap and resize panes from the PWA on tmux, Herdr and Zellij ([#617](https://github.com/lamngockhuong/termote/issues/617)) ([44b988a](https://github.com/lamngockhuong/termote/commit/44b988a18e06d6459bfb0458cb31fd6be626b26e))
+* **tasks:** list and run Gradle, Maven, Python, Cargo, Go, just, Task, Composer and Deno tasks ([#615](https://github.com/lamngockhuong/termote/issues/615)) ([6bd5268](https://github.com/lamngockhuong/termote/commit/6bd5268beec2c1ae28723e91c59dd62f9c4969ba))
+* **tmux:** list every pane of a window and pick or close it in the pane strip ([#613](https://github.com/lamngockhuong/termote/issues/613)) ([f094df8](https://github.com/lamngockhuong/termote/commit/f094df85051ae3f97a6b66a444af2de4c91a6b9d))
+
+
+### Bug Fixes
+
+* **pwa:** open the notified pane on iOS when the app was in the background ([#616](https://github.com/lamngockhuong/termote/issues/616)) ([8a89a3f](https://github.com/lamngockhuong/termote/commit/8a89a3fa41671e8f105847d778fb24c4cd9293e4))
+
 ## [2.12.0](https://github.com/lamngockhuong/termote/compare/v2.11.0...v2.12.0) (2026-10-27)
 
 
