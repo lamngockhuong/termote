@@ -1825,7 +1825,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   Whoever can publish a release picks the unpinned target, so neither lets it skip the signature:
   without `--version`, `update` refuses a release before 1.10.0 on an install already on a signed
   one (`releaseSigned`, `server/cli_update.go`), and without `TERMOTE_VERSION`, `install.sh`
-  refuses a release before 1.10.0.
+  refuses a release before 1.10.0. The `docker` job pins the binfmt (QEMU) and BuildKit images it
+  builds with by digest, like the actions.
   The `docker` job pushes the image to GHCR by digest only, with no tag; `docker-tags`, which needs
   the release job, moves `x.y.z`, `x.y` and `latest` on GHCR and Docker Hub to that digest and fails
   when a tag names another one, and `publish` makes the draft public only after it. So a `v*` tag
