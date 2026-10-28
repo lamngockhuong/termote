@@ -5,7 +5,8 @@ import path from 'node:path'
 import { type APIRequestContext, expect, type Page, test, watchViolations } from './fixtures'
 import { makeCode, pairStranger } from './pairing'
 
-// Tasks: a pane's package.json scripts and Makefile targets listed, one run
+// Tasks: a pane's package.json scripts, Makefile targets and other tools'
+// tasks listed, one run
 // in a tab of its own (again in that tab once it is idle), its status, and
 // Send to agent passing only that run's output. The agent route is
 // intercepted: CI has no real agent (the real send is checked by hand). Run
@@ -144,6 +145,76 @@ test.describe('tasks', () => {
     // Neither the markers nor the line typed before the run
     expect(sent[0]).not.toContain('termote-task')
     expect(sent[0]).not.toContain('printf')
+  })
+})
+
+// Other tools' tasks, read from a root of their own (the repo above has a
+// test and a build that row() would mix up): Maven and PDM listed only (CI
+// has Maven, which must not run), a Taskfile task run whether go-task is
+// installed or not, and a section folded across a reload.
+test.describe('tasks of other tools', () => {
+  test.skip(auth || herdr, 'runs on the tmux server without sign-in')
+  test.skip(!socket || process.platform !== 'linux', 'needs TMUX_SOCKET of the server under test (Linux)')
+  test.describe.configure({ mode: 'serial' })
+
+  let root = ''
+  let window = ''
+  const toolsWindow = `tasks-tools-${tag}`
+  const tmux = (...args: string[]) => execFileSync('tmux', ['-S', socket as string, ...args], { encoding: 'utf-8' })
+
+  test.beforeAll(() => {
+    root = mkdtempSync(path.join(tmpdir(), 'termote-e2e-tools-'))
+    writeFileSync(path.join(root, 'pom.xml'), '<project/>\n')
+    writeFileSync(path.join(root, 'pyproject.toml'), `[tool.pdm.scripts]\npdm-${tag} = "echo pdm"\n`)
+    writeFileSync(
+      path.join(root, 'Taskfile.yml'),
+      `version: '3'\ntasks:\n  e2e-${tag}:\n    cmds: [echo task]\n  ns:e2e-${tag}:\n    cmds: [echo ns]\n`,
+    )
+    window = tmux('new-window', '-P', '-F', '#{window_id}', '-t', `${tmuxSession}:`, '-n', toolsWindow, '-c', root).trim()
+  })
+
+  test.afterAll(() => {
+    try {
+      for (const line of tmux('list-windows', '-a', '-F', '#{window_id} #{pane_current_path}').split('\n')) {
+        const [id, dir] = line.split(' ')
+        if (id && (id === window || dir === root)) tmux('kill-window', '-t', id)
+      }
+    } catch {
+      // Already gone
+    }
+    if (root) rmSync(root, { recursive: true, force: true, maxRetries: 5 })
+  })
+
+  test('lists each tool in its own section, folded across a reload', async ({ page }) => {
+    await page.goto('/')
+    let view = await openTasks(page, toolsWindow)
+    const maven = view.getByRole('region', { name: 'Maven (pom.xml)' })
+    await expect(row(maven, 'verify')).toContainText('mvn verify')
+    await expect(row(view.getByRole('region', { name: 'PDM (pyproject.toml)' }), `pdm-${tag}`)).toContainText('echo pdm')
+    const task = view.getByRole('region', { name: 'Task (Taskfile.yml)' })
+    await expect(row(task, `e2e-${tag}`)).toContainText(`task e2e-${tag}`)
+    await expect(row(task, `ns:e2e-${tag}`)).toBeVisible()
+
+    const header = maven.getByRole('button', { name: /Maven \(pom\.xml\)/ })
+    await header.click()
+    await expect(header).toHaveAttribute('aria-expanded', 'false')
+    await expect(maven.getByTestId('task-row')).toHaveCount(0)
+    await page.reload()
+    view = await openTasks(page, toolsWindow)
+    const again = view.getByRole('region', { name: 'Maven (pom.xml)' })
+    await expect(again.getByRole('button', { name: /Maven \(pom\.xml\)/ })).toHaveAttribute('aria-expanded', 'false')
+    await expect(again.getByTestId('task-row')).toHaveCount(0)
+  })
+
+  test('runs a Taskfile task in a tab named by its tool', async ({ page }) => {
+    test.setTimeout(90000)
+    await page.goto('/')
+    const view = await openTasks(page, toolsWindow)
+    const task = row(view.getByRole('region', { name: 'Task (Taskfile.yml)' }), `e2e-${tag}`)
+    await task.getByRole('button', { name: `Run e2e-${tag}` }).click()
+    await expect(page.getByText(`Running in tab task:task:e2e-${tag}`)).toBeVisible()
+    // go-task may be missing: any exit status shows the run ended
+    await expect(task.getByTestId('task-run-state')).toHaveText(/^exit \d+$/, { timeout: 45000 })
   })
 })
 

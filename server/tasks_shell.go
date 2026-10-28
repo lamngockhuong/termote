@@ -85,20 +85,33 @@ func shellQuote(kind, s string) string {
 }
 
 // taskCommand is what runs a task in kind's syntax: the package manager's
-// run or make with the name quoted, or the user's own command handed whole
-// to the shell's eval, so a trailing &, ; or comment cannot reach the end
-// marker.
+// run or make with the name quoted, a tool's program with its arguments
+// quoted, or the user's own command handed whole to the shell's eval, so a
+// trailing &, ; or comment cannot reach the end marker. "" for a kind it
+// does not know: nothing is typed.
 func taskCommand(kind string, t resolvedTask) string {
 	switch t.Kind {
 	case taskKindScript:
 		return t.PackageManager + " run " + shellQuote(kind, t.Name)
 	case taskKindMake:
 		return "make " + shellQuote(kind, t.Name)
+	case taskKindUser:
+		if kind == shellPwsh {
+			return "Invoke-Expression " + shellQuote(kind, t.Command)
+		}
+		return "eval " + shellQuote(kind, t.Command)
 	}
+	if !isToolKind(t.Kind) || t.Head == "" {
+		return ""
+	}
+	line := t.Head
 	if kind == shellPwsh {
-		return "Invoke-Expression " + shellQuote(kind, t.Command)
+		line = t.PwshHead
 	}
-	return "eval " + shellQuote(kind, t.Command)
+	for _, a := range t.Args {
+		line += " " + shellQuote(kind, a)
+	}
+	return line
 }
 
 // buildTaskLine wraps cmd between a start and an end marker naming nonce;

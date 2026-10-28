@@ -1,12 +1,13 @@
 ---
 title: Tasks
-description: Run a pane's package.json scripts, Makefile targets and your own commands in a tab, and send a failed run's output to an agent
+description: Run a pane's package.json scripts, Makefile targets, Gradle, Maven, Python, Cargo, Go, just, Task, Composer and Deno tasks and your own commands in a tab, and send a failed run's output to an agent
 ---
 
 import { Aside } from "@astrojs/starlight/components";
 
 The **Tasks** view of a pane lists what its folder offers to run: the scripts of its `package.json`,
-the targets of its Makefile and the tasks you saved yourself. **Run** starts one in a tab of its own,
+the targets of its Makefile, the tasks of other build tools and task runners (Gradle, Maven, PDM,
+Hatch, Poe the Poet, Cargo, Go, just, Task, Composer, Deno) and the tasks you saved yourself. **Run** starts one in a tab of its own,
 in the pane's folder. When a run fails, **Send to agent** passes its output to a coding agent in one
 tap, so you do not copy it out of the terminal.
 
@@ -22,15 +23,44 @@ folder. Nothing runs to list the tasks: Termote reads the files.
 - **Make targets**, from the Makefile make would read (`GNUmakefile`, `makefile`, then `Makefile`).
   Only targets written out are listed: not variables, special targets such as `.PHONY`, pattern rules
   or targets built from variables. `make` itself is never run to find them.
+- **Other tools**, one section each, from the files in the table below.
 - **My tasks**: the tasks saved in [Settings](#your-own-tasks), in every pane.
 
+Each section folds from its header, and stays folded on this device. Typing in the filter opens every
+section with a match.
+
+### Where Tasks Come From
+
+| Section     | File read in the folder                                                     | Tasks listed                                                                                | Runs as                                                              |
+| ----------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Gradle      | `build.gradle.kts`, else `build.gradle`, else `settings.gradle(.kts)`       | `build`, `test`, `check`, `clean`, `assemble`; `run` with the `application` plugin; `bootRun` with the Spring Boot plugin | `./gradlew <task>` when the folder has `gradlew`, else `gradle`      |
+| Maven       | `pom.xml`                                                                   | `clean`, `compile`, `test`, `package`, `verify`, `install`                                  | `./mvnw <phase>` when the folder has `mvnw`, else `mvn`              |
+| PDM         | `pyproject.toml`, `[tool.pdm.scripts]`                                      | each script, with its `pre_` and `post_` scripts named                                      | `pdm run <name>`                                                     |
+| Hatch       | `hatch.toml` when there is one, else `pyproject.toml` `[tool.hatch.envs]`   | each environment's scripts: `name` in `default`, else `env:name`                            | `hatch run <env>:<name>`                                             |
+| Poe the Poet| `pyproject.toml`, `[tool.poe.tasks]`                                        | each task but those starting with `_`                                                       | `poetry run poe` with `poetry.lock`, `uv run poe` with `uv.lock`, else `poe` |
+| Cargo       | `Cargo.toml`, `.cargo/config` else `.cargo/config.toml`                     | `build`, `check`, `test`, `clippy`, `fmt`; `run` with `src/main.rs` or a `[[bin]]`; each `[alias]` | `cargo <name>`                                                       |
+| Go          | `go.mod`                                                                    | `build`, `test`, `vet` of `./...`; `run .` with a `main.go`                                 | `go <command>`                                                       |
+| just        | `justfile` or `.justfile`, in any case                                      | each recipe that needs no argument                                                          | `just <recipe>`                                                      |
+| Task        | `Taskfile.yml` (and the other names go-task reads, in its order)            | each task but `internal: true` ones                                                         | `task <name>`                                                        |
+| Composer    | `composer.json`, `scripts`                                                  | each script                                                                                 | `composer run-script <name>`                                         |
+| Deno        | `deno.json`, else `deno.jsonc`, `tasks`                                     | each task                                                                                   | `deno task <name>`                                                   |
+
+Gradle and Maven are never run to find their tasks, so the list is their standard one, read from the
+folder's own build file only (not from sub-projects). A just recipe that is private (`_name` or
+`[private]`) or takes an argument without a default is left out, and so is a Cargo alias named like a
+Cargo command (Cargo would run its own) and a Hatch script whose name holds `:`. On Windows, from
+PowerShell, Gradle and Maven run `.\gradlew.bat` and `.\mvnw.cmd`.
+
 A script or target name with a space or another character a shell would read (`;`, `$`, a quote) is
-left out, and the list says how many were. A `package.json` or Makefile larger than 1 MB is not read.
+left out, and the list says how many were. A file larger than 1 MB (256 KB for a TOML file) is not
+read, and a file that cannot be read as its tool's (invalid JSON or TOML, or both a `justfile` and a
+`.justfile`) is named at the top of the list.
 Only the folder's own files count: the `package.json` of a package inside a monorepo is not listed.
 
 ## Running a Task
 
-**Run** opens a tab named `task:<name>` in the pane's folder and types the command into its shell, as
+**Run** opens a tab named `task:<name>` (`task:<tool>:<name>` for another tool's task, such as
+`task:cargo:test`) in the pane's folder and types the command into its shell, as
 if you had: your `PATH`, nvm and other shell settings apply. The toast's **Open** shows the tab.
 
 Run the task again and its tab is used again when its shell is waiting at its prompt; a line you left

@@ -287,6 +287,8 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/template-editor.tsx`          | Make or change a template                                      |
 | `server/tasks.go`                                 | `/api/mux/panes/{id}/tasks`: a root's tasks and their runs     |
 | `server/tasks_discover.go`                        | Reads `package.json` and the Makefile (nothing runs)           |
+| `server/tasks_tools.go`                           | Other tools' tasks (Gradle, Cargo, just, ...) and their runner |
+| `server/tasks_tools_toml.go`                      | TOML size cap, pre-scan, typed decode, decode slots            |
 | `server/tasks_run.go`                             | `.../tasks/run`: per-task lock, tab reuse, the typed line      |
 | `server/tasks_run_state.go`                       | `/api/mux/tasks/runs/{id}`: running, exited, ended, gone       |
 | `server/tasks_shell.go`                           | `taskMux`, shells, quoting, the run's markers                  |
@@ -297,6 +299,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/task-row.tsx`                 | One task: command, hooks, last run, buttons                    |
 | `pwa/src/components/agent-pane-picker.tsx`        | Which agent pane gets a run's output (kept per group)          |
 | `pwa/src/hooks/use-tasks.ts`                      | A pane's tasks, Run, the runs polled                           |
+| `pwa/src/hooks/use-task-groups-collapsed.ts`      | Folded Tasks sections, kept per device                         |
 | `pwa/src/utils/task-failure-message.ts`           | A run's output between its markers, made into a message        |
 | `pwa/src/utils/send-to-agent.ts`                  | One message to an agent pane, after its cursor (Tasks, Review) |
 | `pwa/src/utils/review-draft.ts`                   | Review comments: the draft per pane (`sessionStorage`)         |

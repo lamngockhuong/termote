@@ -36,7 +36,6 @@ var (
 	errTaskShell         = &codedError{"unsupported_shell", "this shell is not supported (bash, zsh, sh, fish, pwsh)", http.StatusConflict}
 	errTaskShellBusy     = &codedError{"shell_busy", "the tab's shell is busy", http.StatusConflict}
 	errTaskStoredInvalid = &codedError{"invalid_task", "this task cannot be run: edit it in Settings", http.StatusBadRequest}
-	errTaskInvalidInput  = &codedError{"invalid_task", "kind must be script, make or user", http.StatusBadRequest}
 )
 
 // taskRunningError: the task's last run still runs in its tab, and the
@@ -53,6 +52,10 @@ type resolvedTask struct {
 	Kind, Name, ID string
 	// PackageManager runs a script; Command is a user task's.
 	PackageManager, Command string
+	// Head and PwshHead start a tool task's line (toolGroup), Args follow
+	// it, each quoted.
+	Head, PwshHead string
+	Args           []string
 }
 
 // clientKey names the task in the list's runs: kind and name, or user and
@@ -233,13 +236,13 @@ type taskRunRequest struct {
 }
 
 // resolve finds the task named in req among what root offers now.
-func (t *tasksAPI) resolve(req taskRunRequest, root string) (resolvedTask, error) {
-	switch req.Kind {
-	case taskKindScript, taskKindMake:
+func (t *tasksAPI) resolve(ctx context.Context, req taskRunRequest, root string) (resolvedTask, error) {
+	switch {
+	case req.Kind == taskKindScript || req.Kind == taskKindMake || isToolKind(req.Kind):
 		if !validTaskName(req.Name) {
 			return resolvedTask{}, errNoSuchTask
 		}
-		found, err := t.discover(root)
+		found, err := t.discoverRoot(ctx, root, isToolKind(req.Kind))
 		if err != nil {
 			return resolvedTask{}, err
 		}
@@ -249,7 +252,15 @@ func (t *tasksAPI) resolve(req taskRunRequest, root string) (resolvedTask, error
 		if req.Kind == taskKindMake && slices.ContainsFunc(found.MakeTargets, func(m makeTarget) bool { return m.Name == req.Name }) {
 			return resolvedTask{Kind: req.Kind, Name: req.Name}, nil
 		}
-	case taskKindUser:
+		for _, g := range found.ToolGroups {
+			if g.Tool != req.Kind {
+				continue
+			}
+			if i := slices.IndexFunc(g.Tasks, func(tt toolTask) bool { return tt.Name == req.Name }); i >= 0 {
+				return resolvedTask{Kind: req.Kind, Name: req.Name, Head: g.head, PwshHead: g.pwshHead, Args: g.Tasks[i].args}, nil
+			}
+		}
+	case req.Kind == taskKindUser:
 		if t.store != nil && validTemplateID(req.ID) {
 			if u, ok := t.store.task(req.ID); ok {
 				// Checked again: the file can be edited by hand, or written
@@ -261,7 +272,7 @@ func (t *tasksAPI) resolve(req taskRunRequest, root string) (resolvedTask, error
 			}
 		}
 	default:
-		return resolvedTask{}, errTaskInvalidInput
+		return resolvedTask{}, errTaskUnknownKind
 	}
 	return resolvedTask{}, errNoSuchTask
 }
@@ -298,7 +309,7 @@ func (t *tasksAPI) handleRun(w http.ResponseWriter, r *http.Request) {
 		t.files.error(w, "task run", &rootChangedError{root})
 		return
 	}
-	task, err := t.resolve(body, root)
+	task, err := t.resolve(req.ctx, body, root)
 	if err == nil && !validTaskDir(root) {
 		err = errTaskInvalidRoot
 	}
@@ -357,6 +368,10 @@ func (t *tasksAPI) run(ctx context.Context, tm taskMux, paneID, root string, tas
 			return taskRunInfo{}, false, err
 		}
 		name := "task:" + task.Name
+		if isToolKind(task.Kind) {
+			// Two tools may both have a "test".
+			name = "task:" + task.Kind + ":" + task.Name
+		}
 		if tab, err = tm.NewTaskTab(ctx, groupID, name, root); err != nil {
 			return taskRunInfo{}, false, err
 		}
@@ -408,7 +423,11 @@ func (t *tasksAPI) typeTask(ctx context.Context, tm taskMux, target string, task
 	if kind == "" {
 		return errTaskShell
 	}
-	return tm.TypeLine(ctx, target, buildTaskLine(kind, taskCommand(kind, task), nonce))
+	cmd := taskCommand(kind, task)
+	if cmd == "" {
+		return errTaskUnknownKind
+	}
+	return tm.TypeLine(ctx, target, buildTaskLine(kind, cmd, nonce))
 }
 
 // waitTaskShell waits up to agentStartIdleWait for target's shell to wait

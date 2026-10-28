@@ -41,6 +41,9 @@ func TestTaskCommandAndLine(t *testing.T) {
 	script := resolvedTask{Kind: taskKindScript, Name: "test:unit", PackageManager: "pnpm"}
 	make := resolvedTask{Kind: taskKindMake, Name: "build"}
 	user := resolvedTask{Kind: taskKindUser, ID: "0123456789abcdef", Command: "go test ./... &"}
+	gradle := resolvedTask{Kind: "gradle", Name: "build", Head: "./gradlew", PwshHead: `.\gradlew.bat`, Args: []string{"build"}}
+	hatch := resolvedTask{Kind: "hatch", Name: "test", Head: "hatch run", PwshHead: "hatch run", Args: []string{"default:test"}}
+	goTest := resolvedTask{Kind: "go", Name: "test", Head: "go", PwshHead: "go", Args: []string{"test", "./..."}}
 	for _, tc := range []struct {
 		kind string
 		task resolvedTask
@@ -51,6 +54,13 @@ func TestTaskCommandAndLine(t *testing.T) {
 		{shellPOSIX, user, "eval 'go test ./... &'"},
 		{shellFish, user, "eval 'go test ./... &'"},
 		{shellPwsh, user, "Invoke-Expression 'go test ./... &'"},
+		{shellPOSIX, gradle, "./gradlew 'build'"},
+		{shellFish, gradle, "./gradlew 'build'"},
+		{shellPwsh, gradle, `.\gradlew.bat 'build'`},
+		{shellPOSIX, hatch, "hatch run 'default:test'"},
+		{shellPwsh, goTest, "go 'test' './...'"},
+		{shellPOSIX, resolvedTask{Kind: "nope", Head: "x"}, ""},
+		{shellPOSIX, resolvedTask{Kind: "go"}, ""},
 	} {
 		if got := taskCommand(tc.kind, tc.task); got != tc.want {
 			t.Errorf("%s %v = %q, want %q", tc.kind, tc.task, got, tc.want)
@@ -152,6 +162,7 @@ func TestTaskLineRunsInShells(t *testing.T) {
 			{resolvedTask{Kind: taskKindUser, Command: "sleep 0 & echo four"}, "four", 0},
 			{resolvedTask{Kind: taskKindUser, Command: `echo "it's $((1+1))"`}, "it's 2", 0},
 			{resolvedTask{Kind: taskKindMake, Name: "a;b$(echo x)`y`'z\\"}, "arg:a;b$(echo x)`y`'z\\", 4},
+			{resolvedTask{Kind: "go", Head: "make", Args: []string{"default:test", "./..."}}, "arg:default:test\narg:./...", 4},
 		} {
 			if kind == shellFish && strings.Contains(tc.task.Command, "$((") {
 				continue // fish has no arithmetic expansion

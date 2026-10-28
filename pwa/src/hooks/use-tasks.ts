@@ -36,10 +36,29 @@ export interface TaskItem {
   truncated?: boolean
 }
 
-// The tasks of a listing, in groups: scripts, make targets, the user's
+// A group of other tool's tasks: id is its tool
+export interface ToolItems {
+  id: string
+  title: string
+  items: TaskItem[]
+}
+
+// The kinds that are no tool's
+const BASE_KINDS = new Set(['script', 'make', 'user'])
+
+// The tab a run opens: task:<name>, or task:<tool>:<name> for a tool's task
+// (two tools may both have a test)
+export const taskTabName = (item: TaskItem) =>
+  BASE_KINDS.has(item.kind)
+    ? `task:${item.name}`
+    : `task:${item.kind}:${item.name}`
+
+// The tasks of a listing, in groups: scripts, make targets, each other
+// tool's, the user's
 export function taskItems(t: PaneTasks): {
   scripts: TaskItem[]
   make: TaskItem[]
+  tools: ToolItems[]
   user: TaskItem[]
 } {
   return {
@@ -58,6 +77,19 @@ export function taskItems(t: PaneTasks): {
       name: m.name,
       command: `make ${m.name}`,
       label: `make ${m.name}`,
+    })),
+    tools: t.toolGroups.map((g) => ({
+      id: g.tool,
+      title: `${g.label} (${g.file})`,
+      items: g.tasks.map((task) => ({
+        key: `${g.tool}:${task.name}`,
+        kind: g.tool,
+        name: task.name,
+        command: task.detail ?? task.command,
+        label: task.command,
+        hooks: task.hooks,
+        truncated: task.truncated,
+      })),
     })),
     user: t.userTasks.map((u) => ({
       key: `user:${u.id}`,

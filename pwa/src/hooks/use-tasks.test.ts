@@ -6,7 +6,13 @@ import {
   type TaskRun,
   type TaskRunStart,
 } from './use-mux-api'
-import { TASK_POLL_MS, type TaskItem, taskItems, useTasks } from './use-tasks'
+import {
+  TASK_POLL_MS,
+  type TaskItem,
+  taskItems,
+  taskTabName,
+  useTasks,
+} from './use-tasks'
 
 const api = vi.hoisted(() => ({
   fetchTasks: vi.fn(),
@@ -28,6 +34,8 @@ const paneTasks = (over: Partial<PaneTasks> = {}): PaneTasks => ({
   runs: {},
   skipped: 0,
   tooLarge: [],
+  toolGroups: [],
+  unreadable: [],
   ...over,
 })
 
@@ -127,6 +135,7 @@ describe('taskItems', () => {
           label: 'make all',
         },
       ],
+      tools: [],
       user: [
         {
           key: 'user:abc',
@@ -140,12 +149,76 @@ describe('taskItems', () => {
     })
   })
 
+  it('lists each tool group under its label and file, keyed by tool', () => {
+    const { tools } = taskItems(
+      paneTasks({
+        toolGroups: [
+          {
+            tool: 'pdm',
+            label: 'PDM',
+            file: 'pyproject.toml',
+            tasks: [
+              {
+                name: 'test',
+                command: 'pdm run test',
+                detail: 'pytest -x',
+                truncated: true,
+                hooks: ['pre_test'],
+              },
+              { name: 'lint', command: 'pdm run lint' },
+            ],
+          },
+        ],
+      }),
+    )
+    expect(tools).toEqual([
+      {
+        id: 'pdm',
+        title: 'PDM (pyproject.toml)',
+        items: [
+          {
+            key: 'pdm:test',
+            kind: 'pdm',
+            name: 'test',
+            command: 'pytest -x',
+            label: 'pdm run test',
+            hooks: ['pre_test'],
+            truncated: true,
+          },
+          {
+            key: 'pdm:lint',
+            kind: 'pdm',
+            name: 'lint',
+            command: 'pdm run lint',
+            label: 'pdm run lint',
+            hooks: undefined,
+            truncated: undefined,
+          },
+        ],
+      },
+    ])
+  })
+
+  it('names the tab a run opens, with the tool for a tool task', () => {
+    const item = (kind: string): TaskItem => ({
+      key: `${kind}:test`,
+      kind,
+      name: 'test',
+      command: '',
+      label: '',
+    })
+    expect(taskTabName(item('script'))).toBe('task:test')
+    expect(taskTabName(item('make'))).toBe('task:test')
+    expect(taskTabName(item('user'))).toBe('task:test')
+    expect(taskTabName(item('cargo'))).toBe('task:cargo:test')
+  })
+
   it('gives empty groups for an empty listing', () => {
     expect(
       taskItems(
         paneTasks({ scripts: [], makeTargets: [], userTasks: [], runs: {} }),
       ),
-    ).toEqual({ scripts: [], make: [], user: [] })
+    ).toEqual({ scripts: [], make: [], tools: [], user: [] })
   })
 })
 

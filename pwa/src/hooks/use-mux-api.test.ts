@@ -1856,9 +1856,18 @@ describe('tasks API', () => {
       makefile: 'Makefile',
       makeTargets: [{ name: 'build' }],
       userTasks: [task],
+      toolGroups: [
+        {
+          tool: 'go',
+          label: 'Go',
+          file: 'go.mod',
+          tasks: [{ name: 'test', command: 'go test ./...' }],
+        },
+      ],
       runs: { 'script:test': run },
       skipped: 2,
       tooLarge: ['package.json'],
+      unreadable: ['Cargo.toml'],
     }
     const { calls } = mockFetch({ body: full }, { body: full })
     expect(await fetchTasks('%1')).toEqual(full)
@@ -1876,10 +1885,19 @@ describe('tasks API', () => {
       makefile: '',
       makeTargets: [],
       userTasks: [],
+      toolGroups: [],
       runs: {},
       skipped: 0,
       tooLarge: [],
+      unreadable: [],
     })
+  })
+
+  it('reads a null tool list or unreadable list as empty', async () => {
+    mockFetch({ body: { toolGroups: null, unreadable: null } })
+    const got = await fetchTasks('p')
+    expect(got.toolGroups).toEqual([])
+    expect(got.unreadable).toEqual([])
   })
 
   it('a refused listing is a read (no view-only toast) and carries the new root', async () => {
