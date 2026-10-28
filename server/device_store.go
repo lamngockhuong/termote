@@ -336,6 +336,11 @@ func (s *deviceStore) maybeReloadLocked() {
 	s.changedLocked()
 }
 
+// missingFrom returns the ids of before that after does not hold.
+func missingFrom(before, after []string) []string {
+	return slices.DeleteFunc(before, func(id string) bool { return slices.Contains(after, id) })
+}
+
 // liveIDsLocked returns the ids of the live devices; mu must be held.
 func (s *deviceStore) liveIDsLocked() []string {
 	var ids []string

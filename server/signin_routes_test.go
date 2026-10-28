@@ -539,14 +539,18 @@ func TestSessionPushedOutOrExpiredClosesStream(t *testing.T) {
 	}
 	first, _ := s.start(req, sessionViaForm)
 	pushed := open(first)
+	firstMeta := s.store.tokens[first].session
 	if _, err := s.start(req, sessionViaForm); err != nil {
 		t.Fatal(err)
 	}
 	if !errors.Is(context.Cause(pushed), errSessionRevoked) {
 		t.Error("a pushed-out session's stream stayed open")
 	}
-	if want := `audit: session-ended id="` + sessionID(first) + `" reason="pushed-out"`; !strings.Contains(logs.String(), want) {
-		t.Errorf("no %s in:\n%s", want, logs)
+	if want := `audit: session-ended id="` + sessionID(first) + `" reason="pushed-out"`; strings.Count(logs.String(), want) != 1 {
+		t.Errorf("want one %s in:\n%s", want, logs)
+	}
+	if firstMeta.expiry.Stop() {
+		t.Error("a pushed-out session's expiry timer still runs")
 	}
 
 	s.store.max = 0
