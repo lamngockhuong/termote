@@ -58,7 +58,7 @@ React SPA with:
 - **Session Tabs**: Browser-like tabs in the header row for tab switching (hidden/shown via setting), add/remove via UI
 - **Session Chip** (mobile): Header chip that opens the sessions list as a bottom sheet; there is no bottom navigation
 - **Pane Strip**: Second-level switcher shown only when a tab has more than one pane (split panes; on tmux it moves the shared focus, not the stream)
-- **Pane Menu**: Header menu (`pane-layout-menu.tsx`) and palette category `Panes` to split, zoom, swap, resize and close the pane shown; hidden on a view-only device and without `caps.paneLayout` (the palette keeps the commands, disabled with the reason)
+- **Pane Menu**: Header menu (`pane-layout-menu.tsx`) and palette category `Panes` to split, zoom, swap, resize and close the pane shown; hidden on a view-only device and without `caps.paneLayout` (the palette keeps the commands, disabled with the reason); with `caps.paneStream` (Herdr, whose stream is one pane) it offers split and close alone, since zoom, swap and resize would change only the desktop
 - **Agent Status Badge**: Per-pane coding-agent status (idle/working/blocked/done) shown next to the pane, only ever set by the Herdr backend
 - **Keyboard Toolbar**: Virtual keys, Ctrl combos, scroll controls (respects default expanded setting)
 - **More Menu**: Font size (mobile), theme (light/dark/system), Settings, Help & gestures, About, Copy link, Clear cache & reload

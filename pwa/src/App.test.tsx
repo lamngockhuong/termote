@@ -3419,7 +3419,12 @@ describe('App groups and panes', () => {
   // mockMux with the layout actions; zellij turns the panes around
   async function mockLayout(
     backend: 'tmux' | 'herdr',
-    over: { paneLayout?: boolean; role?: 'view'; paneId?: string } = {},
+    over: {
+      paneLayout?: boolean
+      paneStream?: boolean
+      role?: 'view'
+      paneId?: string
+    } = {},
   ) {
     mockMux(backend, over.role)
     const base = mockUseLocalSessions()
@@ -3441,7 +3446,11 @@ describe('App groups and panes', () => {
       },
       mux: {
         ...base.mux,
-        caps: { ...base.mux.caps, paneLayout: over.paneLayout ?? true },
+        caps: {
+          ...base.mux.caps,
+          paneLayout: over.paneLayout ?? true,
+          paneStream: over.paneStream,
+        },
       },
     } as any)
     return actions
@@ -3472,6 +3481,17 @@ describe('App groups and panes', () => {
     expect(screen.getByTestId('confirm-dialog')).toHaveTextContent(
       'Close pane?',
     )
+  })
+
+  it('where the stream shows one pane (Herdr), split and close alone', async () => {
+    const a = await mockLayout('herdr', { paneStream: true })
+    render(<App />)
+    fireEvent.click(await paneMenuItem('Split down'))
+    expect(a.splitPane).toHaveBeenCalledWith('down')
+    fireEvent.click(await screen.findByRole('button', { name: 'Pane' }))
+    expect(screen.getByRole('menuitem', { name: 'Close pane' })).toBeVisible()
+    for (const name of [/Zoom/, /Swap/, /Resize/])
+      expect(screen.queryByRole('menuitem', { name })).toBeNull()
   })
 
   it('no swap past the last pane of tmux or Herdr', async () => {

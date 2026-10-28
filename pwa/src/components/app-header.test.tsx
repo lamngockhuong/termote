@@ -96,6 +96,22 @@ describe('AppHeader — pane menu', () => {
     renderHeader()
     expect(screen.queryByRole('button', { name: 'Pane' })).toBeNull()
   })
+
+  it('sits right of the font size on desktop', () => {
+    render(
+      <ThemeProvider>
+        <AppHeader
+          {...headerProps({ isMobile: false, showFontSize: true })}
+          paneMenu={<button type="button">Pane</button>}
+        />
+      </ThemeProvider>,
+    )
+    const font = screen.getByRole('button', { name: 'Increase font size' })
+    const pane = screen.getByRole('button', { name: 'Pane' })
+    expect(
+      font.compareDocumentPosition(pane) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+  })
 })
 
 describe('AppHeader — desktop', () => {

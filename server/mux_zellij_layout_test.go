@@ -29,8 +29,8 @@ const zellijOnlyPane0 = "0\n[{\"id\":0,\"is_plugin\":false,\"tab_id\":0}]\n"
 
 func TestZellijPaneLayoutCap(t *testing.T) {
 	useFakeZellij(t, map[string]string{"--version": fakeZellijVersion})
-	if !newTestZellijMux().Caps().PaneLayout {
-		t.Error("paneLayout off on 0.45.1")
+	if c := newTestZellijMux().Caps(); !c.PaneLayout || c.PaneStream {
+		t.Errorf("0.45.1: paneLayout %v, paneStream %v (the stream shows the tab)", c.PaneLayout, c.PaneStream)
 	}
 	useFakeZellij(t, map[string]string{"--version": "0\nzellij 0.45.0\n"})
 	m := newTestZellijMux()

@@ -157,7 +157,7 @@ func (m *herdrMux) Caps() Caps {
 	return Caps{ClientSideSelect: true, Scroll: true, PaneText: true, DriveSize: true, AgentChat: true, Files: true, Groups: true,
 		AgentStart: start, AgentStartCodex: start && agentStartKind("codex"),
 		Worktrees: herdrCanWorktrees(v, herdrStartGOOS), ReorderTabs: reorder, ReorderGroups: reorder,
-		PaneLayout: herdrCanPaneLayout(v, herdrStartGOOS)}
+		PaneLayout: herdrCanPaneLayout(v, herdrStartGOOS), PaneStream: true}
 }
 
 // herdrStartGOOS is the OS the worktree gate, a start's idle check

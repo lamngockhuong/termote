@@ -83,7 +83,7 @@ window chỉ đóng được bằng cách đóng tab. psmux (Windows) mỗi wind
 
 ### Bố cục pane
 
-Menu **Pane** trên header (biểu tượng lưới) đổi bố cục của tab đang xem, tính từ pane đang hiện:
+Menu **Pane** trên header (biểu tượng khung chia đôi) đổi bố cục của tab đang xem, tính từ pane đang hiện:
 
 - **Split right** và **Split down** mở một pane mới bên phải hoặc bên dưới nó, cùng thư mục.
 - **Zoom** cho pane chiếm trọn tab; chọn lần nữa thì các pane khác hiện lại.
@@ -100,8 +100,10 @@ Trên tmux, Herdr và Zellij, các thao tác chạy hơi khác nhau:
 
 - **tmux**: split không dời focus, nên pane đang hiện giữ nguyên. Zoom đưa focus của tmux sang
   pane được zoom, trên mọi client, kể cả client trên desktop của bạn.
-- **Herdr**: sau khi split, Termote hiện pane mới; focus của chính Herdr không đổi. Zoom đưa focus
-  trong Herdr sang pane đó, trên mọi client.
+- **Herdr**: Termote mỗi lúc chỉ hiện một pane chứ không hiện bố cục của tab, nên zoom, swap và
+  resize chỉ đổi được giao diện Herdr trên desktop. Vì vậy menu chỉ có **Split right**, **Split
+  down** và **Close pane**; trong palette các lệnh còn lại bị làm mờ ("Changes only the Herdr
+  desktop"). Sau khi split, Termote hiện pane mới; focus của chính Herdr không đổi.
 - **Zellij**: sau khi split, Termote hiện pane mới. Swap xoay các pane trong tab đi một vị trí:
   trên màn hình các pane đổi chỗ, còn dải pane giữ thứ tự cũ. Zoom kéo mọi client đang xem tab đó,
   kể cả Zellij của bạn, về pane được zoom. Qua API, split vào một thư mục khác thư mục của pane bị

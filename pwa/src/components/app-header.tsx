@@ -188,7 +188,6 @@ function DesktopHeader(p: Props) {
             onToggle={p.onTogglePanel}
           />
         )}
-        {p.paneMenu}
         {p.showFontSize && (
           <div className="flex items-center gap-0.5 rounded-control border border-border px-1 pointer-coarse:py-0.5 ui-native:border-0 ui-native:bg-bg">
             <button
@@ -215,6 +214,7 @@ function DesktopHeader(p: Props) {
             </button>
           </div>
         )}
+        {p.paneMenu}
         {p.onToggleFullscreen && (
           <IconButton
             size="sm"

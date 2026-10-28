@@ -106,6 +106,10 @@ export interface MuxSnapshot {
     // A pane can be split, zoomed, swapped and resized (/panes/{id}/split,
     // zoom, swap, resize)
     paneLayout?: boolean
+    // The stream shows one pane, not its tab's layout (Herdr): zooming,
+    // swapping and resizing would change only the desktop, so they are not
+    // offered.
+    paneStream?: boolean
     // A group can be moved (/groups/{id}/move): Herdr only.
     reorderGroups?: boolean
     // What this client may do: "view" changes nothing on the server (every

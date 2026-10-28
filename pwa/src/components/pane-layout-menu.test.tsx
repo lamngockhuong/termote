@@ -6,6 +6,7 @@ import { PaneLayoutMenu, paneLayoutMessage } from './pane-layout-menu'
 function show(over: Partial<Parameters<typeof PaneLayoutMenu>[0]> = {}) {
   const p = {
     desktop: true,
+    arrange: true,
     canSwapNext: true,
     canClose: true,
     onSplit: vi.fn(),
@@ -57,6 +58,15 @@ describe('PaneLayoutMenu', () => {
     expect(item('Swap with next pane')).toBeDisabled()
     fireEvent.click(item('Swap with next pane'))
     expect(p.onSwapNext).not.toHaveBeenCalled()
+  })
+
+  it('offers split and close alone where the page shows one pane (Herdr)', () => {
+    show({ arrange: false })
+    expect(item('Split right')).toBeInTheDocument()
+    expect(item('Split down')).toBeInTheDocument()
+    expect(item('Close pane')).toBeInTheDocument()
+    for (const name of [/Zoom/, /Swap/, /Resize/])
+      expect(screen.queryByRole('menuitem', { name })).toBeNull()
   })
 })
 

@@ -20,6 +20,7 @@ function context(over: Partial<AppCommandContext> = {}): AppCommandContext {
     previousTab: 'a',
     nextTab: 'c',
     paneLayout: true,
+    paneStream: false,
     canSwapNext: true,
     desktop: true,
     splitPane: vi.fn(),
@@ -315,6 +316,21 @@ describe('pane layout commands', () => {
     expect(
       command(context({ canSwapNext: false }), 'pane.zoom').disabledReason,
     ).toBeUndefined()
+  })
+
+  it('split alone where the page shows one pane (Herdr)', () => {
+    const herdr = context({ paneStream: true, canSwapNext: false })
+    for (const id of ids) {
+      expect(command(herdr, id).disabledReason).toBe(
+        id.startsWith('pane.split')
+          ? undefined
+          : 'Changes only the Herdr desktop',
+      )
+    }
+    expect(
+      command(context({ paneStream: true, readOnly: true }), 'pane.zoom')
+        .disabledReason,
+    ).toBe('View only')
   })
 
   it('offer resizing on a desktop only, and stay in a focus window', () => {

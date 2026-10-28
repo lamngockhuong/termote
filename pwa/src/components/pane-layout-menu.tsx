@@ -5,7 +5,6 @@ import {
   ArrowRight,
   ArrowUp,
   Columns2,
-  LayoutGrid,
   Maximize2,
   Rows2,
   X,
@@ -23,6 +22,9 @@ export const RESIZE_STEP = 5
 interface Props {
   // Desktop: the Resize items are offered
   desktop: boolean
+  // Zoom, swap and resize are offered: the page shows the tab's layout
+  // (not on Herdr, whose stream is one pane)
+  arrange: boolean
   // The pane has a pane after it to swap with (on Zellij, which turns the
   // panes around, any other pane)
   canSwapNext: boolean
@@ -55,7 +57,7 @@ export function PaneLayoutMenu(p: Props) {
   return (
     <Menu
       label="Pane"
-      trigger={<LayoutGrid size={16} aria-hidden="true" />}
+      trigger={<Columns2 size={16} aria-hidden="true" />}
       triggerSize="sm"
       align="end"
     >
@@ -68,17 +70,21 @@ export function PaneLayoutMenu(p: Props) {
       <MenuItem icon={<Rows2 size={ICON} />} onSelect={() => p.onSplit('down')}>
         Split down
       </MenuItem>
-      <MenuItem icon={<Maximize2 size={ICON} />} onSelect={p.onZoom}>
-        Zoom
-      </MenuItem>
-      <MenuItem
-        icon={<ArrowLeftRight size={ICON} />}
-        disabled={!p.canSwapNext}
-        onSelect={p.onSwapNext}
-      >
-        Swap with next pane
-      </MenuItem>
-      {p.desktop && (
+      {p.arrange && (
+        <>
+          <MenuItem icon={<Maximize2 size={ICON} />} onSelect={p.onZoom}>
+            Zoom
+          </MenuItem>
+          <MenuItem
+            icon={<ArrowLeftRight size={ICON} />}
+            disabled={!p.canSwapNext}
+            onSelect={p.onSwapNext}
+          >
+            Swap with next pane
+          </MenuItem>
+        </>
+      )}
+      {p.arrange && p.desktop && (
         <MenuGroup label="Resize">
           {RESIZE.map(({ direction, label, icon: Icon }) => (
             <MenuItem

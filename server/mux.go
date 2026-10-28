@@ -142,6 +142,10 @@ type Caps struct {
 	// (/api/mux/panes/{id}/split, zoom, swap, resize): tmux, Herdr 0.9.3 or
 	// later and not on Windows, Zellij 0.45.1 or later. Never on psmux.
 	PaneLayout bool `json:"paneLayout"`
+	// PaneStream: the stream shows one pane, not its tab's layout (Herdr),
+	// so zooming, swapping and resizing change only the desktop: the PWA
+	// offers split and close alone there.
+	PaneStream bool `json:"paneStream,omitempty"`
 	// ReorderGroups: a group can be moved (/api/mux/groups/{id}/move):
 	// Herdr 0.8.0 or later, not on Windows. tmux has no session order.
 	ReorderGroups bool `json:"reorderGroups"`

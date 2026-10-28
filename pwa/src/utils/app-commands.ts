@@ -57,6 +57,8 @@ export interface AppCommandContext {
   nextTab?: string
   // The backend can split, zoom, swap and resize panes (caps.paneLayout)
   paneLayout: boolean
+  // The page shows one pane, not the tab's layout (caps.paneStream)
+  paneStream: boolean
   // The pane shown has a pane after it to swap with
   canSwapNext: boolean
   // Desktop: the resize commands are offered
@@ -92,6 +94,7 @@ const VIEW_ONLY = 'View only'
 const NO_FILES = 'Not available for this pane'
 const IN_FOCUS = 'Not in a focus window'
 const NO_LAYOUT = 'Not available for this backend'
+const DESKTOP_ONLY = 'Changes only the Herdr desktop'
 
 // Commands that leave a focus window's target (or fold a sidebar it has not)
 const LEAVE_FOCUS = new Set([
@@ -148,8 +151,17 @@ function allCommands(ctx: AppCommandContext): AppCommand[] {
     restoreFocus: true,
     run,
   })
+  // Zoom, swap and resize arrange the tab: refused where the page shows one
+  // pane, which they would not change
+  const arrangeReason =
+    layoutReason ?? (ctx.paneStream ? DESKTOP_ONLY : undefined)
   const resize = (id: CommandId, direction: ResizeDirection) =>
-    pane(id, `Resize pane ${direction}`, () => ctx.resizePane(direction))
+    pane(
+      id,
+      `Resize pane ${direction}`,
+      () => ctx.resizePane(direction),
+      arrangeReason,
+    )
   let agentReason: string | undefined
   if (!ctx.startOffered)
     agentReason = ctx.readOnly
@@ -257,12 +269,12 @@ function allCommands(ctx: AppCommandContext): AppCommand[] {
     },
     pane('pane.splitRight', 'Split pane right', () => ctx.splitPane('right')),
     pane('pane.splitDown', 'Split pane down', () => ctx.splitPane('down')),
-    pane('pane.zoom', 'Zoom pane', ctx.zoomPane),
+    pane('pane.zoom', 'Zoom pane', ctx.zoomPane, arrangeReason),
     pane(
       'pane.swapNext',
       'Swap pane with the next one',
       ctx.swapNextPane,
-      layoutReason ?? (ctx.canSwapNext ? undefined : 'No pane after this one'),
+      arrangeReason ?? (ctx.canSwapNext ? undefined : 'No pane after this one'),
     ),
     ...(ctx.desktop
       ? [
