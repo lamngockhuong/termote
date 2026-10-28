@@ -202,6 +202,9 @@ The `update` command:
   installed by the installer, and when the registered service (systemd `ExecStart`, launchd
   `ProgramArguments`) runs another binary than this install's `current` one (a checkout's dev
   shim registered it); warns on downgrade, skips reinstall if already on target version
+- Without `--version`, never goes from a signed release (1.10.0+) back to an unsigned one: whoever
+  can publish a release picks the newest, so that version has to be named (`install.sh` likewise
+  refuses an unpinned release before 1.10.0)
 
 ## Container Runtime Support
 

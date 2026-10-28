@@ -80,6 +80,11 @@ func (c *cli) cmdUpdate(args []string) error {
 		c.infof("Already on v%s. Use --force to reinstall.", current)
 		return nil
 	}
+	// Whoever can publish a release picks the unpinned target: never let it
+	// lead a signed install back to a release with no signature to check.
+	if pin == "" && releaseSigned(current) && !releaseSigned(target) {
+		return fmt.Errorf("the newest release on GitHub, v%s, predates signed releases and this install is on v%s; refusing to go back without a pin. If you mean it: termote update --version %s", target, current, target)
+	}
 	if compareVersions(target, current) < 0 {
 		c.warnf("Downgrading from v%s to v%s", current, target)
 	}

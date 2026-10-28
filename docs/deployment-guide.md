@@ -39,7 +39,8 @@ sudo/admin. It downloads the newest stable 1.x release for your OS/arch, verifie
 `.sha256` (mandatory), lays it out under a versioned install root and prints `termote start` —
 it never starts anything itself. From 1.10.0 on, `install.sh` also checks the release
 signature (see Updating) when OpenSSL 3 is there, and says so when it is not (LibreSSL on
-macOS); `install.ps1` cannot check it, as Windows PowerShell has no Ed25519. Pin a version, or rescue a broken install, with
+macOS); `install.ps1` cannot check it, as Windows PowerShell has no Ed25519. Without a pin,
+`install.sh` refuses a newest release older than 1.10.0, which has no signature to check. Pin a version, or rescue a broken install, with
 `TERMOTE_VERSION`:
 
 ```bash
@@ -768,7 +769,8 @@ termote update --force           # Force reinstall current version
 release's `checksums.txt` with its signature, checked against the public key built into the
 binary: a release published from a pushed tag, or an asset replaced afterwards, is refused even
 when its checksums match. A release before 1.10.0 is checked against its `.sha256` alone, with a
-warning. It then unpacks it into a new
+warning, and only when named with `--version` on an install already on 1.10.0 or later: anyone who
+can publish a release on GitHub decides which one is newest. It then unpacks it into a new
 `versions/<v>`, switches the `current` pointer atomically, restarts the service and waits for
 health to report the new version. It refuses in a git checkout, for a binary not installed
 by the installer, and when the service runs another binary (registered from a checkout with

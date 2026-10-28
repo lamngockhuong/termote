@@ -106,6 +106,13 @@ run_install() {
     CODE=$?
 }
 
+# fake_libressl: an openssl that cannot check a signature (LibreSSL on macOS);
+# remove "$FAKE_PATH/openssl" after.
+fake_libressl() {
+    printf '#!/bin/sh\necho "LibreSSL 3.3.6"\n' >"$FAKE_PATH/openssl"
+    chmod +x "$FAKE_PATH/openssl"
+}
+
 new_home() {
     HOME_DIR="$TMP/home-$1"
     rm -rf "$HOME_DIR"
@@ -128,15 +135,31 @@ test_syntax() {
 test_fresh_install() {
     echo ""
     echo "=== Fresh install picks the newest published stable 1.x release ==="
-    new_home fresh
-    make_release 1.0.1
+    # Whoever publishes a release picks this version: an unsigned one needs a pin.
+    new_home fresh-unsigned
     make_release 1.0.10
-    FAKE_TAGS="v1.0.11:draft v1.0.12:pre v0.1.0 v1.0.1 v1.0.10 v1.0.2 v1.1.0-rc.1 latest" run_install
+    FAKE_TAGS="v1.0.10" run_install
+    [[ $CODE -ne 0 && ! -e "$DATA" ]] && echo "$OUT" | grep -q "predates signed releases" &&
+        pass "unpinned release before 1.10.0 refused" || fail "unsigned latest" "refused" "$OUT"
+    if grep -q "releases/download" "$TMP/curl.log"; then fail "unsigned latest" "no download" "downloaded"; else pass "unsigned latest not downloaded"; fi
+
+    # The signature itself is tested in test_signed_releases: here a LibreSSL
+    # that cannot check it lets the fake releases through.
+    new_home fresh
+    local v
+    for v in 1.10.1 1.10.10; do
+        make_release "$v"
+        : >"$RELEASES/v$v/checksums.txt"
+        : >"$RELEASES/v$v/checksums.txt.sig"
+    done
+    fake_libressl
+    FAKE_TAGS="v1.10.11:draft v1.10.12:pre v0.1.0 v1.0.10 v1.10.1 v1.10.10 v1.10.2 v1.11.0-rc.1 latest" run_install
+    rm -f "$FAKE_PATH/openssl"
     check "exit status" "0" "$CODE"
-    check "current points at 1.0.10" "versions/1.0.10" "$(readlink "$DATA/current")"
-    [[ -x "$DATA/versions/1.0.10/bin/termote" && -f "$DATA/versions/1.0.10/LICENSE" ]] &&
+    check "current points at 1.10.10" "versions/1.10.10" "$(readlink "$DATA/current")"
+    [[ -x "$DATA/versions/1.10.10/bin/termote" && -f "$DATA/versions/1.10.10/LICENSE" ]] &&
         pass "archive laid down as versions/<v> (bin/termote, LICENSE)" || fail "layout" "bin/termote + LICENSE" "$(ls -R "$DATA")"
-    check "links the command through the new binary" "1.0.10 link" "$(cat "$TMP/bin.log")"
+    check "links the command through the new binary" "1.10.10 link" "$(cat "$TMP/bin.log")"
     echo "$OUT" | grep -q "termote start" && pass "prints the next step" || fail "next step" "termote start" "$OUT"
     echo "$OUT" | grep -q "is not on your PATH" && pass "warns when ~/.local/bin is not on PATH" || fail "PATH hint" "warning" "$OUT"
     [[ -z "$(ls -A "$DATA" | grep -v -e '^versions$' -e '^current$')" ]] &&
@@ -164,6 +187,7 @@ test_pin_and_rescue() {
     if grep -q "api.github.com" "$TMP/curl.log"; then fail "pin skips the lookup" "no API call" "API called"; else pass "pin skips the tag lookup"; fi
 
     # Rescue: lay 1.0.1 beside the install and point current at it...
+    make_release 1.0.1
     run_install TERMOTE_VERSION=v1.0.1
     check "rescue installs beside" "versions/1.0.1" "$(readlink "$DATA/current")"
     [[ -d "$DATA/versions/1.0.0-rc.1" ]] && pass "rescue keeps the other version" || fail "rescue" "old version kept" "removed"
@@ -324,8 +348,7 @@ test_signed_releases() {
     new_home signed-libressl
     sign_release 1.11.0
     rm -f "$FAKE_PATH/openssl"
-    printf '#!/bin/sh\necho "LibreSSL 3.3.6"\n' >"$FAKE_PATH/openssl"
-    chmod +x "$FAKE_PATH/openssl"
+    fake_libressl
     run_install TERMOTE_VERSION=1.11.0
     rm -f "$FAKE_PATH/openssl"
     check "installs without OpenSSL 3" "0" "$CODE"

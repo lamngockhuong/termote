@@ -121,6 +121,19 @@ else
   [ -n "$VERSION" ] || die "no 1.x release found for ${REPO}. Name one with TERMOTE_VERSION=X.Y.Z (see https://github.com/${REPO}/releases)."
 fi
 
+# release_signed <version>: 1.10.0 and later (not a 1.10.0 pre-release).
+release_signed() {
+  core=${1%%-*}
+  maj=${core%%.*}; rest=${core#*.}; min=${rest%%.*}
+  if [ "$maj" -ne 1 ]; then [ "$maj" -gt 1 ]; return; fi
+  [ "$min" -gt 10 ] || { [ "$min" -eq 10 ] && [ "$core" = "$1" ]; }
+}
+
+# Whoever can publish a release picks the unpinned version: never let it be
+# one with no signature to check.
+[ -n "$PIN" ] || release_signed "$VERSION" ||
+  die "the newest release for ${REPO}, ${VERSION}, predates signed releases (1.10.0); refusing to install it without a pin. If you mean it: TERMOTE_VERSION=${VERSION}"
+
 publish_name() {
   "$DIR/versions/$VERSION/bin/termote" link ||
     echo "note: 'termote link' did not publish the command; run '$DIR/current/bin/termote link' to see why."
@@ -181,14 +194,6 @@ RELEASE_KEY='-----BEGIN PUBLIC KEY-----
 MCowBQYDK2VwAyEAOr7k5razFbKPXHHupRqpC3u1QUJ1U6ESJghM9us9PaA=
 -----END PUBLIC KEY-----'
 # END RELEASE KEY
-
-# release_signed <version>: 1.10.0 and later (not a 1.10.0 pre-release).
-release_signed() {
-  core=${1%%-*}
-  maj=${core%%.*}; rest=${core#*.}; min=${rest%%.*}
-  if [ "$maj" -ne 1 ]; then [ "$maj" -gt 1 ]; return; fi
-  [ "$min" -gt 10 ] || { [ "$min" -eq 10 ] && [ "$core" = "$1" ]; }
-}
 
 if release_signed "$VERSION"; then
   curl -fsSL -o "$TMP/checksums.txt" "$BASE/checksums.txt" &&
