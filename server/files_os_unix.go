@@ -52,6 +52,14 @@ func isStorageFull(err error) bool {
 // isReadOnlyFS reports whether err is a write to a read-only mount.
 func isReadOnlyFS(err error) bool { return errors.Is(err, syscall.EROFS) }
 
+// isLinkUnsupported reports whether err is a file system without hard
+// links (FAT and exFAT answer EPERM, some network shares ENOTSUP, a FUSE
+// mount without link ENOSYS).
+func isLinkUnsupported(err error) bool {
+	return errors.Is(err, errors.ErrUnsupported) || errors.Is(err, syscall.EPERM) ||
+		errors.Is(err, syscall.ENOTSUP) || errors.Is(err, syscall.EXDEV) || errors.Is(err, syscall.ENOSYS)
+}
+
 // interruptProcess stops a git that writes the index with SIGINT: git
 // removes its index.lock before it exits (WaitDelay kills it past that).
 func interruptProcess(cmd *exec.Cmd) func() error {

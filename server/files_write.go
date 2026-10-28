@@ -551,6 +551,12 @@ var editTempRe = regexp.MustCompile(`^` + regexp.QuoteMeta(editTempPrefix) + `[0
 // Only names a save creates are ever removed (a user's .termote-edit-notes
 // stays).
 func sweepEditTemps(dir *os.Root, now time.Time) {
+	sweepTemps(dir, editTempRe, editTempMaxAge, now)
+}
+
+// sweepTemps removes the regular files in dir whose name matches re and
+// that are older than maxAge.
+func sweepTemps(dir *os.Root, re *regexp.Regexp, maxAge time.Duration, now time.Time) {
 	d, err := dir.Open(".")
 	if err != nil {
 		return
@@ -558,10 +564,10 @@ func sweepEditTemps(dir *os.Root, now time.Time) {
 	names, _ := d.Readdirnames(-1)
 	d.Close()
 	for _, name := range names {
-		if !editTempRe.MatchString(name) {
+		if !re.MatchString(name) {
 			continue
 		}
-		if fi, err := dir.Lstat(name); err == nil && fi.Mode().IsRegular() && now.Sub(fi.ModTime()) > editTempMaxAge {
+		if fi, err := dir.Lstat(name); err == nil && fi.Mode().IsRegular() && now.Sub(fi.ModTime()) > maxAge {
 			dir.Remove(name)
 		}
 	}

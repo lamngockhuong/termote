@@ -1,6 +1,7 @@
 import {
   act,
   cleanup,
+  createEvent,
   fireEvent,
   render,
   renderHook,
@@ -19,6 +20,7 @@ import {
 } from 'vitest'
 import type { ViewProps } from '../app-views'
 import { ThemeProvider } from '../contexts/theme-context'
+import { resetFileUploads, startUploads } from '../hooks/use-file-uploads'
 import {
   requestFilesFocus,
   resetFilesStores,
@@ -55,6 +57,13 @@ vi.mock('../hooks/use-mux-api', async (orig) => ({
   restoreFile: (...a: unknown[]) => mockRestore(...a),
   renameFile: (...a: unknown[]) => mockRename(...a),
   searchFiles: (...a: unknown[]) => mockSearch(...a),
+}))
+const mockCheckUpload = vi.fn()
+const mockUploadFile = vi.fn()
+vi.mock('../utils/upload-file', async (orig) => ({
+  ...(await orig<typeof import('../utils/upload-file')>()),
+  checkUpload: (...a: unknown[]) => mockCheckUpload(...a),
+  uploadFile: (...a: unknown[]) => mockUploadFile(...a),
 }))
 const mockDownload = vi.fn()
 vi.mock('../utils/download-file', () => ({
@@ -2049,5 +2058,526 @@ describe('FilesView review comments', () => {
     await screen.findByTestId('code-block')
     expect(screen.queryByRole('button', { name: 'Line 1' })).toBeNull()
     expect(screen.queryByRole('button', { name: /^Review/ })).toBeNull()
+  })
+})
+
+describe('FilesView upload', () => {
+  const ROOT = '/home/kim/app'
+  const pdf = (name = 'a.pdf') =>
+    new File([new Uint8Array(3)], name, { type: 'application/pdf' })
+  // The path an upload of name into dir gets
+  const at = (dir: string, name: string) =>
+    dir === '.' ? name : `${dir}/${name}`
+  beforeEach(() => {
+    resetFileUploads()
+    mockCheckUpload.mockReset()
+    mockUploadFile.mockReset()
+    mockCheckUpload.mockImplementation(async (_t, a) => ({
+      ok: true,
+      path: at(a.dir, a.name),
+    }))
+    mockUploadFile.mockImplementation(async (_t, a, _f, cb) => {
+      cb.onSent?.()
+      return { ok: true, path: at(a.dir, a.name) }
+    })
+    HTMLDialogElement.prototype.showModal = vi.fn(function (
+      this: HTMLDialogElement,
+    ) {
+      this.setAttribute('open', '')
+    })
+    HTMLDialogElement.prototype.close = vi.fn()
+  })
+  // The dir each upload was checked for
+  const dirs = () => mockCheckUpload.mock.calls.map((c) => c[1].dir)
+  const pick = async (...files: File[]) => {
+    const input = screen.getByTestId('upload-input') as HTMLInputElement
+    const click = vi.spyOn(input, 'click').mockImplementation(() => {})
+    fireEvent.click(screen.getByRole('button', { name: 'Upload files' }))
+    expect(click).toHaveBeenCalled()
+    await act(async () => {
+      fireEvent.change(input, { target: { files } })
+    })
+  }
+  const files = (list: File[], types = ['Files']) => ({
+    dataTransfer: { types, files: list, items: [], dropEffect: '' },
+  })
+  const drop = async (el: Element, list: File[] = [pdf()]) => {
+    let kept = true
+    await act(async () => {
+      kept = fireEvent.drop(el, files(list))
+    })
+    return kept
+  }
+  const status = () => screen.getByRole('status')
+
+  it('the button uploads into the focused folder, the root when none is', async () => {
+    const p = await show()
+    await pick(pdf())
+    fireEvent.click(item('src'))
+    await act(async () => {})
+    await pick(pdf('b.pdf'))
+    // A file focused (by the keys: a click would open it): its folder
+    fireEvent.keyDown(item('src'), { key: 'ArrowDown' })
+    fireEvent.keyDown(item('lib'), { key: 'ArrowDown' })
+    expect(item('a.ts')).toHaveFocus()
+    await pick(pdf('c.pdf'))
+    expect(dirs()).toEqual(['.', 'src', 'src'])
+    expect(mockCheckUpload.mock.calls[0][1]).toEqual({
+      root: ROOT,
+      dir: '.',
+      name: 'a.pdf',
+      reveal: false,
+    })
+    expect(mockCheckUpload.mock.calls[0][0]).toEqual({ paneId: '%1' })
+    expect(p.notify).toHaveBeenCalledWith('Uploaded a.pdf', {
+      variant: 'success',
+    })
+  })
+
+  it('a link to a folder, and a folder through one, are not taken: the nearest folder above is', async () => {
+    mockTree.mockImplementation(async (_p: string, path: string) => ({
+      root: ROOT,
+      isRepo: true,
+      path,
+      entries: path === 'link' ? [e('in', { type: 'dir' })] : DIRS[path],
+    }))
+    await show()
+    fireEvent.click(item('link'))
+    await act(async () => {})
+    await pick(pdf())
+    fireEvent.click(item('in'))
+    await act(async () => {})
+    await pick(pdf('b.pdf'))
+    await drop(item('in'))
+    expect(dirs()).toEqual(['.', '.', '.'])
+  })
+
+  it('focuses the row of the file it saved, from inside Files only', async () => {
+    let saved: string[] = []
+    mockTree.mockImplementation(async (_p: string, path: string) => ({
+      root: ROOT,
+      isRepo: true,
+      path,
+      entries:
+        path === '' ? [...DIRS[''], ...saved.map((n) => e(n))] : DIRS[path],
+    }))
+    mockUploadFile.mockImplementation(async (_t, a) => {
+      saved = [...saved, a.name]
+      return { ok: true, path: a.name }
+    })
+    await show()
+    await pick(pdf('new.pdf'))
+    expect(item('new.pdf')).toHaveFocus()
+    expect(item('new.pdf')).toHaveAttribute('tabindex', '0')
+    // The keyboard elsewhere (the terminal): it stays there
+    const outside = document.createElement('textarea')
+    document.body.append(outside)
+    outside.focus()
+    await pick(pdf('next.pdf'))
+    expect(outside).toHaveFocus()
+    expect(item('next.pdf')).toHaveAttribute('tabindex', '0')
+    outside.remove()
+  })
+
+  it('a file saved for another root is not focused', async () => {
+    await show()
+    await act(async () => {
+      startUploads(
+        [pdf('far.pdf')],
+        { target: { paneId: '%1' }, root: '/elsewhere', dir: '.' },
+        { notify: vi.fn() },
+      )
+    })
+    expect(item('src')).toHaveAttribute('tabindex', '0')
+  })
+
+  it('the answer lost after every byte went: the folder read again shows it saved', async () => {
+    mockTree.mockImplementation(async (_p: string, path: string) => ({
+      root: ROOT,
+      isRepo: true,
+      path,
+      entries:
+        path === 'src' ? [...DIRS.src, e('a.pdf', { size: 3 })] : DIRS[path],
+    }))
+    mockUploadFile.mockImplementation(async (_t, _a, _f, cb) => {
+      cb.onSent?.()
+      return { ok: false, reason: 'network' }
+    })
+    const p = await show()
+    fireEvent.click(item('src'))
+    await act(async () => {})
+    await pick(pdf())
+    expect(p.notify).toHaveBeenCalledWith('Uploaded a.pdf', {
+      variant: 'success',
+    })
+  })
+
+  it('shows the progress of several files, and Cancel stops them', async () => {
+    let abortSeen = false
+    mockUploadFile.mockImplementation(
+      (_t, _a, _f, cb) =>
+        new Promise((resolve) => {
+          cb.onProgress?.(0.5)
+          cb.signal.addEventListener('abort', () => {
+            abortSeen = true
+            resolve({ ok: false, reason: 'aborted' })
+          })
+        }),
+    )
+    const p = await show()
+    expect(status()).toHaveTextContent('')
+    await pick(pdf('a.pdf'), pdf('b.pdf'))
+    expect(status()).toHaveTextContent('Uploading a.pdf (1 of 2)')
+    expect(status()).toHaveTextContent('50 %')
+    await act(async () => {
+      fireEvent.click(within(status()).getByRole('button', { name: 'Cancel' }))
+    })
+    expect(abortSeen).toBe(true)
+    expect(p.notify).toHaveBeenCalledWith('Upload canceled.', undefined)
+    expect(status()).toHaveTextContent('')
+    expect(mockUploadFile).toHaveBeenCalledTimes(1)
+  })
+
+  it('says when another upload holds the slot', async () => {
+    mockCheckUpload.mockResolvedValue({ ok: false, reason: 'upload_busy' })
+    await show()
+    await pick(pdf())
+    expect(status()).toHaveTextContent('Waiting for another upload…')
+    expect(status()).not.toHaveTextContent('%')
+  })
+
+  it('goes on when Files closes, and shows where it is when it opens again', async () => {
+    let finish!: () => void
+    mockUploadFile.mockImplementation(
+      (_t, a) =>
+        new Promise((resolve) => {
+          finish = () => resolve({ ok: true, path: a.name })
+        }),
+    )
+    const p = await show()
+    await pick(pdf())
+    cleanup()
+    await show()
+    expect(status()).toHaveTextContent('Uploading a.pdf')
+    await act(async () => finish())
+    expect(p.notify).toHaveBeenCalledWith('Uploaded a.pdf', {
+      variant: 'success',
+    })
+  })
+
+  it('asks before a folder that may hold secrets, naming the file, then sends reveal', async () => {
+    mockCheckUpload.mockImplementation(async (_t, a) =>
+      a.reveal
+        ? { ok: true, path: at(a.dir, a.name) }
+        : { ok: false, reason: 'sensitive' },
+    )
+    await show()
+    await pick(pdf())
+    const box = screen.getByRole('dialog', {
+      name: 'Upload where secrets may be?',
+    })
+    expect(box).toHaveTextContent(
+      'a.pdf goes to the top folder of /home/kim/app,',
+    )
+    await act(async () => {
+      fireEvent.click(within(box).getByRole('button', { name: 'Upload' }))
+    })
+    expect(mockUploadFile.mock.calls[0][1].reveal).toBe(true)
+    // Said no: nothing sent
+    fireEvent.click(item('src'))
+    await act(async () => {})
+    await pick(pdf('b.pdf'))
+    const again = screen.getByRole('dialog', {
+      name: 'Upload where secrets may be?',
+    })
+    expect(again).toHaveTextContent('b.pdf goes to src of /home/kim/app,')
+    await act(async () => {
+      fireEvent.click(within(again).getByRole('button', { name: 'Cancel' }))
+    })
+    expect(mockUploadFile).toHaveBeenCalledTimes(1)
+  })
+
+  it('no Upload button for a view-only client, nor while a file is open', async () => {
+    await show({ readOnly: true })
+    expect(screen.queryByRole('button', { name: 'Upload files' })).toBeNull()
+    cleanup()
+    mockContent.mockResolvedValue({
+      root: ROOT,
+      path: 'README.md',
+      size: 2,
+      text: 'hi',
+    })
+    await show()
+    expect(
+      screen.getByRole('button', { name: 'Upload files' }),
+    ).toBeInTheDocument()
+    fireEvent.click(item('README.md'))
+    await screen.findByTestId('markdown-preview')
+    expect(screen.queryByRole('button', { name: 'Upload files' })).toBeNull()
+  })
+
+  it('a drop goes into the folder under the pointer, a file’s or a link’s parent', async () => {
+    await show()
+    fireEvent.click(item('src'))
+    await act(async () => {})
+    fireEvent.click(item('lib'))
+    await act(async () => {})
+    expect(await drop(item('src'))).toBe(false)
+    await drop(item('a.ts'))
+    await drop(item('README.md'))
+    await drop(item('link'))
+    await drop(item('lib'))
+    // The note of an empty folder: that folder
+    await drop(screen.getByText('Empty'))
+    // Empty space under the rows, and the header: the root
+    await drop(screen.getByRole('tree'))
+    await drop(screen.getByTestId('pane-root'))
+    expect(dirs()).toEqual([
+      'src',
+      'src',
+      '.',
+      '.',
+      'src/lib',
+      'src/lib',
+      '.',
+      '.',
+    ])
+  })
+
+  it('highlights the folder files are dragged over (a file’s), never a link', async () => {
+    await show()
+    const over = (el: Element) => fireEvent.dragOver(el, files([pdf()]))
+    expect(over(item('src'))).toBe(false)
+    expect(item('src').className).toContain('bg-accent/10')
+    over(item('link'))
+    expect(item('src').className).not.toContain('bg-accent/10')
+    expect(item('link').className).not.toContain('bg-accent/10')
+    over(item('src'))
+    // Leaving for a row inside keeps it; leaving the view clears it (jsdom
+    // drops relatedTarget from a drag event's init)
+    const leave = (to: Element | null) => {
+      const ev = createEvent.dragLeave(item('src'))
+      Object.defineProperty(ev, 'relatedTarget', { value: to })
+      fireEvent(item('src'), ev)
+    }
+    leave(item('README.md'))
+    expect(item('src').className).toContain('bg-accent/10')
+    leave(null)
+    expect(item('src').className).not.toContain('bg-accent/10')
+  })
+
+  it('a drag without files is left alone', async () => {
+    await show()
+    expect(fireEvent.dragOver(item('src'), files([], ['text/plain']))).toBe(
+      true,
+    )
+    expect(fireEvent.dragOver(item('src'))).toBe(true)
+    expect(await drop(item('src'), [])).toBe(false)
+    let kept = false
+    await act(async () => {
+      kept = fireEvent.drop(item('src'), files([pdf()], ['text/plain']))
+    })
+    expect(kept).toBe(true)
+    expect(mockCheckUpload).not.toHaveBeenCalled()
+  })
+
+  it('folders dropped are skipped and said with the result', async () => {
+    const p = await show()
+    await drop(item('src'), [pdf(), new File([], 'photos')])
+    expect(p.notify).toHaveBeenCalledWith(
+      "Uploaded a.pdf. Folders can't be uploaded.",
+      { variant: 'success' },
+    )
+    await drop(item('src'), [new File([], 'photos')])
+    expect(p.notify).toHaveBeenLastCalledWith("Folders can't be uploaded", {
+      variant: 'warning',
+    })
+    expect(mockCheckUpload).toHaveBeenCalledTimes(1)
+  })
+
+  it('a drop on an empty root goes to the root', async () => {
+    mockTree.mockImplementation(async (_p: string, path: string) => ({
+      root: ROOT,
+      isRepo: true,
+      path,
+      entries: [],
+    }))
+    await show()
+    await drop(screen.getByText('This directory is empty'))
+    expect(dirs()).toEqual(['.'])
+  })
+
+  it('with a file open, a drop goes into its folder and names it; the editor never gets it', async () => {
+    mockContent.mockResolvedValue({
+      root: ROOT,
+      path: 'src/a.ts',
+      size: 3,
+      text: 'x = 1',
+    })
+    const p = await show()
+    fireEvent.click(item('src'))
+    await act(async () => {})
+    fireEvent.click(item('a.ts'))
+    const code = await screen.findByText('x = 1')
+    const editorDrop = vi.fn()
+    code.addEventListener('drop', editorDrop)
+    code.addEventListener('dragover', editorDrop)
+    // No highlight while the tree is hidden
+    fireEvent.dragOver(code, files([pdf()]))
+    await drop(code)
+    expect(editorDrop).not.toHaveBeenCalled()
+    expect(dirs()).toEqual(['src'])
+    expect(p.notify).toHaveBeenCalledWith('Saved to src/a.pdf', {
+      variant: 'success',
+    })
+  })
+
+  it('a tab kept from a root the pane has left takes no drop', async () => {
+    mockContent.mockResolvedValue({
+      root: ROOT,
+      path: 'README.md',
+      size: 2,
+      text: 'hi',
+      hash: 'h',
+      editable: true,
+    })
+    const p = await show()
+    fireEvent.click(item('README.md'))
+    await screen.findByTestId('markdown-preview')
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    })
+    const box = await screen.findByRole('textbox')
+    fireEvent.input(box, { target: { textContent: 'changed' } })
+    // The pane moved; the edited tab stays, of the old root
+    mockTree.mockImplementation(async (_p: string, path: string) => ({
+      root: '/home/kim/other',
+      isRepo: true,
+      path,
+      entries: DIRS[path],
+    }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+    })
+    await drop(screen.getByTestId('pane-root'))
+    expect(mockCheckUpload).not.toHaveBeenCalled()
+    expect(p.notify).toHaveBeenCalledWith(
+      "This file's folder isn't the pane's any more: not uploaded",
+      { variant: 'warning' },
+    )
+  })
+
+  it('a drop on a dialog over Files uploads nothing', async () => {
+    mockCheckUpload.mockResolvedValue({ ok: false, reason: 'sensitive' })
+    await show()
+    await pick(pdf())
+    const box = screen.getByRole('dialog', {
+      name: 'Upload where secrets may be?',
+    })
+    mockCheckUpload.mockClear()
+    expect(await drop(box)).toBe(false)
+    expect(mockCheckUpload).not.toHaveBeenCalled()
+  })
+
+  it('the button goes to the root once the focused row is gone', async () => {
+    let gone = false
+    mockTree.mockImplementation(async (_p: string, path: string) => ({
+      root: ROOT,
+      isRepo: true,
+      path,
+      entries:
+        gone && path === ''
+          ? DIRS[''].filter((x) => x.name !== 'src')
+          : DIRS[path],
+    }))
+    await show()
+    fireEvent.click(item('src'))
+    await act(async () => {})
+    gone = true
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+    })
+    await pick(pdf())
+    expect(dirs()).toEqual(['.'])
+  })
+
+  it('with a root file open, a drop goes into the root', async () => {
+    mockContent.mockResolvedValue({
+      root: ROOT,
+      path: 'README.md',
+      size: 2,
+      text: 'hi',
+    })
+    await show()
+    fireEvent.click(item('README.md'))
+    await drop(await screen.findByTestId('markdown-preview'))
+    expect(dirs()).toEqual(['.'])
+  })
+
+  it('a view-only client is told, and the browser never opens the file', async () => {
+    const p = await show({ readOnly: true })
+    const ev = createEvent.dragOver(item('src'), files([pdf()]))
+    fireEvent(item('src'), ev)
+    expect(ev.defaultPrevented).toBe(true)
+    // 'none' would keep the drop from firing at all
+    expect((ev as DragEvent).dataTransfer?.dropEffect).toBe('copy')
+    expect(item('src').className).not.toContain('bg-accent/10')
+    expect(await drop(item('src'))).toBe(false)
+    expect(p.notify).toHaveBeenCalledWith('A view-only device cannot upload', {
+      variant: 'warning',
+    })
+    expect(mockCheckUpload).not.toHaveBeenCalled()
+  })
+
+  it('a drop before the root is known sends nothing', async () => {
+    mockTree.mockRejectedValue(new RequestError(404, 'not_found', 'gone'))
+    await show()
+    expect(await drop(screen.getByText('Directory not found'))).toBe(false)
+    expect(mockCheckUpload).not.toHaveBeenCalled()
+  })
+
+  it('pasting files in the tree uploads them to the focused folder', async () => {
+    await show()
+    fireEvent.click(item('src'))
+    await act(async () => {})
+    let kept = true
+    await act(async () => {
+      kept = fireEvent.paste(item('src'), { clipboardData: { files: [pdf()] } })
+    })
+    expect(kept).toBe(false)
+    expect(dirs()).toEqual(['src'])
+  })
+
+  it('a paste into a text box, or with no files, keeps its default', async () => {
+    await show()
+    const box = screen.getByRole('searchbox', { name: 'Find a file' })
+    expect(fireEvent.paste(box, { clipboardData: { files: [pdf()] } })).toBe(
+      true,
+    )
+    expect(fireEvent.paste(item('src'), { clipboardData: { files: [] } })).toBe(
+      true,
+    )
+    expect(mockCheckUpload).not.toHaveBeenCalled()
+  })
+
+  it('a paste with a file open, or on a view-only client, uploads nothing', async () => {
+    await show({ readOnly: true })
+    expect(
+      fireEvent.paste(item('src'), { clipboardData: { files: [pdf()] } }),
+    ).toBe(true)
+    cleanup()
+    mockContent.mockResolvedValue({
+      root: ROOT,
+      path: 'README.md',
+      size: 2,
+      text: 'hi',
+    })
+    await show()
+    fireEvent.click(item('README.md'))
+    const preview = await screen.findByTestId('markdown-preview')
+    expect(
+      fireEvent.paste(preview, { clipboardData: { files: [pdf()] } }),
+    ).toBe(true)
+    expect(mockCheckUpload).not.toHaveBeenCalled()
   })
 })

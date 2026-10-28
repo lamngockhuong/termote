@@ -80,7 +80,10 @@ type filesAPI struct {
 	// client reads a root at or above one (holdsHome).
 	homeDirs   []string
 	writeSlots chan struct{} // saves running, server-wide
-	writeLocks *writeLocks
+	// uploadSlots are the files/upload bodies being read, server-wide:
+	// apart from writeSlots, so a slow upload never blocks a save.
+	uploadSlots chan struct{}
+	writeLocks  *writeLocks
 	// trash keeps what files/delete removed, for files/restore; nil when
 	// the server has no usable trash dir.
 	trash *trashStore
@@ -122,6 +125,7 @@ func registerFilesRoutes(mux *http.ServeMux, m Mux, allowed hostAllowlist, denyD
 		deny:        slices.Concat(filesDenyDirs(systemDenyDirs...), filesDenyDirs(keyDirs()...), filesDenyDirs(denyDirs...)),
 		placeNow:    newTTLCache[string](placeCheckTTL),
 		writeSlots:  make(chan struct{}, writeMaxRunning),
+		uploadSlots: make(chan struct{}, uploadMaxRunning),
 		writeLocks:  &writeLocks{locks: map[string]*sync.Mutex{}},
 	}
 	mux.HandleFunc("/api/mux/panes/{id}/files/tree", f.handleTree)
@@ -131,6 +135,7 @@ func registerFilesRoutes(mux *http.ServeMux, m Mux, allowed hostAllowlist, denyD
 	// Without a method: a GET or PUT gets 405 here, not the /api/ 404.
 	mux.HandleFunc("/api/mux/panes/{id}/files/create", f.handleCreateFile)
 	mux.HandleFunc("/api/mux/panes/{id}/files/image", f.handleImage)
+	mux.HandleFunc("/api/mux/panes/{id}/files/upload", f.handleUpload)
 	mux.HandleFunc("/api/mux/panes/{id}/files/delete", f.handleDeleteFile)
 	mux.HandleFunc("/api/mux/panes/{id}/files/restore", f.handleRestoreFile)
 	mux.HandleFunc("/api/mux/panes/{id}/files/rename", f.handleRenameFile)

@@ -185,14 +185,8 @@ func (f *filesAPI) writeImage(root filesRoot, dir, mt string, body io.Reader, re
 	case err != nil:
 		return fail(errUploadUnsupported)
 	}
-	if _, err := io.Copy(out, rest); err != nil {
-		if out.err != nil {
-			return fail(createError(out.err))
-		}
-		return fail(readUploadError(err))
-	}
-	if err := fh.Sync(); err != nil {
-		return fail(createError(err))
+	if _, err := streamNewFile(fh, rest, readUploadError); err != nil {
+		return fail(err)
 	}
 	if err := fh.Close(); err != nil {
 		dirRoot.Remove(name)

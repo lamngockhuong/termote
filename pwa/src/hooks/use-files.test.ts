@@ -10,6 +10,8 @@ import {
   type FileDraft,
   fileRenamed,
   filesError,
+  filesRootMoved,
+  filesUploaded,
   followInFiles,
   followPathInFiles,
   hasDirtyDraftAt,
@@ -1103,6 +1105,43 @@ describe('useFiles search, delete and restore', () => {
     mockTree.mockClear()
     await act(() => result.current.restored('top.md'))
     expect(mockTree.mock.calls.map((c) => c[1])).toEqual([''])
+  })
+})
+
+describe('an upload from outside the view', () => {
+  beforeEach(() => {
+    mockTree.mockImplementation(async (_p, path: string) =>
+      tree(path, path === 'x' ? [file('up.pdf')] : [dir('x')]),
+    )
+  })
+
+  it('a file saved under the root the store shows reads its folders again', async () => {
+    const { result } = renderHook(() => useFiles('%1'))
+    act(() => result.current.load())
+    await waitFor(() => expect(result.current.root).toBe('/r'))
+    mockTree.mockClear()
+    await act(() => filesUploaded('%1', undefined, '/r', 'x/up.pdf'))
+    expect(mockTree.mock.calls.map((c) => c[1])).toEqual(['', 'x'])
+    expect(result.current.expanded).toEqual({ x: true })
+    // No tab opens
+    expect(result.current.tabs).toEqual([])
+    // Another root, another place, a pane never shown: nothing read
+    mockTree.mockClear()
+    await act(() => filesUploaded('%1', undefined, '/elsewhere', 'a'))
+    await act(() => filesUploaded('%1', 'p', '/r', 'a'))
+    await act(() => filesUploaded('%9', undefined, '/r', 'a'))
+    expect(mockTree).not.toHaveBeenCalled()
+  })
+
+  it("the pane's root moved: the store follows, unless it shows a place", async () => {
+    const { result } = renderHook(() => useFiles('%1'))
+    act(() => result.current.load())
+    await waitFor(() => expect(result.current.root).toBe('/r'))
+    act(() => filesRootMoved('%1', 'p', '/n'))
+    expect(result.current.root).toBe('/r')
+    act(() => filesRootMoved('%9', undefined, '/n'))
+    act(() => filesRootMoved('%1', undefined, '/n'))
+    await waitFor(() => expect(result.current.rootChanges).toBe(1))
   })
 })
 

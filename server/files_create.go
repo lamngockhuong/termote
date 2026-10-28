@@ -322,8 +322,8 @@ func validNamePart(part string) bool {
 		!strings.ContainsAny(part, createBadChars)
 }
 
-// tempName reports whether name is one a save or a rename gives its
-// temporary file: never a name a client may ask for.
+// tempName reports whether name is one a save, a rename or an upload gives
+// its temporary file: never a name a client may ask for.
 func tempName(name string) bool {
-	return editTempRe.MatchString(name) || renameTempRe.MatchString(name)
+	return editTempRe.MatchString(name) || renameTempRe.MatchString(name) || uploadTempRe.MatchString(name)
 }

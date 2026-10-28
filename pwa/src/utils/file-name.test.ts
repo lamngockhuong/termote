@@ -21,6 +21,7 @@ describe('fileNameProblem', () => {
     ['a\tb', "A name can't hold control characters"],
     ['.termote-rename-0123456789abcdef', "This name can't be used"],
     ['.termote-edit-0123456789abcdef', "This name can't be used"],
+    ['.termote-upload-0123456789abcdef', "This name can't be used"],
     ['.termote-edit-x', undefined],
   ])('%j → %s', (n, want) => expect(fileNameProblem(n)).toBe(want))
 })
