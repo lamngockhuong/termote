@@ -1619,7 +1619,8 @@ termote update --force           # Force reinstall current version
    Zellij, like tmux, exposes every running session of the user and has no extra `--no-auth`
    guard; keys and Chat messages reach a Zellij pane only through a Termote client's PTY, never
    argv, which other local users could read
-9. **Rate limiting**: 5 failed basic-auth attempts/min per IP, and 20/min per IPv6 /64 → 429
+9. **Rate limiting**: 5 failed basic-auth attempts/min per IP (per tailnet login behind
+   `tailscale serve`, with 30/min for all of loopback together), and 20/min per IPv6 /64 → 429
    (expired entries swept at most every 10s, so many source addresses cannot make each failure
    scan the whole table);
    failed logins, blocked clients and rejected Hosts are logged with the client address (never

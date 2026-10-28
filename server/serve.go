@@ -551,7 +551,7 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 
 	var handler http.Handler = mux
 	if !cfg.NoAuth {
-		handler = newBasicAuth(cfg.User, cfg.Pass, devices, sessions, handler)
+		handler = newBasicAuth(cfg.User, cfg.Pass, devices, sessions, cfg.Tailscale != "", handler)
 	}
 	handler = writeGuard(allowed, handler)
 	// Inside hostGuard: the policy names the request's Host, so only an
@@ -767,6 +767,46 @@ const authMaxFailures = 5
 // device's typos do not lock out the other devices of its LAN or tailnet.
 const authMaxPrefixFailures = 20
 
+// authMaxLoopbackFailures failed attempts within a minute over loopback, by
+// every key together, block further ones over loopback. tailscale serve
+// proxies every tailnet user over loopback, each counted under its own login
+// (rateKey), and a local process can set that header itself: this cap keeps
+// such a process from guessing faster by changing it, while one tailnet
+// user's typos still leave the others room to sign in.
+const authMaxLoopbackFailures = 30
+
+// authLoopbackKey counts every failure over loopback.
+const authLoopbackKey = "loopback"
+
+// authTailscalePrefix starts the key of a tailnet user's attempts.
+const authTailscalePrefix = "ts:"
+
+// rateKey is the key a sign-in attempt from r counts under: its address
+// (requestIP), or, when the server publishes itself over Tailscale (tailnet)
+// and r came over loopback with the Tailscale-User-Login header tailscale
+// serve sets for a tailnet user (it removes one the client sent),
+// ts:<login>. Off loopback, or without --tailscale (another proxy on this
+// machine would pass a client's header through), the header is ignored.
+func rateKey(r *http.Request, tailnet bool) string {
+	ip := requestIP(r)
+	if a, err := netip.ParseAddr(ip); !tailnet || err != nil || !a.IsLoopback() {
+		return ip
+	}
+	if login := capBytes(stripUnsafeRunes(r.Header.Get("Tailscale-User-Login")), 256); login != "" {
+		return authTailscalePrefix + login
+	}
+	return ip
+}
+
+// viaLoopback reports whether key counts an attempt that came over loopback.
+func viaLoopback(key string) bool {
+	if strings.HasPrefix(key, authTailscalePrefix) {
+		return true
+	}
+	a, err := netip.ParseAddr(key)
+	return err == nil && a.IsLoopback()
+}
+
 // authPrefix is the /64 of an IPv6 address (zone dropped), or "" for IPv4,
 // IPv4-mapped IPv6 and anything that does not parse.
 func authPrefix(ip string) string {
@@ -810,21 +850,29 @@ func (rl *authRateLimiter) isBlocked(ip string) bool {
 // reserve checks the limits and counts the attempt as failed in one step,
 // before its credentials are compared: a burst of concurrent requests cannot
 // all pass the check before any failure is recorded. It returns "" when the
-// attempt may go on, else the key that is blocked: ip, or its IPv6 /64.
+// attempt may go on, else the key that is blocked: ip (a rateKey), its IPv6
+// /64, or authLoopbackKey.
 func (rl *authRateLimiter) reserve(ip string) string {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 	now := time.Now()
 	prefix := authPrefix(ip)
+	loopback := viaLoopback(ip)
 	if len(rl.recentLocked(ip, now)) >= authMaxFailures {
 		return ip
 	}
 	if prefix != "" && len(rl.recentLocked(prefix, now)) >= authMaxPrefixFailures {
 		return prefix
 	}
+	if loopback && len(rl.recentLocked(authLoopbackKey, now)) >= authMaxLoopbackFailures {
+		return authLoopbackKey
+	}
 	rl.addLocked(ip, now)
 	if prefix != "" {
 		rl.addLocked(prefix, now)
+	}
+	if loopback {
+		rl.addLocked(authLoopbackKey, now)
 	}
 	return ""
 }
@@ -837,6 +885,9 @@ func (rl *authRateLimiter) refund(ip string) {
 	rl.dropLastLocked(ip)
 	if prefix := authPrefix(ip); prefix != "" {
 		rl.dropLastLocked(prefix)
+	}
+	if viaLoopback(ip) {
+		rl.dropLastLocked(authLoopbackKey)
 	}
 }
 
@@ -920,14 +971,16 @@ const (
 // Note: uses r.RemoteAddr for rate limiting. Behind a reverse proxy, all clients
 // may share one IP — consider the proxy's own rate limiting in that setup.
 func basicAuth(user, pass string, next http.Handler) http.Handler {
-	return newBasicAuth(user, pass, nil, nil, next)
+	return newBasicAuth(user, pass, nil, nil, false, next)
 }
 
 // newBasicAuth is basicAuth that also signs paired devices in (dev, nil
 // without a usable device store): their cookie, the /pair form, and Log out
 // revoking the device. sessions holds the password sessions (nil: a store of
-// its own, which ends no stream).
-func newBasicAuth(user, pass string, dev *deviceAuth, sessions *sessionAuth, next http.Handler) http.Handler {
+// its own, which ends no stream). tailnet: the server publishes itself over
+// Tailscale (--tailscale), the only case where rateKey reads
+// Tailscale-User-Login.
+func newBasicAuth(user, pass string, dev *deviceAuth, sessions *sessionAuth, tailnet bool, next http.Handler) http.Handler {
 	limiter := newAuthRateLimiter()
 	if sessions == nil {
 		sessions = newSessionAuth(nil, nil)
@@ -1031,7 +1084,8 @@ func newBasicAuth(user, pass string, dev *deviceAuth, sessions *sessionAuth, nex
 		next := safeNext(r.PostForm.Get("next"))
 		// A phone's keyboard suggestion ends the username with a space.
 		username := strings.TrimSpace(r.PostForm.Get("username"))
-		if blocked := limiter.reserve(ip); blocked != "" {
+		key := rateKey(r, tailnet)
+		if blocked := limiter.reserve(key); blocked != "" {
 			blockedLogins.printf("auth: %s blocked after too many failed logins from %s", ip, blocked)
 			writeLoginPage(w, http.StatusTooManyRequests, loginForm{next, "Too many failed attempts. Wait a minute and try again.", username, dev != nil})
 			return
@@ -1041,7 +1095,7 @@ func newBasicAuth(user, pass string, dev *deviceAuth, sessions *sessionAuth, nex
 			writeLoginPage(w, http.StatusUnauthorized, loginForm{next, "Wrong username or password.", username, dev != nil})
 			return
 		}
-		limiter.refund(ip)
+		limiter.refund(key)
 		startSession(w, r, sessionViaForm)
 		// Basic auth is not logged: the CLI and its health polls sign in
 		// on every request.
@@ -1276,7 +1330,8 @@ func newBasicAuth(user, pass string, dev *deviceAuth, sessions *sessionAuth, nex
 		}
 
 		// Counted as a failure until the credentials prove right.
-		if blocked := limiter.reserve(ip); blocked != "" {
+		key := rateKey(r, tailnet)
+		if blocked := limiter.reserve(key); blocked != "" {
 			blockedLogins.printf("auth: %s blocked after too many failed logins from %s", ip, blocked)
 			http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
 			return
@@ -1284,7 +1339,7 @@ func newBasicAuth(user, pass string, dev *deviceAuth, sessions *sessionAuth, nex
 		u, p, ok := r.BasicAuth()
 		if !ok {
 			// No credentials provided — prompt browser, don't count as failure
-			limiter.refund(ip)
+			limiter.refund(key)
 			challenge(w, r)
 			return
 		}
@@ -1294,7 +1349,7 @@ func newBasicAuth(user, pass string, dev *deviceAuth, sessions *sessionAuth, nex
 			challenge(w, r)
 			return
 		}
-		limiter.refund(ip)
+		limiter.refund(key)
 		// Only a browser keeps the cookie: a session made for every request
 		// of the CLI or curl would push the real ones out of maxSessions.
 		if isBrowser(r) {

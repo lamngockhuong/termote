@@ -1685,7 +1685,16 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
 - Serve mode uses constant-time comparison for password verification
 - **Brute-force protection**: built-in rate limiter (5 failed attempts/min per IP → 429, and
   20/min per IPv6 /64 so a host cannot take a new address for each try); the check and the
-  count are one step, so a concurrent burst gets no more than 5 tries. Failed logins and
+  count are one step, so a concurrent burst gets no more than 5 tries. With `--tailscale`, a
+  password attempt over loopback that carries `Tailscale-User-Login` (`rateKey`; `tailscale serve`
+  sets it for a tailnet user and removes one the client sent, not for a tagged node or Funnel)
+  counts under `ts:<login>` instead of the address, so one tailnet user's typos never lock the
+  others out; the header is ignored off loopback and without `--tailscale` (another proxy on
+  loopback would pass a client's header through). Every attempt over loopback, whatever its key, also counts toward
+  one shared cap of 30/min (`authMaxLoopbackFailures`): a local process setting the header itself
+  (no owner check on macOS loopback) guesses no faster than that. A refund takes back both. A
+  container behind NAT still counts under the gateway address. The pairing limiter stays per
+  address. Failed logins and
   blocked clients are logged with the client address (never the credentials), at most one
   line per 10s each
 - **Server hardening**: ReadHeaderTimeout (Slowloris protection), a 60s read deadline on every

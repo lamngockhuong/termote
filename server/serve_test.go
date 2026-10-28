@@ -1034,3 +1034,86 @@ func TestTokenExpiryOnWallClock(t *testing.T) {
 		}
 	}
 }
+
+// Behind tailscale serve every tailnet user comes over loopback: each counts
+// under its own login, so one user's wrong passwords leave the others able
+// to sign in, while every attempt over loopback together stays under
+// authMaxLoopbackFailures however the header changes. Off loopback, or
+// without --tailscale (another proxy on loopback would pass the client's
+// header through), the header is ignored.
+func TestBasicAuthTailscaleUsers(t *testing.T) {
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+	try := func(h http.Handler, addr, login, pass string) int {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.SetBasicAuth("admin", pass)
+		req.RemoteAddr = addr
+		if login != "" {
+			req.Header.Set("Tailscale-User-Login", login)
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	tailnet := func() http.Handler { return newBasicAuth("admin", "secret", nil, nil, true, inner) }
+	h := tailnet()
+	for range authMaxFailures {
+		try(h, "127.0.0.1:1", "alice@example.com", "wrong")
+	}
+	if code := try(h, "127.0.0.1:1", "alice@example.com", "secret"); code != http.StatusTooManyRequests {
+		t.Errorf("alice after %d failures = %d, want 429", authMaxFailures, code)
+	}
+	if code := try(h, "127.0.0.1:1", "bob@example.com", "secret"); code != http.StatusOK {
+		t.Errorf("bob after alice's failures = %d, want 200", code)
+	}
+	if code := try(h, "127.0.0.1:1", "", "secret"); code != http.StatusOK {
+		t.Errorf("loopback without the header after alice's failures = %d, want 200", code)
+	}
+
+	// A header changed each time does not pass the shared cap.
+	h = tailnet()
+	for i := range authMaxLoopbackFailures {
+		if code := try(h, "[::1]:1", fmt.Sprintf("u%d@example.com", i), "wrong"); code != http.StatusUnauthorized {
+			t.Fatalf("attempt %d = %d, want 401", i, code)
+		}
+	}
+	if code := try(h, "127.0.0.1:1", "fresh@example.com", "secret"); code != http.StatusTooManyRequests {
+		t.Errorf("past the loopback cap = %d, want 429", code)
+	}
+	if code := try(h, "192.0.2.1:1", "", "secret"); code != http.StatusOK {
+		t.Errorf("another address past the loopback cap = %d, want 200", code)
+	}
+
+	// Off loopback the header is not a key.
+	h = tailnet()
+	for i := range authMaxFailures {
+		try(h, "192.0.2.1:1", fmt.Sprintf("u%d@example.com", i), "wrong")
+	}
+	if code := try(h, "192.0.2.1:1", "other@example.com", "secret"); code != http.StatusTooManyRequests {
+		t.Errorf("header off loopback = %d, want 429", code)
+	}
+
+	// Without --tailscale it is not a key either, over loopback too.
+	h = basicAuth("admin", "secret", inner)
+	for i := range authMaxFailures {
+		try(h, "127.0.0.1:1", fmt.Sprintf("u%d@example.com", i), "wrong")
+	}
+	if code := try(h, "127.0.0.1:1", "other@example.com", "secret"); code != http.StatusTooManyRequests {
+		t.Errorf("header without --tailscale = %d, want 429", code)
+	}
+}
+
+// A refund takes back the reservation from the user's key and from the
+// loopback cap.
+func TestAuthRateLimiterLoopbackRefund(t *testing.T) {
+	rl := newAuthRateLimiter()
+	for range authMaxLoopbackFailures + 5 {
+		if blocked := rl.reserve("ts:alice@example.com"); blocked != "" {
+			t.Fatalf("blocked by %s", blocked)
+		}
+		rl.refund("ts:alice@example.com")
+	}
+	if n := len(rl.failures); n != 0 {
+		t.Errorf("after refunds: %v", rl.failures)
+	}
+}

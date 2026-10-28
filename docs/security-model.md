@@ -51,7 +51,8 @@ what Termote can reach, run it as another user with less access.
   and the other device features the app never uses.
 - Requests naming an unknown host are refused; writes and the terminal stream must come from the
   Termote page itself, and the stream needs a single-use token.
-- Failed sign-ins and wrong pairing codes are rate limited.
+- Failed sign-ins and wrong pairing codes are rate limited. Behind `tailscale serve`, each tailnet user
+  has a limit of their own, so one user's wrong passwords do not lock the others out.
 - A view-only device is refused every write on the server, not only hidden buttons in the interface.
 - With Zellij (`--mux zellij`), what you type and Chat messages reach a pane only through the terminal
   of a Termote Zellij client, never through process arguments, which other local users could read. A

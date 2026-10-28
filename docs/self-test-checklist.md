@@ -1062,6 +1062,7 @@ Test on real mobile device:
 
 - [ ] Rate limiter blocks after 5 failed attempts/min per IP (429)
 - [ ] Rate limiter blocks a whole IPv6 /64 after 20 failed attempts/min (429)
+- [ ] Behind `tailscale serve`, one tailnet user's 5 failed attempts do not block another tailnet user
 - [ ] Server log shows `auth: failed login from <ip>` and `auth: <ip> blocked ...`, without the
       username or password sent
 - [ ] Constant-time password comparison
