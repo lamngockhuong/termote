@@ -232,6 +232,7 @@ func TestViewOnlyFilesDocument(t *testing.T) {
 	repo, _ := viewOnlyRepo(t)
 	writeFile(t, filepath.Join(repo, "spec.pdf"), testPDF)
 	writeFile(t, filepath.Join(repo, "gen", "out.pdf"), testPDF)
+	gitAdd(t, repo)
 	_, h := viewFilesFixture(t, repo)
 	logs := captureLog(t)
 	const base = "/api/mux/panes/0/files/document?path="

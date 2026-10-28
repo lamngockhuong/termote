@@ -44,7 +44,17 @@ func viewOnlyRepo(t *testing.T) (repo string, links bool) {
 	}
 	links = os.Symlink("secret.log", filepath.Join(repo, "link")) == nil &&
 		os.Symlink("gen", filepath.Join(repo, "linkdir")) == nil
+	gitAdd(t, repo)
 	return repo, links
+}
+
+// gitAdd stages every file of repo git does not ignore: a view-only client
+// sees tracked files only.
+func gitAdd(t *testing.T, repo string) {
+	t.Helper()
+	if out, err := exec.Command("git", "-C", repo, "add", "-A").CombinedOutput(); err != nil {
+		t.Fatalf("git add: %v %s", err, out)
+	}
 }
 
 func fullRequest(path string) *http.Request {
@@ -90,7 +100,7 @@ func TestViewOnlyFilesSkipIgnored(t *testing.T) {
 
 	refused := []string{"content?path=secret.log", "content?path=gen/out.txt", "tree?path=gen", "raw?path=hidden.png"}
 	if links {
-		refused = append(refused, "content?path=link", "tree?path=linkdir", "content?path=linkdir/out.txt", "diff?path=link")
+		refused = append(refused, "content?path=link", "tree?path=linkdir", "content?path=linkdir/out.txt", "diff?path=link&staged=1")
 	}
 	for _, p := range refused {
 		if rec := serve(h, viewRequest("GET", base+p, "")); rec.Code != http.StatusNotFound {
@@ -100,7 +110,7 @@ func TestViewOnlyFilesSkipIgnored(t *testing.T) {
 			t.Errorf("full %s: %d %s", p, rec.Code, rec.Body)
 		}
 	}
-	for _, p := range []string{"content?path=a.txt", "content?path=src/main.go", "tree?path=src", "raw?path=pic.png", "diff?path=a.txt"} {
+	for _, p := range []string{"content?path=a.txt", "content?path=src/main.go", "tree?path=src", "raw?path=pic.png", "diff?path=a.txt&staged=1"} {
 		if rec := serve(h, viewRequest("GET", base+p, "")); rec.Code != http.StatusOK {
 			t.Errorf("view %s: %d %s", p, rec.Code, rec.Body)
 		}
@@ -191,6 +201,7 @@ func TestViewOnlyFilesDeletedAndLinkedDir(t *testing.T) {
 	if err := os.Symlink("src", filepath.Join(repo, "srclink")); err != nil {
 		t.Fatal(err)
 	}
+	gitAdd(t, repo)
 	_, h = viewFilesFixture(t, repo)
 	if names := treeNames(t, serve(h, viewRequest("GET", base+"tree?path=srclink", ""))); names != ",main.go," {
 		t.Errorf("view tree of a link to a tracked dir: %s", names)
@@ -220,9 +231,9 @@ func TestFilesHoldsHome(t *testing.T) {
 	}
 }
 
-// A view-only client searches what it may read: tracked and untracked files
-// git does not ignore, never through a link to an ignored one, and never
-// makes the server rebuild the list.
+// A view-only client searches what it may read: the files git tracks, never
+// through a link to an ignored one, and never makes the server rebuild the
+// list.
 func TestViewOnlyFilesSearch(t *testing.T) {
 	repo, links := viewOnlyRepo(t)
 	_, h := viewFilesFixture(t, repo)
@@ -258,9 +269,10 @@ func TestViewOnlyFilesSearch(t *testing.T) {
 		os.Remove(filepath.Join(repo, "out"))
 	}
 	if got := search(viewRequest("GET", base+"hello", "")); !slices.Equal(got, []string{"a.txt"}) {
-		t.Errorf("view search of an untracked file = %q", got)
+		t.Errorf("view search of a tracked file = %q", got)
 	}
 	writeFile(t, filepath.Join(repo, "later.txt"), "hello later\n")
+	gitAdd(t, repo)
 	if got := search(viewRequest("GET", base+"later&fresh=1", "")); len(got) != 0 {
 		t.Errorf("view fresh rebuilt the list: %q", got)
 	}
@@ -269,5 +281,73 @@ func TestViewOnlyFilesSearch(t *testing.T) {
 	}
 	if got := search(viewRequest("GET", base+"later", "")); !slices.Equal(got, []string{"later.txt"}) {
 		t.Errorf("view after a full fresh = %q", got)
+	}
+}
+
+// A file git does not track, not ignored either (a repo under a dotfile dir,
+// a secret nobody added), is shown to a full client only: a view-only one
+// gets it from no route, and Changes leaves its entry out.
+func TestViewOnlyFilesTrackedOnly(t *testing.T) {
+	home := t.TempDir()
+	repo := filepath.Join(home, ".config", "tool")
+	if err := os.MkdirAll(repo, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	gitInit(t, repo)
+	writeFile(t, filepath.Join(repo, "tracked.txt"), "hello tracked\n")
+	gitAdd(t, repo)
+	writeFile(t, filepath.Join(repo, "token.txt"), "hello untracked\n")
+	writeFile(t, filepath.Join(repo, "draft.png"), "not really a png")
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	_, h := viewFilesFixture(t, repo)
+	const base = "/api/mux/panes/0/files/"
+
+	if names := treeNames(t, serve(h, viewRequest("GET", base+"tree", ""))); strings.Contains(names, "token.txt") || !strings.Contains(names, ",tracked.txt,") {
+		t.Errorf("view tree: %s", names)
+	}
+	if names := treeNames(t, serve(h, fullRequest(base+"tree"))); !strings.Contains(names, ",token.txt,") {
+		t.Errorf("full tree: %s", names)
+	}
+	var found findResponse
+	json.Unmarshal(serve(h, viewRequest("GET", base+"find?q=token", "")).Body.Bytes(), &found)
+	if len(found.Results) != 0 {
+		t.Errorf("view find: %+v", found.Results)
+	}
+	rec := serve(h, viewRequest("GET", base+"search?q=hello", ""))
+	if got := searchPaths(decodeSearch(t, rec.Code, rec.Body.Bytes())); !slices.Equal(got, []string{"tracked.txt"}) {
+		t.Errorf("view search = %q", got)
+	}
+	for _, p := range []string{"content?path=token.txt", "raw?path=draft.png", "document?path=token.txt",
+		"diff?path=token.txt", "raw?path=draft.png&side=new"} {
+		if rec := serve(h, viewRequest("GET", base+p, "")); rec.Code != http.StatusNotFound {
+			t.Errorf("view %s: %d %s, want 404", p, rec.Code, rec.Body)
+		}
+	}
+	if rec := serve(h, fullRequest(base+"diff?path=token.txt")); rec.Code != http.StatusOK {
+		t.Errorf("full diff of an untracked file: %d %s", rec.Code, rec.Body)
+	}
+
+	changes := func(req *http.Request) []string {
+		t.Helper()
+		var res changesResponse
+		if rec := serve(h, req); rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &res) != nil {
+			t.Fatalf("changes: %d %s", rec.Code, rec.Body)
+		}
+		var paths []string
+		for _, e := range res.Entries {
+			paths = append(paths, e.Path)
+		}
+		slices.Sort(paths)
+		return paths
+	}
+	if got := changes(viewRequest("GET", base+"changes", "")); !slices.Equal(got, []string{"tracked.txt"}) {
+		t.Errorf("view changes = %q", got)
+	}
+	if got := changes(fullRequest(base + "changes")); !slices.Equal(got, []string{"draft.png", "token.txt", "tracked.txt"}) {
+		t.Errorf("full changes = %q", got)
 	}
 }

@@ -161,7 +161,7 @@ func newPatchFixture(t *testing.T) *patchFixture {
 func (px *patchFixture) diff(t *testing.T, path, orig string, staged bool) diffResponse {
 	t.Helper()
 	px.f.forgetRoot(px.repo)
-	res, err := px.f.diff(t.Context(), filesRoot{Root: px.repo, IsRepo: true}, path, orig, staged, true)
+	res, err := px.f.diff(t.Context(), filesRoot{Root: px.repo, IsRepo: true}, path, orig, staged, true, false)
 	if err != nil {
 		t.Fatalf("diff %s: %v", path, err)
 	}

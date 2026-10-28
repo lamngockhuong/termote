@@ -229,8 +229,9 @@ func (f *filesAPI) takeRawSlot(r *http.Request) bool {
 // of a git status entry (Changes). It returns an error only before writing.
 func (f *filesAPI) raw(w http.ResponseWriter, req *filesRequest, q url.Values) error {
 	reveal := q.Get("reveal") == "1"
-	// A version of a change is vouched for by git status; where a symlink
-	// in the worktree leads still counts.
+	// A version of a change is vouched for by git status (for a view-only
+	// client, as a tracked file); where a symlink in the worktree leads
+	// still counts.
 	if f.viewHides(req, q.Get("path"), false, q.Get("side") != "") {
 		return fs.ErrNotExist
 	}
@@ -238,7 +239,7 @@ func (f *filesAPI) raw(w http.ResponseWriter, req *filesRequest, q url.Values) e
 	case "":
 		return f.serveWorktreeImage(w, req.root, q.Get("path"), reveal)
 	case "old", "new":
-		return f.serveImageVersion(w, req.ctx, req.root, q.Get("path"), q.Get("orig"), q.Get("staged") == "1", side, reveal)
+		return f.serveImageVersion(w, req.ctx, req.root, q.Get("path"), q.Get("orig"), q.Get("staged") == "1", side, reveal, req.view != nil)
 	default:
 		return errInvalidSide
 	}
@@ -285,8 +286,9 @@ func (f *filesAPI) serveWorktreeImage(w http.ResponseWriter, root filesRoot, p s
 
 // serveImageVersion serves the old or new version of an image git status
 // lists, on the side (staged or not) it lists it. The client never names a
-// revision: imageVersion picks it from the entry.
-func (f *filesAPI) serveImageVersion(w http.ResponseWriter, ctx context.Context, root filesRoot, path, orig string, staged bool, side string, reveal bool) error {
+// revision: imageVersion picks it from the entry. trackedOnly (a view-only
+// client) refuses an untracked file's as if it were not changed.
+func (f *filesAPI) serveImageVersion(w http.ResponseWriter, ctx context.Context, root filesRoot, path, orig string, staged bool, side string, reveal, trackedOnly bool) error {
 	rel, err := cleanRelPath(path)
 	if err != nil {
 		return err
@@ -299,7 +301,7 @@ func (f *filesAPI) serveImageVersion(w http.ResponseWriter, ctx context.Context,
 		return err
 	}
 	entry := findChange(st, path, orig, staged)
-	if entry == nil {
+	if entry == nil || trackedOnly && entry.untracked() {
 		return errNotChanged
 	}
 	if f.denied(root.Root, rel, root.GitDir) || orig != "" && f.deniedPath(root.Root, orig, root.GitDir) {

@@ -350,9 +350,13 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `container up` first spells each existing name of `--workspace` as its directory lists it
   (`diskSpelling`), since a runtime's VM shares `/Users` and compares names with case), never with `reveal=1` (`requireFilesRead`), `files/find` ignores `fresh=1` and
   `ignored=1`, and `files/search` searches exactly that tracked list and ignores `fresh=1`. Tree, content, raw and diff (and `files/tree`'s `dir`, the pane's directory) serve a view-only client only the paths of the root's
-  tracked list (`git ls-files -co --exclude-standard`, Find's 30 s cache: a new file shows up to
-  30 s late) and the directories above them, by the path and by where its symlinks lead (a diff or
-  a version from git status: where it leads only, so a deleted file's diff shows); names match
+  tracked list (`git ls-files -c`, the `committed` list of `findLists`, Find's 30 s cache: a file
+  just added shows up to 30 s late; a file git does not track, ignored or not, is never in it: a
+  repo under a dotfile dir or a secret nobody added stays hidden) and the directories above them,
+  by the path and by where its symlinks lead (a diff or a version from git status: where it leads
+  only, so a deleted file's diff shows, but never the entry of an untracked file: `diff` and
+  `serveImageVersion` refuse it, `trackedOnly`, from the entry they read); `files/changes` leaves out, for a view-only client, every untracked entry and
+  every entry `viewHides` would refuse; names match
   exactly as git lists them (never folded: a case-sensitive volume on macOS keeps an ignored
   `notes.md` beside a tracked `Notes.md` hidden); anything else is 404 as if missing, a list cut
   short (`findMaxPaths`, git's output cap) refuses what it lacks, and a list that cannot be read
@@ -1157,7 +1161,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   names of at most 255 bytes, never `.`/`..` nor holding `/ \` NUL `* ? [` (400
   `invalid_exclude`), compared without case on Windows/macOS. In a repo the list is
   `git ls-files -co --exclude-standard --deduplicate -z` less `ls-files -d` (files gone from the
-  disk) and less what git lists as a directory (a nested repo, a submodule); tracked files are
+  disk) and less what git lists as a directory (a nested repo, a submodule); a view-only client's
+  is `git ls-files -c --deduplicate -z` (tracked files only), cached apart. Tracked files are
   never filtered by `exclude`. `ignored=1` adds `git ls-files -o -i --exclude-standard
   --directory -z`, read and cached apart: a path with an excluded component is dropped unread,
   a directory git names whole is walked through `os.Root` without entering an excluded name at
@@ -1188,8 +1193,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   whole-file search: the deadline is checked before each line, so a scan overruns its budget by
   at most one line's search. Nothing reaches git
   argv: a query starting with `-` is text. The list is Find's (`findLists`, the same cache key
-  with the PWA's excludes; a view-only client searches its `req.view`, tracked + untracked not
-  ignored, and `fresh=1` is ignored for it), sorted by path. Per file, before anything is
+  with the PWA's excludes; a view-only client searches its `req.view`, tracked files only, and
+  `fresh=1` is ignored for it), sorted by path. Per file, before anything is
   opened: the `files`/`skip` globs; under a root holding a home dir (`holdsHome`) every
   dot-path is skipped (`skipped.hidden`: shell histories hold secrets under ordinary names);
   then one `EvalSymlinks` shared by `deniedPaths` (deny dirs, the git dir, `.git` parts, on

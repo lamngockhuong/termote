@@ -1037,9 +1037,10 @@ required as elsewhere. It answers names only (`path`, `ignored`, `sensitive`), n
   `?` or `[` (400 `invalid_exclude`). `ignored=1` adds ignored files; `fresh=1` skips the cache.
 - In a repository the list is `git ls-files -co --exclude-standard --deduplicate -z`, minus the
   files deleted from disk (`ls-files -d`), with the directories git lists (a nested repository, a
-  submodule) dropped. Tracked files are always searched, even under an excluded name. With
-  `ignored=1`, `git ls-files -o -i --exclude-standard --directory -z` is added and the ignored
-  directories it names are walked through `os.Root`, never entering an excluded name at any depth.
+  submodule) dropped; a view-only client's list is `git ls-files -c` (tracked files only).
+  Tracked files are always searched, even under an excluded name. With `ignored=1`,
+  `git ls-files -o -i --exclude-standard --directory -z` is added and the ignored directories it
+  names are walked through `os.Root`, never entering an excluded name at any depth.
   Outside a repository the root is walked, excluded names never entered, symlinked directories
   and junctions not entered, symlinks to files listed.
 - Limits: 200 results (`truncated`), 200,000 paths read, depth 32, a walk of 5 s and 16 MiB of
@@ -1056,8 +1057,8 @@ out of a repository, match ranges for free, and the same deny, sensitive and bin
 every other files read.
 
 - The files are Find's list (same cache entry: the PWA sends its `exclude` names), sorted by
-  path. A view-only client searches the list it may read (tracked and untracked files git does
-  not ignore). Ignored files are never searched.
+  path. A view-only client searches the list it may read (the files git tracks). Ignored files are
+  never searched.
 - `q` (1 to 256 bytes, not trimmed) is a literal unless `regex=1` (Go RE2 syntax); `case=1`
   matches case, `word=1` adds `\b` (ASCII word characters). `files` and `skip` are globs (a glob
   without `/` matches the base name, `**` any number of folders, a trailing `/` a folder). An
@@ -1457,7 +1458,8 @@ The code is `server/auth_role.go` (roles, the default refusal), `server/device_s
   on one pane (read-only by construction, no history scrolling), and every
   input frame, resize and `drive` is dropped. Files only in a git repo that is neither the server
   user's home dir nor above it (nor the container's `/workspace` when it holds the host home), and
-  only the paths `git ls-files -co --exclude-standard` lists (Find's 30 s cache), anything else 404;
+  only the paths `git ls-files -c` lists (Find's 30 s cache), anything else 404; Changes leaves out
+  untracked files;
   no `reveal=1`, no `content?hash=1`, no `find?ignored=1`; `agent/prompt` carries no `promptId`.
 - **Revoke**: removes the record, drops its stream tokens, closes its open streams and the codes it
   made; a running request finishes. `DELETE /api/mux/devices/{id}` (Settings > Devices, `termote

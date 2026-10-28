@@ -71,8 +71,9 @@ tác ghi, còn giao diện ẩn các nút ghi và hiện biểu ngữ **View onl
 - **Cần tmux 3.2 trở lên:** với tmux cũ hơn hoặc psmux, thiết bị chỉ xem không dùng được terminal và biểu
   ngữ nói rõ điều đó. Chat và Files vẫn dùng được.
 - **Files:** chỉ với pane nằm trong một git repository không phải thư mục home của bạn (hay thư mục chứa
-  nó), chỉ những file git theo dõi hoặc sẽ thêm (không bao giờ file git bỏ qua, như `.env.local` hay log,
-  và file mới hiện chậm tối đa 30 giây), và không bao giờ mở file thuộc loại nhạy cảm (`.env`, khóa, v.v.).
+  nó), chỉ những file git đang theo dõi (không bao giờ file chưa ai `git add`, cũng không file git bỏ qua,
+  như `.env.local` hay log; file vừa thêm hiện chậm tối đa 30 giây), và không bao giờ mở file thuộc loại
+  nhạy cảm (`.env`, khóa, v.v.). Changes chỉ liệt kê thay đổi của file đang được theo dõi.
 - **Chat:** đọc được hội thoại và hộp thoại đang mở, nhưng không trả lời được. Kết quả của một tool
   Claude Code bị bỏ đi khi tool đó nêu một file nhạy cảm (`.env`, khóa, v.v.).
 - **Mọi thứ agent đã in ra đều đọc được.** Chỉ ghép thiết bị chỉ xem cho người bạn chấp nhận để họ nhìn

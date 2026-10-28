@@ -84,7 +84,7 @@ func (ax *applyFixture) wantCode(t *testing.T, status int, code, action, path st
 func (ax *applyFixture) diff(t *testing.T, path string, staged bool) diffResponse {
 	t.Helper()
 	ax.f.forgetRoot(ax.repo)
-	res, err := ax.f.diff(t.Context(), filesRoot{Root: ax.repo, IsRepo: true}, path, "", staged, true)
+	res, err := ax.f.diff(t.Context(), filesRoot{Root: ax.repo, IsRepo: true}, path, "", staged, true, false)
 	if err != nil {
 		t.Fatalf("diff %s: %v", path, err)
 	}

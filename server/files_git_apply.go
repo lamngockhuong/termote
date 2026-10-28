@@ -229,7 +229,7 @@ func (f *filesAPI) unstageFile(ctx context.Context, root filesRoot, in applyRequ
 
 // findHunk takes the path's diff afresh and returns the hunk in.Hunk names.
 func (f *filesAPI) findHunk(ctx context.Context, root filesRoot, in applyRequest, staged bool) (*diffHunk, error) {
-	d, err := f.diff(ctx, root, in.Path, in.Orig, staged, true)
+	d, err := f.diff(ctx, root, in.Path, in.Orig, staged, true, false)
 	if err != nil {
 		return nil, err
 	}

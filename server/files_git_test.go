@@ -536,7 +536,7 @@ func TestFilesChangesGitFailure(t *testing.T) {
 	if _, err := f.status(t.Context(), filesRoot{Root: gx.repo, IsRepo: true}); err == nil {
 		t.Error("failing git status: no error")
 	}
-	if _, err := f.diff(t.Context(), filesRoot{Root: gx.repo, IsRepo: true}, "a.txt", "", false, false); err == nil {
+	if _, err := f.diff(t.Context(), filesRoot{Root: gx.repo, IsRepo: true}, "a.txt", "", false, false, false); err == nil {
 		t.Error("diff with failing status: no error")
 	}
 }

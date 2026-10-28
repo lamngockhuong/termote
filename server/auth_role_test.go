@@ -319,6 +319,7 @@ func TestViewFilesRules(t *testing.T) {
 	gitInit(t, repo)
 	os.WriteFile(filepath.Join(repo, "a.txt"), []byte("hello"), 0o600)
 	os.WriteFile(filepath.Join(repo, ".env"), []byte("SECRET=1"), 0o600)
+	gitAdd(t, repo)
 	_, h = viewFilesFixture(t, repo)
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, viewRequest("GET", "/api/mux/panes/0/files/content?path=a.txt", ""))
