@@ -1479,7 +1479,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `subscriptions.json` 0600, owner-only ACL on Windows, `%LOCALAPPDATA%` so it does not roam, no
   DPAPI), already on the Files deny list; at most 20 subscriptions, the least recently subscribed
   evicted; each bound to `gen` = HMAC(bindKey, user + password), so `start --fresh` or a new
-  password drops every device until it signs in again (its page re-subscribes). Only 404/410
+  password drops every device until it signs in again (its page re-subscribes). One made by a
+  paired device carries its id and goes when the device ends (revoke, expiry, a cascade, a reload
+  that no longer finds it), and at start for a device no longer live; the password's stay. One a
+  device made before this (no id) reads as the password's until its page subscribes again (on load,
+  and every 10 minutes while visible), so a device revoked before that keeps receiving pushes. Only 404/410
   drop a subscription; 401/403 are logged and kept ("check the server clock" when all fail);
   429 and timeouts back the push service off (`Retry-After`, at most 1 h). The watcher runs only
   from `runServer`, every 5 s and only with a subscription, reading tmux through `peekSnapshot`,

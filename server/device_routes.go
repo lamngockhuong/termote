@@ -29,6 +29,8 @@ type deviceAuth struct {
 	limiter *authRateLimiter
 	tokens  *tokenStore
 	hub     *streamHub
+	// push, when set, holds the subscriptions a device's end removes.
+	push *pushStore
 
 	// mu guards the expiry timer and ended. Taken under the store's lock
 	// (arm, from the store's onReload), never the other way round.
@@ -116,12 +118,18 @@ func (d *deviceAuth) expire(id string) {
 }
 
 // end closes what a device holds: its stream tokens, its open streams (a
-// stream still opening is closed by the hub's alive check) and the codes it
-// made. A request it already has running finishes.
+// stream still opening is closed by the hub's alive check), the codes it
+// made and its push subscriptions. A request it already has running
+// finishes.
 func (d *deviceAuth) end(id string) {
 	d.tokens.revokeDevice(id)
 	d.hub.closeDevice(id)
 	d.codes.dropCreator(id)
+	if d.push != nil {
+		if err := d.push.removeDevices(func(dev string) bool { return dev != id }); err != nil {
+			log.Printf("push subscriptions of device %s: %v", id, err)
+		}
+	}
 }
 
 // revoke removes one device (Log out, a device paired again) and ends what

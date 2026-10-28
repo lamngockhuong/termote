@@ -438,6 +438,13 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 			devices = newDeviceAuth(store, tokenStore, hub)
 			hub.alive = store.alive
 			hub.onShutdown = store.flush
+			if push != nil {
+				devices.push = push
+				// A device revoked or expired while the server was down.
+				if err := push.removeDevices(store.alive); err != nil {
+					log.Printf("push subscriptions of gone devices: %v", err)
+				}
+			}
 		}
 	}
 	if sessions != nil && devices != nil {
