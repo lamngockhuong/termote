@@ -32,6 +32,8 @@ type sessionMeta struct {
 	via        string
 	ip         string
 	userAgent  string
+	// expiry revokes the session at its expiry; a revoke stops it.
+	expiry *time.Timer
 }
 
 // sessionID names a session in the list and the logs: the first 16 hex of
@@ -72,22 +74,66 @@ func newSessionAuth(tokens *tokenStore, hub *streamHub) *sessionAuth {
 	return s
 }
 
-// start makes a session for r and returns its token.
+// start makes a session for r and returns its token. The sessions the new
+// one pushed out, and the expired ones it swept, end as a revoke ends them;
+// a session nobody pushes out ends at its expiry.
 func (s *sessionAuth) start(r *http.Request, via string) (string, error) {
 	now := s.now()
+	before, expired := s.ids()
 	token, err := s.store.generateGrant(roleFull, "", "")
 	if err != nil {
 		return "", err
 	}
-	meta := &sessionMeta{id: sessionID(token), createdAt: now, lastUsedAt: now, via: via,
-		ip: requestIP(r), userAgent: cleanUserAgent(r.UserAgent())}
+	id := sessionID(token)
+	meta := &sessionMeta{id: id, createdAt: now, lastUsedAt: now, via: via,
+		ip: requestIP(r), userAgent: cleanUserAgent(r.UserAgent()),
+		expiry: time.AfterFunc(s.store.ttl, func() { s.endAs(s.remove(func(m *sessionMeta) bool { return m.id == id }), nil) })}
 	s.store.mu.Lock()
 	if ti, ok := s.store.tokens[token]; ok {
 		ti.session = meta
 		s.store.tokens[token] = ti
 	}
 	s.store.mu.Unlock()
+	after, _ := s.ids()
+	s.endAs(missingFrom(before, after), expired)
 	return token, nil
+}
+
+// endAs ends sessions that left the store without a revoke, each audited as
+// expired (in expired, or every one when expired is nil: the expiry timer)
+// or pushed out by a newer sign-in.
+func (s *sessionAuth) endAs(ids, expired []string) {
+	for _, id := range ids {
+		reason := "pushed-out"
+		if expired == nil || slices.Contains(expired, id) {
+			reason = "expired"
+		}
+		auditf("session-ended", "id", id, "reason", reason)
+	}
+	s.end(ids)
+}
+
+// missingFrom returns the ids of before that after does not hold.
+func missingFrom(before, after []string) []string {
+	return slices.DeleteFunc(before, func(id string) bool { return slices.Contains(after, id) })
+}
+
+// ids returns the ids of the sessions in the store, and of those the
+// expired ones, on the clock the store sweeps by.
+func (s *sessionAuth) ids() (all, expired []string) {
+	now := time.Now()
+	s.store.mu.RLock()
+	defer s.store.mu.RUnlock()
+	all, expired = []string{}, []string{}
+	for _, ti := range s.store.tokens {
+		if ti.session != nil {
+			all = append(all, ti.session.id)
+			if now.After(ti.exp) {
+				expired = append(expired, ti.session.id)
+			}
+		}
+	}
+	return all, expired
 }
 
 // lookup returns the id of the session token names, or ok false, and moves
@@ -185,6 +231,7 @@ func (s *sessionAuth) remove(match func(*sessionMeta) bool) []string {
 	s.store.mu.Lock()
 	for k, ti := range s.store.tokens {
 		if ti.session != nil && match(ti.session) {
+			ti.session.expiry.Stop()
 			delete(s.store.tokens, k)
 			ids = append(ids, ti.session.id)
 		}

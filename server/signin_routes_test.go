@@ -520,3 +520,45 @@ func TestSessionExpiryAndOrder(t *testing.T) {
 		t.Error("expired session alive or listed")
 	}
 }
+
+// A session that leaves the store without a revoke, pushed out by a newer
+// sign-in or past its expiry, ends like a revoked one: its open stream
+// closes.
+func TestSessionPushedOutOrExpiredClosesStream(t *testing.T) {
+	logs := captureLog(t)
+	hub := newStreamHub(4)
+	s := newSessionAuth(newStreamTokenStore(), hub)
+	s.store.max = 1
+	req := httptest.NewRequest("GET", "/", nil)
+	open := func(token string) context.Context {
+		ctx, cancel := context.WithCancelCause(context.Background())
+		if _, err := hub.addFor(cancel, roleFull, "", sessionID(token)); err != nil {
+			t.Fatal(err)
+		}
+		return ctx
+	}
+	first, _ := s.start(req, sessionViaForm)
+	pushed := open(first)
+	if _, err := s.start(req, sessionViaForm); err != nil {
+		t.Fatal(err)
+	}
+	if !errors.Is(context.Cause(pushed), errSessionRevoked) {
+		t.Error("a pushed-out session's stream stayed open")
+	}
+	if want := `audit: session-ended id="` + sessionID(first) + `" reason="pushed-out"`; !strings.Contains(logs.String(), want) {
+		t.Errorf("no %s in:\n%s", want, logs)
+	}
+
+	s.store.max = 0
+	s.store.ttl = 20 * time.Millisecond
+	short, _ := s.start(req, sessionViaForm)
+	expired := open(short)
+	select {
+	case <-expired.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("an expired session's stream stayed open")
+	}
+	if want := `audit: session-ended id="` + sessionID(short) + `" reason="expired"`; !strings.Contains(logs.String(), want) {
+		t.Errorf("no %s in:\n%s", want, logs)
+	}
+}

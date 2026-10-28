@@ -1749,7 +1749,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `--fresh`). A code a session makes carries `session:<id>` as its creator (`pair-code by=`, the
   device's `pairedBy`); the CLI's (Basic, local socket) stays `password`, as did a session's before
   2.0.1 (no migration: such a device is not revoked with its session, and Devices and
-  `termote devices` list every `password` device as kept when a browser signs out). Every end of a session
+  `termote devices` list every `password` device as kept when a browser signs out). A session that
+  leaves the store without a revoke ends like one (stream tokens, streams, codes; no devices): `start`
+  ends the sessions its sign-in pushed out or swept as expired, and a timer per session revokes it at
+  its expiry; each is logged `audit: session-ended id reason=expired|pushed-out`. Every end of a session
   (revoke, Log out) drops its waiting codes (`onEnd`, after the session left the store; `create`
   asks `sessionAlive` under the codes' lock). A revoke (not Log out) then removes, in one locked
   write, every live device whose `pairedBy` is one of the revoked sessions and every device those
