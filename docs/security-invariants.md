@@ -1363,6 +1363,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   push from `snapshot?peek=1`, which reads the same way. The PWA subscribes only while the active
   worker answers version 2 (`notify-sw.js` has the push handler), and repeats the subscribe POST
   on load, every 10 minutes while shown and when shown again. Log out deletes this device's subscription first.
+  A click follows only a pane link (`#/s/...`): the worker keeps it in Cache Storage
+  (`termote-notify`, for iOS, which drops the message to a resumed home screen app) and the page
+  takes it once, kept since the page was last hidden and at most 60 s old, through
+  `parseDeepLink`, and opens it as any deep link. Neither `focus()` nor `openWindow()` waits on it.
   The CSP is unchanged: the server, not the page, talks to push services. The container opens
   `/home/termote/.local/state` 1777 like `.cache`/`.config`
 - **Prompt templates** (`/api/mux/templates*`, `server/template_store.go`,

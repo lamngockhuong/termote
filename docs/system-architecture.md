@@ -1330,7 +1330,11 @@ Agent status (Herdr event / Claude session file)
         → transitions → queue (64, oldest dropped) → sender (4 at a time, 5 s each)
         → push service (allowlist, IP check after DNS, no proxy, no redirects)
   notify-sw.js: push → names from /api/mux/snapshot?peek=1 (3 s) → showNotification (always)
-                notificationclick → focus a window + postMessage(hash), or openWindow
+                notificationclick → keep hash in Cache Storage (termote-notify)
+                  → focus a window + postMessage(hash), or openWindow
+  page: the message, or the kept hash when it shows again (read at 0/0.3/1/2.5 s, taken once,
+        kept since the page was last hidden, ≤ 60 s old)
+        (iOS resumes a home screen app without delivering the message)
                 pushsubscriptionchange → POST the new subscription
 ```
 

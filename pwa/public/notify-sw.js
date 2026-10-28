@@ -20,20 +20,47 @@
     return typeof hash === 'string' && hash.startsWith('#/s/') ? hash : ''
   }
 
+  // iOS resumes a home screen app without delivering the message below (and
+  // refuses its focus()), so the link is also kept here: the page takes it
+  // when it shows again. Equal to PENDING_LINK_CACHE and PENDING_LINK_URL in
+  // src/hooks/use-agent-notifications.ts.
+  const PENDING_LINK_CACHE = 'termote-notify'
+  const PENDING_LINK_URL = '/__termote/pending-link'
+
+  async function keepLink(hash) {
+    try {
+      const cache = await caches.open(PENDING_LINK_CACHE)
+      await cache.put(
+        PENDING_LINK_URL,
+        new Response(JSON.stringify({ hash, at: Date.now() }), {
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      )
+    } catch {
+      // The message still carries it where it is delivered.
+    }
+  }
+
   // An open window of the app takes the link and is focused; otherwise the app
   // opens on it.
+  // focus() and openWindow() are allowed only shortly after the click, so
+  // neither waits on the link being kept; the message does, so that the
+  // page that takes it also drops the kept copy.
   async function openPane(hash) {
+    const kept = hash ? keepLink(hash) : Promise.resolve()
     const windows = await self.clients.matchAll({
       type: 'window',
       includeUncontrolled: true,
     })
     const client = windows[0]
     if (client) {
+      const focused = client.focus().catch(() => {})
+      await kept
       if (hash) client.postMessage({ type: 'termote-open', hash })
-      await client.focus().catch(() => {})
+      await focused
       return
     }
-    await self.clients.openWindow(`/${hash}`)
+    await Promise.all([self.clients.openWindow(`/${hash}`), kept])
   }
 
   self.addEventListener('notificationclick', (event) => {
