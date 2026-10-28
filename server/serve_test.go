@@ -1019,3 +1019,18 @@ func TestSlowBodyOnStreamPathClosed(t *testing.T) {
 		}
 	}
 }
+
+// Every token's expiry is a wall-clock time with no monotonic reading, so a
+// check after the host slept compares it with the real time: the monotonic
+// clock stops during a suspend.
+func TestTokenExpiryOnWallClock(t *testing.T) {
+	store := newTokenStore(time.Hour, false)
+	token, _ := store.generate()
+	sessions := newSessionAuth(nil, nil)
+	session, _ := sessions.start(httptest.NewRequest("GET", "/", nil), sessionViaForm)
+	for name, exp := range map[string]time.Time{"token": store.tokens[token].exp, "session": sessions.store.tokens[session].exp} {
+		if strings.Contains(exp.String(), " m=") {
+			t.Errorf("%s expiry keeps a monotonic reading: %v", name, exp)
+		}
+	}
+}

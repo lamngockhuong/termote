@@ -239,11 +239,16 @@ type droppedToken struct {
 // put stores token with ti (its exp, when zero, the store's ttl from now)
 // under the sweep and the caps generateGrant describes, and returns the
 // tokens it removed, taken under the same lock as the insert.
+//
+// exp holds no monotonic reading, so every check compares it with the wall
+// clock: the monotonic clock stops while the host sleeps, and a token would
+// otherwise outlive its expiry by the time the machine was suspended.
 func (s *tokenStore) put(token string, ti tokenInfo) ([]droppedToken, error) {
 	now := time.Now()
 	if ti.exp.IsZero() {
 		ti.exp = now.Add(s.ttl)
 	}
+	ti.exp = ti.exp.Round(0)
 	var dropped []droppedToken
 	s.mu.Lock()
 	defer s.mu.Unlock()

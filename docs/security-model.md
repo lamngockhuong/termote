@@ -58,7 +58,9 @@ what Termote can reach, run it as another user with less access.
   view-only device watches a Zellij pane through `zellij subscribe`, which cannot type.
 - A Content-Security-Policy keeps the page from loading or running code from elsewhere.
 - A paired device can carry a time limit (30 days by default when pairing): past it, the device is
-  refused and its open terminals close. A device paired by one with a limit never outlasts it.
+  refused and its open terminals close within 15 seconds, also when the server's machine slept
+  through the limit. A device paired by one with a limit never outlasts it. A password sign-in's
+  open terminals close the same way when its 24 hours run out.
 - Revoking a device also revokes every device it paired. Logging out on a device revokes only that
   device.
 - Only the password (a password sign-in, or `termote pair` on the server) pairs a full device.

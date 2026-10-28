@@ -296,7 +296,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   stores its hash as `v2:<sha256>`: an older release never matches it (downgrade fails closed), and
   a `v2:` hash without `validUntil` is expired. Past it (`now >= validUntil`) `lookup` refuses and the
   cookie is cleared, `alive` is false, and one `time.AfterFunc` per process (re-armed through the
-  store's `onReload` after each change or reload) closes its streams, stream tokens and codes; expired
+  store's `onReload` after each change or reload) closes its streams, stream tokens and codes. That
+  timer runs on the monotonic clock and fires late after the host slept, so each open stream also
+  asks `alive` (wall clock; it stats the file at most each second, like a lookup) at every 15 s ping
+  (`streamHub.recheck`, outside the hub's lock): a stream of a device past its limit, or revoked by
+  another process, closes within one ping, before or after a sleep; expired
   records stay listed (`expired`) until revoked; the cookie's `MaxAge` stays 400 days. Lineage:
   `pairedBy` (`password`, `session:<id>` or the maker's id; absent in older records, listed `unknown`); only the
   password (session, Basic: the CLI) makes a `full` code, a device gets 403 `full_needs_password`
@@ -1758,7 +1762,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `termote devices` list every `password` device as kept when a browser signs out). A session that
   leaves the store without a revoke ends like one (stream tokens, streams, codes; no devices): `start`
   ends the sessions its sign-in pushed out or swept as expired, and a timer per session revokes it at
-  its expiry; each is logged `audit: session-ended id reason=expired|pushed-out`. Every end of a session
+  its expiry; each is logged `audit: session-ended id reason=expired|pushed-out`. Every token's
+  expiry (`tokenStore.put`) is stored without a monotonic reading, so each check compares it with the
+  wall clock; the timer fires late after the host slept, and each open stream asks `sessionAlive` at
+  every 15 s ping, which closes a session's stream within one ping of its expiry. Every end of a session
   (revoke, Log out) drops its waiting codes (`onEnd`, after the session left the store; `create`
   asks `sessionAlive` under the codes' lock). A revoke (not Log out) then removes, in one locked
   write, every live device whose `pairedBy` is one of the revoked sessions and every device those

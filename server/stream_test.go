@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -784,5 +785,40 @@ func TestStreamOutlivesRequestReadTimeout(t *testing.T) {
 	case <-ft.inCh:
 	case <-time.After(5 * time.Second):
 		t.Fatal("input sent after the request read timeout never reached the terminal")
+	}
+}
+
+// A stream whose recheck fails at a ping ends with that error's close: a
+// device revoked or expired without the hub being told, or a session.
+func TestStreamPingRechecks(t *testing.T) {
+	for cause, reason := range map[error]string{errDeviceRevoked: "device revoked", errSessionRevoked: "signed out"} {
+		var gone atomic.Bool
+		ft := newFakeTerm()
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			conn, err := websocket.Accept(w, r, nil)
+			if err != nil {
+				return
+			}
+			ctx, cancel := context.WithCancelCause(context.Background())
+			runStream(ctx, cancel, conn, ft, false, 20*time.Millisecond, func() error {
+				if gone.Load() {
+					return cause
+				}
+				return nil
+			})
+		}))
+		c, _, err := websocket.Dial(context.Background(), "ws"+strings.TrimPrefix(srv.URL, "http"), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		gone.Store(true)
+		_, _, err = readFrame(t, c)
+		var ce websocket.CloseError
+		if !errors.As(err, &ce) || ce.Code != websocket.StatusPolicyViolation || ce.Reason != reason {
+			t.Errorf("%v: close = %v", cause, err)
+		}
+		waitClosed(t, ft)
+		c.CloseNow()
+		srv.Close()
 	}
 }

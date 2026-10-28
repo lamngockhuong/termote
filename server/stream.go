@@ -241,6 +241,22 @@ func (h *streamHub) closeSession(sessionID string) {
 	}
 }
 
+// recheck reports why stream e may no longer run: its device revoked,
+// past its validUntil or revoked by another process (errDeviceRevoked), or
+// its session gone or past its expiry (errSessionRevoked); nil when it may.
+// The ping loop asks it on every tick, without mu: the expiry timers run on
+// the monotonic clock and fire late after the host slept, and a revoke in
+// another process reaches this one only when its file is read again.
+func (h *streamHub) recheck(e *hubEntry) error {
+	if e.deviceID != "" && h.alive != nil && !h.alive(e.deviceID) {
+		return errDeviceRevoked
+	}
+	if e.sessionID != "" && h.sessionAlive != nil && !h.sessionAlive(e.sessionID) {
+		return errSessionRevoked
+	}
+	return nil
+}
+
 // remove unregisters a stream after its cleanup has finished.
 func (h *streamHub) remove(e *hubEntry) {
 	h.mu.Lock()
@@ -427,7 +443,7 @@ func handleStream(w http.ResponseWriter, r *http.Request, m Mux, tokens *tokenSt
 	if sd, ok := ts.(sizeDriver); ok && !view && q.Get("drive") == "1" {
 		sd.Drive(true)
 	}
-	runStream(sctx, scancel, conn, ts, view)
+	runStream(sctx, scancel, conn, ts, view, streamPingEvery, func() error { return hub.recheck(entry) })
 }
 
 // viewAttacher is a backend that can attach a client that changes nothing:
@@ -466,7 +482,11 @@ func viewSnapshot(ctx context.Context, m Mux) (Snapshot, error) {
 //
 // A view-only stream (readOnly) drops every input frame, resize and drive:
 // nothing it sends reaches the pane or its size.
-func runStream(ctx context.Context, cancel context.CancelCauseFunc, conn *websocket.Conn, ts TermStream, readOnly bool) {
+//
+// It pings the client each pingEvery (streamPingEvery). Each ping first asks
+// recheck, and ends the stream with the error it returns (errDeviceRevoked, errSessionRevoked), so an expiry or a revoke the
+// hub was not told of closes it within one ping.
+func runStream(ctx context.Context, cancel context.CancelCauseFunc, conn *websocket.Conn, ts TermStream, readOnly bool, pingEvery time.Duration, recheck func() error) {
 	outDone := make(chan struct{})
 	go func() {
 		defer close(outDone)
@@ -540,13 +560,17 @@ func runStream(ctx context.Context, cancel context.CancelCauseFunc, conn *websoc
 	}
 
 	go func() {
-		t := time.NewTicker(streamPingEvery)
+		t := time.NewTicker(pingEvery)
 		defer t.Stop()
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-t.C:
+				if err := recheck(); err != nil {
+					cancel(err)
+					return
+				}
 				pctx, pcancel := context.WithTimeout(context.Background(), streamPongTimeout)
 				err := conn.Ping(pctx)
 				pcancel()
