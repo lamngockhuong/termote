@@ -662,7 +662,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   restarts. On Windows (#295; psmux, Herdr) the holder comes from the system handle table
   (`NtQuerySystemInformation`, one query cached 1 s, `server/agent_proc_handles_windows.go`):
   only File handles with write or append access (Codex opens its rollout append-only) of a
-  `codex` process the server's user can open with `PROCESS_DUP_HANDLE` are duplicated, with
+  `codex` process the server's user can open with `PROCESS_DUP_HANDLE` and whose token's user SID
+  is the server's own (`isServerUser`, checked before any `DuplicateHandle`, as Linux relies on
+  `/proc`'s owner check; another user's process under the pane is skipped even where an
+  administrator's server could open it) are duplicated, with
   `FILE_READ_ATTRIBUTES` only, never read or written and always closed; only a disk file on a
   drive letter with an identity counts (no UNC path is ever stat'ed), never `NtQueryObject`; one
   kept must still allow writing in a table read after the duplicate (the cached one can be 1 s

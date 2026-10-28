@@ -30,10 +30,12 @@ const (
 )
 
 // procWriteFiles lists the disk files pid holds open for writing or
-// appending whose name passes match, each with its identity. Only handles of
-// a process of this user can be duplicated (an elevated or another user's
-// process is skipped); the duplicates are only inspected, never read or
-// written, and always closed. Any failure lists nothing.
+// appending whose name passes match, each with its identity. Only a process
+// running as the server's own user (its token's SID) is looked at: another
+// user's process under the pane is skipped even where Windows would let the
+// handles be duplicated (an administrator's server, SeDebugPrivilege), and
+// an elevated one cannot be opened. The duplicates are only inspected, never
+// read or written, and always closed. Any failure lists nothing.
 func procWriteFiles(pid int, match func(name string) bool) []procFile {
 	if pid <= 0 || procFilesStuck.Load() > 0 {
 		return nil
@@ -78,11 +80,14 @@ func procWriteFiles(pid int, match func(name string) bool) []procFile {
 // object addresses that would tie the two; the same window as /proc's link
 // read before its fdinfo).
 func dupWriteFiles(pid int, refs []handleRef, match func(string) bool) []procFile {
-	proc, err := windows.OpenProcess(windows.PROCESS_DUP_HANDLE, false, uint32(pid))
+	proc, err := windows.OpenProcess(windows.PROCESS_DUP_HANDLE|windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(pid))
 	if err != nil {
 		return nil
 	}
 	defer windows.CloseHandle(proc)
+	if sid, err := winProcess(proc).user(); err != nil || !isServerUser(sid) {
+		return nil
+	}
 	self := windows.CurrentProcess()
 	var found []procFile
 	var values []uintptr
@@ -116,6 +121,16 @@ func dupWriteFiles(pid int, refs []handleRef, match func(string) bool) []procFil
 		}
 	}
 	return out
+}
+
+// serverSID is the server's own SID, read once ("" when unreadable).
+var serverSID = sync.OnceValue(selfPeerID)
+
+// isServerUser reports whether sid is the server's own user; nothing is
+// when the server's SID cannot be read.
+func isServerUser(sid string) bool {
+	self := serverSID()
+	return self != "" && sid == self
 }
 
 // diskFileOf reads the path and identity of a duplicated handle. Only a disk
