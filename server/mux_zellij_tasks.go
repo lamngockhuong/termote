@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"strings"
 )
 
@@ -33,8 +32,7 @@ func (m *zellijMux) IdleShell(ctx context.Context, target string) (string, bool,
 		return "", false, inputError("invalid pane id")
 	}
 	p, err := zellijFindPane(ctx, session, n)
-	var ie inputError
-	if errors.As(err, &ie) || err == nil && p.Exited {
+	if paneMissing(err) || err == nil && p.Exited {
 		return "", false, errTaskTargetGone
 	}
 	if err != nil {

@@ -620,3 +620,17 @@ func TestAgentStartGuards(t *testing.T) {
 		t.Errorf("Herdr called: %q", calls)
 	}
 }
+
+// A pane that is gone once the start settles: exited, never an error.
+func TestHerdrAgentStartStatePaneGone(t *testing.T) {
+	f := newFakeHerdr(t)
+	f.mu.Lock()
+	f.agentGet = map[string]any{"agent_status": "unknown", "launch_pending": true}
+	f.procFail = "pane_not_found"
+	f.mu.Unlock()
+	m := newTestHerdrMux(t, f)
+	state, err := m.AgentStartState(t.Context(), startPane, "claude-start", "claude", agentStartSettle)
+	if err != nil || state != startExited {
+		t.Errorf("state with the pane gone = %q, %v", state, err)
+	}
+}

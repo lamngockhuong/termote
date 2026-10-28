@@ -88,6 +88,12 @@ type fakeHerdr struct {
 	wtFail    map[string]string
 	wtMessage string
 	wtDelay   time.Duration
+	// pane.split, pane.zoom, pane.swap, pane.resize and pane.layout answer
+	// layoutReply's result for the method (a default shape when missing),
+	// or fail with layoutFail's code (and layoutMessage).
+	layoutReply   map[string]any
+	layoutFail    map[string]string
+	layoutMessage string
 }
 
 func fakeSocketPath(t *testing.T) string {
@@ -271,6 +277,26 @@ func (f *fakeHerdr) handle(c net.Conn) {
 		res := map[string]any{"type": "tab_created", "tab": map[string]any{"tab_id": "wR:tNEW", "workspace_id": "wR"}}
 		if !f.noRootPane {
 			res["root_pane"] = map[string]any{"pane_id": "wR:pNEW", "tab_id": "wR:tNEW"}
+		}
+		reply(res)
+	case "pane.split", "pane.zoom", "pane.swap", "pane.resize", "pane.layout":
+		f.mu.Lock()
+		code, msg, res := f.layoutFail[req.Method], f.layoutMessage, f.layoutReply[req.Method]
+		f.mu.Unlock()
+		if code != "" {
+			b, _ := json.Marshal(map[string]any{"id": req.ID, "error": map[string]string{"code": code, "message": cmp.Or(msg, code)}})
+			c.Write(append(b, '\n'))
+			c.Close()
+			return
+		}
+		if res == nil {
+			res = map[string]any{
+				"pane.split":  map[string]any{"type": "pane_info", "pane": map[string]any{"pane_id": "w13:pNEW"}},
+				"pane.zoom":   map[string]any{"type": "pane_zoom", "zoom": map[string]any{"changed": true}},
+				"pane.swap":   map[string]any{"type": "pane_swap", "swap": map[string]any{"changed": true}},
+				"pane.resize": map[string]any{"type": "pane_resize", "resize": map[string]any{"changed": true}},
+				"pane.layout": map[string]any{"type": "pane_layout", "layout": map[string]any{"area": map[string]any{"width": 120, "height": 40}}},
+			}[req.Method]
 		}
 		reply(res)
 	case "tab.move", "workspace.move_block":
@@ -871,9 +897,10 @@ func TestHerdrTabOps(t *testing.T) {
 		{"send keys bad pane", m.SendKeys(ctx, "wR:p3 x", "a")},
 		{"send keys unknown pane", m.SendKeys(ctx, "wR:pZZ", "a")},
 	}
+	// A bad id is an inputError, an unknown pane errUnknownPane.
 	for _, b := range bad {
-		if !errors.As(b.err, &ie) {
-			t.Errorf("%s: err = %v, want inputError", b.name, b.err)
+		if !paneMissing(b.err) {
+			t.Errorf("%s: err = %v, want a pane error", b.name, b.err)
 		}
 	}
 
@@ -883,8 +910,8 @@ func TestHerdrTabOps(t *testing.T) {
 		t.Errorf("tab_not_found = %v, want inputError", err)
 	}
 	f.failCode = "pane_not_found"
-	if err := m.ClosePane(ctx, "wR:p3"); !errors.As(err, &ie) {
-		t.Errorf("pane_not_found = %v, want inputError", err)
+	if err := m.ClosePane(ctx, "wR:p3"); !errors.Is(err, errUnknownPane) {
+		t.Errorf("pane_not_found = %v, want errUnknownPane", err)
 	}
 
 	if err := m.SelectTab(ctx, "wR:t3"); !errors.Is(err, errUnsupported) {
@@ -1228,10 +1255,9 @@ func TestHerdrStreamPaneClosed(t *testing.T) {
 func TestHerdrStreamRejectsUnknownPane(t *testing.T) {
 	f := newFakeHerdr(t)
 	m := newTestHerdrMux(t, f)
-	var ie inputError
 	for _, pane := range []string{"wR:pZZ", "--help", "wR:t3"} {
-		if _, err := m.Attach(context.Background(), pane, Size{}); !errors.As(err, &ie) {
-			t.Errorf("Attach(%q) = %v, want inputError", pane, err)
+		if _, err := m.Attach(context.Background(), pane, Size{}); !paneMissing(err) {
+			t.Errorf("Attach(%q) = %v, want a pane error", pane, err)
 		}
 	}
 }
@@ -1566,7 +1592,6 @@ func TestHerdrAgentWriter(t *testing.T) {
 	if len(texts) != 2 || texts[0] != "\x1b[200~a\nb\x1b[201~" || texts[1] != "2\r\x1b\x03" {
 		t.Errorf("sent %q", texts)
 	}
-	var ie inputError
 	for name, err := range map[string]error{
 		"bad key":        m.SendKeySequence(ctx, "wR:p3", []string{"C-d"}),
 		"no keys":        m.SendKeySequence(ctx, "wR:p3", nil),
@@ -1574,7 +1599,7 @@ func TestHerdrAgentWriter(t *testing.T) {
 		"capture bad id": func() error { _, err := m.Capture(ctx, "x"); return err }(),
 		"paste bad pane": m.Paste(ctx, "wR:pNOPE", "x"),
 	} {
-		if !errors.As(err, &ie) {
+		if !paneMissing(err) {
 			t.Errorf("%s: %v", name, err)
 		}
 	}

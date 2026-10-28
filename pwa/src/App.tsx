@@ -35,6 +35,11 @@ import { KeyboardToolbar } from './components/keyboard-toolbar'
 import { LazyBoundary, LoadFailed } from './components/lazy-boundary'
 import { LocalhostNotice } from './components/localhost-notice'
 import { OverviewScreen } from './components/overview-screen'
+import {
+  PaneLayoutMenu,
+  paneLayoutMessage,
+  RESIZE_STEP,
+} from './components/pane-layout-menu'
 import { PaneStrip } from './components/pane-strip'
 import { ReadOnlyBar } from './components/read-only-bar'
 import { SelectTextSheet } from './components/select-text-sheet'
@@ -311,6 +316,10 @@ export default function App({
     addSession,
     removeSession,
     removePane,
+    splitPane,
+    zoomPane,
+    swapPane,
+    resizePane,
     updateSession,
     createGroup,
     renameGroup,
@@ -403,6 +412,24 @@ export default function App({
   }, [pendingRemove, removeSession, showToast])
   // Closing a pane ends what runs in it too, so it asks the same way.
   const [pendingPaneId, setPendingPaneId] = useState<string | null>(null)
+  // The pane layout actions, on the pane shown: offered where the backend
+  // has them, never to a view-only device. A refusal shows as a toast.
+  const paneLayoutOn = !!mux.caps.paneLayout && !readOnly
+  const shownPanes = activeSession.panes ?? []
+  const shownPaneIndex = shownPanes.findIndex(
+    (p) => p.id === activeSession.paneId,
+  )
+  // Zellij turns the panes around: any other pane is a next one
+  const canSwapNext =
+    mux.backend === 'zellij'
+      ? shownPanes.length > 1
+      : shownPaneIndex >= 0 && shownPaneIndex < shownPanes.length - 1
+  const runPaneAction = useCallback(
+    (act: () => Promise<unknown>) => {
+      act().catch((err) => showToast(paneLayoutMessage(err), 'warning'))
+    },
+    [showToast],
+  )
   const pendingPane = activeSession.panes?.find((p) => p.id === pendingPaneId)
   const cancelPaneClose = useCallback(() => setPendingPaneId(null), [])
   const confirmPaneClose = useCallback(() => {
@@ -1570,6 +1597,13 @@ export default function App({
         canFullscreen,
         previousTab,
         nextTab,
+        paneLayout: !!mux.caps.paneLayout,
+        canSwapNext,
+        desktop: !isMobile,
+        splitPane: (d) => runPaneAction(() => splitPane(d)),
+        zoomPane: () => runPaneAction(zoomPane),
+        swapNextPane: () => runPaneAction(() => swapPane('next')),
+        resizePane: (d) => runPaneAction(() => resizePane(d, RESIZE_STEP)),
         openPalette: setPaletteMode,
         changeView,
         showTerminal: () => {
@@ -1613,6 +1647,14 @@ export default function App({
       canFullscreen,
       previousTab,
       nextTab,
+      mux.caps.paneLayout,
+      canSwapNext,
+      isMobile,
+      runPaneAction,
+      splitPane,
+      zoomPane,
+      swapPane,
+      resizePane,
       changeView,
       getTerminal,
       composerOffered,
@@ -1757,6 +1799,26 @@ export default function App({
             onViewChange={changeView}
             onOpenOverview={focus ? undefined : openOverview}
             onOpenInMain={focus ? openInMain : undefined}
+            paneMenu={
+              paneLayoutOn &&
+              !overviewOpen && (
+                <PaneLayoutMenu
+                  desktop={!isMobile}
+                  canSwapNext={canSwapNext}
+                  canClose={shownPanes.length > 1}
+                  onSplit={(d) => runPaneAction(() => splitPane(d))}
+                  onZoom={() => runPaneAction(zoomPane)}
+                  onSwapNext={() => runPaneAction(() => swapPane('next'))}
+                  onResize={(d) =>
+                    runPaneAction(() => resizePane(d, RESIZE_STEP))
+                  }
+                  // Offered with two panes or more, one of them shown
+                  onClose={() =>
+                    setPendingPaneId(activeSession.paneId as string)
+                  }
+                />
+              )
+            }
             usageChip={
               <HeaderUsageChip
                 paneId={activeSession.paneId}

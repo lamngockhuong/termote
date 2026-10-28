@@ -8,6 +8,10 @@ const {
   mockCreateTab,
   mockCloseTab,
   mockClosePane,
+  mockSplitPane,
+  mockZoomPane,
+  mockSwapPane,
+  mockResizePane,
   mockRenameTab,
   mockSelectTab,
   mockCreateGroup,
@@ -30,6 +34,10 @@ const {
   mockCreateTab: vi.fn(),
   mockCloseTab: vi.fn(),
   mockClosePane: vi.fn(),
+  mockSplitPane: vi.fn(),
+  mockZoomPane: vi.fn(),
+  mockSwapPane: vi.fn(),
+  mockResizePane: vi.fn(),
   mockRenameTab: vi.fn(),
   mockSelectTab: vi.fn(),
   mockCreateGroup: vi.fn(),
@@ -58,6 +66,10 @@ vi.mock('./use-mux-api', async (importOriginal) => ({
   createTab: mockCreateTab,
   closeTab: mockCloseTab,
   closePane: mockClosePane,
+  splitPane: mockSplitPane,
+  zoomPane: mockZoomPane,
+  swapPane: mockSwapPane,
+  resizePane: mockResizePane,
   renameTab: mockRenameTab,
   selectTab: mockSelectTab,
   createGroup: mockCreateGroup,
@@ -2441,5 +2453,139 @@ describe('nextClockOffset', () => {
   it('keeps it without a usable server time', () => {
     expect(nextClockOffset(7, undefined, at)).toBe(7)
     expect(nextClockOffset(7, 'not a time', at)).toBe(7)
+  })
+})
+
+describe('useLocalSessions pane layout', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    vi.clearAllMocks()
+    mockSnapshot.extra = {}
+    mockFetchTabs.mockResolvedValue([
+      {
+        id: '0',
+        name: 'shell',
+        active: true,
+        key: '@1',
+        panes: [{ id: '%3', active: true }],
+      },
+    ])
+  })
+
+  const herdr = (panes: { id: string; active: boolean }[]) => ({
+    backend: 'herdr',
+    caps: { clientSideSelect: true },
+    groups: [
+      {
+        id: 'w1',
+        name: 'w1',
+        tabs: [{ id: 'w1:t1', name: 'a', active: true, panes }],
+      },
+    ],
+  })
+
+  it('zooms, swaps and resizes the pane shown, then reads the list again', async () => {
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    mockFetchTabs.mockClear()
+    await act(async () => {
+      await result.current.zoomPane()
+      await result.current.swapPane('next')
+      await result.current.resizePane('up', 5)
+    })
+    expect(mockZoomPane).toHaveBeenCalledWith('%3', 'toggle')
+    expect(mockSwapPane).toHaveBeenCalledWith('%3', 'next')
+    expect(mockResizePane).toHaveBeenCalledWith('%3', 'up', 5)
+    expect(mockFetchTabs).toHaveBeenCalledTimes(3)
+  })
+
+  it('reads the list again before a refusal reaches the caller', async () => {
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    mockFetchTabs.mockClear()
+    mockSwapPane.mockRejectedValueOnce(
+      new RequestError(409, 'no_neighbor', 'no pane'),
+    )
+    let caught: unknown
+    await act(async () => {
+      await result.current.swapPane('next').catch((e) => {
+        caught = e
+      })
+    })
+    expect((caught as RequestError).code).toBe('no_neighbor')
+    expect(mockFetchTabs).toHaveBeenCalledTimes(1)
+  })
+
+  it("on tmux a split leaves the pane shown, which follows tmux's focus", async () => {
+    mockSplitPane.mockResolvedValue('%4')
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    mockFetchTabs.mockResolvedValue([
+      {
+        id: '0',
+        name: 'shell',
+        active: true,
+        key: '@1',
+        panes: [
+          { id: '%3', active: true },
+          { id: '%4', active: false },
+        ],
+      },
+    ])
+    await act(async () => {
+      await result.current.splitPane('right')
+    })
+    expect(mockSplitPane).toHaveBeenCalledWith('%3', 'right')
+    expect(result.current.activeSession.paneId).toBe('%3')
+    expect(result.current.activeSession.panes?.map((p) => p.id)).toEqual([
+      '%3',
+      '%4',
+    ])
+  })
+
+  it('where the device picks the pane, a split shows the new pane once listed', async () => {
+    mockSnapshot.extra = herdr([{ id: 'w1:p1', active: true }])
+    mockSplitPane.mockResolvedValue('w1:p2')
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    expect(result.current.activeSession.paneId).toBe('w1:p1')
+    mockSnapshot.extra = herdr([
+      { id: 'w1:p1', active: true },
+      { id: 'w1:p2', active: false },
+    ])
+    await act(async () => {
+      await result.current.splitPane('down')
+    })
+    expect(mockSplitPane).toHaveBeenCalledWith('w1:p1', 'down')
+    expect(result.current.activeSession.paneId).toBe('w1:p2')
+  })
+
+  it('a refused split shows nothing new and reaches the caller', async () => {
+    mockSnapshot.extra = herdr([{ id: 'w1:p1', active: true }])
+    mockSplitPane.mockRejectedValueOnce(new RequestError(503, 'busy', 'busy'))
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    let caught: unknown
+    await act(async () => {
+      await result.current.splitPane('right').catch((e) => {
+        caught = e
+      })
+    })
+    expect((caught as RequestError).code).toBe('busy')
+    expect(result.current.activeSession.paneId).toBe('w1:p1')
+  })
+
+  it('does nothing without a pane on screen', async () => {
+    mockFetchTabs.mockResolvedValue([
+      { id: '0', name: 'shell', active: true, panes: [] },
+    ])
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    await act(async () => {
+      await result.current.splitPane('right')
+      await result.current.zoomPane()
+    })
+    expect(mockSplitPane).not.toHaveBeenCalled()
+    expect(mockZoomPane).not.toHaveBeenCalled()
   })
 })

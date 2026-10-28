@@ -143,6 +143,39 @@ test.describe('write guards on send-keys', () => {
   })
 })
 
+test.describe('write guards on pane layout routes', () => {
+  // Every request here stops at a guard or at its arguments: no pane is
+  // ever split, zoomed, swapped or resized.
+  const routes = [
+    { name: 'split', ok: { direction: 'right' }, bad: { direction: 'left' }, code: 'invalid_direction' },
+    { name: 'zoom', ok: { mode: 'toggle' }, bad: { mode: 'maybe' }, code: 'invalid_mode' },
+    { name: 'swap', ok: { direction: 'next' }, bad: { direction: 'up' }, code: 'invalid_direction' },
+    { name: 'resize', ok: { direction: 'up', amount: 1 }, bad: { direction: 'up', amount: 1.5 }, code: 'invalid_amount' },
+  ]
+  const panePath = async (request: APIRequestContext, name: string) =>
+    `/api/mux/panes/${encodeURIComponent(await firstPane(request))}/${name}`
+
+  for (const r of routes) {
+    test(`POST ${r.name}: text/plain, cross-site and a foreign Origin are rejected`, async ({ request }) => {
+      const path = await panePath(request, r.name)
+      for (const [headers, status] of [
+        [{ 'Content-Type': 'text/plain' }, 415],
+        [{ 'Sec-Fetch-Site': 'cross-site' }, 403],
+        [{ Origin: 'https://evil.example' }, 403],
+      ] as const) {
+        const res = await request.post(path, { headers: { ...headers }, data: JSON.stringify(r.ok) })
+        expect(res.status(), JSON.stringify(headers)).toBe(status)
+      }
+    })
+
+    test(`POST ${r.name}: an argument outside its words is 400 ${r.code}`, async ({ request }) => {
+      const res = await request.post(await panePath(request, r.name), { data: r.bad })
+      expect(res.status()).toBe(400)
+      expect((await res.json()).code).toBe(r.code)
+    })
+  }
+})
+
 test.describe('write guards on group routes', () => {
   // The group ids do not exist: a request that got past the guard would be
   // answered 404 (or 400), never create or close anything.

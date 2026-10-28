@@ -59,6 +59,7 @@ import {
   renameFile,
   renameGroup,
   renameTab,
+  resizePane,
   restoreFile,
   revokeDevice,
   revokeOtherSignins,
@@ -72,12 +73,15 @@ import {
   sendAgentMessage,
   sendKeys,
   signInUrl,
+  splitPane,
   subscribePush,
+  swapPane,
   TASK_RUN_TIMEOUT_MS,
   unsubscribePush,
   updateTemplate,
   updateUserTask,
   WORKTREE_REQUEST_TIMEOUT_MS,
+  zoomPane,
 } from './use-mux-api'
 
 // Helper: create a mock fetch that captures calls and returns responses
@@ -485,6 +489,53 @@ describe('group API client', () => {
     const err = await closeGroup('w1').catch((e) => e)
     expect(err).toBeInstanceOf(RequestError)
     expect(err.code).toBe('')
+  })
+})
+
+describe('pane layout API client', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it('posts each action as JSON to the pane, its id encoded', async () => {
+    const { calls } = mockFetch(
+      { body: { ok: true, id: '%9' } },
+      { body: { ok: true, id: 'w1:p2' } },
+      { body: { ok: true } },
+      { body: { ok: true } },
+      { body: { ok: true } },
+      { body: { ok: true } },
+    )
+    expect(await splitPane('%3', 'right')).toBe('%9')
+    expect(await splitPane('w1:p1', 'down', '/srv')).toBe('w1:p2')
+    await zoomPane('%3', 'toggle')
+    await swapPane('%3', 'next')
+    await resizePane('%3', 'left', 5)
+    expect(await splitPane('%3', 'down')).toBe('')
+    expect(calls.map((c) => [c.url, c.init?.method, c.init?.body])).toEqual([
+      ['/api/mux/panes/%253/split', 'POST', '{"direction":"right"}'],
+      [
+        '/api/mux/panes/w1%3Ap1/split',
+        'POST',
+        '{"direction":"down","cwd":"/srv"}',
+      ],
+      ['/api/mux/panes/%253/zoom', 'POST', '{"mode":"toggle"}'],
+      ['/api/mux/panes/%253/swap', 'POST', '{"direction":"next"}'],
+      ['/api/mux/panes/%253/resize', 'POST', '{"direction":"left","amount":5}'],
+      ['/api/mux/panes/%253/split', 'POST', '{"direction":"down"}'],
+    ])
+  })
+
+  it('throws the server code', async () => {
+    mockFetch({
+      body: { error: 'no pane on that side', code: 'no_neighbor' },
+      status: 409,
+    })
+    await expect(swapPane('%3', 'next')).rejects.toMatchObject({
+      status: 409,
+      code: 'no_neighbor',
+    })
   })
 })
 

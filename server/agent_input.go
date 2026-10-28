@@ -322,8 +322,7 @@ func (a *agentAPI) writer(w http.ResponseWriter) (agentWriter, bool) {
 func (a *agentAPI) lockPane(paneID string) (func(), error) {
 	s, err := a.session(paneID)
 	if err != nil {
-		var ie inputError
-		if errors.As(err, &ie) || errors.Is(err, errAgentUnsupported) {
+		if paneMissing(err) || errors.Is(err, errAgentUnsupported) {
 			return nil, errTargetChanged
 		}
 		return nil, err
@@ -338,8 +337,7 @@ func (a *agentAPI) lockPane(paneID string) (func(), error) {
 // sessionNow re-reads the pane's session, bypassing every cache.
 func sessionNow(ctx context.Context, wr agentWriter, paneID string) (AgentSession, error) {
 	s, ok, err := wr.AgentSessionNow(ctx, paneID)
-	var ie inputError
-	if errors.As(err, &ie) {
+	if paneMissing(err) {
 		return AgentSession{}, errTargetChanged // the window or pane is gone
 	}
 	if err != nil {

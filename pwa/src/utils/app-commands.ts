@@ -1,3 +1,4 @@
+import type { ResizeDirection, SplitDirection } from '../hooks/use-mux-api'
 import type { ShortcutCommand } from '../hooks/use-shortcuts'
 import {
   CHANGES_VIEW_ID,
@@ -6,7 +7,7 @@ import {
   TASKS_VIEW_ID,
 } from '../view-ids'
 import { APP_INFO } from './app-info'
-import { SEARCH_CONTENT_KEY } from './shortcuts'
+import { type CommandId, SEARCH_CONTENT_KEY } from './shortcuts'
 
 // Where the palette opens: files (no prefix), commands (>), a line of the
 // open file (:), tabs and panes (@)
@@ -17,6 +18,7 @@ export type CommandCategory =
   | 'View'
   | 'Files'
   | 'Tabs'
+  | 'Panes'
   | 'Agent'
   | 'Terminal'
   | 'App'
@@ -53,6 +55,16 @@ export interface AppCommandContext {
   // The tabs before and after the current one in its group
   previousTab?: string
   nextTab?: string
+  // The backend can split, zoom, swap and resize panes (caps.paneLayout)
+  paneLayout: boolean
+  // The pane shown has a pane after it to swap with
+  canSwapNext: boolean
+  // Desktop: the resize commands are offered
+  desktop: boolean
+  splitPane: (direction: SplitDirection) => void
+  zoomPane: () => void
+  swapNextPane: () => void
+  resizePane: (direction: ResizeDirection) => void
   openPalette: (mode: PaletteMode) => void
   changeView: (id: string) => void
   // The terminal view, focused
@@ -79,6 +91,7 @@ export interface AppCommandContext {
 const VIEW_ONLY = 'View only'
 const NO_FILES = 'Not available for this pane'
 const IN_FOCUS = 'Not in a focus window'
+const NO_LAYOUT = 'Not available for this backend'
 
 // Commands that leave a focus window's target (or fold a sidebar it has not)
 const LEAVE_FOCUS = new Set([
@@ -115,6 +128,28 @@ function allCommands(ctx: AppCommandContext): AppCommand[] {
     restoreFocus: true,
     run: () => ctx.setTheme(t),
   })
+  // Pane layout: refused to a view-only device and where the backend has
+  // none; resizing only on a desktop
+  const layoutReason = ctx.readOnly
+    ? VIEW_ONLY
+    : ctx.paneLayout
+      ? undefined
+      : NO_LAYOUT
+  const pane = (
+    id: CommandId,
+    title: string,
+    run: () => void,
+    reason = layoutReason,
+  ): AppCommand => ({
+    id,
+    title,
+    category: 'Panes',
+    disabledReason: reason,
+    restoreFocus: true,
+    run,
+  })
+  const resize = (id: CommandId, direction: ResizeDirection) =>
+    pane(id, `Resize pane ${direction}`, () => ctx.resizePane(direction))
   let agentReason: string | undefined
   if (!ctx.startOffered)
     agentReason = ctx.readOnly
@@ -220,6 +255,23 @@ function allCommands(ctx: AppCommandContext): AppCommand[] {
       restoreFocus: true,
       run: () => ctx.nextTab && ctx.selectTab(ctx.nextTab),
     },
+    pane('pane.splitRight', 'Split pane right', () => ctx.splitPane('right')),
+    pane('pane.splitDown', 'Split pane down', () => ctx.splitPane('down')),
+    pane('pane.zoom', 'Zoom pane', ctx.zoomPane),
+    pane(
+      'pane.swapNext',
+      'Swap pane with the next one',
+      ctx.swapNextPane,
+      layoutReason ?? (ctx.canSwapNext ? undefined : 'No pane after this one'),
+    ),
+    ...(ctx.desktop
+      ? [
+          resize('pane.resizeLeft', 'left'),
+          resize('pane.resizeRight', 'right'),
+          resize('pane.resizeUp', 'up'),
+          resize('pane.resizeDown', 'down'),
+        ]
+      : []),
     {
       id: 'agent.start',
       title: 'Start an agent',

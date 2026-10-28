@@ -439,7 +439,7 @@ func TestHerdrPaneIdleShell(t *testing.T) {
 	f.mu.Lock()
 	f.procFail = "pane_not_found"
 	f.mu.Unlock()
-	if _, err := m.paneIdleShell(ctx, "wR:p9"); !errors.As(err, &ie) {
+	if _, err := m.paneIdleShell(ctx, "wR:p9"); !errors.Is(err, errUnknownPane) {
 		t.Errorf("missing pane: %v", err)
 	}
 }

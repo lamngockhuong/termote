@@ -295,8 +295,7 @@ func (s *herdrStream) paneSize(last Size) (Size, error) {
 		}
 	}()
 	size, err := s.m.requirePane(ctx, s.pane)
-	var ie inputError
-	if errors.As(err, &ie) {
+	if paneMissing(err) {
 		return Size{}, err
 	}
 	if err != nil {

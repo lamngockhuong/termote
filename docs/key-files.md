@@ -22,6 +22,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/hooks/use-pane-text.ts`                  | Pane text for the sheet: server history, else xterm buffer     |
 | `pwa/src/utils/copy-text.ts`                      | Clipboard write, `execCommand('copy')` fallback over HTTP      |
 | `pwa/src/components/app-header.tsx`               | Header: session chip / tabs, More menu                         |
+| `pwa/src/components/pane-layout-menu.tsx`         | Header Pane menu: split, zoom, swap, resize, close             |
 | `pwa/src/components/command-palette.tsx`          | Desktop palette: files, `>` commands, `:` line, `@` tabs       |
 | `pwa/src/utils/app-commands.ts`                   | The app's commands, for the palette, keys and Settings         |
 | `pwa/src/utils/palette-match.ts`                  | Palette prefixes, letter matching and ranking, `:line:col`     |
@@ -184,12 +185,15 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/mux_tmux.go`                              | tmux/psmux backend                                             |
 | `server/mux_groups.go`                            | `/api/mux/groups*`: create, rename, close a group; cwd check   |
 | `server/mux_reorder.go`                           | `tabs/{id}/move`, `groups/{id}/move`: one slot, coded errors   |
+| `server/mux_pane_layout.go`                       | `panes/{id}/split\|zoom\|swap\|resize`: checks, codes          |
 | `server/mux_herdr.go`                             | Herdr backend                                                  |
+| `server/mux_herdr_layout.go`                      | Herdr pane layout: `pane.split/zoom/swap/resize`               |
 | `server/herdr_autostart.go`                       | Starts `herdr server` from a full client's snapshot            |
 | `server/herdr_autostart_{unix,windows}.go`        | Per-OS detach flags and not-listening check                    |
 | `server/mux_zellij.go`                            | Zellij backend: snapshot, tabs, sessions, input, text, attach  |
 | `server/mux_zellij_cmd.go`                        | zellij runner (gate, retries), ids, names, version, sockets    |
 | `server/mux_zellij_agent.go`                      | Zellij Chat view and Files (pane dir, capture, paste, keys)    |
+| `server/mux_zellij_layout.go`                     | Zellij pane layout: split (hidden client), zoom, move, resize  |
 | `server/zellij_client.go`                         | Termote's Zellij clients: placed on a pane, input, stream      |
 | `server/zellij_view.go`                           | Zellij view-only stream: `subscribe` renders, size frames      |
 | `server/zellij_pane_pid*.go`                      | A pane's shell: socket owner (sock_diag / lsof), PANE_ID       |

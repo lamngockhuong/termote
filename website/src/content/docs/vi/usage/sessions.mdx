@@ -81,6 +81,32 @@ và khi focus đổi trên desktop thì Termote theo ở lần cập nhật kế
 pane chỉ để xem. Muốn đóng một pane, bấm dấu X cạnh tên pane rồi xác nhận; pane cuối cùng của
 window chỉ đóng được bằng cách đóng tab. psmux (Windows) mỗi window chỉ hiện một pane.
 
+### Bố cục pane
+
+Menu **Pane** trên header (biểu tượng lưới) đổi bố cục của tab đang xem, tính từ pane đang hiện:
+
+- **Split right** và **Split down** mở một pane mới bên phải hoặc bên dưới nó, cùng thư mục.
+- **Zoom** cho pane chiếm trọn tab; chọn lần nữa thì các pane khác hiện lại.
+- **Swap with next pane** đổi chỗ với pane kế tiếp trong dải pane.
+- **Resize left/right/up/down** (chỉ trên desktop) dời mép pane 5 ô. Menu vẫn mở sau mỗi lần bấm,
+  nên bấm tiếp được ngay.
+- **Close pane** đóng pane đang hiện sau khi xác nhận, khi tab còn pane khác.
+
+Split, zoom, swap và resize cũng có trong command palette, nhóm **Panes**. Thiết bị chỉ xem không
+thấy menu này; psmux (Windows), Herdr trước 0.9.3, Herdr trên Windows và Zellij 0.45.0 cũng không có, vì chưa hỗ
+trợ các thao tác này. Ở những chỗ đó palette vẫn liệt kê các lệnh nhưng làm mờ, kèm lý do.
+
+Trên tmux, Herdr và Zellij, các thao tác chạy hơi khác nhau:
+
+- **tmux**: split không dời focus, nên pane đang hiện giữ nguyên. Zoom đưa focus của tmux sang
+  pane được zoom, trên mọi client, kể cả client trên desktop của bạn.
+- **Herdr**: sau khi split, Termote hiện pane mới; focus của chính Herdr không đổi. Zoom đưa focus
+  trong Herdr sang pane đó, trên mọi client.
+- **Zellij**: sau khi split, Termote hiện pane mới. Swap xoay các pane trong tab đi một vị trí:
+  trên màn hình các pane đổi chỗ, còn dải pane giữ thứ tự cũ. Zoom kéo mọi client đang xem tab đó,
+  kể cả Zellij của bạn, về pane được zoom. Qua API, split vào một thư mục khác thư mục của pane bị
+  từ chối (Zellij bỏ qua thư mục này).
+
 ### Sắp xếp lại tab và workspace
 
 Tab giữ thứ tự lúc được tạo cho tới khi bạn di chuyển nó, và Termote hiển thị đúng thứ tự backend
@@ -352,7 +378,11 @@ Phiên được quản lý qua các endpoint `/api/mux/*` của termote:
 | `/api/mux/tabs/{id}?key=`   | DELETE | Xóa tab (cùng kiểm tra `key`)                    |
 | `/api/mux/tabs/{id}/move`   | POST   | Di chuyển tab trong group (nội dung `{index}`; trả về `id` mới) |
 | `/api/mux/groups/{id}/move` | POST   | Di chuyển workspace Herdr (nội dung `{index}`)   |
-| `/api/mux/panes/{id}`       | DELETE | Đóng một pane (Herdr và Zellij, backend khác trả 501) |
+| `/api/mux/panes/{id}`       | DELETE | Đóng một pane (psmux trả 501) |
+| `/api/mux/panes/{id}/split` | POST   | Chia pane (nội dung `{direction: right\|down, cwd?}`; trả `id` của pane mới) |
+| `/api/mux/panes/{id}/zoom`  | POST   | Zoom pane (nội dung `{mode: toggle\|on\|off}`) |
+| `/api/mux/panes/{id}/swap`  | POST   | Đổi chỗ với pane kề (nội dung `{direction: prev\|next}`; quá đầu mút trả 409 `no_neighbor`) |
+| `/api/mux/panes/{id}/resize` | POST  | Đổi kích thước (nội dung `{direction: left\|right\|up\|down, amount}`, 1–50 ô) |
 | `/api/mux/groups`           | POST   | Tạo group (nội dung `{name, cwd}`)               |
 | `/api/mux/groups/{id}`      | PATCH  | Đổi tên group (nội dung `{name}`)                |
 | `/api/mux/groups/{id}`      | DELETE | Đóng group cùng mọi thứ đang chạy trong đó       |

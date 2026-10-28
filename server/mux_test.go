@@ -98,6 +98,22 @@ func (f *fakeMux) RenameGroup(_ context.Context, id, name string) error {
 	f.calls = append(f.calls, "rename group "+id+"="+name)
 	return f.err
 }
+func (f *fakeMux) SplitPane(_ context.Context, id string, dir SplitDir, cwd string) (string, error) {
+	f.calls = append(f.calls, "split "+id+" "+string(dir)+" "+cwd)
+	return id + "+", f.err
+}
+func (f *fakeMux) ZoomPane(_ context.Context, id string, mode ZoomMode) error {
+	f.calls = append(f.calls, "zoom "+id+" "+string(mode))
+	return f.err
+}
+func (f *fakeMux) SwapPane(_ context.Context, id string, dir SwapDir) error {
+	f.calls = append(f.calls, "swap "+id+" "+string(dir))
+	return f.err
+}
+func (f *fakeMux) ResizePane(_ context.Context, id string, dir ResizeDir, amount int) error {
+	f.calls = append(f.calls, fmt.Sprintf("resize %s %s %d", id, dir, amount))
+	return f.err
+}
 func (f *fakeMux) ClosePane(_ context.Context, id string) error {
 	f.calls = append(f.calls, "close pane "+id)
 	return f.err

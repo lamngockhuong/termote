@@ -396,7 +396,8 @@ jobs:
   # its own socket, HOME and XDG dirs, a throwaway repo, and the server with
   # --mux herdr. worktrees.spec.ts runs only with TERMOTE_E2E_HERDR=1, and
   # fails there (never skips) when caps.worktrees is off; terminal-copy.spec.ts
-  # reads a Herdr pane's history into the Select text sheet.
+  # reads a Herdr pane's history into the Select text sheet; pane-layout.spec.ts
+  # splits and zooms a Herdr pane from the Pane menu.
   e2e-herdr:
     name: E2E (Herdr worktrees)
     runs-on: ubuntu-latest
@@ -507,7 +508,7 @@ jobs:
         working-directory: pwa
         env:
           TERMOTE_E2E_HERDR: "1"
-        run: pnpm exec playwright test worktrees terminal-copy tasks --workers=1
+        run: pnpm exec playwright test worktrees terminal-copy tasks pane-layout --workers=1
 
       # Stops the job's Herdr and opens the page: termote starts Herdr again
       # (HOME and XDG of the server's own environment) and it restores the
@@ -537,7 +538,8 @@ jobs:
   # The Zellij backend (#234) against a real Zellij 0.45.1: its own HOME, XDG
   # dirs and a short ZELLIJ_SOCKET_DIR (a session's socket path must fit in
   # sun_path), the server with --mux zellij. zellij.spec.ts runs only with
-  # TERMOTE_E2E_ZELLIJ=1, and fails there (never skips).
+  # TERMOTE_E2E_ZELLIJ=1, and fails there (never skips); so does
+  # pane-layout.spec.ts on a server that is not Zellij.
   e2e-zellij:
     name: E2E (Zellij)
     runs-on: ubuntu-latest
@@ -640,7 +642,7 @@ jobs:
         working-directory: pwa
         env:
           TERMOTE_E2E_ZELLIJ: "1"
-        run: pnpm exec playwright test e2e/zellij.spec.ts e2e/overview.spec.ts --workers=1
+        run: pnpm exec playwright test e2e/zellij.spec.ts e2e/overview.spec.ts e2e/pane-layout.spec.ts --workers=1
 
       - name: Stop Zellij
         if: always()
