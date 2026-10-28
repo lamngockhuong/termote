@@ -186,31 +186,71 @@ grep -q "[[:space:]]\*\{0,1\}$NAME.tar.gz\$" "$TMP/$NAME.tar.gz.sha256" ||
 
 # From 1.10.0 on, a release's checksums.txt is signed with the key below by
 # the release workflow, once a release is approved. OpenSSL 3 (most Linux)
-# checks that signature and the archive's line in checksums.txt. Without an
-# OpenSSL that can (LibreSSL on macOS) this says so and relies on HTTPS and
-# the sha256 above; `termote update` checks the signature from then on.
+# checks that signature and the archive's line in checksums.txt. Without it
+# (LibreSSL on macOS), ssh-keygen -Y verify (OpenSSH 8.1 or later) checks the
+# same key's SSHSIG signature, checksums.txt.sshsig, which releases carry
+# from FIRST_SSHSIG_VERSION on. With neither, this says so and relies on
+# HTTPS and the sha256 above; `termote update` checks the signature from
+# then on.
 # BEGIN RELEASE KEY
 RELEASE_KEY='-----BEGIN PUBLIC KEY-----
 MCowBQYDK2VwAyEAOr7k5razFbKPXHHupRqpC3u1QUJ1U6ESJghM9us9PaA=
 -----END PUBLIC KEY-----'
 # END RELEASE KEY
+# The same key as an allowed-signers line (a Go test keeps the two equal).
+# BEGIN RELEASE SIGNER
+RELEASE_SIGNER='termote-release ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDq+5Oa2sxWyj1xx7qUaqQt7tUFCdVOhEiYITPbrPT2g'
+# END RELEASE SIGNER
+FIRST_SSHSIG_VERSION=2.14.0
+
+# core_at_least <version> <x.y.z>: the version's x.y.z is at least x.y.z.
+# Shell arithmetic, as release_signed: BusyBox sort has no -C.
+core_at_least() {
+  have=${1%%-*}; want=$2
+  for _ in 1 2 3; do
+    h=${have%%.*}; w=${want%%.*}
+    if [ "$h" -ne "$w" ]; then [ "$h" -gt "$w" ]; return; fi
+    have=${have#*.}; want=${want#*.}
+  done
+  return 0
+}
+
+# ssh_keygen_verifies: an ssh-keygen with -Y verify is here; an older one
+# says "unknown option -- Y" (or "illegal option").
+ssh_keygen_verifies() {
+  command -v ssh-keygen >/dev/null 2>&1 || return 1
+  ! ssh-keygen -Y verify 2>&1 | grep -q 'option -- Y'
+}
 
 if release_signed "$VERSION"; then
   curl -fsSL -o "$TMP/checksums.txt" "$BASE/checksums.txt" &&
     curl -fsSL -o "$TMP/checksums.txt.sig" "$BASE/checksums.txt.sig" ||
     die "release ${VERSION} has no signed checksums.txt; refusing to install it."
+  BAD_SIGNATURE="SIGNATURE CHECK FAILED for release ${VERSION}: its checksums.txt is not signed by the Termote release key. Nothing was installed; report it."
+  VERIFIED=0
   if command -v openssl >/dev/null 2>&1 && openssl version 2>/dev/null | grep -qE '^OpenSSL [3-9]'; then
     printf '%s\n' "$RELEASE_KEY" >"$TMP/release-key.pem"
     openssl pkeyutl -verify -pubin -inkey "$TMP/release-key.pem" -rawin \
-      -in "$TMP/checksums.txt" -sigfile "$TMP/checksums.txt.sig" >/dev/null 2>&1 ||
-      die "SIGNATURE CHECK FAILED for release ${VERSION}: its checksums.txt is not signed by the Termote release key. Nothing was installed; report it."
+      -in "$TMP/checksums.txt" -sigfile "$TMP/checksums.txt.sig" >/dev/null 2>&1 || die "$BAD_SIGNATURE"
+    VERIFIED=1
+  elif ssh_keygen_verifies; then
+    if curl -fsSL -o "$TMP/checksums.txt.sshsig" "$BASE/checksums.txt.sshsig"; then
+      printf '%s\n' "$RELEASE_SIGNER" >"$TMP/allowed_signers"
+      ssh-keygen -Y verify -f "$TMP/allowed_signers" -I termote-release -n termote-release \
+        -s "$TMP/checksums.txt.sshsig" <"$TMP/checksums.txt" >/dev/null 2>&1 || die "$BAD_SIGNATURE"
+      VERIFIED=1
+    elif core_at_least "$VERSION" "$FIRST_SSHSIG_VERSION"; then
+      die "release ${VERSION} has no checksums.txt.sshsig; refusing to install it."
+    fi
+  fi
+  if [ "$VERIFIED" -eq 1 ]; then
     SIGNED_SUM=$(awk -v n="$NAME.tar.gz" '$2 == n || $2 == "*" n { print $1 }' "$TMP/checksums.txt")
     ACTUAL_SUM=$($SHA "$TMP/$NAME.tar.gz" | cut -d' ' -f1)
     [ -n "$SIGNED_SUM" ] && [ "$SIGNED_SUM" = "$ACTUAL_SUM" ] ||
       die "the signed checksums.txt does not vouch for $NAME.tar.gz; nothing was installed."
     echo "Signature verified."
   else
-    echo "note: no OpenSSL 3 here, so the release signature was not checked (the sha256 was); 'termote update' checks it from now on."
+    echo "note: the release signature was not checked (the sha256 was): this needs OpenSSL 3, or ssh-keygen -Y verify (OpenSSH 8.1 or later) for ${FIRST_SSHSIG_VERSION} and later. 'termote update' checks it from now on."
   fi
 fi
 

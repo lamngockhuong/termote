@@ -2,7 +2,8 @@
 .SYNOPSIS
     Termote installer for Windows.
 .DESCRIPTION
-    Downloads the release for this machine, verifies its sha256, lays it down
+    Downloads the release for this machine, verifies its sha256 and, with
+    ssh-keygen -Y verify (OpenSSH 8.1 or later), its signature, lays it down
     under %LOCALAPPDATA%\termote and puts `termote` on the user PATH.
 
         irm https://termote.ohnice.app/install.ps1 | iex
@@ -22,6 +23,16 @@ $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 $Repo = 'lamngockhuong/termote'
 $Dir = Join-Path $env:LOCALAPPDATA 'termote'
+
+# From 1.10.0 on, a release's checksums.txt is signed by the release
+# workflow, once a release is approved; from FirstSshsigVersion on it also
+# carries checksums.txt.sshsig, the same key's signature in the format
+# ssh-keygen -Y verify checks. This is that key as an allowed-signers line
+# (a Go test keeps it equal to the one install.sh pins).
+# BEGIN RELEASE SIGNER
+$ReleaseSigner = 'termote-release ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDq+5Oa2sxWyj1xx7qUaqQt7tUFCdVOhEiYITPbrPT2g'
+# END RELEASE SIGNER
+$FirstSshsigVersion = [version]'2.14.0'
 
 function Stop-Install([string]$Message) {
     Write-Host "termote install: $Message" -ForegroundColor Red
@@ -84,6 +95,18 @@ if ($Pin) {
     $Version = "$Version"
 }
 
+# 1.10.0 and later, a 1.10.0 pre-release excepted, as `termote update` counts.
+function Test-ReleaseSigned([string]$V) {
+    $core = [version](($V -split '-', 2)[0])
+    return $core -gt [version]'1.10.0' -or ($core -eq [version]'1.10.0' -and $V -notmatch '-')
+}
+
+# Whoever can publish a release picks the unpinned version: never let it be
+# one with no signature to check.
+if (-not $Pin -and -not (Test-ReleaseSigned $Version)) {
+    Stop-Install "the newest release for $Repo, $Version, predates signed releases (1.10.0); refusing to install it without a pin. If you mean it: `$env:TERMOTE_VERSION='$Version'"
+}
+
 $Exe = Join-Path $Dir "versions\$Version\bin\termote.exe"
 
 function Set-Current {
@@ -114,6 +137,74 @@ if ($Rescue -and (Test-Path $Exe)) {
     return
 }
 
+# Invoke-Native runs $Exe with $Arguments (one command line: quote paths),
+# its stdin the bytes of $StdinFile as they are (Start-Process would rewrite
+# its lines), and returns its exit code and output.
+function Invoke-Native([string]$Exe, [string]$Arguments, [string]$StdinFile) {
+    $psi = New-Object System.Diagnostics.ProcessStartInfo $Exe, $Arguments
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardInput = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $p = [System.Diagnostics.Process]::Start($psi)
+    if ($StdinFile) {
+        $bytes = [System.IO.File]::ReadAllBytes($StdinFile)
+        $p.StandardInput.BaseStream.Write($bytes, 0, $bytes.Length)
+    }
+    $p.StandardInput.Close()
+    # A few lines each: reading one after the other cannot fill a pipe.
+    $text = $p.StandardOutput.ReadToEnd() + $p.StandardError.ReadToEnd()
+    $p.WaitForExit()
+    return @{ Code = $p.ExitCode; Text = $text }
+}
+
+# Get-SshKeygen: the path of an ssh-keygen with -Y verify, or $null. One
+# before OpenSSH 8.1 says "unknown option -- Y".
+function Get-SshKeygen {
+    $cmd = Get-Command ssh-keygen -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $cmd) { return $null }
+    if ((Invoke-Native $cmd.Source '-Y verify' $null).Text -match 'option -- Y') { return $null }
+    return $cmd.Source
+}
+
+# Confirm-Signature: checks the release's signed checksums.txt with
+# ssh-keygen -Y verify and that it lists $Name.zip with the sha256 $Actual.
+# Without such an ssh-keygen it says the signature was not checked.
+function Confirm-Signature([string]$Actual) {
+    $checksums = Join-Path $Tmp 'checksums.txt'
+    try {
+        Invoke-WebRequest -UseBasicParsing -Uri "$Base/checksums.txt" -OutFile $checksums
+        Invoke-WebRequest -UseBasicParsing -Uri "$Base/checksums.txt.sig" -OutFile (Join-Path $Tmp 'checksums.txt.sig')
+    } catch { Stop-Install "release $Version has no signed checksums.txt; refusing to install it." }
+    $keygen = Get-SshKeygen
+    $sshsig = Join-Path $Tmp 'checksums.txt.sshsig'
+    $haveSshsig = $false
+    if ($keygen) {
+        try { Invoke-WebRequest -UseBasicParsing -Uri "$Base/checksums.txt.sshsig" -OutFile $sshsig; $haveSshsig = $true } catch {}
+        if (-not $haveSshsig -and [version](($Version -split '-', 2)[0]) -ge $FirstSshsigVersion) {
+            Stop-Install "release $Version has no checksums.txt.sshsig; refusing to install it."
+        }
+    }
+    if (-not $haveSshsig) {
+        Write-Host "note: the release signature was not checked (the sha256 was): this needs ssh-keygen -Y verify (OpenSSH 8.1 or later) and release $FirstSshsigVersion or later. 'termote update' checks it from now on." -ForegroundColor Yellow
+        return
+    }
+    $allowed = Join-Path $Tmp 'allowed_signers'
+    [System.IO.File]::WriteAllText($allowed, "$ReleaseSigner`n")
+    $verify = Invoke-Native $keygen "-Y verify -f `"$allowed`" -I termote-release -n termote-release -s `"$sshsig`"" $checksums
+    if ($verify.Code -ne 0) {
+        Stop-Install "SIGNATURE CHECK FAILED for release ${Version}: its checksums.txt is not signed by the Termote release key. Nothing was installed; report it."
+    }
+    $signed = Get-Content $checksums | ForEach-Object {
+        $f = $_.Trim() -split '\s+'
+        if ($f.Count -eq 2 -and $f[1].TrimStart('*') -eq "$Name.zip") { $f[0] }
+    } | Select-Object -First 1
+    if (-not $signed -or $signed -ne $Actual) {
+        Stop-Install "the signed checksums.txt does not vouch for $Name.zip; nothing was installed."
+    }
+    Write-Host "Signature verified."
+}
+
 $Name = "termote-$Version-windows-amd64"
 $Base = "https://github.com/$Repo/releases/download/v$Version"
 $Tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("termote-install-" + [guid]::NewGuid().ToString('N'))
@@ -133,6 +224,10 @@ try {
     $actual = (Get-FileHash -Algorithm SHA256 (Join-Path $Tmp "$Name.zip")).Hash
     if (-not $expected -or $expected -ne $actual) {
         Stop-Install "CHECKSUM MISMATCH for $Name.zip: the download was discarded and nothing was installed. Try again; if it repeats, report it."
+    }
+
+    if (Test-ReleaseSigned $Version) {
+        Confirm-Signature $actual
     }
 
     Expand-Archive -Path (Join-Path $Tmp "$Name.zip") -DestinationPath $Tmp -Force

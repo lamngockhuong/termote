@@ -1852,16 +1852,28 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
 - **Release integrity**: `release.yml`'s release job runs in the `release` environment (the
   maintainer approves each release; it holds `RELEASE_SIGNING_KEY`), writes `image-digest.txt`
   (the pushed image by digest) into `checksums.txt`, signs it with `openssl pkeyutl` and checks
-  the signature with the key `install.sh` pins. `update` and `install.sh` (OpenSSL 3) refuse a
-  1.10.0+ release whose signature does not verify; `container up` runs the image by that digest,
+  the signature with the key `install.sh` pins. It also signs it as `checksums.txt.sshsig`
+  (SSHSIG, namespace `termote-release`, made with openssl alone by `scripts/release-sshsig.sh`, so
+  the key is only ever handed to openssl) and checks that with `ssh-keygen -Y verify` against the
+  allowed-signers line `install.sh` pins (`RELEASE_SIGNER`; `install.ps1` pins the same line, and
+  `TestReleaseSignerMatchesInstallers` keeps both equal to the CLI's key); the release needs 14
+  assets. `update` and `install.sh` (OpenSSL 3) refuse a 1.10.0+ release whose signature does
+  not verify. Without OpenSSL 3, `install.sh`, and `install.ps1` always, check the `.sshsig`
+  with an `ssh-keygen` that has `-Y` (OpenSSH 8.1+; one that answers "option -- Y" counts as
+  absent), refuse a bad one, and refuse a release from `FIRST_SSHSIG_VERSION` (2.14.0) without
+  one; with no such `ssh-keygen`, or before that version, they print that the signature was not
+  checked. Both check the archive's line in the verified `checksums.txt`; `install.ps1` writes it
+  to `ssh-keygen`'s stdin byte for byte (`Invoke-Native`: `Start-Process` rewrites its lines).
+  `container up` runs the image by that digest,
   and only from a signed list that names the version's own archives (`listsVersion`:
   `termote-<version>-<os>-<arch>.tar.gz|.zip`, a pre-release's not counting for its stable), so a
   genuine list and image of another release copied into a version's assets run nothing.
   Whoever can publish a release picks the unpinned target, so neither lets it skip the signature:
   without `--version`, `update` refuses a release before 1.10.0 on an install already on a signed
-  one (`releaseSigned`, `server/cli_update.go`), and without `TERMOTE_VERSION`, `install.sh`
-  refuses a release before 1.10.0. The `docker` job pins the binfmt (QEMU) and BuildKit images it
-  builds with by digest, like the actions.
+  one (`releaseSigned`, `server/cli_update.go`), and without `TERMOTE_VERSION`, `install.sh` and
+  `install.ps1` refuse a release before 1.10.0. The `docker` job pins the binfmt (QEMU) and
+  BuildKit images it builds with by digest, like the actions; a Renovate `customManagers` entry
+  updates both tags and digests.
   The `docker` job pushes the image to GHCR by digest only, with no tag; `docker-tags`, which needs
   the release job, moves `x.y.z`, `x.y` and `latest` on GHCR and Docker Hub to that digest and fails
   when a tag names another one, and `publish` makes the draft public only after it. So a `v*` tag

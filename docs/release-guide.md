@@ -140,6 +140,8 @@ Each release produces, per platform (`linux`/`darwin` × `amd64`/`arm64`, plus
 | `termote-<v>-<os>-<arch>.tar.gz`/`.zip` | Archive holding `bin/termote[.exe]` and `LICENSE` |
 | `termote-<v>-<os>-<arch>.tar.gz.sha256` | Checksum of that archive                          |
 | `checksums.txt`                         | All checksums concatenated                        |
+| `checksums.txt.sig`                     | Ed25519 signature of `checksums.txt` (1.10.0+)    |
+| `checksums.txt.sshsig`                  | Same key, SSHSIG for `ssh-keygen -Y` (2.14.0+)    |
 
 `scripts/install.sh`/`install.ps1` verify the per-archive `.sha256`; there is no separate
 "full tarball" or PWA-only zip artifact in 1.0.

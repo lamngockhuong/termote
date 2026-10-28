@@ -38,10 +38,13 @@ The installer needs only `curl`, `tar` and `sha256sum`/`shasum` (Windows: PowerS
 sudo/admin. It downloads the newest stable 1.x release for your OS/arch, verifies its
 `.sha256` (mandatory), lays it out under a versioned install root and prints `termote start` —
 it never starts anything itself. From 1.10.0 on, `install.sh` also checks the release
-signature (see Updating) when OpenSSL 3 is there, and says so when it is not (LibreSSL on
-macOS); `install.ps1` cannot check it, as Windows PowerShell has no Ed25519. Without a pin,
-`install.sh` refuses a newest release older than 1.10.0, which has no signature to check. Pin a version, or rescue a broken install, with
-`TERMOTE_VERSION`:
+signature (see Updating) when OpenSSL 3 is there. Without it (LibreSSL on macOS), and always
+in `install.ps1` (Windows PowerShell has no Ed25519), the installer checks the same key's
+`checksums.txt.sshsig` with `ssh-keygen -Y verify` (OpenSSH 8.1 or later: current macOS has it,
+the OpenSSH of older Windows 10 builds, 7.7, does not) for a release from 2.14.0 on, and
+refuses one that lacks it; with no such `ssh-keygen`, or an older release, it says the
+signature was not checked. Without a pin, both refuse a newest release older than 1.10.0, which
+has no signature to check. Pin a version, or rescue a broken install, with `TERMOTE_VERSION`:
 
 ```bash
 curl -fsSL https://termote.ohnice.app/install.sh | TERMOTE_VERSION=1.0.0 sh

@@ -301,8 +301,12 @@ jobs:
 
       # checksums.txt also lists image-digest.txt (the image by digest), then
       # is signed with the release key and checked against the public key
-      # install.sh pins (a Go test keeps the CLI's copy equal to it). The
-      # key is written to a 0600 file only for the one openssl call.
+      # install.sh pins (a Go test keeps the CLI's copy equal to it). The same
+      # key also signs it in SSHSIG form, checksums.txt.sshsig, which the
+      # installers check with ssh-keygen -Y verify where no OpenSSL 3 is
+      # (macOS, Windows); release-sshsig.sh makes it with openssl alone, and
+      # it is checked against the allowed-signers line install.sh pins. The
+      # key is written to a 0600 file only for these openssl calls.
       - name: Sign the checksums
         if: needs.prepare.outputs.dry_run != 'true'
         env:
@@ -316,11 +320,16 @@ jobs:
           key="$RUNNER_TEMP/release-key.pem"
           (umask 077 && printf '%s\n' "$RELEASE_SIGNING_KEY" >"$key")
           openssl pkeyutl -sign -inkey "$key" -rawin -in release/checksums.txt -out release/checksums.txt.sig
+          sh scripts/release-sshsig.sh sign "$key" release/checksums.txt >release/checksums.txt.sshsig
           rm -f "$key"
           sed -n "/^RELEASE_KEY='/,/^-----END PUBLIC KEY-----'/p" scripts/install.sh | sed "s/^RELEASE_KEY='//; s/'\$//" >"$RUNNER_TEMP/release-pub.pem"
           openssl pkeyutl -verify -pubin -inkey "$RUNNER_TEMP/release-pub.pem" -rawin \
             -in release/checksums.txt -sigfile release/checksums.txt.sig ||
             { echo "::error::the signature does not verify with the key install.sh pins"; exit 1; }
+          sed -n "s/^RELEASE_SIGNER='\(.*\)'\$/\1/p" scripts/install.sh >"$RUNNER_TEMP/allowed_signers"
+          ssh-keygen -Y verify -f "$RUNNER_TEMP/allowed_signers" -I termote-release -n termote-release \
+            -s release/checksums.txt.sshsig <release/checksums.txt ||
+            { echo "::error::checksums.txt.sshsig does not verify with the allowed signer install.sh pins"; exit 1; }
 
       # The assets go onto a draft: release-please creates it; a tag push or a
       # manual run creates it here. The publish job makes it public once the
@@ -339,9 +348,9 @@ jobs:
             gh release create "$tag" --draft --title "$tag" --generate-notes --target "$GITHUB_SHA" --prerelease="$pre"
           fi
           gh release upload "$tag" release/termote-*.tar.gz release/termote-*.zip release/*.sha256 release/checksums.txt \
-            release/checksums.txt.sig release/image-digest.txt --clobber
+            release/checksums.txt.sig release/checksums.txt.sshsig release/image-digest.txt --clobber
           count=$(gh release view "$tag" --json assets --jq '.assets | length')
-          [ "$count" -ge 13 ] || { echo "::error::release $tag has $count assets, expected 13"; exit 1; }
+          [ "$count" -ge 14 ] || { echo "::error::release $tag has $count assets, expected 14"; exit 1; }
 
   # ─────────────────────────────────────────────────────────────
   # Docker tags, once the release is approved and signed

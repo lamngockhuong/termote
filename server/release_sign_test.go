@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/x509"
@@ -290,6 +291,38 @@ func TestReleaseKeyMatchesInstaller(t *testing.T) {
 	if got := installerReleaseKey(t); got != releasePublicKey {
 		t.Fatalf("install.sh pins %s, the CLI %s", got, releasePublicKey)
 	}
+}
+
+// Both installers pin the same key as an allowed-signers line for
+// ssh-keygen -Y verify (the release workflow checks checksums.txt.sshsig
+// against install.sh's): the ssh-ed25519 blob holds the CLI's key.
+func TestReleaseSignerMatchesInstallers(t *testing.T) {
+	for file, prefix := range map[string]string{"install.sh": "RELEASE_SIGNER='", "install.ps1": "$ReleaseSigner = '"} {
+		b, err := os.ReadFile(filepath.Join("..", "scripts", file))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, rest, ok := strings.Cut(string(b), "\n"+prefix)
+		line, _, ok2 := strings.Cut(rest, "'")
+		f := strings.Fields(line)
+		if !ok || !ok2 || len(f) != 3 || f[0] != "termote-release" || f[1] != "ssh-ed25519" {
+			t.Fatalf("%s holds no allowed-signers line: %q", file, line)
+		}
+		blob, err := base64.StdEncoding.DecodeString(f[2])
+		want := append([]byte("\x00\x00\x00\x0bssh-ed25519\x00\x00\x00\x20"), mustDecode(t, releasePublicKey)...)
+		if err != nil || !bytes.Equal(blob, want) {
+			t.Errorf("%s pins %s, not the CLI's key %s", file, f[2], releasePublicKey)
+		}
+	}
+}
+
+func mustDecode(t *testing.T, b64 string) []byte {
+	t.Helper()
+	b, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
 }
 
 // A signature made the way the release workflow makes it (openssl pkeyutl,
