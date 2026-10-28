@@ -101,6 +101,11 @@ function click(data: unknown) {
 }
 
 describe('notify-sw.js', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
   it('answers the ping with its version', async () => {
     const { dispatch } = loadWorker()
     const port = { postMessage: vi.fn() }
@@ -136,6 +141,73 @@ describe('notify-sw.js', () => {
     const win = windowClient(vi.fn().mockRejectedValue(new Error('denied')))
     const { dispatch } = loadWorker([win])
     await dispatch('notificationclick', click({ hash: '#/s/g/t' }))
+    expect(win.postMessage).toHaveBeenCalled()
+  })
+
+  it('keeps the link for a page its message never reaches', async () => {
+    const kept = new Map<string, Response>()
+    const open = vi.fn(async () => ({
+      put: async (url: string, res: Response) => kept.set(url, res),
+    }))
+    vi.stubGlobal('caches', { open })
+    vi.spyOn(Date, 'now').mockReturnValue(1000)
+    const win = windowClient()
+    const { dispatch } = loadWorker([win])
+    await dispatch('notificationclick', click({ hash: '#/s/g/t/p' }))
+    expect(open).toHaveBeenCalledWith('termote-notify')
+    expect(await kept.get('/__termote/pending-link')?.json()).toEqual({
+      hash: '#/s/g/t/p',
+      at: 1000,
+    })
+    expect(win.postMessage).toHaveBeenCalled()
+    // Nothing kept for anything but a pane link
+    open.mockClear()
+    await dispatch('notificationclick', click({ hash: 'https://evil.test' }))
+    expect(open).not.toHaveBeenCalled()
+  })
+
+  it('never holds focus or a new window on keeping the link', async () => {
+    let release = () => {}
+    const put = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('caches', {
+      open: () =>
+        new Promise((r) => {
+          release = () => r({ put })
+        }),
+    })
+    const win = windowClient()
+    const open = loadWorker([win])
+    const clicked = open.dispatch(
+      'notificationclick',
+      click({ hash: '#/s/g/t' }),
+    )
+    await vi.waitFor(() => expect(win.focus).toHaveBeenCalled())
+    // The message waits: the page that takes it drops the kept copy
+    expect(win.postMessage).not.toHaveBeenCalled()
+    release()
+    await clicked
+    expect(put).toHaveBeenCalled()
+    expect(win.postMessage).toHaveBeenCalled()
+
+    const closed = loadWorker()
+    const opening = closed.dispatch(
+      'notificationclick',
+      click({ hash: '#/s/g/t' }),
+    )
+    await vi.waitFor(() =>
+      expect(closed.clients.openWindow).toHaveBeenCalledWith('/#/s/g/t'),
+    )
+    release()
+    await opening
+  })
+
+  it('still sends the link when it cannot be kept', async () => {
+    vi.stubGlobal('caches', {
+      open: () => Promise.reject(new Error('quota')),
+    })
+    const win = windowClient()
+    const { dispatch } = loadWorker([win])
+    await dispatch('notificationclick', click({ hash: '#/s/g/t/p' }))
     expect(win.postMessage).toHaveBeenCalled()
   })
 
