@@ -45,6 +45,10 @@ func newDeviceAuth(store *deviceStore, tokens *tokenStore, hub *streamHub) *devi
 	d.codes.alive = d.creatorAlive
 	store.mu.Lock()
 	store.onReload = d.arm
+	store.onGone = func(id string) {
+		auditf("device-gone", "id", id, "via", "reload")
+		d.end(id)
+	}
 	d.arm(store.nextExpiryLocked())
 	store.mu.Unlock()
 	return d

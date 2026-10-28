@@ -264,7 +264,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   it, and the `lastUsedAt` flush made under `mu` by a lookup only tries both, leaving the uses for
   the next flush (shutdown waits). A file system that cannot lock (`ENOLCK`, `ENOTSUP`) writes
   unlocked and logs it once. A lookup stats the file at most each second, so a second process sees
-  a revoke; `lastUsedAt` reaches disk each 5 minutes. `--no-auth`
+  a revoke, and a reload ends what every device it no longer finds live holds (`onGone`, on its own
+  goroutine: the hub's lock comes before the store's); `lastUsedAt` reaches disk each 5 minutes. `--no-auth`
   or an unusable dir: the store is not loaded, the routes answer 501 `unsupported`, `caps.devices`
   false. `basicAuth` order: public → `/login` → `/pair` → `/logout` → session cookie → device
   cookie → Basic; a session wins over a device cookie, and a cookie naming no record is cleared.
@@ -306,7 +307,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   level) and answers `{ok, revoked}`; Log out and a view device paired again revoke only it. Audit:
   `auditf` (`server/audit_log.go`) logs `audit: <event> k="v"` (values `strconv.Quote`d, never a
   token, code, password or cookie) for `pair-code`, `pair`, `revoke` (`by`, `via`, `cascade`),
-  `device-expired` (once per id and process) and `login via=form`; Basic sign-ins are not logged.
+  `device-expired` (once per id and process), `device-gone via=reload` (a device another process
+  revoked, ended by a reload) and `login via=form`; Basic sign-ins are not logged.
   What this does and does not protect: `docs/security-model.md`
 - **Pane text** (`GET /api/mux/panes/{id}/text?lines=N` → `{text, lines, truncated, more}`,
   `server/mux_pane_text.go`, `caps.paneText`: tmux, never psmux, Herdr and Zellij): a same-site read
