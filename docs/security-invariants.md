@@ -1853,7 +1853,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   maintainer approves each release; it holds `RELEASE_SIGNING_KEY`), writes `image-digest.txt`
   (the pushed image by digest) into `checksums.txt`, signs it with `openssl pkeyutl` and checks
   the signature with the key `install.sh` pins. `update` and `install.sh` (OpenSSL 3) refuse a
-  1.10.0+ release whose signature does not verify; `container up` runs the image by that digest.
+  1.10.0+ release whose signature does not verify; `container up` runs the image by that digest,
+  and only from a signed list that names the version's own archives (`listsVersion`:
+  `termote-<version>-<os>-<arch>.tar.gz|.zip`, a pre-release's not counting for its stable), so a
+  genuine list and image of another release copied into a version's assets run nothing.
   Whoever can publish a release picks the unpinned target, so neither lets it skip the signature:
   without `--version`, `update` refuses a release before 1.10.0 on an install already on a signed
   one (`releaseSigned`, `server/cli_update.go`), and without `TERMOTE_VERSION`, `install.sh`
