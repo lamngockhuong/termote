@@ -2045,7 +2045,28 @@ export interface UserTask {
   updated: string
 }
 
-export type TaskKind = 'script' | 'make' | 'user'
+// A task of another build tool or task runner (Gradle, Cargo, a justfile,
+// ...). command is the line that runs it; detail what the file says it runs
+// (a script's body), cut for the list when truncated.
+export interface ToolTask {
+  name: string
+  command: string
+  detail?: string
+  truncated?: boolean
+  hooks?: string[]
+}
+
+// One tool's tasks in the root: tool is also the kind a run names, file the
+// file they were read from
+export interface ToolGroup {
+  tool: string
+  label: string
+  file: string
+  tasks: ToolTask[]
+}
+
+// script, make, user or a ToolGroup's tool (the server checks it)
+export type TaskKind = string
 
 // running until it printed its end marker (exited, with its code), its
 // shell came back without one (ended: the screen was cleared) or its tab
@@ -2072,12 +2093,17 @@ export interface PaneTasks {
   makefile: string
   makeTargets: { name: string }[]
   userTasks: UserTask[]
+  // The other tools' tasks, in the server's order
+  toolGroups: ToolGroup[]
   // The last run of each task, by kind:name (user:id)
   runs: Record<string, TaskRun>
-  // Scripts and targets left out (a name the view cannot run)
+  // Scripts, targets and tool tasks left out (a name the view cannot run,
+  // or past the server's limit)
   skipped: number
-  // package.json or the Makefile, too large to read
+  // Files too large to read
   tooLarge: string[]
+  // Files there that could not be read as their tool's
+  unreadable: string[]
 }
 
 const tasksUrl = (paneId: string, op = '') =>
@@ -2102,9 +2128,11 @@ export async function fetchTasks(
     makefile: body.makefile ?? '',
     makeTargets: body.makeTargets ?? [],
     userTasks: body.userTasks ?? [],
+    toolGroups: body.toolGroups ?? [],
     runs: body.runs ?? {},
     skipped: body.skipped ?? 0,
     tooLarge: body.tooLarge ?? [],
+    unreadable: body.unreadable ?? [],
   }
 }
 
@@ -2123,7 +2151,7 @@ export const TASK_RUN_TIMEOUT_MS = 40_000
 // Runs a task of the pane's root in a tab at that root. The task is named,
 // never sent: the server reads the root again. Throws RequestError
 // (task_running with runId and tabId, root_changed, task_not_found,
-// unsupported_shell, shell_busy, no_client, tab_gone).
+// unknown_task_kind, unsupported_shell, shell_busy, no_client, tab_gone).
 export async function runTask(
   paneId: string,
   req: {

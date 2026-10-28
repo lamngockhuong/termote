@@ -1411,7 +1411,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   window is kept for the pane shown
 - **Tasks** (`/api/mux/panes/{id}/tasks`, `/api/mux/panes/{id}/tasks/run`,
   `/api/mux/tasks/runs/{runId}`, `/api/mux/tasks[/{id}]`; `server/tasks.go`,
-  `tasks_discover.go`, `tasks_shell.go`, `tasks_run.go`, `tasks_run_state.go`, `task_store.go`,
+  `tasks_discover.go`, `tasks_tools.go`, `tasks_tools_toml.go`, `tasks_shell.go`, `tasks_run.go`, `tasks_run_state.go`, `task_store.go`,
   `task_routes.go`, `mux_{tmux,herdr,zellij}_tasks.go`; `caps.tasks`: the Files routes work and
   the backend runs tasks (`taskMux`: tmux, Herdr, Zellij; never psmux, which has no Files);
   `caps.userTasks`: the store is usable). Every route is a full client's only, reads included
@@ -1427,15 +1427,56 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   Makefile targets are explicit rules only (no assignment `=`, `:=`, `::=`, `?=`, `+=`, `!=`, no
   directive or `define` block, no `.`-special, `%` pattern or `$` name). A script's command is
   shown (cut at 4096 bytes) with its `pre`/`post` hooks, which npm, pnpm and bun run too.
+  The other tools (`toolGroups`, in this order) are read the same way, from the root only, each
+  file once per listing, no tool started: Gradle (`build.gradle.kts`, else `build.gradle`, else
+  only `settings.gradle(.kts)`: the fixed `build test check clean assemble`, `run` when the root's
+  build file applies `application`, `bootRun` when it applies the Spring Boot plugin, never a
+  dependency or `apply false`; no script evaluated, no sub-project read), Maven (`pom.xml`: `clean
+  compile test package verify install`), PDM (`[tool.pdm.scripts]` but `_`, with `pre_`/`post_`
+  hooks), Hatch (`hatch.toml` `[envs.<e>.scripts]` when present, else pyproject's
+  `[tool.hatch.envs.<e>.scripts]`; a key holding `:` left out; shown `name` for `default`, else
+  `env:name`), Poe the Poet (`[tool.poe.tasks]` but `_` names), Cargo (`Cargo.toml`: `build check
+  test clippy fmt`, `run` with `src/main.rs` or a `[[bin]]`; `[alias]` of `.cargo/config`, else
+  `.cargo/config.toml`, minus every name of a Cargo command or built-in alias; an alias of the
+  external `clippy` or `fmt` overrides it and shows on that task), Go (`go.mod`:
+  `build`/`test`/`vet ./...`, `run .` with a root `main.go`), just (`justfile`/`.justfile` in any
+  case; two of them is `unreadable`; recipes with no `_` name, no `[private]` attribute and no
+  parameter without a default; read line by line), Task (the first of go-task's
+  `Taskfile.yml`, `taskfile.yml`, `Taskfile.yaml`, `taskfile.yaml` and their `.dist` forms: the
+  keys one indent under a column-0 `tasks:`, read as YAML scalars line by line, but `internal:
+  true`), Composer (`composer.json` `scripts`) and Deno (`deno.json`, else `deno.jsonc`, `tasks`;
+  comments and trailing commas stripped). Names follow the same pattern and cap per group (each
+  once, file order kept); a detail (a script's body) is cut at 4096 bytes. TOML (`pyproject.toml`,
+  `hatch.toml`, `Cargo.toml`, `.cargo/config(.toml)`) is read at most 256 KiB (else `tooLarge`),
+  pre-scanned outside strings and comments (arrays and inline tables nested at most 32 deep, at
+  most 16 dotted parts in a key, at most 32 parts in a key's whole path through the inline tables
+  and arrays it is in: the decoder's cost grows with the square of the path, a 40 KB dotted key
+  costs it gigabytes, short dotted keys nested in inline tables hundreds of megabytes), then decoded into structs holding only the tables read, two decodes at
+  once server-wide (a file that gets no slot before its request ends is named in `unreadable`, the
+  rest of the list still shows).
+  `pyproject.toml` is decoded once for PDM, Hatch and Poe. A file there that is no valid JSON or
+  TOML, refused by the pre-scan, or one of two justfiles is named once in `unreadable`.
   **Run** (`POST .../tasks/run`, body ≤ 4 KiB `{kind, name|id, root, newTab}`): `writeGuard`,
   `requireWriteRole`, then `start` as above; the client only names the task, never sends a
   command: the server reads the root again and runs only a name in that list (404
   `task_not_found`, nothing opened or typed), a user task by its id from the store; a `root`
-  other than the current one is 409. It builds the line itself: `<pm> run <name>`, `make <name>`
-  or the user's one-line command handed whole to `eval` (`Invoke-Expression` in pwsh), the name or
+  other than the current one is 409. A kind that is neither `script`, `make`, `user` nor a tool is
+  400 `unknown_task_kind` (`taskCommand` returns nothing for it and nothing is typed). It builds
+  the line itself: `<pm> run <name>`, `make <name>`, a tool's constant program and runner
+  arguments followed by the task's arguments, each quoted (`gradle`, `mvn`, `pdm run`, `hatch run
+  <env>:<name>`, `poetry run poe` with `poetry.lock`, `uv run poe` with `uv.lock`, else `poe`,
+  `cargo`, `go build ./...`, `just`, `task`, `composer run-script`, `deno task`; never a text a
+  file supplied), or the user's one-line command handed whole to `eval` (`Invoke-Expression` in pwsh), the name or
   command quoted for the shell found (POSIX `'…'`, fish `'…'` with `\\` and `\'`, pwsh `'…'`
   doubling `'` and U+2018–U+201B), wrapped between `[termote-task <nonce> start]` and
-  `[termote-task <nonce> exit <code>]` (a fresh 16-hex nonce per run). Only bash, zsh, sh, dash,
+  `[termote-task <nonce> exit <code>]` (a fresh 16-hex nonce per run). Gradle and Maven run their
+  wrapper (`./gradlew`, `./mvnw`; `.\gradlew.bat`, `.\mvnw.cmd` from pwsh on Windows) only when it
+  is a regular file in the root as `os.Root` sees it (a symlink out of the root is refused, the
+  bare program runs); the listing shows the POSIX choice (on Windows a root with `gradlew` and no
+  `gradlew.bat` lists `./gradlew` and pwsh runs `gradle`). Every parser keeps the names it has seen
+  in a map, so a 1 MiB file lists in linear time; a run of a script, target or user task reads no
+  other tool's file. A tool task's tab is named
+  `task:<kind>:<name>` (two tools may share a name), others `task:<name>`. Only bash, zsh, sh, dash,
   ash, ksh, mksh, yash, fish and pwsh are typed into; any other shell (PowerShell 5.1, cmd, nu,
   csh) is 409 `unsupported_shell` with nothing typed. The root goes to the backend as the new
   tab's directory, never into the line (tmux `new-window -d -c` and `-n` through `tmuxLiteral`,

@@ -1,12 +1,15 @@
+import { ChevronDown } from 'lucide-react'
 import { useState } from 'react'
 import type { ViewProps } from '../app-views'
 import { agentLabel } from '../chat-agents'
 import { fetchPaneText, RequestError } from '../hooks/use-mux-api'
 import { useSettings } from '../hooks/use-settings'
+import { useTaskGroupsCollapsed } from '../hooks/use-task-groups-collapsed'
 import {
   type TaskItem,
   type TaskRunView,
   taskItems,
+  taskTabName,
   useTasks,
 } from '../hooks/use-tasks'
 import { sendToAgent } from '../utils/send-to-agent'
@@ -32,6 +35,7 @@ const RUN_ERRORS: Record<string, string> = {
   unsupported_shell: 'This shell is not supported (bash, zsh, sh, fish, pwsh)',
   shell_busy: "The tab's shell is busy",
   task_not_found: 'This task is no longer in the folder',
+  unknown_task_kind: 'This task is no longer known: reload the list',
   tab_gone: "The task's tab was closed",
   invalid_task: 'This task cannot be run: edit it in Settings',
   invalid_root: "This folder's name cannot be used for a task",
@@ -44,8 +48,9 @@ const LIST_ERRORS: Record<number, string> = {
 }
 
 // Tasks: what the pane's root offers to run (package.json scripts, Makefile
-// targets, the user's tasks), each run in a tab at that root, and the
-// output of a finished run sent to an agent pane. A full client only.
+// targets, other build tools' and task runners' tasks, the user's tasks),
+// each run in a tab at that root, and the output of a finished run sent to
+// an agent pane. A full client only. Each section folds from its header.
 export function TasksView({
   session,
   mux,
@@ -57,6 +62,7 @@ export function TasksView({
   const { settings } = useSettings()
   const { data, error, loading, runs, reload, run } = useTasks(session.paneId)
   const [filter, setFilter] = useState('')
+  const { isCollapsed, toggle } = useTaskGroupsCollapsed()
   const [starting, setStarting] = useState<string | null>(null)
   const [sending, setSending] = useState<string | null>(null)
   const [picking, setPicking] = useState<{
@@ -73,7 +79,7 @@ export function TasksView({
     try {
       const start = await run(item, newTab)
       void refreshSessions?.()
-      notify(`Running in tab task:${item.name}`, {
+      notify(`Running in tab ${taskTabName(item)}`, {
         variant: 'success',
         action: {
           label: 'Open',
@@ -94,7 +100,8 @@ export function TasksView({
           variant: 'warning',
         })
       } else {
-        if (code === 'task_not_found') void reload()
+        if (code === 'task_not_found' || code === 'unknown_task_kind')
+          void reload()
         notify(RUN_ERRORS[code] ?? 'Could not run the task', {
           variant: 'danger',
         })
@@ -181,12 +188,26 @@ export function TasksView({
             t.command.toLowerCase().includes(needle),
         )
       : list
-  const groups: [string, TaskItem[]][] = [
-    [`Scripts (${data.packageManager || 'npm'})`, shown(items.scripts)],
-    [`Make (${data.makefile})`, shown(items.make)],
-    ['My tasks', shown(items.user)],
+  // Sections: id (what is folded), title, the tasks the filter shows
+  const groups: [string, string, TaskItem[]][] = [
+    [
+      'script',
+      `Scripts (${data.packageManager || 'npm'})`,
+      shown(items.scripts),
+    ],
+    ['make', `Make (${data.makefile})`, shown(items.make)],
+    ...items.tools.map((g): [string, string, TaskItem[]] => [
+      g.id,
+      g.title,
+      shown(g.items),
+    ]),
+    ['user', 'My tasks', shown(items.user)],
   ]
-  const total = items.scripts.length + items.make.length + items.user.length
+  const total =
+    items.scripts.length +
+    items.make.length +
+    items.user.length +
+    items.tools.reduce((n, g) => n + g.items.length, 0)
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="tasks-view">
@@ -198,6 +219,11 @@ export function TasksView({
       {data.tooLarge.length > 0 && (
         <Banner variant="warning" live={false}>
           Too large to read: {data.tooLarge.join(', ')}
+        </Banner>
+      )}
+      {data.unreadable.length > 0 && (
+        <Banner variant="warning" live={false}>
+          Could not read: {data.unreadable.join(', ')}
         </Banner>
       )}
       {total > 0 && (
@@ -213,41 +239,61 @@ export function TasksView({
         </div>
       )}
       {total === 0 ? (
-        <ViewMessage>
-          No package.json script, Makefile target or task of yours here
-        </ViewMessage>
+        <ViewMessage>No task found in this folder</ViewMessage>
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
           {groups
-            .filter(([, list]) => list.length > 0)
-            .map(([title, list]) => (
-              <section key={title} aria-label={title}>
-                <h3 className="bg-surface px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-fg-muted">
-                  {title}
-                </h3>
-                <ul>
-                  {list.map((item) => (
-                    <TaskRow
-                      key={item.key}
-                      item={item}
-                      run={runs[item.key]}
-                      starting={starting === item.key}
-                      sending={sending === item.key}
-                      canSend={canSend}
-                      onRun={() => void onRun(item)}
-                      onOpen={() => {
-                        const r = runs[item.key]
-                        openTab?.(r.tabId, r.paneId)
-                      }}
-                      onSend={() => onSend(item, runs[item.key], data.root)}
-                    />
-                  ))}
-                </ul>
-              </section>
-            ))}
+            .filter(([, , list]) => list.length > 0)
+            .map(([id, title, list]) => {
+              // A filter shows every section with a match
+              const open = !!needle || !isCollapsed(id)
+              return (
+                <section key={id} aria-label={title}>
+                  <h3>
+                    <button
+                      type="button"
+                      aria-expanded={open}
+                      disabled={!!needle}
+                      onClick={() => toggle(id)}
+                      className="flex w-full items-center gap-1.5 bg-surface px-3 py-1 text-left text-[11px] font-medium uppercase tracking-wide text-fg-muted hover:text-fg pointer-coarse:min-h-touch"
+                    >
+                      <ChevronDown
+                        size={12}
+                        aria-hidden="true"
+                        className={`shrink-0 transition-transform duration-(--duration-fast) ease-standard ${open ? '' : '-rotate-90'}`}
+                      />
+                      <span className="min-w-0 flex-1 truncate">{title}</span>
+                      <span className="shrink-0 tabular-nums">
+                        {list.length}
+                      </span>
+                    </button>
+                  </h3>
+                  {open && (
+                    <ul>
+                      {list.map((item) => (
+                        <TaskRow
+                          key={item.key}
+                          item={item}
+                          run={runs[item.key]}
+                          starting={starting === item.key}
+                          sending={sending === item.key}
+                          canSend={canSend}
+                          onRun={() => void onRun(item)}
+                          onOpen={() => {
+                            const r = runs[item.key]
+                            openTab?.(r.tabId, r.paneId)
+                          }}
+                          onSend={() => onSend(item, runs[item.key], data.root)}
+                        />
+                      ))}
+                    </ul>
+                  )}
+                </section>
+              )
+            })}
           {data.skipped > 0 && (
             <p className="px-3 py-2 text-[12px] text-fg-muted">
-              {data.skipped} left out: a name Termote does not run
+              {data.skipped} left out
             </p>
           )}
         </div>

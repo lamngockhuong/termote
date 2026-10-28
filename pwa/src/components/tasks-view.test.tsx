@@ -72,8 +72,20 @@ const tasks = (over: Partial<PaneTasks> = {}): PaneTasks => ({
   runs: {},
   skipped: 0,
   tooLarge: [],
+  toolGroups: [],
+  unreadable: [],
   ...over,
 })
+
+const GO = {
+  tool: 'go',
+  label: 'Go',
+  file: 'go.mod',
+  tasks: [
+    { name: 'vet', command: 'go vet ./...' },
+    { name: 'gen', command: 'go generate', detail: 'stringer -type=X' },
+  ],
+}
 
 const AGENT: Session = {
   id: 'agent-tab',
@@ -194,11 +206,7 @@ describe('TasksView listing', () => {
     await show(
       tasks({ scripts: [], makeTargets: [], userTasks: [], makefile: '' }),
     )
-    expect(
-      screen.getByText(
-        'No package.json script, Makefile target or task of yours here',
-      ),
-    ).toBeInTheDocument()
+    expect(screen.getByText('No task found in this folder')).toBeInTheDocument()
     expect(screen.queryByLabelText('Filter tasks')).toBeNull()
     expect(screen.queryByTestId('task-row')).toBeNull()
   })
@@ -232,14 +240,13 @@ describe('TasksView listing', () => {
     expect(
       screen.getByText('Too large to read: package.json, Makefile'),
     ).toBeInTheDocument()
-    expect(
-      screen.getByText('3 left out: a name Termote does not run'),
-    ).toBeInTheDocument()
+    expect(screen.getByText('3 left out')).toBeInTheDocument()
   })
 
   it('shows neither the banner nor the note when there is nothing to tell', async () => {
     await show()
     expect(screen.queryByText(/Too large to read/)).toBeNull()
+    expect(screen.queryByText(/Could not read/)).toBeNull()
     expect(screen.queryByText(/left out/)).toBeNull()
   })
 
@@ -256,6 +263,81 @@ describe('TasksView listing', () => {
     expect(screen.getByRole('region', { name: 'My tasks' })).toBeInTheDocument()
     fireEvent.change(box, { target: { value: '' } })
     expect(screen.getAllByTestId('task-row')).toHaveLength(4)
+  })
+
+  it('shows each tool group after Make and before My tasks', async () => {
+    await show(tasks({ toolGroups: [GO] }))
+    const titles = screen
+      .getAllByRole('region')
+      .map((r) => r.getAttribute('aria-label'))
+    expect(titles).toEqual([
+      'Scripts (pnpm)',
+      'Make (Makefile)',
+      'Go (go.mod)',
+      'My tasks',
+    ])
+    const go = screen.getByRole('region', { name: 'Go (go.mod)' })
+    expect(within(go).getByText('go vet ./...')).toBeInTheDocument()
+    // What the file says it runs, under the line that runs it
+    expect(within(go).getByText('stringer -type=X')).toBeInTheDocument()
+    // The filter reads tool tasks too
+    fireEvent.change(screen.getByLabelText('Filter tasks'), {
+      target: { value: 'stringer' },
+    })
+    expect(screen.getAllByTestId('task-row')).toHaveLength(1)
+  })
+
+  it('lists only tool tasks when the folder has nothing else', async () => {
+    await show(
+      tasks({
+        scripts: [],
+        makeTargets: [],
+        userTasks: [],
+        makefile: '',
+        toolGroups: [GO],
+      }),
+    )
+    expect(screen.getAllByTestId('task-row')).toHaveLength(2)
+    expect(screen.queryByText('No task found in this folder')).toBeNull()
+  })
+
+  it('warns about files it could not read', async () => {
+    await show(tasks({ unreadable: ['pyproject.toml', 'justfile'] }))
+    expect(
+      screen.getByText('Could not read: pyproject.toml, justfile'),
+    ).toBeInTheDocument()
+  })
+
+  it('folds a section from its header, and keeps it folded on this device', async () => {
+    localStorage.clear()
+    const view = await show(tasks({ toolGroups: [GO] }))
+    const header = screen.getByRole('button', { name: /Go \(go\.mod\)/ })
+    expect(header).toHaveAttribute('aria-expanded', 'true')
+    expect(header).toHaveTextContent('2')
+    fireEvent.click(header)
+    expect(header).toHaveAttribute('aria-expanded', 'false')
+    const go = screen.getByRole('region', { name: 'Go (go.mod)' })
+    expect(within(go).queryByTestId('task-row')).toBeNull()
+    expect(screen.getAllByTestId('task-row')).toHaveLength(4)
+    view.unmount()
+    await show(tasks({ toolGroups: [GO] }))
+    expect(
+      screen.getByRole('button', { name: /Go \(go\.mod\)/ }),
+    ).toHaveAttribute('aria-expanded', 'false')
+    // A filter opens every section with a match
+    fireEvent.change(screen.getByLabelText('Filter tasks'), {
+      target: { value: 'vet' },
+    })
+    const open = screen.getByRole('button', { name: /Go \(go\.mod\)/ })
+    expect(open).toHaveAttribute('aria-expanded', 'true')
+    expect(open).toBeDisabled()
+    expect(screen.getAllByTestId('task-row')).toHaveLength(1)
+    fireEvent.change(screen.getByLabelText('Filter tasks'), {
+      target: { value: '' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Go \(go\.mod\)/ }))
+    expect(screen.getAllByTestId('task-row')).toHaveLength(6)
+    localStorage.clear()
   })
 
   it('reads the list again from Refresh', async () => {
@@ -346,6 +428,7 @@ describe('TasksView Run', () => {
     ],
     ['shell_busy', "The tab's shell is busy"],
     ['task_not_found', 'This task is no longer in the folder'],
+    ['unknown_task_kind', 'This task is no longer known: reload the list'],
     ['tab_gone', "The task's tab was closed"],
     ['invalid_task', 'This task cannot be run: edit it in Settings'],
     ['invalid_root', "This folder's name cannot be used for a task"],
@@ -374,12 +457,29 @@ describe('TasksView Run', () => {
     })
   })
 
-  it('task_not_found reads the list again', async () => {
-    mockRun.mockRejectedValue(new RequestError(404, 'task_not_found', 'gone'))
+  it.each([
+    [404, 'task_not_found'],
+    [400, 'unknown_task_kind'],
+  ])('%s %s reads the list again', async (status, code) => {
+    mockRun.mockRejectedValue(new RequestError(status, code, 'gone'))
     const p = await show()
     clickIn(rowOf('test'), 'Run test')
     await waitFor(() => expect(mockTasks).toHaveBeenCalledTimes(2))
     await waitFor(() => expect(p.notify).toHaveBeenCalled())
+  })
+
+  it('runs a tool task by its tool and names its tab', async () => {
+    mockRun.mockResolvedValue(START)
+    const p = await show(tasks({ toolGroups: [GO] }))
+    clickIn(rowOf('vet'), 'Run vet')
+    await waitFor(() => expect(p.notify).toHaveBeenCalled())
+    expect(mockRun).toHaveBeenCalledWith('%1', {
+      kind: 'go',
+      name: 'vet',
+      root: '/home/u/proj',
+      newTab: false,
+    })
+    expect(notifyCall(p).message).toBe('Running in tab task:go:vet')
   })
 
   it('task_running offers a run in a new tab', async () => {

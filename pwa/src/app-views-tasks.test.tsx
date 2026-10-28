@@ -22,6 +22,8 @@ vi.mock('./hooks/use-mux-api', async (orig) => ({
     runs: {},
     skipped: 0,
     tooLarge: [],
+    toolGroups: [],
+    unreadable: [],
   }),
 }))
 

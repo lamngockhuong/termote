@@ -1,12 +1,13 @@
 ---
 title: Task
-description: Chạy script trong package.json, target của Makefile và lệnh của riêng bạn trong một tab, rồi gửi đầu ra của lần chạy thất bại cho agent
+description: Chạy script trong package.json, target của Makefile, task của Gradle, Maven, Python, Cargo, Go, just, Task, Composer, Deno và lệnh của riêng bạn trong một tab, rồi gửi đầu ra của lần chạy thất bại cho agent
 ---
 
 import { Aside } from "@astrojs/starlight/components";
 
 View **Tasks** của một pane liệt kê những gì thư mục của nó có thể chạy: các script trong
-`package.json`, các target trong Makefile và các task bạn tự lưu. **Run** chạy một task trong tab riêng,
+`package.json`, các target trong Makefile, task của các công cụ build và trình chạy task khác (Gradle,
+Maven, PDM, Hatch, Poe the Poet, Cargo, Go, just, Task, Composer, Deno) và các task bạn tự lưu. **Run** chạy một task trong tab riêng,
 ngay tại thư mục của pane. Khi lần chạy thất bại, **Send to agent** chuyển đầu ra của nó cho một agent viết
 code chỉ bằng một chạm, bạn không phải chép từ terminal ra.
 
@@ -23,16 +24,44 @@ chính thư mục của pane. Termote chỉ đọc file để lập danh sách, 
 - **Target của make** lấy từ Makefile mà make sẽ đọc (`GNUmakefile`, rồi `makefile`, rồi `Makefile`).
   Chỉ những target được viết ra tường minh mới có mặt: biến, target đặc biệt như `.PHONY`, quy tắc
   dạng mẫu hay target dựng từ biến đều bị bỏ qua. Termote không bao giờ chạy `make` để tìm chúng.
+- **Công cụ khác**: mỗi công cụ một mục, lấy từ các file trong bảng dưới đây.
 - **My tasks** là các task lưu trong [Settings](#task-của-riêng-bạn), có mặt ở mọi pane.
 
+Bấm vào tiêu đề để gập một mục; mục đó giữ nguyên trạng thái gập trên thiết bị này. Khi bạn gõ vào ô
+lọc, mọi mục có kết quả khớp đều được mở ra.
+
+### Task lấy từ đâu
+
+| Mục          | File được đọc trong thư mục                                                | Task được liệt kê                                                                           | Lệnh chạy                                                            |
+| ------------ | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Gradle       | `build.gradle.kts`, không có thì `build.gradle`, không có nữa thì `settings.gradle(.kts)` | `build`, `test`, `check`, `clean`, `assemble`; thêm `run` khi dùng plugin `application`; thêm `bootRun` khi dùng plugin Spring Boot | `./gradlew <task>` nếu thư mục có `gradlew`, nếu không thì `gradle`  |
+| Maven        | `pom.xml`                                                                  | `clean`, `compile`, `test`, `package`, `verify`, `install`                                  | `./mvnw <phase>` nếu thư mục có `mvnw`, nếu không thì `mvn`          |
+| PDM          | `pyproject.toml`, `[tool.pdm.scripts]`                                     | từng script, kèm tên script `pre_` và `post_` của nó                                        | `pdm run <name>`                                                     |
+| Hatch        | `hatch.toml` nếu có, nếu không thì `[tool.hatch.envs]` trong `pyproject.toml` | script của từng môi trường: `name` với môi trường `default`, còn lại là `env:name`          | `hatch run <env>:<name>`                                             |
+| Poe the Poet | `pyproject.toml`, `[tool.poe.tasks]`                                       | từng task, trừ task có tên bắt đầu bằng `_`                                                 | `poetry run poe` nếu có `poetry.lock`, `uv run poe` nếu có `uv.lock`, nếu không thì `poe` |
+| Cargo        | `Cargo.toml`, `.cargo/config`, không có thì `.cargo/config.toml`           | `build`, `check`, `test`, `clippy`, `fmt`; thêm `run` khi có `src/main.rs` hoặc `[[bin]]`; từng `[alias]` | `cargo <name>`                                                       |
+| Go           | `go.mod`                                                                   | `build`, `test`, `vet` cho `./...`; thêm `run .` khi có `main.go`                           | `go <command>`                                                       |
+| just         | `justfile` hoặc `.justfile`, viết hoa hay thường đều được                  | từng recipe không cần đối số                                                                | `just <recipe>`                                                      |
+| Task         | `Taskfile.yml` (và các tên khác mà go-task đọc, theo đúng thứ tự của nó)   | từng task, trừ task có `internal: true`                                                     | `task <name>`                                                        |
+| Composer     | `composer.json`, `scripts`                                                 | từng script                                                                                 | `composer run-script <name>`                                         |
+| Deno         | `deno.json`, không có thì `deno.jsonc`, `tasks`                            | từng task                                                                                   | `deno task <name>`                                                   |
+
+Termote không chạy Gradle hay Maven để tìm task, nên danh sách chỉ gồm các task chuẩn, đọc từ file
+build nằm ngay trong thư mục (không đọc project con). Recipe just ở chế độ riêng (`_name` hoặc
+`[private]`) hay cần một đối số không có giá trị mặc định sẽ bị bỏ ra. Alias của Cargo trùng tên một
+lệnh Cargo cũng bị bỏ, vì Cargo sẽ chạy lệnh của chính nó; script Hatch có `:` trong tên cũng vậy. Trên
+Windows, khi chạy từ PowerShell, Gradle và Maven dùng `.\gradlew.bat` và `.\mvnw.cmd`.
+
 Tên script hay target có dấu cách hoặc ký tự mà shell sẽ hiểu theo nghĩa khác (`;`, `$`, dấu nháy) bị
-bỏ ra, và danh sách cho biết bỏ bao nhiêu cái. `package.json` hay Makefile lớn hơn 1 MB thì không được
-đọc. Chỉ file nằm ngay trong thư mục mới tính: `package.json` của một package con trong repo chứa nhiều
+bỏ ra, và danh sách cho biết bỏ bao nhiêu cái. File lớn hơn 1 MB (256 KB với file TOML) thì không được
+đọc. File không đọc được theo định dạng của công cụ (JSON hay TOML sai, hoặc có cả `justfile` lẫn
+`.justfile`) được ghi tên ở đầu danh sách. Chỉ file nằm ngay trong thư mục mới tính: `package.json` của một package con trong repo chứa nhiều
 package không có trong danh sách.
 
 ## Chạy task
 
-**Run** mở một tab tên `task:<name>` tại thư mục của pane rồi gõ lệnh vào shell của tab, y như bạn tự
+**Run** mở một tab tên `task:<name>` (với task của công cụ khác thì là `task:<tool>:<name>`, chẳng hạn
+`task:cargo:test`) tại thư mục của pane rồi gõ lệnh vào shell của tab, y như bạn tự
 gõ: `PATH`, `nvm` và các thiết lập shell khác của bạn vẫn áp dụng. Nút **Open** trên thông báo chuyển sang
 tab đó.
 

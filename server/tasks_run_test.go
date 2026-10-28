@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -20,6 +21,7 @@ type taskFakeMux struct {
 	mu         sync.Mutex
 	shell      string
 	tabs       int
+	tabNames   []string
 	tabErr     error
 	busy       map[string]bool
 	gone       map[string]bool
@@ -52,6 +54,7 @@ func (m *taskFakeMux) NewTaskTab(_ context.Context, groupID, name, dir string) (
 		return taskTab{}, errors.New("unexpected tab request " + groupID + " " + name + " " + dir)
 	}
 	m.tabs++
+	m.tabNames = append(m.tabNames, name)
 	n := string(rune('0' + m.tabs))
 	m.text["%"+n] = "$ "
 	return taskTab{TabID: "t" + n, PaneID: "p" + n, Target: "%" + n}, nil
@@ -280,7 +283,9 @@ func TestTaskRunRefuses(t *testing.T) {
 		{map[string]any{"kind": "make", "name": "test"}, "task_not_found", 404},
 		{map[string]any{"kind": "user", "id": "0123456789abcdef"}, "task_not_found", 404},
 		{map[string]any{"kind": "user", "id": "../tasks"}, "task_not_found", 404},
-		{map[string]any{"kind": "shell", "name": "test", "command": "rm -rf ~"}, "invalid_task", 400},
+		{map[string]any{"kind": "shell", "name": "test", "command": "rm -rf ~"}, "unknown_task_kind", 400},
+		{map[string]any{"kind": "gradle", "name": "test"}, "task_not_found", 404},
+		{map[string]any{"kind": "maven", "name": "x y"}, "task_not_found", 404},
 	} {
 		if code, body := fx.run(t, tc.body); code != tc.st || body["code"] != tc.code {
 			t.Errorf("%v = %d %v", tc.body, code, body)
@@ -699,4 +704,102 @@ func TestTaskRunsLockKeyAfterDrop(t *testing.T) {
 		t.Fatal("the lock taken is not the map's")
 	}
 	second()
+}
+
+// A tool's task runs as the listed line, in a tab named by kind and name; a
+// name its group does not list is refused, and a kind no tool has.
+func TestTaskRunToolTask(t *testing.T) {
+	fx := newTaskFixture(t)
+	writeFile(t, filepath.Join(fx.root, "go.mod"), "module x\n")
+	writeFile(t, filepath.Join(fx.root, "pyproject.toml"), "[tool.hatch.envs.default.scripts]\ntest = \"pytest\"\n")
+	_, list := listPaneTasks(t, fx.h, nil)
+	groups := list["toolGroups"].([]any)
+	if len(groups) != 2 || groups[0].(map[string]any)["tool"] != "hatch" || list["unreadable"] == nil {
+		t.Fatalf("groups = %v", list)
+	}
+	code, body := fx.run(t, map[string]any{"kind": "go", "name": "test"})
+	if code != 200 {
+		t.Fatalf("run = %d %v", code, body)
+	}
+	nonce := body["nonce"].(string)
+	if typed := fx.m.typedLines(); len(typed) != 1 || typed[0] != "%1 "+buildTaskLine(shellPOSIX, "go 'test' './...'", nonce) {
+		t.Fatalf("typed %q", typed)
+	}
+	code, body = fx.run(t, map[string]any{"kind": "hatch", "name": "test"})
+	if code != 200 || fx.m.typedLines()[1] != "%2 "+buildTaskLine(shellPOSIX, "hatch run 'default:test'", body["nonce"].(string)) {
+		t.Fatalf("hatch = %d %v %q", code, body, fx.m.typedLines())
+	}
+	if !slices.Equal(fx.m.tabNames, []string{"task:go:test", "task:hatch:test"}) {
+		t.Errorf("tab names = %v", fx.m.tabNames)
+	}
+	_, list = listPaneTasks(t, fx.h, nil)
+	if r := list["runs"].(map[string]any)["go:test"]; r == nil {
+		t.Errorf("runs = %v", list["runs"])
+	}
+	for _, tc := range []struct {
+		body map[string]any
+		code string
+	}{
+		{map[string]any{"kind": "go", "name": "lint"}, "task_not_found"},
+		{map[string]any{"kind": "cargo", "name": "build"}, "task_not_found"},
+		{map[string]any{"kind": "", "name": "test"}, "unknown_task_kind"},
+	} {
+		if _, body := fx.run(t, tc.body); body["code"] != tc.code {
+			t.Errorf("%v = %v", tc.body, body)
+		}
+	}
+	if len(fx.m.typedLines()) != 2 {
+		t.Errorf("typed %q", fx.m.typedLines())
+	}
+}
+
+// No TOML decode slot in time: the file is named unreadable, the scripts
+// and targets still listed.
+func TestTaskListTOMLBusy(t *testing.T) {
+	fx := newTaskFixture(t)
+	writeFile(t, filepath.Join(fx.root, "pyproject.toml"), "a = 1")
+	for range tomlDecodeSlots {
+		tomlSlots <- struct{}{}
+	}
+	defer func() {
+		for range tomlDecodeSlots {
+			<-tomlSlots
+		}
+	}()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	rec := serve(fx.h, apiRequest("GET", "/api/mux/panes/0/tasks", "").WithContext(ctx))
+	body := decodeBody(t, rec)
+	if rec.Code != 200 || len(body["scripts"].([]any)) != 2 || body["unreadable"].([]any)[0] != "pyproject.toml" {
+		t.Errorf("list = %d %s", rec.Code, rec.Body)
+	}
+}
+
+// A task resolved with a kind taskCommand does not know types nothing.
+func TestTaskTypeUnknownKind(t *testing.T) {
+	shortTasks(t)
+	m := newTaskFake(t, t.TempDir())
+	api := &tasksAPI{input: newAgentInput()}
+	err := api.typeTask(context.Background(), m, "%0", resolvedTask{Kind: "nope", Name: "x"}, "0123456789abcdef", true)
+	if !errors.Is(err, errTaskUnknownKind) || len(m.typedLines()) != 0 {
+		t.Errorf("err = %v, typed %q", err, m.typedLines())
+	}
+}
+
+// A script or target runs without the other tools' files read: a TOML
+// decode with no slot left does not hold it up.
+func TestTaskRunScriptSkipsTools(t *testing.T) {
+	fx := newTaskFixture(t)
+	writeFile(t, filepath.Join(fx.root, "pyproject.toml"), "[tool.poe.tasks]\nx = \"y\"\n")
+	for range tomlDecodeSlots {
+		tomlSlots <- struct{}{}
+	}
+	defer func() {
+		for range tomlDecodeSlots {
+			<-tomlSlots
+		}
+	}()
+	if code, body := fx.run(t, map[string]any{"kind": "make", "name": "build"}); code != 200 {
+		t.Fatalf("make = %d %v", code, body)
+	}
 }
