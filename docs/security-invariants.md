@@ -847,10 +847,23 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   same link and image rules. Tags are paired in one pass per level and nesting past 32 levels
   stays text, so a crafted file cannot stall the page. Anything else, an unclosed `<details>`
   included, stays text.
-- **Mermaid diagrams** (`pwa/src/utils/mermaid-render.ts`, `mermaid-worker.ts`,
+- **Mermaid diagrams** (`pwa/src/utils/mermaid-render.ts`, `mermaid-sandbox.ts`, `mermaid-worker.ts`,
   `mermaid-block.tsx`, through `fenced-code.tsx`): a `mermaid` fenced block of a previewed Markdown
   file or of a Chat view message (agent text, as untrusted as a file) is drawn in the PWA
-  only, by Pele (pinned to an exact version) in a module worker, and shown as an `<img>` whose
+  only, by Pele (pinned to an exact version) in a worker that a hidden
+  `<iframe sandbox="allow-scripts">` of `/assets/mermaid-sandbox-<hash>.html` starts from a `blob:` URL, so code
+  a flaw in Pele lets a diagram run lives in an opaque origin: it reads no cookie (and none of
+  the server's goes with its requests), nothing of the app, and its page's own policy (see
+  Content-Security-Policy) refuses every connection; the page treats each message of the frame
+  as untrusted (only from `frame.contentWindow`, objects only, an unknown error read as
+  `render_failed`), posts to it with `'*'` (its origin is opaque) and the frame relays only from
+  its `parent`, copying the three request fields. The sandbox page is one inline script (built by
+  `pwa/vite.config.ts`: the relay with the worker's IIFE bundle, every diagram type of Pele, as a
+  string; `</script` and `<!--` escaped inside it), since an opaque origin can load nothing from
+  the server; named by its content, it is cached as an asset (a year, immutable) and by the
+  service worker at runtime (`mermaid`), left out of the precache and never the navigation
+  fallback (`/assets/` is on its denylist).
+  Shown as an `<img>` whose
   `src` is a `data:image/svg+xml` URL, so no script runs, no link navigates and nothing it names
   loads; the SVG string never enters the DOM, and nothing is added to `body`. The worker gets the
   source and the page's font list only; its render options are fixed there and never taken from
@@ -863,12 +876,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `PeleError.code` leaves the worker, never its message (it quotes the diagram). Dark colors go
   into the SVG's root `style` as `--pele-*` values (an `<img>` sees no page CSS). Never rendered
   (shown as code with a reason): over 50 KB (checked before the worker is asked) or over Pele's
-  limits; a syntax error; a diagram type Pele does not know; 10 s past the moment its type
-  finished loading (the worker is terminated, the next diagram starts a new one); the worker or
-  a chunk failing to load, or not loaded within 30 s. One diagram in the worker at a time, only
-  near the viewport, 50 results cached by source and theme. The worker and Pele's chunks are
-  built under `assets/shiki/`, left out of the precache (`globIgnores`) and cached at runtime
-  (`shiki` cache) once fetched. Export (`utils/mermaid-export.ts`, `mermaid-export.tsx`): the PNG
+  limits; a syntax error; a diagram type Pele does not know; 10 s past the moment drawing started
+  (the iframe is removed, which ends its worker; the next diagram starts a new one); the sandbox
+  saying it is broken (its worker failed to start or load), not ready 2 s after its page loaded
+  (an error or sign-in page), or not ready and answering within 30 s. One diagram in the sandbox
+  at a time, only near the viewport, 50 results cached by source and theme. Export (`utils/mermaid-export.ts`, `mermaid-export.tsx`): the PNG
   is that same `data:` URL decoded into an `Image` and drawn on a detached canvas (filled with
   the theme's background, at most 2×, 16 M pixels and 16 384 px a side), the SVG file that URL
   decoded in JS: Pele's output under the fixed options above as `svgToDataUrl` writes it,
@@ -1846,6 +1858,13 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   name or IPv4) + `https://api.github.com`, `worker-src`/`manifest-src 'self'`,
   `object-src 'none'`, `base-uri`/`form-action 'self'`, `frame-ancestors 'none'`; plus
   `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`.
+  The Mermaid sandbox page (exactly the path of a served `assets/mermaid-sandbox-*.html`, each
+  hashed at startup; another spelling of the path or another name gets the app's policy, never
+  framed) gets its own instead (`sandboxPolicy`): `default-src 'none'`,
+  `script-src` its one inline script's `sha256` (`'none'` without the page), `worker-src blob:`,
+  `base-uri`/`form-action 'none'`, `frame-ancestors 'self'` with `X-Frame-Options: SAMEORIGIN`,
+  and `sandbox allow-scripts`, so it is an opaque origin even opened on its own. Its iframe's
+  navigation is same-site and carries the session cookie like any page load.
   `isolationHeaders`, wrapped outside `hostGuard` so its 403 carries them too, adds
   `Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Resource-Policy: same-origin` and a
   `Permissions-Policy` turning off camera, microphone, geolocation, payment, USB, serial, HID,

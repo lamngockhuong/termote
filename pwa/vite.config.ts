@@ -1,8 +1,10 @@
 /// <reference types="vitest" />
+import { createHash } from 'node:crypto'
 import { cpSync, createReadStream, existsSync, statSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, normalize, sep } from 'node:path'
-import { defineConfig, type Plugin } from 'vite'
+import { fileURLToPath } from 'node:url'
+import { build, defineConfig, type Plugin, type Rolldown } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import pkg from './package.json'
@@ -95,6 +97,84 @@ function pdfjsAssets(): Plugin {
   }
 }
 
+// The Mermaid sandbox page, the page mermaid-render.ts frames with
+// sandbox="allow-scripts". Its origin is opaque, so it can load nothing from
+// the server (no cookie goes with its requests, and a module or import()
+// would need CORS): it is one inline script, the sandbox's code with the
+// worker's bundle (mermaid-worker.ts, every diagram type of Pele) as a
+// string it starts from a blob: URL. The server allows that script by its
+// hash (server/security_headers.go). Built as assets/mermaid-sandbox-<hash>
+// .html, named by its content, so it is cached like every asset (a year,
+// and by the service worker once fetched); in dev it is SANDBOX_DEV.
+const SANDBOX_DEV = 'assets/mermaid-sandbox-dev.html'
+const PWA_ROOT = dirname(fileURLToPath(import.meta.url))
+
+// One classic script of entry and all it imports
+async function iife(entry: string, define: Record<string, string>) {
+  const out = (await build({
+    configFile: false,
+    root: PWA_ROOT,
+    logLevel: 'warn',
+    define: { 'process.env.NODE_ENV': '"production"', ...define },
+    build: {
+      write: false,
+      lib: { entry: join(PWA_ROOT, entry), formats: ['iife'], name: 'termote' },
+    },
+  })) as Rolldown.RolldownOutput[]
+  const chunk = out[0].output.find((o) => o.type === 'chunk')
+  if (!chunk) throw new Error(`no script built from ${entry}`)
+  return chunk.code
+}
+
+async function sandboxPage(): Promise<string> {
+  const worker = await iife('src/utils/mermaid-worker.ts', {})
+  const code = await iife('src/mermaid-sandbox-main.ts', {
+    __MERMAID_WORKER__: JSON.stringify(worker),
+  })
+  // Never let the HTML parser end or reopen the script early: both only
+  // occur inside the worker's string, where \/ and \! read as / and !.
+  const safe = code.replace(/<\/(script)/gi, '<\\/$1').replace(/<!--/g, '<\\!--')
+  return `<!doctype html><meta charset="utf-8"><title>Mermaid</title><script>${safe}</script>\n`
+}
+
+function mermaidSandbox(): Plugin {
+  let built: { fileName: string; html: string } | undefined
+  let dev: Promise<string> | undefined
+  return {
+    name: 'termote-mermaid-sandbox',
+    // Built before the app, which names its URL (__MERMAID_SANDBOX_URL__)
+    async config(_, { command }) {
+      let fileName = SANDBOX_DEV
+      if (command === 'build') {
+        const html = await sandboxPage()
+        const hash = createHash('sha256').update(html).digest('hex').slice(0, 10)
+        fileName = `assets/mermaid-sandbox-${hash}.html`
+        built = { fileName, html }
+      }
+      return { define: { __MERMAID_SANDBOX_URL__: JSON.stringify(`/${fileName}`) } }
+    },
+    // Dev: built on the first request, and again after a failed build
+    configureServer(server) {
+      server.middlewares.use(`/${SANDBOX_DEV}`, (_req, res, next) => {
+        dev ??= sandboxPage()
+        dev.then(
+          (html) => {
+            res.setHeader('Content-Type', 'text/html; charset=utf-8')
+            res.end(html)
+          },
+          (err) => {
+            dev = undefined
+            next(err)
+          },
+        )
+      })
+    },
+    generateBundle() {
+      if (built) this.emitFile({ type: 'asset', fileName: built.fileName, source: built.html })
+    },
+  }
+}
+
 export default defineConfig({
   define: {
     __APP_NAME__: JSON.stringify(pkg.name),
@@ -104,6 +184,7 @@ export default defineConfig({
   plugins: [
     react(),
     pdfjsAssets(),
+    mermaidSandbox(),
     VitePWA({
       // Disable SW in development
       selfDestroying: process.env.NODE_ENV !== 'production',
@@ -147,13 +228,15 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         // Every module worker and the chunks it imports (the highlighter, its
-        // themes and grammars; the CSV workers; Pele and its diagram types):
+        // themes and grammars; the CSV workers):
         // fetched (then cached) the first time they are needed, never
         // installed upfront.
         // Likewise the editor's languages and Vim mode (assets/cm/), and the
         // document viewers with pdf.js's maps, fonts and decoders
         // (assets/doc/).
+        // The Mermaid sandbox page (Pele inline) likewise.
         globIgnores: [
+          '**/assets/mermaid-sandbox-*.html',
           '**/assets/shiki/**',
           '**/assets/cm/**',
           '**/assets/doc/**',
@@ -167,9 +250,18 @@ export default defineConfig({
             options: {
               cacheName: 'shiki',
               // Hashed names: a new build adds entries, so old ones expire
-              // Grammars, themes and Pele's diagram types: about 115 files;
-              // the document workers (pdf.js, SheetJS, mammoth)
+              // Grammars and themes: about 100 files; the document workers
+              // (pdf.js, SheetJS, mammoth)
               expiration: { maxEntries: 300, maxAgeSeconds: 30 * 24 * 3600 },
+            },
+          },
+          {
+            urlPattern: ({ url }) => url.pathname.startsWith('/assets/mermaid-sandbox-'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'mermaid',
+              // One page per build
+              expiration: { maxEntries: 2, maxAgeSeconds: 30 * 24 * 3600 },
             },
           },
           {
@@ -196,8 +288,11 @@ export default defineConfig({
         // cached app shell in their place would leave a signed-out device
         // with no way to sign in. /login/link takes the CLI's sign-in link
         // (a POST); a GET that lands there gets the server's page too.
+        // The Mermaid sandbox page (its iframe is a navigation), like any
+        // asset, is never the app shell.
         navigateFallbackDenylist: [
           /^\/api\//,
+          /^\/assets\//,
           /^\/login(\?|$)/,
           /^\/pair(\?|$)/,
           /^\/login\/link(\?|$)/,
@@ -211,8 +306,7 @@ export default defineConfig({
     },
   },
   worker: {
-    // A module worker, so each grammar or diagram type it imports is a chunk
-    // of its own
+    // A module worker, so each grammar it imports is a chunk of its own
     format: 'es',
     rolldownOptions: {
       output: {
@@ -238,6 +332,7 @@ export default defineConfig({
         'src/**/*.d.ts',
         'src/vite-env.d.ts',
         'src/main.tsx',
+        'src/mermaid-sandbox-main.ts',
       ],
       thresholds: {
         lines: 100,

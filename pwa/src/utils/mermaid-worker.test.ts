@@ -1,16 +1,13 @@
-import { PeleError } from 'pele/lazy'
+import { PeleError } from 'pele'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import {
   type DrawReply,
   drawOptions,
   failureOf,
   handleRequest,
-  isLoadError,
   MAX_CHARS,
   MAX_EDGES,
 } from './mermaid-worker'
-
-const LOAD_ERROR = 'Failed to fetch dynamically imported module: /assets/x.js'
 
 // jsdom has no canvas: Pele measures text with its own width table, as it
 // does in a worker without OffscreenCanvas
@@ -51,26 +48,17 @@ describe('failureOf', () => {
     expect(failureOf(new PeleError('x', code))).toBe(reason)
   })
 
-  it('maps a chunk that failed to load, and anything else', () => {
-    expect(failureOf(new TypeError(LOAD_ERROR))).toBe('load_failed')
+  it('maps anything else to render_failed', () => {
+    expect(failureOf(new PeleError('x', 'internal' as never))).toBe(
+      'render_failed',
+    )
     expect(failureOf(new Error('boom'))).toBe('render_failed')
     expect(failureOf('boom')).toBe('render_failed')
   })
 })
 
-describe('isLoadError', () => {
-  it.each([
-    [new TypeError(LOAD_ERROR), true],
-    [new TypeError('Importing a module script failed.'), true],
-    [new Error('Parse error on line 1'), false],
-    ['Failed to fetch dynamically imported module', false],
-  ])('%s', (e, expected) => {
-    expect(isLoadError(e)).toBe(expected)
-  })
-})
-
 describe('handleRequest', () => {
-  it('draws a diagram once its type is loaded', async () => {
+  it('draws a diagram, saying first that it started', async () => {
     const onStart = vi.fn()
     const reply = await handleRequest(
       { id: 3, source: 'flowchart LR\n  A --> B', fontFamily: 'sans-serif' },

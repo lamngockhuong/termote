@@ -20,17 +20,17 @@ func TestInlineScriptHashes(t *testing.T) {
 	theme := "\n      (function() { document.documentElement.classList.add('dark') })();\n    "
 	page := `<head><script>` + theme + `</script>` +
 		`<script type="module" crossorigin src="/assets/index.js"></script></head>`
-	got := inlineScriptHashes(fstest.MapFS{"index.html": {Data: []byte(page)}})
+	got := inlineScriptHashes(fstest.MapFS{"index.html": {Data: []byte(page)}}, "index.html")
 	// Only the script without attributes, hashed byte for byte.
 	if len(got) != 1 || got[0] != scriptHash(theme) {
 		t.Errorf("hashes = %v, want [%s]", got, scriptHash(theme))
 	}
 	// Several scripts; CRLF line ends hash as the browser sees them, LF.
 	crlf := "<script>a()\r\nb()</script><script>c()\rd()</script>"
-	if got := inlineScriptHashes(fstest.MapFS{"index.html": {Data: []byte(crlf)}}); len(got) != 2 || got[0] != scriptHash("a()\nb()") || got[1] != scriptHash("c()\nd()") {
+	if got := inlineScriptHashes(fstest.MapFS{"index.html": {Data: []byte(crlf)}}, "index.html"); len(got) != 2 || got[0] != scriptHash("a()\nb()") || got[1] != scriptHash("c()\nd()") {
 		t.Errorf("CRLF hashes = %v", got)
 	}
-	if got := inlineScriptHashes(fstest.MapFS{}); got != nil {
+	if got := inlineScriptHashes(fstest.MapFS{}, "index.html"); got != nil {
 		t.Errorf("no index.html: %v", got)
 	}
 }
@@ -114,6 +114,49 @@ func TestServeSecurityHeaders(t *testing.T) {
 		req.Host = "localhost:7680"
 		req.Header.Set("Sec-Fetch-Mode", "navigate")
 		checkIsolationHeaders(t, "GET "+path, serve(h, req).Header())
+	}
+}
+
+// The Mermaid sandbox page runs only its own inline script and a blob:
+// worker, loads nothing, is sandboxed by its own policy, and only this
+// origin may frame it; every other page still refuses framing.
+func TestServeMermaidSandboxHeaders(t *testing.T) {
+	cfg := testConfig(t)
+	script := "var termote=(()=>{})()"
+	const page = "/assets/mermaid-sandbox-0123456789.html"
+	if err := os.MkdirAll(cfg.PWADir+"/assets", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cfg.PWADir+page, []byte("<!doctype html><script>"+script+"</script>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	h, err := newServeHandler(cfg, &fakeMux{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("GET", "http://localhost:7680"+page, nil)
+	req.Host = "localhost:7680"
+	req.SetBasicAuth(cfg.User, cfg.Pass)
+	rec := serve(h, req)
+	hd := rec.Header()
+	want := "default-src 'none'; script-src " + scriptHash(script) + "; worker-src blob:; base-uri 'none'; form-action 'none'; frame-ancestors 'self'; sandbox allow-scripts"
+	if rec.Code != http.StatusOK || hd.Get("Content-Security-Policy") != want || hd.Get("X-Frame-Options") != "SAMEORIGIN" {
+		t.Errorf("sandbox page (%d): %q, X-Frame-Options %q", rec.Code, hd.Get("Content-Security-Policy"), hd.Get("X-Frame-Options"))
+	}
+	checkIsolationHeaders(t, "sandbox page", hd)
+	// Another spelling of the path, or another file of that name, is served
+	// as any page: never framed.
+	for _, path := range []string{"/x/.." + page, "/assets/mermaid-sandbox-other.html"} {
+		req = httptest.NewRequest("GET", "http://localhost:7680"+path, nil)
+		req.Host = "localhost:7680"
+		req.SetBasicAuth(cfg.User, cfg.Pass)
+		if hd := serve(h, req).Header(); hd.Get("X-Frame-Options") != "DENY" || !strings.Contains(hd.Get("Content-Security-Policy"), "frame-ancestors 'none'") {
+			t.Errorf("%s: %v", path, hd)
+		}
+	}
+	// Without the page built, no script runs there.
+	if got := sandboxPolicy(nil); !strings.Contains(got, "script-src 'none';") {
+		t.Errorf("no sandbox page: %s", got)
 	}
 }
 

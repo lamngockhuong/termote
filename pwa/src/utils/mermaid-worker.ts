@@ -1,15 +1,11 @@
 /// <reference lib="webworker" />
 // Draws a Mermaid diagram with Pele off the main thread. Pele has no time
-// limit of its own: mermaid-render.ts gives up after a timeout and ends this
-// worker. Each diagram type is a chunk of its own, fetched the first time a
-// diagram of that type is drawn.
-import {
-  detectType,
-  load,
-  PeleError,
-  type RenderOptions,
-  renderAsync,
-} from 'pele/lazy'
+// limit of its own: mermaid-render.ts gives up after a timeout and removes
+// the sandboxed iframe that started this worker (mermaid-sandbox.ts), which
+// ends it. The worker runs from a blob: URL of that iframe's opaque origin,
+// so it is one classic script holding every diagram type: an opaque origin
+// can import nothing from the server.
+import { PeleError, type RenderOptions, render } from 'pele'
 
 // Why a diagram is shown as code instead (MermaidFailure in mermaid-render.ts)
 export type DrawFailure =
@@ -31,8 +27,8 @@ export type DrawReply =
   | { id: number; svg: string }
   | { id: number; error: DrawFailure }
 
-// Sent once the diagram's type is loaded, as drawing starts: the timeout
-// counts from here, so a slow download is not taken for a stuck diagram.
+// Sent as drawing starts: the timeout counts from here, so a slow load of
+// the sandbox is not taken for a stuck diagram.
 export interface DrawStarted {
   id: number
   started: true
@@ -54,17 +50,6 @@ export function drawOptions(fontFamily: string): RenderOptions {
   }
 }
 
-// A module that could not be fetched (offline, or a chunk gone after an
-// update), as Chromium, Firefox and Safari word it
-export function isLoadError(e: unknown): boolean {
-  return (
-    e instanceof Error &&
-    /dynamically imported module|Importing a module script failed/i.test(
-      e.message,
-    )
-  )
-}
-
 // Only a code leaves the worker: Pele's messages quote the diagram
 export function failureOf(e: unknown): DrawFailure {
   if (e instanceof PeleError) {
@@ -78,7 +63,7 @@ export function failureOf(e: unknown): DrawFailure {
         return 'unsupported'
     }
   }
-  return isLoadError(e) ? 'load_failed' : 'render_failed'
+  return 'render_failed'
 }
 
 export async function handleRequest(
@@ -86,11 +71,8 @@ export async function handleRequest(
   onStart: () => void = () => {},
 ): Promise<DrawReply> {
   try {
-    // The chunk of the diagram's type first (none for an unknown type:
-    // renderAsync reports it), so the timeout covers drawing alone
-    await load(detectType(req.source))
     onStart()
-    const { svg } = await renderAsync(req.source, drawOptions(req.fontFamily))
+    const { svg } = render(req.source, drawOptions(req.fontFamily))
     return { id: req.id, svg }
   } catch (e) {
     return { id: req.id, error: failureOf(e) }

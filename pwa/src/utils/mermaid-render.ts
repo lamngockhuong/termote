@@ -1,15 +1,14 @@
 // Mermaid diagrams of the Markdown preview, drawn by Pele in
-// mermaid-worker.ts and shown as images. The worker and Pele stay out of the
-// main bundle and the precache: they are fetched the first time a diagram
-// scrolls into view. What Pele draws never reaches the page: the SVG string
-// becomes a data: URL shown in an <img>, where no script runs, no link
-// navigates and nothing loads.
-import type {
-  DrawFailure,
-  DrawReply,
-  DrawRequest,
-  DrawStarted,
-} from './mermaid-worker'
+// mermaid-worker.ts and shown as images. Pele runs in a worker started by a
+// hidden iframe sandbox="allow-scripts" (mermaid-sandbox.ts): its origin is
+// opaque, so a flaw in Pele that a file exploits runs where it can send no
+// cookie of the server's and reach nothing of the app. The sandbox page, and
+// Pele inside it, stay out of the main bundle and the precache: it is loaded
+// the first time a diagram scrolls into view. What Pele draws never reaches
+// the page: the SVG string becomes a data: URL shown in an <img>, where no
+// script runs, no link navigates and nothing loads. Every message from the
+// sandbox is checked as coming from that code.
+import type { DrawFailure, DrawReply, DrawRequest } from './mermaid-worker'
 
 export type MermaidTheme = 'light' | 'dark'
 
@@ -28,13 +27,30 @@ export type MermaidResult =
   | ({ ok: true } & MermaidImage)
   | { ok: false; reason: MermaidFailure }
 
-// UTF-8 bytes of a diagram's source; past this the worker is never asked
+// UTF-8 bytes of a diagram's source; past this the sandbox is never asked
 export const MERMAID_MAX_BYTES = 50_000
-// From the moment the worker starts drawing a diagram (its type loaded):
-// past this the worker is ended, and the next diagram starts a new one.
+// From the moment the worker starts drawing a diagram: past this the
+// sandbox is removed, which ends the worker, and the next diagram starts a
+// new one.
 export const MERMAID_TIMEOUT = 10_000
-// Loading the worker and the diagram's type on a slow network
+// Loading the sandbox page, Pele with it, on a slow network
 export const MERMAID_LOAD_TIMEOUT = 30_000
+// The sandbox page loaded but did not say it is ready (an error page, a
+// signed-out session): its ready message and the load event can come in
+// either order, so it gets this long before the diagram falls back to code.
+export const MERMAID_READY_WAIT = 2_000
+declare const __MERMAID_SANDBOX_URL__: string
+// Named by its content (vite.config.ts), served with a policy of its own
+// (server/security_headers.go)
+export const MERMAID_SANDBOX_URL = __MERMAID_SANDBOX_URL__
+
+const FAILURES: ReadonlySet<string> = new Set<DrawFailure>([
+  'too_large',
+  'unsupported',
+  'syntax',
+  'render_failed',
+  'load_failed',
+])
 const CACHE_SIZE = 50
 
 // Pele's colors are CSS variables with its light palette as fallbacks; an
@@ -87,17 +103,25 @@ function fail(reason: MermaidFailure): MermaidResult {
   return { ok: false, reason }
 }
 
-// One diagram in the worker at a time; the rest wait here, so a block gone
-// meanwhile (its signal aborted) is dropped before the worker sees it.
+// One diagram in the sandbox at a time; the rest wait here, so a block gone
+// meanwhile (its signal aborted) is dropped before the sandbox sees it.
 interface Job {
   source: string
   theme: MermaidTheme
   done: (result: MermaidResult) => void
   timer?: ReturnType<typeof setTimeout>
 }
-let worker: Worker | undefined
+interface Sandbox {
+  frame: HTMLIFrameElement
+  ready: boolean
+  onMessage: (e: MessageEvent) => void
+  readyTimer?: ReturnType<typeof setTimeout>
+}
+let sandbox: Sandbox | undefined
 let nextId = 0
-let running: { id: number; job: Job } | undefined
+let running:
+  | { id: number; job: Job; req: DrawRequest; sent: boolean }
+  | undefined
 const queue: Job[] = []
 
 function finish(job: Job, result: MermaidResult) {
@@ -105,53 +129,114 @@ function finish(job: Job, result: MermaidResult) {
   job.done(result)
 }
 
-// Ends the worker (stuck in a diagram, or broken): the diagram it held
-// fails with reason, and the next one starts a new worker.
-function endWorker(reason: MermaidFailure) {
-  worker?.terminate()
-  worker = undefined
+function removeSandbox() {
+  if (!sandbox) return
+  window.removeEventListener('message', sandbox.onMessage)
+  clearTimeout(sandbox.readyTimer)
+  sandbox.frame.remove()
+  sandbox = undefined
+}
+
+// Ends the sandbox and its worker (stuck in a diagram, or broken): the
+// diagram it held fails with reason, and the next one starts a new sandbox.
+function endSandbox(reason: MermaidFailure) {
+  removeSandbox()
   const current = running
   running = undefined
   if (current) finish(current.job, fail(reason))
   runNext()
 }
 
-function getWorker(): Worker {
-  if (!worker) {
-    const w = new Worker(new URL('./mermaid-worker.ts', import.meta.url), {
-      type: 'module',
-    })
-    w.onmessage = (e: MessageEvent<DrawReply | DrawStarted>) => {
-      if (!running || e.data.id !== running.id) return
-      const { job } = running
-      if ('started' in e.data) {
-        clearTimeout(job.timer)
-        job.timer = setTimeout(() => endWorker('timeout'), MERMAID_TIMEOUT)
-        return
-      }
-      // A chunk that failed to load may stay failed in this worker: the
-      // next diagram gets a new one
-      if ('error' in e.data && e.data.error === 'load_failed') {
-        endWorker('load_failed')
-        return
-      }
-      running = undefined
-      finish(job, settle(e.data, job))
-      runNext()
-    }
-    // The worker or a chunk it imports could not load (offline, or gone
-    // after an update); a late error of a worker already ended is ignored
-    w.onerror = () => {
-      if (worker === w) endWorker('load_failed')
-    }
-    worker = w
-  }
-  return worker
+// Sends the running diagram once the sandbox is ready
+function send() {
+  if (!sandbox?.ready || !running || running.sent) return
+  running.sent = true
+  sandbox.frame.contentWindow?.postMessage(running.req, '*')
 }
 
-// The worker's answer as a result, cached when it is an image
+function isObject(data: unknown): data is Record<string, unknown> {
+  return typeof data === 'object' && data !== null
+}
+
+// A message of the sandbox: its state, or the worker's answer about the
+// running diagram
+function onSandboxMessage(data: unknown) {
+  if (!isObject(data)) return
+  if (data.ready === true) {
+    const s = sandbox as Sandbox
+    s.ready = true
+    clearTimeout(s.readyTimer)
+    send()
+    return
+  }
+  if (data.broken === true) {
+    endSandbox('load_failed')
+    return
+  }
+  if (!running || data.id !== running.id) return
+  const { job } = running
+  if (data.started === true) {
+    clearTimeout(job.timer)
+    job.timer = setTimeout(() => endSandbox('timeout'), MERMAID_TIMEOUT)
+    return
+  }
+  const reply = replyOf(data)
+  if (!reply) return
+  running = undefined
+  finish(job, settle(reply, job))
+  runNext()
+}
+
+// The sandbox's answer as a reply, or undefined when it is none
+function replyOf(data: Record<string, unknown>): DrawReply | undefined {
+  const id = data.id as number
+  if (typeof data.svg === 'string') return { id, svg: data.svg }
+  if (typeof data.error !== 'string') return undefined
+  const error = FAILURES.has(data.error)
+    ? (data.error as DrawFailure)
+    : 'render_failed'
+  return { id, error }
+}
+
+function getSandbox(): Sandbox {
+  if (!sandbox) {
+    const frame = document.createElement('iframe')
+    frame.setAttribute('sandbox', 'allow-scripts')
+    frame.setAttribute('aria-hidden', 'true')
+    frame.tabIndex = -1
+    frame.hidden = true
+    frame.title = 'Mermaid renderer'
+    frame.src = MERMAID_SANDBOX_URL
+    const s: Sandbox = {
+      frame,
+      ready: false,
+      onMessage: (e: MessageEvent) => {
+        if (sandbox === s && e.source === frame.contentWindow)
+          onSandboxMessage(e.data)
+      },
+    }
+    frame.addEventListener('load', () => {
+      if (sandbox === s && !s.ready)
+        s.readyTimer = setTimeout(
+          () => endSandbox('load_failed'),
+          MERMAID_READY_WAIT,
+        )
+    })
+    window.addEventListener('message', s.onMessage)
+    document.body.append(frame)
+    sandbox = s
+  }
+  return sandbox
+}
+
+// The sandbox's answer as a result, cached when it is an image
 function settle(reply: DrawReply, job: Job): MermaidResult {
-  if ('error' in reply) return fail(reply.error)
+  if ('error' in reply) {
+    // A worker that failed to load stays failed: the next diagram gets a
+    // new sandbox
+    if (reply.error === 'load_failed') removeSandbox()
+    return fail(reply.error)
+  }
   const image = svgToDataUrl(reply.svg, job.theme)
   if (!image) return fail('render_failed')
   remember(cacheKey(job.source, job.theme), image)
@@ -168,14 +253,18 @@ function runNext() {
       continue
     }
     const id = ++nextId
-    running = { id, job }
-    job.timer = setTimeout(() => endWorker('load_failed'), MERMAID_LOAD_TIMEOUT)
     const req: DrawRequest = {
       id,
       source: job.source,
       fontFamily: getComputedStyle(document.body).fontFamily,
     }
-    getWorker().postMessage(req)
+    running = { id, job, req, sent: false }
+    job.timer = setTimeout(
+      () => endSandbox('load_failed'),
+      MERMAID_LOAD_TIMEOUT,
+    )
+    getSandbox()
+    send()
   }
 }
 
@@ -192,7 +281,6 @@ export function renderMermaid(
   if (new TextEncoder().encode(source).length > MERMAID_MAX_BYTES) {
     return Promise.resolve(fail('too_large'))
   }
-  if (typeof Worker === 'undefined') return Promise.resolve(fail('load_failed'))
   if (signal.aborted) return Promise.reject(signal.reason)
   return new Promise((resolve, reject) => {
     const onAbort = () => {
@@ -270,11 +358,10 @@ export function svgToDataUrl(
   }
 }
 
-// For tests: end the worker, forget the cache and anything pending.
+// For tests: remove the sandbox, forget the cache and anything pending.
 export function resetMermaid() {
-  worker?.terminate()
-  worker = undefined
-  // Only the diagram in the worker has a timer
+  removeSandbox()
+  // Only the diagram in the sandbox has a timer
   clearTimeout(running?.job.timer)
   running = undefined
   queue.length = 0

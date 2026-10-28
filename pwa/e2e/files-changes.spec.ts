@@ -2056,8 +2056,40 @@ test.describe('files and changes views', () => {
       expect(page.url()).toBe(url)
       expect(dialogs).toEqual([])
       expect(requests.filter((u) => u.includes(LEAK))).toEqual([])
-      expect(requests.filter((u) => !u.startsWith(new URL(url).origin))).toEqual([])
+      // The sandbox's own worker, from a blob: URL of its opaque origin
+      expect(requests.filter((u) => !u.startsWith(new URL(url).origin) && !u.startsWith('blob:null/'))).toEqual([])
       expect(await diagramNodes(page)).toBe(0)
+    })
+
+    test('the sandbox runs in an opaque origin that cannot read the API', async ({ page, cspViolations }) => {
+      writeFileSync(path.join(dir(), 'sandbox.md'), `# S\n\n${fence(FLOW)}`)
+      const panel = await open(page, 'sandbox.md')
+      await expect(diagrams(panel)).toHaveCount(1, { timeout: 15000 })
+      const iframe = page.locator('iframe[src^="/assets/mermaid-sandbox-"]')
+      await expect(iframe).toHaveAttribute('sandbox', 'allow-scripts')
+      const frame = page.frames().find((f) => new URL(f.url()).pathname.startsWith('/assets/mermaid-sandbox-'))
+      expect(frame).toBeDefined()
+      const seen = await frame?.evaluate(async () => ({
+        origin: self.origin,
+        cookie: (() => {
+          try {
+            return document.cookie
+          } catch {
+            return 'refused'
+          }
+        })(),
+        api: await fetch('/api/mux/snapshot', { credentials: 'include' }).then(
+          (r) => `read ${r.status}`,
+          () => 'blocked',
+        ),
+      }))
+      expect(seen).toEqual({ origin: 'null', cookie: 'refused', api: 'blocked' })
+      // Refused by the sandbox page's own policy first (connect-src falls
+      // back to default-src 'none'); those, and only those, are expected
+      const api = cspViolations.filter((v) => v.includes('/api/mux/snapshot'))
+      expect(api.length).toBeGreaterThan(0)
+      expect(cspViolations.filter((v) => !api.includes(v))).toEqual([])
+      cspViolations.length = 0
     })
 
     // Pele draws $$...$$ only through a math typesetter, which the worker
@@ -2090,8 +2122,9 @@ test.describe('files and changes views', () => {
       expect(await diagramNodes(page)).toBe(0)
     })
 
-    test('the diagram worker loads only for a file with a diagram', async ({ page }) => {
-      // Scripts only: the directory's own name is in the API URLs
+    test('the diagram sandbox loads only for a file with a diagram', async ({ page }) => {
+      // Assets only (scripts, the sandbox page): the directory's own name is
+      // in the API URLs
       const requests: string[] = []
       page.on('request', (r) => {
         if (new URL(r.url()).pathname.startsWith('/assets/')) requests.push(r.url())
