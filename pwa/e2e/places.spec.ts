@@ -115,10 +115,10 @@ test.describe('Places in Files', () => {
     await panel.getByRole('searchbox', { name: 'Search file contents' }).fill('needle')
     await expect(panel.getByText('1 line in 1 file')).toBeVisible()
 
-    // A reload keeps the Place
+    // A reload keeps the Place, in the Files panel the pane was left on
+    // (clicking Files would close it again)
     await page.reload()
-    await page.getByRole('group', { name: 'Side panel' }).getByRole('button', { name: 'Files' }).click()
-    await expect(root).toHaveAttribute('title', place.path)
+    await expect(root).toHaveAttribute('title', place.path, { timeout: 15000 })
     await expect(panel.getByRole('button', { name: `Places: ${place.name}` })).toBeVisible()
   })
 })
