@@ -794,3 +794,34 @@ func TestWebpPixels(t *testing.T) {
 		}
 	}
 }
+
+// A view-only client never takes the last free slot, on either route a
+// viewer reads through: previews, downloads and hashes of a full client keep
+// one, however many reads a viewer holds.
+func TestFilesRawKeepsASlotForFull(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	dir := t.TempDir()
+	gitInit(t, dir)
+	writeFile(t, filepath.Join(dir, "a.png"), string(colorImage(t, "png", color.White)))
+	writeFile(t, filepath.Join(dir, "a.pdf"), testPDF)
+	mux := http.NewServeMux()
+	f := registerFilesRoutes(mux, &filesFakeMux{dir: dir, files: true}, hostAllowlist{}, nil)
+	for i := 0; i < rawMaxRunning-1; i++ {
+		f.rawSlots <- struct{}{}
+	}
+	for _, path := range []string{"raw?path=a.png", "document?path=a.pdf"} {
+		req := apiRequest("GET", "/api/mux/panes/0/files/"+path, "")
+		req = req.WithContext(withAuth(req.Context(), authInfo{Kind: authDevice, Role: roleView, DeviceID: "d1"}))
+		if code, key := rawCode(t, serve(mux, req)); code != 429 || key != "busy" {
+			t.Errorf("view %s on the last slot = %d %q", path, code, key)
+		}
+		if len(f.rawSlots) != rawMaxRunning-1 {
+			t.Errorf("%s: slots held = %d, want %d", path, len(f.rawSlots), rawMaxRunning-1)
+		}
+		if rec := serve(mux, apiRequest("GET", "/api/mux/panes/0/files/"+path, "")); rec.Code != 200 {
+			t.Errorf("full %s on the last slot = %d", path, rec.Code)
+		}
+	}
+}

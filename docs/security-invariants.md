@@ -774,7 +774,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   (PNG/JPEG header, a GIF's largest frame with its offset, a WebP's first chunk; 413
   `too_many_pixels`), else 415 `not_image`, a Git LFS pointer 415
   `lfs_pointer`, a sensitive name without `reveal=1` 403 `sensitive`. 4 at a time server-wide
-  (429 `busy`), 2-minute write deadline, `Cross-Origin-Resource-Policy: same-origin`,
+  (429 `busy`), of which a view-only client never takes the last free one (`takeRawSlot`;
+  downloads and hashes, full only, share them), 2-minute write deadline, `Cross-Origin-Resource-Policy: same-origin`,
   `Cache-Control: no-store`; an SVG also gets a second CSP
   (`sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:`) and
   `Content-Disposition: attachment`.
@@ -1404,7 +1405,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `not_document`; an OLE compound file (a password-protected or IRM Office file) → 415 `encrypted`;
   a Git LFS pointer → 415 `lfs_pointer`. Over 30 MiB → 413 `too_large` with `size` in the body
   (`documentTooLargeError`). It shares the 4 `files/raw` slots (429 `busy`, "too many files at
-  once"). Sent by `writeDownload` (256 KiB chunks, 2-minute idle deadline each, 30 minutes in
+  once"), taken through `takeRawSlot` like `files/raw`, so a view-only client never holds the last
+  one. Sent by `writeDownload` (256 KiB chunks, 2-minute idle deadline each, 30 minutes in
   all) with its headers and a second CSP `sandbox; default-src 'none'` on every answer. One
   `audit: document path="<relative>" size by via` line before the bytes, none for a refusal
 - **Office and PDF previews** (`pwa/src/components/document-preview.tsx` and its viewers): the

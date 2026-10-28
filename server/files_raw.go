@@ -198,16 +198,31 @@ func (f *filesAPI) handleRaw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer cancel()
-	select {
-	case f.rawSlots <- struct{}{}:
-		defer func() { <-f.rawSlots }()
-	default:
+	if !f.takeRawSlot(r) {
 		f.error(w, "files raw", errRawBusy)
 		return
 	}
+	defer func() { <-f.rawSlots }()
 	if err := f.raw(w, req, r.URL.Query()); err != nil {
 		f.error(w, "files raw", err)
 	}
+}
+
+// takeRawSlot takes one of the raw slots without waiting, for a route a
+// view-only client reads through too. Such a client never holds the last
+// one: the downloads and hashes of a full one share them. The caller gives
+// the slot back.
+func (f *filesAPI) takeRawSlot(r *http.Request) bool {
+	select {
+	case f.rawSlots <- struct{}{}:
+	default:
+		return false
+	}
+	if isViewOnly(r) && len(f.rawSlots) == cap(f.rawSlots) {
+		<-f.rawSlots
+		return false
+	}
+	return true
 }
 
 // raw serves one image: the worktree file (Files), or with side one version
