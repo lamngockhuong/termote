@@ -156,7 +156,8 @@ func (m *herdrMux) Caps() Caps {
 	reorder := herdrCanReorder(v, herdrStartGOOS)
 	return Caps{ClientSideSelect: true, Scroll: true, PaneText: true, DriveSize: true, AgentChat: true, Files: true, Groups: true,
 		AgentStart: start, AgentStartCodex: start && agentStartKind("codex"),
-		Worktrees: herdrCanWorktrees(v, herdrStartGOOS), ReorderTabs: reorder, ReorderGroups: reorder}
+		Worktrees: herdrCanWorktrees(v, herdrStartGOOS), ReorderTabs: reorder, ReorderGroups: reorder,
+		PaneLayout: herdrCanPaneLayout(v, herdrStartGOOS)}
 }
 
 // herdrStartGOOS is the OS the worktree gate, a start's idle check
@@ -1539,7 +1540,7 @@ func (m *herdrMux) requirePane(ctx context.Context, id string) (Size, error) {
 	}
 	size, ok := v.sizes[id]
 	if !ok {
-		return Size{}, inputError("unknown pane")
+		return Size{}, errUnknownPane
 	}
 	return size, nil
 }
@@ -1548,6 +1549,9 @@ func (m *herdrMux) requirePane(ctx context.Context, id string) (Size, error) {
 // between the check and the call) into client errors.
 func herdrInputError(err error) error {
 	var he *herdrError
+	if errors.As(err, &he) && he.Code == "pane_not_found" {
+		return errUnknownPane
+	}
 	if errors.As(err, &he) && strings.HasSuffix(he.Code, "_not_found") {
 		return inputError(strings.ReplaceAll(he.Code, "_", " "))
 	}
@@ -1820,8 +1824,7 @@ func (m *herdrMux) AgentStartState(ctx context.Context, paneID, name, kind strin
 		return startExited, nil
 	case elapsed >= agentStartSettle && (a.Agent == nil || *a.Agent == ""):
 		idle, err := m.paneIdleShell(ctx, paneID)
-		var ie inputError
-		if errors.As(err, &ie) {
+		if paneMissing(err) {
 			return startExited, nil // the pane is gone
 		}
 		if err != nil {

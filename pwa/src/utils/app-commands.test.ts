@@ -19,6 +19,13 @@ function context(over: Partial<AppCommandContext> = {}): AppCommandContext {
     canFullscreen: true,
     previousTab: 'a',
     nextTab: 'c',
+    paneLayout: true,
+    canSwapNext: true,
+    desktop: true,
+    splitPane: vi.fn(),
+    zoomPane: vi.fn(),
+    swapNextPane: vi.fn(),
+    resizePane: vi.fn(),
     openPalette: vi.fn(),
     changeView: vi.fn(),
     showTerminal: vi.fn(),
@@ -256,5 +263,66 @@ describe('buildAppCommands', () => {
       command(ctx, `theme.${t}`).run()
       expect(ctx.setTheme).toHaveBeenLastCalledWith(t)
     }
+  })
+})
+
+describe('pane layout commands', () => {
+  const ids = [
+    'pane.splitRight',
+    'pane.splitDown',
+    'pane.zoom',
+    'pane.swapNext',
+    'pane.resizeLeft',
+    'pane.resizeRight',
+    'pane.resizeUp',
+    'pane.resizeDown',
+  ]
+
+  it('act on the pane shown, under Panes', () => {
+    const ctx = context()
+    for (const id of ids) {
+      const c = command(ctx, id)
+      expect(c.category).toBe('Panes')
+      expect(c.disabledReason).toBeUndefined()
+      expect(c.restoreFocus).toBe(true)
+      c.run()
+    }
+    expect(ctx.splitPane).toHaveBeenNthCalledWith(1, 'right')
+    expect(ctx.splitPane).toHaveBeenNthCalledWith(2, 'down')
+    expect(ctx.zoomPane).toHaveBeenCalledTimes(1)
+    expect(ctx.swapNextPane).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(ctx.resizePane).mock.calls).toEqual([
+      ['left'],
+      ['right'],
+      ['up'],
+      ['down'],
+    ])
+    expect(command(ctx, 'pane.resizeUp').title).toBe('Resize pane up')
+  })
+
+  it('stay listed with the reason they cannot run', () => {
+    const view = context({ readOnly: true })
+    const none = context({ paneLayout: false })
+    for (const id of ids) {
+      expect(command(view, id).disabledReason).toBe('View only')
+      expect(command(none, id).disabledReason).toBe(
+        'Not available for this backend',
+      )
+    }
+    expect(
+      command(context({ canSwapNext: false }), 'pane.swapNext').disabledReason,
+    ).toBe('No pane after this one')
+    expect(
+      command(context({ canSwapNext: false }), 'pane.zoom').disabledReason,
+    ).toBeUndefined()
+  })
+
+  it('offer resizing on a desktop only, and stay in a focus window', () => {
+    const phone = buildAppCommands(context({ desktop: false })).map((c) => c.id)
+    expect(phone).toContain('pane.zoom')
+    expect(phone.some((id) => id.startsWith('pane.resize'))).toBe(false)
+    expect(
+      command(context({ focus: true }), 'pane.splitRight').disabledReason,
+    ).toBeUndefined()
   })
 })

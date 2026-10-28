@@ -85,6 +85,34 @@ On a view-only device the strip only shows the panes. To close a pane, click the
 name and confirm; a window's last pane is closed by closing the tab. psmux (Windows) shows one
 pane per window.
 
+### Pane layout
+
+The **Pane** menu in the header (the grid icon) changes the layout of the tab on screen, acting on
+the pane shown:
+
+- **Split right** and **Split down** open a new pane beside or under it, in its directory.
+- **Zoom** makes the pane fill its tab; choose it again to bring the other panes back.
+- **Swap with next pane** trades places with the next pane of the pane strip.
+- **Resize left/right/up/down** (desktop only) moves the pane's edge by 5 cells. The menu stays
+  open, so you can click again.
+- **Close pane** closes the pane shown after a confirmation, once the tab has another pane.
+
+Split, zoom, swap and resize are also in the command palette, under **Panes**. The menu is not
+shown on a view-only device, nor on a backend without these actions: psmux (Windows), Herdr
+older than 0.9.3 or on Windows, and Zellij 0.45.0. The palette still lists the commands there, greyed out with the
+reason.
+
+The backends differ in a few ways:
+
+- **tmux**: a split leaves the focus where it was, so the pane shown stays the same. Zoom gives
+  the zoomed pane tmux's focus, for every client, your desktop's included.
+- **Herdr**: after a split, Termote shows the new pane; Herdr's own focus stays put. Zoom focuses
+  the pane in Herdr, for every client.
+- **Zellij**: after a split, Termote shows the new pane. Swap turns the panes of the tab around one
+  place, so the pane strip keeps its order while the panes move on screen. Zoom moves every client
+  viewing the tab, your own Zellij included, to the zoomed pane. Through the API, a split into a
+  directory other than the pane's own is refused (Zellij ignores it).
+
 ### Reordering tabs and workspaces
 
 Tabs keep the order they were made in until you move them, and Termote shows the order the
@@ -354,7 +382,11 @@ Sessions are managed via termote's `/api/mux/*` endpoints:
 | `/api/mux/tabs/{id}?key=`       | DELETE      | Remove tab (same `key` check) |
 | `/api/mux/tabs/{id}/move`       | POST        | Move a tab within its group (body: `{index}`; answers its new `id`) |
 | `/api/mux/groups/{id}/move`     | POST        | Move a Herdr workspace (body: `{index}`) |
-| `/api/mux/panes/{id}`           | DELETE      | Close a pane (Herdr and Zellij, else 501) |
+| `/api/mux/panes/{id}`           | DELETE      | Close a pane (psmux answers 501) |
+| `/api/mux/panes/{id}/split`     | POST        | Split a pane (body: `{direction: right\|down, cwd?}`; answers the new pane's `id`) |
+| `/api/mux/panes/{id}/zoom`      | POST        | Zoom a pane (body: `{mode: toggle\|on\|off}`) |
+| `/api/mux/panes/{id}/swap`      | POST        | Swap with a neighbour (body: `{direction: prev\|next}`; 409 `no_neighbor` past an end) |
+| `/api/mux/panes/{id}/resize`    | POST        | Resize (body: `{direction: left\|right\|up\|down, amount}`, 1–50 cells) |
 | `/api/mux/groups`               | POST        | Create a group (body: `{name, cwd}`) |
 | `/api/mux/groups/{id}`          | PATCH       | Rename a group (body: `{name}`) |
 | `/api/mux/groups/{id}`          | DELETE      | Close a group and everything in it |

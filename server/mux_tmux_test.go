@@ -596,9 +596,8 @@ func TestTmuxPaneDirChecksTheSession(t *testing.T) {
 	if dir, key, err := (tmuxMux{}).PaneDir(context.Background(), "$3:1"); err != nil || dir != "/srv/a:b" || key != "%5" {
 		t.Errorf("PaneDir($3:1) = %q, %q, %v", dir, key, err)
 	}
-	var ie inputError
 	for _, id := range []string{"1", "$4:1", "$3:0"} {
-		if _, _, err := (tmuxMux{}).PaneDir(context.Background(), id); !errors.As(err, &ie) {
+		if _, _, err := (tmuxMux{}).PaneDir(context.Background(), id); !errors.Is(err, errUnknownPane) {
 			t.Errorf("PaneDir(%q) = %v, want unknown pane", id, err)
 		}
 	}
@@ -610,7 +609,7 @@ func TestTmuxPaneDirChecksTheSession(t *testing.T) {
 	if _, _, err := (tmuxMux{}).PaneDir(context.Background(), "1"); !errors.Is(err, errUnsupported) {
 		t.Errorf("PaneDir without a path = %v", err)
 	}
-	if _, _, err := (tmuxMux{}).PaneDir(context.Background(), "shell"); !errors.As(err, &ie) {
+	if _, _, err := (tmuxMux{}).PaneDir(context.Background(), "shell"); !paneMissing(err) {
 		t.Errorf("PaneDir(shell) = %v", err)
 	}
 }

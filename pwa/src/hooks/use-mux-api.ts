@@ -103,6 +103,9 @@ export interface MuxSnapshot {
     // A tab can be moved within its group (/tabs/{id}/move): Herdr 0.8.0
     // or later, tmux 3.2 or later, not psmux nor Herdr on Windows.
     reorderTabs?: boolean
+    // A pane can be split, zoomed, swapped and resized (/panes/{id}/split,
+    // zoom, swap, resize)
+    paneLayout?: boolean
     // A group can be moved (/groups/{id}/move): Herdr only.
     reorderGroups?: boolean
     // What this client may do: "view" changes nothing on the server (every
@@ -624,6 +627,51 @@ export async function removeWorktree(
 export async function closePane(paneId: string): Promise<boolean> {
   const data = await write('DELETE', `/panes/${encodeURIComponent(paneId)}`)
   return data.ok === true
+}
+
+// Pane layout. A refusal throws RequestError with the server's code:
+// unknown_pane, unsupported, no_neighbor, busy, invalid_*.
+export type SplitDirection = 'right' | 'down'
+export type ZoomMode = 'toggle' | 'on' | 'off'
+export type SwapDirection = 'prev' | 'next'
+export type ResizeDirection = 'left' | 'right' | 'up' | 'down'
+
+const panePath = (id: string) => `/panes/${encodeURIComponent(id)}`
+
+// Opens a pane beside (right) or under (down) the pane, in cwd (the pane's
+// own directory when empty), and resolves to its id.
+export async function splitPane(
+  paneId: string,
+  direction: SplitDirection,
+  cwd = '',
+): Promise<string> {
+  const data = await groupWrite(
+    'POST',
+    `${panePath(paneId)}/split`,
+    cwd ? { direction, cwd } : { direction },
+  )
+  return data.id ?? ''
+}
+
+export async function zoomPane(paneId: string, mode: ZoomMode): Promise<void> {
+  await groupWrite('POST', `${panePath(paneId)}/zoom`, { mode })
+}
+
+// Swaps the pane with the one before or after it in the pane strip.
+export async function swapPane(
+  paneId: string,
+  direction: SwapDirection,
+): Promise<void> {
+  await groupWrite('POST', `${panePath(paneId)}/swap`, { direction })
+}
+
+// Moves the pane's edge amount cells (1-50) toward direction.
+export async function resizePane(
+  paneId: string,
+  direction: ResizeDirection,
+  amount: number,
+): Promise<void> {
+  await groupWrite('POST', `${panePath(paneId)}/resize`, { direction, amount })
 }
 
 export async function sendKeys(paneId: string, keys: string): Promise<boolean> {

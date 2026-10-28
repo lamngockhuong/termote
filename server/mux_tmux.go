@@ -306,7 +306,7 @@ func (tmuxMux) Caps() Caps {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	return Caps{CopyMode: true, AgentChat: agentProcSupported, Files: tmuxFilesSupported, Groups: true,
-		ReorderTabs: tmuxCanReorder(ctx), PaneText: !tmuxIsPsmux}
+		ReorderTabs: tmuxCanReorder(ctx), PaneText: !tmuxIsPsmux, PaneLayout: !tmuxIsPsmux}
 }
 
 // tmuxReorderMin is the first tmux whose move-window takes -b (insert
@@ -1355,37 +1355,49 @@ func (tmuxMux) RenameGroup(ctx context.Context, groupID, name string) error {
 // tmuxPaneRun runs a command on one pane (%N), a missing pane being a client
 // mistake.
 func tmuxPaneRun(ctx context.Context, args ...string) error {
-	_, err := tmuxCmd(ctx, args...).Output()
-	var ee *exec.ExitError
-	if errors.As(err, &ee) && strings.Contains(string(ee.Stderr), "can't find pane") {
-		return errTmuxUnknownPane
-	}
+	_, err := tmuxPaneOutput(ctx, args...)
 	return err
 }
 
-// errTmuxUnknownPane is a pane id that names no pane (any more).
-var errTmuxUnknownPane = inputError("unknown pane")
+// tmuxPaneOutput is tmuxPaneRun with the command's output.
+func tmuxPaneOutput(ctx context.Context, args ...string) (string, error) {
+	out, err := tmuxCmd(ctx, args...).Output()
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		switch stderr := string(ee.Stderr); {
+		case strings.Contains(stderr, "can't find pane"):
+			return "", errUnknownPane
+		case strings.Contains(stderr, "no space for new pane"):
+			return "", errNoRoom
+		}
+	}
+	return string(out), err
+}
 
 // tmuxPaneInfoFormat is what resolveTmuxPane reads of a pane: the session
 // name goes last, though tmux turns a ':' in it into '_'.
-const tmuxPaneInfoFormat = "#{session_id}:#{window_index}:#{pane_id}:#{window_panes}:#{session_name}"
+const tmuxPaneInfoFormat = "#{session_id}:#{window_index}:#{pane_id}:#{window_panes}:" +
+	"#{window_zoomed_flag}:#{pane_active}:#{session_name}"
 
 // tmuxResolvedPane is a pane as tmux reports it now.
 type tmuxResolvedPane struct {
 	sessionID, index, paneID string
 	// panes is how many panes its window has.
 	panes int
+	// zoomed: its window is zoomed (on its active pane); active: it is
+	// its window's active pane.
+	zoomed, active bool
 }
 
 // resolveTmuxPane reads the pane ref names, checked against tmux's reply.
 func resolveTmuxPane(ctx context.Context, ref tmuxPaneRef) (tmuxResolvedPane, error) {
 	out, err := tmuxCmd(ctx, "display-message", "-p", "-t", ref.target(), tmuxPaneInfoFormat).Output()
-	f := strings.SplitN(strings.TrimRight(string(out), "\r\n"), ":", 5)
-	if err != nil || len(f) != 5 || !ref.matches(f[0], f[4], f[1], f[2]) || !tmuxPaneIDRe.MatchString(f[2]) {
-		return tmuxResolvedPane{}, errTmuxUnknownPane
+	f := strings.SplitN(strings.TrimRight(string(out), "\r\n"), ":", 7)
+	if err != nil || len(f) != 7 || !ref.matches(f[0], f[6], f[1], f[2]) || !tmuxPaneIDRe.MatchString(f[2]) {
+		return tmuxResolvedPane{}, errUnknownPane
 	}
 	n, _ := strconv.Atoi(f[3])
-	return tmuxResolvedPane{sessionID: f[0], index: f[1], paneID: f[2], panes: n}, nil
+	return tmuxResolvedPane{sessionID: f[0], index: f[1], paneID: f[2], panes: n, zoomed: f[4] == "1", active: f[5] == "1"}, nil
 }
 
 // ClosePane kills one pane, never its window's last: that closes the tab,
@@ -1409,6 +1421,117 @@ func (tmuxMux) ClosePane(ctx context.Context, paneID string) error {
 	return tmuxPaneRun(ctx, "kill-pane", "-t", p.paneID)
 }
 
+// layoutPane reads the pane a layout action names. Not on psmux, whose pane
+// ids are not unique.
+func layoutPane(ctx context.Context, paneID string) (tmuxResolvedPane, error) {
+	if tmuxIsPsmux {
+		return tmuxResolvedPane{}, errPaneLayoutUnsupported
+	}
+	ref, ok := parseTmuxPaneID(paneID)
+	if !ok {
+		return tmuxResolvedPane{}, inputError("invalid pane id")
+	}
+	return resolveTmuxPane(ctx, ref)
+}
+
+// SplitPane opens a pane beside or under paneID with split-window -d, which
+// leaves the focus where it is, and returns its %N. Without cwd it starts in
+// paneID's directory (#{pane_current_path}, which tmux expands); a cwd goes
+// through tmuxLiteral, so tmux expands nothing in it.
+func (tmuxMux) SplitPane(ctx context.Context, paneID string, dir SplitDir, cwd string) (string, error) {
+	p, err := layoutPane(ctx, paneID)
+	if err != nil {
+		return "", err
+	}
+	flag := "-h"
+	if dir == SplitDown {
+		flag = "-v"
+	}
+	start := "#{pane_current_path}"
+	if cwd != "" {
+		start = tmuxLiteral(cwd)
+	}
+	out, err := tmuxPaneOutput(ctx, "split-window", "-d", flag, "-t", p.paneID, "-c", start, "-P", "-F", "#{pane_id}")
+	if err != nil {
+		return "", err
+	}
+	id := strings.TrimSpace(out)
+	if !tmuxPaneIDRe.MatchString(id) {
+		return "", fmt.Errorf("split-window printed %q", out)
+	}
+	return id, nil
+}
+
+// ZoomPane zooms paneID with resize-pane -Z, which flips the window's zoom.
+// A pane counts as zoomed when its window is zoomed and it is the active
+// pane (the one shown). Zooming another pane of a zoomed window unzooms it
+// first; zooming makes the pane active, for every client.
+func (tmuxMux) ZoomPane(ctx context.Context, paneID string, mode ZoomMode) error {
+	p, err := layoutPane(ctx, paneID)
+	if err != nil {
+		return err
+	}
+	zoomed := p.zoomed && p.active
+	want := mode == ZoomOn || mode == ZoomToggle && !zoomed
+	if want == zoomed {
+		return nil
+	}
+	if p.zoomed {
+		if err := tmuxPaneRun(ctx, "resize-pane", "-Z", "-t", p.paneID); err != nil || zoomed {
+			return err
+		}
+	}
+	return tmuxPaneRun(ctx, "resize-pane", "-Z", "-t", p.paneID)
+}
+
+// SwapPane swaps paneID with the pane before or after it in pane order.
+// tmux's own -U/-D wrap around and move the focus, so the neighbour is found
+// here, swap-pane -d swaps the two, and the pane that had the focus gets it
+// back.
+func (tmuxMux) SwapPane(ctx context.Context, paneID string, dir SwapDir) error {
+	p, err := layoutPane(ctx, paneID)
+	if err != nil {
+		return err
+	}
+	out, err := tmuxPaneOutput(ctx, "list-panes", "-t", p.paneID, "-F", "#{pane_id}:#{pane_active}")
+	if err != nil {
+		return err
+	}
+	var ids []string
+	active := ""
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		id, flag, _ := strings.Cut(strings.TrimRight(line, "\r"), ":")
+		if !tmuxPaneIDRe.MatchString(id) {
+			return fmt.Errorf("list-panes printed %q", out)
+		}
+		ids = append(ids, id)
+		if flag == "1" {
+			active = id
+		}
+	}
+	target, err := swapNeighbor(ids, p.paneID, dir)
+	if err != nil {
+		return err
+	}
+	if err := tmuxPaneRun(ctx, "swap-pane", "-d", "-s", p.paneID, "-t", target); err != nil {
+		return err
+	}
+	if active == "" {
+		return nil
+	}
+	return tmuxPaneRun(ctx, "select-pane", "-t", active)
+}
+
+// ResizePane moves paneID's edge amount cells with resize-pane.
+func (tmuxMux) ResizePane(ctx context.Context, paneID string, dir ResizeDir, amount int) error {
+	p, err := layoutPane(ctx, paneID)
+	if err != nil {
+		return err
+	}
+	flag := map[ResizeDir]string{ResizeLeft: "-L", ResizeRight: "-R", ResizeUp: "-U", ResizeDown: "-D"}[dir]
+	return tmuxPaneRun(ctx, "resize-pane", "-t", p.paneID, flag, strconv.Itoa(amount))
+}
+
 // Scroll is not offered: tmux history is scrolled in copy mode.
 func (tmuxMux) Scroll(context.Context, string, int) error { return errUnsupported }
 
@@ -1429,7 +1552,7 @@ func (tmuxMux) ReadText(ctx context.Context, paneID string, lines int, w io.Writ
 	out, err := tmuxCmd(ctx, "display-message", "-p", "-t", win.target(), "#{history_size}").Output()
 	if err != nil {
 		if tmuxMissing(err) {
-			return false, inputError("unknown pane")
+			return false, errUnknownPane
 		}
 		return false, fmt.Errorf("history size: %w", err)
 	}
@@ -1440,7 +1563,7 @@ func (tmuxMux) ReadText(ctx context.Context, paneID string, lines int, w io.Writ
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		if strings.Contains(stderr.String(), "can't find") {
-			return false, inputError("unknown pane")
+			return false, errUnknownPane
 		}
 		return false, fmt.Errorf("capture-pane: %w: %s", err, strings.TrimSpace(stderr.String()))
 	}
@@ -1621,7 +1744,7 @@ func tmuxAgentSession(ctx context.Context, paneID string, find func(string, int)
 		"#{session_id}:#{window_index}:#{pane_in_mode}:#{pane_id}:#{pane_pid}:#{session_name}").Output()
 	parts := strings.SplitN(strings.TrimRight(string(out), "\r\n"), ":", 6)
 	if err != nil || len(parts) != 6 || !w.matches(parts[0], parts[5], parts[1], parts[3]) {
-		return AgentSession{}, false, inputError("unknown pane")
+		return AgentSession{}, false, errUnknownPane
 	}
 	s, ok := tmuxPaneAgentWith(parts[3], parts[4], find)
 	s.InMode = parts[2] == "1"
@@ -1651,7 +1774,7 @@ func (tmuxMux) PaneDir(ctx context.Context, paneID string) (string, string, erro
 	parts := strings.SplitN(strings.TrimRight(string(out), "\r\n"), ":", 5)
 	if err != nil || len(parts) != 5 || !w.matches(parts[0], parts[3], parts[1], parts[2]) ||
 		!tmuxPaneIDRe.MatchString(parts[2]) {
-		return "", "", inputError("unknown pane")
+		return "", "", errUnknownPane
 	}
 	if parts[4] == "" || strings.HasPrefix(parts[4], "#{") {
 		return "", "", errUnsupported

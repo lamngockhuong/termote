@@ -64,17 +64,19 @@ type zellijTabInfo struct {
 
 // zellijPaneInfo is one pane of `list-panes -a -j`.
 type zellijPaneInfo struct {
-	ID          int    `json:"id"`
-	IsPlugin    bool   `json:"is_plugin"`
-	IsFocused   bool   `json:"is_focused"`
-	IsFloating  bool   `json:"is_floating"`
-	Title       string `json:"title"`
-	Exited      bool   `json:"exited"`
-	TabID       int    `json:"tab_id"`
-	Command     string `json:"pane_command"`
-	Cwd         string `json:"pane_cwd"`
-	ContentRows int    `json:"pane_content_rows"`
-	ContentCols int    `json:"pane_content_columns"`
+	ID         int  `json:"id"`
+	IsPlugin   bool `json:"is_plugin"`
+	IsFocused  bool `json:"is_focused"`
+	IsFloating bool `json:"is_floating"`
+	// IsFullscreen: the pane fills its tab (toggle-fullscreen).
+	IsFullscreen bool   `json:"is_fullscreen"`
+	Title        string `json:"title"`
+	Exited       bool   `json:"exited"`
+	TabID        int    `json:"tab_id"`
+	Command      string `json:"pane_command"`
+	Cwd          string `json:"pane_cwd"`
+	ContentRows  int    `json:"pane_content_rows"`
+	ContentCols  int    `json:"pane_content_columns"`
 }
 
 type zellijRead struct {
@@ -105,7 +107,10 @@ func newZellijMux(ctx context.Context) (*zellijMux, error) {
 func (*zellijMux) Name() string { return "zellij" }
 
 func (*zellijMux) Caps() Caps {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
 	return Caps{
+		PaneLayout:       zellijCanPaneLayout(ctx),
 		ClientSideSelect: true,
 		PaneText:         true,
 		Groups:           true,
@@ -435,7 +440,7 @@ func (m *zellijMux) requirePane(ctx context.Context, paneID string) (string, int
 func zellijFindPane(ctx context.Context, session string, n int) (zellijPaneInfo, error) {
 	panes, err := zellijPanes(ctx, session)
 	if errors.Is(err, errZellijNoSession) {
-		return zellijPaneInfo{}, inputError("unknown pane")
+		return zellijPaneInfo{}, errUnknownPane
 	}
 	if err != nil {
 		return zellijPaneInfo{}, err
@@ -445,7 +450,7 @@ func zellijFindPane(ctx context.Context, session string, n int) (zellijPaneInfo,
 			return p, nil
 		}
 	}
-	return zellijPaneInfo{}, inputError("unknown pane")
+	return zellijPaneInfo{}, errUnknownPane
 }
 
 // zellijPaneSize is a pane's content size.

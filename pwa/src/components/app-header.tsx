@@ -58,6 +58,8 @@ interface Props {
   // How full the open pane's agent is (HeaderUsageChip); renders nothing
   // when it has nothing to show
   usageChip?: ReactNode
+  // The Pane menu (split, zoom, swap, resize, close); unset: no button
+  paneMenu?: ReactNode
   viewPanelId: (id: string) => string
   // Desktop: views shown in the side panel, the one open, and its toggle
   panelViews?: ViewOption<string>[]
@@ -115,6 +117,7 @@ function MobileHeader(p: Props) {
         <ConnectionIndicator state={p.connectionState} onRetry={p.onRetry} />
       )}
       {p.usageChip}
+      {p.paneMenu}
       <ViewMenu
         views={p.views}
         value={p.viewId}
@@ -185,6 +188,7 @@ function DesktopHeader(p: Props) {
             onToggle={p.onTogglePanel}
           />
         )}
+        {p.paneMenu}
         {p.showFontSize && (
           <div className="flex items-center gap-0.5 rounded-control border border-border px-1 pointer-coarse:py-0.5 ui-native:border-0 ui-native:bg-bg">
             <button

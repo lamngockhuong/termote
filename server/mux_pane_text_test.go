@@ -261,11 +261,11 @@ func TestTmuxReadTextErrors(t *testing.T) {
 	useFakeTmuxScript(t, map[string]fakeTmuxReply{"display-message": {stderr: "can't find window: 9", code: 1}})
 	var ie inputError
 	var b strings.Builder
-	if _, err := (tmuxMux{}).ReadText(context.Background(), "9", 5, &b); !errors.As(err, &ie) {
+	if _, err := (tmuxMux{}).ReadText(context.Background(), "9", 5, &b); !errors.Is(err, errUnknownPane) {
 		t.Errorf("missing window: %v", err)
 	}
 	useFakeTmuxScript(t, map[string]fakeTmuxReply{"capture-pane": {stderr: "can't find window: 9", code: 1}})
-	if _, err := (tmuxMux{}).ReadText(context.Background(), "9", 5, &b); !errors.As(err, &ie) {
+	if _, err := (tmuxMux{}).ReadText(context.Background(), "9", 5, &b); !errors.Is(err, errUnknownPane) {
 		t.Errorf("window gone before the capture: %v", err)
 	}
 	useFakeTmuxScript(t, map[string]fakeTmuxReply{"capture-pane": {stderr: "server exited", code: 1}})
@@ -334,14 +334,14 @@ func TestHerdrReadText(t *testing.T) {
 	f.mu.Lock()
 	f.getFail = "pane_not_found"
 	f.mu.Unlock()
-	if _, err := m.ReadText(ctx, "wR:p3", 5, &b); !errors.As(err, &ie) {
+	if _, err := m.ReadText(ctx, "wR:p3", 5, &b); !errors.Is(err, errUnknownPane) {
 		t.Errorf("pane gone before pane.get: %v", err)
 	}
 	f.mu.Lock()
 	f.getFail = ""
 	f.readFail = "pane_not_found"
 	f.mu.Unlock()
-	if _, err := m.ReadText(ctx, "wR:p3", 5, &b); !errors.As(err, &ie) {
+	if _, err := m.ReadText(ctx, "wR:p3", 5, &b); !errors.Is(err, errUnknownPane) {
 		t.Errorf("pane gone: %v", err)
 	}
 	f.mu.Lock()

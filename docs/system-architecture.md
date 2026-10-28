@@ -58,6 +58,7 @@ React SPA with:
 - **Session Tabs**: Browser-like tabs in the header row for tab switching (hidden/shown via setting), add/remove via UI
 - **Session Chip** (mobile): Header chip that opens the sessions list as a bottom sheet; there is no bottom navigation
 - **Pane Strip**: Second-level switcher shown only when a tab has more than one pane (split panes; on tmux it moves the shared focus, not the stream)
+- **Pane Menu**: Header menu (`pane-layout-menu.tsx`) and palette category `Panes` to split, zoom, swap, resize and close the pane shown; hidden on a view-only device and without `caps.paneLayout` (the palette keeps the commands, disabled with the reason)
 - **Agent Status Badge**: Per-pane coding-agent status (idle/working/blocked/done) shown next to the pane, only ever set by the Herdr backend
 - **Keyboard Toolbar**: Virtual keys, Ctrl combos, scroll controls (respects default expanded setting)
 - **More Menu**: Font size (mobile), theme (light/dark/system), Settings, Help & gestures, About, Copy link, Clear cache & reload
@@ -83,7 +84,7 @@ Go HTTP server providing:
 - **Terminal WebSocket**: `/api/mux/stream` opens a PTY/ConPTY attached to the selected pane and streams it as binary WebSocket frames; a text control frame carries resize (client→server) and exit/error/size (server→client)
 - **Authentication**: Basic auth or a sign-in form (`/login`, for browsers: an iOS home-screen app never shows the Basic prompt), then a session cookie, rate-limited, plus a Host allowlist and an Origin/CSRF write guard in front of everything; `POST /api/mux/logout` ends the session on the server (the More menu's Log out, shown when the snapshot reports `caps.auth`)
 - **Paired devices**: `/pair` and `/api/mux/devices*` — a one-time code signs a device in with its own cookie and a role (`full` or `view`) (see [Paired devices and the view-only role](#paired-devices-and-the-view-only-role))
-- **Mux API endpoints**: `/api/mux/*` — snapshot (groups→tabs→panes), tab create/rename/close/select, send-keys, health
+- **Mux API endpoints**: `/api/mux/*` — snapshot (groups→tabs→panes), tab create/rename/close/select, pane close/split/zoom/swap/resize, send-keys, health
 - **Web Push**: `/api/mux/push/*` — the server's key and this device's subscription; a watcher sends a push when an agent needs the user (see [Agent notifications](#agent-notifications-apimuxpush))
 - **Agent chat endpoints**: `/api/mux/panes/{id}/agent/*` — the transcript of the Claude Code or Codex session in a pane, sending it a message, reading and answering its dialogs (see [Agent chat](#agent-chat-apimuxpanesidagent))
 
@@ -188,6 +189,32 @@ attach a terminal, health) with three implementations:
   `serve` warns in the log about a running Zellij server whose environment holds a `TERMOTE_*`
   variable (its panes inherit it; Zellij cannot unset it), and every process it starts drops
   `ZELLIJ`, `ZELLIJ_SESSION_NAME` and `ZELLIJ_PANE_ID` (keeping `ZELLIJ_SOCKET_DIR`).
+
+**Pane layout** (`server/mux_pane_layout.go`, `caps.paneLayout`): `POST
+/api/mux/panes/{id}/split|zoom|swap|resize` call the `Mux` methods `SplitPane`, `ZoomPane`,
+`SwapPane` and `ResizePane`. The route checks every argument (a few fixed words, cells 1–50, a
+`cwd` checked like a new group's) before a backend is asked, and every pane route answers a pane
+that is gone with 404 `unknown_pane` (code that must tell uses `paneMissing(err)`). A backend or
+version without an action answers 501 `unsupported`. The PWA sends no `cwd`: a new pane starts in
+the pane's own directory. Per backend:
+
+- tmux (`mux_tmux.go`; never psmux): `split-window -d` (the focus stays), `resize-pane -Z` with
+  the zoom read from `#{window_zoomed_flag}` and `#{pane_active}`, a swap with the next or
+  previous pane of the window by `swap-pane -d` then `select-pane` back (no wrap: 409
+  `no_neighbor`), `resize-pane -L|R|U|D`. Zoom gives the pane the window's focus, for every client.
+- Herdr 0.9.3 or later, not on Windows (`mux_herdr_layout.go`): `pane.split` with `focus:false`,
+  `pane.zoom`, `pane.swap` with the neighbour in the strip's order (its `reason` mapped to 404 or
+  409), `pane.resize` whose `amount` is a share of the tab, so cells are divided by the tab's
+  width or height from `pane.layout`. Zoom focuses the pane in Herdr, for every client.
+- Zellij 0.45.1 or later (`mux_zellij_layout.go`): `new-pane` through a hidden client on the
+  pane (never the client a stream uses), which ignores `--cwd`, so a `cwd` other than the pane's
+  answers 501; `toggle-fullscreen` from the listing's `is_fullscreen`; swap is `move-pane` or
+  `move-pane-backwards`, which turns the tab's panes around one place (the strip keeps its order);
+  resize runs `resize increase <dir>` once per 5 cells, at most 5 times. Zoom moves every client
+  viewing the tab to the pane.
+
+After a split the PWA picks the new pane only where it selects panes itself
+(`caps.clientSideSelect`: Herdr, Zellij); on tmux the pane shown follows tmux's focus.
 
 **Foreground process** (`server/mux_process.go`): each pane of the snapshot carries
 `process: {name, cwd?}` when the backend can tell, and a tmux tab also carries `processes` for

@@ -42,6 +42,10 @@ import {
   openWorktree as apiOpenWorktree,
   removeWorktree as apiRemoveWorktree,
   renameGroup as apiRenameGroup,
+  resizePane as apiResizePane,
+  splitPane as apiSplitPane,
+  swapPane as apiSwapPane,
+  zoomPane as apiZoomPane,
   closePane,
   closeTab,
   createTab,
@@ -49,7 +53,10 @@ import {
   fetchSnapshot,
   type MuxSnapshot,
   RequestError,
+  type ResizeDirection,
   renameTab,
+  type SplitDirection,
+  type SwapDirection,
   selectTab,
 } from './use-mux-api'
 import { setTemplatesServer } from './use-prompt-templates'
@@ -713,6 +720,61 @@ export function useLocalSessions(pollInterval = 5) {
     [activeSession?.panes, refreshSessions],
   )
 
+  // Pane layout, on the pane shown. A refusal (RequestError) reaches the
+  // caller once the list was read again: a pane gone leaves it.
+  const layoutPane = useCallback(
+    async (act: (paneId: string) => Promise<unknown>) => {
+      const paneId = activeSession?.paneId
+      if (!paneId) return
+      try {
+        await act(paneId)
+      } finally {
+        await refreshSessions()
+      }
+    },
+    [activeSession?.paneId, refreshSessions],
+  )
+
+  // Splits the pane shown. Where this device picks the pane it streams
+  // (Herdr, Zellij) the new pane is shown once listed; tmux leaves the
+  // focus, which every client shares, where it was.
+  const splitPane = useCallback(
+    async (direction: SplitDirection) => {
+      const session = activeSession
+      if (!session?.paneId) return
+      let id = ''
+      try {
+        id = await apiSplitPane(session.paneId, direction)
+      } finally {
+        if (id && muxRef.current.caps.clientSideSelect) {
+          selectionVersionRef.current++
+          storeSelection({
+            tabId: session.id,
+            groupId: session.groupId,
+            paneId: id,
+          })
+        }
+        await refreshSessions()
+      }
+    },
+    [activeSession, storeSelection, refreshSessions],
+  )
+
+  const zoomPane = useCallback(
+    () => layoutPane((id) => apiZoomPane(id, 'toggle')),
+    [layoutPane],
+  )
+  const swapPane = useCallback(
+    (direction: SwapDirection) =>
+      layoutPane((id) => apiSwapPane(id, direction)),
+    [layoutPane],
+  )
+  const resizePane = useCallback(
+    (direction: ResizeDirection, amount: number) =>
+      layoutPane((id) => apiResizePane(id, direction, amount)),
+    [layoutPane],
+  )
+
   const updateSession = useCallback(
     async (sessionId: string, updates: Partial<Omit<Session, 'id'>>) => {
       const session = sessions.find((s) => s.id === sessionId)
@@ -942,6 +1004,10 @@ export function useLocalSessions(pollInterval = 5) {
     addSession,
     removeSession,
     removePane,
+    splitPane,
+    zoomPane,
+    swapPane,
+    resizePane,
     updateSession,
     createGroup,
     renameGroup,

@@ -79,6 +79,25 @@ describe('AppHeader — usage chip', () => {
   })
 })
 
+describe('AppHeader — pane menu', () => {
+  it('shows the Pane menu it is given, on desktop and mobile, and none without', () => {
+    for (const isMobile of [false, true]) {
+      const { unmount } = render(
+        <ThemeProvider>
+          <AppHeader
+            {...headerProps({ isMobile })}
+            paneMenu={<button type="button">Pane</button>}
+          />
+        </ThemeProvider>,
+      )
+      expect(screen.getByRole('button', { name: 'Pane' })).toBeInTheDocument()
+      unmount()
+    }
+    renderHeader()
+    expect(screen.queryByRole('button', { name: 'Pane' })).toBeNull()
+  })
+})
+
 describe('AppHeader — desktop', () => {
   beforeEach(() => {
     Element.prototype.scrollIntoView = vi.fn()

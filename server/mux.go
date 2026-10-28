@@ -61,6 +61,17 @@ type Mux interface {
 	RenameGroup(ctx context.Context, groupID, name string) error
 	// ClosePane closes one pane of a split tab, ending what runs in it.
 	ClosePane(ctx context.Context, paneID string) error
+	// SplitPane opens a pane beside (right) or under (down) paneID, in cwd
+	// (absolute, already checked; empty: paneID's own), without moving the
+	// focus, and returns its id.
+	SplitPane(ctx context.Context, paneID string, dir SplitDir, cwd string) (newPaneID string, err error)
+	// ZoomPane makes paneID fill its tab, or not.
+	ZoomPane(ctx context.Context, paneID string, mode ZoomMode) error
+	// SwapPane swaps paneID with the pane before or after it in its tab's
+	// pane order.
+	SwapPane(ctx context.Context, paneID string, dir SwapDir) error
+	// ResizePane moves paneID's edge amount cells (1..maxResizeAmount) dir.
+	ResizePane(ctx context.Context, paneID string, dir ResizeDir, amount int) error
 	SendKeys(ctx context.Context, paneID, keys string) error
 	// Scroll moves paneID's view lines rows back into its history (negative:
 	// toward the live screen), clamped to what the pane holds.
@@ -127,6 +138,10 @@ type Caps struct {
 	// (/api/mux/tabs/{id}/move): Herdr 0.8.0 or later, not on Windows; tmux
 	// 3.2 or later (the server's version), not psmux.
 	ReorderTabs bool `json:"reorderTabs"`
+	// PaneLayout: a pane can be split, zoomed, swapped and resized
+	// (/api/mux/panes/{id}/split, zoom, swap, resize): tmux, Herdr 0.9.3 or
+	// later and not on Windows, Zellij 0.45.1 or later. Never on psmux.
+	PaneLayout bool `json:"paneLayout"`
 	// ReorderGroups: a group can be moved (/api/mux/groups/{id}/move):
 	// Herdr 0.8.0 or later, not on Windows. tmux has no session order.
 	ReorderGroups bool `json:"reorderGroups"`

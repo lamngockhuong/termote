@@ -172,7 +172,7 @@ func TestTmuxClosePane(t *testing.T) {
 	ctx := context.Background()
 	m := tmuxMux{}
 
-	args := useFakeTmuxScript(t, map[string]fakeTmuxReply{"display-message": {out: "$0:1:%7:2:main\n"}})
+	args := useFakeTmuxScript(t, map[string]fakeTmuxReply{"display-message": {out: "$0:1:%7:2:0:0:main\n"}})
 	if err := m.ClosePane(ctx, "%7"); err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +180,7 @@ func TestTmuxClosePane(t *testing.T) {
 		t.Errorf("argv = %q", got)
 	}
 	// A tab id closes its window's active pane, by the %N tmux names.
-	args = useFakeTmuxScript(t, map[string]fakeTmuxReply{"display-message": {out: "$0:1:%8:3:main\n"}})
+	args = useFakeTmuxScript(t, map[string]fakeTmuxReply{"display-message": {out: "$0:1:%8:3:0:0:main\n"}})
 	if err := m.ClosePane(ctx, "1"); err != nil {
 		t.Fatal(err)
 	}
@@ -193,20 +193,20 @@ func TestTmuxClosePane(t *testing.T) {
 		replies  map[string]fakeTmuxReply
 		want     error
 	}{
-		{"last pane", "%7", map[string]fakeTmuxReply{"display-message": {out: "$0:1:%7:1:main\n"}}, errLastPane},
+		{"last pane", "%7", map[string]fakeTmuxReply{"display-message": {out: "$0:1:%7:1:0:0:main\n"}}, errLastPane},
 		// tmux answers a missing %N with nothing and exit 0
-		{"missing pane", "%7", map[string]fakeTmuxReply{"display-message": {}}, errTmuxUnknownPane},
-		{"another pane", "%7", map[string]fakeTmuxReply{"display-message": {out: "$0:1:%9:2:main\n"}}, errTmuxUnknownPane},
+		{"missing pane", "%7", map[string]fakeTmuxReply{"display-message": {}}, errUnknownPane},
+		{"another pane", "%7", map[string]fakeTmuxReply{"display-message": {out: "$0:1:%9:2:0:0:main\n"}}, errUnknownPane},
 		// and a missing window with the current one
-		{"another window", "2", map[string]fakeTmuxReply{"display-message": {out: "$0:1:%9:2:main\n"}}, errTmuxUnknownPane},
-		{"gone before the kill", "%7", map[string]fakeTmuxReply{"display-message": {out: "$0:1:%7:2:main\n"},
-			"kill-pane": {stderr: "can't find pane: %7", code: 1}}, errTmuxUnknownPane},
+		{"another window", "2", map[string]fakeTmuxReply{"display-message": {out: "$0:1:%9:2:0:0:main\n"}}, errUnknownPane},
+		{"gone before the kill", "%7", map[string]fakeTmuxReply{"display-message": {out: "$0:1:%7:2:0:0:main\n"},
+			"kill-pane": {stderr: "can't find pane: %7", code: 1}}, errUnknownPane},
 	} {
 		args := useFakeTmuxScript(t, tc.replies)
 		if err := m.ClosePane(ctx, tc.id); !errors.Is(err, tc.want) {
 			t.Errorf("%s: ClosePane = %v, want %v", tc.name, err, tc.want)
 		}
-		if tc.want != errTmuxUnknownPane || tc.name != "gone before the kill" {
+		if tc.want != errUnknownPane || tc.name != "gone before the kill" {
 			if strings.Contains(args(), "kill-pane") {
 				t.Errorf("%s: killed a pane: %q", tc.name, args())
 			}
@@ -233,14 +233,14 @@ func TestTmuxSelectPane(t *testing.T) {
 		t.Errorf("argv = %q", got)
 	}
 	args = useFakeTmuxScript(t, map[string]fakeTmuxReply{"select-window": {stderr: "can't find pane: %4", code: 1}})
-	if err := (tmuxMux{}).SelectTab(ctx, "%4"); !errors.Is(err, errTmuxUnknownPane) {
+	if err := (tmuxMux{}).SelectTab(ctx, "%4"); !errors.Is(err, errUnknownPane) {
 		t.Errorf("missing pane = %v", err)
 	}
 	if strings.Contains(args(), "select-pane") {
 		t.Errorf("selected a pane after the window failed: %q", args())
 	}
 	useFakeTmuxScript(t, map[string]fakeTmuxReply{"select-window": {stderr: "lost server", code: 1}})
-	if err := (tmuxMux{}).SelectTab(ctx, "%4"); err == nil || errors.Is(err, errTmuxUnknownPane) {
+	if err := (tmuxMux{}).SelectTab(ctx, "%4"); err == nil || errors.Is(err, errUnknownPane) {
 		t.Errorf("failure = %v, want the tmux error", err)
 	}
 }
@@ -257,7 +257,7 @@ func TestTmuxPaneRoutesTakeAPaneID(t *testing.T) {
 		t.Errorf("argv = %q", got)
 	}
 	useFakeTmuxScript(t, map[string]fakeTmuxReply{"send-keys": {stderr: "can't find pane: %4", code: 1}})
-	if err := m.SendKeys(ctx, "%4", "ls"); !errors.Is(err, errTmuxUnknownPane) {
+	if err := m.SendKeys(ctx, "%4", "ls"); !errors.Is(err, errUnknownPane) {
 		t.Errorf("SendKeys to a missing pane = %v", err)
 	}
 
@@ -280,19 +280,19 @@ func TestTmuxPaneRoutesTakeAPaneID(t *testing.T) {
 	if s, err := tmuxPaneSession(ctx, "1"); err != nil || s != "="+tmuxSession {
 		t.Errorf("tab session = %q %v", s, err)
 	}
-	useFakeTmuxScript(t, map[string]fakeTmuxReply{"display-message": {out: "$3:1:%4:1:work\n"}})
+	useFakeTmuxScript(t, map[string]fakeTmuxReply{"display-message": {out: "$3:1:%4:1:0:0:work\n"}})
 	if s, err := tmuxPaneSession(ctx, "%4"); err != nil || s != "$3" {
 		t.Errorf("pane session = %q %v", s, err)
 	}
 	useFakeTmuxScript(t, map[string]fakeTmuxReply{"display-message": {}})
-	if _, err := tmuxPaneSession(ctx, "%4"); !errors.Is(err, errTmuxUnknownPane) {
+	if _, err := tmuxPaneSession(ctx, "%4"); !errors.Is(err, errUnknownPane) {
 		t.Errorf("missing pane session = %v", err)
 	}
-	if _, err := m.AttachView(ctx, "%4", Size{Cols: 80, Rows: 24}); !errors.Is(err, errTmuxUnknownPane) {
+	if _, err := m.AttachView(ctx, "%4", Size{Cols: 80, Rows: 24}); !errors.Is(err, errUnknownPane) {
 		t.Errorf("AttachView on a missing pane = %v", err)
 	}
 	// Closed between its selection and the attach
-	if _, err := m.Attach(ctx, "%4", Size{Cols: 80, Rows: 24}); !errors.Is(err, errTmuxUnknownPane) {
+	if _, err := m.Attach(ctx, "%4", Size{Cols: 80, Rows: 24}); !errors.Is(err, errUnknownPane) {
 		t.Errorf("Attach on a missing pane = %v", err)
 	}
 	if _, err := tmuxPaneSession(ctx, "x"); err == nil {
@@ -350,13 +350,13 @@ func TestTmuxPanesInRealServer(t *testing.T) {
 	if _, key, err := m.PaneDir(ctx, third); err != nil || key != third {
 		t.Errorf("PaneDir(%s) after a swap = %q %v", third, key, err)
 	}
-	if err := m.SendKeys(ctx, second, "x"); !errors.Is(err, errTmuxUnknownPane) {
+	if err := m.SendKeys(ctx, second, "x"); !errors.Is(err, errUnknownPane) {
 		t.Errorf("SendKeys to a closed pane = %v", err)
 	}
 	if _, _, err := m.PaneDir(ctx, second); err == nil {
 		t.Error("PaneDir found a closed pane")
 	}
-	if err := m.ClosePane(ctx, second); !errors.Is(err, errTmuxUnknownPane) {
+	if err := m.ClosePane(ctx, second); !errors.Is(err, errUnknownPane) {
 		t.Errorf("ClosePane on a closed pane = %v", err)
 	}
 

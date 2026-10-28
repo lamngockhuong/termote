@@ -324,9 +324,9 @@ func (a *agentAPI) startError(w http.ResponseWriter, err error) {
 	var ce *codedError
 	var ie inputError
 	switch {
-	case errors.As(err, &ce):
-	case errors.As(err, &ie):
+	case errors.Is(err, errUnknownPane), errors.As(err, &ie):
 		ce = errStartNotFound // a bad or unknown pane id, or the pane vanished
+	case errors.As(err, &ce):
 	case errors.Is(err, errUnsupported):
 		ce = errStartUnsupported
 	default:

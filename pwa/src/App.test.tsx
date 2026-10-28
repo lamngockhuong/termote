@@ -3416,6 +3416,80 @@ describe('App groups and panes', () => {
     expect(screen.queryByRole('button', { name: 'Close pane logs' })).toBeNull()
   })
 
+  // mockMux with the layout actions; zellij turns the panes around
+  async function mockLayout(
+    backend: 'tmux' | 'herdr',
+    over: { paneLayout?: boolean; role?: 'view'; paneId?: string } = {},
+  ) {
+    mockMux(backend, over.role)
+    const base = mockUseLocalSessions()
+    const { RequestError } = await import('./hooks/use-mux-api')
+    const actions = {
+      splitPane: vi.fn(async () => {}),
+      zoomPane: vi.fn(async () => {}),
+      swapPane: vi.fn(async () => {
+        throw new RequestError(409, 'no_neighbor', 'no pane on that side')
+      }),
+      resizePane: vi.fn(async () => {}),
+    }
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      ...actions,
+      activeSession: {
+        ...base.activeSession,
+        paneId: over.paneId ?? base.activeSession.paneId,
+      },
+      mux: {
+        ...base.mux,
+        caps: { ...base.mux.caps, paneLayout: over.paneLayout ?? true },
+      },
+    } as any)
+    return actions
+  }
+  const paneMenuItem = async (name: string) => {
+    fireEvent.click(await screen.findByRole('button', { name: 'Pane' }))
+    return screen.getByRole('menuitem', { name })
+  }
+
+  it('the Pane menu acts on the pane shown, and words a refusal', async () => {
+    const a = await mockLayout('herdr')
+    render(<App />)
+    fireEvent.click(await paneMenuItem('Split right'))
+    expect(a.splitPane).toHaveBeenCalledWith('right')
+    fireEvent.click(await paneMenuItem('Zoom'))
+    expect(a.zoomPane).toHaveBeenCalled()
+    fireEvent.click(await paneMenuItem('Resize left'))
+    expect(a.resizePane).toHaveBeenCalledWith('left', 5)
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: 'Escape',
+    })
+    fireEvent.click(await paneMenuItem('Swap with next pane'))
+    expect(a.swapPane).toHaveBeenCalledWith('next')
+    expect(await screen.findByTestId('toast')).toHaveTextContent(
+      'No pane on that side',
+    )
+    fireEvent.click(await paneMenuItem('Close pane'))
+    expect(screen.getByTestId('confirm-dialog')).toHaveTextContent(
+      'Close pane?',
+    )
+  })
+
+  it('no swap past the last pane of tmux or Herdr', async () => {
+    await mockLayout('tmux', { paneId: 'w1:t1:p2' })
+    render(<App />)
+    expect(await paneMenuItem('Swap with next pane')).toBeDisabled()
+  })
+
+  it('no Pane menu where the backend has none, or on a view-only device', async () => {
+    for (const over of [{ paneLayout: false }, { role: 'view' as const }]) {
+      await mockLayout('herdr', over)
+      const { unmount } = render(<App />)
+      await screen.findByTestId('terminal-view')
+      expect(screen.queryByRole('button', { name: 'Pane' })).toBeNull()
+      unmount()
+    }
+  })
+
   it('herdr: a view-only device still picks the pane it streams', async () => {
     mockMux('herdr', 'view')
     render(<App />)
@@ -6152,6 +6226,41 @@ describe('App command palette and shortcuts', () => {
     await waitFor(() =>
       expect(switchSession).toHaveBeenLastCalledWith('a', undefined),
     )
+  })
+
+  it('runs the pane layout commands on the pane shown', async () => {
+    mockSessions('b')
+    const base = mockUseLocalSessions()
+    const actions = {
+      splitPane: vi.fn(async () => {}),
+      zoomPane: vi.fn(async () => {}),
+      swapPane: vi.fn(async () => {}),
+      resizePane: vi.fn(async () => {}),
+    }
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      ...actions,
+      mux: { ...base.mux, caps: { ...base.mux.caps, paneLayout: true } },
+    } as any)
+    render(<App />)
+    await run('Split pane right')
+    await run('Split pane down')
+    await run('Zoom pane')
+    await run('Resize pane up')
+    expect(actions.splitPane.mock.calls).toEqual([['right'], ['down']])
+    expect(actions.zoomPane).toHaveBeenCalled()
+    expect(actions.resizePane).toHaveBeenCalledWith('up', 5)
+    // One pane in the tab: no next one to swap with
+    await openPalette()
+    expect(
+      screen.getByRole('button', { name: 'Swap pane with the next one' }),
+    ).toBeDisabled()
+    act(() =>
+      palette.props!.onRun(
+        palette.props!.commands.find((c) => c.id === 'pane.swapNext')!.run,
+      ),
+    )
+    await waitFor(() => expect(actions.swapPane).toHaveBeenCalledWith('next'))
   })
 
   it('offers no pane pick to a view-only device where the backend picks the pane', async () => {

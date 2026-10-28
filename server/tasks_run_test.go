@@ -352,8 +352,8 @@ func TestTaskRunShellAndBackendErrors(t *testing.T) {
 func TestTaskRunUnknownPaneAndDir(t *testing.T) {
 	fx := newTaskFixture(t)
 	fx.m.snap = Snapshot{Groups: []Group{{ID: "g", Tabs: []Tab{{ID: "9", Panes: []Pane{{ID: "9"}}}}}}}
-	if code, _ := fx.run(t, map[string]any{"kind": "script", "name": "test"}); code != http.StatusBadRequest {
-		t.Errorf("unknown pane = %d", code)
+	if code, body := fx.run(t, map[string]any{"kind": "script", "name": "test"}); code != http.StatusNotFound || body["code"] != "unknown_pane" {
+		t.Errorf("unknown pane = %d %v", code, body)
 	}
 	// Where tabs are selected on the server (tmux), a tab id names its
 	// active pane.

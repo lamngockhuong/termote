@@ -137,10 +137,24 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   found) with exactly one `ZELLIJ_PANE_ID=<N>`, failing closed; the pane command is cut to its
   first word. The reaper matches only `zellij attach <name> options --show-startup-tips false
   --show-release-notes false` and the exact `subscribe` argv. New sessions get their floating
-  plugin panes (setup wizard, release notes, tips) closed for 1.2 s after `attach -b`
+  plugin panes (setup wizard, release notes, tips) closed for 1.2 s after `attach -b`.
+  Pane layout (`server/mux_zellij_layout.go`, Zellij 0.45.1 or later, the version checked; else
+  501): each action runs once, never through `zellijRepeat`, on the `terminal_N` the listing
+  confirmed. Zoom is `toggle-fullscreen --pane-id` only when the listing's `is_fullscreen`
+  differs (another fullscreen pane of the tab put back first), checked again after (503 `busy`
+  otherwise); Zellij moves every client of the tab onto that pane. Swap is `move-pane` (next) or
+  `move-pane-backwards` (prev) `--pane-id`: it turns the panes around on screen, the strip keeps
+  its id order, and it wraps (never 409). Resize is `resize increase <dir> --pane-id`, one round
+  per 5 cells asked, at most 5, under the session's slot. Split has no pane target: under the
+  slot, the session's hidden client is positioned on the pane as for a write, the no-op key goes
+  to it and `new-pane --direction right|down` follows at once; the clients are listed before and
+  after, any other moved is put back (else 503 `busy`), and exactly one new terminal pane in the
+  pane's tab must be listed, else every new one is closed (`close-pane --pane-id`) and the split
+  is 503 `busy`. Zellij 0.45.1 ignores `new-pane --cwd`, so the new pane starts in the pane's
+  directory and another `cwd` is 501. A failed action with the pane gone is 404 `unknown_pane`
 - **Pane processes** (`server/mux_process.go`): the snapshot carries each pane's foreground
-  process `{name, cwd}`; tmux tabs also carry every pane's in `processes` (the snapshot holds
-  only the window's active pane). The name is the first word of what the OS reports (cut at
+  process `{name, cwd}`; tmux tabs also carry every pane's in `processes` (on psmux the snapshot
+  holds only the window's active pane). The name is the first word of what the OS reports (cut at
   whitespace, `=` or `:`, then after the last `/`; a process can set its own title), at most 32
   bytes, control and format characters (zero-width, bidi) removed; argv and the environment never
   leave the server. tmux: one `list-panes -a`, read by `#{n:}` byte lengths keyed by session id and
@@ -342,6 +356,30 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   shows "View only" (`caps.role`); tmux follows each session's active window, Herdr selects tabs
   client-side but cannot scroll history. No Web Push. A view client reads whatever the agent
   printed (accepted), except a sensitive file's tool results in the transcript (see Agent chat)
+- **Pane layout** (`POST /api/mux/panes/{id}/split` `{direction, cwd?}` → `{ok, id}`, `zoom`
+  `{mode}`, `swap` `{direction}`, `resize` `{direction, amount}` → `{ok}`;
+  `server/mux_pane_layout.go`, `caps.paneLayout`: Herdr 0.9.3 or later and not on Windows, tmux
+  (never psmux), Zellij 0.45.1 or later): auth, `hostGuard`, `writeGuard` (same-site JSON), 8 KB
+  body, `requireWriteRole` first (a view-only client gets 403 `view_only`), then
+  `requireMethod(POST)`, `muxTimeout`. Every argument is one of a few words, read before the
+  backend is asked: `direction` `right|down` (split), `prev|next` (swap), `left|right|up|down`
+  (resize), else 400 `invalid_direction`; `mode` `toggle|on|off`, else 400 `invalid_mode`;
+  `amount` a whole number of cells 1–50 (1.5, 0, 51 or missing: 400 `invalid_amount`). A
+  non-empty `cwd` goes through the groups' `resolveGroupCwd` (absolute, existing directory,
+  symlinks resolved, the files deny list: 400 `invalid_cwd`/`not_found`, 409 `not_directory`, 403
+  `not_allowed`, 503 `busy` when the directory does not answer in time); an empty one stays empty and the new pane starts in the pane's own directory
+  (never the home a new group gets). It is no boundary: the shell can `cd` anywhere. A pane id
+  that names no pane (or no longer does) is 404 `unknown_pane`, as on every `/api/mux/panes/{id}`
+  route (an id of the wrong form is 400, and the stream keeps 400); a backend or version
+  without the action, or an argument it cannot honour (Zellij's `cwd`), 501 `unsupported`; a swap
+  past either end 409 `no_neighbor` (tmux, Herdr); a tmux window too small for another pane 409
+  `no_room`; anything else is logged and answered 500
+  without the backend's text. No lock of their own and no cap on the number of panes, as new
+  tabs. A split never moves the focus; a zoom may, for every client (tmux, Herdr, Zellij), and
+  the commands each backend runs are in its entry (tmux panes, Zellij sessions; Herdr
+  `pane.split` with `focus:false`, `pane.zoom`, `pane.swap` with the neighbour in the strip's
+  order and its `reason` mapped, `pane.resize` with `amount` cells as a share of the tab from
+  `pane.layout`)
 - **Groups** (`POST /api/mux/groups` `{name, cwd}` → `{ok, id}`, `PATCH /api/mux/groups/{id}`
   `{name}`, `DELETE /api/mux/groups/{id}`; `server/mux_groups.go`, `caps.groups`): auth,
   `hostGuard`, `writeGuard` (same-site JSON), 8 KB body, `requireWriteRole` first (a view-only
@@ -475,7 +513,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   with a line that cannot be read, or an index or id listed twice, keeps its active pane only,
   as every window does when the command fails (logged once a minute). Commands target `%N`
   exactly, and a reply naming another pane (tmux answers a missing `%N` with nothing, exit 0)
-  or `can't find pane` is 400 `unknown pane`. Picking a pane is `POST /tabs/{id}/select` with
+  or `can't find pane` is 404 `unknown_pane`. Picking a pane is `POST /tabs/{id}/select` with
   its `%N` (`select-window -t %N`, then `select-pane -t %N`): a write (`requireWriteRole`) that
   moves the focus every client of the session shares, so the PWA's pane strip only shows the
   panes to a view-only device, and the pane it shows follows that focus; opening a given pane
@@ -484,7 +522,18 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   reads the pane's `%N` and `#{window_panes}` with `display-message`, checks the reply, then
   runs `kill-pane -t %N`; a window's last pane is 409 `last_pane` (closing the tab is
   `CloseTab`); psmux 501. Accepted gap: a pane closed elsewhere between that check and the kill
-  makes it close the window's last pane, which closes the window too
+  makes it close the window's last pane, which closes the window too. The layout actions
+  (`layoutPane`, never on psmux: 501) read the pane the same way first, then target its `%N`
+  only, argv through `tmuxCmd`: `split-window -d -h|-v -t %N -c <dir> -P -F '#{pane_id}'` (`-d`
+  keeps the focus; without a cwd `<dir>` is the format `#{pane_current_path}`, which tmux
+  expands, else the checked directory through `tmuxLiteral`, so tmux expands nothing in it; the
+  reply must be a `%N`); `resize-pane -Z -t %N` once or twice from the reply's
+  `#{window_zoomed_flag}` and `#{pane_active}` (zooming focuses the pane, for every client);
+  `list-panes -t %N` for the order and the focused pane, `swap-pane -d -s %N -t <neighbour>`
+  with the neighbour found there (tmux's own `-U`/`-D` wrap around: past either end is 409
+  `no_neighbor`, nothing run), then `select-pane` back to the pane that had the focus;
+  `resize-pane -t %N -L|-R|-U|-D <1..50>`. `can't find pane` from any of them is 404
+  `unknown_pane`
 - **Agent chat** (`/api/mux/panes/{id}/agent/*`): for Claude Code on tmux the server reads only
   the transcript in the Claude config dir of the process found in the pane (`CLAUDE_CONFIG_DIR`,
   else `~/.claude`; psmux: `%USERPROFILE%\.claude`), and only for a process whose start time

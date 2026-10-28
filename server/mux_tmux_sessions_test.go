@@ -148,16 +148,16 @@ func TestTmuxSessionsInRealServer(t *testing.T) {
 	if err := tmuxCmd(ctx, "kill-session", "-t", sid).Run(); err != nil {
 		t.Fatal(err)
 	}
-	var ie inputError
-	if _, _, err := m.PaneDir(ctx, sid+":0"); tmuxFilesSupported && !errors.As(err, &ie) {
+	if _, _, err := m.PaneDir(ctx, sid+":0"); tmuxFilesSupported && !errors.Is(err, errUnknownPane) {
 		t.Errorf("PaneDir of a closed session = %v", err)
 	}
-	if _, _, err := m.AgentSession(ctx, sid+":0"); !errors.As(err, &ie) {
+	if _, _, err := m.AgentSession(ctx, sid+":0"); !errors.Is(err, errUnknownPane) {
 		t.Errorf("AgentSession of a closed session = %v", err)
 	}
 	if err := m.SelectTab(ctx, sid+":0"); err == nil {
 		t.Error("SelectTab of a closed session succeeded")
 	}
+	var ie inputError
 	if _, err := m.NewTab(ctx, sid, ""); !errors.As(err, &ie) || ie != "unknown group" {
 		t.Errorf("NewTab of a closed session = %v", err)
 	}

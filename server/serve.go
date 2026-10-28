@@ -493,6 +493,7 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 	registerTaskRoutes(mux, files, userTasks, agent.input)
 	_, agent.tasks = m.(taskMux)
 	registerGroupRoutes(mux, m, files.deny)
+	registerPaneLayoutRoutes(mux, m, files.deny)
 	registerReorderRoutes(mux, m)
 	registerWorktreeRoutes(mux, m, files.git, allowed)
 	// Unknown /api/ paths get JSON 404 instead of the SPA fallback.

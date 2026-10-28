@@ -598,8 +598,7 @@ func TestTmuxPaneDirInRealSession(t *testing.T) {
 	if err != nil || got != dir || !tmuxPaneIDRe.MatchString(key) {
 		t.Fatalf("PaneDir(0) = %q, %q, %v", got, key, err)
 	}
-	var ie inputError
-	if _, _, err := (tmuxMux{}).PaneDir(ctx, "5"); !errors.As(err, &ie) || ie != "unknown pane" {
+	if _, _, err := (tmuxMux{}).PaneDir(ctx, "5"); !errors.Is(err, errUnknownPane) {
 		t.Errorf("PaneDir(5) with a window named 5-x = %v, want unknown pane", err)
 	}
 }

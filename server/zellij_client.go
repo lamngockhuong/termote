@@ -618,8 +618,24 @@ func (m *zellijMux) writeToPaneOnce(ctx context.Context, session string, n int, 
 		}
 		return c.write(p)
 	}
+	hidden, err := m.hiddenClientOn(ctx, session, n)
+	if err != nil {
+		return err
+	}
+	if err := hidden.write(p); err != nil {
+		return err
+	}
+	// The client reads its PTY on its own schedule; give it time before an
+	// idle close can drop what it has not read yet.
+	time.Sleep(zellijHiddenSettle)
+	return nil
+}
+
+// hiddenClientOn returns the session's hidden client moved to terminal_n,
+// or a new hidden client there. The caller holds the session's slot.
+func (m *zellijMux) hiddenClientOn(ctx context.Context, session string, n int) (*zellijClient, error) {
 	var hidden *zellijClient
-	for _, c := range clients {
+	for _, c := range m.sessionClients(session) {
 		c.mu.Lock()
 		usable := c.hidden && !c.closed
 		if usable {
@@ -633,27 +649,16 @@ func (m *zellijMux) writeToPaneOnce(ctx context.Context, session string, n int, 
 		}
 	}
 	if hidden != nil {
-		if err := hidden.position(ctx, n); err != nil {
-			hidden.close()
-			hidden = nil
+		if err := hidden.position(ctx, n); err == nil {
+			return hidden, nil
 		}
+		hidden.close()
 	}
-	if hidden == nil {
-		size, err := m.tabSize(ctx, session, n)
-		if err != nil {
-			return err
-		}
-		if hidden, err = m.startClient(ctx, session, n, size, true); err != nil {
-			return err
-		}
+	size, err := m.tabSize(ctx, session, n)
+	if err != nil {
+		return nil, err
 	}
-	if err := hidden.write(p); err != nil {
-		return err
-	}
-	// The client reads its PTY on its own schedule; give it time before an
-	// idle close can drop what it has not read yet.
-	time.Sleep(zellijHiddenSettle)
-	return nil
+	return m.startClient(ctx, session, n, size, true)
 }
 
 // write sends p to the client's PTY.
