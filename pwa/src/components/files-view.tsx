@@ -10,8 +10,11 @@ import {
   Lock,
   TextCursorInput,
   Trash2,
+  Upload,
 } from 'lucide-react'
 import {
+  type ClipboardEvent,
+  type DragEvent,
   type KeyboardEvent,
   useCallback,
   useEffect,
@@ -21,6 +24,13 @@ import {
   useState,
 } from 'react'
 import type { ViewProps } from '../app-views'
+import {
+  cancelUploads,
+  confirmUpload,
+  onFileUploaded,
+  startUploads,
+  useFileUploads,
+} from '../hooks/use-file-uploads'
 import {
   dropDraft,
   type FilesError,
@@ -57,6 +67,7 @@ import { isApplePlatform } from '../utils/platform'
 import { commentedFileLines, type ReviewComment } from '../utils/review-draft'
 import { chordFromEvent, SEARCH_CONTENT_KEY } from '../utils/shortcuts'
 import { visibleUnsafe } from '../utils/unsafe-chars'
+import { droppedFiles, uploadDir } from '../utils/upload-file'
 import { CHANGES_VIEW_ID } from '../view-ids'
 import { openCommentInChanges } from './changes-view'
 import {
@@ -77,7 +88,7 @@ import { RenameFileDialog } from './rename-file-dialog'
 import { ReviewCommentSheet } from './review-comment-sheet'
 import { ReviewControl } from './review-panel'
 import { DiscardTabDialog, RootCloseDialog } from './tab-close-dialogs'
-import { FOCUS_RING, IconButton } from './ui/button'
+import { Button, FOCUS_RING, IconButton } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
 import { Menu, MenuItem } from './ui/menu'
 import { SegmentedControl } from './ui/segmented-control'
@@ -98,7 +109,7 @@ type Row =
       level: number
       parent: string
     }
-  | { kind: 'note'; path: string; level: number; text: string }
+  | { kind: 'note'; path: string; dir: string; level: number; text: string }
 
 type EntryRow = Extract<Row, { kind: 'entry' }>
 
@@ -111,7 +122,7 @@ function visibleRows(s: FilesState, dir = '', level = 1): Row[] {
   const rows: Row[] = []
   if (!d.entries) {
     const text = d.error ? ERRORS[d.error] : 'Loading…'
-    return [{ kind: 'note', path: `${dir}/…`, level, text }]
+    return [{ kind: 'note', path: `${dir}/…`, dir, level, text }]
   }
   for (const entry of d.entries) {
     const path = joinPath(dir, entry.name)
@@ -123,12 +134,13 @@ function visibleRows(s: FilesState, dir = '', level = 1): Row[] {
     rows.push({
       kind: 'note',
       path: `${dir}/+`,
+      dir,
       level,
       text: 'Only the first 5000 entries are shown',
     })
   }
   if (dir && d.entries?.length === 0) {
-    rows.push({ kind: 'note', path: `${dir}/0`, level, text: 'Empty' })
+    rows.push({ kind: 'note', path: `${dir}/0`, dir, level, text: 'Empty' })
   }
   return rows
 }
@@ -146,6 +158,45 @@ function focusedDir(s: FilesState, focused?: string): string {
 }
 
 const baseName = (path: string) => path.slice(path.lastIndexOf('/') + 1)
+const parentOf = (path: string) =>
+  path.slice(0, Math.max(0, path.lastIndexOf('/')))
+
+// The tree's entry at path, where its folder was read
+const entryAt = (s: FilesState, path: string) =>
+  s.dirs[parentOf(path)]?.entries?.find((e) => e.name === baseName(path))
+
+// Whether an upload may go in dir of the tree: the root, or a folder (a
+// real one where the tree read it) not reached through a link, which the
+// server refuses to write through
+function uploadable(s: FilesState, dir: string): boolean {
+  if (!dir) return true
+  const entry = entryAt(s, dir)
+  return (!entry || entry.type === 'dir') && !throughLink(s, dir)
+}
+
+// The folder an upload at path of the tree goes in: path when it is a
+// folder that may take it, else the nearest one above (a file's, a link's).
+// Worked out per event, never per row: a folder holds up to 5000 entries.
+function uploadFolder(s: FilesState, path = ''): string {
+  let dir = path
+  while (!uploadable(s, dir)) dir = parentOf(dir)
+  return dir
+}
+
+// The folder a drop on target goes in: its row's (data-path; a folder's
+// note stands for that folder), or the root's below the rows
+function dropFolder(s: FilesState, target: EventTarget): string {
+  const row = (target as Element).closest<HTMLElement>('[data-path]')
+  return uploadFolder(s, row?.dataset.path)
+}
+
+// The folder the focused row stands for, the root when that row is gone
+// (deleted, or the root moved)
+const focusedFolder = (s: FilesState, focused?: string) =>
+  uploadFolder(s, focused && entryAt(s, focused) ? focused : '')
+
+const carriesFiles = (e: DragEvent) =>
+  Array.from(e.dataTransfer?.types ?? []).includes('Files')
 
 // How soon after a file opens from the tree a double click still pins it
 export const TREE_DOUBLE_CLICK_MS = 500
@@ -293,6 +344,51 @@ function PaneFiles({
   }
   // The tree's focused item, which a new file starts next to
   const [focused, setFocused] = useState<string>()
+  // The tree's rows by path, and the row an upload just saved, focused once
+  // it shows
+  const treeItems = useRef(new Map<string, HTMLElement>())
+  const [focusRow, setFocusRow] = useState<string>()
+  useEffect(() => {
+    if (!focusRow) return
+    treeItems.current.get(focusRow)?.focus()
+    setFocusRow(undefined)
+  }, [focusRow])
+  // The folder files dragged over the tree would go in
+  const [dropAt, setDropAt] = useState<string>()
+  const fileInput = useRef<HTMLInputElement>(null)
+  const viewRef = useRef<HTMLDivElement>(null)
+  // A file uploaded into what this view shows becomes its focused row; it
+  // takes the keyboard focus only from Files itself (never from the terminal)
+  const shown = useRef({ place: f.place, root: f.root })
+  shown.current = { place: f.place, root: f.root }
+  useEffect(
+    () =>
+      onFileUploaded((u) => {
+        const { place, root } = shown.current
+        if (u.paneId !== paneId || u.place !== place || u.root !== root) return
+        setFocused(u.path)
+        const at = document.activeElement
+        if (at === document.body || viewRef.current?.contains(at))
+          setFocusRow(u.path)
+      }),
+    [paneId],
+  )
+  // Files into dir of the tree ("" for the root), from wherever the view
+  // shows now; the upload goes on if the view goes
+  const upload = (
+    files: File[],
+    dir: string,
+    opts: { announce?: boolean; folders?: number } = {},
+  ) =>
+    startUploads(
+      files,
+      {
+        target: { paneId, place: f.place },
+        root: f.root as string,
+        dir: uploadDir(dir),
+      },
+      { notify, ...opts },
+    )
   // The root the New file box was opened under, while it is open
   const [creating, setCreating] = useState<string>()
   const [deleting, setDeleting] = useState<Deleting>()
@@ -619,15 +715,82 @@ function PaneFiles({
     })
   }
 
+  // Files dragged onto Files: never opened by the browser in place of the
+  // app. Into the folder under the pointer, or with a file open (the tree
+  // hidden) into that file's folder. Taken on the way down, so the editor
+  // never inserts a dropped file's text as well.
+  const onDragOver = (e: DragEvent) => {
+    if (!carriesFiles(e)) return
+    e.preventDefault()
+    e.stopPropagation()
+    // 'none' would keep the drop from firing: a view-only device is told
+    e.dataTransfer.dropEffect = 'copy'
+    if (!readOnly && !tab) setDropAt(dropFolder(f, e.target))
+  }
+  const onDragLeave = (e: DragEvent) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null))
+      setDropAt(undefined)
+  }
+  const onDrop = (e: DragEvent) => {
+    if (!carriesFiles(e)) return
+    e.preventDefault()
+    e.stopPropagation()
+    setDropAt(undefined)
+    // A dialog open over Files (Rename, an ask) is no folder
+    if ((e.target as Element).closest('dialog, [role="dialog"]')) return
+    if (readOnly) {
+      notify('A view-only device cannot upload', { variant: 'warning' })
+      return
+    }
+    if (!f.root) return
+    const { files, folders } = droppedFiles(e.dataTransfer)
+    // Folders alone: no run to tell it
+    if (!files.length) {
+      if (folders) notify("Folders can't be uploaded", { variant: 'warning' })
+      return
+    }
+    // A tab kept from a root the pane has left: its folder is not this one
+    if (tab && tab.root !== f.root) {
+      notify("This file's folder isn't the pane's any more: not uploaded", {
+        variant: 'warning',
+      })
+      return
+    }
+    const dir = tab
+      ? uploadFolder(f, parentOf(tab.path))
+      : dropFolder(f, e.target)
+    upload(files, dir, { announce: !!tab, folders })
+  }
+
   const root = f.dirs['']
   // Once the root is read, from the tree only. Never for a view-only client,
   // whose creates the server refuses as well
   const newFileRoot = !readOnly && !tab && root?.entries ? f.root : undefined
+  // Files copied in the file manager and pasted while the tree shows; a
+  // paste into a text box, or with no files, keeps its default
+  const onPaste = (e: ClipboardEvent) => {
+    const files = Array.from(e.clipboardData.files)
+    const into = e.target as Element
+    if (
+      newFileRoot === undefined ||
+      files.length === 0 ||
+      into.closest(
+        'input, textarea, [contenteditable]:not([contenteditable="false"])',
+      )
+    )
+      return
+    e.preventDefault()
+    upload(files, focusedFolder(f, focused))
+  }
   return (
     <div
+      ref={viewRef}
       className="flex h-full min-h-0 flex-col"
       onDoubleClick={pinIfDoubleClick}
       onKeyDown={onKeyDown}
+      onDragOverCapture={onDragOver}
+      onDragLeave={onDragLeave}
+      onDropCapture={onDrop}
     >
       <PaneDirHeader
         root={f.root}
@@ -646,6 +809,32 @@ function PaneFiles({
             <FilePlus size={15} aria-hidden="true" />
           </IconButton>
         )}
+        {newFileRoot !== undefined && (
+          <>
+            <IconButton
+              size="sm"
+              variant="ghost"
+              onClick={() => fileInput.current?.click()}
+              aria-label="Upload files"
+              title="Upload files"
+            >
+              <Upload size={15} aria-hidden="true" />
+            </IconButton>
+            <input
+              ref={fileInput}
+              type="file"
+              multiple
+              hidden
+              data-testid="upload-input"
+              onChange={(e) => {
+                const files = Array.from(e.currentTarget.files as FileList)
+                // The same file can be picked again
+                e.currentTarget.value = ''
+                upload(files, focusedFolder(f, focused))
+              }}
+            />
+          </>
+        )}
         {commenting && (
           <ReviewControl
             paneId={paneId}
@@ -659,6 +848,7 @@ function PaneFiles({
         )}
         {!tab && openFiles}
       </PaneDirHeader>
+      <UploadStatusRow />
       {tabBar && <FileTabBar {...tabList} />}
       <OpenFilesSheet
         {...tabList}
@@ -749,6 +939,7 @@ function PaneFiles({
           'aria-labelledby': tabElementId(panelId, f.activeId),
         })}
         className="flex min-h-0 flex-1 flex-col outline-none"
+        onPaste={onPaste}
       >
         {tab ? (
           <FileViewer
@@ -881,6 +1072,8 @@ function PaneFiles({
                 ) : (
                   <FileTree
                     state={f}
+                    items={treeItems}
+                    dropAt={dropAt}
                     focused={focused}
                     onFocus={setFocused}
                     onToggle={f.toggle}
@@ -910,6 +1103,61 @@ function PaneFiles({
   )
 }
 
+// The upload running, and the ask before writing where secrets may be: its
+// own component, so each step of the progress re-renders only this, never
+// the tree. Stays mounted so a screen reader announces each file; the
+// percentage is not read out at every step. A live region, not a status
+// role: the content search's result count is the panel's status.
+function UploadStatusRow() {
+  const { status: up, asking } = useFileUploads()
+  return (
+    <>
+      <div
+        aria-live="polite"
+        data-testid="upload-status"
+        className={up ? '' : 'sr-only'}
+      >
+        {up && (
+          <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-1 text-[12px] text-fg-muted">
+            <span className="min-w-0 flex-1 truncate">
+              {up.waiting
+                ? 'Waiting for another upload…'
+                : `Uploading ${visibleUnsafe(up.name)}`}
+              {up.total > 1 && ` (${up.index} of ${up.total})`}
+            </span>
+            {!up.waiting && (
+              <span aria-hidden="true" className="shrink-0 tabular-nums">
+                {up.percent} %
+              </span>
+            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={cancelUploads}
+              disabled={!up.canCancel}
+            >
+              Cancel
+            </Button>
+          </div>
+        )}
+      </div>
+      <ConfirmDialog
+        isOpen={!!asking}
+        title="Upload where secrets may be?"
+        confirmLabel="Upload"
+        // Enter keeps the files away from the secrets
+        defaultAction="cancel"
+        onConfirm={() => confirmUpload(true)}
+        onCancel={() => confirmUpload(false)}
+      >
+        {/* The root too: the ask may show in another pane's Files */}
+        {asking &&
+          `${visibleUnsafe(asking.name)} goes to ${asking.dir === '.' ? 'the top folder' : visibleUnsafe(asking.dir)} of ${visibleUnsafe(asking.root)}, where keys or passwords usually are. Upload it, and the other files sent with it that go there too?`}
+      </ConfirmDialog>
+    </>
+  )
+}
+
 // Whether a component of path is a symbolic link, as far as the tree has read
 // the directories on it
 function throughLink(f: FilesState, path: string): boolean {
@@ -924,6 +1172,8 @@ function throughLink(f: FilesState, path: string): boolean {
 
 function FileTree({
   state,
+  items,
+  dropAt,
   focused,
   onFocus: setFocused,
   onToggle,
@@ -933,6 +1183,10 @@ function FileTree({
   onDownload,
 }: {
   state: FilesState
+  // The rows by path, kept by the view: it focuses an uploaded file's
+  items: { current: Map<string, HTMLElement> }
+  // The folder files dragged over would go in, highlighted
+  dropAt?: string
   focused?: string
   onFocus: (path: string) => void
   onToggle: (path: string) => void
@@ -949,7 +1203,6 @@ function FileTree({
   const rows = visibleRows(state)
   const entries = rows.filter((r) => r.kind === 'entry')
   const current = entries.find((r) => r.path === focused) ?? entries[0]
-  const items = useRef(new Map<string, HTMLElement>())
 
   const focus = (path: string) => {
     setFocused(path)
@@ -1020,6 +1273,8 @@ function FileTree({
         r.kind === 'note' ? (
           <div
             key={r.path}
+            // A drop on a folder's note goes in that folder
+            data-path={r.dir}
             className="py-1.5 pr-3 text-[12px] text-fg-subtle"
             style={{ paddingLeft: `${r.level * 16 + 12}px` }}
           >
@@ -1031,6 +1286,7 @@ function FileTree({
             row={r}
             expanded={isDir(r.entry) ? !!state.expanded[r.path] : undefined}
             tabbable={r === current}
+            dropTarget={r.path === dropAt}
             // A folder read and found to hold something cannot go
             notEmpty={!!state.dirs[r.path]?.entries?.length}
             itemRef={(el) => {
@@ -1063,6 +1319,7 @@ function TreeItem({
   row,
   expanded,
   tabbable,
+  dropTarget,
   notEmpty,
   itemRef,
   onClick,
@@ -1073,6 +1330,7 @@ function TreeItem({
   row: EntryRow
   expanded?: boolean
   tabbable: boolean
+  dropTarget: boolean
   notEmpty: boolean
   itemRef: (el: HTMLElement | null) => void
   onClick: () => void
@@ -1103,9 +1361,11 @@ function TreeItem({
       aria-expanded={expanded}
       aria-disabled={can ? undefined : true}
       tabIndex={tabbable ? 0 : -1}
+      // Where a drop on the row goes is worked out from it (dropFolder)
+      data-path={row.path}
       onClick={onClick}
       {...(hasMenu && press)}
-      className={`group flex min-h-9 [-webkit-touch-callout:none] cursor-default items-center gap-1.5 pr-1 text-[13px] hover:bg-surface pointer-coarse:min-h-touch ${FOCUS_RING} focus-visible:-outline-offset-2 ${can ? 'text-fg' : 'text-fg-subtle'}`}
+      className={`group flex min-h-9 [-webkit-touch-callout:none] cursor-default items-center gap-1.5 pr-1 text-[13px] hover:bg-surface pointer-coarse:min-h-touch ${dropTarget ? 'bg-accent/10 ring-1 ring-accent ring-inset' : ''} ${FOCUS_RING} focus-visible:-outline-offset-2 ${can ? 'text-fg' : 'text-fg-subtle'}`}
       style={{ paddingLeft: `${(level - 1) * 16 + 8}px` }}
     >
       <ChevronRight

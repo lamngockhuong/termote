@@ -37,7 +37,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   same-site (`Sec-Fetch-Site`/`Origin` on the allowlist) with `Content-Type: application/json`;
   only the paths `/api/mux/uploads` and `.../files/image` (`isFilesImagePath`, anchored, on the
   decoded path) take a raw `image/png|jpeg|gif|webp` body instead (their handlers take POST only),
-  any other type there → 415 `unsupported_image`
+  any other type there → 415 `unsupported_image`; and `.../files/upload` (`isFilesUploadPath`,
+  anchored) without `check=1` takes a raw `application/octet-stream` body only, any other type
+  there (a form's `multipart/form-data`, `text/plain` or urlencoded, which need no preflight) → 415
+  `unsupported_type`
 - **Terminal stream** (`/api/mux/stream`): same Origin check plus a single-use, 30s-TTL token
   fetched via `/api/mux/stream-token`, consumed on WebSocket upgrade. Every paste into the
   terminal (native paste events are taken in capture phase, ahead of xterm) goes through
@@ -1020,8 +1023,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   stays 60s; 201 `{root, path}`. The name is checked
   before the disk is touched (400 `invalid_name`): no empty component, at most 32 components and
   1024 bytes, 255 a component, none ending in a dot or a space, no control character, no
-  `<>:"|?*` on Windows, not a
-  `.termote-edit-<16 hex>` name, then `cleanRelPath`. Deny dirs, `.git`/the git dir and the
+  `<>:"|?*` on Windows, not a temporary file's name (`.termote-edit-`, `.termote-rename-` or
+  `.termote-upload-<16 hex>`, `tempName`), then `cleanRelPath`. Deny dirs, `.git`/the git dir and the
   write-only deny list → 403 `not_allowed`; a sensitive name needs `reveal: true` (403
   `sensitive`; the PWA asks once, then opens the editor without a Show). One lock per root, taken
   before one of the 2 write slots shared with saves (429 `busy`), so a create waiting on another
@@ -1073,6 +1076,74 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   status is dropped. Accepted risk: no quota and no sweep (unlike uploads), at most 10 MB per
   request and 2 at a time, since the file is the user's own in their repo, as a save is. No caps
   flag: the PWA offers it where Edit is offered
+- **Uploading a file** (`POST files/upload?root=&dir=&name=[&reveal=1][&check=1]`,
+  `server/files_upload.go`; PWA `hooks/use-file-uploads.ts`, `utils/upload-file.ts`): a file from
+  the device (the Upload button, a drop on Files, a paste of files in the tree) becomes a new file
+  in a folder of the root, any type, 0 bytes allowed, never sniffed. The body is raw
+  `application/octet-stream` only (`writeGuard`, above: any other type → 415 `unsupported_type`);
+  `check=1` is a JSON write like any other and its body is never read. Order: POST only (405),
+  `root` required (400), the handler's cross-site check, `requireWriteRole` (403 `view_only`), the
+  root still the pane's (409) or the Place's (403 `place_moved`, 404 `unknown_place`), `dir` as
+  `files/image` checks it (`imageDir`, 400 `invalid_name`), then `name` (`validUploadName`, 400
+  `invalid_name`): exactly one component on every OS (no `/`, no `\`, `filepath.IsLocal`,
+  `Base(name) == name`), a create's per-name rules (`validNamePart`: at most 255 bytes, no
+  control character, not ending in a dot or a space, so never `.` or `..`, and `<>:"|?*` on a
+  Windows host), never a temporary file's name (`tempName`), no Windows device name on any OS
+  (`CON`, `PRN`, `AUX`, `NUL`, `COM1`–`COM9`, `LPT1`–`LPT9`, `COM¹²³`, `LPT¹²³`, `CONIN$`,
+  `CONOUT$`, with or without an extension: `CON.txt`), no format character (a bidi override or a
+  zero-width space makes one name pose as another) and no U+FFFD or invalid UTF-8.
+  - `check=1` runs every check that needs no body (the walk, the deny lists, sensitive, the name
+    the upload would get now), creates nothing, takes no slot, and answers 200 `{root, path}` or
+    the refusal; with no refusal, 429 `upload_busy` while another upload holds the slot (looked at
+    only). The PWA always checks first: a refusal written before a large body is read reaches the
+    browser as a reset connection (`net/http` stops reading past 256 KiB), not as its code. The
+    upload checks everything again.
+  - The upload: a `Content-Length` over 100 MiB (`maxUploadFileSize`, as `maxDownloadSize`) → 413
+    `too_large` unread; one slot of its own (`uploadSlots`, capacity 1, never one of the 2 write
+    slots of saves) else 429 `upload_busy` unread; the body capped at 100 MiB (`MaxBytesReader`,
+    413); a read deadline of 2 minutes from each read that brought bytes and 30 minutes for the
+    whole body (`idleReader`): a client that stops sending gets 408 `timeout` and frees the slot.
+    The folder is walked as a create walks it, making none (`walkParents`: a symlink or junction
+    → 403 `symlink`, deny dirs and the git dir → 403 `not_allowed`, missing → 404 `not_found`, a
+    file on the way → 409 `not_directory`); the name is checked again before the body is read
+    (deny lists, sensitive without `reveal=1` → 403 `sensitive`). `.termote-upload-<16 hex>`
+    files over an hour old in that folder are swept (that exact form only), then the body streams
+    into a new hidden `.termote-upload-<16 hex>` (`O_CREATE|O_EXCL`, 0666 under the umask), synced
+    and closed; a disk error is kept apart from the body's (507 `storage_full`, 403 `read_only`,
+    403 `permission`).
+  - Only then, under the root's lock (`rootLockKey`, never held while the body streams), the
+    first free name: `name`, then `stem (2)ext` … `stem (99)ext` (a dotfile with no other dot has
+    no extension: `.env (2)`; the stem cut on a rune boundary to stay within 255 bytes; each one
+    checked again: the name rules, the deny lists, sensitive), past 99 → 409 `exists`.
+    `os.Root.Link(temp, name)` gives it the name (a hard link never replaces: a taken name moves
+    on to the next), then the temp is removed. Where the file system has no hard links (`Link`
+    fails with `ErrUnsupported`, `EPERM`, `ENOTSUP`, `EXDEV` or `ENOSYS`; on Windows
+    `ERROR_INVALID_FUNCTION` or `ERROR_NOT_SUPPORTED`): the name is `Lstat`ed and, free, the temp
+    renamed to it under the lock. Any failure removes the temp by its random name, never a name a
+    user sees: a visible name only ever holds a whole file, and a server stopped mid-upload leaves
+    only a hidden temp. 201 `{root, path}` (`path` names the file as saved); the root's cached git
+    status is dropped; an `audit: upload path= size= by= via=` line.
+  - Upload temps are refused as a name by every write (`tempName`) and are sensitive
+    (`isSensitive`), as a save's: one a failed remove left shows in the tree as sensitive until
+    the sweep, and one whose `Link` worked shares the visible file's inode, so it is swept only
+    once that file went an hour unchanged. Accepted risks: on a file system without hard links
+    (a FAT or exFAT stick on Windows too), a file another process makes under the same name
+    between the `Lstat` and the rename is replaced, on Windows as on Unix (Go's `Root.Rename`
+    replaces an existing file there, unless it is open without delete sharing), and so is a file
+    a create makes through another root's lock (a Place inside the pane's root); the slot is one
+    for the whole server, so a writer sending a byte just under every 2 minutes holds it up to 30
+    minutes; an uploaded file is as trusted as one made with `files/create` (Windows runs a
+    file by its extension, so an uploaded `.exe` or `.ps1` can be run like any file the user has;
+    a writer has a shell anyway); no quota beyond 100 MiB a file and one at a time, writer role
+    only.
+  - The PWA sends one file at a time from a queue that outlives the Files view (switching to the
+    terminal never stops it); each file keeps the pane, Place and root it was started for. It asks
+    once per batch before a sensitive folder or name (`.ssh/…`, `.env`), naming the file, the
+    folder and the root (Enter cancels; a no sends nothing of the batch and says nothing), waits on `upload_busy` (every 3 s, 150 s at most), and after every byte went checks
+    a lost answer by reading the folder (the name and the size). Drops are taken in the capture
+    phase on the whole Files view: the browser never navigates to a dropped file, and the editor
+    never inserts its text. A view-only device has no Upload button and no paste, and a drop only
+    tells it so
 - **Finding a file** (`GET files/find?q=&root=&ignored=1&exclude=…&fresh=1`,
   `server/files_find.go`): the GET guards of the other files routes; only names are sent, as
   the tree does. `q` is trimmed, 1–256 bytes; `exclude` (repeated) is at most 50 directory
@@ -1262,7 +1333,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `permission`); never opened, never hashed, any number of hard links. The new path:
   `validRenameTarget` (a create's shape rules; its per-name rules only for the new base name and
   for each directory the walk has to make, so a file inside an existing directory whose name ends in a space can
-  still be renamed; never a `.termote-edit-`/`.termote-rename-<16 hex>` name) → 400
+  still be renamed; never a `.termote-edit-`/`.termote-rename-`/`.termote-upload-<16 hex>` name) → 400
   `invalid_name`, the deny lists → 403 `not_allowed`, missing parents made and checked again as
   a create's. A sensitive name on either side needs `reveal: true` (403 `sensitive`). Locks: the
   root's lock, both files' locks (shared with saves) in the order of their keys, one write slot

@@ -983,6 +983,30 @@ export function useFiles(paneId: string) {
   }
 }
 
+// A file uploaded at path under root, of paneId's place: the folders down to
+// it are read again where paneId's view still shows that root. Run from an
+// upload that may outlive the view that started it.
+export async function filesUploaded(
+  paneId: string,
+  place: string | undefined,
+  root: string,
+  path: string,
+) {
+  const s = stores.get(paneId)
+  if (s?.get().root === root && s.get().place === place) await s.restored(path)
+}
+
+// paneId's root moved to root, as an upload was told: its view follows,
+// unless it shows another place now
+export function filesRootMoved(
+  paneId: string,
+  place: string | undefined,
+  root: string,
+) {
+  const s = stores.get(paneId)
+  if (s && s.get().place === place) s.rootChanged(root)
+}
+
 // The file from under root was renamed to to: the tabs and drafts of every
 // pane showing root follow it (reveal: the user chose to show it as
 // sensitive). Run once the server moved it, with the paths it answered.

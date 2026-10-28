@@ -29,8 +29,8 @@ func isSensitive(p string) bool {
 	parts := strings.Split(strings.ToLower(filepath.ToSlash(filepath.Clean(p))), "/")
 	base := parts[len(parts)-1]
 	// A save's temporary file holds the new contents of any file, a .env
-	// one included, and a rename's the file itself.
-	if strings.HasPrefix(base, editTempPrefix) || strings.HasPrefix(base, renameTempPrefix) {
+	// one included, a rename's the file itself, and an upload's any file.
+	if strings.HasPrefix(base, editTempPrefix) || strings.HasPrefix(base, renameTempPrefix) || strings.HasPrefix(base, uploadTempPrefix) {
 		return true
 	}
 	for _, pat := range sensitiveNames {

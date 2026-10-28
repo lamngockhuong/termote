@@ -8,8 +8,8 @@ export function nameProblem(path: string): string | undefined {
   if (path.split('/').includes('..')) return "A path can't go up with .."
 }
 
-// A save's and a rename's temporary files: names the server never takes
-const TEMP_NAME = /^\.termote-(edit|rename)-[0-9a-f]{16}$/
+// A save's, a rename's and an upload's temporary files: names the server never takes
+const TEMP_NAME = /^\.termote-(edit|rename|upload)-[0-9a-f]{16}$/
 
 // Whether the server takes name as the name of a new file (its
 // validNamePart): at most 255 bytes, not ending in a dot or a space, no

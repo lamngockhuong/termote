@@ -157,6 +157,17 @@ func writeGuard(allowed hostAllowlist, next http.Handler) http.Handler {
 			jsonError(w, msg, http.StatusForbidden)
 			return
 		}
+		// A file sent to files/upload is raw application/octet-stream:
+		// not CORS-safelisted, so another site needs the preflight too.
+		// Its check=1 is JSON like any other write.
+		if isFilesUploadPath(r.URL.Path) && r.URL.Query().Get("check") != "1" {
+			if mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type")); err == nil && mt == "application/octet-stream" {
+				next.ServeHTTP(w, r)
+				return
+			}
+			writeUploadError(w, errFileUploadUnsupported)
+			return
+		}
 		// An upload, and an image pasted into a Markdown file, is a raw
 		// image body: image/* is not CORS-safelisted either, so another site
 		// still needs the preflight we never answer. Multipart stays

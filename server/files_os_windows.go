@@ -49,6 +49,13 @@ func isStorageFull(err error) bool {
 // isReadOnlyFS reports whether err is a write to write-protected media.
 func isReadOnlyFS(err error) bool { return errors.Is(err, windows.ERROR_WRITE_PROTECT) }
 
+// isLinkUnsupported reports whether err is a file system without hard
+// links (FAT and exFAT, some network shares).
+func isLinkUnsupported(err error) bool {
+	return errors.Is(err, errors.ErrUnsupported) || errors.Is(err, windows.ERROR_INVALID_FUNCTION) ||
+		errors.Is(err, windows.ERROR_NOT_SUPPORTED)
+}
+
 // interruptProcess kills git: a console signal cannot reach a process
 // without its own console. Accepted risk: a git killed past gitWriteTimeout
 // can leave index.lock behind.

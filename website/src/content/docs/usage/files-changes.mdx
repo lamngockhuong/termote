@@ -515,6 +515,74 @@ download, under the file's name; nothing is opened or shown, whatever the file h
 
 A view-only session has no Download.
 
+## Uploading Files
+
+A file on the device you are using, of any type (a PDF, a CSV, a zip, a screenshot, a log), can
+be put in a folder of Files in three ways:
+
+- **Upload files** (an arrow up, next to New file) opens the device's file picker; on a phone it
+  offers the photo library, the camera and the Files app too. Several files can be picked at once.
+  They go into the folder you last tapped in the tree, or the folder of the file you last tapped,
+  or the top folder.
+- **Dropping** files from the computer's file manager on Files: on a folder row they go into that
+  folder, on a file row into its folder, below the rows into the top folder. A folder that is a
+  symbolic link, or one inside such a link, passes them to the nearest real folder above it. While a file is open,
+  a drop puts the files in that file's folder, and the result names the folder. A dropped file is
+  never inserted into the text being edited.
+- **Pasting** files copied in the file manager (Ctrl+V, ⌘V on a Mac) while the tree is shown puts
+  them in the same folder as Upload files. A paste into the search box, or with a file open, does
+  nothing. What a copy in the file manager puts on the clipboard differs between browsers and
+  systems (on Linux often only the file's path), so when nothing happens, use the button or a drop.
+
+The files go up one at a time. A row under the Files header shows the file being sent, how far it
+is and how many are left, with **Cancel**; Cancel turns off once a file is fully sent, since the
+server then saves it anyway. Uploads carry on when you switch to the terminal or
+another view, each into the folder it was started for; the row shows again when you come back to
+Files. When they are done one notice says how it went, such as `Uploaded 3 files.` or
+`1 of 3 uploaded. big.zip: File is larger than 100 MB (1 more not uploaded)`.
+
+- At most **100 MiB** a file, the most a download takes.
+- An existing file is never replaced: a taken name gets a number, `report.pdf` becoming
+  `report (2).pdf`, up to `(99)`. The notice says `Saved as report (2).pdf`.
+- A folder that usually holds secrets (`.ssh`, `.aws`, …), or a name that does (`.env`), is asked
+  about first, once for the files sent together, naming the file and where it goes. Enter keeps
+  the files away; answering no sends none of those files, without a notice.
+- Only files go up, never folders: a dropped folder is skipped and said so.
+- When another upload is running (from another device, or another tab), the row says `Waiting for another upload…` and the file goes
+  once that one ends, or after two and a half minutes says so.
+- When the connection drops after the file was fully sent, Files reads the folder to see whether the file
+  arrived; if it cannot tell, it says `Not sure the file was saved. Check the folder`.
+- A file is written under a hidden temporary name (`.termote-upload-…`) and only gets its name
+  once complete, so a half-sent file never shows under its name (while it is sent, the temporary
+  file may show in the tree, marked as sensitive). One left by a server stopped mid-upload is
+  removed by the next upload to that folder after an hour.
+- Every upload is written to the server log as an `audit: upload` line (the path, the size and who
+  sent it).
+
+| Shown                                              | Why                                                                                       |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `File is larger than 100 MB`                       | The file is over the limit                                                                |
+| `The folder is a link: not uploaded`               | A folder on the path is a symbolic link the tree had not shown as one: nothing is written through one |
+| `Files can't be uploaded to this folder`           | A path Termote never serves (see [Never Shown](#never-shown)), `.git`, or its own folders  |
+| `This file's name can't be used on the host`       | A name with `\`, a Windows device name (`NUL`, `CON.txt`, `COM1`), invisible or direction-changing characters, a control character, more than 255 bytes, one ending in a dot or a space, or on a Windows host one of `<>:"\|?*` |
+| `Too many files with this name. Rename one first`  | `name (2)` up to `name (99)` are all taken                                                |
+| `The folder is no longer on the host`              | Something removed or moved the folder after the tree was read                             |
+| `The server can't write in this folder`            | The folder cannot be written                                                              |
+| `The file system there is read-only`               | The folder is on a read-only disk or mount                                                |
+| `The host's disk or quota is full`                 | The host's disk, or your disk quota, has no room left                                     |
+| `The upload stalled. Try again on a better connection` | Nothing arrived for two minutes, or the file took more than 30 minutes                |
+| `Another upload is running. Try again shortly`     | Another device's upload still held the server after the wait                              |
+
+<Aside type="caution">
+  An uploaded file is as trusted as one made with New file: a tool may read or run it by itself
+  (on Windows a file runs by its extension, so an uploaded `.exe` or `.ps1` can be started like
+  any other). Anyone who can sign in can already run commands in the terminal, so this allows
+  nothing new, but check what you upload into such places.
+</Aside>
+
+A view-only session has no Upload files button and pastes nothing; a drop only says
+`A view-only device cannot upload`, and the browser never opens the dropped file.
+
 ## Markdown Preview
 
 A Markdown file (`.md`, `.markdown`, `.mdx`) opens rendered: headings, lists, tables (they
