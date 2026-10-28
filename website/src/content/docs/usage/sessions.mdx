@@ -87,7 +87,7 @@ pane per window.
 
 ### Pane layout
 
-The **Pane** menu in the header (the grid icon) changes the layout of the tab on screen, acting on
+The **Pane** menu in the header (the split icon) changes the layout of the tab on screen, acting on
 the pane shown:
 
 - **Split right** and **Split down** open a new pane beside or under it, in its directory.
@@ -106,8 +106,10 @@ The backends differ in a few ways:
 
 - **tmux**: a split leaves the focus where it was, so the pane shown stays the same. Zoom gives
   the zoomed pane tmux's focus, for every client, your desktop's included.
-- **Herdr**: after a split, Termote shows the new pane; Herdr's own focus stays put. Zoom focuses
-  the pane in Herdr, for every client.
+- **Herdr**: Termote shows one pane at a time, not the tab's layout, so zooming, swapping and
+  resizing would change only the Herdr desktop. The menu offers **Split right**, **Split down** and
+  **Close pane** alone, and the palette greys the others out ("Changes only the Herdr desktop").
+  After a split, Termote shows the new pane; Herdr's own focus stays put.
 - **Zellij**: after a split, Termote shows the new pane. Swap turns the panes of the tab around one
   place, so the pane strip keeps its order while the panes move on screen. Zoom moves every client
   viewing the tab, your own Zellij included, to the zoomed pane. Through the API, a split into a

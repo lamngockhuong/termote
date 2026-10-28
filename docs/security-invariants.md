@@ -144,8 +144,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   Pane layout (`server/mux_zellij_layout.go`, Zellij 0.45.1 or later, the version checked; else
   501): each action runs once, never through `zellijRepeat`, on the `terminal_N` the listing
   confirmed. Zoom is `toggle-fullscreen --pane-id` only when the listing's `is_fullscreen`
-  differs (another fullscreen pane of the tab put back first), checked again after (503 `busy`
-  otherwise); Zellij moves every client of the tab onto that pane. Swap is `move-pane` (next) or
+  differs (another fullscreen pane of the tab put back first), checked again after for up to 1 s,
+  as the listing can lag the toggle (503 `busy` otherwise, never toggled twice); Zellij moves every client of the tab onto that pane. Swap is `move-pane` (next) or
   `move-pane-backwards` (prev) `--pane-id`: it turns the panes around on screen, the strip keeps
   its id order, and it wraps (never 409). Resize is `resize increase <dir> --pane-id`, one round
   per 5 cells asked, at most 5, under the session's slot. Split has no pane target: under the

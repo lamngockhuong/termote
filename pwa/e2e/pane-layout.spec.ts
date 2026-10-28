@@ -3,7 +3,8 @@ import type { APIRequestContext } from '@playwright/test'
 import { expect, type Page, test } from './fixtures'
 
 // The Pane menu of the header against a real backend: split, zoom, swap,
-// resize and close on the backend of the job running it.
+// resize and close on the backend of the job running it (on Herdr, whose
+// page shows one pane, split and close alone).
 // TERMOTE_E2E_HERDR=1 (the e2e-herdr job) is Herdr on HERDR_SOCKET_PATH,
 // TERMOTE_E2E_ZELLIJ=1 (the e2e-zellij job) is Zellij on ZELLIJ_SOCKET_DIR,
 // else tmux on TMUX_SOCKET (the E2E job). Without that socket the spec skips,
@@ -55,10 +56,10 @@ function zellijPanes(): ZellijPane[] {
 const zellijPane = (paneId: string) =>
   zellijPanes().find((p) => p.id === Number(paneId.slice(paneId.lastIndexOf(':p') + 2)))
 
-// Whether the tab holding paneId is zoomed, as the backend itself says
+// Whether the tab holding paneId is zoomed, as tmux or Zellij says (Herdr's
+// page offers no zoom)
 function zoomed(paneId: string): boolean {
   if (backend === 'tmux') return cli('tmux', '-S', socket, 'display', '-p', '-t', paneId, '#{window_zoomed_flag}') === '1'
-  if (backend === 'herdr') return JSON.parse(cli('herdr', 'pane', 'layout', '--pane', paneId)).result.layout.zoomed === true
   const tab = zellijPane(paneId)?.tab_id
   return zellijPanes().some((p) => p.tab_id === tab && p.is_fullscreen)
 }
@@ -82,7 +83,7 @@ function columns(paneId: string): { x: number; width: number } {
 
 interface Snapshot {
   backend: string
-  caps: { paneLayout?: boolean; clientSideSelect?: boolean }
+  caps: { paneLayout?: boolean; clientSideSelect?: boolean; paneStream?: boolean }
   groups: { id: string; name: string; tabs: { id: string; name: string; panes?: { id: string }[] }[] }[]
 }
 
@@ -118,12 +119,15 @@ test.describe(`Pane layout on ${backend}`, () => {
   // The page picks the pane it streams (Herdr, Zellij), and so the new one
   // after a split
   let clientSide = false
+  // The page shows one pane (Herdr): zoom, swap and resize are not offered
+  let paneStream = false
 
   test.beforeEach(async ({ request }) => {
     const snap = await snapshot(request)
     expect(snap.backend, `the server under test runs ${backend}`).toBe(backend)
     expect(snap.caps.paneLayout, 'caps.paneLayout').toBe(true)
     clientSide = snap.caps.clientSideSelect === true
+    paneStream = snap.caps.paneStream === true
     const group = snap.groups.find((g) => g.name === GROUP)
     expect(group, `the ${GROUP} group`).toBeTruthy()
     groupId = group!.id
@@ -167,28 +171,38 @@ test.describe(`Pane layout on ${backend}`, () => {
     const added = (await panesOf(request, tabId)).find((p) => p.id !== first.id)!
     expect(columns(added.id).x).toBeGreaterThan(columns(first.id).x)
 
-    // Zoom toggles the tab: on, then off again
-    expect(zoomed(first.id)).toBe(false)
-    await paneAction(page, 'Zoom')
-    await expect.poll(() => zoomed(first.id), { timeout: 15000 }).toBe(true)
-    await paneAction(page, 'Zoom')
-    await expect.poll(() => zoomed(first.id), { timeout: 15000 }).toBe(false)
-
-    // The first pane shown again where the page picked the new one, then
-    // swapped with the next: it moves to the right
+    // The first pane shown again where the page picked the new one
     if (clientSide) {
       await strip(page).locator('button[aria-pressed="false"]').click()
       await expect(strip(page).locator('button[aria-pressed="false"]')).toHaveCount(1)
     }
-    await paneAction(page, 'Swap with next pane')
-    await expect.poll(() => columns(first.id).x > columns(added.id).x, { timeout: 15000 }).toBe(true)
 
-    // Resize: its left edge moves, so it changes width; the menu stays open
-    const before = columns(first.id).width
-    await paneAction(page, 'Resize left')
-    await expect.poll(() => columns(first.id).width, { timeout: 15000 }).not.toBe(before)
-    await expect(page.getByRole('menuitem', { name: 'Resize left', exact: true })).toBeVisible()
-    await page.keyboard.press('Escape')
+    if (paneStream) {
+      // Herdr streams one pane: arranging the tab would change only the
+      // desktop, so the menu offers split and close alone
+      await menuButton(page).click()
+      await expect(page.getByRole('menuitem', { name: 'Split right', exact: true })).toBeVisible()
+      for (const name of [/Zoom/, /Swap/, /Resize/]) await expect(page.getByRole('menuitem', { name })).toHaveCount(0)
+      await page.keyboard.press('Escape')
+    } else {
+      // Zoom toggles the tab: on, then off again
+      expect(zoomed(first.id)).toBe(false)
+      await paneAction(page, 'Zoom')
+      await expect.poll(() => zoomed(first.id), { timeout: 15000 }).toBe(true)
+      await paneAction(page, 'Zoom')
+      await expect.poll(() => zoomed(first.id), { timeout: 15000 }).toBe(false)
+
+      // Swapped with the next: the first pane moves to the right
+      await paneAction(page, 'Swap with next pane')
+      await expect.poll(() => columns(first.id).x > columns(added.id).x, { timeout: 15000 }).toBe(true)
+
+      // Resize: its left edge moves, so it changes width; the menu stays open
+      const before = columns(first.id).width
+      await paneAction(page, 'Resize left')
+      await expect.poll(() => columns(first.id).width, { timeout: 15000 }).not.toBe(before)
+      await expect(page.getByRole('menuitem', { name: 'Resize left', exact: true })).toBeVisible()
+      await page.keyboard.press('Escape')
+    }
 
     // The pane shown closes after the confirmation; the strip goes with it
     await paneAction(page, 'Close pane')

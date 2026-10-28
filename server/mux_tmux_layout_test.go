@@ -17,8 +17,8 @@ func paneReply(panes, zoomed, active string) fakeTmuxReply {
 
 func TestTmuxPaneLayoutCap(t *testing.T) {
 	useFakeTmuxScript(t, map[string]fakeTmuxReply{})
-	if !(tmuxMux{}).Caps().PaneLayout {
-		t.Error("tmux: paneLayout off")
+	if c := (tmuxMux{}).Caps(); !c.PaneLayout || c.PaneStream {
+		t.Errorf("tmux: paneLayout %v, paneStream %v (the stream shows the window)", c.PaneLayout, c.PaneStream)
 	}
 	usePsmux(t, true)
 	if (tmuxMux{}).Caps().PaneLayout {

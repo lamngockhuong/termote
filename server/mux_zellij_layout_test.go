@@ -29,8 +29,8 @@ const zellijOnlyPane0 = "0\n[{\"id\":0,\"is_plugin\":false,\"tab_id\":0}]\n"
 
 func TestZellijPaneLayoutCap(t *testing.T) {
 	useFakeZellij(t, map[string]string{"--version": fakeZellijVersion})
-	if !newTestZellijMux().Caps().PaneLayout {
-		t.Error("paneLayout off on 0.45.1")
+	if c := newTestZellijMux().Caps(); !c.PaneLayout || c.PaneStream {
+		t.Errorf("0.45.1: paneLayout %v, paneStream %v (the stream shows the tab)", c.PaneLayout, c.PaneStream)
 	}
 	useFakeZellij(t, map[string]string{"--version": "0\nzellij 0.45.0\n"})
 	m := newTestZellijMux()
@@ -97,6 +97,23 @@ func TestZellijZoomPane(t *testing.T) {
 	}
 	if strings.Contains(log(), "toggle-fullscreen") {
 		t.Errorf("only pane toggled: %q", log())
+	}
+	// The listing still shows the old state just after the toggle, then
+	// catches up: done, toggled once.
+	log = useFakeZellij(t, map[string]string{"--version": fakeZellijVersion, "list-panes": zellijPanesJSON(),
+		"list-panes.5": zellijPanesJSON(1)})
+	if err := newTestZellijMux().ZoomPane(ctx, id, ZoomOn); err != nil {
+		t.Errorf("zoom confirmed late = %v", err)
+	}
+	if n := strings.Count(log(), "toggle-fullscreen"); n != 1 {
+		t.Errorf("toggled %d times", n)
+	}
+	// The request ends while the listing has not caught up: its error.
+	useFakeZellij(t, map[string]string{"--version": fakeZellijVersion, "list-panes": zellijPanesJSON()})
+	short, cancel := context.WithTimeout(ctx, 2*zellijZoomPoll)
+	defer cancel()
+	if err := newTestZellijMux().ZoomPane(short, id, ZoomOn); !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("zoom past the request's end = %v", err)
 	}
 	// Still not fullscreen after the toggle: busy, never toggled again.
 	log = useFakeZellij(t, map[string]string{"--version": fakeZellijVersion, "list-panes": zellijPanesJSON()})

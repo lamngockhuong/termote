@@ -1598,6 +1598,7 @@ export default function App({
         previousTab,
         nextTab,
         paneLayout: !!mux.caps.paneLayout,
+        paneStream: !!mux.caps.paneStream,
         canSwapNext,
         desktop: !isMobile,
         splitPane: (d) => runPaneAction(() => splitPane(d)),
@@ -1648,6 +1649,7 @@ export default function App({
       previousTab,
       nextTab,
       mux.caps.paneLayout,
+      mux.caps.paneStream,
       canSwapNext,
       isMobile,
       runPaneAction,
@@ -1804,6 +1806,7 @@ export default function App({
               !overviewOpen && (
                 <PaneLayoutMenu
                   desktop={!isMobile}
+                  arrange={!mux.caps.paneStream}
                   canSwapNext={canSwapNext}
                   canClose={shownPanes.length > 1}
                   onSplit={(d) => runPaneAction(() => splitPane(d))}
