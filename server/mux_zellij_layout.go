@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"time"
 )
 
 // Pane layout on Zellij. None of these actions can be run twice safely (a
@@ -20,6 +21,15 @@ var zellijPaneLayoutMin = [3]int{0, 45, 1}
 const (
 	zellijResizeStep   = 5
 	zellijResizeRounds = 5
+)
+
+// zellijZoomSettle bounds the wait for the listing to report a toggled
+// fullscreen: list-panes can still show the old state just after
+// toggle-fullscreen, and a zoom that did happen must not answer busy (nor
+// be toggled back by the next one, read from the old state).
+const (
+	zellijZoomSettle = time.Second
+	zellijZoomPoll   = 100 * time.Millisecond
 )
 
 // zellijCanPaneLayout reports whether this Zellij has the layout actions.
@@ -175,14 +185,23 @@ func (m *zellijMux) ZoomPane(ctx context.Context, paneID string, mode ZoomMode) 
 	if err := zellijLayoutAction(ctx, session, p.ID, "toggle-fullscreen", "--pane-id", zellijTerminal(p.ID)); err != nil {
 		return err
 	}
-	now, err := zellijFindPane(ctx, session, p.ID)
-	if err != nil {
-		return err
+	for deadline := time.Now().Add(zellijZoomSettle); ; {
+		now, err := zellijFindPane(ctx, session, p.ID)
+		if err != nil {
+			return err
+		}
+		if now.IsFullscreen == want {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return errZellijBusy
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(zellijZoomPoll):
+		}
 	}
-	if now.IsFullscreen != want {
-		return errZellijBusy
-	}
-	return nil
 }
 
 // SwapPane moves paneID one place on screen: next is move-pane, prev
