@@ -1484,12 +1484,12 @@ export default function App({
       window.location.hash = formatDeepLink({
         group: session.groupId,
         tab: session.id,
-        pane: mux.caps.clientSideSelect ? pane.id : undefined,
+        pane: pane.id,
         view,
         ...(focus && { solo: true as const }),
       })
     },
-    [mux.caps.clientSideSelect, selectSession, focus],
+    [selectSession, focus],
   )
   const overviewOpensChat = useCallback(
     (pane: SessionPane) => !!mux.caps.agentChat && chatAgent(pane.agentName),
@@ -1830,18 +1830,18 @@ export default function App({
                 View only: you can watch this terminal but not type
               </Banner>
             ))}
-          {/* Split tab: pick the pane to stream (herdr) */}
-          {mux.caps.clientSideSelect &&
-            activeSession.panes &&
-            !overviewOpen &&
-            !focus && (
-              <PaneStrip
-                panes={activeSession.panes}
-                activePaneId={activeSession.paneId}
-                onSelect={selectPane}
-                onClose={readOnly ? undefined : setPendingPaneId}
-              />
-            )}
+          {/* Split tab: pick the pane to stream (Herdr, Zellij) or to focus
+              (tmux, where picking is a write: a view-only device watches) */}
+          {activeSession.panes && !overviewOpen && !focus && (
+            <PaneStrip
+              panes={activeSession.panes}
+              activePaneId={activeSession.paneId}
+              onSelect={
+                mux.caps.clientSideSelect || !readOnly ? selectPane : undefined
+              }
+              onClose={readOnly ? undefined : setPendingPaneId}
+            />
+          )}
           {/* isolate: the maximized side panel stays under the header's menus */}
           <div className="relative isolate flex min-h-0 flex-1">
             {/* The view's column: the input area sits under the view only, so
@@ -2260,7 +2260,9 @@ export default function App({
                 focusTerminal(getTerminal())
               }}
               selectSession={(id) => void selectFromList(id)}
-              selectPane={mux.caps.clientSideSelect ? selectPane : undefined}
+              selectPane={
+                mux.caps.clientSideSelect || !readOnly ? selectPane : undefined
+              }
               openInWindow={focus ? undefined : openPickWindow}
               sessionsOff={focus ? 'Not in a focus window' : undefined}
             />

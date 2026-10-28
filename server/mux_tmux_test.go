@@ -253,12 +253,6 @@ func TestTmuxMuxCaps(t *testing.T) {
 
 // Invalid input must be rejected before any tmux process is started, so these
 // cases run without tmux installed.
-func TestTmuxClosePaneUnsupported(t *testing.T) {
-	if err := (tmuxMux{}).ClosePane(context.Background(), "0"); !errors.Is(err, errUnsupported) {
-		t.Errorf("ClosePane = %v, want errUnsupported", err)
-	}
-}
-
 func TestTmuxMuxRejectsInvalidInput(t *testing.T) {
 	m := tmuxMux{}
 	ctx := context.Background()
@@ -374,8 +368,10 @@ type fakeTmuxReply struct {
 	code        int
 }
 
-// useFakeTmuxScript is useFakeTmux with a reply per subcommand ($1); a
-// subcommand without one prints nothing and exits 0.
+// useFakeTmuxScript is useFakeTmux with a reply per subcommand ($1, after a
+// leading -u); a subcommand without one prints nothing and exits 0. A key
+// with a space matches the first two arguments ("-u list-panes"), before
+// the subcommand alone.
 func useFakeTmuxScript(t *testing.T, replies map[string]fakeTmuxReply) func() string {
 	t.Helper()
 	if runtime.GOOS == "windows" {
@@ -385,12 +381,26 @@ func useFakeTmuxScript(t *testing.T, replies map[string]fakeTmuxReply) func() st
 	logPath := filepath.Join(dir, "args")
 	script := filepath.Join(dir, "tmux")
 	var b strings.Builder
-	b.WriteString("#!/bin/sh\nprintf '%s\\n' \"$*\" >> '" + logPath + "'\n[ \"$1\" = -u ] && shift\ncase \"$1\" in\n")
-	for sub, r := range replies {
-		out, errf := filepath.Join(dir, sub+".out"), filepath.Join(dir, sub+".err")
+	b.WriteString("#!/bin/sh\nprintf '%s\\n' \"$*\" >> '" + logPath + "'\n")
+	n := 0
+	reply := func(r fakeTmuxReply) string {
+		n++
+		out, errf := filepath.Join(dir, fmt.Sprintf("%d.out", n)), filepath.Join(dir, fmt.Sprintf("%d.err", n))
 		os.WriteFile(out, []byte(r.out), 0o644)
 		os.WriteFile(errf, []byte(r.stderr), 0o644)
-		fmt.Fprintf(&b, "%s) cat '%s'; cat '%s' >&2; exit %d;;\n", sub, out, errf, r.code)
+		return fmt.Sprintf("cat '%s'; cat '%s' >&2; exit %d;;\n", out, errf, r.code)
+	}
+	b.WriteString("case \"$1 $2\" in\n")
+	for sub, r := range replies {
+		if strings.Contains(sub, " ") {
+			fmt.Fprintf(&b, "'%s') %s", sub, reply(r))
+		}
+	}
+	b.WriteString("esac\n[ \"$1\" = -u ] && shift\ncase \"$1\" in\n")
+	for sub, r := range replies {
+		if !strings.Contains(sub, " ") {
+			fmt.Fprintf(&b, "%s) %s", sub, reply(r))
+		}
 	}
 	b.WriteString("esac\n")
 	if err := os.WriteFile(script, []byte(b.String()), 0o755); err != nil {
@@ -424,20 +434,23 @@ func TestTmuxSnapshotParsesPaneFields(t *testing.T) {
 	if def.ID != "main" || def.Name != "main" || ma2.ID != "$4" || ma2.Name != "ma2" || work.ID != "$5" || work.Name != "wo_rk" {
 		t.Fatalf("groups = %+v", snap.Groups)
 	}
+	// The pane list (the same reply here) reads nothing, so each tab has
+	// its window's active pane, by its %N.
 	tabs := def.Tabs
-	if len(tabs) != 2 || tabs[0].Name != "edit: main.go" || tabs[1].Name != "logs" || tabs[0].Panes[0].ID != "0" || !tabs[0].Active {
+	if len(tabs) != 2 || tabs[0].Name != "edit: main.go" || tabs[1].Name != "logs" || tabs[0].Panes[0].ID != "%3" || !tabs[0].Active {
 		t.Fatalf("tabs = %+v", tabs)
 	}
-	if ma2.Tabs[0].ID != "$4:0" || ma2.Tabs[0].Name != "a:b" || ma2.Tabs[0].Panes[0].ID != "$4:0" || work.Tabs[0].ID != "$5:2" {
+	if ma2.Tabs[0].ID != "$4:0" || ma2.Tabs[0].Name != "a:b" || ma2.Tabs[0].Panes[0].ID != "%9" || work.Tabs[0].ID != "$5:2" {
 		t.Fatalf("other tabs = %+v, %+v", ma2.Tabs, work.Tabs)
 	}
-	if tabs[0].Key != "@12" || tabs[1].Key != "@13" || ma2.Tabs[0].Key != "@11" || tabs[0].Panes[0].key != "%3" {
-		t.Errorf("keys = %q %q %q, pane %q", tabs[0].Key, tabs[1].Key, ma2.Tabs[0].Key, tabs[0].Panes[0].key)
+	if tabs[0].Key != "@12" || tabs[1].Key != "@13" || ma2.Tabs[0].Key != "@11" || paneKey(tabs[0].Panes[0]) != "%3" {
+		t.Errorf("keys = %q %q %q, pane %q", tabs[0].Key, tabs[1].Key, ma2.Tabs[0].Key, paneKey(tabs[0].Panes[0]))
 	}
 	if tabs[0].Panes[0].Agent != nil || tabs[1].Panes[0].Agent != nil {
 		t.Error("agent reported for panes without Claude Code")
 	}
-	if got := strings.TrimSpace(args()); got != "list-windows -a -F "+tmuxListFormat+"\n-u list-panes -a -F "+tmuxPaneFormat {
+	if got := strings.TrimSpace(args()); got != "list-windows -a -F "+tmuxListFormat+"\nlist-panes -a -F "+tmuxPaneListFormat+
+		"\n-u list-panes -a -F "+tmuxPaneFormat {
 		t.Errorf("argv = %q", got)
 	}
 }
@@ -460,8 +473,8 @@ func TestTmuxSnapshotCreatesMissingDefaultSession(t *testing.T) {
 		t.Errorf("groups = %+v", snap.Groups)
 	}
 	lines := strings.Split(strings.TrimSpace(args()), "\n")
-	if len(lines) != 5 || lines[1] != "has-session -t =main" || lines[2] != "new-session -d -s main" || !strings.HasPrefix(lines[3], "list-windows -a") ||
-		!strings.HasPrefix(lines[4], "-u list-panes -a") {
+	if len(lines) != 6 || lines[1] != "has-session -t =main" || lines[2] != "new-session -d -s main" || !strings.HasPrefix(lines[3], "list-windows -a") ||
+		lines[4] != "list-panes -a -F "+tmuxPaneListFormat || !strings.HasPrefix(lines[5], "-u list-panes -a") {
 		t.Errorf("argv = %q", lines)
 	}
 }
@@ -693,7 +706,7 @@ func TestLookupAgentsDoesNotBlockSnapshot(t *testing.T) {
 	<-started
 	defer close(release)
 	start := time.Now()
-	out := lookupAgents(context.Background(), []agentPane{{0, 0, "%999", "424242"}})
+	out := lookupAgents(context.Background(), []agentPane{{paneID: "%999", panePID: "424242"}})
 	if d := time.Since(start); d > agentLookupWait+500*time.Millisecond {
 		t.Errorf("lookupAgents waited %v", d)
 	}
@@ -1200,7 +1213,8 @@ func TestTmuxProcessesInRealSession(t *testing.T) {
 		body, _ = json.Marshal(snap)
 		tab := snap.Groups[0].Tabs[0]
 		return len(tab.Processes) == 2 && tab.Processes[0].Name == "bash" && tab.Processes[1].Name == "python3" &&
-			tab.Panes[0].Process != nil && tab.Panes[0].Process.Name == "python3"
+			len(tab.Panes) == 2 && tab.Panes[0].Process != nil && tab.Panes[0].Process.Name == "bash" &&
+			tab.Panes[1].Process != nil && tab.Panes[1].Process.Name == "python3" && tab.Panes[1].Active
 	})
 	if strings.Contains(string(body), "SECRET") || strings.Contains(string(body), "time.sleep") {
 		t.Errorf("argv in the snapshot: %s", body)

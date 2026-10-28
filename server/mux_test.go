@@ -362,3 +362,47 @@ func TestNewMux(t *testing.T) {
 		t.Error("newMux(screen) should fail")
 	}
 }
+
+func TestFindSnapshotPane(t *testing.T) {
+	snap := Snapshot{Groups: []Group{
+		{ID: "main", Tabs: []Tab{
+			{ID: "0", Panes: []Pane{{ID: "%3"}, {ID: "%4", Active: true}}},
+			{ID: "1", Panes: []Pane{{ID: "%5"}}},
+			{ID: "2"},
+		}},
+		{ID: "$1", Tabs: []Tab{{ID: "$1:0", Panes: []Pane{{ID: "$1:0", Active: true}}}}},
+	}}
+	for _, tc := range []struct {
+		id         string
+		tabIDs     bool
+		group, tab string
+		pane       string
+	}{
+		{"%3", false, "main", "0", "%3"},
+		{"%3", true, "main", "0", "%3"},
+		{"0", true, "main", "0", "%4"},
+		{"1", true, "main", "1", "%5"}, // no pane active: its first
+		{"$1:0", false, "$1", "$1:0", "$1:0"},
+		{"0", false, "", "", ""},
+		{"2", true, "", "", ""}, // a tab without panes
+		{"%9", true, "", "", ""},
+	} {
+		g, tab, p, ok := findSnapshotPane(snap, tc.id, tc.tabIDs)
+		if ok != (tc.pane != "") || g.ID != tc.group || tab.ID != tc.tab || p.ID != tc.pane {
+			t.Errorf("findSnapshotPane(%q, %v) = %q %q %q %v", tc.id, tc.tabIDs, g.ID, tab.ID, p.ID, ok)
+		}
+	}
+}
+
+// Closing a tab's last pane is refused with its own code: the PWA asks to
+// close the tab instead.
+func TestClosePaneLastPaneRoute(t *testing.T) {
+	m := &fakeMux{err: errLastPane}
+	rec := serve(newTestHandler(t, m), apiRequest(http.MethodDelete, "/api/mux/panes/%254", ""))
+	if body := decodeBody(t, rec); rec.Code != http.StatusConflict || body["code"] != "last_pane" {
+		t.Errorf("= %d %v", rec.Code, body)
+	}
+	if len(m.calls) != 1 || m.calls[0] != "close pane %4" {
+		t.Errorf("calls = %v", m.calls)
+	}
+}

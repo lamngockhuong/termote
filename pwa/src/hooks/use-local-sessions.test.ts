@@ -73,6 +73,7 @@ vi.mock('../utils/large-packet-loss', async (orig) => ({
   reportLargePacketLoss: mockReportLargePacketLoss,
 }))
 
+import { loadView } from '../utils/files-persist'
 import { onPaneRemap, paneGroupOf, paneKeyOf } from '../utils/pane-remap'
 
 const { mockRenamePersisted } = vi.hoisted(() => ({
@@ -780,16 +781,155 @@ describe('useLocalSessions', () => {
     ])
   })
 
-  it('tmux ignores selectPane: only the session is kept', async () => {
-    mockFetchTabs.mockResolvedValue([
-      { ...WIN_SHELL, panes: [{ id: '0', active: true }] },
-    ])
+  // tmux streams the whole window: picking a pane gives it tmux's focus,
+  // shared by every client, and the pane shown follows that focus.
+  const SPLIT = (active: string) => ({
+    ...WIN_SHELL,
+    key: '@12',
+    panes: [
+      { id: '%3', active: active === '%3' },
+      { id: '%4', active: active === '%4' },
+    ],
+  })
+
+  it('tmux selectPane focuses the pane on the server and shows it at once', async () => {
+    mockFetchTabs.mockResolvedValue([SPLIT('%4')])
     const { result } = renderHook(() => useLocalSessions(1))
     await act(async () => {})
-    act(() => result.current.selectPane('0'))
+    expect(result.current.activeSession.paneId).toBe('%4')
+    await act(async () => {
+      await result.current.selectPane('%3')
+    })
+    expect(mockSelectTab).toHaveBeenCalledWith('%3')
+    expect(result.current.activeSession.paneId).toBe('%3')
+    // Only the session is kept: the pane is tmux's to tell
     expect(JSON.parse(localStorage.getItem('termote-selection-tmux')!)).toEqual(
       { tabId: '0', groupId: 'main' },
     )
+    // A refused pick shows the pane until the next snapshot says otherwise
+    mockSelectTab.mockRejectedValueOnce(new Error('gone'))
+    await act(async () => {
+      result.current.selectPane('%4')
+    })
+    expect(result.current.activeSession.paneId).toBe('%4')
+    await act(async () => {
+      await result.current.refreshSessions()
+    })
+    expect(result.current.activeSession.paneId).toBe('%4')
+    // The pane on screen, or one of another tab, asks for nothing
+    mockSelectTab.mockClear()
+    await act(async () => {
+      await result.current.selectPane('%4')
+      await result.current.selectPane('%9')
+    })
+    expect(mockSelectTab).not.toHaveBeenCalled()
+  })
+
+  it('tmux switchSession to a pane gives that pane the focus', async () => {
+    mockFetchTabs.mockResolvedValue([
+      { ...WIN_VIM, active: true },
+      { ...SPLIT('%4'), active: false },
+    ])
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    expect(result.current.activeSession.id).toBe('1')
+    // A pane of another tab: its %N is selected, window and focus at once
+    await act(async () => {
+      await result.current.switchSession('0', '%3')
+    })
+    expect(mockSelectTab).toHaveBeenLastCalledWith('%3')
+    expect(result.current.activeSession.id).toBe('0')
+    expect(result.current.activeSession.paneId).toBe('%3')
+    // A pane of the tab on screen
+    await act(async () => {
+      await result.current.switchSession('0', '%4')
+    })
+    expect(mockSelectTab).toHaveBeenLastCalledWith('%4')
+    expect(result.current.activeSession.paneId).toBe('%4')
+    // The pane on screen, or one the tab lacks, asks for nothing more
+    mockSelectTab.mockClear()
+    await act(async () => {
+      await result.current.switchSession('0', '%4')
+      await result.current.switchSession('0', '%9')
+    })
+    expect(mockSelectTab).not.toHaveBeenCalled()
+    // Another tab with an unknown pane: the tab alone
+    await act(async () => {
+      await result.current.switchSession('1', '%9')
+    })
+    expect(mockSelectTab).toHaveBeenLastCalledWith('1')
+  })
+
+  it('a view-only device cannot open a pane by moving the tmux focus', async () => {
+    mockSnapshot.extra = {
+      caps: { clientSideSelect: false, copyMode: true, role: 'view' },
+    }
+    mockFetchTabs.mockResolvedValue([SPLIT('%4')])
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    let res: string | undefined
+    await act(async () => {
+      res = await result.current.switchSession('0', '%3')
+    })
+    expect(res).toBe('view-only')
+    expect(mockSelectTab).not.toHaveBeenCalled()
+    expect(result.current.activeSession.paneId).toBe('%4')
+  })
+
+  it('tmux shows the pane the server reports as focused', async () => {
+    mockFetchTabs.mockResolvedValueOnce([SPLIT('%4')])
+    mockFetchTabs.mockResolvedValue([SPLIT('%3')])
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    expect(result.current.activeSession.paneId).toBe('%4')
+    await act(async () => {
+      await result.current.refreshSessions()
+    })
+    expect(result.current.activeSession.paneId).toBe('%3')
+    expect(result.current.activeSession.panes?.map((p) => p.id)).toEqual([
+      '%3',
+      '%4',
+    ])
+  })
+
+  it('a view-only device never moves the tmux focus', async () => {
+    mockSnapshot.extra = {
+      caps: { clientSideSelect: false, copyMode: true, role: 'view' },
+    }
+    mockFetchTabs.mockResolvedValue([SPLIT('%4')])
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    await act(async () => {
+      await result.current.selectPane('%3')
+    })
+    expect(mockSelectTab).not.toHaveBeenCalled()
+    expect(result.current.activeSession.paneId).toBe('%4')
+  })
+
+  it("keeps what was stored for a tmux tab's one pane, now its active pane", async () => {
+    mockSnapshot.extra = { instanceId: 'inst' }
+    mockFetchTabs.mockResolvedValue([SPLIT('%4')])
+    const view = (pane: string, v: string) =>
+      JSON.stringify({
+        v: 1,
+        pane,
+        group: 'main',
+        savedAt: Date.now(),
+        view: v,
+      })
+    localStorage.setItem('termote-pane-view:inst:@12', view('@12', 'chat'))
+    localStorage.setItem('termote-pane-view:other:@12', view('@12', 'files'))
+    sessionStorage.setItem('termote-chat-draft:0', 'unsent')
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    expect(result.current.activeSession.paneId).toBe('%4')
+    expect(loadView('%4')).toBe('chat')
+    expect(localStorage.getItem('termote-pane-view:inst:@12')).toBeNull()
+    // Another server's records are not this one's
+    expect(localStorage.getItem('termote-pane-view:other:@12')).not.toBeNull()
+    expect(sessionStorage.getItem('termote-chat-draft:%4')).toBe('unsent')
+    expect(sessionStorage.getItem('termote-chat-draft:0')).toBeNull()
+    sessionStorage.clear()
   })
 
   it('tmux follows the window the server reports as current', async () => {

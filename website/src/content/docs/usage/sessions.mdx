@@ -6,8 +6,8 @@ description: Managing terminal sessions with tmux, Herdr or Zellij
 import { Aside, Steps } from "@astrojs/starlight/components";
 
 Termote models terminals as three levels — **group → tab → pane** — regardless of backend.
-With the default tmux backend a group is a tmux session and a tab is a tmux window; panes are
-only used by the Herdr and Zellij backends.
+With the default tmux backend a group is a tmux session, a tab is a tmux window and a pane is a
+pane of that window.
 
 With tmux, every session on the tmux server appears as a group, including sessions you started
 yourself outside Termote (`tmux new -s work`): anyone signed in to Termote can switch to them and
@@ -73,6 +73,17 @@ The directory check only catches mistakes: the shell that opens can still `cd` a
 Windows, the directory must be on a drive letter (`C:\work`), and psmux names and directories
 cannot contain `#`. A Zellij session name cannot contain `/`, start with `-`, be `help` or
 `options`, or be too long for Zellij's socket path.
+
+### Split windows (tmux)
+
+A tmux window split into several panes shows a **pane strip** below the tab bar: one button per
+pane, with the command it runs and its agent badge. The terminal always shows the whole window,
+so picking a pane gives it tmux's focus: what you type goes there, and the Chat and Files views
+follow it. That focus is tmux's own and shared with every client: the tmux client on your
+desktop moves too, and when the focus changes on the desktop, Termote follows at its next poll.
+On a view-only device the strip only shows the panes. To close a pane, click the X next to its
+name and confirm; a window's last pane is closed by closing the tab. psmux (Windows) shows one
+pane per window.
 
 ### Reordering tabs and workspaces
 
@@ -232,8 +243,7 @@ Native installs ([`termote start --mux herdr`](/installation/native/#herdr-backe
 It changes the session model in two ways:
 
 - **Panes**: a Herdr tab can have more than one pane. When it does, a **pane strip** appears
-  below the tab bar to switch between them; a tmux tab never shows this strip (it never has
-  more than one pane). Each pane shows the command it runs under its name. To close a pane, click the X next to its name (shown on the streamed pane,
+  below the tab bar to switch between them. Each pane shows the command it runs under its name. To close a pane, click the X next to its name (shown on the streamed pane,
   and on the others on hover or on touch screens), then confirm with "Close pane". The other panes
   of the tab stay open; a tab's last pane is closed by closing the tab.
 - **Agent status badges**: each pane can show a small icon — idle, working, blocked, or done —

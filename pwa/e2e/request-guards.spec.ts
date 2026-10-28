@@ -52,6 +52,7 @@ async function streamToken(request: APIRequestContext): Promise<string> {
   return (await res.json()).token
 }
 
+// The first pane's id, encoded by each caller: a tmux pane id is "%N"
 async function firstPane(request: APIRequestContext): Promise<string> {
   const snap = await (await request.get('/api/mux/snapshot')).json()
   return snap.groups[0].tabs[0].panes[0].id
@@ -62,7 +63,7 @@ test.describe('stream WebSocket guards', () => {
     const pane = await firstPane(request)
     const token = await streamToken(request)
     const origin = new URL(testInfo.project.use.baseURL ?? '').origin
-    const res = await handshake(testInfo, `/api/mux/stream?pane=${pane}&token=${token}`, {
+    const res = await handshake(testInfo, `/api/mux/stream?pane=${encodeURIComponent(pane)}&token=${token}`, {
       Origin: origin,
     })
     expect(res).toEqual({ status: 101, upgraded: true })
@@ -71,7 +72,7 @@ test.describe('stream WebSocket guards', () => {
   test('a foreign Origin is rejected', async ({ request }, testInfo) => {
     const pane = await firstPane(request)
     const token = await streamToken(request)
-    const res = await handshake(testInfo, `/api/mux/stream?pane=${pane}&token=${token}`, {
+    const res = await handshake(testInfo, `/api/mux/stream?pane=${encodeURIComponent(pane)}&token=${token}`, {
       Origin: 'https://evil.example',
     })
     expect(res).toEqual({ status: 403, upgraded: false })
@@ -80,7 +81,7 @@ test.describe('stream WebSocket guards', () => {
   test('a cross-site fetch context is rejected', async ({ request }, testInfo) => {
     const pane = await firstPane(request)
     const token = await streamToken(request)
-    const res = await handshake(testInfo, `/api/mux/stream?pane=${pane}&token=${token}`, {
+    const res = await handshake(testInfo, `/api/mux/stream?pane=${encodeURIComponent(pane)}&token=${token}`, {
       'Sec-Fetch-Site': 'cross-site',
     })
     expect(res).toEqual({ status: 403, upgraded: false })
@@ -88,14 +89,14 @@ test.describe('stream WebSocket guards', () => {
 
   test('a missing token is rejected', async ({ request }, testInfo) => {
     const pane = await firstPane(request)
-    const res = await handshake(testInfo, `/api/mux/stream?pane=${pane}`)
+    const res = await handshake(testInfo, `/api/mux/stream?pane=${encodeURIComponent(pane)}`)
     expect(res).toEqual({ status: 401, upgraded: false })
   })
 
   test('a token works only once', async ({ request }, testInfo) => {
     const pane = await firstPane(request)
     const token = await streamToken(request)
-    const path = `/api/mux/stream?pane=${pane}&token=${token}`
+    const path = `/api/mux/stream?pane=${encodeURIComponent(pane)}&token=${token}`
     expect((await handshake(testInfo, path)).upgraded).toBe(true)
     expect(await handshake(testInfo, path)).toEqual({ status: 401, upgraded: false })
   })

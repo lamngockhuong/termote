@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MuxSnapshot } from '../hooks/use-mux-api'
 import {
+  adoptPersisted,
   clearDrafts,
   DRAFT_LIMIT,
   DRAFTS_LIMIT,
@@ -372,6 +373,80 @@ describe('renamePersistedGroup', () => {
     localStorage.setItem('termote-pane-view:i1:bad', '{')
     renamePersistedGroup('z', 'y', null)
     expect(stored('termote-pane-view:i1:y:9').group).toBeNull()
+  })
+})
+
+describe('adoptPersisted', () => {
+  it("moves a tab key's records to its pane, drafts with their paths", () => {
+    saveTabs('files', '1', { n: 1 })
+    writeDraft('1', draft('a:b'), 3)
+    saveView('1', { view: 'chat' })
+    saveView('2', { view: 'files' })
+    // Another server's record under the same key is not this one's
+    localStorage.setItem(
+      'termote-pane-view:i2:@1',
+      JSON.stringify({ v: 1, pane: '@1', group: 'main', savedAt: 1 }),
+    )
+    adoptPersisted(new Map([['@1', '%3']]))
+    expect(Object.keys(localStorage).sort()).toEqual([
+      'termote-file-drafts:i1:%3:/r\u0000a:b',
+      'termote-files-tabs:i1:%3',
+      'termote-pane-view:i1:%3',
+      'termote-pane-view:i1:@2',
+      'termote-pane-view:i2:@1',
+    ])
+    snapshot([['%3', '%3']], 'i1', [{ name: 'main', tabs: ['%3'] }])
+    expect(loadView('%3')).toEqual({ view: 'chat' })
+    expect(loadTabs('files', '%3')).toEqual({ n: 1 })
+    expect(loadDrafts('%3')).toHaveLength(1)
+    // The moved draft still counts towards the total
+    const big = 'x'.repeat(DRAFTS_LIMIT - 100)
+    expect(writeDraft('%3', draft('other', big), 1)).toBe(false)
+  })
+
+  it("keeps what the pane has already, dropping the tab key's", () => {
+    saveView('1', { view: 'chat' })
+    localStorage.setItem(
+      'termote-pane-view:i1:%3',
+      JSON.stringify({
+        v: 1,
+        pane: '%3',
+        group: 'main',
+        savedAt: 1,
+        view: 'files',
+      }),
+    )
+    adoptPersisted(new Map([['@1', '%3']]))
+    expect(localStorage.getItem('termote-pane-view:i1:@1')).toBeNull()
+    expect(stored('termote-pane-view:i1:%3').view).toBe('files')
+  })
+
+  it('does nothing without moves, in a focus window or once signed out', () => {
+    saveView('1', { view: 'chat' })
+    const before = Object.keys(localStorage).sort()
+    adoptPersisted(new Map())
+    setFocusWindowForTest(true)
+    adoptPersisted(new Map([['@1', '%3']]))
+    setFocusWindowForTest(false)
+    expect(Object.keys(localStorage).sort()).toEqual(before)
+    signedOut()
+    adoptPersisted(new Map([['@1', '%3']]))
+    expect(localStorage.getItem('termote-pane-view:i1:%3')).toBeNull()
+  })
+
+  it('leaves a record whose new key cannot be read', () => {
+    saveView('1', { view: 'chat' })
+    const get = Storage.prototype.getItem
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(function (
+      this: Storage,
+      key: string,
+    ) {
+      if (key === 'termote-pane-view:i1:%3') throw new Error('denied')
+      return get.call(this, key)
+    })
+    adoptPersisted(new Map([['@1', '%3']]))
+    vi.restoreAllMocks()
+    expect(stored('termote-pane-view:i1:@1').view).toEqual({ view: 'chat' })
   })
 })
 

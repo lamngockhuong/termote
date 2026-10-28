@@ -178,6 +178,17 @@ export function remapReviewDrafts(shift: PaneShift) {
   for (const id of shift.stale) write(id, moved.get(id) ?? EMPTY)
 }
 
+// Each review kept under a key in moves goes to its value, unless one is
+// already kept there (tabPaneMoves).
+export function adoptReviewDrafts(moves: Map<string, string>) {
+  for (const [from, to] of moves) {
+    const list = loadReview(from)
+    if (!list.length) continue
+    if (!loadReview(to).length) write(to, list)
+    write(from, EMPTY)
+  }
+}
+
 // Every review of this tab: on sign-out, since a comment quotes the files
 export function clearReviewDrafts() {
   cache.clear()

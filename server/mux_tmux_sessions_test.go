@@ -73,7 +73,7 @@ func TestTmuxSessionsInRealServer(t *testing.T) {
 		t.Fatalf("groups = %+v", snap.Groups)
 	}
 	g := findGroup(snap, sid)
-	if g == nil || g.Name != "work" || g.Tabs[0].ID != sid+":0" || g.Tabs[0].Panes[0].ID != sid+":0" {
+	if g == nil || g.Name != "work" || g.Tabs[0].ID != sid+":0" || !tmuxPaneIDRe.MatchString(g.Tabs[0].Panes[0].ID) {
 		t.Fatalf("work group = %+v", g)
 	}
 

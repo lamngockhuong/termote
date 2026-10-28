@@ -474,14 +474,8 @@ func paneGroup(ctx context.Context, m Mux, paneID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	for _, g := range snap.Groups {
-		for _, tab := range g.Tabs {
-			for _, p := range tab.Panes {
-				if p.ID == paneID {
-					return g.ID, nil
-				}
-			}
-		}
+	if g, _, _, ok := findSnapshotPane(snap, paneID, !m.Caps().ClientSideSelect); ok {
+		return g.ID, nil
 	}
 	return "", inputError("unknown pane")
 }

@@ -444,7 +444,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   outside Termote included, so anyone signed in sees, switches to and types into them (as Herdr
   exposes every workspace; accepted). `TMUX_SESSION` (default `main`; no `:`, `.`, leading `=`
   or `$`) keeps group id = its name and bare tab ids (`0`), so links, saved selections and E2E
-  keep working; any other session is tmux's own session id: group `$3`, tab/pane `$3:1`, which
+  keep working; any other session is tmux's own session id: group `$3`, tab `$3:1`, which
   a rename keeps and a tmux server restart changes. A window name is never an id. A window
   index shifts with a move or `renumber-windows`, so each tab also carries `Tab.key`, tmux's
   window id `@N` (read in `tmuxListFormat` before the names; psmux keys a tab by its id until
@@ -464,6 +464,27 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   target with another window or nothing. A stream runs `attach -E -t <$N|=name>`; the macOS
   reaper matches exactly that, plus `attach -t <TMUX_SESSION>` left by older releases, never a
   user's own `tmux attach`
+- **tmux panes** (`server/mux_tmux.go`, `tmuxPaneRef`): every pane of a window is a pane, its
+  id tmux's own `%N`, unique on the server and kept through a kill, swap or window move, so an
+  old id reaches no other pane; psmux keeps one pane per window with the tab's id (its pane ids
+  are per session). Every pane route and the stream also take a bare tab id (`0`, `$3:2`) for
+  the window's active pane (`parseTmuxPaneID`; the stream, task runs and the overview through
+  `findSnapshotPane`, only where tabs are selected on the server), so links, notifications and
+  older clients keep working; the tab routes (`parseTmuxID`) never take `%N`. The panes come
+  from one `list-panes -a` per snapshot, never cached (fields that cannot hold a `:`); a window
+  with a line that cannot be read, or an index or id listed twice, keeps its active pane only,
+  as every window does when the command fails (logged once a minute). Commands target `%N`
+  exactly, and a reply naming another pane (tmux answers a missing `%N` with nothing, exit 0)
+  or `can't find pane` is 400 `unknown pane`. Picking a pane is `POST /tabs/{id}/select` with
+  its `%N` (`select-window -t %N`, then `select-pane -t %N`): a write (`requireWriteRole`) that
+  moves the focus every client of the session shares, so the PWA's pane strip only shows the
+  panes to a view-only device, and the pane it shows follows that focus; opening a given pane
+  (Overview, a task, a link) selects its `%N` the same way, refused as `view-only` to such a
+  device. `DELETE /panes/{id}`
+  reads the pane's `%N` and `#{window_panes}` with `display-message`, checks the reply, then
+  runs `kill-pane -t %N`; a window's last pane is 409 `last_pane` (closing the tab is
+  `CloseTab`); psmux 501. Accepted gap: a pane closed elsewhere between that check and the kill
+  makes it close the window's last pane, which closes the window too
 - **Agent chat** (`/api/mux/panes/{id}/agent/*`): for Claude Code on tmux the server reads only
   the transcript in the Claude config dir of the process found in the pane (`CLAUDE_CONFIG_DIR`,
   else `~/.claude`; psmux: `%USERPROFILE%\.claude`), and only for a process whose start time

@@ -15,6 +15,7 @@ import {
   sessionPaneKey,
   setPaneKeys,
   shiftedIds,
+  tabPaneMoves,
 } from './pane-remap'
 
 const keys = (...pairs: [string, string][]) => new Map(pairs)
@@ -291,5 +292,55 @@ describe('setPaneKeys renames', () => {
       ['%5', null],
     ])
     resetPaneKeys()
+  })
+})
+
+describe('tabPaneMoves', () => {
+  const snap = (backend: string, clientSideSelect = false) =>
+    ({
+      backend,
+      caps: { clientSideSelect },
+      groups: [
+        {
+          id: 'main',
+          tabs: [
+            {
+              id: '0',
+              key: '@1',
+              panes: [
+                { id: '%3', active: false },
+                { id: '%4', active: true },
+              ],
+            },
+            { id: '1', key: '@2', panes: [{ id: '%5', active: false }] },
+            // psmux, or a tab still known by its own id
+            { id: '2', key: '2', panes: [{ id: '2', active: true }] },
+            { id: '3', panes: [{ id: '%7', active: true }] },
+            { id: '4', key: '@4', panes: [] },
+          ],
+        },
+      ],
+    }) as unknown as MuxSnapshot
+
+  it("gives each tmux tab's id and key its active pane", () => {
+    const { ids, keys } = tabPaneMoves(snap('tmux'))
+    expect([...ids]).toEqual([
+      ['0', '%4'],
+      ['1', '%5'],
+      ['3', '%7'],
+    ])
+    expect([...keys]).toEqual([
+      ['@1', '%4'],
+      ['@2', '%5'],
+    ])
+  })
+
+  it('moves nothing on another backend', () => {
+    for (const s of [snap('herdr', true), snap('zellij', true)]) {
+      const { ids, keys } = tabPaneMoves(s)
+      expect(ids.size + keys.size).toBe(0)
+    }
+    const noGroups = { ...snap('tmux'), groups: undefined }
+    expect(tabPaneMoves(noGroups as unknown as MuxSnapshot).ids.size).toBe(0)
   })
 })

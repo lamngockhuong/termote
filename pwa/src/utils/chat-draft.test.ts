@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  adoptChatDrafts,
   clearChatDrafts,
   clearChatDraftsOnSignOut,
   isTextInsert,
@@ -139,5 +140,25 @@ describe('text for the draft', () => {
     expect(takeDraftInsert('1')).toBeUndefined()
     expect(takeDraftInsert('2')).toEqual({ text: 'a' })
     expect(takeDraftInsert('3')).toBeUndefined()
+  })
+})
+
+describe('adoptChatDrafts', () => {
+  it('moves a draft to its new key unless one is kept there', () => {
+    saveDraft('0', 'tab draft')
+    saveDraft('1', 'old')
+    saveDraft('%5', 'pane draft')
+    adoptChatDrafts(
+      new Map([
+        ['0', '%3'],
+        ['1', '%5'],
+        ['2', '%6'],
+      ]),
+    )
+    expect(loadDraft('%3')).toBe('tab draft')
+    expect(loadDraft('0')).toBe('')
+    expect(loadDraft('%5')).toBe('pane draft')
+    expect(loadDraft('1')).toBe('')
+    expect(loadDraft('%6')).toBe('')
   })
 })

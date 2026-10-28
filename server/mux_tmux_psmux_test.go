@@ -163,8 +163,11 @@ func TestPsmuxTabKeys(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tab := snap.Groups[0].Tabs[0]; tab.Key != "0" || tab.Panes[0].key != "0" {
-		t.Errorf("tab key %q, pane key %q; want the id", tab.Key, tab.Panes[0].key)
+	if tab := snap.Groups[0].Tabs[0]; tab.Key != "0" || tab.Panes[0].ID != "0" || paneKey(tab.Panes[0]) != "0" {
+		t.Errorf("tab key %q, pane %q key %q; want the id", tab.Key, tab.Panes[0].ID, paneKey(tab.Panes[0]))
+	}
+	if strings.Contains(args(), "list-panes -a -F "+tmuxPaneListFormat) {
+		t.Errorf("psmux listed its panes by id: %q", args())
 	}
 	before := len(strings.Split(strings.TrimSpace(args()), "\n"))
 	if err := (tmuxMux{}).CloseTab(context.Background(), "0", "0"); err != nil {
