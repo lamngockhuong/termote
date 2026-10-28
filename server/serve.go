@@ -213,17 +213,44 @@ func (s *tokenStore) generateFor(r role, deviceID string) (string, error) {
 // never pushes out a full client's: it takes the oldest view-only one, or
 // errTokensBusy; a full client's takes the oldest view-only one first.
 func (s *tokenStore) generateGrant(r role, deviceID, sessionID string) (string, error) {
+	token, err := newRandomToken()
+	if err != nil {
+		return "", err
+	}
+	_, err = s.put(token, tokenInfo{role: r, deviceID: deviceID, sessionID: sessionID})
+	return token, err
+}
+
+// newRandomToken returns 16 random bytes as hex.
+func newRandomToken() (string, error) {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
-	token := hex.EncodeToString(b)
+	return hex.EncodeToString(b), nil
+}
+
+// droppedToken is a token put removed: expired, or pushed out by the cap.
+type droppedToken struct {
+	tokenInfo
+	expired bool
+}
+
+// put stores token with ti (its exp, when zero, the store's ttl from now)
+// under the sweep and the caps generateGrant describes, and returns the
+// tokens it removed, taken under the same lock as the insert.
+func (s *tokenStore) put(token string, ti tokenInfo) ([]droppedToken, error) {
 	now := time.Now()
+	if ti.exp.IsZero() {
+		ti.exp = now.Add(s.ttl)
+	}
+	var dropped []droppedToken
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for k, ti := range s.tokens {
-		if now.After(ti.exp) {
+	for k, old := range s.tokens {
+		if now.After(old.exp) {
 			delete(s.tokens, k)
+			dropped = append(dropped, droppedToken{old, true})
 		}
 	}
 	if s.max > 0 {
@@ -236,13 +263,14 @@ func (s *tokenStore) generateGrant(r role, deviceID, sessionID string) (string, 
 			}
 		}
 		drop := func(i int) {
+			dropped = append(dropped, droppedToken{s.tokens[live[i]], false})
 			delete(s.tokens, live[i])
 			live = append(live[:i], live[i+1:]...)
 		}
-		if r == roleView && deviceID != "" && s.perDevice > 0 {
+		if ti.role == roleView && ti.deviceID != "" && s.perDevice > 0 {
 			var mine []int
 			for i, k := range live {
-				if s.tokens[k].deviceID == deviceID {
+				if s.tokens[k].deviceID == ti.deviceID {
 					mine = append(mine, i)
 				}
 			}
@@ -253,9 +281,9 @@ func (s *tokenStore) generateGrant(r role, deviceID, sessionID string) (string, 
 		for len(live) >= s.max {
 			i := slices.IndexFunc(live, func(k string) bool { return s.tokens[k].role == roleView })
 			if i < 0 {
-				if r == roleView {
+				if ti.role == roleView {
 					s.order = live
-					return "", errTokensBusy
+					return dropped, errTokensBusy
 				}
 				i = 0
 			}
@@ -263,8 +291,8 @@ func (s *tokenStore) generateGrant(r role, deviceID, sessionID string) (string, 
 		}
 		s.order = append(live, token)
 	}
-	s.tokens[token] = tokenInfo{exp: now.Add(s.ttl), role: r, deviceID: deviceID, sessionID: sessionID}
-	return token, nil
+	s.tokens[token] = ti
+	return dropped, nil
 }
 
 // validate checks a token. If singleUse is true, consumes the token.
@@ -438,6 +466,13 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 			devices = newDeviceAuth(store, tokenStore, hub)
 			hub.alive = store.alive
 			hub.onShutdown = store.flush
+			if push != nil {
+				devices.push = push
+				// A device revoked or expired while the server was down.
+				if err := push.removeDevices(store.alive); err != nil {
+					log.Printf("push subscriptions of gone devices: %v", err)
+				}
+			}
 		}
 	}
 	if sessions != nil && devices != nil {

@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -52,13 +53,15 @@ var (
 )
 
 // pushSub is one device's push subscription. Gen ties it to the credential
-// it was made with; Created is when it was last subscribed (an upsert renews
-// it), the age the cap evicts by.
+// it was made with; Device to the paired device that made it ("" for the
+// password), so it ends with that device; Created is when it was last
+// subscribed (an upsert renews it), the age the cap evicts by.
 type pushSub struct {
 	Endpoint string    `json:"endpoint"`
 	P256dh   string    `json:"p256dh"`
 	Auth     string    `json:"auth"`
 	Gen      string    `json:"gen"`
+	Device   string    `json:"device,omitempty"`
 	Created  time.Time `json:"created"`
 }
 
@@ -341,6 +344,18 @@ func (s *pushStore) remove(endpoint string) error {
 		return nil
 	}
 	return s.commitLocked(next)
+}
+
+// removeDevices deletes the subscriptions of the paired devices keep does
+// not keep (revoked, expired); the password's stay.
+func (s *pushStore) removeDevices(keep func(id string) bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	gone := func(sub pushSub) bool { return sub.Device != "" && !keep(sub.Device) }
+	if !slices.ContainsFunc(s.subs, gone) {
+		return nil
+	}
+	return s.commitLocked(slices.DeleteFunc(slices.Clone(s.subs), gone))
 }
 
 // drop removes a subscription its push service reported gone (404, 410).

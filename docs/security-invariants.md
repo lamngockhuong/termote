@@ -264,7 +264,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   it, and the `lastUsedAt` flush made under `mu` by a lookup only tries both, leaving the uses for
   the next flush (shutdown waits). A file system that cannot lock (`ENOLCK`, `ENOTSUP`) writes
   unlocked and logs it once. A lookup stats the file at most each second, so a second process sees
-  a revoke; `lastUsedAt` reaches disk each 5 minutes. `--no-auth`
+  a revoke, and a reload ends what every device it no longer finds live holds (`onGone`, on its own
+  goroutine: the hub's lock comes before the store's); `lastUsedAt` reaches disk each 5 minutes. `--no-auth`
   or an unusable dir: the store is not loaded, the routes answer 501 `unsupported`, `caps.devices`
   false. `basicAuth` order: public → `/login` → `/pair` → `/logout` → session cookie → device
   cookie → Basic; a session wins over a device cookie, and a cookie naming no record is cleared.
@@ -306,7 +307,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   level) and answers `{ok, revoked}`; Log out and a view device paired again revoke only it. Audit:
   `auditf` (`server/audit_log.go`) logs `audit: <event> k="v"` (values `strconv.Quote`d, never a
   token, code, password or cookie) for `pair-code`, `pair`, `revoke` (`by`, `via`, `cascade`),
-  `device-expired` (once per id and process) and `login via=form`; Basic sign-ins are not logged.
+  `device-expired` (once per id and process), `device-gone via=reload` (a device another process
+  revoked, ended by a reload) and `login via=form`; Basic sign-ins are not logged.
   What this does and does not protect: `docs/security-model.md`
 - **Pane text** (`GET /api/mux/panes/{id}/text?lines=N` → `{text, lines, truncated, more}`,
   `server/mux_pane_text.go`, `caps.paneText`: tmux, never psmux, Herdr and Zellij): a same-site read
@@ -774,7 +776,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   (PNG/JPEG header, a GIF's largest frame with its offset, a WebP's first chunk; 413
   `too_many_pixels`), else 415 `not_image`, a Git LFS pointer 415
   `lfs_pointer`, a sensitive name without `reveal=1` 403 `sensitive`. 4 at a time server-wide
-  (429 `busy`), 2-minute write deadline, `Cross-Origin-Resource-Policy: same-origin`,
+  (429 `busy`), of which a view-only client never takes the last free one (`takeRawSlot`;
+  downloads and hashes, full only, share them), 2-minute write deadline, `Cross-Origin-Resource-Policy: same-origin`,
   `Cache-Control: no-store`; an SVG also gets a second CSP
   (`sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:`) and
   `Content-Disposition: attachment`.
@@ -1404,7 +1407,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `not_document`; an OLE compound file (a password-protected or IRM Office file) → 415 `encrypted`;
   a Git LFS pointer → 415 `lfs_pointer`. Over 30 MiB → 413 `too_large` with `size` in the body
   (`documentTooLargeError`). It shares the 4 `files/raw` slots (429 `busy`, "too many files at
-  once"). Sent by `writeDownload` (256 KiB chunks, 2-minute idle deadline each, 30 minutes in
+  once"), taken through `takeRawSlot` like `files/raw`, so a view-only client never holds the last
+  one. Sent by `writeDownload` (256 KiB chunks, 2-minute idle deadline each, 30 minutes in
   all) with its headers and a second CSP `sandbox; default-src 'none'` on every answer. One
   `audit: document path="<relative>" size by via` line before the bytes, none for a refusal
 - **Office and PDF previews** (`pwa/src/components/document-preview.tsx` and its viewers): the
@@ -1475,7 +1479,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `subscriptions.json` 0600, owner-only ACL on Windows, `%LOCALAPPDATA%` so it does not roam, no
   DPAPI), already on the Files deny list; at most 20 subscriptions, the least recently subscribed
   evicted; each bound to `gen` = HMAC(bindKey, user + password), so `start --fresh` or a new
-  password drops every device until it signs in again (its page re-subscribes). Only 404/410
+  password drops every device until it signs in again (its page re-subscribes). One made by a
+  paired device carries its id and goes when the device ends (revoke, expiry, a cascade, a reload
+  that no longer finds it), and at start for a device no longer live; the password's stay. One a
+  device made before this (no id) reads as the password's until its page subscribes again (on load,
+  and every 10 minutes while visible), so a device revoked before that keeps receiving pushes. Only 404/410
   drop a subscription; 401/403 are logged and kept ("check the server clock" when all fail);
   429 and timeouts back the push service off (`Retry-After`, at most 1 h). The watcher runs only
   from `runServer`, every 5 s and only with a subscription, reading tmux through `peekSnapshot`,
@@ -1747,7 +1755,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `--fresh`). A code a session makes carries `session:<id>` as its creator (`pair-code by=`, the
   device's `pairedBy`); the CLI's (Basic, local socket) stays `password`, as did a session's before
   2.0.1 (no migration: such a device is not revoked with its session, and Devices and
-  `termote devices` list every `password` device as kept when a browser signs out). Every end of a session
+  `termote devices` list every `password` device as kept when a browser signs out). A session that
+  leaves the store without a revoke ends like one (stream tokens, streams, codes; no devices): `start`
+  ends the sessions its sign-in pushed out or swept as expired, and a timer per session revokes it at
+  its expiry; each is logged `audit: session-ended id reason=expired|pushed-out`. Every end of a session
   (revoke, Log out) drops its waiting codes (`onEnd`, after the session left the store; `create`
   asks `sessionAlive` under the codes' lock). A revoke (not Log out) then removes, in one locked
   write, every live device whose `pairedBy` is one of the revoked sessions and every device those
@@ -1822,6 +1833,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   (the pushed image by digest) into `checksums.txt`, signs it with `openssl pkeyutl` and checks
   the signature with the key `install.sh` pins. `update` and `install.sh` (OpenSSL 3) refuse a
   1.10.0+ release whose signature does not verify; `container up` runs the image by that digest.
+  Whoever can publish a release picks the unpinned target, so neither lets it skip the signature:
+  without `--version`, `update` refuses a release before 1.10.0 on an install already on a signed
+  one (`releaseSigned`, `server/cli_update.go`), and without `TERMOTE_VERSION`, `install.sh`
+  refuses a release before 1.10.0. The `docker` job pins the binfmt (QEMU) and BuildKit images it
+  builds with by digest, like the actions.
   The `docker` job pushes the image to GHCR by digest only, with no tag; `docker-tags`, which needs
   the release job, moves `x.y.z`, `x.y` and `latest` on GHCR and Docker Hub to that digest and fails
   when a tag names another one, and `publish` makes the draft public only after it. So a `v*` tag

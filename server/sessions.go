@@ -32,6 +32,8 @@ type sessionMeta struct {
 	via        string
 	ip         string
 	userAgent  string
+	// expiry revokes the session at its expiry; a revoke stops it.
+	expiry *time.Timer
 }
 
 // sessionID names a session in the list and the logs: the first 16 hex of
@@ -72,22 +74,52 @@ func newSessionAuth(tokens *tokenStore, hub *streamHub) *sessionAuth {
 	return s
 }
 
-// start makes a session for r and returns its token.
+// start makes a session for r and returns its token. The sessions the new
+// one pushed out, and the expired ones it swept, end as a revoke ends them;
+// a session nobody pushes out ends at its expiry.
 func (s *sessionAuth) start(r *http.Request, via string) (string, error) {
-	now := s.now()
-	token, err := s.store.generateGrant(roleFull, "", "")
+	token, err := newRandomToken()
 	if err != nil {
 		return "", err
 	}
-	meta := &sessionMeta{id: sessionID(token), createdAt: now, lastUsedAt: now, via: via,
-		ip: requestIP(r), userAgent: cleanUserAgent(r.UserAgent())}
-	s.store.mu.Lock()
-	if ti, ok := s.store.tokens[token]; ok {
-		ti.session = meta
-		s.store.tokens[token] = ti
+	now := s.now()
+	id := sessionID(token)
+	exp := time.Now().Add(s.store.ttl)
+	meta := &sessionMeta{id: id, createdAt: now, lastUsedAt: now, via: via,
+		ip: requestIP(r), userAgent: cleanUserAgent(r.UserAgent()),
+		expiry: time.AfterFunc(time.Until(exp), func() {
+			s.endAs("expired", s.remove(func(m *sessionMeta) bool { return m.id == id }))
+		})}
+	dropped, err := s.store.put(token, tokenInfo{exp: exp, role: roleFull, session: meta})
+	if err != nil {
+		meta.expiry.Stop()
+		return "", err
 	}
-	s.store.mu.Unlock()
+	var expired, pushed []string
+	for _, d := range dropped {
+		if d.session == nil {
+			continue
+		}
+		d.session.expiry.Stop()
+		if d.expired {
+			expired = append(expired, d.session.id)
+		} else {
+			pushed = append(pushed, d.session.id)
+		}
+	}
+	slices.Sort(expired)
+	s.endAs("expired", expired)
+	s.endAs("pushed-out", pushed)
 	return token, nil
+}
+
+// endAs ends sessions that left the store without a revoke, each audited
+// with reason (expired, pushed-out).
+func (s *sessionAuth) endAs(reason string, ids []string) {
+	for _, id := range ids {
+		auditf("session-ended", "id", id, "reason", reason)
+	}
+	s.end(ids)
 }
 
 // lookup returns the id of the session token names, or ok false, and moves
@@ -185,6 +217,7 @@ func (s *sessionAuth) remove(match func(*sessionMeta) bool) []string {
 	s.store.mu.Lock()
 	for k, ti := range s.store.tokens {
 		if ti.session != nil && match(ti.session) {
+			ti.session.expiry.Stop()
 			delete(s.store.tokens, k)
 			ids = append(ids, ti.session.id)
 		}

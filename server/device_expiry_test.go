@@ -403,3 +403,39 @@ func TestDeviceAuthExpiryRacesPairing(t *testing.T) {
 		hub.shutdown(context.Background())
 	}
 }
+
+// A device another process revoked (the CLI's offline path, a second serve)
+// is ended once this one reads the file again: its open stream closes.
+func TestDeviceAuthReloadEndsRevokedDevice(t *testing.T) {
+	logs := captureLog(t)
+	dir := t.TempDir()
+	s, clock := clockedStore(t, dir)
+	other := newTestDeviceStore(t, dir, "pw")
+	tokens := newTokenStore(time.Minute, true)
+	hub := newStreamHub(8)
+	t.Cleanup(func() { hub.shutdown(context.Background()) })
+	newDeviceAuth(s, tokens, hub)
+	token, rec, _ := s.add("Phone", roleFull, deviceAddOpts{})
+	tok, _ := tokens.generateFor(roleFull, rec.ID)
+	ctx, cancel := context.WithCancelCause(context.Background())
+	e, _ := hub.add(cancel, roleFull, rec.ID)
+	defer hub.remove(e)
+	if err := other.revoke(rec.ID); err != nil {
+		t.Fatal(err)
+	}
+	*clock = clock.Add(2 * deviceReloadEvery)
+	if _, ok, _ := s.lookup(token); ok {
+		t.Fatal("the revoked device still signs in")
+	}
+	select {
+	case <-ctx.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatal("the revoked device's stream stayed open")
+	}
+	if _, ok := tokens.consume(tok); ok {
+		t.Error("the revoked device's stream token outlived it")
+	}
+	if want := `audit: device-gone id="` + rec.ID + `" via="reload"`; !strings.Contains(logs.String(), want) {
+		t.Errorf("no %s in:\n%s", want, logs)
+	}
+}

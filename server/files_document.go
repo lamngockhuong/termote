@@ -84,13 +84,11 @@ func (f *filesAPI) handleDocument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer cancel()
-	select {
-	case f.rawSlots <- struct{}{}:
-		defer func() { <-f.rawSlots }()
-	default:
+	if !f.takeRawSlot(r) {
 		f.error(w, "files document", errDocumentBusy)
 		return
 	}
+	defer func() { <-f.rawSlots }()
 	q := r.URL.Query()
 	fh, rel, size, err := f.openDocument(req, q)
 	if err != nil {

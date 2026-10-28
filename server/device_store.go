@@ -150,6 +150,10 @@ type deviceStore struct {
 	// onReload, when set, is told the next validUntil (zero: none) each
 	// time the records change, under mu: it must not call the store.
 	onReload func(next time.Time)
+	// onGone, when set, is told the devices a reload found revoked by
+	// another process, on its own goroutine (it ends what they hold, which
+	// takes the hub's lock, taken before mu).
+	onGone func(id string)
 	// beforeWrite, when set, runs in a change between its read and its
 	// write; only tests set it.
 	beforeWrite func()
@@ -317,11 +321,35 @@ func (s *deviceStore) maybeReloadLocked() {
 	case fi.ModTime().Equal(s.modTime) && fi.Size() == s.size:
 		return
 	}
+	before := s.liveIDsLocked()
 	if err := s.reloadLocked(); err != nil {
 		log.Printf("devices: %v", err)
 		return
 	}
+	if gone := missingFrom(before, s.liveIDsLocked()); len(gone) > 0 && s.onGone != nil {
+		go func() {
+			for _, id := range gone {
+				s.onGone(id)
+			}
+		}()
+	}
 	s.changedLocked()
+}
+
+// missingFrom returns the ids of before that after does not hold.
+func missingFrom(before, after []string) []string {
+	return slices.DeleteFunc(before, func(id string) bool { return slices.Contains(after, id) })
+}
+
+// liveIDsLocked returns the ids of the live devices; mu must be held.
+func (s *deviceStore) liveIDsLocked() []string {
+	var ids []string
+	for _, r := range s.recs {
+		if s.live(r) {
+			ids = append(ids, r.ID)
+		}
+	}
+	return ids
 }
 
 // lockFile takes devices.lock, waiting at most wait for another process

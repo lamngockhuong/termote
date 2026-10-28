@@ -49,7 +49,11 @@ func registerPushRoutes(mux *http.ServeMux, store *pushStore) {
 		}
 		var err error
 		if r.Method == http.MethodPost {
-			err = store.add(pushSub{Endpoint: body.Endpoint, P256dh: body.Keys.P256dh, Auth: body.Keys.Auth})
+			sub := pushSub{Endpoint: body.Endpoint, P256dh: body.Keys.P256dh, Auth: body.Keys.Auth}
+			if a, _ := authFrom(r.Context()); a.Kind == authDevice {
+				sub.Device = a.DeviceID
+			}
+			err = store.add(sub)
 		} else {
 			err = store.remove(body.Endpoint)
 		}

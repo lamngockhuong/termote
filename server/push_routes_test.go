@@ -211,3 +211,68 @@ func TestSnapshotPeekCreatesNothing(t *testing.T) {
 		t.Fatalf("peeked %d, snapped %d", m.peeked, m.snapped)
 	}
 }
+
+// A device's subscription goes with the device: once it is revoked, no
+// push reaches it. One made with the password stays.
+func TestPushSubscriptionEndsWithItsDevice(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.PushDir = filepath.Join(t.TempDir(), "push")
+	cfg.DevicesDir = filepath.Join(t.TempDir(), "devices")
+	h, hub, store, err := buildServer(cfg, &fakeMux{snap: oneTabSnapshot()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { hub.shutdown(context.Background()) })
+	c := pairDevice(t, h, "full")
+	device, password := fcmSub(t, 1), fcmSub(t, 2)
+	if rec := serve(h, asDevice("POST", "/api/mux/push/subscribe", subscribeBody(t, device), c)); rec.Code != http.StatusOK {
+		t.Fatalf("device subscribe = %d %s", rec.Code, rec.Body)
+	}
+	if rec := serve(h, apiRequest("POST", "/api/mux/push/subscribe", subscribeBody(t, password))); rec.Code != http.StatusOK {
+		t.Fatalf("password subscribe = %d %s", rec.Code, rec.Body)
+	}
+	list := decodeBody(t, serve(h, apiRequest("GET", "/api/mux/devices", "")))
+	id := list["devices"].([]any)[0].(map[string]any)["id"].(string)
+	if rec := serve(h, apiRequest("DELETE", "/api/mux/devices/"+id, "")); rec.Code != http.StatusOK {
+		t.Fatalf("revoke = %d %s", rec.Code, rec.Body)
+	}
+	subs := store.list()
+	if len(subs) != 1 || subs[0].Endpoint != password.Endpoint {
+		t.Errorf("after the revoke: %+v", subs)
+	}
+}
+
+// A device revoked while the server was down (the CLI's offline path) loses
+// its subscription when the server starts; the password's stays.
+func TestPushSubscriptionOfDeviceGoneAtStart(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.PushDir = filepath.Join(t.TempDir(), "push")
+	cfg.DevicesDir = filepath.Join(t.TempDir(), "devices")
+	h, hub, _, err := buildServer(cfg, &fakeMux{snap: oneTabSnapshot()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := pairDevice(t, h, "full")
+	device, password := fcmSub(t, 1), fcmSub(t, 2)
+	serve(h, asDevice("POST", "/api/mux/push/subscribe", subscribeBody(t, device), c))
+	serve(h, apiRequest("POST", "/api/mux/push/subscribe", subscribeBody(t, password)))
+	list := decodeBody(t, serve(h, apiRequest("GET", "/api/mux/devices", "")))
+	id := list["devices"].([]any)[0].(map[string]any)["id"].(string)
+	hub.shutdown(context.Background())
+
+	offline, err := newDeviceStore(cfg.DevicesDir, cfg.User, cfg.Pass)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := offline.revoke(id); err != nil {
+		t.Fatal(err)
+	}
+	_, hub, store, err := buildServer(cfg, &fakeMux{snap: oneTabSnapshot()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { hub.shutdown(context.Background()) })
+	if subs := store.list(); len(subs) != 1 || subs[0].Endpoint != password.Endpoint {
+		t.Errorf("after the restart: %+v", subs)
+	}
+}

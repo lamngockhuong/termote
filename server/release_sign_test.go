@@ -123,6 +123,31 @@ func TestUpdateToAnOlderUnsignedRelease(t *testing.T) {
 	}
 }
 
+// Whoever controls the release list cannot lead an install on a signed
+// release back to an unsigned one: without --version the update refuses,
+// and nothing is downloaded.
+func TestUpdateWillNotLeaveSignedReleasesUnpinned(t *testing.T) {
+	tc, gh, svc := setupUpdate(t)
+	tc.version = "2.0.0"
+	writeFile(t, tc.versionBinary("2.0.0"), "ELF 2.0.0")
+	if err := tc.setPointer("current", "2.0.0"); err != nil {
+		t.Fatal(err)
+	}
+	tc.exe = tc.versionBinary("2.0.0")
+	gh.tags = []string{"v2.0.0:pre", "v1.9.99"}
+	gh.publish(t, "1.9.99", "good")
+	if code := tc.main([]string{"update"}); code != 1 || !strings.Contains(tc.stderr.String(), "termote update --version 1.9.99") {
+		t.Fatalf("code %d\n%s%s", code, tc.stdout.String(), tc.stderr.String())
+	}
+	if fileExists(filepath.Join(tc.versionsDir(), "1.9.99")) || tc.currentVersion() != "2.0.0" || len(svc.calls) != 0 {
+		t.Fatalf("an unpinned update left signed releases (calls %v)", svc.calls)
+	}
+	// Named on purpose, it installs, checked against its sha256.
+	if code := tc.main([]string{"update", "--version", "1.9.99"}); code != 0 || tc.currentVersion() != "1.9.99" {
+		t.Fatalf("code %d current %s\n%s", code, tc.currentVersion(), tc.stderr.String())
+	}
+}
+
 func TestVerifyChecksums(t *testing.T) {
 	priv := useTestReleaseKey(t)
 	msg := []byte("abc  termote.tar.gz\n")

@@ -1576,6 +1576,7 @@ termote update --force           # Force reinstall current version
 
 - Refuses to run from a git checkout, or for a binary not installed by the installer
 - Warns on downgrade (but allows it with an explicit `--version`)
+- Without `--version`, refuses to go from a signed release (1.10.0 or later) to one before 1.10.0
 - Skips reinstall if already on target version (unless `--force`)
 - Preserves the saved config and service registration; keeps only the current and previous
   version on disk
