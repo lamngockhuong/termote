@@ -339,7 +339,7 @@ test.describe('about sheet', () => {
 
   test('contains the expected links', async ({ page }) => {
     const dialog = page.getByRole('dialog')
-    for (const name of ['Documentation', 'GitHub', 'Changelog', 'Report an issue']) {
+    for (const name of ['Star on GitHub', 'Documentation', 'Changelog', 'Report an issue']) {
       await expect(dialog.getByRole('link', { name })).toBeVisible()
     }
   })

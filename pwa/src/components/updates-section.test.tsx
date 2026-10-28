@@ -46,6 +46,7 @@ function renderSection(
 describe('UpdatesSection', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    localStorage.clear()
     mockState = { latest: null, checking: false, failed: false }
   })
 
@@ -189,5 +190,16 @@ describe('UpdatesSection', () => {
       reloading: true,
     })
     expect(screen.getByRole('button', { name: 'Reloading…' })).toBeDisabled()
+  })
+
+  it('shows no star card unless one is pending', () => {
+    renderSection()
+    expect(screen.queryByText(/a star on GitHub/)).not.toBeInTheDocument()
+  })
+
+  it('shows the star card while it is pending', () => {
+    localStorage.setItem('termote-star-prompt', 'pending')
+    renderSection()
+    expect(screen.getByText(/Updated to v1\.13\.0/)).toBeInTheDocument()
   })
 })
