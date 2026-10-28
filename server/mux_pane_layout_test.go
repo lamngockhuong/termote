@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"os"
@@ -116,6 +117,13 @@ func TestPaneLayoutUnsupported(t *testing.T) {
 
 // The layout routes: guarded like every write, their arguments checked
 // before the backend is asked, the backend's errors answered with codes.
+// splitBody is a split request into dir, JSON-escaped (a Windows path's
+// backslashes).
+func splitBody(dir string) string {
+	b, _ := json.Marshal(map[string]string{"direction": "right", "cwd": dir})
+	return string(b)
+}
+
 func TestPaneLayoutRoutes(t *testing.T) {
 	routes := []struct{ path, body, call string }{
 		{"/api/mux/panes/%254/split", `{"direction":"down"}`, "split %4 down "},
@@ -184,7 +192,7 @@ func TestPaneLayoutRoutes(t *testing.T) {
 		{"resize", `{"direction":"up","amount":1.5}`, "invalid_amount"},
 		{"resize", `{"direction":"up"}`, "invalid_amount"},
 		{"split", `{"direction":"right","cwd":"relative/dir"}`, "invalid_cwd"},
-		{"split", `{"direction":"right","cwd":"/no/such/termote/dir"}`, "not_found"},
+		{"split", splitBody(filepath.Join(t.TempDir(), "missing")), "not_found"},
 	} {
 		m := &fakeMux{}
 		rec := serve(newTestHandler(t, m), apiRequest(http.MethodPost, "/api/mux/panes/1/"+c.path, c.body))
@@ -206,7 +214,7 @@ func TestPaneLayoutRoutes(t *testing.T) {
 	real, _ := filepath.EvalSymlinks(dir)
 	m := &fakeMux{}
 	h := newTestHandler(t, m)
-	serve(h, apiRequest(http.MethodPost, "/api/mux/panes/1/split", `{"direction":"right","cwd":"`+link+`"}`))
+	serve(h, apiRequest(http.MethodPost, "/api/mux/panes/1/split", splitBody(link)))
 	serve(h, apiRequest(http.MethodPost, "/api/mux/panes/1/split", `{"direction":"right"}`))
 	if len(m.calls) != 2 || m.calls[0] != "split 1 right "+real || m.calls[1] != "split 1 right " {
 		t.Errorf("calls = %q", m.calls)
