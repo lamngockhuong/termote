@@ -52,9 +52,10 @@ async function streamToken(request: APIRequestContext): Promise<string> {
   return (await res.json()).token
 }
 
+// The first pane's id, ready for a query string: a tmux pane id is "%N"
 async function firstPane(request: APIRequestContext): Promise<string> {
   const snap = await (await request.get('/api/mux/snapshot')).json()
-  return snap.groups[0].tabs[0].panes[0].id
+  return encodeURIComponent(snap.groups[0].tabs[0].panes[0].id)
 }
 
 test.describe('stream WebSocket guards', () => {

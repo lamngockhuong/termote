@@ -11,6 +11,7 @@ func TestParseTmuxPaneID(t *testing.T) {
 	orig := tmuxSession
 	t.Cleanup(func() { tmuxSession = orig })
 	tmuxSession = "main"
+	usePsmux(t, false)
 	for _, tc := range []struct {
 		id, target string
 		ok         bool
@@ -43,6 +44,7 @@ func TestTmuxPaneRefMatches(t *testing.T) {
 	orig := tmuxSession
 	t.Cleanup(func() { tmuxSession = orig })
 	tmuxSession = "main"
+	usePsmux(t, false)
 	pane, _ := parseTmuxPaneID("%7")
 	if !pane.matches("$9", "x", "4", "%7") || pane.matches("$0", "main", "0", "%8") || pane.matches("", "", "", "") {
 		t.Error("a %N must match its own pane id only")
