@@ -1106,12 +1106,17 @@ function PaneFiles({
 // The upload running, and the ask before writing where secrets may be: its
 // own component, so each step of the progress re-renders only this, never
 // the tree. Stays mounted so a screen reader announces each file; the
-// percentage is not read out at every step.
+// percentage is not read out at every step. A live region, not a status
+// role: the content search's result count is the panel's status.
 function UploadStatusRow() {
   const { status: up, asking } = useFileUploads()
   return (
     <>
-      <div role="status" className={up ? '' : 'sr-only'}>
+      <div
+        aria-live="polite"
+        data-testid="upload-status"
+        className={up ? '' : 'sr-only'}
+      >
         {up && (
           <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-1 text-[12px] text-fg-muted">
             <span className="min-w-0 flex-1 truncate">

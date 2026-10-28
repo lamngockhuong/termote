@@ -291,7 +291,7 @@ func TestFilesUploadRejects(t *testing.T) {
 		"dir backslash":       {uploadQuery(`sub\x`, "n.txt"), "", nil, 400, "invalid_name", "sub/n.txt"},
 		"no name":             {url.Values{"dir": {"."}}, "", nil, 400, "invalid_name", ""},
 		"name with a slash":   {uploadQuery(".", "sub/n.txt"), "", nil, 400, "invalid_name", "sub/n.txt"},
-		"device name":         {uploadQuery(".", "NUL"), "", nil, 400, "invalid_name", "NUL"},
+		"device name":         {uploadQuery(".", "NUL"), "", nil, 400, "invalid_name", ""}, // Windows answers any path named NUL
 		"temp name":           {uploadQuery(".", uploadTempPrefix+"0123456789abcdef"), "", nil, 400, "invalid_name", uploadTempPrefix + "0123456789abcdef"},
 		"view-only":           {uploadQuery(".", "n.txt"), "", view, 403, "view_only", "n.txt"},
 		"git dir":             {uploadQuery(".git", "n.txt"), "", nil, 403, "not_allowed", ".git/n.txt"},

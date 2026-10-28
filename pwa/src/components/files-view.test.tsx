@@ -2108,7 +2108,7 @@ describe('FilesView upload', () => {
     })
     return kept
   }
-  const status = () => screen.getByRole('status')
+  const status = () => screen.getByTestId('upload-status')
 
   it('the button uploads into the focused folder, the root when none is', async () => {
     const p = await show()
