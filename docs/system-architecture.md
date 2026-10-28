@@ -318,6 +318,8 @@ GET    /api/mux/panes/{id}/files/content?path=&root=&hash=1     → {root, path,
 PUT    /api/mux/panes/{id}/files/content?root=  body: {path, baseHash, text, reveal, encoding?, saveAs?} → {root, path, size, hash, encoding, bom?} | {error, code, reason?, line?, char?}
 POST   /api/mux/panes/{id}/files/create?root=   body: {path, reveal}           → 201 {root, path} | {error, code[, path]}
 POST   /api/mux/panes/{id}/files/image?root=&dir=&reveal=  body: raw PNG/JPEG/GIF/WebP → 201 {root, path} | {error, code}
+POST   /api/mux/panes/{id}/files/upload?root=&dir=&name=&reveal=  body: raw application/octet-stream (≤ 100 MiB) → 201 {root, path} | {error, code}
+POST   /api/mux/panes/{id}/files/upload?…&check=1  body: {} (JSON)          → 200 {root, path} (the name it would get) | {error, code}
 POST   /api/mux/panes/{id}/files/delete?root=   body: {path, kind, baseHash, reveal, permanent} → {root, path[, trashId, size, permanent]} | {error, code}
 POST   /api/mux/panes/{id}/files/restore?root=  body: {trashId, reveal}         → {root, path} | {error, code}
 POST   /api/mux/panes/{id}/files/changes/apply?root= body: {action, path, orig, hunk, baseHash, reveal, permanent} → {root, path[, trashId, permanent]} | {error, code}
@@ -841,12 +843,14 @@ Herdr (`foreground_cwd`, else `cwd`, of the pane; a Herdr that reports neither a
 Zellij on Linux and macOS (the pane's cwd as Zellij lists it).
 psmux does not report the directory, so `caps.files` is off on Windows tmux. Every route is
 registered for every backend and answers 501 where it is off. Eight are read-only GETs (`find`, `search` and
-`download` included); `PUT files/content` saves a text file, `POST files/create` creates an empty one and
+`download` included); `PUT files/content` saves a text file, `POST files/create` creates an empty one,
+`POST files/upload` saves a file from the device (`check=1` first; `unsupported_type` 415, `upload_busy`
+429, `timeout` 408 are its own codes) and
 `POST files/delete` / `files/restore` remove a file and put it back, `POST files/changes/apply` stages,
 unstages or discards a change (Staging and discarding a change), `POST files/rename` moves a
 file to a new path, never replacing anything, and `GET files/download` sends a file as an
-attachment (see Saving a file, Creating a file, Finding a file, Searching file contents, Deleting a file,
-Renaming a file, Downloading a file).
+attachment (see Saving a file, Creating a file, Uploading a file, Finding a file, Searching file
+contents, Deleting a file, Renaming a file, Downloading a file).
 
 **Places.** A Files request with `place=<id>` reads a folder the operator allowed with
 `--allow-path` instead of the pane's root (`server/files_places.go`): `filesAPI.start` picks the
@@ -1126,6 +1130,19 @@ never replacing a file, and never losing one a step fails on.
   every pane of the root, refuses a new path whose file has unsaved changes, and offers Undo, a
   second rename back. Changes shows a deleted and an untracked file until the user stages.
 
+**Uploading a file (`POST upload`).** A file from the device (the Upload button, a drop on
+Files, a paste of files in the tree) becomes a new file in a folder of the root, in
+`server/files_upload.go`; the PWA's queue is `hooks/use-file-uploads.ts`. The client asks with
+`check=1` (JSON, nothing created, no slot taken) before sending any byte, since a refusal sent
+while a large body is still coming reaches the browser as a reset connection; the answer is the
+name the file would get, a refusal, or `upload_busy` while another upload holds the server's one
+slot. The upload itself is a raw `application/octet-stream` body of at most 100 MiB, read with a
+2-minute idle and 30-minute total deadline into a hidden `.termote-upload-<16 hex>` file, then
+hard-linked to the first free name (`name`, `name (2)` … `name (99)`) under the root's lock, so
+nothing is ever replaced and a visible name only holds a whole file. The guards, their order and
+the accepted risks are in [`security-invariants.md`](security-invariants.md) ("Uploading a
+file").
+
 **Downloading a file (`GET download`).** `server/files_download.go`. Any regular file under the
 root, up to 100 MiB, goes to the device as a download the browser never renders.
 
@@ -1159,7 +1176,9 @@ root, up to 100 MiB, goes to the device as a download the browser never renders.
 **Guards.** Basic auth and the Host allowlist like every route; GETs pass `writeGuard`, so the
 handlers check `Sec-Fetch-Site`/`Origin` themselves (403 cross-site), which keeps another page
 from making a `--no-auth` server run git. `PUT content`, `POST create`, `POST delete`, `POST restore` and `POST rename` go through
-`writeGuard` like every write (same-site, `application/json`) and their handlers check again.
+`writeGuard` like every write (same-site, `application/json`) and their handlers check again;
+`POST image` takes a raw image body and `POST upload` a raw `application/octet-stream` one (its
+`check=1` is JSON), same-site all the same.
 Other methods get 405.
 `requireFilesRead` and `requireFilesWrite` are where a view-only role (#236) will be enforced;
 `requireWriteRole` is still a stub, so today a view-only client is kept from editing only by
@@ -1581,9 +1600,11 @@ termote update --force           # Force reinstall current version
    cannot reach the server
 5. **Write/CSRF guard**: state-changing `/api/mux/*` requests must be same-site
    (`Sec-Fetch-Site`/`Origin` on the allowlist) and `Content-Type: application/json`, except
-   `/api/mux/uploads`, which also takes a raw `image/png|jpeg|gif|webp` body: those types are
-   not CORS-safelisted either, so another site's request still needs a preflight that is never
-   answered; multipart, which a form posts without one, stays refused
+   `/api/mux/uploads` and `files/image`, which take a raw `image/png|jpeg|gif|webp` body, and
+   `files/upload`, which takes a raw `application/octet-stream` one: those types are not
+   CORS-safelisted either, so another site's request still needs a preflight that is never
+   answered; multipart, `text/plain` and urlencoded bodies, which a form posts without one, stay
+   refused
 6. **Terminal access** (`/api/mux/stream`): same Origin check, plus a single-use 30s-TTL token
    minted by `/api/mux/stream-token` and consumed on WebSocket upgrade. Every paste (Ctrl+V,
    the iOS Paste menu, the toolbar) loses its end-of-paste markers and control characters other

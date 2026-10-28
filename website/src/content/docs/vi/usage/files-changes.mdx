@@ -509,6 +509,75 @@ file như mọi lần tải khác, dưới tên của file; không có gì đư�
 
 Phiên chỉ xem không có nút Download.
 
+## Tải file lên
+
+File trên thiết bị đang dùng, loại nào cũng được (PDF, CSV, zip, ảnh chụp màn hình, log), có thể
+đưa vào một thư mục của Files theo ba cách:
+
+- Nút **Upload files** (mũi tên hướng lên, cạnh New file) mở trình chọn file của thiết bị; trên
+  điện thoại có cả thư viện ảnh, máy ảnh và app Tệp. Chọn được nhiều file một lần. File vào thư mục
+  bạn chạm gần nhất trên cây, hoặc thư mục chứa file bạn chạm gần nhất, nếu không thì vào thư mục
+  trên cùng.
+- **Thả** file từ trình quản lý file của máy tính lên Files: thả lên dòng thư mục thì file vào thư
+  mục đó, thả lên dòng file thì vào thư mục chứa file ấy, thả xuống khoảng trống dưới các dòng thì
+  vào thư mục trên cùng. Thư mục là symbolic link, hoặc nằm bên trong một link như vậy, sẽ chuyển
+  file sang thư mục thật gần nhất phía trên nó. Khi đang mở một file, file thả vào sẽ nằm cùng thư mục với file đang mở,
+  và thông báo kết quả ghi rõ thư mục. Nội dung file thả vào không bao giờ bị chèn vào văn bản
+  đang sửa.
+- **Dán** file đã sao chép trong trình quản lý file (Ctrl+V, ⌘V trên Mac) khi cây thư mục đang
+  hiện: file vào cùng thư mục như nút Upload files. Dán vào ô tìm kiếm, hoặc dán khi đang mở file,
+  thì không có gì xảy ra. Mỗi trình duyệt và hệ điều hành đặt vào clipboard một thứ khác nhau khi
+  sao chép file (trên Linux thường chỉ có đường dẫn), nên nếu dán không thấy gì, hãy dùng nút hoặc
+  kéo thả.
+
+File được gửi lần lượt từng cái. Dưới đầu Files có một dòng cho biết file đang gửi, đã gửi được
+bao nhiêu phần trăm và còn mấy file, kèm nút **Cancel**. Một file đã gửi xong thì nút Cancel tắt
+đi, vì lúc đó server sẽ lưu file dù thế nào. Chuyển sang terminal hay view khác, file vẫn tiếp tục
+được tải lên, file nào vào đúng thư mục của file ấy; quay lại Files sẽ thấy dòng tiến độ. Xong cả lượt, một thông báo cho biết kết quả, chẳng hạn `Uploaded 3 files.` hoặc
+`1 of 3 uploaded. big.zip: File is larger than 100 MB (1 more not uploaded)`.
+
+- Mỗi file tối đa **100 MiB**, bằng giới hạn khi tải về.
+- File có sẵn không bao giờ bị ghi đè: tên đã có file khác dùng thì được đánh số, `report.pdf` thành
+  `report (2).pdf`, tới `(99)`. Thông báo ghi `Saved as report (2).pdf`.
+- Thư mục thường chứa bí mật (`.ssh`, `.aws`, …) hoặc tên file thường chứa bí mật (`.env`) thì app
+  hỏi trước, một lần cho các file gửi cùng nhau, kèm tên file và nơi nó sẽ vào. Nhấn Enter là
+  chọn không gửi; trả lời không thì không file nào trong số đó được gửi, và app cũng không báo gì.
+- Chỉ tải lên được file, không tải được thư mục: thư mục thả vào bị bỏ qua và app báo điều đó.
+- Khi đang có một lượt tải lên khác (từ thiết bị khác, hoặc từ một tab khác), dòng tiến độ hiện `Waiting for another upload…`; file được
+  gửi ngay khi lượt kia xong, hoặc sau hai phút rưỡi chờ thì app báo lỗi.
+- Nếu mất kết nối sau khi file đã gửi xong, Files đọc lại thư mục để xem file đã tới chưa; không
+  biết chắc thì báo `Not sure the file was saved. Check the folder`.
+- File được ghi dưới một tên tạm ẩn (`.termote-upload-…`) và chỉ mang tên thật khi đã nhận đủ, nên
+  một file gửi dở không bao giờ hiện dưới tên của nó (trong lúc gửi, file tạm có thể hiện trên cây,
+  có dấu nhạy cảm). Nếu server dừng giữa chừng, file tạm còn lại sẽ
+  bị xoá ở lần tải lên kế tiếp vào thư mục đó, khi nó đã quá một giờ.
+- Mỗi lần tải lên được ghi vào log của server thành một dòng `audit: upload` (đường dẫn, kích
+  thước và ai gửi).
+
+| Hiện                                                   | Vì sao                                                                                 |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| `File is larger than 100 MB`                           | File vượt giới hạn                                                                     |
+| `The folder is a link: not uploaded`                   | Một thư mục trên đường dẫn là symbolic link mà cây chưa hiện như vậy: không ghi gì qua link |
+| `Files can't be uploaded to this folder`               | Đường dẫn Termote không bao giờ trả về (xem [Không bao giờ hiện](#không-bao-giờ-hiện)), `.git`, hoặc thư mục của chính Termote |
+| `This file's name can't be used on the host`           | Tên có `\`, tên thiết bị của Windows (`NUL`, `CON.txt`, `COM1`), ký tự vô hình hoặc ký tự đảo chiều chữ, ký tự điều khiển, dài hơn 255 byte, kết thúc bằng dấu chấm hay dấu cách, hoặc trên máy chủ Windows có một trong `<>:"\|?*` |
+| `Too many files with this name. Rename one first`      | Từ `name (2)` tới `name (99)` đều đã có                                                |
+| `The folder is no longer on the host`                  | Thư mục đã bị xoá hoặc chuyển đi sau khi cây được đọc                                  |
+| `The server can't write in this folder`                | Không ghi được vào thư mục                                                             |
+| `The file system there is read-only`                   | Thư mục nằm trên ổ đĩa hoặc mount chỉ đọc                                              |
+| `The host's disk or quota is full`                     | Ổ đĩa của máy chủ, hoặc hạn mức của bạn, đã hết chỗ                                    |
+| `The upload stalled. Try again on a better connection` | Hai phút không nhận được gì, hoặc file gửi quá 30 phút                                 |
+| `Another upload is running. Try again shortly`         | Đã chờ hết thời gian mà lượt tải lên khác vẫn chưa xong                                |
+
+<Aside type="caution">
+  File tải lên được tin cậy như file tạo bằng New file: một công cụ có thể tự đọc hoặc tự chạy nó
+  (trên Windows, file chạy theo phần mở rộng, nên file `.exe` hay `.ps1` tải lên có thể được khởi
+  chạy như mọi file khác). Ai đăng nhập được Termote thì đã chạy được lệnh trong terminal, nên điều
+  này không mở thêm quyền gì, nhưng hãy xem kỹ thứ bạn tải lên những chỗ như vậy.
+</Aside>
+
+Phiên chỉ xem không có nút Upload files và dán không có tác dụng; thả file vào chỉ hiện
+`A view-only device cannot upload`, và trình duyệt không bao giờ mở file vừa thả.
+
 ## Xem trước Markdown
 
 File Markdown (`.md`, `.markdown`, `.mdx`) mở ra ở dạng đã hiển thị: tiêu đề, danh sách, bảng

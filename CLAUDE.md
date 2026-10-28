@@ -219,7 +219,8 @@ Before changing a route, guard, CLI command or file operation, read its entry in
 that entry in the same change. A new feature with a security surface gets an entry there, not here.
 
 - Every state-changing `/api/mux/*` route: `writeGuard` (same-site JSON; only `uploads` and `files/image` take a
-  raw image body instead), `requireWriteRole` first, a body limit, errors as `codedError` codes; same-site reads
+  raw image body instead, and `files/upload` a raw `application/octet-stream` one), `requireWriteRole` first, a
+  body limit, errors as `codedError` codes; same-site reads
   use `crossSiteRejection`
 - Never take a filesystem path from the client: open through `os.Root` under the pane root, with the files
   deny lists and the sensitive-name `reveal` check

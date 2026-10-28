@@ -528,8 +528,9 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 // (and a file descriptor) forever. Bodies are at most 64 KB, but for an
 // uploaded image (10 MB) and a saved file (6 MiB + 64 KiB of JSON): their
 // handlers extend the deadline to uploadReadTimeout once the request is
-// authenticated and holds a slot, and a Chat view message with images to
-// its own time budget once its body is read. Past
+// authenticated and holds a slot, a file sent to files/upload (100 MiB)
+// gets 2 minutes from each read that brought bytes and 30 at most, and a
+// Chat view message with images its own time budget once its body is read. Past
 // the deadline, net/http's background read also cancels the request's
 // context, so no other handler but the stream may run longer (mux calls
 // take at most muxTimeout, git gitTimeout).

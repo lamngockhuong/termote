@@ -315,7 +315,8 @@ jobs:
       # second server with a password, on its own port, tmux socket, session
       # and state dir (the paired devices), for devices.spec.ts,
       # signins.spec.ts, login-link.spec.ts, prompt-templates.spec.ts,
-      # tasks.spec.ts and review.spec.ts alone. The password is made here and
+      # tasks.spec.ts, review.spec.ts and the view-only part of
+      # files-upload.spec.ts alone. The password is made here and
       # never printed.
       - name: Start server with sign-in
         run: |
@@ -343,7 +344,7 @@ jobs:
           TERMOTE_PORT: "7681"
           TERMOTE_PASS: ${{ env.E2E_AUTH_PASS }}
           TMUX_SESSION: e2e-auth
-        run: TMUX_SOCKET="$RUNNER_TEMP/tmux-auth.sock" pnpm exec playwright test devices signins login-link prompt-templates tasks e2e/review --workers=1
+        run: TMUX_SOCKET="$RUNNER_TEMP/tmux-auth.sock" pnpm exec playwright test devices signins login-link prompt-templates tasks e2e/review files-upload --workers=1
 
       # Places (--allow-path): a third server, configured from the
       # environment like the others, offers one folder (TERMOTE_PLACES) on

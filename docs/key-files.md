@@ -177,6 +177,8 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/hooks/use-git-changes.ts`                | Polls a pane's git status, the Changes tabs, one store a pane  |
 | `pwa/src/utils/highlight.ts`                      | Syntax highlighting through a Shiki worker, with a timeout     |
 | `pwa/src/utils/upload-image.ts`                   | Uploads an image to the host (Chat, Markdown), error messages  |
+| `pwa/src/utils/upload-file.ts`                    | Files upload: `check=1`, the bytes over XHR, reasons, drops    |
+| `pwa/src/hooks/use-file-uploads.ts`               | Upload queue that outlives the view: ask, busy wait, summary   |
 | `pwa/src/hooks/use-chat-attachments.ts`           | Images attached to a Chat view message (upload, ids, errors)   |
 | `pwa/src/hooks/use-agent-commands.ts`             | A pane's custom slash commands, read once and cached           |
 | `server/main.go`                                  | Entry point (`serve` runs the server, no args opens the menu)  |
@@ -231,6 +233,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/files_encoding.go`                        | Detects, decodes and encodes UTF-8/16, Shift-JIS, EUC-JP       |
 | `server/files_create.go`                          | `POST files/create`: an empty file, never replacing anything   |
 | `server/files_image.go`                           | `POST files/image`: a pasted image beside its Markdown file    |
+| `server/files_upload.go`                          | `POST files/upload`: a device's file, hidden temp then a link  |
 | `server/files_find*.go`                           | `GET files/find`: file lists (git, walk), cache, ranking       |
 | `server/files_search*.go`                         | `GET files/search`: lines of the listed files, globs, caps     |
 | `server/files_delete.go`                          | `POST files/delete`/`restore`, `content?hash=1`                |
