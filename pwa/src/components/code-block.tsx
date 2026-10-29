@@ -9,9 +9,10 @@ import {
 } from 'react'
 import { useTheme } from '../contexts/theme-context'
 import { useLinePick } from '../hooks/use-line-pick'
+import { useT } from '../i18n/i18n-context'
 import { highlight, type Token } from '../utils/highlight'
 import { inPick, pickSpan, type TextLines } from '../utils/line-range'
-import { lineLabel } from '../utils/review-message'
+import { lineText } from '../utils/review-message'
 import { LineCommentBar, LineGutterButton } from './line-comment-bar'
 
 // The code frame shared by Files and Changes: a gutter of line numbers that
@@ -81,6 +82,7 @@ export function CodeBlock({
   commentedLines,
 }: Props) {
   const { resolvedTheme } = useTheme()
+  const { t } = useT()
   const lines = useMemo(() => splitLines(text), [text])
   const [tokens, setTokens] = useState<Token[][] | null>(null)
   const frame = useRef<HTMLDivElement>(null)
@@ -177,7 +179,7 @@ export function CodeBlock({
       </div>
       {onLineComment && span && (
         <LineCommentBar
-          label={capitalized(lineLabel({ start: span[0], end: span[1] }))}
+          label={capitalized(lineText({ start: span[0], end: span[1] }, t))}
           onComment={() => {
             onLineComment({
               from: span[0],

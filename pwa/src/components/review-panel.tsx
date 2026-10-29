@@ -4,17 +4,19 @@ import type { NotifyOptions } from '../app-views'
 import { agentLabel } from '../chat-agents'
 import { RequestError } from '../hooks/use-mux-api'
 import { useReviewDraft } from '../hooks/use-review-draft'
+import { useT } from '../i18n/i18n-context'
 import type { Session } from '../types/session'
+import { formatKib } from '../utils/files-format'
 import {
   type ReviewComment,
   removeReviewComments,
   updateReviewComment,
 } from '../utils/review-draft'
 import {
-  lineLabel,
+  lineText,
   MAX_REVIEW_MESSAGE_BYTES,
   reviewMessage,
-  sourceLabel,
+  sourceText,
 } from '../utils/review-message'
 import { sendToAgent } from '../utils/send-to-agent'
 import { visibleUnsafe } from '../utils/unsafe-chars'
@@ -57,8 +59,6 @@ function receiver(
   return { to: choices.find((c) => c.paneId === last), own: false }
 }
 
-const kib = (n: number) => (n / 1024).toFixed(1)
-
 // The Review button of a pane's header, with how many comments its review
 // holds, and the review it opens: the comments by file, each opened,
 // edited or deleted there, and all of them sent to an agent as one
@@ -73,6 +73,7 @@ export function ReviewControl({
   onOpenComment,
 }: Props) {
   const comments = useReviewDraft(paneId)
+  const { t, locale } = useT()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<ReviewComment | null>(null)
   const [clearing, setClearing] = useState(false)
@@ -83,14 +84,18 @@ export function ReviewControl({
   const groupId = session.groupId ?? ''
   const choices = agentPanes(sessions)
   const { to, own } = receiver(paneId, groupId, choices)
+  // In English whatever the app's language: the agent reads it
   const message = reviewMessage(comments)
   const tooLong = message.bytes > MAX_REVIEW_MESSAGE_BYTES
   const why = !canSend
-    ? 'This server cannot send a message to an agent'
+    ? t('files.review.cannotSend')
     : choices.length === 0
-      ? 'No pane runs Claude Code or Codex'
+      ? t('files.review.noAgent')
       : tooLong
-        ? `Too long for one message: ${kib(message.bytes)} of ${kib(MAX_REVIEW_MESSAGE_BYTES)} KiB`
+        ? t('files.review.tooLongToSend', {
+            size: formatKib(message.bytes, locale),
+            max: formatKib(MAX_REVIEW_MESSAGE_BYTES, locale),
+          })
         : undefined
 
   const send = async (target: AgentPaneChoice, remember: boolean) => {
@@ -102,22 +107,25 @@ export function ReviewControl({
     const ids = comments.map((c) => c.id)
     const name = agentLabel(target.agentName)
     const openChat = {
-      label: 'Open chat',
+      label: t('files.review.openChat'),
       onClick: () => openTab?.(target.sessionId, target.paneId, CHAT_VIEW_ID),
     }
     try {
       const { queued } = await sendToAgent(target.paneId, message.text)
       removeReviewComments(paneId, ids)
       setOpen(false)
-      notify(queued ? `Queued for ${name}` : `Sent to ${name}`, {
-        variant: 'success',
-        action: openChat,
-      })
+      notify(
+        t(queued ? 'files.review.queued' : 'files.review.sent', { name }),
+        {
+          variant: 'success',
+          action: openChat,
+        },
+      )
     } catch (err) {
       notify(
         err instanceof RequestError
-          ? `Not sent: ${err.message}`
-          : 'Could not send the review',
+          ? t('files.review.notSent', { message: err.message })
+          : t('files.review.sendFailed'),
         { variant: 'danger' },
       )
     } finally {
@@ -138,8 +146,8 @@ export function ReviewControl({
         size="sm"
         variant="ghost"
         onClick={() => setOpen(true)}
-        aria-label={`Review, ${comments.length} comment${comments.length === 1 ? '' : 's'}`}
-        title="Review comments"
+        aria-label={t('files.review.button', { count: comments.length })}
+        title={t('files.review.buttonTitle')}
       >
         <MessageSquareText size={15} aria-hidden="true" />
         {comments.length}
@@ -147,12 +155,14 @@ export function ReviewControl({
       <Sheet
         isOpen={open}
         onClose={() => setOpen(false)}
-        title={`Review (${comments.length})`}
+        title={t('files.review.title', { count: comments.length })}
       >
         <div className="flex max-h-[70vh] flex-col">
           <div className="min-h-0 flex-1 overflow-y-auto">
             {comments.length === 0 && (
-              <p className="m-0 p-4 text-sm text-fg-muted">No comments</p>
+              <p className="m-0 p-4 text-sm text-fg-muted">
+                {t('files.review.none')}
+              </p>
             )}
             {[...byFile.values()].map((list) => (
               <section
@@ -177,9 +187,9 @@ export function ReviewControl({
                           }}
                           className="self-start text-left text-[12px] text-accent hover:underline"
                         >
-                          {lineLabel(c)}{' '}
+                          {lineText(c, t)}{' '}
                           <span className="text-fg-muted">
-                            · {sourceLabel(c)}
+                            · {sourceText(c, t)}
                           </span>
                         </button>
                         <p className="m-0 whitespace-pre-wrap break-words text-[13px] text-fg">
@@ -192,8 +202,8 @@ export function ReviewControl({
                         // What is being sent is removed once taken: an
                         // edit made meanwhile would go with it, unsent
                         disabled={sending}
-                        aria-label="Edit comment"
-                        title="Edit"
+                        aria-label={t('files.review.editComment')}
+                        title={t('files.review.edit')}
                       >
                         <Pencil size={14} aria-hidden="true" />
                       </IconButton>
@@ -201,8 +211,8 @@ export function ReviewControl({
                         size="sm"
                         onClick={() => removeReviewComments(paneId, [c.id])}
                         disabled={sending}
-                        aria-label="Delete comment"
-                        title="Delete"
+                        aria-label={t('files.review.deleteComment')}
+                        title={t('files.review.delete')}
                       >
                         <Trash2 size={14} aria-hidden="true" />
                       </IconButton>
@@ -219,7 +229,7 @@ export function ReviewControl({
                 onClick={() => setClearing(true)}
                 disabled={comments.length === 0 || sending}
               >
-                Clear
+                {t('files.review.clear')}
               </Button>
               <span className="flex-1" />
               {to && !own && (
@@ -228,7 +238,7 @@ export function ReviewControl({
                   onClick={() => setPicking(true)}
                   disabled={sending}
                 >
-                  Change
+                  {t('files.review.change')}
                 </Button>
               )}
               <Button
@@ -242,10 +252,12 @@ export function ReviewControl({
               >
                 <Send size={14} aria-hidden="true" />
                 {sending
-                  ? 'Sending…'
+                  ? t('files.review.sending')
                   : to
-                    ? `Send to ${agentLabel(to.agentName)}`
-                    : 'Send to…'}
+                    ? t('files.review.sendTo', {
+                        name: agentLabel(to.agentName),
+                      })
+                    : t('files.review.sendToPick')}
               </Button>
             </div>
             {to && !own && (
@@ -277,8 +289,8 @@ export function ReviewControl({
       />
       <ConfirmDialog
         isOpen={clearing}
-        title="Clear the review?"
-        confirmLabel="Clear"
+        title={t('files.review.askClear')}
+        confirmLabel={t('files.review.clear')}
         destructive
         onConfirm={() => {
           setClearing(false)
@@ -289,8 +301,7 @@ export function ReviewControl({
         }}
         onCancel={() => setClearing(false)}
       >
-        {comments.length} comment{comments.length === 1 ? '' : 's'} will be
-        deleted.
+        {t('files.review.askClearBody', { count: comments.length })}
       </ConfirmDialog>
     </>
   )

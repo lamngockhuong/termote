@@ -1,6 +1,8 @@
 import { type KeyboardEvent, type RefObject, useRef, useState } from 'react'
+import { useT } from '../i18n/i18n-context'
+import { formatKib } from '../utils/files-format'
 import { MAX_COMMENT_BYTES, type ReviewTarget } from '../utils/review-draft'
-import { lineLabel } from '../utils/review-message'
+import { lineText } from '../utils/review-message'
 import { utf8Bytes } from '../utils/task-failure-message'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { Button, FOCUS_RING } from './ui/button'
@@ -19,12 +21,17 @@ interface Props {
 // lines quoted (never a sensitive file's), and the comment.
 export function ReviewCommentSheet({ target, onClose, ...rest }: Props) {
   const area = useRef<HTMLTextAreaElement>(null)
+  const { t } = useT()
   return (
     <Sheet
       isOpen={!!target}
       onClose={onClose}
       focusOnOpen={() => area.current?.focus()}
-      title={rest.initialText === undefined ? 'Add a comment' : 'Edit comment'}
+      title={t(
+        rest.initialText === undefined
+          ? 'files.review.addTitle'
+          : 'files.review.editTitle',
+      )}
     >
       {target && (
         <CommentForm area={area} target={target} onClose={onClose} {...rest} />
@@ -43,6 +50,7 @@ function CommentForm({
   area: RefObject<HTMLTextAreaElement | null>
   target: ReviewTarget
 }) {
+  const { t, locale } = useT()
   const [text, setText] = useState(initialText ?? '')
   const size = utf8Bytes(text)
   const tooLong = size > MAX_COMMENT_BYTES
@@ -60,11 +68,11 @@ function CommentForm({
     <div className="flex flex-col gap-3 p-4">
       <p className="m-0 break-all font-term text-[12px]">
         <bdi>{visibleUnsafe(target.path)}</bdi>{' '}
-        <span className="text-fg-muted">{lineLabel(target)}</span>
+        <span className="text-fg-muted">{lineText(target, t)}</span>
       </p>
       {target.sensitive ? (
         <p className="m-0 text-[12px] text-fg-muted">
-          Lines not quoted: may contain secrets
+          {t('files.review.notQuoted')}
         </p>
       ) : (
         target.quote !== undefined && (
@@ -77,7 +85,7 @@ function CommentForm({
         )
       )}
       <textarea
-        aria-label="Comment"
+        aria-label={t('files.review.commentField')}
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={onKeyDown}
@@ -87,18 +95,26 @@ function CommentForm({
       />
       {tooLong && (
         <p className="m-0 text-[12px] text-danger">
-          Too long: {(size / 1024).toFixed(1)} of {MAX_COMMENT_BYTES / 1024} KiB
+          {t('files.review.tooLong', {
+            size: formatKib(size, locale),
+            max: formatKib(MAX_COMMENT_BYTES, locale, 0),
+          })}
         </p>
       )}
       <div className="flex justify-end gap-2">
-        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={onClose}>{t('common.cancel')}</Button>
         <Button
           variant="primary"
           onClick={save}
           disabled={!ok}
+          // i18n-ignore: a key's name
           title="Ctrl+Enter"
         >
-          {initialText === undefined ? 'Add' : 'Save'}
+          {t(
+            initialText === undefined
+              ? 'files.review.add'
+              : 'files.review.save',
+          )}
         </Button>
       </div>
     </div>

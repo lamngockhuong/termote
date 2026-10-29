@@ -15,6 +15,7 @@ import { useDomSelection } from '../hooks/use-dom-selection'
 import { FOLLOW_NOTICES, followPathInFiles } from '../hooks/use-files'
 import type { TranscriptEntry } from '../hooks/use-mux-api'
 import type { StartRecord } from '../hooks/use-start-agent'
+import { useT } from '../i18n/i18n-context'
 import { toAgentStatus } from '../types/session'
 import { canStartAgent } from '../utils/agent-start'
 import { visibleUnsafe } from '../utils/unsafe-chars'
@@ -146,6 +147,7 @@ function AgentChat({
   isMobile,
 }: ViewProps) {
   const t = useAgentTranscript(session.paneId)
+  const { t: translate } = useT()
   const status = toAgentStatus(t.status)
   // View-only has no composer: the dialog is shown here, without buttons.
   // An agent without input has no dialog reader on the server.
@@ -176,10 +178,11 @@ function AgentChat({
             if (result === 'opened') showView(FILES_VIEW_ID)
             else if (result === 'outside')
               notify("This file is outside the pane's folder")
-            else if (FOLLOW_NOTICES[result]) notify(FOLLOW_NOTICES[result])
+            else if (FOLLOW_NOTICES[result])
+              notify(translate(FOLLOW_NOTICES[result]))
           }
         : undefined,
-    [mux.caps.files, paneId, showView, notify],
+    [mux.caps.files, paneId, showView, notify, translate],
   )
   const [shown, setShown] = useState(RENDER_WINDOW)
   const [atBottom, setAtBottom] = useState(true)

@@ -1,5 +1,6 @@
 import { MessageSquarePlus, X } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { useT } from '../i18n/i18n-context'
 import { Button, IconButton } from './ui/button'
 
 // Under a diff or a file whose lines are picked: which, and Comment
@@ -12,14 +13,19 @@ export function LineCommentBar({
   onComment: () => void
   onClear: () => void
 }) {
+  const { t } = useT()
   return (
     <div className="flex shrink-0 items-center gap-2 border-t border-border bg-surface px-3 py-1 text-[12px]">
       <span className="min-w-0 flex-1 truncate text-fg-muted">{label}</span>
       <Button size="sm" variant="primary" onClick={onComment}>
         <MessageSquarePlus size={14} aria-hidden="true" />
-        Comment
+        {t('files.review.comment')}
       </Button>
-      <IconButton size="sm" onClick={onClear} aria-label="Clear the lines">
+      <IconButton
+        size="sm"
+        onClick={onClear}
+        aria-label={t('files.review.clearLines')}
+      >
         <X size={15} aria-hidden="true" />
       </IconButton>
     </div>
@@ -43,13 +49,17 @@ export function LineGutterButton({
   onPress: (shift: boolean) => void
   children: ReactNode
 }) {
+  const { t } = useT()
   return (
     <button
       type="button"
       tabIndex={-1}
-      aria-label={`${removed ? 'Removed line' : 'Line'} ${line}`}
+      aria-label={t(
+        removed ? 'files.review.gutterRemoved' : 'files.review.gutterLine',
+        { line },
+      )}
       data-commented={commented || undefined}
-      title={commented ? 'Has a comment' : undefined}
+      title={commented ? t('files.review.hasComment') : undefined}
       onClick={(e) => onPress(e.shiftKey)}
       // Not the double click that keeps a Changes tab open
       onDoubleClick={(e) => e.stopPropagation()}

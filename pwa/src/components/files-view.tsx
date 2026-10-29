@@ -342,7 +342,7 @@ function PaneFiles({
       f.openFromFind(cm.root, cm.path, { line: cm.start })
       return
     }
-    openCommentInChanges(paneId, cm, notify)
+    openCommentInChanges(paneId, cm, notify, t)
     showView(CHANGES_VIEW_ID)
   }
   // The tab with unsaved changes the Discard box is open for
@@ -438,9 +438,9 @@ function PaneFiles({
   const onFollow = useCallback(
     async (target: LinkPath, scrollTop: number, opts: { newTab: boolean }) => {
       const notice = FOLLOW_NOTICES[await follow(target, scrollTop, opts)]
-      if (notice) notify(notice)
+      if (notice) notify(t(notice))
     },
-    [follow, notify],
+    [follow, notify, t],
   )
 
   // A tab with unsaved changes closes only once the user says so

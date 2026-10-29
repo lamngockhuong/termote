@@ -7,6 +7,8 @@ import {
   fetchFileHash,
   RequestError,
 } from '../hooks/use-mux-api'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
 import { splitPath } from '../utils/files-format'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { Button } from './ui/button'
@@ -14,25 +16,24 @@ import { ConfirmDialog } from './ui/confirm-dialog'
 import { Sheet } from './ui/sheet'
 
 // Why the server would not stage, unstage or discard it, by its code
-export const APPLY_REFUSED: Record<string, string> = {
-  stale_hunk: 'The file changed since the diff was read; it was read again',
-  changed: 'The file changed since it was read',
-  not_changed: 'No longer changed',
-  index_locked: 'Another git command holds the index. Try again',
-  filtered:
-    'This file goes through a git filter (such as LFS); use the terminal',
-  conflict: 'Resolve the conflict in the terminal first',
-  unsupported: "This change can't be applied here; use the terminal",
-  hunk_unsupported: 'This change can only be applied to the whole file',
-  too_large: 'Too large to discard here; use the terminal',
-  busy: 'Too many writes at once. Try again',
-  sensitive: 'This file may contain secrets',
-  view_only: 'View only',
-  trash_unavailable: 'Discarding is not available on this server',
-  not_editable: "This file can't be written from here",
-  permission: "The server can't write this file",
-  not_directory: 'A folder on that path is now a file',
-  storage_full: "The host's disk or quota is full",
+export const APPLY_REFUSED: Record<string, MessageKey> = {
+  stale_hunk: 'files.apply.staleHunk',
+  changed: 'files.apply.changed',
+  not_changed: 'files.apply.notChanged',
+  index_locked: 'files.apply.indexLocked',
+  filtered: 'files.apply.filtered',
+  conflict: 'files.apply.conflict',
+  unsupported: 'files.apply.unsupported',
+  hunk_unsupported: 'files.apply.hunkUnsupported',
+  too_large: 'files.apply.tooLarge',
+  busy: 'files.refused.busy',
+  sensitive: 'files.apply.sensitive',
+  view_only: 'files.apply.viewOnly',
+  trash_unavailable: 'files.apply.trashUnavailable',
+  not_editable: 'files.apply.notEditable',
+  permission: 'files.apply.permission',
+  not_directory: 'files.apply.notDirectory',
+  storage_full: 'files.refused.storageFull',
 }
 
 // The codes after which the list and the diff are read again: what the
@@ -42,7 +43,7 @@ export const APPLY_STALE = new Set(['stale_hunk', 'changed', 'not_changed'])
 type Hash =
   | { status: 'loading' }
   | { status: 'ready'; hash?: string }
-  | { status: 'error'; message: string }
+  | { status: 'error'; message: MessageKey }
 
 interface Props {
   paneId: string
@@ -76,6 +77,7 @@ export function DiscardChangeDialog({
   onRootChanged,
   onRefresh,
 }: Props) {
+  const { t } = useT()
   const untracked = entry.unstaged === '?'
   const deleted = entry.unstaged === 'D'
   // A hunk or a deleted file is checked by the server against the file
@@ -134,8 +136,8 @@ export function DiscardChangeDialog({
           status: 'error',
           message:
             err instanceof RequestError && err.status === 404
-              ? 'File not found'
-              : 'Could not read the file',
+              ? 'files.discard.fileNotFound'
+              : 'files.discard.unreadable',
         })
       },
     )
@@ -167,8 +169,7 @@ export function DiscardChangeDialog({
     } catch (err) {
       if (!(err instanceof RequestError)) {
         onRefresh()
-        if (!closed.current)
-          setProblem('It may have been discarded. Refresh to check.')
+        if (!closed.current) setProblem(t('files.discard.maybeDiscarded'))
         return
       }
       if (err.status === 409 && err.root) {
@@ -179,7 +180,7 @@ export function DiscardChangeDialog({
       if (APPLY_STALE.has(err.code)) onRefresh()
       if (closed.current) return
       if (err.code === 'cross_device') setAskPermanent(true)
-      else setProblem(APPLY_REFUSED[err.code] ?? 'Could not discard it')
+      else setProblem(t(APPLY_REFUSED[err.code] ?? 'files.discard.failed'))
     } finally {
       if (!closed.current) setSending(false)
     }
@@ -187,17 +188,22 @@ export function DiscardChangeDialog({
 
   const name = splitPath(entry.path)[1]
   const title = hunk
-    ? 'Discard this change?'
-    : untracked
-      ? `Delete ${name}?`
-      : deleted
-        ? `Restore ${name}?`
-        : `Discard changes in ${name}?`
-  const what = deleted
-    ? 'The file comes back as the index has it.'
-    : untracked
-      ? "The file goes to Termote's trash; Undo puts it back."
-      : "The current file goes to Termote's trash; Undo puts it back."
+    ? t('files.discard.askHunk')
+    : t(
+        untracked
+          ? 'files.discard.askDelete'
+          : deleted
+            ? 'files.discard.askRestore'
+            : 'files.discard.askFile',
+        { name },
+      )
+  const what = t(
+    deleted
+      ? 'files.discard.deletedNote'
+      : untracked
+        ? 'files.discard.untrackedNote'
+        : 'files.discard.note',
+  )
   return (
     <>
       <Sheet isOpen onClose={close} title={title}>
@@ -214,11 +220,13 @@ export function DiscardChangeDialog({
           )}
           <p className="m-0 text-sm text-fg-muted">{what}</p>
           {entry.sensitive && (
-            <p className="m-0 text-sm text-warning">This is a sensitive file</p>
+            <p className="m-0 text-sm text-warning">
+              {t('files.discard.sensitive')}
+            </p>
           )}
           {hash.status === 'error' && (
             <p role="alert" className="m-0 text-sm text-danger">
-              {hash.message}
+              {t(hash.message)}
             </p>
           )}
           {problem && (
@@ -228,7 +236,7 @@ export function DiscardChangeDialog({
           )}
           <div className="flex justify-end gap-2">
             <Button ref={cancel} onClick={close}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button
               variant="danger"
@@ -236,15 +244,21 @@ export function DiscardChangeDialog({
               onClick={() => send(false)}
               className="border border-danger/40 bg-danger/5"
             >
-              {untracked ? 'Delete' : deleted ? 'Restore' : 'Discard'}
+              {t(
+                untracked
+                  ? 'files.discard.delete'
+                  : deleted
+                    ? 'files.discard.restore'
+                    : 'files.discard.discard',
+              )}
             </Button>
           </div>
         </div>
       </Sheet>
       <ConfirmDialog
         isOpen={askPermanent}
-        title="Delete permanently?"
-        confirmLabel="Delete permanently"
+        title={t('files.discard.askPermanent')}
+        confirmLabel={t('files.discard.permanent')}
         destructive
         // A second ask never defaults to the destructive button
         defaultAction="cancel"
@@ -254,8 +268,7 @@ export function DiscardChangeDialog({
         }}
         onCancel={() => setAskPermanent(false)}
       >
-        This file is on another file system than Termote's trash, so it cannot
-        be moved there. Delete it permanently? This cannot be undone.
+        {t('files.discard.crossDevice')}
       </ConfirmDialog>
     </>
   )

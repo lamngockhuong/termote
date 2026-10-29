@@ -25,6 +25,11 @@ export function formatSize(bytes: number, locale: Locale): string {
   return `${num(bytes / 1024 / 1024, 1, locale)} MiB`
 }
 
+// bytes in KiB, as a number alone ("4.5"): with digits decimals
+export function formatKib(bytes: number, locale: Locale, digits = 1): string {
+  return num(bytes / 1024, digits, locale)
+}
+
 // A root under a home directory as ~/…; the server does not say where home
 // is, so the usual places are matched.
 export function shortRoot(root: string): string {

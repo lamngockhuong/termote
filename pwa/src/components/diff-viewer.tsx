@@ -29,13 +29,15 @@ import {
   RequestError,
 } from '../hooks/use-mux-api'
 import { useSettings } from '../hooks/use-settings'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
 import { isTablePath } from '../utils/csv-parse'
 import { keepOrder, TRUNCATE_START } from '../utils/files-format'
 import { isImagePath, isSvgPath } from '../utils/image-path'
 import { diffRange, inPick, type LineRange } from '../utils/line-range'
 import { isMarkdownPath, type LinkPath } from '../utils/markdown-links'
 import type { OpenWindowEvent } from '../utils/open-window'
-import { lineLabel } from '../utils/review-message'
+import { lineText } from '../utils/review-message'
 import {
   CODE_FRAME,
   capitalized,
@@ -61,16 +63,16 @@ type Loaded =
   | { kind: 'loading' }
   | { kind: 'diff'; diff: FileDiff }
   | { kind: 'sensitive' }
-  | { kind: 'error'; text: string }
+  | { kind: 'error'; text: MessageKey }
 
-const ERRORS: Record<FilesError, string> = {
-  'not-allowed': "This file can't be shown",
-  'view-only': 'View only: files show in a git repository only',
+const ERRORS: Record<FilesError, MessageKey> = {
+  'not-allowed': 'files.diff.fileNotAllowed',
+  'view-only': 'files.changes.viewOnly',
   // Answered as gone instead: not listed by git status any more, or the
   // untracked file was removed
-  'not-found': 'No longer changed',
-  unsupported: 'Not supported by this backend',
-  unavailable: 'Could not load the diff',
+  'not-found': 'files.diff.gone',
+  unsupported: 'files.changes.unsupported',
+  unavailable: 'files.diff.unavailable',
 }
 
 const ROW: Record<DiffLine['kind'], string> = {
@@ -171,6 +173,7 @@ export function DiffViewer({
   commentedLines,
   line,
 }: Props) {
+  const { t } = useT()
   const [state, setState] = useState<Loaded>({ kind: 'loading' })
   // The jump to line already made: a diff read again (a refresh, a stage)
   // opens where it was scrolled, not at the line again
@@ -271,7 +274,9 @@ export function DiffViewer({
     shown.kind === 'diff' &&
     !shown.diff.binary &&
     !shown.diff.reason
-  const editLabel = staged ? 'Edit working copy' : 'Edit'
+  const editLabel = t(
+    staged ? 'files.diff.editWorkingCopy' : 'files.viewer.edit',
+  )
   // The editor opens at the first change; the staged side's new lines are
   // the index's, not the file's
   const editLine =
@@ -279,42 +284,46 @@ export function DiffViewer({
   const copyPath = async () => {
     try {
       await navigator.clipboard.writeText(path)
-      notify('Path copied')
+      notify(t('files.viewer.pathCopied'))
     } catch {
-      notify('Could not copy the path')
+      notify(t('files.viewer.pathCopyFailed'))
     }
   }
   // After Edit: icons in the header, or a menu of them on a phone, where
   // the file's name needs the room beside the stage and discard buttons
   const extras: HeaderAction[] = [
-    { label: 'Copy path', icon: <Copy size={15} />, onClick: copyPath },
+    {
+      label: t('files.viewer.copyPath'),
+      icon: <Copy size={15} />,
+      onClick: copyPath,
+    },
   ]
   if (onOpenWindow)
     extras.push({
-      label: 'Open in new window',
-      title: 'Open in new window (Shift: a popup)',
+      label: t('files.viewer.newWindow'),
+      title: t('files.viewer.newWindowTitle'),
       icon: <AppWindow size={15} />,
       onClick: onOpenWindow,
     })
   if (canPreview)
     extras.push({
-      label: 'Preview',
-      title: previewing ? 'Show the diff' : 'Show the current version',
+      label: t('files.viewer.preview'),
+      title: t(previewing ? 'files.diff.showDiff' : 'files.diff.showCurrent'),
       icon: <Eye size={15} />,
       pressed: previewing,
       onClick: () => setPreview((v) => !v),
     })
   if (svg)
     extras.push({
-      label: 'Image',
-      title: asImage ? 'Show the diff' : 'Show as images',
+      label: t('files.viewer.image'),
+      title: t(asImage ? 'files.diff.showDiff' : 'files.diff.showImages'),
       icon: <ImageIcon size={15} />,
       pressed: asImage,
       onClick: () => updateSetting('svgPreview', !asImage),
     })
   if (!asImage)
     extras.push({
-      label: 'Wrap lines',
+      label: t('files.viewer.wrap'),
       icon: <WrapText size={15} />,
       pressed: wrap,
       onClick: () => setWrap((w) => !w),
@@ -334,8 +343,8 @@ export function DiffViewer({
         <IconButton
           size="sm"
           onClick={onClose}
-          aria-label="Back to changes"
-          title="Back to changes"
+          aria-label={t('files.changes.back')}
+          title={t('files.changes.back')}
         >
           <ArrowLeft size={16} aria-hidden="true" />
         </IconButton>
@@ -347,7 +356,7 @@ export function DiffViewer({
             {keepOrder(orig ? `${orig} → ${path}` : path)}
           </span>
           <span className="text-[11px] text-fg-muted">
-            {staged ? 'Staged' : 'Not staged'}
+            {t(staged ? 'files.changes.staged' : 'files.changes.notStaged')}
           </span>
         </div>
         {editable && onEdit && (
@@ -369,15 +378,17 @@ export function DiffViewer({
         {headerExtra}
       </div>
       {shown.kind === 'loading' && !previewing && (
-        <ViewMessage>Loading…</ViewMessage>
+        <ViewMessage>{t('files.loading')}</ViewMessage>
       )}
-      {shown.kind === 'gone' && <ViewMessage>No longer changed</ViewMessage>}
-      {shown.kind === 'error' && <ViewMessage>{shown.text}</ViewMessage>}
+      {shown.kind === 'gone' && (
+        <ViewMessage>{t('files.diff.gone')}</ViewMessage>
+      )}
+      {shown.kind === 'error' && <ViewMessage>{t(shown.text)}</ViewMessage>}
       {shown.kind === 'sensitive' && (
         <ViewMessage>
           <Lock size={20} aria-hidden="true" />
-          This file may contain secrets
-          {!canReveal && <span>A view-only device cannot show it</span>}
+          {t('files.viewer.sensitive')}
+          {!canReveal && <span>{t('files.viewer.sensitiveViewOnly')}</span>}
         </ViewMessage>
       )}
       {previewing && (
@@ -446,7 +457,7 @@ export function DiffViewer({
 type Content =
   | { kind: 'loading' }
   | { kind: 'text'; text: string }
-  | { kind: 'message'; text: string }
+  | { kind: 'message'; text: MessageKey }
 
 // The file as it is now in the working tree, rendered; read again whenever
 // the diff is. What shows stays until the new read answers, so a refresh
@@ -471,24 +482,23 @@ function WorkingTreePreview({
   onFollow: (target: LinkPath) => void
   notify: (message: string) => void
 }) {
+  const { t } = useT()
   const [content, setContent] = useState<Content>({ kind: 'loading' })
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: version re-reads the file
   useEffect(() => {
     let live = true
+    // i18n-ignore: code between two objects, not text
     fetchFileContent({ paneId }, path, { root, reveal }).then(
       (c) => {
         if (!live) return
         if ('sensitive' in c)
-          setContent({ kind: 'message', text: 'This file may contain secrets' })
+          setContent({ kind: 'message', text: 'files.viewer.sensitive' })
         else if ('previewable' in c)
-          setContent({
-            kind: 'message',
-            text: 'Not previewable (binary, special file or larger than 1 MiB)',
-          })
+          setContent({ kind: 'message', text: 'files.viewer.unpreviewable' })
         // A table shows whatever its size (up to the 1 MiB a read returns)
         else if (!isTablePath(path) && c.size > PREVIEW_MAX_BYTES)
-          setContent({ kind: 'message', text: 'Too large to preview' })
+          setContent({ kind: 'message', text: 'files.diff.tooLarge' })
         else setContent({ kind: 'text', text: c.text })
       },
       (err) =>
@@ -497,8 +507,8 @@ function WorkingTreePreview({
           kind: 'message',
           text:
             filesError(err) === 'not-found'
-              ? 'File not found'
-              : 'Could not load the file',
+              ? 'files.diff.fileNotFound'
+              : 'files.viewer.failed',
         }),
     )
     return () => {
@@ -506,9 +516,10 @@ function WorkingTreePreview({
     }
   }, [paneId, root, path, reveal, version])
 
-  if (content.kind === 'loading') return <ViewMessage>Loading…</ViewMessage>
+  if (content.kind === 'loading')
+    return <ViewMessage>{t('files.loading')}</ViewMessage>
   if (content.kind === 'message')
-    return <ViewMessage>{content.text}</ViewMessage>
+    return <ViewMessage>{t(content.text)}</ViewMessage>
   if (isTablePath(path))
     return (
       <LazyTablePreview
@@ -551,6 +562,7 @@ export function DiffBody({
   line?: DiffLineAt
   onLineShown?: (jump: number) => void
 }) {
+  const { t } = useT()
   const hunks = diff.hunks ?? []
   const frame = useRef<HTMLDivElement>(null)
   // Picked by index in its hunk: a deleted line has no new number
@@ -576,21 +588,17 @@ export function DiffBody({
   return (
     <>
       {diff.conflict && (
-        <Banner variant="warning">
-          Unresolved conflict: the file as it is now
-        </Banner>
+        <Banner variant="warning">{t('files.diff.conflict')}</Banner>
       )}
       {diff.truncated && (
-        <Banner variant="warning">Diff truncated at 1 MiB</Banner>
+        <Banner variant="warning">{t('files.diff.truncated')}</Banner>
       )}
       {diff.binary ? (
-        <ViewMessage>Binary file changed</ViewMessage>
+        <ViewMessage>{t('files.diff.binary')}</ViewMessage>
       ) : diff.reason ? (
-        <ViewMessage>
-          Not previewable (special file or larger than 1 MiB)
-        </ViewMessage>
+        <ViewMessage>{t('files.diff.special')}</ViewMessage>
       ) : hunks.length === 0 ? (
-        <ViewMessage>No content changes</ViewMessage>
+        <ViewMessage>{t('files.diff.noContent')}</ViewMessage>
       ) : (
         <div
           ref={frame}
@@ -657,7 +665,7 @@ export function DiffBody({
                         {l.noNewline && (
                           <span className="text-fg-muted">
                             {' '}
-                            (no newline at end of file)
+                            {t('files.diff.noNewline')}
                           </span>
                         )}
                       </code>
@@ -671,7 +679,7 @@ export function DiffBody({
       )}
       {onLineComment && range && (
         <LineCommentBar
-          label={capitalized(lineLabel(range))}
+          label={capitalized(lineText(range, t))}
           onComment={() => {
             onLineComment(range)
             clear()
