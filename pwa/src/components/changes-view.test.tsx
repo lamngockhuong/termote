@@ -24,6 +24,7 @@ import {
   type GitChanges,
   RequestError,
 } from '../hooks/use-mux-api'
+import { tFor } from '../i18n/i18n-context'
 import { setFocusWindowForTest } from '../utils/focus-mode'
 import {
   addReviewComment,
@@ -354,6 +355,7 @@ describe('ChangesView', () => {
           at: 1,
         },
         vi.fn(),
+        tFor('en'),
       )
     })
     await settle()
@@ -1625,7 +1627,7 @@ describe('ChangesView review comments', () => {
   })
 
   it('shows a line asked for from another view once the diff shows, until another one does', async () => {
-    openCommentInChanges('%1', review(), vi.fn())
+    openCommentInChanges('%1', review(), vi.fn(), tFor('en'))
     await show()
     await settle()
     const centred = () =>

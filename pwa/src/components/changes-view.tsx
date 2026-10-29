@@ -37,6 +37,9 @@ import {
 import { useReviewComposer } from '../hooks/use-review-composer'
 import { useSettings } from '../hooks/use-settings'
 import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
+import { Trans } from '../i18n/trans'
+import type { Translate } from '../i18n/translate'
 import type { Session } from '../types/session'
 import { splitPath } from '../utils/files-format'
 import { isFocusWindow } from '../utils/focus-mode'
@@ -68,13 +71,13 @@ import { Banner } from './ui/banner'
 import { Button, IconButton } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
 
-const ERRORS: Record<ChangesError, string> = {
-  unsupported: 'Not supported by this backend',
-  'not-found': 'Directory not found',
-  'not-allowed': "This directory can't be shown",
-  'view-only': 'View only: files show in a git repository only',
-  timeout: 'git took too long; trying again',
-  unavailable: 'Could not read the changes',
+const ERRORS: Record<ChangesError, MessageKey> = {
+  unsupported: 'files.changes.unsupported',
+  'not-found': 'files.changes.notFound',
+  'not-allowed': 'files.changes.notAllowed',
+  'view-only': 'files.changes.viewOnly',
+  timeout: 'files.changes.timeout',
+  unavailable: 'files.changes.unavailable',
 }
 
 // Past this many entries the list gets a filter box
@@ -96,12 +99,15 @@ export const LIST_DOUBLE_CLICK_MS = 500
 
 // What a tab shows of its side: the file's name (the staged side says so,
 // next to the same file's other side), its path and directory
-function tabLabel(t: ChangeTab) {
-  const [dir, name] = splitPath(t.path)
-  const side = t.staged ? 'Staged' : 'Not staged'
+function tabLabel(tab: ChangeTab, t: Translate<MessageKey>) {
+  const [dir, name] = splitPath(tab.path)
+  const side = t(
+    tab.staged ? 'files.changes.staged' : 'files.changes.notStaged',
+  )
+  const path = `${tab.orig ? `${tab.orig} → ` : ''}${tab.path}`
   return {
-    name: t.staged ? `${name} (staged)` : name,
-    title: `${t.orig ? `${t.orig} → ` : ''}${t.path} (${side})`,
+    name: tab.staged ? t('files.changes.stagedTab', { name }) : name,
+    title: t('files.changes.tabTitle', { path, side }),
     detail: dir ? `${dir} · ${side}` : side,
   }
 }
@@ -113,7 +119,48 @@ interface Item {
 }
 
 const ACTION_ICON = { stage: Plus, unstage: Minus, discard: Undo2 }
-const ACTION_LABEL = { stage: 'Stage', unstage: 'Unstage', discard: 'Discard' }
+
+// What a side's buttons act on: the whole file, one of its hunks (from 1),
+// or the file of a row, named
+type ActionTarget = 'file' | number | { name: string }
+
+const ACTION_LABELS: Record<
+  ChangeAction,
+  { file: MessageKey; hunk: MessageKey; name: MessageKey }
+> = {
+  stage: {
+    file: 'files.changes.stageFile',
+    hunk: 'files.changes.stageHunk',
+    name: 'files.changes.stageName',
+  },
+  unstage: {
+    file: 'files.changes.unstageFile',
+    hunk: 'files.changes.unstageHunk',
+    name: 'files.changes.unstageName',
+  },
+  discard: {
+    file: 'files.changes.discardFile',
+    hunk: 'files.changes.discardHunk',
+    name: 'files.changes.discardName',
+  },
+}
+
+// A stage or unstage asked about first, and what failed
+const ASK: Record<
+  AskedAction,
+  { title: MessageKey; confirm: MessageKey; failed: MessageKey }
+> = {
+  stage: {
+    title: 'files.changes.askStage',
+    confirm: 'files.changes.stage',
+    failed: 'files.changes.stageFailed',
+  },
+  unstage: {
+    title: 'files.changes.askUnstage',
+    confirm: 'files.changes.unstage',
+    failed: 'files.changes.unstageFailed',
+  },
+}
 
 // The buttons of a side's actions; what names what they act on for a
 // screen reader ("Stage a.ts", "Discard change 2")
@@ -124,13 +171,20 @@ function ChangeActions({
   onAction,
 }: {
   actions: ChangeAction[]
-  what: string
+  what: ActionTarget
   disabled: boolean
   onAction: (a: ChangeAction) => void
 }) {
+  const { t } = useT()
   return actions.map((a) => {
     const Icon = ACTION_ICON[a]
-    const label = `${ACTION_LABEL[a]} ${what}`
+    const keys = ACTION_LABELS[a]
+    const label =
+      what === 'file'
+        ? t(keys.file)
+        : typeof what === 'number'
+          ? t(keys.hunk, { n: what })
+          : t(keys.name, { name: what.name })
     return (
       <IconButton
         key={a}
@@ -157,8 +211,9 @@ interface Discarding {
 }
 
 // A stage or unstage of a sensitive file, asked about first
+type AskedAction = Exclude<ChangeAction, 'discard'>
 interface Asking {
-  action: ChangeAction
+  action: AskedAction
   entry: ChangeEntry
   staged: boolean
   hunk?: DiffHunk
@@ -166,7 +221,7 @@ interface Asking {
 
 // Staged and unstaged changes of one file show in both groups, each opening
 // its own side's diff.
-function groups(entries: ChangeEntry[]): [string, Item[]][] {
+function groups(entries: ChangeEntry[]): [MessageKey, Item[]][] {
   const conflicts: Item[] = []
   const staged: Item[] = []
   const changes: Item[] = []
@@ -182,11 +237,11 @@ function groups(entries: ChangeEntry[]): [string, Item[]][] {
     else if (entry.unstaged)
       changes.push({ entry, staged: false, code: entry.unstaged })
   }
-  const all: [string, Item[]][] = [
-    ['Conflicts', conflicts],
-    ['Staged', staged],
-    ['Changes', changes],
-    ['Untracked', untracked],
+  const all: [MessageKey, Item[]][] = [
+    ['files.changes.group.conflicts', conflicts],
+    ['files.changes.group.staged', staged],
+    ['files.changes.group.changes', changes],
+    ['files.changes.group.untracked', untracked],
   ]
   return all.filter(([, items]) => items.length > 0)
 }
@@ -224,6 +279,7 @@ function openCommentDiff(
   paneId: string,
   c: ReviewComment,
   notify: ViewProps['notify'],
+  t: Translate<MessageKey>,
 ): DiffLineWanted {
   const wanted = commentLine(c)
   void openChangeFromLink(paneId, {
@@ -233,7 +289,7 @@ function openCommentDiff(
   }).then((shown) => {
     if (shown !== false) return
     wanted.gone = true
-    notify('No changes for this file', { variant: 'warning' })
+    notify(t('files.changes.noChangesFor'), { variant: 'warning' })
   })
   return wanted
 }
@@ -244,8 +300,9 @@ export function openCommentInChanges(
   paneId: string,
   c: ReviewComment,
   notify: ViewProps['notify'],
+  t: Translate<MessageKey>,
 ) {
-  pendingDiffLines.set(paneId, openCommentDiff(paneId, c, notify))
+  pendingDiffLines.set(paneId, openCommentDiff(paneId, c, notify, t))
 }
 
 export function ChangesView({
@@ -259,7 +316,8 @@ export function ChangesView({
   sessions,
   openTab,
 }: ViewProps) {
-  if (!session.paneId) return <ViewMessage>Loading…</ViewMessage>
+  const { t } = useT()
+  if (!session.paneId) return <ViewMessage>{t('files.loading')}</ViewMessage>
   return (
     <PaneChanges
       session={session}
@@ -342,7 +400,7 @@ function PaneChanges({
   }
   const openComment = (cm: ReviewComment) => {
     if (cm.root !== c.root) {
-      notify('The pane is in another folder now', { variant: 'warning' })
+      notify(t('files.changes.otherFolder'), { variant: 'warning' })
       return
     }
     if (cm.source === 'file') {
@@ -350,7 +408,7 @@ function PaneChanges({
       showView(FILES_VIEW_ID)
       return
     }
-    setDiffLine(openCommentDiff(paneId, cm, notify))
+    setDiffLine(openCommentDiff(paneId, cm, notify, t))
   }
   const commentedInEditor = useMemo(
     () =>
@@ -398,19 +456,19 @@ function PaneChanges({
       const { names } = c.gone
       notify(
         names.length === 1
-          ? `No changes left in ${names[0]}`
-          : `No changes left in ${names.length} files`,
+          ? t('files.changes.noneLeftIn', { name: names[0] })
+          : t('files.changes.noneLeftMany', { count: names.length }),
       )
     }
     seenGone.current = c.gone.count
-  }, [c.gone, notify])
+  }, [c.gone, notify, t])
 
   const seenChanges = useRef(c.rootChanges)
   useEffect(() => {
     if (c.rootChanges > seenChanges.current)
-      notify("The pane's directory changed")
+      notify(t('files.changes.rootChanged'))
     seenChanges.current = c.rootChanges
-  }, [c.rootChanges, notify])
+  }, [c.rootChanges, notify, t])
 
   // A link of a previewed file opens in the Files view
   const follow = useCallback(
@@ -418,9 +476,9 @@ function PaneChanges({
       const result = await followInFiles(paneId, target)
       if (result === 'opened') showView(FILES_VIEW_ID)
       const notice = FOLLOW_NOTICES[result]
-      if (notice) notify(notice)
+      if (notice) notify(t(notice))
     },
-    [paneId, showView, notify],
+    [paneId, showView, notify, t],
   )
 
   const refresh = () => {
@@ -482,9 +540,12 @@ function PaneChanges({
       const code = err instanceof RequestError ? err.code : ''
       // No answer (a timeout): it may have been applied all the same
       if (!code || APPLY_STALE.has(code)) refresh()
-      notify(APPLY_REFUSED[code] ?? `Could not ${action} ${name}`, {
-        variant: 'danger',
-      })
+      notify(
+        APPLY_REFUSED[code]
+          ? t(APPLY_REFUSED[code])
+          : t(ASK[action].failed, { name }),
+        { variant: 'danger' },
+      )
     } finally {
       setRunning(false)
     }
@@ -502,7 +563,7 @@ function PaneChanges({
         },
       )
       refresh()
-      notify(`Restored ${name}`, { variant: 'success' })
+      notify(t('files.changes.restored', { name }), { variant: 'success' })
     } catch (err) {
       const fail = restoreFailure(err, name, undefined, t)
       if (fail.root) c.rootChanged(fail.root)
@@ -514,26 +575,30 @@ function PaneChanges({
     applied(d.entry, false)
     const name = visibleUnsafe(splitPath(d.entry.path)[1])
     const untracked = d.entry.unstaged === '?'
-    if (res.permanent) notify(`Deleted ${name} permanently`)
-    else if (!res.trashId) notify(`Restored ${name}`)
+    if (res.permanent) notify(t('files.changes.deletedForGood', { name }))
+    else if (!res.trashId) notify(t('files.changes.restored', { name }))
     else {
       const id = res.trashId
-      notify(untracked ? `Deleted ${name}` : `Discarded changes in ${name}`, {
-        action: { label: 'Undo', onClick: () => undo(d, id) },
-      })
+      notify(
+        t(untracked ? 'files.changes.deleted' : 'files.changes.discarded', {
+          name,
+        }),
+        { action: { label: t('files.undo'), onClick: () => undo(d, id) } },
+      )
     }
   }
 
   // Only an editor holds unsaved changes
-  const tabDirty = (t: ChangeTab) => t.editing && isDirty(t.root, t.path)
+  const tabDirty = (tab: ChangeTab) =>
+    tab.editing && isDirty(tab.root, tab.path)
   // A tab with unsaved changes closes only once the user says so, unless
   // another tab edits the same file: the changes stay there
   const requestClose = (id: string) => {
-    const t = c.tabs.find((x) => x.id === id)
+    const closed = c.tabs.find((x) => x.id === id)
     const shared = c.tabs.some(
-      (x) => x !== t && x.editing && x.path === t?.path,
+      (x) => x !== closed && x.editing && x.path === closed?.path,
     )
-    if (t && tabDirty(t) && !shared) setClosing(id)
+    if (closed && tabDirty(closed) && !shared) setClosing(id)
     else c.close(id)
   }
 
@@ -541,14 +606,14 @@ function PaneChanges({
   const panelId = useId()
   const tabBar = !isMobile && c.tabs.length > 0
   const tabList: TabListProps = {
-    tabs: c.tabs.map((t) => ({
-      id: t.id,
-      ...tabLabel(t),
-      pinned: t.pinned,
-      dirty: tabDirty(t),
+    tabs: c.tabs.map((tab) => ({
+      id: tab.id,
+      ...tabLabel(tab, t),
+      pinned: tab.pinned,
+      dirty: tabDirty(tab),
     })),
     activeId: c.activeId,
-    homeLabel: 'Changes',
+    homeLabel: t('common.changes'),
     onActivate: c.activate,
     onClose: requestClose,
     onPin: c.pin,
@@ -565,7 +630,7 @@ function PaneChanges({
   const openFiles = isMobile && c.tabs.length > 0 && (
     <OpenFilesButton count={c.tabs.length} onClick={() => setListing(true)} />
   )
-  const closingTab = c.tabs.find((t) => t.id === closing)
+  const closingTab = c.tabs.find((x) => x.id === closing)
 
   let body: ReactNode
   if (showCommit && !tab) {
@@ -589,7 +654,7 @@ function PaneChanges({
         path={tab.path}
         wrapByDefault={isMobile || settings.editorWrap}
         compact={isMobile}
-        backLabel="Back to the diff"
+        backLabel={t('files.changes.backToDiff')}
         onClose={() => c.setEditing(tab.id, false)}
         onFollow={follow}
         onRootChanged={c.rootChanged}
@@ -679,7 +744,7 @@ function PaneChanges({
         renderHunkActions={(entry: ChangeEntry, hunk: DiffHunk, i: number) => (
           <ChangeActions
             actions={actionsOf(entry, tab.staged)}
-            what={`change ${i + 1}`}
+            what={i + 1}
             disabled={busy}
             onAction={(a) =>
               run(a, entry, tab.staged, { hunk, revealed: tab.revealed })
@@ -702,18 +767,22 @@ function PaneChanges({
       />
     )
   } else if (!c.loaded) {
-    body = <ViewMessage>Loading…</ViewMessage>
+    body = <ViewMessage>{t('files.loading')}</ViewMessage>
   } else if (c.error && c.entries.length === 0) {
-    body = <ViewMessage>{ERRORS[c.error]}</ViewMessage>
+    body = <ViewMessage>{t(ERRORS[c.error])}</ViewMessage>
   } else if (!c.isRepo) {
-    body = <ViewMessage>Not a git repository: {c.root}</ViewMessage>
+    body = (
+      <ViewMessage>
+        {t('files.changes.notRepo', { root: c.root as string })}
+      </ViewMessage>
+    )
   } else if (c.entries.length === 0) {
     body = (
       <ViewMessage>
-        No changes since the last commit
+        {t('files.changes.clean')}
         <Button size="sm" onClick={() => setShowCommit(true)}>
           <GitCommitHorizontal size={15} aria-hidden="true" />
-          Show last commit
+          {t('files.changes.showLastCommit')}
         </Button>
       </ViewMessage>
     )
@@ -724,14 +793,14 @@ function PaneChanges({
     )
     body = (
       <div className="min-h-0 flex-1 overflow-y-auto pb-2">
-        {c.error && <Banner variant="warning">{ERRORS[c.error]}</Banner>}
-        {c.truncated && <Banner>Only the first 5000 changes are shown</Banner>}
+        {c.error && <Banner variant="warning">{t(ERRORS[c.error])}</Banner>}
+        {c.truncated && <Banner>{t('files.changes.truncated')}</Banner>}
         {filtering && (
           <div className="sticky top-0 z-10 border-b border-border bg-bg px-2 py-1.5">
             <input
               type="search"
-              aria-label="Filter changes"
-              placeholder="Filter changes…"
+              aria-label={t('files.changes.filter')}
+              placeholder={t('files.changes.filterPlaceholder')}
               value={filter}
               spellCheck={false}
               autoCapitalize="off"
@@ -750,13 +819,13 @@ function PaneChanges({
         )}
         {shown.length === 0 && (
           <p role="status" className="m-0 px-3 py-2 text-[12px] text-fg-subtle">
-            No changes match
+            {t('files.changes.noMatch')}
           </p>
         )}
         {shown.map(([title, items]) => (
-          <section key={title} aria-label={title}>
+          <section key={title} aria-label={t(title)}>
             <h3 className="px-3 pt-3 pb-1 text-[11px] font-medium uppercase tracking-wide text-fg-muted ui-terminal:font-label">
-              {title} <span className="text-fg-subtle">{items.length}</span>
+              {t(title)} <span className="text-fg-subtle">{items.length}</span>
             </h3>
             <ul>
               {items.map((it) => (
@@ -773,7 +842,7 @@ function PaneChanges({
                     actions={
                       <ChangeActions
                         actions={actionsOf(it.entry, it.staged)}
-                        what={splitPath(it.entry.path)[1]}
+                        what={{ name: splitPath(it.entry.path)[1] }}
                         disabled={busy}
                         onAction={(a) => run(a, it.entry, it.staged)}
                       />
@@ -846,8 +915,8 @@ function PaneChanges({
       {asking && (
         <ConfirmDialog
           isOpen
-          title={`${ACTION_LABEL[asking.action]} a sensitive file?`}
-          confirmLabel={ACTION_LABEL[asking.action]}
+          title={t(ASK[asking.action].title)}
+          confirmLabel={t(ASK[asking.action].confirm)}
           onConfirm={() => {
             setAsking(undefined)
             run(asking.action, asking.entry, asking.staged, {
@@ -857,7 +926,10 @@ function PaneChanges({
           }}
           onCancel={() => setAsking(undefined)}
         >
-          {visibleUnsafe(asking.entry.path)} may contain secrets.
+          <Trans
+            k="files.changes.askSensitiveBody"
+            tags={{ name: () => visibleUnsafe(asking.entry.path) }}
+          />
         </ConfirmDialog>
       )}
       <div

@@ -9,6 +9,9 @@ import {
   fetchLastCommit,
   RequestError,
 } from '../hooks/use-mux-api'
+import { formatDateTime } from '../i18n/format'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
 import { keepOrder, TRUNCATE_START } from '../utils/files-format'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { ChangeRowButton, STATUS } from './change-status'
@@ -20,22 +23,22 @@ import { IconButton } from './ui/button'
 
 type Loaded =
   | { kind: 'loading' }
-  | { kind: 'error'; text: string }
+  | { kind: 'error'; text: MessageKey }
   | { kind: 'none' }
   | { kind: 'commit'; commit: CommitInfo }
 
 type FileLoaded =
   | { kind: 'loading' }
-  | { kind: 'error'; text: string }
+  | { kind: 'error'; text: MessageKey }
   | { kind: 'sensitive' }
   | { kind: 'diff'; diff: FileDiff }
 
-const ERRORS: Record<FilesError, string> = {
-  'not-allowed': "This file can't be shown",
-  'view-only': 'View only: files show in a git repository only',
-  'not-found': 'Not in the last commit',
-  unsupported: 'Not supported by this backend',
-  unavailable: 'Could not load the commit',
+const ERRORS: Record<FilesError, MessageKey> = {
+  'not-allowed': 'files.diff.fileNotAllowed',
+  'view-only': 'files.changes.viewOnly',
+  'not-found': 'files.commit.notFound',
+  unsupported: 'files.changes.unsupported',
+  unavailable: 'files.commit.unavailable',
 }
 
 // The last commit of the pane's repo, read only: its message, author and
@@ -59,6 +62,7 @@ export function CommitView({
   onBack: () => void
   onRootChanged: (root: string) => void
 }) {
+  const { t } = useT()
   const [state, setState] = useState<Loaded>({ kind: 'loading' })
   const [reload, setReload] = useState(0)
   const [file, setFile] = useState<CommitFile>()
@@ -112,28 +116,30 @@ export function CommitView({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <Header
-        title="Last commit"
+        title={t('files.commit.title')}
         detail={commit?.hash.slice(0, 7)}
-        backLabel="Back to changes"
+        backLabel={t('files.changes.back')}
         onBack={onBack}
       />
-      {state.kind === 'loading' && <ViewMessage>Loading…</ViewMessage>}
-      {state.kind === 'error' && <ViewMessage>{state.text}</ViewMessage>}
-      {state.kind === 'none' && <ViewMessage>No commits yet</ViewMessage>}
+      {state.kind === 'loading' && (
+        <ViewMessage>{t('files.loading')}</ViewMessage>
+      )}
+      {state.kind === 'error' && <ViewMessage>{t(state.text)}</ViewMessage>}
+      {state.kind === 'none' && (
+        <ViewMessage>{t('files.commit.none')}</ViewMessage>
+      )}
       {commit && (
         <div className="min-h-0 flex-1 overflow-y-auto pb-2">
           <CommitMeta commit={commit} />
-          {commit.truncated && (
-            <Banner>Only the first 5000 files are shown</Banner>
-          )}
-          <section aria-label="Files">
+          {commit.truncated && <Banner>{t('files.commit.truncated')}</Banner>}
+          <section aria-label={t('files.commit.files')}>
             <h3 className="px-3 pt-3 pb-1 text-[11px] font-medium uppercase tracking-wide text-fg-muted ui-terminal:font-label">
-              Files{' '}
+              {t('files.commit.files')}{' '}
               <span className="text-fg-subtle">{commit.files.length}</span>
             </h3>
             {commit.files.length === 0 ? (
               <p className="m-0 px-3 py-2 text-[12px] text-fg-subtle">
-                No files changed
+                {t('files.commit.noFiles')}
               </p>
             ) : (
               <ul>
@@ -196,6 +202,7 @@ function Header({
 
 // The message (subject, then body), author and date of a commit
 function CommitMeta({ commit }: { commit: CommitInfo }) {
+  const { t, locale } = useT()
   const message = visibleUnsafe(commit.message, true)
   const cut = message.indexOf('\n')
   const subject = cut < 0 ? message : message.slice(0, cut)
@@ -204,7 +211,7 @@ function CommitMeta({ commit }: { commit: CommitInfo }) {
   return (
     <div className="border-b border-border px-3 py-3">
       <p className="m-0 whitespace-pre-wrap break-words text-[13px] font-medium text-fg">
-        {subject || '(no message)'}
+        {subject || t('files.commit.noMessage')}
       </p>
       {body && (
         <p className="m-0 mt-1.5 whitespace-pre-wrap break-words text-[12px] text-fg-muted">
@@ -218,11 +225,13 @@ function CommitMeta({ commit }: { commit: CommitInfo }) {
         <span aria-hidden="true">·</span>
         <span>{visibleUnsafe(commit.author)}</span>
         <span aria-hidden="true">·</span>
-        <time dateTime={date.toISOString()}>{date.toLocaleString()}</time>
+        <time dateTime={date.toISOString()}>
+          {formatDateTime(date, locale)}
+        </time>
       </p>
       {commit.parents.length > 1 && (
         <p className="m-0 mt-1 text-[11px] text-fg-subtle">
-          Merge: changes against the first parent
+          {t('files.commit.merge')}
         </p>
       )}
     </div>
@@ -251,6 +260,7 @@ function CommitFileDiff({
   onHeadMoved: () => void
   onRootChanged: (root: string) => void
 }) {
+  const { t } = useT()
   const [state, setState] = useState<FileLoaded>({ kind: 'loading' })
   const [reveal, setReveal] = useState(false)
   const [wrap, setWrap] = useState(isMobile)
@@ -279,13 +289,13 @@ function CommitFileDiff({
     }
   }, [paneId, root, hash, file, reveal, onHeadMoved, onRootChanged])
 
-  const label = 'Wrap lines'
+  const label = t('files.viewer.wrap')
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <Header
         title={keepOrder(file.orig ? `${file.orig} → ${file.path}` : file.path)}
-        detail={`${STATUS[file.status] ?? file.status} · ${hash.slice(0, 7)}`}
-        backLabel="Back to the commit"
+        detail={`${STATUS[file.status] ? t(STATUS[file.status]) : file.status} · ${hash.slice(0, 7)}`}
+        backLabel={t('files.commit.backToCommit')}
         onBack={onBack}
       >
         {state.kind === 'diff' && (
@@ -300,13 +310,15 @@ function CommitFileDiff({
           </IconButton>
         )}
       </Header>
-      {state.kind === 'loading' && <ViewMessage>Loading…</ViewMessage>}
-      {state.kind === 'error' && <ViewMessage>{state.text}</ViewMessage>}
+      {state.kind === 'loading' && (
+        <ViewMessage>{t('files.loading')}</ViewMessage>
+      )}
+      {state.kind === 'error' && <ViewMessage>{t(state.text)}</ViewMessage>}
       {state.kind === 'sensitive' && (
         <ViewMessage>
           <Lock size={20} aria-hidden="true" />
-          This file may contain secrets
-          {!canReveal && <span>A view-only device cannot show it</span>}
+          {t('files.viewer.sensitive')}
+          {!canReveal && <span>{t('files.viewer.sensitiveViewOnly')}</span>}
         </ViewMessage>
       )}
       {state.kind === 'diff' && (

@@ -5,6 +5,7 @@ import {
   useRef,
   useSyncExternalStore,
 } from 'react'
+import type { MessageKey } from '../i18n/messages/en'
 import { isAbsolutePath, underRoot } from '../utils/chat-file-links'
 import type { TableOp } from '../utils/csv-edits'
 import type { Delimiter } from '../utils/csv-parse'
@@ -193,9 +194,9 @@ export const isOpenable = (e: FileEntry) =>
 export type FollowResult = 'opened' | 'missing' | 'failed' | 'stale'
 
 // What to tell the user when a link went nowhere
-export const FOLLOW_NOTICES: Partial<Record<FollowResult, string>> = {
-  missing: 'Not found',
-  failed: "This link can't be opened",
+export const FOLLOW_NOTICES: Partial<Record<FollowResult, MessageKey>> = {
+  missing: 'files.follow.missing',
+  failed: 'files.follow.failed',
 }
 
 interface Store {

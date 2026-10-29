@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { formatSize, keepOrder, shortRoot, splitPath } from './files-format'
+import {
+  formatKib,
+  formatSize,
+  keepOrder,
+  shortRoot,
+  splitPath,
+} from './files-format'
 
 describe('files format', () => {
   it.each([
@@ -14,6 +20,13 @@ describe('files format', () => {
   it('writes the decimal mark of the locale', () => {
     expect(formatSize(1536, 'vi')).toBe('1,5 KiB')
     expect(formatSize(3 * 1024 * 1024, 'vi')).toBe('3,0 MiB')
+  })
+
+  it('writes KiB alone, with the decimals asked for', () => {
+    expect(formatKib(4608, 'en')).toBe('4.5')
+    expect(formatKib(16 * 1024, 'en')).toBe('16.0')
+    expect(formatKib(4096, 'en', 0)).toBe('4')
+    expect(formatKib(4608, 'vi')).toBe('4,5')
   })
 
   it.each([

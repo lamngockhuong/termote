@@ -13,6 +13,8 @@ import {
   type Worktree,
   type WorktreeList,
 } from '../hooks/use-mux-api'
+import { useT } from '../i18n/i18n-context'
+import { Trans } from '../i18n/trans'
 import { validBranchName } from '../utils/git-ref'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { MAX_GROUP_NAME_BYTES, nameTooLong } from './group-dialog'
@@ -25,8 +27,6 @@ const INPUT_CLASSES =
 
 // Past this many branches the base list gets a filter field
 const FILTER_FROM = 15
-
-const EXISTING_NOTE = 'Checks out the existing branch; base is not used'
 
 // What a worktree route's refusal means, by its code
 export function worktreeProblem(code: string): string {
@@ -112,6 +112,7 @@ export function WorktreeDialog({
   onShow,
   load = listWorktrees,
 }: Props) {
+  const { t } = useT()
   const [mode, setMode] = useState(initialMode)
   const { list, problem: listProblem } = useWorktreeList(groupId, load)
   const [branch, setBranch] = useState('')
@@ -183,16 +184,22 @@ export function WorktreeDialog({
     e.preventDefault()
     if (sending) return
     if (!validBranchName(trimmed)) {
-      setProblem(trimmed ? worktreeProblem('invalid_name') : 'Enter a branch')
+      setProblem(
+        trimmed
+          ? worktreeProblem('invalid_name')
+          : t('files.worktree.enterBranch'),
+      )
       return
     }
     if (nameTooLong(label.trim())) {
-      setProblem(`Use at most ${MAX_GROUP_NAME_BYTES} bytes for the label`)
+      setProblem(
+        t('files.worktree.labelTooLong', { max: MAX_GROUP_NAME_BYTES }),
+      )
       return
     }
     // The server's label rule (validateTmuxTarget)
     if (/\p{Cc}/u.test(label) || label.trim().endsWith(';')) {
-      setProblem("This workspace name can't be used")
+      setProblem(t('files.worktree.badLabel'))
       return
     }
     run(() =>
@@ -231,10 +238,12 @@ export function WorktreeDialog({
 
   if (mode === 'open') {
     return (
-      <Sheet isOpen onClose={close} title="Open worktree">
+      <Sheet isOpen onClose={close} title={t('files.worktree.openTitle')}>
         <div className="flex flex-col gap-3 p-4">
           {!list && !listProblem && (
-            <p className="m-0 text-sm text-fg-muted">Reading the worktrees…</p>
+            <p className="m-0 text-sm text-fg-muted">
+              {t('files.worktree.reading')}
+            </p>
           )}
           {listProblem && (
             <p role="alert" className="m-0 text-sm text-danger">
@@ -243,7 +252,7 @@ export function WorktreeDialog({
           )}
           {list && openable.length === 0 && (
             <p className="m-0 text-sm text-fg-muted">
-              No other worktrees. Create one with New worktree
+              {t('files.worktree.noneOther')}
             </p>
           )}
           {openable.length > 0 && (
@@ -265,7 +274,9 @@ export function WorktreeDialog({
                       </span>
                     </span>
                     {w.groupId && (
-                      <span className="text-[12px] text-fg-subtle">open</span>
+                      <span className="text-[12px] text-fg-subtle">
+                        {t('files.worktree.isOpen')}
+                      </span>
                     )}
                   </Button>
                 </li>
@@ -274,7 +285,7 @@ export function WorktreeDialog({
           )}
           {problemLine}
           <div className="flex justify-end">
-            <Button onClick={close}>Cancel</Button>
+            <Button onClick={close}>{t('common.cancel')}</Button>
           </div>
         </div>
       </Sheet>
@@ -282,10 +293,10 @@ export function WorktreeDialog({
   }
 
   return (
-    <Sheet isOpen onClose={close} title="New worktree">
+    <Sheet isOpen onClose={close} title={t('files.worktree.newTitle')}>
       <form onSubmit={submit} className="flex flex-col gap-3 p-4">
         <label htmlFor={branchId} className="text-sm text-fg-muted">
-          Branch (new, or one to check out)
+          {t('files.worktree.branch')}
         </label>
         <input
           ref={branchInput}
@@ -307,13 +318,19 @@ export function WorktreeDialog({
           }}
           className={`${INPUT_CLASSES} font-term`}
         />
-        <span className="text-sm text-fg-muted">Base</span>
+        <span className="text-sm text-fg-muted">
+          {t('files.worktree.base')}
+        </span>
         {existing ? (
-          <p className="m-0 text-sm text-fg-subtle">{EXISTING_NOTE}</p>
+          <p className="m-0 text-sm text-fg-subtle">
+            {t('files.worktree.existingNote')}
+          </p>
         ) : (
           <>
             <Button
-              aria-label={`Base: ${base || 'Current HEAD'}`}
+              aria-label={t('files.worktree.baseButton', {
+                base: base || t('files.worktree.currentHead'),
+              })}
               aria-expanded={pickBase}
               aria-controls={baseListId}
               onClick={() => setPickBase(!pickBase)}
@@ -321,7 +338,7 @@ export function WorktreeDialog({
             >
               <GitBranch size={14} aria-hidden="true" />
               <span className="max-w-56 truncate">
-                {base ? visibleUnsafe(base) : 'Current HEAD'}
+                {base ? visibleUnsafe(base) : t('files.worktree.currentHead')}
               </span>
               <ChevronDown size={14} aria-hidden="true" />
             </Button>
@@ -330,13 +347,13 @@ export function WorktreeDialog({
                 id={baseListId}
                 className="m-0 flex min-w-0 flex-col gap-1 rounded-control border border-border p-1"
               >
-                <legend className="sr-only">Base</legend>
+                <legend className="sr-only">{t('files.worktree.base')}</legend>
                 {branches.length > FILTER_FROM && (
                   <input
                     type="search"
                     value={filter}
-                    placeholder="Filter branches"
-                    aria-label="Filter branches"
+                    placeholder={t('files.worktree.filter')}
+                    aria-label={t('files.worktree.filter')}
                     spellCheck={false}
                     autoCapitalize="off"
                     onChange={(e) => setFilter(e.target.value)}
@@ -357,7 +374,7 @@ export function WorktreeDialog({
                         className="accent-accent"
                       />
                       <span className="min-w-0 truncate">
-                        {b ? visibleUnsafe(b) : 'Current HEAD'}
+                        {b ? visibleUnsafe(b) : t('files.worktree.currentHead')}
                       </span>
                     </label>
                   ))}
@@ -367,7 +384,7 @@ export function WorktreeDialog({
           </>
         )}
         <label htmlFor={labelId} className="text-sm text-fg-muted">
-          Workspace name (optional)
+          {t('files.worktree.label')}
         </label>
         <input
           id={labelId}
@@ -396,13 +413,13 @@ export function WorktreeDialog({
             }}
             className="self-start"
           >
-            Open it
+            {t('files.worktree.openIt')}
           </Button>
         )}
         <div className="flex justify-end gap-2">
-          <Button onClick={close}>Cancel</Button>
+          <Button onClick={close}>{t('common.cancel')}</Button>
           <Button type="submit" variant="primary" disabled={sending}>
-            Create
+            {t('files.worktree.create')}
           </Button>
         </div>
       </form>
@@ -433,22 +450,22 @@ export function WorktreeRemoveDialog({
   children,
   load = listWorktrees,
 }: RemoveProps) {
+  const { t } = useT()
   if (force) {
     return (
       <ConfirmDialog
         isOpen
-        title={`Remove worktree "${visibleUnsafe(force.branch)}" anyway?`}
-        confirmLabel="Remove anyway"
+        title={t('files.worktree.askForce', {
+          name: visibleUnsafe(force.branch),
+        })}
+        confirmLabel={t('files.worktree.removeAnyway')}
         destructive
         // A second ask never defaults to the destructive button
         defaultAction="cancel"
         onConfirm={() => onConfirm({ force: true, ...force })}
         onCancel={onCancel}
       >
-        <p className="m-0">
-          This worktree has uncommitted or untracked changes. Remove it anyway?
-          They are lost, and its terminals are ended first.
-        </p>
+        <p className="m-0">{t('files.worktree.forceBody')}</p>
       </ConfirmDialog>
     )
   }
@@ -471,21 +488,24 @@ function RemoveConfirm({
   children,
   load = listWorktrees,
 }: Omit<RemoveProps, 'force'>) {
+  const { t } = useT()
   const { list, problem } = useWorktreeList(groupId, load)
   const entry = list?.worktrees.find((w) => w.groupId === groupId && w.linked)
   if (!entry) {
     return (
-      <Sheet isOpen onClose={onCancel} title="Remove worktree">
+      <Sheet isOpen onClose={onCancel} title={t('files.worktree.removeTitle')}>
         <div className="flex flex-col gap-4 p-4">
           <p
             role={problem || list ? 'alert' : undefined}
             className="m-0 text-sm text-fg-muted"
           >
             {problem ??
-              (list ? worktreeProblem('not_linked') : 'Reading the worktree…')}
+              (list
+                ? worktreeProblem('not_linked')
+                : t('files.worktree.readingOne'))}
           </p>
           <div className="flex justify-end">
-            <Button onClick={onCancel}>Cancel</Button>
+            <Button onClick={onCancel}>{t('common.cancel')}</Button>
           </div>
         </div>
       </Sheet>
@@ -495,27 +515,39 @@ function RemoveConfirm({
   return (
     <ConfirmDialog
       isOpen
-      title={`Remove worktree "${visibleUnsafe(branch || lastPart(entry.path))}"?`}
-      confirmLabel="Remove worktree"
+      title={t('files.worktree.ask', {
+        name: visibleUnsafe(branch || lastPart(entry.path)),
+      })}
+      confirmLabel={t('files.worktree.remove')}
       destructive
       onConfirm={() => onConfirm({ force: false, path: entry.path, branch })}
       onCancel={onCancel}
     >
       {branch && (
         <p className="m-0 mb-2">
-          Branch{' '}
-          <span className="break-all font-term text-fg">
-            {visibleUnsafe(branch)}
-          </span>
+          <Trans
+            k="files.worktree.branchLine"
+            tags={{
+              name: () => (
+                <span className="break-all font-term text-fg">
+                  {visibleUnsafe(branch)}
+                </span>
+              ),
+            }}
+          />
         </p>
       )}
       <p className="m-0">
-        Deletes{' '}
-        <span className="break-all font-term text-fg">
-          {visibleUnsafe(entry.path)}
-        </span>{' '}
-        and closes this workspace. Files ignored by git (.env, node_modules) are
-        deleted too. The branch is kept.
+        <Trans
+          k="files.worktree.deletes"
+          tags={{
+            name: () => (
+              <span className="break-all font-term text-fg">
+                {visibleUnsafe(entry.path)}
+              </span>
+            ),
+          }}
+        />
       </p>
       {children}
     </ConfirmDialog>

@@ -1,3 +1,5 @@
+import type { MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
 import type { ReviewComment, ReviewSource } from './review-draft'
 import {
   inlineCode,
@@ -8,6 +10,8 @@ import {
 
 // What Send to agent sends for a review: one message with each comment
 // under its file and lines, the lines quoted as they were when commented.
+// The message is in English whatever the app's language: the agent reads
+// it. What the review shows on screen goes through t (lineText, sourceText).
 
 // The agent route's limit (server/agent_input.go agentMaxText): a longer
 // review is not sent, never cut
@@ -44,6 +48,23 @@ export function lineLabel(
   return span('line', c.start, c.end)
 }
 
+// The same as shown, in the app's language
+export function lineText(
+  c: Pick<ReviewComment, 'start' | 'end' | 'removed' | 'removedOnly'>,
+  t: Translate<MessageKey>,
+): string {
+  const removed = c.removedOnly && c.removed
+  const { start, end } = removed || c
+  if (start === end)
+    return t(removed ? 'files.review.removedLine' : 'files.review.line', {
+      start,
+    })
+  return t(removed ? 'files.review.removedLines' : 'files.review.lines', {
+    start,
+    end,
+  })
+}
+
 const SOURCE_LABELS: Record<ReviewSource, string> = {
   unstaged: 'unstaged diff',
   staged: 'staged diff',
@@ -55,6 +76,21 @@ export function sourceLabel(c: ReviewComment): string {
   return c.unsaved && c.source === 'file'
     ? 'file (unsaved edits)'
     : SOURCE_LABELS[c.source]
+}
+
+const SOURCE_TEXT: Record<ReviewSource, MessageKey> = {
+  unstaged: 'files.review.source.unstaged',
+  staged: 'files.review.source.staged',
+  file: 'files.review.source.file',
+}
+
+// The same as shown, in the app's language
+export function sourceText(c: ReviewComment, t: Translate<MessageKey>): string {
+  return t(
+    c.unsaved && c.source === 'file'
+      ? 'files.review.source.fileUnsaved'
+      : SOURCE_TEXT[c.source],
+  )
 }
 
 function item(n: number, c: ReviewComment): string {
