@@ -69,8 +69,12 @@
 }
 
 /*
- * Every style keeps text around 12-15:1 on its background, never pure black
- * on white nor white on black, which tires the eyes over long reads. A dark
+ * Every style keeps text around 12-15:1 on its background in light mode;
+ * never pure black on white nor white on black, which tires the eyes over long
+ * reads. Dark mode is held to APCA instead, which WCAG 2 ratios misjudge on dark
+ * backgrounds: every style puts --tm-fg at Lc -70, --tm-fg-muted at -52 and
+ * --tm-fg-subtle at -43 on --tm-bg. Body text reads comfortably from about
+ * Lc 70, and every step brighter adds glare on a bright screen. A dark
  * terminal background stays at or below #0f1110 so every ANSI colour of
  * terminal-view.tsx keeps 4.5:1 on it.
  */
@@ -111,9 +115,9 @@
   --tm-surface-raised: #29292e;
   --tm-overlay: rgb(0 0 0 / 0.6);
   --tm-term-bg: #0c0c0e;
-  --tm-fg: #d4d4d8;
-  --tm-fg-muted: #a1a1aa;
-  --tm-fg-subtle: #909099;
+  --tm-fg: #c5c5cb;
+  --tm-fg-muted: #a4a4ae;
+  --tm-fg-subtle: #93939c;
   --tm-border: #2f2f34;
   --tm-border-strong: #424249;
   --tm-accent: #818cf8;
@@ -162,9 +166,9 @@
   --tm-surface-raised: #1d2120;
   --tm-overlay: rgb(0 0 0 / 0.6);
   --tm-term-bg: #0f1110;
-  --tm-fg: #cdd5d0;
-  --tm-fg-muted: #a0aca6;
-  --tm-fg-subtle: #88938d;
+  --tm-fg: #bdc6c0;
+  --tm-fg-muted: #9aa6a0;
+  --tm-fg-subtle: #89958e;
   --tm-border: #272d2a;
   --tm-border-strong: #384039;
   --tm-accent: #3ddc84;
@@ -212,9 +216,9 @@
   --tm-surface-raised: #2c2c2e;
   --tm-overlay: rgb(0 0 0 / 0.55);
   --tm-term-bg: #0b0b0c;
-  --tm-fg: #e5e5ea;
-  --tm-fg-muted: #b4b4ba;
-  --tm-fg-subtle: #a0a0a6;
+  --tm-fg: #c4c4c8;
+  --tm-fg-muted: #a3a3a8;
+  --tm-fg-subtle: #949498;
   --tm-border: #38383a;
   --tm-border-strong: #4a4a4d;
   --tm-accent: #4c9cf8;
@@ -253,6 +257,14 @@ body {
   position: fixed;
   width: 100%;
   overscroll-behavior: none;
+}
+
+/* macOS thickens light text on a dark background, which makes it glare more
+   than its colour says; grayscale antialiasing keeps the strokes at the
+   weight of the font. No effect on other platforms. */
+:root.dark body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 @media (display-mode: standalone) {
