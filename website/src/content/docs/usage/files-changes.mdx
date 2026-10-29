@@ -422,8 +422,8 @@ the focus, so pressing Enter does not delete.
   `Deleted <name>` with **Undo** for 10 seconds, which puts it back where it was (it never
   replaces anything now there). A deleted empty folder is made again by Undo.
 - The trash keeps a file for 7 days, at most 1 GiB in all (the oldest go first), and never
-  removes one younger than an hour. The app has no trash browser: after the toast is gone, take
-  the file from the trash folder on the host (`~/.cache/termote/trash` on Linux).
+  removes one younger than an hour. After the toast is gone, open the [Trash](#the-trash) to get
+  it back.
 - A folder that is not empty is not deleted, and neither is the root itself.
 - Deleting asks the server to check that the file is still the one you saw. If something (often
   the agent) changed it meanwhile, nothing is deleted.
@@ -450,6 +450,34 @@ roles, it is only hidden in the app.
 <Aside type="note">
   `termote uninstall` keeps the trash and prints its path; `termote uninstall --purge` removes it
   too. See [Uninstall](/installation/native/#uninstall).
+</Aside>
+
+### The Trash
+
+The **Trash** button in the Files header (a full session on a server with a trash, also with a
+file open and in a Place) opens a sheet listing what was deleted under the folder shown, newest
+first: the name and its folder, whether it was a file, a folder or a discarded change in
+[Changes](#staging-unstaging-and-discarding), when, its size and `Removed by <date> at the latest`. The list is
+read each time the sheet opens.
+
+- **Restore** puts an entry back where it was, never replacing anything there. A sensitive file
+  asks first. A discarded change puts the discarded text back over the file, only while the file
+  is still what the discard left; an open tab of the file and Changes read it again.
+- **Delete permanently** removes one entry for good, after asking. This works for something
+  deleted a moment ago too.
+- **Empty trash** removes the entries the sheet shows, after asking, and no other: something
+  deleted meanwhile, on this device or another one, stays (and its Undo still works). When more
+  than 500 entries are kept, only the 500 newest show and are emptied; the list is read again and
+  the older ones show next.
+- An entry already restored or removed elsewhere leaves the list with
+  `Already restored or removed`.
+- Only a full session sees the Trash: a view-only one has no button.
+
+<Aside type="caution">
+  The Trash shows only what was deleted while the folder shown was the root. Something deleted
+  from another folder, before a `cd` into a subfolder or from a Place or repository that holds this
+  folder, is in that folder's Trash: open it there. A file on another file system than the trash
+  is deleted for good, so it is never in the Trash.
 </Aside>
 
 ## Renaming or Moving a File

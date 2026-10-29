@@ -1560,6 +1560,73 @@ export async function restoreFile(
   return res.json()
 }
 
+// One entry of the root's trash. expiresAt: when the sweep removes it at the
+// latest (sooner once the trash outgrows its size cap). sensitive: restoring
+// it takes reveal.
+export interface TrashEntry {
+  trashId: string
+  path: string
+  kind: 'file' | 'dir' | 'discard'
+  deletedAt: string
+  expiresAt: string
+  size: number
+  sensitive?: boolean
+}
+
+export interface TrashList {
+  root: string
+  entries: TrashEntry[]
+  // More than the 500 newest, which are all that is listed
+  truncated?: boolean
+}
+
+// What was deleted under root (required: never the trash of a directory the
+// pane moved to), newest first. Full clients only.
+export function fetchTrash(
+  target: FilesTarget,
+  root: string,
+): Promise<TrashList> {
+  return filesGet(target, 'trash', { root })
+}
+
+async function trashPost<T>(
+  target: FilesTarget,
+  op: string,
+  root: string,
+  body: unknown,
+): Promise<T> {
+  const res = await fetch(filesUrl(target, op, { root }), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(SAVE_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res)
+  return res.json()
+}
+
+// Removes one entry of root's trash for good. A refusal is a RequestError
+// with the server's code (not_in_trash once it is gone or was deleted under
+// another root, trash_unavailable), or a 409 with the root once it moved.
+export function deleteTrashEntry(
+  target: FilesTarget,
+  del: { root: string; trashId: string },
+): Promise<{ root: string; trashId: string }> {
+  return trashPost(target, 'trash/delete', del.root, { trashId: del.trashId })
+}
+
+// Removes for good the entries of root's trash listed in trashIds (1 to 500),
+// never another: removed counts those that went, failed those that could not
+// (they stay listed); an id already gone counts as neither.
+export function emptyTrash(
+  target: FilesTarget,
+  empty: { root: string; trashIds: string[] },
+): Promise<{ root: string; removed: number; failed: number }> {
+  return trashPost(target, 'trash/empty', empty.root, {
+    trashIds: empty.trashIds,
+  })
+}
+
 export type ChangeAction = 'stage' | 'unstage' | 'discard'
 
 export interface AppliedChange {

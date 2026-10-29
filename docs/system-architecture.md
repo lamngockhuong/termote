@@ -322,6 +322,9 @@ POST   /api/mux/panes/{id}/files/upload?root=&dir=&name=&reveal=  body: raw appl
 POST   /api/mux/panes/{id}/files/upload?…&check=1  body: {} (JSON)          → 200 {root, path} (the name it would get) | {error, code}
 POST   /api/mux/panes/{id}/files/delete?root=   body: {path, kind, baseHash, reveal, permanent} → {root, path[, trashId, size, permanent]} | {error, code}
 POST   /api/mux/panes/{id}/files/restore?root=  body: {trashId, reveal}         → {root, path} | {error, code}
+GET    /api/mux/panes/{id}/files/trash?root=                    → {root, entries: [{trashId, path, kind, deletedAt, expiresAt, size, sensitive?}], truncated?} | {error, code}
+POST   /api/mux/panes/{id}/files/trash/delete?root= body: {trashId}         → {root, trashId} | {error, code}
+POST   /api/mux/panes/{id}/files/trash/empty?root=  body: {trashIds}        → {root, removed, failed} | {error, code}
 POST   /api/mux/panes/{id}/files/changes/apply?root= body: {action, path, orig, hunk, baseHash, reveal, permanent} → {root, path[, trashId, permanent]} | {error, code}
 POST   /api/mux/panes/{id}/files/rename?root=   body: {path, newPath, reveal}  → {root, path} | {error, code[, path]}
 GET    /api/mux/panes/{id}/files/find?q=&root=&ignored=1&exclude=&fresh=1 → {root, isRepo, results, truncated, incomplete} | {error, code}
@@ -846,7 +849,9 @@ registered for every backend and answers 501 where it is off. Eight are read-onl
 `download` included); `PUT files/content` saves a text file, `POST files/create` creates an empty one,
 `POST files/upload` saves a file from the device (`check=1` first; `unsupported_type` 415, `upload_busy`
 429, `timeout` 408 are its own codes) and
-`POST files/delete` / `files/restore` remove a file and put it back, `POST files/changes/apply` stages,
+`POST files/delete` / `files/restore` remove a file and put it back, `GET files/trash` lists the
+root's trash and `POST files/trash/delete` / `files/trash/empty` remove entries of it for good,
+`POST files/changes/apply` stages,
 unstages or discards a change (Staging and discarding a change), `POST files/rename` moves a
 file to a new path, never replacing anything, and `GET files/download` sends a file as an
 attachment (see Saving a file, Creating a file, Uploading a file, Finding a file, Searching file
@@ -1105,8 +1110,14 @@ a change an agent just made and never touching what the reads refuse.
 - `POST restore` takes `{trashId, reveal}` and puts the entry back at its path, making missing
   parent directories; it never replaces anything (409 `exists`).
 - The trash keeps an entry 7 days, at most 1 GiB in all (the oldest go first), and never removes
-  one younger than an hour (`trashMaxAge`, `trashMaxTotal`, `trashMinAge`). Nothing lists the
-  trash: the PWA has no trash browser, only the Undo of the delete that made the entry.
+  one younger than an hour (`trashMaxAge`, `trashMaxTotal`, `trashMinAge`).
+- `GET trash` lists the entries deleted under the root, newest first, at most 500 (`truncated`),
+  full clients only; `POST trash/delete` (`{trashId}`) and `POST trash/empty` (`{trashIds}`, the
+  ids the client listed and no other) remove entries for good, whatever their age
+  (`server/files_trash_list.go`). The scope is the exact root of the record: something deleted
+  while the root was another folder (before a `cd`, or from a Place or a repository holding this
+  one) shows only when that folder is the root again. An entry from another root is 404
+  `not_in_trash` for a delete, as one gone is.
   `uninstall` keeps it (see Uninstall).
 
 **Renaming a file (`POST rename`).** `server/files_rename.go`. A regular file goes to a new path
@@ -1245,7 +1256,13 @@ for nothing.
 Delete is in a tree row's menu, on the Delete key of the focused row and in an open file's header
 (`delete-file-dialog.tsx`; the dialog shows the full path and Cancel has the focus). It sends the
 hash it has or reads one with `content?hash=1`, then shows a toast with Undo (`files/restore`) for
-10 s. A 409 `cross_device` opens the second, permanent confirmation described above.
+10 s. A 409 `cross_device` opens the second, permanent confirmation described above. The Trash
+button in the Files header (full clients with `Caps.trash`, once the root is read, with a file
+open too) opens `trash-sheet.tsx`, read each time it opens for the root shown: Restore (a
+sensitive entry asks first and sends `reveal`; a discarded change reads its open tab and Changes
+again), Delete permanently and Empty trash (the entries shown), each confirmed by
+`ui/confirm-dialog.tsx`. Files' Undo, Changes' Undo and the sheet tell a failed restore through
+`utils/restore-failure.ts`; `not_in_trash` (restored or removed elsewhere) is said neutrally.
 
 One store per pane for the tree (`use-files.ts`) and for the status
 (`use-git-changes.ts`, polled every 5 s while a view shows it and the page is visible, backing

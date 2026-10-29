@@ -53,7 +53,9 @@ func (e *rootChangedError) Error() string { return "root changed" }
 // pane's root (its git toplevel, else its directory), saves of a text file's
 // whole contents (PUT files/content), creates of an empty file (POST
 // files/create), renames (POST files/rename), deletes into a trash and
-// back (POST files/delete, files/restore), downloads (GET files/download),
+// back (POST files/delete, files/restore), the root's trash listed and
+// removed for good (GET files/trash, POST files/trash/delete,
+// files/trash/empty), downloads (GET files/download),
 // stages, unstages or discards of a change (POST files/changes/apply) and
 // the bytes of a document to preview (GET files/document).
 type filesAPI struct {
@@ -138,6 +140,9 @@ func registerFilesRoutes(mux *http.ServeMux, m Mux, allowed hostAllowlist, denyD
 	mux.HandleFunc("/api/mux/panes/{id}/files/upload", f.handleUpload)
 	mux.HandleFunc("/api/mux/panes/{id}/files/delete", f.handleDeleteFile)
 	mux.HandleFunc("/api/mux/panes/{id}/files/restore", f.handleRestoreFile)
+	mux.HandleFunc("/api/mux/panes/{id}/files/trash", f.handleTrashList)
+	mux.HandleFunc("/api/mux/panes/{id}/files/trash/delete", f.handleTrashDelete)
+	mux.HandleFunc("/api/mux/panes/{id}/files/trash/empty", f.handleTrashEmpty)
 	mux.HandleFunc("/api/mux/panes/{id}/files/rename", f.handleRenameFile)
 	mux.HandleFunc("/api/mux/panes/{id}/files/find", f.handleFind)
 	mux.HandleFunc("/api/mux/panes/{id}/files/search", f.handleSearch)

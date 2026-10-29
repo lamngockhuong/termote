@@ -307,8 +307,13 @@ jobs:
 
       # One worker: the specs share one tmux, and a spec that switches its
       # active window would move the others' tabs.
+      # The server's XDG_CACHE_HOME: files-trash.spec.ts makes its repo on
+      # the trash's file system, next to it. Not as XDG_CACHE_HOME, which
+      # would move where Playwright looks for its browsers.
       - name: Run Playwright
         working-directory: pwa
+        env:
+          TERMOTE_E2E_CACHE: ${{ runner.temp }}/cache
         run: pnpm exec playwright test --workers=1 --grep-invert "Capture screenshots"
 
       # Pairing, the view-only role and the sign-in list need sign-in: a

@@ -177,6 +177,11 @@ func (s *trashStore) removeEntryLocked(id string) {
 // readRecordLocked reads id's record; errNotInTrash when there is none.
 func (s *trashStore) readRecordLocked(id string) (trashRecord, error) {
 	fh, err := os.Open(filepath.Join(s.dir, id+".json"))
+	return decodeRecord(id, fh, err)
+}
+
+// decodeRecord reads id's record from fh, opened with err.
+func decodeRecord(id string, fh *os.File, err error) (trashRecord, error) {
 	if errors.Is(err, fs.ErrNotExist) {
 		return trashRecord{}, errNotInTrash
 	}

@@ -650,6 +650,19 @@ Run on tmux (Linux/macOS) and Herdr; psmux (Windows) offers neither view.
       shows it; switching tabs and back keeps it shown, closing its tab and opening it again asks
       again
 - [ ] `.git` does not open ("This directory can't be shown")
+- [ ] Trash (full device, server with a trash): the Trash button in the Files header (also with a
+      file open, and in a Place) lists what was deleted while this folder was the root, newest
+      first, with its folder, kind, when, size and "Removed by … at the latest"; a view-only
+      device has no button
+- [ ] Trash: delete a file, open Trash, Restore → it is back in the tree and leaves the list; a
+      `.env` asks first; Delete permanently asks (Cancel focused) and removes it for good
+- [ ] Trash: discard a change in Changes, then Restore its "Discarded change" from Trash → the
+      text is back, an open tab of the file and Changes read it again; after editing the file
+      first, the restore is refused ("changed since")
+- [ ] Trash: with the sheet open on device A, delete a file on device B, then Empty trash on A →
+      B's file is still in the trash (and B's Undo still works); only the entries A showed went
+- [ ] Trash: a file deleted before `cd` into a subfolder does not show there, only when the pane is
+      back in the first folder
 
 ### Open Files as Tabs
 

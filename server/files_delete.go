@@ -78,8 +78,8 @@ type restoreResponse struct {
 
 // startWrite runs the checks every write of the trash routes starts with:
 // startJSONWrite's, and a usable trash.
-func (f *filesAPI) startWrite(w http.ResponseWriter, r *http.Request, op string, in any) (*filesRequest, func(), bool) {
-	req, cancel, ok := f.startJSONWrite(w, r, op, in)
+func (f *filesAPI) startWrite(w http.ResponseWriter, r *http.Request, op string, in any, limit int64) (*filesRequest, func(), bool) {
+	req, cancel, ok := f.startJSONWriteMax(w, r, op, in, limit)
 	if !ok {
 		return nil, nil, false
 	}
@@ -95,6 +95,11 @@ func (f *filesAPI) startWrite(w http.ResponseWriter, r *http.Request, op string,
 // the root query, the files guards and the body (read before any slot is
 // taken).
 func (f *filesAPI) startJSONWrite(w http.ResponseWriter, r *http.Request, op string, in any) (*filesRequest, func(), bool) {
+	return f.startJSONWriteMax(w, r, op, in, maxJSONBody)
+}
+
+// startJSONWriteMax is startJSONWrite with a body of up to limit bytes.
+func (f *filesAPI) startJSONWriteMax(w http.ResponseWriter, r *http.Request, op string, in any, limit int64) (*filesRequest, func(), bool) {
 	if !requireMethod(w, r, http.MethodPost) {
 		return nil, nil, false
 	}
@@ -108,7 +113,7 @@ func (f *filesAPI) startJSONWrite(w http.ResponseWriter, r *http.Request, op str
 	if !ok {
 		return nil, nil, false
 	}
-	if !decodeJSON(w, r, in) {
+	if !decodeJSONMax(w, r, in, limit) {
 		cancel()
 		return nil, nil, false
 	}
@@ -121,7 +126,7 @@ func (f *filesAPI) startJSONWrite(w http.ResponseWriter, r *http.Request, op str
 // a cross-site or non-JSON POST already.
 func (f *filesAPI) handleDeleteFile(w http.ResponseWriter, r *http.Request) {
 	var in deleteRequest
-	req, cancel, ok := f.startWrite(w, r, "files delete", &in)
+	req, cancel, ok := f.startWrite(w, r, "files delete", &in, maxJSONBody)
 	if !ok {
 		return
 	}
@@ -389,7 +394,7 @@ func deleteError(err error) error {
 // discard changed.
 func (f *filesAPI) handleRestoreFile(w http.ResponseWriter, r *http.Request) {
 	var in restoreRequest
-	req, cancel, ok := f.startWrite(w, r, "files restore", &in)
+	req, cancel, ok := f.startWrite(w, r, "files restore", &in, maxJSONBody)
 	if !ok {
 		return
 	}

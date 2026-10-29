@@ -14,6 +14,7 @@ import {
   type ChangeSide,
   changeKey,
   changesMoved,
+  changesRefresh,
   findEntry,
   openChangeFromLink,
   peekGitChanges,
@@ -472,6 +473,17 @@ describe('Changes tabs', () => {
     expect(result.current.gone.count).toBe(0)
     await tick()
     expect(mockChanges).toHaveBeenCalled()
+  })
+
+  it('reads again when its root changed from elsewhere, not for another', async () => {
+    await loaded()
+    mockChanges.mockClear()
+    act(() => changesRefresh('/other'))
+    await tick()
+    expect(mockChanges).not.toHaveBeenCalled()
+    act(() => changesRefresh('/r'))
+    await tick()
+    expect(mockChanges).toHaveBeenCalledTimes(1)
   })
 
   it('a renamed file with a diff only: the diff closes, nothing else', async () => {

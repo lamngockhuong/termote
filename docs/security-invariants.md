@@ -1269,7 +1269,33 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   (accepted risk: a short secret's hash can be guessed by a signed-in user, who has a shell);
   it takes one of the 4 `files/raw` slots (429 `busy`). `termote uninstall` keeps the trash
   (the user's files) and says where; `--purge` removes it. A view-only client gets 403 `view_only`
-  for deletes and restores, and `content?hash=1`
+  for deletes and restores, and `content?hash=1`.
+  The root's trash (`GET files/trash?root=`, `POST files/trash/delete?root=`,
+  `POST files/trash/empty?root=`, `server/files_trash_list.go`): full clients only, the list
+  too (403 `view_only`: it names files a view-only client may not read), `root` required (400,
+  never the trash of a directory the pane moved to; a different one → 409 with the root), no
+  trash → 503 `trash_unavailable`. The client sends only ids (`trashId`, `trashIds`, each
+  `^[0-9a-f]{32}$`, else 400), never a path. Scope is the exact root: an entry whose record's
+  `root` differs (deleted before a `cd`, or from a Place or repository holding this folder) is
+  never listed or removed here, and a delete of one answers 404 `not_in_trash`, as for an id that
+  is gone (not 409 like a restore, which needs the new root). The list holds no lock (a record
+  is renamed into place whole, never changed): it reads every record, skips one past 7 days, a
+  `file`/`discard` whose payload is missing or not a regular file, and a `file` whose `linkat`
+  restore died, removes nothing, answers the 500 newest (`truncated`), with `sensitive` computed
+  for those only, and takes one of the 4 `files/raw` slots (429 `busy`). A delete and an empty
+  hold only the trash's mutex, for one id at a time, and take no write slot (they change nothing
+  under the root): the record is read again under it and must name this root, the payload is
+  removed first, only when `Lstat` says it is a regular file of the store (a symlink or a
+  directory is left alone), and when that or the `Lstat` fails (not `ENOENT`) the record stays,
+  so the entry is still listed: 500 for a delete (an access denied too, logged), counted in
+  `failed` for an empty; a store that cannot be opened is 503 `trash_unavailable`. The list reads each record through the store's `os.Root`: on Windows a
+  plain open shares no delete, and a restore removing that record meanwhile would fail unseen. Both ignore the one-hour
+  `trashMinAge` (the user asked), but an empty (`{trashIds: [...]}`, 1–500, body 24 KB) removes
+  only the ids sent, those the client listed, never one deleted since (another device's Undo);
+  ids gone or of another root are skipped (`{removed, failed}`). A restore racing a delete of the
+  same id rereads the record under the same mutex: exactly one wins, the other gets 404
+  `not_in_trash`. `audit: trash-delete id=…` and `audit: trash-empty removed=… failed=…` (with
+  `by`, `via`) never carry a path or a root
 - **Staging and discarding a change** (`POST files/changes/apply?root=`,
   `server/files_git_apply.go`, `server/files_git_patch.go`): a file git status lists, or one hunk
   of its diff, is staged, unstaged or discarded. Guards in order: `writeGuard`, POST, `root`

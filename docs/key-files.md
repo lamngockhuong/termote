@@ -119,6 +119,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/file-search.tsx`              | Files: find a file by name under the root, results, switch     |
 | `pwa/src/components/content-search.tsx`           | Files: Search tab, file contents, options, globs, results      |
 | `pwa/src/components/delete-file-dialog.tsx`       | Files: asks before a delete, second ask for a permanent one    |
+| `pwa/src/components/trash-sheet.tsx`              | Files: Trash button and sheet, restore or remove for good      |
 | `pwa/src/components/rename-file-dialog.tsx`       | Files: a file's new path, renames/moves it, says why not       |
 | `pwa/src/components/discard-change-dialog.tsx`    | Changes: asks before a discard of a file or a hunk             |
 | `pwa/src/utils/file-name.ts`                      | Name checks of New file and Rename, the base name selected     |
@@ -157,6 +158,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/utils/csv-find.ts`                       | Match case, whole cell, regex; matches in the order shown      |
 | `pwa/src/utils/csv-find-client.ts`                | The search worker: ended on a timeout, never the main thread   |
 | `pwa/src/utils/unsafe-chars.ts`                   | Control, bidi and zero-width spaces (strip or show)            |
+| `pwa/src/utils/restore-failure.ts`                | Why a restore from the trash failed, for every Undo and Trash  |
 | `pwa/src/components/image-preview.tsx`            | One image of Files/Changes (sizes, why it cannot be shown)     |
 | `pwa/src/components/image-compare.tsx`            | Changes: an image's old and new versions side by side          |
 | `pwa/src/hooks/use-image-blob.ts`                 | Reads `files/raw` into a `blob:` URL (SVG: `data:`), revokes   |
@@ -245,6 +247,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/files_rename.go`                          | `POST files/rename`: a file moved, never replacing anything    |
 | `server/files_download.go`                        | `GET files/download`: a file as an attachment, `check=1`       |
 | `server/files_trash*.go`                          | Trash store, sweep, no-replace rename/rmdir by descriptor      |
+| `server/files_trash_list.go`                      | `GET files/trash`, `POST files/trash/delete`/`empty` by root   |
 | `server/agent_proc*.go`                           | Finds Claude Code (or Codex) under a tmux/psmux pane           |
 | `server/agent_proc_handles_windows.go`            | Windows: write handles of every process (handle table, 1 s)    |
 | `server/agent_proc_files_windows.go`              | Windows: a process's open rollouts, checked again live         |

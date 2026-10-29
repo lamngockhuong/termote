@@ -415,8 +415,7 @@ có focus, nên nhấn Enter không xoá.
   `Deleted <name>` kèm nút **Undo** trong 10 giây; Undo đặt file về chỗ cũ (và không bao giờ ghi
   đè thứ gì đang có ở đó). Thư mục rỗng đã xoá thì Undo tạo lại.
 - Thùng rác giữ một file 7 ngày, tổng cộng tối đa 1 GiB (file cũ nhất bị xoá trước), và không bao
-  giờ xoá file mới hơn một giờ. Ứng dụng không có màn hình xem thùng rác: khi toast đã mất, muốn
-  lấy file lại thì vào thư mục thùng rác trên máy chủ (`~/.cache/termote/trash` trên Linux).
+  giờ xoá file mới hơn một giờ. Khi toast đã mất, mở [Thùng rác](#thùng-rác) để lấy file lại.
 - Thư mục không rỗng không xoá được, thư mục gốc cũng vậy.
 - Khi xoá, server kiểm tra file vẫn đúng là file bạn đã thấy. Nếu trong lúc đó có thứ gì (thường
   là agent) đã sửa nó thì không xoá gì cả.
@@ -443,6 +442,33 @@ bị ẩn trong ứng dụng.
 <Aside type="note">
   `termote uninstall` giữ lại thùng rác và in ra đường dẫn của nó; `termote uninstall --purge`
   xoá cả thùng rác. Xem [Gỡ cài đặt](/vi/installation/native/#gỡ-cài-đặt).
+</Aside>
+
+### Thùng rác
+
+Nút **Trash** trên đầu Files mở một bảng liệt kê những gì đã xoá trong thư mục đang hiện, mục mới
+nhất ở trên. Nút có khi phiên có toàn quyền và server có thùng rác, kể cả lúc đang mở file hay
+đang ở một Place. Mỗi mục ghi tên và thư mục chứa nó, loại (file, thư mục, hay thay đổi đã bỏ trong
+[Changes](#đưa-vào-index-bỏ-khỏi-index-và-bỏ-thay-đổi)), lúc xoá, kích thước và
+`Removed by <date> at the latest`. Mỗi lần mở bảng, danh sách được đọc lại.
+
+- **Restore** đặt mục về chỗ cũ, không bao giờ ghi đè thứ đang có ở đó. File nhạy cảm thì hỏi
+  trước. Với một thay đổi đã bỏ, nội dung cũ được ghi lại vào file, nhưng chỉ khi file vẫn y như
+  lúc bỏ thay đổi; tab đang mở file đó và Changes cùng đọc lại.
+- **Delete permanently** hỏi trước rồi xoá hẳn một mục, kể cả mục vừa xoá xong.
+- **Empty trash** hỏi trước rồi xoá hẳn đúng các mục đang hiện trong bảng, không mục nào khác:
+  thứ vừa xoá trong lúc đó, ở thiết bị này hay thiết bị khác, vẫn còn (và Undo của nó vẫn dùng
+  được). Khi thùng rác giữ hơn 500 mục, bảng chỉ hiện 500 mục mới nhất và chỉ xoá chúng; danh sách
+  được đọc lại để hiện các mục cũ hơn.
+- Mục đã được khôi phục hay xoá ở nơi khác thì rời khỏi danh sách, kèm thông báo
+  `Already restored or removed`.
+- Chỉ phiên có toàn quyền mới thấy Trash; phiên chỉ xem không có nút này.
+
+<Aside type="caution">
+  Bảng chỉ hiện những gì đã xoá khi thư mục đang hiện là thư mục gốc. Thứ xoá từ thư mục khác,
+  trước khi `cd` vào thư mục con hay từ một Place hoặc repository chứa thư mục này, nằm trong
+  Trash của thư mục đó: hãy mở nó ở đấy. File trên hệ thống file khác với thùng rác bị xoá vĩnh
+  viễn, nên không bao giờ có trong Trash.
 </Aside>
 
 ## Đổi tên hoặc chuyển file

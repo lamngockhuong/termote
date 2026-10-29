@@ -635,6 +635,12 @@ export function changesMoved(
     if (s.get().root === root) s.moved(from, to, reveal)
 }
 
+// Something changed the files under root outside Changes (a discarded
+// change restored from the trash): every pane showing root reads again.
+export function changesRefresh(root: string) {
+  for (const s of stores.values()) if (s.get().root === root) s.refresh()
+}
+
 // A store follows its pane to the id it has now, so its open tabs stay; a
 // pane id that names another pane now starts again from the server.
 onPaneRemap((shift) => {

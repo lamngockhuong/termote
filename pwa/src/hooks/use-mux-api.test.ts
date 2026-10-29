@@ -16,7 +16,9 @@ import {
   createWorktree,
   deleteFile,
   deleteTemplate,
+  deleteTrashEntry,
   deleteUserTask,
+  emptyTrash,
   fetchActivity,
   fetchAgentCommands,
   fetchAgentPrompt,
@@ -42,6 +44,7 @@ import {
   fetchTemplates,
   fetchTerminalToken,
   fetchTranscript,
+  fetchTrash,
   fetchUserTasks,
   findFiles,
   getPushKey,
@@ -1271,6 +1274,66 @@ describe('files API client', () => {
     await expect(
       restoreFile({ paneId: '1' }, { root: '/r', trashId: 'x', reveal: false }),
     ).rejects.toMatchObject({ code: 'exists', path: 'a' })
+  })
+
+  it('lists the trash with the root, and changes it with POST', async () => {
+    const entry = {
+      trashId: 'a'.repeat(32),
+      path: 'x/a.txt',
+      kind: 'file',
+      deletedAt: '2026-10-28T10:00:00Z',
+      expiresAt: '2026-11-04T10:00:00Z',
+      size: 3,
+    }
+    const { calls } = mockFetch(
+      { body: { root: '/r', entries: [entry] } },
+      { body: { root: '/r', trashId: 'x' } },
+      { body: { root: '/r', removed: 2, failed: 0 } },
+    )
+    const timeout = vi.spyOn(AbortSignal, 'timeout')
+    expect(await fetchTrash({ paneId: '%1', place: 'p1' }, '/r')).toEqual({
+      root: '/r',
+      entries: [entry],
+    })
+    expect(calls[0].url).toBe(
+      '/api/mux/panes/%251/files/trash?root=%2Fr&place=p1',
+    )
+    expect(calls[0].init?.method).toBeUndefined()
+    expect(
+      await deleteTrashEntry({ paneId: '%1' }, { root: '/r', trashId: 'x' }),
+    ).toEqual({ root: '/r', trashId: 'x' })
+    expect(calls[1].url).toBe(
+      '/api/mux/panes/%251/files/trash/delete?root=%2Fr',
+    )
+    expect(calls[1].init?.method).toBe('POST')
+    expect(JSON.parse(calls[1].init?.body as string)).toEqual({ trashId: 'x' })
+    expect(
+      await emptyTrash({ paneId: '%1' }, { root: '/r', trashIds: ['x', 'y'] }),
+    ).toEqual({ root: '/r', removed: 2, failed: 0 })
+    expect(calls[2].url).toBe('/api/mux/panes/%251/files/trash/empty?root=%2Fr')
+    expect(JSON.parse(calls[2].init?.body as string)).toEqual({
+      trashIds: ['x', 'y'],
+    })
+    expect(timeout).toHaveBeenCalledWith(SAVE_TIMEOUT_MS)
+    timeout.mockRestore()
+  })
+
+  it('a refused trash request throws its code and the root it moved to', async () => {
+    mockFetch(
+      { body: { error: 'x', code: 'view_only' }, status: 403 },
+      { body: { error: 'x', code: 'not_in_trash' }, status: 404 },
+      { body: { error: 'root changed', root: '/n' }, status: 409 },
+    )
+    await expect(fetchTrash({ paneId: '1' }, '/r')).rejects.toMatchObject({
+      status: 403,
+      code: 'view_only',
+    })
+    await expect(
+      deleteTrashEntry({ paneId: '1' }, { root: '/r', trashId: 'x' }),
+    ).rejects.toMatchObject({ status: 404, code: 'not_in_trash' })
+    await expect(
+      emptyTrash({ paneId: '1' }, { root: '/r', trashIds: ['x'] }),
+    ).rejects.toMatchObject({ status: 409, root: '/n' })
   })
 
   it('applies a change with POST, the root in the query, with a timeout', async () => {

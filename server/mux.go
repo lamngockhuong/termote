@@ -577,7 +577,12 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 
 // decodeJSON reads a size-limited JSON body into v, writing a 400 on failure.
 func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
-	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBody)
+	return decodeJSONMax(w, r, v, maxJSONBody)
+}
+
+// decodeJSONMax is decodeJSON with a body of up to limit bytes.
+func decodeJSONMax(w http.ResponseWriter, r *http.Request, v any, limit int64) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
 		jsonError(w, "invalid JSON body", http.StatusBadRequest)
 		return false

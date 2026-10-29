@@ -1351,6 +1351,10 @@ describe('ChangesView actions', () => {
         new RequestError(409, '', 'x', { root: '/new' }),
         "The pane's directory changed; both.ts was not restored",
       ],
+      [
+        new RequestError(404, 'not_in_trash', 'x'),
+        'both.ts was already restored or removed',
+      ],
       [new TypeError('x'), 'Could not restore both.ts'],
     ] as const) {
       mockRestore.mockRejectedValueOnce(err)
