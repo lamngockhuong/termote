@@ -2233,6 +2233,10 @@ export default function App({
       {newGroupOpen && (
         <GroupDialog
           kind={groupKind}
+          // Never on a view-only client: the server says false there, and
+          // the dialog does not open
+          recent={!!mux.caps.recentGroups}
+          takenNames={groups.map((g) => g.name)}
           onClose={() => setNewGroupOpen(false)}
           onCreate={async (name, cwd, isOpen) => {
             await createGroup(name, cwd, isOpen)

@@ -1,5 +1,8 @@
 import { execFileSync } from 'node:child_process'
-import { expect, type Page, test } from './fixtures'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { type APIRequestContext, expect, type Page, test } from './fixtures'
 
 // Creating, renaming and closing a tmux session from the PWA. Needs the
 // socket of the server under test, since the snapshot lists every session
@@ -28,6 +31,25 @@ async function open(page: Page) {
   })
   await page.reload()
   await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
+}
+
+type RecentGroup = { id: string; name: string; cwd: string }
+
+const recentGroups = async (request: APIRequestContext): Promise<RecentGroup[]> => {
+  const res = await request.get('/api/mux/recent-groups')
+  expect(res.status()).toBe(200)
+  return (await res.json()).groups
+}
+
+// Removes the recent groups in dir, never another's: a local run may be
+// against the user's own server
+async function clearRecent(request: APIRequestContext, dir: string) {
+  for (const g of await recentGroups(request)) {
+    if (g.cwd !== dir) continue
+    await request.delete(`/api/mux/recent-groups/${g.id}`, {
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
 }
 
 async function createInDialog(page: Page, name: string) {
@@ -115,6 +137,89 @@ test.describe('tmux sessions from the PWA', () => {
     await expect
       .poll(() => tmux('list-clients', '-F', '#{session_name}'), { timeout: 10000 })
       .toContain(name)
+  })
+
+  test('a recent directory fills in the dialog, with a free name', async ({ page, request }) => {
+    const snap = await (await request.get('/api/mux/snapshot')).json()
+    test.skip(!snap.caps.groups, 'the server cannot manage groups')
+    expect(snap.caps.recentGroups, 'a full client reads the recent groups').toBe(true)
+    // A directory of its own, not the /tmp the other tests use
+    const dir = mkdtempSync(join(tmpdir(), 'e2e-recent-'))
+    try {
+      await open(page)
+      const name = fresh('e2e-r')
+      const dialog = page.getByRole('dialog', { name: 'New tmux session' })
+      const recent = dialog.getByRole('region', { name: 'Recent' })
+      const use = dialog.getByRole('button', { name: new RegExp(`^Use .* in ${dir}$`) })
+
+      // Made, then closed.
+      await page.getByRole('button', { name: 'New tmux session' }).click()
+      await page.getByLabel('Name', { exact: true }).fill(name)
+      await page.getByLabel('Directory (an absolute path on the host)').fill(dir)
+      await page.getByRole('button', { name: 'Create' }).click()
+      await expect.poll(sessionNames, { timeout: 10000 }).toContain(name)
+      // Closed from the PWA, which moves its terminal off it first: killed
+      // in tmux under an attached stream, the name could be taken again.
+      await page.getByRole('button', { name: `Actions for tmux session ${name}` }).click()
+      await page.getByRole('menuitem', { name: 'Close' }).click()
+      await page
+        .getByRole('dialog', { name: 'Close tmux session?' })
+        .getByRole('button', { name: 'Close tmux session' })
+        .click()
+      await expect.poll(sessionNames, { timeout: 10000 }).not.toContain(name)
+      await expect(page.locator(`aside section[aria-label="${name}"]`)).toHaveCount(0)
+
+      // First in the list, as typed; a tap fills both fields, Create makes it.
+      await page.getByRole('button', { name: 'New tmux session' }).click()
+      await expect(recent.getByRole('listitem').first()).toContainText(name)
+      await expect(use).toHaveAccessibleName(`Use ${name} in ${dir}`)
+      await use.click()
+      await expect(page.getByLabel('Name', { exact: true })).toHaveValue(name)
+      await expect(page.getByLabel('Directory (an absolute path on the host)')).toHaveValue(dir)
+      await page.getByRole('button', { name: 'Create' }).click()
+      await expect.poll(sessionNames, { timeout: 10000 }).toContain(name)
+      await expect(page.locator(`aside section[aria-label="${name}"]`)).toBeVisible()
+
+      // With that session open, the name filled in is the next free one.
+      await page.getByRole('button', { name: 'New tmux session' }).click()
+      await use.click()
+      await expect(page.getByLabel('Name', { exact: true })).toHaveValue(`${name}-2`)
+      await page.getByRole('button', { name: 'Create' }).click()
+      await expect.poll(sessionNames, { timeout: 10000 }).toContain(`${name}-2`)
+
+      // One entry for the directory, under the last name.
+      await page.getByRole('button', { name: 'New tmux session' }).click()
+      await expect(use).toHaveCount(1)
+      await expect(use).toHaveAccessibleName(`Use ${name}-2 in ${dir}`)
+      await page.getByRole('button', { name: 'Cancel' }).click()
+
+      // On a phone the list sits above the name, which stays in view with
+      // Create.
+      await page.setViewportSize({ width: 375, height: 667 })
+      await open(page)
+      await page.getByRole('button', { name: 'Open sessions menu' }).click()
+      await page.getByRole('button', { name: 'New tmux session' }).click()
+      const nameField = page.getByLabel('Name', { exact: true })
+      await expect(recent).toBeVisible()
+      const listBox = (await recent.boundingBox())!
+      expect(listBox.y).toBeLessThan((await nameField.boundingBox())!.y)
+      await expect(nameField).toBeInViewport()
+      await expect(page.getByRole('button', { name: 'Create' })).toBeInViewport()
+      expect(await dialog.evaluate((el) => el.scrollWidth - el.clientWidth)).toBe(0)
+
+      // Removed, on the server too.
+      await dialog.getByRole('button', { name: `Remove ${name}-2 from recent` }).click()
+      await expect(use).toHaveCount(0)
+      expect((await recentGroups(request)).filter((g) => g.cwd === dir)).toEqual([])
+      await open(page)
+      await page.getByRole('button', { name: 'Open sessions menu' }).click()
+      await page.getByRole('button', { name: 'New tmux session' }).click()
+      await expect(page.getByLabel('Name', { exact: true })).toBeVisible()
+      await expect(use).toHaveCount(0)
+    } finally {
+      await clearRecent(request, dir)
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   test('the menu of the last session in the sidebar shows whole, over the view', async ({

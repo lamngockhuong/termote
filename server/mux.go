@@ -163,6 +163,11 @@ type Caps struct {
 	// Templates: the prompt templates can be read and, by a full client,
 	// changed (/api/mux/templates*). Set by the snapshot route.
 	Templates bool `json:"templates"`
+	// RecentGroups: the groups created last, with their directories, can be
+	// read and removed (/api/mux/recent-groups*) by a full client: the
+	// server's state dir keeps them and groups can be created. Set by the
+	// snapshot route.
+	RecentGroups bool `json:"recentGroups"`
 	// Tasks: a pane's package.json scripts, Makefile targets and the user's
 	// tasks can be listed and run (/api/mux/panes/{id}/tasks*): the files
 	// routes work. Set by the snapshot route.
@@ -405,6 +410,7 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 		snap.Caps.Devices = agent.devices
 		snap.Caps.Signins = agent.signins
 		snap.Caps.Templates = agent.templates
+		snap.Caps.RecentGroups = agent.recentGroups && snap.Caps.Groups && !isViewOnly(r)
 		snap.Caps.Tasks = agent.tasks && snap.Caps.Files
 		snap.Caps.UserTasks = agent.userTasks
 		snap.InstanceID = agent.instanceID

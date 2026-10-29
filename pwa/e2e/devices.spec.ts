@@ -98,6 +98,14 @@ test.describe('paired devices and the view-only role', () => {
     expect(write.status()).toBe(403)
     expect((await write.json()).code).toBe('view_only')
 
+    // The directories of the groups created last are a full client's alone.
+    expect(snap.caps.recentGroups, 'a full client reads the recent groups').toBe(true)
+    const viewSnap = await (await page.request.get('/api/mux/snapshot')).json()
+    expect(viewSnap.caps.recentGroups).toBe(false)
+    const recent = await page.request.get('/api/mux/recent-groups')
+    expect(recent.status()).toBe(403)
+    expect((await recent.json()).code).toBe('view_only')
+
     // Revoked from a full client: the next poll sends the device to sign in.
     const del = await request.delete(`/api/mux/devices/${await deviceId(request, name)}`, {
       headers: { 'Content-Type': 'application/json' },

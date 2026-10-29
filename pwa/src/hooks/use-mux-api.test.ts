@@ -49,6 +49,7 @@ import {
   findFiles,
   getPushKey,
   importTemplates,
+  listRecentGroups,
   listWorktrees,
   logout,
   moveGroup,
@@ -58,6 +59,7 @@ import {
   previewTemplateImport,
   REQUEST_TIMEOUT_MS,
   RequestError,
+  removeRecentGroup,
   removeWorktree,
   renameFile,
   renameGroup,
@@ -492,6 +494,44 @@ describe('group API client', () => {
     const err = await closeGroup('w1').catch((e) => e)
     expect(err).toBeInstanceOf(RequestError)
     expect(err.code).toBe('')
+  })
+
+  it('lists and removes the recent groups', async () => {
+    const groups = [{ id: '0123456789abcdef', name: 'api', cwd: '/srv/api' }]
+    const { calls } = mockFetch(
+      { body: { groups, readOnly: false } },
+      { body: { groups: [], readOnly: true } },
+      { body: {} },
+      { body: { ok: true } },
+    )
+    expect(await listRecentGroups()).toEqual({ groups, readOnly: false })
+    expect(await listRecentGroups()).toEqual({ groups: [], readOnly: true })
+    expect(await listRecentGroups()).toEqual({ groups: [], readOnly: false })
+    await removeRecentGroup('0123456789abcdef')
+    expect(calls.map((c) => [c.url, c.init?.method])).toEqual([
+      ['/api/mux/recent-groups', undefined],
+      ['/api/mux/recent-groups', undefined],
+      ['/api/mux/recent-groups', undefined],
+      ['/api/mux/recent-groups/0123456789abcdef', 'DELETE'],
+    ])
+  })
+
+  it('throws the server code of a refused recent groups request', async () => {
+    mockFetch({
+      body: { error: 'view-only device', code: 'view_only' },
+      status: 403,
+    })
+    await expect(listRecentGroups()).rejects.toMatchObject({
+      status: 403,
+      code: 'view_only',
+    })
+    mockFetch({
+      body: { error: 'no such recent group', code: 'unknown_recent' },
+      status: 404,
+    })
+    const err = await removeRecentGroup('x/y').catch((e) => e)
+    expect(err).toBeInstanceOf(RequestError)
+    expect(err.code).toBe('unknown_recent')
   })
 })
 

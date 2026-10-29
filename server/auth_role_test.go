@@ -187,6 +187,8 @@ func TestViewRefusedByEveryWriteHandler(t *testing.T) {
 		{"PATCH", "/api/mux/groups/main", `{"name":"x"}`},
 		{"DELETE", "/api/mux/groups/main", ""},
 		{"POST", "/api/mux/groups/main/move", `{"index":0}`},
+		{"GET", "/api/mux/recent-groups", ""},
+		{"DELETE", "/api/mux/recent-groups/0123456789abcdef", ""},
 		{"POST", "/api/mux/worktrees", `{"groupId":"main","branch":"b"}`},
 		{"POST", "/api/mux/worktrees/open", `{"groupId":"main","branch":"b"}`},
 		{"DELETE", "/api/mux/worktrees/w1", `{"force":false,"path":"/x","branch":"b"}`},

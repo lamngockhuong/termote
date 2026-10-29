@@ -374,6 +374,9 @@ type agentAPI struct {
 	// templates: the prompt templates are usable (the snapshot's
 	// caps.templates); set by buildServer.
 	templates bool
+	// recentGroups: the groups created last are kept (the snapshot's
+	// caps.recentGroups, for a full client); set by buildServer.
+	recentGroups bool
 	// userTasks: the user's tasks are usable (the snapshot's
 	// caps.userTasks); tasks: the pane tasks routes are mounted (the
 	// snapshot's caps.tasks, with caps.files). Set by buildServer.

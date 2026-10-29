@@ -61,6 +61,11 @@ tmux session:
   the host, or empty for your home directory. Its first tab opens once it is created. A name
   already taken, a relative or missing directory, or a file is refused with the reason, and what
   you typed stays.
+- **Recent**: above the name, the dialog lists the groups created last with a directory (up to
+  20, five until **Show more**), the same list on every device. A tap fills in the name and the
+  directory; you still press **Create**. A name an open group uses becomes `name-2`, `name-3`, …
+  The ✕ beside an entry removes it on every device. A group made in the home directory is not
+  listed, and a view-only device does not see the list.
 - **Rename**: in the **⋯** menu; the name is edited in place. Termote's own tmux session (`main`)
   and the Zellij session `main` cannot be renamed.
 - **Close**: in the **⋯** menu; it asks first and says how many tabs end with it. Closing

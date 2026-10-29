@@ -427,7 +427,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `{label, cwd, focus:false}`, `workspace.rename`, `workspace.close` without `close_group` (linked
   worktrees → 409 `has_worktrees`, closed in Herdr), `workspace_not_found` → 404 (Herdr answers a method it lacks with
   `invalid_request`, so an older Herdr gets a 500, not 501). A request that waited past
-  `muxTimeout` for another group change gets 503 `busy`. Closing a group ends every process in it
+  `muxTimeout` for another group change gets 503 `busy`. A group created with a directory is
+  recorded in the recent groups (below), after the mutex is released. Closing a group ends every process in it
 - **Reordering** (`POST /api/mux/tabs/{id}/move` and `POST /api/mux/groups/{id}/move`, both
   `{index}` → `{ok, id}`; `server/mux_reorder.go`, `caps.reorderTabs`/`caps.reorderGroups`):
   `writeGuard` (same-site JSON), `requireWriteRole` first (a view-only
@@ -1604,6 +1605,41 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   container keep separate templates; a name differing only by a look-alike character is another
   name (the import confirmation lists every name); with tmux, a selection in another split of the
   window is kept for the pane shown
+- **Recent groups** (`GET /api/mux/recent-groups` → `{groups:[{id,name,cwd}], readOnly}`,
+  `DELETE /api/mux/recent-groups/{id}`; `server/recent_group_store.go`,
+  `server/recent_group_routes.go`, `caps.recentGroups`; PWA `group-dialog.tsx`): the groups created
+  last with a directory, which the New group dialog fills in on a tap (the user still presses
+  Create). Only the server writes the list: `POST /api/mux/groups` records `{name, cwd, real}`
+  after the group was made and after it released the group mutex (the file lock never holds up
+  another group change, and a panic in the backend still releases it); an empty `cwd` (home), a
+  refused create, or an entry the reply would hide (below) records nothing, and a failed write is
+  only logged. No route takes a path. `cwd` is the directory as typed (`filepath.Clean`),
+  shown and filled in; `real` is it resolved by the create's own check, used to merge two
+  spellings of one directory (`EqualFold` on Windows) and never sent to a client. One file
+  `<stateDir>/recent-groups/recent-groups.json`, at most 20 entries, newest first (dir 0700
+  through `checkPrivateDir`, file 0600 through `writeStateFile`, a symlinked file or dir refused,
+  stale `.recent-groups-*.part` removed; `recent-groups.lock` around every write, 2 s then logged
+  `busy`; a read never waits for it, its prune only takes a free lock). Unlike the templates these are suggestions: a file that
+  cannot be read (corrupt JSON, no `v`, larger than 1 MiB) is renamed
+  `recent-groups.json.bad-<unix ns>` under the lock and the list starts again, never written
+  over; `v` is read first, and a `v` above 1 is read only (also when its list does not decode) (`record` and the prune skip it silently, `DELETE` 409
+  `newer_format`, `readOnly` hides the remove buttons). An entry whose id is not 16 hex digits,
+  whose name fails `validateTmuxTarget` or whose `cwd`/`real` fails `validCwdForm` is left out of
+  the reply (kept in the file), so a hand-edited file shows no control character. Both routes are
+  a full client's only (`requireWriteRole` first, before the method, 403 `view_only`; `caps.recentGroups` false for
+  `view`, without a store or without `caps.groups`): the list names projects. `GET` also goes
+  through `crossSiteRejection`; `DELETE` through `writeGuard`, no body, a bad or unknown id 404
+  `unknown_recent`. `GET` never stats: each entry is checked as strings against the same
+  `files.deny` slice the create uses (`underDirName` on `cwd` and `real`: case-folded on Windows
+  and macOS, exact on Linux, where `underDir` would stat), a denied one is left out and pruned from
+  the file when the lock is free; a directory gone since is listed and Create answers `not_found`, so a hung
+  mount cannot hold the list up and on Windows no symlink is followed to a share outside a
+  create. Without a store every route is 503 `recent_unavailable`. Not under
+  `/api/mux/groups/`: `/api/mux/groups/recent/{id}` would clash with `/api/mux/groups/{id}/move`.
+  Names and directories are shown through `visibleUnsafe`; a name an open group uses is filled in
+  as `name-2`, `name-3`… Errors carry their code, anything else is a logged generic 500. Plain
+  `uninstall` keeps the list and says where; `--purge` removes it with the state dir. Native and
+  container keep separate lists
 - **Tasks** (`/api/mux/panes/{id}/tasks`, `/api/mux/panes/{id}/tasks/run`,
   `/api/mux/tasks/runs/{runId}`, `/api/mux/tasks[/{id}]`; `server/tasks.go`,
   `tasks_discover.go`, `tasks_tools.go`, `tasks_tools_toml.go`, `tasks_shell.go`, `tasks_run.go`, `tasks_run_state.go`, `task_store.go`,

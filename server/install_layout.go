@@ -341,6 +341,10 @@ func (c *cli) removeCacheDir(dir, done string) []string {
 	return nil
 }
 
+// recentGroupsDir keeps the groups created last with their directories;
+// purgeData removes it with the rest of the state dir.
+func (c *cli) recentGroupsDir() string { return filepath.Join(c.stateDir(), "recent-groups") }
+
 // purgeData deletes the config (saved options, password, secret) and the
 // state dir (logs, PID file), for uninstall --purge. It returns what could
 // not be removed yet.

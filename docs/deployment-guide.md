@@ -796,7 +796,7 @@ current and previous version are kept on disk.
 ## Uninstall
 
 ```bash
-termote uninstall          # keeps the config (and saved password), the logs and the deleted files
+termote uninstall          # keeps the config (and saved password), the logs, the recent group directories and the deleted files
 termote uninstall --purge  # removes them too
 ```
 

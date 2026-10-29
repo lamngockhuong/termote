@@ -291,12 +291,13 @@ jobs:
 
       # No saved config here, so the server reads TERMOTE_* from the
       # environment; XDG_CONFIG_HOME keeps it that way on any runner.
-      # XDG_CACHE_HOME keeps the image uploads in the run's own dir.
+      # XDG_CACHE_HOME keeps the image uploads in the run's own dir, and
+      # XDG_STATE_HOME the recent groups (groups.spec.ts empties them).
       - name: Start server
         run: |
           echo "TMUX_SOCKET=$RUNNER_TEMP/tmux.sock" >> "$GITHUB_ENV"
-          XDG_CONFIG_HOME="$RUNNER_TEMP/xdg" XDG_CACHE_HOME="$RUNNER_TEMP/cache" TMUX_SOCKET="$RUNNER_TEMP/tmux.sock" \
-            nohup ./server/termote-dev serve > "$RUNNER_TEMP/serve.log" 2>&1 &
+          XDG_CONFIG_HOME="$RUNNER_TEMP/xdg" XDG_CACHE_HOME="$RUNNER_TEMP/cache" XDG_STATE_HOME="$RUNNER_TEMP/state" \
+            TMUX_SOCKET="$RUNNER_TEMP/tmux.sock" nohup ./server/termote-dev serve > "$RUNNER_TEMP/serve.log" 2>&1 &
           for _ in $(seq 1 30); do
             # The first snapshot also creates the server's tmux session
             curl -fsS "http://localhost:$TERMOTE_PORT/api/mux/snapshot" > /dev/null && exit 0
