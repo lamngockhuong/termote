@@ -216,8 +216,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   gets the same summary (the snapshot already names the agents) but no branch or count for a
   root `viewHidesRoot` refuses (no repo, a home dir or one above), as Files. The PWA shows the
   last text, the branch, the model, a Codex plan and an agent name it does not know (Herdr reports
-  its own; the card and the activity log) with every C0/C1, bidi (U+061C included) and zero-width
-  space character as `⟨U+XXXX⟩` (`visibleUnsafe`, `pwa/src/utils/unsafe-chars.ts`). Group, tab
+  its own; the card and the activity log) with every C0/C1, bidi (U+061C included), line or
+  paragraph separator and invisible character (zero-width space, soft hyphen, invisible operator,
+  Hangul filler, tag character) as `⟨U+XXXX⟩` (`visibleUnsafe`, `pwa/src/utils/unsafe-chars.ts`). Group, tab
   and session names, which any process in a pane can change (`tmux rename-window`), are shown the
   same way wherever they appear as text or a tooltip: the overview's cards, its queue and the
   activity log, the sidebar (rows, group headers, the collapsed rail, the current session), the
@@ -1531,7 +1532,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   VAPID ES256 with `sub` `https://termote.ohnice.app` and 12 h tokens, stdlib only); `Topic` is an
   HMAC of pane and kind under a random key and `Urgency` is `high` for both kinds, so the push
   service learns neither. The service worker reads the names from the snapshot (3 s) and strips
-  C0/C1, bidi (U+061C included) and zero-width space characters (64 characters max); `Pane.Title` is never used; every push shows a
+  the characters `visibleUnsafe` marks (64 characters max); `Pane.Title` is never used; every push shows a
   notification (Safari revokes silent ones). State: `<stateDir>/push` (0700; `vapid.json` and
   `subscriptions.json` 0600, owner-only ACL on Windows, `%LOCALAPPDATA%` so it does not roam, no
   DPAPI), already on the Files deny list; at most 20 subscriptions, the least recently subscribed
