@@ -51,6 +51,9 @@ func (c *cli) cmdUpdate(args []string) error {
 	if c.isCheckout() {
 		return errors.New("cannot update a git checkout; pull and rebuild instead (git pull && make build)")
 	}
+	if c.isHomebrew() {
+		return errors.New("termote was installed with Homebrew; update it with: brew upgrade termote && termote restart")
+	}
 	if !c.isInstalledRelease() {
 		return fmt.Errorf("update works on an install made by install.sh (%s); this binary runs from %s", c.versionsDir(), c.exe)
 	}

@@ -343,7 +343,12 @@ export async function fetchSubagents(paneId: string): Promise<Subagents> {
 }
 
 // How the server was installed, which names the way to update it.
-export type InstallKind = 'release' | 'checkout' | 'container' | 'unknown'
+export type InstallKind =
+  | 'release'
+  | 'homebrew'
+  | 'checkout'
+  | 'container'
+  | 'unknown'
 
 export interface Health {
   apiVersion?: number

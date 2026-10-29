@@ -25,6 +25,10 @@ func (c *cli) cmdLink() error {
 	if c.goos == "windows" {
 		return c.linkWindows()
 	}
+	if opt, ok := c.homebrewOpt(); ok {
+		c.infof("Homebrew already put the termote command on PATH (%s); nothing to link", homebrewBin(opt))
+		return nil
+	}
 	source := c.linkSource()
 	if c.isCheckout() {
 		c.infof("Linking the git checkout (development mode)")
@@ -151,6 +155,17 @@ func (c *cli) ownLink(target string) bool {
 	cur, _ := os.Readlink(target)
 	return filepath.Base(cur) == "termote.sh" ||
 		strings.HasSuffix(filepath.ToSlash(cur), "/current/bin/termote")
+}
+
+// linksInstall reports whether the `termote` command runs the installer's
+// install: ~/.local/bin/termote linking its current binary, or (Windows) its
+// bin dir on PATH.
+func (c *cli) linksInstall() bool {
+	if c.goos == "windows" {
+		return c.onPath(filepath.Dir(c.currentExe()))
+	}
+	cur, err := os.Readlink(filepath.Join(c.userBinDir(), "termote"))
+	return err == nil && strings.HasSuffix(filepath.ToSlash(cur), "/current/bin/termote")
 }
 
 func (c *cli) cmdUnlink() error {

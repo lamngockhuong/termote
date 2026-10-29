@@ -950,12 +950,14 @@ func (c *cli) cmdUninstall(args []string) error {
 	if saved != nil {
 		c.removeTailscale(saved.Tailscale, c.savedPort(saved))
 	}
-	c.cmdUnlink()
-	left := c.removeUploads()
 	installed := c.isInstalledRelease()
-	// From a checkout, an install elsewhere stays, and so do the config and
-	// logs it uses.
+	// From a checkout or Homebrew, an install elsewhere stays, and so do the
+	// command it publishes and the config and logs it uses.
 	otherInstall := !installed && isDir(c.versionsDir())
+	if !otherInstall || !c.linksInstall() {
+		c.cmdUnlink()
+	}
+	left := c.removeUploads()
 	if purge && !otherInstall {
 		// Before the install: on Windows the state dir sits in the install
 		// root, which can then go as a whole.
@@ -967,6 +969,9 @@ func (c *cli) cmdUninstall(args []string) error {
 		left = append(left, c.removeInstall()...)
 	} else if otherInstall {
 		c.infof("An install in %s was left alone (this command runs from %s); remove it with: %s uninstall", c.dataDir(), c.exe, c.currentExe())
+	}
+	if c.isHomebrew() {
+		c.infof("Remove the binary with: brew uninstall termote")
 	}
 	c.removeLater(left)
 	switch {

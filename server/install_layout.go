@@ -44,12 +44,15 @@ var containerMarkers = []string{"/.dockerenv", "/run/.containerenv"}
 
 // installKind names how this binary was installed, so the PWA can say how to
 // update it: "release" (the installer's layout, `termote update`),
-// "checkout" (a git checkout, pull and rebuild), "container" (the image, run
-// again by the host's termote) or "unknown" (a binary copied by hand).
+// "homebrew" (a Homebrew keg, `brew upgrade`), "checkout" (a git checkout,
+// pull and rebuild), "container" (the image, run again by the host's
+// termote) or "unknown" (a binary copied by hand).
 func (c *cli) installKind() string {
 	switch {
 	case c.isInstalledRelease():
 		return "release"
+	case c.isHomebrew():
+		return "homebrew"
 	case c.isCheckout():
 		return "checkout"
 	case slices.ContainsFunc(containerMarkers, fileExists):
@@ -79,13 +82,51 @@ func (c *cli) isInstalledRelease() bool {
 	return false
 }
 
+// homebrewOpt returns <prefix>/opt/termote/bin/termote when this binary is
+// a Homebrew keg's (<prefix>/Cellar/termote/<v>/bin/termote) and that opt
+// link resolves to it. c.exe has its symlinks resolved, so a brew binary
+// always names its Cellar version. A layout brew has changed, or an opt link
+// to another version, reports false: the binary then runs as itself.
+func (c *cli) homebrewOpt() (string, bool) {
+	if c.goos == "windows" {
+		return "", false
+	}
+	bin := filepath.Dir(c.exe)
+	formula := filepath.Dir(filepath.Dir(bin))
+	cellar := filepath.Dir(formula)
+	if filepath.Base(c.exe) != "termote" || filepath.Base(bin) != "bin" ||
+		filepath.Base(formula) != "termote" || filepath.Base(cellar) != "Cellar" {
+		return "", false
+	}
+	opt := filepath.Join(filepath.Dir(cellar), "opt", "termote", "bin", "termote")
+	if !sameFile(opt, c.exe) {
+		return "", false
+	}
+	return opt, true
+}
+
+func (c *cli) isHomebrew() bool {
+	_, ok := c.homebrewOpt()
+	return ok
+}
+
+// homebrewBin is the `termote` command brew links: <prefix>/bin/termote.
+func homebrewBin(opt string) string {
+	prefix := filepath.Dir(filepath.Dir(filepath.Dir(filepath.Dir(opt))))
+	return filepath.Join(prefix, "bin", "termote")
+}
+
 // stableExe is what a service runs: a path that survives update, so update
 // only switches current and restarts. It is built from the install layout,
-// never taken from c.exe, which names one version. A checkout or a binary
-// copied elsewhere runs itself.
+// never taken from c.exe, which names one version. Homebrew's opt link
+// survives `brew upgrade` the same way, while the Cellar path it replaces
+// is deleted. A checkout or a binary copied elsewhere runs itself.
 func (c *cli) stableExe() string {
 	if c.isInstalledRelease() {
 		return c.currentExe()
+	}
+	if opt, ok := c.homebrewOpt(); ok {
+		return opt
 	}
 	return c.exe
 }

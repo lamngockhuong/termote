@@ -14,11 +14,16 @@ import { Button, FOCUS_RING } from './ui/button'
 // host's termote, so it is updated there and the container made again. A
 // checkout's commands differ by OS (make, termote.sh or termote.ps1), and an
 // unknown install has none: those get a hint and the release notes only.
+// A kind this page does not know (a newer server) reads as unknown.
 const UPDATE_HOW: Record<InstallKind, { where: MessageKey; command?: string }> =
   {
     release: {
       where: 'settings.updates.howRelease',
       command: 'termote update',
+    },
+    homebrew: {
+      where: 'settings.updates.howRelease',
+      command: 'brew upgrade termote && termote restart',
     },
     container: {
       where: 'settings.updates.howContainer',
@@ -68,7 +73,11 @@ export function UpdatesSection({
   // The server is what an update replaces; this page may be older.
   const running = server?.version ?? APP_INFO.version
   const hasUpdate = availableUpdate(running, latest) !== null
-  const how = UPDATE_HOW[server?.install ?? 'unknown']
+  const install = server?.install
+  const how =
+    install && Object.hasOwn(UPDATE_HOW, install)
+      ? UPDATE_HOW[install]
+      : UPDATE_HOW.unknown
   const command = how.command
 
   const copy = async (text: string) => {

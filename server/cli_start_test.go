@@ -614,6 +614,23 @@ func TestStableExeFollowsInstallLayout(t *testing.T) {
 	}
 }
 
+// A brew install registers the opt link, which brew upgrade keeps, never
+// the Cellar path it deletes.
+func TestRegisterServiceHomebrewOpt(t *testing.T) {
+	brew, prefix := homebrewCLI(t)
+	tc := newSystemdCLI(t)
+	tc.env["USER"] = "u"
+	tc.runner.outputs["loginctl show-user u -p Linger --value"] = "yes\n"
+	tc.exe = brew.exe
+	if _, err := tc.registerService(); err != nil {
+		t.Fatal(err)
+	}
+	unit := string(mustRead(t, filepath.Join(tc.home, ".config", "systemd", "user", "termote.service")))
+	if opt := filepath.Join(prefix, "opt", "termote", "bin", "termote"); !strings.Contains(unit, `ExecStart="`+opt+`" serve`) {
+		t.Fatalf("unit:\n%s", unit)
+	}
+}
+
 func TestTailscaleMapping(t *testing.T) {
 	status := []byte(`{"TCP":{"8443":{"HTTPS":true}},"Web":{"box.ts.net:8443":{"Handlers":{"/":{"Proxy":"http://127.0.0.1:7680"}}}}}`)
 	if !tailscaleMapped(status, "8443", "http://127.0.0.1:7680") || tailscaleMapped(status, "443", "http://127.0.0.1:7680") ||
