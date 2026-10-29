@@ -1,5 +1,8 @@
 import { CircleAlert, CircleCheck, LoaderCircle } from 'lucide-react'
 import type { SubagentNode, Subagents } from '../hooks/use-mux-api'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 
 // At most this many subagents are drawn; the rest are counted.
@@ -11,10 +14,18 @@ const NODE_STYLE = {
   running: {
     Icon: LoaderCircle,
     className: 'text-warning motion-safe:animate-pulse',
-    word: 'running',
+    word: 'chat.subagent.running',
   },
-  done: { Icon: CircleCheck, className: 'text-success', word: 'done' },
-  error: { Icon: CircleAlert, className: 'text-danger', word: 'failed' },
+  done: {
+    Icon: CircleCheck,
+    className: 'text-success',
+    word: 'chat.subagent.done',
+  },
+  error: {
+    Icon: CircleAlert,
+    className: 'text-danger',
+    word: 'chat.subagent.failed',
+  },
 } as const
 
 // Every node of nodes, depth first, in the order they are drawn.
@@ -31,28 +42,31 @@ export function flattenSubagents(nodes: readonly SubagentNode[]) {
 }
 
 // "3 subagents, 1 running", or undefined when there are none.
-export function subagentSummary(tree?: Subagents): string | undefined {
+export function subagentSummary(
+  tree: Subagents | undefined,
+  t: Translate<MessageKey>,
+): string | undefined {
   const all = flattenSubagents(tree?.nodes ?? [])
   if (!all.length) return undefined
   const running = all.filter((n) => n.status === 'running').length
-  const noun = all.length === 1 ? 'subagent' : 'subagents'
   return running
-    ? `${all.length} ${noun}, ${running} running`
-    : `${all.length} ${noun}`
+    ? t('chat.subagent.countRunning', { count: all.length, running })
+    : t('chat.subagent.count', { count: all.length })
 }
 
 // How long a subagent ran, or has been running: "42 s", "3 min", "2 h".
 export function subagentDuration(
   n: SubagentNode,
   now: number,
+  t: Translate<MessageKey>,
 ): string | undefined {
   const start = n.startTs ? Date.parse(n.startTs) : Number.NaN
   const end = n.endTs ? Date.parse(n.endTs) : n.status === 'running' ? now : NaN
   if (!Number.isFinite(start) || !Number.isFinite(end)) return undefined
   const s = Math.max(0, Math.round((end - start) / 1000))
-  if (s < 60) return `${s} s`
-  if (s < 3600) return `${Math.floor(s / 60)} min`
-  return `${Math.floor(s / 3600)} h`
+  if (s < 60) return t('chat.subagent.seconds', { n: s })
+  if (s < 3600) return t('chat.subagent.minutes', { n: Math.floor(s / 60) })
+  return t('chat.subagent.hours', { n: Math.floor(s / 3600) })
 }
 
 interface Props {
@@ -64,9 +78,12 @@ interface Props {
 
 // The subagents of a Claude session, indented by depth.
 export function SubagentTree({ tree, error, now }: Props) {
+  const { t } = useT()
   if (!tree) {
     return error ? (
-      <p className="text-[12px] text-fg-muted">Could not read subagents.</p>
+      <p className="text-[12px] text-fg-muted">
+        {t('chat.subagent.readFailed')}
+      </p>
     ) : (
       <span
         aria-hidden="true"
@@ -76,16 +93,18 @@ export function SubagentTree({ tree, error, now }: Props) {
   }
   const all = flattenSubagents(tree.nodes)
   if (!all.length) {
-    return <p className="text-[12px] text-fg-muted">No subagents.</p>
+    return (
+      <p className="text-[12px] text-fg-muted">{t('chat.subagent.none')}</p>
+    )
   }
   const shown = all.slice(0, SUBAGENT_TREE_MAX)
   const more = all.length - shown.length
   return (
     <div className="flex flex-col gap-1">
-      <ul aria-label="Subagents" className="flex flex-col gap-1">
+      <ul aria-label={t('chat.subagent.list')} className="flex flex-col gap-1">
         {shown.map((n) => {
           const { Icon, className, word } = NODE_STYLE[n.status]
-          const took = subagentDuration(n, now)
+          const took = subagentDuration(n, now, t)
           return (
             <li
               key={n.id}
@@ -104,8 +123,8 @@ export function SubagentTree({ tree, error, now }: Props) {
                     {visibleUnsafe(n.type)}
                   </span>
                   <span className="shrink-0 text-fg-muted">
-                    · {word}
-                    {n.statusGuessed && ' (guessed)'}
+                    · {t(word)}
+                    {n.statusGuessed && ` ${t('chat.subagent.guessed')}`}
                     {took && ` · ${took}`}
                   </span>
                 </span>
@@ -127,8 +146,8 @@ export function SubagentTree({ tree, error, now }: Props) {
       {(more > 0 || tree.truncated) && (
         <p className="text-[12px] text-fg-subtle">
           {more > 0
-            ? `and ${more} more`
-            : 'Older or deeper subagents not shown'}
+            ? t('chat.subagent.more', { count: more })
+            : t('chat.subagent.truncated')}
         </p>
       )}
     </div>

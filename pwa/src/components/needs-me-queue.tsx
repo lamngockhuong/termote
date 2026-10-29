@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { agentLabel } from '../chat-agents'
 import { useAgentPrompt } from '../hooks/use-agent-prompt'
+import { useT } from '../i18n/i18n-context'
 import type { Session, SessionPane } from '../types/session'
 import {
   ANSWER_GRACE,
@@ -46,6 +47,7 @@ interface Props {
 // overview (utils/needs-me-queue.ts: the card on top is pinned, an answer
 // never moves on by itself). Only that card's dialog is read.
 export function NeedsMeQueue({ cards, readOnly, canAnswer, onOpen }: Props) {
+  const { t } = useT()
   const blocked: Blocked[] = useMemo(
     () =>
       cards
@@ -102,9 +104,9 @@ export function NeedsMeQueue({ cards, readOnly, canAnswer, onOpen }: Props) {
     const n = queue.skipped.size
     return n > 0 ? (
       <p className="mb-4 flex items-center gap-2 text-[13px] text-fg-muted">
-        {n} skipped {n === 1 ? 'dialog is' : 'dialogs are'} still waiting.
+        {t('chat.queue.skipped', { count: n })}
         <Button size="sm" onClick={() => move(unskip(queue, blocked))}>
-          Show again
+          {t('chat.queue.showAgain')}
         </Button>
       </p>
     ) : null
@@ -122,11 +124,15 @@ export function NeedsMeQueue({ cards, readOnly, canAnswer, onOpen }: Props) {
           tabIndex={-1}
           className="min-w-0 flex-1 truncate text-[14px] font-semibold outline-none"
         >
-          Needs you: {agentLabel(card.pane.agentName)},{' '}
-          {visibleUnsafe(card.where)}
+          {t('chat.queue.title', {
+            agent: agentLabel(card.pane.agentName),
+            where: visibleUnsafe(card.where),
+          })}
         </h3>
         <span className="shrink-0 text-[12px] text-fg-muted">
-          {left > 0 ? `${left} more waiting` : 'last one'}
+          {left > 0
+            ? t('chat.queue.more', { count: left })
+            : t('chat.queue.last')}
         </span>
         {!queue.answered && (
           <Button
@@ -134,7 +140,7 @@ export function NeedsMeQueue({ cards, readOnly, canAnswer, onOpen }: Props) {
             variant="ghost"
             onClick={() => move(advance(queue, blocked))}
           >
-            Skip
+            {t('common.skip')}
           </Button>
         )}
       </div>
@@ -156,6 +162,7 @@ export function NeedsMeQueue({ cards, readOnly, canAnswer, onOpen }: Props) {
 }
 
 function Answered({ left, onNext }: { left: number; onNext: () => void }) {
+  const { t } = useT()
   const [ready, setReady] = useState(false)
   useEffect(() => {
     const id = setTimeout(() => setReady(true), NEXT_DELAY)
@@ -164,10 +171,10 @@ function Answered({ left, onNext }: { left: number; onNext: () => void }) {
   return (
     <div className="flex items-center gap-2 p-3">
       <p role="status" className="flex-1 text-[13px] text-fg">
-        Answered.
+        {t('chat.queue.answered')}
       </p>
       <Button variant="primary" disabled={!ready} onClick={onNext}>
-        {left > 0 ? `Next (${left} left)` : 'Done'}
+        {left ? t('chat.queue.next', { count: left }) : t('common.done')}
       </Button>
     </div>
   )
@@ -191,6 +198,7 @@ function QueueDialog({
   // An answer was sent and the dialog has closed since
   onDone: () => void
 }) {
+  const { t } = useT()
   const { session, pane } = card
   // Only this card's dialog is polled, and only where the server reads it
   const p = useAgentPrompt(answerable ? pane.id : undefined, 'blocked')
@@ -210,7 +218,7 @@ function QueueDialog({
   if (!p.prompt) {
     return (
       <p role="status" className="p-3 text-[13px] text-fg-muted">
-        Reading the dialog…
+        {t('chat.queue.reading')}
       </p>
     )
   }
@@ -229,9 +237,7 @@ function QueueDialog({
         onSent={() => setSent(true)}
         onChanged={p.show}
       />
-      {readOnly && (
-        <ReadOnlyBar label="View only: answer from a device with full access" />
-      )}
+      {readOnly && <ReadOnlyBar label={t('chat.queue.viewOnly')} />}
     </>
   )
 }

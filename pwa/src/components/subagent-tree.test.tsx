@@ -1,6 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type { SubagentNode } from '../hooks/use-mux-api'
+import { tFor } from '../i18n/i18n-context'
 import {
   flattenSubagents,
   SUBAGENT_TREE_MAX,
@@ -8,6 +9,8 @@ import {
   subagentDuration,
   subagentSummary,
 } from './subagent-tree'
+
+const en = tFor('en')
 
 const NOW = Date.parse('2026-10-13T10:00:00Z')
 const node = (over: Partial<SubagentNode>): SubagentNode => ({
@@ -81,19 +84,19 @@ describe('subagent helpers', () => {
       'a4',
       'a3',
     ])
-    expect(subagentSummary(TREE)).toBe('4 subagents, 1 running')
-    expect(subagentSummary({ nodes: [node({ status: 'done' })] })).toBe(
+    expect(subagentSummary(TREE, en)).toBe('4 subagents, 1 running')
+    expect(subagentSummary({ nodes: [node({ status: 'done' })] }, en)).toBe(
       '1 subagent',
     )
-    expect(subagentSummary({ nodes: [] })).toBeUndefined()
-    expect(subagentSummary(undefined)).toBeUndefined()
+    expect(subagentSummary({ nodes: [] }, en)).toBeUndefined()
+    expect(subagentSummary(undefined, en)).toBeUndefined()
     const [a1, a2, a4, a3] = flattenSubagents(TREE.nodes)
-    expect(subagentDuration(a1, NOW)).toBe('3 min')
-    expect(subagentDuration(a2, NOW)).toBe('42 s')
-    expect(subagentDuration(a4, NOW)).toBe('2 h')
-    expect(subagentDuration(a3, NOW)).toBeUndefined()
+    expect(subagentDuration(a1, NOW, en)).toBe('3 min')
+    expect(subagentDuration(a2, NOW, en)).toBe('42 s')
+    expect(subagentDuration(a4, NOW, en)).toBe('2 h')
+    expect(subagentDuration(a3, NOW, en)).toBeUndefined()
     expect(
-      subagentDuration(node({ status: 'done', startTs: 'x' }), NOW),
+      subagentDuration(node({ status: 'done', startTs: 'x' }), NOW, en),
     ).toBeUndefined()
   })
 })

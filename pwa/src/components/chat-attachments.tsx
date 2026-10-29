@@ -1,5 +1,6 @@
 import { ImageIcon, LoaderCircle, X } from 'lucide-react'
 import type { ChatAttachment } from '../hooks/use-chat-attachments'
+import { useT } from '../i18n/i18n-context'
 
 interface ChatAttachmentsProps {
   items: ChatAttachment[]
@@ -14,13 +15,21 @@ export function ChatAttachments({
   onRemove,
   disabled,
 }: ChatAttachmentsProps) {
+  const { t } = useT()
   if (items.length === 0) return null
   return (
-    <ul aria-label="Attached images" className="flex gap-2 px-2 pt-2">
+    <ul aria-label={t('chat.attach.list')} className="flex gap-2 px-2 pt-2">
       {items.map((a) => {
         // The number of its "[Image #n]" token in the text
         const n = a.n
-        const state = a.status === 'failed' ? a.error : a.status
+        const state =
+          a.status === 'failed'
+            ? a.error
+            : t(
+                a.status === 'uploading'
+                  ? 'chat.attach.uploading'
+                  : 'chat.attach.ready',
+              )
         return (
           <li
             key={a.key}
@@ -32,13 +41,13 @@ export function ChatAttachments({
             {a.thumb ? (
               <img
                 src={a.thumb}
-                alt={`Attachment ${n}, ${state}`}
+                alt={t('chat.attach.item', { n, state })}
                 className="size-full object-cover"
               />
             ) : (
               <span
                 role="img"
-                aria-label={`Attachment ${n}, ${state}`}
+                aria-label={t('chat.attach.item', { n, state })}
                 className="flex size-full items-center justify-center text-fg-muted"
               >
                 <ImageIcon size={18} aria-hidden="true" />
@@ -55,7 +64,7 @@ export function ChatAttachments({
             )}
             <button
               type="button"
-              aria-label={`Remove image ${n}`}
+              aria-label={t('chat.attach.remove', { n })}
               disabled={disabled}
               onClick={() => onRemove(a.key)}
               className="absolute top-0 right-0 flex size-6 items-center justify-center rounded-bl-control bg-surface/90 text-fg disabled:opacity-50"

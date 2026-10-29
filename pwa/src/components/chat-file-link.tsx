@@ -1,4 +1,5 @@
 import { createContext, type ReactNode, useContext } from 'react'
+import { useT } from '../i18n/i18n-context'
 
 // A file path the agent wrote in the Chat view, opened in the pane's Files
 // view on a click. The Chat view gives the opener; without one (a pane with
@@ -27,6 +28,7 @@ export function FileRef({
   children: ReactNode
 }) {
   const open = useContext(ChatFileLinkContext)
+  const { t } = useT()
   if (!open || !path) {
     return (
       <span className={`${className} ${plainClassName}`} title={title}>
@@ -39,7 +41,7 @@ export function FileRef({
     <button
       type="button"
       data-file-ref={where}
-      title={`Open ${where} in Files`}
+      title={t('chat.fileLink.open', { where })}
       onClick={() => void open(path, line)}
       className={`${className} cursor-pointer text-left text-accent underline decoration-dotted underline-offset-2 hover:decoration-solid`}
     >

@@ -3,6 +3,9 @@
 // table is enough; past MAX_CELLS the old lines are shown removed and the
 // new ones added, without matching.
 
+import type { MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
+
 export interface DiffRow {
   kind: 'ctx' | 'add' | 'del'
   text: string
@@ -87,16 +90,15 @@ export function parseUnifiedDiff(text: string): DiffRow[] {
 
 // What an edit did, in the words of the card under its title: added or
 // removed when the line count changed, else modified.
-export function diffSummary(rows: DiffRow[]): string {
+export function diffSummary(rows: DiffRow[], t: Translate<MessageKey>): string {
   let adds = 0
   let dels = 0
   for (const r of rows) {
     if (r.kind === 'add') adds++
     else if (r.kind === 'del') dels++
   }
-  const plural = (k: number) => `${k} line${k === 1 ? '' : 's'}`
-  if (adds === 0 && dels === 0) return 'No changes'
-  if (adds > dels) return `Added ${plural(adds - dels)}`
-  if (dels > adds) return `Removed ${plural(dels - adds)}`
-  return 'Modified'
+  if (adds === 0 && dels === 0) return t('chat.diff.none')
+  if (adds > dels) return t('chat.diff.added', { count: adds - dels })
+  if (dels > adds) return t('chat.diff.removed', { count: dels - adds })
+  return t('chat.diff.modified')
 }

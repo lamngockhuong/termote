@@ -3,6 +3,9 @@
 // plugins and the agent itself (read by the server), after the agent's own
 // trigger: "/" for Claude Code, "$" for Codex skills.
 
+import { en, type MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
+
 export type SlashCommandSource =
   | 'builtin'
   | 'project'
@@ -15,7 +18,10 @@ export type CommandTrigger = '/' | '$'
 export interface SlashCommand {
   // Without the leading "/"
   name: string
+  // What the agent says it does (a custom command or skill)
   description?: string
+  // What a built-in does, in the app's words: read through t()
+  descriptionKey?: MessageKey
   source: SlashCommandSource
   kind?: 'command' | 'skill'
   // Opens an interactive screen the Chat view cannot drive: sent, then the
@@ -29,59 +35,69 @@ export interface SlashCommand {
 
 const builtin = (
   name: string,
-  description: string,
+  descriptionKey: MessageKey,
   flags: Pick<SlashCommand, 'terminal' | 'confirm'> = {},
-): SlashCommand => ({ name, description, source: 'builtin', ...flags })
+): SlashCommand => ({ name, descriptionKey, source: 'builtin', ...flags })
+
+// The description a command shows: a built-in's in the app's language, an
+// agent's own as it wrote it
+export function commandDescription(
+  c: SlashCommand,
+  t: Translate<MessageKey>,
+): string | undefined {
+  return c.descriptionKey ? t(c.descriptionKey) : c.description
+}
+
 const T = { terminal: true }
 
 // Claude Code 2.1.x built-ins (code.claude.com/docs/en/commands), without
 // the removed ones and those hidden from its own menu. /exit comes first; the
 // rest are in alphabetical order. A command missing here can still be typed.
 export const CLAUDE_BUILTIN_COMMANDS: SlashCommand[] = [
-  builtin('exit', 'Exit Claude Code', { confirm: true }),
-  builtin('add-dir', 'Add a working directory for this session'),
-  builtin('agents', 'Create or manage subagents'),
-  builtin('branch', 'Branch the conversation at this point'),
-  builtin('btw', 'Ask a side question about this session'),
-  builtin('clear', 'Start a new conversation with empty context'),
-  builtin('compact', 'Summarize the conversation to free up context'),
-  builtin('config', 'Open the settings', T),
-  builtin('context', 'Show current context usage'),
-  builtin('copy', 'Copy the last response to the clipboard', T),
-  builtin('cost', 'Show session cost and usage', T),
-  builtin('diff', 'Review the changes in the working tree', T),
-  builtin('doctor', 'Check the Claude Code setup'),
-  builtin('effort', 'Set the effort level'),
-  builtin('export', 'Export the conversation', T),
-  builtin('fast', 'Toggle fast mode'),
-  builtin('feedback', 'Send feedback about Claude Code', T),
-  builtin('help', 'Show help and available commands', T),
-  builtin('hooks', 'View hook configurations', T),
-  builtin('ide', 'Manage IDE integrations', T),
-  builtin('init', 'Initialize the project with a CLAUDE.md guide'),
-  builtin('login', 'Sign in to your Anthropic account', T),
-  builtin('logout', 'Sign out from your Anthropic account', T),
-  builtin('mcp', 'Manage MCP servers', T),
-  builtin('memory', 'Edit CLAUDE.md files and auto memory', T),
-  builtin('model', 'Switch the model', T),
-  builtin('permissions', 'Manage tool permission rules', T),
-  builtin('plan', 'Enter plan mode'),
-  builtin('plugin', 'Manage plugins', T),
-  builtin('recap', 'Summarize this session in one line'),
-  builtin('release-notes', 'View the changelog', T),
-  builtin('reload-plugins', 'Reload active plugins'),
-  builtin('reload-skills', 'Re-scan skills and commands'),
-  builtin('rename', 'Rename this session'),
-  builtin('resume', 'Resume another conversation', T),
-  builtin('review', 'Review the current diff, a PR or a branch'),
-  builtin('rewind', 'Rewind the conversation or code', T),
-  builtin('security-review', 'Review the branch for security issues'),
-  builtin('skills', 'List available skills', T),
-  builtin('status', 'Show version, model and account', T),
-  builtin('statusline', "Configure Claude Code's status line"),
-  builtin('tasks', 'View and manage background work', T),
-  builtin('theme', 'Change the color theme', T),
-  builtin('usage', 'Show plan usage limits', T),
+  builtin('exit', 'chat.slash.claude.exit', { confirm: true }),
+  builtin('add-dir', 'chat.slash.claude.addDir'),
+  builtin('agents', 'chat.slash.claude.agents'),
+  builtin('branch', 'chat.slash.claude.branch'),
+  builtin('btw', 'chat.slash.claude.btw'),
+  builtin('clear', 'chat.slash.claude.clear'),
+  builtin('compact', 'chat.slash.claude.compact'),
+  builtin('config', 'chat.slash.claude.config', T),
+  builtin('context', 'chat.slash.claude.context'),
+  builtin('copy', 'chat.slash.claude.copy', T),
+  builtin('cost', 'chat.slash.claude.cost', T),
+  builtin('diff', 'chat.slash.claude.diff', T),
+  builtin('doctor', 'chat.slash.claude.doctor'),
+  builtin('effort', 'chat.slash.claude.effort'),
+  builtin('export', 'chat.slash.claude.export', T),
+  builtin('fast', 'chat.slash.claude.fast'),
+  builtin('feedback', 'chat.slash.claude.feedback', T),
+  builtin('help', 'chat.slash.claude.help', T),
+  builtin('hooks', 'chat.slash.claude.hooks', T),
+  builtin('ide', 'chat.slash.claude.ide', T),
+  builtin('init', 'chat.slash.claude.init'),
+  builtin('login', 'chat.slash.claude.login', T),
+  builtin('logout', 'chat.slash.claude.logout', T),
+  builtin('mcp', 'chat.slash.claude.mcp', T),
+  builtin('memory', 'chat.slash.claude.memory', T),
+  builtin('model', 'chat.slash.claude.model', T),
+  builtin('permissions', 'chat.slash.claude.permissions', T),
+  builtin('plan', 'chat.slash.claude.plan'),
+  builtin('plugin', 'chat.slash.claude.plugin', T),
+  builtin('recap', 'chat.slash.claude.recap'),
+  builtin('release-notes', 'chat.slash.claude.releaseNotes', T),
+  builtin('reload-plugins', 'chat.slash.claude.reloadPlugins'),
+  builtin('reload-skills', 'chat.slash.claude.reloadSkills'),
+  builtin('rename', 'chat.slash.claude.rename'),
+  builtin('resume', 'chat.slash.claude.resume', T),
+  builtin('review', 'chat.slash.claude.review'),
+  builtin('rewind', 'chat.slash.claude.rewind', T),
+  builtin('security-review', 'chat.slash.claude.securityReview'),
+  builtin('skills', 'chat.slash.claude.skills', T),
+  builtin('status', 'chat.slash.claude.status', T),
+  builtin('statusline', 'chat.slash.claude.statusline'),
+  builtin('tasks', 'chat.slash.claude.tasks', T),
+  builtin('theme', 'chat.slash.claude.theme', T),
+  builtin('usage', 'chat.slash.claude.usage', T),
 ]
 
 // Codex 0.162.0 built-ins (codex-rs/tui/src/slash_command.rs at tag
@@ -90,58 +106,58 @@ export const CLAUDE_BUILTIN_COMMANDS: SlashCommand[] = [
 // /setup-default-sandbox, /voice) and the debug ones. /exit comes first; the
 // rest are in alphabetical order. A command missing here can still be typed.
 export const CODEX_BUILTIN_COMMANDS: SlashCommand[] = [
-  builtin('exit', 'Exit Codex', { confirm: true }),
-  builtin('agents', 'Open the agent command center', T),
-  builtin('approve', 'Approve one retry of a recent auto-review denial', T),
-  builtin('apps', 'Manage apps', T),
-  builtin('archive', 'Archive this session', T),
-  builtin('btw', 'Start a side conversation in an ephemeral fork', T),
-  builtin('cd', 'Change the current working directory'),
-  builtin('clear', 'Clear the terminal and start a new chat'),
-  builtin('compact', 'Summarize the conversation to free up context'),
-  builtin('copy', 'Copy the last response or part of it', T),
-  builtin('daemon', 'Manage the local background server', T),
-  builtin('debug-config', 'Show config layers and requirement sources', T),
-  builtin('delete', 'Permanently delete this session', T),
-  builtin('diff', 'Show the git diff, untracked files included', T),
-  builtin('experimental', 'Toggle experimental features', T),
-  builtin('export', 'Export the conversation as Markdown', T),
-  builtin('feedback', 'Send logs to the maintainers', T),
-  builtin('fork', 'Fork the current chat', T),
-  builtin('goal', 'Set or view the goal of a long-running task'),
-  builtin('hooks', 'View and manage lifecycle hooks', T),
-  builtin('import', 'Import setup, this project and chats from Claude Code', T),
-  builtin('init', 'Create an AGENTS.md file with instructions for Codex'),
-  builtin('keymap', 'Remap TUI shortcuts', T),
-  builtin('logout', 'Log out of Codex', { confirm: true }),
-  builtin('mcp', 'List MCP tools', T),
-  builtin('memories', 'Configure memory use and generation', T),
-  builtin('model', 'Choose the model and reasoning effort', T),
-  builtin('new', 'Start a new chat', T),
-  builtin('permissions', 'Choose what Codex is allowed to do', T),
-  builtin('pets', 'Choose or hide the terminal pet', T),
-  builtin('plan', 'Switch to Plan mode'),
-  builtin('plugins', 'Browse plugins', T),
-  builtin('ps', 'List background terminals', T),
-  builtin('pwd', 'Show the current working directory', T),
-  builtin('raw', 'Toggle raw scrollback mode'),
-  builtin('recap', 'Summarize the conversation now'),
-  builtin('rename', 'Rename the current thread'),
-  builtin('resume', 'Resume a saved chat', T),
-  builtin('review', 'Review the current changes and find issues'),
-  builtin('side', 'Start a side conversation in an ephemeral fork', T),
-  builtin('skills', 'Use skills to improve how Codex performs tasks', T),
-  builtin('status', 'Show the session configuration and token usage', T),
-  builtin('statusline', 'Configure the items of the status line', T),
-  builtin('stop', 'Stop all background terminals'),
-  builtin('subagents', "Switch between this session's subagents", T),
-  builtin('theme', 'Choose a syntax highlighting theme', T),
-  builtin('title', 'Configure the items of the terminal title', T),
-  builtin('tui', 'Choose the TUI mode for the next launch', T),
-  builtin('usage', 'View account usage or use a usage limit reset', T),
-  builtin('vim', 'Toggle Vim mode for the composer'),
-  builtin('warnings', 'View retained warnings and diagnostic details', T),
-  builtin('worktree', 'Start or continue a conversation in a new worktree', T),
+  builtin('exit', 'chat.slash.codex.exit', { confirm: true }),
+  builtin('agents', 'chat.slash.codex.agents', T),
+  builtin('approve', 'chat.slash.codex.approve', T),
+  builtin('apps', 'chat.slash.codex.apps', T),
+  builtin('archive', 'chat.slash.codex.archive', T),
+  builtin('btw', 'chat.slash.codex.btw', T),
+  builtin('cd', 'chat.slash.codex.cd'),
+  builtin('clear', 'chat.slash.codex.clear'),
+  builtin('compact', 'chat.slash.codex.compact'),
+  builtin('copy', 'chat.slash.codex.copy', T),
+  builtin('daemon', 'chat.slash.codex.daemon', T),
+  builtin('debug-config', 'chat.slash.codex.debugConfig', T),
+  builtin('delete', 'chat.slash.codex.delete', T),
+  builtin('diff', 'chat.slash.codex.diff', T),
+  builtin('experimental', 'chat.slash.codex.experimental', T),
+  builtin('export', 'chat.slash.codex.export', T),
+  builtin('feedback', 'chat.slash.codex.feedback', T),
+  builtin('fork', 'chat.slash.codex.fork', T),
+  builtin('goal', 'chat.slash.codex.goal'),
+  builtin('hooks', 'chat.slash.codex.hooks', T),
+  builtin('import', 'chat.slash.codex.import', T),
+  builtin('init', 'chat.slash.codex.init'),
+  builtin('keymap', 'chat.slash.codex.keymap', T),
+  builtin('logout', 'chat.slash.codex.logout', { confirm: true }),
+  builtin('mcp', 'chat.slash.codex.mcp', T),
+  builtin('memories', 'chat.slash.codex.memories', T),
+  builtin('model', 'chat.slash.codex.model', T),
+  builtin('new', 'chat.slash.codex.new', T),
+  builtin('permissions', 'chat.slash.codex.permissions', T),
+  builtin('pets', 'chat.slash.codex.pets', T),
+  builtin('plan', 'chat.slash.codex.plan'),
+  builtin('plugins', 'chat.slash.codex.plugins', T),
+  builtin('ps', 'chat.slash.codex.ps', T),
+  builtin('pwd', 'chat.slash.codex.pwd', T),
+  builtin('raw', 'chat.slash.codex.raw'),
+  builtin('recap', 'chat.slash.codex.recap'),
+  builtin('rename', 'chat.slash.codex.rename'),
+  builtin('resume', 'chat.slash.codex.resume', T),
+  builtin('review', 'chat.slash.codex.review'),
+  builtin('side', 'chat.slash.codex.side', T),
+  builtin('skills', 'chat.slash.codex.skills', T),
+  builtin('status', 'chat.slash.codex.status', T),
+  builtin('statusline', 'chat.slash.codex.statusline', T),
+  builtin('stop', 'chat.slash.codex.stop'),
+  builtin('subagents', 'chat.slash.codex.subagents', T),
+  builtin('theme', 'chat.slash.codex.theme', T),
+  builtin('title', 'chat.slash.codex.title', T),
+  builtin('tui', 'chat.slash.codex.tui', T),
+  builtin('usage', 'chat.slash.codex.usage', T),
+  builtin('vim', 'chat.slash.codex.vim'),
+  builtin('warnings', 'chat.slash.codex.warnings', T),
+  builtin('worktree', 'chat.slash.codex.worktree', T),
 ]
 
 // Built-ins per agent, by the name the server reports (session.agentName).
@@ -180,11 +196,16 @@ export function mergeSlashCommands(...lists: SlashCommand[][]): SlashCommand[] {
   return out
 }
 
+// A built-in's description in English, matched in any language: the words
+// the agent itself shows
+const ENGLISH: Record<string, string> = en
+
 // Names starting with the query first, then those holding it in the name or
 // the description; each group keeps the list's order.
 export function filterSlashCommands(
   commands: SlashCommand[],
   query: string,
+  t: Translate<MessageKey>,
 ): SlashCommand[] {
   const q = query.toLowerCase()
   if (!q) return commands
@@ -195,7 +216,10 @@ export function filterSlashCommands(
     if (name.startsWith(q)) prefix.push(c)
     else if (
       name.includes(q) ||
-      (c.description ?? '').toLowerCase().includes(q)
+      [
+        commandDescription(c, t),
+        c.descriptionKey && ENGLISH[c.descriptionKey],
+      ].some((d) => d?.toLowerCase().includes(q))
     ) {
       rest.push(c)
     }

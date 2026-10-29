@@ -49,6 +49,7 @@ import {
   applyPick,
   BUILTIN_COMMANDS,
   CUSTOM_TRIGGER,
+  commandDescription,
   mergeSlashCommands,
   type SlashCommand,
 } from '../utils/slash-commands'
@@ -427,7 +428,7 @@ export function CommandPalette({
       ...agentCommands.map((c) => ({
         key: `agent:${c.trigger ?? '/'}${c.name}`,
         label: `${c.trigger ?? '/'}${c.name}`,
-        description: c.description,
+        description: commandDescription(c, t),
         group: 'Agent',
         disabledReason: agentReason,
         run: () => runAgentCommand(c),

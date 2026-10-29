@@ -1,5 +1,6 @@
 import { Bot } from 'lucide-react'
 import { agentLabel, chatInputAgent } from '../chat-agents'
+import { useT } from '../i18n/i18n-context'
 import type { Session } from '../types/session'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { Button } from './ui/button'
@@ -74,11 +75,16 @@ interface Props {
 
 // Which agent receives a task's output: the panes running one
 export function AgentPanePicker({ isOpen, choices, onPick, onClose }: Props) {
+  const { t } = useT()
   return (
-    <Sheet isOpen={isOpen} onClose={onClose} title="Send to which agent?">
+    <Sheet
+      isOpen={isOpen}
+      onClose={onClose}
+      title={t('chat.agentPicker.title')}
+    >
       {choices.length === 0 ? (
         <p className="p-4 text-sm text-fg-muted">
-          No pane runs an agent that takes a message (Claude Code, Codex).
+          {t('chat.agentPicker.none')}
         </p>
       ) : (
         <ul className="flex flex-col gap-1 p-2">

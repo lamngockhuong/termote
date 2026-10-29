@@ -1,5 +1,6 @@
 import { Check, Copy, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { useT } from '../i18n/i18n-context'
 import { IconButton } from './ui/button'
 
 // Copies text from the Chat view (a code block, an answer) and shows how it
@@ -14,11 +15,12 @@ export function CopyButton({
   label: string
   className?: string
 }) {
+  const { t } = useT()
   const [state, setState] = useState<'idle' | 'done' | 'failed'>('idle')
   useEffect(() => {
     if (state === 'idle') return
-    const t = setTimeout(() => setState('idle'), 1500)
-    return () => clearTimeout(t)
+    const id = setTimeout(() => setState('idle'), 1500)
+    return () => clearTimeout(id)
   }, [state])
   const copy = () => {
     navigator.clipboard.writeText(text()).then(
@@ -27,7 +29,11 @@ export function CopyButton({
     )
   }
   const title =
-    state === 'done' ? 'Copied' : state === 'failed' ? 'Could not copy' : label
+    state === 'done'
+      ? t('chat.copy.done')
+      : state === 'failed'
+        ? t('chat.copy.failed')
+        : label
   const Icon = state === 'done' ? Check : state === 'failed' ? X : Copy
   return (
     <IconButton

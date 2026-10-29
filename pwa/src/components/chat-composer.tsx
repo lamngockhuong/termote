@@ -24,6 +24,9 @@ import {
   sendAgentMessage,
 } from '../hooks/use-mux-api'
 import { usePromptTemplates } from '../hooks/use-prompt-templates'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
 import { toAgentStatus } from '../types/session'
 import {
   isTextInsert,
@@ -80,68 +83,52 @@ interface Notice {
   terminal?: boolean
 }
 
-// What to tell the user when the server refuses a message.
-function noticeFor(err: unknown): Notice {
+// What to tell the user when the server refuses a message. The server's own
+// message (err.message) is shown as it wrote it.
+function noticeFor(err: unknown, t: Translate<MessageKey>): Notice {
   if (!(err instanceof AgentRequestError)) {
-    return {
-      variant: 'danger',
-      text: 'Could not reach the server; the message was not sent.',
-    }
+    return { variant: 'danger', text: t('chat.composer.unreachable') }
   }
+  const notSent = t('chat.composer.notSent', { message: err.message })
   switch (err.code) {
     case 'input_not_ready':
-      return {
-        variant: 'warning',
-        text: `Not sent: ${err.message}.`,
-        terminal: true,
-      }
+      return { variant: 'warning', text: notSent, terminal: true }
     case 'partial_paste':
       return {
         variant: 'danger',
-        text: 'Not sent: the input box holds part of this message. Clear it in the terminal before sending again.',
+        text: t('chat.composer.partialPaste'),
         terminal: true,
       }
     case 'uploads_unavailable':
-      return {
-        variant: 'warning',
-        text: 'Not sent: this server cannot take images.',
-      }
+      return { variant: 'warning', text: t('chat.composer.noImages') }
     case 'invalid_request':
       if (err.images?.length) {
-        return {
-          variant: 'warning',
-          text: 'Not sent: an image is no longer on the host. Remove it and attach it again.',
-        }
+        return { variant: 'warning', text: t('chat.composer.imageGone') }
       }
-      return { variant: 'danger', text: `Not sent: ${err.message}.` }
+      return { variant: 'danger', text: notSent }
     case 'paste_not_confirmed':
       return {
         variant: 'warning',
-        text: 'Not sent: the text did not show in the input box. It may be there now; check in the terminal.',
+        text: t('chat.composer.pasteNotConfirmed'),
         terminal: true,
       }
     case 'delivered_not_submitted':
       return {
         variant: 'danger',
-        text: 'The text was pasted but not submitted. Check the terminal before sending again.',
+        text: t('chat.composer.notSubmitted'),
         terminal: true,
       }
     case 'session_changed':
-      return {
-        variant: 'info',
-        text: 'The conversation changed; it has been reloaded. Send again if you still want to.',
-      }
+      return { variant: 'info', text: t('chat.composer.sessionChanged') }
     case 'text_too_long':
       return {
         variant: 'warning',
-        text: `Too long: the limit is ${Math.floor((err.limit ?? MAX_MESSAGE_BYTES) / 1024)} KB.`,
+        text: t('chat.composer.tooLong', {
+          size: Math.floor((err.limit ?? MAX_MESSAGE_BYTES) / 1024),
+        }),
       }
     default:
-      return {
-        variant: 'danger',
-        text: `Not sent: ${err.message}.`,
-        terminal: err.status === 409,
-      }
+      return { variant: 'danger', text: notSent, terminal: err.status === 409 }
   }
 }
 
@@ -156,6 +143,7 @@ export function ChatComposer({
   const paneId = session.paneId ?? ''
   const agent = agentLabel(session.agentName)
   const t = useAgentTranscript(session.paneId)
+  const { t: translate } = useT()
   const status = toAgentStatus(t.status)
   const p = useAgentPrompt(session.paneId, status)
   // Blocked with no dialog the server can read. Only once a dialog read came
@@ -242,9 +230,10 @@ export function ChatComposer({
         ? filterSlashCommands(
             commands.filter((c) => (c.trigger ?? '/') === listTrigger),
             query,
+            translate,
           )
         : [],
-    [listOpen, commands, query, listTrigger],
+    [listOpen, commands, query, listTrigger, translate],
   )
   // Every row of the list: the commands, then the templates
   const listRows = matches.length + templateMatches.length
@@ -334,7 +323,7 @@ export function ChatComposer({
     if (
       !plain &&
       message.trimStart().startsWith('!') &&
-      !window.confirm(`Run this as a shell command in ${agent}?`)
+      !window.confirm(translate('chat.composer.shellConfirm', { agent }))
     ) {
       return
     }
@@ -351,7 +340,7 @@ export function ChatComposer({
       if (queued) {
         setNotice({
           variant: 'info',
-          text: `Queued: ${agent} reads it when it is ready.`,
+          text: translate('chat.composer.queued', { agent }),
         })
       }
       setText('')
@@ -364,7 +353,7 @@ export function ChatComposer({
         showView(TERMINAL_VIEW_ID)
       }
     } catch (err) {
-      setNotice(noticeFor(err))
+      setNotice(noticeFor(err, translate))
       if (err instanceof AgentRequestError && err.code === 'session_changed') {
         t.refresh()
       }
@@ -559,9 +548,12 @@ export function ChatComposer({
   const announcement =
     notice?.text ??
     (p.prompt
-      ? `${agent} asks: ${p.prompt.title || 'a question'}`
+      ? translate('chat.composer.asks', {
+          agent,
+          title: p.prompt.title || translate('chat.composer.aQuestion'),
+        })
       : waiting
-        ? `${agent} is waiting for you in the terminal.`
+        ? translate('chat.prompt.waitingTerminal', { agent })
         : '')
   const live = (
     <p aria-live="polite" className="sr-only">
@@ -590,7 +582,7 @@ export function ChatComposer({
             if (!next) {
               setNotice({
                 variant: 'info',
-                text: 'The dialog closed before the answer was sent.',
+                text: translate('chat.composer.dialogClosed'),
               })
             }
           }}
@@ -610,7 +602,7 @@ export function ChatComposer({
     <>
       {uploadsOn && (
         <IconButton
-          aria-label="Attach image"
+          aria-label={translate('chat.composer.attach')}
           disabled={sending || images.full}
           onClick={attach}
         >
@@ -619,7 +611,7 @@ export function ChatComposer({
       )}
       {templatesOn && (
         <IconButton
-          aria-label="Templates"
+          aria-label={translate('chat.composer.templates')}
           aria-haspopup="dialog"
           disabled={sending}
           onClick={() => setPickerOpen(true)}
@@ -632,7 +624,7 @@ export function ChatComposer({
   const box = (
     <textarea
       ref={boxRef}
-      aria-label={`Message to ${agent}`}
+      aria-label={translate('chat.composer.messageTo', { agent })}
       aria-describedby={
         [!isMobile && hintId, tooLong && limitId].filter(Boolean).join(' ') ||
         undefined
@@ -653,13 +645,13 @@ export function ChatComposer({
       }}
       onKeyDown={onKeyDown}
       onPaste={onPaste}
-      placeholder="Message"
+      placeholder={translate('chat.composer.placeholder')}
       className="block w-full min-w-0 resize-none border-0 bg-transparent px-3 pt-2.5 pb-1 text-[15px] text-fg placeholder:text-fg-subtle focus:outline-hidden"
     />
   )
   const sendButton = (
     <IconButton
-      aria-label="Send"
+      aria-label={translate('chat.composer.send')}
       variant="primary"
       disabled={!canSend}
       onClick={send}
@@ -695,8 +687,8 @@ export function ChatComposer({
       />
       <ConfirmDialog
         isOpen={confirming !== null}
-        title={`Exit ${agent}?`}
-        confirmLabel="Exit"
+        title={translate('chat.composer.exitTitle', { agent })}
+        confirmLabel={translate('chat.composer.exit')}
         destructive
         onCancel={() => setConfirming(null)}
         onConfirm={() => {
@@ -705,7 +697,7 @@ export function ChatComposer({
           submit(confirming as string, true)
         }}
       >
-        This ends the agent in this pane; the app goes back to the terminal.
+        {translate('chat.composer.exitBody')}
       </ConfirmDialog>
       {listOpen && (
         <SlashCommandList
@@ -721,8 +713,10 @@ export function ChatComposer({
       )}
       {tooLong && (
         <p id={limitId} className="px-3 pt-2 text-[12px] text-danger">
-          {Math.ceil(bytes / 1024)} KB of {MAX_MESSAGE_BYTES / 1024} KB: shorten
-          the message to send it.
+          {translate('chat.composer.size', {
+            used: Math.ceil(bytes / 1024),
+            max: MAX_MESSAGE_BYTES / 1024,
+          })}
         </p>
       )}
       <ChatAttachments
@@ -754,7 +748,7 @@ export function ChatComposer({
                 id={hintId}
                 className="whitespace-nowrap text-[12px] text-fg-subtle"
               >
-                Ctrl+Enter to send
+                {translate('chat.composer.hint')}
               </span>
             )}
             {sendButton}
