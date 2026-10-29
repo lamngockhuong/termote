@@ -135,6 +135,15 @@ curl -fsSL https://termote.ohnice.app/install.sh | sh
 termote start
 ```
 
+**Homebrew (macOS, Linux):**
+
+```bash
+brew install lamngockhuong/tap/termote
+termote start
+```
+
+通过 Homebrew 安装的版本用 brew 更新，而不是 `termote update`：`brew upgrade termote && termote restart`。卸载用 `termote uninstall && brew uninstall termote`。
+
 **Windows（PowerShell）：**
 
 ```powershell
