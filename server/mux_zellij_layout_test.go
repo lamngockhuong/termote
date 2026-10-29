@@ -343,6 +343,20 @@ func TestZellijRealPaneLayout(t *testing.T) {
 	if p, _ := zellijFindPane(ctx, "main", n2); !p.IsFullscreen {
 		t.Error("zoom on left the pane small")
 	}
+	// A stream on the zoomed pane leaves it zoomed (keepZellijZoom)
+	for try := 1; ; try++ {
+		s, err := m.Attach(ctx, second, Size{Cols: 90, Rows: 28})
+		if err == nil {
+			s.Close()
+			break
+		}
+		if !errors.Is(err, errZellijBusy) || try == 5 {
+			t.Fatal(err)
+		}
+	}
+	if p, _ := zellijFindPane(ctx, "main", n2); !p.IsFullscreen {
+		t.Error("a stream on the zoomed pane ended the zoom")
+	}
 	if err := m.ZoomPane(ctx, first, ZoomToggle); err != nil {
 		t.Fatal(err)
 	}
@@ -565,4 +579,56 @@ func TestZellijWriteToPaneHidden(t *testing.T) {
 	if err := splitMux(term).writeToPane(ctx, "main", 1, []byte("x")); !errors.Is(err, gone) {
 		t.Errorf("keys refused by the PTY = %v", err)
 	}
+}
+
+func TestZellijZoomed(t *testing.T) {
+	pane := func(id, tab, cols int, fs bool) zellijPaneInfo {
+		return zellijPaneInfo{ID: id, TabID: tab, ContentCols: cols, IsFullscreen: fs}
+	}
+	plugin := zellijPaneInfo{ID: 1, IsPlugin: true, ContentCols: 200, IsFullscreen: true}
+	for _, tc := range []struct {
+		name  string
+		panes []zellijPaneInfo
+		want  bool
+	}{
+		{"fills its tab", []zellijPaneInfo{pane(1, 0, 100, true), pane(2, 0, 50, false)}, true},
+		// Just after a toggle the listing can flag the hidden pane too
+		{"another pane flagged too", []zellijPaneInfo{pane(1, 0, 100, true), pane(2, 0, 50, true)}, true},
+		{"flagged but not the widest", []zellijPaneInfo{pane(1, 0, 50, true), pane(2, 0, 100, true)}, false},
+		{"as wide as another", []zellijPaneInfo{pane(1, 0, 50, true), pane(2, 0, 50, false)}, false},
+		{"not flagged", []zellijPaneInfo{pane(1, 0, 100, false), pane(2, 0, 50, false)}, false},
+		{"another tab is wider", []zellijPaneInfo{pane(1, 0, 100, true), pane(2, 1, 200, false)}, true},
+		{"a plugin with the same id", []zellijPaneInfo{plugin, pane(2, 0, 50, false)}, false},
+		{"missing", []zellijPaneInfo{pane(2, 0, 50, true)}, false},
+	} {
+		if got := zellijZoomed(tc.panes, 1); got != tc.want {
+			t.Errorf("%s: zoomed = %v", tc.name, got)
+		}
+	}
+}
+
+// keepZellijZoom zooms the pane again only when its tab is listed with no
+// fullscreen pane left, so a lagging listing never toggles a zoom off.
+func TestKeepZellijZoom(t *testing.T) {
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name   string
+		panes  string
+		toggle bool
+	}{
+		{"zoom ended", zellijPanesJSON(), true},
+		{"still zoomed", zellijPanesJSON(1), false},
+		{"another pane zoomed", zellijPanesJSON(0), false},
+		{"pane gone", zellijOnlyPane0, false},
+		{"listing failed", "1\n", false},
+	} {
+		log := useFakeZellij(t, map[string]string{"--version": fakeZellijVersion, "list-panes": tc.panes})
+		keepZellijZoom(ctx, "main", 1)
+		if got := strings.Contains(log(), "action toggle-fullscreen --pane-id terminal_1\n"); got != tc.toggle {
+			t.Errorf("%s: toggled = %v: %q", tc.name, got, log())
+		}
+	}
+	// A toggle that fails is logged only
+	useFakeZellij(t, map[string]string{"--version": fakeZellijVersion, "list-panes": zellijPanesJSON(), "toggle-fullscreen": "1\n"})
+	keepZellijZoom(ctx, "main", 1)
 }

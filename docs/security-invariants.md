@@ -145,7 +145,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   501): each action runs once, never through `zellijRepeat`, on the `terminal_N` the listing
   confirmed. Zoom and swap read the pane and act under the session's slot, so no client
   positioning runs in between (its `focus-pane-id` onto another pane of a zoomed tab ends the
-  zoom, and `move-pane` in a zoomed tab moves nothing). Zoom is `toggle-fullscreen --pane-id` only when the listing's `is_fullscreen`
+  zoom, and `move-pane` in a zoomed tab moves nothing). A client Termote attaches to a zoomed
+  pane can land on another pane of the tab, which ends the zoom: once it is placed, a tab listed
+  with no fullscreen pane left gets `toggle-fullscreen --pane-id` on that pane again (a failure is
+  logged only). Zoom is `toggle-fullscreen --pane-id` only when the listing's `is_fullscreen`
   differs (another fullscreen pane of the tab put back first), checked again after for up to 1 s,
   as the listing can lag the toggle (503 `busy` otherwise, never toggled twice); Zellij moves every client of the tab onto that pane. Swap is `move-pane` (next) or
   `move-pane-backwards` (prev) `--pane-id`: it turns the panes around on screen, the strip keeps

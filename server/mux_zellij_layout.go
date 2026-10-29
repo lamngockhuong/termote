@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"log"
 	"slices"
 	"time"
 )
@@ -75,6 +76,42 @@ func (m *zellijMux) lockedLayoutPane(ctx context.Context, paneID string) (string
 		return "", zellijPaneInfo{}, nil, err
 	}
 	return session, p, unlock, nil
+}
+
+// zellijZoomed reports whether terminal_n fills its tab: listed
+// is_fullscreen and wider than every other terminal pane of the tab. Just
+// after a toggle the listing can flag another pane of the tab as well.
+func zellijZoomed(panes []zellijPaneInfo, n int) bool {
+	i := slices.IndexFunc(panes, func(p zellijPaneInfo) bool { return !p.IsPlugin && p.ID == n })
+	if i < 0 || !panes[i].IsFullscreen {
+		return false
+	}
+	p := panes[i]
+	return !slices.ContainsFunc(panes, func(o zellijPaneInfo) bool {
+		return !o.IsPlugin && o.TabID == p.TabID && o.ID != p.ID && o.ContentCols >= p.ContentCols
+	})
+}
+
+// keepZellijZoom zooms terminal_n again when a client attached while it was
+// zoomed landed on another pane of its tab, which ends the zoom. Only a tab
+// listed with no fullscreen pane left is zoomed again, so a listing that lags
+// never toggles a zoom off. A failure is logged only: the client is placed,
+// the zoom is lost as Zellij left it.
+func keepZellijZoom(ctx context.Context, session string, n int) {
+	panes, err := zellijPanes(ctx, session)
+	if err != nil {
+		return
+	}
+	i := slices.IndexFunc(panes, func(p zellijPaneInfo) bool { return !p.IsPlugin && p.ID == n })
+	if i < 0 || slices.ContainsFunc(panes, func(o zellijPaneInfo) bool {
+		return !o.IsPlugin && o.TabID == panes[i].TabID && o.IsFullscreen
+	}) {
+		return
+	}
+	log.Printf("zellij: an attaching client ended the zoom of terminal_%d, zooming it again", n)
+	if _, err := zellijAction(ctx, session, "toggle-fullscreen", "--pane-id", zellijTerminal(n)); err != nil {
+		log.Printf("zellij: zooming terminal_%d again: %v", n, err)
+	}
 }
 
 // zellijLayoutAction runs one action on terminal_n; a failure while the pane
