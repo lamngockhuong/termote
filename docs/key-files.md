@@ -114,7 +114,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/code-editor.tsx`              | Desktop editor (CodeMirror, lazy chunk), Vim mode              |
 | `pwa/src/utils/cm-languages.ts`                   | The desktop editor's languages, one chunk each                 |
 | `pwa/src/components/new-file-dialog.tsx`          | Files: asks for a new file's path, creates it, says why not    |
-| `pwa/src/components/group-dialog.tsx`             | New tmux session / workspace: name, directory, why refused     |
+| `pwa/src/components/group-dialog.tsx`             | New group: name, directory, why refused, recent directories    |
 | `pwa/src/components/worktree-dialog.tsx`          | New/Open worktree, the Remove confirmations, why refused       |
 | `pwa/src/utils/git-ref.ts`                        | Branch names the server accepts (validBranchName)              |
 | `pwa/src/components/file-search.tsx`              | Files: find a file by name under the root, results, switch     |
@@ -291,6 +291,8 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/hooks/use-signins.ts`                    | Signed-in browsers list and revoke calls                       |
 | `server/template_store.go`                        | Prompt templates (`<stateDir>/templates`), limits, lock        |
 | `server/template_routes.go`                       | `/api/mux/templates*`: list, save, delete, import              |
+| `server/recent_group_store.go`                    | Recent groups (`<stateDir>/recent-groups`), merge, set aside   |
+| `server/recent_group_routes.go`                   | `/api/mux/recent-groups*`: list (deny filter), remove          |
 | `server/testdata/template-hidden-chars.json`      | Hidden-character cases shared by the PWA and the server        |
 | `pwa/src/hooks/use-prompt-templates.ts`           | Templates read for this server, and the writes                 |
 | `pwa/src/utils/prompt-templates.ts`               | Variables, fill, checks, export and import files               |

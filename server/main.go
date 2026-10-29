@@ -81,6 +81,7 @@ func runServe(args []string) int {
 	cfg.PushDir = filepath.Join(c.stateDir(), "push")
 	cfg.DevicesDir = filepath.Join(c.stateDir(), "devices")
 	cfg.TemplatesDir = filepath.Join(c.stateDir(), "templates")
+	cfg.RecentGroupsDir = c.recentGroupsDir()
 	cfg.TasksDir = filepath.Join(c.stateDir(), "tasks")
 	cfg.InstanceDir = c.stateDir()
 	if cfg.LocalSocketDir != "" {

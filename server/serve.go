@@ -85,6 +85,9 @@ type serveConfig struct {
 	// TemplatesDir holds the prompt templates every device shares; empty
 	// disables them.
 	TemplatesDir string
+	// RecentGroupsDir holds the groups created last with their directories,
+	// shared by every full device; empty disables them.
+	RecentGroupsDir string
 	// TasksDir holds the tasks the user defined, shared by every device;
 	// empty disables them.
 	TasksDir string
@@ -532,7 +535,18 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 	agent.registerCommandsRoute(mux, files, allowed)
 	registerTaskRoutes(mux, files, userTasks, agent.input)
 	_, agent.tasks = m.(taskMux)
-	registerGroupRoutes(mux, m, files.deny)
+	var recent *recentGroupStore
+	if cfg.RecentGroupsDir != "" {
+		var err error
+		if recent, err = newRecentGroupStore(cfg.RecentGroupsDir); err != nil {
+			log.Printf("recent groups disabled: %v", err)
+		}
+	}
+	agent.recentGroups = recent != nil
+	// The same deny list: a group never starts in a denied dir, and none is
+	// suggested.
+	registerGroupRoutes(mux, m, files.deny, recent)
+	registerRecentGroupRoutes(mux, recent, files.deny, allowed)
 	registerPaneLayoutRoutes(mux, m, files.deny)
 	registerReorderRoutes(mux, m)
 	registerWorktreeRoutes(mux, m, files.git, allowed)

@@ -143,6 +143,11 @@ export default {
   'shell.group.directory': 'Directory (an absolute path on the host)',
   'shell.group.home': 'Home directory',
   'shell.group.create': 'Create',
+  'shell.group.recent': 'Recent',
+  'shell.group.useRecent': 'Use {name} in {cwd}',
+  'shell.group.removeRecent': 'Remove {name} from recent',
+  'shell.group.recentRemoveFailed': 'Could not remove it. Try again.',
+  'shell.group.recentMore': 'Show {n} more',
   // The view switch (components/ui/view-switcher.tsx, ui/view-menu.tsx)
   'shell.view': 'View',
   'shell.view.current': 'View: {name}',

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -981,6 +982,9 @@ func (c *cli) cmdUninstall(args []string) error {
 		c.infof("Kept the config in %s and the logs in %s; delete them to forget everything", c.configDir(), c.stateDir())
 		if isDir(c.trashDir()) {
 			c.infof("Kept the files deleted from the Files view in %s; --purge removes them", c.trashDir())
+		}
+		if dir := c.recentGroupsDir(); fileExists(filepath.Join(dir, recentGroupsFile)) {
+			c.infof("Kept the directories of the groups created last in %s; --purge removes them", dir)
 		}
 	}
 	return nil

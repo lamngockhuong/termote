@@ -5673,7 +5673,7 @@ describe('App — group actions', () => {
   const createGroup = vi.fn(async () => {})
   const renameGroup = vi.fn(async () => {})
   const closeGroup = vi.fn(async () => {})
-  const withGroups = (backend = 'tmux') => {
+  const withGroups = (backend = 'tmux', caps: Record<string, unknown> = {}) => {
     const base = mockUseLocalSessions()
     const tabs = [tab('0', 'main'), tab('1', 'main'), tab('$3:0', '$3')]
     mockUseLocalSessions.mockReturnValue({
@@ -5693,6 +5693,7 @@ describe('App — group actions', () => {
           clientSideSelect: backend === 'herdr',
           copyMode: true,
           groups: true,
+          ...caps,
         },
       },
     } as any)
@@ -5747,6 +5748,38 @@ describe('App — group actions', () => {
     })
     expect(createGroup).toHaveBeenCalledWith('api', '', expect.any(Function))
     expect(screen.queryByText('New tmux session')).toBeNull()
+  })
+
+  it('lists the recent groups, an open group name taken', async () => {
+    withGroups('tmux', { recentGroups: true })
+    const realFetch = globalThis.fetch
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation((input, init) =>
+        String(input) === '/api/mux/recent-groups'
+          ? Promise.resolve(
+              new Response(
+                JSON.stringify({
+                  groups: [
+                    { id: '0000000000000001', name: 'work', cwd: '/srv/w' },
+                  ],
+                  readOnly: false,
+                }),
+                { headers: { 'Content-Type': 'application/json' } },
+              ),
+            )
+          : realFetch(input, init),
+      )
+    try {
+      render(<App />)
+      fireEvent.click(await screen.findByText('GroupNew'))
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Use work in /srv/w' }),
+      )
+      expect(screen.getByLabelText('Name')).toHaveValue('work-2')
+    } finally {
+      fetchSpy.mockRestore()
+    }
   })
 
   it('closes the sessions sheet once a group is made on mobile', async () => {

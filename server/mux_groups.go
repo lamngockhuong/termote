@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -37,15 +38,18 @@ var (
 type groupAPI struct {
 	m    Mux
 	deny []string
-	mu   sync.Mutex
+	// recent keeps each group created with a directory; nil keeps none.
+	recent *recentGroupStore
+	mu     sync.Mutex
 }
 
 // registerGroupRoutes mounts the group routes. deny is the files routes'
 // deny list (system dirs, termote's own dirs, both as given and resolved): a
-// new group never starts in one of them. Patterns carry no method so a wrong
+// new group never starts in one of them. recent, when not nil, is told of
+// each group created with a directory. Patterns carry no method so a wrong
 // one gets a JSON 405.
-func registerGroupRoutes(mux *http.ServeMux, m Mux, deny []string) {
-	g := &groupAPI{m: m, deny: deny}
+func registerGroupRoutes(mux *http.ServeMux, m Mux, deny []string, recent *recentGroupStore) {
+	g := &groupAPI{m: m, deny: deny, recent: recent}
 	mux.HandleFunc("/api/mux/groups", g.handleCreate)
 	mux.HandleFunc("/api/mux/groups/{id}", g.handleGroup)
 }
@@ -76,11 +80,23 @@ func (g *groupAPI) handleCreate(w http.ResponseWriter, r *http.Request) {
 		groupError(w, g.m, "new group", errGroupsBusy)
 		return
 	}
-	defer g.mu.Unlock()
-	id, err := g.m.NewGroup(ctx, body.Name, cwd)
+	// Released before the recent groups are written (their file lock, held
+	// by another process, must not hold up another group change), and on a
+	// panic in the backend too.
+	id, err := func() (string, error) {
+		defer g.mu.Unlock()
+		return g.m.NewGroup(ctx, body.Name, cwd)
+	}()
 	if err != nil {
 		groupError(w, g.m, "new group", err)
 		return
+	}
+	// The directory as typed is what the list shows; an empty one (home)
+	// is not suggested. A failed write never fails the group.
+	if g.recent != nil && strings.TrimSpace(body.Cwd) != "" {
+		if err := g.recent.record(body.Name, filepath.Clean(body.Cwd), cwd); err != nil {
+			log.Printf("recent groups: %v", err)
+		}
 	}
 	jsonOK(w, map[string]any{"ok": true, "id": id})
 }

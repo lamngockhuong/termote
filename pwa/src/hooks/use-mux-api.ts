@@ -123,6 +123,10 @@ export interface MuxSnapshot {
     // The prompt templates can be read, and changed by a full client
     // (/api/mux/templates*): the server's state dir holds them.
     templates?: boolean
+    // The groups created last, with their directories, can be listed and
+    // removed (/api/mux/recent-groups*): a full client, groups can be
+    // created and the server's state dir keeps them.
+    recentGroups?: boolean
     // A pane's package.json scripts, Makefile targets and the user's tasks
     // can be listed and run in a tab (/panes/{id}/tasks*): a full client.
     tasks?: boolean
@@ -533,6 +537,34 @@ export async function moveGroup(id: string, index: number): Promise<void> {
     { index },
     MOVE_REQUEST_TIMEOUT_MS,
   )
+}
+
+// A group created with a directory, as the server recorded it: cwd is the
+// directory as typed.
+export interface RecentGroup {
+  id: string
+  name: string
+  cwd: string
+}
+
+// The groups created last, newest first. readOnly: a newer Termote saved
+// them, so none can be removed.
+export async function listRecentGroups(): Promise<{
+  groups: RecentGroup[]
+  readOnly: boolean
+}> {
+  const res = await fetch(`${API_BASE}/recent-groups`, {
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res)
+  const data = await res.json()
+  return { groups: data.groups ?? [], readOnly: data.readOnly === true }
+}
+
+// Removes one from the list on every device; a refusal throws RequestError
+// (unknown_recent when another device removed it already).
+export async function removeRecentGroup(id: string): Promise<void> {
+  await groupWrite('DELETE', `/recent-groups/${encodeURIComponent(id)}`)
 }
 
 // A create or remove answers once git is done: the server waits up to 5s

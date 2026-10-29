@@ -23,6 +23,7 @@ func installedCLI(t *testing.T, goos string) *testCLI {
 	writeFile(t, filepath.Join(tc.stateDir(), "termote.log"), "log")
 	writeFile(t, filepath.Join(tc.uploadsDir(), "0123.png"), "png")
 	writeFile(t, filepath.Join(tc.trashDir(), strings.Repeat("a", 32)), "deleted")
+	writeFile(t, filepath.Join(tc.recentGroupsDir(), recentGroupsFile), `{"v":1,"groups":[]}`)
 	return tc
 }
 
@@ -45,7 +46,8 @@ func TestUninstallRemovesUploadsKeepsConfig(t *testing.T) {
 			}
 			out := tc.stdout.String()
 			if !strings.Contains(out, "Removed the uploaded images") || !strings.Contains(out, "Kept the config") ||
-				!strings.Contains(out, "Kept the files deleted from the Files view in "+tc.trashDir()) {
+				!strings.Contains(out, "Kept the files deleted from the Files view in "+tc.trashDir()) ||
+				!strings.Contains(out, "Kept the directories of the groups created last in "+tc.recentGroupsDir()) {
 				t.Fatalf("output:\n%s", out)
 			}
 			// Without a trash, the empty cache/termote dir goes with the

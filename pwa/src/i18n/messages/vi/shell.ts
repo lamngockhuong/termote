@@ -125,6 +125,11 @@ export default {
   'shell.group.directory': 'Thư mục (đường dẫn tuyệt đối trên máy chủ)',
   'shell.group.home': 'Thư mục home',
   'shell.group.create': 'Tạo',
+  'shell.group.recent': 'Gần đây',
+  'shell.group.useRecent': 'Dùng {name} ở {cwd}',
+  'shell.group.removeRecent': 'Xoá {name} khỏi danh sách gần đây',
+  'shell.group.recentRemoveFailed': 'Chưa xoá được. Thử lại.',
+  'shell.group.recentMore': 'Xem thêm {n} mục',
 
   'shell.view': 'Cách xem',
   'shell.view.current': 'Cách xem: {name}',
