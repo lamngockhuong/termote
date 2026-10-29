@@ -87,7 +87,17 @@ Cho phép: **Icon Copy** → di chuyển → **Space** → chọn → **Enter** 
     termote start
     ```
   </TabItem>
+  <TabItem label="Homebrew (macOS, Linux)">
+
+    ```bash
+    brew install lamngockhuong/tap/termote
+    termote start
+    ```
+  </TabItem>
 </Tabs>
+
+Bản cài bằng Homebrew được cập nhật bằng `brew upgrade termote && termote restart` thay cho `termote update`, và gỡ bằng `termote uninstall && brew uninstall termote`. Mỗi máy
+chỉ nên giữ một bản cài: bản của trình cài đặt và bản của brew đăng ký cùng một service.
 
 Sau đó mở http://127.0.0.1:7680 (Windows: http://127.0.0.1:7690). Cách cố định phiên bản và vị trí các file nằm ở
 trang [Bắt đầu](/vi/getting-started/).

@@ -34,6 +34,18 @@ curl -fsSL https://termote.ohnice.app/install.sh | sh      # Linux, macOS
 irm https://termote.ohnice.app/install.ps1 | iex           # Windows
 ```
 
+```bash
+brew install lamngockhuong/tap/termote                     # Homebrew: macOS, Linux
+```
+
+Homebrew installs the same release archives from the
+[`lamngockhuong/homebrew-tap`](https://github.com/lamngockhuong/homebrew-tap) formula, which each
+stable release updates. Then run `termote start`; the service runs
+`<prefix>/opt/termote/bin/termote`, which `brew upgrade` keeps. Update with
+`brew upgrade termote && termote restart` (`termote update` refuses a brew install and says
+so), and remove it with `termote uninstall && brew uninstall termote`. Keep one install per
+machine, the installer's or brew's: both register the same service, and the last `start` wins.
+
 The installer needs only `curl`, `tar` and `sha256sum`/`shasum` (Windows: PowerShell) — no
 sudo/admin. It downloads the newest stable 1.x release for your OS/arch, verifies its
 `.sha256` (mandatory), lays it out under a versioned install root and prints `termote start` —
@@ -104,7 +116,8 @@ then install 1.0 fresh with the command above.
 
 All services run natively (no container): termote on port 7680 (7690 on Windows) serving the
 PWA, the terminal stream and the API. There is nothing else to install for the terminal
-transport — termote opens it itself.
+transport — termote opens it itself. A Homebrew install updates with brew, not `termote update`
+(see Installing).
 
 **Linux:**
 

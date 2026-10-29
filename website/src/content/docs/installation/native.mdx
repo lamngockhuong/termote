@@ -87,7 +87,17 @@ This enables: **Copy icon** → navigate → **Space** → select → **Enter** 
     termote start
     ```
   </TabItem>
+  <TabItem label="Homebrew (macOS, Linux)">
+
+    ```bash
+    brew install lamngockhuong/tap/termote
+    termote start
+    ```
+  </TabItem>
 </Tabs>
+
+A Homebrew install updates with `brew upgrade termote && termote restart` instead of `termote update`, and is removed with `termote uninstall && brew uninstall termote`. Keep one
+install per machine: the installer's and brew's register the same service.
 
 Then open http://127.0.0.1:7680 (Windows: http://127.0.0.1:7690). Pinning a version and the file locations are
 covered in [Getting Started](/getting-started/).

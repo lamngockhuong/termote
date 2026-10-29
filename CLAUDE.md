@@ -29,7 +29,7 @@ installers, dev shims, hooks), `tests/` (shell/PowerShell tests), `herdr-plugin/
 
 ## Deployment Modes
 
-Termote 1.0 has a single install path: two commands, then `termote start` (native) or
+Termote 1.0 installs with the online installer (or Homebrew on macOS and Linux), then `termote start` (native) or
 `termote container up` (container, podman/docker). See
 [`docs/getting-started.md`](docs/getting-started.md) and
 [`docs/deployment-guide.md`](docs/deployment-guide.md) for the full flag/config reference.
@@ -37,6 +37,8 @@ Termote 1.0 has a single install path: two commands, then `termote start` (nativ
 ```bash
 # Linux, macOS
 curl -fsSL https://termote.ohnice.app/install.sh | sh
+brew install lamngockhuong/tap/termote     # or Homebrew (macOS, Linux); update with
+                                           # brew upgrade termote && termote restart
 termote start                              # native: host tools (Claude Code, git, ...)
 termote start --lan                        # native, LAN accessible
 termote start --no-auth                    # native, without auth (local dev only)
@@ -201,8 +203,9 @@ The `update` command:
   (`server/release_sign.go`, equal to the PEM in `install.sh`, a test checks)
 - Restarts the service, waits until health reports the new version and keeps answering
 - Otherwise switches `current` back to the previous version and restarts it (both kept)
-- Preserves config and service registration; refuses in a git checkout or for a binary not
-  installed by the installer, and when the registered service (systemd `ExecStart`, launchd
+- Preserves config and service registration; refuses in a git checkout, for a Homebrew install
+  (it names `brew upgrade termote && termote restart`; the service runs `<prefix>/opt/termote/bin/termote`),
+  or for a binary not installed by the installer, and when the registered service (systemd `ExecStart`, launchd
   `ProgramArguments`) runs another binary than this install's `current` one (a checkout's dev
   shim registered it); warns on downgrade, skips reinstall if already on target version
 - Without `--version`, never goes from a signed release (1.10.0+) back to an unsigned one: whoever
