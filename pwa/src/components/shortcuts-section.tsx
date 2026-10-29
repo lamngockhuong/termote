@@ -5,6 +5,7 @@ import {
   setShortcut,
   useKeymap,
 } from '../hooks/use-shortcuts'
+import { useT } from '../i18n/i18n-context'
 import type { AppCommand } from '../utils/app-commands'
 import { isApplePlatform } from '../utils/platform'
 import {
@@ -26,6 +27,7 @@ const MODIFIER_CODE = /^(Shift|Control|Alt|Meta|OS)(Left|Right)?$/
 // key, which the user can change, remove or reset, and whether it also runs
 // while the terminal has focus. Kept on this device.
 export function ShortcutsSection({ commands }: { commands: AppCommand[] }) {
+  const { t } = useT()
   const apple = isApplePlatform()
   const keymap = useKeymap(commands)
   const conflicts = findConflicts(keymap)
@@ -53,11 +55,12 @@ export function ShortcutsSection({ commands }: { commands: AppCommand[] }) {
         return
       }
       const chord = chordFromEvent(e, apple)
+      const refused = chord && isRefusedChord(chord, apple)
       const why = !chord
         ? keyFromCode(e.code) || !plain
-          ? `Use ${apple ? '⌘' : 'Ctrl'} with a key`
-          : 'This key cannot be used'
-        : isRefusedChord(chord, apple)
+          ? t('settings.shortcuts.useMod', { mod: apple ? '⌘' : 'Ctrl' })
+          : t('settings.shortcuts.unusable')
+        : refused && t(refused)
       if (!chord || why) {
         setProblem({ id: recording, text: why as string })
         return
@@ -68,7 +71,7 @@ export function ShortcutsSection({ commands }: { commands: AppCommand[] }) {
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [recording, apple])
+  }, [recording, apple, t])
 
   const q = filter.trim().toLowerCase()
   const shown = commands.filter((c) => {
@@ -85,18 +88,17 @@ export function ShortcutsSection({ commands }: { commands: AppCommand[] }) {
   return (
     <div className="flex flex-col gap-2 px-4 py-2.5 ui-native:bg-surface-raised">
       <p className="m-0 text-[12px] text-fg-muted">
-        Kept on this device. A key the browser handles first (such as{' '}
-        {formatChord('Mod+W', apple)}) never reaches the app.
+        {t('settings.shortcuts.intro', { key: formatChord('Mod+W', apple) })}
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <label htmlFor={filterId} className="sr-only">
-          Filter shortcuts
+          {t('settings.shortcuts.filter')}
         </label>
         <input
           id={filterId}
           type="search"
           value={filter}
-          placeholder="Filter by name or key"
+          placeholder={t('settings.shortcuts.filterPlaceholder')}
           onChange={(e) => setFilter(e.target.value)}
           className="h-9 min-w-0 flex-1 rounded-control border border-border bg-bg px-2 text-[13px] text-fg"
         />
@@ -106,11 +108,13 @@ export function ShortcutsSection({ commands }: { commands: AppCommand[] }) {
           disabled={!custom}
           onClick={() => setConfirmReset(true)}
         >
-          Reset all shortcuts
+          {t('settings.shortcuts.resetAll')}
         </Button>
       </div>
       {!shown.length && (
-        <p className="m-0 text-[13px] text-fg-muted">No shortcut matches</p>
+        <p className="m-0 text-[13px] text-fg-muted">
+          {t('settings.shortcuts.none')}
+        </p>
       )}
       {categories.map((category) => (
         <section key={category} aria-label={category}>
@@ -144,8 +148,8 @@ export function ShortcutsSection({ commands }: { commands: AppCommand[] }) {
       ))}
       <ConfirmDialog
         isOpen={confirmReset}
-        title="Reset all shortcuts?"
-        confirmLabel="Reset all"
+        title={t('settings.shortcuts.resetAllTitle')}
+        confirmLabel={t('settings.shortcuts.resetAllConfirm')}
         destructive
         onConfirm={() => {
           resetAllShortcuts()
@@ -153,7 +157,7 @@ export function ShortcutsSection({ commands }: { commands: AppCommand[] }) {
         }}
         onCancel={() => setConfirmReset(false)}
       >
-        Every command gets its default key back.
+        {t('settings.shortcuts.resetAllBody')}
       </ConfirmDialog>
     </div>
   )
@@ -178,12 +182,13 @@ function ShortcutRow({
   replacedBy?: string
   onRecord: () => void
 }) {
+  const { t } = useT()
   const titleId = useId()
   const key = resolved?.key
   const canTerminal = !!key && canRunInTerminal(key, apple)
   const notes = [
-    ...conflicts.map((t) => `Also used by ${t}`),
-    replacedBy && `Replaced by your shortcut for ${replacedBy}`,
+    ...conflicts.map((name) => t('settings.shortcuts.alsoUsedBy', { name })),
+    replacedBy && t('settings.shortcuts.replacedBy', { name: replacedBy }),
     problem,
   ].filter(Boolean) as string[]
   const noteId = useId()
@@ -195,51 +200,59 @@ function ShortcutRow({
       <kbd
         className={`rounded-control border px-1.5 font-ui text-[12px] ${conflicts.length ? 'border-warning text-warning' : 'border-border text-fg-muted'}`}
       >
-        {key ? formatChord(key, apple) : 'No key'}
+        {key ? formatChord(key, apple) : t('settings.shortcuts.noKey')}
       </kbd>
       <Button
         variant="secondary"
         size="sm"
         aria-describedby={notes.length ? noteId : undefined}
-        aria-label={`Change the key of ${command.title}`}
+        aria-label={t('settings.shortcuts.changeName', { name: command.title })}
         onClick={onRecord}
       >
-        {recording ? 'Press keys…' : 'Change'}
+        {recording
+          ? t('settings.shortcuts.pressKeys')
+          : t('settings.shortcuts.change')}
       </Button>
       {key && (
         <Button
           variant="ghost"
           size="sm"
-          aria-label={`Remove the key of ${command.title}`}
+          aria-label={t('settings.shortcuts.removeName', {
+            name: command.title,
+          })}
           onClick={() => setShortcut(command.id, { key: null })}
         >
-          Remove
+          {t('settings.shortcuts.remove')}
         </Button>
       )}
       {resolved?.custom && (
         <Button
           variant="ghost"
           size="sm"
-          aria-label={`Reset the key of ${command.title}`}
+          aria-label={t('settings.shortcuts.resetName', {
+            name: command.title,
+          })}
           onClick={() => resetShortcut(command.id)}
         >
-          Reset
+          {t('settings.shortcuts.reset')}
         </Button>
       )}
       <span className="flex items-center gap-1 text-[12px] text-fg-muted">
         <Switch
-          label={`${command.title}: also in the terminal`}
+          label={t('settings.shortcuts.inTerminalName', {
+            name: command.title,
+          })}
           checked={!!resolved?.inTerminal}
           disabled={!canTerminal}
           onChange={(v) => setShortcut(command.id, { inTerminal: v })}
         />
         {key && !canTerminal
-          ? 'The terminal uses this key'
-          : 'Also in the terminal'}
+          ? t('settings.shortcuts.terminalUses')
+          : t('settings.shortcuts.inTerminal')}
       </span>
       {recording && (
         <span aria-live="polite" className="sr-only">
-          Press the new key for {command.title}, or Escape
+          {t('settings.shortcuts.recording', { name: command.title })}
         </span>
       )}
       {notes.length > 0 && (

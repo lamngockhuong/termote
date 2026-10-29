@@ -4,6 +4,8 @@ import {
   createPromptTemplate,
   updatePromptTemplate,
 } from '../hooks/use-prompt-templates'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
 import {
   MAX_TEMPLATE_NAME,
   MAX_TEMPLATE_TEXT,
@@ -23,11 +25,11 @@ interface Props {
   onClose: () => void
 }
 
-const HINT: Record<(typeof VARIABLES)[number], string> = {
-  file: 'the file shown in Files',
-  selection: 'the text selected last',
-  branch: 'the git branch',
-  input: 'typed when inserting',
+const HINT: Record<(typeof VARIABLES)[number], MessageKey> = {
+  file: 'settings.templates.varFile',
+  selection: 'settings.templates.varSelection',
+  branch: 'settings.templates.varBranch',
+  input: 'settings.templates.varInput',
 }
 
 // What a refused save offers: another device changed the template (take
@@ -43,6 +45,7 @@ const FIELD =
 // Makes or changes a prompt template. The limits and hidden characters are
 // checked here first; the server's answer is final.
 export function TemplateEditor({ template, onClose }: Props) {
+  const { t } = useT()
   const [base, setBase] = useState(template)
   const [name, setName] = useState(template?.name ?? '')
   const [text, setText] = useState(template?.text ?? '')
@@ -57,7 +60,7 @@ export function TemplateEditor({ template, onClose }: Props) {
   const bytes = templateBytes(normalizeText(text))
 
   const save = async (over: PromptTemplate | null = base) => {
-    const p = templateProblem(name, text)
+    const p = templateProblem(name, text, t)
     if (p) {
       setProblem(p.message)
       setBad(p.field)
@@ -88,7 +91,7 @@ export function TemplateEditor({ template, onClose }: Props) {
       else if (err instanceof RequestError && err.code === 'not_found')
         setRefusal({ kind: 'gone' })
       else {
-        setRefusal({ kind: 'other', text: templateErrorText(err) })
+        setRefusal({ kind: 'other', text: templateErrorText(err, t) })
         if (err instanceof RequestError)
           setBad(
             err.field === 'name' || err.field === 'text' ? err.field : null,
@@ -119,12 +122,16 @@ export function TemplateEditor({ template, onClose }: Props) {
     <Sheet
       isOpen
       onClose={onClose}
-      title={base ? `Edit ${visibleUnsafe(base.name)}` : 'New prompt template'}
+      title={
+        base
+          ? t('settings.editName', { name: visibleUnsafe(base.name) })
+          : t('settings.templates.newTitle')
+      }
       focusOnOpen={() => nameRef.current?.focus()}
     >
       <form onSubmit={submit} className="flex flex-col gap-3 p-4">
         <label htmlFor={`${ids}-name`} className="text-sm text-fg-muted">
-          Name
+          {t('settings.name')}
         </label>
         <input
           ref={nameRef}
@@ -141,7 +148,7 @@ export function TemplateEditor({ template, onClose }: Props) {
           className={`${FIELD} h-9 pointer-coarse:h-touch`}
         />
         <label htmlFor={`${ids}-text`} className="text-sm text-fg-muted">
-          Text
+          {t('settings.templates.text')}
         </label>
         <textarea
           ref={textRef}
@@ -160,10 +167,15 @@ export function TemplateEditor({ template, onClose }: Props) {
           id={`${ids}-size`}
           className={`m-0 text-[12px] ${bytes > MAX_TEMPLATE_TEXT ? 'text-danger' : 'text-fg-muted'}`}
         >
-          {Math.ceil(bytes / 1024)} KB of {MAX_TEMPLATE_TEXT / 1024} KB
+          {t('settings.templates.size', {
+            used: Math.ceil(bytes / 1024),
+            max: MAX_TEMPLATE_TEXT / 1024,
+          })}
         </p>
         <div className="flex flex-col gap-1.5">
-          <span className="text-sm text-fg-muted">Insert a variable</span>
+          <span className="text-sm text-fg-muted">
+            {t('settings.templates.insertVariable')}
+          </span>
           <div className="flex flex-wrap gap-1.5">
             {VARIABLES.map((v) => (
               <Button
@@ -171,15 +183,19 @@ export function TemplateEditor({ template, onClose }: Props) {
                 size="sm"
                 variant="secondary"
                 onClick={() => insertVariable(v)}
-                aria-label={`Insert {{${v}}}: ${HINT[v]}`}
+                aria-label={t('settings.templates.insert', {
+                  token: `{{${v}}}`,
+                  hint: t(HINT[v]),
+                })}
               >
                 <span className="font-term">{`{{${v}}}`}</span>
               </Button>
             ))}
           </div>
           <p className="m-0 text-[12px] text-fg-muted">
-            Filled in when the template is inserted into the Chat:{' '}
-            {VARIABLES.map((v) => `{{${v}}} ${HINT[v]}`).join(', ')}.
+            {t('settings.templates.filledIn', {
+              list: VARIABLES.map((v) => `{{${v}}} ${t(HINT[v])}`).join(', '),
+            })}
           </p>
         </div>
         {(problem || refusal?.kind === 'other') && (
@@ -193,7 +209,9 @@ export function TemplateEditor({ template, onClose }: Props) {
         )}
         {refusal?.kind === 'conflict' && (
           <div role="alert" className="flex flex-col gap-2">
-            <p className="m-0 text-sm text-danger">Changed on another device</p>
+            <p className="m-0 text-sm text-danger">
+              {t('settings.changedElsewhere')}
+            </p>
             <div className="flex flex-wrap gap-2">
               <Button
                 size="sm"
@@ -204,7 +222,7 @@ export function TemplateEditor({ template, onClose }: Props) {
                   setRefusal(null)
                 }}
               >
-                Load theirs
+                {t('settings.loadTheirs')}
               </Button>
               <Button
                 size="sm"
@@ -214,14 +232,16 @@ export function TemplateEditor({ template, onClose }: Props) {
                   void save(refusal.theirs)
                 }}
               >
-                Keep mine
+                {t('settings.keepMine')}
               </Button>
             </div>
           </div>
         )}
         {refusal?.kind === 'gone' && (
           <div role="alert" className="flex flex-col gap-2">
-            <p className="m-0 text-sm text-danger">Deleted on another device</p>
+            <p className="m-0 text-sm text-danger">
+              {t('settings.deletedElsewhere')}
+            </p>
             <Button
               size="sm"
               className="self-start"
@@ -231,14 +251,14 @@ export function TemplateEditor({ template, onClose }: Props) {
                 void save(null)
               }}
             >
-              Save as new
+              {t('settings.saveAsNew')}
             </Button>
           </div>
         )}
         <div className="flex justify-end gap-2">
-          <Button onClick={onClose}>Cancel</Button>
+          <Button onClick={onClose}>{t('common.cancel')}</Button>
           <Button type="submit" variant="primary" disabled={saving}>
-            Save
+            {t('settings.save')}
           </Button>
         </div>
       </form>

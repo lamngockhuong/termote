@@ -13,6 +13,8 @@ import {
   TASK_HISTORY_LINE_CHOICES,
 } from '../hooks/use-settings'
 import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
 import { UI_STYLES, type UiStyle } from '../ui-style'
 import { STUCK_MINUTES_OPTIONS } from '../utils/agent-stuck'
 import type { AppCommand } from '../utils/app-commands'
@@ -166,6 +168,7 @@ function TerminalFontRow({
   value: string
   onSave: (value: string) => void
 }) {
+  const { t } = useT()
   const [draft, setDraft] = useState(value)
   useEffect(() => setDraft(value), [value])
   const save = () => {
@@ -174,14 +177,15 @@ function TerminalFontRow({
   }
   return (
     <SettingsRow
-      title="Terminal font"
-      desc="A font installed on this device (e.g. a Nerd Font). Nerd Font icons work without one."
+      title={t('settings.font')}
+      desc={t('settings.fontDesc')}
       htmlFor="terminal-font"
     >
       <input
         id="terminal-font"
         type="text"
         value={draft}
+        // i18n-ignore: a font's name
         placeholder="JetBrainsMono Nerd Font"
         spellCheck={false}
         autoCapitalize="off"
@@ -204,17 +208,22 @@ function ExcludedFoldersRow({
   value: string[]
   onSave: (value: string[]) => void
 }) {
+  const { t } = useT()
   const [name, setName] = useState('')
   const [problem, setProblem] = useState<string>()
   const inputId = useId()
   const errorId = useId()
+  const excludeProblem = (n: string) => {
+    const key = findExcludeProblem(n)
+    return key && t(key)
+  }
   const add = () => {
     const next = name.trim()
     const why =
-      findExcludeProblem(next) ??
-      (value.includes(next) ? 'Already in the list' : undefined) ??
+      excludeProblem(next) ??
+      (value.includes(next) ? t('settings.excluded.listed') : undefined) ??
       (value.length >= FIND_EXCLUDES_MAX
-        ? `At most ${FIND_EXCLUDES_MAX} folders`
+        ? t('settings.excluded.max', { max: FIND_EXCLUDES_MAX })
         : undefined)
     if (why) {
       setProblem(why)
@@ -233,15 +242,14 @@ function ExcludedFoldersRow({
           htmlFor={inputId}
           className="block text-[15px] text-fg ui-terminal:font-label ui-terminal:text-[13px]"
         >
-          Excluded folders
+          {t('settings.excluded')}
         </label>
         <p className="m-0 text-[12px] text-fg-muted">
-          Never searched for ignored files, and never outside a repository.
-          Tracked files are always searched.
+          {t('settings.excludedDesc')}
         </p>
       </div>
       <ul
-        aria-label="Folders never searched"
+        aria-label={t('settings.excluded.list')}
         className="flex flex-wrap gap-1.5"
       >
         {value.map((v) => (
@@ -253,7 +261,7 @@ function ExcludedFoldersRow({
             <IconButton
               size="sm"
               variant="ghost"
-              aria-label={`Remove ${v}`}
+              aria-label={t('settings.excluded.remove', { name: v })}
               onClick={() => onSave(value.filter((x) => x !== v))}
             >
               <X size={12} aria-hidden="true" />
@@ -266,7 +274,7 @@ function ExcludedFoldersRow({
           id={inputId}
           type="text"
           value={name}
-          placeholder="Folder name"
+          placeholder={t('settings.excluded.placeholder')}
           spellCheck={false}
           autoCapitalize="off"
           autoCorrect="off"
@@ -284,7 +292,7 @@ function ExcludedFoldersRow({
           className={`w-40 px-2 font-term ${CONTROL} ${FOCUS_RING}`}
         />
         <Button size="sm" onClick={add}>
-          Add
+          {t('settings.excluded.add')}
         </Button>
         <Button
           size="sm"
@@ -295,7 +303,7 @@ function ExcludedFoldersRow({
             setProblem(undefined)
           }}
         >
-          Reset to defaults
+          {t('settings.excluded.reset')}
         </Button>
       </div>
       {problem && (
@@ -307,28 +315,34 @@ function ExcludedFoldersRow({
   )
 }
 
-const formatSeconds = (s: number) => (s >= 60 ? `${s / 60}m` : `${s}s`)
+const formatSeconds = (s: number, t: Translate<MessageKey>) =>
+  s >= 60
+    ? t('settings.pollMinutes', { n: s / 60 })
+    : t('settings.pollSeconds', { n: s })
 
 const POLL_INTERVAL_OPTIONS = [3, 5, 10, 15, 30, 60, 120, 300]
 
 const IME_SEND_OPTIONS: {
   value: ImeSendBehavior
-  label: string
-  desc: string
+  label: MessageKey
+  desc: MessageKey
 }[] = [
   {
     value: 'send-only',
-    label: 'Send text only',
-    desc: 'Send text to terminal without Enter',
+    label: 'settings.ime.sendOnly',
+    desc: 'settings.ime.sendOnlyDesc',
   },
   {
     value: 'send-enter',
-    label: 'Send + Enter',
-    desc: 'Send text then press Enter automatically',
+    label: 'settings.ime.sendEnter',
+    desc: 'settings.ime.sendEnterDesc',
   },
 ]
 
-function pasteSourceOptions(bufferLabel: string): {
+function pasteSourceOptions(
+  bufferLabel: string,
+  t: Translate<MessageKey>,
+): {
   value: PasteSource
   label: string
   desc: string
@@ -336,14 +350,14 @@ function pasteSourceOptions(bufferLabel: string): {
   return [
     {
       value: 'clipboard',
-      label: 'System clipboard',
-      desc: 'Paste from device clipboard (Ctrl+Shift+V)',
+      label: t('settings.paste.clipboard'),
+      desc: t('settings.paste.clipboardDesc'),
     },
     {
       // The stored value stays 'tmux' (the localStorage schema is unchanged)
       value: 'tmux',
       label: bufferLabel,
-      desc: 'Paste from the copy mode buffer',
+      desc: t('settings.paste.bufferDesc'),
     },
   ]
 }
@@ -366,6 +380,7 @@ function NotifyAgentsRow({
   onEnable?: () => Promise<unknown>
   onDisable?: () => void
 }) {
+  const { t } = useT()
   const [permission, setPermission] = useState(notificationSupport)
   // undefined while the worker is asked
   const [workerReady, setWorkerReady] = useState<boolean>()
@@ -381,13 +396,15 @@ function NotifyAgentsRow({
   }, [])
   if (permission === 'unsupported' && !homeScreenOnly) return null
   const checked = enabled && permission === 'granted'
-  const desc = homeScreenOnly
-    ? 'iPhone/iPad: works only from the Home Screen app (iOS 16.4+)'
-    : permission === 'denied'
-      ? 'Blocked in browser settings'
-      : workerReady === false
-        ? 'Reload to turn on'
-        : 'A dialog waits or a turn finished. On a phone, needs the installed app'
+  const desc = t(
+    homeScreenOnly
+      ? 'settings.notify.homeScreen'
+      : permission === 'denied'
+        ? 'settings.notify.denied'
+        : workerReady === false
+          ? 'settings.notify.reload'
+          : 'settings.notify.desc',
+  )
   const toggle = async (on: boolean) => {
     if (!on) {
       onChange(false)
@@ -403,9 +420,9 @@ function NotifyAgentsRow({
     await subscribed
   }
   return (
-    <SettingsRow title="Notify when an agent needs me" desc={desc}>
+    <SettingsRow title={t('settings.notify')} desc={desc}>
       <Switch
-        label="Notify when an agent needs me"
+        label={t('settings.notify')}
         checked={checked}
         disabled={
           !checked &&
@@ -437,16 +454,11 @@ function StylePreview({ style }: { style: UiStyle }) {
   )
 }
 
-const STYLE_OPTIONS = UI_STYLES.map((s) => ({
-  value: s.id,
-  label: s.label,
-  content: (
-    <>
-      <StylePreview style={s.id} />
-      {s.label}
-    </>
-  ),
-}))
+const STYLE_LABEL: Record<UiStyle, MessageKey> = {
+  neutral: 'settings.style.neutral',
+  terminal: 'settings.style.terminal',
+  native: 'settings.style.native',
+}
 
 interface GroupDef {
   id: string
@@ -465,7 +477,7 @@ export function SettingsModal({
   onClearHistory,
   historyCount = 0,
   tmuxBufferSupported = true,
-  pasteBufferLabel = 'Session buffer',
+  pasteBufferLabel,
   driveSizeSupported = false,
   pushAvailable = false,
   onEnableNotify,
@@ -500,28 +512,40 @@ export function SettingsModal({
   const imeOption = IME_SEND_OPTIONS.find(
     (o) => o.value === settings.imeSendBehavior,
   )
-  const pasteOptions = pasteSourceOptions(pasteBufferLabel)
+  const pasteOptions = pasteSourceOptions(
+    pasteBufferLabel ?? t('shell.buffer.session'),
+    t,
+  )
   const pasteOption = pasteOptions.find((o) => o.value === settings.pasteSource)
   const hasActions = onShowWelcome || onStartTour || onClearHistory
 
   const groups: GroupDef[] = [
     {
       id: 'appearance',
-      title: 'Appearance',
+      title: t('settings.group.appearance'),
       rows: (
         <>
           <div className="flex flex-col gap-2 px-4 py-2.5 ui-native:bg-surface-raised">
             <div>
               <p className="m-0 text-[15px] text-fg ui-terminal:font-label ui-terminal:text-[13px]">
-                Interface style
+                {t('settings.style')}
               </p>
               <p className="m-0 text-[12px] text-fg-muted">
-                Applies at once. Theme stays in the ⋯ menu.
+                {t('settings.styleDesc')}
               </p>
             </div>
             <SegmentedControl
-              label="Interface style"
-              options={STYLE_OPTIONS}
+              label={t('settings.style')}
+              options={UI_STYLES.map((s) => ({
+                value: s.id,
+                label: t(STYLE_LABEL[s.id]),
+                content: (
+                  <>
+                    <StylePreview style={s.id} />
+                    {t(STYLE_LABEL[s.id])}
+                  </>
+                ),
+              }))}
               value={settings.uiStyle}
               onChange={(v) => onUpdateSetting('uiStyle', v)}
               className="self-start"
@@ -547,25 +571,28 @@ export function SettingsModal({
     },
     {
       id: 'keyboard',
-      title: 'Keyboard',
+      title: t('settings.group.keyboard'),
       rows: (
         <>
-          <SettingsRow title="Text input send behavior" desc={imeOption?.desc}>
+          <SettingsRow
+            title={t('settings.ime')}
+            desc={imeOption && t(imeOption.desc)}
+          >
             <SegmentedControl
-              label="Text input send behavior"
+              label={t('settings.ime')}
               options={IME_SEND_OPTIONS.map((o) => ({
                 value: o.value,
-                label: o.label,
-                content: o.label,
+                label: t(o.label),
+                content: t(o.label),
               }))}
               value={settings.imeSendBehavior}
               onChange={(v) => onUpdateSetting('imeSendBehavior', v)}
             />
           </SettingsRow>
           {tmuxBufferSupported && (
-            <SettingsRow title="Paste button source" desc={pasteOption?.desc}>
+            <SettingsRow title={t('settings.paste')} desc={pasteOption?.desc}>
               <SegmentedControl
-                label="Paste button source"
+                label={t('settings.paste')}
                 options={pasteOptions.map((o) => ({
                   value: o.value,
                   label: o.label,
@@ -577,11 +604,11 @@ export function SettingsModal({
             </SettingsRow>
           )}
           <SettingsRow
-            title="Toolbar default expanded"
-            desc="Show all keys when toolbar loads"
+            title={t('settings.toolbarExpanded')}
+            desc={t('settings.toolbarExpandedDesc')}
           >
             <Switch
-              label="Toolbar default expanded"
+              label={t('settings.toolbarExpanded')}
               checked={settings.toolbarDefaultExpanded}
               onChange={(v) => onUpdateSetting('toolbarDefaultExpanded', v)}
             />
@@ -593,14 +620,14 @@ export function SettingsModal({
       ? [
           {
             id: 'shortcuts',
-            title: 'Shortcuts',
+            title: t('settings.group.shortcuts'),
             rows: <ShortcutsSection commands={shortcuts} />,
           },
         ]
       : []),
     {
       id: 'terminal',
-      title: 'Terminal',
+      title: t('common.terminal'),
       rows: (
         <>
           <TerminalFontRow
@@ -608,32 +635,32 @@ export function SettingsModal({
             onSave={(v) => onUpdateSetting('terminalFont', v)}
           />
           <SettingsRow
-            title="Disable right-click menu"
-            desc="Block context menu on terminal area"
+            title={t('settings.contextMenu')}
+            desc={t('settings.contextMenuDesc')}
           >
             <Switch
-              label="Disable right-click menu"
+              label={t('settings.contextMenu')}
               checked={settings.disableContextMenu}
               onChange={(v) => onUpdateSetting('disableContextMenu', v)}
             />
           </SettingsRow>
           <SettingsRow
-            title="Copy on select"
-            desc="Copy the text you select with the mouse as soon as you release the button"
+            title={t('settings.copyOnSelect')}
+            desc={t('settings.copyOnSelectDesc')}
           >
             <Switch
-              label="Copy on select"
+              label={t('settings.copyOnSelect')}
               checked={settings.copyOnSelect}
               onChange={(v) => onUpdateSetting('copyOnSelect', v)}
             />
           </SettingsRow>
           {driveSizeSupported && (
             <SettingsRow
-              title="Fit herdr pane to this device"
-              desc="While the terminal shows; resizes the pane on the desktop too, until this page is hidden or closed, another view opens, or another device takes over"
+              title={t('settings.fitPane')}
+              desc={t('settings.fitPaneDesc')}
             >
               <Switch
-                label="Fit herdr pane to this device"
+                label={t('settings.fitPane')}
                 checked={settings.driveTerminalSize}
                 onChange={(v) => onUpdateSetting('driveTerminalSize', v)}
               />
@@ -644,25 +671,22 @@ export function SettingsModal({
     },
     {
       id: 'sessions',
-      title: 'Sessions',
+      title: t('settings.group.sessions'),
       rows: (
         <>
-          <SettingsRow
-            title="Show session tabs"
-            desc="Display tab bar for quick session switching (desktop)"
-          >
+          <SettingsRow title={t('settings.tabs')} desc={t('settings.tabsDesc')}>
             <Switch
-              label="Show session tabs"
+              label={t('settings.tabs')}
               checked={settings.showSessionTabs}
               onChange={(v) => onUpdateSetting('showSessionTabs', v)}
             />
           </SettingsRow>
           <SettingsRow
-            title="Blocked sessions first"
-            desc="List sessions waiting on you at the top of each group"
+            title={t('settings.blockedFirst')}
+            desc={t('settings.blockedFirstDesc')}
           >
             <Switch
-              label="Blocked sessions first"
+              label={t('settings.blockedFirst')}
               checked={settings.sortBlockedFirst}
               onChange={(v) => onUpdateSetting('sortBlockedFirst', v)}
             />
@@ -677,11 +701,11 @@ export function SettingsModal({
             />
           )}
           <SettingsRow
-            title="Stuck agent"
-            desc={`Mark a working agent quiet for ${settings.stuckMinutes} min in the overview`}
+            title={t('settings.stuck')}
+            desc={t('settings.stuckDesc', { minutes: settings.stuckMinutes })}
           >
             <select
-              aria-label="Stuck agent after"
+              aria-label={t('settings.stuckAfter')}
               value={settings.stuckMinutes}
               onChange={(e) =>
                 onUpdateSetting('stuckMinutes', Number(e.target.value))
@@ -690,27 +714,29 @@ export function SettingsModal({
             >
               {STUCK_MINUTES_OPTIONS.map((v) => (
                 <option key={v} value={v}>
-                  {v} min
+                  {t('settings.minutes', { n: v })}
                 </option>
               ))}
             </select>
           </SettingsRow>
           <SettingsRow
-            title="Agent usage in the header"
-            desc="Show how full the open pane's agent context is, and its Codex limits"
+            title={t('settings.usage')}
+            desc={t('settings.usageDesc')}
           >
             <Switch
-              label="Agent usage in the header"
+              label={t('settings.usage')}
               checked={settings.showUsageChip}
               onChange={(v) => onUpdateSetting('showUsageChip', v)}
             />
           </SettingsRow>
           <SettingsRow
-            title="Session poll interval"
-            desc={`How often to sync session list (${formatSeconds(settings.pollInterval)})`}
+            title={t('settings.poll')}
+            desc={t('settings.pollDesc', {
+              interval: formatSeconds(settings.pollInterval, t),
+            })}
           >
             <select
-              aria-label="Session poll interval"
+              aria-label={t('settings.poll')}
               value={settings.pollInterval}
               onChange={(e) =>
                 onUpdateSetting('pollInterval', Number(e.target.value))
@@ -719,7 +745,7 @@ export function SettingsModal({
             >
               {POLL_INTERVAL_OPTIONS.map((v) => (
                 <option key={v} value={v}>
-                  {formatSeconds(v)}
+                  {formatSeconds(v, t)}
                 </option>
               ))}
             </select>
@@ -731,29 +757,26 @@ export function SettingsModal({
 
   groups.push({
     id: 'files',
-    title: 'Files',
+    title: t('common.files'),
     rows: (
       <>
         <ExcludedFoldersRow
           value={settings.findExcludes}
           onSave={(v) => onUpdateSetting('findExcludes', v)}
         />
-        <SettingsRow
-          title="Wrap lines"
-          desc="Wrap long lines of a file at first, on desktop too"
-        >
+        <SettingsRow title={t('settings.wrap')} desc={t('settings.wrapDesc')}>
           <Switch
-            label="Wrap lines"
+            label={t('settings.wrap')}
             checked={settings.editorWrap}
             onChange={(v) => onUpdateSetting('editorWrap', v)}
           />
         </SettingsRow>
         <SettingsRow
-          title="Editor font size"
-          desc="Desktop editor (a phone edits in a plain text box)"
+          title={t('settings.fontSize')}
+          desc={t('settings.fontSizeDesc')}
         >
           <select
-            aria-label="Editor font size"
+            aria-label={t('settings.fontSize')}
             value={settings.editorFontSize}
             onChange={(e) =>
               onUpdateSetting('editorFontSize', Number(e.target.value))
@@ -762,17 +785,17 @@ export function SettingsModal({
           >
             {EDITOR_FONT_SIZES.map((v) => (
               <option key={v} value={v}>
-                {v} px
+                {t('settings.px', { n: v })}
               </option>
             ))}
           </select>
         </SettingsRow>
         <SettingsRow
-          title="Tab size"
-          desc="Desktop editor: columns of a tab, and of one indent"
+          title={t('settings.tabSize')}
+          desc={t('settings.tabSizeDesc')}
         >
           <select
-            aria-label="Tab size"
+            aria-label={t('settings.tabSize')}
             value={settings.editorTabSize}
             onChange={(e) =>
               onUpdateSetting(
@@ -789,9 +812,9 @@ export function SettingsModal({
             ))}
           </select>
         </SettingsRow>
-        <SettingsRow title="Vim mode" desc="Desktop editor: Vim keys; :w saves">
+        <SettingsRow title={t('settings.vim')} desc={t('settings.vimDesc')}>
           <Switch
-            label="Vim mode"
+            label={t('settings.vim')}
             checked={settings.editorVim}
             onChange={(v) => onUpdateSetting('editorVim', v)}
           />
@@ -803,7 +826,7 @@ export function SettingsModal({
   if (devices) {
     groups.push({
       id: 'devices',
-      title: 'Devices',
+      title: t('settings.group.devices'),
       rows: <DevicesSection />,
     })
   }
@@ -811,7 +834,7 @@ export function SettingsModal({
   if (signins) {
     groups.push({
       id: 'signins',
-      title: 'Signed-in browsers',
+      title: t('settings.group.signins'),
       rows: <SigninsSection logOut={onLogout} />,
     })
   }
@@ -819,7 +842,7 @@ export function SettingsModal({
   if (templates) {
     groups.push({
       id: 'templates',
-      title: 'Prompt templates',
+      title: t('settings.group.templates'),
       rows: <PromptTemplatesSection readOnly={readOnly} />,
     })
   }
@@ -827,16 +850,16 @@ export function SettingsModal({
   if (!readOnly && (tasks || userTasks)) {
     groups.push({
       id: 'tasks',
-      title: 'Tasks',
+      title: t('common.tasks'),
       rows: (
         <>
           {tasks && (
             <SettingsRow
-              title="History read for Send to agent"
-              desc="Lines of a task's tab searched for its run's output; only the run's own output is sent"
+              title={t('settings.taskHistory')}
+              desc={t('settings.taskHistoryDesc')}
             >
               <select
-                aria-label="History read for Send to agent"
+                aria-label={t('settings.taskHistory')}
                 value={settings.taskHistoryLines}
                 onChange={(e) =>
                   onUpdateSetting('taskHistoryLines', Number(e.target.value))
@@ -845,7 +868,7 @@ export function SettingsModal({
               >
                 {TASK_HISTORY_LINE_CHOICES.map((v) => (
                   <option key={v} value={v}>
-                    {v} lines
+                    {t('settings.taskLines', { n: v })}
                   </option>
                 ))}
               </select>
@@ -860,7 +883,7 @@ export function SettingsModal({
   if (updates) {
     groups.push({
       id: 'updates',
-      title: 'Updates',
+      title: t('settings.group.updates'),
       rows: <UpdatesSection {...updates} />,
     })
   }
@@ -868,7 +891,7 @@ export function SettingsModal({
   if (hasActions) {
     groups.push({
       id: 'data',
-      title: 'Data & help',
+      title: t('settings.group.data'),
       rows: (
         <div className="flex flex-col gap-1 px-4 py-2.5 ui-native:bg-surface-raised">
           {onShowWelcome && (
@@ -888,7 +911,7 @@ export function SettingsModal({
               onClick={onClearHistory}
             >
               <Trash2 size={16} aria-hidden="true" />
-              Clear Command History ({historyCount})
+              {t('settings.clearHistory', { count: historyCount })}
             </Button>
           )}
         </div>
@@ -905,7 +928,7 @@ export function SettingsModal({
     <Sheet
       isOpen={isOpen}
       onClose={onClose}
-      title="Settings"
+      title={t('common.settings')}
       // Full screen on a phone, a two-column dialog on desktop. Full screen
       // reaches under the status bar of a notched phone, so the header is
       // pushed below it.
@@ -913,7 +936,7 @@ export function SettingsModal({
     >
       <div className="md:flex md:min-h-full">
         <nav
-          aria-label="Settings groups"
+          aria-label={t('settings.groups')}
           className="hidden md:sticky md:top-0 md:flex md:w-44 md:shrink-0 md:flex-col md:gap-0.5 md:self-start md:border-r md:border-border md:p-2"
         >
           {groups.map((g) => (

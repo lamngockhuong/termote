@@ -1,13 +1,17 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { type PairingCode, RequestError } from '../hooks/use-mux-api'
+import { tFor } from '../i18n/i18n-context'
 import {
   formatLeft,
   PairDeviceSheet,
   pairProblem,
   validityChoices,
   validityNote,
+  validityOptionLabel,
 } from './pair-device-sheet'
+
+const tEn = tFor('en')
 
 beforeEach(() => {
   HTMLDialogElement.prototype.showModal = vi.fn().mockImplementation(function (
@@ -83,13 +87,18 @@ describe('pairProblem', () => {
     ],
     [new Error('offline'), 'Could not make a pairing code. Try again'],
   ])('%s', (err, want) => {
-    expect(pairProblem(err)).toBe(want)
+    expect(pairProblem(err, tEn)).toBe(want)
   })
 })
 
 describe('validityChoices', () => {
   it('offers every choice, Never included, without a limit of its own', () => {
-    expect(validityChoices().map((o) => [o.label, o.disabled])).toEqual([
+    expect(
+      validityChoices().map((o) => [
+        validityOptionLabel(o.secs, tEn),
+        o.disabled,
+      ]),
+    ).toEqual([
       ['1 day', false],
       ['7 days', false],
       ['30 days', false],
@@ -100,7 +109,10 @@ describe('validityChoices', () => {
 
   it('a limited device gets no Never and nothing longer than it has left', () => {
     expect(
-      validityChoices(10 * 86400).map((o) => [o.label, o.disabled]),
+      validityChoices(10 * 86400).map((o) => [
+        validityOptionLabel(o.secs, tEn),
+        o.disabled,
+      ]),
     ).toEqual([
       ['1 day', false],
       ['7 days', false],
@@ -121,7 +133,7 @@ describe('validityNote', () => {
     [3600, 'stays signed in for 1 hour'],
     [7000, 'stays signed in for 2 hours'],
   ])('%s', (secs, want) => {
-    expect(validityNote(secs)).toBe(want)
+    expect(validityNote(secs, tEn)).toBe(want)
   })
 })
 

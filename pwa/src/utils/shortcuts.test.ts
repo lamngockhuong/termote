@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { tFor } from '../i18n/i18n-context'
 import {
   canRunInTerminal,
   chordFromEvent,
@@ -13,6 +14,14 @@ import {
   resolveKeymap,
   type ShortcutDefault,
 } from './shortcuts'
+
+const tEn = tFor('en')
+
+// The English of why a chord is refused
+const refused = (chord: string, apple: boolean) => {
+  const key = isRefusedChord(chord, apple)
+  return key && tEn(key)
+}
 
 function press(
   code: string,
@@ -143,21 +152,21 @@ describe('formatChord', () => {
 describe('isRefusedChord', () => {
   it('refuses keys the browser keeps', () => {
     for (const k of ['Mod+W', 'Mod+T', 'Mod+N', 'Mod+Q', 'Mod+Shift+T'])
-      expect(isRefusedChord(k, false)).toBe('The browser keeps this key')
-    expect(isRefusedChord('Mod+Tab', false)).toBe('The browser keeps this key')
-    expect(isRefusedChord('Ctrl+Tab', true)).toBe('The browser keeps this key')
+      expect(refused(k, false)).toBe('The browser keeps this key')
+    expect(refused('Mod+Tab', false)).toBe('The browser keeps this key')
+    expect(refused('Ctrl+Tab', true)).toBe('The browser keeps this key')
   })
 
   it('refuses fixed editor, terminal and text keys', () => {
-    expect(isRefusedChord('Mod+S', false)).toBe('Used by the editor')
-    expect(isRefusedChord('Mod+Shift+C', false)).toBe('Used by the terminal')
-    expect(isRefusedChord('Mod+Shift+C', true)).toBeUndefined()
-    expect(isRefusedChord('Mod+Shift+V', false)).toBe('Used by the terminal')
-    expect(isRefusedChord('Mod+V', true)).toBe('Used to edit text')
+    expect(refused('Mod+S', false)).toBe('Used by the editor')
+    expect(refused('Mod+Shift+C', false)).toBe('Used by the terminal')
+    expect(refused('Mod+Shift+C', true)).toBeUndefined()
+    expect(refused('Mod+Shift+V', false)).toBe('Used by the terminal')
+    expect(refused('Mod+V', true)).toBe('Used to edit text')
   })
 
   it('accepts anything else', () => {
-    expect(isRefusedChord('Mod+P', false)).toBeUndefined()
+    expect(refused('Mod+P', false)).toBeUndefined()
   })
 })
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import casesJson from '../../../server/testdata/template-hidden-chars.json?raw'
+import { tFor } from '../i18n/i18n-context'
 import {
   exportFile,
   fillTemplate,
@@ -16,6 +17,8 @@ import {
   templateProblem,
   templateVariables,
 } from './prompt-templates'
+
+const tEn = tFor('en')
 
 describe('templateVariables', () => {
   it('lists each known variable once, in order', () => {
@@ -60,8 +63,8 @@ describe('hiddenChars', () => {
     const s = `a${String.fromCodePoint(Number.parseInt(codePoint, 16))}b`
     expect(hiddenChars(s, false).length === 0).toBe(inName)
     expect(hiddenChars(s).length === 0).toBe(inText)
-    expect(templateProblem(s, 'x') === null).toBe(inName)
-    expect(templateProblem('x', s) === null).toBe(inText)
+    expect(templateProblem(s, 'x', tEn) === null).toBe(inName)
+    expect(templateProblem('x', s, tEn) === null).toBe(inText)
   })
 
   it('says where and which', () => {
@@ -74,32 +77,39 @@ describe('hiddenChars', () => {
 
 describe('templateProblem', () => {
   it('checks the name', () => {
-    expect(templateProblem('  ', 'x')?.field).toBe('name')
-    expect(templateProblem('é'.repeat(MAX_TEMPLATE_NAME), 'x')).toBeNull()
-    expect(templateProblem('😀'.repeat(MAX_TEMPLATE_NAME), 'x')).toBeNull()
-    expect(templateProblem('é'.repeat(MAX_TEMPLATE_NAME + 1), 'x')).toEqual({
+    expect(templateProblem('  ', 'x', tEn)?.field).toBe('name')
+    expect(templateProblem('é'.repeat(MAX_TEMPLATE_NAME), 'x', tEn)).toBeNull()
+    expect(templateProblem('😀'.repeat(MAX_TEMPLATE_NAME), 'x', tEn)).toBeNull()
+    expect(
+      templateProblem('é'.repeat(MAX_TEMPLATE_NAME + 1), 'x', tEn),
+    ).toEqual({
       field: 'name',
       message: 'The name is longer than 64 characters',
     })
-    expect(templateProblem('a\tb', 'x')?.message).toMatch(/U\+0009/)
+    expect(templateProblem('a\tb', 'x', tEn)?.message).toMatch(/U\+0009/)
   })
 
   it('trims the name as the server does', () => {
-    expect(templateProblem('\u0085 a  ', 'x')).toBeNull()
-    expect(templateProblem('﻿a', 'x')?.message).toMatch(/U\+FEFF/)
+    expect(templateProblem('\u0085 a  ', 'x', tEn)).toBeNull()
+    expect(templateProblem('﻿a', 'x', tEn)?.message).toMatch(/U\+FEFF/)
     expect(
-      parseImport('{"v":1,"templates":[{"name":"\\u2003a ","text":"x"}]}'),
+      parseImport('{"v":1,"templates":[{"name":"\\u2003a ","text":"x"}]}', tEn),
     ).toEqual({ ok: true, templates: [{ name: 'a', text: 'x' }] })
   })
 
   it('checks the text in bytes, line breaks as stored', () => {
-    expect(templateProblem('a', '')?.message).toBe('The template is empty')
-    expect(templateProblem('a', 'é'.repeat(MAX_TEMPLATE_TEXT / 2))).toBeNull()
+    expect(templateProblem('a', '', tEn)?.message).toBe('The template is empty')
     expect(
-      templateProblem('a', `é${'é'.repeat(MAX_TEMPLATE_TEXT / 2)}`)?.message,
+      templateProblem('a', 'é'.repeat(MAX_TEMPLATE_TEXT / 2), tEn),
+    ).toBeNull()
+    expect(
+      templateProblem('a', `é${'é'.repeat(MAX_TEMPLATE_TEXT / 2)}`, tEn)
+        ?.message,
     ).toBe('The template is larger than 16 KB')
-    expect(templateProblem('a', '\r\n'.repeat(MAX_TEMPLATE_TEXT))).toBeNull()
-    expect(templateProblem('a', 'x\u200by')?.message).toBe(
+    expect(
+      templateProblem('a', '\r\n'.repeat(MAX_TEMPLATE_TEXT), tEn),
+    ).toBeNull()
+    expect(templateProblem('a', 'x\u200by', tEn)?.message).toBe(
       'The template contains hidden characters (U+200B at character 2)',
     )
   })
@@ -127,12 +137,15 @@ describe('export and import', () => {
     }))
     const { text } = exportFile(list)
     expect(text.length).toBeLessThanOrEqual(4 * 1024 * 1024)
-    expect(parseImport(text)).toEqual({ ok: true, templates: list })
+    expect(parseImport(text, tEn)).toEqual({ ok: true, templates: list })
   })
 
   it('trims names and stores line breaks as the server does', () => {
     expect(
-      parseImport('{"v":1,"templates":[{"name":" a ","text":"x\\r\\ny"}]}'),
+      parseImport(
+        '{"v":1,"templates":[{"name":" a ","text":"x\\r\\ny"}]}',
+        tEn,
+      ),
     ).toEqual({ ok: true, templates: [{ name: 'a', text: 'x\ny' }] })
   })
 
@@ -164,7 +177,7 @@ describe('export and import', () => {
       'The file has 101 templates: up to 100',
     ],
   ])('refuses %s', (json, error) => {
-    const r = parseImport(json)
+    const r = parseImport(json, tEn)
     expect(r.ok).toBe(false)
     expect(r.ok === false && r.error).toMatch(error)
   })
@@ -219,16 +232,23 @@ describe('templateErrorText', () => {
     ['import_changed', 'The templates changed since the check; check again'],
     ['other', 'Could not save the templates'],
   ])('%s', (code, text) => {
-    expect(templateErrorText({ code })).toBe(text)
+    expect(templateErrorText({ code }, tEn)).toBe(text)
   })
 
   it('names what is invalid, and anything else could not save', () => {
     expect(
-      templateErrorText({
-        code: 'invalid_template',
-        message: 'the text is empty',
-      }),
+      templateErrorText(
+        {
+          code: 'invalid_template',
+          message: 'the text is empty',
+        },
+        tEn,
+      ),
     ).toBe('Not saved: the text is empty')
-    expect(templateErrorText(null)).toBe('Could not save the templates')
+    // A refusal without its reason never shows "undefined"
+    expect(templateErrorText({ code: 'invalid_template' }, tEn)).toBe(
+      'Not saved: ',
+    )
+    expect(templateErrorText(null, tEn)).toBe('Could not save the templates')
   })
 })

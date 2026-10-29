@@ -3,6 +3,9 @@
 // (server/template_store.go), checked here first so the editor and an
 // import say what is wrong before anything is sent.
 
+import type { MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
+
 export const VARIABLES = ['file', 'selection', 'branch', 'input'] as const
 export type TemplateVariable = (typeof VARIABLES)[number]
 
@@ -84,33 +87,41 @@ export interface TemplateProblem {
 export function templateProblem(
   name: string,
   text: string,
+  t: Translate<MessageKey>,
 ): TemplateProblem | null {
   const n = trimName(name)
-  const t = normalizeText(text)
+  const body = normalizeText(text)
   const length = [...n].length
-  if (length === 0) return { field: 'name', message: 'Name the template' }
+  if (length === 0)
+    return { field: 'name', message: t('settings.templates.nameIt') }
   if (length > MAX_TEMPLATE_NAME)
     return {
       field: 'name',
-      message: `The name is longer than ${MAX_TEMPLATE_NAME} characters`,
+      message: t('settings.nameTooLong', { max: MAX_TEMPLATE_NAME }),
     }
   const inName = hiddenChars(n, false)
   if (inName.length)
     return {
       field: 'name',
-      message: `The name contains hidden characters (${inName[0].codePoint})`,
+      message: t('settings.nameHidden', { code: inName[0].codePoint }),
     }
-  if (t === '') return { field: 'text', message: 'The template is empty' }
-  if (templateBytes(t) > MAX_TEMPLATE_TEXT)
+  if (body === '')
+    return { field: 'text', message: t('settings.templates.empty') }
+  if (templateBytes(body) > MAX_TEMPLATE_TEXT)
     return {
       field: 'text',
-      message: `The template is larger than ${MAX_TEMPLATE_TEXT / 1024} KB`,
+      message: t('settings.templates.tooLarge', {
+        max: MAX_TEMPLATE_TEXT / 1024,
+      }),
     }
-  const inText = hiddenChars(t)
+  const inText = hiddenChars(body)
   if (inText.length)
     return {
       field: 'text',
-      message: `The template contains hidden characters (${inText[0].codePoint} at character ${inText[0].index + 1})`,
+      message: t('settings.templates.textHidden', {
+        code: inText[0].codePoint,
+        index: inText[0].index + 1,
+      }),
     }
   return null
 }
@@ -147,44 +158,51 @@ export type ParsedImport =
 // The templates of an export file, or what is wrong with it. What the
 // server would add or replace is asked of it (a dry run), never worked out
 // here.
-export function parseImport(json: string): ParsedImport {
+export function parseImport(
+  json: string,
+  t: Translate<MessageKey>,
+): ParsedImport {
   let data: unknown
   try {
     data = JSON.parse(json)
   } catch {
-    return { ok: false, error: 'This is not a JSON file' }
+    return { ok: false, error: t('settings.templates.notJson') }
   }
   const file = data as { v?: unknown; templates?: unknown } | null
   if (typeof file !== 'object' || file === null || Array.isArray(file))
-    return { ok: false, error: 'This is not a templates file' }
+    return { ok: false, error: t('settings.templates.notTemplates') }
   if (file.v !== 1)
-    return {
-      ok: false,
-      error: 'This file was made by another version of Termote',
-    }
+    return { ok: false, error: t('settings.templates.otherVersion') }
   if (!Array.isArray(file.templates))
-    return { ok: false, error: 'This is not a templates file' }
+    return { ok: false, error: t('settings.templates.notTemplates') }
   if (file.templates.length === 0)
-    return { ok: false, error: 'The file has no templates' }
+    return { ok: false, error: t('settings.templates.fileEmpty') }
   if (file.templates.length > MAX_TEMPLATES)
     return {
       ok: false,
-      error: `The file has ${file.templates.length} templates: up to ${MAX_TEMPLATES}`,
+      error: t('settings.templates.fileTooMany', {
+        count: file.templates.length,
+        max: MAX_TEMPLATES,
+      }),
     }
   const templates: TemplateEntry[] = []
   const names = new Set<string>()
-  for (const [i, t] of file.templates.entries()) {
-    const at = `Template ${i + 1}`
-    if (typeof t?.name !== 'string' || typeof t?.text !== 'string')
-      return { ok: false, error: `${at} has no name or text` }
-    const problem = templateProblem(t.name, t.text)
-    if (problem) return { ok: false, error: `${at}: ${problem.message}` }
-    const name = trimName(t.name)
+  for (const [i, entry] of file.templates.entries()) {
+    const n = i + 1
+    if (typeof entry?.name !== 'string' || typeof entry?.text !== 'string')
+      return { ok: false, error: t('settings.templates.noNameOrText', { n }) }
+    const problem = templateProblem(entry.name, entry.text, t)
+    if (problem)
+      return {
+        ok: false,
+        error: t('settings.templates.at', { n, problem: problem.message }),
+      }
+    const name = trimName(entry.name)
     const key = name.toLowerCase()
     if (names.has(key))
-      return { ok: false, error: `${at}: another template has this name` }
+      return { ok: false, error: t('settings.templates.sameNameAt', { n }) }
     names.add(key)
-    templates.push({ name, text: normalizeText(t.text) })
+    templates.push({ name, text: normalizeText(entry.text) })
   }
   return { ok: true, templates }
 }
@@ -219,34 +237,37 @@ export function firstLine(text: string, max = 80): string {
 }
 
 // What a refused template change tells the user, by the server's code
-export function templateErrorText(err: unknown): string {
+export function templateErrorText(
+  err: unknown,
+  t: Translate<MessageKey>,
+): string {
   const e = err as { code?: string; message?: string; field?: string } | null
   switch (e?.code) {
     case 'name_taken':
-      return 'A template with this name exists'
+      return t('settings.templates.nameTaken')
     case 'too_many':
-      return `Up to ${MAX_TEMPLATES} templates`
+      return t('settings.templates.tooMany', { max: MAX_TEMPLATES })
     case 'invalid_template':
-      return `Not saved: ${e.message}`
+      return t('settings.notSaved', { message: e.message ?? '' })
     case 'duplicate_name':
-      return 'Two templates in the file have the same name'
+      return t('settings.templates.duplicateName')
     case 'conflict':
-      return 'Changed on another device'
+      return t('settings.changedElsewhere')
     case 'not_found':
-      return 'Deleted on another device'
+      return t('settings.deletedElsewhere')
     case 'newer_format':
-      return 'Saved by a newer Termote; update it to change templates'
+      return t('settings.templates.newerFormat')
     case 'view_only':
-      return 'This device is view only'
+      return t('settings.viewOnly')
     case 'templates_unavailable':
-      return 'Templates are not available on this server'
+      return t('settings.templates.unavailable')
     case 'busy':
-      return 'The templates are being changed elsewhere; try again'
+      return t('settings.templates.busy')
     case 'too_large':
-      return 'Too large to save'
+      return t('settings.tooLarge')
     case 'import_changed':
-      return 'The templates changed since the check; check again'
+      return t('settings.templates.importChanged')
     default:
-      return 'Could not save the templates'
+      return t('settings.templates.saveFailed')
   }
 }
