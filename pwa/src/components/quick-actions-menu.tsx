@@ -1,8 +1,11 @@
 import { Ban, Eraser, LogOut, Sparkles } from 'lucide-react'
+import type { MessageKey } from '../i18n/messages/en'
 
 export interface QuickAction {
+  // The action's name in English, for its data-key
+  id: string
   icon: React.ReactNode
-  label: string
+  label: MessageKey
   key: string
   ctrl?: boolean
   text?: string // For sending text like "clear"
@@ -13,19 +16,33 @@ const ICON_SIZE = 18
 // Common actions, shown as the Actions row of the expanded toolbar (mobile)
 export const QUICK_ACTIONS: QuickAction[] = [
   {
+    id: 'Clear',
     icon: <Eraser size={ICON_SIZE} />,
-    label: 'Clear',
+    label: 'shell.action.clear',
     text: 'clear',
     key: 'Enter',
   },
-  { icon: <Ban size={ICON_SIZE} />, label: 'Cancel', key: 'c', ctrl: true },
   {
+    id: 'Cancel',
+    icon: <Ban size={ICON_SIZE} />,
+    label: 'shell.action.cancel',
+    key: 'c',
+    ctrl: true,
+  },
+  {
+    id: 'Clear line',
     icon: <Sparkles size={ICON_SIZE} />,
-    label: 'Clear line',
+    label: 'shell.action.clearLine',
     key: 'u',
     ctrl: true,
   },
-  { icon: <LogOut size={ICON_SIZE} />, label: 'Exit', key: 'd', ctrl: true },
+  {
+    id: 'Exit',
+    icon: <LogOut size={ICON_SIZE} />,
+    label: 'shell.action.exit',
+    key: 'd',
+    ctrl: true,
+  },
 ]
 
 export interface QuickActionHandlers {

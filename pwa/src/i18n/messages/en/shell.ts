@@ -1,2 +1,298 @@
-// Filled in as this area is translated
-export default {} as const
+// The app's frame: header, sessions, tabs and panes, the key toolbar, the
+// view menu, the Settings menu, banners and the status bars
+export default {
+  // The key toolbar (components/keyboard-toolbar.tsx, quick-actions-menu.tsx)
+  'shell.keys.attachImage': 'Attach image',
+  'shell.keys.selectText': 'Select text',
+  'shell.keys.shiftTab': 'Shift+Tab',
+  'shell.keys.closeIme': 'Close IME input',
+  'shell.keys.imePlaceholder':
+    'Type non-Latin text here... (Vietnamese, CJK, ...)',
+  'shell.keys.sendText': 'Send text',
+  'shell.keys.actions': 'Actions',
+  'shell.keys.textScroll': 'Text · Scroll',
+  'shell.keys.navigate': 'Navigate',
+  'shell.keys.extra': 'Extra keys',
+  'shell.action.clear': 'Clear',
+  'shell.action.cancel': 'Cancel',
+  'shell.action.clearLine': 'Clear line',
+  'shell.action.exit': 'Exit',
+  // The mobile session chip (components/session-switcher-chip.tsx)
+  'shell.chip.sessions_one': '{count} session',
+  'shell.chip.sessions_other': '{count} sessions',
+  'shell.chip.open': 'Open sessions menu',
+  'shell.chip.openWaiting_one':
+    'Open sessions menu, {count} other session needs you',
+  'shell.chip.openWaiting_other':
+    'Open sessions menu, {count} other sessions need you',
+  // The desktop session tabs (components/session-tabs.tsx)
+  'shell.tabs.label': 'Sessions',
+  'shell.tabs.close': 'Close {name}',
+  'shell.tabs.add': 'Add session',
+  // The pane strip (components/pane-strip.tsx)
+  'shell.panes.close': 'Close pane {name}',
+  // The connection state (components/connection-indicator.tsx)
+  'shell.connection.connecting': 'Connecting...',
+  'shell.connection.connected': 'Connected',
+  'shell.connection.disconnected': 'Disconnected',
+  'shell.connection.error': 'Connection error',
+  'shell.connection.evicted': 'Disconnected by a newer window',
+  // An agent's state (components/agent-status-badge.tsx)
+  'shell.agent.blocked': 'Agent blocked',
+  'shell.agent.working': 'Agent working',
+  'shell.agent.done': 'Agent done',
+  'shell.agent.idle': 'Agent idle',
+  'shell.openTerminal': 'Open terminal',
+  // The banner on a page opened through localhost (components/localhost-notice.tsx)
+  'shell.localhost.dismiss': 'Dismiss',
+  'shell.localhost.open': 'Open 127.0.0.1',
+  'shell.localhost.body':
+    'Opened through localhost: every connection tries IPv6 first, which can slow each tab switch. Use 127.0.0.1 instead. It is another address to the browser: you sign in again there, settings and unsaved drafts stay here, and an installed app has to be installed again.',
+  // The desktop side panel's toggles (components/panel-toggles.tsx)
+  'shell.sidePanel': 'Side panel',
+  'shell.sidePanel.close': 'Close {name}',
+  // Closing a tab with unsaved changes (components/tab-close-dialogs.tsx)
+  'shell.discardTab.title': 'Discard changes?',
+  'shell.discardTab.confirm': 'Discard',
+  'shell.discardTab.body': 'Your changes to {name} will be lost.',
+  'shell.rootClose.title_one': 'Close a file with unsaved changes?',
+  'shell.rootClose.title_other': 'Close {count} files with unsaved changes?',
+  'shell.rootClose.confirm': 'Discard and close',
+  'shell.rootClose.keep': 'Keep',
+  'shell.rootClose.body':
+    "The pane's directory changed. Closing drops the changes; kept files can no longer be saved, but their text can be copied.",
+  // A search box and its toggle (components/session-search-field.tsx)
+  'shell.search.clear': 'Clear the search',
+  'shell.search.clearShort': 'Clear',
+  'shell.search.close': 'Close the search',
+  'shell.search.open': 'Search {noun}',
+  // A session in the mobile sheet (components/swipeable-session-item.tsx)
+  'shell.session.edit': 'Edit {name}',
+  'shell.session.remove': 'Remove {name}',
+  // The command history (components/command-history-dropdown.tsx)
+  'shell.history.placeholder':
+    'Search history... (↑↓ to navigate, Enter to select)',
+  'shell.history.search': 'Search command history',
+  'shell.history.close': 'Close history',
+  'shell.history.noMatch': 'No matching commands',
+  'shell.history.empty': 'No command history',
+  'shell.history.remove': 'Remove command: {text}',
+  'shell.history.clearAll': 'Clear all history',
+  'shell.loading': 'Loading…',
+  // The Select text sheet (components/select-text-sheet.tsx)
+  'shell.selectText.title': 'Select text',
+  'shell.selectText.bufferOnly':
+    'Only what the terminal on this page holds: the history stays on the server.',
+  'shell.selectText.truncated': 'The oldest lines were left out.',
+  'shell.selectText.loadMore': 'Load more',
+  'shell.selectText.copyAll': 'Copy all',
+  'shell.selectText.copy': 'Copy',
+  // The desktop side panel (components/side-panel.tsx)
+  'shell.panel.resize': 'Resize {name}',
+  'shell.panel.resizeHint': 'Drag to resize, double-click to reset',
+  'shell.panel.restore': 'Restore panel',
+  'shell.panel.maximize': 'Maximize panel',
+  // A session's icon (components/icon-picker.tsx)
+  'shell.icon.change': 'Change icon',
+  'shell.icon.choose': 'Choose Icon',
+  // An agent's last hour (components/status-timeline.tsx)
+  'shell.timeline.blocked': 'needs you',
+  'shell.timeline.working': 'working',
+  'shell.timeline.done': 'done',
+  'shell.timeline.idle': 'idle',
+  'shell.timeline.underMinute': '<1 min',
+  'shell.timeline.minutes': '{n} min',
+  'shell.timeline.label': 'Last 60 min: {totals}',
+  'shell.timeline.none': 'Last 60 min: no status changes recorded',
+  'shell.timeline.window': '60 min',
+  'shell.timeline.noData': 'No data yet',
+  // How full an agent is (components/usage-chip.tsx)
+  'shell.usage.context': 'context {percent}',
+  'shell.usage.limit': 'Codex {name} limit {percent}',
+  'shell.usage.label': 'Agent usage: {usage}',
+  'shell.usage.openLabel': 'Agent usage: {usage}. Open the agent overview',
+  'shell.usage.openTitle': 'Agent usage: open the overview',
+  // The Codex accounts' limits (components/account-usage-strip.tsx)
+  'shell.accounts': 'Accounts',
+  'shell.accounts.limit': 'Codex {name} limit',
+  'shell.accounts.used': '{percent} used',
+  'shell.accounts.usedReset': '{percent} used, {reset}',
+  'shell.accounts.updated': 'updated {ago}',
+  // A group of sessions and its New box (components/group-dialog.tsx)
+  'shell.group.workspace': 'workspace',
+  'shell.group.tmux': 'tmux session',
+  'shell.group.zellij': 'Zellij session',
+  'shell.group.invalidName': "This name can't be used",
+  'shell.group.invalidNameTmux':
+    "This name can't be used. Avoid : . * ? [ \\ and a leading = or -",
+  'shell.group.invalidCwd':
+    'Enter an absolute path on the host, or leave it empty',
+  'shell.group.notFound': 'No such directory on the host',
+  'shell.group.notDirectory': 'That path is a file, not a directory',
+  'shell.group.notAllowed': "A {noun} can't start in that directory",
+  'shell.group.busy': 'The directory did not answer. Try again',
+  'shell.group.exists': 'A {noun} of that name already exists',
+  'shell.group.unsupported': "This server can't create a {noun}",
+  'shell.group.createFailed': 'Could not create the {noun}',
+  'shell.group.enterName': 'Enter a name',
+  'shell.group.tooLong': 'Use at most {n} bytes',
+  'shell.group.maybeCreated':
+    'The {noun} may have been created. Check the list.',
+  'shell.group.new': 'New {noun}',
+  'shell.group.name': 'Name',
+  'shell.group.directory': 'Directory (an absolute path on the host)',
+  'shell.group.home': 'Home directory',
+  'shell.group.create': 'Create',
+  // The view switch (components/ui/view-switcher.tsx, ui/view-menu.tsx)
+  'shell.view': 'View',
+  'shell.view.current': 'View: {name}',
+  'shell.view.agents': 'Agents',
+  // The header (components/app-header.tsx)
+  'shell.header.fontSmaller': 'Decrease font size',
+  'shell.header.fontLarger': 'Increase font size',
+  'shell.header.exitFullscreen': 'Exit fullscreen',
+  'shell.header.enterFullscreen': 'Enter fullscreen',
+  'shell.header.fullscreen': 'Fullscreen',
+  'shell.header.openInMain': 'Open in main window',
+  // The header's overflow menu (components/settings-menu.tsx)
+  'shell.menu.more': 'More',
+  'shell.menu.moreUpdate': 'More, v{version} available',
+  'shell.menu.update': 'Update to v{version}',
+  'shell.menu.fontSize': 'Font size · {n}',
+  'shell.menu.theme': 'Theme',
+  'shell.menu.light': 'Light',
+  'shell.menu.dark': 'Dark',
+  'shell.menu.system': 'System',
+  'shell.menu.help': 'Help & gestures',
+  'shell.menu.about': 'About',
+  'shell.menu.copyLink': 'Copy link',
+  'shell.menu.popupHint': 'Shift: a popup',
+  'shell.menu.newWindow': 'Open in new window',
+  'shell.menu.logout': 'Log out',
+  'shell.menu.clearing': 'Clearing...',
+  'shell.menu.clearCache': 'Clear cache & reload',
+  // The session list (components/session-sidebar.tsx)
+  'shell.move.busy': 'Another move is running; try again',
+  'shell.move.changed': 'The list changed; try again',
+  'shell.move.linkedWorktree':
+    "A worktree moves with its repository's workspace",
+  'shell.move.unsupported': 'Reordering is not supported here',
+  'shell.move.failed': 'Could not move',
+  // The steps, joined into one sentence: "Clear the search, Show All and
+  // turn off Blocked sessions first to reorder"
+  'shell.reorder.clearSearch': 'clear the search',
+  'shell.reorder.showAll': 'Show All',
+  'shell.reorder.blockedFirst': 'turn off Blocked sessions first',
+  'shell.reorder.blockedFirstSettings':
+    'turn off Blocked sessions first in Settings',
+  'shell.reorder.and': '{first} and {last}',
+  'shell.reorder.hint': '{steps} to reorder',
+  'shell.group.renameFailed': 'Could not rename the {noun}',
+  'shell.group.newName': 'New name for {noun} {name}',
+  'shell.group.actions': 'Actions for {noun} {name}',
+  'shell.sidebar.sessionName': 'Session name',
+  'shell.sidebar.save': 'Save',
+  'shell.sidebar.add': 'Add',
+  'shell.sidebar.editSession': 'Edit session',
+  'shell.sidebar.removeSession': 'Remove session',
+  'shell.sidebar.rename': 'Rename',
+  'shell.sidebar.moveUp': 'Move up',
+  'shell.sidebar.moveDown': 'Move down',
+  'shell.sidebar.newWorktree': 'New worktree',
+  'shell.sidebar.openWorktree': 'Open worktree',
+  'shell.sidebar.removeWorktree': 'Remove worktree',
+  'shell.sidebar.actions': 'Actions for {name}',
+  'shell.sidebar.edit': 'Edit',
+  'shell.sidebar.delete': 'Delete',
+  'shell.sidebar.branch': 'branch',
+  'shell.sidebar.searchNoun': 'sessions',
+  'shell.sidebar.find': 'Find a session',
+  'shell.sidebar.noMatch': 'No sessions match',
+  'shell.sidebar.showAll': 'Show all',
+  'shell.sidebar.current': 'Current session',
+  'shell.sidebar.currentTag': 'Current',
+  'shell.sidebar.close': 'Close sessions',
+  'shell.sidebar.addNew': 'Add new session',
+  'shell.sidebar.new': 'New session',
+  'shell.sidebar.expand': 'Expand sidebar',
+  'shell.sidebar.expandFiltered': 'Expand sidebar, filtered',
+  'shell.sidebar.expandFilteredTitle': 'Expand sidebar (filtered)',
+  'shell.sidebar.collapse': 'Collapse sidebar',
+  // The terminal (components/terminal-view.tsx)
+  'shell.terminal.lost': 'Connection lost',
+  'shell.terminal.reconnect': '{reason} — Reconnect',
+  'shell.terminal.exited': 'process exited',
+  'shell.terminal.streamError': 'stream error',
+  // The app (App.tsx): toasts, banners and the close confirmations.
+  // <name></name> is where a session's or pane's name is drawn: never through
+  // a {name} value, since a name may hold what reads as a tag
+  'shell.paste.longPress':
+    'Long press paste not supported. Use the Paste button.',
+  'shell.paste.denied': 'Clipboard permission denied. Check browser settings.',
+  'shell.paste.notSecure': 'Clipboard requires HTTPS. Use text input to paste.',
+  'shell.paste.unsupported':
+    'Clipboard not supported. Use text input to paste.',
+  'shell.paste.failed': 'Clipboard access failed. Use text input to paste.',
+  'shell.drive.takenOver':
+    'Another device took over the terminal size. Reopen the page to take it back',
+  'shell.drive.failed':
+    'Could not fit the pane to this device; showing the desktop size',
+  'shell.viewOnly': 'View only',
+  'shell.viewOnly.refused': 'This device is view-only',
+  'shell.viewOnly.follows': 'View only: follows the active window',
+  'shell.viewOnly.oldTmux':
+    'View only is not available with this tmux: the terminal needs tmux 3.2 or later on the server',
+  'shell.viewOnly.banner':
+    'View only: you can watch this terminal but not type',
+  'shell.logoutFailed': 'Could not log out. Try again',
+  'shell.tabChanged': 'The tab changed; try again',
+  'shell.popupBlocked': 'Pop-up blocked',
+  'shell.packetLoss':
+    'This network seems to drop large replies, so the terminal cannot load. Lowering the Tailscale MTU on the server fixes it',
+  'shell.packetLoss.fix': 'How to fix',
+  'shell.image.notInserted': 'Image not inserted: {path}',
+  'shell.image.copyFailed': 'Could not copy the path',
+  'shell.image.uploading': 'Uploading image…',
+  'shell.image.uploaded': 'Image uploaded: {path}',
+  'shell.image.insert': 'Insert',
+  'shell.copied': 'Copied',
+  'shell.copyFailed': 'Could not copy',
+  'shell.group.hasWorktrees':
+    'This workspace has worktrees; remove them first, or close it in Herdr',
+  'shell.group.closeFailed': 'Could not close the {noun}',
+  'shell.addTabFailed': 'Could not add a tab',
+  'shell.link.fileMissing': 'File not found or not allowed',
+  'shell.link.noChanges': 'No changes for this file',
+  'shell.link.noSession': 'Session in link not found',
+  'shell.link.noPane': 'Pane in link not found',
+  'shell.link.copied': 'Link copied',
+  'shell.link.copyFailed': 'Could not copy the link',
+  'shell.focus.overview': 'Overview',
+  'shell.focus.noSessions': 'Not in a focus window',
+  'shell.update.reload': 'Reload',
+  'shell.update.reloading': 'Reloading…',
+  'shell.update.ready': 'A new version is ready',
+  'shell.update.readyVersion': 'Termote v{version} is ready',
+  'shell.close.sessionTitle': 'Close session?',
+  'shell.close.session': 'Close session',
+  'shell.close.sessionBody':
+    '<name></name> will be closed, along with anything still running in it.',
+  'shell.close.groupTitle': 'Close {noun}?',
+  'shell.close.group': 'Close {noun}',
+  'shell.close.groupBody_one':
+    'Close {noun} <name></name>? Its {count} tab and everything running in them will end.',
+  'shell.close.groupBody_other':
+    'Close {noun} <name></name>? Its {count} tabs and everything running in them will end.',
+  'shell.close.zellij': 'The session is deleted: Zellij cannot resurrect it.',
+  'shell.close.defaultGroup':
+    'Termote starts a new, empty "{name}" right away, and every device viewing it is disconnected.',
+  'shell.close.paneTitle': 'Close pane?',
+  'shell.close.pane': 'Close pane',
+  'shell.close.paneBody':
+    '<name></name> will be closed, along with anything still running in it. The other panes of this session stay open.',
+  'shell.close.running': 'Running: {names}.',
+  'shell.buffer.tmux': 'tmux buffer',
+  'shell.buffer.session': 'Session buffer',
+  'shell.paletteFailed': 'Could not load the command palette',
+  'shell.viewFailed': 'Could not load this view',
+} as const

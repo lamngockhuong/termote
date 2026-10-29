@@ -1,6 +1,7 @@
 import { Clock, Search, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { HistoryCommand } from '../hooks/use-command-history'
+import { useT } from '../i18n/i18n-context'
 import { FOCUS_RING } from './ui/button'
 
 interface Props {
@@ -18,6 +19,7 @@ export function CommandHistoryDropdown({
   onClear,
   onClose,
 }: Props) {
+  const { t } = useT()
   const [search, setSearch] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(-1)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -90,9 +92,9 @@ export function CommandHistoryDropdown({
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search history... (↑↓ to navigate, Enter to select)"
+          placeholder={t('shell.history.placeholder')}
           className="flex-1 bg-transparent text-sm text-fg outline-none placeholder:text-fg-subtle ui-terminal:font-label"
-          aria-label="Search command history"
+          aria-label={t('shell.history.search')}
           aria-controls="history-list"
           aria-activedescendant={
             selectedIndex >= 0 ? `history-item-${selectedIndex}` : undefined
@@ -101,7 +103,7 @@ export function CommandHistoryDropdown({
         <button
           onClick={onClose}
           className={`flex size-8 items-center justify-center rounded-control text-fg-muted transition-colors hover:bg-surface hover:text-fg pointer-coarse:size-touch ${FOCUS_RING}`}
-          aria-label="Close history"
+          aria-label={t('shell.history.close')}
         >
           <X size={16} />
         </button>
@@ -116,7 +118,7 @@ export function CommandHistoryDropdown({
       >
         {filtered.length === 0 ? (
           <div className="p-4 text-center text-sm text-fg-subtle">
-            {search ? 'No matching commands' : 'No command history'}
+            {search ? t('shell.history.noMatch') : t('shell.history.empty')}
           </div>
         ) : (
           filtered.map((cmd, index) => (
@@ -142,7 +144,7 @@ export function CommandHistoryDropdown({
                   onRemove(cmd.id)
                 }}
                 className={`flex size-8 items-center justify-center rounded-control transition-colors hover:bg-surface pointer-coarse:size-touch sm:hidden sm:group-hover:flex ${FOCUS_RING}`}
-                aria-label={`Remove command: ${cmd.text}`}
+                aria-label={t('shell.history.remove', { text: cmd.text })}
               >
                 <Trash2 size={14} className="text-danger" />
               </button>
@@ -158,7 +160,7 @@ export function CommandHistoryDropdown({
             onClick={onClear}
             className={`w-full rounded-control px-3 py-1.5 text-xs text-danger transition-colors hover:bg-danger/10 pointer-coarse:h-touch ${FOCUS_RING}`}
           >
-            Clear all history
+            {t('shell.history.clearAll')}
           </button>
         </div>
       )}

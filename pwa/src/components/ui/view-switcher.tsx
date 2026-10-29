@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import { type KeyboardEvent, useRef } from 'react'
+import { useT } from '../../i18n/i18n-context'
 import { FOCUS_RING } from './button'
 
 export interface ViewOption<T extends string> {
@@ -26,6 +27,7 @@ export function ViewSwitcher<T extends string>({
   onChange,
   panelId,
 }: Props<T>) {
+  const { t } = useT()
   const listRef = useRef<HTMLDivElement>(null)
   if (views.length < 2) return null
   const current = Math.max(
@@ -54,7 +56,7 @@ export function ViewSwitcher<T extends string>({
       ref={listRef}
       data-tour="view-switcher"
       role="tablist"
-      aria-label="View"
+      aria-label={t('shell.view')}
       onKeyDown={onKeyDown}
       className="flex shrink-0 gap-0.5 border border-border bg-surface p-0.5 rounded-control ui-native:rounded-full ui-native:border-0"
     >

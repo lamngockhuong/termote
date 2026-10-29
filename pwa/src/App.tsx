@@ -20,6 +20,7 @@ import {
   TERMINAL_VIEW_ID,
   type ViewContext,
   type ViewProps,
+  viewLabel,
   viewPanelId,
 } from './app-views'
 import { chatAgent, chatInputAgent } from './chat-agents'
@@ -28,7 +29,11 @@ import { AppHeader } from './components/app-header'
 import { CommandHistoryDropdown } from './components/command-history-dropdown'
 import type { CommandPaletteProps } from './components/command-palette'
 import { type ConnectionState, isDown } from './components/connection-indicator'
-import { GroupDialog } from './components/group-dialog'
+import {
+  GroupDialog,
+  type GroupKind,
+  groupNoun as groupNounOf,
+} from './components/group-dialog'
 import { HelpModal } from './components/help-modal'
 import { KeyboardToolbar } from './components/keyboard-toolbar'
 import { LazyBoundary, LoadFailed } from './components/lazy-boundary'
@@ -92,6 +97,10 @@ import { useKeymap, useShortcutDispatcher } from './hooks/use-shortcuts'
 import { useSidebarCollapsed } from './hooks/use-sidebar-collapsed'
 import { useStartAgent } from './hooks/use-start-agent'
 import { availableUpdate, useUpdateCheck } from './hooks/use-update-check'
+import { useT } from './i18n/i18n-context'
+import type { MessageKey } from './i18n/messages/en'
+import { Trans } from './i18n/trans'
+import type { Translate } from './i18n/translate'
 import type { Session, SessionPane } from './types/session'
 import { applyUiStyle, syncThemeColor } from './ui-style'
 import { buildAppCommands, type PaletteMode } from './utils/app-commands'
@@ -162,20 +171,19 @@ const shouldShowPasteError = (
 
 // Error-specific clipboard messages
 const getClipboardErrorMsg = (
+  t: Translate<MessageKey>,
   reason: PasteErrorReason,
   isLongPress = false,
 ): string => {
   switch (reason) {
     case 'not-allowed':
-      return isLongPress
-        ? 'Long press paste not supported. Use the Paste button.'
-        : 'Clipboard permission denied. Check browser settings.'
+      return isLongPress ? t('shell.paste.longPress') : t('shell.paste.denied')
     case 'not-secure':
-      return 'Clipboard requires HTTPS. Use text input to paste.'
+      return t('shell.paste.notSecure')
     case 'not-supported':
-      return 'Clipboard not supported. Use text input to paste.'
+      return t('shell.paste.unsupported')
     default:
-      return 'Clipboard access failed. Use text input to paste.'
+      return t('shell.paste.failed')
   }
 }
 
@@ -234,6 +242,7 @@ export default function App({
   views = APP_VIEWS,
   readOnly: readOnlyProp = false,
 }: AppProps = {}) {
+  const { t } = useT()
   const terminalRef = useRef<TerminalHandle>(null)
   // Stable, so the handlers that depend on it are not rebuilt every render;
   // it reads the ref at call time.
@@ -279,17 +288,19 @@ export default function App({
     (reason: 'taken-over' | 'failed') =>
       showToast(
         reason === 'taken-over'
-          ? 'Another device took over the terminal size. Reopen the page to take it back'
-          : 'Could not fit the pane to this device; showing the desktop size',
+          ? t('shell.drive.takenOver')
+          : t('shell.drive.failed'),
         'warning',
       ),
-    [showToast],
+    [showToast, t],
   )
   // A write the server refused as view-only (a control the UI missed).
   useEffect(
     () =>
-      onViewOnlyRefusal(() => showToast('This device is view-only', 'warning')),
-    [showToast],
+      onViewOnlyRefusal(() =>
+        showToast(t('shell.viewOnly.refused'), 'warning'),
+      ),
+    [showToast, t],
   )
   // State of the terminal stream, reported by TerminalView.
   const [streamState, setStreamState] = useState<ConnectionState>('connecting')
@@ -377,8 +388,8 @@ export default function App({
     } catch {
       // Shown below, like a refusal.
     }
-    showToast('Could not log out. Try again', 'danger')
-  }, [showToast, disablePush])
+    showToast(t('shell.logoutFailed'), 'danger')
+  }, [showToast, disablePush, t])
   // Each snapshot that still lists the pane on screen (a new sessions array
   // per poll): a stream that exited with it, a tmux session closed and made
   // again, reconnects.
@@ -412,10 +423,10 @@ export default function App({
   const confirmRemove = useCallback(() => {
     // Only reachable from the open dialog, which needs a pending tab
     removeSession(pendingRemove!.id).catch(() =>
-      showToast('The tab changed; try again', 'warning'),
+      showToast(t('shell.tabChanged'), 'warning'),
     )
     setPendingRemoveKey(null)
-  }, [pendingRemove, removeSession, showToast])
+  }, [pendingRemove, removeSession, showToast, t])
   // Closing a pane ends what runs in it too, so it asks the same way.
   const [pendingPaneId, setPendingPaneId] = useState<string | null>(null)
   // The pane layout actions, on the pane shown: offered where the backend
@@ -449,11 +460,12 @@ export default function App({
   // closed here. The default session (tmux: its id is its name, the others
   // are "$N"; Zellij: the one named "main") cannot be renamed, and closing
   // it starts a new, empty one at once.
-  const groupNoun = isHerdr
+  const groupKind: GroupKind = isHerdr
     ? 'workspace'
     : isZellij
-      ? 'Zellij session'
-      : 'tmux session'
+      ? 'zellij'
+      : 'tmux'
+  const groupNoun = groupNounOf(groupKind, t)
   const isDefaultGroup = (id: string) =>
     isZellij ? id === ZELLIJ_DEFAULT_GROUP_ID : !isHerdr && !id.startsWith('$')
   const [newGroupOpen, setNewGroupOpen] = useState(false)
@@ -493,18 +505,18 @@ export default function App({
         groups: !!mux.caps.reorderGroups,
         onMoveTab: (id, index) =>
           moveTab(id, index).catch((err) =>
-            showToast(moveProblem(err), 'danger'),
+            showToast(moveProblem(err, t), 'danger'),
           ),
         onMoveGroup: (id, index) =>
           moveGroup(id, index).catch((err) =>
-            showToast(moveProblem(err), 'danger'),
+            showToast(moveProblem(err, t), 'danger'),
           ),
         moving,
       }
   const groupActions: GroupActions | undefined =
     mux.caps.groups && !readOnly
       ? {
-          noun: groupNoun,
+          kind: groupKind,
           onNew: () => setNewGroupOpen(true),
           onRename: renameGroup,
           onClose: setPendingGroupCloseId,
@@ -597,9 +609,14 @@ export default function App({
     () => ({ mux, session: activeSession, readOnly, agentStart }),
     [mux, activeSession, readOnly, agentStart],
   )
+  // Each named in the app's language
   const offeredViews = useMemo(
-    () => availableViews(views, viewContext),
-    [views, viewContext],
+    () =>
+      availableViews(views, viewContext).map((v) => ({
+        ...v,
+        label: viewLabel(v, t),
+      })),
+    [views, viewContext, t],
   )
   // Desktop shows the panel views next to the terminal, from a header
   // toggle; mobile has no room for that and keeps them in the switcher.
@@ -659,9 +676,10 @@ export default function App({
   // own; a phone has no second window to open
   const openLinkWindow = useCallback(
     (hash: string, popup: boolean) => {
-      if (!openInWindow(hash, popup)) showToast('Pop-up blocked', 'warning')
+      if (!openInWindow(hash, popup))
+        showToast(t('shell.popupBlocked'), 'warning')
     },
-    [showToast],
+    [showToast, t],
   )
   // The link of a tab (and pane) of this server, in a focus window
   const soloLink = useCallback(
@@ -817,17 +835,17 @@ export default function App({
         if (packetHintShownRef.current) return
         packetHintShownRef.current = true
         showToast(
-          'This network seems to drop large replies, so the terminal cannot load. Lowering the Tailscale MTU on the server fixes it',
+          t('shell.packetLoss'),
           'warning',
           {
-            label: 'How to fix',
+            label: t('shell.packetLoss.fix'),
             onClick: () =>
               window.open(LARGE_PACKET_HELP_URL, '_blank', 'noopener'),
           },
           15_000,
         )
       }),
-    [showToast],
+    [showToast, t],
   )
 
   // tmux scrolls its own history (copy mode); other backends scroll the
@@ -853,17 +871,17 @@ export default function App({
   const insertUploadedPath = useCallback(
     (insert: string) => {
       if (getTerminal()?.paste(`${insert} `)) return
-      showToast(`Image not inserted: ${insert}`, 'warning', {
-        label: 'Copy',
+      showToast(t('shell.image.notInserted', { path: insert }), 'warning', {
+        label: t('shell.selectText.copy'),
         // No clipboard API over plain HTTP: that throws, and is caught too.
         onClick: () => {
           Promise.resolve()
             .then(() => navigator.clipboard.writeText(insert))
-            .catch(() => showToast('Could not copy the path', 'danger'))
+            .catch(() => showToast(t('shell.image.copyFailed'), 'danger'))
         },
       })
     },
-    [getTerminal, showToast],
+    [getTerminal, showToast, t],
   )
 
   const attachImage = useCallback(
@@ -872,7 +890,7 @@ export default function App({
       let uploadingToast = 0
       const timer = setTimeout(() => {
         uploadingToast = showToast(
-          'Uploading image…',
+          t('shell.image.uploading'),
           'info',
           undefined,
           UPLOAD_TIMEOUT_MS,
@@ -887,13 +905,17 @@ export default function App({
       clearTimeout(timer)
       switch (result.status) {
         case 'inserted':
-          setToast((t) => (t?.id === uploadingToast ? null : t))
+          setToast((cur) => (cur?.id === uploadingToast ? null : cur))
           break
         case 'pane-changed':
-          showToast(`Image uploaded: ${result.insert}`, 'info', {
-            label: 'Insert',
-            onClick: () => insertUploadedPath(result.insert),
-          })
+          showToast(
+            t('shell.image.uploaded', { path: result.insert }),
+            'info',
+            {
+              label: t('shell.image.insert'),
+              onClick: () => insertUploadedPath(result.insert),
+            },
+          )
           break
         case 'not-inserted':
           insertUploadedPath(result.insert)
@@ -902,7 +924,7 @@ export default function App({
           showToast(uploadErrorMessage(result.reason), 'danger')
       }
     },
-    [getTerminal, showToast, insertUploadedPath],
+    [getTerminal, showToast, insertUploadedPath, t],
   )
 
   const handleAttachImage = useCallback(async () => {
@@ -918,12 +940,12 @@ export default function App({
         images: uploadsOn,
       })
       if (shouldShowPasteError(result)) {
-        showToast(getClipboardErrorMsg(result.reason, longPress), 'danger')
+        showToast(getClipboardErrorMsg(t, result.reason, longPress), 'danger')
       } else if (result.ok && result.image) {
         await attachImage(result.image)
       }
     },
-    [getTerminal, uploadsOn, showToast, attachImage],
+    [getTerminal, uploadsOn, showToast, attachImage, t],
   )
 
   // The history follows the finger, except with tmux copy mode, which only
@@ -1043,10 +1065,11 @@ export default function App({
 
   const onTerminalCopy = useCallback(
     (result: 'ok' | 'failed') => {
-      if (result === 'ok') showToast('Copied', 'success', undefined, 1500)
-      else showToast('Could not copy', 'danger')
+      if (result === 'ok')
+        showToast(t('shell.copied'), 'success', undefined, 1500)
+      else showToast(t('shell.copyFailed'), 'danger')
     },
-    [showToast],
+    [showToast, t],
   )
 
   const handleCtrlShiftKey = useCallback(
@@ -1127,10 +1150,10 @@ export default function App({
   const selectSession = useCallback(
     async (id: string, paneId?: string) => {
       if ((await switchSession(id, paneId)) !== 'view-only') return true
-      showToast('View only: follows the active window', 'info')
+      showToast(t('shell.viewOnly.follows'), 'info')
       return false
     },
-    [switchSession, showToast],
+    [switchSession, showToast, t],
   )
 
   // The view is kept for the pane, as a link's is: the pane comes up on it
@@ -1158,14 +1181,11 @@ export default function App({
     setPendingGroupCloseId(null)
     closeGroup(id).catch((err) => {
       if (err instanceof RequestError && err.code === 'has_worktrees') {
-        showToast(
-          'This workspace has worktrees; remove them first, or close it in Herdr',
-          'warning',
-        )
+        showToast(t('shell.group.hasWorktrees'), 'warning')
       } else if (
         !(err instanceof RequestError && err.code === 'unknown_group')
       ) {
-        showToast(`Could not close the ${groupNoun}`, 'danger')
+        showToast(t('shell.group.closeFailed', { noun: groupNoun }), 'danger')
       }
     })
   }
@@ -1202,13 +1222,13 @@ export default function App({
         return true
       } catch (err) {
         showToast(
-          err instanceof RequestError ? err.message : 'Could not add a tab',
+          err instanceof RequestError ? err.message : t('shell.addTabFailed'),
           'warning',
         )
         return false
       }
     },
-    [addSession, showToast],
+    [addSession, showToast, t],
   )
 
   const handleMobileAdd = async (
@@ -1227,7 +1247,7 @@ export default function App({
   const openLinkFile = (link: DeepLink, paneId: string) => {
     if (focus) setFocusFile(null)
     if (link.badFile) {
-      showToast('File not found or not allowed', 'warning')
+      showToast(t('shell.link.fileMissing'), 'warning')
       return
     }
     if (!link.file || !link.view) return
@@ -1247,7 +1267,7 @@ export default function App({
         orig: link.orig,
         staged: !!link.staged,
       }).then((shown) => {
-        if (shown === false) showToast('No changes for this file', 'warning')
+        if (shown === false) showToast(t('shell.link.noChanges'), 'warning')
       })
       return
     }
@@ -1258,7 +1278,7 @@ export default function App({
       readOnly ? undefined : link.place,
     ).then((result) => {
       if (result === 'missing' || result === 'failed')
-        showToast('File not found or not allowed', 'warning')
+        showToast(t('shell.link.fileMissing'), 'warning')
     })
   }
 
@@ -1305,12 +1325,12 @@ export default function App({
       (s) => s.id === link.tab && s.groupId === link.group,
     )
     if (!target) {
-      showToast('Session in link not found', 'warning')
+      showToast(t('shell.link.noSession'), 'warning')
       return
     }
     // A pane that is gone still opens its tab, with the tab's own pane.
     if (link.pane && !target.panes?.some((p) => p.id === link.pane)) {
-      showToast('Pane in link not found', 'warning')
+      showToast(t('shell.link.noPane'), 'warning')
     }
     const left = currentLinkRef.current
     const hash = window.location.hash
@@ -1430,15 +1450,15 @@ export default function App({
       await navigator.clipboard.writeText(
         `${origin}${pathname}${search}${shownLink}`,
       )
-      showToast('Link copied', 'success')
+      showToast(t('shell.link.copied'), 'success')
     } catch {
-      showToast('Could not copy the link', 'danger')
+      showToast(t('shell.link.copyFailed'), 'danger')
     }
-  }, [shownLink, showToast])
+  }, [shownLink, showToast, t])
   // A focus window is named for its file, or its tab, among the others
   const focusTitle = focus
     ? overviewOpen
-      ? 'Overview'
+      ? t('shell.focus.overview')
       : focusFile && linkView === focusFile.view
         ? focusFile.file.slice(focusFile.file.lastIndexOf('/') + 1)
         : activeSession.name
@@ -1460,11 +1480,11 @@ export default function App({
       main.location.href = url
       main.focus()
     } else if (!window.open(url, '_blank')) {
-      showToast('Pop-up blocked', 'warning')
+      showToast(t('shell.popupBlocked'), 'warning')
       return
     }
     window.close()
-  }, [shownLink, showToast])
+  }, [shownLink, showToast, t])
 
   // Opening and closing go through the address, so each is a history entry.
   // The usage chip opens it on its pane's card.
@@ -1551,8 +1571,12 @@ export default function App({
     if (!overviewOpen) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented) return
-      const t = e.target as Element | null
-      if (t?.closest?.('dialog,[role="dialog"],[role="menu"],[role="listbox"]'))
+      const target = e.target as Element | null
+      if (
+        target?.closest?.(
+          'dialog,[role="dialog"],[role="menu"],[role="listbox"]',
+        )
+      )
         return
       closeOverview()
     }
@@ -1896,14 +1920,18 @@ export default function App({
                     disabled={appUpdate.reloading}
                     onClick={() => reloadToNewVersion()}
                   >
-                    {appUpdate.reloading ? 'Reloading…' : 'Reload'}
+                    {appUpdate.reloading
+                      ? t('shell.update.reloading')
+                      : t('shell.update.reload')}
                   </Button>
                 }
               >
                 {appUpdate.server &&
                 appUpdate.server.version !== APP_INFO.version
-                  ? `Termote v${appUpdate.server.version} is ready`
-                  : 'A new version is ready'}
+                  ? t('shell.update.readyVersion', {
+                      version: appUpdate.server.version,
+                    })
+                  : t('shell.update.ready')}
               </Banner>
             )}
           </div>
@@ -1914,14 +1942,9 @@ export default function App({
           )}
           {readOnly &&
             (viewStreamOff ? (
-              <Banner variant="warning">
-                View only is not available with this tmux: the terminal needs
-                tmux 3.2 or later on the server
-              </Banner>
+              <Banner variant="warning">{t('shell.viewOnly.oldTmux')}</Banner>
             ) : (
-              <Banner>
-                View only: you can watch this terminal but not type
-              </Banner>
+              <Banner>{t('shell.viewOnly.banner')}</Banner>
             ))}
           {/* Split tab: pick the pane to stream (Herdr, Zellij) or to focus
               (tmux, where picking is a write: a view-only device watches) */}
@@ -2042,11 +2065,11 @@ export default function App({
                     toolbar for the terminal. View-only has no input at all. */}
                 {overviewOpen ? null : readOnly ? (
                   <ReadOnlyBar
-                    label="View only"
+                    label={t('shell.viewOnly')}
                     action={
                       isTerminalView && (
                         <Button size="sm" onClick={openSelectText}>
-                          Select text
+                          {t('shell.selectText.title')}
                         </Button>
                       )
                     }
@@ -2163,44 +2186,41 @@ export default function App({
       {/* Modals */}
       <ConfirmDialog
         isOpen={!!pendingRemove}
-        title="Close session?"
-        confirmLabel="Close session"
+        title={t('shell.close.sessionTitle')}
+        confirmLabel={t('shell.close.session')}
         destructive
         onConfirm={confirmRemove}
         onCancel={cancelRemove}
       >
         <p className="m-0">
-          <span className="font-medium text-fg">
-            {visibleUnsafe(pendingRemove?.name ?? '')}
-          </span>{' '}
-          will be closed, along with anything still running in it.
+          <Trans
+            k="shell.close.sessionBody"
+            tags={{ name: boldName(pendingRemove?.name) }}
+          />
         </p>
         <RunningLine names={pendingRemove?.commands ?? []} />
       </ConfirmDialog>
       <ConfirmDialog
         isOpen={!!pendingGroupClose}
-        title={`Close ${groupNoun}?`}
-        confirmLabel={`Close ${groupNoun}`}
+        title={t('shell.close.groupTitle', { noun: groupNoun })}
+        confirmLabel={t('shell.close.group', { noun: groupNoun })}
         destructive
         onConfirm={confirmGroupClose}
         onCancel={() => setPendingGroupCloseId(null)}
       >
         <p className="m-0">
-          Close {groupNoun}{' '}
-          <span className="font-medium text-fg">
-            "{visibleUnsafe(pendingGroupClose?.name ?? '')}"
-          </span>
-          ? Its {pendingGroupTabs} {pendingGroupTabs === 1 ? 'tab' : 'tabs'} and
-          everything running in them will end.
-          {pendingGroupClose && isZellij && (
-            <> The session is deleted: Zellij cannot resurrect it.</>
-          )}
+          <Trans
+            k="shell.close.groupBody"
+            vars={{ noun: groupNoun, count: pendingGroupTabs }}
+            tags={{ name: boldName(pendingGroupClose?.name, true) }}
+          />
+          {pendingGroupClose && isZellij && <> {t('shell.close.zellij')}</>}
           {pendingGroupClose && isDefaultGroup(pendingGroupClose.id) && (
             <>
               {' '}
-              Termote starts a new, empty "
-              {visibleUnsafe(pendingGroupClose.name)}" right away, and every
-              device viewing it is disconnected.
+              {t('shell.close.defaultGroup', {
+                name: visibleUnsafe(pendingGroupClose.name),
+              })}
             </>
           )}
         </p>
@@ -2212,7 +2232,7 @@ export default function App({
       </ConfirmDialog>
       {newGroupOpen && (
         <GroupDialog
-          noun={groupNoun}
+          kind={groupKind}
           onClose={() => setNewGroupOpen(false)}
           onCreate={async (name, cwd, isOpen) => {
             await createGroup(name, cwd, isOpen)
@@ -2258,18 +2278,17 @@ export default function App({
       )}
       <ConfirmDialog
         isOpen={!!pendingPane}
-        title="Close pane?"
-        confirmLabel="Close pane"
+        title={t('shell.close.paneTitle')}
+        confirmLabel={t('shell.close.pane')}
         destructive
         onConfirm={confirmPaneClose}
         onCancel={cancelPaneClose}
       >
         <p className="m-0">
-          <span className="font-medium text-fg">
-            {visibleUnsafe(pendingPane?.label ?? '')}
-          </span>{' '}
-          will be closed, along with anything still running in it. The other
-          panes of this session stay open.
+          <Trans
+            k="shell.close.paneBody"
+            tags={{ name: boldName(pendingPane?.label) }}
+          />
         </p>
         <RunningLine
           names={pendingPane?.command ? [pendingPane.command] : []}
@@ -2294,7 +2313,9 @@ export default function App({
         onUpdateSetting={updateSetting}
         tmuxBufferSupported={copyModeSupported}
         pasteBufferLabel={
-          mux.backend === 'tmux' ? 'tmux buffer' : 'Session buffer'
+          mux.backend === 'tmux'
+            ? t('shell.buffer.tmux')
+            : t('shell.buffer.session')
         }
         driveSizeSupported={!!mux.caps.driveSize && !readOnly}
         pushAvailable={!!mux.caps.push}
@@ -2326,7 +2347,7 @@ export default function App({
           // the chunk again
           fallback={() => null}
           onError={() => {
-            showToast('Could not load the command palette', 'danger')
+            showToast(t('shell.paletteFailed'), 'danger')
             setPaletteMode(null)
           }}
         >
@@ -2358,7 +2379,7 @@ export default function App({
                 mux.caps.clientSideSelect || !readOnly ? selectPane : undefined
               }
               openInWindow={focus ? undefined : openPickWindow}
-              sessionsOff={focus ? 'Not in a focus window' : undefined}
+              sessionsOff={focus ? t('shell.focus.noSessions') : undefined}
             />
           </Suspense>
         </LazyBoundary>
@@ -2457,11 +2478,12 @@ function ViewSlot({
   View: NonNullable<AppView['Main']>
   props: ViewProps
 }) {
+  const { t } = useT()
   return (
     <LazyBoundary
       onRetry={View.retry}
       fallback={(retry) => (
-        <LoadFailed message="Could not load this view" retry={retry} />
+        <LoadFailed message={t('shell.viewFailed')} retry={retry} />
       )}
     >
       <Suspense fallback={null}>
@@ -2471,8 +2493,19 @@ function ViewSlot({
   )
 }
 
+// A name in a close confirmation, in bold (quoted: a group's), drawn for
+// the <name></name> of its message
+const boldName =
+  (name = '', quoted = false) =>
+  () => (
+    <span className="font-medium text-fg">
+      {quoted ? `"${visibleUnsafe(name)}"` : visibleUnsafe(name)}
+    </span>
+  )
+
 // What a close confirmation will stop, as the last snapshot named it.
 function RunningLine({ names }: { names: string[] }) {
-  const text = formatRunning(names)
+  const { t } = useT()
+  const text = formatRunning(names, t)
   return text ? <p className="m-0 mt-2">{text}</p> : null
 }

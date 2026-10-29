@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RequestError } from '../hooks/use-mux-api'
+import { tFor } from '../i18n/i18n-context'
 import { GroupDialog, groupProblem } from './group-dialog'
 
 beforeEach(() => {
@@ -14,7 +15,7 @@ beforeEach(() => {
 
 const setup = (onCreate = vi.fn(async () => {})) => {
   const onClose = vi.fn()
-  render(<GroupDialog noun="workspace" onClose={onClose} onCreate={onCreate} />)
+  render(<GroupDialog kind="workspace" onClose={onClose} onCreate={onCreate} />)
   return {
     onCreate,
     onClose,
@@ -117,7 +118,7 @@ describe('GroupDialog', () => {
 
 describe('groupProblem', () => {
   it('a workspace name has no character list', () => {
-    expect(groupProblem('invalid_name', 'workspace')).toBe(
+    expect(groupProblem('invalid_name', 'workspace', tFor('en'))).toBe(
       "This name can't be used",
     )
   })
@@ -137,7 +138,7 @@ describe('groupProblem', () => {
       ['unsupported', "This server can't create a tmux session"],
       ['', 'Could not create the tmux session'],
     ]) {
-      expect(groupProblem(code, 'tmux session')).toBe(text)
+      expect(groupProblem(code, 'tmux', tFor('en'))).toBe(text)
     }
   })
 })

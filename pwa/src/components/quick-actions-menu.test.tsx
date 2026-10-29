@@ -2,14 +2,14 @@ import { describe, expect, it, vi } from 'vitest'
 import { QUICK_ACTIONS, runAction } from './quick-actions-menu'
 
 const action = (label: string) => {
-  const found = QUICK_ACTIONS.find((a) => a.label === label)
+  const found = QUICK_ACTIONS.find((a) => a.id === label)
   if (!found) throw new Error(`no action ${label}`)
   return found
 }
 
 describe('QUICK_ACTIONS', () => {
   it('lists every quick action in order', () => {
-    expect(QUICK_ACTIONS.map((a) => a.label)).toEqual([
+    expect(QUICK_ACTIONS.map((a) => a.id)).toEqual([
       'Clear',
       'Cancel',
       'Clear line',

@@ -1,5 +1,6 @@
 import { Pencil, Trash2 } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
+import { useT } from '../i18n/i18n-context'
 import type { Session } from '../types/session'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { AgentStatusBadge } from './agent-status-badge'
@@ -26,6 +27,7 @@ export function SwipeableSessionItem({
   canRemove,
   canEdit,
 }: Props) {
+  const { t } = useT()
   const [offsetX, setOffsetX] = useState(0)
   const [isAnimating, setIsAnimating] = useState(false)
   const touchStartRef = useRef({ x: 0, y: 0, time: 0 })
@@ -154,7 +156,7 @@ export function SwipeableSessionItem({
           <button
             type="button"
             onClick={handleEdit}
-            aria-label={`Edit ${session.name}`}
+            aria-label={t('shell.session.edit', { name: session.name })}
             className="flex h-full w-[70px] items-center justify-center bg-accent text-accent-fg active:opacity-90"
           >
             <Pencil size={20} aria-hidden="true" />
@@ -165,7 +167,7 @@ export function SwipeableSessionItem({
           <button
             type="button"
             onClick={handleRemove}
-            aria-label={`Remove ${session.name}`}
+            aria-label={t('shell.session.remove', { name: session.name })}
             className="flex h-full w-[70px] items-center justify-center bg-danger text-white active:opacity-90 dark:text-bg"
           >
             <Trash2 size={20} aria-hidden="true" />

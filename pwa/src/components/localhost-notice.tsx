@@ -1,3 +1,4 @@
+import { useT } from '../i18n/i18n-context'
 import { loopbackAddress } from '../utils/loopback-address'
 import { Banner } from './ui/banner'
 import { Button } from './ui/button'
@@ -11,6 +12,7 @@ interface Props {
 // local settings and drafts do not follow, and an installed app keeps its
 // address, so it has to be installed again there.
 export function LocalhostNotice({ onDismiss }: Props) {
+  const { t } = useT()
   const link = loopbackAddress()
   if (!link) return null
   return (
@@ -19,22 +21,19 @@ export function LocalhostNotice({ onDismiss }: Props) {
       action={
         <>
           <Button variant="ghost" size="sm" onClick={onDismiss}>
-            Dismiss
+            {t('shell.localhost.dismiss')}
           </Button>
           <Button
             variant="primary"
             size="sm"
             onClick={() => window.location.assign(link)}
           >
-            Open 127.0.0.1
+            {t('shell.localhost.open')}
           </Button>
         </>
       }
     >
-      Opened through localhost: every connection tries IPv6 first, which can
-      slow each tab switch. Use 127.0.0.1 instead. It is another address to the
-      browser: you sign in again there, settings and unsaved drafts stay here,
-      and an installed app has to be installed again.
+      {t('shell.localhost.body')}
     </Banner>
   )
 }

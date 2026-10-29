@@ -1,4 +1,5 @@
 import type { OverviewAccount } from '../hooks/use-mux-api'
+import { useT } from '../i18n/i18n-context'
 import { formatAgo } from '../utils/format-ago'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import {
@@ -21,10 +22,11 @@ interface Props {
 // older than USAGE_STALE_MS are dimmed; a window past its reset is left out.
 // Nothing without an account.
 export function AccountUsageStrip({ accounts, now }: Props) {
+  const { t } = useT()
   if (accounts.length === 0) return null
   return (
     <section
-      aria-label="Accounts"
+      aria-label={t('shell.accounts')}
       className="mb-3 flex flex-col gap-2 rounded-panel border border-border bg-surface px-3 py-2 text-[12px] ui-terminal:bg-bg"
     >
       {accounts.map((a) => {
@@ -38,6 +40,7 @@ export function AccountUsageStrip({ accounts, now }: Props) {
             className={`flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5 ${stale ? 'opacity-60' : ''}`}
           >
             <span className="shrink-0 font-semibold text-fg">
+              {/* i18n-ignore: the product's name */}
               Codex
               {a.plan && (
                 <span className="font-normal text-fg-muted">
@@ -59,8 +62,17 @@ export function AccountUsageStrip({ accounts, now }: Props) {
                   <span className="shrink-0 text-fg-muted">{name}</span>
                   <UsageMeter
                     percent={w.usedPercent}
-                    label={`Codex ${name} limit`}
-                    valueText={`${percentLabel(w.usedPercent)} used${reset ? `, ${reset}` : ''}`}
+                    label={t('shell.accounts.limit', { name })}
+                    valueText={
+                      reset
+                        ? t('shell.accounts.usedReset', {
+                            percent: percentLabel(w.usedPercent),
+                            reset,
+                          })
+                        : t('shell.accounts.used', {
+                            percent: percentLabel(w.usedPercent),
+                          })
+                    }
                     className="w-16 shrink-0"
                   />
                   <span className="shrink-0 tabular-nums text-fg">
@@ -74,7 +86,9 @@ export function AccountUsageStrip({ accounts, now }: Props) {
             })}
             {known && (
               <span className="shrink-0 text-fg-subtle">
-                updated {formatAgo(Math.max(0, now - updated))}
+                {t('shell.accounts.updated', {
+                  ago: formatAgo(Math.max(0, now - updated)),
+                })}
               </span>
             )}
           </div>

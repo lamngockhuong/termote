@@ -1,3 +1,4 @@
+import { useT } from '../i18n/i18n-context'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { ConfirmDialog } from './ui/confirm-dialog'
 
@@ -13,16 +14,17 @@ export function DiscardTabDialog({
   onConfirm: () => void
   onCancel: () => void
 }) {
+  const { t } = useT()
   return (
     <ConfirmDialog
       isOpen
-      title="Discard changes?"
-      confirmLabel="Discard"
+      title={t('shell.discardTab.title')}
+      confirmLabel={t('shell.discardTab.confirm')}
       destructive
       onConfirm={onConfirm}
       onCancel={onCancel}
     >
-      Your changes to {visibleUnsafe(name)} will be lost.
+      {t('shell.discardTab.body', { name: visibleUnsafe(name) })}
     </ConfirmDialog>
   )
 }
@@ -37,19 +39,19 @@ export function RootCloseDialog({
   count: number
   onResolve: (close: boolean) => void
 }) {
+  const { t } = useT()
   return (
     <ConfirmDialog
       isOpen={count > 0}
-      title={`Close ${count === 1 ? 'a file' : `${count} files`} with unsaved changes?`}
+      title={t('shell.rootClose.title', { count })}
       // Not "Close": the sheet's own close button has that name
-      confirmLabel="Discard and close"
-      cancelLabel="Keep"
+      confirmLabel={t('shell.rootClose.confirm')}
+      cancelLabel={t('shell.rootClose.keep')}
       destructive
       onConfirm={() => onResolve(true)}
       onCancel={() => onResolve(false)}
     >
-      The pane's directory changed. Closing drops the changes; kept files can no
-      longer be saved, but their text can be copied.
+      {t('shell.rootClose.body')}
     </ConfirmDialog>
   )
 }

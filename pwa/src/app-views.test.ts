@@ -8,8 +8,10 @@ import {
   TASKS_VIEW_ID,
   TERMINAL_VIEW_ID,
   type ViewContext,
+  viewLabel,
   viewPanelId,
 } from './app-views'
+import { tFor } from './i18n/i18n-context'
 
 const ctx: ViewContext = {
   mux: { backend: 'tmux', caps: { clientSideSelect: false, copyMode: true } },
@@ -131,5 +133,14 @@ describe('app views', () => {
 
   it('names the element that shows a view', () => {
     expect(viewPanelId('chat')).toBe('view-panel-chat')
+  })
+
+  it("names a view in the app's language, or by its own text or id", () => {
+    const [terminal] = APP_VIEWS
+    expect(viewLabel(terminal, tFor('en'))).toBe('Terminal')
+    expect(viewLabel(APP_VIEWS[2], tFor('vi'))).toBe('File')
+    const own = { ...terminal, labelKey: undefined }
+    expect(viewLabel({ ...own, label: 'Logs' }, tFor('en'))).toBe('Logs')
+    expect(viewLabel(own, tFor('en'))).toBe(TERMINAL_VIEW_ID)
   })
 })

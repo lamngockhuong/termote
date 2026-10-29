@@ -7,6 +7,7 @@ import {
   useState,
 } from 'react'
 import { usePaneText } from '../hooks/use-pane-text'
+import { useT } from '../i18n/i18n-context'
 import { copyText } from '../utils/copy-text'
 import { recordSelection } from '../utils/pane-selection'
 import { splitUnsafe } from '../utils/unsafe-chars'
@@ -42,6 +43,7 @@ export function SelectTextSheet({
   readBuffer: () => string
   onCopied: (result: 'ok' | 'failed') => void
 }) {
+  const { t } = useT()
   const { text, source, loading, truncated, canLoadMore, loadMore } =
     usePaneText({ paneId, useServer, readBuffer })
   const preRef = useRef<HTMLPreElement>(null)
@@ -80,17 +82,16 @@ export function SelectTextSheet({
   }
 
   return (
-    <Sheet isOpen onClose={onClose} title="Select text">
+    <Sheet isOpen onClose={onClose} title={t('shell.selectText.title')}>
       <div className="flex flex-col">
         {source === 'buffer' && !loading && (
           <p className="m-0 px-4 pt-3 text-[13px] text-fg-muted">
-            Only what the terminal on this page holds: the history stays on the
-            server.
+            {t('shell.selectText.bufferOnly')}
           </p>
         )}
         {truncated && (
           <p className="m-0 px-4 pt-3 text-[13px] text-fg-muted">
-            The oldest lines were left out.
+            {t('shell.selectText.truncated')}
           </p>
         )}
         <div
@@ -98,7 +99,9 @@ export function SelectTextSheet({
           className="mx-4 my-3 h-[55vh] overflow-auto rounded-control border border-border bg-bg"
         >
           {loading ? (
-            <p className="m-0 p-3 text-[13px] text-fg-muted">Loading…</p>
+            <p className="m-0 p-3 text-[13px] text-fg-muted">
+              {t('shell.loading')}
+            </p>
           ) : (
             <pre
               ref={preRef}
@@ -133,12 +136,12 @@ export function SelectTextSheet({
         <div className="flex flex-wrap items-center gap-2 px-4 pb-3">
           {canLoadMore && (
             <Button variant="ghost" onClick={loadMore}>
-              Load more
+              {t('shell.selectText.loadMore')}
             </Button>
           )}
           <div className="ml-auto flex gap-2">
             <Button disabled={loading || !text} onClick={() => copy(text)}>
-              Copy all
+              {t('shell.selectText.copyAll')}
             </Button>
             <Button
               variant="primary"
@@ -151,7 +154,7 @@ export function SelectTextSheet({
                 if (range) copy(rangeText(range))
               }}
             >
-              Copy
+              {t('shell.selectText.copy')}
             </Button>
           </div>
         </div>

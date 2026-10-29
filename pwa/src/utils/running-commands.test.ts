@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { tFor } from '../i18n/i18n-context'
 import { formatRunning, uniqueNames } from './running-commands'
 
 describe('uniqueNames', () => {
@@ -18,17 +19,17 @@ describe('uniqueNames', () => {
 
 describe('formatRunning', () => {
   it('names one or several commands', () => {
-    expect(formatRunning(['vim'])).toBe('Running: vim.')
-    expect(formatRunning(['vim', 'npm'])).toBe('Running: vim, npm.')
+    expect(formatRunning(['vim'], tFor('en'))).toBe('Running: vim.')
+    expect(formatRunning(['vim', 'npm'], tFor('en'))).toBe('Running: vim, npm.')
   })
 
   it('shows the hidden characters of a command name', () => {
-    expect(formatRunning(['vi\u202em', 'npm'])).toBe(
+    expect(formatRunning(['vi\u202em', 'npm'], tFor('en'))).toBe(
       'Running: vi⟨U+202E⟩m, npm.',
     )
   })
 
   it('says nothing without commands', () => {
-    expect(formatRunning([])).toBe('')
+    expect(formatRunning([], tFor('en'))).toBe('')
   })
 })

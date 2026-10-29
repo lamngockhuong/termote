@@ -15,6 +15,7 @@ import {
 import { useState } from 'react'
 import { useTheme } from '../contexts/theme-context'
 import { logout } from '../hooks/use-mux-api'
+import { useT } from '../i18n/i18n-context'
 import { signedOut } from '../utils/files-persist'
 import type { OpenWindowEvent } from '../utils/open-window'
 import {
@@ -50,9 +51,9 @@ interface Props {
 }
 
 const THEMES = [
-  { value: 'light', label: 'Light', Icon: Sun },
-  { value: 'dark', label: 'Dark', Icon: Moon },
-  { value: 'system', label: 'System', Icon: Monitor },
+  { value: 'light', label: 'shell.menu.light', Icon: Sun },
+  { value: 'dark', label: 'shell.menu.dark', Icon: Moon },
+  { value: 'system', label: 'shell.menu.system', Icon: Monitor },
 ] as const
 
 // Each step runs whatever the one before did: a browser that refuses the
@@ -93,6 +94,7 @@ export function SettingsMenu({
   updateVersion,
   onOpenUpdates,
 }: Props) {
+  const { t } = useT()
   const update = updateVersion && onOpenUpdates
   const { theme, setTheme } = useTheme()
   const [clearing, setClearing] = useState(false)
@@ -104,7 +106,11 @@ export function SettingsMenu({
 
   return (
     <Menu
-      label={update ? `More, v${updateVersion} available` : 'More'}
+      label={
+        update
+          ? t('shell.menu.moreUpdate', { version: updateVersion })
+          : t('shell.menu.more')
+      }
       trigger={
         <span className="relative inline-flex">
           <MoreHorizontal size={20} aria-hidden="true" />
@@ -123,33 +129,33 @@ export function SettingsMenu({
             icon={<ArrowUpCircle size={17} className="text-accent" />}
             onSelect={onOpenUpdates}
           >
-            Update to v{updateVersion}
+            {t('shell.menu.update', { version: updateVersion })}
           </MenuItem>
           <MenuSeparator />
         </>
       )}
       {fontSize && (
         <>
-          <MenuGroup label={`Font size · ${fontSize.value}`}>
+          <MenuGroup label={t('shell.menu.fontSize', { n: fontSize.value })}>
             <MenuItem
               icon={<span className="inline-block w-5 text-center">A−</span>}
               onSelect={fontSize.onDecrease}
               keepOpen
             >
-              Decrease font size
+              {t('shell.header.fontSmaller')}
             </MenuItem>
             <MenuItem
               icon={<span className="inline-block w-5 text-center">A+</span>}
               onSelect={fontSize.onIncrease}
               keepOpen
             >
-              Increase font size
+              {t('shell.header.fontLarger')}
             </MenuItem>
           </MenuGroup>
           <MenuSeparator />
         </>
       )}
-      <MenuGroup label="Theme">
+      <MenuGroup label={t('shell.menu.theme')}>
         {THEMES.map(({ value, label, Icon }) => (
           <MenuItemRadio
             key={value}
@@ -158,37 +164,37 @@ export function SettingsMenu({
             onSelect={() => setTheme(value)}
             keepOpen
           >
-            {label}
+            {t(label)}
           </MenuItemRadio>
         ))}
       </MenuGroup>
       <MenuSeparator />
       <MenuItem icon={<Settings size={17} />} onSelect={onOpenSettings}>
-        Settings
+        {t('common.settings')}
       </MenuItem>
       <MenuItem icon={<LifeBuoy size={17} />} onSelect={onOpenHelp}>
-        Help &amp; gestures
+        {t('shell.menu.help')}
       </MenuItem>
       <MenuItem icon={<Info size={17} />} onSelect={onOpenAbout}>
-        About
+        {t('shell.menu.about')}
       </MenuItem>
       {onCopyLink && (
         <MenuItem icon={<Link size={17} />} onSelect={onCopyLink}>
-          Copy link
+          {t('shell.menu.copyLink')}
         </MenuItem>
       )}
       {onOpenWindow && (
         <MenuItem
           icon={<AppWindow size={17} />}
           onSelect={onOpenWindow}
-          title="Shift: a popup"
+          title={t('shell.menu.popupHint')}
         >
-          Open in new window
+          {t('shell.menu.newWindow')}
         </MenuItem>
       )}
       {onLogout && (
         <MenuItem icon={<LogOut size={17} />} onSelect={onLogout}>
-          Log out
+          {t('shell.menu.logout')}
         </MenuItem>
       )}
       <MenuSeparator />
@@ -199,7 +205,7 @@ export function SettingsMenu({
         keepOpen
         danger
       >
-        {clearing ? 'Clearing...' : 'Clear cache & reload'}
+        {clearing ? t('shell.menu.clearing') : t('shell.menu.clearCache')}
       </MenuItem>
     </Menu>
   )

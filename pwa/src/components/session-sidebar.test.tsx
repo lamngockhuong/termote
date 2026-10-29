@@ -8,6 +8,7 @@ import {
 } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RequestError } from '../hooks/use-mux-api'
+import { tFor } from '../i18n/i18n-context'
 import type { Session, SessionGroup } from '../types/session'
 import {
   moveProblem,
@@ -1380,7 +1381,7 @@ describe('SessionSidebar — group actions', () => {
     groupId: '$3',
   }
   const actions = (over = {}) => ({
-    noun: 'tmux session',
+    kind: 'tmux' as const,
     onNew: vi.fn(),
     onRename: vi.fn(async () => {}),
     onClose: vi.fn(),
@@ -1577,7 +1578,7 @@ describe('SessionSidebar — group actions', () => {
   })
 
   it('the mobile sheet has the New button too', () => {
-    const a = actions({ noun: 'workspace' })
+    const a = actions({ kind: 'workspace' as const })
     renderWith(a, { isMobile: true })
     fireEvent.click(screen.getByRole('button', { name: 'New workspace' }))
     expect(a.onNew).toHaveBeenCalled()
@@ -1594,7 +1595,7 @@ describe('SessionSidebar — worktree actions', () => {
   }
   const WT: Session = { ...REPO, id: 'w2:t1', groupId: 'w2' }
   const actions = (over = {}) => ({
-    noun: 'workspace',
+    kind: 'workspace' as const,
     onNew: vi.fn(),
     onRename: vi.fn(async () => {}),
     onClose: vi.fn(),
@@ -1775,7 +1776,7 @@ describe('SessionSidebar — reorder', () => {
     ...over,
   })
   const groupActions = {
-    noun: 'workspace',
+    kind: 'workspace' as const,
     onNew: vi.fn(),
     onRename: vi.fn(async () => {}),
     onClose: vi.fn(),
@@ -1813,18 +1814,20 @@ describe('SessionSidebar — reorder', () => {
 
   it('says why a move was refused', () => {
     const err = (code: string) => new RequestError(400, code, code)
-    expect(moveProblem(err('busy'))).toBe('Another move is running; try again')
-    expect(moveProblem(err('invalid_index'))).toBe(
+    expect(moveProblem(err('busy'), tFor('en'))).toBe(
+      'Another move is running; try again',
+    )
+    expect(moveProblem(err('invalid_index'), tFor('en'))).toBe(
       'The list changed; try again',
     )
-    expect(moveProblem(err('linked_worktree'))).toBe(
+    expect(moveProblem(err('linked_worktree'), tFor('en'))).toBe(
       "A worktree moves with its repository's workspace",
     )
-    expect(moveProblem(err('unsupported'))).toBe(
+    expect(moveProblem(err('unsupported'), tFor('en'))).toBe(
       'Reordering is not supported here',
     )
-    expect(moveProblem(err('other'))).toBe('Could not move')
-    expect(moveProblem(new Error('x'))).toBe('Could not move')
+    expect(moveProblem(err('other'), tFor('en'))).toBe('Could not move')
+    expect(moveProblem(new Error('x'), tFor('en'))).toBe('Could not move')
   })
 
   it('drags a tab within its group, before or after the row under it', () => {
@@ -1915,11 +1918,13 @@ describe('SessionSidebar — reorder', () => {
   })
 
   it('says what to undo while the list is sorted or filtered', () => {
-    expect(reorderPausedHint(false, true)).toBe(
+    expect(reorderPausedHint(tFor('en'), false, true)).toBe(
       'Turn off Blocked sessions first in Settings to reorder',
     )
-    expect(reorderPausedHint(true, false)).toBe('Show All to reorder')
-    expect(reorderPausedHint(true, true)).toBe(
+    expect(reorderPausedHint(tFor('en'), true, false)).toBe(
+      'Show All to reorder',
+    )
+    expect(reorderPausedHint(tFor('en'), true, true)).toBe(
       'Show All and turn off Blocked sessions first to reorder',
     )
     const hint = 'Turn off Blocked sessions first in Settings to reorder'
@@ -2222,16 +2227,16 @@ describe('SessionSidebar — search', () => {
   })
 
   it('says what to undo, the search included', () => {
-    expect(reorderPausedHint(false, false, true)).toBe(
+    expect(reorderPausedHint(tFor('en'), false, false, true)).toBe(
       'Clear the search to reorder',
     )
-    expect(reorderPausedHint(true, false, true)).toBe(
+    expect(reorderPausedHint(tFor('en'), true, false, true)).toBe(
       'Clear the search and Show All to reorder',
     )
-    expect(reorderPausedHint(false, true, true)).toBe(
+    expect(reorderPausedHint(tFor('en'), false, true, true)).toBe(
       'Clear the search and turn off Blocked sessions first to reorder',
     )
-    expect(reorderPausedHint(true, true, true)).toBe(
+    expect(reorderPausedHint(tFor('en'), true, true, true)).toBe(
       'Clear the search, Show All and turn off Blocked sessions first to reorder',
     )
   })
@@ -2333,7 +2338,7 @@ describe('SessionSidebar — search', () => {
       <SessionSidebar
         {...props({
           groupActions: {
-            noun: 'workspace',
+            kind: 'workspace' as const,
             onNew,
             onRename: vi.fn(async () => {}),
             onClose: vi.fn(),

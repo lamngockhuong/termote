@@ -1,6 +1,7 @@
 import { Plus, X } from 'lucide-react'
 import { type KeyboardEvent, useEffect, useRef } from 'react'
 import { useWheelScrollX } from '../hooks/use-wheel-scroll-x'
+import { useT } from '../i18n/i18n-context'
 import type { Session } from '../types/session'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { AgentStatusBadge } from './agent-status-badge'
@@ -30,6 +31,7 @@ export function SessionTabs({
   onRemove,
   canRemove = sessions.length > 1,
 }: Props) {
+  const { t } = useT()
   const scrollRef = useRef<HTMLDivElement>(null)
   useWheelScrollX(scrollRef)
   const activeRef = useRef<HTMLButtonElement>(null)
@@ -86,7 +88,7 @@ export function SessionTabs({
         ref={scrollRef}
         data-tour="session-tabs"
         role="tablist"
-        aria-label="Sessions"
+        aria-label={t('shell.tabs.label')}
         onKeyDown={onKeyDown}
         className="flex min-w-0 items-end gap-1 overflow-x-auto scrollbar-hide"
       >
@@ -130,7 +132,7 @@ export function SessionTabs({
                   className={`flex size-5 items-center justify-center rounded-[calc(var(--radius-control)-2px)] text-fg-subtle hover:bg-surface hover:text-fg ${
                     active ? '' : 'invisible group-hover:visible'
                   }`}
-                  aria-label={`Close ${session.name}`}
+                  aria-label={t('shell.tabs.close', { name: session.name })}
                 >
                   <X size={12} aria-hidden="true" />
                 </button>
@@ -145,8 +147,8 @@ export function SessionTabs({
           size="sm"
           onClick={onAdd}
           className="mb-1"
-          aria-label="Add session"
-          title="Add session"
+          aria-label={t('shell.tabs.add')}
+          title={t('shell.tabs.add')}
         >
           <Plus size={16} aria-hidden="true" />
         </IconButton>
