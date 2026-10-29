@@ -174,6 +174,8 @@ type agentScreen struct {
 	// working: Codex shows its working line over the composer, which then
 	// takes a message for its queue (Tab), not one to read now
 	working bool
+	// activity: the working line read, nil when there is none
+	activity *AgentActivity
 }
 
 // AgentPrompt is a dialog the PWA shows as a card.
@@ -291,7 +293,9 @@ func findInputBox(lines []screenLine) (agentScreen, bool) {
 			if p == 0 || !isTopBorder(lines[p-1].text) {
 				break
 			}
-			return readInputBox(lines[p:b]), true
+			sc := readInputBox(lines[p:b])
+			sc.activity = claudeActivity(lines[:p-1])
+			return sc, true
 		}
 	}
 	return agentScreen{}, false

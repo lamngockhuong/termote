@@ -16,7 +16,10 @@ const { mockFetchPrompt, mockAnswer } = vi.hoisted(() => ({
 }))
 vi.mock('../hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-mux-api')>()),
-  fetchAgentPrompt: (id: string) => mockFetchPrompt(id),
+  fetchAgentPrompt: async (id: string) => ({
+    prompt: await mockFetchPrompt(id),
+    activity: null,
+  }),
   answerAgentPrompt: (...a: unknown[]) => mockAnswer(...a),
 }))
 

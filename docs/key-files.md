@@ -64,6 +64,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/utils/terminal-bridge.ts`                | Drives the xterm.js terminal (key mapping, clipboard paste)    |
 | `pwa/src/components/chat-view.tsx`                | Chat view of a pane running Claude Code (lazy-loaded)          |
 | `pwa/src/components/chat-composer.tsx`            | Chat view message box                                          |
+| `pwa/src/components/chat-activity-row.tsx`        | Chat view: the agent's working line while a turn runs          |
 | `pwa/src/components/chat-tool-card.tsx`           | Chat view tool call: `$` command, folded output, edit diff     |
 | `pwa/src/components/chat-tool-run.tsx`            | Chat view: steps in a row folded into one summary line         |
 | `pwa/src/components/chat-file-link.tsx`           | A file path in the Chat view, opened in Files on a click       |
@@ -96,7 +97,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/activity-log.tsx`             | Overview: every status change, newest first, opens its pane    |
 | `pwa/src/hooks/use-activity-log.ts`               | Polls `/api/mux/activity` for new events while shown           |
 | `pwa/src/hooks/use-agent-transcript.ts`           | Polls a pane's transcript, one store per pane                  |
-| `pwa/src/hooks/use-agent-prompt.ts`               | Polls a pane's open dialog, one store per pane                 |
+| `pwa/src/hooks/use-agent-prompt.ts`               | Polls a pane's dialog and working line, one store per pane     |
 | `pwa/src/components/files-view.tsx`               | Files view: the pane's directory as a tree, opens a file       |
 | `pwa/src/components/places-menu.tsx`              | Files next to its root: the pane's folder or an allowed Place  |
 | `pwa/src/utils/file-tabs.ts`                      | Open files as tabs: preview tab, pin, close, cap of 10 (LRU)   |
@@ -220,6 +221,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `scripts/claude-chat-tags.sh`                     | Tags Claude Code writes that the Chat view would show raw      |
 | `scripts/codex-chat-items.sh`                     | Codex items and events the Chat view would not show            |
 | `server/agent_claude_prompt.go`                   | Reads a Claude Code screen: input box, dialogs                 |
+| `server/agent_activity_line.go`                   | Claude Code/Codex working line on screen (`agent/prompt`)      |
 | `server/agent_input.go`                           | Sends a message, answers a dialog (checks before each write)   |
 | `server/agent_commands*.go`                       | `agent/commands`: custom commands, skills (Codex: `$` skills)  |
 | `server/agent_start.go`                           | `agent/start`: starts Claude Code/Codex in an idle Herdr pane  |

@@ -869,6 +869,8 @@ func pollPaste(ctx context.Context, wr agentWriter, agent, target string, wait, 
 
 type promptResponse struct {
 	Prompt *AgentPrompt `json:"prompt"`
+	// Activity: the agent's working line, null when it shows none
+	Activity *AgentActivity `json:"activity"`
 }
 
 func (a *agentAPI) handlePrompt(w http.ResponseWriter, r *http.Request) {
@@ -908,10 +910,10 @@ func (a *agentAPI) handlePrompt(w http.ResponseWriter, r *http.Request) {
 	}
 	sc := readAgentScreen(s.Agent, screen)
 	if isViewOnly(r) {
-		jsonOK(w, promptResponse{Prompt: viewPrompt(sc)})
+		jsonOK(w, promptResponse{Prompt: viewPrompt(sc), Activity: sc.activity})
 		return
 	}
-	jsonOK(w, promptResponse{Prompt: a.promptOf(paneID, s, sc)})
+	jsonOK(w, promptResponse{Prompt: a.promptOf(paneID, s, sc), Activity: sc.activity})
 }
 
 // viewPrompt is the card a view-only client gets: the dialog without a

@@ -141,6 +141,17 @@ test.describe('chat view', () => {
     await expect(conversation).toContainText('You said: hello from e2e')
     await expect(conversation).toContainText('second line')
 
+    // While a turn runs, the agent's working line shows under the
+    // conversation, and goes with the answer
+    await composer.fill('think slow please')
+    await send.click()
+    const working = page.getByRole('status').filter({ hasText: 'Incubating… Thinking' })
+    await expect(working).toBeAttached()
+    await expect(conversation.getByText('Incubating…', { exact: true })).toBeVisible()
+    // The stand-in works 5s, then the transcript is read within 2s
+    await expect(conversation).toContainText('Done thinking.', { timeout: 15_000 })
+    await expect(working).toHaveCount(0)
+
     // An image attached in the composer goes where the caret is, as its
     // token in the text, and reaches the agent there as the agent's own
     // token; the transcript shows the image part

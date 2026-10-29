@@ -19,8 +19,9 @@
 #   Ctrl+C      clears the composer
 #   Enter       records the draft as a user turn, then answers it:
 #               "permission" in it opens the command approval dialog, the
-#               turn running until it is answered; anything else gets an
-#               echo reply
+#               turn running until it is answered; "slow" works for a few
+#               seconds under the recorded working line before it answers
+#               (keys wait until then); anything else gets an echo reply
 #   1/2/3, Esc  answer or cancel the open dialog
 #
 # Environment: CODEX_HOME (required), FAKE_CODEX_SESSION (session id, default
@@ -144,6 +145,13 @@ submit() {
   images=()
   case $text in
     *permission*) state=approval ;;
+    *slow*)
+      # The recorded working line over the composer
+      printf '\e[?7l\e[H\e[2J\e[3J'
+      awk 'NF { for (; n; n--) print ""; print; next } { n++ }' "$screens/0.164.0-working-plain.txt" | tail -n "$rows"
+      sleep "${FAKE_CODEX_SLOW:-5}"
+      end_turn 'Done working.'
+      ;;
     *) if [ "$n" -gt 0 ]; then end_turn "You said: $text (images: $n)"; else end_turn "You said: $text"; fi ;;
   esac
   draw

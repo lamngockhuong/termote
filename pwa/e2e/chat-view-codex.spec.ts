@@ -206,6 +206,16 @@ test.describe('chat view of a Codex pane', () => {
     await expect(conversation).toContainText('You said: hello from e2e')
     await expect(conversation).toContainText('second line')
 
+    // While a turn runs, Codex's working line shows under the conversation,
+    // and goes with the answer
+    await composer.fill('work slow please')
+    await send.click()
+    const working = page.getByRole('status').filter({ hasText: /^Working…$/ })
+    await expect(working).toBeAttached()
+    // The stand-in works 5s, then the rollout is read within 2s
+    await expect(conversation).toContainText('Done working.', { timeout: 15_000 })
+    await expect(working).toHaveCount(0)
+
     // An image attached in the composer goes where the caret is, as Codex's
     // own token; the rollout's local_image shows as an image part
     await composer.fill('what is in it?')

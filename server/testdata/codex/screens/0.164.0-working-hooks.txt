@@ -1,0 +1,40 @@
+[2m╭──────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ [0;1m[38;2;99;168;248m✨ Update available![0m [1m0.164.0 -> 0.165.0[0;2m                                                          │
+│ [0mRun [38;2;99;168;248msh -c 'curl -fsSL ]8;;https://chatgpt.com/codex/install.sh\https://chatgpt.com/codex/install.sh]8;;\ | CODEX_NON_INTERACTIVE=1 sh'[39m to[2m      │
+│ [0mupdate.[2m                                                                                          │
+│                                                                                                  │
+│ [0mSee full release notes:[2m                                                                          │
+│ [0;4m[38;2;99;168;248m]8;;https://github.com/openai/codex/releases/latest\https://github.com/openai/codex/releases/latest[0;2m]8;;\                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+
+[0m  [38;2;99;168;248m>_ [1m[39mOpenAI Codex[0;2m (v0.164.0)[0m
+     [2m/tmp/lab[0m
+
+[2m  To get started, describe a task or try one of these commands:[0m
+
+  /init[2m - create an AGENTS.md file with instructions for Codex[0m
+  /status[2m - show current session configuration[0m
+  /permissions[2m - choose what Codex is allowed to do[0m
+  /model[2m - choose what model and reasoning effort to use[0m
+  /review[2m - review any changes and find issues[0m
+
+
+[1;2m› [0mWrite a 30-line poem about autumn. Do not run any tools.
+
+
+[1m[38;2;242;242;242m•[0m [2mWorking[0m [2m(3s • [0;1mesc[0;2m to interrupt) · Running hooks[0m
+
+
+[1m›[0m [2mAsk Codex to do anything[0m
+
+  [38;2;246;226;183mGPT-5.6-Terra medium[39m · [38;2;171;223;167m/tmp/lab
+
+
+
+
+
+
+
+
+

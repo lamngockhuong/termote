@@ -26,6 +26,8 @@
 #               "subagents" starts two background subagents (their meta and
 #               conversation files): one ends at once with the transcript's
 #               queue-operation notification, the other keeps running,
+#               "slow" works for a few seconds under the recorded working
+#               line before it answers (keys wait until then),
 #               anything else gets an echo reply
 #   1/2/3, Esc  answer or cancel an open dialog (on a wizard, a digit answers
 #               the tab open and moves to the next one)
@@ -244,6 +246,14 @@ submit() {
       state=color
       typed=""
       set_status waiting
+      ;;
+    *slow*)
+      # The recorded working line over the box, as a thinking turn draws it
+      printf '\e[H\e[2J\e[3J'
+      dialog 2.1.312-working-thinking.txt
+      sleep "${FAKE_CLAUDE_SLOW:-5}"
+      say 'Done thinking.'
+      set_status idle
       ;;
     *subagents*)
       subagents

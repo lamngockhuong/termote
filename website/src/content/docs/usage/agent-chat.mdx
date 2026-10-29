@@ -30,6 +30,11 @@ and one difference for dialogs (see [Codex](#codex)).
   the agent is running now stay open on the newest ones.
 - New turns within about two seconds. After `/clear` or a resume, the view switches to the new
   session without mixing the two.
+- While a turn runs, a row under the conversation shows what the terminal's working line says:
+  the agent's word for it (`Incubating…`, `Working…`), whether it is thinking or running hooks,
+  how long the turn has run and the tokens received. The agent writes a reply to its transcript
+  only once the reply is complete, and never writes its thinking, so this row is what moves until
+  then. When the line cannot be read, the row still says the agent is working and for how long.
 - Code blocks framed with their language, highlighted, with a Copy button. A ` ```mermaid ` block
   is drawn as a diagram, with the same Show source, export and full-screen buttons as the
   [Markdown preview](/usage/files-changes/#markdown-preview); one that cannot be drawn stays code

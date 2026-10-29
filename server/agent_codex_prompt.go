@@ -124,7 +124,7 @@ func findCodexComposer(lines []screenLine) (agentScreen, bool) {
 		}
 		sc := readCodexComposer(lines[p:end])
 		top := codexQueueTop(lines, p)
-		sc.working = codexWorking(lines[max(0, top-codexMaxStatusRows):p])
+		sc.working, sc.activity = codexWorking(lines[max(0, top-codexMaxStatusRows):p])
 		return sc, true
 	}
 	return agentScreen{}, false
@@ -179,14 +179,15 @@ func codexQueueTop(lines []screenLine, p int) int {
 
 // codexWorking: the rows above the composer show the working line
 // ("• Working (2s • esc to interrupt)"); Codex works with the composer
-// empty, so the composer alone does not say it waits for a message.
-func codexWorking(rows []screenLine) bool {
+// empty, so the composer alone does not say it waits for a message. The
+// activity is that line read, nil when its shape is not the one parsed.
+func codexWorking(rows []screenLine) (bool, *AgentActivity) {
 	for _, l := range rows {
-		if codexWorkingRe.MatchString(strings.TrimSpace(l.text)) {
-			return true
+		if t := strings.TrimSpace(l.text); codexWorkingRe.MatchString(t) {
+			return true, codexActivityOf(t)
 		}
 	}
-	return false
+	return false, nil
 }
 
 // codexFooter returns the first row of the approval footer when it ends the
