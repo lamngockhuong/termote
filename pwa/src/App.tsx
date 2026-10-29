@@ -28,7 +28,6 @@ import { AppHeader } from './components/app-header'
 import { CommandHistoryDropdown } from './components/command-history-dropdown'
 import type { CommandPaletteProps } from './components/command-palette'
 import { type ConnectionState, isDown } from './components/connection-indicator'
-import { GestureHintsOverlay } from './components/gesture-hints-overlay'
 import { GroupDialog } from './components/group-dialog'
 import { HelpModal } from './components/help-modal'
 import { KeyboardToolbar } from './components/keyboard-toolbar'
@@ -51,6 +50,7 @@ import {
 } from './components/session-sidebar'
 import { SettingsModal } from './components/settings-modal'
 import { SidePanel } from './components/side-panel'
+import { SpotlightTour } from './components/spotlight-tour'
 import { TemplateFillDialog } from './components/template-fill-dialog'
 import { type TerminalHandle, TerminalView } from './components/terminal-view'
 import { Toast, type ToastAction, type ToastVariant } from './components/toast'
@@ -58,6 +58,7 @@ import { Banner } from './components/ui/banner'
 import { Button } from './components/ui/button'
 import { ConfirmDialog } from './components/ui/confirm-dialog'
 import { HeaderUsageChip } from './components/usage-chip'
+import { WelcomeHost } from './components/welcome-host'
 import {
   WorktreeDialog,
   WorktreeRemoveDialog,
@@ -143,12 +144,14 @@ import {
   terminalSelection,
   toggleTmuxCopyMode,
 } from './utils/terminal-bridge'
+import { DESKTOP_STEPS, MOBILE_STEPS, type TourStep } from './utils/tour-steps'
 import { visibleUnsafe } from './utils/unsafe-chars'
 import {
   pickImageFile,
   UPLOAD_TIMEOUT_MS,
   uploadErrorMessage,
 } from './utils/upload-image'
+import { openedOnLink, type WaitingAgent } from './utils/welcome'
 import { ZELLIJ_DEFAULT_GROUP_ID } from './utils/zellij-group'
 
 // Check if paste result should show an error toast
@@ -245,7 +248,10 @@ export default function App({
   const [settingsOpen, setSettingsOpen] = useState(false)
   // Group Settings opens at; About's "Check for updates" asks for Updates
   const [settingsGroup, setSettingsGroup] = useState<string>()
-  const [gestureHintsOpen, setGestureHintsOpen] = useState(false)
+  // Settings › Show welcome screen asks for it again
+  const [welcomeRequest, setWelcomeRequest] = useState(0)
+  // The tour's steps while it runs, for the layout it started on
+  const [tourSteps, setTourSteps] = useState<TourStep[] | null>(null)
   const [toast, setToast] = useState<{
     id: number
     message: string
@@ -1002,21 +1008,9 @@ export default function App({
     }
   }, [ctrlActive, getTerminal])
 
-  // Show gesture hints on first mobile visit
-  useEffect(() => {
-    if (isMobile && !settings.hasSeenGestureHints) {
-      setGestureHintsOpen(true)
-    }
-  }, [isMobile, settings.hasSeenGestureHints])
-
-  const dismissGestureHints = useCallback(() => {
-    setGestureHintsOpen(false)
-    updateSetting('hasSeenGestureHints', true)
-  }, [updateSetting])
-
-  const showGestureHints = useCallback(() => {
+  const showWelcome = useCallback(() => {
     setSettingsOpen(false)
-    setGestureHintsOpen(true)
+    setWelcomeRequest((n) => n + 1)
   }, [])
 
   useGestures(gestureRef, gestureHandlers)
@@ -1271,6 +1265,11 @@ export default function App({
   // Deep link: opened once the first snapshot is in, and again on each
   // hashchange. It only selects a tab, pane and view.
   const pendingLinkRef = useRef(parseDeepLink(window.location.hash))
+  // Opened on a link (a notification's pane): the welcome screen waits for
+  // the next visit rather than cover what the link shows
+  const [linkedAtStart] = useState(() =>
+    openedOnLink(pendingLinkRef.current !== null),
+  )
   const [linkRequest, setLinkRequest] = useState(0)
   // The agent overview covers the panes while its address (#/overview) is
   // on: a reload keeps it, Back and Forward go between it and a pane.
@@ -1569,7 +1568,30 @@ export default function App({
     [selectSession],
   )
 
+  // The welcome screen's waiting agent: its pane, in the terminal
+  const openWaitingPane = useCallback(
+    (agent: WaitingAgent) => {
+      const session = sessions.find((s) => s.id === agent.sessionId)
+      const pane = session?.panes?.find((p) => p.id === agent.paneId)
+      if (session && pane) openFromOverview(session, pane, 'terminal')
+      else void selectFromList(agent.sessionId)
+    },
+    [sessions, openFromOverview, selectFromList],
+  )
+
   const [paletteMode, setPaletteMode] = useState<PaletteMode | null>(null)
+  // The tour shows the terminal's parts: nothing covers them, and the
+  // terminal is on screen
+  const startTour = useCallback(() => {
+    setSettingsOpen(false)
+    setSidebarOpen(false)
+    setHelpOpen(false)
+    setAboutOpen(false)
+    setPaletteMode(null)
+    changeView(TERMINAL_VIEW_ID)
+    setTourSteps(isMobile ? MOBILE_STEPS : DESKTOP_STEPS)
+  }, [changeView, isMobile])
+  const endTour = useCallback(() => setTourSteps(null), [])
   const groupTabs = sessions.filter((s) => s.groupId === activeSession.groupId)
   const tabIndex = groupTabs.findIndex((s) => s.id === activeSession.id)
   const previousTab = groupTabs[tabIndex - 1]?.id
@@ -1677,6 +1699,12 @@ export default function App({
   useShortcutDispatcher(commands, desktop)
   const keymap = useKeymap(commands)
   const paletteKey = keymap.byId['palette.commands']?.key
+  const quickOpenKey = keymap.byId['palette.quickOpen']?.key
+  // The palette's keys, as the welcome screen and the tour show them
+  const paletteKeys = {
+    commands: paletteKey && formatChord(paletteKey, isApplePlatform()),
+    files: quickOpenKey && formatChord(quickOpenKey, isApplePlatform()),
+  }
   // Run once the palette is gone: the focus a command moves is not taken
   // back by the closing dialog
   const afterPalette = useRef<(() => void) | null>(null)
@@ -2280,7 +2308,8 @@ export default function App({
         onLogout={handleLogout}
         onEnableNotify={push.enable}
         onDisableNotify={push.disable}
-        onShowGestureHints={isMobile ? showGestureHints : undefined}
+        onShowWelcome={focus ? undefined : showWelcome}
+        onStartTour={focus ? undefined : startTour}
         updates={{
           server: appUpdate.server,
           stale: appUpdate.stale,
@@ -2334,11 +2363,36 @@ export default function App({
           </Suspense>
         </LazyBoundary>
       )}
-      {isMobile && (
-        <GestureHintsOverlay
-          isOpen={gestureHintsOpen}
-          onDismiss={dismissGestureHints}
-        />
+      <WelcomeHost
+        ready={isReady && isServerReachable}
+        suppressed={focus || linkedAtStart}
+        openRequest={welcomeRequest}
+        mobile={isMobile}
+        backend={mux.backend}
+        sessions={sessions}
+        readOnly={readOnly}
+        signIn={!!mux.caps.auth}
+        devices={!!mux.caps.devices && !readOnly}
+        areas={{
+          chat: !!mux.caps.agentChat,
+          files: !!mux.caps.files,
+          tasks: !!mux.caps.tasks,
+          panes: !!mux.caps.paneLayout,
+        }}
+        version={appUpdate.server?.version ?? APP_INFO.version}
+        keys={paletteKeys}
+        onOpenPane={openWaitingPane}
+        onOpenTerminal={() => {
+          changeView(TERMINAL_VIEW_ID)
+          // Once the closed dialog has given the focus back
+          requestAnimationFrame(() => focusTerminal(getTerminal()))
+        }}
+        onStartSession={() => void addTab('New')}
+        onOpenSettings={openSettings}
+        onTour={focus ? undefined : startTour}
+      />
+      {tourSteps && (
+        <SpotlightTour steps={tourSteps} onClose={endTour} keys={paletteKeys} />
       )}
       {mux.caps.templates && (
         <TemplateFillDialog

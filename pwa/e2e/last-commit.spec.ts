@@ -104,10 +104,6 @@ test.describe('last commit from Changes', () => {
 
   test('mobile: fits the screen', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 800 })
-    // The first-visit gesture tour would cover the view
-    await page.addInitScript(() =>
-      localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true })),
-    )
     await page.goto(`${link}?view=changes`)
     await page.getByRole('button', { name: 'Show last commit' }).click()
     await page.getByRole('region', { name: 'Files' }).getByRole('button', { name: /Modified:\s*app\.ts/ }).click()

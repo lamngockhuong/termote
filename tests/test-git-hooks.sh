@@ -142,7 +142,7 @@ has "lefthook.yml turns off lefthook's auto-install" "$PROJECT_DIR/lefthook.yml"
 # A branch that changes a hook file runs none of them, in any case (none of these names is one
 # main has in another case, so the cases hold on a case-insensitive file system too)
 n=0
-for f in lefthook.yml scripts/check-gofmt.sh scripts/staged-files.sh dprint.json docs/dprint.json .lefthook.toml lefthook-local.yml \
+for f in lefthook.yml scripts/check-gofmt.sh scripts/staged-files.sh pwa/scripts/check-i18n.mjs dprint.json docs/dprint.json .lefthook.toml lefthook-local.yml \
     .config/lefthook.yaml .npmrc pwa/.npmrc docs/.npmrc pnpm-workspace.yaml pwa/pnpm-workspace.yaml \
     .pnpmfile.cjs package.json pwa/package.json node_modules/x/evil pwa/node_modules/.bin/biome \
     .NPMRC Package.json PWA/Package.json LEFTHOOK-local.yml .Lefthook.toml .Config/Lefthook.yaml Docs/DPrint.json \

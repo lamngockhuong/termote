@@ -78,10 +78,6 @@ test.describe('image uploads', () => {
       }).toPass()
       // The stream shows the session's active window
       tmux('select-window', '-t', windowId)
-      // The first-visit gesture tour would cover the toolbar
-      await page.addInitScript(() =>
-        localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true })),
-      )
       await page.goto(link)
       await expect(page.getByTestId('terminal-view')).toBeVisible()
 

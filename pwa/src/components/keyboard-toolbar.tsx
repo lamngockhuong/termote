@@ -628,6 +628,7 @@ export function KeyboardToolbar({
 
   return (
     <div
+      data-tour="keyboard-toolbar"
       className={`relative flex flex-col px-3 py-2 ${ROOT_CLASS}`}
       style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.5rem)' }}
     >

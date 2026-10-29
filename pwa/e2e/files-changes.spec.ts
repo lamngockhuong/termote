@@ -156,10 +156,6 @@ test.describe('files and changes views', () => {
 
   test('mobile: both are views of the view menu and fit the screen', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 800 })
-    // The first-visit gesture tour would cover the view
-    await page.addInitScript(() =>
-      localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true })),
-    )
     await page.goto(`${link}?view=files`)
     await expect(page.getByRole('button', { name: 'View: Files' })).toBeVisible()
     await page.getByRole('treeitem', { name: 'src' }).click()
@@ -623,9 +619,6 @@ test.describe('files and changes views', () => {
 
     test('mobile: Edit and the text box fit the screen', async ({ page }) => {
       await page.setViewportSize({ width: 375, height: 800 })
-      await page.addInitScript(() =>
-        localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true })),
-      )
       const f = path.join(repo, 'phone.txt')
       writeFileSync(f, 'from the desk\n')
       await page.goto(`${link}?view=files`)
@@ -764,9 +757,6 @@ test.describe('files and changes views', () => {
       mkdirSync(dir, { recursive: true })
       writeFileSync(path.join(dir, 'a.txt'), 'a\n')
       await page.setViewportSize({ width: 375, height: 800 })
-      await page.addInitScript(() =>
-        localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true })),
-      )
       await page.goto(`${link}?view=files`)
       await page.getByRole('treeitem', { name: 'e2e-rename-phone' }).click()
       const row = page.getByRole('treeitem', { name: 'a.txt' })
@@ -860,7 +850,7 @@ test.describe('files and changes views', () => {
     await page.addInitScript(() =>
       localStorage.setItem(
         'termote-settings',
-        JSON.stringify({ hasSeenGestureHints: true, tablePreview: true }),
+        JSON.stringify({ tablePreview: true }),
       ),
     )
     // The app follows the window tmux has active: the test's window was
@@ -1765,9 +1755,6 @@ test.describe('files and changes views', () => {
 
     test('mobile: a sheet of open files instead of a tab bar', async ({ page }) => {
       await page.setViewportSize({ width: 360, height: 800 })
-      await page.addInitScript(() =>
-        localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true })),
-      )
       await page.goto(`${link}?view=files`)
       await page.getByRole('treeitem', { name: 'e2e-tabs' }).click()
       await page.getByRole('treeitem', { name: 'alpha.txt' }).click()
@@ -1876,9 +1863,6 @@ test.describe('files and changes views', () => {
 
     test('mobile: a sheet of the open diffs instead of a tab bar', async ({ page }) => {
       await page.setViewportSize({ width: 360, height: 800 })
-      await page.addInitScript(() =>
-        localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true })),
-      )
       await page.goto(`${link}?view=changes`)
       const list = (group: string, name: RegExp) =>
         page.getByRole('region', { name: group }).getByRole('button', { name: new RegExp(`:\\s*${name.source}`) })
@@ -2382,7 +2366,6 @@ test.describe('files and changes views', () => {
         await context.grantPermissions(['clipboard-read', 'clipboard-write'])
         await page.setViewportSize({ width: 360, height: 740 })
         await page.addInitScript(() => {
-          localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true }))
           // Share as on a phone (Chromium on Linux has none): all three buttons
           Object.assign(navigator, { share: async () => {}, canShare: () => true })
         })
@@ -2406,10 +2389,6 @@ test.describe('files and changes views', () => {
       })
 
       test('a tap opens the viewer; a double tap zooms; the stage takes every touch', async ({ page }) => {
-        // The first-visit gesture tour would cover the view
-        await page.addInitScript(() =>
-          localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true })),
-        )
         await page.goto(`${link}?view=files`)
         await page.getByRole('treeitem', { name: 'e2e-viewer' }).tap()
         await page.getByRole('treeitem', { name: 'diagram.md' }).tap()

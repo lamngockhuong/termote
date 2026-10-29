@@ -80,6 +80,8 @@ interface MenuProps {
   // left out, the menu keeps its own state
   open?: boolean
   onOpenChange?: (open: boolean) => void
+  // Names the menu for the tour (data-tour)
+  tourAnchor?: string
 }
 
 // menuitem and menuitemradio
@@ -106,6 +108,7 @@ export function Menu({
   textTrigger,
   open,
   onOpenChange,
+  tourAnchor,
 }: MenuProps) {
   const [ownOpen, setOwnOpen] = useState(false)
   const isOpen = open ?? ownOpen
@@ -276,6 +279,7 @@ export function Menu({
   return (
     <div
       ref={rootRef}
+      data-tour={tourAnchor}
       className="relative"
       // Tab (or anything else) moving focus out of the trigger and menu closes it.
       onBlur={(e) => {

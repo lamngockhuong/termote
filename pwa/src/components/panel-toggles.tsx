@@ -15,6 +15,7 @@ export function PanelToggles({ views, open, onToggle }: Props) {
   if (views.length === 0) return null
   return (
     <fieldset
+      data-tour="panel-toggles"
       aria-label="Side panel"
       className="flex shrink-0 gap-0.5 border border-border bg-surface p-0.5 rounded-control ui-native:rounded-full ui-native:border-0"
     >

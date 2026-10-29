@@ -66,7 +66,8 @@ const DEFAULT_SETTINGS: Settings = {
   copyOnSelect: false,
   showSessionTabs: false,
   pollInterval: 5,
-  hasSeenGestureHints: false,
+  welcomeSeenVersion: 0,
+  language: 'auto',
   hasSeenLocalhostNotice: false,
   terminalFont: '',
   uiStyle: 'neutral',
@@ -451,14 +452,14 @@ describe('SettingsModal', () => {
       within(nav()).queryByRole('button', { name: 'Data & help' }),
     ).toBeNull()
     unmount()
-    renderModal({ onShowGestureHints: vi.fn() })
+    renderModal({ onShowWelcome: vi.fn() })
     expect(
       within(nav()).getByRole('button', { name: 'Data & help' }),
     ).toBeInTheDocument()
   })
 
   it('falls back to the first group when the open one goes away', () => {
-    const { rerender, onClose } = renderModal({ onShowGestureHints: vi.fn() })
+    const { rerender, onClose } = renderModal({ onShowWelcome: vi.fn() })
     fireEvent.click(screen.getByRole('button', { name: 'Data & help' }))
     rerender(
       <SettingsModal
@@ -530,26 +531,44 @@ describe('SettingsModal', () => {
 
   it('does not render optional buttons when handlers not provided', () => {
     renderModal()
-    expect(document.body.textContent).not.toContain('Show Gesture Hints')
+    expect(document.body.textContent).not.toContain('Show welcome screen')
     expect(document.body.textContent).not.toContain('Check for Updates')
     expect(document.body.textContent).not.toContain('Clear Command History')
   })
 
-  it('renders Show Gesture Hints button when handler provided', () => {
-    const onShowGestureHints = vi.fn()
-    renderModal({ onShowGestureHints })
-    expect(document.body.textContent).toContain('Show Gesture Hints')
+  it('renders Show welcome screen button when handler provided', () => {
+    const onShowWelcome = vi.fn()
+    renderModal({ onShowWelcome })
+    expect(document.body.textContent).toContain('Show welcome screen')
   })
 
-  it('calls onShowGestureHints when button clicked', () => {
-    const onShowGestureHints = vi.fn()
-    renderModal({ onShowGestureHints })
+  it('calls onShowWelcome when button clicked', () => {
+    const onShowWelcome = vi.fn()
+    renderModal({ onShowWelcome })
     const btns = document.querySelectorAll('button')
-    const gestureBtn = Array.from(btns).find((b) =>
-      b.textContent?.includes('Show Gesture Hints'),
+    const welcomeBtn = Array.from(btns).find((b) =>
+      b.textContent?.includes('Show welcome screen'),
     )!
-    fireEvent.click(gestureBtn)
-    expect(onShowGestureHints).toHaveBeenCalled()
+    fireEvent.click(welcomeBtn)
+    expect(onShowWelcome).toHaveBeenCalled()
+  })
+
+  it('takes the tour from Data & help', () => {
+    const onStartTour = vi.fn()
+    renderModal({ onStartTour })
+    fireEvent.click(screen.getByRole('button', { name: 'Data & help' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Take the tour' }))
+    expect(onStartTour).toHaveBeenCalled()
+  })
+
+  it('picks the welcome and tour language', () => {
+    const { onUpdateSetting } = renderModal()
+    const group = screen.getByRole('radiogroup', {
+      name: 'Welcome & tour language',
+    })
+    expect(within(group).getByRole('radio', { name: 'Auto' })).toBeChecked()
+    fireEvent.click(within(group).getByRole('radio', { name: 'Tiếng Việt' }))
+    expect(onUpdateSetting).toHaveBeenCalledWith('language', 'vi')
   })
 
   it('shows the Updates group only when given', () => {
@@ -647,14 +666,14 @@ describe('SettingsModal', () => {
   })
 
   it('renders all optional action buttons in footer section', () => {
-    const onShowGestureHints = vi.fn()
+    const onShowWelcome = vi.fn()
     const onClearHistory = vi.fn()
     renderModal({
-      onShowGestureHints,
+      onShowWelcome,
       onClearHistory,
       historyCount: 1,
     })
-    expect(document.body.textContent).toContain('Show Gesture Hints')
+    expect(document.body.textContent).toContain('Show welcome screen')
     expect(document.body.textContent).toContain('Clear Command History')
   })
 

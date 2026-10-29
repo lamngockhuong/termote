@@ -1,4 +1,5 @@
 import { type APIRequestContext, type Browser, expect, type Page, test } from './fixtures'
+import { WELCOME_VERSION } from '../src/utils/welcome'
 
 // Settings > Signed-in browsers, against a server with sign-in on: the e2e
 // CI job's second server (TERMOTE_PASS, its own port), as devices.spec.ts.
@@ -39,10 +40,10 @@ async function browserNamed(
       ? { extraHTTPHeaders: { Authorization: `Basic ${Buffer.from(`${user}:${pass}`).toString('base64')}` } }
       : {}),
   })
-  // The first-visit gesture tour would cover the page on a phone
-  await context.addInitScript(() => {
-    localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true }))
-  })
+  // The first-visit welcome screen would cover the page
+  await context.addInitScript((version) => {
+    localStorage.setItem('termote-settings', JSON.stringify({ welcomeSeenVersion: version }))
+  }, WELCOME_VERSION)
   return context.newPage()
 }
 

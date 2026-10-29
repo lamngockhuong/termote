@@ -520,7 +520,7 @@ test.describe('mobile layout', () => {
       await page.addInitScript((s) => {
         localStorage.setItem(
           'termote-settings',
-          JSON.stringify({ uiStyle: s, hasSeenGestureHints: true }),
+          JSON.stringify({ uiStyle: s }),
         )
       }, style)
       await page.goto('/')
@@ -534,9 +534,6 @@ test.describe('mobile layout', () => {
   }
 
   test('the Extra keys button is pinned and opens the expanded rows with Actions', async ({ page }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true }))
-    })
     await page.goto('/')
     await waitForTerminal(page)
 
@@ -577,7 +574,6 @@ test.describe('history list on a short screen', () => {
 
   test('fits between the top of the app and the toolbar', async ({ page }) => {
     await page.addInitScript(() => {
-      localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true }))
       localStorage.setItem(
         'termote-command-history',
         JSON.stringify(Array.from({ length: 30 }, (_, i) => ({ id: `${i}`, text: `cmd ${i}`, timestamp: i }))),
@@ -601,9 +597,6 @@ test.describe('desktop toolbar', () => {
   test.use({ viewport: { width: 1280, height: 800 } })
 
   test('the bottom row fits, so it does not fade', async ({ page }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true }))
-    })
     await page.goto('/')
     await waitForTerminal(page)
     const scroller = page.getByTestId('toolbar-scroller')

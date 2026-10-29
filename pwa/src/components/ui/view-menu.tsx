@@ -23,6 +23,7 @@ export function ViewMenu<T extends string>({
   const current = views.find((v) => v.id === value) ?? views[0]
   return (
     <Menu
+      tourAnchor="view-menu"
       label={`View: ${current.label}`}
       trigger={<current.Icon size={17} aria-hidden="true" />}
     >

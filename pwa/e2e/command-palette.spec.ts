@@ -83,9 +83,6 @@ test.describe('command palette', () => {
 
   // The pane on screen, focus outside the terminal
   async function open(page: Page) {
-    await page.addInitScript(() => {
-      localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true }))
-    })
     await page.goto(link)
     await showLinkTab(page)
   }

@@ -44,10 +44,10 @@ test.describe('reordering tmux windows', () => {
     await page.goto('/')
     await page.evaluate(() => {
       localStorage.clear()
-      localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true, pollInterval: 1 }))
+      localStorage.setItem('termote-settings', JSON.stringify({ pollInterval: 1 }))
     })
     // A hash change alone does not load the page again: reload so the
-    // settings (no gesture tour) apply
+    // settings apply
     await page.goto(`/${hash}`)
     await page.reload()
     await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })

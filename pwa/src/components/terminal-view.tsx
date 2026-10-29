@@ -816,6 +816,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
         <div
           ref={containerRef}
           data-testid="terminal-view"
+          data-tour="terminal"
           className="w-full h-full [&>.xterm]:px-1 md:[&>.xterm]:px-2 md:[&>.xterm]:pt-1 [&_.xterm-viewport]:bg-term!"
         />
         {failed && (

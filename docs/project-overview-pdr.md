@@ -36,7 +36,7 @@ straight into an xterm.js terminal in the page, with:
 | Herdr Backend          | Alternative to tmux with per-pane agent-status badges                |
 | Virtual Keyboard       | Touch-friendly buttons for special keys                              |
 | Keyboard Gestures      | Swipe, long-press, pinch for common shortcuts                        |
-| Gesture Hints          | First-time overlay teaching touch gestures (mobile)                  |
+| Welcome Screen & Tour  | First-visit summary of the install, 4-step tour (EN/VI)              |
 | Theme Support          | Light/dark/system theme toggle (in-place switching)                  |
 | Font Scaling           | Adjustable terminal font size (6-24px)                               |
 | Nerd Font Icons        | Bundled Symbols Nerd Font; optional custom terminal font             |
