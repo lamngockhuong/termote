@@ -41,6 +41,30 @@ func TestProcessName(t *testing.T) {
 	}
 }
 
+func TestAgentProcessName(t *testing.T) {
+	claude := &AgentInfo{Name: "claude", Status: "idle"}
+	for _, c := range []struct {
+		name  string
+		agent *AgentInfo
+		want  string
+	}{
+		{"2.1.310", claude, "claude"},
+		{"2.1", claude, "claude"},
+		{"claude", claude, "claude"},
+		{"node", claude, "node"},
+		{"2", claude, "2"},
+		{"2.1.310-beta", claude, "2.1.310-beta"},
+		{"2.1.310", nil, "2.1.310"},
+		{"2.1.310", &AgentInfo{}, "2.1.310"},
+		{"2.1.310", &AgentInfo{Name: "cl\u200baude"}, "claude"},
+		{"2.1.310", &AgentInfo{Name: "\u200b"}, "2.1.310"},
+	} {
+		if got := agentProcessName(c.name, c.agent); got != c.want {
+			t.Errorf("agentProcessName(%q, %v) = %q, want %q", c.name, c.agent, got, c.want)
+		}
+	}
+}
+
 // knownShells is the list the PWA reads too (shells.ts offers the Chat
 // view's start on a pane whose process is one of them).
 func TestKnownShellsMatchSharedList(t *testing.T) {

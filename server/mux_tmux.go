@@ -938,7 +938,10 @@ func attachTmuxProcesses(groups []tmuxGroup, windows map[tmuxWindowKey][]tmuxPan
 				tab.Processes[i] = p.proc
 				for pi, info := range g.panes[ti] {
 					if info.index == p.index || info.index < 0 && p.active {
-						tab.Panes[pi].Process = &p.proc
+						proc := p.proc
+						proc.Name = agentProcessName(proc.Name, tab.Panes[pi].Agent)
+						tab.Panes[pi].Process = &proc
+						tab.Processes[i] = proc
 					}
 				}
 			}
