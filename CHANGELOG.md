@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.14.0](https://github.com/lamngockhuong/termote/compare/v2.13.0...v2.14.0) (2026-10-29)
+
+
+### Features
+
+* **chat:** show the agent's working line while a turn runs ([#628](https://github.com/lamngockhuong/termote/issues/628)) ([6abbbf9](https://github.com/lamngockhuong/termote/commit/6abbbf9f6075053e4fa4fa91d9e63813bf37568c))
+* **files:** browse the root's trash to restore or delete for good ([#627](https://github.com/lamngockhuong/termote/issues/627)) ([3889962](https://github.com/lamngockhuong/termote/commit/3889962fe89c00c1fb6e52c551415357102bebf4))
+* Homebrew tap for termote ([#632](https://github.com/lamngockhuong/termote/issues/632)) ([85a8d0d](https://github.com/lamngockhuong/termote/commit/85a8d0db3798c205ce007efc3a851a427afabd43))
+* **pwa:** translate Settings and its sections (EN/VI) ([#631](https://github.com/lamngockhuong/termote/issues/631)) ([7431cbe](https://github.com/lamngockhuong/termote/commit/7431cbebd62d7a3e97df4f201dc2ec58bd380e49))
+* **pwa:** translate the app shell and navigation (EN/VI) ([#629](https://github.com/lamngockhuong/termote/issues/629)) ([d820183](https://github.com/lamngockhuong/termote/commit/d8201838f98fb28b4d532b89e7a1df357512beed))
+* **pwa:** welcome screen, spotlight tour and EN/VI i18n infrastructure ([#626](https://github.com/lamngockhuong/termote/issues/626)) ([623dce3](https://github.com/lamngockhuong/termote/commit/623dce3866ab7c42896b19e03157e01e42d80376))
+
+
+### Bug Fixes
+
+* close seven findings of the full-repo security review (SF1, SF6, SF7, SF8, SF10, SF12, SF14) ([#621](https://github.com/lamngockhuong/termote/issues/621)) ([74c7b10](https://github.com/lamngockhuong/termote/commit/74c7b10bb8d4e2621b8e0b1fd564628483883041))
+* close the seven deferred Low findings of the 1d46d3e security review ([#623](https://github.com/lamngockhuong/termote/issues/623)) ([ef1882b](https://github.com/lamngockhuong/termote/commit/ef1882be87d073ef6b156770291e9741e2eb8ee7))
+* mark more invisible characters, and keep the Windows password off a shared port unless the container runs ([#630](https://github.com/lamngockhuong/termote/issues/630)) ([a4ae065](https://github.com/lamngockhuong/termote/commit/a4ae065685cd68f1a9482d6f2bd1a6a2efdcea1a))
+* **pwa:** soften dark-mode text so it stops glaring on a bright screen ([#624](https://github.com/lamngockhuong/termote/issues/624)) ([88edbf0](https://github.com/lamngockhuong/termote/commit/88edbf019db58e62e2755cb3ac2898c99a8dd39d))
+
 ## [2.13.0](https://github.com/lamngockhuong/termote/compare/v2.12.0...v2.13.0) (2026-10-28)
 
 
