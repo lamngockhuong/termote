@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useT } from '../i18n/i18n-context'
 import { FOCUS_RING } from './ui/button'
 import { Sheet } from './ui/sheet'
 
@@ -31,6 +32,7 @@ interface Props {
 // The picker is a Sheet (a modal <dialog> in the top layer): opened from the
 // sessions sheet, a fixed overlay would be clipped by that sheet's transform.
 export function IconPicker({ value, onChange }: Props) {
+  const { t } = useT()
   const [isOpen, setIsOpen] = useState(false)
 
   const handleSelect = (icon: string) => {
@@ -44,7 +46,7 @@ export function IconPicker({ value, onChange }: Props) {
         type="button"
         onClick={() => setIsOpen(true)}
         className={`flex size-10 shrink-0 items-center justify-center rounded-control border border-border bg-surface text-xl transition-colors duration-(--duration-fast) hover:border-border-strong pointer-coarse:size-touch ${FOCUS_RING}`}
-        title="Change icon"
+        title={t('shell.icon.change')}
       >
         {value}
       </button>
@@ -52,8 +54,8 @@ export function IconPicker({ value, onChange }: Props) {
       <Sheet
         isOpen={isOpen}
         onClose={() => setIsOpen(false)}
-        title="Choose Icon"
-        closeLabel="Cancel"
+        title={t('shell.icon.choose')}
+        closeLabel={t('common.cancel')}
         className="md:max-w-sm"
       >
         <div className="grid grid-cols-6 gap-2 p-4">

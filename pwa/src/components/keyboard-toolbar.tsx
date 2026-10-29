@@ -31,6 +31,8 @@ import {
 } from 'react'
 import { useHaptic } from '../hooks/use-haptic'
 import { scrollEdgeMask, useScrollEdges } from '../hooks/use-scroll-edges'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
 import {
   QUICK_ACTIONS,
   type QuickActionHandlers,
@@ -75,7 +77,7 @@ interface Props {
 interface KeyConfig {
   label: ReactNode
   key: string
-  ariaLabel?: string
+  ariaLabel?: MessageKey
   isCtrlModifier?: boolean
   isShiftModifier?: boolean
   isShiftTab?: boolean
@@ -105,12 +107,13 @@ const MAIN_KEYS: KeyConfig[] = [
     key: 'ImeToggle',
     isImeToggle: true,
   },
-  { label: 'Esc', key: 'Escape' },
-  { label: 'Ctrl', key: 'Control', isCtrlModifier: true },
+  // Keycaps carry the keys' own names, the same in every language
+  { label: 'Esc', key: 'Escape' }, // i18n-ignore
+  { label: 'Ctrl', key: 'Control', isCtrlModifier: true }, // i18n-ignore
   { label: <ArrowUp size={ICON_SIZE} />, key: 'ArrowUp' },
   { label: <ArrowDown size={ICON_SIZE} />, key: 'ArrowDown' },
   { label: <CornerDownLeft size={ICON_SIZE} />, key: 'Enter' },
-  { label: 'Tab', key: 'Tab' },
+  { label: 'Tab', key: 'Tab' }, // i18n-ignore
 ]
 
 // Expanded rows, below the Actions row. Text and scroll keys share one row
@@ -125,29 +128,34 @@ const TEXT_KEYS: KeyConfig[] = [
   {
     label: <ImagePlus size={ICON_SIZE} />,
     key: 'Attach',
-    ariaLabel: 'Attach image',
+    ariaLabel: 'shell.keys.attachImage',
     isAttach: true,
   },
   {
     label: <TextSelect size={ICON_SIZE} />,
     key: 'SelectText',
-    ariaLabel: 'Select text',
+    ariaLabel: 'shell.keys.selectText',
     isSelectText: true,
   },
 ]
 
 const NAVIGATE_KEYS: KeyConfig[] = [
-  { label: 'Shift', key: 'Shift', isShiftModifier: true },
-  { label: '⇧Tab', key: 'ShiftTab', ariaLabel: 'Shift+Tab', isShiftTab: true },
+  { label: 'Shift', key: 'Shift', isShiftModifier: true }, // i18n-ignore
+  {
+    label: '⇧Tab', // i18n-ignore
+    key: 'ShiftTab',
+    ariaLabel: 'shell.keys.shiftTab',
+    isShiftTab: true,
+  },
   { label: <ArrowLeft size={ICON_SIZE} />, key: 'ArrowLeft' },
   { label: <ArrowRight size={ICON_SIZE} />, key: 'ArrowRight' },
   { label: <ChevronFirst size={ICON_SIZE} />, key: 'Home' },
   { label: <ChevronLast size={ICON_SIZE} />, key: 'End' },
-  { label: 'PgUp', key: 'PageUp' },
-  { label: 'PgDn', key: 'PageDown' },
+  { label: 'PgUp', key: 'PageUp' }, // i18n-ignore
+  { label: 'PgDn', key: 'PageDown' }, // i18n-ignore
   { label: <Delete size={ICON_SIZE} />, key: 'Delete' },
-  { label: 'Bksp', key: 'Backspace' },
-  { label: 'Ins', key: 'Insert' },
+  { label: 'Bksp', key: 'Backspace' }, // i18n-ignore
+  { label: 'Ins', key: 'Insert' }, // i18n-ignore
 ]
 
 const SCROLL_KEYS: KeyConfig[] = [
@@ -282,6 +290,7 @@ export function KeyboardToolbar({
   quickActions,
   readOnly = false,
 }: Props) {
+  const { t } = useT()
   const [internalCtrlActive, setInternalCtrlActive] = useState(false)
   const [internalShiftActive, setInternalShiftActive] = useState(false)
   const [expanded, setExpanded] = useState(defaultExpanded)
@@ -533,7 +542,7 @@ export function KeyboardToolbar({
           onClick={toggleImeMode}
           // `!`: the colour must beat KEYCAP's text-fg, whatever the CSS order
           className={`${KEYCAP} text-danger!`}
-          aria-label="Close IME input"
+          aria-label={t('shell.keys.closeIme')}
         >
           <X size={ICON_SIZE} />
         </button>
@@ -543,7 +552,7 @@ export function KeyboardToolbar({
           value={imeText}
           onChange={(e) => setImeText(e.target.value)}
           onKeyDown={handleImeKeyDown}
-          placeholder="Type non-Latin text here... (Vietnamese, CJK, ...)"
+          placeholder={t('shell.keys.imePlaceholder')}
           className={`h-11 flex-1 rounded-control border border-border bg-surface-raised px-4 text-fg placeholder:text-fg-subtle ui-native:border-0 ${FOCUS_RING}`}
           autoComplete="off"
           autoCorrect="off"
@@ -554,7 +563,7 @@ export function KeyboardToolbar({
           onClick={handleImeSend}
           disabled={!imeText.trim()}
           className={`${KEYCAP} ${KEYCAP_ON}`}
-          aria-label="Send text"
+          aria-label={t('shell.keys.sendText')}
         >
           <Send size={ICON_SIZE} />
         </button>
@@ -591,7 +600,7 @@ export function KeyboardToolbar({
           isHistoryToggle: keyConfig.isHistoryToggle,
         })
       }
-      aria-label={keyConfig.ariaLabel}
+      aria-label={keyConfig.ariaLabel && t(keyConfig.ariaLabel)}
     >
       {keyConfig.label}
     </Keycap>
@@ -635,11 +644,11 @@ export function KeyboardToolbar({
       {expanded && (
         <>
           {quickActions && (
-            <KeyGroup label="Actions">
+            <KeyGroup label={t('shell.keys.actions')}>
               {QUICK_ACTIONS.map((action) => (
                 <Keycap
-                  key={action.label}
-                  data-key={`Action-${action.label}`}
+                  key={action.id}
+                  data-key={`Action-${action.id}`}
                   onClick={() => {
                     haptic('light')
                     runAction(action, quickActions)
@@ -649,13 +658,17 @@ export function KeyboardToolbar({
                   <span aria-hidden="true" className="text-fg-muted">
                     {action.icon}
                   </span>
-                  {action.label}
+                  {t(action.label)}
                 </Keycap>
               ))}
             </KeyGroup>
           )}
-          <KeyGroup label="Text · Scroll">{toolKeys.map(renderKey)}</KeyGroup>
-          <KeyGroup label="Navigate">{navigateKeys.map(renderKey)}</KeyGroup>
+          <KeyGroup label={t('shell.keys.textScroll')}>
+            {toolKeys.map(renderKey)}
+          </KeyGroup>
+          <KeyGroup label={t('shell.keys.navigate')}>
+            {navigateKeys.map(renderKey)}
+          </KeyGroup>
         </>
       )}
 
@@ -688,7 +701,7 @@ export function KeyboardToolbar({
         <div className="shrink-0 border-l border-border pl-2 ui-native:pb-0.5">
           <Keycap
             data-key="More"
-            aria-label="Extra keys"
+            aria-label={t('shell.keys.extra')}
             aria-expanded={expanded}
             onClick={toggleExpanded}
           >

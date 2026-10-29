@@ -36,8 +36,8 @@ const pane = (over: Partial<OverviewPane> = {}): OverviewPane => ({
 describe('usageParts', () => {
   it('takes the context share and the fullest window of the account', () => {
     expect(usageParts(pane({ accountKey: 'k1' }), [ACCOUNT], NOW)).toEqual([
-      { name: 'ctx', spoken: 'context', percent: 72, exact: true },
-      { name: '7d', spoken: 'Codex 7d limit', percent: 95, exact: true },
+      { name: 'ctx', kind: 'context', percent: 72, exact: true },
+      { name: '7d', kind: 'limit', percent: 95, exact: true },
     ])
   })
 
@@ -63,7 +63,7 @@ describe('usageParts', () => {
         [ACCOUNT],
         NOW,
       ),
-    ).toEqual([{ name: 'ctx', spoken: 'context', percent: 0, exact: true }])
+    ).toEqual([{ name: 'ctx', kind: 'context', percent: 0, exact: true }])
     expect(
       usageParts(
         pane({ usage: undefined, accountKey: 'k1' }),
@@ -89,17 +89,13 @@ describe('usageParts limits', () => {
           { usedPercent: 95, windowMinutes: 10080, resetsAt: passed },
         ],
       }),
-    ).toEqual([
-      { name: '5h', spoken: 'Codex 5h limit', percent: 40, exact: true },
-    ])
+    ).toEqual([{ name: '5h', kind: 'limit', percent: 40, exact: true }])
   })
 
   it('takes the fullest window wherever it comes', () => {
     expect(
       only({ ...ACCOUNT, windows: [...ACCOUNT.windows].reverse() }),
-    ).toEqual([
-      { name: '7d', spoken: 'Codex 7d limit', percent: 95, exact: true },
-    ])
+    ).toEqual([{ name: '7d', kind: 'limit', percent: 95, exact: true }])
   })
 
   it('leaves out limits recorded over half an hour ago', () => {

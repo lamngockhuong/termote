@@ -1,5 +1,6 @@
 import { AppWindow, Command, Maximize, Minimize } from 'lucide-react'
 import type { ComponentProps, ReactNode } from 'react'
+import { useT } from '../i18n/i18n-context'
 import type { Session } from '../types/session'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { BrandMark } from './brand-mark'
@@ -145,6 +146,7 @@ function MobileHeader(p: Props) {
 const FONT_BUTTON = `relative flex h-8 w-7 pointer-coarse:h-9 before:absolute before:-inset-2 before:content-[''] items-center justify-center text-[12px] text-fg-muted hover:text-fg rounded-[calc(var(--radius-control)-2px)] ${FOCUS_RING}`
 
 function DesktopHeader(p: Props) {
+  const { t } = useT()
   const { session } = p
   return (
     // At least 44px, padded below the status bar of an installed iPad app;
@@ -194,7 +196,7 @@ function DesktopHeader(p: Props) {
               type="button"
               onClick={p.onDecreaseFont}
               className={FONT_BUTTON}
-              aria-label="Decrease font size"
+              aria-label={t('shell.header.fontSmaller')}
             >
               A−
             </button>
@@ -208,7 +210,7 @@ function DesktopHeader(p: Props) {
               type="button"
               onClick={p.onIncreaseFont}
               className={FONT_BUTTON}
-              aria-label="Increase font size"
+              aria-label={t('shell.header.fontLarger')}
             >
               A+
             </button>
@@ -219,8 +221,16 @@ function DesktopHeader(p: Props) {
           <IconButton
             size="sm"
             onClick={p.onToggleFullscreen}
-            aria-label={p.isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-            title={p.isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+            aria-label={
+              p.isFullscreen
+                ? t('shell.header.exitFullscreen')
+                : t('shell.header.enterFullscreen')
+            }
+            title={
+              p.isFullscreen
+                ? t('shell.header.exitFullscreen')
+                : t('shell.header.fullscreen')
+            }
           >
             {p.isFullscreen ? (
               <Minimize size={16} aria-hidden="true" />
@@ -234,11 +244,11 @@ function DesktopHeader(p: Props) {
             size="sm"
             onClick={p.onOpenPalette}
             data-tour="palette"
-            aria-label="Command palette"
+            aria-label={t('common.commandPalette')}
             title={
               p.paletteKey
-                ? `Command palette (${p.paletteKey})`
-                : 'Command palette'
+                ? `${t('common.commandPalette')} (${p.paletteKey})`
+                : t('common.commandPalette')
             }
           >
             <Command size={16} aria-hidden="true" />
@@ -279,12 +289,13 @@ function SessionName({
 }
 
 function OpenInMainButton({ onClick }: { onClick: () => void }) {
+  const { t } = useT()
   return (
     <IconButton
       size="sm"
       onClick={onClick}
-      aria-label="Open in main window"
-      title="Open in main window"
+      aria-label={t('shell.header.openInMain')}
+      title={t('shell.header.openInMain')}
     >
       <AppWindow size={16} aria-hidden="true" />
     </IconButton>

@@ -1,5 +1,8 @@
 import { type FormEvent, useEffect, useId, useRef, useState } from 'react'
 import { RequestError } from '../hooks/use-mux-api'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
 import { Button } from './ui/button'
 import { Sheet } from './ui/sheet'
 
@@ -12,31 +15,51 @@ export const MAX_GROUP_NAME_BYTES = 64
 export const nameTooLong = (name: string) =>
   new TextEncoder().encode(name).length > MAX_GROUP_NAME_BYTES
 
-// Why a name was refused: tmux reads some characters in a target
-export const invalidNameMessage = (noun: string) =>
-  noun === 'tmux session'
-    ? "This name can't be used. Avoid : . * ? [ \\ and a leading = or -"
-    : "This name can't be used"
+// What a group is on each backend: a Herdr workspace, a tmux or a Zellij
+// session
+export type GroupKind = 'workspace' | 'tmux' | 'zellij'
 
-// Why the server would not create the group, by its code; noun is
-// "workspace" or "tmux session"
-export function groupProblem(code: string, noun: string): string {
+const GROUP_NOUN: Record<GroupKind, MessageKey> = {
+  workspace: 'shell.group.workspace',
+  tmux: 'shell.group.tmux',
+  zellij: 'shell.group.zellij',
+}
+
+// What a group is called, in the app's language ("tmux session")
+export const groupNoun = (kind: GroupKind, t: Translate<MessageKey>) =>
+  t(GROUP_NOUN[kind])
+
+// Why a name was refused: tmux reads some characters in a target
+export const invalidNameMessage = (
+  kind: GroupKind,
+  t: Translate<MessageKey>,
+) =>
+  kind === 'tmux'
+    ? t('shell.group.invalidNameTmux')
+    : t('shell.group.invalidName')
+
+// Why the server would not create the group, by its code
+export function groupProblem(
+  code: string,
+  kind: GroupKind,
+  t: Translate<MessageKey>,
+): string {
+  const noun = groupNoun(kind, t)
   const messages: Record<string, string> = {
-    invalid_name: invalidNameMessage(noun),
-    invalid_cwd: 'Enter an absolute path on the host, or leave it empty',
-    not_found: 'No such directory on the host',
-    not_directory: 'That path is a file, not a directory',
-    not_allowed: `A ${noun} can't start in that directory`,
-    busy: 'The directory did not answer. Try again',
-    exists: `A ${noun} of that name already exists`,
-    unsupported: `This server can't create a ${noun}`,
+    invalid_name: invalidNameMessage(kind, t),
+    invalid_cwd: t('shell.group.invalidCwd'),
+    not_found: t('shell.group.notFound'),
+    not_directory: t('shell.group.notDirectory'),
+    not_allowed: t('shell.group.notAllowed', { noun }),
+    busy: t('shell.group.busy'),
+    exists: t('shell.group.exists', { noun }),
+    unsupported: t('shell.group.unsupported', { noun }),
   }
-  return messages[code] ?? `Could not create the ${noun}`
+  return messages[code] ?? t('shell.group.createFailed', { noun })
 }
 
 interface Props {
-  // "workspace" (Herdr) or "tmux session"
-  noun: string
+  kind: GroupKind
   onClose: () => void
   // Creates the group; a refusal throws RequestError with the server's code.
   // isOpen tells whether the box is still open once the reply is in: after
@@ -46,7 +69,9 @@ interface Props {
 
 // Asks for the name and directory of a new group and creates it. A refusal
 // is shown under the fields, which keep what was typed.
-export function GroupDialog({ noun, onClose, onCreate }: Props) {
+export function GroupDialog({ kind, onClose, onCreate }: Props) {
+  const { t } = useT()
+  const noun = groupNoun(kind, t)
   const [name, setName] = useState('')
   const [cwd, setCwd] = useState('')
   const [sending, setSending] = useState(false)
@@ -79,11 +104,11 @@ export function GroupDialog({ noun, onClose, onCreate }: Props) {
     if (sending) return
     const trimmed = name.trim()
     if (!trimmed) {
-      setProblem('Enter a name')
+      setProblem(t('shell.group.enterName'))
       return
     }
     if (nameTooLong(trimmed)) {
-      setProblem(`Use at most ${MAX_GROUP_NAME_BYTES} bytes`)
+      setProblem(t('shell.group.tooLong', { n: MAX_GROUP_NAME_BYTES }))
       return
     }
     setSending(true)
@@ -95,9 +120,9 @@ export function GroupDialog({ noun, onClose, onCreate }: Props) {
       if (closed.current) return
       setProblem(
         err instanceof RequestError
-          ? groupProblem(err.code, noun)
+          ? groupProblem(err.code, kind, t)
           : // Lost on the way back, perhaps after the group was made
-            `The ${noun} may have been created. Check the list.`,
+            t('shell.group.maybeCreated', { noun }),
       )
     } finally {
       if (!closed.current) setSending(false)
@@ -106,10 +131,10 @@ export function GroupDialog({ noun, onClose, onCreate }: Props) {
 
   const describedBy = problem ? errorId : undefined
   return (
-    <Sheet isOpen onClose={close} title={`New ${noun}`}>
+    <Sheet isOpen onClose={close} title={t('shell.group.new', { noun })}>
       <form onSubmit={submit} className="flex flex-col gap-3 p-4">
         <label htmlFor={nameId} className="text-sm text-fg-muted">
-          Name
+          {t('shell.group.name')}
         </label>
         <input
           ref={nameInput}
@@ -127,13 +152,13 @@ export function GroupDialog({ noun, onClose, onCreate }: Props) {
           className={INPUT_CLASSES}
         />
         <label htmlFor={cwdId} className="text-sm text-fg-muted">
-          Directory (an absolute path on the host)
+          {t('shell.group.directory')}
         </label>
         <input
           id={cwdId}
           type="text"
           value={cwd}
-          placeholder="Home directory"
+          placeholder={t('shell.group.home')}
           spellCheck={false}
           autoCapitalize="off"
           autoCorrect="off"
@@ -152,9 +177,9 @@ export function GroupDialog({ noun, onClose, onCreate }: Props) {
           </div>
         )}
         <div className="flex justify-end gap-2">
-          <Button onClick={close}>Cancel</Button>
+          <Button onClick={close}>{t('common.cancel')}</Button>
           <Button type="submit" variant="primary" disabled={sending}>
-            Create
+            {t('shell.group.create')}
           </Button>
         </div>
       </form>

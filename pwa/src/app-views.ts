@@ -12,6 +12,8 @@ import type { ToastAction, ToastVariant } from './components/toast'
 import type { ViewOption } from './components/ui/view-switcher'
 import type { MuxInfo } from './hooks/use-local-sessions'
 import type { AgentStartControl } from './hooks/use-start-agent'
+import type { MessageKey } from './i18n/messages/en'
+import type { Translate } from './i18n/translate'
 import type { Session } from './types/session'
 import { canStartAgent } from './utils/agent-start'
 import { lazyRetry, type Retryable } from './utils/lazy-retry'
@@ -77,7 +79,11 @@ type LazyView = ComponentType<ViewProps> &
 
 // A view of the current pane (terminal, chat, files, changes). Adding one is adding an
 // entry here: the header shows the switcher once two are available.
-export interface AppView extends ViewOption<string> {
+export interface AppView extends Omit<ViewOption<string>, 'label'> {
+  // Its name: a message, read in the app's language (the views here), or
+  // text shown as it is
+  labelKey?: MessageKey
+  label?: string
   available: (ctx: ViewContext) => boolean
   // Main area. The terminal view has none: App keeps the terminal mounted
   // under every view so switching back does not reconnect the stream.
@@ -122,13 +128,13 @@ const TasksView = lazyRetry<ViewProps>(
 export const APP_VIEWS: AppView[] = [
   {
     id: TERMINAL_VIEW_ID,
-    label: 'Terminal',
+    labelKey: 'common.terminal',
     Icon: SquareTerminal,
     available: () => true,
   },
   {
     id: CHAT_VIEW_ID,
-    label: 'Chat',
+    labelKey: 'common.chat',
     Icon: MessagesSquare,
     // An agent whose transcript the server reads (chat-agents.ts), or a
     // pane where one can be started or was started from this page
@@ -142,7 +148,7 @@ export const APP_VIEWS: AppView[] = [
   },
   {
     id: FILES_VIEW_ID,
-    label: 'Files',
+    labelKey: 'common.files',
     Icon: FolderTree,
     // The server reports the pane's directory (tmux on Linux/macOS, Herdr)
     available: ({ mux }) => !!mux.caps.files,
@@ -152,7 +158,7 @@ export const APP_VIEWS: AppView[] = [
   },
   {
     id: CHANGES_VIEW_ID,
-    label: 'Changes',
+    labelKey: 'common.changes',
     Icon: GitCompare,
     // Same routes; a root outside a repo says so in the view
     available: ({ mux }) => !!mux.caps.files,
@@ -162,7 +168,7 @@ export const APP_VIEWS: AppView[] = [
   },
   {
     id: TASKS_VIEW_ID,
-    label: 'Tasks',
+    labelKey: 'common.tasks',
     Icon: ListChecks,
     // The server lists and runs the root's tasks; they run commands, so a
     // full client only
@@ -188,6 +194,10 @@ export function startOffered({
 export function availableViews(views: AppView[], ctx: ViewContext): AppView[] {
   return views.filter((v) => v.available(ctx))
 }
+
+// The name a view shows
+export const viewLabel = (view: AppView, t: Translate<MessageKey>): string =>
+  view.labelKey ? t(view.labelKey) : (view.label ?? view.id)
 
 // Id of the element that shows a view (the switcher's aria-controls target).
 export const viewPanelId = (id: string) => `view-panel-${id}`

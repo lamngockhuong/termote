@@ -23,17 +23,20 @@ const BASELINE = join(ROOT, 'i18n-baseline.json')
 // Two letters in a row: a word, not a symbol or a number
 const WORD = /\p{L}{2}/u
 // Code, not prose, between a > or } and a < or {: an operator, a keyword,
-// a template literal, a condition's closing parenthesis (if (a > b) {), or
-// a type after a destructured parameter (}: Omit<Props, 'x'>)
+// a template literal, a condition's closing parenthesis (if (a > b) {), a
+// type after a destructured parameter (}: Omit<Props, 'x'>), or the rest of
+// a call or a signature after a generic or an object (Translate<K>): T {,
+// f(t('a', { n }), 'warning', {)
 const CODE =
-  /[=;&|$`]|\b(?:return|const|else|if|while|catch|finally|case)\b|\)$|^:/
+  /[=;&|$`]|\b(?:return|const|else|if|while|catch|finally|case)\b|\)$|^[:)]/
 // After a tag's > (not after = or -: an arrow, a generic's end in a type:
 // `=> Promise<`) or a value's } ({count} files selected)
 const JSX_TEXT = /(?:(?<![=-])>|\})([^<>{}]+)[<{]/g
 // &amp; and the like are text, not the & operator
 const ENTITY = /&\w+;/g
-// A message's key (title: 'tour.chipTitle'), read through t() elsewhere
-const MESSAGE_KEY = /^[a-z]+\.\w+$/
+// A message's key (title: 'tour.chipTitle', label: 'shell.agent.done'),
+// read through t() elsewhere
+const MESSAGE_KEY = /^[a-z]+(?:\.\w+)+$/
 const PROSE_LINE = /^[\p{L}\p{N}][\p{L}\p{N}\s.,!?'’:()&;/-]*$/u
 const ATTR =
   /\b(?:aria-label|title|placeholder|alt|label|desc|description)\s*(?:=|:)\s*(['"])((?:(?!\1).)*)\1/g

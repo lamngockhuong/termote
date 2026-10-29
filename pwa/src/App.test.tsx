@@ -485,7 +485,7 @@ vi.mock('./components/session-sidebar', () => ({
       onMoveGroup: (id: string, index: number) => void
     }
     groupActions?: {
-      noun: string
+      kind: string
       onNew: () => void
       onRename: (id: string, name: string) => Promise<void>
       onClose: (id: string) => void
@@ -537,7 +537,7 @@ vi.mock('./components/session-sidebar', () => ({
       {groupActions && !isMobile && (
         <>
           <span>
-            {groupActions.noun}: rename main{' '}
+            {groupActions.kind}: rename main{' '}
             {String(groupActions.canRename('main'))}, rename $3{' '}
             {String(groupActions.canRename('$3'))}
           </span>
@@ -3412,6 +3412,26 @@ describe('App groups and panes', () => {
     )
   })
 
+  it('herdr: a pane named like markup or a placeholder shows as it is', async () => {
+    mockMux('herdr')
+    const base = mockUseLocalSessions()
+    const label = '<b>x</b> {noun}'
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      activeSession: {
+        ...base.activeSession,
+        panes: [PANES[0], { ...PANES[1], label }],
+      },
+    } as any)
+    render(<App />)
+    fireEvent.click(
+      await screen.findByRole('button', { name: `Close pane ${label}` }),
+    )
+    expect(screen.getByTestId('confirm-dialog')).toHaveTextContent(
+      `${label} will be closed`,
+    )
+  })
+
   it('herdr: names what runs in the pane it asks to close', async () => {
     mockMux('herdr')
     const base = mockUseLocalSessions()
@@ -5700,9 +5720,7 @@ describe('App — group actions', () => {
     withGroups()
     render(<App />)
     expect(
-      await screen.findByText(
-        'tmux session: rename main false, rename $3 true',
-      ),
+      await screen.findByText('tmux: rename main false, rename $3 true'),
     ).toBeInTheDocument()
     fireEvent.click(screen.getByText('GroupRename'))
     expect(renameGroup).toHaveBeenCalledWith('$3', 'web')
@@ -5844,9 +5862,7 @@ describe('App — group actions', () => {
     withZellij()
     render(<App />)
     expect(
-      await screen.findByText(
-        'Zellij session: rename main true, rename $3 true',
-      ),
+      await screen.findByText('zellij: rename main true, rename $3 true'),
     ).toBeInTheDocument()
     expect(
       screen.getByText('zellij rename main false, rename dev true'),

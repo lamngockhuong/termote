@@ -10,6 +10,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { useT } from '../i18n/i18n-context'
 import {
   clampPanelWidth,
   maxPanelWidth,
@@ -56,6 +57,7 @@ export function SidePanel({
   inert,
   children,
 }: Props) {
+  const { t } = useT()
   const asideRef = useRef<HTMLElement>(null)
   // Width of the row the panel shares with the main area: null until
   // measured, and with no ResizeObserver (tests) the panel has no maximum.
@@ -162,12 +164,12 @@ export function SidePanel({
         <div
           role="separator"
           aria-orientation="vertical"
-          aria-label={`Resize ${label}`}
+          aria-label={t('shell.panel.resize', { name: label })}
           aria-valuenow={shown}
           aria-valuemin={SIDE_PANEL_MIN}
           aria-valuemax={Number.isFinite(max) ? max : undefined}
           tabIndex={0}
-          title="Drag to resize, double-click to reset"
+          title={t('shell.panel.resizeHint')}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={endDrag}
@@ -191,8 +193,11 @@ export function SidePanel({
 // panel.
 export function PanelMaximizeButton() {
   const panel = useContext(SidePanelContext)
+  const { t } = useT()
   if (!panel) return null
-  const label = panel.maximized ? 'Restore panel' : 'Maximize panel'
+  const label = panel.maximized
+    ? t('shell.panel.restore')
+    : t('shell.panel.maximize')
   const Icon = panel.maximized ? Minimize2 : Maximize2
   return (
     <IconButton

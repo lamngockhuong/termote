@@ -1,5 +1,7 @@
 import { useMemo } from 'react'
 import type { ActivityEvent } from '../hooks/use-mux-api'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
 import type { AgentStatus } from '../types/session'
 import {
   segmentTotals,
@@ -18,18 +20,11 @@ const SEGMENT_STYLE: Record<string, string> = {
   idle: 'border border-fg-subtle bg-transparent',
 }
 
-const STATUS_WORDS: Record<string, string> = {
-  blocked: 'needs you',
-  working: 'working',
-  done: 'done',
-  idle: 'idle',
-}
-
-const word = (status: string) => STATUS_WORDS[status] ?? status
-
-function minutes(ms: number): string {
-  const min = Math.round(ms / 60_000)
-  return min < 1 ? '<1 min' : `${min} min`
+const STATUS_WORDS: Record<string, MessageKey> = {
+  blocked: 'shell.timeline.blocked',
+  working: 'shell.timeline.working',
+  done: 'shell.timeline.done',
+  idle: 'shell.timeline.idle',
 }
 
 interface Props {
@@ -47,11 +42,23 @@ export function StatusTimeline({ events, paneKey, now }: Props) {
     () => timelineSegments(events, paneKey, now),
     [events, paneKey, now],
   )
+  const { t } = useT()
+  // A status the server added later shows as it is
+  const word = (status: string) =>
+    status in STATUS_WORDS ? t(STATUS_WORDS[status]) : status
+  const minutes = (ms: number) => {
+    const min = Math.round(ms / 60_000)
+    return min < 1
+      ? t('shell.timeline.underMinute')
+      : t('shell.timeline.minutes', { n: min })
+  }
   const from = now - TIMELINE_WINDOW
   const totals = segmentTotals(segments)
   const label = totals.length
-    ? `Last 60 min: ${totals.map(([s, ms]) => `${word(s)} ${minutes(ms)}`).join(', ')}`
-    : 'Last 60 min: no status changes recorded'
+    ? t('shell.timeline.label', {
+        totals: totals.map(([s, ms]) => `${word(s)} ${minutes(ms)}`).join(', '),
+      })
+    : t('shell.timeline.none')
   return (
     <div className="flex flex-col gap-1">
       <div
@@ -76,9 +83,9 @@ export function StatusTimeline({ events, paneKey, now }: Props) {
         aria-hidden="true"
         className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-fg-subtle"
       >
-        <span>60 min</span>
+        <span>{t('shell.timeline.window')}</span>
         {totals.length === 0 ? (
-          <span>No data yet</span>
+          <span>{t('shell.timeline.noData')}</span>
         ) : (
           totals.map(([status, ms]) => (
             <span key={status} className="flex items-center gap-1">

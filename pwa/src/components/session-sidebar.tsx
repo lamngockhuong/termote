@@ -27,6 +27,9 @@ import {
 } from 'react'
 import { useGroupCollapsed } from '../hooks/use-group-collapsed'
 import { RequestError } from '../hooks/use-mux-api'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
 import type { Session, SessionGroup } from '../types/session'
 import { dropIndex, movableGroups, targetIndex } from '../utils/reorder'
 import {
@@ -42,6 +45,8 @@ import { AgentFilterBar } from './agent-filter-bar'
 import { AgentStatusBadge } from './agent-status-badge'
 import { BrandMark } from './brand-mark'
 import {
+  type GroupKind,
+  groupNoun,
   invalidNameMessage,
   MAX_GROUP_NAME_BYTES,
   nameTooLong,
@@ -95,8 +100,8 @@ interface Props {
   // Sessions waiting on the user first in each group
   sortBlockedFirst?: boolean
   // Groups can be created, renamed and closed (caps.groups): what one is
-  // called ("workspace", "tmux session"), and the actions. Without it the
-  // list is as before: no group actions, no header for a single group.
+  // (a workspace, a tmux session), and the actions. Without it the list is
+  // as before: no group actions, no header for a single group.
   groupActions?: GroupActions
   // Moving tabs and groups (caps.reorderTabs, caps.reorderGroups)
   reorder?: ReorderActions
@@ -113,43 +118,49 @@ export interface ReorderActions {
 }
 
 // Why a move was refused, by the server's code
-export function moveProblem(err: unknown): string {
+export function moveProblem(err: unknown, t: Translate<MessageKey>): string {
   const code = err instanceof RequestError ? err.code : ''
   switch (code) {
     case 'busy':
-      return 'Another move is running; try again'
+      return t('shell.move.busy')
     case 'invalid_index':
-      return 'The list changed; try again'
+      return t('shell.move.changed')
     case 'linked_worktree':
-      return "A worktree moves with its repository's workspace"
+      return t('shell.move.linkedWorktree')
     case 'unsupported':
-      return 'Reordering is not supported here'
+      return t('shell.move.unsupported')
   }
-  return 'Could not move'
+  return t('shell.move.failed')
 }
 
 // What to undo so tabs and groups can be moved again
 export function reorderPausedHint(
+  t: Translate<MessageKey>,
   filtering: boolean,
   sortBlockedFirst: boolean,
   searching = false,
 ): string {
   const steps: string[] = []
-  if (searching) steps.push('clear the search')
-  if (filtering) steps.push('Show All')
+  if (searching) steps.push(t('shell.reorder.clearSearch'))
+  if (filtering) steps.push(t('shell.reorder.showAll'))
   if (sortBlockedFirst) {
     // Alone, it says where the setting is
     steps.push(
       steps.length
-        ? 'turn off Blocked sessions first'
-        : 'turn off Blocked sessions first in Settings',
+        ? t('shell.reorder.blockedFirst')
+        : t('shell.reorder.blockedFirstSettings'),
     )
   }
-  const text =
-    steps.length > 1
-      ? `${steps.slice(0, -1).join(', ')} and ${steps[steps.length - 1]}`
-      : steps.join('')
-  return `${text.charAt(0).toUpperCase()}${text.slice(1)} to reorder`
+  const text = t('shell.reorder.hint', {
+    steps:
+      steps.length > 1
+        ? t('shell.reorder.and', {
+            first: steps.slice(0, -1).join(', '),
+            last: steps[steps.length - 1],
+          })
+        : steps.join(''),
+  })
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}`
 }
 
 // The key a tab keeps when its id changes
@@ -181,7 +192,7 @@ const dropLine = (after: boolean) => (
 )
 
 export interface GroupActions {
-  noun: string
+  kind: GroupKind
   onNew: () => void
   // Rejects with RequestError on a refusal
   onRename: (id: string, name: string) => Promise<void>
@@ -198,11 +209,17 @@ export interface GroupActions {
 }
 
 // Why a rename was refused, by the server's code
-function renameProblem(err: unknown, noun: string): string {
-  if (!(err instanceof RequestError)) return `Could not rename the ${noun}`
-  if (err.code === 'exists') return `A ${noun} of that name already exists`
-  if (err.code === 'invalid_name') return invalidNameMessage(noun)
-  return `Could not rename the ${noun}`
+function renameProblem(
+  err: unknown,
+  kind: GroupKind,
+  t: Translate<MessageKey>,
+): string {
+  const noun = groupNoun(kind, t)
+  if (!(err instanceof RequestError))
+    return t('shell.group.renameFailed', { noun })
+  if (err.code === 'exists') return t('shell.group.exists', { noun })
+  if (err.code === 'invalid_name') return invalidNameMessage(kind, t)
+  return t('shell.group.renameFailed', { noun })
 }
 
 // The session list: a bottom sheet on phones, a collapsible sidebar on desktop.
@@ -227,6 +244,7 @@ export function SessionSidebar({
   groupActions,
   reorder,
 }: Props) {
+  const { t } = useT()
   const [showAddForm, setShowAddForm] = useState(false)
   const canAdd = !!onAdd
   const canRemove = !!onRemove && sessions.length > 1
@@ -317,7 +335,12 @@ export function SessionSidebar({
     !!reorder?.groups && movableIds.length > 1 && movableIds.includes(group.id)
   const canMoveGroup = (group: SessionGroup) =>
     canReorder && groupMovable(group)
-  const pausedHint = reorderPausedHint(filtering, sortBlockedFirst, searching)
+  const pausedHint = reorderPausedHint(
+    t,
+    filtering,
+    sortBlockedFirst,
+    searching,
+  )
 
   // Move a tab one place up or down in its group; nothing at an end.
   const stepTab = (session: Session, delta: -1 | 1) => {
@@ -470,7 +493,7 @@ export function SessionSidebar({
         <IconPicker value={editIcon} onChange={setEditIcon} />
         <input
           type="text"
-          aria-label="Session name"
+          aria-label={t('shell.sidebar.sessionName')}
           value={editName}
           onChange={(e) => setEditName(e.target.value)}
           className={INPUT_CLASSES}
@@ -484,10 +507,10 @@ export function SessionSidebar({
           onClick={saveEdit}
           className="flex-1"
         >
-          Save
+          {t('shell.sidebar.save')}
         </Button>
         <Button size="sm" onClick={cancelEdit}>
-          Cancel
+          {t('common.cancel')}
         </Button>
       </div>
     </div>
@@ -561,8 +584,8 @@ export function SessionSidebar({
               size="sm"
               onClick={() => startEdit(session)}
               className="size-7!"
-              title="Edit session"
-              aria-label={`Edit ${session.name}`}
+              title={t('shell.sidebar.editSession')}
+              aria-label={t('shell.session.edit', { name: session.name })}
             >
               <Pencil size={14} aria-hidden="true" />
             </IconButton>
@@ -573,8 +596,8 @@ export function SessionSidebar({
               variant="danger"
               onClick={() => onRemove?.(session.id)}
               className="size-7!"
-              title="Remove session"
-              aria-label={`Remove ${session.name}`}
+              title={t('shell.sidebar.removeSession')}
+              aria-label={t('shell.session.remove', { name: session.name })}
             >
               <X size={14} aria-hidden="true" />
             </IconButton>
@@ -626,7 +649,7 @@ export function SessionSidebar({
       return
     }
     if (nameTooLong(name)) {
-      setGroupNameProblem(`Use at most ${MAX_GROUP_NAME_BYTES} bytes`)
+      setGroupNameProblem(t('shell.group.tooLong', { n: MAX_GROUP_NAME_BYTES }))
       return
     }
     setSavingGroup(true)
@@ -634,7 +657,7 @@ export function SessionSidebar({
       await actions.onRename(group.id, name)
       setRenamingGroup(null)
     } catch (err) {
-      setGroupNameProblem(renameProblem(err, actions.noun))
+      setGroupNameProblem(renameProblem(err, actions.kind, t))
     } finally {
       setSavingGroup(false)
     }
@@ -651,7 +674,10 @@ export function SessionSidebar({
     >
       <input
         type="text"
-        aria-label={`New name for ${actions.noun} ${group.name}`}
+        aria-label={t('shell.group.newName', {
+          noun: groupNoun(actions.kind, t),
+          name: group.name,
+        })}
         value={groupName}
         onChange={(e) => {
           setGroupName(e.target.value)
@@ -676,10 +702,10 @@ export function SessionSidebar({
           disabled={savingGroup}
           className="flex-1"
         >
-          Save
+          {t('shell.sidebar.save')}
         </Button>
         <Button size="sm" onClick={() => setRenamingGroup(null)}>
-          Cancel
+          {t('common.cancel')}
         </Button>
       </div>
     </form>
@@ -689,7 +715,10 @@ export function SessionSidebar({
   const renderGroupMenu = (group: SessionGroup, name: string) =>
     groupActions && (
       <Menu
-        label={`Actions for ${groupActions.noun} ${name}`}
+        label={t('shell.group.actions', {
+          noun: groupNoun(groupActions.kind, t),
+          name,
+        })}
         trigger={<MoreHorizontal size={14} aria-hidden="true" />}
         triggerSize="sm"
       >
@@ -698,7 +727,7 @@ export function SessionSidebar({
             icon={<Pencil size={16} />}
             onSelect={() => startGroupRename(group)}
           >
-            Rename
+            {t('shell.sidebar.rename')}
           </MenuItem>
         )}
         {canMoveGroup(group) && (
@@ -708,14 +737,14 @@ export function SessionSidebar({
               disabled={movableIds[0] === group.id}
               onSelect={() => stepGroup(group, -1)}
             >
-              Move up
+              {t('shell.sidebar.moveUp')}
             </MenuItem>
             <MenuItem
               icon={<ArrowDown size={16} />}
               disabled={movableIds[movableIds.length - 1] === group.id}
               onSelect={() => stepGroup(group, 1)}
             >
-              Move down
+              {t('shell.sidebar.moveDown')}
             </MenuItem>
           </>
         )}
@@ -729,7 +758,7 @@ export function SessionSidebar({
             icon={<FolderGit2 size={16} />}
             onSelect={() => groupActions.onNewWorktree?.(group.id)}
           >
-            New worktree
+            {t('shell.sidebar.newWorktree')}
           </MenuItem>
         )}
         {groupActions.onOpenWorktree && !group.worktree?.linked && (
@@ -737,7 +766,7 @@ export function SessionSidebar({
             icon={<FolderOpen size={16} />}
             onSelect={() => groupActions.onOpenWorktree?.(group.id)}
           >
-            Open worktree
+            {t('shell.sidebar.openWorktree')}
           </MenuItem>
         )}
         <MenuItem
@@ -745,7 +774,7 @@ export function SessionSidebar({
           danger
           onSelect={() => groupActions.onClose(group.id)}
         >
-          Close
+          {t('common.close')}
         </MenuItem>
         {groupActions.onRemoveWorktree && group.worktree?.linked && (
           <MenuItem
@@ -753,7 +782,7 @@ export function SessionSidebar({
             danger
             onSelect={() => groupActions.onRemoveWorktree?.(group.id)}
           >
-            Remove worktree
+            {t('shell.sidebar.removeWorktree')}
           </MenuItem>
         )}
       </Menu>
@@ -768,7 +797,7 @@ export function SessionSidebar({
     return (
       <Menu
         key={session.id}
-        label={`Actions for ${session.name}`}
+        label={t('shell.sidebar.actions', { name: session.name })}
         trigger={<MoreHorizontal size={18} aria-hidden="true" />}
       >
         {onUpdate && (
@@ -776,7 +805,7 @@ export function SessionSidebar({
             icon={<Pencil size={16} />}
             onSelect={() => startEdit(session, true)}
           >
-            Edit
+            {t('shell.sidebar.edit')}
           </MenuItem>
         )}
         {movable && (
@@ -786,14 +815,14 @@ export function SessionSidebar({
               disabled={ids[0] === session.id}
               onSelect={() => stepTab(session, -1)}
             >
-              Move up
+              {t('shell.sidebar.moveUp')}
             </MenuItem>
             <MenuItem
               icon={<ArrowDown size={16} />}
               disabled={ids[ids.length - 1] === session.id}
               onSelect={() => stepTab(session, 1)}
             >
-              Move down
+              {t('shell.sidebar.moveDown')}
             </MenuItem>
           </>
         )}
@@ -803,7 +832,7 @@ export function SessionSidebar({
             danger
             onSelect={() => onRemove?.(session.id)}
           >
-            Delete
+            {t('shell.sidebar.delete')}
           </MenuItem>
         )}
       </Menu>
@@ -823,7 +852,7 @@ export function SessionSidebar({
       className="w-full"
     >
       <FolderPlus size={14} aria-hidden="true" />
-      New {groupActions.noun}
+      {t('shell.group.new', { noun: groupNoun(groupActions.kind, t) })}
     </Button>
   )
 
@@ -881,7 +910,9 @@ export function SessionSidebar({
                       aria-hidden="true"
                       className="mr-0.5 inline align-[-1px]"
                     />
-                    <span className="sr-only">branch </span>
+                    <span className="sr-only">
+                      {t('shell.sidebar.branch')}{' '}
+                    </span>
                     {visibleUnsafe(group.worktree.branch)}
                   </span>
                 )}
@@ -923,7 +954,7 @@ export function SessionSidebar({
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-          placeholder="Session name"
+          placeholder={t('shell.sidebar.sessionName')}
           className={INPUT_CLASSES}
           autoFocus
         />
@@ -935,10 +966,10 @@ export function SessionSidebar({
           onClick={handleAdd}
           className="flex-1"
         >
-          Add
+          {t('shell.sidebar.add')}
         </Button>
         <Button size="sm" onClick={() => setShowAddForm(false)}>
-          Cancel
+          {t('common.cancel')}
         </Button>
       </div>
     </div>
@@ -948,8 +979,8 @@ export function SessionSidebar({
   const overviewButton = onOpenOverview && (
     <IconButton
       onClick={onOpenOverview}
-      title="Agent overview"
-      aria-label="Agent overview"
+      title={t('common.overview')}
+      aria-label={t('common.overview')}
       aria-pressed={!!overviewOpen}
       className={overviewOpen ? 'bg-surface text-fg' : ''}
     >
@@ -973,7 +1004,7 @@ export function SessionSidebar({
   const searchToggle = canSearch && (
     <SearchToggle
       controls={searchId}
-      noun="sessions"
+      noun={t('shell.sidebar.searchNoun')}
       open={searchOpen}
       onToggle={() => {
         if (searchOpen) closeSearch()
@@ -993,7 +1024,7 @@ export function SessionSidebar({
   const searchField = searchOpen && (
     <SessionSearchField
       id={searchId}
-      label="Find a session"
+      label={t('shell.sidebar.find')}
       value={query}
       onChange={setQuery}
       onClose={closeSearch}
@@ -1009,7 +1040,7 @@ export function SessionSidebar({
   const sessionList =
     narrowed && visibleSessions.length === 0 ? (
       <div className="flex flex-col items-center gap-2 px-2 py-6 text-center text-[13px] text-fg-muted">
-        No sessions match
+        {t('shell.sidebar.noMatch')}
         <Button
           size="sm"
           onClick={() => {
@@ -1017,7 +1048,7 @@ export function SessionSidebar({
             setQuery('')
           }}
         >
-          Show all
+          {t('shell.sidebar.showAll')}
         </Button>
       </div>
     ) : showGroups ? (
@@ -1034,7 +1065,10 @@ export function SessionSidebar({
   // the agent filter fits under it and both stay in sight while the list
   // scrolls.
   const currentRow = activeSession && (
-    <section aria-label="Current session" className="flex flex-col gap-1">
+    <section
+      aria-label={t('shell.sidebar.current')}
+      className="flex flex-col gap-1"
+    >
       {editingInCurrent && editingId === activeSession.id ? (
         renderEditForm()
       ) : (
@@ -1046,7 +1080,7 @@ export function SessionSidebar({
             {visibleUnsafe(activeSession.name)}
           </span>
           <span className="shrink-0 font-label text-[11px] uppercase tracking-wider text-fg-subtle">
-            Current
+            {t('shell.sidebar.currentTag')}
           </span>
           <span className="flex-1" />
           {renderCurrentMenu(activeSession)}
@@ -1078,8 +1112,8 @@ export function SessionSidebar({
       <Sheet
         isOpen={isOpen}
         onClose={onClose}
-        title="Sessions"
-        closeLabel="Close sessions"
+        title={t('shell.tabs.label')}
+        closeLabel={t('shell.sidebar.close')}
         actions={
           <>
             {searchToggle}
@@ -1088,11 +1122,11 @@ export function SessionSidebar({
                 variant="primary"
                 size="sm"
                 onClick={() => setShowAddForm(true)}
-                title="Add new session"
+                title={t('shell.sidebar.addNew')}
                 className="ui-native:rounded-full"
               >
                 <Plus size={16} aria-hidden="true" />
-                New session
+                {t('shell.sidebar.new')}
               </Button>
             )}
           </>
@@ -1118,9 +1152,15 @@ export function SessionSidebar({
         >
           <IconButton
             onClick={() => onToggleCollapse?.()}
-            title={narrowed ? 'Expand sidebar (filtered)' : 'Expand sidebar'}
+            title={
+              narrowed
+                ? t('shell.sidebar.expandFilteredTitle')
+                : t('shell.sidebar.expand')
+            }
             aria-label={
-              narrowed ? 'Expand sidebar, filtered' : 'Expand sidebar'
+              narrowed
+                ? t('shell.sidebar.expandFiltered')
+                : t('shell.sidebar.expand')
             }
             className="relative"
           >
@@ -1140,8 +1180,8 @@ export function SessionSidebar({
                 onToggleCollapse?.()
                 setShowAddForm(true)
               }}
-              title="Add new session"
-              aria-label="Add new session"
+              title={t('shell.sidebar.addNew')}
+              aria-label={t('shell.sidebar.addNew')}
             >
               <Plus size={18} aria-hidden="true" />
             </IconButton>
@@ -1187,6 +1227,7 @@ export function SessionSidebar({
         <div className="flex h-12 shrink-0 items-center justify-between pl-3 pr-1.5">
           <span className="flex items-center gap-2 text-[15px] font-semibold text-fg ui-terminal:font-label">
             <BrandMark className="size-6 shrink-0" blink="hover" />
+            {/* i18n-ignore: the product's name */}
             Termote
           </span>
           <span className="flex items-center">
@@ -1194,8 +1235,8 @@ export function SessionSidebar({
             {overviewButton}
             <IconButton
               onClick={() => onToggleCollapse?.()}
-              title="Collapse sidebar"
-              aria-label="Collapse sidebar"
+              title={t('shell.sidebar.collapse')}
+              aria-label={t('shell.sidebar.collapse')}
             >
               <PanelLeftClose size={18} aria-hidden="true" />
             </IconButton>
@@ -1208,11 +1249,11 @@ export function SessionSidebar({
                 <Button
                   variant="primary"
                   onClick={() => setShowAddForm(true)}
-                  title="Add new session"
+                  title={t('shell.sidebar.addNew')}
                   className="w-full ui-native:rounded-full"
                 >
                   <Plus size={16} aria-hidden="true" />
-                  New session
+                  {t('shell.sidebar.new')}
                 </Button>
               )}
           {newGroupButton && <div className="mt-2">{newGroupButton}</div>}

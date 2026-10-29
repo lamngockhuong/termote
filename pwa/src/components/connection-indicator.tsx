@@ -1,4 +1,6 @@
 import { Wifi, WifiOff } from 'lucide-react'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
 import { FOCUS_RING } from './ui/button'
 
 export type ConnectionState =
@@ -27,12 +29,12 @@ const STATUS_COLORS: Record<ConnectionState, string> = {
   evicted: 'bg-danger',
 }
 
-export const STATUS_TEXT: Record<ConnectionState, string> = {
-  connecting: 'Connecting...',
-  connected: 'Connected',
-  disconnected: 'Disconnected',
-  error: 'Connection error',
-  evicted: 'Disconnected by a newer window',
+export const STATUS_TEXT: Record<ConnectionState, MessageKey> = {
+  connecting: 'shell.connection.connecting',
+  connected: 'shell.connection.connected',
+  disconnected: 'shell.connection.disconnected',
+  error: 'shell.connection.error',
+  evicted: 'shell.connection.evicted',
 }
 
 // The coloured dot alone, for places that show the state without the retry
@@ -48,6 +50,7 @@ export function ConnectionDot({ state }: { state: ConnectionState }) {
 }
 
 export function ConnectionIndicator({ state, onRetry }: Props) {
+  const { t } = useT()
   const isClickable = state !== 'connected' && state !== 'connecting'
 
   return (
@@ -57,8 +60,8 @@ export function ConnectionIndicator({ state, onRetry }: Props) {
       className={`flex h-8 items-center gap-1.5 px-2 rounded-control text-fg-muted transition-colors duration-(--duration-fast) pointer-coarse:h-touch ${FOCUS_RING} ${
         isClickable ? 'hover:bg-surface hover:text-fg' : 'cursor-default'
       }`}
-      title={STATUS_TEXT[state]}
-      aria-label={STATUS_TEXT[state]}
+      title={t(STATUS_TEXT[state])}
+      aria-label={t(STATUS_TEXT[state])}
       disabled={!isClickable}
     >
       <ConnectionDot state={state} />

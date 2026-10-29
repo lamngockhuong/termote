@@ -1,5 +1,6 @@
 import { Search, X } from 'lucide-react'
 import { type KeyboardEvent, useEffect, useRef } from 'react'
+import { useT } from '../i18n/i18n-context'
 import { IconButton } from './ui/button'
 
 interface FieldProps {
@@ -34,6 +35,7 @@ export function SessionSearchField({
   onArrowDown,
   autoFocus = true,
 }: FieldProps) {
+  const { t } = useT()
   const input = useRef<HTMLInputElement>(null)
   // biome-ignore lint/correctness/useExhaustiveDependencies: only on mounting
   useEffect(() => {
@@ -83,8 +85,8 @@ export function SessionSearchField({
             input.current?.focus()
           } else onClose()
         }}
-        aria-label={value ? 'Clear the search' : 'Close the search'}
-        title={value ? 'Clear' : 'Close'}
+        aria-label={value ? t('shell.search.clear') : t('shell.search.close')}
+        title={value ? t('shell.search.clearShort') : t('common.close')}
         className="absolute top-1/2 right-0.5 -translate-y-1/2"
       >
         <X size={14} aria-hidden="true" />
@@ -96,7 +98,8 @@ export function SessionSearchField({
 interface ToggleProps {
   // The id of the field it opens
   controls: string
-  // What it searches ("sessions"): two may show at once on a desktop
+  // What it searches, in the app's language ("sessions"): two may show at
+  // once on a desktop
   noun: string
   open: boolean
   onToggle: () => void
@@ -104,7 +107,10 @@ interface ToggleProps {
 
 // The magnifier that opens and closes a search box.
 export function SearchToggle({ controls, noun, open, onToggle }: ToggleProps) {
-  const label = open ? 'Close the search' : `Search ${noun}`
+  const { t } = useT()
+  const label = open
+    ? t('shell.search.close')
+    : t('shell.search.open', { noun })
   return (
     <IconButton
       onClick={onToggle}

@@ -1,4 +1,5 @@
 import { LayoutDashboard } from 'lucide-react'
+import { useT } from '../../i18n/i18n-context'
 import { Menu, MenuGroup, MenuItem, MenuItemRadio } from './menu'
 import type { ViewOption } from './view-switcher'
 
@@ -19,15 +20,16 @@ export function ViewMenu<T extends string>({
   onChange,
   onOpenOverview,
 }: Props<T>) {
+  const { t } = useT()
   if (views.length < 2 && !onOpenOverview) return null
   const current = views.find((v) => v.id === value) ?? views[0]
   return (
     <Menu
       tourAnchor="view-menu"
-      label={`View: ${current.label}`}
+      label={t('shell.view.current', { name: current.label })}
       trigger={<current.Icon size={17} aria-hidden="true" />}
     >
-      <MenuGroup label="View">
+      <MenuGroup label={t('shell.view')}>
         {views.map(({ id, label, Icon }) => (
           <MenuItemRadio
             key={id}
@@ -40,12 +42,12 @@ export function ViewMenu<T extends string>({
         ))}
       </MenuGroup>
       {onOpenOverview && (
-        <MenuGroup label="Agents">
+        <MenuGroup label={t('shell.view.agents')}>
           <MenuItem
             icon={<LayoutDashboard size={17} />}
             onSelect={onOpenOverview}
           >
-            Agent overview
+            {t('common.overview')}
           </MenuItem>
         </MenuGroup>
       )}

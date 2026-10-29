@@ -1,4 +1,5 @@
 import { ChevronDown } from 'lucide-react'
+import { useT } from '../i18n/i18n-context'
 import type { Session } from '../types/session'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { AgentStatusBadge } from './agent-status-badge'
@@ -30,17 +31,18 @@ export function SessionSwitcherChip({
   expanded,
   onClick,
 }: Props) {
-  const count = `${sessionCount} ${sessionCount === 1 ? 'session' : 'sessions'}`
-  const waiting =
-    blockedElsewhere > 0
-      ? `, ${blockedElsewhere} other ${blockedElsewhere === 1 ? 'session needs' : 'sessions need'} you`
-      : ''
+  const { t } = useT()
+  const count = t('shell.chip.sessions', { count: sessionCount })
   return (
     <button
       type="button"
       data-tour="session-chip"
       onClick={onClick}
-      aria-label={`Open sessions menu${waiting}`}
+      aria-label={
+        blockedElsewhere > 0
+          ? t('shell.chip.openWaiting', { count: blockedElsewhere })
+          : t('shell.chip.open')
+      }
       aria-haspopup="dialog"
       aria-expanded={expanded}
       className={`flex h-10 min-w-0 flex-1 items-center gap-2 rounded-control px-2 text-left transition-colors duration-(--duration-fast) hover:bg-surface ui-native:rounded-full ui-native:bg-surface ui-native:px-3 ${FOCUS_RING}`}

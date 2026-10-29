@@ -1,3 +1,4 @@
+import { useT } from '../i18n/i18n-context'
 import { FOCUS_RING } from './ui/button'
 import type { ViewOption } from './ui/view-switcher'
 
@@ -12,11 +13,12 @@ interface Props {
 // changes), one at a time. A pressed button closes its panel. Sized like the
 // view switcher beside it.
 export function PanelToggles({ views, open, onToggle }: Props) {
+  const { t } = useT()
   if (views.length === 0) return null
   return (
     <fieldset
       data-tour="panel-toggles"
-      aria-label="Side panel"
+      aria-label={t('shell.sidePanel')}
       className="flex shrink-0 gap-0.5 border border-border bg-surface p-0.5 rounded-control ui-native:rounded-full ui-native:border-0"
     >
       {views.map(({ id, label, Icon }) => {
@@ -27,7 +29,9 @@ export function PanelToggles({ views, open, onToggle }: Props) {
             type="button"
             aria-pressed={pressed}
             onClick={() => onToggle(pressed ? null : id)}
-            title={pressed ? `Close ${label}` : label}
+            title={
+              pressed ? t('shell.sidePanel.close', { name: label }) : label
+            }
             className={`relative before:absolute before:inset-x-0 before:-inset-y-1 before:content-[''] flex h-7 items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] px-2.5 text-[12px] ui-native:rounded-full pointer-coarse:h-9 ${FOCUS_RING} ${
               pressed
                 ? 'bg-surface-raised text-fg shadow-sm ui-terminal:bg-accent-soft ui-terminal:text-accent ui-terminal:shadow-none'

@@ -1,4 +1,5 @@
 import { X } from 'lucide-react'
+import { useT } from '../i18n/i18n-context'
 import type { SessionPane } from '../types/session'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { AgentStatusBadge } from './agent-status-badge'
@@ -20,6 +21,7 @@ interface Props {
 // tab.
 // Each close button is a sibling of its pane button, never nested in it.
 export function PaneStrip({ panes, activePaneId, onSelect, onClose }: Props) {
+  const { t } = useT()
   if (panes.length < 2) return null
   // The command under a pane's label, unless it only repeats the label (an
   // agent pane named after what it runs). When one pane shows a command,
@@ -30,7 +32,7 @@ export function PaneStrip({ panes, activePaneId, onSelect, onClose }: Props) {
   return (
     <fieldset
       data-tour="pane-strip"
-      aria-label="Panes"
+      aria-label={t('common.panes')}
       className="m-0 flex min-w-0 shrink-0 items-center gap-1 overflow-x-auto border-0 border-b border-border bg-term px-2 py-1 scrollbar-hide"
     >
       {panes.map((pane) => {
@@ -75,7 +77,7 @@ export function PaneStrip({ panes, activePaneId, onSelect, onClose }: Props) {
                     ? ''
                     : 'invisible group-hover:visible group-focus-within:visible pointer-coarse:visible'
                 }`}
-                aria-label={`Close pane ${pane.label}`}
+                aria-label={t('shell.panes.close', { name: pane.label })}
               >
                 <X size={12} aria-hidden="true" />
               </button>

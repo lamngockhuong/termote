@@ -1,5 +1,6 @@
 import type { OverviewAccount, OverviewPane } from '../hooks/use-mux-api'
 import { usePaneOverview } from '../hooks/use-pane-overview'
+import { useT } from '../i18n/i18n-context'
 import {
   percentLabel,
   USAGE_STALE_MS,
@@ -19,8 +20,9 @@ const LEVEL_CHIP: Record<UsageLevel, string> = {
 interface Part {
   // "ctx", or the limit window ("7d")
   name: string
-  // What a screen reader calls it
-  spoken: string
+  // What it measures: the context, or a rate limit window (read aloud as
+  // "Codex 7d limit")
+  kind: 'context' | 'limit'
   percent: number
   exact: boolean
 }
@@ -38,7 +40,7 @@ export function usageParts(
   if (u?.contextWindow && u.contextPercent !== undefined) {
     parts.push({
       name: 'ctx',
-      spoken: 'context',
+      kind: 'context',
       percent: u.contextPercent,
       exact: u.exact !== false,
     })
@@ -58,7 +60,7 @@ export function usageParts(
     const name = windowLabel(fullest.windowMinutes)
     parts.push({
       name,
-      spoken: `Codex ${name} limit`,
+      kind: 'limit',
       percent: fullest.usedPercent,
       exact: true,
     })
@@ -78,6 +80,7 @@ interface Props {
 // A small chip of how full the open pane's agent is: "ctx 72% · 7d 95%",
 // coloured by the fuller part. Nothing until the overview has read it.
 export function UsageChip({ pane, accounts, isMobile, onOpen }: Props) {
+  const { t } = useT()
   const all = usageParts(pane, accounts, Date.now())
   if (all.length === 0) return null
   const parts = isMobile
@@ -88,7 +91,12 @@ export function UsageChip({ pane, accounts, isMobile, onOpen }: Props) {
     .map((p) => `${p.name} ${percentLabel(p.percent, p.exact)}`)
     .join(' · ')
   const spoken = parts
-    .map((p) => `${p.spoken} ${percentLabel(p.percent, p.exact)}`)
+    .map((p) =>
+      t(p.kind === 'context' ? 'shell.usage.context' : 'shell.usage.limit', {
+        name: p.name,
+        percent: percentLabel(p.percent, p.exact),
+      }),
+    )
     .join(', ')
   // The frame and size of the view switcher beside it, so both line up
   const frame = `flex shrink-0 rounded-control border bg-surface p-0.5 ui-native:rounded-full ui-native:border-0 ${LEVEL_CHIP[level]}`
@@ -98,8 +106,8 @@ export function UsageChip({ pane, accounts, isMobile, onOpen }: Props) {
     <button
       type="button"
       onClick={onOpen}
-      aria-label={`Agent usage: ${spoken}. Open the agent overview`}
-      title="Agent usage: open the overview"
+      aria-label={t('shell.usage.openLabel', { usage: spoken })}
+      title={t('shell.usage.openTitle')}
       data-level={level}
       className={`group ${frame} ${FOCUS_RING}`}
     >
@@ -108,7 +116,7 @@ export function UsageChip({ pane, accounts, isMobile, onOpen }: Props) {
   ) : (
     <span
       role="note"
-      aria-label={`Agent usage: ${spoken}`}
+      aria-label={t('shell.usage.label', { usage: spoken })}
       data-level={level}
       className={frame}
     >

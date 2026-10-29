@@ -17,6 +17,8 @@ describe('countText', () => {
     expect(countText('} else {')).toBe(0)
     expect(countText('}: Props) {')).toBe(0)
     expect(countText("}: Omit<Props, 'isOpen'>) {")).toBe(0)
+    expect(countText('function f(t: Translate<Key>): string {')).toBe(0)
+    expect(countText("notify(t('a.b', { n }), 'warning', {")).toBe(0)
     expect(countText('const s = `${n} files${x}`')).toBe(0)
   })
 
@@ -43,6 +45,7 @@ describe('countText', () => {
     expect(countText('<button aria-label={label} />')).toBe(0)
     expect(countText('<i title={`${name} file`} />')).toBe(0)
     expect(countText("{ title: 'tour.chipTitle' }")).toBe(0)
+    expect(countText("{ label: 'shell.agent.done' }")).toBe(0)
     expect(countText('<span>{n}</span> <b>+</b>')).toBe(0)
   })
 

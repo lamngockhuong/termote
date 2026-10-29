@@ -12,6 +12,8 @@ import { DEFAULT_SIZE } from '../hooks/use-font-size'
 import { MAX_SCROLL_LINES, scrollPane } from '../hooks/use-mux-api'
 import { terminalShortcut } from '../hooks/use-shortcuts'
 import { type StreamControl, useTermSocket } from '../hooks/use-term-socket'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
 import { readToken, type UiStyle } from '../ui-style'
 import { safeUrl } from '../utils/markdown-safety'
 import { recordSelection } from '../utils/pane-selection'
@@ -101,11 +103,11 @@ interface Props {
 }
 
 // What the Reconnect button says, by why the stream is down
-const FAILED_TEXT = {
-  disconnected: 'Disconnected',
-  error: 'Connection lost',
-  evicted: 'Disconnected by a newer window',
-} as const
+const FAILED_TEXT: Record<'disconnected' | 'error' | 'evicted', MessageKey> = {
+  disconnected: 'shell.connection.disconnected',
+  error: 'shell.terminal.lost',
+  evicted: 'shell.connection.evicted',
+}
 
 // Foreground colours reach WCAG AA (4.5:1) on the terminal background of every
 // UI style (ANSI black stays black: programs use it as a background). On the
@@ -309,6 +311,10 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
     serverScrollRef.current = serverScroll
     const paneIdRef = useRef(paneId)
     paneIdRef.current = paneId
+    const { t } = useT()
+    // For the handlers set once: the language at the time they run
+    const tRef = useRef(t)
+    tRef.current = t
     const readOnlyRef = useRef(readOnly)
     readOnlyRef.current = readOnly
     const onPasteImageRef = useRef(onPasteImage)
@@ -460,9 +466,11 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
           serverSizeRef.current = { cols: msg.cols, rows: msg.rows }
           layout()
         } else if (msg.type === 'exit') {
-          term.write('\r\n[process exited]\r\n')
+          term.write(`\r\n[${tRef.current('shell.terminal.exited')}]\r\n`)
         } else if (msg.type === 'error') {
-          term.write(`\r\n[${msg.message ?? 'stream error'}]\r\n`)
+          term.write(
+            `\r\n[${msg.message ?? tRef.current('shell.terminal.streamError')}]\r\n`,
+          )
         }
       },
       [layout, wantsDrive],
@@ -825,7 +833,9 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
               onClick={socket.reconnect}
               className={`pointer-events-auto h-9 rounded-control border border-border bg-surface-raised px-3 text-sm text-fg shadow-lg hover:border-border-strong pointer-coarse:h-touch ${FOCUS_RING}`}
             >
-              {FAILED_TEXT[state as keyof typeof FAILED_TEXT]} — Reconnect
+              {t('shell.terminal.reconnect', {
+                reason: t(FAILED_TEXT[state as keyof typeof FAILED_TEXT]),
+              })}
             </button>
           </div>
         )}
