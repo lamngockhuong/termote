@@ -174,9 +174,6 @@ test.describe('focus window', () => {
 
   test('a phone offers no new window', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 800 })
-    await page.addInitScript(() =>
-      localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true })),
-    )
     await page.goto(`${link}?view=files`)
     await page.getByRole('treeitem', { name: 'README.md' }).click()
     await expect(page.getByRole('heading', { name: 'Focus' })).toBeVisible()

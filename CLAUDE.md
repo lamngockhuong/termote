@@ -244,7 +244,7 @@ that entry in the same change. A new feature with a security surface gets an ent
 
 `pnpm install` installs git hooks (lefthook, [`lefthook.yml`](lefthook.yml); they skip on a branch whose
 hook files differ from `origin/HEAD`, else `main`, see `scripts/install-git-hooks.mjs`) that run most of them
-for you, checking only and never rewriting a file: `pre-commit` runs biome (`pwa/src`), `gofmt -l`
+for you, checking only and never rewriting a file: `pre-commit` runs biome and `check-i18n.mjs` (`pwa/src`), `gofmt -l`
 (`server/`) and dprint (markdown/mdx) on the staged files; `pre-push` runs `tsc --noEmit` when
 `pwa/**` changed and `go vet ./...` for linux, windows and darwin when `server/**` changed. They never
 run `go test` or the E2E suite. Skip them once with `LEFTHOOK=0 git commit ...` or `--no-verify`. CI

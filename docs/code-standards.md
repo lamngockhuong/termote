@@ -165,6 +165,37 @@ import type { Session } from "./types/session";
 - Interface comments for API documentation
 - No redundant comments
 
+## Interface Text (i18n)
+
+The PWA's words live in `pwa/src/i18n/messages/<locale>/<area>.ts`, one file per area (`common`,
+`welcome`, `tour`, `shell`, `settings`, `files`, `chat`, `tasks`, `dialogs`, `errors`, `help`), so
+two changes to different areas never edit the same file. No i18n library: `src/i18n` keeps the
+`i18next` shape (`t(key, vars)`, `{name}` placeholders, plural keys `_one`/`_other`).
+
+- New interface text goes through `t()`: `useT()` for the app, `useTourT()` for the welcome screen
+  and the tour. Text with markup (`<b>`, `<kbd>`, a link) uses `<Trans k=… tags={…} />`, never
+  `dangerouslySetInnerHTML`.
+- Add the English key and the Vietnamese one in the same change. `vi` is typed against `en`: a key
+  missing or extra fails `tsc`; `src/i18n/messages.test.ts` checks the placeholders and tags match.
+  Vietnamese has one plural form, so it gives only `_other`.
+- The names of the app's parts (Terminal, Chat, Files, Changes, Tasks, Panes) come from `common`.
+- Dates, times and numbers go through `src/i18n/format.ts` (`Intl` in the locale), never a fixed
+  format.
+- Check a Vietnamese translation with `check_translation.py` of the `kai:translate` skill.
+- `pwa/scripts/check-i18n.mjs` counts the text written straight into each file (JSX text, literal
+  `aria-label`, `title`, `placeholder`, `alt`, `label`, `desc`) against `pwa/i18n-baseline.json`: a
+  file may only go down. `pnpm --filter termote lint` and the `pre-commit` hook run it; after
+  moving text into `t()`, `node scripts/check-i18n.mjs --update` lowers the baseline. A line that is
+  not interface text (a key name, the product's name) takes an `i18n-ignore` comment. CI cannot tell a
+  count raised by hand from one lowered: in review, a diff that raises a number in
+  `i18n-baseline.json` is a change to send back.
+- Unit tests and E2E run in English (`navigator.languages` is `en-US` in jsdom, Playwright sets
+  `locale: 'en-US'`); `renderWithLocale(ui, 'vi')` from `src/i18n/test-utils.tsx` renders in
+  Vietnamese.
+
+Until every area is translated, `APP_LOCALES` (`src/i18n/index.ts`) holds only `en`: Vietnamese
+reaches the welcome screen and the tour alone, and the app never shows two languages at once.
+
 ## Git Hooks
 
 `pnpm install` at the repo root installs [lefthook](https://github.com/evilmartians/lefthook) hooks
@@ -172,17 +203,17 @@ through `scripts/install-git-hooks.mjs` (the root `prepare` script); it skips th
 with `LEFTHOOK=0`, outside a git worktree, or with `core.hooksPath` set (it warns). It writes the
 `pre-commit` and `pre-push` hooks itself (never over a hook that is not lefthook's) instead of
 `lefthook install`, and each runs lefthook only while the files that decide what it runs (any
-`lefthook*`, `.lefthook*` or `.config/lefthook*`, `scripts/check-gofmt.sh`, `scripts/staged-files.sh`, any `dprint.json*` or
+`lefthook*`, `.lefthook*` or `.config/lefthook*`, `scripts/check-gofmt.sh`, `scripts/staged-files.sh`, `pwa/scripts/check-i18n.mjs`, any `dprint.json*` or
 `.dprint.json*`, any `.npmrc`, any `pnpm-workspace.yaml`, any `.pnpmfile.*`, `package.json` and
 `pwa/package.json`, and any tracked `node_modules` or file under one, in any case: `.NPMRC` counts; and any name git quotes: a non-ASCII byte, a `"`, a `\` or a control character)
 match `origin/HEAD`, else `main`; otherwise it names the files, skips without failing the commit or push, and says how to run
 the checks by hand. A branch changing `package.json` therefore runs no hooks.
 [`lefthook.yml`](../lefthook.yml) holds the commands:
 
-| Hook         | Runs when                        | Checks                                                                                                      |
-| ------------ | -------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `pre-commit` | a matching file is staged        | `biome check` (`pwa/src/**/*.{ts,tsx}`), `gofmt -l` (`server/**/*.go`), dprint (markdown/mdx)               |
-| `pre-push`   | the pushed commits touch the dir | `tsc --noEmit` (`pwa/**`); `go vet ./...` with `GOOS` linux, windows, darwin, `CGO_ENABLED=0` (`server/**`) |
+| Hook         | Runs when                        | Checks                                                                                                             |
+| ------------ | -------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `pre-commit` | a matching file is staged        | `biome check` and `check-i18n.mjs` (`pwa/src/**/*.{ts,tsx}`), `gofmt -l` (`server/**/*.go`), dprint (markdown/mdx) |
+| `pre-push`   | the pushed commits touch the dir | `tsc --noEmit` (`pwa/**`); `go vet ./...` with `GOOS` linux, windows, darwin, `CGO_ENABLED=0` (`server/**`)        |
 
 - Hooks only check; fix with `pnpm lint`, `gofmt -w` or `make fmt`, then stage again.
 - `pre-commit` checks what is staged: lefthook sets unstaged changes aside while it runs.

@@ -1,4 +1,5 @@
 import { useCallback, useSyncExternalStore } from 'react'
+import { type LanguageSetting, resolveLanguage } from '../i18n'
 import { DEFAULT_UI_STYLE, resolveUiStyle, type UiStyle } from '../ui-style'
 import {
   DEFAULT_STUCK_MINUTES,
@@ -103,6 +104,13 @@ export function resolveMarkdownEditLayout(value: unknown): MarkdownEditLayout {
     : 'split'
 }
 
+// A saved welcome version, kept when it is a whole number from 0
+export function resolveSeenVersion(value: unknown): number {
+  return Number.isInteger(value) && (value as number) >= 0
+    ? (value as number)
+    : 0
+}
+
 export type ImeSendBehavior = 'send-only' | 'send-enter'
 export type PasteSource = 'clipboard' | 'tmux'
 
@@ -112,7 +120,10 @@ export interface Settings {
   disableContextMenu: boolean
   copyOnSelect: boolean // copy the terminal selection when a mouse drag ends
   pollInterval: number // seconds between session list refreshes
-  hasSeenGestureHints: boolean // first-time gesture hints overlay
+  // The welcome screen's version this device has seen (WELCOME_VERSION)
+  welcomeSeenVersion: number
+  // The welcome screen's and the tour's language (later the whole app's)
+  language: LanguageSetting
   hasSeenLocalhostNotice: boolean // dismissed the notice of a page opened through localhost
   pasteSource: PasteSource // paste button source: system clipboard or tmux buffer
   showSessionTabs: boolean // show session tabs bar on desktop
@@ -148,7 +159,8 @@ const DEFAULTS: Settings = {
   disableContextMenu: true,
   copyOnSelect: false,
   pollInterval: 5,
-  hasSeenGestureHints: false,
+  welcomeSeenVersion: 0,
+  language: 'auto',
   hasSeenLocalhostNotice: false,
   pasteSource: 'clipboard',
   showSessionTabs: true,
@@ -220,6 +232,8 @@ function getSnapshot(): Settings {
         markdownEditLayout: resolveMarkdownEditLayout(
           merged.markdownEditLayout,
         ),
+        welcomeSeenVersion: resolveSeenVersion(merged.welcomeSeenVersion),
+        language: resolveLanguage(merged.language),
       }
     } catch {
       cachedSettings = DEFAULTS

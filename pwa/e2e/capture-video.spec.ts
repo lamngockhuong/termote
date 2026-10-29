@@ -3,6 +3,7 @@ import { mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { type Browser, expect, type Page, type TestInfo, test } from './fixtures'
+import { WELCOME_VERSION } from '../src/utils/welcome'
 
 // Screens of the intro video (video/), taken against the demo server that
 // video/capture/demo-env.sh starts; see video/README.md for the commands.
@@ -55,13 +56,13 @@ async function open(
   uiStyle: 'neutral' | 'terminal' | 'native' = 'neutral',
 ): Promise<Page> {
   const ctx = await browser.newContext(context)
-  await ctx.addInitScript((style) => {
-    localStorage.setItem('termote-theme', 'dark')
-    localStorage.setItem(
-      'termote-settings',
-      JSON.stringify({ uiStyle: style, hasSeenGestureHints: true }),
-    )
-  }, uiStyle)
+  await ctx.addInitScript(
+    ([style, version]) => {
+      localStorage.setItem('termote-theme', 'dark')
+      localStorage.setItem('termote-settings', JSON.stringify({ uiStyle: style, welcomeSeenVersion: version }))
+    },
+    [uiStyle, WELCOME_VERSION] as const,
+  )
   const page = await ctx.newPage()
   // A browser page gets the sign-in form, never a Basic challenge
   await page.goto('/login')

@@ -42,7 +42,6 @@ async function open(page: Page) {
   await page.goto('/')
   await page.evaluate(() => {
     localStorage.clear()
-    localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true }))
   })
   await page.reload()
   await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })

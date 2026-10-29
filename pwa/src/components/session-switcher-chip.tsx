@@ -38,6 +38,7 @@ export function SessionSwitcherChip({
   return (
     <button
       type="button"
+      data-tour="session-chip"
       onClick={onClick}
       aria-label={`Open sessions menu${waiting}`}
       aria-haspopup="dialog"

@@ -57,7 +57,6 @@ async function open(page: Page) {
     if (sessionStorage.getItem('e2e-opened')) return
     sessionStorage.setItem('e2e-opened', '1')
     localStorage.clear()
-    localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true }))
   })
   await page.goto('/')
   await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 15000 })

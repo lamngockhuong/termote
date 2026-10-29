@@ -35,6 +35,9 @@ export default defineConfig({
     // 127.0.0.1, as `termote url` prints: through localhost the page shows
     // a notice, and the browser tries ::1 first on every connection
     baseURL: `http://127.0.0.1:${process.env.TERMOTE_PORT || '7680'}`,
+    // The welcome screen and the tour follow the browser's language: every
+    // spec reads them in English unless it asks for another locale
+    locale: 'en-US',
     ...(credentials ? { httpCredentials: credentials } : {}),
     // There are no retries: a trace kept on failure is the only record of
     // what the page saw when a test fails now and then on CI

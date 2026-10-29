@@ -12,6 +12,7 @@ import {
   type Settings,
   TASK_HISTORY_LINE_CHOICES,
 } from '../hooks/use-settings'
+import { useT } from '../i18n/i18n-context'
 import { UI_STYLES, type UiStyle } from '../ui-style'
 import { STUCK_MINUTES_OPTIONS } from '../utils/agent-stuck'
 import type { AppCommand } from '../utils/app-commands'
@@ -41,7 +42,10 @@ interface Props {
     key: K,
     value: Settings[K],
   ) => void
-  onShowGestureHints?: () => void
+  // Shows the welcome screen again (closing Settings)
+  onShowWelcome?: () => void
+  // Starts the tour (closing Settings)
+  onStartTour?: () => void
   // The Updates group: what the server runs, and the reload to its page
   updates?: {
     server: ServerInfo | null
@@ -455,7 +459,8 @@ export function SettingsModal({
   onClose,
   settings,
   onUpdateSetting,
-  onShowGestureHints,
+  onShowWelcome,
+  onStartTour,
   updates,
   onClearHistory,
   historyCount = 0,
@@ -475,6 +480,7 @@ export function SettingsModal({
   initialGroup,
   shortcuts,
 }: Props) {
+  const { t } = useT()
   const [activeGroup, setActiveGroup] = useState('appearance')
 
   // Opened for one group: pick it in the desktop rail, and on a phone, where
@@ -496,30 +502,47 @@ export function SettingsModal({
   )
   const pasteOptions = pasteSourceOptions(pasteBufferLabel)
   const pasteOption = pasteOptions.find((o) => o.value === settings.pasteSource)
-  const hasActions = onShowGestureHints || onClearHistory
+  const hasActions = onShowWelcome || onStartTour || onClearHistory
 
   const groups: GroupDef[] = [
     {
       id: 'appearance',
       title: 'Appearance',
       rows: (
-        <div className="flex flex-col gap-2 px-4 py-2.5 ui-native:bg-surface-raised">
-          <div>
-            <p className="m-0 text-[15px] text-fg ui-terminal:font-label ui-terminal:text-[13px]">
-              Interface style
-            </p>
-            <p className="m-0 text-[12px] text-fg-muted">
-              Applies at once. Theme stays in the ⋯ menu.
-            </p>
+        <>
+          <div className="flex flex-col gap-2 px-4 py-2.5 ui-native:bg-surface-raised">
+            <div>
+              <p className="m-0 text-[15px] text-fg ui-terminal:font-label ui-terminal:text-[13px]">
+                Interface style
+              </p>
+              <p className="m-0 text-[12px] text-fg-muted">
+                Applies at once. Theme stays in the ⋯ menu.
+              </p>
+            </div>
+            <SegmentedControl
+              label="Interface style"
+              options={STYLE_OPTIONS}
+              value={settings.uiStyle}
+              onChange={(v) => onUpdateSetting('uiStyle', v)}
+              className="self-start"
+            />
           </div>
-          <SegmentedControl
-            label="Interface style"
-            options={STYLE_OPTIONS}
-            value={settings.uiStyle}
-            onChange={(v) => onUpdateSetting('uiStyle', v)}
-            className="self-start"
-          />
-        </div>
+          <SettingsRow
+            title={t('settings.language')}
+            desc={t('settings.languageDesc')}
+          >
+            <SegmentedControl
+              label={t('settings.language')}
+              options={[
+                { value: 'auto', content: t('settings.languageAuto') },
+                { value: 'en', content: t('common.english') },
+                { value: 'vi', content: t('common.vietnamese') },
+              ]}
+              value={settings.language}
+              onChange={(v) => onUpdateSetting('language', v)}
+            />
+          </SettingsRow>
+        </>
       ),
     },
     {
@@ -848,9 +871,14 @@ export function SettingsModal({
       title: 'Data & help',
       rows: (
         <div className="flex flex-col gap-1 px-4 py-2.5 ui-native:bg-surface-raised">
-          {onShowGestureHints && (
-            <Button variant="ghost" onClick={onShowGestureHints}>
-              Show Gesture Hints
+          {onShowWelcome && (
+            <Button variant="ghost" onClick={onShowWelcome}>
+              {t('settings.showWelcome')}
+            </Button>
+          )}
+          {onStartTour && (
+            <Button variant="ghost" onClick={onStartTour}>
+              {t('settings.takeTour')}
             </Button>
           )}
           {onClearHistory && (

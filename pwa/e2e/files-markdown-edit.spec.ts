@@ -97,7 +97,7 @@ test.describe('editing Markdown beside its preview', () => {
     await page.setViewportSize({ width: 1600, height: 900 })
     await page.addInitScript(() => {
       if (!localStorage.getItem('termote-settings'))
-        localStorage.setItem('termote-settings', JSON.stringify({ sidePanelWidth: 1200, hasSeenGestureHints: true }))
+        localStorage.setItem('termote-settings', JSON.stringify({ sidePanelWidth: 1200 }))
     })
     await page.goto(`${link}?view=files`)
     const panel = page.getByRole('complementary', { name: 'Files' })

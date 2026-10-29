@@ -145,7 +145,6 @@ test.describe(`Pane layout on ${backend}`, () => {
       if (sessionStorage.getItem('e2e-opened')) return
       sessionStorage.setItem('e2e-opened', '1')
       localStorage.clear()
-      localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true }))
     })
     // The page first: on Zellij its stream is the client a new tab needs
     await page.goto('/')

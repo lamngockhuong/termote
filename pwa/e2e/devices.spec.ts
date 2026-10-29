@@ -107,6 +107,35 @@ test.describe('paired devices and the view-only role', () => {
     await page.context().close()
   })
 
+  test('a view-only device is welcomed as one: no session to start, nothing to type', async ({
+    browser,
+    baseURL,
+    request,
+  }) => {
+    const name = `e2e-welcome-${Math.random().toString(36).slice(2, 8)}`
+    made.push(name)
+    const { code } = await makeCode(request, 'view', name)
+    const page = await pairStranger(browser, baseURL, code, undefined, true)
+    const welcome = page.getByTestId('welcome')
+    await expect(welcome).toBeVisible({ timeout: 10000 })
+    await expect(welcome).toContainText('View only')
+    await expect(welcome).toContainText('need a device with full access')
+    await expect(welcome.getByRole('button', { name: 'Turn on' })).toHaveCount(0)
+    await welcome.getByRole('button', { name: 'Close' }).click()
+
+    // On a phone the tour has no keyboard step: a view-only device has no toolbar
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.getByRole('button', { name: 'More' }).click()
+    await page.getByRole('menuitem', { name: 'Settings' }).click()
+    await page.getByRole('button', { name: 'Take the tour' }).click()
+    const bubble = page.getByRole('dialog')
+    await expect(bubble).toHaveAccessibleName('Sessions and windows')
+    await expect(bubble).toContainText('1 / 3')
+    for (let i = 0; i < 2; i++) await bubble.getByRole('button', { name: 'Next' }).click()
+    await expect(bubble).toHaveAccessibleName('Gestures on the terminal')
+    await page.context().close()
+  })
+
   test('a browser already signed in is never paired', async ({ browser, baseURL, request }) => {
     const name = `e2e-signed-in-${Math.random().toString(36).slice(2, 8)}`
     made.push(name)

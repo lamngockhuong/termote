@@ -52,6 +52,7 @@ export function ViewSwitcher<T extends string>({
   return (
     <div
       ref={listRef}
+      data-tour="view-switcher"
       role="tablist"
       aria-label="View"
       onKeyDown={onKeyDown}

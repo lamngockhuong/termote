@@ -249,7 +249,8 @@ Manual testing checklist for Termote features before release.
 - [ ] Session tabs visibility toggle works (desktop)
 - [ ] Poll interval selector works (3s to 5m)
 - [ ] Update checker button works
-- [ ] Gesture hints viewer available (mobile)
+- [ ] Show welcome screen and Take the tour available (Data & help)
+- [ ] Welcome & tour language: Auto / English / Tiếng Việt
 - [ ] Clear history button works
 - [ ] Preferences persist after page reload
 
@@ -897,12 +898,14 @@ Test on real mobile device:
 - [ ] Settings > Copy on select: releasing a mouse drag copies, with a short toast; off by default
 - [ ] Over plain HTTP on the LAN (no secure context): copying still works, or a clear error toast
 
-### Gesture Hints Overlay
+### Welcome Screen and Tour
 
-- [ ] First-time mobile users see gesture tutorial overlay
-- [ ] Overlay dismissible
-- [ ] Not shown again after dismissal (persists via settings)
-- [ ] Can be re-shown from Settings (Gesture hints viewer)
+- [ ] First visit on a device (phone and desktop): the welcome screen shows once, with the real backend, sessions, waiting agents, device role and notifications
+- [ ] Not shown again after a reload; not shown when the page opens on a link to a pane
+- [ ] A view-only device gets no "Start a session" nor "Turn on" card
+- [ ] EN | VI switches the text at once; a browser in Vietnamese starts in Vietnamese
+- [ ] Take the tour: four steps on a phone and on desktop; a collapsed sidebar or a single pane leaves its step out
+- [ ] Tour: →, Enter, ← and Esc work; a tap on the dimmed area does nothing
 
 ### Edge Cases
 

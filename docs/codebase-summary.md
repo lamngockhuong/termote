@@ -19,9 +19,11 @@ termote/
 │   │   │   │                   #   session-*, settings-*, keyboard-toolbar, prompt-card, ...
 │   │   │   └── ui/             # Shared primitives (Button, Sheet, Menu, Switch, ConfirmDialog, ...)
 │   │   ├── hooks/              # use-* hooks: settings, sessions, mux API, stream, per-pane stores
+│   │   ├── i18n/               # t(), <Trans>, Intl formats, messages/<locale>/<area>.ts (EN, VI)
 │   │   ├── contexts/           # Theme provider
 │   │   ├── types/              # Group/Tab/Pane/AgentStatus types
 │   │   └── utils/              # Pure helpers: terminal bridge, highlighting, Markdown, uploads, deep links
+│   ├── scripts/                # check-i18n.mjs: interface text outside t() (baseline i18n-baseline.json)
 │   └── e2e/                    # Playwright specs; every spec imports `test` from fixtures.ts (CSP check)
 ├── server/                     # Go server + CLI, one binary, flat `package main`
 │   ├── main.go                 # Entry point (`serve` runs the server, no args opens the menu)
@@ -63,6 +65,9 @@ described in [`system-architecture.md`](system-architecture.md), conventions in
 | Sessions (group → tab → pane)                | `hooks/use-local-sessions.ts`, `hooks/use-mux-api.ts`, `components/session-*.tsx`, `pane-strip.tsx`                                                                                                                         |
 | Mobile input                                 | `components/keyboard-toolbar.tsx`, `quick-actions-menu.tsx`, `hooks/use-gestures.ts`                                                                                                                                        |
 | Settings                                     | `hooks/use-settings.ts` (keys and defaults), `components/settings-modal.tsx`                                                                                                                                                |
+| Welcome screen (first visit)                 | `components/welcome-host.tsx` (when, real data), `welcome-sheet.tsx`, `utils/welcome.ts` (facts, `WELCOME_VERSION`), `utils/install-prompt.ts`                                                                              |
+| Tour                                         | `components/spotlight-tour.tsx`, `utils/tour-steps.ts` (steps, placement), `hooks/use-anchor-rect.ts`; anchors are `data-tour` attributes                                                                                   |
+| Interface text (EN, VI)                      | `pwa/src/i18n/` (`index.ts` locales, `translate.ts`, `i18n-context.tsx`, `trans.tsx`, `format.ts`, `messages/`), `pwa/scripts/check-i18n.mjs`                                                                               |
 | Pane views (terminal, chat, files, changes)  | `pwa/src/app-views.ts`, then `components/chat-*`, `files-view.tsx`, `changes-view.tsx`                                                                                                                                      |
 | Images in Files and Changes                  | `components/image-preview.tsx`, `image-compare.tsx`, `hooks/use-image-blob.ts`                                                                                                                                              |
 | CSV/TSV as a table in Files                  | `components/table-preview.tsx`, `table-grid.tsx`, `hooks/use-csv-table.ts`, `utils/csv-parse.ts`                                                                                                                            |

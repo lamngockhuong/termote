@@ -84,6 +84,7 @@ export function SessionTabs({
     <div className="flex min-w-0 flex-1 items-end gap-1 self-stretch">
       <div
         ref={scrollRef}
+        data-tour="session-tabs"
         role="tablist"
         aria-label="Sessions"
         onKeyDown={onKeyDown}

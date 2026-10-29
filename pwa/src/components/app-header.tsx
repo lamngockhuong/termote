@@ -233,6 +233,7 @@ function DesktopHeader(p: Props) {
           <IconButton
             size="sm"
             onClick={p.onOpenPalette}
+            data-tour="palette"
             aria-label="Command palette"
             title={
               p.paletteKey

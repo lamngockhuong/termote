@@ -29,6 +29,7 @@ export function PaneStrip({ panes, activePaneId, onSelect, onClose }: Props) {
   const twoLines = panes.some((p) => commandOf(p))
   return (
     <fieldset
+      data-tour="pane-strip"
       aria-label="Panes"
       className="m-0 flex min-w-0 shrink-0 items-center gap-1 overflow-x-auto border-0 border-b border-border bg-term px-2 py-1 scrollbar-hide"
     >

@@ -11,9 +11,6 @@ const marker = () => `copy-${Math.random().toString(36).slice(2, 8)}`
 const rows = (page: Page) => page.locator('[data-testid="terminal-view"] .xterm-rows')
 
 async function openTerminal(page: Page) {
-  await page.addInitScript(() => {
-    localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true }))
-  })
   await page.goto('/')
   await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
   // Keys typed before the stream opens are dropped: wait for the prompt

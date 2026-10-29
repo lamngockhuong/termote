@@ -23,10 +23,8 @@ const fresh = (prefix: string) => {
 
 async function open(page: Page) {
   await page.goto('/')
-  // The first-visit gesture tour would cover the page on a phone
   await page.evaluate(() => {
     localStorage.clear()
-    localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true }))
   })
   await page.reload()
   await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })

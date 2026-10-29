@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { expect, test } from './fixtures'
+import { WELCOME_VERSION } from '../src/utils/welcome'
 
 // `termote url --open` against a server with sign-in on: the CLI's sign-in
 // link file, opened in a browser without a session, must land in the app
@@ -46,9 +47,9 @@ test.describe('sign-in link from the CLI', () => {
 
     // A browser with no session and no credentials.
     const context = await browser.newContext({ baseURL, httpCredentials: undefined })
-    await context.addInitScript(() => {
-      localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true }))
-    })
+    await context.addInitScript((version) => {
+      localStorage.setItem('termote-settings', JSON.stringify({ welcomeSeenVersion: version }))
+    }, WELCOME_VERSION)
     const page = await context.newPage()
     const visited: string[] = []
     page.on('request', (r) => {

@@ -196,7 +196,7 @@ test.describe('acceptance: a working day without another editor', () => {
     await page.setViewportSize({ width: 1600, height: 900 })
     await page.addInitScript(() => {
       if (!localStorage.getItem('termote-settings'))
-        localStorage.setItem('termote-settings', JSON.stringify({ sidePanelWidth: 1000, hasSeenGestureHints: true }))
+        localStorage.setItem('termote-settings', JSON.stringify({ sidePanelWidth: 1000 }))
     })
     tmux('select-window', '-t', windows[0])
   })

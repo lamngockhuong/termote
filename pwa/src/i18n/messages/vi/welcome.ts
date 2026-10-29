@@ -1,0 +1,67 @@
+import type en from '../en/welcome'
+import type { Translation } from '../types'
+
+export default {
+  'welcome.titleMobile': 'Terminal của bạn, ngay trên điện thoại.',
+  'welcome.titleDesktop': 'Terminal của bạn, trên mọi trình duyệt.',
+  'welcome.intro':
+    'Termote {version} trên <host>{host}</host>, chạy {backend}.',
+  'welcome.introType':
+    'Những gì bạn gõ ở đây đi thẳng vào các phiên đang mở trên máy đó.',
+  'welcome.introView':
+    'Thiết bị này xem được mọi phiên trên máy đó nhưng không gõ được.',
+  'welcome.language': 'Ngôn ngữ',
+  'welcome.setup': 'Bản cài của bạn',
+  'welcome.backend': 'Backend',
+  'welcome.sessions': 'Phiên',
+  'welcome.sessionsNone': 'Chưa có',
+  'welcome.sessionCount_other': '{count} phiên',
+  'welcome.paneCount_other': '{count} pane',
+  'welcome.waiting': 'Đang chờ bạn',
+  'welcome.agentCount_other': '{count} agent',
+  'welcome.device': 'Thiết bị này',
+  'welcome.canType': 'Gõ được',
+  'welcome.viewOnly': 'Chỉ xem',
+  'welcome.notifications': 'Thông báo',
+  'welcome.signIn': 'Đăng nhập',
+  'welcome.on': 'Đang bật',
+  'welcome.off': 'Đang tắt',
+  'welcome.next': 'Nên làm tiếp',
+  'welcome.waitingTitle': '{agent} ở {tab} đang chờ bạn',
+  'welcome.waitingDesc': 'Mở pane đó để trả lời.',
+  'welcome.waitingAction': 'Mở',
+  'welcome.startTitle': 'Tạo phiên đầu tiên',
+  'welcome.startDesc': 'Chưa có phiên nào đang chạy.',
+  'welcome.startAction': 'Tạo',
+  'welcome.notifyTitle': 'Biết khi agent cần bạn',
+  'welcome.notifyDesc': 'Nhận thông báo khi Claude Code đang chờ.',
+  'welcome.notifyAction': 'Bật',
+  'welcome.installTitle': 'Thêm vào màn hình chính',
+  'welcome.installDesc': 'Mở toàn màn hình, và app nhớ pane bạn đang xem.',
+  'welcome.installIos':
+    'Trong Safari, chạm Chia sẻ rồi chọn “Thêm vào MH chính”.',
+  'welcome.installAction': 'Thêm',
+  'welcome.pairTitle': 'Mở trên điện thoại',
+  'welcome.pairDesc': 'Ghép bằng mã dùng một lần, không cần mật khẩu.',
+  'welcome.pairAction': 'Ghép',
+  'welcome.areas': 'Làm được gì ở đây',
+  'welcome.areaTerminal':
+    'Esc, Ctrl, phím mũi tên và Tab có sẵn trên thanh phím.',
+  'welcome.areaTerminalView': 'xem pane đang chạy, đủ cả màu sắc.',
+  'welcome.areaChat': 'đọc phiên làm việc của agent và trả lời câu nó hỏi.',
+  'welcome.areaChatView': 'đọc toàn bộ phiên làm việc của agent.',
+  'welcome.areaFiles': 'duyệt, sửa file, xem diff và commit.',
+  'welcome.areaTasks': 'chạy script npm, make, cargo và nhiều loại khác.',
+  'welcome.areaPanes': 'chọn, chia đôi và đóng pane ngay trên dải pane.',
+  'welcome.gestures': 'Cử chỉ',
+  'welcome.areaGestures':
+    'vuốt trái là Ctrl+C, vuốt phải là Tab, chụm hai ngón để đổi cỡ chữ.',
+  'welcome.areaViewNote':
+    'Muốn gõ phím, sửa file hay chạy tác vụ thì cần thiết bị có toàn quyền.',
+  'welcome.keys': 'Phím tắt nên nhớ',
+  'welcome.keyFiles': 'Mở nhanh file',
+  'welcome.openTerminal': 'Mở terminal',
+  'welcome.openWaiting': 'Mở pane đang cần bạn',
+  'welcome.tour': 'Xem hướng dẫn nhanh (1 phút)',
+  'welcome.again': 'Xem lại bất cứ lúc nào ở Settings › Show welcome screen',
+} satisfies Translation<typeof en>

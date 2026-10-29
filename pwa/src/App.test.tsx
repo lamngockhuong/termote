@@ -207,7 +207,6 @@ const mockUseSettings = vi.fn(() => ({
     disableContextMenu: true,
     showSessionTabs: false,
     pollInterval: 5,
-    hasSeenGestureHints: true,
   },
   updateSetting: vi.fn(),
 }))
@@ -596,7 +595,8 @@ vi.mock('./components/settings-modal', () => ({
     isOpen,
     onClose,
     updates,
-    onShowGestureHints,
+    onShowWelcome,
+    onStartTour,
     pasteBufferLabel,
     devices,
     signins,
@@ -614,7 +614,8 @@ vi.mock('./components/settings-modal', () => ({
     pasteBufferLabel?: string
     onClose: () => void
     updates?: { onReload: () => void }
-    onShowGestureHints?: () => void
+    onShowWelcome?: () => void
+    onStartTour?: () => void
     devices?: boolean
     signins?: boolean
     readOnly?: boolean
@@ -635,9 +636,8 @@ vi.mock('./components/settings-modal', () => ({
         {updates && (
           <button onClick={() => updates.onReload()}>ReloadUpdate</button>
         )}
-        {onShowGestureHints && (
-          <button onClick={onShowGestureHints}>GestureHints</button>
-        )}
+        {onShowWelcome && <button onClick={onShowWelcome}>ShowWelcome</button>}
+        {onStartTour && <button onClick={onStartTour}>StartTour</button>}
       </div>
     ) : null,
 }))
@@ -771,19 +771,19 @@ vi.mock('./components/toast', () => ({
   ),
 }))
 
-vi.mock('./components/gesture-hints-overlay', () => ({
-  GestureHintsOverlay: ({
-    isOpen,
-    onDismiss,
-  }: {
-    isOpen: boolean
-    onDismiss: () => void
-  }) =>
-    isOpen ? (
-      <div data-testid="gesture-hints">
-        <button onClick={onDismiss}>DismissHints</button>
-      </div>
-    ) : null,
+// The welcome screen's host, its props kept for the tests to call
+let welcomeProps: Record<string, any> = {}
+vi.mock('./components/welcome-host', () => ({
+  WelcomeHost: (props: Record<string, any>) => {
+    welcomeProps = props
+    return (
+      <div
+        data-testid="welcome-host"
+        data-request={props.openRequest}
+        data-suppressed={String(props.suppressed)}
+      />
+    )
+  },
 }))
 
 vi.mock('./components/command-history-dropdown', () => ({
@@ -941,7 +941,6 @@ describe('App', () => {
         disableContextMenu: true,
         showSessionTabs: false,
         pollInterval: 5,
-        hasSeenGestureHints: true,
       },
       updateSetting: vi.fn(),
     })
@@ -1919,7 +1918,6 @@ describe('App', () => {
         disableContextMenu: true,
         showSessionTabs: true,
         pollInterval: 5,
-        hasSeenGestureHints: true,
       },
       updateSetting: vi.fn(),
     })
@@ -2551,7 +2549,6 @@ describe('App', () => {
         disableContextMenu: true,
         showSessionTabs: false,
         pollInterval: 5,
-        hasSeenGestureHints: true,
       },
       updateSetting: vi.fn(),
     } as any)
@@ -2562,11 +2559,91 @@ describe('App', () => {
     expect(mockSendKeyToTerminal).toHaveBeenCalledWith(null, 'Enter')
   })
 
-  it('gesture hints not shown when hasSeenGestureHints=true', async () => {
+  it('gives the welcome screen what this install is', async () => {
     render(<App />)
-    await waitFor(() => {
-      expect(screen.queryByTestId('gesture-hints')).not.toBeInTheDocument()
+    await waitFor(() => screen.getByTestId('welcome-host'))
+    expect(welcomeProps).toMatchObject({
+      ready: true,
+      suppressed: false,
+      mobile: false,
+      backend: 'tmux',
+      readOnly: false,
+      signIn: false,
+      devices: false,
+      areas: { chat: false, files: false, tasks: false, panes: false },
+      keys: { commands: 'Ctrl+Shift+P', files: 'Ctrl+P' },
     })
+  })
+
+  it('leaves out a key the user took off its command', async () => {
+    setShortcut('palette.quickOpen', { key: null })
+    render(<App />)
+    await waitFor(() => screen.getByTestId('welcome-host'))
+    expect(welcomeProps.keys).toEqual({
+      commands: 'Ctrl+Shift+P',
+      files: undefined,
+    })
+  })
+
+  it('keeps the welcome screen for the next visit when opened on a link', async () => {
+    window.history.replaceState(null, '', '/#/s/w1/w1%3At1')
+    render(<App />)
+    await waitFor(() => screen.getByTestId('welcome-host'))
+    expect(welcomeProps.suppressed).toBe(true)
+  })
+
+  it('runs what the welcome screen asks for', async () => {
+    const base = mockUseLocalSessions() as any
+    const addSession = vi.fn(async () => {})
+    mockUseLocalSessions.mockReturnValue({ ...base, addSession } as any)
+    render(<App />)
+    await waitFor(() => screen.getByTestId('welcome-host'))
+    act(() => welcomeProps.onStartSession())
+    await waitFor(() => expect(addSession).toHaveBeenCalledWith('New'))
+    act(() => welcomeProps.onOpenTerminal())
+    // Desktop steps; their parts are mocked out, so it ends at once
+    act(() => welcomeProps.onTour())
+    expect(screen.queryByTestId('tour')).not.toBeInTheDocument()
+    act(() => welcomeProps.onOpenSettings('devices'))
+    expect(screen.getByTestId('settings-modal')).toHaveAttribute(
+      'data-initial-group',
+      'devices',
+    )
+  })
+
+  it('opens the pane of the agent waiting, or its tab', async () => {
+    const base = mockUseLocalSessions() as any
+    const switchSession = vi.fn(async () => true)
+    const waiting = {
+      id: 'w1:t1',
+      name: 'api',
+      icon: '',
+      description: '',
+      groupId: 'w1',
+      panes: [{ id: 'w1:t1:p2', label: 'claude', hasAgent: true }],
+    }
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      switchSession,
+      sessions: [...base.sessions, waiting],
+    } as any)
+    render(<App />)
+    await waitFor(() => screen.getByTestId('welcome-host'))
+    act(() =>
+      welcomeProps.onOpenPane({
+        sessionId: 'w1:t1',
+        paneId: 'w1:t1:p2',
+        agent: 'claude',
+        tab: 'api',
+      }),
+    )
+    expect(window.location.hash).toContain('w1%3At1%3Ap2')
+    act(() =>
+      welcomeProps.onOpenPane({ sessionId: '1', agent: 'x', tab: 'Shell' }),
+    )
+    await waitFor(() =>
+      expect(switchSession).toHaveBeenCalledWith('1', undefined),
+    )
   })
 
   it('settings modal reloads to the new version', async () => {
@@ -2853,7 +2930,6 @@ describe('shouldShowPasteError (via handlePaste)', () => {
         disableContextMenu: true,
         showSessionTabs: false,
         pollInterval: 5,
-        hasSeenGestureHints: true,
       },
       updateSetting: vi.fn(),
     })
@@ -2961,7 +3037,6 @@ describe('getClipboardErrorMsg long-press variant (via CtrlShiftV toast)', () =>
         disableContextMenu: true,
         showSessionTabs: false,
         pollInterval: 5,
-        hasSeenGestureHints: true,
       },
       updateSetting: vi.fn(),
     })
@@ -3061,7 +3136,6 @@ describe('App with tmux paste source', () => {
         disableContextMenu: true,
         showSessionTabs: false,
         pollInterval: 5,
-        hasSeenGestureHints: true,
       },
       updateSetting: vi.fn(),
     } as any)
@@ -3087,7 +3161,6 @@ describe('App server reachability effect', () => {
         disableContextMenu: true,
         showSessionTabs: false,
         pollInterval: 5,
-        hasSeenGestureHints: true,
       },
       updateSetting: vi.fn(),
     })
@@ -3134,7 +3207,7 @@ describe('App server reachability effect', () => {
   })
 })
 
-describe('App gesture hints (mobile, first visit)', () => {
+describe('App welcome screen (mobile)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockIsMobile.mockReturnValue(true)
@@ -3177,64 +3250,38 @@ describe('App gesture hints (mobile, first visit)', () => {
         disableContextMenu: true,
         showSessionTabs: false,
         pollInterval: 5,
-        hasSeenGestureHints: true,
       },
       updateSetting: vi.fn(),
     })
   })
 
-  it('shows gesture hints on first mobile visit (hasSeenGestureHints=false)', async () => {
-    mockUseSettings.mockReturnValue({
-      settings: {
-        imeSendBehavior: 'send-only' as const,
-        pasteSource: 'clipboard' as const,
-        toolbarDefaultExpanded: false,
-        disableContextMenu: true,
-        showSessionTabs: false,
-        pollInterval: 5,
-        hasSeenGestureHints: false,
-      },
-      updateSetting: vi.fn(),
-    })
-
-    render(<App />)
-    await waitFor(() => {
-      expect(screen.getByTestId('gesture-hints')).toBeInTheDocument()
-    })
-  })
-
-  it('dismisses gesture hints and updates setting', async () => {
-    const mockUpdateSetting = vi.fn()
-    // Override the default set in beforeEach
-    mockUseSettings.mockReturnValue({
-      settings: {
-        imeSendBehavior: 'send-only' as const,
-        pasteSource: 'clipboard' as const,
-        toolbarDefaultExpanded: false,
-        disableContextMenu: true,
-        showSessionTabs: false,
-        pollInterval: 5,
-        hasSeenGestureHints: false,
-      },
-      updateSetting: mockUpdateSetting,
-    })
-
-    render(<App />)
-    await waitFor(() => screen.getByRole('button', { name: 'DismissHints' }))
-    fireEvent.click(screen.getByRole('button', { name: 'DismissHints' }))
-    expect(mockUpdateSetting).toHaveBeenCalledWith('hasSeenGestureHints', true)
-    expect(screen.queryByTestId('gesture-hints')).not.toBeInTheDocument()
-  })
-
-  it('settings modal shows gesture hints button on mobile', async () => {
-    // hasSeenGestureHints=true so hints not auto-shown; isMobile=true so settings shows gesture hints btn
+  it('starts the tour from Settings with the terminal on screen', async () => {
     render(<App />)
     await waitFor(() => screen.getByRole('button', { name: 'Settings' }))
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
-    await waitFor(() => screen.getByRole('button', { name: 'GestureHints' }))
-    fireEvent.click(screen.getByRole('button', { name: 'GestureHints' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'StartTour' }))
     expect(screen.queryByTestId('settings-modal')).not.toBeInTheDocument()
-    expect(screen.getByTestId('gesture-hints')).toBeInTheDocument()
+    // The parts it lights are mocked out here: it ends at once
+    expect(screen.queryByTestId('tour')).not.toBeInTheDocument()
+    expect(welcomeProps.onTour).toEqual(expect.any(Function))
+    act(() => welcomeProps.onTour())
+    expect(screen.queryByTestId('tour')).not.toBeInTheDocument()
+  })
+
+  it('asks for the welcome screen again from Settings', async () => {
+    render(<App />)
+    await waitFor(() => screen.getByRole('button', { name: 'Settings' }))
+    expect(screen.getByTestId('welcome-host')).toHaveAttribute(
+      'data-request',
+      '0',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'ShowWelcome' }))
+    expect(screen.queryByTestId('settings-modal')).not.toBeInTheDocument()
+    expect(screen.getByTestId('welcome-host')).toHaveAttribute(
+      'data-request',
+      '1',
+    )
   })
 })
 
@@ -3304,7 +3351,6 @@ describe('App groups and panes', () => {
         disableContextMenu: true,
         showSessionTabs: true,
         pollInterval: 5,
-        hasSeenGestureHints: true,
       },
       updateSetting: vi.fn(),
     })

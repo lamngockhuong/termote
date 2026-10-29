@@ -8,6 +8,7 @@ import {
   resolveEditorTabSize,
   resolveFindExcludes,
   resolveMarkdownEditLayout,
+  resolveSeenVersion,
   resolveTaskHistoryLines,
   TASK_HISTORY_LINES_DEFAULT,
   TASK_HISTORY_LINES_MAX,
@@ -28,6 +29,26 @@ describe('useSettings', () => {
     expect(result.current.settings.pollInterval).toBe(5)
     expect(result.current.settings.driveTerminalSize).toBe(false)
     expect(result.current.settings.sidePanelWidth).toBe(440)
+  })
+
+  it('keeps a known language and the welcome version seen', () => {
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ language: 'vi', welcomeSeenVersion: 1 }),
+    )
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.language).toBe('vi')
+    expect(result.current.settings.welcomeSeenVersion).toBe(1)
+  })
+
+  it('reads an unknown language as auto and a bad version as unseen', () => {
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ language: 'fr', welcomeSeenVersion: 'x' }),
+    )
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.language).toBe('auto')
+    expect(result.current.settings.welcomeSeenVersion).toBe(0)
   })
 
   it('updates sidePanelWidth and persists', () => {
@@ -465,5 +486,18 @@ describe('task history lines', () => {
       JSON.parse(localStorage.getItem('termote-settings') ?? '{}')
         .taskHistoryLines,
     ).toBe(200)
+  })
+})
+
+describe('resolveSeenVersion', () => {
+  it('keeps a whole number from 0', () => {
+    expect(resolveSeenVersion(0)).toBe(0)
+    expect(resolveSeenVersion(3)).toBe(3)
+  })
+
+  it('reads anything else as 0', () => {
+    expect(resolveSeenVersion(-1)).toBe(0)
+    expect(resolveSeenVersion(1.5)).toBe(0)
+    expect(resolveSeenVersion(null)).toBe(0)
   })
 })

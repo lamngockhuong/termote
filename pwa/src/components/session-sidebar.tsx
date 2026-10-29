@@ -1182,7 +1182,7 @@ export function SessionSidebar({
 
   // Desktop: expanded sidebar
   return (
-    <aside className={`w-64 ${SIDEBAR_BASE_CLASSES}`}>
+    <aside data-tour="sidebar" className={`w-64 ${SIDEBAR_BASE_CLASSES}`}>
       <div className={`w-64 ${SIDEBAR_CONTENT_CLASSES}`}>
         <div className="flex h-12 shrink-0 items-center justify-between pl-3 pr-1.5">
           <span className="flex items-center gap-2 text-[15px] font-semibold text-fg ui-terminal:font-label">

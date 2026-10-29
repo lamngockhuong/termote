@@ -247,7 +247,8 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 - [ ] Chuyển đổi hiện session tabs hoạt động (máy tính)
 - [ ] Chọn chu kỳ làm mới hoạt động (3 giây đến 5 phút)
 - [ ] Nút kiểm tra cập nhật hoạt động
-- [ ] Xem hướng dẫn cử chỉ có sẵn (mobile)
+- [ ] Có `Show welcome screen` và `Take the tour` (Data & help)
+- [ ] `Welcome & tour language`: Auto / English / Tiếng Việt
 - [ ] Nút xóa lịch sử hoạt động
 - [ ] Tùy chỉnh giữ nguyên sau khi tải lại trang
 
@@ -897,12 +898,14 @@ Test trên thiết bị di động thật:
 - [ ] Cài đặt > Copy on select: nhả chuột sau khi kéo thì chữ được chép, có toast ngắn; mặc định tắt
 - [ ] Mở trang qua HTTP thường trong LAN (không phải secure context): vẫn chép được, hoặc có toast báo lỗi rõ ràng
 
-### Hướng Dẫn Cử Chỉ
+### Màn Chào Và Hướng Dẫn Nhanh
 
-- [ ] Người dùng mobile lần đầu thấy overlay hướng dẫn cử chỉ
-- [ ] Overlay tắt được
-- [ ] Không hiện lại sau khi tắt (lưu qua settings)
-- [ ] Có thể xem lại từ Settings (`Show Gesture Hints`)
+- [ ] Lần đầu mở trên một thiết bị (điện thoại và desktop): màn chào hiện một lần, đúng backend, số phiên, agent đang chờ, quyền thiết bị và trạng thái thông báo
+- [ ] Không hiện lại sau khi tải lại trang; không hiện khi trang mở từ link tới một pane
+- [ ] Thiết bị chỉ xem không có thẻ "Start a session" hay "Turn on"
+- [ ] Nút EN | VI đổi chữ ngay; trình duyệt tiếng Việt thấy tiếng Việt từ đầu
+- [ ] Take the tour: bốn bước trên điện thoại và desktop; sidebar thu gọn hoặc chỉ một pane thì bước đó được bỏ qua
+- [ ] Hướng dẫn nhanh: →, Enter, ← và Esc dùng được; chạm vào vùng tối không làm gì
 
 ### Trường Hợp Đặc Biệt
 

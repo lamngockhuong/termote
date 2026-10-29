@@ -8,7 +8,11 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/App.tsx`                                 | Main app with gestures, toolbar, settings, sessions            |
 | `pwa/src/components/keyboard-toolbar.tsx`         | Virtual keyboard for mobile                                    |
 | `pwa/src/components/settings-modal.tsx`           | Settings dialog (IME, paste source, toolbar, etc.)             |
-| `pwa/src/components/gesture-hints-overlay.tsx`    | First-time gesture tutorial overlay (mobile)                   |
+| `pwa/src/components/welcome-host.tsx`             | Welcome screen: once per device, from the app's real state     |
+| `pwa/src/components/welcome-sheet.tsx`            | Welcome screen: setup, next actions, areas, EN/VI switch       |
+| `pwa/src/components/spotlight-tour.tsx`           | Tour: dims the app, lights one part (`data-tour`) per step     |
+| `pwa/src/utils/tour-steps.ts`                     | Tour steps (phone, desktop), which show, where the bubble goes |
+| `pwa/src/i18n/`                                   | `t()`, `<Trans>`, locales, messages per area (EN, VI)          |
 | `pwa/src/components/session-tabs.tsx`             | Session tab bar for window switching                           |
 | `pwa/src/components/connection-indicator.tsx`     | Connection status indicator with retry                         |
 | `pwa/src/components/localhost-notice.tsx`         | Offers a page opened through localhost the same at 127.0.0.1   |
