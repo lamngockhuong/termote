@@ -338,7 +338,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   "view_only"}`) before a handler runs, except `POST /api/mux/logout`; handlers repeat it with
   `requireWriteRole`, so a route added later is closed without remembering to. Reads: transcript,
   commands, snapshot (`viewSnapshot`: no tmux default session, and Herdr is not started), push key and `worktrees` GET are allowed; `agent/prompt` carries no
-  `promptId`; `GET agent/start` and `files/content?hash=1` are 403; a Place never (`place=` → 403
+  `promptId` (its `activity` is the same as for `full`); `GET agent/start` and `files/content?hash=1` are 403; a Place never (`place=` → 403
   `view_only` before the root is resolved, `files/places` lists none, `caps.places` false); Files/Changes routes only when
   the pane root is a git toplevel that is neither the server user's home dir nor above it (through
   symlinks; `$HOME`, else the user database, else every root counts as one; in the container also
@@ -562,6 +562,13 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   idle, since C-c interrupts a working one: a working agent's box is left as `partial_paste`. Claude Code writes its transcript only with the first message: until
   then `transcript` answers an empty conversation whose cursor names the session, so the Chat
   view can send it.
+  `GET agent/prompt` also returns `activity`, the agent's working line read off the same capture
+  (`server/agent_activity_line.go`: Claude Code's spinner row just over the input box, Codex's
+  `esc to interrupt)` row over the composer), `null` when there is none. It adds no capture and
+  no write, takes nothing from the client, and holds only that line's own words (each field
+  stripped of control characters and cut to 80 runes): a status line, no file content or
+  command output, and less than the transcript and dialog card a view-only client already reads
+  for every pane, so both roles get it.
   `agent/message` may carry `images`: at most 5 upload ids, each resolved through the upload
   store (a path is never taken from the client; unknown ids → 400 with the bad ids, no store →
   503 `uploads_unavailable`). Each path is pasted alone and the draft must show that many

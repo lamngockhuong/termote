@@ -29,6 +29,11 @@ Codex dùng được theo cách tương tự, có yêu cầu riêng và một đ
   những bước mới nhất.
 - Lượt mới hiện ra trong khoảng hai giây. Sau `/clear` hoặc khi resume, view chuyển sang phiên mới
   và không trộn hai phiên với nhau.
+- Trong lúc một lượt đang chạy, một dòng dưới cuộc hội thoại hiện đúng những gì dòng trạng thái
+  của terminal đang báo: chữ agent tự đặt (`Incubating…`, `Working…`), agent đang suy nghĩ hay đang
+  chạy hook, lượt đã chạy bao lâu và đã nhận bao nhiêu token. Agent chỉ ghi câu trả lời vào
+  transcript khi đã viết xong và không bao giờ ghi phần suy nghĩ, nên trước lúc đó chỉ có dòng này
+  thay đổi. Khi không đọc được dòng trạng thái, nó vẫn báo agent đang làm việc và đã bao lâu.
 - Khối code có khung ghi tên ngôn ngữ, được tô màu cú pháp và có nút Copy. Khối ` ```mermaid ` được
   vẽ thành sơ đồ, với các nút Show source, xuất ảnh và xem toàn màn hình giống
   [bản xem trước Markdown](/vi/usage/files-changes/#xem-trước-markdown); sơ đồ không vẽ được thì vẫn
