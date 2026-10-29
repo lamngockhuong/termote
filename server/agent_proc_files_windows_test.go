@@ -141,3 +141,24 @@ func TestWinDrivePath(t *testing.T) {
 		}
 	}
 }
+
+// Only the server's own user's processes have their handles duplicated:
+// this test process passes, SYSTEM's SID and an empty one do not.
+func TestProcWriteFilesOwnerOnly(t *testing.T) {
+	self := windows.CurrentProcess()
+	sid, err := winProcess(self).user()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !isServerUser(sid) {
+		t.Errorf("own SID %s not the server's", sid)
+	}
+	for _, other := range []string{localSystemSID, "S-1-5-21-1-2-3-1001", ""} {
+		if other == sid {
+			continue // a test run as SYSTEM
+		}
+		if isServerUser(other) {
+			t.Errorf("%q counted as the server's user", other)
+		}
+	}
+}

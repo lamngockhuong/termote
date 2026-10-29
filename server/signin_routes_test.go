@@ -566,3 +566,21 @@ func TestSessionPushedOutOrExpiredClosesStream(t *testing.T) {
 		t.Errorf("no %s in:\n%s", want, logs)
 	}
 }
+
+// The ping loop's recheck ends a session's stream past its expiry, before
+// its timer fires.
+func TestHubRecheckSession(t *testing.T) {
+	clock := time.Now()
+	hub := newStreamHub(4)
+	s := newSessionAuth(nil, hub)
+	s.now = func() time.Time { return clock }
+	token, _ := s.start(httptest.NewRequest("GET", "/", nil), sessionViaForm)
+	e, _ := hub.addFor(func(error) {}, roleFull, "", sessionID(token))
+	if err := hub.recheck(e); err != nil {
+		t.Fatalf("a live session: %v", err)
+	}
+	clock = clock.Add(sessionTTL + time.Second)
+	if err := hub.recheck(e); !errors.Is(err, errSessionRevoked) {
+		t.Errorf("past its expiry: %v", err)
+	}
+}

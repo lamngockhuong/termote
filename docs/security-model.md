@@ -16,12 +16,12 @@ what Termote can reach, run it as another user with less access.
 
 ## Who can do what
 
-| Signed in as             | Can                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The password             | Everything (full).                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| A full device            | Everything the password can, except pairing another full device (it pairs view-only devices only) and signing a password browser out (it only lists them).                                                                                                                                                                                                                                                                                                          |
-| A view-only device       | Watch the terminal, read the Chat view and Files/Changes inside a git repository (not the home dir, never a file git ignores). Outside a repository too, it reads the names and descriptions of the custom commands (`~/.claude` and the pane's project) and the worktree list (paths and branches). It types nothing, changes nothing and downloads no file, but reads everything printed, except the Chat view's tool results of a sensitive file (`.env`, keys). |
-| Anyone, with `--no-auth` | Everything, as soon as they reach the port.                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Signed in as             | Can                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The password             | Everything (full).                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| A full device            | Everything the password can, except pairing another full device (it pairs view-only devices only) and signing a password browser out (it only lists them).                                                                                                                                                                                                                                                                                                           |
+| A view-only device       | Watch the terminal, read the Chat view and Files/Changes inside a git repository (not the home dir, only the files git tracks). Outside a repository too, it reads the names and descriptions of the custom commands (`~/.claude` and the pane's project) and the worktree list (paths and branches). It types nothing, changes nothing and downloads no file, but reads everything printed, except the Chat view's tool results of a sensitive file (`.env`, keys). |
+| Anyone, with `--no-auth` | Everything, as soon as they reach the port.                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 ## What the server enforces
 
@@ -51,14 +51,17 @@ what Termote can reach, run it as another user with less access.
   and the other device features the app never uses.
 - Requests naming an unknown host are refused; writes and the terminal stream must come from the
   Termote page itself, and the stream needs a single-use token.
-- Failed sign-ins and wrong pairing codes are rate limited.
+- Failed sign-ins and wrong pairing codes are rate limited. Behind `tailscale serve`, each tailnet user
+  has a limit of their own, so one user's wrong passwords do not lock the others out.
 - A view-only device is refused every write on the server, not only hidden buttons in the interface.
 - With Zellij (`--mux zellij`), what you type and Chat messages reach a pane only through the terminal
   of a Termote Zellij client, never through process arguments, which other local users could read. A
   view-only device watches a Zellij pane through `zellij subscribe`, which cannot type.
 - A Content-Security-Policy keeps the page from loading or running code from elsewhere.
 - A paired device can carry a time limit (30 days by default when pairing): past it, the device is
-  refused and its open terminals close. A device paired by one with a limit never outlasts it.
+  refused and its open terminals close within 15 seconds, also when the server's machine slept
+  through the limit. A device paired by one with a limit never outlasts it. A password sign-in's
+  open terminals close the same way when its 24 hours run out.
 - Revoking a device also revokes every device it paired. Logging out on a device revokes only that
   device.
 - Only the password (a password sign-in, or `termote pair` on the server) pairs a full device.

@@ -7,6 +7,7 @@
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$TEST_DIR")"
 INSTALL_SCRIPT="$PROJECT_DIR/scripts/install.sh"
+SSHSIG_SCRIPT="$PROJECT_DIR/scripts/release-sshsig.sh"
 PASSED=0
 FAILED=0
 
@@ -284,19 +285,25 @@ test_real_binary() {
     [[ "$out" =~ ^Termote\ v[0-9] ]] && pass "installed command runs: $out" || fail "installed command" "Termote vX" "$out"
 }
 
-# A copy of install.sh pinning a key made here, whose private half signs the
-# fake releases (the real key signs only real releases). The PEM is read
-# from a file: BSD awk refuses a newline in a -v value.
+# A copy of install.sh pinning a key made here, as a PEM and as an
+# allowed-signers line, whose private half signs the fake releases (the real
+# key signs only real releases). The PEM is read from a file: BSD awk
+# refuses a newline in a -v value.
 setup_signing() {
     openssl genpkey -algorithm ed25519 -out "$TMP/key.pem" 2>/dev/null
     openssl pkey -in "$TMP/key.pem" -pubout >"$TMP/pub.pem"
+    local signer
+    signer=$(sh "$SSHSIG_SCRIPT" signer "$TMP/key.pem") || { fail "allowed-signers line" "made" "$signer"; return 1; }
     SIGNED_SCRIPT="$TMP/install-signed.sh"
-    awk -v q="'" '
+    awk -v q="'" -v signer="$signer" '
         FNR == NR { pem = pem (pem == "" ? "" : "\n") $0; next }
         /^# BEGIN RELEASE KEY/ { print; print "RELEASE_KEY=" q pem q; skip = 1; next }
         /^# END RELEASE KEY/ { skip = 0 }
+        /^# BEGIN RELEASE SIGNER/ { print; print "RELEASE_SIGNER=" q signer q; skip = 1; next }
+        /^# END RELEASE SIGNER/ { skip = 0 }
         !skip' "$TMP/pub.pem" "$INSTALL_SCRIPT" >"$SIGNED_SCRIPT"
-    grep -q "BEGIN PUBLIC KEY" "$SIGNED_SCRIPT" || { fail "signed install.sh copy" "the test key" "$(head -c 200 "$SIGNED_SCRIPT")"; return 1; }
+    grep -q "BEGIN PUBLIC KEY" "$SIGNED_SCRIPT" && grep -qF "RELEASE_SIGNER='$signer'" "$SIGNED_SCRIPT" ||
+        { fail "signed install.sh copy" "the test key" "$(head -c 200 "$SIGNED_SCRIPT")"; return 1; }
     # The installer runs with PATH=$FAKE_PATH:/usr/bin:/bin, where macOS has
     # LibreSSL: give it the OpenSSL 3 this test found.
     ln -sf "$(command -v openssl)" "$FAKE_PATH/openssl"
@@ -314,6 +321,25 @@ sign_release() {
     rm -f "$dir/checksums.txt.sig"
     [[ "${2:-good}" == nosig ]] && return
     openssl pkeyutl -sign -inkey "$key" -rawin -in "$dir/checksums.txt" -out "$dir/checksums.txt.sig"
+}
+
+# sshsign_release <version> [good|otherkey|none]: checksums.txt.sshsig for a
+# release signed by sign_release.
+sshsign_release() {
+    local dir="$RELEASES/v$1" key="$TMP/key.pem"
+    rm -f "$dir/checksums.txt.sshsig"
+    case "${2:-good}" in
+        none) return ;;
+        otherkey) openssl genpkey -algorithm ed25519 -out "$TMP/other.pem" 2>/dev/null; key="$TMP/other.pem" ;;
+    esac
+    sh "$SSHSIG_SCRIPT" sign "$key" "$dir/checksums.txt" >"$dir/checksums.txt.sshsig"
+}
+
+# fake_old_ssh_keygen: an ssh-keygen before OpenSSH 8.1, with no -Y; remove
+# "$FAKE_PATH/ssh-keygen" after.
+fake_old_ssh_keygen() {
+    printf '#!/bin/sh\necho "ssh-keygen: unknown option -- Y" >&2\nexit 1\n' >"$FAKE_PATH/ssh-keygen"
+    chmod +x "$FAKE_PATH/ssh-keygen"
 }
 
 test_signed_releases() {
@@ -354,12 +380,61 @@ test_signed_releases() {
     check "installs without OpenSSL 3" "0" "$CODE"
     echo "$OUT" | grep -q "signature was not checked" && pass "says the signature was not checked" || fail "no openssl" "note" "$OUT"
 
+    # No OpenSSL 3, an ssh-keygen with -Y verify: it checks checksums.txt.sshsig.
+    if ssh-keygen -Y verify 2>&1 | grep -q 'option -- Y' || ! command -v ssh-keygen >/dev/null; then
+        echo "skipped: ssh-keygen -Y verify (OpenSSH 8.1 or later) is not here"
+    else
+        test_ssh_signed_releases
+    fi
+
     # A 1.10.0 pre-release, like everything before 1.10.0, has no signature.
     new_home signed-rc
     make_release 1.10.0-rc.1
     run_install TERMOTE_VERSION=1.10.0-rc.1
     check "1.10.0-rc.1 needs no signature" "0" "$CODE"
     INSTALL_SCRIPT="$saved"
+}
+
+# Without OpenSSL 3, from FIRST_SSHSIG_VERSION on: ssh-keygen checks the
+# SSHSIG signature, refuses a bad or missing one, and an ssh-keygen without -Y
+# only gets the note. Runs inside test_signed_releases (its signed script).
+test_ssh_signed_releases() {
+    local first
+    first=$(sed -n 's/^FIRST_SSHSIG_VERSION=//p' "$INSTALL_SCRIPT")
+    fake_libressl
+    new_home ssh-signed
+    make_release "$first"
+    sign_release "$first"
+    sshsign_release "$first"
+    run_install TERMOTE_VERSION="$first"
+    check "ssh-keygen: signed release installs" "0" "$CODE"
+    echo "$OUT" | grep -q "Signature verified" && pass "ssh-keygen: says the signature was checked" || fail "ssh signature" "verified" "$OUT"
+
+    local mode
+    for mode in otherkey none unlisted; do
+        new_home "ssh-signed-$mode"
+        make_release "$first"
+        if [[ $mode == unlisted ]]; then sign_release "$first" unlisted; sshsign_release "$first"; else sign_release "$first"; sshsign_release "$first" "$mode"; fi
+        run_install TERMOTE_VERSION="$first"
+        [[ $CODE -ne 0 && ! -e "$DATA/current" ]] && pass "ssh-keygen $mode: refused, nothing installed" || fail "ssh $mode" "refused" "$OUT"
+        case $mode in
+            otherkey) echo "$OUT" | grep -q "SIGNATURE CHECK FAILED" && pass "ssh-keygen: bad signature explained" || fail "ssh otherkey" "SIGNATURE CHECK FAILED" "$OUT" ;;
+            none) echo "$OUT" | grep -q "has no checksums.txt.sshsig" && pass "ssh-keygen: missing .sshsig explained" || fail "ssh none" "has no checksums.txt.sshsig" "$OUT" ;;
+            unlisted) echo "$OUT" | grep -q "does not vouch" && pass "ssh-keygen: unlisted archive explained" || fail "ssh unlisted" "does not vouch" "$OUT" ;;
+        esac
+    done
+
+    # An ssh-keygen before OpenSSH 8.1: installs with the note.
+    new_home ssh-old
+    make_release "$first"
+    sign_release "$first"
+    sshsign_release "$first"
+    fake_old_ssh_keygen
+    run_install TERMOTE_VERSION="$first"
+    rm -f "$FAKE_PATH/ssh-keygen"
+    check "old ssh-keygen: installs" "0" "$CODE"
+    echo "$OUT" | grep -q "signature was not checked" && pass "old ssh-keygen: says the signature was not checked" || fail "old ssh-keygen" "note" "$OUT"
+    rm -f "$FAKE_PATH/openssl"
 }
 
 test_syntax

@@ -13,6 +13,16 @@
       ],
       "depNameTemplate": "gitleaks/gitleaks",
       "datasourceTemplate": "github-release-attachments"
+    },
+    {
+      "description": "The binfmt (QEMU) and BuildKit images the release workflow's docker job builds with, pinned by digest",
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/workflows/release\\.yml$/"],
+      "matchStrings": [
+        "image: (?<depName>docker\\.io/tonistiigi/binfmt):(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[0-9a-f]{64})",
+        "driver-opts: image=(?<depName>docker\\.io/moby/buildkit):(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[0-9a-f]{64})"
+      ],
+      "datasourceTemplate": "docker"
     }
   ],
   "packageRules": [

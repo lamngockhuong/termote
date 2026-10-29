@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -315,9 +316,19 @@ func (f *filesAPI) handleChanges(w http.ResponseWriter, r *http.Request) {
 		}
 		res.Branch, res.Truncated = st.Branch, st.Truncated
 		res.Entries = append(res.Entries, st.Entries...)
+		// A view-only client sees the changes of tracked files only, and
+		// none it could not open.
+		if req.view != nil {
+			res.Entries = slices.DeleteFunc(res.Entries, func(e changeEntry) bool {
+				return e.untracked() || f.viewHides(req, e.Path, false, true)
+			})
+		}
 	}
 	jsonOK(w, res)
 }
+
+// untracked reports whether e is a file git does not track.
+func (e changeEntry) untracked() bool { return e.Unstaged == "?" }
 
 func (f *filesAPI) handleDiff(w http.ResponseWriter, r *http.Request) {
 	req, cancel, ok := f.begin(w, r)
@@ -326,13 +337,14 @@ func (f *filesAPI) handleDiff(w http.ResponseWriter, r *http.Request) {
 	}
 	defer cancel()
 	q := r.URL.Query()
-	// The path is checked against git status by diff; where a symlink in
-	// the worktree leads is not.
+	// The path is checked against git status by diff (for a view-only
+	// client, as a tracked file); where a symlink in the worktree leads is
+	// not.
 	if f.viewHides(req, q.Get("path"), false, true) {
 		f.error(w, "git diff", fs.ErrNotExist)
 		return
 	}
-	res, err := f.diff(req.ctx, req.root, q.Get("path"), q.Get("orig"), q.Get("staged") == "1", q.Get("reveal") == "1")
+	res, err := f.diff(req.ctx, req.root, q.Get("path"), q.Get("orig"), q.Get("staged") == "1", q.Get("reveal") == "1", req.view != nil)
 	if err != nil {
 		f.error(w, "git diff", err)
 		return
@@ -340,7 +352,9 @@ func (f *filesAPI) handleDiff(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, res)
 }
 
-func (f *filesAPI) diff(ctx context.Context, root filesRoot, path, orig string, staged, reveal bool) (diffResponse, error) {
+// diff is the diff of the git status entry path names; trackedOnly (a
+// view-only client) refuses an untracked file's as if it were not changed.
+func (f *filesAPI) diff(ctx context.Context, root filesRoot, path, orig string, staged, reveal, trackedOnly bool) (diffResponse, error) {
 	if !root.IsRepo {
 		return diffResponse{}, errNotChanged
 	}
@@ -349,7 +363,7 @@ func (f *filesAPI) diff(ctx context.Context, root filesRoot, path, orig string, 
 		return diffResponse{}, err
 	}
 	entry := findChange(st, path, orig, staged)
-	if entry == nil {
+	if entry == nil || trackedOnly && entry.untracked() {
 		return diffResponse{}, errNotChanged
 	}
 	rel, err := cleanRelPath(path)

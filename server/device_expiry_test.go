@@ -439,3 +439,34 @@ func TestDeviceAuthReloadEndsRevokedDevice(t *testing.T) {
 		t.Errorf("no %s in:\n%s", want, logs)
 	}
 }
+
+// The ping loop's recheck ends a device's stream when its validUntil passed
+// with no timer to fire (the host slept), and when another process revoked
+// it, without a lookup in this one.
+func TestHubRecheckDevice(t *testing.T) {
+	dir := t.TempDir()
+	s, clock := clockedStore(t, dir)
+	hub := newStreamHub(8)
+	hub.alive = s.alive
+	_, limited, _ := s.add("Limited", roleView, deviceAddOpts{ValidFor: time.Hour})
+	_, kept, _ := s.add("Kept", roleFull, deviceAddOpts{})
+	e1, _ := hub.add(func(error) {}, roleView, limited.ID)
+	e2, _ := hub.add(func(error) {}, roleFull, kept.ID)
+	if err := hub.recheck(e1); err != nil {
+		t.Fatalf("a valid device: %v", err)
+	}
+	*clock = *limited.ValidUntil
+	if err := hub.recheck(e1); !errors.Is(err, errDeviceRevoked) {
+		t.Errorf("past its validUntil: %v", err)
+	}
+	if err := newTestDeviceStore(t, dir, "pw").revoke(kept.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := hub.recheck(e2); err != nil {
+		t.Errorf("read the file again before deviceReloadEvery: %v", err)
+	}
+	*clock = clock.Add(2 * deviceReloadEvery)
+	if err := hub.recheck(e2); !errors.Is(err, errDeviceRevoked) {
+		t.Errorf("revoked by another process: %v", err)
+	}
+}

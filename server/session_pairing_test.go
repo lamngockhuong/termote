@@ -208,7 +208,7 @@ func TestPairRevokedWhenSessionGone(t *testing.T) {
 	}
 	dev := newDeviceAuth(store, newStreamTokenStore(), newStreamHub(4))
 	sessions := newSessionAuth(nil, nil)
-	h := newBasicAuth("admin", "secret", dev, sessions, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	h := newBasicAuth("admin", "secret", dev, sessions, false, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	// Made while the session lived; its revoke then missed the code (it was
 	// being used), and only the store, wired as buildServer does, sees it.
 	code, _, err := dev.codes.create(roleView, "", sessionCreator("0123456789abcdef"), 0)

@@ -127,8 +127,9 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/utils/markdown-image-paste.ts`           | An image pasted into Markdown: placeholder, relative link      |
 | `pwa/src/components/fenced-code.tsx`              | Code block of rendered Markdown (preview, Chat): highlight     |
 | `pwa/src/components/mermaid-block.tsx`            | A mermaid block: the diagram image, Show source, fallback      |
-| `pwa/src/utils/mermaid-render.ts`                 | Diagram → `data:` SVG image: worker queue, timeouts, cache     |
-| `pwa/src/utils/mermaid-worker.ts`                 | Module worker drawing a diagram with Pele, fixed options       |
+| `pwa/src/utils/mermaid-render.ts`                 | Diagram → `data:` SVG image: sandbox iframe, queue, timeouts   |
+| `pwa/src/utils/mermaid-sandbox.ts`                | Sandboxed iframe's relay: starts the Pele worker from `blob:`  |
+| `pwa/src/utils/mermaid-worker.ts`                 | Worker drawing a diagram with Pele, fixed options              |
 | `pwa/src/components/mermaid-export.tsx`           | A diagram's Share, Copy image and Download SVG buttons         |
 | `pwa/src/utils/mermaid-export.ts`                 | Diagram → PNG (canvas) for share/clipboard, SVG download       |
 | `pwa/src/components/image-viewer.tsx`             | Full-screen image viewer: zoom, pan, keys, Back closes it      |

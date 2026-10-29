@@ -72,6 +72,36 @@ func checksumOf(listing []byte, name string) string {
 	return ""
 }
 
+// listsVersion reports whether listing names an archive of version itself,
+// termote-<version>-<os>-<arch>.tar.gz or .zip: a release's own signed list
+// always does. A pre-release's archives (termote-<version>-rc.1-…) do not
+// count for <version>.
+func listsVersion(listing []byte, version string) bool {
+	sc := bufio.NewScanner(bytes.NewReader(listing))
+	for sc.Scan() {
+		f := strings.Fields(sc.Text())
+		if len(f) != 2 {
+			continue
+		}
+		rest, ok := strings.CutPrefix(strings.TrimPrefix(f[1], "*"), "termote-"+version+"-")
+		if !ok {
+			continue
+		}
+		platform, tgz := strings.CutSuffix(rest, ".tar.gz")
+		platform, zip := strings.CutSuffix(platform, ".zip")
+		parts := strings.Split(platform, "-")
+		if (tgz || zip) && len(parts) == 2 && isLowerAlnum(parts[0]) && isLowerAlnum(parts[1]) {
+			return true
+		}
+	}
+	return false
+}
+
+// isLowerAlnum reports whether s is one or more of a-z and 0-9.
+func isLowerAlnum(s string) bool {
+	return s != "" && strings.Trim(s, "abcdefghijklmnopqrstuvwxyz0123456789") == ""
+}
+
 // signedChecksums downloads checksums.txt and its signature from base (the
 // release's download URL, ending in /) and returns the listing once the
 // signature checks out.
@@ -113,12 +143,18 @@ const imageDigestName = "image-digest.txt"
 
 // signedImageRef returns the image of release version by digest, as its
 // signed checksums vouch for it: a tag on the registry can be moved, a
-// digest names one image.
+// digest names one image. The signed list must be version's own (it names
+// version's archives): a genuine list and image of another release, copied
+// into this one's assets, signs another image than this version's.
 func (c *cli) signedImageRef(version string) (string, error) {
 	base := c.downloadBase + "/" + updateRepo + "/releases/download/v" + version + "/"
 	listing, err := c.signedChecksums(base)
 	if err != nil {
 		return "", fmt.Errorf("%v; refusing to run the v%s image", err, version)
+	}
+	if !listsVersion(listing, version) {
+		return "", fmt.Errorf("the signed %s is not v%s's (it names no termote-%s archive); refusing to run the v%s image",
+			checksumsName, version, version, version)
 	}
 	body, err := c.fetchSmall(base+imageDigestName, 1<<10)
 	if err != nil {

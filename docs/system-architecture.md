@@ -68,7 +68,7 @@ React SPA with:
 - **Connection Indicator**: Real-time auto-detection of server status (connecting/connected/disconnected/error), clickable to retry
 - **Command History**: Search/recall previously sent commands (mobile-friendly delete buttons), persisted in localStorage
 - **Quick Actions**: On mobile, the keyboard toolbar's expanded rows (the ⋯ key pinned at the end of its bottom row) start with an Actions row of preset commands (clear, cancel, clear line, exit)
-- **Files and Changes**: views of the pane's directory (`caps.files`), where a text file can also be edited and saved: a tree with a highlighted file viewer, and `git status` with per-file diffs. Files keeps each open file in a tab (`pwa/src/utils/file-tabs.ts`: a preview tab, pinned tabs, at most 10, the least recently used clean one closed past that), in memory only; only the tab shown has a viewer, the others keep their scroll offset, link trail and Show. Changes keeps its diffs as tabs of its own with the same rules (`use-git-changes.ts`: one tab per side of a file, keyed `staged:orig:path`, holding its editor, Show and scroll; a side git status stops listing closes its tab unless it is being edited). A tab bar on desktop (`file-tab-bar.tsx`), a sheet of open files on mobile (`open-files-sheet.tsx`). A side panel next to the terminal on desktop (header toggles), views of the header's view menu on mobile. Shiki runs in a module worker (`pwa/src/utils/highlight-worker.ts`); the worker, its themes and grammars are built under `assets/shiki/` (with every other module worker: CSV, Mermaid diagrams), left out of the precache and cached on first use
+- **Files and Changes**: views of the pane's directory (`caps.files`), where a text file can also be edited and saved: a tree with a highlighted file viewer, and `git status` with per-file diffs. Files keeps each open file in a tab (`pwa/src/utils/file-tabs.ts`: a preview tab, pinned tabs, at most 10, the least recently used clean one closed past that), in memory only; only the tab shown has a viewer, the others keep their scroll offset, link trail and Show. Changes keeps its diffs as tabs of its own with the same rules (`use-git-changes.ts`: one tab per side of a file, keyed `staged:orig:path`, holding its editor, Show and scroll; a side git status stops listing closes its tab unless it is being edited). A tab bar on desktop (`file-tab-bar.tsx`), a sheet of open files on mobile (`open-files-sheet.tsx`). A side panel next to the terminal on desktop (header toggles), views of the header's view menu on mobile. Shiki runs in a module worker (`pwa/src/utils/highlight-worker.ts`); the worker, its themes and grammars are built under `assets/shiki/` (with every other module worker: CSV), left out of the precache and cached on first use
 - **Deep Links**: `#/s/<group>/<tab>[/<pane>][?view=]` selects a session (never sends input); the address bar follows the current session via `replaceState`
 - **Context Menu Control**: Block/unblock right-click on the terminal
 - **Font Controls**: Adjustable font size (6-24px)
@@ -1037,9 +1037,10 @@ required as elsewhere. It answers names only (`path`, `ignored`, `sensitive`), n
   `?` or `[` (400 `invalid_exclude`). `ignored=1` adds ignored files; `fresh=1` skips the cache.
 - In a repository the list is `git ls-files -co --exclude-standard --deduplicate -z`, minus the
   files deleted from disk (`ls-files -d`), with the directories git lists (a nested repository, a
-  submodule) dropped. Tracked files are always searched, even under an excluded name. With
-  `ignored=1`, `git ls-files -o -i --exclude-standard --directory -z` is added and the ignored
-  directories it names are walked through `os.Root`, never entering an excluded name at any depth.
+  submodule) dropped; a view-only client's list is `git ls-files -c` (tracked files only).
+  Tracked files are always searched, even under an excluded name. With `ignored=1`,
+  `git ls-files -o -i --exclude-standard --directory -z` is added and the ignored directories it
+  names are walked through `os.Root`, never entering an excluded name at any depth.
   Outside a repository the root is walked, excluded names never entered, symlinked directories
   and junctions not entered, symlinks to files listed.
 - Limits: 200 results (`truncated`), 200,000 paths read, depth 32, a walk of 5 s and 16 MiB of
@@ -1056,8 +1057,8 @@ out of a repository, match ranges for free, and the same deny, sensitive and bin
 every other files read.
 
 - The files are Find's list (same cache entry: the PWA sends its `exclude` names), sorted by
-  path. A view-only client searches the list it may read (tracked and untracked files git does
-  not ignore). Ignored files are never searched.
+  path. A view-only client searches the list it may read (the files git tracks). Ignored files are
+  never searched.
 - `q` (1 to 256 bytes, not trimmed) is a literal unless `regex=1` (Go RE2 syntax); `case=1`
   matches case, `word=1` adds `\b` (ASCII word characters). `files` and `skip` are globs (a glob
   without `/` matches the base name, `**` any number of folders, a trailing `/` a folder). An
@@ -1257,10 +1258,13 @@ loads; only here, a closed `<details>` block, with its optional `<summary>`, is 
 `details` element from markdown nodes, keeping no attribute but `open`), fenced code through the same worker, and relative links resolved client side by
 `utils/markdown-links.ts` against the file's directory (a leading `/` is the root); a path that
 would leave the root is never built, so never requested. A `mermaid` block is drawn by Pele in
-a module worker (`utils/mermaid-worker.ts`, built under `assets/shiki/` with each diagram type a
-chunk of its own, out of the precache) and shown by `utils/mermaid-render.ts` as a `data:` SVG
-image (render options fixed in the worker, never taken from the file; a diagram still drawing
-10 s after its type loaded ends the worker), its source shown with a reason whenever it cannot be. A diagram, and an image of Files or Changes,
+a worker (`utils/mermaid-worker.ts`) that a hidden `<iframe sandbox="allow-scripts">` of
+`/assets/mermaid-sandbox-<hash>.html` starts from a `blob:` URL (`utils/mermaid-sandbox.ts`; an opaque origin,
+under a policy of its own, so a flaw in Pele reaches neither the app nor the API), the page being
+one inline script that `vite.config.ts` builds with Pele's every diagram type, out of the
+precache. `utils/mermaid-render.ts` shows the result as a `data:` SVG image (render options fixed
+in the worker, never taken from the file; a diagram still drawing 10 s after it started removes
+the iframe, which ends the worker), its source shown with a reason whenever it cannot be. A diagram, and an image of Files or Changes,
 opens in `components/image-viewer.tsx` (lazy chunk) with the URL already shown: zoom and pan by
 Pointer Events, one history entry of its own so Back closes it. Following a link reads the target's
 parent directory to tell file from folder; the files store keeps a Back trail with scroll
@@ -1457,7 +1461,8 @@ The code is `server/auth_role.go` (roles, the default refusal), `server/device_s
   on one pane (read-only by construction, no history scrolling), and every
   input frame, resize and `drive` is dropped. Files only in a git repo that is neither the server
   user's home dir nor above it (nor the container's `/workspace` when it holds the host home), and
-  only the paths `git ls-files -co --exclude-standard` lists (Find's 30 s cache), anything else 404;
+  only the paths `git ls-files -c` lists (Find's 30 s cache), anything else 404; Changes leaves out
+  untracked files;
   no `reveal=1`, no `content?hash=1`, no `find?ignored=1`; `agent/prompt` carries no `promptId`.
 - **Revoke**: removes the record, drops its stream tokens, closes its open streams and the codes it
   made; a running request finishes. `DELETE /api/mux/devices/{id}` (Settings > Devices, `termote
@@ -1619,7 +1624,8 @@ termote update --force           # Force reinstall current version
    Zellij, like tmux, exposes every running session of the user and has no extra `--no-auth`
    guard; keys and Chat messages reach a Zellij pane only through a Termote client's PTY, never
    argv, which other local users could read
-9. **Rate limiting**: 5 failed basic-auth attempts/min per IP, and 20/min per IPv6 /64 → 429
+9. **Rate limiting**: 5 failed basic-auth attempts/min per IP (per tailnet login behind
+   `tailscale serve`, with 30/min for all of loopback together), and 20/min per IPv6 /64 → 429
    (expired entries swept at most every 10s, so many source addresses cannot make each failure
    scan the whole table);
    failed logins, blocked clients and rejected Hosts are logged with the client address (never

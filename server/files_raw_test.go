@@ -596,16 +596,16 @@ func TestFilesRawFailures(t *testing.T) {
 	f := registerFilesRoutes(http.NewServeMux(), &filesFakeMux{dir: gx.repo, files: true}, hostAllowlist{}, nil)
 	root := filesRoot{Root: gx.repo, IsRepo: true}
 	rec := httptest.NewRecorder()
-	if err := f.serveImageVersion(rec, t.Context(), root, "a.png", "", true, "new", false); err != nil || rec.Code != 200 {
+	if err := f.serveImageVersion(rec, t.Context(), root, "a.png", "", true, "new", false, false); err != nil || rec.Code != 200 {
 		t.Fatalf("staged new = %d, %v", rec.Code, err)
 	}
 	// The status is cached; cat-file now fails.
 	f.git.bin = writeScript(t, "exit 1")
-	if err := f.serveImageVersion(httptest.NewRecorder(), t.Context(), root, "a.png", "", true, "new", false); err == nil {
+	if err := f.serveImageVersion(httptest.NewRecorder(), t.Context(), root, "a.png", "", true, "new", false, false); err == nil {
 		t.Error("failing cat-file: no error")
 	}
 	f.statuses = newTTLCache[gitStatus](filesRootTTL)
-	if err := f.serveImageVersion(httptest.NewRecorder(), t.Context(), root, "a.png", "", true, "new", false); err == nil {
+	if err := f.serveImageVersion(httptest.NewRecorder(), t.Context(), root, "a.png", "", true, "new", false, false); err == nil {
 		t.Error("failing status: no error")
 	}
 	gone := filesRoot{Root: filepath.Join(t.TempDir(), "gone")}

@@ -216,14 +216,15 @@ func (f *filesAPI) start(w http.ResponseWriter, r *http.Request, allow func(http
 	// shell histories and tool configs holding keys under ordinary names.
 	// It reads files in a git repo only, never the home dir or one above it
 	// (`git init ~` makes every dotfile an untracked file), and only what git
-	// lists as tracked or untracked and not ignored.
+	// tracks: a file nobody added (a repo under a dotfile dir, a secret
+	// dropped into the tree) is not shown.
 	if isViewOnly(r) {
 		if f.viewHidesRoot(root) {
 			cancel()
 			writeViewOnly(w)
 			return nil, nil, false
 		}
-		lists, err := f.findLists(ctx, root, findQuery{})
+		lists, err := f.findLists(ctx, root, findQuery{committed: true})
 		if err != nil {
 			cancel()
 			f.error(w, "files view list", err)
@@ -278,10 +279,11 @@ func (f *filesAPI) holdsHome(dir string) bool {
 }
 
 // viewHides reports whether a view-only request may not read p (dir: as a
-// directory): p is not in the root's tracked list (git ignores it, or the
-// list was cut short), or its symlinks lead to a path that is not. listed:
-// p is vouched for already (a git status entry), only where it leads is
-// checked. A full request is never hidden anything.
+// directory): p is not in the root's tracked list (git does not track it,
+// or the list was cut short), or its symlinks lead to a path that is not.
+// listed: p is vouched for already (a git status entry of a tracked file,
+// see diff's trackedOnly), only where it leads is checked. A full request is
+// never hidden anything.
 func (f *filesAPI) viewHides(req *filesRequest, p string, dir, listed bool) bool {
 	if req.view == nil {
 		return false

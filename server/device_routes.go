@@ -92,9 +92,10 @@ func (d *deviceAuth) arm(next time.Time) {
 // checkExpiry ends what every device past its validUntil holds, then sets
 // the timer to the next one. The next limit is read and armed under the
 // store's lock, like every change does: read before and armed after, it
-// could undo the timer a pairing set meanwhile. A late or early firing (a
-// clock change, a suspended machine) only moves when an open stream closes:
-// lookup and alive check the limit on their own.
+// could undo the timer a pairing set meanwhile. The timer is the fast path
+// and runs on the monotonic clock, so it fires late after the host slept;
+// lookup and alive check the limit on the wall clock, and each open stream
+// asks alive at every ping, which closes it within streamPingEvery.
 func (d *deviceAuth) checkExpiry() {
 	for _, id := range d.store.expiredNow() {
 		d.expire(id)

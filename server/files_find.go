@@ -104,10 +104,13 @@ type findResponse struct {
 
 // findQuery is a parsed GET files/find.
 type findQuery struct {
-	q        string
-	ignored  bool
-	fresh    bool
-	excludes findExcludes
+	q       string
+	ignored bool
+	// committed: only the files git tracks, a view-only client's list
+	// (begin); never with ignored.
+	committed bool
+	fresh     bool
+	excludes  findExcludes
 	// excludeKey names the excluded set in a cache key.
 	excludeKey string
 }
@@ -314,12 +317,16 @@ func findCall(root filesRoot) gitCall {
 	return gitCall{root: root.Root, safeDir: root.SafeDir, heavy: true, noBackoff: true, limit: findListOutput}
 }
 
-// findTracked lists the tracked and untracked (not ignored) files of a
-// repo. Directories git lists (an untracked nested repo, a submodule) and
+// findTracked lists the tracked files of a repo, and with untracked the
+// untracked ones git does not ignore too. Directories git lists (an untracked nested repo, a submodule) and
 // tracked files gone from the disk are left out. Excluded names do not
 // apply: a committed vendor/ is always searched.
-func (f *filesAPI) findTracked(ctx context.Context, root filesRoot) (findList, error) {
-	out, cut, err := f.git.output(ctx, findCall(root), "ls-files", "-co", "--exclude-standard", "--deduplicate", "-z")
+func (f *filesAPI) findTracked(ctx context.Context, root filesRoot, untracked bool) (findList, error) {
+	args := []string{"ls-files", "-c", "--deduplicate", "-z"}
+	if untracked {
+		args = []string{"ls-files", "-co", "--exclude-standard", "--deduplicate", "-z"}
+	}
+	out, cut, err := f.git.output(ctx, findCall(root), args...)
 	if err != nil {
 		return findList{}, err
 	}
@@ -425,7 +432,11 @@ func (f *filesAPI) findLists(ctx context.Context, root filesRoot, in findQuery) 
 		l, err := cached("walk\x00"+in.excludeKey, func() (findList, error) { return f.findWalkRoot(root, in.excludes) })
 		return []findList{l}, err
 	}
-	tracked, err := cached("tracked", func() (findList, error) { return f.findTracked(ctx, root) })
+	if in.committed {
+		l, err := cached("committed", func() (findList, error) { return f.findTracked(ctx, root, false) })
+		return []findList{l}, err
+	}
+	tracked, err := cached("tracked", func() (findList, error) { return f.findTracked(ctx, root, true) })
 	if err != nil || !in.ignored {
 		return []findList{tracked}, err
 	}
@@ -456,9 +467,9 @@ func (f *filesAPI) handleFind(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	in, err := parseFindQuery(r.URL.Query())
 	// A view-only client never makes the server drop and rebuild a list,
-	// and never sees what git ignores.
+	// and sees only what git tracks.
 	if isViewOnly(r) {
-		in.fresh, in.ignored = false, false
+		in.fresh, in.ignored, in.committed = false, false, true
 	}
 	if err != nil {
 		f.error(w, "files find", err)

@@ -534,6 +534,7 @@ func TestFilesTreePaneDir(t *testing.T) {
 	writeFile(t, filepath.Join(repo, ".gitignore"), "build/\n")
 	writeFile(t, filepath.Join(repo, "pwa", "src", "a.ts"), "x\n")
 	writeFile(t, filepath.Join(repo, "build", "out.js"), "x\n")
+	gitAdd(t, repo)
 	dirOf := func(h http.Handler, req *http.Request) any {
 		t.Helper()
 		rec := httptest.NewRecorder()

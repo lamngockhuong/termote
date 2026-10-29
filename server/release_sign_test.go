@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/x509"
@@ -292,6 +293,38 @@ func TestReleaseKeyMatchesInstaller(t *testing.T) {
 	}
 }
 
+// Both installers pin the same key as an allowed-signers line for
+// ssh-keygen -Y verify (the release workflow checks checksums.txt.sshsig
+// against install.sh's): the ssh-ed25519 blob holds the CLI's key.
+func TestReleaseSignerMatchesInstallers(t *testing.T) {
+	for file, prefix := range map[string]string{"install.sh": "RELEASE_SIGNER='", "install.ps1": "$ReleaseSigner = '"} {
+		b, err := os.ReadFile(filepath.Join("..", "scripts", file))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, rest, ok := strings.Cut(string(b), "\n"+prefix)
+		line, _, ok2 := strings.Cut(rest, "'")
+		f := strings.Fields(line)
+		if !ok || !ok2 || len(f) != 3 || f[0] != "termote-release" || f[1] != "ssh-ed25519" {
+			t.Fatalf("%s holds no allowed-signers line: %q", file, line)
+		}
+		blob, err := base64.StdEncoding.DecodeString(f[2])
+		want := append([]byte("\x00\x00\x00\x0bssh-ed25519\x00\x00\x00\x20"), mustDecode(t, releasePublicKey)...)
+		if err != nil || !bytes.Equal(blob, want) {
+			t.Errorf("%s pins %s, not the CLI's key %s", file, f[2], releasePublicKey)
+		}
+	}
+}
+
+func mustDecode(t *testing.T, b64 string) []byte {
+	t.Helper()
+	b, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
 // A signature made the way the release workflow makes it (openssl pkeyutl,
 // raw output) verifies here.
 func TestVerifyChecksumsAcceptsOpenSSLSignatures(t *testing.T) {
@@ -338,5 +371,52 @@ func TestFetchSmallCutShort(t *testing.T) {
 	tc.http = srv.Client()
 	if _, err := tc.fetchSmall(srv.URL+"/checksums.txt", 1024); err == nil {
 		t.Fatal("cut-short reply accepted")
+	}
+}
+
+// A genuine signed list and image of another release, copied into this
+// version's assets, runs nothing: the list must name this version's
+// archives. A pre-release's list does not count for its stable version.
+func TestContainerUpRefusesAnotherVersionsList(t *testing.T) {
+	ref := containerImage + "@sha256:" + strings.Repeat("ab", 32)
+	for _, other := range []string{"1.9.0", "1.10.0-rc.1", "1.10.01"} {
+		cc := newContainerCLI(t)
+		priv := useTestReleaseKey(t)
+		gh := &fakeReleases{assets: map[string][]byte{}, goos: "linux"}
+		listing := []byte(strings.Repeat("1", 64) + "  termote-" + other + "-linux-amd64.tar.gz\n" +
+			sha([]byte(ref+"\n")) + "  " + imageDigestName + "\n")
+		gh.assets["v1.10.0/"+checksumsName] = listing
+		gh.assets["v1.10.0/"+checksumsSigName] = ed25519.Sign(priv, listing)
+		gh.assets["v1.10.0/"+imageDigestName] = []byte(ref + "\n")
+		srv := httptest.NewServer(gh)
+		cc.http, cc.downloadBase, cc.version = srv.Client(), srv.URL, "1.10.0"
+		if code := cc.main([]string{"container", "up", "--port", strconv.Itoa(freePort(t)), "--workspace", t.TempDir()}); code != 1 ||
+			!strings.Contains(cc.stderr.String(), "is not v1.10.0's") {
+			t.Errorf("%s's list: code %d stderr %s", other, code, cc.stderr.String())
+		}
+		if slices.ContainsFunc(cc.runner.calls, func(s string) bool { return strings.HasPrefix(s, "docker pull") }) {
+			t.Errorf("%s's list: pulled %v", other, cc.runner.calls)
+		}
+		srv.Close()
+	}
+}
+
+// Every archive name the release job lists counts, the Windows .zip too; a
+// name that only starts like one does not.
+func TestListsVersion(t *testing.T) {
+	sum := strings.Repeat("1", 64)
+	for name, want := range map[string]bool{
+		"termote-2.13.0-linux-amd64.tar.gz":        true,
+		"*termote-2.13.0-windows-amd64.zip":        true,
+		"termote-2.13.0-darwin-arm64.tar.gz":       true,
+		"termote-2.13.0-rc.1-linux-amd64.tar.gz":   false,
+		"termote-2.13.0-linux-amd64.tar.gz.sha256": false,
+		"termote-2.13.0-linux.tar.gz":              false,
+		"termote-2.13.01-linux-amd64.tar.gz":       false,
+		"image-digest.txt":                         false,
+	} {
+		if got := listsVersion([]byte(sum+"  "+name+"\n"), "2.13.0"); got != want {
+			t.Errorf("%s: %v, want %v", name, got, want)
+		}
 	}
 }

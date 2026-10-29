@@ -673,12 +673,14 @@ func (s *deviceStore) flush() {
 	}
 }
 
-// alive reports whether a live device still valid has this id. It reads
-// memory only (the stream hub asks it under its lock); a revoke updates
-// memory before the hub closes the device's streams.
+// alive reports whether a live device still valid has this id. A revoke
+// updates memory before the hub closes the device's streams; a revoke by
+// another process is read from the file at most each deviceReloadEvery, as
+// lookup does, so the stream's ping loop ends a device revoked there.
 func (s *deviceStore) alive(id string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.maybeReloadLocked()
 	now := s.now()
 	return slices.ContainsFunc(s.recs, func(r deviceRecord) bool { return r.ID == id && s.live(r) && !r.expired(now) })
 }

@@ -296,7 +296,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   stores its hash as `v2:<sha256>`: an older release never matches it (downgrade fails closed), and
   a `v2:` hash without `validUntil` is expired. Past it (`now >= validUntil`) `lookup` refuses and the
   cookie is cleared, `alive` is false, and one `time.AfterFunc` per process (re-armed through the
-  store's `onReload` after each change or reload) closes its streams, stream tokens and codes; expired
+  store's `onReload` after each change or reload) closes its streams, stream tokens and codes. That
+  timer runs on the monotonic clock and fires late after the host slept, so each open stream also
+  asks `alive` (wall clock; it stats the file at most each second, like a lookup) at every 15 s ping
+  (`streamHub.recheck`, outside the hub's lock): a stream of a device past its limit, or revoked by
+  another process, closes within one ping, before or after a sleep; expired
   records stay listed (`expired`) until revoked; the cookie's `MaxAge` stays 400 days. Lineage:
   `pairedBy` (`password`, `session:<id>` or the maker's id; absent in older records, listed `unknown`); only the
   password (session, Basic: the CLI) makes a `full` code, a device gets 403 `full_needs_password`
@@ -346,9 +350,13 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `container up` first spells each existing name of `--workspace` as its directory lists it
   (`diskSpelling`), since a runtime's VM shares `/Users` and compares names with case), never with `reveal=1` (`requireFilesRead`), `files/find` ignores `fresh=1` and
   `ignored=1`, and `files/search` searches exactly that tracked list and ignores `fresh=1`. Tree, content, raw and diff (and `files/tree`'s `dir`, the pane's directory) serve a view-only client only the paths of the root's
-  tracked list (`git ls-files -co --exclude-standard`, Find's 30 s cache: a new file shows up to
-  30 s late) and the directories above them, by the path and by where its symlinks lead (a diff or
-  a version from git status: where it leads only, so a deleted file's diff shows); names match
+  tracked list (`git ls-files -c`, the `committed` list of `findLists`, Find's 30 s cache: a file
+  just added shows up to 30 s late; a file git does not track, ignored or not, is never in it: a
+  repo under a dotfile dir or a secret nobody added stays hidden) and the directories above them,
+  by the path and by where its symlinks lead (a diff or a version from git status: where it leads
+  only, so a deleted file's diff shows, but never the entry of an untracked file: `diff` and
+  `serveImageVersion` refuse it, `trackedOnly`, from the entry they read); `files/changes` leaves out, for a view-only client, every untracked entry and
+  every entry `viewHides` would refuse; names match
   exactly as git lists them (never folded: a case-sensitive volume on macOS keeps an ignored
   `notes.md` beside a tracked `Notes.md` hidden); anything else is 404 as if missing, a list cut
   short (`findMaxPaths`, git's output cap) refuses what it lacks, and a list that cannot be read
@@ -654,7 +662,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   restarts. On Windows (#295; psmux, Herdr) the holder comes from the system handle table
   (`NtQuerySystemInformation`, one query cached 1 s, `server/agent_proc_handles_windows.go`):
   only File handles with write or append access (Codex opens its rollout append-only) of a
-  `codex` process the server's user can open with `PROCESS_DUP_HANDLE` are duplicated, with
+  `codex` process the server's user can open with `PROCESS_DUP_HANDLE` and whose token's user SID
+  is the server's own (`isServerUser`, checked before any `DuplicateHandle`, as Linux relies on
+  `/proc`'s owner check; another user's process under the pane is skipped even where an
+  administrator's server could open it) are duplicated, with
   `FILE_READ_ATTRIBUTES` only, never read or written and always closed; only a disk file on a
   drive letter with an identity counts (no UNC path is ever stat'ed), never `NtQueryObject`; one
   kept must still allow writing in a table read after the duplicate (the cached one can be 1 s
@@ -836,10 +847,23 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   same link and image rules. Tags are paired in one pass per level and nesting past 32 levels
   stays text, so a crafted file cannot stall the page. Anything else, an unclosed `<details>`
   included, stays text.
-- **Mermaid diagrams** (`pwa/src/utils/mermaid-render.ts`, `mermaid-worker.ts`,
+- **Mermaid diagrams** (`pwa/src/utils/mermaid-render.ts`, `mermaid-sandbox.ts`, `mermaid-worker.ts`,
   `mermaid-block.tsx`, through `fenced-code.tsx`): a `mermaid` fenced block of a previewed Markdown
   file or of a Chat view message (agent text, as untrusted as a file) is drawn in the PWA
-  only, by Pele (pinned to an exact version) in a module worker, and shown as an `<img>` whose
+  only, by Pele (pinned to an exact version) in a worker that a hidden
+  `<iframe sandbox="allow-scripts">` of `/assets/mermaid-sandbox-<hash>.html` starts from a `blob:` URL, so code
+  a flaw in Pele lets a diagram run lives in an opaque origin: it reads no cookie (and none of
+  the server's goes with its requests), nothing of the app, and its page's own policy (see
+  Content-Security-Policy) refuses every connection; the page treats each message of the frame
+  as untrusted (only from `frame.contentWindow`, objects only, an unknown error read as
+  `render_failed`), posts to it with `'*'` (its origin is opaque) and the frame relays only from
+  its `parent`, copying the three request fields. The sandbox page is one inline script (built by
+  `pwa/vite.config.ts`: the relay with the worker's IIFE bundle, every diagram type of Pele, as a
+  string; `</script` and `<!--` escaped inside it), since an opaque origin can load nothing from
+  the server; named by its content, it is cached as an asset (a year, immutable) and by the
+  service worker at runtime (`mermaid`), left out of the precache and never the navigation
+  fallback (`/assets/` is on its denylist).
+  Shown as an `<img>` whose
   `src` is a `data:image/svg+xml` URL, so no script runs, no link navigates and nothing it names
   loads; the SVG string never enters the DOM, and nothing is added to `body`. The worker gets the
   source and the page's font list only; its render options are fixed there and never taken from
@@ -852,12 +876,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `PeleError.code` leaves the worker, never its message (it quotes the diagram). Dark colors go
   into the SVG's root `style` as `--pele-*` values (an `<img>` sees no page CSS). Never rendered
   (shown as code with a reason): over 50 KB (checked before the worker is asked) or over Pele's
-  limits; a syntax error; a diagram type Pele does not know; 10 s past the moment its type
-  finished loading (the worker is terminated, the next diagram starts a new one); the worker or
-  a chunk failing to load, or not loaded within 30 s. One diagram in the worker at a time, only
-  near the viewport, 50 results cached by source and theme. The worker and Pele's chunks are
-  built under `assets/shiki/`, left out of the precache (`globIgnores`) and cached at runtime
-  (`shiki` cache) once fetched. Export (`utils/mermaid-export.ts`, `mermaid-export.tsx`): the PNG
+  limits; a syntax error; a diagram type Pele does not know; 10 s past the moment drawing started
+  (the iframe is removed, which ends its worker; the next diagram starts a new one); the sandbox
+  saying it is broken (its worker failed to start or load), not ready 2 s after its page loaded
+  (an error or sign-in page), or not ready and answering within 30 s. One diagram in the sandbox
+  at a time, only near the viewport, 50 results cached by source and theme. Export (`utils/mermaid-export.ts`, `mermaid-export.tsx`): the PNG
   is that same `data:` URL decoded into an `Image` and drawn on a detached canvas (filled with
   the theme's background, at most 2×, 16 M pixels and 16 384 px a side), the SVG file that URL
   decoded in JS: Pele's output under the fixed options above as `svgToDataUrl` writes it,
@@ -1153,7 +1176,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   names of at most 255 bytes, never `.`/`..` nor holding `/ \` NUL `* ? [` (400
   `invalid_exclude`), compared without case on Windows/macOS. In a repo the list is
   `git ls-files -co --exclude-standard --deduplicate -z` less `ls-files -d` (files gone from the
-  disk) and less what git lists as a directory (a nested repo, a submodule); tracked files are
+  disk) and less what git lists as a directory (a nested repo, a submodule); a view-only client's
+  is `git ls-files -c --deduplicate -z` (tracked files only), cached apart. Tracked files are
   never filtered by `exclude`. `ignored=1` adds `git ls-files -o -i --exclude-standard
   --directory -z`, read and cached apart: a path with an excluded component is dropped unread,
   a directory git names whole is walked through `os.Root` without entering an excluded name at
@@ -1184,8 +1208,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   whole-file search: the deadline is checked before each line, so a scan overruns its budget by
   at most one line's search. Nothing reaches git
   argv: a query starting with `-` is text. The list is Find's (`findLists`, the same cache key
-  with the PWA's excludes; a view-only client searches its `req.view`, tracked + untracked not
-  ignored, and `fresh=1` is ignored for it), sorted by path. Per file, before anything is
+  with the PWA's excludes; a view-only client searches its `req.view`, tracked files only, and
+  `fresh=1` is ignored for it), sorted by path. Per file, before anything is
   opened: the `files`/`skip` globs; under a root holding a home dir (`holdsHome`) every
   dot-path is skipped (`skipped.hidden`: shell histories hold secrets under ordinary names);
   then one `EvalSymlinks` shared by `deniedPaths` (deny dirs, the git dir, `.git` parts, on
@@ -1681,7 +1705,16 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
 - Serve mode uses constant-time comparison for password verification
 - **Brute-force protection**: built-in rate limiter (5 failed attempts/min per IP → 429, and
   20/min per IPv6 /64 so a host cannot take a new address for each try); the check and the
-  count are one step, so a concurrent burst gets no more than 5 tries. Failed logins and
+  count are one step, so a concurrent burst gets no more than 5 tries. With `--tailscale`, a
+  password attempt over loopback that carries `Tailscale-User-Login` (`rateKey`; `tailscale serve`
+  sets it for a tailnet user and removes one the client sent, not for a tagged node or Funnel)
+  counts under `ts:<login>` instead of the address, so one tailnet user's typos never lock the
+  others out; the header is ignored off loopback and without `--tailscale` (another proxy on
+  loopback would pass a client's header through). Every attempt over loopback, whatever its key, also counts toward
+  one shared cap of 30/min (`authMaxLoopbackFailures`): a local process setting the header itself
+  (no owner check on macOS loopback) guesses no faster than that. A refund takes back both. A
+  container behind NAT still counts under the gateway address. The pairing limiter stays per
+  address. Failed logins and
   blocked clients are logged with the client address (never the credentials), at most one
   line per 10s each
 - **Server hardening**: ReadHeaderTimeout (Slowloris protection), a 60s read deadline on every
@@ -1758,7 +1791,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `termote devices` list every `password` device as kept when a browser signs out). A session that
   leaves the store without a revoke ends like one (stream tokens, streams, codes; no devices): `start`
   ends the sessions its sign-in pushed out or swept as expired, and a timer per session revokes it at
-  its expiry; each is logged `audit: session-ended id reason=expired|pushed-out`. Every end of a session
+  its expiry; each is logged `audit: session-ended id reason=expired|pushed-out`. Every token's
+  expiry (`tokenStore.put`) is stored without a monotonic reading, so each check compares it with the
+  wall clock; the timer fires late after the host slept, and each open stream asks `sessionAlive` at
+  every 15 s ping, which closes a session's stream within one ping of its expiry. Every end of a session
   (revoke, Log out) drops its waiting codes (`onEnd`, after the session left the store; `create`
   asks `sessionAlive` under the codes' lock). A revoke (not Log out) then removes, in one locked
   write, every live device whose `pairedBy` is one of the revoked sessions and every device those
@@ -1822,6 +1858,13 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   name or IPv4) + `https://api.github.com`, `worker-src`/`manifest-src 'self'`,
   `object-src 'none'`, `base-uri`/`form-action 'self'`, `frame-ancestors 'none'`; plus
   `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`.
+  The Mermaid sandbox page (exactly the path of a served `assets/mermaid-sandbox-*.html`, each
+  hashed at startup; another spelling of the path or another name gets the app's policy, never
+  framed) gets its own instead (`sandboxPolicy`): `default-src 'none'`,
+  `script-src` its one inline script's `sha256` (`'none'` without the page), `worker-src blob:`,
+  `base-uri`/`form-action 'none'`, `frame-ancestors 'self'` with `X-Frame-Options: SAMEORIGIN`,
+  and `sandbox allow-scripts`, so it is an opaque origin even opened on its own. Its iframe's
+  navigation is same-site and carries the session cookie like any page load.
   `isolationHeaders`, wrapped outside `hostGuard` so its 403 carries them too, adds
   `Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Resource-Policy: same-origin` and a
   `Permissions-Policy` turning off camera, microphone, geolocation, payment, USB, serial, HID,
@@ -1831,13 +1874,28 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
 - **Release integrity**: `release.yml`'s release job runs in the `release` environment (the
   maintainer approves each release; it holds `RELEASE_SIGNING_KEY`), writes `image-digest.txt`
   (the pushed image by digest) into `checksums.txt`, signs it with `openssl pkeyutl` and checks
-  the signature with the key `install.sh` pins. `update` and `install.sh` (OpenSSL 3) refuse a
-  1.10.0+ release whose signature does not verify; `container up` runs the image by that digest.
+  the signature with the key `install.sh` pins. It also signs it as `checksums.txt.sshsig`
+  (SSHSIG, namespace `termote-release`, made with openssl alone by `scripts/release-sshsig.sh`, so
+  the key is only ever handed to openssl) and checks that with `ssh-keygen -Y verify` against the
+  allowed-signers line `install.sh` pins (`RELEASE_SIGNER`; `install.ps1` pins the same line, and
+  `TestReleaseSignerMatchesInstallers` keeps both equal to the CLI's key); the release needs 14
+  assets. `update` and `install.sh` (OpenSSL 3) refuse a 1.10.0+ release whose signature does
+  not verify. Without OpenSSL 3, `install.sh`, and `install.ps1` always, check the `.sshsig`
+  with an `ssh-keygen` that has `-Y` (OpenSSH 8.1+; one that answers "option -- Y" counts as
+  absent), refuse a bad one, and refuse a release from `FIRST_SSHSIG_VERSION` (2.14.0) without
+  one; with no such `ssh-keygen`, or before that version, they print that the signature was not
+  checked. Both check the archive's line in the verified `checksums.txt`; `install.ps1` writes it
+  to `ssh-keygen`'s stdin byte for byte (`Invoke-Native`: `Start-Process` rewrites its lines).
+  `container up` runs the image by that digest,
+  and only from a signed list that names the version's own archives (`listsVersion`:
+  `termote-<version>-<os>-<arch>.tar.gz|.zip`, a pre-release's not counting for its stable), so a
+  genuine list and image of another release copied into a version's assets run nothing.
   Whoever can publish a release picks the unpinned target, so neither lets it skip the signature:
   without `--version`, `update` refuses a release before 1.10.0 on an install already on a signed
-  one (`releaseSigned`, `server/cli_update.go`), and without `TERMOTE_VERSION`, `install.sh`
-  refuses a release before 1.10.0. The `docker` job pins the binfmt (QEMU) and BuildKit images it
-  builds with by digest, like the actions.
+  one (`releaseSigned`, `server/cli_update.go`), and without `TERMOTE_VERSION`, `install.sh` and
+  `install.ps1` refuse a release before 1.10.0. The `docker` job pins the binfmt (QEMU) and
+  BuildKit images it builds with by digest, like the actions; a Renovate `customManagers` entry
+  updates both tags and digests.
   The `docker` job pushes the image to GHCR by digest only, with no tag; `docker-tags`, which needs
   the release job, moves `x.y.z`, `x.y` and `latest` on GHCR and Docker Hub to that digest and fails
   when a tag names another one, and `publish` makes the draft public only after it. So a `v*` tag

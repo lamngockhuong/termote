@@ -70,8 +70,9 @@ refuses every write, and the interface hides the controls that would write, unde
 - **Needs tmux 3.2 or later:** with an older tmux, or psmux, the terminal is not available to a view-only
   device and the banner says so. Chat and Files still work.
 - **Files:** only for a pane inside a git repository that is not your home dir (or above it), only the
-  files git tracks or would add (never one it ignores, such as a `.env.local` or a log, and a new file
-  shows up to 30 seconds late), and never a file marked as sensitive (`.env`, keys, and so on).
+  files git tracks (never one nobody has `git add`ed yet, nor one git ignores, such as a `.env.local`
+  or a log; a file just added shows up to 30 seconds late), and never a file marked as sensitive
+  (`.env`, keys, and so on). Changes lists only the changes of tracked files.
 - **Chat:** it reads the conversation and any open dialog, but cannot answer it. A Claude Code tool's
   result is left out when the tool named a sensitive file (`.env`, keys, and so on).
 - **Everything the agent printed is readable.** Pair a view-only device only with someone you would let
