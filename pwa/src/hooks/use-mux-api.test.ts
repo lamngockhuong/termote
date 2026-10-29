@@ -821,12 +821,19 @@ describe('agent API client', () => {
 
   it('reads the open dialog, null when none', async () => {
     const prompt = { promptId: 'p', kind: 'permission', title: 'Bash command' }
+    const activity = { label: 'Working', elapsed: 3 }
     const { calls } = mockFetch(
-      { body: { prompt } },
-      { body: { prompt: null } },
+      { body: { prompt, activity: null } },
+      { body: { prompt: null, activity } },
+      { body: {} },
     )
-    expect(await fetchAgentPrompt('%3')).toEqual(prompt)
-    expect(await fetchAgentPrompt('%3')).toBeNull()
+    expect(await fetchAgentPrompt('%3')).toEqual({ prompt, activity: null })
+    expect(await fetchAgentPrompt('%3')).toEqual({ prompt: null, activity })
+    // An older server sends neither
+    expect(await fetchAgentPrompt('%3')).toEqual({
+      prompt: null,
+      activity: null,
+    })
     expect(calls[0].url).toBe('/api/mux/panes/%253/agent/prompt')
   })
 

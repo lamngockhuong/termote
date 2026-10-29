@@ -7,14 +7,19 @@ import {
   promptPollInterval,
   resetAgentPromptStores,
   SLOW_POLL,
+  useAgentActivity,
   useAgentPrompt,
 } from './use-agent-prompt'
 import type { AgentPrompt } from './use-mux-api'
 
 const mockFetchPrompt = vi.fn()
+const mockActivity = vi.fn()
 vi.mock('./use-mux-api', async (orig) => ({
   ...(await orig<typeof import('./use-mux-api')>()),
-  fetchAgentPrompt: (...a: unknown[]) => mockFetchPrompt(...a),
+  fetchAgentPrompt: async (...a: unknown[]) => ({
+    prompt: await mockFetchPrompt(...a),
+    activity: mockActivity() ?? null,
+  }),
 }))
 
 const dialog: AgentPrompt = {
@@ -31,6 +36,7 @@ beforeEach(() => {
   resetAgentPromptStores()
   mockFetchPrompt.mockReset()
   mockFetchPrompt.mockResolvedValue(null)
+  mockActivity.mockReset()
   visibility = 'visible'
   Object.defineProperty(document, 'visibilityState', {
     configurable: true,
@@ -100,6 +106,57 @@ describe('useAgentPrompt', () => {
     await tick(FAST_POLL)
     await tick(FAST_POLL)
     expect(renders).toBe(after)
+  })
+
+  it('reads the working line apart: a new count renders its readers only', async () => {
+    mockActivity.mockReturnValue({ label: 'Working', elapsed: 1 })
+    let promptRenders = 0
+    let liveRenders = 0
+    const prompt = renderHook(() => {
+      promptRenders++
+      return useAgentPrompt('p1', 'working')
+    })
+    const live = renderHook(() => {
+      liveRenders++
+      return useAgentActivity('p1', 'working')
+    })
+    await tick()
+    // One read serves both
+    expect(mockFetchPrompt).toHaveBeenCalledTimes(1)
+    expect(live.result.current).toEqual({
+      activity: { label: 'Working', elapsed: 1 },
+      dialog: false,
+    })
+    const [p0, l0] = [promptRenders, liveRenders]
+    mockActivity.mockReturnValue({ label: 'Working', elapsed: 1 })
+    await tick(FAST_POLL)
+    expect(liveRenders).toBe(l0)
+    mockActivity.mockReturnValue({ label: 'Working', elapsed: 2 })
+    await tick(FAST_POLL)
+    expect(live.result.current.activity).toEqual({
+      label: 'Working',
+      elapsed: 2,
+    })
+    expect(promptRenders).toBe(p0)
+    // A dialog, read or shown from a refusal, says the agent waits
+    act(() => prompt.result.current.show(dialog))
+    expect(live.result.current.dialog).toBe(true)
+    mockFetchPrompt.mockRejectedValue(new Error('x'))
+    await tick(FAST_POLL)
+    expect(live.result.current).toEqual({ activity: null, dialog: false })
+    // The last reader of either part leaving forgets both
+    prompt.unmount()
+    live.unmount()
+    mockFetchPrompt.mockResolvedValue(null)
+    mockActivity.mockReturnValue(undefined)
+    const again = renderHook(() => useAgentActivity('p1', 'working'))
+    expect(again.result.current).toEqual({ activity: null, dialog: false })
+  })
+
+  it('a pane without a screen reader reads no working line', () => {
+    const { result } = renderHook(() => useAgentActivity(undefined, 'working'))
+    expect(result.current).toEqual({ activity: null, dialog: false })
+    expect(mockFetchPrompt).not.toHaveBeenCalled()
   })
 
   it('a failed read shows no card', async () => {

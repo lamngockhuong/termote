@@ -4,7 +4,11 @@ import type { ViewProps } from '../app-views'
 import { ThemeProvider } from '../contexts/theme-context'
 import type { TranscriptState } from '../hooks/use-agent-transcript'
 import { resetChatAttachments } from '../hooks/use-chat-attachments'
-import type { AgentPrompt, TranscriptEntry } from '../hooks/use-mux-api'
+import type {
+  AgentActivity,
+  AgentPrompt,
+  TranscriptEntry,
+} from '../hooks/use-mux-api'
 import { paneSelection, resetPaneSelections } from '../utils/pane-selection'
 import ChatView, { chatLayout, RENDER_WINDOW } from './chat-view'
 import { OpenTerminalButton } from './open-terminal-button'
@@ -16,9 +20,15 @@ const transcript = {
 }
 const promptStore = {
   prompt: null as AgentPrompt | null,
+  activity: null as AgentActivity | null,
   pane: undefined as unknown,
+  livePane: undefined as unknown,
 }
 vi.mock('../hooks/use-agent-prompt', () => ({
+  useAgentActivity: (pane: unknown) => {
+    promptStore.livePane = pane
+    return { activity: promptStore.activity, dialog: !!promptStore.prompt }
+  },
   useAgentPrompt: (pane: unknown) => {
     promptStore.pane = pane
     return {
@@ -102,6 +112,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   set({})
   promptStore.prompt = null
+  promptStore.activity = null
 })
 
 describe('ChatView', () => {
@@ -566,6 +577,55 @@ describe('ChatView agent state', () => {
       screen.getByRole('region', { name: 'Bash command' }),
     ).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Yes/ })).toBeNull()
+  })
+
+  it('shows the working line under the conversation while the agent works', () => {
+    promptStore.activity = {
+      label: 'Incubating',
+      elapsed: 73,
+      phase: 'hooks',
+      detail: 'running Stop hooks… 0/3',
+      tokens: '15.8k',
+    }
+    set({ entries: entries(1), status: 'working' })
+    const { rerender } = render(<ChatView {...props} />)
+    expect(screen.getByText('Incubating…').parentElement).toHaveTextContent(
+      'Incubating… · running Stop hooks… 0/3 · 1m 13s · ↓ 15.8k tokens',
+    )
+    // Read out by phase, not by the second
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Incubating… running Stop hooks… 0/3',
+    )
+    // Not while a dialog is open, nor once the turn is over
+    promptStore.prompt = {
+      kind: 'permission',
+      title: 'Bash command',
+      options: [{ index: 1, label: 'Yes' }],
+    }
+    rerender(<ChatView {...props} />)
+    expect(screen.queryByText('Incubating…')).toBeNull()
+    promptStore.prompt = null
+    set({ entries: entries(2), status: 'idle' })
+    rerender(<ChatView {...props} />)
+    expect(screen.queryByText('Incubating…')).toBeNull()
+  })
+
+  it('says the agent works when its screen gives no working line', () => {
+    set({ entries: entries(1), status: 'working' })
+    const { rerender } = render(<ChatView {...props} />)
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Claude Code is working…',
+    )
+    expect(promptStore.livePane).toBe('0')
+    // An agent with no screen reader gets the row, without reading a screen
+    rerender(
+      <ChatView
+        {...props}
+        session={{ ...props.session, name: 'pi', agentName: 'pi' }}
+      />,
+    )
+    expect(promptStore.livePane).toBeUndefined()
+    expect(screen.getByRole('status')).toHaveTextContent('agent is working…')
   })
 
   it('view-only does not read the dialog of an agent without input', () => {

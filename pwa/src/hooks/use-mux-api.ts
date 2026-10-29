@@ -1026,12 +1026,34 @@ export interface AgentPrompt {
   freeText?: { index: number; label: string }
 }
 
+// The working line the agent draws while a turn runs, read off its screen:
+// what the terminal shows between two transcript writes.
+export interface AgentActivity {
+  // The spinner's word: "Incubating", "Working"
+  label: string
+  // Seconds the turn has run, when the line says
+  elapsed?: number
+  phase?: 'thinking' | 'hooks'
+  // The line's own words for the phase: "still thinking", "running Stop hooks… 0/3"
+  detail?: string
+  // Tokens received as written: "15.8k"
+  tokens?: string
+}
+
+// One read of the agent's screen: its open dialog and its working line
+export interface AgentScreenRead {
+  prompt: AgentPrompt | null
+  activity: AgentActivity | null
+}
+
 export async function fetchAgentPrompt(
   paneId: string,
-): Promise<AgentPrompt | null> {
+): Promise<AgentScreenRead> {
   const res = await fetch(agentPath(paneId, 'prompt'))
   if (!res.ok) throw await requestError(res)
-  return (await res.json()).prompt
+  const body = await res.json()
+  // A server before the working line sends no activity
+  return { prompt: body.prompt ?? null, activity: body.activity ?? null }
 }
 
 // A custom command or skill of the pane's project, its user or an enabled
