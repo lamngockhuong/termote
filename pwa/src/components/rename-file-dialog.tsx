@@ -1,6 +1,8 @@
 import { type FormEvent, useEffect, useId, useRef, useState } from 'react'
 import { hasDirtyDraftAt } from '../hooks/use-files'
 import { RequestError, renameFile } from '../hooks/use-mux-api'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
 import { baseNameSelection, nameProblem } from '../utils/file-name'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { Button } from './ui/button'
@@ -8,20 +10,20 @@ import { ConfirmDialog } from './ui/confirm-dialog'
 import { Sheet } from './ui/sheet'
 
 // Why the server would not rename the file, by its code
-const REFUSED: Record<string, string> = {
-  not_directory: 'Part of the new path is a file, not a directory',
-  symlink: 'Part of this path is a symbolic link',
-  not_allowed: "Files can't be moved there",
-  not_file: 'Only a file can be renamed',
-  permission: "The server can't rename this file",
-  invalid_name: "This name can't be used",
-  invalid_path: "This file can't be renamed",
-  in_use: 'The file is open in another program on the host',
-  cross_device: "Can't move a file to another file system",
-  changed: 'The file changed while it was being renamed',
-  busy: 'Too many writes at once. Try again',
-  storage_full: "The host's disk or quota is full",
-  read_only: 'The file system there is read-only',
+const REFUSED: Record<string, MessageKey> = {
+  not_directory: 'files.rename.notDirectory',
+  symlink: 'files.refused.symlink',
+  not_allowed: 'files.rename.notAllowed',
+  not_file: 'files.rename.notFile',
+  permission: 'files.rename.permission',
+  invalid_name: 'files.refused.invalidName',
+  invalid_path: 'files.rename.invalidPath',
+  in_use: 'files.rename.inUse',
+  cross_device: 'files.rename.crossDevice',
+  changed: 'files.rename.changed',
+  busy: 'files.refused.busy',
+  storage_full: 'files.refused.storageFull',
+  read_only: 'files.refused.readOnly',
 }
 
 type Problem = {
@@ -66,6 +68,7 @@ export function RenameFileDialog({
   onRootChanged,
   onRefresh,
 }: Props) {
+  const { t } = useT()
   const [newPath, setNewPath] = useState(path)
   const [sending, setSending] = useState(false)
   const [problem, setProblem] = useState<Problem>()
@@ -126,25 +129,25 @@ export function RenameFileDialog({
       } else if (!(err instanceof RequestError)) {
         // Lost on the way back, perhaps after the file moved
         setProblem({
-          message: 'The file may have been renamed. Refresh to check.',
+          message: t('files.rename.maybeRenamed'),
           action: { kind: 'refresh' },
         })
       } else if (err.status === 404) {
         setProblem({
-          message: 'This file no longer exists',
+          message: t('files.rename.gone'),
           action: { kind: 'refresh' },
         })
       } else if (err.code === 'sensitive') {
         setAsk('sensitive')
       } else if (err.code === 'exists') {
         setProblem({
-          message: 'A file or directory of that name already exists',
+          message: t('files.refused.exists'),
           // The server's name for it, cleaned
           action: { kind: 'open', path: err.path ?? newPath },
         })
       } else {
         setProblem({
-          message: REFUSED[err.code] ?? 'Could not rename the file',
+          message: t(REFUSED[err.code] ?? 'files.rename.failed'),
         })
       }
     } finally {
@@ -155,7 +158,7 @@ export function RenameFileDialog({
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (sending || newPath === path) return
-    const message = nameProblem(newPath)
+    const message = nameProblem(newPath, t)
     if (message) {
       setProblem({ message })
       return
@@ -168,7 +171,9 @@ export function RenameFileDialog({
       .join('/')
     if (hasDirtyDraftAt(root, target)) {
       setProblem({
-        message: `${visibleUnsafe(target)} has unsaved changes. Save or discard them first`,
+        message: t('files.rename.targetDirty', {
+          name: visibleUnsafe(target),
+        }),
       })
       return
     }
@@ -178,11 +183,15 @@ export function RenameFileDialog({
   const action = problem?.action
   return (
     <>
-      <Sheet isOpen onClose={close} title="Rename" focusOnOpen={focusOnOpen}>
+      <Sheet
+        isOpen
+        onClose={close}
+        title={t('files.rename.title')}
+        focusOnOpen={focusOnOpen}
+      >
         <form onSubmit={submit} className="flex flex-col gap-3 p-4">
           <label htmlFor={inputId} className="text-sm text-fg-muted">
-            New path from the pane's directory. Change the directories to move
-            the file; missing ones are created.
+            {t('files.rename.pathLabel')}
           </label>
           <input
             ref={input}
@@ -218,35 +227,36 @@ export function RenameFileDialog({
                     else onRefresh()
                   }}
                 >
-                  {action.kind === 'open' ? 'Open it' : 'Refresh'}
+                  {action.kind === 'open'
+                    ? t('files.openIt')
+                    : t('files.refresh')}
                 </Button>
               )}
             </div>
           )}
           <div className="flex justify-end gap-2">
-            <Button onClick={close}>Cancel</Button>
+            <Button onClick={close}>{t('common.cancel')}</Button>
             <Button
               type="submit"
               variant="primary"
               disabled={sending || newPath === path}
             >
-              Rename
+              {t('files.rename.title')}
             </Button>
           </div>
         </form>
       </Sheet>
       <ConfirmDialog
         isOpen={ask === 'sensitive'}
-        title="Rename this file?"
-        confirmLabel="Rename"
+        title={t('files.rename.askSensitive')}
+        confirmLabel={t('files.rename.title')}
         onConfirm={() => {
           setAsk(undefined)
           send(true)
         }}
         onCancel={() => setAsk(undefined)}
       >
-        The old or the new name usually holds secrets. Under an ordinary name
-        its contents show without asking. Rename it anyway?
+        {t('files.rename.askSensitiveBody')}
       </ConfirmDialog>
     </>
   )

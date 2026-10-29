@@ -24,6 +24,7 @@ import {
 import { usePromptTemplates } from '../hooks/use-prompt-templates'
 import { useSettings } from '../hooks/use-settings'
 import { useKeymap } from '../hooks/use-shortcuts'
+import { useT } from '../i18n/i18n-context'
 import type { Session, SessionGroup } from '../types/session'
 import { paneCommand } from '../utils/agent-start'
 import type { AppCommand, PaletteMode } from '../utils/app-commands'
@@ -164,6 +165,7 @@ export function CommandPalette({
   const paneId = session.paneId ?? ''
   const f = useFiles(paneId || NO_PANE)
   const { settings } = useSettings()
+  const { t } = useT()
 
   // Another pane on screen, or the pane's id moved: the palette closes
   const openedOn = useRef(paneId)
@@ -300,16 +302,16 @@ export function CommandPalette({
         listed.add(r.path)
         fileItems.push(fileItem(r.root, r.path))
       }
-      for (const t of f.tabs) {
-        if (listed.has(t.path) || t.path === shown) continue
-        const [dir, name] = splitPath(t.path)
+      for (const tab of f.tabs) {
+        if (listed.has(tab.path) || tab.path === shown) continue
+        const [dir, name] = splitPath(tab.path)
         fileItems.push({
-          key: `tab:${t.id}`,
+          key: `tab:${tab.id}`,
           label: name,
           description: dir,
           run: () =>
             run(() => {
-              f.activate(t.id)
+              f.activate(tab.id)
               showFilesPanel()
               requestFilesFocus(paneId, 'file')
             }),
@@ -317,7 +319,7 @@ export function CommandPalette({
       }
       if (!fileItems.length) note = 'Type a file name'
     } else if (fresh && 'error' in fresh) {
-      note = FIND_ERRORS[fresh.error]
+      note = t(FIND_ERRORS[fresh.error])
     } else if (fresh) {
       const { root, results } = fresh.res
       const recentPaths = new Set(

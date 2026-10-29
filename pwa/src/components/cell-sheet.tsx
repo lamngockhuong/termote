@@ -1,4 +1,5 @@
 import { Copy } from 'lucide-react'
+import { useT } from '../i18n/i18n-context'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { cellText } from './table-grid'
 import { IconButton } from './ui/button'
@@ -14,12 +15,13 @@ interface Props {
 // The whole value of one cell, wrapped, with unsafe characters made visible;
 // Copy takes the value as it is in the file.
 export function CellSheet({ cell, onClose, notify }: Props) {
+  const { t } = useT()
   const copy = async (value: string) => {
     try {
       await navigator.clipboard.writeText(value)
-      notify('Value copied')
+      notify(t('files.cell.copied'))
     } catch {
-      notify('Could not copy the value')
+      notify(t('files.cell.copyFailed'))
     }
   }
   return (
@@ -29,13 +31,17 @@ export function CellSheet({ cell, onClose, notify }: Props) {
       title={
         cell && (
           <>
-            Row {cell.row + 1} · <bdi>{cellText(cell.name)}</bdi>
+            {t('files.grid.rowN', { row: cell.row + 1 })} ·{' '}
+            <bdi>{cellText(cell.name)}</bdi>
           </>
         )
       }
       actions={
         cell && (
-          <IconButton aria-label="Copy value" onClick={() => copy(cell.value)}>
+          <IconButton
+            aria-label={t('files.skipped.copyValue')}
+            onClick={() => copy(cell.value)}
+          >
             <Copy size={16} aria-hidden="true" />
           </IconButton>
         )

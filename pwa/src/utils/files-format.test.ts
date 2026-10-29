@@ -8,7 +8,12 @@ describe('files format', () => {
     [1536, '1.5 KiB'],
     [3 * 1024 * 1024, '3.0 MiB'],
   ])('%i bytes is %s', (n, want) => {
-    expect(formatSize(n)).toBe(want)
+    expect(formatSize(n, 'en')).toBe(want)
+  })
+
+  it('writes the decimal mark of the locale', () => {
+    expect(formatSize(1536, 'vi')).toBe('1,5 KiB')
+    expect(formatSize(3 * 1024 * 1024, 'vi')).toBe('3,0 MiB')
   })
 
   it.each([

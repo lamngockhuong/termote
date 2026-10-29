@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FindStatus } from '../hooks/use-csv-find'
+import { useT } from '../i18n/i18n-context'
 import {
   DOC_LOAD_TIMEOUT,
   DocumentWorkerError,
@@ -51,6 +52,7 @@ export const PDF_DESTROY_WAIT = 1000
 
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
+// i18n-ignore: a generic signature, not text
 function timeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new DocumentWorkerError('timeout')), ms)
@@ -68,6 +70,7 @@ export default function PdfPreview({
   onRetry,
   onDownload,
 }: DocumentViewerProps) {
+  const { t } = useT()
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState<Open>()
@@ -242,7 +245,7 @@ export default function PdfPreview({
       )}
       {open && findOpen && (
         <TableFindBar
-          label="Find in document"
+          label={t('files.pdf.find')}
           toggles={['matchCase']}
           f3={false}
           input={input}
@@ -275,7 +278,7 @@ export default function PdfPreview({
         </div>
         {!open && (
           <div className="absolute inset-0 flex">
-            <DocumentMessage>Opening…</DocumentMessage>
+            <DocumentMessage>{t('files.document.opening')}</DocumentMessage>
           </div>
         )}
       </div>

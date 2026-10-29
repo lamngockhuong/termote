@@ -10,6 +10,8 @@ import {
 import { useTheme } from '../contexts/theme-context'
 import { useDebouncedValue } from '../hooks/use-debounced-value'
 import { useImageViewer } from '../hooks/use-image-viewer'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
 import {
   type MermaidFailure,
   type MermaidResult,
@@ -28,14 +30,14 @@ export interface FrameParts {
   body?: ReactNode
 }
 
-export const MERMAID_REASONS: Record<MermaidFailure, string> = {
+export const MERMAID_REASONS: Record<MermaidFailure, MessageKey> = {
   // Over 50 KB, or over the renderer's limits (500 links, nesting, output)
-  too_large: 'Diagram too large to render',
-  unsupported: 'This kind of diagram is not supported',
-  syntax: 'Not a valid Mermaid diagram',
-  render_failed: 'Could not render the diagram',
-  timeout: 'Diagram took too long to render',
-  load_failed: 'Could not load the diagram renderer',
+  too_large: 'files.mermaid.tooLarge',
+  unsupported: 'files.mermaid.unsupported',
+  syntax: 'files.mermaid.syntax',
+  render_failed: 'files.mermaid.renderFailed',
+  timeout: 'files.mermaid.timeout',
+  load_failed: 'files.mermaid.loadFailed',
 }
 
 // While its source is edited, a diagram is drawn once the source has stayed
@@ -100,6 +102,7 @@ export function MermaidBlock({
   live = false,
   dataLine,
 }: Props) {
+  const { t } = useT()
   const { resolvedTheme } = useTheme()
   const ref = useRef<HTMLDivElement>(null)
   const near = useNearViewport(ref, scrollRoot)
@@ -148,23 +151,23 @@ export function MermaidBlock({
   )
   // The viewer's code could not be loaded: it closed, the diagram stays
   useEffect(() => {
-    if (failed) notify('Could not open the image')
-  }, [failed, notify])
+    if (failed) notify(t('files.imagePreview.openFailed'))
+  }, [failed, notify, t])
   const keepFocus = useCallback(
     (el: HTMLButtonElement | null) => () => {
       if (document.activeElement === el) ref.current?.focus()
     },
     [],
   )
-  const alt = `Mermaid diagram ${index}`
+  const alt = t('files.mermaid.alt', { index })
   // Why the source shown is not drawn (an older image may still show)
   const note = !result
     ? image
       ? undefined
-      : 'Rendering diagram…'
+      : t('files.mermaid.rendering')
     : result.ok
       ? undefined
-      : MERMAID_REASONS[result.reason]
+      : t(MERMAID_REASONS[result.reason])
   let parts: FrameParts
   if (!image) {
     parts = { note }
@@ -174,8 +177,8 @@ export function MermaidBlock({
         size="sm"
         onClick={() => setSource((s) => !s)}
         aria-pressed={source}
-        aria-label="Show source"
-        title="Show source"
+        aria-label={t('files.mermaid.showSource')}
+        title={t('files.mermaid.showSource')}
       >
         <Code size={14} aria-hidden="true" />
       </IconButton>
@@ -203,7 +206,7 @@ export function MermaidBlock({
               <button
                 ref={keepFocus}
                 type="button"
-                aria-label={`Open ${alt} full screen`}
+                aria-label={t('files.imagePreview.open', { name: alt })}
                 className="mx-auto block cursor-zoom-in"
                 onClick={() =>
                   open({

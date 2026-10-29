@@ -1,4 +1,5 @@
 import { type KeyboardEvent, useEffect, useId, useRef, useState } from 'react'
+import { useT } from '../i18n/i18n-context'
 import {
   DocumentWorkerClient,
   type DocumentWorkerError,
@@ -43,6 +44,7 @@ export default function XlsxPreview({
   onDownload,
   notify,
 }: DocumentViewerProps) {
+  const { t } = useT()
   const [attempt, setAttempt] = useState(0)
   const [book, setBook] = useState<Book>({ status: 'loading' })
   const [sheets, setSheets] = useState<Record<string, Sheet>>({})
@@ -134,12 +136,12 @@ export default function XlsxPreview({
       />
     )
   if (book.status === 'loading')
-    return <DocumentMessage>Opening…</DocumentMessage>
+    return <DocumentMessage>{t('files.document.opening')}</DocumentMessage>
   const hidden = book.sheets.length - shown.length
   if (shown.length === 0)
     return (
       <DocumentMessage onDownload={onDownload}>
-        Every sheet is hidden
+        {t('files.xlsx.allHidden')}
       </DocumentMessage>
     )
 
@@ -169,7 +171,7 @@ export default function XlsxPreview({
       <div className="flex shrink-0 items-center gap-2 border-b border-border px-2 py-1 text-[13px]">
         <div
           role="tablist"
-          aria-label="Sheets"
+          aria-label={t('files.xlsx.sheets')}
           className="flex min-w-0 flex-1 gap-1 overflow-x-auto"
           onKeyDown={onTabKey}
         >
@@ -198,7 +200,7 @@ export default function XlsxPreview({
         </div>
         {hidden > 0 && (
           <span className="shrink-0 text-fg-subtle">
-            {hidden} hidden {hidden === 1 ? 'sheet' : 'sheets'}
+            {t('files.xlsx.hidden', { count: hidden })}
           </span>
         )}
       </div>
@@ -218,15 +220,21 @@ export default function XlsxPreview({
                 action={
                   onDownload && (
                     <Button size="sm" variant="secondary" onClick={onDownload}>
-                      Download
+                      {t('files.download')}
                     </Button>
                   )
                 }
               >
-                {sheet.tsv.truncated
-                  ? `Showing the first ${sheet.tsv.rows} rows of ${sheet.totalRows}`
-                  : 'Showing the first 200 columns'}
-                {onDownload ? ': download for the full sheet' : ''}
+                {t(
+                  sheet.tsv.truncated
+                    ? onDownload
+                      ? 'files.xlsx.rowsCutDownload'
+                      : 'files.xlsx.rowsCut'
+                    : onDownload
+                      ? 'files.xlsx.columnsCutDownload'
+                      : 'files.xlsx.columnsCut',
+                  { rows: sheet.tsv.rows, total: sheet.totalRows },
+                )}
               </Banner>
             )}
             <TablePreview
@@ -241,7 +249,7 @@ export default function XlsxPreview({
           </>
         )}
         {(sheet === undefined || sheet.status === 'loading') && (
-          <DocumentMessage>Reading the sheet…</DocumentMessage>
+          <DocumentMessage>{t('files.xlsx.reading')}</DocumentMessage>
         )}
       </div>
     </div>

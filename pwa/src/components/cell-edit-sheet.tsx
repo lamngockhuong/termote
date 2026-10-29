@@ -1,5 +1,6 @@
 import { Copy } from 'lucide-react'
 import { useState } from 'react'
+import { useT } from '../i18n/i18n-context'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { cellText } from './table-grid'
 import { Button, FOCUS_RING, IconButton } from './ui/button'
@@ -22,6 +23,7 @@ interface Props {
 // One cell of a table being edited: its whole value in a textarea (a value
 // may hold line breaks), and the row's own actions.
 export function CellEditSheet({ cell, onClose, ...rest }: Props) {
+  const { t } = useT()
   return (
     <Sheet
       isOpen={!!cell}
@@ -29,7 +31,8 @@ export function CellEditSheet({ cell, onClose, ...rest }: Props) {
       title={
         cell && (
           <>
-            Row {cell.row + 1} · <bdi>{cellText(cell.name)}</bdi>
+            {t('files.grid.rowN', { row: cell.row + 1 })} ·{' '}
+            <bdi>{cellText(cell.name)}</bdi>
           </>
         )
       }
@@ -57,6 +60,7 @@ function CellForm({
   onClose,
   notify,
 }: Omit<Props, 'cell'> & { value: string }) {
+  const { t } = useT()
   const [input, setInput] = useState(initial)
   // A value can hold characters that make it read as something else: they
   // are shown, since the textarea draws them as nothing (or reorders text)
@@ -64,16 +68,16 @@ function CellForm({
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(input)
-      notify('Value copied')
+      notify(t('files.cell.copied'))
     } catch {
-      notify('Could not copy the value')
+      notify(t('files.cell.copyFailed'))
     }
   }
   return (
     <div className="flex flex-col gap-3 p-4">
       <div className="flex items-start gap-1">
         <textarea
-          aria-label="Value"
+          aria-label={t('files.cell.value')}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           rows={4}
@@ -83,13 +87,13 @@ function CellForm({
           autoComplete="off"
           className={`min-h-24 w-full flex-1 resize-y rounded-control border border-border bg-bg p-2 font-term text-[13px] text-fg pointer-coarse:text-[16px] ${FOCUS_RING}`}
         />
-        <IconButton aria-label="Copy value" onClick={copy}>
+        <IconButton aria-label={t('files.skipped.copyValue')} onClick={copy}>
           <Copy size={16} aria-hidden="true" />
         </IconButton>
       </div>
       {shown !== input.replace(/\r\n/g, '\n') && (
         <p className="m-0 text-[12px] text-fg-muted">
-          Hidden characters:{' '}
+          {t('files.cell.hidden')}{' '}
           <bdi className="whitespace-pre-wrap break-all font-term">{shown}</bdi>
         </p>
       )}
@@ -97,15 +101,17 @@ function CellForm({
         {!headerRow && (
           <>
             <Button variant="danger" onClick={onDelete} className="mr-auto">
-              Delete row
+              {t('files.table.deleteRow')}
             </Button>
-            <Button onClick={onInsertAbove}>Insert row above</Button>
-            <Button onClick={onInsertBelow}>Add row below</Button>
+            <Button onClick={onInsertAbove}>
+              {t('files.columnMenu.rowAbove')}
+            </Button>
+            <Button onClick={onInsertBelow}>{t('files.cell.addBelow')}</Button>
           </>
         )}
-        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={onClose}>{t('common.cancel')}</Button>
         <Button variant="primary" onClick={() => onApply(input)}>
-          Apply
+          {t('files.cell.apply')}
         </Button>
       </div>
     </div>

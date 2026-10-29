@@ -1,5 +1,8 @@
 import { useSyncExternalStore } from 'react'
 import type { NotifyOptions } from '../app-views'
+import { tFor } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import {
   checkUpload,
@@ -102,6 +105,8 @@ let answer: ((yes: boolean) => void) | undefined
 // The latest view's toasts: the App's, which outlive any view (set by
 // every start, before its run)
 let notify!: Notify
+// The words of the run's notices: the app's language when it was queued
+let translate: Translate<MessageKey> = tFor('en')
 // Folders a drop held, told with the run's result
 let foldersSkipped = 0
 // Files queued since the run began: its total, those a Cancel or a moved
@@ -250,43 +255,55 @@ async function one(
 
 // What a run is told at its end: a refusal before any success, the folder
 // when the tree was hidden (a file open), a new name when it changed
-function summary(t: Tally): {
+function summary(
+  tally: Tally,
+  t: Translate<MessageKey>,
+): {
   text: string
   variant?: NotifyOptions['variant']
 } {
-  const folders = t.folders ? " Folders can't be uploaded." : ''
-  const ok = t.saved.length
-  if (t.canceled) {
-    const after = ok ? ` after ${ok} of ${t.total}` : ''
-    return { text: `Upload canceled${after}.${folders}` }
-  }
-  if (t.failed.length) {
-    const [first] = t.failed
-    const of = t.total > 1 ? `${ok} of ${t.total} uploaded. ` : ''
-    const more =
-      t.failed.length > 1 ? ` (${t.failed.length - 1} more not uploaded)` : ''
+  const folders = tally.folders ? ` ${t('files.upload.folders')}.` : ''
+  const ok = tally.saved.length
+  if (tally.canceled) {
     return {
-      text: `${of}${visibleUnsafe(first.name)}: ${fileUploadErrorMessage(first.reason)}${more}${folders}`,
+      text: `${ok ? t('files.uploaded.canceledAfter', { ok, total: tally.total }) : t('files.uploaded.canceled')}.${folders}`,
+    }
+  }
+  if (tally.failed.length) {
+    const [first] = tally.failed
+    const of =
+      tally.total > 1
+        ? `${t('files.uploaded.of', { ok, total: tally.total })} `
+        : ''
+    const more =
+      tally.failed.length > 1
+        ? ` ${t('files.uploaded.more', { count: tally.failed.length - 1 })}`
+        : ''
+    return {
+      text: `${of}${visibleUnsafe(first.name)}: ${fileUploadErrorMessage(first.reason, t)}${more}${folders}`,
       variant: 'danger',
     }
   }
   // Every file skipped at the ask: only the folders, if any, to tell
   if (ok === 0) return { text: folders.trim(), variant: 'warning' }
-  const [s] = t.saved
+  const [s] = tally.saved
   const dir = dirOf(s.path)
-  const where = s.announce
-    ? ` to ${dir ? visibleUnsafe(dir) : 'the top folder'}`
-    : ''
   if (ok > 1)
     return {
-      text: `Uploaded ${ok} files${where}.${folders}`,
+      text: `${
+        !s.announce
+          ? t('files.uploaded.many', { count: ok })
+          : dir
+            ? t('files.uploaded.manyTo', { count: ok, dir: visibleUnsafe(dir) })
+            : t('files.uploaded.manyToTop', { count: ok })
+      }.${folders}`,
       variant: 'success',
     }
   const text = s.announce
-    ? `Saved to ${visibleUnsafe(s.path)}`
+    ? t('files.uploaded.savedTo', { path: visibleUnsafe(s.path) })
     : baseName(s.path) !== s.name
-      ? `Saved as ${visibleUnsafe(baseName(s.path))}`
-      : `Uploaded ${visibleUnsafe(s.name)}`
+      ? t('files.uploaded.savedAs', { name: visibleUnsafe(baseName(s.path)) })
+      : t('files.uploaded.one', { name: visibleUnsafe(s.name) })
   return { text: folders ? `${text}.${folders}` : text, variant: 'success' }
 }
 
@@ -389,7 +406,7 @@ async function runQueue(gen: number) {
   // Files queued after a Cancel are the next run's
   tally.total = queued - queue.length
   queued = queue.length
-  const { text, variant } = summary(tally)
+  const { text, variant } = summary(tally, translate)
   if (!tally.silent && text) notify(text, variant && { variant })
 }
 
@@ -399,9 +416,15 @@ async function runQueue(gen: number) {
 export function startUploads(
   files: File[],
   to: UploadTo,
-  opts: { notify: Notify; announce?: boolean; folders?: number },
+  opts: {
+    notify: Notify
+    t: Translate<MessageKey>
+    announce?: boolean
+    folders?: number
+  },
 ) {
   notify = opts.notify
+  translate = opts.t
   if (files.length === 0) return
   foldersSkipped += opts.folders ?? 0
   const batch: Batch = {

@@ -1,5 +1,6 @@
 import { FileDown, Image as ImageIcon, Share } from 'lucide-react'
 import { type RefCallback, useState } from 'react'
+import { useT } from '../i18n/i18n-context'
 import {
   canCopyImage,
   canShareImage,
@@ -29,6 +30,7 @@ export function MermaidExport({
   size = 'md',
   buttonRef,
 }: Props) {
+  const { t } = useT()
   const [canShare] = useState(canShareImage)
   const [canCopy] = useState(canCopyImage)
   return (
@@ -37,9 +39,9 @@ export function MermaidExport({
         <IconButton
           ref={buttonRef}
           size={size}
-          onClick={() => void sharePng(image, name, notify)}
-          aria-label="Share diagram as PNG"
-          title="Share diagram as PNG"
+          onClick={() => void sharePng(image, name, notify, t)}
+          aria-label={t('files.mermaid.share')}
+          title={t('files.mermaid.share')}
         >
           <Share size={14} aria-hidden="true" />
         </IconButton>
@@ -49,9 +51,9 @@ export function MermaidExport({
           ref={buttonRef}
           size={size}
           // Not deferred: the ClipboardItem must be made in the click
-          onClick={() => void copyPng(image, notify)}
-          aria-label="Copy diagram as image"
-          title="Copy diagram as image"
+          onClick={() => void copyPng(image, notify, t)}
+          aria-label={t('files.mermaid.copy')}
+          title={t('files.mermaid.copy')}
         >
           <ImageIcon size={14} aria-hidden="true" />
         </IconButton>
@@ -59,9 +61,9 @@ export function MermaidExport({
       <IconButton
         ref={buttonRef}
         size={size}
-        onClick={() => void downloadSvg(image, name, notify)}
-        aria-label="Download diagram as SVG"
-        title="Download diagram as SVG"
+        onClick={() => void downloadSvg(image, name, notify, t)}
+        aria-label={t('files.mermaid.download')}
+        title={t('files.mermaid.download')}
       >
         <FileDown size={14} aria-hidden="true" />
       </IconButton>

@@ -5,26 +5,28 @@ import {
   fetchFileHash,
   RequestError,
 } from '../hooks/use-mux-api'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { Button } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
 import { Sheet } from './ui/sheet'
 
 // Why the server would not delete it, by its code
-const REFUSED: Record<string, string> = {
-  changed: 'The file changed since it was read',
-  not_empty: 'The folder is not empty',
-  not_file: 'This is not a regular file',
-  not_directory: 'This is not a folder',
-  symlink: 'Part of this path is a symbolic link',
-  not_allowed: "Files can't be deleted there",
-  permission: "The server can't delete this",
-  read_only: 'The file system there is read-only',
-  hardlink: 'This file has several hard links; delete it from a terminal',
-  too_large: 'Too large to delete here; use the terminal',
-  busy: 'Too many writes at once. Try again',
-  trash_unavailable: 'Deleting is not available on this server',
-  storage_full: "The host's disk or quota is full",
+const REFUSED: Record<string, MessageKey> = {
+  changed: 'files.delete.changed',
+  not_empty: 'files.delete.notEmpty',
+  not_file: 'files.delete.notFile',
+  not_directory: 'files.delete.notDirectory',
+  symlink: 'files.refused.symlink',
+  not_allowed: 'files.delete.notAllowed',
+  permission: 'files.delete.permission',
+  read_only: 'files.refused.readOnly',
+  hardlink: 'files.delete.hardlink',
+  too_large: 'files.delete.tooLarge',
+  busy: 'files.refused.busy',
+  trash_unavailable: 'files.delete.trashUnavailable',
+  storage_full: 'files.refused.storageFull',
 }
 
 // What a delete did, for the caller's notice and its Undo
@@ -42,7 +44,7 @@ type Hash =
   | { status: 'loading' }
   | { status: 'ready'; hash: string }
   | { status: 'too-large' }
-  | { status: 'error'; message: string; retry: boolean }
+  | { status: 'error'; message: MessageKey; retry: boolean }
 
 interface Props {
   paneId: string
@@ -78,6 +80,7 @@ export function DeleteFileDialog({
   onRootChanged,
   onRefresh,
 }: Props) {
+  const { t } = useT()
   const [hash, setHash] = useState<Hash>(
     kind === 'dir' || known
       ? { status: 'ready', hash: known ?? '' }
@@ -133,10 +136,10 @@ export function DeleteFileDialog({
         setHash({
           status: 'error',
           message: busy
-            ? 'Busy; try again'
+            ? 'files.delete.busy'
             : err instanceof RequestError && err.status === 404
-              ? 'File not found'
-              : 'Could not read the file',
+              ? 'files.delete.fileNotFound'
+              : 'files.delete.unreadable',
           retry: busy,
         })
       },
@@ -176,7 +179,7 @@ export function DeleteFileDialog({
     } catch (err) {
       if (!(err instanceof RequestError)) {
         if (closed.current) onRefresh()
-        else setProblem('It may have been deleted. Refresh to check.')
+        else setProblem(t('files.delete.maybeDeleted'))
         return
       }
       if (err.status === 409 && err.root) {
@@ -195,33 +198,40 @@ export function DeleteFileDialog({
       }
       if (closed.current) return
       if (err.code === 'cross_device') setAskPermanent(true)
-      else if (err.status === 404) setProblem('Not found; it may be gone')
-      else setProblem(REFUSED[err.code] ?? 'Could not delete it')
+      else if (err.status === 404) setProblem(t('files.delete.notFound'))
+      else setProblem(t(REFUSED[err.code] ?? 'files.delete.failed'))
     } finally {
       if (!closed.current) setSending(false)
     }
   }
 
-  const what = kind === 'dir' ? 'folder' : 'file'
   const ready = hash.status === 'ready'
   return (
     <>
-      <Sheet isOpen onClose={close} title={`Delete ${what}?`}>
+      <Sheet
+        isOpen
+        onClose={close}
+        title={t(
+          kind === 'dir' ? 'files.delete.askFolder' : 'files.delete.askFile',
+        )}
+      >
         <div className="flex flex-col gap-3 p-4">
           <p className="m-0 break-all font-term text-[13px] text-fg">
             {visibleUnsafe(`${root.endsWith('/') ? root : `${root}/`}${path}`)}
           </p>
           <p className="m-0 text-sm text-fg-muted">
             {kind === 'dir'
-              ? 'The empty folder is removed. Undo makes it again.'
-              : "The file goes to Termote's trash; Undo puts it back."}
+              ? t('files.delete.folderNote')
+              : t('files.delete.fileNote')}
           </p>
           {sensitive && (
-            <p className="m-0 text-sm text-warning">This is a sensitive file</p>
+            <p className="m-0 text-sm text-warning">
+              {t('files.delete.sensitive')}
+            </p>
           )}
           {hash.status === 'too-large' && (
             <p role="alert" className="m-0 text-sm text-danger">
-              Too large to delete here; use the terminal
+              {t('files.delete.tooLarge')}
             </p>
           )}
           {hash.status === 'error' && (
@@ -229,10 +239,10 @@ export function DeleteFileDialog({
               role="alert"
               className="flex items-center gap-2 text-sm text-danger"
             >
-              <span className="min-w-0 flex-1">{hash.message}</span>
+              <span className="min-w-0 flex-1">{t(hash.message)}</span>
               {hash.retry && (
                 <Button size="sm" onClick={() => setTries((n) => n + 1)}>
-                  Try again
+                  {t('files.delete.retry')}
                 </Button>
               )}
             </div>
@@ -244,7 +254,7 @@ export function DeleteFileDialog({
           )}
           <div className="flex justify-end gap-2">
             <Button ref={cancel} onClick={close}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button
               variant="danger"
@@ -252,15 +262,15 @@ export function DeleteFileDialog({
               onClick={() => send(false)}
               className="border border-danger/40 bg-danger/5"
             >
-              Delete
+              {t('files.delete')}
             </Button>
           </div>
         </div>
       </Sheet>
       <ConfirmDialog
         isOpen={askPermanent}
-        title="Delete permanently?"
-        confirmLabel="Delete permanently"
+        title={t('files.delete.askPermanent')}
+        confirmLabel={t('files.delete.permanent')}
         destructive
         // A second ask never defaults to the destructive button
         defaultAction="cancel"
@@ -270,8 +280,7 @@ export function DeleteFileDialog({
         }}
         onCancel={() => setAskPermanent(false)}
       >
-        This file is on another file system than Termote's trash, so it cannot
-        be moved there. Delete it permanently? This cannot be undone.
+        {t('files.delete.crossDevice')}
       </ConfirmDialog>
     </>
   )

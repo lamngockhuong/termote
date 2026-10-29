@@ -1,4 +1,6 @@
 import { RequestError } from '../hooks/use-mux-api'
+import type { MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
 import { visibleUnsafe } from './unsafe-chars'
 
 // Why a restoreFile failed, as one toast: what Files' Undo, Changes' Undo and
@@ -19,12 +21,13 @@ export interface RestoreFailure {
 export function restoreFailure(
   err: unknown,
   name: string,
-  path?: string,
+  path: string | undefined,
+  t: Translate<MessageKey>,
 ): RestoreFailure {
   const e = err instanceof RequestError ? err : undefined
   if (e?.status === 409 && e.root)
     return {
-      message: `The pane's directory changed; ${name} was not restored`,
+      message: t('files.restore.rootChanged', { name }),
       variant: 'warning',
       root: e.root,
     }
@@ -32,41 +35,41 @@ export function restoreFailure(
     case 'exists': {
       const at = path === undefined ? name : visibleUnsafe(e.path ?? path)
       return {
-        message: `A file now exists at ${at}; not restored`,
+        message: t('files.restore.exists', { path: at }),
         variant: 'warning',
       }
     }
     case 'changed':
       return {
-        message: `${name} changed since; not restored`,
+        message: t('files.restore.changed', { name }),
         variant: 'warning',
       }
     case 'not_in_trash':
       return {
-        message: `${name} was already restored or removed`,
+        message: t('files.restore.gone', { name }),
         variant: 'info',
         gone: true,
       }
     case 'cross_device':
       return {
-        message: `${name} is on another file system than the trash; not restored`,
+        message: t('files.restore.crossDevice', { name }),
         variant: 'warning',
       }
     case 'not_allowed':
       return {
-        message: `${name} can't be restored to that folder`,
+        message: t('files.restore.notAllowed', { name }),
         variant: 'warning',
       }
     case 'sensitive':
       return {
-        message: `${name} may contain secrets; not restored`,
+        message: t('files.restore.sensitive', { name }),
         variant: 'warning',
       }
     case 'busy':
       return {
-        message: 'Too many writes at once. Try again',
+        message: t('files.refused.busy'),
         variant: 'warning',
       }
   }
-  return { message: `Could not restore ${name}`, variant: 'danger' }
+  return { message: t('files.restore.failed', { name }), variant: 'danger' }
 }

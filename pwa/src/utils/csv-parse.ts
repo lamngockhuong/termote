@@ -3,16 +3,25 @@
 // Every cell keeps its raw range in the text it was parsed from (UTF-16
 // indices of the JS string, the same string a save sends back), so an edit
 // patches exactly that range and never rebuilds the file from the table.
+import type { MessageKey } from '../i18n/messages/en'
 
 export type Delimiter = ',' | ';' | '\t' | '|'
 
 export const DELIMITERS: readonly Delimiter[] = [',', ';', '\t', '|']
 
-export const DELIMITER_NAMES: Record<Delimiter, string> = {
-  ',': 'Comma',
-  ';': 'Semicolon',
-  '\t': 'Tab',
-  '|': 'Pipe',
+export const DELIMITER_NAMES: Record<Delimiter, MessageKey> = {
+  ',': 'files.delimiter.comma',
+  ';': 'files.delimiter.semicolon',
+  '\t': 'files.delimiter.tab',
+  '|': 'files.delimiter.pipe',
+}
+
+// "comma-separated", what a file whose cells d separates is
+export const DELIMITER_SEPARATED: Record<Delimiter, MessageKey> = {
+  ',': 'files.delimiter.commaSeparated',
+  ';': 'files.delimiter.semicolonSeparated',
+  '\t': 'files.delimiter.tabSeparated',
+  '|': 'files.delimiter.pipeSeparated',
 }
 
 export interface CsvTable {

@@ -14,6 +14,8 @@ import {
   RequestError,
 } from '../hooks/use-mux-api'
 import { useSettings } from '../hooks/use-settings'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
 import { splitPath } from '../utils/files-format'
 import { FOCUS_RING } from './ui/button'
 import { Switch } from './ui/switch'
@@ -21,12 +23,12 @@ import { Switch } from './ui/switch'
 // Typing waits this long before a search is sent
 export const FIND_DEBOUNCE_MS = 150
 
-export const FIND_ERRORS: Record<FilesError, string> = {
-  unsupported: 'Not supported by this backend',
-  'not-found': 'Directory not found',
-  'not-allowed': "This directory can't be searched",
-  'view-only': 'View only: files show in a git repository only',
-  unavailable: 'Could not search the files',
+export const FIND_ERRORS: Record<FilesError, MessageKey> = {
+  unsupported: 'files.find.unsupported',
+  'not-found': 'files.find.notFound',
+  'not-allowed': 'files.find.notAllowed',
+  'view-only': 'files.find.viewOnly',
+  unavailable: 'files.find.failed',
 }
 
 type Found =
@@ -72,6 +74,7 @@ export function FileSearch({
   hideIgnored = false,
   children,
 }: Props) {
+  const { t } = useT()
   const { settings, updateSetting } = useSettings()
   const canIncludeIgnored = isRepo && !hideIgnored
   const ignored = canIncludeIgnored && settings.findIncludeIgnored
@@ -144,15 +147,15 @@ export function FileSearch({
   let body: ReactNode = children
   if (q) {
     if (found.status === 'error') {
-      body = <Note>{FIND_ERRORS[found.error]}</Note>
+      body = <Note>{t(FIND_ERRORS[found.error])}</Note>
     } else if (found.status !== 'done') {
-      body = <Note>Searching…</Note>
+      body = <Note>{t('files.find.searching')}</Note>
     } else if (found.res.results.length === 0) {
       body = (
         <Note>
           {found.res.incomplete
-            ? 'No files match. The search stopped early in a large tree.'
-            : 'No files match'}
+            ? t('files.find.noneIncomplete')
+            : t('files.find.none')}
         </Note>
       )
     } else {
@@ -160,7 +163,7 @@ export function FileSearch({
       rows.current.length = results.length
       body = (
         <div className="min-h-0 flex-1 overflow-y-auto py-1">
-          <ul aria-label="Matching files">
+          <ul aria-label={t('files.find.results')}>
             {results.map((r, i) => {
               const [dir, name] = splitPath(r.path)
               return (
@@ -191,16 +194,16 @@ export function FileSearch({
                     </span>
                     {r.ignored && (
                       <span className="shrink-0 rounded-control border border-border px-1.5 text-[11px] text-fg-muted">
-                        ignored
+                        {t('files.find.ignored')}
                       </span>
                     )}
                     {r.sensitive && (
                       <span
                         className="flex shrink-0 items-center text-warning"
-                        title="May contain secrets"
+                        title={t('files.mayContainSecrets')}
                       >
                         <Lock size={12} aria-hidden="true" />
-                        <span className="sr-only">Sensitive</span>
+                        <span className="sr-only">{t('files.sensitive')}</span>
                       </span>
                     )}
                   </button>
@@ -208,10 +211,8 @@ export function FileSearch({
               )
             })}
           </ul>
-          {truncated && (
-            <Note>More than 200 matches — type more to narrow</Note>
-          )}
-          {incomplete && <Note>Search stopped early in a large tree</Note>}
+          {truncated && <Note>{t('files.find.truncated')}</Note>}
+          {incomplete && <Note>{t('files.find.incomplete')}</Note>}
         </div>
       )
     }
@@ -229,8 +230,8 @@ export function FileSearch({
           <input
             ref={input}
             type="search"
-            aria-label="Find a file"
-            placeholder="Find a file…"
+            aria-label={t('files.find.label')}
+            placeholder={t('files.find.placeholder')}
             value={query}
             spellCheck={false}
             autoCapitalize="off"
@@ -246,7 +247,7 @@ export function FileSearch({
         {canIncludeIgnored && (
           <div className="flex shrink-0 items-center gap-2">
             <span id={switchLabel} className="text-[12px] text-fg-muted">
-              Include ignored
+              {t('files.find.includeIgnored')}
             </span>
             <Switch
               labelledBy={switchLabel}

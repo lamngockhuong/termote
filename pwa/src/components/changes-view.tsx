@@ -36,6 +36,7 @@ import {
 } from '../hooks/use-mux-api'
 import { useReviewComposer } from '../hooks/use-review-composer'
 import { useSettings } from '../hooks/use-settings'
+import { useT } from '../i18n/i18n-context'
 import type { Session } from '../types/session'
 import { splitPath } from '../utils/files-format'
 import { isFocusWindow } from '../utils/focus-mode'
@@ -307,6 +308,7 @@ function PaneChanges({
 >) {
   const c = useGitChanges(paneId)
   const { settings } = useSettings()
+  const { t } = useT()
   const isDirty = useDirtyCheck(paneId)
   const tab = c.active
   // Review comments: never for a view-only client (it cannot send them) or
@@ -502,7 +504,7 @@ function PaneChanges({
       refresh()
       notify(`Restored ${name}`, { variant: 'success' })
     } catch (err) {
-      const fail = restoreFailure(err, name)
+      const fail = restoreFailure(err, name, undefined, t)
       if (fail.root) c.rootChanged(fail.root)
       notify(fail.message, { variant: fail.variant })
     }

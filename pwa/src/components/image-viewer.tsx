@@ -12,6 +12,7 @@ import { useDialogModal } from '../hooks/use-dialog-modal'
 import { useHistoryClose } from '../hooks/use-history-close'
 import { useRestoreFocus } from '../hooks/use-restore-focus'
 import { useZoomPan } from '../hooks/use-zoom-pan'
+import { useT } from '../i18n/i18n-context'
 import type { Size } from '../utils/zoom-pan'
 import { IconButton } from './ui/button'
 
@@ -65,6 +66,7 @@ export default function ImageViewer({
   actions,
   onClose,
 }: Props) {
+  const { t } = useT()
   const dialogRef = useRef<HTMLDialogElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   useRestoreFocus(returnFocus)
@@ -123,8 +125,8 @@ export default function ImageViewer({
         <span className="min-w-0 flex-1 truncate text-[13px]">{alt}</span>
         <IconButton
           onClick={() => zoomBy(1 / STEP)}
-          aria-label="Zoom out"
-          title="Zoom out (-)"
+          aria-label={t('files.zoom.out')}
+          title={t('files.zoom.outKey')}
         >
           <Minus size={16} aria-hidden="true" />
         </IconButton>
@@ -138,15 +140,23 @@ export default function ImageViewer({
         </span>
         <IconButton
           onClick={() => zoomBy(STEP)}
-          aria-label="Zoom in"
-          title="Zoom in (+)"
+          aria-label={t('files.zoom.in')}
+          title={t('files.zoom.inKey')}
         >
           <Plus size={16} aria-hidden="true" />
         </IconButton>
-        <IconButton onClick={reset} aria-label="Fit" title="Fit (0)">
+        <IconButton
+          onClick={reset}
+          aria-label={t('files.zoom.fit')}
+          title={t('files.zoom.fitKey')}
+        >
           <Maximize size={16} aria-hidden="true" />
         </IconButton>
-        <IconButton onClick={close} aria-label="Close" title="Close">
+        <IconButton
+          onClick={close}
+          aria-label={t('common.close')}
+          title={t('common.close')}
+        >
           <X size={18} aria-hidden="true" />
         </IconButton>
       </div>

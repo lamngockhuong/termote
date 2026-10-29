@@ -41,6 +41,7 @@ import { type RefObject, useEffect, useLayoutEffect, useRef } from 'react'
 import { useTheme } from '../contexts/theme-context'
 import type { SyncSide } from '../hooks/use-scroll-sync'
 import { useSettings } from '../hooks/use-settings'
+import { useT } from '../i18n/i18n-context'
 import { loadLanguage } from '../utils/cm-languages'
 import { baseTheme, darkCode, lightCode } from '../utils/cm-theme'
 import { HIGHLIGHT_MAX_LINE } from '../utils/highlight'
@@ -148,9 +149,9 @@ function fontSizeOf(size: number): Extension {
   return EditorView.theme({ '&': { fontSize: `${size}px` } })
 }
 
-function labelOf(path: string): Extension {
+function labelOf(label: string): Extension {
   return EditorView.contentAttributes.of({
-    'aria-label': `Text of ${path}`,
+    'aria-label': label,
     'aria-multiline': 'true',
   })
 }
@@ -230,6 +231,8 @@ export default function CodeEditor({
   onSyncSide,
   onPasteImage,
 }: CodeEditorProps) {
+  const { t } = useT()
+  const label = t('files.editor.text', { path })
   const { settings } = useSettings()
   const { editorFontSize, editorTabSize, editorVim } = settings
   const { resolvedTheme } = useTheme()
@@ -247,6 +250,7 @@ export default function CodeEditor({
     onSelectText,
     hidden,
     onPasteImage,
+    t,
   })
   latest.current = {
     onChange,
@@ -258,6 +262,7 @@ export default function CodeEditor({
     onSelectText,
     hidden,
     onPasteImage,
+    t,
   }
   // What the editor told onChange last: a render with it is no change
   const lastEmitted = useRef(text)
@@ -327,7 +332,7 @@ export default function CodeEditor({
       c.tabs.of(tabsOf(text, editorTabSize)),
       c.colors.of(resolvedTheme === 'dark' ? darkCode : lightCode),
       c.language.of([]),
-      c.label.of(labelOf(path)),
+      c.label.of(labelOf(label)),
       c.readOnly.of(EditorState.readOnly.of(saving)),
       c.wrap.of(wrap ? EditorView.lineWrapping : []),
       EditorView.updateListener.of((u) => {
@@ -448,7 +453,8 @@ export default function CodeEditor({
         v.dom.addEventListener('keydown', stopEscape)
       },
       () => {
-        if (live) latest.current.notify('Could not load Vim mode')
+        if (live)
+          latest.current.notify(latest.current.t('files.editor.vimFailed'))
       },
     )
     return () => {
@@ -533,8 +539,8 @@ export default function CodeEditor({
   }, [hidden])
 
   useEffect(() => {
-    reconfigure(view.current, parts.current.label, labelOf(path))
-  }, [path])
+    reconfigure(view.current, parts.current.label, labelOf(label))
+  }, [label])
   useEffect(() => {
     reconfigure(
       view.current,

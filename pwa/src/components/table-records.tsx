@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { useT } from '../i18n/i18n-context'
 import type { CsvTable } from '../utils/csv-parse'
 import { cellText, shownAt } from './table-grid'
 import { FOCUS_RING, IconButton } from './ui/button'
@@ -29,9 +30,12 @@ export function TableRecords({
   onRow,
   onOpen,
 }: Props) {
+  const { t } = useT()
   if (!rows.length) {
     return (
-      <p className="p-4 text-center text-sm text-fg-muted">No matching rows</p>
+      <p className="p-4 text-center text-sm text-fg-muted">
+        {t('files.records.none')}
+      </p>
     )
   }
   const i = row === undefined ? 0 : Math.max(0, rows.indexOf(row))
@@ -41,7 +45,7 @@ export function TableRecords({
       <div className="flex shrink-0 items-center gap-1 border-b border-border px-2 py-1">
         <IconButton
           size="sm"
-          aria-label="Previous record"
+          aria-label={t('files.records.previous')}
           disabled={i === 0}
           onClick={() => onRow(rows[i - 1])}
         >
@@ -51,13 +55,17 @@ export function TableRecords({
           className="flex-1 text-center text-[13px] tabular-nums"
           aria-live="polite"
         >
-          Record {i + 1} / {rows.length} · row {r + 1}
+          {t('files.records.at', {
+            n: i + 1,
+            total: rows.length,
+            row: r + 1,
+          })}
           {cols.length < names.length &&
-            ` · ${names.length - cols.length} ${names.length - cols.length === 1 ? 'column' : 'columns'} hidden`}
+            ` · ${t('files.table.hiddenColumns', { count: names.length - cols.length })}`}
         </span>
         <IconButton
           size="sm"
-          aria-label="Next record"
+          aria-label={t('files.records.next')}
           disabled={i === rows.length - 1}
           onClick={() => onRow(rows[i + 1])}
         >
@@ -65,7 +73,7 @@ export function TableRecords({
         </IconButton>
       </div>
       <dl
-        aria-label={`Row ${r + 1}`}
+        aria-label={t('files.grid.rowN', { row: r + 1 })}
         className="min-h-0 flex-1 overflow-y-auto px-3 py-2 font-term text-[12px]"
       >
         {cols.map((c) => (

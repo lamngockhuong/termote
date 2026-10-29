@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RequestError } from '../hooks/use-mux-api'
+import { tFor } from '../i18n/i18n-context'
 import type { TextLines } from '../utils/line-range'
 import type { PasteEdit } from '../utils/markdown-image-paste'
 import type { CodeEditorProps } from './code-editor'
@@ -78,7 +79,7 @@ describe('saveErrorOf', () => {
       },
     ],
   ])('%s', (err, want) => {
-    expect(saveErrorOf(err)).toEqual(want)
+    expect(saveErrorOf(err, tFor('en'))).toEqual(want)
   })
 
   it('names the encoding a character does not fit in', () => {
@@ -86,7 +87,7 @@ describe('saveErrorOf', () => {
       line: 12,
       char: '😀',
     })
-    expect(saveErrorOf(err, 'shift_jis')).toEqual({
+    expect(saveErrorOf(err, tFor('en'), 'shift_jis')).toEqual({
       kind: 'refused',
       message:
         'Line 12 has "😀", which Shift-JIS can\'t hold. Change it or save as UTF-8',

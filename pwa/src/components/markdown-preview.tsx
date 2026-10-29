@@ -19,6 +19,7 @@ import {
   orderAnchors,
   type SyncSide,
 } from '../hooks/use-scroll-sync'
+import { useT } from '../i18n/i18n-context'
 import {
   findAnchor,
   type LinkPath,
@@ -167,33 +168,40 @@ function MdLink({
 
 // Never loaded: a relative image opens as a file, an external one is a link
 function MdImage({ src, alt }: ComponentProps<'img'>) {
+  const { t } = useT()
   const { path, go } = useContext(PreviewContext)
   // Always a string from markdown (React also types a Blob)
-  const t = resolveLink(src as string | undefined, path)
-  if (t.kind === 'external') {
+  const link = resolveLink(src as string | undefined, path)
+  if (link.kind === 'external') {
     return (
       <a
-        href={t.url.href}
-        title={t.url.host}
+        href={link.url.href}
+        title={link.url.host}
         target="_blank"
         rel="noopener noreferrer"
         className={`inline-flex items-center gap-1 ${LINK}`}
       >
         <ImageIcon size={13} aria-hidden="true" />
-        image: {t.url.host}
+        {t('files.markdown.image', { name: link.url.host })}
       </a>
     )
   }
-  if (t.kind === 'path') {
-    const name = t.path.slice(t.path.lastIndexOf('/') + 1)
+  if (link.kind === 'path') {
+    const name = link.path.slice(link.path.lastIndexOf('/') + 1)
     return (
-      <LinkButton onClick={(n) => go(t, n)}>
+      <LinkButton onClick={(n) => go(link, n)}>
         <ImageIcon size={13} aria-hidden="true" className="mr-1 inline" />
-        image: {alt || name}
+        {t('files.markdown.image', { name: alt || name })}
       </LinkButton>
     )
   }
-  return <span className="text-fg-muted">[image: {alt || 'unavailable'}]</span>
+  return (
+    <span className="text-fg-muted">
+      {t('files.markdown.imageMissing', {
+        name: alt || t('files.markdown.unavailable'),
+      })}
+    </span>
+  )
 }
 
 // A code block, or a Mermaid diagram, of the file
@@ -250,6 +258,7 @@ export default function MarkdownPreview({
   followScrollTop,
   onSyncSide,
 }: Props) {
+  const { t } = useT()
   const ref = useRef<HTMLDivElement>(null)
   const { frontMatter, body, lines } = useMemo(
     () => splitFrontMatter(text),
@@ -269,7 +278,7 @@ export default function MarkdownPreview({
       d.open = true
     }
     if (el) el.scrollIntoView({ block: 'start' })
-    else notify('Heading not found')
+    else notify(t('files.markdown.headingMissing'))
   }
 
   // Where the file starts, once its content is on screen
@@ -367,7 +376,7 @@ export default function MarkdownPreview({
             <FencedCode
               text={frontMatter}
               lang="yaml"
-              label="front matter"
+              label={t('files.markdown.frontMatter')}
               wrap={wrap}
               notify={notify}
               dataLine={editing ? 1 : undefined}

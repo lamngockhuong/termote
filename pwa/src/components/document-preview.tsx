@@ -1,4 +1,5 @@
 import type { DocumentBytes } from '../hooks/use-document-bytes'
+import { useT } from '../i18n/i18n-context'
 import type { DocumentKind } from '../utils/document-path'
 import { DocumentError, DocumentMessage } from './document-message'
 import DocxPreview from './docx-preview'
@@ -35,6 +36,7 @@ export default function DocumentPreview({
   onDownload,
   notify,
 }: Props) {
+  const { t } = useT()
   if (state.status === 'error')
     return (
       <DocumentError
@@ -44,7 +46,7 @@ export default function DocumentPreview({
       />
     )
   if (state.status !== 'ready')
-    return <DocumentMessage>Loading…</DocumentMessage>
+    return <DocumentMessage>{t('files.loading')}</DocumentMessage>
   const props: DocumentViewerProps = {
     blob: state.blob,
     path,
@@ -62,7 +64,7 @@ export default function DocumentPreview({
     default:
       return (
         <DocumentMessage onDownload={props.onDownload}>
-          No viewer for this file
+          {t('files.document.noViewer')}
         </DocumentMessage>
       )
   }

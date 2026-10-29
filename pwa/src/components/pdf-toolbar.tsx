@@ -1,4 +1,5 @@
 import { MoveHorizontal, Search, ZoomIn, ZoomOut } from 'lucide-react'
+import { useT } from '../i18n/i18n-context'
 import { IconButton } from './ui/button'
 
 interface Props {
@@ -26,20 +27,22 @@ export function PdfToolbar({
   findOpen,
   onFind,
 }: Props) {
+  const { t } = useT()
   return (
     <div
       role="toolbar"
+      // i18n-ignore: the format's name
       aria-label="PDF"
       className="flex shrink-0 items-center gap-1 border-b border-border px-2 py-1 text-[13px] text-fg-muted"
     >
       <span className="tabular-nums" aria-live="polite">
-        Page {page} of {pages}
+        {t('files.pdf.page', { page, pages })}
       </span>
       <span className="flex-1" />
       <IconButton
         size="sm"
-        aria-label="Zoom out"
-        title="Zoom out"
+        aria-label={t('files.zoom.out')}
+        title={t('files.zoom.out')}
         onClick={onZoomOut}
       >
         <ZoomOut size={15} aria-hidden="true" />
@@ -47,24 +50,24 @@ export function PdfToolbar({
       <span className="min-w-11 text-center tabular-nums">{scale}%</span>
       <IconButton
         size="sm"
-        aria-label="Zoom in"
-        title="Zoom in"
+        aria-label={t('files.zoom.in')}
+        title={t('files.zoom.in')}
         onClick={onZoomIn}
       >
         <ZoomIn size={15} aria-hidden="true" />
       </IconButton>
       <IconButton
         size="sm"
-        aria-label="Fit width"
-        title="Fit width"
+        aria-label={t('files.pdf.fitWidth')}
+        title={t('files.pdf.fitWidth')}
         onClick={onFitWidth}
       >
         <MoveHorizontal size={15} aria-hidden="true" />
       </IconButton>
       <IconButton
         size="sm"
-        aria-label="Find"
-        title="Find in document"
+        aria-label={t('files.pdf.findShort')}
+        title={t('files.pdf.find')}
         aria-pressed={findOpen}
         className={findOpen ? 'text-accent' : ''}
         onClick={onFind}

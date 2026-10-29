@@ -1,6 +1,9 @@
 import { FolderTree, X } from 'lucide-react'
 import { type KeyboardEvent, useEffect, useRef } from 'react'
 import { useWheelScrollX } from '../hooks/use-wheel-scroll-x'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
 import { FOCUS_RING } from './ui/button'
 
 // A tab as the tab bar and the open-files sheet show it
@@ -20,8 +23,8 @@ export interface TabEntry {
 }
 
 // The tooltip of tab t: its path, and why it is struck through
-export const tabTitle = (t: TabEntry) =>
-  t.missing ? `${t.title} — File not found` : t.title
+export const tabTitle = (tab: TabEntry, t: Translate<MessageKey>) =>
+  tab.missing ? t('files.tabs.missingTitle', { path: tab.title }) : tab.title
 
 // What the tab bar (desktop) and the open-files sheet (mobile) both take
 export interface TabListProps {
@@ -59,10 +62,11 @@ export function FileTabBar({
 }: TabListProps) {
   const tabIds = (id: string | null) =>
     panelId ? { id: tabElementId(panelId, id), 'aria-controls': panelId } : {}
+  const { t } = useT()
   const items = useRef(new Map<string | null, HTMLElement>())
   const barRef = useRef<HTMLDivElement>(null)
   useWheelScrollX(barRef)
-  const ids: (string | null)[] = [null, ...tabs.map((t) => t.id)]
+  const ids: (string | null)[] = [null, ...tabs.map((tab) => tab.id)]
 
   // The tab shown stays in view as the bar scrolls sideways
   useEffect(() => {
@@ -113,7 +117,7 @@ export function FileTabBar({
     <div
       ref={barRef}
       role="tablist"
-      aria-label="Open files"
+      aria-label={t('files.tabs.open')}
       className="flex shrink-0 overflow-x-auto scrollbar-hide border-b border-border bg-surface ui-terminal:bg-bg"
     >
       <button
@@ -130,25 +134,25 @@ export function FileTabBar({
         <FolderTree size={14} aria-hidden="true" />
         {homeLabel}
       </button>
-      {tabs.map((t) => {
-        const shown = t.id === activeId
+      {tabs.map((tab) => {
+        const shown = tab.id === activeId
         return (
           <div
-            key={t.id}
+            key={tab.id}
             role="presentation"
             className={`group flex shrink-0 items-center border-r border-border ${shown ? 'bg-bg text-fg' : 'text-fg-muted hover:text-fg'}`}
           >
             <button
-              ref={ref(t.id)}
+              ref={ref(tab.id)}
               type="button"
               role="tab"
-              {...tabIds(t.id)}
+              {...tabIds(tab.id)}
               aria-selected={shown}
               aria-keyshortcuts="Delete"
-              tabIndex={tabbable === t.id ? 0 : -1}
-              title={tabTitle(t)}
-              onClick={() => onActivate(t.id)}
-              onDoubleClick={() => onPin(t.id)}
+              tabIndex={tabbable === tab.id ? 0 : -1}
+              title={tabTitle(tab, t)}
+              onClick={() => onActivate(tab.id)}
+              onDoubleClick={() => onPin(tab.id)}
               // No autoscroll: a middle click closes the tab
               onMouseDown={(e) => {
                 if (e.button === 1) e.preventDefault()
@@ -156,25 +160,29 @@ export function FileTabBar({
               onAuxClick={(e) => {
                 if (e.button !== 1) return
                 e.preventDefault()
-                onClose(t.id)
+                onClose(tab.id)
               }}
-              onKeyDown={(e) => onKeyDown(e, t.id)}
+              onKeyDown={(e) => onKeyDown(e, tab.id)}
               className={`${TAB} max-w-48 pr-1`}
             >
               <span
-                className={`truncate ${t.pinned ? '' : 'italic'} ${t.missing ? 'text-fg-subtle line-through' : ''}`}
+                className={`truncate ${tab.pinned ? '' : 'italic'} ${tab.missing ? 'text-fg-subtle line-through' : ''}`}
               >
-                {t.name}
+                {tab.name}
               </span>
-              {!t.pinned && <span className="sr-only"> (preview)</span>}
-              {t.missing && <span className="sr-only"> (not found)</span>}
-              {t.dirty && (
+              {!tab.pinned && (
+                <span className="sr-only"> {t('files.tabs.preview')}</span>
+              )}
+              {tab.missing && (
+                <span className="sr-only"> {t('files.tabs.notFound')}</span>
+              )}
+              {tab.dirty && (
                 <>
                   <span
                     aria-hidden="true"
                     className="size-1.5 shrink-0 rounded-full bg-accent"
                   />
-                  <span className="sr-only"> (unsaved changes)</span>
+                  <span className="sr-only"> {t('files.tabs.unsaved')}</span>
                 </>
               )}
             </button>
@@ -184,9 +192,9 @@ export function FileTabBar({
               // Delete key closes it from the keyboard
               tabIndex={-1}
               aria-hidden="true"
-              aria-label={`Close ${t.name}`}
-              title="Close"
-              onClick={() => onClose(t.id)}
+              aria-label={t('files.tabs.closeName', { name: tab.name })}
+              title={t('common.close')}
+              onClick={() => onClose(tab.id)}
               className={`mr-1 flex size-5 shrink-0 items-center justify-center rounded-control hover:bg-surface ${FOCUS_RING} ${shown ? '' : 'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100'}`}
             >
               <X size={12} aria-hidden="true" />

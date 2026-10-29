@@ -6,6 +6,8 @@
  */
 
 import { type FilesTarget, filesUrl } from '../hooks/use-mux-api'
+import type { MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
 
 // Mirrors the server's limit (what files/download sends back); the server
 // still decides.
@@ -175,53 +177,56 @@ export function uploadFile(
 }
 
 // What the user is told when a file was not uploaded
-export function fileUploadErrorMessage(reason: FileUploadReason): string {
+export function fileUploadErrorMessage(
+  reason: FileUploadReason,
+  t: Translate<MessageKey>,
+): string {
   switch (reason) {
     case 'view_only':
-      return 'A view-only device cannot upload'
+      return t('files.upload.viewOnly')
     case 'sensitive':
-      return 'This folder may hold secrets: not uploaded'
+      return t('files.uploadError.sensitive')
     case 'symlink':
-      return 'The folder is a link: not uploaded'
+      return t('files.uploadError.symlink')
     case 'not_directory':
-      return 'A folder on the way is a file: not uploaded'
+      return t('files.uploadError.notDirectory')
     case 'exists':
-      return 'Too many files with this name. Rename one first'
+      return t('files.uploadError.exists')
     case 'invalid_name':
-      return "This file's name can't be used on the host"
+      return t('files.uploadError.invalidName')
     case 'not_allowed':
-      return "Files can't be uploaded to this folder"
+      return t('files.uploadError.notAllowed')
     case 'not_found':
-      return 'The folder is no longer on the host'
+      return t('files.uploadError.notFound')
     case 'permission':
-      return "The server can't write in this folder"
+      return t('files.uploadError.permission')
     case 'read_only':
-      return 'The file system there is read-only'
+      return t('files.refused.readOnly')
     case 'place_moved':
     case 'unknown_place':
-      return "This place isn't available any more"
+      return t('files.uploadError.placeGone')
     case 'too_large':
-      return 'File is larger than 100 MB'
+      return t('files.uploadError.tooLarge')
     case 'timeout':
-      return 'The upload stalled. Try again on a better connection'
+      return t('files.uploadError.timeout')
     case 'upload_busy':
-      return 'Another upload is running. Try again shortly'
+      return t('files.uploadError.busy')
     case 'storage_full':
-      return "The host's disk or quota is full"
+      return t('files.refused.storageFull')
     case 'unsupported_type':
-      return 'The server refused how the file was sent'
+      return t('files.uploadError.unsupportedType')
     case 'root_changed':
-      return "This pane's folder changed: not uploaded"
+      return t('files.uploadError.rootChanged')
     case 'unauthorized':
-      return 'Sign in again to upload'
+      return t('files.uploadError.unauthorized')
     case 'network':
-      return 'Upload failed: network error'
+      return t('files.uploadError.network')
     case 'aborted':
-      return 'Upload canceled'
+      return t('files.uploadError.aborted')
     case 'unsure':
-      return 'Not sure the file was saved. Check the folder'
+      return t('files.uploadError.unsure')
     default:
-      return 'Upload failed'
+      return t('files.uploadError.failed')
   }
 }
 

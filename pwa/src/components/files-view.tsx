@@ -57,6 +57,9 @@ import {
 import { useReviewComposer } from '../hooks/use-review-composer'
 import { useSettings } from '../hooks/use-settings'
 import { useShortcutKey } from '../hooks/use-shortcuts'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
+import { Trans } from '../i18n/trans'
 import type { Session } from '../types/session'
 import { downloadFile } from '../utils/download-file'
 import { fileNameProblem } from '../utils/file-name'
@@ -95,12 +98,12 @@ import { ConfirmDialog } from './ui/confirm-dialog'
 import { Menu, MenuItem } from './ui/menu'
 import { SegmentedControl } from './ui/segmented-control'
 
-const ERRORS: Record<FilesError, string> = {
-  unsupported: 'Not supported by this backend',
-  'not-found': 'Directory not found',
-  'not-allowed': "This directory can't be shown",
-  'view-only': 'View only: files show in a git repository only',
-  unavailable: 'Could not load the directory',
+const ERRORS: Record<FilesError, MessageKey> = {
+  unsupported: 'files.find.unsupported',
+  'not-found': 'files.find.notFound',
+  'not-allowed': 'files.tree.notAllowed',
+  'view-only': 'files.find.viewOnly',
+  unavailable: 'files.tree.failed',
 }
 
 type Row =
@@ -111,7 +114,13 @@ type Row =
       level: number
       parent: string
     }
-  | { kind: 'note'; path: string; dir: string; level: number; text: string }
+  | {
+      kind: 'note'
+      path: string
+      dir: string
+      level: number
+      text: MessageKey
+    }
 
 type EntryRow = Extract<Row, { kind: 'entry' }>
 
@@ -123,7 +132,7 @@ function visibleRows(s: FilesState, dir = '', level = 1): Row[] {
   const d = s.dirs[dir]
   const rows: Row[] = []
   if (!d.entries) {
-    const text = d.error ? ERRORS[d.error] : 'Loading…'
+    const text = d.error ? ERRORS[d.error] : 'files.loading'
     return [{ kind: 'note', path: `${dir}/…`, dir, level, text }]
   }
   for (const entry of d.entries) {
@@ -138,11 +147,17 @@ function visibleRows(s: FilesState, dir = '', level = 1): Row[] {
       path: `${dir}/+`,
       dir,
       level,
-      text: 'Only the first 5000 entries are shown',
+      text: 'files.tree.truncated',
     })
   }
   if (dir && d.entries?.length === 0) {
-    rows.push({ kind: 'note', path: `${dir}/0`, dir, level, text: 'Empty' })
+    rows.push({
+      kind: 'note',
+      path: `${dir}/0`,
+      dir,
+      level,
+      text: 'files.tree.empty',
+    })
   }
   return rows
 }
@@ -218,8 +233,9 @@ export function FilesView({
   sessions,
   openTab,
 }: ViewProps) {
+  const { t } = useT()
   // Before the first snapshot there is no pane to read
-  if (!session.paneId) return <ViewMessage>Loading…</ViewMessage>
+  if (!session.paneId) return <ViewMessage>{t('files.loading')}</ViewMessage>
   return (
     <PaneFiles
       session={session}
@@ -297,6 +313,7 @@ function PaneFiles({
   | 'openTab'
   | 'showView'
 >) {
+  const { t } = useT()
   const f = useFiles(paneId)
   const places = usePlaces(canPlaces)
   const placeRoots = useMemo(() => places.map((p) => p.path), [places])
@@ -318,7 +335,7 @@ function PaneFiles({
     const ofPlace = cm.source === 'file' && placeRoots.includes(cm.root)
     // On a Place, a comment of another root is the pane's: its folder opens
     if (cm.root !== f.root && !ofPlace && !f.place) {
-      notify('The pane is in another folder now', { variant: 'warning' })
+      notify(t('files.paneMoved'), { variant: 'warning' })
       return
     }
     if (cm.source === 'file') {
@@ -389,7 +406,7 @@ function PaneFiles({
         root: f.root as string,
         dir: uploadDir(dir),
       },
-      { notify, ...opts },
+      { notify, t, ...opts },
     )
   // The root the New file box was opened under, while it is open
   const [creating, setCreating] = useState<string>()
@@ -450,7 +467,7 @@ function PaneFiles({
       }
     }),
     activeId: f.activeId,
-    homeLabel: 'Files',
+    homeLabel: t('common.files'),
     onActivate: f.activate,
     onClose: requestClose,
     onPin: f.pin,
@@ -474,20 +491,17 @@ function PaneFiles({
   // store does not count a move to a Place the user picked)
   const seenChanges = useRef(rootChanges)
   useEffect(() => {
-    if (rootChanges > seenChanges.current)
-      notify("The pane's directory changed")
+    if (rootChanges > seenChanges.current) notify(t('files.rootChanged'))
     seenChanges.current = rootChanges
-  }, [rootChanges, notify])
+  }, [rootChanges, notify, t])
   // The Place shown is gone (the server no longer offers it, or it leads
   // elsewhere now): back to the pane's folder, said once
   const seenLost = useRef(f.placeLost)
   useEffect(() => {
     if (f.placeLost > seenLost.current)
-      notify("That place isn't available; showing the pane's folder", {
-        variant: 'warning',
-      })
+      notify(t('files.placeLost'), { variant: 'warning' })
     seenLost.current = f.placeLost
-  }, [f.placeLost, notify])
+  }, [f.placeLost, notify, t])
 
   const refresh = () => {
     f.refresh()
@@ -550,8 +564,8 @@ function PaneFiles({
     }
     // A folder only once it is known to be empty: read now unless it was
     const dir = f.dirs[path]?.entries ? f.dirs[path] : await f.list(path)
-    if (!dir.entries) notify("This folder can't be read")
-    else if (dir.entries.length > 0) notify('The folder is not empty')
+    if (!dir.entries) notify(t('files.tree.unreadable'))
+    else if (dir.entries.length > 0) notify(t('files.delete.notEmpty'))
     else
       setDeleting({ root, place: f.place, path, kind: 'dir', sensitive: false })
   }
@@ -568,9 +582,9 @@ function PaneFiles({
         },
       )
       await f.restored(res.path)
-      notify(`Restored ${name}`, { variant: 'success' })
+      notify(t('files.trash.restored', { name }), { variant: 'success' })
     } catch (err) {
-      const fail = restoreFailure(err, name, d.path)
+      const fail = restoreFailure(err, name, d.path, t)
       if (fail.root) f.rootChanged(fail.root)
       notify(fail.message, { variant: fail.variant })
     }
@@ -581,9 +595,9 @@ function PaneFiles({
     if (o.swapped) {
       // Only ever told with the id it stayed in the trash under
       const id = o.trashId as string
-      notify(`${name} changed; the file that was there is in the trash`, {
+      notify(t('files.deleted.swapped', { name }), {
         variant: 'warning',
-        action: { label: 'Undo', onClick: () => undo(d, id) },
+        action: { label: t('files.undo'), onClick: () => undo(d, id) },
       })
       return
     }
@@ -591,12 +605,12 @@ function PaneFiles({
     dropDraft(paneId, d.root, o.path)
     f.deleted(o.path)
     if (o.permanent || !o.trashId) {
-      notify(`Deleted ${name} permanently`)
+      notify(t('files.trash.deleted', { name }))
       return
     }
     const id = o.trashId
-    notify(`Deleted ${name}`, {
-      action: { label: 'Undo', onClick: () => undo(d, id) },
+    notify(t('files.deleted', { name }), {
+      action: { label: t('files.undo'), onClick: () => undo(d, id) },
     })
   }
 
@@ -625,6 +639,7 @@ function PaneFiles({
     downloadFile(
       { paneId, place: f.place, root, path, reveal },
       notify,
+      t,
       f.rootChanged,
     )
 
@@ -636,7 +651,7 @@ function PaneFiles({
   const undoRename = async (r: Renaming, to: string, reveal: boolean) => {
     const name = visibleUnsafe(baseName(r.path))
     if (hasDirtyDraftAt(r.root, r.path)) {
-      notify(`${name} has unsaved changes; not renamed back`, {
+      notify(t('files.renameBack.dirty', { name }), {
         variant: 'warning',
       })
       return
@@ -652,16 +667,18 @@ function PaneFiles({
         },
       )
       followRename(r.root, to, res.path, reveal)
-      notify(`Renamed back to ${name}`, { variant: 'success' })
+      notify(t('files.renameBack.done', { name }), { variant: 'success' })
     } catch (err) {
       if (err instanceof RequestError && err.status === 409 && err.root) {
         f.rootChanged(err.root)
-        notify(`The pane's directory changed; ${name} was not renamed back`, {
+        notify(t('files.renameBack.rootChanged', { name }), {
           variant: 'warning',
         })
       } else if (err instanceof RequestError && err.code === 'exists') {
         notify(
-          `A file now exists at ${visibleUnsafe(err.path ?? r.path)}; not renamed back`,
+          t('files.renameBack.exists', {
+            path: visibleUnsafe(err.path ?? r.path),
+          }),
           { variant: 'warning' },
         )
       } else if (
@@ -670,12 +687,11 @@ function PaneFiles({
         err.path
       ) {
         followRename(r.root, to, err.path, reveal)
-        notify(
-          `The file changed while it was renamed; it is at ${visibleUnsafe(err.path)}`,
-          { variant: 'warning' },
-        )
+        notify(t('files.renamed.changed', { path: visibleUnsafe(err.path) }), {
+          variant: 'warning',
+        })
       } else {
-        notify('Could not undo the rename', { variant: 'danger' })
+        notify(t('files.renameBack.failed'), { variant: 'danger' })
       }
     }
   }
@@ -689,25 +705,35 @@ function PaneFiles({
     if (to === r.path) return
     followRename(r.root, r.path, to, reveal)
     if (changed) {
-      notify(
-        `The file changed while it was renamed; it is at ${visibleUnsafe(to)}`,
-        { variant: 'warning' },
-      )
+      notify(t('files.renamed.changed', { path: visibleUnsafe(to) }), {
+        variant: 'warning',
+      })
       return
     }
     const [fromDir, fromName] = splitPath(r.path)
     const [toDir, toName] = splitPath(to)
     const text =
       fromDir === toDir
-        ? `Renamed ${visibleUnsafe(fromName)} to ${visibleUnsafe(toName)}`
-        : `Moved ${visibleUnsafe(toName)} to ${toDir ? visibleUnsafe(toDir.slice(0, -1)) : "the pane's directory"}`
+        ? t('files.renamed', {
+            from: visibleUnsafe(fromName),
+            to: visibleUnsafe(toName),
+          })
+        : toDir
+          ? t('files.moved', {
+              name: visibleUnsafe(toName),
+              dir: visibleUnsafe(toDir.slice(0, -1)),
+            })
+          : t('files.movedToRoot', { name: visibleUnsafe(toName) })
     // The old name must be one the server takes as a new name
     if (fileNameProblem(fromName)) {
-      notify(`${text}. Undo isn't available for this name`)
+      notify(t('files.renamed.noUndo', { text }))
       return
     }
     notify(text, {
-      action: { label: 'Undo', onClick: () => undoRename(r, to, reveal) },
+      action: {
+        label: t('files.undo'),
+        onClick: () => undoRename(r, to, reveal),
+      },
     })
   }
 
@@ -735,21 +761,19 @@ function PaneFiles({
     // A dialog open over Files (Rename, an ask) is no folder
     if ((e.target as Element).closest('dialog, [role="dialog"]')) return
     if (readOnly) {
-      notify('A view-only device cannot upload', { variant: 'warning' })
+      notify(t('files.upload.viewOnly'), { variant: 'warning' })
       return
     }
     if (!f.root) return
     const { files, folders } = droppedFiles(e.dataTransfer)
     // Folders alone: no run to tell it
     if (!files.length) {
-      if (folders) notify("Folders can't be uploaded", { variant: 'warning' })
+      if (folders) notify(t('files.upload.folders'), { variant: 'warning' })
       return
     }
     // A tab kept from a root the pane has left: its folder is not this one
     if (tab && tab.root !== f.root) {
-      notify("This file's folder isn't the pane's any more: not uploaded", {
-        variant: 'warning',
-      })
+      notify(t('files.upload.rootLeft'), { variant: 'warning' })
       return
     }
     const dir = tab
@@ -803,8 +827,8 @@ function PaneFiles({
             size="sm"
             variant="ghost"
             onClick={() => setCreating(newFileRoot)}
-            aria-label="New file"
-            title="New file"
+            aria-label={t('files.new.title')}
+            title={t('files.new.title')}
           >
             <FilePlus size={15} aria-hidden="true" />
           </IconButton>
@@ -815,8 +839,8 @@ function PaneFiles({
               size="sm"
               variant="ghost"
               onClick={() => fileInput.current?.click()}
-              aria-label="Upload files"
-              title="Upload files"
+              aria-label={t('files.upload')}
+              title={t('files.upload')}
             >
               <Upload size={15} aria-hidden="true" />
             </IconButton>
@@ -902,16 +926,18 @@ function PaneFiles({
       {downloading && (
         <ConfirmDialog
           isOpen
-          title="Download a file that may contain secrets?"
-          confirmLabel="Download"
+          title={t('files.download.askSensitive')}
+          confirmLabel={t('files.download')}
           onConfirm={() => {
             setDownloading(undefined)
             download(downloading.root, downloading.path, true)
           }}
           onCancel={() => setDownloading(undefined)}
         >
-          {visibleUnsafe(baseName(downloading.path))} usually holds keys or
-          passwords. A copy will be saved on this device.
+          <Trans
+            k="files.download.askSensitiveBody"
+            tags={{ name: () => visibleUnsafe(baseName(downloading.path)) }}
+          />
         </ConfirmDialog>
       )}
       {deleting && (
@@ -1039,19 +1065,19 @@ function PaneFiles({
             commentedLines={commented}
           />
         ) : root?.error ? (
-          <ViewMessage>{ERRORS[root.error]}</ViewMessage>
+          <ViewMessage>{t(ERRORS[root.error])}</ViewMessage>
         ) : !root?.entries ? (
-          <ViewMessage>Loading…</ViewMessage>
+          <ViewMessage>{t('files.loading')}</ViewMessage>
         ) : (
           <>
             <div className="flex shrink-0 justify-center border-b border-border px-2 py-1.5">
               <SegmentedControl
-                label="Files view"
+                label={t('files.pane')}
                 value={pane}
                 onChange={setPane}
                 options={[
-                  { value: 'files', content: 'Files' },
-                  { value: 'search', content: 'Search' },
+                  { value: 'files', content: t('common.files') },
+                  { value: 'search', content: t('files.pane.search') },
                 ]}
                 className="w-full [&>button]:flex-1"
               />
@@ -1084,7 +1110,7 @@ function PaneFiles({
                 hideIgnored={readOnly}
               >
                 {root.entries.length === 0 ? (
-                  <ViewMessage>This directory is empty</ViewMessage>
+                  <ViewMessage>{t('files.tree.dirEmpty')}</ViewMessage>
                 ) : (
                   <FileTree
                     state={f}
@@ -1125,6 +1151,7 @@ function PaneFiles({
 // percentage is not read out at every step. A live region, not a status
 // role: the content search's result count is the panel's status.
 function UploadStatusRow() {
+  const { t } = useT()
   const { status: up, asking } = useFileUploads()
   return (
     <>
@@ -1137,9 +1164,10 @@ function UploadStatusRow() {
           <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-1 text-[12px] text-fg-muted">
             <span className="min-w-0 flex-1 truncate">
               {up.waiting
-                ? 'Waiting for another upload…'
-                : `Uploading ${visibleUnsafe(up.name)}`}
-              {up.total > 1 && ` (${up.index} of ${up.total})`}
+                ? t('files.upload.waiting')
+                : t('files.upload.running', { name: visibleUnsafe(up.name) })}
+              {up.total > 1 &&
+                ` ${t('files.upload.progress', { index: up.index, total: up.total })}`}
             </span>
             {!up.waiting && (
               <span aria-hidden="true" className="shrink-0 tabular-nums">
@@ -1152,15 +1180,15 @@ function UploadStatusRow() {
               onClick={cancelUploads}
               disabled={!up.canCancel}
             >
-              Cancel
+              {t('common.cancel')}
             </Button>
           </div>
         )}
       </div>
       <ConfirmDialog
         isOpen={!!asking}
-        title="Upload where secrets may be?"
-        confirmLabel="Upload"
+        title={t('files.upload.askSensitive')}
+        confirmLabel={t('files.upload.confirm')}
         // Enter keeps the files away from the secrets
         defaultAction="cancel"
         onConfirm={() => confirmUpload(true)}
@@ -1168,7 +1196,16 @@ function UploadStatusRow() {
       >
         {/* The root too: the ask may show in another pane's Files */}
         {asking &&
-          `${visibleUnsafe(asking.name)} goes to ${asking.dir === '.' ? 'the top folder' : visibleUnsafe(asking.dir)} of ${visibleUnsafe(asking.root)}, where keys or passwords usually are. Upload it, and the other files sent with it that go there too?`}
+          t(
+            asking.dir === '.'
+              ? 'files.upload.askSensitiveTop'
+              : 'files.upload.askSensitiveBody',
+            {
+              name: visibleUnsafe(asking.name),
+              dir: visibleUnsafe(asking.dir),
+              root: visibleUnsafe(asking.root),
+            },
+          )}
       </ConfirmDialog>
     </>
   )
@@ -1216,6 +1253,7 @@ function FileTree({
   // server refuses a symlink)
   onDownload?: (path: string, entry: FileEntry) => void
 }) {
+  const { t } = useT()
   const rows = visibleRows(state)
   const entries = rows.filter((r) => r.kind === 'entry')
   const current = entries.find((r) => r.path === focused) ?? entries[0]
@@ -1281,7 +1319,7 @@ function FileTree({
   return (
     <div
       role="tree"
-      aria-label="Files"
+      aria-label={t('common.files')}
       onKeyDown={onKeyDown}
       className="min-h-0 flex-1 overflow-y-auto py-1"
     >
@@ -1294,7 +1332,7 @@ function FileTree({
             className="py-1.5 pr-3 text-[12px] text-fg-subtle"
             style={{ paddingLeft: `${r.level * 16 + 12}px` }}
           >
-            {r.text}
+            {t(r.text)}
           </div>
         ) : (
           <TreeItem
@@ -1354,6 +1392,7 @@ function TreeItem({
   onRename?: () => void
   onDownload?: () => void
 }) {
+  const { t } = useT()
   const { entry, level } = row
   const hasMenu = !!(onDelete || onRename || onDownload)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -1398,10 +1437,10 @@ function TreeItem({
       {entry.sensitive && (
         <span
           className="flex shrink-0 items-center gap-1 text-[11px] text-warning"
-          title="May contain secrets"
+          title={t('files.mayContainSecrets')}
         >
           <Lock size={12} aria-hidden="true" />
-          <span className="sr-only">Sensitive</span>
+          <span className="sr-only">{t('files.sensitive')}</span>
         </span>
       )}
       {hasMenu && (
@@ -1414,7 +1453,7 @@ function TreeItem({
           className="shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100"
         >
           <Menu
-            label={`Actions for ${entry.name}`}
+            label={t('files.tree.actions', { name: entry.name })}
             trigger={<Ellipsis size={14} aria-hidden="true" />}
             triggerTabIndex={-1}
             triggerSize="sm"
@@ -1423,7 +1462,7 @@ function TreeItem({
           >
             {onDownload && (
               <MenuItem icon={<Download size={16} />} onSelect={onDownload}>
-                Download
+                {t('files.download')}
               </MenuItem>
             )}
             {onRename && (
@@ -1431,7 +1470,7 @@ function TreeItem({
                 icon={<TextCursorInput size={16} />}
                 onSelect={onRename}
               >
-                Rename
+                {t('files.rename.title')}
               </MenuItem>
             )}
             {onDelete && (
@@ -1441,7 +1480,9 @@ function TreeItem({
                 disabled={dir && notEmpty}
                 onSelect={onDelete}
               >
-                {dir && notEmpty ? 'Delete (not empty)' : 'Delete'}
+                {dir && notEmpty
+                  ? t('files.tree.deleteNotEmpty')
+                  : t('files.delete')}
               </MenuItem>
             )}
           </Menu>

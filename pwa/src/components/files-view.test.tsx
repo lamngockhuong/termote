@@ -28,6 +28,7 @@ import {
 } from '../hooks/use-files'
 import { type FileEntry, RequestError } from '../hooks/use-mux-api'
 import { resetAllShortcuts, setShortcut } from '../hooks/use-shortcuts'
+import { tFor } from '../i18n/i18n-context'
 import {
   addReviewComment,
   loadReview,
@@ -2063,6 +2064,7 @@ describe('FilesView download', () => {
       { paneId: '%1', root: ROOT, path: 'README.md', reveal: false },
       p.notify,
       expect.any(Function),
+      expect.any(Function),
     )
   })
 
@@ -2344,7 +2346,7 @@ describe('FilesView upload', () => {
       startUploads(
         [pdf('far.pdf')],
         { target: { paneId: '%1' }, root: '/elsewhere', dir: '.' },
-        { notify: vi.fn() },
+        { notify: vi.fn(), t: tFor('en') },
       )
     })
     expect(item('src')).toHaveAttribute('tabindex', '0')

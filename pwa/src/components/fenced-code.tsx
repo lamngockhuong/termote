@@ -1,6 +1,7 @@
 import { Copy } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { useTheme } from '../contexts/theme-context'
+import { useT } from '../i18n/i18n-context'
 import { highlightLang, type Token } from '../utils/highlight'
 import { type LanguageId, languageForName } from '../utils/highlight-langs'
 import { isMermaidInfo, textOf } from '../utils/markdown-links'
@@ -48,6 +49,7 @@ export function FencedCode({
   dataLine?: number
 } & Pick<FenceOptions, 'wrap' | 'notify' | 'copyButton'> &
   FrameParts) {
+  const { t } = useT()
   const { resolvedTheme } = useTheme()
   const lines = useMemo(() => splitLines(text), [text])
   const [tokens, setTokens] = useState<Token[][] | null>(null)
@@ -57,8 +59,8 @@ export function FencedCode({
     // waiting for the worker is dropped
     const ac = new AbortController()
     setTokens(null)
-    highlightLang(text, lang, resolvedTheme, ac.signal).then((t) => {
-      if (!ac.signal.aborted) setTokens(t)
+    highlightLang(text, lang, resolvedTheme, ac.signal).then((found) => {
+      if (!ac.signal.aborted) setTokens(found)
     })
     return () => ac.abort()
   }, [text, lang, resolvedTheme])
@@ -66,9 +68,9 @@ export function FencedCode({
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(text)
-      notify('Code copied')
+      notify(t('files.code.copied'))
     } catch {
-      notify('Could not copy the code')
+      notify(t('files.code.copyFailed'))
     }
   }
 
@@ -88,8 +90,8 @@ export function FencedCode({
             <IconButton
               size="sm"
               onClick={copy}
-              aria-label="Copy code"
-              title="Copy code"
+              aria-label={t('files.code.copy')}
+              title={t('files.code.copy')}
             >
               <Copy size={14} aria-hidden="true" />
             </IconButton>

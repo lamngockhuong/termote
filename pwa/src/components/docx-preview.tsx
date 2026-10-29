@@ -1,4 +1,7 @@
 import { createElement, type ReactNode, useEffect, useState } from 'react'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
 import {
   DocumentWorkerClient,
   type DocumentWorkerError,
@@ -43,7 +46,10 @@ const spanOk = (n: number | undefined) =>
 // The tree the worker made as React elements. Each tag and attribute is
 // checked again here: only allowed ones, links to http(s) or mailto opening
 // in a new tab, images from data: URLs of raster types.
-export function renderDocTree(nodes: DocChild[]): ReactNode[] {
+export function renderDocTree(
+  nodes: DocChild[],
+  t: Translate<MessageKey>,
+): ReactNode[] {
   return nodes.map((n, key) => {
     if (typeof n === 'string') return n
     if (!isDocTag(n.t)) return null
@@ -51,7 +57,7 @@ export function renderDocTree(nodes: DocChild[]): ReactNode[] {
     const props: Record<string, unknown> = { key }
     if (n.t === 'a') {
       const href = safeHref(a.href)
-      if (!href) return renderDocTree(n.c ?? [])
+      if (!href) return renderDocTree(n.c ?? [], t)
       Object.assign(props, {
         href,
         target: '_blank',
@@ -59,7 +65,7 @@ export function renderDocTree(nodes: DocChild[]): ReactNode[] {
         className: LINK,
       })
     } else if (n.t === 'img') {
-      if (!a.src || !IMAGE_SRC.test(a.src)) return '[image omitted]'
+      if (!a.src || !IMAGE_SRC.test(a.src)) return t('files.docx.imageOmitted')
       Object.assign(props, {
         src: a.src,
         alt: a.alt ?? '',
@@ -74,7 +80,7 @@ export function renderDocTree(nodes: DocChild[]): ReactNode[] {
     }
     // One keyed array, not spread: a node can hold more children than a
     // call takes arguments
-    const el = createElement(n.t, props, renderDocTree(n.c ?? []))
+    const el = createElement(n.t, props, renderDocTree(n.c ?? [], t))
     // A wide table scrolls on its own, as in a Markdown preview. The tree
     // never changes once shown: its places are its keys.
     return n.t === 'table'
@@ -87,6 +93,7 @@ export function renderDocTree(nodes: DocChild[]): ReactNode[] {
 // converted in a worker that is ended when the document closes, fails or
 // takes too long. Find is the browser's: the text is the page's own.
 export default function DocxPreview({ blob, onDownload }: DocumentViewerProps) {
+  const { t } = useT()
   const [attempt, setAttempt] = useState(0)
   const [doc, setDoc] = useState<Doc>({ status: 'loading' })
 
@@ -131,11 +138,11 @@ export default function DocxPreview({ blob, onDownload }: DocumentViewerProps) {
       />
     )
   if (doc.status === 'loading')
-    return <DocumentMessage>Opening…</DocumentMessage>
+    return <DocumentMessage>{t('files.document.opening')}</DocumentMessage>
   const notes = [
-    doc.truncated && 'Too long to show in full',
+    doc.truncated && t('files.docx.truncated'),
     doc.imagesOmitted > 0 &&
-      `${doc.imagesOmitted} ${doc.imagesOmitted === 1 ? 'image' : 'images'} not shown`,
+      t('files.docx.imagesOmitted', { count: doc.imagesOmitted }),
   ].filter(Boolean)
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -144,16 +151,16 @@ export default function DocxPreview({ blob, onDownload }: DocumentViewerProps) {
           action={
             onDownload && (
               <Button size="sm" variant="secondary" onClick={onDownload}>
-                Download
+                {t('files.download')}
               </Button>
             )
           }
         >
-          {notes.join('; ')}
+          {notes.join(t('files.docx.noteSeparator'))}
         </Banner>
       )}
       <div className="min-h-0 flex-1 overflow-auto bg-bg">
-        <article className={PROSE}>{renderDocTree(doc.tree)}</article>
+        <article className={PROSE}>{renderDocTree(doc.tree, t)}</article>
       </div>
     </div>
   )

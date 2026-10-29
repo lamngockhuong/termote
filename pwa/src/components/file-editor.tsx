@@ -9,6 +9,9 @@ import {
 import { useMediaQuery } from '../hooks/use-media-query'
 import { type FileEncoding, RequestError } from '../hooks/use-mux-api'
 import type { SyncSide } from '../hooks/use-scroll-sync'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
 import { encodingLabel } from '../utils/file-encoding'
 import { lazyRetry } from '../utils/lazy-retry'
 import { selectedLines, type TextLines } from '../utils/line-range'
@@ -30,21 +33,22 @@ export type SaveError =
   | { kind: 'unsure' }
   | { kind: 'refused'; message: string }
 
-const REFUSED: Record<string, string> = {
-  sensitive: 'Show the file before saving it',
-  permission: "The server can't write this file",
-  not_editable: "This file can't be edited here",
-  not_text: 'Only text without NUL characters can be saved',
-  too_large: 'The file would be larger than 1 MiB',
-  busy: 'Too many saves at once. Try again',
-  storage_full: "The host's disk or quota is full",
-  read_only: 'The file system there is read-only',
+const REFUSED: Record<string, MessageKey> = {
+  sensitive: 'files.save.sensitive',
+  permission: 'files.save.permission',
+  not_editable: 'files.save.notEditable',
+  not_text: 'files.save.notText',
+  too_large: 'files.save.tooLarge',
+  busy: 'files.save.busy',
+  storage_full: 'files.refused.storageFull',
+  read_only: 'files.refused.readOnly',
 }
 
 // encoding: what the save wrote the text in, to name it when a character
 // does not fit
 export function saveErrorOf(
   err: unknown,
+  t: Translate<MessageKey>,
   encoding: FileEncoding = 'utf-8',
 ): SaveError {
   if (!(err instanceof RequestError)) return { kind: 'unsure' }
@@ -53,18 +57,23 @@ export function saveErrorOf(
   if (err.code === 'unencodable')
     return {
       kind: 'refused',
-      message: `Line ${err.line} has "${err.char}", which ${encodingLabel(encoding)} can't hold. Change it or save as UTF-8`,
+      message: t('files.save.unencodable', {
+        line: String(err.line),
+        char: String(err.char),
+        encoding: encodingLabel(encoding, t),
+      }),
     }
   // A draft kept from before encodings, of a file no longer UTF-8
   if (err.code === 'not_editable' && err.reason === 'encoding-required')
-    return { kind: 'refused', message: 'Reload the app to save this file' }
-  const message =
+    return { kind: 'refused', message: t('files.save.reloadApp') }
+  const message = t(
     REFUSED[err.code] ??
-    (err.status === 404
-      ? 'File not found on the host'
-      : err.status === 403
-        ? "This file can't be written"
-        : 'Could not save the file')
+      (err.status === 404
+        ? 'files.save.notFound'
+        : err.status === 403
+          ? 'files.save.forbidden'
+          : 'files.save.failed'),
+  )
   return { kind: 'refused', message }
 }
 
@@ -109,7 +118,7 @@ interface Props {
 export function SaveBanner({
   error,
   rootMoved,
-  reloadLabel = 'Reload',
+  reloadLabel,
   onReload,
   onCopy,
 }: {
@@ -119,15 +128,15 @@ export function SaveBanner({
   onReload: () => void
   onCopy: () => void
 }) {
+  const { t } = useT()
   const copy = (
     <Button size="sm" variant="secondary" onClick={onCopy}>
-      Copy my text
+      {t('files.viewer.copyMine')}
     </Button>
   )
   return rootMoved ? (
     <Banner variant="warning" action={copy}>
-      This pane's folder changed. Copy your text, then discard it to open the
-      file again.
+      {t('files.save.rootMoved')}
     </Banner>
   ) : error?.kind === 'changed' ? (
     <Banner
@@ -135,18 +144,16 @@ export function SaveBanner({
       action={
         <span className="flex gap-1.5">
           <Button size="sm" variant="secondary" onClick={onReload}>
-            {reloadLabel}
+            {reloadLabel ?? t('files.save.reload')}
           </Button>
           {copy}
         </span>
       }
     >
-      The file changed on the host since you opened it
+      {t('files.save.changed')}
     </Banner>
   ) : error?.kind === 'unsure' ? (
-    <Banner variant="warning">
-      Not sure the file was saved. Saving again is safe.
-    </Banner>
+    <Banner variant="warning">{t('files.save.unsure')}</Banner>
   ) : error?.kind === 'refused' ? (
     <Banner variant="danger">{error.message}</Banner>
   ) : null
@@ -162,6 +169,7 @@ const CodeEditor = lazyRetry(() => import('./code-editor'), 'CodeEditor')
 // failed shows above it, in the viewer (SaveBanner).
 export function FileEditor(props: Props) {
   const { rootMoved } = props
+  const { t } = useT()
   const fine = useMediaQuery('(pointer: fine)')
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -176,17 +184,17 @@ export function FileEditor(props: Props) {
                 variant="warning"
                 action={
                   <Button size="sm" variant="secondary" onClick={retry}>
-                    Retry
+                    {t('files.search.retry')}
                   </Button>
                 }
               >
-                Could not load the editor
+                {t('files.save.editorFailed')}
               </Banner>
               <PlainEditor {...props} />
             </>
           )}
         >
-          <Suspense fallback={<ViewMessage>Loading…</ViewMessage>}>
+          <Suspense fallback={<ViewMessage>{t('files.loading')}</ViewMessage>}>
             <CodeEditor
               path={props.path}
               text={props.text}
@@ -230,6 +238,7 @@ function PlainEditor({
   hidden = false,
   onPasteImage,
 }: Props) {
+  const { t } = useT()
   const area = useRef<HTMLTextAreaElement>(null)
   useEffect(() => {
     if (!linesRef) return
@@ -270,7 +279,7 @@ function PlainEditor({
     <textarea
       ref={area}
       data-scroll-restore
-      aria-label={`Text of ${path}`}
+      aria-label={t('files.editor.text', { path })}
       value={text}
       onChange={(e) => onChange(e.target.value)}
       onKeyDown={onKeyDown}

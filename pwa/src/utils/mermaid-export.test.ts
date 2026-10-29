@@ -7,6 +7,7 @@ import {
   type Mock,
   vi,
 } from 'vitest'
+import { tFor } from '../i18n/i18n-context'
 import { BLOB_REVOKE_MS } from './download-file'
 import {
   canCopyImage,
@@ -23,6 +24,8 @@ import {
   svgBlob,
 } from './mermaid-export'
 import type { MermaidImage } from './mermaid-render'
+
+const en = tFor('en')
 
 const SVG_URL = 'data:image/svg+xml;charset=utf-8,%3Csvg%3E'
 const IMG: MermaidImage = {
@@ -394,7 +397,7 @@ describe('pngOf', () => {
 
 describe('sharePng', () => {
   it('shares the PNG under the given name', async () => {
-    await sharePng(IMG, 'a-mermaid-1', notify)
+    await sharePng(IMG, 'a-mermaid-1', notify, en)
     const [arg] = sheet.mock.calls[0] as unknown as [{ files: File[] }]
     expect(arg.files[0].name).toBe('a-mermaid-1.png')
     expect(arg.files[0].type).toBe('image/png')
@@ -408,32 +411,32 @@ describe('sharePng', () => {
         .mockRejectedValue(new DOMException('closed', 'AbortError')),
       canShare: () => true,
     })
-    await sharePng(IMG, 'a-mermaid-1', notify)
+    await sharePng(IMG, 'a-mermaid-1', notify, en)
     expect(notify).not.toHaveBeenCalled()
   })
 
   it('asks for a new tap when the browser refused the sheet', async () => {
     stubNav({ share: vi.fn().mockRejectedValue(notAllowed()) })
-    await sharePng(IMG, 'a-mermaid-1', notify)
+    await sharePng(IMG, 'a-mermaid-1', notify, en)
     expect(notify).toHaveBeenCalledWith('Diagram ready: tap Share again')
   })
 
   it('tells the user when the sheet fails otherwise', async () => {
     stubNav({ share: vi.fn().mockRejectedValue(new Error('boom')) })
-    await sharePng(IMG, 'a-mermaid-1', notify)
+    await sharePng(IMG, 'a-mermaid-1', notify, en)
     expect(notify).toHaveBeenCalledWith('Could not share the diagram')
   })
 
   it('tells the user when the diagram cannot be drawn', async () => {
     stubCanvas({ context: false })
-    await sharePng(IMG, 'a-mermaid-1', notify)
+    await sharePng(IMG, 'a-mermaid-1', notify, en)
     expect(notify).toHaveBeenCalledWith('Could not share the diagram')
   })
 })
 
 describe('copyPng', () => {
   it('makes the ClipboardItem before the first await, with the PNG to come', async () => {
-    const done = copyPng(IMG, notify)
+    const done = copyPng(IMG, notify, en)
     expect(items).toHaveLength(1)
     const png = items[0].data['image/png']
     expect(png).toBeInstanceOf(Promise)
@@ -447,13 +450,13 @@ describe('copyPng', () => {
     stubNav({
       clipboard: { write: vi.fn().mockRejectedValue(notAllowed()) },
     })
-    await copyPng(IMG, notify)
+    await copyPng(IMG, notify, en)
     expect(notify).toHaveBeenCalledWith('Could not copy the diagram')
   })
 
   it('tells the user when the diagram cannot be drawn', async () => {
     stubCanvas({ context: false })
-    await copyPng(IMG, notify)
+    await copyPng(IMG, notify, en)
     expect(notify).toHaveBeenCalledWith('Could not copy the diagram')
   })
 })
@@ -462,7 +465,7 @@ describe('downloadSvg', () => {
   it('saves the SVG through a link named for the diagram', async () => {
     const clicks = watchLinks()
     vi.useFakeTimers()
-    await downloadSvg(IMG, 'a-mermaid-1', notify, false)
+    await downloadSvg(IMG, 'a-mermaid-1', notify, en, false)
     expect(URL.createObjectURL).toHaveBeenCalledWith(expect.any(Blob))
     expect(clicks).toEqual([
       { href: 'blob:svg', download: 'a-mermaid-1.svg', attached: true },
@@ -472,7 +475,7 @@ describe('downloadSvg', () => {
 
   it('uses the link on desktop when no iOS flag is given', async () => {
     const clicks = watchLinks()
-    await downloadSvg(IMG, 'a-mermaid-1', notify)
+    await downloadSvg(IMG, 'a-mermaid-1', notify, en)
     expect(clicks).toHaveLength(1)
     expect(clicks[0].download).toBe('a-mermaid-1.svg')
   })
@@ -480,7 +483,7 @@ describe('downloadSvg', () => {
   it('revokes the blob: URL only after the save had time to start', async () => {
     watchLinks()
     vi.useFakeTimers()
-    await downloadSvg(IMG, 'a-mermaid-1', notify, false)
+    await downloadSvg(IMG, 'a-mermaid-1', notify, en, false)
     expect(URL.revokeObjectURL).not.toHaveBeenCalled()
     vi.advanceTimersByTime(BLOB_REVOKE_MS)
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:svg')
@@ -490,7 +493,7 @@ describe('downloadSvg', () => {
     const clicks = watchLinks()
     const sheet = share()
     stubNav({ share: sheet, canShare: () => true })
-    await downloadSvg(IMG, 'a-mermaid-1', notify, true)
+    await downloadSvg(IMG, 'a-mermaid-1', notify, en, true)
     const [arg] = sheet.mock.calls[0] as unknown as [{ files: File[] }]
     expect(arg.files[0].name).toBe('a-mermaid-1.svg')
     expect(clicks).toHaveLength(0)
@@ -500,7 +503,7 @@ describe('downloadSvg', () => {
   it('from the iOS home-screen app, falls back to a link when no file can be shared', async () => {
     const clicks = watchLinks()
     stubNav({ share: share() })
-    await downloadSvg(IMG, 'a-mermaid-1', notify, true)
+    await downloadSvg(IMG, 'a-mermaid-1', notify, en, true)
     expect(clicks).toEqual([
       { href: 'blob:svg', download: 'a-mermaid-1.svg', attached: true },
     ])
@@ -511,7 +514,7 @@ describe('downloadSvg', () => {
       share: vi.fn().mockRejectedValue(notAllowed()),
       canShare: () => true,
     })
-    await downloadSvg(IMG, 'a-mermaid-1', notify, true)
+    await downloadSvg(IMG, 'a-mermaid-1', notify, en, true)
     expect(notify).toHaveBeenCalledWith('Diagram ready: tap Download again')
   })
 
@@ -522,7 +525,7 @@ describe('downloadSvg', () => {
         .mockRejectedValue(new DOMException('closed', 'AbortError')),
       canShare: () => true,
     })
-    await downloadSvg(IMG, 'a-mermaid-1', notify, true)
+    await downloadSvg(IMG, 'a-mermaid-1', notify, en, true)
     expect(notify).not.toHaveBeenCalled()
   })
 
@@ -531,7 +534,7 @@ describe('downloadSvg', () => {
       share: vi.fn().mockRejectedValue(new Error('boom')),
       canShare: () => true,
     })
-    await downloadSvg(IMG, 'a-mermaid-1', notify, true)
+    await downloadSvg(IMG, 'a-mermaid-1', notify, en, true)
     expect(notify).toHaveBeenCalledWith('Could not download the diagram')
   })
 })

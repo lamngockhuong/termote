@@ -8,6 +8,7 @@ import {
 } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider, useTheme } from '../contexts/theme-context'
+import { tFor } from '../i18n/i18n-context'
 import type { MermaidResult } from '../utils/mermaid-render'
 import MarkdownPreview from './markdown-preview'
 import { LIVE_RENDER_DELAY, MERMAID_REASONS } from './mermaid-block'
@@ -133,7 +134,7 @@ describe('MermaidBlock', () => {
     async (reason, message) => {
       mockRender.mockResolvedValue({ ok: false, reason })
       show(`${md(GRAPH)}\n\n## After`)
-      expect(await screen.findByText(message)).toBeInTheDocument()
+      expect(await screen.findByText(tFor('en')(message))).toBeInTheDocument()
       expect(screen.getByTestId('fenced-code')).toHaveTextContent('A --> B')
       expect(screen.queryByRole('img')).toBeNull()
       expect(screen.queryByRole('button', { name: 'Show source' })).toBeNull()
@@ -145,7 +146,9 @@ describe('MermaidBlock', () => {
   it('falls back to the source when the image cannot be decoded', async () => {
     show(md(GRAPH))
     fireEvent.error(await screen.findByAltText('Mermaid diagram 1'))
-    expect(screen.getByText(MERMAID_REASONS.render_failed)).toBeInTheDocument()
+    expect(
+      screen.getByText(tFor('en')(MERMAID_REASONS.render_failed)),
+    ).toBeInTheDocument()
     expect(screen.getByTestId('fenced-code')).toHaveTextContent('A --> B')
   })
 
@@ -188,7 +191,9 @@ describe('MermaidBlock', () => {
     show(md(GRAPH))
     ;(await fullScreen()).focus()
     fireEvent.error(screen.getByAltText('Mermaid diagram 1'))
-    expect(screen.getByText(MERMAID_REASONS.render_failed)).toBeInTheDocument()
+    expect(
+      screen.getByText(tFor('en')(MERMAID_REASONS.render_failed)),
+    ).toBeInTheDocument()
     expect(document.activeElement).toBe(screen.getByTestId('mermaid-block'))
   })
 
@@ -197,7 +202,9 @@ describe('MermaidBlock', () => {
     ;(await fullScreen()).focus()
     mockRender.mockResolvedValueOnce({ ok: false, reason: 'render_failed' })
     await act(async () => setTheme('dark'))
-    expect(screen.getByText(MERMAID_REASONS.render_failed)).toBeInTheDocument()
+    expect(
+      screen.getByText(tFor('en')(MERMAID_REASONS.render_failed)),
+    ).toBeInTheDocument()
     expect(document.activeElement).toBe(screen.getByTestId('mermaid-block'))
   })
 
@@ -303,7 +310,7 @@ describe('MermaidBlock', () => {
     expect(first.aborted).toBe(true)
     await screen.findByAltText('Mermaid diagram 1')
     await act(async () => old.resolve({ ok: false, reason: 'syntax' }))
-    expect(screen.queryByText(MERMAID_REASONS.syntax)).toBeNull()
+    expect(screen.queryByText(tFor('en')(MERMAID_REASONS.syntax))).toBeNull()
     expect(screen.getByAltText('Mermaid diagram 1')).toBeInTheDocument()
   })
 
@@ -374,7 +381,9 @@ describe('MermaidBlock: while its source is edited', () => {
     await act(async () => {})
     p.again(md('graph TD\n  A -->'))
     await act(async () => vi.advanceTimersByTime(LIVE_RENDER_DELAY))
-    expect(screen.getByText(MERMAID_REASONS.syntax)).toBeInTheDocument()
+    expect(
+      screen.getByText(tFor('en')(MERMAID_REASONS.syntax)),
+    ).toBeInTheDocument()
     expect(screen.getByAltText('Mermaid diagram 1')).toHaveAttribute(
       'src',
       urlOf(1),
@@ -382,7 +391,9 @@ describe('MermaidBlock: while its source is edited', () => {
     // Its source can still be shown, the reason with it
     fireEvent.click(screen.getByRole('button', { name: 'Show source' }))
     expect(screen.queryByAltText('Mermaid diagram 1')).toBeNull()
-    expect(screen.getByText(MERMAID_REASONS.syntax)).toBeInTheDocument()
+    expect(
+      screen.getByText(tFor('en')(MERMAID_REASONS.syntax)),
+    ).toBeInTheDocument()
   })
 
   it('shows a diagram drawn before at once, and says it renders when none was', async () => {
@@ -527,7 +538,7 @@ describe('MermaidBlock: export', () => {
     p.unmount()
     mockRender.mockResolvedValueOnce({ ok: false, reason: 'syntax' })
     show(md(GRAPH))
-    await screen.findByText(MERMAID_REASONS.syntax)
+    await screen.findByText(tFor('en')(MERMAID_REASONS.syntax))
     expect(exportButtons()).toEqual([null, null, null])
   })
 
@@ -586,7 +597,9 @@ describe('MermaidBlock: export', () => {
     await screen.findByAltText('Mermaid diagram 1')
     screen.getByRole('button', { name: 'Download diagram as SVG' }).focus()
     fireEvent.error(screen.getByAltText('Mermaid diagram 1'))
-    expect(screen.getByText(MERMAID_REASONS.render_failed)).toBeInTheDocument()
+    expect(
+      screen.getByText(tFor('en')(MERMAID_REASONS.render_failed)),
+    ).toBeInTheDocument()
     expect(document.activeElement).toBe(screen.getByTestId('mermaid-block'))
   })
 

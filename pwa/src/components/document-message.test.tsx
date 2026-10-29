@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { RequestError } from '../hooks/use-mux-api'
+import { tFor } from '../i18n/i18n-context'
 import { DocumentWorkerError } from '../utils/document-worker-client'
 import { ZipGuardError } from '../utils/zip-guard'
 import {
@@ -32,7 +33,7 @@ describe('documentErrorText', () => {
     [new Error('x'), 'Could not load the file'],
     ['x', 'Could not load the file'],
   ])('%s', (error, text) => {
-    expect(documentErrorText(error)).toBe(text)
+    expect(documentErrorText(error, tFor('en'), 'en')).toBe(text)
   })
 
   it('tells the code of each kind of failure', () => {
