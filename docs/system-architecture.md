@@ -483,7 +483,7 @@ refusal.
 build and reloads on mismatch. A health `version` other than the PWA's own (or a new service
 worker waiting, `registerType: 'prompt'`) only shows a Reload banner, so an unsaved edit is never
 lost to a reload; the reload tells the waiting worker to skip waiting first. `install`
-(`release`, `checkout`, `container`, `unknown`) names the update command Settings > Updates shows. The old `/api/tmux/*` paths and the `/terminal/` iframe route
+(`release`, `homebrew`, `checkout`, `container`, `unknown`; the PWA reads a kind it does not know as `unknown`) names the update command Settings > Updates shows. The old `/api/tmux/*` paths and the `/terminal/` iframe route
 are gone; `/terminal/` now answers `410 Gone` so a stale cached PWA bundle gets a readable
 error instead of a broken page.
 
@@ -1596,7 +1596,8 @@ termote update --force           # Force reinstall current version
 
 **Safeguards:**
 
-- Refuses to run from a git checkout, or for a binary not installed by the installer
+- Refuses to run from a git checkout, or for a binary not installed by the installer; a Homebrew
+  install is told to run `brew upgrade termote && termote restart`
 - Warns on downgrade (but allows it with an explicit `--version`)
 - Without `--version`, refuses to go from a signed release (1.10.0 or later) to one before 1.10.0
 - Skips reinstall if already on target version (unless `--force`)

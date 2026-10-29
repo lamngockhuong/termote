@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { InstallKind } from '../hooks/use-mux-api'
 import type { LatestRelease } from '../hooks/use-update-check'
 import { UpdatesSection } from './updates-section'
 
@@ -103,6 +104,24 @@ describe('UpdatesSection', () => {
       screen.getByText('termote update && termote container up'),
     ).toBeInTheDocument()
     expect(screen.getByText(/not in this container/)).toBeInTheDocument()
+  })
+
+  it('names the brew upgrade for a Homebrew install', () => {
+    mockState.latest = LATEST
+    renderSection({ server: { version: '1.13.0', install: 'homebrew' } })
+    expect(
+      screen.getByText('brew upgrade termote && termote restart'),
+    ).toBeInTheDocument()
+  })
+
+  // A cached page can talk to a newer server that reports a kind it does
+  // not know yet.
+  it('treats an install kind it does not know as unknown', () => {
+    mockState.latest = LATEST
+    renderSection({
+      server: { version: '1.13.0', install: 'future' as InstallKind },
+    })
+    expect(screen.getByText(/the way it was installed/)).toBeInTheDocument()
   })
 
   // A checkout's commands differ by OS; an unknown install has none.

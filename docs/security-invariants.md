@@ -1907,6 +1907,14 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   Bluetooth, MIDI and display capture (never the clipboard: paste and copy on select use it).
   Every E2E spec imports `test` from `pwa/e2e/fixtures.ts`, which fails a test on any CSP
   violation
+- **Homebrew install** (`homebrewOpt`, `server/install_layout.go`): a binary is a brew install only
+  when its resolved path is `<prefix>/Cellar/termote/<v>/bin/termote` (path components, not a
+  substring) and `<prefix>/opt/termote/bin/termote` resolves to the same file. Then `start`
+  registers the service with that `opt` path (it survives `brew upgrade`, the Cellar path does
+  not), `update` refuses and names `brew upgrade termote && termote restart`, `link` writes
+  nothing, `unlink` still removes only its own links, `uninstall` removes the service and leaves
+  the binary to `brew uninstall`, and health reports `install: "homebrew"`. Any other layout, or
+  an `opt` link to another version, runs as an unknown binary (its own path), as before
 - **Release integrity**: `release.yml`'s release job runs in the `release` environment (the
   maintainer approves each release; it holds `RELEASE_SIGNING_KEY`), writes `image-digest.txt`
   (the pushed image by digest) into `checksums.txt`, signs it with `openssl pkeyutl` and checks
@@ -1932,6 +1940,13 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `install.ps1` refuse a release before 1.10.0. The `docker` job pins the binfmt (QEMU) and
   BuildKit images it builds with by digest, like the actions; a Renovate `customManagers` entry
   updates both tags and digests.
+  The `homebrew` job (after `publish`, stable releases only, never a dry run) writes
+  `Formula/termote.rb` only from a `checksums.txt` whose `.sig` verifies with the key `install.sh`
+  pins, since brew checks nothing but the hash the formula names; it pushes with
+  `HOMEBREW_TAP_DEPLOY_KEY`, a deploy key that can write to `lamngockhuong/homebrew-tap` only,
+  held in the `release` environment, through ssh with GitHub's host keys from `gh api meta`
+  (`StrictHostKeyChecking=yes`), and never replaces a newer version in the tap.
+  `homebrew-verify` installs the pushed formula on macOS and Linux with no secret.
   The `docker` job pushes the image to GHCR by digest only, with no tag; `docker-tags`, which needs
   the release job, moves `x.y.z`, `x.y` and `latest` on GHCR and Docker Hub to that digest and fails
   when a tag names another one, and `publish` makes the draft public only after it. So a `v*` tag

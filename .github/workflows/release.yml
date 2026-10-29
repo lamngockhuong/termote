@@ -507,3 +507,115 @@ jobs:
     uses: ./.github/workflows/deploy-website.yml
     with:
       tag: v${{ needs.prepare.outputs.version }}
+
+  # ─────────────────────────────────────────────────────────────
+  # Homebrew tap (stable releases), once the release is public
+  # ─────────────────────────────────────────────────────────────
+
+  # brew checks only the hash a formula names, so the formula takes its hashes
+  # from a checksums.txt whose signature verifies with the key install.sh
+  # pins. The deploy key can push to lamngockhuong/homebrew-tap and nothing
+  # else, and lives in the approval-gated release environment. Nothing the
+  # release needs waits on these jobs: a failure leaves the tap one version
+  # behind until this job is re-run.
+  homebrew:
+    name: Update the Homebrew tap
+    runs-on: ubuntu-latest
+    needs: [prepare, publish]
+    if: needs.prepare.outputs.dry_run != 'true' && !contains(needs.prepare.outputs.version, '-')
+    environment: release
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.push.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: v${{ needs.prepare.outputs.version }}
+          persist-credentials: false
+
+      - name: Verify the signed checksums
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          gh release download "v$VERSION" --repo "$GITHUB_REPOSITORY" -p checksums.txt -p checksums.txt.sig -D "$RUNNER_TEMP/release"
+          sed -n "/^RELEASE_KEY='/,/^-----END PUBLIC KEY-----'/p" scripts/install.sh | sed "s/^RELEASE_KEY='//; s/'\$//" >"$RUNNER_TEMP/release-pub.pem"
+          openssl pkeyutl -verify -pubin -inkey "$RUNNER_TEMP/release-pub.pem" -rawin \
+            -in "$RUNNER_TEMP/release/checksums.txt" -sigfile "$RUNNER_TEMP/release/checksums.txt.sig" ||
+            { echo "::error::checksums.txt does not verify with the key install.sh pins"; exit 1; }
+
+      - name: Generate the formula
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: sh scripts/homebrew-formula.sh "$VERSION" "$RUNNER_TEMP/release/checksums.txt" >"$RUNNER_TEMP/termote.rb"
+
+      # The key is written to a 0600 file only for the clone and the push, and
+      # GitHub's host keys come from its API, so ssh never trusts on first use.
+      # A tap already on a newer version (a patch release of an older line)
+      # keeps it.
+      - name: Push the formula to the tap
+        id: push
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          [ -n "$HOMEBREW_TAP_DEPLOY_KEY" ] || { echo "::error::HOMEBREW_TAP_DEPLOY_KEY is not set in the release environment"; exit 1; }
+          key="$RUNNER_TEMP/tap-key"
+          trap 'rm -f "$key"' EXIT
+          (umask 077 && printf '%s\n' "$HOMEBREW_TAP_DEPLOY_KEY" >"$key")
+          gh api meta --jq '.ssh_keys[]' | sed 's/^/github.com /' >"$RUNNER_TEMP/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts"
+          git clone --depth 1 git@github.com:lamngockhuong/homebrew-tap.git "$RUNNER_TEMP/tap"
+          cd "$RUNNER_TEMP/tap"
+          current=$(sed -n 's|.*/releases/download/v\([0-9.]*\)/.*|\1|p' Formula/termote.rb 2>/dev/null | head -1)
+          if [ -n "$current" ] && [ "$current" != "$VERSION" ] &&
+            [ "$(printf '%s\n%s\n' "$current" "$VERSION" | sort -V | tail -1)" = "$current" ]; then
+            echo "::notice::the tap already holds termote $current, newer than $VERSION; left as it is"
+            echo "version=$current" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          mkdir -p Formula
+          cp "$RUNNER_TEMP/termote.rb" Formula/termote.rb
+          git add Formula/termote.rb
+          if git diff --cached --quiet; then
+            echo "The tap already holds this formula"
+          else
+            git -c user.name="github-actions[bot]" -c user.email="github-actions[bot]@users.noreply.github.com" \
+              commit -m "termote $VERSION"
+            git push origin HEAD:main
+          fi
+          echo "version=$VERSION" >>"$GITHUB_OUTPUT"
+
+  # Installs what users install, on both systems the formula serves, with no
+  # secret. A new brew audit rule fails here after the push: fix the
+  # generator and re-run the homebrew job.
+  homebrew-verify:
+    name: Install from the Homebrew tap (${{ matrix.os }})
+    needs: [prepare, homebrew]
+    if: needs.prepare.outputs.dry_run != 'true' && !contains(needs.prepare.outputs.version, '-')
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Set up Homebrew
+        if: runner.os == 'Linux'
+        uses: Homebrew/actions/setup-homebrew@eb02c69dbabdb66ff183c614f4ce7ab3c077592c # 2026.10.12.1
+
+      - name: Install, test and audit the formula
+        env:
+          VERSION: ${{ needs.homebrew.outputs.version }}
+        run: |
+          brew install lamngockhuong/tap/termote
+          got=$(termote version)
+          [ "$got" = "Termote v$VERSION" ] || { echo "::error::brew installed '$got', expected Termote v$VERSION"; exit 1; }
+          brew test lamngockhuong/tap/termote
+          brew audit --strict --formula lamngockhuong/tap/termote
+          brew style lamngockhuong/tap/termote

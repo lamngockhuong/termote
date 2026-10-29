@@ -316,3 +316,42 @@ func TestUninstallPurgeRemovesStateVolume(t *testing.T) {
 		t.Error("volume removed without --purge")
 	}
 }
+
+// On a brew install, uninstall removes the service and leaves the binary to
+// brew, saying how.
+func TestUninstallHomebrew(t *testing.T) {
+	tc, _ := homebrewCLI(t)
+	if code := tc.main([]string{"uninstall"}); code != 0 {
+		t.Fatal(tc.stderr.String())
+	}
+	if !fileExists(tc.exe) {
+		t.Fatal("uninstall removed the brew binary")
+	}
+	if !strings.Contains(tc.stdout.String(), "brew uninstall termote") {
+		t.Fatalf("output:\n%s", tc.stdout.String())
+	}
+}
+
+// Uninstalling a brew install beside the installer's leaves that install's
+// command alone, as it leaves the install.
+func TestUninstallHomebrewKeepsOtherInstallLink(t *testing.T) {
+	tc, _ := homebrewCLI(t)
+	writeFile(t, tc.versionBinary("1.0.0"), "bin")
+	tc.setPointer("current", "1.0.0")
+	link := filepath.Join(tc.userBinDir(), "termote")
+	if err := os.MkdirAll(tc.userBinDir(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("../share/termote/current/bin/termote", link); err != nil {
+		t.Fatal(err)
+	}
+	if code := tc.main([]string{"uninstall"}); code != 0 {
+		t.Fatal(tc.stderr.String())
+	}
+	if _, err := os.Lstat(link); err != nil {
+		t.Fatal("uninstall removed the other install's command")
+	}
+	if !strings.Contains(tc.stdout.String(), "was left alone") {
+		t.Fatalf("output:\n%s", tc.stdout.String())
+	}
+}

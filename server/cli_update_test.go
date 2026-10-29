@@ -606,3 +606,13 @@ func TestLatestReleaseErrors(t *testing.T) {
 		t.Fatalf("unreachable: %v", err)
 	}
 }
+
+// Brew owns a brew install: update names the brew command and never reaches
+// GitHub (the test CLI has no HTTP client).
+func TestUpdateRefusesHomebrew(t *testing.T) {
+	tc, _ := homebrewCLI(t)
+	if code := tc.main([]string{"update"}); code != 1 ||
+		!strings.Contains(tc.stderr.String(), "brew upgrade termote && termote restart") {
+		t.Fatalf("update on brew: %s", tc.stderr.String())
+	}
+}
