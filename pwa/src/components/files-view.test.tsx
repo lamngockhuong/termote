@@ -46,6 +46,7 @@ const mockDelete = vi.fn()
 const mockRestore = vi.fn()
 const mockRename = vi.fn()
 const mockSearch = vi.fn()
+const mockTrash = vi.fn()
 vi.mock('../hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-mux-api')>()),
   fetchFilesTree: (...a: unknown[]) => mockTree(...a),
@@ -57,6 +58,7 @@ vi.mock('../hooks/use-mux-api', async (orig) => ({
   restoreFile: (...a: unknown[]) => mockRestore(...a),
   renameFile: (...a: unknown[]) => mockRename(...a),
   searchFiles: (...a: unknown[]) => mockSearch(...a),
+  fetchTrash: (...a: unknown[]) => mockTrash(...a),
 }))
 const mockCheckUpload = vi.fn()
 const mockUploadFile = vi.fn()
@@ -920,6 +922,7 @@ describe('FilesView delete', () => {
     mockHash.mockReset()
     mockDelete.mockReset()
     mockRestore.mockReset()
+    mockTrash.mockReset()
     mockHash.mockResolvedValue({ root: '/r', path: 'x', size: 1, hash: 'hh' })
   })
 
@@ -1028,6 +1031,132 @@ describe('FilesView delete', () => {
     expect(p.notify).toHaveBeenLastCalledWith('Could not restore .env', {
       variant: 'danger',
     })
+  })
+
+  it('an Undo of an entry gone elsewhere says so neutrally', async () => {
+    mockDelete.mockResolvedValue({
+      root: '/r',
+      path: 'README.md',
+      trashId: 't',
+    })
+    mockRestore.mockRejectedValueOnce(
+      new RequestError(404, 'not_in_trash', 'x'),
+    )
+    const p = await withTrash()
+    await choose('README.md')
+    await confirm()
+    await act(async () => lastAction(p.notify).onClick())
+    expect(p.notify).toHaveBeenLastCalledWith(
+      'README.md was already restored or removed',
+      { variant: 'info' },
+    )
+  })
+
+  it('offers the Trash only with a trash, to a full client, once the root is read', async () => {
+    const { unmount } = await show()
+    expect(screen.queryByRole('button', { name: 'Trash' })).toBeNull()
+    unmount()
+    const second = await withTrash({ readOnly: true })
+    expect(screen.queryByRole('button', { name: 'Trash' })).toBeNull()
+    second.unmount()
+    // The root not read yet: none (the store read it above)
+    resetFilesStores()
+    let answer: (v: unknown) => void = () => {}
+    mockTree.mockImplementationOnce(
+      () => new Promise((resolve) => (answer = resolve)),
+    )
+    await withTrash()
+    expect(screen.queryByRole('button', { name: 'Trash' })).toBeNull()
+    await act(async () =>
+      answer({
+        root: '/home/kim/app',
+        isRepo: true,
+        path: '',
+        entries: DIRS[''],
+      }),
+    )
+    expect(screen.getByRole('button', { name: 'Trash' })).toBeInTheDocument()
+  })
+
+  it('opens the Trash of the root shown, with a file open too', async () => {
+    mockContent.mockResolvedValue({
+      root: '/home/kim/app',
+      path: 'README.md',
+      size: 3,
+      text: 'hi',
+    })
+    mockTrash.mockResolvedValue({ root: '/home/kim/app', entries: [] })
+    await withTrash()
+    fireEvent.click(item('README.md'))
+    await screen.findByTestId('markdown-preview')
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Trash' })),
+    )
+    expect(mockTrash).toHaveBeenCalledWith(
+      { paneId: '%1', place: undefined },
+      '/home/kim/app',
+    )
+    expect(screen.getByText(/The trash is empty/)).toBeInTheDocument()
+  })
+
+  it('a discard restored from the Trash reads its open tab again', async () => {
+    mockContent.mockResolvedValue({
+      root: '/home/kim/app',
+      path: 'README.md',
+      size: 3,
+      text: 'hi',
+    })
+    const discard = {
+      trashId: 'x',
+      path: 'README.md',
+      kind: 'discard',
+      deletedAt: new Date().toISOString(),
+      expiresAt: new Date().toISOString(),
+      size: 3,
+    }
+    mockTrash.mockResolvedValue({ root: '/home/kim/app', entries: [discard] })
+    mockRestore.mockResolvedValue({ root: '/home/kim/app', path: 'README.md' })
+    await withTrash()
+    fireEvent.click(item('README.md'))
+    await screen.findByTestId('markdown-preview')
+    const reads = mockContent.mock.calls.length
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Trash' })),
+    )
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: 'Restore the discarded text of README.md',
+        }),
+      ),
+    )
+    await waitFor(() =>
+      expect(mockContent.mock.calls.length).toBeGreaterThan(reads),
+    )
+    // Another file's discard restored: this tab is not read again
+    mockTrash.mockResolvedValue({
+      root: '/home/kim/app',
+      entries: [{ ...discard, trashId: 'y', path: 'src/a.ts' }],
+    })
+    mockRestore.mockResolvedValue({ root: '/home/kim/app', path: 'src/a.ts' })
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Close' })),
+    )
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Trash' })),
+    )
+    const after = mockContent.mock.calls.length
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: 'Restore the discarded text of a.ts',
+        }),
+      ),
+    )
+    await act(async () => {})
+    expect(
+      mockContent.mock.calls.slice(after).filter((c) => c[1] === 'README.md'),
+    ).toHaveLength(0)
   })
 
   it('deletes for good after a second ask, with no Undo', async () => {

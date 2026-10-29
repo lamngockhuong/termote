@@ -40,6 +40,7 @@ import type { Session } from '../types/session'
 import { splitPath } from '../utils/files-format'
 import { isFocusWindow } from '../utils/focus-mode'
 import type { LinkPath } from '../utils/markdown-links'
+import { restoreFailure } from '../utils/restore-failure'
 import {
   commentedDiffLines,
   commentedFileLines,
@@ -501,21 +502,9 @@ function PaneChanges({
       refresh()
       notify(`Restored ${name}`, { variant: 'success' })
     } catch (err) {
-      const e = err instanceof RequestError ? err : undefined
-      if (e?.status === 409 && e.root) {
-        c.rootChanged(e.root)
-        notify(`The pane's directory changed; ${name} was not restored`, {
-          variant: 'warning',
-        })
-      } else if (e?.code === 'changed') {
-        notify(`${name} changed since; not restored`, { variant: 'warning' })
-      } else if (e?.code === 'exists') {
-        notify(`A file now exists at ${name}; not restored`, {
-          variant: 'warning',
-        })
-      } else {
-        notify(`Could not restore ${name}`, { variant: 'danger' })
-      }
+      const fail = restoreFailure(err, name)
+      if (fail.root) c.rootChanged(fail.root)
+      notify(fail.message, { variant: fail.variant })
     }
   }
 

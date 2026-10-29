@@ -46,7 +46,7 @@ import {
   useFilesFocusRequest,
   usePlaces,
 } from '../hooks/use-files'
-import { changesMoved } from '../hooks/use-git-changes'
+import { changesMoved, changesRefresh } from '../hooks/use-git-changes'
 import { useLongPress } from '../hooks/use-long-press'
 import {
   type FileEntry,
@@ -64,6 +64,7 @@ import { splitPath } from '../utils/files-format'
 import { isFocusWindow } from '../utils/focus-mode'
 import type { LinkPath } from '../utils/markdown-links'
 import { isApplePlatform } from '../utils/platform'
+import { restoreFailure } from '../utils/restore-failure'
 import { commentedFileLines, type ReviewComment } from '../utils/review-draft'
 import { chordFromEvent, SEARCH_CONTENT_KEY } from '../utils/shortcuts'
 import { visibleUnsafe } from '../utils/unsafe-chars'
@@ -88,6 +89,7 @@ import { RenameFileDialog } from './rename-file-dialog'
 import { ReviewCommentSheet } from './review-comment-sheet'
 import { ReviewControl } from './review-panel'
 import { DiscardTabDialog, RootCloseDialog } from './tab-close-dialogs'
+import { TrashButton, TrashSheet } from './trash-sheet'
 import { Button, FOCUS_RING, IconButton } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
 import { Menu, MenuItem } from './ui/menu'
@@ -456,6 +458,10 @@ function PaneFiles({
   }
   // A phone has a sheet of the open files in place of the tab bar
   const [listing, setListing] = useState(false)
+  // The Trash sheet, and the file a restored discard rewrote: its tab
+  // reads it again
+  const [trashOpen, setTrashOpen] = useState(false)
+  const [rewritten, setRewritten] = useState<Record<string, number>>({})
   const openFiles = isMobile && f.tabs.length > 0 && (
     <OpenFilesButton count={f.tabs.length} onClick={() => setListing(true)} />
   )
@@ -564,19 +570,9 @@ function PaneFiles({
       await f.restored(res.path)
       notify(`Restored ${name}`, { variant: 'success' })
     } catch (err) {
-      if (err instanceof RequestError && err.status === 409 && err.root) {
-        f.rootChanged(err.root)
-        notify(`The pane's directory changed; ${name} was not restored`, {
-          variant: 'warning',
-        })
-      } else if (err instanceof RequestError && err.code === 'exists') {
-        notify(
-          `A file now exists at ${visibleUnsafe(err.path ?? d.path)}; not restored`,
-          { variant: 'warning' },
-        )
-      } else {
-        notify(`Could not restore ${name}`, { variant: 'danger' })
-      }
+      const fail = restoreFailure(err, name, d.path)
+      if (fail.root) f.rootChanged(fail.root)
+      notify(fail.message, { variant: fail.variant })
     }
   }
 
@@ -798,6 +794,10 @@ function PaneFiles({
         refreshing={root?.loading}
       >
         <PlacesMenu places={places} place={f.place} onPick={f.openPlace} />
+        {/* Whether a file is open or not, and in a Place too */}
+        {canDelete && root?.entries && (
+          <TrashButton onClick={() => setTrashOpen(true)} />
+        )}
         {newFileRoot !== undefined && (
           <IconButton
             size="sm"
@@ -855,6 +855,22 @@ function PaneFiles({
         isOpen={isMobile && listing}
         onDismiss={() => setListing(false)}
       />
+      {canDelete && f.root && (
+        <TrashSheet
+          isOpen={trashOpen}
+          onDismiss={() => setTrashOpen(false)}
+          target={{ paneId, place: f.place }}
+          root={f.root}
+          notify={notify}
+          onRestored={(entry, path) => {
+            void f.restored(path)
+            if (entry.kind !== 'discard') return
+            setRewritten((r) => ({ ...r, [path]: (r[path] ?? 0) + 1 }))
+            changesRefresh(f.root as string)
+          }}
+          onRootChanged={f.rootChanged}
+        />
+      )}
       {creating !== undefined && (
         <NewFileDialog
           paneId={paneId}
@@ -945,7 +961,7 @@ function PaneFiles({
           <FileViewer
             // A new tab, root or path starts unrevealed unless the tab was
             // shown: a Show never carries over to another file
-            key={`${tab.id}\u0000${f.root}\u0000${tab.path}`}
+            key={`${tab.id}\u0000${f.root}\u0000${tab.path}\u0000${rewritten[tab.path] ?? 0}`}
             paneId={paneId}
             place={f.place}
             root={f.root}
