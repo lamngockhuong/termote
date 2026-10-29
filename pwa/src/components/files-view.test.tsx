@@ -1099,6 +1099,36 @@ describe('FilesView delete', () => {
     expect(screen.getByText(/The trash is empty/)).toBeInTheDocument()
   })
 
+  it('a file restored from the Trash shows in the tree again', async () => {
+    mockTrash.mockResolvedValue({
+      root: '/home/kim/app',
+      entries: [
+        {
+          trashId: 't',
+          path: 'src/b.ts',
+          kind: 'file',
+          deletedAt: new Date().toISOString(),
+          expiresAt: new Date().toISOString(),
+          size: 1,
+        },
+      ],
+    })
+    mockRestore.mockResolvedValue({ root: '/home/kim/app', path: 'src/b.ts' })
+    await withTrash()
+    mockTree.mockClear()
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Trash' })),
+    )
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Restore b.ts' })),
+    )
+    // The folders down to it are read again, src opened
+    expect(mockTree.mock.calls.map((c) => c[1])).toEqual(
+      expect.arrayContaining(['', 'src']),
+    )
+    expect(item('src')).toHaveAttribute('aria-expanded', 'true')
+  })
+
   it('a discard restored from the Trash reads its open tab again', async () => {
     mockContent.mockResolvedValue({
       root: '/home/kim/app',
