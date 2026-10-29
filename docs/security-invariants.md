@@ -1856,8 +1856,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   swept by the CLI and by `serve` at start. With `--no-auth` the plain link opens; with an old
   server or no password it opens with a warning saying why
 - **CLI and the saved password**: on Windows the native server (any port but the saved
-  container's; a port both are saved on is the native server's while a native service is registered,
-  `installedSupervisor`) gets the saved password over its pipe only (`cli.pipeOnly`, `server/cli_start.go`;
+  container's; a port both are saved on is the container's only while no native server is registered
+  or running, `installedSupervisor`, and the runtime reports the container running,
+  `containerRunning`, so a failed `schtasks`, `podman` or `docker` lookup keeps the password home)
+  gets the saved password over its pipe only (`cli.pipeOnly`, `server/cli_start.go`;
   `cli.tcpRequest` for `container status`): without the
   pipe, `status`, `url`, `panel` and the health wait of `start`/`restart`/`update`/`container up` ask over TCP
   without it, still only on a connection whose listeners pass the owner check below (else
