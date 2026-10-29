@@ -8,6 +8,7 @@ import {
 } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RequestError, type TrashEntry } from '../hooks/use-mux-api'
+import { renderWithLocale } from '../i18n/test-utils'
 import { TrashButton, TrashSheet } from './trash-sheet'
 
 const mockList = vi.fn()
@@ -108,13 +109,13 @@ describe('TrashSheet', () => {
     const first = rows()[0]
     expect(within(first).getByText('a.ts')).toBeInTheDocument()
     expect(within(first).getByText('src/')).toBeInTheDocument()
-    expect(first.textContent).toContain('File · 5 min ago · 2.0 KiB')
+    expect(first.textContent).toContain('File · 5 minutes ago · 2.0 KiB')
     expect(first.textContent).toContain('Removed by')
     expect(within(rows()[1]).getByLabelText('Sensitive')).toBeInTheDocument()
-    // A folder has no size, and an older entry its date
+    // A folder has no size
     expect(rows()[2].textContent).toContain('Folder · ')
     expect(rows()[2].textContent).not.toContain('KB')
-    expect(rows()[2].textContent).not.toContain('ago')
+    expect(rows()[2].textContent).toContain('3 days ago')
     expect(rows()[3].textContent).toContain('Discarded change')
     expect(rows()[3].textContent).toContain(
       "replaces the file's current content",
@@ -128,6 +129,28 @@ describe('TrashSheet', () => {
     p.rerender(<TrashSheet {...p} isOpen />)
     await act(async () => {})
     expect(mockList).toHaveBeenCalledTimes(2)
+  })
+
+  it('speaks Vietnamese when the app does', async () => {
+    renderWithLocale(
+      <TrashSheet
+        isOpen
+        onDismiss={vi.fn()}
+        target={{ paneId: '%1' }}
+        root="/r"
+        notify={vi.fn()}
+        onRestored={vi.fn()}
+        onRootChanged={vi.fn()}
+      />,
+      'vi',
+    )
+    await act(async () => {})
+    const list = screen.getByRole('list', { name: 'Các mục đã xoá' })
+    expect(within(list).getAllByRole('listitem')).toHaveLength(4)
+    expect(list.textContent).toContain('Thư mục')
+    expect(
+      screen.getByRole('button', { name: 'Dọn sạch thùng rác' }),
+    ).toBeInTheDocument()
   })
 
   it('reads nothing while closed', async () => {

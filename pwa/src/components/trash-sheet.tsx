@@ -10,35 +10,25 @@ import {
   restoreFile,
   type TrashEntry,
 } from '../hooks/use-mux-api'
+import { formatDate, formatRelative } from '../i18n/format'
+import { useT } from '../i18n/i18n-context'
 import { formatSize, splitPath } from '../utils/files-format'
-import { formatAgo } from '../utils/format-ago'
 import { restoreFailure } from '../utils/restore-failure'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { Button, IconButton } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
 import { Sheet } from './ui/sheet'
 
-const KIND_LABEL: Record<TrashEntry['kind'], string> = {
-  file: 'File',
-  dir: 'Folder',
-  discard: 'Discarded change',
-}
-
-// When an entry was deleted: minutes and hours ago, then the date
-function deletedWhen(at: string, now: number): string {
-  const ms = now - Date.parse(at)
-  return ms < 24 * 3_600_000 ? formatAgo(ms) : new Date(at).toLocaleDateString()
-}
-
 // The trash of the root Files shows: opens the Trash sheet
 export function TrashButton({ onClick }: { onClick: () => void }) {
+  const { t } = useT()
   return (
     <IconButton
       size="sm"
       variant="ghost"
       onClick={onClick}
-      aria-label="Trash"
-      title="Trash"
+      aria-label={t('files.trash')}
+      title={t('files.trash')}
     >
       <Trash size={15} aria-hidden="true" />
     </IconButton>
@@ -81,6 +71,7 @@ export function TrashSheet({
   onRestored: (entry: TrashEntry, path: string) => void
   onRootChanged: (root: string) => void
 }) {
+  const { t, locale } = useT()
   const [listing, setListing] = useState<Listing>({ status: 'loading' })
   const [asking, setAskingState] = useState<Asking>()
   // What a confirm acts on, cleared on its first press: a second press
@@ -145,7 +136,7 @@ export function TrashSheet({
     }
     if (err.code === 'not_in_trash' && id) {
       drop(id)
-      notify('Already restored or removed', { variant: 'info' })
+      notify(t('files.trash.gone'), { variant: 'info' })
       return true
     }
     return false
@@ -161,7 +152,7 @@ export function TrashSheet({
       )
       drop(entry.trashId)
       onRestored(entry, res.path)
-      notify(`Restored ${name}`, { variant: 'success' })
+      notify(t('files.trash.restored', { name }), { variant: 'success' })
     } catch (err) {
       const fail = restoreFailure(err, name, entry.path)
       if (fail.root) {
@@ -169,7 +160,7 @@ export function TrashSheet({
         onRootChanged(fail.root)
       }
       if (fail.gone) drop(entry.trashId)
-      notify(fail.gone ? 'Already restored or removed' : fail.message, {
+      notify(fail.gone ? t('files.trash.gone') : fail.message, {
         variant: fail.variant,
       })
     } finally {
@@ -186,10 +177,10 @@ export function TrashSheet({
         { root, trashId: entry.trashId },
       )
       drop(entry.trashId)
-      notify(`Deleted ${name} permanently`)
+      notify(t('files.trash.deleted', { name }))
     } catch (err) {
       if (!shared(err, entry.trashId))
-        notify(`Could not delete ${name}`, { variant: 'danger' })
+        notify(t('files.trash.deleteFailed', { name }), { variant: 'danger' })
     } finally {
       setRunning(false)
     }
@@ -201,13 +192,13 @@ export function TrashSheet({
       const res = await emptyTrash({ paneId, place }, { root, trashIds: ids })
       notify(
         res.failed > 0
-          ? `${res.failed} of them could not be deleted; try again`
-          : `Deleted ${res.removed} permanently`,
+          ? t('files.trash.emptyFailed', { count: res.failed })
+          : t('files.trash.emptied', { count: res.removed }),
         { variant: res.failed > 0 ? 'warning' : 'info' },
       )
     } catch (err) {
       if (!shared(err))
-        notify('Could not empty the trash', { variant: 'danger' })
+        notify(t('files.trash.emptyError'), { variant: 'danger' })
     } finally {
       setRunning(false)
       // What is left, and any older entry the 500 shown left out
@@ -232,37 +223,36 @@ export function TrashSheet({
       : ''
   return (
     <>
-      <Sheet isOpen={isOpen} onClose={onDismiss} title="Trash">
+      <Sheet isOpen={isOpen} onClose={onDismiss} title={t('files.trash')}>
         <div className="flex flex-col gap-2 pb-2">
           <p className="px-4 text-[12px] text-fg-subtle">
-            Only what was deleted while this folder was the root shows here.
-            Something deleted from another folder (before a cd, or from a place
-            or repository holding this one) is in that folder's trash.
+            {t('files.trash.scope')}
           </p>
           {listing.status === 'loading' && (
-            <p className="px-4 py-3 text-sm text-fg-muted">Loading…</p>
+            <p className="px-4 py-3 text-sm text-fg-muted">
+              {t('files.trash.loading')}
+            </p>
           )}
           {listing.status === 'error' && (
             <div className="flex items-center gap-2 px-4 py-3 text-sm text-fg-muted">
-              The trash can't be read
+              {t('files.trash.unreadable')}
               <Button size="sm" onClick={() => setLoads((n) => n + 1)}>
-                Try again
+                {t('files.trash.retry')}
               </Button>
             </div>
           )}
           {listing.status === 'ok' && shown.length === 0 && (
             <p className="px-4 py-3 text-sm text-fg-muted">
-              The trash is empty. A file on another file system than the trash
-              is deleted for good, so it is never here.
+              {t('files.trash.empty')}
             </p>
           )}
           {listing.status === 'ok' && listing.truncated && (
             <p className="px-4 text-[12px] text-fg-subtle">
-              Showing the 500 newest
+              {t('files.trash.truncated')}
             </p>
           )}
           {shown.length > 0 && (
-            <ul aria-label="Deleted items">
+            <ul aria-label={t('files.trash.list')}>
               {shown.map((e) => {
                 const [dir, base] = splitPath(e.path)
                 const name = visibleUnsafe(base)
@@ -277,7 +267,7 @@ export function TrashSheet({
                         {e.sensitive && (
                           <Lock
                             size={12}
-                            aria-label="Sensitive"
+                            aria-label={t('files.trash.sensitive')}
                             className="shrink-0 text-fg-subtle"
                           />
                         )}
@@ -288,16 +278,16 @@ export function TrashSheet({
                         </span>
                       )}
                       <span className="text-[12px] text-fg-subtle">
-                        {KIND_LABEL[e.kind]} · {deletedWhen(e.deletedAt, now)}
-                        {e.kind !== 'dir' && ` · ${formatSize(e.size)}`}
-                        {' · '}
-                        Removed by {new Date(e.expiresAt).toLocaleDateString()}{' '}
-                        at the latest
+                        {t(`files.trash.kind.${e.kind}`)} ·{' '}
+                        {formatRelative(Date.parse(e.deletedAt), locale, now)}
+                        {e.kind !== 'dir' && ` · ${formatSize(e.size)}`} ·{' '}
+                        {t('files.trash.removedBy', {
+                          date: formatDate(Date.parse(e.expiresAt), locale),
+                        })}
                       </span>
                       {e.kind === 'discard' && (
                         <span className="text-[12px] text-fg-subtle">
-                          Restoring replaces the file's current content; only
-                          while the file is unchanged since the discard
+                          {t('files.trash.discardNote')}
                         </span>
                       )}
                     </div>
@@ -311,13 +301,13 @@ export function TrashSheet({
                       }
                       aria-label={
                         e.kind === 'discard'
-                          ? `Restore the discarded text of ${name}`
-                          : `Restore ${name}`
+                          ? t('files.trash.restoreDiscardName', { name })
+                          : t('files.trash.restoreName', { name })
                       }
                       title={
                         e.kind === 'discard'
-                          ? 'Restore the discarded text'
-                          : 'Restore'
+                          ? t('files.trash.restoreDiscard')
+                          : t('files.trash.restore')
                       }
                     >
                       <RotateCcw size={15} aria-hidden="true" />
@@ -326,8 +316,8 @@ export function TrashSheet({
                       size="sm"
                       disabled={running}
                       onClick={() => setAsking({ kind: 'delete', entry: e })}
-                      aria-label={`Delete ${name} permanently`}
-                      title="Delete permanently"
+                      aria-label={t('files.trash.deleteForGoodName', { name })}
+                      title={t('files.trash.deleteForGood')}
                     >
                       <Trash2 size={15} aria-hidden="true" />
                     </IconButton>
@@ -350,7 +340,7 @@ export function TrashSheet({
                   })
                 }
               >
-                Empty trash
+                {t('files.trash.emptyTrash')}
               </Button>
             </div>
           )}
@@ -360,17 +350,17 @@ export function TrashSheet({
         isOpen={!!asking}
         title={
           asking?.kind === 'restore'
-            ? 'This is a sensitive file'
+            ? t('files.trash.askSensitive')
             : asking?.kind === 'delete'
-              ? 'Delete permanently?'
-              : 'Empty the trash?'
+              ? t('files.trash.askDelete')
+              : t('files.trash.askEmpty')
         }
         confirmLabel={
           asking?.kind === 'restore'
-            ? 'Restore'
+            ? t('files.trash.restore')
             : asking?.kind === 'delete'
-              ? 'Delete permanently'
-              : 'Empty trash'
+              ? t('files.trash.deleteForGood')
+              : t('files.trash.emptyTrash')
         }
         destructive={asking?.kind !== 'restore'}
         defaultAction="cancel"
@@ -378,13 +368,13 @@ export function TrashSheet({
         onCancel={() => setAsking(undefined)}
       >
         {asking?.kind === 'restore' &&
-          `${askingName} may contain secrets. Restore it?`}
+          t('files.trash.askSensitiveBody', { name: askingName })}
         {asking?.kind === 'delete' &&
-          `${askingName} will be deleted. This cannot be undone.`}
+          t('files.trash.askDeleteBody', { name: askingName })}
         {asking?.kind === 'empty' &&
           (asking.truncated
-            ? `Only the ${asking.ids.length} newest items, the ones shown, will be deleted; older ones stay. This cannot be undone.`
-            : `${asking.ids.length === 1 ? 'The 1 item' : `All ${asking.ids.length} items`} shown will be deleted. This cannot be undone.`)}
+            ? t('files.trash.askEmptyNewest', { count: asking.ids.length })
+            : t('files.trash.askEmptyBody', { count: asking.ids.length }))}
       </ConfirmDialog>
     </>
   )
