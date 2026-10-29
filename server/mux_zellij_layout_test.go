@@ -201,6 +201,41 @@ func TestZellijSwapAndResizePane(t *testing.T) {
 	}
 }
 
+// Zoom and swap wait for the session's slot, as split and resize do: a
+// client positioned meanwhile would focus another pane of the zoomed tab
+// (ending the zoom) or put back a client the zoom moved, and move-pane in a
+// zoomed tab moves nothing. Nothing is listed or run before the slot.
+func TestZellijZoomAndSwapWaitForTheSlot(t *testing.T) {
+	id := zellijPaneID("main", 1)
+	for name, run := range map[string]func(*zellijMux, context.Context) error{
+		"zoom": func(m *zellijMux, ctx context.Context) error { return m.ZoomPane(ctx, id, ZoomToggle) },
+		"swap": func(m *zellijMux, ctx context.Context) error { return m.SwapPane(ctx, id, SwapNext) },
+	} {
+		log := useFakeZellij(t, map[string]string{"--version": fakeZellijVersion, "list-panes": zellijPanesJSON()})
+		m := newTestZellijMux()
+		m.sessionSlot("main") <- struct{}{}
+		short, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+		err := run(m, short)
+		cancel()
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Errorf("%s without the session's slot = %v", name, err)
+		}
+		if strings.Contains(log(), "list-panes") || strings.Contains(log(), "toggle-fullscreen") || strings.Contains(log(), "move-pane") {
+			t.Errorf("%s ran without the session's slot: %q", name, log())
+		}
+		// Released, it runs and gives the slot back
+		<-m.sessionSlot("main")
+		if err := run(m, context.Background()); err != nil && !errors.Is(err, errZellijBusy) {
+			t.Errorf("%s with the slot free = %v", name, err)
+		}
+		select {
+		case m.sessionSlot("main") <- struct{}{}:
+		default:
+			t.Errorf("%s kept the session's slot", name)
+		}
+	}
+}
+
 func TestZellijPaneLayoutRefusals(t *testing.T) {
 	ctx := context.Background()
 	useFakeZellij(t, map[string]string{"--version": fakeZellijVersion, "list-panes": zellijPanesJSON()})
@@ -208,6 +243,8 @@ func TestZellijPaneLayoutRefusals(t *testing.T) {
 	for op, err := range map[string]error{
 		"swap of a bad id":       m.SwapPane(ctx, "x", SwapNext),
 		"swap of a missing pane": m.SwapPane(ctx, zellijPaneID("main", 9), SwapNext),
+		"resize of a bad id":     m.ResizePane(ctx, "x", ResizeUp, 1),
+		"zoom of a missing pane": m.ZoomPane(ctx, zellijPaneID("main", 9), ZoomOn),
 	} {
 		if !paneMissing(err) {
 			t.Errorf("%s = %v", op, err)

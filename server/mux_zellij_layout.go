@@ -52,6 +52,31 @@ func (m *zellijMux) layoutPane(ctx context.Context, paneID string) (string, zell
 	return session, p, err
 }
 
+// lockedLayoutPane is layoutPane under the session's slot, held until the
+// returned unlock: the pane is read and changed with no client positioning
+// in between. A positioning's focus-pane-id onto another pane of a zoomed
+// tab ends the zoom, and one that finds a client the zoom moved puts it
+// back the same way; move-pane in a zoomed tab moves nothing.
+func (m *zellijMux) lockedLayoutPane(ctx context.Context, paneID string) (string, zellijPaneInfo, func(), error) {
+	if !zellijCanPaneLayout(ctx) {
+		return "", zellijPaneInfo{}, nil, errPaneLayoutUnsupported
+	}
+	session, n, ok := parseZellijPaneID(paneID)
+	if !ok {
+		return "", zellijPaneInfo{}, nil, inputError("invalid pane id")
+	}
+	unlock, err := m.lockSession(ctx, session)
+	if err != nil {
+		return "", zellijPaneInfo{}, nil, err
+	}
+	p, err := zellijFindPane(ctx, session, n)
+	if err != nil {
+		unlock()
+		return "", zellijPaneInfo{}, nil, err
+	}
+	return session, p, unlock, nil
+}
+
 // zellijLayoutAction runs one action on terminal_n; a failure while the pane
 // is gone is errUnknownPane.
 func zellijLayoutAction(ctx context.Context, session string, n int, args ...string) error {
@@ -156,12 +181,14 @@ func (m *zellijMux) SplitPane(ctx context.Context, paneID string, dir SplitDir, 
 // listing's is_fullscreen: only when it changes, another fullscreen pane of
 // the tab first put back. Zellij moves every client of the tab onto the
 // pane it makes fullscreen. The tab's only pane has nothing to fill: Zellij
-// leaves it as it is, and so does the zoom, as tmux and Herdr do.
+// leaves it as it is, and so does the zoom, as tmux and Herdr do. It runs
+// under the session's slot (see lockedLayoutPane).
 func (m *zellijMux) ZoomPane(ctx context.Context, paneID string, mode ZoomMode) error {
-	session, p, err := m.layoutPane(ctx, paneID)
+	session, p, unlock, err := m.lockedLayoutPane(ctx, paneID)
 	if err != nil {
 		return err
 	}
+	defer unlock()
 	want := mode == ZoomOn || mode == ZoomToggle && !p.IsFullscreen
 	if want == p.IsFullscreen {
 		return nil
@@ -207,12 +234,14 @@ func (m *zellijMux) ZoomPane(ctx context.Context, paneID string, mode ZoomMode) 
 // SwapPane moves paneID one place on screen: next is move-pane, prev
 // move-pane-backwards. Zellij turns the tab's panes around and keeps their
 // ids, and the pane strip lists panes by id, so the strip keeps its order;
-// the move wraps around, so there is never no neighbour.
+// the move wraps around, so there is never no neighbour. It runs under the
+// session's slot (see lockedLayoutPane).
 func (m *zellijMux) SwapPane(ctx context.Context, paneID string, dir SwapDir) error {
-	session, p, err := m.layoutPane(ctx, paneID)
+	session, p, unlock, err := m.lockedLayoutPane(ctx, paneID)
 	if err != nil {
 		return err
 	}
+	defer unlock()
 	action := "move-pane"
 	if dir == SwapPrev {
 		action = "move-pane-backwards"
