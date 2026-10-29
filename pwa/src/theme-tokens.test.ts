@@ -126,6 +126,47 @@ describe('diff colours', () => {
   })
 })
 
+// APCA 0.0.98G-4g lightness contrast (Lc) of light text on a dark background,
+// as a magnitude (APCA reports it negative)
+function apcaDarkLc(text: string, bg: string) {
+  const y = (hex: string) => {
+    const [r, g, b] = [1, 3, 5].map(
+      (i) => (Number.parseInt(hex.slice(i, i + 2), 16) / 255) ** 2.4,
+    )
+    const v = 0.2126729 * r + 0.7151522 * g + 0.072175 * b
+    // biome-ignore lint/suspicious/noApproximativeNumericConstant: APCA's black clamp exponent, not √2
+    return v < 0.022 ? v + (0.022 - v) ** 1.414 : v
+  }
+  const sapc = (y(bg) ** 0.65 - y(text) ** 0.62) * 1.14
+  return sapc > -0.1 ? 0 : -(sapc + 0.027) * 100
+}
+
+describe('dark text brightness', () => {
+  // Every style lands on the same perceived contrast, readable but no brighter
+  it.each([
+    ['--tm-fg', 68, 73],
+    ['--tm-fg-muted', 50, 55],
+    ['--tm-fg-subtle', 41, 46],
+  ])('%s sits within Lc %i-%i on --tm-bg', (fg, min, max) => {
+    for (const s of styles) {
+      const lc = apcaDarkLc(s.dark.get(fg)!, s.dark.get('--tm-bg')!)
+      expect(lc, s.id).toBeGreaterThanOrEqual(min)
+      expect(lc, s.id).toBeLessThanOrEqual(max)
+    }
+  })
+
+  it.each(styles)('$id dark text keeps 4.5:1 on every surface', (s) => {
+    for (const fg of ['--tm-fg', '--tm-fg-muted', '--tm-fg-subtle']) {
+      for (const bg of ['--tm-bg', '--tm-surface', '--tm-surface-raised']) {
+        expect(
+          contrast(s.dark.get(fg)!, s.dark.get(bg)!),
+          `${fg} on ${bg}`,
+        ).toBeGreaterThanOrEqual(4.5)
+      }
+    }
+  })
+})
+
 describe('pre-paint script and browser colours', () => {
   const neutral = styles.find((s) => s.id === DEFAULT_UI_STYLE)!
   const script = html.match(/<script>([\s\S]*?)<\/script>/)![1]
