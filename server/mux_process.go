@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -57,6 +58,22 @@ func processName(raw string) string {
 	}
 	return capBytes(s, maxProcessName)
 }
+
+// agentProcessName is the name a pane shows for its process when an agent
+// was found in it. Claude Code sets its process title to its version, which
+// tmux reports as the command ("2.1.310" on macOS), so a name made of digits
+// and dots only is the agent's.
+func agentProcessName(name string, agent *AgentInfo) string {
+	if agent == nil || !versionTitleRe.MatchString(name) {
+		return name
+	}
+	if a := processName(agent.Name); a != "" {
+		return a
+	}
+	return name
+}
+
+var versionTitleRe = regexp.MustCompile(`^[0-9]+(\.[0-9]+)+$`)
 
 // processCwd is a pane's process directory as sent to clients, or "" when it
 // is not an absolute path.

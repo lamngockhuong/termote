@@ -294,7 +294,7 @@ func (m *herdrMux) snapshot(ctx context.Context, withBranches bool) (Snapshot, e
 			for pi := range tab.Panes {
 				p := &tab.Panes[pi]
 				if name := names[p.ID]; name != "" {
-					p.Process = &ProcessInfo{Name: name, Cwd: v.cwds[p.ID]}
+					p.Process = &ProcessInfo{Name: agentProcessName(name, p.Agent), Cwd: v.cwds[p.ID]}
 				}
 			}
 		}
