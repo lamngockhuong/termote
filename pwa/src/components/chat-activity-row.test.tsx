@@ -86,6 +86,13 @@ describe('ChatActivityRow', () => {
     expect(line()).not.toContain('​')
   })
 
+  it('keeps the text read out inside the row', () => {
+    render(<ChatActivityRow agent="Claude Code" activity={null} />)
+    // The absolute sr-only box would otherwise belong to the view outside
+    // the scrolling list (iOS Safari grew the page below the row)
+    expect(screen.getByRole('status').parentElement).toHaveClass('relative')
+  })
+
   it('pulses only when motion is allowed', () => {
     const { container } = render(
       <ChatActivityRow agent="Claude Code" activity={null} />,

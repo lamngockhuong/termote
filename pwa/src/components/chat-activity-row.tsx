@@ -81,7 +81,10 @@ export function ChatActivityRow({ activity, agent }: Props) {
       t('chat.activity.tokens', { tokens: visibleUnsafe(activity.tokens) }),
   ].filter((p): p is string => !!p)
   return (
-    <div className="flex items-center gap-2 text-[13px] text-fg-muted">
+    // relative: the text read out is absolute, and kept inside this row; its
+    // box otherwise belongs to the view outside the scrolling list, which
+    // iOS Safari grows by a screen of empty space below the row
+    <div className="relative flex items-center gap-2 text-[13px] text-fg-muted">
       <Sparkle
         size={14}
         aria-hidden="true"
