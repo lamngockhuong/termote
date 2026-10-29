@@ -1,6 +1,9 @@
 import { type ChangeEvent, useEffect, useRef, useState } from 'react'
 import { type PromptTemplate, RequestError } from '../hooks/use-mux-api'
 import { usePromptTemplates } from '../hooks/use-prompt-templates'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
 import { saveMadeFile } from '../utils/download-file'
 import {
   exportFile,
@@ -34,9 +37,10 @@ interface Importing {
 // Settings > Prompt templates: every device of this server shares them.
 // Read again when shown: another device may have changed them.
 export function PromptTemplatesSection({ readOnly = false }: Props) {
-  const t = usePromptTemplates()
-  const { refresh } = t
-  const canWrite = !readOnly && !t.readOnly
+  const { t } = useT()
+  const store = usePromptTemplates()
+  const { refresh } = store
+  const canWrite = !readOnly && !store.readOnly
   // undefined: no editor; null: a new template
   const [editing, setEditing] = useState<PromptTemplate | null | undefined>()
   const [deleting, setDeleting] = useState<Deleting | null>(null)
@@ -66,8 +70,8 @@ export function PromptTemplatesSection({ readOnly = false }: Props) {
   const remove = async ({ template }: Deleting) => {
     setDeleting(null)
     try {
-      await t.remove(template)
-      tell(null, `Deleted ${visibleUnsafe(template.name)}`)
+      await store.remove(template)
+      tell(null, t('settings.deleted', { name: visibleUnsafe(template.name) }))
     } catch (err) {
       if (
         err instanceof RequestError &&
@@ -77,13 +81,16 @@ export function PromptTemplatesSection({ readOnly = false }: Props) {
         setDeleting({ template: err.template, again: true })
       else if (err instanceof RequestError && err.code === 'not_found') {
         // Gone already: what the user wanted
-        tell(null, `Deleted ${visibleUnsafe(template.name)}`)
+        tell(
+          null,
+          t('settings.deleted', { name: visibleUnsafe(template.name) }),
+        )
         void refresh()
       } else
         tell(
           err instanceof RequestError && err.code
-            ? templateErrorText(err)
-            : 'Could not delete the template',
+            ? templateErrorText(err, t)
+            : t('settings.templates.deleteFailed'),
         )
     } finally {
       // The row and its button are gone: keep the place in the list
@@ -92,19 +99,19 @@ export function PromptTemplatesSection({ readOnly = false }: Props) {
   }
 
   const exportAll = () => {
-    const f = exportFile(t.templates)
+    const f = exportFile(store.templates)
     saveMadeFile(
       new File([f.text], f.name, { type: 'application/json' }),
-    ).catch(() => tell('Could not export the templates'))
+    ).catch(() => tell(t('settings.templates.exportFailed')))
   }
 
   // Asks the server what list would add and replace, then the user
   const check = async (list: TemplateEntry[]) => {
     try {
-      const preview = await t.previewImport(list)
+      const preview = await store.previewImport(list)
       setImporting({ list, ...preview })
     } catch (err) {
-      tell(importErrorText(err))
+      tell(importErrorText(err, t))
     }
   }
 
@@ -114,7 +121,11 @@ export function PromptTemplatesSection({ readOnly = false }: Props) {
     if (!file) return
     tell(null)
     if (file.size > MAX_IMPORT_FILE) {
-      tell(`The file is larger than ${MAX_IMPORT_FILE / 1024 / 1024} MB`)
+      tell(
+        t('settings.templates.fileTooLarge', {
+          size: MAX_IMPORT_FILE / 1024 / 1024,
+        }),
+      )
       return
     }
     setBusy(true)
@@ -123,10 +134,10 @@ export function PromptTemplatesSection({ readOnly = false }: Props) {
       try {
         json = await file.text()
       } catch {
-        tell('Could not read the file')
+        tell(t('settings.templates.readFileFailed'))
         return
       }
-      const parsed = parseImport(json)
+      const parsed = parseImport(json, t)
       if (!parsed.ok) tell(parsed.error)
       else await check(parsed.templates)
     } finally {
@@ -138,14 +149,20 @@ export function PromptTemplatesSection({ readOnly = false }: Props) {
     setImporting(null)
     setBusy(true)
     try {
-      const r = await t.importAll(i.list, i.replaced)
-      tell(null, `Imported: ${r.added} added, ${r.replaced} replaced`)
+      const r = await store.importAll(i.list, i.replaced)
+      tell(
+        null,
+        t('settings.templates.imported', {
+          added: r.added,
+          replaced: r.replaced,
+        }),
+      )
     } catch (err) {
       if (err instanceof RequestError && err.code === 'import_changed') {
         // Changed since the check: check again and ask again
-        tell(templateErrorText(err))
+        tell(templateErrorText(err, t))
         await check(i.list)
-      } else tell(importErrorText(err))
+      } else tell(importErrorText(err, t))
     } finally {
       setBusy(false)
     }
@@ -154,23 +171,21 @@ export function PromptTemplatesSection({ readOnly = false }: Props) {
   return (
     <div className="flex flex-col gap-2 px-4 py-2.5 ui-native:bg-surface-raised">
       <p className="m-0 text-[12px] text-fg-muted">
-        Saved on this server, shared by every device that signs in to it. Insert
-        one from the Chat: the Templates button, the / list or the command
-        palette.
+        {t('settings.templates.intro')}
       </p>
       {readOnly && (
         <p className="m-0 text-[12px] text-fg-muted">
-          This device is view only: the templates can be read and exported.
+          {t('settings.templates.viewOnly')}
         </p>
       )}
-      {!readOnly && t.readOnly && (
+      {!readOnly && store.readOnly && (
         <p className="m-0 text-[12px] text-fg-muted">
-          Saved by a newer Termote; update it to change templates.
+          {t('settings.templates.newer')}
         </p>
       )}
-      {(problem || (t.error && !t.loaded)) && (
+      {(problem || (store.error && !store.loaded)) && (
         <p role="alert" className="m-0 text-sm text-danger">
-          {problem ?? 'Could not read the templates'}
+          {problem ?? t('settings.templates.readFailed')}
         </p>
       )}
       {done && (
@@ -178,15 +193,17 @@ export function PromptTemplatesSection({ readOnly = false }: Props) {
           {done}
         </p>
       )}
-      {t.loaded && t.templates.length === 0 && (
-        <p className="m-0 text-sm text-fg-muted">No templates yet.</p>
+      {store.loaded && store.templates.length === 0 && (
+        <p className="m-0 text-sm text-fg-muted">
+          {t('settings.templates.none')}
+        </p>
       )}
-      {t.templates.length > 0 && (
+      {store.templates.length > 0 && (
         <ul
-          aria-label="Prompt templates"
+          aria-label={t('settings.group.templates')}
           className="m-0 flex list-none flex-col p-0"
         >
-          {t.templates.map((tpl) => {
+          {store.templates.map((tpl) => {
             const name = visibleUnsafe(tpl.name)
             return (
               <li
@@ -204,17 +221,17 @@ export function PromptTemplatesSection({ readOnly = false }: Props) {
                     <Button
                       size="sm"
                       onClick={() => edit(tpl)}
-                      aria-label={`Edit ${name}`}
+                      aria-label={t('settings.editName', { name })}
                     >
-                      Edit
+                      {t('settings.edit')}
                     </Button>
                     <Button
                       size="sm"
                       variant="danger"
                       onClick={() => setDeleting({ template: tpl })}
-                      aria-label={`Delete ${name}`}
+                      aria-label={t('settings.deleteName', { name })}
                     >
-                      Delete
+                      {t('settings.delete')}
                     </Button>
                   </>
                 )}
@@ -226,7 +243,7 @@ export function PromptTemplatesSection({ readOnly = false }: Props) {
       <div className="flex flex-wrap gap-2">
         {canWrite && (
           <Button ref={newRef} variant="secondary" onClick={() => edit(null)}>
-            New template
+            {t('settings.templates.new')}
           </Button>
         )}
         {canWrite && (
@@ -235,27 +252,27 @@ export function PromptTemplatesSection({ readOnly = false }: Props) {
             disabled={busy}
             onClick={() => fileRef.current?.click()}
           >
-            Import…
+            {t('settings.templates.import')}
           </Button>
         )}
         <Button
           variant="secondary"
-          disabled={t.templates.length === 0}
+          disabled={store.templates.length === 0}
           onClick={exportAll}
         >
-          Export
+          {t('settings.templates.export')}
         </Button>
       </div>
       {canWrite && (
         <>
           <p className="m-0 text-[12px] text-fg-muted">
-            Export first to keep a copy: an import cannot be undone.
+            {t('settings.templates.exportFirst')}
           </p>
           <input
             ref={fileRef}
             type="file"
             accept="application/json,.json"
-            aria-label="Templates file to import"
+            aria-label={t('settings.templates.file')}
             className="hidden"
             onChange={onFile}
           />
@@ -271,39 +288,45 @@ export function PromptTemplatesSection({ readOnly = false }: Props) {
         isOpen={!!deleting}
         title={
           deleting?.again
-            ? 'Changed on another device: delete anyway?'
-            : `Delete ${visibleUnsafe(deleting?.template.name ?? '')}?`
+            ? t('settings.deleteAgain')
+            : t('settings.deleteTitle', {
+                name: visibleUnsafe(deleting?.template.name ?? ''),
+              })
         }
-        confirmLabel="Delete"
+        confirmLabel={t('settings.delete')}
         destructive
         defaultAction={deleting?.again ? 'cancel' : 'confirm'}
         onConfirm={() => remove(deleting as Deleting)}
         onCancel={() => setDeleting(null)}
       >
         <p className="m-0">
-          Every device of this server loses{' '}
-          {visibleUnsafe(deleting?.template.name ?? '')}.
+          {t('settings.deleteBody', {
+            name: visibleUnsafe(deleting?.template.name ?? ''),
+          })}
         </p>
       </ConfirmDialog>
       <ConfirmDialog
         isOpen={!!importing}
-        title="Import templates?"
-        confirmLabel="Import"
+        title={t('settings.templates.importTitle')}
+        confirmLabel={t('settings.templates.importConfirm')}
         onConfirm={() => runImport(importing as Importing)}
         onCancel={() => setImporting(null)}
       >
         <div className="flex max-h-72 flex-col gap-2 overflow-y-auto">
           {importing && importing.added.length > 0 && (
-            <NameList title="New" names={importing.added} />
+            <NameList
+              title={t('settings.templates.added')}
+              names={importing.added}
+            />
           )}
           {importing && importing.replaced.length > 0 && (
             <NameList
-              title="Replaces the existing template"
+              title={t('settings.templates.replaced')}
               names={importing.replaced}
             />
           )}
           <p className="m-0 text-[12px] text-fg-muted">
-            An import cannot be undone.
+            {t('settings.templates.noUndo')}
           </p>
         </div>
       </ConfirmDialog>
@@ -312,10 +335,11 @@ export function PromptTemplatesSection({ readOnly = false }: Props) {
 }
 
 function NameList({ title, names }: { title: string; names: string[] }) {
+  const { t } = useT()
   return (
     <div>
       <p className="m-0 text-sm font-medium text-fg">
-        {title} ({names.length})
+        {t('settings.templates.listCount', { title, count: names.length })}
       </p>
       <ul aria-label={title} className="m-0 list-disc pl-5 text-sm text-fg">
         {names.map((n) => (
@@ -327,9 +351,9 @@ function NameList({ title, names }: { title: string; names: string[] }) {
 }
 
 // A refused import, naming the template when the server says which
-function importErrorText(err: unknown): string {
-  const text = templateErrorText(err)
+function importErrorText(err: unknown, t: Translate<MessageKey>): string {
+  const text = templateErrorText(err, t)
   return err instanceof RequestError && err.index !== undefined
-    ? `Template ${err.index + 1}: ${text}`
+    ? t('settings.templates.at', { n: err.index + 1, problem: text })
     : text
 }

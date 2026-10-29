@@ -1,5 +1,6 @@
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { tFor } from '../i18n/i18n-context'
 import {
   FIND_EXCLUDES_DEFAULT,
   FIND_EXCLUDES_MAX,
@@ -15,6 +16,14 @@ import {
   TASK_HISTORY_LINES_MIN,
   useSettings,
 } from './use-settings'
+
+const tEn = tFor('en')
+
+// The English of why a name cannot be excluded
+const excludeProblem = (name: string) => {
+  const key = findExcludeProblem(name)
+  return key && tEn(key)
+}
 
 describe('useSettings', () => {
   beforeEach(() => {
@@ -350,14 +359,14 @@ describe('useSettings', () => {
 
 describe('excluded folder names', () => {
   it('takes one folder name, never a path or a pattern', () => {
-    expect(findExcludeProblem('node_modules')).toBeUndefined()
-    expect(findExcludeProblem('')).toBe('Enter a folder name')
+    expect(excludeProblem('node_modules')).toBeUndefined()
+    expect(excludeProblem('')).toBe('Enter a folder name')
     for (const bad of ['.', '..', 'a\0b'])
-      expect(findExcludeProblem(bad)).toBe('Not a folder name')
-    expect(findExcludeProblem('a/b')).toBe('One folder name, not a path')
-    expect(findExcludeProblem('a\\b')).toBe('One folder name, not a path')
-    expect(findExcludeProblem('*.js')).toBe('A name, not a pattern')
-    expect(findExcludeProblem('a'.repeat(256))).toBe('Name too long')
+      expect(excludeProblem(bad)).toBe('Not a folder name')
+    expect(excludeProblem('a/b')).toBe('One folder name, not a path')
+    expect(excludeProblem('a\\b')).toBe('One folder name, not a path')
+    expect(excludeProblem('*.js')).toBe('A name, not a pattern')
+    expect(excludeProblem('a'.repeat(256))).toBe('Name too long')
   })
 
   it('keeps the valid names of a saved list, each once, up to the cap', () => {

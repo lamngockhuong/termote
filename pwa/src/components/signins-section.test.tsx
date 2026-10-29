@@ -2,7 +2,10 @@ import { fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RequestError, type SignedInBrowser } from '../hooks/use-mux-api'
 import type { SigninsState } from '../hooks/use-signins'
+import { tFor } from '../i18n/i18n-context'
 import { browserLabel, SigninsSection } from './signins-section'
+
+const tEn = tFor('en')
 
 const hook = vi.hoisted(() => ({
   state: null as unknown as SigninsState,
@@ -85,7 +88,7 @@ describe('browserLabel', () => {
     ['Mozilla/5.0', 'Unknown browser'],
     ['', 'Unknown browser'],
   ])('names %j as %j', (ua, want) => {
-    expect(browserLabel(ua)).toBe(want)
+    expect(browserLabel(ua, tEn)).toBe(want)
   })
 })
 

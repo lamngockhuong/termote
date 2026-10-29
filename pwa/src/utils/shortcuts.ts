@@ -4,6 +4,8 @@
 // The key is the physical key (KeyboardEvent.code), so a chord does not
 // change with the keyboard layout's Shift characters.
 
+import type { MessageKey } from '../i18n/messages/en'
+
 // Every id a command can have, whether or not this pane, backend or role
 // shows it: a saved shortcut is kept or dropped by this list alone, so an
 // override of a command hidden right now survives.
@@ -219,22 +221,22 @@ const BROWSER_KEYS = [
 const BROWSER_TAB_KEYS = ['Ctrl+Tab', 'Ctrl+Shift+Tab']
 const TEXT_KEYS = ['Mod+A', 'Mod+C', 'Mod+V', 'Mod+X', 'Mod+Z']
 
-// Why a chord cannot be assigned, or undefined when it can: the browser
-// keeps it, or the editor, the terminal or text editing uses it
+// The message saying why a chord cannot be assigned, or undefined when it
+// can: the browser keeps it, or the editor, the terminal or text editing uses it
 export function isRefusedChord(
   chord: string,
   apple: boolean,
-): string | undefined {
+): MessageKey | undefined {
   const tabKeys = apple
     ? BROWSER_TAB_KEYS
     : BROWSER_TAB_KEYS.map((k) => k.replace('Ctrl', 'Mod'))
   if (BROWSER_KEYS.includes(chord) || tabKeys.includes(chord))
-    return 'The browser keeps this key'
-  if (chord === 'Mod+S') return 'Used by the editor'
+    return 'settings.shortcuts.browserKeeps'
+  if (chord === 'Mod+S') return 'settings.shortcuts.usedByEditor'
   // The terminal's copy and paste keys
   if (!apple && (chord === 'Mod+Shift+C' || chord === 'Mod+Shift+V'))
-    return 'Used by the terminal'
-  if (TEXT_KEYS.includes(chord)) return 'Used to edit text'
+    return 'settings.shortcuts.usedByTerminal'
+  if (TEXT_KEYS.includes(chord)) return 'settings.shortcuts.usedForText'
 }
 
 // Keys xterm sends nothing for with Cmd: letters, digits and punctuation

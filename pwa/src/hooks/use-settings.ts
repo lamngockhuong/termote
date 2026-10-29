@@ -1,5 +1,6 @@
 import { useCallback, useSyncExternalStore } from 'react'
 import { type LanguageSetting, resolveLanguage } from '../i18n'
+import type { MessageKey } from '../i18n/messages/en'
 import { DEFAULT_UI_STYLE, resolveUiStyle, type UiStyle } from '../ui-style'
 import {
   DEFAULT_STUCK_MINUTES,
@@ -37,16 +38,16 @@ export const FIND_EXCLUDES_DEFAULT = [
 export const FIND_EXCLUDES_MAX = 50
 const FIND_EXCLUDE_NAME_MAX = 255
 
-// Why name cannot be an excluded folder, or undefined when it can: one
-// directory name, never a path or a pattern
-export function findExcludeProblem(name: string): string | undefined {
-  if (!name) return 'Enter a folder name'
+// The message saying why name cannot be an excluded folder, or undefined
+// when it can: one directory name, never a path or a pattern
+export function findExcludeProblem(name: string): MessageKey | undefined {
+  if (!name) return 'settings.excluded.empty'
   if (name === '.' || name === '..' || name.includes('\0'))
-    return 'Not a folder name'
-  if (/[/\\]/.test(name)) return 'One folder name, not a path'
-  if (/[*?[]/.test(name)) return 'A name, not a pattern'
+    return 'settings.excluded.notName'
+  if (/[/\\]/.test(name)) return 'settings.excluded.path'
+  if (/[*?[]/.test(name)) return 'settings.excluded.pattern'
   if (new TextEncoder().encode(name).length > FIND_EXCLUDE_NAME_MAX)
-    return 'Name too long'
+    return 'settings.excluded.tooLong'
 }
 
 // A saved list, kept only when it is one: valid names, each once, at most

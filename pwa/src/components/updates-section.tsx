@@ -2,6 +2,8 @@ import { Check, Copy, RefreshCw } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { InstallKind } from '../hooks/use-mux-api'
 import { availableUpdate, useUpdateCheck } from '../hooks/use-update-check'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
 import { APP_INFO } from '../utils/app-info'
 import type { ServerInfo } from '../utils/app-update'
 import { formatAgo } from '../utils/format-ago'
@@ -12,24 +14,23 @@ import { Button, FOCUS_RING } from './ui/button'
 // host's termote, so it is updated there and the container made again. A
 // checkout's commands differ by OS (make, termote.sh or termote.ps1), and an
 // unknown install has none: those get a hint and the release notes only.
-const UPDATE_HOW: Record<InstallKind, { where: string; command?: string }> = {
-  release: {
-    where: 'Run in a terminal on the host (a Termote one works too):',
-    command: 'termote update',
-  },
-  container: {
-    where:
-      'Run on the host, not in this container (a container built from a checkout: git pull, then termote container up --build):',
-    command: 'termote update && termote container up',
-  },
-  checkout: {
-    where:
-      'This server runs from a git checkout: pull, rebuild and restart it there.',
-  },
-  unknown: {
-    where: 'Update it the way it was installed.',
-  },
-}
+const UPDATE_HOW: Record<InstallKind, { where: MessageKey; command?: string }> =
+  {
+    release: {
+      where: 'settings.updates.howRelease',
+      command: 'termote update',
+    },
+    container: {
+      where: 'settings.updates.howContainer',
+      command: 'termote update && termote container up',
+    },
+    checkout: {
+      where: 'settings.updates.howCheckout',
+    },
+    unknown: {
+      where: 'settings.updates.howUnknown',
+    },
+  }
 
 interface Props {
   // What the server reported; null until its health was read
@@ -47,6 +48,7 @@ export function UpdatesSection({
   reloading = false,
   onReload,
 }: Props) {
+  const { t } = useT()
   const { latest, checking, failed, check } = useUpdateCheck()
   const [copied, setCopied] = useState(false)
   const copiedTimer = useRef<ReturnType<typeof setTimeout>>(null)
@@ -81,22 +83,26 @@ export function UpdatesSection({
   }
 
   let status: string
-  if (failed) status = 'Could not reach GitHub to check for updates.'
-  else if (!latest) status = checking ? 'Checking for updates…' : ''
-  else if (hasUpdate) status = `Version ${latest.version} is available.`
-  else status = 'You are on the newest version.'
+  if (failed) status = t('settings.updates.failed')
+  else if (!latest) status = checking ? t('settings.updates.checkingFor') : ''
+  else if (hasUpdate)
+    status = t('settings.updates.available', { version: latest.version })
+  else status = t('settings.updates.newest')
 
   return (
     <div className="flex flex-col gap-3 px-4 py-3 ui-native:bg-surface-raised">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <div className="min-w-0 flex-1 basis-40">
           <p className="m-0 text-[15px] text-fg ui-terminal:font-label ui-terminal:text-[13px]">
-            Running v{running}
+            {t('settings.updates.running', { version: running })}
           </p>
           <p className="m-0 text-[12px] text-fg-muted">
             {latest
-              ? `Newest v${latest.version} · checked ${formatAgo(Date.now() - latest.checkedAt)}`
-              : 'Not checked yet'}
+              ? t('settings.updates.checked', {
+                  version: latest.version,
+                  ago: formatAgo(Date.now() - latest.checkedAt),
+                })
+              : t('settings.updates.notChecked')}
           </p>
         </div>
         <Button
@@ -109,7 +115,9 @@ export function UpdatesSection({
             aria-hidden="true"
             className={checking ? 'motion-safe:animate-spin' : ''}
           />
-          {checking ? 'Checking…' : 'Check for updates'}
+          {checking
+            ? t('settings.updates.checking')
+            : t('settings.updates.check')}
         </Button>
       </div>
 
@@ -118,7 +126,10 @@ export function UpdatesSection({
       {stale && server && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-control bg-info/12 px-3 py-2">
           <p className="m-0 min-w-0 flex-1 basis-40 text-[13px] text-fg">
-            This page is v{APP_INFO.version}; reload to use v{server.version}.
+            {t('settings.updates.stale', {
+              page: APP_INFO.version,
+              server: server.version,
+            })}
           </p>
           <Button
             variant="primary"
@@ -126,7 +137,9 @@ export function UpdatesSection({
             disabled={reloading}
             onClick={onReload}
           >
-            {reloading ? 'Reloading…' : 'Reload'}
+            {reloading
+              ? t('settings.updates.reloading')
+              : t('settings.updates.reload')}
           </Button>
         </div>
       )}
@@ -141,7 +154,7 @@ export function UpdatesSection({
 
       {hasUpdate && latest && (
         <div className="flex flex-col gap-2">
-          <p className="m-0 text-[12px] text-fg-muted">{how.where}</p>
+          <p className="m-0 text-[12px] text-fg-muted">{t(how.where)}</p>
           {command && (
             <>
               <div className="flex items-center gap-2">
@@ -154,11 +167,11 @@ export function UpdatesSection({
                   ) : (
                     <Copy size={16} aria-hidden="true" />
                   )}
-                  {copied ? 'Copied' : 'Copy'}
+                  {copied ? t('settings.copied') : t('settings.updates.copy')}
                 </Button>
               </div>
               <span role="status" className="sr-only">
-                {copied ? 'Command copied' : ''}
+                {copied ? t('settings.updates.commandCopied') : ''}
               </span>
             </>
           )}
@@ -168,7 +181,7 @@ export function UpdatesSection({
             rel="noopener noreferrer"
             className={`self-start text-[13px] text-accent hover:underline ${FOCUS_RING}`}
           >
-            Release notes for v{latest.version}
+            {t('settings.updates.notes', { version: latest.version })}
           </a>
         </div>
       )}

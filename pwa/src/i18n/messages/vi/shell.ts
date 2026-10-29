@@ -160,9 +160,9 @@ export default {
   'shell.move.failed': 'Không di chuyển được',
   'shell.reorder.clearSearch': 'xóa ô tìm',
   'shell.reorder.showAll': 'bấm Hiện tất cả',
-  'shell.reorder.blockedFirst': 'tắt xếp phiên đang chờ lên đầu',
+  'shell.reorder.blockedFirst': 'tắt Phiên đang chờ lên đầu',
   'shell.reorder.blockedFirstSettings':
-    'tắt xếp phiên đang chờ lên đầu trong Cài đặt',
+    'tắt Phiên đang chờ lên đầu trong Cài đặt',
   'shell.reorder.and': '{first} và {last}',
   'shell.reorder.hint': '{steps} để sắp xếp lại',
   'shell.group.renameFailed': 'Không đổi tên được {noun}',
@@ -267,8 +267,8 @@ export default {
   'shell.close.paneBody':
     '<name></name> sẽ bị đóng, cùng mọi thứ còn đang chạy trong đó. Các pane khác của phiên vẫn mở.',
   'shell.close.running': 'Đang chạy: {names}.',
-  'shell.buffer.tmux': 'buffer của tmux',
-  'shell.buffer.session': 'buffer của phiên',
+  'shell.buffer.tmux': 'Buffer của tmux',
+  'shell.buffer.session': 'Buffer của phiên',
   'shell.paletteFailed': 'Không tải được bảng lệnh',
   'shell.viewFailed': 'Không tải được cách xem này',
 } satisfies Translation<typeof en>

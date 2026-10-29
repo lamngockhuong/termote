@@ -1,20 +1,24 @@
 import { Check, Copy } from 'lucide-react'
 import { type FormEvent, useEffect, useId, useRef, useState } from 'react'
 import { type PairingCode, RequestError } from '../hooks/use-mux-api'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
+import { Trans } from '../i18n/trans'
+import type { Translate } from '../i18n/translate'
 import { Button, FOCUS_RING } from './ui/button'
 import { SegmentedControl } from './ui/segmented-control'
 import { Sheet } from './ui/sheet'
 
 type Role = 'full' | 'view'
 
-const ROLE_OPTIONS = [
-  { value: 'view' as const, content: 'View only' },
-  { value: 'full' as const, content: 'Full' },
+const ROLE_OPTIONS: { value: Role; label: MessageKey }[] = [
+  { value: 'view', label: 'settings.devices.viewOnly' },
+  { value: 'full', label: 'settings.devices.full' },
 ]
 
-const ROLE_HINT: Record<Role, string> = {
-  view: 'Watches the terminal, Chat and Files; changes nothing.',
-  full: 'Everything this device can do: typing, files, agents, devices.',
+const ROLE_HINT: Record<Role, MessageKey> = {
+  view: 'settings.pair.viewHint',
+  full: 'settings.pair.fullHint',
 }
 
 // The device names the server takes: 1-64 bytes, no control characters.
@@ -26,13 +30,23 @@ export const SECURITY_MODEL_URL = 'https://termote.ohnice.app/usage/security/'
 const DAY = 86400
 
 // How long the new device stays signed in once paired; null is no limit.
-export const VALIDITY_OPTIONS: { label: string; secs: number | null }[] = [
-  { label: '1 day', secs: DAY },
-  { label: '7 days', secs: 7 * DAY },
-  { label: '30 days', secs: 30 * DAY },
-  { label: '90 days', secs: 90 * DAY },
-  { label: 'Never', secs: null },
+export const VALIDITY_OPTIONS: { secs: number | null }[] = [
+  { secs: DAY },
+  { secs: 7 * DAY },
+  { secs: 30 * DAY },
+  { secs: 90 * DAY },
+  { secs: null },
 ]
+
+// "7 days", or "Never" for no limit
+export function validityOptionLabel(
+  secs: number | null,
+  t: Translate<MessageKey>,
+): string {
+  return secs === null
+    ? t('settings.pair.never')
+    : t('settings.pair.days', { count: secs / DAY })
+}
 const DEFAULT_VALIDITY = 30 * DAY
 
 // The options a device whose own limit is left seconds away may pick: no
@@ -58,17 +72,17 @@ function defaultValidity(left?: number): number {
 }
 
 // "for 30 days once used", "with no time limit", from the server's answer.
-export function validityNote(secs?: number): string {
-  if (!secs) return 'stays signed in with no time limit'
-  if (secs % DAY === 0) {
-    const d = secs / DAY
-    return `stays signed in for ${d} ${d === 1 ? 'day' : 'days'}`
-  }
-  const h = Math.ceil(secs / 3600)
-  return `stays signed in for ${h} ${h === 1 ? 'hour' : 'hours'}`
+export function validityNote(
+  secs: number | undefined,
+  t: Translate<MessageKey>,
+): string {
+  if (!secs) return t('settings.pair.noLimit')
+  if (secs % DAY === 0) return t('settings.pair.forDays', { count: secs / DAY })
+  return t('settings.pair.forHours', { count: Math.ceil(secs / 3600) })
 }
 
 function SecurityModelLink() {
+  const { t } = useT()
   return (
     <a
       href={SECURITY_MODEL_URL}
@@ -76,28 +90,28 @@ function SecurityModelLink() {
       rel="noopener noreferrer"
       className={`text-accent hover:underline ${FOCUS_RING}`}
     >
-      Security model
+      {t('settings.securityModel')}
     </a>
   )
 }
 
-export function pairProblem(err: unknown): string {
+export function pairProblem(err: unknown, t: Translate<MessageKey>): string {
   const code = err instanceof RequestError ? err.code : ''
   switch (code) {
     case 'too_many_codes':
-      return 'Too many codes are waiting. Use one, or wait 5 minutes'
+      return t('settings.pair.tooManyCodes')
     case 'invalid_name':
-      return 'Use a shorter name without special characters'
+      return t('settings.pair.invalidName')
     case 'view_only':
-      return 'This device is view-only'
+      return t('settings.pair.viewOnly')
     case 'full_needs_password':
-      return 'A full device is paired from a password sign-in or the CLI'
+      return t('settings.pair.fullNeedsPassword')
     case 'creator_gone':
-      return 'This device can no longer pair devices'
+      return t('settings.pair.creatorGone')
     case 'invalid_validity':
-      return 'Pick how long the new device stays signed in'
+      return t('settings.pair.invalidValidity')
     default:
-      return 'Could not make a pairing code. Try again'
+      return t('settings.pair.failed')
   }
 }
 
@@ -137,6 +151,7 @@ function OpenPairSheet({
   canPairFull = true,
   validityLeft,
 }: Omit<Props, 'isOpen'>) {
+  const { t } = useT()
   const [role, setRole] = useState<Role>('view')
   const [validFor, setValidFor] = useState<number | null>(() =>
     defaultValidity(validityLeft),
@@ -174,7 +189,7 @@ function OpenPairSheet({
     e.preventDefault()
     const trimmed = name.trim()
     if (new TextEncoder().encode(trimmed).length > MAX_NAME_BYTES) {
-      setProblem('Use a name of at most 64 characters')
+      setProblem(t('settings.pair.nameTooLong', { max: MAX_NAME_BYTES }))
       return
     }
     setSending(true)
@@ -187,7 +202,7 @@ function OpenPairSheet({
       setDeadline(at + (made.expiresIn ?? Number.NaN) * 1000)
       setCode(made)
     } catch (err) {
-      if (!closed.current) setProblem(pairProblem(err))
+      if (!closed.current) setProblem(pairProblem(err, t))
     } finally {
       if (!closed.current) setSending(false)
     }
@@ -203,21 +218,20 @@ function OpenPairSheet({
   }
 
   return (
-    <Sheet isOpen onClose={onClose} title="Pair a device">
+    <Sheet isOpen onClose={onClose} title={t('settings.devices.pair')}>
       {code ? (
         <div className="flex flex-col items-center gap-3 p-4 text-center">
           {expired ? (
             <p role="alert" className="m-0 text-sm text-danger">
-              This code expired. Make a new one.
+              {t('settings.pair.expired')}
             </p>
           ) : (
             <>
               <p className="m-0 text-sm text-fg-muted">
-                On the new device, scan the code or open the link. In the
-                installed app, use “Have a pairing code?” on the sign-in page.
+                {t('settings.pair.howTo')}
               </p>
               <output
-                aria-label="Pairing code"
+                aria-label={t('settings.pair.code')}
                 className="font-term text-3xl font-semibold tracking-widest text-fg"
               >
                 {code.code}
@@ -225,17 +239,21 @@ function OpenPairSheet({
               {code.qr && (
                 <img
                   src={code.qr}
-                  alt="QR code of the pairing link"
+                  alt={t('settings.pair.qr')}
                   width={192}
                   height={192}
                   className="size-48 rounded-control bg-white p-2 [image-rendering:pixelated]"
                 />
               )}
               <p className="m-0 text-sm text-fg-muted" aria-live="off">
-                Expires in {formatLeft(deadline - now)} · works once
+                {t('settings.pair.expires', {
+                  left: formatLeft(deadline - now),
+                })}
               </p>
               <p className="m-0 text-[12px] text-fg-muted">
-                The new device {validityNote(code.validFor)}.
+                {t('settings.pair.validFor', {
+                  note: validityNote(code.validFor, t),
+                })}
               </p>
               <p className="m-0 w-full break-all font-term text-xs text-fg-subtle select-all">
                 {code.url}
@@ -250,7 +268,7 @@ function OpenPairSheet({
                 ) : (
                   <Copy size={14} aria-hidden="true" />
                 )}
-                {copied ? 'Copied' : 'Copy link'}
+                {copied ? t('settings.copied') : t('settings.pair.copyLink')}
               </Button>
             )}
             {expired && (
@@ -262,45 +280,52 @@ function OpenPairSheet({
                   setCopied(false)
                 }}
               >
-                New code
+                {t('settings.pair.newCode')}
               </Button>
             )}
             <Button size="sm" onClick={onClose}>
-              Done
+              {t('common.done')}
             </Button>
           </div>
         </div>
       ) : (
         <form onSubmit={submit} className="flex flex-col gap-3 p-4">
           <div className="flex flex-col gap-1.5">
-            <span className="text-sm text-fg-muted">Role</span>
+            <span className="text-sm text-fg-muted">
+              {t('settings.pair.role')}
+            </span>
             {canPairFull ? (
               <>
                 <SegmentedControl
-                  label="Role"
-                  options={ROLE_OPTIONS}
+                  label={t('settings.pair.role')}
+                  options={ROLE_OPTIONS.map((o) => ({
+                    value: o.value,
+                    content: t(o.label),
+                  }))}
                   value={role}
                   onChange={setRole}
                   className="self-start"
                 />
                 <p className="m-0 text-[12px] text-fg-muted">
-                  {ROLE_HINT[role]}
+                  {t(ROLE_HINT[role])}
                 </p>
               </>
             ) : (
               <p className="m-0 text-[12px] text-fg-muted">
-                View only. {ROLE_HINT.view} Full devices are paired from a
-                password sign-in or <code>termote pair --role full</code>.
+                <Trans
+                  k="settings.pair.viewOnlyOnly"
+                  vars={{ hint: t(ROLE_HINT.view) }}
+                  tags={{ code: (s) => <code>{s}</code> }}
+                />
               </p>
             )}
             <p className="m-0 text-[12px] text-fg-muted">
-              A full device can do anything your user account can; a view device
-              sees everything printed. <SecurityModelLink />
+              {t('settings.pair.trust')} <SecurityModelLink />
             </p>
           </div>
           <div className="flex flex-col gap-1.5">
             <label htmlFor={validityId} className="text-sm text-fg-muted">
-              Stays signed in for
+              {t('settings.pair.validity')}
             </label>
             <select
               id={validityId}
@@ -314,28 +339,28 @@ function OpenPairSheet({
             >
               {validityChoices(validityLeft).map((o) => (
                 <option
-                  key={o.label}
+                  key={o.secs ?? 'never'}
                   value={o.secs ?? 'never'}
                   disabled={o.disabled}
                 >
-                  {o.label}
+                  {validityOptionLabel(o.secs, t)}
                 </option>
               ))}
             </select>
             {validityLeft !== undefined && (
               <p className="m-0 text-[12px] text-fg-muted">
-                Can't outlast this device
+                {t('settings.pair.outlast')}
               </p>
             )}
           </div>
           <label htmlFor={nameId} className="text-sm text-fg-muted">
-            Name (optional; the new device can name itself)
+            {t('settings.pair.name')}
           </label>
           <input
             id={nameId}
             type="text"
             value={name}
-            placeholder="Phone"
+            placeholder={t('settings.pair.namePlaceholder')}
             maxLength={MAX_NAME_BYTES}
             autoComplete="off"
             enterKeyHint="done"
@@ -353,9 +378,9 @@ function OpenPairSheet({
             </p>
           )}
           <div className="flex justify-end gap-2">
-            <Button onClick={onClose}>Cancel</Button>
+            <Button onClick={onClose}>{t('common.cancel')}</Button>
             <Button type="submit" variant="primary" disabled={sending}>
-              Make code
+              {t('settings.pair.make')}
             </Button>
           </div>
         </form>
