@@ -692,6 +692,9 @@ jobs:
       - name: Run online installer tests
         run: ./tests/test-install.sh
 
+      - name: Run Homebrew formula generator tests
+        run: ./tests/test-homebrew-formula.sh
+
       - name: Run entrypoint tests
         run: ./tests/test-entrypoints.sh
 
