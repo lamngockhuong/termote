@@ -294,6 +294,10 @@ func (m *zellijMux) attachClient(ctx context.Context, session string, n int, siz
 	if err := zellijCheckSocketDir(); err != nil {
 		return nil, err
 	}
+	// A new client can land on another pane of a zoomed tab, which ends the
+	// zoom: one on the target pane is put back once the client is placed.
+	panes, err := zellijPanes(ctx, session)
+	zoomed := err == nil && zellijZoomed(panes, n)
 	zellijGate.Lock()
 	// A command that just ended may still have its second removal queued in
 	// the server.
@@ -328,6 +332,9 @@ func (m *zellijMux) attachClient(ctx context.Context, session string, n int, siz
 	}
 	if err := c.lock(ctx); err != nil {
 		return fail(err)
+	}
+	if zoomed {
+		keepZellijZoom(ctx, session, n)
 	}
 	m.addClient(c)
 	go func() {
