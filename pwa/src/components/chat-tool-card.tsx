@@ -2,6 +2,7 @@ import { ChevronRight } from 'lucide-react'
 import { type ReactNode, useLayoutEffect, useRef, useState } from 'react'
 import { EDIT_TOOLS } from '../hooks/use-agent-transcript'
 import type { TranscriptPart } from '../hooks/use-mux-api'
+import { useT } from '../i18n/i18n-context'
 import {
   type DiffRow,
   diffLines,
@@ -69,6 +70,7 @@ function Capped({
   className: string
   children: ReactNode
 }) {
+  const { t } = useT()
   const [open, setOpen] = useState(false)
   const [tall, setTall] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -98,10 +100,10 @@ function Capped({
           className="w-full border-t border-border px-2 py-1 text-left font-sans text-[12px] text-fg-muted hover:text-fg pointer-coarse:min-h-touch"
         >
           {open
-            ? 'Show less'
+            ? t('chat.showLess')
             : lines > limit
-              ? `Show all ${lines} lines`
-              : 'Show all'}
+              ? t('chat.showAllLines', { count: lines })
+              : t('chat.showAll')}
         </button>
       )}
     </>
@@ -131,6 +133,7 @@ const FOLD_ROW =
 // What a call returned, behind one row until opened; a failure opens at
 // once. Opened, it shows its last lines, and all of them on request.
 function OutputFold({ text, danger }: { text: string; danger?: boolean }) {
+  const { t } = useT()
   const [open, setOpen] = useState(!!danger)
   const [all, setAll] = useState(false)
   const lines = text.replace(/\n+$/, '').split('\n')
@@ -157,8 +160,8 @@ function OutputFold({ text, danger }: { text: string; danger?: boolean }) {
             className={`shrink-0 transition-transform ${open ? 'rotate-90' : ''}`}
           />
           {open
-            ? 'Hide output'
-            : `Output · ${lines.length} ${lines.length === 1 ? 'line' : 'lines'}`}
+            ? t('chat.tool.hideOutput')
+            : t('chat.tool.output', { count: lines.length })}
         </button>
         {open && lines.length > OUT_TAIL && (
           <button
@@ -168,8 +171,8 @@ function OutputFold({ text, danger }: { text: string; danger?: boolean }) {
             className={`${FOLD_ROW} justify-center border-l border-border`}
           >
             {all
-              ? `Show last ${OUT_TAIL} lines`
-              : `Show all ${lines.length} lines`}
+              ? t('chat.tool.showLast', { count: OUT_TAIL })
+              : t('chat.showAllLines', { count: lines.length })}
           </button>
         )}
       </div>
@@ -238,8 +241,9 @@ function editHunks(part: TranscriptPart): DiffRow[][] | null {
 }
 
 export function ToolCard({ part }: { part: TranscriptPart }) {
+  const { t } = useT()
   const d = part.detail
-  const name = part.orphan ? 'Result' : part.tool
+  const name = part.orphan ? t('chat.tool.result') : part.tool
   const edit = !part.orphan && EDIT_TOOLS.has(part.tool ?? '')
   const hunks = edit ? editHunks(part) : null
   const command = d?.command
@@ -249,7 +253,10 @@ export function ToolCard({ part }: { part: TranscriptPart }) {
   // An edit's result only repeats the file; shown when the edit failed
   const out = !hunks && (!edit || part.isError) ? part.result : undefined
   return (
-    <div className="min-w-0 text-[13px]" data-tool={name}>
+    <div
+      className="min-w-0 text-[13px]"
+      data-tool={part.orphan ? 'Result' : part.tool}
+    >
       <div className="flex min-w-0 items-baseline gap-2">
         <span
           className={`min-w-0 shrink-[0.5] truncate font-semibold ${part.isError ? 'text-danger' : ''}`}
@@ -285,23 +292,19 @@ export function ToolCard({ part }: { part: TranscriptPart }) {
         )}
       </div>
       {part.orphan && (
-        <p className="text-[12px] text-fg-subtle">
-          The call is in an earlier part of the conversation.
-        </p>
+        <p className="text-[12px] text-fg-subtle">{t('chat.tool.orphan')}</p>
       )}
       {hunks && (
         <>
           <p className="text-[12px] text-fg-subtle">
-            {diffSummary(hunks.flat())}
+            {diffSummary(hunks.flat(), t)}
           </p>
           <DiffBlock hunks={hunks} />
         </>
       )}
       {d?.hidden && (
         <p className="text-[12px] text-fg-subtle">
-          {edit
-            ? 'The edit of a sensitive file is not shown.'
-            : 'The contents of a sensitive file are not shown.'}
+          {edit ? t('chat.tool.hiddenEdit') : t('chat.tool.hiddenContents')}
         </p>
       )}
       {(command || out) && (
@@ -311,7 +314,9 @@ export function ToolCard({ part }: { part: TranscriptPart }) {
         </Frame>
       )}
       {clipped && (
-        <p className="mt-1 text-[12px] text-fg-subtle">(shortened)</p>
+        <p className="mt-1 text-[12px] text-fg-subtle">
+          {t('chat.message.shortened')}
+        </p>
       )}
     </div>
   )

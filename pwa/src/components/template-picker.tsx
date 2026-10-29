@@ -1,6 +1,7 @@
 import { type KeyboardEvent, useEffect, useId, useRef, useState } from 'react'
 import type { PromptTemplate } from '../hooks/use-mux-api'
 import { usePromptTemplates } from '../hooks/use-prompt-templates'
+import { useT } from '../i18n/i18n-context'
 import { firstLine, matchTemplates } from '../utils/prompt-templates'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { Button } from './ui/button'
@@ -23,14 +24,15 @@ export function TemplatePicker({ isOpen, onClose, onPick, onManage }: Props) {
 }
 
 function OpenPicker({ onClose, onPick, onManage }: Omit<Props, 'isOpen'>) {
-  const t = usePromptTemplates()
+  const { t } = useT()
+  const prompts = usePromptTemplates()
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const listId = useId()
   const optionId = (i: number) => `${listId}-${i}`
-  const matches = matchTemplates(t.templates, query)
-  const { refresh } = t
+  const matches = matchTemplates(prompts.templates, query)
+  const { refresh } = prompts
 
   useEffect(() => {
     void refresh()
@@ -55,15 +57,15 @@ function OpenPicker({ onClose, onPick, onManage }: Omit<Props, 'isOpen'>) {
     <Sheet
       isOpen
       onClose={onClose}
-      title="Insert a template"
+      title={t('chat.picker.title')}
       focusOnOpen={() => inputRef.current?.focus()}
     >
       <div className="flex flex-col gap-2 p-4">
         <input
           ref={inputRef}
           type="search"
-          aria-label="Search templates"
-          placeholder="Search templates"
+          aria-label={t('chat.picker.search')}
+          placeholder={t('chat.picker.search')}
           value={query}
           role="combobox"
           aria-expanded={matches.length > 0}
@@ -75,22 +77,24 @@ function OpenPicker({ onClose, onPick, onManage }: Omit<Props, 'isOpen'>) {
           onKeyDown={onKeyDown}
           className="h-9 w-full min-w-0 rounded-control border border-border bg-bg px-2.5 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent pointer-coarse:h-touch"
         />
-        {t.templates.length === 0 ? (
+        {prompts.templates.length === 0 ? (
           <p className="m-0 py-2 text-sm text-fg-muted">
-            {t.loaded
-              ? 'No templates yet'
-              : t.error
-                ? 'Could not read the templates'
-                : 'Loading…'}
+            {prompts.loaded
+              ? t('chat.picker.none')
+              : prompts.error
+                ? t('chat.picker.readFailed')
+                : t('chat.picker.loading')}
           </p>
         ) : matches.length === 0 ? (
-          <p className="m-0 py-2 text-sm text-fg-muted">No matching template</p>
+          <p className="m-0 py-2 text-sm text-fg-muted">
+            {t('chat.picker.noMatch')}
+          </p>
         ) : null}
         {matches.length > 0 && (
           <div
             id={listId}
             role="listbox"
-            aria-label="Templates"
+            aria-label={t('chat.picker.list')}
             className="max-h-72 overflow-y-auto"
           >
             {matches.map((m, i) => (
@@ -118,9 +122,9 @@ function OpenPicker({ onClose, onPick, onManage }: Omit<Props, 'isOpen'>) {
         {onManage && (
           <div className="flex justify-end">
             <Button size="sm" variant="ghost" onClick={onManage}>
-              {t.loaded && t.templates.length === 0
-                ? 'Create one…'
-                : 'Manage templates…'}
+              {prompts.loaded && prompts.templates.length === 0
+                ? t('chat.picker.create')
+                : t('chat.picker.manage')}
             </Button>
           </div>
         )}

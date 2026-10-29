@@ -9,6 +9,9 @@ import {
 } from 'react'
 import type { PromptTemplate } from '../hooks/use-mux-api'
 import { refreshTemplates, templateById } from '../hooks/use-prompt-templates'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
 import { requestDraftInsert } from '../utils/chat-draft'
 import { onPaneRemap } from '../utils/pane-remap'
 import {
@@ -58,23 +61,27 @@ interface Open {
   branchLoading: boolean
 }
 
-const LABEL: Record<TemplateVariable, string> = {
-  input: 'Your text',
-  file: 'File',
-  selection: 'Selection',
-  branch: 'Branch',
+const LABEL: Record<TemplateVariable, MessageKey> = {
+  input: 'chat.fill.var.input',
+  file: 'chat.fill.var.file',
+  selection: 'chat.fill.var.selection',
+  branch: 'chat.fill.var.branch',
 }
 
-const SOURCE: Record<string, string> = {
-  'the file shown': 'From the file shown',
-  'the terminal': 'From the terminal',
-  'the Chat': 'From the Chat',
-  git: 'From git',
-  'the worktree': 'From the worktree',
+// By the source utils/resolve-template-vars.ts names
+const SOURCE: Record<string, MessageKey> = {
+  'the file shown': 'chat.fill.from.file',
+  'the terminal': 'chat.fill.from.terminal',
+  'the Chat': 'chat.fill.from.chat',
+  git: 'chat.fill.from.git',
+  'the worktree': 'chat.fill.from.worktree',
 }
 
 // Where a value came from, as its field says it
-const sourceText = (source: string) => SOURCE[source] ?? `From ${source}`
+const sourceText = (source: string, t: Translate<MessageKey>) =>
+  Object.hasOwn(SOURCE, source)
+    ? t(SOURCE[source])
+    : t('chat.fill.from', { source })
 
 const FIELD =
   'w-full min-w-0 rounded-control border border-border bg-bg px-2.5 py-1.5 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent'
@@ -84,11 +91,12 @@ const FIELD =
 // without variables goes in as it is (the server refused hidden characters
 // when it was saved).
 export function TemplateFillDialog({ pane, terminalText, notify }: Props) {
+  const { t } = useT()
   const [open, setOpen] = useState<Open | null>(null)
   const keepFocus = useRef(false)
   const ids = useId()
-  const latest = useRef({ pane, terminalText, notify })
-  latest.current = { pane, terminalText, notify }
+  const latest = useRef({ pane, terminalText, notify, t })
+  latest.current = { pane, terminalText, notify, t }
   // The fill a late branch read belongs to
   const openRef = useRef(open)
   openRef.current = open
@@ -97,10 +105,10 @@ export function TemplateFillDialog({ pane, terminalText, notify }: Props) {
     const start = () => {
       const fill = takeTemplateFill()
       if (!fill) return
-      const { pane, terminalText, notify } = latest.current
+      const { pane, terminalText, notify, t } = latest.current
       const template = templateById(fill.templateId)
       if (!template) {
-        notify('This template was deleted on another device')
+        notify(t('chat.fill.deleted'))
         void refreshTemplates()
         return
       }
@@ -231,7 +239,7 @@ export function TemplateFillDialog({ pane, terminalText, notify }: Props) {
     <Sheet
       isOpen
       onClose={close}
-      title={`Insert ${visibleUnsafe(template.name)}`}
+      title={t('chat.fill.title', { name: visibleUnsafe(template.name) })}
       keepFocus={keepFocus}
       focusOnOpen={() => document.getElementById(id(fields[0]))?.focus()}
     >
@@ -243,12 +251,12 @@ export function TemplateFillDialog({ pane, terminalText, notify }: Props) {
         {fields.map((v) => {
           const loading = v === 'branch' && open.branchLoading
           const hint = loading
-            ? 'Reading the branch…'
+            ? t('chat.fill.readingBranch')
             : v === 'input' || open.edited[v]
               ? ''
               : sources[v]
-                ? sourceText(sources[v])
-                : 'Nothing found: type it or leave it empty'
+                ? sourceText(sources[v], t)
+                : t('chat.fill.nothing')
           const multi = v === 'input' || v === 'selection'
           const props = {
             id: id(v),
@@ -264,7 +272,7 @@ export function TemplateFillDialog({ pane, terminalText, notify }: Props) {
           return (
             <div key={v} className="flex flex-col gap-1">
               <label htmlFor={id(v)} className="text-sm text-fg-muted">
-                {LABEL[v]}{' '}
+                {t(LABEL[v])}{' '}
                 <span className="font-term text-[12px]">{`{{${v}}}`}</span>
               </label>
               {multi ? (
@@ -288,7 +296,9 @@ export function TemplateFillDialog({ pane, terminalText, notify }: Props) {
           )
         })}
         <div className="flex flex-col gap-1">
-          <span className="text-sm text-fg-muted">Preview</span>
+          <span className="text-sm text-fg-muted">
+            {t('chat.fill.preview')}
+          </span>
           <pre
             data-testid="template-preview"
             className="m-0 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-control border border-border bg-bg p-2.5 font-term text-[12px] text-fg"
@@ -298,17 +308,17 @@ export function TemplateFillDialog({ pane, terminalText, notify }: Props) {
           <p
             className={`m-0 text-[12px] ${tooLong ? 'text-danger' : 'text-fg-muted'}`}
           >
-            {Math.ceil(bytes / 1024)} KB of {MAX_TEMPLATE_TEXT / 1024} KB
-            {tooLong && ': shorten it before sending'}
+            {t(tooLong ? 'chat.fill.sizeTooLong' : 'chat.fill.size', {
+              used: Math.ceil(bytes / 1024),
+              max: MAX_TEMPLATE_TEXT / 1024,
+            })}
           </p>
         </div>
-        <p className="m-0 text-[12px] text-fg-muted">
-          Goes into the message box; nothing is sent.
-        </p>
+        <p className="m-0 text-[12px] text-fg-muted">{t('chat.fill.note')}</p>
         <div className="flex justify-end gap-2">
-          <Button onClick={close}>Cancel</Button>
+          <Button onClick={close}>{t('common.cancel')}</Button>
           <Button type="submit" variant="primary">
-            Insert
+            {t('chat.fill.insert')}
           </Button>
         </div>
       </form>

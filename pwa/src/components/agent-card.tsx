@@ -7,6 +7,7 @@ import type {
   OverviewUsage,
 } from '../hooks/use-mux-api'
 import { useSubagents } from '../hooks/use-subagents'
+import { useT } from '../i18n/i18n-context'
 import type { AgentStatus, Session, SessionPane } from '../types/session'
 import { formatAgo } from '../utils/format-ago'
 import { visibleUnsafe } from '../utils/unsafe-chars'
@@ -146,13 +147,14 @@ export const AgentCard = memo(function AgentCard({
   openRef,
   highlighted,
 }: Props) {
+  const { t } = useT()
   const detailsId = useId()
   const moreId = useId()
   const [expanded, setExpanded] = useState(false)
   // Only Claude Code's sessions have a subagent tree to read.
   const claude = pane.agentName === 'claude'
   const subagents = useSubagents(pane.id, expanded && claude)
-  const subagentCount = claude ? subagentSummary(subagents.tree) : undefined
+  const subagentCount = claude ? subagentSummary(subagents.tree, t) : undefined
   const label = agentLabel(pane.agentName)
   const name =
     label === 'agent' ? visibleUnsafe(pane.agentName || 'Agent') : label

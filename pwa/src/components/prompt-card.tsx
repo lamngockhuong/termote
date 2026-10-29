@@ -9,6 +9,7 @@ import {
   answerAgentPrompt,
   MAX_FREE_TEXT_BYTES,
 } from '../hooks/use-mux-api'
+import { useT } from '../i18n/i18n-context'
 import { OpenTerminalButton } from './open-terminal-button'
 import { Button } from './ui/button'
 
@@ -17,6 +18,7 @@ import { Button } from './ui/button'
 // so locking the buttons here is for the user, not for safety.
 
 // Labels that refuse or stop: shown as such so they are not tapped by habit.
+// Claude Code's own words, matched in English whatever the app's language.
 const REFUSING = /^(no|cancel|deny|reject)\b/i
 
 const encoder = new TextEncoder()
@@ -51,6 +53,7 @@ export function PromptCard({
   onSent,
   onChanged,
 }: Props) {
+  const { t } = useT()
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   // This card sent the answer: a dialog without an id is that answer settling
@@ -103,53 +106,55 @@ export function PromptCard({
     } catch (err) {
       if (err instanceof AgentRequestError && err.code === 'invalid_text') {
         // Nothing was sent and the dialog is the same: fix the text
-        setNotice('The answer cannot hold line breaks or control characters.')
+        setNotice(t('chat.prompt.invalidText'))
       } else if (
         err instanceof AgentRequestError &&
         err.code === 'text_too_long'
       ) {
         setNotice(
-          `The answer is too long: the limit is ${err.limit ?? MAX_FREE_TEXT_BYTES} bytes.`,
+          t('chat.prompt.tooLong', {
+            limit: err.limit ?? MAX_FREE_TEXT_BYTES,
+          }),
         )
       } else if (
         err instanceof AgentRequestError &&
         err.code === 'text_not_confirmed'
       ) {
-        setNotice(
-          'The text may be in the dialog but was not sent; check it in the terminal.',
-        )
+        setNotice(t('chat.prompt.textNotConfirmed'))
         onAnswered()
       } else if (
         err instanceof AgentRequestError &&
         err.code === 'prompt_changed'
       ) {
-        setNotice('The screen changed; check the dialog again.')
+        setNotice(t('chat.prompt.changed'))
         onChanged(err.prompt ?? null)
       } else if (
         err instanceof AgentRequestError &&
         err.code === 'step_not_confirmed'
       ) {
-        setNotice('That tab did not open; check the dialog.')
+        setNotice(t('chat.prompt.stepNotConfirmed'))
         onChanged(err.prompt ?? null)
       } else if (err instanceof AgentRequestError && err.code === 'busy') {
         // Zellij could not place a client on the pane, maybe after a step
         // of the answer went in: read the dialog again before a retry
-        setNotice('Zellij is busy; try again.')
+        setNotice(t('chat.prompt.zellijBusy'))
         onAnswered()
       } else if (
         err instanceof AgentRequestError &&
         err.code === 'prompt_expired'
       ) {
-        setNotice('This dialog was already answered.')
+        setNotice(t('chat.prompt.expired'))
         onAnswered()
       } else {
         // The key may have reached the pane even when the reply did not:
         // read the dialog again rather than claim either way.
         setNotice(
-          err instanceof AgentRequestError &&
-            err.code === 'answer_not_confirmed'
-            ? 'The answer was sent but the dialog is still open; check it in the terminal.'
-            : 'Could not confirm the answer; check the dialog.',
+          t(
+            err instanceof AgentRequestError &&
+              err.code === 'answer_not_confirmed'
+              ? 'chat.prompt.answerNotConfirmed'
+              : 'chat.prompt.unconfirmed',
+          ),
         )
         onAnswered()
       }
@@ -200,7 +205,7 @@ export function PromptCard({
         className="justify-start text-left"
       >
         <span className="shrink-0 text-fg-subtle">{f.index}.</span>
-        Other…
+        {t('chat.prompt.other')}
       </Button>
     ) : (
       <FreeTextField
@@ -227,7 +232,10 @@ export function PromptCard({
     <>
       <div className="min-h-0 space-y-2 overflow-y-auto">
         {prompt.steps && prompt.steps.length > 0 && (
-          <ol aria-label="Questions" className="flex flex-wrap gap-1.5">
+          <ol
+            aria-label={t('chat.prompt.questions')}
+            className="flex flex-wrap gap-1.5"
+          >
             {prompt.steps.map((s, i) => (
               <li
                 // biome-ignore lint/suspicious/noArrayIndexKey: tabs can share a header
@@ -257,7 +265,8 @@ export function PromptCard({
           </ol>
         )}
         <p id={titleId} className="font-medium text-fg">
-          {prompt.title || `${agentLabel(agentName)} is asking`}
+          {prompt.title ||
+            t('chat.prompt.asking', { agent: agentLabel(agentName) })}
         </p>
         {prompt.body && (
           // A new body is read from its start, shut again
@@ -270,13 +279,13 @@ export function PromptCard({
         )}
         {locked && answerable && (
           <p id={lockedId} className="text-[12px] text-warning">
-            Read the whole dialog to answer.
+            {t('chat.prompt.readWhole')}
           </p>
         )}
         <p aria-live="polite" className="text-[13px] text-warning empty:hidden">
           {notice ??
             (prompt.kind === 'unsupported' && !readOnly
-              ? 'Answer this dialog in the terminal.'
+              ? t('chat.prompt.inTerminal')
               : '')}
         </p>
         {answerable && (
@@ -295,7 +304,7 @@ export function PromptCard({
                 disabled={busy}
                 onClick={() => answer('next')}
               >
-                Next
+                {t('common.next')}
               </Button>
             )}
           </div>
@@ -308,7 +317,7 @@ export function PromptCard({
             disabled={busy}
             onClick={() => answer('cancel')}
           >
-            Cancel (Esc)
+            {t('chat.prompt.cancelEsc')}
           </Button>
           <span className="flex-1" />
           <OpenTerminalButton showView={showView} />
@@ -317,7 +326,11 @@ export function PromptCard({
         <div className="flex shrink-0 items-center gap-2">
           {!readOnly && prompt.kind !== 'unsupported' && (
             <span className="text-[13px] text-fg-muted">
-              {sent ? 'Answer sent…' : `Waiting for ${agentLabel(agentName)}…`}
+              {sent
+                ? t('chat.prompt.sent')
+                : t('chat.prompt.waitingFor', {
+                    agent: agentLabel(agentName),
+                  })}
             </span>
           )}
           <span className="flex-1" />
@@ -354,6 +367,7 @@ function FreeTextField({
   onSend: () => void
   onCancel: () => void
 }) {
+  const { t } = useT()
   const tooLong = encoder.encode(text).length > MAX_FREE_TEXT_BYTES
   const limitId = `${id}-limit`
   return (
@@ -365,7 +379,7 @@ function FreeTextField({
       }}
     >
       <label htmlFor={id} className="sr-only">
-        Your answer
+        {t('chat.prompt.yourAnswer')}
       </label>
       <input
         id={id}
@@ -373,7 +387,7 @@ function FreeTextField({
         value={text}
         autoFocus
         enterKeyHint="send"
-        placeholder="Type your answer"
+        placeholder={t('chat.prompt.typeAnswer')}
         aria-invalid={tooLong || undefined}
         aria-describedby={tooLong ? limitId : undefined}
         onChange={(e) => onChange(e.target.value)}
@@ -381,7 +395,7 @@ function FreeTextField({
       />
       {tooLong && (
         <p id={limitId} className="text-[12px] text-danger">
-          Too long: the limit is {MAX_FREE_TEXT_BYTES} bytes.
+          {t('chat.prompt.limit', { limit: MAX_FREE_TEXT_BYTES })}
         </p>
       )}
       <div className="flex gap-2">
@@ -390,7 +404,7 @@ function FreeTextField({
           variant="primary"
           disabled={busy || tooLong || !text.trim()}
         >
-          Send
+          {t('chat.prompt.send')}
         </Button>
         <Button
           type="button"
@@ -398,7 +412,7 @@ function FreeTextField({
           disabled={busy}
           onClick={onCancel}
         >
-          Cancel
+          {t('common.cancel')}
         </Button>
       </div>
     </form>
@@ -417,6 +431,7 @@ function PromptBody({
   body: string
   onSeen: (seen: boolean) => void
 }) {
+  const { t } = useT()
   const ref = useRef<HTMLParagraphElement>(null)
   const [expanded, setExpanded] = useState(false)
   const [overflows, setOverflows] = useState(false)
@@ -471,7 +486,7 @@ function PromptBody({
           aria-controls={id}
           onClick={() => setExpanded(!expanded)}
         >
-          {expanded ? 'Show less' : 'Show all'}
+          {expanded ? t('chat.showLess') : t('chat.showAll')}
         </Button>
       )}
     </div>
@@ -485,10 +500,12 @@ const scrolledToEnd = (el: HTMLElement) =>
 const STEP =
   'inline-flex min-h-6 items-center rounded-full border px-2.5 py-1 text-[12px]'
 
-// "Chat about this" ends the questions, on a multiSelect tab as well
+// "Chat about this" ends the questions, on a multiSelect tab as well (Claude
+// Code's words: never translated)
 const isChat = (label: string) => label === 'Chat about this'
 
 function StepLabel({ step }: { step: NonNullable<AgentPrompt['steps']>[0] }) {
+  const { t } = useT()
   return (
     <>
       {step.answered && (
@@ -500,7 +517,7 @@ function StepLabel({ step }: { step: NonNullable<AgentPrompt['steps']>[0] }) {
       {step.answered && (
         <>
           {' '}
-          <span className="sr-only">(answered)</span>
+          <span className="sr-only">{t('chat.prompt.answered')}</span>
         </>
       )}
     </>
@@ -513,10 +530,11 @@ export function WaitingCard({
   agentName,
   showView,
 }: Pick<ViewProps, 'showView'> & { agentName?: string }) {
+  const { t } = useT()
   return (
     <div className="flex items-center gap-2 border-t border-border bg-surface p-3 pb-safe ui-terminal:bg-bg">
       <p className="flex-1 text-[13px] text-fg">
-        {agentLabel(agentName)} is waiting for you in the terminal.
+        {t('chat.prompt.waitingTerminal', { agent: agentLabel(agentName) })}
       </p>
       <OpenTerminalButton showView={showView} />
     </div>

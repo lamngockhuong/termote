@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { useRef, useState } from 'react'
 import { describe, expect, it } from 'vitest'
 import type { TranscriptEntry, TranscriptPart } from '../hooks/use-mux-api'
+import { tFor } from '../i18n/i18n-context'
 import {
   chatItems,
   hasPending,
@@ -10,6 +11,8 @@ import {
   stepLine,
   toolRunRows,
 } from './chat-tool-run'
+
+const en = tFor('en')
 
 const tool = (id: string, part: Partial<TranscriptPart>): TranscriptEntry => ({
   id,
@@ -100,30 +103,33 @@ describe('runSummary and stepLine', () => {
       { kind: 'tool', tool: 'WebFetch' },
       { kind: 'tool', tool: 'TodoWrite' },
     ]
-    expect(runSummary(parts)).toBe(
+    expect(runSummary(parts, en)).toBe(
       '2 commands, 1 edit, 1 read, 2 searches, 1 other step',
     )
   })
 
   it('a call with no tool name counts as another step', () => {
-    expect(runSummary([{ kind: 'tool' }])).toBe('1 other step')
+    expect(runSummary([{ kind: 'tool' }], en)).toBe('1 other step')
   })
 
   it('says a step by its description, its command or its tool', () => {
     expect(
-      stepLine({
-        kind: 'tool',
-        tool: 'Bash',
-        detail: { description: 'Run tests', command: 'x' },
-      }),
+      stepLine(
+        {
+          kind: 'tool',
+          tool: 'Bash',
+          detail: { description: 'Run tests', command: 'x' },
+        },
+        en,
+      ),
     ).toBe('Run tests')
     expect(
-      stepLine({ kind: 'tool', tool: 'Bash', detail: { command: 'a\nb' } }),
+      stepLine({ kind: 'tool', tool: 'Bash', detail: { command: 'a\nb' } }, en),
     ).toBe('$ a')
-    expect(stepLine({ kind: 'tool', tool: 'Read', input: 'x.ts' })).toBe(
+    expect(stepLine({ kind: 'tool', tool: 'Read', input: 'x.ts' }, en)).toBe(
       'Read x.ts',
     )
-    expect(stepLine({ kind: 'tool', orphan: true, tool: 'result' })).toBe(
+    expect(stepLine({ kind: 'tool', orphan: true, tool: 'result' }, en)).toBe(
       'Result',
     )
   })
@@ -149,17 +155,23 @@ function Run({
   const tails = useRef(new Map<string, string>()).current
   return (
     <>
-      {toolRunRows(entries, layoutOf(entries.length), live, {
-        modes,
-        held,
-        tails,
-        follow,
-        setMode: (ids, mode) =>
-          setModes((m) => ({
-            ...m,
-            ...Object.fromEntries(ids.map((id) => [id, mode])),
-          })),
-      })}
+      {toolRunRows(
+        entries,
+        layoutOf(entries.length),
+        live,
+        {
+          modes,
+          held,
+          tails,
+          follow,
+          setMode: (ids, mode) =>
+            setModes((m) => ({
+              ...m,
+              ...Object.fromEntries(ids.map((id) => [id, mode])),
+            })),
+        },
+        en,
+      )}
     </>
   )
 }

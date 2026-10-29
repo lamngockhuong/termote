@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { tFor } from '../i18n/i18n-context'
 import { diffLines, diffSummary, parseUnifiedDiff } from './line-diff'
+
+const en = tFor('en')
 
 const kinds = (rows: { kind: string }[]) => rows.map((r) => r.kind).join(' ')
 
@@ -47,9 +50,9 @@ describe('parseUnifiedDiff', () => {
 
 describe('diffSummary', () => {
   it('names what an edit did', () => {
-    expect(diffSummary(diffLines('a', 'a\nb'))).toBe('Added 1 line')
-    expect(diffSummary(diffLines('a\nb\nc', 'a'))).toBe('Removed 2 lines')
-    expect(diffSummary(diffLines('a', 'b'))).toBe('Modified')
-    expect(diffSummary([])).toBe('No changes')
+    expect(diffSummary(diffLines('a', 'a\nb'), en)).toBe('Added 1 line')
+    expect(diffSummary(diffLines('a\nb\nc', 'a'), en)).toBe('Removed 2 lines')
+    expect(diffSummary(diffLines('a', 'b'), en)).toBe('Modified')
+    expect(diffSummary([], en)).toBe('No changes')
   })
 })

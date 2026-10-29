@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { tFor } from '../i18n/i18n-context'
 import {
   applyPick,
   BUILTIN_COMMANDS,
@@ -14,6 +15,8 @@ import {
   mergeSlashCommands,
   type SlashCommand,
 } from './slash-commands'
+
+const en = tFor('en')
 
 const cmd = (
   name: string,
@@ -93,17 +96,17 @@ describe('slash commands', () => {
       cmd('compact', 'Free up context; review later'),
       cmd('exit'),
     ]
-    expect(filterSlashCommands(list, '').length).toBe(5)
-    expect(filterSlashCommands(list, 'RE').map((c) => c.name)).toEqual([
+    expect(filterSlashCommands(list, '', en).length).toBe(5)
+    expect(filterSlashCommands(list, 'RE', en).map((c) => c.name)).toEqual([
       'review',
       'rewind',
       'security-review',
       'compact',
     ])
-    expect(filterSlashCommands(list, 'zzz')).toEqual([])
-    expect(filterSlashCommands([{ name: 'x', source: 'user' }], 'y')).toEqual(
-      [],
-    )
+    expect(filterSlashCommands(list, 'zzz', en)).toEqual([])
+    expect(
+      filterSlashCommands([{ name: 'x', source: 'user' }], 'y', en),
+    ).toEqual([])
   })
 
   it('keeps a "$" skill named like a "/" built-in', () => {

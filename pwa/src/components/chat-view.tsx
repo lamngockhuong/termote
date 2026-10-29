@@ -85,6 +85,7 @@ export function ChatView(props: ViewProps) {
 // A pane with no agent (yet): start one, follow the start, or say there is
 // none.
 function NoAgentChat({ mux, session, showView, agentStart }: ViewProps) {
+  const { t } = useT()
   const paneId = session.paneId ?? ''
   const record = agentStart?.starts[paneId]
   if (record?.phase === 'ready') {
@@ -106,7 +107,7 @@ function NoAgentChat({ mux, session, showView, agentStart }: ViewProps) {
   }
   return (
     <Centered>
-      <p>No agent runs in this pane.</p>
+      <p>{t('chat.view.noAgent')}</p>
       <OpenTerminalButton showView={showView} />
     </Centered>
   )
@@ -123,18 +124,20 @@ function StartedNotice({
   record: StartRecord
   showView: ViewProps['showView']
 }) {
+  const { t } = useT()
   if (record.kind === 'codex') {
     return (
       <Centered>
-        <p>
-          Codex is running. Type your first message in the terminal; the Chat
-          view follows from the next one.
-        </p>
+        <p>{t('chat.view.codexStarted')}</p>
         <OpenTerminalButton showView={showView} />
       </Centered>
     )
   }
-  return <Centered>{agentLabel(record.kind)} is starting…</Centered>
+  return (
+    <Centered>
+      {t('chat.view.starting', { agent: agentLabel(record.kind) })}
+    </Centered>
+  )
 }
 
 function AgentChat({
@@ -177,7 +180,7 @@ function AgentChat({
             const result = await followPathInFiles(paneId, path, line)
             if (result === 'opened') showView(FILES_VIEW_ID)
             else if (result === 'outside')
-              notify("This file is outside the pane's folder")
+              notify(translate('chat.view.outside'))
             else if (FOLLOW_NOTICES[result])
               notify(translate(FOLLOW_NOTICES[result]))
           }
@@ -304,7 +307,7 @@ function AgentChat({
   }
 
   if (!t.loaded) {
-    return <Centered>Loading the conversation…</Centered>
+    return <Centered>{translate('chat.view.loading')}</Centered>
   }
   const started = agentStart?.starts[session.paneId ?? '']
   if (
@@ -320,8 +323,8 @@ function AgentChat({
       <Centered>
         <p>
           {t.error === 'no-session'
-            ? `No ${agent} session found in this pane.`
-            : 'Could not read the conversation.'}
+            ? translate('chat.view.noSession', { agent })
+            : translate('chat.view.readFailed')}
         </p>
         <OpenTerminalButton showView={showView} />
       </Centered>
@@ -363,12 +366,16 @@ function AgentChat({
             .map((part) => visibleUnsafe(part))
             .join(' · ')}
         </span>
-        {t.error && <span className="text-warning">Reconnecting…</span>}
+        {t.error && (
+          <span className="text-warning">
+            {translate('chat.view.reconnecting')}
+          </span>
+        )}
       </header>
       <section
         ref={listRef}
         onScroll={onScroll}
-        aria-label="Conversation"
+        aria-label={translate('chat.view.conversation')}
         className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-3"
       >
         <ChatFileLinkContext.Provider value={openFile}>
@@ -382,12 +389,16 @@ function AgentChat({
                     disabled={t.loadingOlder}
                     onClick={showEarlier}
                   >
-                    {t.loadingOlder ? 'Loading…' : 'Show earlier messages'}
+                    {t.loadingOlder
+                      ? translate('chat.view.loadingOlder')
+                      : translate('chat.view.showEarlier')}
                   </Button>
                 </div>
               )}
               {visible.length === 0 && (
-                <p className="text-center text-fg-muted">No messages yet.</p>
+                <p className="text-center text-fg-muted">
+                  {translate('chat.view.empty')}
+                </p>
               )}
               {items.flatMap((item, k) => {
                 if (item.kind === 'entry') {
@@ -415,6 +426,7 @@ function AgentChat({
                   layout.slice(start - hidden, item.end - hidden),
                   live,
                   runs,
+                  translate,
                   t.entries[item.start].id,
                 )
               })}
@@ -453,7 +465,7 @@ function AgentChat({
             onClick={jumpToBottom}
           >
             <ArrowDown size={14} aria-hidden="true" />
-            New messages
+            {translate('chat.view.newMessages')}
           </Button>
         </div>
       )}

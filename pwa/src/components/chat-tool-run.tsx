@@ -2,6 +2,8 @@ import { ChevronRight } from 'lucide-react'
 import type { ReactElement } from 'react'
 import { EDIT_TOOLS } from '../hooks/use-agent-transcript'
 import type { TranscriptEntry, TranscriptPart } from '../hooks/use-mux-api'
+import type { MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
 import { ChatMessage, chatSide, Step, Time } from './chat-message'
 
 // The agent's steps one after another (tool calls, thinking) fold into one
@@ -77,19 +79,19 @@ function stepKind(p: TranscriptPart): StepKind {
   return 'other'
 }
 
-const NOUNS: [StepKind, string, string][] = [
-  ['command', 'command', 'commands'],
-  ['edit', 'edit', 'edits'],
-  ['read', 'read', 'reads'],
-  ['search', 'search', 'searches'],
-  ['other', 'other step', 'other steps'],
+const NOUNS: [StepKind, MessageKey][] = [
+  ['command', 'chat.run.command'],
+  ['edit', 'chat.run.edit'],
+  ['read', 'chat.run.read'],
+  ['search', 'chat.run.search'],
+  ['other', 'chat.run.other'],
 ]
 
 // "3 commands, 2 reads"
-export function runSummary(tools: TranscriptPart[]) {
-  return NOUNS.map(([kind, one, many]) => {
+export function runSummary(tools: TranscriptPart[], t: Translate<MessageKey>) {
+  return NOUNS.map(([kind, key]) => {
     const n = tools.filter((p) => stepKind(p) === kind).length
-    return n ? `${n} ${n === 1 ? one : many}` : ''
+    return n ? t(key, { count: n }) : ''
   })
     .filter(Boolean)
     .join(', ')
@@ -97,10 +99,12 @@ export function runSummary(tools: TranscriptPart[]) {
 
 // The newest step in a few words: what the model said it does, else the
 // command or the tool and what it acted on
-export function stepLine(p: TranscriptPart) {
+export function stepLine(p: TranscriptPart, t: Translate<MessageKey>) {
   if (p.detail?.description) return p.detail.description
   if (p.detail?.command) return `$ ${p.detail.command.split('\n')[0]}`
-  return [p.orphan ? 'Result' : p.tool, p.input].filter(Boolean).join(' ')
+  return [p.orphan ? t('chat.tool.result') : p.tool, p.input]
+    .filter(Boolean)
+    .join(' ')
 }
 
 // A call without its result yet
@@ -147,6 +151,7 @@ export function toolRunRows(
   layout: Layout[],
   live: boolean,
   state: RunState,
+  t: Translate<MessageKey>,
   runKey = entries[0].id,
 ): ReactElement[] {
   const tools = toolsOf(entries)
@@ -164,7 +169,7 @@ export function toolRunRows(
   const ids = entries.map((e) => e.id)
   if (live) for (const id of ids) state.held.add(id)
   const chosen = ids.map((id) => state.modes[id]).find(Boolean)
-  const summary = runSummary(tools)
+  const summary = runSummary(tools, t)
   const dot = runDot(tools)
   const setMode = (mode: RunMode) => state.setMode(ids, mode)
   const tail = !chosen && ids.some((id) => state.held.has(id))
@@ -185,8 +190,8 @@ export function toolRunRows(
       start === 0
         ? summary
         : earlier
-          ? `${earlier} earlier ${earlier === 1 ? 'step' : 'steps'} · ${summary}`
-          : `Earlier steps · ${summary}`
+          ? t('chat.run.earlier', { count: earlier, summary })
+          : t('chat.run.earlierSteps', { summary })
     return [
       <div
         key={`run:${runKey}`}
@@ -244,13 +249,15 @@ export function toolRunRows(
             <ChevronRight size={14} aria-hidden="true" className="shrink-0" />
             <span className="min-w-0 truncate tabular-nums">{summary}</span>
             {failed > 0 && (
-              <span className="shrink-0 text-danger">{failed} failed</span>
+              <span className="shrink-0 text-danger">
+                {t('chat.run.failed', { count: failed })}
+              </span>
             )}
           </span>
           <span
             className={`min-w-0 truncate pl-5 ${last.detail?.description ? '' : 'font-mono text-[11px]'}`}
           >
-            {stepLine(last)}
+            {stepLine(last, t)}
           </span>
         </button>
       </Step>

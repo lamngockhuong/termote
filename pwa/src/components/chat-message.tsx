@@ -9,6 +9,8 @@ import {
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { TranscriptEntry, TranscriptPart } from '../hooks/use-mux-api'
+import { formatDateTime, formatTime } from '../i18n/format'
+import { useT } from '../i18n/i18n-context'
 import { fileRefFromHref, parseFileRef } from '../utils/chat-file-links'
 import { rehypeMermaidIndex } from '../utils/markdown-links'
 import { htmlAsText, safeUrl } from '../utils/markdown-safety'
@@ -55,8 +57,11 @@ function MdLink({ href, children }: ComponentProps<'a'>) {
 
 function MdImage({ src, alt }: ComponentProps<'img'>) {
   const inLink = useContext(InLink)
+  const { t } = useT()
   const u = safeUrl(src)
-  const label = `image: ${u ? u.host : alt || 'unavailable'}`
+  const label = t('chat.message.image', {
+    where: u ? u.host : alt || t('chat.message.imageUnavailable'),
+  })
   // Inside a link, a link of its own would take the click too
   if (!u || inLink) return <span className="text-fg-muted">[{label}]</span>
   return (
@@ -82,6 +87,7 @@ export const ChatMarkdownContext = createContext<{
 // A code block, or a Mermaid diagram. Copy reports on the button itself.
 function MdPre({ node }: { node?: unknown }) {
   const { scrollRoot, notify } = useContext(ChatMarkdownContext)
+  const { t } = useT()
   return (
     <CodeFence
       node={node}
@@ -89,7 +95,9 @@ function MdPre({ node }: { node?: unknown }) {
       notify={notify}
       scrollRoot={scrollRoot}
       exportName={(index) => exportName('chat', index)}
-      copyButton={(text) => <CopyButton text={() => text} label="Copy code" />}
+      copyButton={(text) => (
+        <CopyButton text={() => text} label={t('chat.message.copyCode')} />
+      )}
     />
   )
 }
@@ -124,8 +132,13 @@ export function MarkdownText({ text }: { text: string }) {
 }
 
 function Clipped({ show }: { show?: boolean }) {
+  const { t } = useT()
   if (!show) return null
-  return <p className="mt-1 text-[12px] text-fg-subtle">(shortened)</p>
+  return (
+    <p className="mt-1 text-[12px] text-fg-subtle">
+      {t('chat.message.shortened')}
+    </p>
+  )
 }
 
 function Disclosure({
@@ -151,15 +164,17 @@ function Disclosure({
 }
 
 function ImageChip() {
+  const { t } = useT()
   return (
     <span className="inline-flex items-center gap-1 text-fg-muted">
       <ImageIcon size={13} aria-hidden="true" />
-      [image]
+      {t('chat.message.imageChip')}
     </span>
   )
 }
 
 function Part({ part }: { part: TranscriptPart }) {
+  const { t } = useT()
   switch (part.kind) {
     case 'tool':
       return <ToolCard part={part} />
@@ -167,7 +182,7 @@ function Part({ part }: { part: TranscriptPart }) {
       return <ImageChip />
     case 'thinking':
       return (
-        <Disclosure summary="Thinking">
+        <Disclosure summary={t('chat.message.thinking')}>
           <p className="whitespace-pre-wrap text-fg-muted">{part.text}</p>
           <Clipped show={part.clipped} />
         </Disclosure>
@@ -212,16 +227,17 @@ export function Step({
 }
 
 export function Time({ ts }: { ts?: string }) {
+  const { locale } = useT()
   if (!ts) return null
   const d = new Date(ts)
   if (Number.isNaN(d.getTime())) return null
   return (
     <time
       dateTime={ts}
-      title={d.toLocaleString()}
+      title={formatDateTime(d, locale)}
       className="self-end text-[11px] text-fg-subtle"
     >
-      {d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+      {formatTime(d, locale)}
     </time>
   )
 }
@@ -248,11 +264,12 @@ export const ChatMessage = memo(function ChatMessage({
   showTime?: boolean
   joinsNext?: boolean
 }) {
+  const { t } = useT()
   if (entry.role === 'summary') {
     return (
       <div data-role="summary" className="my-2 flex items-center gap-2">
         <span className="h-px flex-1 bg-border" />
-        <Disclosure summary="Conversation compacted">
+        <Disclosure summary={t('chat.message.compacted')}>
           <p className="whitespace-pre-wrap text-fg-muted">
             {entry.parts.map((p) => p.text).join('\n')}
           </p>
@@ -267,7 +284,7 @@ export const ChatMessage = memo(function ChatMessage({
         {entry.parts.map((p, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: parts never reorder
           <p key={i} className="whitespace-pre-wrap">
-            {p.clipped && !p.text ? 'A line too large to show' : p.text}
+            {p.clipped && !p.text ? t('chat.message.lineTooLarge') : p.text}
           </p>
         ))}
       </div>
@@ -323,7 +340,10 @@ export const ChatMessage = memo(function ChatMessage({
       ))}
       {!joinsNext && answer && (
         <div className="-mt-2 pl-4">
-          <CopyButton text={() => answer} label="Copy answer" />
+          <CopyButton
+            text={() => answer}
+            label={t('chat.message.copyAnswer')}
+          />
         </div>
       )}
     </div>

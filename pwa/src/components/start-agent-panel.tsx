@@ -2,6 +2,7 @@ import { LoaderCircle } from 'lucide-react'
 import { agentLabel } from '../chat-agents'
 import type { StartAgentKind } from '../hooks/use-mux-api'
 import type { StartRecord } from '../hooks/use-start-agent'
+import { useT } from '../i18n/i18n-context'
 import { Button } from './ui/button'
 
 interface StartAgentPanelProps {
@@ -19,10 +20,11 @@ export function StartAgentPanel({
   record,
   onStart,
 }: StartAgentPanelProps) {
+  const { t } = useT()
   const busy = record?.phase === 'sending' || record?.phase === 'starting'
   return (
     <>
-      <p>Start an agent in this pane</p>
+      <p>{t('chat.start.title')}</p>
       <div className="flex flex-wrap justify-center gap-2">
         {kinds.map((kind) => (
           <Button
@@ -42,7 +44,7 @@ export function StartAgentPanel({
             aria-hidden="true"
             className="motion-safe:animate-spin"
           />
-          Starting {agentLabel(record.kind)}…
+          {t('chat.start.starting', { agent: agentLabel(record.kind) })}
         </p>
       )}
       {record?.phase === 'failed' && (
