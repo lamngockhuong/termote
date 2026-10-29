@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { tFor } from '../i18n/i18n-context'
 import { ENCODINGS, encodingLabel, isFileEncoding } from './file-encoding'
 
 describe('file encoding', () => {
@@ -10,11 +11,11 @@ describe('file encoding', () => {
     ['shift_jis', false, 'Shift-JIS'],
     ['euc-jp', false, 'EUC-JP'],
   ] as const)('%s (BOM %s) is %s', (enc, bom, want) => {
-    expect(encodingLabel(enc, bom)).toBe(want)
+    expect(encodingLabel(enc, tFor('en'), bom)).toBe(want)
   })
 
   it('names a BOM only when there is one', () => {
-    expect(encodingLabel('utf-8')).toBe('UTF-8')
+    expect(encodingLabel('utf-8', tFor('en'))).toBe('UTF-8')
   })
 
   it('knows every listed encoding and nothing else', () => {

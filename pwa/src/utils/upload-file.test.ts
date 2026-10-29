@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { tFor } from '../i18n/i18n-context'
 import {
   checkUpload,
   droppedFiles,
@@ -272,16 +273,16 @@ describe('fileUploadErrorMessage', () => {
     'unsure',
     'failed',
   ])('%s has its own words, never the image texts', (reason) => {
-    const msg = fileUploadErrorMessage(reason)
+    const msg = fileUploadErrorMessage(reason, tFor('en'))
     expect(msg).toBeTruthy()
     expect(msg).not.toMatch(/image|10 MB|saves/i)
   })
 
   it('says the limit and the busy slot plainly', () => {
-    expect(fileUploadErrorMessage('too_large')).toBe(
+    expect(fileUploadErrorMessage('too_large', tFor('en'))).toBe(
       'File is larger than 100 MB',
     )
-    expect(fileUploadErrorMessage('upload_busy')).toBe(
+    expect(fileUploadErrorMessage('upload_busy', tFor('en'))).toBe(
       'Another upload is running. Try again shortly',
     )
   })

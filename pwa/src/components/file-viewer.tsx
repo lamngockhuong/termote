@@ -55,9 +55,12 @@ import {
   type MarkdownEditLayout as EditLayout,
   useSettings,
 } from '../hooks/use-settings'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
 import type { Reapplied, Skipped, TableOp } from '../utils/csv-edits'
 import {
-  DELIMITER_NAMES,
+  DELIMITER_SEPARATED,
   type Delimiter,
   delimiterFor,
   isTablePath,
@@ -122,16 +125,23 @@ function PreviewBoundary({
   retry: () => void
   children: ReactNode
 }) {
+  const { t } = useT()
   return (
     <LazyBoundary
       onRetry={retry}
       fallback={(again) => (
-        <LoadFailed message="Could not load the preview" retry={again} />
+        <LoadFailed message={t('files.viewer.previewFailed')} retry={again} />
       )}
     >
       {children}
     </LazyBoundary>
   )
+}
+
+// A preview's chunk on its way
+function Loading() {
+  const { t } = useT()
+  return <ViewMessage>{t('files.loading')}</ViewMessage>
 }
 
 // The markdown renderer: loaded the first time a Markdown file is previewed
@@ -145,7 +155,7 @@ export function LazyMarkdownPreview(
 ) {
   return (
     <PreviewBoundary retry={MarkdownPreview.retry}>
-      <Suspense fallback={<ViewMessage>Loading…</ViewMessage>}>
+      <Suspense fallback={<Loading />}>
         <MarkdownPreview {...props} />
       </Suspense>
     </PreviewBoundary>
@@ -195,10 +205,24 @@ function DraftPreview(props: ComponentProps<typeof MarkdownPreview>) {
   )
 }
 
-const LAYOUT_LABELS: Record<EditLayout, string> = {
-  source: 'Source',
-  split: 'Source and preview',
-  preview: 'Preview',
+const LAYOUT_LABELS: Record<EditLayout, MessageKey> = {
+  source: 'files.viewer.layout.source',
+  split: 'files.viewer.layout.split',
+  preview: 'files.viewer.layout.preview',
+}
+
+// The layout a click switches to, as the button's tooltip names it
+const LAYOUT_NEXT: Record<EditLayout, MessageKey> = {
+  source: 'files.viewer.layoutNext.source',
+  split: 'files.viewer.layoutNext.split',
+  preview: 'files.viewer.layoutNext.preview',
+}
+
+// The layout a click switches to, as the button names it
+const LAYOUT_SWITCH: Record<EditLayout, MessageKey> = {
+  source: 'files.viewer.switchTo.source',
+  split: 'files.viewer.switchTo.split',
+  preview: 'files.viewer.switchTo.preview',
 }
 
 const LAYOUT_ICONS: Record<EditLayout, ReactNode> = {
@@ -213,7 +237,7 @@ const TablePreview = lazyRetry(() => import('./table-preview'), 'TablePreview')
 export function LazyTablePreview(props: ComponentProps<typeof TablePreview>) {
   return (
     <PreviewBoundary retry={TablePreview.retry}>
-      <Suspense fallback={<ViewMessage>Loading…</ViewMessage>}>
+      <Suspense fallback={<Loading />}>
         <TablePreview {...props} />
       </Suspense>
     </PreviewBoundary>
@@ -229,7 +253,7 @@ const DocumentPreview = lazyRetry(
 function LazyDocumentPreview(props: ComponentProps<typeof DocumentPreview>) {
   return (
     <PreviewBoundary retry={DocumentPreview.retry}>
-      <Suspense fallback={<ViewMessage>Loading…</ViewMessage>}>
+      <Suspense fallback={<Loading />}>
         <DocumentPreview {...props} />
       </Suspense>
     </PreviewBoundary>
@@ -332,38 +356,41 @@ export function rebaseDraft(
   }
 }
 
-const separated = (d: Delimiter) =>
-  `${DELIMITER_NAMES[d].toLowerCase()}-separated`
-
-const SKIP_REASONS: Record<Skipped['reason'], string> = {
-  missing: 'its row is no longer in the file',
-  many: 'more than one row matches it',
-  column: 'its column is no longer in the file',
-  columns: 'more than one column has that name',
-  depends: 'it follows a row or column change that was not applied',
-  unreadable: 'the file can no longer be edited as a table',
+const SKIP_REASONS: Record<Skipped['reason'], MessageKey> = {
+  missing: 'files.skipped.missing',
+  many: 'files.skipped.many',
+  column: 'files.skipped.column',
+  columns: 'files.skipped.columns',
+  depends: 'files.skipped.depends',
+  unreadable: 'files.skipped.unreadable',
 }
 
-function describeOp(op: TableOp): string {
+export function describeOp(op: TableOp, t: Translate<MessageKey>): string {
   if (op.kind === 'cell') {
-    return `Row ${op.row + 1}, column ${visibleUnsafe(op.name)}`
+    return t('files.op.cell', {
+      row: op.row + 1,
+      column: visibleUnsafe(op.name),
+    })
   }
   if (op.kind === 'insert') {
     return op.after < 0
-      ? 'The row added at the top'
-      : `The row added after row ${op.after + 1}`
+      ? t('files.op.insertTop')
+      : t('files.op.insert', { row: op.after + 1 })
   }
-  if (op.kind === 'delete') return `Deleting row ${op.row + 1}`
+  if (op.kind === 'delete') return t('files.op.delete', { row: op.row + 1 })
   if (op.kind === 'cells') {
     const n =
       op.rows.reduce((sum, r) => sum + r.cells.length, 0) +
       op.added.reduce((sum, r) => sum + r.length, 0)
-    return `Pasted block, ${n} ${n === 1 ? 'cell' : 'cells'}`
+    return t('files.op.cells', { count: n })
   }
   const column =
     op.name === null ? String(op.col + 1) : `"${visibleUnsafe(op.name)}"`
-  if (op.kind === 'delete-col') return `Deleting column ${column}`
-  return `The column added ${op.side === 'left' ? 'before' : 'after'} column ${column}`
+  if (op.kind === 'delete-col') return t('files.op.deleteCol', { column })
+  return t(
+    op.side === 'left' ? 'files.op.insertColBefore' : 'files.op.insertColAfter',
+    { column },
+  )
 }
 
 // The edits a reload could not apply again, and why; a cell's value can be
@@ -372,21 +399,22 @@ function SkippedEdits(props: {
   skipped: Skipped[]
   onCopy: (value: string) => void
 }) {
+  const { t } = useT()
   return (
     <Banner variant="warning">
-      Not applied to the new file:
+      {t('files.skipped')}
       <ul className="m-0 mt-1 list-none p-0">
         {props.skipped.map(({ op, reason }, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: the list is replaced whole
           <li key={i} className="flex flex-wrap items-center gap-1.5 py-0.5">
-            <bdi>{describeOp(op)}</bdi>: {SKIP_REASONS[reason]}
+            <bdi>{describeOp(op, t)}</bdi>: {t(SKIP_REASONS[reason])}
             {op.kind === 'cell' && (
               <Button
                 size="sm"
                 variant="secondary"
                 onClick={() => props.onCopy(op.after)}
               >
-                Copy value
+                {t('files.skipped.copyValue')}
               </Button>
             )}
           </li>
@@ -396,12 +424,12 @@ function SkippedEdits(props: {
   )
 }
 
-const ERRORS: Record<FilesError, string> = {
-  'not-allowed': "This file can't be shown",
-  'view-only': 'View only: files show in a git repository only',
-  'not-found': 'File not found',
-  unsupported: 'Not supported by this backend',
-  unavailable: 'Could not load the file',
+const ERRORS: Record<FilesError, MessageKey> = {
+  'not-allowed': 'files.viewer.notAllowed',
+  'view-only': 'files.find.viewOnly',
+  'not-found': 'files.delete.fileNotFound',
+  unsupported: 'files.find.unsupported',
+  unavailable: 'files.viewer.failed',
 }
 
 interface Props {
@@ -517,6 +545,7 @@ export function HeaderActions({
   // At the top of the phone's menu (a Markdown draft's layouts)
   menuStart?: ReactNode
 }) {
+  const { t } = useT()
   if (!compact)
     return actions.map((a) => (
       <IconButton
@@ -534,7 +563,7 @@ export function HeaderActions({
   if (actions.length === 0) return null
   return (
     <Menu
-      label="More actions"
+      label={t('files.viewer.moreActions')}
       trigger={<Ellipsis size={16} aria-hidden="true" />}
       triggerSize="sm"
       align="end"
@@ -613,6 +642,7 @@ export function FileViewer({
   onLineComment,
   commentedLines,
 }: Props) {
+  const { t, locale } = useT()
   const [state, setState] = useState<Loaded>({ kind: 'loading' })
   const [mine, setDraft] = useFileDraft(paneId, draftRoot ?? root ?? '', path)
   const target = { paneId, place }
@@ -749,8 +779,10 @@ export function FileViewer({
   const back =
     backLabel ??
     (backTo
-      ? `Back to ${backTo.slice(backTo.lastIndexOf('/') + 1)}`
-      : 'Back to files')
+      ? t('files.viewer.backTo', {
+          name: backTo.slice(backTo.lastIndexOf('/') + 1),
+        })
+      : t('files.viewer.backToFiles'))
   // Kept while the pane's root moves: the text is the old root's file
   const [saveError, setSaveError] = useState<SaveError>()
   const rootMoved =
@@ -827,7 +859,7 @@ export function FileViewer({
   useEffect(() => {
     const d = mineRef.current
     if (pick && d && d.text !== d.base)
-      notify(`Unsaved changes: line ${pick.line} may have moved`)
+      notify(t('files.viewer.lineMoved', { line: pick.line }))
   }, [pick?.jump])
 
   // Read by the load below without being one of its dependencies
@@ -1016,10 +1048,10 @@ export function FileViewer({
             ),
       )
       setSkipped([])
-      notify('Saved')
+      notify(t('files.viewer.saved'))
       onSaved?.()
     } catch (err) {
-      setSaveError(saveErrorOf(err, saveAs ?? edit.encoding))
+      setSaveError(saveErrorOf(err, t, saveAs ?? edit.encoding))
     } finally {
       setSaving(false)
     }
@@ -1083,12 +1115,12 @@ export function FileViewer({
       setSaveError(undefined)
       setSkipped(res.skipped)
       if (!res.ops.length && !res.skipped.length) {
-        notify('Your changes are already in the file')
+        notify(t('files.viewer.alreadyIn'))
       }
     } catch (err) {
       if (err instanceof RequestError && err.status === 409 && err.root) {
         setSaveError({ kind: 'root', root: err.root })
-      } else notify('Could not read the file again')
+      } else notify(t('files.viewer.rereadFailed'))
     } finally {
       setSaving(false)
     }
@@ -1107,7 +1139,7 @@ export function FileViewer({
     // Refused at once: never a placeholder waiting behind another upload
     const refused = imageRefusal(file)
     if (refused) {
-      notify(fileImageErrorMessage(refused))
+      notify(fileImageErrorMessage(refused, t))
       return
     }
     const d = mineRef.current as FileDraft
@@ -1136,17 +1168,17 @@ export function FileViewer({
           put('')
           if (res.reason === 'root_changed')
             setSaveError({ kind: 'root', root: res.root })
-          notify(fileImageErrorMessage(res.reason))
+          notify(fileImageErrorMessage(res.reason, t))
         } else if (!put(imageLink(path, res.path))) {
           notify(
             savedPlaceholders.current.has(ph)
-              ? `Image saved as ${res.path}. The file still holds its placeholder`
-              : `Image saved as ${res.path}`,
+              ? t('files.viewer.imageSavedPlaceholder', { path: res.path })
+              : t('files.viewer.imageSaved', { path: res.path }),
           )
         }
       } catch {
         put('')
-        notify('Could not save the image')
+        notify(t('files.viewer.imageFailed'))
       } finally {
         savedPlaceholders.current.delete(ph)
       }
@@ -1183,18 +1215,18 @@ export function FileViewer({
   const copyText = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text)
-      notify('Text copied')
+      notify(t('files.viewer.textCopied'))
     } catch {
-      notify('Could not copy the text')
+      notify(t('files.viewer.textCopyFailed'))
     }
   }
 
   const copyPath = async () => {
     try {
       await navigator.clipboard.writeText(path)
-      notify('Path copied')
+      notify(t('files.viewer.pathCopied'))
     } catch {
-      notify('Could not copy the path')
+      notify(t('files.viewer.pathCopyFailed'))
     }
   }
 
@@ -1204,13 +1236,13 @@ export function FileViewer({
   const extras: HeaderAction[] = []
   if (!pinned && onPin)
     extras.push({
-      label: 'Keep open',
+      label: t('files.tabs.keep'),
       icon: <Pin size={15} />,
       onClick: onPin,
     })
   if (!mine && onRename)
     extras.push({
-      label: 'Rename',
+      label: t('files.rename.title'),
       icon: <TextCursorInput size={15} />,
       onClick: () => onRename({ revealed: reveal }),
     })
@@ -1218,13 +1250,13 @@ export function FileViewer({
   // says when it cannot send one
   if (!mine && onDownload && !sensitive)
     extras.push({
-      label: 'Download',
+      label: t('files.download'),
       icon: <Download size={15} />,
       onClick: () => onDownload({ revealed: reveal }),
     })
   if (!mine && onDelete)
     extras.push({
-      label: 'Delete',
+      label: t('files.delete'),
       icon: <Trash2 size={15} />,
       danger: true,
       onClick: () =>
@@ -1236,29 +1268,33 @@ export function FileViewer({
     })
   if (!mine)
     extras.push({
-      label: 'Copy path',
+      label: t('files.viewer.copyPath'),
       icon: <Copy size={15} />,
       onClick: copyPath,
     })
   if (!mine && onOpenWindow)
     extras.push({
-      label: 'Open in new window',
-      title: 'Open in new window (Shift: a popup)',
+      label: t('files.viewer.newWindow'),
+      title: t('files.viewer.newWindowTitle'),
       icon: <AppWindow size={15} />,
       onClick: onOpenWindow,
     })
   if (!mine && (canPreview || canTable))
     extras.push({
-      label: 'Preview',
-      title: previewOn ? 'Show the source' : 'Show the preview',
+      label: t('files.viewer.preview'),
+      title: previewOn
+        ? t('files.viewer.showSource')
+        : t('files.viewer.showPreview'),
       icon: <Eye size={15} />,
       pressed: previewOn,
       onClick: togglePreview,
     })
   if (!mine && svg)
     extras.push({
-      label: 'Image',
-      title: asImage ? 'Show the source' : 'Show as an image',
+      label: t('files.viewer.image'),
+      title: asImage
+        ? t('files.viewer.showSource')
+        : t('files.viewer.showImage'),
       icon: <ImageIcon size={15} />,
       pressed: asImage,
       onClick: () => {
@@ -1271,17 +1307,17 @@ export function FileViewer({
     })
   if (mine && !cells && onLineComment)
     extras.push({
-      label: 'Comment on lines',
-      title: 'Comment on the lines selected',
+      label: t('files.viewer.comment'),
+      title: t('files.viewer.commentTitle'),
       icon: <MessageSquarePlus size={15} />,
       onClick: () => {
-        const t = editorLines.current?.()
-        if (t) onLineComment(lineRange(t, dirty))
+        const lines = editorLines.current?.()
+        if (lines) onLineComment(lineRange(lines, dirty))
       },
     })
   if (!binaryView)
     extras.push({
-      label: 'Wrap lines',
+      label: t('files.viewer.wrap'),
       icon: <WrapText size={15} />,
       pressed: wrap,
       onClick: () => setWrap((w) => !w),
@@ -1318,7 +1354,7 @@ export function FileViewer({
           </span>
           {size !== undefined && (
             <span className="flex items-center gap-1 whitespace-nowrap text-[11px] text-fg-muted">
-              {formatSize(size)}
+              {formatSize(size, locale)}
               {encodingMenu && (
                 <>
                   <span aria-hidden="true">·</span>
@@ -1337,8 +1373,8 @@ export function FileViewer({
               size="sm"
               onClick={cancel}
               disabled={saving}
-              aria-label="Cancel editing"
-              title="Cancel editing"
+              aria-label={t('files.viewer.cancelEdit')}
+              title={t('files.viewer.cancelEdit')}
             >
               <X size={16} aria-hidden="true" />
             </IconButton>
@@ -1346,8 +1382,8 @@ export function FileViewer({
               size="sm"
               onClick={() => save(mine)}
               disabled={!dirty || saving || rootMoved || stuck}
-              aria-label="Save"
-              title="Save (Ctrl+S)"
+              aria-label={t('files.viewer.save')}
+              title={t('files.viewer.saveTitle')}
               className="text-accent"
             >
               <Check size={16} aria-hidden="true" />
@@ -1363,8 +1399,8 @@ export function FileViewer({
                 tableView && tableState?.ok ? tableState.delimiter : undefined,
               )
             }
-            aria-label="Edit"
-            title="Edit"
+            aria-label={t('files.viewer.edit')}
+            title={t('files.viewer.edit')}
           >
             <Pencil size={15} aria-hidden="true" />
           </IconButton>
@@ -1374,8 +1410,11 @@ export function FileViewer({
             size="sm"
             onClick={() => updateSetting('markdownEditLayout', nextLayout)}
             // Not "Show source": a diagram's own button is named so
-            aria-label={`Switch to ${LAYOUT_LABELS[nextLayout].toLowerCase()}`}
-            title={`${LAYOUT_LABELS[editLayout]} (click: ${LAYOUT_LABELS[nextLayout].toLowerCase()})`}
+            aria-label={t(LAYOUT_SWITCH[nextLayout])}
+            title={t('files.viewer.layoutTitle', {
+              layout: t(LAYOUT_LABELS[editLayout]),
+              next: t(LAYOUT_NEXT[nextLayout]),
+            })}
           >
             {LAYOUT_ICONS[editLayout]}
           </IconButton>
@@ -1386,7 +1425,7 @@ export function FileViewer({
           menuStart={
             canPreviewDraft && (
               <>
-                <MenuGroup label="Show">
+                <MenuGroup label={t('files.viewer.show')}>
                   {layouts.map((l) => (
                     <MenuItemRadio
                       key={l}
@@ -1394,7 +1433,7 @@ export function FileViewer({
                       checked={l === editLayout}
                       onSelect={() => updateSetting('markdownEditLayout', l)}
                     >
-                      {LAYOUT_LABELS[l]}
+                      {t(LAYOUT_LABELS[l])}
                     </MenuItemRadio>
                   ))}
                 </MenuGroup>
@@ -1421,15 +1460,15 @@ export function FileViewer({
                   variant="secondary"
                   onClick={() => copyText(mine.text)}
                 >
-                  Copy my text
+                  {t('files.viewer.copyMine')}
                 </Button>
                 <Button size="sm" variant="secondary" onClick={cancel}>
-                  Discard
+                  {t('files.viewer.discard')}
                 </Button>
               </span>
             }
           >
-            This file is no longer on the host
+            {t('files.viewer.gone')}
           </Banner>
         )}
       {mine && !cells && (
@@ -1445,7 +1484,7 @@ export function FileViewer({
         draftTooLarge &&
         layouts.includes(chosen) &&
         chosen !== 'source' && (
-          <Banner>Too large to preview: shown as source</Banner>
+          <Banner>{t('files.viewer.tooLargeToPreview')}</Banner>
         )}
       {mine &&
         !cells &&
@@ -1540,7 +1579,7 @@ export function FileViewer({
         <SaveBanner
           error={saveError}
           rootMoved={rootMoved}
-          reloadLabel="Reload and reapply"
+          reloadLabel={t('files.viewer.reapply')}
           onReload={() => reapplyEdits(mine, cells)}
           onCopy={() => copyText(mine.text)}
         />
@@ -1587,7 +1626,7 @@ export function FileViewer({
       {!mine && !binaryView && state.kind === 'text' && !previewOn && (
         <>
           {markdown && tooLarge && (
-            <Banner>Too large to preview: shown as source</Banner>
+            <Banner>{t('files.viewer.tooLargeToPreview')}</Banner>
           )}
           <CodeBlock
             text={state.text}
@@ -1597,28 +1636,27 @@ export function FileViewer({
             line={pick?.line}
             jump={pick?.jump}
             onLineComment={
-              onLineComment && ((t) => onLineComment(lineRange(t, false)))
+              onLineComment &&
+              ((lines) => onLineComment(lineRange(lines, false)))
             }
             commentedLines={commentedLines}
           />
         </>
       )}
       {!mine && !binaryView && state.kind === 'loading' && (
-        <ViewMessage>Loading…</ViewMessage>
+        <ViewMessage>{t('files.loading')}</ViewMessage>
       )}
       {!mine && !binaryView && state.kind === 'unpreviewable' && (
-        <ViewMessage>
-          Not previewable (binary, special file or larger than 1 MiB)
-        </ViewMessage>
+        <ViewMessage>{t('files.viewer.unpreviewable')}</ViewMessage>
       )}
       {!mine && !binaryView && state.kind === 'error' && (
         <ViewMessage>
-          {ERRORS[state.error]}
+          {t(ERRORS[state.error])}
           {state.error === 'not-found' && onCloseTab && (
             // Gone from the host (deleted or renamed elsewhere): the tab
             // stays until the user closes it
             <Button size="sm" onClick={onCloseTab}>
-              Close tab
+              {t('files.viewer.closeTab')}
             </Button>
           )}
         </ViewMessage>
@@ -1626,8 +1664,8 @@ export function FileViewer({
       {!mine && sensitive && (
         <ViewMessage>
           <Lock size={20} aria-hidden="true" />
-          This file may contain secrets
-          {!canReveal && <span>A view-only device cannot show it</span>}
+          {t('files.viewer.sensitive')}
+          {!canReveal && <span>{t('files.viewer.sensitiveViewOnly')}</span>}
         </ViewMessage>
       )}
       <SensitiveConfirm
@@ -1640,8 +1678,8 @@ export function FileViewer({
       />
       <ConfirmDialog
         isOpen={!!discarding}
-        title="Discard changes?"
-        confirmLabel="Discard"
+        title={t('files.viewer.askDiscard')}
+        confirmLabel={t('files.viewer.discard')}
         destructive
         onConfirm={() => {
           const then = discarding
@@ -1655,22 +1693,23 @@ export function FileViewer({
         }}
         onCancel={() => setDiscarding(undefined)}
       >
-        Your changes to this file will be lost.
+        {t('files.viewer.askDiscardBody')}
       </ConfirmDialog>
       {asking && (
         <ConfirmDialog
           isOpen
-          title="Edit with another delimiter?"
-          confirmLabel="Edit anyway"
+          title={t('files.viewer.askDelimiter')}
+          confirmLabel={t('files.viewer.editAnyway')}
           onConfirm={() => {
             setAsking(undefined)
             beginEdit(asking.file, asking.delimiter)
           }}
           onCancel={() => setAsking(undefined)}
         >
-          This file looks {separated(asking.detected)}, and you are viewing it
-          as {separated(asking.delimiter)}. Edits are written with that
-          delimiter, which can shift its columns.
+          {t('files.viewer.askDelimiterBody', {
+            detected: t(DELIMITER_SEPARATED[asking.detected]),
+            delimiter: t(DELIMITER_SEPARATED[asking.delimiter]),
+          })}
         </ConfirmDialog>
       )}
     </div>
@@ -1683,9 +1722,14 @@ export function SensitiveConfirm(props: {
   onConfirm: () => void
   onCancel: () => void
 }) {
+  const { t } = useT()
   return (
-    <ConfirmDialog title="Show this file?" confirmLabel="Show" {...props}>
-      This file may contain secrets. Show its contents?
+    <ConfirmDialog
+      title={t('files.viewer.askShow')}
+      confirmLabel={t('files.viewer.show')}
+      {...props}
+    >
+      {t('files.viewer.askShowBody')}
     </ConfirmDialog>
   )
 }

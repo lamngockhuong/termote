@@ -1,4 +1,5 @@
 import { MoreHorizontal } from 'lucide-react'
+import { useT } from '../i18n/i18n-context'
 import { Menu, MenuItem, MenuSeparator } from './ui/menu'
 
 // The actions that change the file, offered while the table is edited
@@ -40,9 +41,10 @@ export function TableColumnMenu({
   onHide,
   edit,
 }: Props) {
+  const { t } = useT()
   return (
     <Menu
-      label={`Column ${name}`}
+      label={t('files.columnMenu.label', { name })}
       trigger={<MoreHorizontal size={15} aria-hidden="true" />}
       triggerSize="sm"
       // The keys of its cells open it: no Tab stop of its own
@@ -54,45 +56,43 @@ export function TableColumnMenu({
       {edit?.fromCell && (
         <>
           <MenuItem onSelect={() => edit.onInsertRow('above')}>
-            Insert row above
+            {t('files.columnMenu.rowAbove')}
           </MenuItem>
           <MenuItem onSelect={() => edit.onInsertRow('below')}>
-            Insert row below
+            {t('files.columnMenu.rowBelow')}
           </MenuItem>
           <MenuSeparator />
         </>
       )}
       <MenuItem
-        title={
-          pinned
-            ? undefined
-            : 'Keeps the column at the left once the table scrolls sideways to it, unless it is wider than half the table'
-        }
+        title={pinned ? undefined : t('files.columnMenu.pinTitle')}
         onSelect={onPin}
       >
-        {pinned ? 'Unpin column' : 'Pin column'}
+        {pinned ? t('files.columnMenu.unpin') : t('files.columnMenu.pin')}
       </MenuItem>
       <MenuItem disabled={!canHide} onSelect={onHide}>
-        Hide column
+        {t('files.columnMenu.hide')}
       </MenuItem>
       {edit && (
         <>
           <MenuSeparator />
           <MenuItem onSelect={() => edit.onInsertColumn('left')}>
-            Insert column left
+            {t('files.columnMenu.left')}
           </MenuItem>
           <MenuItem onSelect={() => edit.onInsertColumn('right')}>
-            Insert column right
+            {t('files.columnMenu.right')}
           </MenuItem>
           {edit.canRename && (
-            <MenuItem onSelect={edit.onRename}>Rename column</MenuItem>
+            <MenuItem onSelect={edit.onRename}>
+              {t('files.columnMenu.rename')}
+            </MenuItem>
           )}
           <MenuItem
             danger
             disabled={!edit.canDelete}
             onSelect={edit.onDeleteColumn}
           >
-            Delete column
+            {t('files.table.deleteColumn')}
           </MenuItem>
         </>
       )}

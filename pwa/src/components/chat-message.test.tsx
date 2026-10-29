@@ -9,6 +9,7 @@ import type { ReactElement } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { ThemeProvider } from '../contexts/theme-context'
 import type { TranscriptEntry } from '../hooks/use-mux-api'
+import { tFor } from '../i18n/i18n-context'
 import type { MermaidResult } from '../utils/mermaid-render'
 import { ChatMarkdownContext, ChatMessage, chatSide } from './chat-message'
 import { MERMAID_REASONS } from './mermaid-block'
@@ -838,7 +839,9 @@ describe('ChatMessage code blocks', () => {
   it('a diagram that cannot be drawn stays code, with the reason', async () => {
     mockRender.mockResolvedValue({ ok: false, reason: 'syntax' })
     render(<ChatMessage entry={assistant('```mermaid\nnot a diagram\n```')} />)
-    expect(await screen.findByText(MERMAID_REASONS.syntax)).toBeInTheDocument()
+    expect(
+      await screen.findByText(tFor('en')(MERMAID_REASONS.syntax)),
+    ).toBeInTheDocument()
     expect(screen.getByText('not a diagram')).toBeInTheDocument()
   })
 
@@ -872,6 +875,7 @@ describe('ChatMessage code blocks', () => {
       ok,
       'chat-mermaid-1',
       expect.any(Function),
+      expect.any(Function),
     )
     expect(root).toBeNull()
     vi.unstubAllGlobals()
@@ -889,6 +893,11 @@ describe('ChatMessage code blocks', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Download diagram as SVG' }),
     )
-    expect(mockDownload).toHaveBeenCalledWith(ok, 'chat-mermaid-1', notify)
+    expect(mockDownload).toHaveBeenCalledWith(
+      ok,
+      'chat-mermaid-1',
+      notify,
+      expect.any(Function),
+    )
   })
 })

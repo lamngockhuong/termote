@@ -1,5 +1,6 @@
 import { GitBranch, RefreshCw } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { useT } from '../i18n/i18n-context'
 import { keepOrder, shortRoot, TRUNCATE_START } from '../utils/files-format'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { PanelMaximizeButton } from './side-panel'
@@ -23,6 +24,7 @@ export function PaneDirHeader({
   refreshing,
   children,
 }: Props) {
+  const { t } = useT()
   return (
     <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-1.5">
       <div className="flex min-w-0 flex-1 flex-col">
@@ -45,8 +47,8 @@ export function PaneDirHeader({
         size="sm"
         variant="ghost"
         onClick={onRefresh}
-        aria-label="Refresh"
-        title="Refresh"
+        aria-label={t('files.refresh')}
+        title={t('files.refresh')}
       >
         <RefreshCw
           size={15}

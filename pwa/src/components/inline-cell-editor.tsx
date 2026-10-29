@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { useT } from '../i18n/i18n-context'
 import { WRAP_LINE_HEIGHT, WRAP_PAD_Y } from '../utils/table-columns'
 import { FOCUS_RING } from './ui/button'
 
@@ -49,6 +50,7 @@ export function InlineCellEditor({
   onCancel,
   onExpand,
 }: Props) {
+  const { t } = useT()
   const [input, setInput] = useState(initial ?? value)
   const box = useRef<HTMLTextAreaElement>(null)
   // Ended: set, dropped or taken to the sheet, never twice
@@ -136,8 +138,8 @@ export function InlineCellEditor({
       />
       <button
         type="button"
-        aria-label="Open in sheet"
-        title="Open in sheet"
+        aria-label={t('files.cell.openSheet')}
+        title={t('files.cell.openSheet')}
         // Tab is the field's: it sets the value and goes to the next cell
         tabIndex={-1}
         // The field keeps the focus: no blur sets the value first

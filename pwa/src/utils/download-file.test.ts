@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RequestError } from '../hooks/use-mux-api'
+import { tFor } from '../i18n/i18n-context'
 import {
   BLOB_REVOKE_MS,
   downloadErrorMessage,
@@ -61,7 +62,7 @@ describe('downloadErrorMessage', () => {
     [err(500), 'Could not download a.bin'],
     [new Error('offline'), 'Could not download a.bin'],
   ])('%s', (e, text) => {
-    expect(downloadErrorMessage(e, 'a.bin')).toBe(text)
+    expect(downloadErrorMessage(e, 'a.bin', tFor('en'))).toBe(text)
   })
 })
 
@@ -181,7 +182,9 @@ describe('downloadFile', () => {
     const clicks = watchLinks()
     mockCheck.mockResolvedValue({ root: '/r', path: 'dir/a b.bin', size: 1 })
     const notify = vi.fn()
-    await downloadFile(file, notify, undefined, { iosStandalone: false })
+    await downloadFile(file, notify, tFor('en'), undefined, {
+      iosStandalone: false,
+    })
     expect(mockCheck).toHaveBeenCalledWith({ paneId: '%1' }, 'dir/a b.bin', {
       root: '/r',
       reveal: true,
@@ -202,6 +205,7 @@ describe('downloadFile', () => {
     await downloadFile(
       { ...file, path: 'dir/evil\u202egpj.exe' },
       vi.fn(),
+      tFor('en'),
       undefined,
       {
         iosStandalone: false,
@@ -210,6 +214,7 @@ describe('downloadFile', () => {
     await downloadFile(
       { ...file, path: 'dir/\u200b\u0007' },
       vi.fn(),
+      tFor('en'),
       undefined,
       {
         iosStandalone: false,
@@ -220,6 +225,7 @@ describe('downloadFile', () => {
     await downloadFile(
       { ...file, path: 'dir/evil\u202egpj.exe' },
       vi.fn(),
+      tFor('en'),
       undefined,
       {
         iosStandalone: true,
@@ -234,7 +240,9 @@ describe('downloadFile', () => {
     const clicks = watchLinks()
     mockCheck.mockRejectedValue(err(413, 'too_large'))
     const notify = vi.fn()
-    await downloadFile(file, notify, undefined, { iosStandalone: false })
+    await downloadFile(file, notify, tFor('en'), undefined, {
+      iosStandalone: false,
+    })
     expect(notify).toHaveBeenCalledWith(
       'a b.bin is larger than 100 MiB, too large to download',
       { variant: 'danger' },
@@ -246,7 +254,7 @@ describe('downloadFile', () => {
     const fetchSpy = vi.fn(async (_url: string) => new Response('x'))
     vi.stubGlobal('fetch', fetchSpy)
     const share = vi.fn()
-    await downloadFile(file, vi.fn(), undefined, {
+    await downloadFile(file, vi.fn(), tFor('en'), undefined, {
       iosStandalone: true,
       nav: { share, canShare: () => true },
     })
@@ -260,21 +268,23 @@ describe('downloadFile', () => {
   it('outside the iOS app, a link (the browser tells it apart)', async () => {
     const clicks = watchLinks()
     mockCheck.mockResolvedValue({ root: '/r', path: 'dir/a b.bin', size: 1 })
-    await downloadFile(file, vi.fn())
+    await downloadFile(file, vi.fn(), tFor('en'))
     expect(clicks).toHaveLength(1)
   })
 
   it('a moved root is handed on', async () => {
     mockCheck.mockRejectedValue(err(409, '', '/new'))
     const moved = vi.fn()
-    await downloadFile(file, vi.fn(), moved, { iosStandalone: false })
+    await downloadFile(file, vi.fn(), tFor('en'), moved, {
+      iosStandalone: false,
+    })
     expect(moved).toHaveBeenCalledWith('/new')
   })
 
   it('iOS: no check (the read tells a refusal); says it is downloading', async () => {
     const notify = vi.fn()
     const share = vi.fn()
-    await downloadFile(file, notify, undefined, {
+    await downloadFile(file, notify, tFor('en'), undefined, {
       iosStandalone: true,
       fetchBlob: async () => new Blob(['x']),
       nav: { share, canShare: () => true },
@@ -286,7 +296,7 @@ describe('downloadFile', () => {
 
   it('iOS: a refused read is told', async () => {
     const notify = vi.fn()
-    await downloadFile(file, notify, undefined, {
+    await downloadFile(file, notify, tFor('en'), undefined, {
       iosStandalone: true,
       fetchBlob: async () => {
         throw err(413, 'too_large')
@@ -304,7 +314,7 @@ describe('downloadFile', () => {
     const share = vi
       .fn()
       .mockRejectedValueOnce(new DOMException('no', 'NotAllowedError'))
-    await downloadFile(file, notify, undefined, {
+    await downloadFile(file, notify, tFor('en'), undefined, {
       iosStandalone: true,
       fetchBlob: async () => new Blob(['x']),
       nav: { share, canShare: () => true },

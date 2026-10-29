@@ -1,35 +1,39 @@
 import type { ReactNode } from 'react'
 import { filesError } from '../hooks/use-files'
 import { RequestError } from '../hooks/use-mux-api'
+import type { Locale } from '../i18n'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
 import { DocumentWorkerError } from '../utils/document-worker-client'
 import { formatSize } from '../utils/files-format'
 import { ViewMessage } from './pane-dir-header'
 import { Button } from './ui/button'
 
 // Why a document cannot be shown, by the server's code or the viewer's
-const CODES: Record<string, string> = {
-  not_document: 'Not previewable (not a valid PDF, .xlsx or .docx file)',
-  encrypted: 'Password-protected or encrypted file',
-  lfs_pointer: 'Stored in Git LFS: only the pointer is in git',
-  busy: 'Busy, try again',
-  sensitive: 'This file may contain secrets',
-  interrupted: 'The download was cut off',
+const CODES: Record<string, MessageKey> = {
+  not_document: 'files.document.notDocument',
+  encrypted: 'files.document.encrypted',
+  lfs_pointer: 'files.document.lfsPointer',
+  busy: 'files.document.busy',
+  sensitive: 'files.viewer.sensitive',
+  interrupted: 'files.document.interrupted',
   // The viewer's own
-  timeout: 'Took too long to open',
-  dead: 'The viewer stopped',
-  failed: 'The file could not be read (damaged or not supported)',
-  corrupt: 'The file could not be read (damaged or not supported)',
-  too_big: 'Too large to preview once unpacked',
-  password: 'Password-protected PDF',
+  timeout: 'files.document.timeout',
+  dead: 'files.document.dead',
+  failed: 'files.document.unreadable',
+  corrupt: 'files.document.unreadable',
+  too_big: 'files.document.tooBig',
+  password: 'files.document.password',
 }
 
 const ERRORS = {
-  'not-allowed': "This file can't be shown",
-  'view-only': 'View only: files show in a git repository only',
-  'not-found': 'File not found',
-  unsupported: 'Not supported by this backend',
-  unavailable: 'Could not load the file',
-}
+  'not-allowed': 'files.viewer.notAllowed',
+  'view-only': 'files.find.viewOnly',
+  'not-found': 'files.delete.fileNotFound',
+  unsupported: 'files.find.unsupported',
+  unavailable: 'files.viewer.failed',
+} as const satisfies Record<string, MessageKey>
 
 // Codes worth reading again: the server was busy, the bytes were cut off,
 // or the viewer gave up
@@ -45,16 +49,20 @@ export function documentCode(error: unknown): string {
 }
 
 // What to say about a failed document
-export function documentErrorText(error: unknown): string {
+export function documentErrorText(
+  error: unknown,
+  t: Translate<MessageKey>,
+  locale: Locale,
+): string {
   const code = documentCode(error)
   if (code === 'too_large') {
     // Only the server says too_large, with the size when it knows it
     const size = (error as RequestError).size
     return size === undefined
-      ? 'Larger than 30 MiB'
-      : `Larger than 30 MiB (${formatSize(size)})`
+      ? t('files.document.tooLarge')
+      : t('files.document.tooLargeSize', { size: formatSize(size, locale) })
   }
-  return CODES[code] ?? ERRORS[filesError(error)]
+  return t(CODES[code] ?? ERRORS[filesError(error)])
 }
 
 interface Props {
@@ -67,6 +75,7 @@ interface Props {
 
 // A reason in place of the document, with Retry and Download when they help
 export function DocumentMessage({ children, onRetry, onDownload }: Props) {
+  const { t } = useT()
   return (
     <ViewMessage>
       <span role="status">{children}</span>
@@ -74,12 +83,12 @@ export function DocumentMessage({ children, onRetry, onDownload }: Props) {
         <span className="flex gap-1.5">
           {onRetry && (
             <Button size="sm" onClick={onRetry}>
-              Retry
+              {t('files.search.retry')}
             </Button>
           )}
           {onDownload && (
             <Button size="sm" variant="secondary" onClick={onDownload}>
-              Download
+              {t('files.download')}
             </Button>
           )}
         </span>
@@ -98,12 +107,13 @@ export function DocumentError({
   onRetry?: () => void
   onDownload?: () => void
 }) {
+  const { t, locale } = useT()
   return (
     <DocumentMessage
       onRetry={RETRY.has(documentCode(error)) ? onRetry : undefined}
       onDownload={onDownload}
     >
-      {documentErrorText(error)}
+      {documentErrorText(error, t, locale)}
     </DocumentMessage>
   )
 }

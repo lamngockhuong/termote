@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ImageState } from '../hooks/use-image-blob'
 import type { ViewerImage } from '../hooks/use-image-viewer'
 import { RequestError } from '../hooks/use-mux-api'
+import { tFor } from '../i18n/i18n-context'
 import { ImagePreview, imageErrorText } from './image-preview'
 
 const opened = vi.fn()
@@ -222,9 +223,9 @@ describe('ImagePreview', () => {
 describe('imageErrorText', () => {
   it('says what is missing for no_version, when the caller knows', () => {
     const none = new RequestError(404, 'no_version', 'no such version')
-    expect(imageErrorText(none, 'Deleted')).toBe('Deleted')
-    expect(imageErrorText(none)).toBe('File not found')
-    expect(imageErrorText(new TypeError('offline'))).toBe(
+    expect(imageErrorText(none, tFor('en'), 'Deleted')).toBe('Deleted')
+    expect(imageErrorText(none, tFor('en'))).toBe('File not found')
+    expect(imageErrorText(new TypeError('offline'), tFor('en'))).toBe(
       'Could not load the image',
     )
   })

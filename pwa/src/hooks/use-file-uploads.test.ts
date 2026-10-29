@@ -1,5 +1,6 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { tFor } from '../i18n/i18n-context'
 import type {
   UploadAt,
   UploadCallbacks,
@@ -70,7 +71,10 @@ const start = (
   dir = '.',
   opts: { announce?: boolean; folders?: number } = {},
   over: Partial<UploadTo> = {},
-) => act(() => startUploads(files, to(dir, over), { notify, ...opts }))
+) =>
+  act(() =>
+    startUploads(files, to(dir, over), { notify, t: tFor('en'), ...opts }),
+  )
 // Lets every pending promise run
 const settle = () => act(async () => {})
 const last = () => notify.mock.calls[notify.mock.calls.length - 1]

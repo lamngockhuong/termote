@@ -3,6 +3,8 @@
 // its SVG file. Everything comes from the data: URL already on screen: the
 // PNG is that image drawn on a canvas, the SVG that URL decoded, and nothing
 // is fetched (connect-src has no data:).
+import type { MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
 import {
   BLOB_REVOKE_MS,
   isIosStandalone,
@@ -124,14 +126,15 @@ export async function sharePng(
   image: MermaidImage,
   name: string,
   notify: (message: string) => void,
+  t: Translate<MessageKey>,
 ): Promise<void> {
   try {
     const png = await pngOf(image)
     const file = new File([png], `${name}.png`, { type: 'image/png' })
     if ((await shareFile(navigator, file)) === 'blocked')
-      notify('Diagram ready: tap Share again')
+      notify(t('files.mermaid.shareAgain'))
   } catch {
-    notify('Could not share the diagram')
+    notify(t('files.mermaid.shareFailed'))
   }
 }
 
@@ -140,13 +143,14 @@ export async function sharePng(
 export async function copyPng(
   image: MermaidImage,
   notify: (message: string) => void,
+  t: Translate<MessageKey>,
 ): Promise<void> {
   try {
     const item = new ClipboardItem({ 'image/png': pngOf(image) })
     await navigator.clipboard.write([item])
-    notify('Diagram copied')
+    notify(t('files.mermaid.copied'))
   } catch {
-    notify('Could not copy the diagram')
+    notify(t('files.mermaid.copyFailed'))
   }
 }
 
@@ -156,6 +160,7 @@ export async function downloadSvg(
   image: MermaidImage,
   name: string,
   notify: (message: string) => void,
+  t: Translate<MessageKey>,
   iosStandalone = isIosStandalone(),
 ): Promise<void> {
   const blob = svgBlob(image)
@@ -165,10 +170,10 @@ export async function downloadSvg(
       iosStandalone,
       fetchBlob: async () => blob,
       nav: navigator,
-      onShareBlocked: () => notify('Diagram ready: tap Download again'),
+      onShareBlocked: () => notify(t('files.mermaid.downloadAgain')),
     })
   } catch {
-    notify('Could not download the diagram')
+    notify(t('files.mermaid.downloadFailed'))
   } finally {
     setTimeout(() => URL.revokeObjectURL(href), BLOB_REVOKE_MS)
   }

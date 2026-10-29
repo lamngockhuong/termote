@@ -4,6 +4,8 @@
  */
 
 import { type FilesTarget, filesUrl } from '../hooks/use-mux-api'
+import type { MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
 
 // Mirrors the server's limit; the server still decides.
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
@@ -185,39 +187,42 @@ export async function uploadFileImage(
 }
 
 // What the user is told when a pasted image was not saved next to the file
-export function fileImageErrorMessage(reason: FileImageErrorReason): string {
+export function fileImageErrorMessage(
+  reason: FileImageErrorReason,
+  t: Translate<MessageKey>,
+): string {
   switch (reason) {
     case 'view_only':
-      return 'A view-only device cannot save images'
+      return t('files.image.viewOnly')
     case 'sensitive':
-      return 'This folder may hold secrets: the image was not saved'
+      return t('files.image.sensitive')
     case 'symlink':
-      return 'The folder is a link: the image was not saved'
+      return t('files.image.symlink')
     case 'not_directory':
-      return 'A folder on the way is a file: the image was not saved'
+      return t('files.image.notDirectory')
     case 'exists':
-      return 'Too many images pasted this second. Try again'
+      return t('files.image.exists')
     case 'invalid_name':
     case 'not_allowed':
-      return "Images can't be saved in this folder"
+      return t('files.image.notAllowed')
     case 'not_found':
-      return "The file's folder is no longer on the host"
+      return t('files.image.notFound')
     case 'permission':
-      return "The server can't write in this folder"
+      return t('files.image.permission')
     case 'read_only':
-      return 'The file system there is read-only'
+      return t('files.refused.readOnly')
     case 'too_many_pixels':
-      return 'Image is larger than 40 megapixels'
+      return t('files.image.tooManyPixels')
     case 'storage_full':
-      return "The host's disk or quota is full"
+      return t('files.refused.storageFull')
     case 'busy':
-      return 'Too many saves at once. Try again'
+      return t('files.image.busy')
     case 'root_changed':
-      return "This pane's folder changed: the image was not saved"
+      return t('files.image.rootChanged')
     case 'timeout':
-      return 'Not sure the image was saved. Check the folder'
+      return t('files.image.timeout')
     case 'unsupported_image':
-      return 'Only PNG, JPEG, GIF and WebP images can be pasted'
+      return t('files.image.unsupported')
     default:
       return uploadErrorMessage(reason)
   }

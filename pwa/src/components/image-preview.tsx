@@ -3,28 +3,31 @@ import { filesError } from '../hooks/use-files'
 import { type ImageState, imageErrorCode } from '../hooks/use-image-blob'
 import { useImageViewer } from '../hooks/use-image-viewer'
 import { RequestError } from '../hooks/use-mux-api'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
 import { formatSize } from '../utils/files-format'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { ViewMessage } from './pane-dir-header'
 import { Button } from './ui/button'
 
 // Why an image cannot be shown, by the server's code
-const CODES: Record<string, string> = {
-  too_large: 'Larger than 10 MiB',
-  too_many_pixels: 'Too many pixels to show (over 40 megapixels)',
-  not_image: 'Not previewable (not a PNG, JPEG, GIF, WebP or SVG image)',
-  lfs_pointer: 'Stored in Git LFS: only the pointer is in git',
-  busy: 'Busy, try again',
-  sensitive: 'This file may contain secrets',
+const CODES: Record<string, MessageKey> = {
+  too_large: 'files.imagePreview.tooLarge',
+  too_many_pixels: 'files.imagePreview.tooManyPixels',
+  not_image: 'files.imagePreview.notImage',
+  lfs_pointer: 'files.document.lfsPointer',
+  busy: 'files.document.busy',
+  sensitive: 'files.viewer.sensitive',
 }
 
 const ERRORS = {
-  'not-allowed': "This file can't be shown",
-  'view-only': 'View only: files show in a git repository only',
-  'not-found': 'File not found',
-  unsupported: 'Not supported by this backend',
-  unavailable: 'Could not load the image',
-}
+  'not-allowed': 'files.viewer.notAllowed',
+  'view-only': 'files.find.viewOnly',
+  'not-found': 'files.delete.fileNotFound',
+  unsupported: 'files.find.unsupported',
+  unavailable: 'files.imagePreview.failed',
+} as const satisfies Record<string, MessageKey>
 
 const SVG_TYPE = 'image/svg+xml'
 
@@ -35,10 +38,14 @@ const CHECKERBOARD = {
 }
 
 // Why a read failed: the server's code, else the files routes' reasons
-export function imageErrorText(error: unknown, missing?: string): string {
+export function imageErrorText(
+  error: unknown,
+  t: Translate<MessageKey>,
+  missing?: string,
+): string {
   const code = error instanceof RequestError ? error.code : ''
   if (code === 'no_version' && missing) return missing
-  return CODES[code] ?? ERRORS[filesError(error)]
+  return t(CODES[code] ?? ERRORS[filesError(error)])
 }
 
 interface Props {
@@ -57,6 +64,7 @@ interface Props {
 // its pixel size and file size, or why it cannot be shown. Once decoded, a
 // click (Enter, Space) opens it full screen.
 export function ImagePreview({ state, alt, label, missing, onRetry }: Props) {
+  const { t, locale } = useT()
   // What the browser made of the current URL
   const [decoded, setDecoded] = useState<{
     url: string
@@ -83,20 +91,20 @@ export function ImagePreview({ state, alt, label, missing, onRetry }: Props) {
   let body: ReactNode
   if (state.status === 'idle') body = <ViewMessage>{missing}</ViewMessage>
   else if (state.status === 'loading')
-    body = <ViewMessage>Loading…</ViewMessage>
+    body = <ViewMessage>{t('files.loading')}</ViewMessage>
   else if (state.status === 'error')
     body = (
       <ViewMessage>
-        {imageErrorText(state.error, missing)}
+        {imageErrorText(state.error, t, missing)}
         {imageErrorCode(state) === 'busy' && onRetry && (
           <Button size="sm" onClick={onRetry}>
-            Retry
+            {t('files.search.retry')}
           </Button>
         )}
       </ViewMessage>
     )
   else if (seen?.failed)
-    body = <ViewMessage>The image could not be decoded</ViewMessage>
+    body = <ViewMessage>{t('files.imagePreview.undecodable')}</ViewMessage>
   else
     body = (
       // A block, not a shrink-to-fit flex item: an SVG with only a viewBox
@@ -110,7 +118,7 @@ export function ImagePreview({ state, alt, label, missing, onRetry }: Props) {
           // disabled, which takes no focus: a viewer that closes because a
           // new image replaced this one returns focus here before it decodes
           aria-disabled={seen ? undefined : true}
-          aria-label={`Open ${title} full screen`}
+          aria-label={t('files.imagePreview.open', { name: title })}
           className="block w-full cursor-zoom-in text-left aria-disabled:cursor-default"
           onClick={() =>
             seen &&
@@ -146,7 +154,7 @@ export function ImagePreview({ state, alt, label, missing, onRetry }: Props) {
           {seen?.width !== undefined &&
             state.type !== SVG_TYPE &&
             `${seen.width}×${seen.height} · `}
-          {formatSize(state.size)}
+          {formatSize(state.size, locale)}
         </span>
       </div>
     )
@@ -166,7 +174,7 @@ export function ImagePreview({ state, alt, label, missing, onRetry }: Props) {
       {body}
       {failed && (
         <p role="status" className="m-0 px-2 pb-2 text-[11px] text-fg-muted">
-          Could not open the image
+          {t('files.imagePreview.openFailed')}
         </p>
       )}
       {viewer}

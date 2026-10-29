@@ -91,15 +91,25 @@ describe('MermaidExport', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Share diagram as PNG' }),
     )
-    expect(mockShare).toHaveBeenCalledWith(IMG, 'a-mermaid-1', notify)
+    expect(mockShare).toHaveBeenCalledWith(
+      IMG,
+      'a-mermaid-1',
+      notify,
+      expect.any(Function),
+    )
     fireEvent.click(
       screen.getByRole('button', { name: 'Copy diagram as image' }),
     )
-    expect(mockCopy).toHaveBeenCalledWith(IMG, notify)
+    expect(mockCopy).toHaveBeenCalledWith(IMG, notify, expect.any(Function))
     fireEvent.click(
       screen.getByRole('button', { name: 'Download diagram as SVG' }),
     )
-    expect(mockDownload).toHaveBeenCalledWith(IMG, 'a-mermaid-1', notify)
+    expect(mockDownload).toHaveBeenCalledWith(
+      IMG,
+      'a-mermaid-1',
+      notify,
+      expect.any(Function),
+    )
   })
 
   it('hands every button to buttonRef', () => {

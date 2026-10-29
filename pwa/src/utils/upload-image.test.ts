@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { tFor } from '../i18n/i18n-context'
 import {
   type FileImageErrorReason,
   fileImageErrorMessage,
@@ -271,19 +272,21 @@ describe('fileImageErrorMessage', () => {
       'unsupported_image',
     ]
     for (const r of own) {
-      expect(fileImageErrorMessage(r)).toBeTruthy()
+      expect(fileImageErrorMessage(r, tFor('en'))).toBeTruthy()
       if (r !== 'busy' && r !== 'storage_full' && r !== 'timeout')
-        expect(fileImageErrorMessage(r)).not.toBe(
+        expect(fileImageErrorMessage(r, tFor('en'))).not.toBe(
           uploadErrorMessage(r as UploadErrorReason),
         )
     }
-    expect(fileImageErrorMessage('timeout')).toBe(
+    expect(fileImageErrorMessage('timeout', tFor('en'))).toBe(
       'Not sure the image was saved. Check the folder',
     )
-    expect(fileImageErrorMessage('invalid_name')).toBe(
-      fileImageErrorMessage('not_allowed'),
+    expect(fileImageErrorMessage('invalid_name', tFor('en'))).toBe(
+      fileImageErrorMessage('not_allowed', tFor('en')),
     )
-    expect(fileImageErrorMessage('heic')).toBe(uploadErrorMessage('heic'))
+    expect(fileImageErrorMessage('heic', tFor('en'))).toBe(
+      uploadErrorMessage('heic'),
+    )
   })
 })
 

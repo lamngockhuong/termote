@@ -205,6 +205,7 @@ function getSandbox(): Sandbox {
     frame.setAttribute('aria-hidden', 'true')
     frame.tabIndex = -1
     frame.hidden = true
+    // i18n-ignore: a hidden frame no one reads
     frame.title = 'Mermaid renderer'
     frame.src = MERMAID_SANDBOX_URL
     const s: Sandbox = {

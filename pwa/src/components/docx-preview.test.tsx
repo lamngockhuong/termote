@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { tFor } from '../i18n/i18n-context'
 import { DOC_TIMEOUT } from '../utils/document-worker-client'
 import type { DocChild } from '../utils/docx-sanitize'
 import type { DocxReply } from '../utils/docx-worker'
@@ -185,7 +186,7 @@ describe('DocxPreview', () => {
 
 describe('renderDocTree', () => {
   function html(tree: DocChild[]) {
-    const { container } = render(<div>{renderDocTree(tree)}</div>)
+    const { container } = render(<div>{renderDocTree(tree, tFor('en'))}</div>)
     return (container.firstChild as HTMLElement).innerHTML
   }
 

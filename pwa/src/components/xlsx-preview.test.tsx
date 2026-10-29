@@ -176,7 +176,23 @@ describe('XlsxPreview', () => {
       tsv: tsv('a\n', { columnsCut: true }),
       totalRows: 1,
     })
-    expect(screen.getByText(/Showing the first 200 columns/)).toBeDefined()
+    expect(
+      screen.getByText(
+        'Showing the first 200 columns: download for the full sheet',
+      ),
+    ).toBeDefined()
+  })
+
+  it('says columns were cut without Download for a view-only device', async () => {
+    show({ onDownload: undefined })
+    await settle()
+    await answer({ type: 'open', sheets: sheets('Wide') })
+    await answer({
+      type: 'sheet',
+      tsv: tsv('a\n', { columnsCut: true }),
+      totalRows: 1,
+    })
+    expect(screen.getByText('Showing the first 200 columns')).toBeDefined()
   })
 
   it('says a sheet was cut without Download for a view-only device', async () => {

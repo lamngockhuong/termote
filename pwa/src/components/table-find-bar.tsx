@@ -1,6 +1,9 @@
 import { ChevronDown, ChevronUp, X } from 'lucide-react'
 import type { KeyboardEvent, RefObject } from 'react'
 import type { FindStatus } from '../hooks/use-csv-find'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
 import { type FindOptions, MAX_FIND } from '../utils/csv-find'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { FOCUS_RING, IconButton } from './ui/button'
@@ -30,22 +33,30 @@ interface Props {
   f3?: boolean
 }
 
-const TOGGLES: { flag: keyof FindFlags; label: string; text: string }[] = [
-  { flag: 'matchCase', label: 'Match case', text: 'Aa' },
-  { flag: 'wholeCell', label: 'Whole cell', text: 'ab' },
-  { flag: 'regex', label: 'Regular expression', text: '.*' },
+const TOGGLES: { flag: keyof FindFlags; label: MessageKey; text: string }[] = [
+  { flag: 'matchCase', label: 'files.search.matchCase', text: 'Aa' },
+  { flag: 'wholeCell', label: 'files.tableFind.wholeCell', text: 'ab' },
+  { flag: 'regex', label: 'files.search.regex', text: '.*' },
 ]
 
-function statusText(status: FindStatus, count: number, current: number) {
-  if (status === 'invalid') return 'Invalid pattern'
+function statusText(
+  status: FindStatus,
+  count: number,
+  current: number,
+  t: Translate<MessageKey>,
+) {
+  if (status === 'invalid') return t('files.tableFind.invalid')
   if (status === 'busy') return '…'
-  if (status === 'timeout') return 'Search took too long'
-  if (status === 'failed') return 'Search failed'
-  if (status === 'unavailable') return 'Search is unavailable'
-  if (!count) return 'No matches'
+  if (status === 'timeout') return t('files.tableFind.timeout')
+  if (status === 'failed') return t('files.tableFind.failed')
+  if (status === 'unavailable') return t('files.tableFind.unavailable')
+  if (!count) return t('files.search.none')
   const total = count > MAX_FIND ? `${MAX_FIND}+` : String(count)
   // The one past MAX_FIND can be gone to, never counted
-  return `${Math.min(current + 1, MAX_FIND)} of ${total}`
+  return t('files.tableFind.at', {
+    current: Math.min(current + 1, MAX_FIND),
+    total,
+  })
 }
 
 // Find in a table, under its bar: what to find, how, and where the current
@@ -63,9 +74,10 @@ export function TableFindBar({
   onClose,
   inputRef,
   toggles = ['matchCase', 'wholeCell', 'regex'],
-  label = 'Find in table',
+  label,
   f3 = true,
 }: Props) {
+  const { t } = useT()
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     // Escape while composing (IME) drops the word composed, not find
     if (e.key === 'Escape' && !e.nativeEvent.isComposing) {
@@ -82,7 +94,7 @@ export function TableFindBar({
   const shown = visibleUnsafe(input)
   return (
     <search
-      aria-label={label}
+      aria-label={label ?? t('files.tableFind.label')}
       className="flex shrink-0 flex-wrap items-center gap-1 border-b border-border px-2 py-1.5 text-[13px]"
       onKeyDown={onKeyDown}
     >
@@ -92,21 +104,21 @@ export function TableFindBar({
         value={input}
         onChange={(e) => onInput(e.target.value)}
         onKeyDown={onInputKey}
-        placeholder="Find"
-        aria-label="Find"
+        placeholder={t('files.pdf.findShort')}
+        aria-label={t('files.pdf.findShort')}
         spellCheck={false}
         autoCapitalize="off"
         autoCorrect="off"
         autoComplete="off"
         className={`h-8 min-w-0 flex-1 basis-32 rounded-control border border-border bg-surface px-2 text-fg pointer-coarse:h-touch ${FOCUS_RING}`}
       />
-      {TOGGLES.filter((t) => toggles.includes(t.flag)).map(
-        ({ flag, label, text }) => (
+      {TOGGLES.filter((toggle) => toggles.includes(toggle.flag)).map(
+        ({ flag, label: name, text }) => (
           <IconButton
             key={flag}
             size="sm"
-            aria-label={label}
-            title={label}
+            aria-label={t(name)}
+            title={t(name)}
             aria-pressed={flags[flag]}
             onClick={() => onFlags({ ...flags, [flag]: !flags[flag] })}
             className={`font-term text-[12px] ${flags[flag] ? 'text-accent' : ''}`}
@@ -125,12 +137,16 @@ export function TableFindBar({
         ),
       )}
       <span className="min-w-16 tabular-nums text-fg-muted" aria-live="polite">
-        {input && statusText(status, count, current)}
+        {input && statusText(status, count, current, t)}
       </span>
       <IconButton
         size="sm"
-        aria-label="Previous match"
-        title={`Previous match (Shift+Enter${f3 ? ', Shift+F3' : ''})`}
+        aria-label={t('files.tableFind.previous')}
+        title={t(
+          f3
+            ? 'files.tableFind.previousTitleF3'
+            : 'files.tableFind.previousTitle',
+        )}
         disabled={!count}
         onClick={() => onStep(-1)}
       >
@@ -138,8 +154,10 @@ export function TableFindBar({
       </IconButton>
       <IconButton
         size="sm"
-        aria-label="Next match"
-        title={`Next match (Enter${f3 ? ', F3' : ''})`}
+        aria-label={t('files.tableFind.next')}
+        title={t(
+          f3 ? 'files.tableFind.nextTitleF3' : 'files.tableFind.nextTitle',
+        )}
         disabled={!count}
         onClick={() => onStep(1)}
       >
@@ -147,8 +165,8 @@ export function TableFindBar({
       </IconButton>
       <IconButton
         size="sm"
-        aria-label="Close find"
-        title="Close (Escape)"
+        aria-label={t('files.tableFind.close')}
+        title={t('files.tableFind.closeTitle')}
         onClick={onClose}
       >
         <X size={15} aria-hidden="true" />
@@ -160,7 +178,7 @@ export function TableFindBar({
           {shown !== input && (
             <span className="mr-3 font-term break-all">{shown}</span>
           )}
-          {hidden > 0 && 'Hidden columns not searched'}
+          {hidden > 0 && t('files.tableFind.hidden')}
         </div>
       )}
     </search>

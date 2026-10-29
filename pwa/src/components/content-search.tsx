@@ -24,7 +24,10 @@ import {
   searchFiles,
 } from '../hooks/use-mux-api'
 import { useSettings } from '../hooks/use-settings'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
 import { splitPath } from '../utils/files-format'
+import { FIND_ERRORS } from './file-search'
 import { FOCUS_RING } from './ui/button'
 
 // Typing waits this long before a search is sent
@@ -34,20 +37,12 @@ export const SEARCH_MIN_CHARS = 2
 // Groups past this many files start collapsed
 const OPEN_GROUPS = 50
 
-const ERRORS: Record<FilesError, string> = {
-  unsupported: 'Not supported by this backend',
-  'not-found': 'Directory not found',
-  'not-allowed': "This directory can't be searched",
-  'view-only': 'View only: files show in a git repository only',
-  unavailable: 'Could not search the files',
-}
-
 // Refusals of the query itself, told under the box
-const QUERY_ERRORS: Record<string, string> = {
-  invalid_regex: 'Invalid regular expression',
-  empty_match: 'This pattern matches empty text',
-  invalid_glob: 'Invalid file pattern',
-  invalid_exclude: 'An excluded folder in Settings is invalid',
+const QUERY_ERRORS: Record<string, MessageKey> = {
+  invalid_regex: 'files.search.invalidRegex',
+  empty_match: 'files.search.emptyMatch',
+  invalid_glob: 'files.search.invalidGlob',
+  invalid_exclude: 'files.search.invalidExclude',
 }
 
 // What the Search tab holds, kept by the caller while a result is open:
@@ -98,7 +93,7 @@ type Pending =
   | { status: 'none' }
   | { status: 'loading' }
   | { status: 'busy' }
-  | { status: 'query'; message: string }
+  | { status: 'query'; message: MessageKey }
   | { status: 'error'; error: FilesError }
 
 interface Props {
@@ -130,6 +125,7 @@ export function ContentSearch({
   onPick,
   onRootChanged,
 }: Props) {
+  const { t } = useT()
   const { settings, updateSetting } = useSettings()
   const [pending, setPending] = useState<Pending>({ status: 'none' })
   const [retry, setRetry] = useState(0)
@@ -263,24 +259,27 @@ export function ContentSearch({
   if (!query) {
     body = null
   } else if (short) {
-    body = <Note>Type at least {SEARCH_MIN_CHARS} characters</Note>
+    body = <Note>{t('files.search.short', { count: SEARCH_MIN_CHARS })}</Note>
   } else if (pending.status === 'error') {
-    body = <Note>{ERRORS[pending.error]}</Note>
+    body = <Note>{t(FIND_ERRORS[pending.error])}</Note>
   } else if (pending.status === 'busy') {
     body = (
       <Note>
-        Search busy, try again.{' '}
+        {t('files.search.busy')}{' '}
         <button
           type="button"
           onClick={() => setRetry((n) => n + 1)}
           className={`text-accent underline ${FOCUS_RING}`}
         >
-          Retry
+          {t('files.search.retry')}
         </button>
       </Note>
     )
   } else if (!result) {
-    body = pending.status === 'query' ? null : <Note>Searching…</Note>
+    body =
+      pending.status === 'query' ? null : (
+        <Note>{t('files.find.searching')}</Note>
+      )
   } else {
     body = (
       <Results
@@ -319,12 +318,12 @@ export function ContentSearch({
             <input
               ref={input}
               type="search"
-              aria-label="Search file contents"
+              aria-label={t('files.search.label')}
               aria-invalid={pending.status === 'query' || undefined}
               aria-describedby={
                 pending.status === 'query' ? errorId : undefined
               }
-              placeholder="Search in files…"
+              placeholder={t('files.search.placeholder')}
               value={query}
               spellCheck={false}
               autoCapitalize="off"
@@ -338,21 +337,21 @@ export function ContentSearch({
             />
           </div>
           <Toggle
-            label="Match case"
+            label={t('files.search.matchCase')}
             on={settings.searchCase}
             onClick={() => toggle('searchCase')}
           >
             <CaseSensitive size={16} aria-hidden="true" />
           </Toggle>
           <Toggle
-            label="Whole word"
+            label={t('files.search.wholeWord')}
             on={settings.searchWord}
             onClick={() => toggle('searchWord')}
           >
             <WholeWord size={16} aria-hidden="true" />
           </Toggle>
           <Toggle
-            label="Regular expression"
+            label={t('files.search.regex')}
             on={settings.searchRegex}
             onClick={() => toggle('searchRegex')}
           >
@@ -360,8 +359,8 @@ export function ContentSearch({
           </Toggle>
           <button
             type="button"
-            aria-label="Files to include or exclude"
-            title="Files to include or exclude"
+            aria-label={t('files.search.globs')}
+            title={t('files.search.globs')}
             aria-expanded={state.globsOpen}
             aria-controls={globsId}
             onClick={() => onState({ globsOpen: !state.globsOpen })}
@@ -376,20 +375,20 @@ export function ContentSearch({
             role="alert"
             className="m-0 px-1 text-[12px] text-danger"
           >
-            {pending.message}
+            {t(pending.message)}
           </p>
         )}
         {state.globsOpen && (
           <div id={globsId} className="flex flex-col gap-1">
             <GlobField
-              label="Files to include"
-              placeholder="e.g. *.ts, src/"
+              label={t('files.search.include')}
+              placeholder={t('files.search.includeExample')}
               value={state.files}
               onChange={(v) => onState({ files: v })}
             />
             <GlobField
-              label="Files to exclude"
-              placeholder="e.g. *.test.ts, docs/"
+              label={t('files.search.exclude')}
+              placeholder={t('files.search.excludeExample')}
               value={state.skip}
               onChange={(v) => onState({ skip: v })}
             />
@@ -482,20 +481,19 @@ function Results({
   onKeyDown: (e: KeyboardEvent) => void
   onPick: (path: string, match: SearchMatch) => void
 }) {
+  const { t } = useT()
   // Lines sent, and every matching line known (with those past a file's cap)
   const lines = res.files.reduce((n, f) => n + f.matches.length, 0)
   const total = res.files.reduce((n, f) => n + f.matches.length + f.more, 0)
   const notes: string[] = []
-  if (res.truncated) notes.push(`Showing the first ${lines} lines`)
-  if (res.incomplete) notes.push('Stopped early: some files were not searched')
+  if (res.truncated) notes.push(t('files.search.truncated', { count: lines }))
+  if (res.incomplete) notes.push(t('files.search.incomplete'))
   if (res.skipped.sensitive)
     notes.push(
-      `${res.skipped.sensitive} sensitive ${plural(res.skipped.sensitive, 'file')} not searched`,
+      t('files.search.skippedSensitive', { count: res.skipped.sensitive }),
     )
   if (res.skipped.hidden)
-    notes.push(
-      `${res.skipped.hidden} hidden ${plural(res.skipped.hidden, 'file')} not searched in a home folder`,
-    )
+    notes.push(t('files.search.skippedHidden', { count: res.skipped.hidden }))
   // Row index of each focusable row, in order: the tab stop is the selected
   let row = 0
   return (
@@ -510,16 +508,19 @@ function Results({
         className="m-0 px-3 pt-2 pb-1 text-[12px] text-fg-subtle"
       >
         {res.files.length === 0
-          ? 'No matches'
-          : `${total} ${plural(total, 'line')} in ${res.files.length} ${plural(res.files.length, 'file')}`}
-        {searching && ' · Searching…'}
+          ? t('files.search.none')
+          : t('files.search.summary', {
+              lines: t('files.search.lines', { count: total }),
+              files: t('files.search.files', { count: res.files.length }),
+            })}
+        {searching && ` · ${t('files.find.searching')}`}
       </p>
-      {stale && <Note>The folder changed: search again</Note>}
+      {stale && <Note>{t('files.search.stale')}</Note>}
       {notes.map((n) => (
         <Note key={n}>{n}</Note>
       ))}
       <ul
-        aria-label="Search results"
+        aria-label={t('files.search.results')}
         className={`m-0 list-none p-0 ${stale ? 'opacity-50' : ''}`}
       >
         {res.files.map((file, fi) => {
@@ -580,7 +581,7 @@ function Results({
                   })}
                   {file.more > 0 && (
                     <li className="py-0.5 pl-17 text-[12px] text-fg-subtle">
-                      {file.more} more {plural(file.more, 'line')} in this file
+                      {t('files.search.more', { count: file.more })}
                     </li>
                   )}
                 </ul>
@@ -623,8 +624,6 @@ export function Marked({ match }: { match: SearchMatch }) {
     </>
   )
 }
-
-const plural = (n: number, word: string) => (n === 1 ? word : `${word}s`)
 
 function Note({ children }: { children: ReactNode }) {
   return (

@@ -1,6 +1,7 @@
 import { FileType } from 'lucide-react'
 import { useState } from 'react'
 import type { FileEncoding } from '../hooks/use-mux-api'
+import { useT } from '../i18n/i18n-context'
 import { ENCODINGS, encodingLabel } from '../utils/file-encoding'
 import { ConfirmDialog } from './ui/confirm-dialog'
 import { Menu, MenuGroup, MenuItem, MenuItemRadio } from './ui/menu'
@@ -32,65 +33,67 @@ export function FileEncodingMenu({
   onReopen,
   onSaveAsUtf8,
 }: Props) {
+  const { t } = useT()
   const [confirming, setConfirming] = useState(false)
-  const name = encoding ? encodingLabel(encoding, bom) : undefined
+  const name = encoding ? encodingLabel(encoding, t, bom) : undefined
   return (
     <>
       <Menu
-        label={name ? `Encoding: ${name}` : 'Open with encoding'}
-        trigger={name ?? 'Open with encoding…'}
+        label={
+          name ? t('files.encoding.shown', { name }) : t('files.encoding.open')
+        }
+        trigger={name ?? t('files.encoding.openMenu')}
         textTrigger="block max-w-full truncate rounded-control text-[11px] text-fg-muted underline decoration-dotted underline-offset-2 hover:text-fg pointer-coarse:py-1"
         align="start"
       >
         <MenuGroup
-          label={encoding ? 'Reopen with encoding' : 'Open with encoding'}
+          label={
+            encoding ? t('files.encoding.reopen') : t('files.encoding.open')
+          }
         >
           {ENCODINGS.map((enc) => (
             <MenuItemRadio
               key={enc}
               checked={enc === encoding}
               disabled={dirty}
-              title={dirty ? 'Save or discard your changes first' : undefined}
+              title={dirty ? t('files.encoding.dirty') : undefined}
               onSelect={() => onReopen(enc)}
             >
-              {encodingLabel(enc)}
+              {encodingLabel(enc, t)}
             </MenuItemRadio>
           ))}
         </MenuGroup>
         {notEditable === 'lossy-encoding' && (
-          <MenuItem disabled>
-            Can't be edited in this encoding: saving would change bytes you did
-            not edit. Save as UTF-8 to edit it.
-          </MenuItem>
+          <MenuItem disabled>{t('files.encoding.lossy')}</MenuItem>
         )}
         {notEditable === 'invalid-encoding' && (
-          <MenuItem disabled>
-            Can't be edited: some bytes are not valid in this encoding, and
-            saving would lose them. Try another encoding.
-          </MenuItem>
+          <MenuItem disabled>{t('files.encoding.invalid')}</MenuItem>
         )}
         {onSaveAsUtf8 && (
           <MenuItem
             icon={<FileType size={15} />}
             onSelect={() => setConfirming(true)}
           >
-            Save as UTF-8
+            {t('files.encoding.saveUtf8')}
           </MenuItem>
         )}
       </Menu>
       <ConfirmDialog
         isOpen={confirming}
-        title="Save as UTF-8?"
-        confirmLabel="Save as UTF-8"
+        title={t('files.encoding.askSaveUtf8')}
+        confirmLabel={t('files.encoding.saveUtf8')}
         onConfirm={() => {
           setConfirming(false)
           onSaveAsUtf8!()
         }}
         onCancel={() => setConfirming(false)}
       >
-        The file is written as UTF-8 instead of {name}
-        {bom ? ', without its byte order mark' : ''}. Tools that read it as{' '}
-        {name} will show its text wrongly.
+        {t(
+          bom
+            ? 'files.encoding.saveUtf8BodyBom'
+            : 'files.encoding.saveUtf8Body',
+          { name: name ?? '' },
+        )}
       </ConfirmDialog>
     </>
   )

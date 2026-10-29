@@ -154,7 +154,7 @@ export function TrashSheet({
       onRestored(entry, res.path)
       notify(t('files.trash.restored', { name }), { variant: 'success' })
     } catch (err) {
-      const fail = restoreFailure(err, name, entry.path)
+      const fail = restoreFailure(err, name, entry.path, t)
       if (fail.root) {
         onDismiss()
         onRootChanged(fail.root)
@@ -280,7 +280,8 @@ export function TrashSheet({
                       <span className="text-[12px] text-fg-subtle">
                         {t(`files.trash.kind.${e.kind}`)} ·{' '}
                         {formatRelative(Date.parse(e.deletedAt), locale, now)}
-                        {e.kind !== 'dir' && ` · ${formatSize(e.size)}`} ·{' '}
+                        {e.kind !== 'dir' && ` · ${formatSize(e.size, locale)}`}{' '}
+                        ·{' '}
                         {t('files.trash.removedBy', {
                           date: formatDate(Date.parse(e.expiresAt), locale),
                         })}

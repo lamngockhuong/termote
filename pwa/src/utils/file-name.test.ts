@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { tFor } from '../i18n/i18n-context'
 import { baseNameSelection, fileNameProblem, nameProblem } from './file-name'
 
 describe('nameProblem', () => {
@@ -7,7 +8,7 @@ describe('nameProblem', () => {
     ['a/', 'Enter a file name after the last /'],
     ['a/../b', "A path can't go up with .."],
     ['a/b.md', undefined],
-  ])('%j → %s', (p, want) => expect(nameProblem(p)).toBe(want))
+  ])('%j → %s', (p, want) => expect(nameProblem(p, tFor('en'))).toBe(want))
 })
 
 describe('fileNameProblem', () => {
@@ -23,7 +24,10 @@ describe('fileNameProblem', () => {
     ['.termote-edit-0123456789abcdef', "This name can't be used"],
     ['.termote-upload-0123456789abcdef', "This name can't be used"],
     ['.termote-edit-x', undefined],
-  ])('%j → %s', (n, want) => expect(fileNameProblem(n)).toBe(want))
+  ])('%j → %s', (n, want) => {
+    const key = fileNameProblem(n)
+    expect(key && tFor('en')(key)).toBe(want)
+  })
 })
 
 describe('baseNameSelection', () => {

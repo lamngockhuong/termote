@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { imageErrorCode, useImageBlob } from '../hooks/use-image-blob'
 import type { ChangeEntry } from '../hooks/use-mux-api'
+import { useT } from '../i18n/i18n-context'
 import { ImagePreview } from './image-preview'
 import { Banner } from './ui/banner'
 
@@ -59,14 +60,13 @@ export function ImageCompare({
   onRootChanged,
   onSensitive,
 }: Props) {
+  const { t } = useT()
   const sides = imageSides(entry, staged)
   const orig = sides.old?.orig ? entry.orig : undefined
   return (
     <div className="min-h-0 flex-1 overflow-auto">
       {entry.conflict && (
-        <Banner variant="warning">
-          Unresolved conflict: the file as it is now
-        </Banner>
+        <Banner variant="warning">{t('files.compare.conflict')}</Banner>
       )}
       <div
         className={`grid gap-px bg-border ${oneColumn || entry.conflict ? 'grid-cols-1' : 'grid-cols-2'}`}
@@ -79,9 +79,11 @@ export function ImageCompare({
             root={root}
             reveal={reveal}
             reloadKey={`${version}:${reload}`}
-            label={`Before · ${staged ? 'HEAD' : 'Index'}`}
+            label={t(
+              staged ? 'files.compare.beforeHead' : 'files.compare.beforeIndex',
+            )}
             from={orig}
-            missing="Added"
+            missing={t('files.compare.added')}
             onRootChanged={onRootChanged}
             onSensitive={onSensitive}
           />
@@ -93,8 +95,10 @@ export function ImageCompare({
           root={root}
           reveal={reveal}
           reloadKey={`${version}:${reload}`}
-          label={`After · ${staged ? 'Index' : 'Working tree'}`}
-          missing="Deleted"
+          label={t(
+            staged ? 'files.compare.afterIndex' : 'files.compare.afterWorktree',
+          )}
+          missing={t('files.compare.deleted')}
           onRootChanged={onRootChanged}
           onSensitive={onSensitive}
         />

@@ -1,20 +1,22 @@
 import { type FormEvent, useEffect, useId, useRef, useState } from 'react'
 import { createFile, RequestError } from '../hooks/use-mux-api'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
 import { nameProblem } from '../utils/file-name'
 import { Button } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
 import { Sheet } from './ui/sheet'
 
 // Why the server would not create the file, by its code
-const REFUSED: Record<string, string> = {
-  not_directory: 'Part of this path is a file, not a directory',
-  symlink: 'Part of this path is a symbolic link',
-  not_allowed: "Files can't be created there",
-  permission: "The server can't create a file there",
-  invalid_name: "This name can't be used",
-  busy: 'Too many writes at once. Try again',
-  storage_full: "The host's disk or quota is full",
-  read_only: 'The file system there is read-only',
+const REFUSED: Record<string, MessageKey> = {
+  not_directory: 'files.new.notDirectory',
+  symlink: 'files.refused.symlink',
+  not_allowed: 'files.new.notAllowed',
+  permission: 'files.new.permission',
+  invalid_name: 'files.refused.invalidName',
+  busy: 'files.refused.busy',
+  storage_full: 'files.refused.storageFull',
+  read_only: 'files.refused.readOnly',
 }
 
 type Problem = {
@@ -51,6 +53,7 @@ export function NewFileDialog({
   onRootChanged,
   onRefresh,
 }: Props) {
+  const { t } = useT()
   const [path, setPath] = useState(initialPath)
   const [sending, setSending] = useState(false)
   const [problem, setProblem] = useState<Problem>()
@@ -100,7 +103,7 @@ export function NewFileDialog({
         // Lost on the way back, perhaps after the file was made: never
         // guessed from the tree, where an agent may have made one too
         setProblem({
-          message: 'The file may have been created. Refresh to check.',
+          message: t('files.new.maybeCreated'),
           action: { kind: 'refresh' },
         })
       } else if (err.status === 409 && err.root) {
@@ -110,14 +113,14 @@ export function NewFileDialog({
         setAsk('sensitive')
       } else if (err.code === 'exists') {
         setProblem({
-          message: 'A file or directory of that name already exists',
+          message: t('files.refused.exists'),
           // Opened like any file found there: a secret one asks to Show.
           // The server's name for it: '\' separates directories on Windows
           action: { kind: 'open', path: err.path ?? path, reveal: false },
         })
       } else {
         setProblem({
-          message: REFUSED[err.code] ?? 'Could not create the file',
+          message: t(REFUSED[err.code] ?? 'files.new.failed'),
         })
       }
     } finally {
@@ -128,7 +131,7 @@ export function NewFileDialog({
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (sending) return
-    const message = nameProblem(path)
+    const message = nameProblem(path, t)
     if (message) setProblem({ message })
     else send(false)
   }
@@ -136,16 +139,22 @@ export function NewFileDialog({
   const action = problem?.action
   return (
     <>
-      <Sheet isOpen onClose={close} title="New file" focusOnOpen={focusOnOpen}>
+      <Sheet
+        isOpen
+        onClose={close}
+        title={t('files.new.title')}
+        focusOnOpen={focusOnOpen}
+      >
         <form onSubmit={submit} className="flex flex-col gap-3 p-4">
           <label htmlFor={inputId} className="text-sm text-fg-muted">
-            Path from the pane's directory. Missing directories are created.
+            {t('files.new.pathLabel')}
           </label>
           <input
             ref={input}
             id={inputId}
             type="text"
             value={path}
+            // i18n-ignore: a path, the same in every language
             placeholder="docs/notes.md"
             spellCheck={false}
             autoCapitalize="off"
@@ -177,30 +186,32 @@ export function NewFileDialog({
                     else onRefresh()
                   }}
                 >
-                  {action.kind === 'open' ? 'Open it' : 'Refresh'}
+                  {action.kind === 'open'
+                    ? t('files.openIt')
+                    : t('files.refresh')}
                 </Button>
               )}
             </div>
           )}
           <div className="flex justify-end gap-2">
-            <Button onClick={close}>Cancel</Button>
+            <Button onClick={close}>{t('common.cancel')}</Button>
             <Button type="submit" variant="primary" disabled={sending}>
-              Create
+              {t('files.new.create')}
             </Button>
           </div>
         </form>
       </Sheet>
       <ConfirmDialog
         isOpen={ask === 'sensitive'}
-        title="Create this file?"
-        confirmLabel="Create"
+        title={t('files.new.askSensitive')}
+        confirmLabel={t('files.new.create')}
         onConfirm={() => {
           setAsk(undefined)
           send(true)
         }}
         onCancel={() => setAsk(undefined)}
       >
-        This name usually holds secrets. Create it anyway?
+        {t('files.new.askSensitiveBody')}
       </ConfirmDialog>
     </>
   )

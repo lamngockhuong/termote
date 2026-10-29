@@ -1,4 +1,5 @@
 import { Files, FolderTree, Pin, X } from 'lucide-react'
+import { useT } from '../i18n/i18n-context'
 import { type TabListProps, tabTitle } from './file-tab-bar'
 import { FOCUS_RING, IconButton } from './ui/button'
 import { Sheet } from './ui/sheet'
@@ -16,12 +17,13 @@ export function OpenFilesButton({
   count: number
   onClick: () => void
 }) {
+  const { t } = useT()
   return (
     <IconButton
       size="sm"
       onClick={onClick}
-      aria-label={`Open files (${count})`}
-      title="Open files"
+      aria-label={t('files.tabs.openCount', { count })}
+      title={t('files.tabs.open')}
       className="relative"
     >
       <Files size={15} aria-hidden="true" />
@@ -45,12 +47,13 @@ export function OpenFilesSheet({
   isOpen,
   onDismiss,
 }: TabListProps & { isOpen: boolean; onDismiss: () => void }) {
+  const { t } = useT()
   const show = (id: string | null) => {
     onActivate(id)
     onDismiss()
   }
   return (
-    <Sheet isOpen={isOpen} onClose={onDismiss} title="Open files">
+    <Sheet isOpen={isOpen} onClose={onDismiss} title={t('files.tabs.open')}>
       <ul className="pb-2">
         <li className="flex border-b border-border">
           <button
@@ -63,60 +66,65 @@ export function OpenFilesSheet({
             {homeLabel}
           </button>
         </li>
-        {tabs.map((t) => (
-          <li key={t.id} className="flex items-center pr-2">
+        {tabs.map((tab) => (
+          <li key={tab.id} className="flex items-center pr-2">
             <button
               type="button"
-              aria-current={t.id === activeId ? 'true' : undefined}
-              title={tabTitle(t)}
-              onClick={() => show(t.id)}
+              aria-current={tab.id === activeId ? 'true' : undefined}
+              title={tabTitle(tab, t)}
+              onClick={() => show(tab.id)}
               className={ROW}
             >
               <span className="flex min-w-0 flex-1 flex-col py-1.5">
                 <span className="flex min-w-0 items-center gap-1.5">
                   <span
-                    className={`truncate ${t.id === activeId ? 'font-medium text-accent' : t.missing ? 'text-fg-subtle' : 'text-fg'} ${t.pinned ? '' : 'italic'} ${t.missing ? 'line-through' : ''}`}
+                    className={`truncate ${tab.id === activeId ? 'font-medium text-accent' : tab.missing ? 'text-fg-subtle' : 'text-fg'} ${tab.pinned ? '' : 'italic'} ${tab.missing ? 'line-through' : ''}`}
                   >
-                    {t.name}
+                    {tab.name}
                   </span>
-                  {t.missing && <span className="sr-only"> (not found)</span>}
-                  {t.dirty && (
+                  {tab.missing && (
+                    <span className="sr-only"> {t('files.tabs.notFound')}</span>
+                  )}
+                  {tab.dirty && (
                     <>
                       <span
                         aria-hidden="true"
                         className="size-1.5 shrink-0 rounded-full bg-accent"
                       />
-                      <span className="sr-only"> (unsaved changes)</span>
+                      <span className="sr-only">
+                        {' '}
+                        {t('files.tabs.unsaved')}
+                      </span>
                     </>
                   )}
-                  {!t.pinned && (
+                  {!tab.pinned && (
                     <span className="shrink-0 text-[11px] text-fg-subtle">
-                      Preview
+                      {t('files.tabs.previewBadge')}
                     </span>
                   )}
                 </span>
-                {t.detail && (
+                {tab.detail && (
                   <span className="truncate text-[12px] text-fg-subtle">
-                    {t.detail}
+                    {tab.detail}
                   </span>
                 )}
               </span>
             </button>
-            {!t.pinned && (
+            {!tab.pinned && (
               <IconButton
                 size="sm"
-                onClick={() => onPin(t.id)}
-                aria-label={`Keep ${t.name} open`}
-                title="Keep open"
+                onClick={() => onPin(tab.id)}
+                aria-label={t('files.tabs.keepName', { name: tab.name })}
+                title={t('files.tabs.keep')}
               >
                 <Pin size={15} aria-hidden="true" />
               </IconButton>
             )}
             <IconButton
               size="sm"
-              onClick={() => onClose(t.id)}
-              aria-label={`Close ${t.name}`}
-              title="Close"
+              onClick={() => onClose(tab.id)}
+              aria-label={t('files.tabs.closeName', { name: tab.name })}
+              title={t('common.close')}
             >
               <X size={15} aria-hidden="true" />
             </IconButton>

@@ -15,6 +15,7 @@ import {
   useCsvTable,
 } from '../hooks/use-csv-table'
 import { useMediaQuery } from '../hooks/use-media-query'
+import { useT } from '../i18n/i18n-context'
 import {
   filledCells,
   makeOp,
@@ -144,11 +145,6 @@ interface CellAt {
 }
 
 // The values a column delete takes with it
-const countText = (n: number) =>
-  n === 0
-    ? 'It has no values.'
-    : `${n} ${n === 1 ? 'cell with a value goes' : 'cells with a value go'} with it.`
-
 type ColumnOp = Extract<TableOp, { kind: 'insert-col' | 'delete-col' }>
 
 const NO_FLAGS: FindFlags = { matchCase: false, wholeCell: false, regex: false }
@@ -178,6 +174,7 @@ export default function TablePreview({
   onLayout,
   onRequestEdit,
 }: Props) {
+  const { t } = useT()
   const [chosen, setDelimiter] = useState(() => delimiterFor(path, text))
   const delimiter = editing?.delimiter ?? chosen
   const [header, setHeader] = useState(true)
@@ -292,9 +289,9 @@ export default function TablePreview({
     const n = Math.min(table.columnCount, MAX_COLUMNS)
     return Array.from({ length: n }, (_, c) => {
       const name = header ? valueAt(shown, table, 0, c, MAX_CELL_CHARS + 1) : ''
-      return name || `Column ${c + 1}`
+      return name || t('files.table.column', { n: c + 1 })
     })
-  }, [shown, table, header])
+  }, [shown, table, header, t])
   // Called only once there is a table (its widths, a fit)
   const read = useCallback<ReadCell>(
     (r, c, multiline) => shownAt(shown, table as CsvTable, r, c, multiline),
@@ -509,7 +506,7 @@ export default function TablePreview({
   const clearRange = (r: GridRange) => {
     const n = (r.bottom - r.top + 1) * (r.right - r.left + 1)
     if (n > MAX_COPY_CELLS) {
-      notify(`Too many cells to clear: ${n}, at most ${MAX_COPY_CELLS}`)
+      notify(t('files.table.tooManyClear', { n, max: MAX_COPY_CELLS }))
       return
     }
     const order = computed as Int32Array
@@ -553,10 +550,10 @@ export default function TablePreview({
     // on text closes it
     if (at.text !== textNow.current) return
     setInline(undefined)
-    const t = table as CsvTable
+    const csv = table as CsvTable
     const target = move && neighbour(at, move)
     const next =
-      value === valueAt(text, t, at.row, at.col)
+      value === valueAt(text, csv, at.row, at.col)
         ? text
         : act({
             kind: 'cell',
@@ -570,7 +567,7 @@ export default function TablePreview({
     if (
       target &&
       editableInline(
-        valueAt(text, t, target.row, target.col, MAX_CELL_CHARS + 1),
+        valueAt(text, csv, target.row, target.col, MAX_CELL_CHARS + 1),
       )
     ) {
       setInline({ ...target, text: next })
@@ -674,7 +671,7 @@ export default function TablePreview({
   if (parsed.status === 'parsing') {
     return (
       <div aria-busy="true" className="flex flex-1">
-        <ViewMessage>Reading the table…</ViewMessage>
+        <ViewMessage>{t('files.table.reading')}</ViewMessage>
       </div>
     )
   }
@@ -682,28 +679,28 @@ export default function TablePreview({
     return (
       <>
         <Banner variant="warning">
-          Unclosed quote on line {parsed.line}: shown as source
+          {t('files.table.unclosedQuote', { line: parsed.line })}
         </Banner>
         <CodeBlock text={parsed.text} path={path} wrap={wrap} />
       </>
     )
   }
-  const t = parsed.table
-  if (!t.rowCount) {
+  const csv = parsed.table
+  if (!csv.rowCount) {
     return (
       <ViewMessage>
-        No rows
+        {t('files.table.noRows')}
         {editing && (
           <Button size="sm" disabled={!live} onClick={() => addRow(-1)}>
-            Add a row
+            {t('files.table.addRow')}
           </Button>
         )}
       </ViewMessage>
     )
   }
 
-  const total = t.rowCount - (header ? 1 : 0)
-  const expected = header ? cellsIn(t, 0) : t.columnCount
+  const total = csv.rowCount - (header ? 1 : 0)
+  const expected = header ? cellsIn(csv, 0) : csv.columnCount
   // A fit reads the rows on screen: never the rows of an older table, nor
   // none while they are worked out
   const canFit = !!computed && !stale
@@ -766,7 +763,7 @@ export default function TablePreview({
     !stale && {
       row: open.row,
       name: names[open.col],
-      value: open.input ?? valueAt(shown, t, open.row, open.col),
+      value: open.input ?? valueAt(shown, csv, open.row, open.col),
     }
   // The same for a cell's own field, and not while the rows are worked
   // out (their order on screen is the old one); while a save runs it
@@ -778,7 +775,7 @@ export default function TablePreview({
   const copyRange = (r: GridRange) => {
     const n = (r.bottom - r.top + 1) * (r.right - r.left + 1)
     if (n > MAX_COPY_CELLS) {
-      notify(`Too many cells to copy: ${n}, at most ${MAX_COPY_CELLS}`)
+      notify(t('files.table.tooManyCopy', { n, max: MAX_COPY_CELLS }))
       return
     }
     const values: string[][] = []
@@ -786,7 +783,7 @@ export default function TablePreview({
       values.push(
         cols
           .slice(r.left, r.right + 1)
-          .map((c) => valueAt(shown, t, shownRows[p], c)),
+          .map((c) => valueAt(shown, csv, shownRows[p], c)),
       )
     }
     return toTsv(values)
@@ -817,14 +814,22 @@ export default function TablePreview({
     if (repeats > 1) n = tall * wide
     if (n > MAX_COPY_CELLS) {
       notify(
-        `Too many cells to paste${repeats > 1 ? ' over the range' : ''}: ${n}, at most ${MAX_COPY_CELLS}`,
+        t(
+          repeats > 1
+            ? 'files.table.tooManyPasteRange'
+            : 'files.table.tooManyPaste',
+          { n, max: MAX_COPY_CELLS },
+        ),
       )
       return
     }
     const room = cols.length - r.left
     if (width > room) {
       notify(
-        `The block is ${width} columns wide; ${room} ${room === 1 ? 'column' : 'columns'} from here`,
+        t('files.table.blockWide', {
+          width,
+          room: t('files.table.columns', { count: room }),
+        }),
       )
       return
     }
@@ -832,14 +837,17 @@ export default function TablePreview({
     const over = block.length - left
     if (over > 0 && (sort || filter)) {
       notify(
-        `The block is ${block.length} rows long; ${left} ${left === 1 ? 'row' : 'rows'} from here, and no row is added while sorted or filtered`,
+        t('files.table.blockLong', {
+          length: block.length,
+          left: t('files.table.rows', { count: left }),
+        }),
       )
       return
     }
     const cells: { row: number; col: number; value: string }[] = []
     for (let i = 0; i < block.length * down; i++) {
       // Past the rows shown (the file's own order): a row added
-      const row = i < left ? order[r.top + i] : t.rowCount + i - left
+      const row = i < left ? order[r.top + i] : csv.rowCount + i - left
       const values = block[i % block.length]
       // Repeated, a short line's missing cells are empty, as in a spreadsheet
       const count = repeats > 1 ? width : values.length
@@ -853,6 +861,7 @@ export default function TablePreview({
         }
       }
     }
+    // i18n-ignore: a comparison, not text
     if (over > 0) setPasting({ cells, addRows: over, text })
     else act({ kind: 'cells', cells })
   }
@@ -866,7 +875,7 @@ export default function TablePreview({
     if (at.text !== textNow.current) return
     setRenaming(undefined)
     const next =
-      value === valueAt(text, t, 0, at.col)
+      value === valueAt(text, csv, 0, at.col)
         ? text
         : act({ kind: 'cell', row: 0, col: at.col, name: names[at.col], value })
     if (next !== undefined && save) saveNext.current = true
@@ -881,8 +890,8 @@ export default function TablePreview({
           <span className="flex items-center gap-1">
             <IconButton
               size="sm"
-              aria-label="Undo"
-              title="Undo (Ctrl+Z)"
+              aria-label={t('files.undo')}
+              title={t('files.table.undoTitle')}
               disabled={!live?.ops.length}
               onClick={undo}
             >
@@ -890,8 +899,8 @@ export default function TablePreview({
             </IconButton>
             <IconButton
               size="sm"
-              aria-label="Redo"
-              title="Redo (Ctrl+Shift+Z)"
+              aria-label={t('files.table.redo')}
+              title={t('files.table.redoTitle')}
               disabled={!live?.redo.length}
               onClick={redo}
             >
@@ -899,23 +908,21 @@ export default function TablePreview({
             </IconButton>
             <IconButton
               size="sm"
-              aria-label="Add a row at the end"
-              title="Add a row at the end"
+              aria-label={t('files.table.addRowEnd')}
+              title={t('files.table.addRowEnd')}
               disabled={!live}
-              onClick={() => addRow(t.rowCount - 1)}
+              onClick={() => addRow(csv.rowCount - 1)}
             >
               <ListPlus size={15} aria-hidden="true" />
             </IconButton>
           </span>
         )}
         <label className="flex items-center gap-1 text-fg-muted">
-          Delimiter
+          {t('files.table.delimiter')}
           <select
             value={delimiter}
             disabled={!!editing}
-            title={
-              editing ? 'Edits are written with this delimiter' : undefined
-            }
+            title={editing ? t('files.table.delimiterEditing') : undefined}
             onChange={(e) => {
               const next = e.target.value as Delimiter
               setDelimiter(next)
@@ -925,8 +932,8 @@ export default function TablePreview({
             className={`h-8 rounded-control border border-border bg-surface px-1.5 text-fg pointer-coarse:h-touch ${FOCUS_RING}`}
           >
             {Object.entries(DELIMITER_NAMES).map(([d, name]) => (
-              <option key={name} value={d}>
-                {name}
+              <option key={d} value={d}>
+                {t(name)}
               </option>
             ))}
           </select>
@@ -940,22 +947,25 @@ export default function TablePreview({
           }}
           className={header ? 'text-accent' : ''}
         >
-          Header row
+          {t('files.table.headerRow')}
         </Button>
         <input
           type="search"
           value={filterInput}
           onChange={(e) => setFilterInput(e.target.value)}
-          placeholder="Filter rows"
-          aria-label="Filter rows"
+          placeholder={t('files.table.filter')}
+          aria-label={t('files.table.filter')}
           className={`h-8 min-w-0 flex-1 basis-32 rounded-control border border-border bg-surface px-2 text-fg pointer-coarse:h-touch ${FOCUS_RING}`}
         />
         <span className="tabular-nums text-fg-muted" aria-live="polite">
-          {rows ? rows.length : '…'} / {total} rows
+          {t('files.table.rowCount', {
+            shown: rows ? rows.length : '…',
+            total,
+          })}
           {hiddenCount > 0 && (
-            <span title="Filter rows also searches hidden columns">
+            <span title={t('files.table.hiddenTitle')}>
               {' '}
-              · {hiddenCount} {hiddenCount === 1 ? 'column' : 'columns'} hidden
+              · {t('files.table.hiddenColumns', { count: hiddenCount })}
             </span>
           )}
         </span>
@@ -965,10 +975,10 @@ export default function TablePreview({
           onClick={() => setRecords((r) => !r)}
           className={records ? 'text-accent' : ''}
         >
-          Records
+          {t('files.table.records')}
         </Button>
         <Menu
-          label="Columns"
+          label={t('files.table.columnsMenu')}
           trigger={<Columns3 size={15} aria-hidden="true" />}
           triggerSize="sm"
           className="max-h-[60vh] overflow-y-auto"
@@ -977,19 +987,19 @@ export default function TablePreview({
             disabled={!canFit}
             onSelect={() => fitColumns(cols, topRef.current)}
           >
-            Fit columns
+            {t('files.table.fitColumns')}
           </MenuItem>
           <MenuItem
             disabled={!Object.keys(layout.widths).length}
             onSelect={() => setLayout({ ...layout, widths: {} })}
           >
-            Reset widths
+            {t('files.table.resetWidths')}
           </MenuItem>
           {/* Pinned from a column's ⋯; undone here too, where a column
               too wide to stick, its ⋯ scrolled away, still shows */}
           {pinned !== undefined && (
             <MenuItem onSelect={() => togglePin(pinned)}>
-              Unpin {cellText(names[pinned])}
+              {t('files.table.unpin', { name: cellText(names[pinned]) })}
             </MenuItem>
           )}
           <MenuSeparator />
@@ -999,9 +1009,9 @@ export default function TablePreview({
             disabled={!hiddenCount}
             onSelect={() => setLayout({ ...layout, hidden: [] })}
           >
-            Show all
+            {t('files.table.showAll')}
           </MenuItem>
-          <MenuGroup label="Show">
+          <MenuGroup label={t('files.viewer.show')}>
             {names.map((name, c) => {
               const shownNow = cols.includes(c)
               return (
@@ -1022,7 +1032,7 @@ export default function TablePreview({
             })}
           </MenuGroup>
           <MenuSeparator />
-          <MenuGroup label="Wrap">
+          <MenuGroup label={t('files.table.wrap')}>
             {names.map((name, c) => (
               <MenuItemCheckbox
                 // biome-ignore lint/suspicious/noArrayIndexKey: a column is its index
@@ -1040,7 +1050,7 @@ export default function TablePreview({
           </MenuGroup>
           <MenuSeparator />
           {/* One height for every row: the lines any wrapped cell shows */}
-          <MenuGroup label="Lines">
+          <MenuGroup label={t('files.table.lines')}>
             {WRAP_LINE_CHOICES.map((n) => (
               <MenuItemRadio
                 key={n}
@@ -1049,7 +1059,7 @@ export default function TablePreview({
                 checked={lines === n}
                 onSelect={() => setLayout({ ...layout, lines: n })}
               >
-                {n} lines
+                {t('files.table.lineCount', { count: n })}
               </MenuItemRadio>
             ))}
           </MenuGroup>
@@ -1070,9 +1080,12 @@ export default function TablePreview({
           inputRef={findBox}
         />
       )}
-      {t.columnCount > MAX_COLUMNS && (
+      {csv.columnCount > MAX_COLUMNS && (
         <Banner variant="warning">
-          Showing {MAX_COLUMNS} of {t.columnCount} columns. See all in Source
+          {t('files.table.columnsCut', {
+            shown: MAX_COLUMNS,
+            total: csv.columnCount,
+          })}
         </Banner>
       )}
       {/* Records cover the grid, which stays laid out: back on it, it is
@@ -1080,7 +1093,7 @@ export default function TablePreview({
       <div className="relative flex min-h-0 flex-1 flex-col">
         <TableGrid
           text={shown}
-          table={t}
+          table={csv}
           rows={rows ?? new Int32Array()}
           names={names}
           widths={widths}
@@ -1099,9 +1112,12 @@ export default function TablePreview({
           editor={
             field && (
               <InlineCellEditor
-                value={valueAt(shown, t, field.row, field.col)}
+                value={valueAt(shown, csv, field.row, field.col)}
                 initial={field.input}
-                label={`Edit ${cellText(names[field.col])}, row ${field.row + 1}`}
+                label={t('files.table.editCell', {
+                  name: cellText(names[field.col]),
+                  row: field.row + 1,
+                })}
                 onCommit={(value, move, save) =>
                   commitInline(field, value, move, save)
                 }
@@ -1136,7 +1152,7 @@ export default function TablePreview({
               edit={
                 live && {
                   fromCell: row !== undefined,
-                  canDelete: t.columnCount > 1,
+                  canDelete: csv.columnCount > 1,
                   canRename: header,
                   onInsertRow: (side) =>
                     addRow((row as number) - (side === 'above' ? 1 : 0)),
@@ -1145,7 +1161,7 @@ export default function TablePreview({
                     setDeletingCol({
                       col,
                       text,
-                      values: filledCells(text, t, col, header ? 1 : 0),
+                      values: filledCells(text, csv, col, header ? 1 : 0),
                     }),
                   onRename: () => rename(col),
                 }
@@ -1161,8 +1177,10 @@ export default function TablePreview({
           headerEditor={
             headerField && (
               <InlineCellEditor
-                value={valueAt(shown, t, 0, headerField.col)}
-                label={`Rename column ${cellText(names[headerField.col])}`}
+                value={valueAt(shown, csv, 0, headerField.col)}
+                label={t('files.table.renameColumn', {
+                  name: cellText(names[headerField.col]),
+                })}
                 onCommit={(value, _move, save) =>
                   commitName(headerField, value, save)
                 }
@@ -1184,7 +1202,7 @@ export default function TablePreview({
             {rows ? (
               <TableRecords
                 text={shown}
-                table={t}
+                table={csv}
                 rows={rows}
                 names={names}
                 cols={cols}
@@ -1194,7 +1212,7 @@ export default function TablePreview({
                 onOpen={openSheet}
               />
             ) : (
-              <ViewMessage>Sorting and filtering…</ViewMessage>
+              <ViewMessage>{t('files.table.sorting')}</ViewMessage>
             )}
           </div>
         )}
@@ -1233,8 +1251,8 @@ export default function TablePreview({
       {deleting?.text === text && (
         <ConfirmDialog
           isOpen
-          title={`Delete row ${deleting.row + 1}?`}
-          confirmLabel="Delete row"
+          title={t('files.table.askDeleteRow', { row: deleting.row + 1 })}
+          confirmLabel={t('files.table.deleteRow')}
           destructive
           onConfirm={() => {
             setDeleting(undefined)
@@ -1243,15 +1261,15 @@ export default function TablePreview({
           onCancel={() => setDeleting(undefined)}
         >
           {deleting.row === 0
-            ? "This is the file's first row, its header when Header row is on: the next row takes its place."
-            : 'The row is removed from the file when you save it.'}
+            ? t('files.table.deleteFirstRow')
+            : t('files.table.deleteRowBody')}
         </ConfirmDialog>
       )}
       {pasting?.text === text && (
         <ConfirmDialog
           isOpen
-          title={`Add ${pasting.addRows} ${pasting.addRows === 1 ? 'row' : 'rows'} at the end?`}
-          confirmLabel="Add and paste"
+          title={t('files.table.askAddRows', { count: pasting.addRows })}
+          confirmLabel={t('files.table.addAndPaste')}
           onConfirm={() => {
             setPasting(undefined)
             act({
@@ -1262,15 +1280,16 @@ export default function TablePreview({
           }}
           onCancel={() => setPasting(undefined)}
         >
-          The block is longer than the rows left: empty rows go in at the end,
-          then it is pasted.
+          {t('files.table.addRowsBody')}
         </ConfirmDialog>
       )}
       {deletingCol?.text === text && (
         <ConfirmDialog
           isOpen
-          title={`Delete column ${cellText(names[deletingCol.col])}?`}
-          confirmLabel="Delete column"
+          title={t('files.table.askDeleteColumn', {
+            name: cellText(names[deletingCol.col]),
+          })}
+          confirmLabel={t('files.table.deleteColumn')}
           destructive
           onConfirm={() => {
             setDeletingCol(undefined)
@@ -1278,8 +1297,12 @@ export default function TablePreview({
           }}
           onCancel={() => setDeletingCol(undefined)}
         >
-          {countText(deletingCol.values)} The column is removed from the file
-          when you save it.
+          {t(
+            deletingCol.values === 0
+              ? 'files.table.deleteColumnEmpty'
+              : 'files.table.deleteColumnBody',
+            { count: deletingCol.values },
+          )}
         </ConfirmDialog>
       )}
     </div>

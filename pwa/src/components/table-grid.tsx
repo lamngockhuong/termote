@@ -13,6 +13,7 @@ import {
   useState,
 } from 'react'
 import { useMediaQuery } from '../hooks/use-media-query'
+import { useT } from '../i18n/i18n-context'
 import { copyText } from '../utils/copy-text'
 import { matchFrom } from '../utils/csv-find'
 import { type CsvTable, cellsIn, valueAt } from '../utils/csv-parse'
@@ -305,6 +306,7 @@ export function TableGrid({
   onPasteBlock,
   clickSelects = false,
 }: Props) {
+  const { t } = useT()
   const frame = useRef<HTMLDivElement>(null)
   // Used up by the first rows: the offset is a scroll offset of this frame,
   // so it is set back as it was, whatever the scale
@@ -869,7 +871,7 @@ export function TableGrid({
     <div
       ref={frame}
       role="grid"
-      aria-label="Table"
+      aria-label={t('files.grid.table')}
       aria-rowcount={table.rowCount + (header ? 0 : 1)}
       aria-colcount={table.columnCount + 1}
       // The grid keeps the Tab stop while the active cell is scrolled away
@@ -911,7 +913,7 @@ export function TableGrid({
             aria-colindex={1}
             // Above the resize handles of the columns scrolled under it
             className="sticky left-0 z-30 bg-surface px-2"
-            aria-label="Row"
+            aria-label={t('files.grid.row')}
           />
           {cols.map((c, i) => {
             const name = names[c]
@@ -1032,13 +1034,15 @@ export function TableGrid({
                 <div
                   role="separator"
                   aria-orientation="vertical"
-                  aria-label={`Resize column ${label}`}
+                  aria-label={t('files.grid.resize', { name: label })}
                   aria-valuenow={Math.round(widths[c])}
-                  aria-valuetext={`${Math.round(widths[c])} characters`}
+                  aria-valuetext={t('files.grid.width', {
+                    count: Math.round(widths[c]),
+                  })}
                   aria-valuemin={MIN_WIDTH}
                   aria-valuemax={FIT_MAX_WIDTH}
                   tabIndex={0}
-                  title="Drag to resize, double-click to fit"
+                  title={t('files.grid.resizeTitle')}
                   onPointerDown={(e) => onHandleDown(e, c)}
                   onPointerMove={onHandleMove}
                   onPointerUp={(e) => endDrag(e, true)}
@@ -1063,8 +1067,12 @@ export function TableGrid({
           const n = cellsIn(table, r)
           const odd = n !== expected
           const label = odd
-            ? `Row ${r + 1}: ${n} cells, ${header ? 'the header has' : 'the widest row has'} ${expected}`
-            : `Row ${r + 1}`
+            ? t(header ? 'files.grid.oddHeader' : 'files.grid.oddWidest', {
+                row: r + 1,
+                n,
+                expected,
+              })
+            : t('files.grid.rowN', { row: r + 1 })
           return (
             <div
               key={r}
@@ -1092,7 +1100,7 @@ export function TableGrid({
                   data-col={-1}
                   data-at={-1}
                   tabIndex={p === pos && col === -1 ? 0 : -1}
-                  aria-label={`Open row ${r + 1} as a record`}
+                  aria-label={t('files.grid.openRecord', { row: r + 1 })}
                   className={`h-full w-full px-2 text-right ${FOCUS_RING} focus-visible:-outline-offset-2`}
                 >
                   {r + 1}

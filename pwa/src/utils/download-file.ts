@@ -5,6 +5,8 @@ import {
   fileDownloadUrl,
   RequestError,
 } from '../hooks/use-mux-api'
+import type { MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
 import { isIos, isStandalone } from './notify-permission'
 import { UNSAFE_CHARS, visibleUnsafe } from './unsafe-chars'
 
@@ -13,29 +15,34 @@ import { UNSAFE_CHARS, visibleUnsafe } from './unsafe-chars'
 export const BLOB_REVOKE_MS = 60_000
 
 // What a refused download tells the user, by the server's code.
-export function downloadErrorMessage(err: unknown, name: string): string {
-  if (!(err instanceof RequestError)) return `Could not download ${name}`
-  if (err.status === 409 && err.root) return "The pane's directory changed"
-  if (err.status === 404) return `${name} is gone`
+export function downloadErrorMessage(
+  err: unknown,
+  name: string,
+  t: Translate<MessageKey>,
+): string {
+  if (!(err instanceof RequestError))
+    return t('files.downloadError.failed', { name })
+  if (err.status === 409 && err.root) return t('files.rootChanged')
+  if (err.status === 404) return t('files.downloadError.gone', { name })
   switch (err.code) {
     case 'sensitive':
-      return `${name} may contain secrets; not downloaded`
+      return t('files.downloadError.sensitive', { name })
     case 'not_allowed':
-      return `${name} can't be downloaded from here`
+      return t('files.downloadError.notAllowed', { name })
     case 'symlink':
-      return 'A link on that path; not downloaded'
+      return t('files.downloadError.symlink')
     case 'not_file':
-      return `${name} is not a regular file; not downloaded`
+      return t('files.downloadError.notFile', { name })
     case 'too_large':
-      return `${name} is larger than 100 MiB, too large to download`
+      return t('files.downloadError.tooLarge', { name })
     case 'busy':
-      return 'Too many files at once; try again'
+      return t('files.downloadError.busy')
     case 'view_only':
-      return 'This device is view only'
+      return t('files.downloadError.viewOnly')
     case 'changed':
-      return `${name} changed; try again`
+      return t('files.downloadError.changed', { name })
     default:
-      return `Could not download ${name}`
+      return t('files.downloadError.failed', { name })
   }
 }
 
@@ -131,38 +138,39 @@ export interface DownloadTarget {
 // check keeps more of the tap's activation for the share sheet.
 // onRootChanged: a 409 naming the pane's root now.
 export async function downloadFile(
-  t: DownloadTarget,
+  file: DownloadTarget,
   notify: (message: string, options?: NotifyOptions) => void,
+  t: Translate<MessageKey>,
   onRootChanged?: (root: string) => void,
   deps: Partial<DownloadDeps> = {},
 ): Promise<void> {
-  const base = t.path.slice(t.path.lastIndexOf('/') + 1)
+  const base = file.path.slice(file.path.lastIndexOf('/') + 1)
   const shown = visibleUnsafe(base)
   // The name the file is saved as, cleaned as the server's
   // Content-Disposition is (downloadName): a bidi mark could make one name
   // pose as another in the share sheet or the downloads list.
   const saveAs = base.replace(UNSAFE_CHARS, '') || 'download'
 
-  const opts = { root: t.root, reveal: t.reveal }
+  const opts = { root: file.root, reveal: file.reveal }
   const iosStandalone = deps.iosStandalone ?? isIosStandalone()
   try {
-    const target = { paneId: t.paneId, place: t.place }
-    if (!iosStandalone) await checkFileDownload(target, t.path, opts)
-    await startDownload(fileDownloadUrl(target, t.path, opts), saveAs, {
+    const target = { paneId: file.paneId, place: file.place }
+    if (!iosStandalone) await checkFileDownload(target, file.path, opts)
+    await startDownload(fileDownloadUrl(target, file.path, opts), saveAs, {
       iosStandalone,
       fetchBlob: deps.fetchBlob ?? fetchFileDownload,
       nav: deps.nav ?? navigator,
-      onFetching: () => notify(`Downloading ${shown}`),
+      onFetching: () => notify(t('files.downloading', { name: shown })),
       onShareBlocked: (share) =>
-        notify(`${shown} is ready`, {
-          action: { label: 'Save', onClick: share },
+        notify(t('files.downloadReady', { name: shown }), {
+          action: { label: t('files.viewer.save'), onClick: share },
           duration: 15_000,
         }),
     })
   } catch (err) {
     if (err instanceof RequestError && err.status === 409 && err.root)
       onRootChanged?.(err.root)
-    notify(downloadErrorMessage(err, shown), { variant: 'danger' })
+    notify(downloadErrorMessage(err, shown, t), { variant: 'danger' })
   }
 }
 

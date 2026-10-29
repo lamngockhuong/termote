@@ -1,5 +1,7 @@
 // The names the Files view gives a text file's encoding.
 import type { FileEncoding } from '../hooks/use-mux-api'
+import type { MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
 
 // In the order the encoding menu lists them
 export const ENCODINGS: readonly FileEncoding[] = [
@@ -18,9 +20,14 @@ const NAMES: Record<FileEncoding, string> = {
   'euc-jp': 'EUC-JP',
 }
 
-// "UTF-8", "UTF-16 LE with BOM", "Shift-JIS"
-export function encodingLabel(enc: FileEncoding, bom = false): string {
-  return bom ? `${NAMES[enc]} with BOM` : NAMES[enc]
+// "UTF-8", "UTF-16 LE with BOM", "Shift-JIS": the names are the same in
+// every language
+export function encodingLabel(
+  enc: FileEncoding,
+  t: Translate<MessageKey>,
+  bom = false,
+): string {
+  return bom ? t('files.encoding.withBom', { name: NAMES[enc] }) : NAMES[enc]
 }
 
 export function isFileEncoding(v: unknown): v is FileEncoding {
