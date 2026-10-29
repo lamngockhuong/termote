@@ -797,6 +797,16 @@ func localIPv4s() []string {
 	return ips
 }
 
+// containerRunning says the runtime reports the termote container running.
+func (c *cli) containerRunning() bool {
+	rt := c.containerRuntime()
+	if rt == "" {
+		return false
+	}
+	out, err := c.run.Output("", nil, rt, "ps", "--filter", "name=^"+containerName+"$", "--filter", "status=running", "--format", "{{.Names}}")
+	return err == nil && strings.TrimSpace(string(out)) == containerName
+}
+
 // containerRuntime prefers podman, the lighter of the two.
 func (c *cli) containerRuntime() string {
 	for _, rt := range []string{"podman", "docker"} {

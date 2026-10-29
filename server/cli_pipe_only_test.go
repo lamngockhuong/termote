@@ -230,6 +230,45 @@ func TestWindowsSharedPortWithNativeServiceIsPipeOnly(t *testing.T) {
 	}
 }
 
+// Native and container saved on one port, no native server registered or
+// running: the port is the container's only while the runtime reports the
+// container running. A runtime that does not answer, or none at all, keeps
+// the password home, as does schtasks failing (the fake knows no command).
+func TestWindowsSharedPortIsContainersOnlyWhileItRuns(t *testing.T) {
+	const ps = "docker ps --filter name=^termote$ --filter status=running --format {{.Names}}"
+	for _, tt := range []struct {
+		name      string
+		runtime   bool
+		ps        string
+		container bool
+	}{
+		{name: "no runtime"},
+		{name: "runtime does not answer", runtime: true},
+		{name: "container stopped", runtime: true, ps: ""},
+		{name: "container running", runtime: true, ps: "termote\n", container: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			noLocalSocket(t)
+			srv := newPasswordServer(t, false, `{"status":"ok","version":"1.0.0"}`)
+			tc := newTestCLI(t, "windows")
+			tc.saveConfig(savedConfig{Port: srv.port, Password: "secret", Container: &containerConfig{Port: srv.port}})
+			if tt.runtime {
+				tc.runner.paths["docker"] = true
+				if tt.name != "runtime does not answer" {
+					tc.runner.outputs[ps] = tt.ps
+				}
+			}
+			if got := tc.pipeOnly(srv.port); got == tt.container {
+				t.Errorf("pipeOnly = %v", got)
+			}
+			r := tc.statusReport(&savedConfig{Port: srv.port, Password: "secret"}, srv.port)
+			if srv.gotPassword() != tt.container {
+				t.Errorf("password over TCP = %v, report %+v", srv.gotPassword(), r)
+			}
+		})
+	}
+}
+
 // The sign-in link of the native server on Windows is not asked for over
 // TCP: only health is probed, without the password.
 func TestNativeWindowsLoginLinkNotAskedOverTCP(t *testing.T) {

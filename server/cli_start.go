@@ -559,8 +559,10 @@ func (c *cli) tcpRequest(port int, user, pass, method, path string, body []byte)
 // document which process that is for a socket handed from one process to
 // another. The saved container's port is not the native server's: the
 // container's server, which has no pipe for this user, still gets the
-// password over TCP. Only when both are saved on one port and a native
-// server is registered is that port taken for the native server's.
+// password over TCP. When both are saved on one port, the port is the
+// container's only while no native server is registered or running and the
+// runtime reports the container running: a lookup that fails (schtasks,
+// podman, docker) keeps the password home.
 func (c *cli) pipeOnly(port int) bool {
 	if c.goos != "windows" {
 		return false
@@ -569,7 +571,10 @@ func (c *cli) pipeOnly(port int) bool {
 	if saved == nil || saved.Container == nil || saved.Container.Port != port {
 		return true
 	}
-	return port == c.savedPort(saved) && c.installedSupervisor() != nil
+	if port != c.savedPort(saved) {
+		return false
+	}
+	return c.installedSupervisor() != nil || !c.containerRunning()
 }
 
 // healthPipeOnly is tcpRequest's code when the native server did not
