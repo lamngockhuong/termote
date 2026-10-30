@@ -28,12 +28,6 @@ vi.mock('@replit/codemirror-vim', () => ({
 
 type Props = ComponentProps<typeof CodeEditor>
 
-// jsdom lays nothing out: CodeMirror measures text ranges when scrolling to
-// the cursor
-Range.prototype.getClientRects ??= () =>
-  Object.assign([], { item: () => null }) as unknown as DOMRectList
-Range.prototype.getBoundingClientRect ??= () => new DOMRect()
-
 // The settings and theme setters, reached from a test
 const handles: {
   update?: ReturnType<typeof useSettings>['updateSetting']
