@@ -1741,6 +1741,41 @@ func TestHerdrSnapshotKeepsTabOrder(t *testing.T) {
 	}
 }
 
+// Linked worktrees follow their repository's checkout, as Herdr's sidebar
+// draws them (under the first checkout of a repository with two); with no
+// checkout open they stay together where the first is.
+// A move still reads Herdr's own order.
+func TestHerdrSnapshotNestsWorktrees(t *testing.T) {
+	_, m := reorderHerdr(t,
+		[2]any{"wA", wt("a", false)}, [2]any{"wX", nil}, [2]any{"wO1", wt("c", true)},
+		[2]any{"wB", wt("b", false)}, [2]any{"wL1", wt("a", true)}, [2]any{"wY", nil},
+		[2]any{"wL2", wt("b", true)}, [2]any{"wO2", wt("c", true)}, [2]any{"wL3", wt("a", true)},
+		// A worktree listed before its checkout, and a second checkout of a
+		[2]any{"wD1", wt("d", true)}, [2]any{"wD", wt("d", false)}, [2]any{"wA2", wt("a", false)})
+	snap, err := m.Snapshot(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, g := range snap.Groups {
+		s := g.ID
+		if g.Worktree != nil && g.Worktree.Parent != "" {
+			s += "<" + g.Worktree.Parent
+		}
+		got = append(got, s)
+	}
+	if want := "wA,wL1<wA,wL3<wA,wX,wO1,wO2,wB,wL2<wB,wY,wD,wD1<wD,wA2"; strings.Join(got, ",") != want {
+		t.Errorf("groups = %s, want %s", strings.Join(got, ","), want)
+	}
+	v, err := m.view(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g := v.snap.Groups[1]; g.ID != "wX" || g.Worktree != nil {
+		t.Errorf("view reordered: second group %s", g.ID)
+	}
+}
+
 func TestHerdrReorderCaps(t *testing.T) {
 	for _, c := range []struct {
 		v, goos string

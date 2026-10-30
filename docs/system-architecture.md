@@ -410,7 +410,11 @@ panes end first) and closes the workspace; the branch is kept. Changes run one a
 `unknown` (Herdr may still finish). The snapshot's `worktree` marks a workspace of a Herdr
 worktree group (`linked`: a linked worktree, else the repository's own checkout); its `branch`
 is read from `worktree.list` in the background, at most every 10 s per repository and never on
-the snapshot's own path, so it can be missing for a moment. See Security Model.
+the snapshot's own path, so it can be missing for a moment. As Herdr's sidebar draws them, the
+snapshot lists a repository's linked worktrees right after its own checkout, whose id is their
+`parent` (the PWA indents them under it); with the checkout not open they stay together where
+the first one is. Only the snapshot is reordered: a move reads Herdr's own order. See Security
+Model.
 
 `/move` reorders. `index` is the final 0-based position: for a tab, among its own group's tabs
 (never into another group); for a group, among the groups that can move. It must be a JSON

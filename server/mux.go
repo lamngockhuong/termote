@@ -222,9 +222,12 @@ type Group struct {
 
 // GroupWorktree is a group's place in a Herdr worktree group. Branch is the
 // checked out branch when known (read in the background, so it can lag).
+// Parent is, for a linked worktree, the group of its repository's own
+// checkout when that is open; the snapshot lists the worktree right after it.
 type GroupWorktree struct {
 	Linked bool   `json:"linked"`
 	Branch string `json:"branch,omitempty"`
+	Parent string `json:"parent,omitempty"`
 }
 
 type Tab struct {
