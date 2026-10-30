@@ -199,11 +199,14 @@ function SettingsGroup({
 function PhoneBackButton({
   onBack,
   backRef,
+  byKeyboard,
 }: {
   onBack: () => void
   // Lets Android's Back, which reaches the dialog as a close request, take
   // the same way
   backRef: RefObject<(() => void) | null>
+  // Set when Enter or Space pressed it (a click with no detail)
+  byKeyboard: RefObject<boolean>
 }) {
   const { t } = useT()
   const back = useHistoryClose(onBack)
@@ -217,7 +220,10 @@ function PhoneBackButton({
     <IconButton
       aria-label={t('settings.back')}
       data-phone-back=""
-      onClick={back}
+      onClick={(e) => {
+        byKeyboard.current = e.detail === 0
+        back()
+      }}
     >
       <ChevronLeft size={20} aria-hidden="true" />
     </IconButton>
@@ -618,6 +624,10 @@ export function SettingsModal({
 
   // A group just opened from the list, to focus its way back
   const enteredGroup = useRef(false)
+  // Whether the last move between the list and a group came from a key.
+  // Focus still moves on a tap, but without a ring: Safari draws one for any
+  // focus() that follows a touch.
+  const byKeyboard = useRef(false)
   // Set while a tap waits for the Back of the group just left
   const stopWaiting = useRef<(() => void) | null>(null)
   useEffect(() => () => stopWaiting.current?.(), [])
@@ -695,13 +705,17 @@ export function SettingsModal({
     // screen reader does not start over from the top of the page
     if (isMobile && !phoneList && enteredGroup.current) {
       enteredGroup.current = false
-      document.querySelector<HTMLElement>('[data-phone-back]')?.focus()
+      document
+        .querySelector<HTMLElement>('[data-phone-back]')
+        ?.focus({ focusVisible: byKeyboard.current })
+      byKeyboard.current = false
     }
     if (!isMobile || !phoneList || !leftGroup.current) return
     document
       .querySelector<HTMLElement>(`[data-group-button="${leftGroup.current}"]`)
-      ?.focus()
+      ?.focus({ focusVisible: byKeyboard.current })
     leftGroup.current = null
+    byKeyboard.current = false
   }, [isMobile, phoneList, activeGroup])
 
   const imeOption = IME_SEND_OPTIONS.find(
@@ -1156,6 +1170,7 @@ export function SettingsModal({
             key={historyKey}
             onBack={backToList}
             backRef={phoneBack}
+            byKeyboard={byKeyboard}
           />
         )
       }
@@ -1183,7 +1198,10 @@ export function SettingsModal({
                   // Named by the group alone; the summary describes it
                   aria-labelledby={`${navId}-${g.id}-name`}
                   aria-describedby={g.summary ? `${navId}-${g.id}` : undefined}
-                  onClick={() => openGroup(g.id)}
+                  onClick={(e) => {
+                    byKeyboard.current = e.detail === 0
+                    openGroup(g.id)
+                  }}
                   className={`flex min-h-touch w-full items-center gap-3 px-4 py-2 text-left ui-native:bg-surface-raised ${FOCUS_RING} focus-visible:-outline-offset-2`}
                 >
                   <span className="min-w-0 flex-1">
