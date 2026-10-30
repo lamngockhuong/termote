@@ -13,7 +13,7 @@ export function useRestoreFocus(
 ) {
   useEffect(() => {
     const opener = document.activeElement
-    const ring = opener?.matches(':focus-visible') ?? false
+    const ring = opener?.matches(':focus-visible')
     return () => {
       if (skip?.current) return
       if (opener instanceof HTMLElement && opener.isConnected)
