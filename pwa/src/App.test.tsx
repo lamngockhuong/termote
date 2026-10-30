@@ -5755,6 +5755,23 @@ describe('App views, view-only and deep links', () => {
       expect(window.location.hash).toBe('#/s/w1/w1%3At1/w1%3At1%3Ap1')
     })
 
+    it('opens when the session list arrives before its hashchange', async () => {
+      mockSessions({ isReady: false })
+      const { rerender } = render(<App />)
+      const button = await screen.findByRole('button', { name: 'SBOverview' })
+      // The pane's address is first written between the click and the
+      // hashchange that opens the overview
+      act(() => {
+        fireEvent.click(button)
+        mockSessions()
+        rerender(<App />)
+      })
+      expect(
+        await screen.findByRole('region', { name: 'Agents' }),
+      ).toBeInTheDocument()
+      expect(window.location.hash).toBe('#/overview')
+    })
+
     it('Esc in a dialog or menu is theirs', async () => {
       window.history.replaceState(null, '', '/#/overview')
       render(<App />)
