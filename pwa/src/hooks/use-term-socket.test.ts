@@ -401,6 +401,20 @@ describe('useTermSocket', () => {
     expect(last().url).toContain('pane=p4')
   })
 
+  it('opens on the pane picked while its token was on the way (tmux: a link)', async () => {
+    let resolveToken: (t: string) => void = () => {}
+    mockFetchTerminalToken.mockImplementationOnce(
+      () => new Promise<string>((r) => (resolveToken = r)),
+    )
+    const { rerender } = setup({ paneId: '0', streamKey: 'main' })
+    await flush()
+    expect(FakeWS.instances).toHaveLength(0)
+    rerender({ paneId: '1', streamKey: 'main' })
+    await act(async () => resolveToken('tok'))
+    expect(FakeWS.instances).toHaveLength(1)
+    expect(last().url).toContain('pane=1')
+  })
+
   it('reconnects when the stream key changes (tmux: another session)', async () => {
     const { rerender } = setup({ paneId: '0', streamKey: 'main' })
     await flush()

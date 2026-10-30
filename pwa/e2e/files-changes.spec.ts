@@ -266,10 +266,8 @@ test.describe('files and changes views', () => {
 
   test.describe('kept on the device', () => {
     // What the PWA keeps on the device for the panes (tabs, drafts, views)
-    // The page loaded again on the window: tmux shows every client its
-    // session's current window, which another test may have changed
+    // The page loaded again on the window
     const reopen = async (page: Page) => {
-      tmux('select-window', '-t', windowId)
       await page.reload()
       await page.goto(`${link}?view=files`)
     }
@@ -853,9 +851,6 @@ test.describe('files and changes views', () => {
         JSON.stringify({ tablePreview: true }),
       ),
     )
-    // The app follows the window tmux has active: the test's window was
-    // made with -d, and a test longer than a snapshot poll would lose it
-    tmux('select-window', '-t', windowId)
     await page.goto(`${link}?view=files`)
     await page.getByRole('treeitem', { name: 'csv' }).click()
     await page.getByRole('treeitem', { name }).click()
@@ -1800,10 +1795,6 @@ test.describe('files and changes views', () => {
       writeFileSync(path.join(dir(), 'one.txt'), 'one staged\n')
       git(repo, 'add', 'e2e-ctabs/one.txt')
       writeFileSync(path.join(dir(), 'one.txt'), 'one staged and more\n')
-      // The repo's window already current: the link's select and the first
-      // stream (opened for the window current at load) then agree, so no
-      // snapshot moves the page to another window while these tests run
-      tmux('select-window', '-t', windowId)
     })
     test.afterEach(() => {
       git(repo, 'rm', '-rqf', 'e2e-ctabs')
