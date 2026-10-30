@@ -3953,6 +3953,40 @@ describe('App views, view-only and deep links', () => {
     expect(terminalPanel()).not.toHaveClass('invisible')
   })
 
+  it('back on the terminal, the view fades out over it, inert, then goes', async () => {
+    render(<App views={VIEWS} />)
+    await screen.findByRole('tablist', { name: 'View' })
+    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }))
+    const cover = screen
+      .getByTestId('chat-main')
+      .closest('[id^="view-panel-"]')!
+    expect(cover).toHaveClass('starting:opacity-0')
+    // Its transition, as the stylesheet gives it in a browser
+    const real = window.getComputedStyle
+    const style = vi
+      .spyOn(window, 'getComputedStyle')
+      .mockImplementation((el) =>
+        el === cover
+          ? ({
+              transitionDuration: '0.15s',
+              transitionDelay: '0s',
+            } as CSSStyleDeclaration)
+          : real(el),
+      )
+    fireEvent.click(screen.getByRole('tab', { name: 'Terminal' }))
+    // The terminal is back at once; the view leaves over it
+    expect(terminalPanel()).not.toHaveClass('invisible')
+    expect(terminalPanel()).not.toHaveAttribute('inert')
+    expect(cover).toHaveAttribute('data-closing', 'true')
+    expect(cover).toHaveAttribute('inert')
+    expect(cover).toHaveClass('opacity-0')
+    act(() => {
+      cover.dispatchEvent(new Event('transitionend'))
+    })
+    expect(screen.queryByTestId('chat-main')).toBeNull()
+    style.mockRestore()
+  })
+
   it('shows the font size only while the terminal is the main view', async () => {
     render(<App views={PANEL_VIEWS} />)
     const decrease = () =>

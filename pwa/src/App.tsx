@@ -74,6 +74,7 @@ import {
 import { useTheme } from './contexts/theme-context'
 import { useAgentNotifications } from './hooks/use-agent-notifications'
 import { useCommandHistory } from './hooks/use-command-history'
+import { useExitTransition } from './hooks/use-exit-transition'
 import { followInFiles, requestFilesFocus, usePlaces } from './hooks/use-files'
 import { useFontSize } from './hooks/use-font-size'
 import { useFullscreen } from './hooks/use-fullscreen'
@@ -707,6 +708,15 @@ export default function App({
   const currentView =
     switcherViews.find((v) => v.id === viewId) ?? switcherViews[0]
   const isTerminalView = currentView.id === TERMINAL_VIEW_ID
+  // The view over the terminal fades in, and out back to the terminal; the
+  // terminal under it never animates. Back on the terminal, the view that
+  // was shown stays for its fade out, inert.
+  const viewShown = !isTerminalView && !!currentView.Main
+  const viewCoverRef = useRef<HTMLDivElement>(null)
+  const viewCover = useExitTransition(viewShown, viewCoverRef)
+  const lastViewRef = useRef(currentView)
+  if (viewShown) lastViewRef.current = currentView
+  const coverView = lastViewRef.current
   // Each pane comes back on the view (and side panel) it was left on; one
   // never shown opens on the terminal. Before paint, so the previous pane's
   // view never flashes on the new one.
@@ -2197,17 +2207,18 @@ export default function App({
                     />
                   )}
                 </div>
-                {!isTerminalView && currentView.Main && (
+                {viewCover.mounted && coverView.Main && (
+                  // Keyed by the view: a view after another fades in afresh
                   <div
-                    id={viewPanelId(currentView.id)}
+                    key={coverView.id}
+                    ref={viewCoverRef}
+                    id={viewPanelId(coverView.id)}
                     role={panelRole}
-                    className="absolute inset-0 overflow-auto bg-bg"
+                    inert={viewCover.closing}
+                    data-closing={viewCover.closing || undefined}
+                    className={`absolute inset-0 overflow-auto bg-bg transition-opacity ease-standard starting:opacity-0 ${viewCover.closing ? 'pointer-events-none opacity-0 duration-(--duration-fast)' : 'duration-(--duration-base)'}`}
                   >
-                    <ViewSlot
-                      key={currentView.id}
-                      View={currentView.Main}
-                      props={viewProps}
-                    />
+                    <ViewSlot View={coverView.Main} props={viewProps} />
                   </div>
                 )}
               </div>
