@@ -55,6 +55,8 @@ Manual testing checklist for Termote features before release.
 - [ ] `--mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also given
 - [ ] PWA lists the same workspaces/tabs/panes as `herdr pane list`
 - [ ] Selecting a tab/pane on the PWA does not change the Herdr desktop's focused tab
+- [ ] Desktop, a tab of 2 panes side by side: leave pane 2 on the Chat view, go back to the terminal
+      on pane 1, then click pane 2: its terminal takes the focus and the Chat view stays closed
 - [ ] Agent status badge changes within one `pollInterval` after `herdr` reports a status change
 - [ ] Typing from the PWA lands in the correct order in the Herdr pane (no interleaving)
 - [ ] Font buttons, fit switch off: 14 shows as before; each step up makes the text 1px larger,
