@@ -33,10 +33,13 @@ describe('resolveLanguage', () => {
 })
 
 describe('resolveLocales', () => {
-  it('auto follows the browser for the tour, the app stays English', () => {
+  it('auto follows the browser, for the tour and the app alike', () => {
     expect(
       resolveLocales({ setting: 'auto', navigatorLanguages: ['vi-VN'] }),
-    ).toEqual({ tourLocale: 'vi', appLocale: 'en' })
+    ).toEqual({ tourLocale: 'vi', appLocale: 'vi' })
+    expect(
+      resolveLocales({ setting: 'auto', navigatorLanguages: ['en-US'] }),
+    ).toEqual({ tourLocale: 'en', appLocale: 'en' })
   })
 
   it('a picked language wins over the browser', () => {
@@ -45,14 +48,20 @@ describe('resolveLocales', () => {
     ).toEqual({ tourLocale: 'en', appLocale: 'en' })
   })
 
-  it('the app speaks the language once it is an app locale', () => {
+  it('the app speaks a picked language: Vietnamese now', () => {
+    expect(
+      resolveLocales({ setting: 'vi', navigatorLanguages: ['en'] }),
+    ).toEqual({ tourLocale: 'vi', appLocale: 'vi' })
+  })
+
+  it('a language not yet an app locale reaches the tour alone', () => {
     expect(
       resolveLocales({
         setting: 'vi',
         navigatorLanguages: ['en'],
-        appLocales: ['en', 'vi'],
+        appLocales: ['en'],
       }),
-    ).toEqual({ tourLocale: 'vi', appLocale: 'vi' })
+    ).toEqual({ tourLocale: 'vi', appLocale: 'en' })
   })
 })
 

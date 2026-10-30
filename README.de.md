@@ -62,6 +62,7 @@ CLI-Tools (Claude Code, GitHub Copilot, jedes Terminal) per PWA von Mobilgeräte
 - **Befehlsverlauf**: Zuvor gesendete Befehle mit Suche abrufen
 - **Schnellaktionen**: Die am Ende der mobilen Leiste fixierte ⋯-Taste zeigt eine Actions-Zeile mit häufigen Operationen (clear, cancel, exit)
 - **Oberflächenstile**: Neutral, Terminal oder Native, in den Einstellungen gewählt, unabhängig vom hellen/dunklen Theme
+- **Sprache der Oberfläche**: Englisch oder Vietnamesisch, in den Einstellungen gewählt; Auto folgt dem Browser
 - **Verbindungsanzeige**: Echtzeit-Serverstatus mit automatischer Trennungserkennung
 - **Update-Prüfung**: Automatische Benachrichtigung über neue Versionen von GitHub Releases
 - **PWA**: Auf dem Homescreen installierbar, offline-fähig

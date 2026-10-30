@@ -50,6 +50,31 @@ describe('useSettings', () => {
     expect(result.current.settings.welcomeSeenVersion).toBe(1)
   })
 
+  it('keeps the language notice unseen unless marked so', () => {
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ language: 'vi', languageNoticeSeen: 'yes' }),
+    )
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.languageNoticeSeen).toBe(false)
+    act(() => result.current.updateSetting('languageNoticeSeen', true))
+    expect(result.current.settings.languageNoticeSeen).toBe(true)
+  })
+
+  it('marks the language notice seen when a language is picked', () => {
+    localStorage.setItem('termote-settings', JSON.stringify({ language: 'vi' }))
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.languageNoticeSeen).toBe(false)
+    act(() => result.current.updateSetting('language', 'en'))
+    expect(result.current.settings).toMatchObject({
+      language: 'en',
+      languageNoticeSeen: true,
+    })
+    expect(
+      JSON.parse(localStorage.getItem('termote-settings')!).languageNoticeSeen,
+    ).toBe(true)
+  })
+
   it('reads an unknown language as auto and a bad version as unseen', () => {
     localStorage.setItem(
       'termote-settings',

@@ -63,5 +63,5 @@ export default {
   'welcome.openTerminal': 'Mở terminal',
   'welcome.openWaiting': 'Mở pane đang cần bạn',
   'welcome.tour': 'Xem hướng dẫn nhanh (1 phút)',
-  'welcome.again': 'Xem lại bất cứ lúc nào ở Settings › Show welcome screen',
+  'welcome.again': 'Xem lại bất cứ lúc nào ở Cài đặt › Hiện màn chào',
 } satisfies Translation<typeof en>

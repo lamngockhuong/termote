@@ -1,10 +1,10 @@
 // The languages the PWA is written in, and which of them the whole app
-// speaks. A language is added to APP_LOCALES once every area is translated;
+// speaks. A new language joins APP_LOCALES once every area is translated;
 // until then it covers only the welcome screen and the tour.
 export const LOCALES = ['en', 'vi'] as const
 export type Locale = (typeof LOCALES)[number]
 
-export const APP_LOCALES: readonly Locale[] = ['en']
+export const APP_LOCALES: readonly Locale[] = ['en', 'vi']
 
 // What Settings keeps: a language, or auto to follow the browser's
 export type LanguageSetting = 'auto' | Locale

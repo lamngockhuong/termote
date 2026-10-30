@@ -52,6 +52,12 @@ export default {
   'shell.localhost.open': 'Open 127.0.0.1',
   'shell.localhost.body':
     'Opened through localhost: every connection tries IPv6 first, which can slow each tab switch. Use 127.0.0.1 instead. It is another address to the browser: you sign in again there, settings and unsaved drafts stay here, and an installed app has to be installed again.',
+  // The one-time banner of a device that picked Vietnamese for the welcome
+  // screen before the whole app spoke it (components/language-notice.tsx)
+  'shell.languageNotice.body':
+    'Termote is now in Vietnamese across the whole app.',
+  'shell.languageNotice.english': 'Switch to English',
+  'shell.languageNotice.dismiss': 'Got it',
   // The desktop side panel's toggles (components/panel-toggles.tsx)
   'shell.sidePanel': 'Side panel',
   'shell.sidePanel.close': 'Close {name}',

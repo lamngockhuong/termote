@@ -182,19 +182,18 @@ two changes to different areas never edit the same file. No i18n library: `src/i
 - Dates, times and numbers go through `src/i18n/format.ts` (`Intl` in the locale), never a fixed
   format.
 - Check a Vietnamese translation with `check_translation.py` of the `kai:translate` skill.
-- `pwa/scripts/check-i18n.mjs` counts the text written straight into each file (JSX text, literal
-  `aria-label`, `title`, `placeholder`, `alt`, `label`, `desc`) against `pwa/i18n-baseline.json`: a
-  file may only go down. `pnpm --filter termote lint` and the `pre-commit` hook run it; after
-  moving text into `t()`, `node scripts/check-i18n.mjs --update` lowers the baseline. A line that is
-  not interface text (a key name, the product's name) takes an `i18n-ignore` comment. CI cannot tell a
-  count raised by hand from one lowered: in review, a diff that raises a number in
-  `i18n-baseline.json` is a change to send back.
+- `pwa/scripts/check-i18n.mjs` fails on any text written straight into a file (JSX text, literal
+  `aria-label`, `title`, `placeholder`, `alt`, `label`, `desc`). `pnpm --filter termote lint` and the
+  `pre-commit` hook run it. A line that is not interface text (a key name, the product's name, a
+  key cap) takes an `i18n-ignore` comment saying why.
 - Unit tests and E2E run in English (`navigator.languages` is `en-US` in jsdom, Playwright sets
   `locale: 'en-US'`); `renderWithLocale(ui, 'vi')` from `src/i18n/test-utils.tsx` renders in
   Vietnamese.
 
-Until every area is translated, `APP_LOCALES` (`src/i18n/index.ts`) holds only `en`: Vietnamese
-reaches the welcome screen and the tour alone, and the app never shows two languages at once.
+`APP_LOCALES` (`src/i18n/index.ts`) holds the languages the whole app speaks, `en` and `vi`; the
+Language setting picks one for every screen. A new language goes into `LOCALES` first, for the
+welcome screen and the tour alone, and into `APP_LOCALES` once every area is translated, so the app
+never shows two languages at once.
 
 ## Git Hooks
 

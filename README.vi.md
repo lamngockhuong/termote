@@ -62,6 +62,7 @@
 - **Lịch sử lệnh**: Gợi nhớ các lệnh đã gửi trước đó với tìm kiếm
 - **Thao tác nhanh**: Phím ⋯ ghim ở cuối thanh công cụ mobile mở hàng Actions gồm các thao tác phổ biến (clear, cancel, exit)
 - **Kiểu giao diện**: Neutral, Terminal hoặc Native, chọn trong Settings, độc lập với theme sáng/tối
+- **Ngôn ngữ giao diện**: tiếng Anh hoặc tiếng Việt, chọn trong Settings; Auto theo ngôn ngữ trình duyệt
 - **Chỉ báo kết nối**: Trạng thái server real-time, tự phát hiện mất kết nối
 - **Kiểm tra cập nhật**: Tự động thông báo phiên bản mới từ GitHub releases
 - **PWA**: Cài được vào homescreen, hoạt động offline

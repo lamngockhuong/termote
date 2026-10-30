@@ -53,6 +53,7 @@ const SETTINGS: Settings = {
   pollInterval: 5,
   welcomeSeenVersion: 0,
   language: 'auto',
+  languageNoticeSeen: false,
   hasSeenLocalhostNotice: false,
   terminalFont: '',
   uiStyle: 'neutral',

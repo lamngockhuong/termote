@@ -23,7 +23,7 @@ termote/
 │   │   ├── contexts/           # Theme provider
 │   │   ├── types/              # Group/Tab/Pane/AgentStatus types
 │   │   └── utils/              # Pure helpers: terminal bridge, highlighting, Markdown, uploads, deep links
-│   ├── scripts/                # check-i18n.mjs: interface text outside t() (baseline i18n-baseline.json)
+│   ├── scripts/                # check-i18n.mjs: interface text outside t() (none allowed)
 │   └── e2e/                    # Playwright specs; every spec imports `test` from fixtures.ts (CSP check)
 ├── server/                     # Go server + CLI, one binary, flat `package main`
 │   ├── main.go                 # Entry point (`serve` runs the server, no args opens the menu)

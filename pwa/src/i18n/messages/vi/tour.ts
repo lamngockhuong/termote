@@ -26,7 +26,7 @@ export default {
   'tour.pinch': 'Chụm hai ngón',
   'tour.fontSize': 'Cỡ chữ',
   'tour.gesturesFoot':
-    'Danh sách đầy đủ có trong Usage Guide, và Settings cho phép xem lại hướng dẫn này.',
+    'Danh sách đầy đủ có trong Hướng dẫn sử dụng; muốn xem lại hướng dẫn nhanh này thì vào Cài đặt.',
   'tour.sidebarTitle': 'Các phiên của bạn',
   'tour.sidebarBody':
     'Mọi phiên trên máy này, xếp theo nhóm. Agent nào đang chờ bạn sẽ có dấu hiệu riêng. <kbd>+</kbd> mở phiên mới, còn trang tổng quan agent cho thấy mọi agent cùng lúc.',
@@ -42,5 +42,5 @@ export default {
   'tour.allCommands': 'Mọi lệnh',
   'tour.goToFile': 'Mở nhanh file',
   'tour.paletteFoot':
-    'Settings có Usage Guide, danh sách phím tắt và nút để xem lại hướng dẫn này.',
+    'Cài đặt có Hướng dẫn sử dụng, danh sách phím tắt và nút để xem lại hướng dẫn nhanh này.',
 } satisfies Translation<typeof en>

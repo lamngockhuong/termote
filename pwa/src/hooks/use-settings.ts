@@ -123,8 +123,11 @@ export interface Settings {
   pollInterval: number // seconds between session list refreshes
   // The welcome screen's version this device has seen (WELCOME_VERSION)
   welcomeSeenVersion: number
-  // The welcome screen's and the tour's language (later the whole app's)
+  // The app's language, the welcome screen's and the tour's with it
   language: LanguageSetting
+  // Dismissed the banner saying the whole app speaks Vietnamese now, or
+  // picked a language since (components/language-notice.tsx)
+  languageNoticeSeen: boolean
   hasSeenLocalhostNotice: boolean // dismissed the notice of a page opened through localhost
   pasteSource: PasteSource // paste button source: system clipboard or tmux buffer
   showSessionTabs: boolean // show session tabs bar on desktop
@@ -164,6 +167,7 @@ const DEFAULTS: Settings = {
   pollInterval: 5,
   welcomeSeenVersion: 0,
   language: 'auto',
+  languageNoticeSeen: false,
   hasSeenLocalhostNotice: false,
   pasteSource: 'clipboard',
   showSessionTabs: true,
@@ -238,6 +242,7 @@ function getSnapshot(): Settings {
         ),
         welcomeSeenVersion: resolveSeenVersion(merged.welcomeSeenVersion),
         language: resolveLanguage(merged.language),
+        languageNoticeSeen: merged.languageNoticeSeen === true,
       }
     } catch {
       cachedSettings = DEFAULTS
@@ -260,7 +265,14 @@ export function useSettings() {
 
   const updateSetting = useCallback(
     <K extends keyof Settings>(key: K, value: Settings[K]) => {
-      writeSettings({ ...cachedSettings, [key]: value })
+      writeSettings({
+        ...cachedSettings,
+        // A language picked now, in Settings or on the welcome screen, is
+        // not one to tell about: only a 'vi' saved before the whole app
+        // spoke it shows the banner
+        ...(key === 'language' && { languageNoticeSeen: true }),
+        [key]: value,
+      })
     },
     [],
   )

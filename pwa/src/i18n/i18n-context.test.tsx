@@ -21,6 +21,7 @@ const wrapper = ({ children }: { children: ReactNode }) => (
 describe('I18nProvider', () => {
   afterEach(() => {
     vi.restoreAllMocks()
+    localStorage.clear()
     document.documentElement.lang = 'en'
   })
 
@@ -29,11 +30,11 @@ describe('I18nProvider', () => {
     expect(screen.getByText('en:Next en:Next')).toBeInTheDocument()
   })
 
-  it('auto: the tour follows a Vietnamese browser, the app stays English', () => {
+  it('auto: the app and the tour follow a Vietnamese browser', () => {
     vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['vi-VN'])
     render(<Show />, { wrapper })
-    expect(screen.getByText('en:Next vi:Tiếp')).toBeInTheDocument()
-    expect(document.documentElement.lang).toBe('en')
+    expect(screen.getByText('vi:Tiếp vi:Tiếp')).toBeInTheDocument()
+    expect(document.documentElement.lang).toBe('vi')
   })
 
   it("keeps the app's language for the push worker", async () => {
@@ -48,14 +49,21 @@ describe('I18nProvider', () => {
     vi.unstubAllGlobals()
   })
 
-  it('follows the language picked in Settings at once', () => {
-    const { result } = renderHook(() => ({ s: useSettings(), t: useTourT() }), {
-      wrapper,
-    })
+  it('follows the language picked in Settings at once, the app with the tour', () => {
+    const { result } = renderHook(
+      () => ({ s: useSettings(), t: useTourT(), app: useT() }),
+      { wrapper },
+    )
     expect(result.current.t.locale).toBe('en')
+    expect(result.current.app.locale).toBe('en')
     act(() => result.current.s.updateSetting('language', 'vi'))
     expect(result.current.t.locale).toBe('vi')
     expect(result.current.t.t('common.skip')).toBe('Bỏ qua')
+    expect(result.current.app.locale).toBe('vi')
+    expect(result.current.app.t('common.skip')).toBe('Bỏ qua')
+    expect(document.documentElement.lang).toBe('vi')
+    act(() => result.current.s.updateSetting('language', 'en'))
+    expect(document.documentElement.lang).toBe('en')
   })
 
   it('tFor gives the locale its t', () => {

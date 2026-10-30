@@ -252,7 +252,8 @@ Manual testing checklist for Termote features before release.
 - [ ] Poll interval selector works (3s to 5m)
 - [ ] Update checker button works
 - [ ] Show welcome screen and Take the tour available (Data & help)
-- [ ] Welcome & tour language: Auto / English / Tiếng Việt
+- [ ] Language: Auto / English / Tiếng Việt, applies to the whole app at once (no reload), `<html lang>` follows
+- [ ] A device saved with `language: 'vi'` from before shows the Vietnamese banner; Got it or Switch to English hides it for good; Auto in a Vietnamese browser shows none
 - [ ] Clear history button works
 - [ ] Preferences persist after page reload
 

@@ -46,12 +46,15 @@ test.describe('welcome screen', () => {
     await welcome(page).getByRole('radio', { name: 'VI' }).click()
     await expect(page.getByRole('dialog', { name: 'Terminal của bạn, trên mọi trình duyệt.' })).toBeVisible()
     await expect(welcome(page)).toContainText('Bản cài của bạn')
-    // The rest of the app stays English until it is translated
-    await expect(page.locator('html')).toHaveAttribute('lang', 'en')
+    // The whole app with it
+    await expect(page.locator('html')).toHaveAttribute('lang', 'vi')
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('termote-settings') ?? '{}'))
     expect(saved.language).toBe('vi')
+    // Picked now: no banner telling the device the app speaks it
+    expect(saved.languageNoticeSeen).toBe(true)
     await welcome(page).getByRole('radio', { name: 'EN' }).click()
     await expect(page.getByRole('dialog', { name: 'Your terminal, in any browser.' })).toBeVisible()
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en')
   })
 })
 

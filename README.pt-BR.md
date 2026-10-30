@@ -62,6 +62,7 @@ Controle remotamente ferramentas CLI (Claude Code, GitHub Copilot, qualquer term
 - **Historico de comandos**: Recuperar comandos enviados anteriormente com busca
 - **Acoes rapidas**: A tecla ⋯ fixada no fim da barra mobile mostra uma linha Actions com operacoes comuns (clear, cancel, exit)
 - **Estilos de interface**: Neutral, Terminal ou Native, escolhidos nas Configuracoes, independentes do tema claro/escuro
+- **Idioma da interface**: inglês ou vietnamita, escolhido nas Configuracoes; Auto segue o navegador
 - **Indicador de conexao**: Status do servidor em tempo real com deteccao automatica de desconexao
 - **Verificador de atualizacao**: Notificacao automatica de nova versao do GitHub releases
 - **PWA**: Instalavel na tela inicial, funciona offline

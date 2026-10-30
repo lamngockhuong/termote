@@ -1,3 +1,5 @@
+import { en } from '../src/i18n/messages/en'
+import { vi } from '../src/i18n/messages/vi'
 import { expect, type Locator, type Page, test } from './fixtures'
 
 // The tour, started from Settings: a step per part of the app, lit where it
@@ -8,13 +10,14 @@ async function openApp(page: Page) {
   await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
 }
 
-async function startTour(page: Page) {
-  await page.getByRole('button', { name: 'More' }).click()
-  await page.getByRole('menuitem', { name: 'Settings' }).click()
-  const data = page.getByRole('button', { name: 'Data & help' })
+// The tour starts in Settings, in the app's language
+async function startTour(page: Page, words: typeof en | typeof vi = en) {
+  await page.getByRole('button', { name: words['shell.menu.more'] }).click()
+  await page.getByRole('menuitem', { name: words['common.settings'] }).click()
+  const data = page.getByRole('button', { name: words['settings.group.data'] })
   // Desktop picks the group in a rail; a phone stacks every group
   if (await data.isVisible()) await data.click()
-  await page.getByRole('button', { name: 'Take the tour' }).click()
+  await page.getByRole('button', { name: words['settings.takeTour'] }).click()
   await expect(page.getByTestId('tour')).toBeVisible()
 }
 
@@ -91,7 +94,7 @@ test.describe('tour on a phone in Vietnamese', () => {
 
   test('speaks Vietnamese', async ({ page }) => {
     await openApp(page)
-    await startTour(page)
+    await startTour(page, vi)
     const bubble = page.getByRole('dialog')
     await expect(bubble).toHaveAccessibleName('Phiên và cửa sổ')
     await bubble.getByRole('button', { name: 'Tiếp' }).click()
@@ -106,7 +109,7 @@ test.describe('tour on desktop in Vietnamese', () => {
 
   test('speaks Vietnamese', async ({ page }) => {
     await openApp(page)
-    await startTour(page)
+    await startTour(page, vi)
     const bubble = page.getByRole('dialog')
     await expect(bubble).toHaveAccessibleName('Các phiên của bạn')
     await page.keyboard.press('ArrowRight')

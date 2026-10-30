@@ -69,6 +69,7 @@ const DEFAULT_SETTINGS: Settings = {
   pollInterval: 5,
   welcomeSeenVersion: 0,
   language: 'auto',
+  languageNoticeSeen: false,
   hasSeenLocalhostNotice: false,
   terminalFont: '',
   uiStyle: 'neutral',
@@ -577,11 +578,9 @@ describe('SettingsModal', () => {
     expect(onStartTour).toHaveBeenCalled()
   })
 
-  it('picks the welcome and tour language', () => {
+  it("picks the app's language", () => {
     const { onUpdateSetting } = renderModal()
-    const group = screen.getByRole('radiogroup', {
-      name: 'Welcome & tour language',
-    })
+    const group = screen.getByRole('radiogroup', { name: 'Language' })
     expect(within(group).getByRole('radio', { name: 'Auto' })).toBeChecked()
     fireEvent.click(within(group).getByRole('radio', { name: 'Tiếng Việt' }))
     expect(onUpdateSetting).toHaveBeenCalledWith('language', 'vi')
