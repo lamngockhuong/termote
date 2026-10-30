@@ -711,15 +711,46 @@ export default function App({
   // The view a link asked for a pane not on screen yet: a focus window
   // keeps no pane view to find it in once the pane shows
   const linkViewRef = useRef<{ paneId: string; view: string } | null>(null)
+  // A pane of this tab picked while the terminal shows the tab's panes
+  // side by side (or one of them zoomed) stays on the terminal: coming back
+  // on the Chat view it was left on would hide the terminal just picked
+  const keepTerminalRef = useRef<string | null>(null)
+  const pickPane = useCallback(
+    (id: string) => {
+      keepTerminalRef.current =
+        layoutShown &&
+        isTerminalView &&
+        id !== activeSession.paneId &&
+        activeSession.panes?.some((p) => p.id === id)
+          ? id
+          : null
+      selectPane(id)
+    },
+    [
+      layoutShown,
+      isTerminalView,
+      activeSession.paneId,
+      activeSession.panes,
+      selectPane,
+    ],
+  )
   useLayoutEffect(() => {
     if (viewPaneRef.current !== viewPaneId) {
       viewPaneRef.current = viewPaneId
       const asked = linkViewRef.current
       linkViewRef.current = null
-      const saved =
+      const keepTerminal = keepTerminalRef.current === viewPaneId
+      keepTerminalRef.current = null
+      const loaded =
         asked?.paneId === viewPaneId
           ? { view: asked.view, panel: null }
           : loadPaneView(viewPaneId)
+      // Kept for the pane too: the view on screen is saved only when it
+      // changes, and the terminal may already be the one shown
+      const saved = keepTerminal
+        ? { view: TERMINAL_VIEW_ID, panel: loaded?.panel ?? null }
+        : loaded
+      if (keepTerminal && saved) savePaneView(viewPaneId, saved)
       setViewId(saved?.view ?? TERMINAL_VIEW_ID)
       setSidePanelId(saved?.panel ?? null)
       return
@@ -1720,7 +1751,7 @@ export default function App({
         previousPane,
         nextPane,
         selectPane: (id) => {
-          selectPane(id)
+          pickPane(id)
           requestAnimationFrame(() => focusTerminal(getTerminal()))
         },
         paneLayout: !!mux.caps.paneLayout,
@@ -1776,7 +1807,7 @@ export default function App({
       nextTab,
       previousPane,
       nextPane,
-      selectPane,
+      pickPane,
       mux.caps.paneLayout,
       mux.caps.paneStream,
       layoutShown,
@@ -2040,7 +2071,7 @@ export default function App({
               panes={activeSession.panes}
               activePaneId={activeSession.paneId}
               onSelect={
-                mux.caps.clientSideSelect || !readOnly ? selectPane : undefined
+                mux.caps.clientSideSelect || !readOnly ? pickPane : undefined
               }
               onClose={readOnly ? undefined : setPendingPaneId}
             />
@@ -2080,7 +2111,7 @@ export default function App({
                       agentPaste={isHerdr || isZellij}
                       onSelect={
                         mux.caps.clientSideSelect || !readOnly
-                          ? selectPane
+                          ? pickPane
                           : undefined
                       }
                       onLayoutShownChange={setLayoutShown}
@@ -2478,7 +2509,7 @@ export default function App({
               }}
               selectSession={(id) => void selectFromList(id)}
               selectPane={
-                mux.caps.clientSideSelect || !readOnly ? selectPane : undefined
+                mux.caps.clientSideSelect || !readOnly ? pickPane : undefined
               }
               openInWindow={focus ? undefined : openPickWindow}
               sessionsOff={focus ? t('shell.focus.noSessions') : undefined}

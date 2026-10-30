@@ -4293,6 +4293,50 @@ describe('App views, view-only and deep links', () => {
       expect(screen.getByTestId('files-panel')).toBeInTheDocument()
     })
 
+    it('a pane picked in the layout view stays on the terminal', async () => {
+      for (const shown of [false, true]) {
+        localStorage.clear()
+        layoutShown = false
+        const selectPane = vi.fn()
+        const base = mockUseLocalSessions()
+        const showPane = (paneId: string) =>
+          mockUseLocalSessions.mockReturnValue({
+            ...base,
+            selectPane,
+            activeSession: {
+              ...base.sessions[0],
+              paneId,
+              panes: [
+                { id: 'w1:t1:p1', label: 'one', hasAgent: true },
+                { id: 'w1:t1:p2', label: 'two', hasAgent: true },
+              ],
+            },
+          } as any)
+        // The second pane was left on the Chat view
+        showPane('w1:t1:p2')
+        const { rerender, unmount } = render(<App views={VIEWS} />)
+        fireEvent.click(await screen.findByRole('tab', { name: 'Chat' }))
+        showPane('w1:t1:p1')
+        rerender(<App views={VIEWS} />)
+        expect(screen.queryByTestId('chat-main')).toBeNull()
+        layoutShown = shown
+        rerender(<App views={VIEWS} />)
+        fireEvent.click(screen.getByRole('button', { name: 'two' }))
+        expect(selectPane).toHaveBeenCalledWith('w1:t1:p2')
+        showPane('w1:t1:p2')
+        rerender(<App views={VIEWS} />)
+        // Its terminal was on screen beside the other: picking it shows it,
+        // where only one pane shows it comes back on its Chat view
+        if (shown) {
+          expect(screen.queryByTestId('chat-main')).toBeNull()
+          expect(viewOf('w1:t1:p2')).toBe('terminal')
+        } else {
+          expect(screen.getByTestId('chat-main')).toBeInTheDocument()
+        }
+        unmount()
+      }
+    })
+
     it('a link to another pane keeps its view for it, not for the one on screen', async () => {
       window.history.replaceState(
         null,
@@ -6511,7 +6555,8 @@ describe('App command palette and shortcuts', () => {
     const p = palette.props!
     expect(p.composer).toBe(true)
     expect(p.filesAvailable).toBe(true)
-    expect(p.selectPane).toBe(selectPane)
+    act(() => p.selectPane?.('w1:t1:p2'))
+    expect(selectPane).toHaveBeenCalledWith('w1:t1:p2')
     act(() => p.onRun(() => p.showFilesPanel()))
     expect(await screen.findByTestId('files-panel')).toBeInTheDocument()
     await openPalette()
