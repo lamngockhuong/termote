@@ -23,7 +23,7 @@ const (
 	maxStreamMessage = 64 * 1024 // largest client → server message
 	maxStreams       = 8         // concurrent streams, server-wide
 	// maxHerdrStreams is maxStreams for Herdr, whose layout view streams each
-	// pane of a tab on its own (up to 4).
+	// pane of a tab on its own (the PWA shows it for up to 4 panes).
 	maxHerdrStreams    = 16
 	streamWriteTimeout = 10 * time.Second // a client that cannot take a frame this long is dropped
 	streamPingEvery    = 15 * time.Second

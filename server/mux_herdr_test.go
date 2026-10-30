@@ -783,6 +783,14 @@ func TestHerdrPaneSizes(t *testing.T) {
 		layout(`{"tab_id":"u","zoomed":false,"focused_pane_id":"c","panes":[{"pane_id":"c","rect":{"width":10,"height":5}}]}`),
 	}
 	v := mapHerdrSnapshot(snap)
+	// Without an area the layout places nothing: no layout. Zoomed on a pane
+	// the layout lacks: not zoomed.
+	if l := herdrTabLayout(snap.Layouts[1], []Pane{{ID: "c"}}); l != nil {
+		t.Errorf("layout without an area: %+v", l)
+	}
+	if l := herdrTabLayout(layout(`{"tab_id":"t","zoomed":true,"focused_pane_id":"x","area":{"width":134,"height":24},`+panes+`}`), nil); l == nil || l.Zoomed || l.ZoomedPaneID != "" {
+		t.Errorf("zoomed on an unlisted pane: %+v", l)
+	}
 	if v.sizes["b"] != (Size{Cols: 134, Rows: 24}) || v.sizes["a"] != (Size{Cols: 40, Rows: 24}) || v.sizes["c"] != (Size{Cols: 10, Rows: 5}) {
 		t.Errorf("snapshot sizes %v", v.sizes)
 	}

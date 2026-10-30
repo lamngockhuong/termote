@@ -589,13 +589,18 @@ func herdrPaneSizes(l herdrLayout) map[string]Size {
 }
 
 // herdrTabLayout is l with the rects of panes, in their order. A pane the
-// layout does not place is left out.
+// layout does not place is left out; a layout without an area, which places
+// nothing, is nil. Zoomed only with the pane it shows.
 func herdrTabLayout(l herdrLayout, panes []Pane) *TabLayout {
+	if l.Area.Width <= 0 || l.Area.Height <= 0 {
+		return nil
+	}
 	rects := make(map[string]PaneLayout, len(l.Panes))
 	for _, p := range l.Panes {
 		rects[p.ID] = PaneLayout{ID: p.ID, X: p.Rect.X, Y: p.Rect.Y, Cols: p.Rect.Width, Rows: p.Rect.Height}
 	}
-	tl := &TabLayout{Cols: l.Area.Width, Rows: l.Area.Height, Zoomed: l.Zoomed, ZoomedPaneID: herdrZoomedPane(l),
+	zoomed := herdrZoomedPane(l)
+	tl := &TabLayout{Cols: l.Area.Width, Rows: l.Area.Height, Zoomed: zoomed != "", ZoomedPaneID: zoomed,
 		Panes: make([]PaneLayout, 0, len(panes))}
 	for _, p := range panes {
 		if r, ok := rects[p.ID]; ok {
