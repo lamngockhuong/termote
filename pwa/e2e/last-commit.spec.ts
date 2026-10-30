@@ -67,11 +67,6 @@ test.describe('last commit from Changes', () => {
     await api.dispose()
   })
 
-  test.beforeEach(() => {
-    // The page follows tmux's current window: keep it on this one
-    tmux('select-window', '-t', windowId)
-  })
-
   test.afterAll(() => {
     try {
       if (windowId) tmux('kill-window', '-t', windowId)

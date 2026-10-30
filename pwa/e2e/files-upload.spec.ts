@@ -72,9 +72,6 @@ test.describe('uploading files into Files', () => {
   let link = ''
   let emptyLink = ''
   let paneId = ''
-  // The window of each link: selected before the page opens it, or tmux's
-  // current window takes the page back a few seconds in
-  const windowOf = new Map<string, string>()
 
   test.beforeAll(async ({ playwright }, testInfo) => {
     api = await playwright.request.newContext({
@@ -100,8 +97,6 @@ test.describe('uploading files into Files', () => {
     link = w.link
     paneId = w.paneId
     emptyLink = e.link
-    windowOf.set(link, w.windowId)
-    windowOf.set(emptyLink, e.windowId)
   })
 
   test.afterAll(async () => {
@@ -118,7 +113,6 @@ test.describe('uploading files into Files', () => {
 
   async function openFiles(page: Page, at = link) {
     await page.setViewportSize({ width: 1400, height: 900 })
-    tmux('select-window', '-t', windowOf.get(at) as string)
     await page.goto(`${at}?view=files`)
     const panel = page.getByRole('complementary', { name: 'Files' })
     await expect(panel.getByRole('button', { name: 'Upload files' })).toBeVisible()
@@ -254,6 +248,8 @@ test.describe('uploading from a view-only device', () => {
     const viewer = await pairStranger(browser, baseURL, (await makeCode(request, 'view', name)).code)
     try {
       await viewer.setViewportSize({ width: 1400, height: 900 })
+      // A view-only page never selects a window and is shown the session's
+      // current one: the link's window, made current here
       tmux('select-window', '-t', windowId)
       await viewer.goto(`${link}?view=files`)
       const panel = viewer.getByRole('complementary', { name: 'Files' })
