@@ -70,6 +70,7 @@ import { DiscardTabDialog, RootCloseDialog } from './tab-close-dialogs'
 import { Banner } from './ui/banner'
 import { Button, IconButton } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
+import { SkeletonLines } from './ui/skeleton'
 
 const ERRORS: Record<ChangesError, MessageKey> = {
   unsupported: 'files.changes.unsupported',
@@ -317,7 +318,8 @@ export function ChangesView({
   openTab,
 }: ViewProps) {
   const { t } = useT()
-  if (!session.paneId) return <ViewMessage>{t('files.loading')}</ViewMessage>
+  if (!session.paneId)
+    return <SkeletonLines label={t('files.loading')} icon className="flex-1" />
   return (
     <PaneChanges
       session={session}
@@ -767,7 +769,7 @@ function PaneChanges({
       />
     )
   } else if (!c.loaded) {
-    body = <ViewMessage>{t('files.loading')}</ViewMessage>
+    body = <SkeletonLines label={t('files.loading')} icon className="flex-1" />
   } else if (c.error && c.entries.length === 0) {
     body = <ViewMessage>{t(ERRORS[c.error])}</ViewMessage>
   } else if (!c.isRepo) {

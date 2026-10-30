@@ -98,6 +98,7 @@ import { Button, FOCUS_RING, IconButton } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
 import { Menu, MenuItem } from './ui/menu'
 import { SegmentedControl } from './ui/segmented-control'
+import { SkeletonLines } from './ui/skeleton'
 
 const ERRORS: Record<FilesError, MessageKey> = {
   unsupported: 'files.find.unsupported',
@@ -236,7 +237,8 @@ export function FilesView({
 }: ViewProps) {
   const { t } = useT()
   // Before the first snapshot there is no pane to read
-  if (!session.paneId) return <ViewMessage>{t('files.loading')}</ViewMessage>
+  if (!session.paneId)
+    return <SkeletonLines label={t('files.loading')} icon className="flex-1" />
   return (
     <PaneFiles
       session={session}
@@ -1068,7 +1070,7 @@ function PaneFiles({
         ) : root?.error ? (
           <ViewMessage>{t(ERRORS[root.error])}</ViewMessage>
         ) : !root?.entries ? (
-          <ViewMessage>{t('files.loading')}</ViewMessage>
+          <SkeletonLines label={t('files.loading')} icon className="flex-1" />
         ) : (
           <>
             <div className="flex shrink-0 justify-center border-b border-border px-2 py-1.5">

@@ -20,6 +20,7 @@ import { SensitiveConfirm } from './file-viewer'
 import { ViewMessage } from './pane-dir-header'
 import { Banner } from './ui/banner'
 import { IconButton } from './ui/button'
+import { SkeletonLines } from './ui/skeleton'
 
 type Loaded =
   | { kind: 'loading' }
@@ -122,7 +123,7 @@ export function CommitView({
         onBack={onBack}
       />
       {state.kind === 'loading' && (
-        <ViewMessage>{t('files.loading')}</ViewMessage>
+        <SkeletonLines label={t('files.loading')} heading className="flex-1" />
       )}
       {state.kind === 'error' && <ViewMessage>{t(state.text)}</ViewMessage>}
       {state.kind === 'none' && (
@@ -311,7 +312,7 @@ function CommitFileDiff({
         )}
       </Header>
       {state.kind === 'loading' && (
-        <ViewMessage>{t('files.loading')}</ViewMessage>
+        <SkeletonLines label={t('files.loading')} heading className="flex-1" />
       )}
       {state.kind === 'error' && <ViewMessage>{t(state.text)}</ViewMessage>}
       {state.kind === 'sensitive' && (

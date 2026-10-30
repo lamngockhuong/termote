@@ -4,6 +4,7 @@ import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
 import type { Translate } from '../i18n/translate'
 import { visibleUnsafe } from '../utils/unsafe-chars'
+import { Skeleton } from './ui/skeleton'
 
 // At most this many subagents are drawn; the rest are counted.
 export const SUBAGENT_TREE_MAX = 20
@@ -85,10 +86,7 @@ export function SubagentTree({ tree, error, now }: Props) {
         {t('chat.subagent.readFailed')}
       </p>
     ) : (
-      <span
-        aria-hidden="true"
-        className="block h-4 w-1/2 rounded-control bg-surface-raised motion-safe:animate-pulse"
-      />
+      <Skeleton className="h-4 w-1/2" />
     )
   }
   const all = flattenSubagents(tree.nodes)
