@@ -175,10 +175,11 @@ function SettingsGroup({
     <section
       data-group={id}
       aria-labelledby={headingId}
-      className={`pb-3 max-md:pt-3 ${active ? '' : 'hidden'}`}
+      className={`pb-3 pt-3 ${active ? '' : 'hidden'}`}
     >
       {/* The rail (desktop) or the sheet's title (phone) already names the
-          group, so only a screen reader hears the heading */}
+          group, so only a screen reader hears the heading; pt-3 keeps the
+          gap it left, so the rows' top line does not run into the header's */}
       <h3
         id={headingId}
         className="m-0 px-4 pb-1.5 pt-3 font-label text-[11px] font-semibold uppercase tracking-wider text-fg-subtle sr-only"

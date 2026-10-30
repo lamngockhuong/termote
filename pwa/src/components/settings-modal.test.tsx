@@ -389,6 +389,9 @@ describe('SettingsModal', () => {
     renderModal()
     const appearance = screen.getByRole('region', { name: 'Appearance' })
     expect(within(appearance).getByRole('heading')).toHaveClass('sr-only')
+    // The gap the heading left stays, so the rows' top line does not meet
+    // the header's
+    expect(appearance).toHaveClass('pt-3')
   })
 
   it('grows a rail button with its label instead of a fixed height', () => {
