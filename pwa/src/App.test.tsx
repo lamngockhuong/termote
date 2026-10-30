@@ -331,6 +331,8 @@ let terminalHandle: { paste: (text: string) => boolean } | null = null
 // The real stack; layoutShown makes it report the layout view as shown,
 // which a page without layout (jsdom) never measures
 let layoutShown = false
+// The props the stack got last
+let stackProps: { onLayoutSignal?: () => void } = {}
 beforeEach(() => {
   layoutShown = false
   mockFinePointer.mockReturnValue(false)
@@ -342,6 +344,7 @@ vi.mock('./components/terminal-stack', async (importOriginal) => {
   return {
     TerminalStack: (props: Parameters<typeof real.TerminalStack>[0]) => {
       const { onLayoutShownChange } = props
+      stackProps = props
       useEffect(() => {
         if (layoutShown) onLayoutShownChange?.(true)
       })
@@ -3606,6 +3609,16 @@ describe('App groups and panes', () => {
     expect(
       await screen.findByRole('button', { name: 'Zoom pane' }),
     ).toBeEnabled()
+  })
+
+  it('a layout change a pane reports reads the snapshot again', async () => {
+    await mockLayout('herdr', { paneStream: true })
+    const { refreshSessions } = mockUseLocalSessions() as any
+    render(<App />)
+    await screen.findByTestId('terminal-view')
+    refreshSessions.mockClear()
+    act(() => stackProps.onLayoutSignal?.())
+    expect(refreshSessions).toHaveBeenCalledTimes(1)
   })
 
   it("in Herdr's layout view, Zoom ends the zoom of a zoomed tab", async () => {
