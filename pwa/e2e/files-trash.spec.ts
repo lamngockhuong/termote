@@ -89,8 +89,6 @@ test.describe('files trash', () => {
     const gone = `gone-${tag}.txt`
     writeFileSync(path.join(repo, kept), 'keep me\n')
     writeFileSync(path.join(repo, gone), 'remove me\n')
-    // tmux's current window, or the page follows it back to another
-    tmux('select-window', '-t', windowId)
     await page.setViewportSize({ width: 1280, height: 800 })
     await page.goto(`${link}?view=files`)
     const panel = page.getByRole('complementary', { name: 'Files' })

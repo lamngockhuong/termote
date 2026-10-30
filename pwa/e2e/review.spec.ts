@@ -129,9 +129,6 @@ test.describe('review comments', () => {
 
   test.beforeEach(async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 })
-    // tmux shows every client its session's current window, which the page
-    // follows: the repo's window, or the page leaves it midway
-    tmux('select-window', '-t', windows[0])
   })
 
   test('comments on two files go to the agent as one message', async ({ page }) => {
@@ -229,6 +226,8 @@ test.describe('review comments on a view-only device', () => {
     test.setTimeout(60000)
     repo = makeRepo()
     windowId = tmux('new-window', '-d', '-P', '-F', '#{window_id}', '-t', `${tmuxSession}:`, '-n', repoWindow, '-c', repo, 'bash').trim()
+    // A view-only page never selects a window and is shown the session's
+    // current one: the repo's window, made current here
     tmux('select-window', '-t', windowId)
     const { link, pane } = await tabLink(request, repoWindow)
     const violations: string[][] = []

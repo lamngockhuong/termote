@@ -76,8 +76,6 @@ test.describe('image uploads', () => {
         expect(tab).toBeDefined()
         link = `/#/s/${encodeURIComponent(group.id)}/${encodeURIComponent(tab.id)}`
       }).toPass()
-      // The stream shows the session's active window
-      tmux('select-window', '-t', windowId)
       await page.goto(link)
       await expect(page.getByTestId('terminal-view')).toBeVisible()
 
