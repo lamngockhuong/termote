@@ -27,6 +27,10 @@ type AgentActivity struct {
 	Detail string `json:"detail,omitempty"`
 	// Tokens: the received count as written ("15.8k")
 	Tokens string `json:"tokens,omitempty"`
+	// Background: set only once the turn is done, what it left running as
+	// the line writes it ("2 shells", "1 shell, 1 monitor"); Label is then
+	// the turn's past-tense word and Elapsed its length
+	Background string `json:"background,omitempty"`
 }
 
 // activityMaxText bounds every text field of an AgentActivity.
@@ -42,6 +46,10 @@ var (
 	// before the first count. The line that ends a turn ("✻ Sautéed for
 	// 1m 14s · done 4:17 AM") has no "…" after the word.
 	claudeActivityRe = regexp.MustCompile(`^[·✢*✶✻✽] (\S.*?)…(?: \((.+)\))?$`)
+	// claudeDoneRe: "✻ Cogitated for 5m 36s · done 12:26 AM · 2 shells
+	// still running", the line that ends a turn while background tasks it
+	// started still run (Claude Code 2.1.312). Its items are read apart.
+	claudeDoneRe = regexp.MustCompile(`^[·✢*✶✻✽] (\S.*?) for ([0-9hms ]+?)((?: · .+)*)$`)
 	// codexActivityRe: "• Working (3s • esc to interrupt) · Running hooks"
 	codexActivityRe = regexp.MustCompile(`^• (.+?) \(([0-9hms ]+) • esc to interrupt\)(?: · (.+))?$`)
 	// durationRe: "0s", "1m 14s", "1h 2m 3s"
@@ -59,9 +67,10 @@ func claudeActivity(above []screenLine) *AgentActivity {
 		if !atColumnZero(above[i]) {
 			continue // blank, or the right-aligned effort row
 		}
-		m := claudeActivityRe.FindStringSubmatch(strings.TrimRight(above[i].text, " "))
+		line := strings.TrimRight(above[i].text, " ")
+		m := claudeActivityRe.FindStringSubmatch(line)
 		if m == nil {
-			return nil
+			return claudeDone(line)
 		}
 		a := &AgentActivity{Label: clipActivity(m[1])}
 		if m[2] != "" {
@@ -70,6 +79,27 @@ func claudeActivity(above []screenLine) *AgentActivity {
 			}
 		}
 		return a
+	}
+	return nil
+}
+
+// claudeDone reads the line that ends a turn, but only while it says what
+// the turn left running: a turn done with nothing left is no activity. What
+// is left starts with its count ("2 shells"), which sets it apart from an
+// answer's own words.
+func claudeDone(line string) *AgentActivity {
+	m := claudeDoneRe.FindStringSubmatch(line)
+	if m == nil {
+		return nil
+	}
+	elapsed, ok := parseElapsed(strings.TrimSpace(m[2]))
+	if !ok {
+		return nil
+	}
+	for item := range strings.SplitSeq(strings.TrimPrefix(m[3], " · "), " · ") {
+		if what, ok := strings.CutSuffix(strings.TrimSpace(item), " still running"); ok && what != "" && what[0] >= '0' && what[0] <= '9' {
+			return &AgentActivity{Label: clipActivity(m[1]), Elapsed: elapsed, Background: clipActivity(what)}
+		}
 	}
 	return nil
 }

@@ -5,6 +5,7 @@ export default {
   'chat.activity.working': '{agent} đang làm việc…',
   'chat.activity.thinking': 'Đang suy nghĩ',
   'chat.activity.tokens': '↓ {tokens} token',
+  'chat.activity.background': 'Đã xong lượt · {what} vẫn đang chạy',
 
   'chat.showAll': 'Hiện tất cả',
   'chat.showLess': 'Thu gọn',

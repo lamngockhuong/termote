@@ -5,6 +5,9 @@ export default {
   'chat.activity.working': '{agent} is working…',
   'chat.activity.thinking': 'Thinking',
   'chat.activity.tokens': '↓ {tokens} tokens',
+  // The turn is over but what it started still runs; {what} is the agent's
+  // own words ("2 shells")
+  'chat.activity.background': 'Turn done · {what} still running',
 
   // A block folded to a few lines, opened on request (tool cards, a dialog's body)
   'chat.showAll': 'Show all',

@@ -1,7 +1,11 @@
 import { act, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithLocale } from '../i18n/test-utils'
-import { ChatActivityRow, formatElapsed } from './chat-activity-row'
+import {
+  ChatActivityRow,
+  ChatBackgroundRow,
+  formatElapsed,
+} from './chat-activity-row'
 
 // The visible line, without the text read out to a screen reader
 const line = () =>
@@ -99,6 +103,15 @@ describe('ChatActivityRow', () => {
     )
     expect(container.querySelector('svg')).toHaveClass(
       'motion-safe:animate-pulse',
+    )
+  })
+})
+
+describe('ChatBackgroundRow', () => {
+  it('says what the turn left running, in the reader language', () => {
+    renderWithLocale(<ChatBackgroundRow what="1 shell, 1 monitor" />, 'vi')
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Đã xong lượt · 1 shell, 1 monitor vẫn đang chạy',
     )
   })
 })
