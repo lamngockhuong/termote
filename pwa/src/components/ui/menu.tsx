@@ -314,6 +314,7 @@ export function Menu({
           ref={listRef}
           id={menuId}
           inert={closing}
+          aria-hidden={closing || undefined}
           data-closing={closing || undefined}
           role="menu"
           aria-label={label}

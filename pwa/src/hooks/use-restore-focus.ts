@@ -22,8 +22,12 @@ export function useRestoreFocus(
       if (done) return
       done = true
       if (skip?.current) return
-      if (opener instanceof HTMLElement && opener.isConnected)
+      if (opener instanceof HTMLElement && opener.isConnected) {
+        // Focused already (a browser that gave it back on dialog.close()):
+        // focus() would not change its ring
+        if (document.activeElement === opener) opener.blur()
         opener.focus({ focusVisible: ring })
+      }
       const at = document.activeElement
       if (!at || at === document.body) fallback?.current?.focus()
     }

@@ -209,6 +209,7 @@ describe('Sheet', () => {
         const dialog = document.querySelector('dialog')!
         expect(dialog.dataset.closing).toBe('true')
         expect(dialog.hasAttribute('inert')).toBe(true)
+        expect(dialog).toHaveAttribute('aria-hidden', 'true')
         expect(dialog.className).toContain(
           `opacity-0 duration-(--duration-fast)`,
         )
@@ -224,18 +225,28 @@ describe('Sheet', () => {
       },
     )
 
-    it('opens again from where it was while closing', () => {
+    it('opened again while closing, is a sheet of its own: focused, and gives focus back', () => {
+      const opener = document.createElement('button')
+      document.body.append(opener)
+      opener.focus()
       const { rerender } = renderSheet()
-      const dialog = document.querySelector('dialog')!
+      const first = document.querySelector('dialog')!
       rerender(closed)
-      rerender(
+      opener.focus()
+      const open = (
         <Sheet isOpen onClose={vi.fn()} title="Sessions">
           <p>Body</p>
-        </Sheet>,
+        </Sheet>
       )
-      expect(document.querySelector('dialog')).toBe(dialog)
+      rerender(open)
+      const dialog = document.querySelector('dialog')!
+      expect(dialog).not.toBe(first)
       expect(dialog.dataset.closing).toBeUndefined()
       expect(dialog.hasAttribute('inert')).toBe(false)
+      expect(document.activeElement).toBe(dialog)
+      // Its own close gives focus back again
+      rerender(closed)
+      expect(document.activeElement).toBe(opener)
     })
   })
 

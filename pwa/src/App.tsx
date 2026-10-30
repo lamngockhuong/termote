@@ -851,6 +851,11 @@ export default function App({
     openTab,
     refreshSessions,
   }
+  // A view fading out keeps what it showed: another pane picked meanwhile
+  // (on the terminal) must not draw, or load, that pane's view under it
+  const lastViewPropsRef = useRef(viewProps)
+  if (viewShown) lastViewPropsRef.current = viewProps
+  const coverProps = lastViewPropsRef.current
   const sidePanelView = panelViews.find((v) => v.id === sidePanelId && v.Panel)
   const hasSidePanel = !!sidePanelView
   // Neither is kept once the panel goes: it opens again at its saved width.
@@ -2215,10 +2220,11 @@ export default function App({
                     id={viewPanelId(coverView.id)}
                     role={panelRole}
                     inert={viewCover.closing}
+                    aria-hidden={viewCover.closing || undefined}
                     data-closing={viewCover.closing || undefined}
                     className={`absolute inset-0 overflow-auto bg-bg transition-opacity ease-standard starting:opacity-0 ${viewCover.closing ? 'pointer-events-none opacity-0 duration-(--duration-fast)' : 'duration-(--duration-base)'}`}
                   >
-                    <ViewSlot View={coverView.Main} props={viewProps} />
+                    <ViewSlot View={coverView.Main} props={coverProps} />
                   </div>
                 )}
               </div>

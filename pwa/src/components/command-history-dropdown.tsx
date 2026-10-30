@@ -17,9 +17,11 @@ interface Props {
 // Closed, it fades out first, inert; opened again it starts with an empty search
 export function CommandHistoryDropdown({ isOpen, ...rest }: Props) {
   const rootRef = useRef<HTMLDivElement>(null)
-  const { mounted, closing } = useExitTransition(isOpen, rootRef)
+  const { mounted, closing, opens } = useExitTransition(isOpen, rootRef)
   if (!mounted) return null
-  return <OpenDropdown rootRef={rootRef} closing={closing} {...rest} />
+  return (
+    <OpenDropdown key={opens} rootRef={rootRef} closing={closing} {...rest} />
+  )
 }
 
 function OpenDropdown({
@@ -99,6 +101,7 @@ function OpenDropdown({
       ref={rootRef}
       data-history-root
       inert={closing}
+      aria-hidden={closing || undefined}
       data-closing={closing || undefined}
       className={`absolute bottom-full left-0 right-0 z-40 mb-2 mx-2 flex max-h-[60vh] supports-[height:1cqh]:max-h-[60cqh] flex-col overflow-hidden rounded-panel border border-border bg-surface-raised text-fg shadow-xl transition-[opacity,translate] duration-(--duration-fast) ease-standard starting:translate-y-1 starting:opacity-0 ui-native:border-0 ${closing ? 'pointer-events-none translate-y-1 opacity-0' : ''}`}
       onKeyDown={handleKeyDown}

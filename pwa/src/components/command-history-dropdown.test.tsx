@@ -276,6 +276,11 @@ describe('CommandHistoryDropdown', () => {
       target: { value: 'git' },
     })
     rerender(<CommandHistoryDropdown {...defaultProps} isOpen={false} />)
+    // Opened again while it fades: a fresh one, its search empty and focused
+    rerender(<CommandHistoryDropdown {...defaultProps} />)
+    expect(screen.getByLabelText('Search command history')).toHaveValue('')
+    expect(screen.getByLabelText('Search command history')).toHaveFocus()
+    rerender(<CommandHistoryDropdown {...defaultProps} isOpen={false} />)
     const root = document.querySelector('[data-history-root]')!
     expect(root).toHaveAttribute('data-closing', 'true')
     expect(root).toHaveAttribute('inert')

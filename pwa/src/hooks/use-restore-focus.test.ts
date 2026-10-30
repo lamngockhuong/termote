@@ -130,4 +130,19 @@ describe('useRestoreFocus', () => {
     })
     expect(document.activeElement).toBe(a)
   })
+
+  it('sets the ring afresh on an opener focused again already', () => {
+    document.body.innerHTML = '<button id="a">a</button>'
+    const a = document.getElementById('a') as HTMLElement
+    a.focus()
+    vi.spyOn(a, 'matches').mockReturnValueOnce(false)
+    const view = renderHook(() => useRestoreFocus())
+    // As dialog.close() does in a browser
+    const blur = vi.spyOn(a, 'blur')
+    const focus = vi.spyOn(a, 'focus')
+    view.result.current()
+    expect(blur).toHaveBeenCalled()
+    expect(focus).toHaveBeenLastCalledWith({ focusVisible: false })
+    expect(document.activeElement).toBe(a)
+  })
 })

@@ -22,6 +22,11 @@ export function useDialogModal(
       dialog.addEventListener('cancel', handleCancel)
       return () => dialog.removeEventListener('cancel', handleCancel)
     }
+    // close() on a modal gives focus back by itself when focus is inside it,
+    // with a ring after a tap on Safari and over keepFocus: useRestoreFocus
+    // decides that instead.
+    const active = document.activeElement
+    if (active instanceof HTMLElement && dialog.contains(active)) active.blur()
     dialog.close()
   }, [isOpen, onClose, ref])
 }

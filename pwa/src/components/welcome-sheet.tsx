@@ -72,9 +72,16 @@ const LANGUAGE_NAMES: Record<Locale, string> = { en: 'EN', vi: 'VI' }
 // Closing, it fades out as a Sheet does.
 export function WelcomeSheet({ isOpen, ...rest }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null)
-  const { mounted, closing } = useExitTransition(isOpen, dialogRef)
+  const { mounted, closing, opens } = useExitTransition(isOpen, dialogRef)
   if (!mounted) return null
-  return <OpenWelcome dialogRef={dialogRef} closing={closing} {...rest} />
+  return (
+    <OpenWelcome
+      key={opens}
+      dialogRef={dialogRef}
+      closing={closing}
+      {...rest}
+    />
+  )
 }
 
 function OpenWelcome({
@@ -305,6 +312,7 @@ function OpenWelcome({
       data-layout={mobile ? 'sheet' : 'dialog'}
       data-closing={closing || undefined}
       inert={closing}
+      aria-hidden={closing || undefined}
       className={`fixed inset-0 z-50 flex-col overflow-hidden border-border bg-bg p-0 text-fg shadow-xl outline-none backdrop:bg-overlay backdrop:exit-discrete backdrop:ease-emphasized backdrop:starting:opacity-0 open:flex exit-discrete ease-emphasized starting:opacity-0 ui-native:border-0 ui-native:bg-surface ${leaving} ${layout}`}
       onPointerDown={(e) => {
         pressedScrim.current = e.target === e.currentTarget

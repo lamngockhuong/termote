@@ -298,7 +298,11 @@ export function OverviewScreen({
                     }
                     // A card's first button opens it
                     onArrowDown={() =>
-                      listRef.current?.querySelector('button')?.focus()
+                      listRef.current
+                        ?.querySelector<HTMLElement>(
+                          'li:not([data-leaving]) button',
+                        )
+                        ?.focus()
                     }
                   />
                 )}
@@ -340,6 +344,7 @@ export function OverviewScreen({
                         key={pane.id}
                         ref={ref(pane.id)}
                         inert={leaving}
+                        aria-hidden={leaving || undefined}
                         data-leaving={leaving || undefined}
                         className={`transition-[opacity,translate,scale] duration-(--duration-base) ease-standard ${isNew(pane.id) ? ENTER_FROM : ''} ${leaving ? LEAVE_TO : ''}`}
                         onBlur={(e) => {

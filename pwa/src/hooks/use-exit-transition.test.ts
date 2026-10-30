@@ -61,9 +61,12 @@ describe('transitionMs', () => {
 describe('useExitTransition', () => {
   it('mounts with open and unmounts at once with nothing to animate', () => {
     const view = render(true)
-    expect(view.result.current).toEqual({ mounted: true, closing: false })
+    expect(view.result.current).toMatchObject({ mounted: true, closing: false })
     view.rerender({ open: false })
-    expect(view.result.current).toEqual({ mounted: false, closing: false })
+    expect(view.result.current).toMatchObject({
+      mounted: false,
+      closing: false,
+    })
   })
 
   it('treats the reduced-motion duration as none', () => {
@@ -77,14 +80,14 @@ describe('useExitTransition', () => {
     const view = render(false)
     expect(view.result.current.mounted).toBe(false)
     view.rerender({ open: true })
-    expect(view.result.current).toEqual({ mounted: true, closing: false })
+    expect(view.result.current).toMatchObject({ mounted: true, closing: false })
   })
 
   it('keeps the element while it closes, until its transitionend', () => {
     animate('150ms')
     const view = render(true)
     view.rerender({ open: false })
-    expect(view.result.current).toEqual({ mounted: true, closing: true })
+    expect(view.result.current).toMatchObject({ mounted: true, closing: true })
     // A child's transition bubbles up: not the element's own
     const child = document.createElement('span')
     el.append(child)
@@ -95,7 +98,10 @@ describe('useExitTransition', () => {
     act(() => {
       el.dispatchEvent(new Event('transitionend'))
     })
-    expect(view.result.current).toEqual({ mounted: false, closing: false })
+    expect(view.result.current).toMatchObject({
+      mounted: false,
+      closing: false,
+    })
   })
 
   it('removes the element after its duration when no transitionend comes', () => {
@@ -119,7 +125,11 @@ describe('useExitTransition', () => {
     const view = render(true)
     view.rerender({ open: false })
     view.rerender({ open: true })
-    expect(view.result.current).toEqual({ mounted: true, closing: false })
+    expect(view.result.current).toEqual({
+      mounted: true,
+      closing: false,
+      opens: 2,
+    })
     act(() => {
       vi.advanceTimersByTime(500)
       el.dispatchEvent(new Event('transitionend'))

@@ -1383,6 +1383,7 @@ function Rows({
           key={key}
           ref={ref(key)}
           inert={leaving}
+          aria-hidden={leaving || undefined}
           data-leaving={leaving || undefined}
           className={`transition-[opacity,translate,scale] duration-(--duration-base) ease-standard ${isNew(key) ? ENTER_FROM : ''} ${leaving ? LEAVE_TO : ''}`}
         >

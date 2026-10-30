@@ -39,4 +39,24 @@ describe('useDialogModal', () => {
     rerender({ open: false })
     expect(dialog.close).toHaveBeenCalledTimes(1)
   })
+
+  it('takes focus out of the dialog before closing it, so it is not given back by the browser', () => {
+    const dialog = document.createElement('dialog')
+    const button = document.createElement('button')
+    dialog.append(button)
+    document.body.append(dialog)
+    dialog.showModal = vi.fn(() => dialog.setAttribute('open', ''))
+    const blurred = vi.fn()
+    button.addEventListener('blur', blurred)
+    dialog.close = vi.fn(() => expect(blurred).toHaveBeenCalled())
+    const { rerender } = renderHook(
+      ({ open }) => useDialogModal({ current: dialog }, open, vi.fn()),
+      { initialProps: { open: true } },
+    )
+    button.focus()
+    rerender({ open: false })
+    expect(dialog.close).toHaveBeenCalled()
+    expect(document.activeElement).toBe(document.body)
+    dialog.remove()
+  })
 })

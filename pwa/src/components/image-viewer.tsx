@@ -128,6 +128,7 @@ function OpenViewer({
       ref={dialogRef}
       aria-label={alt}
       inert={closing}
+      aria-hidden={closing || undefined}
       data-closing={closing || undefined}
       className={`fixed inset-0 z-50 m-0 h-(--app-height) max-h-none w-screen max-w-none flex-col overflow-hidden bg-bg p-0 text-fg outline-none open:flex backdrop:bg-overlay exit-discrete ease-standard starting:opacity-0 backdrop:exit-discrete backdrop:ease-standard backdrop:starting:opacity-0 ${closing ? 'pointer-events-none opacity-0 duration-(--duration-fast) backdrop:opacity-0 backdrop:duration-(--duration-fast)' : 'duration-(--duration-base) backdrop:duration-(--duration-base)'}`}
       onKeyDown={(e) => {

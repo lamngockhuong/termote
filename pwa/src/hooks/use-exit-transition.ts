@@ -24,19 +24,22 @@ export function transitionMs(el: Element | null | undefined): number {
 // inert). It goes once its own transition ends, or its duration and a little
 // more has passed. An element with no transition (reduced motion) goes in the
 // same render, never showing a closing frame. Opening again while it closes
-// keeps it.
+// keeps it mounted; opens counts each opening, for a key when what is inside
+// must start afresh (its focus on open, a search typed before).
 export function useExitTransition(
   open: boolean,
   ref: RefObject<Element | null>,
 ) {
   const [mounted, setMounted] = useState(open)
   const [closing, setClosing] = useState(false)
+  const [opens, setOpens] = useState(open ? 1 : 0)
 
   // Adjusted while rendering, so a close with nothing to animate unmounts
   // in the same commit
   if (open && (!mounted || closing)) {
     setMounted(true)
     setClosing(false)
+    setOpens(opens + 1)
   } else if (!open && mounted && !closing) {
     if (transitionMs(ref.current) > 1) setClosing(true)
     else setMounted(false)
@@ -61,5 +64,5 @@ export function useExitTransition(
     }
   }, [closing, ref])
 
-  return { mounted, closing }
+  return { mounted, closing, opens }
 }

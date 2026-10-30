@@ -3954,7 +3954,7 @@ describe('App views, view-only and deep links', () => {
   })
 
   it('back on the terminal, the view fades out over it, inert, then goes', async () => {
-    render(<App views={VIEWS} />)
+    const { rerender } = render(<App views={VIEWS} />)
     await screen.findByRole('tablist', { name: 'View' })
     fireEvent.click(screen.getByRole('tab', { name: 'Chat' }))
     const cover = screen
@@ -3980,6 +3980,9 @@ describe('App views, view-only and deep links', () => {
     expect(cover).toHaveAttribute('data-closing', 'true')
     expect(cover).toHaveAttribute('inert')
     expect(cover).toHaveClass('opacity-0')
+    // It keeps what it showed while it fades, whatever changes under it
+    rerender(<App views={VIEWS} readOnly />)
+    expect(cover).toHaveTextContent('rw')
     act(() => {
       cover.dispatchEvent(new Event('transitionend'))
     })
