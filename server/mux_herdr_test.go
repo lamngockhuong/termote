@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"slices"
 	"strconv"
@@ -707,6 +708,32 @@ func TestMapHerdrSnapshot(t *testing.T) {
 	if v.sizes["w13:p1"] != (Size{Cols: 42, Rows: 36}) || v.sizes["wR:p3"] != (Size{Cols: 108, Rows: 36}) {
 		t.Errorf("sizes = %v", v.sizes)
 	}
+
+	// Each tab carries its layout, panes in the tab's order.
+	want := TabLayout{Cols: 108, Rows: 36, Panes: []PaneLayout{
+		{ID: "w13:p1", X: 0, Y: 0, Cols: 42, Rows: 36}, {ID: "w13:pC", X: 42, Y: 0, Cols: 66, Rows: 36}}}
+	if split.Layout == nil || !reflect.DeepEqual(*split.Layout, want) {
+		t.Errorf("split layout = %+v, want %+v", split.Layout, want)
+	}
+	if l := wr.Tabs[0].Layout; l == nil || len(l.Panes) != 1 || l.Panes[0].ID != "wR:p3" {
+		t.Errorf("single pane layout = %+v", l)
+	}
+
+	// Filling a copy leaves the cached snapshot alone.
+	c := copySnapshot(snap)
+	c.Groups[1].Tabs[0].Layout.Panes[0].Cols = 1
+	c.Groups[1].Tabs[0].Layout.Cols = 1
+	again, _ := m.Snapshot(context.Background())
+	if l := again.Groups[1].Tabs[0].Layout; l.Cols != 108 || l.Panes[0].Cols != 42 {
+		t.Errorf("a copy's layout changed the cache: %+v", l)
+	}
+	b, _ := json.Marshal(split)
+	if !strings.Contains(string(b), `"layout":{"cols":108,"rows":36,"zoomed":false,"panes":[{"id":"w13:p1","x":0,"y":0,"cols":42,"rows":36}`) {
+		t.Errorf("tab JSON %s", b)
+	}
+	if b, _ := json.Marshal(Tab{}); strings.Contains(string(b), "layout") {
+		t.Errorf("a tab without layout has one in JSON: %s", b)
+	}
 }
 
 // The zoomed pane is observed at the area: a zoomed layout keeps the split's
@@ -745,15 +772,28 @@ func TestHerdrPaneSizes(t *testing.T) {
 		}
 	}
 
-	v := mapHerdrSnapshot(herdrSnapshot{Layouts: []herdrLayout{
+	var snap herdrSnapshot
+	if err := json.Unmarshal([]byte(`{"workspaces":[{"workspace_id":"w","number":1}],
+		"tabs":[{"tab_id":"t","workspace_id":"w"}],
+		"panes":[{"pane_id":"a","tab_id":"t"},{"pane_id":"b","tab_id":"t"},{"pane_id":"n","tab_id":"t"}]}`), &snap); err != nil {
+		t.Fatal(err)
+	}
+	snap.Layouts = []herdrLayout{
 		layout(`{"tab_id":"t","zoomed":true,"focused_pane_id":"b","area":{"width":134,"height":24},` + panes + `}`),
 		layout(`{"tab_id":"u","zoomed":false,"focused_pane_id":"c","panes":[{"pane_id":"c","rect":{"width":10,"height":5}}]}`),
-	}})
+	}
+	v := mapHerdrSnapshot(snap)
 	if v.sizes["b"] != (Size{Cols: 134, Rows: 24}) || v.sizes["a"] != (Size{Cols: 40, Rows: 24}) || v.sizes["c"] != (Size{Cols: 10, Rows: 5}) {
 		t.Errorf("snapshot sizes %v", v.sizes)
 	}
 	if !v.zoomed["t"] || v.zoomed["u"] {
 		t.Errorf("zoomed tabs %v, want only t", v.zoomed)
+	}
+	// The tab's layout names the zoomed pane and keeps the split's rects; a
+	// pane the layout does not place (n) is left out.
+	tl := v.snap.Groups[0].Tabs[0].Layout
+	if tl == nil || !tl.Zoomed || tl.ZoomedPaneID != "b" || tl.Cols != 134 || len(tl.Panes) != 2 || tl.Panes[1] != (PaneLayout{ID: "b", X: 40, Cols: 94, Rows: 24}) {
+		t.Errorf("zoomed tab layout %+v", tl)
 	}
 }
 

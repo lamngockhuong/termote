@@ -822,3 +822,39 @@ func TestStreamPingRechecks(t *testing.T) {
 		srv.Close()
 	}
 }
+
+// Herdr outside Windows holds more streams: its layout view streams each pane
+// of a tab.
+func TestMaxStreamsFor(t *testing.T) {
+	goos := herdrStartGOOS
+	t.Cleanup(func() { herdrStartGOOS = goos })
+	herdrStartGOOS = "linux"
+	if n := maxStreamsFor(&herdrMux{}); n != maxHerdrStreams {
+		t.Errorf("herdr on linux: %d, want %d", n, maxHerdrStreams)
+	}
+	if n := maxStreamsFor(tmuxMux{}); n != maxStreams {
+		t.Errorf("tmux: %d, want %d", n, maxStreams)
+	}
+	herdrStartGOOS = "windows"
+	if n := maxStreamsFor(&herdrMux{}); n != maxStreams {
+		t.Errorf("herdr on windows: %d, want %d", n, maxStreams)
+	}
+
+	herdrStartGOOS = "linux"
+	f := newFakeHerdr(t)
+	m := newTestHerdrMux(t, f)
+	_, hub, _, err := buildServer(testConfig(t), m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hub.max != maxHerdrStreams {
+		t.Errorf("herdr hub holds %d, want %d", hub.max, maxHerdrStreams)
+	}
+	_, hub, _, err = buildServer(testConfig(t), tmuxMux{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hub.max != maxStreams {
+		t.Errorf("tmux hub holds %d, want %d", hub.max, maxStreams)
+	}
+}

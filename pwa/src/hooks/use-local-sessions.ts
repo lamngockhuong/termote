@@ -275,6 +275,7 @@ export function buildSessions(
         panes,
         agentStatus: worstAgentStatus(panes.map((p) => p.agentStatus)),
         commands: commands.length ? commands : undefined,
+        ...(tab.layout && { layout: tab.layout }),
       }
       groupTabs.push(session)
       if (tab.active && !serverActive) serverActive = session

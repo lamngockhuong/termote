@@ -243,6 +243,28 @@ type Tab struct {
 	// the backend lists panes the snapshot does not carry (tmux: only the
 	// active pane is a Pane).
 	Processes []ProcessInfo `json:"processes,omitempty"`
+	// Layout places the tab's panes as the desktop shows them (Herdr only).
+	Layout *TabLayout `json:"layout,omitempty"`
+}
+
+// TabLayout is where each pane of a tab sits, in character cells from the
+// top left of the tab's area. Zoomed: the desktop shows only ZoomedPaneID,
+// over the whole area. Panes are in the order of Tab.Panes.
+type TabLayout struct {
+	Cols         int          `json:"cols"`
+	Rows         int          `json:"rows"`
+	Zoomed       bool         `json:"zoomed"`
+	ZoomedPaneID string       `json:"zoomedPaneId,omitempty"`
+	Panes        []PaneLayout `json:"panes"`
+}
+
+// PaneLayout is one pane's rect in a TabLayout.
+type PaneLayout struct {
+	ID   string `json:"id"`
+	X    int    `json:"x"`
+	Y    int    `json:"y"`
+	Cols int    `json:"cols"`
+	Rows int    `json:"rows"`
 }
 
 type Pane struct {

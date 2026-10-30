@@ -38,6 +38,17 @@ export interface SessionPane {
   command?: string
 }
 
+// Where each pane of a Herdr tab sits on the desktop, in character cells
+// from the top left of the tab's area. zoomed: the desktop shows only
+// zoomedPaneId, over the whole area.
+export interface TabLayout {
+  cols: number
+  rows: number
+  zoomed: boolean
+  zoomedPaneId?: string
+  panes: { id: string; x: number; y: number; cols: number; rows: number }[]
+}
+
 export interface Session {
   id: string
   // Names the same tab while its id changes (MuxTab.key); the id when the
@@ -59,6 +70,8 @@ export interface Session {
   agentStatus?: AgentStatus
   // Foreground process names of every pane of the tab, without repeats.
   commands?: string[]
+  // The panes' places on the desktop (Herdr).
+  layout?: TabLayout
 }
 
 export interface SessionGroup {

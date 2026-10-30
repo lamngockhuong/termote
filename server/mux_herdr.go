@@ -378,6 +378,11 @@ func copySnapshot(s Snapshot) Snapshot {
 		g.Tabs = slices.Clone(g.Tabs)
 		for ti := range g.Tabs {
 			g.Tabs[ti].Panes = slices.Clone(g.Tabs[ti].Panes)
+			if l := g.Tabs[ti].Layout; l != nil {
+				lc := *l
+				lc.Panes = slices.Clone(l.Panes)
+				g.Tabs[ti].Layout = &lc
+			}
 		}
 		out.Groups[gi] = g
 	}
@@ -583,6 +588,23 @@ func herdrPaneSizes(l herdrLayout) map[string]Size {
 	return sizes
 }
 
+// herdrTabLayout is l with the rects of panes, in their order. A pane the
+// layout does not place is left out.
+func herdrTabLayout(l herdrLayout, panes []Pane) *TabLayout {
+	rects := make(map[string]PaneLayout, len(l.Panes))
+	for _, p := range l.Panes {
+		rects[p.ID] = PaneLayout{ID: p.ID, X: p.Rect.X, Y: p.Rect.Y, Cols: p.Rect.Width, Rows: p.Rect.Height}
+	}
+	tl := &TabLayout{Cols: l.Area.Width, Rows: l.Area.Height, Zoomed: l.Zoomed, ZoomedPaneID: herdrZoomedPane(l),
+		Panes: make([]PaneLayout, 0, len(panes))}
+	for _, p := range panes {
+		if r, ok := rects[p.ID]; ok {
+			tl.Panes = append(tl.Panes, r)
+		}
+	}
+	return tl
+}
+
 // mapHerdrSnapshot orders workspaces by their herdr number, tabs as herdr
 // lists them and panes top-left first, the way they appear on the desktop.
 func mapHerdrSnapshot(s herdrSnapshot) herdrView {
@@ -640,7 +662,11 @@ func mapHerdrSnapshot(s herdrSnapshot) herdrView {
 		if panes == nil {
 			panes = []Pane{}
 		}
-		tabsByWS[t.WorkspaceID] = append(tabsByWS[t.WorkspaceID], Tab{ID: t.ID, Key: t.ID, Name: t.Label, Panes: panes})
+		tab := Tab{ID: t.ID, Key: t.ID, Name: t.Label, Panes: panes}
+		if l, ok := layouts[t.ID]; ok {
+			tab.Layout = herdrTabLayout(l, panes)
+		}
+		tabsByWS[t.WorkspaceID] = append(tabsByWS[t.WorkspaceID], tab)
 	}
 
 	wss := s.Workspaces

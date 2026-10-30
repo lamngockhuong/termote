@@ -446,7 +446,7 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 	mux := http.NewServeMux()
 	tokenStore := newStreamTokenStore()
 	allowed := parseAllowedHosts(cfg.AllowedHosts, cfg.AllowLocalAddr)
-	hub := newStreamHub(maxStreams)
+	hub := newStreamHub(maxStreamsFor(m))
 	var sessions *sessionAuth
 	if !cfg.NoAuth {
 		sessions = newSessionAuth(tokenStore, hub)

@@ -20,8 +20,11 @@ import (
 // Limits for /api/mux/stream. They bound what one authenticated client can make
 // the server hold open.
 const (
-	maxStreamMessage   = 64 * 1024        // largest client → server message
-	maxStreams         = 8                // concurrent streams, server-wide
+	maxStreamMessage = 64 * 1024 // largest client → server message
+	maxStreams       = 8         // concurrent streams, server-wide
+	// maxHerdrStreams is maxStreams for Herdr, whose layout view streams each
+	// pane of a tab on its own (up to 4).
+	maxHerdrStreams    = 16
 	streamWriteTimeout = 10 * time.Second // a client that cannot take a frame this long is dropped
 	streamPingEvery    = 15 * time.Second
 	streamPongTimeout  = 15 * time.Second // with streamPingEvery: no pong within 30s closes the stream
@@ -148,6 +151,16 @@ type hubEntry struct {
 	role      role
 	deviceID  string
 	sessionID string
+}
+
+// maxStreamsFor is the server-wide stream limit for backend m: more for
+// Herdr outside Windows, where a desktop shows a tab's panes side by side.
+// Herdr on Windows (ConPTY) has not been measured with that many.
+func maxStreamsFor(m Mux) int {
+	if _, ok := m.(*herdrMux); ok && herdrStartGOOS != "windows" {
+		return maxHerdrStreams
+	}
+	return maxStreams
 }
 
 func newStreamHub(max int) *streamHub {
