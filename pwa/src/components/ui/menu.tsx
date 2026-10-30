@@ -59,7 +59,8 @@ export function placeMenu(
   return { left, top: view.top + MENU_MARGIN, maxHeight: above }
 }
 
-const MenuContext = createContext<() => void>(() => {})
+// Closes the menu; byKey says an item was chosen with Enter or Space
+const MenuContext = createContext<(byKey?: boolean) => void>(() => {})
 
 interface MenuProps {
   // Accessible name of the trigger button
@@ -131,9 +132,12 @@ export function Menu({
   // the click alone would open it again.
   const openAtPressRef = useRef<boolean | null>(null)
 
-  const close = () => {
+  // Focus goes back to the trigger with a ring only after a key: Safari
+  // rings any focus() that follows a tap, and keeps it there once a sheet
+  // the item opened gives focus back.
+  const close = (byKey = true) => {
     setIsOpen(false)
-    triggerRef.current?.focus()
+    triggerRef.current?.focus({ focusVisible: byKey })
   }
 
   // Opened from the keyboard, focus the first item so the arrow keys work at
@@ -361,7 +365,7 @@ function ItemButton({
       title={title}
       onClick={(e) => {
         onSelect?.({ shiftKey: e.shiftKey })
-        if (!keepOpen) close()
+        if (!keepOpen) close(e.detail === 0)
       }}
       className={`flex h-10 w-full items-center gap-3 px-3 text-left text-[14px] hover:bg-surface focus:bg-surface disabled:opacity-50 pointer-coarse:h-touch ui-terminal:font-label ui-terminal:text-[13px] ${FOCUS_RING} focus-visible:-outline-offset-2 ${danger ? 'text-danger' : 'text-fg'}`}
     >

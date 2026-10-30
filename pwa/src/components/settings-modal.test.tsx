@@ -1281,6 +1281,35 @@ describe('SettingsModal on a phone', () => {
     expect(back()).toHaveFocus()
   })
 
+  it('moves focus without a ring after a tap, with one after a key', async () => {
+    const focus = vi.spyOn(HTMLElement.prototype, 'focus')
+    try {
+      renderPhone()
+      // A tap: Safari would ring whatever focus() reaches after a touch
+      fireEvent.click(
+        within(list()!).getByRole('button', { name: 'Keyboard' }),
+        {
+          detail: 1,
+        },
+      )
+      expect(back()).toHaveFocus()
+      expect(focus).toHaveBeenLastCalledWith({ focusVisible: false })
+      fireEvent.click(back()!, { detail: 1 })
+      await waitFor(() => expect(list()).toBeInTheDocument())
+      const group = within(list()!).getByRole('button', { name: 'Keyboard' })
+      expect(group).toHaveFocus()
+      expect(focus).toHaveBeenLastCalledWith({ focusVisible: false })
+      // Enter or Space: a click with no detail
+      fireEvent.click(group)
+      expect(focus).toHaveBeenLastCalledWith({ focusVisible: true })
+      fireEvent.click(back()!)
+      await waitFor(() => expect(list()).toBeInTheDocument())
+      expect(focus).toHaveBeenLastCalledWith({ focusVisible: true })
+    } finally {
+      focus.mockRestore()
+    }
+  })
+
   it('stays in the group on Back while a sheet of it is open over it', async () => {
     renderPhone()
     fireEvent.click(within(list()!).getByRole('button', { name: 'Keyboard' }))

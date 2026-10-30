@@ -249,6 +249,20 @@ describe('Menu', () => {
     expect(document.activeElement).toBe(trigger())
   })
 
+  it('gives the trigger a focus ring back after a key, not after a tap', () => {
+    renderMenu()
+    const focus = vi.spyOn(trigger(), 'focus')
+    tapOpen()
+    fireEvent.click(item('Settings'), { detail: 1 })
+    expect(focus).toHaveBeenLastCalledWith({ focusVisible: false })
+    open()
+    fireEvent.click(item('Settings'))
+    expect(focus).toHaveBeenLastCalledWith({ focusVisible: true })
+    open()
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+    expect(focus).toHaveBeenLastCalledWith({ focusVisible: true })
+  })
+
   it('closes on an item without an action', () => {
     render(
       <Menu label="More" trigger="⋯">

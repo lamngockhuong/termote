@@ -1,6 +1,6 @@
 import { renderHook } from '@testing-library/react'
 import type { RefObject } from 'react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useRestoreFocus } from './use-restore-focus'
 
 afterEach(() => {
@@ -17,6 +17,19 @@ describe('useRestoreFocus', () => {
     ;(document.getElementById('b') as HTMLElement).focus()
     view.unmount()
     expect(document.activeElement).toBe(a)
+  })
+
+  it('gives the focus ring back only if the element had one', () => {
+    document.body.innerHTML = '<button id="a">a</button>'
+    const a = document.getElementById('a') as HTMLElement
+    a.focus()
+    const focus = vi.spyOn(a, 'focus')
+    for (const ring of [false, true]) {
+      // Safari rings an element focused right after a tap
+      vi.spyOn(a, 'matches').mockReturnValueOnce(ring)
+      renderHook(() => useRestoreFocus()).unmount()
+      expect(focus).toHaveBeenLastCalledWith({ focusVisible: ring })
+    }
   })
 
   it('leaves focus alone when told to skip at unmount', () => {
