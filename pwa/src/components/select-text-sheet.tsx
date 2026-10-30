@@ -71,7 +71,7 @@ export function SelectTextSheet({
       setSelected(!!range)
       // Kept for a prompt template's {{selection}}
       if (range && paneId)
-        recordSelection(paneId, rangeText(range), 'the terminal')
+        recordSelection(paneId, rangeText(range), 'chat.fill.from.terminal')
     }
     document.addEventListener('selectionchange', onChange)
     return () => document.removeEventListener('selectionchange', onChange)

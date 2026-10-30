@@ -24,7 +24,8 @@ import {
 import { usePromptTemplates } from '../hooks/use-prompt-templates'
 import { useSettings } from '../hooks/use-settings'
 import { useKeymap } from '../hooks/use-shortcuts'
-import { useT } from '../i18n/i18n-context'
+import { tFor, useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
 import type { Session, SessionGroup } from '../types/session'
 import { paneCommand } from '../utils/agent-start'
 import type { AppCommand, PaletteMode } from '../utils/app-commands'
@@ -101,6 +102,9 @@ interface Item {
   description?: string
   // The group shown before the label (a command's category)
   group?: string
+  // The group and label in English too, which the query also matches when
+  // the app speaks another language
+  english?: string
   // The key that runs it, as shown
   hint?: string
   sensitive?: boolean
@@ -113,12 +117,14 @@ type Found =
   | { paneId: string; q: string; res: FindResponse }
   | { paneId: string; q: string; error: FilesError }
 
-const TITLES: Record<PaletteMode, string> = {
-  files: 'Go to file',
-  commands: 'Commands',
-  line: 'Go to line',
-  sessions: 'Go to tab or pane',
+const TITLES: Record<PaletteMode, MessageKey> = {
+  files: 'tasks.palette.files',
+  commands: 'tasks.palette.commands',
+  line: 'tasks.palette.line',
+  sessions: 'tasks.palette.sessions',
 }
+
+const en = tFor('en')
 
 const MODE_OF: Partial<Record<CommandId, PaletteMode>> = {
   'palette.quickOpen': 'files',
@@ -166,7 +172,7 @@ export function CommandPalette({
   const paneId = session.paneId ?? ''
   const f = useFiles(paneId || NO_PANE)
   const { settings } = useSettings()
-  const { t } = useT()
+  const { t, locale } = useT()
 
   // Another pane on screen, or the pane's id moved: the palette closes
   const openedOn = useRef(paneId)
@@ -290,8 +296,8 @@ export function CommandPalette({
       fileItems = [
         {
           key: 'files:none',
-          label: 'Open a file',
-          disabledReason: 'Not available for this pane',
+          label: t('tasks.palette.openFile'),
+          disabledReason: t('tasks.commandOff.noFiles'),
         },
       ]
     } else if (!query) {
@@ -318,7 +324,7 @@ export function CommandPalette({
             }),
         })
       }
-      if (!fileItems.length) note = 'Type a file name'
+      if (!fileItems.length) note = t('tasks.palette.typeFileName')
     } else if (fresh && 'error' in fresh) {
       note = t(FIND_ERRORS[fresh.error])
     } else if (fresh) {
@@ -332,8 +338,8 @@ export function CommandPalette({
         ...results.filter((r) => !recentPaths.has(r.path)),
       ]
       fileItems = sorted.map((r) => fileItem(root, r.path, r.sensitive))
-      if (!fileItems.length) note = 'No files match'
-    } else if (slow) note = 'Searching…'
+      if (!fileItems.length) note = t('tasks.palette.noFiles')
+    } else if (slow) note = t('tasks.palette.searching')
   }
 
   // Waiting results arrived: the first one opens
@@ -366,10 +372,10 @@ export function CommandPalette({
   const agentReason = composer
     ? undefined
     : readOnly
-      ? 'View only'
+      ? t('tasks.commandOff.viewOnly')
       : inTerminal
         ? undefined
-        : "Open the agent's Chat to use its commands"
+        : t('tasks.palette.agentInChat')
 
   const runAgentCommand = (c: SlashCommand) => {
     if (composer)
@@ -392,14 +398,14 @@ export function CommandPalette({
     if (listTemplates) void refreshPrompts()
   }, [listTemplates, refreshPrompts])
   const templateReason = readOnly
-    ? 'View only'
+    ? t('tasks.commandOff.viewOnly')
     : composer
       ? undefined
-      : "Open the agent's Chat to use templates"
-  const runTemplate = (t: PromptTemplate) =>
+      : t('tasks.palette.templateInChat')
+  const runTemplate = (tpl: PromptTemplate) =>
     run(() => {
       showChat()
-      requestTemplateFill({ paneId, templateId: t.id, agent: agentName })
+      requestTemplateFill({ paneId, templateId: tpl.id, agent: agentName })
     })
 
   const runCommand = (c: AppCommand) => {
@@ -418,10 +424,11 @@ export function CommandPalette({
         const key = keymap.byId[c.id]?.key
         return {
           key: c.id,
-          label: c.title,
-          group: c.category,
+          label: t(c.title),
+          group: t(c.category),
+          english: `${en(c.category)} ${en(c.title)}`,
           hint: key && formatChord(key, apple),
-          disabledReason: c.disabledReason,
+          disabledReason: c.disabledReason && t(c.disabledReason),
           run: () => runCommand(c),
         }
       }),
@@ -429,20 +436,27 @@ export function CommandPalette({
         key: `agent:${c.trigger ?? '/'}${c.name}`,
         label: `${c.trigger ?? '/'}${c.name}`,
         description: commandDescription(c, t),
-        group: 'Agent',
+        group: t('tasks.palette.agent'),
+        english: `${en('tasks.palette.agent')} ${c.trigger ?? '/'}${c.name}`,
         disabledReason: agentReason,
         run: () => runAgentCommand(c),
       })),
-      ...(listTemplates ? prompts.templates : []).map((t) => ({
-        key: `template:${t.id}`,
-        label: visibleUnsafe(t.name),
-        description: visibleUnsafe(firstLine(t.text)),
-        group: 'Template',
+      ...(listTemplates ? prompts.templates : []).map((tpl) => ({
+        key: `template:${tpl.id}`,
+        label: visibleUnsafe(tpl.name),
+        description: visibleUnsafe(firstLine(tpl.text)),
+        group: t('tasks.palette.template'),
+        english: `${en('tasks.palette.template')} ${visibleUnsafe(tpl.name)}`,
         disabledReason: templateReason,
-        run: () => runTemplate(t),
+        run: () => runTemplate(tpl),
       })),
     ]
-    return rankByMatch(items, query, (i) => `${i.group} ${i.label}`)
+    // In another language, an English name finds the item too
+    return rankByMatch(items, query, (i) =>
+      locale === 'en' || !i.english
+        ? `${i.group} ${i.label}`
+        : [`${i.group} ${i.label}`, i.english],
+    )
   }
 
   // A line of the open file
@@ -453,8 +467,8 @@ export function CommandPalette({
       return [
         {
           key: 'line:none',
-          label: 'Go to line',
-          disabledReason: 'Open a file first',
+          label: t('tasks.palette.line'),
+          disabledReason: t('tasks.palette.openFileFirst'),
         },
       ]
     const at = parseLine(query)
@@ -462,17 +476,17 @@ export function CommandPalette({
       return [
         {
           key: 'line:type',
-          label: 'Go to line',
+          label: t('tasks.palette.line'),
           description: tab.path,
-          disabledReason: 'Type a line number, or line:column',
+          disabledReason: t('tasks.palette.typeLine'),
         },
       ]
     return [
       {
         key: 'line:go',
         label: at.col
-          ? `Go to line ${at.line}, column ${at.col}`
-          : `Go to line ${at.line}`,
+          ? t('tasks.palette.goToLineColumn', { line: at.line, col: at.col })
+          : t('tasks.palette.goToLine', { line: at.line }),
         description: tab.path,
         run: () =>
           run(() => {
@@ -493,7 +507,7 @@ export function CommandPalette({
       label: `${s.icon} ${s.name}`,
       description:
         s.id === session.id
-          ? 'Current tab'
+          ? t('tasks.palette.currentTab')
           : s.groupId && groupName.get(s.groupId),
       // The terminal, focused before, shows the new tab
       run: (mod) =>
@@ -506,7 +520,10 @@ export function CommandPalette({
         items.push({
           key: `pane:${p.id}`,
           label: p.label || p.command || p.id,
-          description: p.id === session.paneId ? 'Current pane' : 'Pane',
+          description:
+            p.id === session.paneId
+              ? t('tasks.palette.currentPane')
+              : t('tasks.palette.pane'),
           run: (mod) =>
             mod && openInWindow
               ? run(
@@ -599,7 +616,7 @@ export function CommandPalette({
       <div
         id={listId}
         role="listbox"
-        aria-label={TITLES[current]}
+        aria-label={t(TITLES[current])}
         className="max-h-[50vh] overflow-y-auto py-1"
       >
         {items.map((item, i) => {
@@ -647,10 +664,12 @@ export function CommandPalette({
               {item.sensitive && (
                 <span
                   className="flex shrink-0 items-center text-warning"
-                  title="May contain secrets"
+                  title={t('tasks.palette.secrets')}
                 >
                   <Lock size={12} aria-hidden="true" />
-                  <span className="sr-only">Sensitive</span>
+                  <span className="sr-only">
+                    {t('tasks.palette.sensitive')}
+                  </span>
                 </span>
               )}
               {item.hint && (
@@ -668,8 +687,8 @@ export function CommandPalette({
     <Sheet
       isOpen
       onClose={onClose}
-      title={TITLES[current]}
-      closeLabel="Close command palette"
+      title={t(TITLES[current])}
+      closeLabel={t('tasks.palette.close')}
       className="mt-[12vh]! mb-auto! max-w-xl!"
       focusOnOpen={() => inputRef.current?.focus()}
       keepFocus={keepFocus}
@@ -679,7 +698,7 @@ export function CommandPalette({
           ref={inputRef}
           type="text"
           role="combobox"
-          aria-label="Search files, commands, lines, tabs"
+          aria-label={t('tasks.palette.search')}
           aria-expanded={items.length > 0}
           aria-controls={listId}
           aria-autocomplete="list"
@@ -694,7 +713,7 @@ export function CommandPalette({
             setPending(undefined)
           }}
           onKeyDown={onKeyDown}
-          placeholder="File name, > command, : line, @ tab"
+          placeholder={t('tasks.palette.placeholder')}
           className="w-full rounded-control border border-border bg-bg px-2 py-1.5 text-[14px] text-fg outline-none focus-visible:border-accent"
         />
       </div>
@@ -705,7 +724,7 @@ export function CommandPalette({
       )}
       {body}
       <p aria-live="polite" className="sr-only">
-        {count === 1 ? '1 result' : `${count} results`}
+        {t('tasks.palette.results', { count })}
       </p>
     </Sheet>
   )

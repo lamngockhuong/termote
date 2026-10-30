@@ -154,7 +154,7 @@ describe('the app frame in Vietnamese', () => {
       'Một lần di chuyển khác đang chạy; hãy thử lại',
     )
     expect(reorderPausedHint(tVi, true, true, true)).toBe(
-      'Xóa ô tìm, bấm Hiện tất cả và tắt Phiên đang chờ lên đầu để sắp xếp lại',
+      'Xóa ô tìm, bấm Tất cả và tắt Phiên đang chờ lên đầu để sắp xếp lại',
     )
     expect(reorderPausedHint(tVi, false, true)).toBe(
       'Tắt Phiên đang chờ lên đầu trong Cài đặt để sắp xếp lại',

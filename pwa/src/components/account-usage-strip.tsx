@@ -22,7 +22,7 @@ interface Props {
 // older than USAGE_STALE_MS are dimmed; a window past its reset is left out.
 // Nothing without an account.
 export function AccountUsageStrip({ accounts, now }: Props) {
-  const { t } = useT()
+  const { t, locale } = useT()
   if (accounts.length === 0) return null
   return (
     <section
@@ -52,7 +52,7 @@ export function AccountUsageStrip({ accounts, now }: Props) {
             {a.windows.map((w, i) => {
               if (!windowRunning(w.resetsAt, now)) return null
               const name = windowLabel(w.windowMinutes)
-              const reset = resetLabel(w.resetsAt, now)
+              const reset = resetLabel(w.resetsAt, now, t, locale)
               return (
                 <span
                   // biome-ignore lint/suspicious/noArrayIndexKey: two windows may share a length; the spans hold no state
@@ -87,7 +87,7 @@ export function AccountUsageStrip({ accounts, now }: Props) {
             {known && (
               <span className="shrink-0 text-fg-subtle">
                 {t('shell.accounts.updated', {
-                  ago: formatAgo(Math.max(0, now - updated)),
+                  ago: formatAgo(Math.max(0, now - updated), t),
                 })}
               </span>
             )}

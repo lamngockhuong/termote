@@ -136,7 +136,7 @@ describe('SelectTextSheet', () => {
     select(screen.getByTestId('select-text'))
     expect(paneSelection('0')).toEqual({
       text: 'one\ntwo',
-      source: 'the terminal',
+      source: 'chat.fill.from.terminal',
     })
   })
 

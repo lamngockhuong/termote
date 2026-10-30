@@ -9,7 +9,8 @@ import type { TemplateVariable } from './prompt-templates'
 
 export interface VariableValue {
   value: string
-  // Where it came from, shown under its field ('' when nothing was found)
+  // Where it came from, shown under its field ('' when nothing was found):
+  // the key of a view's line (chat.fill.from.*) or a file's path
   source: string
 }
 
@@ -34,16 +35,16 @@ export function knownTemplateValues(
   const changes = branchName(peekGitChanges(paneId)?.branch)
   const worktree = branchName(ctx.worktreeBranch)
   return {
-    file: tab ? { value: tab.path, source: 'the file shown' } : none,
+    file: tab ? { value: tab.path, source: 'chat.fill.from.file' } : none,
     selection: ctx.terminalText
-      ? { value: ctx.terminalText, source: 'the terminal' }
+      ? { value: ctx.terminalText, source: 'chat.fill.from.terminal' }
       : kept
         ? { value: kept.text, source: kept.source }
         : none,
     branch: changes
-      ? { value: changes, source: 'git' }
+      ? { value: changes, source: 'chat.fill.from.git' }
       : worktree
-        ? { value: worktree, source: 'the worktree' }
+        ? { value: worktree, source: 'chat.fill.from.worktree' }
         : none,
     input: none,
   }

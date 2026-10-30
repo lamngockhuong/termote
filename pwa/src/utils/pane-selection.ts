@@ -9,7 +9,8 @@ import { MAX_TEMPLATE_TEXT, templateBytes } from './prompt-templates'
 
 export interface PaneSelection {
   text: string
-  // Where it was selected, for the fill dialog: "the terminal", a path
+  // Where it was selected, for the fill dialog: the key of a view's line
+  // (chat.fill.from.terminal), or a file's path
   source: string
 }
 

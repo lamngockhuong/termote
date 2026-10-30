@@ -12,6 +12,8 @@ import {
   taskTabName,
   useTasks,
 } from '../hooks/use-tasks'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
 import { sendToAgent } from '../utils/send-to-agent'
 import {
   taskFailureMessage,
@@ -30,21 +32,21 @@ import { TaskRow } from './task-row'
 import { Banner } from './ui/banner'
 
 // What a refused Run tells, by the server's code
-const RUN_ERRORS: Record<string, string> = {
-  no_client: 'Open this session in Zellij first',
-  unsupported_shell: 'This shell is not supported (bash, zsh, sh, fish, pwsh)',
-  shell_busy: "The tab's shell is busy",
-  task_not_found: 'This task is no longer in the folder',
-  unknown_task_kind: 'This task is no longer known: reload the list',
-  tab_gone: "The task's tab was closed",
-  invalid_task: 'This task cannot be run: edit it in Settings',
-  invalid_root: "This folder's name cannot be used for a task",
+const RUN_ERRORS: Record<string, MessageKey> = {
+  no_client: 'tasks.runError.noClient',
+  unsupported_shell: 'tasks.runError.unsupportedShell',
+  shell_busy: 'tasks.runError.shellBusy',
+  task_not_found: 'tasks.runError.notFound',
+  unknown_task_kind: 'tasks.runError.unknownKind',
+  tab_gone: 'tasks.runError.tabGone',
+  invalid_task: 'tasks.runError.invalidTask',
+  invalid_root: 'tasks.runError.invalidRoot',
 }
 
-const LIST_ERRORS: Record<number, string> = {
-  400: 'Directory not found',
-  403: "This directory can't be shown",
-  501: 'Not supported by this backend',
+const LIST_ERRORS: Record<number, MessageKey> = {
+  400: 'tasks.listError.notFound',
+  403: 'tasks.listError.forbidden',
+  501: 'tasks.listError.unsupported',
 }
 
 // Tasks: what the pane's root offers to run (package.json scripts, Makefile
@@ -60,6 +62,7 @@ export function TasksView({
   refreshSessions,
 }: ViewProps) {
   const { settings } = useSettings()
+  const { t } = useT()
   const { data, error, loading, runs, reload, run } = useTasks(session.paneId)
   const [filter, setFilter] = useState('')
   const { isCollapsed, toggle } = useTaskGroupsCollapsed()
@@ -72,37 +75,37 @@ export function TasksView({
   const canSend = !!mux.caps.paneText && !!mux.caps.agentChat
   const groupId = session.groupId ?? ''
 
-  if (!session.paneId) return <ViewMessage>Loading…</ViewMessage>
+  if (!session.paneId) return <ViewMessage>{t('tasks.loading')}</ViewMessage>
 
   const onRun = async (item: TaskItem, newTab = false) => {
     setStarting(item.key)
     try {
       const start = await run(item, newTab)
       void refreshSessions?.()
-      notify(`Running in tab ${taskTabName(item)}`, {
+      notify(t('tasks.running', { name: taskTabName(item) }), {
         variant: 'success',
         action: {
-          label: 'Open',
+          label: t('tasks.open'),
           onClick: () => openTab?.(start.tabId, start.paneId),
         },
       })
     } catch (err) {
       const code = err instanceof RequestError ? err.code : ''
       if (code === 'task_running') {
-        notify('Already running', {
+        notify(t('tasks.alreadyRunning'), {
           action: {
-            label: 'Run in new tab',
+            label: t('tasks.runInNewTab'),
             onClick: () => void onRun(item, true),
           },
         })
       } else if (err instanceof RequestError && err.root) {
-        notify("The pane's folder changed: the list was read again", {
+        notify(t('tasks.rootChanged'), {
           variant: 'warning',
         })
       } else {
         if (code === 'task_not_found' || code === 'unknown_task_kind')
           void reload()
-        notify(RUN_ERRORS[code] ?? 'Could not run the task', {
+        notify(t(RUN_ERRORS[code] ?? 'tasks.runFailed'), {
           variant: 'danger',
         })
       }
@@ -123,14 +126,14 @@ export function TasksView({
     setPicking(null)
     setSending(item.key)
     const openChat = {
-      label: 'Open chat',
+      label: t('tasks.openChat'),
       onClick: () => openTab?.(to.sessionId, to.paneId, CHAT_VIEW_ID),
     }
     try {
       const text = await fetchPaneText(r.paneId, settings.taskHistoryLines)
       const output = taskRunOutput(text.text, r.nonce)
       if (!output) {
-        notify("The run's output is no longer in its tab", {
+        notify(t('tasks.outputGone'), {
           variant: 'warning',
         })
         return
@@ -142,15 +145,15 @@ export function TasksView({
         output,
       })
       await sendToAgent(to.paneId, message)
-      notify(`Sent to ${agentLabel(to.agentName)}`, {
+      notify(t('tasks.sent', { agent: agentLabel(to.agentName) }), {
         variant: 'success',
         action: openChat,
       })
     } catch (err) {
       notify(
         err instanceof RequestError
-          ? `Not sent: ${err.message}`
-          : 'Could not send the output',
+          ? t('tasks.notSent', { message: err.message })
+          : t('tasks.sendFailed'),
         { variant: 'danger', action: openChat },
       )
     } finally {
@@ -171,11 +174,11 @@ export function TasksView({
       const status = error instanceof RequestError ? error.status : 0
       return (
         <ViewMessage>
-          {LIST_ERRORS[status] ?? 'Could not read the tasks'}
+          {t(LIST_ERRORS[status] ?? 'tasks.listFailed')}
         </ViewMessage>
       )
     }
-    return <ViewMessage>Loading…</ViewMessage>
+    return <ViewMessage>{t('tasks.loading')}</ViewMessage>
   }
 
   const items = taskItems(data)
@@ -183,25 +186,25 @@ export function TasksView({
   const shown = (list: TaskItem[]) =>
     needle
       ? list.filter(
-          (t) =>
-            t.name.toLowerCase().includes(needle) ||
-            t.command.toLowerCase().includes(needle),
+          (task) =>
+            task.name.toLowerCase().includes(needle) ||
+            task.command.toLowerCase().includes(needle),
         )
       : list
   // Sections: id (what is folded), title, the tasks the filter shows
   const groups: [string, string, TaskItem[]][] = [
     [
       'script',
-      `Scripts (${data.packageManager || 'npm'})`,
+      t('tasks.group.scripts', { tool: data.packageManager || 'npm' }),
       shown(items.scripts),
     ],
-    ['make', `Make (${data.makefile})`, shown(items.make)],
+    ['make', t('tasks.group.make', { file: data.makefile }), shown(items.make)],
     ...items.tools.map((g): [string, string, TaskItem[]] => [
       g.id,
       g.title,
       shown(g.items),
     ]),
-    ['user', 'My tasks', shown(items.user)],
+    ['user', t('tasks.group.user'), shown(items.user)],
   ]
   const total =
     items.scripts.length +
@@ -218,12 +221,12 @@ export function TasksView({
       />
       {data.tooLarge.length > 0 && (
         <Banner variant="warning" live={false}>
-          Too large to read: {data.tooLarge.join(', ')}
+          {t('tasks.tooLarge', { files: data.tooLarge.join(', ') })}
         </Banner>
       )}
       {data.unreadable.length > 0 && (
         <Banner variant="warning" live={false}>
-          Could not read: {data.unreadable.join(', ')}
+          {t('tasks.unreadable', { files: data.unreadable.join(', ') })}
         </Banner>
       )}
       {total > 0 && (
@@ -232,14 +235,14 @@ export function TasksView({
             type="search"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            placeholder="Filter tasks"
-            aria-label="Filter tasks"
+            placeholder={t('tasks.filterTasks')}
+            aria-label={t('tasks.filterTasks')}
             className="h-8 w-full rounded-control border border-border bg-surface px-2 text-sm text-fg pointer-coarse:h-touch"
           />
         </div>
       )}
       {total === 0 ? (
-        <ViewMessage>No task found in this folder</ViewMessage>
+        <ViewMessage>{t('tasks.none')}</ViewMessage>
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
           {groups
@@ -293,7 +296,7 @@ export function TasksView({
             })}
           {data.skipped > 0 && (
             <p className="px-3 py-2 text-[12px] text-fg-muted">
-              {data.skipped} left out
+              {t('tasks.skipped', { count: data.skipped })}
             </p>
           )}
         </div>

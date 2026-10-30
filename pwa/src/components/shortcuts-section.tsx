@@ -5,7 +5,7 @@ import {
   setShortcut,
   useKeymap,
 } from '../hooks/use-shortcuts'
-import { useT } from '../i18n/i18n-context'
+import { tFor, useT } from '../i18n/i18n-context'
 import type { AppCommand } from '../utils/app-commands'
 import { isApplePlatform } from '../utils/platform'
 import {
@@ -23,6 +23,8 @@ import { Switch } from './ui/switch'
 
 const MODIFIER_CODE = /^(Shift|Control|Alt|Meta|OS)(Left|Right)?$/
 
+const en = tFor('en')
+
 // Settings > Shortcuts (desktop): every command of the palette with its
 // key, which the user can change, remove or reset, and whether it also runs
 // while the terminal has focus. Kept on this device.
@@ -38,7 +40,7 @@ export function ShortcutsSection({ commands }: { commands: AppCommand[] }) {
   const filterId = useId()
   // Every id of the keymap is one of commands
   const titleOf = (id: CommandId) =>
-    (commands.find((c) => c.id === id) as AppCommand).title
+    t((commands.find((c) => c.id === id) as AppCommand).title)
 
   // The next key pressed is the command's key; Escape gives up. Taken
   // before anything else sees it (capture), so no shortcut runs meanwhile.
@@ -78,7 +80,9 @@ export function ShortcutsSection({ commands }: { commands: AppCommand[] }) {
     if (!q) return true
     const key = keymap.byId[c.id]?.key
     return (
-      c.title.toLowerCase().includes(q) ||
+      // A command's English name finds it too
+      t(c.title).toLowerCase().includes(q) ||
+      en(c.title).toLowerCase().includes(q) ||
       (!!key && formatChord(key, apple).toLowerCase().includes(q))
     )
   })
@@ -117,9 +121,9 @@ export function ShortcutsSection({ commands }: { commands: AppCommand[] }) {
         </p>
       )}
       {categories.map((category) => (
-        <section key={category} aria-label={category}>
+        <section key={category} aria-label={t(category)}>
           <h4 className="m-0 mt-2 text-[12px] font-medium uppercase tracking-wide text-fg-muted">
-            {category}
+            {t(category)}
           </h4>
           <ul className="m-0 flex list-none flex-col p-0">
             {shown
@@ -184,6 +188,7 @@ function ShortcutRow({
 }) {
   const { t } = useT()
   const titleId = useId()
+  const title = t(command.title)
   const key = resolved?.key
   const canTerminal = !!key && canRunInTerminal(key, apple)
   const notes = [
@@ -195,7 +200,7 @@ function ShortcutRow({
   return (
     <li className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border py-1.5 last:border-0">
       <span id={titleId} className="min-w-0 flex-1 basis-40 text-[14px]">
-        {command.title}
+        {title}
       </span>
       <kbd
         className={`rounded-control border px-1.5 font-ui text-[12px] ${conflicts.length ? 'border-warning text-warning' : 'border-border text-fg-muted'}`}
@@ -206,7 +211,7 @@ function ShortcutRow({
         variant="secondary"
         size="sm"
         aria-describedby={notes.length ? noteId : undefined}
-        aria-label={t('settings.shortcuts.changeName', { name: command.title })}
+        aria-label={t('settings.shortcuts.changeName', { name: title })}
         onClick={onRecord}
       >
         {recording
@@ -217,9 +222,7 @@ function ShortcutRow({
         <Button
           variant="ghost"
           size="sm"
-          aria-label={t('settings.shortcuts.removeName', {
-            name: command.title,
-          })}
+          aria-label={t('settings.shortcuts.removeName', { name: title })}
           onClick={() => setShortcut(command.id, { key: null })}
         >
           {t('settings.shortcuts.remove')}
@@ -229,9 +232,7 @@ function ShortcutRow({
         <Button
           variant="ghost"
           size="sm"
-          aria-label={t('settings.shortcuts.resetName', {
-            name: command.title,
-          })}
+          aria-label={t('settings.shortcuts.resetName', { name: title })}
           onClick={() => resetShortcut(command.id)}
         >
           {t('settings.shortcuts.reset')}
@@ -239,9 +240,7 @@ function ShortcutRow({
       )}
       <span className="flex items-center gap-1 text-[12px] text-fg-muted">
         <Switch
-          label={t('settings.shortcuts.inTerminalName', {
-            name: command.title,
-          })}
+          label={t('settings.shortcuts.inTerminalName', { name: title })}
           checked={!!resolved?.inTerminal}
           disabled={!canTerminal}
           onChange={(v) => setShortcut(command.id, { inTerminal: v })}
@@ -252,7 +251,7 @@ function ShortcutRow({
       </span>
       {recording && (
         <span aria-live="polite" className="sr-only">
-          {t('settings.shortcuts.recording', { name: command.title })}
+          {t('settings.shortcuts.recording', { name: title })}
         </span>
       )}
       {notes.length > 0 && (

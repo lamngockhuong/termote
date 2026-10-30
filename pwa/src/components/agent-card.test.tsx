@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { tFor } from '../i18n/i18n-context'
 
 const { mockFetchSubagents } = vi.hoisted(() => ({
   mockFetchSubagents: vi.fn(),
@@ -54,11 +55,17 @@ describe('formatTokens', () => {
 
 describe('statusAge', () => {
   it('says how long, marked when the server first saw it so', () => {
-    expect(statusAge('2026-10-13T09:05:00Z', false, NOW)).toBe('5 min ago')
-    expect(statusAge('2026-10-13T09:05:00Z', true, NOW)).toBe('≥ 5 min ago')
-    expect(statusAge('2026-10-13T09:09:50Z', true, NOW)).toBe('just now')
-    expect(statusAge(undefined, false, NOW)).toBeUndefined()
-    expect(statusAge('nope', false, NOW)).toBeUndefined()
+    expect(statusAge('2026-10-13T09:05:00Z', false, NOW, tFor('en'))).toBe(
+      '5 min ago',
+    )
+    expect(statusAge('2026-10-13T09:05:00Z', true, NOW, tFor('en'))).toBe(
+      '≥ 5 min ago',
+    )
+    expect(statusAge('2026-10-13T09:09:50Z', true, NOW, tFor('en'))).toBe(
+      'just now',
+    )
+    expect(statusAge(undefined, false, NOW, tFor('en'))).toBeUndefined()
+    expect(statusAge('nope', false, NOW, tFor('en'))).toBeUndefined()
   })
 })
 

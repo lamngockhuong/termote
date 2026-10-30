@@ -44,15 +44,15 @@ describe('knownTemplateValues', () => {
     state.changes = { branch: 'main' }
     recordSelection('1', 'kept', 'src/b.ts')
     expect(knownTemplateValues('1', { worktreeBranch: 'wt' })).toEqual({
-      file: { value: 'src/a.ts', source: 'the file shown' },
+      file: { value: 'src/a.ts', source: 'chat.fill.from.file' },
       selection: { value: 'kept', source: 'src/b.ts' },
-      branch: { value: 'main', source: 'git' },
+      branch: { value: 'main', source: 'chat.fill.from.git' },
       input: empty,
     })
     // The terminal's selection now comes first
     expect(
       knownTemplateValues('1', { terminalText: 'live' }).selection,
-    ).toEqual({ value: 'live', source: 'the terminal' })
+    ).toEqual({ value: 'live', source: 'chat.fill.from.terminal' })
   })
 
   it('the tree shown is no file; a detached HEAD no branch', () => {
@@ -60,7 +60,7 @@ describe('knownTemplateValues', () => {
     state.changes = { branch: '(detached)' }
     const v = knownTemplateValues('1', { worktreeBranch: 'wt' })
     expect(v.file).toEqual(empty)
-    expect(v.branch).toEqual({ value: 'wt', source: 'the worktree' })
+    expect(v.branch).toEqual({ value: 'wt', source: 'chat.fill.from.worktree' })
     expect(
       knownTemplateValues('1', { worktreeBranch: '(detached)' }).branch,
     ).toEqual(empty)

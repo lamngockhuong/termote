@@ -785,7 +785,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       const sub = term.onSelectionChange(() => {
         const pane = paneIdRef.current
         if (pane && term.hasSelection())
-          recordSelection(pane, term.getSelection(), 'the terminal')
+          recordSelection(pane, term.getSelection(), 'chat.fill.from.terminal')
       })
       return () => sub.dispose()
     }, [])

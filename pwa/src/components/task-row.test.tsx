@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { TaskItem, TaskRunView } from '../hooks/use-tasks'
+import { tFor } from '../i18n/i18n-context'
 import { runBadge, TaskRow } from './task-row'
 
 const item = (over: Partial<TaskItem> = {}): TaskItem => ({
@@ -46,7 +47,7 @@ describe('runBadge', () => {
     [{ state: 'gone' }, 'tab closed', 'text-fg-muted'],
     [{ state: 'unknown' }, 'unknown', 'text-fg-muted'],
   ] as [Partial<TaskRunView>, string, string][])('%j', (over, text, tone) => {
-    expect(runBadge(run(over))).toEqual({ text, tone })
+    expect(runBadge(run(over), tFor('en'))).toEqual({ text, tone })
   })
 })
 

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useActivityLog } from '../hooks/use-activity-log'
 import { useAgentOverview } from '../hooks/use-agent-overview'
 import { useMediaQuery } from '../hooks/use-media-query'
+import { useT } from '../i18n/i18n-context'
 import type { Session, SessionGroup, SessionPane } from '../types/session'
 import { stuckFor } from '../utils/agent-stuck'
 import { overviewOrder } from '../utils/overview-order'
@@ -101,6 +102,7 @@ export function OverviewScreen({
   onStartAgent,
   focusPane,
 }: Props) {
+  const { t } = useT()
   const overview = useAgentOverview(pollInterval)
   const activity = useActivityLog(pollInterval)
   // The activity log: a column beside the cards on a wide screen, a sheet
@@ -215,28 +217,28 @@ export function OverviewScreen({
           tabIndex={-1}
           className="flex-1 text-[15px] font-semibold outline-none"
         >
-          Agents
+          {t('tasks.overview.title')}
         </h2>
         {cards.length > 0 && (
           <SearchToggle
             controls={searchId}
-            noun="agents"
+            noun={t('tasks.overview.searchNoun')}
             open={searchOpen}
             onToggle={() => (searchOpen ? closeSearch() : setSearchOpen(true))}
           />
         )}
         <IconButton
           onClick={() => setLogOpen((v) => !v)}
-          aria-label="Activity"
+          aria-label={t('tasks.activity.title')}
           aria-pressed={logOpen}
-          title="Status changes of every agent"
+          title={t('tasks.activity.hint')}
         >
           <History size={18} aria-hidden="true" />
         </IconButton>
         <IconButton
           onClick={onClose}
-          aria-label="Close the agent overview"
-          title="Close (Esc)"
+          aria-label={t('tasks.overview.close')}
+          title={t('tasks.overview.closeEsc')}
         >
           <X size={18} aria-hidden="true" />
         </IconButton>
@@ -245,15 +247,15 @@ export function OverviewScreen({
         <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
           {overview.error && (
             <p role="status" className="mb-3 text-[12px] text-fg-muted">
-              Could not read the agents' details; retrying.
+              {t('tasks.overview.readFailed')}
             </p>
           )}
           {!ready ? null : cards.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-10 text-center text-[13px] text-fg-muted">
-              <p>No agent is running in any session.</p>
+              <p>{t('tasks.overview.none')}</p>
               {onStartAgent && (
                 <Button onClick={onStartAgent}>
-                  Start an agent in this pane
+                  {t('tasks.overview.start')}
                 </Button>
               )}
             </div>
@@ -270,7 +272,7 @@ export function OverviewScreen({
                 {searchOpen && (
                   <SessionSearchField
                     id={searchId}
-                    label="Find an agent"
+                    label={t('tasks.overview.find')}
                     value={query}
                     onChange={setQuery}
                     onClose={closeSearch}
@@ -297,7 +299,7 @@ export function OverviewScreen({
               </div>
               {shown.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 py-6 text-center text-[13px] text-fg-muted">
-                  No agents match
+                  {t('tasks.overview.noMatch')}
                   <Button
                     size="sm"
                     onClick={() => {
@@ -305,7 +307,7 @@ export function OverviewScreen({
                       setQuery('')
                     }}
                   >
-                    Show all
+                    {t('tasks.overview.showAll')}
                   </Button>
                 </div>
               ) : (
@@ -337,7 +339,12 @@ export function OverviewScreen({
                           pane={pane}
                           where={where}
                           groupTitle={
-                            named ? `${groupNoun} ${group.name}` : undefined
+                            named
+                              ? t('tasks.overview.groupTitle', {
+                                  noun: groupNoun,
+                                  name: group.name,
+                                })
+                              : undefined
                           }
                           worktree={group?.worktree?.linked}
                           overview={overview.panes.get(pane.id)}
@@ -365,7 +372,7 @@ export function OverviewScreen({
               )}
               {activePaneOnly && (
                 <p className="mt-4 text-[12px] text-fg-subtle">
-                  Only the active pane of each window is tracked.
+                  {t('tasks.overview.activePaneOnly')}
                 </p>
               )}
             </>
@@ -380,7 +387,7 @@ export function OverviewScreen({
               id="overview-activity-title"
               className="text-[13px] font-semibold"
             >
-              Activity
+              {t('tasks.activity.title')}
             </h3>
             {log}
           </aside>
@@ -389,8 +396,8 @@ export function OverviewScreen({
       <Sheet
         isOpen={logOpen && !wide}
         onClose={() => setLogOpen(false)}
-        title="Activity"
-        closeLabel="Close the activity"
+        title={t('tasks.activity.title')}
+        closeLabel={t('tasks.activity.close')}
       >
         <div className="overflow-y-auto px-4 pb-4">{log}</div>
       </Sheet>

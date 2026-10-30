@@ -19,21 +19,31 @@ vi.mock('../hooks/use-media-query', () => ({
 const COMMANDS: AppCommand[] = [
   {
     id: 'palette.quickOpen',
-    title: 'Go to file',
-    category: 'Palette',
+    title: 'tasks.command.quickOpen',
+    category: 'tasks.category.palette',
     defaultKey: 'Mod+P',
     run: vi.fn(),
   },
   {
     id: 'palette.commands',
-    title: 'Show all commands',
-    category: 'Palette',
+    title: 'tasks.command.commands',
+    category: 'tasks.category.palette',
     defaultKey: 'Mod+Shift+P',
     inTerminal: true,
     run: vi.fn(),
   },
-  { id: 'app.help', title: 'Show help', category: 'App', run: vi.fn() },
-  { id: 'app.about', title: 'About Termote', category: 'App', run: vi.fn() },
+  {
+    id: 'app.help',
+    title: 'tasks.command.help',
+    category: 'tasks.category.app',
+    run: vi.fn(),
+  },
+  {
+    id: 'app.about',
+    title: 'tasks.command.about',
+    category: 'tasks.category.app',
+    run: vi.fn(),
+  },
 ]
 
 const row = (title: string) =>

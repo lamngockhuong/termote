@@ -28,9 +28,9 @@ function lastUse(
 ): string {
   const used = Date.parse(d.lastUsedAt)
   if (Number.isFinite(used) && used > 0)
-    return t('settings.used', { ago: formatAgo(now - used) })
+    return t('settings.used', { ago: formatAgo(now - used, t) })
   return t('settings.paired', {
-    ago: formatAgo(now - Date.parse(d.createdAt)),
+    ago: formatAgo(now - Date.parse(d.createdAt), t),
   })
 }
 

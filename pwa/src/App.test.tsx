@@ -136,7 +136,9 @@ const palette = vi.hoisted(() => ({
     | import('./components/command-palette').CommandPaletteProps,
   fail: false,
 }))
-vi.mock('./components/command-palette', () => {
+vi.mock('./components/command-palette', async () => {
+  // A command's title and reason are message keys, shown in English
+  const en = (await import('./i18n/i18n-context')).tFor('en')
   function CommandPalette(
     p: import('./components/command-palette').CommandPaletteProps,
   ) {
@@ -151,7 +153,7 @@ vi.mock('./components/command-palette', () => {
             disabled={!!c.disabledReason}
             onClick={() => p.onRun(c.run)}
           >
-            {c.title}
+            {en(c.title)}
           </button>
         ))}
         <button type="button" onClick={p.onClose}>

@@ -60,16 +60,31 @@ export function matchScore(text: string, query: string): number | undefined {
   return score - text.length / 1000
 }
 
+// How well query matches the best of texts (an item's name in the app's
+// language and in English), or undefined when it matches none
+export function bestMatchScore(
+  texts: string | readonly string[],
+  query: string,
+): number | undefined {
+  let best: number | undefined
+  for (const text of typeof texts === 'string' ? [texts] : texts) {
+    const score = matchScore(text, query)
+    if (score !== undefined && (best === undefined || score > best))
+      best = score
+  }
+  return best
+}
+
 // The items that match query, best first; items scoring the same keep
-// their order
+// their order. An item may be found by several texts, its best one counts.
 export function rankByMatch<T>(
   items: T[],
   query: string,
-  textOf: (item: T) => string,
+  textOf: (item: T) => string | readonly string[],
 ): T[] {
   if (!query) return items
   return items
-    .map((item, i) => ({ item, i, score: matchScore(textOf(item), query) }))
+    .map((item, i) => ({ item, i, score: bestMatchScore(textOf(item), query) }))
     .filter(
       (r): r is { item: T; i: number; score: number } => r.score !== undefined,
     )
