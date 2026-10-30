@@ -89,16 +89,13 @@ test.describe('command palette', () => {
 
   async function showLinkTab(page: Page) {
     await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
-    // The link's tab, still shown one session poll later: the stream may
-    // attach to the window shown before the link and move tmux back to it,
-    // which the next poll then shows (and the palette closes on)
+    // The link's tab, still shown one session poll later: the first stream
+    // attaches the linked window, so tmux is not moved back to the window
+    // current at load (which the poll would show, and the palette close on)
     const tab = page.getByRole('tablist', { name: 'Sessions' }).getByRole('tab', { name: new RegExp(windowName) })
-    await expect(async () => {
-      if ((await tab.getAttribute('aria-selected')) !== 'true') await tab.click()
-      await expect(tab).toHaveAttribute('aria-selected', 'true', { timeout: 2000 })
-      await page.waitForResponse((r) => r.url().includes('/api/mux/snapshot'), { timeout: 8000 })
-      await expect(tab).toHaveAttribute('aria-selected', 'true', { timeout: 500 })
-    }).toPass({ timeout: 40000 })
+    await expect(tab).toHaveAttribute('aria-selected', 'true')
+    await page.waitForResponse((r) => r.url().includes('/api/mux/snapshot'), { timeout: 8000 })
+    await expect(tab).toHaveAttribute('aria-selected', 'true', { timeout: 500 })
     await expect(rows(page)).toHaveText(/\S/, { timeout: 15000 })
     await page.getByRole('button', { name: 'Command palette' }).focus()
   }

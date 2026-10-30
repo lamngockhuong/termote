@@ -142,8 +142,7 @@ export function useTermSocket({
 
   const connect = useCallback(async () => {
     teardown()
-    const pane = paneRef.current
-    if (!pane) return
+    if (!paneRef.current) return
     stopRef.current = null
     exitedRef.current = false
     const gen = genRef.current
@@ -166,6 +165,15 @@ export function useTermSocket({
       return
     }
     if (gen !== genRef.current) return
+    // The pane is read once the token is in, not before: tmux's stream is
+    // kept per session, so a window picked meanwhile (a link opened as the
+    // page loads) reconnects nothing, and attaching the pane read before
+    // would select its window again over that pick.
+    const pane = paneRef.current
+    // A pane gone meanwhile, before the effect that tears this connect down
+    // has run: nothing opens, and the pane coming back connects again
+    /* v8 ignore next */
+    if (!pane) return
 
     const cb = cbRef.current
     const ws = new WebSocket(
