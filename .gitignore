@@ -43,6 +43,7 @@ server/webui/dist/*
 
 # Claude Code
 .claude/settings.local.json
+**/.claude/agent-memory/
 
 # Test results, coverage and screenshots
 pwa/test-results/
@@ -59,3 +60,4 @@ plans/
 
 # Journals (generated, local only)
 docs/journals/
+docs/records/
