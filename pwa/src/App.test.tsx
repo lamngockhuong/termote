@@ -335,13 +335,14 @@ vi.mock('./components/terminal-view', () => ({
       onPasteImage?: (image: File) => void
       onCopy?: (result: 'ok' | 'failed') => void
       copyOnSelect?: boolean
-      ref?: { current: unknown }
+      ref?: { current: unknown } | ((h: unknown) => void)
     }) => {
       reportStreamState = props.onConnectionStateChange
       pasteImage = props.onPasteImage
       terminalCopy = props.onCopy
       terminalCopyOnSelect = props.copyOnSelect
-      if (props.ref) props.ref.current = terminalHandle
+      if (typeof props.ref === 'function') props.ref(terminalHandle)
+      else if (props.ref) props.ref.current = terminalHandle
       return <div data-testid="terminal-view">Terminal</div>
     },
   ),
@@ -6380,6 +6381,50 @@ describe('App command palette and shortcuts', () => {
       ),
     )
     await waitFor(() => expect(actions.swapPane).toHaveBeenCalledWith('next'))
+  })
+
+  it('moves to the pane before or after, and gives it the keys', async () => {
+    mockSessions('b')
+    const base = mockUseLocalSessions()
+    const panes = [
+      { id: 'b:p0', label: 'one', hasAgent: false },
+      { id: 'b:p', label: 'two', hasAgent: true },
+      { id: 'b:p2', label: 'three', hasAgent: false },
+    ]
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      activeSession: { ...base.activeSession, panes },
+    } as any)
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+      cb(0)
+      return 0
+    })
+    render(<App />)
+    await run('Previous pane')
+    expect(selectPane).toHaveBeenLastCalledWith('b:p0')
+    await run('Next pane')
+    expect(selectPane).toHaveBeenLastCalledWith('b:p2')
+    expect(mockFocusTerminal).toHaveBeenCalled()
+    vi.unstubAllGlobals()
+  })
+
+  it('a view-only device on tmux picks no pane from the palette', async () => {
+    mockSessions('b')
+    const base = mockUseLocalSessions()
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      activeSession: {
+        ...base.activeSession,
+        panes: [
+          { id: 'b:p0', label: 'one', hasAgent: false },
+          { id: 'b:p', label: 'two', hasAgent: true },
+        ],
+      },
+      mux: { ...base.mux, caps: { ...base.mux.caps, role: 'view' } },
+    } as any)
+    render(<App />)
+    await openPalette()
+    expect(screen.getByRole('button', { name: 'Previous pane' })).toBeDisabled()
   })
 
   it('offers no pane pick to a view-only device where the backend picks the pane', async () => {

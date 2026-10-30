@@ -49,6 +49,9 @@ export default {
   'settings.fitPane': 'Chỉnh pane herdr vừa thiết bị này',
   'settings.fitPaneDesc':
     'Khi terminal đang hiện; cỡ pane trên máy tính cũng đổi theo, cho tới khi trang này bị ẩn hoặc đóng, mở cách xem khác, hay thiết bị khác giành quyền',
+  'settings.layoutView': 'Hiện các pane herdr cạnh nhau',
+  'settings.layoutViewDesc':
+    'Trên máy tính, tab có 2 đến 4 pane hiện các pane theo đúng bố cục của herdr; khi tắt, hoặc khi chữ sẽ quá nhỏ để đọc, mỗi lần một pane',
 
   'settings.tabs': 'Hiện tab phiên',
   'settings.tabsDesc': 'Thanh tab để chuyển phiên nhanh (máy tính)',

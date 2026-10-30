@@ -42,6 +42,7 @@ vi.mock('../hooks/use-devices', () => ({
 }))
 
 const SETTINGS: Settings = {
+  herdrLayoutView: true,
   markdownEditLayout: 'split',
   imeSendBehavior: 'send-only',
   pasteSource: 'clipboard',

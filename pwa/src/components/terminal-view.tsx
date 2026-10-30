@@ -97,6 +97,12 @@ interface Props {
   onPasteImage?: (image: File) => void
   // Copy the selection when a mouse drag ends (the setting).
   copyOnSelect?: boolean
+  // Layout view: the font size the tab's layout fits at. The grid is drawn
+  // at it, never fitted to the view, and nothing pads or scrolls it.
+  fixedFontSize?: number
+  // herdr: the layout of the pane's tab may have changed (a layout frame, or
+  // a size frame other than a stream's first).
+  onLayoutSignal?: () => void
   // A selection was copied: by Ctrl+Shift+C ('key') or a drag ending with
   // copyOnSelect ('select').
   onCopy?: (result: 'ok' | 'failed', how: 'key' | 'select') => void
@@ -280,9 +286,17 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       onPasteImage,
       copyOnSelect = false,
       onCopy,
+      fixedFontSize,
+      onLayoutSignal,
     },
     ref,
   ) => {
+    const fixedFontRef = useRef(fixedFontSize)
+    fixedFontRef.current = fixedFontSize
+    const onLayoutSignalRef = useRef(onLayoutSignal)
+    onLayoutSignalRef.current = onLayoutSignal
+    // The stream's first size frame came: a later one is the layout changing.
+    const sizedRef = useRef(false)
     const coveredRef = useRef(covered)
     coveredRef.current = covered
     // Fitted at least once: a covered terminal then keeps that size, also
@@ -401,6 +415,12 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       /* v8 ignore next */
       if (!term || !fit) return
       const fixed = serverSizeRef.current
+      const fixedFont = fixedFontRef.current
+      if (fixedFont) {
+        term.options.fontSize = fixedFont
+        if (fixed) term.resize(fixed.cols, fixed.rows)
+        return
+      }
       if (!fixed) {
         if (coveredRef.current && fittedRef.current) return
         // A fixed grid may have left a zoomed font behind.
@@ -439,7 +459,11 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
         const term = termRef.current
         /* v8 ignore next */
         if (!term) return
-        if (msg.type === 'size') {
+        if (msg.type === 'layout') {
+          onLayoutSignalRef.current?.()
+        } else if (msg.type === 'size') {
+          if (sizedRef.current) onLayoutSignalRef.current?.()
+          sizedRef.current = true
           drivingRef.current = !!msg.driving
           if (msg.reason) {
             driveLostRef.current = true
@@ -509,6 +533,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
         serverSizeRef.current = null
         // The old stream's mode does not carry over; wait for a size frame.
         drivingRef.current = false
+        sizedRef.current = false
         layout()
         if (!isHerdrRef.current) {
           socket.sendResize({ cols: term.cols, rows: term.rows })
@@ -666,6 +691,11 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       layout()
     }, [fontSize, layout])
 
+    // biome-ignore lint/correctness/useExhaustiveDependencies: a new size is read through its ref
+    useEffect(() => {
+      layout()
+    }, [fixedFontSize, layout])
+
     // Shown again: fit the space it has now.
     useEffect(() => {
       if (!covered) layout()
@@ -808,7 +838,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
     return (
       <div
         ref={scrollerRef}
-        className="relative flex-1 w-full h-full overflow-x-auto bg-term"
+        className={`relative flex-1 w-full h-full bg-term ${fixedFontSize ? 'overflow-hidden' : 'overflow-x-auto'}`}
         // App blocks the context menu everywhere; let it through here when
         // the setting allows it.
         onContextMenu={
@@ -825,7 +855,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
           ref={containerRef}
           data-testid="terminal-view"
           data-tour="terminal"
-          className="w-full h-full [&>.xterm]:px-1 md:[&>.xterm]:px-2 md:[&>.xterm]:pt-1 [&_.xterm-viewport]:bg-term!"
+          className={`w-full h-full [&_.xterm-viewport]:bg-term! ${fixedFontSize ? '' : '[&>.xterm]:px-1 md:[&>.xterm]:px-2 md:[&>.xterm]:pt-1'}`}
         />
         {failed && (
           <div className="absolute inset-x-0 bottom-4 flex justify-center pointer-events-none">

@@ -78,6 +78,7 @@ const context = (over: Partial<AppCommandContext> = {}): AppCommandContext => {
   return {
     apple: false,
     readOnly: false,
+    selectPane: vi.fn(),
     viewIds: ['terminal'],
     panelIds: ['files', 'changes'],
     sidePanelId: null,

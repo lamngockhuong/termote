@@ -31,6 +31,8 @@ export default {
   'shell.tabs.add': 'Add session',
   // The pane strip (components/pane-strip.tsx)
   'shell.panes.close': 'Close pane {name}',
+  // The layout view (components/terminal-stack.tsx): one pane of it
+  'shell.layout.pane': 'Pane {name}',
   // The connection state (components/connection-indicator.tsx)
   'shell.connection.connecting': 'Connecting...',
   'shell.connection.connected': 'Connected',

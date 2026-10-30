@@ -59,6 +59,10 @@ export interface AppCommandContext {
   // The tabs before and after the current one in its group
   previousTab?: string
   nextTab?: string
+  // The panes before and after the one the page works on, in the tab
+  previousPane?: string
+  nextPane?: string
+  selectPane: (id: string) => void
   // The backend can split, zoom, swap and resize panes (caps.paneLayout)
   paneLayout: boolean
   // The page shows one pane, not the tab's layout (caps.paneStream)
@@ -270,6 +274,22 @@ function allCommands(ctx: AppCommandContext): AppCommand[] {
       disabledReason: ctx.nextTab ? undefined : 'tasks.commandOff.noNext',
       restoreFocus: true,
       run: () => ctx.nextTab && ctx.selectTab(ctx.nextTab),
+    },
+    {
+      id: 'pane.previous',
+      title: 'tasks.command.previousPane',
+      category: 'tasks.category.panes',
+      disabledReason: ctx.previousPane
+        ? undefined
+        : 'tasks.commandOff.noPreviousPane',
+      run: () => ctx.previousPane && ctx.selectPane(ctx.previousPane),
+    },
+    {
+      id: 'pane.next',
+      title: 'tasks.command.nextPane',
+      category: 'tasks.category.panes',
+      disabledReason: ctx.nextPane ? undefined : 'tasks.commandOff.noNextPane',
+      run: () => ctx.nextPane && ctx.selectPane(ctx.nextPane),
     },
     pane('pane.splitRight', 'tasks.command.splitRight', () =>
       ctx.splitPane('right'),

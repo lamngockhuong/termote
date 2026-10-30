@@ -132,6 +132,8 @@ export interface Settings {
   uiStyle: UiStyle // visual style of the app chrome (tokens in index.css)
   // herdr: size the pane to this device while it shows it (Caps.driveSize)
   driveTerminalSize: boolean
+  // herdr, desktop: a split tab's panes side by side, as the desktop has them
+  herdrLayoutView: boolean
   sidebarFilter: SidebarFilter // which sessions the sidebar lists
   sortBlockedFirst: boolean // sessions waiting on the user first in each group
   markdownPreview: boolean // Files: Markdown rendered (else its source)
@@ -168,6 +170,7 @@ const DEFAULTS: Settings = {
   terminalFont: '',
   uiStyle: DEFAULT_UI_STYLE,
   driveTerminalSize: false,
+  herdrLayoutView: true,
   sidebarFilter: DEFAULT_SIDEBAR_FILTER,
   sortBlockedFirst: false,
   markdownPreview: true,

@@ -57,7 +57,8 @@ import { SettingsModal } from './components/settings-modal'
 import { SidePanel } from './components/side-panel'
 import { SpotlightTour } from './components/spotlight-tour'
 import { TemplateFillDialog } from './components/template-fill-dialog'
-import { type TerminalHandle, TerminalView } from './components/terminal-view'
+import { TerminalStack } from './components/terminal-stack'
+import type { TerminalHandle } from './components/terminal-view'
 import { Toast, type ToastAction, type ToastVariant } from './components/toast'
 import { Banner } from './components/ui/banner'
 import { Button } from './components/ui/button'
@@ -126,6 +127,7 @@ import {
   LARGE_PACKET_HELP_URL,
   onLargePacketLoss,
 } from './utils/large-packet-loss'
+import { layoutViewWanted, throttle } from './utils/layout-view'
 import { lazyRetry } from './utils/lazy-retry'
 import { type OpenWindowEvent, openInWindow } from './utils/open-window'
 import { loadPaneView, savePaneView } from './utils/pane-view'
@@ -442,6 +444,17 @@ export default function App({
     mux.backend === 'zellij'
       ? shownPanes.length > 1
       : shownPaneIndex >= 0 && shownPaneIndex < shownPanes.length - 1
+  // The panes either side of the one the page works on, where it may pick
+  // another (tmux: a write, refused to a view-only device)
+  const canPickPane = mux.caps.clientSideSelect || !readOnly
+  const previousPane =
+    canPickPane && shownPaneIndex > 0
+      ? shownPanes[shownPaneIndex - 1].id
+      : undefined
+  const nextPane =
+    canPickPane && shownPaneIndex >= 0
+      ? shownPanes[shownPaneIndex + 1]?.id
+      : undefined
   const runPaneAction = useCallback(
     (act: () => Promise<unknown>) => {
       act().catch((err) => showToast(paneLayoutMessage(err, t), 'warning'))
@@ -457,6 +470,30 @@ export default function App({
   }, [pendingPaneId, removePane])
   const isHerdr = mux.backend === 'herdr'
   const isZellij = mux.backend === 'zellij'
+  // Herdr streams each pane on its own and arranges them: a desktop shows
+  // the tab's panes side by side (the layout view), from the snapshot's
+  // layout (read from sessions: a snapshot that came while a pane was being
+  // picked updates them, not activeSession)
+  const panesOneByOne =
+    isHerdr && !!mux.caps.paneStream && !!mux.caps.paneLayout
+  const tabLayout = sessions.find((s) => s.id === activeSession.id)?.layout
+  const layoutWanted = layoutViewWanted({
+    paneStream: panesOneByOne,
+    paneLayout: panesOneByOne,
+    mobile: isMobile,
+    viewOnly: readOnly,
+    setting: settings.herdrLayoutView,
+    layout: tabLayout,
+  })
+  // Also off where the font the tab fits at would be too small
+  const [layoutShown, setLayoutShown] = useState(false)
+  // A pane of the layout reports a change: read the snapshot at once, then
+  // at most every 250 ms while a drag on the desktop goes on
+  const refreshLayout = useMemo(
+    () => throttle(() => void refreshSessions(), 250),
+    [refreshSessions],
+  )
+  useEffect(() => refreshLayout.cancel, [refreshLayout])
   // Groups (tmux and Zellij sessions, Herdr workspaces) made, renamed and
   // closed here. The default session (tmux: its id is its name, the others
   // are "$N"; Zellij: the one named "main") cannot be renamed, and closing
@@ -1648,6 +1685,12 @@ export default function App({
         canFullscreen,
         previousTab,
         nextTab,
+        previousPane,
+        nextPane,
+        selectPane: (id) => {
+          selectPane(id)
+          requestAnimationFrame(() => focusTerminal(getTerminal()))
+        },
         paneLayout: !!mux.caps.paneLayout,
         paneStream: !!mux.caps.paneStream,
         canSwapNext,
@@ -1699,6 +1742,9 @@ export default function App({
       canFullscreen,
       previousTab,
       nextTab,
+      previousPane,
+      nextPane,
+      selectPane,
       mux.caps.paneLayout,
       mux.caps.paneStream,
       canSwapNext,
@@ -1848,7 +1894,7 @@ export default function App({
             onOpenSessions={() => setSidebarOpen(true)}
             fontSize={fontSize}
             // The font size only applies to the terminal
-            showFontSize={isTerminalView}
+            showFontSize={isTerminalView && !layoutShown}
             onDecreaseFont={decrease}
             onIncreaseFont={increase}
             isFullscreen={isFullscreen}
@@ -1988,58 +2034,68 @@ export default function App({
                   onContextMenu={(e) => e.preventDefault()}
                 >
                   <div className="h-full">
-                    <TerminalView
-                      ref={terminalRef}
-                      // No stream at all where the server would refuse it, nor
-                      // while a focus window's file covers the terminal
-                      paneId={
-                        viewStreamOff || streamOff
+                    <TerminalStack
+                      terminalRef={terminalRef}
+                      panes={activeSession.panes ?? []}
+                      activePaneId={activeSession.paneId}
+                      layout={tabLayout}
+                      layoutWanted={layoutWanted}
+                      perPane={panesOneByOne}
+                      agentPaste={isHerdr || isZellij}
+                      onSelect={
+                        mux.caps.clientSideSelect || !readOnly
+                          ? selectPane
+                          : undefined
+                      }
+                      onLayoutShownChange={setLayoutShown}
+                      onLayoutSignal={refreshLayout}
+                      view={{
+                        // No stream at all where the server would refuse it, nor
+                        // while a focus window's file covers the terminal
+                        paneId:
+                          viewStreamOff || streamOff
+                            ? undefined
+                            : activeSession.paneId,
+                        backend: mux.backend,
+                        followPane: mux.caps.clientSideSelect,
+                        // tmux attaches a whole session: another session needs
+                        // another stream.
+                        streamKey: mux.caps.clientSideSelect
                           ? undefined
-                          : activeSession.paneId
-                      }
-                      backend={mux.backend}
-                      followPane={mux.caps.clientSideSelect}
-                      // tmux attaches a whole session: another session needs
-                      // another stream.
-                      streamKey={
-                        mux.caps.clientSideSelect
+                          : activeSession.groupId,
+                        paneSeen: mux.caps.clientSideSelect
                           ? undefined
-                          : activeSession.groupId
-                      }
-                      paneSeen={
-                        mux.caps.clientSideSelect ? undefined : paneSeen
-                      }
-                      copyModeSupported={copyModeSupported}
-                      // A view-only device never moves the backend's view of
-                      // the pane (Herdr scrolls it for every client)
-                      serverScroll={!!mux.caps.scroll && !readOnly}
-                      bracketedPaste={
-                        (isHerdr || isZellij) && !!activeSession.hasAgent
-                      }
-                      fontSize={fontSize}
-                      fontFamily={settings.terminalFont}
-                      theme={resolvedTheme}
-                      uiStyle={settings.uiStyle}
-                      disableContextMenu={settings.disableContextMenu}
-                      copyOnSelect={settings.copyOnSelect}
-                      onCopy={onTerminalCopy}
-                      readOnly={readOnly}
-                      // Only while the terminal shows: under another view the
-                      // pane keeps the desktop's size, so a Claude Code dialog
-                      // taller than this device's screen is not cut by
-                      // Claude Code and the Chat view can still read it.
-                      driveSize={
-                        settings.driveTerminalSize &&
-                        !!mux.caps.driveSize &&
-                        !readOnly &&
-                        isTerminalView
-                      }
-                      onDriveLost={onDriveLost}
-                      // Also while the side panel is dragged (fitted once on
-                      // release) or covers it maximized (no resize at all)
-                      covered={!isTerminalView || holdTerminalSize}
-                      onConnectionStateChange={setStreamState}
-                      onPasteImage={uploadsOn ? attachImage : undefined}
+                          : paneSeen,
+                        copyModeSupported: copyModeSupported,
+                        // A view-only device never moves the backend's view of
+                        // the pane (Herdr scrolls it for every client)
+                        serverScroll: !!mux.caps.scroll && !readOnly,
+                        bracketedPaste:
+                          (isHerdr || isZellij) && !!activeSession.hasAgent,
+                        fontSize: fontSize,
+                        fontFamily: settings.terminalFont,
+                        theme: resolvedTheme,
+                        uiStyle: settings.uiStyle,
+                        disableContextMenu: settings.disableContextMenu,
+                        copyOnSelect: settings.copyOnSelect,
+                        onCopy: onTerminalCopy,
+                        readOnly: readOnly,
+                        // Only while the terminal shows: under another view the
+                        // pane keeps the desktop's size, so a Claude Code dialog
+                        // taller than this device's screen is not cut by
+                        // Claude Code and the Chat view can still read it.
+                        driveSize:
+                          settings.driveTerminalSize &&
+                          !!mux.caps.driveSize &&
+                          !readOnly &&
+                          isTerminalView,
+                        onDriveLost: onDriveLost,
+                        // Also while the side panel is dragged (fitted once on
+                        // release) or covers it maximized (no resize at all)
+                        covered: !isTerminalView || holdTerminalSize,
+                        onConnectionStateChange: setStreamState,
+                        onPasteImage: uploadsOn ? attachImage : undefined,
+                      }}
                     />
                   </div>
                   {/* Gesture overlay - captures touch gestures (mobile only) */}
@@ -2327,6 +2383,7 @@ export default function App({
             : t('shell.buffer.session')
         }
         driveSizeSupported={!!mux.caps.driveSize && !readOnly}
+        layoutViewSupported={panesOneByOne && !readOnly && !isMobile}
         pushAvailable={!!mux.caps.push}
         readOnly={readOnly}
         devices={!!mux.caps.devices && !readOnly}

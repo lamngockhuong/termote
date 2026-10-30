@@ -64,6 +64,8 @@ interface Props {
   pasteBufferLabel?: string
   // Backend lets this device take over the pane size (caps.driveSize)
   driveSizeSupported?: boolean
+  // Herdr tabs can show their panes side by side on this device
+  layoutViewSupported?: boolean
   // The server sends Web Push (caps.push); turning notifications on then
   // subscribes this device, turning them off unsubscribes it.
   pushAvailable?: boolean
@@ -479,6 +481,7 @@ export function SettingsModal({
   tmuxBufferSupported = true,
   pasteBufferLabel,
   driveSizeSupported = false,
+  layoutViewSupported = false,
   pushAvailable = false,
   onEnableNotify,
   onDisableNotify,
@@ -654,6 +657,18 @@ export function SettingsModal({
               onChange={(v) => onUpdateSetting('copyOnSelect', v)}
             />
           </SettingsRow>
+          {layoutViewSupported && (
+            <SettingsRow
+              title={t('settings.layoutView')}
+              desc={t('settings.layoutViewDesc')}
+            >
+              <Switch
+                label={t('settings.layoutView')}
+                checked={settings.herdrLayoutView}
+                onChange={(v) => onUpdateSetting('herdrLayoutView', v)}
+              />
+            </SettingsRow>
+          )}
           {driveSizeSupported && (
             <SettingsRow
               title={t('settings.fitPane')}
