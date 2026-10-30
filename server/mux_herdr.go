@@ -83,6 +83,9 @@ type herdrMux struct {
 	// zoomedTabs: the tabs the latest layout showed zoomed. Moving the focus
 	// moves the zoom without a layout event.
 	zoomedTabs map[string]bool
+	// layoutSeq counts each tab's layout events and focus changes; a layout
+	// read for a focus change is dropped once a newer one came.
+	layoutSeq map[string]uint64
 
 	writersMu sync.Mutex
 	writers   map[string]*paneWriter
@@ -100,9 +103,8 @@ type herdrMux struct {
 }
 
 // herdrView is a mapped snapshot plus the pane sizes streams need, the
-// zoomed tabs, each
-// pane's foreground directory (for its process) and each worktree group
-// member's repository (for its branch).
+// zoomed tabs, each pane's foreground directory (for its process) and each
+// worktree group member's repository (for its branch).
 type herdrView struct {
 	snap      Snapshot
 	sizes     map[string]Size
@@ -128,6 +130,7 @@ func newHerdrMux(ctx context.Context, socket string) (*herdrMux, error) {
 		resub:      make(chan struct{}, 1),
 		watchers:   map[string]map[*herdrWatch]struct{}{},
 		zoomedTabs: map[string]bool{},
+		layoutSeq:  map[string]uint64{},
 		writers:    map[string]*paneWriter{},
 		procs:      newHerdrProcCache(),
 		woken:      make(chan struct{}, 1),
@@ -831,8 +834,10 @@ func (m *herdrMux) subscribeOnce(ctx context.Context) (live bool, err error) {
 			}
 			// Focusing another pane of a zoomed tab zooms that pane instead,
 			// and Herdr sends only pane_focused and tab_focused for it.
-			if ev.Event == "tab_focused" && m.isZoomed(ev.Data.TabID) {
-				go m.refreshLayout(ctx, ev.Data.TabID)
+			if ev.Event == "tab_focused" {
+				if seq, ok := m.zoomFocused(ev.Data.TabID); ok {
+					go m.refreshLayout(ctx, ev.Data.TabID, seq)
+				}
 			}
 			if strings.HasPrefix(ev.Event, "worktree_") {
 				m.branches.drop()
@@ -885,10 +890,16 @@ func (m *herdrMux) unwatchSize(pane string, w *herdrWatch) {
 // notifySizes sends the sizes of a layout_updated event to watching streams,
 // and tells every stream following a pane of the tab that its layout changed.
 func (m *herdrMux) notifySizes(l herdrLayout) {
-	m.notifyPaneSizes(herdrPaneSizes(l))
 	m.watchMu.Lock()
 	defer m.watchMu.Unlock()
+	m.notifyLayoutLocked(l)
+}
+
+// notifyLayoutLocked is notifySizes with watchMu held.
+func (m *herdrMux) notifyLayoutLocked(l herdrLayout) {
+	m.notifyPaneSizesLocked(herdrPaneSizes(l))
 	if l.TabID != "" {
+		m.layoutSeq[l.TabID]++
 		if herdrZoomedPane(l) != "" {
 			m.zoomedTabs[l.TabID] = true
 		} else {
@@ -913,31 +924,36 @@ func (m *herdrMux) setZoomed(tabs map[string]bool) {
 	maps.Copy(m.zoomedTabs, tabs)
 }
 
-func (m *herdrMux) isZoomed(tab string) bool {
+// zoomFocused records a focus change in tab. ok tells whether the tab is
+// zoomed, so that its layout must be read again; seq identifies the change.
+func (m *herdrMux) zoomFocused(tab string) (seq uint64, ok bool) {
 	m.watchMu.Lock()
 	defer m.watchMu.Unlock()
-	return m.zoomedTabs[tab]
+	m.layoutSeq[tab]++
+	return m.layoutSeq[tab], m.zoomedTabs[tab]
 }
 
-// refreshLayout reads a tab's layout and sends it to the streams as a layout
-// event would. A later layout event or fresh snapshot corrects one that
-// arrives out of order.
-func (m *herdrMux) refreshLayout(ctx context.Context, tab string) {
-	ctx, cancel := context.WithTimeout(ctx, muxTimeout)
+// refreshLayout reads a tab's layout after focus change seq and sends it to
+// the streams as a layout event would, unless a layout event or another focus
+// change came meanwhile: Herdr may answer two reads out of order.
+func (m *herdrMux) refreshLayout(ctx context.Context, tab string, seq uint64) {
+	rctx, cancel := context.WithTimeout(ctx, muxTimeout)
 	defer cancel()
 	var res struct {
 		Layout herdrLayout `json:"layout"`
 	}
-	if err := m.rpc.call(ctx, "pane.layout", map[string]string{"tab_id": tab}, &res); err != nil {
+	if err := m.rpc.call(rctx, "pane.layout", map[string]string{"tab_id": tab}, &res); err != nil {
 		if ctx.Err() == nil {
 			log.Printf("herdr pane.layout %s: %v", tab, err)
 		}
 		return
 	}
-	if res.Layout.TabID == "" {
-		res.Layout.TabID = tab
+	res.Layout.TabID = tab
+	m.watchMu.Lock()
+	defer m.watchMu.Unlock()
+	if m.layoutSeq[tab] == seq {
+		m.notifyLayoutLocked(res.Layout)
 	}
-	m.notifySizes(res.Layout)
 }
 
 // notifyPaneSizes sends each watched pane's size, replacing a value the
@@ -947,6 +963,10 @@ func (m *herdrMux) refreshLayout(ctx context.Context, tab string) {
 func (m *herdrMux) notifyPaneSizes(sizes map[string]Size) {
 	m.watchMu.Lock()
 	defer m.watchMu.Unlock()
+	m.notifyPaneSizesLocked(sizes)
+}
+
+func (m *herdrMux) notifyPaneSizesLocked(sizes map[string]Size) {
 	for pane, ws := range m.watchers {
 		size, ok := sizes[pane]
 		if !ok {

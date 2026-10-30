@@ -58,8 +58,8 @@ const (
 const minDriveSwitch = 500 * time.Millisecond
 
 // herdrRestartSettle is how long a new pane size must stay before the
-// observer restarts at it. A var so tests can shorten it.
-var herdrRestartSettle = 150 * time.Millisecond
+// observer restarts at it.
+const herdrRestartSettle = 150 * time.Millisecond
 
 // Attach streams paneID. By default it observes the pane at its own (desktop)
 // size: an observer smaller than the pane crops it instead of reflowing. Once

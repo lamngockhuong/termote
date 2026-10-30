@@ -567,7 +567,8 @@ func TestHerdrStreamZoomFollowsFocus(t *testing.T) {
 }
 
 // A zoomed tab from the snapshot counts too; a failed pane.layout is only
-// logged, and a layout without its tab id is taken as the tab's.
+// logged, and a read overtaken by a newer focus change or layout event is
+// dropped.
 func TestHerdrRefreshLayout(t *testing.T) {
 	f := newFakeHerdr(t)
 	f.mu.Lock()
@@ -575,30 +576,58 @@ func TestHerdrRefreshLayout(t *testing.T) {
 	f.mu.Unlock()
 	m := newTestHerdrMux(t, f)
 	m.Snapshot(context.Background())
-	if !m.isZoomed("w13:t1") || m.isZoomed("wR:t3") {
+	zoomed := func(tab string) bool {
+		m.watchMu.Lock()
+		defer m.watchMu.Unlock()
+		return m.zoomedTabs[tab]
+	}
+	if !zoomed("w13:t1") || zoomed("wR:t3") {
 		t.Fatalf("zoomed tabs %v, want only w13:t1", m.zoomedTabs)
+	}
+	if _, ok := m.zoomFocused("wR:t3"); ok {
+		t.Error("an unzoomed tab asks for its layout")
 	}
 
 	f.mu.Lock()
 	f.layoutFail = map[string]string{"pane.layout": "tab_not_found"}
 	f.mu.Unlock()
-	m.refreshLayout(context.Background(), "w13:t1")
-	if !m.isZoomed("w13:t1") {
+	seq, ok := m.zoomFocused("w13:t1")
+	if !ok {
+		t.Fatal("a zoomed tab does not ask for its layout")
+	}
+	m.refreshLayout(context.Background(), "w13:t1", seq)
+	if !zoomed("w13:t1") {
 		t.Error("a failed pane.layout changed the zoomed tabs")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	m.refreshLayout(ctx, "w13:t1") // canceled: not even logged
+	m.refreshLayout(ctx, "w13:t1", seq) // canceled: not even logged
 
+	// The reply lacks the tab id: it is the tab asked for.
 	f.mu.Lock()
 	f.layoutFail = nil
 	l := tabLayout(0, 42, 42, 66, "")
 	delete(l, "tab_id")
 	f.layoutReply = map[string]any{"pane.layout": map[string]any{"type": "pane_layout", "layout": l}}
 	f.mu.Unlock()
-	m.refreshLayout(context.Background(), "w13:t1")
-	if m.isZoomed("w13:t1") {
-		t.Error("an unzoomed layout without a tab id left w13:t1 zoomed")
+	older, _ := m.zoomFocused("w13:t1")
+	newer, _ := m.zoomFocused("w13:t1")
+	m.refreshLayout(context.Background(), "w13:t1", older)
+	if !zoomed("w13:t1") {
+		t.Error("a read overtaken by a newer focus change was applied")
+	}
+	m.refreshLayout(context.Background(), "w13:t1", newer)
+	if zoomed("w13:t1") {
+		t.Error("the latest read, unzoomed, left w13:t1 zoomed")
+	}
+
+	// A layout event after the focus change wins over the read.
+	seq, _ = m.zoomFocused("w13:t1")
+	emitTabLayout(f, 0, 42, 42, 66, "w13:pC")
+	waitUntil(t, "layout event", func() bool { return zoomed("w13:t1") })
+	m.refreshLayout(context.Background(), "w13:t1", seq)
+	if !zoomed("w13:t1") {
+		t.Error("a read older than a layout event was applied")
 	}
 }
 
