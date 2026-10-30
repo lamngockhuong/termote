@@ -16,8 +16,12 @@ export function precacheUrls(sw) {
   return [...sw.slice(start, end).matchAll(/url:\s*"([^"]+)"/g)].map((m) => m[1]);
 }
 
+// Vite's content hash before the extension (name-DoCX48Fu.js): random letters that can spell
+// "docx" or "pdf", so a name is matched without it.
+const HASH = /-[\w-]{8}(\.\w+)$/;
+
 export function forbiddenUrls(urls) {
-  return urls.filter((u) => FORBIDDEN.some((re) => re.test(u)));
+  return urls.filter((u) => FORBIDDEN.some((re) => re.test(u.replace(HASH, "$1"))));
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
