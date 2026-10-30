@@ -47,6 +47,9 @@ export default {
   'settings.fitPane': 'Fit herdr pane to this device',
   'settings.fitPaneDesc':
     'While the terminal shows; resizes the pane on the desktop too, until this page is hidden or closed, another view opens, or another device takes over',
+  'settings.layoutView': 'Show herdr panes side by side',
+  'settings.layoutViewDesc':
+    "On a computer, a tab of 2 to 4 panes shows them in herdr's layout; off, or when they would be too small to read, one pane at a time",
   // Sessions
   'settings.tabs': 'Show session tabs',
   'settings.tabsDesc': 'Display tab bar for quick session switching (desktop)',

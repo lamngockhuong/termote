@@ -328,6 +328,30 @@ let terminalCopy: ((result: 'ok' | 'failed') => void) | undefined
 let terminalCopyOnSelect: boolean | undefined
 // The handle the mocked terminal hands App through its ref; none by default.
 let terminalHandle: { paste: (text: string) => boolean } | null = null
+// The real stack; layoutShown makes it report the layout view as shown,
+// which a page without layout (jsdom) never measures
+let layoutShown = false
+// The props the stack got last
+let stackProps: { onLayoutSignal?: () => void } = {}
+beforeEach(() => {
+  layoutShown = false
+  mockFinePointer.mockReturnValue(false)
+})
+vi.mock('./components/terminal-stack', async (importOriginal) => {
+  const { useEffect } = await import('react')
+  const real =
+    await importOriginal<typeof import('./components/terminal-stack')>()
+  return {
+    TerminalStack: (props: Parameters<typeof real.TerminalStack>[0]) => {
+      const { onLayoutShownChange } = props
+      stackProps = props
+      useEffect(() => {
+        if (layoutShown) onLayoutShownChange?.(true)
+      })
+      return <real.TerminalStack {...props} />
+    },
+  }
+})
 vi.mock('./components/terminal-view', () => ({
   TerminalView: vi.fn(
     (props: {
@@ -335,13 +359,14 @@ vi.mock('./components/terminal-view', () => ({
       onPasteImage?: (image: File) => void
       onCopy?: (result: 'ok' | 'failed') => void
       copyOnSelect?: boolean
-      ref?: { current: unknown }
+      ref?: { current: unknown } | ((h: unknown) => void)
     }) => {
       reportStreamState = props.onConnectionStateChange
       pasteImage = props.onPasteImage
       terminalCopy = props.onCopy
       terminalCopyOnSelect = props.copyOnSelect
-      if (props.ref) props.ref.current = terminalHandle
+      if (typeof props.ref === 'function') props.ref(terminalHandle)
+      else if (props.ref) props.ref.current = terminalHandle
       return <div data-testid="terminal-view">Terminal</div>
     },
   ),
@@ -3564,6 +3589,67 @@ describe('App groups and panes', () => {
       expect(screen.queryByRole('menuitem', { name })).toBeNull()
   })
 
+  it("Herdr's layout view offers zoom, swap and resize, in the menu and the palette", async () => {
+    layoutShown = true
+    mockFinePointer.mockReturnValue(true)
+    const a = await mockLayout('herdr', { paneStream: true })
+    render(<App />)
+    fireEvent.click(await paneMenuItem('Zoom'))
+    expect(a.zoomPane).toHaveBeenCalled()
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: 'Escape',
+    })
+    expect(await paneMenuItem('Resize left')).toBeVisible()
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: 'Escape',
+    })
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Command palette' }),
+    )
+    expect(
+      await screen.findByRole('button', { name: 'Zoom pane' }),
+    ).toBeEnabled()
+  })
+
+  it('a layout change a pane reports reads the snapshot again', async () => {
+    await mockLayout('herdr', { paneStream: true })
+    const { refreshSessions } = mockUseLocalSessions() as any
+    render(<App />)
+    await screen.findByTestId('terminal-view')
+    refreshSessions.mockClear()
+    act(() => stackProps.onLayoutSignal?.())
+    expect(refreshSessions).toHaveBeenCalledTimes(1)
+  })
+
+  it("in Herdr's layout view, Zoom ends the zoom of a zoomed tab", async () => {
+    layoutShown = true
+    const a = await mockLayout('herdr', { paneStream: true })
+    const base = mockUseLocalSessions() as any
+    const panes = base.activeSession.panes ?? []
+    const layout = {
+      cols: 120,
+      rows: 40,
+      zoomed: true,
+      zoomedPaneId: panes[1].id,
+      panes: panes.map((p: { id: string }, i: number) => ({
+        id: p.id,
+        x: i * 60,
+        y: 0,
+        cols: 60,
+        rows: 40,
+      })),
+    }
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      sessions: base.sessions.map((s: { id: string }) =>
+        s.id === base.activeSession.id ? { ...s, layout } : s,
+      ),
+    } as any)
+    render(<App />)
+    fireEvent.click(await paneMenuItem('Zoom'))
+    expect(a.zoomPane).toHaveBeenCalledWith(panes[1].id)
+  })
+
   it('no swap past the last pane of tmux or Herdr', async () => {
     await mockLayout('tmux', { paneId: 'w1:t1:p2' })
     render(<App />)
@@ -6380,6 +6466,50 @@ describe('App command palette and shortcuts', () => {
       ),
     )
     await waitFor(() => expect(actions.swapPane).toHaveBeenCalledWith('next'))
+  })
+
+  it('moves to the pane before or after, and gives it the keys', async () => {
+    mockSessions('b')
+    const base = mockUseLocalSessions()
+    const panes = [
+      { id: 'b:p0', label: 'one', hasAgent: false },
+      { id: 'b:p', label: 'two', hasAgent: true },
+      { id: 'b:p2', label: 'three', hasAgent: false },
+    ]
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      activeSession: { ...base.activeSession, panes },
+    } as any)
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+      cb(0)
+      return 0
+    })
+    render(<App />)
+    await run('Previous pane')
+    expect(selectPane).toHaveBeenLastCalledWith('b:p0')
+    await run('Next pane')
+    expect(selectPane).toHaveBeenLastCalledWith('b:p2')
+    expect(mockFocusTerminal).toHaveBeenCalled()
+    vi.unstubAllGlobals()
+  })
+
+  it('a view-only device on tmux picks no pane from the palette', async () => {
+    mockSessions('b')
+    const base = mockUseLocalSessions()
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      activeSession: {
+        ...base.activeSession,
+        panes: [
+          { id: 'b:p0', label: 'one', hasAgent: false },
+          { id: 'b:p', label: 'two', hasAgent: true },
+        ],
+      },
+      mux: { ...base.mux, caps: { ...base.mux.caps, role: 'view' } },
+    } as any)
+    render(<App />)
+    await openPalette()
+    expect(screen.getByRole('button', { name: 'Previous pane' })).toBeDisabled()
   })
 
   it('offers no pane pick to a view-only device where the backend picks the pane', async () => {

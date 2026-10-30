@@ -275,6 +275,7 @@ export function buildSessions(
         panes,
         agentStatus: worstAgentStatus(panes.map((p) => p.agentStatus)),
         commands: commands.length ? commands : undefined,
+        ...(tab.layout && { layout: tab.layout }),
       }
       groupTabs.push(session)
       if (tab.active && !serverActive) serverActive = session
@@ -771,8 +772,13 @@ export function useLocalSessions(pollInterval = 5) {
     [activeSession, storeSelection, refreshSessions],
   )
 
+  // zoomed: the pane a zoomed tab shows (Herdr's layout view, where the page
+  // may work on another one), whose zoom ends rather than moving to this one
   const zoomPane = useCallback(
-    () => layoutPane((id) => apiZoomPane(id, 'toggle')),
+    (zoomed?: string) =>
+      layoutPane((id) =>
+        zoomed ? apiZoomPane(zoomed, 'off') : apiZoomPane(id, 'toggle'),
+      ),
     [layoutPane],
   )
   const swapPane = useCallback(

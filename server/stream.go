@@ -20,8 +20,11 @@ import (
 // Limits for /api/mux/stream. They bound what one authenticated client can make
 // the server hold open.
 const (
-	maxStreamMessage   = 64 * 1024        // largest client → server message
-	maxStreams         = 8                // concurrent streams, server-wide
+	maxStreamMessage = 64 * 1024 // largest client → server message
+	maxStreams       = 8         // concurrent streams, server-wide
+	// maxHerdrStreams is maxStreams for Herdr, whose layout view streams each
+	// pane of a tab on its own (the PWA shows it for up to 4 panes).
+	maxHerdrStreams    = 16
 	streamWriteTimeout = 10 * time.Second // a client that cannot take a frame this long is dropped
 	streamPingEvery    = 15 * time.Second
 	streamPongTimeout  = 15 * time.Second // with streamPingEvery: no pong within 30s closes the stream
@@ -75,10 +78,13 @@ type sizeReporter interface {
 
 // sizeChange is one size frame. Driving tells whether the client now drives
 // the size (sizeDriver); Reason says why it stopped when it did not ask to.
+// Layout makes it a layout frame instead, carrying nothing: the layout of the
+// pane's tab changed, which a client showing the tab's panes reads again.
 type sizeChange struct {
 	Size    Size
 	Driving bool
 	Reason  string
+	Layout  bool
 	sent    chan<- struct{}
 }
 
@@ -90,7 +96,7 @@ type sizeDriver interface {
 }
 
 // streamControl is a text frame. Client → server: resize, drive. Server →
-// client: exit, error, size.
+// client: exit, error, size, layout.
 type streamControl struct {
 	Type    string `json:"type"`
 	Cols    int    `json:"cols,omitempty"`
@@ -145,6 +151,16 @@ type hubEntry struct {
 	role      role
 	deviceID  string
 	sessionID string
+}
+
+// maxStreamsFor is the server-wide stream limit for backend m: more for
+// Herdr outside Windows, where a desktop shows a tab's panes side by side.
+// Herdr on Windows (ConPTY) has not been measured with that many.
+func maxStreamsFor(m Mux) int {
+	if _, ok := m.(*herdrMux); ok && herdrStartGOOS != "windows" {
+		return maxHerdrStreams
+	}
+	return maxStreams
 }
 
 func newStreamHub(max int) *streamHub {
@@ -551,8 +567,12 @@ func runStream(ctx context.Context, cancel context.CancelCauseFunc, conn *websoc
 					if !ok {
 						return
 					}
-					driving := c.Driving
-					sendControl(conn, streamControl{Type: "size", Cols: c.Size.Cols, Rows: c.Size.Rows, Driving: &driving, Reason: c.Reason})
+					if c.Layout {
+						sendControl(conn, streamControl{Type: "layout"})
+					} else {
+						driving := c.Driving
+						sendControl(conn, streamControl{Type: "size", Cols: c.Size.Cols, Rows: c.Size.Rows, Driving: &driving, Reason: c.Reason})
+					}
 					close(c.sent)
 				}
 			}

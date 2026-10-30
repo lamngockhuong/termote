@@ -26,6 +26,7 @@ export default {
   'shell.tabs.close': 'Đóng {name}',
   'shell.tabs.add': 'Thêm phiên',
   'shell.panes.close': 'Đóng pane {name}',
+  'shell.layout.pane': 'Pane {name}',
   'shell.connection.connecting': 'Đang kết nối...',
   'shell.connection.connected': 'Đã kết nối',
   'shell.connection.disconnected': 'Mất kết nối',

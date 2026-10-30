@@ -3,8 +3,10 @@ import type { APIRequestContext } from '@playwright/test'
 import { expect, type Page, test } from './fixtures'
 
 // The Pane menu of the header against a real backend: split, zoom, swap,
-// resize and close on the backend of the job running it (on Herdr, whose
-// page shows one pane, split and close alone).
+// resize and close on the backend of the job running it. On Herdr the page
+// shows the split tab's panes side by side (the layout view): typing reaches
+// the pane picked, and the desktop's layout shows as it changes; a phone
+// shows one pane and offers split and close alone.
 // TERMOTE_E2E_HERDR=1 (the e2e-herdr job) is Herdr on HERDR_SOCKET_PATH,
 // TERMOTE_E2E_ZELLIJ=1 (the e2e-zellij job) is Zellij on ZELLIJ_SOCKET_DIR,
 // else tmux on TMUX_SOCKET (the E2E job). Without that socket the spec skips,
@@ -56,9 +58,12 @@ function zellijPanes(): ZellijPane[] {
 const zellijPane = (paneId: string) =>
   zellijPanes().find((p) => p.id === Number(paneId.slice(paneId.lastIndexOf(':p') + 2)))
 
-// Whether the tab holding paneId is zoomed, as tmux or Zellij says (Herdr's
-// page offers no zoom)
+const herdrLayout = (paneId: string) =>
+  JSON.parse(cli('herdr', 'pane', 'layout', '--pane', paneId)).result.layout
+
+// Whether the tab holding paneId is zoomed, as the backend says
 function zoomed(paneId: string): boolean {
+  if (backend === 'herdr') return herdrLayout(paneId).zoomed === true
   if (backend === 'tmux') return cli('tmux', '-S', socket, 'display', '-p', '-t', paneId, '#{window_zoomed_flag}') === '1'
   const tab = zellijPane(paneId)?.tab_id
   return zellijPanes().some((p) => p.tab_id === tab && p.is_fullscreen)
@@ -73,7 +78,7 @@ function columns(paneId: string): { x: number; width: number } {
     return { x, width }
   }
   if (backend === 'herdr') {
-    const layout = JSON.parse(cli('herdr', 'pane', 'layout', '--pane', paneId)).result.layout
+    const layout = herdrLayout(paneId)
     const { rect } = layout.panes.find((p: { pane_id: string }) => p.pane_id === paneId)
     return { x: rect.x, width: rect.width }
   }
@@ -102,6 +107,12 @@ async function connected(page: Page) {
   await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 15000 })
   await expect(page.getByRole('button', { name: 'Connected' }).first()).toBeAttached({ timeout: 20000 })
 }
+
+// A pane of Herdr's layout view, its box on the page, and the text its
+// terminal shows
+const layoutPane = (page: Page, id: string) => page.locator(`[data-pane-id="${id}"]`)
+const box = async (page: Page, id: string) => (await layoutPane(page, id).boundingBox())!
+const screenText = (page: Page, id: string) => layoutPane(page, id).locator('.xterm-rows')
 
 const menuButton = (page: Page) => page.getByRole('button', { name: 'Pane', exact: true })
 
@@ -177,12 +188,64 @@ test.describe(`Pane layout on ${backend}`, () => {
     }
 
     if (paneStream) {
-      // Herdr streams one pane: arranging the tab would change only the
-      // desktop, so the menu offers split and close alone
+      // Herdr: the two panes side by side, the new one on the right, at
+      // the same height
+      await expect(layoutPane(page, first.id)).toBeVisible({ timeout: 15000 })
+      await expect(layoutPane(page, added.id)).toBeVisible()
+      const [left, right] = [await box(page, first.id), await box(page, added.id)]
+      expect(right.x).toBeGreaterThan(left.x + left.width / 2)
+      expect(Math.abs(right.y - left.y)).toBeLessThan(2)
+
+      // Keys go to the pane picked only, and picking moves no focus in Herdr
+      const focusedBefore = herdrLayout(first.id).focused_pane_id
+      const mark = Math.random().toString(36).slice(2, 8)
+      await layoutPane(page, first.id).locator('.xterm').click()
+      await page.keyboard.type(`echo left-${mark}`)
+      await page.keyboard.press('Enter')
+      await expect(screenText(page, first.id)).toContainText(`left-${mark}`, { timeout: 15000 })
+      await strip(page).locator('button[aria-pressed="false"]').click()
+      await page.keyboard.type(`echo right-${mark}`)
+      await page.keyboard.press('Enter')
+      await expect(screenText(page, added.id)).toContainText(`right-${mark}`, { timeout: 15000 })
+      await expect(screenText(page, first.id)).not.toContainText(`right-${mark}`)
+      await expect(screenText(page, added.id)).not.toContainText(`left-${mark}`)
+      expect(herdrLayout(first.id).focused_pane_id).toBe(focusedBefore)
+
+      // Zoom: the zoomed pane alone fills the space, then both again
+      await paneAction(page, 'Zoom')
+      await expect.poll(() => zoomed(added.id), { timeout: 15000 }).toBe(true)
+      await expect(layoutPane(page, first.id)).toBeHidden({ timeout: 15000 })
+      await expect.poll(async () => (await box(page, added.id)).width, { timeout: 15000 }).toBeGreaterThan(
+        right.width * 1.5,
+      )
+      await paneAction(page, 'Zoom')
+      await expect.poll(() => zoomed(added.id), { timeout: 15000 }).toBe(false)
+      await expect(layoutPane(page, first.id)).toBeVisible({ timeout: 15000 })
+
+      // Swapped with the next, two panes of one size: the page follows the
+      // desktop, the first pane now on the right
+      await strip(page).locator('button[aria-pressed="false"]').click()
+      await paneAction(page, 'Swap with next pane')
+      await expect.poll(() => columns(first.id).x > columns(added.id).x, { timeout: 15000 }).toBe(true)
+      await expect
+        .poll(async () => (await box(page, first.id)).x > (await box(page, added.id)).x, { timeout: 5000 })
+        .toBe(true)
+
+      // Resize: the first pane's left edge moves, on the page too
+      const width = (await box(page, first.id)).width
+      await paneAction(page, 'Resize left')
+      await expect.poll(async () => (await box(page, first.id)).width, { timeout: 5000 }).not.toBeCloseTo(width, 0)
+      await page.keyboard.press('Escape')
+
+      // A phone shows one pane: split and close alone
+      const size = page.viewportSize()!
+      await page.setViewportSize({ width: 390, height: 800 })
+      await expect(page.locator('[data-pane-id]')).toHaveCount(0, { timeout: 15000 })
       await menuButton(page).click()
       await expect(page.getByRole('menuitem', { name: 'Split right', exact: true })).toBeVisible()
       for (const name of [/Zoom/, /Swap/, /Resize/]) await expect(page.getByRole('menuitem', { name })).toHaveCount(0)
       await page.keyboard.press('Escape')
+      await page.setViewportSize(size)
     } else {
       // Zoom toggles the tab: on, then off again
       expect(zoomed(first.id)).toBe(false)

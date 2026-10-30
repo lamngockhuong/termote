@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maps"
 	"regexp"
 	"runtime"
 	"slices"
@@ -78,7 +79,13 @@ type herdrMux struct {
 	resub      chan struct{}
 
 	watchMu  sync.Mutex
-	watchers map[string]map[chan Size]struct{} // pane → streams following its size
+	watchers map[string]map[*herdrWatch]struct{} // pane → streams following it
+	// zoomedTabs: the tabs the latest layout showed zoomed. Moving the focus
+	// moves the zoom without a layout event.
+	zoomedTabs map[string]bool
+	// layoutSeq counts each tab's layout events and focus changes; a layout
+	// read for a focus change is dropped once a newer one came.
+	layoutSeq map[string]uint64
 
 	writersMu sync.Mutex
 	writers   map[string]*paneWriter
@@ -95,12 +102,13 @@ type herdrMux struct {
 	woken chan struct{}
 }
 
-// herdrView is a mapped snapshot plus the pane sizes streams need, each
-// pane's foreground directory (for its process) and each worktree group
-// member's repository (for its branch).
+// herdrView is a mapped snapshot plus the pane sizes streams need, the
+// zoomed tabs, each pane's foreground directory (for its process) and each
+// worktree group member's repository (for its branch).
 type herdrView struct {
 	snap      Snapshot
 	sizes     map[string]Size
+	zoomed    map[string]bool // tabs showing one zoomed pane
 	cwds      map[string]string
 	worktrees map[string]herdrWorktreeRef
 }
@@ -118,12 +126,14 @@ type herdrWorktreeRef struct {
 // started after the server.
 func newHerdrMux(ctx context.Context, socket string) (*herdrMux, error) {
 	m := &herdrMux{
-		rpc:      &herdrRPC{socket: socket},
-		resub:    make(chan struct{}, 1),
-		watchers: map[string]map[chan Size]struct{}{},
-		writers:  map[string]*paneWriter{},
-		procs:    newHerdrProcCache(),
-		woken:    make(chan struct{}, 1),
+		rpc:        &herdrRPC{socket: socket},
+		resub:      make(chan struct{}, 1),
+		watchers:   map[string]map[*herdrWatch]struct{}{},
+		zoomedTabs: map[string]bool{},
+		layoutSeq:  map[string]uint64{},
+		writers:    map[string]*paneWriter{},
+		procs:      newHerdrProcCache(),
+		woken:      make(chan struct{}, 1),
 	}
 	m.branches = newHerdrBranchCache(m.worktreeBranches)
 	m.starter = newHerdrStarter(m)
@@ -368,6 +378,11 @@ func copySnapshot(s Snapshot) Snapshot {
 		g.Tabs = slices.Clone(g.Tabs)
 		for ti := range g.Tabs {
 			g.Tabs[ti].Panes = slices.Clone(g.Tabs[ti].Panes)
+			if l := g.Tabs[ti].Layout; l != nil {
+				lc := *l
+				lc.Panes = slices.Clone(l.Panes)
+				g.Tabs[ti].Layout = &lc
+			}
 		}
 		out.Groups[gi] = g
 	}
@@ -463,6 +478,7 @@ func (m *herdrMux) view(ctx context.Context) (herdrView, error) {
 		// stream was starting); a snapshot that no event overtook corrects
 		// every stream's size. One that was overtaken may carry an old size.
 		m.notifyPaneSizes(v.sizes)
+		m.setZoomed(v.zoomed)
 	}
 	stale := m.connected && !sameKeys(m.subscribed, v.sizes)
 	m.mu.Unlock()
@@ -525,7 +541,12 @@ type herdrSnapshot struct {
 type herdrLayout struct {
 	TabID         string `json:"tab_id"`
 	FocusedPaneID string `json:"focused_pane_id"`
-	Panes         []struct {
+	Zoomed        bool   `json:"zoomed"`
+	Area          struct {
+		Width  int `json:"width"`
+		Height int `json:"height"`
+	} `json:"area"`
+	Panes []struct {
 		ID   string `json:"pane_id"`
 		Rect struct {
 			X      int `json:"x"`
@@ -536,6 +557,59 @@ type herdrLayout struct {
 	} `json:"panes"`
 }
 
+// herdrZoomedPane is the pane a zoomed layout shows, "" when the layout
+// shows its split. Zoom focuses the pane it zooms and follows the focus to
+// another pane, so it is the focused one.
+func herdrZoomedPane(l herdrLayout) string {
+	if !l.Zoomed {
+		return ""
+	}
+	for _, p := range l.Panes {
+		if p.ID == l.FocusedPaneID {
+			return p.ID
+		}
+	}
+	return ""
+}
+
+// herdrPaneSizes is the size each pane of a layout is observed at: its rect,
+// except the zoomed pane, which fills the area. A zoomed layout keeps the
+// split's rects while the zoomed pane's PTY grows to the area, and an
+// observer smaller than the PTY crops its last lines. Without an area the
+// rect is kept.
+func herdrPaneSizes(l herdrLayout) map[string]Size {
+	sizes := make(map[string]Size, len(l.Panes))
+	for _, p := range l.Panes {
+		sizes[p.ID] = Size{Cols: clampDim(p.Rect.Width), Rows: clampDim(p.Rect.Height)}
+	}
+	if z := herdrZoomedPane(l); z != "" && l.Area.Width > 0 && l.Area.Height > 0 {
+		sizes[z] = Size{Cols: clampDim(l.Area.Width), Rows: clampDim(l.Area.Height)}
+	}
+	return sizes
+}
+
+// herdrTabLayout is l with the rects of panes, in their order. A pane the
+// layout does not place is left out; a layout without an area, which places
+// nothing, is nil. Zoomed only with the pane it shows.
+func herdrTabLayout(l herdrLayout, panes []Pane) *TabLayout {
+	if l.Area.Width <= 0 || l.Area.Height <= 0 {
+		return nil
+	}
+	rects := make(map[string]PaneLayout, len(l.Panes))
+	for _, p := range l.Panes {
+		rects[p.ID] = PaneLayout{ID: p.ID, X: p.Rect.X, Y: p.Rect.Y, Cols: p.Rect.Width, Rows: p.Rect.Height}
+	}
+	zoomed := herdrZoomedPane(l)
+	tl := &TabLayout{Cols: l.Area.Width, Rows: l.Area.Height, Zoomed: zoomed != "", ZoomedPaneID: zoomed,
+		Panes: make([]PaneLayout, 0, len(panes))}
+	for _, p := range panes {
+		if r, ok := rects[p.ID]; ok {
+			tl.Panes = append(tl.Panes, r)
+		}
+	}
+	return tl
+}
+
 // mapHerdrSnapshot orders workspaces by their herdr number, tabs as herdr
 // lists them and panes top-left first, the way they appear on the desktop.
 func mapHerdrSnapshot(s herdrSnapshot) herdrView {
@@ -543,11 +617,15 @@ func mapHerdrSnapshot(s herdrSnapshot) herdrView {
 	layouts := map[string]herdrLayout{}
 	pos := map[string]paneKey{}
 	sizes := map[string]Size{}
+	zoomed := map[string]bool{}
 	for _, l := range s.Layouts {
 		layouts[l.TabID] = l
 		for _, p := range l.Panes {
 			pos[p.ID] = paneKey{p.Rect.Y, p.Rect.X}
-			sizes[p.ID] = Size{Cols: clampDim(p.Rect.Width), Rows: clampDim(p.Rect.Height)}
+		}
+		maps.Copy(sizes, herdrPaneSizes(l))
+		if herdrZoomedPane(l) != "" {
+			zoomed[l.TabID] = true
 		}
 	}
 
@@ -589,7 +667,11 @@ func mapHerdrSnapshot(s herdrSnapshot) herdrView {
 		if panes == nil {
 			panes = []Pane{}
 		}
-		tabsByWS[t.WorkspaceID] = append(tabsByWS[t.WorkspaceID], Tab{ID: t.ID, Key: t.ID, Name: t.Label, Panes: panes})
+		tab := Tab{ID: t.ID, Key: t.ID, Name: t.Label, Panes: panes}
+		if l, ok := layouts[t.ID]; ok {
+			tab.Layout = herdrTabLayout(l, panes)
+		}
+		tabsByWS[t.WorkspaceID] = append(tabsByWS[t.WorkspaceID], tab)
 	}
 
 	wss := s.Workspaces
@@ -609,7 +691,7 @@ func mapHerdrSnapshot(s herdrSnapshot) herdrView {
 		}
 		groups = append(groups, Group{ID: w.ID, Name: w.Label, Tabs: tabs})
 	}
-	return herdrView{snap: Snapshot{Groups: groups}, sizes: sizes, cwds: cwds, worktrees: worktrees}
+	return herdrView{snap: Snapshot{Groups: groups}, sizes: sizes, zoomed: zoomed, cwds: cwds, worktrees: worktrees}
 }
 
 func sameKeys(a map[string]bool, b map[string]Size) bool {
@@ -668,6 +750,7 @@ type herdrEvent struct {
 	Event string `json:"event"`
 	Data  struct {
 		Layout *herdrLayout `json:"layout"`
+		TabID  string       `json:"tab_id"`
 	} `json:"data"`
 }
 
@@ -780,6 +863,13 @@ func (m *herdrMux) subscribeOnce(ctx context.Context) (live bool, err error) {
 			if ev.Data.Layout != nil {
 				m.notifySizes(*ev.Data.Layout)
 			}
+			// Focusing another pane of a zoomed tab zooms that pane instead,
+			// and Herdr sends only pane_focused and tab_focused for it.
+			if ev.Event == "tab_focused" {
+				if seq, ok := m.zoomFocused(ev.Data.TabID); ok {
+					go m.refreshLayout(ctx, ev.Data.TabID, seq)
+				}
+			}
 			if strings.HasPrefix(ev.Event, "worktree_") {
 				m.branches.drop()
 			}
@@ -797,32 +887,104 @@ func (m *herdrMux) subscribeOnce(ctx context.Context) (live bool, err error) {
 	}
 }
 
-// watchSize registers ch to receive pane's size whenever its layout changes.
-func (m *herdrMux) watchSize(pane string, ch chan Size) {
+// herdrWatch is one stream following its pane: the pane's size, and a signal
+// whenever the layout of the pane's tab changes, even when no size does (two
+// panes of the same size swapped). Both channels have room for one value.
+type herdrWatch struct {
+	size   chan Size
+	layout chan struct{}
+}
+
+func newHerdrWatch() *herdrWatch {
+	return &herdrWatch{size: make(chan Size, 1), layout: make(chan struct{}, 1)}
+}
+
+// watchSize registers w to follow pane's size and its tab's layout.
+func (m *herdrMux) watchSize(pane string, w *herdrWatch) {
 	m.watchMu.Lock()
 	defer m.watchMu.Unlock()
 	if m.watchers[pane] == nil {
-		m.watchers[pane] = map[chan Size]struct{}{}
+		m.watchers[pane] = map[*herdrWatch]struct{}{}
 	}
-	m.watchers[pane][ch] = struct{}{}
+	m.watchers[pane][w] = struct{}{}
 }
 
-func (m *herdrMux) unwatchSize(pane string, ch chan Size) {
+func (m *herdrMux) unwatchSize(pane string, w *herdrWatch) {
 	m.watchMu.Lock()
 	defer m.watchMu.Unlock()
-	delete(m.watchers[pane], ch)
+	delete(m.watchers[pane], w)
 	if len(m.watchers[pane]) == 0 {
 		delete(m.watchers, pane)
 	}
 }
 
-// notifySizes sends the sizes of a layout_updated event to watching streams.
+// notifySizes sends the sizes of a layout_updated event to watching streams,
+// and tells every stream following a pane of the tab that its layout changed.
 func (m *herdrMux) notifySizes(l herdrLayout) {
-	sizes := make(map[string]Size, len(l.Panes))
-	for _, p := range l.Panes {
-		sizes[p.ID] = Size{Cols: clampDim(p.Rect.Width), Rows: clampDim(p.Rect.Height)}
+	m.watchMu.Lock()
+	defer m.watchMu.Unlock()
+	m.notifyLayoutLocked(l)
+}
+
+// notifyLayoutLocked is notifySizes with watchMu held.
+func (m *herdrMux) notifyLayoutLocked(l herdrLayout) {
+	m.notifyPaneSizesLocked(herdrPaneSizes(l))
+	if l.TabID != "" {
+		m.layoutSeq[l.TabID]++
+		if herdrZoomedPane(l) != "" {
+			m.zoomedTabs[l.TabID] = true
+		} else {
+			delete(m.zoomedTabs, l.TabID)
+		}
 	}
-	m.notifyPaneSizes(sizes)
+	for _, p := range l.Panes {
+		for w := range m.watchers[p.ID] {
+			select {
+			case w.layout <- struct{}{}:
+			default: // a signal is pending already
+			}
+		}
+	}
+}
+
+// setZoomed replaces the zoomed tabs with those of a fresh snapshot.
+func (m *herdrMux) setZoomed(tabs map[string]bool) {
+	m.watchMu.Lock()
+	defer m.watchMu.Unlock()
+	m.zoomedTabs = map[string]bool{}
+	maps.Copy(m.zoomedTabs, tabs)
+}
+
+// zoomFocused records a focus change in tab. ok tells whether the tab is
+// zoomed, so that its layout must be read again; seq identifies the change.
+func (m *herdrMux) zoomFocused(tab string) (seq uint64, ok bool) {
+	m.watchMu.Lock()
+	defer m.watchMu.Unlock()
+	m.layoutSeq[tab]++
+	return m.layoutSeq[tab], m.zoomedTabs[tab]
+}
+
+// refreshLayout reads a tab's layout after focus change seq and sends it to
+// the streams as a layout event would, unless a layout event or another focus
+// change came meanwhile: Herdr may answer two reads out of order.
+func (m *herdrMux) refreshLayout(ctx context.Context, tab string, seq uint64) {
+	rctx, cancel := context.WithTimeout(ctx, muxTimeout)
+	defer cancel()
+	var res struct {
+		Layout herdrLayout `json:"layout"`
+	}
+	if err := m.rpc.call(rctx, "pane.layout", map[string]string{"tab_id": tab}, &res); err != nil {
+		if ctx.Err() == nil {
+			log.Printf("herdr pane.layout %s: %v", tab, err)
+		}
+		return
+	}
+	res.Layout.TabID = tab
+	m.watchMu.Lock()
+	defer m.watchMu.Unlock()
+	if m.layoutSeq[tab] == seq {
+		m.notifyLayoutLocked(res.Layout)
+	}
 }
 
 // notifyPaneSizes sends each watched pane's size, replacing a value the
@@ -832,17 +994,21 @@ func (m *herdrMux) notifySizes(l herdrLayout) {
 func (m *herdrMux) notifyPaneSizes(sizes map[string]Size) {
 	m.watchMu.Lock()
 	defer m.watchMu.Unlock()
-	for pane, chs := range m.watchers {
+	m.notifyPaneSizesLocked(sizes)
+}
+
+func (m *herdrMux) notifyPaneSizesLocked(sizes map[string]Size) {
+	for pane, ws := range m.watchers {
 		size, ok := sizes[pane]
 		if !ok {
 			continue
 		}
-		for ch := range chs {
+		for w := range ws {
 			select {
-			case <-ch:
+			case <-w.size:
 			default:
 			}
-			ch <- size
+			w.size <- size
 		}
 	}
 }

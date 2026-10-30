@@ -211,6 +211,25 @@ describe('useLocalSessions', () => {
     expect(idle.commands).toBeUndefined()
   })
 
+  it("passes a Herdr tab's layout on, and none when the tab has none", async () => {
+    const layout = {
+      cols: 120,
+      rows: 40,
+      zoomed: true,
+      zoomedPaneId: '1',
+      panes: [
+        { id: '0', x: 0, y: 0, cols: 60, rows: 40 },
+        { id: '1', x: 60, y: 0, cols: 60, rows: 40 },
+      ],
+    }
+    mockFetchTabs.mockResolvedValue([{ ...WIN_SHELL, layout }, WIN_VIM])
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    const [shell, vim] = result.current.sessions
+    expect(shell.layout).toEqual(layout)
+    expect(vim).not.toHaveProperty('layout')
+  })
+
   it('sets activeSession to the active window', async () => {
     mockFetchTabs.mockResolvedValue([WIN_SHELL, WIN_VIM])
     const { result } = renderHook(() => useLocalSessions(1))
@@ -2494,9 +2513,14 @@ describe('useLocalSessions pane layout', () => {
       await result.current.resizePane('up', 5)
     })
     expect(mockZoomPane).toHaveBeenCalledWith('%3', 'toggle')
+    // A zoomed tab: its zoom ends, on whichever pane is shown
+    await act(async () => {
+      await result.current.zoomPane('%9')
+    })
+    expect(mockZoomPane).toHaveBeenLastCalledWith('%9', 'off')
     expect(mockSwapPane).toHaveBeenCalledWith('%3', 'next')
     expect(mockResizePane).toHaveBeenCalledWith('%3', 'up', 5)
-    expect(mockFetchTabs).toHaveBeenCalledTimes(3)
+    expect(mockFetchTabs).toHaveBeenCalledTimes(4)
   })
 
   it('reads the list again before a refusal reaches the caller', async () => {

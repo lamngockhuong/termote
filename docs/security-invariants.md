@@ -45,7 +45,13 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   fetched via `/api/mux/stream-token`, consumed on WebSocket upgrade. Every paste into the
   terminal (native paste events are taken in capture phase, ahead of xterm) goes through
   `cleanPaste` in `terminal-view.tsx`: end-of-paste markers and control characters other than
-  tab and line breaks removed, since xterm brackets a paste without removing a marker inside it
+  tab and line breaks removed, since xterm brackets a paste without removing a marker inside it.
+  The hub holds 16 streams server-wide on Herdr outside Windows (`maxStreamsFor`, its layout view
+  streams up to 4 panes of a tab), 8 on every other backend (`maxStreams`); past it a full stream
+  evicts the oldest view stream first, then the oldest stream (4001). A stream closed with 4001
+  never reconnects by itself, a pane of the layout view included: that pane shows Reconnect in
+  its own box, the layout stays, and no other stream opens (two devices never evict each other
+  in a loop). The `{"type":"layout"}` frame carries nothing but its type
 - **Herdr guard**: `--mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also
   given, since Herdr exposes every workspace on the host
 - **Herdr autostart** (`server/herdr_autostart*.go`; the only place serve starts `herdr`): `GET
@@ -392,7 +398,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   route (an id of the wrong form is 400, and the stream keeps 400); a backend or version
   without the action, or an argument it cannot honour (Zellij's `cwd`), 501 `unsupported`; a swap
   past either end 409 `no_neighbor` (tmux, Herdr); a tmux window too small for another pane 409
-  `no_room`; anything else is logged and answered 500
+  `no_room`; anything else is logged and answered 500. The snapshot's `tab.layout` (Herdr) carries
+  numbers and pane ids only, sent to a view-only client like the rest of the snapshot. Herdr's
+  layout view never drives a pane's size (no `drive`, no `control`), and picking a pane in it never
+  calls `pane.focus`. Hiding the layout view from a view-only device is UI behaviour; the
+  invariant stays 2 streams per view device and a view stream dropping input
   without the backend's text. No lock of their own and no cap on the number of panes, as new
   tabs. A split never moves the focus; a zoom may, for every client (tmux, Herdr, Zellij), and
   the commands each backend runs are in its entry (tmux panes, Zellij sessions; Herdr
@@ -1057,7 +1067,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   (the palette's `@` rows are disabled), so it never leaves its target. **Open in new window** keeps the new window's `opener` (this app's own
   page); **Open in main window** drives an opener only when reading its `location.origin` works
   and equals this one, else it opens a new window. A stream closed with 4001 (evicted) shows
-  `Disconnected by a newer window` and reconnects only when asked
+  `Disconnected by a newer window` and reconnects only when asked, each pane of Herdr's layout
+  view on its own
 - **Creating a file** (`POST files/create?root=`, `server/files_create.go`): an empty file and
   the directories missing above it (0666/0777 under the umask; directories made before a later
   failure stay, as with `mkdir -p`); the text then goes through `PUT files/content`. Same guards

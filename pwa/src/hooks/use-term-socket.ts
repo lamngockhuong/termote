@@ -14,6 +14,8 @@ export type StreamControl =
       // Why driving stopped when the client did not ask it to.
       reason?: 'taken-over' | 'failed'
     }
+  // herdr: the layout of the pane's tab changed (a split, a swap, a zoom).
+  | { type: 'layout' }
   | { type: 'exit'; code?: number }
   | { type: 'error'; message?: string }
 

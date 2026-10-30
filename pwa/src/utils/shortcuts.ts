@@ -24,6 +24,8 @@ export const COMMAND_IDS = {
   'tab.new': true,
   'tab.previous': true,
   'tab.next': true,
+  'pane.previous': true,
+  'pane.next': true,
   'pane.splitRight': true,
   'pane.splitDown': true,
   'pane.zoom': true,

@@ -15,6 +15,7 @@ function context(over: Partial<AppCommandContext> = {}): AppCommandContext {
   return {
     apple: false,
     readOnly: false,
+    selectPane: vi.fn(),
     viewIds: ['terminal', 'chat'],
     panelIds: ['files', 'changes'],
     sidePanelId: null,
@@ -207,6 +208,22 @@ describe('buildAppCommands', () => {
     expect(en(next.disabledReason)).toBe('No tab after this one')
     next.run()
     expect(ctx.selectTab).not.toHaveBeenCalled()
+  })
+
+  it('moves between the panes of the tab, or says why not', () => {
+    const ctx = context({ previousPane: 'p1', nextPane: 'p3' })
+    command(ctx, 'pane.previous').run()
+    expect(ctx.selectPane).toHaveBeenLastCalledWith('p1')
+    command(ctx, 'pane.next').run()
+    expect(ctx.selectPane).toHaveBeenLastCalledWith('p3')
+    const none = context()
+    const prev = command(none, 'pane.previous')
+    expect(en(prev.disabledReason)).toBe('No pane before this one')
+    prev.run()
+    const next = command(none, 'pane.next')
+    expect(en(next.disabledReason)).toBe('No pane after this one')
+    next.run()
+    expect(none.selectPane).not.toHaveBeenCalled()
   })
 
   it('starts an agent from its Chat view, or says why not', () => {

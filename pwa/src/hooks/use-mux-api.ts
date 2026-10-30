@@ -1,3 +1,5 @@
+import type { TabLayout } from '../types/session'
+
 const API_BASE = '/api/mux'
 
 // /api/mux/* version this bundle speaks; must match apiVersion in
@@ -44,6 +46,8 @@ export interface MuxTab {
   // Every pane's process, in pane order, when panes lists only some of them
   // (tmux: only the window's active pane).
   processes?: MuxProcess[]
+  // Herdr: where each pane sits on the desktop.
+  layout?: TabLayout
 }
 
 // A group's place in a Herdr worktree group: a linked worktree, or the

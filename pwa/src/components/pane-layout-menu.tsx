@@ -26,7 +26,7 @@ interface Props {
   // Desktop: the Resize items are offered
   desktop: boolean
   // Zoom, swap and resize are offered: the page shows the tab's layout
-  // (not on Herdr, whose stream is one pane)
+  // (on Herdr only in the layout view; its pane strip shows one pane)
   arrange: boolean
   // The pane has a pane after it to swap with (on Zellij, which turns the
   // panes around, any other pane)

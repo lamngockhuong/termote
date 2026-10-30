@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"io"
@@ -30,26 +31,54 @@ func useFakeControl(t *testing.T) (pids func() []int, flag func(name string)) {
 	return pids, flag
 }
 
-// nextChange takes the next size frame and acknowledges it.
+// nextChange takes the next size frame and acknowledges it, skipping layout
+// frames.
 func nextChange(t *testing.T, ts TermStream) sizeChange {
+	t.Helper()
+	timeout := time.After(5 * time.Second)
+	for {
+		select {
+		case c := <-ts.(sizeReporter).Sizes():
+			close(c.sent)
+			if !c.Layout {
+				return c
+			}
+		case <-timeout:
+			t.Fatal("no size announced")
+			return sizeChange{}
+		}
+	}
+}
+
+// noChange fails if a size frame arrives within a short while. Layout frames
+// are skipped.
+func noChange(t *testing.T, ts TermStream, why string) {
+	t.Helper()
+	timeout := time.After(300 * time.Millisecond)
+	for {
+		select {
+		case c := <-ts.(sizeReporter).Sizes():
+			close(c.sent)
+			if !c.Layout {
+				t.Fatalf("unexpected size frame %+v: %s", c, why)
+			}
+		case <-timeout:
+			return
+		}
+	}
+}
+
+// nextLayout waits for a layout frame, failing on a size frame first.
+func nextLayout(t *testing.T, ts TermStream) {
 	t.Helper()
 	select {
 	case c := <-ts.(sizeReporter).Sizes():
 		close(c.sent)
-		return c
+		if !c.Layout {
+			t.Fatalf("size frame %+v, want a layout frame", c)
+		}
 	case <-time.After(5 * time.Second):
-		t.Fatal("no size announced")
-		return sizeChange{}
-	}
-}
-
-// noChange fails if a size frame arrives within a short while.
-func noChange(t *testing.T, ts TermStream, why string) {
-	t.Helper()
-	select {
-	case c := <-ts.(sizeReporter).Sizes():
-		t.Fatalf("unexpected size frame %+v: %s", c, why)
-	case <-time.After(300 * time.Millisecond):
+		t.Fatal("no layout frame")
 	}
 }
 
@@ -371,4 +400,318 @@ func TestHerdrControlEndClosesInput(t *testing.T) {
 		t.Fatal("stdin writer still waiting for sizes")
 	}
 	p.release() // releasing an ended control is harmless
+}
+
+// emitTabLayout reports w13:t1's two panes with the given rects (x, width;
+// both full height), zoomed on focused when focused is not "".
+func emitTabLayout(f *fakeHerdr, p1x, p1w, pCx, pCw int, focused string) {
+	f.emit("layout_updated", map[string]any{"layout": tabLayout(p1x, p1w, pCx, pCw, focused)})
+}
+
+func tabLayout(p1x, p1w, pCx, pCw int, focused string) map[string]any {
+	return map[string]any{
+		"tab_id": "w13:t1", "zoomed": focused != "", "focused_pane_id": cmp.Or(focused, "w13:pC"),
+		"area": map[string]int{"x": 0, "y": 0, "width": 108, "height": 36},
+		"panes": []any{
+			map[string]any{"pane_id": "w13:p1", "rect": map[string]int{"x": p1x, "y": 0, "width": p1w, "height": 36}},
+			map[string]any{"pane_id": "w13:pC", "rect": map[string]int{"x": pCx, "y": 0, "width": pCw, "height": 36}},
+		},
+	}
+}
+
+// attachTab streams both panes of w13:t1 and takes their first size frames.
+func attachTab(t *testing.T, m *herdrMux) (p1, pC TermStream) {
+	t.Helper()
+	var err error
+	if p1, err = m.Attach(context.Background(), "w13:p1", Size{}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { p1.Close() })
+	if pC, err = m.Attach(context.Background(), "w13:pC", Size{}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { pC.Close() })
+	if s := nextSize(t, p1); s != (Size{Cols: 42, Rows: 36}) {
+		t.Fatalf("w13:p1 first size %v", s)
+	}
+	if s := nextSize(t, pC); s != (Size{Cols: 66, Rows: 36}) {
+		t.Fatalf("w13:pC first size %v", s)
+	}
+	return p1, pC
+}
+
+// Dragging a split border sends a size per cell: the observer restarts once,
+// at the last size. A size back to the observed one restarts nothing.
+func TestHerdrStreamSettlesRestart(t *testing.T) {
+	pids := useFakeObserve(t, false)
+	f := newFakeHerdr(t)
+	m := newTestHerdrMux(t, f)
+	ts, err := m.Attach(context.Background(), "wR:p3", Size{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ts.Close()
+	nextSize(t, ts)
+	out := newOutputReader(ts)
+	out.waitFor(t, `OBSERVE wR:p3 108x36`)
+
+	for w := 90; w < 100; w++ {
+		f.emitLayout("wR:p3", w, 30)
+	}
+	// One size frame at the last size and one layout frame, which the
+	// restart does not drop.
+	var sizes []Size
+	layouts := 0
+	for done := time.After(time.Second); ; {
+		select {
+		case c := <-ts.(sizeReporter).Sizes():
+			close(c.sent)
+			if c.Layout {
+				layouts++
+			} else {
+				sizes = append(sizes, c.Size)
+			}
+			continue
+		case <-done:
+		}
+		break
+	}
+	if len(sizes) != 1 || sizes[0] != (Size{Cols: 99, Rows: 30}) || layouts != 1 {
+		t.Fatalf("sizes %v and %d layout frames, want 99x30 and one layout frame", sizes, layouts)
+	}
+	out.waitFor(t, `OBSERVE wR:p3 99x30`)
+	if n := len(pids()); n != 2 {
+		t.Fatalf("%d observers, want one restart", n)
+	}
+
+	f.emitLayout("wR:p3", 80, 30)
+	f.emitLayout("wR:p3", 99, 30)
+	noChange(t, ts, "size back to the observed one")
+	if n := len(pids()); n != 2 {
+		t.Errorf("%d observers after a size came back, want no restart", n)
+	}
+}
+
+// Two panes of the same size swapped: no size changes, yet every stream of
+// the tab gets a layout frame, without restarting.
+func TestHerdrStreamLayoutFrame(t *testing.T) {
+	pids := useFakeObserve(t, false)
+	f := newFakeHerdr(t)
+	m := newTestHerdrMux(t, f)
+	p1, pC := attachTab(t, m)
+	other, err := m.Attach(context.Background(), "wR:p3", Size{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer other.Close()
+	nextSize(t, other)
+
+	emitTabLayout(f, 66, 42, 0, 66, "")
+	nextLayout(t, p1)
+	nextLayout(t, pC)
+	noChange(t, p1, "swap kept the size")
+	noChange(t, pC, "swap kept the size")
+	select {
+	case c := <-other.(sizeReporter).Sizes():
+		t.Errorf("frame %+v for a pane of another tab", c)
+	case <-time.After(100 * time.Millisecond):
+	}
+	if n := len(pids()); n != 3 {
+		t.Errorf("%d observers, want 3 and no restart", n)
+	}
+}
+
+// A zoomed pane fills the area, and the zoom follows the focus to another
+// pane with no layout event: tab_focused on a zoomed tab reads its layout.
+func TestHerdrStreamZoomFollowsFocus(t *testing.T) {
+	useFakeObserve(t, false)
+	f := newFakeHerdr(t)
+	m := newTestHerdrMux(t, f)
+	p1, pC := attachTab(t, m)
+	out1, outC := newOutputReader(p1), newOutputReader(pC)
+	outC.waitFor(t, `OBSERVE w13:pC 66x36`)
+
+	emitTabLayout(f, 0, 42, 42, 66, "w13:pC")
+	if s := nextSize(t, pC); s != (Size{Cols: 108, Rows: 36}) {
+		t.Fatalf("zoomed pane at %v, want the 108x36 area", s)
+	}
+	outC.waitFor(t, `OBSERVE w13:pC 108x36`)
+	noChange(t, p1, "the hidden pane keeps its rect")
+
+	f.mu.Lock()
+	f.layoutReply = map[string]any{"pane.layout": map[string]any{"type": "pane_layout", "layout": tabLayout(0, 42, 42, 66, "w13:p1")}}
+	f.mu.Unlock()
+	f.emit("pane_focused", map[string]any{"pane_id": "w13:p1"})
+	f.emit("tab_focused", map[string]any{"tab_id": "w13:t1"})
+	if s := nextSize(t, p1); s != (Size{Cols: 108, Rows: 36}) {
+		t.Fatalf("newly zoomed pane at %v, want 108x36", s)
+	}
+	if s := nextSize(t, pC); s != (Size{Cols: 66, Rows: 36}) {
+		t.Fatalf("pane zoomed before at %v, want its 66x36 rect", s)
+	}
+	out1.waitFor(t, `OBSERVE w13:p1 108x36`)
+	if p := f.lastParams(t, "pane.layout"); p["tab_id"] != "w13:t1" {
+		t.Errorf("pane.layout params %v", p)
+	}
+
+	// Unzoomed: focusing reads no layout.
+	emitTabLayout(f, 0, 42, 42, 66, "")
+	nextSize(t, p1)
+	calls := f.count("pane.layout")
+	f.emit("tab_focused", map[string]any{"tab_id": "w13:t1"})
+	f.emit("tab_focused", map[string]any{"tab_id": "wR:t3"})
+	time.Sleep(200 * time.Millisecond)
+	if n := f.count("pane.layout"); n != calls {
+		t.Errorf("pane.layout called %d times for unzoomed tabs", n-calls)
+	}
+}
+
+// A zoomed tab from the snapshot counts too; a failed pane.layout is only
+// logged, and a read overtaken by a newer focus change or layout event is
+// dropped.
+func TestHerdrRefreshLayout(t *testing.T) {
+	f := newFakeHerdr(t)
+	f.mu.Lock()
+	f.snapshot["layouts"].([]any)[4] = tabLayout(0, 42, 42, 66, "w13:pC")
+	f.mu.Unlock()
+	m := newTestHerdrMux(t, f)
+	m.Snapshot(context.Background())
+	zoomed := func(tab string) bool {
+		m.watchMu.Lock()
+		defer m.watchMu.Unlock()
+		return m.zoomedTabs[tab]
+	}
+	if !zoomed("w13:t1") || zoomed("wR:t3") {
+		t.Fatalf("zoomed tabs %v, want only w13:t1", m.zoomedTabs)
+	}
+	if _, ok := m.zoomFocused("wR:t3"); ok {
+		t.Error("an unzoomed tab asks for its layout")
+	}
+
+	f.mu.Lock()
+	f.layoutFail = map[string]string{"pane.layout": "tab_not_found"}
+	f.mu.Unlock()
+	seq, ok := m.zoomFocused("w13:t1")
+	if !ok {
+		t.Fatal("a zoomed tab does not ask for its layout")
+	}
+	m.refreshLayout(context.Background(), "w13:t1", seq)
+	if !zoomed("w13:t1") {
+		t.Error("a failed pane.layout changed the zoomed tabs")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	m.refreshLayout(ctx, "w13:t1", seq) // canceled: not even logged
+
+	// The reply lacks the tab id: it is the tab asked for.
+	f.mu.Lock()
+	f.layoutFail = nil
+	l := tabLayout(0, 42, 42, 66, "")
+	delete(l, "tab_id")
+	f.layoutReply = map[string]any{"pane.layout": map[string]any{"type": "pane_layout", "layout": l}}
+	f.mu.Unlock()
+	older, _ := m.zoomFocused("w13:t1")
+	newer, _ := m.zoomFocused("w13:t1")
+	m.refreshLayout(context.Background(), "w13:t1", older)
+	if !zoomed("w13:t1") {
+		t.Error("a read overtaken by a newer focus change was applied")
+	}
+	m.refreshLayout(context.Background(), "w13:t1", newer)
+	if zoomed("w13:t1") {
+		t.Error("the latest read, unzoomed, left w13:t1 zoomed")
+	}
+
+	// A layout event after the focus change wins over the read.
+	seq, _ = m.zoomFocused("w13:t1")
+	emitTabLayout(f, 0, 42, 42, 66, "w13:pC")
+	waitUntil(t, "layout event", func() bool { return zoomed("w13:t1") })
+	m.refreshLayout(context.Background(), "w13:t1", seq)
+	if !zoomed("w13:t1") {
+		t.Error("a read older than a layout event was applied")
+	}
+}
+
+// A layout frame reaches the client as {"type":"layout"}.
+func TestHerdrLayoutFrameOverWebSocket(t *testing.T) {
+	useFakeObserve(t, false)
+	f := newFakeHerdr(t)
+	m := newTestHerdrMux(t, f)
+	h, _, _, err := buildServer(testConfig(t), m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	hdr := authHeader()
+	hdr.Set("Origin", srv.URL)
+	c, _, err := dialStream(t, srv.URL, "token="+fetchToken(t, srv.URL, true)+"&pane=w13:p1", hdr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.CloseNow()
+	var types []string
+	for {
+		typ, data, err := readFrame(t, c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if typ != websocket.MessageText {
+			continue
+		}
+		var ctl map[string]any
+		json.Unmarshal(data, &ctl)
+		types = append(types, ctl["type"].(string))
+		if ctl["type"] == "size" && len(types) == 1 {
+			emitTabLayout(f, 66, 42, 0, 66, "")
+		}
+		if ctl["type"] == "layout" {
+			if len(ctl) != 1 {
+				t.Errorf("layout frame %s carries more than its type", data)
+			}
+			break
+		}
+	}
+	if types[0] != "size" {
+		t.Errorf("frames %v, want the size first", types)
+	}
+}
+
+// A layout change still settling when the observer restarts reaches the
+// client after the restart.
+func TestHerdrStreamLayoutAcrossRestart(t *testing.T) {
+	useFakeObserve(t, false)
+	f := newFakeHerdr(t)
+	m := newTestHerdrMux(t, f)
+	ts, err := m.Attach(context.Background(), "wR:p3", Size{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ts.Close()
+	nextSize(t, ts)
+	out := newOutputReader(ts)
+	out.waitFor(t, `OBSERVE wR:p3 108x36`)
+
+	// The restart is due herdrRestartSettle after the first event; the
+	// second one, repeating the size, makes the layout settle later.
+	f.emitLayout("wR:p3", 90, 30)
+	time.Sleep(herdrRestartSettle / 2)
+	f.emitLayout("wR:p3", 90, 30)
+	if c := nextChangeOrLayout(t, ts); c.Layout || c.Size != (Size{Cols: 90, Rows: 30}) {
+		t.Fatalf("frame %+v, want the size first", c)
+	}
+	nextLayout(t, ts)
+	out.waitFor(t, `OBSERVE wR:p3 90x30`)
+}
+
+// nextChangeOrLayout takes the next frame of either kind.
+func nextChangeOrLayout(t *testing.T, ts TermStream) sizeChange {
+	t.Helper()
+	select {
+	case c := <-ts.(sizeReporter).Sizes():
+		close(c.sent)
+		return c
+	case <-time.After(5 * time.Second):
+		t.Fatal("no frame")
+		return sizeChange{}
+	}
 }

@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"slices"
 	"strconv"
@@ -707,6 +708,101 @@ func TestMapHerdrSnapshot(t *testing.T) {
 	if v.sizes["w13:p1"] != (Size{Cols: 42, Rows: 36}) || v.sizes["wR:p3"] != (Size{Cols: 108, Rows: 36}) {
 		t.Errorf("sizes = %v", v.sizes)
 	}
+
+	// Each tab carries its layout, panes in the tab's order.
+	want := TabLayout{Cols: 108, Rows: 36, Panes: []PaneLayout{
+		{ID: "w13:p1", X: 0, Y: 0, Cols: 42, Rows: 36}, {ID: "w13:pC", X: 42, Y: 0, Cols: 66, Rows: 36}}}
+	if split.Layout == nil || !reflect.DeepEqual(*split.Layout, want) {
+		t.Errorf("split layout = %+v, want %+v", split.Layout, want)
+	}
+	if l := wr.Tabs[0].Layout; l == nil || len(l.Panes) != 1 || l.Panes[0].ID != "wR:p3" {
+		t.Errorf("single pane layout = %+v", l)
+	}
+
+	// Filling a copy leaves the cached snapshot alone.
+	c := copySnapshot(snap)
+	c.Groups[1].Tabs[0].Layout.Panes[0].Cols = 1
+	c.Groups[1].Tabs[0].Layout.Cols = 1
+	again, _ := m.Snapshot(context.Background())
+	if l := again.Groups[1].Tabs[0].Layout; l.Cols != 108 || l.Panes[0].Cols != 42 {
+		t.Errorf("a copy's layout changed the cache: %+v", l)
+	}
+	b, _ := json.Marshal(split)
+	if !strings.Contains(string(b), `"layout":{"cols":108,"rows":36,"zoomed":false,"panes":[{"id":"w13:p1","x":0,"y":0,"cols":42,"rows":36}`) {
+		t.Errorf("tab JSON %s", b)
+	}
+	if b, _ := json.Marshal(Tab{}); strings.Contains(string(b), "layout") {
+		t.Errorf("a tab without layout has one in JSON: %s", b)
+	}
+}
+
+// The zoomed pane is observed at the area: a zoomed layout keeps the split's
+// rects while the pane's PTY fills the area.
+func TestHerdrPaneSizes(t *testing.T) {
+	layout := func(js string) herdrLayout {
+		t.Helper()
+		var l herdrLayout
+		if err := json.Unmarshal([]byte(js), &l); err != nil {
+			t.Fatal(err)
+		}
+		return l
+	}
+	panes := `"panes":[{"pane_id":"a","rect":{"x":0,"y":0,"width":40,"height":24}},{"pane_id":"b","rect":{"x":40,"y":0,"width":94,"height":24}}]`
+	for _, tc := range []struct {
+		name, js, zoomed string
+		a, b             Size
+	}{
+		{"split", `{"tab_id":"t","zoomed":false,"focused_pane_id":"a","area":{"width":134,"height":24},` + panes + `}`,
+			"", Size{Cols: 40, Rows: 24}, Size{Cols: 94, Rows: 24}},
+		{"zoomed", `{"tab_id":"t","zoomed":true,"focused_pane_id":"a","area":{"width":134,"height":24},` + panes + `}`,
+			"a", Size{Cols: 134, Rows: 24}, Size{Cols: 94, Rows: 24}},
+		{"zoomed without area", `{"tab_id":"t","zoomed":true,"focused_pane_id":"a",` + panes + `}`,
+			"a", Size{Cols: 40, Rows: 24}, Size{Cols: 94, Rows: 24}},
+		{"zoomed with an empty area", `{"tab_id":"t","zoomed":true,"focused_pane_id":"b","area":{"width":134,"height":0},` + panes + `}`,
+			"b", Size{Cols: 40, Rows: 24}, Size{Cols: 94, Rows: 24}},
+		{"zoomed on a pane not listed", `{"tab_id":"t","zoomed":true,"focused_pane_id":"x","area":{"width":134,"height":24},` + panes + `}`,
+			"", Size{Cols: 40, Rows: 24}, Size{Cols: 94, Rows: 24}},
+	} {
+		l := layout(tc.js)
+		if z := herdrZoomedPane(l); z != tc.zoomed {
+			t.Errorf("%s: zoomed pane %q, want %q", tc.name, z, tc.zoomed)
+		}
+		if s := herdrPaneSizes(l); s["a"] != tc.a || s["b"] != tc.b {
+			t.Errorf("%s: sizes %v, want a %v, b %v", tc.name, s, tc.a, tc.b)
+		}
+	}
+
+	var snap herdrSnapshot
+	if err := json.Unmarshal([]byte(`{"workspaces":[{"workspace_id":"w","number":1}],
+		"tabs":[{"tab_id":"t","workspace_id":"w"}],
+		"panes":[{"pane_id":"a","tab_id":"t"},{"pane_id":"b","tab_id":"t"},{"pane_id":"n","tab_id":"t"}]}`), &snap); err != nil {
+		t.Fatal(err)
+	}
+	snap.Layouts = []herdrLayout{
+		layout(`{"tab_id":"t","zoomed":true,"focused_pane_id":"b","area":{"width":134,"height":24},` + panes + `}`),
+		layout(`{"tab_id":"u","zoomed":false,"focused_pane_id":"c","panes":[{"pane_id":"c","rect":{"width":10,"height":5}}]}`),
+	}
+	v := mapHerdrSnapshot(snap)
+	// Without an area the layout places nothing: no layout. Zoomed on a pane
+	// the layout lacks: not zoomed.
+	if l := herdrTabLayout(snap.Layouts[1], []Pane{{ID: "c"}}); l != nil {
+		t.Errorf("layout without an area: %+v", l)
+	}
+	if l := herdrTabLayout(layout(`{"tab_id":"t","zoomed":true,"focused_pane_id":"x","area":{"width":134,"height":24},`+panes+`}`), nil); l == nil || l.Zoomed || l.ZoomedPaneID != "" {
+		t.Errorf("zoomed on an unlisted pane: %+v", l)
+	}
+	if v.sizes["b"] != (Size{Cols: 134, Rows: 24}) || v.sizes["a"] != (Size{Cols: 40, Rows: 24}) || v.sizes["c"] != (Size{Cols: 10, Rows: 5}) {
+		t.Errorf("snapshot sizes %v", v.sizes)
+	}
+	if !v.zoomed["t"] || v.zoomed["u"] {
+		t.Errorf("zoomed tabs %v, want only t", v.zoomed)
+	}
+	// The tab's layout names the zoomed pane and keeps the split's rects; a
+	// pane the layout does not place (n) is left out.
+	tl := v.snap.Groups[0].Tabs[0].Layout
+	if tl == nil || !tl.Zoomed || tl.ZoomedPaneID != "b" || tl.Cols != 134 || len(tl.Panes) != 2 || tl.Panes[1] != (PaneLayout{ID: "b", X: 40, Cols: 94, Rows: 24}) {
+		t.Errorf("zoomed tab layout %+v", tl)
+	}
 }
 
 func TestMapHerdrSnapshotUnknownStatus(t *testing.T) {
@@ -1172,14 +1268,7 @@ func useFakeObserve(t *testing.T, closeAfterFrame bool) func() []int {
 // nextSize takes the next size announcement and acknowledges it.
 func nextSize(t *testing.T, ts TermStream) Size {
 	t.Helper()
-	select {
-	case c := <-ts.(sizeReporter).Sizes():
-		close(c.sent)
-		return c.Size
-	case <-time.After(5 * time.Second):
-		t.Fatal("no size announced")
-		return Size{}
-	}
+	return nextChange(t, ts).Size
 }
 
 func TestHerdrStreamFollowsPaneSize(t *testing.T) {
@@ -1202,12 +1291,13 @@ func TestHerdrStreamFollowsPaneSize(t *testing.T) {
 		t.Errorf("Resize: %v", err)
 	}
 
-	// Another pane of the tab changed: the observer keeps running.
+	// Another pane of the tab changed: a layout frame, the observer keeps
+	// running.
 	f.emitLayout("wR:p3", 108, 36)
-	select {
-	case c := <-ts.(sizeReporter).Sizes():
-		t.Fatalf("unexpected size %v for an unchanged pane", c.Size)
-	case <-time.After(300 * time.Millisecond):
+	nextLayout(t, ts)
+	noChange(t, ts, "unchanged pane")
+	if n := len(pids()); n != 1 {
+		t.Errorf("%d observers, want the first one still running", n)
 	}
 
 	// The desktop resized the pane: restart observe at the new size.
@@ -1506,12 +1596,7 @@ func TestHerdrStaleSnapshotKeepsNewerSize(t *testing.T) {
 		t.Fatalf("announced %v, want 90x30", s)
 	}
 	<-fetched
-	select {
-	case c := <-ts.(sizeReporter).Sizes():
-		close(c.sent)
-		t.Errorf("stale snapshot moved the stream to %v", c.Size)
-	case <-time.After(300 * time.Millisecond):
-	}
+	noChange(t, ts, "stale snapshot")
 }
 
 func TestHerdrAgentSession(t *testing.T) {

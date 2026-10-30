@@ -634,6 +634,64 @@ describe('TerminalView', () => {
     expect(fit.fit).toHaveBeenCalled()
   })
 
+  it('layout view: draws the server grid at the fixed font, never fitted or padded', () => {
+    const { term, fit, container, rerender, ref } = renderView({
+      backend: 'herdr',
+      fontSize: 14,
+      fixedFontSize: 9,
+    })
+    socketOpts.onOpen()
+    expect(term.options.fontSize).toBe(9)
+    fit.fit.mockClear()
+    act(() => socketOpts.onControl({ type: 'size', cols: 120, rows: 40 }))
+    expect(term.resize).toHaveBeenLastCalledWith(120, 40)
+    expect(term.options.fontSize).toBe(9)
+    resize()
+    expect(fit.fit).not.toHaveBeenCalled()
+    expect(term.options.fontSize).toBe(9)
+    const scroller = container.firstElementChild as HTMLElement
+    expect(scroller.className).toContain('overflow-hidden')
+    expect(scroller.className).not.toContain('overflow-x-auto')
+    expect(screen.getByTestId('terminal-view').className).not.toContain('px-1')
+
+    // A new size from the layout: drawn at once
+    rerender(
+      <TerminalView ref={ref} paneId="0" backend="herdr" fixedFontSize={11} />,
+    )
+    expect(term.options.fontSize).toBe(11)
+    expect(term.resize).toHaveBeenLastCalledWith(120, 40)
+
+    // Out of the layout view: fitted as before, padded again
+    rerender(
+      <TerminalView ref={ref} paneId="0" backend="herdr" fontSize={14} />,
+    )
+    expect(scroller.className).toContain('overflow-x-auto')
+    expect(screen.getByTestId('terminal-view').className).toContain('px-1')
+  })
+
+  it("layout view: signals a layout frame and every size frame but a stream's first", () => {
+    const onLayoutSignal = vi.fn()
+    renderView({ backend: 'herdr', fixedFontSize: 9, onLayoutSignal })
+    socketOpts.onOpen()
+    act(() => socketOpts.onControl({ type: 'size', cols: 120, rows: 40 }))
+    expect(onLayoutSignal).not.toHaveBeenCalled()
+    act(() => socketOpts.onControl({ type: 'size', cols: 100, rows: 40 }))
+    expect(onLayoutSignal).toHaveBeenCalledTimes(1)
+    act(() => socketOpts.onControl({ type: 'layout' }))
+    expect(onLayoutSignal).toHaveBeenCalledTimes(2)
+    // A new stream's first size frame is not a change
+    socketOpts.onOpen()
+    act(() => socketOpts.onControl({ type: 'size', cols: 100, rows: 40 }))
+    expect(onLayoutSignal).toHaveBeenCalledTimes(2)
+  })
+
+  it('a layout frame without a listener changes nothing', () => {
+    const { term } = renderView({ backend: 'herdr' })
+    socketOpts.onOpen()
+    act(() => socketOpts.onControl({ type: 'layout' }))
+    expect(term.write).not.toHaveBeenCalled()
+  })
+
   it('herdr: a grid taller than the view keeps its bottom rows in view', () => {
     vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
       cb(0)

@@ -57,6 +57,10 @@ const (
 // toggling fast cannot spawn a process for each toggle.
 const minDriveSwitch = 500 * time.Millisecond
 
+// herdrRestartSettle is how long a new pane size must stay before the
+// observer restarts at it.
+const herdrRestartSettle = 150 * time.Millisecond
+
 // Attach streams paneID. By default it observes the pane at its own (desktop)
 // size: an observer smaller than the pane crops it instead of reflowing. Once
 // the client asks to drive the size (Drive), the stream switches to herdr's
@@ -64,11 +68,11 @@ const minDriveSwitch = 500 * time.Millisecond
 // Nothing runs until the caller first calls Sizes (runStream always does).
 func (m *herdrMux) Attach(ctx context.Context, paneID string, client Size) (TermStream, error) {
 	// Watch before reading the size, so a resize in between is not lost.
-	resize := make(chan Size, 1)
-	m.watchSize(paneID, resize)
+	watch := newHerdrWatch()
+	m.watchSize(paneID, watch)
 	size, err := m.requirePane(ctx, paneID)
 	if err != nil {
-		m.unwatchSize(paneID, resize)
+		m.unwatchSize(paneID, watch)
 		return nil, err
 	}
 	if client.Cols <= 0 || client.Rows <= 0 {
@@ -80,7 +84,7 @@ func (m *herdrMux) Attach(ctx context.Context, paneID string, client Size) (Term
 		pane:       paneID,
 		pr:         pr,
 		pw:         pw,
-		resize:     resize,
+		watch:      watch,
 		clientSize: make(chan Size, 1),
 		wantDrive:  make(chan bool, 1),
 		sizes:      make(chan sizeChange),
@@ -112,7 +116,7 @@ type herdrStream struct {
 	pr *io.PipeReader
 	pw *io.PipeWriter
 
-	resize     chan Size       // from layout events
+	watch      *herdrWatch     // pane size and tab layout, from layout events
 	clientSize chan Size       // latest client size (Resize)
 	wantDrive  chan bool       // latest Drive request
 	sizes      chan sizeChange // to the client
@@ -200,7 +204,7 @@ type herdrMode struct {
 func (s *herdrStream) run(pane, client Size) {
 	defer close(s.done)
 	defer s.pw.Close()
-	defer s.m.unwatchSize(s.pane, s.resize)
+	defer s.m.unwatchSize(s.pane, s.watch)
 	select {
 	case <-s.ready:
 	case <-s.stop:
@@ -325,10 +329,23 @@ const (
 // follow runs process p in mode until the stream ends or another process is
 // needed. It keeps pane, client and want up to date, and switches mode no
 // sooner than minDriveSwitch after switched. A layout event for another pane
-// of the tab repeats the same size and is skipped.
+// of the tab repeats the same size and is skipped. An observer restarts at a
+// new pane size only once no other size came for herdrRestartSettle: dragging
+// a split border on the desktop sends dozens a second. Changes to the tab's
+// layout reach the client as one layout frame, once they too have settled.
 func (s *herdrStream) follow(p *observer, mode herdrMode, switched time.Time, pane, client *Size, want *bool) followResult {
-	var wait <-chan time.Time
+	var wait, settle, layoutSettle <-chan time.Time
 	sent := mode.size // control's PTY size
+	// A layout change still settling when another process takes over is
+	// handed to the next follow.
+	defer func() {
+		if layoutSettle != nil {
+			select {
+			case s.watch.layout <- struct{}{}:
+			default:
+			}
+		}
+	}()
 	for {
 		select {
 		case <-p.decoded:
@@ -361,10 +378,27 @@ func (s *herdrStream) follow(p *observer, mode herdrMode, switched time.Time, pa
 		case <-s.stop:
 			p.stopFor(mode)
 			return followEnded
-		case next := <-s.resize:
+		case next := <-s.watch.size:
+			changed := next != *pane
 			*pane = next
-			if !mode.driving && next != mode.size {
-				return followRestart
+			switch {
+			case mode.driving:
+			case next == mode.size:
+				settle = nil // back to the size observed: nothing to restart
+			case changed || settle == nil:
+				// A layout event repeating the pending size (another pane
+				// changed) does not postpone the restart.
+				settle = time.After(herdrRestartSettle)
+			}
+		case <-settle:
+			return followRestart
+		case <-s.watch.layout:
+			layoutSettle = time.After(herdrRestartSettle)
+		case <-layoutSettle:
+			layoutSettle = nil
+			if !s.announce(sizeChange{Layout: true}) {
+				p.stopFor(mode)
+				return followEnded
 			}
 		case next := <-s.clientSize:
 			*client = next

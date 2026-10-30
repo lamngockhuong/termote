@@ -58,6 +58,7 @@ vi.mock('./signins-section', () => ({
 }))
 
 const DEFAULT_SETTINGS: Settings = {
+  herdrLayoutView: true,
   markdownEditLayout: 'split',
   imeSendBehavior: 'send-only',
   pasteSource: 'clipboard',
@@ -307,6 +308,21 @@ describe('SettingsModal', () => {
       screen.getByRole('switch', { name: 'Fit herdr pane to this device' }),
     )
     expect(onUpdateSetting).toHaveBeenCalledWith('driveTerminalSize', true)
+  })
+
+  it('toggles herdrLayoutView where the panes can show side by side', () => {
+    const { onUpdateSetting } = renderModal({ layoutViewSupported: true })
+    fireEvent.click(
+      screen.getByRole('switch', { name: 'Show herdr panes side by side' }),
+    )
+    expect(onUpdateSetting).toHaveBeenCalledWith('herdrLayoutView', false)
+  })
+
+  it('hides herdrLayoutView elsewhere', () => {
+    renderModal()
+    expect(
+      screen.queryByRole('switch', { name: 'Show herdr panes side by side' }),
+    ).toBeNull()
   })
 
   it('toggles showSessionTabs', () => {
