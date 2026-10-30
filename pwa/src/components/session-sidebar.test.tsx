@@ -2087,6 +2087,76 @@ describe('SessionSidebar — reorder', () => {
     expect(r.onMoveGroup).toHaveBeenCalledWith('$3', 0)
   })
 
+  // main's worktree wt is drawn under it and moves with it
+  const NESTED: SessionGroup[] = [
+    { id: 'main', name: 'main', worktree: { linked: false } },
+    { id: 'w9', name: 'wt', worktree: { linked: true, parent: 'main' } },
+    { id: '$3', name: 'work' },
+  ]
+
+  it('draws the line after a group below its worktrees, where the drop lands', () => {
+    const r = reorderOf()
+    render(
+      <SessionSidebar
+        {...props({
+          reorder: r,
+          groups: NESTED,
+          sessions: [...TABS, tab('w9:t1', 'y', 'w9')],
+        })}
+      />,
+    )
+    const region = (name: string) => screen.getByRole('region', { name })
+    const header = (name: string) =>
+      region(name).firstElementChild as HTMLElement
+    const line = (el: HTMLElement) => el.querySelector(':scope > .bg-accent')
+    fireEvent.dragStart(header('work'), { dataTransfer: dt() })
+    dragAt('dragOver', header('main'), 5)
+    expect(line(region('wt'))).not.toBeNull()
+    expect(line(header('main'))).toBeNull()
+    expect(line(region('main'))).toBeNull()
+    dragAt('dragOver', header('main'), 0)
+    expect(line(header('main'))).not.toBeNull()
+    expect(line(region('wt'))).toBeNull()
+    // work already sits after main's block: dropping there moves nothing
+    dragAt('drop', header('main'), 5)
+    expect(r.onMoveGroup).not.toHaveBeenCalled()
+    // Collapsed, main is drawn alone: the line is at its own end
+    fireEvent.click(header('main').querySelector('button[aria-expanded]')!)
+    fireEvent.dragStart(header('work'), { dataTransfer: dt() })
+    dragAt('dragOver', header('main'), 5)
+    expect(line(region('main'))).not.toBeNull()
+  })
+
+  it('hides a collapsed checkout’s worktrees, its badge speaking for them', () => {
+    const groups: SessionGroup[] = [
+      { ...NESTED[0], agentStatus: 'working' },
+      { ...NESTED[1], agentStatus: 'blocked' },
+      NESTED[2],
+    ]
+    render(
+      <SessionSidebar
+        {...props({
+          groups,
+          sessions: [...TABS, tab('w9:t1', 'y', 'w9')],
+        })}
+      />,
+    )
+    const toggle = () =>
+      screen
+        .getByRole('region', { name: 'main' })
+        .querySelector('button[aria-expanded]') as HTMLElement
+    const badge = () =>
+      toggle().querySelector('[role="img"]')?.getAttribute('data-status')
+    expect(screen.getByRole('region', { name: 'wt' })).toBeInTheDocument()
+    expect(badge()).toBe('working')
+    fireEvent.click(toggle())
+    expect(screen.queryByRole('region', { name: 'wt' })).toBeNull()
+    expect(screen.getByRole('region', { name: 'work' })).toBeInTheDocument()
+    expect(badge()).toBe('blocked')
+    fireEvent.click(toggle())
+    expect(screen.getByRole('region', { name: 'wt' })).toBeInTheDocument()
+  })
+
   it('mobile: Move up and down in the current session menu', () => {
     const r = reorderOf()
     const { rerender } = render(

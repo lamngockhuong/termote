@@ -332,6 +332,9 @@ Run Herdr on a throwaway socket and `HOME`, never your live Herdr.
 - [ ] Herdr worktree group: each linked worktree shows indented right under its repository's
       workspace, even one opened after other workspaces; with the repository's workspace closed
       its worktrees stay together, not indented
+- [ ] Herdr worktree group: collapsing the repository's workspace hides its worktrees too, its
+      badge showing the heaviest status among them; dragging a workspace after it draws the line
+      below its last worktree
 - [ ] Herdr restarted: the order is kept
 - [ ] No reorder control while the agent filter or "blocked first" is on, nor on tmux older than
       3.2, psmux (Windows), Herdr older than 0.8.0 or Herdr on Windows; tmux sessions have no Move
