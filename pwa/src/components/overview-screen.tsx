@@ -3,6 +3,8 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useActivityLog } from '../hooks/use-activity-log'
 import { useAgentOverview } from '../hooks/use-agent-overview'
 import { useMediaQuery } from '../hooks/use-media-query'
+import { ENTER_FROM, useNewKeys } from '../hooks/use-new-keys'
+import { LEAVE_TO, usePresenceList } from '../hooks/use-presence-list'
 import { useT } from '../i18n/i18n-context'
 import type { Session, SessionGroup, SessionPane } from '../types/session'
 import { stuckFor } from '../utils/agent-stuck'
@@ -154,6 +156,16 @@ export function OverviewScreen({
         terms,
         groupOf.get(c.session.groupId ?? '')?.name,
       ),
+  )
+  // A card for an agent that came later fades in; one whose pane went fades
+  // out where it was, inert. One the filter or the search hides just goes.
+  const cardIds = cards.map(cardKey)
+  const isNew = useNewKeys(cardIds)
+  const known = new Set(cardIds)
+  const { entries, ref } = usePresenceList(
+    shown,
+    cardKey,
+    (id) => !known.has(id),
   )
   // The card asked for takes focus once it is shown (the cards are drawn
   // only when ready), over the title, and keeps an accent border until focus
@@ -315,7 +327,7 @@ export function OverviewScreen({
                   ref={listRef}
                   className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3"
                 >
-                  {shown.map(({ session, pane }) => {
+                  {entries.map(({ item: { session, pane }, leaving }) => {
                     const group = session.groupId
                       ? groupOf.get(session.groupId)
                       : undefined
@@ -326,6 +338,10 @@ export function OverviewScreen({
                     return (
                       <li
                         key={pane.id}
+                        ref={ref(pane.id)}
+                        inert={leaving}
+                        data-leaving={leaving || undefined}
+                        className={`transition-[opacity,translate,scale] duration-(--duration-base) ease-standard ${isNew(pane.id) ? ENTER_FROM : ''} ${leaving ? LEAVE_TO : ''}`}
                         onBlur={(e) => {
                           if (!e.currentTarget.contains(e.relatedTarget)) {
                             setHighlighted((h) =>
@@ -361,9 +377,11 @@ export function OverviewScreen({
                           opensChat={opensChat(pane)}
                           onOpen={onOpen}
                           openRef={
-                            pane.id === target?.paneId ? targetRef : undefined
+                            !leaving && pane.id === target?.paneId
+                              ? targetRef
+                              : undefined
                           }
-                          highlighted={pane.id === highlighted}
+                          highlighted={!leaving && pane.id === highlighted}
                         />
                       </li>
                     )
@@ -404,3 +422,5 @@ export function OverviewScreen({
     </section>
   )
 }
+
+const cardKey = (c: OverviewCard) => c.pane.id

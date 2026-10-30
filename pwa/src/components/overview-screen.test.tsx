@@ -641,4 +641,71 @@ describe('agentCards', () => {
       'p-blocked',
     ])
   })
+
+  describe('OverviewScreen cards coming and going', () => {
+    beforeEach(() => {
+      resetAgentOverview()
+      mockFetchOverview.mockResolvedValue({ serverNow: 'x', panes: [] })
+      mockFetchActivity.mockResolvedValue({ events: [] })
+    })
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    it('fades in a card for a later agent, and fades out one whose pane went', () => {
+      // The cards' transition, as the stylesheet gives it in a browser
+      const real = window.getComputedStyle
+      vi.spyOn(window, 'getComputedStyle').mockImplementation((el) =>
+        el.tagName === 'LI'
+          ? ({
+              transitionDuration: '0.2s',
+              transitionDelay: '0s',
+            } as CSSStyleDeclaration)
+          : real(el),
+      )
+      const later = tab('t9', 'g1', [
+        {
+          id: 'p-later',
+          label: 'aider',
+          hasAgent: true,
+          agentName: 'aider',
+          agentStatus: 'working',
+        },
+      ])
+      const { rerender, onOpen, onClose } = renderScreen()
+      const props = {
+        groups: GROUPS,
+        groupNoun: 'workspace' as const,
+        ready: true,
+        pollInterval: 5000,
+        clockOffset: 0,
+        activePaneOnly: false,
+        opensChat: () => false,
+        canAnswer: () => false,
+        readOnly: false,
+        stuckMinutes: 10,
+        onOpen,
+        onClose,
+      }
+      const items = () => screen.getAllByRole('listitem', { hidden: true })
+      const before = items().length
+      rerender(<OverviewScreen {...props} sessions={[...SESSIONS, later]} />)
+      const added = items().filter((li) =>
+        li.className.includes('motion-safe:starting:opacity-0'),
+      )
+      expect(added).toHaveLength(1)
+      expect(added[0]).toHaveTextContent('aider')
+      rerender(<OverviewScreen {...props} sessions={[SESSIONS[0], later]} />)
+      const leaving = items().filter((li) => li.hasAttribute('data-leaving'))
+      expect(leaving.length).toBe(before - 1)
+      for (const li of leaving) {
+        expect(li).toHaveAttribute('inert')
+        expect(li).toHaveClass('pointer-events-none', 'opacity-0')
+      }
+      act(() => {
+        for (const li of leaving) li.dispatchEvent(new Event('transitionend'))
+      })
+      expect(items()).toHaveLength(2)
+    })
+  })
 })

@@ -120,6 +120,52 @@ describe('SessionSidebar — desktop expanded (default)', () => {
     expect(screen.getByText('Dev')).toBeInTheDocument()
   })
 
+  it('fades in a session added later, and fades a closed one out', () => {
+    // The rows' transition, as the stylesheet gives it in a browser
+    const real = window.getComputedStyle
+    const style = vi
+      .spyOn(window, 'getComputedStyle')
+      .mockImplementation((el) =>
+        el.classList.contains('duration-(--duration-base)')
+          ? ({
+              transitionDuration: '0.2s',
+              transitionDelay: '0s',
+            } as CSSStyleDeclaration)
+          : real(el),
+      )
+    // The wrapper of a row, which carries its motion
+    const row = (name: string) =>
+      screen.getByText(name).closest('[class*="ease-standard"]') as HTMLElement
+    const added: Session = {
+      id: '3',
+      name: 'Added',
+      icon: '🆕',
+      description: '',
+    }
+    const { rerender } = renderDesktop()
+    const props = {
+      activeId: '1',
+      onSelect,
+      onAdd,
+      onRemove,
+      onUpdate,
+      onToggleCollapse,
+    }
+    rerender(<SessionSidebar sessions={[...SESSIONS, added]} {...props} />)
+    expect(row('Added')).toHaveClass('motion-safe:starting:opacity-0')
+    expect(row('Shell')).not.toHaveClass('motion-safe:starting:opacity-0')
+    rerender(<SessionSidebar sessions={[SESSIONS[0], added]} {...props} />)
+    const leaving = row('Dev')
+    expect(leaving).toHaveAttribute('data-leaving', 'true')
+    expect(leaving).toHaveAttribute('inert')
+    expect(leaving).toHaveClass('pointer-events-none', 'opacity-0')
+    act(() => {
+      leaving.dispatchEvent(new Event('transitionend'))
+    })
+    expect(screen.queryByText('Dev')).toBeNull()
+    style.mockRestore()
+  })
+
   it('keeps its content below the status bar', () => {
     renderDesktop()
     expect(screen.getByRole('complementary')).toHaveClass(

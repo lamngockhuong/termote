@@ -254,20 +254,26 @@ export function chatSide(entry: TranscriptEntry): 'user' | 'agent' | 'other' {
 // Memoised: a poll that brings new entries leaves the others (and their
 // parsed markdown) alone. showTime: the entry starts a run of its own;
 // joinsNext: the agent's next entry follows, so the line goes on; at the
-// end of a turn the answer gets a copy button instead.
+// end of a turn the answer gets a copy button instead. className: motion
+// on its root (a message that just came in).
 export const ChatMessage = memo(function ChatMessage({
   entry,
   showTime,
   joinsNext,
+  className = '',
 }: {
   entry: TranscriptEntry
   showTime?: boolean
   joinsNext?: boolean
+  className?: string
 }) {
   const { t } = useT()
   if (entry.role === 'summary') {
     return (
-      <div data-role="summary" className="my-2 flex items-center gap-2">
+      <div
+        data-role="summary"
+        className={`my-2 flex items-center gap-2 ${className}`}
+      >
         <span className="h-px flex-1 bg-border" />
         <Disclosure summary={t('chat.message.compacted')}>
           <p className="whitespace-pre-wrap text-fg-muted">
@@ -280,7 +286,7 @@ export const ChatMessage = memo(function ChatMessage({
   }
   if (entry.role === 'note') {
     return (
-      <div className="pl-5 text-[12px] text-fg-subtle italic">
+      <div className={`pl-5 text-[12px] text-fg-subtle italic ${className}`}>
         {entry.parts.map((p, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: parts never reorder
           <p key={i} className="whitespace-pre-wrap">
@@ -296,7 +302,10 @@ export const ChatMessage = memo(function ChatMessage({
     return (
       // The reader's own messages sit on the right, as wide as their text up
       // to 85% of the column
-      <div data-role="user" className="flex flex-col items-end gap-1">
+      <div
+        data-role="user"
+        className={`flex flex-col items-end gap-1 ${className}`}
+      >
         {time}
         <div className="w-fit min-w-0 max-w-[85%] space-y-1.5 rounded-control border border-border bg-surface px-3 py-2">
           {entry.parts.map((part, i) =>
@@ -326,7 +335,7 @@ export const ChatMessage = memo(function ChatMessage({
     .map((p) => p.text)
     .join('\n\n')
   return (
-    <div data-role={entry.role} className="flex flex-col gap-3">
+    <div data-role={entry.role} className={`flex flex-col gap-3 ${className}`}>
       {time}
       {entry.parts.map((part, i) => (
         <Step

@@ -7,7 +7,7 @@ const SLACK_MS = 50
 // The longest transition of the element, delay included, in ms. 0 where
 // nothing animates: jsdom has no stylesheet, and reduced motion cuts every
 // transition to 0.01ms (index.css).
-export function transitionMs(el: Element | null): number {
+export function transitionMs(el: Element | null | undefined): number {
   if (!el) return 0
   const style = getComputedStyle(el)
   const times = (list: string) =>

@@ -117,6 +117,30 @@ beforeEach(() => {
 })
 
 describe('ChatView', () => {
+  it('fades in only a message that came after the conversation showed', () => {
+    const root = (text: string) =>
+      screen.getByText(text).closest('[data-role]') as HTMLElement
+    const enters = 'motion-safe:starting:opacity-0'
+    set({ entries: [entry(2), entry(3)] })
+    const { rerender } = render(<ChatView {...props} />)
+    expect(root('message 2')).not.toHaveClass(enters)
+    set({ entries: [entry(2), entry(3), entry(4)] })
+    rerender(<ChatView {...props} />)
+    expect(root('message 4')).toHaveClass(enters)
+    expect(root('message 3')).not.toHaveClass(enters)
+    // Older messages loaded above are history, not news
+    set({ entries: [entry(0), entry(1), entry(2), entry(3), entry(4)] })
+    rerender(<ChatView {...props} />)
+    expect(root('message 0')).not.toHaveClass(enters)
+    expect(root('message 4')).toHaveClass(enters)
+    // Another pane's conversation starts afresh
+    set({ entries: [entry(5)] })
+    rerender(
+      <ChatView {...props} session={{ ...props.session, paneId: '1' }} />,
+    )
+    expect(root('message 5')).not.toHaveClass(enters)
+  })
+
   it('says it is loading until the first read', () => {
     set({ loaded: false })
     render(<ChatView {...props} />)

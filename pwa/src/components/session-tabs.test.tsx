@@ -1,5 +1,12 @@
-import { createEvent, fireEvent, render, screen } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  act,
+  createEvent,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Session } from '../types/session'
 import { SessionTabs } from './session-tabs'
 
@@ -335,6 +342,77 @@ describe('SessionTabs', () => {
         />,
       )
       expect(tab('Shell')).not.toHaveAttribute('draggable')
+    })
+  })
+
+  describe('as tabs come and go', () => {
+    const tab = (name: string) =>
+      screen.getByText(name).closest('.group') as HTMLElement
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    it('fades in only a tab added after the first ones', () => {
+      const { rerender } = render(<SessionTabs {...defaultProps} />)
+      expect(tab('Shell')).not.toHaveClass('motion-safe:starting:opacity-0')
+      rerender(
+        <SessionTabs
+          {...defaultProps}
+          sessions={[
+            ...SESSIONS,
+            { id: 'new', name: 'New', icon: '🆕', description: '' },
+          ]}
+        />,
+      )
+      expect(tab('New')).toHaveClass('motion-safe:starting:opacity-0')
+      expect(tab('Code')).not.toHaveClass('motion-safe:starting:opacity-0')
+    })
+
+    it('fades a closed tab out, inert and out of the keys, then drops it', () => {
+      // The tabs' transition, as the stylesheet gives it in a browser
+      const real = window.getComputedStyle
+      vi.spyOn(window, 'getComputedStyle').mockImplementation((el) =>
+        el.classList.contains('group')
+          ? ({
+              transitionDuration: '150ms',
+              transitionDelay: '0s',
+            } as CSSStyleDeclaration)
+          : real(el),
+      )
+      const three = [
+        ...SESSIONS,
+        { id: 'more', name: 'More', icon: '➕', description: '' },
+      ]
+      const { rerender } = render(
+        <SessionTabs {...defaultProps} sessions={three} onMove={vi.fn()} />,
+      )
+      rerender(
+        <SessionTabs
+          {...defaultProps}
+          sessions={[three[0], three[2]]}
+          activeId="code"
+          onMove={vi.fn()}
+        />,
+      )
+      const leaving = tab('Code')
+      expect(leaving).toHaveAttribute('data-leaving', 'true')
+      expect(leaving).toHaveAttribute('inert')
+      expect(leaving).toHaveClass('pointer-events-none', 'opacity-0')
+      expect(leaving).not.toHaveAttribute('draggable')
+      // Even the active id: a tab leaving is not the selected one
+      expect(
+        within(leaving).getByRole('tab', { hidden: true }),
+      ).toHaveAttribute('aria-selected', 'false')
+      // Arrow keys and Delete skip it
+      screen.getByRole('tab', { name: /Shell/ }).focus()
+      fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' })
+      expect(document.activeElement).toHaveTextContent('More')
+      fireEvent.keyDown(screen.getByRole('tablist'), { key: 'Delete' })
+      expect(defaultProps.onRemove).toHaveBeenCalledWith('more')
+      act(() => {
+        leaving.dispatchEvent(new Event('transitionend'))
+      })
+      expect(screen.queryByText('Code')).toBeNull()
     })
   })
 })
