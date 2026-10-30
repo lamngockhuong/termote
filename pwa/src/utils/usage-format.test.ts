@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { tFor } from '../i18n/i18n-context'
 import {
   percentLabel,
   resetLabel,
@@ -60,14 +61,22 @@ describe('resetLabel', () => {
     new Date(...a).toISOString()
 
   it('names the time today, the day this week, the date further', () => {
-    expect(resetLabel(at(2026, 9, 14, 14, 30), now)).toBe('resets 14:30')
-    expect(resetLabel(at(2026, 9, 19, 9, 5), now)).toBe('resets Mon 09:05')
-    expect(resetLabel(at(2026, 9, 28, 9, 0), now)).toBe('resets 28/10')
+    expect(resetLabel(at(2026, 9, 14, 14, 30), now, tFor('en'), 'en')).toBe(
+      'resets 14:30',
+    )
+    expect(resetLabel(at(2026, 9, 19, 9, 5), now, tFor('en'), 'en')).toBe(
+      'resets Mon 09:05',
+    )
+    expect(resetLabel(at(2026, 9, 28, 9, 0), now, tFor('en'), 'en')).toBe(
+      'resets 28/10',
+    )
   })
 
   it('says now for a time passed, nothing for none', () => {
-    expect(resetLabel(at(2026, 9, 14, 8, 0), now)).toBe('resets now')
-    expect(resetLabel(undefined, now)).toBeUndefined()
-    expect(resetLabel('soon', now)).toBeUndefined()
+    expect(resetLabel(at(2026, 9, 14, 8, 0), now, tFor('en'), 'en')).toBe(
+      'resets now',
+    )
+    expect(resetLabel(undefined, now, tFor('en'), 'en')).toBeUndefined()
+    expect(resetLabel('soon', now, tFor('en'), 'en')).toBeUndefined()
   })
 })

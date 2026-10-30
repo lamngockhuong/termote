@@ -1,17 +1,10 @@
 {
-  "src/components/activity-log.tsx": 5,
-  "src/components/agent-card.tsx": 3,
-  "src/components/command-palette.tsx": 7,
   "src/components/help-modal.tsx": 85,
   "src/components/lazy-boundary.tsx": 1,
-  "src/components/overview-screen.tsx": 14,
   "src/components/pane-layout-menu.tsx": 11,
-  "src/components/task-row.tsx": 3,
-  "src/components/tasks-view.tsx": 8,
   "src/hooks/use-local-sessions.ts": 1,
   "src/hooks/use-start-agent.ts": 1,
   "src/types/session.ts": 1,
   "src/ui-style.ts": 3,
-  "src/utils/app-commands.ts": 24,
   "src/utils/app-info.ts": 1
 }

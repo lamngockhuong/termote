@@ -161,7 +161,7 @@ function AgentChat({
   const agent = agentLabel(session.agentName)
   const listRef = useRef<HTMLDivElement>(null)
   // Text selected in the conversation, for a template's {{selection}}
-  useDomSelection(listRef, session.paneId, 'the Chat')
+  useDomSelection(listRef, session.paneId, 'chat.fill.from.chat')
   const contentRef = useRef<HTMLDivElement>(null)
   // The first entry on screen while reading above the bottom, and how far
   // below the list's top it was

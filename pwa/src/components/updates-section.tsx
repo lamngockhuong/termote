@@ -109,7 +109,7 @@ export function UpdatesSection({
             {latest
               ? t('settings.updates.checked', {
                   version: latest.version,
-                  ago: formatAgo(Date.now() - latest.checkedAt),
+                  ago: formatAgo(Date.now() - latest.checkedAt, t),
                 })
               : t('settings.updates.notChecked')}
           </p>

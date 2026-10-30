@@ -1,5 +1,6 @@
 import type { ResizeDirection, SplitDirection } from '../hooks/use-mux-api'
 import type { ShortcutCommand } from '../hooks/use-shortcuts'
+import type { MessageKey } from '../i18n/messages/en'
 import {
   CHANGES_VIEW_ID,
   CHAT_VIEW_ID,
@@ -13,21 +14,24 @@ import { type CommandId, SEARCH_CONTENT_KEY } from './shortcuts'
 // open file (:), tabs and panes (@)
 export type PaletteMode = 'files' | 'commands' | 'line' | 'sessions'
 
+// The group a command is listed under, as the key of its name
 export type CommandCategory =
-  | 'Palette'
-  | 'View'
-  | 'Files'
-  | 'Tabs'
-  | 'Panes'
-  | 'Agent'
-  | 'Terminal'
-  | 'App'
+  | 'tasks.category.palette'
+  | 'tasks.category.view'
+  | 'tasks.category.files'
+  | 'tasks.category.tabs'
+  | 'tasks.category.panes'
+  | 'tasks.category.agent'
+  | 'tasks.category.terminal'
+  | 'tasks.category.app'
 
 // A command of the palette, which a shortcut can run too. Shown even when
 // it cannot run, then with the reason.
 export interface AppCommand extends ShortcutCommand {
-  title: string
+  // Keys of the messages, read through t() where shown
+  title: MessageKey
   category: CommandCategory
+  disabledReason?: MessageKey
   // Run from the palette, focus goes back where it was before (the command
   // moves it nowhere, or opens a dialog that gives it back there on close);
   // otherwise it stays where the command puts it
@@ -90,11 +94,11 @@ export interface AppCommandContext {
   setTheme: (theme: ThemeChoice) => void
 }
 
-const VIEW_ONLY = 'View only'
-const NO_FILES = 'Not available for this pane'
-const IN_FOCUS = 'Not in a focus window'
-const NO_LAYOUT = 'Not available for this backend'
-const DESKTOP_ONLY = 'Changes only the Herdr desktop'
+const VIEW_ONLY: MessageKey = 'tasks.commandOff.viewOnly'
+const NO_FILES: MessageKey = 'tasks.commandOff.noFiles'
+const IN_FOCUS: MessageKey = 'tasks.commandOff.inFocus'
+const NO_LAYOUT: MessageKey = 'tasks.commandOff.noLayout'
+const DESKTOP_ONLY: MessageKey = 'tasks.commandOff.desktopOnly'
 
 // Commands that leave a focus window's target (or fold a sidebar it has not)
 const LEAVE_FOCUS = new Set([
@@ -116,18 +120,18 @@ export function buildAppCommands(ctx: AppCommandContext): AppCommand[] {
 }
 
 function allCommands(ctx: AppCommandContext): AppCommand[] {
-  const panel = (id: string, title: string): AppCommand => ({
+  const panel = (id: string, title: MessageKey): AppCommand => ({
     id: id === FILES_VIEW_ID ? 'view.filesPanel' : 'view.changesPanel',
     title,
-    category: 'View',
+    category: 'tasks.category.view',
     disabledReason: ctx.panelIds.includes(id) ? undefined : NO_FILES,
     restoreFocus: true,
     run: () => ctx.togglePanel(ctx.sidePanelId === id ? null : id),
   })
-  const theme = (t: ThemeChoice, title: string): AppCommand => ({
+  const theme = (t: ThemeChoice, title: MessageKey): AppCommand => ({
     id: `theme.${t}`,
     title,
-    category: 'App',
+    category: 'tasks.category.app',
     restoreFocus: true,
     run: () => ctx.setTheme(t),
   })
@@ -140,13 +144,13 @@ function allCommands(ctx: AppCommandContext): AppCommand[] {
       : NO_LAYOUT
   const pane = (
     id: CommandId,
-    title: string,
+    title: MessageKey,
     run: () => void,
     reason = layoutReason,
   ): AppCommand => ({
     id,
     title,
-    category: 'Panes',
+    category: 'tasks.category.panes',
     disabledReason: reason,
     restoreFocus: true,
     run,
@@ -155,25 +159,23 @@ function allCommands(ctx: AppCommandContext): AppCommand[] {
   // pane, which they would not change
   const arrangeReason =
     layoutReason ?? (ctx.paneStream ? DESKTOP_ONLY : undefined)
-  const resize = (id: CommandId, direction: ResizeDirection) =>
-    pane(
-      id,
-      `Resize pane ${direction}`,
-      () => ctx.resizePane(direction),
-      arrangeReason,
-    )
-  let agentReason: string | undefined
+  const resize = (
+    id: CommandId,
+    title: MessageKey,
+    direction: ResizeDirection,
+  ) => pane(id, title, () => ctx.resizePane(direction), arrangeReason)
+  let agentReason: MessageKey | undefined
   if (!ctx.startOffered)
     agentReason = ctx.readOnly
       ? VIEW_ONLY
       : ctx.hasAgent
-        ? 'An agent already runs in this pane'
-        : 'This pane cannot start an agent'
+        ? 'tasks.commandOff.hasAgent'
+        : 'tasks.commandOff.cannotStart'
   return [
     {
       id: 'palette.quickOpen',
-      title: 'Go to file',
-      category: 'Palette',
+      title: 'tasks.command.quickOpen',
+      category: 'tasks.category.palette',
       defaultKey: 'Mod+P',
       // Cmd+P never reaches the pane; Ctrl+P is the terminal's
       inTerminal: ctx.apple,
@@ -181,62 +183,62 @@ function allCommands(ctx: AppCommandContext): AppCommand[] {
     },
     {
       id: 'palette.commands',
-      title: 'Show all commands',
-      category: 'Palette',
+      title: 'tasks.command.commands',
+      category: 'tasks.category.palette',
       defaultKey: 'Mod+Shift+P',
       inTerminal: true,
       run: () => ctx.openPalette('commands'),
     },
     {
       id: 'palette.goToLine',
-      title: 'Go to line',
-      category: 'Palette',
+      title: 'tasks.command.goToLine',
+      category: 'tasks.category.palette',
       run: () => ctx.openPalette('line'),
     },
     {
       id: 'palette.sessions',
-      title: 'Go to tab or pane',
-      category: 'Palette',
+      title: 'tasks.command.sessions',
+      category: 'tasks.category.palette',
       run: () => ctx.openPalette('sessions'),
     },
     {
       id: 'view.terminal',
-      title: 'Show the terminal',
-      category: 'View',
+      title: 'tasks.command.terminal',
+      category: 'tasks.category.view',
       run: ctx.showTerminal,
     },
     {
       id: 'view.chat',
-      title: 'Show Chat',
-      category: 'View',
+      title: 'tasks.command.chat',
+      category: 'tasks.category.view',
       disabledReason: ctx.viewIds.includes(CHAT_VIEW_ID)
         ? undefined
-        : 'No agent chat in this pane',
+        : 'tasks.commandOff.noChat',
       run: ctx.showChat,
     },
     {
       id: 'view.tasks',
-      title: 'Show Tasks',
-      category: 'View',
+      title: 'tasks.command.tasks',
+      category: 'tasks.category.view',
       disabledReason: ctx.viewIds.includes(TASKS_VIEW_ID)
         ? undefined
         : ctx.readOnly
           ? VIEW_ONLY
-          : 'No tasks for this pane',
+          : 'tasks.commandOff.noTasks',
       run: () => ctx.changeView(TASKS_VIEW_ID),
     },
-    panel(FILES_VIEW_ID, 'Toggle the Files panel'),
-    panel(CHANGES_VIEW_ID, 'Toggle the Changes panel'),
+    panel(FILES_VIEW_ID, 'tasks.command.filesPanel'),
+    panel(CHANGES_VIEW_ID, 'tasks.command.changesPanel'),
     {
       id: 'view.overview',
-      title: 'Show the agent overview',
-      category: 'View',
+      title: 'tasks.command.overview',
+      category: 'tasks.category.view',
       run: ctx.openOverview,
     },
     {
       id: 'files.searchContent',
-      title: 'Search in files',
-      category: 'Files',
+      title: 'tasks.command.searchContent',
+      category: 'tasks.category.files',
       defaultKey: SEARCH_CONTENT_KEY,
       disabledReason: ctx.panelIds.includes(FILES_VIEW_ID)
         ? undefined
@@ -245,92 +247,99 @@ function allCommands(ctx: AppCommandContext): AppCommand[] {
     },
     {
       id: 'tab.new',
-      title: 'New tab',
-      category: 'Tabs',
+      title: 'tasks.command.newTab',
+      category: 'tasks.category.tabs',
       disabledReason: ctx.readOnly ? VIEW_ONLY : undefined,
       restoreFocus: true,
       run: ctx.newTab,
     },
     {
       id: 'tab.previous',
-      title: 'Previous tab',
-      category: 'Tabs',
-      disabledReason: ctx.previousTab ? undefined : 'No tab before this one',
+      title: 'tasks.command.previousTab',
+      category: 'tasks.category.tabs',
+      disabledReason: ctx.previousTab
+        ? undefined
+        : 'tasks.commandOff.noPrevious',
       restoreFocus: true,
       run: () => ctx.previousTab && ctx.selectTab(ctx.previousTab),
     },
     {
       id: 'tab.next',
-      title: 'Next tab',
-      category: 'Tabs',
-      disabledReason: ctx.nextTab ? undefined : 'No tab after this one',
+      title: 'tasks.command.nextTab',
+      category: 'tasks.category.tabs',
+      disabledReason: ctx.nextTab ? undefined : 'tasks.commandOff.noNext',
       restoreFocus: true,
       run: () => ctx.nextTab && ctx.selectTab(ctx.nextTab),
     },
-    pane('pane.splitRight', 'Split pane right', () => ctx.splitPane('right')),
-    pane('pane.splitDown', 'Split pane down', () => ctx.splitPane('down')),
-    pane('pane.zoom', 'Zoom pane', ctx.zoomPane, arrangeReason),
+    pane('pane.splitRight', 'tasks.command.splitRight', () =>
+      ctx.splitPane('right'),
+    ),
+    pane('pane.splitDown', 'tasks.command.splitDown', () =>
+      ctx.splitPane('down'),
+    ),
+    pane('pane.zoom', 'tasks.command.zoom', ctx.zoomPane, arrangeReason),
     pane(
       'pane.swapNext',
-      'Swap pane with the next one',
+      'tasks.command.swapNext',
       ctx.swapNextPane,
-      arrangeReason ?? (ctx.canSwapNext ? undefined : 'No pane after this one'),
+      arrangeReason ??
+        (ctx.canSwapNext ? undefined : 'tasks.commandOff.noPaneAfter'),
     ),
     ...(ctx.desktop
       ? [
-          resize('pane.resizeLeft', 'left'),
-          resize('pane.resizeRight', 'right'),
-          resize('pane.resizeUp', 'up'),
-          resize('pane.resizeDown', 'down'),
+          resize('pane.resizeLeft', 'tasks.command.resizeLeft', 'left'),
+          resize('pane.resizeRight', 'tasks.command.resizeRight', 'right'),
+          resize('pane.resizeUp', 'tasks.command.resizeUp', 'up'),
+          resize('pane.resizeDown', 'tasks.command.resizeDown', 'down'),
         ]
       : []),
     {
       id: 'agent.start',
-      title: 'Start an agent',
-      category: 'Agent',
+      title: 'tasks.command.agentStart',
+      category: 'tasks.category.agent',
       disabledReason: agentReason,
       run: () => ctx.changeView(CHAT_VIEW_ID),
     },
     {
       id: 'settings.open',
-      title: 'Open Settings',
-      category: 'App',
+      title: 'tasks.command.settings',
+      category: 'tasks.category.app',
       restoreFocus: true,
       run: () => ctx.openSettings(),
     },
     {
       id: 'settings.devices',
-      title: 'Open Settings: Devices',
-      category: 'App',
-      disabledReason: ctx.devices ? undefined : 'Not available on this server',
+      title: 'tasks.command.settingsDevices',
+      category: 'tasks.category.app',
+      disabledReason: ctx.devices ? undefined : 'tasks.commandOff.noDevices',
       restoreFocus: true,
       run: () => ctx.openSettings('devices'),
     },
     {
       id: 'settings.shortcuts',
-      title: 'Open Settings: Shortcuts',
-      category: 'App',
+      title: 'tasks.command.settingsShortcuts',
+      category: 'tasks.category.app',
       restoreFocus: true,
       run: () => ctx.openSettings('shortcuts'),
     },
     {
       id: 'app.help',
-      title: 'Show help',
-      category: 'App',
+      title: 'tasks.command.help',
+      category: 'tasks.category.app',
       restoreFocus: true,
       run: ctx.openHelp,
     },
     {
       id: 'app.about',
-      title: 'About Termote',
-      category: 'App',
+      title: 'tasks.command.about',
+      category: 'tasks.category.app',
       restoreFocus: true,
       run: ctx.openAbout,
     },
     {
       id: 'app.docs',
-      title: 'Open the documentation',
-      category: 'App',
+      title: 'tasks.command.docs',
+      category: 'tasks.category.app',
       restoreFocus: true,
       run: () => {
         window.open(APP_INFO.links.docs, '_blank', 'noopener,noreferrer')
@@ -338,44 +347,44 @@ function allCommands(ctx: AppCommandContext): AppCommand[] {
     },
     {
       id: 'app.toggleSidebar',
-      title: 'Toggle the sidebar',
-      category: 'App',
+      title: 'tasks.command.toggleSidebar',
+      category: 'tasks.category.app',
       restoreFocus: true,
       run: ctx.toggleSidebar,
     },
     {
       id: 'app.fullscreen',
-      title: 'Toggle full screen',
-      category: 'App',
+      title: 'tasks.command.fullscreen',
+      category: 'tasks.category.app',
       disabledReason: ctx.canFullscreen
         ? undefined
-        : 'Not supported by this browser',
+        : 'tasks.commandOff.noFullscreen',
       restoreFocus: true,
       run: ctx.toggleFullscreen,
     },
     {
       id: 'window.openNew',
-      title: 'Open in new window',
-      category: 'App',
-      disabledReason: ctx.openWindow ? undefined : 'No link names this pane',
+      title: 'tasks.command.openWindow',
+      category: 'tasks.category.app',
+      disabledReason: ctx.openWindow ? undefined : 'tasks.commandOff.noLink',
       run: () => ctx.openWindow?.(),
     },
     {
       id: 'terminal.fontIncrease',
-      title: 'Terminal: larger text',
-      category: 'Terminal',
+      title: 'tasks.command.fontIncrease',
+      category: 'tasks.category.terminal',
       restoreFocus: true,
       run: ctx.fontIncrease,
     },
     {
       id: 'terminal.fontDecrease',
-      title: 'Terminal: smaller text',
-      category: 'Terminal',
+      title: 'tasks.command.fontDecrease',
+      category: 'tasks.category.terminal',
       restoreFocus: true,
       run: ctx.fontDecrease,
     },
-    theme('light', 'Theme: light'),
-    theme('dark', 'Theme: dark'),
-    theme('system', 'Theme: follow the system'),
+    theme('light', 'tasks.command.themeLight'),
+    theme('dark', 'tasks.command.themeDark'),
+    theme('system', 'tasks.command.themeSystem'),
   ]
 }

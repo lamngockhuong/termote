@@ -1,10 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
+import { tFor } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
 import {
   type AppCommand,
   type AppCommandContext,
   buildAppCommands,
 } from './app-commands'
 import { APP_INFO } from './app-info'
+
+// A command's text as English shows it
+const en = (key?: MessageKey) => key && tFor('en')(key)
 
 function context(over: Partial<AppCommandContext> = {}): AppCommandContext {
   return {
@@ -58,11 +63,11 @@ describe('buildAppCommands', () => {
   it('opens what is on screen in a new window, where a link names it', () => {
     const openWindow = vi.fn()
     const on = command(context({ openWindow }), 'window.openNew')
-    expect(on.disabledReason).toBeUndefined()
+    expect(en(on.disabledReason)).toBeUndefined()
     on.run?.()
     expect(openWindow).toHaveBeenCalled()
     const off = command(context(), 'window.openNew')
-    expect(off.disabledReason).toBe('No link names this pane')
+    expect(en(off.disabledReason)).toBe('No link names this pane')
     expect(() => off.run?.()).not.toThrow()
   })
 
@@ -82,7 +87,8 @@ describe('buildAppCommands', () => {
     )
     expect(focus.map((c) => c.id)).toEqual(normal.map((c) => c.id))
     for (const [i, c] of focus.entries()) {
-      if (left.has(c.id)) expect(c.disabledReason).toBe('Not in a focus window')
+      if (left.has(c.id))
+        expect(en(c.disabledReason)).toBe('Not in a focus window')
       else expect(c.disabledReason).toBe(normal[i].disabledReason)
     }
   })
@@ -91,8 +97,8 @@ describe('buildAppCommands', () => {
     const list = buildAppCommands(context())
     expect(new Set(list.map((c) => c.id)).size).toBe(list.length)
     for (const c of list) {
-      expect(c.title).toBeTruthy()
-      expect(c.category).toBeTruthy()
+      expect(en(c.title)).toBeTruthy()
+      expect(en(c.category)).toBeTruthy()
     }
   })
 
@@ -143,27 +149,27 @@ describe('buildAppCommands', () => {
   it('shows Tasks where the view is offered, and says why when it is not', () => {
     const on = context({ viewIds: ['terminal', 'tasks'] })
     const show = command(on, 'view.tasks')
-    expect(show.title).toBe('Show Tasks')
-    expect(show.disabledReason).toBeUndefined()
+    expect(en(show.title)).toBe('Show Tasks')
+    expect(en(show.disabledReason)).toBeUndefined()
     show.run()
     expect(on.changeView).toHaveBeenCalledWith('tasks')
     expect(
-      command(context({ readOnly: true }), 'view.tasks').disabledReason,
+      en(command(context({ readOnly: true }), 'view.tasks').disabledReason),
     ).toBe('View only')
-    expect(command(context(), 'view.tasks').disabledReason).toBe(
+    expect(en(command(context(), 'view.tasks').disabledReason)).toBe(
       'No tasks for this pane',
     )
   })
 
   it('says why a view or panel is not offered', () => {
     const ctx = context({ viewIds: ['terminal'], panelIds: [] })
-    expect(command(ctx, 'view.chat').disabledReason).toBe(
+    expect(en(command(ctx, 'view.chat').disabledReason)).toBe(
       'No agent chat in this pane',
     )
-    expect(command(ctx, 'view.filesPanel').disabledReason).toBe(
+    expect(en(command(ctx, 'view.filesPanel').disabledReason)).toBe(
       'Not available for this pane',
     )
-    expect(command(ctx, 'files.searchContent').disabledReason).toBe(
+    expect(en(command(ctx, 'files.searchContent').disabledReason)).toBe(
       'Not available for this pane',
     )
   })
@@ -172,7 +178,7 @@ describe('buildAppCommands', () => {
     const ctx = context()
     const c = command(ctx, 'files.searchContent')
     expect(c.defaultKey).toBe('Mod+Shift+F')
-    expect(c.disabledReason).toBeUndefined()
+    expect(en(c.disabledReason)).toBeUndefined()
     c.run()
     expect(ctx.searchContent).toHaveBeenCalled()
   })
@@ -193,12 +199,12 @@ describe('buildAppCommands', () => {
       previousTab: undefined,
       nextTab: undefined,
     })
-    expect(command(ctx, 'tab.new').disabledReason).toBe('View only')
+    expect(en(command(ctx, 'tab.new').disabledReason)).toBe('View only')
     const prev = command(ctx, 'tab.previous')
-    expect(prev.disabledReason).toBe('No tab before this one')
+    expect(en(prev.disabledReason)).toBe('No tab before this one')
     prev.run()
     const next = command(ctx, 'tab.next')
-    expect(next.disabledReason).toBe('No tab after this one')
+    expect(en(next.disabledReason)).toBe('No tab after this one')
     next.run()
     expect(ctx.selectTab).not.toHaveBeenCalled()
   })
@@ -208,8 +214,10 @@ describe('buildAppCommands', () => {
     command(ctx, 'agent.start').run()
     expect(ctx.changeView).toHaveBeenLastCalledWith('chat')
     const reason = (over: Partial<AppCommandContext>) =>
-      command(context({ startOffered: false, ...over }), 'agent.start')
-        .disabledReason
+      en(
+        command(context({ startOffered: false, ...over }), 'agent.start')
+          .disabledReason,
+      )
     expect(reason({ readOnly: true })).toBe('View only')
     expect(reason({ hasAgent: true })).toBe(
       'An agent already runs in this pane',
@@ -238,7 +246,9 @@ describe('buildAppCommands', () => {
     )
     open.mockRestore()
     expect(
-      command(context({ devices: false }), 'settings.devices').disabledReason,
+      en(
+        command(context({ devices: false }), 'settings.devices').disabledReason,
+      ),
     ).toBe('Not available on this server')
   })
 
@@ -253,8 +263,10 @@ describe('buildAppCommands', () => {
     command(ctx, 'terminal.fontDecrease').run()
     expect(ctx.fontDecrease).toHaveBeenCalled()
     expect(
-      command(context({ canFullscreen: false }), 'app.fullscreen')
-        .disabledReason,
+      en(
+        command(context({ canFullscreen: false }), 'app.fullscreen')
+          .disabledReason,
+      ),
     ).toBe('Not supported by this browser')
   })
 
@@ -283,8 +295,8 @@ describe('pane layout commands', () => {
     const ctx = context()
     for (const id of ids) {
       const c = command(ctx, id)
-      expect(c.category).toBe('Panes')
-      expect(c.disabledReason).toBeUndefined()
+      expect(en(c.category)).toBe('Panes')
+      expect(en(c.disabledReason)).toBeUndefined()
       expect(c.restoreFocus).toBe(true)
       c.run()
     }
@@ -298,38 +310,43 @@ describe('pane layout commands', () => {
       ['up'],
       ['down'],
     ])
-    expect(command(ctx, 'pane.resizeUp').title).toBe('Resize pane up')
+    expect(en(command(ctx, 'pane.resizeUp').title)).toBe('Resize pane up')
   })
 
   it('stay listed with the reason they cannot run', () => {
     const view = context({ readOnly: true })
     const none = context({ paneLayout: false })
     for (const id of ids) {
-      expect(command(view, id).disabledReason).toBe('View only')
-      expect(command(none, id).disabledReason).toBe(
+      expect(en(command(view, id).disabledReason)).toBe('View only')
+      expect(en(command(none, id).disabledReason)).toBe(
         'Not available for this backend',
       )
     }
     expect(
-      command(context({ canSwapNext: false }), 'pane.swapNext').disabledReason,
+      en(
+        command(context({ canSwapNext: false }), 'pane.swapNext')
+          .disabledReason,
+      ),
     ).toBe('No pane after this one')
     expect(
-      command(context({ canSwapNext: false }), 'pane.zoom').disabledReason,
+      en(command(context({ canSwapNext: false }), 'pane.zoom').disabledReason),
     ).toBeUndefined()
   })
 
   it('split alone where the page shows one pane (Herdr)', () => {
     const herdr = context({ paneStream: true, canSwapNext: false })
     for (const id of ids) {
-      expect(command(herdr, id).disabledReason).toBe(
+      expect(en(command(herdr, id).disabledReason)).toBe(
         id.startsWith('pane.split')
           ? undefined
           : 'Changes only the Herdr desktop',
       )
     }
     expect(
-      command(context({ paneStream: true, readOnly: true }), 'pane.zoom')
-        .disabledReason,
+      en(
+        command(context({ paneStream: true, readOnly: true }), 'pane.zoom')
+          .disabledReason,
+      ),
     ).toBe('View only')
   })
 
@@ -338,7 +355,7 @@ describe('pane layout commands', () => {
     expect(phone).toContain('pane.zoom')
     expect(phone.some((id) => id.startsWith('pane.resize'))).toBe(false)
     expect(
-      command(context({ focus: true }), 'pane.splitRight').disabledReason,
+      en(command(context({ focus: true }), 'pane.splitRight').disabledReason),
     ).toBeUndefined()
   })
 })

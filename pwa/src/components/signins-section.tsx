@@ -58,7 +58,7 @@ function lastUse(
   t: Translate<MessageKey>,
 ): string {
   return t('settings.used', {
-    ago: formatAgo(Math.max(0, now - Date.parse(s.lastUsedAt))),
+    ago: formatAgo(Math.max(0, now - Date.parse(s.lastUsedAt)), t),
   })
 }
 

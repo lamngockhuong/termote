@@ -1,3 +1,7 @@
+import type { Locale } from '../i18n'
+import type { MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
+
 // How an agent's usage reads: its context share and its account's rate
 // limit windows, as the overview, the cards and the header chip show them.
 
@@ -22,27 +26,35 @@ export function windowLabel(minutes: number): string {
   return `${minutes}m`
 }
 
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const pad = (n: number) => String(n).padStart(2, '0')
 
 // When a window resets, in this device's time, as precisely as it is near:
-// "resets 14:30" today, "resets Mon 09:00" within a week, "resets 28/10"
-// further. Undefined when the time cannot be read.
+// "resets 14:30" today, "resets Mon 09:00" within a week (the day in
+// locale's words), "resets 28/10" further. Undefined when the time cannot
+// be read.
 export function resetLabel(
   iso: string | undefined,
   now: number,
+  t: Translate<MessageKey>,
+  locale: Locale,
 ): string | undefined {
-  const t = iso ? Date.parse(iso) : Number.NaN
-  if (!Number.isFinite(t)) return undefined
-  if (t <= now) return 'resets now'
-  const at = new Date(t)
+  const at = iso ? Date.parse(iso) : Number.NaN
+  if (!Number.isFinite(at)) return undefined
+  if (at <= now) return t('tasks.reset.now')
+  const date = new Date(at)
   const today = new Date(now)
-  const time = `${pad(at.getHours())}:${pad(at.getMinutes())}`
-  if (at.toDateString() === today.toDateString()) return `resets ${time}`
-  if (t - now < 6 * 86_400_000) {
-    return `resets ${WEEKDAYS[at.getDay()]} ${time}`
+  const time = `${pad(date.getHours())}:${pad(date.getMinutes())}`
+  if (date.toDateString() === today.toDateString())
+    return t('tasks.reset.at', { when: time })
+  if (at - now < 6 * 86_400_000) {
+    const day = new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(
+      date,
+    )
+    return t('tasks.reset.at', { when: `${day} ${time}` })
   }
-  return `resets ${pad(at.getDate())}/${pad(at.getMonth() + 1)}`
+  return t('tasks.reset.on', {
+    when: `${pad(date.getDate())}/${pad(date.getMonth() + 1)}`,
+  })
 }
 
 // A window is still running at now: no reset time, or one still ahead. A

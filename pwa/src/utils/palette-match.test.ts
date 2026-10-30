@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  bestMatchScore,
   matchScore,
   parseLine,
   parsePrefix,
@@ -51,7 +52,27 @@ describe('matchScore', () => {
   })
 })
 
+describe('bestMatchScore', () => {
+  it('takes the best of the texts, or nothing when none match', () => {
+    const best = matchScore('Toggle Files', 'tf')
+    expect(bestMatchScore(['Toggle Files', 'settings for'], 'tf')).toBe(best)
+    expect(bestMatchScore(['settings for', 'Toggle Files'], 'tf')).toBe(best)
+    expect(bestMatchScore(['nothing', 'Toggle Files'], 'tf')).toBe(best)
+    expect(bestMatchScore('Toggle Files', 'tf')).toBe(best)
+    expect(bestMatchScore(['nothing'], 'tf')).toBeUndefined()
+  })
+})
+
 describe('rankByMatch', () => {
+  it('finds an item by any of its texts', () => {
+    const items = [
+      ['Mở file', 'Go to file'],
+      ['Tới dòng', 'Go to line'],
+    ]
+    expect(rankByMatch(items, 'go to file', (i) => i)).toEqual([items[0]])
+    expect(rankByMatch(items, 'mở file', (i) => i)).toEqual([items[0]])
+  })
+
   const items = ['settings for', 'Toggle Files', 'nothing', 'Toggle Fullscreen']
   it('keeps the matches, best first, ties in order', () => {
     expect(rankByMatch(items, 'tf', (s) => s)).toEqual([

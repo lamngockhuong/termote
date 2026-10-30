@@ -1,4 +1,6 @@
 import { Bot, CircleAlert, LoaderCircle } from 'lucide-react'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
 import type { SessionSummary, SidebarFilter } from '../utils/session-filter'
 import { SegmentedControl, type SegmentOption } from './ui/segmented-control'
 
@@ -13,7 +15,19 @@ interface Props {
 
 type Icon = typeof Bot
 
-const count = (n: number, unit: string) => `${n} ${unit}${n === 1 ? '' : 's'}`
+// The words for each unit counted
+const WORDS = {
+  session: {
+    all: 'tasks.filter.allSessions',
+    count: 'tasks.filter.sessions',
+    label: 'tasks.filter.labelSessions',
+  },
+  agent: {
+    all: 'tasks.filter.allAgents',
+    count: 'tasks.filter.agents',
+    label: 'tasks.filter.labelAgents',
+  },
+} as const satisfies Record<string, Record<string, MessageKey>>
 
 function segment(
   value: SidebarFilter,
@@ -21,9 +35,9 @@ function segment(
   Icon: Icon,
   active: string,
   n: number,
-  unit: string,
+  count: string,
 ): SegmentOption<SidebarFilter> {
-  const label = `${name}, ${count(n, unit)}`
+  const label = `${name}, ${count}`
   return { value, label, content: countContent(Icon, active, n, label) }
 }
 
@@ -52,33 +66,43 @@ export function AgentFilterBar({
   onChange,
   unit = 'session',
 }: Props) {
+  const { t } = useT()
+  const words = WORDS[unit]
+  const count = (n: number) => t(words.count, { count: n })
   const options: SegmentOption<SidebarFilter>[] = [
-    { value: 'all', content: 'All', label: `All ${unit}s` },
+    { value: 'all', content: t('tasks.filter.all'), label: t(words.all) },
     segment(
       'needs-you',
-      'Needs you',
+      t('tasks.filter.needsYou'),
       CircleAlert,
       'text-danger',
       summary.blocked,
-      unit,
+      count(summary.blocked),
     ),
     segment(
       'working',
-      'Working',
+      t('tasks.filter.working'),
       LoaderCircle,
       'text-warning motion-safe:animate-spin',
       summary.working,
-      unit,
+      count(summary.working),
     ),
   ]
   if (unit === 'session') {
     options.push(
-      segment('agents', 'Agents', Bot, 'text-fg-muted', summary.agents, unit),
+      segment(
+        'agents',
+        t('tasks.filter.agentsSegment'),
+        Bot,
+        'text-fg-muted',
+        summary.agents,
+        count(summary.agents),
+      ),
     )
   }
   return (
     <SegmentedControl
-      label={`Filter ${unit}s`}
+      label={t(words.label)}
       options={options}
       value={filter}
       onChange={onChange}

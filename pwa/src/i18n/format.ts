@@ -13,8 +13,15 @@ export function formatDate(date: Date | number, locale: Locale): string {
   return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(date)
 }
 
-export function formatTime(date: Date | number, locale: Locale): string {
-  return new Intl.DateTimeFormat(locale, { timeStyle: 'short' }).format(date)
+// seconds: with them ("2:03:27 PM"), for a log
+export function formatTime(
+  date: Date | number,
+  locale: Locale,
+  seconds = false,
+): string {
+  return new Intl.DateTimeFormat(locale, {
+    timeStyle: seconds ? 'medium' : 'short',
+  }).format(date)
 }
 
 export function formatNumber(value: number, locale: Locale): string {

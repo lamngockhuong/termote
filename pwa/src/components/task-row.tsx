@@ -1,23 +1,30 @@
 import { Play, Send, SquareArrowOutUpRight } from 'lucide-react'
 import type { TaskItem, TaskRunView } from '../hooks/use-tasks'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { Button, IconButton } from './ui/button'
 
 // What a run's badge says, and its tone
-export function runBadge(run: TaskRunView): { text: string; tone: string } {
+export function runBadge(
+  run: TaskRunView,
+  t: Translate<MessageKey>,
+): { text: string; tone: string } {
   switch (run.state) {
     case 'running':
-      return { text: 'running', tone: 'text-info' }
+      return { text: t('tasks.badge.running'), tone: 'text-info' }
     case 'exited':
-      return run.code === 0
-        ? { text: 'exit 0', tone: 'text-success' }
-        : { text: `exit ${run.code}`, tone: 'text-danger' }
+      return {
+        text: t('tasks.badge.exit', { code: String(run.code) }),
+        tone: run.code === 0 ? 'text-success' : 'text-danger',
+      }
     case 'ended':
-      return { text: 'ended', tone: 'text-fg-muted' }
+      return { text: t('tasks.badge.ended'), tone: 'text-fg-muted' }
     case 'gone':
-      return { text: 'tab closed', tone: 'text-fg-muted' }
+      return { text: t('tasks.badge.gone'), tone: 'text-fg-muted' }
     default:
-      return { text: 'unknown', tone: 'text-fg-muted' }
+      return { text: t('tasks.badge.unknown'), tone: 'text-fg-muted' }
   }
 }
 
@@ -47,7 +54,8 @@ export function TaskRow({
   onOpen,
   onSend,
 }: Props) {
-  const badge = run && runBadge(run)
+  const { t } = useT()
+  const badge = run && runBadge(run, t)
   const ended = run && run.state !== 'running' && run.state !== 'gone'
   const failed = run?.state === 'exited' && run.code !== 0
   return (
@@ -78,15 +86,15 @@ export function TaskRow({
         </span>
         {item.hooks && item.hooks.length > 0 && (
           <span className="truncate text-[11px] text-fg-muted">
-            also runs {item.hooks.join(', ')}
+            {t('tasks.alsoRuns', { hooks: item.hooks.join(', ') })}
           </span>
         )}
       </div>
       {run && run.state !== 'gone' && run.state !== 'unknown' && (
         <IconButton
           size="sm"
-          aria-label={`Open the tab of ${item.name}`}
-          title="Open its tab"
+          aria-label={t('tasks.openTabOf', { name: item.name })}
+          title={t('tasks.openTab')}
           onClick={onOpen}
         >
           <SquareArrowOutUpRight size={15} aria-hidden="true" />
@@ -98,20 +106,20 @@ export function TaskRow({
           variant={failed ? 'primary' : 'secondary'}
           disabled={sending}
           onClick={onSend}
-          aria-label={`Send the output of ${item.name} to an agent`}
+          aria-label={t('tasks.sendOf', { name: item.name })}
         >
           <Send size={14} aria-hidden="true" />
-          Send to agent
+          {t('tasks.send')}
         </Button>
       )}
       <Button
         size="sm"
         disabled={starting}
         onClick={onRun}
-        aria-label={`Run ${item.name}`}
+        aria-label={t('tasks.runName', { name: item.name })}
       >
         <Play size={14} aria-hidden="true" />
-        Run
+        {t('tasks.run')}
       </Button>
     </li>
   )

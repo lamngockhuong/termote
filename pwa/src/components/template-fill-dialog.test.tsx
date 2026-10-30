@@ -64,7 +64,7 @@ describe('TemplateFillDialog', () => {
     })
     HTMLDialogElement.prototype.close = vi.fn()
     vars.known = {
-      file: { value: 'src/a.ts', source: 'the file shown' },
+      file: { value: 'src/a.ts', source: 'chat.fill.from.file' },
       selection: none,
       branch: none,
       input: none,
@@ -214,7 +214,7 @@ describe('TemplateFillDialog', () => {
   it('a known branch needs no read; Enter in a field inserts', () => {
     vars.known = {
       ...vars.known,
-      branch: { value: 'dev', source: 'the worktree' },
+      branch: { value: 'dev', source: 'chat.fill.from.worktree' },
     }
     renderDialog()
     pick('full')
@@ -240,7 +240,10 @@ describe('TemplateFillDialog', () => {
   it('warns when the text is longer than a message', () => {
     vars.known = {
       ...vars.known,
-      file: { value: 'x'.repeat(MAX_TEMPLATE_TEXT), source: 'the file shown' },
+      file: {
+        value: 'x'.repeat(MAX_TEMPLATE_TEXT),
+        source: 'chat.fill.from.file',
+      },
     }
     renderDialog()
     pick('file')

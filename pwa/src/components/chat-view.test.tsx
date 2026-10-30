@@ -163,7 +163,7 @@ describe('ChatView', () => {
     })
     expect(paneSelection('0')).toEqual({
       text: 'message 0',
-      source: 'the Chat',
+      source: 'chat.fill.from.chat',
     })
     sel.removeAllRanges()
   })

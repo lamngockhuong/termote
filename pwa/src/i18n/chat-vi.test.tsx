@@ -492,7 +492,7 @@ describe('templates in Vietnamese', () => {
     ]
     const none = { value: '', source: '' }
     vars.known = {
-      file: { value: 'src/a.ts', source: 'the file shown' },
+      file: { value: 'src/a.ts', source: 'chat.fill.from.file' },
       selection: none,
       branch: none,
       input: none,

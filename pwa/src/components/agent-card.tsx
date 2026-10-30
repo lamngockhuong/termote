@@ -8,6 +8,8 @@ import type {
 } from '../hooks/use-mux-api'
 import { useSubagents } from '../hooks/use-subagents'
 import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
 import type { AgentStatus, Session, SessionPane } from '../types/session'
 import { formatAgo } from '../utils/format-ago'
 import { visibleUnsafe } from '../utils/unsafe-chars'
@@ -18,11 +20,11 @@ import { SubagentTree, subagentSummary } from './subagent-tree'
 import { FOCUS_RING, IconButton } from './ui/button'
 import { UsageMeter } from './usage-meter'
 
-const STATUS_WORDS: Record<AgentStatus, string> = {
-  blocked: 'Needs you',
-  working: 'Working',
-  done: 'Done',
-  idle: 'Idle',
+const STATUS_WORDS: Record<AgentStatus, MessageKey> = {
+  blocked: 'tasks.status.blocked',
+  working: 'tasks.status.working',
+  done: 'tasks.status.done',
+  idle: 'tasks.status.idle',
 }
 
 // A token count the way a card has room for it: 950, 12.3k, 184k, 1.2M.
@@ -43,6 +45,7 @@ const LEVEL_TEXT = {
 // assumed) and the tokens of the window; only the tokens from a server that
 // does not know the window.
 function ContextUsage({ usage }: { usage: OverviewUsage }) {
+  const { t } = useT()
   const { contextTokens, contextWindow, contextPercent, exact, model } = usage
   const known = !!contextWindow && contextPercent !== undefined
   return (
@@ -51,17 +54,17 @@ function ContextUsage({ usage }: { usage: OverviewUsage }) {
         <>
           <UsageMeter
             percent={contextPercent}
-            label="Context"
-            valueText={`${percentLabel(contextPercent, exact)}, ${formatTokens(contextTokens)} of ${formatTokens(contextWindow)} tokens`}
+            label={t('tasks.card.context')}
+            valueText={t('tasks.card.contextValue', {
+              percent: percentLabel(contextPercent, exact),
+              used: formatTokens(contextTokens),
+              size: formatTokens(contextWindow),
+            })}
             className="w-12 shrink-0"
           />
           <span
             className={`shrink-0 tabular-nums ${LEVEL_TEXT[usageLevel(contextPercent)]}`}
-            title={
-              exact
-                ? undefined
-                : 'Window assumed: the agent was not started with --model'
-            }
+            title={exact ? undefined : t('tasks.card.windowAssumed')}
           >
             {percentLabel(contextPercent, exact)}
           </span>
@@ -71,7 +74,7 @@ function ContextUsage({ usage }: { usage: OverviewUsage }) {
         </>
       ) : (
         <span className="shrink-0 tabular-nums">
-          {formatTokens(contextTokens)} tokens
+          {t('tasks.card.tokens', { tokens: formatTokens(contextTokens) })}
         </span>
       )}
       {model && <span className="truncate">· {visibleUnsafe(model)}</span>}
@@ -85,11 +88,14 @@ export function statusAge(
   since: string | undefined,
   firstSeen: boolean | undefined,
   now: number,
+  t: Translate<MessageKey>,
 ): string | undefined {
-  const t = since ? Date.parse(since) : Number.NaN
-  if (!Number.isFinite(t)) return undefined
-  const ago = formatAgo(Math.max(0, now - t))
-  return firstSeen && ago !== 'just now' ? `≥ ${ago}` : ago
+  const at = since ? Date.parse(since) : Number.NaN
+  if (!Number.isFinite(at)) return undefined
+  const ms = Math.max(0, now - at)
+  const ago = formatAgo(ms, t)
+  // "just now" is under a minute
+  return firstSeen && ms >= 60_000 ? `≥ ${ago}` : ago
 }
 
 interface Props {
@@ -157,11 +163,15 @@ export const AgentCard = memo(function AgentCard({
   const subagentCount = claude ? subagentSummary(subagents.tree, t) : undefined
   const label = agentLabel(pane.agentName)
   const name =
-    label === 'agent' ? visibleUnsafe(pane.agentName || 'Agent') : label
+    label === 'agent'
+      ? visibleUnsafe(pane.agentName || t('tasks.agent'))
+      : label
   const place = visibleUnsafe(where)
-  const openLabel = opensChat ? 'Open chat' : 'Open terminal'
+  const openLabel = opensChat
+    ? t('tasks.card.openChat')
+    : t('tasks.card.openTerminal')
   const status = pane.agentStatus
-  const age = statusAge(pane.agentSince, pane.agentSinceFirstSeen, now)
+  const age = statusAge(pane.agentSince, pane.agentSinceFirstSeen, now, t)
   const pending = (what: string) => overview?.unavailable?.includes(what)
   const showChanges =
     overview && !pending('changes') && overview.changed !== undefined
@@ -184,7 +194,12 @@ export const AgentCard = memo(function AgentCard({
         ref={openRef}
         type="button"
         onClick={() => onOpen(session, pane, opensChat ? 'chat' : 'terminal')}
-        aria-label={`${openLabel}: ${name}, ${status ? STATUS_WORDS[status] : 'status unknown'}, ${place}`}
+        aria-label={t('tasks.card.label', {
+          open: openLabel,
+          name,
+          status: status ? t(STATUS_WORDS[status]) : t('tasks.card.noStatus'),
+          place,
+        })}
         aria-describedby={detailsId}
         className={`flex w-full min-h-touch flex-col gap-1.5 rounded-panel p-3 pr-12 text-left transition-colors duration-(--duration-fast) ease-standard hover:bg-surface-raised ${FOCUS_RING}`}
       >
@@ -193,12 +208,12 @@ export const AgentCard = memo(function AgentCard({
           <span className="truncate font-semibold text-fg">{name}</span>
           {status && (
             <span className="shrink-0 text-fg-muted">
-              · {STATUS_WORDS[status]}
+              · {t(STATUS_WORDS[status])}
               {age && (
                 <span
                   title={
                     pane.agentSinceFirstSeen
-                      ? 'Already in this state when the server first saw it'
+                      ? t('tasks.card.firstSeen')
                       : undefined
                   }
                 >
@@ -218,7 +233,7 @@ export const AgentCard = memo(function AgentCard({
           </span>
           {worktree && (
             <span className="shrink-0 rounded-control border border-border px-1 text-[11px]">
-              worktree
+              {t('tasks.card.worktree')}
             </span>
           )}
         </span>
@@ -227,7 +242,7 @@ export const AgentCard = memo(function AgentCard({
           {stuckFor !== undefined && (
             <span className="flex items-center gap-1.5 text-[12px] text-warning">
               <Hourglass size={13} aria-hidden="true" className="shrink-0" />
-              May be stuck: no new activity for {stuckFor} min
+              {t('tasks.card.stuck', { n: stuckFor })}
             </span>
           )}
           {overview?.lastText ? (
@@ -257,8 +272,10 @@ export const AgentCard = memo(function AgentCard({
                     </span>
                   )}
                   <span className="shrink-0">
-                    · {overview.changed}
-                    {overview.changedTruncated ? '+' : ''} changed
+                    ·{' '}
+                    {t('tasks.card.changed', {
+                      n: `${overview.changed}${overview.changedTruncated ? '+' : ''}`,
+                    })}
                   </span>
                 </span>
               )}
@@ -281,7 +298,7 @@ export const AgentCard = memo(function AgentCard({
             className={`shrink-0 transition-transform duration-(--duration-fast) ease-standard ${expanded ? 'rotate-180' : ''}`}
           />
           <span className="truncate">
-            {expanded ? 'Hide history' : 'History'}
+            {expanded ? t('tasks.card.hideHistory') : t('tasks.card.history')}
             {subagentCount && ` · ${subagentCount}`}
           </span>
         </button>
@@ -302,8 +319,8 @@ export const AgentCard = memo(function AgentCard({
         <IconButton
           size="sm"
           onClick={() => onOpen(session, pane, 'terminal')}
-          aria-label={`Open terminal: ${name}, ${place}`}
-          title="Open terminal"
+          aria-label={t('tasks.card.openTerminalOf', { name, place })}
+          title={t('tasks.card.openTerminal')}
           className="absolute right-2 top-2"
         >
           <SquareTerminal size={16} aria-hidden="true" />

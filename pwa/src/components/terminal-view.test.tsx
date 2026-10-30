@@ -1299,7 +1299,7 @@ describe('TerminalView', () => {
       term.selectionCb()
       expect(paneSelection('0')).toEqual({
         text: 'picked',
-        source: 'the terminal',
+        source: 'chat.fill.from.terminal',
       })
       // Cleared: the last one stays
       term.selection = ''

@@ -68,20 +68,20 @@ const LABEL: Record<TemplateVariable, MessageKey> = {
   branch: 'chat.fill.var.branch',
 }
 
-// By the source utils/resolve-template-vars.ts names
-const SOURCE: Record<string, MessageKey> = {
-  'the file shown': 'chat.fill.from.file',
-  'the terminal': 'chat.fill.from.terminal',
-  'the Chat': 'chat.fill.from.chat',
-  git: 'chat.fill.from.git',
-  'the worktree': 'chat.fill.from.worktree',
-}
+// The views a value can come from, named by the key of their line
+// (utils/resolve-template-vars.ts, the selections); any other source is a
+// file's path
+const VIEWS: ReadonlySet<string> = new Set<MessageKey>([
+  'chat.fill.from.file',
+  'chat.fill.from.terminal',
+  'chat.fill.from.chat',
+  'chat.fill.from.git',
+  'chat.fill.from.worktree',
+])
 
 // Where a value came from, as its field says it
 const sourceText = (source: string, t: Translate<MessageKey>) =>
-  Object.hasOwn(SOURCE, source)
-    ? t(SOURCE[source])
-    : t('chat.fill.from', { source })
+  VIEWS.has(source) ? t(source as MessageKey) : t('chat.fill.from', { source })
 
 const FIELD =
   'w-full min-w-0 rounded-control border border-border bg-bg px-2.5 py-1.5 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent'
@@ -157,7 +157,10 @@ export function TemplateFillDialog({ pane, terminalText, notify }: Props) {
                   branchLoading: false,
                   ...(!o.edited.branch && {
                     values: { ...o.values, branch },
-                    sources: { ...o.sources, branch: branch && 'git' },
+                    sources: {
+                      ...o.sources,
+                      branch: branch && 'chat.fill.from.git',
+                    },
                   }),
                 }
               : o,

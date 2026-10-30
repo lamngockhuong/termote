@@ -133,12 +133,10 @@ describe('ActivityLog', () => {
 
   it("shows a server time on this device's clock", () => {
     const at = '2026-10-13T10:00:30Z'
-    const local = new Date(Date.parse(at) - 30_000).toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    })
-    expect(eventTime(at, 30_000)).toBe(local)
-    expect(eventTime('nope', 0)).toBe('')
+    const local = new Intl.DateTimeFormat('en', {
+      timeStyle: 'medium',
+    }).format(Date.parse(at) - 30_000)
+    expect(eventTime(at, 30_000, 'en')).toBe(local)
+    expect(eventTime('nope', 0, 'en')).toBe('')
   })
 })

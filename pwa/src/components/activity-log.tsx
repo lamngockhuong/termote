@@ -2,6 +2,10 @@ import { ArrowRight } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { agentLabel } from '../chat-agents'
 import type { ActivityEvent } from '../hooks/use-mux-api'
+import type { Locale } from '../i18n'
+import { formatTime } from '../i18n/format'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
 import type {
   AgentStatus,
   Session,
@@ -16,42 +20,45 @@ import { SegmentedControl } from './ui/segmented-control'
 
 type Filter = 'all' | AgentStatus
 
-const FILTERS: { value: Filter; content: string }[] = [
-  { value: 'all', content: 'All' },
-  { value: 'blocked', content: 'Needs you' },
-  { value: 'working', content: 'Working' },
-  { value: 'done', content: 'Done' },
-  { value: 'idle', content: 'Idle' },
+const FILTERS: { value: Filter; content: MessageKey }[] = [
+  { value: 'all', content: 'tasks.activity.all' },
+  { value: 'blocked', content: 'tasks.status.blocked' },
+  { value: 'working', content: 'tasks.status.working' },
+  { value: 'done', content: 'tasks.status.done' },
+  { value: 'idle', content: 'tasks.status.idle' },
 ]
 
-const STATUS_WORDS: Record<string, string> = {
-  blocked: 'needs you',
-  working: 'working',
-  done: 'done',
-  idle: 'idle',
+const STATUS_WORDS: Record<string, MessageKey> = {
+  blocked: 'tasks.activity.blocked',
+  working: 'tasks.activity.working',
+  done: 'tasks.activity.done',
+  idle: 'tasks.activity.idle',
 }
 
 function Status({ status }: { status: string }) {
-  if (!status) return <span className="text-fg-subtle">gone</span>
+  const { t } = useT()
+  if (!status)
+    return <span className="text-fg-subtle">{t('tasks.activity.gone')}</span>
+  // A status this version does not know is shown as the server names it
+  const known = Object.hasOwn(STATUS_WORDS, status)
   return (
     <span className="flex items-center gap-1">
-      {status in STATUS_WORDS && (
-        <AgentStatusBadge status={status as AgentStatus} size={12} />
-      )}
-      {STATUS_WORDS[status] ?? status}
+      {known && <AgentStatusBadge status={status as AgentStatus} size={12} />}
+      {known ? t(STATUS_WORDS[status]) : status}
     </span>
   )
 }
 
-// The time of a server timestamp on this device's clock, "14:03:27".
-export function eventTime(ts: string, clockOffset: number): string {
+// The time of a server timestamp on this device's clock, in locale's way
+// with its seconds ("2:03:27 PM")
+export function eventTime(
+  ts: string,
+  clockOffset: number,
+  locale: Locale,
+): string {
   const t = Date.parse(ts)
   if (!Number.isFinite(t)) return ''
-  return new Date(t - clockOffset).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  })
+  return formatTime(t - clockOffset, locale, true)
 }
 
 interface Props {
@@ -77,6 +84,7 @@ export function ActivityLog({
   error,
   onOpen,
 }: Props) {
+  const { t, locale } = useT()
   const [filter, setFilter] = useState<Filter>('all')
   const byKey = useMemo(() => {
     const m = new Map<string, { session: Session; pane: SessionPane }>()
@@ -103,25 +111,25 @@ export function ActivityLog({
   return (
     <div className="flex min-h-0 flex-col gap-2">
       <SegmentedControl
-        label="Show changes to"
-        options={FILTERS}
+        label={t('tasks.activity.filter')}
+        options={FILTERS.map((f) => ({ ...f, content: t(f.content) }))}
         value={filter}
         onChange={setFilter}
         className="self-start"
       />
       {error && (
         <p role="status" className="text-[12px] text-fg-muted">
-          Could not read the activity; retrying.
+          {t('tasks.activity.readFailed')}
         </p>
       )}
       {loaded && rows.length === 0 ? (
         <p className="py-4 text-center text-[13px] text-fg-muted">
           {events.length
-            ? 'No changes match.'
-            : 'No status changes since the server started.'}
+            ? t('tasks.activity.noMatch')
+            : t('tasks.activity.none')}
         </p>
       ) : (
-        <ol aria-label="Status changes" className="flex flex-col">
+        <ol aria-label={t('tasks.activity.list')} className="flex flex-col">
           {rows.map((e) => {
             const found = byKey.get(e.key)
             const where = found
@@ -130,23 +138,23 @@ export function ActivityLog({
                     ? `${groupName.get(found.session.groupId) ?? found.session.groupId} / ${found.session.name}`
                     : found.session.name,
                 )
-              : 'closed'
+              : t('tasks.activity.closed')
             const name =
               agentLabel(e.agent) === 'agent'
-                ? visibleUnsafe(e.agent || 'Agent')
+                ? visibleUnsafe(e.agent || t('tasks.agent'))
                 : agentLabel(e.agent)
             const body = (
               <>
                 <span className="flex min-w-0 items-center gap-1.5">
                   <span className="shrink-0 tabular-nums text-fg-muted">
-                    {eventTime(e.ts, clockOffset)}
+                    {eventTime(e.ts, clockOffset, locale)}
                   </span>
                   <span className="truncate font-semibold">{name}</span>
                   <span className="truncate text-fg-muted">{where}</span>
                 </span>
                 <span className="flex items-center gap-1.5 text-fg-muted">
                   <Status status={e.from} />
-                  <ArrowRight size={12} aria-label="to" />
+                  <ArrowRight size={12} aria-label={t('tasks.activity.to')} />
                   <Status status={e.to} />
                 </span>
               </>

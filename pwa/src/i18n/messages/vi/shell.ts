@@ -164,7 +164,7 @@ export default {
   'shell.move.unsupported': 'Ở đây không sắp xếp lại được',
   'shell.move.failed': 'Không di chuyển được',
   'shell.reorder.clearSearch': 'xóa ô tìm',
-  'shell.reorder.showAll': 'bấm Hiện tất cả',
+  'shell.reorder.showAll': 'bấm Tất cả',
   'shell.reorder.blockedFirst': 'tắt Phiên đang chờ lên đầu',
   'shell.reorder.blockedFirstSettings':
     'tắt Phiên đang chờ lên đầu trong Cài đặt',
