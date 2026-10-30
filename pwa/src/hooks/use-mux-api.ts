@@ -48,10 +48,12 @@ export interface MuxTab {
 
 // A group's place in a Herdr worktree group: a linked worktree, or the
 // repository's own checkout. branch is read in the background, so it can
-// be missing for a moment.
+// be missing for a moment. parent: a linked worktree's repository checkout,
+// when open; the snapshot lists the worktree right after it.
 export interface MuxGroupWorktree {
   linked: boolean
   branch?: string
+  parent?: string
 }
 
 export interface MuxGroup {

@@ -864,8 +864,17 @@ export function SessionSidebar({
     if (narrowed && tabs.length === 0) return null
     const collapsed = !narrowed && isGroupCollapsed(group.id)
     const name = visibleUnsafe(group.name || group.id)
+    // A linked worktree sits indented under its repository's checkout, after
+    // which the server lists its worktrees, as Herdr's sidebar draws it. Not
+    // while filtering: the checkout may be hidden, leaving it under another.
+    const parent = group.worktree?.parent
+    const nested = !narrowed && !!parent && groupById.has(parent)
     return (
-      <section key={group.id} aria-label={name} className="pb-2">
+      <section
+        key={group.id}
+        aria-label={name}
+        className={nested ? 'ml-3 border-l border-border pb-2 pl-1.5' : 'pb-2'}
+      >
         {groupActions && renamingGroup === group.id ? (
           renderGroupRename(groupActions, group)
         ) : (

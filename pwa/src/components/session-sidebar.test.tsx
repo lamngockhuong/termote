@@ -1639,6 +1639,69 @@ describe('SessionSidebar — worktree actions', () => {
       screen.getByRole('button', { name: `Actions for workspace ${name}` }),
     )
 
+  it('indents a linked worktree under its open repository checkout', () => {
+    render(
+      <SessionSidebar
+        sessions={[REPO, WT]}
+        groups={[
+          { id: 'w1', name: 'repo', worktree: { linked: false } },
+          {
+            id: 'w2',
+            name: 'feature',
+            worktree: { linked: true, parent: 'w1' },
+          },
+          {
+            id: 'w3',
+            name: 'orphan',
+            worktree: { linked: true, parent: 'w9' },
+          },
+        ]}
+        activeId="w1:t1"
+        onSelect={vi.fn()}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+      />,
+    )
+    const section = (name: string) =>
+      screen.getByRole('region', { name }).className
+    expect(section('feature')).toContain('border-l')
+    expect(section('repo')).not.toContain('border-l')
+    // A parent not in the list: not indented under some other workspace
+    expect(section('orphan')).not.toContain('border-l')
+  })
+
+  it('does not indent a worktree while filtering hides its checkout', () => {
+    const working: Session = {
+      ...WT,
+      panes: [
+        { id: 'p1', label: 'p1', hasAgent: true, agentStatus: 'working' },
+      ],
+    }
+    render(
+      <SessionSidebar
+        sessions={[REPO, working]}
+        groups={[
+          { id: 'w1', name: 'repo', worktree: { linked: false } },
+          {
+            id: 'w2',
+            name: 'feature',
+            worktree: { linked: true, parent: 'w1' },
+          },
+        ]}
+        activeId="w1:t1"
+        filter="working"
+        onFilterChange={vi.fn()}
+        onSelect={vi.fn()}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+      />,
+    )
+    expect(screen.queryByRole('region', { name: 'repo' })).toBeNull()
+    expect(
+      screen.getByRole('region', { name: 'feature' }).className,
+    ).not.toContain('border-l')
+  })
+
   it('shows the hidden characters of a worktree branch', () => {
     render(
       <SessionSidebar

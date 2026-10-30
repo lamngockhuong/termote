@@ -445,7 +445,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   drag sends it), before the movable workspace at `index`; a linked worktree → 409
   `linked_worktree`; `tab_not_found` → 404, `tab_move_failed`/`workspace_not_found` → 400
   `invalid_index`, `invalid_request` naming the method → 501, else 500 (Herdr's text logged,
-  never returned). The snapshot keeps Herdr's tab order (`number` is a creation number). tmux
+  never returned). The snapshot keeps Herdr's tab order (`number` is a creation number); its group
+  order lists a repository's linked worktrees after its checkout, so a move reads the view's order, never
+  the snapshot's. tmux
   (the server's version from `display-message -p '#{version}'`, ≥ 3.2 for `-b`, cached once
   parsed, a failed read retried after 30 s; psmux never, its `move-window` ignores `-s`):
   `list-windows -t <session>`, one `move-window -b|-a -s <exact> -t <exact window at index>`,
@@ -490,7 +492,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   last line dropped when cut, names failing `validBranchName` dropped, `[]` when git refuses).
   Create and remove run git with the user's config (hooks, LFS filters), as typing the command
   would; a remove deletes ignored files too and, with `force`, ends the panes first; the branch
-  is kept. The snapshot's `worktree: {linked, branch?}` comes from `session.snapshot`'s
+  is kept. The snapshot's `worktree: {linked, branch?, parent?}` comes from `session.snapshot`'s
   membership (kept across a Herdr restart); the branch from a cache apart from the view
   (`herdr_worktree_branches.go`): served stale while one background `worktree.list` per
   repository refreshes it (10 s fresh, 1.5 s budget, 30 s kept after failures, 5 minutes off

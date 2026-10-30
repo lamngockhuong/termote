@@ -329,6 +329,9 @@ Run Herdr on a throwaway socket and `HOME`, never your live Herdr.
 - [ ] Herdr: a tab reordered in Herdr itself shows in the same order in Termote
 - [ ] Herdr worktree group: the repository's workspace moves with its worktrees; a linked worktree
       has no Move and its route answers 409 `linked_worktree`
+- [ ] Herdr worktree group: each linked worktree shows indented right under its repository's
+      workspace, even one opened after other workspaces; with the repository's workspace closed
+      its worktrees stay together, not indented
 - [ ] Herdr restarted: the order is kept
 - [ ] No reorder control while the agent filter or "blocked first" is on, nor on tmux older than
       3.2, psmux (Windows), Herdr older than 0.8.0 or Herdr on Windows; tmux sessions have no Move

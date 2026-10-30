@@ -309,7 +309,54 @@ func (m *herdrMux) snapshot(ctx context.Context, withBranches bool) (Snapshot, e
 			g.Worktree = &GroupWorktree{Linked: ref.linked, Branch: branches[g.ID]}
 		}
 	}
+	nestWorktrees(snap.Groups, v.worktrees)
 	return snap, nil
+}
+
+// nestWorktrees puts each repository's linked worktrees right after its own
+// checkout, as Herdr's sidebar draws them, and names that checkout as their
+// parent; with the checkout not open, they stay together where the first one
+// is. Only the snapshot is reordered: a move reads Herdr's own order.
+func nestWorktrees(groups []Group, refs map[string]herdrWorktreeRef) {
+	parent := map[string]string{}  // repository → its checkout's workspace
+	linked := map[string][]Group{} // repository → its linked worktrees
+	for _, g := range groups {
+		ref, ok := refs[g.ID]
+		switch {
+		case !ok || ref.repoKey == "" || g.Worktree == nil:
+		case ref.linked:
+			linked[ref.repoKey] = append(linked[ref.repoKey], g)
+		case parent[ref.repoKey] == "":
+			parent[ref.repoKey] = g.ID
+		}
+	}
+	if len(linked) == 0 {
+		return
+	}
+	out := make([]Group, 0, len(groups))
+	placed := map[string]bool{}
+	for _, g := range groups {
+		ref, ok := refs[g.ID]
+		key := ref.repoKey
+		if !ok || key == "" || g.Worktree == nil {
+			out = append(out, g)
+			continue
+		}
+		if !ref.linked {
+			out = append(out, g)
+			if parent[key] != g.ID {
+				continue
+			}
+		} else if parent[key] != "" || placed[key] {
+			continue
+		}
+		placed[key] = true
+		for _, w := range linked[key] {
+			w.Worktree.Parent = parent[key]
+			out = append(out, w)
+		}
+	}
+	copy(groups, out)
 }
 
 // copySnapshot copies a snapshot's groups, tabs and panes, so filling the
