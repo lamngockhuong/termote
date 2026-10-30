@@ -351,8 +351,9 @@ var (
 )
 
 // findDialog recognises a dialog whose footer is the last row. A footer
-// without "Esc to cancel" is not a dialog this code knows, except the Submit
-// tab of AskUserQuestion, which Claude Code draws without one.
+// without "Esc to cancel" is not a dialog this code knows, except the one
+// vim mode draws on the free-text option (vimFooterRe) and the Submit tab of
+// AskUserQuestion, which Claude Code draws without a footer.
 func findDialog(lines []screenLine) agentScreen {
 	n := len(lines)
 	if n == 0 {
@@ -362,11 +363,8 @@ func findDialog(lines []screenLine) agentScreen {
 	// Only the end of the hint may move to the last row: a row of its own
 	// below a whole footer is not part of the dialog.
 	footer := n - 1
-	if !strings.Contains(lines[footer].text, "Esc to cancel") {
-		last := strings.TrimSpace(lines[n-1].text)
-		if n < 2 || last == "" || !strings.HasSuffix("Esc to cancel", last) ||
-			strings.Contains(lines[n-2].text, "Esc to cancel") ||
-			!strings.HasSuffix(strings.TrimSpace(lines[n-2].text)+" "+last, "Esc to cancel") {
+	if !isDialogFooter(lines[footer].text) {
+		if n < 2 || !wrappedFooter(lines[n-2].text, lines[n-1].text) {
 			return findSubmitTab(lines)
 		}
 		footer = n - 2
@@ -398,6 +396,38 @@ func findDialog(lines []screenLine) agentScreen {
 	// Only a question whose options have previews offers notes.
 	preview := strings.Contains(strings.Join(hints, " "), "n to add notes")
 	return agentScreen{sig: dialogSig(lines[top:]), prompt: parseDialog(lines[top+1:footer], preview)}
+}
+
+// vimFooterRe: the mode Claude Code's vim editor mode puts first in the
+// footer while the pointer is on the free-text option, where Esc leaves
+// insert mode instead of cancelling, so the footer has no "Esc to cancel":
+// "-- INSERT -- · Enter to select · ↑/↓ to navigate · ctrl+g to edit in Vim".
+var vimFooterRe = regexp.MustCompile(`^-- [A-Z]+ -- · Enter to select\b`)
+
+// dialogFooterEnds are the hints a dialog footer ends with.
+var dialogFooterEnds = []string{"Esc to cancel", "ctrl+g to edit in Vim"}
+
+func isDialogFooter(t string) bool {
+	t = strings.TrimSpace(t)
+	return strings.Contains(t, "Esc to cancel") ||
+		(vimFooterRe.MatchString(t) && strings.HasSuffix(t, "ctrl+g to edit in Vim"))
+}
+
+// wrappedFooter reports a footer a narrow pane wrapped onto two rows: only
+// the end of its last hint ("… · Esc to" / "cancel") may move to the last
+// row, and the row above is not a whole footer on its own.
+func wrappedFooter(prev, last string) bool {
+	prev, last = strings.TrimSpace(prev), strings.TrimSpace(last)
+	if last == "" || isDialogFooter(prev) {
+		return false
+	}
+	joined := prev + " " + last
+	for _, end := range dialogFooterEnds {
+		if strings.HasSuffix(end, last) && strings.HasSuffix(joined, end) {
+			return isDialogFooter(joined)
+		}
+	}
+	return false
 }
 
 // findSubmitTab recognises the Submit tab of a wizard, which has no footer:
