@@ -30,7 +30,11 @@ import { RequestError } from '../hooks/use-mux-api'
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
 import type { Translate } from '../i18n/translate'
-import type { Session, SessionGroup } from '../types/session'
+import {
+  type Session,
+  type SessionGroup,
+  worstAgentStatus,
+} from '../types/session'
 import { dropIndex, movableGroups, targetIndex } from '../utils/reorder'
 import {
   blockedFirst,
@@ -423,6 +427,15 @@ export function SessionSidebar({
   }
   const dropLineFor = (id: string) =>
     dropTarget?.id === id && dropLine(dropTarget.after)
+
+  // A repository checkout's linked worktrees, drawn under it. Asked only
+  // while not filtering (collapsed, or dragging), when they are indented.
+  const worktreesOf = (id: string) =>
+    groups.filter((g) => g.worktree?.parent === id)
+  // The last group drawn for a group and its worktrees: a group moves with
+  // them, so a drop after it lands after them
+  const blockEnd = (id: string) =>
+    (!isGroupCollapsed(id) && worktreesOf(id).at(-1)?.id) || id
 
   // Mobile: the sheet opens on the active session, wherever it is in the list.
   // Closed, it drops an edit left open, so it does not come back with it.
@@ -864,16 +877,23 @@ export function SessionSidebar({
     if (narrowed && tabs.length === 0) return null
     const collapsed = !narrowed && isGroupCollapsed(group.id)
     const name = visibleUnsafe(group.name || group.id)
-    // A linked worktree sits indented under its repository's checkout, after
-    // which the server lists its worktrees, as Herdr's sidebar draws it. Not
-    // while filtering: the checkout may be hidden, leaving it under another.
+    // The server lists a checkout's worktrees right after it, as Herdr's
+    // sidebar draws them; collapsing the checkout hides them too, and its
+    // badge then speaks for them.
     const parent = group.worktree?.parent
     const nested = !narrowed && !!parent && groupById.has(parent)
+    if (nested && isGroupCollapsed(parent)) return null
+    const status = collapsed
+      ? worstAgentStatus([
+          group.agentStatus,
+          ...worktreesOf(group.id).map((w) => w.agentStatus),
+        ])
+      : group.agentStatus
     return (
       <section
         key={group.id}
         aria-label={name}
-        className={nested ? 'ml-3 border-l border-border pb-2 pl-1.5' : 'pb-2'}
+        className={`relative pb-2 ${nested ? 'ml-3 border-l border-border pl-1.5' : ''}`}
       >
         {groupActions && renamingGroup === group.id ? (
           renderGroupRename(groupActions, group)
@@ -887,7 +907,9 @@ export function SessionSidebar({
               reorder?.onMoveGroup,
             )}
           >
-            {dropLineFor(group.id)}
+            {dropTarget?.id === group.id &&
+              !dropTarget.after &&
+              dropLine(false)}
             <button
               type="button"
               onClick={() => toggleGroup(group.id)}
@@ -926,7 +948,7 @@ export function SessionSidebar({
                   </span>
                 )}
               </span>
-              <AgentStatusBadge status={group.agentStatus} size={12} />
+              <AgentStatusBadge status={status} size={12} />
               <span className="ml-1 tabular-nums">{tabs.length}</span>
             </button>
             {/* Shown on hover, with focus inside or while open, as a
@@ -950,6 +972,9 @@ export function SessionSidebar({
             {tabs.map(renderItem)}
           </div>
         )}
+        {dropTarget?.after &&
+          blockEnd(dropTarget.id) === group.id &&
+          dropLine(true)}
       </section>
     )
   }

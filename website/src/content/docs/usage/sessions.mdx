@@ -372,7 +372,9 @@ worktrees as workspaces of their own, from its **⋯** menu:
   workspace; the branch is kept. A worktree with uncommitted or untracked changes is asked about a
   second time: removing it then loses those changes and ends its terminals first.
 
-A worktree's workspace shows its branch next to its name. Creating and removing run git with your
+A worktree's workspace shows its branch next to its name, indented under its repository's
+workspace as in Herdr; collapsing the repository's workspace hides its worktrees too, and its
+status badge then shows theirs as well. Creating and removing run git with your
 own config, hooks included, as typing the command would. Branch names with spaces, control or
 invisible characters are refused.
 
