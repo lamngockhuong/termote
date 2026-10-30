@@ -3,6 +3,7 @@ import type { TabLayout } from '../types/session'
 import {
   layoutFontFits,
   layoutFontSize,
+  layoutPanesOverLimit,
   layoutViewWanted,
   MAX_LAYOUT_PANES,
   measureCell,
@@ -64,6 +65,31 @@ describe('layoutViewWanted', () => {
       pane(`p${i}`),
     )
     expect(layoutViewWanted({ ...ON, layout: { ...LAYOUT, panes } })).toBe(true)
+  })
+})
+
+describe('layoutPanesOverLimit', () => {
+  const panes = (n: number) =>
+    Array.from({ length: n }, (_, i) => pane(`p${i}`))
+
+  it('is on past the limit where the layout view is otherwise allowed', () => {
+    const layout = { ...LAYOUT, panes: panes(MAX_LAYOUT_PANES + 1) }
+    expect(layoutPanesOverLimit({ ...ON, layout })).toBe(true)
+  })
+
+  it('is off up to the limit', () => {
+    const layout = { ...LAYOUT, panes: panes(MAX_LAYOUT_PANES) }
+    expect(layoutPanesOverLimit({ ...ON, layout })).toBe(false)
+  })
+
+  it.each([
+    ['a phone', { mobile: true }],
+    ['view-only', { viewOnly: true }],
+    ['the setting off', { setting: false }],
+    ['no pane streams', { paneStream: false }],
+  ])('is off with %s', (_, change) => {
+    const layout = { ...LAYOUT, panes: panes(MAX_LAYOUT_PANES + 1) }
+    expect(layoutPanesOverLimit({ ...ON, ...change, layout })).toBe(false)
   })
 })
 

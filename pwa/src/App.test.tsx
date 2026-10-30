@@ -10,7 +10,15 @@ import {
 } from '@testing-library/react'
 import { Folder, MessageSquare } from 'lucide-react'
 import { lazy, type ReactElement } from 'react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest'
 import App from './App'
 import { APP_VIEWS, type AppView, type ViewProps } from './app-views'
 import { KeyboardToolbar } from './components/keyboard-toolbar'
@@ -3648,6 +3656,69 @@ describe('App groups and panes', () => {
     render(<App />)
     fireEvent.click(await paneMenuItem('Zoom'))
     expect(a.zoomPane).toHaveBeenCalledWith(panes[1].id)
+  })
+
+  it("a Herdr tab past the layout view's pane limit says why it shows one pane at a time, once", async () => {
+    mockFinePointer.mockReturnValue(true)
+    const settings = mockUseSettings()
+    mockUseSettings.mockReturnValue({
+      ...settings,
+      settings: { ...settings.settings, herdrLayoutView: true } as any,
+    })
+    onTestFinished(() => mockUseSettings.mockRestore())
+    await mockLayout('herdr', { paneStream: true })
+    const base = mockUseLocalSessions() as any
+    const withPanes = (n: number) => ({
+      ...base,
+      sessions: base.sessions.map((s: { id: string }) =>
+        s.id === base.activeSession.id
+          ? {
+              ...s,
+              layout: {
+                cols: 120,
+                rows: 40,
+                zoomed: false,
+                panes: Array.from({ length: n }, (_, i) => ({
+                  id: `p${i}`,
+                  x: i * 10,
+                  y: 0,
+                  cols: 10,
+                  rows: 40,
+                })),
+              },
+            }
+          : s,
+      ),
+    })
+    const told = 'This tab has more than 4 panes, so they show one at a time.'
+    mockUseLocalSessions.mockReturnValue(withPanes(1))
+    const { rerender } = render(<App />)
+    await screen.findByTestId('terminal-view')
+    expect(screen.queryByTestId('toast')).toBeNull()
+    // A split past the limit
+    mockUseLocalSessions.mockReturnValue(withPanes(5))
+    rerender(<App />)
+    const first = await screen.findByTestId('toast')
+    expect(first).toHaveTextContent(told)
+    // Another pane: the same toast, not a new one (each toast mounts anew)
+    mockUseLocalSessions.mockReturnValue(withPanes(6))
+    rerender(<App />)
+    expect(screen.getByTestId('toast')).toBe(first)
+    // Off for a while (a phone's width) with the panes still past it: not
+    // said again once back on a desktop
+    mockIsMobile.mockReturnValue(true)
+    rerender(<App />)
+    mockIsMobile.mockReturnValue(false)
+    rerender(<App />)
+    expect(screen.getByTestId('toast')).toBe(first)
+    // Back under the limit (one pane: no layout view in jsdom), then past it again: said again
+    mockUseLocalSessions.mockReturnValue(withPanes(1))
+    rerender(<App />)
+    mockUseLocalSessions.mockReturnValue(withPanes(5))
+    rerender(<App />)
+    const again = await screen.findByTestId('toast')
+    expect(again).not.toBe(first)
+    expect(again).toHaveTextContent(told)
   })
 
   it('no swap past the last pane of tmux or Herdr', async () => {

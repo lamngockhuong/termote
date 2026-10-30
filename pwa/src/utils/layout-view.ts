@@ -27,11 +27,10 @@ export interface LayoutViewInput {
   layout: TabLayout | undefined
 }
 
-// The layout view is offered: a desktop with full rights, a backend that
-// streams panes one by one and arranges them, the setting on, and a tab of
-// 2 to MAX_LAYOUT_PANES panes with an area.
-export function layoutViewWanted(i: LayoutViewInput): boolean {
-  const n = i.layout?.panes.length ?? 0
+// Everything but the pane count allows the layout view: a desktop with full
+// rights, a backend that streams panes one by one and arranges them, the
+// setting on, and a tab with an area.
+function layoutViewAllowed(i: LayoutViewInput): boolean {
   return (
     i.paneStream &&
     i.paneLayout &&
@@ -39,10 +38,22 @@ export function layoutViewWanted(i: LayoutViewInput): boolean {
     !i.viewOnly &&
     i.setting &&
     !!i.layout?.cols &&
-    !!i.layout.rows &&
-    n >= 2 &&
-    n <= MAX_LAYOUT_PANES
+    !!i.layout.rows
   )
+}
+
+// The layout view is offered: allowed, and a tab of 2 to MAX_LAYOUT_PANES
+// panes.
+export function layoutViewWanted(i: LayoutViewInput): boolean {
+  const n = i.layout?.panes.length ?? 0
+  return layoutViewAllowed(i) && n >= 2 && n <= MAX_LAYOUT_PANES
+}
+
+// The layout view would be offered but for the tab's panes: more than
+// MAX_LAYOUT_PANES, so they show one at a time.
+export function layoutPanesOverLimit(i: LayoutViewInput): boolean {
+  const n = i.layout?.panes.length ?? 0
+  return layoutViewAllowed(i) && n > MAX_LAYOUT_PANES
 }
 
 // Whether the font fits: below minimum the panes would be unreadable. Once
