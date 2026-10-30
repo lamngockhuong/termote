@@ -89,9 +89,14 @@ export function CodeBlock({
   // The line picked last, highlighted until the next pick
   const [marked, setMarked] = useState<number>()
   const { pick, press, clear } = useLinePick()
-  // Lines picked in a file read again may hold something else now
-  // biome-ignore lint/correctness/useExhaustiveDependencies: text is the trigger
-  useEffect(clear, [text, clear])
+  // Lines picked in a file read again may hold something else now. Dropped
+  // while rendering the new text, not in an effect: a mount effect still
+  // pending would drop a line picked right after the file showed.
+  const [pickedIn, setPickedIn] = useState(text)
+  if (pickedIn !== text) {
+    setPickedIn(text)
+    clear()
+  }
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: only where it opens
   useLayoutEffect(() => {

@@ -27,3 +27,10 @@ Object.defineProperty(window, 'matchMedia', {
     dispatchEvent: () => false,
   }),
 })
+
+// jsdom lays nothing out and has no Range rects: CodeMirror measures text
+// ranges (the cursor, the selection, scrolling to it) in a later frame, and
+// logs the TypeError to stderr in whichever test that frame lands in
+Range.prototype.getClientRects ??= () =>
+  Object.assign([], { item: () => null }) as unknown as DOMRectList
+Range.prototype.getBoundingClientRect ??= () => new DOMRect()

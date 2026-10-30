@@ -1,4 +1,12 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
+import { createRoot } from 'react-dom/client'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider } from '../contexts/theme-context'
 import { CodeBlock, splitLines } from './code-block'
@@ -221,6 +229,51 @@ describe('CodeBlock lines picked for a comment', () => {
     expect(screen.getByRole('button', { name: 'Comment' })).toBeInTheDocument()
     v.rerender(ui('b'))
     expect(screen.queryByRole('button', { name: 'Comment' })).toBeNull()
+  })
+
+  it('keeps a line picked before the first effects ran', async () => {
+    mockHighlight.mockResolvedValue(null)
+    // Outside act, as the app runs: a line can be pressed as soon as it is
+    // on screen, while the mount's effects still wait for the scheduler
+    const env = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    const acting = env.IS_REACT_ACT_ENVIRONMENT
+    env.IS_REACT_ACT_ENVIRONMENT = false
+    const host = document.body.appendChild(document.createElement('div'))
+    const root = createRoot(host)
+    let seen: MutationObserver | undefined
+    try {
+      const pressed = new Promise<void>((resolve) => {
+        seen = new MutationObserver(() => {
+          const line = within(host).queryByRole('button', { name: 'Line 2' })
+          if (!line) return
+          seen?.disconnect()
+          line.click()
+          resolve()
+        })
+        seen.observe(host, { childList: true, subtree: true })
+      })
+      root.render(
+        <ThemeProvider>
+          <CodeBlock
+            text={'a\nb\n'}
+            path="a.ts"
+            wrap={false}
+            onLineComment={vi.fn()}
+          />
+        </ThemeProvider>,
+      )
+      await pressed
+      await waitFor(() =>
+        expect(
+          within(host).getByRole('button', { name: 'Comment' }),
+        ).toBeInTheDocument(),
+      )
+    } finally {
+      seen?.disconnect()
+      root.unmount()
+      host.remove()
+      env.IS_REACT_ACT_ENVIRONMENT = acting
+    }
   })
 
   it('marks the lines a comment is on', () => {
