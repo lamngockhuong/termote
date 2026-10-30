@@ -17,6 +17,8 @@ import {
   TextSelect,
 } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
 import { APP_INFO } from '../utils/app-info'
 import { AgentStatusBadge } from './agent-status-badge'
 import { FOCUS_RING } from './ui/button'
@@ -32,15 +34,17 @@ interface Props {
 
 type TabId = 'gestures' | 'tmux' | 'toolbar'
 
-interface GuideItem {
-  key: ReactNode
-  desc: string
+// A key drawn as it is typed (a keycap, an icon), or named in words
+type GuideKey = { key: ReactNode } | { keyLabel: MessageKey }
+
+type GuideItem = GuideKey & {
+  desc: MessageKey
   // Shown only when the backend has tmux copy mode (true) or lacks it (false)
   tmux?: boolean
 }
 
 interface GuideSection {
-  title: string
+  title: MessageKey
   items: GuideItem[]
 }
 
@@ -48,13 +52,25 @@ const ICON_SIZE = 14
 
 const GESTURES_GUIDE: GuideSection[] = [
   {
-    title: 'Touch Gestures',
+    title: 'help.gestures.title',
     items: [
-      { key: 'Swipe Left', desc: 'Cancel (Ctrl+C)' },
-      { key: 'Swipe Right', desc: 'Tab completion' },
-      { key: 'Swipe Up/Down', desc: 'Scroll history' },
-      { key: 'Long Press', desc: 'Paste from clipboard' },
-      { key: 'Pinch In/Out', desc: 'Decrease/Increase font size' },
+      {
+        keyLabel: 'help.gestures.swipeLeft',
+        desc: 'help.gestures.swipeLeftDesc',
+      },
+      {
+        keyLabel: 'help.gestures.swipeRight',
+        desc: 'help.gestures.swipeRightDesc',
+      },
+      {
+        keyLabel: 'help.gestures.swipeUpDown',
+        desc: 'help.gestures.swipeUpDownDesc',
+      },
+      {
+        keyLabel: 'help.gestures.longPress',
+        desc: 'help.gestures.longPressDesc',
+      },
+      { keyLabel: 'help.gestures.pinch', desc: 'help.gestures.pinchDesc' },
     ],
   },
 ]
@@ -80,170 +96,161 @@ const ScrollIcon = () => (
   </span>
 )
 
+// Keycaps carry the keys' own names, the same in every language
 const TOOLBAR_GUIDE: GuideSection[] = [
   {
-    title: 'Toolbar Buttons',
+    title: 'help.buttons.title',
     items: [
-      { key: <Keyboard size={ICON_SIZE} />, desc: 'Toggle virtual keyboard' },
-      { key: <Languages size={ICON_SIZE} />, desc: 'Text input mode (IME)' },
-      { key: 'Esc', desc: 'Escape key (clears modifiers if active)' },
-      { key: 'Ctrl', desc: 'Toggle Ctrl modifier (sticky)' },
-      { key: <UpDownIcon />, desc: 'Up/Down arrows' },
-      {
-        key: <CornerDownLeft size={ICON_SIZE} />,
-        desc: 'Enter / Submit command',
-      },
-      { key: 'Tab', desc: 'Tab key / autocomplete' },
-      {
-        key: <Ellipsis size={ICON_SIZE} />,
-        desc: 'Extra keys: show or hide the expanded rows (pinned at the right)',
-      },
+      { key: <Keyboard size={ICON_SIZE} />, desc: 'help.buttons.keyboard' },
+      { key: <Languages size={ICON_SIZE} />, desc: 'help.buttons.ime' },
+      { key: 'Esc', desc: 'help.buttons.esc' },
+      { key: 'Ctrl', desc: 'help.buttons.ctrl' },
+      { key: <UpDownIcon />, desc: 'help.buttons.upDown' },
+      { key: <CornerDownLeft size={ICON_SIZE} />, desc: 'help.buttons.enter' },
+      { key: 'Tab', desc: 'help.buttons.tab' },
+      { key: <Ellipsis size={ICON_SIZE} />, desc: 'help.buttons.extra' },
     ],
   },
   {
-    title: 'Expanded Keys',
+    title: 'help.expanded.title',
     items: [
-      { key: <Clock size={ICON_SIZE} />, desc: 'Command history search' },
+      { key: <Clock size={ICON_SIZE} />, desc: 'help.expanded.history' },
       {
         key: <Clipboard size={ICON_SIZE} />,
-        desc: 'Paste (source configurable in Settings)',
+        desc: 'help.expanded.pasteSource',
         tmux: true,
       },
       {
         key: <Clipboard size={ICON_SIZE} />,
-        desc: 'Paste from the system clipboard',
+        desc: 'help.expanded.pasteSystem',
         tmux: false,
       },
-      { key: <ImagePlus size={ICON_SIZE} />, desc: 'Attach an image' },
+      { key: <ImagePlus size={ICON_SIZE} />, desc: 'help.expanded.attach' },
       {
         key: <TextSelect size={ICON_SIZE} />,
-        desc: "Select text: the pane's text, to select and copy",
+        desc: 'help.expanded.selectText',
       },
-      { key: 'Shift', desc: 'Toggle Shift modifier (sticky)' },
-      { key: '⇧Tab', desc: 'Shift+Tab (e.g. switch mode in Claude Code)' },
-      { key: <LeftRightIcon />, desc: 'Left/Right arrows' },
+      { key: 'Shift', desc: 'help.expanded.shift' },
+      { key: '⇧Tab', desc: 'help.expanded.shiftTab' },
+      { key: <LeftRightIcon />, desc: 'help.expanded.leftRight' },
       {
         key: <History size={ICON_SIZE} />,
-        desc: 'Toggle tmux copy mode',
+        desc: 'help.expanded.copyMode',
         tmux: true,
       },
-      { key: <ScrollIcon />, desc: 'Page up/down in copy mode', tmux: true },
-      { key: <ScrollIcon />, desc: 'Scroll history', tmux: false },
+      { key: <ScrollIcon />, desc: 'help.expanded.page', tmux: true },
+      { key: <ScrollIcon />, desc: 'help.expanded.scroll', tmux: false },
     ],
   },
   {
-    title: 'Ctrl Combos (when Ctrl active)',
+    title: 'help.ctrl.title',
     items: [
-      { key: '^C', desc: 'Cancel/interrupt' },
-      { key: '^D', desc: 'Exit/EOF' },
-      { key: '^Z', desc: 'Suspend process' },
-      { key: '^L', desc: 'Clear screen' },
-      { key: '^A', desc: 'Move to line start' },
-      { key: '^E', desc: 'Move to line end' },
-      { key: '^B', desc: 'tmux prefix', tmux: true },
-      { key: '^B', desc: 'Move cursor back', tmux: false },
+      { key: '^C', desc: 'help.ctrl.c' },
+      { key: '^D', desc: 'help.ctrl.d' },
+      { key: '^Z', desc: 'help.ctrl.z' },
+      { key: '^L', desc: 'help.ctrl.l' },
+      { key: '^A', desc: 'help.ctrl.a' },
+      { key: '^E', desc: 'help.ctrl.e' },
+      { key: '^B', desc: 'help.ctrl.prefix', tmux: true },
+      { key: '^B', desc: 'help.ctrl.back', tmux: false },
     ],
   },
   {
-    title: 'Ctrl+Shift Combos',
+    title: 'help.ctrlShift.title',
     items: [
-      { key: '^⇧C', desc: 'Copy the selection, else send ^⇧C' },
-      { key: '^⇧V', desc: 'Paste from clipboard' },
-      { key: '^⇧Z', desc: 'Redo' },
-      { key: '^⇧X', desc: 'Cut' },
+      { key: '^⇧C', desc: 'help.ctrlShift.c' },
+      { key: '^⇧V', desc: 'help.ctrlShift.v' },
+      { key: '^⇧Z', desc: 'help.ctrlShift.z' },
+      { key: '^⇧X', desc: 'help.ctrlShift.x' },
     ],
   },
   {
-    title: 'Expanded Toolbar Rows',
+    // Each row by the name the toolbar shows on it
+    title: 'help.rows.title',
     items: [
-      { key: 'Actions', desc: 'Clear, Cancel, Clear line, Exit (mobile)' },
+      { keyLabel: 'shell.keys.actions', desc: 'help.rows.actions' },
       {
-        key: 'Text · Scroll',
-        desc: 'History, paste, attach image, select text, copy mode, page up/down',
+        keyLabel: 'shell.keys.textScroll',
+        desc: 'help.rows.textCopyMode',
         tmux: true,
       },
       {
-        key: 'Text · Scroll',
-        desc: 'History, paste, attach image, select text, scroll up/down',
+        keyLabel: 'shell.keys.textScroll',
+        desc: 'help.rows.textScroll',
         tmux: false,
       },
-      {
-        key: 'Navigate',
-        desc: 'Shift, Shift+Tab, Left/Right, Home/End, PgUp/PgDn, Del/Bksp, Insert',
-      },
-      {
-        key: 'Ctrl +',
-        desc: 'Every Ctrl combo, above the toolbar while Ctrl is on',
-      },
+      { keyLabel: 'shell.keys.navigate', desc: 'help.rows.navigate' },
+      { key: 'Ctrl +', desc: 'help.rows.ctrl' },
     ],
   },
   {
-    title: 'Agent Status',
+    title: 'help.status.title',
     items: [
       {
         key: <AgentStatusBadge status="blocked" />,
-        desc: 'Blocked: the agent is waiting for you',
+        desc: 'help.status.blocked',
       },
-      { key: <AgentStatusBadge status="working" />, desc: 'Working' },
-      { key: <AgentStatusBadge status="done" />, desc: 'Done' },
-      { key: <AgentStatusBadge status="idle" />, desc: 'Idle' },
       {
-        key: 'Chat',
-        desc: 'Claude Code and Codex panes: read the conversation, send a message, answer its dialogs (Codex on tmux: in the terminal)',
+        key: <AgentStatusBadge status="working" />,
+        desc: 'tasks.status.working',
       },
+      { key: <AgentStatusBadge status="done" />, desc: 'tasks.status.done' },
+      { key: <AgentStatusBadge status="idle" />, desc: 'tasks.status.idle' },
+      { keyLabel: 'common.chat', desc: 'help.status.chat' },
     ],
   },
 ]
 
+// tmux's own keys, typed after the prefix
 const TMUX_GUIDE: GuideSection[] = [
   {
-    title: 'Windows (Ctrl+B, then...)',
+    title: 'help.windows.title',
     items: [
-      { key: 'c', desc: 'Create new window' },
-      { key: 'n / p', desc: 'Next / Previous window' },
-      { key: '0-9', desc: 'Switch to window N' },
-      { key: ',', desc: 'Rename current window' },
-      { key: '&', desc: 'Kill current window' },
-      { key: 'w', desc: 'List all windows' },
+      { key: 'c', desc: 'help.windows.create' },
+      { key: 'n / p', desc: 'help.windows.nextPrev' },
+      { key: '0-9', desc: 'help.windows.switch' },
+      { key: ',', desc: 'help.windows.rename' },
+      { key: '&', desc: 'help.windows.kill' },
+      { key: 'w', desc: 'help.windows.list' },
     ],
   },
   {
-    title: 'Panes (Ctrl+B, then...)',
+    title: 'help.panes.title',
     items: [
-      { key: '%', desc: 'Split vertically' },
-      { key: '"', desc: 'Split horizontally' },
-      { key: '← ↑ → ↓', desc: 'Navigate panes' },
-      { key: 'x', desc: 'Kill current pane' },
-      { key: 'z', desc: 'Toggle pane zoom' },
-      { key: 'Space', desc: 'Cycle layouts' },
+      { key: '%', desc: 'help.panes.splitVertical' },
+      { key: '"', desc: 'help.panes.splitHorizontal' },
+      { key: '← ↑ → ↓', desc: 'help.panes.navigate' },
+      { key: 'x', desc: 'help.panes.kill' },
+      { key: 'z', desc: 'help.panes.zoom' },
+      { key: 'Space', desc: 'help.panes.layouts' },
     ],
   },
   {
-    title: 'Copy Mode (Ctrl+B, then...)',
+    title: 'help.copy.title',
     items: [
-      { key: '[', desc: 'Enter copy mode' },
-      { key: 'q', desc: 'Exit copy mode' },
-      { key: 'Space', desc: 'Start selection' },
-      { key: 'Enter', desc: 'Copy selection' },
-      { key: ']', desc: 'Paste buffer' },
-      { key: '/', desc: 'Search forward' },
+      { key: '[', desc: 'help.copy.enter' },
+      { key: 'q', desc: 'help.copy.exit' },
+      { key: 'Space', desc: 'help.copy.start' },
+      { key: 'Enter', desc: 'help.copy.copy' },
+      { key: ']', desc: 'help.copy.paste' },
+      { key: '/', desc: 'help.copy.search' },
     ],
   },
   {
-    title: 'Sessions (Ctrl+B, then...)',
+    title: 'help.sessions.title',
     items: [
-      { key: 's', desc: 'List sessions' },
-      { key: '$', desc: 'Rename session' },
-      { key: 'd', desc: 'Detach from session' },
-      { key: '( / )', desc: 'Prev / Next session' },
+      { key: 's', desc: 'help.sessions.list' },
+      { key: '$', desc: 'help.sessions.rename' },
+      { key: 'd', desc: 'help.sessions.detach' },
+      { key: '( / )', desc: 'help.sessions.prevNext' },
     ],
   },
 ]
 
-const TABS: { id: TabId; label: string }[] = [
-  { id: 'gestures', label: 'Gestures' },
-  { id: 'toolbar', label: 'Toolbar' },
-  { id: 'tmux', label: 'tmux' },
+const TABS: { id: TabId; labelKey: MessageKey }[] = [
+  { id: 'gestures', labelKey: 'help.tab.gestures' },
+  { id: 'toolbar', labelKey: 'help.tab.toolbar' },
+  { id: 'tmux', labelKey: 'help.tab.tmux' },
 ]
 
 export function HelpModal({
@@ -251,6 +258,7 @@ export function HelpModal({
   onClose,
   copyModeSupported = true,
 }: Props) {
+  const { t } = useT()
   const [activeTab, setActiveTab] = useState<TabId>('gestures')
   const tabs = copyModeSupported
     ? TABS
@@ -277,13 +285,13 @@ export function HelpModal({
   }
 
   return (
-    <Sheet isOpen={isOpen} onClose={onClose} title="Usage Guide">
+    <Sheet isOpen={isOpen} onClose={onClose} title={t('help.title')}>
       <div className="space-y-4 p-4">
         <SegmentedControl
-          label="Guide topic"
+          label={t('help.topic')}
           options={tabs.map((tab) => ({
             value: tab.id,
-            content: tab.label,
+            content: t(tab.labelKey),
           }))}
           value={shownTab}
           onChange={setActiveTab}
@@ -291,7 +299,7 @@ export function HelpModal({
         {getGuide().map((section) => (
           <section key={section.title}>
             <h3 className="m-0 mb-2 font-label text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">
-              {section.title}
+              {t(section.title)}
             </h3>
             <div className="divide-y divide-border overflow-hidden rounded-panel border border-border ui-native:border-0 ui-native:bg-surface-raised">
               {section.items.map((item) => (
@@ -300,9 +308,9 @@ export function HelpModal({
                   className="flex items-center gap-3 px-3 py-2"
                 >
                   <code className="min-w-[5rem] rounded-control bg-surface px-2 py-1 font-label text-xs text-fg ui-native:bg-bg">
-                    {item.key}
+                    {'keyLabel' in item ? t(item.keyLabel) : item.key}
                   </code>
-                  <span className="text-sm text-fg-muted">{item.desc}</span>
+                  <span className="text-sm text-fg-muted">{t(item.desc)}</span>
                 </div>
               ))}
             </div>
@@ -314,9 +322,9 @@ export function HelpModal({
           rel="noopener noreferrer"
           className={`inline-flex items-center gap-1 rounded-control text-sm text-fg-muted hover:text-fg ${FOCUS_RING}`}
         >
-          Full documentation
+          {t('help.docs')}
           <ArrowUpRight size={ICON_SIZE} aria-hidden="true" />
-          <span className="sr-only"> (opens in a new tab)</span>
+          <span className="sr-only"> {t('settings.newTab')}</span>
         </a>
       </div>
     </Sheet>

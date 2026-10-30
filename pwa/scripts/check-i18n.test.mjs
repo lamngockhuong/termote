@@ -102,8 +102,11 @@ describe('countFiles and main', () => {
   })
 
   it('counts the whole of src', () => {
+    dir = mkdtempSync(join(process.cwd(), 'src/.check-i18n-'))
+    const file = join(dir, 'x.tsx')
+    writeFileSync(file, '<span>Hello world</span>\n')
     const counts = countFiles()
-    expect(Object.keys(counts).length).toBeGreaterThan(0)
+    expect(counts[file.slice(process.cwd().length + 1)]).toBe(1)
     expect(Object.keys(counts).every((k) => k.startsWith('src/'))).toBe(true)
   })
 
