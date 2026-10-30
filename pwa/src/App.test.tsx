@@ -930,10 +930,12 @@ vi.mock('./components/session-tabs', () => ({
     sessions,
     onAdd,
     onRemove,
+    onMove,
   }: {
     sessions: { id: string }[]
     onAdd: () => void
     onRemove: (id: string) => void
+    onMove?: (id: string, index: number) => void
   }) => (
     <div
       data-testid="session-tabs"
@@ -941,6 +943,7 @@ vi.mock('./components/session-tabs', () => ({
     >
       <button onClick={onAdd}>STAdd</button>
       <button onClick={() => onRemove('1')}>STRemove</button>
+      {onMove && <button onClick={() => onMove('1', 0)}>STMove</button>}
     </div>
   ),
 }))
@@ -1212,6 +1215,10 @@ describe('App', () => {
   })
 
   it('moves tabs and groups where the server can; a refusal is a toast', async () => {
+    mockUseSettings.mockReturnValue({
+      ...mockUseSettings(),
+      settings: { ...mockUseSettings().settings, showSessionTabs: true },
+    })
     const base = mockUseLocalSessions()
     const moveTab = vi.fn(async () => {
       throw new Error('tab')
@@ -1243,6 +1250,9 @@ describe('App', () => {
     expect(await screen.findByTestId('toast')).toHaveTextContent(
       'MoveProblem tab',
     )
+    // The header's tabs move through the same action
+    fireEvent.click(screen.getByRole('button', { name: 'STMove' }))
+    expect(moveTab).toHaveBeenCalledTimes(2)
     fireEvent.click(screen.getByRole('button', { name: 'SBMoveGroup' }))
     expect(moveGroup).toHaveBeenCalledWith('main', 1)
     await waitFor(() =>
@@ -2030,6 +2040,8 @@ describe('App', () => {
     await waitFor(() => screen.getByRole('button', { name: 'STAdd' }))
     fireEvent.click(screen.getByRole('button', { name: 'STAdd' }))
     expect(mockAddSession).toHaveBeenCalledWith('New')
+    // The server cannot move tabs: they do not drag
+    expect(screen.queryByRole('button', { name: 'STMove' })).toBeNull()
   })
 
   it('hidden ctrl input blurs ctrl on blur', async () => {

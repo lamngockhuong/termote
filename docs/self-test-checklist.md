@@ -325,6 +325,9 @@ Run Herdr on a throwaway socket and `HOME`, never your live Herdr.
 - [ ] Desktop: drag a tab row above or below another of its group; a 2 px line shows where it
       lands; `tmux list-windows` (or Herdr's tab bar) shows the new order; a click still selects
 - [ ] Desktop: Alt+↑/Alt+↓ on a focused tab row moves it; focus stays on the same row
+- [ ] Desktop: drag a tab in the header row onto the left or right half of another; a 2 px line
+      shows where it lands and the sidebar shows the same new order; a click still selects;
+      view-only, or tmux older than 3.2, the header tabs do not drag
 - [ ] Phone (390×844): Move up/Move down in the "Current session" ⋯ menu move the tab on screen,
       disabled at the ends of its group; swipe still reveals Edit/Delete
 - [ ] Herdr: Move up/Move down in a workspace's ⋯ menu (disabled at the ends) and dragging its

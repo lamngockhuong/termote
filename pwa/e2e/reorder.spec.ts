@@ -96,6 +96,37 @@ test.describe('reordering tmux windows', () => {
     await expect(sidebarRow(page, b)).toBeFocused()
   })
 
+  test('drag a tab before or after another in the header row', async ({ page }) => {
+    const [a, b, c] = names
+    await page.goto('/')
+    const tab = await tabNamed(page, a)
+    // Open on this session, so the header shows its windows
+    await open(page, `#/s/${encodeURIComponent(sid)}/${encodeURIComponent(tab.id)}`)
+    // The session tabs, not the view switcher's
+    const headerTabs = page.locator('header [data-tour="session-tabs"] [role="tab"]')
+    const headerTab = (name: string) => headerTabs.filter({ hasText: name })
+    await expect(headerTab(c)).toBeVisible()
+    // The left part of a's tab: before it
+    await headerTab(c)
+      .locator('..')
+      .dragTo(headerTab(a).locator('..'), { targetPosition: { x: 2, y: 10 } })
+    await expect.poll(order).toEqual([c, a, b])
+    await expect(headerTabs).toHaveText([
+      new RegExp(c),
+      new RegExp(a),
+      new RegExp(b),
+    ])
+    // The right part of b's tab: after it
+    const box = await headerTab(b).locator('..').boundingBox()
+    await headerTab(c)
+      .locator('..')
+      .dragTo(headerTab(b).locator('..'), { targetPosition: { x: (box?.width ?? 0) - 2, y: 10 } })
+    await expect.poll(order).toEqual([a, b, c])
+    // A click still selects a tab
+    await headerTab(b).click()
+    await expect.poll(() => tmux('display-message', '-p', '-t', sid, '#{window_name}')).toBe(b)
+  })
+
   test('an open rename form and a close follow their window, by key', async ({ page }) => {
     const [a, b, c] = names
     await open(page)

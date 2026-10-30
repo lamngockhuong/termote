@@ -1,8 +1,15 @@
 import { Plus, X } from 'lucide-react'
-import { type KeyboardEvent, useEffect, useRef } from 'react'
+import {
+  type DragEvent,
+  type KeyboardEvent,
+  useEffect,
+  useRef,
+  useState,
+} from 'react'
 import { useWheelScrollX } from '../hooks/use-wheel-scroll-x'
 import { useT } from '../i18n/i18n-context'
 import type { Session } from '../types/session'
+import { dropIndex } from '../utils/reorder'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { AgentStatusBadge } from './agent-status-badge'
 import { FOCUS_RING, IconButton } from './ui/button'
@@ -16,13 +23,23 @@ interface Props {
   onRemove: (id: string) => void
   // Whether a tab may be closed; defaults to "more than one tab here".
   canRemove?: boolean
+  // Moving a tab within these (caps.reorderTabs); unset, tabs do not drag.
+  // index: the final position, in the server's order
+  onMove?: (id: string, index: number) => void
+}
+
+// Where a dragged tab would land: before or after the tab under the pointer
+interface DropTarget {
+  id: string
+  after: boolean
 }
 
 // Browser-style tabs in the desktop header row. A tab is a role="tab"
 // button; its close button is a sibling, never nested in it, and Add sits
 // outside the tablist. Arrow keys move focus between tabs; Enter or Space
 // switches, since every switch is a request to the backend; Delete closes the
-// focused tab, so the close buttons stay out of the tab order.
+// focused tab, so the close buttons stay out of the tab order. With onMove,
+// a tab drags before or after another; a 2 px line shows where it lands.
 export function SessionTabs({
   sessions,
   activeId,
@@ -30,11 +47,16 @@ export function SessionTabs({
   onAdd,
   onRemove,
   canRemove = sessions.length > 1,
+  onMove,
 }: Props) {
   const { t } = useT()
   const scrollRef = useRef<HTMLDivElement>(null)
   useWheelScrollX(scrollRef)
   const activeRef = useRef<HTMLButtonElement>(null)
+  // The tab being dragged, kept here: while dragging over a tab the browser
+  // shows only the data's types, never the data.
+  const dragged = useRef<string | null>(null)
+  const [dropTarget, setDropTarget] = useState<DropTarget | null>(null)
 
   // Scroll active tab into view only if not visible
   // biome-ignore lint/correctness/useExhaustiveDependencies: activeId triggers scroll when tab changes
@@ -82,6 +104,48 @@ export function SessionTabs({
     tabs[next].focus()
   }
 
+  // Drag and drop (desktop): the half of the tab under the pointer says
+  // before or after it.
+  const movable = !!onMove && sessions.length > 1
+  const ids = sessions.map((s) => s.id)
+  const dragProps = (id: string) => {
+    if (!movable) return {}
+    const isAfter = (e: DragEvent<HTMLElement>) => {
+      const box = e.currentTarget.getBoundingClientRect()
+      return e.clientX > box.left + box.width / 2
+    }
+    const end = () => {
+      dragged.current = null
+      setDropTarget(null)
+    }
+    return {
+      draggable: true,
+      onDragStart: (e: DragEvent) => {
+        dragged.current = id
+        e.dataTransfer.effectAllowed = 'move'
+        e.dataTransfer.setData('text/x-termote-tab', id)
+      },
+      onDragOver: (e: DragEvent<HTMLElement>) => {
+        if (!dragged.current) return
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'move'
+        const after = isAfter(e)
+        if (dropTarget?.id !== id || dropTarget.after !== after) {
+          setDropTarget({ id, after })
+        }
+      },
+      onDrop: (e: DragEvent<HTMLElement>) => {
+        const from = dragged.current
+        if (!from) return
+        e.preventDefault()
+        const index = dropIndex(ids, from, id, isAfter(e))
+        if (index !== null) onMove(from, index)
+        end()
+      },
+      onDragEnd: end,
+    }
+  }
+
   return (
     <div className="flex min-w-0 flex-1 items-end gap-1 self-stretch">
       <div
@@ -97,12 +161,23 @@ export function SessionTabs({
           return (
             <div
               key={session.id}
-              className={`group flex h-9 shrink-0 items-center pr-1.5 text-[13px] transition-colors duration-(--duration-fast) ${
+              {...dragProps(session.id)}
+              className={`group relative flex h-9 shrink-0 items-center pr-1.5 text-[13px] transition-colors duration-(--duration-fast) ${
                 active
                   ? 'pointer-coarse:h-11 rounded-t-control border border-b-0 border-border bg-term text-fg shadow-sm ui-terminal:shadow-[inset_0_2px_0_var(--color-accent)] ui-native:rounded-t-panel ui-native:border-0'
                   : 'mb-1 h-8 pointer-coarse:h-10 rounded-control text-fg-muted hover:bg-surface-raised hover:text-fg'
               }`}
             >
+              {/* Inside the tab's edge: the scrolling tablist cuts off
+                  anything past its first and last tab */}
+              {dropTarget?.id === session.id && (
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none absolute inset-y-1 z-10 w-0.5 rounded-full bg-accent ${
+                    dropTarget.after ? 'right-0' : 'left-0'
+                  }`}
+                />
+              )}
               <button
                 ref={active ? activeRef : null}
                 type="button"

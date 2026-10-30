@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { createEvent, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Session } from '../types/session'
 import { SessionTabs } from './session-tabs'
@@ -261,5 +261,80 @@ describe('SessionTabs', () => {
     expect(screen.getByLabelText('Close Shell')).toBeInTheDocument()
     rerender(<SessionTabs {...defaultProps} canRemove={false} />)
     expect(screen.queryByLabelText('Close Shell')).toBeNull()
+  })
+
+  describe('dragging a tab', () => {
+    const THREE: Session[] = [
+      ...SESSIONS,
+      { id: 'logs', name: 'Logs', icon: '📜', description: '' },
+    ]
+    // The draggable box around a tab's button
+    const tab = (name: string) =>
+      screen.getByRole('tab', { name: new RegExp(name) })
+        .parentElement as HTMLElement
+    const dt = () => ({ setData: vi.fn(), effectAllowed: '', dropEffect: '' })
+    // jsdom has no DragEvent, and a box has no width: clientX 0 is the left
+    // half (before), anything more the right half (after)
+    const dragAt = (
+      type: 'dragOver' | 'drop',
+      el: HTMLElement,
+      clientX: number,
+    ) => {
+      const ev = createEvent[type](el, { dataTransfer: dt() })
+      Object.defineProperty(ev, 'clientX', { value: clientX })
+      fireEvent(el, ev)
+    }
+
+    it('drops a tab before or after the tab under the pointer', () => {
+      const onMove = vi.fn()
+      render(<SessionTabs {...defaultProps} sessions={THREE} onMove={onMove} />)
+      expect(tab('Logs')).toHaveAttribute('draggable', 'true')
+      const data = dt()
+      fireEvent.dragStart(tab('Logs'), { dataTransfer: data })
+      expect(data.setData).toHaveBeenCalledWith('text/x-termote-tab', 'logs')
+      // The left half of Shell: before it; the line shows there
+      dragAt('dragOver', tab('Shell'), 0)
+      dragAt('dragOver', tab('Shell'), 0)
+      expect(tab('Shell').querySelector('.left-0')).not.toBeNull()
+      dragAt('drop', tab('Shell'), 0)
+      expect(onMove).toHaveBeenCalledWith('logs', 0)
+      expect(tab('Shell').querySelector('.bg-accent')).toBeNull()
+      // The right half of Code: after it
+      fireEvent.dragStart(tab('Shell'), { dataTransfer: dt() })
+      dragAt('dragOver', tab('Code'), 5)
+      expect(tab('Code').querySelector('.right-0')).not.toBeNull()
+      dragAt('drop', tab('Code'), 5)
+      expect(onMove).toHaveBeenLastCalledWith('shell', 1)
+      // A drop on itself sends nothing; drag end clears the line
+      fireEvent.dragStart(tab('Code'), { dataTransfer: dt() })
+      dragAt('dragOver', tab('Code'), 0)
+      dragAt('drop', tab('Code'), 0)
+      fireEvent.dragEnd(tab('Code'))
+      expect(onMove).toHaveBeenCalledTimes(2)
+      expect(tab('Code').querySelector('.bg-accent')).toBeNull()
+    })
+
+    it('takes no drop without a drag from these tabs', () => {
+      const onMove = vi.fn()
+      render(<SessionTabs {...defaultProps} onMove={onMove} />)
+      dragAt('dragOver', tab('Shell'), 0)
+      dragAt('drop', tab('Shell'), 0)
+      expect(onMove).not.toHaveBeenCalled()
+      expect(tab('Shell').querySelector('.bg-accent')).toBeNull()
+    })
+
+    it('does not drag without onMove, nor a single tab', () => {
+      const { unmount } = render(<SessionTabs {...defaultProps} />)
+      expect(tab('Shell')).not.toHaveAttribute('draggable')
+      unmount()
+      render(
+        <SessionTabs
+          {...defaultProps}
+          sessions={ONE_SESSION}
+          onMove={vi.fn()}
+        />,
+      )
+      expect(tab('Shell')).not.toHaveAttribute('draggable')
+    })
   })
 })
