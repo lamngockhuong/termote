@@ -127,7 +127,7 @@ import {
   LARGE_PACKET_HELP_URL,
   onLargePacketLoss,
 } from './utils/large-packet-loss'
-import { layoutViewWanted, throttle } from './utils/layout-view'
+import { layoutViewWanted, throttle, zoomedPane } from './utils/layout-view'
 import { lazyRetry } from './utils/lazy-retry'
 import { type OpenWindowEvent, openInWindow } from './utils/open-window'
 import { loadPaneView, savePaneView } from './utils/pane-view'
@@ -494,6 +494,8 @@ export default function App({
     [refreshSessions],
   )
   useEffect(() => refreshLayout.cancel, [refreshLayout])
+  // The pane the layout view shows zoomed: Zoom ends that zoom
+  const shownZoomed = layoutShown ? zoomedPane(tabLayout) : undefined
   // Groups (tmux and Zellij sessions, Herdr workspaces) made, renamed and
   // closed here. The default session (tmux: its id is its name, the others
   // are "$N"; Zellij: the one named "main") cannot be renamed, and closing
@@ -1696,7 +1698,7 @@ export default function App({
         canSwapNext,
         desktop: !isMobile,
         splitPane: (d) => runPaneAction(() => splitPane(d)),
-        zoomPane: () => runPaneAction(zoomPane),
+        zoomPane: () => runPaneAction(() => zoomPane(shownZoomed)),
         swapNextPane: () => runPaneAction(() => swapPane('next')),
         resizePane: (d) => runPaneAction(() => resizePane(d, RESIZE_STEP)),
         openPalette: setPaletteMode,
@@ -1748,6 +1750,7 @@ export default function App({
       mux.caps.paneLayout,
       mux.caps.paneStream,
       layoutShown,
+      shownZoomed,
       canSwapNext,
       isMobile,
       runPaneAction,
@@ -1916,7 +1919,7 @@ export default function App({
                   canSwapNext={canSwapNext}
                   canClose={shownPanes.length > 1}
                   onSplit={(d) => runPaneAction(() => splitPane(d))}
-                  onZoom={() => runPaneAction(zoomPane)}
+                  onZoom={() => runPaneAction(() => zoomPane(shownZoomed))}
                   onSwapNext={() => runPaneAction(() => swapPane('next'))}
                   onResize={(d) =>
                     runPaneAction(() => resizePane(d, RESIZE_STEP))

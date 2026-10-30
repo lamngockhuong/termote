@@ -331,6 +331,10 @@ let terminalHandle: { paste: (text: string) => boolean } | null = null
 // The real stack; layoutShown makes it report the layout view as shown,
 // which a page without layout (jsdom) never measures
 let layoutShown = false
+beforeEach(() => {
+  layoutShown = false
+  mockFinePointer.mockReturnValue(false)
+})
 vi.mock('./components/terminal-stack', async (importOriginal) => {
   const { useEffect } = await import('react')
   const real =
@@ -3602,8 +3606,35 @@ describe('App groups and panes', () => {
     expect(
       await screen.findByRole('button', { name: 'Zoom pane' }),
     ).toBeEnabled()
-    layoutShown = false
-    mockFinePointer.mockReturnValue(false)
+  })
+
+  it("in Herdr's layout view, Zoom ends the zoom of a zoomed tab", async () => {
+    layoutShown = true
+    const a = await mockLayout('herdr', { paneStream: true })
+    const base = mockUseLocalSessions() as any
+    const panes = base.activeSession.panes ?? []
+    const layout = {
+      cols: 120,
+      rows: 40,
+      zoomed: true,
+      zoomedPaneId: panes[1].id,
+      panes: panes.map((p: { id: string }, i: number) => ({
+        id: p.id,
+        x: i * 60,
+        y: 0,
+        cols: 60,
+        rows: 40,
+      })),
+    }
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      sessions: base.sessions.map((s: { id: string }) =>
+        s.id === base.activeSession.id ? { ...s, layout } : s,
+      ),
+    } as any)
+    render(<App />)
+    fireEvent.click(await paneMenuItem('Zoom'))
+    expect(a.zoomPane).toHaveBeenCalledWith(panes[1].id)
   })
 
   it('no swap past the last pane of tmux or Herdr', async () => {

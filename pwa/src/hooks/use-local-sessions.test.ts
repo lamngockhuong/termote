@@ -2513,9 +2513,14 @@ describe('useLocalSessions pane layout', () => {
       await result.current.resizePane('up', 5)
     })
     expect(mockZoomPane).toHaveBeenCalledWith('%3', 'toggle')
+    // A zoomed tab: its zoom ends, on whichever pane is shown
+    await act(async () => {
+      await result.current.zoomPane('%9')
+    })
+    expect(mockZoomPane).toHaveBeenLastCalledWith('%9', 'off')
     expect(mockSwapPane).toHaveBeenCalledWith('%3', 'next')
     expect(mockResizePane).toHaveBeenCalledWith('%3', 'up', 5)
-    expect(mockFetchTabs).toHaveBeenCalledTimes(3)
+    expect(mockFetchTabs).toHaveBeenCalledTimes(4)
   })
 
   it('reads the list again before a refusal reaches the caller', async () => {
