@@ -64,7 +64,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/utils/terminal-bridge.ts`                | Drives the xterm.js terminal (key mapping, clipboard paste)    |
 | `pwa/src/components/chat-view.tsx`                | Chat view of a pane running Claude Code (lazy-loaded)          |
 | `pwa/src/components/chat-composer.tsx`            | Chat view message box                                          |
-| `pwa/src/components/chat-activity-row.tsx`        | Chat view: the agent's working line while a turn runs          |
+| `pwa/src/components/chat-activity-row.tsx`        | Chat view: working line; what a done turn left running         |
 | `pwa/src/components/chat-tool-card.tsx`           | Chat view tool call: `$` command, folded output, edit diff     |
 | `pwa/src/components/chat-tool-run.tsx`            | Chat view: steps in a row folded into one summary line         |
 | `pwa/src/components/chat-file-link.tsx`           | A file path in the Chat view, opened in Files on a click       |

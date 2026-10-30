@@ -1,4 +1,4 @@
-import { Sparkle } from 'lucide-react'
+import { Hourglass, Sparkle } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useAgentActivity } from '../hooks/use-agent-prompt'
 import type { AgentActivity } from '../hooks/use-mux-api'
@@ -35,7 +35,40 @@ export function ChatActivity({
 }) {
   const { activity, dialog } = useAgentActivity(paneId, status)
   if (dialog) return null
-  return <ChatActivityRow activity={activity} agent={agent} />
+  // A turn's end line read before the status caught up is no working line
+  return (
+    <ChatActivityRow
+      activity={activity?.background ? null : activity}
+      agent={agent}
+    />
+  )
+}
+
+// The row once the turn is done while what it started still runs (shells,
+// monitors): the terminal says so on the line that ends the turn, and the
+// agent goes on by itself when they finish.
+export function ChatBackground({
+  paneId,
+  status,
+}: {
+  paneId: string
+  status: AgentStatus | undefined
+}) {
+  const { activity, dialog } = useAgentActivity(paneId, status)
+  if (dialog || !activity?.background) return null
+  return <ChatBackgroundRow what={activity.background} />
+}
+
+export function ChatBackgroundRow({ what }: { what: string }) {
+  const { t } = useT()
+  return (
+    <div className="flex items-center gap-2 text-[13px] text-fg-muted">
+      <Hourglass size={14} aria-hidden="true" className="shrink-0" />
+      <span role="status" className="min-w-0 flex-1 truncate">
+        {t('chat.activity.background', { what: visibleUnsafe(what) })}
+      </span>
+    </div>
+  )
 }
 
 interface Props {

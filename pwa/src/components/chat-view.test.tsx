@@ -610,6 +610,42 @@ describe('ChatView agent state', () => {
     expect(screen.queryByText('Incubating…')).toBeNull()
   })
 
+  it('says what still runs once the turn is done', () => {
+    promptStore.activity = {
+      label: 'Cogitated',
+      elapsed: 336,
+      background: '2 shells',
+    }
+    set({ entries: entries(1), status: 'idle' })
+    const { rerender } = render(<ChatView {...props} />)
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Turn done · 2 shells still running',
+    )
+    expect(promptStore.livePane).toBe('0')
+    // Not while a dialog is open
+    promptStore.prompt = {
+      kind: 'permission',
+      title: 'Bash command',
+      options: [{ index: 1, label: 'Yes' }],
+    }
+    rerender(<ChatView {...props} />)
+    expect(screen.queryByText(/still running/)).toBeNull()
+    // Working again: the end line read late is no working line
+    promptStore.prompt = null
+    set({ entries: entries(1), status: 'working' })
+    rerender(<ChatView {...props} />)
+    expect(screen.queryByText(/still running/)).toBeNull()
+    expect(screen.queryByText('Cogitated…')).toBeNull()
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Claude Code is working…',
+    )
+    // Done with nothing left running: no row
+    promptStore.activity = null
+    set({ entries: entries(2), status: 'idle' })
+    rerender(<ChatView {...props} />)
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
   it('says the agent works when its screen gives no working line', () => {
     set({ entries: entries(1), status: 'working' })
     const { rerender } = render(<ChatView {...props} />)

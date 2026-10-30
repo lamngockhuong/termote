@@ -1075,6 +1075,9 @@ export interface AgentActivity {
   detail?: string
   // Tokens received as written: "15.8k"
   tokens?: string
+  // Set once the turn is done, what it left running as the line writes it:
+  // "2 shells", "1 shell, 1 monitor". label is then the turn's past word.
+  background?: string
 }
 
 // One read of the agent's screen: its open dialog and its working line

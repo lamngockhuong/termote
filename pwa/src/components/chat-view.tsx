@@ -21,7 +21,7 @@ import { canStartAgent } from '../utils/agent-start'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { FILES_VIEW_ID } from '../view-ids'
 import { AgentStatusBadge } from './agent-status-badge'
-import { ChatActivity } from './chat-activity-row'
+import { ChatActivity, ChatBackground } from './chat-activity-row'
 import { ChatFileLinkContext } from './chat-file-link'
 import { ChatMarkdownContext, ChatMessage, chatSide } from './chat-message'
 import {
@@ -430,7 +430,7 @@ function AgentChat({
                   t.entries[item.start].id,
                 )
               })}
-              {status === 'working' && (
+              {status === 'working' ? (
                 <ChatActivity
                   paneId={
                     chatInputAgent(session.agentName)
@@ -440,6 +440,11 @@ function AgentChat({
                   status={status}
                   agent={agent}
                 />
+              ) : (
+                chatInputAgent(session.agentName) &&
+                session.paneId && (
+                  <ChatBackground paneId={session.paneId} status={status} />
+                )
               )}
             </div>
           </ChatMarkdownContext.Provider>

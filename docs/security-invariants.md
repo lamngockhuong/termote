@@ -571,7 +571,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   view can send it.
   `GET agent/prompt` also returns `activity`, the agent's working line read off the same capture
   (`server/agent_activity_line.go`: Claude Code's spinner row just over the input box, Codex's
-  `esc to interrupt)` row over the composer), `null` when there is none. It adds no capture and
+  `esc to interrupt)` row over the composer; once a Claude Code turn is done, its end line only
+  while it names what still runs, read into `background`), `null` when there is none. It adds no capture and
   no write, takes nothing from the client, and holds only that line's own words (each field
   stripped of control characters and cut to 80 runes): a status line, no file content or
   command output, and less than the transcript and dialog card a view-only client already reads
