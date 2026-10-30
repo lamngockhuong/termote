@@ -942,6 +942,60 @@ describe('SessionSidebar — groups', () => {
     renderGroups({ isCollapsed: true })
     expect(screen.getByRole('img', { name: 'Agent blocked' })).toBeVisible()
   })
+
+  it('names each group above its icons in the icon-only sidebar', () => {
+    renderGroups({ isCollapsed: true })
+    const api = screen.getByRole('region', { name: 'api' })
+    expect(within(api).getByTitle('api')).toHaveTextContent('api')
+    expect(within(api).getByTitle('agents')).toBeInTheDocument()
+    expect(within(api).getByTitle('shell')).toBeInTheDocument()
+    expect(within(api).queryByTitle('dev')).toBeNull()
+    // A group without a name falls back to its id
+    const w2 = screen.getByRole('region', { name: 'w2' })
+    expect(within(w2).getByTitle('w2')).toBeInTheDocument()
+    expect(within(w2).getByTitle('dev')).toBeInTheDocument()
+  })
+
+  it('puts a worktree’s branch in its name’s tooltip in the icon-only sidebar', () => {
+    renderGroups({
+      isCollapsed: true,
+      groups: [
+        GROUPS[0],
+        {
+          ...GROUPS[1],
+          name: 'fix',
+          worktree: { linked: true, parent: 'w1', branch: 'b' },
+        },
+      ],
+    })
+    const fix = screen.getByRole('region', { name: 'fix' })
+    expect(within(fix).getByText('fix')).toHaveAttribute('title', 'fix\nb')
+  })
+
+  it('leaves a group with no match out of the icon-only sidebar', () => {
+    renderGroups({
+      sessions: [{ ...TABS[0], hasAgent: true }, ...TABS.slice(1)],
+      isCollapsed: true,
+      onFilterChange: vi.fn(),
+      filter: 'needs-you',
+    })
+    expect(screen.getByRole('region', { name: 'api' })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'w2' })).toBeNull()
+  })
+
+  it('keeps a single group’s icon-only sidebar flat', () => {
+    render(
+      <SessionSidebar
+        sessions={SESSIONS}
+        groups={[{ id: 'main', name: 'main' }]}
+        activeId="1"
+        onSelect={vi.fn()}
+        isCollapsed
+      />,
+    )
+    expect(screen.queryByRole('region')).toBeNull()
+    expect(screen.queryByText('main')).toBeNull()
+  })
 })
 
 describe('SessionSidebar — filter bar', () => {

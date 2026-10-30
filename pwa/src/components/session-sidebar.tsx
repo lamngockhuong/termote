@@ -1177,6 +1177,59 @@ export function SessionSidebar({
     )
   }
 
+  // Desktop, collapsed: a session's icon, its name in the tooltip
+  const renderRailItem = (session: Session) => {
+    const active = activeId === session.id
+    return (
+      <button
+        key={session.id}
+        type="button"
+        aria-current={active ? 'true' : undefined}
+        onClick={() => onSelect(session.id)}
+        className={`flex size-10 shrink-0 items-center justify-center rounded-control ${FOCUS_RING} ${
+          active ? ACTIVE_ROW_CLASSES : ROW_CLASSES
+        }`}
+        title={visibleUnsafe(session.name)}
+      >
+        <span className="relative text-lg leading-none">
+          {session.icon}
+          {session.agentStatus && (
+            <span className="absolute -top-1.5 -right-2 flex size-3.5 items-center justify-center rounded-full bg-surface ui-terminal:bg-bg">
+              <AgentStatusBadge status={session.agentStatus} size={10} />
+            </span>
+          )}
+        </span>
+      </button>
+    )
+  }
+
+  // Desktop, collapsed: a group's icons under its name, cut to the rail's
+  // width (the whole name and a worktree's branch in the tooltip), and a
+  // line between groups, so the icons still say which group they are in. A
+  // group with nothing to show is left out, as in the list.
+  const renderRailGroup = (group: SessionGroup) => {
+    const tabs = arrange(sessions.filter((s) => s.groupId === group.id))
+    if (tabs.length === 0) return null
+    const name = visibleUnsafe(group.name || group.id)
+    const branch = group.worktree?.branch
+    return (
+      <section
+        key={group.id}
+        aria-label={name}
+        className="flex w-full flex-col items-center gap-0.5 border-t border-border pt-1 first:border-t-0 first:pt-0"
+      >
+        <span
+          aria-hidden="true"
+          title={branch ? `${name}\n${visibleUnsafe(branch)}` : name}
+          className="w-full truncate px-1 text-center font-label text-[10px] leading-4 text-fg-subtle"
+        >
+          {name}
+        </span>
+        {tabs.map(renderRailItem)}
+      </section>
+    )
+  }
+
   // Desktop: collapsible sidebar
   if (isCollapsed) {
     return (
@@ -1221,33 +1274,9 @@ export function SessionSidebar({
             </IconButton>
           )}
           <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-0.5 overflow-y-auto pt-1 scrollbar-hover">
-            {shownSessions.map((session) => {
-              const active = activeId === session.id
-              return (
-                <button
-                  key={session.id}
-                  type="button"
-                  aria-current={active ? 'true' : undefined}
-                  onClick={() => onSelect(session.id)}
-                  className={`flex size-10 shrink-0 items-center justify-center rounded-control ${FOCUS_RING} ${
-                    active ? ACTIVE_ROW_CLASSES : ROW_CLASSES
-                  }`}
-                  title={visibleUnsafe(session.name)}
-                >
-                  <span className="relative text-lg leading-none">
-                    {session.icon}
-                    {session.agentStatus && (
-                      <span className="absolute -top-1.5 -right-2 flex size-3.5 items-center justify-center rounded-full bg-surface ui-terminal:bg-bg">
-                        <AgentStatusBadge
-                          status={session.agentStatus}
-                          size={10}
-                        />
-                      </span>
-                    )}
-                  </span>
-                </button>
-              )
-            })}
+            {showGroups
+              ? groups.map(renderRailGroup)
+              : visibleSessions.map(renderRailItem)}
           </div>
         </div>
       </aside>
