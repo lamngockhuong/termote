@@ -34,7 +34,7 @@ export default {
   // The layout view (components/terminal-stack.tsx): one pane of it
   'shell.layout.pane': 'Pane {name}',
   'shell.layout.overLimit':
-    'This tab has more than {max} panes, so they show one at a time. Close a pane to see them side by side.',
+    'This tab has more than {max} panes, so they show one at a time. Keep {max} panes or fewer to see them side by side.',
   // The connection state (components/connection-indicator.tsx)
   'shell.connection.connecting': 'Connecting...',
   'shell.connection.connected': 'Connected',

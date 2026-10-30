@@ -3658,20 +3658,23 @@ describe('App groups and panes', () => {
     expect(a.zoomPane).toHaveBeenCalledWith(panes[1].id)
   })
 
-  it("a Herdr tab past the layout view's pane limit says why it shows one pane at a time, once", async () => {
+  // A desktop on Herdr's layout view, the setting as given; withPanes(n)
+  // gives the active tab a layout of n panes (none for undefined)
+  async function overLimitSetup(layoutView = true) {
     mockFinePointer.mockReturnValue(true)
     const settings = mockUseSettings()
-    mockUseSettings.mockReturnValue({
+    const withSetting = (on: boolean) => ({
       ...settings,
-      settings: { ...settings.settings, herdrLayoutView: true } as any,
+      settings: { ...settings.settings, herdrLayoutView: on } as any,
     })
+    mockUseSettings.mockReturnValue(withSetting(layoutView))
     onTestFinished(() => mockUseSettings.mockRestore())
     await mockLayout('herdr', { paneStream: true })
     const base = mockUseLocalSessions() as any
-    const withPanes = (n: number) => ({
+    const withPanes = (n?: number) => ({
       ...base,
       sessions: base.sessions.map((s: { id: string }) =>
-        s.id === base.activeSession.id
+        s.id === base.activeSession.id && n !== undefined
           ? {
               ...s,
               layout: {
@@ -3690,7 +3693,14 @@ describe('App groups and panes', () => {
           : s,
       ),
     })
-    const told = 'This tab has more than 4 panes, so they show one at a time.'
+    return { withPanes, withSetting }
+  }
+  const overLimitTold =
+    'This tab has more than 4 panes, so they show one at a time.'
+
+  it("a Herdr tab past the layout view's pane limit says why it shows one pane at a time, once", async () => {
+    const { withPanes } = await overLimitSetup()
+    const told = overLimitTold
     mockUseLocalSessions.mockReturnValue(withPanes(1))
     const { rerender } = render(<App />)
     await screen.findByTestId('terminal-view')
@@ -3711,6 +3721,12 @@ describe('App groups and panes', () => {
     mockIsMobile.mockReturnValue(false)
     rerender(<App />)
     expect(screen.getByTestId('toast')).toBe(first)
+    // A snapshot without the tab's layout is not back under the limit
+    mockUseLocalSessions.mockReturnValue(withPanes(undefined))
+    rerender(<App />)
+    mockUseLocalSessions.mockReturnValue(withPanes(5))
+    rerender(<App />)
+    expect(screen.getByTestId('toast')).toBe(first)
     // Back under the limit (one pane: no layout view in jsdom), then past it again: said again
     mockUseLocalSessions.mockReturnValue(withPanes(1))
     rerender(<App />)
@@ -3719,6 +3735,23 @@ describe('App groups and panes', () => {
     const again = await screen.findByTestId('toast')
     expect(again).not.toBe(first)
     expect(again).toHaveTextContent(told)
+  })
+
+  it('a tab opened past the pane limit says so at once; the setting turned on says so', async () => {
+    const { withPanes } = await overLimitSetup()
+    mockUseLocalSessions.mockReturnValue(withPanes(5))
+    const { unmount } = render(<App />)
+    expect(await screen.findByTestId('toast')).toHaveTextContent(overLimitTold)
+    unmount()
+    // The setting off: nothing; turned on: said once
+    const { withSetting } = await overLimitSetup(false)
+    mockUseLocalSessions.mockReturnValue(withPanes(5))
+    const { rerender } = render(<App />)
+    await screen.findByTestId('terminal-view')
+    expect(screen.queryByTestId('toast')).toBeNull()
+    mockUseSettings.mockReturnValue(withSetting(true))
+    rerender(<App />)
+    expect(await screen.findByTestId('toast')).toHaveTextContent(overLimitTold)
   })
 
   it('no swap past the last pane of tmux or Herdr', async () => {
