@@ -263,6 +263,17 @@ export function TerminalStack({
                 onLayoutSignal={shown ? onLayoutSignal : undefined}
               />
             </div>
+            {/* A line where the pane meets the one left of or above it, drawn
+                over the terminal so its size stays the one Herdr gave */}
+            {style && rect && (rect.x > 0 || rect.y > 0) && (
+              <div
+                aria-hidden
+                data-pane-divider
+                className={`pointer-events-none absolute inset-0 border-border-strong ${
+                  rect.x > 0 ? 'border-l' : ''
+                } ${rect.y > 0 ? 'border-t' : ''}`}
+              />
+            )}
             {shown && active && !zoomed && (
               <div
                 aria-hidden

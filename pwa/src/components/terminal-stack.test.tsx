@@ -167,6 +167,30 @@ describe('TerminalStack', () => {
     expect(paneEl('b').querySelector('.ring-accent')).toBeNull()
   })
 
+  it('draws a line only where a pane meets another, none while zoomed', () => {
+    const grid: TabLayout = {
+      cols: 120,
+      rows: 40,
+      zoomed: false,
+      panes: [
+        { id: 'a', x: 0, y: 0, cols: 60, rows: 20 },
+        { id: 'b', x: 60, y: 0, cols: 60, rows: 20 },
+        { id: 'c', x: 0, y: 20, cols: 120, rows: 20 },
+      ],
+    }
+    const panes = [...PANES, { ...PANES[0], id: 'c', label: 'c' }]
+    const divider = (id: string) =>
+      paneEl(id).querySelector('[data-pane-divider]')
+    const { update } = renderStack({ layout: grid, panes })
+    expect(divider('a')).toBeNull()
+    expect(divider('b')?.className).toContain('border-l')
+    expect(divider('b')?.className).not.toContain('border-t')
+    expect(divider('c')?.className).toContain('border-t')
+    expect(divider('c')?.className).not.toContain('border-l')
+    update({ layout: { ...grid, zoomed: true, zoomedPaneId: 'b' }, panes })
+    expect(document.querySelector('[data-pane-divider]')).toBeNull()
+  })
+
   it('a pane without an agent gets plain pastes', () => {
     renderStack({ activePaneId: 'b' })
     expect(views.get('a')!.bracketedPaste).toBe(false)
