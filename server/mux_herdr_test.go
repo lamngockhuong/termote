@@ -709,6 +709,54 @@ func TestMapHerdrSnapshot(t *testing.T) {
 	}
 }
 
+// The zoomed pane is observed at the area: a zoomed layout keeps the split's
+// rects while the pane's PTY fills the area.
+func TestHerdrPaneSizes(t *testing.T) {
+	layout := func(js string) herdrLayout {
+		t.Helper()
+		var l herdrLayout
+		if err := json.Unmarshal([]byte(js), &l); err != nil {
+			t.Fatal(err)
+		}
+		return l
+	}
+	panes := `"panes":[{"pane_id":"a","rect":{"x":0,"y":0,"width":40,"height":24}},{"pane_id":"b","rect":{"x":40,"y":0,"width":94,"height":24}}]`
+	for _, tc := range []struct {
+		name, js, zoomed string
+		a, b             Size
+	}{
+		{"split", `{"tab_id":"t","zoomed":false,"focused_pane_id":"a","area":{"width":134,"height":24},` + panes + `}`,
+			"", Size{Cols: 40, Rows: 24}, Size{Cols: 94, Rows: 24}},
+		{"zoomed", `{"tab_id":"t","zoomed":true,"focused_pane_id":"a","area":{"width":134,"height":24},` + panes + `}`,
+			"a", Size{Cols: 134, Rows: 24}, Size{Cols: 94, Rows: 24}},
+		{"zoomed without area", `{"tab_id":"t","zoomed":true,"focused_pane_id":"a",` + panes + `}`,
+			"a", Size{Cols: 40, Rows: 24}, Size{Cols: 94, Rows: 24}},
+		{"zoomed with an empty area", `{"tab_id":"t","zoomed":true,"focused_pane_id":"b","area":{"width":134,"height":0},` + panes + `}`,
+			"b", Size{Cols: 40, Rows: 24}, Size{Cols: 94, Rows: 24}},
+		{"zoomed on a pane not listed", `{"tab_id":"t","zoomed":true,"focused_pane_id":"x","area":{"width":134,"height":24},` + panes + `}`,
+			"", Size{Cols: 40, Rows: 24}, Size{Cols: 94, Rows: 24}},
+	} {
+		l := layout(tc.js)
+		if z := herdrZoomedPane(l); z != tc.zoomed {
+			t.Errorf("%s: zoomed pane %q, want %q", tc.name, z, tc.zoomed)
+		}
+		if s := herdrPaneSizes(l); s["a"] != tc.a || s["b"] != tc.b {
+			t.Errorf("%s: sizes %v, want a %v, b %v", tc.name, s, tc.a, tc.b)
+		}
+	}
+
+	v := mapHerdrSnapshot(herdrSnapshot{Layouts: []herdrLayout{
+		layout(`{"tab_id":"t","zoomed":true,"focused_pane_id":"b","area":{"width":134,"height":24},` + panes + `}`),
+		layout(`{"tab_id":"u","zoomed":false,"focused_pane_id":"c","panes":[{"pane_id":"c","rect":{"width":10,"height":5}}]}`),
+	}})
+	if v.sizes["b"] != (Size{Cols: 134, Rows: 24}) || v.sizes["a"] != (Size{Cols: 40, Rows: 24}) || v.sizes["c"] != (Size{Cols: 10, Rows: 5}) {
+		t.Errorf("snapshot sizes %v", v.sizes)
+	}
+	if !v.zoomed["t"] || v.zoomed["u"] {
+		t.Errorf("zoomed tabs %v, want only t", v.zoomed)
+	}
+}
+
 func TestMapHerdrSnapshotUnknownStatus(t *testing.T) {
 	var s herdrSnapshot
 	json.Unmarshal([]byte(`{
@@ -1172,14 +1220,7 @@ func useFakeObserve(t *testing.T, closeAfterFrame bool) func() []int {
 // nextSize takes the next size announcement and acknowledges it.
 func nextSize(t *testing.T, ts TermStream) Size {
 	t.Helper()
-	select {
-	case c := <-ts.(sizeReporter).Sizes():
-		close(c.sent)
-		return c.Size
-	case <-time.After(5 * time.Second):
-		t.Fatal("no size announced")
-		return Size{}
-	}
+	return nextChange(t, ts).Size
 }
 
 func TestHerdrStreamFollowsPaneSize(t *testing.T) {
@@ -1202,12 +1243,13 @@ func TestHerdrStreamFollowsPaneSize(t *testing.T) {
 		t.Errorf("Resize: %v", err)
 	}
 
-	// Another pane of the tab changed: the observer keeps running.
+	// Another pane of the tab changed: a layout frame, the observer keeps
+	// running.
 	f.emitLayout("wR:p3", 108, 36)
-	select {
-	case c := <-ts.(sizeReporter).Sizes():
-		t.Fatalf("unexpected size %v for an unchanged pane", c.Size)
-	case <-time.After(300 * time.Millisecond):
+	nextLayout(t, ts)
+	noChange(t, ts, "unchanged pane")
+	if n := len(pids()); n != 1 {
+		t.Errorf("%d observers, want the first one still running", n)
 	}
 
 	// The desktop resized the pane: restart observe at the new size.
@@ -1506,12 +1548,7 @@ func TestHerdrStaleSnapshotKeepsNewerSize(t *testing.T) {
 		t.Fatalf("announced %v, want 90x30", s)
 	}
 	<-fetched
-	select {
-	case c := <-ts.(sizeReporter).Sizes():
-		close(c.sent)
-		t.Errorf("stale snapshot moved the stream to %v", c.Size)
-	case <-time.After(300 * time.Millisecond):
-	}
+	noChange(t, ts, "stale snapshot")
 }
 
 func TestHerdrAgentSession(t *testing.T) {

@@ -193,8 +193,10 @@ describe('useTermSocket', () => {
       cols: 152,
       rows: 41,
     })
+    ws.message('{"type":"layout"}')
+    expect(onControl).toHaveBeenLastCalledWith({ type: 'layout' })
     ws.message('not json')
-    expect(onControl).toHaveBeenCalledTimes(1)
+    expect(onControl).toHaveBeenCalledTimes(2)
   })
 
   it('works without an onControl or onOpen callback', async () => {

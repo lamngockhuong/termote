@@ -75,10 +75,13 @@ type sizeReporter interface {
 
 // sizeChange is one size frame. Driving tells whether the client now drives
 // the size (sizeDriver); Reason says why it stopped when it did not ask to.
+// Layout makes it a layout frame instead, carrying nothing: the layout of the
+// pane's tab changed, which a client showing the tab's panes reads again.
 type sizeChange struct {
 	Size    Size
 	Driving bool
 	Reason  string
+	Layout  bool
 	sent    chan<- struct{}
 }
 
@@ -90,7 +93,7 @@ type sizeDriver interface {
 }
 
 // streamControl is a text frame. Client → server: resize, drive. Server →
-// client: exit, error, size.
+// client: exit, error, size, layout.
 type streamControl struct {
 	Type    string `json:"type"`
 	Cols    int    `json:"cols,omitempty"`
@@ -551,8 +554,12 @@ func runStream(ctx context.Context, cancel context.CancelCauseFunc, conn *websoc
 					if !ok {
 						return
 					}
-					driving := c.Driving
-					sendControl(conn, streamControl{Type: "size", Cols: c.Size.Cols, Rows: c.Size.Rows, Driving: &driving, Reason: c.Reason})
+					if c.Layout {
+						sendControl(conn, streamControl{Type: "layout"})
+					} else {
+						driving := c.Driving
+						sendControl(conn, streamControl{Type: "size", Cols: c.Size.Cols, Rows: c.Size.Rows, Driving: &driving, Reason: c.Reason})
+					}
 					close(c.sent)
 				}
 			}
