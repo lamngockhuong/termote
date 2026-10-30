@@ -741,6 +741,16 @@ func TestWrappedFooterIsOnlyTheHintsTail(t *testing.T) {
 	if sc := readClaudeScreen(rule + "\n Bash command\n Do you want to proceed?\n ❯ 1. Yes\n   2. No\n Enter to confirm · Esc\n to cancel\n"); sc.prompt == nil || sc.prompt.Kind != "permission" {
 		t.Errorf("wrap after Esc = %+v", sc.prompt)
 	}
+	// Vim mode's footer wraps too, at "… to edit in" / "Vim".
+	if sc := readClaudeScreen(rule + "\n Bash command\n Do you want to proceed?\n ❯ 1. Yes\n   2. No\n -- INSERT -- · Enter to select · ctrl+g to edit in\n Vim\n"); sc.prompt == nil || sc.prompt.Kind != "permission" {
+		t.Errorf("vim footer wrap = %+v", sc.prompt)
+	}
+	// A vim mode line alone is not a dialog footer, nor a stray "Vim" row.
+	for _, footer := range []string{"-- INSERT --", "-- INSERT -- · Enter to select · ctrl+g to edit in Vim\n Vim"} {
+		if sc := readClaudeScreen(rule + "\n Bash command\n ❯ 1. Yes\n   2. No\n " + footer + "\n"); sc.prompt != nil {
+			t.Errorf("%q read as a dialog: %+v", footer, sc.prompt)
+		}
+	}
 }
 
 func TestFreeTextOption(t *testing.T) {
@@ -766,6 +776,10 @@ func TestFreeTextOption(t *testing.T) {
 		{"2.1.286-ask-wizard-free-pointer", "unsupported", "", 0, freeField{3, "Type something.", true, false}, 3},
 		{"2.1.286-ask-wizard-free-typed", "unsupported", "", 0, freeField{3, "Medium", false, false}, 3},
 		{"2.1.286-ask-wizard-multi-free-pointer", "unsupported", "", 0, freeField{3, "Type something", true, false}, 3},
+		// Vim editor mode: on the free-text option the footer leads with the
+		// mode and has no "Esc to cancel" (Esc leaves insert mode). The footer
+		// is the one 2.1.314 draws, the rows above from the fixture before.
+		{"2.1.314-ask-wizard-multi-free-vim-insert", "unsupported", "", 0, freeField{3, "Type something", true, false}, 3},
 		{"2.1.286-ask-wizard-multi-free-typed", "unsupported", "", 0, freeField{3, "Honey", false, true}, 3},
 		// Holding text, the pointer away: single-choice drops it (its digit
 		// moves the pointer into the text), multiSelect toggles it.
