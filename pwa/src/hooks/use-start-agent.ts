@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { NotifyOptions } from '../app-views'
 import { agentLabel } from '../chat-agents'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
 import { TERMINAL_VIEW_ID } from '../view-ids'
 import {
   type AgentStartState,
@@ -33,7 +35,7 @@ export interface StartRecord {
   kind: StartAgentKind
   phase: StartPhase
   // failed: what to tell the user
-  error?: string
+  error?: MessageKey
   // When the start was sent, or when it became ready or failed (Date.now())
   since: number
   // ready: the snapshot has shown the agent in the pane
@@ -73,24 +75,24 @@ export interface StartAgentOptions {
   notify: (message: string, options?: NotifyOptions) => void
 }
 
-// What a refused start tells the user.
-export function startErrorMessage(
+// What a refused start tells the user, kept as a key in the record
+export function startErrorKey(
   err: RequestError,
   kind: StartAgentKind,
-): string {
+): MessageKey {
   switch (err.code) {
     case 'pane_busy':
-      return 'This pane is running something. Start the agent in a pane that shows only its shell.'
+      return 'dialogs.startAgent.paneBusy'
     case 'unsupported':
       return kind === 'codex'
-        ? 'This server cannot start Codex.'
-        : 'This Herdr cannot start agents. Update Herdr to 0.8.2 or later.'
+        ? 'dialogs.startAgent.codexUnsupported'
+        : 'dialogs.startAgent.herdrUnsupported'
     case 'not_found':
-      return 'This pane is gone.'
+      return 'dialogs.startAgent.gone'
     case 'start_pending':
-      return 'Herdr still holds the last start in this pane for up to 30 seconds. Try again shortly.'
+      return 'dialogs.startAgent.pending'
   }
-  return 'Could not start the agent.'
+  return 'dialogs.startAgent.failed'
 }
 
 // A refusal after which the start is followed anyway: another device's
@@ -100,12 +102,16 @@ const followAfter = (err: unknown) =>
   err.code === 'starting' ||
   err.code === 'start_unknown'
 
-const LOST = 'Could not follow the start. Open the terminal to check.'
+const LOST: MessageKey = 'dialogs.startAgent.lost'
 
 export function useStartAgent(opts: StartAgentOptions): AgentStartControl {
   const [starts, setStarts] = useState<Record<string, StartRecord>>({})
   const optsRef = useRef(opts)
   optsRef.current = opts
+  // The callbacks below stay stable; they read the language shown now
+  const { t } = useT()
+  const tRef = useRef(t)
+  tRef.current = t
   const inFlight = useRef(new Set<string>())
 
   // Sets the pane's record (undefined: drops it).
@@ -132,7 +138,7 @@ export function useStartAgent(opts: StartAgentOptions): AgentStartControl {
               : {
                   kind,
                   phase: 'failed',
-                  error: startErrorMessage(err, kind),
+                  error: startErrorKey(err, kind),
                   since: Date.now(),
                 },
           ),
@@ -145,34 +151,38 @@ export function useStartAgent(opts: StartAgentOptions): AgentStartControl {
     (paneId: string, kind: StartAgentKind, state: AgentStartState) => {
       const { activePaneId, showView, notify } = optsRef.current
       const here = paneId === activePaneId
-      const label = agentLabel(kind)
+      const t = tRef.current
+      const vars = { agent: agentLabel(kind) }
       switch (state) {
         case 'starting':
           return
         case 'ready':
           put(paneId, { kind, phase: 'ready', since: Date.now() })
-          if (!here) notify(`${label} is ready in another pane.`)
+          if (!here) notify(t('dialogs.startAgent.readyElsewhere', vars))
           return
         case 'blocked':
           put(paneId, undefined)
           if (here) {
             showView(TERMINAL_VIEW_ID)
-            notify(`${label} is asking something in the terminal.`)
+            notify(t('dialogs.startAgent.askingHere', vars))
           } else {
-            notify(`${label} is asking something in another pane's terminal.`)
+            notify(t('dialogs.startAgent.askingElsewhere', vars))
           }
           return
         default:
           put(paneId, undefined)
           notify(
-            here
-              ? `${label} did not start. Open the terminal to see why.`
-              : `${label} did not start in another pane.`,
+            t(
+              here
+                ? 'dialogs.startAgent.notStartedHere'
+                : 'dialogs.startAgent.notStartedElsewhere',
+              vars,
+            ),
             {
               variant: 'warning',
               action: here
                 ? {
-                    label: 'Open terminal',
+                    label: t('shell.openTerminal'),
                     onClick: () => optsRef.current.showView(TERMINAL_VIEW_ID),
                   }
                 : undefined,
@@ -190,7 +200,7 @@ export function useStartAgent(opts: StartAgentOptions): AgentStartControl {
     const following: Keyed[] = JSON.parse(followingKey)
     if (following.length === 0) return
     // A followed start that cannot be followed any more
-    const lose = ({ id, kind }: Keyed, error: string) =>
+    const lose = ({ id, kind }: Keyed, error: MessageKey) =>
       put(id, { kind, phase: 'failed', error, since: Date.now() })
     const poll = () => {
       for (const s of following) {
@@ -210,10 +220,7 @@ export function useStartAgent(opts: StartAgentOptions): AgentStartControl {
               // starts agents, a refused read): nothing to follow. A
               // network failure is retried.
               if (err instanceof RequestError) {
-                lose(
-                  s,
-                  err.status === 404 ? 'Could not start the agent.' : LOST,
-                )
+                lose(s, err.status === 404 ? 'dialogs.startAgent.failed' : LOST)
               }
             },
           )

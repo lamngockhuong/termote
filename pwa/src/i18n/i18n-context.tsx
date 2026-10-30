@@ -6,6 +6,7 @@ import {
   useMemo,
 } from 'react'
 import { useSettings } from '../hooks/use-settings'
+import { keepNotifyLocale } from '../utils/notify-locale'
 import { browserLanguages, type Locale, type Locales, resolveLocales } from '.'
 import { en, type MessageKey } from './messages/en'
 import { vi } from './messages/vi'
@@ -29,7 +30,7 @@ export const I18nContext = createContext<Locales>({
 })
 
 // The languages picked in Settings (or the browser's), for everything below;
-// <html lang> follows the app's
+// <html lang> and the words of a push notification follow the app's
 export function I18nProvider({ children }: { children: ReactNode }) {
   const { settings } = useSettings()
   const { tourLocale, appLocale } = resolveLocales({
@@ -42,6 +43,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   )
   useEffect(() => {
     document.documentElement.lang = appLocale
+    void keepNotifyLocale(appLocale)
   }, [appLocale])
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>
 }

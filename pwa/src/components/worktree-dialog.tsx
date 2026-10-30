@@ -14,7 +14,9 @@ import {
   type WorktreeList,
 } from '../hooks/use-mux-api'
 import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
 import { Trans } from '../i18n/trans'
+import type { Translate } from '../i18n/translate'
 import { validBranchName } from '../utils/git-ref'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { MAX_GROUP_NAME_BYTES, nameTooLong } from './group-dialog'
@@ -29,31 +31,35 @@ const INPUT_CLASSES =
 const FILTER_FROM = 15
 
 // What a worktree route's refusal means, by its code
-export function worktreeProblem(code: string): string {
-  const messages: Record<string, string> = {
-    invalid_name: 'Not a valid branch name',
-    branch_exists:
-      'This branch exists; it is checked out as it is, without a base',
-    create_failed:
-      'Git refused: the branch may be checked out elsewhere, or the folder exists',
-    open_failed:
-      'The checkout was made but could not be opened; use Open worktree',
-    not_git: 'This workspace is not in a git repository',
-    linked_source: "Open it from the repository's own workspace",
-    not_linked: 'Herdr does not manage this worktree',
-    changed: 'This worktree changed; look again',
-    ambiguous: 'More than one worktree uses this branch; open it in Herdr',
-    not_found: 'It no longer exists; the list was refreshed',
-    unknown_group: 'It no longer exists; the list was refreshed',
-    busy: 'Another worktree change is still running; try again',
-    unknown: 'Herdr is still working on it; check the list in a moment',
-    unsupported: 'This Herdr cannot manage worktrees (needs 0.9.2 or later)',
-  }
-  return messages[code] ?? 'Could not change the worktree'
+const WORKTREE_PROBLEMS: Record<string, MessageKey> = {
+  invalid_name: 'dialogs.worktree.invalidName',
+  branch_exists: 'dialogs.worktree.branchExists',
+  create_failed: 'dialogs.worktree.createFailed',
+  open_failed: 'dialogs.worktree.openFailed',
+  not_git: 'errors.not_git',
+  linked_source: 'dialogs.worktree.linkedSource',
+  not_linked: 'errors.not_linked',
+  changed: 'dialogs.worktree.changed',
+  ambiguous: 'dialogs.worktree.ambiguous',
+  not_found: 'dialogs.worktree.gone',
+  unknown_group: 'dialogs.worktree.gone',
+  busy: 'dialogs.worktree.busy',
+  unknown: 'dialogs.worktree.unknown',
+  unsupported: 'dialogs.worktree.unsupported',
 }
 
-const problemOf = (err: unknown) =>
-  worktreeProblem(err instanceof RequestError ? err.code : '')
+export function worktreeProblem(
+  code: string,
+  t: Translate<MessageKey>,
+): string {
+  return t(
+    Object.hasOwn(WORKTREE_PROBLEMS, code)
+      ? WORKTREE_PROBLEMS[code]
+      : 'errors.worktree_failed',
+  )
+}
+
+const codeOf = (err: unknown) => (err instanceof RequestError ? err.code : '')
 
 // The last component of a checkout's path, for a short label
 const lastPart = (path: string) =>
@@ -67,19 +73,24 @@ function useWorktreeList(
   groupId: string,
   load: (groupId: string) => Promise<WorktreeList>,
 ) {
+  const { t } = useT()
   const [list, setList] = useState<WorktreeList>()
-  const [problem, setProblem] = useState<string>()
+  // The refusal's code, told in the language shown
+  const [refused, setRefused] = useState<string>()
   useEffect(() => {
     let live = true
     load(groupId).then(
       (l) => live && setList(l),
-      (err) => live && setProblem(problemOf(err)),
+      (err) => live && setRefused(codeOf(err)),
     )
     return () => {
       live = false
     }
   }, [groupId, load])
-  return { list, problem }
+  return {
+    list,
+    problem: refused === undefined ? undefined : worktreeProblem(refused, t),
+  }
 }
 
 interface Props {
@@ -166,7 +177,7 @@ export function WorktreeDialog({
       if (!closed.current) onClose()
     } catch (err) {
       if (closed.current) return
-      setProblem(problemOf(err))
+      setProblem(worktreeProblem(codeOf(err), t))
       onRefusal?.()
       if (err instanceof RequestError && err.code === 'branch_exists') {
         setBase('')
@@ -186,7 +197,7 @@ export function WorktreeDialog({
     if (!validBranchName(trimmed)) {
       setProblem(
         trimmed
-          ? worktreeProblem('invalid_name')
+          ? worktreeProblem('invalid_name', t)
           : t('files.worktree.enterBranch'),
       )
       return
@@ -501,7 +512,7 @@ function RemoveConfirm({
           >
             {problem ??
               (list
-                ? worktreeProblem('not_linked')
+                ? worktreeProblem('not_linked', t)
                 : t('files.worktree.readingOne'))}
           </p>
           <div className="flex justify-end">

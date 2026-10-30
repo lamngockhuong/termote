@@ -8,6 +8,7 @@ export const APP_INFO = {
   /* v8 ignore stop */
   // The wordmark as people read it; `name` is the npm package name
   displayName: 'Termote',
+  // i18n-ignore: package metadata; About shows settings.about.description
   description: 'Terminal + Remote — control CLI tools from anywhere',
   author: {
     name: 'Lam Ngoc Khuong',

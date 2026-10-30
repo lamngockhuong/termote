@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { useT } from '../i18n/i18n-context'
 import type { AgentStatus, Session, SessionGroup } from '../types/session'
 import {
   agentTransitions,
@@ -26,6 +27,9 @@ interface Options {
 export function useAgentNotifications(opts: Options) {
   const optsRef = useRef(opts)
   optsRef.current = opts
+  const { t } = useT()
+  const tRef = useRef(t)
+  tRef.current = t
   const prevRef = useRef(new Map<string, AgentStatus>())
 
   // A status follows its pane when a tmux window move shifts the ids, so
@@ -41,6 +45,7 @@ export function useAgentNotifications(opts: Options) {
     prevRef.current = next
     if (events.length === 0) return
     const o = optsRef.current
+    const t = tRef.current
     const ctx = {
       enabled: o.enabled,
       permission: notificationSupport(),
@@ -58,6 +63,7 @@ export function useAgentNotifications(opts: Options) {
             e,
             o.sessions,
             o.groups,
+            t,
           )
           reg.showNotification(title, options).catch(() => {})
         }

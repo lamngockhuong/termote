@@ -224,31 +224,33 @@ export function fileImageErrorMessage(
     case 'unsupported_image':
       return t('files.image.unsupported')
     default:
-      return uploadErrorMessage(reason)
+      return uploadErrorMessage(reason, t)
   }
 }
 
-export function uploadErrorMessage(reason: UploadErrorReason): string {
-  switch (reason) {
-    case 'too_large':
-      return 'Image is larger than 10 MB'
-    case 'heic':
-      return 'HEIC images are not supported. Share the photo as JPEG'
-    case 'unsupported_image':
-      return 'Only PNG, JPEG, GIF and WebP images can be attached'
-    case 'busy':
-      return 'Another upload is running. Try again in a moment'
-    case 'storage_full':
-      return 'Upload storage on the host is full. Try again later'
-    case 'uploads_unavailable':
-      return 'This server cannot take image uploads'
-    case 'network':
-      return 'Upload failed: network error'
-    case 'timeout':
-      return 'Upload took too long. Try a smaller image or a better connection'
-    default:
-      return 'Upload failed'
-  }
+const UPLOAD_ERRORS: Record<UploadErrorReason, MessageKey> = {
+  too_large: 'dialogs.upload.tooLarge',
+  heic: 'dialogs.upload.heic',
+  unsupported_image: 'errors.unsupported_image',
+  busy: 'errors.upload_busy',
+  storage_full: 'dialogs.upload.storageFull',
+  uploads_unavailable: 'dialogs.upload.unavailable',
+  network: 'dialogs.upload.network',
+  timeout: 'dialogs.upload.timeout',
+  failed: 'errors.upload_failed',
+}
+
+// Why an image could not be attached; kept as a key where the text outlives
+// the render (an attachment's state)
+export function uploadErrorKey(reason: UploadErrorReason): MessageKey {
+  return UPLOAD_ERRORS[reason]
+}
+
+export function uploadErrorMessage(
+  reason: UploadErrorReason,
+  t: Translate<MessageKey>,
+): string {
+  return t(uploadErrorKey(reason))
 }
 
 // The image a paste carries, only when it carries no text: copying from a

@@ -128,7 +128,7 @@ describe('DevicesSection', () => {
   })
 
   it('shows the read error', () => {
-    setState({ error: 'Could not read the paired devices' })
+    setState({ error: 'dialogs.devices.readFailed' })
     render(<DevicesSection />)
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Could not read the paired devices',

@@ -42,6 +42,7 @@ import {
   removeImageToken,
 } from '../utils/chat-image-tokens'
 import { matchTemplates } from '../utils/prompt-templates'
+import { serverErrorText } from '../utils/server-error'
 import {
   applyPick,
   BUILTIN_COMMANDS,
@@ -83,13 +84,15 @@ interface Notice {
   terminal?: boolean
 }
 
-// What to tell the user when the server refuses a message. The server's own
-// message (err.message) is shown as it wrote it.
+// What to tell the user when the server refuses a message: by its code, or
+// the server's own message when it sent none (serverErrorText).
 function noticeFor(err: unknown, t: Translate<MessageKey>): Notice {
   if (!(err instanceof AgentRequestError)) {
     return { variant: 'danger', text: t('chat.composer.unreachable') }
   }
-  const notSent = t('chat.composer.notSent', { message: err.message })
+  const notSent = t('chat.composer.notSent', {
+    message: serverErrorText(err, t),
+  })
   switch (err.code) {
     case 'input_not_ready':
       return { variant: 'warning', text: notSent, terminal: true }

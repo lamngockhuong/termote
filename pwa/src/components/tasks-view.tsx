@@ -15,6 +15,7 @@ import {
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
 import { sendToAgent } from '../utils/send-to-agent'
+import { serverErrorText } from '../utils/server-error'
 import {
   taskFailureMessage,
   taskRunOutput,
@@ -152,7 +153,7 @@ export function TasksView({
     } catch (err) {
       notify(
         err instanceof RequestError
-          ? t('tasks.notSent', { message: err.message })
+          ? t('tasks.notSent', { message: serverErrorText(err, t) })
           : t('tasks.sendFailed'),
         { variant: 'danger', action: openChat },
       )

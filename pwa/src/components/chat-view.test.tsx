@@ -9,6 +9,7 @@ import type {
   AgentPrompt,
   TranscriptEntry,
 } from '../hooks/use-mux-api'
+import type { MessageKey } from '../i18n/messages/en'
 import { paneSelection, resetPaneSelections } from '../utils/pane-selection'
 import ChatView, { chatLayout, RENDER_WINDOW } from './chat-view'
 import { OpenTerminalButton } from './open-terminal-button'
@@ -961,7 +962,7 @@ describe('ChatView without an agent', () => {
   const withStart = (
     kind: 'claude' | 'codex',
     phase: 'sending' | 'starting' | 'ready' | 'failed',
-    error?: string,
+    error?: MessageKey,
   ): ViewProps => ({
     ...idle,
     agentStart: {
@@ -1030,7 +1031,9 @@ describe('ChatView without an agent', () => {
 
   it('shows why a start was refused', () => {
     render(
-      <ChatView {...withStart('claude', 'failed', 'This pane is gone.')} />,
+      <ChatView
+        {...withStart('claude', 'failed', 'dialogs.startAgent.gone')}
+      />,
     )
     expect(screen.getByRole('alert').textContent).toBe('This pane is gone.')
   })

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { RequestError } from '../hooks/use-mux-api'
+import { tFor } from '../i18n/i18n-context'
 import { PaneLayoutMenu, paneLayoutMessage } from './pane-layout-menu'
 
 function show(over: Partial<Parameters<typeof PaneLayoutMenu>[0]> = {}) {
@@ -71,20 +72,27 @@ describe('PaneLayoutMenu', () => {
 })
 
 describe('paneLayoutMessage', () => {
+  const en = tFor('en')
   it('words each code the server refuses with', () => {
     const err = (code: string) => new RequestError(400, code, code)
-    expect(paneLayoutMessage(err('unknown_pane'))).toBe('The pane is gone')
-    expect(paneLayoutMessage(err('no_neighbor'))).toBe('No pane on that side')
-    expect(paneLayoutMessage(err('no_room'))).toBe('No room for another pane')
-    expect(paneLayoutMessage(err('busy'))).toBe('Busy, try again')
-    expect(paneLayoutMessage(err('unsupported'))).toBe(
+    expect(paneLayoutMessage(err('unknown_pane'), en)).toBe('The pane is gone')
+    expect(paneLayoutMessage(err('no_neighbor'), en)).toBe(
+      'No pane on that side',
+    )
+    expect(paneLayoutMessage(err('no_room'), en)).toBe(
+      'No room for another pane',
+    )
+    expect(paneLayoutMessage(err('busy'), en)).toBe('Busy, try again')
+    expect(paneLayoutMessage(err('unsupported'), en)).toBe(
       'Not supported for this pane',
     )
-    expect(paneLayoutMessage(err('view_only'))).toBe('This device is view-only')
-    expect(paneLayoutMessage(err('invalid_mode'))).toBe(
+    expect(paneLayoutMessage(err('view_only'), en)).toBe(
+      'This device is view-only',
+    )
+    expect(paneLayoutMessage(err('invalid_mode'), en)).toBe(
       'Could not change the panes',
     )
-    expect(paneLayoutMessage(new Error('offline'))).toBe(
+    expect(paneLayoutMessage(new Error('offline'), en)).toBe(
       'Could not change the panes',
     )
   })

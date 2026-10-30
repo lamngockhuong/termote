@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildSessions, type MuxInfo } from '../hooks/use-local-sessions'
 import type { MuxPane, MuxSnapshot } from '../hooks/use-mux-api'
+import { tFor } from '../i18n/i18n-context'
 import { canStartAgent, paneCommand } from './agent-start'
 
 const caps = (agentStart?: boolean): MuxSnapshot['caps'] => ({
@@ -26,7 +27,7 @@ function tabOf(panes: MuxPane[], agentStart = true) {
     ],
   }
   const mux: MuxInfo = { backend: snap.backend, caps: snap.caps }
-  return { mux, session: buildSessions(snap, {}).sessions[0] }
+  return { mux, session: buildSessions(snap, {}, tFor('en')).sessions[0] }
 }
 
 const shellPane = (name: string): MuxPane => ({

@@ -712,10 +712,12 @@ describe('TasksView Send to agent', () => {
     fireEvent.click(sendButton())
     await waitFor(() => expect(p.notify).toHaveBeenCalled())
     expect(mockSend).toHaveBeenCalledTimes(2)
-    expect(notifyCall(p).message).toBe('Not sent: again')
+    expect(notifyCall(p).message).toBe(
+      'Not sent: The pane runs another session now',
+    )
   })
 
-  it('tells a refused send with the server text and a way to the chat', async () => {
+  it('tells a refused send by its code, with a way to the chat', async () => {
     localStorage.setItem('termote-task-agent:g1', '%agent')
     mockSend.mockRejectedValue(
       new RequestError(409, 'agent_busy', 'agent is busy'),
@@ -725,7 +727,10 @@ describe('TasksView Send to agent', () => {
     await waitFor(() => expect(p.notify).toHaveBeenCalled())
     expect(mockSend).toHaveBeenCalledTimes(1)
     const { message, options } = notifyCall(p)
-    expect(message).toBe('Not sent: agent is busy')
+    // A code this version does not know: never the server's words
+    expect(message).toBe(
+      'Not sent: The server could not finish this. Try again',
+    )
     expect(options?.variant).toBe('danger')
     expect(options?.action?.label).toBe('Open chat')
     options?.action?.onClick()

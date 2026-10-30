@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { MessageKey } from '../i18n/messages/en'
 import {
   devicesKept,
   fetchSignins,
@@ -14,7 +15,7 @@ export interface SigninsState {
   // This client may sign browsers out (a paired device only lists them)
   canRevoke: boolean
   // Why the last read failed; cleared by the next one that works
-  error: string | null
+  error: MessageKey | null
   refresh: () => Promise<void>
   // Resolves once the browser is gone from the list; throws RequestError
   // (devices_not_revoked: signed out, but the devices it paired stay)
@@ -29,7 +30,7 @@ export interface SigninsState {
 export function useSignins(enabled: boolean): SigninsState {
   const [sessions, setSessions] = useState<SignedInBrowser[] | null>(null)
   const [canRevoke, setCanRevoke] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<MessageKey | null>(null)
   // Only the latest read lands: a slow one never replaces a newer list.
   const readRef = useRef(0)
 
@@ -43,7 +44,7 @@ export function useSignins(enabled: boolean): SigninsState {
       setError(null)
     } catch {
       if (id !== readRef.current) return
-      setError('Could not read the signed-in browsers')
+      setError('dialogs.signins.readFailed')
     }
   }, [])
 

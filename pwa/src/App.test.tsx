@@ -2109,7 +2109,7 @@ describe('App', () => {
       fireEvent.click(screen.getByRole('button', { name: 'MobileAdd' }))
     })
     expect(await screen.findByTestId('toast')).toHaveTextContent(
-      'open this Zellij session first',
+      'Open this Zellij session in a terminal (or in Termote) before adding a tab',
     )
     // The sheet stays open on a refusal
     expect(screen.getByTestId('session-sidebar')).toHaveAttribute(
@@ -2119,12 +2119,14 @@ describe('App', () => {
     mockIsMobile.mockReturnValue(false)
   })
 
-  it('says a tab could not be added when the failure carries no message', async () => {
+  it('says a tab could not be added when the refusal carries no code', async () => {
+    const { RequestError } = await import('./hooks/use-mux-api')
     mockIsMobile.mockReturnValue(true)
     mockUseLocalSessions.mockReturnValue({
       ...mockUseLocalSessions(),
       addSession: vi.fn(async () => {
-        throw new Error('network')
+        // Never the server's own words
+        throw new RequestError(500, '', 'mux command failed')
       }),
     })
     render(<App />)

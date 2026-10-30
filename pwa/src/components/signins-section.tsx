@@ -144,7 +144,7 @@ export function SigninsSection({ logOut, onSignedOut = signOutPage }: Props) {
       </p>
       {error && (
         <p role="alert" className="m-0 text-sm text-danger">
-          {error}
+          {t(error)}
         </p>
       )}
       {problem && (

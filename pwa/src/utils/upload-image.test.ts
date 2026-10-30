@@ -120,9 +120,9 @@ describe('uploadErrorMessage', () => {
       'timeout',
       'failed',
     ]
-    const messages = reasons.map(uploadErrorMessage)
+    const messages = reasons.map((r) => uploadErrorMessage(r, tFor('en')))
     expect(new Set(messages).size).toBe(reasons.length)
-    expect(uploadErrorMessage('heic')).toMatch(/JPEG/)
+    expect(uploadErrorMessage('heic', tFor('en'))).toMatch(/JPEG/)
   })
 })
 
@@ -275,7 +275,7 @@ describe('fileImageErrorMessage', () => {
       expect(fileImageErrorMessage(r, tFor('en'))).toBeTruthy()
       if (r !== 'busy' && r !== 'storage_full' && r !== 'timeout')
         expect(fileImageErrorMessage(r, tFor('en'))).not.toBe(
-          uploadErrorMessage(r as UploadErrorReason),
+          uploadErrorMessage(r as UploadErrorReason, tFor('en')),
         )
     }
     expect(fileImageErrorMessage('timeout', tFor('en'))).toBe(
@@ -285,7 +285,7 @@ describe('fileImageErrorMessage', () => {
       fileImageErrorMessage('not_allowed', tFor('en')),
     )
     expect(fileImageErrorMessage('heic', tFor('en'))).toBe(
-      uploadErrorMessage('heic'),
+      uploadErrorMessage('heic', tFor('en')),
     )
   })
 })

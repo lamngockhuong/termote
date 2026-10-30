@@ -262,9 +262,12 @@ describe('ReviewControl', () => {
     openReview()
     fireEvent.click(sendButton())
     await waitFor(() =>
-      expect(p.notify).toHaveBeenCalledWith('Not sent: The agent is busy', {
-        variant: 'danger',
-      }),
+      expect(p.notify).toHaveBeenCalledWith(
+        'Not sent: The server could not finish this. Try again',
+        {
+          variant: 'danger',
+        },
+      ),
     )
     expect(loadReview('%1')).toHaveLength(1)
     mockSend.mockRejectedValueOnce(new Error('offline'))

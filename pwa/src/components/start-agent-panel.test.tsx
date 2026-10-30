@@ -30,11 +30,18 @@ describe('StartAgentPanel', () => {
     render(
       <StartAgentPanel
         kinds={['claude', 'codex']}
-        record={{ kind: 'claude', phase: 'failed', error: 'No.', since: 0 }}
+        record={{
+          kind: 'claude',
+          phase: 'failed',
+          error: 'dialogs.startAgent.failed',
+          since: 0,
+        }}
         onStart={vi.fn()}
       />,
     )
-    expect(screen.getByRole('alert').textContent).toBe('No.')
+    expect(screen.getByRole('alert').textContent).toBe(
+      'Could not start the agent.',
+    )
     const buttons = screen.getAllByRole('button') as HTMLButtonElement[]
     expect(buttons.every((b) => !b.disabled)).toBe(true)
   })

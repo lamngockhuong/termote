@@ -58,9 +58,7 @@ describe('useSignins', () => {
     mocks.fetchSignins.mockRejectedValueOnce(new RequestError(500, '', 'x'))
     const { result } = renderHook(() => useSignins(true))
     await waitFor(() =>
-      expect(result.current.error).toBe(
-        'Could not read the signed-in browsers',
-      ),
+      expect(result.current.error).toBe('dialogs.signins.readFailed'),
     )
     mocks.fetchSignins.mockResolvedValueOnce(answer([], false))
     await act(() => result.current.refresh())

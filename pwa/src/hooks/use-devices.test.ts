@@ -54,7 +54,7 @@ describe('useDevices', () => {
     mocks.fetchDevices.mockRejectedValueOnce(new RequestError(500, '', 'x'))
     const { result } = renderHook(() => useDevices(true))
     await waitFor(() =>
-      expect(result.current.error).toBe('Could not read the paired devices'),
+      expect(result.current.error).toBe('dialogs.devices.readFailed'),
     )
     expect(result.current.devices).toBeNull()
 
