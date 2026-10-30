@@ -10,6 +10,13 @@ describe('Button', () => {
     expect(button).toHaveClass('bg-surface', 'h-9', 'pointer-coarse:h-touch')
   })
 
+  it('shrinks a little while pressed, unless motion is reduced', () => {
+    render(<Button>Save</Button>)
+    render(<IconButton aria-label="Close">x</IconButton>)
+    for (const b of screen.getAllByRole('button'))
+      expect(b).toHaveClass('motion-safe:active:scale-[0.97]')
+  })
+
   it.each([
     ['primary', 'bg-accent'],
     ['secondary', 'bg-surface'],

@@ -135,7 +135,11 @@ describe('SessionSidebar — desktop expanded (default)', () => {
       )
     // The wrapper of a row, which carries its motion
     const row = (name: string) =>
-      screen.getByText(name).closest('[class*="ease-standard"]') as HTMLElement
+      screen
+        .getByText(name)
+        .closest(
+          '[class*="transition-[opacity,translate,scale]"]',
+        ) as HTMLElement
     const added: Session = {
       id: '3',
       name: 'Added',
@@ -164,6 +168,13 @@ describe('SessionSidebar — desktop expanded (default)', () => {
     })
     expect(screen.queryByText('Dev')).toBeNull()
     style.mockRestore()
+  })
+
+  it('shrinks a session row a little while pressed', () => {
+    renderDesktop()
+    expect(screen.getByText('Shell').closest('.group')).toHaveClass(
+      'motion-safe:active:scale-[0.98]',
+    )
   })
 
   it('keeps its content below the status bar', () => {

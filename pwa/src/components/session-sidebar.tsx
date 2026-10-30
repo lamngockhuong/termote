@@ -68,8 +68,10 @@ import { Sheet } from './ui/sheet'
 // The row on screen: a soft accent fill, or an accent edge in the terminal style.
 const ACTIVE_ROW_CLASSES =
   'bg-accent-soft text-fg font-medium ui-terminal:bg-surface-raised ui-terminal:shadow-[inset_2px_0_0_var(--color-accent)]'
-const ROW_CLASSES =
-  'text-fg-muted hover:bg-surface-raised hover:text-fg transition-colors duration-(--duration-fast)'
+const ROW_CLASSES = 'text-fg-muted hover:bg-surface-raised hover:text-fg'
+// A press shrinks a row a little (less than a button: a row is wide)
+const ROW_PRESS =
+  'transition-[color,background-color,scale] duration-(--duration-fast) ease-standard motion-safe:active:scale-[0.98]'
 // The content inside keeps its final width while the width animates, so it is
 // revealed or clipped instead of laid out again at every frame.
 // The top padding keeps the sidebar below the status bar of an installed iPad
@@ -554,7 +556,7 @@ export function SessionSidebar({
     }
     return (
       <div
-        className={`group relative flex items-center rounded-control ${
+        className={`group relative flex items-center rounded-control ${ROW_PRESS} ${
           active ? ACTIVE_ROW_CLASSES : ROW_CLASSES
         }`}
         {...dragProps(
@@ -1198,7 +1200,7 @@ export function SessionSidebar({
         type="button"
         aria-current={active ? 'true' : undefined}
         onClick={() => onSelect(session.id)}
-        className={`flex size-10 shrink-0 items-center justify-center rounded-control ${FOCUS_RING} ${
+        className={`flex size-10 shrink-0 items-center justify-center rounded-control ${FOCUS_RING} ${ROW_PRESS} ${
           active ? ACTIVE_ROW_CLASSES : ROW_CLASSES
         }`}
         title={visibleUnsafe(session.name)}

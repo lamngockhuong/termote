@@ -352,6 +352,11 @@ describe('SessionTabs', () => {
       vi.restoreAllMocks()
     })
 
+    it('shrinks a tab a little while pressed', () => {
+      render(<SessionTabs {...defaultProps} />)
+      expect(tab('Shell')).toHaveClass('motion-safe:active:scale-[0.98]')
+    })
+
     it('fades in only a tab added after the first ones', () => {
       const { rerender } = render(<SessionTabs {...defaultProps} />)
       expect(tab('Shell')).not.toHaveClass('motion-safe:starting:opacity-0')

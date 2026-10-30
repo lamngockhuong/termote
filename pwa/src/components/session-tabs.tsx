@@ -172,7 +172,7 @@ export function SessionTabs({
               inert={leaving}
               data-leaving={leaving || undefined}
               {...(leaving ? {} : dragProps(session.id))}
-              className={`group relative flex h-9 shrink-0 items-center pr-1.5 text-[13px] transition-[color,background-color,border-color,opacity,translate,scale] duration-(--duration-fast) ease-standard ${isNew(key) ? ENTER_FROM : ''} ${leaving ? LEAVE_TO : ''} ${
+              className={`group relative flex h-9 shrink-0 items-center pr-1.5 text-[13px] transition-[color,background-color,border-color,opacity,translate,scale] duration-(--duration-fast) ease-standard motion-safe:active:scale-[0.98] ${isNew(key) ? ENTER_FROM : ''} ${leaving ? LEAVE_TO : ''} ${
                 active
                   ? 'pointer-coarse:h-11 rounded-t-control border border-b-0 border-border bg-term text-fg shadow-sm ui-terminal:shadow-[inset_0_2px_0_var(--color-accent)] ui-native:rounded-t-panel ui-native:border-0'
                   : 'mb-1 h-8 pointer-coarse:h-10 rounded-control text-fg-muted hover:bg-surface-raised hover:text-fg'

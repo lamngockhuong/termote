@@ -194,7 +194,7 @@ export function SwipeableSessionItem({
             which hides the action buttons. */}
         <div
           aria-current={isActive ? 'true' : undefined}
-          className={`flex h-14 min-w-0 select-none items-center gap-3 px-3 text-left text-fg ${
+          className={`flex h-14 min-w-0 select-none items-center gap-3 px-3 text-left text-fg transition-[scale] duration-(--duration-fast) ease-standard motion-safe:active:scale-[0.98] ${
             isActive
               ? 'bg-accent-soft ui-terminal:bg-surface-raised ui-terminal:shadow-[inset_2px_0_0_var(--color-accent)]'
               : ''

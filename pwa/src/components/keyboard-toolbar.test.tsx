@@ -136,6 +136,13 @@ describe('KeyboardToolbar', () => {
       expect(onKey).toHaveBeenCalledWith('Tab')
     })
 
+    it('shrinks a key a little while pressed, in every style', () => {
+      renderToolbar()
+      const esc = screen.getByText('Esc').closest('button')!
+      expect(esc).toHaveClass('motion-safe:active:scale-95')
+      expect(esc).not.toHaveClass('active:ui-native:scale-95')
+    })
+
     it('sends Esc key', () => {
       renderToolbar()
       fireEvent.click(screen.getByText('Esc'))
