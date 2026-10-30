@@ -23,6 +23,7 @@ function show(over: Partial<Parameters<typeof ImageViewer>[0]> = {}) {
   opener.focus()
   const view = render(
     <ImageViewer
+      isOpen
       src={SRC}
       alt="Mermaid diagram 1"
       width={800}
@@ -78,6 +79,37 @@ describe('ImageViewer', () => {
     expect(img.style.height).toBe('150px')
     expect(img.style.transform).toBe('translate(0px, 75px)')
     expect(screen.getByText('100%')).toHaveAttribute('aria-live', 'polite')
+  })
+
+  it('fades out once closed, giving focus back at once', () => {
+    const real = window.getComputedStyle
+    vi.spyOn(window, 'getComputedStyle').mockImplementation((el) =>
+      el instanceof HTMLDialogElement
+        ? ({
+            transitionDuration: '0.2s',
+            transitionDelay: '0s',
+          } as CSSStyleDeclaration)
+        : real(el),
+    )
+    const { rerender, dialog, opener } = show()
+    rerender(
+      <ImageViewer
+        isOpen={false}
+        src={SRC}
+        alt="Mermaid diagram 1"
+        isSvg
+        onClose={vi.fn()}
+      />,
+    )
+    expect(dialog).toHaveAttribute('data-closing', 'true')
+    expect(dialog).toHaveAttribute('inert')
+    expect(dialog).toHaveClass('pointer-events-none', 'opacity-0')
+    expect((dialog as HTMLDialogElement).close).toHaveBeenCalled()
+    expect(document.activeElement).toBe(opener)
+    act(() => {
+      dialog.dispatchEvent(new Event('transitionend'))
+    })
+    expect(dialog).not.toBeInTheDocument()
   })
 
   it('zooms with the buttons and keys, and Fit goes back', () => {
@@ -195,6 +227,7 @@ describe('ImageViewer', () => {
     const pop = popped()
     rerender(
       <ImageViewer
+        isOpen
         src={SRC}
         alt="Mermaid diagram 1"
         width={800}

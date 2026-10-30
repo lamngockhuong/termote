@@ -8,6 +8,7 @@ import {
   useRef,
 } from 'react'
 import { useDialogModal } from '../../hooks/use-dialog-modal'
+import { useExitTransition } from '../../hooks/use-exit-transition'
 import { useIsMobile } from '../../hooks/use-media-query'
 import { useRestoreFocus } from '../../hooks/use-restore-focus'
 import { useT } from '../../i18n/i18n-context'
@@ -39,12 +40,24 @@ interface Props {
 // A modal <dialog>: a bottom sheet on phones, a centred dialog on desktop.
 // Escape, the close button and a tap on the scrim close it; focus returns to
 // whatever had it when the sheet opened, unless keepFocus says otherwise.
+// Closing, it fades out (useExitTransition) while already inert.
 export function Sheet({ isOpen, onClose, ...rest }: Props) {
-  if (!isOpen) return null
-  return <OpenSheet onClose={onClose} {...rest} />
+  const dialogRef = useRef<HTMLDialogElement>(null)
+  const { mounted, closing } = useExitTransition(isOpen, dialogRef)
+  if (!mounted) return null
+  return (
+    <OpenSheet
+      dialogRef={dialogRef}
+      closing={closing}
+      onClose={onClose}
+      {...rest}
+    />
+  )
 }
 
 function OpenSheet({
+  dialogRef,
+  closing,
   onClose,
   title,
   children,
@@ -55,13 +68,15 @@ function OpenSheet({
   className = '',
   focusOnOpen,
   keepFocus,
-}: Omit<Props, 'isOpen'>) {
-  const dialogRef = useRef<HTMLDialogElement>(null)
+}: Omit<Props, 'isOpen'> & {
+  dialogRef: RefObject<HTMLDialogElement | null>
+  closing: boolean
+}) {
   const titleId = useId()
   const isMobile = useIsMobile()
   const { t } = useT()
 
-  useRestoreFocus(undefined, keepFocus)
+  const restoreFocus = useRestoreFocus(undefined, keepFocus)
   // A stable callback: callers pass inline functions, and a new one would
   // re-run useDialogModal (showModal on an open dialog, listener churn).
   const onCloseRef = useRef(onClose)
@@ -73,7 +88,12 @@ function OpenSheet({
     () => (onCancelRef.current ?? onCloseRef.current)(),
     [],
   )
-  useDialogModal(dialogRef, true, cancel)
+  useDialogModal(dialogRef, !closing, cancel)
+  // Closing, the dialog stops being modal at once (dialog.close), so focus
+  // goes back now rather than after the fade: Tab meanwhile stays in the page.
+  useEffect(() => {
+    if (closing) restoreFocus()
+  }, [closing, restoreFocus])
   // showModal focuses the first control, and on a phone that draws a focus
   // ring round the header's first button the moment the sheet opens. Focus
   // the dialog itself instead; a screen reader still announces its title.
@@ -81,11 +101,14 @@ function OpenSheet({
   useEffect(() => {
     if (focusOnOpenRef.current) focusOnOpenRef.current()
     else dialogRef.current?.focus()
-  }, [])
+  }, [dialogRef])
   // Only a press that starts and ends on the scrim closes the sheet; a text
   // selection dragged out of the content ends with a click on the dialog too.
   const pressedScrim = useRef(false)
 
+  const leaving = closing
+    ? `pointer-events-none opacity-0 duration-(--duration-fast) backdrop:opacity-0 backdrop:duration-(--duration-fast) ${isMobile ? 'translate-y-8' : 'scale-95'}`
+    : 'duration-(--duration-base) backdrop:duration-(--duration-base)'
   const layout = isMobile
     ? 'mb-0 mt-auto max-h-[calc(var(--app-height)*0.9)] w-full max-w-none rounded-t-sheet border-t border-border pb-safe starting:translate-y-8'
     : 'm-auto max-h-[85vh] w-[90vw] max-w-lg rounded-sheet border border-border starting:scale-95'
@@ -96,7 +119,9 @@ function OpenSheet({
       aria-labelledby={titleId}
       tabIndex={-1}
       data-layout={isMobile ? 'sheet' : 'dialog'}
-      className={`fixed inset-0 z-50 flex-col outline-none overflow-hidden bg-bg p-0 text-fg shadow-xl backdrop:bg-overlay open:flex transition-[opacity,translate,scale] duration-(--duration-base) ease-emphasized starting:opacity-0 ui-native:border-0 ui-native:bg-surface ${layout} ${className}`}
+      data-closing={closing || undefined}
+      inert={closing}
+      className={`fixed inset-0 z-50 flex-col outline-none overflow-hidden bg-bg p-0 text-fg shadow-xl backdrop:bg-overlay backdrop:exit-discrete backdrop:ease-emphasized backdrop:starting:opacity-0 open:flex exit-discrete ease-emphasized starting:opacity-0 ui-native:border-0 ui-native:bg-surface ${leaving} ${layout} ${className}`}
       onPointerDown={(e) => {
         pressedScrim.current = e.target === e.currentTarget
       }}

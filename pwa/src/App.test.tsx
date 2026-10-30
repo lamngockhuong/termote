@@ -823,17 +823,20 @@ vi.mock('./components/welcome-host', () => ({
 
 vi.mock('./components/command-history-dropdown', () => ({
   CommandHistoryDropdown: ({
+    isOpen,
     onClose,
     onSelect,
   }: {
+    isOpen: boolean
     onClose: () => void
     onSelect: (t: string) => void
-  }) => (
-    <div data-testid="history-dropdown">
-      <button onClick={onClose}>CloseHistory</button>
-      <button onClick={() => onSelect('git status')}>SelectHistory</button>
-    </div>
-  ),
+  }) =>
+    isOpen && (
+      <div data-testid="history-dropdown">
+        <button onClick={onClose}>CloseHistory</button>
+        <button onClick={() => onSelect('git status')}>SelectHistory</button>
+      </div>
+    ),
 }))
 
 vi.mock('./components/worktree-dialog', async (importOriginal) => ({

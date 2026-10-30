@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HistoryCommand } from '../hooks/use-command-history'
 import { CommandHistoryDropdown } from './command-history-dropdown'
@@ -11,6 +11,7 @@ const HISTORY: HistoryCommand[] = [
 
 describe('CommandHistoryDropdown', () => {
   const defaultProps = {
+    isOpen: true,
     history: HISTORY,
     onSelect: vi.fn(),
     onRemove: vi.fn(),
@@ -251,5 +252,40 @@ describe('CommandHistoryDropdown', () => {
       .closest('.absolute') as HTMLElement
     expect(panel.className).toContain('max-h-[60cqh]')
     expect(panel.className).toContain('overflow-hidden')
+  })
+
+  it('renders nothing while closed', () => {
+    render(<CommandHistoryDropdown {...defaultProps} isOpen={false} />)
+    expect(screen.queryByLabelText('Search command history')).toBeNull()
+  })
+
+  it('fades out on close, inert, and starts afresh when opened again', () => {
+    const real = window.getComputedStyle
+    const style = vi
+      .spyOn(window, 'getComputedStyle')
+      .mockImplementation((el) =>
+        el.hasAttribute('data-history-root')
+          ? ({
+              transitionDuration: '150ms',
+              transitionDelay: '0s',
+            } as CSSStyleDeclaration)
+          : real(el),
+      )
+    const { rerender } = render(<CommandHistoryDropdown {...defaultProps} />)
+    fireEvent.change(screen.getByLabelText('Search command history'), {
+      target: { value: 'git' },
+    })
+    rerender(<CommandHistoryDropdown {...defaultProps} isOpen={false} />)
+    const root = document.querySelector('[data-history-root]')!
+    expect(root).toHaveAttribute('data-closing', 'true')
+    expect(root).toHaveAttribute('inert')
+    expect(root).toHaveClass('pointer-events-none', 'opacity-0')
+    act(() => {
+      root.dispatchEvent(new Event('transitionend'))
+    })
+    expect(document.querySelector('[data-history-root]')).toBeNull()
+    rerender(<CommandHistoryDropdown {...defaultProps} />)
+    expect(screen.getByLabelText('Search command history')).toHaveValue('')
+    style.mockRestore()
   })
 })

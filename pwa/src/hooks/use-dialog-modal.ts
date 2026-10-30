@@ -21,10 +21,7 @@ export function useDialogModal(
       }
       dialog.addEventListener('cancel', handleCancel)
       return () => dialog.removeEventListener('cancel', handleCancel)
-      /* v8 ignore start */
-    } else {
-      dialog.close()
-      /* v8 ignore stop */
     }
+    dialog.close()
   }, [isOpen, onClose, ref])
 }

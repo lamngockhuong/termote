@@ -2228,15 +2228,14 @@ export default function App({
                   />
                 ) : isTerminalView ? (
                   <div className="relative">
-                    {historyOpen && (
-                      <CommandHistoryDropdown
-                        history={history}
-                        onSelect={handleHistorySelect}
-                        onRemove={removeCommand}
-                        onClear={clearHistory}
-                        onClose={() => setHistoryOpen(false)}
-                      />
-                    )}
+                    <CommandHistoryDropdown
+                      isOpen={historyOpen}
+                      history={history}
+                      onSelect={handleHistorySelect}
+                      onRemove={removeCommand}
+                      onClear={clearHistory}
+                      onClose={() => setHistoryOpen(false)}
+                    />
                     <KeyboardToolbar
                       onKey={handleKey}
                       onCtrlKey={handleCtrlKey}

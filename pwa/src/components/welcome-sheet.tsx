@@ -6,8 +6,16 @@ import {
   SquareTerminal,
   X,
 } from 'lucide-react'
-import { type ReactNode, useCallback, useEffect, useId, useRef } from 'react'
+import {
+  type ReactNode,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+} from 'react'
 import { useDialogModal } from '../hooks/use-dialog-modal'
+import { useExitTransition } from '../hooks/use-exit-transition'
 import { useRestoreFocus } from '../hooks/use-restore-focus'
 import { LOCALES, type Locale } from '../i18n'
 import { useTourT } from '../i18n/i18n-context'
@@ -61,12 +69,17 @@ const LANGUAGE_NAMES: Record<Locale, string> = { en: 'EN', vi: 'VI' }
 
 // The first-run screen: what this install is, what to do next, and where
 // things are. It only shows what it is given; WelcomeHost gathers it.
+// Closing, it fades out as a Sheet does.
 export function WelcomeSheet({ isOpen, ...rest }: Props) {
-  if (!isOpen) return null
-  return <OpenWelcome {...rest} />
+  const dialogRef = useRef<HTMLDialogElement>(null)
+  const { mounted, closing } = useExitTransition(isOpen, dialogRef)
+  if (!mounted) return null
+  return <OpenWelcome dialogRef={dialogRef} closing={closing} {...rest} />
 }
 
 function OpenWelcome({
+  dialogRef,
+  closing,
   onClose,
   mobile,
   host,
@@ -82,22 +95,28 @@ function OpenWelcome({
   onAction,
   onPrimary,
   onTour,
-}: Omit<Props, 'isOpen'>) {
+}: Omit<Props, 'isOpen'> & {
+  dialogRef: RefObject<HTMLDialogElement | null>
+  closing: boolean
+}) {
   const { t, locale } = useTourT()
-  const dialogRef = useRef<HTMLDialogElement>(null)
   const titleId = useId()
-  useRestoreFocus()
+  const restoreFocus = useRestoreFocus()
   // A stable callback: the host passes a new function at each render, and
   // a new one would run useDialogModal again (showModal on an open dialog)
   const onCloseRef = useRef(onClose)
   onCloseRef.current = onClose
   const close = useCallback(() => onCloseRef.current(), [])
-  useDialogModal(dialogRef, true, close)
+  useDialogModal(dialogRef, !closing, close)
+  // No longer modal once closing: focus goes back without waiting for the fade
+  useEffect(() => {
+    if (closing) restoreFocus()
+  }, [closing, restoreFocus])
   // showModal focuses the first control (the EN | VI switch, with a ring
   // on a phone); the dialog itself takes it, and its title is read out
   useEffect(() => {
     dialogRef.current?.focus()
-  }, [])
+  }, [dialogRef])
   const pressedScrim = useRef(false)
 
   const backendName = BACKEND_NAMES[backend] ?? backend
@@ -270,6 +289,9 @@ function OpenWelcome({
     />
   )
 
+  const leaving = closing
+    ? `pointer-events-none opacity-0 duration-(--duration-fast) backdrop:opacity-0 backdrop:duration-(--duration-fast) ${mobile ? 'translate-y-8' : 'scale-95'}`
+    : 'duration-(--duration-base) backdrop:duration-(--duration-base)'
   const layout = mobile
     ? 'mb-0 mt-auto max-h-[calc(var(--app-height)*0.94)] w-full max-w-none rounded-t-sheet border-t pb-safe starting:translate-y-8'
     : 'm-auto max-h-[90vh] w-[90vw] max-w-3xl rounded-sheet border starting:scale-95'
@@ -281,7 +303,9 @@ function OpenWelcome({
       tabIndex={-1}
       data-testid="welcome"
       data-layout={mobile ? 'sheet' : 'dialog'}
-      className={`fixed inset-0 z-50 flex-col overflow-hidden border-border bg-bg p-0 text-fg shadow-xl outline-none backdrop:bg-overlay open:flex transition-[opacity,translate,scale] duration-(--duration-base) ease-emphasized starting:opacity-0 ui-native:border-0 ui-native:bg-surface ${layout}`}
+      data-closing={closing || undefined}
+      inert={closing}
+      className={`fixed inset-0 z-50 flex-col overflow-hidden border-border bg-bg p-0 text-fg shadow-xl outline-none backdrop:bg-overlay backdrop:exit-discrete backdrop:ease-emphasized backdrop:starting:opacity-0 open:flex exit-discrete ease-emphasized starting:opacity-0 ui-native:border-0 ui-native:bg-surface ${leaving} ${layout}`}
       onPointerDown={(e) => {
         pressedScrim.current = e.target === e.currentTarget
       }}

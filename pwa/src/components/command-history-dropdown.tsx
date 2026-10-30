@@ -1,10 +1,12 @@
 import { Clock, Search, Trash2, X } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { type RefObject, useCallback, useEffect, useRef, useState } from 'react'
 import type { HistoryCommand } from '../hooks/use-command-history'
+import { useExitTransition } from '../hooks/use-exit-transition'
 import { useT } from '../i18n/i18n-context'
 import { FOCUS_RING } from './ui/button'
 
 interface Props {
+  isOpen: boolean
   history: HistoryCommand[]
   onSelect: (text: string) => void
   onRemove: (id: string) => void
@@ -12,13 +14,26 @@ interface Props {
   onClose: () => void
 }
 
-export function CommandHistoryDropdown({
+// Closed, it fades out first, inert; opened again it starts with an empty search
+export function CommandHistoryDropdown({ isOpen, ...rest }: Props) {
+  const rootRef = useRef<HTMLDivElement>(null)
+  const { mounted, closing } = useExitTransition(isOpen, rootRef)
+  if (!mounted) return null
+  return <OpenDropdown rootRef={rootRef} closing={closing} {...rest} />
+}
+
+function OpenDropdown({
+  rootRef,
+  closing,
   history,
   onSelect,
   onRemove,
   onClear,
   onClose,
-}: Props) {
+}: Omit<Props, 'isOpen'> & {
+  rootRef: RefObject<HTMLDivElement | null>
+  closing: boolean
+}) {
   const { t } = useT()
   const [search, setSearch] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(-1)
@@ -81,7 +96,11 @@ export function CommandHistoryDropdown({
   // off the top; overflow-hidden keeps the list off the toolbar regardless.
   return (
     <div
-      className="absolute bottom-full left-0 right-0 z-40 mb-2 mx-2 flex max-h-[60vh] supports-[height:1cqh]:max-h-[60cqh] flex-col overflow-hidden rounded-panel border border-border bg-surface-raised text-fg shadow-xl transition-[opacity,translate] duration-(--duration-fast) ease-standard starting:translate-y-1 starting:opacity-0 ui-native:border-0"
+      ref={rootRef}
+      data-history-root
+      inert={closing}
+      data-closing={closing || undefined}
+      className={`absolute bottom-full left-0 right-0 z-40 mb-2 mx-2 flex max-h-[60vh] supports-[height:1cqh]:max-h-[60cqh] flex-col overflow-hidden rounded-panel border border-border bg-surface-raised text-fg shadow-xl transition-[opacity,translate] duration-(--duration-fast) ease-standard starting:translate-y-1 starting:opacity-0 ui-native:border-0 ${closing ? 'pointer-events-none translate-y-1 opacity-0' : ''}`}
       onKeyDown={handleKeyDown}
     >
       {/* Header */}

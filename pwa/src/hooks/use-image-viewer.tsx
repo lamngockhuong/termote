@@ -16,6 +16,7 @@ const LazyImageViewer = lazyRetry<ViewerProps>(
 )
 
 type ViewerProps = ViewerImage & {
+  isOpen: boolean
   stale: boolean
   returnFocus?: RefObject<HTMLElement | null>
   actions?: (say: (message: string) => void) => ReactNode
@@ -44,7 +45,14 @@ export function useImageViewer(
   returnFocus?: RefObject<HTMLElement | null>,
   actions?: (say: (message: string) => void) => ReactNode,
 ) {
-  const [shown, setShown] = useState<ViewerImage | null>(null)
+  // The image open now, or the last one while its viewer fades out. seq
+  // gives each open a viewer of its own: one opened while the last still
+  // fades replaces it, with a history entry of its own.
+  const [shown, setShown] = useState<{
+    image: ViewerImage
+    open: boolean
+    seq: number
+  } | null>(null)
   // The URL on screen when the viewer's code failed to load
   const [failure, setFailure] = useState<{ src: string | undefined } | null>(
     null,
@@ -53,20 +61,25 @@ export function useImageViewer(
     // The last one is still leaving the history: its back() would pop this
     if (viewerClosing()) return
     setFailure(null)
-    setShown(image)
+    setShown((last) => ({ image, open: true, seq: (last?.seq ?? 0) + 1 }))
   }, [])
   const onFail = useCallback(() => {
     LazyImageViewer.retry()
     setShown(null)
     setFailure({ src })
   }, [src])
-  const onClose = useCallback(() => setShown(null), [])
+  // Only the open viewer calls it, so there is one
+  const onClose = useCallback(
+    () => setShown((last) => ({ ...last!, open: false })),
+    [],
+  )
   const viewer = shown && (
-    <LazyBoundary onError={onFail} fallback={() => null}>
+    <LazyBoundary key={shown.seq} onError={onFail} fallback={() => null}>
       <Suspense fallback={null}>
         <LazyImageViewer
-          {...shown}
-          stale={shown.src !== src}
+          {...shown.image}
+          isOpen={shown.open}
+          stale={shown.image.src !== src}
           returnFocus={returnFocus}
           actions={actions}
           onClose={onClose}

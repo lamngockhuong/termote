@@ -9,6 +9,7 @@ import {
   useState,
 } from 'react'
 import { useDialogModal } from '../hooks/use-dialog-modal'
+import { useExitTransition } from '../hooks/use-exit-transition'
 import { useHistoryClose } from '../hooks/use-history-close'
 import { useRestoreFocus } from '../hooks/use-restore-focus'
 import { useZoomPan } from '../hooks/use-zoom-pan'
@@ -30,6 +31,8 @@ const KEY_STEPS: Record<string, number> = {
 export const STATUS_MS = 4000
 
 interface Props {
+  // False once closed: it fades out, then leaves
+  isOpen: boolean
   // The URL already on screen (data: or blob:): never read again
   src: string
   // The image's name, from the app (never text inside the image)
@@ -53,9 +56,17 @@ interface Props {
 
 // An image full screen: pinch, drag and double tap on a phone; wheel, drag,
 // buttons and + - 0 on a desktop. Back closes it (its own history entry), as
-// do X and Escape; focus then returns to what opened it. Mounted only while
-// open.
-export default function ImageViewer({
+// do X and Escape; focus then returns to what opened it, and it fades out.
+export default function ImageViewer({ isOpen, ...rest }: Props) {
+  const dialogRef = useRef<HTMLDialogElement>(null)
+  const { mounted, closing } = useExitTransition(isOpen, dialogRef)
+  if (!mounted) return null
+  return <OpenViewer dialogRef={dialogRef} closing={closing} {...rest} />
+}
+
+function OpenViewer({
+  dialogRef,
+  closing,
   src,
   alt,
   width,
@@ -65,13 +76,19 @@ export default function ImageViewer({
   returnFocus,
   actions,
   onClose,
-}: Props) {
+}: Omit<Props, 'isOpen'> & {
+  dialogRef: RefObject<HTMLDialogElement | null>
+  closing: boolean
+}) {
   const { t } = useT()
-  const dialogRef = useRef<HTMLDialogElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
-  useRestoreFocus(returnFocus)
+  const restoreFocus = useRestoreFocus(returnFocus)
   const close = useHistoryClose(onClose)
-  useDialogModal(dialogRef, true, close)
+  useDialogModal(dialogRef, !closing, close)
+  // No longer modal once closing: focus goes back without waiting for the fade
+  useEffect(() => {
+    if (closing) restoreFocus()
+  }, [closing, restoreFocus])
   useEffect(() => {
     if (stale) close()
   }, [stale, close])
@@ -110,7 +127,9 @@ export default function ImageViewer({
     <dialog
       ref={dialogRef}
       aria-label={alt}
-      className="fixed inset-0 z-50 m-0 h-(--app-height) max-h-none w-screen max-w-none flex-col overflow-hidden bg-bg p-0 text-fg outline-none open:flex backdrop:bg-overlay"
+      inert={closing}
+      data-closing={closing || undefined}
+      className={`fixed inset-0 z-50 m-0 h-(--app-height) max-h-none w-screen max-w-none flex-col overflow-hidden bg-bg p-0 text-fg outline-none open:flex backdrop:bg-overlay exit-discrete ease-standard starting:opacity-0 backdrop:exit-discrete backdrop:ease-standard backdrop:starting:opacity-0 ${closing ? 'pointer-events-none opacity-0 duration-(--duration-fast) backdrop:opacity-0 backdrop:duration-(--duration-fast)' : 'duration-(--duration-base) backdrop:duration-(--duration-base)'}`}
       onKeyDown={(e) => {
         // Ctrl/Cmd with + - 0 is the browser's own zoom: left to it
         if (e.ctrlKey || e.metaKey || e.altKey) return
