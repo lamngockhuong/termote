@@ -212,10 +212,13 @@ interface AppProps {
 }
 
 // The overview's address; the hash change opens it. A focus window keeps
-// solo=1 in it, so a reload is a focus window again.
+// solo=1 in it, so a reload is a focus window again. True when the address
+// changed, its hash change still to come.
 function showOverviewAddress() {
   const hash = formatOverviewLink({ solo: isFocusWindow() })
-  if (window.location.hash !== hash) window.location.hash = hash
+  if (window.location.hash === hash) return false
+  window.location.hash = hash
+  return true
 }
 
 // The file a focus window was opened on: a file in the Files panel, or a
@@ -1402,9 +1405,15 @@ export default function App({
   const [overviewOpen, setOverviewOpen] = useState(
     () => parseScreenLink(window.location.hash) === 'overview',
   )
+  // Its address is set and its hash change not yet in: the address bar
+  // must not follow the pane meanwhile, or the overview never opens
+  const overviewComingRef = useRef(false)
   useEffect(() => {
     const onHashChange = () => {
       const overview = parseScreenLink(window.location.hash) === 'overview'
+      // Kept until a render shows it open: an effect of the render before
+      // may still be waiting to run
+      if (!overview) overviewComingRef.current = false
       setOverviewOpen(overview)
       if (overview) return
       pendingLinkRef.current = parseDeepLink(window.location.hash)
@@ -1510,9 +1519,10 @@ export default function App({
   }, [])
   // biome-ignore lint/correctness/useExhaustiveDependencies: viewerGone and linkSettled re-run it once a viewer's entry is gone or a link's pick showed nothing new
   useEffect(() => {
+    if (overviewOpen) overviewComingRef.current = false
     if (!sessionsLoaded || !currentLink || pendingLinkRef.current) return
-    // The overview's address stays while it shows.
-    if (overviewOpen) return
+    // The overview's address stays while it shows, or is about to.
+    if (overviewOpen || overviewComingRef.current) return
     if (currentLink === linkLeftRef.current) return
     linkLeftRef.current = null
     const settledHash = settledHashRef.current
@@ -1601,14 +1611,20 @@ export default function App({
     setFocusWhileOpen(overviewOpen)
     if (!overviewOpen) setOverviewFocus(undefined)
   }
+  const showOverview = useCallback(() => {
+    if (showOverviewAddress()) overviewComingRef.current = true
+  }, [])
   const openOverview = useCallback(() => {
     setOverviewFocus(undefined)
-    showOverviewAddress()
-  }, [])
-  const openOverviewOn = useCallback((paneId: string) => {
-    setOverviewFocus({ paneId })
-    showOverviewAddress()
-  }, [])
+    showOverview()
+  }, [showOverview])
+  const openOverviewOn = useCallback(
+    (paneId: string) => {
+      setOverviewFocus({ paneId })
+      showOverview()
+    },
+    [showOverview],
+  )
   const closeOverview = useCallback(() => {
     if (currentLink) {
       window.location.hash = currentLink
