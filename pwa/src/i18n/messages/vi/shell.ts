@@ -27,6 +27,8 @@ export default {
   'shell.tabs.add': 'Thêm phiên',
   'shell.panes.close': 'Đóng pane {name}',
   'shell.layout.pane': 'Pane {name}',
+  'shell.layout.overLimit':
+    'Tab này có hơn {max} pane nên chỉ hiện từng pane một. Đóng bớt pane, còn tối đa {max}, để xem các pane cạnh nhau.',
   'shell.connection.connecting': 'Đang kết nối...',
   'shell.connection.connected': 'Đã kết nối',
   'shell.connection.disconnected': 'Mất kết nối',

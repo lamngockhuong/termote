@@ -10,7 +10,15 @@ import {
 } from '@testing-library/react'
 import { Folder, MessageSquare } from 'lucide-react'
 import { lazy, type ReactElement } from 'react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest'
 import App from './App'
 import { APP_VIEWS, type AppView, type ViewProps } from './app-views'
 import { KeyboardToolbar } from './components/keyboard-toolbar'
@@ -3648,6 +3656,102 @@ describe('App groups and panes', () => {
     render(<App />)
     fireEvent.click(await paneMenuItem('Zoom'))
     expect(a.zoomPane).toHaveBeenCalledWith(panes[1].id)
+  })
+
+  // A desktop on Herdr's layout view, the setting as given; withPanes(n)
+  // gives the active tab a layout of n panes (none for undefined)
+  async function overLimitSetup(layoutView = true) {
+    mockFinePointer.mockReturnValue(true)
+    const settings = mockUseSettings()
+    const withSetting = (on: boolean) => ({
+      ...settings,
+      settings: { ...settings.settings, herdrLayoutView: on } as any,
+    })
+    mockUseSettings.mockReturnValue(withSetting(layoutView))
+    onTestFinished(() => mockUseSettings.mockRestore())
+    await mockLayout('herdr', { paneStream: true })
+    const base = mockUseLocalSessions() as any
+    const withPanes = (n?: number) => ({
+      ...base,
+      sessions: base.sessions.map((s: { id: string }) =>
+        s.id === base.activeSession.id && n !== undefined
+          ? {
+              ...s,
+              layout: {
+                cols: 120,
+                rows: 40,
+                zoomed: false,
+                panes: Array.from({ length: n }, (_, i) => ({
+                  id: `p${i}`,
+                  x: i * 10,
+                  y: 0,
+                  cols: 10,
+                  rows: 40,
+                })),
+              },
+            }
+          : s,
+      ),
+    })
+    return { withPanes, withSetting }
+  }
+  const overLimitTold =
+    'This tab has more than 4 panes, so they show one at a time.'
+
+  it("a Herdr tab past the layout view's pane limit says why it shows one pane at a time, once", async () => {
+    const { withPanes } = await overLimitSetup()
+    const told = overLimitTold
+    mockUseLocalSessions.mockReturnValue(withPanes(1))
+    const { rerender } = render(<App />)
+    await screen.findByTestId('terminal-view')
+    expect(screen.queryByTestId('toast')).toBeNull()
+    // A split past the limit
+    mockUseLocalSessions.mockReturnValue(withPanes(5))
+    rerender(<App />)
+    const first = await screen.findByTestId('toast')
+    expect(first).toHaveTextContent(told)
+    // Another pane: the same toast, not a new one (each toast mounts anew)
+    mockUseLocalSessions.mockReturnValue(withPanes(6))
+    rerender(<App />)
+    expect(screen.getByTestId('toast')).toBe(first)
+    // Off for a while (a phone's width) with the panes still past it: not
+    // said again once back on a desktop
+    mockIsMobile.mockReturnValue(true)
+    rerender(<App />)
+    mockIsMobile.mockReturnValue(false)
+    rerender(<App />)
+    expect(screen.getByTestId('toast')).toBe(first)
+    // A snapshot without the tab's layout is not back under the limit
+    mockUseLocalSessions.mockReturnValue(withPanes(undefined))
+    rerender(<App />)
+    mockUseLocalSessions.mockReturnValue(withPanes(5))
+    rerender(<App />)
+    expect(screen.getByTestId('toast')).toBe(first)
+    // Back under the limit (one pane: no layout view in jsdom), then past it again: said again
+    mockUseLocalSessions.mockReturnValue(withPanes(1))
+    rerender(<App />)
+    mockUseLocalSessions.mockReturnValue(withPanes(5))
+    rerender(<App />)
+    const again = await screen.findByTestId('toast')
+    expect(again).not.toBe(first)
+    expect(again).toHaveTextContent(told)
+  })
+
+  it('a tab opened past the pane limit says so at once; the setting turned on says so', async () => {
+    const { withPanes } = await overLimitSetup()
+    mockUseLocalSessions.mockReturnValue(withPanes(5))
+    const { unmount } = render(<App />)
+    expect(await screen.findByTestId('toast')).toHaveTextContent(overLimitTold)
+    unmount()
+    // The setting off: nothing; turned on: said once
+    const { withSetting } = await overLimitSetup(false)
+    mockUseLocalSessions.mockReturnValue(withPanes(5))
+    const { rerender } = render(<App />)
+    await screen.findByTestId('terminal-view')
+    expect(screen.queryByTestId('toast')).toBeNull()
+    mockUseSettings.mockReturnValue(withSetting(true))
+    rerender(<App />)
+    expect(await screen.findByTestId('toast')).toHaveTextContent(overLimitTold)
   })
 
   it('no swap past the last pane of tmux or Herdr', async () => {

@@ -127,7 +127,13 @@ import {
   LARGE_PACKET_HELP_URL,
   onLargePacketLoss,
 } from './utils/large-packet-loss'
-import { layoutViewWanted, throttle, zoomedPane } from './utils/layout-view'
+import {
+  layoutPanesOverLimit,
+  layoutViewWanted,
+  MAX_LAYOUT_PANES,
+  throttle,
+  zoomedPane,
+} from './utils/layout-view'
 import { lazyRetry } from './utils/lazy-retry'
 import { type OpenWindowEvent, openInWindow } from './utils/open-window'
 import { loadPaneView, savePaneView } from './utils/pane-view'
@@ -477,14 +483,38 @@ export default function App({
   const panesOneByOne =
     isHerdr && !!mux.caps.paneStream && !!mux.caps.paneLayout
   const tabLayout = sessions.find((s) => s.id === activeSession.id)?.layout
-  const layoutWanted = layoutViewWanted({
+  const layoutInput = {
     paneStream: panesOneByOne,
     paneLayout: panesOneByOne,
     mobile: isMobile,
     viewOnly: readOnly,
     setting: settings.herdrLayoutView,
     layout: tabLayout,
-  })
+  }
+  const layoutWanted = layoutViewWanted(layoutInput)
+  // A tab with more panes than the layout view takes shows them one at a
+  // time: say why, once per tab and page load, and again once the tab has
+  // been back under the limit (a snapshot without the tab's layout is not)
+  const overLimit = layoutPanesOverLimit(layoutInput)
+  const overLimitTold = useRef(new Set<string>())
+  const tabPaneCount = tabLayout?.panes.length ?? 0
+  useEffect(() => {
+    const told = overLimitTold.current
+    if (!overLimit) {
+      if (tabLayout && tabPaneCount <= MAX_LAYOUT_PANES)
+        told.delete(activeSession.id)
+      return
+    }
+    if (told.has(activeSession.id)) return
+    told.add(activeSession.id)
+    // Two sentences: as long as a toast with an action, to read them
+    showToast(
+      t('shell.layout.overLimit', { max: MAX_LAYOUT_PANES }),
+      'info',
+      undefined,
+      ACTION_TOAST_MS,
+    )
+  }, [overLimit, tabLayout, tabPaneCount, activeSession.id, showToast, t])
   // Also off where the font the tab fits at would be too small
   const [layoutShown, setLayoutShown] = useState(false)
   // A pane of the layout reports a change: read the snapshot at once, then
