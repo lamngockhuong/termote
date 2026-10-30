@@ -608,3 +608,94 @@ test.describe('desktop toolbar', () => {
     expect(mask).toBe('none')
   })
 })
+
+test.describe('settings on a phone', () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+
+  test.beforeEach(async ({ page }) => {
+    await reloadFresh(page)
+  })
+
+  const dialog = (page: Page) => page.getByRole('dialog')
+  const list = (page: Page) => page.getByRole('navigation', { name: 'Settings groups' })
+  const back = (page: Page) => page.getByRole('button', { name: 'Back to Settings' })
+
+  test('opens at the list, one group at a time, and ‹ goes back', async ({ page }) => {
+    await openFromMenu(page, 'Settings')
+    await expect(list(page)).toBeVisible()
+    await expect(page.getByRole('radiogroup')).toHaveCount(0)
+
+    await list(page).getByRole('button', { name: 'Keyboard' }).click()
+    await expect(dialog(page)).toHaveAccessibleName('Keyboard')
+    await expect(list(page)).toHaveCount(0)
+    await expect(page.getByRole('radio', { name: 'Send + Enter' })).toBeVisible()
+    await expect(page.getByRole('region')).toHaveCount(1)
+
+    await back(page).click()
+    await expect(list(page)).toBeVisible()
+    await expect(list(page).getByRole('button', { name: 'Keyboard' })).toBeFocused()
+    // Nothing wider than the screen
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+  })
+
+  test('Back of the browser leaves a group for the list, not the page', async ({ page }) => {
+    const url = page.url()
+    await openFromMenu(page, 'Settings')
+    await list(page).getByRole('button', { name: 'Sessions' }).click()
+    await expect(back(page)).toBeVisible()
+    await page.goBack()
+    await expect(list(page)).toBeVisible()
+    await expect(dialog(page)).toHaveAccessibleName('Settings')
+    expect(page.url()).toBe(url)
+  })
+
+  test('closed from inside a group, it leaves no entry behind', async ({ page }) => {
+    const length = await page.evaluate(() => history.length)
+    await openFromMenu(page, 'Settings')
+    // In and out of several groups, then closed from inside one
+    for (const group of ['Appearance', 'Keyboard', 'Terminal', 'Sessions']) {
+      await list(page).getByRole('button', { name: group }).click()
+      await back(page).click()
+      await expect(list(page)).toBeVisible()
+    }
+    await list(page).getByRole('button', { name: 'Files' }).click()
+    await dialog(page).getByRole('button', { name: 'Close' }).click()
+    await expect(dialog(page)).toBeHidden()
+    await expect.poll(() => page.evaluate(() => history.state?.termoteViewer)).toBeUndefined()
+    // One entry at most stays ahead, for Forward
+    expect(await page.evaluate(() => history.length)).toBeLessThanOrEqual(length + 1)
+    // The first Back is not spent on an entry Settings left: it leaves the
+    // app for the page before it, as if Settings had never opened
+    const origin = new URL(page.url()).origin
+    await page.goBack()
+    await expect.poll(() => page.url()).not.toContain(origin)
+  })
+
+  test('picks the colour mode in Appearance', async ({ page }) => {
+    await openFromMenu(page, 'Settings')
+    await list(page).getByRole('button', { name: 'Appearance' }).click()
+    await page.getByRole('radiogroup', { name: 'Theme' }).getByRole('radio', { name: 'Dark' }).click()
+    await expect(page.locator('html')).toHaveClass(/\bdark\b/)
+    await back(page).click()
+    await expect(list(page).getByRole('button', { name: 'Appearance' })).toContainText('Dark')
+  })
+})
+
+test.describe('settings rail on desktop in Vietnamese', () => {
+  test.use({ viewport: { width: 1280, height: 800 }, locale: 'vi-VN' })
+
+  test('no group name spills out of its button', async ({ page }) => {
+    await reloadFresh(page)
+    await page.getByRole('button', { name: 'Tùy chọn khác' }).click()
+    await page.getByRole('menuitem', { name: 'Cài đặt' }).click()
+    const rail = page.getByRole('navigation', { name: 'Các nhóm cài đặt' })
+    await expect(rail).toBeVisible()
+    for (const button of await rail.getByRole('button').all()) {
+      const { height, scroll } = await button.evaluate((b) => ({
+        height: b.clientHeight,
+        scroll: b.scrollHeight,
+      }))
+      expect(height, (await button.textContent()) ?? '').toBeGreaterThanOrEqual(scroll)
+    }
+  })
+})

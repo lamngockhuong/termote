@@ -1,5 +1,20 @@
-import { Trash2, X } from 'lucide-react'
-import { type ReactNode, useEffect, useId, useState } from 'react'
+import { ChevronLeft, ChevronRight, Trash2, X } from 'lucide-react'
+import {
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react'
+import { THEMES, useTheme } from '../contexts/theme-context'
+import {
+  onViewerEntryGone,
+  useHistoryClose,
+  viewerClosing,
+} from '../hooks/use-history-close'
+import { useIsMobile } from '../hooks/use-media-query'
 import {
   EDITOR_FONT_SIZES,
   EDITOR_TAB_SIZES,
@@ -97,23 +112,32 @@ const CONTROL =
   'h-9 rounded-control border border-border bg-bg text-[13px] text-fg pointer-coarse:h-touch'
 
 // One line of a settings group: the title (and hint) on the left, the control
-// on the right. `htmlFor` makes the title the label of a text field.
+// on the right; `stack` puts the control under the title instead, for a choice
+// of three or more. `htmlFor` makes the title the label of a text field.
 function SettingsRow({
   title,
   desc,
   htmlFor,
+  layout = 'inline',
   children,
 }: {
   title: string
   desc?: string
   htmlFor?: string
+  layout?: 'inline' | 'stack'
   children: ReactNode
 }) {
   const titleClass =
     'block text-[15px] text-fg ui-terminal:font-label ui-terminal:text-[13px]'
   return (
-    <div className="flex min-h-14 flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 ui-native:bg-surface-raised">
-      <div className="min-w-0 flex-1 basis-40">
+    <div
+      className={`flex px-4 py-2.5 ui-native:bg-surface-raised ${
+        layout === 'stack'
+          ? 'flex-col gap-2'
+          : 'min-h-14 flex-wrap items-center gap-x-3 gap-y-2'
+      }`}
+    >
+      <div className={layout === 'stack' ? '' : 'min-w-0 flex-1 basis-40'}>
         {htmlFor ? (
           <label htmlFor={htmlFor} className={titleClass}>
             {title}
@@ -128,8 +152,13 @@ function SettingsRow({
   )
 }
 
-// A titled block of rows. On desktop only the group picked in the left rail
-// shows; on a phone every group stacks in one scrolling sheet.
+// The rows of a group, and on a phone the list of groups: a hairline between
+// items, a card in the native and neutral styles
+const ITEM_LIST =
+  'divide-y divide-border border-y border-border ui-native:mx-4 ui-native:overflow-hidden ui-native:rounded-panel ui-native:border-0 ui-neutral:mx-4 ui-neutral:rounded-panel ui-neutral:border'
+
+// A titled block of rows. Only the group picked shows: in the left rail on
+// desktop, from the list of groups on a phone.
 function SettingsGroup({
   id,
   title,
@@ -146,18 +175,52 @@ function SettingsGroup({
     <section
       data-group={id}
       aria-labelledby={headingId}
-      className={`pb-3 ${active ? '' : 'md:hidden'}`}
+      className={`pb-3 pt-3 ${active ? '' : 'hidden'}`}
     >
+      {/* The rail (desktop) or the sheet's title (phone) already names the
+          group, so only a screen reader hears the heading; pt-3 keeps the
+          gap it left, so the rows' top line does not run into the header's */}
       <h3
         id={headingId}
-        className="m-0 px-4 pb-1.5 pt-3 font-label text-[11px] font-semibold uppercase tracking-wider text-fg-subtle"
+        className="m-0 px-4 pb-1.5 pt-3 font-label text-[11px] font-semibold uppercase tracking-wider text-fg-subtle sr-only"
       >
         {title}
       </h3>
-      <div className="divide-y divide-border border-y border-border ui-native:mx-4 ui-native:overflow-hidden ui-native:rounded-panel ui-native:border-0 ui-neutral:mx-4 ui-neutral:rounded-panel ui-neutral:border">
-        {children}
-      </div>
+      <div className={ITEM_LIST}>{children}</div>
     </section>
+  )
+}
+
+// A phone's way back from a group to the list: the ‹ before the title, and
+// Back (a gesture, a button, Android's) through an entry of its own in the
+// history, taken off again however the group is left. useHistoryClose keeps
+// one such entry for the whole page; Settings is modal, so no image viewer
+// can open over it and hold the other.
+function PhoneBackButton({
+  onBack,
+  backRef,
+}: {
+  onBack: () => void
+  // Lets Android's Back, which reaches the dialog as a close request, take
+  // the same way
+  backRef: RefObject<(() => void) | null>
+}) {
+  const { t } = useT()
+  const back = useHistoryClose(onBack)
+  useEffect(() => {
+    backRef.current = back
+    return () => {
+      backRef.current = null
+    }
+  }, [back, backRef])
+  return (
+    <IconButton
+      aria-label={t('settings.back')}
+      data-phone-back=""
+      onClick={back}
+    >
+      <ChevronLeft size={20} aria-hidden="true" />
+    </IconButton>
   )
 }
 
@@ -238,18 +301,12 @@ function ExcludedFoldersRow({
     value.length === FIND_EXCLUDES_DEFAULT.length &&
     value.every((v, i) => v === FIND_EXCLUDES_DEFAULT[i])
   return (
-    <div className="flex flex-col gap-2 px-4 py-2.5 ui-native:bg-surface-raised">
-      <div>
-        <label
-          htmlFor={inputId}
-          className="block text-[15px] text-fg ui-terminal:font-label ui-terminal:text-[13px]"
-        >
-          {t('settings.excluded')}
-        </label>
-        <p className="m-0 text-[12px] text-fg-muted">
-          {t('settings.excludedDesc')}
-        </p>
-      </div>
+    <SettingsRow
+      title={t('settings.excluded')}
+      desc={t('settings.excludedDesc')}
+      htmlFor={inputId}
+      layout="stack"
+    >
       <ul
         aria-label={t('settings.excluded.list')}
         className="flex flex-wrap gap-1.5"
@@ -313,7 +370,7 @@ function ExcludedFoldersRow({
           {problem}
         </p>
       )}
-    </div>
+    </SettingsRow>
   )
 }
 
@@ -436,6 +493,33 @@ function NotifyAgentsRow({
   )
 }
 
+// Light, dark or the system's: the same choice as the ⋯ menu, saved by the
+// theme context rather than with the other settings
+function ThemeRow() {
+  const { t } = useT()
+  const { theme, setTheme } = useTheme()
+  return (
+    <SettingsRow title={t('shell.menu.theme')} layout="stack">
+      <SegmentedControl
+        label={t('shell.menu.theme')}
+        options={THEMES.map(({ value, label, Icon }) => ({
+          value,
+          label: t(label),
+          content: (
+            <>
+              <Icon size={14} aria-hidden="true" className="mr-1.5" />
+              {t(label)}
+            </>
+          ),
+        }))}
+        value={theme}
+        onChange={setTheme}
+        className="self-start"
+      />
+    </SettingsRow>
+  )
+}
+
 // A tiny drawing of each style's shape: corner radius, hairline or raised.
 const STYLE_PREVIEW: Record<UiStyle, string> = {
   terminal: 'rounded-[2px] border border-border-strong bg-bg',
@@ -466,6 +550,14 @@ interface GroupDef {
   id: string
   title: string
   rows: ReactNode
+  // Under the title in a phone's list: what the group is set to now
+  summary?: string
+}
+
+const LANGUAGE_LABEL: Record<Settings['language'], MessageKey> = {
+  auto: 'settings.languageAuto',
+  en: 'common.english',
+  vi: 'common.vietnamese',
 }
 
 export function SettingsModal({
@@ -496,21 +588,121 @@ export function SettingsModal({
   shortcuts,
 }: Props) {
   const { t } = useT()
+  const { theme } = useTheme()
+  const isMobile = useIsMobile()
   const [activeGroup, setActiveGroup] = useState('appearance')
+  // A phone shows the list of groups, or one group with a way back to it
+  const [phoneList, setPhoneList] = useState(true)
+  const navId = useId()
+  const contentRef = useRef<HTMLDivElement>(null)
+  // The group a phone just left, to focus in the list again
+  const leftGroup = useRef<string | null>(null)
 
-  // Opened for one group: pick it in the desktop rail, and on a phone, where
-  // every group stacks, scroll it to the top once the sheet has mounted.
+  // Each opening starts over: at the group it is given (About's "Check for
+  // updates"), picked in the rail and opened on a phone, or at the list. Set
+  // while rendering, so a phone never draws the list first.
+  const openKey = isOpen ? (initialGroup ?? '') : null
+  const [seenKey, setSeenKey] = useState<string | null>(null)
+  if (openKey !== seenKey) {
+    setSeenKey(openKey)
+    setPhoneList(!initialGroup || !isOpen)
+    if (isOpen && initialGroup) setActiveGroup(initialGroup)
+  }
+  // Down to a phone's width while open: back at the list
+  const [wasMobile, setWasMobile] = useState(isMobile)
+  if (isMobile !== wasMobile) {
+    setWasMobile(isMobile)
+    if (isMobile) setPhoneList(true)
+  }
+  const phoneGroup = isOpen && isMobile && !phoneList
+
+  // A group just opened from the list, to focus its way back
+  const enteredGroup = useRef(false)
+  // Set while a tap waits for the Back of the group just left
+  const stopWaiting = useRef<(() => void) | null>(null)
+  useEffect(() => () => stopWaiting.current?.(), [])
+
+  const openGroup = (id: string) => {
+    setActiveGroup(id)
+    if (!isMobile) return
+    // The entry of the group just left is still being popped: one pushed
+    // now would sit on top of it, and its popstate would close the new group.
+    // Open once it is gone; another tap meanwhile only changes the group.
+    if (viewerClosing()) {
+      stopWaiting.current ??= onViewerEntryGone(() => {
+        stopWaiting.current?.()
+        stopWaiting.current = null
+        enteredGroup.current = true
+        setPhoneList(false)
+      })
+      return
+    }
+    enteredGroup.current = true
+    setPhoneList(false)
+  }
+
+  // Bumped to push the group's history entry again (a new PhoneBackButton)
+  const [historyKey, setHistoryKey] = useState(0)
+  const phoneBack = useRef<(() => void) | null>(null)
+
+  const backToList = () => {
+    // Back while a sheet of the group is open over it (a template being
+    // edited, a confirmation): that sheet is the top layer, so the group
+    // stays, with a new entry for the next Back; the sheet closes by its
+    // own buttons. Leaving the group would drop what was typed in it.
+    const settings = contentRef.current?.closest('dialog')
+    const childOpen = [...document.querySelectorAll('dialog[open]')].some(
+      (d) => d !== settings,
+    )
+    if (childOpen) {
+      setHistoryKey((k) => k + 1)
+      return
+    }
+    leftGroup.current = activeGroup
+    setPhoneList(true)
+  }
+
+  // Escape closes Settings at either level. Android's Back reaches the dialog
+  // as the same close request (cancel) without the key, and leaves a group
+  // for the list as Back of the history does.
+  const escapePressed = useRef(false)
   useEffect(() => {
-    if (!isOpen || !initialGroup) return
-    setActiveGroup(initialGroup)
-    const frame = requestAnimationFrame(() => {
-      document
-        .querySelector(`[data-group="${initialGroup}"]`)
-        // jsdom has no scrollIntoView
-        ?.scrollIntoView?.({ block: 'start' })
-    })
-    return () => cancelAnimationFrame(frame)
-  }, [isOpen, initialGroup])
+    if (!isOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      escapePressed.current = true
+      // The cancel follows within the same task
+      setTimeout(() => {
+        escapePressed.current = false
+      })
+    }
+    document.addEventListener('keydown', onKey, true)
+    return () => document.removeEventListener('keydown', onKey, true)
+  }, [isOpen])
+  const cancel = () => {
+    if (!escapePressed.current && phoneBack.current) phoneBack.current()
+    else onClose()
+  }
+
+  // A group opens at its top, and the list again with focus on the group
+  // just left (a keyboard or screen reader keeps its place)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs when the view changes
+  useLayoutEffect(() => {
+    // The sheet's scrolling body holds this content
+    const body = contentRef.current?.parentElement
+    if (body && isMobile) body.scrollTop = 0
+    // Into a group from the list: its way back has focus, so a keyboard or
+    // screen reader does not start over from the top of the page
+    if (isMobile && !phoneList && enteredGroup.current) {
+      enteredGroup.current = false
+      document.querySelector<HTMLElement>('[data-phone-back]')?.focus()
+    }
+    if (!isMobile || !phoneList || !leftGroup.current) return
+    document
+      .querySelector<HTMLElement>(`[data-group-button="${leftGroup.current}"]`)
+      ?.focus()
+    leftGroup.current = null
+  }, [isMobile, phoneList, activeGroup])
 
   const imeOption = IME_SEND_OPTIONS.find(
     (o) => o.value === settings.imeSendBehavior,
@@ -522,21 +714,25 @@ export function SettingsModal({
   const pasteOption = pasteOptions.find((o) => o.value === settings.pasteSource)
   const hasActions = onShowWelcome || onStartTour || onClearHistory
 
+  const themeLabel = THEMES.find((m) => m.value === theme)?.label
   const groups: GroupDef[] = [
     {
       id: 'appearance',
       title: t('settings.group.appearance'),
+      summary: [
+        t(STYLE_LABEL[settings.uiStyle]),
+        themeLabel && t(themeLabel),
+        t(LANGUAGE_LABEL[settings.language]),
+      ]
+        .filter(Boolean)
+        .join(' · '),
       rows: (
         <>
-          <div className="flex flex-col gap-2 px-4 py-2.5 ui-native:bg-surface-raised">
-            <div>
-              <p className="m-0 text-[15px] text-fg ui-terminal:font-label ui-terminal:text-[13px]">
-                {t('settings.style')}
-              </p>
-              <p className="m-0 text-[12px] text-fg-muted">
-                {t('settings.styleDesc')}
-              </p>
-            </div>
+          <SettingsRow
+            title={t('settings.style')}
+            desc={t('settings.styleDesc')}
+            layout="stack"
+          >
             <SegmentedControl
               label={t('settings.style')}
               options={UI_STYLES.map((s) => ({
@@ -553,10 +749,12 @@ export function SettingsModal({
               onChange={(v) => onUpdateSetting('uiStyle', v)}
               className="self-start"
             />
-          </div>
+          </SettingsRow>
+          <ThemeRow />
           <SettingsRow
             title={t('settings.language')}
             desc={t('settings.languageDesc')}
+            layout="stack"
           >
             <SegmentedControl
               label={t('settings.language')}
@@ -567,6 +765,7 @@ export function SettingsModal({
               ]}
               value={settings.language}
               onChange={(v) => onUpdateSetting('language', v)}
+              className="self-start"
             />
           </SettingsRow>
         </>
@@ -575,6 +774,7 @@ export function SettingsModal({
     {
       id: 'keyboard',
       title: t('settings.group.keyboard'),
+      summary: imeOption && t(imeOption.label),
       rows: (
         <>
           <SettingsRow
@@ -939,49 +1139,112 @@ export function SettingsModal({
     ? activeGroup
     : groups[0].id
 
+  const shown = groups.find((g) => g.id === shownGroup)
+  // A phone shows the list or one group, never both
+  const showList = !isMobile || phoneList
+  const showGroups = !isMobile || !phoneList
+
   return (
     <Sheet
       isOpen={isOpen}
       onClose={onClose}
-      title={t('common.settings')}
+      title={phoneGroup && shown ? shown.title : t('common.settings')}
+      onCancel={cancel}
+      leading={
+        phoneGroup && (
+          <PhoneBackButton
+            key={historyKey}
+            onBack={backToList}
+            backRef={phoneBack}
+          />
+        )
+      }
       // Full screen on a phone, a two-column dialog on desktop. Full screen
       // reaches under the status bar of a notched phone, so the header is
       // pushed below it.
       className="max-md:h-(--app-height) max-md:max-h-(--app-height) max-md:pt-[env(safe-area-inset-top)] md:h-[34rem] md:max-w-3xl"
     >
-      <div className="md:flex md:min-h-full">
-        <nav
-          aria-label={t('settings.groups')}
-          className="hidden md:sticky md:top-0 md:flex md:w-44 md:shrink-0 md:flex-col md:gap-0.5 md:self-start md:border-r md:border-border md:p-2"
-        >
-          {groups.map((g) => (
-            <button
-              key={g.id}
-              type="button"
-              aria-current={g.id === shownGroup ? 'true' : undefined}
-              onClick={() => setActiveGroup(g.id)}
-              className={`h-9 rounded-control px-3 text-left pointer-coarse:h-touch text-[14px] ui-terminal:font-label ui-terminal:text-[13px] ${FOCUS_RING} ${
-                g.id === shownGroup
-                  ? 'bg-accent-soft font-medium text-fg'
-                  : 'text-fg-muted hover:bg-surface hover:text-fg'
-              }`}
-            >
-              {g.title}
-            </button>
-          ))}
-        </nav>
-        <div className="min-w-0 flex-1">
-          {groups.map((g) => (
-            <SettingsGroup
-              key={g.id}
-              id={g.id}
-              title={g.title}
-              active={g.id === shownGroup}
-            >
-              {g.rows}
-            </SettingsGroup>
-          ))}
-        </div>
+      <div ref={contentRef} className="md:flex md:min-h-full">
+        {showList && (
+          <nav
+            aria-label={t('settings.groups')}
+            className={
+              isMobile
+                ? `mt-3 flex flex-col ${ITEM_LIST}`
+                : 'sticky top-0 flex w-48 shrink-0 flex-col gap-0.5 self-start border-r border-border p-2'
+            }
+          >
+            {groups.map((g) =>
+              isMobile ? (
+                <button
+                  key={g.id}
+                  type="button"
+                  data-group-button={g.id}
+                  // Named by the group alone; the summary describes it
+                  aria-labelledby={`${navId}-${g.id}-name`}
+                  aria-describedby={g.summary ? `${navId}-${g.id}` : undefined}
+                  onClick={() => openGroup(g.id)}
+                  className={`flex min-h-touch w-full items-center gap-3 px-4 py-2 text-left ui-native:bg-surface-raised ${FOCUS_RING} focus-visible:-outline-offset-2`}
+                >
+                  <span className="min-w-0 flex-1">
+                    <span
+                      id={`${navId}-${g.id}-name`}
+                      className="block text-[15px] text-fg ui-terminal:font-label ui-terminal:text-[13px]"
+                    >
+                      {g.title}
+                    </span>
+                    {g.summary && (
+                      <span
+                        id={`${navId}-${g.id}`}
+                        className="block truncate text-[12px] text-fg-muted"
+                      >
+                        {g.summary}
+                      </span>
+                    )}
+                  </span>
+                  <ChevronRight
+                    size={16}
+                    aria-hidden="true"
+                    className="shrink-0 text-fg-subtle"
+                  />
+                </button>
+              ) : (
+                <button
+                  key={g.id}
+                  type="button"
+                  data-group-button={g.id}
+                  aria-current={g.id === shownGroup ? 'true' : undefined}
+                  onClick={() => openGroup(g.id)}
+                  // Grows with its label: a long one wraps to a second line
+                  // rather than spilling onto the next button
+                  className={`min-h-9 rounded-control px-3 py-1.5 text-left leading-snug pointer-coarse:min-h-touch text-[14px] ui-terminal:font-label ui-terminal:text-[13px] ${FOCUS_RING} ${
+                    g.id === shownGroup
+                      ? 'bg-accent-soft font-semibold text-fg ui-terminal:shadow-[inset_2px_0_0_var(--color-accent)]'
+                      : 'text-fg-muted hover:bg-surface hover:text-fg'
+                  }`}
+                >
+                  {g.title}
+                </button>
+              ),
+            )}
+          </nav>
+        )}
+        {showGroups && (
+          <div className="min-w-0 flex-1">
+            {/* Desktop keeps every group mounted (a draft in one survives
+                switching); a phone draws only the one open */}
+            {(isMobile && shown ? [shown] : groups).map((g) => (
+              <SettingsGroup
+                key={g.id}
+                id={g.id}
+                title={g.title}
+                active={g.id === shownGroup}
+              >
+                {g.rows}
+              </SettingsGroup>
+            ))}
+          </div>
+        )}
       </div>
     </Sheet>
   )

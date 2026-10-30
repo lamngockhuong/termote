@@ -14,6 +14,7 @@ import {
 } from '../components/pair-device-sheet'
 import { SettingsModal } from '../components/settings-modal'
 import { browserLabel } from '../components/signins-section'
+import { ThemeProvider } from '../contexts/theme-context'
 import type { DevicesState } from '../hooks/use-devices'
 import { type PairedDevice, RequestError } from '../hooks/use-mux-api'
 import { FIND_EXCLUDES_DEFAULT, type Settings } from '../hooks/use-settings'
@@ -105,14 +106,16 @@ beforeEach(() => {
 describe('Settings in Vietnamese', () => {
   it('names the sheet, its groups and its rows', () => {
     renderWithLocale(
-      <SettingsModal
-        isOpen
-        onClose={() => {}}
-        settings={SETTINGS}
-        onUpdateSetting={() => {}}
-        onClearHistory={() => {}}
-        historyCount={3}
-      />,
+      <ThemeProvider>
+        <SettingsModal
+          isOpen
+          onClose={() => {}}
+          settings={SETTINGS}
+          onUpdateSetting={() => {}}
+          onClearHistory={() => {}}
+          historyCount={3}
+        />
+      </ThemeProvider>,
       'vi',
     )
     expect(screen.getByRole('dialog', { name: 'Cài đặt' })).toBeTruthy()
@@ -144,12 +147,14 @@ describe('Settings in Vietnamese', () => {
 
   it('says why a folder cannot be excluded', () => {
     renderWithLocale(
-      <SettingsModal
-        isOpen
-        onClose={() => {}}
-        settings={SETTINGS}
-        onUpdateSetting={() => {}}
-      />,
+      <ThemeProvider>
+        <SettingsModal
+          isOpen
+          onClose={() => {}}
+          settings={SETTINGS}
+          onUpdateSetting={() => {}}
+        />
+      </ThemeProvider>,
       'vi',
     )
     fireEvent.click(screen.getByRole('button', { name: 'Thêm' }))

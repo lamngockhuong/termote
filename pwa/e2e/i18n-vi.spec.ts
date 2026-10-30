@@ -112,19 +112,23 @@ for (const device of ['phone', 'desktop'] as const) {
       await expect(tour).toBeHidden()
 
       await openMenu(page, V['common.settings'])
-      const settings = page.getByRole('dialog', { name: V['common.settings'] })
-      await expect(settings).toBeVisible()
+      await expect(page.getByRole('dialog', { name: V['common.settings'] })).toBeVisible()
+      // Named after the group open in it on a phone
+      const settings = page.getByRole('dialog')
       const rail = settings.getByRole('navigation', { name: V['settings.groups'] })
-      if (await rail.isVisible()) {
-        // Desktop shows one group at a time
-        for (const group of await rail.getByRole('button').all()) {
-          await group.click()
-          await expectVietnamese(page, `Settings › ${await group.textContent()}`)
-        }
-        await rail.getByRole('button', { name: V['settings.group.appearance'] }).click()
-      } else {
-        await expectVietnamese(page, 'Settings')
+      // A phone opens at the list of groups, its summaries included
+      if (device === 'phone') await expectVietnamese(page, 'Settings')
+      // One group at a time: beside the rail on desktop; on a phone in place
+      // of the list, which ‹ brings back
+      const count = await rail.getByRole('button').count()
+      for (let i = 0; i < count; i++) {
+        const group = rail.getByRole('button').nth(i)
+        const id = await group.getAttribute('data-group-button')
+        await group.click()
+        await expectVietnamese(page, `Settings › ${id}`)
+        if (device === 'phone') await settings.getByRole('button', { name: V['settings.back'] }).click()
       }
+      await rail.getByRole('button', { name: V['settings.group.appearance'] }).click()
       await expect(settings.getByRole('radiogroup', { name: V['settings.language'] })).toBeVisible()
       await page.keyboard.press('Escape')
       await expect(settings).toBeHidden()

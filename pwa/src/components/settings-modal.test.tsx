@@ -1,12 +1,15 @@
 import {
   act,
+  cleanup,
   fireEvent,
   render,
   screen,
   waitFor,
   within,
 } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ThemeProvider } from '../contexts/theme-context'
+import { viewerClosing } from '../hooks/use-history-close'
 import { FIND_EXCLUDES_DEFAULT, type Settings } from '../hooks/use-settings'
 import { SettingsModal } from './settings-modal'
 
@@ -122,7 +125,9 @@ describe('SettingsModal', () => {
       onUpdateSetting,
       ...overrides,
     }
-    const result = render(<SettingsModal {...props} />)
+    const result = render(<SettingsModal {...props} />, {
+      wrapper: ThemeProvider,
+    })
     return { ...result, onClose, onUpdateSetting }
   }
 
@@ -365,15 +370,54 @@ describe('SettingsModal', () => {
     renderModal()
     const section = (id: string) =>
       document.querySelector(`[data-group="${id}"]`)!
-    // Every group is in the page; the CSS hides the inactive ones at md+
-    expect(section('appearance')).not.toHaveClass('md:hidden')
-    expect(section('keyboard')).toHaveClass('md:hidden')
+    // Every group is in the page; the CSS hides the inactive ones
+    expect(section('appearance')).not.toHaveClass('hidden')
+    expect(section('keyboard')).toHaveClass('hidden')
     const nav = screen.getByRole('navigation', { name: 'Settings groups' })
     const keyboard = within(nav).getByRole('button', { name: 'Keyboard' })
     fireEvent.click(keyboard)
-    expect(section('keyboard')).not.toHaveClass('md:hidden')
-    expect(section('appearance')).toHaveClass('md:hidden')
+    expect(section('keyboard')).not.toHaveClass('hidden')
+    expect(section('appearance')).toHaveClass('hidden')
     expect(keyboard).toHaveAttribute('aria-current', 'true')
+    // No way back on desktop: the rail stays
+    expect(
+      screen.queryByRole('button', { name: 'Back to Settings' }),
+    ).toBeNull()
+  })
+
+  it('names each group for a screen reader only: the rail shows it', () => {
+    renderModal()
+    const appearance = screen.getByRole('region', { name: 'Appearance' })
+    expect(within(appearance).getByRole('heading')).toHaveClass('sr-only')
+    // The gap the heading left stays, so the rows' top line does not meet
+    // the header's
+    expect(appearance).toHaveClass('pt-3')
+  })
+
+  it('grows a rail button with its label instead of a fixed height', () => {
+    renderModal()
+    const nav = screen.getByRole('navigation', { name: 'Settings groups' })
+    const appearance = within(nav).getByRole('button', { name: 'Appearance' })
+    expect(appearance).toHaveClass('min-h-9', 'font-semibold')
+    expect(appearance).not.toHaveClass('h-9')
+    expect(within(nav).getByRole('button', { name: 'Keyboard' })).toHaveClass(
+      'text-fg-muted',
+    )
+  })
+
+  it('picks the colour mode in Appearance, as the ⋯ menu does', () => {
+    localStorage.setItem('termote-theme', 'light')
+    renderModal()
+    const modes = screen.getByRole('radiogroup', { name: 'Theme' })
+    expect(
+      within(modes).getByRole('radio', { name: 'Light', checked: true }),
+    ).toBeInTheDocument()
+    fireEvent.click(within(modes).getByRole('radio', { name: 'Dark' }))
+    expect(
+      within(modes).getByRole('radio', { name: 'Dark', checked: true }),
+    ).toBeInTheDocument()
+    expect(document.documentElement).toHaveClass('dark')
+    expect(localStorage.getItem('termote-theme')).toBe('dark')
   })
 
   it('sets how files are edited on desktop', () => {
@@ -605,38 +649,20 @@ describe('SettingsModal', () => {
     expect(screen.getByRole('button', { name: 'Updates' })).toBeInTheDocument()
   })
 
-  it('opens at the group it is given: picked in the rail, scrolled to', () => {
-    const scrollIntoView = vi.fn()
-    const original = Element.prototype.scrollIntoView
-    Element.prototype.scrollIntoView = scrollIntoView
-    const raf = vi
-      .spyOn(window, 'requestAnimationFrame')
-      .mockImplementation((cb) => {
-        cb(0)
-        return 1
-      })
-    try {
-      renderModal({
-        initialGroup: 'updates',
-        updates: {
-          server: null,
-          stale: false,
-          reloading: false,
-          onReload: vi.fn(),
-        },
-      })
-      expect(screen.getByRole('button', { name: 'Updates' })).toHaveAttribute(
-        'aria-current',
-        'true',
-      )
-      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start' })
-      expect(
-        (scrollIntoView.mock.contexts[0] as Element).getAttribute('data-group'),
-      ).toBe('updates')
-    } finally {
-      raf.mockRestore()
-      Element.prototype.scrollIntoView = original
-    }
+  it('opens at the group it is given, picked in the rail', () => {
+    renderModal({
+      initialGroup: 'updates',
+      updates: {
+        server: null,
+        stale: false,
+        reloading: false,
+        onReload: vi.fn(),
+      },
+    })
+    expect(screen.getByRole('button', { name: 'Updates' })).toHaveAttribute(
+      'aria-current',
+      'true',
+    )
   })
 
   it('opens at Appearance without a group', () => {
@@ -930,6 +956,7 @@ describe('SettingsModal for a view-only device or with devices', () => {
         onUpdateSetting={vi.fn()}
         {...props}
       />,
+      { wrapper: ThemeProvider },
     )
 
   it('has no Devices group unless the server offers devices', () => {
@@ -1060,5 +1087,274 @@ describe('SettingsModal for a view-only device or with devices', () => {
       screen.queryByRole('switch', { name: 'Notify when an agent needs me' }),
     ).toBeNull()
     expect(notify.notifyWorkerReady).not.toHaveBeenCalled()
+  })
+})
+
+describe('SettingsModal on a phone', () => {
+  const desktopMatchMedia = window.matchMedia
+  // The width listeners, to cross the 768px line while open
+  const widthListeners = new Set<(e: { matches: boolean }) => void>()
+  let phone = true
+
+  beforeEach(() => {
+    phone = true
+    widthListeners.clear()
+    type Listener = (e: { matches: boolean }) => void
+    window.matchMedia = ((query: string) => ({
+      ...desktopMatchMedia(query),
+      matches: query === '(max-width: 767px)' && phone,
+      addEventListener: (_: string, fn: Listener) => {
+        if (query === '(max-width: 767px)') widthListeners.add(fn)
+      },
+      removeEventListener: (_: string, fn: Listener) => {
+        widthListeners.delete(fn)
+      },
+    })) as unknown as typeof window.matchMedia
+    HTMLDialogElement.prototype.showModal = vi.fn(function (
+      this: HTMLDialogElement,
+    ) {
+      this.setAttribute('open', '')
+    })
+    HTMLDialogElement.prototype.close = vi.fn()
+  })
+  afterEach(async () => {
+    window.matchMedia = desktopMatchMedia
+    // Unmounted inside a group, a test leaves a Back in flight: the next
+    // one starts once it has landed
+    cleanup()
+    await waitFor(() => expect(viewerClosing()).toBe(false))
+  })
+
+  const setPhone = (on: boolean) =>
+    act(() => {
+      phone = on
+      for (const fn of widthListeners) fn({ matches: on })
+    })
+
+  function renderPhone(
+    overrides: Partial<Parameters<typeof SettingsModal>[0]> = {},
+  ) {
+    const onClose = vi.fn()
+    const props = {
+      isOpen: true,
+      onClose,
+      settings: DEFAULT_SETTINGS,
+      onUpdateSetting: vi.fn(),
+      ...overrides,
+    }
+    const view = render(<SettingsModal {...props} />, {
+      wrapper: ThemeProvider,
+    })
+    return { ...view, onClose, props }
+  }
+
+  const list = () =>
+    screen.queryByRole('navigation', { name: 'Settings groups' })
+  const back = () => screen.queryByRole('button', { name: 'Back to Settings' })
+  // Back from the history: pops the group's entry, as a gesture would
+  const historyBack = async () => {
+    await act(async () => {
+      window.history.back()
+      await new Promise((r) => setTimeout(r, 20))
+    })
+  }
+
+  it('opens at the list of groups, with no rows of any', () => {
+    renderPhone()
+    expect(list()).toBeInTheDocument()
+    expect(screen.queryByRole('region')).toBeNull()
+    expect(screen.queryByRole('radiogroup')).toBeNull()
+    expect(back()).toBeNull()
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Settings' }),
+    ).toBeInTheDocument()
+    // No group is "current" in a list that only opens them
+    expect(
+      within(list()!).getByRole('button', { name: 'Keyboard' }),
+    ).not.toHaveAttribute('aria-current')
+  })
+
+  it('sums up Appearance and Keyboard under their names', () => {
+    localStorage.setItem('termote-theme', 'dark')
+    renderPhone({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        uiStyle: 'terminal',
+        language: 'vi',
+        imeSendBehavior: 'send-enter',
+      },
+    })
+    const nav = list()!
+    expect(
+      within(nav).getByRole('button', { name: 'Appearance' }),
+    ).toHaveAccessibleDescription('Terminal · Dark · Tiếng Việt')
+    expect(
+      within(nav).getByRole('button', { name: 'Keyboard' }),
+    ).toHaveAccessibleDescription('Send + Enter')
+    expect(
+      within(nav).getByRole('button', { name: 'Sessions' }),
+    ).not.toHaveAttribute('aria-describedby')
+  })
+
+  it('opens one group with a way back, and goes back to the list on ‹', async () => {
+    const before = window.history.length
+    renderPhone()
+    fireEvent.click(within(list()!).getByRole('button', { name: 'Keyboard' }))
+    expect(list()).toBeNull()
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Keyboard' }),
+    ).toBeInTheDocument()
+    expect(screen.getAllByRole('region')).toHaveLength(1)
+    expect(
+      screen.getByRole('radiogroup', { name: 'Text input send behavior' }),
+    ).toBeInTheDocument()
+    expect(window.history.length).toBe(before + 1)
+
+    fireEvent.click(back()!)
+    await waitFor(() => expect(list()).toBeInTheDocument())
+    // Focus is back on the group just left
+    expect(
+      within(list()!).getByRole('button', { name: 'Keyboard' }),
+    ).toHaveFocus()
+    expect(screen.queryByRole('region')).toBeNull()
+  })
+
+  it('goes back to the list on Back of the history, staying open', async () => {
+    const { onClose } = renderPhone()
+    fireEvent.click(within(list()!).getByRole('button', { name: 'Sessions' }))
+    expect(back()).toBeInTheDocument()
+    await historyBack()
+    await waitFor(() => expect(list()).toBeInTheDocument())
+    expect(onClose).not.toHaveBeenCalled()
+    expect(back()).toBeNull()
+  })
+
+  it('waits for the Back of the group just left before opening another', async () => {
+    const { rerender, props } = renderPhone()
+    fireEvent.click(within(list()!).getByRole('button', { name: 'Keyboard' }))
+    const length = window.history.length
+    // Closed from inside a group, then opened again before the Back that
+    // takes its entry off has landed: a tap only names the group meanwhile
+    rerender(<SettingsModal {...props} isOpen={false} />)
+    rerender(<SettingsModal {...props} isOpen />)
+    fireEvent.click(within(list()!).getByRole('button', { name: 'Terminal' }))
+    fireEvent.click(within(list()!).getByRole('button', { name: 'Sessions' }))
+    expect(list()).toBeInTheDocument()
+    await waitFor(() =>
+      expect(
+        screen.getByRole('heading', { level: 2, name: 'Sessions' }),
+      ).toBeInTheDocument(),
+    )
+    // One entry of its own on top, not one under the old: Back leaves it
+    expect(window.history.state).toHaveProperty('termoteViewer')
+    expect(window.history.length).toBe(length)
+    await historyBack()
+    await waitFor(() => expect(list()).toBeInTheDocument())
+  })
+
+  const cancel = () =>
+    fireEvent(document.querySelector('dialog')!, new Event('cancel'))
+
+  it('closes on Escape from inside a group', () => {
+    const { onClose } = renderPhone()
+    fireEvent.click(within(list()!).getByRole('button', { name: 'Keyboard' }))
+    // The key, then the close request it makes
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
+    cancel()
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it("goes back to the list on Android's Back, a close request without Escape", async () => {
+    const { onClose } = renderPhone()
+    fireEvent.click(within(list()!).getByRole('button', { name: 'Keyboard' }))
+    cancel()
+    await waitFor(() => expect(list()).toBeInTheDocument())
+    expect(onClose).not.toHaveBeenCalled()
+    // At the list it closes Settings
+    cancel()
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('focuses the way back once a group opens from the list', () => {
+    renderPhone()
+    fireEvent.click(within(list()!).getByRole('button', { name: 'Keyboard' }))
+    expect(back()).toHaveFocus()
+  })
+
+  it('stays in the group on Back while a sheet of it is open over it', async () => {
+    renderPhone()
+    fireEvent.click(within(list()!).getByRole('button', { name: 'Keyboard' }))
+    // A sheet the group opened (a template editor, a confirmation)
+    const child = document.createElement('dialog')
+    child.setAttribute('open', '')
+    document.body.append(child)
+    try {
+      await historyBack()
+      // Still in the group, with its own entry pushed again
+      await waitFor(() =>
+        expect(window.history.state).toHaveProperty('termoteViewer'),
+      )
+      expect(list()).toBeNull()
+      expect(back()).toBeInTheDocument()
+    } finally {
+      child.remove()
+    }
+    await historyBack()
+    await waitFor(() => expect(list()).toBeInTheDocument())
+  })
+
+  it('takes its history entry off when closed from inside a group', async () => {
+    const { rerender, props } = renderPhone()
+    fireEvent.click(within(list()!).getByRole('button', { name: 'Keyboard' }))
+    const pushed = window.history.state
+    expect(pushed).toHaveProperty('termoteViewer')
+    rerender(<SettingsModal {...props} isOpen={false} />)
+    await waitFor(() =>
+      expect(window.history.state?.termoteViewer).toBeUndefined(),
+    )
+    // Opened again: at the list, not the group left
+    rerender(<SettingsModal {...props} isOpen />)
+    expect(list()).toBeInTheDocument()
+  })
+
+  it('opens straight at the group it is given', () => {
+    renderPhone({
+      initialGroup: 'updates',
+      updates: {
+        server: null,
+        stale: false,
+        reloading: false,
+        onReload: vi.fn(),
+      },
+    })
+    expect(list()).toBeNull()
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Updates' }),
+    ).toBeInTheDocument()
+    expect(screen.getByTestId('updates-section')).toBeInTheDocument()
+    expect(back()).toBeInTheDocument()
+  })
+
+  it('opens a group at its top', () => {
+    renderPhone()
+    const body = document.querySelector('dialog .overflow-y-auto')!
+    body.scrollTop = 300
+    fireEvent.click(within(list()!).getByRole('button', { name: 'Sessions' }))
+    expect(body.scrollTop).toBe(0)
+  })
+
+  it('follows the width across 768px while open', async () => {
+    renderPhone()
+    fireEvent.click(within(list()!).getByRole('button', { name: 'Keyboard' }))
+    // Wider: the group open is the one picked in the rail
+    setPhone(false)
+    expect(
+      within(list()!).getByRole('button', { name: 'Keyboard' }),
+    ).toHaveAttribute('aria-current', 'true')
+    expect(back()).toBeNull()
+    // Narrower again: the list
+    setPhone(true)
+    expect(list()).toBeInTheDocument()
+    expect(screen.queryByRole('region')).toBeNull()
   })
 })

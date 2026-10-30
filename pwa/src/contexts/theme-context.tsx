@@ -1,3 +1,4 @@
+import { Monitor, Moon, Sun } from 'lucide-react'
 import {
   createContext,
   type ReactNode,
@@ -7,7 +8,7 @@ import {
   useState,
 } from 'react'
 
-type Theme = 'light' | 'dark' | 'system'
+export type Theme = 'light' | 'dark' | 'system'
 type ResolvedTheme = 'light' | 'dark'
 
 interface ThemeContextType {
@@ -15,6 +16,14 @@ interface ThemeContextType {
   resolvedTheme: ResolvedTheme
   setTheme: (theme: Theme) => void
 }
+
+// The colour modes, in the order the ⋯ menu and Settings > Appearance list
+// them
+export const THEMES = [
+  { value: 'light', label: 'shell.menu.light', Icon: Sun },
+  { value: 'dark', label: 'shell.menu.dark', Icon: Moon },
+  { value: 'system', label: 'shell.menu.system', Icon: Monitor },
+] as const
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 

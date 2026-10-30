@@ -6,8 +6,10 @@ export default {
   'settings.languageAuto': 'Auto',
   'settings.takeTour': 'Take the tour',
   'settings.showWelcome': 'Show welcome screen',
-  // The groups, in the desktop rail and as headings
+  // The groups, in the desktop rail (a list on a phone) and as headings
   'settings.groups': 'Settings groups',
+  // A phone's back button from a group to the list
+  'settings.back': 'Back to Settings',
   'settings.group.appearance': 'Appearance',
   'settings.group.keyboard': 'Keyboard',
   'settings.group.shortcuts': 'Shortcuts',
@@ -19,7 +21,7 @@ export default {
   'settings.group.data': 'Data & help',
   // Appearance
   'settings.style': 'Interface style',
-  'settings.styleDesc': 'Applies at once. Theme stays in the ⋯ menu.',
+  'settings.styleDesc': 'Applies at once.',
   'settings.style.neutral': 'Neutral',
   'settings.style.terminal': 'Terminal',
   'settings.style.native': 'Native',
@@ -37,8 +39,7 @@ export default {
   'settings.toolbarExpandedDesc': 'Show all keys when toolbar loads',
   // Terminal
   'settings.font': 'Terminal font',
-  'settings.fontDesc':
-    'A font installed on this device (e.g. a Nerd Font). Nerd Font icons work without one.',
+  'settings.fontDesc': 'A font installed on this device, such as a Nerd Font',
   'settings.contextMenu': 'Disable right-click menu',
   'settings.contextMenuDesc': 'Block context menu on terminal area',
   'settings.copyOnSelect': 'Copy on select',
@@ -46,10 +47,9 @@ export default {
     'Copy the text you select with the mouse as soon as you release the button',
   'settings.fitPane': 'Fit herdr pane to this device',
   'settings.fitPaneDesc':
-    'While the terminal shows; resizes the pane on the desktop too, until this page is hidden or closed, another view opens, or another device takes over',
+    "The pane on the computer takes this screen's size while you watch it",
   'settings.layoutView': 'Show herdr panes side by side',
-  'settings.layoutViewDesc':
-    "On a computer, a tab of 2 to 4 panes shows them in herdr's layout; off, or when they would be too small to read, one pane at a time",
+  'settings.layoutViewDesc': "A tab of 2 to 4 panes shows herdr's own layout",
   // Sessions
   'settings.tabs': 'Show session tabs',
   'settings.tabsDesc': 'Display tab bar for quick session switching (desktop)',

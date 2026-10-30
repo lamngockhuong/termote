@@ -135,6 +135,7 @@ test.describe('paired devices and the view-only role', () => {
     await page.setViewportSize({ width: 390, height: 844 })
     await page.getByRole('button', { name: 'More' }).click()
     await page.getByRole('menuitem', { name: 'Settings' }).click()
+    await page.getByRole('button', { name: 'Data & help' }).click()
     await page.getByRole('button', { name: 'Take the tour' }).click()
     const bubble = page.getByRole('dialog')
     await expect(bubble).toHaveAccessibleName('Sessions and windows')

@@ -22,6 +22,10 @@ interface Props {
   closeLabel?: string
   // Extra controls in the header, before the close button
   actions?: ReactNode
+  // A control before the title, such as a back button
+  leading?: ReactNode
+  // A close request (Escape, Android's Back) goes here instead of onClose
+  onCancel?: () => void
   className?: string
   // Focuses a control of the content once the sheet is open, instead of the
   // dialog itself. Called in the same commit as the opening, so nothing typed
@@ -46,6 +50,8 @@ function OpenSheet({
   children,
   closeLabel,
   actions,
+  leading,
+  onCancel,
   className = '',
   focusOnOpen,
   keepFocus,
@@ -61,7 +67,13 @@ function OpenSheet({
   const onCloseRef = useRef(onClose)
   onCloseRef.current = onClose
   const close = useCallback(() => onCloseRef.current(), [])
-  useDialogModal(dialogRef, true, close)
+  const onCancelRef = useRef(onCancel)
+  onCancelRef.current = onCancel
+  const cancel = useCallback(
+    () => (onCancelRef.current ?? onCloseRef.current)(),
+    [],
+  )
+  useDialogModal(dialogRef, true, cancel)
   // showModal focuses the first control, and on a phone that draws a focus
   // ring round the header's first button the moment the sheet opens. Focus
   // the dialog itself instead; a screen reader still announces its title.
@@ -102,9 +114,14 @@ function OpenSheet({
         </div>
       )}
       <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border px-4 ui-native:border-0">
+        {leading && (
+          <div className="-ml-2 flex shrink-0 items-center [&_button:focus-visible]:-outline-offset-2">
+            {leading}
+          </div>
+        )}
         <h2
           id={titleId}
-          className="m-0 truncate text-[17px] font-semibold ui-terminal:font-label ui-terminal:text-[14px] ui-terminal:uppercase ui-terminal:tracking-wider"
+          className={`m-0 truncate text-[17px] ${leading ? 'mr-auto' : ''} font-semibold ui-terminal:font-label ui-terminal:text-[14px] ui-terminal:uppercase ui-terminal:tracking-wider`}
         >
           {title}
         </h2>

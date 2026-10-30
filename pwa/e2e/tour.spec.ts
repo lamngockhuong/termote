@@ -15,8 +15,8 @@ async function startTour(page: Page, words: typeof en | typeof vi = en) {
   await page.getByRole('button', { name: words['shell.menu.more'] }).click()
   await page.getByRole('menuitem', { name: words['common.settings'] }).click()
   const data = page.getByRole('button', { name: words['settings.group.data'] })
-  // Desktop picks the group in a rail; a phone stacks every group
-  if (await data.isVisible()) await data.click()
+  // Desktop picks the group in a rail, a phone in the list of groups
+  await data.click()
   await page.getByRole('button', { name: words['settings.takeTour'] }).click()
   await expect(page.getByTestId('tour')).toBeVisible()
 }
