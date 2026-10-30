@@ -5,15 +5,12 @@ import {
   LifeBuoy,
   Link,
   LogOut,
-  Monitor,
-  Moon,
   MoreHorizontal,
   RotateCcw,
   Settings,
-  Sun,
 } from 'lucide-react'
 import { useState } from 'react'
-import { useTheme } from '../contexts/theme-context'
+import { THEMES, useTheme } from '../contexts/theme-context'
 import { logout } from '../hooks/use-mux-api'
 import { useT } from '../i18n/i18n-context'
 import { signedOut } from '../utils/files-persist'
@@ -49,12 +46,6 @@ interface Props {
   updateVersion?: string | null
   onOpenUpdates?: () => void
 }
-
-const THEMES = [
-  { value: 'light', label: 'shell.menu.light', Icon: Sun },
-  { value: 'dark', label: 'shell.menu.dark', Icon: Moon },
-  { value: 'system', label: 'shell.menu.system', Icon: Monitor },
-] as const
 
 // Each step runs whatever the one before did: a browser that refuses the
 // service worker or cache API still signs out.

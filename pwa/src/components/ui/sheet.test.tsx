@@ -180,4 +180,36 @@ describe('Sheet', () => {
     unmount()
     expect(focus).not.toHaveBeenCalled()
   })
+
+  it('draws a leading control before the title', () => {
+    renderSheet({
+      leading: (
+        <button type="button" aria-label="Back">
+          ‹
+        </button>
+      ),
+    })
+    const back = screen.getByRole('button', { name: 'Back' })
+    const title = screen.getByRole('heading', { name: 'Sessions' })
+    expect(
+      back.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+  })
+
+  it('has no leading slot unless given one', () => {
+    renderSheet()
+    const title = screen.getByRole('heading', { name: 'Sessions' })
+    expect(title.previousElementSibling).toBeNull()
+  })
+
+  it('sends a close request to onCancel when given one', () => {
+    const onCancel = vi.fn()
+    const { onClose } = renderSheet({ onCancel })
+    fireEvent(screen.getByRole('dialog'), new Event('cancel'))
+    expect(onCancel).toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
+    // The close button still closes
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(onClose).toHaveBeenCalled()
+  })
 })

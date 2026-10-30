@@ -8,6 +8,7 @@ export default {
   'settings.takeTour': 'Xem hướng dẫn nhanh',
   'settings.showWelcome': 'Hiện màn chào',
   'settings.groups': 'Các nhóm cài đặt',
+  'settings.back': 'Quay lại Cài đặt',
   'settings.group.appearance': 'Giao diện',
   'settings.group.keyboard': 'Bàn phím',
   'settings.group.shortcuts': 'Phím tắt',
@@ -16,10 +17,10 @@ export default {
   'settings.group.signins': 'Trình duyệt đã đăng nhập',
   'settings.group.templates': 'Mẫu prompt',
   'settings.group.updates': 'Cập nhật',
-  'settings.group.data': 'Dữ liệu và trợ giúp',
+  'settings.group.data': 'Dữ liệu & trợ giúp',
 
   'settings.style': 'Kiểu giao diện',
-  'settings.styleDesc': 'Đổi ngay khi chọn. Chế độ màu vẫn nằm trong menu ⋯.',
+  'settings.styleDesc': 'Đổi ngay khi chọn.',
   'settings.style.neutral': 'Trung tính',
   'settings.style.terminal': 'Terminal',
   'settings.style.native': 'Gốc',
@@ -39,8 +40,7 @@ export default {
     'Hiện đủ các phím ngay khi thanh phím hiện ra',
 
   'settings.font': 'Phông chữ terminal',
-  'settings.fontDesc':
-    'Một phông đã cài trên thiết bị này (ví dụ Nerd Font). Biểu tượng Nerd Font vẫn hiện được khi không có.',
+  'settings.fontDesc': 'Phông đã cài trên thiết bị này, ví dụ một Nerd Font',
   'settings.contextMenu': 'Tắt menu chuột phải',
   'settings.contextMenuDesc': 'Không mở menu ngữ cảnh trên vùng terminal',
   'settings.copyOnSelect': 'Chọn là sao chép',
@@ -48,10 +48,9 @@ export default {
     'Chữ bôi đen bằng chuột được sao chép ngay khi nhả nút',
   'settings.fitPane': 'Chỉnh pane herdr vừa thiết bị này',
   'settings.fitPaneDesc':
-    'Khi terminal đang hiện; cỡ pane trên máy tính cũng đổi theo, cho tới khi trang này bị ẩn hoặc đóng, mở cách xem khác, hay thiết bị khác giành quyền',
+    'Cỡ pane trên máy tính đổi theo màn hình này khi đang xem',
   'settings.layoutView': 'Hiện các pane herdr cạnh nhau',
-  'settings.layoutViewDesc':
-    'Trên máy tính, tab có 2 đến 4 pane sẽ hiện theo đúng bố cục của herdr; khi tắt, hoặc khi chữ quá nhỏ để đọc, thì chỉ hiện từng pane một',
+  'settings.layoutViewDesc': 'Tab có 2–4 pane hiện đúng bố cục của herdr',
 
   'settings.tabs': 'Hiện tab phiên',
   'settings.tabsDesc': 'Thanh tab để chuyển phiên nhanh (máy tính)',

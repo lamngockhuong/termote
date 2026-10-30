@@ -181,7 +181,8 @@ test.describe('Capture screenshots for the intro video', () => {
       await waitTerminal(page)
       await page.getByRole('button', { name: 'More' }).click()
       await page.getByRole('menuitem', { name: 'Settings' }).click()
-      // A phone shows every settings group on one page, without the side list
+      // A phone opens Settings at the list of groups
+      await page.getByRole('button', { name: 'Devices' }).click()
       await page.getByRole('button', { name: 'Pair a device' }).click()
       await page.getByPlaceholder('Phone').fill('Tablet')
       await page.getByRole('button', { name: 'Make code' }).click()
