@@ -36,6 +36,8 @@ interface Props {
   // Unset (view-only role): no Add button
   onAddTab?: () => void
   onRemoveTab: (id: string) => void
+  // Unset (view-only role, or the server cannot move tabs): tabs do not drag
+  onMoveTab?: (id: string, index: number) => void
   connectionState: ConnectionState
   onRetry: () => void
   // Mobile: the sessions sheet
@@ -169,6 +171,7 @@ function DesktopHeader(p: Props) {
           onAdd={p.onAddTab}
           onRemove={p.onRemoveTab}
           canRemove={p.canRemoveTab}
+          onMove={p.onMoveTab}
         />
       ) : (
         <SessionName session={session} className="mb-2" />

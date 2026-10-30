@@ -1970,6 +1970,7 @@ export default function App({
             onSelectTab={selectFromList}
             onAddTab={readOnly || focus ? undefined : () => addTab('New')}
             onRemoveTab={requestRemove}
+            onMoveTab={reorder?.tabs ? reorder.onMoveTab : undefined}
             connectionState={connectionState}
             onRetry={() => terminalRef.current?.reconnect()}
             sessionsOpen={sidebarOpen}
