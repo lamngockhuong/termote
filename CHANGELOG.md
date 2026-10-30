@@ -1,5 +1,39 @@
 # Changelog
 
+## [2.15.0](https://github.com/lamngockhuong/termote/compare/v2.14.0...v2.15.0) (2026-10-30)
+
+
+### Features
+
+* **herdr:** list linked worktrees under their repository's workspace ([#643](https://github.com/lamngockhuong/termote/issues/643)) ([a4226f1](https://github.com/lamngockhuong/termote/commit/a4226f1f955368780de42079f27fdefb81b09089))
+* **herdr:** show a tab's panes side by side on desktop ([#646](https://github.com/lamngockhuong/termote/issues/646)) ([98ce049](https://github.com/lamngockhuong/termote/commit/98ce049ab40930d38c1c9efa098682972bf52665))
+* **pwa:** drag to reorder the session tabs in the header row ([#661](https://github.com/lamngockhuong/termote/issues/661)) ([59b67ce](https://github.com/lamngockhuong/termote/commit/59b67ceff0ab4ee105068f9b47e4b0b0c8a9d24f))
+* **pwa:** draw a line between panes shown side by side ([#653](https://github.com/lamngockhuong/termote/issues/653)) ([3133a99](https://github.com/lamngockhuong/termote/commit/3133a9905a968fcea68ad6c44b0c429035207fa3))
+* **pwa:** name each group above its icons in the collapsed sidebar ([#648](https://github.com/lamngockhuong/termote/issues/648)) ([065855d](https://github.com/lamngockhuong/termote/commit/065855da0b879edad067473e9ecd3eb383b6f376))
+* **pwa:** open Settings at a list of groups on a phone ([#657](https://github.com/lamngockhuong/termote/issues/657)) ([1198036](https://github.com/lamngockhuong/termote/commit/1198036926791f4aededb624f738c06071450e3a))
+* **pwa:** open the Language setting to the whole app (EN/VI) ([#650](https://github.com/lamngockhuong/termote/issues/650)) ([ac39183](https://github.com/lamngockhuong/termote/commit/ac39183a0156e2618cb35d631084ee8680a4bf18))
+* **pwa:** say why a Herdr tab past 4 panes shows one pane at a time ([#649](https://github.com/lamngockhuong/termote/issues/649)) ([26efb42](https://github.com/lamngockhuong/termote/commit/26efb42982ab53f5f341dd9dfae45268cccbcbc7))
+* **pwa:** translate Changes, review and git dialogs (EN/VI) ([#638](https://github.com/lamngockhuong/termote/issues/638)) ([36912cc](https://github.com/lamngockhuong/termote/commit/36912cc52ae11b9c2f8e6ef02e9133e9f892dbbe))
+* **pwa:** translate Files and document previews (EN/VI) ([#633](https://github.com/lamngockhuong/termote/issues/633)) ([55c5cc6](https://github.com/lamngockhuong/termote/commit/55c5cc63fe6266b5799e94ed96d8a29c151613c7))
+* **pwa:** translate shared dialogs, server errors and push notifications (EN/VI) ([#645](https://github.com/lamngockhuong/termote/issues/645)) ([416403b](https://github.com/lamngockhuong/termote/commit/416403b841c624558f86eb3be3405fb649201993))
+* **pwa:** translate Tasks, the agent overview and the command palette (EN/VI) ([#642](https://github.com/lamngockhuong/termote/issues/642)) ([0d02a5a](https://github.com/lamngockhuong/termote/commit/0d02a5aef0a0ab6cfb6cb6e9b59c6d5a25d68d7c))
+* **pwa:** translate the Chat view (EN/VI) ([#640](https://github.com/lamngockhuong/termote/issues/640)) ([3e31f3e](https://github.com/lamngockhuong/termote/commit/3e31f3e22f00c0a66d1e16e469b7e1ef38c2aac0))
+* **pwa:** translate the Usage Guide (EN/VI) ([#647](https://github.com/lamngockhuong/termote/issues/647)) ([e7caa1f](https://github.com/lamngockhuong/termote/commit/e7caa1f664fc671ecf4438cefce57500264bebd2))
+* recent group directories in the new group dialog ([#637](https://github.com/lamngockhuong/termote/issues/637)) ([7689ebe](https://github.com/lamngockhuong/termote/commit/7689ebedafda83ef12afa83bb81e34a803d8e333))
+
+
+### Bug Fixes
+
+* **chat:** keep an AskUserQuestion card while vim mode edits its free-text row ([#656](https://github.com/lamngockhuong/termote/issues/656)) ([4b7aaa5](https://github.com/lamngockhuong/termote/commit/4b7aaa5364dde4226959bc9d2eaadb70d91990a0))
+* **chat:** say what a done turn left running ([#641](https://github.com/lamngockhuong/termote/issues/641)) ([dfb3520](https://github.com/lamngockhuong/termote/commit/dfb3520d2f3195607a8ff3a7e461b3b0e3d75798))
+* **pwa:** collapse a checkout's worktrees with it and draw the drop line where a group lands ([#644](https://github.com/lamngockhuong/termote/issues/644)) ([34cf264](https://github.com/lamngockhuong/termote/commit/34cf2640023b90e4b71f78fa23ab1a4639fe71c3))
+* **pwa:** keep a deep-linked tmux window instead of jumping back to the previous one ([#659](https://github.com/lamngockhuong/termote/issues/659)) ([a2f5720](https://github.com/lamngockhuong/termote/commit/a2f5720f57758d11a8b720e5c02347404554f904)), closes [#398](https://github.com/lamngockhuong/termote/issues/398)
+* **pwa:** keep a line picked right after a file shows in the code view ([#662](https://github.com/lamngockhuong/termote/issues/662)) ([7ccf3d1](https://github.com/lamngockhuong/termote/commit/7ccf3d161b34caf1b4b4aaf8e0b39fdaeddec5e5))
+* **pwa:** keep a pane picked in Herdr's layout view on the terminal ([#651](https://github.com/lamngockhuong/termote/issues/651)) ([893c1fa](https://github.com/lamngockhuong/termote/commit/893c1fa1658d0cde98fd116f1a12470cbd0c21ab))
+* **server:** show the agent name for a pane titled with its version ([#639](https://github.com/lamngockhuong/termote/issues/639)) ([b8846ca](https://github.com/lamngockhuong/termote/commit/b8846ca8b173886070281aadbbcb4f93840f7ccc))
+* two flaky E2E failures (stray paste marker, overview not opening) ([#658](https://github.com/lamngockhuong/termote/issues/658)) ([e7d6032](https://github.com/lamngockhuong/termote/commit/e7d60323f1e08c7409889b6c315e04fa8f87b05e))
+* **zellij:** keep zoom and swap reliable while clients attach ([#635](https://github.com/lamngockhuong/termote/issues/635)) ([86d4875](https://github.com/lamngockhuong/termote/commit/86d4875ab6b54cea1dd8ee12d33de78673e71650)), closes [#625](https://github.com/lamngockhuong/termote/issues/625)
+
 ## [2.14.0](https://github.com/lamngockhuong/termote/compare/v2.13.0...v2.14.0) (2026-10-29)
 
 
