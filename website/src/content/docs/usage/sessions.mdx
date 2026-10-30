@@ -102,7 +102,8 @@ the pane shown:
   open, so you can click again.
 - **Close pane** closes the pane shown after a confirmation, once the tab has another pane.
 
-Split, zoom, swap and resize are also in the command palette, under **Panes**. The menu is not
+Split, zoom, swap and resize are also in the command palette, under **Panes**, with **Previous
+pane** and **Next pane**, which you can give a key in Settings → Shortcuts. The menu is not
 shown on a view-only device, nor on a backend without these actions: psmux (Windows), Herdr
 older than 0.9.3 or on Windows, and Zellij 0.45.0. The palette still lists the commands there, greyed out with the
 reason.
@@ -111,10 +112,13 @@ The backends differ in a few ways:
 
 - **tmux**: a split leaves the focus where it was, so the pane shown stays the same. Zoom gives
   the zoomed pane tmux's focus, for every client, your desktop's included.
-- **Herdr**: Termote shows one pane at a time, not the tab's layout, so zooming, swapping and
-  resizing would change only the Herdr desktop. The menu offers **Split right**, **Split down** and
-  **Close pane** alone, and the palette greys the others out ("Changes only the Herdr desktop").
-  After a split, Termote shows the new pane; Herdr's own focus stays put.
+- **Herdr**: on a computer, a tab of 2 to 4 panes shows its panes side by side, as the Herdr desktop
+  arranges them (see [Herdr Backend](#herdr-backend)), and the menu offers everything. Where
+  Termote shows one pane at a time (the pane strip: a phone, more panes, the setting off), zooming,
+  swapping and resizing would change only the Herdr desktop, so the menu offers **Split right**,
+  **Split down** and **Close pane** alone, and the palette greys the others out ("Changes only the
+  Herdr desktop"). While the tab is zoomed, **Zoom** ends the zoom. After a split, Termote works on
+  the new pane; Herdr's own focus stays put.
 - **Zellij**: after a split, Termote shows the new pane. Swap turns the panes of the tab around one
   place, so the pane strip keeps its order while the panes move on screen. Zoom moves every client
   viewing the tab, your own Zellij included, to the zoomed pane. Through the API, a split into a
@@ -266,8 +270,8 @@ the other's save is refused with "changed on the host", as with any other change
 </Aside>
 
 Each window that shows a terminal holds one terminal stream; a focus window on a file holds none
-while the file covers the terminal. The server keeps at most 8 streams and closes the oldest for a
-new one. Only that window's stream closes, never the session or what runs in it, and the window
+while the file covers the terminal, and Herdr's side-by-side panes hold one each. The server keeps
+at most 16 streams with Herdr and 8 with tmux and Zellij, and closes the oldest for a new one. Only that window's stream closes, never the session or what runs in it, and the window
 shows **Disconnected by a newer window — Reconnect** instead of reconnecting on its own (two windows
 would otherwise push each other out in turn). Click it, or the connection indicator, to reconnect.
 
@@ -278,7 +282,14 @@ Native installs ([`termote start --mux herdr`](/installation/native/#herdr-backe
 It changes the session model in two ways:
 
 - **Panes**: a Herdr tab can have more than one pane. When it does, a **pane strip** appears
-  below the tab bar to switch between them. Each pane shows the command it runs under its name. To close a pane, click the X next to its name (shown on the streamed pane,
+  below the tab bar to switch between them. On a computer, a tab of 2 to 4 panes also shows its
+  panes side by side, in the Herdr desktop's layout, all at one font size that fits the window:
+  click a pane (or pick it in the pane strip) to type into it; Herdr's own focus does not move.
+  A zoom, a split or a resize made on the desktop shows within a second. A pane closed by a
+  newer window shows **Reconnect** in its own box. Termote shows one pane at a time instead on a
+  phone, on a view-only device, with more than 4 panes, on Herdr older than 0.9.3 or on Windows,
+  when the panes would be too small to read, or with **Show herdr panes side by side** off
+  (Settings → Terminal). Each pane shows the command it runs under its name. To close a pane, click the X next to its name (shown on the streamed pane,
   and on the others on hover or on touch screens), then confirm with "Close pane". The other panes
   of the tab stay open; a tab's last pane is closed by closing the tab.
 - **Agent status badges**: each pane can show a small icon — idle, working, blocked, or done —

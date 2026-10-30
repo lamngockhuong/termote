@@ -61,6 +61,8 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/star-prompt-card.tsx`         | Settings > Updates: the one-time Star on GitHub card           |
 | `pwa/src/hooks/use-gestures.ts`                   | Hammer.js gesture handling                                     |
 | `pwa/src/components/terminal-view.tsx`            | xterm.js terminal component (stream, resize, reconnect)        |
+| `pwa/src/components/terminal-stack.tsx`           | Terminal area: the active pane, or Herdr's layout view         |
+| `pwa/src/utils/layout-view.ts`                    | Layout view: when it shows, pane boxes, the font it fits at    |
 | `pwa/src/utils/terminal-bridge.ts`                | Drives the xterm.js terminal (key mapping, clipboard paste)    |
 | `pwa/src/components/chat-view.tsx`                | Chat view of a pane running Claude Code (lazy-loaded)          |
 | `pwa/src/components/chat-composer.tsx`            | Chat view message box                                          |

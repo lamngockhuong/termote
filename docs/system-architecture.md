@@ -58,7 +58,8 @@ React SPA with:
 - **Session Tabs**: Browser-like tabs in the header row for tab switching (hidden/shown via setting), add/remove via UI
 - **Session Chip** (mobile): Header chip that opens the sessions list as a bottom sheet; there is no bottom navigation
 - **Pane Strip**: Second-level switcher shown only when a tab has more than one pane (split panes; on tmux it moves the shared focus, not the stream)
-- **Pane Menu**: Header menu (`pane-layout-menu.tsx`) and palette category `Panes` to split, zoom, swap, resize and close the pane shown; hidden on a view-only device and without `caps.paneLayout` (the palette keeps the commands, disabled with the reason); with `caps.paneStream` (Herdr, whose stream is one pane) it offers split and close alone, since zoom, swap and resize would change only the desktop
+- **Pane Menu**: Header menu (`pane-layout-menu.tsx`) and palette category `Panes` to split, zoom, swap, resize and close the pane shown, and to pick the previous or next pane (no default key); hidden on a view-only device and without `caps.paneLayout` (the palette keeps the commands, disabled with the reason); with `caps.paneStream` (Herdr, whose stream is one pane) it offers split and close alone in the pane strip, since zoom, swap and resize would change only the desktop, and all of them in the layout view. While the tab is zoomed, Zoom ends the zoom on the zoomed pane
+- **Herdr layout view** (`terminal-stack.tsx`, `utils/layout-view.ts`): on a desktop with full rights, a Herdr tab of 2 to 4 panes (`MAX_LAYOUT_PANES`) shows as the desktop arranges them, from the snapshot's `tab.layout` (`{cols, rows, zoomed, zoomedPaneId?, panes:[{id,x,y,cols,rows}]}`, cells from the top left of the tab's area): a terminal per pane, each its own `observe` stream, placed at its rect, all at the font the area fits at (measured from the terminal font's cell, rows rounded up as xterm.js draws them). Picking a pane (a click, the strip, the palette) changes only the page's pane, never Herdr's focus. No pane drives the size. A zoom on the desktop shows the zoomed pane alone and the page works on it. The pane strip stays in use on a phone, view-only, with more than 4 panes, without `caps.paneLayout`/`caps.paneStream`, with the setting off (`herdrLayoutView`, on by default), or when the font would fall below `MIN_FONT_SIZE` (it comes back a pixel above it). Strip and layout are one React tree, so picking a pane, a zoom, or switching between them opens no stream for the active pane
 - **Agent Status Badge**: Per-pane coding-agent status (idle/working/blocked/done) shown next to the pane, only ever set by the Herdr backend
 - **Keyboard Toolbar**: Virtual keys, Ctrl combos, scroll controls (respects default expanded setting)
 - **More Menu**: Font size (mobile), theme (light/dark/system), Settings, Help & gestures, About, Copy link, Clear cache & reload
@@ -145,7 +146,12 @@ attach a terminal, health) with three implementations:
   when the client gives the size back, another client takes over, or `control` ends for any
   other reason while the pane is still there. Ending `control` (stdin closed, or the process
   killed) returns the PTY to the desktop's size; keys still go through `pane.send_text`. Mode
-  switches are at least 500ms apart. Per-pane agent
+  switches are at least 500ms apart. `observe` runs at the pane's rect, except a zoomed pane,
+  which runs at the tab's `area` (a zoomed layout keeps the split's rects while the zoomed PTY
+  grows, and a smaller observer would cut its last lines); focusing another pane of a zoomed tab
+  moves the zoom with no `layout.updated`, so `tab_focused` on a zoomed tab reads `pane.layout`
+  again. A new size restarts `observe` only once it has held for 150 ms (a border dragged on the
+  desktop sends dozens a second). Per-pane agent
   status comes from Herdr's `pane.agent_status_changed` event and is surfaced as the PWA's
   agent-status badge, refreshed at most once per `pollInterval`. The OS-specific parts are split
   by build tag: `herdr_socket_*.go` finds and dials the socket (a Unix socket, or on Windows the
@@ -254,6 +260,7 @@ Client → Server:
 Server → Client:
   - binary frame                      (output bytes)
   - {"type":"size","cols":N,"rows":N,"driving":B,"reason":R}   (Herdr)
+  - {"type":"layout"}                 (Herdr: the layout of the pane's tab changed)
   - {"type":"exit","code":N}
   - {"type":"error","message":"..."}
 ```
@@ -268,6 +275,11 @@ back, since Claude Code cuts a dialog taller than the pane (the tab row and the 
 off), and the Chat view could no longer read it. Under another view the terminal also keeps its
 size (no fit, no resize sent): the view's input area below it grows with a dialog card, which
 would otherwise shrink the pane until the dialog no longer fits, and the card would come and go.
+
+A Herdr stream sends `{"type":"layout"}` to every stream of a tab whose layout changed (a split,
+a close, a zoom, a resize, a swap of two panes of one size, which changes no size), once the
+changes have held for 150 ms. The layout view reads the snapshot again on it, or on a size frame
+other than a stream's first. Clients that do not know the frame ignore it.
 
 The connection requires a same-origin/allowed Origin, a single-use token minted by
 `GET /api/mux/stream-token` (30s TTL, consumed on upgrade), and `?pane=<id>` naming an
@@ -1774,5 +1786,6 @@ termote update --force           # Force reinstall current version
 
 - Single-user design (no multi-tenancy)
 - Sessions limited by tmux/Herdr capacity (~dozens)
-- Terminal WebSocket connections are persistent; the server caps concurrent streams and evicts
-  the oldest one past the limit
+- Terminal WebSocket connections are persistent; the server caps concurrent streams (16 on Herdr
+  outside Windows, whose layout view streams each pane; 8 on other backends) and evicts the
+  oldest one past the limit
