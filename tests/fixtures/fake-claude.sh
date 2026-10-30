@@ -358,7 +358,12 @@ while :; do
   fi
   if [ "$ch" = $'\e' ]; then
     seq=""
-    while IFS= read -r -s -n1 -d '' -t 0.05 c; do
+    # A key's sequence, or a paste's marker, comes in one write: bytes
+    # already there are read with no timeout, which a loaded machine can
+    # run past before the read even starts (a paste then lost its marker
+    # into the message). The wait is for an Esc alone.
+    while { read -t 0 && IFS= read -r -s -n1 -d '' c; } ||
+      IFS= read -r -s -n1 -d '' -t 0.05 c; do
       seq+=$c
       case $c in [~A-Za-z]) break ;; esac
     done
