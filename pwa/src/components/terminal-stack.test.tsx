@@ -251,6 +251,61 @@ describe('TerminalStack', () => {
     expect(onSelect).toHaveBeenCalledWith('a')
   })
 
+  it('a pane picked during a zoom shows, and stays picked after it', () => {
+    const zoomed = { ...LAYOUT, zoomed: true, zoomedPaneId: 'b' }
+    const { update } = renderStack({ activePaneId: 'b', layout: zoomed })
+    update({ activePaneId: 'a', layout: zoomed })
+    expect(paneEl('a')).not.toHaveAttribute('hidden')
+    expect(paneEl('b')).toHaveAttribute('hidden')
+    // Back on the zoomed pane: it shows again
+    update({ activePaneId: 'b', layout: zoomed })
+    expect(paneEl('a')).toHaveAttribute('hidden')
+    update({ activePaneId: 'a', layout: zoomed })
+    onSelect.mockClear()
+    update({ activePaneId: 'a' })
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  it('keeps its size while covered, and measures again once shown', () => {
+    const { update } = renderStack({ view: { paneId: 'a' } })
+    update({ view: { paneId: 'a', covered: true } })
+    setBox(400, 260)
+    expect(views.get('a')!.fixedFontSize).toBe(16)
+    update({ view: { paneId: 'a', covered: false } })
+    expect(onShown).toHaveBeenLastCalledWith(false)
+    // The same size again changes nothing
+    onShown.mockClear()
+    setBox(400, 260)
+    expect(onShown).not.toHaveBeenCalled()
+  })
+
+  it("Herdr's strip gives the keys to the pane it opens, when its terminal had them", () => {
+    const { update } = renderStack({ layoutWanted: false })
+    // Focus outside: nothing moves
+    update({ layoutWanted: false, activePaneId: 'b' })
+    expect(focus).not.toHaveBeenCalled()
+    // In the terminal, which is replaced: the new one gets it
+    fireEvent.focus(screen.getByTestId('term-b'))
+    update({ layoutWanted: false, activePaneId: 'a' })
+    expect(focus).toHaveBeenCalledWith('a')
+    // Moved to somewhere else on the page first: not
+    const button = document.createElement('button')
+    document.body.appendChild(button)
+    fireEvent.blur(screen.getByTestId('term-a'), { relatedTarget: button })
+    focus.mockClear()
+    update({ layoutWanted: false, activePaneId: 'b' })
+    expect(focus).not.toHaveBeenCalled()
+    button.remove()
+  })
+
+  it('tmux keeps one terminal and moves no focus on a pane pick', () => {
+    const { update } = renderStack({ layoutWanted: false, perPane: false })
+    fireEvent.focus(screen.getByTestId('term-a'))
+    update({ layoutWanted: false, perPane: false, activePaneId: 'b' })
+    expect(mounts).toEqual(['a'])
+    expect(focus).not.toHaveBeenCalled()
+  })
+
   it('a zoom on the active pane moves nothing, nor its end', () => {
     const zoomed = { ...LAYOUT, zoomed: true, zoomedPaneId: 'a' }
     const { update } = renderStack({ layout: zoomed })
@@ -272,17 +327,17 @@ describe('TerminalStack', () => {
 
   it('leaves the layout below the minimum font and comes back a pixel above it', () => {
     renderStack()
-    // 6px: still shown
-    setBox(450, 300)
+    // 6px (rows of 8px: 40 of them need 320): still shown
+    setBox(450, 320)
     expect(onShown).toHaveBeenLastCalledWith(true)
     expect(views.get('a')!.fixedFontSize).toBe(6)
     // 5px: the strip
     setBox(400, 260)
     expect(onShown).toHaveBeenLastCalledWith(false)
     // 6px again: not yet
-    setBox(450, 300)
+    setBox(450, 320)
     expect(onShown).toHaveBeenLastCalledWith(false)
-    setBox(520, 340)
+    setBox(520, 360)
     expect(onShown).toHaveBeenLastCalledWith(true)
   })
 

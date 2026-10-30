@@ -56,6 +56,14 @@ export function layoutFontFits(
   return fontSize >= (shown ? minimum : minimum + 1)
 }
 
+// The height xterm.js gives a row at fontSize: the character's height
+// rounded up to whole device pixels (at line height 1). Rounding up, a row
+// is up to a device pixel taller than the cell measured at REF_FONT_SIZE
+// scales to.
+export function rowHeight(cell: CellSize, fontSize: number, dpr: number) {
+  return Math.ceil(((cell.height * fontSize) / REF_FONT_SIZE) * dpr) / dpr
+}
+
 // The font size at which the area's grid fits a box of width x height
 // pixels, from the cell size at REF_FONT_SIZE. Not clamped: the caller
 // compares it with its minimum. 0 when nothing is measured yet.
@@ -63,13 +71,17 @@ export function layoutFontSize(
   area: { cols: number; rows: number },
   box: { width: number; height: number },
   cell: CellSize,
+  dpr = window.devicePixelRatio || 1,
 ): number {
   if (!cell.width || !cell.height || !box.width || !box.height) return 0
   const scale = Math.min(
     box.width / (area.cols * cell.width),
     box.height / (area.rows * cell.height),
   )
-  return Math.floor(REF_FONT_SIZE * scale)
+  let size = Math.floor(REF_FONT_SIZE * scale)
+  // Rows rounded up may not fit at the size the scale gives
+  while (size > 0 && area.rows * rowHeight(cell, size, dpr) > box.height) size--
+  return size
 }
 
 // Where a pane sits in the box, as CSS percentages of the area.
@@ -144,6 +156,7 @@ export function measureCell(fontFamily: string): CellSize {
     fontFamily,
     fontSize: `${REF_FONT_SIZE}px`,
     lineHeight: 'normal',
+    fontKerning: 'none',
   })
   document.body.appendChild(span)
   const rect = span.getBoundingClientRect()

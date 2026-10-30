@@ -8,6 +8,7 @@ import {
   measureCell,
   paneBox,
   REF_FONT_SIZE,
+  rowHeight,
   throttle,
   zoomedPane,
 } from './layout-view'
@@ -105,6 +106,21 @@ describe('layoutFontSize', () => {
         cell,
       ),
     ).toBe(5)
+  })
+
+  it('drops a size whose rows, rounded up to device pixels, do not fit', () => {
+    const odd = { width: 60, height: 117.3 }
+    const area = { cols: 40, rows: 40 }
+    // 13px scales to 15.25px rows, which xterm draws 16px high: 640px
+    expect(layoutFontSize(area, { width: 2000, height: 640 }, odd, 1)).toBe(13)
+    expect(layoutFontSize(area, { width: 2000, height: 620 }, odd, 1)).toBe(12)
+    // At two device pixels per pixel a row is 15.5px: 13 fits 620
+    expect(layoutFontSize(area, { width: 2000, height: 620 }, odd, 2)).toBe(13)
+    expect(rowHeight(odd, 13, 1)).toBe(16)
+    // Without a ratio, the window's
+    vi.stubGlobal('devicePixelRatio', 0)
+    expect(layoutFontSize(area, { width: 2000, height: 620 }, odd)).toBe(12)
+    vi.unstubAllGlobals()
   })
 
   it('is 0 until the cell and the box are measured', () => {

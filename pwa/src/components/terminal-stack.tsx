@@ -72,17 +72,32 @@ export function TerminalStack({
 }: Props) {
   const { t } = useT()
   const boxRef = useRef<HTMLDivElement>(null)
+  // The space the panes share. Kept while another view covers the terminal
+  // or the side panel is dragged, as a single terminal keeps its size then:
+  // the font, and whether the layout view shows, stay as they are.
   const [box, setBox] = useState({ width: 0, height: 0 })
+  const coveredRef = useRef(view.covered)
+  coveredRef.current = view.covered
+  const measureRef = useRef(() => {})
   useEffect(() => {
     const el = boxRef.current
     if (!el || typeof ResizeObserver === 'undefined') return
-    const measure = () =>
-      setBox({ width: el.clientWidth, height: el.clientHeight })
-    measure()
-    const observer = new ResizeObserver(measure)
+    measureRef.current = () => {
+      if (coveredRef.current) return
+      const { clientWidth: width, clientHeight: height } = el
+      setBox((b) =>
+        b.width === width && b.height === height ? b : { width, height },
+      )
+    }
+    measureRef.current()
+    const observer = new ResizeObserver(() => measureRef.current())
     observer.observe(el)
     return () => observer.disconnect()
   }, [])
+  // Uncovered: the space it has now
+  useEffect(() => {
+    if (!view.covered) measureRef.current()
+  }, [view.covered])
 
   // The cell size of the terminal font, measured again once web fonts load
   const family = terminalFontFamily(view.fontFamily)
@@ -111,7 +126,8 @@ export function TerminalStack({
   const streamOn = view.paneId !== undefined
 
   // A zoom made on the desktop shows one pane: the page works on that one,
-  // and on the pane it worked on before once the zoom ends.
+  // and on the pane it worked on before once the zoom ends. A pane picked
+  // during the zoom is shown instead, and stays picked after it.
   const beforeZoomRef = useRef<string | undefined>(undefined)
   const selectRef = useRef(onSelect)
   selectRef.current = onSelect
@@ -130,6 +146,14 @@ export function TerminalStack({
     if (before && before !== activePaneId && panes.some((p) => p.id === before))
       selectRef.current?.(before)
   }, [zoomed])
+  const [pickedInZoom, setPickedInZoom] = useState(false)
+  useEffect(() => {
+    if (!zoomed || activePaneId === zoomed) setPickedInZoom(false)
+    else if (activePaneId !== beforeZoomRef.current) {
+      beforeZoomRef.current = undefined
+      setPickedInZoom(true)
+    }
+  }, [activePaneId, zoomed])
 
   // The panes with a terminal: in the layout view every pane it places, else
   // the active one (keyed by itself on Herdr, so it stays as it is).
@@ -151,28 +175,50 @@ export function TerminalStack({
       (activeKey !== undefined && handles.current.get(activeKey)) || null
   })
 
-  // Another pane picked in the layout view (the strip, the palette, a zoom):
-  // keys go to it. Not where the focus is elsewhere on the page, as in a
-  // dialog.
+  // Whether the keyboard focus is in a terminal here. A terminal taken out
+  // of the page (Herdr's strip opens another pane's) leaves the focus on the
+  // body without a focusout, so this stays true then.
+  const focusInRef = useRef(false)
+
+  // Another pane picked (the strip, the palette, a zoom): keys go to it. In
+  // the layout view also from the strip or nowhere; with one terminal only
+  // when the one that had the focus was replaced. Not where the focus is
+  // elsewhere on the page, as in a dialog.
   useEffect(() => {
-    if (!shown || !activePaneId) return
+    if (!activePaneId || !(shown || perPane)) return
     // A page with a body always has an active element
     const focused = document.activeElement as Element
     const fromHere =
-      focused === document.body ||
-      !!boxRef.current?.contains(focused) ||
-      !!focused.closest('[data-tour="pane-strip"]')
+      focused === document.body
+        ? shown || focusInRef.current
+        : !!boxRef.current?.contains(focused) ||
+          (shown && !!focused.closest('[data-tour="pane-strip"]'))
     if (fromHere) focusTerminal(handles.current.get(activePaneId) ?? null)
-  }, [activePaneId, shown])
+  }, [activePaneId, shown, perPane])
 
   const label = (id: string) => panes.find((p) => p.id === id)?.label ?? id
 
   return (
-    <div ref={boxRef} className="relative h-full overflow-hidden">
+    <div
+      ref={boxRef}
+      className="relative h-full overflow-hidden"
+      onFocus={() => {
+        focusInRef.current = true
+      }}
+      onBlur={(e) => {
+        focusInRef.current = !!boxRef.current?.contains(e.relatedTarget)
+      }}
+    >
       {mounted.map(({ key, id }) => {
         const active = key === activeKey
         const rect = shown ? placed.find((p) => p.id === id) : undefined
-        const hidden = !!zoomed && id !== zoomed
+        // Zoomed: the pane the page works on, the zoomed one unless another
+        // was picked since
+        const shownAlone =
+          pickedInZoom && placed.some((p) => p.id === activePaneId)
+            ? activePaneId
+            : zoomed
+        const hidden = !!zoomed && id !== shownAlone
         const style =
           rect && layout && !zoomed ? paneBox(layout, rect) : undefined
         const pane = panes.find((p) => p.id === id)
@@ -194,26 +240,29 @@ export function TerminalStack({
               shown && id && !active ? () => onSelect?.(id) : undefined
             }
           >
-            <TerminalView
-              ref={(h) => {
-                if (h) handles.current.set(key, h)
-                else handles.current.delete(key)
-                if (key === activeKey) terminalRef.current = h
-              }}
-              {...view}
-              paneId={!streamOn ? undefined : shown ? id : view.paneId}
-              // Every pane sizes and fits at the layout's font; none drives
-              // the pane size, the desktop keeps it
-              fixedFontSize={shown ? fontSize : undefined}
-              driveSize={shown ? false : view.driveSize}
-              bracketedPaste={
-                active ? view.bracketedPaste : agentPaste && !!pane?.hasAgent
-              }
-              onConnectionStateChange={
-                active ? view.onConnectionStateChange : undefined
-              }
-              onLayoutSignal={shown ? onLayoutSignal : undefined}
-            />
+            {/* A box of its own: a fieldset gives a child no height to fill */}
+            <div className="absolute inset-0">
+              <TerminalView
+                ref={(h) => {
+                  if (h) handles.current.set(key, h)
+                  else handles.current.delete(key)
+                  if (key === activeKey) terminalRef.current = h
+                }}
+                {...view}
+                paneId={!streamOn ? undefined : shown ? id : view.paneId}
+                // Every pane sizes and fits at the layout's font; none drives
+                // the pane size, the desktop keeps it
+                fixedFontSize={shown ? fontSize : undefined}
+                driveSize={shown ? false : view.driveSize}
+                bracketedPaste={
+                  active ? view.bracketedPaste : agentPaste && !!pane?.hasAgent
+                }
+                onConnectionStateChange={
+                  active ? view.onConnectionStateChange : undefined
+                }
+                onLayoutSignal={shown ? onLayoutSignal : undefined}
+              />
+            </div>
             {shown && active && !zoomed && (
               <div
                 aria-hidden
