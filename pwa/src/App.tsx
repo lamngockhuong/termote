@@ -1611,14 +1611,20 @@ export default function App({
     setFocusWhileOpen(overviewOpen)
     if (!overviewOpen) setOverviewFocus(undefined)
   }
+  const showOverview = useCallback(() => {
+    if (showOverviewAddress()) overviewComingRef.current = true
+  }, [])
   const openOverview = useCallback(() => {
     setOverviewFocus(undefined)
-    if (showOverviewAddress()) overviewComingRef.current = true
-  }, [])
-  const openOverviewOn = useCallback((paneId: string) => {
-    setOverviewFocus({ paneId })
-    if (showOverviewAddress()) overviewComingRef.current = true
-  }, [])
+    showOverview()
+  }, [showOverview])
+  const openOverviewOn = useCallback(
+    (paneId: string) => {
+      setOverviewFocus({ paneId })
+      showOverview()
+    },
+    [showOverview],
+  )
   const closeOverview = useCallback(() => {
     if (currentLink) {
       window.location.hash = currentLink
