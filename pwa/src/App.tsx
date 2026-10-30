@@ -36,6 +36,7 @@ import {
 } from './components/group-dialog'
 import { HelpModal } from './components/help-modal'
 import { KeyboardToolbar } from './components/keyboard-toolbar'
+import { LanguageNotice } from './components/language-notice'
 import { LazyBoundary, LoadFailed } from './components/lazy-boundary'
 import { LocalhostNotice } from './components/localhost-notice'
 import { OverviewScreen } from './components/overview-screen'
@@ -2053,6 +2054,12 @@ export default function App({
               </Banner>
             )}
           </div>
+          {settings.language === 'vi' && !settings.languageNoticeSeen && (
+            <LanguageNotice
+              onEnglish={() => updateSetting('language', 'en')}
+              onDismiss={() => updateSetting('languageNoticeSeen', true)}
+            />
+          )}
           {!settings.hasSeenLocalhostNotice && (
             <LocalhostNotice
               onDismiss={() => updateSetting('hasSeenLocalhostNotice', true)}

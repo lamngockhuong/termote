@@ -248,7 +248,8 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 - [ ] Chọn chu kỳ làm mới hoạt động (3 giây đến 5 phút)
 - [ ] Nút kiểm tra cập nhật hoạt động
 - [ ] Có `Show welcome screen` và `Take the tour` (Data & help)
-- [ ] `Welcome & tour language`: Auto / English / Tiếng Việt
+- [ ] `Language`: Auto / English / Tiếng Việt, áp dụng ngay cho cả app (không tải lại), `<html lang>` đổi theo
+- [ ] Thiết bị đã lưu `language: 'vi'` từ trước thấy banner tiếng Việt; bấm `Đã hiểu` hoặc `Chuyển về English` thì banner ẩn hẳn; để Auto với trình duyệt tiếng Việt thì không có banner
 - [ ] Nút xóa lịch sử hoạt động
 - [ ] Tùy chỉnh giữ nguyên sau khi tải lại trang
 

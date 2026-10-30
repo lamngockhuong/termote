@@ -1287,6 +1287,45 @@ describe('App', () => {
     })
   })
 
+  // A device that picked Vietnamese for the welcome screen before the whole
+  // app spoke it
+  describe('language notice', () => {
+    const withLanguage = (extra: Record<string, unknown>) => {
+      const base = mockUseSettings()
+      const updateSetting = vi.fn()
+      mockUseSettings.mockReturnValue({
+        ...base,
+        settings: { ...base.settings, ...extra },
+        updateSetting,
+      } as typeof base)
+      return updateSetting
+    }
+
+    it('offers English, or is saved as seen once dismissed', async () => {
+      const updateSetting = withLanguage({ language: 'vi' })
+      render(<App />)
+      expect(
+        await screen.findByText(/now in Vietnamese across the whole app/),
+      ).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Switch to English' }))
+      expect(updateSetting).toHaveBeenCalledWith('language', 'en')
+      fireEvent.click(screen.getByRole('button', { name: 'Got it' }))
+      expect(updateSetting).toHaveBeenCalledWith('languageNoticeSeen', true)
+    })
+
+    it('stays hidden once seen, and for another language', async () => {
+      withLanguage({ language: 'vi', languageNoticeSeen: true })
+      const { unmount } = render(<App />)
+      await screen.findByRole('button', { name: 'About' })
+      expect(screen.queryByText(/across the whole app/)).toBeNull()
+      unmount()
+      withLanguage({ language: 'auto' })
+      render(<App />)
+      await screen.findByRole('button', { name: 'About' })
+      expect(screen.queryByText(/across the whole app/)).toBeNull()
+    })
+  })
+
   describe('log out', () => {
     const withAuth = () => {
       const base = mockUseLocalSessions()

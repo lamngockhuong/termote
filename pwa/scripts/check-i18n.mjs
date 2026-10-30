@@ -1,9 +1,7 @@
-// Counts the interface text written straight into the PWA's source, outside
-// t(), and fails when a file holds more than i18n-baseline.json allows: new
-// text goes through src/i18n. Files only ever go down; `--update` writes the
-// lower counts (and drops the files that hold none), never a higher one.
+// Finds the interface text written straight into the PWA's source, outside
+// t(), and fails on any: text goes through src/i18n.
 //
-//   node scripts/check-i18n.mjs [--update] [file...]
+//   node scripts/check-i18n.mjs [file...]
 //
 // With files (the pre-commit hook passes the staged ones), only those are
 // checked. What counts, per line of a .ts/.tsx file under src that is not a
@@ -13,12 +11,11 @@
 //   - a literal in aria-label, title, placeholder, alt, label or desc/
 //     description, as a JSX attribute or an object key
 // A line with `i18n-ignore` in it, or under a line with it, is not counted.
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, relative, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
-const BASELINE = join(ROOT, 'i18n-baseline.json')
 
 // Two letters in a row: a word, not a symbol or a number
 const WORD = /\p{L}{2}/u
@@ -98,7 +95,7 @@ function walk(dir) {
   )
 }
 
-// The baseline's name for a file: from the package root, with /
+// A file's name in the report: from the package root, with /
 const key = (file) => relative(ROOT, file).split(sep).join('/')
 
 // The counts of files (every checked file under src when none are given)
@@ -113,65 +110,20 @@ export function countFiles(files) {
   return counts
 }
 
-// The files counting more than baseline allows, each with both numbers
-export function compare(counts, baseline) {
-  return Object.entries(counts)
-    .filter(([name, n]) => n > (baseline[name] ?? 0))
-    .map(([name, n]) => ({ name, count: n, allowed: baseline[name] ?? 0 }))
-}
-
-// The baseline after an update: each file at its count when that went
-// down, every file with none dropped; a whole scan drops deleted files too
-export function lowered(counts, baseline, whole) {
-  const next = {}
-  for (const [name, allowed] of Object.entries(baseline)) {
-    if (!(name in counts) && !whole) next[name] = allowed
-    else if (name in counts) next[name] = Math.min(allowed, counts[name])
+// 1 when a checked file (of args, or all of src) holds interface text
+export function main(args) {
+  const counts = countFiles(
+    args.length ? args.map((f) => join(process.cwd(), f)) : undefined,
+  )
+  for (const [name, n] of Object.entries(counts).sort()) {
+    console.error(`${name}: ${n} interface strings outside t()`)
   }
-  return Object.fromEntries(Object.entries(next).sort())
-}
-
-function readBaseline(path) {
-  try {
-    return JSON.parse(readFileSync(path, 'utf8'))
-  } catch {
-    return null
-  }
-}
-
-// opts.baseline: another baseline file (tests)
-export function main(args, { baseline: baselinePath = BASELINE } = {}) {
-  const update = args.includes('--update')
-  const files = args.filter((a) => a !== '--update')
-  const counts = countFiles(files.length ? files.map((f) => join(process.cwd(), f)) : undefined)
-  const baseline = readBaseline(baselinePath)
-  if (baseline === null) {
-    if (!update) {
-      console.error('check-i18n: no i18n-baseline.json; run with --update once')
-      return 1
-    }
-    const sorted = Object.fromEntries(Object.entries(counts).sort())
-    writeFileSync(baselinePath, `${JSON.stringify(sorted, null, 2)}\n`)
-    return 0
-  }
-  const over = compare(counts, baseline)
-  for (const { name, count, allowed } of over) {
+  if (Object.keys(counts).length) {
     console.error(
-      `${name}: ${count} interface strings outside t(), ${allowed} allowed`,
-    )
-  }
-  if (over.length) {
-    console.error(
-      'check-i18n: put new interface text in src/i18n/messages and read it with t() ' +
+      'check-i18n: put interface text in src/i18n/messages and read it with t() ' +
         '(docs/code-standards.md), or mark a line that is not interface text // i18n-ignore',
     )
     return 1
-  }
-  if (update) {
-    writeFileSync(
-      baselinePath,
-      `${JSON.stringify(lowered(counts, baseline, files.length === 0), null, 2)}\n`,
-    )
   }
   return 0
 }

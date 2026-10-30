@@ -2,7 +2,7 @@ import type en from '../en/settings'
 import type { Translation } from '../types'
 
 export default {
-  'settings.language': 'Ngôn ngữ của màn chào và hướng dẫn',
+  'settings.language': 'Ngôn ngữ',
   'settings.languageDesc': 'Tự động theo ngôn ngữ trình duyệt',
   'settings.languageAuto': 'Tự động',
   'settings.takeTour': 'Xem hướng dẫn nhanh',

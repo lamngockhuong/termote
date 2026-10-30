@@ -13,6 +13,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/spotlight-tour.tsx`           | Tour: dims the app, lights one part (`data-tour`) per step     |
 | `pwa/src/utils/tour-steps.ts`                     | Tour steps (phone, desktop), which show, where the bubble goes |
 | `pwa/src/i18n/`                                   | `t()`, `<Trans>`, locales, messages per area (EN, VI)          |
+| `pwa/src/components/language-notice.tsx`          | Once, to a device that picked VI before: the app speaks it now |
 | `pwa/src/components/session-tabs.tsx`             | Session tab bar for window switching                           |
 | `pwa/src/components/connection-indicator.tsx`     | Connection status indicator with retry                         |
 | `pwa/src/components/localhost-notice.tsx`         | Offers a page opened through localhost the same at 127.0.0.1   |

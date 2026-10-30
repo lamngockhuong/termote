@@ -1,8 +1,7 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { checked, compare, countFiles, countText, lowered, main } from './check-i18n.mjs'
+import { checked, countFiles, countText, main } from './check-i18n.mjs'
 
 describe('countText', () => {
   it('counts JSX text on one line', () => {
@@ -77,23 +76,6 @@ describe('checked', () => {
   })
 })
 
-describe('compare and lowered', () => {
-  it('names each file over its allowance, a new file allowed none', () => {
-    expect(compare({ a: 2, b: 1, c: 1 }, { a: 2, b: 0 })).toEqual([
-      { name: 'b', count: 1, allowed: 0 },
-      { name: 'c', count: 1, allowed: 0 },
-    ])
-  })
-
-  it('lowers counts and drops files at none', () => {
-    expect(lowered({ a: 1 }, { a: 3, b: 2 }, true)).toEqual({ a: 1 })
-  })
-
-  it('keeps files it did not read on a partial scan', () => {
-    expect(lowered({ a: 1 }, { b: 2, a: 3 }, false)).toEqual({ a: 1, b: 2 })
-  })
-})
-
 describe('countFiles and main', () => {
   let dir
   afterEach(() => {
@@ -119,34 +101,23 @@ describe('countFiles and main', () => {
     expect(main(['src/main.tsx'])).toBe(0)
   })
 
-  it('fails on a staged file with new text, and --update does not raise it', () => {
+  it('fails on a file with interface text, naming it', () => {
     const err = vi.spyOn(console, 'error').mockImplementation(() => {})
     dir = mkdtempSync(join(process.cwd(), 'src/.check-i18n-'))
     const file = join(dir, 'x.tsx')
     writeFileSync(file, '<span>Hello world</span>\n')
     const name = file.slice(process.cwd().length + 1)
-    const before = readFileSync('i18n-baseline.json', 'utf8')
     expect(main([name])).toBe(1)
-    expect(main(['--update', name])).toBe(1)
-    expect(readFileSync('i18n-baseline.json', 'utf8')).toBe(before)
-    expect(err).toHaveBeenCalledWith(
-      expect.stringContaining('1 interface strings outside t(), 0 allowed'),
-    )
+    expect(err).toHaveBeenCalledWith(`${name}: 1 interface strings outside t()`)
+    expect(err).toHaveBeenCalledWith(expect.stringContaining('// i18n-ignore'))
+    // The whole of src, with it
+    expect(main([])).toBe(1)
   })
 
-  it('--update keeps the baseline when nothing went down', () => {
-    const before = readFileSync('i18n-baseline.json', 'utf8')
-    expect(main(['--update', 'src/main.tsx'])).toBe(0)
-    expect(readFileSync('i18n-baseline.json', 'utf8')).toBe(before)
-  })
-
-  it('asks for a baseline when there is none, and writes one with --update', () => {
-    dir = mkdtempSync(join(tmpdir(), 'check-i18n-'))
-    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const opts = { baseline: join(dir, 'b.json') }
-    expect(main([], opts)).toBe(1)
-    expect(err).toHaveBeenCalledWith(expect.stringContaining('no i18n-baseline.json'))
-    expect(main(['--update'], opts)).toBe(0)
-    expect(JSON.parse(readFileSync(opts.baseline, 'utf8'))).toEqual(countFiles())
+  it('passes on a file whose text is marked i18n-ignore', () => {
+    dir = mkdtempSync(join(process.cwd(), 'src/.check-i18n-'))
+    const file = join(dir, 'x.tsx')
+    writeFileSync(file, '<kbd>Esc</kbd> // i18n-ignore\n')
+    expect(main([file.slice(process.cwd().length + 1)])).toBe(0)
   })
 })

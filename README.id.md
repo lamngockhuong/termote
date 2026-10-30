@@ -62,6 +62,7 @@ Kendalikan alat CLI (Claude Code, GitHub Copilot, terminal apa pun) dari jarak j
 - **Riwayat perintah**: Panggil ulang perintah yang pernah dikirim dengan pencarian
 - **Aksi cepat**: Tombol ⋯ yang tersemat di ujung toolbar mobile menampilkan baris Actions berisi operasi umum (clear, cancel, exit)
 - **Gaya antarmuka**: Neutral, Terminal, atau Native, dipilih di Pengaturan, terpisah dari tema terang/gelap
+- **Bahasa antarmuka**: Inggris atau Vietnam, dipilih di Pengaturan; Auto mengikuti browser
 - **Indikator koneksi**: Status server real-time, deteksi otomatis koneksi terputus
 - **Pemeriksa pembaruan**: Notifikasi otomatis versi baru dari GitHub releases
 - **PWA**: Dapat dipasang di homescreen, tersedia offline

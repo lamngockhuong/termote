@@ -63,6 +63,7 @@ Remote control CLI tools (Claude Code, GitHub Copilot, any terminal) from mobile
 - **Command history**: Recall previously sent commands with search
 - **Quick actions**: The ⋯ key pinned at the end of the mobile toolbar shows an Actions row for common operations (clear, cancel, exit)
 - **Interface styles**: Neutral, Terminal or Native, chosen in Settings, independent of light/dark theme
+- **Interface language**: English or Vietnamese, chosen in Settings; Auto follows the browser
 - **Connection indicator**: Real-time server status with auto-detect disconnect
 - **Update checker**: Automatic new version notification from GitHub releases
 - **PWA**: Installable to homescreen, offline-capable

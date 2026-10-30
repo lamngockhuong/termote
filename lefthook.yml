@@ -17,7 +17,7 @@ pre-commit:
       root: pwa/
       glob: "pwa/src/**/*.{ts,tsx}"
       run: sh ../scripts/staged-files.sh --glob 'src/**/*.ts' --glob 'src/**/*.tsx' pnpm exec biome check --no-errors-on-unmatched --files-ignore-unknown=true
-    # Interface text outside t() (pwa/scripts/check-i18n.mjs): the staged files against the baseline
+    # Interface text outside t() (pwa/scripts/check-i18n.mjs): none allowed in the staged files
     i18n:
       root: pwa/
       glob: "pwa/src/**/*.{ts,tsx}"

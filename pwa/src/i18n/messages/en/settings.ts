@@ -1,7 +1,7 @@
 // Settings (components/settings-modal.tsx) and its groups, the pairing sheet
 // and About
 export default {
-  'settings.language': 'Welcome & tour language',
+  'settings.language': 'Language',
   'settings.languageDesc': 'Auto follows the browser',
   'settings.languageAuto': 'Auto',
   'settings.takeTour': 'Take the tour',

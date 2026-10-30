@@ -37,6 +37,7 @@ straight into an xterm.js terminal in the page, with:
 | Virtual Keyboard       | Touch-friendly buttons for special keys                              |
 | Keyboard Gestures      | Swipe, long-press, pinch for common shortcuts                        |
 | Welcome Screen & Tour  | First-visit summary of the install, 4-step tour (EN/VI)              |
+| Interface Language     | English or Vietnamese across the PWA, chosen in Settings (or Auto)   |
 | Theme Support          | Light/dark/system theme toggle (in-place switching)                  |
 | Font Scaling           | Adjustable terminal font size (6-24px)                               |
 | Nerd Font Icons        | Bundled Symbols Nerd Font; optional custom terminal font             |
