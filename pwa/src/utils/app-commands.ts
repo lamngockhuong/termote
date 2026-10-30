@@ -65,7 +65,8 @@ export interface AppCommandContext {
   selectPane: (id: string) => void
   // The backend can split, zoom, swap and resize panes (caps.paneLayout)
   paneLayout: boolean
-  // The page shows one pane, not the tab's layout (caps.paneStream)
+  // The page shows one pane, not the tab's layout (caps.paneStream, out of
+  // Herdr's layout view)
   paneStream: boolean
   // The pane shown has a pane after it to swap with
   canSwapNext: boolean

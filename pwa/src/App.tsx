@@ -1692,7 +1692,7 @@ export default function App({
           requestAnimationFrame(() => focusTerminal(getTerminal()))
         },
         paneLayout: !!mux.caps.paneLayout,
-        paneStream: !!mux.caps.paneStream,
+        paneStream: !!mux.caps.paneStream && !layoutShown,
         canSwapNext,
         desktop: !isMobile,
         splitPane: (d) => runPaneAction(() => splitPane(d)),
@@ -1747,6 +1747,7 @@ export default function App({
       selectPane,
       mux.caps.paneLayout,
       mux.caps.paneStream,
+      layoutShown,
       canSwapNext,
       isMobile,
       runPaneAction,
@@ -1909,7 +1910,9 @@ export default function App({
               !overviewOpen && (
                 <PaneLayoutMenu
                   desktop={!isMobile}
-                  arrange={!mux.caps.paneStream}
+                  // Zoom, swap and resize change what the page shows only
+                  // where it shows the tab's layout
+                  arrange={!mux.caps.paneStream || layoutShown}
                   canSwapNext={canSwapNext}
                   canClose={shownPanes.length > 1}
                   onSplit={(d) => runPaneAction(() => splitPane(d))}

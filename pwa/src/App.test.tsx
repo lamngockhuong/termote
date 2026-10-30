@@ -328,6 +328,23 @@ let terminalCopy: ((result: 'ok' | 'failed') => void) | undefined
 let terminalCopyOnSelect: boolean | undefined
 // The handle the mocked terminal hands App through its ref; none by default.
 let terminalHandle: { paste: (text: string) => boolean } | null = null
+// The real stack; layoutShown makes it report the layout view as shown,
+// which a page without layout (jsdom) never measures
+let layoutShown = false
+vi.mock('./components/terminal-stack', async (importOriginal) => {
+  const { useEffect } = await import('react')
+  const real =
+    await importOriginal<typeof import('./components/terminal-stack')>()
+  return {
+    TerminalStack: (props: Parameters<typeof real.TerminalStack>[0]) => {
+      const { onLayoutShownChange } = props
+      useEffect(() => {
+        if (layoutShown) onLayoutShownChange?.(true)
+      })
+      return <real.TerminalStack {...props} />
+    },
+  }
+})
 vi.mock('./components/terminal-view', () => ({
   TerminalView: vi.fn(
     (props: {
@@ -3563,6 +3580,30 @@ describe('App groups and panes', () => {
     expect(screen.getByRole('menuitem', { name: 'Close pane' })).toBeVisible()
     for (const name of [/Zoom/, /Swap/, /Resize/])
       expect(screen.queryByRole('menuitem', { name })).toBeNull()
+  })
+
+  it("Herdr's layout view offers zoom, swap and resize, in the menu and the palette", async () => {
+    layoutShown = true
+    mockFinePointer.mockReturnValue(true)
+    const a = await mockLayout('herdr', { paneStream: true })
+    render(<App />)
+    fireEvent.click(await paneMenuItem('Zoom'))
+    expect(a.zoomPane).toHaveBeenCalled()
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: 'Escape',
+    })
+    expect(await paneMenuItem('Resize left')).toBeVisible()
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: 'Escape',
+    })
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Command palette' }),
+    )
+    expect(
+      await screen.findByRole('button', { name: 'Zoom pane' }),
+    ).toBeEnabled()
+    layoutShown = false
+    mockFinePointer.mockReturnValue(false)
   })
 
   it('no swap past the last pane of tmux or Herdr', async () => {
