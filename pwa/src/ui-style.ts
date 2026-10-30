@@ -3,10 +3,11 @@
 // React runs (so the page never paints another style first) with an inline copy
 // of resolveUiStyle; theme-tokens.test.ts keeps the two in step.
 
+// Settings names each one (STYLE_LABEL in components/settings-modal.tsx)
 export const UI_STYLES = [
-  { id: 'neutral', label: 'Neutral' },
-  { id: 'terminal', label: 'Terminal' },
-  { id: 'native', label: 'Native' },
+  { id: 'neutral' },
+  { id: 'terminal' },
+  { id: 'native' },
 ] as const
 
 export type UiStyle = (typeof UI_STYLES)[number]['id']

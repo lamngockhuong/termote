@@ -146,7 +146,7 @@ describe('SigninsSection', () => {
   })
 
   it('shows the read error', () => {
-    setState({ error: 'Could not read the signed-in browsers' })
+    setState({ error: 'dialogs.signins.readFailed' })
     render(<SigninsSection />)
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Could not read the signed-in browsers',

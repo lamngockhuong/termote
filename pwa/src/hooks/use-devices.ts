@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { MessageKey } from '../i18n/messages/en'
 import {
   createPairingCode,
   fetchDevices,
@@ -12,7 +13,7 @@ export interface DevicesState {
   // null until the first read answers
   devices: PairedDevice[] | null
   // Why the last read failed; cleared by the next one that works
-  error: string | null
+  error: MessageKey | null
   refresh: () => Promise<void>
   // Resolves to the ids revoked (the device and those it paired) once they
   // are gone from the list; throws RequestError
@@ -30,7 +31,7 @@ export interface DevicesState {
 // again after each revoke or pairing code, which a device spends later.
 export function useDevices(enabled: boolean): DevicesState {
   const [devices, setDevices] = useState<PairedDevice[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<MessageKey | null>(null)
   // Only the latest read lands: a slow one never replaces a newer list.
   const readRef = useRef(0)
 
@@ -43,7 +44,7 @@ export function useDevices(enabled: boolean): DevicesState {
       setError(null)
     } catch {
       if (id !== readRef.current) return
-      setError('Could not read the paired devices')
+      setError('dialogs.devices.readFailed')
     }
   }, [])
 

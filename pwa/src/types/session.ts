@@ -74,6 +74,7 @@ export interface SessionGroup {
 
 // Default sessions (single session on fresh install)
 export const DEFAULT_SESSIONS: Session[] = [
+  // i18n-ignore: a stored description, only searched, never shown
   { id: 'shell', name: 'Shell', icon: '💻', description: 'Terminal' },
 ]
 

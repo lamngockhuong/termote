@@ -71,7 +71,28 @@
   // Web Push from the server: ids only. The text is made here, with the
   // names read from the snapshot, cleaned as cleanName in
   // src/utils/agent-notify.ts does (the tests hold both to one vector).
-  const TITLES = { blocked: 'Agent needs you', done: 'Agent finished' }
+  const KINDS = ['blocked', 'done']
+  // The words, in each language the app speaks: equal to dialogs.notify.* in
+  // src/i18n/messages (notify-sw.test.ts holds them to one table).
+  const TEXT = {
+    en: {
+      blocked: 'Agent needs you',
+      done: 'Agent finished',
+      agent: 'Agent',
+      fallback: 'An agent may need you',
+    },
+    vi: {
+      blocked: 'Agent cần bạn',
+      done: 'Agent đã xong',
+      agent: 'Agent',
+      fallback: 'Có thể một agent đang cần bạn',
+    },
+  }
+  // Where the page keeps the app's language, so a push read with no page
+  // open speaks it too. Equal to LOCALE_CACHE and LOCALE_URL in
+  // src/utils/notify-locale.ts.
+  const LOCALE_CACHE = 'termote-prefs'
+  const LOCALE_URL = '/__locale'
   const ICON = '/pwa-192x192.png'
   // Monochrome mark Android shows in the status bar
   const BADGE = '/badge-96x96.png'
@@ -79,6 +100,18 @@
   const UNSAFE_CHARS =
     /[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u115f\u1160\u180e\u200b\u200e\u200f\u2028-\u202e\u2060-\u2064\u2066-\u2069\u3164\ufeff\uffa0\ufff9-\ufffb\u{e0000}-\u{e007f}]/gu
   const SNAPSHOT_TIMEOUT_MS = 3000
+
+  // The words in the app's language; English when none was kept or it
+  // cannot be read.
+  async function readText() {
+    try {
+      const res = await caches.match(LOCALE_URL, { cacheName: LOCALE_CACHE })
+      const locale = res ? await res.text() : ''
+      return Object.hasOwn(TEXT, locale) ? TEXT[locale] : TEXT.en
+    } catch {
+      return TEXT.en
+    }
+  }
 
   function cleanName(name) {
     if (typeof name !== 'string') return ''
@@ -97,7 +130,7 @@
     }
     const ids = [ev?.groupId, ev?.tabId, ev?.paneId]
     if (!ids.every((id) => typeof id === 'string' && id !== '')) return null
-    if (!Object.hasOwn(TITLES, ev.kind)) return null
+    if (!KINDS.includes(ev.kind)) return null
     return ev
   }
 
@@ -133,9 +166,10 @@
   // site whose push shows none, and Chrome shows one of its own.
   async function showPush(data) {
     const ev = readEvent(data)
+    const text = await readText()
     if (!ev) {
       await self.registration.showNotification('Termote', {
-        body: 'An agent may need you',
+        body: text.fallback,
         icon: ICON,
         badge: BADGE,
       })
@@ -150,13 +184,13 @@
       data: { hash: deepLink(ev) },
     }
     if (names) {
-      const agent = cleanName(names.agent) || 'Agent'
+      const agent = cleanName(names.agent) || text.agent
       const place = [cleanName(names.group), cleanName(names.tab)]
         .filter(Boolean)
         .join(' / ')
       options.body = place ? `${agent} · ${place}` : agent
     }
-    await self.registration.showNotification(TITLES[ev.kind], options)
+    await self.registration.showNotification(text[ev.kind], options)
   }
 
   self.addEventListener('push', (event) => {

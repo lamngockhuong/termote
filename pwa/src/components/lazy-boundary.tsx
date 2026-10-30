@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from 'react'
+import { useT } from '../i18n/i18n-context'
 import { ViewMessage } from './pane-dir-header'
 import { Button } from './ui/button'
 
@@ -58,6 +59,7 @@ export function LoadFailed({
   message: string
   retry: () => void
 }) {
+  const { t } = useT()
   return (
     <ViewMessage>
       <span role="alert">{message}</span>
@@ -72,7 +74,7 @@ export function LoadFailed({
           host.focus({ preventScroll: true })
         }}
       >
-        Try again
+        {t('dialogs.loadFailed.retry')}
       </Button>
     </ViewMessage>
   )

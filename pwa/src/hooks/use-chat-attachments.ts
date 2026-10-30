@@ -1,7 +1,9 @@
 import { useCallback, useMemo, useSyncExternalStore } from 'react'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
 import { imageThumbnail } from '../utils/image-thumbnail'
 import { onPaneRemap, remapEntries } from '../utils/pane-remap'
-import { uploadErrorMessage, uploadImage } from '../utils/upload-image'
+import { uploadErrorKey, uploadImage } from '../utils/upload-image'
 
 // The server's limit on the images of one message.
 export const MAX_CHAT_IMAGES = 5
@@ -17,7 +19,7 @@ export type ChatAttachment = {
 } & (
   | { status: 'uploading' | 'ready' }
   // error: why the upload failed, or why the server refused the image
-  | { status: 'failed'; error: string }
+  | { status: 'failed'; error: MessageKey }
 )
 
 // Each pane's attached images, out of the composer so they survive its
@@ -77,6 +79,7 @@ export function useChatAttachments(
   paneId: string,
   onError: (message: string) => void,
 ) {
+  const { t } = useT()
   const items = useSyncExternalStore(subscribe, () => lists.get(paneId) ?? NONE)
 
   // Adds file and starts its upload: its token number, null when the list
@@ -89,7 +92,7 @@ export function useChatAttachments(
     ): { n: number; done: Promise<void> } | null => {
       const list = lists.get(paneId) ?? NONE
       if (list.length >= MAX_CHAT_IMAGES) {
-        onError(`At most ${MAX_CHAT_IMAGES} images per message.`)
+        onError(t('dialogs.upload.tooMany', { max: MAX_CHAT_IMAGES }))
         return null
       }
       const key = ++seq
@@ -104,13 +107,13 @@ export function useChatAttachments(
           patch(key, { status: 'ready', id: result.upload.id })
           return
         }
-        const error = uploadErrorMessage(result.reason)
+        const error = uploadErrorKey(result.reason)
         patch(key, { status: 'failed', error })
-        onError(`${error}.`)
+        onError(`${t(error)}.`)
       })
       return { n, done }
     },
-    [paneId, onError],
+    [paneId, onError, t],
   )
 
   const remove = useCallback(
@@ -130,7 +133,7 @@ export function useChatAttachments(
             ? {
                 ...a,
                 status: 'failed' as const,
-                error: 'No longer on the host',
+                error: 'dialogs.upload.gone',
               }
             : a,
         ),

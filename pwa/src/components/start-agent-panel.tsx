@@ -49,7 +49,7 @@ export function StartAgentPanel({
       )}
       {record?.phase === 'failed' && (
         <p role="alert" className="text-danger">
-          {record.error}
+          {record.error && t(record.error)}
         </p>
       )}
     </>

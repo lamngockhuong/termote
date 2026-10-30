@@ -24,7 +24,7 @@ export function ChatAttachments({
         const n = a.n
         const state =
           a.status === 'failed'
-            ? a.error
+            ? t(a.error)
             : t(
                 a.status === 'uploading'
                   ? 'chat.attach.uploading'
@@ -33,7 +33,7 @@ export function ChatAttachments({
         return (
           <li
             key={a.key}
-            title={a.status === 'failed' ? a.error : undefined}
+            title={a.status === 'failed' ? t(a.error) : undefined}
             className={`relative size-12 shrink-0 overflow-hidden rounded-control border bg-bg ${
               a.status === 'failed' ? 'border-danger' : 'border-border'
             }`}

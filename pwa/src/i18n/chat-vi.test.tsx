@@ -331,7 +331,7 @@ describe('the composer in Vietnamese', () => {
     expect(mockSend).toHaveBeenCalledWith('%3', '/compact ', 'cur1', [], [])
   })
 
-  it("says why a message was refused, with the server's words as they are", async () => {
+  it('says why a message was refused, by its code', async () => {
     mockSend.mockRejectedValue(
       new AgentRequestError(409, 'input_not_ready', 'a dialog is open'),
     )
@@ -341,7 +341,9 @@ describe('the composer in Vietnamese', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Gửi' }))
     })
     expect(
-      screen.getAllByText('Chưa gửi: a dialog is open.').length,
+      screen.getAllByText(
+        'Chưa gửi: Lúc này agent chưa nhận được nội dung nhập.',
+      ).length,
     ).toBeGreaterThan(0)
   })
 

@@ -1,5 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { tFor } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
 import {
   READY_UNSEEN_MS,
   START_GIVE_UP_MS,
@@ -9,6 +11,9 @@ import {
 } from './use-start-agent'
 
 const PANE = 'w1:p1'
+
+// A failed start's message, as English shows it
+const english = (key: MessageKey | undefined) => key && tFor('en')(key)
 
 // Replies of the fake server, in order: the POST's, then each GET's.
 let postReply: { status: number; body: unknown }
@@ -195,8 +200,10 @@ describe('useStartAgent', () => {
     expect(result.current.starts[PANE]).toMatchObject({
       kind: 'claude',
       phase: 'failed',
-      error: 'Could not start the agent.',
     })
+    expect(english(result.current.starts[PANE].error)).toBe(
+      'Could not start the agent.',
+    )
     const n = requests.length
     await poll()
     expect(requests.length).toBe(n)
@@ -228,8 +235,8 @@ describe('useStartAgent', () => {
     expect(result.current.starts[PANE]).toMatchObject({
       kind: 'claude',
       phase: 'failed',
-      error: message,
     })
+    expect(english(result.current.starts[PANE].error)).toBe(message)
     await poll()
     expect(requests.filter((r) => r.method === 'GET')).toHaveLength(0)
   })
@@ -241,8 +248,10 @@ describe('useStartAgent', () => {
     await settle()
     expect(result.current.starts[PANE]).toMatchObject({
       phase: 'failed',
-      error: 'This server cannot start Codex.',
     })
+    expect(english(result.current.starts[PANE].error)).toBe(
+      'This server cannot start Codex.',
+    )
   })
 
   it('keeps a ready start while its agent runs, forgets it once gone', async () => {
@@ -292,8 +301,10 @@ describe('useStartAgent', () => {
     await poll()
     expect(result.current.starts[PANE]).toMatchObject({
       phase: 'failed',
-      error: 'Could not follow the start. Open the terminal to check.',
     })
+    expect(english(result.current.starts[PANE].error)).toBe(
+      'Could not follow the start. Open the terminal to check.',
+    )
   })
 
   it('gives up on a start that never ends', async () => {

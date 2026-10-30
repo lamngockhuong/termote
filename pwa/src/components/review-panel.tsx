@@ -19,6 +19,7 @@ import {
   sourceText,
 } from '../utils/review-message'
 import { sendToAgent } from '../utils/send-to-agent'
+import { serverErrorText } from '../utils/server-error'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { CHAT_VIEW_ID } from '../view-ids'
 import {
@@ -124,7 +125,9 @@ export function ReviewControl({
     } catch (err) {
       notify(
         err instanceof RequestError
-          ? t('files.review.notSent', { message: err.message })
+          ? t('files.review.notSent', {
+              message: serverErrorText(err, t),
+            })
           : t('files.review.sendFailed'),
         { variant: 'danger' },
       )

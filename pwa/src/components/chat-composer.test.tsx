@@ -330,7 +330,11 @@ describe('ChatComposer images', () => {
   it.each([
     ['partial_paste', 409, /holds part of this message/],
     ['uploads_unavailable', 503, /cannot take images/],
-    ['invalid_request', 400, /Not sent: too many images\./],
+    [
+      'invalid_request',
+      400,
+      /Not sent: The server could not use this request\./,
+    ],
   ])('%s is explained', async (code, status, text) => {
     render(<ChatComposer {...uploadsProps()} />)
     await attach()
@@ -717,7 +721,9 @@ describe('ChatComposer', () => {
     expect(live).toHaveTextContent('')
     type('hello')
     await send()
-    expect(live).toHaveTextContent('Not sent: a dialog is open.')
+    expect(live).toHaveTextContent(
+      'Not sent: The agent cannot take input right now.',
+    )
     type('ệ'.repeat(Math.floor(MAX_MESSAGE_BYTES / 3) + 1))
     expect(box()).toHaveAccessibleDescription(/shorten the message/)
   })
@@ -742,7 +748,7 @@ describe('ChatComposer', () => {
       'input_not_ready',
       409,
       'a dialog is open',
-      'Not sent: a dialog is open.',
+      'Not sent: The agent cannot take input right now.',
       true,
     ],
     [
@@ -764,9 +770,10 @@ describe('ChatComposer', () => {
       'target_changed',
       409,
       'the agent is no longer in this pane',
-      'Not sent: the agent is no longer in this pane.',
+      'Not sent: The agent is no longer in this pane.',
       true,
     ],
+    // No code: the server's words, as it wrote them
     ['', 500, 'mux command failed', 'Not sent: mux command failed.', false],
   ])(
     'a %s refusal keeps the draft and says why',

@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import source from '../../public/notify-sw.js?raw'
+import { LOCALES } from '../i18n'
+import { tFor } from '../i18n/i18n-context'
 import { cleanName, notificationContent } from '../utils/agent-notify'
+import { LOCALE_CACHE, LOCALE_URL } from '../utils/notify-locale'
 
 type Listener = (event: unknown) => void
 
@@ -243,6 +246,7 @@ describe('notify-sw.js', () => {
         { ...EVENT, kind: 'blocked', agentName: 'claude\u2066' },
         [{ id: '$1:2', name: ' build\u0007 ', icon: '', description: '' }],
         [{ id: '$1', name: 'wo\u202erk' }],
+        tFor('en'),
       )
       expect(registration.showNotification).toHaveBeenCalledTimes(1)
       expect(registration.showNotification).toHaveBeenCalledWith(
@@ -337,6 +341,88 @@ describe('notify-sw.js', () => {
           badge: '/badge-96x96.png',
         })
       }
+    })
+
+    describe("in the app's language", () => {
+      // Cache Storage as the page leaves it: the locale kept, or nothing
+      const keep = (locale?: string) => {
+        const match = vi.fn(
+          async (url: string, opts?: MultiCacheQueryOptions) =>
+            locale !== undefined &&
+            url === LOCALE_URL &&
+            opts?.cacheName === LOCALE_CACHE
+              ? new Response(locale)
+              : undefined,
+        )
+        vi.stubGlobal('caches', { match })
+        return match
+      }
+      // What the worker shows for an event with names, for one without, and
+      // for a malformed push
+      const shown = async () => {
+        const words = []
+        for (const [routes, data] of [
+          [{ '/api/mux/snapshot?peek=1': { body: SNAPSHOT } }, EVENT],
+          [
+            { '/api/mux/snapshot?peek=1': { body: {} } },
+            { ...EVENT, kind: 'done' },
+          ],
+          [{}, 'not json'],
+        ] as const) {
+          stubFetch(routes)
+          const { registration, dispatch } = loadWorker()
+          await dispatch('push', pushData(data))
+          const [title, options] = registration.showNotification.mock.calls[0]
+          words.push([title, options.body])
+        }
+        return words
+      }
+
+      it.each(LOCALES)(
+        'words a push in %s, as the page words its own',
+        async (locale) => {
+          keep(locale)
+          const t = tFor(locale)
+          expect(await shown()).toEqual([
+            [t('dialogs.notify.blocked'), 'claude · work / build'],
+            [t('dialogs.notify.done'), t('dialogs.notify.agent')],
+            ['Termote', t('dialogs.notify.fallback')],
+          ])
+        },
+      )
+
+      it('speaks Vietnamese when the page kept vi', async () => {
+        const match = keep('vi')
+        expect(await shown()).toEqual([
+          ['Agent cần bạn', 'claude · work / build'],
+          ['Agent đã xong', 'Agent'],
+          ['Termote', 'Có thể một agent đang cần bạn'],
+        ])
+        expect(match).toHaveBeenCalledWith('/__locale', {
+          cacheName: 'termote-prefs',
+        })
+      })
+
+      it('speaks English when no language was kept, or it cannot be read', async () => {
+        const english = [
+          ['Agent needs you', 'claude · work / build'],
+          ['Agent finished', 'Agent'],
+          ['Termote', 'An agent may need you'],
+        ]
+        keep()
+        expect(await shown()).toEqual(english)
+        // One this worker does not speak, or a name of the object's own
+        keep('fr')
+        expect(await shown()).toEqual(english)
+        keep('toString')
+        expect(await shown()).toEqual(english)
+        vi.stubGlobal('caches', {
+          match: vi.fn().mockRejectedValue(new Error('denied')),
+        })
+        expect(await shown()).toEqual(english)
+        vi.stubGlobal('caches', undefined)
+        expect(await shown()).toEqual(english)
+      })
     })
   })
 

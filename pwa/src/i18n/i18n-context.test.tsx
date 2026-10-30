@@ -36,6 +36,18 @@ describe('I18nProvider', () => {
     expect(document.documentElement.lang).toBe('en')
   })
 
+  it("keeps the app's language for the push worker", async () => {
+    const put = vi.fn().mockResolvedValue(undefined)
+    const open = vi.fn().mockResolvedValue({ put })
+    vi.stubGlobal('caches', { open })
+    render(<Show />, { wrapper })
+    await vi.waitFor(() => expect(put).toHaveBeenCalled())
+    expect(open).toHaveBeenCalledWith('termote-prefs')
+    expect(put.mock.calls[0][0]).toBe('/__locale')
+    expect(await put.mock.calls[0][1].text()).toBe('en')
+    vi.unstubAllGlobals()
+  })
+
   it('follows the language picked in Settings at once', () => {
     const { result } = renderHook(() => ({ s: useSettings(), t: useTourT() }), {
       wrapper,

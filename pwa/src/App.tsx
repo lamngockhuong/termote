@@ -131,6 +131,7 @@ import { type OpenWindowEvent, openInWindow } from './utils/open-window'
 import { loadPaneView, savePaneView } from './utils/pane-view'
 import { isApplePlatform } from './utils/platform'
 import { formatRunning, uniqueNames } from './utils/running-commands'
+import { errorKey } from './utils/server-error'
 import { matchesFilter } from './utils/session-filter'
 import { formatChord } from './utils/shortcuts'
 import {
@@ -443,9 +444,9 @@ export default function App({
       : shownPaneIndex >= 0 && shownPaneIndex < shownPanes.length - 1
   const runPaneAction = useCallback(
     (act: () => Promise<unknown>) => {
-      act().catch((err) => showToast(paneLayoutMessage(err), 'warning'))
+      act().catch((err) => showToast(paneLayoutMessage(err, t), 'warning'))
     },
-    [showToast],
+    [showToast, t],
   )
   const pendingPane = activeSession.panes?.find((p) => p.id === pendingPaneId)
   const cancelPaneClose = useCallback(() => setPendingPaneId(null), [])
@@ -921,7 +922,7 @@ export default function App({
           insertUploadedPath(result.insert)
           break
         case 'failed':
-          showToast(uploadErrorMessage(result.reason), 'danger')
+          showToast(uploadErrorMessage(result.reason, t), 'danger')
       }
     },
     [getTerminal, showToast, insertUploadedPath, t],
@@ -1208,7 +1209,7 @@ export default function App({
       }
       const variant =
         code === 'changed' ? 'info' : code === 'unknown' ? 'warning' : 'danger'
-      showToast(worktreeProblem(code), variant)
+      showToast(worktreeProblem(code, t), variant)
       if (code !== 'unknown') void refreshSessions()
     })
   }
@@ -1222,7 +1223,11 @@ export default function App({
         return true
       } catch (err) {
         showToast(
-          err instanceof RequestError ? err.message : t('shell.addTabFailed'),
+          t(
+            err instanceof RequestError && err.code
+              ? errorKey(err.code)
+              : 'shell.addTabFailed',
+          ),
           'warning',
         )
         return false

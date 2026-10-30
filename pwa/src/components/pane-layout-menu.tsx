@@ -14,6 +14,9 @@ import {
   type ResizeDirection,
   type SplitDirection,
 } from '../hooks/use-mux-api'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
 import { Menu, MenuGroup, MenuItem, MenuSeparator } from './ui/menu'
 
 // How many cells one Resize item moves the pane's edge
@@ -42,21 +45,26 @@ const ICON = 15
 
 const RESIZE: {
   direction: ResizeDirection
-  label: string
+  label: MessageKey
   icon: typeof ArrowLeft
 }[] = [
-  { direction: 'left', label: 'Resize left', icon: ArrowLeft },
-  { direction: 'right', label: 'Resize right', icon: ArrowRight },
-  { direction: 'up', label: 'Resize up', icon: ArrowUp },
-  { direction: 'down', label: 'Resize down', icon: ArrowDown },
+  { direction: 'left', label: 'dialogs.paneMenu.resizeLeft', icon: ArrowLeft },
+  {
+    direction: 'right',
+    label: 'dialogs.paneMenu.resizeRight',
+    icon: ArrowRight,
+  },
+  { direction: 'up', label: 'dialogs.paneMenu.resizeUp', icon: ArrowUp },
+  { direction: 'down', label: 'dialogs.paneMenu.resizeDown', icon: ArrowDown },
 ]
 
 // The Pane menu of the header: what the pane shown can do to its tab's
 // layout. Rendered only where the backend offers it to this device.
 export function PaneLayoutMenu(p: Props) {
+  const { t } = useT()
   return (
     <Menu
-      label="Pane"
+      label={t('dialogs.paneMenu.label')}
       trigger={<Columns2 size={16} aria-hidden="true" />}
       triggerSize="sm"
       align="end"
@@ -65,27 +73,27 @@ export function PaneLayoutMenu(p: Props) {
         icon={<Columns2 size={ICON} />}
         onSelect={() => p.onSplit('right')}
       >
-        Split right
+        {t('dialogs.paneMenu.splitRight')}
       </MenuItem>
       <MenuItem icon={<Rows2 size={ICON} />} onSelect={() => p.onSplit('down')}>
-        Split down
+        {t('dialogs.paneMenu.splitDown')}
       </MenuItem>
       {p.arrange && (
         <>
           <MenuItem icon={<Maximize2 size={ICON} />} onSelect={p.onZoom}>
-            Zoom
+            {t('dialogs.paneMenu.zoom')}
           </MenuItem>
           <MenuItem
             icon={<ArrowLeftRight size={ICON} />}
             disabled={!p.canSwapNext}
             onSelect={p.onSwapNext}
           >
-            Swap with next pane
+            {t('dialogs.paneMenu.swapNext')}
           </MenuItem>
         </>
       )}
       {p.arrange && p.desktop && (
-        <MenuGroup label="Resize">
+        <MenuGroup label={t('dialogs.paneMenu.resize')}>
           {RESIZE.map(({ direction, label, icon: Icon }) => (
             <MenuItem
               key={direction}
@@ -93,7 +101,7 @@ export function PaneLayoutMenu(p: Props) {
               keepOpen
               onSelect={() => p.onResize(direction)}
             >
-              {label}
+              {t(label)}
             </MenuItem>
           ))}
         </MenuGroup>
@@ -102,7 +110,7 @@ export function PaneLayoutMenu(p: Props) {
         <>
           <MenuSeparator />
           <MenuItem icon={<X size={ICON} />} danger onSelect={p.onClose}>
-            Close pane
+            {t('dialogs.paneMenu.close')}
           </MenuItem>
         </>
       )}
@@ -110,22 +118,26 @@ export function PaneLayoutMenu(p: Props) {
   )
 }
 
+// A refused layout action's message, by the server's code; any other code
+// is told as the generic failure
+const PANE_LAYOUT_REFUSED: Record<string, MessageKey> = {
+  unknown_pane: 'errors.unknown_pane',
+  no_neighbor: 'errors.no_neighbor',
+  no_room: 'errors.no_room',
+  busy: 'dialogs.paneLayout.busy',
+  unsupported: 'dialogs.paneLayout.unsupported',
+  view_only: 'errors.view_only',
+}
+
 // The message of a refused layout action, from the server's code
-export function paneLayoutMessage(err: unknown): string {
+export function paneLayoutMessage(
+  err: unknown,
+  t: Translate<MessageKey>,
+): string {
   const code = err instanceof RequestError ? err.code : ''
-  switch (code) {
-    case 'unknown_pane':
-      return 'The pane is gone'
-    case 'no_neighbor':
-      return 'No pane on that side'
-    case 'no_room':
-      return 'No room for another pane'
-    case 'busy':
-      return 'Busy, try again'
-    case 'unsupported':
-      return 'Not supported for this pane'
-    case 'view_only':
-      return 'This device is view-only'
-  }
-  return 'Could not change the panes'
+  return t(
+    Object.hasOwn(PANE_LAYOUT_REFUSED, code)
+      ? PANE_LAYOUT_REFUSED[code]
+      : 'dialogs.paneLayout.failed',
+  )
 }

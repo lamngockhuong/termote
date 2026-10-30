@@ -1,3 +1,5 @@
+import type { MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
 import type { AgentStatus, Session, SessionGroup } from '../types/session'
 import { formatDeepLink } from './deep-link'
 import { UNSAFE_CHARS } from './unsafe-chars'
@@ -88,8 +90,13 @@ export interface NotificationContent {
   options: NotificationOptions & { renotify: boolean; data: { hash: string } }
 }
 
-export function notificationTitle(kind: AgentEventKind): string {
-  return kind === 'blocked' ? 'Agent needs you' : 'Agent finished'
+export function notificationTitle(
+  kind: AgentEventKind,
+  t: Translate<MessageKey>,
+): string {
+  return t(
+    kind === 'blocked' ? 'dialogs.notify.blocked' : 'dialogs.notify.done',
+  )
 }
 
 // Names only: no screen or transcript text, and never the pane title, which
@@ -98,10 +105,11 @@ export function notificationContent(
   event: AgentEvent,
   sessions: readonly Session[],
   groups: readonly SessionGroup[],
+  t: Translate<MessageKey>,
 ): NotificationContent {
   const tab = sessions.find((s) => s.id === event.tabId)
   const group = groups.find((g) => g.id === event.groupId)
-  const agent = cleanName(event.agentName) || 'Agent'
+  const agent = cleanName(event.agentName) || t('dialogs.notify.agent')
   const place = [cleanName(group?.name), cleanName(tab?.name)]
     .filter(Boolean)
     .join(' / ')
@@ -113,7 +121,7 @@ export function notificationContent(
       })
     : ''
   return {
-    title: notificationTitle(event.kind),
+    title: notificationTitle(event.kind, t),
     options: {
       body: place ? `${agent} · ${place}` : agent,
       tag: event.paneId,

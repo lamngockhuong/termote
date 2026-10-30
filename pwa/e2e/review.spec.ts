@@ -173,7 +173,7 @@ test.describe('review comments', () => {
         await route.fulfill({
           status: 409,
           contentType: 'application/json',
-          body: JSON.stringify({ code: 'not_idle', error: 'The agent is busy' }),
+          body: JSON.stringify({ code: 'input_not_ready', error: 'the agent is working' }),
         })
       else await route.fulfill({ status: 204 })
     })
@@ -191,7 +191,7 @@ test.describe('review comments', () => {
     await reviewButton(page).click()
     await page.getByRole('dialog', { name: 'Review (1)' }).getByRole('button', { name: 'Send to…' }).click()
     await page.getByRole('dialog', { name: 'Send to which agent?' }).getByRole('button', { name: new RegExp(agentWindow) }).click()
-    await expect(page.getByText('Not sent: The agent is busy')).toBeVisible({ timeout: 15000 })
+    await expect(page.getByText('Not sent: The agent cannot take input right now')).toBeVisible({ timeout: 15000 })
     // Still there, sent to the agent picked once it is free
     const review = page.getByRole('dialog', { name: 'Review (1)' })
     await expect(review.getByText('Kept')).toBeVisible()

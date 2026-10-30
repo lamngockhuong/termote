@@ -10,6 +10,7 @@ import {
 import { useDialogModal } from '../../hooks/use-dialog-modal'
 import { useIsMobile } from '../../hooks/use-media-query'
 import { useRestoreFocus } from '../../hooks/use-restore-focus'
+import { useT } from '../../i18n/i18n-context'
 import { IconButton } from './button'
 
 interface Props {
@@ -17,7 +18,7 @@ interface Props {
   onClose: () => void
   title: ReactNode
   children: ReactNode
-  // Accessible name of the close button
+  // Accessible name of the close button; common Close when not given
   closeLabel?: string
   // Extra controls in the header, before the close button
   actions?: ReactNode
@@ -43,7 +44,7 @@ function OpenSheet({
   onClose,
   title,
   children,
-  closeLabel = 'Close',
+  closeLabel,
   actions,
   className = '',
   focusOnOpen,
@@ -52,6 +53,7 @@ function OpenSheet({
   const dialogRef = useRef<HTMLDialogElement>(null)
   const titleId = useId()
   const isMobile = useIsMobile()
+  const { t } = useT()
 
   useRestoreFocus(undefined, keepFocus)
   // A stable callback: callers pass inline functions, and a new one would
@@ -110,7 +112,10 @@ function OpenSheet({
             no room for an outer ring in the 48px header. */}
         <div className="flex items-center gap-1 [&_button:focus-visible]:-outline-offset-2">
           {actions}
-          <IconButton aria-label={closeLabel} onClick={close}>
+          <IconButton
+            aria-label={closeLabel ?? t('common.close')}
+            onClick={close}
+          >
             <X size={18} aria-hidden="true" />
           </IconButton>
         </div>

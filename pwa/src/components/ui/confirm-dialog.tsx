@@ -1,5 +1,6 @@
 import { type KeyboardEvent, type ReactNode, useRef } from 'react'
 import { useIsMobile } from '../../hooks/use-media-query'
+import { useT } from '../../i18n/i18n-context'
 import { Button } from './button'
 import { Sheet } from './sheet'
 
@@ -8,6 +9,7 @@ interface Props {
   title: ReactNode
   children: ReactNode
   confirmLabel: string
+  // Common Cancel when not given
   cancelLabel?: string
   // A destructive action gets the danger colour on its confirm button
   destructive?: boolean
@@ -26,12 +28,13 @@ export function ConfirmDialog({
   title,
   children,
   confirmLabel,
-  cancelLabel = 'Cancel',
+  cancelLabel,
   destructive = false,
   defaultAction = 'confirm',
   onConfirm,
   onCancel,
 }: Props) {
+  const { t } = useT()
   const isMobile = useIsMobile()
   const confirmRef = useRef<HTMLButtonElement>(null)
   const cancelRef = useRef<HTMLButtonElement>(null)
@@ -60,7 +63,7 @@ export function ConfirmDialog({
         <div className="text-sm text-fg-muted">{children}</div>
         <div className="flex justify-end gap-2">
           <Button ref={cancelRef} onKeyDown={blockRepeat} onClick={onCancel}>
-            {cancelLabel}
+            {cancelLabel ?? t('common.cancel')}
           </Button>
           <Button
             ref={confirmRef}

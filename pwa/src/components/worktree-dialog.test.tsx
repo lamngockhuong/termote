@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RequestError, type WorktreeList } from '../hooks/use-mux-api'
+import { tFor } from '../i18n/i18n-context'
 import {
   WorktreeDialog,
   WorktreeRemoveDialog,
@@ -216,7 +217,7 @@ describe('WorktreeDialog — new', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'main' }))
     await act(async () => fireEvent.click(create()))
     expect(screen.getByRole('alert')).toHaveTextContent(
-      worktreeProblem('branch_exists'),
+      worktreeProblem('branch_exists', tFor('en')),
     )
     expect(branchInput()).toHaveValue('elsewhere')
     expect(
@@ -461,6 +462,6 @@ describe('worktreeProblem', () => {
     ],
     ['', 'Could not change the worktree'],
   ])('%s', (code, message) => {
-    expect(worktreeProblem(code)).toBe(message)
+    expect(worktreeProblem(code, tFor('en'))).toBe(message)
   })
 })

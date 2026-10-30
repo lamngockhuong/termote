@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import fixtureJson from '../../../server/testdata/agent-transitions.json?raw'
+import { tFor } from '../i18n/i18n-context'
 import { type AgentStatus, type Session, toAgentStatus } from '../types/session'
 import {
   type AgentEvent,
@@ -154,6 +155,7 @@ describe('notificationContent', () => {
       },
       sessions,
       groups,
+      tFor('en'),
     )
     expect(c).toEqual({
       title: 'Agent needs you',
@@ -173,6 +175,7 @@ describe('notificationContent', () => {
       { kind: 'done', tabId: 'gone', paneId: 'p' },
       sessions,
       groups,
+      tFor('en'),
     )
     expect(c.title).toBe('Agent finished')
     expect(c.options.body).toBe('Agent')

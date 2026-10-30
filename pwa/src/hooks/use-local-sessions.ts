@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
+import type { Translate } from '../i18n/translate'
 import {
   SESSIONS_STORAGE_KEY,
   type Session,
@@ -228,9 +231,11 @@ interface Built {
 }
 
 // Flatten the snapshot into tabs (each tagged with its group) and groups.
+// t names a pane with neither an agent nor a title.
 export function buildSessions(
   snap: MuxSnapshot,
   meta: Record<string, SessionMeta>,
+  t: Translate<MessageKey>,
 ): Built {
   const sessions: Session[] = []
   const groups: SessionGroup[] = []
@@ -244,7 +249,8 @@ export function buildSessions(
         DEFAULT_META
       const panes: SessionPane[] = tab.panes.map((p, i) => ({
         id: p.id,
-        label: p.agent?.name || p.title || `Pane ${i + 1}`,
+        label:
+          p.agent?.name || p.title || t('dialogs.pane.fallback', { n: i + 1 }),
         hasAgent: !!p.agent,
         agentName: p.agent?.name,
         agentStatus: toAgentStatus(p.agent?.status),
@@ -313,6 +319,10 @@ export function useLocalSessions(pollInterval = 5) {
   // with the server's times (an agent's since).
   const [clockOffset, setClockOffset] = useState(0)
   const metaRef = useRef<Record<string, SessionMeta>>(loadMeta())
+  // Read at each snapshot, so the poll's callbacks stay as they are
+  const { t } = useT()
+  const tRef = useRef(t)
+  tRef.current = t
   const muxRef = useRef<MuxInfo>(DEFAULT_MUX)
   const selectionRef = useRef<Selection | null>(null)
   // Bumped on every client-side pick; a snapshot requested before the
@@ -415,7 +425,7 @@ export function useLocalSessions(pollInterval = 5) {
       }
       // The drafts kept on the device come back before any view reads
       hydrateDrafts(keys.keys(), snap.caps.role)
-      const built = buildSessions(snap, metaRef.current)
+      const built = buildSessions(snap, metaRef.current, tRef.current)
       currentTabsRef.current = new Set(
         [...built.activeByGroup.values()].map((s) => s.id),
       )
@@ -511,6 +521,7 @@ export function useLocalSessions(pollInterval = 5) {
           id: '0',
           name: 'shell',
           icon: '💻',
+          // i18n-ignore: a stored description, only searched, never shown
           description: 'Terminal',
         }
         setSessions([fallback])
