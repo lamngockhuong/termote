@@ -32,6 +32,9 @@ type zellijMux struct {
 	reads    map[string]zellijRead   // session → last good read
 	tabKeys  map[zellijTabRef]string // a tab's Key while its id lives
 	skipped  map[string]bool         // names left out, logged once
+	// names: the name termote gave each pane (zellijPaneKey), which
+	// list-panes shows only as the pane's title, until that title changes.
+	names map[string]zellijPaneName
 
 	// groupMu runs session creates, renames and closes one at a time.
 	groupMu sync.Mutex
@@ -39,6 +42,16 @@ type zellijMux struct {
 	// serving; may be nil).
 	onRename func(from, to string)
 }
+
+// zellijPaneName is a name termote gave a pane, and when.
+type zellijPaneName struct {
+	name string
+	at   time.Time
+}
+
+// zellijRenameSettle is how long after a rename a listing can still show the
+// title from before it: read earlier, or before Zellij applied the rename.
+const zellijRenameSettle = 2 * time.Second
 
 // zellijReadKeep is how long a session's last good read stands in for a
 // failed one.
@@ -101,6 +114,7 @@ func newZellijMux(ctx context.Context) (*zellijMux, error) {
 		reads:    map[string]zellijRead{},
 		tabKeys:  map[zellijTabRef]string{},
 		skipped:  map[string]bool{},
+		names:    map[string]zellijPaneName{},
 	}, nil
 }
 
@@ -111,6 +125,7 @@ func (*zellijMux) Caps() Caps {
 	defer cancel()
 	return Caps{
 		PaneLayout:       zellijCanPaneLayout(ctx),
+		RenamePane:       zellijCanPaneLayout(ctx),
 		ClientSideSelect: true,
 		PaneText:         true,
 		Groups:           true,
@@ -295,6 +310,7 @@ func (m *zellijMux) buildGroup(session string, r zellijRead) Group {
 		for _, p := range panes {
 			pane := Pane{ID: zellijPaneID(session, p.ID), Active: p.IsFocused,
 				Title: stripUnsafeRunes(p.Title), key: zellijPaneKey(session, p.ID)}
+			pane.Name = cleanPaneName(m.paneName(pane.key, p.Title, r.at))
 			if name := processName(p.Command); name != "" {
 				pane.Process = &ProcessInfo{Name: name, Cwd: processCwd(p.Cwd)}
 			}
@@ -303,6 +319,24 @@ func (m *zellijMux) buildGroup(session string, r zellijRead) Group {
 		g.Tabs = append(g.Tabs, tab)
 	}
 	return g
+}
+
+// paneName is the name termote gave the pane key while its title still is
+// that name. A different title read zellijRenameSettle after the rename
+// (the pane's program set one, or the name was cleared outside termote)
+// forgets it; one read earlier can predate the rename, and keeps it.
+func (m *zellijMux) paneName(key, title string, readAt time.Time) string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	n, ok := m.names[key]
+	if !ok {
+		return ""
+	}
+	if n.name != title && readAt.After(n.at.Add(zellijRenameSettle)) {
+		delete(m.names, key)
+		return ""
+	}
+	return n.name
 }
 
 // tabKey names a tab for as long as it lives: its group id and the first
@@ -331,11 +365,22 @@ func (m *zellijMux) pruneTabKeys(names []string, reads []zellijRead) {
 			live[zellijTabRef{name, t.TabID}] = true
 		}
 	}
+	livePanes := map[string]bool{}
+	for i, name := range names {
+		for _, p := range reads[i].panes {
+			livePanes[zellijPaneKey(name, p.ID)] = true
+		}
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for ref := range m.tabKeys {
 		if !live[ref] {
 			delete(m.tabKeys, ref)
+		}
+	}
+	for k := range m.names {
+		if !livePanes[k] {
+			delete(m.names, k)
 		}
 	}
 	for s := range m.reads {
@@ -801,6 +846,39 @@ func (m *zellijMux) ClosePane(ctx context.Context, paneID string) error {
 		return err
 	}
 	return zellijRepeat(ctx, session, "close-pane", "--pane-id", zellijTerminal(n))
+}
+
+// RenamePane names a pane with rename-pane, or clears its name with
+// undo-rename-pane, and remembers the name: list-panes has it only as the
+// pane's title, which an agent's own title would otherwise outrank.
+func (m *zellijMux) RenamePane(ctx context.Context, paneID, name string) error {
+	if !zellijCanPaneLayout(ctx) {
+		return errUnsupported
+	}
+	session, n, err := m.requirePane(ctx, paneID)
+	if err != nil {
+		return err
+	}
+	key := zellijPaneKey(session, n)
+	if name == "" {
+		err = zellijRepeat(ctx, session, "undo-rename-pane", "--pane-id", zellijTerminal(n))
+	} else {
+		err = zellijRepeat(ctx, session, "rename-pane", "--pane-id", zellijTerminal(n), "--", name)
+	}
+	if err != nil {
+		return err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.names == nil {
+		m.names = map[string]zellijPaneName{}
+	}
+	if name == "" {
+		delete(m.names, key)
+	} else {
+		m.names[key] = zellijPaneName{name: name, at: time.Now()}
+	}
+	return nil
 }
 
 // SendKeys types raw input into a pane through a Termote client (the

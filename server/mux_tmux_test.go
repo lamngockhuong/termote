@@ -449,8 +449,9 @@ func TestTmuxSnapshotParsesPaneFields(t *testing.T) {
 	if tabs[0].Panes[0].Agent != nil || tabs[1].Panes[0].Agent != nil {
 		t.Error("agent reported for panes without Claude Code")
 	}
+	// The version read finds none here: no pane names are listed.
 	if got := strings.TrimSpace(args()); got != "list-windows -a -F "+tmuxListFormat+"\nlist-panes -a -F "+tmuxPaneListFormat+
-		"\n-u list-panes -a -F "+tmuxPaneFormat {
+		"\n-u list-panes -a -F "+tmuxPaneFormat+"\ndisplay-message -p #{version}" {
 		t.Errorf("argv = %q", got)
 	}
 }
@@ -473,7 +474,7 @@ func TestTmuxSnapshotCreatesMissingDefaultSession(t *testing.T) {
 		t.Errorf("groups = %+v", snap.Groups)
 	}
 	lines := strings.Split(strings.TrimSpace(args()), "\n")
-	if len(lines) != 6 || lines[1] != "has-session -t =main" || lines[2] != "new-session -d -s main" || !strings.HasPrefix(lines[3], "list-windows -a") ||
+	if len(lines) != 7 || lines[6] != "display-message -p #{version}" || lines[1] != "has-session -t =main" || lines[2] != "new-session -d -s main" || !strings.HasPrefix(lines[3], "list-windows -a") ||
 		lines[4] != "list-panes -a -F "+tmuxPaneListFormat || !strings.HasPrefix(lines[5], "-u list-panes -a") {
 		t.Errorf("argv = %q", lines)
 	}

@@ -57,6 +57,10 @@ var herdrEventTypes = []string{
 // branches are read again. Subscribed only when worktrees are offered.
 var herdrWorktreeEventTypes = []string{"worktree.created", "worktree.opened", "worktree.removed"}
 
+// herdrMetaEventTypes tell a workspace's metadata changed (a pane's comes
+// as pane.updated). Subscribed only from herdrPaneMetaMin.
+var herdrMetaEventTypes = []string{"workspace.metadata_updated"}
+
 // herdrAgentStatuses are the agent_status values herdr documents; anything
 // else is reported as "unknown".
 var herdrAgentStatuses = map[string]bool{"idle": true, "working": true, "blocked": true, "done": true, "unknown": true}
@@ -167,7 +171,7 @@ func (m *herdrMux) Caps() Caps {
 	return Caps{ClientSideSelect: true, Scroll: true, PaneText: true, DriveSize: true, AgentChat: true, Files: true, Groups: true,
 		AgentStart: start, AgentStartCodex: start && agentStartKind("codex"),
 		Worktrees: herdrCanWorktrees(v, herdrStartGOOS), ReorderTabs: reorder, ReorderGroups: reorder,
-		PaneLayout: herdrCanPaneLayout(v, herdrStartGOOS), PaneStream: true}
+		PaneLayout: herdrCanPaneLayout(v, herdrStartGOOS), PaneStream: true, RenamePane: herdrCanPaneMeta(v)}
 }
 
 // herdrStartGOOS is the OS the worktree gate, a start's idle check
@@ -515,7 +519,9 @@ type herdrSnapshot struct {
 		Number      int    `json:"number"`
 		Label       string `json:"label"`
 		ActiveTabID string `json:"active_tab_id"`
-		Worktree    *struct {
+		// Tokens: the metadata plugins and tools reported (0.7.4 on).
+		Tokens   map[string]string `json:"tokens"`
+		Worktree *struct {
 			RepoKey  string `json:"repo_key"`
 			IsLinked bool   `json:"is_linked_worktree"`
 		} `json:"worktree"`
@@ -534,6 +540,9 @@ type herdrSnapshot struct {
 		AgentStatus   string  `json:"agent_status"`
 		Cwd           string  `json:"cwd"`
 		ForegroundCwd string  `json:"foreground_cwd"`
+		// Label is the name pane.rename gave the pane, null without one.
+		Label  *string           `json:"label"`
+		Tokens map[string]string `json:"tokens"`
 	} `json:"panes"`
 	Layouts []herdrLayout `json:"layouts"`
 }
@@ -639,7 +648,10 @@ func mapHerdrSnapshot(s herdrSnapshot) herdrView {
 		if dir = processCwd(dir); dir != "" {
 			cwds[p.ID] = dir
 		}
-		pane := Pane{ID: p.ID, Title: p.Title, Active: layouts[p.TabID].FocusedPaneID == p.ID}
+		pane := Pane{ID: p.ID, Title: p.Title, Active: layouts[p.TabID].FocusedPaneID == p.ID, Meta: cleanMeta(p.Tokens)}
+		if p.Label != nil {
+			pane.Name = cleanPaneName(*p.Label)
+		}
 		if p.Agent != nil && *p.Agent != "" {
 			status := p.AgentStatus
 			if !herdrAgentStatuses[status] {
@@ -689,7 +701,7 @@ func mapHerdrSnapshot(s herdrSnapshot) herdrView {
 		for i := range tabs {
 			tabs[i].Active = tabs[i].ID == w.ActiveTabID
 		}
-		groups = append(groups, Group{ID: w.ID, Name: w.Label, Tabs: tabs})
+		groups = append(groups, Group{ID: w.ID, Name: w.Label, Tabs: tabs, Meta: cleanMeta(w.Tokens)})
 	}
 	return herdrView{snap: Snapshot{Groups: groups}, sizes: sizes, zoomed: zoomed, cwds: cwds, worktrees: worktrees}
 }
@@ -776,7 +788,7 @@ func (m *herdrMux) subscribeOnce(ctx context.Context) (live bool, err error) {
 	if err != nil {
 		return false, err
 	}
-	subs := make([]herdrSubscription, 0, len(herdrEventTypes)+len(herdrWorktreeEventTypes)+len(v.sizes))
+	subs := make([]herdrSubscription, 0, len(herdrEventTypes)+len(herdrWorktreeEventTypes)+len(herdrMetaEventTypes)+len(v.sizes))
 	for _, t := range herdrEventTypes {
 		subs = append(subs, herdrSubscription{Type: t})
 	}
@@ -784,6 +796,11 @@ func (m *herdrMux) subscribeOnce(ctx context.Context) (live bool, err error) {
 	// subscription with it.
 	if herdrCanWorktrees(p.Version, herdrStartGOOS) {
 		for _, t := range herdrWorktreeEventTypes {
+			subs = append(subs, herdrSubscription{Type: t})
+		}
+	}
+	if herdrCanPaneMeta(p.Version) {
+		for _, t := range herdrMetaEventTypes {
 			subs = append(subs, herdrSubscription{Type: t})
 		}
 	}
@@ -1504,6 +1521,52 @@ func (m *herdrMux) ClosePane(ctx context.Context, paneID string) error {
 	err := m.rpc.call(ctx, "pane.close", map[string]string{"pane_id": paneID}, nil)
 	m.invalidate()
 	return herdrInputError(err)
+}
+
+// herdrPaneMetaMin is the first Herdr checked to have pane.rename, pane
+// labels and metadata tokens in session.snapshot and the
+// workspace.metadata_updated event as used here (0.9.3, the version CI pins).
+const herdrPaneMetaMin = "0.9.3"
+
+// herdrCanPaneMeta: panes can be named, and metadata is read, on Herdr
+// version v.
+func herdrCanPaneMeta(v string) bool {
+	return versionRe.MatchString(v) && compareVersions(v, herdrPaneMetaMin) >= 0
+}
+
+// RenamePane sets the pane's label through pane.rename; a null label clears
+// it.
+func (m *herdrMux) RenamePane(ctx context.Context, paneID, name string) error {
+	if v, _ := m.version.Load().(string); !herdrCanPaneMeta(v) {
+		return errUnsupported
+	}
+	if _, err := m.requirePane(ctx, paneID); err != nil {
+		return err
+	}
+	var label *string
+	if name != "" {
+		label = &name
+	}
+	err := m.rpc.call(ctx, "pane.rename", map[string]any{"pane_id": paneID, "label": label}, nil)
+	m.invalidate()
+	return herdrRenameError(err)
+}
+
+// herdrRenameError maps Herdr's refusals of pane.rename: a pane gone is
+// errUnknownPane, a method this Herdr lacks errUnsupported. Any other error
+// goes on as it is (muxError logs it and answers 500).
+func herdrRenameError(err error) error {
+	var he *herdrError
+	if !errors.As(err, &he) {
+		return err
+	}
+	switch {
+	case strings.HasSuffix(he.Code, "_not_found"):
+		return errUnknownPane
+	case he.Code == "unknown_method" || he.Code == "invalid_request" && strings.Contains(he.Message, "`pane."):
+		return errUnsupported
+	}
+	return err
 }
 
 // SendKeys types keys as raw bytes, the same way stream input is sent, and

@@ -89,7 +89,8 @@ type fakeHerdr struct {
 	wtFail    map[string]string
 	wtMessage string
 	wtDelay   time.Duration
-	// pane.split, pane.zoom, pane.swap, pane.resize and pane.layout answer
+	// pane.split, pane.zoom, pane.swap, pane.resize, pane.layout and
+	// pane.rename answer
 	// layoutReply's result for the method (a default shape when missing),
 	// or fail with layoutFail's code (and layoutMessage).
 	layoutReply   map[string]any
@@ -280,7 +281,7 @@ func (f *fakeHerdr) handle(c net.Conn) {
 			res["root_pane"] = map[string]any{"pane_id": "wR:pNEW", "tab_id": "wR:tNEW"}
 		}
 		reply(res)
-	case "pane.split", "pane.zoom", "pane.swap", "pane.resize", "pane.layout":
+	case "pane.split", "pane.zoom", "pane.swap", "pane.resize", "pane.layout", "pane.rename":
 		f.mu.Lock()
 		code, msg, res := f.layoutFail[req.Method], f.layoutMessage, f.layoutReply[req.Method]
 		f.mu.Unlock()
@@ -297,6 +298,7 @@ func (f *fakeHerdr) handle(c net.Conn) {
 				"pane.swap":   map[string]any{"type": "pane_swap", "swap": map[string]any{"changed": true}},
 				"pane.resize": map[string]any{"type": "pane_resize", "resize": map[string]any{"changed": true}},
 				"pane.layout": map[string]any{"type": "pane_layout", "layout": map[string]any{"area": map[string]any{"width": 120, "height": 40}}},
+				"pane.rename": map[string]any{"type": "pane_info", "pane": map[string]any{"pane_id": "w13:p1"}},
 			}[req.Method]
 		}
 		reply(res)

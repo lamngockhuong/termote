@@ -464,3 +464,51 @@ func TestZellijRealViewStream(t *testing.T) {
 		}
 	}
 }
+
+// A real Zellij: a pane named through termote shows its name in the
+// snapshot, its title is that name, and clearing gives the title back.
+func TestZellijRealRenamePane(t *testing.T) {
+	m := realZellij(t)
+	ctx := t.Context()
+	snap, err := m.Snapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := zellijGroupNamed(t, snap, "main").Tabs[0].Panes[0].ID
+	_, n, _ := parseZellijPaneID(id)
+	before, err := zellijFindPane(ctx, "main", n)
+	if err != nil {
+		t.Fatal(err)
+	}
+	name := func() string {
+		s, err := m.Snapshot(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _, p, _ := findSnapshotPane(s, id, false)
+		return p.Name
+	}
+	if err := m.RenamePane(ctx, id, "Bản dựng #1"); err != nil {
+		t.Fatal(err)
+	}
+	waitUntil(t, "the pane titled with its name", func() bool {
+		p, _ := zellijFindPane(ctx, "main", n)
+		return p.Title == "Bản dựng #1"
+	})
+	if got := name(); got != "Bản dựng #1" {
+		t.Errorf("name = %q", got)
+	}
+	if err := m.RenamePane(ctx, id, ""); err != nil {
+		t.Fatal(err)
+	}
+	waitUntil(t, "the pane's own title back", func() bool {
+		p, _ := zellijFindPane(ctx, "main", n)
+		return p.Title != "Bản dựng #1"
+	})
+	if got := name(); got != "" {
+		t.Errorf("cleared name = %q (title was %q)", got, before.Title)
+	}
+	if err := m.RenamePane(ctx, zellijPaneID("main", 999), "x"); !errors.Is(err, errUnknownPane) {
+		t.Errorf("missing pane = %v", err)
+	}
+}

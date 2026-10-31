@@ -422,3 +422,7 @@ func TestClosePaneLastPaneRoute(t *testing.T) {
 		t.Errorf("calls = %v", m.calls)
 	}
 }
+func (f *fakeMux) RenamePane(_ context.Context, id, name string) error {
+	f.calls = append(f.calls, "rename pane "+id+"="+name)
+	return f.err
+}

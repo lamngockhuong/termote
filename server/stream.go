@@ -474,15 +474,21 @@ type viewAttacher interface {
 }
 
 // viewSnapshot reads m's panes for a view-only client: without making
-// anything (tmux's default session) where the snapshot would.
+// anything (tmux's default session) where the snapshot would, and without
+// metadata (withoutMeta).
 func viewSnapshot(ctx context.Context, m Mux) (Snapshot, error) {
+	read := peekSnapshot
 	if _, ok := m.(*herdrMux); ok {
 		// Herdr's snapshot makes nothing and never starts herdr (only the
 		// snapshot route does, for a full client); its peek leaves out the
 		// worktree branches.
-		return m.Snapshot(ctx)
+		read = func(ctx context.Context, m Mux) (Snapshot, error) { return m.Snapshot(ctx) }
 	}
-	return peekSnapshot(ctx, m)
+	s, err := read(ctx, m)
+	if err != nil {
+		return s, err
+	}
+	return withoutMeta(s), nil
 }
 
 // runStream pumps bytes both ways until the terminal exits, the client goes
