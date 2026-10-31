@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.16.0](https://github.com/lamngockhuong/termote/compare/v2.15.0...v2.16.0) (2026-10-31)
+
+
+### Features
+
+* **pwa:** exit motion, view crossfade, list enter/exit, press feedback, skeletons ([#665](https://github.com/lamngockhuong/termote/issues/665)) ([7abb306](https://github.com/lamngockhuong/termote/commit/7abb30626a442c47578ee8c57e0956f6107ac46a))
+* rename panes and show Herdr metadata ([#362](https://github.com/lamngockhuong/termote/issues/362)) ([#670](https://github.com/lamngockhuong/termote/issues/670)) ([093a735](https://github.com/lamngockhuong/termote/commit/093a7354a1ab2c8bc1358e409e64bb271809bd1a))
+* show text files up to 4 MiB in Files, edits stay at 1 MiB ([#669](https://github.com/lamngockhuong/termote/issues/669)) ([ff85e7c](https://github.com/lamngockhuong/termote/commit/ff85e7c95abeef864459b08d63c8c6dce1c62b13))
+* **video:** re-render the intro on the current UI, add pane, file and task scenes ([#673](https://github.com/lamngockhuong/termote/issues/673)) ([5fac962](https://github.com/lamngockhuong/termote/commit/5fac96229ff7ea1616583ec7cc6df6df56431c7b))
+
+
+### Bug Fixes
+
+* Files search sees files made outside Termote at once ([#610](https://github.com/lamngockhuong/termote/issues/610)) ([#668](https://github.com/lamngockhuong/termote/issues/668)) ([95df179](https://github.com/lamngockhuong/termote/commit/95df179307c84b16de762f85aba15e348ad7c1cd))
+* **pwa:** no focus ring on a button after a tap moves focus to it ([#663](https://github.com/lamngockhuong/termote/issues/663)) ([a6abca5](https://github.com/lamngockhuong/termote/commit/a6abca5d41a2ec560cd13787ebcbd83f15a7731d))
+* **pwa:** swipe a sidebar tab to edit or remove it on an iPad ([#671](https://github.com/lamngockhuong/termote/issues/671)) ([c5cdaf0](https://github.com/lamngockhuong/termote/commit/c5cdaf0222f31dbdc9450fb99007a0f365d6beb5))
+
 ## [2.15.0](https://github.com/lamngockhuong/termote/compare/v2.14.0...v2.15.0) (2026-10-30)
 
 
