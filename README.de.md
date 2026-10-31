@@ -83,7 +83,7 @@ CLI-Tools (Claude Code, GitHub Copilot, jedes Terminal) per PWA von Mobilgeräte
 </p>
 
 <p align="center">
-  <img src="docs/images/screenshots/ui-styles.png" alt="Interface Styles" width="720" />
+  <img src="docs/images/screenshots/ui-styles.png" alt="Die Oberflächenstile Neutral, Terminal und Native, hell und dunkel" width="720" />
 </p>
 
 ## Architektur

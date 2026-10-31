@@ -81,7 +81,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/screenshots/ui-styles.png" alt="Interface Styles" width="720" />
+  <img src="docs/images/screenshots/ui-styles.png" alt="インターフェーススタイル Neutral・Terminal・Native（ライトとダーク）" width="720" />
 </p>
 
 ## アーキテクチャ

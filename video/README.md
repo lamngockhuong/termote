@@ -3,13 +3,15 @@
 The feature intro of Termote, made with [Remotion](https://www.remotion.dev/). Three
 compositions share the same scenes (`src/scenes/`):
 
-| Composition            | Size      | Length | For                                          |
-| ---------------------- | --------- | ------ | -------------------------------------------- |
-| `TermoteIntro`         | 1920×1080 | ~61 s  | README, website                              |
-| `TermoteHero`          | 1920×1080 | 15 s   | Website hero: no words, loops                |
-| `TermoteIntroVertical` | 1080×1920 | ~31 s  | Social: the phone scenes with big captions   |
-| `TermotePoster`        | 1920×1080 | still  | README and website: the intro's picture      |
-| `Readme*`              | 1800×1260 | stills | README screenshots (phones, desktop, styles) |
+| Composition            | Size      | Length | For                                        |
+| ---------------------- | --------- | ------ | ------------------------------------------ |
+| `TermoteIntro`         | 1920×1080 | ~61 s  | README, website                            |
+| `TermoteHero`          | 1920×1080 | 15 s   | Website hero: no words, loops              |
+| `TermoteIntroVertical` | 1080×1920 | ~31 s  | Social: the phone scenes with big captions |
+| `TermotePoster`        | 1920×1080 | still  | README and website: the intro's picture    |
+| `ReadmePhones`         | 1800×1260 | still  | README screenshot: phones                  |
+| `ReadmeDesktop`        | 1800×1120 | still  | README screenshot: desktop                 |
+| `ReadmeStyles`         | 1800×2200 | still  | README screenshot: interface styles        |
 
 `render` writes the intro, the hero and their pictures (`.jpg`) into
 `website/public/video/`, which is committed: the homepage plays them
@@ -53,10 +55,13 @@ server with demo content: a git repo `acme-api` with uncommitted edits, three
 workspaces (or tmux sessions), and the Claude Code stand-in
 (`tests/fixtures/fake-claude.sh`) holding a finished conversation. Most
 screens are taken on Herdr; tmux takes `desktop-tmux.png`, shown beside
-Herdr's to say both backends work, and the phone's terminal in each interface
-style (`phone-terminal.png`, `phone-style-*.png`), since tmux sizes the window
-to the phone while a headless Herdr's pane keeps its own width and its text
-comes out tiny. The README's screenshots are stills of these captures
+Herdr's to say both backends work, and the phone's terminal
+(`phone-terminal.png`), since tmux sizes the window to the phone while a
+headless Herdr's pane keeps its own width and its text comes out tiny. Each
+interface style is taken in the light and the dark theme on the sessions sheet
+(`phone-style-<style>-<theme>.png`), where the styles differ the most. Every
+capture runs with reduced motion and waits for the page to settle, so none is
+taken mid-transition. The README's screenshots are stills of these captures
 (`src/readme-shots.tsx`, `pnpm screenshots`). Under Herdr the stand-in reports its state and session id to
 Herdr (`herdr pane report-agent`), which is what gives its pane a Chat view.
 Nothing in them is mocked up, and no real user, host or project name appears.

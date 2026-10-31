@@ -84,7 +84,7 @@ Remote control CLI tools (Claude Code, GitHub Copilot, any terminal) from mobile
 </p>
 
 <p align="center">
-  <img src="docs/images/screenshots/ui-styles.png" alt="Interface Styles" width="720" />
+  <img src="docs/images/screenshots/ui-styles.png" alt="The Neutral, Terminal and Native interface styles, light and dark" width="720" />
 </p>
 
 ## Architecture

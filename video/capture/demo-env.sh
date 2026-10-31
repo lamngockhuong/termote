@@ -332,11 +332,16 @@ printf '%s\n' "$pass" >"$work/pass"
 chmod 600 "$work/pass"
 # A clean start: go test would answer (cached), Herdr would restore the last
 # run's workspaces next to the new ones
-rm -rf "$work/cache" "$work/state" "$work/xdg"
-mkdir -p "$work/xdg" "$work/cache" "$work/state"
+rm -rf "$work/cache" "$work/state" "$work/xdg" "$work/data" "$work/run"
+mkdir -p "$work/xdg" "$work/cache" "$work/state" "$work/data"
+mkdir -m 700 "$work/run"
 echo "$mux" >"$work/mux"
+# Run from inside your own Herdr or tmux, their variables would point the
+# demo's server and panes at them
+unset HERDR_ENV HERDR_SOCKET_PATH HERDR_PANE_ID HERDR_TAB_ID HERDR_WORKSPACE_ID TMUX TMUX_PANE CLAUDE_CONFIG_DIR
 demo_env=(HOME="$home" SHELL=/bin/bash
-  XDG_CONFIG_HOME="$work/xdg" XDG_CACHE_HOME="$work/cache" XDG_STATE_HOME="$work/state")
+  XDG_CONFIG_HOME="$work/xdg" XDG_CACHE_HOME="$work/cache" XDG_STATE_HOME="$work/state"
+  XDG_DATA_HOME="$work/data" XDG_RUNTIME_DIR="$work/run")
 if [ "$mux" = herdr ]; then
   env "${demo_env[@]}" HERDR_SOCKET_PATH="$sock" nohup herdr server >"$work/herdr.log" 2>&1 &
   for _ in $(seq 1 30); do h api snapshot >/dev/null 2>&1 && break; sleep 0.5; done

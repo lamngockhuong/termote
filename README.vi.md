@@ -83,7 +83,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/screenshots/ui-styles.png" alt="Interface Styles" width="720" />
+  <img src="docs/images/screenshots/ui-styles.png" alt="Ba kiểu giao diện Neutral, Terminal và Native, ở chế độ sáng và tối" width="720" />
 </p>
 
 ## Kiến Trúc

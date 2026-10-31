@@ -83,7 +83,7 @@ Contrôlez à distance des outils CLI (Claude Code, GitHub Copilot, n'importe qu
 </p>
 
 <p align="center">
-  <img src="docs/images/screenshots/ui-styles.png" alt="Interface Styles" width="720" />
+  <img src="docs/images/screenshots/ui-styles.png" alt="Les styles d'interface Neutral, Terminal et Native, en clair et en sombre" width="720" />
 </p>
 
 ## Architecture
