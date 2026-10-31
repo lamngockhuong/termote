@@ -169,11 +169,71 @@ func TestFilesContentDecodeSlots(t *testing.T) {
 
 func TestFilesContentTooLargeAfterRead(t *testing.T) {
 	fx := newEncFixture(t)
-	if err := os.WriteFile(filepath.Join(fx.root, "big.txt"), make([]byte, maxPreviewSize+1), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(fx.root, "big.txt"), make([]byte, maxViewSize+1), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if _, body := fx.get(t, url.Values{"path": {"big.txt"}}); body["reason"] != "too-large" {
 		t.Errorf("too large = %v", body)
+	}
+}
+
+func TestFilesContentShowsUpToTheViewLimit(t *testing.T) {
+	fx := newEncFixture(t)
+	text := strings.Repeat("a", maxViewSize)
+	if err := os.WriteFile(filepath.Join(fx.root, "edge.txt"), []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, body := fx.get(t, url.Values{"path": {"edge.txt"}}); code != 200 || body["text"] != text {
+		t.Errorf("at the limit = %d %v", code, body["reason"])
+	}
+}
+
+func TestFilesContentShowsWhatItCannotEdit(t *testing.T) {
+	fx := newEncFixture(t)
+	text := strings.Repeat("# heading\n", maxPreviewSize/10+1)
+	if err := os.WriteFile(filepath.Join(fx.root, "big.md"), []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, body := fx.get(t, url.Values{"path": {"big.md"}})
+	if body["text"] != text || body["editable"] != false || body["notEditable"] != "too-large" {
+		got, _ := body["text"].(string)
+		t.Errorf("past the edit limit = %d bytes, %v, %v", len(got), body["editable"], body["notEditable"])
+	}
+}
+
+func TestFilesContentLargeReadSlots(t *testing.T) {
+	fx := newEncFixture(t)
+	big := strings.Repeat("<a>\n", maxPreviewSize/4+1)
+	for _, name := range []string{"big.md", ".env"} {
+		if err := os.WriteFile(filepath.Join(fx.root, name), []byte(big), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for range largeReadMaxRunning {
+		fx.f.largeReadSlots <- struct{}{}
+	}
+	if code, body := fx.get(t, url.Values{"path": {"big.md"}}); code != 429 || body["code"] != "busy" {
+		t.Errorf("busy = %d %v", code, body)
+	}
+	if code, body := fx.get(t, url.Values{"path": {".env"}, "reveal": {"1"}}); code != 429 {
+		t.Errorf("revealed while busy = %d %v", code, body)
+	}
+	// A file up to maxPreviewSize needs no slot; a sensitive one not
+	// revealed is answered without one.
+	if code, _ := fx.get(t, url.Values{"path": {"expected.txt"}}); code != 200 {
+		t.Errorf("small while busy = %d", code)
+	}
+	if code, body := fx.get(t, url.Values{"path": {".env"}}); code != 200 || body["sensitive"] != true {
+		t.Errorf("sensitive while busy = %d %v", code, body)
+	}
+	for range largeReadMaxRunning {
+		<-fx.f.largeReadSlots
+	}
+	if code, body := fx.get(t, url.Values{"path": {"big.md"}}); code != 200 || body["text"] != big {
+		t.Errorf("free = %d", code)
+	}
+	if len(fx.f.largeReadSlots) != 0 {
+		t.Errorf("slots held = %d", len(fx.f.largeReadSlots))
 	}
 }
 

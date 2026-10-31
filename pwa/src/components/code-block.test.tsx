@@ -9,7 +9,7 @@ import {
 import { createRoot } from 'react-dom/client'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider } from '../contexts/theme-context'
-import { CodeBlock, splitLines } from './code-block'
+import { CodeBlock, firstLines, splitLines } from './code-block'
 
 const mockHighlight = vi.fn()
 vi.mock('../utils/highlight', () => ({
@@ -35,6 +35,16 @@ describe('splitLines', () => {
     expect(splitLines('a\nb\n')).toEqual(['a', 'b'])
     expect(splitLines('a\n\n')).toEqual(['a', ''])
     expect(splitLines('')).toEqual([''])
+  })
+})
+
+describe('firstLines', () => {
+  it('cuts after the last line kept, only when more follow', () => {
+    expect(firstLines('a\nb\nc', 2)).toBe('a\nb\n')
+    expect(firstLines('a\nb\n\n', 2)).toBe('a\nb\n')
+    expect(firstLines('a\nb\n', 2)).toBeUndefined()
+    expect(firstLines('a\nb', 2)).toBeUndefined()
+    expect(firstLines('', 2)).toBeUndefined()
   })
 })
 

@@ -98,8 +98,9 @@ it. On Windows, Places need the Herdr backend (`--mux herdr`).
 | Shown                                                         | Why                                                                                              |
 | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | Text with colours                                             | A text file of up to 256 KiB, up to 5000 lines, no line over 2000 characters                     |
-| Plain text, no colours                                        | A larger text file (up to 1 MiB), a language not covered, or highlighting that took over 3 seconds |
-| `Not previewable (binary, special file or larger than 1 MiB)`  | A binary file that is not an image or a document, a file over 1 MiB, or something that is not a regular file |
+| Plain text, no colours                                        | A larger text file (up to 4 MiB), a language not covered, or highlighting that took over 3 seconds |
+| `Only the first 50,000 lines are shown: download the file to see all of it` | A text file over 1 MiB with more than 50,000 lines: only its start is shown. Download the file to read the rest |
+| `Not previewable (binary, special file or larger than 4 MiB)`  | A binary file that is not an image or a document, a file over 4 MiB, or something that is not a regular file |
 | `This file can't be shown`                                     | A path termote never serves (see below)                                                          |
 
 ## Open Files as Tabs
@@ -521,7 +522,7 @@ row in the tree (on a phone, a finger resting on the row opens it), or the **Dow
 the header of an open file (in the header's menu on a phone). The browser saves it as it saves any
 download, under the file's name; nothing is opened or shown, whatever the file holds.
 
-- Any regular file can be downloaded, also one Termote cannot preview (binary, larger than 1 MiB),
+- Any regular file can be downloaded, also one Termote cannot preview (binary, larger than 4 MiB),
   up to **100 MiB**.
 - A file whose name usually holds secrets is downloaded after a second ask; an open one you chose
   to show is downloaded at once.

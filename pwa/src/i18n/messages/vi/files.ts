@@ -393,9 +393,12 @@ export default {
   'files.viewer.gone': 'File này không còn trên máy chủ',
   'files.viewer.tooLargeToPreview':
     'Quá lớn để xem trước: đang hiện văn bản gốc',
+  'files.viewer.linesCut': 'Chỉ hiện {n} dòng đầu: tải file về để xem toàn bộ',
+  'files.viewer.lineCut':
+    'Dòng {line} nằm sau {n} dòng đầu đang hiện: tải file về để xem',
   'files.viewer.reapply': 'Tải lại và áp dụng lại',
   'files.viewer.unpreviewable':
-    'Không xem trước được (file nhị phân, file đặc biệt hoặc lớn hơn 1 MiB)',
+    'Không xem trước được (file nhị phân, file đặc biệt hoặc lớn hơn 4 MiB)',
   'files.viewer.closeTab': 'Đóng tab',
   'files.viewer.sensitive': 'File này có thể chứa bí mật',
   'files.viewer.sensitiveViewOnly': 'Thiết bị chỉ xem không hiện được nó',

@@ -55,6 +55,7 @@ import {
   type MarkdownEditLayout as EditLayout,
   useSettings,
 } from '../hooks/use-settings'
+import { formatNumber } from '../i18n/format'
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
 import type { Translate } from '../i18n/translate'
@@ -91,7 +92,7 @@ import {
   imageRefusal,
   uploadFileImage,
 } from '../utils/upload-image'
-import { CodeBlock } from './code-block'
+import { CodeBlock, firstLines } from './code-block'
 import type { EditorAt } from './code-editor'
 import {
   FileEditor,
@@ -263,6 +264,14 @@ function LazyDocumentPreview(props: ComponentProps<typeof DocumentPreview>) {
 
 // Beyond this a Markdown file is shown as its source
 export const PREVIEW_MAX_BYTES = HIGHLIGHT_MAX_BYTES
+
+// Lines the source view shows of a file larger than SOURCE_CUT_BYTES: every
+// one is a row in the page (not virtualised), and a read of up to 4 MiB can
+// hold millions of short ones
+export const SOURCE_MAX_LINES = 50_000
+// Up to this (the server's limit for an edit, a search, a diff), a file
+// shows whole: a search result or a link reaches any of its lines
+export const SOURCE_CUT_BYTES = 1024 * 1024
 
 type Loaded =
   | { kind: 'loading' }
@@ -698,10 +707,22 @@ export function FileViewer({
   const tooLarge = state.kind === 'text' && state.size > PREVIEW_MAX_BYTES
   const canPreview = markdown && state.kind === 'text' && !tooLarge
   const preview = canPreview && settings.markdownPreview && !forceSource
+  const longText =
+    state.kind === 'text' && state.size > SOURCE_CUT_BYTES
+      ? state.text
+      : undefined
+  // The start of a file too long for the source view, else undefined
+  const sourceCut = useMemo(
+    () =>
+      longText === undefined
+        ? undefined
+        : firstLines(longText, SOURCE_MAX_LINES),
+    [longText],
+  )
   // Where the preview started (the link's heading, the offset Back restored)
   // is used up once the user leaves it: Source then Preview starts at the top
   const [leftPreview, setLeftPreview] = useState(false)
-  // A CSV/TSV file is a table, whatever its size (up to the 1 MiB a read
+  // A CSV/TSV file is a table, whatever its size (up to the 4 MiB a read
   // returns), unless the user chose its source
   const canTable = isTablePath(path) && state.kind === 'text'
   const tableView = canTable && settings.tablePreview && !forceSource
@@ -1629,8 +1650,20 @@ export function FileViewer({
           {markdown && tooLarge && (
             <Banner>{t('files.viewer.tooLargeToPreview')}</Banner>
           )}
+          {sourceCut !== undefined && (
+            <Banner>
+              {pick?.line && pick.line > SOURCE_MAX_LINES
+                ? t('files.viewer.lineCut', {
+                    line: formatNumber(pick.line, locale),
+                    n: formatNumber(SOURCE_MAX_LINES, locale),
+                  })
+                : t('files.viewer.linesCut', {
+                    n: formatNumber(SOURCE_MAX_LINES, locale),
+                  })}
+            </Banner>
+          )}
           <CodeBlock
-            text={state.text}
+            text={sourceCut ?? state.text}
             path={path}
             wrap={wrap}
             scrollTop={scrolled.current}

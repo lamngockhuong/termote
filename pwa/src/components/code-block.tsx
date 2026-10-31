@@ -38,6 +38,17 @@ export function splitLines(text: string): string[] {
   return lines
 }
 
+// text up to the end of its max-th line, or undefined when it has no more
+// lines than that
+export function firstLines(text: string, max: number): string | undefined {
+  let at = -1
+  for (let i = 0; i < max; i++) {
+    at = text.indexOf('\n', at + 1)
+    if (at < 0) return undefined
+  }
+  return at + 1 < text.length ? text.slice(0, at + 1) : undefined
+}
+
 // fontStyle bits from Shiki
 const ITALIC = 1
 const BOLD = 2

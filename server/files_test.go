@@ -120,7 +120,7 @@ func newFilesFixture(t *testing.T) *filesFixture {
 	writeFile(t, filepath.Join(root, "latin1.txt"), "caf\xe9\n")
 	writeFile(t, filepath.Join(deny, "secret"), "key\n")
 	writeFile(t, filepath.Join(outside, "passwd"), "root:x\n")
-	if err := os.WriteFile(filepath.Join(root, "big.log"), make([]byte, 2<<20), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "big.log"), make([]byte, maxViewSize+1), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if runtime.GOOS != "windows" {

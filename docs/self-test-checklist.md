@@ -656,8 +656,9 @@ Run on tmux (Linux/macOS) and Herdr; psmux (Windows) offers neither view.
 - [ ] Folders open and close by click and by arrow keys; Enter or a click opens a file
 - [ ] A file shows with line numbers and its size; "Copy path" and "Wrap lines" work; Back returns
       to the tree
-- [ ] A binary file or one over 1 MiB shows "Not previewable (binary, special file or larger than
-      1 MiB)"
+- [ ] A binary file or one over 4 MiB shows "Not previewable (binary, special file or larger than
+      4 MiB)"; a text file between 1 and 4 MiB shows, without "Edit"; one over 1 MiB with more
+      than 50,000 lines shows its first 50,000 under "Only the first 50,000 lines are shown"
 - [ ] `.env` (lock icon in the tree) asks "Show this file?" first: Cancel closes its tab, Show
       shows it; switching tabs and back keeps it shown, closing its tab and opening it again asks
       again

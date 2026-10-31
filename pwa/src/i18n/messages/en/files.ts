@@ -373,9 +373,13 @@ export default {
   'files.viewer.discard': 'Discard',
   'files.viewer.gone': 'This file is no longer on the host',
   'files.viewer.tooLargeToPreview': 'Too large to preview: shown as source',
+  'files.viewer.linesCut':
+    'Only the first {n} lines are shown: download the file to see all of it',
+  'files.viewer.lineCut':
+    'Line {line} is past the first {n} lines shown: download the file to see it',
   'files.viewer.reapply': 'Reload and reapply',
   'files.viewer.unpreviewable':
-    'Not previewable (binary, special file or larger than 1 MiB)',
+    'Not previewable (binary, special file or larger than 4 MiB)',
   'files.viewer.closeTab': 'Close tab',
   'files.viewer.sensitive': 'This file may contain secrets',
   'files.viewer.sensitiveViewOnly': 'A view-only device cannot show it',

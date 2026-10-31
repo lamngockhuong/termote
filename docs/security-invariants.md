@@ -798,8 +798,14 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   the sha256 of the bytes read, never of the decoded text. A sensitive name without `reveal=1` is
   answered before anything is decoded; a read as another encoding than UTF-8, or one that
   detects the encoding of bytes not valid UTF-8, takes one of 2 server-wide slots (429 `busy`);
-  a UTF-8 read none. Content search and git
-  diffs stay UTF-8 only. git runs
+  a UTF-8 read none. It reads at most 4 MiB (`maxViewSize`, past it `previewable: false`,
+  `too-large`); a save, a discard, content search and a whole-file diff stay at 1 MiB
+  (`maxPreviewSize`), so a file shown past that is `editable: false`, `notEditable: too-large`.
+  A read past 1 MiB (by its size before the read, or the bytes read) takes one of 2 server-wide
+  `largeReadSlots` (429 `busy`), held until the answer is written under a 2-minute write deadline
+  (its JSON escapes `<`, `>`, `&` and control bytes to six bytes each); a sensitive name not
+  revealed takes none.
+  Content search and git diffs stay UTF-8 only. git runs
   without a shell, with `GIT_*`/`TERMOTE_*` stripped, hooks (`core.hooksPath` to the null
   device), index refresh on diff, fsmonitor, filter drivers, external diff and textconv off,
   submodules ignored, 10s timeout, 2 at a time (a command that writes the index runs under the
