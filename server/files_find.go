@@ -22,7 +22,8 @@ const (
 	// findMaxExcludes caps the excluded names one find takes.
 	findMaxExcludes = 50
 	// findListTTL caches the file list of a root: a query is matched
-	// against it at every key typed.
+	// against it at every key typed. Its stamp (findStamp) ends it sooner
+	// when a directory it was read from changes.
 	findListTTL = 30 * time.Second
 )
 
@@ -76,6 +77,11 @@ type findList struct {
 	// ignored notes.md beside a tracked Notes.md stays hidden; a path that
 	// differs from git's in case only is hidden too.
 	files, dirs map[string]bool
+	// read: the directories a walk read, until the list is stamped
+	read []string
+	// stamp tells whether the list still holds once cached (nil: only
+	// findListTTL ends it).
+	stamp *findStamp
 }
 
 // listed reports whether rel ('/'-separated, "." the root) is a file of the
@@ -247,6 +253,7 @@ type findWalk struct {
 	b       *findBudget
 	ignored bool
 	out     []findEntry
+	read    []string // the directories read, for the list's stamp
 	// deep: a directory past findMaxDepth was not read. The walk goes on
 	// with its siblings, but the list is incomplete.
 	deep bool
@@ -267,6 +274,7 @@ func (w *findWalk) walk(dir string, depth int) {
 		return
 	}
 	defer d.Close()
+	w.read = append(w.read, dir)
 	for {
 		ents, err := d.ReadDir(256)
 		for _, e := range ents {
@@ -386,7 +394,7 @@ func (f *filesAPI) findIgnored(ctx context.Context, root filesRoot, ex findExclu
 			break
 		}
 	}
-	return findList{entries: w.out, incomplete: cut || w.b.stopped || w.deep}, nil
+	return findList{entries: w.out, read: w.read, incomplete: cut || w.b.stopped || w.deep}, nil
 }
 
 func hasExcludedPart(rel string, ex findExcludes) bool {
@@ -407,21 +415,39 @@ func (f *filesAPI) findWalkRoot(root filesRoot, ex findExcludes) (findList, erro
 	defer rt.Close()
 	w := &findWalk{rt: rt, ex: ex, ff: f.newFindFilter(root), b: newFindBudget()}
 	w.walk(".", 0)
-	return findList{entries: w.out, incomplete: w.b.stopped || w.deep}, nil
+	return findList{entries: w.out, read: w.read, incomplete: w.b.stopped || w.deep}, nil
 }
 
 // findLists returns the lists a query of root is matched against, from the
-// cache when fresh enough. Building one is shared by every request waiting
-// on it, so it never stops because the first of them left (the PWA cancels
-// the previous request at each key).
+// cache while its stamp holds and it is fresh enough. Building one is shared
+// by every request waiting on it, so it never stops because the first of
+// them left (the PWA cancels the previous request at each key).
 func (f *filesAPI) findLists(ctx context.Context, root filesRoot, in findQuery) ([]findList, error) {
 	ctx = context.WithoutCancel(ctx)
 	prefix := root.Root + "\x00" + root.SafeDir + "\x00"
 	cached := func(key string, build func() (findList, error)) (findList, error) {
-		l, err := f.finds.do(prefix+key, func() (findList, error) {
-			findBeforeBuild(key)
-			return build()
-		})
+		built := false
+		get := func() (findList, error) {
+			return f.finds.do(prefix+key, func() (findList, error) {
+				built = true
+				findBeforeBuild(key)
+				at := time.Now()
+				l, err := build()
+				if err == nil {
+					l.stamp, l.read = newFindStamp(at, root, l), nil
+				}
+				return l, err
+			})
+		}
+		l, err := get()
+		// A file made outside Termote (the agent, a terminal, git pull)
+		// shows at the next search, not once the list expires.
+		// Only the list read is dropped: a build another request started
+		// since is kept, and joined.
+		if err == nil && !built && l.stamp.changed(root.Root) {
+			f.finds.forgetIf(prefix+key, func(c findList) bool { return c.stamp == l.stamp })
+			l, err = get()
+		}
 		if err != nil {
 			// A failure (git timed out) is not kept: the next key tries again
 			f.finds.forgetPrefix(prefix + key)

@@ -316,6 +316,7 @@ func TestFilesSearchOutsideRepo(t *testing.T) {
 	writeFile(t, filepath.Join(root, "a.txt"), "needle\n")
 	writeFile(t, filepath.Join(root, nodeModules, "m.js"), "needle\n")
 	writeFile(t, filepath.Join(root, ".git", "config"), "needle\n")
+	ageTree(t, root)
 	fx := newFindFixture(t, root)
 	var mu sync.Mutex
 	builds := 0
