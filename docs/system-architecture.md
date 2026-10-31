@@ -732,6 +732,23 @@ still fails closed (#410); the route's time budget and read deadline grow with t
 The text is at most 16 KB (UTF-8 bytes; the body 64 KB), with control
 characters other than newline and tab removed, so it cannot end the paste early.
 
+**Why not Herdr's `agent.prompt`** (#359, tested against Herdr 0.9.5 with Claude Code 2.1.314).
+On Herdr, `message` keeps the paste above rather than `agent.prompt` + `agent.wait`:
+
+- `agent.prompt` writes the text and Enter as one submission and refuses only an agent whose
+  Herdr status is `blocked` (`agent_blocked`, nothing written). A draft in the box is not
+  refused: with `DRAFT-AAA` typed, the agent received `DRAFT-AAA <text>`. Checking the box
+  before the call leaves a window in which someone else's typing is submitted with the
+  message; the paste path sends Enter only once the box shows exactly the pasted text.
+- `wait` with `until: ["working"]` confirms a prompt sent to an idle agent (about 0.5 s;
+  `agent_prompt_stalled` after 5 s), but returns at once for an agent already working, so it
+  proves nothing for a queued message and cannot tell 202 from 204. Without `until` it waits for
+  the turn to end and times out on a long one.
+- It always sends Enter, so it cannot queue with Codex's Tab (`agentQueueing`), and it takes no
+  images.
+
+Worth revisiting if Herdr's `agent.prompt` gains a refusal for a non-empty input box.
+
 **Codex writes.** The same routes, with these differences. The pane lock is keyed by the pane's
 backend address alone, so two agents in turn on one pane share it. `sameAgent` also compares
 the rollout (resolved path and dev:inode), so a Codex that moved to another rollout is
