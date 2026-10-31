@@ -85,7 +85,7 @@ Go HTTP server providing:
 - **Terminal WebSocket**: `/api/mux/stream` opens a PTY/ConPTY attached to the selected pane and streams it as binary WebSocket frames; a text control frame carries resize (client→server) and exit/error/size (server→client)
 - **Authentication**: Basic auth or a sign-in form (`/login`, for browsers: an iOS home-screen app never shows the Basic prompt), then a session cookie, rate-limited, plus a Host allowlist and an Origin/CSRF write guard in front of everything; `POST /api/mux/logout` ends the session on the server (the More menu's Log out, shown when the snapshot reports `caps.auth`)
 - **Paired devices**: `/pair` and `/api/mux/devices*` — a one-time code signs a device in with its own cookie and a role (`full` or `view`) (see [Paired devices and the view-only role](#paired-devices-and-the-view-only-role))
-- **Mux API endpoints**: `/api/mux/*` — snapshot (groups→tabs→panes), tab create/rename/close/select, pane close/split/zoom/swap/resize, send-keys, health
+- **Mux API endpoints**: `/api/mux/*` — snapshot (groups→tabs→panes), tab create/rename/close/select, pane close/rename/split/zoom/swap/resize, send-keys, health
 - **Web Push**: `/api/mux/push/*` — the server's key and this device's subscription; a watcher sends a push when an agent needs the user (see [Agent notifications](#agent-notifications-apimuxpush))
 - **Agent chat endpoints**: `/api/mux/panes/{id}/agent/*` — the transcript of the Claude Code or Codex session in a pane, sending it a message, reading and answering its dialogs (see [Agent chat](#agent-chat-apimuxpanesidagent))
 
@@ -288,7 +288,7 @@ existing pane from the last snapshot.
 ### Mux API (REST, JSON)
 
 ```bash
-GET    /api/mux/snapshot          → {apiVersion, backend, caps, serverNow, groups:[{id,name,worktree?:{linked,branch?},tabs:[{id,key,name,active,processes?,panes:[{id,active,title,agent?:{name,status,since?,sinceFirstSeen?},process?}]}]}]}
+GET    /api/mux/snapshot          → {apiVersion, backend, caps, serverNow, groups:[{id,name,worktree?:{linked,branch?},meta?,tabs:[{id,key,name,active,processes?,panes:[{id,active,title,name?,agent?:{name,status,since?,sinceFirstSeen?},process?,meta?:[{key,value}]}]}]}]}   (meta: Herdr, not to a view-only client)
 GET    /api/mux/overview[?pane=]  → {serverNow, panes:[{paneId,key,lastText?,lastTs?,branch?,changed?,changedTruncated?,usage?:{contextTokens,model?,contextWindow?,contextPercent?,exact},accountKey?,unavailable?:["transcript"|"changes"]}], accounts?:[{key,agent:"codex",plan?,windows:[{usedPercent,windowMinutes,resetsAt?}],updatedAt}]}
 GET    /api/mux/activity?after=   → {events:[{seq,ts,key,groupId,tabId,paneId,agent,from,to}], latest, oldest, reset?, serverNow} | 400 invalid_after
 GET    /api/mux/panes/{id}/agent/subagents → {nodes:[{id,type,description?,status:running|done|error,statusGuessed?,startTs?,endTs?,lastTool?,depth,children}], truncated?} | 404
@@ -299,6 +299,7 @@ POST   /api/mux/tabs/{id}/select                                 → {ok}
 POST   /api/mux/tabs/{id}/move     body: {index}               → {ok, id} | {error, code}   (caps.reorderTabs)
 POST   /api/mux/groups/{id}/move   body: {index}               → {ok, id} | {error, code}   (caps.reorderGroups)
 DELETE /api/mux/panes/{id}                                      → {ok}   (herdr, zellij; else 501)
+PATCH  /api/mux/panes/{id}         body: {name}                 → {ok} | {error, code}   (caps.renamePane; "" clears)
 POST   /api/mux/groups             body: {name, cwd}            → {ok, id} | {error, code}   (caps.groups)
 PATCH  /api/mux/groups/{id}        body: {name}                 → {ok} | {error, code}
 DELETE /api/mux/groups/{id}                                     → {ok} | {error, code}

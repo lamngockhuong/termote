@@ -236,8 +236,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   session tabs, the header, the session chip, the Chat view's header and the confirmations that
   close a session or a group; a rename field keeps the name as it is. So are a pane's label (an
   agent's name or the pane title, which any program sets with an escape sequence) in the pane
-  strip, the Chat view's header and the close-pane confirmation, and a branch name in a worktree
-  group's header and the Changes header
+  strip, the Chat view's header and the close-pane confirmation, a pane's name (pane strip, a
+  one-pane tab's row, the Chat view's header), the Herdr metadata chips (pane strip, tab rows,
+  group headers), and a branch name in a worktree group's header and the Changes header
 - **Agent subagents** (`server/agent_subagents.go`, `GET /api/mux/panes/{id}/agent/subagents`):
   `requireMethod(GET)`, `crossSiteRejection`, `requireAgentRead`; internal errors are logged only.
   Only the pane's own Claude session (`AgentSession`, as the transcript): another agent, no
@@ -409,6 +410,48 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `pane.split` with `focus:false`, `pane.zoom`, `pane.swap` with the neighbour in the strip's
   order and its `reason` mapped, `pane.resize` with `amount` cells as a share of the tab from
   `pane.layout`)
+- **Pane names and Herdr metadata** (`PATCH /api/mux/panes/{id}` `{name}` → `{ok}`,
+  `server/mux_pane_name.go`, `caps.renamePane`: tmux 3.0 or later (the server's version, never
+  psmux), Herdr 0.9.3 or later, Zellij 0.45.1 or later; `Pane.Name`, `Pane.Meta`, `Group.Meta` in
+  the snapshot): auth, `hostGuard`, `writeGuard` (same-site JSON), 8 KB body, `requireWriteRole`
+  first (403 `view_only`), `muxTimeout`; `DELETE` on the same path still closes the pane, any
+  other method is 405 with `Allow: PATCH, DELETE`. `validPaneName` runs before the backend is
+  asked: `""` clears the name, else at most 64 bytes of valid UTF-8 with no control or format
+  character (`unicode.IsControl` or `Cf`: C0, C1, bidi, zero-width), no leading `-` and no
+  trailing `;`, else 400 `invalid_name`. A pane that names no pane is 404 `unknown_pane`; a
+  backend or version without names 501, nothing run; anything else is logged and answered 500.
+  Herdr: `pane.rename` `{pane_id, label}` after `requirePane` (`label: null` clears),
+  `*_not_found` 404, `unknown_method` or an `invalid_request` naming `` `pane. `` 501. tmux: the
+  pane is read as `tmuxPaneRef` (`resolveTmuxPane`; a tab id names the window's active pane),
+  then `set-option -p -t %N @termote-name <name>` (`-u` to clear) as argv. Without `-F`,
+  `set-option` stores the value verbatim, so the name does not go through `tmuxLiteral` (which
+  would double its `#`): an exception to the rule for names in tmux formats, as nothing expands
+  it. `select-pane -T` is not used: what runs in the pane overwrites its title. `no such pane` is
+  404. The names are read back with one `tmux -u list-panes -a -F
+  '#{pane_id}:#{n:@termote-name}:#{@termote-name}'` per snapshot (only where names are offered),
+  by the byte length `#{n:}` gives, never split into lines: any process on the server can set
+  the option to a value holding `:` or a newline, and a forged entry stays inside the name;
+  `-u` keeps the lengths right without a UTF-8 locale. A reply that cannot be read keeps the
+  names before it; a failing one shows no names, never fails the snapshot. Zellij:
+  `rename-pane --pane-id terminal_N -- <name>` or `undo-rename-pane --pane-id terminal_N`
+  after `requirePane`; `list-panes -j` has no name field, so the server keeps the names it set
+  in memory and shows one only while the pane's title still is that name (a program that sets a
+  title read more than 2 s after the rename, a session rename or a restart of the server forgets
+  it). Every name a backend reports (another process
+  can set Herdr's label over its socket, or the tmux option) is `stripUnsafeRunes` and capped
+  at 64 bytes (`cleanPaneName`). Metadata is read only, never written by termote: Herdr's
+  `panes[].tokens` and `workspaces[].tokens`, which any process that reaches Herdr's socket
+  can report, go through `cleanMeta`: keys outside `^[A-Za-z0-9_-]{1,32}$` dropped, values
+  `stripUnsafeRunes`, trimmed, cut to 64 runes, empty ones dropped, at most 8 per pane or
+  workspace, in key order. `workspace.metadata_updated` is subscribed only from Herdr 0.9.3
+  (an older one refuses the whole subscription for a type it does not know); a pane's
+  metadata and rename come as `pane.updated`. A view-only client gets the names but no
+  metadata (`viewSnapshot` returns a copy through `withoutMeta`, never changing the backend's
+  cached snapshot) and `caps.renamePane` false. The PWA shows names and tokens as text only
+  (`visibleUnsafe`, never markup or a link); a token is a chip with a dashed border, unlike
+  termote's own badges, titled "Reported by a Herdr plugin", three at most and `+N`. Existing
+  limit, not addressed here: a token of several MB still makes `session.snapshot` exceed
+  `herdrMaxReply` (16 MiB), which fails the read as before
 - **Groups** (`POST /api/mux/groups` `{name, cwd}` → `{ok, id}`, `PATCH /api/mux/groups/{id}`
   `{name}`, `DELETE /api/mux/groups/{id}`; `server/mux_groups.go`, `caps.groups`): auth,
   `hostGuard`, `writeGuard` (same-site JSON), 8 KB body, `requireWriteRole` first (a view-only
@@ -1561,7 +1604,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   VAPID ES256 with `sub` `https://termote.ohnice.app` and 12 h tokens, stdlib only); `Topic` is an
   HMAC of pane and kind under a random key and `Urgency` is `high` for both kinds, so the push
   service learns neither. The service worker reads the names from the snapshot (3 s) and strips
-  the characters `visibleUnsafe` marks (64 characters max); `Pane.Title` is never used; every push shows a
+  the characters `visibleUnsafe` marks (64 characters max); the pane's name (`Pane.Name`), when
+  it has one, goes before the agent's; `Pane.Title` is never used; every push shows a
   notification (Safari revokes silent ones). State: `<stateDir>/push` (0700; `vapid.json` and
   `subscriptions.json` 0600, owner-only ACL on Windows, `%LOCALAPPDATA%` so it does not roam, no
   DPAPI), already on the Files deny list; at most 20 subscriptions, the least recently subscribed

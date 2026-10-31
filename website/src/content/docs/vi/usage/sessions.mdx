@@ -118,6 +118,34 @@ Trên tmux, Herdr và Zellij, các thao tác chạy hơi khác nhau:
   kể cả Zellij của bạn, về pane được zoom. Qua API, split vào một thư mục khác thư mục của pane bị
   từ chối (Zellij bỏ qua thư mục này).
 
+### Đặt tên pane
+
+Hai pane cùng chạy một agent thì nhìn giống hệt nhau. Chọn **Pane → Rename pane** để đặt cho pane
+đang hiện một cái tên dài tối đa 64 byte; để trống ô nhập thì tên bị xóa. Tên lưu ngay trong tmux,
+Herdr hoặc Zellij chứ không lưu trên thiết bị, nên tải lại trang hay mở từ thiết bị khác vẫn thấy. Tên hiện thay cho tên
+agent hoặc tiêu đề pane ở dải pane, ở dòng dưới tên tab trong sidebar (với tab chỉ có một pane), ở
+tiêu đề Chat và trong thông báo ("api · work / build"), nhờ vậy hai pane Claude Code không còn trùng
+nhau. Tên không được bắt đầu bằng `-`, kết thúc bằng `;` hay chứa ký tự điều khiển.
+
+Mục Rename pane có trên tmux từ 3.0, Herdr từ 0.9.3 và Zellij từ 0.45.1, kể cả nơi không có các thao
+tác bố cục (Herdr trên Windows). psmux và thiết bị chỉ xem thì không có mục này. Mỗi bên giữ tên theo
+một cách:
+
+- **tmux**: trong pane option `@termote-name`. Termote không dùng tiêu đề pane vì chương trình chạy
+  trong pane ghi đè nó liên tục. Giao diện tmux trên desktop không hiện tên này.
+- **Herdr**: là label của pane, giao diện Herdr trên desktop cũng hiện.
+- **Zellij**: là tiêu đề của pane, Zellij hiện tiêu đề này. Termote nhớ những tên nó đã đặt trong lúc
+  đang chạy; khi Termote khởi động lại, khi phiên được đổi tên, hoặc khi chương trình trong pane tự
+  đặt tiêu đề, pane quay về hiện tiêu đề của nó.
+
+**Thông tin plugin Herdr báo.** Plugin và công cụ của Herdr có thể báo vài token ngắn cho một workspace hay
+một pane (số PR, môi trường). Termote chỉ đọc và hiện chúng thành chip nhỏ, màu nhạt, viền nét đứt,
+cạnh tên workspace, cạnh pane trong dải pane, hoặc trên dòng của tab một pane. Mỗi chỗ hiện tối đa ba
+chip, phần còn lại gộp thành `+N`; trỏ chuột vào sẽ thấy đủ danh sách, kèm dòng ghi rõ chúng do plugin
+Herdr báo. Chip luôn
+là chữ thường, không bao giờ là link, nên plugin không thể giả làm thông báo của Termote. Server giữ
+tối đa 8 token, mỗi token dài tối đa 64 ký tự, và không gửi token nào cho thiết bị chỉ xem.
+
 ### Sắp xếp lại tab và workspace
 
 Tab giữ thứ tự lúc được tạo cho tới khi bạn di chuyển nó, và Termote hiển thị đúng thứ tự backend
