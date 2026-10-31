@@ -152,6 +152,9 @@ export function ContentSearch({
   // The latest state and callbacks, read when an answer arrives
   const latest = useRef({ onState, onRootChanged, result, tick: refreshTick })
   latest.current = { onState, onRootChanged, result, tick: refreshTick }
+  // The refresh in place when the search opened: one asked after it, before
+  // the first search, reads the files again too
+  const openedTick = useRef(refreshTick)
 
   // key holds every input of the request; retry sends it again
   // biome-ignore lint/correctness/useExhaustiveDependencies: key covers the query
@@ -164,7 +167,8 @@ export function ContentSearch({
     const timer = setTimeout(async () => {
       const { result: last, tick } = latest.current
       // Read the files again once the user refreshed since the last search
-      const fresh = last !== undefined && last.tick !== tick
+      // (or since the search opened)
+      const fresh = (last?.tick ?? openedTick.current) !== tick
       setPending({ status: 'loading' })
       try {
         const res = await searchFiles(

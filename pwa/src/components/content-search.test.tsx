@@ -459,6 +459,19 @@ describe('ContentSearch', () => {
     expect(sent(1).fresh).toBe(true)
   })
 
+  it('a refresh before the first search sends it with fresh', async () => {
+    const { rerender } = render(<Harness tick={3} />)
+    rerender(<Harness tick={4} />)
+    await type('foo')
+    expect(sent(0).fresh).toBe(true)
+  })
+
+  it('a search opened after a refresh is not sent with fresh', async () => {
+    render(<Harness tick={3} />)
+    await type('foo')
+    expect(sent(0).fresh).toBe(false)
+  })
+
   it('a search aborted by a newer one says nothing of its failure', async () => {
     let fail!: (e: unknown) => void
     mockSearch.mockReturnValueOnce(new Promise((_, r) => (fail = r)))
