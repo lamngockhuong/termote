@@ -187,6 +187,87 @@ describe('SwipeableSessionItem', () => {
     expect(onSelect).not.toHaveBeenCalled()
   })
 
+  // ── A given row (a tablet's sidebar) ──────────────────────────────────────
+
+  it('slides a given row, and a tap leaves the selecting to its click', () => {
+    renderItem({
+      onSelect: undefined,
+      children: <button type="button">Row</button>,
+      surfaceClassName: 'bg-surface',
+    })
+    expect(screen.getByRole('button', { name: 'Row' })).toBeVisible()
+    expect(screen.queryByText('Shell')).not.toBeInTheDocument()
+    const content = getContent()
+    expect(content).toHaveClass('bg-surface')
+    expect(content).not.toHaveClass('bg-bg')
+    touchStart(content, 100, 100)
+    touchEnd(content, 102, 100)
+    expect(onSelect).not.toHaveBeenCalled()
+    // Out of the Tab order (the row's own buttons serve a keyboard), still
+    // reached by a screen reader, which cannot swipe
+    for (const name of ['Edit Shell', 'Remove Shell']) {
+      expect(screen.getByRole('button', { name })).toHaveAttribute(
+        'tabindex',
+        '-1',
+      )
+    }
+  })
+
+  it('a tap closing an open given row cancels the click that would select', () => {
+    renderItem({
+      onSelect: undefined,
+      children: <button type="button">Row</button>,
+    })
+    const content = getContent()
+    touchStart(content, 100, 100)
+    touchMove(content, 60, 100)
+    touchEnd(content, 60, 100)
+    expect(content.style.transform).not.toContain('translateX(0px)')
+    touchStart(content, 100, 100)
+    const end = fireEvent.touchEnd(content, {
+      touches: [],
+      changedTouches: [{ clientX: 102, clientY: 100, identifier: 0 }],
+    })
+    expect(end).toBe(false)
+    expect(content.style.transform).toContain('translateX(0px)')
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  it('slides back when the touch is cancelled half way', () => {
+    renderItem()
+    const content = getContent()
+    touchStart(content, 100, 100)
+    touchMove(content, 70, 100)
+    expect(content.style.transform).toContain('translateX(-30px)')
+    fireEvent.touchCancel(content)
+    expect(content.style.transform).toContain('translateX(0px)')
+    expect(content.style.transition).toContain('transform')
+    fireEvent.transitionEnd(content)
+    expect(document.querySelector('.absolute.inset-0')).toHaveClass('opacity-0')
+  })
+
+  it('hides the buttons when a touch is cancelled on a closed row', () => {
+    renderItem()
+    const content = getContent()
+    touchStart(content, 100, 100)
+    fireEvent.touchCancel(content)
+    expect(document.querySelector('.absolute.inset-0')).toHaveClass('opacity-0')
+  })
+
+  it("a tap closing the phone's own row does not cancel the click", () => {
+    renderItem()
+    const content = getContent()
+    touchStart(content, 100, 100)
+    touchMove(content, 60, 100)
+    touchEnd(content, 60, 100)
+    touchStart(content, 100, 100)
+    const end = fireEvent.touchEnd(content, {
+      touches: [],
+      changedTouches: [{ clientX: 102, clientY: 100, identifier: 0 }],
+    })
+    expect(end).toBe(true)
+  })
+
   // ── Swipe left → delete revealed (threshold-based, slow velocity) ─────────
 
   it('swipe left past SWIPE_THRESHOLD snaps to maxLeft when velocity is low', () => {

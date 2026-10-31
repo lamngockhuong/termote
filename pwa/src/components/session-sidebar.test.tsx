@@ -6,7 +6,8 @@ import {
   screen,
   within,
 } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ReactNode } from 'react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RequestError } from '../hooks/use-mux-api'
 import { tFor } from '../i18n/i18n-context'
 import type { Session, SessionGroup } from '../types/session'
@@ -37,21 +38,26 @@ vi.mock('./swipeable-session-item', () => ({
     onSelect,
     onEdit,
     onRemove,
+    children,
+    surfaceClassName,
   }: {
     session: Session
     isActive: boolean
-    onSelect: () => void
+    onSelect?: () => void
     onEdit: () => void
     onRemove: () => void
     canRemove: boolean
     canEdit: boolean
+    children?: ReactNode
+    surfaceClassName?: string
   }) => (
     <div
       data-testid={`swipeable-${session.id}`}
       data-active={isActive}
-      aria-current={isActive ? 'true' : undefined}
+      data-surface={surfaceClassName}
+      aria-current={children || !isActive ? undefined : 'true'}
     >
-      <span>{session.name}</span>
+      {children ?? <span>{session.name}</span>}
       <button onClick={onSelect}>Select</button>
       <button onClick={onEdit}>Edit</button>
       <button onClick={onRemove}>Remove</button>
@@ -520,6 +526,48 @@ describe('SessionSidebar — desktop expanded (default)', () => {
     )
     fireEvent.click(removeBtns[0])
     expect(onRemove).toHaveBeenCalledWith('1')
+  })
+})
+
+describe('SessionSidebar — desktop on a touch screen', () => {
+  const matchMedia = window.matchMedia
+  afterEach(() => {
+    window.matchMedia = matchMedia
+  })
+
+  // An iPad: the desktop layout, but no hover to show a row's buttons
+  function renderTouch() {
+    window.matchMedia = ((query: string) => ({
+      ...matchMedia(query),
+      matches: query === '(pointer: coarse)',
+    })) as typeof matchMedia
+    const props = {
+      onSelect: vi.fn(),
+      onRemove: vi.fn(),
+      onUpdate: vi.fn(),
+    }
+    render(<SessionSidebar sessions={SESSIONS} activeId="1" {...props} />)
+    return props
+  }
+
+  it('slides its own row, which still selects on a click', () => {
+    const { onSelect } = renderTouch()
+    const slid = screen.getByTestId('swipeable-2')
+    expect(slid).toHaveAttribute('data-surface', 'bg-surface ui-terminal:bg-bg')
+    const row = within(slid).getByText('Dev').closest('button')!
+    fireEvent.click(row)
+    expect(onSelect).toHaveBeenCalledWith('2')
+    // Still draggable: the drag handlers sit round the slid row
+    expect(slid.parentElement).toHaveClass('relative')
+  })
+
+  it('slides a row open to remove or rename it', () => {
+    const { onRemove } = renderTouch()
+    const slid = screen.getByTestId('swipeable-2')
+    fireEvent.click(within(slid).getByText('Remove'))
+    expect(onRemove).toHaveBeenCalledWith('2')
+    fireEvent.click(within(slid).getByText('Edit'))
+    expect(screen.getByDisplayValue('Dev')).toBeVisible()
   })
 })
 
@@ -2017,7 +2065,10 @@ describe('SessionSidebar — reorder', () => {
     groupActions,
     ...over,
   })
-  const row = (name: string) => rowButton(name).parentElement as HTMLElement
+  // The drag handlers sit on a wrapper round the row, which a touch screen
+  // slides inside it
+  const row = (name: string) =>
+    rowButton(name).parentElement!.parentElement as HTMLElement
   const rowButton = (name: string) =>
     screen
       .getByText(name, { selector: 'span' })
@@ -2511,7 +2562,7 @@ describe('SessionSidebar — search', () => {
     render(<SessionSidebar {...props({ reorder })} />)
     const rowOf = (n: string) =>
       screen.getByText(n, { selector: 'span' }).closest('button')!
-        .parentElement!
+        .parentElement!.parentElement!
     expect(rowOf('api')).toHaveAttribute('draggable', 'true')
     open()
     type('a')

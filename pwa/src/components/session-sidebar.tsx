@@ -27,6 +27,7 @@ import {
   useState,
 } from 'react'
 import { useGroupCollapsed } from '../hooks/use-group-collapsed'
+import { useMediaQuery } from '../hooks/use-media-query'
 import { RequestError } from '../hooks/use-mux-api'
 import { ENTER_FROM, useNewKeys } from '../hooks/use-new-keys'
 import { LEAVE_TO, usePresenceList } from '../hooks/use-presence-list'
@@ -255,6 +256,7 @@ export function SessionSidebar({
   reorder,
 }: Props) {
   const { t } = useT()
+  const coarsePointer = useMediaQuery('(pointer: coarse)')
   const [showAddForm, setShowAddForm] = useState(false)
   const canAdd = !!onAdd
   const canRemove = !!onRemove && sessions.length > 1
@@ -541,7 +543,9 @@ export function SessionSidebar({
     </div>
   )
 
-  // Desktop session item; edit and remove show on hover or keyboard focus
+  // Desktop session item; edit and remove show on hover or keyboard focus.
+  // A touch screen (an iPad's desktop layout) has no hover and Safari does not
+  // focus a tapped button: the row slides open on them, as a phone's does.
   // Drag it within its group, or Alt+Up/Down while its button has focus.
   const renderDesktopItem = (session: Session) => {
     const active = activeId === session.id
@@ -556,19 +560,12 @@ export function SessionSidebar({
         refocusKey.current = key
       }
     }
-    return (
+    const row = (
       <div
         className={`group relative flex items-center rounded-control ${ROW_PRESS} ${
           active ? ACTIVE_ROW_CLASSES : ROW_CLASSES
         }`}
-        {...dragProps(
-          { kind: 'tab', id: session.id, groupId: session.groupId },
-          movable,
-          groupTabIds(session.groupId),
-          reorder?.onMoveTab,
-        )}
       >
-        {dropLineFor(session.id)}
         <button
           type="button"
           ref={(el) => {
@@ -632,6 +629,34 @@ export function SessionSidebar({
             </IconButton>
           )}
         </div>
+      </div>
+    )
+    return (
+      <div
+        className="relative"
+        {...dragProps(
+          { kind: 'tab', id: session.id, groupId: session.groupId },
+          movable,
+          groupTabIds(session.groupId),
+          reorder?.onMoveTab,
+        )}
+      >
+        {dropLineFor(session.id)}
+        {coarsePointer ? (
+          <SwipeableSessionItem
+            session={session}
+            isActive={active}
+            onEdit={() => startEdit(session)}
+            onRemove={() => onRemove?.(session.id)}
+            canRemove={canRemove}
+            canEdit={!!onUpdate}
+            surfaceClassName="bg-surface ui-terminal:bg-bg"
+          >
+            {row}
+          </SwipeableSessionItem>
+        ) : (
+          row
+        )}
       </div>
     )
   }
