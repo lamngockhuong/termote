@@ -5,9 +5,9 @@ compositions share the same scenes (`src/scenes/`):
 
 | Composition            | Size      | Length | For                                        |
 | ---------------------- | --------- | ------ | ------------------------------------------ |
-| `TermoteIntro`         | 1920×1080 | ~61 s  | README, website                            |
+| `TermoteIntro`         | 1920×1080 | ~75 s  | README, website                            |
 | `TermoteHero`          | 1920×1080 | 15 s   | Website hero: no words, loops              |
-| `TermoteIntroVertical` | 1080×1920 | ~31 s  | Social: the phone scenes with big captions |
+| `TermoteIntroVertical` | 1080×1920 | ~32 s  | Social: the phone scenes with big captions |
 | `TermotePoster`        | 1920×1080 | still  | README and website: the intro's picture    |
 | `ReadmePhones`         | 1800×1260 | still  | README screenshot: phones                  |
 | `ReadmeDesktop`        | 1800×1120 | still  | README screenshot: desktop                 |
@@ -57,7 +57,10 @@ workspaces (or tmux sessions), and the Claude Code stand-in
 screens are taken on Herdr; tmux takes `desktop-tmux.png`, shown beside
 Herdr's to say both backends work, and the phone's terminal
 (`phone-terminal.png`), since tmux sizes the window to the phone while a
-headless Herdr's pane keeps its own width and its text comes out tiny. Each
+headless Herdr's pane keeps its own width and its text comes out tiny. tmux
+also takes the Chat view's working row (`phone-chat-working.png`): it reads
+the stand-in's status from its session file, where a headless Herdr never
+sees it work. Each
 interface style is taken in the light and the dark theme on the sessions sheet
 (`phone-style-<style>-<theme>.png`), where the styles differ the most. Every
 capture runs with reduced motion and waits for the page to settle, so none is

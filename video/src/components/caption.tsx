@@ -1,5 +1,5 @@
 import { useCurrentFrame, useVideoConfig } from "remotion";
-import { appear, color, sans } from "../theme";
+import { appear, color, progress, sans } from "../theme";
 
 type Props = {
   readonly title: string;
@@ -43,6 +43,29 @@ export const Caption: React.FC<Props> = ({ title, sub, at = 6, align = "left" })
           {sub}
         </div>
       ) : null}
+    </div>
+  );
+};
+
+type CaptionText = { readonly title: string; readonly sub?: string };
+
+// Two captions in one place: the first, then the second fading in over it
+// from frame `at`, for a scene that makes two points
+export const CaptionSwitch: React.FC<{
+  readonly first: CaptionText;
+  readonly second: CaptionText;
+  readonly at: number;
+}> = ({ first, second, at }) => {
+  const frame = useCurrentFrame();
+  const p = progress(frame, at - 8, 10);
+  return (
+    <div style={{ display: "grid" }}>
+      <div style={{ gridArea: "1 / 1", opacity: 1 - p }}>
+        <Caption {...first} />
+      </div>
+      <div style={{ gridArea: "1 / 1", opacity: p }}>
+        {frame >= at - 8 ? <Caption at={at - 8} {...second} /> : null}
+      </div>
     </div>
   );
 };

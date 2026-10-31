@@ -51,21 +51,28 @@ type UiStyle = 'neutral' | 'terminal' | 'native'
 type Theme = 'light' | 'dark'
 
 // The page opens signed in, past the welcome screen, in the given interface
-// style and theme. Reduced motion makes every transition end at once, so a
+// style, theme and language. Reduced motion makes every transition end at once, so a
 // screen is taken in its final state rather than halfway through one.
 async function open(
   browser: Browser,
   context: ReturnType<typeof phone> | ReturnType<typeof desktop>,
   path: string,
-  { style = 'neutral', theme = 'dark' }: { style?: UiStyle; theme?: Theme } = {},
+  {
+    style = 'neutral',
+    theme = 'dark',
+    language = 'en',
+  }: { style?: UiStyle; theme?: Theme; language?: 'en' | 'vi' } = {},
 ): Promise<Page> {
   const ctx = await browser.newContext({ ...context, colorScheme: theme, reducedMotion: 'reduce' })
   await ctx.addInitScript(
-    ([uiStyle, colorTheme, version]) => {
+    ([uiStyle, colorTheme, version, lang]) => {
       localStorage.setItem('termote-theme', colorTheme)
-      localStorage.setItem('termote-settings', JSON.stringify({ uiStyle, welcomeSeenVersion: version }))
+      localStorage.setItem(
+        'termote-settings',
+        JSON.stringify({ uiStyle, welcomeSeenVersion: version, language: lang, languageNoticeSeen: true }),
+      )
     },
-    [style, theme, WELCOME_VERSION] as const,
+    [style, theme, WELCOME_VERSION, language] as const,
   )
   const page = await ctx.newPage()
   // A browser page gets the sign-in form, never a Basic challenge
@@ -149,6 +156,30 @@ test.describe('Capture screenshots for the intro video', () => {
     await waitTerminal(page)
     await expect(page.locator('.xterm-rows')).toContainText('dev@laptop', { timeout: 15000 })
     await shot(page, 'phone-terminal')
+    await page.context().close()
+  })
+
+  // The Chat view's working line, on tmux: the row shows while the agent's
+  // status is working, which tmux reads from the stand-in's session file. A
+  // headless Herdr never sees the stand-in work, as it reads the lifecycle of
+  // a Claude Code with a session id off the screen only (Herdr 0.9.5). Last on
+  // tmux, since the turn changes the conversation desktop-tmux shows.
+  test('phone chat working on tmux', async ({ browser }, testInfo) => {
+    test.skip(mux !== 'tmux', 'tmux reads the working status from the session file')
+    const page = await open(browser, phone(testInfo), link('claude', 'chat'))
+    await expect(page.getByRole('region', { name: 'Conversation' })).toContainText('rate limited', {
+      timeout: 15000,
+    })
+    await page.getByRole('textbox', { name: 'Message to Claude Code' }).fill('Yes, run the auth tests')
+    await page.getByRole('button', { name: 'Send', exact: true }).click()
+    // The stand-in works a few seconds before it asks. Its recorded working
+    // line is wider than the phone's window, so the row names the agent only
+    await expect(page.getByRole('status').filter({ hasText: 'Claude Code is working…' })).toBeAttached({
+      timeout: 15000,
+    })
+    // A few seconds into the turn, as the row counts them
+    await expect(page.getByText(/· [3-6]s/)).toBeVisible({ timeout: 10000 })
+    await shot(page, 'phone-chat-working')
     await page.context().close()
   })
 
@@ -263,6 +294,73 @@ test.describe('Capture screenshots for the intro video', () => {
       await page.getByRole('treeitem', { name: 'README.md' }).click({ timeout: 15000 })
       await expect(page.getByTestId('mermaid-block').locator('img').first()).toBeVisible({ timeout: 20000 })
       await shot(page, 'desktop-files')
+      await page.context().close()
+    })
+
+    // The header's Pane menu over the tab's two panes side by side, then the
+    // agent's pane zoomed; zoomed back after, as Herdr keeps it
+    test('desktop pane menu', async ({ browser }, testInfo) => {
+      const page = await open(browser, desktop(testInfo), link('claude'))
+      await waitTerminal(page)
+      const menu = page.getByRole('button', { name: 'Pane', exact: true })
+      await menu.click()
+      await expect(page.getByRole('menuitem', { name: 'Split right', exact: true })).toBeVisible()
+      await shot(page, 'desktop-pane-menu')
+      await page.getByRole('menuitem', { name: 'Zoom', exact: true }).click()
+      // The dev server's log beside it (w1:p2) is hidden while the agent's pane is zoomed
+      const log = page.locator('[data-pane-id="w1:p2"]')
+      await expect(log).toBeHidden({ timeout: 15000 })
+      await shot(page, 'desktop-pane-zoom')
+      await menu.click()
+      await page.getByRole('menuitem', { name: 'Zoom', exact: true }).click()
+      await expect(log).toBeVisible({ timeout: 15000 })
+      await page.context().close()
+    })
+
+    // The repo's Go tasks (from go.mod) and its make targets
+    test('phone tasks', async ({ browser }, testInfo) => {
+      const page = await open(browser, phone(testInfo), link('claude', 'tasks'))
+      const view = page.getByTestId('tasks-view')
+      await expect(view.getByText('migrate', { exact: true })).toBeVisible({ timeout: 15000 })
+      await shot(page, 'phone-tasks')
+      await page.context().close()
+    })
+
+    // phone-sessions in Vietnamese: the sheet is mostly the app's own words
+    test('phone sessions in Vietnamese', async ({ browser }, testInfo) => {
+      const page = await open(browser, phone(testInfo), link('claude'), { language: 'vi' })
+      await expect(page.locator('html')).toHaveAttribute('lang', 'vi')
+      await waitTerminal(page)
+      await page.getByRole('button', { name: 'Mở danh sách phiên' }).click()
+      await expect(page.getByText('deploy', { exact: true })).toBeVisible()
+      await expect(page.getByText('go', { exact: true })).toHaveCount(0, { timeout: 30000 })
+      await shot(page, 'phone-sessions-vi')
+      await page.context().close()
+    })
+
+    // A file sent from the phone, then deleted and found in the trash. Last,
+    // since the upload would show in every later capture's Changes
+    test('phone upload and trash', async ({ browser }, testInfo) => {
+      const page = await open(browser, phone(testInfo), link('claude', 'files'))
+      await expect(page.getByRole('treeitem', { name: 'README.md' })).toBeVisible({ timeout: 15000 })
+      await page.getByTestId('upload-input').setInputFiles({
+        name: 'api-spec.pdf',
+        mimeType: 'application/pdf',
+        buffer: Buffer.from('%PDF-1.4\n%%EOF\n'),
+      })
+      await expect(page.getByRole('treeitem', { name: 'api-spec.pdf' })).toBeVisible()
+      await expect(page.getByText('Uploaded api-spec.pdf')).toBeVisible()
+      await shot(page, 'phone-files-upload')
+
+      const row = page.getByRole('treeitem', { name: 'api-spec.pdf' })
+      await row.getByRole('button', { name: 'Actions for api-spec.pdf' }).click()
+      await page.getByRole('menuitem', { name: /^Delete/ }).click()
+      await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click()
+      await expect(page.getByText('Deleted api-spec.pdf', { exact: true })).toBeVisible()
+      await page.getByRole('button', { name: 'Trash' }).click()
+      const items = page.getByRole('dialog', { name: 'Trash' }).getByRole('list', { name: 'Deleted items' })
+      await expect(items.getByText('api-spec.pdf', { exact: true })).toBeVisible()
+      await shot(page, 'phone-files-trash')
       await page.context().close()
     })
   })
