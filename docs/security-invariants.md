@@ -362,8 +362,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `container up` first spells each existing name of `--workspace` as its directory lists it
   (`diskSpelling`), since a runtime's VM shares `/Users` and compares names with case), never with `reveal=1` (`requireFilesRead`), `files/find` ignores `fresh=1` and
   `ignored=1`, and `files/search` searches exactly that tracked list and ignores `fresh=1`. Tree, content, raw and diff (and `files/tree`'s `dir`, the pane's directory) serve a view-only client only the paths of the root's
-  tracked list (`git ls-files -c`, the `committed` list of `findLists`, Find's 30 s cache: a file
-  just added shows up to 30 s late; a file git does not track, ignored or not, is never in it: a
+  tracked list (`git ls-files -c`, the `committed` list of `findLists`, Find's cache: a file
+  just added shows once the index or a directory above it changes, at the latest 30 s later; a file git does not track, ignored or not, is never in it: a
   repo under a dotfile dir or a secret nobody added stays hidden) and the directories above them,
   by the path and by where its symlinks lead (a diff or a version from git status: where it leads
   only, so a deleted file's diff shows, but never the entry of an untracked file: `diff` and
@@ -1218,7 +1218,16 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   timeout answers 503 but never makes Changes back off. Lists are built under
   `context.WithoutCancel` (the PWA aborts the previous request at each key), cached 30 s per
   root + `SafeDir` + kind (+ the sorted excludes; a failure is not kept), dropped by `forgetRoot` on a save, a create, a
-  delete and a restore, and by `fresh=1` (the PWA's refresh)
+  delete and a restore, by `fresh=1` (the PWA's refresh), and at a search that finds the list's stamp changed
+  (`server/files_find_stamp.go`): the times of the directories it was read from (the root, every directory a walk
+  read or above a listed file; at most 20 000, past that only the 30 s end it) and of the repo's index, taken
+  after the build; a directory gone, no longer a directory or of another time, or the index of another time or
+  unreadable, is a change, and a time from 2 s before the build to 2 s after the stamp makes the first check one
+  too (a time far ahead is only compared). A stamp is checked at most once a second, by one request at a time
+  (the others wait for its answer), and only the finished list read is then dropped (`ttlCache.forgetIf`): a build in
+  flight is joined, never restarted. The stamp is server-side `Stat`s of what the list was built from (`os.Root`
+  for directories), never a path from the client; a view-only client's request rebuilds only for such a
+  change, never for its `fresh=1`
 - **Searching file contents** (`GET files/search?q=&root=&case=1&word=1&regex=1&files=…&skip=…&exclude=…&fresh=1`,
   `server/files_search.go`, `server/files_search_glob.go`): the GET guards of the other files
   routes. `q` is 1–256 bytes, never trimmed. `files`/`skip` (repeated) are at most 20 globs

@@ -364,31 +364,17 @@ func TestFilesFindRepoLimits(t *testing.T) {
 func TestFilesFindCache(t *testing.T) {
 	requireGit(t)
 	r := newTestRepo(t)
+	ageTree(t, r)
 	fx := newFindFixture(t, r)
-	var mu sync.Mutex
-	builds := map[string]int{}
-	setFindHook(t, &findBeforeBuild, func(key string) {
-		mu.Lock()
-		builds[key]++
-		mu.Unlock()
-	})
-	count := func(key string) int {
-		mu.Lock()
-		defer mu.Unlock()
-		return builds[key]
-	}
+	count := countBuilds(t)
 	fx.findOK(t, url.Values{"q": {"a"}})
 	fx.findOK(t, url.Values{"q": {"b"}})
 	if count("tracked") != 1 {
 		t.Errorf("tracked built %d times, want 1", count("tracked"))
 	}
-	// A new file shows only once the list is read again: fresh=1, or a
-	// create or a save (forgetRoot).
-	writeFile(t, filepath.Join(r, "later.txt"), "")
-	if _, by := fx.findOK(t, url.Values{"q": {"later"}}); len(by) != 0 {
-		t.Errorf("cached list = %v", by)
-	}
-	if _, by := fx.findOK(t, url.Values{"q": {"later"}, "fresh": {"1"}}); by["later.txt"] == nil {
+	// The list is read again on fresh=1, or after a create or a save
+	// (forgetRoot), even when no directory changed.
+	if _, by := fx.findOK(t, url.Values{"q": {"a"}, "fresh": {"1"}}); by["a.txt"] == nil {
 		t.Errorf("fresh = %v", by)
 	}
 	b := url.Values{"root": {r}}

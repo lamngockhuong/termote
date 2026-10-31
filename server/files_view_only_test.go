@@ -271,10 +271,21 @@ func TestViewOnlyFilesSearch(t *testing.T) {
 	if got := search(viewRequest("GET", base+"hello", "")); !slices.Equal(got, []string{"a.txt"}) {
 		t.Errorf("view search of a tracked file = %q", got)
 	}
+	// fresh=1 from a view-only client reads nothing again; a change of
+	// the tree does, for every client
+	count := countBuilds(t)
+	setFindHook(t, &findStampEvery, 0)
+	ageTree(t, repo)
+	search(viewRequest("GET", base+"hello", ""))
+	built := count("committed")
+	search(viewRequest("GET", base+"hello&fresh=1", ""))
+	if n := count("committed"); n != built {
+		t.Errorf("view fresh rebuilt the list: %d builds, then %d", built, n)
+	}
 	writeFile(t, filepath.Join(repo, "later.txt"), "hello later\n")
 	gitAdd(t, repo)
-	if got := search(viewRequest("GET", base+"later&fresh=1", "")); len(got) != 0 {
-		t.Errorf("view fresh rebuilt the list: %q", got)
+	if got := search(viewRequest("GET", base+"later", "")); !slices.Equal(got, []string{"later.txt"}) {
+		t.Errorf("view after git add = %q", got)
 	}
 	if got := search(fullRequest(base + "later&fresh=1")); !slices.Equal(got, []string{"later.txt"}) {
 		t.Errorf("full fresh = %q", got)

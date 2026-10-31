@@ -308,6 +308,22 @@ func (c *ttlCache[V]) forgetFunc(drop func(key string) bool) {
 	}
 }
 
+// forgetIf drops key's entry when its call is done and drop holds for its
+// value; a call in flight is kept.
+func (c *ttlCache[V]) forgetIf(key string, drop func(V) bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if e, ok := c.entries[key]; ok {
+		select {
+		case <-e.done:
+			if drop(e.val) {
+				delete(c.entries, key)
+			}
+		default:
+		}
+	}
+}
+
 // forgetPrefix drops every entry whose key starts with prefix, so the next
 // do reads again. A read in flight still answers its own waiters.
 func (c *ttlCache[V]) forgetPrefix(prefix string) {
