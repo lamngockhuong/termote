@@ -1,6 +1,7 @@
 package main
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,7 @@ import (
 	"os"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -652,6 +654,57 @@ func requireMethod(w http.ResponseWriter, r *http.Request, method string) bool {
 func jsonOK(w http.ResponseWriter, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(data)
+}
+
+// jsonOKGzip is jsonOK, gzipped when the client takes gzip: a file's text
+// shrinks five to twenty times, which a phone on a VPN feels. Only for an
+// answer with no session token in it (see the files/content entry of
+// docs/security-invariants.md).
+func jsonOKGzip(w http.ResponseWriter, r *http.Request, data any) {
+	w.Header().Add("Vary", "Accept-Encoding")
+	if !acceptsGzip(r.Header.Get("Accept-Encoding")) {
+		jsonOK(w, data)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Encoding", "gzip")
+	gz := gzip.NewWriter(w)
+	json.NewEncoder(gz).Encode(data)
+	gz.Close()
+}
+
+// acceptsGzip reports whether an Accept-Encoding value takes gzip: its own
+// q when named (q=0 refuses it, whatever * says), else that of *.
+func acceptsGzip(header string) bool {
+	gzipQ, starQ := -1.0, -1.0
+	for part := range strings.SplitSeq(header, ",") {
+		name, params, _ := strings.Cut(part, ";")
+		name = strings.ToLower(strings.TrimSpace(name))
+		if name != "gzip" && name != "*" {
+			continue
+		}
+		q := 1.0
+		for p := range strings.SplitSeq(params, ";") {
+			k, v, ok := strings.Cut(p, "=")
+			if !ok || strings.TrimSpace(k) != "q" {
+				continue
+			}
+			f, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
+			if err != nil {
+				f = 0 // a q that cannot be read takes nothing
+			}
+			q = f
+		}
+		if name == "gzip" {
+			gzipQ = q
+		} else {
+			starQ = q
+		}
+	}
+	if gzipQ >= 0 {
+		return gzipQ > 0
+	}
+	return starQ > 0
 }
 
 func jsonError(w http.ResponseWriter, msg string, code int) {

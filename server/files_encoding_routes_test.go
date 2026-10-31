@@ -2,8 +2,10 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -234,6 +236,65 @@ func TestFilesContentLargeReadSlots(t *testing.T) {
 	}
 	if len(fx.f.largeReadSlots) != 0 {
 		t.Errorf("slots held = %d", len(fx.f.largeReadSlots))
+	}
+}
+
+func TestAcceptsGzip(t *testing.T) {
+	for header, want := range map[string]bool{
+		"":                      false,
+		"gzip":                  true,
+		"gzip, deflate, br":     true,
+		"br;q=1.0, GZip;q=0.5":  true,
+		"gzip;q=0":              false,
+		"gzip; q=0.0, identity": false,
+		"*":                     true,
+		"deflate, br":           false,
+		"identity;q=1, *;q=0":   false,
+		"gzip;q=0, *":           false,
+		"*, gzip;q=0":           false,
+		"gzip;level=1;q=0":      false,
+		"gzip;q=abc":            false,
+		"*;q=0.1":               true,
+	} {
+		if got := acceptsGzip(header); got != want {
+			t.Errorf("acceptsGzip(%q) = %v", header, got)
+		}
+	}
+}
+
+func TestFilesContentGzipped(t *testing.T) {
+	fx := newEncFixture(t)
+	text := strings.Repeat("a line of a log\n", 4096)
+	if err := os.WriteFile(filepath.Join(fx.root, "log.txt"), []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	get := func(enc string) *httptest.ResponseRecorder {
+		req := apiRequest("GET", "/api/mux/panes/0/files/content?path=log.txt", "")
+		if enc != "" {
+			req.Header.Set("Accept-Encoding", enc)
+		}
+		return serve(fx.mux, req)
+	}
+	rec := get("gzip, deflate")
+	if rec.Code != 200 || rec.Header().Get("Content-Encoding") != "gzip" || rec.Header().Get("Vary") != "Accept-Encoding" {
+		t.Fatalf("gzipped = %d %v", rec.Code, rec.Header())
+	}
+	if rec.Body.Len() > len(text)/5 {
+		t.Errorf("gzipped body = %d bytes for %d of text", rec.Body.Len(), len(text))
+	}
+	gz, err := gzip.NewReader(rec.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body map[string]any
+	if err := json.NewDecoder(gz).Decode(&body); err != nil || body["text"] != text {
+		t.Errorf("gzipped text = %v", err)
+	}
+	for _, enc := range []string{"", "gzip;q=0"} {
+		rec := get(enc)
+		if rec.Header().Get("Content-Encoding") != "" || rec.Header().Get("Vary") != "Accept-Encoding" || decodeBody(t, rec)["text"] != text {
+			t.Errorf("plain for %q = %v", enc, rec.Header())
+		}
 	}
 }
 

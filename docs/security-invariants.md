@@ -805,6 +805,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `largeReadSlots` (429 `busy`), held until the answer is written under a 2-minute write deadline
   (its JSON escapes `<`, `>`, `&` and control bytes to six bytes each); a sensitive name not
   revealed takes none.
+  The answer is gzipped when `Accept-Encoding` takes gzip (`jsonOKGzip`, `Vary: Accept-Encoding`):
+  it holds a file's text and hash but no session token; a browser request from another site carries
+  no session (`SameSite=Strict` cookies) or is refused by `Sec-Fetch-Site`/`Origin`, and the PWA
+  reads a file again only when the user asks, so nothing makes the many requests a compression
+  oracle (guessing a file's secret by the answer's length) needs.
   Content search and git diffs stay UTF-8 only. git runs
   without a shell, with `GIT_*`/`TERMOTE_*` stripped, hooks (`core.hooksPath` to the null
   device), index refresh on diff, fsmonitor, filter drivers, external diff and textconv off,

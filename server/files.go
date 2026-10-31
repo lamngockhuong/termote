@@ -686,7 +686,7 @@ func (f *filesAPI) handleContent(w http.ResponseWriter, r *http.Request) {
 		f.error(w, "files content", err)
 		return
 	}
-	jsonOK(w, res)
+	jsonOKGzip(w, r, res)
 }
 
 // content reads the file p for the content route, decoded from enc, or
