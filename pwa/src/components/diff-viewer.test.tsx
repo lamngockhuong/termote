@@ -354,7 +354,7 @@ describe('DiffViewer: Markdown preview', () => {
         previewable: false,
         reason: 'binary',
       },
-      'Not previewable (binary, special file or larger than 1 MiB)',
+      'Not previewable (binary, special file or larger than 4 MiB)',
     ],
     [content('x', 300 * 1024), 'Too large to preview'],
     // By the bytes on disk, not the text decoded from them (UTF-16 here)

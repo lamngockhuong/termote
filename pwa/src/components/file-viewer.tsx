@@ -701,7 +701,7 @@ export function FileViewer({
   // Where the preview started (the link's heading, the offset Back restored)
   // is used up once the user leaves it: Source then Preview starts at the top
   const [leftPreview, setLeftPreview] = useState(false)
-  // A CSV/TSV file is a table, whatever its size (up to the 1 MiB a read
+  // A CSV/TSV file is a table, whatever its size (up to the 4 MiB a read
   // returns), unless the user chose its source
   const canTable = isTablePath(path) && state.kind === 'text'
   const tableView = canTable && settings.tablePreview && !forceSource

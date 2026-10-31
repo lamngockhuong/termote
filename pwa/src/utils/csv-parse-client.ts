@@ -1,7 +1,7 @@
 // The table view's worker (csv-parse-worker.ts), one per open table. Every
 // answer comes back: a worker that fails to load, breaks or takes too long
 // is ended, and the work is done on the main thread instead (the text is at
-// most 1 MiB), so a table never stays at "parsing".
+// most 4 MiB), so a table never stays at "parsing".
 import { type Reapplied, reapply, type TableOp } from './csv-edits'
 import { type CsvParse, type Delimiter, parseCsv } from './csv-parse'
 import type { CsvReply, CsvRequest } from './csv-parse-worker'

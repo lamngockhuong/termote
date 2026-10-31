@@ -515,6 +515,10 @@ func (f *filesAPI) editCheck(rt *os.Root, root filesRoot, rel string, d decoded)
 	}
 	defer dir.Close()
 	_, _, reason, err = readEditTarget(dir, base)
+	if errors.Is(err, errEditTooLarge) {
+		// Shown by the content route, too large to save
+		return "too-large"
+	}
 	if err != nil {
 		return "unavailable"
 	}

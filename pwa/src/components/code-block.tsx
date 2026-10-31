@@ -9,6 +9,8 @@ import {
 } from 'react'
 import { useTheme } from '../contexts/theme-context'
 import { useLinePick } from '../hooks/use-line-pick'
+import { BLOCK_LINES, useLineWindow } from '../hooks/use-line-window'
+import { formatNumber } from '../i18n/format'
 import { useT } from '../i18n/i18n-context'
 import { highlight, type Token } from '../utils/highlight'
 import { inPick, pickSpan, type TextLines } from '../utils/line-range'
@@ -37,6 +39,14 @@ export function splitLines(text: string): string[] {
   if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop()
   return lines
 }
+
+// Past this many lines only the lines near the view are in the page (a few
+// DOM nodes a row: tens of thousands stall a tablet for seconds). Up to it
+// every line is, so the browser's find and a selection see the whole file.
+export const WINDOW_FROM_LINES = 2000
+// Lines shown at most: browsers cap an element's height (Firefox near 17.9
+// million px, about 930,000 rows), and 4 MiB of short lines is millions
+export const MAX_LINES = 400_000
 
 // fontStyle bits from Shiki
 const ITALIC = 1
@@ -82,10 +92,22 @@ export function CodeBlock({
   commentedLines,
 }: Props) {
   const { resolvedTheme } = useTheme()
-  const { t } = useT()
-  const lines = useMemo(() => splitLines(text), [text])
+  const { t, locale } = useT()
+  const all = useMemo(() => splitLines(text), [text])
+  const lines = useMemo(
+    () => (all.length > MAX_LINES ? all.slice(0, MAX_LINES) : all),
+    [all],
+  )
   const [tokens, setTokens] = useState<Token[][] | null>(null)
   const frame = useRef<HTMLDivElement>(null)
+  const win = useLineWindow(
+    frame,
+    lines,
+    wrap,
+    lines.length > WINDOW_FROM_LINES,
+  )
+  // A line asked for, scrolled to once its rows are in the page
+  const pending = useRef<number>(undefined)
   // The line picked last, highlighted until the next pick
   const [marked, setMarked] = useState<number>()
   const { pick, press, clear } = useLinePick()
@@ -102,6 +124,7 @@ export function CodeBlock({
   useLayoutEffect(() => {
     if (line) return
     if (scrollTop && frame.current) frame.current.scrollTop = scrollTop
+    win?.sync()
   }, [])
 
   // The rows are there before the tokens (plain text first): once per pick
@@ -109,10 +132,19 @@ export function CodeBlock({
   useLayoutEffect(() => {
     if (!line) return
     setMarked(line)
-    frame.current
-      ?.querySelector(`[data-line="${line}"]`)
-      ?.scrollIntoView?.({ block: 'center' })
+    pending.current = line
+    win?.reveal(line)
   }, [jump])
+  // After every render: the line asked for, once it is there
+  useLayoutEffect(() => {
+    const at = pending.current
+    if (!at) return
+    const row = frame.current?.querySelector(`[data-line="${at}"]`)
+    if (!row && win && at <= lines.length) return
+    pending.current = undefined
+    row?.scrollIntoView?.({ block: 'center' })
+    win?.sync()
+  })
 
   useEffect(() => {
     let live = true
@@ -127,60 +159,106 @@ export function CodeBlock({
 
   const gutter = `${String(lines.length).length + 1}ch`
   const span = pick && pickSpan(pick)
+  // Unwrapped, the rows in the page are as wide as the widest line, not
+  // only the widest of those shown
+  const wide = !!win && !wrap
+  const widest = useMemo(() => {
+    let n = 0
+    if (wide) for (const l of lines) n = Math.max(n, l.length)
+    return n
+  }, [wide, lines])
+  const row = (i: number) => {
+    const parts = tokens?.[i]
+    let content: ReactNode = lines[i]
+    if (parts) {
+      content = parts.map((t, j) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: tokens of one line never move
+        <span key={j} style={tokenStyle(t)}>
+          {t[0]}
+        </span>
+      ))
+    }
+    return (
+      <div
+        key={i}
+        data-line={i + 1}
+        className={`flex ${marked === i + 1 || inPick(pick, 0, i + 1) ? 'bg-accent/15' : 'bg-bg'}`}
+      >
+        {onLineComment ? (
+          <LineGutterButton
+            line={i + 1}
+            commented={!!commentedLines?.has(i + 1)}
+            onPress={(shift) => press(0, i + 1, shift)}
+          >
+            <span
+              className={`${GUTTER_CELL} text-fg-subtle`}
+              style={{ minWidth: gutter }}
+            >
+              {i + 1}
+            </span>
+          </LineGutterButton>
+        ) : (
+          <span
+            aria-hidden="true"
+            className={`${GUTTER} text-fg-subtle`}
+            style={{ minWidth: gutter }}
+          >
+            {i + 1}
+          </span>
+        )}
+        <code className={codeText(wrap)}>{content || ' '}</code>
+      </div>
+    )
+  }
+  const blocks: ReactNode[] = []
+  if (win) {
+    for (let b = win.first; b <= win.last; b++) {
+      const rows: ReactNode[] = []
+      const end = Math.min(lines.length, (b + 1) * BLOCK_LINES)
+      for (let i = b * BLOCK_LINES; i < end; i++) rows.push(row(i))
+      blocks.push(
+        <div key={b} data-block={b} ref={win.measure(b)}>
+          {rows}
+        </div>,
+      )
+    }
+  }
   return (
     <>
       <div
         ref={frame}
         className={CODE_FRAME}
+        // The window keeps the view in place itself when a block above it
+        // is measured
+        style={win ? { overflowAnchor: 'none' } : undefined}
         data-testid="code-block"
         data-scroll-restore
       >
-        <div className={wrap ? '' : 'w-max min-w-full'}>
-          {lines.map((line, i) => {
-            const parts = tokens?.[i]
-            let content: ReactNode = line
-            if (parts) {
-              content = parts.map((t, j) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: tokens of one line never move
-                <span key={j} style={tokenStyle(t)}>
-                  {t[0]}
-                </span>
-              ))
-            }
-            return (
-              <div
-                // biome-ignore lint/suspicious/noArrayIndexKey: a line is its number
-                key={i}
-                data-line={i + 1}
-                className={`flex ${marked === i + 1 || inPick(pick, 0, i + 1) ? 'bg-accent/15' : 'bg-bg'}`}
-              >
-                {onLineComment ? (
-                  <LineGutterButton
-                    line={i + 1}
-                    commented={!!commentedLines?.has(i + 1)}
-                    onPress={(shift) => press(0, i + 1, shift)}
-                  >
-                    <span
-                      className={`${GUTTER_CELL} text-fg-subtle`}
-                      style={{ minWidth: gutter }}
-                    >
-                      {i + 1}
-                    </span>
-                  </LineGutterButton>
-                ) : (
-                  <span
-                    aria-hidden="true"
-                    className={`${GUTTER} text-fg-subtle`}
-                    style={{ minWidth: gutter }}
-                  >
-                    {i + 1}
-                  </span>
-                )}
-                <code className={codeText(wrap)}>{content || ' '}</code>
-              </div>
-            )
-          })}
+        <div
+          className={wrap ? '' : 'w-max min-w-full'}
+          style={
+            widest
+              ? { minWidth: `max(100%, calc(${gutter} + ${widest}ch + 2rem))` }
+              : undefined
+          }
+        >
+          {win ? (
+            <>
+              <div style={{ height: win.before }} />
+              {blocks}
+              <div style={{ height: win.after }} />
+            </>
+          ) : (
+            lines.map((_, i) => row(i))
+          )}
         </div>
+        {all.length > lines.length && (
+          <p className="px-4 py-2 font-sans text-fg-subtle">
+            {t('files.viewer.moreLines', {
+              n: formatNumber(all.length - lines.length, locale),
+            })}
+          </p>
+        )}
       </div>
       {onLineComment && span && (
         <LineCommentBar

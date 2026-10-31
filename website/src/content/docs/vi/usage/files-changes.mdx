@@ -91,12 +91,16 @@ các thư mục chứa socket điều khiển máy host (`/tmp`, `/run`, `/var/r
 - Tô màu áp dụng cho các ngôn ngữ và tên file thường gặp (TypeScript, Go, Python, shell,
   Dockerfile, Makefile, YAML, JSON, Markdown và nhiều loại khác). Phần này chỉ tải về lần đầu có
   file cần đến, nên máy nào chưa từng mở Files thì không tải.
+- File dài hơn 2000 dòng chỉ giữ trong trang những dòng gần chỗ đang xem, nên dài bao nhiêu cũng
+  mở và cuộn nhanh như file ngắn. Khi đó tìm kiếm của trình duyệt (Ctrl+F) và thao tác bôi đen
+  chỉ chạm tới những dòng ấy: hãy dùng Search trong Files, hoặc tải file về. File dài hơn
+  400.000 dòng chỉ hiện 400.000 dòng đầu, kèm số dòng còn lại.
 
 | Hiện                                                          | Vì sao                                                                                           |
 | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | Chữ có màu                                                    | File văn bản tối đa 256 KiB, tối đa 5000 dòng, không dòng nào quá 2000 ký tự                     |
-| Chữ thường, không màu                                         | File văn bản lớn hơn (tới 1 MiB), ngôn ngữ chưa hỗ trợ, hoặc tô màu mất quá 3 giây              |
-| `Not previewable (binary, special file or larger than 1 MiB)`  | File nhị phân không phải ảnh hay tài liệu, file lớn hơn 1 MiB, hoặc thứ không phải file thường |
+| Chữ thường, không màu                                         | File văn bản lớn hơn (tới 4 MiB), ngôn ngữ chưa hỗ trợ, hoặc tô màu mất quá 3 giây              |
+| `Not previewable (binary, special file or larger than 4 MiB)`  | File nhị phân không phải ảnh hay tài liệu, file lớn hơn 4 MiB, hoặc thứ không phải file thường |
 | `This file can't be shown`                                     | Đường dẫn Termote không bao giờ trả về (xem bên dưới)                                            |
 
 ## Mở nhiều file theo tab
@@ -513,7 +517,7 @@ Có thể lưu một bản sao của file về thiết bị đang dùng: **Downl
 **Download** trên đầu file đang mở (trên điện thoại nằm trong menu của phần đầu). Trình duyệt lưu
 file như mọi lần tải khác, dưới tên của file; không có gì được mở hay hiện ra, dù file chứa gì.
 
-- Tải được mọi file thường, kể cả file Termote không xem trước được (nhị phân, lớn hơn 1 MiB), tối
+- Tải được mọi file thường, kể cả file Termote không xem trước được (nhị phân, lớn hơn 4 MiB), tối
   đa **100 MiB**.
 - File có tên thường dùng để chứa bí mật thì app hỏi thêm một lần; file đang mở mà bạn đã chọn
   hiện thì tải ngay.

@@ -927,8 +927,9 @@ repository's `.git` and its git directory wherever it is (`git rev-parse --absol
 for a `--separate-git-dir` inside the root) are never served (403 `path not allowed`), checked
 on the path and on what it resolves to; `.git` is also left out of listings, and a symlink into
 one of them is listed without its target's type or size. Files are opened non-blocking and judged on
-the open handle: anything not a regular file, over 1 MiB, or binary (a NUL in the first 8 KiB,
-or not UTF-8) is answered `previewable: false` with a `reason`. A directory lists at most 5000
+the open handle: anything not a regular file, over 4 MiB, or binary (a NUL in the first 8 KiB,
+or not UTF-8) is answered `previewable: false` with a `reason`. A file over 1 MiB is shown but
+not editable (`notEditable: too-large`). A directory lists at most 5000
 entries.
 
 **Sensitive files.** Names that usually hold secrets (`server/files_sensitive.go`: `.env*`,

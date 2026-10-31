@@ -497,7 +497,7 @@ function WorkingTreePreview({
           setContent({ kind: 'message', text: 'files.viewer.sensitive' })
         else if ('previewable' in c)
           setContent({ kind: 'message', text: 'files.viewer.unpreviewable' })
-        // A table shows whatever its size (up to the 1 MiB a read returns)
+        // A table shows whatever its size (up to the 4 MiB a read returns)
         else if (!isTablePath(path) && c.size > PREVIEW_MAX_BYTES)
           setContent({ kind: 'message', text: 'files.diff.tooLarge' })
         else setContent({ kind: 'text', text: c.text })

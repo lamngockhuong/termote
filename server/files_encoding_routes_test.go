@@ -2,8 +2,10 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -169,11 +171,130 @@ func TestFilesContentDecodeSlots(t *testing.T) {
 
 func TestFilesContentTooLargeAfterRead(t *testing.T) {
 	fx := newEncFixture(t)
-	if err := os.WriteFile(filepath.Join(fx.root, "big.txt"), make([]byte, maxPreviewSize+1), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(fx.root, "big.txt"), make([]byte, maxViewSize+1), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if _, body := fx.get(t, url.Values{"path": {"big.txt"}}); body["reason"] != "too-large" {
 		t.Errorf("too large = %v", body)
+	}
+}
+
+func TestFilesContentShowsUpToTheViewLimit(t *testing.T) {
+	fx := newEncFixture(t)
+	text := strings.Repeat("a", maxViewSize)
+	if err := os.WriteFile(filepath.Join(fx.root, "edge.txt"), []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, body := fx.get(t, url.Values{"path": {"edge.txt"}}); code != 200 || body["text"] != text {
+		t.Errorf("at the limit = %d %v", code, body["reason"])
+	}
+}
+
+func TestFilesContentShowsWhatItCannotEdit(t *testing.T) {
+	fx := newEncFixture(t)
+	text := strings.Repeat("# heading\n", maxPreviewSize/10+1)
+	if err := os.WriteFile(filepath.Join(fx.root, "big.md"), []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, body := fx.get(t, url.Values{"path": {"big.md"}})
+	if body["text"] != text || body["editable"] != false || body["notEditable"] != "too-large" {
+		got, _ := body["text"].(string)
+		t.Errorf("past the edit limit = %d bytes, %v, %v", len(got), body["editable"], body["notEditable"])
+	}
+}
+
+func TestFilesContentLargeReadSlots(t *testing.T) {
+	fx := newEncFixture(t)
+	big := strings.Repeat("<a>\n", maxPreviewSize/4+1)
+	for _, name := range []string{"big.md", ".env"} {
+		if err := os.WriteFile(filepath.Join(fx.root, name), []byte(big), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for range largeReadMaxRunning {
+		fx.f.largeReadSlots <- struct{}{}
+	}
+	if code, body := fx.get(t, url.Values{"path": {"big.md"}}); code != 429 || body["code"] != "busy" {
+		t.Errorf("busy = %d %v", code, body)
+	}
+	if code, body := fx.get(t, url.Values{"path": {".env"}, "reveal": {"1"}}); code != 429 {
+		t.Errorf("revealed while busy = %d %v", code, body)
+	}
+	// A file up to maxPreviewSize needs no slot; a sensitive one not
+	// revealed is answered without one.
+	if code, _ := fx.get(t, url.Values{"path": {"expected.txt"}}); code != 200 {
+		t.Errorf("small while busy = %d", code)
+	}
+	if code, body := fx.get(t, url.Values{"path": {".env"}}); code != 200 || body["sensitive"] != true {
+		t.Errorf("sensitive while busy = %d %v", code, body)
+	}
+	for range largeReadMaxRunning {
+		<-fx.f.largeReadSlots
+	}
+	if code, body := fx.get(t, url.Values{"path": {"big.md"}}); code != 200 || body["text"] != big {
+		t.Errorf("free = %d", code)
+	}
+	if len(fx.f.largeReadSlots) != 0 {
+		t.Errorf("slots held = %d", len(fx.f.largeReadSlots))
+	}
+}
+
+func TestAcceptsGzip(t *testing.T) {
+	for header, want := range map[string]bool{
+		"":                      false,
+		"gzip":                  true,
+		"gzip, deflate, br":     true,
+		"br;q=1.0, GZip;q=0.5":  true,
+		"gzip;q=0":              false,
+		"gzip; q=0.0, identity": false,
+		"*":                     true,
+		"deflate, br":           false,
+		"identity;q=1, *;q=0":   false,
+		"gzip;q=0, *":           false,
+		"*, gzip;q=0":           false,
+		"gzip;level=1;q=0":      false,
+		"gzip;q=abc":            false,
+		"*;q=0.1":               true,
+	} {
+		if got := acceptsGzip(header); got != want {
+			t.Errorf("acceptsGzip(%q) = %v", header, got)
+		}
+	}
+}
+
+func TestFilesContentGzipped(t *testing.T) {
+	fx := newEncFixture(t)
+	text := strings.Repeat("a line of a log\n", 4096)
+	if err := os.WriteFile(filepath.Join(fx.root, "log.txt"), []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	get := func(enc string) *httptest.ResponseRecorder {
+		req := apiRequest("GET", "/api/mux/panes/0/files/content?path=log.txt", "")
+		if enc != "" {
+			req.Header.Set("Accept-Encoding", enc)
+		}
+		return serve(fx.mux, req)
+	}
+	rec := get("gzip, deflate")
+	if rec.Code != 200 || rec.Header().Get("Content-Encoding") != "gzip" || rec.Header().Get("Vary") != "Accept-Encoding" {
+		t.Fatalf("gzipped = %d %v", rec.Code, rec.Header())
+	}
+	if rec.Body.Len() > len(text)/5 {
+		t.Errorf("gzipped body = %d bytes for %d of text", rec.Body.Len(), len(text))
+	}
+	gz, err := gzip.NewReader(rec.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body map[string]any
+	if err := json.NewDecoder(gz).Decode(&body); err != nil || body["text"] != text {
+		t.Errorf("gzipped text = %v", err)
+	}
+	for _, enc := range []string{"", "gzip;q=0"} {
+		rec := get(enc)
+		if rec.Header().Get("Content-Encoding") != "" || rec.Header().Get("Vary") != "Accept-Encoding" || decodeBody(t, rec)["text"] != text {
+			t.Errorf("plain for %q = %v", enc, rec.Header())
+		}
 	}
 }
 

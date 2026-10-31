@@ -250,7 +250,7 @@ describe('FileViewer', () => {
     show()
     expect(
       await screen.findByText(
-        'Not previewable (binary, special file or larger than 1 MiB)',
+        'Not previewable (binary, special file or larger than 4 MiB)',
       ),
     ).toBeInTheDocument()
   })
@@ -2669,7 +2669,7 @@ describe('FileViewer download', () => {
     const onDownload = vi.fn()
     show({ path: 'a.bin', onDownload })
     await screen.findByText(
-      'Not previewable (binary, special file or larger than 1 MiB)',
+      'Not previewable (binary, special file or larger than 4 MiB)',
     )
     fireEvent.click(screen.getByRole('button', { name: 'Download' }))
     expect(onDownload).toHaveBeenCalledWith({ revealed: false })

@@ -130,4 +130,56 @@ test.describe('files content search', () => {
     await panel.getByRole('searchbox', { name: 'Search file contents' }).fill('needle\\w+ = \\d+')
     await expect(panel.getByText('1 line in 1 file')).toBeVisible()
   })
+
+  // Past 2000 lines only the lines near the view are in the page: a line
+  // far down opens centred, and scrolling back up never jumps (70,001 lines,
+  // so the last block is short)
+  test('a long file opens at a line far down and scrolls back smoothly', async ({ page }) => {
+    const lines = Array.from({ length: 70001 }, (_, i) => `long ${i + 1}`)
+    lines[50122] = 'the farNeedle line'
+    writeFileSync(path.join(repo, 'long.log'), `${lines.join('\n')}\n`)
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.goto(`${link}?view=files`)
+    const panel = page.getByRole('complementary', { name: 'Files' })
+    await panel.getByRole('radio', { name: 'Search' }).click()
+    await panel.getByRole('searchbox', { name: 'Search file contents' }).fill('farNeedle')
+    await panel
+      .getByRole('list', { name: 'Search results' })
+      .getByRole('button', { name: /^50123\s*the farNeedle line/ })
+      .click()
+    const code = panel.getByTestId('code-block')
+    const row = code.locator('[data-line="50123"]')
+    await expect(row).toHaveClass(/bg-accent/)
+    await expect(row).toBeInViewport()
+    expect(await code.locator('[data-line]').count()).toBeLessThan(2000)
+
+    // The top line of the view, read after each step up
+    const top = () =>
+      code.evaluate((el) => {
+        const r = el.getBoundingClientRect()
+        const row = [...el.querySelectorAll<HTMLElement>('[data-line]')].find(
+          (x) => x.getBoundingClientRect().bottom > r.top + 1,
+        )
+        return Number(row?.dataset.line)
+      })
+    for (const start of ['bottom', 'middle'] as const) {
+      await code.evaluate((el, at) => {
+        el.scrollTop = at === 'bottom' ? el.scrollHeight : el.scrollHeight / 2
+      }, start)
+      if (start === 'bottom') await expect(code.locator('[data-line="70001"]')).toBeInViewport()
+      await page.waitForTimeout(300)
+      let prev = await top()
+      for (let i = 0; i < 20; i++) {
+        await code.evaluate((el) => {
+          el.scrollTop -= 300
+        })
+        await page.waitForTimeout(50)
+        const now = await top()
+        // 300 px is about 16 rows: never a jump past that, never down
+        expect(now).toBeLessThanOrEqual(prev)
+        expect(prev - now).toBeLessThan(40)
+        prev = now
+      }
+    }
+  })
 })
