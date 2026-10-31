@@ -34,7 +34,7 @@ export const Hero: React.FC = () => (
         ]}
         taps={[
           { at: 102, x: 92, y: 96.4 },
-          { at: 170, x: 50, y: 78.1 },
+          { at: 170, x: 50, y: 79.4 },
         ]}
       />
     </div>

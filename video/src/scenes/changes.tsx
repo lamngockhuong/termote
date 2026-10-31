@@ -20,7 +20,7 @@ export const ChangesScene: React.FC = () => {
           { at: 80, src: "phone-changes" },
           { at: 130, src: "phone-diff" },
         ]}
-        taps={[{ at: 122, x: 40, y: 30 }]}
+        taps={[{ at: 122, x: 40, y: 25.1 }]}
       />
     </SceneLayout>
   );

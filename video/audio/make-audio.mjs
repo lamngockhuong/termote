@@ -77,13 +77,13 @@ const softSaw = (phase, harmonics = 8) => {
   return v * 0.55;
 };
 
-// ---- Music: 120 BPM (a beat is 15 frames at 30 fps), A minor, 66 s ----
+// ---- Music: 120 BPM (a beat is 15 frames at 30 fps), A minor, 76 s ----
 // Bars 1-2 pad alone under the hook, then bass and kick, then hats and the
 // arpeggio from bar 5. The composition fades it in and out.
 const music = () => {
   const BEAT = 0.5;
   const BAR = BEAT * 4;
-  const BARS = 33;
+  const BARS = 38;
   const out = buffers(BARS * BAR);
   const noise = rng(7);
   // Am7, Fmaj7, Cmaj7, G6: root (bass) and pad voicing

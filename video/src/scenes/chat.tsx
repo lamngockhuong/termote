@@ -4,7 +4,8 @@ import { SceneLayout, usePhoneHeight } from "../components/scene-layout";
 import { Sfx } from "../components/sfx";
 
 // One turn through the Chat view, as captured: the conversation, the slash
-// commands, a message sent, the permission card answered with a tap
+// commands, a message sent, the agent's working row, the permission card
+// answered with a tap
 export const ChatScene: React.FC = () => {
   const phoneH = usePhoneHeight();
   return (
@@ -12,7 +13,7 @@ export const ChatScene: React.FC = () => {
       caption={
         <Caption
           title="Chat with Claude Code and Codex."
-          sub="Read the turn, send the next message, answer its questions with one tap."
+          sub="Send the next message, see that it works, answer its questions with one tap."
         />
       }
     >
@@ -23,13 +24,15 @@ export const ChatScene: React.FC = () => {
           { at: 0, src: "phone-chat" },
           { at: 56, src: "phone-chat-commands" },
           { at: 100, src: "phone-chat-typed" },
-          { at: 140, src: "phone-chat-permission" },
-          { at: 206, src: "phone-chat-done" },
+          { at: 140, src: "phone-chat-working" },
+          { at: 180, src: "phone-chat-permission" },
+          { at: 236, src: "phone-chat-done" },
         ]}
         taps={[
           { at: 132, x: 92, y: 96.4 },
-          { at: 196, x: 50, y: 78.1 },
+          { at: 226, x: 50, y: 79.4 },
         ]}
+        marks={[{ from: 146, to: 172, x: 1.5, y: 83.2, w: 97, h: 3.8 }]}
       />
     </SceneLayout>
   );

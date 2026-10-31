@@ -175,6 +175,8 @@ description: Run the tests, commit and open a pull request
 ---
 Ship it.
 EOF
+# Make targets beside the Go tasks of go.mod, for the Tasks view
+printf 'run:\n\tgo run .\n\nlint:\n\tgo vet ./...\n\nmigrate:\n\t@echo "migrations: up to date"\n' >Makefile
 git init -q -b main
 git -c user.name=Dev -c user.email=dev@example.com add -A
 git -c user.name=Dev -c user.email=dev@example.com commit -qm "feat: sign-in endpoint"
@@ -284,12 +286,15 @@ perl -Mutf8 -CSD -pi -e '
   s{Create a file named scratch-one\.txt}{Run the tests of the auth package}g;
   s{touch scratch-one\.txt}{go test ./auth/...}g;
   s{Đã tạo file .*scratch-one\.txt.*\.}{All auth tests pass.}g;
+  s{Viết một bài thơ 30 dòng về mùa thu, không dùng công cụ nào\.}{Yes, run the auth tests}g;
 ' "$kit/server/testdata/claude/screens/"*.txt
 # Option 2 of the permission dialog, two rows in the recording
 perl -0pi -e 's{Yes, and always allow access to.*?from this project}{Yes, and don\x27t ask again for \e[1mgo test\e[0m in this project}s' \
   "$kit/server/testdata/claude/screens/2.1.286-permission-bash.txt"
+# The tests turn works a few seconds under the recorded working line before it
+# asks, so the Chat view's working line can be taken
 perl -pi -e '
-  s{\*permission\*\)}{*tests*)};
+  s{\*permission\*\)}{*tests*)\n      printf "\\e[H\\e[2J\\e[3J"\n      dialog 2.1.312-working-thinking.txt\n      sleep 8};
   s{touch scratch-one\.txt}{go test ./auth/...}g;
   s{Create a file named scratch-one\.txt}{Run the tests of the auth package}g;
   s{Created scratch-one\.txt\.}{ok  acme-api/auth  0.41s: both tests pass.}g;
