@@ -134,7 +134,7 @@
     return ev
   }
 
-  // Group, tab and agent names of the event's pane, or null when the
+  // Group, tab, pane and agent names of the event's pane, or null when the
   // snapshot cannot be read (signed out, offline, slow).
   async function readNames(ev) {
     try {
@@ -148,7 +148,12 @@
       const group = snap.groups?.find((g) => g.id === ev.groupId)
       const tab = group?.tabs?.find((t) => t.id === ev.tabId)
       const pane = tab?.panes?.find((p) => p.id === ev.paneId)
-      return { group: group?.name, tab: tab?.name, agent: pane?.agent?.name }
+      return {
+        group: group?.name,
+        tab: tab?.name,
+        pane: pane?.name,
+        agent: pane?.agent?.name,
+      }
     } catch {
       return null
     }
@@ -184,7 +189,9 @@
       data: { hash: deepLink(ev) },
     }
     if (names) {
-      const agent = cleanName(names.agent) || text.agent
+      // The name the user gave the pane tells two agents' panes apart
+      const agent =
+        cleanName(names.pane) || cleanName(names.agent) || text.agent
       const place = [cleanName(names.group), cleanName(names.tab)]
         .filter(Boolean)
         .join(' / ')

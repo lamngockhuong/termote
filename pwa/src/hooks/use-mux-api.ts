@@ -27,12 +27,23 @@ export interface MuxProcess {
   cwd?: string
 }
 
+// A metadata token a Herdr plugin or tool reported for a pane or workspace:
+// plain text from outside termote, cleaned and capped by the server, never
+// sent to a view-only client.
+export interface MuxMetaToken {
+  key: string
+  value: string
+}
+
 export interface MuxPane {
   id: string
   active: boolean
   title?: string
+  // The name the user gave the pane (renamePane).
+  name?: string
   agent?: MuxAgent
   process?: MuxProcess
+  meta?: MuxMetaToken[]
 }
 
 export interface MuxTab {
@@ -65,6 +76,7 @@ export interface MuxGroup {
   name: string
   tabs: MuxTab[]
   worktree?: MuxGroupWorktree
+  meta?: MuxMetaToken[]
 }
 
 export interface MuxSnapshot {
@@ -112,6 +124,9 @@ export interface MuxSnapshot {
     // A pane can be split, zoomed, swapped and resized (/panes/{id}/split,
     // zoom, swap, resize)
     paneLayout?: boolean
+    // A pane can be named (PATCH /panes/{id}): tmux 3.0 or later, Herdr
+    // 0.9.3 or later, Zellij 0.45.1 or later; never to a view-only client.
+    renamePane?: boolean
     // The stream shows one pane, not its tab's layout (Herdr): zooming,
     // swapping and resizing would change only the desktop, so they are not
     // offered.
@@ -674,6 +689,12 @@ export async function removeWorktree(
 export async function closePane(paneId: string): Promise<boolean> {
   const data = await write('DELETE', `/panes/${encodeURIComponent(paneId)}`)
   return data.ok === true
+}
+
+// Names a pane; '' clears its name. A refusal throws RequestError with the
+// server's code: unknown_pane, invalid_name.
+export async function renamePane(paneId: string, name: string): Promise<void> {
+  await groupWrite('PATCH', `/panes/${encodeURIComponent(paneId)}`, { name })
 }
 
 // Pane layout. A refusal throws RequestError with the server's code:

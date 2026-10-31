@@ -6,6 +6,7 @@ import { PaneLayoutMenu, paneLayoutMessage } from './pane-layout-menu'
 
 function show(over: Partial<Parameters<typeof PaneLayoutMenu>[0]> = {}) {
   const p = {
+    layout: true,
     desktop: true,
     arrange: true,
     canSwapNext: true,
@@ -50,6 +51,25 @@ describe('PaneLayoutMenu', () => {
       expect(p.onResize).toHaveBeenLastCalledWith(d)
     }
     expect(screen.getByRole('menu')).toBeInTheDocument()
+  })
+
+  it('offers Rename pane first when the pane can be named', () => {
+    const p = show({ onRename: vi.fn() })
+    expect(screen.getAllByRole('menuitem')[0]).toHaveTextContent('Rename pane')
+    fireEvent.click(item('Rename pane'))
+    expect(p.onRename).toHaveBeenCalled()
+  })
+
+  it('offers only Rename pane without the layout actions', () => {
+    show({ layout: false, onRename: vi.fn() })
+    expect(screen.getAllByRole('menuitem').map((m) => m.textContent)).toEqual([
+      'Rename pane',
+    ])
+  })
+
+  it('offers no Rename pane where panes cannot be named', () => {
+    show()
+    expect(screen.queryByRole('menuitem', { name: 'Rename pane' })).toBeNull()
   })
 
   it('offers no resize on a phone, no swap without a next pane, no close of the last pane', () => {

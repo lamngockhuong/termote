@@ -358,11 +358,13 @@ function AgentChat({
   // A call left without a result (an interrupted one) keeps nothing open
   // once the agent says it is done.
   const settled = status === 'idle' || status === 'done'
-  // A split tab (herdr) names the pane too.
+  // A split tab names the pane too, and so does a one-pane tab whose pane
+  // the user named.
+  const shownPane = session.panes?.find((p) => p.id === session.paneId)
   const paneLabel =
     session.panes && session.panes.length > 1
-      ? session.panes.find((p) => p.id === session.paneId)?.label
-      : undefined
+      ? shownPane?.label
+      : shownPane?.name
   return (
     <div className="relative flex h-full flex-col">
       <header className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2 text-[13px]">

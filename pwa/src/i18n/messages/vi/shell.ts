@@ -283,4 +283,6 @@ export default {
   'shell.buffer.session': 'Buffer của phiên',
   'shell.paletteFailed': 'Không tải được bảng lệnh',
   'shell.viewFailed': 'Không tải được cách xem này',
+  'shell.meta.source': 'Do một plugin Herdr báo',
+  'shell.meta.more': '+{n}',
 } satisfies Translation<typeof en>

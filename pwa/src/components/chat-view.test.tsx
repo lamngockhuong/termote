@@ -831,6 +831,24 @@ describe('ChatView older entries', () => {
     )
     expect(screen.getByText('Claude Code · reviewer')).toBeInTheDocument()
   })
+
+  it('a one-pane tab names its pane only when the user named it', () => {
+    set({ entries: entries(1) })
+    const one = (name?: string) => (
+      <ChatView
+        {...props}
+        session={{
+          ...props.session,
+          paneId: 'p1',
+          panes: [{ id: 'p1', label: name ?? 'claude', name, hasAgent: true }],
+        }}
+      />
+    )
+    const { rerender } = render(one('api'))
+    expect(screen.getByText('Claude Code · api')).toBeInTheDocument()
+    rerender(one())
+    expect(screen.queryByText(/Claude Code · /)).toBeNull()
+  })
 })
 
 describe('ChatView resizing', () => {

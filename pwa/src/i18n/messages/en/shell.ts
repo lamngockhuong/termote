@@ -310,4 +310,8 @@ export default {
   'shell.buffer.session': 'Session buffer',
   'shell.paletteFailed': 'Could not load the command palette',
   'shell.viewFailed': 'Could not load this view',
+  // Metadata a Herdr plugin reported, shown beside a workspace or a pane
+  // (components/meta-chips.tsx)
+  'shell.meta.source': 'Reported by a Herdr plugin',
+  'shell.meta.more': '+{n}',
 } as const

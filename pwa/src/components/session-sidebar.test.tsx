@@ -265,6 +265,56 @@ describe('SessionSidebar — desktop expanded (default)', () => {
     expect(dev).toHaveClass('h-9')
   })
 
+  it("shows a one-pane tab's pane name and metadata under its name", () => {
+    const meta = [{ key: 'env', value: '<b>dev</b>' }]
+    renderDesktop([
+      {
+        ...SESSIONS[0],
+        panes: [{ id: 'p1', label: 'api', name: 'api', meta, hasAgent: false }],
+      },
+      {
+        ...SESSIONS[1],
+        // Two panes: the pane strip shows them, not the list
+        panes: [
+          { id: 'p2', label: 'x', name: 'x', hasAgent: false },
+          { id: 'p3', label: 'y', hasAgent: false },
+        ],
+      },
+    ])
+    const shell = screen.getByText('Shell').closest('button')!
+    expect(shell).toHaveTextContent('Shellapienv: <b>dev</b>')
+    expect(shell).toHaveClass('min-h-9')
+    expect(shell.querySelector('b')).toBeNull()
+    expect(screen.getByText('Dev').closest('button')).toHaveTextContent(
+      /^🔧Dev$/,
+    )
+  })
+
+  it("shows a workspace's metadata beside its name, as text", () => {
+    render(
+      <SessionSidebar
+        sessions={[
+          { ...SESSIONS[0], groupId: 'w1' },
+          { ...SESSIONS[1], groupId: 'w2' },
+        ]}
+        groups={[
+          { id: 'w1', name: 'api', meta: [{ key: 'pr', value: '<i>42</i>' }] },
+          { id: 'w2', name: 'web' },
+        ]}
+        activeId={SESSIONS[0].id}
+        onSelect={vi.fn()}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+      />,
+    )
+    const chip = screen.getByText('pr: <i>42</i>')
+    expect(chip.closest('[data-meta-chips]')).toHaveAttribute(
+      'title',
+      'Reported by a Herdr plugin\npr: <i>42</i>',
+    )
+    expect(document.querySelector('[data-meta-chips] i')).toBeNull()
+  })
+
   it('shows the hidden characters of what runs in a session', () => {
     renderDesktop([{ ...SESSIONS[0], commands: ['vi\u202em'] }, SESSIONS[1]])
     expect(screen.getByText('vi⟨U+202E⟩m')).toBeInTheDocument()

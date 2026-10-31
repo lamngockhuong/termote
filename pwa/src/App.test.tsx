@@ -3579,6 +3579,7 @@ describe('App groups and panes', () => {
     over: {
       paneLayout?: boolean
       paneStream?: boolean
+      renamePane?: boolean
       role?: 'view'
       paneId?: string
     } = {},
@@ -3593,6 +3594,7 @@ describe('App groups and panes', () => {
         throw new RequestError(409, 'no_neighbor', 'no pane on that side')
       }),
       resizePane: vi.fn(async () => {}),
+      renamePane: vi.fn(async (_id: string, _name: string) => {}),
     }
     mockUseLocalSessions.mockReturnValue({
       ...base,
@@ -3607,6 +3609,7 @@ describe('App groups and panes', () => {
           ...base.mux.caps,
           paneLayout: over.paneLayout ?? true,
           paneStream: over.paneStream,
+          renamePane: over.renamePane,
         },
       },
     } as any)
@@ -3638,6 +3641,48 @@ describe('App groups and panes', () => {
     expect(screen.getByTestId('confirm-dialog')).toHaveTextContent(
       'Close pane?',
     )
+  })
+
+  it('Rename pane asks for the name of the pane shown and saves it', async () => {
+    HTMLDialogElement.prototype.showModal = vi.fn(function (
+      this: HTMLDialogElement,
+    ) {
+      this.setAttribute('open', '')
+    })
+    HTMLDialogElement.prototype.close = vi.fn()
+    const a = await mockLayout('herdr', { renamePane: true })
+    render(<App />)
+    fireEvent.click(await paneMenuItem('Rename pane'))
+    const box = await screen.findByRole('textbox', { name: 'Name' })
+    // The pane shown has no name yet
+    expect(box).toHaveValue('')
+    fireEvent.change(box, { target: { value: 'api' } })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    })
+    expect(a.renamePane).toHaveBeenCalledWith('w1:t1:p1', 'api')
+    expect(screen.queryByRole('textbox', { name: 'Name' })).toBeNull()
+  })
+
+  it('Rename pane alone where the backend names panes but has no layout actions', async () => {
+    await mockLayout('herdr', { paneLayout: false, renamePane: true })
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Pane' }))
+    expect(screen.getAllByRole('menuitem').map((m) => m.textContent)).toEqual([
+      'Rename pane',
+    ])
+  })
+
+  it('no Pane menu without either cap, nor for a view-only device', async () => {
+    await mockLayout('herdr', { paneLayout: false })
+    const { unmount } = render(<App />)
+    await screen.findByTestId('terminal-view')
+    expect(screen.queryByRole('button', { name: 'Pane' })).toBeNull()
+    unmount()
+    await mockLayout('herdr', { renamePane: true, role: 'view' })
+    render(<App />)
+    await screen.findByTestId('terminal-view')
+    expect(screen.queryByRole('button', { name: 'Pane' })).toBeNull()
   })
 
   it('where the stream shows one pane (Herdr), split and close alone', async () => {

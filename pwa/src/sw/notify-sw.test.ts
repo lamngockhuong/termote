@@ -258,6 +258,38 @@ describe('notify-sw.js', () => {
       expect(calls[0].init?.signal).toBeInstanceOf(AbortSignal)
     })
 
+    it('names the pane by the name the user gave it, cleaned', async () => {
+      const snapshot = (name?: string) => ({
+        groups: [
+          {
+            id: 'g',
+            name: 'work',
+            tabs: [
+              {
+                id: 't',
+                name: 'build',
+                panes: [{ id: 'p', name, agent: { name: 'claude' } }],
+              },
+            ],
+          },
+        ],
+      })
+      for (const [name, body] of [
+        ['api\u202e', 'api · work / build'],
+        ['tests', 'tests · work / build'],
+        [undefined, 'claude · work / build'],
+        ['\u200b', 'claude · work / build'],
+      ] as const) {
+        stubFetch({ '/api/mux/snapshot?peek=1': { body: snapshot(name) } })
+        const { registration, dispatch } = loadWorker()
+        await dispatch(
+          'push',
+          pushData({ groupId: 'g', tabId: 't', paneId: 'p', kind: 'done' }),
+        )
+        expect(registration.showNotification.mock.calls[0][1].body).toBe(body)
+      }
+    })
+
     it('cleans names exactly as cleanName does', async () => {
       const vector = [
         'a\u0000b\u001fc\u007fd\u0085e\u009ff',

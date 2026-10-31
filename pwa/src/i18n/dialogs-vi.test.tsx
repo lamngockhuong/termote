@@ -69,6 +69,7 @@ describe('the Pane menu in Vietnamese', () => {
   it('names every action', () => {
     renderWithLocale(
       <PaneLayoutMenu
+        layout
         desktop
         arrange
         canSwapNext
@@ -78,11 +79,13 @@ describe('the Pane menu in Vietnamese', () => {
         onSwapNext={vi.fn()}
         onResize={vi.fn()}
         onClose={vi.fn()}
+        onRename={vi.fn()}
       />,
       'vi',
     )
     fireEvent.click(screen.getByRole('button', { name: 'Pane' }))
     expect(screen.getAllByRole('menuitem').map((m) => m.textContent)).toEqual([
+      'Đổi tên pane',
       'Chia sang phải',
       'Chia xuống dưới',
       'Phóng to',
