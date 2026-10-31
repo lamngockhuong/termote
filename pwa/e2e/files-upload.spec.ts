@@ -245,12 +245,13 @@ test.describe('uploading from a view-only device', () => {
   })
 
   test('sees no Upload button, and a drop never opens the file', async ({ browser, baseURL, request }) => {
+    // A view-only page never selects a window and is shown the session's
+    // current one: the link's window, made current before the page reads
+    // its first snapshot, or it shows another window when the link opens
+    tmux('select-window', '-t', windowId)
     const viewer = await pairStranger(browser, baseURL, (await makeCode(request, 'view', name)).code)
     try {
       await viewer.setViewportSize({ width: 1400, height: 900 })
-      // A view-only page never selects a window and is shown the session's
-      // current one: the link's window, made current here
-      tmux('select-window', '-t', windowId)
       await viewer.goto(`${link}?view=files`)
       const panel = viewer.getByRole('complementary', { name: 'Files' })
       const row = panel.getByRole('treeitem', { name: 'tracked.txt' })
