@@ -113,9 +113,9 @@ export function useLineWindow(
   const anchor = useRef<{ line: string; y: number; screen: number } | null>(
     null,
   )
+  // Called only with the frame in the page
   const capture = useCallback(() => {
-    const el = frame.current
-    if (!el) return
+    const el = frame.current as HTMLDivElement
     const top = el.getBoundingClientRect().top
     const rows = el.querySelectorAll<HTMLElement>('[data-line]')
     let lo = 0
@@ -191,7 +191,9 @@ export function useLineWindow(
   // rendered before the next paint, the anchor keeping the view in place
   const observer = useRef<ResizeObserver | null>(null)
   const observed = useRef(new Map<number, HTMLDivElement>())
-  const onSized = useRef<(entries: ResizeObserverEntry[]) => void>(() => {})
+  const onSized = useRef<((entries: ResizeObserverEntry[]) => void) | null>(
+    null,
+  )
   useLayoutEffect(() => {
     onSized.current = (entries) => {
       let changed = false
@@ -216,7 +218,10 @@ export function useLineWindow(
   })
   useEffect(() => {
     if (!enabled || typeof ResizeObserver === 'undefined') return
-    const ro = new ResizeObserver((entries) => onSized.current(entries))
+    // Set by the layout effect above before any block is delivered
+    const ro = new ResizeObserver((entries) =>
+      (onSized.current as (entries: ResizeObserverEntry[]) => void)(entries),
+    )
     observer.current = ro
     for (const el of observed.current.values()) ro.observe(el)
     return () => {
