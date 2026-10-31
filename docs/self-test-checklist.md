@@ -483,6 +483,8 @@ Open it from the sidebar's grid button (desktop) or the view menu's "Agent overv
 
 - [ ] Edit/Delete buttons hidden by default
 - [ ] Swipe left/right on session item reveals Edit/Delete buttons
+- [ ] iPad (desktop sidebar, touch): swipe left/right on a sidebar row reveals Delete/Edit; a tap on
+      an open row only closes it; a trackpad click still selects; long-press drag still reorders
 - [ ] With `caps.reorderTabs`: Move up/Move down in the "Current session" ⋯ menu
 - [ ] Phone: the "Current session" row and the agent filter stay pinned under the title while the
       list scrolls

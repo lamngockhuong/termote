@@ -1,5 +1,5 @@
 import { Pencil, Trash2 } from 'lucide-react'
-import { useCallback, useRef, useState } from 'react'
+import { type ReactNode, useCallback, useRef, useState } from 'react'
 import { useT } from '../i18n/i18n-context'
 import type { Session } from '../types/session'
 import { visibleUnsafe } from '../utils/unsafe-chars'
@@ -9,11 +9,18 @@ import { OnlyPaneLine, onlyPaneOf } from './meta-chips'
 interface Props {
   session: Session
   isActive: boolean
-  onSelect: () => void
+  // Left out with a given row, which selects itself
+  onSelect?: () => void
   onEdit: () => void
   onRemove: () => void
   canRemove: boolean
   canEdit: boolean
+  // The row to slide instead of the phone's: a tablet's sidebar keeps its
+  // own row, whose button selects on a click (a trackpad or a keyboard has
+  // no touch), so a tap here only closes an open row
+  children?: ReactNode
+  // The opaque layer under the row, matching what it sits on
+  surfaceClassName?: string
 }
 
 const ACTION_WIDTH = 70
@@ -27,6 +34,8 @@ export function SwipeableSessionItem({
   onRemove,
   canRemove,
   canEdit,
+  children,
+  surfaceClassName = 'bg-bg ui-native:bg-surface-raised',
 }: Props) {
   const { t } = useT()
   const [offsetX, setOffsetX] = useState(0)
@@ -123,17 +132,28 @@ export function SwipeableSessionItem({
         // drag scrolls the list and must not select (and close the sheet).
         if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
           if (offsetX !== 0) {
+            // No click after it: it would select the row it closes
+            if (children) e.preventDefault()
             setOffsetX(0)
           } else {
-            onSelect()
+            onSelect?.()
           }
         }
       }
 
       isDraggingRef.current = false
     },
-    [offsetX, maxLeft, maxRight, canRemove, canEdit, onSelect],
+    [offsetX, maxLeft, maxRight, canRemove, canEdit, onSelect, children],
   )
+
+  // iPadOS cancels the touch when a long press starts dragging the row: slide
+  // back rather than stop half open
+  const handleTouchCancel = useCallback(() => {
+    isDraggingRef.current = false
+    setIsAnimating(true)
+    if (offsetX === 0) setActionsShown(false)
+    setOffsetX(0)
+  }, [offsetX])
 
   const handleEdit = () => {
     setIsAnimating(true)
@@ -147,6 +167,11 @@ export function SwipeableSessionItem({
     setTimeout(onRemove, 100)
   }
 
+  // A given row brings its own edit and remove buttons for a keyboard: these
+  // stay out of the Tab order. Not hidden from a screen reader, which cannot
+  // swipe, and reaches the row's buttons only while they show (hover, focus).
+  const fingerOnly = children ? { tabIndex: -1 } : {}
+
   return (
     <div className="relative isolate overflow-hidden rounded-control ui-native:rounded-none">
       {/* Action buttons layer */}
@@ -158,6 +183,7 @@ export function SwipeableSessionItem({
             type="button"
             onClick={handleEdit}
             aria-label={t('shell.session.edit', { name: session.name })}
+            {...fingerOnly}
             className="flex h-full w-[70px] items-center justify-center bg-accent text-accent-fg active:opacity-90"
           >
             <Pencil size={20} aria-hidden="true" />
@@ -169,6 +195,7 @@ export function SwipeableSessionItem({
             type="button"
             onClick={handleRemove}
             aria-label={t('shell.session.remove', { name: session.name })}
+            {...fingerOnly}
             className="flex h-full w-[70px] items-center justify-center bg-danger text-white active:opacity-90 dark:text-bg"
           >
             <Trash2 size={20} aria-hidden="true" />
@@ -179,7 +206,7 @@ export function SwipeableSessionItem({
       {/* Main content */}
       <div
         data-active={isActive}
-        className="relative z-10 bg-bg ui-native:bg-surface-raised"
+        className={`relative z-10 ${surfaceClassName}`}
         style={{
           transform: `translateX(${offsetX}px)`,
           transition: isAnimating ? 'transform 200ms ease-out' : 'none',
@@ -187,44 +214,47 @@ export function SwipeableSessionItem({
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchCancel}
         onTransitionEnd={() => {
           if (offsetX === 0) setActionsShown(false)
         }}
       >
         {/* The accent tint is translucent: it sits on the opaque layer above,
             which hides the action buttons. */}
-        <div
-          aria-current={isActive ? 'true' : undefined}
-          className={`flex h-14 min-w-0 select-none items-center gap-3 px-3 text-left text-fg transition-[scale] duration-(--duration-fast) ease-standard motion-safe:active:scale-[0.98] ${
-            isActive
-              ? 'bg-accent-soft ui-terminal:bg-surface-raised ui-terminal:shadow-[inset_2px_0_0_var(--color-accent)]'
-              : ''
-          }`}
-        >
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-control bg-surface text-[18px] ui-native:bg-bg">
-            {session.icon}
-          </span>
-          <span className="min-w-0 flex-1">
-            <span
-              className={`block truncate text-[15px] ui-terminal:font-label ui-terminal:text-[14px] ${isActive ? 'font-semibold' : ''}`}
-            >
-              {visibleUnsafe(session.name)}
+        {children ?? (
+          <div
+            aria-current={isActive ? 'true' : undefined}
+            className={`flex h-14 min-w-0 select-none items-center gap-3 px-3 text-left text-fg transition-[scale] duration-(--duration-fast) ease-standard motion-safe:active:scale-[0.98] ${
+              isActive
+                ? 'bg-accent-soft ui-terminal:bg-surface-raised ui-terminal:shadow-[inset_2px_0_0_var(--color-accent)]'
+                : ''
+            }`}
+          >
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-control bg-surface text-[18px] ui-native:bg-bg">
+              {session.icon}
             </span>
-            <OnlyPaneLine pane={onlyPaneOf(session)} />
-            {(session.description || session.commands) && (
-              <span className="block truncate text-[12px] text-fg-muted">
-                {[
-                  session.description,
-                  session.commands &&
-                    visibleUnsafe(session.commands.join(', ')),
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
+            <span className="min-w-0 flex-1">
+              <span
+                className={`block truncate text-[15px] ui-terminal:font-label ui-terminal:text-[14px] ${isActive ? 'font-semibold' : ''}`}
+              >
+                {visibleUnsafe(session.name)}
               </span>
-            )}
-          </span>
-          <AgentStatusBadge status={session.agentStatus} size={16} />
-        </div>
+              <OnlyPaneLine pane={onlyPaneOf(session)} />
+              {(session.description || session.commands) && (
+                <span className="block truncate text-[12px] text-fg-muted">
+                  {[
+                    session.description,
+                    session.commands &&
+                      visibleUnsafe(session.commands.join(', ')),
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+              )}
+            </span>
+            <AgentStatusBadge status={session.agentStatus} size={16} />
+          </div>
+        )}
       </div>
     </div>
   )
