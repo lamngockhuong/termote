@@ -81,7 +81,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/screenshots/ui-styles.png" alt="Interface Styles" width="720" />
+  <img src="docs/images/screenshots/ui-styles.png" alt="Neutral、Terminal 和 Native 三种界面风格（浅色与深色）" width="720" />
 </p>
 
 ## 架构

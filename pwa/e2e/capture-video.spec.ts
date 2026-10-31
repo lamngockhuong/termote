@@ -22,14 +22,12 @@ const phone = (testInfo: TestInfo) => ({
   deviceScaleFactor: 3,
   isMobile: true,
   hasTouch: true,
-  colorScheme: 'dark' as const,
   httpCredentials: testInfo.project.use.httpCredentials,
 })
 
 const desktop = (testInfo: TestInfo) => ({
   viewport: { width: 1600, height: 900 },
   deviceScaleFactor: 2,
-  colorScheme: 'dark' as const,
   httpCredentials: testInfo.project.use.httpCredentials,
 })
 
@@ -49,19 +47,25 @@ const link = (tab: Tab, view?: string) => {
   return `/#/s/acme-api/${index}${query}`
 }
 
+type UiStyle = 'neutral' | 'terminal' | 'native'
+type Theme = 'light' | 'dark'
+
+// The page opens signed in, past the welcome screen, in the given interface
+// style and theme. Reduced motion makes every transition end at once, so a
+// screen is taken in its final state rather than halfway through one.
 async function open(
   browser: Browser,
   context: ReturnType<typeof phone> | ReturnType<typeof desktop>,
   path: string,
-  uiStyle: 'neutral' | 'terminal' | 'native' = 'neutral',
+  { style = 'neutral', theme = 'dark' }: { style?: UiStyle; theme?: Theme } = {},
 ): Promise<Page> {
-  const ctx = await browser.newContext(context)
+  const ctx = await browser.newContext({ ...context, colorScheme: theme, reducedMotion: 'reduce' })
   await ctx.addInitScript(
-    ([style, version]) => {
-      localStorage.setItem('termote-theme', 'dark')
-      localStorage.setItem('termote-settings', JSON.stringify({ uiStyle: style, welcomeSeenVersion: version }))
+    ([uiStyle, colorTheme, version]) => {
+      localStorage.setItem('termote-theme', colorTheme)
+      localStorage.setItem('termote-settings', JSON.stringify({ uiStyle, welcomeSeenVersion: version }))
     },
-    [uiStyle, WELCOME_VERSION] as const,
+    [style, theme, WELCOME_VERSION] as const,
   )
   const page = await ctx.newPage()
   // A browser page gets the sign-in form, never a Basic challenge
@@ -81,11 +85,48 @@ async function waitTerminal(page: Page) {
     undefined,
     { timeout: 15000 },
   )
-  await page.waitForTimeout(800)
 }
 
-const shot = (page: Page, name: string) =>
-  page.screenshot({ path: join(outDir, `${name}.png`) })
+// The sessions sheet names what each pane runs: the shell tab's go test,
+// started with the demo, is waited out so every capture reads bash there
+async function openSessions(page: Page) {
+  await page.getByRole('button', { name: 'Open sessions menu' }).click()
+  await expect(page.getByRole('button', { name: 'New workspace' })).toBeVisible()
+  await expect(page.getByText('go', { exact: true })).toHaveCount(0, { timeout: 30000 })
+}
+
+// Waits for the page to stop changing: fonts and images loaded, every finite
+// animation finished, and the terminal's text (which redraws as it fits the pane) the
+// same on two reads in a row
+async function settled(page: Page) {
+  await page.evaluate(async () => {
+    await document.fonts.ready
+    await Promise.all([...document.images].map((img) => img.decode().catch(() => undefined)))
+    const finite = document
+      .getAnimations()
+      .filter((a) => a.effect?.getComputedTiming().endTime !== Number.POSITIVE_INFINITY)
+    await Promise.all(finite.map((a) => a.finished.catch(() => undefined)))
+  })
+  let last: string | undefined
+  await expect
+    .poll(
+      async () => {
+        const text = await page.evaluate(
+          () => (document.querySelector('.xterm-rows') as HTMLElement | null)?.innerText ?? '',
+        )
+        const same = text === last
+        last = text
+        return same
+      },
+      { intervals: [250], timeout: 10000 },
+    )
+    .toBe(true)
+}
+
+async function shot(page: Page, name: string) {
+  await settled(page)
+  await page.screenshot({ path: join(outDir, `${name}.png`) })
+}
 
 test.describe('Capture screenshots for the intro video', () => {
   test.skip(!process.env.DEMO_MUX, 'needs the demo server (video/capture/demo-env.sh)')
@@ -97,23 +138,18 @@ test.describe('Capture screenshots for the intro video', () => {
     await expect(page.getByRole('region', { name: 'Conversation' })).toContainText('rate limited', {
       timeout: 15000,
     })
-    await page.waitForTimeout(1000)
     await shot(page, 'desktop-tmux')
     await page.context().close()
   })
 
-  // The terminal on a phone, in each interface style (the README's picture of
-  // them; neutral is the video's)
+  // The terminal on a phone
   test('phone terminal on tmux', async ({ browser }, testInfo) => {
     test.skip(mux !== 'tmux', 'tmux fits the window to the phone')
-    for (const style of ['neutral', 'terminal', 'native'] as const) {
-      const page = await open(browser, phone(testInfo), link('shell'), style)
-      await waitTerminal(page)
-      await expect(page.locator('.xterm-rows')).toContainText('dev@laptop', { timeout: 15000 })
-      await page.waitForTimeout(500)
-      await shot(page, style === 'neutral' ? 'phone-terminal' : `phone-style-${style}`)
-      await page.context().close()
-    }
+    const page = await open(browser, phone(testInfo), link('shell'))
+    await waitTerminal(page)
+    await expect(page.locator('.xterm-rows')).toContainText('dev@laptop', { timeout: 15000 })
+    await shot(page, 'phone-terminal')
+    await page.context().close()
   })
 
   test.describe('on Herdr', () => {
@@ -122,37 +158,51 @@ test.describe('Capture screenshots for the intro video', () => {
     test('phone sessions', async ({ browser }, testInfo) => {
       const page = await open(browser, phone(testInfo), link('claude'))
       await waitTerminal(page)
-      await page.getByRole('button', { name: 'Open sessions menu' }).click()
-      await page.waitForTimeout(500)
+      await openSessions(page)
       await shot(page, 'phone-sessions')
       await page.context().close()
+    })
+
+    // The README's picture of the interface styles: each one light and dark,
+    // on the sessions sheet over the Chat view. That screen carries the most
+    // of what a style changes (accent colour, button shape, the selected
+    // row, the filter control, grouped rows, the sheet's handle, the
+    // terminal style's monospace), where the terminal itself looks the same
+    // in all three.
+    test('phone sessions in each style and theme', async ({ browser }, testInfo) => {
+      for (const style of ['neutral', 'terminal', 'native'] as const) {
+        for (const theme of ['light', 'dark'] as const) {
+          const page = await open(browser, phone(testInfo), link('claude', 'chat'), { style, theme })
+          await expect(page.getByRole('region', { name: 'Conversation' })).toContainText('rate limited', {
+            timeout: 15000,
+          })
+          await openSessions(page)
+          await shot(page, `phone-style-${style}-${theme}`)
+          await page.context().close()
+        }
+      }
     })
 
     test('phone chat', async ({ browser }, testInfo) => {
       const page = await open(browser, phone(testInfo), link('claude', 'chat'))
       const conversation = page.getByRole('region', { name: 'Conversation' })
       await expect(conversation).toContainText('rate limited', { timeout: 15000 })
-      await page.waitForTimeout(800)
       await shot(page, 'phone-chat')
 
       const composer = page.getByRole('textbox', { name: 'Message to Claude Code' })
       await composer.fill('/')
-      await page.waitForTimeout(800)
       await shot(page, 'phone-chat-commands')
 
       await composer.fill('Yes, run the auth tests')
-      await page.waitForTimeout(300)
       await shot(page, 'phone-chat-typed')
       await page.getByRole('button', { name: 'Send', exact: true }).click()
       const card = page.getByRole('alertdialog', { name: 'Bash command' })
       await expect(card).toBeVisible({ timeout: 15000 })
-      await page.waitForTimeout(800)
       await shot(page, 'phone-chat-permission')
       await card.getByRole('button', { name: /^1\.\s*Yes$/ }).click()
       await expect(conversation).toContainText('both tests pass', { timeout: 15000 })
       // The composer comes back once the agent is idle again
       await expect(composer).toBeVisible({ timeout: 15000 })
-      await page.waitForTimeout(800)
       await shot(page, 'phone-chat-done')
       await page.context().close()
     })
@@ -160,18 +210,15 @@ test.describe('Capture screenshots for the intro video', () => {
     test('phone files and changes', async ({ browser }, testInfo) => {
       const page = await open(browser, phone(testInfo), link('claude', 'files'))
       await page.getByRole('treeitem', { name: 'README.md' }).click({ timeout: 15000 })
-      await page.locator('img[alt*="Mermaid" i], [data-testid="mermaid-block"] img').first()
-        .waitFor({ timeout: 20000 }).catch(() => {})
-      await page.waitForTimeout(1500)
+      await expect(page.getByTestId('mermaid-block').locator('img').first()).toBeVisible({ timeout: 20000 })
       await shot(page, 'phone-files')
 
       await page.goto(link('claude', 'changes'))
       const changes = page.getByRole('region', { name: 'Changes' })
       await expect(changes).toContainText('login.go', { timeout: 15000 })
-      await page.waitForTimeout(500)
       await shot(page, 'phone-changes')
       await changes.getByRole('button', { name: /login\.go/ }).first().click()
-      await page.waitForTimeout(1500)
+      await expect(page.getByText('attempts.allow(addr)').first()).toBeVisible({ timeout: 15000 })
       await shot(page, 'phone-diff')
       await page.context().close()
     })
@@ -187,7 +234,6 @@ test.describe('Capture screenshots for the intro video', () => {
       await page.getByPlaceholder('Phone').fill('Tablet')
       await page.getByRole('button', { name: 'Make code' }).click()
       await expect(page.getByLabel('Pairing code')).toBeVisible({ timeout: 10000 })
-      await page.waitForTimeout(500)
       await shot(page, 'phone-pair')
       await page.context().close()
     })
@@ -207,7 +253,7 @@ test.describe('Capture screenshots for the intro video', () => {
       await page.getByRole('group', { name: 'Side panel' }).getByRole('button', { name: 'Changes' }).click()
       const changes = page.getByRole('complementary', { name: 'Changes' })
       await changes.getByRole('region', { name: 'Changes' }).getByRole('button', { name: /:\s*login\.go/ }).click()
-      await page.waitForTimeout(1500)
+      await expect(changes.getByText('attempts.allow(addr)').first()).toBeVisible({ timeout: 15000 })
       await shot(page, 'desktop-chat-changes')
       await page.context().close()
     })
@@ -215,7 +261,7 @@ test.describe('Capture screenshots for the intro video', () => {
     test('desktop files', async ({ browser }, testInfo) => {
       const page = await open(browser, desktop(testInfo), link('claude', 'files'))
       await page.getByRole('treeitem', { name: 'README.md' }).click({ timeout: 15000 })
-      await page.waitForTimeout(2500)
+      await expect(page.getByTestId('mermaid-block').locator('img').first()).toBeVisible({ timeout: 20000 })
       await shot(page, 'desktop-files')
       await page.context().close()
     })

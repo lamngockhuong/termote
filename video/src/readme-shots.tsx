@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { AbsoluteFill } from "remotion";
 import { DesktopFrame } from "./components/desktop-frame";
 import { PhoneFrame } from "./components/phone-frame";
@@ -8,6 +9,9 @@ import { color, sans } from "./theme";
 
 export const PHONES_SIZE = { width: 1800, height: 1260 };
 export const DESKTOP_SIZE = { width: 1800, height: 1120 };
+// Taller than the others: six phones still large enough to read at the
+// README's width
+export const STYLES_SIZE = { width: 1800, height: 2200 };
 
 const Backdrop: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <AbsoluteFill
@@ -49,14 +53,52 @@ export const ReadmePhones: React.FC = () => (
   />
 );
 
+const STYLES = [
+  { key: "neutral", label: "Neutral" },
+  { key: "terminal", label: "Terminal" },
+  { key: "native", label: "Native" },
+] as const;
+const THEMES = [
+  { key: "light", label: "Light" },
+  { key: "dark", label: "Dark" },
+] as const;
+
+const label: React.CSSProperties = { color: color.fg, fontSize: 40, fontWeight: 600 };
+
+// Each interface style (columns) in the light and dark theme (rows), on the
+// sessions sheet: the screen where the styles differ the most
 export const ReadmeStyles: React.FC = () => (
-  <PhoneRow
-    phones={[
-      { src: "phone-terminal", label: "Neutral" },
-      { src: "phone-style-terminal", label: "Terminal" },
-      { src: "phone-style-native", label: "Native" },
-    ]}
-  />
+  <Backdrop>
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: `140px repeat(${STYLES.length}, auto)`,
+        columnGap: 56,
+        rowGap: 40,
+        alignItems: "center",
+        justifyItems: "center",
+      }}
+    >
+      <div />
+      {STYLES.map((s) => (
+        <div key={s.key} style={label}>
+          {s.label}
+        </div>
+      ))}
+      {THEMES.map((t) => (
+        <Fragment key={t.key}>
+          <div style={{ ...label, justifySelf: "end" }}>{t.label}</div>
+          {STYLES.map((s) => (
+            <PhoneFrame
+              key={s.key}
+              height={960}
+              screens={[{ at: 0, src: `phone-style-${s.key}-${t.key}` }]}
+            />
+          ))}
+        </Fragment>
+      ))}
+    </div>
+  </Backdrop>
 );
 
 // Herdr's workspaces, the Chat view and the Changes panel on a desktop

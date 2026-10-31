@@ -4,6 +4,7 @@ import { Poster } from "./poster";
 import {
   DESKTOP_SIZE,
   PHONES_SIZE,
+  STYLES_SIZE,
   ReadmeDesktop,
   ReadmePhones,
   ReadmeStyles,
@@ -88,6 +89,6 @@ export const RemotionRoot: React.FC = () => (
     <Still id="TermotePoster" component={Poster} width={1920} height={1080} />
     <Still id="ReadmePhones" component={ReadmePhones} {...PHONES_SIZE} />
     <Still id="ReadmeDesktop" component={ReadmeDesktop} {...DESKTOP_SIZE} />
-    <Still id="ReadmeStyles" component={ReadmeStyles} {...PHONES_SIZE} />
+    <Still id="ReadmeStyles" component={ReadmeStyles} {...STYLES_SIZE} />
   </>
 );

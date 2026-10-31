@@ -81,7 +81,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/screenshots/ui-styles.png" alt="Interface Styles" width="720" />
+  <img src="docs/images/screenshots/ui-styles.png" alt="Neutral, Terminal, Native 인터페이스 스타일(라이트와 다크)" width="720" />
 </p>
 
 ## 아키텍처

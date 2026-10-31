@@ -83,7 +83,7 @@ Kendalikan alat CLI (Claude Code, GitHub Copilot, terminal apa pun) dari jarak j
 </p>
 
 <p align="center">
-  <img src="docs/images/screenshots/ui-styles.png" alt="Interface Styles" width="720" />
+  <img src="docs/images/screenshots/ui-styles.png" alt="Gaya antarmuka Neutral, Terminal, dan Native, terang dan gelap" width="720" />
 </p>
 
 ## Arsitektur

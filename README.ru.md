@@ -83,7 +83,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/screenshots/ui-styles.png" alt="Interface Styles" width="720" />
+  <img src="docs/images/screenshots/ui-styles.png" alt="Стили интерфейса Neutral, Terminal и Native в светлой и тёмной теме" width="720" />
 </p>
 
 ## Архитектура
