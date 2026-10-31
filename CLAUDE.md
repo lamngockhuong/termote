@@ -286,7 +286,7 @@ pnpm --filter termote test:e2e:ui           # Run with UI debugger
 ```
 
 `pwa/e2e/worktrees.spec.ts` skips unless `TERMOTE_E2E_HERDR=1` (with `TERMOTE_E2E_REPO`): CI's
-`e2e-herdr` job runs it against a headless Herdr 0.9.3 (sha256 pinned) on its own socket,
+`e2e-herdr` job runs it against a headless Herdr 0.9.5 (sha256 pinned) on its own socket,
 `HOME` and XDG dirs, a throwaway repo with a branch `e2e-base` and a workspace `e2e-repo`. Never
 point it at your own Herdr.
 

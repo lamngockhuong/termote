@@ -399,7 +399,7 @@ jobs:
           path: pwa/test-results
           retention-days: 7
 
-  # Worktree workspaces against a real Herdr (#355): a headless Herdr 0.9.3 on
+  # Worktree workspaces against a real Herdr (#355): a headless Herdr 0.9.5 on
   # its own socket, HOME and XDG dirs, a throwaway repo, and the server with
   # --mux herdr. worktrees.spec.ts runs only with TERMOTE_E2E_HERDR=1, and
   # fails there (never skips) when caps.worktrees is off; terminal-copy.spec.ts
@@ -417,8 +417,8 @@ jobs:
       TERMOTE_MUX: herdr
       TERMOTE_BIND: 127.0.0.1
       TERMOTE_PORT: "7680"
-      HERDR_VERSION: v0.9.3
-      HERDR_SHA256: 18a8dc65f1c2fa485884344356dea1cfd911c6f06cf46fa78e193f4087f4dba7
+      HERDR_VERSION: v0.9.5
+      HERDR_SHA256: 14d9e8bc8b4a9e0118d77c32266f76d461f09b40342eb23752960bd89f59929d
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

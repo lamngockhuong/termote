@@ -1525,7 +1525,7 @@ func (m *herdrMux) ClosePane(ctx context.Context, paneID string) error {
 
 // herdrPaneMetaMin is the first Herdr checked to have pane.rename, pane
 // labels and metadata tokens in session.snapshot and the
-// workspace.metadata_updated event as used here (0.9.3, the version CI pins).
+// workspace.metadata_updated event as used here (0.9.3).
 const herdrPaneMetaMin = "0.9.3"
 
 // herdrCanPaneMeta: panes can be named, and metadata is read, on Herdr

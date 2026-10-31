@@ -8,8 +8,7 @@ import (
 )
 
 // herdrPaneLayoutMin is the first Herdr checked to have pane.split,
-// pane.zoom, pane.swap and pane.resize as used here (0.9.3, the version CI
-// pins).
+// pane.zoom, pane.swap and pane.resize as used here (0.9.3).
 const herdrPaneLayoutMin = "0.9.3"
 
 // herdrCanPaneLayout: panes can be split, zoomed, swapped and resized on
