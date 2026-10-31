@@ -27,7 +27,9 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/hooks/use-pane-text.ts`                  | Pane text for the sheet: server history, else xterm buffer     |
 | `pwa/src/utils/copy-text.ts`                      | Clipboard write, `execCommand('copy')` fallback over HTTP      |
 | `pwa/src/components/app-header.tsx`               | Header: session chip / tabs, More menu                         |
-| `pwa/src/components/pane-layout-menu.tsx`         | Header Pane menu: split, zoom, swap, resize, close             |
+| `pwa/src/components/pane-layout-menu.tsx`         | Header Pane menu: rename, split, zoom, swap, resize, close     |
+| `pwa/src/components/pane-rename-dialog.tsx`       | Rename pane: the name, checked as the server checks it         |
+| `pwa/src/components/meta-chips.tsx`               | Herdr metadata chips (text only); a one-pane tab's name line   |
 | `pwa/src/components/command-palette.tsx`          | Desktop palette: files, `>` commands, `:` line, `@` tabs       |
 | `pwa/src/utils/app-commands.ts`                   | The app's commands, for the palette, keys and Settings         |
 | `pwa/src/utils/palette-match.ts`                  | Palette prefixes, letter matching and ranking, `:line:col`     |
@@ -199,6 +201,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/mux_groups.go`                            | `/api/mux/groups*`: create, rename, close a group; cwd check   |
 | `server/mux_reorder.go`                           | `tabs/{id}/move`, `groups/{id}/move`: one slot, coded errors   |
 | `server/mux_pane_layout.go`                       | `panes/{id}/split\|zoom\|swap\|resize`: checks, codes          |
+| `server/mux_pane_name.go`                         | Pane names (`validPaneName`) and Herdr metadata (`cleanMeta`)  |
 | `server/mux_herdr.go`                             | Herdr backend                                                  |
 | `server/mux_herdr_layout.go`                      | Herdr pane layout: `pane.split/zoom/swap/resize`               |
 | `server/herdr_autostart.go`                       | Starts `herdr server` from a full client's snapshot            |

@@ -124,6 +124,35 @@ The backends differ in a few ways:
   viewing the tab, your own Zellij included, to the zoomed pane. Through the API, a split into a
   directory other than the pane's own is refused (Zellij ignores it).
 
+### Naming a pane
+
+Two panes running the same agent look alike. **Pane → Rename pane** gives the pane shown a name
+of up to 64 bytes; leave the field empty to remove it. The name is kept by the backend, not on
+the device, so it is still there after a reload and on your other devices. It shows instead of
+the agent's name or the pane title in the pane strip, under the tab's name in the sidebar for a
+tab of one pane, in the Chat view's header and in notifications ("api · work / build"), so two
+Claude Code panes no longer read the same. A name cannot start with `-`, end with `;` or hold
+control characters.
+
+Rename pane is offered on tmux 3.0 or later, Herdr 0.9.3 or later and Zellij 0.45.1 or later,
+also where the layout actions are not (Herdr on Windows), and never on psmux or a view-only
+device. How each backend keeps it:
+
+- **tmux**: in the pane option `@termote-name`, not the pane title, which the program in the pane
+  overwrites. The tmux desktop does not show it.
+- **Herdr**: as the pane's label, which the Herdr desktop shows too.
+- **Zellij**: as the pane's title, which Zellij shows. Termote remembers the names it set while
+  it runs; after Termote restarts, after the session is renamed, or once the program in the pane
+  sets its own title, the pane shows its title again.
+
+**Herdr metadata.** Herdr plugins and tools can report short tokens for a workspace or a pane (a
+PR number, an environment). Termote shows them read-only as small faint chips with a dashed
+border beside the workspace's name, the pane in the pane strip, or the row of a one-pane tab:
+three at most, then `+N`, and the tooltip lists them all and says they come from a Herdr plugin.
+They are always plain text, never a link, so a plugin cannot make one look like a Termote
+message. The server keeps at most 8 tokens of up to 64 characters each, and a view-only device
+gets none.
+
 ### Reordering tabs and workspaces
 
 Tabs keep the order they were made in until you move them, and Termote shows the order the

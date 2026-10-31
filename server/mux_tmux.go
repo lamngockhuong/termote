@@ -306,7 +306,7 @@ func (tmuxMux) Caps() Caps {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	return Caps{CopyMode: true, AgentChat: agentProcSupported, Files: tmuxFilesSupported, Groups: true,
-		ReorderTabs: tmuxCanReorder(ctx), PaneText: !tmuxIsPsmux, PaneLayout: !tmuxIsPsmux}
+		ReorderTabs: tmuxCanReorder(ctx), PaneText: !tmuxIsPsmux, PaneLayout: !tmuxIsPsmux, RenamePane: tmuxCanNamePanes(ctx)}
 }
 
 // tmuxReorderMin is the first tmux whose move-window takes -b (insert
@@ -338,9 +338,20 @@ func resetTmuxVersion() {
 func tmuxCanReorder(ctx context.Context) bool { return tmuxServerFrom32(ctx) }
 
 // tmuxServerFrom32 reports whether the server is tmux (never psmux) 3.2 or
+// later.
+func tmuxServerFrom32(ctx context.Context) bool { return tmuxServerAtLeast(ctx, tmuxReorderMin) }
+
+// tmuxPaneNameMin is the first tmux with pane options (set-option -p), where
+// a pane's name is kept.
+var tmuxPaneNameMin = [2]int{3, 0}
+
+// tmuxCanNamePanes reports whether a pane can be named: never on psmux.
+func tmuxCanNamePanes(ctx context.Context) bool { return tmuxServerAtLeast(ctx, tmuxPaneNameMin) }
+
+// tmuxServerAtLeast reports whether the server is tmux (never psmux) min or
 // later, the server's version (not the client's `tmux -V`, which can
 // differ). A version that cannot be read counts as older.
-func tmuxServerFrom32(ctx context.Context) bool {
+func tmuxServerAtLeast(ctx context.Context, min [2]int) bool {
 	if tmuxIsPsmux {
 		return false
 	}
@@ -359,7 +370,7 @@ func tmuxServerFrom32(ctx context.Context) bool {
 		tmuxVersion.major, tmuxVersion.minor, tmuxVersion.ok = major, minor, true
 	}
 	major, minor := tmuxVersion.major, tmuxVersion.minor
-	return major > tmuxReorderMin[0] || major == tmuxReorderMin[0] && minor >= tmuxReorderMin[1]
+	return major > min[0] || major == min[0] && minor >= min[1]
 }
 
 // tmuxVersionRe reads a tmux version: "3.2a", "3.4", "next-3.6".
@@ -485,6 +496,7 @@ func tmuxSnapshot(ctx context.Context, create bool) (Snapshot, error) {
 		}
 	}
 	attachTmuxProcesses(groups, tmuxPaneProcesses(ctx))
+	attachTmuxPaneNames(groups, listTmuxPaneNames(ctx))
 	snap := Snapshot{Groups: make([]Group, len(groups))}
 	for i, g := range groups {
 		snap.Groups[i] = g.Group
@@ -679,6 +691,72 @@ func applyTmuxPanes(groups []tmuxGroup, windows map[tmuxWindowKey][]tmuxPaneInfo
 			}
 			g.Tabs[ti].Panes = panes
 			g.panes[ti] = listed
+		}
+	}
+}
+
+// tmuxPaneNameFormat is every pane's id and name (tmuxPaneNameOption),
+// the name after its length in bytes (#{n:}): any process on the server can
+// set the option, to a value holding ':' or a newline, so the reply is read
+// by that length, never split into lines.
+const tmuxPaneNameFormat = "#{pane_id}:#{n:@termote-name}:#{@termote-name}"
+
+// listTmuxPaneNames reads every named pane's name, by %N. nil where panes
+// cannot be named (tmuxCanNamePanes) and on a failure: the panes show
+// without names.
+func listTmuxPaneNames(ctx context.Context) map[string]string {
+	if !tmuxCanNamePanes(ctx) {
+		return nil
+	}
+	// -u: without a UTF-8 locale tmux prints each multibyte character as
+	// '_' and a newline as '_', and the lengths no longer match.
+	out, err := tmuxCmd(ctx, "-u", "list-panes", "-a", "-F", tmuxPaneNameFormat).Output()
+	if err != nil {
+		return nil
+	}
+	return parseTmuxPaneNames(out)
+}
+
+// parseTmuxPaneNames reads tmuxPaneNameFormat output into the names of the
+// panes that have one. It stops at the first entry it cannot read, keeping
+// those before it.
+func parseTmuxPaneNames(out []byte) map[string]string {
+	names := map[string]string{}
+	for b := out; len(b) > 0; {
+		id, rest, ok := bytes.Cut(b, []byte(":"))
+		if !ok || !tmuxPaneIDRe.Match(id) {
+			break
+		}
+		n, rest, ok := bytes.Cut(rest, []byte(":"))
+		size, err := strconv.Atoi(string(n))
+		if !ok || err != nil || !tmuxIndexRe.Match(n) || size > len(rest) {
+			break
+		}
+		if name := cleanPaneName(string(rest[:size])); name != "" {
+			names[string(id)] = name
+		}
+		b = bytes.TrimPrefix(rest[size:], []byte("\r"))
+		if len(b) > 0 {
+			if b[0] != '\n' {
+				break
+			}
+			b = b[1:]
+		}
+	}
+	return names
+}
+
+// attachTmuxPaneNames gives each pane listed with a %N its name.
+func attachTmuxPaneNames(groups []tmuxGroup, names map[string]string) {
+	if len(names) == 0 {
+		return
+	}
+	for gi := range groups {
+		for ti := range groups[gi].Tabs {
+			panes := groups[gi].Tabs[ti].Panes
+			for pi := range panes {
+				panes[pi].Name = names[panes[pi].ID]
+			}
 		}
 	}
 }
@@ -1368,7 +1446,7 @@ func tmuxPaneOutput(ctx context.Context, args ...string) (string, error) {
 	var ee *exec.ExitError
 	if errors.As(err, &ee) {
 		switch stderr := string(ee.Stderr); {
-		case strings.Contains(stderr, "can't find pane"):
+		case strings.Contains(stderr, "can't find pane"), strings.Contains(stderr, "no such pane"):
 			return "", errUnknownPane
 		case strings.Contains(stderr, "no space for new pane"):
 			return "", errNoRoom
@@ -1422,6 +1500,33 @@ func (tmuxMux) ClosePane(ctx context.Context, paneID string) error {
 		return errLastPane
 	}
 	return tmuxPaneRun(ctx, "kill-pane", "-t", p.paneID)
+}
+
+// tmuxPaneNameOption is the pane option a pane's name is kept in: a pane's
+// title (select-pane -T) is overwritten by what runs in it (OSC 2).
+const tmuxPaneNameOption = "@termote-name"
+
+// RenamePane keeps the name in the pane's tmuxPaneNameOption, or unsets it.
+// Without -F, set-option stores the value verbatim (no format expansion),
+// so the name does not go through tmuxLiteral, which would double its '#'.
+// A tab id names the window's active pane. Not on psmux, nor before tmux
+// 3.0 (no pane options).
+func (tmuxMux) RenamePane(ctx context.Context, paneID, name string) error {
+	if !tmuxCanNamePanes(ctx) {
+		return errUnsupported
+	}
+	ref, ok := parseTmuxPaneID(paneID)
+	if !ok {
+		return inputError("invalid pane id")
+	}
+	p, err := resolveTmuxPane(ctx, ref)
+	if err != nil {
+		return err
+	}
+	if name == "" {
+		return tmuxPaneRun(ctx, "set-option", "-p", "-u", "-t", p.paneID, tmuxPaneNameOption)
+	}
+	return tmuxPaneRun(ctx, "set-option", "-p", "-t", p.paneID, tmuxPaneNameOption, name)
 }
 
 // layoutPane reads the pane a layout action names. Not on psmux, whose pane

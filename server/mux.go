@@ -61,6 +61,8 @@ type Mux interface {
 	RenameGroup(ctx context.Context, groupID, name string) error
 	// ClosePane closes one pane of a split tab, ending what runs in it.
 	ClosePane(ctx context.Context, paneID string) error
+	// RenamePane names paneID (validPaneName); "" clears its name.
+	RenamePane(ctx context.Context, paneID, name string) error
 	// SplitPane opens a pane beside (right) or under (down) paneID, in cwd
 	// (absolute, already checked; empty: paneID's own), without moving the
 	// focus, and returns its id.
@@ -146,6 +148,10 @@ type Caps struct {
 	// so zooming, swapping and resizing change only the desktop: the PWA
 	// offers split and close alone there.
 	PaneStream bool `json:"paneStream,omitempty"`
+	// RenamePane: a pane can be named (PATCH /api/mux/panes/{id}): tmux 3.0
+	// or later (not psmux), Herdr 0.9.3 or later, Zellij 0.45.1 or later.
+	// Never to a view-only client.
+	RenamePane bool `json:"renamePane"`
 	// ReorderGroups: a group can be moved (/api/mux/groups/{id}/move):
 	// Herdr 0.8.0 or later, not on Windows. tmux has no session order.
 	ReorderGroups bool `json:"reorderGroups"`
@@ -218,6 +224,9 @@ type Group struct {
 	// Worktree: the group belongs to a Herdr worktree group, as the
 	// repository's own checkout or as a linked worktree.
 	Worktree *GroupWorktree `json:"worktree,omitempty"`
+	// Meta: the metadata tokens Herdr plugins and tools reported for the
+	// workspace (cleanMeta); never sent to a view-only client.
+	Meta []MetaToken `json:"meta,omitempty"`
 }
 
 // GroupWorktree is a group's place in a Herdr worktree group. Branch is the
@@ -268,11 +277,16 @@ type PaneLayout struct {
 }
 
 type Pane struct {
-	ID      string       `json:"id"`
-	Active  bool         `json:"active"`
-	Title   string       `json:"title,omitempty"`
+	ID     string `json:"id"`
+	Active bool   `json:"active"`
+	Title  string `json:"title,omitempty"`
+	// Name is the name the user gave the pane (RenamePane), cleanPaneName.
+	Name    string       `json:"name,omitempty"`
 	Agent   *AgentInfo   `json:"agent,omitempty"`
 	Process *ProcessInfo `json:"process,omitempty"`
+	// Meta: the metadata tokens Herdr plugins and tools reported for the
+	// pane (cleanMeta); never sent to a view-only client.
+	Meta []MetaToken `json:"meta,omitempty"`
 	// key names the same pane while its id shifts (tmux %N), for the push
 	// watcher; never sent. Empty means the id.
 	key string
@@ -416,6 +430,11 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 			muxError(w, m, "snapshot", err)
 			return
 		}
+		// Whichever read ran (a view-only device's service worker peeks
+		// too), such a device gets no metadata.
+		if isViewOnly(r) {
+			snap = withoutMeta(snap)
+		}
 		snap = agent.activity.observe(gen, snap)
 		snap.APIVersion = apiVersion
 		snap.Backend = m.Name()
@@ -423,6 +442,7 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 		snap.Caps.Uploads = uploads != nil
 		snap.Caps.Trash = agent.files != nil && agent.files.trash != nil
 		snap.Caps.Places = agent.files != nil && len(agent.files.places) > 0 && snap.Caps.Files && !isViewOnly(r)
+		snap.Caps.RenamePane = snap.Caps.RenamePane && !isViewOnly(r)
 		snap.Caps.Auth = authenticated(r.Context())
 		if snap.Caps.Auth {
 			snap.Caps.Role = string(requestRole(r.Context()))
@@ -513,13 +533,36 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 	})
 
 	mux.HandleFunc("/api/mux/panes/{id}", func(w http.ResponseWriter, r *http.Request) {
-		if !requireMethod(w, r, http.MethodDelete) || !requireWriteRole(w, r) {
+		if !requireWriteRole(w, r) {
 			return
 		}
+		id := r.PathValue("id")
 		ctx, cancel := context.WithTimeout(r.Context(), muxTimeout)
 		defer cancel()
-		if err := m.ClosePane(ctx, r.PathValue("id")); err != nil {
-			muxError(w, m, "close pane", err)
+		switch r.Method {
+		case http.MethodPatch:
+			var body struct {
+				Name string `json:"name"`
+			}
+			if !decodeJSON(w, r, &body) {
+				return
+			}
+			if !validPaneName(body.Name) {
+				muxError(w, m, "rename pane", errInvalidPaneName)
+				return
+			}
+			if err := m.RenamePane(ctx, id, body.Name); err != nil {
+				muxError(w, m, "rename pane", err)
+				return
+			}
+		case http.MethodDelete:
+			if err := m.ClosePane(ctx, id); err != nil {
+				muxError(w, m, "close pane", err)
+				return
+			}
+		default:
+			w.Header().Set("Allow", "PATCH, DELETE")
+			jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 		jsonOK(w, map[string]any{"ok": true})

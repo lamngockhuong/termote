@@ -4,6 +4,7 @@ import { useT } from '../i18n/i18n-context'
 import type { Session } from '../types/session'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { AgentStatusBadge } from './agent-status-badge'
+import { OnlyPaneLine, onlyPaneOf } from './meta-chips'
 
 interface Props {
   session: Session
@@ -209,6 +210,7 @@ export function SwipeableSessionItem({
             >
               {visibleUnsafe(session.name)}
             </span>
+            <OnlyPaneLine pane={onlyPaneOf(session)} />
             {(session.description || session.commands) && (
               <span className="block truncate text-[12px] text-fg-muted">
                 {[

@@ -9,6 +9,7 @@ const {
   mockCloseTab,
   mockClosePane,
   mockSplitPane,
+  mockRenamePane,
   mockZoomPane,
   mockSwapPane,
   mockResizePane,
@@ -35,6 +36,7 @@ const {
   mockCloseTab: vi.fn(),
   mockClosePane: vi.fn(),
   mockSplitPane: vi.fn(),
+  mockRenamePane: vi.fn(),
   mockZoomPane: vi.fn(),
   mockSwapPane: vi.fn(),
   mockResizePane: vi.fn(),
@@ -67,6 +69,7 @@ vi.mock('./use-mux-api', async (importOriginal) => ({
   closeTab: mockCloseTab,
   closePane: mockClosePane,
   splitPane: mockSplitPane,
+  renamePane: mockRenamePane,
   zoomPane: mockZoomPane,
   swapPane: mockSwapPane,
   resizePane: mockResizePane,
@@ -1517,6 +1520,55 @@ describe('useLocalSessions with herdr', () => {
       { id: 'w1:p3', label: 'logs', hasAgent: false, agentStatus: undefined },
       { id: 'w1:p4', label: 'Pane 4', hasAgent: false, agentStatus: undefined },
     ])
+  })
+
+  it('labels a named pane by its name first, and carries metadata', async () => {
+    const snap = herdr()
+    const meta = [{ key: 'env', value: '<b>dev</b>' }]
+    const tabs = snap.groups[0].tabs
+    Object.assign(tabs[0].panes[0], { name: 'api', meta })
+    // An empty name and no metadata fall back to the agent, as before
+    Object.assign(tabs[0].panes[1], { name: '', meta: [] })
+    Object.assign(snap.groups[0], { meta })
+    mockSnapshot.extra = snap
+    const { result } = await render()
+    const [p1, p2] = result.current.sessions[0].panes ?? []
+    expect(p1).toMatchObject({
+      label: 'api',
+      name: 'api',
+      meta,
+      agentName: 'claude',
+    })
+    expect(p2).toEqual({
+      id: 'w1:p2',
+      label: 'codex',
+      hasAgent: true,
+      agentName: 'codex',
+      agentStatus: 'blocked',
+    })
+    expect(result.current.groups[0].meta).toEqual(meta)
+    expect(result.current.groups[1]).not.toHaveProperty('meta')
+  })
+
+  it('names a pane, then reads the list again, a refusal reaching the caller', async () => {
+    const { result } = await render()
+    mockRenamePane.mockResolvedValueOnce(undefined)
+    const fetches = mockFetchTabs.mock.calls.length
+    await act(async () => {
+      await result.current.renamePane('w1:p2', 'tests')
+    })
+    expect(mockRenamePane).toHaveBeenCalledWith('w1:p2', 'tests')
+    mockRenamePane.mockRejectedValueOnce(
+      new RequestError(404, 'unknown_pane', 'gone'),
+    )
+    let caught: unknown
+    await act(async () => {
+      await result.current.renamePane('w1:p9', '').catch((e) => {
+        caught = e
+      })
+    })
+    expect((caught as RequestError).code).toBe('unknown_pane')
+    expect(mockFetchTabs.mock.calls.length).toBeGreaterThan(fetches)
   })
 
   it('switching tab stays on this device and is not undone by the poll', async () => {

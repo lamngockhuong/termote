@@ -176,6 +176,7 @@ func TestViewRefusedByEveryWriteHandler(t *testing.T) {
 		{"DELETE", "/api/mux/tabs/0", ""},
 		{"POST", "/api/mux/tabs/0/select", "{}"},
 		{"DELETE", "/api/mux/panes/0", ""},
+		{"PATCH", "/api/mux/panes/0", `{"name":"x"}`},
 		{"POST", "/api/mux/panes/0/keys", `{"keys":"ls"}`},
 		{"POST", "/api/mux/panes/0/scroll", `{"lines":3}`},
 		{"POST", "/api/mux/panes/0/split", `{"direction":"right"}`},

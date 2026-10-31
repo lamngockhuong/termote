@@ -3,6 +3,7 @@ import { useT } from '../i18n/i18n-context'
 import type { SessionPane } from '../types/session'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { AgentStatusBadge } from './agent-status-badge'
+import { MetaChips } from './meta-chips'
 import { FOCUS_RING } from './ui/button'
 
 interface Props {
@@ -67,6 +68,7 @@ export function PaneStrip({ panes, activePaneId, onSelect, onClose }: Props) {
                   </span>
                 )}
               </span>
+              <MetaChips tokens={pane.meta} />
             </button>
             {onClose && (
               <button

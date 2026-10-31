@@ -170,6 +170,34 @@ describe('notificationContent', () => {
     })
   })
 
+  it('names the pane by the name the user gave it, before the agent', () => {
+    const named = (paneId: string, name: string) =>
+      notificationContent(
+        {
+          kind: 'blocked',
+          groupId: '$1',
+          tabId: '$1:2',
+          paneId,
+          agentName: 'claude',
+        },
+        [
+          {
+            ...sessions[0],
+            panes: [
+              { id: '%3', label: 'api', name, hasAgent: true },
+              { id: '%4', label: 'claude', hasAgent: true },
+            ],
+          },
+        ],
+        groups,
+        tFor('en'),
+      ).options.body
+    expect(named('%3', 'api\u202e')).toBe('api · work / build')
+    expect(named('%3', 'tests')).toBe('tests · work / build')
+    // A pane without a name keeps the agent's
+    expect(named('%4', 'x')).toBe('claude · work / build')
+  })
+
   it('falls back to generic text without names or a group', () => {
     const c = notificationContent(
       { kind: 'done', tabId: 'gone', paneId: 'p' },

@@ -63,6 +63,7 @@ import {
   removeWorktree,
   renameFile,
   renameGroup,
+  renamePane,
   renameTab,
   resizePane,
   restoreFile,
@@ -567,6 +568,21 @@ describe('pane layout API client', () => {
       ['/api/mux/panes/%253/swap', 'POST', '{"direction":"next"}'],
       ['/api/mux/panes/%253/resize', 'POST', '{"direction":"left","amount":5}'],
       ['/api/mux/panes/%253/split', 'POST', '{"direction":"down"}'],
+    ])
+  })
+
+  it('renames a pane with a JSON PATCH, a refusal throwing its code', async () => {
+    const { calls } = mockFetch(
+      { body: { ok: true } },
+      { status: 400, body: { error: 'invalid name', code: 'invalid_name' } },
+    )
+    await renamePane('w1:p1', 'api')
+    await expect(renamePane('%3', '')).rejects.toMatchObject({
+      code: 'invalid_name',
+    })
+    expect(calls.map((c) => [c.url, c.init?.method, c.init?.body])).toEqual([
+      ['/api/mux/panes/w1%3Ap1', 'PATCH', '{"name":"api"}'],
+      ['/api/mux/panes/%253', 'PATCH', '{"name":""}'],
     ])
   })
 

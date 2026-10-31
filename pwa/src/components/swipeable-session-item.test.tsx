@@ -85,6 +85,25 @@ describe('SwipeableSessionItem', () => {
     expect(screen.getByText('Sh⟨U+202E⟩ell')).toBeInTheDocument()
   })
 
+  it("shows a one-pane tab's pane name and metadata", () => {
+    renderItem({
+      session: {
+        ...SESSION,
+        panes: [
+          {
+            id: 'p',
+            label: 'api',
+            name: 'api',
+            meta: [{ key: 'env', value: 'dev' }],
+            hasAgent: false,
+          },
+        ],
+      },
+    })
+    expect(screen.getByText('api')).toBeInTheDocument()
+    expect(screen.getByText('env: dev')).toBeInTheDocument()
+  })
+
   it('shows the description and what runs in the session', () => {
     renderItem({ session: { ...SESSION, commands: ['bash', 'vim'] } })
     expect(screen.getByText('Terminal · bash, vim')).toBeInTheDocument()

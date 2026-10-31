@@ -23,9 +23,20 @@ export function worstAgentStatus(
   return AGENT_STATUS_ORDER.find((s) => statuses.includes(s))
 }
 
+// A metadata token a Herdr plugin or tool reported: plain text from outside
+// termote, shown as text only.
+export interface MetaToken {
+  key: string
+  value: string
+}
+
 export interface SessionPane {
   id: string
   label: string
+  // The name the user gave the pane, which label shows first.
+  name?: string
+  // Metadata a Herdr plugin or tool reported (plain text, never markup).
+  meta?: MetaToken[]
   hasAgent: boolean
   // Which agent ("claude"), when it runs one
   agentName?: string
@@ -83,6 +94,7 @@ export interface SessionGroup {
   // repository's own checkout), the branch, when known, and a linked
   // worktree's repository checkout (parent), when open.
   worktree?: { linked: boolean; branch?: string; parent?: string }
+  meta?: MetaToken[]
 }
 
 // Default sessions (single session on fresh install)

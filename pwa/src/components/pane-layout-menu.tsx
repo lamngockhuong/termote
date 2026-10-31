@@ -6,6 +6,7 @@ import {
   ArrowUp,
   Columns2,
   Maximize2,
+  Pencil,
   Rows2,
   X,
 } from 'lucide-react'
@@ -23,6 +24,9 @@ import { Menu, MenuGroup, MenuItem, MenuSeparator } from './ui/menu'
 export const RESIZE_STEP = 5
 
 interface Props {
+  // Split, zoom, swap, resize and close are offered: the backend has the
+  // layout actions (caps.paneLayout)
+  layout: boolean
   // Desktop: the Resize items are offered
   desktop: boolean
   // Zoom, swap and resize are offered: the page shows the tab's layout
@@ -39,6 +43,8 @@ interface Props {
   onResize: (direction: ResizeDirection) => void
   // Asks to close the pane (the Close pane? confirmation)
   onClose: () => void
+  // Asks for the pane's name; without it no Rename item is shown
+  onRename?: () => void
 }
 
 const ICON = 15
@@ -59,9 +65,11 @@ const RESIZE: {
 ]
 
 // The Pane menu of the header: what the pane shown can do to its tab's
-// layout. Rendered only where the backend offers it to this device.
+// layout, and its name. Rendered only where the backend offers either to
+// this device.
 export function PaneLayoutMenu(p: Props) {
   const { t } = useT()
+  const arrange = p.layout && p.arrange
   return (
     <Menu
       label={t('dialogs.paneMenu.label')}
@@ -69,16 +77,28 @@ export function PaneLayoutMenu(p: Props) {
       triggerSize="sm"
       align="end"
     >
-      <MenuItem
-        icon={<Columns2 size={ICON} />}
-        onSelect={() => p.onSplit('right')}
-      >
-        {t('dialogs.paneMenu.splitRight')}
-      </MenuItem>
-      <MenuItem icon={<Rows2 size={ICON} />} onSelect={() => p.onSplit('down')}>
-        {t('dialogs.paneMenu.splitDown')}
-      </MenuItem>
-      {p.arrange && (
+      {p.onRename && (
+        <MenuItem icon={<Pencil size={ICON} />} onSelect={p.onRename}>
+          {t('dialogs.paneMenu.rename')}
+        </MenuItem>
+      )}
+      {p.layout && (
+        <>
+          <MenuItem
+            icon={<Columns2 size={ICON} />}
+            onSelect={() => p.onSplit('right')}
+          >
+            {t('dialogs.paneMenu.splitRight')}
+          </MenuItem>
+          <MenuItem
+            icon={<Rows2 size={ICON} />}
+            onSelect={() => p.onSplit('down')}
+          >
+            {t('dialogs.paneMenu.splitDown')}
+          </MenuItem>
+        </>
+      )}
+      {arrange && (
         <>
           <MenuItem icon={<Maximize2 size={ICON} />} onSelect={p.onZoom}>
             {t('dialogs.paneMenu.zoom')}
@@ -92,7 +112,7 @@ export function PaneLayoutMenu(p: Props) {
           </MenuItem>
         </>
       )}
-      {p.arrange && p.desktop && (
+      {arrange && p.desktop && (
         <MenuGroup label={t('dialogs.paneMenu.resize')}>
           {RESIZE.map(({ direction, label, icon: Icon }) => (
             <MenuItem
@@ -106,7 +126,7 @@ export function PaneLayoutMenu(p: Props) {
           ))}
         </MenuGroup>
       )}
-      {p.canClose && (
+      {p.layout && p.canClose && (
         <>
           <MenuSeparator />
           <MenuItem icon={<X size={ICON} />} danger onSelect={p.onClose}>

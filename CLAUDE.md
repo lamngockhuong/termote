@@ -234,7 +234,8 @@ that entry in the same change. A new feature with a security surface gets an ent
 - Never take a filesystem path from the client: open through `os.Root` under the pane root, with the files
   deny lists and the sensitive-name `reveal` check
 - tmux/psmux/Herdr: argv or RPC only, never a shell; exact targets (`$N:=i`, `=name`); names and paths into
-  tmux formats go through `tmuxLiteral`; psmux differs (no `=` before an index, no `#{n:}`)
+  tmux formats go through `tmuxLiteral` (a pane name set with `set-option`, no `-F`, is stored verbatim and does
+  not); psmux differs (no `=` before an index, no `#{n:}`)
 - git only through the files routes' `gitRunner` (hooks, filters, fsmonitor off; `GIT_*`/`TERMOTE_*` stripped)
 - Internal errors are logged only; never return OS, git or Herdr text to a client
 - The password never goes into argv, a service unit/plist/task, a log or an `audit:` line; never `sudo`
@@ -285,7 +286,7 @@ pnpm --filter termote test:e2e:ui           # Run with UI debugger
 ```
 
 `pwa/e2e/worktrees.spec.ts` skips unless `TERMOTE_E2E_HERDR=1` (with `TERMOTE_E2E_REPO`): CI's
-`e2e-herdr` job runs it against a headless Herdr 0.9.3 (sha256 pinned) on its own socket,
+`e2e-herdr` job runs it against a headless Herdr 0.9.5 (sha256 pinned) on its own socket,
 `HOME` and XDG dirs, a throwaway repo with a branch `e2e-base` and a workspace `e2e-repo`. Never
 point it at your own Herdr.
 

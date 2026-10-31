@@ -26,6 +26,24 @@ describe('PaneStrip', () => {
     expect(screen.getByRole('img', { name: 'Agent working' })).toBeVisible()
   })
 
+  it('shows the metadata of a pane after its label, as text', () => {
+    render(
+      <PaneStrip
+        panes={[
+          { ...PANES[0], meta: [{ key: 'env', value: '<b>dev</b>' }] },
+          PANES[1],
+        ]}
+        activePaneId="p1"
+        onSelect={vi.fn()}
+      />,
+    )
+    const [claude] = within(
+      screen.getByRole('group', { name: 'Panes' }),
+    ).getAllByRole('button')
+    expect(claude).toHaveTextContent('claudeenv: <b>dev</b>')
+    expect(claude.querySelector('b')).toBeNull()
+  })
+
   it('shows the hidden characters of a label and a command', () => {
     render(
       <PaneStrip

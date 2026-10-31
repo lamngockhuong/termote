@@ -45,6 +45,7 @@ import {
   openWorktree as apiOpenWorktree,
   removeWorktree as apiRemoveWorktree,
   renameGroup as apiRenameGroup,
+  renamePane as apiRenamePane,
   resizePane as apiResizePane,
   splitPane as apiSplitPane,
   swapPane as apiSwapPane,
@@ -250,7 +251,12 @@ export function buildSessions(
       const panes: SessionPane[] = tab.panes.map((p, i) => ({
         id: p.id,
         label:
-          p.agent?.name || p.title || t('dialogs.pane.fallback', { n: i + 1 }),
+          p.name ||
+          p.agent?.name ||
+          p.title ||
+          t('dialogs.pane.fallback', { n: i + 1 }),
+        ...(p.name && { name: p.name }),
+        ...(p.meta?.length && { meta: p.meta }),
         hasAgent: !!p.agent,
         agentName: p.agent?.name,
         agentStatus: toAgentStatus(p.agent?.status),
@@ -290,6 +296,7 @@ export function buildSessions(
       name: g.name,
       agentStatus: worstAgentStatus(groupTabs.map((t) => t.agentStatus)),
       ...(g.worktree && { worktree: g.worktree }),
+      ...(g.meta?.length && { meta: g.meta }),
     })
   }
   return { sessions, groups, serverActive, activeByGroup }
@@ -792,6 +799,19 @@ export function useLocalSessions(pollInterval = 5) {
     [layoutPane],
   )
 
+  // Names a pane ('' clears it), then reads the list again; a refusal
+  // (RequestError) reaches the caller.
+  const renamePane = useCallback(
+    async (paneId: string, name: string) => {
+      try {
+        await apiRenamePane(paneId, name)
+      } finally {
+        await refreshSessions()
+      }
+    },
+    [refreshSessions],
+  )
+
   const updateSession = useCallback(
     async (sessionId: string, updates: Partial<Omit<Session, 'id'>>) => {
       const session = sessions.find((s) => s.id === sessionId)
@@ -1025,6 +1045,7 @@ export function useLocalSessions(pollInterval = 5) {
     zoomPane,
     swapPane,
     resizePane,
+    renamePane,
     updateSession,
     createGroup,
     renameGroup,

@@ -59,6 +59,7 @@ import {
   nameTooLong,
 } from './group-dialog'
 import { IconPicker } from './icon-picker'
+import { MetaChips, OnlyPaneLine, onlyPaneOf } from './meta-chips'
 import { SearchToggle, SessionSearchField } from './session-search-field'
 import { SwipeableSessionItem } from './swipeable-session-item'
 import { Button, FOCUS_RING, IconButton } from './ui/button'
@@ -544,6 +545,7 @@ export function SessionSidebar({
   // Drag it within its group, or Alt+Up/Down while its button has focus.
   const renderDesktopItem = (session: Session) => {
     const active = activeId === session.id
+    const onlyPane = onlyPaneOf(session)
     const movable = canMoveTabs(session.groupId)
     const key = keyOf(session)
     const onKeyDown = (e: KeyboardEvent) => {
@@ -584,7 +586,7 @@ export function SessionSidebar({
               : undefined
           }
           className={`flex min-w-0 flex-1 items-center gap-2.5 rounded-control px-2 text-left text-[14px] ${
-            session.commands ? 'min-h-9 py-1' : 'h-9'
+            session.commands || onlyPane ? 'min-h-9 py-1' : 'h-9'
           } ${FOCUS_RING} focus-visible:-outline-offset-2`}
         >
           <span className="shrink-0 text-[15px] leading-none">
@@ -594,6 +596,9 @@ export function SessionSidebar({
             <span className="block truncate ui-terminal:font-label ui-terminal:text-[13px]">
               {visibleUnsafe(session.name)}
             </span>
+            {/* A one-pane tab has no pane strip: its pane's name and
+                metadata show here */}
+            <OnlyPaneLine pane={onlyPane} />
             {session.commands && (
               <span className="block truncate text-[11px] font-normal text-fg-subtle">
                 {visibleUnsafe(session.commands.join(', '))}
@@ -939,6 +944,10 @@ export function SessionSidebar({
                   session's commands sit under its name */}
               <span className="flex min-w-0 flex-1 flex-col text-left">
                 <span className="truncate">{name}</span>
+                <MetaChips
+                  tokens={group.meta}
+                  className="normal-case tracking-normal"
+                />
                 {group.worktree?.branch && (
                   // relative: the sr-only label is absolute; without a
                   // containing block here it escapes the truncation and

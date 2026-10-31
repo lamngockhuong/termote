@@ -100,7 +100,8 @@ export function notificationTitle(
 }
 
 // Names only: no screen or transcript text, and never the pane title, which
-// whatever runs in the pane can set.
+// whatever runs in the pane can set. The name the user gave the pane goes
+// before the agent's, so two agents' panes read apart.
 export function notificationContent(
   event: AgentEvent,
   sessions: readonly Session[],
@@ -109,7 +110,11 @@ export function notificationContent(
 ): NotificationContent {
   const tab = sessions.find((s) => s.id === event.tabId)
   const group = groups.find((g) => g.id === event.groupId)
-  const agent = cleanName(event.agentName) || t('dialogs.notify.agent')
+  const paneName = tab?.panes?.find((p) => p.id === event.paneId)?.name
+  const agent =
+    cleanName(paneName) ||
+    cleanName(event.agentName) ||
+    t('dialogs.notify.agent')
   const place = [cleanName(group?.name), cleanName(tab?.name)]
     .filter(Boolean)
     .join(' / ')

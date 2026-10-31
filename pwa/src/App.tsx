@@ -45,6 +45,7 @@ import {
   paneLayoutMessage,
   RESIZE_STEP,
 } from './components/pane-layout-menu'
+import { PaneRenameDialog } from './components/pane-rename-dialog'
 import { PaneStrip } from './components/pane-strip'
 import { ReadOnlyBar } from './components/read-only-bar'
 import { SelectTextSheet } from './components/select-text-sheet'
@@ -351,6 +352,7 @@ export default function App({
     zoomPane,
     swapPane,
     resizePane,
+    renamePane,
     updateSession,
     createGroup,
     renameGroup,
@@ -446,6 +448,10 @@ export default function App({
   // The pane layout actions, on the pane shown: offered where the backend
   // has them, never to a view-only device. A refusal shows as a toast.
   const paneLayoutOn = !!mux.caps.paneLayout && !readOnly
+  // Naming the pane shown: its own cap (Herdr on Windows names panes
+  // without the layout actions; tmux before 3.0 has them but no names)
+  const paneRenameOn = !!mux.caps.renamePane && !readOnly
+  const [renamingPaneId, setRenamingPaneId] = useState<string | null>(null)
   const shownPanes = activeSession.panes ?? []
   const shownPaneIndex = shownPanes.findIndex(
     (p) => p.id === activeSession.paneId,
@@ -2003,9 +2009,10 @@ export default function App({
             onOpenOverview={focus ? undefined : openOverview}
             onOpenInMain={focus ? openInMain : undefined}
             paneMenu={
-              paneLayoutOn &&
+              (paneLayoutOn || paneRenameOn) &&
               !overviewOpen && (
                 <PaneLayoutMenu
+                  layout={paneLayoutOn}
                   desktop={!isMobile}
                   // Zoom, swap and resize change what the page shows only
                   // where it shows the tab's layout
@@ -2021,6 +2028,11 @@ export default function App({
                   // Offered with two panes or more, one of them shown
                   onClose={() =>
                     setPendingPaneId(activeSession.paneId as string)
+                  }
+                  onRename={
+                    paneRenameOn && activeSession.paneId
+                      ? () => setRenamingPaneId(activeSession.paneId as string)
+                      : undefined
                   }
                 />
               )
@@ -2398,6 +2410,13 @@ export default function App({
           )}
         />
       </ConfirmDialog>
+      {renamingPaneId && (
+        <PaneRenameDialog
+          name={shownPanes.find((p) => p.id === renamingPaneId)?.name ?? ''}
+          onClose={() => setRenamingPaneId(null)}
+          onSave={(name) => renamePane(renamingPaneId, name)}
+        />
+      )}
       {newGroupOpen && (
         <GroupDialog
           kind={groupKind}

@@ -17,6 +17,17 @@ export default {
   'dialogs.paneMenu.resizeUp': 'Resize up',
   'dialogs.paneMenu.resizeDown': 'Resize down',
   'dialogs.paneMenu.close': 'Close pane',
+  'dialogs.paneMenu.rename': 'Rename pane',
+  // Naming a pane (components/pane-rename-dialog.tsx)
+  'dialogs.paneRename.title': 'Rename pane',
+  'dialogs.paneRename.label': 'Name',
+  'dialogs.paneRename.placeholder': 'e.g. api, tests',
+  'dialogs.paneRename.hint': 'Leave empty to remove the name',
+  'dialogs.paneRename.save': 'Save',
+  'dialogs.paneRename.tooLong': 'At most {n} bytes',
+  'dialogs.paneRename.invalid':
+    "A name cannot start with '-', end with ';' or hold control characters",
+  'dialogs.paneRename.failed': 'Could not rename the pane',
   // A refused layout action, where errors.* says it otherwise
   'dialogs.paneLayout.busy': 'Busy, try again',
   'dialogs.paneLayout.unsupported': 'Not supported for this pane',
