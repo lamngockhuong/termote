@@ -330,6 +330,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/hooks/use-review-draft.ts`               | A pane's review comments, as they change                       |
 | `pwa/src/hooks/use-review-composer.ts`            | A comment being written on lines, then added                   |
 | `pwa/src/hooks/use-line-pick.ts`                  | Lines picked by their numbers (Shift, touch)                   |
+| `pwa/src/hooks/use-line-window.ts`                | Blocks of a long file's lines in the page, near the view only  |
 | `pwa/src/components/line-comment-bar.tsx`         | Line number buttons and the bar under picked lines             |
 | `pwa/src/components/review-comment-sheet.tsx`     | Write or edit a review comment                                 |
 | `pwa/src/components/review-panel.tsx`             | Review button and panel: list, edit, Clear, Send               |

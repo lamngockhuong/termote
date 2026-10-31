@@ -650,8 +650,8 @@ Chạy trên tmux (Linux/macOS) và Herdr; psmux (Windows) không có hai view n
       về cây thư mục
 - [ ] File nhị phân hoặc lớn hơn 4 MiB hiện
       `Not previewable (binary, special file or larger than 4 MiB)`; file văn bản từ 1 đến 4 MiB vẫn
-      hiện, nhưng không có nút "Edit"; file lớn hơn 1 MiB và dài hơn 50.000 dòng chỉ hiện
-      50.000 dòng đầu, kèm thông báo "Chỉ hiện 50.000 dòng đầu"
+      hiện, nhưng không có nút "Edit"; file 140.000 dòng mở ngay trên
+      máy tính bảng và cuộn được tới dòng cuối
 - [ ] `.env` (có icon ổ khóa trên cây) hỏi `Show this file?` trước: Cancel đóng tab của nó, Show
       hiện nội dung; chuyển sang tab khác rồi quay lại thì vẫn hiện, đóng tab rồi mở lại thì hỏi lại
 - [ ] `.git` không mở được ("This directory can't be shown")

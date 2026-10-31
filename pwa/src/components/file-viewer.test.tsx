@@ -33,8 +33,6 @@ import {
   HeaderActions,
   PREVIEW_MAX_BYTES,
   rebaseDraft,
-  SOURCE_CUT_BYTES,
-  SOURCE_MAX_LINES,
 } from './file-viewer'
 
 const mockContent = vi.fn()
@@ -108,21 +106,6 @@ vi.mock('../utils/highlight', async (orig) => ({
   highlight: async () => null,
   highlightLang: async () => null,
 }))
-// When set, the source view only says how many lines it got: rendering
-// tens of thousands of rows takes jsdom longer than a test may
-const codeLines = vi.hoisted(() => ({ count: false }))
-vi.mock('./code-block', async (orig) => {
-  const m = await orig<typeof import('./code-block')>()
-  return {
-    ...m,
-    CodeBlock: (p: Parameters<typeof m.CodeBlock>[0]) =>
-      codeLines.count ? (
-        <div data-testid="code-block">{m.splitLines(p.text).length} lines</div>
-      ) : (
-        <m.CodeBlock {...p} />
-      ),
-  }
-})
 // Times the Markdown of a preview was parsed (its rehype plugins attached)
 const parses = vi.hoisted(() => ({ n: 0 }))
 vi.mock('../utils/markdown-links', async (orig) => {
@@ -390,75 +373,6 @@ describe('FileViewer: Markdown', () => {
     expect(await screen.findByTestId('code-block')).toBeInTheDocument()
     expect(screen.getByText(/Too large to preview/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull()
-  })
-
-  it('shows the first lines of a very long large file, saying so', async () => {
-    codeLines.count = true
-    try {
-      const text = 'x\n'.repeat(SOURCE_MAX_LINES + 1)
-      const size = SOURCE_CUT_BYTES + 1
-      mockContent.mockResolvedValue({ root: '/r', path: 'a', size, text })
-      show()
-      expect(await screen.findByTestId('code-block')).toHaveTextContent(
-        `${SOURCE_MAX_LINES} lines`,
-      )
-      expect(
-        screen.getByText(
-          'Only the first 50,000 lines are shown: download the file to see all of it',
-        ),
-      ).toBeInTheDocument()
-    } finally {
-      codeLines.count = false
-    }
-  })
-
-  it('shows every line of a large file at the limit', async () => {
-    codeLines.count = true
-    try {
-      const text = 'x\n'.repeat(SOURCE_MAX_LINES)
-      const size = SOURCE_CUT_BYTES + 1
-      mockContent.mockResolvedValue({ root: '/r', path: 'a', size, text })
-      show()
-      expect(await screen.findByTestId('code-block')).toHaveTextContent(
-        `${SOURCE_MAX_LINES} lines`,
-      )
-      expect(screen.queryByText(/Only the first/)).toBeNull()
-    } finally {
-      codeLines.count = false
-    }
-  })
-
-  it('shows every line of a file up to the edit limit, however many', async () => {
-    codeLines.count = true
-    try {
-      const text = 'x\n'.repeat(SOURCE_MAX_LINES + 1)
-      const size = SOURCE_CUT_BYTES
-      mockContent.mockResolvedValue({ root: '/r', path: 'a', size, text })
-      show({ line: SOURCE_MAX_LINES + 1, jump: 1 })
-      expect(await screen.findByTestId('code-block')).toHaveTextContent(
-        `${SOURCE_MAX_LINES + 1} lines`,
-      )
-      expect(screen.queryByText(/first 50,000 lines/)).toBeNull()
-    } finally {
-      codeLines.count = false
-    }
-  })
-
-  it('says a line asked for is past the lines shown', async () => {
-    codeLines.count = true
-    try {
-      const text = 'x\n'.repeat(SOURCE_MAX_LINES + 1)
-      const size = SOURCE_CUT_BYTES + 1
-      mockContent.mockResolvedValue({ root: '/r', path: 'a', size, text })
-      show({ line: SOURCE_MAX_LINES + 1, jump: 1 })
-      expect(
-        await screen.findByText(
-          'Line 50,001 is past the first 50,000 lines shown: download the file to see it',
-        ),
-      ).toBeInTheDocument()
-    } finally {
-      codeLines.count = false
-    }
   })
 
   it('has no preview for other files', async () => {

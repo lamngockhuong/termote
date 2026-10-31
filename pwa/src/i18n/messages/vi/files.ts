@@ -393,9 +393,7 @@ export default {
   'files.viewer.gone': 'File này không còn trên máy chủ',
   'files.viewer.tooLargeToPreview':
     'Quá lớn để xem trước: đang hiện văn bản gốc',
-  'files.viewer.linesCut': 'Chỉ hiện {n} dòng đầu: tải file về để xem toàn bộ',
-  'files.viewer.lineCut':
-    'Dòng {line} nằm sau {n} dòng đầu đang hiện: tải file về để xem',
+  'files.viewer.moreLines': 'Còn {n} dòng nữa không hiện: tải file về để đọc',
   'files.viewer.reapply': 'Tải lại và áp dụng lại',
   'files.viewer.unpreviewable':
     'Không xem trước được (file nhị phân, file đặc biệt hoặc lớn hơn 4 MiB)',

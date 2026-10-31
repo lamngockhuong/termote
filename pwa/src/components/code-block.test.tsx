@@ -9,7 +9,12 @@ import {
 import { createRoot } from 'react-dom/client'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider } from '../contexts/theme-context'
-import { CodeBlock, firstLines, splitLines } from './code-block'
+import {
+  CodeBlock,
+  MAX_LINES,
+  splitLines,
+  WINDOW_FROM_LINES,
+} from './code-block'
 
 const mockHighlight = vi.fn()
 vi.mock('../utils/highlight', () => ({
@@ -35,16 +40,6 @@ describe('splitLines', () => {
     expect(splitLines('a\nb\n')).toEqual(['a', 'b'])
     expect(splitLines('a\n\n')).toEqual(['a', ''])
     expect(splitLines('')).toEqual([''])
-  })
-})
-
-describe('firstLines', () => {
-  it('cuts after the last line kept, only when more follow', () => {
-    expect(firstLines('a\nb\nc', 2)).toBe('a\nb\n')
-    expect(firstLines('a\nb\n\n', 2)).toBe('a\nb\n')
-    expect(firstLines('a\nb\n', 2)).toBeUndefined()
-    expect(firstLines('a\nb', 2)).toBeUndefined()
-    expect(firstLines('', 2)).toBeUndefined()
   })
 })
 
@@ -167,6 +162,79 @@ describe('CodeBlock at a line', () => {
     Element.prototype.scrollIntoView = scroll
     render(at(undefined, undefined, 50))
     expect(scroll).not.toHaveBeenCalled()
+  })
+})
+
+describe('CodeBlock of many lines', () => {
+  const numbered = (n: number) =>
+    Array.from({ length: n }, (_, i) => `line ${i + 1}`).join('\n')
+  const many = (n: number, line?: number, jump?: number) => (
+    <ThemeProvider>
+      <CodeBlock
+        text={numbered(n)}
+        path="a.log"
+        wrap={false}
+        line={line}
+        jump={jump}
+      />
+    </ThemeProvider>
+  )
+  const row = (n: number) =>
+    screen.getByTestId('code-block').querySelector(`[data-line="${n}"]`)
+  const rows = () =>
+    screen.getByTestId('code-block').querySelectorAll('[data-line]').length
+
+  beforeEach(() => mockHighlight.mockResolvedValue(null))
+
+  it('shows every line up to the limit', () => {
+    render(many(WINDOW_FROM_LINES))
+    expect(rows()).toBe(WINDOW_FROM_LINES)
+  })
+
+  it('past it, puts only the lines near the view in the page, the rest as space', () => {
+    render(many(5000))
+    expect(rows()).toBeLessThan(WINDOW_FROM_LINES)
+    expect(row(1)).not.toBeNull()
+    expect(row(5000)).toBeNull()
+    const frame = screen.getByTestId('code-block')
+    expect(frame.style.overflowAnchor).toBe('none')
+    const spacer = frame.firstElementChild?.lastElementChild as HTMLElement
+    expect(Number.parseFloat(spacer.style.height)).toBeGreaterThan(0)
+  })
+
+  it('follows the scroll', async () => {
+    render(many(5000))
+    const frame = screen.getByTestId('code-block')
+    Object.defineProperty(frame, 'clientHeight', { value: 400 })
+    frame.scrollTop = 19.2 * 3000
+    fireEvent.scroll(frame)
+    await waitFor(() => expect(row(3000)).not.toBeNull())
+    expect(row(1)).toBeNull()
+  })
+
+  it('shows at most MAX_LINES, saying how many more there are', () => {
+    render(many(MAX_LINES + 5))
+    expect(
+      screen.getByText(
+        '5 more lines are not shown: download the file to read them',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('brings a line asked for into the page, then scrolls to it', () => {
+    // jsdom lays nothing out, so the scroll moves nothing: what counts is
+    // the row it was asked of, there and marked at that moment
+    const asked: [string | null, boolean][] = []
+    Element.prototype.scrollIntoView = vi.fn(function (this: Element) {
+      asked.push([
+        this.getAttribute('data-line'),
+        this.classList.contains('bg-accent/15'),
+      ])
+    })
+    const view = render(many(5000, 4000, 1))
+    expect(asked).toEqual([['4000', true]])
+    view.rerender(many(5000, 4999, 2))
+    expect(asked.at(-1)).toEqual(['4999', true])
   })
 })
 
