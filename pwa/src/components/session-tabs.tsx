@@ -6,6 +6,8 @@ import {
   useRef,
   useState,
 } from 'react'
+import { ENTER_FROM, useNewKeys } from '../hooks/use-new-keys'
+import { LEAVE_TO, usePresenceList } from '../hooks/use-presence-list'
 import { useWheelScrollX } from '../hooks/use-wheel-scroll-x'
 import { useT } from '../i18n/i18n-context'
 import type { Session } from '../types/session'
@@ -40,6 +42,8 @@ interface DropTarget {
 // switches, since every switch is a request to the backend; Delete closes the
 // focused tab, so the close buttons stay out of the tab order. With onMove,
 // a tab drags before or after another; a 2 px line shows where it lands.
+// A new tab fades in; a closed one fades out, inert and out of the tab order
+// and of dragging, then the others close up.
 export function SessionTabs({
   sessions,
   activeId,
@@ -57,6 +61,8 @@ export function SessionTabs({
   // shows only the data's types, never the data.
   const dragged = useRef<string | null>(null)
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null)
+  const { entries, ref } = usePresenceList(sessions, sessionId)
+  const isNew = useNewKeys(sessions.map(sessionId))
 
   // Scroll active tab into view only if not visible
   // biome-ignore lint/correctness/useExhaustiveDependencies: activeId triggers scroll when tab changes
@@ -81,9 +87,10 @@ export function SessionTabs({
   }, [activeId])
 
   const onKeyDown = (e: KeyboardEvent) => {
+    // A closed tab still fading out is not one of them
     const tabs = [
       ...scrollRef.current!.querySelectorAll<HTMLElement>('[role="tab"]'),
-    ]
+    ].filter((tab) => !tab.closest('[data-leaving]'))
     const at = tabs.indexOf(document.activeElement as HTMLElement)
     if (at === -1) return
     if (e.key === 'Delete') {
@@ -156,14 +163,21 @@ export function SessionTabs({
         onKeyDown={onKeyDown}
         className="flex min-w-0 items-end gap-1 overflow-x-auto scrollbar-hide"
       >
-        {sessions.map((session) => {
-          const active = session.id === activeId
+        {entries.map(({ item: session, key, leaving }) => {
+          // A closing active tab keeps its look while it fades (no jump),
+          // but is no longer the selected one
+          const looksActive = session.id === activeId
+          const active = !leaving && looksActive
           return (
             <div
-              key={session.id}
-              {...dragProps(session.id)}
-              className={`group relative flex h-9 shrink-0 items-center pr-1.5 text-[13px] transition-colors duration-(--duration-fast) ${
-                active
+              key={key}
+              ref={ref(key)}
+              inert={leaving}
+              aria-hidden={leaving || undefined}
+              data-leaving={leaving || undefined}
+              {...(leaving ? {} : dragProps(session.id))}
+              className={`group relative flex h-9 shrink-0 items-center pr-1.5 text-[13px] transition-[color,background-color,border-color,opacity,translate,scale] duration-(--duration-fast) ease-standard motion-safe:active:scale-[0.98] ${isNew(key) ? ENTER_FROM : ''} ${leaving ? LEAVE_TO : ''} ${
+                looksActive
                   ? 'pointer-coarse:h-11 rounded-t-control border border-b-0 border-border bg-term text-fg shadow-sm ui-terminal:shadow-[inset_0_2px_0_var(--color-accent)] ui-native:rounded-t-panel ui-native:border-0'
                   : 'mb-1 h-8 pointer-coarse:h-10 rounded-control text-fg-muted hover:bg-surface-raised hover:text-fg'
               }`}
@@ -231,3 +245,5 @@ export function SessionTabs({
     </div>
   )
 }
+
+const sessionId = (s: Session) => s.id

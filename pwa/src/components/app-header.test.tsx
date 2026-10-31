@@ -130,6 +130,37 @@ describe('AppHeader — desktop', () => {
     expect(props.onRemoveTab).toHaveBeenCalledWith('2')
   })
 
+  it('shows the tabs of another group as a new list: none fades in or out', () => {
+    // The tabs' transition, as the stylesheet gives it in a browser
+    const real = window.getComputedStyle
+    const style = vi
+      .spyOn(window, 'getComputedStyle')
+      .mockImplementation((el) =>
+        el.getAttribute('draggable') !== null || el.classList.contains('group')
+          ? ({
+              transitionDuration: '150ms',
+              transitionDelay: '0s',
+            } as CSSStyleDeclaration)
+          : real(el),
+      )
+    const other: Session[] = [
+      { id: '3', name: 'Web', icon: '🌐', description: '', groupId: 'g2' },
+    ]
+    const header = (p: Props) => (
+      <ThemeProvider>
+        <AppHeader {...p} />
+      </ThemeProvider>
+    )
+    const props = headerProps()
+    const { rerender } = render(header(props))
+    rerender(header({ ...props, session: other[0], groupSessions: other }))
+    expect(screen.queryByText('Shell')).toBeNull()
+    expect(screen.getByText('Web').closest('.group')).not.toHaveClass(
+      'motion-safe:starting:opacity-0',
+    )
+    style.mockRestore()
+  })
+
   it('leads the row with the brand mark while the sidebar is collapsed', () => {
     renderHeader({ showBrand: true })
     expect(screen.getByRole('banner').firstElementChild).toBe(

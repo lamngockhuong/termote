@@ -20,6 +20,7 @@ import {
 import {
   type DragEvent,
   type KeyboardEvent,
+  type ReactNode,
   useEffect,
   useId,
   useRef,
@@ -27,6 +28,8 @@ import {
 } from 'react'
 import { useGroupCollapsed } from '../hooks/use-group-collapsed'
 import { RequestError } from '../hooks/use-mux-api'
+import { ENTER_FROM, useNewKeys } from '../hooks/use-new-keys'
+import { LEAVE_TO, usePresenceList } from '../hooks/use-presence-list'
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
 import type { Translate } from '../i18n/translate'
@@ -65,8 +68,10 @@ import { Sheet } from './ui/sheet'
 // The row on screen: a soft accent fill, or an accent edge in the terminal style.
 const ACTIVE_ROW_CLASSES =
   'bg-accent-soft text-fg font-medium ui-terminal:bg-surface-raised ui-terminal:shadow-[inset_2px_0_0_var(--color-accent)]'
-const ROW_CLASSES =
-  'text-fg-muted hover:bg-surface-raised hover:text-fg transition-colors duration-(--duration-fast)'
+const ROW_CLASSES = 'text-fg-muted hover:bg-surface-raised hover:text-fg'
+// A press shrinks a row a little (less than a button: a row is wide)
+const ROW_PRESS =
+  'transition-[color,background-color,scale] duration-(--duration-fast) ease-standard motion-safe:active:scale-[0.98]'
 // The content inside keeps its final width while the width animates, so it is
 // revealed or clipped instead of laid out again at every frame.
 // The top padding keeps the sidebar below the status bar of an installed iPad
@@ -307,6 +312,12 @@ export function SessionSidebar({
     setSearchOpen(false)
   }
   const groupById = new Map(groups.map((g) => [g.id, g]))
+  // A session added later fades in, one closed fades out; one a filter or a
+  // search hides just goes
+  const allKeys = sessions.map(keyOf)
+  const isNew = useNewKeys(allKeys)
+  const known = new Set(allKeys)
+  const gone = (key: string) => !known.has(key)
   const summary = summarizeSessions(sessions)
   // Hidden with no agent anywhere: there is nothing to filter by.
   const showFilterBar = !!onFilterChange && summary.agents > 0
@@ -545,7 +556,7 @@ export function SessionSidebar({
     }
     return (
       <div
-        className={`group relative flex items-center rounded-control ${
+        className={`group relative flex items-center rounded-control ${ROW_PRESS} ${
           active ? ACTIVE_ROW_CLASSES : ROW_CLASSES
         }`}
         {...dragProps(
@@ -621,7 +632,7 @@ export function SessionSidebar({
   }
 
   const renderItem = (session: Session) => (
-    <div key={keyOf(session)}>
+    <>
       {editingId === session.id && !editingInCurrent ? (
         renderEditForm()
       ) : isMobile ? (
@@ -637,7 +648,7 @@ export function SessionSidebar({
       ) : (
         renderDesktopItem(session)
       )}
-    </div>
+    </>
   )
 
   const rowGap = isMobile ? 'gap-1 ui-native:gap-px' : 'gap-0.5'
@@ -966,11 +977,13 @@ export function SessionSidebar({
           </div>
         )}
         {!collapsed && (
-          <div
+          <Rows
+            sessions={tabs}
+            gone={gone}
+            isNew={isNew}
             className={`flex flex-col ${rowGap} ui-native:overflow-hidden ui-native:rounded-panel`}
-          >
-            {tabs.map(renderItem)}
-          </div>
+            row={renderItem}
+          />
         )}
         {dropTarget?.after &&
           blockEnd(dropTarget.id) === group.id &&
@@ -1088,11 +1101,13 @@ export function SessionSidebar({
     ) : showGroups ? (
       groups.map(renderGroup)
     ) : (
-      <div
+      <Rows
+        sessions={visibleSessions}
+        gone={gone}
+        isNew={isNew}
         className={`flex flex-col ${rowGap} ui-native:overflow-hidden ui-native:rounded-panel`}
-      >
-        {visibleSessions.map(renderItem)}
-      </div>
+        row={renderItem}
+      />
     )
 
   // Mobile: the session on screen on one line, its actions behind a menu, so
@@ -1182,11 +1197,10 @@ export function SessionSidebar({
     const active = activeId === session.id
     return (
       <button
-        key={session.id}
         type="button"
         aria-current={active ? 'true' : undefined}
         onClick={() => onSelect(session.id)}
-        className={`flex size-10 shrink-0 items-center justify-center rounded-control ${FOCUS_RING} ${
+        className={`flex size-10 shrink-0 items-center justify-center rounded-control ${FOCUS_RING} ${ROW_PRESS} ${
           active ? ACTIVE_ROW_CLASSES : ROW_CLASSES
         }`}
         title={visibleUnsafe(session.name)}
@@ -1225,7 +1239,13 @@ export function SessionSidebar({
         >
           {name}
         </span>
-        {tabs.map(renderRailItem)}
+        <Rows
+          sessions={tabs}
+          gone={gone}
+          isNew={isNew}
+          className="contents"
+          row={renderRailItem}
+        />
       </section>
     )
   }
@@ -1274,9 +1294,17 @@ export function SessionSidebar({
             </IconButton>
           )}
           <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-0.5 overflow-y-auto pt-1 scrollbar-hover">
-            {showGroups
-              ? groups.map(renderRailGroup)
-              : visibleSessions.map(renderRailItem)}
+            {showGroups ? (
+              groups.map(renderRailGroup)
+            ) : (
+              <Rows
+                sessions={visibleSessions}
+                gone={gone}
+                isNew={isNew}
+                className="contents"
+                row={renderRailItem}
+              />
+            )}
           </div>
         </div>
       </aside>
@@ -1328,5 +1356,40 @@ export function SessionSidebar({
         </div>
       </div>
     </aside>
+  )
+}
+
+// Rows of sessions: one added after the list first showed fades in, one
+// closed (gone says so) fades out where it was, inert, before the rest close
+// up. Each row is wrapped, so the wrapper carries the motion.
+function Rows({
+  sessions,
+  gone,
+  isNew,
+  className,
+  row,
+}: {
+  sessions: Session[]
+  gone: (key: string) => boolean
+  isNew: (key: string) => boolean
+  className: string
+  row: (session: Session) => ReactNode
+}) {
+  const { entries, ref } = usePresenceList(sessions, keyOf, gone)
+  return (
+    <div className={className}>
+      {entries.map(({ item, key, leaving }) => (
+        <div
+          key={key}
+          ref={ref(key)}
+          inert={leaving}
+          aria-hidden={leaving || undefined}
+          data-leaving={leaving || undefined}
+          className={`transition-[opacity,translate,scale] duration-(--duration-base) ease-standard ${isNew(key) ? ENTER_FROM : ''} ${leaving ? LEAVE_TO : ''}`}
+        >
+          {row(item)}
+        </div>
+      ))}
+    </div>
   )
 }

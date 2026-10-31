@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithLocale } from '../i18n/test-utils'
 import type { WelcomeFacts } from '../utils/welcome'
@@ -50,6 +50,43 @@ describe('WelcomeSheet', () => {
     render(<WelcomeSheet {...props({ isOpen: false })} />)
     expect(screen.queryByTestId('welcome')).toBeNull()
   })
+
+  it.each([
+    [true, 'translate-y-8'],
+    [false, 'scale-95'],
+  ])(
+    'fades out on close, giving focus back at once (phone %s)',
+    (mobile, away) => {
+      const real = window.getComputedStyle
+      const style = vi
+        .spyOn(window, 'getComputedStyle')
+        .mockImplementation((el) =>
+          el instanceof HTMLDialogElement
+            ? ({
+                transitionDuration: '150ms',
+                transitionDelay: '0s',
+              } as CSSStyleDeclaration)
+            : real(el),
+        )
+      const opener = document.createElement('button')
+      document.body.append(opener)
+      opener.focus()
+      const { rerender } = render(<WelcomeSheet {...props({ mobile })} />)
+      rerender(<WelcomeSheet {...props({ mobile, isOpen: false })} />)
+      const dialog = screen.getByTestId('welcome')
+      expect(dialog).toHaveAttribute('data-closing', 'true')
+      expect(dialog).toHaveAttribute('inert')
+      expect(dialog.className.split(' ')).toContain(away)
+      expect((dialog as HTMLDialogElement).close).toHaveBeenCalled()
+      expect(document.activeElement).toBe(opener)
+      act(() => {
+        dialog.dispatchEvent(new Event('transitionend'))
+      })
+      expect(screen.queryByTestId('welcome')).toBeNull()
+      style.mockRestore()
+      opener.remove()
+    },
+  )
 
   it('a phone: a sheet with the setup, the areas and the gestures', () => {
     render(<WelcomeSheet {...props()} />)

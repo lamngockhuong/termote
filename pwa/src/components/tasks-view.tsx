@@ -31,6 +31,7 @@ import {
 import { PaneDirHeader, ViewMessage } from './pane-dir-header'
 import { TaskRow } from './task-row'
 import { Banner } from './ui/banner'
+import { SkeletonLines } from './ui/skeleton'
 
 // What a refused Run tells, by the server's code
 const RUN_ERRORS: Record<string, MessageKey> = {
@@ -76,7 +77,8 @@ export function TasksView({
   const canSend = !!mux.caps.paneText && !!mux.caps.agentChat
   const groupId = session.groupId ?? ''
 
-  if (!session.paneId) return <ViewMessage>{t('tasks.loading')}</ViewMessage>
+  if (!session.paneId)
+    return <SkeletonLines label={t('tasks.loading')} className="flex-1" />
 
   const onRun = async (item: TaskItem, newTab = false) => {
     setStarting(item.key)
@@ -179,7 +181,7 @@ export function TasksView({
         </ViewMessage>
       )
     }
-    return <ViewMessage>{t('tasks.loading')}</ViewMessage>
+    return <SkeletonLines label={t('tasks.loading')} className="flex-1" />
   }
 
   const items = taskItems(data)

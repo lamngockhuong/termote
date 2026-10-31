@@ -6,6 +6,7 @@ import { firstLine, matchTemplates } from '../utils/prompt-templates'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { Button } from './ui/button'
 import { Sheet } from './ui/sheet'
+import { SkeletonLines } from './ui/skeleton'
 
 interface Props {
   isOpen: boolean
@@ -77,13 +78,17 @@ function OpenPicker({ onClose, onPick, onManage }: Omit<Props, 'isOpen'>) {
           onKeyDown={onKeyDown}
           className="h-9 w-full min-w-0 rounded-control border border-border bg-bg px-2.5 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent pointer-coarse:h-touch"
         />
-        {prompts.templates.length === 0 ? (
+        {prompts.templates.length === 0 && !prompts.loaded && !prompts.error ? (
+          <SkeletonLines
+            label={t('chat.picker.loading')}
+            lines={3}
+            className="px-0"
+          />
+        ) : prompts.templates.length === 0 ? (
           <p className="m-0 py-2 text-sm text-fg-muted">
             {prompts.loaded
               ? t('chat.picker.none')
-              : prompts.error
-                ? t('chat.picker.readFailed')
-                : t('chat.picker.loading')}
+              : t('chat.picker.readFailed')}
           </p>
         ) : matches.length === 0 ? (
           <p className="m-0 py-2 text-sm text-fg-muted">

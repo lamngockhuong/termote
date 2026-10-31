@@ -8,7 +8,8 @@ export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
 // grow: at least md's height, taller for content on several lines
 export type ButtonSize = 'sm' | 'md' | 'grow'
 
-const BASE = `inline-flex shrink-0 items-center justify-center gap-1.5 rounded-control font-medium select-none transition-colors duration-(--duration-fast) ease-standard disabled:pointer-events-none disabled:opacity-50 ${FOCUS_RING}`
+// A press shrinks the button a little, unless motion is reduced
+const BASE = `inline-flex shrink-0 items-center justify-center gap-1.5 rounded-control font-medium select-none transition-[color,background-color,border-color,opacity,scale] duration-(--duration-fast) ease-standard motion-safe:active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 ${FOCUS_RING}`
 
 const VARIANTS: Record<ButtonVariant, string> = {
   primary: 'bg-accent text-accent-fg hover:opacity-90',

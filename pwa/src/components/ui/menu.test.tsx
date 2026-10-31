@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   Menu,
@@ -40,6 +40,18 @@ const trigger = () => screen.getByRole('button', { name: 'More' })
 const open = () => fireEvent.click(trigger(), { detail: 0 })
 const tapOpen = () => fireEvent.click(trigger(), { detail: 1 })
 const item = (name: string) => screen.getByRole('menuitem', { name })
+// The menu's transition, as the stylesheet gives it in a browser
+const animateMenu = () => {
+  const real = window.getComputedStyle
+  return vi.spyOn(window, 'getComputedStyle').mockImplementation((el) =>
+    el.getAttribute('role') === 'menu'
+      ? ({
+          transitionDuration: '150ms',
+          transitionDelay: '0s',
+        } as CSSStyleDeclaration)
+      : real(el),
+  )
+}
 
 describe('Menu', () => {
   it('is closed at first and opens from its trigger', () => {
@@ -90,6 +102,28 @@ describe('Menu', () => {
     tapOpen()
     expect(screen.getByRole('menu').style.transform).toBe('')
     width.mockRestore()
+    rect.mockRestore()
+  })
+
+  it('fades out where it was, inert, then leaves', () => {
+    const style = animateMenu()
+    const rect = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue({ left: -28, right: 228, width: 256 } as DOMRect)
+    renderMenu()
+    tapOpen()
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+    expect(trigger()).toHaveAttribute('aria-expanded', 'false')
+    const menu = screen.getByRole('menu', { hidden: true })
+    expect(menu).toHaveAttribute('data-closing', 'true')
+    expect(menu).toHaveAttribute('inert')
+    expect(menu).toHaveClass('pointer-events-none', 'opacity-0')
+    expect(menu.style.transform).toBe('translateX(36px)')
+    act(() => {
+      menu.dispatchEvent(new Event('transitionend'))
+    })
+    expect(screen.queryByRole('menu', { hidden: true })).toBeNull()
+    style.mockRestore()
     rect.mockRestore()
   })
 
@@ -413,6 +447,23 @@ describe('Menu in the top layer', () => {
   afterEach(() => {
     delete (HTMLElement.prototype as Partial<HTMLElement>).showPopover
     vi.restoreAllMocks()
+  })
+
+  it('leaves the top layer as its fade out starts', () => {
+    const style = animateMenu()
+    const hide = vi.fn()
+    Object.defineProperty(HTMLElement.prototype, 'hidePopover', {
+      configurable: true,
+      value: hide,
+    })
+    renderMenu()
+    tapOpen()
+    const list = menu()!
+    fireEvent.keyDown(list, { key: 'Escape' })
+    expect(hide.mock.contexts[0]).toBe(list)
+    expect(list).toHaveAttribute('data-closing', 'true')
+    delete (HTMLElement.prototype as Partial<HTMLElement>).hidePopover
+    style.mockRestore()
   })
 
   it('shows as a manual popover, placed in the viewport', () => {

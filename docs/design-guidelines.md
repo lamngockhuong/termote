@@ -244,7 +244,8 @@ There is no Quick actions sheet and no floating button.
 ### Motion
 
 - A global `prefers-reduced-motion: reduce` rule in `index.css` finishes animations and
-  transitions at once
+  transitions at once; an element that closes or leaves a list then goes in the same render, and
+  presses do not shrink (`motion-safe:`)
 - Haptic feedback opt-in
 
 ## Icons
@@ -257,6 +258,26 @@ There is no Quick actions sheet and no floating button.
 - Durations and easing come from the motion tokens (`duration-fast`, `duration-base`,
   `ease-standard`, `ease-emphasized`); Terminal is the fastest style and Native the slowest
 - Animate opacity, transform and colours
+- Closing animates too: a sheet, dialog, menu, the command history and the image viewer stay in the
+  page for a `duration-fast` fade out (shorter than their way in), then leave. `useExitTransition`
+  keeps them; meanwhile they are `inert` and `aria-hidden`, take no clicks (`pointer-events-none`),
+  and focus is back on the opener already. Opened again while fading, a sheet or dropdown starts
+  afresh (its focus on open, an empty search). A dialog stops being modal as its fade starts (`dialog.close()`), and the
+  `exit-discrete` utility (`transition-behavior: allow-discrete` on `display` and `overlay`) keeps
+  it in the top layer until the fade ends; a browser without it hides the dialog at once
+- Views fade in over the terminal and out back to it; only the view layer animates, never the
+  terminal, which is uncovered (and sized, and focusable) at once. No View Transitions API: it
+  snapshots the terminal's canvas and blocks input while it runs
+- Lists animate only what changes after they first show: a new chat message, agent card, session
+  row or tab, or file tree row fades in (`useNewKeys`); a list's first load and older messages
+  loaded above do not. A closed session row, tab or agent card fades out where it was, inert, then
+  the rest close up (`usePresenceList`); one a filter or search hides just goes
+- A press shrinks a button or toolbar key (`active:scale-[0.97]`, keys `0.95`) and a session row
+  or tab a little less (`0.98`), in every style
+- Content still loading shows grey lines in its shape (`SkeletonLines`) instead of a Loading line,
+  after 150 ms so a quick answer flashes nothing; the loading text stays as a `role="status"` line
+  for screen readers
+- No animation library: CSS transitions and `@starting-style` (`starting:`) only
 - Toasts appear near the top, with status colours, so they never cover the toolbar; a swipe up or
   sideways dismisses one, and holding it pauses its timer
 - Sidebar: collapsible on desktop (icon-only when collapsed)

@@ -281,6 +281,16 @@ describe('FilesView', () => {
     )
   })
 
+  it('fades in the rows of a folder opened after the first listing', async () => {
+    await show()
+    const enters = 'motion-safe:starting:opacity-0'
+    expect(item('src')).not.toHaveClass(enters)
+    fireEvent.keyDown(screen.getByRole('tree'), { key: 'ArrowRight' })
+    await act(async () => {})
+    expect(item('lib')).toHaveClass(enters)
+    expect(item('README.md')).not.toHaveClass(enters)
+  })
+
   it('moves through the tree with the keyboard', async () => {
     mockContent.mockResolvedValue({
       root: '/home/kim/app',

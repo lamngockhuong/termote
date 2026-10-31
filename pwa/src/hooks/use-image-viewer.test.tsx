@@ -18,6 +18,7 @@ vi.mock('../components/image-viewer', () => {
   return {
     default: (
       p: ViewerImage & {
+        isOpen: boolean
         stale: boolean
         returnFocus?: RefObject<HTMLElement | null>
         actions?: unknown
@@ -25,6 +26,7 @@ vi.mock('../components/image-viewer', () => {
       },
     ) => {
       if (h.fail) throw new Error('viewer broke')
+      if (!p.isOpen) return null
       h.onClose = p.onClose
       h.returnFocus = p.returnFocus
       h.actions = p.actions
@@ -88,6 +90,17 @@ describe('useImageViewer', () => {
     expect(h.returnFocus).toBe(home)
     act(() => h.onClose())
     expect(screen.queryByTestId('viewer')).toBeNull()
+  })
+
+  it('gives an image opened after a close a viewer of its own', async () => {
+    render(<Host src="blob:a" />)
+    act(() => open(IMAGE))
+    const first = await screen.findByTestId('viewer')
+    act(() => h.onClose())
+    act(() => open({ ...IMAGE, alt: 'other.png' }))
+    const second = await screen.findByTestId('viewer')
+    expect(second).not.toBe(first)
+    expect(second).toHaveAttribute('data-alt', 'other.png')
   })
 
   it('tells the viewer once the image shows another URL', async () => {

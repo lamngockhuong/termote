@@ -116,6 +116,7 @@ import {
   MenuItemRadio,
   MenuSeparator,
 } from './ui/menu'
+import { SkeletonLines } from './ui/skeleton'
 
 // A preview whose chunk failed to load: said in its place, with a way to retry
 function PreviewBoundary({
@@ -141,7 +142,7 @@ function PreviewBoundary({
 // A preview's chunk on its way
 function Loading() {
   const { t } = useT()
-  return <ViewMessage>{t('files.loading')}</ViewMessage>
+  return <SkeletonLines label={t('files.loading')} code className="flex-1" />
 }
 
 // The markdown renderer: loaded the first time a Markdown file is previewed
@@ -1644,7 +1645,7 @@ export function FileViewer({
         </>
       )}
       {!mine && !binaryView && state.kind === 'loading' && (
-        <ViewMessage>{t('files.loading')}</ViewMessage>
+        <SkeletonLines label={t('files.loading')} code className="flex-1" />
       )}
       {!mine && !binaryView && state.kind === 'unpreviewable' && (
         <ViewMessage>{t('files.viewer.unpreviewable')}</ViewMessage>

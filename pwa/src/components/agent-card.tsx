@@ -18,6 +18,7 @@ import { AgentStatusBadge } from './agent-status-badge'
 import { StatusTimeline } from './status-timeline'
 import { SubagentTree, subagentSummary } from './subagent-tree'
 import { FOCUS_RING, IconButton } from './ui/button'
+import { Skeleton } from './ui/skeleton'
 import { UsageMeter } from './usage-meter'
 
 const STATUS_WORDS: Record<AgentStatus, MessageKey> = {
@@ -251,10 +252,7 @@ export const AgentCard = memo(function AgentCard({
             </span>
           ) : (
             (pending('transcript') || (!overview && !overviewFailed)) && (
-              <span
-                aria-hidden="true"
-                className="h-4 w-3/4 rounded-control bg-surface-raised motion-safe:animate-pulse"
-              />
+              <Skeleton className="h-4 w-3/4" />
             )
           )}
           {(showChanges || overview?.usage) && (

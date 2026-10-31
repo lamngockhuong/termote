@@ -54,6 +54,7 @@ import {
   renameFile,
   restoreFile,
 } from '../hooks/use-mux-api'
+import { ENTER_FROM, useNewKeys } from '../hooks/use-new-keys'
 import { useReviewComposer } from '../hooks/use-review-composer'
 import { useSettings } from '../hooks/use-settings'
 import { useShortcutKey } from '../hooks/use-shortcuts'
@@ -97,6 +98,7 @@ import { Button, FOCUS_RING, IconButton } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
 import { Menu, MenuItem } from './ui/menu'
 import { SegmentedControl } from './ui/segmented-control'
+import { SkeletonLines } from './ui/skeleton'
 
 const ERRORS: Record<FilesError, MessageKey> = {
   unsupported: 'files.find.unsupported',
@@ -235,7 +237,8 @@ export function FilesView({
 }: ViewProps) {
   const { t } = useT()
   // Before the first snapshot there is no pane to read
-  if (!session.paneId) return <ViewMessage>{t('files.loading')}</ViewMessage>
+  if (!session.paneId)
+    return <SkeletonLines label={t('files.loading')} icon className="flex-1" />
   return (
     <PaneFiles
       session={session}
@@ -1067,7 +1070,7 @@ function PaneFiles({
         ) : root?.error ? (
           <ViewMessage>{t(ERRORS[root.error])}</ViewMessage>
         ) : !root?.entries ? (
-          <ViewMessage>{t('files.loading')}</ViewMessage>
+          <SkeletonLines label={t('files.loading')} icon className="flex-1" />
         ) : (
           <>
             <div className="flex shrink-0 justify-center border-b border-border px-2 py-1.5">
@@ -1257,6 +1260,12 @@ function FileTree({
   const rows = visibleRows(state)
   const entries = rows.filter((r) => r.kind === 'entry')
   const current = entries.find((r) => r.path === focused) ?? entries[0]
+  // A row after the first listing (a folder opened, a file made) fades in;
+  // another root or Place lists afresh
+  const isNew = useNewKeys(
+    entries.map((r) => r.path),
+    `${state.root}\0${state.place}`,
+  )
 
   const focus = (path: string) => {
     setFocused(path)
@@ -1340,6 +1349,7 @@ function FileTree({
             row={r}
             expanded={isDir(r.entry) ? !!state.expanded[r.path] : undefined}
             tabbable={r === current}
+            entering={isNew(r.path)}
             dropTarget={r.path === dropAt}
             // A folder read and found to hold something cannot go
             notEmpty={!!state.dirs[r.path]?.entries?.length}
@@ -1373,6 +1383,7 @@ function TreeItem({
   row,
   expanded,
   tabbable,
+  entering,
   dropTarget,
   notEmpty,
   itemRef,
@@ -1384,6 +1395,7 @@ function TreeItem({
   row: EntryRow
   expanded?: boolean
   tabbable: boolean
+  entering: boolean
   dropTarget: boolean
   notEmpty: boolean
   itemRef: (el: HTMLElement | null) => void
@@ -1420,7 +1432,7 @@ function TreeItem({
       data-path={row.path}
       onClick={onClick}
       {...(hasMenu && press)}
-      className={`group flex min-h-9 [-webkit-touch-callout:none] cursor-default items-center gap-1.5 pr-1 text-[13px] hover:bg-surface pointer-coarse:min-h-touch ${dropTarget ? 'bg-accent/10 ring-1 ring-accent ring-inset' : ''} ${FOCUS_RING} focus-visible:-outline-offset-2 ${can ? 'text-fg' : 'text-fg-subtle'}`}
+      className={`group flex min-h-9 [-webkit-touch-callout:none] cursor-default items-center gap-1.5 pr-1 text-[13px] hover:bg-surface pointer-coarse:min-h-touch ${entering ? `transition-[opacity,translate] duration-(--duration-base) ease-standard ${ENTER_FROM}` : ''} ${dropTarget ? 'bg-accent/10 ring-1 ring-accent ring-inset' : ''} ${FOCUS_RING} focus-visible:-outline-offset-2 ${can ? 'text-fg' : 'text-fg-subtle'}`}
       style={{ paddingLeft: `${(level - 1) * 16 + 8}px` }}
     >
       <ChevronRight

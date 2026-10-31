@@ -14,6 +14,7 @@ import { useAgentTranscript } from '../hooks/use-agent-transcript'
 import { useDomSelection } from '../hooks/use-dom-selection'
 import { FOLLOW_NOTICES, followPathInFiles } from '../hooks/use-files'
 import type { TranscriptEntry } from '../hooks/use-mux-api'
+import { ENTER_FROM, useNewKeys } from '../hooks/use-new-keys'
 import type { StartRecord } from '../hooks/use-start-agent'
 import { useT } from '../i18n/i18n-context'
 import { toAgentStatus } from '../types/session'
@@ -151,6 +152,13 @@ function AgentChat({
 }: ViewProps) {
   const t = useAgentTranscript(session.paneId)
   const { t: translate } = useT()
+  // A message that came in after the conversation showed fades in: not its
+  // history, nor older messages loaded above it (before the first one known)
+  const isNew = useNewKeys(
+    t.entries.map((e) => e.id),
+    session.paneId,
+  )
+  const firstKnown = t.entries.findIndex((e) => !isNew(e.id))
   const status = toAgentStatus(t.status)
   // View-only has no composer: the dialog is shown here, without buttons.
   // An agent without input has no dialog reader on the server.
@@ -405,12 +413,14 @@ function AgentChat({
                   if (item.index < hidden) return []
                   const e = t.entries[item.index]
                   const l = layout[item.index - hidden]
+                  const enters = isNew(e.id) && item.index > firstKnown
                   return [
                     <ChatMessage
                       key={e.id}
                       entry={e}
                       showTime={l.showTime}
                       joinsNext={l.joinsNext}
+                      className={enters ? ENTER_MESSAGE : undefined}
                     />,
                   ]
                 }
@@ -487,3 +497,6 @@ function Centered({ children }: { children: ReactNode }) {
 }
 
 export default ChatView
+
+// How a message that just came in enters
+const ENTER_MESSAGE = `transition-[opacity,translate] duration-(--duration-base) ease-standard ${ENTER_FROM}`

@@ -165,6 +165,9 @@ function DesktopHeader(p: Props) {
       )}
       {p.showSessionTabs ? (
         <SessionTabs
+          // Another group's tabs are another list: none of them fades in,
+          // and the last group's do not fade out among them
+          key={session.groupId ?? ''}
           sessions={p.groupSessions}
           activeId={session.id}
           onSelect={p.onSelectTab}

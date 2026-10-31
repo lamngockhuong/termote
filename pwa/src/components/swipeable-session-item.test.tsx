@@ -73,6 +73,13 @@ describe('SwipeableSessionItem', () => {
     expect(screen.getByText('Shell')).toBeInTheDocument()
   })
 
+  it('shrinks the row a little while pressed', () => {
+    renderItem()
+    expect(screen.getByText('Shell').closest('.h-14')).toHaveClass(
+      'motion-safe:active:scale-[0.98]',
+    )
+  })
+
   it('shows the hidden characters of the session name', () => {
     renderItem({ session: { ...SESSION, name: 'Sh\u202eell' } })
     expect(screen.getByText('Sh⟨U+202E⟩ell')).toBeInTheDocument()

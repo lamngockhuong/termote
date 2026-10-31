@@ -19,9 +19,9 @@ import type { PasteEdit } from '../utils/markdown-image-paste'
 import { imageFromClipboard } from '../utils/upload-image'
 import type { EditorAt } from './code-editor'
 import { LazyBoundary } from './lazy-boundary'
-import { ViewMessage } from './pane-dir-header'
 import { Banner } from './ui/banner'
 import { Button } from './ui/button'
+import { SkeletonLines } from './ui/skeleton'
 
 // Why a save did not go through, as the editor shows it
 export type SaveError =
@@ -194,7 +194,15 @@ export function FileEditor(props: Props) {
             </>
           )}
         >
-          <Suspense fallback={<ViewMessage>{t('files.loading')}</ViewMessage>}>
+          <Suspense
+            fallback={
+              <SkeletonLines
+                label={t('files.loading')}
+                code
+                className="flex-1"
+              />
+            }
+          >
             <CodeEditor
               path={props.path}
               text={props.text}

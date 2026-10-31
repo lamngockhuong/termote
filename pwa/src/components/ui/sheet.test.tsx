@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Sheet } from './sheet'
 
@@ -168,6 +168,86 @@ describe('Sheet', () => {
       </Sheet>,
     )
     expect(document.activeElement).toBe(target)
+  })
+
+  describe('with an exit transition', () => {
+    // As the stylesheet gives the dialog in a browser
+    beforeEach(() => {
+      const real = window.getComputedStyle
+      vi.spyOn(window, 'getComputedStyle').mockImplementation((el) =>
+        el instanceof HTMLDialogElement
+          ? ({
+              transitionDuration: '0.2s',
+              transitionDelay: '0s',
+            } as CSSStyleDeclaration)
+          : real(el),
+      )
+    })
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    const closed = (
+      <Sheet isOpen={false} onClose={vi.fn()} title="Sessions">
+        <p>Body</p>
+      </Sheet>
+    )
+
+    it.each([
+      [false, 'scale-95'],
+      [true, 'translate-y-8'],
+    ])(
+      'stays, inert and fading, until its transition ends (phone %s)',
+      (phone, away) => {
+        mobile.value = phone
+        const opener = document.createElement('button')
+        document.body.append(opener)
+        opener.focus()
+        const { rerender } = renderSheet()
+        screen.getByRole('button', { name: 'Close' }).focus()
+        rerender(closed)
+        const dialog = document.querySelector('dialog')!
+        expect(dialog.dataset.closing).toBe('true')
+        expect(dialog.hasAttribute('inert')).toBe(true)
+        expect(dialog).toHaveAttribute('aria-hidden', 'true')
+        expect(dialog.className).toContain(
+          `opacity-0 duration-(--duration-fast)`,
+        )
+        expect(dialog.className.split(' ')).toContain(away)
+        // No longer modal, and focus is back already
+        expect(dialog.close).toHaveBeenCalled()
+        expect(document.activeElement).toBe(opener)
+        act(() => {
+          dialog.dispatchEvent(new Event('transitionend'))
+        })
+        expect(document.querySelector('dialog')).toBeNull()
+        expect(document.activeElement).toBe(opener)
+      },
+    )
+
+    it('opened again while closing, is a sheet of its own: focused, and gives focus back', () => {
+      const opener = document.createElement('button')
+      document.body.append(opener)
+      opener.focus()
+      const { rerender } = renderSheet()
+      const first = document.querySelector('dialog')!
+      rerender(closed)
+      opener.focus()
+      const open = (
+        <Sheet isOpen onClose={vi.fn()} title="Sessions">
+          <p>Body</p>
+        </Sheet>
+      )
+      rerender(open)
+      const dialog = document.querySelector('dialog')!
+      expect(dialog).not.toBe(first)
+      expect(dialog.dataset.closing).toBeUndefined()
+      expect(dialog.hasAttribute('inert')).toBe(false)
+      expect(document.activeElement).toBe(dialog)
+      // Its own close gives focus back again
+      rerender(closed)
+      expect(document.activeElement).toBe(opener)
+    })
   })
 
   it('does not focus an opener that has left the page', () => {

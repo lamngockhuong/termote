@@ -58,6 +58,7 @@ import { LineCommentBar, LineGutterButton } from './line-comment-bar'
 import { ViewMessage } from './pane-dir-header'
 import { Banner } from './ui/banner'
 import { IconButton } from './ui/button'
+import { SkeletonLines } from './ui/skeleton'
 
 type Loaded =
   | { kind: 'loading' }
@@ -378,7 +379,7 @@ export function DiffViewer({
         {headerExtra}
       </div>
       {shown.kind === 'loading' && !previewing && (
-        <ViewMessage>{t('files.loading')}</ViewMessage>
+        <SkeletonLines label={t('files.loading')} code className="flex-1" />
       )}
       {shown.kind === 'gone' && (
         <ViewMessage>{t('files.diff.gone')}</ViewMessage>
@@ -517,7 +518,7 @@ function WorkingTreePreview({
   }, [paneId, root, path, reveal, version])
 
   if (content.kind === 'loading')
-    return <ViewMessage>{t('files.loading')}</ViewMessage>
+    return <SkeletonLines label={t('files.loading')} code className="flex-1" />
   if (content.kind === 'message')
     return <ViewMessage>{t(content.text)}</ViewMessage>
   if (isTablePath(path))

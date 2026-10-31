@@ -100,4 +100,49 @@ describe('useRestoreFocus', () => {
     view.unmount()
     expect(document.activeElement).toBe(b)
   })
+
+  it('gives focus back when told, and not again at unmount', () => {
+    document.body.innerHTML =
+      '<button id="a">a</button><button id="b">b</button>'
+    const a = document.getElementById('a') as HTMLElement
+    const b = document.getElementById('b') as HTMLElement
+    a.focus()
+    const view = renderHook(() => useRestoreFocus())
+    b.focus()
+    view.result.current()
+    expect(document.activeElement).toBe(a)
+    b.focus()
+    view.result.current()
+    view.unmount()
+    expect(document.activeElement).toBe(b)
+  })
+
+  it('does nothing when told before its effect ran', () => {
+    document.body.innerHTML = '<button id="a">a</button>'
+    const a = document.getElementById('a') as HTMLElement
+    a.focus()
+    let rendered = false
+    // The function exists from the first render; the opener is read later
+    renderHook(() => {
+      const restore = useRestoreFocus()
+      if (!rendered) restore()
+      rendered = true
+    })
+    expect(document.activeElement).toBe(a)
+  })
+
+  it('sets the ring afresh on an opener focused again already', () => {
+    document.body.innerHTML = '<button id="a">a</button>'
+    const a = document.getElementById('a') as HTMLElement
+    a.focus()
+    vi.spyOn(a, 'matches').mockReturnValueOnce(false)
+    const view = renderHook(() => useRestoreFocus())
+    // As dialog.close() does in a browser
+    const blur = vi.spyOn(a, 'blur')
+    const focus = vi.spyOn(a, 'focus')
+    view.result.current()
+    expect(blur).toHaveBeenCalled()
+    expect(focus).toHaveBeenLastCalledWith({ focusVisible: false })
+    expect(document.activeElement).toBe(a)
+  })
 })

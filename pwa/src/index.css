@@ -304,6 +304,15 @@ body {
   touch-action: manipulation;
 }
 
+/* A dialog or popover that animates out as well as in (useExitTransition):
+   display and overlay switch at the end of the transition, so it stays in
+   the top layer and visible while it fades. A browser that cannot keep it
+   just hides it at once. */
+@utility exit-discrete {
+  transition-property: opacity, translate, scale, display, overlay;
+  transition-behavior: allow-discrete;
+}
+
 /* Theme-aware glass surface */
 /* Hide scrollbar but allow scrolling */
 .scrollbar-hide {

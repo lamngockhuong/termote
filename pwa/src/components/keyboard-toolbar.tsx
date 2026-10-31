@@ -205,7 +205,7 @@ const CTRL_SHIFT_COMBOS = [
 const KEYCAP =
   'flex h-11 min-w-11 shrink-0 items-center justify-center rounded-control border border-border bg-surface-raised px-3 text-[13px] font-medium text-fg touch-manipulation select-none transition duration-(--duration-fast) ease-standard hover:border-border-strong active:bg-surface disabled:opacity-50 ' +
   'ui-terminal:bg-bg ui-terminal:font-label ui-terminal:text-[12px] ' +
-  'ui-native:border-0 ui-native:text-[15px] ui-native:shadow-[inset_0_0_0_1px_rgb(0_0_0/0.1),0_1px_0_rgb(0_0_0/0.18)] dark:ui-native:shadow-[0_1px_0_rgb(0_0_0/0.8)] active:ui-native:scale-95 ' +
+  'ui-native:border-0 ui-native:text-[15px] ui-native:shadow-[inset_0_0_0_1px_rgb(0_0_0/0.1),0_1px_0_rgb(0_0_0/0.18)] dark:ui-native:shadow-[0_1px_0_rgb(0_0_0/0.8)] motion-safe:active:scale-95 ' +
   FOCUS_RING
 // Pressed state (Ctrl/Shift/History on)
 const KEYCAP_ON = 'bg-accent! text-accent-fg! border-accent!'

@@ -823,17 +823,20 @@ vi.mock('./components/welcome-host', () => ({
 
 vi.mock('./components/command-history-dropdown', () => ({
   CommandHistoryDropdown: ({
+    isOpen,
     onClose,
     onSelect,
   }: {
+    isOpen: boolean
     onClose: () => void
     onSelect: (t: string) => void
-  }) => (
-    <div data-testid="history-dropdown">
-      <button onClick={onClose}>CloseHistory</button>
-      <button onClick={() => onSelect('git status')}>SelectHistory</button>
-    </div>
-  ),
+  }) =>
+    isOpen && (
+      <div data-testid="history-dropdown">
+        <button onClick={onClose}>CloseHistory</button>
+        <button onClick={() => onSelect('git status')}>SelectHistory</button>
+      </div>
+    ),
 }))
 
 vi.mock('./components/worktree-dialog', async (importOriginal) => ({
@@ -3948,6 +3951,43 @@ describe('App views, view-only and deep links', () => {
     expect(screen.queryByTestId('chat-main')).toBeNull()
     expect(screen.getByTestId('keyboard-toolbar')).toBeInTheDocument()
     expect(terminalPanel()).not.toHaveClass('invisible')
+  })
+
+  it('back on the terminal, the view fades out over it, inert, then goes', async () => {
+    const { rerender } = render(<App views={VIEWS} />)
+    await screen.findByRole('tablist', { name: 'View' })
+    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }))
+    const cover = screen
+      .getByTestId('chat-main')
+      .closest('[id^="view-panel-"]')!
+    expect(cover).toHaveClass('starting:opacity-0')
+    // Its transition, as the stylesheet gives it in a browser
+    const real = window.getComputedStyle
+    const style = vi
+      .spyOn(window, 'getComputedStyle')
+      .mockImplementation((el) =>
+        el === cover
+          ? ({
+              transitionDuration: '0.15s',
+              transitionDelay: '0s',
+            } as CSSStyleDeclaration)
+          : real(el),
+      )
+    fireEvent.click(screen.getByRole('tab', { name: 'Terminal' }))
+    // The terminal is back at once; the view leaves over it
+    expect(terminalPanel()).not.toHaveClass('invisible')
+    expect(terminalPanel()).not.toHaveAttribute('inert')
+    expect(cover).toHaveAttribute('data-closing', 'true')
+    expect(cover).toHaveAttribute('inert')
+    expect(cover).toHaveClass('opacity-0')
+    // It keeps what it showed while it fades, whatever changes under it
+    rerender(<App views={VIEWS} readOnly />)
+    expect(cover).toHaveTextContent('rw')
+    act(() => {
+      cover.dispatchEvent(new Event('transitionend'))
+    })
+    expect(screen.queryByTestId('chat-main')).toBeNull()
+    style.mockRestore()
   })
 
   it('shows the font size only while the terminal is the main view', async () => {

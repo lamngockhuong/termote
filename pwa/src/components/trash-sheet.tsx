@@ -18,6 +18,7 @@ import { visibleUnsafe } from '../utils/unsafe-chars'
 import { Button, IconButton } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
 import { Sheet } from './ui/sheet'
+import { SkeletonLines } from './ui/skeleton'
 
 // The trash of the root Files shows: opens the Trash sheet
 export function TrashButton({ onClick }: { onClick: () => void }) {
@@ -229,9 +230,12 @@ export function TrashSheet({
             {t('files.trash.scope')}
           </p>
           {listing.status === 'loading' && (
-            <p className="px-4 py-3 text-sm text-fg-muted">
-              {t('files.trash.loading')}
-            </p>
+            <SkeletonLines
+              label={t('files.trash.loading')}
+              lines={4}
+              icon
+              className="px-4"
+            />
           )}
           {listing.status === 'error' && (
             <div className="flex items-center gap-2 px-4 py-3 text-sm text-fg-muted">

@@ -11,6 +11,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { useExitTransition } from '../../hooks/use-exit-transition'
 import { FOCUS_RING, IconButton } from './button'
 
 // The least room left between an open menu and the screen's edge, in px
@@ -131,6 +132,8 @@ export function Menu({
   // with no relatedTarget and the blur closes the menu before the click, so
   // the click alone would open it again.
   const openAtPressRef = useRef<boolean | null>(null)
+  // Closed, the menu stays for its fade out, inert
+  const { mounted, closing } = useExitTransition(isOpen, listRef)
 
   // Focus goes back to the trigger with a ring only after a key: Safari
   // rings any focus() that follows a tap, and keeps it there once a sheet
@@ -181,10 +184,7 @@ export function Menu({
   placeRef.current = placeInViewport
   const [shift, setShift] = useState(0)
   useLayoutEffect(() => {
-    if (!isOpen) {
-      setShift(0)
-      return
-    }
+    if (!isOpen) return
     const list = listRef.current!
     if (inTopLayer) {
       list.showPopover()
@@ -197,6 +197,15 @@ export function Menu({
     if (rect.left < MENU_MARGIN) setShift(MENU_MARGIN - rect.left)
     else if (rect.right > edge) setShift(edge - rect.right)
   }, [isOpen, inTopLayer])
+  // Kept while it fades out, so it leaves from where it was
+  useLayoutEffect(() => {
+    if (!mounted) setShift(0)
+  }, [mounted])
+  // Out of the top layer as its fade starts; exit-discrete keeps it shown
+  // until the fade ends
+  useLayoutEffect(() => {
+    if (closing && inTopLayer) listRef.current!.hidePopover()
+  }, [closing, inTopLayer])
 
   // Placed in the viewport, the menu would drift off its trigger as a list
   // holding the trigger scrolls: that closes it. Any other scroll (a Chat
@@ -300,10 +309,13 @@ export function Menu({
           {...triggerProps}
         />
       )}
-      {isOpen && (
+      {mounted && (
         <div
           ref={listRef}
           id={menuId}
+          inert={closing}
+          aria-hidden={closing || undefined}
+          data-closing={closing || undefined}
           role="menu"
           aria-label={label}
           tabIndex={-1}
@@ -314,7 +326,7 @@ export function Menu({
           style={shift ? { transform: `translateX(${shift}px)` } : undefined}
           // In the top layer: fixed, placed by style; the UA's popover inset,
           // margin and padding reset so these classes decide the look
-          className={`z-50 outline-none w-64 border border-border bg-surface-raised py-1 text-fg shadow-xl rounded-panel ui-native:border-0 transition-[opacity,translate] duration-(--duration-fast) ease-standard starting:-translate-y-1 starting:opacity-0 ${inTopLayer ? 'fixed inset-auto m-0 overflow-y-auto px-0' : `absolute top-full mt-2 ${align === 'end' ? 'right-0' : 'left-0'}`} ${className}`}
+          className={`z-50 outline-none w-64 border border-border bg-surface-raised py-1 text-fg shadow-xl rounded-panel ui-native:border-0 exit-discrete duration-(--duration-fast) ease-standard starting:-translate-y-1 starting:opacity-0 ${closing ? 'pointer-events-none -translate-y-1 opacity-0' : ''} ${inTopLayer ? 'fixed inset-auto m-0 overflow-y-auto px-0' : `absolute top-full mt-2 ${align === 'end' ? 'right-0' : 'left-0'}`} ${className}`}
         >
           <MenuContext.Provider value={close}>{children}</MenuContext.Provider>
         </div>
