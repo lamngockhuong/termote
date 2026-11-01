@@ -35,6 +35,7 @@ import {
   groupNoun as groupNounOf,
 } from './components/group-dialog'
 import { HelpModal } from './components/help-modal'
+import { HeaderHostChip } from './components/host-chip'
 import { KeyboardToolbar } from './components/keyboard-toolbar'
 import { LanguageNotice } from './components/language-notice'
 import { LazyBoundary, LoadFailed } from './components/lazy-boundary'
@@ -2036,6 +2037,12 @@ export default function App({
                   }
                 />
               )
+            }
+            hostChip={
+              <HeaderHostChip
+                enabled={settings.showHostChip}
+                isMobile={isMobile}
+              />
             }
             usageChip={
               <HeaderUsageChip

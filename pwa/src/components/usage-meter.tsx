@@ -13,13 +13,23 @@ interface Props {
   label: string
   // What a screen reader reads as the value ("~72%, 144k of 200k tokens")
   valueText: string
+  // How worrying the value is, when not usageLevel(percent) (a battery is
+  // worse the emptier it is)
+  level?: UsageLevel
   className?: string
 }
 
 // A thin bar of how much of something is used, coloured by how close it is
 // to full.
-export function UsageMeter({ percent, label, valueText, className }: Props) {
+export function UsageMeter({
+  percent,
+  label,
+  valueText,
+  level,
+  className,
+}: Props) {
   const value = Math.min(100, Math.max(0, percent))
+  const shown = level ?? usageLevel(value)
   return (
     // biome-ignore lint/a11y/useSemanticElements: a native <meter> cannot take the theme's tokens in every browser
     <span
@@ -29,11 +39,11 @@ export function UsageMeter({ percent, label, valueText, className }: Props) {
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuetext={valueText}
-      data-level={usageLevel(value)}
+      data-level={shown}
       className={`block h-1 overflow-hidden rounded-full bg-surface-raised ${className ?? ''}`}
     >
       <span
-        className={`block h-full rounded-full ${FILL[usageLevel(value)]}`}
+        className={`block h-full rounded-full ${FILL[shown]}`}
         style={{ width: `${value}%` }}
       />
     </span>

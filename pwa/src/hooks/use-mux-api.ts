@@ -335,6 +335,65 @@ export async function fetchOverview(pane?: string): Promise<Overview> {
   return res.json()
 }
 
+// The machine running termote (GET /api/mux/system). scope: whose numbers
+// they are ('wsl': the WSL VM's, 'container': the container's). A value the
+// OS does not give is null. Bytes are bytes; percents 0 to 100.
+export type HostScope = 'host' | 'wsl' | 'container'
+
+export interface HostMemory {
+  total: number
+  used: number
+  percent: number
+  // No exact source for the used figure (macOS, Windows swap)
+  approx: boolean
+  // A container's memory limit given as the total (absent before 2.17)
+  limit?: boolean
+}
+
+export interface HostDisk {
+  // 'home': the disk holding the home folder; 'windows': drive C: from WSL
+  label: string
+  total: number
+  free: number
+  percent: number
+}
+
+export interface HostBattery {
+  percent: number
+  charging: boolean
+  plugged: boolean
+  // To empty when discharging, to full when charging; null: no estimate
+  minutesLeft: number | null
+}
+
+export interface HostPoint {
+  t: string
+  cpu: number | null
+  mem: number | null
+}
+
+export interface HostStats {
+  scope: HostScope
+  cpu: { percent: number; count: number } | null
+  // 1, 5 and 15 minutes; null on Windows
+  load: number[] | null
+  memory: HostMemory | null
+  swap: HostMemory | null
+  disks: HostDisk[] | null
+  battery: HostBattery | null
+  sampledAt: string
+  // CPU and memory every 5 s for the last 15 minutes, oldest first
+  history: HostPoint[]
+}
+
+export async function fetchHostStats(): Promise<HostStats> {
+  const res = await fetch(`${API_BASE}/system`, {
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res)
+  return res.json()
+}
+
 // One subagent of a Claude session. status is running until the transcript
 // reports its end; statusGuessed: done is a guess from how long its file
 // has been quiet. depth is 1 for a subagent of the session itself.
