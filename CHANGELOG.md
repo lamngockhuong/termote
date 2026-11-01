@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.17.0](https://github.com/lamngockhuong/termote/compare/v2.16.0...v2.17.0) (2026-11-01)
+
+
+### Features
+
+* host system stats (CPU, load, RAM, swap, disk, battery) ([#675](https://github.com/lamngockhuong/termote/issues/675)) ([6b48a7e](https://github.com/lamngockhuong/termote/commit/6b48a7e46320d8a38918798504e8d2fbc2931a93))
+
+
+### Bug Fixes
+
+* **pwa:** keep the session tabs visible in a narrow desktop header ([#677](https://github.com/lamngockhuong/termote/issues/677)) ([ba38cce](https://github.com/lamngockhuong/termote/commit/ba38cce461dfc5e28a31565ec40eaac3b6a283a5))
+
 ## [2.16.0](https://github.com/lamngockhuong/termote/compare/v2.15.0...v2.16.0) (2026-10-31)
 
 
