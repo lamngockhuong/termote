@@ -9,6 +9,11 @@ export interface ViewOption<T extends string> {
   Icon: LucideIcon
 }
 
+// A view or panel button's label: read out always, shown once the header
+// (an @container) is at least 60rem wide; narrower, the buttons show their
+// icon only and name it in the tooltip
+export const HEADER_LABEL = 'sr-only @[60rem]:not-sr-only'
+
 interface Props<T extends string> {
   views: ViewOption<T>[]
   value: T
@@ -71,6 +76,7 @@ export function ViewSwitcher<T extends string>({
             aria-controls={panelId?.(id)}
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(id)}
+            title={label}
             className={`relative before:absolute before:inset-x-0 before:-inset-y-1 before:content-[''] flex items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] ui-native:rounded-full ${FOCUS_RING} h-7 px-2.5 text-[12px] pointer-coarse:h-9 ${
               selected
                 ? 'bg-surface-raised text-fg shadow-sm ui-terminal:bg-accent-soft ui-terminal:text-accent ui-terminal:shadow-none'
@@ -78,7 +84,9 @@ export function ViewSwitcher<T extends string>({
             }`}
           >
             <Icon size={14} aria-hidden="true" />
-            <span className="ui-terminal:font-label">{label}</span>
+            <span className={`ui-terminal:font-label ${HEADER_LABEL}`}>
+              {label}
+            </span>
           </button>
         )
       })}

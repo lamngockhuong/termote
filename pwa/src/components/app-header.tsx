@@ -157,8 +157,10 @@ function DesktopHeader(p: Props) {
   return (
     // At least 44px, padded below the status bar of an installed iPad app;
     // it grows when touch-sized controls are taller than the row, instead of
-    // cutting off their top
-    <header className="relative z-10 flex min-h-11 shrink-0 items-end gap-2 border-b border-border bg-surface px-2 pt-[env(safe-area-inset-top)] ui-terminal:bg-bg">
+    // cutting off their top. A container: below 60rem the view
+    // and panel buttons drop their labels, so the session tabs keep room
+    // (an iPad beside the sidebar)
+    <header className="@container relative z-10 flex min-h-11 shrink-0 items-end gap-2 border-b border-border bg-surface px-2 pt-[env(safe-area-inset-top)] ui-terminal:bg-bg">
       {/* The expanded sidebar carries the brand; the phone header has no
           room to spare */}
       {p.showBrand && (

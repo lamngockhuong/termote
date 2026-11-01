@@ -1,6 +1,6 @@
 import { useT } from '../i18n/i18n-context'
 import { FOCUS_RING } from './ui/button'
-import type { ViewOption } from './ui/view-switcher'
+import { HEADER_LABEL, type ViewOption } from './ui/view-switcher'
 
 interface Props {
   views: ViewOption<string>[]
@@ -39,7 +39,9 @@ export function PanelToggles({ views, open, onToggle }: Props) {
             }`}
           >
             <Icon size={14} aria-hidden="true" />
-            <span className="ui-terminal:font-label">{label}</span>
+            <span className={`ui-terminal:font-label ${HEADER_LABEL}`}>
+              {label}
+            </span>
           </button>
         )
       })}
