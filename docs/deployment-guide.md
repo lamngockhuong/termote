@@ -495,7 +495,26 @@ make health
 termote status
 termote status --json   # one JSON object for scripts (no password); exit 1 when not running
 curl http://127.0.0.1:7680/api/mux/health
+curl http://127.0.0.1:7680/api/mux/system   # host stats: CPU, load, memory, swap, disks, battery
 ```
+
+With the server running, `termote status` also prints what its machine has left, leaving out what
+the OS does not give:
+
+```
+Host: CPU 23% · load 1.2 · RAM 61% (9.8/16 GB) · disk 120 GB free · battery 84% charging
+```
+
+`status --json` carries the same sample as `system` (without the history). `RAM ~37%` marks an
+approximation (macOS has no exact used-memory figure). The numbers are those of whatever runs the
+server: under WSL the line ends `(WSL VM)`, and memory and the Linux disk are the VM's (the Linux
+disk is a virtual one that reports its maximum size); drive C: is listed as `C:`. In container mode
+it ends `(container)`: CPU, load and disk are those of the kernel running the container (the host
+on Linux, the container VM with Docker Desktop or podman machine); memory is the container's own
+limit when it has one (cgroup v2 `memory.max`, else v1, shown as `RAM 50% (1/2 GB limit)`), and
+there is no battery. The PWA shows the same numbers in the
+header's Host chip (Settings > Sessions > Host stats in the header) and, on a tap, a sheet with CPU
+and memory over the last 15 minutes.
 
 ## Links and the Herdr Plugin
 
@@ -767,6 +786,9 @@ curl http://127.0.0.1:7680/api/mux/health
 
 # Snapshot (groups/tabs/panes)
 curl http://127.0.0.1:7680/api/mux/snapshot
+
+# Host stats (the sampler's latest sample and 15 minutes of CPU/memory history)
+curl http://127.0.0.1:7680/api/mux/system
 
 # With auth
 curl -u admin:password http://127.0.0.1:7680/api/mux/health   # or the name set with --user

@@ -93,6 +93,11 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/account-usage-strip.tsx`      | Overview: each Codex account's rate limit windows              |
 | `pwa/src/components/usage-meter.tsx`              | Thin usage bar (`role="meter"`), coloured by level             |
 | `pwa/src/components/usage-chip.tsx`               | Header chip: the open pane's context share and Codex limit     |
+| `pwa/src/components/host-chip.tsx`                | Header chip: CPU, RAM, battery of termote's machine            |
+| `pwa/src/components/host-sheet.tsx`               | Host sheet: scope, CPU/RAM lines, load, meters                 |
+| `pwa/src/components/sparkline.tsx`                | Inline SVG line of the last values, gaps for nulls             |
+| `pwa/src/hooks/use-host-stats.ts`                 | Polls `/api/mux/system` (10 s) while visible and on            |
+| `pwa/src/utils/host-format.ts`                    | Host levels (80/95, battery 20/10), bytes, minutes             |
 | `pwa/src/utils/usage-format.ts`                   | Usage labels: level, `~72%`, `5h`/`7d`, "resets 14:30"         |
 | `pwa/src/utils/overview-order.ts`                 | Overview order: blocked, working, done, idle; oldest first     |
 | `pwa/src/components/status-timeline.tsx`          | A card's last hour by status, from the activity log            |
@@ -219,6 +224,10 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/mux_pane_text.go`                         | `GET panes/{id}/text`: pane history as plain text, capped      |
 | `server/agent.go`                                 | `/api/mux/panes/{id}/agent/*` routes, transcript reads         |
 | `server/agent_activity.go`                        | Status since and change log of every agent (`/activity`)       |
+| `server/system.go`                                | Host stats types, scope (host, WSL VM, container)              |
+| `server/system_<os>.go`                           | Host stats per OS: CPU, load, memory, swap, disk, battery      |
+| `server/system_parse.go`                          | Pure parsers: /proc, power_supply, pmset, ps, sysctl           |
+| `server/system_sampler.go`                        | One sampler (5 s, 15 min history), `GET /api/mux/system`       |
 | `server/agent_overview.go`                        | `/overview`: each agent's last text, context, git changes      |
 | `server/agent_context_window.go`                  | Window of a model id, context share, Codex account key         |
 | `server/agent_claude_model.go`                    | Last model a Claude Code transcript names                      |
@@ -283,7 +292,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/cli_allow_path.go`                        | `--allow-path` checks: deny lists, home, termote's dirs, git   |
 | `server/cli_service*.go`                          | OS supervisor registration (systemd/launchd/Scheduled Task)    |
 | `server/cli_container.go`                         | `container up/down/logs/status`                                |
-| `server/cli_url.go`                               | `status --json`, `url` (deep link, open, copy, QR)             |
+| `server/cli_url.go`                               | `status --json`, `url` (deep link, open, copy, QR), Host line  |
 | `server/cli_panel.go`                             | `panel`: the Herdr plugin's popup                              |
 | `server/listener_owner*.go`                       | Saved password sent only to the current user's listener        |
 | `server/peer_user_listener.go`                    | Refuses connections from other local OS users (`peer_user_*`)  |
