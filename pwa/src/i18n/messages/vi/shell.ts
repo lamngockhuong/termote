@@ -111,7 +111,6 @@ export default {
   'shell.host.chipBatteryCharging': 'pin {percent}, đang sạc',
   'shell.host.label': 'Máy chủ: {stats}',
   'shell.host.openLabel': 'Máy chủ: {stats}. Mở chi tiết máy chủ',
-  'shell.host.openTitle': 'Máy chủ: CPU, bộ nhớ, ổ đĩa và pin',
   'shell.host.title': 'Máy chủ',
   'shell.host.scope.host': 'Máy này',
   'shell.host.scope.wsl': 'Máy ảo WSL',

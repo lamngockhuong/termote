@@ -35,60 +35,69 @@ beforeEach(() => {
 })
 
 describe('hostParts', () => {
-  it('takes CPU and RAM, only the higher on a phone', () => {
-    expect(hostParts(stats(), false).map((p) => p.kind)).toEqual(['cpu', 'ram'])
-    expect(hostParts(stats(), true).map((p) => p.kind)).toEqual(['ram'])
-    const busy = stats({ cpu: { percent: 90, count: 8 } })
-    expect(hostParts(busy, true).map((p) => p.kind)).toEqual(['cpu'])
-  })
-
-  it('leaves out what is null', () => {
-    expect(hostParts(stats({ cpu: null }), false).map((p) => p.kind)).toEqual([
-      'ram',
-    ])
-    expect(hostParts(stats({ cpu: null, memory: null }), false)).toEqual([])
+  it('takes CPU and RAM, leaving out what is null', () => {
+    expect(hostParts(stats()).map((p) => p.kind)).toEqual(['cpu', 'ram'])
+    expect(hostParts(stats({ cpu: null })).map((p) => p.kind)).toEqual(['ram'])
+    expect(hostParts(stats({ cpu: null, memory: null }))).toEqual([])
   })
 })
 
 describe('HostChip', () => {
-  it('shows CPU, RAM and battery, and reads every value', () => {
+  it('shows the higher of CPU and RAM, with every value in its name and tooltip', () => {
     render(<HostChip stats={stats()} isMobile={false} onOpen={() => {}} />)
     const chip = screen.getByRole('button', {
       name: 'Host: CPU 23%, RAM 61%, battery 84%, charging. Open the host details',
     })
-    expect(chip.textContent).toBe('CPU 23% · RAM 61%·84%')
+    expect(chip.textContent).toBe('61%')
+    expect(chip.title).toBe('Host: CPU 23%, RAM 61%, battery 84%, charging')
     expect(chip.dataset.level).toBe('normal')
   })
 
-  it('shows only the higher of CPU and RAM on a phone, but reads all', () => {
-    render(<HostChip stats={stats()} isMobile onOpen={() => {}} />)
-    const chip = screen.getByRole('button', {
-      name: /CPU 23%, RAM 61%, battery 84%, charging/,
-    })
-    expect(chip.textContent).toBe('61%')
-  })
-
-  it('shows the battery on a phone when it is the worst part', () => {
-    const low = {
-      percent: 9,
-      charging: false,
-      plugged: false,
-      minutesLeft: 12,
-    }
-    const { rerender } = render(
-      <HostChip stats={stats({ battery: low })} isMobile onOpen={() => {}} />,
-    )
-    expect(screen.getByRole('button').textContent).toBe('9%')
-    expect(screen.getByRole('button').dataset.level).toBe('danger')
-    // Without CPU and RAM the battery is all there is
-    rerender(
+  it('shows CPU when it is the higher', () => {
+    render(
       <HostChip
-        stats={stats({ cpu: null, memory: null })}
+        stats={stats({ cpu: { percent: 90, count: 8 } })}
         isMobile
         onOpen={() => {}}
       />,
     )
+    expect(screen.getByRole('button').textContent).toBe('90%')
+    expect(screen.getByRole('button').dataset.level).toBe('warning')
+  })
+
+  it('shows the battery when it is the worst part, or all there is', () => {
+    const low = { percent: 9, charging: false, plugged: false, minutesLeft: 12 }
+    const { rerender } = render(
+      <HostChip
+        stats={stats({ battery: low })}
+        isMobile={false}
+        onOpen={() => {}}
+      />,
+    )
+    expect(screen.getByRole('button').textContent).toBe('9%')
+    expect(screen.getByRole('button').dataset.level).toBe('danger')
+    rerender(
+      <HostChip
+        stats={stats({ cpu: null, memory: null })}
+        isMobile={false}
+        onOpen={() => {}}
+      />,
+    )
     expect(screen.getByRole('button').textContent).toBe('84%')
+  })
+
+  it('marks approximate memory', () => {
+    render(
+      <HostChip
+        stats={stats({
+          battery: null,
+          memory: { total: 16 * GB, used: 6 * GB, percent: 37.5, approx: true },
+        })}
+        isMobile={false}
+        onOpen={() => {}}
+      />,
+    )
+    expect(screen.getByRole('button').textContent).toBe('~38%')
   })
 
   it('hides below 360 px on a phone when the usage chip is beside it', () => {
@@ -102,46 +111,6 @@ describe('HostChip', () => {
       <HostChip stats={stats()} isMobile={false} crowded onOpen={() => {}} />,
     )
     expect(screen.getByRole('button').className).not.toContain('hidden')
-  })
-
-  it('colours by the worst part', () => {
-    const { rerender } = render(
-      <HostChip
-        stats={stats({ cpu: { percent: 85, count: 8 } })}
-        isMobile={false}
-        onOpen={() => {}}
-      />,
-    )
-    expect(screen.getByRole('button').dataset.level).toBe('warning')
-    rerender(
-      <HostChip
-        stats={stats({
-          battery: {
-            percent: 8,
-            charging: false,
-            plugged: false,
-            minutesLeft: 9,
-          },
-        })}
-        isMobile={false}
-        onOpen={() => {}}
-      />,
-    )
-    expect(screen.getByRole('button').dataset.level).toBe('danger')
-  })
-
-  it('marks approximate memory and leaves out a missing battery', () => {
-    render(
-      <HostChip
-        stats={stats({
-          battery: null,
-          memory: { total: 16 * GB, used: 6 * GB, percent: 37.5, approx: true },
-        })}
-        isMobile={false}
-        onOpen={() => {}}
-      />,
-    )
-    expect(screen.getByRole('button').textContent).toBe('CPU 23% · RAM ~38%')
   })
 
   it('renders nothing without a value to show', () => {

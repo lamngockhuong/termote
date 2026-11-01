@@ -464,9 +464,9 @@ Mở bằng nút lưới trên sidebar (máy tính) hoặc mục "Agent overview
 
 ### Số liệu máy chủ
 
-- [ ] Thanh tiêu đề có chip máy chủ (`CPU 23% · RAM 61% · 84%` kèm biểu tượng pin); điện thoại chỉ
-      hiện một giá trị kèm biểu tượng: đồng hồ đo với giá trị cao hơn trong CPU và RAM, hoặc pin khi
-      pin là phần đáng lo nhất
+- [ ] Thanh tiêu đề có chip máy chủ, trên mọi màn hình chỉ hiện một giá trị kèm biểu tượng: đồng hồ
+      đo với giá trị cao hơn trong CPU và RAM, hoặc pin khi pin là phần đáng lo nhất; đưa chuột vào
+      thì hiện đủ (`Máy chủ: CPU 23%, RAM 61%, pin 84%`), và các tab phiên vẫn đủ chỗ
 - [ ] Điện thoại, trong pane đang chạy agent (có chip mức dùng của agent): ở 360 px cả hai chip vừa
       và nút ⋯ vẫn đủ; dưới 360 px (320 px) chip máy chủ ẩn đi, và hiện lại ở pane khác
 - [ ] Bấm chip: sheet Máy chủ hiện phạm vi ("Máy này"), đường CPU và bộ nhớ lấp dần từ phải qua 15

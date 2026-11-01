@@ -1,5 +1,5 @@
 import { Battery, BatteryCharging, BatteryLow, Gauge } from 'lucide-react'
-import { type ReactNode, useState } from 'react'
+import { useState } from 'react'
 import { useHostStats } from '../hooks/use-host-stats'
 import type { HostStats } from '../hooks/use-mux-api'
 import { useT } from '../i18n/i18n-context'
@@ -22,9 +22,8 @@ interface Part {
   approx: boolean
 }
 
-// The chip's CPU and memory parts, nulls left out; on a phone only the
-// higher of the two.
-export function hostParts(stats: HostStats, isMobile: boolean): Part[] {
+// The chip's CPU and memory parts, nulls left out.
+export function hostParts(stats: HostStats): Part[] {
   const parts: Part[] = []
   if (stats.cpu)
     parts.push({ kind: 'cpu', percent: stats.cpu.percent, approx: false })
@@ -34,47 +33,47 @@ export function hostParts(stats: HostStats, isMobile: boolean): Part[] {
       percent: stats.memory.percent,
       approx: stats.memory.approx,
     })
-  if (isMobile && parts.length > 1)
-    return [parts.reduce((a, b) => (b.percent > a.percent ? b : a))]
   return parts
 }
 
 interface Props {
   stats: HostStats
   isMobile: boolean
-  // The header also shows the agent usage chip: below 360 px there is no
+  // The header also shows the agent usage chip: below 360 px a phone has no
   // room for both, and the chip hides (the session switcher and the menus
   // must stay whole)
   crowded?: boolean
   onOpen: () => void
 }
 
-// A small chip of how busy the machine running termote is:
-// "CPU 23% · RAM 61% · [battery] 84%", coloured by the worst part. A phone's
-// header has room for one value: the worst one, behind an icon (a gauge for
-// the higher of CPU and RAM, else the battery). Nothing when the server gave
+// A small chip of how busy the machine running termote is: one value behind
+// an icon, the worst part (a gauge with the higher of CPU and RAM, else the
+// battery), coloured by its level. It stays this narrow on every screen: the
+// header's session tabs need the room. Every value is in its tooltip and
+// accessible name, and in the sheet it opens. Nothing when the server gave
 // nothing to show.
 export function HostChip({ stats, isMobile, crowded, onOpen }: Props) {
   const { t } = useT()
-  const parts = hostParts(stats, isMobile)
+  const parts = hostParts(stats)
   const b = stats.battery
   if (parts.length === 0 && !b) return null
-  const partLevel = parts.length
-    ? hostLevel(Math.max(...parts.map((p) => p.percent)))
-    : undefined
+  const top = parts.reduce<Part | undefined>(
+    (a, p) => (!a || p.percent > a.percent ? p : a),
+    undefined,
+  )
+  const partLevel = top ? hostLevel(top.percent) : undefined
   const battLevel = b ? batteryLevel(b) : undefined
   const level = [partLevel, battLevel].reduce<UsageLevel>(
     (a, l) => (l && RANK[l] > RANK[a] ? l : a),
     'normal',
   )
-  // The screen reader hears every value, the phone's hidden ones included
-  const spoken = hostParts(stats, false).map((p) =>
+  const values = parts.map((p) =>
     t(p.kind === 'cpu' ? 'shell.host.cpu' : 'shell.host.ram', {
       percent: hostPercent(p.percent, p.approx),
     }),
   )
   if (b)
-    spoken.push(
+    values.push(
       t(
         b.charging
           ? 'shell.host.chipBatteryCharging'
@@ -82,67 +81,36 @@ export function HostChip({ stats, isMobile, crowded, onOpen }: Props) {
         { percent: hostPercent(b.percent) },
       ),
     )
+  const all = values.join(', ')
+  // Without CPU and RAM there is a battery (else nothing was returned above)
+  const showBattery =
+    !top || (!!battLevel && RANK[battLevel] > RANK[hostLevel(top.percent)])
   const BatteryIcon = b?.charging
     ? BatteryCharging
     : b && b.percent <= 20
       ? BatteryLow
       : Battery
-  const battery = b && (
-    <>
-      <BatteryIcon aria-hidden="true" className="size-3.5" />
-      {hostPercent(b.percent)}
-    </>
-  )
-  let content: ReactNode
-  if (isMobile) {
-    const top = parts[0]
-    const showBattery =
-      battery &&
-      (!top ||
-        (battLevel !== undefined &&
-          partLevel !== undefined &&
-          RANK[battLevel] > RANK[partLevel]))
-    content = showBattery ? (
-      battery
-    ) : (
-      <>
-        <Gauge aria-hidden="true" className="size-3.5" />
-        {hostPercent(top.percent, top.approx)}
-      </>
-    )
-  } else {
-    const text = parts
-      .map((p) =>
-        t(p.kind === 'cpu' ? 'shell.host.cpu' : 'shell.host.ram', {
-          percent: hostPercent(p.percent, p.approx),
-        }),
-      )
-      .join(' · ')
-    content = (
-      <>
-        {text}
-        {battery && (
-          <>
-            {text && <span aria-hidden="true">·</span>}
-            {battery}
-          </>
-        )}
-      </>
-    )
-  }
   return (
     <button
       type="button"
       onClick={onOpen}
-      aria-label={t('shell.host.openLabel', { stats: spoken.join(', ') })}
-      title={t('shell.host.openTitle')}
+      aria-label={t('shell.host.openLabel', { stats: all })}
+      title={t('shell.host.label', { stats: all })}
       data-level={level}
       className={`group flex shrink-0 rounded-control border bg-surface p-0.5 ui-native:rounded-full ui-native:border-0 ${LEVEL_CHIP[level]} ${FOCUS_RING} ${isMobile && crowded ? 'max-[359px]:hidden' : ''}`}
     >
-      <span
-        className={`flex h-7 items-center gap-1 rounded-[calc(var(--radius-control)-2px)] text-[12px] tabular-nums group-hover:bg-surface-raised pointer-coarse:h-9 ui-native:rounded-full ui-terminal:font-label ${isMobile ? 'px-2' : 'px-2.5'}`}
-      >
-        {content}
+      <span className="flex h-7 items-center gap-1 rounded-[calc(var(--radius-control)-2px)] px-2 text-[12px] tabular-nums group-hover:bg-surface-raised pointer-coarse:h-9 ui-native:rounded-full ui-terminal:font-label">
+        {showBattery ? (
+          <>
+            <BatteryIcon aria-hidden="true" className="size-3.5" />
+            {hostPercent((b as NonNullable<typeof b>).percent)}
+          </>
+        ) : (
+          <>
+            <Gauge aria-hidden="true" className="size-3.5" />
+            {hostPercent(top.percent, top.approx)}
+          </>
+        )}
       </span>
     </button>
   )

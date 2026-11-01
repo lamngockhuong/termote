@@ -132,7 +132,6 @@ export default {
   'shell.host.chipBatteryCharging': 'battery {percent}, charging',
   'shell.host.label': 'Host: {stats}',
   'shell.host.openLabel': 'Host: {stats}. Open the host details',
-  'shell.host.openTitle': 'Host: CPU, memory, disk and battery',
   'shell.host.title': 'Host',
   'shell.host.scope.host': 'This machine',
   'shell.host.scope.wsl': 'WSL virtual machine',
