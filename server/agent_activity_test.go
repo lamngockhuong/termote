@@ -406,11 +406,11 @@ func TestActivityRoute(t *testing.T) {
 
 func TestBuildServerWiresZellijRename(t *testing.T) {
 	m := newTestZellijMux()
-	_, _, _, activity, err := buildServerWith(testConfig(t), m)
+	_, _, _, agent, err := buildServerWith(testConfig(t), m)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m.onRename == nil || activity == nil {
+	if m.onRename == nil || agent.activity == nil {
 		t.Fatal("the Zellij rename is not told to the tracker")
 	}
 }

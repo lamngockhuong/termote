@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -77,6 +79,9 @@ type statusReport struct {
 	// Via is how the CLI reached the server: "socket" (the local socket,
 	// no password sent) or "tcp"; "" when nothing answered.
 	Via string `json:"via,omitempty"`
+	// System is the host stats the server last sampled, without their
+	// history; absent when the server did not give them.
+	System *systemStats `json:"system,omitempty"`
 }
 
 func (c *cli) statusReport(saved *savedConfig, port int) statusReport {
@@ -93,6 +98,7 @@ func (c *cli) statusReport(saved *savedConfig, port int) statusReport {
 	switch {
 	case code == http.StatusOK:
 		r.Running, r.Status, r.Version, r.Backend, r.PID = true, h.Status, h.Version, h.Backend, h.PID
+		r.System = c.fetchSystem(port, saved.authUser(), pass)
 	case code == http.StatusUnauthorized:
 		r.Running, r.Status = true, "unauthorized"
 	case code == healthUntrusted:
@@ -110,6 +116,102 @@ func (c *cli) statusReport(saved *savedConfig, port int) statusReport {
 		r.Supervisor = sup.Name()
 	}
 	return r
+}
+
+// fetchSystem asks the server on port for its host stats, the way health
+// was asked; nil when it does not give them (an older server, an error).
+func (c *cli) fetchSystem(port int, user, pass string) *systemStats {
+	resp, code, _ := c.localRequest(port, user, pass, http.MethodGet, "/api/mux/system", nil)
+	if resp == nil {
+		return nil
+	}
+	defer resp.Body.Close()
+	var s systemStats
+	if code != http.StatusOK || json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&s) != nil || s.Scope == "" {
+		return nil
+	}
+	return &s
+}
+
+// hostSummary is the Host line of `termote status`: what the server's
+// machine has left, leaving out what it could not read.
+func hostSummary(s *systemStats) string {
+	if s == nil {
+		return ""
+	}
+	var parts []string
+	if s.CPU != nil {
+		parts = append(parts, fmt.Sprintf("CPU %s%%", formatPercent(s.CPU.Percent)))
+	}
+	if len(s.Load) > 0 {
+		parts = append(parts, fmt.Sprintf("load %.1f", s.Load[0]))
+	}
+	if m := s.Memory; m != nil {
+		approx := ""
+		if m.Approx {
+			approx = "~"
+		}
+		limit := ""
+		if m.Limit {
+			limit = " limit"
+		}
+		parts = append(parts, fmt.Sprintf("RAM %s%s%% (%s/%s%s)", approx, formatPercent(m.Percent), formatGB(m.Used, false), formatGB(m.Total, true), limit))
+	}
+	if m := s.Swap; m != nil {
+		parts = append(parts, fmt.Sprintf("swap %s%%", formatPercent(m.Percent)))
+	}
+	for _, d := range s.Disks {
+		name := "disk"
+		if d.Label == "windows" {
+			name = "C:"
+		}
+		parts = append(parts, fmt.Sprintf("%s %s free", name, formatGB(d.Free, true)))
+	}
+	if b := s.Battery; b != nil {
+		p := fmt.Sprintf("battery %s%%", formatPercent(b.Percent))
+		switch {
+		case b.Charging:
+			p += " charging"
+		case b.Plugged:
+			p += " plugged in"
+		case b.MinutesLeft != nil:
+			p += fmt.Sprintf(" (%d:%02d left)", *b.MinutesLeft/60, *b.MinutesLeft%60)
+		}
+		parts = append(parts, p)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	line := strings.Join(parts, " · ")
+	switch s.Scope {
+	case scopeWSL:
+		line += " (WSL VM)"
+	case scopeContainer:
+		line += " (container)"
+	}
+	return line
+}
+
+// formatPercent prints a share without a decimal.
+func formatPercent(p float64) string { return strconv.Itoa(int(math.Round(p))) }
+
+// formatGB prints bytes in GB (base 1024, as the OS tools show memory),
+// one decimal below 100 GB; unit adds " GB" (or MB below 1 GB).
+func formatGB(b uint64, unit bool) string {
+	const gb = 1 << 30
+	if b < gb && unit {
+		return fmt.Sprintf("%d MB", b>>20)
+	}
+	v := float64(b) / gb
+	s := strconv.FormatFloat(v, 'f', 1, 64)
+	if v >= 100 {
+		s = strconv.FormatFloat(v, 'f', 0, 64)
+	}
+	s = strings.TrimSuffix(s, ".0")
+	if unit {
+		s += " GB"
+	}
+	return s
 }
 
 func (c *cli) printStatusJSON(port int) error {

@@ -875,6 +875,9 @@ func (c *cli) cmdStatus(args []string) error {
 	case running:
 		fmt.Fprintf(c.out, "  %s server :%d - %s\n", c.paint(ansiGreen, "[OK]"), port, h.Status)
 		fmt.Fprintf(c.out, "  Version: v%s\n  Backend: %s\n  PID: %d\n", h.Version, h.Backend, h.PID)
+		if line := hostSummary(c.fetchSystem(port, saved.authUser(), pass)); line != "" {
+			fmt.Fprintf(c.out, "  Host: %s\n", line)
+		}
 	case code == http.StatusUnauthorized:
 		running = true
 		fmt.Fprintf(c.out, "  %s server :%d - running (the saved password was not accepted)\n", c.paint(ansiYellow, "[OK]"), port)

@@ -368,6 +368,8 @@ type agentAPI struct {
 	uploads *uploadStore
 	// activity records each agent's status changes from the snapshots read.
 	activity *activityTracker
+	// system samples the host's CPU, memory, disk and battery.
+	system *systemSampler
 	// overview shares one summary of every agent between clients; changes
 	// holds their directories' changes, read in the background.
 	overview *ttlCache[overviewRead]

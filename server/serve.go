@@ -437,9 +437,10 @@ func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushStore, 
 	return h, hub, push, err
 }
 
-// buildServerWith is buildServer that also returns the activity tracker, for
-// the push watcher to feed.
-func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushStore, *activityTracker, error) {
+// buildServerWith is buildServer that also returns the agent API, whose
+// activity tracker the push watcher feeds and whose host stats sampler the
+// caller starts.
+func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushStore, *agentAPI, error) {
 	if err := validateConfig(cfg); err != nil {
 		return nil, nil, nil, nil, err
 	}
@@ -514,6 +515,8 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 	}
 	agent.userTasks = userTasks != nil
 	registerUserTaskRoutes(mux, userTasks, allowed)
+	agent.system = newSystemSampler(systemScope(), collectSystem)
+	registerSystemRoute(mux, agent.system, allowed)
 	registerStreamRoutes(mux, m, tokenStore, allowed, hub, agent.activity)
 	if z, ok := m.(*zellijMux); ok {
 		// A Zellij group's ids change with its session's name.
@@ -573,7 +576,7 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 	handler = securityHeaders(pwa, handler)
 	handler = hostGuard(allowed, handler)
 	handler = isolationHeaders(handler)
-	return readDeadline(noCacheMiddleware(handler)), hub, push, agent.activity, nil
+	return readDeadline(noCacheMiddleware(handler)), hub, push, agent, nil
 }
 
 // requestReadTimeout bounds reading one request, its body included:
@@ -680,13 +683,16 @@ func serveAndPublish(ctx context.Context, cfg serveConfig, m Mux, ln net.Listene
 // runServer serves on ln until ctx is cancelled, then stops accepting
 // requests, closes every terminal stream and waits for their processes.
 func runServer(ctx context.Context, cfg serveConfig, m Mux, ln net.Listener) error {
-	handler, hub, push, activity, err := buildServerWith(cfg, m)
+	handler, hub, push, agent, err := buildServerWith(cfg, m)
 	if err != nil {
 		ln.Close()
 		return err
 	}
-	// Here, not in buildServer: a handler built for a test sends nothing.
-	startPushWatcher(ctx, m, push, activity)
+	// Here, not in buildServer: a handler built for a test sends nothing
+	// and reads no host stats in the background.
+	startPushWatcher(ctx, m, push, agent.activity)
+	stopSystem := startSystemSampler(ctx, agent.system)
+	defer stopSystem()
 	pwa := "embedded"
 	if cfg.PWADir != "" {
 		pwa, _ = filepath.Abs(cfg.PWADir)
@@ -706,6 +712,7 @@ func runServer(ctx context.Context, cfg serveConfig, m Mux, ln net.Listener) err
 	select {
 	case err := <-errCh:
 		srv.Close()
+		stopSystem()
 		cleanupSocket()
 		return err
 	case <-ctx.Done():
@@ -719,6 +726,7 @@ func runServer(ctx context.Context, cfg serveConfig, m Mux, ln net.Listener) err
 	}
 	// Shutdown has closed the socket's listener: the CLI finds no socket
 	// rather than one nothing answers on.
+	stopSystem()
 	cleanupSocket()
 	if err := hub.shutdown(sctx); err != nil {
 		log.Printf("terminal streams still open at exit: %v", err)
