@@ -465,7 +465,10 @@ Mở bằng nút lưới trên sidebar (máy tính) hoặc mục "Agent overview
 ### Số liệu máy chủ
 
 - [ ] Thanh tiêu đề có chip máy chủ (`CPU 23% · RAM 61% · 84%` kèm biểu tượng pin); điện thoại chỉ
-      hiện giá trị cao hơn trong CPU và RAM cùng pin, và chip vừa thanh tiêu đề ở 360 px
+      hiện một giá trị kèm biểu tượng: đồng hồ đo với giá trị cao hơn trong CPU và RAM, hoặc pin khi
+      pin là phần đáng lo nhất
+- [ ] Điện thoại, trong pane đang chạy agent (có chip mức dùng của agent): ở 360 px cả hai chip vừa
+      và nút ⋯ vẫn đủ; dưới 360 px (320 px) chip máy chủ ẩn đi, và hiện lại ở pane khác
 - [ ] Bấm chip: sheet Máy chủ hiện phạm vi ("Máy này"), đường CPU và bộ nhớ lấp dần từ phải qua 15
       phút, tải 1/5/15, và thanh đo cho bộ nhớ, swap (khi có), ổ đĩa và pin
 - [ ] macOS: số liệu lệch không quá vài % so với Activity Monitor, bộ nhớ ghi là ước tính (`~`), pin

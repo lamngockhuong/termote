@@ -2042,6 +2042,11 @@ export default function App({
               <HeaderHostChip
                 enabled={settings.showHostChip}
                 isMobile={isMobile}
+                crowded={
+                  settings.showUsageChip &&
+                  !!activeSession.hasAgent &&
+                  !!activeSession.paneId
+                }
               />
             }
             usageChip={

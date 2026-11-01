@@ -473,8 +473,11 @@ Open it from the sidebar's grid button (desktop) or the view menu's "Agent overv
 
 ### Host Stats
 
-- [ ] Header shows the Host chip (`CPU 23% · RAM 61% · 84%` with a battery icon); a phone shows the
-      higher of CPU and RAM plus the battery, and the chip fits the header at 360 px
+- [ ] Header shows the Host chip (`CPU 23% · RAM 61% · 84%` with a battery icon); a phone shows one
+      value behind an icon: a gauge with the higher of CPU and RAM, or the battery when it is the
+      worst part
+- [ ] Phone, in a pane running an agent (agent usage chip shown): at 360 px both chips fit and the ⋯
+      menu stays whole; below 360 px (320 px) the Host chip hides, and shows again in another pane
 - [ ] Tap the chip: the Host sheet shows the scope ("This machine"), CPU and memory lines filling
       from the right over 15 minutes, load 1/5/15, and meters for memory, swap (when there is
       some), disk and battery
