@@ -81,6 +81,48 @@ describe('useHostStats', () => {
     expect(mockFetch).toHaveBeenCalledTimes(2)
   })
 
+  it('sets nothing when unmounted during a read, ok or failed', async () => {
+    for (const settle of ['resolve', 'reject'] as const) {
+      mockFetch.mockReset()
+      let done: (v?: unknown) => void = () => {}
+      mockFetch.mockReturnValue(
+        new Promise((res, rej) => {
+          done =
+            settle === 'resolve'
+              ? () => res(stats(1))
+              : () => rej(new Error('x'))
+        }),
+      )
+      const { unmount } = renderHook(() => useHostStats(true))
+      unmount()
+      await act(async () => {
+        done()
+      })
+      await act(async () => {
+        vi.advanceTimersByTime(HOST_POLL * 2)
+      })
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+    }
+  })
+
+  it('starts no second read while one is running, nor while hidden', async () => {
+    let done: (v: unknown) => void = () => {}
+    mockFetch.mockReturnValueOnce(new Promise((res) => (done = res)))
+    renderHook(() => useHostStats(true))
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+    setHidden(true)
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      done(stats(3))
+    })
+  })
+
   it('clears what it showed when a read fails', async () => {
     mockFetch
       .mockResolvedValueOnce(stats(1))

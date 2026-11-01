@@ -38,6 +38,8 @@ describe('hostParts', () => {
   it('takes CPU and RAM, only the higher on a phone', () => {
     expect(hostParts(stats(), false).map((p) => p.kind)).toEqual(['cpu', 'ram'])
     expect(hostParts(stats(), true).map((p) => p.kind)).toEqual(['ram'])
+    const busy = stats({ cpu: { percent: 90, count: 8 } })
+    expect(hostParts(busy, true).map((p) => p.kind)).toEqual(['cpu'])
   })
 
   it('leaves out what is null', () => {
@@ -187,5 +189,7 @@ describe('HeaderHostChip', () => {
     )
     expect(await screen.findByRole('dialog', { name: 'Host' })).toBeTruthy()
     expect(screen.getByText('This machine')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(screen.queryByRole('dialog', { name: 'Host' })).toBeNull()
   })
 })

@@ -118,6 +118,40 @@ describe('HostDetails', () => {
     expect(screen.queryByRole('meter', { name: 'Swap' })).toBeNull()
   })
 
+  it('takes an unknown scope as this machine', () => {
+    render(<HostDetails stats={stats({ scope: 'vm' as HostStats['scope'] })} />)
+    expect(screen.getByText('This machine')).toBeTruthy()
+  })
+
+  it('says how the battery is powered', () => {
+    const { rerender } = render(
+      <HostDetails
+        stats={stats({
+          battery: {
+            percent: 60,
+            charging: true,
+            plugged: true,
+            minutesLeft: 45,
+          },
+        })}
+      />,
+    )
+    expect(screen.getByText('Charging · 45 min until full')).toBeTruthy()
+    rerender(
+      <HostDetails
+        stats={stats({
+          battery: {
+            percent: 100,
+            charging: false,
+            plugged: true,
+            minutesLeft: null,
+          },
+        })}
+      />,
+    )
+    expect(screen.getByText('Plugged in')).toBeTruthy()
+  })
+
   it('says when a line has no data yet', () => {
     render(<HostDetails stats={stats({ cpu: null, history: [] })} />)
     expect(screen.getByRole('img', { name: 'CPU: no data yet' })).toBeTruthy()

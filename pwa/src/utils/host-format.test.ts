@@ -69,5 +69,7 @@ describe('historySlots', () => {
       null,
     ])
     expect(historySlots(history, (p) => p.cpu, 'bad', 2)).toEqual([null, null])
+    const bad = [{ t: 'soon', cpu: 1, mem: 1 }]
+    expect(historySlots(bad, (p) => p.cpu, at(10), 2)).toEqual([null, null])
   })
 })
