@@ -91,6 +91,7 @@ const DEFAULT_SETTINGS: Settings = {
   notifyAgents: false,
   stuckMinutes: 10,
   showUsageChip: true,
+  showHostChip: true,
   editorFontSize: 13,
   editorTabSize: 4,
   editorWrap: false,
@@ -789,6 +790,14 @@ describe('SettingsModal', () => {
     expect(sw).toHaveAttribute('aria-checked', 'true')
     fireEvent.click(sw)
     expect(onUpdateSetting).toHaveBeenCalledWith('showUsageChip', false)
+  })
+
+  it('toggles the host chip, on by default', () => {
+    const { onUpdateSetting } = renderModal()
+    const sw = screen.getByRole('switch', { name: 'Host stats in the header' })
+    expect(sw).toHaveAttribute('aria-checked', 'true')
+    fireEvent.click(sw)
+    expect(onUpdateSetting).toHaveBeenCalledWith('showHostChip', false)
   })
 
   it('reflects stored sortBlockedFirst state', () => {

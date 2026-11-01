@@ -73,6 +73,7 @@ const SETTINGS: Settings = {
   notifyAgents: false,
   stuckMinutes: 10,
   showUsageChip: true,
+  showHostChip: true,
   editorFontSize: 13,
   editorTabSize: 4,
   editorWrap: false,

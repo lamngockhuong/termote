@@ -152,6 +152,7 @@ export interface Settings {
   notifyAgents: boolean // notify when an agent is blocked or ends a turn
   stuckMinutes: number // overview: a working agent quiet this long may be stuck
   showUsageChip: boolean // header: the open pane's agent's context and limits
+  showHostChip: boolean // header: CPU, memory and battery of termote's machine
   editorFontSize: number // desktop editor (CodeMirror): px, EDITOR_FONT_SIZES
   editorTabSize: EditorTabSize // desktop editor: columns of a tab, one indent
   editorWrap: boolean // Files/Changes on desktop: lines wrapped by default
@@ -190,6 +191,7 @@ const DEFAULTS: Settings = {
   notifyAgents: false,
   stuckMinutes: DEFAULT_STUCK_MINUTES,
   showUsageChip: true,
+  showHostChip: true,
   editorFontSize: 13,
   editorTabSize: 4,
   editorWrap: false,
@@ -232,6 +234,7 @@ function getSnapshot(): Settings {
         stuckMinutes: resolveStuckMinutes(merged.stuckMinutes),
         copyOnSelect: merged.copyOnSelect === true,
         showUsageChip: merged.showUsageChip !== false,
+        showHostChip: merged.showHostChip !== false,
         editorFontSize: resolveEditorFontSize(merged.editorFontSize),
         editorTabSize: resolveEditorTabSize(merged.editorTabSize),
         editorWrap: merged.editorWrap === true,

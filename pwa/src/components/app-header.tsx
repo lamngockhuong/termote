@@ -61,6 +61,9 @@ interface Props {
   // How full the open pane's agent is (HeaderUsageChip); renders nothing
   // when it has nothing to show
   usageChip?: ReactNode
+  // How busy the machine running termote is (HeaderHostChip), with the Host
+  // sheet it opens
+  hostChip?: ReactNode
   // The Pane menu (split, zoom, swap, resize, close); unset: no button
   paneMenu?: ReactNode
   viewPanelId: (id: string) => string
@@ -119,6 +122,7 @@ function MobileHeader(p: Props) {
       {down && (
         <ConnectionIndicator state={p.connectionState} onRetry={p.onRetry} />
       )}
+      {p.hostChip}
       {p.usageChip}
       {p.paneMenu}
       <ViewMenu
@@ -182,6 +186,7 @@ function DesktopHeader(p: Props) {
       {/* 2px above the border: the controls' middle then sits between the
           middle of the active tab (on the border) and of the others (4px up) */}
       <div className="mb-0.5 flex shrink-0 items-center gap-1">
+        {p.hostChip}
         {p.usageChip}
         <ViewSwitcher
           views={p.views}

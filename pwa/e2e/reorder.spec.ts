@@ -98,6 +98,9 @@ test.describe('reordering tmux windows', () => {
 
   test('drag a tab before or after another in the header row', async ({ page }) => {
     const [a, b, c] = names
+    // Wide enough that the three tabs fit beside the header's chips and
+    // controls: a tab scrolled out of the strip cannot be dragged onto
+    await page.setViewportSize({ width: 1600, height: 900 })
     await page.goto('/')
     const tab = await tabNamed(page, a)
     // Open on this session, so the header shows its windows

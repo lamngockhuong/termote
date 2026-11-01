@@ -959,6 +959,16 @@ export function SettingsModal({
             />
           </SettingsRow>
           <SettingsRow
+            title={t('settings.hostChip')}
+            desc={t('settings.hostChipDesc')}
+          >
+            <Switch
+              label={t('settings.hostChip')}
+              checked={settings.showHostChip}
+              onChange={(v) => onUpdateSetting('showHostChip', v)}
+            />
+          </SettingsRow>
+          <SettingsRow
             title={t('settings.poll')}
             desc={t('settings.pollDesc', {
               interval: formatSeconds(settings.pollInterval, t),

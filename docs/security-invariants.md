@@ -261,6 +261,20 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   never a prompt, a tool input or result, a path or a file name, so view-only may read it; the PWA
   shows the type, the description and the tool's name through `visibleUnsafe`, as the overview's text. The
   newest write of a running subagent becomes the overview's `lastTs`
+- **Host stats** (`server/system*.go`, `GET /api/mux/system`, the PWA's Host chip and sheet,
+  `termote status`): `requireMethod(GET)`, `crossSiteRejection`, no parameters, no role check: a
+  view-only device reads it by design, as it holds only load and capacity figures (CPU and memory
+  shares, load averages, byte counts, battery state) and names no pane, person or path. One sampler
+  (`systemSampler`, started by `runServer` and stopped, waiting for a sample in progress, before the
+  CLI socket's cleanup: a macOS sample forks `ps`, whose child holds that socket until it execs) reads the host every 5 s and
+  keeps 180 points of CPU and memory in memory; requests answer from it and never read the host,
+  except one read before the first sample. A disk is labelled with a fixed word (`home`, `windows`),
+  never its path. A failed reading is `null` and its error is logged once until it works again, never
+  sent. The only commands run are `ps -A -o %cpu=` and `pmset -g batt` on macOS, by argv with a 2 s
+  timeout and `LC_ALL=C`; their output is parsed into numbers and never returned or logged. In a
+  container the battery is never read (its `/sys` is the VM's); its memory limit is read from its own
+  cgroup files (`/sys/fs/cgroup`, fixed paths, numbers only). `termote status` asks the route the
+  way it asks health (local socket, else TCP to a trusted listener) and prints only parsed numbers.
 - **Paired devices** (`server/device_*.go`, `server/pair_page.go`, `server/cli_devices.go`,
   `caps.devices`): a device signs in with a one-time code instead of the password and gets its own
   cookie `termote_device_<8 hex of the store id>` (`HttpOnly`, `SameSite=Strict`, `Secure` on HTTPS,

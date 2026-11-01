@@ -462,6 +462,31 @@ Mở bằng nút lưới trên sidebar (máy tính) hoặc mục "Agent overview
       mở pane của nó, dòng của window đã đóng thì bấm không có tác dụng; màn hình rộng hiện thành cột
       bên cạnh các thẻ, điện thoại hiện thành sheet (360 px, không cuộn ngang)
 
+### Số liệu máy chủ
+
+- [ ] Thanh tiêu đề có chip máy chủ, trên mọi màn hình chỉ hiện một giá trị kèm biểu tượng: đồng hồ
+      đo với giá trị cao hơn trong CPU và RAM, hoặc pin khi pin là phần đáng lo nhất; đưa chuột vào
+      thì hiện đủ (`Máy chủ: CPU 23%, RAM 61%, pin 84%`), và các tab phiên vẫn đủ chỗ
+- [ ] Điện thoại, trong pane đang chạy agent (có chip mức dùng của agent): ở 360 px cả hai chip vừa
+      và nút ⋯ vẫn đủ; dưới 360 px (320 px) chip máy chủ ẩn đi, và hiện lại ở pane khác
+- [ ] Bấm chip: sheet Máy chủ hiện phạm vi ("Máy này"), đường CPU và bộ nhớ lấp dần từ phải qua 15
+      phút, tải 1/5/15, và thanh đo cho bộ nhớ, swap (khi có), ổ đĩa và pin
+- [ ] macOS: số liệu lệch không quá vài % so với Activity Monitor, bộ nhớ ghi là ước tính (`~`), pin
+      khớp với thanh menu (đang sạc, thời gian còn lại)
+- [ ] Linux: bộ nhớ và swap khớp `free -b`, ổ đĩa khớp `df ~`, tải khớp `/proc/loadavg`
+- [ ] Windows: CPU và bộ nhớ khớp Task Manager, không có tải trung bình, laptop có pin
+- [ ] WSL: phạm vi "Máy ảo WSL", có thanh "Ổ Linux (ảo)" và "Ổ C: của Windows"; pin hiện khi
+      `ls /sys/class/power_supply` liệt kê một pin, nếu không thì không có thanh pin
+- [ ] Chế độ container: phạm vi "Container" kèm ghi chú, không có pin; đặt giới hạn bộ nhớ 2 GB cho
+      container (`podman update --memory 2g <tên>`, hoặc `docker update`) thì bộ nhớ ghi "Bộ nhớ · giới
+      hạn của container" là 2 GB và `termote status` in `RAM n% (x/2 GB limit)`
+- [ ] CPU hoặc bộ nhớ trên 80% làm chip chuyển màu hổ phách, 95% màu đỏ; pin còn 20% trở xuống khi
+      không cắm sạc làm chip màu hổ phách, 10% màu đỏ
+- [ ] Cài đặt > Phiên > **Số liệu máy chủ trên thanh tiêu đề** tắt: chip biến mất và không còn
+      request `/api/mux/system` nào
+- [ ] Thiết bị chỉ xem vẫn thấy chip và sheet
+- [ ] `termote status` in dòng `Host:`; `termote status --json` có object `system`
+
 ### Fullscreen (Desktop)
 
 - [ ] Nút fullscreen hiện trên header (chỉ trên máy tính)

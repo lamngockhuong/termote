@@ -471,6 +471,32 @@ Open it from the sidebar's grid button (desktop) or the view menu's "Agent overv
       of a closed window does nothing; a column beside the cards on a wide screen, a sheet on a phone
       (360 px, no sideways scroll)
 
+### Host Stats
+
+- [ ] Header shows the Host chip, one value behind an icon on every screen: a gauge with the higher
+      of CPU and RAM, or the battery when it is the worst part; hovering it shows every value
+      (`Host: CPU 23%, RAM 61%, battery 84%`), and the session tabs keep their room
+- [ ] Phone, in a pane running an agent (agent usage chip shown): at 360 px both chips fit and the ⋯
+      menu stays whole; below 360 px (320 px) the Host chip hides, and shows again in another pane
+- [ ] Tap the chip: the Host sheet shows the scope ("This machine"), CPU and memory lines filling
+      from the right over 15 minutes, load 1/5/15, and meters for memory, swap (when there is
+      some), disk and battery
+- [ ] macOS: numbers within a few % of Activity Monitor, memory marked approximate (`~`), battery
+      matches the menu bar (charging, time left)
+- [ ] Linux: memory and swap agree with `free -b`, disk with `df ~`, load with `/proc/loadavg`
+- [ ] Windows: CPU and memory agree with Task Manager, no load average, battery shown on a laptop
+- [ ] WSL: scope "WSL virtual machine", a "Linux disk (virtual)" and a "Windows drive C:" meter; the
+      battery shows when `ls /sys/class/power_supply` lists one, else no battery meter
+- [ ] Container mode: scope "Container" with its note, no battery; with a 2 GB memory limit on
+      the container (`podman update --memory 2g <name>`, or `docker update`) memory reads "Memory · container limit" of 2 GB and
+      `termote status` shows `RAM n% (x/2 GB limit)`
+- [ ] CPU above 80% or memory above 80% turns the chip amber, 95% red; a battery at 20% or less
+      while discharging turns it amber, 10% red
+- [ ] Settings > Sessions > **Host stats in the header** off: the chip goes and no
+      `/api/mux/system` request is sent
+- [ ] A view-only device sees the chip and the sheet
+- [ ] `termote status` prints a `Host:` line; `termote status --json` has a `system` object
+
 ### Fullscreen (Desktop)
 
 - [ ] Fullscreen button visible in header (desktop only)

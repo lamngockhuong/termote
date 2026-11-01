@@ -71,6 +71,9 @@ export default {
   'settings.usage': 'Agent usage in the header',
   'settings.usageDesc':
     "Show how full the open pane's agent context is, and its Codex limits",
+  'settings.hostChip': 'Host stats in the header',
+  'settings.hostChipDesc':
+    'Show the CPU, memory and battery of the machine running Termote',
   'settings.poll': 'Session poll interval',
   'settings.pollDesc': 'How often to sync session list ({interval})',
   'settings.pollSeconds': '{n}s',

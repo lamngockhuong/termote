@@ -1330,6 +1330,20 @@ a document of termote's origin without the server's `sandbox` policy, while a `d
 opaque origin), keeps the previous image while reading again, and revokes every `blob:` URL once
 replaced or unmounted; Changes reads again on a refresh or a new status, not on every poll.
 
+### Host stats (`/api/mux/system`)
+
+`server/system_sampler.go` runs one goroutine, started by `runServer` and stopped with it, that reads
+the machine every 5 s through `collectSystem` (`server/system_<os>.go`: `/proc` and
+`/sys/class/power_supply` on Linux and WSL, sysctl, `ps` and `pmset` on macOS, kernel32 on Windows)
+and keeps the latest sample plus 180 points of CPU and memory (15 minutes) in memory. Requests,
+however many, answer from it; only a request before the first tick reads one sample itself. CPU is a
+delta of cumulative counters on Linux and Windows (so the first sample has none) and the summed
+per-process `%cpu` on macOS. The scope says whose numbers they are: `container` when a container
+marker exists, else `wsl` under WSL, else `host`. In a container with a memory limit (cgroup v2 `memory.max`, else v1), memory is that limit and the
+cgroup's usage less inactive file cache, marked `limit`. A reading the OS does not give is `null`; its error
+is logged once until it works again. The PWA polls every 10 s while the page is visible and the Host
+chip is on or its sheet open; `termote status` asks once.
+
 ### Agent activity (`/api/mux/activity`)
 
 `server/agent_activity.go` records, for each pane with an agent, its status and when it began,

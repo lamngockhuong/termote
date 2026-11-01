@@ -72,6 +72,8 @@ export default {
   'settings.usage': 'Mức dùng của agent trên thanh tiêu đề',
   'settings.usageDesc':
     'Cho biết context của agent trong pane đang mở đã đầy bao nhiêu, và hạn mức Codex của nó',
+  'settings.hostChip': 'Số liệu máy chủ trên thanh tiêu đề',
+  'settings.hostChipDesc': 'Hiện CPU, bộ nhớ và pin của máy đang chạy Termote',
   'settings.poll': 'Chu kỳ cập nhật danh sách phiên',
   'settings.pollDesc': 'Bao lâu đồng bộ danh sách phiên một lần ({interval})',
   'settings.pollSeconds': '{n} giây',

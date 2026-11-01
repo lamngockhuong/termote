@@ -33,6 +33,7 @@ import {
   fetchFilesTree,
   fetchGitChanges,
   fetchHealth,
+  fetchHostStats,
   fetchLastCommit,
   fetchOverview,
   fetchPaneText,
@@ -648,6 +649,27 @@ describe('fetchOverview', () => {
   it('throws on a refused read', async () => {
     mockFetch({ body: { error: 'cross-site request rejected' }, status: 403 })
     const err = await fetchOverview().catch((e) => e)
+    expect(err).toBeInstanceOf(RequestError)
+    expect(err.status).toBe(403)
+  })
+})
+
+describe('fetchHostStats', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it('reads the host sample', async () => {
+    const body = { scope: 'host', history: [] }
+    const { calls } = mockFetch({ body })
+    expect(await fetchHostStats()).toEqual(body)
+    expect(calls[0].url).toBe('/api/mux/system')
+  })
+
+  it('throws on a refused read', async () => {
+    mockFetch({ body: { error: 'origin not allowed' }, status: 403 })
+    const err = await fetchHostStats().catch((e) => e)
     expect(err).toBeInstanceOf(RequestError)
     expect(err.status).toBe(403)
   })
