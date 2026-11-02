@@ -406,6 +406,15 @@ func TestFilesTreeNow(t *testing.T) {
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Errorf("POST tree = %d", rec.Code)
 	}
+	// and a view-only client still gets nothing of a root it may not read
+	// (b is no repo)
+	mux := http.NewServeMux()
+	registerFilesRoutes(mux, m, hostAllowlist{}, nil)
+	req := apiRequest("GET", "/api/mux/panes/0/files/tree?now=1", "")
+	req = req.WithContext(withAuth(req.Context(), authInfo{Kind: authDevice, Role: roleView, DeviceID: "d1"}))
+	if code, key := rawCode(t, serve(mux, req)); code != http.StatusForbidden || key != "view_only" {
+		t.Errorf("view-only now=1 = %d %q", code, key)
+	}
 }
 
 // The deny list holds when the pane's root is above it (cwd = $HOME).

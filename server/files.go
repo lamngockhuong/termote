@@ -183,10 +183,16 @@ type filesRequest struct {
 
 // begin checks a GET and resolves the pane's root.
 func (f *filesAPI) begin(w http.ResponseWriter, r *http.Request) (*filesRequest, context.CancelFunc, bool) {
+	return f.beginAt(w, r, false)
+}
+
+// beginAt is begin; now resolves the pane's root from where the pane is now
+// (startAt).
+func (f *filesAPI) beginAt(w http.ResponseWriter, r *http.Request, now bool) (*filesRequest, context.CancelFunc, bool) {
 	if !requireMethod(w, r, http.MethodGet) {
 		return nil, nil, false
 	}
-	return f.start(w, r, requireFilesRead)
+	return f.startAt(w, r, requireFilesRead, now)
 }
 
 // start checks a files request (cross-site, then allow for the role) and
@@ -491,12 +497,9 @@ type treeResponse struct {
 }
 
 func (f *filesAPI) handleTree(w http.ResponseWriter, r *http.Request) {
-	if !requireMethod(w, r, http.MethodGet) {
-		return
-	}
 	// now=1: the user asked (Refresh), the pane's root is taken from where
 	// the pane is now
-	req, cancel, ok := f.startAt(w, r, requireFilesRead, r.URL.Query().Get("now") == "1")
+	req, cancel, ok := f.beginAt(w, r, r.URL.Query().Get("now") == "1")
 	if !ok {
 		return
 	}

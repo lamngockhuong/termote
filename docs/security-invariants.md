@@ -850,7 +850,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   The pane's root moves only once reads 2 s apart agree on it (`rootSettle`), except for
   `GET files/tree?now=1` (Refresh), which takes it from where the pane is now
   (`rootResolver.paneRootNow`): still the directory the backend reports, resolved by the server,
-  never a path from the client; ignored with `place=` and on every other route.
+  never a path from the client; ignored with `place=` and on every other route. The settled root
+  is the pane's, shared by every reader (Files, Changes, the overview's changes, agent commands)
+  and every client, a view-only one included (it is set before `viewHidesRoot`, which still
+  refuses that client the root): one Refresh moves it for all of them, only ever to the
+  directory the pane reports, and plain reads settle it again as before.
   `GET files/content` takes an `encoding` of a fixed set (`utf-8`, `utf-16le`, `utf-16be`,
   `shift_jis`, `euc-jp`; another → 400, ignored by `?hash=1`) or detects one
   (`server/files_encoding.go`: a BOM, then valid UTF-8, then Shift-JIS/EUC-JP only when the
