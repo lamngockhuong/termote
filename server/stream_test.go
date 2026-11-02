@@ -40,9 +40,16 @@ func TestMain(m *testing.M) {
 	herdrStartServer = func(string, []string, string) (herdrServerProc, error) {
 		return herdrServerProc{}, errors.New("tests never start herdr")
 	}
+	// Nor a real hc: the hc tests use a fake core.
+	hcConnectStart = func(context.Context, string, []string) (*hcConn, error) {
+		return nil, errors.New("tests never start hc")
+	}
+	hcCoreRunning = func(context.Context, []string) bool { return false }
 	switch os.Getenv(helperEnv) {
 	case "":
 		os.Exit(m.Run())
+	case "hc-connect":
+		helperHcConnect()
 	case "tree":
 		helperTree()
 	case "sleep":
