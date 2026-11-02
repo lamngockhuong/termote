@@ -1689,7 +1689,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   cannot see (`server/testdata/template-hidden-chars.json`, read by the Go and PWA tests). `PUT`
   and `DELETE` name the `updated` they read: another one is 409 `conflict` with the template as it
   is now, a missing one 404 `not_found`. An import is one write or none: every entry checked
-  first (400 `invalid_template` or `duplicate_name` with `index`), a name already there
+  first (400 `invalid_template` or `duplicate_name` with `index`; more than 100 entries is 409
+  `too_many` before any is checked or compared), a name already there
   (`EqualFold`) replaced, the rest added; the dry run says which by name, and the import names
   what it replaces (`replace`): another set is 409 `import_changed`. An error carries its code, a
   fixed message and what it is about (`field`, `index`, the current `template`), never OS text or a

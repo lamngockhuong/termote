@@ -382,6 +382,11 @@ func (s *templateStore) remove(id, updated string) error {
 // is replaced, keeping its id, any other added. added and replaced are the
 // names as imported.
 func (s *templateStore) importPlan(list []promptTemplate, items []templateInput) (next []promptTemplate, added, replaced []string, err error) {
+	// More entries than may be kept always end in too_many: refused before
+	// the names are compared pair by pair.
+	if len(items) > maxTemplates {
+		return nil, nil, nil, errTooManyTemplates
+	}
 	clean := make([]templateInput, len(items))
 	for i, in := range items {
 		name, text, err := validateTemplate(in.Name, in.Text)
