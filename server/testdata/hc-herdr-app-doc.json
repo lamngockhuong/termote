@@ -1,0 +1,61 @@
+{
+ "value": {
+  "spaces": [
+   {
+    "folder": "",
+    "id": "sp4edb720aa4b17f5a613793b7a96b7965",
+    "name": "",
+    "tabs": [
+     {
+      "id": "tb4958b85f9429906ea3b85a34be43d4c3",
+      "name": "",
+      "root": {
+       "children": [
+        {
+         "content": {
+          "terminal": "t1"
+         },
+         "id": "pde7d92e735b9ecba449517b4c32b4981",
+         "size": {
+          "weight": 0.5
+         },
+         "type": "block"
+        },
+        {
+         "content": {
+          "terminal": "t7"
+         },
+         "id": "p32de1cd85b56d024d1b8f84a382f0758",
+         "size": {
+          "weight": 0.5
+         },
+         "type": "block"
+        }
+       ],
+       "id": "tb4958b85f9429906ea3b85a34be43d4c3",
+       "type": "row"
+      }
+     },
+     {
+      "id": "tbd34e4c4c59605762a3a691af2454b914",
+      "name": "",
+      "root": {
+       "children": [
+        {
+         "content": {
+          "terminal": "t4"
+         },
+         "id": "p29465ea237094d7dcf1e3b0035c4e7fd",
+         "type": "block"
+        }
+       ],
+       "id": "tbd34e4c4c59605762a3a691af2454b914",
+       "type": "row"
+      }
+     }
+    ]
+   }
+  ]
+ },
+ "version": 17
+}
