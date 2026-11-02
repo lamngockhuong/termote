@@ -602,3 +602,18 @@ func TestToolParsersLinear(t *testing.T) {
 		t.Errorf("skipped %d", out.Skipped)
 	}
 }
+
+// A build file of plugins blocks that never close, as large as one is
+// read, lists in linear time: each block is scanned once, not to the end
+// of the file once per block.
+func TestDetectGradleUnclosedPluginsLinear(t *testing.T) {
+	text := strings.Repeat("plugins{", (maxTaskFile-20)/len("plugins{")) + "\napplication\n"
+	start := time.Now()
+	g := toolGroupOf(discoverFiles(t, map[string]string{"build.gradle.kts": text}), "gradle")
+	if took := time.Since(start); took > 2*time.Second {
+		t.Errorf("took %v", took)
+	}
+	if !slices.Contains(toolNames(g), "run") {
+		t.Errorf("tasks = %v, want run", toolNames(g))
+	}
+}
