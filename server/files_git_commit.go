@@ -202,7 +202,7 @@ func (f *filesAPI) handleCommitDiff(w http.ResponseWriter, r *http.Request) {
 		f.error(w, "git commit diff", fs.ErrNotExist)
 		return
 	}
-	res, err := f.commitDiff(req.ctx, req.root, q.Get("commit"), q.Get("path"), q.Get("orig"), q.Get("reveal") == "1")
+	res, err := f.commitDiff(req.ctx, req.root, q.Get("commit"), q.Get("path"), q.Get("orig"), q.Get("reveal") == "1", req.view != nil)
 	if err != nil {
 		f.error(w, "git commit diff", err)
 		return
@@ -211,8 +211,9 @@ func (f *filesAPI) handleCommitDiff(w http.ResponseWriter, r *http.Request) {
 }
 
 // commitDiff is the diff of one file of HEAD, which must still be the commit
-// the client saw.
-func (f *filesAPI) commitDiff(ctx context.Context, root filesRoot, commit, path, orig string, reveal bool) (diffResponse, error) {
+// the client saw. headOnly (a view-only client): only a path still in HEAD's
+// tree, never one the commit deleted or a rename's source, as if missing.
+func (f *filesAPI) commitDiff(ctx context.Context, root filesRoot, commit, path, orig string, reveal, headOnly bool) (diffResponse, error) {
 	if !root.IsRepo {
 		return diffResponse{}, errNotChanged
 	}
@@ -234,6 +235,9 @@ func (f *filesAPI) commitDiff(ctx context.Context, root filesRoot, commit, path,
 	}
 	if entry == nil {
 		return diffResponse{}, errNotChanged
+	}
+	if headOnly && (entry.Status == "D" || entry.Status == "R") {
+		return diffResponse{}, fs.ErrNotExist
 	}
 	if f.deniedPath(root.Root, path, root.GitDir) || orig != "" && f.deniedPath(root.Root, orig, root.GitDir) {
 		return diffResponse{}, errPathNotAllowed
