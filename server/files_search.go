@@ -351,10 +351,15 @@ func (f *filesAPI) searchList(ctx context.Context, deadline time.Time, req *file
 	}
 	// The cached list is shared: sort a copy (git lists untracked files
 	// first, the walk in directory order). The globs and the dot-path rule
-	// need no file system, so they run here.
+	// need no file system, so they run here, within the scan's deadline.
+	scanCtx, stop := context.WithDeadline(ctx, deadline)
 	hideDots := f.holdsHome(req.root.Root)
 	var todo []string
-	for _, e := range list.entries {
+	for i, e := range list.entries {
+		if i%64 == 0 && scanCtx.Err() != nil {
+			res.Incomplete = true
+			break
+		}
 		if (len(in.files) > 0 && !matchAny(in.files, e.rel)) || matchAny(in.skip, e.rel) {
 			continue
 		}
@@ -367,7 +372,6 @@ func (f *filesAPI) searchList(ctx context.Context, deadline time.Time, req *file
 	slices.Sort(todo)
 
 	sc := &searchScan{f: f, root: req.root, rt: rt, view: req.view, in: in, hideDots: hideDots}
-	scanCtx, stop := context.WithDeadline(ctx, deadline)
 	window := 2 * searchWorkers
 	tokens := make(chan struct{}, window)
 	jobs := make(chan int)

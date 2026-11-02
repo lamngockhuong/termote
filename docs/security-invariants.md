@@ -1323,7 +1323,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   argv: a query starting with `-` is text. The list is Find's (`findLists`, the same cache key
   with the PWA's excludes; a view-only client searches its `req.view`, tracked files only, and
   `fresh=1` is ignored for it), sorted by path. Per file, before anything is
-  opened: the `files`/`skip` globs; under a root holding a home dir (`holdsHome`) every
+  opened: the `files`/`skip` globs, matched within the scan's deadline (checked every 64 paths,
+  a client leaving stops them too); under a root holding a home dir (`holdsHome`) every
   dot-path is skipped (`skipped.hidden`: shell histories hold secrets under ordinary names);
   then one `EvalSymlinks` shared by `deniedPaths` (deny dirs, the git dir, `.git` parts, on
   both paths), the view-only target check (where a link leads must be listed), the dot-path
