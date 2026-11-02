@@ -59,25 +59,26 @@ func TestHerdrTaskShell(t *testing.T) {
 	m := newTestHerdrMux(t, f)
 	ctx := context.Background()
 	shortStart(t)
-	if shell, idle, err := m.IdleShell(ctx, startPane); shell != "bash" || !idle || err != nil {
-		t.Errorf("idle = %q %v %v", shell, idle, err)
+	if shell, pid, idle, err := m.IdleShell(ctx, startPane); shell != "bash" || pid == 0 || !idle || err != nil {
+		t.Errorf("idle = %q %d %v %v", shell, pid, idle, err)
 	}
 	f.mu.Lock()
 	f.procs = map[string]any{startPane: vimProcs}
 	f.mu.Unlock()
-	if shell, idle, err := m.IdleShell(ctx, startPane); shell != "" || idle || err != nil {
-		t.Errorf("busy = %q %v %v", shell, idle, err)
+	// Busy, the shell's pid is still known (vimProcs: shell 100).
+	if shell, pid, idle, err := m.IdleShell(ctx, startPane); shell != "" || pid != 100 || idle || err != nil {
+		t.Errorf("busy = %q %d %v %v", shell, pid, idle, err)
 	}
 	f.mu.Lock()
 	f.procFail = "pane_not_found"
 	f.mu.Unlock()
-	if _, _, err := m.IdleShell(ctx, startPane); !errors.Is(err, errTaskTargetGone) {
+	if _, _, _, err := m.IdleShell(ctx, startPane); !errors.Is(err, errTaskTargetGone) {
 		t.Errorf("gone = %v", err)
 	}
 	f.mu.Lock()
 	f.procFail = "internal"
 	f.mu.Unlock()
-	if _, _, err := m.IdleShell(ctx, startPane); err == nil || errors.Is(err, errTaskTargetGone) {
+	if _, _, _, err := m.IdleShell(ctx, startPane); err == nil || errors.Is(err, errTaskTargetGone) {
 		t.Errorf("failure = %v", err)
 	}
 
@@ -99,7 +100,7 @@ func TestHerdrTaskShell(t *testing.T) {
 	}
 	var ie inputError
 	for _, bad := range []string{"p3", "wR:t1", ""} {
-		_, _, err := m.IdleShell(ctx, bad)
+		_, _, _, err := m.IdleShell(ctx, bad)
 		if !errors.As(err, &ie) || !errors.As(m.Interrupt(ctx, bad), &ie) || !errors.As(m.TypeLine(ctx, bad, "x"), &ie) {
 			t.Errorf("target %q accepted", bad)
 		}

@@ -48,31 +48,31 @@ func (tmuxMux) NewTaskTab(ctx context.Context, groupID, name, dir string) (taskT
 
 // IdleShell reads target's shell (its pane_pid) and whether it is the
 // terminal's foreground process, the pane not in copy mode.
-func (tmuxMux) IdleShell(ctx context.Context, target string) (string, bool, error) {
+func (tmuxMux) IdleShell(ctx context.Context, target string) (string, int, bool, error) {
 	if tmuxIsPsmux {
-		return "", false, errUnsupported
+		return "", 0, false, errUnsupported
 	}
 	if !tmuxPaneIDRe.MatchString(target) {
-		return "", false, inputError("invalid pane")
+		return "", 0, false, inputError("invalid pane")
 	}
 	out, err := tmuxCmd(ctx, "display-message", "-p", "-t", target,
 		"#{pane_id}:#{pane_dead}:#{pane_in_mode}:#{pane_pid}").Output()
 	var ee *exec.ExitError
 	if errors.As(err, &ee) && strings.Contains(string(ee.Stderr), "can't find") {
-		return "", false, errTaskTargetGone
+		return "", 0, false, errTaskTargetGone
 	}
 	if err != nil {
-		return "", false, err
+		return "", 0, false, err
 	}
 	parts := strings.Split(strings.TrimSpace(string(out)), ":")
 	if len(parts) != 4 || parts[0] != target || parts[1] == "1" {
-		return "", false, errTaskTargetGone
+		return "", 0, false, errTaskTargetGone
 	}
 	pid, err := strconv.Atoi(parts[3])
 	if err != nil {
-		return "", false, fmt.Errorf("pane_pid %q", parts[3])
+		return "", 0, false, fmt.Errorf("pane_pid %q", parts[3])
 	}
-	return procExeBase(pid), parts[2] == "0" && procForeground(pid), nil
+	return procExeBase(pid), pid, parts[2] == "0" && procForeground(pid), nil
 }
 
 func (tmuxMux) Interrupt(ctx context.Context, target string) error {

@@ -1820,7 +1820,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   run until the line is typed, so two devices pressing Run open one tab (the other gets 409
   `task_running` with its `runId`); typing holds the pane's input lock the agent routes take. The
   last run's tab is used again only when its shell waits at its prompt (the shell itself in its
-  terminal's foreground, tmux not in copy mode): C-c clears its input line first and the shell is
+  terminal's foreground, tmux not in copy mode) and is still the shell process the run typed into
+  (its pid, as `IdleShell` reads it; never when unknown), so a pane id a restarted tmux, Herdr or
+  Zellij gave another pane gets a new tab instead: C-c clears its input line first and the shell is
   checked again; a new tab is never sent C-c (its rc files may still run) and is typed into once
   its shell is idle and its text stopped changing (up to 15 s); a shell still busy after the wait
   is 409 `shell_busy`. A new tab whose line could not be typed (`shell_busy`,

@@ -30,8 +30,12 @@ type taskFakeMux struct {
 	typed      []string // target + " " + line
 	interrupts []string
 	text       map[string]string
-	typeErr    error
-	readErr    error
+	// pids: each target's shell process id, set when its tab opens;
+	// noPID: IdleShell never knows it
+	pids    map[string]int
+	noPID   bool
+	typeErr error
+	readErr error
 	// interrupt runs in Interrupt when set; its error is Interrupt's.
 	interrupt func() error
 }
@@ -39,7 +43,7 @@ type taskFakeMux struct {
 func newTaskFake(t *testing.T, dir string) *taskFakeMux {
 	t.Helper()
 	m := &taskFakeMux{filesFakeMux: filesFakeMux{dir: dir, files: true}, shell: "bash",
-		busy: map[string]bool{}, gone: map[string]bool{}, text: map[string]string{}}
+		busy: map[string]bool{}, gone: map[string]bool{}, text: map[string]string{}, pids: map[string]int{}}
 	m.snap = Snapshot{Groups: []Group{{ID: "g", Tabs: []Tab{{ID: "0", Panes: []Pane{{ID: "0"}}}}}}}
 	return m
 }
@@ -57,19 +61,24 @@ func (m *taskFakeMux) NewTaskTab(_ context.Context, groupID, name, dir string) (
 	m.tabNames = append(m.tabNames, name)
 	n := string(rune('0' + m.tabs))
 	m.text["%"+n] = "$ "
+	m.pids["%"+n] = 1000 + m.tabs
 	return taskTab{TabID: "t" + n, PaneID: "p" + n, Target: "%" + n}, nil
 }
 
-func (m *taskFakeMux) IdleShell(_ context.Context, target string) (string, bool, error) {
+func (m *taskFakeMux) IdleShell(_ context.Context, target string) (string, int, bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.gone[target] {
-		return "", false, errTaskTargetGone
+		return "", 0, false, errTaskTargetGone
 	}
 	if m.idleErr != nil {
-		return "", false, m.idleErr
+		return "", 0, false, m.idleErr
 	}
-	return m.shell, !m.busy[target] && !m.neverIdle, nil
+	pid := m.pids[target]
+	if m.noPID {
+		pid = 0
+	}
+	return m.shell, pid, !m.busy[target] && !m.neverIdle, nil
 }
 
 func (m *taskFakeMux) Interrupt(_ context.Context, target string) error {
@@ -618,11 +627,11 @@ func TestTaskRunContextEnds(t *testing.T) {
 	ta := &tasksAPI{runs: newTaskRuns(), input: newAgentInput()}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := ta.typeTask(ctx, m, "%1", resolvedTask{Kind: taskKindMake, Name: "x"}, "0123456789abcdef", true); !errors.Is(err, context.Canceled) {
+	if _, err := ta.typeTask(ctx, m, "%1", resolvedTask{Kind: taskKindMake, Name: "x"}, "0123456789abcdef", true); !errors.Is(err, context.Canceled) {
 		t.Errorf("after clear = %v", err)
 	}
 	m.neverIdle = true
-	if _, err := waitTaskShell(ctx, m, "%1", false); !errors.Is(err, context.Canceled) {
+	if _, _, err := waitTaskShell(ctx, m, "%1", false); !errors.Is(err, context.Canceled) {
 		t.Errorf("waiting = %v", err)
 	}
 	if len(m.typed) != 0 {
@@ -651,6 +660,53 @@ func TestTaskRunKeepsAnUntypedTab(t *testing.T) {
 	code, body := fx.run(t, map[string]any{"kind": "script", "name": "test"})
 	if code != 200 || body["reused"] != true || fx.m.tabs != 1 {
 		t.Fatalf("after = %d %v", code, body)
+	}
+}
+
+// The pane id of the last run's tab now names another shell (the
+// multiplexer restarted and gave the id to another pane): a new tab, and
+// nothing is sent to that pane.
+func TestTaskRunTabShellReplaced(t *testing.T) {
+	fx := newTaskFixture(t)
+	_, body := fx.run(t, map[string]any{"kind": "make", "name": "build"})
+	fx.m.finish("%1", body["nonce"].(string), "0")
+	fx.m.mu.Lock()
+	fx.m.pids["%1"] = 4242
+	fx.m.mu.Unlock()
+	code, body := fx.run(t, map[string]any{"kind": "make", "name": "build"})
+	if code != 200 || body["reused"] != false || body["tabId"] != "t2" || fx.m.tabs != 2 {
+		t.Fatalf("replaced shell = %d %v, %d tabs", code, body, fx.m.tabs)
+	}
+	if typed := fx.m.typedLines(); len(typed) != 2 || !strings.HasPrefix(typed[1], "%2 ") || len(fx.m.interrupts) != 0 {
+		t.Errorf("typed %q, interrupts %v", typed, fx.m.interrupts)
+	}
+}
+
+// A tab whose shell's pid is not known is never used again: nothing
+// shows it still runs the shell the last run typed into.
+func TestTaskRunTabShellUnknown(t *testing.T) {
+	fx := newTaskFixture(t)
+	fx.m.noPID = true
+	_, body := fx.run(t, map[string]any{"kind": "make", "name": "build"})
+	fx.m.finish("%1", body["nonce"].(string), "0")
+	code, body := fx.run(t, map[string]any{"kind": "make", "name": "build"})
+	if code != 200 || body["reused"] != false || fx.m.tabs != 2 || len(fx.m.interrupts) != 0 {
+		t.Fatalf("unknown shell = %d %v, %d tabs, interrupts %v", code, body, fx.m.tabs, fx.m.interrupts)
+	}
+}
+
+// A new tab whose shell stayed busy (a slow rc) is the task's next tab once
+// its shell waits: its pid was seen while busy.
+func TestTaskRunReusesTabBusyAtFirst(t *testing.T) {
+	fx := newTaskFixture(t)
+	fx.m.neverIdle = true
+	if code, body := fx.run(t, map[string]any{"kind": "make", "name": "build"}); code != 409 || body["code"] != "shell_busy" {
+		t.Fatalf("busy = %d %v", code, body)
+	}
+	fx.m.neverIdle = false
+	code, body := fx.run(t, map[string]any{"kind": "make", "name": "build"})
+	if code != 200 || body["reused"] != true || fx.m.tabs != 1 {
+		t.Fatalf("after = %d %v, %d tabs", code, body, fx.m.tabs)
 	}
 }
 
@@ -780,7 +836,7 @@ func TestTaskTypeUnknownKind(t *testing.T) {
 	shortTasks(t)
 	m := newTaskFake(t, t.TempDir())
 	api := &tasksAPI{input: newAgentInput()}
-	err := api.typeTask(context.Background(), m, "%0", resolvedTask{Kind: "nope", Name: "x"}, "0123456789abcdef", true)
+	_, err := api.typeTask(context.Background(), m, "%0", resolvedTask{Kind: "nope", Name: "x"}, "0123456789abcdef", true)
 	if !errors.Is(err, errTaskUnknownKind) || len(m.typedLines()) != 0 {
 		t.Errorf("err = %v, typed %q", err, m.typedLines())
 	}

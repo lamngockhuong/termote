@@ -26,23 +26,23 @@ func (m *zellijMux) NewTaskTab(ctx context.Context, groupID, name, dir string) (
 // IdleShell finds the pane's shell under the session's server
 // (zellijPaneShell, as the Chat view does) and whether it is its terminal's
 // foreground process. A shell that cannot be found is not idle.
-func (m *zellijMux) IdleShell(ctx context.Context, target string) (string, bool, error) {
+func (m *zellijMux) IdleShell(ctx context.Context, target string) (string, int, bool, error) {
 	session, n, ok := parseZellijPaneID(target)
 	if !ok {
-		return "", false, inputError("invalid pane id")
+		return "", 0, false, inputError("invalid pane id")
 	}
 	p, err := zellijFindPane(ctx, session, n)
 	if paneMissing(err) || err == nil && p.Exited {
-		return "", false, errTaskTargetGone
+		return "", 0, false, errTaskTargetGone
 	}
 	if err != nil {
-		return "", false, err
+		return "", 0, false, err
 	}
 	pid, ok := zellijPaneShell(session, n, true)
 	if !ok {
-		return "", false, nil
+		return "", 0, false, nil
 	}
-	return procExeBase(pid), procForeground(pid), nil
+	return procExeBase(pid), pid, procForeground(pid), nil
 }
 
 func (m *zellijMux) Interrupt(ctx context.Context, target string) error {
