@@ -388,7 +388,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `notes.md` beside a tracked `Notes.md` hidden); anything else is 404 as if missing, a list cut
   short (`findMaxPaths`, git's output cap) refuses what it lacks, and a list that cannot be read
   refuses the request. The snapshot uses `peekSnapshot` (tmux does not recreate the default session).
-  A view stream drops every input frame, `resize` and `drive`; tmux attaches `-E -r` to the
+  A view stream drops every input frame, `resize`, `drive` and `visible`; tmux attaches `-E -r` to the
   session's active window only (another `pane` → 403; tmux ≥ 3.2, older tmux and psmux → 501,
   `caps.viewStream` false), Herdr only `observe`s. Limits: 2 streams and 4 waiting stream tokens
   per view device; a view stream or token never evicts a full one (full evicts view first; a full

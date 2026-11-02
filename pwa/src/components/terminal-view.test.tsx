@@ -134,6 +134,7 @@ interface SocketOpts {
   paneSeen?: unknown
   getSize: () => TermSize | null
   drive?: () => boolean
+  visible?: boolean
   onOutput: (d: Uint8Array) => void
   onControl: (m: StreamControl) => void
   onOpen: () => void
@@ -413,6 +414,15 @@ describe('TerminalView', () => {
     renderView({ paneId: 'w1:p2', followPane: true })
     expect(socketOpts.paneId).toBe('w1:p2')
     expect(socketOpts.followPane).toBe(true)
+  })
+
+  it('tells the socket the pane is looked at, never on a view-only device', () => {
+    renderView()
+    expect(socketOpts.visible).toBe(false)
+    renderView({ watched: true })
+    expect(socketOpts.visible).toBe(true)
+    renderView({ watched: true, readOnly: true })
+    expect(socketOpts.visible).toBe(false)
   })
 
   it('passes the stream key and pane listing to the socket', () => {

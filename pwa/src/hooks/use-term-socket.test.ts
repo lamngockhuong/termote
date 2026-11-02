@@ -65,6 +65,7 @@ interface Opts {
   streamKey?: string
   paneSeen?: unknown
   drive?: () => boolean
+  visible?: boolean
 }
 
 function setup(initial: Opts = { paneId: 'p1' }) {
@@ -81,6 +82,7 @@ function setup(initial: Opts = { paneId: 'p1' }) {
         paneSeen: props.paneSeen,
         getSize,
         drive: props.drive,
+        visible: props.visible,
         onOutput,
         onControl,
         onOpen,
@@ -262,6 +264,59 @@ describe('useTermSocket', () => {
     await flush()
     expect(last()).not.toBe(ws)
     expect(last().url).not.toContain('drive=')
+  })
+
+  it('tells the server while the pane is on screen and the page shown', async () => {
+    const visible = (ws: FakeWS) =>
+      ws.send.mock.calls
+        .map(([m]) => m)
+        .filter((m) => typeof m === 'string' && m.includes('visible'))
+    const { rerender } = setup({ paneId: 'p1', visible: true })
+    await flush()
+    const ws = last()
+    // Not open yet: nothing is sent
+    expect(ws.send).not.toHaveBeenCalled()
+    act(() => ws.open())
+    expect(visible(ws)).toEqual(['{"type":"visible","on":true}'])
+    // The same value again sends nothing
+    rerender({ paneId: 'p1', visible: true })
+    expect(visible(ws)).toHaveLength(1)
+    // The page in the background, then back
+    act(() => setVisibility('hidden'))
+    act(() => setVisibility('visible'))
+    // Another view covers the pane
+    rerender({ paneId: 'p1', visible: false })
+    // Hidden while not shown: already off
+    act(() => setVisibility('hidden'))
+    act(() => setVisibility('visible'))
+    expect(visible(ws)).toEqual([
+      '{"type":"visible","on":true}',
+      '{"type":"visible","on":false}',
+      '{"type":"visible","on":true}',
+      '{"type":"visible","on":false}',
+    ])
+
+    // A new socket starts unseen: it is told again once open
+    rerender({ paneId: 'p1', visible: true })
+    expect(visible(ws)).toHaveLength(5)
+    ws.closeWith(1006)
+    await act(async () => {
+      vi.advanceTimersByTime(BACKOFF_MAX_MS)
+    })
+    await flush()
+    const next = last()
+    expect(next).not.toBe(ws)
+    act(() => next.open())
+    expect(visible(next)).toEqual(['{"type":"visible","on":true}'])
+  })
+
+  it('never sends visible for a pane not looked at', async () => {
+    setup({ paneId: 'p1' })
+    await flush()
+    act(() => last().open())
+    act(() => setVisibility('hidden'))
+    act(() => setVisibility('visible'))
+    expect(last().send).not.toHaveBeenCalled()
   })
 
   it('reconnects with backoff after an unexpected close', async () => {

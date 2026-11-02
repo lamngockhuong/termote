@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // The state of herdr-core as termote keeps it: terminals from the events
@@ -535,9 +536,22 @@ type hcState struct {
 	doc       *hcDoc
 	docVer    uint64
 	docBad    uint64 // the last version that failed to parse, logged once
+
+	// herdr.seen (mux_hc_seen.go), per terminal: the full clients looking at
+	// it, when the last one left, and the turn termote last wrote.
+	viewers map[string]int
+	left    map[string]time.Time
+	wrote   map[string]uint64
+	rejoin  time.Duration // hcSeenRejoin
 }
 
-func newHcState() *hcState { return &hcState{terminals: map[string]*hcTerminal{}} }
+func newHcState() *hcState {
+	return &hcState{
+		terminals: map[string]*hcTerminal{},
+		viewers:   map[string]int{}, left: map[string]time.Time{}, wrote: map[string]uint64{},
+		rejoin: hcSeenRejoin,
+	}
+}
 
 // reset takes a fresh snapshot (subscribe, missed, reconnect).
 func (s *hcState) reset(seq uint64, terminals []hcTerminal) {
@@ -548,6 +562,13 @@ func (s *hcState) reset(seq uint64, terminals []hcTerminal) {
 	}
 	s.mu.Lock()
 	s.seq, s.terminals = seq, m
+	// Terminals gone while termote was away: their address may come back
+	// for another terminal at a lower turn.
+	for a := range s.wrote {
+		if m[a] == nil {
+			delete(s.wrote, a)
+		}
+	}
 	s.mu.Unlock()
 }
 
@@ -587,6 +608,7 @@ func (s *hcState) apply(ev hcEvent) (docVersion uint64, isDoc bool) {
 	}
 	if ev.Type == "removed" {
 		delete(s.terminals, ev.Terminal)
+		delete(s.wrote, ev.Terminal)
 		return 0, false
 	}
 	t := s.terminals[ev.Terminal]

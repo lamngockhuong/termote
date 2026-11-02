@@ -2223,6 +2223,15 @@ export default function App({
                         // Also while the side panel is dragged (fitted once on
                         // release) or covers it maximized (no resize at all)
                         covered: !isTerminalView || holdTerminalSize,
+                        // Someone looks at the pane: the terminal shows (not
+                        // under the maximized side panel or the overview), or
+                        // its Chat view
+                        watched:
+                          !readOnly &&
+                          !overviewOpen &&
+                          (isTerminalView
+                            ? !(hasSidePanel && panelMaximized)
+                            : currentView.id === CHAT_VIEW_ID),
                         onConnectionStateChange: setStreamState,
                         onPasteImage: uploadsOn ? attachImage : undefined,
                       }}

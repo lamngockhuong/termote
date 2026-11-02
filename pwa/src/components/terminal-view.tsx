@@ -91,6 +91,9 @@ interface Props {
   // otherwise resize the pane, and Claude Code cuts a dialog taller than
   // the pane, so the card would come and go with it.
   covered?: boolean
+  // A person is looking at this pane here: drawn, not covered by another
+  // view than Chat, on a full client. Shared as herdr.seen (hc).
+  watched?: boolean
   onConnectionStateChange?: (state: ConnectionState) => void
   // A paste that carries an image and no text goes here instead of the
   // terminal (the server has uploads); unset, every paste is text.
@@ -282,6 +285,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       driveSize = false,
       onDriveLost,
       covered = false,
+      watched = false,
       onConnectionStateChange,
       onPasteImage,
       copyOnSelect = false,
@@ -505,6 +509,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       followPane,
       streamKey,
       paneSeen,
+      visible: watched && !readOnly,
       // The size the client would take, so measured at the chosen font,
       // not the zoomed one a fixed grid shows.
       getSize: () => {

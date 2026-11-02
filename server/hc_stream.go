@@ -99,6 +99,8 @@ type hcStream struct {
 	sent    Size   // the size this viewer last told the core
 	drive   bool   // the client drives the size
 	pending []byte // input typed while no attach is in use
+	visible bool   // counted as a viewer of the pane (SetVisible)
+	ended   bool   // run returned: no longer counted
 
 	ready     chan struct{}
 	readyOnce sync.Once
@@ -236,6 +238,7 @@ type hcPump struct {
 func (s *hcStream) run(pane, client Size) {
 	defer close(s.done)
 	defer s.pw.Close()
+	defer s.endVisible()
 	select {
 	case <-s.ready:
 	case <-s.stop:

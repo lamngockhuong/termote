@@ -547,6 +547,7 @@ func TestViewStreamChangesNothing(t *testing.T) {
 	c.Write(ctx, websocket.MessageBinary, []byte("rm -rf ~\r"))
 	c.Write(ctx, websocket.MessageText, []byte(`{"type":"resize","cols":90,"rows":30}`))
 	c.Write(ctx, websocket.MessageText, []byte(`{"type":"drive","on":true}`))
+	c.Write(ctx, websocket.MessageText, []byte(`{"type":"visible","on":true}`))
 	// Output still flows, and arrives after the frames above were read.
 	ft.out <- []byte("hi")
 	if typ, data, err := readFrame(t, c); err != nil || typ != websocket.MessageBinary || string(data) != "hi" {
@@ -554,10 +555,10 @@ func TestViewStreamChangesNothing(t *testing.T) {
 	}
 	time.Sleep(50 * time.Millisecond)
 	ft.mu.Lock()
-	in, sizes := string(ft.in), ft.sizes
+	in, sizes, visible := string(ft.in), ft.sizes, ft.visible
 	ft.mu.Unlock()
-	if in != "" || len(sizes) != 0 {
-		t.Errorf("a view-only stream reached the pane: input %q, resizes %v", in, sizes)
+	if in != "" || len(sizes) != 0 || len(visible) != 0 {
+		t.Errorf("a view-only stream reached the pane: input %q, resizes %v, visible %v", in, sizes, visible)
 	}
 	if p := m.waitAttached(t); p != "0" || !slices.Equal(m.calls, []string{"peek"}) {
 		t.Errorf("attached %q, calls %v: want a peek and a read-only attach (no snapshot, no select)", p, m.calls)

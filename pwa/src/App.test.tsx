@@ -3984,7 +3984,13 @@ describe('App views, view-only and deep links', () => {
     const switcher = await screen.findByRole('tablist', { name: 'View' })
     expect(switcher).toBeInTheDocument()
     expect(terminalPanel()).toHaveAttribute('role', 'tabpanel')
+    const watched = () =>
+      (vi.mocked(TerminalView).mock.lastCall![0] as { watched: boolean })
+        .watched
+    expect(watched()).toBe(true)
     fireEvent.click(screen.getByRole('tab', { name: 'Chat' }))
+    // The Chat view shows the pane's agent: still looked at
+    expect(watched()).toBe(true)
     expect(screen.getByTestId('chat-main')).toHaveTextContent('rw')
     expect(screen.getByTestId('chat-input')).toBeInTheDocument()
     expect(screen.queryByTestId('keyboard-toolbar')).toBeNull()
@@ -3996,6 +4002,21 @@ describe('App views, view-only and deep links', () => {
     expect(screen.queryByTestId('chat-main')).toBeNull()
     expect(screen.getByTestId('keyboard-toolbar')).toBeInTheDocument()
     expect(terminalPanel()).not.toHaveClass('invisible')
+  })
+
+  it('another view than Chat over the terminal: the pane is not looked at', async () => {
+    const TASKS: AppView = {
+      ...CHAT,
+      id: 'tasks',
+      label: 'Tasks',
+      Main: () => <div data-testid="tasks-main" />,
+    }
+    render(<App views={[...APP_VIEWS, TASKS]} />)
+    fireEvent.click(await screen.findByRole('tab', { name: 'Tasks' }))
+    expect(
+      (vi.mocked(TerminalView).mock.lastCall![0] as { watched: boolean })
+        .watched,
+    ).toBe(false)
   })
 
   it('back on the terminal, the view fades out over it, inert, then goes', async () => {
@@ -4279,6 +4300,9 @@ describe('App views, view-only and deep links', () => {
     const coveredNow = () =>
       (vi.mocked(TerminalView).mock.lastCall![0] as { covered: boolean })
         .covered
+    const watchedNow = () =>
+      (vi.mocked(TerminalView).mock.lastCall![0] as { watched: boolean })
+        .watched
     const handle = () => screen.getByRole('separator', { name: 'Resize Files' })
     const main = () =>
       screen.getByTestId('terminal-view').closest('[id="view-panel-terminal"]')!
@@ -4324,6 +4348,8 @@ describe('App views, view-only and deep links', () => {
       expect(main()).toHaveAttribute('inert')
       expect(toolbar().closest('[inert]')).not.toBeNull()
       expect(coveredNow()).toBe(true)
+      // Nobody sees the pane under the maximized panel
+      expect(watchedNow()).toBe(false)
       fireEvent.keyDown(screen.getByRole('button', { name: 'Restore panel' }), {
         key: 'Escape',
       })
@@ -4331,6 +4357,7 @@ describe('App views, view-only and deep links', () => {
       expect(main()).not.toHaveAttribute('inert')
       expect(toolbar().closest('[inert]')).toBeNull()
       expect(coveredNow()).toBe(false)
+      expect(watchedNow()).toBe(true)
     })
 
     it('maximizing the panel closes the command history', async () => {
@@ -4817,6 +4844,8 @@ describe('App views, view-only and deep links', () => {
       ).toBeInTheDocument()
       expect(terminalProps().paneId).toBeUndefined()
       expect(terminalProps().readOnly).toBe(true)
+      // A view-only device never marks an agent seen
+      expect(terminalProps().watched).toBe(false)
     })
 
     it('a view-only device with a stream gets its pane and no such notice', async () => {
@@ -5783,6 +5812,11 @@ describe('App views, view-only and deep links', () => {
       // The panes stay mounted, out of reach, and the toolbar goes
       expect(terminalPanel().parentElement).toHaveAttribute('inert')
       expect(screen.queryByTestId('keyboard-toolbar')).toBeNull()
+      // Nobody looks at the pane under it
+      expect(
+        (vi.mocked(TerminalView).mock.lastCall![0] as { watched: boolean })
+          .watched,
+      ).toBe(false)
       expect(switchSession).not.toHaveBeenCalled()
       // One card, for the pane running an agent
       expect(

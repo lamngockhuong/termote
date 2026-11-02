@@ -21,6 +21,8 @@ const hcTopCacheMax = 256
 // the core herdr-app talks to. It shows the spaces, tabs and panes herdr-app
 // shows, from herdr-app's document (read only) and the terminals' labels.
 type hcMux struct {
+	// ctx is the backend's life: background work (herdr.seen) ends with it.
+	ctx    context.Context
 	client *hcClient
 	state  *hcState
 	home   string
@@ -57,6 +59,7 @@ type hcMux struct {
 func newHcMux(ctx context.Context, bin string, env []string) *hcMux {
 	home, _ := os.UserHomeDir()
 	m := &hcMux{
+		ctx:       ctx,
 		client:    newHcClient(bin, env),
 		state:     newHcState(),
 		home:      home,
@@ -144,6 +147,12 @@ func (m *hcMux) followConn(ctx context.Context, conn *hcConn) error {
 			}
 			if v, ok := m.state.apply(ev); ok && v > m.state.docVersion() {
 				m.readDoc(ctx, conn, false)
+			}
+			// A turn ends with a status event, then this one: decide here.
+			if ev.Type == "turn" {
+				if turn, ok := m.state.turnSeen(ev.Terminal); ok {
+					m.writeSeen(ev.Terminal, turn)
+				}
 			}
 			m.bump()
 		case "missed":

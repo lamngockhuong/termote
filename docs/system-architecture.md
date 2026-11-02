@@ -256,6 +256,7 @@ Client → Server:
   - binary frame                      (input bytes)
   - {"type":"resize","cols":N,"rows":N} (text frame)
   - {"type":"drive","on":true|false}   (caps.driveSize: take over / give back the pane size)
+  - {"type":"visible","on":true|false} (a full client has the pane on screen; hc writes herdr.seen)
 
 Server → Client:
   - binary frame                      (output bytes)

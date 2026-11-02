@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -147,6 +148,7 @@ type fakeTerm struct {
 	in        []byte
 	inCh      chan struct{}
 	sizes     []Size
+	visible   []bool
 	done      chan struct{}
 	code      int
 	closed    chan struct{}
@@ -185,6 +187,14 @@ func (f *fakeTerm) Resize(s Size) error {
 	f.mu.Unlock()
 	f.inCh <- struct{}{}
 	return nil
+}
+
+// SetVisible records each visible message (visibleSetter).
+func (f *fakeTerm) SetVisible(on bool) {
+	f.mu.Lock()
+	f.visible = append(f.visible, on)
+	f.mu.Unlock()
+	f.inCh <- struct{}{}
 }
 
 func (f *fakeTerm) Done() <-chan struct{} { return f.done }
@@ -476,7 +486,9 @@ func TestStreamPipesBytesAndResize(t *testing.T) {
 	c.Write(ctx, websocket.MessageText, []byte(`{"type":"resize"}`))
 	c.Write(ctx, websocket.MessageText, []byte(`{"type":"bogus"}`))
 	c.Write(ctx, websocket.MessageText, []byte(`not json`))
-	for i := 0; i < 2; i++ {
+	c.Write(ctx, websocket.MessageText, []byte(`{"type":"visible"}`))
+	c.Write(ctx, websocket.MessageText, []byte(`{"type":"visible","on":true}`))
+	for i := 0; i < 3; i++ {
 		select {
 		case <-ft.inCh:
 		case <-time.After(5 * time.Second):
@@ -484,10 +496,14 @@ func TestStreamPipesBytesAndResize(t *testing.T) {
 		}
 	}
 	ft.mu.Lock()
-	in, sizes := string(ft.in), ft.sizes
+	in, sizes, visible := string(ft.in), ft.sizes, ft.visible
 	ft.mu.Unlock()
 	if in != "ls\r" {
 		t.Errorf("terminal input = %q", in)
+	}
+	// A visible message without "on" is ignored.
+	if !slices.Equal(visible, []bool{true}) {
+		t.Errorf("visible = %v", visible)
 	}
 	if len(sizes) != 1 || sizes[0] != (Size{Cols: maxTermDim, Rows: 30}) {
 		t.Errorf("resizes = %+v", sizes)

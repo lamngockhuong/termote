@@ -43,6 +43,10 @@ interface Options {
   // Open already driving the pane size (herdr), so a reconnect does not start
   // at the desktop size only to switch at once.
   drive?: () => boolean
+  // A person has the pane on screen here (a full client, the pane drawn, not
+  // covered). Sent as a visible frame while the page is also in the
+  // foreground: herdr-core marks the agent seen for every client.
+  visible?: boolean
   onOutput: (data: Uint8Array) => void
   onControl?: (msg: StreamControl) => void
   // Called on every successful open, after the state becomes 'connected'.
@@ -93,6 +97,7 @@ export function useTermSocket({
   paneSeen,
   getSize,
   drive,
+  visible = false,
   onOutput,
   onControl,
   onOpen,
@@ -113,6 +118,20 @@ export function useTermSocket({
   const exitedRef = useRef(false)
   const paneRef = useRef(paneId)
   paneRef.current = paneId
+  const visibleRef = useRef(visible)
+  visibleRef.current = visible
+  // What the current socket was last told; a new socket starts unseen.
+  const sentVisibleRef = useRef(false)
+
+  // Tell the server whether the pane is on screen, when that changed.
+  const syncVisible = useCallback(() => {
+    const ws = wsRef.current
+    if (!ws || ws.readyState !== WebSocket.OPEN) return
+    const on = visibleRef.current && document.visibilityState === 'visible'
+    if (on === sentVisibleRef.current) return
+    sentVisibleRef.current = on
+    ws.send(JSON.stringify({ type: 'visible', on }))
+  }, [])
 
   // Callbacks change every render; the socket reads the latest through a ref.
   const cbRef = useRef({ getSize, drive, onOutput, onControl, onOpen })
@@ -181,6 +200,7 @@ export function useTermSocket({
     )
     ws.binaryType = 'arraybuffer'
     wsRef.current = ws
+    sentVisibleRef.current = false
     // Set by an exit frame so the following close does not reconnect.
     let exited = false
     // teardown clears this timer, so it only fires for the current socket.
@@ -195,6 +215,7 @@ export function useTermSocket({
     ws.onopen = () => {
       attemptRef.current = 0
       setState('connected')
+      syncVisible()
       cbRef.current.onOpen?.()
     }
     ws.onmessage = (ev: MessageEvent) => {
@@ -224,7 +245,7 @@ export function useTermSocket({
       }
       scheduleRetry('disconnected')
     }
-  }, [teardown, clearStartTimer])
+  }, [teardown, clearStartTimer, syncVisible])
 
   // Open on mount and when the pane first becomes known; follow pane changes
   // only when asked.
@@ -269,6 +290,7 @@ export function useTermSocket({
       connect()
     }
     const onVisibility = () => {
+      syncVisible()
       if (document.visibilityState === 'hidden') {
         clearHidden()
         hiddenAt = Date.now()
@@ -309,7 +331,13 @@ export function useTermSocket({
       window.removeEventListener('offline', onOffline)
       window.removeEventListener('online', onOnline)
     }
-  }, [connect, teardown])
+  }, [connect, teardown, syncVisible])
+
+  // The pane shown or hidden on the page (another view, another pane)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: visibleRef carries it
+  useEffect(() => {
+    syncVisible()
+  }, [visible, syncVisible])
 
   const send = useCallback((data: string | Uint8Array<ArrayBuffer>) => {
     const ws = wsRef.current

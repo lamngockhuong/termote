@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -30,6 +31,8 @@ type hcSim struct {
 	attachs []hcSimAttach
 	reads   map[string]any // terminal.read reply, or {"error": kind}
 	killErr map[string]string
+	// labelErr makes terminal.label fail with this kind.
+	labelErr string
 }
 
 // hcSimAttach is one terminal.attach the core took.
@@ -152,6 +155,35 @@ func (s *hcSim) handlers(core *fakeHcCore) {
 		core.reply(id, rec)
 		s.emit(p.Terminal, "finished", map[string]any{"reason": "killed", "exit_code": nil})
 		s.closeAttachs(p.Terminal, "killed", nil)
+	})
+	core.handle("terminal.label", func(core *fakeHcCore, id uint64, params json.RawMessage) {
+		var p struct {
+			Terminal string
+			Labels   map[string]string
+		}
+		json.Unmarshal(params, &p)
+		s.mu.Lock()
+		kind := s.labelErr
+		r := s.terms[p.Terminal]
+		var labels map[string]string
+		if r != nil && kind == "" {
+			labels = map[string]string{}
+			for k, v := range r["labels"].(map[string]string) {
+				labels[k] = v
+			}
+			for k, v := range p.Labels {
+				labels[k] = v
+			}
+			r["labels"] = labels
+		}
+		rec := s.recLocked(p.Terminal)
+		s.mu.Unlock()
+		if kind != "" || rec == nil {
+			core.replyError(id, cmp.Or(kind, "not_found"), "cannot label")
+			return
+		}
+		core.reply(id, rec)
+		s.emit(p.Terminal, "labels", map[string]any{"labels": labels})
 	})
 	core.handle("terminal.read", func(core *fakeHcCore, id uint64, params json.RawMessage) {
 		var p struct{ Terminal string }

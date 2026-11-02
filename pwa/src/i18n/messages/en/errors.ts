@@ -135,6 +135,7 @@ export default {
   'errors.too_many_devices': 'Too many paired devices. Revoke one first',
   'errors.too_many_pixels': 'The image has more than 40 megapixels',
   'errors.trash_unavailable': 'The trash is not available on this server',
+  'errors.unavailable': 'herdr-core is not running. Try again in a moment',
   'errors.unencodable': "The text cannot be saved in the file's encoding",
   'errors.unknown_device': 'This device is no longer paired',
   'errors.unknown_group': 'The group no longer exists',
