@@ -1389,12 +1389,15 @@ export async function fetchPlaces(): Promise<FilesPlace[]> {
 }
 
 // One directory ("" is the root). root: the root the client saw, if any.
+// now: the pane's root is taken from where the pane is now, without the
+// server waiting for it to settle (the user asked: Refresh)
 export function fetchFilesTree(
   target: FilesTarget,
   path: string,
   root?: string,
+  now?: boolean,
 ): Promise<FilesTree> {
-  return filesGet(target, 'tree', { path, root })
+  return filesGet(target, 'tree', { path, root, now: now ? '1' : undefined })
 }
 
 // encoding: read the file as that instead of the one the server detects

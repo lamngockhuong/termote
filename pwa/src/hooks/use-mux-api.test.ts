@@ -976,9 +976,12 @@ describe('files API client', () => {
     const { calls } = mockFetch({ body: tree })
     expect(await fetchFilesTree({ paneId: '%3' }, '')).toEqual(tree)
     await fetchFilesTree({ paneId: '%3' }, 'src/a b', '/r')
+    // Refresh: the pane's root as it is now
+    await fetchFilesTree({ paneId: '%3' }, '', '/r', true)
     expect(calls.map((c) => c.url)).toEqual([
       '/api/mux/panes/%253/files/tree',
       '/api/mux/panes/%253/files/tree?path=src%2Fa+b&root=%2Fr',
+      '/api/mux/panes/%253/files/tree?root=%2Fr&now=1',
     ])
     // GETs: no method, no body
     expect(calls[0].init).toBeUndefined()

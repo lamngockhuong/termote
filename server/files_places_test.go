@@ -179,6 +179,11 @@ func TestPlaceReadRoutes(t *testing.T) {
 			t.Errorf("%s leads out of the place and shows its target: %+v", e.Name, e)
 		}
 	}
+	// now=1 asks where the pane is, which a Place does not follow: the
+	// Place is read as without it.
+	if code, body := fx.get(t, "tree", fx.q("now", "1")); code != http.StatusOK || !strings.Contains(body, `"todo.md"`) || strings.Contains(body, "pane.txt") {
+		t.Errorf("tree now=1 = %d %s", code, body)
+	}
 	// The pane's own root is untouched.
 	if code, body := fx.get(t, "tree", nil); code != http.StatusOK || !strings.Contains(body, "pane.txt") {
 		t.Errorf("pane tree = %d %s", code, body)

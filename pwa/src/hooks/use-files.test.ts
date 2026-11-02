@@ -161,7 +161,29 @@ describe('useFiles', () => {
     expect(result.current.dirs.src.entries).toHaveLength(1)
     expect(result.current.dirs.src.loading).toBe(true)
     expect(mockTree.mock.calls.map((c) => c[1])).toEqual(['', 'src'])
+    // The root asks for where the pane is now; the directories under it
+    // are plain reads
+    expect(mockTree.mock.calls.map((c) => c[3])).toEqual([true, undefined])
     await waitFor(() => expect(result.current.dirs.src.loading).toBe(false))
+  })
+
+  it('refresh shows a cd in the pane at once', async () => {
+    mockTree.mockResolvedValueOnce(tree('', [dir('src')]))
+    const { result } = renderHook(() => useFiles('%1'))
+    act(() => result.current.load())
+    await waitFor(() => expect(result.current.root).toBe('/r'))
+    mockTree
+      .mockRejectedValueOnce(
+        new RequestError(409, '', 'root changed', { root: '/n' }),
+      )
+      .mockResolvedValueOnce(tree('', [file('n')], '/n'))
+    act(() => result.current.refresh())
+    expect(mockTree).toHaveBeenLastCalledWith({ paneId: '%1' }, '', '/r', true)
+    await waitFor(() =>
+      expect(result.current.dirs[''].entries).toEqual([file('n')]),
+    )
+    expect(result.current.root).toBe('/n')
+    expect(result.current.rootChanges).toBe(1)
   })
 
   it('a moved root restarts the tree from the new one', async () => {

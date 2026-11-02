@@ -410,6 +410,30 @@ describe('FilesView', () => {
     expect(mockTree).toHaveBeenCalledTimes(2)
   })
 
+  it('Refresh shows a cd in the pane at once', async () => {
+    const p = await show()
+    mockTree.mockRejectedValueOnce(
+      new RequestError(409, '', 'root changed', { root: '/home/kim' }),
+    )
+    const real = mockTree.getMockImplementation()!
+    mockTree.mockImplementation(async (...a: [string, string]) => ({
+      ...(await real(...a)),
+      root: '/home/kim',
+    }))
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+    await act(async () => {})
+    expect(mockTree).toHaveBeenCalledWith(
+      { paneId: '%1' },
+      '',
+      '/home/kim/app',
+      true,
+    )
+    expect(p.notify).toHaveBeenCalledExactlyOnceWith(
+      "The pane's directory changed",
+    )
+    expect(screen.getByTestId('pane-root')).not.toHaveTextContent('app')
+  })
+
   it('tells once when the pane directory moved', async () => {
     const p = await show()
     mockTree.mockRejectedValueOnce(
