@@ -913,7 +913,9 @@ are in [`security-invariants.md`](security-invariants.md) (Files/Changes state k
 repository and a `.git` sits at that toplevel (a `core.worktree` naming another directory, even
 `/`, leaves the pane's directory as the root); resolutions are cached for 2 s. A directory a foreground command only passes
 through does not move the root: a new root is taken once reads at least 2 s apart
-agree on it. Every response
+agree on it, except a `files/tree` read with `now=1`, which the PWA sends for Refresh: it takes
+where the pane is now, so a `cd` shows on one Refresh. A `cd` alone tells the PWA nothing and
+reads nothing. Every response
 carries `root`; a client sends back the root it saw, and gets `409 {error, root}` with the
 current one when it moved, so it reloads instead of mixing two trees. `safe.directory` is
 passed for the toplevel only when it belongs to the server's user (or is under `/workspace` in

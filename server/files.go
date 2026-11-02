@@ -195,6 +195,12 @@ func (f *filesAPI) begin(w http.ResponseWriter, r *http.Request) (*filesRequest,
 // root query). writeGuard lets GETs through, and with --no-auth another page could
 // otherwise make the server run git in a pane's repo.
 func (f *filesAPI) start(w http.ResponseWriter, r *http.Request, allow func(http.ResponseWriter, *http.Request) bool) (*filesRequest, context.CancelFunc, bool) {
+	return f.startAt(w, r, allow, false)
+}
+
+// startAt is start; now resolves the pane's root from where the pane is
+// now, without waiting for it to settle (files/tree with now=1: Refresh).
+func (f *filesAPI) startAt(w http.ResponseWriter, r *http.Request, allow func(http.ResponseWriter, *http.Request) bool, now bool) (*filesRequest, context.CancelFunc, bool) {
 	if msg := crossSiteRejection(f.allowed, r); msg != "" {
 		jsonError(w, msg, http.StatusForbidden)
 		return nil, nil, false
@@ -207,6 +213,8 @@ func (f *filesAPI) start(w http.ResponseWriter, r *http.Request, allow func(http
 	var root filesRoot
 	var err error
 	switch id := r.URL.Query().Get("place"); {
+	case id == "" && now:
+		root, err = f.paneRootNow(ctx, r.PathValue("id"))
 	case id == "":
 		root, err = f.paneRootForRead(ctx, r.PathValue("id"))
 	case isViewOnly(r):
@@ -262,6 +270,14 @@ func (f *filesAPI) paneRootForRead(ctx context.Context, paneID string) (filesRoo
 		return filesRoot{}, errUnsupported
 	}
 	return f.roots.paneRoot(ctx, f.dirs, paneID)
+}
+
+// paneRootNow is paneRootForRead from where the pane is now (rootResolver.paneRootNow).
+func (f *filesAPI) paneRootNow(ctx context.Context, paneID string) (filesRoot, error) {
+	if f.dirs == nil || !f.m.Caps().Files {
+		return filesRoot{}, errUnsupported
+	}
+	return f.roots.paneRootNow(ctx, f.dirs, paneID)
 }
 
 // viewHidesRoot reports whether a view-only client may read nothing of
@@ -475,7 +491,12 @@ type treeResponse struct {
 }
 
 func (f *filesAPI) handleTree(w http.ResponseWriter, r *http.Request) {
-	req, cancel, ok := f.begin(w, r)
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
+	// now=1: the user asked (Refresh), the pane's root is taken from where
+	// the pane is now
+	req, cancel, ok := f.startAt(w, r, requireFilesRead, r.URL.Query().Get("now") == "1")
 	if !ok {
 		return
 	}

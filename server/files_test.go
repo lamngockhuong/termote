@@ -367,6 +367,47 @@ func TestFilesRootChanged(t *testing.T) {
 	}
 }
 
+// files/tree with now=1 (Refresh) takes the pane's new directory at once:
+// the 409 names it on the first ask, where a plain read waits rootSettle.
+func TestFilesTreeNow(t *testing.T) {
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, b := filepath.Join(base, "a"), filepath.Join(base, "b")
+	writeFile(t, filepath.Join(a, "x.txt"), "x\n")
+	writeFile(t, filepath.Join(b, "y.txt"), "y\n")
+	m := &filesFakeMux{dir: a, files: true}
+	h, _, _, err := buildServer(testConfig(t), m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	get := func(q url.Values) (int, map[string]any) {
+		t.Helper()
+		rec := serve(h, apiRequest("GET", "/api/mux/panes/0/files/tree?"+q.Encode(), ""))
+		return rec.Code, decodeBody(t, rec)
+	}
+	if code, body := get(nil); code != 200 || body["root"] != a {
+		t.Fatalf("first tree = %d %v", code, body)
+	}
+	m.dir = b
+	if code, body := get(url.Values{"root": {a}}); code != 200 || body["root"] != a {
+		t.Errorf("plain read right after the cd = %d %v, want the old root", code, body)
+	}
+	code, body := get(url.Values{"root": {a}, "now": {"1"}})
+	if code != http.StatusConflict || body["root"] != b {
+		t.Errorf("now=1 = %d %v, want 409 naming %q", code, body, b)
+	}
+	if code, body := get(url.Values{"root": {b}}); code != 200 || body["root"] != b {
+		t.Errorf("read after now=1 = %d %v", code, body)
+	}
+	// now=1 is a read like the others: a write method is still refused
+	rec := serve(h, apiRequest("POST", "/api/mux/panes/0/files/tree?now=1", "{}"))
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Errorf("POST tree = %d", rec.Code)
+	}
+}
+
 // The deny list holds when the pane's root is above it (cwd = $HOME).
 func TestFilesDenyDirsAboveRoot(t *testing.T) {
 	fx := newFilesFixture(t)

@@ -205,6 +205,8 @@ interface Store {
   // Reads the root once there is a reader
   load: () => void
   toggle: (path: string) => void
+  // Reads the root and every open directory again; the root is taken from
+  // where the pane is now (a cd shows at once)
   refresh: () => void
   // The pane's id changed (a tmux window move): reads go to the new one,
   // and the directories read are read again
@@ -321,12 +323,15 @@ function createStore(id: string): Store {
   const setDir = (path: string, dir: DirState) =>
     set({ dirs: { ...state.dirs, [path]: dir } })
 
-  async function read(path: string) {
+  // now: the pane's root as it is now (Refresh), not once it settled
+  async function read(path: string, now = false) {
     const gen = generation
     setDir(path, { ...state.dirs[path], loading: true })
     let tree: FilesTree
     try {
-      tree = await fetchFilesTree(target(), path, state.root)
+      tree = now
+        ? await fetchFilesTree(target(), path, state.root, true)
+        : await fetchFilesTree(target(), path, state.root)
     } catch (err) {
       if (gen !== generation) return
       if (err instanceof RequestError && err.status === 409 && err.root) {
@@ -508,7 +513,7 @@ function createStore(id: string): Store {
     const parent = dirs[dirs.length - 1] ?? ''
     set({ expanded: expandTo(parent) })
     // The directories just made are in no listing read so far
-    await Promise.all(['', ...dirs].map(read))
+    await Promise.all(['', ...dirs].map((p) => read(p)))
     // The root moved, or the user opened something else meanwhile
     if (gen !== generation || place() !== from) return
     const entry = state.dirs[parent]?.entries?.find((e) => e.name === name)
@@ -605,7 +610,7 @@ function createStore(id: string): Store {
   function readDown(dir: string) {
     const parts = dir ? dir.split('/') : []
     const chain = ['', ...parts.map((_, i) => parts.slice(0, i + 1).join('/'))]
-    return Promise.all(chain.map(read))
+    return Promise.all(chain.map((p) => read(p)))
   }
 
   async function reveal(path: string, kind: 'file' | 'dir' = 'file') {
@@ -765,7 +770,10 @@ function createStore(id: string): Store {
       if (!dir || dir.error) read(path)
     },
     refresh() {
-      for (const path of ['', ...Object.keys(state.expanded)]) read(path)
+      // The user asked: a cd in the pane shows now, not once the server saw
+      // the new directory for 2 s. A Place does not follow the pane.
+      read('', !state.place)
+      for (const path of Object.keys(state.expanded)) read(path)
     },
     moveTo(id) {
       paneId = id

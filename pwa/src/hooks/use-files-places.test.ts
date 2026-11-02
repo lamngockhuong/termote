@@ -111,6 +111,19 @@ describe('Places in the files store', () => {
     expect(h.result.current.place).toBeUndefined()
   })
 
+  it('refresh of a Place does not ask where the pane is', async () => {
+    const h = await loaded()
+    act(() => h.result.current.openPlace('n1'))
+    await waitFor(() => expect(h.result.current.root).toBe(NOTES))
+    mockTree.mockClear()
+    act(() => h.result.current.refresh())
+    expect(mockTree).toHaveBeenCalledExactlyOnceWith(
+      { paneId: '%1', place: 'n1' },
+      '',
+      NOTES,
+    )
+  })
+
   it('a tab with unsaved changes is asked about, not closed', async () => {
     const h = await loaded()
     act(() => h.result.current.open('a.md'))

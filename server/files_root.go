@@ -428,6 +428,17 @@ func newRootResolver(git *gitRunner) *rootResolver {
 // paneRoot resolves the root of a pane and keeps it stable while the pane's
 // directory only passes through another one.
 func (rr *rootResolver) paneRoot(ctx context.Context, d PaneDirer, paneID string) (filesRoot, error) {
+	return rr.paneRootAt(ctx, d, paneID, false)
+}
+
+// paneRootNow resolves the root of a pane from where it is now, without
+// waiting for rootSettle: the user asked for it (Refresh in Files), so a
+// directory the pane only passes through is what they want to see.
+func (rr *rootResolver) paneRootNow(ctx context.Context, d PaneDirer, paneID string) (filesRoot, error) {
+	return rr.paneRootAt(ctx, d, paneID, true)
+}
+
+func (rr *rootResolver) paneRootAt(ctx context.Context, d PaneDirer, paneID string, take bool) (filesRoot, error) {
 	dir, key, err := d.PaneDir(ctx, paneID)
 	if err != nil {
 		return filesRoot{}, err
@@ -440,13 +451,13 @@ func (rr *rootResolver) paneRoot(ctx context.Context, d PaneDirer, paneID string
 	if abs, err := filepath.Abs(dir); err == nil {
 		real, _ = filepath.EvalSymlinks(abs)
 	}
-	return rr.settle(key, root, real), nil
+	return rr.settle(key, root, real, take), nil
 }
 
 // settle returns the pane's settled root, with its settled directory as Dir.
 // The two settle apart, so a move within the new root does not hold the
-// root back.
-func (rr *rootResolver) settle(key string, root filesRoot, dir string) filesRoot {
+// root back. take takes both as they are, settled from then on.
+func (rr *rootResolver) settle(key string, root filesRoot, dir string, take bool) filesRoot {
 	rr.mu.Lock()
 	defer rr.mu.Unlock()
 	now := rr.now()
@@ -461,6 +472,10 @@ func (rr *rootResolver) settle(key string, root filesRoot, dir string) filesRoot
 		rr.panes[key] = s
 	}
 	s.used = now
+	if take {
+		s.root = settling[filesRoot]{cur: root}
+		s.dir = settling[string]{cur: dir}
+	}
 	out := s.root.see(root, now)
 	out.Dir = s.dir.see(dir, now)
 	return out

@@ -523,6 +523,43 @@ func TestPaneRootSettles(t *testing.T) {
 	}
 }
 
+// Asked for (Refresh), the root is where the pane is now, and stays so: a
+// read that follows does not move it back to the root it left.
+func TestPaneRootNow(t *testing.T) {
+	requireGit(t)
+	ctx := context.Background()
+	a, _ := filepath.EvalSymlinks(t.TempDir())
+	b, _ := filepath.EvalSymlinks(t.TempDir())
+	rr := newRootResolver(newGitRunner())
+	now := time.Now()
+	rr.now = func() time.Time { return now }
+	d := &fakePaneDirer{dir: a, key: "%1"}
+	if r, err := rr.paneRoot(ctx, d, "0"); err != nil || r.Root != a {
+		t.Fatalf("first root = %q, %v", r.Root, err)
+	}
+	d.dir = b
+	r, err := rr.paneRootNow(ctx, d, "0")
+	if err != nil || r.Root != b || r.Dir != b {
+		t.Fatalf("asked root = %q dir %q, %v; want %q at once", r.Root, r.Dir, err, b)
+	}
+	if r, _ := rr.paneRoot(ctx, d, "0"); r.Root != b {
+		t.Errorf("read after the ask = %q, want %q", r.Root, b)
+	}
+	// Back to a: an ordinary read waits for rootSettle again
+	d.dir = a
+	if r, _ := rr.paneRoot(ctx, d, "0"); r.Root != b {
+		t.Errorf("one read of a moved the root to %q", r.Root)
+	}
+	// A pane never read before: asked or not, where it is
+	if r, _ := rr.paneRootNow(ctx, &fakePaneDirer{dir: a, key: "%2"}, "1"); r.Root != a {
+		t.Errorf("new pane = %q", r.Root)
+	}
+	d.err = inputError("unknown pane")
+	if _, err := rr.paneRootNow(ctx, d, "0"); err == nil {
+		t.Error("PaneDir error not returned")
+	}
+}
+
 func TestHerdrPaneDir(t *testing.T) {
 	f := newFakeHerdr(t)
 	m := newTestHerdrMux(t, f)

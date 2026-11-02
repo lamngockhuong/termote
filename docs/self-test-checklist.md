@@ -721,8 +721,8 @@ Run on tmux (Linux/macOS) and Herdr; psmux (Windows) offers neither view.
       struck through in the tab bar (tooltip "— File not found"); when the
       pane moves to another directory, clean tabs close and tabs with a draft ask (Discard and
       close / Keep)
-- [ ] `cd` out of the root in the pane, then Refresh: toast "The pane's directory changed" and the
-      tree shows the new root
+- [ ] `cd` out of the root in the pane, then one Refresh: toast "The pane's directory changed"
+      and the tree shows the new root at once; without Refresh the tree stays as it is
 
 ### Changes
 
