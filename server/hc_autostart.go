@@ -27,6 +27,8 @@ var (
 var (
 	hcDialWait  = 10 * time.Second
 	hcStartWait = 30 * time.Second
+	// hcDialBackoff is how long a failed dial answers for itself.
+	hcDialBackoff = 2 * time.Second
 )
 
 // hcEnv is what termote passes on of the user's hc environment: saved by
@@ -125,17 +127,20 @@ type hcClient struct {
 	// connect starts hc connect (hcConnectStart; tests replace it).
 	connect func(ctx context.Context, bin string, env []string) (*hcConn, error)
 
-	mu      sync.Mutex
-	conn    *hcConn
-	changed chan struct{} // closed and replaced when conn changes
-	dialing chan struct{} // closed when the dial in progress ends
-	dialErr error
+	mu         sync.Mutex
+	conn       *hcConn
+	changed    chan struct{} // closed and replaced when conn changes
+	dialing    chan struct{} // closed when the dial in progress ends
+	dialErr    error
+	dialFailed time.Time // when the last dial failed
+	// dialBackoff is hcDialBackoff, read once.
+	dialBackoff time.Duration
 
 	starter hcStarter
 }
 
 func newHcClient(bin string, env []string) *hcClient {
-	c := &hcClient{bin: bin, env: env, connect: hcConnectStart, changed: make(chan struct{})}
+	c := &hcClient{bin: bin, env: env, connect: hcConnectStart, changed: make(chan struct{}), dialBackoff: hcDialBackoff}
 	c.starter = hcStarter{c: c, startedAt: time.Now()}
 	return c
 }
@@ -164,6 +169,7 @@ func (c *hcClient) set(conn *hcConn) {
 // background under the autostart policy, and answers errHcStarting.
 func (c *hcClient) get(ctx context.Context, mayStart bool) (*hcConn, error) {
 	if conn, _ := c.current(); conn != nil {
+		c.starter.answered()
 		return conn, nil
 	}
 	if c.starter.starting() {
@@ -188,6 +194,13 @@ func (c *hcClient) dial(ctx context.Context, wait time.Duration) (*hcConn, error
 		return conn, nil
 	}
 	ch := c.dialing
+	// A dial that just failed is not tried again at once: every poll and
+	// every stream waiting would start another hc connect.
+	if ch == nil && c.dialErr != nil && time.Since(c.dialFailed) < c.dialBackoff {
+		err := c.dialErr
+		c.mu.Unlock()
+		return nil, err
+	}
 	if ch == nil {
 		ch = make(chan struct{})
 		c.dialing = ch
@@ -200,6 +213,9 @@ func (c *hcClient) dial(ctx context.Context, wait time.Duration) (*hcConn, error
 			}
 			c.mu.Lock()
 			c.dialErr = err
+			if err != nil {
+				c.dialFailed = time.Now()
+			}
 			c.dialing = nil
 			c.mu.Unlock()
 			close(ch)

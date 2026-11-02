@@ -121,8 +121,10 @@ func TestHcSnapshotFromRichDoc(t *testing.T) {
 	if a.ID != "spa" || a.Name != cleanPaneName("Work \x1b[31mspace\u202e") || strings.ContainsAny(a.Name, "\x1b\u202e") {
 		t.Fatalf("group a %q %q", a.ID, a.Name)
 	}
-	// tbc's only terminal ended: the tab is gone.
-	if len(a.Tabs) != 2 || a.Tabs[1].Name != "logs" {
+	// tbc's only terminal ended: the tab is gone. t17 has a space but no
+	// tab label: a tab of its own, as herdr-app adopts it.
+	if len(a.Tabs) != 3 || a.Tabs[1].Name != "logs" || a.Tabs[2].ID != "tb-t17" || a.Tabs[2].Name != "3" ||
+		hcTabLabel(a.Tabs[2].ID) != "" || hcTabLabel("tba") != "tba" {
 		t.Fatalf("tabs %+v", a.Tabs)
 	}
 	tba := a.Tabs[0]
@@ -389,9 +391,27 @@ func TestHcStateAppliesEvents(t *testing.T) {
 	// upsert and documents: an older read never replaces a newer one.
 	st.upsert(*hcTerm("t50", "s", "t", 1, 1, 0))
 	get("t50")
-	st.setDoc(7, &hcDoc{})
-	st.setDoc(6, nil)
+	st.setDoc(7, &hcDoc{}, false)
+	st.setDoc(6, nil, false)
 	if st.docVersion() != 7 || st.input().doc == nil {
 		t.Fatal("older document read replaced a newer one")
+	}
+	// The first read on a connection is taken whatever its version: the
+	// core's state may have been wiped.
+	st.setDoc(1, nil, true)
+	if st.docVersion() != 1 || st.input().doc != nil {
+		t.Fatal("a fresh read was dropped")
+	}
+}
+
+func TestHcLostClearsPid(t *testing.T) {
+	st := newHcState()
+	rec := *hcTerm("t1", "s", "t", 80, 24, 0)
+	pid := 42
+	rec.Pid = &pid
+	st.reset(1, []hcTerminal{rec})
+	st.apply(hcEvent{Seq: 2, Type: "lost", Terminal: "t1", Data: json.RawMessage(`{"reason":"signaled"}`)})
+	if got, _ := st.terminal("t1"); got.Pid != nil {
+		t.Fatal("a lost terminal keeps its pid")
 	}
 }

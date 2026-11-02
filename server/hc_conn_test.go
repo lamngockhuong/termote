@@ -413,15 +413,12 @@ func TestHcChannelCloseReasons(t *testing.T) {
 				!strings.Contains(err.Error(), tc.reason) {
 				t.Fatalf("close: %v", err)
 			}
-			// The DATA was credited.
-			frames := f.waitFrames(id, 0)
-			_ = frames
-			f.mu.Lock()
-			credit := f.credit[id]
-			f.mu.Unlock()
-			if credit != hcWindow {
-				t.Fatalf("credit %d, want the full window back", credit)
-			}
+			// The DATA was credited: the window is whole again.
+			waitFor(t, func() bool {
+				f.mu.Lock()
+				defer f.mu.Unlock()
+				return f.credit[id] == hcWindow
+			})
 		})
 	}
 }
@@ -553,4 +550,39 @@ func TestHcStderrIsLoggedSafely(t *testing.T) {
 	if got := truncateBytes([]byte("a\x1b[31mb\xff"+strings.Repeat("c", 600)), 10); got != "a [31mb?cc" {
 		t.Fatalf("%q", got)
 	}
+}
+
+// A call that timed out leaves no channel behind: the late reply's channel
+// is closed and its frames dropped.
+func TestHcLateReplyClosesItsChannel(t *testing.T) {
+	release := make(chan struct{})
+	opened := make(chan uint32, 1)
+	f, c := startFakeHc(t, func(f *fakeHcCore) {
+		f.handle("terminal.attach", func(f *fakeHcCore, id uint64, _ json.RawMessage) {
+			<-release
+			ch := f.openChannel()
+			f.send(ch, []byte("paint"))
+			f.reply(id, map[string]any{"channel": ch})
+			opened <- ch
+		})
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if err := c.call(ctx, hcAttachParams{Terminal: "t7", Cols: 80, Rows: 24}, nil); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("err = %v", err)
+	}
+	close(release)
+	ch := <-opened
+	frames := f.waitFrames(ch, 1)
+	if frames[0].kind != hcKindClose {
+		t.Fatalf("frames %+v", frames)
+	}
+	f.frame(ch, hcKindData, []byte("more"))
+	f.frame(ch, hcKindClose, nil)
+	waitFor(t, func() bool {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		_, closing := c.closing[ch]
+		return len(c.early) == 0 && !closing
+	})
 }

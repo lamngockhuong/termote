@@ -310,7 +310,30 @@ func hcSeen(t *hcTerminal) (uint64, bool) {
 // live, addressed by a local id, with a herdr.space label. Terminals of
 // other apps (no label) stay hidden, as in herdr-app.
 func hcShown(t *hcTerminal) bool {
-	return t.State == "live" && validHcAddress(t.Address) && t.Labels[hcLabelSpace] != "" && t.Labels[hcLabelTab] != ""
+	return t.State == "live" && validHcAddress(t.Address) && t.Labels[hcLabelSpace] != ""
+}
+
+// hcLoneTab is the prefix of the id of a tab made for a terminal with a
+// space but no herdr.tab label (herdr-app gives it a tab of its own, under
+// an id of its own making, window.rs adopt); herdr-app's ids never have a
+// dash.
+const hcLoneTab = "tb-"
+
+// hcTabOf is the id of the tab a terminal is placed in by its labels.
+func hcTabOf(t *hcTerminal) string {
+	if tab := t.Labels[hcLabelTab]; tab != "" {
+		return tab
+	}
+	return hcLoneTab + t.Address
+}
+
+// hcTabLabel is the herdr.tab label the terminals of tab id carry: none for
+// a lone tab.
+func hcTabLabel(id string) string {
+	if strings.HasPrefix(id, hcLoneTab) {
+		return ""
+	}
+	return id
 }
 
 // hcFolderName names a folder the way herdr-app names a space after one
@@ -433,7 +456,7 @@ func buildHcSnapshot(in hcBuildInput) Snapshot {
 	})
 	for _, t := range rest {
 		g := group(t.Labels[hcLabelSpace], "", "")
-		tabID := t.Labels[hcLabelTab]
+		tabID := hcTabOf(t)
 		acc := g.tabIdx[tabID]
 		if acc == nil {
 			acc = &tabAcc{tab: Tab{ID: tabID, Key: tabID}}
@@ -585,7 +608,8 @@ func (s *hcState) apply(ev hcEvent) (docVersion uint64, isDoc bool) {
 			Reason *string `json:"reason"`
 		}
 		json.Unmarshal(ev.Data, &d)
-		c.Reason, c.Foreground = d.Reason, nil
+		// The program is gone: its pid may be another process's soon.
+		c.Reason, c.Foreground, c.Pid = d.Reason, nil, nil
 		if ev.Type == "finished" {
 			c.State = "finished"
 		}
@@ -631,11 +655,13 @@ func (s *hcState) apply(ev hcEvent) (docVersion uint64, isDoc bool) {
 }
 
 // setDoc keeps a document read at version; an older read than the one kept
-// is dropped. A nil doc (unwritten, or not parsed) falls back to labels.
-func (s *hcState) setDoc(version uint64, doc *hcDoc) {
+// is dropped, except the first read on a connection (fresh): a core whose
+// state was wiped, or whose document file broke, starts its versions again.
+// A nil doc (unwritten, or not parsed) falls back to labels.
+func (s *hcState) setDoc(version uint64, doc *hcDoc, fresh bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if version < s.docVer {
+	if version < s.docVer && !fresh {
 		return
 	}
 	s.doc, s.docVer = doc, version

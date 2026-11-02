@@ -130,6 +130,7 @@ func fakeHcStarts(t *testing.T, running *atomic.Bool, fail *atomic.Bool) (*hcCli
 	})
 	hcCoreRunning = func(context.Context, []string) bool { return running.Load() }
 	c := newHcClient("/usr/bin/hc", nil)
+	c.dialBackoff = 0
 	c.connect = func(ctx context.Context, bin string, env []string) (*hcConn, error) {
 		starts.Add(1)
 		time.Sleep(20 * time.Millisecond)
@@ -267,6 +268,15 @@ func TestHcClientDialsOnceWhenTheCoreRuns(t *testing.T) {
 	if _, err := c.get(context.Background(), false); err == nil || err.Error() != "boom" {
 		t.Fatalf("err = %v", err)
 	}
+	// A failed dial answers for itself a while: no new hc connect.
+	c.dialBackoff = time.Hour
+	c.connect = func(context.Context, string, []string) (*hcConn, error) { t.Fatal("dialed again"); return nil, nil }
+	if _, err := c.get(context.Background(), false); err == nil || err.Error() != "boom" {
+		t.Fatalf("err = %v", err)
+	}
+	c.mu.Lock()
+	c.dialBackoff, c.dialErr = 0, nil
+	c.mu.Unlock()
 	// A caller's context ends its wait.
 	block := make(chan struct{})
 	defer close(block)

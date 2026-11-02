@@ -196,6 +196,13 @@ type snapshotPeeker interface {
 	peekSnapshot(ctx context.Context) (Snapshot, error)
 }
 
+// startingSnapshotter is a backend whose server a full client's snapshot
+// starts when it does not run (Herdr, herdr-core), under the autostart
+// policy; every other read leaves it stopped.
+type startingSnapshotter interface {
+	startingSnapshot(ctx context.Context) (Snapshot, error)
+}
+
 // peekSnapshot reads m's panes without changing anything: the push watcher
 // runs with no page open.
 func peekSnapshot(ctx context.Context, m Mux) (Snapshot, error) {
@@ -421,9 +428,9 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 			// session), nor starts herdr.
 			read = func(ctx context.Context) (Snapshot, error) { return viewSnapshot(ctx, m) }
 		default:
-			// A full client opening the page starts herdr when it is not
-			// running, like tmux makes its default session.
-			if h, ok := m.(*herdrMux); ok {
+			// A full client opening the page starts herdr (or herdr-core)
+			// when it is not running, like tmux makes its default session.
+			if h, ok := m.(startingSnapshotter); ok {
 				read = h.startingSnapshot
 			}
 		}

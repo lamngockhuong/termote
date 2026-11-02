@@ -212,6 +212,8 @@ type hcAttachParams struct {
 	Rows                int    `json:"rows"`
 	Observe             bool   `json:"observe"`
 	ResizeNotifications bool   `json:"resize_notifications"`
+	// Resumed: attached again after the stream was lost.
+	Resumed bool `json:"resumed"`
 }
 
 func (hcAttachParams) hcMethod() string { return "terminal.attach" }
@@ -248,21 +250,24 @@ func hcUnsafeRune(r rune) bool { return unicode.IsControl(r) || unicode.Is(unico
 // and environment are never decoded: they can hold secrets and are never
 // shown.
 type hcTerminal struct {
-	Address    string            `json:"address"`
-	Labels     map[string]string `json:"labels"`
-	Cwd        string            `json:"cwd"`
-	State      string            `json:"state"`
-	Reason     *string           `json:"reason"`
-	Keep       bool              `json:"keep"`
-	Parent     *string           `json:"parent"`
-	Cols       int               `json:"cols"`
-	Rows       int               `json:"rows"`
-	Title      string            `json:"title"`
-	Turn       uint64            `json:"turn"`
-	Status     *hcStatus         `json:"status"`
-	StatusMs   *int64            `json:"status_ms"`
-	Foreground *hcForeground     `json:"foreground"`
-	CreatedMs  int64             `json:"created_ms"`
+	Address string            `json:"address"`
+	Labels  map[string]string `json:"labels"`
+	Cwd     string            `json:"cwd"`
+	State   string            `json:"state"`
+	Reason  *string           `json:"reason"`
+	Keep    bool              `json:"keep"`
+	Parent  *string           `json:"parent"`
+	// Pid is the terminal's program (its shell): the Chat view finds an
+	// agent under it. Never shown.
+	Pid        *int          `json:"pid"`
+	Cols       int           `json:"cols"`
+	Rows       int           `json:"rows"`
+	Title      string        `json:"title"`
+	Turn       uint64        `json:"turn"`
+	Status     *hcStatus     `json:"status"`
+	StatusMs   *int64        `json:"status_ms"`
+	Foreground *hcForeground `json:"foreground"`
+	CreatedMs  int64         `json:"created_ms"`
 }
 
 // hcStatus is a terminal's OSC 7501 root record, as its program reported it.
@@ -405,7 +410,6 @@ func startHcConnect(ctx context.Context, bin string, env []string) (*hcConn, err
 		cmd.Wait()
 		return nil, err
 	}
-	c.exited = make(chan struct{})
 	return c, nil
 }
 
@@ -450,6 +454,9 @@ func newHcConn(ctx context.Context, stdin io.WriteCloser, stdout io.Reader, cmd 
 		early:   map[uint32][]hcFrame{},
 		closing: map[uint32]struct{}{},
 		done:    make(chan struct{}),
+	}
+	if cmd != nil {
+		c.exited = make(chan struct{})
 	}
 	go c.readLoop(br)
 	return c, nil
@@ -666,6 +673,20 @@ func (c *hcConn) handleControl(f hcFrame) {
 	c.mu.Unlock()
 	if ch != nil {
 		ch <- r
+		return
+	}
+	// Nobody waits any more (the call timed out): a channel the reply
+	// opened (attach, subscribe) is closed, so neither its frames nor the
+	// core's viewer outlive it.
+	var opened struct {
+		Channel uint32 `json:"channel"`
+	}
+	if r.Error == nil && json.Unmarshal(r.Result, &opened) == nil && opened.Channel != 0 {
+		c.mu.Lock()
+		delete(c.early, opened.Channel)
+		c.closing[opened.Channel] = struct{}{}
+		c.mu.Unlock()
+		c.write(opened.Channel, hcKindClose, nil)
 	}
 }
 
@@ -822,6 +843,13 @@ func (ch *hcChannel) next(ctx context.Context) (hcFrame, error) {
 			return hcFrame{}, ctx.Err()
 		}
 	}
+}
+
+// gone reports whether the core closed the channel or the connection ended.
+func (ch *hcChannel) gone() bool {
+	ch.mu.Lock()
+	defer ch.mu.Unlock()
+	return ch.ended || ch.lost
 }
 
 // send writes a frame of kind on the channel (keys as DATA, RESIZE).

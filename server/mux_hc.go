@@ -39,6 +39,14 @@ type hcMux struct {
 	docRunning bool
 	docAgain   bool
 
+	chgMu sync.Mutex
+	chg   chan struct{} // closed at each change of the state (bump)
+
+	inputsMu sync.Mutex
+	inputs   map[string]*hcInput // each pane's input writer
+	// inputIdle is hcInputIdle, read once.
+	inputIdle time.Duration
+
 	topMu   sync.Mutex
 	tops    map[string]string // folder → its git checkout ("" outside one)
 	topBusy map[string]bool
@@ -49,14 +57,17 @@ type hcMux struct {
 func newHcMux(ctx context.Context, bin string, env []string) *hcMux {
 	home, _ := os.UserHomeDir()
 	m := &hcMux{
-		client:   newHcClient(bin, env),
-		state:    newHcState(),
-		home:     home,
-		roots:    newRootResolver(newGitRunner()),
-		docRetry: hcDocRetry,
-		synced:   make(chan struct{}),
-		tops:     map[string]string{},
-		topBusy:  map[string]bool{},
+		client:    newHcClient(bin, env),
+		state:     newHcState(),
+		home:      home,
+		roots:     newRootResolver(newGitRunner()),
+		docRetry:  hcDocRetry,
+		synced:    make(chan struct{}),
+		tops:      map[string]string{},
+		topBusy:   map[string]bool{},
+		inputs:    map[string]*hcInput{},
+		inputIdle: hcInputIdle,
+		chg:       make(chan struct{}),
 	}
 	go m.follow(ctx)
 	return m
@@ -74,6 +85,7 @@ func (m *hcMux) setLive(c *hcConn) {
 	m.live = c
 	close(m.synced)
 	m.synced = make(chan struct{})
+	defer m.bump()
 }
 
 // liveConn is the connection the state follows now, and a channel closed
@@ -133,11 +145,13 @@ func (m *hcMux) followConn(ctx context.Context, conn *hcConn) error {
 			if v, ok := m.state.apply(ev); ok && v > m.state.docVersion() {
 				m.readDoc(ctx, conn, false)
 			}
+			m.bump()
 		case "missed":
 			var ms hcMissed
 			if json.Unmarshal(l.Params, &ms) == nil {
 				m.state.reset(ms.Seq, ms.Terminals)
 				m.readDoc(ctx, conn, false)
+				m.bump()
 			}
 		}
 	})
@@ -148,7 +162,7 @@ func (m *hcMux) followConn(ctx context.Context, conn *hcConn) error {
 // asked for meanwhile become one more read after it.
 func (m *hcMux) readDoc(ctx context.Context, conn *hcConn, wait bool) {
 	if wait {
-		m.fetchDoc(ctx, conn)
+		m.fetchDoc(ctx, conn, true)
 		return
 	}
 	m.docMu.Lock()
@@ -161,7 +175,7 @@ func (m *hcMux) readDoc(ctx context.Context, conn *hcConn, wait bool) {
 	m.docMu.Unlock()
 	go func() {
 		for {
-			m.fetchDoc(ctx, conn)
+			m.fetchDoc(ctx, conn, false)
 			select {
 			case <-time.After(m.docRetry):
 			case <-ctx.Done():
@@ -181,7 +195,7 @@ func (m *hcMux) readDoc(ctx context.Context, conn *hcConn, wait bool) {
 // fetchDoc reads and parses the document outside the state's lock. One
 // that does not parse is dropped (labels place the terminals), logged once
 // per version.
-func (m *hcMux) fetchDoc(ctx context.Context, conn *hcConn) {
+func (m *hcMux) fetchDoc(ctx context.Context, conn *hcConn, fresh bool) {
 	var res struct {
 		Value   json.RawMessage `json:"value"`
 		Version uint64          `json:"version"`
@@ -206,7 +220,8 @@ func (m *hcMux) fetchDoc(ctx context.Context, conn *hcConn) {
 		}
 		doc = nil
 	}
-	m.state.setDoc(res.Version, doc)
+	m.state.setDoc(res.Version, doc, fresh)
+	m.bump()
 }
 
 // view waits until the state follows a connection, connecting when the core
