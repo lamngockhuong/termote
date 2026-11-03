@@ -1,7 +1,7 @@
 # Termote Makefile
 # Usage: make <target>
 
-.PHONY: help build build-pwa build-api test test-go test-cli test-install test-homebrew-formula test-entrypoints test-herdr-plugin test-git-hooks start container-up container-down uninstall health clean release release-dry fmt fmt-check brand-assets claude-chat-tags codex-chat-items
+.PHONY: help build build-pwa build-api test test-go test-hc test-cli test-install test-homebrew-formula test-entrypoints test-herdr-plugin test-git-hooks start container-up container-down uninstall health clean release release-dry fmt fmt-check brand-assets claude-chat-tags codex-chat-items
 
 # Default target
 help:
@@ -19,6 +19,7 @@ help:
 	@echo "Test:"
 	@echo "  make test              Run all tests"
 	@echo "  make test-go           Test server/ (server + CLI) with go test"
+	@echo "  make test-hc           Test the hc backend against a real hc (a core of its own per test)"
 	@echo "  make test-cli          Test the termote.sh shim"
 	@echo "  make test-install      Test the install.sh online installer"
 	@echo "  make test-homebrew-formula Test the Homebrew formula generator"
@@ -77,6 +78,11 @@ test: test-go test-cli test-install test-homebrew-formula test-entrypoints test-
 
 test-go:
 	cd server && go test ./...
+
+# Not part of `make test`: needs hc on PATH. Each test starts a core of its
+# own in a temporary directory and stops it; your own core is never reached.
+test-hc:
+	cd server && TERMOTE_TEST_HC=1 go test -race -count=1 -run 'TestHcReal' .
 
 test-cli:
 	@chmod +x tests/test-termote.sh
