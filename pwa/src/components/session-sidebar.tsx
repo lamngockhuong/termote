@@ -945,7 +945,13 @@ export function SessionSidebar({
       <section
         key={group.id}
         aria-label={name}
-        className={`relative pb-2 ${nested ? 'ml-3 border-l border-border pl-1.5' : ''}`}
+        // A line and a gap set each workspace apart; a worktree belongs to
+        // its checkout, so it is indented under it instead.
+        className={`relative pb-2 ${
+          nested
+            ? 'ml-3 border-l border-border pl-1.5'
+            : 'mt-2 border-t border-border pt-1.5 first:mt-0 first:border-t-0 first:pt-0'
+        }`}
       >
         {groupActions && renamingGroup === group.id ? (
           renderGroupRename(groupActions, group)
@@ -969,7 +975,7 @@ export function SessionSidebar({
               // the saved state without showing it.
               disabled={narrowed}
               aria-expanded={!collapsed}
-              className={`flex w-full min-w-0 items-center gap-1.5 rounded-control px-2 pb-1 pt-2 font-label text-[11px] uppercase tracking-wider text-fg-subtle hover:text-fg disabled:hover:text-fg-subtle ${FOCUS_RING}`}
+              className={`flex w-full min-w-0 items-center gap-1.5 rounded-control px-2 pb-1 pt-2 font-label text-[11px] font-semibold uppercase tracking-wider text-fg ${FOCUS_RING}`}
             >
               {collapsed ? (
                 <ChevronRight size={12} aria-hidden="true" />
@@ -982,7 +988,7 @@ export function SessionSidebar({
                 <span className="truncate">{name}</span>
                 <MetaChips
                   tokens={group.meta}
-                  className="normal-case tracking-normal"
+                  className="font-normal normal-case tracking-normal"
                 />
                 {group.worktree?.branch && (
                   // relative: the sr-only label is absolute; without a
@@ -990,7 +996,7 @@ export function SessionSidebar({
                   // widens the list into a horizontal scroll past a long name
                   <span
                     title={visibleUnsafe(group.worktree.branch)}
-                    className="relative truncate text-[11px] normal-case tracking-normal text-fg-subtle"
+                    className="relative truncate text-[11px] font-normal normal-case tracking-normal text-fg-subtle"
                   >
                     <GitBranch
                       size={11}
@@ -1005,7 +1011,9 @@ export function SessionSidebar({
                 )}
               </span>
               <AgentStatusBadge status={status} size={12} />
-              <span className="ml-1 tabular-nums">{tabs.length}</span>
+              <span className="ml-1 font-normal tabular-nums text-fg-muted">
+                {tabs.length}
+              </span>
             </button>
             {/* Shown on hover, with focus inside or while open, as a
                 session's buttons; a touch screen (no hover) always shows it. opacity, not
@@ -1026,7 +1034,16 @@ export function SessionSidebar({
             sessions={tabs}
             gone={gone}
             isNew={isNew}
-            className={`flex flex-col ${rowGap} ui-native:overflow-hidden ui-native:rounded-panel`}
+            // Desktop rows start under the header's name: its px-2, the
+            // 12px chevron and gap-1.5 make 26px, the row's own px-2 the
+            // rest. A phone's swipe rows keep the full width, drawn as one
+            // rounded block on native; indented desktop rows keep their own
+            // corners.
+            className={`flex flex-col ${rowGap} ${
+              isMobile
+                ? 'ui-native:overflow-hidden ui-native:rounded-panel'
+                : 'pl-4.5'
+            }`}
             row={renderItem}
           />
         )}
@@ -1144,7 +1161,9 @@ export function SessionSidebar({
         </Button>
       </div>
     ) : showGroups ? (
-      groups.map(renderGroup)
+      // Their own parent, so first: finds the first group shown, not a form
+      // or a button the phone's sheet puts above the list
+      <div>{groups.map(renderGroup)}</div>
     ) : (
       <Rows
         sessions={visibleSessions}

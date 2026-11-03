@@ -1068,6 +1068,8 @@ describe('SessionSidebar — groups', () => {
     expect(screen.queryByRole('region')).toBeNull()
     expect(screen.queryByText('main')).toBeNull()
     expect(screen.getByText('Shell')).toBeInTheDocument()
+    // No header to line up with: the flat list is not indented
+    expect(document.querySelector('.pl-4\\.5')).toBeNull()
   })
 
   it('lists tabs under a header per group, with counts and badges', () => {
@@ -1104,6 +1106,36 @@ describe('SessionSidebar — groups', () => {
     renderGroups({ isMobile: true })
     const web = screen.getByRole('region', { name: 'w2' })
     expect(web).toContainElement(screen.getByTestId('swipeable-w2:t1'))
+  })
+
+  it('sets each workspace apart with a bold header and a line above', () => {
+    renderGroups()
+    const api = screen.getByRole('region', { name: 'api' })
+    const w2 = screen.getByRole('region', { name: 'w2' })
+    // first: drops the line above the first group shown; the groups have a
+    // parent of their own so nothing else can be that first child
+    expect(api.parentElement).toBe(w2.parentElement)
+    expect(api.parentElement?.firstElementChild).toBe(api)
+    expect(w2).toHaveClass('border-t', 'first:border-t-0')
+    const header = screen.getByRole('button', { name: /api.*2/ })
+    expect(header).toHaveClass('text-fg', 'font-semibold')
+    expect(header).not.toHaveClass('text-fg-subtle')
+    // The count stays lighter than the name
+    expect(within(header).getByText('2')).toHaveClass('text-fg-muted')
+  })
+
+  it('indents the desktop rows under their header, not a phone’s', () => {
+    const { unmount } = renderGroups()
+    const rows = (name: string) =>
+      screen.getByRole('region', { name }).querySelector('.pl-4\\.5')
+    expect(rows('api')).toContainElement(screen.getByText('agents'))
+    unmount()
+    renderGroups({ isMobile: true })
+    expect(rows('api')).toBeNull()
+    // The phone's sheet puts buttons above the list: still a parent of
+    // their own for the groups
+    const api = screen.getByRole('region', { name: 'api' })
+    expect(api.parentElement?.firstElementChild).toBe(api)
   })
 
   it('shows tab badges in the icon-only sidebar', () => {
@@ -1384,6 +1416,45 @@ describe('SessionSidebar — filter bar', () => {
     expect(
       screen.queryByRole('region', { name: 'App' }),
     ).not.toBeInTheDocument()
+  })
+
+  it('draws no line above the first group a filter leaves', () => {
+    renderWithFilter(
+      [
+        {
+          id: '2',
+          name: 'Working in app',
+          icon: '🟡',
+          description: '',
+          groupId: 'app',
+          panes: [
+            { id: 'p2', label: 'p2', hasAgent: true, agentStatus: 'working' },
+          ],
+        },
+        {
+          id: '1',
+          name: 'Blocked in web',
+          icon: '🔴',
+          description: '',
+          groupId: 'web',
+          panes: [
+            { id: 'p1', label: 'p1', hasAgent: true, agentStatus: 'blocked' },
+          ],
+        },
+      ],
+      {
+        groups: [
+          { id: 'app', name: 'App' },
+          { id: 'web', name: 'Web' },
+        ],
+        filter: 'needs-you',
+      },
+    )
+    // The hidden first group leaves no element behind: first: (no line)
+    // lands on the first group still shown
+    const web = screen.getByRole('region', { name: 'Web' })
+    expect(web.parentElement?.firstElementChild).toBe(web)
+    expect(web).toHaveClass('first:border-t-0')
   })
   const pane = (id: string, agentStatus: 'blocked' | 'working') => ({
     id,
@@ -1888,6 +1959,9 @@ describe('SessionSidebar — worktree actions', () => {
       screen.getByRole('region', { name }).className
     expect(section('feature')).toContain('border-l')
     expect(section('repo')).not.toContain('border-l')
+    // The line between workspaces does not cut a worktree off its checkout
+    expect(section('feature')).not.toContain('border-t')
+    expect(section('orphan')).toContain('border-t')
     // A parent not in the list: not indented under some other workspace
     expect(section('orphan')).not.toContain('border-l')
   })
