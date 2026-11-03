@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.19.1](https://github.com/lamngockhuong/termote/compare/v2.19.0...v2.19.1) (2026-11-03)
+
+
+### Bug Fixes
+
+* task state and pane roots after a tmux restart, and a view-only link's view ([#694](https://github.com/lamngockhuong/termote/issues/694)) ([9104252](https://github.com/lamngockhuong/termote/commit/91042522212a4ea1027a91b9f0766a48a2ec3a42))
+
 ## [2.19.0](https://github.com/lamngockhuong/termote/compare/v2.18.0...v2.19.0) (2026-11-03)
 
 
