@@ -901,7 +901,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   the hash the client saw only to compare: another one than the current `HEAD` is 409
   `head_moved`, before any path reaches git. The path (and a rename's source) must be one that
   commit's `diff-tree` lists, under the same deny lists and `reveal=1` for a sensitive name, then
-  goes in as `:(literal)` after `--`; a view-only client goes through `viewHides`. A commit's
+  goes in as `:(literal)` after `--`; a view-only client goes through `viewHides`, and reads the
+  diff only of a path still in `HEAD`'s tree: a file the commit deleted (or stopped tracking) and a
+  rename's source stay listed by name, but their diff is 404 as if missing (history is not what it
+  may read); a full client reads them all. A commit's
   file list is kept 30 s per root and hash (a hash never changes what it names); a sensitive name
   is checked again when its diff is read. Message and author are shown with `visibleUnsafe`.
 - **Places** (`--allow-path`, `server/cli_allow_path.go`, `server/files_places.go`): folders the
@@ -1323,7 +1326,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   argv: a query starting with `-` is text. The list is Find's (`findLists`, the same cache key
   with the PWA's excludes; a view-only client searches its `req.view`, tracked files only, and
   `fresh=1` is ignored for it), sorted by path. Per file, before anything is
-  opened: the `files`/`skip` globs; under a root holding a home dir (`holdsHome`) every
+  opened: the `files`/`skip` globs, matched within the scan's deadline (checked every 64 paths,
+  a client leaving stops them too); under a root holding a home dir (`holdsHome`) every
   dot-path is skipped (`skipped.hidden`: shell histories hold secrets under ordinary names);
   then one `EvalSymlinks` shared by `deniedPaths` (deny dirs, the git dir, `.git` parts, on
   both paths), the view-only target check (where a link leads must be listed), the dot-path
@@ -1688,7 +1692,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   cannot see (`server/testdata/template-hidden-chars.json`, read by the Go and PWA tests). `PUT`
   and `DELETE` name the `updated` they read: another one is 409 `conflict` with the template as it
   is now, a missing one 404 `not_found`. An import is one write or none: every entry checked
-  first (400 `invalid_template` or `duplicate_name` with `index`), a name already there
+  first (400 `invalid_template` or `duplicate_name` with `index`; more than 100 entries is 409
+  `too_many` before any is checked or compared), a name already there
   (`EqualFold`) replaced, the rest added; the dry run says which by name, and the import names
   what it replaces (`replace`): another set is 409 `import_changed`. An error carries its code, a
   fixed message and what it is about (`field`, `index`, the current `template`), never OS text or a
@@ -1818,7 +1823,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   run until the line is typed, so two devices pressing Run open one tab (the other gets 409
   `task_running` with its `runId`); typing holds the pane's input lock the agent routes take. The
   last run's tab is used again only when its shell waits at its prompt (the shell itself in its
-  terminal's foreground, tmux not in copy mode): C-c clears its input line first and the shell is
+  terminal's foreground, tmux not in copy mode) and is still the shell process the run typed into
+  (its pid, as `IdleShell` reads it; never when unknown), so a pane id a restarted tmux, Herdr or
+  Zellij gave another pane gets a new tab instead: C-c clears its input line first and the shell is
   checked again; a new tab is never sent C-c (its rc files may still run) and is typed into once
   its shell is idle and its text stopped changing (up to 15 s); a shell still busy after the wait
   is 409 `shell_busy`. A new tab whose line could not be typed (`shell_busy`,

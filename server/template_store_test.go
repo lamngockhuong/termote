@@ -287,6 +287,23 @@ func TestTemplateStoreImportRefuses(t *testing.T) {
 	}
 }
 
+// An import of more entries than may be kept, as many as fit its body, is
+// refused before the entries are compared with each other.
+func TestTemplateStoreImportTooManyFast(t *testing.T) {
+	s := newTestTemplateStore(t, t.TempDir())
+	n := templateImportBody / len(`{"name":"m000000","text":"x"},`)
+	items := make([]templateInput, n)
+	for i := range items {
+		items[i] = templateInput{fmt.Sprintf("m%06d", i), "x"}
+	}
+	start := time.Now()
+	_, _, err := s.preview(items)
+	if took := time.Since(start); took > 2*time.Second {
+		t.Errorf("took %v", took)
+	}
+	wantCode(t, err, "too_many")
+}
+
 // 100 templates of the largest size round-trip through an import.
 func TestTemplateStoreImportLargest(t *testing.T) {
 	s := newTestTemplateStore(t, t.TempDir())

@@ -40,24 +40,26 @@ func (m *herdrMux) NewTaskTab(ctx context.Context, groupID, name, dir string) (t
 
 // IdleShell reads the pane's foreground processes (pane.process_info): the
 // shell alone is idle, and names itself.
-func (m *herdrMux) IdleShell(ctx context.Context, target string) (string, bool, error) {
+func (m *herdrMux) IdleShell(ctx context.Context, target string) (string, int, bool, error) {
 	if !herdrPaneIDRe.MatchString(target) {
-		return "", false, inputError("invalid pane id")
+		return "", 0, false, inputError("invalid pane id")
 	}
 	info, err := m.paneProcess(ctx, target)
 	var he *herdrError
 	if errors.As(err, &he) && strings.HasSuffix(he.Code, "_not_found") {
-		return "", false, errTaskTargetGone
+		return "", 0, false, errTaskTargetGone
 	}
 	if err != nil {
-		return "", false, err
+		return "", 0, false, err
 	}
+	// The shell's pid is known busy or not, so a tab whose shell never
+	// came back idle is still the task's next one.
 	idle, err := herdrIdle(info)
 	if err != nil || !idle {
-		return "", false, err
+		return "", info.ShellPID, false, err
 	}
 	_, name, _ := info.leader()
-	return name, true, nil
+	return name, info.ShellPID, true, nil
 }
 
 func (m *herdrMux) Interrupt(ctx context.Context, target string) error {

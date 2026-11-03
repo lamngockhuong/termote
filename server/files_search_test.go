@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -480,6 +481,39 @@ func TestFilesSearchDeadline(t *testing.T) {
 	}
 	if _, _, err := f.searchList(context.Background(), now, &filesRequest{root: filesRoot{Root: filepath.Join(root, "gone")}}, list, in); err == nil {
 		t.Error("missing root: no error")
+	}
+}
+
+// The file globs are matched within the scan's deadline: a list as long as
+// one gets and the costliest globs a client may send stop when it passes.
+func TestFilesSearchGlobsKeepDeadline(t *testing.T) {
+	root := plainDir(t)
+	f := &filesAPI{}
+	req := &filesRequest{ctx: context.Background(), root: filesRoot{Root: root}}
+	list := findList{entries: make([]findEntry, findMaxPaths)}
+	for i := range list.entries {
+		list.entries[i] = newFindEntry(fmt.Sprintf("a/b/c/d/e/f%d.txt", i), false)
+	}
+	long := strings.Repeat("a/", searchMaxGlobLen/2-1) + "z"
+	q := url.Values{"q": {"hit"}}
+	for range searchMaxGlobs - 1 {
+		q.Add("files", long)
+		q.Add("skip", long)
+	}
+	q.Add("files", "**")
+	q.Add("skip", long)
+	in, err := parseSearchQuery(q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	res, wait, err := f.searchList(context.Background(), start.Add(100*time.Millisecond), req, list, in)
+	wait()
+	if took := time.Since(start); took > 2*time.Second {
+		t.Errorf("took %v", took)
+	}
+	if err != nil || !res.Incomplete {
+		t.Errorf("past deadline = %+v %v", res.Incomplete, err)
 	}
 }
 

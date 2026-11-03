@@ -75,6 +75,10 @@ type taskRun struct {
 	tabID, paneID      string
 	target, nonce      string
 	started            time.Time
+	// shellPID: the process id of the shell the line was typed into (0
+	// when not known); the tab is reused only while it still runs it, so
+	// a pane id a restarted multiplexer gave another pane is not.
+	shellPID int
 
 	// state is running until a check finds it exited, ended or gone, which
 	// never change again; code is an exited run's status.
@@ -357,7 +361,7 @@ func (t *tasksAPI) run(ctx context.Context, tm taskMux, paneID, root string, tas
 			return taskRunInfo{}, false, &taskRunningError{prev.id, prev.tabID}
 		}
 		if state.State != taskStateRunning && state.State != taskStateGone && !newTab {
-			if _, idle, err := tm.IdleShell(ctx, prev.target); err == nil && idle {
+			if _, pid, idle, err := tm.IdleShell(ctx, prev.target); err == nil && idle && pid != 0 && pid == prev.shellPID {
 				tab, reused = taskTab{TabID: prev.tabID, PaneID: prev.paneID, Target: prev.target}, true
 			}
 		}
@@ -380,7 +384,9 @@ func (t *tasksAPI) run(ctx context.Context, tm taskMux, paneID, root string, tas
 	run := &taskRun{id: newTaskNonce(), key: key, clientKey: task.clientKey(), root: root,
 		tabID: tab.TabID, paneID: tab.PaneID, target: tab.Target, nonce: nonce,
 		started: t.runs.now(), state: taskStateRunning, typed: true}
-	if err := t.typeTask(ctx, tm, tab.Target, task, nonce, reused); err != nil {
+	pid, err := t.typeTask(ctx, tm, tab.Target, task, nonce, reused)
+	run.shellPID = pid
+	if err != nil {
 		if !reused {
 			// The tab stays open: kept as the key's last run, ended, so the
 			// next Run types there once its shell waits (a slow rc, an
@@ -400,67 +406,71 @@ func (t *tasksAPI) run(ctx context.Context, tm taskMux, paneID, root string, tas
 // before (a new shell may still run its rc files, which C-c would cut
 // short), checks the shell again and types the task's line. It holds the
 // pane's input lock, which the agent routes share, so nothing else types
-// in between.
-func (t *tasksAPI) typeTask(ctx context.Context, tm taskMux, target string, task resolvedTask, nonce string, reused bool) error {
+// in between. It returns the shell's process id when seen, even with an
+// error (an unsupported shell, one still loading), 0 otherwise.
+func (t *tasksAPI) typeTask(ctx context.Context, tm taskMux, target string, task resolvedTask, nonce string, reused bool) (int, error) {
 	unlock := t.input.lock(target)
 	defer unlock()
-	shell, err := waitTaskShell(ctx, tm, target, !reused)
+	shell, pid, err := waitTaskShell(ctx, tm, target, !reused)
 	if err != nil {
-		return err
+		return pid, err
 	}
 	if reused {
 		if err := tm.Interrupt(ctx, target); err != nil {
-			return err
+			return pid, err
 		}
 		if err := taskSleep(ctx, agentStartClearWait); err != nil {
-			return err
+			return pid, err
 		}
-		if shell, err = waitTaskShell(ctx, tm, target, false); err != nil {
-			return err
+		if shell, pid, err = waitTaskShell(ctx, tm, target, false); err != nil {
+			return pid, err
 		}
 	}
 	kind := taskShellKind(shell)
 	if kind == "" {
-		return errTaskShell
+		return pid, errTaskShell
 	}
 	cmd := taskCommand(kind, task)
 	if cmd == "" {
-		return errTaskUnknownKind
+		return pid, errTaskUnknownKind
 	}
-	return tm.TypeLine(ctx, target, buildTaskLine(kind, cmd, nonce))
+	return pid, tm.TypeLine(ctx, target, buildTaskLine(kind, cmd, nonce))
 }
 
 // waitTaskShell waits up to agentStartIdleWait for target's shell to wait
 // at its prompt; with settle, also for the pane's text to stop changing, so
 // a new shell has drawn its prompt (its rc files done) before anything is
-// typed.
-func waitTaskShell(ctx context.Context, tm taskMux, target string, settle bool) (string, error) {
+// typed. pid is the shell's last process id seen, also with an error.
+func waitTaskShell(ctx context.Context, tm taskMux, target string, settle bool) (shell string, pid int, err error) {
 	deadline := time.Now().Add(agentStartIdleWait)
 	if settle {
 		deadline = time.Now().Add(taskNewShellWait)
 	}
 	prev, seen := "", false
 	for {
-		shell, idle, err := tm.IdleShell(ctx, target)
+		name, p, idle, err := tm.IdleShell(ctx, target)
 		if err != nil {
-			return "", err
+			return "", pid, err
+		}
+		if p != 0 {
+			pid = p
 		}
 		if idle && settle {
 			text, err := tm.ReadTaskText(ctx, target, taskReadLines)
 			if err != nil {
-				return "", err
+				return "", pid, err
 			}
 			idle = seen && text == prev && taskPromptShown(text)
 			prev, seen = text, true
 		}
 		if idle {
-			return shell, nil
+			return name, pid, nil
 		}
 		if !time.Now().Add(agentStartIdlePoll).Before(deadline) {
-			return "", errTaskShellBusy
+			return "", pid, errTaskShellBusy
 		}
 		if err := taskSleep(ctx, agentStartIdlePoll); err != nil {
-			return "", err
+			return "", pid, err
 		}
 	}
 }

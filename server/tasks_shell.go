@@ -18,11 +18,12 @@ type taskMux interface {
 	// NewTaskTab opens a tab in groupID whose shell starts in dir, without
 	// focusing it. name may be empty.
 	NewTaskTab(ctx context.Context, groupID, name, dir string) (taskTab, error)
-	// IdleShell names target's shell and whether it waits at its prompt:
-	// the shell itself in the terminal's foreground (no program it runs,
-	// no nested shell), and not in a mode that takes keys (tmux copy mode).
-	// errTaskTargetGone when target is no pane any more.
-	IdleShell(ctx context.Context, target string) (shell string, idle bool, err error)
+	// IdleShell names target's shell, its process id (0 when not known)
+	// and whether it waits at its prompt: the shell itself in the
+	// terminal's foreground (no program it runs, no nested shell), and not
+	// in a mode that takes keys (tmux copy mode). errTaskTargetGone when
+	// target is no pane any more.
+	IdleShell(ctx context.Context, target string) (shell string, pid int, idle bool, err error)
 	// Interrupt sends C-c: a half-typed line, a continuation prompt or a
 	// read waiting there is dropped.
 	Interrupt(ctx context.Context, target string) error

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -468,7 +469,16 @@ func TestTmuxRenamePaneReal(t *testing.T) {
 		}
 		return got
 	}
-	for _, name := range []string{"PR #42", "a#{pane_id}", "Bản dựng"} {
+	// A name holding a command (#()) is never run, read back or listed.
+	// Not t.TempDir (nor $TMPDIR, long on macOS): the name must stay under
+	// maxPaneName to read back whole.
+	short, err := os.MkdirTemp("/tmp", "n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(short) })
+	ran := filepath.Join(short, "r")
+	for _, name := range []string{"PR #42", "a#{pane_id}", "Bản dựng", "#(touch " + ran + ")#[fg=red]##"} {
 		if err := m.RenamePane(ctx, newID, name); err != nil {
 			t.Fatal(err)
 		}
@@ -478,6 +488,10 @@ func TestTmuxRenamePaneReal(t *testing.T) {
 		if got := names()[newID]; got != name {
 			t.Errorf("snapshot name %q, want %q", got, name)
 		}
+	}
+	time.Sleep(300 * time.Millisecond) // a #() job would have run by now
+	if _, err := os.Stat(ran); err == nil {
+		t.Error("the name's #() ran")
 	}
 	// A tab id names the window's active pane (the first one: split -d).
 	if err := m.RenamePane(ctx, "0", "tab"); err != nil {

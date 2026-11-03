@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -49,9 +50,12 @@ func TestTmuxTaskTabReal(t *testing.T) {
 	}
 	shortStart(t)
 	agentStartIdleWait = 3e9
-	shell, err := waitTaskShell(ctx, tm, tab.Target, true)
+	shell, pid, err := waitTaskShell(ctx, tm, tab.Target, true)
 	if err != nil || shell != "bash" {
 		t.Fatalf("shell = %q %v", shell, err)
+	}
+	if out, _ := tmuxCmd(ctx, "display-message", "-p", "-t", tab.Target, "#{pane_pid}").Output(); strings.TrimSpace(string(out)) != strconv.Itoa(pid) {
+		t.Errorf("pid = %d, pane_pid %q", pid, out)
 	}
 	// Read once the shell runs: before, the pane's process is tmux's fork.
 	out, _ := tmuxCmd(ctx, "display-message", "-p", "-t", tab.Target, "#{window_name}|#{pane_current_path}|#{window_active}").Output()
@@ -65,7 +69,7 @@ func TestTmuxTaskTabReal(t *testing.T) {
 	if err := tm.TypeLine(ctx, tab.Target, buildTaskLine(shellPOSIX, "eval 'echo hi; sleep 0.3; (exit 5)'", nonce)); err != nil {
 		t.Fatal(err)
 	}
-	waitUntil(t, "busy", func() bool { _, idle, _ := tm.IdleShell(ctx, tab.Target); return !idle })
+	waitUntil(t, "busy", func() bool { _, _, idle, _ := tm.IdleShell(ctx, tab.Target); return !idle })
 	waitUntil(t, "exit marker", func() bool {
 		text, _ := tm.ReadTaskText(ctx, tab.Target, taskReadLines)
 		code, ok := parseTaskExit(text, nonce)
@@ -73,17 +77,17 @@ func TestTmuxTaskTabReal(t *testing.T) {
 	})
 	// A half-typed line is cleared by C-c.
 	tm.TypeLine(ctx, tab.Target, "sleep 30")
-	waitUntil(t, "sleep runs", func() bool { _, idle, _ := tm.IdleShell(ctx, tab.Target); return !idle })
+	waitUntil(t, "sleep runs", func() bool { _, _, idle, _ := tm.IdleShell(ctx, tab.Target); return !idle })
 	if err := tm.Interrupt(ctx, tab.Target); err != nil {
 		t.Fatal(err)
 	}
-	waitUntil(t, "idle after C-c", func() bool { _, idle, _ := tm.IdleShell(ctx, tab.Target); return idle })
+	waitUntil(t, "idle after C-c", func() bool { _, _, idle, _ := tm.IdleShell(ctx, tab.Target); return idle })
 	tmuxCmd(ctx, "copy-mode", "-t", tab.Target).Run()
-	if _, idle, err := tm.IdleShell(ctx, tab.Target); idle || err != nil {
+	if _, _, idle, err := tm.IdleShell(ctx, tab.Target); idle || err != nil {
 		t.Errorf("copy mode = %v %v", idle, err)
 	}
 	tmuxCmd(ctx, "kill-pane", "-t", tab.Target).Run()
-	if _, _, err := tm.IdleShell(ctx, tab.Target); !errors.Is(err, errTaskTargetGone) {
+	if _, _, _, err := tm.IdleShell(ctx, tab.Target); !errors.Is(err, errTaskTargetGone) {
 		t.Errorf("killed pane = %v", err)
 	}
 }
@@ -142,7 +146,7 @@ func TestTmuxTaskArgvAndErrors(t *testing.T) {
 		{fakeTmuxReply{out: fmt.Sprintf("%%7:0:1:%d\n", pid)}, false, false},
 	} {
 		args := useFakeTmuxScript(t, map[string]fakeTmuxReply{"display-message": tc.reply})
-		_, idle, err := tm.IdleShell(ctx, "%7")
+		_, _, idle, err := tm.IdleShell(ctx, "%7")
 		if errors.Is(err, errTaskTargetGone) != tc.gone || (err != nil && !tc.gone) != tc.fails || idle {
 			t.Errorf("%+v = %v %v", tc.reply, idle, err)
 		}
@@ -165,7 +169,7 @@ func TestTmuxTaskArgvAndErrors(t *testing.T) {
 		t.Error("a failed send-keys typed")
 	}
 	for _, bad := range []string{"7", "$1:2", "%7;x", ""} {
-		_, _, err1 := tm.IdleShell(ctx, bad)
+		_, _, _, err1 := tm.IdleShell(ctx, bad)
 		_, err2 := tm.ReadTaskText(ctx, bad, 1)
 		if !errors.As(err1, &ie) || !errors.As(err2, &ie) || !errors.As(tm.Interrupt(ctx, bad), &ie) || !errors.As(tm.TypeLine(ctx, bad, "x"), &ie) {
 			t.Errorf("target %q accepted", bad)
@@ -179,7 +183,7 @@ func TestTmuxTaskArgvAndErrors(t *testing.T) {
 	if _, err := tm.NewTaskTab(ctx, "$3", "", "/r"); !errors.Is(err, errUnsupported) {
 		t.Errorf("psmux tab = %v", err)
 	}
-	if _, _, err := tm.IdleShell(ctx, "%7"); !errors.Is(err, errUnsupported) {
+	if _, _, _, err := tm.IdleShell(ctx, "%7"); !errors.Is(err, errUnsupported) {
 		t.Errorf("psmux idle = %v", err)
 	}
 }

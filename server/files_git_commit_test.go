@@ -260,7 +260,7 @@ func TestFilesCommitPlainDirAndGitFailure(t *testing.T) {
 	if _, err := f.headCommit(t.Context(), root); err == nil {
 		t.Error("failing rev-parse: no error")
 	}
-	if _, err := f.commitDiff(t.Context(), root, strings.Repeat("a", 40), "a.txt", "", false); err == nil || err == errHeadMoved {
+	if _, err := f.commitDiff(t.Context(), root, strings.Repeat("a", 40), "a.txt", "", false, false); err == nil || err == errHeadMoved {
 		t.Errorf("commit diff, failing rev-parse = %v", err)
 	}
 	f.git.bin = writeScript(t, "echo nothex")
@@ -287,7 +287,7 @@ esac`)
 	}
 	for _, fail := range []string{"rev-parse", "diff-tree"} {
 		fake(fail)
-		if _, err := f.commitDiff(t.Context(), root, hash, "a.txt", "", false); err == nil {
+		if _, err := f.commitDiff(t.Context(), root, hash, "a.txt", "", false, false); err == nil {
 			t.Errorf("commit diff, failing %s: no error", fail)
 		}
 	}
@@ -299,7 +299,7 @@ esac`)
 *" log "*) printf '`+hash+`\000\000me\0001\000msg' ;;
 *" diff-tree "*) printf 'M\000a.txt\000' ;;
 esac`)
-	if _, err := f.commitDiff(t.Context(), root, hash, "a.txt", "", false); err == nil {
+	if _, err := f.commitDiff(t.Context(), root, hash, "a.txt", "", false, false); err == nil {
 		t.Error("failing diff-tree -p: no error")
 	}
 
@@ -343,6 +343,49 @@ func TestViewOnlyCommitDiffSymlink(t *testing.T) {
 	}
 }
 
+// A view-only client sees every file HEAD changed by name, but reads the diff
+// only of a path, and a rename's source, still in HEAD's tree: history is not
+// what it may read. A full client reads them all.
+func TestViewOnlyCommitDiffHeadTree(t *testing.T) {
+	gx := newGitFixture(t)
+	r := gx.repo
+	writeFile(t, filepath.Join(r, "del.txt"), "deleted secret\n")
+	writeFile(t, filepath.Join(r, "untrack.txt"), "untracked secret\n")
+	writeFile(t, filepath.Join(r, "old.txt"), "same content for rename\n")
+	gitT(t, r, "add", ".")
+	gitT(t, r, "commit", "-q", "-m", "more")
+	gitT(t, r, "rm", "-q", "del.txt")
+	gitT(t, r, "rm", "-q", "--cached", "untrack.txt")
+	gitT(t, r, "mv", "old.txt", "new.txt")
+	writeFile(t, filepath.Join(r, "a.txt"), "one\ntwo\n")
+	gitT(t, r, "add", "a.txt")
+	gitT(t, r, "commit", "-q", "-m", "drop")
+	head := strings.TrimSpace(gitT(t, r, "rev-parse", "HEAD"))
+	_, vh := viewFilesFixture(t, r)
+	base := "/api/mux/panes/0/files/"
+	if rec := serve(vh, viewRequest("GET", base+"commit", "")); rec.Code != 200 ||
+		!strings.Contains(rec.Body.String(), "del.txt") || !strings.Contains(rec.Body.String(), "untrack.txt") {
+		t.Errorf("view commit = %d %s", rec.Code, rec.Body)
+	}
+	for _, q := range []url.Values{
+		{"path": {"del.txt"}},
+		{"path": {"untrack.txt"}},
+		{"path": {"new.txt"}, "orig": {"old.txt"}},
+	} {
+		q.Set("commit", head)
+		if rec := serve(vh, viewRequest("GET", base+"commit/diff?"+q.Encode(), "")); rec.Code != http.StatusNotFound || strings.Contains(rec.Body.String(), "secret") {
+			t.Errorf("view %v = %d %s", q, rec.Code, rec.Body)
+		}
+		if rec := serve(vh, fullRequest(base+"commit/diff?"+q.Encode())); rec.Code != http.StatusOK {
+			t.Errorf("full %v = %d %s", q, rec.Code, rec.Body)
+		}
+	}
+	q := url.Values{"path": {"a.txt"}, "commit": {head}}
+	if rec := serve(vh, viewRequest("GET", base+"commit/diff?"+q.Encode(), "")); rec.Code != http.StatusOK {
+		t.Errorf("view a.txt = %d %s", rec.Code, rec.Body)
+	}
+}
+
 // The files of a commit are listed once for every diff opened in it, and a
 // file of a cached list is still checked for a sensitive name.
 func TestFilesCommitFilesCached(t *testing.T) {
@@ -359,7 +402,7 @@ func TestFilesCommitFilesCached(t *testing.T) {
 *" diff-tree "*) echo x >> `+count+`; printf 'M\000a.txt\000M\000notes.txt\000' ;;
 esac`)
 	for i := 0; i < 3; i++ {
-		if _, err := f.commitDiff(t.Context(), root, hash, "a.txt", "", false); err != nil {
+		if _, err := f.commitDiff(t.Context(), root, hash, "a.txt", "", false, false); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -371,7 +414,7 @@ esac`)
 	if err := os.Symlink(".env", filepath.Join(gx.repo, "notes.txt")); err != nil {
 		t.Skip("no symlinks")
 	}
-	if d, err := f.commitDiff(t.Context(), root, hash, "notes.txt", "", false); err != nil || !d.Sensitive {
+	if d, err := f.commitDiff(t.Context(), root, hash, "notes.txt", "", false, false); err != nil || !d.Sensitive {
 		t.Errorf("link to .env = %+v %v", d, err)
 	}
 }

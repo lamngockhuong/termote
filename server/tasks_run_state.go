@@ -51,7 +51,7 @@ func (t *tasksAPI) check(ctx context.Context, tm taskMux, run *taskRun, fresh bo
 // read looks at run's pane once (run.checkMu held).
 func (t *tasksAPI) read(ctx context.Context, tm taskMux, run *taskRun) (string, int) {
 	rs := t.runs
-	_, idle, err := tm.IdleShell(ctx, run.target)
+	_, _, idle, err := tm.IdleShell(ctx, run.target)
 	if errors.Is(err, errTaskTargetGone) {
 		return taskStateGone, 0
 	}

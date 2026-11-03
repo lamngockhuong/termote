@@ -331,8 +331,14 @@ func detectGradle(f *rootFiles, b *groupBuilder) {
 		app = app || gradleApp.MatchString(line)
 		boot = boot || gradleBoot.MatchString(line)
 	}
-	// A bare `application` in a plugins block (Kotlin DSL's accessor).
+	// A bare `application` in a plugins block (Kotlin DSL's accessor). A
+	// block inside one already read is not read again, so each byte is
+	// scanned once.
+	read := 0
 	for _, loc := range gradlePluginsRe.FindAllStringIndex(text, -1) {
+		if loc[0] < read {
+			continue
+		}
 		depth, end := 1, loc[1]
 		for end < len(text) && depth > 0 {
 			switch text[end] {
@@ -343,6 +349,7 @@ func detectGradle(f *rootFiles, b *groupBuilder) {
 			}
 			end++
 		}
+		read = end
 		if depth == 0 {
 			end-- // the closing brace
 		}

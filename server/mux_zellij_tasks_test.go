@@ -58,11 +58,11 @@ func TestZellijTaskShellFake(t *testing.T) {
 	ctx := t.Context()
 	// No server owns the session's socket here: the shell is not found,
 	// so not idle.
-	if shell, idle, err := m.IdleShell(ctx, zellijPaneID("main", 3)); shell != "" || idle || err != nil {
+	if shell, _, idle, err := m.IdleShell(ctx, zellijPaneID("main", 3)); shell != "" || idle || err != nil {
 		t.Errorf("no shell = %q %v %v", shell, idle, err)
 	}
 	for _, n := range []int{6, 9} {
-		if _, _, err := m.IdleShell(ctx, zellijPaneID("main", n)); !errors.Is(err, errTaskTargetGone) {
+		if _, _, _, err := m.IdleShell(ctx, zellijPaneID("main", n)); !errors.Is(err, errTaskTargetGone) {
 			t.Errorf("pane %d = %v", n, err)
 		}
 	}
@@ -71,7 +71,7 @@ func TestZellijTaskShellFake(t *testing.T) {
 	}
 	var ie inputError
 	for _, bad := range []string{"main", "x:t1", ""} {
-		_, _, err := m.IdleShell(ctx, bad)
+		_, _, _, err := m.IdleShell(ctx, bad)
 		if !errors.As(err, &ie) || !errors.As(m.Interrupt(ctx, bad), &ie) || !errors.As(m.TypeLine(ctx, bad, "x"), &ie) {
 			t.Errorf("target %q accepted", bad)
 		}
@@ -81,7 +81,7 @@ func TestZellijTaskShellFake(t *testing.T) {
 func TestZellijTaskShellListFails(t *testing.T) {
 	useFakeZellij(t, map[string]string{"list-panes": "1\nboom\n"})
 	m := newTestZellijMux()
-	if _, _, err := m.IdleShell(t.Context(), zellijPaneID("main", 3)); err == nil || errors.Is(err, errTaskTargetGone) {
+	if _, _, _, err := m.IdleShell(t.Context(), zellijPaneID("main", 3)); err == nil || errors.Is(err, errTaskTargetGone) {
 		t.Errorf("failed listing = %v", err)
 	}
 }
@@ -113,7 +113,7 @@ func TestZellijRealTaskTab(t *testing.T) {
 	}
 	shortStart(t)
 	agentStartIdleWait = 5 * time.Second
-	if shell, err := waitTaskShell(ctx, m, tab.Target, true); err != nil || shell != "bash" {
+	if shell, _, err := waitTaskShell(ctx, m, tab.Target, true); err != nil || shell != "bash" {
 		t.Fatalf("shell = %q %v", shell, err)
 	}
 	nonce := "0123456789abcdef"
@@ -128,9 +128,9 @@ func TestZellijRealTaskTab(t *testing.T) {
 	if err := m.TypeLine(ctx, tab.Target, "sleep 30"); err != nil {
 		t.Fatal(err)
 	}
-	zellijWaitFor(t, "busy", func() bool { _, idle, _ := m.IdleShell(ctx, tab.Target); return !idle })
+	zellijWaitFor(t, "busy", func() bool { _, _, idle, _ := m.IdleShell(ctx, tab.Target); return !idle })
 	if err := m.Interrupt(ctx, tab.Target); err != nil {
 		t.Fatal(err)
 	}
-	zellijWaitFor(t, "idle after C-c", func() bool { _, idle, _ := m.IdleShell(ctx, tab.Target); return idle })
+	zellijWaitFor(t, "idle after C-c", func() bool { _, _, idle, _ := m.IdleShell(ctx, tab.Target); return idle })
 }
