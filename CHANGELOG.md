@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.17.1](https://github.com/lamngockhuong/termote/compare/v2.17.0...v2.17.1) (2026-11-03)
+
+
+### Bug Fixes
+
+* close five findings of the 1d46d3e..9702242 security review ([#680](https://github.com/lamngockhuong/termote/issues/680)) ([e1564a1](https://github.com/lamngockhuong/termote/commit/e1564a15b6203013a977f70aa5cd8682a2fdc60e))
+* **files:** show a cd in the pane on one Refresh ([#678](https://github.com/lamngockhuong/termote/issues/678)) ([9702242](https://github.com/lamngockhuong/termote/commit/970224226cfddf95d399851c496cb26882b040ca))
+
 ## [2.17.0](https://github.com/lamngockhuong/termote/compare/v2.16.0...v2.17.0) (2026-11-01)
 
 
