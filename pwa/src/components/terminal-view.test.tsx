@@ -463,14 +463,17 @@ describe('TerminalView', () => {
     expect(socket.send).toHaveBeenCalledWith('ls\x1b[?1;2c')
   })
 
-  it('herdr: strips query replies and drops input that was only replies', () => {
-    const { term } = renderView({ backend: 'herdr' })
-    term.dataCb('x\x1b[>0;276;0c')
-    expect(socket.send).toHaveBeenCalledWith('x')
-    socket.send.mockClear()
-    term.dataCb('\x1b[12;40R')
-    expect(socket.send).not.toHaveBeenCalled()
-  })
+  it.each(['herdr', 'hc'])(
+    '%s: strips query replies and drops input that was only replies',
+    (backend) => {
+      const { term } = renderView({ backend })
+      term.dataCb('x\x1b[>0;276;0c')
+      expect(socket.send).toHaveBeenCalledWith('x')
+      socket.send.mockClear()
+      term.dataCb('\x1b[12;40R')
+      expect(socket.send).not.toHaveBeenCalled()
+    },
+  )
 
   it('serverScroll: the wheel scrolls the pane history through the backend', async () => {
     const { term, ref } = renderView({

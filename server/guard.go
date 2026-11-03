@@ -227,6 +227,9 @@ func validateConfig(cfg serveConfig) error {
 	if cfg.NoAuth && cfg.MuxBackend == "herdr" && !cfg.HerdrAllowNoAuth {
 		return errors.New("TERMOTE_NO_AUTH=true with TERMOTE_MUX=herdr would expose every herdr workspace without a password; set TERMOTE_HERDR_ALLOW_NO_AUTH=true to accept that")
 	}
+	if cfg.NoAuth && cfg.MuxBackend == "hc" && !cfg.HcAllowNoAuth {
+		return errors.New("TERMOTE_NO_AUTH=true with TERMOTE_MUX=hc would expose every herdr-core terminal without a password; set TERMOTE_HC_ALLOW_NO_AUTH=true to accept that")
+	}
 	return nil
 }
 

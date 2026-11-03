@@ -166,6 +166,60 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   pane's tab must be listed, else every new one is closed (`close-pane --pane-id`) and the split
   is 503 `busy`. Zellij 0.45.1 ignores `new-pane --cwd`, so the new pane starts in the pane's
   directory and another `cwd` is 501. A failed action with the pane gone is 404 `unknown_pane`
+- **herdr-core** (`--mux hc`; `server/hc_*.go`, `server/mux_hc*.go`; hc 0.1.16 or later,
+  protocol generation 1): termote is one more client of the core herdr-app talks to. **hc has no
+  auth of its own**: whoever reaches its socket or pipe drives every terminal, so the trust
+  boundary is this machine's user. `--mux hc --no-auth` is refused unless `--allow-hc-no-auth` is
+  given (`validateMux`), and serve refuses `TERMOTE_NO_AUTH=true` with `TERMOTE_MUX=hc` without
+  `TERMOTE_HC_ALLOW_NO_AUTH=true` (`validateConfig`); herdr's flag never allows hc, nor hc's herdr.
+  A container never runs it: `container up --mux hc` is refused before anything starts, and
+  `newMux` refuses hc when `runningInContainer()`. Remote machines' terminals (`m/t7`) are out of
+  scope.
+  - Connection: one `hc connect` child (argv `[<absolute hc path> connect]`, never a shell) in
+    framed mode; every RPC, the events and each attach share it on credit-counted channels. The
+    path is found by `start` through `PATH` (absolute only, so never a match through `.`), checked
+    with `hc --version` against `hcMinVersion`, and saved in the config (`TERMOTE_HC_BIN`, Windows
+    `HcBin`); `hello` with another generation or an older version refuses the backend. Its
+    environment is `terminalEnv()` (no `TERMOTE_*`) without any `HC_*` variable (a pane's
+    `HC_TERMINAL_ID` would make termote that terminal's caller), plus `HC_SESSION` and
+    `HC_SOCKET` as saved in the config by `start` from its shell (`TERMOTE_HC_SESSION`,
+    `TERMOTE_HC_SOCKET`; a shell without one keeps the saved value), never the service's own.
+  - Typed allowlist: the params types are the only calls (`server.status`, `terminal.list`,
+    `get`, `run`, `kill`, `label`, `read`, `attach`, `events.subscribe`, `doc.get`; a test
+    checks). No `terminal.on`, `send`, `keys`, `rm`, no `doc.set`: herdr-app's layout document is
+    read only. `terminal.run` sends only `keep`, `cwd` (absolute) and the labels `herdr.space`,
+    `herdr.tab` (checked: non-empty, bounded, no control or format character) and
+    `herdr.seen=0`; never argv or env, so the core runs the machine's own shell. `terminal.label`
+    writes only `herdr.seen` (below).
+  - Addresses: every call naming a terminal takes a local id (`t` + id characters, at most 16;
+    `validHcAddress`), checked in the params (`hcCheck`) before anything is sent; a name or
+    `m/t7` never reaches the core. Every pane route goes through `requirePane`: the id must be a
+    live terminal of the snapshot with a `herdr.space` label (`hcShown`), so a terminal of another
+    app (no label) cannot be attached, read, killed or labelled.
+  - Autostart (the only place termote starts the core): `hc connect` starts a core that does not
+    run (`connect_or_start`), so it is spawned only when the core answers, or for a full client's
+    page snapshot (`startingSnapshot`), never for a peek, a view-only device, the stream,
+    `/health` or the push watcher. "Runs" is `HC_SOCKET`, else the endpoint the core wrote in
+    `<state>/herdr-core/<session>/core.lock`, accepting a connection; a probe starts nothing. A
+    core that stops between the probe and the spawn is started by `hc connect`: an accepted gap.
+    A failed start backs off like Herdr's. A core termote starts inherits the service's
+    environment, and the terminals herdr-app opens later inherit it from the core;
+    `termote stop` and `uninstall` never stop it.
+  - Snapshot: built from the events stream and herdr-app's document (parsed with depth and node
+    limits; one that does not parse falls back to the labels). Names, titles, folders and agent
+    words are cleaned (`cleanPaneName`; an unknown app is `other`); argv and pids never reach a
+    client. The pane's pid is used server side only, for the Chat view.
+  - Streams: a full client attaches as a viewer that may type, at the terminal's size (typing
+    never resizes the desktop's pane; only drive does); a view-only device attaches with
+    `observe` (the core lets it neither type nor resize). Input waiting for an attach is held up
+    to 1 MiB. Pane layout routes other than split and close answer `unsupported`.
+  - `herdr.seen` (`server/mux_hc_seen.go`): the stream's `visible` frame, from a full client
+    only (a view stream drops it, and the stream ignores it for an observer), counts a viewer per
+    terminal. The label is written only for an agent terminal with a local id, only to raise it
+    (or when missing), once per turn; a viewer back within 10 s writes only a turn that ended
+    meanwhile. A failed write is logged, never returned, and never holds the stream.
+  - Errors: the core's text is logged only; clients get `codedError` codes (503 `unavailable`
+    while the core does not answer).
 - **Pane processes** (`server/mux_process.go`): the snapshot carries each pane's foreground
   process `{name, cwd}`; tmux tabs also carry every pane's in `processes` (on psmux the snapshot
   holds only the window's active pane). The name is the first word of what the OS reports (cut at
@@ -390,7 +444,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   refuses the request. The snapshot uses `peekSnapshot` (tmux does not recreate the default session).
   A view stream drops every input frame, `resize`, `drive` and `visible`; tmux attaches `-E -r` to the
   session's active window only (another `pane` → 403; tmux ≥ 3.2, older tmux and psmux → 501,
-  `caps.viewStream` false), Herdr only `observe`s. Limits: 2 streams and 4 waiting stream tokens
+  `caps.viewStream` false), Herdr and hc only `observe`. Limits: 2 streams and 4 waiting stream tokens
   per view device; a view stream or token never evicts a full one (full evicts view first; a full
   hub with no view stream to evict → "too many viewers"). The PWA hides every write control and
   shows "View only" (`caps.role`); tmux follows each session's active window, Herdr selects tabs
@@ -494,7 +548,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `{label, cwd, focus:false}`, `workspace.rename`, `workspace.close` without `close_group` (linked
   worktrees → 409 `has_worktrees`, closed in Herdr), `workspace_not_found` → 404 (Herdr answers a method it lacks with
   `invalid_request`, so an older Herdr gets a 500, not 501). A request that waited past
-  `muxTimeout` for another group change gets 503 `busy`. A group created with a directory is
+  `muxTimeout` for another group change gets 503 `busy`. hc (`caps.renameGroup` false): a new
+  group takes no name (one sent is dropped; herdr-app names a space after its folder), it is a
+  `terminal.run` with new space and tab labels, and renaming answers 501 `unsupported`; it is
+  recorded in the recent groups under its folder's name. A group created with a directory is
   recorded in the recent groups (below), after the mutex is released. Closing a group ends every process in it
 - **Reordering** (`POST /api/mux/tabs/{id}/move` and `POST /api/mux/groups/{id}/move`, both
   `{index}` → `{ok, id}`; `server/mux_reorder.go`, `caps.reorderTabs`/`caps.reorderGroups`):
@@ -1824,7 +1881,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `task_running` with its `runId`); typing holds the pane's input lock the agent routes take. The
   last run's tab is used again only when its shell waits at its prompt (the shell itself in its
   terminal's foreground, tmux not in copy mode) and is still the shell process the run typed into
-  (its pid, as `IdleShell` reads it; never when unknown), so a pane id a restarted tmux, Herdr or
+  (its pid, as `IdleShell` reads it; never when unknown), so a pane id a restarted tmux, Herdr, hc or
   Zellij gave another pane gets a new tab instead: C-c clears its input line first and the shell is
   checked again; a new tab is never sent C-c (its rc files may still run) and is typed into once
   its shell is idle and its text stopped changing (up to 15 s); a shell still busy after the wait

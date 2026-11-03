@@ -66,6 +66,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/terminal-view.tsx`            | xterm.js terminal component (stream, resize, reconnect)        |
 | `pwa/src/components/terminal-stack.tsx`           | Terminal area: the active pane, or Herdr's layout view         |
 | `pwa/src/utils/layout-view.ts`                    | Layout view: when it shows, pane boxes, the font it fits at    |
+| `pwa/src/utils/backend.ts`                        | Backends streaming one pane at their own size (Herdr, hc)      |
 | `pwa/src/utils/terminal-bridge.ts`                | Drives the xterm.js terminal (key mapping, clipboard paste)    |
 | `pwa/src/components/chat-view.tsx`                | Chat view of a pane running Claude Code (lazy-loaded)          |
 | `pwa/src/components/chat-composer.tsx`            | Chat view message box                                          |
@@ -218,6 +219,14 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/zellij_client.go`                         | Termote's Zellij clients: placed on a pane, input, stream      |
 | `server/zellij_view.go`                           | Zellij view-only stream: `subscribe` renders, size frames      |
 | `server/zellij_pane_pid*.go`                      | A pane's shell: socket owner (sock_diag / lsof), PANE_ID       |
+| `server/hc_frame.go`, `server/hc_conn.go`         | herdr-core: frames, typed RPC allowlist, channels, events      |
+| `server/hc_autostart.go`, `server/hc_os_*.go`     | `hc connect` client, core-running check, autostart policy      |
+| `server/mux_hc.go`                                | hc backend: follows events, reads herdr-app's document         |
+| `server/mux_hc_model.go`                          | hc state, herdr-app document parser, snapshot, agent status    |
+| `server/mux_hc_ops.go`                            | hc tabs, groups, split, close, input, text (`requirePane`)     |
+| `server/mux_hc_agent.go`                          | hc Files, Chat view and Tasks                                  |
+| `server/hc_stream.go`                             | hc attach stream: size frames, drive, reattach, layout frames  |
+| `server/mux_hc_seen.go`                           | Viewers per terminal and the shared `herdr.seen` label         |
 | `server/mux_worktrees.go`                         | `/api/mux/worktrees*`: list, create, open, remove; name check  |
 | `server/herdr_worktree_branches.go`               | Each worktree workspace's branch, read in the background       |
 | `server/stream.go`                                | Terminal WebSocket (`/api/mux/stream`)                         |

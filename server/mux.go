@@ -130,8 +130,13 @@ type Caps struct {
 	// AgentStartCodex: Codex can be started too (AgentStart, and Codex has
 	// a Chat view on this OS, codexProcSupported).
 	AgentStartCodex bool `json:"agentStartCodex"`
-	// Groups: groups can be created, renamed and closed (/api/mux/groups).
+	// Groups: groups can be created and closed, and renamed where
+	// RenameGroup says so (/api/mux/groups).
 	Groups bool `json:"groups"`
+	// RenameGroup: a group has a name the client gives it, at creation and
+	// by renaming (tmux, Herdr, Zellij). hc names a space after its folder,
+	// as herdr-app does: a new group takes no name there.
+	RenameGroup bool `json:"renameGroup"`
 	// Push: the server can send Web Push (/api/mux/push/*). Set by the
 	// snapshot route, not by the backend.
 	Push bool `json:"push"`

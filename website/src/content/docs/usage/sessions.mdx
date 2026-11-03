@@ -1,6 +1,6 @@
 ---
 title: Session Management
-description: Managing terminal sessions with tmux, Herdr or Zellij
+description: Managing terminal sessions with tmux, Herdr, Zellij or herdr-core
 ---
 
 import { Aside, Steps } from "@astrojs/starlight/components";
@@ -69,6 +69,8 @@ tmux session:
   listed, and a view-only device does not see the list.
 - **Rename**: in the **⋯** menu; the name is edited in place. Termote's own tmux session (`main`)
   and the Zellij session `main` cannot be renamed.
+- **herdr-core**: a group is a space of the herdr app. The app names a space after its folder, so
+  **New workspace** asks only for the directory, and a space cannot be renamed.
 - **Close**: in the **⋯** menu; it asks first and says how many tabs end with it. Closing
   Termote's own tmux session starts a new, empty one right away, and every device viewing it
   reconnects to that (the same holds for the Zellij session `main`). Closing a Zellij session
@@ -124,6 +126,9 @@ The backends differ in a few ways:
   place, so the pane strip keeps its order while the panes move on screen. Zoom moves every client
   viewing the tab, your own Zellij included, to the zoomed pane. Through the API, a split into a
   directory other than the pane's own is refused (Zellij ignores it).
+- **herdr-core**: as on Herdr, a tab of 2 to 4 panes shows side by side on a computer, as the herdr
+  app arranges them. Only **Split right**, **Split down** and **Close pane** are offered: the app
+  places a new pane after the tab's last one, and zoom, swap and resize stay in the app.
 
 ### Naming a pane
 

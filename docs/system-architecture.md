@@ -27,11 +27,12 @@
                          │
                          ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│              Mux backend (tmux/psmux, Herdr or Zellij)          │
+│        Mux backend (tmux/psmux, Herdr, Zellij or herdr-core)    │
 │  termote opens the terminal itself: a PTY on Unix, ConPTY on     │
 │  Windows, attached to `tmux attach` (or, with Herdr, an          │
 │  `observe`/`pane.send_text` session over Herdr's socket, or,    │
-│  with Zellij, a `zellij attach` client of Termote's own)        │
+│  with Zellij, a `zellij attach` client of Termote's own, or,    │
+│  with herdr-core, a channel of one framed `hc connect`)         │
 └────────────────────────┬────────────────────────────────────────┘
                          ▼
 ┌─────────────────────────────────────────────────────────────────┐
@@ -102,9 +103,10 @@ nothing it opens inherits one. Only without a saved config (the container image,
 | `TERMOTE_USER`                | `admin`      | HTTP basic auth username                                                                                                                       |
 | `TERMOTE_PASS`                | (empty)      | HTTP basic auth password                                                                                                                       |
 | `TERMOTE_NO_AUTH`             | `false`      | Disable basic auth                                                                                                                             |
-| `TERMOTE_MUX`                 | `tmux`       | Backend: `tmux`, `herdr` or `zellij`; in the image, also picks what starts                                                                     |
+| `TERMOTE_MUX`                 | `tmux`       | Backend: `tmux`, `herdr`, `zellij` or `hc` (native only); in the image, also picks what starts                                                 |
 | `TERMOTE_ALLOWED_HOSTS`       | (empty)      | Extra `Host` header values allowed, comma-separated; loopback is always allowed                                                                |
 | `TERMOTE_HERDR_ALLOW_NO_AUTH` | `false`      | Required together with `TERMOTE_MUX=herdr` and `TERMOTE_NO_AUTH=true`                                                                          |
+| `TERMOTE_HC_ALLOW_NO_AUTH`    | `false`      | Required together with `TERMOTE_MUX=hc` and `TERMOTE_NO_AUTH=true`                                                                             |
 | `TERMOTE_WORKSPACE_HOME`      | (empty)      | The host home dir's place in `/workspace` (`.`: the workspace) when the workspace holds it: view-only Files refuse it (`container up` sets it) |
 
 For a native install, `termote start` computes the equivalent of `TERMOTE_ALLOWED_HOSTS` from
@@ -195,6 +197,22 @@ attach a terminal, health) with three implementations:
   `serve` warns in the log about a running Zellij server whose environment holds a `TERMOTE_*`
   variable (its panes inherit it; Zellij cannot unset it), and every process it starts drops
   `ZELLIJ`, `ZELLIJ_SESSION_NAME` and `ZELLIJ_PANE_ID` (keeping `ZELLIJ_SOCKET_DIR`).
+- **`mux_hc*.go`** (`TERMOTE_MUX=hc`, native on Linux, macOS and Windows, never in a container;
+  hc 0.1.16 or later; never auto-detected): termote is one more client of herdr-core, the core
+  herdr-app talks to, and shows the spaces, tabs and panes herdr-app shows. `hc_conn.go` runs one
+  `hc connect` child in framed mode (hc finds the core's socket or named pipe itself): typed RPCs,
+  the events stream and each attach share it on credit-counted channels. `hc_autostart.go` starts
+  the core only for a full client's page snapshot, as Herdr's autostart does. `mux_hc.go` follows
+  the events and reads herdr-app's layout document (`doc.get`, read only); `mux_hc_model.go`
+  builds the snapshot from both: a terminal with a `herdr.space` label is a pane, grouped by
+  `herdr.space` and `herdr.tab` as herdr-app places them, without the document by label alone;
+  terminals of other apps stay hidden. A space is named as herdr-app names it (its name, else
+  the git checkout or folder of its first terminal); a tab without a name is its position. New
+  tabs, splits and closes are `terminal.run` with labels (herdr-app picks them up) and
+  `terminal.kill`; zoom, swap, resize and renames answer `unsupported`. Agent status comes from
+  the program's own OSC 7501 report; `herdr.seen` is shared with every Herdr client
+  (`mux_hc_seen.go`). `hc_stream.go` attaches a full client as a viewer that may type at the
+  terminal's size, a view-only one with `observe`, and attaches again after the core restarts.
 
 **Pane layout** (`server/mux_pane_layout.go`, `caps.paneLayout`): `POST
 /api/mux/panes/{id}/split|zoom|swap|resize` call the `Mux` methods `SplitPane`, `ZoomPane`,
@@ -1583,6 +1601,7 @@ is 1777 too, so a password the entrypoint generates (no `TERMOTE_PASS`) goes to
 termote start
 termote start --mux herdr   # Herdr backend instead of tmux
 termote start --mux zellij  # Zellij backend (Linux, macOS)
+termote start --mux hc      # herdr-core: the terminals herdr-app shows
 ```
 
 All services run natively (no container): termote on port 7680 (7690 on Windows) serving the
@@ -1595,6 +1614,10 @@ Auto-detects OS via `runtime.GOOS`. Works on macOS, Linux and Windows (with psmu
 or Herdr on every OS; Zellij on Linux and macOS, native `--mux zellij` is refused on Windows
 before anything is saved). `start` passes `ZELLIJ_SOCKET_DIR`, `XDG_RUNTIME_DIR` and, on macOS,
 `TMPDIR` from its shell to the service, so it sees the same Zellij sessions as that shell.
+herdr-core only with `--mux hc` or the menu: `start` finds `hc` on `PATH` (absolute), checks it is
+0.1.16 or later and saves its path, and its shell's `HC_SESSION` and `HC_SOCKET` (one the shell lacks
+keeps the saved value) in the config, so the service talks to the same core on every OS.
+A container refuses `--mux hc`.
 
 ### With Tailscale
 
@@ -1690,7 +1713,9 @@ termote update --force           # Force reinstall current version
 7. **Herdr guard**: `--mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also
    given, since Herdr exposes every workspace on the host, not just this session's pane. tmux
    likewise lists every session on its server, the user's own included (accepted): ids and
-   targets are exact (`$N`, `=name`), so no request reaches a session by a prefix of its name
+   targets are exact (`$N`, `=name`), so no request reaches a session by a prefix of its name.
+   `--mux hc --no-auth` likewise needs `--allow-hc-no-auth`: herdr-core has no auth of its own,
+   so serve refuses it too, and never runs it in a container
 8. **Session**: tmux isolates terminal processes; Herdr sessions are isolated by Herdr itself.
    Zellij, like tmux, exposes every running session of the user and has no extra `--no-auth`
    guard; keys and Chat messages reach a Zellij pane only through a Termote client's PTY, never

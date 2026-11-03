@@ -14,7 +14,8 @@ terminal process to install.
 termote needs one terminal backend: **tmux** (on Windows, **psmux**) or a running
 **[Herdr](https://herdr.dev/#install)** server (see [Herdr Backend](#herdr-backend)); you do not need both. On Linux and macOS,
 **[Zellij](https://zellij.dev/documentation/installation)** 0.45.0 or later is a third choice (see
-[Zellij Backend](#zellij-backend)).
+[Zellij Backend](#zellij-backend)). **[herdr-core](https://herdr.dev/core/)** (`hc`) 0.1.16 or later, the core the
+herdr app talks to, is a fourth, on every OS (see [herdr-core Backend](#herdr-core-backend)).
 
 <Tabs>
   <TabItem label="Linux">
@@ -115,8 +116,8 @@ unsaved drafts stay with `localhost`, and an installed app has to be installed a
    `herdr.sock` in Herdr's config directory: `$XDG_CONFIG_HOME/herdr`, or `~/.config/herdr`; on Windows
    `%APPDATA%\herdr`, reached as a named pipe), tmux (psmux on Windows) when it is installed. When both are there it asks, or, without a
    terminal to ask in, picks tmux and prints how to switch. When neither is there it stops with install hints.
-   The choice is saved and not detected again unless you pass `--mux`. Zellij is never detected: choose it
-   with `--mux zellij` or the menu (`termote` with no command).
+   The choice is saved and not detected again unless you pass `--mux`. Zellij and herdr-core are never
+   detected: choose them with `--mux zellij` or `--mux hc`, or the menu (`termote` with no command).
 
 2. **Creates the admin password** the first time (or with `--fresh`): type one, or press Enter to generate
    one. It is printed once; `termote show-password` shows it again later.
@@ -156,7 +157,7 @@ server exactly as last time. A boolean option is turned off with `=false`.
 | `--tailscale <host[:port]>` | Publish over [Tailscale HTTPS](/installation/tailscale/) (default 443) |
 | `--no-tailscale`            | Stop publishing over Tailscale                                         |
 | `--no-auth[=false]`         | Disable the login                                                      |
-| `--mux <tmux\|herdr\|zellij>` | Terminal backend (default: detected the first time; zellij: Linux, macOS) |
+| `--mux <tmux\|herdr\|zellij\|hc>` | Terminal backend (default: detected the first time; zellij: Linux, macOS; hc: herdr-core) |
 | `--allow-host <name>`       | Allow another `Host` header name (repeatable, no wildcard)             |
 | `--remove-host <name>`      | Remove an allowed name (repeatable)                                    |
 | `--allow-local-user <name>` | Let another OS user of this machine connect, e.g. a reverse proxy      |
@@ -164,6 +165,7 @@ server exactly as last time. A boolean option is turned off with `=false`.
 | `--allow-path <dir>`        | Offer a folder in Files, under [Places](/usage/files-changes/#places) (repeatable) |
 | `--remove-path <dir>`       | Remove an allowed folder (repeatable)                                  |
 | `--allow-herdr-no-auth`     | Required together with `--mux herdr --no-auth`                         |
+| `--allow-hc-no-auth`        | Required together with `--mux hc --no-auth`                            |
 | `--user <name>`             | Login username (default `admin`; shared with the container)            |
 | `--fresh`                   | Set a new password                                                     |
 
@@ -271,6 +273,40 @@ from the shell whose sessions you want.
   - Closing a session from Termote deletes it: Zellij cannot resurrect it.
   - On Windows, native `--mux zellij` is refused; use `termote container up --mux zellij`, see
   [Container Installation](/installation/docker/#terminal-backend).
+</Aside>
+
+## herdr-core Backend
+
+[herdr-core](https://herdr.dev/core/) keeps terminals running for the herdr app and any other client. With
+`--mux hc`, Termote is one more of those clients: it shows the spaces, tabs and panes the herdr app shows on this
+machine, as the app arranges them. It needs `hc` 0.1.16 or later on your PATH (its releases carry a checksum,
+not a signature); `start` checks the version and saves where `hc` is. It is never picked for you:
+
+```bash
+termote start --mux hc
+```
+
+- **The herdr app does not need to run.** Termote reads the app's layout when there is one, and otherwise places
+  the terminals by their labels. A tab, split or close made in Termote shows in the app within about a second,
+  and the other way round.
+- **Only the herdr app's terminals show.** A terminal another program started in the core, without the app's
+  labels, stays hidden, as it does in the app.
+- **Typing from a phone does not resize the desktop's pane.** The pane keeps the desktop's size unless you turn
+  on **Fit herdr pane to this device** in Settings.
+- **Agent status** comes from the agent itself (Claude Code reports `working`, `blocked` and `done`). An agent
+  you look at in Termote is no longer "done" in the app, and the other way round.
+- **A new group takes no name**: the app names a space after its folder, so Termote asks only for the directory,
+  and a group cannot be renamed. Zoom, swap, resize and pane names are left to the app.
+- **The core is started for you** when you open the page and it does not run, the way Termote starts Herdr. A core
+  Termote started runs with the service's environment, and terminals the app opens afterwards inherit it.
+  `termote stop` and `termote uninstall` never stop the core.
+- `start` saves `HC_SESSION` and `HC_SOCKET` from your shell in the config, so the service talks to the same core
+  as that shell; a later `start` from a shell without them keeps the saved values.
+
+<Aside type="caution" title="herdr-core has no login of its own">
+  Anyone who can reach its socket drives every terminal, so Termote never runs it in a container
+  (`container up --mux hc` is refused), and `--mux hc --no-auth` is refused unless `--allow-hc-no-auth` is
+  also given. Terminals of other machines connected to the core are not shown.
 </Aside>
 
 ## Managing the Server

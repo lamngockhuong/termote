@@ -15,6 +15,7 @@ import { type StreamControl, useTermSocket } from '../hooks/use-term-socket'
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
 import { readToken, type UiStyle } from '../ui-style'
+import { backendIsPaneStream } from '../utils/backend'
 import { safeUrl } from '../utils/markdown-safety'
 import { recordSelection } from '../utils/pane-selection'
 import {
@@ -317,8 +318,9 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
     fontSizeRef.current = fontSize
     const fontFamilyRef = useRef(fontFamily)
     fontFamilyRef.current = fontFamily
-    // herdr fixes the pane size and answers terminal queries itself.
-    const isHerdr = backend === 'herdr'
+    // herdr (and herdr-core) fixes the pane size and answers terminal
+    // queries itself.
+    const isHerdr = backendIsPaneStream(backend)
     const isHerdrRef = useRef(isHerdr)
     isHerdrRef.current = isHerdr
     const copyModeRef = useRef(copyModeSupported)

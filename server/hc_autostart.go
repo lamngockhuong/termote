@@ -31,8 +31,9 @@ var (
 	hcDialBackoff = 2 * time.Second
 )
 
-// hcEnv is what termote passes on of the user's hc environment: saved by
-// start, so the service talks to the core the user's shell does.
+// hcEnv is what termote passes on of the user's hc environment: saved in
+// the config by start, so the service talks to the core the user's shell
+// does.
 type hcEnv struct {
 	Session string `json:"session,omitempty"`
 	Socket  string `json:"socket,omitempty"`

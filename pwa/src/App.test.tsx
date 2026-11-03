@@ -2160,6 +2160,7 @@ describe('App', () => {
   it.each([
     ['tmux', false],
     ['herdr', true],
+    ['hc', true],
     ['zellij', true],
   ])(
     '%s: pastes bracketed into a pane with an agent: %s',
@@ -2175,6 +2176,33 @@ describe('App', () => {
       expect(vi.mocked(TerminalView).mock.lastCall![0]).toMatchObject({
         bracketedPaste: bracketed,
       })
+    },
+  )
+
+  it.each([
+    ['tmux', false],
+    ['herdr', true],
+    ['hc', true],
+  ])(
+    '%s: streams each pane on its own, at the size the backend keeps: %s',
+    async (backend, oneByOne) => {
+      const base = mockUseLocalSessions()
+      mockUseLocalSessions.mockReturnValue({
+        ...base,
+        mux: {
+          backend,
+          caps: {
+            clientSideSelect: backend !== 'tmux',
+            paneStream: backend !== 'tmux',
+            paneLayout: true,
+          },
+        },
+      } as any)
+      render(<App />)
+      await screen.findByTestId('terminal-view')
+      const p = stackProps as { perPane?: boolean; agentPaste?: boolean }
+      expect(p.perPane).toBe(oneByOne)
+      expect(p.agentPaste).toBe(oneByOne)
     },
   )
 
@@ -6115,7 +6143,7 @@ describe('App — group actions', () => {
       mux: {
         backend,
         caps: {
-          clientSideSelect: backend === 'herdr',
+          clientSideSelect: backend === 'herdr' || backend === 'hc',
           copyMode: true,
           groups: true,
           ...caps,
@@ -6158,6 +6186,27 @@ describe('App — group actions', () => {
     expect(
       await screen.findByText('workspace: rename main true, rename $3 true'),
     ).toBeInTheDocument()
+  })
+
+  it('herdr-core: spaces named after their folder, none renamed, made from a directory alone', async () => {
+    withGroups('hc', { renameGroup: false })
+    render(<App />)
+    expect(
+      await screen.findByText('workspace: rename main false, rename $3 false'),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByText('GroupNew'))
+    expect(screen.queryByLabelText('Name')).toBeNull()
+    fireEvent.change(screen.getByLabelText(/^Directory/), {
+      target: { value: '/src/api' },
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+    })
+    expect(createGroup).toHaveBeenCalledWith(
+      '',
+      '/src/api',
+      expect.any(Function),
+    )
   })
 
   it('creates a group from the dialog', async () => {

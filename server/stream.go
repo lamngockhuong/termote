@@ -154,10 +154,14 @@ type hubEntry struct {
 }
 
 // maxStreamsFor is the server-wide stream limit for backend m: more for
-// Herdr outside Windows, where a desktop shows a tab's panes side by side.
-// Herdr on Windows (ConPTY) has not been measured with that many.
+// Herdr outside Windows and for hc, where a desktop shows a tab's panes side
+// by side, each its own stream. Herdr on Windows (ConPTY) has not been
+// measured with that many; hc's streams are channels of one connection.
 func maxStreamsFor(m Mux) int {
 	if _, ok := m.(*herdrMux); ok && herdrStartGOOS != "windows" {
+		return maxHerdrStreams
+	}
+	if _, ok := m.(*hcMux); ok {
 		return maxHerdrStreams
 	}
 	return maxStreams

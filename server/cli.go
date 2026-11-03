@@ -494,8 +494,8 @@ Options of start (saved; a flag not given keeps its saved value):
   --tailscale <host[:port]>  Publish over Tailscale HTTPS (default port 443)
   --no-tailscale             Stop publishing over Tailscale
   --no-auth[=false]          Disable authentication
-  --mux <tmux|herdr|zellij>  Terminal backend (default: herdr when it runs, else tmux;
-                             zellij: Linux and macOS)
+  --mux <tmux|herdr|zellij|hc>  Terminal backend (default: herdr when it runs, else
+                             tmux; zellij: Linux and macOS; hc: herdr-core, native only)
   --allow-host <name>        Allow another Host name (repeatable)
   --remove-host <name>       Remove an allowed Host name (repeatable)
   --allow-local-user <name>  Serve connections of another OS user of this machine, e.g.
@@ -505,6 +505,7 @@ Options of start (saved; a flag not given keeps its saved value):
                              home, ~/.ssh, ~/.gnupg, termote's own dirs or a .git)
   --remove-path <dir>        Remove an allowed folder (repeatable)
   --allow-herdr-no-auth      Allow herdr without auth
+  --allow-hc-no-auth         Allow hc without auth
   --user <name>              Login username (default: admin; shared with the container)
   --fresh                    Set a new password
 

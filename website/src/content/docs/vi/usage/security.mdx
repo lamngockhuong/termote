@@ -60,6 +60,11 @@ giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tà
 - Với Zellij (`--mux zellij`), phím bạn gõ và tin nhắn Chat chỉ tới pane qua terminal của một client Zellij
   của Termote, không bao giờ qua tham số tiến trình, thứ mà người dùng cục bộ khác có thể đọc. Thiết bị chỉ
   xem theo dõi pane Zellij qua `zellij subscribe`, vốn không gõ được.
+- herdr-core (`--mux hc`) không có đăng nhập riêng, nên Termote chỉ chạy nó ở chế độ native, không bao giờ
+  trong container, và `--no-auth` phải kèm `--allow-hc-no-auth`. Termote chỉ dùng một danh sách cố định các
+  lời gọi tới phần lõi, chỉ trên terminal của máy này mà ứng dụng herdr đang hiện. Nó không bao giờ sửa bố cục
+  của ứng dụng, và chỉ ghi đúng một nhãn, nhãn đánh dấu đã xem agent. Thiết bị chỉ xem theo dõi qua một
+  observer, mà phần lõi không cho gõ cũng không cho đổi khổ.
 - Content-Security-Policy ngăn trang tải hay chạy code từ nơi khác.
 - Thiết bị đã ghép có thể có hạn dùng (mặc định 30 ngày khi ghép): quá hạn, thiết bị bị từ chối và các
   terminal đang mở của nó bị đóng. Thiết bị do một thiết bị có hạn ghép ra không bao giờ sống lâu hơn nó.

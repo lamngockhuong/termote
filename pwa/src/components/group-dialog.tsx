@@ -92,6 +92,9 @@ interface Props {
   recent?: boolean
   // The names of the open groups, which a recent one's is changed from
   takenNames?: readonly string[]
+  // The group takes a name (caps.renameGroup); herdr-core names a space
+  // after its folder, so only the directory is asked there
+  named?: boolean
 }
 
 // Asks for the name and directory of a new group and creates it. A refusal
@@ -102,6 +105,7 @@ export function GroupDialog({
   onCreate,
   recent = false,
   takenNames = [],
+  named = true,
 }: Props) {
   const { t } = useT()
   const noun = groupNoun(kind, t)
@@ -113,6 +117,9 @@ export function GroupDialog({
   const cwdId = useId()
   const errorId = useId()
   const nameInput = useRef<HTMLInputElement>(null)
+  const cwdInput = useRef<HTMLInputElement>(null)
+  // The first field: the name, or the directory where there is none
+  const firstInput = named ? nameInput : cwdInput
   // The user closed the box: a reply arriving later shows nothing
   const closed = useRef(false)
   useEffect(() => {
@@ -156,7 +163,7 @@ export function GroupDialog({
     setName(freeGroupName(g.name, takenNames))
     setCwd(g.cwd)
     setProblem(undefined)
-    nameInput.current?.focus()
+    firstInput.current?.focus()
   }
 
   const removeRecent = async (id: string) => {
@@ -179,15 +186,15 @@ export function GroupDialog({
 
   // After the sheet focuses itself on open
   useEffect(() => {
-    const id = requestAnimationFrame(() => nameInput.current?.focus())
+    const id = requestAnimationFrame(() => firstInput.current?.focus())
     return () => cancelAnimationFrame(id)
-  }, [])
+  }, [firstInput])
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     if (sending) return
-    const trimmed = name.trim()
-    if (!trimmed) {
+    const trimmed = named ? name.trim() : ''
+    if (named && !trimmed) {
       setProblem(t('shell.group.enterName'))
       return
     }
@@ -288,28 +295,33 @@ export function GroupDialog({
             {t('shell.group.recentRemoveFailed')}
           </div>
         )}
-        <label htmlFor={nameId} className="text-sm text-fg-muted">
-          {t('shell.group.name')}
-        </label>
-        <input
-          ref={nameInput}
-          id={nameId}
-          type="text"
-          value={name}
-          autoComplete="off"
-          enterKeyHint="next"
-          aria-invalid={problem ? true : undefined}
-          aria-describedby={describedBy}
-          onChange={(e) => {
-            setName(e.target.value)
-            setProblem(undefined)
-          }}
-          className={INPUT_CLASSES}
-        />
+        {named && (
+          <>
+            <label htmlFor={nameId} className="text-sm text-fg-muted">
+              {t('shell.group.name')}
+            </label>
+            <input
+              ref={nameInput}
+              id={nameId}
+              type="text"
+              value={name}
+              autoComplete="off"
+              enterKeyHint="next"
+              aria-invalid={problem ? true : undefined}
+              aria-describedby={describedBy}
+              onChange={(e) => {
+                setName(e.target.value)
+                setProblem(undefined)
+              }}
+              className={INPUT_CLASSES}
+            />
+          </>
+        )}
         <label htmlFor={cwdId} className="text-sm text-fg-muted">
           {t('shell.group.directory')}
         </label>
         <input
+          ref={cwdInput}
           id={cwdId}
           type="text"
           value={cwd}

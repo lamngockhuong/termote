@@ -63,6 +63,7 @@ const BACKEND_NAMES: Record<string, string> = {
   psmux: 'psmux',
   herdr: 'Herdr',
   zellij: 'Zellij',
+  hc: 'herdr-core',
 }
 
 const LANGUAGE_NAMES: Record<Locale, string> = { en: 'EN', vi: 'VI' }

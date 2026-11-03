@@ -17,7 +17,7 @@ func TestStartZellijOnWindowsRefusedBeforeSaving(t *testing.T) {
 	if _, err := os.Stat(tc.configFile()); err == nil {
 		t.Fatal("a config was saved")
 	}
-	if err := validateMux("zellij", false, false); err != nil {
+	if err := validateMux("zellij", false, false, false); err != nil {
 		t.Fatalf("validateMux(zellij) = %v (the container shares it)", err)
 	}
 }
