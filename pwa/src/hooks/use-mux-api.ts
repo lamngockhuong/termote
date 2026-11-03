@@ -108,9 +108,13 @@ export interface MuxSnapshot {
     // Groups (tmux sessions, Herdr workspaces) can be created, renamed and
     // closed (/groups).
     groups?: boolean
-    // A group takes a name, at creation and by renaming; false on
-    // herdr-core, which names a space after its folder.
+    // A group can be renamed, and takes a name at creation (not on
+    // herdr-core, which names a new space after its folder); false on
+    // herdr-core until herdr-app has laid the machine out.
     renameGroup?: boolean
+    // A tab can be renamed (PATCH /tabs/{id}); false on herdr-core until
+    // herdr-app has laid the machine out.
+    renameTab?: boolean
     // The server sends Web Push when an agent needs the user (/push).
     push?: boolean
     // Claude Code can be started in a pane that shows only its shell

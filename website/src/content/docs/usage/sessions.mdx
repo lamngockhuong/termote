@@ -70,7 +70,8 @@ tmux session:
 - **Rename**: in the **⋯** menu; the name is edited in place. Termote's own tmux session (`main`)
   and the Zellij session `main` cannot be renamed.
 - **herdr-core**: a group is a space of the herdr app. The app names a space after its folder, so
-  **New workspace** asks only for the directory, and a space cannot be renamed.
+  **New workspace** asks only for the directory. Once the herdr app has run on this machine, a
+  space can be renamed in the **⋯** menu, and the herdr app shows the new name.
 - **Close**: in the **⋯** menu; it asks first and says how many tabs end with it. Closing
   Termote's own tmux session starts a new, empty one right away, and every device viewing it
   reconnects to that (the same holds for the Zellij session `main`). Closing a Zellij session
@@ -172,11 +173,14 @@ backend keeps, so Herdr's own tab bar and sidebar agree with it.
 - **Herdr workspaces**: **Move up** and **Move down** in a workspace's **⋯** menu, or drag its
   header on desktop. A repository's workspace moves together with its worktrees, as in Herdr; a
   linked worktree cannot be moved on its own.
+- **herdr-core spaces**: as Herdr workspaces, once the herdr app has run on this machine. The order
+  is written into the herdr app's layout, so its sidebar and tab bar follow.
 
 The controls are hidden while a search, the agent filter or "blocked first" sorting is on, since the list on
 screen is then not the real order; a line in their place (the **Current session** row, a
 workspace's **⋯** menu) says what to turn off to get them back. Not supported: tmux and Zellij sessions (neither has a session order), tmux
-older than 3.2, psmux on Windows, Herdr older than 0.8.0, and Herdr on Windows for now.
+older than 3.2, psmux on Windows, Herdr older than 0.8.0, Herdr on Windows for now, and herdr-core
+before the herdr app has run on the machine.
 
 <Aside type="caution">
 With tmux, a tab's id is its window number, and moving a window renumbers the windows it passes.
@@ -232,7 +236,7 @@ the desktop sidebar and in the mobile sessions sheet):
 | Feature             | Description                                      |
 | -------------------- | -------------------------------------------------- |
 | Custom icons        | Choose emoji icon for each session               |
-| Rename              | Change session name anytime                      |
+| Rename              | Change session name anytime; on herdr-core once the herdr app has run on this machine (until then Edit changes only the icon) |
 | Auto-sync           | Groups/tabs/panes sync from the server (configurable interval) |
 | Persistence         | Sessions backed by tmux windows, Herdr tabs or Zellij tabs |
 | Connection status   | Real-time indicator in header (see below)        |

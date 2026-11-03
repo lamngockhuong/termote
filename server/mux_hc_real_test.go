@@ -684,3 +684,71 @@ func TestHcRealDocumentLayout(t *testing.T) {
 			g.Tabs[0].Layout != nil
 	})
 }
+
+// termote writes names and order into herdr-app's document on a real core:
+// the version it read is accepted, the fields it does not know stay.
+func TestHcRealDocumentWrite(t *testing.T) {
+	c := newHcRealCore(t)
+	m := c.mux()
+	r := c.rpc()
+	s1, s2 := "sp0123456789abcdef0123456789abcd01", "sp0123456789abcdef0123456789abcd02"
+	t1, t2 := "tb0123456789abcdef0123456789abcd01", "tb0123456789abcdef0123456789abcd02"
+	addr := map[string]string{}
+	for _, l := range [][2]string{{s1, t1}, {s1, t2}, {s2, "tb0123456789abcdef0123456789abcd03"}} {
+		var a struct {
+			Address string `json:"address"`
+		}
+		r.call("terminal.run", map[string]any{"keep": true, "labels": map[string]string{hcLabelSpace: l[0], hcLabelTab: l[1]}, "cwd": c.dir}, &a)
+		addr[l[1]] = a.Address
+	}
+	block := func(tab string) map[string]any {
+		return map[string]any{"id": tab, "name": "", "root": map[string]any{"id": "b" + tab, "type": "block",
+			"content": map[string]any{"terminal": addr[tab]}, "size": map[string]any{"weight": 1.5}}}
+	}
+	doc := map[string]any{"spaces": []any{
+		map[string]any{"id": s1, "name": "", "folder": c.dir, "look": map[string]any{"theme": "dusk"},
+			"tabs": []any{block(t1), block(t2)}},
+		map[string]any{"id": s2, "name": "", "folder": c.dir, "tabs": []any{block("tb0123456789abcdef0123456789abcd03")}},
+	}}
+	var cur struct {
+		Version uint64 `json:"version"`
+	}
+	r.call("doc.get", map[string]any{"name": hcAppDoc}, &cur)
+	r.call("doc.set", map[string]any{"name": hcAppDoc, "version": cur.Version, "value": doc}, nil)
+	waitHc(t, "the document", func() bool {
+		_, ok := hcRealGroup(hcRealSnapshot(t, m), s2)
+		return ok && m.Caps().RenameTab
+	})
+
+	ctx := ctx5s(t)
+	if err := m.RenameTab(ctx, t1, "first", t1); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.RenameGroup(ctx, s1, "one"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.MoveTab(ctx, t2, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.MoveGroup(ctx, s2, 0); err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Value json.RawMessage `json:"value"`
+	}
+	r.call("doc.get", map[string]any{"name": hcAppDoc}, &got)
+	raw := string(got.Value)
+	for _, want := range []string{`"look":{"theme":"dusk"}`, `"size":{"weight":1.5}`, `"name":"first"`, `"name":"one"`} {
+		if !strings.Contains(raw, want) {
+			t.Errorf("document lacks %s: %s", want, raw)
+		}
+	}
+	snap := hcRealSnapshot(t, m)
+	if len(snap.Groups) < 2 || snap.Groups[0].ID != s2 {
+		t.Fatalf("groups %+v", snap.Groups)
+	}
+	g, _ := hcRealGroup(snap, s1)
+	if g.Name != "one" || len(g.Tabs) != 2 || g.Tabs[0].ID != t2 || g.Tabs[1].Name != "first" {
+		t.Errorf("group %+v", g)
+	}
+}

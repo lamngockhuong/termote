@@ -67,9 +67,9 @@ func (g *groupAPI) handleCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), muxTimeout)
 	defer cancel()
-	// hc names a space after its folder (herdr-app does), so it takes no
-	// name; every other backend needs one. Caps().RenameGroup says the same
-	// to the PWA, but it runs tmux commands, so the type decides here.
+	// hc names a new space after its folder (herdr-app does), so it takes
+	// no name; every other backend needs one. The PWA asks for none on hc,
+	// but the type decides here.
 	_, unnamed := g.m.(*hcMux)
 	if unnamed {
 		body.Name = ""

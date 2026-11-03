@@ -544,7 +544,8 @@ export default function App({
   // made, renamed and closed here. The default session (tmux: its id is its
   // name, the others are "$N"; Zellij: the one named "main") cannot be
   // renamed, and closing it starts a new, empty one at once. A herdr-core
-  // space is named after its folder: it takes no name (caps.renameGroup).
+  // space is named after its folder when made, so it takes no name then; it
+  // can be renamed once herdr-app has laid the machine out (caps.renameGroup).
   const groupKind: GroupKind = paneStream
     ? 'workspace'
     : isZellij
@@ -552,6 +553,7 @@ export default function App({
       : 'tmux'
   const groupNoun = groupNounOf(groupKind, t)
   const namedGroups = mux.caps.renameGroup !== false
+  const newGroupNamed = namedGroups && mux.backend !== 'hc'
   const isDefaultGroup = (id: string) =>
     isZellij
       ? id === ZELLIJ_DEFAULT_GROUP_ID
@@ -1952,6 +1954,7 @@ export default function App({
             onAdd={readOnly ? undefined : addTab}
             onRemove={readOnly ? undefined : requestRemove}
             onUpdate={readOnly ? undefined : updateSession}
+            renameTab={mux.caps.renameTab !== false}
             isCollapsed={sidebarCollapsed}
             onToggleCollapse={toggleSidebarCollapsed}
             overviewOpen={overviewOpen}
@@ -1974,6 +1977,7 @@ export default function App({
             onAdd={readOnly ? undefined : handleMobileAdd}
             onRemove={readOnly ? undefined : requestRemove}
             onUpdate={readOnly ? undefined : updateSession}
+            renameTab={mux.caps.renameTab !== false}
             isOpen={sidebarOpen}
             onClose={() => setSidebarOpen(false)}
             isMobile
@@ -2447,7 +2451,7 @@ export default function App({
       {newGroupOpen && (
         <GroupDialog
           kind={groupKind}
-          named={namedGroups}
+          named={newGroupNamed}
           // Never on a view-only client: the server says false there, and
           // the dialog does not open
           recent={!!mux.caps.recentGroups}

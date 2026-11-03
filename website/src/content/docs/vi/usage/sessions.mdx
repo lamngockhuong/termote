@@ -69,7 +69,8 @@ session:
 - **Đổi tên**: trong menu **⋯**, sửa tên ngay tại chỗ. Session tmux riêng của Termote (`main`) và
   phiên Zellij `main` không đổi tên được.
 - **herdr-core**: mỗi group là một space của ứng dụng herdr. Ứng dụng đặt tên space theo thư mục,
-  nên **New workspace** chỉ hỏi thư mục, và không đổi tên space được.
+  nên **New workspace** chỉ hỏi thư mục. Khi ứng dụng herdr đã chạy trên máy này, có thể đổi tên
+  space trong menu **⋯**, và ứng dụng herdr cũng hiện tên mới.
 - **Đóng**: trong menu **⋯**, hỏi trước và nói bao nhiêu tab sẽ kết thúc theo. Đóng session tmux
   riêng của Termote thì một session mới, rỗng được tạo ngay, và mọi thiết bị đang xem nó tự kết nối
   lại vào đó (phiên Zellij `main` cũng vậy). Đóng một phiên Zellij sẽ xóa nó: Zellij không thể khôi
@@ -165,11 +166,14 @@ Tab giữ thứ tự lúc được tạo cho tới khi bạn di chuyển nó, v�
 - **Workspace Herdr**: **Move up** và **Move down** trong menu **⋯** của workspace, hoặc kéo header
   của nó trên desktop. Workspace của một repository di chuyển cùng các worktree của nó, như trong
   Herdr; một linked worktree không di chuyển riêng được.
+- **Space herdr-core**: như workspace Herdr, khi ứng dụng herdr đã chạy trên máy này. Thứ tự được
+  ghi vào bố cục của ứng dụng herdr, nên sidebar và thanh tab của nó cũng theo.
 
 Các nút này bị ẩn khi đang tìm kiếm, bật lọc agent hoặc sắp xếp "blocked first", vì lúc đó danh sách trên màn
 hình không phải thứ tự thật; thay vào chỗ của chúng (hàng **Current session**, menu **⋯** của
 workspace) là một dòng cho biết cần tắt gì để các nút hiện lại. Không hỗ trợ: session tmux và phiên Zellij (cả hai đều không có thứ tự phiên), tmux cũ hơn
-3.2, psmux trên Windows, Herdr cũ hơn 0.8.0, và tạm thời Herdr trên Windows.
+3.2, psmux trên Windows, Herdr cũ hơn 0.8.0, tạm thời Herdr trên Windows, và herdr-core khi ứng
+dụng herdr chưa chạy trên máy.
 
 <Aside type="caution">
 Với tmux, id của tab là số thứ tự window, và di chuyển một window sẽ đánh số lại các window nó đi
@@ -225,7 +229,7 @@ phiên trên mobile) có thêm thanh lọc:
 | Tính năng         | Mô tả                                         |
 | ----------------- | --------------------------------------------- |
 | Icon tùy chỉnh    | Chọn biểu tượng cảm xúc làm icon cho mỗi phiên |
-| Đổi tên           | Đổi tên phiên bất cứ lúc nào                  |
+| Đổi tên           | Đổi tên phiên bất cứ lúc nào; với herdr-core, khi ứng dụng herdr đã chạy trên máy này (trước đó Edit chỉ đổi biểu tượng) |
 | Tự động đồng bộ   | Group/tab/pane được đồng bộ từ server (chu kỳ tùy chỉnh được) |
 | Lưu trữ           | Phiên được lưu bởi tmux windows, tab của Herdr hoặc tab của Zellij |
 | Trạng thái kết nối | Chỉ báo thời gian thực trên header (xem bên dưới) |

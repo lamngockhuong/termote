@@ -60,6 +60,7 @@ export default {
   'errors.invalid_text': 'Chữ đang trống hoặc có ký tự điều khiển',
   'errors.invalid_validity': 'Thời hạn không hợp lệ',
   'errors.last_pane': 'Muốn đóng pane cuối cùng của tab thì hãy đóng tab',
+  'errors.layout_busy': 'herdr-app vừa thay đổi bố cục. Hãy thử lại',
   'errors.lfs_pointer': 'File là một con trỏ Git LFS',
   'errors.linked_source': 'Workspace nguồn là một worktree liên kết',
   'errors.linked_worktree':
@@ -69,6 +70,7 @@ export default {
     'Một bản Termote mới hơn đã lưu mục này. Hãy cập nhật Termote để sửa nó',
   'errors.no_client':
     'Hãy mở phiên Zellij này trong một terminal (hoặc trong Termote) trước khi thêm tab',
+  'errors.no_layout': 'Hãy mở herdr-app trên máy này trước',
   'errors.no_neighbor': 'Phía đó không có pane nào',
   'errors.no_room': 'Không còn chỗ cho pane mới',
   'errors.no_start': 'Chưa có agent nào được khởi động trong pane này',

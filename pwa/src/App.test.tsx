@@ -6209,6 +6209,16 @@ describe('App — group actions', () => {
     )
   })
 
+  it('herdr-core with herdr-app laid out: spaces renamed, still made from a directory alone', async () => {
+    withGroups('hc', { renameGroup: true })
+    render(<App />)
+    expect(
+      await screen.findByText('workspace: rename main true, rename $3 true'),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByText('GroupNew'))
+    expect(screen.queryByLabelText('Name')).toBeNull()
+  })
+
   it('creates a group from the dialog', async () => {
     withGroups()
     render(<App />)

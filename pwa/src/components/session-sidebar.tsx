@@ -95,6 +95,9 @@ interface Props {
   onAdd?: (name: string, icon?: string, description?: string) => void
   onRemove?: (id: string) => void
   onUpdate?: (id: string, updates: Partial<Omit<Session, 'id'>>) => void
+  // The edit form may change a tab's name (caps.renameTab); false keeps the
+  // name as the backend has it and edits the icon only.
+  renameTab?: boolean
   // Mobile: whether the sessions sheet is open
   isOpen?: boolean
   onClose?: () => void
@@ -242,6 +245,7 @@ export function SessionSidebar({
   onAdd,
   onRemove,
   onUpdate,
+  renameTab = true,
   isOpen = true,
   onClose = () => {},
   isMobile = false,
@@ -523,10 +527,17 @@ export function SessionSidebar({
           aria-label={t('shell.sidebar.sessionName')}
           value={editName}
           onChange={(e) => setEditName(e.target.value)}
+          readOnly={!renameTab}
+          aria-describedby={renameTab ? undefined : 'tab-name-fixed'}
           className={INPUT_CLASSES}
           autoFocus
         />
       </div>
+      {!renameTab && (
+        <p id="tab-name-fixed" className="text-[11px] text-fg-subtle">
+          {t('shell.sidebar.tabNameFixed')}
+        </p>
+      )}
       <div className="flex gap-2">
         <Button
           variant="primary"

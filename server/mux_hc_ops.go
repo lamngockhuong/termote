@@ -16,8 +16,9 @@ import (
 // adopts a terminal (herdr-app defaults/AGENTS.md): a terminal started with
 // herdr.space and herdr.tab shows up in that space and tab, an id herdr-app
 // does not know becomes a new space or tab, a second terminal of a tab
-// splits it. herdr-app's document is never written, so renaming, moving,
-// zooming, swapping and resizing are not offered.
+// splits it. herdr-app's document is written only for the names and order
+// of spaces and tabs (mux_hc_doc.go); zooming (herdr-app's own view, not in
+// the document), swapping, resizing and naming a pane are not offered.
 
 // errHcRestarting: the terminal was lost and waits for its new shell.
 var errHcRestarting = &codedError{"unavailable", "the terminal is restarting", http.StatusServiceUnavailable}
@@ -41,9 +42,13 @@ func hcError(err error) error {
 }
 
 func (m *hcMux) Caps() Caps {
+	doc := m.state.hasDoc()
 	return Caps{
 		ClientSideSelect: true, PaneText: true, DriveSize: true, PaneStream: true, PaneLayout: true,
 		Files: true, AgentChat: agentProcSupported, Groups: true,
+		// Names and order are written to herdr-app's document (mux_hc_doc.go),
+		// once herdr-app has written one.
+		RenameTab: doc, RenameGroup: doc, ReorderTabs: doc, ReorderGroups: doc,
 	}
 }
 
@@ -324,14 +329,11 @@ func (m *hcMux) docHolds(tabID string) bool {
 // SelectTab: clients choose their tab themselves (ClientSideSelect).
 func (m *hcMux) SelectTab(context.Context, string) error { return nil }
 
-// Changes that would rewrite herdr-app's document are not offered.
-func (m *hcMux) RenameTab(context.Context, string, string, string) error { return errUnsupported }
-func (m *hcMux) RenameGroup(context.Context, string, string) error       { return errUnsupported }
-func (m *hcMux) RenamePane(context.Context, string, string) error        { return errUnsupported }
-func (m *hcMux) MoveTab(context.Context, string, int) (string, error)    { return "", errUnsupported }
-func (m *hcMux) MoveGroup(context.Context, string, int) error            { return errUnsupported }
-func (m *hcMux) ZoomPane(context.Context, string, ZoomMode) error        { return errPaneLayoutUnsupported }
-func (m *hcMux) SwapPane(context.Context, string, SwapDir) error         { return errPaneLayoutUnsupported }
+// Pane changes herdr-app's document holds no field for, or would need its
+// tree rewritten, are not offered.
+func (m *hcMux) RenamePane(context.Context, string, string) error { return errUnsupported }
+func (m *hcMux) ZoomPane(context.Context, string, ZoomMode) error { return errPaneLayoutUnsupported }
+func (m *hcMux) SwapPane(context.Context, string, SwapDir) error  { return errPaneLayoutUnsupported }
 func (m *hcMux) ResizePane(context.Context, string, ResizeDir, int) error {
 	return errPaneLayoutUnsupported
 }
