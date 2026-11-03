@@ -273,6 +273,7 @@ make fmt-check
 ```bash
 make test             # Run all tests (Go + dev shim + install.sh + entrypoints)
 make test-go          # go test ./... in server/
+make test-hc          # hc backend against a real hc on PATH (a core of its own per test)
 make test-cli         # Test the termote.sh dev shim
 make test-install     # Test install.sh (fake curl)
 make test-entrypoints # Test Docker entrypoints
@@ -292,5 +293,11 @@ pnpm --filter termote test:e2e:ui           # Run with UI debugger
 `e2e-herdr` job runs it against a headless Herdr 0.9.5 (sha256 pinned) on its own socket,
 `HOME` and XDG dirs, a throwaway repo with a branch `e2e-base` and a workspace `e2e-repo`. Never
 point it at your own Herdr.
+
+`pwa/e2e/hc.spec.ts` skips unless `TERMOTE_E2E_HC=1` (with `HC_SOCKET`, `HC_SESSION`,
+`TERMOTE_E2E_HC_DIR` and `TERMOTE_PASS`): CI's `e2e-hc` job runs it against hc 0.1.16 (sha256 pinned)
+on its own socket, `HOME` and XDG dirs, `headless = "80x24"` in that core's config, and the server
+with sign-in on. `server/mux_hc_real_test.go` runs with `TERMOTE_TEST_HC=1` and refuses a socket
+outside a temporary directory. Never point either at your own core.
 
 Windows equivalents: `tests/test-termote.ps1`, `tests/test-install.ps1`.
