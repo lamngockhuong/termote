@@ -163,7 +163,8 @@ export function CommandPalette({
   const keymap = useKeymap(commands)
   const [text, setText] = useState(() => prefixOf(mode))
   const { mode: current, query } = parsePrefix(text)
-  const [active, setActive] = useState(0)
+  // The highlighted row, kept with the list it was picked in
+  const [picked, setPicked] = useState({ list: '', i: 0 })
   const inputRef = useRef<HTMLInputElement>(null)
   const listId = useId()
   const noteId = useId()
@@ -546,10 +547,12 @@ export function CommandPalette({
         : current === 'line'
           ? lineItems()
           : sessionItems()
-  const at = Math.min(active, Math.max(items.length - 1, 0))
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: a new query or list starts at the top
-  useEffect(() => setActive(0), [text, items.length])
+  // A new query or list starts at the top. Derived while rendering, not
+  // reset in an effect: an effect still waiting when the next key comes
+  // would undo the row that key picked.
+  const list = `${items.length}\n${text}`
+  const at = picked.list === list ? picked.i : 0
+  const setActive = (i: number) => setPicked({ list, i })
 
   // Keep the highlighted row in view
   useEffect(() => {
@@ -574,8 +577,7 @@ export function CommandPalette({
     const next = id ? MODE_OF[id] : undefined
     if (next) {
       e.preventDefault()
-      if (next === current)
-        setActive((i) => (i + 1) % Math.max(items.length, 1))
+      if (next === current) setActive((at + 1) % Math.max(items.length, 1))
       else setText(prefixOf(next))
       return
     }
