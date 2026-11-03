@@ -61,6 +61,16 @@ func TestHcStateDir(t *testing.T) {
 	}
 }
 
+// Without HOME the state home is under the root, as herdr-core falls back.
+func TestHcDefaultStateHomeWithoutHome(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix state home")
+	}
+	if got := hcDefaultStateHome(nil); got != filepath.Join("/", ".local", "state") {
+		t.Errorf("got %s", got)
+	}
+}
+
 func TestHcCoreRunningProbe(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("named pipes: the probe uses dialHerdr, tested with herdr")
@@ -122,14 +132,8 @@ func shortTempDir(t *testing.T) string {
 // with hcCoreRunning reporting *running.
 func fakeHcStarts(t *testing.T, running *atomic.Bool, fail *atomic.Bool) (*hcClient, *atomic.Int32) {
 	var starts atomic.Int32
-	oldRunning := hcCoreRunning
-	oldGrace := herdrStartGrace
-	t.Cleanup(func() {
-		hcCoreRunning = oldRunning
-		herdrStartGrace = oldGrace
-	})
-	hcCoreRunning = func(context.Context, []string) bool { return running.Load() }
 	c := newHcClient("/usr/bin/hc", nil)
+	c.running = func(context.Context, []string) bool { return running.Load() }
 	c.dialBackoff = 0
 	c.connect = func(ctx context.Context, bin string, env []string) (*hcConn, error) {
 		starts.Add(1)
@@ -147,7 +151,7 @@ func fakeHcStarts(t *testing.T, running *atomic.Bool, fail *atomic.Bool) (*hcCli
 func TestHcClientNeverStartsTheCoreForReads(t *testing.T) {
 	var running atomic.Bool
 	c, starts := fakeHcStarts(t, &running, nil)
-	herdrStartGrace = 0
+	c.starter.setGrace(0)
 	// Peek, view-only, health and the push watcher read with mayStart false.
 	for i := 0; i < 3; i++ {
 		if _, err := c.get(context.Background(), false); !errors.Is(err, errHcNotRunning) {
@@ -163,7 +167,7 @@ func TestHcClientNeverStartsTheCoreForReads(t *testing.T) {
 func TestHcClientStartsOnceForAFullClient(t *testing.T) {
 	var running atomic.Bool
 	c, starts := fakeHcStarts(t, &running, nil)
-	herdrStartGrace = 0
+	c.starter.setGrace(0)
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
@@ -191,7 +195,7 @@ func TestHcClientStartGraceAndBackoff(t *testing.T) {
 	var running, fail atomic.Bool
 	fail.Store(true)
 	c, starts := fakeHcStarts(t, &running, &fail)
-	herdrStartGrace = time.Hour
+	c.starter.setGrace(time.Hour)
 	if _, err := c.get(context.Background(), true); !errors.Is(err, errHcStarting) {
 		t.Fatalf("err = %v", err)
 	}
@@ -199,7 +203,7 @@ func TestHcClientStartGraceAndBackoff(t *testing.T) {
 	if starts.Load() != 0 {
 		t.Fatal("started within the grace period")
 	}
-	herdrStartGrace = 0
+	c.starter.setGrace(0)
 	c.get(context.Background(), true)
 	waitFor(t, func() bool { return starts.Load() == 1 && !c.starter.starting() })
 	// The failure backs off: no second start right away.
@@ -335,4 +339,11 @@ func TestHcConnectChildProcess(t *testing.T) {
 	if _, err := startHcConnect(ctx, filepath.Join(dir, "no-such-hc"), env); err == nil {
 		t.Fatal("started a missing binary")
 	}
+}
+
+// setGrace changes the grace period after serve started.
+func (s *hcStarter) setGrace(d time.Duration) {
+	s.mu.Lock()
+	s.grace = d
+	s.mu.Unlock()
 }

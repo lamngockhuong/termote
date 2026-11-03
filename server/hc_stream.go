@@ -14,12 +14,12 @@ import (
 // hcRetryWait is how long a stream waits before attaching again when the
 // core did not take the attach (the terminal is restarting, the core is
 // gone), unless the state changes first.
-var hcRetryWait = time.Second
+const hcRetryWait = time.Second
 
 // hcLayoutSettle is how long the tab's layout must stay before clients are
 // told to read it again: dragging a split on the desktop resizes it many
 // times a second.
-var hcLayoutSettle = 150 * time.Millisecond
+const hcLayoutSettle = 150 * time.Millisecond
 
 // changes is closed at the next change of the state (bump).
 func (m *hcMux) changes() <-chan struct{} {
@@ -258,7 +258,7 @@ func (s *hcStream) run(pane, client Size) {
 			if hcErrorKind(err) == "not_found" {
 				return
 			}
-			if !s.sleep(hcRetryWait) {
+			if !s.sleep(s.m.retryWait) {
 				return
 			}
 			continue
@@ -278,7 +278,7 @@ func (s *hcStream) run(pane, client Size) {
 			return
 		default:
 			// Lost for a while: attach again once the core can take it.
-			if !s.sleep(hcRetryWait) {
+			if !s.sleep(s.m.retryWait) {
 				return
 			}
 		}
@@ -373,11 +373,36 @@ func (s *hcStream) follow(ch *hcChannel, pane, client *Size, want *bool) error {
 			}
 		}
 	}()
+	// changes is taken before the state is read, and taken again before
+	// each new read: a change that lands in between closes the channel in
+	// hand instead of going unseen.
+	changes := s.m.changes()
 	before := *pane // the terminal's size when the client took it over
 	layout := s.layoutKey()
 	var layoutSettle <-chan time.Time
+	// stateChanged follows the terminal's state: false ends follow with err.
+	stateChanged := func() (bool, error) {
+		t, ok := s.m.state.terminal(s.pane)
+		if !ok || t.State != "live" {
+			return false, &hcClosed{Reason: "exited"}
+		}
+		if size := hcSize(t); size != *pane && !*want {
+			*pane = size
+			if !s.announce(sizeChange{Size: size}) {
+				return false, nil
+			}
+		}
+		if k := s.layoutKey(); k != layout {
+			layout = k
+			layoutSettle = time.After(s.m.layoutSettle)
+		}
+		return true, nil
+	}
+	// A change since run read the terminal's size, before changes was taken.
+	if ok, err := stateChanged(); !ok {
+		return err
+	}
 	for {
-		changes := s.m.changes()
 		select {
 		case <-s.stop:
 			return nil
@@ -396,19 +421,9 @@ func (s *hcStream) follow(ch *hcChannel, pane, client *Size, want *bool) error {
 			}
 			close(p.ack)
 		case <-changes:
-			t, ok := s.m.state.terminal(s.pane)
-			if !ok || t.State != "live" {
-				return &hcClosed{Reason: "exited"}
-			}
-			if size := hcSize(t); size != *pane && !*want {
-				*pane = size
-				if !s.announce(sizeChange{Size: size}) {
-					return nil
-				}
-			}
-			if k := s.layoutKey(); k != layout {
-				layout = k
-				layoutSettle = time.After(hcLayoutSettle)
+			changes = s.m.changes()
+			if ok, err := stateChanged(); !ok {
+				return err
 			}
 		case <-layoutSettle:
 			layoutSettle = nil

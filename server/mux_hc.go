@@ -29,6 +29,10 @@ type hcMux struct {
 	roots  *rootResolver
 	// docRetry is hcDocRetry, read once.
 	docRetry time.Duration
+	// retryWait is hcRetryWait, read once.
+	retryWait time.Duration
+	// layoutSettle is hcLayoutSettle, read once.
+	layoutSettle time.Duration
 
 	// live is the connection whose events the state follows, nil while
 	// none does; synced is closed when it changes.
@@ -59,18 +63,20 @@ type hcMux struct {
 func newHcMux(ctx context.Context, bin string, env []string) *hcMux {
 	home, _ := os.UserHomeDir()
 	m := &hcMux{
-		ctx:       ctx,
-		client:    newHcClient(bin, env),
-		state:     newHcState(),
-		home:      home,
-		roots:     newRootResolver(newGitRunner()),
-		docRetry:  hcDocRetry,
-		synced:    make(chan struct{}),
-		tops:      map[string]string{},
-		topBusy:   map[string]bool{},
-		inputs:    map[string]*hcInput{},
-		inputIdle: hcInputIdle,
-		chg:       make(chan struct{}),
+		ctx:          ctx,
+		client:       newHcClient(bin, env),
+		state:        newHcState(),
+		home:         home,
+		roots:        newRootResolver(newGitRunner()),
+		docRetry:     hcDocRetry,
+		retryWait:    hcRetryWait,
+		layoutSettle: hcLayoutSettle,
+		synced:       make(chan struct{}),
+		tops:         map[string]string{},
+		topBusy:      map[string]bool{},
+		inputs:       map[string]*hcInput{},
+		inputIdle:    hcInputIdle,
+		chg:          make(chan struct{}),
 	}
 	go m.follow(ctx)
 	return m

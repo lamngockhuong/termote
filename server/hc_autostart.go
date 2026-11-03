@@ -127,6 +127,8 @@ type hcClient struct {
 	env []string // hc connect's environment (hcChildEnv)
 	// connect starts hc connect (hcConnectStart; tests replace it).
 	connect func(ctx context.Context, bin string, env []string) (*hcConn, error)
+	// running is hcCoreRunning, read once (tests replace it).
+	running func(ctx context.Context, env []string) bool
 
 	mu         sync.Mutex
 	conn       *hcConn
@@ -141,8 +143,11 @@ type hcClient struct {
 }
 
 func newHcClient(bin string, env []string) *hcClient {
-	c := &hcClient{bin: bin, env: env, connect: hcConnectStart, changed: make(chan struct{}), dialBackoff: hcDialBackoff}
-	c.starter = hcStarter{c: c, startedAt: time.Now()}
+	c := &hcClient{
+		bin: bin, env: env, connect: hcConnectStart, running: hcCoreRunning,
+		changed: make(chan struct{}), dialBackoff: hcDialBackoff,
+	}
+	c.starter = hcStarter{c: c, startedAt: time.Now(), grace: herdrStartGrace, stable: herdrStableAfter}
 	return c
 }
 
@@ -176,7 +181,7 @@ func (c *hcClient) get(ctx context.Context, mayStart bool) (*hcConn, error) {
 	if c.starter.starting() {
 		return nil, errHcStarting
 	}
-	if !hcCoreRunning(ctx, c.env) {
+	if !c.running(ctx, c.env) {
 		if !mayStart {
 			return nil, errHcNotRunning
 		}
@@ -257,6 +262,8 @@ type hcStarter struct {
 	running atomic.Bool
 
 	mu        sync.Mutex
+	grace     time.Duration // herdrStartGrace, read once
+	stable    time.Duration // herdrStableAfter, read once
 	startedAt time.Time
 	nextTry   time.Time
 	delay     time.Duration
@@ -280,7 +287,7 @@ func (s *hcStarter) kick() {
 func (s *hcStarter) due(now time.Time) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return now.Sub(s.startedAt) >= herdrStartGrace && !now.Before(s.nextTry)
+	return now.Sub(s.startedAt) >= s.grace && !now.Before(s.nextTry)
 }
 
 func (s *hcStarter) failed(format string, args ...any) {
@@ -295,7 +302,7 @@ func (s *hcStarter) failed(format string, args ...any) {
 // answered resets the backoff once a core termote started has stayed up.
 func (s *hcStarter) answered() {
 	s.mu.Lock()
-	if time.Since(s.lastStart) >= herdrStableAfter {
+	if time.Since(s.lastStart) >= s.stable {
 		s.delay, s.nextTry = 0, time.Time{}
 	}
 	s.mu.Unlock()
@@ -317,7 +324,7 @@ func (s *hcStarter) run() {
 	log.Printf("hc autostart: core %s answers", conn.hello.Version)
 	go func() {
 		<-conn.Done()
-		if d := time.Since(started); d < herdrStableAfter {
+		if d := time.Since(started); d < s.stable {
 			s.failed("the core went away %s after it answered", d.Round(time.Second))
 		}
 	}()

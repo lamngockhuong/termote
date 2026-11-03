@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -71,16 +72,11 @@ func newHcSim(t *testing.T) *hcSim {
 	add("t5", "", "", "")
 	s.terms["t1"]["foreground"] = map[string]any{"pid": 1000, "name": "zsh", "cwd": "/w/live", "argv": []string{"zsh"}}
 
-	oldRunning := hcCoreRunning
-	hcCoreRunning = func(context.Context, []string) bool { return true }
-	oldRetry := hcRetryWait
-	hcRetryWait = 20 * time.Millisecond
 	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(func() {
-		cancel()
-		hcCoreRunning, hcRetryWait = oldRunning, oldRetry
-	})
+	t.Cleanup(cancel)
 	s.m = newHcMux(ctx, "/usr/bin/hc", nil)
+	s.m.client.running = func(context.Context, []string) bool { return true }
+	s.m.retryWait = 20 * time.Millisecond
 	s.m.client.connect = func(context.Context, string, []string) (*hcConn, error) {
 		core, c := startFakeHc(t, s.handlers)
 		s.mu.Lock()
@@ -717,4 +713,304 @@ func TestHcInputForgottenWhenIdle(t *testing.T) {
 		defer s.m.inputsMu.Unlock()
 		return len(s.m.inputs) == 0
 	})
+}
+
+// newHcMuxDown is an hcMux whose core does not run: every read fails at once.
+func newHcMuxDown(t *testing.T) *hcMux {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	m := newHcMux(ctx, "/usr/bin/hc", nil)
+	m.client.running = func(context.Context, []string) bool { return false }
+	return m
+}
+
+// dropHcClient leaves the mux following its connection while the client no
+// longer holds one (the moment between a loss and the follower noticing it),
+// and the core does not run: a call that needs a connection now fails.
+func dropHcClient(s *hcSim) {
+	s.m.client.running = func(context.Context, []string) bool { return false }
+	s.m.client.set(nil)
+}
+
+// editHcTerm changes the state's record of addr, as an event would, without
+// the core.
+func editHcTerm(t *testing.T, s *hcSim, addr string, edit func(h *hcTerminal)) {
+	t.Helper()
+	h, ok := s.m.state.terminal(addr)
+	if !ok {
+		t.Fatalf("no terminal %s", addr)
+	}
+	edit(&h)
+	s.m.state.upsert(h)
+}
+
+// attachTo makes terminal.attach open a channel, reply, then run feed on it.
+func attachTo(core *fakeHcCore, feed func(core *fakeHcCore, ch uint32)) {
+	core.handle("terminal.attach", func(core *fakeHcCore, id uint64, _ json.RawMessage) {
+		ch := core.openChannel()
+		core.reply(id, map[string]any{"channel": ch})
+		feed(core, ch)
+	})
+}
+
+// refuseAttach makes terminal.attach answer with an error of kind.
+func refuseAttach(core *fakeHcCore, kind string) {
+	core.handle("terminal.attach", func(core *fakeHcCore, id uint64, _ json.RawMessage) {
+		core.replyError(id, kind, "refused")
+	})
+}
+
+// Operations on a core that does not run fail with the unavailable error.
+func TestHcOpsWhenTheCoreDoesNotRun(t *testing.T) {
+	down := newHcMuxDown(t)
+	ctx := ctx5s(t)
+	if _, err := down.NewTab(ctx, "sp1", ""); err != errHcUnavailable {
+		t.Errorf("NewTab: %v", err)
+	}
+	if _, err := down.NewGroup(ctx, "", "/w"); err != errHcUnavailable {
+		t.Errorf("NewGroup: %v", err)
+	}
+	if err := down.CloseTab(ctx, "tb1", ""); err != errHcUnavailable {
+		t.Errorf("CloseTab: %v", err)
+	}
+	if err := down.CloseGroup(ctx, "sp1"); err != errHcUnavailable {
+		t.Errorf("CloseGroup: %v", err)
+	}
+}
+
+// Operations that need a connection the client no longer holds fail with the
+// unavailable error, after the snapshot they start from was read.
+func TestHcOpsWithoutTheClientsConnection(t *testing.T) {
+	s := newHcSim(t)
+	ctx := ctx5s(t)
+	dropHcClient(s)
+	if _, err := s.m.NewTab(ctx, "sp1", ""); err != errHcUnavailable {
+		t.Errorf("NewTab: %v", err)
+	}
+	if _, err := s.m.NewGroup(ctx, "", "/w"); err != errHcUnavailable {
+		t.Errorf("NewGroup: %v", err)
+	}
+	if err := s.m.ClosePane(ctx, "t1"); err != errHcUnavailable {
+		t.Errorf("ClosePane: %v", err)
+	}
+	if err := s.m.CloseTab(ctx, "tb2", ""); err != errHcUnavailable {
+		t.Errorf("CloseTab: %v", err)
+	}
+	if err := s.m.CloseGroup(ctx, "sp1"); err != errHcUnavailable {
+		t.Errorf("CloseGroup: %v", err)
+	}
+	if _, err := s.m.ReadText(ctx, "t1", 5, io.Discard); err != errHcUnavailable {
+		t.Errorf("ReadText: %v", err)
+	}
+	if got := s.killed(); len(got) != 0 {
+		t.Errorf("killed without a connection: %v", got)
+	}
+}
+
+// A run the core refuses, or answers without a local terminal, fails the
+// operation that started it.
+func TestHcRunFailuresReachTheCaller(t *testing.T) {
+	s := newHcSim(t)
+	ctx := ctx5s(t)
+	s.core.handle("terminal.run", func(core *fakeHcCore, id uint64, _ json.RawMessage) {
+		core.replyError(id, "conflict", "no room")
+	})
+	if _, err := s.m.NewTab(ctx, "sp1", ""); hcErrorKind(err) != "conflict" {
+		t.Errorf("NewTab: %v", err)
+	}
+	if _, err := s.m.NewGroup(ctx, "", "/w"); hcErrorKind(err) != "conflict" {
+		t.Errorf("NewGroup: %v", err)
+	}
+	if _, err := s.m.SplitPane(ctx, "t2", SplitRight, ""); hcErrorKind(err) != "conflict" {
+		t.Errorf("SplitPane: %v", err)
+	}
+	s.core.handle("terminal.run", func(core *fakeHcCore, id uint64, _ json.RawMessage) {
+		core.reply(id, map[string]any{"address": "box/t1"})
+	})
+	if _, err := s.m.NewTab(ctx, "sp1", ""); err == nil {
+		t.Error("a reply without a local terminal was taken")
+	}
+}
+
+// Closing fails when the core refuses to say what a terminal is, or refuses
+// to end one of its sub-agents; a sub-agent already gone does not fail it.
+func TestHcCloseFailures(t *testing.T) {
+	s := newHcSim(t)
+	ctx := ctx5s(t)
+	s.core.handle("terminal.get", func(core *fakeHcCore, id uint64, _ json.RawMessage) {
+		core.replyError(id, "conflict", "busy")
+	})
+	if err := s.m.ClosePane(ctx, "t1"); hcErrorKind(err) != "conflict" {
+		t.Errorf("get refused: %v", err)
+	}
+
+	s2 := newHcSim(t)
+	s2.mu.Lock()
+	s2.killErr["t3"] = "conflict"
+	s2.mu.Unlock()
+	if err := s2.m.ClosePane(ctx, "t1"); hcErrorKind(err) != "conflict" {
+		t.Errorf("sub-agent refused: %v", err)
+	}
+	if got := s2.killed(); fmt.Sprint(got) != "[t3]" {
+		t.Errorf("killed %v", got)
+	}
+}
+
+// The sub-agents of a terminal are walked to a depth limit and no further.
+func TestHcChildrenDepthLimit(t *testing.T) {
+	s := newHcSim(t)
+	parent := "t1"
+	for i := 0; i < 20; i++ {
+		addr := fmt.Sprintf("t9%02d", i)
+		s.m.state.upsert(hcTerminal{Address: addr, State: "live", Parent: ptr(parent), Labels: map[string]string{}})
+		parent = addr
+	}
+	got := s.m.children("t1")
+	if !slices.Contains(got, "t916") || slices.Contains(got, "t917") {
+		t.Errorf("children %v", got)
+	}
+}
+
+// A tab herdr-app's document holds closes by position, without its label.
+func TestHcCloseTabByDocument(t *testing.T) {
+	s := newHcSim(t)
+	ctx := ctx5s(t)
+	s.m.state.setDoc(1, &hcDoc{Spaces: []hcDocSpace{{ID: "sp1", Tabs: []hcDocTab{{ID: "tb1"}}}}}, true)
+	if err := s.m.CloseTab(ctx, "tb1", ""); err != nil {
+		t.Fatalf("held tab: %v", err)
+	}
+	// A tab the document does not hold still needs its label.
+	if err := s.m.CloseTab(ctx, "tb2", ""); err != nil {
+		t.Fatalf("unheld tab: %v", err)
+	}
+	if got := s.killed(); !slices.Contains(got, "t4") {
+		t.Errorf("killed %v", got)
+	}
+}
+
+// Keys that cannot be queued, or whose attach fails, fail the operation.
+func TestHcInputFailures(t *testing.T) {
+	ctx := ctx5s(t)
+
+	// The queue is full.
+	s := newHcSim(t)
+	in := s.m.input("t2")
+	in.mu.Lock()
+	in.pending, in.running = make([]byte, hcMaxQueuedInput), true
+	in.mu.Unlock()
+	if err := s.m.SendKeys(ctx, "t2", "x"); err == nil {
+		t.Error("keys past the queue limit accepted")
+	}
+
+	// The attach is refused.
+	s2 := newHcSim(t)
+	refuseAttach(s2.core, "not_found")
+	if err := s2.m.SendKeys(ctx, "t2", "x"); err != errUnknownPane {
+		t.Errorf("refused attach: %v", err)
+	}
+
+	// The attach answers without a channel.
+	s3 := newHcSim(t)
+	s3.core.handle("terminal.attach", func(core *fakeHcCore, id uint64, _ json.RawMessage) { core.reply(id, map[string]any{}) })
+	if _, err := attachHc(ctx, mustConn(t, s3.m), hcAttachParams{Terminal: "t2", Cols: 80, Rows: 24}); err == nil {
+		t.Error("an attach without a channel was taken")
+	}
+
+	// The caller gives up before the attach is answered.
+	s4 := newHcSim(t)
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+	s4.core.handle("terminal.attach", func(*fakeHcCore, uint64, json.RawMessage) { <-release })
+	short, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	defer cancel()
+	if err := s4.m.SendKeys(short, "t2", "x"); !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("abandoned keys: %v", err)
+	}
+
+	// A pane that is gone, or a connection the client no longer holds.
+	s5 := newHcSim(t)
+	if _, _, err := s5.m.input("t99").write(nil, [2]int{80, 24}, []byte("x")); err != errUnknownPane {
+		t.Errorf("gone pane: %v", err)
+	}
+	dropHcClient(s5)
+	if _, _, err := s5.m.input("t2").write(nil, [2]int{80, 24}, []byte("x")); err != errHcUnavailable {
+		t.Errorf("no connection: %v", err)
+	}
+}
+
+// Keys on an attach whose connection ended are not sent on it: the attach
+// is made again on the connection the mux now holds.
+func TestHcInputOnADeadConnection(t *testing.T) {
+	// The size is sent first, and that fails.
+	s := newHcSim(t)
+	old := mustConn(t, s.m)
+	ch := &hcChannel{conn: old, id: 77, wake: make(chan struct{}, 1)}
+	old.close()
+	if _, _, err := s.m.input("t2").write(ch, [2]int{30, 10}, []byte("x")); err != errHcUnavailable {
+		t.Errorf("size on a dead connection: %v", err)
+	}
+
+	// The keys themselves fail.
+	s2 := newHcSim(t)
+	old2 := mustConn(t, s2.m)
+	ch2 := &hcChannel{conn: old2, id: 78, wake: make(chan struct{}, 1)}
+	old2.close()
+	if _, _, err := s2.m.input("t2").write(ch2, [2]int{80, 24}, []byte("x")); err != errHcUnavailable {
+		t.Errorf("keys on a dead connection: %v", err)
+	}
+}
+
+// Keys queued just as the writer's idle timer ends are written, not dropped.
+func TestHcInputQueuedAtIdle(t *testing.T) {
+	s := newHcSim(t)
+	s.m.inputIdle = 300 * time.Millisecond
+	if err := s.m.SendKeys(ctx5s(t), "t2", "a"); err != nil {
+		t.Fatal(err)
+	}
+	ch := s.attachList()[0].Channel
+	s.core.waitFrames(ch, 1)
+	in := s.m.input("t2")
+	in.mu.Lock()
+	in.pending = append(in.pending, 'b')
+	in.mu.Unlock()
+	frames := s.core.waitFrames(ch, 2)
+	if string(frames[1].payload) != "b" {
+		t.Fatalf("frames %+v", frames)
+	}
+}
+
+// A write that outlasts the idle timer still ends with the timer drained.
+func TestHcInputWriteOutlastsItsIdleTimer(t *testing.T) {
+	s := newHcSim(t)
+	s.m.inputIdle = time.Millisecond
+	opened := make(chan uint32, 1)
+	s.core.handle("terminal.attach", func(core *fakeHcCore, id uint64, _ json.RawMessage) {
+		time.Sleep(30 * time.Millisecond) // the core answers after the idle timer ended
+		ch := core.openChannel()
+		core.reply(id, map[string]any{"channel": ch})
+		opened <- ch
+	})
+	if err := s.m.SendKeys(ctx5s(t), "t2", "a"); err != nil {
+		t.Fatal(err)
+	}
+	frames := s.core.waitFrames(<-opened, 1)
+	if string(frames[0].payload) != "a" {
+		t.Fatalf("frames %+v", frames)
+	}
+}
+
+// Closing or reading a pane that is gone fails before the core is asked.
+func TestHcGonePaneCloseAndRead(t *testing.T) {
+	s := newHcSim(t)
+	ctx := ctx5s(t)
+	if err := s.m.ClosePane(ctx, "t99"); err != errUnknownPane {
+		t.Errorf("ClosePane: %v", err)
+	}
+	if _, err := s.m.ReadText(ctx, "t99", 5, io.Discard); err != errUnknownPane {
+		t.Errorf("ReadText: %v", err)
+	}
+	if n := len(s.killed()); n != 0 {
+		t.Errorf("killed %d for a gone pane", n)
+	}
 }

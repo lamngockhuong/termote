@@ -332,9 +332,6 @@ func TestHcEventsPastTheWindowAndCutLines(t *testing.T) {
 }
 
 func TestHcEventsStallAndEnd(t *testing.T) {
-	old := hcEventStall
-	hcEventStall = 50 * time.Millisecond
-	defer func() { hcEventStall = old }()
 	ready := make(chan uint32, 1)
 	f, c := startFakeHc(t, func(f *fakeHcCore) { subscribeFake(f, ready, nil) })
 	sub, err := c.subscribeEvents(context.Background())
@@ -342,6 +339,7 @@ func TestHcEventsStallAndEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	<-ready
+	sub.stall = 50 * time.Millisecond
 	if err := sub.run(context.Background(), func(hcEventLine) {}); !errors.Is(err, errHcEventsStalled) {
 		t.Fatalf("silent channel: %v", err)
 	}

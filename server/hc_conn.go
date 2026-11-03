@@ -33,7 +33,7 @@ const hcMaxEventLine = hcFrameMaxPayload
 
 // hcEventStall is how long the events channel may stay silent: the core sends
 // a heartbeat every 15 s when no event is queued.
-var hcEventStall = 45 * time.Second
+const hcEventStall = 45 * time.Second
 
 var (
 	// errHcLost: the connection to the core ended (hc connect exited, the
@@ -894,6 +894,8 @@ type hcSubscription struct {
 	Seq       uint64
 	Terminals []hcTerminal
 	ch        *hcChannel
+	// stall is hcEventStall (tests shorten it).
+	stall time.Duration
 }
 
 // subscribeEvents subscribes to every event. The reply's snapshot is in the
@@ -914,7 +916,7 @@ func (c *hcConn) subscribeEvents(ctx context.Context) (*hcSubscription, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &hcSubscription{Seq: res.Seq, Terminals: res.Terminals, ch: ch}, nil
+	return &hcSubscription{Seq: res.Seq, Terminals: res.Terminals, ch: ch, stall: hcEventStall}, nil
 }
 
 // errHcEventsStalled: no heartbeat came within hcEventStall; subscribe again.
@@ -927,7 +929,7 @@ func (s *hcSubscription) run(ctx context.Context, handle func(hcEventLine)) erro
 	defer s.ch.close()
 	var buf []byte
 	for {
-		fctx, cancel := context.WithTimeout(ctx, hcEventStall)
+		fctx, cancel := context.WithTimeout(ctx, s.stall)
 		f, err := s.ch.next(fctx)
 		stalled := fctx.Err() != nil && ctx.Err() == nil
 		cancel()

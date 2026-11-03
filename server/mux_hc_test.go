@@ -43,14 +43,10 @@ func newHcMuxFake(t *testing.T) *hcMuxFake {
 	}
 	f := &hcMuxFake{events: make(chan uint32, 16), doc: res.Value, docVer: 17,
 		terms: []any{term("t1", tb1), term("t7", tb1), term("t4", tb2)}}
-	oldRunning := hcCoreRunning
-	hcCoreRunning = func(context.Context, []string) bool { return f.running.Load() }
 	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(func() {
-		cancel()
-		hcCoreRunning = oldRunning
-	})
+	t.Cleanup(cancel)
 	f.m = newHcMux(ctx, "/usr/bin/hc", nil)
+	f.m.client.running = func(context.Context, []string) bool { return f.running.Load() }
 	f.m.docRetry = 30 * time.Millisecond
 	f.m.client.connect = func(context.Context, string, []string) (*hcConn, error) {
 		core, c := startFakeHc(t, func(core *fakeHcCore) {
