@@ -56,6 +56,8 @@
 - **Tasks**: запуск скриптов `package.json` и целей Makefile панели, отправка неудачного запуска агенту — см. [Tasks](https://termote.ohnice.app/usage/tasks/)
 - **Отдельные окна** (десктоп): файл, diff, вкладка, панель или обзор в собственном окне
 - **Вложения изображений**: отправка изображения с телефона в терминал или в сообщение вида Chat, чтобы агент прочитал его по пути
+- **Бэкенд Zellij** (Linux, macOS или в контейнере): управление сессиями, вкладками и панелями Zellij вместо tmux (Zellij 0.45.0 или новее), выбирается через `--mux zellij` — см. [Нативная установка](https://termote.ohnice.app/installation/native/)
+- **Бэкенд herdr-core** (нативно, любая ОС): показывает пространства, вкладки и панели, которые показывает приложение herdr, как ещё один клиент herdr-core (`hc` 0.1.16 или новее), выбирается через `--mux hc` — см. [Бэкенд herdr-core](https://termote.ohnice.app/installation/native/#herdr-core-backend)
 - **Плагин Herdr**: открыть активную панель Herdr в Termote, показать её ссылку QR-кодом для телефона, запустить или остановить сервер, не выходя из Herdr — см. [Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/)
 - **Мобильная адаптация**: Виртуальная клавиатура (Tab/Ctrl/Shift/стрелки, расширяемая)
 - **Поддержка жестов**: Свайп для Ctrl+C, Tab, прокрутки
@@ -104,10 +106,12 @@ flowchart TB
         Auth["Basic Auth"]
     end
 
-    subgraph Backend["Mux-бэкенд (tmux/psmux или Herdr)"]
+    subgraph Backend["Mux-бэкенд (tmux/psmux, Herdr, Zellij или herdr-core)"]
         Mux["Интерфейс Mux"]
         tmux["tmux/psmux (PTY)"]
         herdr["Herdr"]
+        zellij["Zellij"]
+        hc["herdr-core (hc)"]
         Shell["Shell"]
         Tools["CLI Tools"]
     end
@@ -121,7 +125,7 @@ flowchart TB
     Auth -.-> Static & Stream & API
     Stream --> Mux
     API --> Mux
-    Mux --> tmux & herdr
+    Mux --> tmux & herdr & zellij & hc
     tmux --> Shell --> Tools
 ```
 
@@ -156,7 +160,7 @@ termote start
 
 Установщику нужны только `curl`, `tar` и `sha256sum`/`shasum` (в Windows — PowerShell), без sudo и прав администратора. Он проверяет контрольную сумму архива, устанавливает команду `termote` и ничего не запускает. `termote start` сохраняет параметры, при первом запуске создаёт пароль (выводится один раз; `termote show-password` покажет его снова), регистрирует службу и запускает её. Откройте `http://127.0.0.1:7680` (Windows: `http://127.0.0.1:7690`).
 
-Сначала должен быть установлен терминальный бэкенд: tmux (`sudo apt install tmux`, `brew install tmux`), psmux в Windows (`winget install psmux`) или [Herdr](https://termote.ohnice.app/installation/native/). Первый `start` сам определяет, какой из них использовать.
+Сначала должен быть установлен терминальный бэкенд: tmux (`sudo apt install tmux`, `brew install tmux`), psmux в Windows (`winget install psmux`) или [Herdr](https://termote.ohnice.app/installation/native/). Первый `start` сам определяет, какой из них использовать. [Zellij](https://zellij.dev/documentation/installation) 0.45.0 или новее (Linux, macOS) никогда не определяется автоматически: выберите его через `--mux zellij`. [herdr-core](https://herdr.dev/core/) (`hc` 0.1.16 или новее, любая ОС, только нативно) тоже не определяется: выберите его через `--mux hc`.
 
 ### Основные параметры
 
@@ -164,6 +168,8 @@ termote start
 termote start --lan                  # Listen on the LAN, not only this machine
 termote start --tailscale myhost.ts.net  # Publish over Tailscale HTTPS
 termote start --mux herdr            # Drive Herdr workspaces instead of tmux
+termote start --mux zellij           # Drive Zellij sessions instead of tmux (Linux, macOS)
+termote start --mux hc               # Show the herdr app's terminals through herdr-core
 termote start --no-auth              # Disable basic auth (local use only)
 ```
 
@@ -196,7 +202,7 @@ termote update --version 1.0.0
 $env:TERMOTE_VERSION='1.0.0'; irm https://termote.ohnice.app/install.ps1 | iex
 ```
 
-Без `TERMOTE_VERSION` установщик берёт самый новый стабильный релиз 1.x и не трогает существующую установку. С этой переменной указанная версия ставится рядом с текущей и становится активной — так же можно восстановить сломанную установку.
+Без `TERMOTE_VERSION` установщик берёт самый новый стабильный релиз (1.0 или новее) и не трогает существующую установку. С этой переменной указанная версия ставится рядом с текущей и становится активной — так же можно восстановить сломанную установку. Предварительный релиз (`X.Y.Z-rc.N`) ставится, только если указать его так (или через `termote update --version`), и только после публикации; см. [Deployment Guide](docs/deployment-guide.md#pre-releases).
 
 ### Контейнерный режим
 
@@ -253,12 +259,12 @@ make build
 flowchart LR
     subgraph Container["Контейнерный режим"]
         direction TB
-        C1["Docker/Podman"] --> C2["termote :7680 (сам передаёт терминал)"] --> C3["tmux / Herdr"]
+        C1["Docker/Podman"] --> C2["termote :7680 (сам передаёт терминал)"] --> C3["tmux / Herdr / Zellij"]
     end
 
     subgraph Native["Нативный режим"]
         direction TB
-        N1["Хост-система"] --> N2["termote :7680 (сам передаёт терминал)"] --> N3["tmux/psmux или Herdr + Инструменты хоста"]
+        N1["Хост-система"] --> N2["termote :7680 (сам передаёт терминал)"] --> N3["tmux/psmux, Herdr, Zellij или herdr-core + Инструменты хоста"]
     end
 
     User["Пользователь"] --> Container & Native
@@ -273,23 +279,24 @@ flowchart LR
 
 ### Параметры `start`
 
-| Флаг                         | Описание                                                                                                                      |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `--port <port>`              | Порт (по умолчанию: 7680, Windows: 7690)                                                                                      |
-| `--lan[=false]`              | Слушать на всех интерфейсах (по умолчанию: только localhost)                                                                  |
-| `--tailscale <host[:port]>`  | Публиковать через Tailscale HTTPS (порт по умолчанию 443)                                                                     |
-| `--no-tailscale`             | Прекратить публикацию через Tailscale                                                                                         |
-| `--no-auth[=false]`          | Отключить базовую аутентификацию                                                                                              |
-| `--mux <tmux\|herdr>`        | Терминальный бэкенд (по умолчанию: herdr, если он запущен, иначе tmux)                                                        |
-| `--allow-host <name>`        | Разрешить дополнительное значение заголовка Host (можно повторять; без подстановочных знаков, см. примечания по безопасности) |
-| `--remove-host <name>`       | Удалить разрешённое имя Host (можно повторять)                                                                                |
-| `--allow-local-user <name>`  | Разрешить подключаться другому пользователю ОС этой машины, например обратному прокси (можно повторять; Linux, Windows)       |
-| `--remove-local-user <name>` | Запретить этому пользователю подключаться (можно повторять)                                                                   |
-| `--allow-path <dir>`         | Показать папку в Files, в разделе Places (можно повторять)                                                                    |
-| `--remove-path <dir>`        | Удалить разрешённую папку (можно повторять)                                                                                   |
-| `--allow-herdr-no-auth`      | Обязателен вместе с `--mux herdr --no-auth`                                                                                   |
-| `--user <name>`              | Имя пользователя для входа (по умолчанию `admin`; общее с контейнером)                                                        |
-| `--fresh`                    | Задать новый пароль                                                                                                           |
+| Флаг                              | Описание                                                                                                                      |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `--port <port>`                   | Порт (по умолчанию: 7680, Windows: 7690)                                                                                      |
+| `--lan[=false]`                   | Слушать на всех интерфейсах (по умолчанию: только localhost)                                                                  |
+| `--tailscale <host[:port]>`       | Публиковать через Tailscale HTTPS (порт по умолчанию 443)                                                                     |
+| `--no-tailscale`                  | Прекратить публикацию через Tailscale                                                                                         |
+| `--no-auth[=false]`               | Отключить базовую аутентификацию                                                                                              |
+| `--mux <tmux\|herdr\|zellij\|hc>` | Терминальный бэкенд (по умолчанию: herdr, если он запущен, иначе tmux; zellij: Linux, macOS; hc: herdr-core)                  |
+| `--allow-host <name>`             | Разрешить дополнительное значение заголовка Host (можно повторять; без подстановочных знаков, см. примечания по безопасности) |
+| `--remove-host <name>`            | Удалить разрешённое имя Host (можно повторять)                                                                                |
+| `--allow-local-user <name>`       | Разрешить подключаться другому пользователю ОС этой машины, например обратному прокси (можно повторять; Linux, Windows)       |
+| `--remove-local-user <name>`      | Запретить этому пользователю подключаться (можно повторять)                                                                   |
+| `--allow-path <dir>`              | Показать папку в Files, в разделе Places (можно повторять)                                                                    |
+| `--remove-path <dir>`             | Удалить разрешённую папку (можно повторять)                                                                                   |
+| `--allow-herdr-no-auth`           | Обязателен вместе с `--mux herdr --no-auth`                                                                                   |
+| `--allow-hc-no-auth`              | Обязателен вместе с `--mux hc --no-auth`                                                                                      |
+| `--user <name>`                   | Имя пользователя для входа (по умолчанию `admin`; общее с контейнером)                                                        |
+| `--fresh`                         | Задать новый пароль                                                                                                           |
 
 ### С Tailscale HTTPS
 
@@ -332,7 +339,7 @@ sudo tailscale set --operator=$USER                    # Linux, once: let termot
 ```
 termote/
 ├── Makefile                # Build/test/run commands
-├── Dockerfile              # Container image (termote + tmux + herdr)
+├── Dockerfile              # Container image (termote + tmux + herdr + zellij)
 ├── docker-compose.yml      # Development from a checkout only
 ├── entrypoint.sh           # Container entrypoint
 ├── docs/                   # Documentation
@@ -350,6 +357,9 @@ termote/
 │   ├── mux.go              # Mux interface + /api/mux/* routes
 │   ├── mux_tmux.go         # tmux/psmux backend
 │   ├── mux_herdr.go        # Herdr backend
+│   ├── mux_zellij*.go      # Zellij backend (commands, Chat view and Files)
+│   ├── zellij_*.go         # Termote's Zellij clients, view-only stream, a pane's shell
+│   ├── mux_hc*.go, hc_*.go # herdr-core backend (hc connect client, herdr-app document)
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
 │   ├── cli*.go             # start/stop/update/container/logs/menu subcommands
 │   └── webui/              # PWA embedded in the binary (filled by make build)
@@ -418,9 +428,12 @@ termote start --fresh      # If the saved password can no longer be read
 - **Защита Origin/CSRF**: изменяющие состояние запросы `/api/mux/*` и WebSocket `/api/mux/stream` отклоняют межсайтовые `Sec-Fetch-Site`/`Origin` и требуют одноразовый токен потока с того же источника
 - **Встроенная защита от перебора** - ограничение частоты (5 неудачных попыток/мин с одного IP, 20/мин на подсеть IPv6 /64)
 - **Бэкенд Herdr**: открывает доступ ко всем рабочим пространствам Herdr на хосте, поэтому `--mux herdr --no-auth` отклоняется, если не указан также `--allow-herdr-no-auth`
+- **Бэкенд Zellij**: открывает доступ ко всем запущенным сессиям Zellij пользователя, как и tmux (без дополнительной защиты для `--no-auth`); нажатия клавиш и сообщения Chat попадают в панель только через терминал Zellij-клиента Termote и никогда — через аргументы процесса, которые могут прочитать другие локальные пользователи
+- **Бэкенд herdr-core**: у herdr-core нет собственного входа, поэтому `--mux hc --no-auth` отклоняется, если не указан также `--allow-hc-no-auth`, а `container up --mux hc` отклоняется всегда
 - **Файлы службы не содержат секретов**: юнит systemd, агент launchd и задача планировщика никогда не содержат пароль
 - Используйте HTTPS (Tailscale) в продакшене
 - Ограничьте доступ доверенными сетями/VPN
+- Что может вошедшее или сопряжённое устройство и что делать, если его потеряли: [Модель безопасности](docs/security-model.md)
 
 ## Другие проекты
 

@@ -56,6 +56,8 @@ Kendalikan alat CLI (Claude Code, GitHub Copilot, terminal apa pun) dari jarak j
 - **Tasks**: jalankan script `package.json` dan target Makefile milik pane, kirim run yang gagal ke agent — lihat [Tasks](https://termote.ohnice.app/usage/tasks/)
 - **Jendela terpisah** (desktop): buka file, diff, tab, pane, atau ringkasan di jendelanya sendiri
 - **Lampiran gambar**: kirim gambar dari ponsel ke terminal atau ke pesan di tampilan Chat, agar agent dapat membacanya lewat path
+- **Backend Zellij** (Linux, macOS, atau di dalam container): kendalikan sesi, tab, dan pane Zellij Anda alih-alih tmux (Zellij 0.45.0 atau lebih baru), dipilih dengan `--mux zellij` — lihat [Instalasi Native](https://termote.ohnice.app/installation/native/)
+- **Backend herdr-core** (native, semua OS): tampilkan space, tab, dan pane yang ditampilkan aplikasi herdr, sebagai satu klien lagi dari herdr-core (`hc` 0.1.16 atau lebih baru), dipilih dengan `--mux hc` — lihat [Backend herdr-core](https://termote.ohnice.app/installation/native/#herdr-core-backend)
 - **Plugin Herdr**: buka pane Herdr yang sedang aktif di Termote, tampilkan link-nya sebagai kode QR untuk ponsel, mulai atau hentikan server, tanpa meninggalkan Herdr — lihat [Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/)
 - **Ramah mobile**: Toolbar keyboard virtual (Tab/Ctrl/Shift/panah, dapat diperluas)
 - **Dukungan gestur**: Geser untuk Ctrl+C, Tab, menggulir
@@ -104,10 +106,12 @@ flowchart TB
         Auth["Basic Auth"]
     end
 
-    subgraph Backend["Backend Mux (tmux/psmux atau Herdr)"]
+    subgraph Backend["Backend Mux (tmux/psmux, Herdr, Zellij atau herdr-core)"]
         Mux["Antarmuka Mux"]
         tmux["tmux/psmux (PTY)"]
         herdr["Herdr"]
+        zellij["Zellij"]
+        hc["herdr-core (hc)"]
         Shell["Shell"]
         Tools["CLI Tools"]
     end
@@ -121,7 +125,7 @@ flowchart TB
     Auth -.-> Static & Stream & API
     Stream --> Mux
     API --> Mux
-    Mux --> tmux & herdr
+    Mux --> tmux & herdr & zellij & hc
     tmux --> Shell --> Tools
 ```
 
@@ -156,7 +160,7 @@ termote start
 
 Installer hanya membutuhkan `curl`, `tar` dan `sha256sum`/`shasum` (PowerShell di Windows), tanpa sudo atau hak admin. Installer memverifikasi checksum arsip, memasang perintah `termote`, dan tidak menjalankan apa pun. `termote start` menyimpan opsi, membuat password saat pertama kali (ditampilkan sekali; `termote show-password` menampilkannya lagi), mendaftarkan service lalu menjalankannya. Buka `http://127.0.0.1:7680` (Windows: `http://127.0.0.1:7690`).
 
-Backend terminal harus sudah terpasang lebih dulu: tmux (`sudo apt install tmux`, `brew install tmux`), psmux di Windows (`winget install psmux`), atau [Herdr](https://termote.ohnice.app/installation/native/). `start` yang pertama mendeteksi backend mana yang dipakai.
+Backend terminal harus sudah terpasang lebih dulu: tmux (`sudo apt install tmux`, `brew install tmux`), psmux di Windows (`winget install psmux`), atau [Herdr](https://termote.ohnice.app/installation/native/). `start` yang pertama mendeteksi backend mana yang dipakai. [Zellij](https://zellij.dev/documentation/installation) 0.45.0 atau lebih baru (Linux, macOS) tidak pernah dideteksi: pilih dengan `--mux zellij`. [herdr-core](https://herdr.dev/core/) (`hc` 0.1.16 atau lebih baru, semua OS, hanya native) juga tidak pernah dideteksi: pilih dengan `--mux hc`.
 
 ### Opsi umum
 
@@ -164,6 +168,8 @@ Backend terminal harus sudah terpasang lebih dulu: tmux (`sudo apt install tmux`
 termote start --lan                  # Listen on the LAN, not only this machine
 termote start --tailscale myhost.ts.net  # Publish over Tailscale HTTPS
 termote start --mux herdr            # Drive Herdr workspaces instead of tmux
+termote start --mux zellij           # Drive Zellij sessions instead of tmux (Linux, macOS)
+termote start --mux hc               # Show the herdr app's terminals through herdr-core
 termote start --no-auth              # Disable basic auth (local use only)
 ```
 
@@ -196,7 +202,7 @@ termote update --version 1.0.0
 $env:TERMOTE_VERSION='1.0.0'; irm https://termote.ohnice.app/install.ps1 | iex
 ```
 
-Tanpa `TERMOTE_VERSION`, installer mengambil rilis stabil 1.x terbaru dan tidak mengubah instalasi yang sudah ada. Dengan variabel itu, versi tersebut dipasang di samping versi saat ini dan menjadi versi aktif, sekaligus cara untuk memperbaiki instalasi yang rusak.
+Tanpa `TERMOTE_VERSION`, installer mengambil rilis stabil terbaru (1.0 atau lebih baru) dan tidak mengubah instalasi yang sudah ada. Dengan variabel itu, versi tersebut dipasang di samping versi saat ini dan menjadi versi aktif, sekaligus cara untuk memperbaiki instalasi yang rusak. Pre-release (`X.Y.Z-rc.N`) hanya dipasang bila disebut dengan cara ini (atau dengan `termote update --version`), dan hanya setelah diterbitkan; lihat [Deployment Guide](docs/deployment-guide.md#pre-releases).
 
 ### Mode Container
 
@@ -253,12 +259,12 @@ Tidak ada upgrade dari 0.x: 1.0 terpasang di lokasi baru dan tidak membaca konfi
 flowchart LR
     subgraph Container["Mode Container"]
         direction TB
-        C1["Docker/Podman"] --> C2["termote :7680 (mengalirkan terminal sendiri)"] --> C3["tmux / Herdr"]
+        C1["Docker/Podman"] --> C2["termote :7680 (mengalirkan terminal sendiri)"] --> C3["tmux / Herdr / Zellij"]
     end
 
     subgraph Native["Mode Native"]
         direction TB
-        N1["Sistem Host"] --> N2["termote :7680 (mengalirkan terminal sendiri)"] --> N3["tmux/psmux atau Herdr + Alat Host"]
+        N1["Sistem Host"] --> N2["termote :7680 (mengalirkan terminal sendiri)"] --> N3["tmux/psmux, Herdr, Zellij atau herdr-core + Alat Host"]
     end
 
     User["Pengguna"] --> Container & Native
@@ -273,23 +279,24 @@ Server native berjalan sebagai service pengguna: unit systemd user di Linux (pro
 
 ### Opsi `start`
 
-| Flag                         | Deskripsi                                                                                           |
-| ---------------------------- | --------------------------------------------------------------------------------------------------- |
-| `--port <port>`              | Port (default: 7680, Windows: 7690)                                                                 |
-| `--lan[=false]`              | Mendengarkan di semua interface (default: hanya localhost)                                          |
-| `--tailscale <host[:port]>`  | Publikasikan melalui Tailscale HTTPS (port default 443)                                             |
-| `--no-tailscale`             | Berhenti memublikasikan melalui Tailscale                                                           |
-| `--no-auth[=false]`          | Nonaktifkan basic authentication                                                                    |
-| `--mux <tmux\|herdr>`        | Backend terminal (default: herdr jika sedang berjalan, selain itu tmux)                             |
-| `--allow-host <name>`        | Izinkan nilai header Host tambahan (dapat diulang; tanpa wildcard, lihat catatan keamanan)          |
-| `--remove-host <name>`       | Hapus nama Host yang diizinkan (dapat diulang)                                                      |
-| `--allow-local-user <name>`  | Izinkan pengguna OS lain di mesin ini terhubung, mis. reverse proxy (dapat diulang; Linux, Windows) |
-| `--remove-local-user <name>` | Berhenti mengizinkan pengguna itu terhubung (dapat diulang)                                         |
-| `--allow-path <dir>`         | Tawarkan folder di Files, di bawah Places (dapat diulang)                                           |
-| `--remove-path <dir>`        | Hapus folder yang diizinkan (dapat diulang)                                                         |
-| `--allow-herdr-no-auth`      | Wajib bersama `--mux herdr --no-auth`                                                               |
-| `--user <name>`              | Username login (default: `admin`; sama dengan container)                                            |
-| `--fresh`                    | Buat password baru                                                                                  |
+| Flag                              | Deskripsi                                                                                                     |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `--port <port>`                   | Port (default: 7680, Windows: 7690)                                                                           |
+| `--lan[=false]`                   | Mendengarkan di semua interface (default: hanya localhost)                                                    |
+| `--tailscale <host[:port]>`       | Publikasikan melalui Tailscale HTTPS (port default 443)                                                       |
+| `--no-tailscale`                  | Berhenti memublikasikan melalui Tailscale                                                                     |
+| `--no-auth[=false]`               | Nonaktifkan basic authentication                                                                              |
+| `--mux <tmux\|herdr\|zellij\|hc>` | Backend terminal (default: herdr jika sedang berjalan, selain itu tmux; zellij: Linux, macOS; hc: herdr-core) |
+| `--allow-host <name>`             | Izinkan nilai header Host tambahan (dapat diulang; tanpa wildcard, lihat catatan keamanan)                    |
+| `--remove-host <name>`            | Hapus nama Host yang diizinkan (dapat diulang)                                                                |
+| `--allow-local-user <name>`       | Izinkan pengguna OS lain di mesin ini terhubung, mis. reverse proxy (dapat diulang; Linux, Windows)           |
+| `--remove-local-user <name>`      | Berhenti mengizinkan pengguna itu terhubung (dapat diulang)                                                   |
+| `--allow-path <dir>`              | Tawarkan folder di Files, di bawah Places (dapat diulang)                                                     |
+| `--remove-path <dir>`             | Hapus folder yang diizinkan (dapat diulang)                                                                   |
+| `--allow-herdr-no-auth`           | Wajib bersama `--mux herdr --no-auth`                                                                         |
+| `--allow-hc-no-auth`              | Wajib bersama `--mux hc --no-auth`                                                                            |
+| `--user <name>`                   | Username login (default: `admin`; sama dengan container)                                                      |
+| `--fresh`                         | Buat password baru                                                                                            |
 
 ### Dengan Tailscale HTTPS
 
@@ -332,7 +339,7 @@ Toolbar virtual menyediakan: Tab, Esc, Ctrl, Shift, tombol panah, dan kombinasi 
 ```
 termote/
 ├── Makefile                # Build/test/run commands
-├── Dockerfile              # Container image (termote + tmux + herdr)
+├── Dockerfile              # Container image (termote + tmux + herdr + zellij)
 ├── docker-compose.yml      # Development from a checkout only
 ├── entrypoint.sh           # Container entrypoint
 ├── docs/                   # Documentation
@@ -350,6 +357,9 @@ termote/
 │   ├── mux.go              # Mux interface + /api/mux/* routes
 │   ├── mux_tmux.go         # tmux/psmux backend
 │   ├── mux_herdr.go        # Herdr backend
+│   ├── mux_zellij*.go      # Zellij backend (commands, Chat view and Files)
+│   ├── zellij_*.go         # Termote's Zellij clients, view-only stream, a pane's shell
+│   ├── mux_hc*.go, hc_*.go # herdr-core backend (hc connect client, herdr-app document)
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
 │   ├── cli*.go             # start/stop/update/container/logs/menu subcommands
 │   └── webui/              # PWA embedded in the binary (filled by make build)
@@ -418,9 +428,12 @@ termote start --fresh      # If the saved password can no longer be read
 - **Guard Origin/CSRF**: request `/api/mux/*` yang mengubah state dan WebSocket `/api/mux/stream` menolak `Sec-Fetch-Site`/`Origin` lintas situs dan mewajibkan stream token sekali pakai dari origin yang sama
 - **Perlindungan brute-force bawaan** - pembatasan laju (5 percobaan gagal/menit per IP, 20/menit per IPv6 /64)
 - **Backend Herdr**: mengekspos setiap workspace Herdr di host, sehingga `--mux herdr --no-auth` ditolak kecuali `--allow-herdr-no-auth` juga diberikan
+- **Backend Zellij**: mengekspos setiap sesi Zellij pengguna yang sedang berjalan, seperti tmux (tanpa penjagaan `--no-auth` tambahan); tombol dan pesan Chat sampai ke pane hanya lewat terminal klien Zellij milik Termote, tidak pernah lewat argumen proses yang bisa dibaca pengguna lokal lain
+- **Backend herdr-core**: herdr-core tidak punya login sendiri, sehingga `--mux hc --no-auth` ditolak kecuali `--allow-hc-no-auth` juga diberikan, dan `container up --mux hc` ditolak
 - **File service tidak menyimpan rahasia**: unit systemd, agent launchd, dan Scheduled Task tidak pernah berisi password
 - Gunakan HTTPS (Tailscale) untuk produksi
 - Batasi ke jaringan tepercaya/VPN
+- Apa yang bisa dilakukan perangkat yang masuk atau dipasangkan, dan apa yang harus dilakukan jika perangkat hilang: [Model keamanan](docs/security-model.md)
 
 ## Proyek Lainnya
 
