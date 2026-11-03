@@ -216,10 +216,11 @@ func TestHcAllowlist(t *testing.T) {
 	allowed := map[string]bool{
 		"server.status": true, "terminal.list": true, "terminal.get": true, "terminal.run": true,
 		"terminal.kill": true, "terminal.label": true, "terminal.read": true, "terminal.attach": true,
-		"events.subscribe": true, "doc.get": true,
+		"events.subscribe": true, "doc.get": true, "doc.set": true,
 	}
 	for _, p := range []hcParams{hcStatusParams{}, hcListParams{}, hcGetParams{}, hcRunParams{}, hcKillParams{},
-		hcLabelParams{}, hcReadParams{}, hcAttachParams{}, hcSubscribeParams{}, hcDocGetParams{}} {
+		hcLabelParams{}, hcReadParams{}, hcAttachParams{}, hcSubscribeParams{}, hcDocGetParams{},
+		hcDocSetParams{}} {
 		if !allowed[p.hcMethod()] {
 			t.Errorf("%T calls %s", p, p.hcMethod())
 		}

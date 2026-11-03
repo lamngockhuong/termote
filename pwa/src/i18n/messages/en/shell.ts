@@ -248,6 +248,8 @@ export default {
   'shell.group.newName': 'New name for {noun} {name}',
   'shell.group.actions': 'Actions for {noun} {name}',
   'shell.sidebar.sessionName': 'Session name',
+  'shell.sidebar.tabNameFixed':
+    'Open herdr-app once to rename this tab; only its icon changes here.',
   'shell.sidebar.save': 'Save',
   'shell.sidebar.add': 'Add',
   'shell.sidebar.editSession': 'Edit session',

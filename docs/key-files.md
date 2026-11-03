@@ -224,6 +224,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/mux_hc.go`                                | hc backend: follows events, reads herdr-app's document         |
 | `server/mux_hc_model.go`                          | hc state, herdr-app document parser, snapshot, agent status    |
 | `server/mux_hc_ops.go`                            | hc tabs, groups, split, close, input, text (`requirePane`)     |
+| `server/mux_hc_doc.go`                            | hc names and order written to herdr-app's document (`doc.set`) |
 | `server/mux_hc_agent.go`                          | hc Files, Chat view and Tasks                                  |
 | `server/hc_stream.go`                             | hc attach stream: size frames, drive, reattach, layout frames  |
 | `server/mux_hc_seen.go`                           | Viewers per terminal and the shared `herdr.seen` label         |

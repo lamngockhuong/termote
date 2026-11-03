@@ -203,13 +203,14 @@ attach a terminal, health) with three implementations:
   `hc connect` child in framed mode (hc finds the core's socket or named pipe itself): typed RPCs,
   the events stream and each attach share it on credit-counted channels. `hc_autostart.go` starts
   the core only for a full client's page snapshot, as Herdr's autostart does. `mux_hc.go` follows
-  the events and reads herdr-app's layout document (`doc.get`, read only); `mux_hc_model.go`
+  the events and reads herdr-app's layout document (`doc.get`); `mux_hc_doc.go` writes back only
+  space and tab names and their order (`doc.set` over the version read); `mux_hc_model.go`
   builds the snapshot from both: a terminal with a `herdr.space` label is a pane, grouped by
   `herdr.space` and `herdr.tab` as herdr-app places them, without the document by label alone;
   terminals of other apps stay hidden. A space is named as herdr-app names it (its name, else
   the git checkout or folder of its first terminal); a tab without a name is its position. New
   tabs, splits and closes are `terminal.run` with labels (herdr-app picks them up) and
-  `terminal.kill`; zoom, swap, resize and renames answer `unsupported`. Agent status comes from
+  `terminal.kill`; zoom, swap, resize and pane names answer `unsupported`. Agent status comes from
   the program's own OSC 7501 report; `herdr.seen` is shared with every Herdr client
   (`mux_hc_seen.go`). `hc_stream.go` attaches a full client as a viewer that may type at the
   terminal's size, a view-only one with `observe`, and attaches again after the core restarts.

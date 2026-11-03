@@ -65,6 +65,7 @@ export default {
   'errors.invalid_text': 'The text is empty or holds a control character',
   'errors.invalid_validity': 'The time limit is not valid',
   'errors.last_pane': "A tab's last pane is closed by closing the tab",
+  'errors.layout_busy': 'herdr-app changed the layout meanwhile. Try again',
   'errors.lfs_pointer': 'The file is a Git LFS pointer',
   'errors.linked_source': 'The source workspace is a linked worktree',
   'errors.linked_worktree':
@@ -74,6 +75,7 @@ export default {
     'A newer Termote saved this. Update Termote to change it',
   'errors.no_client':
     'Open this Zellij session in a terminal (or in Termote) before adding a tab',
+  'errors.no_layout': 'Open herdr-app on this machine first',
   'errors.no_neighbor': 'No pane on that side',
   'errors.no_room': 'No room for another pane',
   'errors.no_start': 'No agent was started in this pane',

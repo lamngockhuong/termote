@@ -92,7 +92,7 @@ interface Props {
   recent?: boolean
   // The names of the open groups, which a recent one's is changed from
   takenNames?: readonly string[]
-  // The group takes a name (caps.renameGroup); herdr-core names a space
+  // The group takes a name (caps.renameGroup); herdr-core names a new space
   // after its folder, so only the directory is asked there
   named?: boolean
 }

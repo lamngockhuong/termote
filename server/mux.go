@@ -133,10 +133,14 @@ type Caps struct {
 	// Groups: groups can be created and closed, and renamed where
 	// RenameGroup says so (/api/mux/groups).
 	Groups bool `json:"groups"`
-	// RenameGroup: a group has a name the client gives it, at creation and
-	// by renaming (tmux, Herdr, Zellij). hc names a space after its folder,
-	// as herdr-app does: a new group takes no name there.
+	// RenameGroup: a group can be renamed (tmux, Herdr, Zellij; hc once
+	// herdr-app has written its layout). It takes a name at creation too,
+	// except on hc: herdr-app names a new space after its folder.
 	RenameGroup bool `json:"renameGroup"`
+	// RenameTab: a tab can be renamed (PATCH /api/mux/tabs/{id}): tmux,
+	// Herdr, Zellij; hc once herdr-app has written its layout document,
+	// which holds the tab names (none before: tabs placed by labels).
+	RenameTab bool `json:"renameTab"`
 	// Push: the server can send Web Push (/api/mux/push/*). Set by the
 	// snapshot route, not by the backend.
 	Push bool `json:"push"`
@@ -145,7 +149,8 @@ type Caps struct {
 	Worktrees bool `json:"worktrees"`
 	// ReorderTabs: a tab can be moved within its group
 	// (/api/mux/tabs/{id}/move): Herdr 0.8.0 or later, not on Windows; tmux
-	// 3.2 or later (the server's version), not psmux.
+	// 3.2 or later (the server's version), not psmux; Zellij; hc once
+	// herdr-app has written its layout.
 	ReorderTabs bool `json:"reorderTabs"`
 	// PaneLayout: a pane can be split, zoomed, swapped and resized
 	// (/api/mux/panes/{id}/split, zoom, swap, resize): tmux, Herdr 0.9.3 or
@@ -160,7 +165,8 @@ type Caps struct {
 	// Never to a view-only client.
 	RenamePane bool `json:"renamePane"`
 	// ReorderGroups: a group can be moved (/api/mux/groups/{id}/move):
-	// Herdr 0.8.0 or later, not on Windows. tmux has no session order.
+	// Herdr 0.8.0 or later, not on Windows; hc once herdr-app has written its
+	// layout. tmux has no session order.
 	ReorderGroups bool `json:"reorderGroups"`
 	// Role: what the signed-in client may do, "full" or "view" (it changes
 	// nothing on the server); empty without sign-in. Set by the snapshot

@@ -466,6 +466,19 @@ describe('SessionSidebar — desktop expanded (default)', () => {
     expect(onUpdate).toHaveBeenCalledWith('1', { name: 'Renamed', icon: '💻' })
   })
 
+  it('edit form: a backend without tab renaming keeps the name', () => {
+    renderDesktop(SESSIONS, { renameTab: false })
+    const editBtns = document.querySelectorAll('button[title="Edit session"]')
+    fireEvent.click(editBtns[0])
+    const input = screen.getByDisplayValue('Shell') as HTMLInputElement
+    expect(input.readOnly).toBe(true)
+    expect(input).toHaveAccessibleDescription(
+      'Open herdr-app once to rename this tab; only its icon changes here.',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(onUpdate).toHaveBeenCalledWith('1', { name: 'Shell', icon: '💻' })
+  })
+
   it('edit form: Save does nothing if name is empty', () => {
     renderDesktop()
     const editBtns = document.querySelectorAll('button[title="Edit session"]')

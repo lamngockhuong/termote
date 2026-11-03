@@ -281,10 +281,17 @@ func TestHcGroupCreateTakesNoName(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), `"name":"`+filepath.Base(dir)+`"`) {
 		t.Errorf("recent groups: %s", rec.Body)
 	}
+	// No herdr-app document on this core: nothing to write names into.
 	if s.m.Caps().RenameGroup {
 		t.Error("hc offers renaming a group")
 	}
 	if !(tmuxMux{}).Caps().RenameGroup {
 		t.Error("tmux lost group renaming")
+	}
+	if s.m.Caps().RenameTab {
+		t.Error("hc offers renaming a tab")
+	}
+	if !(tmuxMux{}).Caps().RenameTab || !(&herdrMux{}).Caps().RenameTab || !(&zellijMux{}).Caps().RenameTab {
+		t.Error("a backend lost tab renaming")
 	}
 }

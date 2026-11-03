@@ -185,9 +185,18 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
     `HC_SOCKET` as saved in the config by `start` from its shell (`TERMOTE_HC_SESSION`,
     `TERMOTE_HC_SOCKET`; a shell without one keeps the saved value), never the service's own.
   - Typed allowlist: the params types are the only calls (`server.status`, `terminal.list`,
-    `get`, `run`, `kill`, `label`, `read`, `attach`, `events.subscribe`, `doc.get`; a test
-    checks). No `terminal.on`, `send`, `keys`, `rm`, no `doc.set`: herdr-app's layout document is
-    read only. `terminal.run` sends only `keep`, `cwd` (absolute) and the labels `herdr.space`,
+    `get`, `run`, `kill`, `label`, `read`, `attach`, `events.subscribe`, `doc.get`, `doc.set`; a
+    test checks). No `terminal.on`, `send`, `keys`, `rm`. `doc.get` and `doc.set` name only the
+    `herdr-app` document of this machine (no `on`). `doc.set` (`server/mux_hc_doc.go`) changes
+    only a space's or a tab's `name` (`validHcName`: what the group routes accept, no control or
+    format character) or the order of `spaces` or of one space's `tabs`: the document is read
+    with `doc.get`, must parse within the snapshot's depth and node limits (else 409 `no_layout`,
+    nothing written; an unwritten one too), is edited as generic JSON (numbers kept as read, every
+    field termote does not know written back unchanged), and is written over the version read
+    (`hcCheck`: a JSON object of at most 1 MiB, version above 0). A `conflict` (herdr-app wrote in
+    between) reads and changes again, at most 3 times, then 503 `layout_busy`; an edit that
+    changes nothing (the same name, a move to the place it holds) writes nothing. A list with an
+    empty or repeated id is not moved (409 `no_layout`). The core's own text is only logged. `terminal.run` sends only `keep`, `cwd` (absolute) and the labels `herdr.space`,
     `herdr.tab` (checked: non-empty, bounded, no control or format character) and
     `herdr.seen=0`; never argv or env, so the core runs the machine's own shell. `terminal.label`
     writes only `herdr.seen` (below).
@@ -548,10 +557,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `{label, cwd, focus:false}`, `workspace.rename`, `workspace.close` without `close_group` (linked
   worktrees → 409 `has_worktrees`, closed in Herdr), `workspace_not_found` → 404 (Herdr answers a method it lacks with
   `invalid_request`, so an older Herdr gets a 500, not 501). A request that waited past
-  `muxTimeout` for another group change gets 503 `busy`. hc (`caps.renameGroup` false): a new
-  group takes no name (one sent is dropped; herdr-app names a space after its folder), it is a
-  `terminal.run` with new space and tab labels, and renaming answers 501 `unsupported`; it is
-  recorded in the recent groups under its folder's name. A group created with a directory is
+  `muxTimeout` for another group change gets 503 `busy`. hc: a new group takes no name (one sent
+  is dropped; herdr-app names a space after its folder, and the PWA asks for none), it is a
+  `terminal.run` with new space and tab labels, and it is recorded in the recent groups under its
+  folder's name. Renaming writes the space's `name` into herdr-app's document (`doc.set`, above;
+  `caps.renameGroup` only once a document is read, a space not in it → 404 `unknown_group`). A group created with a directory is
   recorded in the recent groups (below), after the mutex is released. Closing a group ends every process in it
 - **Reordering** (`POST /api/mux/tabs/{id}/move` and `POST /api/mux/groups/{id}/move`, both
   `{index}` → `{ok, id}`; `server/mux_reorder.go`, `caps.reorderTabs`/`caps.reorderGroups`):
@@ -571,7 +581,13 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `invalid_index`, `invalid_request` naming the method → 501, else 500 (Herdr's text logged,
   never returned). The snapshot keeps Herdr's tab order (`number` is a creation number); its group
   order lists a repository's linked worktrees after its checkout, so a move reads the view's order, never
-  the snapshot's. tmux
+  the snapshot's. hc (`caps.reorderTabs`/`reorderGroups` only once herdr-app's document is
+  read): the snapshot gives which tabs or spaces show and checks `index`; the move is made on the
+  order of herdr-app's `tabs` or `spaces` as read for the write (`doc.set`, above), so a move
+  herdr-app made meanwhile is kept: the shown ones in their new order in the places they held,
+  the others (a tab without a terminal) left where they are. One placed by labels alone (not in
+  the document; the snapshot lists those last) → 404 `unknown_tab`/`unknown_group`, and an
+  `index` among them lands last among the document's. The id never changes. tmux
   (the server's version from `display-message -p '#{version}'`, ≥ 3.2 for `-b`, cached once
   parsed, a failed read retried after 30 s; psmux never, its `move-window` ignores `-s`):
   `list-windows -t <session>`, one `move-window -b|-a -s <exact> -t <exact window at index>`,
@@ -582,8 +598,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   move; transcript, prompt and command caches of a shifted id are dropped; rename form and close
   dialog follow the key), and the push watcher
   keys statuses by the pane's `%N`. `DELETE /tabs/{id}?key=` and `PATCH /tabs/{id}` `{name,
-  key}` act on `@N` only while it sits at the id's index, else 409 `changed` (Herdr: key ≠ id →
-  409); without a key, as before. Accepted gaps: deep links and saved selections to a shifted
+  key}` act on `@N` only while it sits at the id's index, else 409 `changed` (Herdr and hc: key ≠
+  id → 409); without a key, as before. hc renames a tab by writing its `name` into herdr-app's
+  document (`doc.set`, above; `caps.renameTab` only once a document is read; a tab placed by its
+  labels alone → 404 `unknown_tab`). Accepted gaps: deep links and saved selections to a shifted
   index open another tab; `send-keys` and the stream carry no key, so keys typed on another
   device within one poll of a move can reach the window that took the id
 - **Worktrees** (`GET /api/mux/worktrees?groupId=` → `{repoName, worktrees, branches}`,

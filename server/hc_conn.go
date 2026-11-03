@@ -231,8 +231,12 @@ type hcSubscribeParams struct{}
 func (hcSubscribeParams) hcMethod() string { return "events.subscribe" }
 func (hcSubscribeParams) hcCheck() error   { return nil }
 
-// hcAppDoc is the document herdr-app keeps its layout in; termote only reads it.
+// hcAppDoc is the document herdr-app keeps its layout in. termote reads it,
+// and writes back only the names and order of spaces and tabs (mux_hc_doc.go).
 const hcAppDoc = "herdr-app"
+
+// hcDocMaxValue is the core's limit on a document's serialized value.
+const hcDocMaxValue = 1 << 20
 
 // hcDocGetParams reads herdr-app's document on this machine.
 type hcDocGetParams struct{}
@@ -241,6 +245,26 @@ func (hcDocGetParams) hcMethod() string { return "doc.get" }
 func (hcDocGetParams) hcCheck() error   { return nil }
 func (hcDocGetParams) MarshalJSON() ([]byte, error) {
 	return []byte(`{"name":"` + hcAppDoc + `"}`), nil
+}
+
+// hcDocSetParams writes herdr-app's document on this machine, only over the
+// version it was read at (the core refuses a stale write with kind conflict).
+// Value is the whole document as read, with only a name or an order changed.
+type hcDocSetParams struct {
+	Version uint64
+	Value   json.RawMessage
+}
+
+func (hcDocSetParams) hcMethod() string { return "doc.set" }
+func (p hcDocSetParams) hcCheck() error {
+	v := bytes.TrimSpace(p.Value)
+	if p.Version == 0 || len(v) == 0 || v[0] != '{' || len(v) > hcDocMaxValue || !json.Valid(v) {
+		return errors.New("hc doc.set: bad document or version")
+	}
+	return nil
+}
+func (p hcDocSetParams) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]any{"name": hcAppDoc, "version": p.Version, "value": p.Value})
 }
 
 // hcUnsafeRune is a control or format character (C0, C1, bidi, zero-width).

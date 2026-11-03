@@ -223,6 +223,8 @@ export default {
   'shell.group.newName': 'Tên mới cho {noun} {name}',
   'shell.group.actions': 'Thao tác với {noun} {name}',
   'shell.sidebar.sessionName': 'Tên phiên',
+  'shell.sidebar.tabNameFixed':
+    'Mở herdr-app một lần để đổi được tên tab này; ở đây chỉ đổi được biểu tượng.',
   'shell.sidebar.save': 'Lưu',
   'shell.sidebar.add': 'Thêm',
   'shell.sidebar.editSession': 'Sửa phiên',

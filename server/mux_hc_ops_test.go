@@ -326,7 +326,7 @@ func TestHcRequirePaneAndErrors(t *testing.T) {
 	}
 	caps := s.m.Caps()
 	if !caps.ClientSideSelect || !caps.PaneStream || !caps.PaneLayout || !caps.Groups || !caps.Files || caps.Scroll ||
-		caps.RenamePane || caps.ReorderTabs || caps.Worktrees || s.m.Name() != "hc" {
+		caps.RenamePane || caps.RenameTab || caps.ReorderTabs || caps.Worktrees || s.m.Name() != "hc" {
 		t.Fatalf("caps %+v", caps)
 	}
 }
@@ -444,15 +444,11 @@ func TestHcUnsupportedAndSelect(t *testing.T) {
 	m := &hcMux{}
 	ctx := context.Background()
 	for _, err := range []error{
-		m.RenameTab(ctx, "", "", ""), m.RenameGroup(ctx, "", ""), m.RenamePane(ctx, "", ""),
-		m.MoveGroup(ctx, "", 0), m.Scroll(ctx, "", 1),
+		m.RenamePane(ctx, "", ""), m.Scroll(ctx, "", 1),
 	} {
 		if err != errUnsupported {
 			t.Errorf("%v", err)
 		}
-	}
-	if _, err := m.MoveTab(ctx, "", 0); err != errUnsupported {
-		t.Error(err)
 	}
 	for _, err := range []error{m.ZoomPane(ctx, "", ZoomOn), m.SwapPane(ctx, "", SwapNext), m.ResizePane(ctx, "", ResizeLeft, 1)} {
 		if err != errPaneLayoutUnsupported {

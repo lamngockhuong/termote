@@ -306,7 +306,7 @@ func (tmuxMux) Caps() Caps {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	return Caps{CopyMode: true, AgentChat: agentProcSupported, Files: tmuxFilesSupported, Groups: true,
-		RenameGroup: true, ReorderTabs: tmuxCanReorder(ctx), PaneText: !tmuxIsPsmux, PaneLayout: !tmuxIsPsmux, RenamePane: tmuxCanNamePanes(ctx)}
+		RenameGroup: true, RenameTab: true, ReorderTabs: tmuxCanReorder(ctx), PaneText: !tmuxIsPsmux, PaneLayout: !tmuxIsPsmux, RenamePane: tmuxCanNamePanes(ctx)}
 }
 
 // tmuxReorderMin is the first tmux whose move-window takes -b (insert
