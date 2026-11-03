@@ -163,14 +163,55 @@ func (c *cli) setupTailscale(ts string, port, prevPort int) error {
 		return errors.New("tailscale not found in PATH (https://tailscale.com/download), or drop --tailscale")
 	}
 	host, tsPort := splitTailscale(ts)
-	if other := tailscaleTarget(c.tailscaleStatus(), tsPort); other != "" && other != localTarget(port) &&
-		(prevPort == 0 || other != localTarget(prevPort)) {
+	switch other := tailscaleTarget(c.tailscaleStatus(), tsPort); {
+	case other == localTarget(port):
+		// Already published: tailscaled keeps the mapping even while it is
+		// stopped, and `tailscale serve` would only fail then.
+		if state := c.tailscaleBackendState(); state != "" && state != "Running" {
+			c.warnf("Tailscale is %s: https://%s:%s answers once you run: tailscale up", strings.ToLower(state), host, tsPort)
+		}
+		return nil
+	case other != "" && (prevPort == 0 || other != localTarget(prevPort)):
 		return fmt.Errorf("https:%s on Tailscale already serves %s; publish on another HTTPS port, e.g. --tailscale %s:8443", tsPort, other, host)
 	}
 	if _, err := c.run.Output("", nil, "tailscale", tailscaleServeArgs(tsPort, port)...); err != nil {
-		return fmt.Errorf("tailscale serve failed (%v)%s", err, c.tailscaleOperatorHint())
+		return fmt.Errorf("tailscale serve failed (%s)%s", tailscaleErrText(err), c.tailscaleServeHint(err))
 	}
 	return nil
+}
+
+// tailscaleBackendState is BackendState from `tailscale status --json`
+// ("Running", "Stopped", "NeedsLogin", ...), "" when it cannot be read.
+func (c *cli) tailscaleBackendState() string {
+	out, err := c.run.Output("", nil, "tailscale", "status", "--json")
+	if err != nil {
+		return ""
+	}
+	var st struct{ BackendState string }
+	if json.Unmarshal(out, &st) != nil {
+		return ""
+	}
+	return st.BackendState
+}
+
+// tailscaleErrText is err with what tailscale printed on stderr, which
+// Output keeps in the ExitError (e.g. "Tailscale is stopped.").
+func tailscaleErrText(err error) string {
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		if msg := strings.TrimSpace(string(ee.Stderr)); msg != "" {
+			return fmt.Sprintf("%v: %s", err, msg)
+		}
+	}
+	return err.Error()
+}
+
+// tailscaleServeHint is the fix for a refused `tailscale serve`.
+func (c *cli) tailscaleServeHint(err error) string {
+	if strings.Contains(tailscaleErrText(err), "Tailscale is stopped") {
+		return "; start Tailscale (tailscale up), or start without it: --no-tailscale"
+	}
+	return c.tailscaleOperatorHint()
 }
 
 // removeTailscale removes the mapping of ts when it still proxies to this
