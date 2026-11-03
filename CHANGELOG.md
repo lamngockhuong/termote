@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.18.0](https://github.com/lamngockhuong/termote/compare/v2.17.1...v2.18.0) (2026-11-03)
+
+
+### Features
+
+* --mux hc, termote as a client of herdr-core ([#685](https://github.com/lamngockhuong/termote/issues/685)) ([1ae58d4](https://github.com/lamngockhuong/termote/commit/1ae58d4bfb7102072bc3719a904fc7c4b68d5f7f))
+* **hc:** rename and reorder tabs and spaces through herdr-app's document ([#689](https://github.com/lamngockhuong/termote/issues/689)) ([9625abd](https://github.com/lamngockhuong/termote/commit/9625abd04c589b0825a9031d576a468ac1db6bd2))
+
 ## [2.17.1](https://github.com/lamngockhuong/termote/compare/v2.17.0...v2.17.1) (2026-11-03)
 
 
