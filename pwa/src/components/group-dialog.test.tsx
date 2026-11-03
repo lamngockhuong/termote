@@ -1,4 +1,11 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   listRecentGroups,
@@ -171,6 +178,41 @@ const setupRecent = async (
       screen.getByRole('button', { name: `Remove ${g.name} from recent` }),
   }
 }
+
+describe('GroupDialog without a name (herdr-core)', () => {
+  it('asks only for the directory, focused first, and sends no name', async () => {
+    vi.mocked(listRecentGroups).mockResolvedValue({
+      groups: [recentGroup(1)],
+      readOnly: false,
+    })
+    const onCreate = vi.fn(async () => {})
+    render(
+      <GroupDialog
+        kind="workspace"
+        named={false}
+        recent
+        onClose={vi.fn()}
+        onCreate={onCreate}
+      />,
+    )
+    await act(async () => {})
+    expect(screen.queryByLabelText('Name')).toBeNull()
+    const cwd = screen.getByLabelText(
+      'Directory (an absolute path on the host)',
+    )
+    await waitFor(() => expect(cwd).toHaveFocus())
+    // A recent one fills the directory alone
+    fireEvent.click(screen.getByRole('button', { name: 'Use g1 in /srv/g1' }))
+    expect(cwd).toHaveValue('/srv/g1')
+    expect(cwd).toHaveFocus()
+    // Nothing to fill in but the directory: an empty one is the home dir
+    fireEvent.change(cwd, { target: { value: '' } })
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Create' })),
+    )
+    expect(onCreate).toHaveBeenCalledWith('', '', expect.any(Function))
+  })
+})
 
 describe('GroupDialog recent groups', () => {
   it('asks for nothing when the server keeps none', () => {

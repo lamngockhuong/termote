@@ -169,7 +169,7 @@ func (m *herdrMux) Caps() Caps {
 	start := herdrCanStartAgents(v)
 	reorder := herdrCanReorder(v, herdrStartGOOS)
 	return Caps{ClientSideSelect: true, Scroll: true, PaneText: true, DriveSize: true, AgentChat: true, Files: true, Groups: true,
-		AgentStart: start, AgentStartCodex: start && agentStartKind("codex"),
+		RenameGroup: true, AgentStart: start, AgentStartCodex: start && agentStartKind("codex"),
 		Worktrees: herdrCanWorktrees(v, herdrStartGOOS), ReorderTabs: reorder, ReorderGroups: reorder,
 		PaneLayout: herdrCanPaneLayout(v, herdrStartGOOS), PaneStream: true, RenamePane: herdrCanPaneMeta(v)}
 }

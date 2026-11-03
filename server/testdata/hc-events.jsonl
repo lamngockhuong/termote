@@ -1,0 +1,20 @@
+{"jsonrpc":"2.0","method":"event","params":{"seq":10,"type":"title","terminal":"t1","data":{"title":"stale"}}}
+{"jsonrpc":"2.0","method":"event","params":{"seq":11,"type":"created","terminal":"t2","data":{"address":"t2","labels":{"herdr.space":"sp1","herdr.tab":"tb1"},"argv":["claude","--secret"],"cwd":"/w","state":"live","cols":80,"rows":24,"created_ms":2,"turn":0,"pid":4242}}}
+{"jsonrpc":"2.0","method":"event","params":{"seq":12,"type":"status","terminal":"t2","data":{"status":{"app":"claude-code","state":"working"},"records":{},"reported":true}}}
+{"jsonrpc":"2.0","method":"event","params":{"seq":13,"type":"title","terminal":"t2","data":{"title":"✳ fixing"}}}
+{"jsonrpc":"2.0","method":"event","params":{"seq":14,"type":"foreground","terminal":"t2","data":{"pid":4243,"name":"claude","argv":["claude","--token","s3cret"],"cwd":"/w/sub"}}}
+{"jsonrpc":"2.0","method":"event","params":{"seq":15,"type":"size","terminal":"t2","data":{"cols":100,"rows":30}}}
+{"jsonrpc":"2.0","method":"event","params":{"seq":16,"type":"status","terminal":"t2","data":{"status":{"app":"claude-code","state":"idle"},"records":{},"reported":true}}}
+{"jsonrpc":"2.0","method":"event","params":{"seq":17,"type":"turn","terminal":"t2","data":{"turn":1,"state":"idle"}}}
+{"jsonrpc":"2.0","method":"event","params":{"seq":18,"type":"labels","terminal":"t2","data":{"labels":{"herdr.space":"sp1","herdr.tab":"tb1","herdr.seen":"0"}}}}
+{"jsonrpc":"2.0","method":"event","params":{"seq":19,"type":"keep","terminal":"t2","data":{"keep":true}}}
+{"jsonrpc":"2.0","method":"event","params":{"seq":20,"type":"doc","data":{"name":"herdr-app","version":5}}}
+{"jsonrpc":"2.0","method":"event","params":{"seq":21,"type":"doc","machine":"rohan","data":{"name":"herdr-app","version":9}}}
+{"jsonrpc":"2.0","method":"event","params":{"seq":22,"type":"doc","data":{"name":"other-app","version":3}}}
+{"jsonrpc":"2.0","method":"event","params":{"seq":23,"type":"lost","terminal":"t1","data":{"reason":"signaled","exit_code":null,"signal":9,"finished_ms":null}}}
+{"jsonrpc":"2.0","method":"event","params":{"seq":24,"type":"restarted","terminal":"t1","data":{"address":"t1","labels":{"herdr.space":"sp1","herdr.tab":"tb0"},"argv":["/bin/zsh"],"cwd":"/w","state":"live","cols":80,"rows":24,"created_ms":1}}}
+{"jsonrpc":"2.0","method":"event","params":{"seq":25,"type":"finished","terminal":"t3","data":{"reason":"exited","exit_code":0,"signal":null,"finished_ms":5}}}
+{"jsonrpc":"2.0","method":"event","params":{"seq":26,"type":"removed","terminal":"t4","data":{}}}
+{"jsonrpc":"2.0","method":"event","params":{"seq":27,"type":"labels","terminal":"t9","data":{"labels":{"herdr.space":"sp9","herdr.tab":"tb9"},"record":{"address":"t9","labels":{"herdr.space":"sp9","herdr.tab":"tb9"},"cwd":"/","state":"live","cols":80,"rows":24}}}}
+{"jsonrpc":"2.0","method":"event","params":{"seq":28,"type":"title","terminal":"t404","data":{"title":"unknown terminal"}}}
+{"jsonrpc":"2.0","method":"event","params":{"seq":29,"type":"mystery","terminal":"t2","data":{}}}

@@ -160,6 +160,11 @@ describe('WelcomeSheet', () => {
     expect(screen.queryByText('Chat', { selector: 'b' })).toBeNull()
   })
 
+  it('names herdr-core as such', () => {
+    render(<WelcomeSheet {...props({ mobile: false, backend: 'hc' })} />)
+    expect(value('Backend')).toBe('herdr-core')
+  })
+
   it('a view-only device: what it can watch, and no typing', () => {
     render(
       <WelcomeSheet

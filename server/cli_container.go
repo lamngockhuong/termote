@@ -174,7 +174,16 @@ func (c *cli) mergeContainer(o *containerOptions, set map[string]bool, s *contai
 	if o.port < 1 || o.port > 65535 {
 		return usageError("invalid port: %d", o.port)
 	}
-	if err := validateMux(o.mux, o.noAuth, o.herdrNoAuth); err != nil {
+	// herdr-core has no auth of its own and is this machine's: a container
+	// never reaches it, nor offers it.
+	switch o.mux {
+	case "", "tmux", "herdr", "zellij":
+	case "hc":
+		return usageError("--mux hc is not available in a container; run it natively: termote start --mux hc")
+	default:
+		return usageError("unknown --mux %q (use: tmux, herdr, zellij)", o.mux)
+	}
+	if err := validateMux(o.mux, o.noAuth, o.herdrNoAuth, false); err != nil {
 		return err
 	}
 	for _, h := range append(slices.Clone(o.allowHosts), o.removeHosts...) {
@@ -219,7 +228,7 @@ func (c *cli) mergeContainer(o *containerOptions, set map[string]bool, s *contai
 	o.mounted = mounted
 	if o.mux == "" {
 		o.mux = c.chooseContainerMux()
-		return validateMux(o.mux, o.noAuth, o.herdrNoAuth)
+		return validateMux(o.mux, o.noAuth, o.herdrNoAuth, false)
 	}
 	return nil
 }

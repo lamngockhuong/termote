@@ -130,8 +130,13 @@ type Caps struct {
 	// AgentStartCodex: Codex can be started too (AgentStart, and Codex has
 	// a Chat view on this OS, codexProcSupported).
 	AgentStartCodex bool `json:"agentStartCodex"`
-	// Groups: groups can be created, renamed and closed (/api/mux/groups).
+	// Groups: groups can be created and closed, and renamed where
+	// RenameGroup says so (/api/mux/groups).
 	Groups bool `json:"groups"`
+	// RenameGroup: a group has a name the client gives it, at creation and
+	// by renaming (tmux, Herdr, Zellij). hc names a space after its folder,
+	// as herdr-app does: a new group takes no name there.
+	RenameGroup bool `json:"renameGroup"`
 	// Push: the server can send Web Push (/api/mux/push/*). Set by the
 	// snapshot route, not by the backend.
 	Push bool `json:"push"`
@@ -194,6 +199,13 @@ type Caps struct {
 // the default session); peekSnapshot reads without them.
 type snapshotPeeker interface {
 	peekSnapshot(ctx context.Context) (Snapshot, error)
+}
+
+// startingSnapshotter is a backend whose server a full client's snapshot
+// starts when it does not run (Herdr, herdr-core), under the autostart
+// policy; every other read leaves it stopped.
+type startingSnapshotter interface {
+	startingSnapshot(ctx context.Context) (Snapshot, error)
 }
 
 // peekSnapshot reads m's panes without changing anything: the push watcher
@@ -421,9 +433,9 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 			// session), nor starts herdr.
 			read = func(ctx context.Context) (Snapshot, error) { return viewSnapshot(ctx, m) }
 		default:
-			// A full client opening the page starts herdr when it is not
-			// running, like tmux makes its default session.
-			if h, ok := m.(*herdrMux); ok {
+			// A full client opening the page starts herdr (or herdr-core)
+			// when it is not running, like tmux makes its default session.
+			if h, ok := m.(startingSnapshotter); ok {
 				read = h.startingSnapshot
 			}
 		}

@@ -254,6 +254,9 @@ export function TerminalStack({
                 // the pane size, the desktop keeps it
                 fixedFontSize={shown ? fontSize : undefined}
                 driveSize={shown ? false : view.driveSize}
+                // A pane a desktop zoom hides is not looked at, nor under
+                // another view (Chat) any but the one it shows
+                watched={!!view.watched && !hidden && (!view.covered || active)}
                 bracketedPaste={
                   active ? view.bracketedPaste : agentPaste && !!pane?.hasAgent
                 }

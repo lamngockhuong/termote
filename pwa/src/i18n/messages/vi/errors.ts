@@ -130,6 +130,7 @@ export default {
     'Có quá nhiều thiết bị đã ghép. Hãy thu hồi một thiết bị trước',
   'errors.too_many_pixels': 'Ảnh lớn hơn 40 triệu điểm ảnh',
   'errors.trash_unavailable': 'Server này không có thùng rác',
+  'errors.unavailable': 'herdr-core không chạy. Hãy thử lại sau giây lát',
   'errors.unencodable': 'Không lưu được chữ này bằng bảng mã của file',
   'errors.unknown_device': 'Thiết bị này không còn được ghép',
   'errors.unknown_group': 'Nhóm không còn nữa',

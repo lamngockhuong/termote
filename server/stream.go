@@ -103,7 +103,7 @@ type streamControl struct {
 	Rows    int    `json:"rows,omitempty"`
 	Code    *int   `json:"code,omitempty"`
 	Message string `json:"message,omitempty"`
-	// On is the drive request; a drive message without it is ignored.
+	// On is the drive or visible request; one without it is ignored.
 	On *bool `json:"on,omitempty"`
 	// Driving is set on every size frame, so false is sent too.
 	Driving *bool `json:"driving,omitempty"`
@@ -154,10 +154,14 @@ type hubEntry struct {
 }
 
 // maxStreamsFor is the server-wide stream limit for backend m: more for
-// Herdr outside Windows, where a desktop shows a tab's panes side by side.
-// Herdr on Windows (ConPTY) has not been measured with that many.
+// Herdr outside Windows and for hc, where a desktop shows a tab's panes side
+// by side, each its own stream. Herdr on Windows (ConPTY) has not been
+// measured with that many; hc's streams are channels of one connection.
 func maxStreamsFor(m Mux) int {
 	if _, ok := m.(*herdrMux); ok && herdrStartGOOS != "windows" {
+		return maxHerdrStreams
+	}
+	if _, ok := m.(*hcMux); ok {
 		return maxHerdrStreams
 	}
 	return maxStreams
@@ -502,8 +506,8 @@ func viewSnapshot(ctx context.Context, m Mux) (Snapshot, error) {
 // in the background: the hub only tracks terminal processes, and those are
 // gone by then.
 //
-// A view-only stream (readOnly) drops every input frame, resize and drive:
-// nothing it sends reaches the pane or its size.
+// A view-only stream (readOnly) drops every input frame, resize, drive and
+// visible: nothing it sends reaches the pane, its size or its labels.
 //
 // It pings the client each pingEvery (streamPingEvery). Each ping first asks
 // recheck, and ends the stream with the error it returns (errDeviceRevoked, errSessionRevoked), so an expiry or a revoke the
@@ -558,6 +562,11 @@ func runStream(ctx context.Context, cancel context.CancelCauseFunc, conn *websoc
 			case msg.Type == "drive" && msg.On != nil:
 				if sd, ok := ts.(sizeDriver); ok {
 					sd.Drive(*msg.On)
+				}
+			// Whether the client has the pane on screen (herdr.seen, hc).
+			case msg.Type == "visible" && msg.On != nil:
+				if vs, ok := ts.(visibleSetter); ok {
+					vs.SetVisible(*msg.On)
 				}
 			}
 		}

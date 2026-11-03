@@ -134,6 +134,7 @@ interface SocketOpts {
   paneSeen?: unknown
   getSize: () => TermSize | null
   drive?: () => boolean
+  visible?: boolean
   onOutput: (d: Uint8Array) => void
   onControl: (m: StreamControl) => void
   onOpen: () => void
@@ -415,6 +416,15 @@ describe('TerminalView', () => {
     expect(socketOpts.followPane).toBe(true)
   })
 
+  it('tells the socket the pane is looked at, never on a view-only device', () => {
+    renderView()
+    expect(socketOpts.visible).toBe(false)
+    renderView({ watched: true })
+    expect(socketOpts.visible).toBe(true)
+    renderView({ watched: true, readOnly: true })
+    expect(socketOpts.visible).toBe(false)
+  })
+
   it('passes the stream key and pane listing to the socket', () => {
     const seen = {}
     renderView({ paneId: '$3:0', streamKey: '$3', paneSeen: seen })
@@ -453,14 +463,17 @@ describe('TerminalView', () => {
     expect(socket.send).toHaveBeenCalledWith('ls\x1b[?1;2c')
   })
 
-  it('herdr: strips query replies and drops input that was only replies', () => {
-    const { term } = renderView({ backend: 'herdr' })
-    term.dataCb('x\x1b[>0;276;0c')
-    expect(socket.send).toHaveBeenCalledWith('x')
-    socket.send.mockClear()
-    term.dataCb('\x1b[12;40R')
-    expect(socket.send).not.toHaveBeenCalled()
-  })
+  it.each(['herdr', 'hc'])(
+    '%s: strips query replies and drops input that was only replies',
+    (backend) => {
+      const { term } = renderView({ backend })
+      term.dataCb('x\x1b[>0;276;0c')
+      expect(socket.send).toHaveBeenCalledWith('x')
+      socket.send.mockClear()
+      term.dataCb('\x1b[12;40R')
+      expect(socket.send).not.toHaveBeenCalled()
+    },
+  )
 
   it('serverScroll: the wheel scrolls the pane history through the backend', async () => {
     const { term, ref } = renderView({

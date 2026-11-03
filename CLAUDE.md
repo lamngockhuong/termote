@@ -16,7 +16,7 @@ A PWA for remotely controlling CLI tools (Claude Code, GitHub Copilot, any termi
 | PWA             | vite-plugin-pwa + Workbox                                                |
 | Terminal        | xterm.js over WebSocket (termote streams the PTY/ConPTY itself, no ttyd) |
 | Server          | Go (termote serve mode)                                                  |
-| Sessions        | tmux/psmux, Herdr workspaces or Zellij sessions (native or container)    |
+| Sessions        | tmux/psmux, Herdr workspaces, Zellij sessions or herdr-core (native)     |
 | Package Manager | pnpm                                                                     |
 
 ## Project Structure
@@ -46,6 +46,7 @@ termote start --tailscale host             # native, Tailscale HTTPS
 termote start --fresh                      # native, force a new password
 termote start --mux herdr                  # native, Herdr backend instead of tmux
 termote start --mux zellij                 # native, Zellij backend (Linux, macOS)
+termote start --mux hc                     # native, herdr-core: the terminals herdr-app shows
 termote start --allow-host box.local       # native, add a Host allowlist entry
 termote start --allow-path ~/notes         # native, offer a folder as a Place in Files
 termote container up                       # container mode (podman/docker)
@@ -122,7 +123,8 @@ cd server && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o 
 termote is the single server in every mode (PWA + terminal stream + API + auth). It opens the terminal itself
 (PTY on Unix, ConPTY on Windows) and streams it to xterm.js over `/api/mux/stream`; there is no ttyd or proxy.
 Default port 7680 (Windows 7690). Mux backend: tmux (psmux on Windows), Herdr (`--mux herdr`; a named pipe on
-Windows) or Zellij (`--mux zellij`; Linux and macOS natively, any host in the container). Container mode auto-detects podman, then docker. Full model, including the Host allowlist, Origin and
+Windows), Zellij (`--mux zellij`; Linux and macOS natively, any host in the container) or herdr-core
+(`--mux hc`; native only, through a framed `hc connect`). Container mode auto-detects podman, then docker. Full model, including the Host allowlist, Origin and
 stream-token checks: [`docs/system-architecture.md`](docs/system-architecture.md).
 
 ## Code Conventions
@@ -180,12 +182,12 @@ There is no `install` command in 1.0 (it prints the replacement above).
 
 `start` options (saved in the config; a flag not given keeps its saved value; a boolean is
 turned off with `=false`): `--port <port>` (default 7680, Windows 7690), `--lan[=false]`,
-`--tailscale <host[:port]>`, `--no-tailscale`, `--no-auth[=false]`, `--mux <tmux|herdr|zellij>` (zellij refused natively on Windows),
+`--tailscale <host[:port]>`, `--no-tailscale`, `--no-auth[=false]`, `--mux <tmux|herdr|zellij|hc>` (zellij refused natively on Windows, hc in a container),
 `--allow-host <name>` (repeatable), `--remove-host <name>` (repeatable),
 `--allow-local-user <name>`/`--remove-local-user <name>` (repeatable; native Linux and Windows),
 `--allow-path <dir>`/`--remove-path <dir>` (repeatable; a Place in Files, refused at or above home,
 `~/.ssh`, `~/.gnupg`, termote's dirs or a git dir; `container up` keeps its own list and mounts it),
-`--allow-herdr-no-auth`, `--user <name>` (default `admin`, shared with the container like the
+`--allow-herdr-no-auth`, `--allow-hc-no-auth`, `--user <name>` (default `admin`, shared with the container like the
 password), `--fresh`. `update` takes `--version <X.Y.Z>` and `--force`.
 `container up` additionally takes `--workspace <dir>` and `--build`. `url` prints `http://127.0.0.1:<port>` for this machine (never `localhost`, whose `::1` another
 user could hold), and takes `--herdr` (ids from
@@ -233,7 +235,8 @@ that entry in the same change. A new feature with a security surface gets an ent
   use `crossSiteRejection`
 - Never take a filesystem path from the client: open through `os.Root` under the pane root, with the files
   deny lists and the sensitive-name `reveal` check
-- tmux/psmux/Herdr: argv or RPC only, never a shell; exact targets (`$N:=i`, `=name`); names and paths into
+- tmux/psmux/Herdr/herdr-core: argv or RPC only, never a shell (hc: the typed allowlist, local
+  terminal ids only, never `doc.set`); exact targets (`$N:=i`, `=name`); names and paths into
   tmux formats go through `tmuxLiteral` (a pane name set with `set-option`, no `-F`, is stored verbatim and does
   not); psmux differs (no `=` before an index, no `#{n:}`)
 - git only through the files routes' `gitRunner` (hooks, filters, fsmonitor off; `GIT_*`/`TERMOTE_*` stripped)
@@ -270,6 +273,7 @@ make fmt-check
 ```bash
 make test             # Run all tests (Go + dev shim + install.sh + entrypoints)
 make test-go          # go test ./... in server/
+make test-hc          # hc backend against a real hc on PATH (a core of its own per test)
 make test-cli         # Test the termote.sh dev shim
 make test-install     # Test install.sh (fake curl)
 make test-entrypoints # Test Docker entrypoints
@@ -289,5 +293,11 @@ pnpm --filter termote test:e2e:ui           # Run with UI debugger
 `e2e-herdr` job runs it against a headless Herdr 0.9.5 (sha256 pinned) on its own socket,
 `HOME` and XDG dirs, a throwaway repo with a branch `e2e-base` and a workspace `e2e-repo`. Never
 point it at your own Herdr.
+
+`pwa/e2e/hc.spec.ts` skips unless `TERMOTE_E2E_HC=1` (with `HC_SOCKET`, `HC_SESSION`,
+`TERMOTE_E2E_HC_DIR` and `TERMOTE_PASS`): CI's `e2e-hc` job runs it against hc 0.1.16 (sha256 pinned)
+on its own socket, `HOME` and XDG dirs, `headless = "80x24"` in that core's config, and the server
+with sign-in on. `server/mux_hc_real_test.go` runs with `TERMOTE_TEST_HC=1` and refuses a socket
+outside a temporary directory. Never point either at your own core.
 
 Windows equivalents: `tests/test-termote.ps1`, `tests/test-install.ps1`.

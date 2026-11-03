@@ -1,0 +1,74 @@
+{
+ "version": 42,
+ "value": {
+  "spaces": [
+   {
+    "id": "spa",
+    "name": "Work \u001b[31mspace‮",
+    "folder": "/home/u/proj",
+    "tabs": [
+     {
+      "id": "tba",
+      "name": "",
+      "root": {
+       "id": "tba",
+       "type": "row",
+       "children": [
+        {"id": "p1", "type": "block", "content": {"terminal": "t1"}, "size": {"px": 300}},
+        {
+         "id": "c1",
+         "type": "column",
+         "size": {"weight": 0},
+         "children": [
+          {"id": "p2", "type": "block", "content": {"terminal": "t2"}, "size": {"weight": 0}},
+          {
+           "id": "s1",
+           "type": "stack",
+           "active": "p4",
+           "children": [
+            {"id": "p3", "type": "block", "content": {"terminal": "t3"}},
+            {"id": "p4", "type": "block", "content": {"terminal": "t4"}}
+           ]
+          }
+         ]
+        },
+        {"id": "m1", "type": "block", "content": {"mod": "markdown", "props": {"file": "README.md"}}},
+        {"id": "p9", "type": "block", "content": {"terminal": "t9"}, "hidden": true}
+       ],
+       "floating": [
+        {"id": "f1", "content": {"terminal": "t5"}, "edge": "right", "align": "end"}
+       ]
+      }
+     },
+     {
+      "id": "tbb",
+      "name": "logs",
+      "root": {"id": "tbb", "type": "row", "children": [
+       {"id": "p6", "type": "block", "content": {"terminal": "t6"}},
+       {"id": "p7", "type": "block", "content": {"terminal": "rohan/t7"}},
+       {"id": "pz", "type": "block", "content": {"terminal": "t1"}}
+      ]}
+     },
+     {
+      "id": "tbc",
+      "name": "",
+      "root": {"id": "tbc", "type": "row", "children": [
+       {"id": "p8", "type": "block", "content": {"terminal": "t8"}}
+      ]}
+     }
+    ]
+   },
+   {
+    "id": "spb",
+    "name": "",
+    "folder": "/home/u",
+    "tabs": [
+     {"id": "tbd", "name": "", "root": {"id": "tbd", "type": "column", "children": [
+      {"id": "pd", "type": "block", "content": {"terminal": "tb1"}},
+      {"id": "pq", "type": "weird", "content": {"terminal": "t10"}}
+     ]}}
+    ]
+   }
+  ]
+ }
+}

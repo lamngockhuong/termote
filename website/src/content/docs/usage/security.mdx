@@ -60,6 +60,11 @@ what Termote can reach, run it as another user with less access.
 - With Zellij (`--mux zellij`), what you type and Chat messages reach a pane only through the terminal
   of a Termote Zellij client, never through process arguments, which other local users could read. A
   view-only device watches a Zellij pane through `zellij subscribe`, which cannot type.
+- With herdr-core (`--mux hc`), which has no login of its own, Termote runs only natively, never in a
+  container, and `--no-auth` needs `--allow-hc-no-auth`. Termote calls only a fixed list of core
+  methods, on this machine's terminals that the herdr app shows, never changes the app's layout, and
+  writes only the label that marks an agent seen. A view-only device watches through an observer,
+  which the core lets neither type nor resize.
 - A Content-Security-Policy keeps the page from loading or running code from elsewhere.
 - A paired device can carry a time limit (30 days by default when pairing): past it, the device is
   refused and its open terminals close. A device paired by one with a limit never outlasts it.

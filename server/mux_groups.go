@@ -67,7 +67,13 @@ func (g *groupAPI) handleCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), muxTimeout)
 	defer cancel()
-	if !validateTmuxTarget(body.Name) {
+	// hc names a space after its folder (herdr-app does), so it takes no
+	// name; every other backend needs one. Caps().RenameGroup says the same
+	// to the PWA, but it runs tmux commands, so the type decides here.
+	_, unnamed := g.m.(*hcMux)
+	if unnamed {
+		body.Name = ""
+	} else if !validateTmuxTarget(body.Name) {
 		groupError(w, g.m, "new group", errInvalidGroupName)
 		return
 	}
@@ -94,7 +100,13 @@ func (g *groupAPI) handleCreate(w http.ResponseWriter, r *http.Request) {
 	// The directory as typed is what the list shows; an empty one (home)
 	// is not suggested. A failed write never fails the group.
 	if g.recent != nil && strings.TrimSpace(body.Cwd) != "" {
-		if err := g.recent.record(body.Name, filepath.Clean(body.Cwd), cwd); err != nil {
+		// An hc space is listed under its folder's name, the one herdr-app
+		// gives it.
+		name := body.Name
+		if unnamed {
+			name = filepath.Base(cwd)
+		}
+		if err := g.recent.record(name, filepath.Clean(body.Cwd), cwd); err != nil {
 			log.Printf("recent groups: %v", err)
 		}
 	}

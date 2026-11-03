@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/netip"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path"
 	"path/filepath"
@@ -44,6 +45,13 @@ type serveConfig struct {
 	// HerdrAllowNoAuth lets herdr run with auth disabled. herdr exposes every
 	// workspace of the user, so NoAuth alone is refused.
 	HerdrAllowNoAuth bool
+	// HcAllowNoAuth is the same for hc (every herdr-core terminal). HcBin is
+	// hc's absolute path; empty (no saved config) looks it up in PATH.
+	HcAllowNoAuth bool
+	HcBin         string
+	// HcEnv is the core's session (HC_SESSION, HC_SOCKET): saved by start,
+	// else (no saved config) the environment's.
+	HcEnv hcEnv
 	// AllowLocalAddr also accepts the address a request arrived on as its
 	// Host (LAN access; see hostAllowlist).
 	AllowLocalAddr bool
@@ -117,6 +125,8 @@ func newServeConfigFromEnv() serveConfig {
 		MuxBackend:   envOr("TERMOTE_MUX", "tmux"),
 
 		HerdrAllowNoAuth: os.Getenv("TERMOTE_HERDR_ALLOW_NO_AUTH") == "true",
+		HcAllowNoAuth:    os.Getenv("TERMOTE_HC_ALLOW_NO_AUTH") == "true",
+		HcEnv:            hcEnv{Session: os.Getenv("HC_SESSION"), Socket: os.Getenv("HC_SOCKET")},
 		Places:           parsePlacesEnv(os.Getenv("TERMOTE_PLACES")),
 	}
 	// Where the host user's home dir sits in the container's workspace, when
@@ -405,10 +415,28 @@ func newStreamTokenStore() *tokenStore {
 	return s
 }
 
-// newMux returns the backend selected by TERMOTE_MUX. Background work of the
+// newMux returns the backend cfg selects (MuxBackend). Background work of the
 // backend (herdr's event subscription) runs until ctx ends.
-func newMux(ctx context.Context, backend string) (Mux, error) {
+func newMux(ctx context.Context, cfg serveConfig) (Mux, error) {
+	backend := cfg.MuxBackend
 	switch backend {
+	case "hc":
+		// herdr-core has no auth of its own: only this machine's user may
+		// reach it, never a container's server.
+		if runningInContainer() {
+			return nil, errors.New("TERMOTE_MUX=hc is not supported in a container; run termote start --mux hc natively")
+		}
+		bin := cfg.HcBin
+		if bin == "" {
+			var err error
+			if bin, err = exec.LookPath("hc"); err != nil {
+				return nil, fmt.Errorf("hc not found in PATH: %w", err)
+			}
+		}
+		if !filepath.IsAbs(bin) {
+			return nil, fmt.Errorf("hc at %q is not an absolute path", bin)
+		}
+		return newHcMux(ctx, bin, hcChildEnv(cfg.HcEnv)), nil
 	case "tmux":
 		return tmuxMux{}, nil
 	case "herdr":
@@ -419,7 +447,7 @@ func newMux(ctx context.Context, backend string) (Mux, error) {
 		}
 		return newZellijMux(ctx)
 	}
-	return nil, fmt.Errorf("unsupported TERMOTE_MUX %q (supported: tmux, herdr, zellij)", backend)
+	return nil, fmt.Errorf("unsupported TERMOTE_MUX %q (supported: tmux, herdr, zellij, hc)", backend)
 }
 
 // newServeHandler builds the full handler chain: PWA static files,
@@ -619,7 +647,7 @@ func startServeMode(cfg serveConfig) {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	m, err := newMux(ctx, cfg.MuxBackend)
+	m, err := newMux(ctx, cfg)
 	if err != nil {
 		log.Fatal(err)
 	}

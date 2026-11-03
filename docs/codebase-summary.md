@@ -28,9 +28,10 @@ termote/
 ├── server/                     # Go server + CLI, one binary, flat `package main`
 │   ├── main.go                 # Entry point (`serve` runs the server, no args opens the menu)
 │   ├── serve*.go, guard.go, security_headers.go # HTTP server, auth, Host/Origin guards, CSP
-│   ├── mux*.go, stream*.go, pty_*.go # Mux interface + tmux/Herdr/Zellij backends, terminal WebSocket, PTY/ConPTY
+│   ├── mux*.go, stream*.go, pty_*.go # Mux interface + tmux/Herdr/Zellij/herdr-core backends, terminal WebSocket, PTY/ConPTY
 │   ├── herdr_*.go              # Herdr JSON-RPC client, socket/pipe, observer lifetime
 │   ├── zellij_*.go             # Termote's Zellij clients (input, full stream), view-only stream, a pane's shell
+│   ├── hc_*.go                 # herdr-core: framed `hc connect`, typed RPC, autostart, attach stream
 │   ├── agent*.go               # Chat view: Claude Code and Codex sessions, transcripts, dialogs, input
 │   ├── files*.go               # Files/Changes views: pane root, tree, contents, git status/diff, images, saves
 │   ├── uploads*.go             # `/api/mux/uploads` image store
@@ -75,7 +76,7 @@ described in [`system-architecture.md`](system-architecture.md), conventions in
 | Editing a file in Files and Changes          | `components/file-editor.tsx`, `code-editor.tsx`, `file-viewer.tsx`, `markdown-edit-layout.tsx`, `hooks/use-scroll-sync.ts`, `utils/markdown-image-paste.ts`, `utils/cm-languages.ts`, `hooks/use-files.ts` (`useFileDraft`) |
 | Creating a file in Files                     | `components/new-file-dialog.tsx`, `files-view.tsx`, `hooks/use-files.ts` (`created`)                                                                                                                                        |
 | Server entry, auth, guards                   | `server/main.go`, `serve.go`, `guard.go`, `security_headers.go`                                                                                                                                                             |
-| Mux backends                                 | `server/mux.go` (interface + routes), `mux_tmux.go`, `mux_herdr.go`, `mux_zellij*.go`, `zellij_*.go`                                                                                                                        |
+| Mux backends                                 | `server/mux.go` (interface + routes), `mux_tmux.go`, `mux_herdr.go`, `mux_zellij*.go`, `zellij_*.go`, `mux_hc*.go`, `hc_*.go`                                                                                               |
 | Chat view (server)                           | `server/agent.go`, then `agent_claude*.go` / `agent_codex*.go`, `agent_input.go`                                                                                                                                            |
 | Agent overview (server)                      | `server/agent_activity.go` (status since, log), `agent_overview.go`, `agent_subagents.go`                                                                                                                                   |
 | Agent overview (PWA)                         | `components/overview-screen.tsx`, `agent-card.tsx`, `needs-me-queue.tsx`, `hooks/use-agent-overview.ts`                                                                                                                     |
@@ -87,7 +88,7 @@ described in [`system-architecture.md`](system-architecture.md), conventions in
 
 Two things the code does not explain on its own:
 
-- Selecting a tab on Herdr or Zellij changes only which pane this client streams
+- Selecting a tab on Herdr, Zellij or herdr-core changes only which pane this client streams
   (`caps.clientSideSelect`); Herdr's own focus and the user's own Zellij clients stay where they
   were (on Zellij only Termote's client is moved).
 - A split tab shows the pane strip on every backend. On tmux each pane is known by its `%N` and
@@ -104,7 +105,7 @@ Gesture/Toolbar → sendKeyToTerminal()
     ↓
 WebSocket binary frame → /api/mux/stream
     ↓
-termote → PTY/ConPTY → tmux/psmux, Herdr or Zellij pane
+termote → PTY/ConPTY → tmux/psmux, Herdr or Zellij pane (herdr-core: a channel of `hc connect`)
     ↓
 Terminal output → WebSocket binary frame → xterm.js → display
 ```

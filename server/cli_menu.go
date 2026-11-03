@@ -78,11 +78,13 @@ func (c *cli) menuStart() error {
 		"tmux - tmux (psmux on Windows)",
 		"herdr - Herdr workspaces",
 		"zellij - Zellij sessions (Linux, macOS)",
+		"hc - herdr-core, the terminals herdr-app shows",
 	}), " ")
 	if backend == "" {
 		return errors.New("cancelled")
 	}
 	herdr := backend == "herdr"
+	hc := backend == "hc"
 	if backend != "auto" {
 		args = append(args, "--mux", backend)
 	}
@@ -93,6 +95,12 @@ func (c *cli) menuStart() error {
 			return errors.New("cancelled")
 		}
 		args = append(args, "--allow-herdr-no-auth")
+	}
+	if noAuth && hc {
+		if !c.confirm("herdr-core without auth exposes every terminal. Continue?") {
+			return errors.New("cancelled")
+		}
+		args = append(args, "--allow-hc-no-auth")
 	}
 	args = append(args, "--no-auth="+strconv.FormatBool(noAuth))
 	if c.confirm("Publish over Tailscale HTTPS?") {

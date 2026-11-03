@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -26,6 +27,11 @@ type startOptions struct {
 	noAuth      bool
 	fresh       bool
 	herdrNoAuth bool
+	hcNoAuth    bool
+	// hcBin is hc's absolute path (--mux hc), found by findHc; hcEnv the
+	// core's session, from the shell, else as saved.
+	hcBin       string
+	hcEnv       hcEnv
 	port        int
 	tailscale   string
 	noTailscale bool
@@ -59,6 +65,7 @@ func (c *cli) parseStartArgs(args []string) (startOptions, map[string]bool, erro
 	fs.BoolVar(&o.noAuth, "no-auth", false, "")
 	fs.BoolVar(&o.fresh, "fresh", false, "")
 	fs.BoolVar(&o.herdrNoAuth, "allow-herdr-no-auth", false, "")
+	fs.BoolVar(&o.hcNoAuth, "allow-hc-no-auth", false, "")
 	fs.IntVar(&o.port, "port", 0, "")
 	fs.StringVar(&o.tailscale, "tailscale", "", "")
 	fs.BoolVar(&o.noTailscale, "no-tailscale", false, "")
@@ -119,6 +126,10 @@ func mergeSaved(o *startOptions, set map[string]bool, s *savedConfig) {
 	if !set["allow-herdr-no-auth"] {
 		o.herdrNoAuth = s.HerdrAllowNoAuth
 	}
+	if !set["allow-hc-no-auth"] {
+		o.hcNoAuth = s.HcAllowNoAuth
+	}
+	o.hcEnv = s.HcEnv
 	if !set["user"] {
 		o.user = s.authUser()
 	}
@@ -153,7 +164,7 @@ func (c *cli) validateStart(o *startOptions) error {
 	if o.port < 1 || o.port > 65535 {
 		return usageError("invalid port: %d", o.port)
 	}
-	if err := validateMux(o.mux, o.noAuth, o.herdrNoAuth); err != nil {
+	if err := validateMux(o.mux, o.noAuth, o.herdrNoAuth, o.hcNoAuth); err != nil {
 		return err
 	}
 	if o.mux == "zellij" && c.goos == "windows" {
@@ -183,18 +194,22 @@ func (c *cli) validateStart(o *startOptions) error {
 }
 
 // validateMux checks a --mux value ("" is not chosen yet) and refuses herdr
-// without auth unless allowNoAuth accepts it; start and container up share it
-// (so zellij is refused on Windows by start alone: the container runs it on
-// any host).
-func validateMux(mux string, noAuth, allowNoAuth bool) error {
+// or hc without auth unless herdrNoAuth or hcNoAuth accepts it; start and
+// container up share it (so zellij is refused on Windows by start alone: the
+// container runs it on any host; container up refuses hc itself).
+func validateMux(mux string, noAuth, herdrNoAuth, hcNoAuth bool) error {
 	switch mux {
 	case "tmux", "", "zellij":
 	case "herdr":
-		if noAuth && !allowNoAuth {
+		if noAuth && !herdrNoAuth {
 			return usageError("--mux herdr --no-auth would expose every herdr workspace without a password; add --allow-herdr-no-auth to accept that")
 		}
+	case "hc":
+		if noAuth && !hcNoAuth {
+			return usageError("--mux hc --no-auth would expose every herdr-core terminal without a password; add --allow-hc-no-auth to accept that")
+		}
 	default:
-		return usageError("unknown --mux %q (use: tmux, herdr, zellij)", mux)
+		return usageError("unknown --mux %q (use: tmux, herdr, zellij, hc)", mux)
 	}
 	return nil
 }
@@ -244,9 +259,53 @@ func herdrReachable() bool {
 	return true
 }
 
+// hcInstall is how to get hc, the herdr-core client.
+const hcInstall = "install herdr-core " + hcMinVersion + " or later (https://herdr.dev/core/; its releases carry a checksum, no signature) or use --mux tmux"
+
+// findHc finds hc in PATH as an absolute path, the one the service runs
+// (never one found relative to the current directory), and checks its
+// version.
+func (c *cli) findHc() (string, error) {
+	bin, err := c.run.LookPath("hc")
+	if errors.Is(err, exec.ErrDot) || (err == nil && !filepath.IsAbs(bin)) {
+		return "", fmt.Errorf("hc was found at %s, not an absolute path; put the folder holding hc in PATH as an absolute path", bin)
+	}
+	if err != nil {
+		return "", errors.New("hc not found in PATH; " + hcInstall)
+	}
+	out, err := c.run.Output("", nil, bin, "--version")
+	// "hc 0.1.16", perhaps followed by more words
+	v := ""
+	if f := strings.Fields(string(out)); len(f) >= 2 && f[0] == "hc" {
+		v = f[1]
+	}
+	if err != nil || !validHcVersion(v) {
+		return "", errors.New("could not read the hc version; " + hcInstall)
+	}
+	if compareVersions(v, hcMinVersion) < 0 {
+		return "", fmt.Errorf("hc %s is too old; run: hc update (termote needs %s or later)", v, hcMinVersion)
+	}
+	return bin, nil
+}
+
+// shellHcEnv is the core the shell running start talks to: its HC_SESSION
+// and HC_SOCKET, each kept as saved when the shell has none.
+func (c *cli) shellHcEnv(saved hcEnv) hcEnv {
+	if v := c.getenv("HC_SESSION"); v != "" {
+		saved.Session = v
+	}
+	if v := c.getenv("HC_SOCKET"); v != "" {
+		saved.Socket = v
+	}
+	return saved
+}
+
 // preflight checks that the backend's command is installed.
 func (c *cli) preflight(mux string) error {
 	switch mux {
+	case "hc":
+		_, err := c.findHc()
+		return err
 	case "tmux":
 		if _, err := c.run.LookPath("tmux"); err != nil {
 			if c.goos == "windows" {
@@ -296,7 +355,12 @@ func (c *cli) cmdStart(args []string) error {
 	if err := c.validateStart(&o); err != nil {
 		return err
 	}
-	if err := c.preflight(o.mux); err != nil {
+	if o.mux == "hc" {
+		if o.hcBin, err = c.findHc(); err != nil {
+			return err
+		}
+		o.hcEnv = c.shellHcEnv(o.hcEnv)
+	} else if err := c.preflight(o.mux); err != nil {
 		return err
 	}
 	if err := c.startAllowPaths(o, saved); err != nil {
@@ -378,6 +442,9 @@ func (c *cli) cmdStart(args []string) error {
 		AllowLocalUsers:  o.allowLocalUsers,
 		AllowPaths:       o.allowPaths,
 		HerdrAllowNoAuth: o.herdrNoAuth,
+		HcAllowNoAuth:    o.hcNoAuth,
+		HcBin:            o.hcBin,
+		HcEnv:            o.hcEnv,
 		User:             o.user,
 		Password:         c.keptPassword(pass, saved),
 		Container:        c.savedContainer(saved),
@@ -723,6 +790,9 @@ var degradedGrace = 3 * time.Second
 func degradedBackendMsg(backend string) string {
 	if backend == "herdr" {
 		return "The server runs, but herdr does not answer yet; termote starts it when you open the page (see: termote logs)"
+	}
+	if backend == "hc" {
+		return "The server runs, but herdr-core does not answer yet; termote starts it when you open the page (see: termote logs)"
 	}
 	return fmt.Sprintf("The server runs, but its %s backend does not answer yet; it connects once that runs (see: termote logs)", backend)
 }

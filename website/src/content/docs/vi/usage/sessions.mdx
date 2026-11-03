@@ -1,6 +1,6 @@
 ---
 title: Quản lý phiên
-description: Quản lý phiên terminal với tmux, Herdr hoặc Zellij
+description: Quản lý phiên terminal với tmux, Herdr, Zellij hoặc herdr-core
 ---
 
 import { Aside, Steps } from "@astrojs/starlight/components";
@@ -68,6 +68,8 @@ session:
   được ghi lại, và thiết bị chỉ xem không thấy danh sách này.
 - **Đổi tên**: trong menu **⋯**, sửa tên ngay tại chỗ. Session tmux riêng của Termote (`main`) và
   phiên Zellij `main` không đổi tên được.
+- **herdr-core**: mỗi group là một space của ứng dụng herdr. Ứng dụng đặt tên space theo thư mục,
+  nên **New workspace** chỉ hỏi thư mục, và không đổi tên space được.
 - **Đóng**: trong menu **⋯**, hỏi trước và nói bao nhiêu tab sẽ kết thúc theo. Đóng session tmux
   riêng của Termote thì một session mới, rỗng được tạo ngay, và mọi thiết bị đang xem nó tự kết nối
   lại vào đó (phiên Zellij `main` cũng vậy). Đóng một phiên Zellij sẽ xóa nó: Zellij không thể khôi
@@ -118,6 +120,9 @@ Trên tmux, Herdr và Zellij, các thao tác chạy hơi khác nhau:
   trên màn hình các pane đổi chỗ, còn dải pane giữ thứ tự cũ. Zoom kéo mọi client đang xem tab đó,
   kể cả Zellij của bạn, về pane được zoom. Qua API, split vào một thư mục khác thư mục của pane bị
   từ chối (Zellij bỏ qua thư mục này).
+- **herdr-core**: như Herdr, trên máy tính một tab có 2 đến 4 pane hiện các pane cạnh nhau, theo bố
+  cục của ứng dụng herdr. Menu chỉ có **Split right**, **Split down** và **Close pane**: ứng dụng đặt
+  pane mới sau pane cuối của tab, còn zoom, swap và resize thì làm trong ứng dụng.
 
 ### Đặt tên pane
 

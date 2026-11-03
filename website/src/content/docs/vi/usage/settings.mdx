@@ -49,7 +49,7 @@ nào. Nếu hệ điều hành của bạn đã bật giảm chuyển
 
 **Mẹo**: Dùng "System clipboard" để dán từ các ứng dụng khác. Dùng "tmux buffer" để dán text đã copy trong tmux.
 
-Với backend tmux, lựa chọn thứ hai có nhãn **tmux buffer**; với backend khác, nhãn là **Session buffer**. Herdr và Zellij không có tmux buffer, nên khi chạy backend Herdr hoặc Zellij thì mục này bị ẩn và nút Paste luôn dán từ clipboard hệ thống.
+Với backend tmux, lựa chọn thứ hai có nhãn **tmux buffer**; với backend khác, nhãn là **Session buffer**. Herdr, Zellij và herdr-core không có tmux buffer, nên khi chạy một trong các backend đó thì mục này bị ẩn và nút Paste luôn dán từ clipboard hệ thống.
 
 ## Toolbar mặc định mở rộng
 
@@ -91,7 +91,7 @@ Trên máy tính, tab Herdr có từ 2 đến 4 pane sẽ hiện các pane cạn
 | Bật      | Tab có nhiều pane hiện các pane cạnh nhau | ✓        |
 | Tắt      | Mỗi lần một pane                         |          |
 
-Cài đặt này chỉ có với Herdr 0.9.3 trở lên, không có trên Windows, và chỉ trên máy tính có toàn quyền.
+Cài đặt này chỉ có với Herdr 0.9.3 trở lên (không có trên Windows) hoặc với herdr-core (`--mux hc`, theo bố cục của ứng dụng herdr), và chỉ trên máy tính có toàn quyền.
 
 ## Cho pane Herdr vừa với thiết bị này (Chỉ Herdr)
 
@@ -115,7 +115,7 @@ Thiết bị bị giành mất khổ sẽ hiện một thông báo và tiếp t�
 | Tắt      | Pane giữ khổ của desktop                    | ✓        |
 | Bật      | Pane vừa với thiết bị này khi trang đang hiện |          |
 
-Tùy chọn này chỉ hiện khi dùng backend Herdr. Trên macOS, nếu server bị kill (`kill -9`) lúc một thiết bị đang giữ khổ pane, pane giữ nguyên khổ đó cho tới khi service khởi động lại.
+Tùy chọn này chỉ hiện khi dùng backend Herdr hoặc herdr-core. Trên macOS, nếu server bị kill (`kill -9`) lúc một thiết bị đang giữ khổ pane, pane giữ nguyên khổ đó cho tới khi service khởi động lại.
 
 ## Hiện thanh tab phiên (Chỉ desktop)
 

@@ -48,7 +48,7 @@ Controls where the **Paste** button in the toolbar gets content from.
 
 **Tip**: Use "System clipboard" for pasting from other apps. Use "tmux buffer" for pasting text copied within tmux.
 
-With the tmux backend the second option is labelled **tmux buffer**; with any other backend it is labelled **Session buffer**. With the Herdr and Zellij backends there is no tmux buffer, so this setting is hidden and the Paste button always uses the system clipboard.
+With the tmux backend the second option is labelled **tmux buffer**; with any other backend it is labelled **Session buffer**. With the Herdr, Zellij and herdr-core backends there is no tmux buffer, so this setting is hidden and the Paste button always uses the system clipboard.
 
 ## Toolbar Default Expanded
 
@@ -88,7 +88,7 @@ On a computer, a Herdr tab of 2 to 4 panes shows its panes side by side, in the 
 | On     | A split tab shows its panes side by side  | ✓       |
 | Off    | One pane at a time                        |         |
 
-This setting only appears with Herdr 0.9.3 or later, not on Windows, on a computer with full rights.
+This setting only appears with Herdr 0.9.3 or later, not on Windows, or with herdr-core (`--mux hc`, the herdr app's layout), on a computer with full rights.
 
 ## Fit Herdr Pane to This Device (Herdr Only)
 
@@ -101,7 +101,7 @@ With this switch on, the PWA sets the pane's size to fit its own screen while th
 | Off    | Pane keeps the desktop's size             | ✓       |
 | On     | Pane fits this device while it is shown   |         |
 
-This setting only appears with the Herdr backend. On macOS, if the server is killed (`kill -9`) while a device drives the size, the pane keeps that size until the service starts again.
+This setting only appears with the Herdr and herdr-core backends. On macOS, if the server is killed (`kill -9`) while a device drives the size, the pane keeps that size until the service starts again.
 
 ## Show Session Tabs (Desktop Only)
 

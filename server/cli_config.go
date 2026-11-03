@@ -38,6 +38,14 @@ type savedConfig struct {
 	// in Files.
 	AllowPaths       []string
 	HerdrAllowNoAuth bool
+	// HcAllowNoAuth lets --mux hc run without auth; HcBin is hc's absolute
+	// path, found by start (--mux hc).
+	HcAllowNoAuth bool
+	HcBin         string
+	// HcEnv is the herdr-core session the shell running start talks to
+	// (HC_SESSION, HC_SOCKET), so the service reaches the same core: Windows
+	// tasks take no environment of their own.
+	HcEnv hcEnv
 	// User is the Basic auth username, shared by native and container like
 	// the password; "" (a config saved before it existed) means admin.
 	User     string
@@ -196,6 +204,10 @@ const (
 	keyMux              = "TERMOTE_MUX"
 	keyAllowedHosts     = "TERMOTE_ALLOWED_HOSTS"
 	keyHerdrAllowNoAuth = "TERMOTE_HERDR_ALLOW_NO_AUTH"
+	keyHcAllowNoAuth    = "TERMOTE_HC_ALLOW_NO_AUTH"
+	keyHcBin            = "TERMOTE_HC_BIN"
+	keyHcSession        = "TERMOTE_HC_SESSION"
+	keyHcSocket         = "TERMOTE_HC_SOCKET"
 	keyUser             = "TERMOTE_USER"
 	keyAllowLocalUsers  = "TERMOTE_ALLOWED_LOCAL_USERS"
 	keyAllowPaths       = "TERMOTE_ALLOWED_PATHS" // ':'-separated
@@ -239,6 +251,9 @@ func parseUnixConfig(data []byte, key func() string) (*savedConfig, error) {
 		AllowLocalUsers:  splitHosts(kv[keyAllowLocalUsers]),
 		AllowPaths:       splitPaths(kv[keyAllowPaths]),
 		HerdrAllowNoAuth: kv[keyHerdrAllowNoAuth] == "true",
+		HcAllowNoAuth:    kv[keyHcAllowNoAuth] == "true",
+		HcBin:            kv[keyHcBin],
+		HcEnv:            hcEnv{Session: kv[keyHcSession], Socket: kv[keyHcSocket]},
 		User:             kv[keyUser],
 	}
 	cfg.Port, _ = strconv.Atoi(kv[keyPort])
@@ -276,7 +291,7 @@ func formatUnixConfig(cfg savedConfig, key string) ([]byte, error) {
 		}
 		mac = passwordMAC(enc, key)
 	}
-	values := []string{cfg.Tailscale, cfg.Mux, strings.Join(cfg.AllowHosts, ","), strings.Join(cfg.AllowLocalUsers, ","), cfg.User}
+	values := []string{cfg.Tailscale, cfg.Mux, strings.Join(cfg.AllowHosts, ","), strings.Join(cfg.AllowLocalUsers, ","), cfg.User, cfg.HcBin, cfg.HcEnv.Session, cfg.HcEnv.Socket}
 	paths := slices.Clone(cfg.AllowPaths)
 	if cc := cfg.Container; cc != nil {
 		values = append(values, cc.Tailscale, strings.Join(cc.AllowHosts, ","), cc.Workspace, cc.Mux)
@@ -305,6 +320,12 @@ func formatUnixConfig(cfg savedConfig, key string) ([]byte, error) {
 	w(keyMux, cfg.Mux)
 	w(keyAllowedHosts, strings.Join(cfg.AllowHosts, ","))
 	w(keyHerdrAllowNoAuth, strconv.FormatBool(cfg.HerdrAllowNoAuth))
+	if cfg.Mux == "hc" || cfg.HcAllowNoAuth {
+		w(keyHcAllowNoAuth, strconv.FormatBool(cfg.HcAllowNoAuth))
+		w(keyHcBin, cfg.HcBin)
+		w(keyHcSession, cfg.HcEnv.Session)
+		w(keyHcSocket, cfg.HcEnv.Socket)
+	}
 	w(keyUser, cfg.User)
 	if len(cfg.AllowLocalUsers) > 0 {
 		w(keyAllowLocalUsers, strings.Join(cfg.AllowLocalUsers, ","))
@@ -341,6 +362,10 @@ type windowsConfigFile struct {
 	AllowLocalUser   []string             `json:"AllowLocalUser,omitempty"`
 	AllowPath        []string             `json:"AllowPath,omitempty"`
 	HerdrAllowNoAuth bool                 `json:"HerdrAllowNoAuth,omitempty"`
+	HcAllowNoAuth    bool                 `json:"HcAllowNoAuth,omitempty"`
+	HcBin            string               `json:"HcBin,omitempty"`
+	HcSession        string               `json:"HcSession,omitempty"`
+	HcSocket         string               `json:"HcSocket,omitempty"`
 	User             string               `json:"User,omitempty"`
 	Container        *windowsContainerCfg `json:"Container,omitempty"`
 	SavedAt          string               `json:"SavedAt"`
@@ -382,6 +407,9 @@ func parseWindowsConfig(data []byte) (*savedConfig, error) {
 		AllowLocalUsers:  f.AllowLocalUser,
 		AllowPaths:       f.AllowPath,
 		HerdrAllowNoAuth: f.HerdrAllowNoAuth,
+		HcAllowNoAuth:    f.HcAllowNoAuth,
+		HcBin:            f.HcBin,
+		HcEnv:            hcEnv{Session: f.HcSession, Socket: f.HcSocket},
 		User:             f.User,
 	}
 	if cc := f.Container; cc != nil {
@@ -414,6 +442,10 @@ func formatWindowsConfig(cfg savedConfig, now time.Time) ([]byte, error) {
 		AllowLocalUser:   cfg.AllowLocalUsers,
 		AllowPath:        cfg.AllowPaths,
 		HerdrAllowNoAuth: cfg.HerdrAllowNoAuth,
+		HcAllowNoAuth:    cfg.HcAllowNoAuth,
+		HcBin:            cfg.HcBin,
+		HcSession:        cfg.HcEnv.Session,
+		HcSocket:         cfg.HcEnv.Socket,
 		User:             cfg.User,
 		SavedAt:          now.Format(time.RFC3339),
 	}

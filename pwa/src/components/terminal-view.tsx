@@ -15,6 +15,7 @@ import { type StreamControl, useTermSocket } from '../hooks/use-term-socket'
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
 import { readToken, type UiStyle } from '../ui-style'
+import { backendIsPaneStream } from '../utils/backend'
 import { safeUrl } from '../utils/markdown-safety'
 import { recordSelection } from '../utils/pane-selection'
 import {
@@ -91,6 +92,9 @@ interface Props {
   // otherwise resize the pane, and Claude Code cuts a dialog taller than
   // the pane, so the card would come and go with it.
   covered?: boolean
+  // A person is looking at this pane here: drawn, not covered by another
+  // view than Chat, on a full client. Shared as herdr.seen (hc).
+  watched?: boolean
   onConnectionStateChange?: (state: ConnectionState) => void
   // A paste that carries an image and no text goes here instead of the
   // terminal (the server has uploads); unset, every paste is text.
@@ -282,6 +286,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       driveSize = false,
       onDriveLost,
       covered = false,
+      watched = false,
       onConnectionStateChange,
       onPasteImage,
       copyOnSelect = false,
@@ -313,8 +318,9 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
     fontSizeRef.current = fontSize
     const fontFamilyRef = useRef(fontFamily)
     fontFamilyRef.current = fontFamily
-    // herdr fixes the pane size and answers terminal queries itself.
-    const isHerdr = backend === 'herdr'
+    // herdr (and herdr-core) fixes the pane size and answers terminal
+    // queries itself.
+    const isHerdr = backendIsPaneStream(backend)
     const isHerdrRef = useRef(isHerdr)
     isHerdrRef.current = isHerdr
     const copyModeRef = useRef(copyModeSupported)
@@ -505,6 +511,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       followPane,
       streamKey,
       paneSeen,
+      visible: watched && !readOnly,
       // The size the client would take, so measured at the chosen font,
       // not the zoomed one a fixed grid shows.
       getSize: () => {

@@ -129,6 +129,7 @@ func (*zellijMux) Caps() Caps {
 		ClientSideSelect: true,
 		PaneText:         true,
 		Groups:           true,
+		RenameGroup:      true,
 		ReorderTabs:      true,
 		Files:            true,
 		AgentChat:        agentProcSupported,

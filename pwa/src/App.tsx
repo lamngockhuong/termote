@@ -116,6 +116,7 @@ import {
   reloadToNewVersion,
   useAppUpdate,
 } from './utils/app-update'
+import { backendIsPaneStream } from './utils/backend'
 import { requestDraftInsert } from './utils/chat-draft'
 import {
   type DeepLink,
@@ -486,14 +487,15 @@ export default function App({
     removePane(pendingPaneId!)
     setPendingPaneId(null)
   }, [pendingPaneId, removePane])
-  const isHerdr = mux.backend === 'herdr'
   const isZellij = mux.backend === 'zellij'
-  // Herdr streams each pane on its own and arranges them: a desktop shows
-  // the tab's panes side by side (the layout view), from the snapshot's
-  // layout (read from sessions: a snapshot that came while a pane was being
-  // picked updates them, not activeSession)
+  // Herdr and herdr-core stream each pane on its own at the size they keep
+  const paneStream = backendIsPaneStream(mux.backend)
+  // They arrange the panes: a desktop shows the tab's panes side by side
+  // (the layout view), from the snapshot's layout (read from sessions: a
+  // snapshot that came while a pane was being picked updates them, not
+  // activeSession)
   const panesOneByOne =
-    isHerdr && !!mux.caps.paneStream && !!mux.caps.paneLayout
+    paneStream && !!mux.caps.paneStream && !!mux.caps.paneLayout
   const tabLayout = sessions.find((s) => s.id === activeSession.id)?.layout
   const layoutInput = {
     paneStream: panesOneByOne,
@@ -538,18 +540,22 @@ export default function App({
   useEffect(() => refreshLayout.cancel, [refreshLayout])
   // The pane the layout view shows zoomed: Zoom ends that zoom
   const shownZoomed = layoutShown ? zoomedPane(tabLayout) : undefined
-  // Groups (tmux and Zellij sessions, Herdr workspaces) made, renamed and
-  // closed here. The default session (tmux: its id is its name, the others
-  // are "$N"; Zellij: the one named "main") cannot be renamed, and closing
-  // it starts a new, empty one at once.
-  const groupKind: GroupKind = isHerdr
+  // Groups (tmux and Zellij sessions, Herdr workspaces, herdr-core spaces)
+  // made, renamed and closed here. The default session (tmux: its id is its
+  // name, the others are "$N"; Zellij: the one named "main") cannot be
+  // renamed, and closing it starts a new, empty one at once. A herdr-core
+  // space is named after its folder: it takes no name (caps.renameGroup).
+  const groupKind: GroupKind = paneStream
     ? 'workspace'
     : isZellij
       ? 'zellij'
       : 'tmux'
   const groupNoun = groupNounOf(groupKind, t)
+  const namedGroups = mux.caps.renameGroup !== false
   const isDefaultGroup = (id: string) =>
-    isZellij ? id === ZELLIJ_DEFAULT_GROUP_ID : !isHerdr && !id.startsWith('$')
+    isZellij
+      ? id === ZELLIJ_DEFAULT_GROUP_ID
+      : groupKind === 'tmux' && !id.startsWith('$')
   const [newGroupOpen, setNewGroupOpen] = useState(false)
   const [pendingGroupCloseId, setPendingGroupCloseId] = useState<string | null>(
     null,
@@ -602,7 +608,7 @@ export default function App({
           onNew: () => setNewGroupOpen(true),
           onRename: renameGroup,
           onClose: setPendingGroupCloseId,
-          canRename: (id) => !isDefaultGroup(id),
+          canRename: (id) => namedGroups && !isDefaultGroup(id),
           ...worktreeActions,
         }
       : undefined
@@ -1081,7 +1087,7 @@ export default function App({
 
   // The pane keeps the backend's size: Herdr, and Zellij's view-only stream
   // (screen renders, like Herdr's).
-  const fixedSize = isHerdr || (isZellij && readOnly)
+  const fixedSize = paneStream || (isZellij && readOnly)
 
   // Swipes and long press send input; while view-only only scrolling and
   // zooming remain.
@@ -2171,7 +2177,7 @@ export default function App({
                       layout={tabLayout}
                       layoutWanted={layoutWanted}
                       perPane={panesOneByOne}
-                      agentPaste={isHerdr || isZellij}
+                      agentPaste={paneStream || isZellij}
                       onSelect={
                         mux.caps.clientSideSelect || !readOnly
                           ? pickPane
@@ -2201,7 +2207,7 @@ export default function App({
                         // the pane (Herdr scrolls it for every client)
                         serverScroll: !!mux.caps.scroll && !readOnly,
                         bracketedPaste:
-                          (isHerdr || isZellij) && !!activeSession.hasAgent,
+                          (paneStream || isZellij) && !!activeSession.hasAgent,
                         fontSize: fontSize,
                         fontFamily: settings.terminalFont,
                         theme: resolvedTheme,
@@ -2223,6 +2229,15 @@ export default function App({
                         // Also while the side panel is dragged (fitted once on
                         // release) or covers it maximized (no resize at all)
                         covered: !isTerminalView || holdTerminalSize,
+                        // Someone looks at the pane: the terminal shows (not
+                        // under the maximized side panel or the overview), or
+                        // its Chat view
+                        watched:
+                          !readOnly &&
+                          !overviewOpen &&
+                          (isTerminalView
+                            ? !(hasSidePanel && panelMaximized)
+                            : currentView.id === CHAT_VIEW_ID),
                         onConnectionStateChange: setStreamState,
                         onPasteImage: uploadsOn ? attachImage : undefined,
                       }}
@@ -2432,6 +2447,7 @@ export default function App({
       {newGroupOpen && (
         <GroupDialog
           kind={groupKind}
+          named={namedGroups}
           // Never on a view-only client: the server says false there, and
           // the dialog does not open
           recent={!!mux.caps.recentGroups}

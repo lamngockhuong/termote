@@ -14,7 +14,8 @@ nên không phải cài thêm tiến trình terminal nào khác.
 termote cần một backend terminal: **tmux** (trên Windows là **psmux**) hoặc một server
 **[Herdr](https://herdr.dev/#install)** đang chạy (xem [Backend Herdr](#backend-herdr)); chỉ cần một trong hai. Trên Linux và macOS,
 **[Zellij](https://zellij.dev/documentation/installation)** 0.45.0 trở lên là lựa chọn thứ ba (xem
-[Backend Zellij](#backend-zellij)).
+[Backend Zellij](#backend-zellij)). Lựa chọn thứ tư, có trên mọi hệ điều hành, là **[herdr-core](https://herdr.dev/core/)**
+(`hc`) 0.1.16 trở lên, tức phần lõi mà ứng dụng herdr kết nối tới (xem [Backend herdr-core](#backend-herdr-core)).
 
 <Tabs>
   <TabItem label="Linux">
@@ -115,8 +116,8 @@ nháp chưa lưu vẫn nằm ở `localhost`, và app đã cài phải được 
    thì `herdr.sock` trong thư mục config của Herdr: `$XDG_CONFIG_HOME/herdr` hoặc `~/.config/herdr`; trên Windows
    là `%APPDATA%\herdr`, kết nối tới `\\.\pipe\` cộng đường dẫn đó), tmux (trên Windows là psmux) nếu đã được cài. Khi có cả hai, nó hỏi bạn; nếu không có terminal để
    hỏi, nó chọn tmux và in ra cách đổi. Khi không có cái nào, nó dừng lại và gợi ý cách cài. Lựa chọn được lưu
-   lại và không dò lại nữa, trừ khi bạn truyền `--mux`. Zellij không bao giờ được dò: hãy chọn bằng
-   `--mux zellij` hoặc menu (`termote` không kèm lệnh).
+   lại và không dò lại nữa, trừ khi bạn truyền `--mux`. Zellij và herdr-core không bao giờ được dò: hãy chọn
+   bằng `--mux zellij` hay `--mux hc`, hoặc qua menu (`termote` không kèm lệnh).
 
 2. **Tạo mật khẩu admin** ở lần đầu (hoặc khi có `--fresh`): gõ một mật khẩu, hoặc nhấn Enter để tự sinh. Mật
    khẩu chỉ được in ra một lần; về sau `termote show-password` sẽ hiện lại.
@@ -156,7 +157,7 @@ sẽ khởi động server y như lần trước. Tùy chọn kiểu bật/tắt
 | `--tailscale <host[:port]>` | Công khai qua [Tailscale HTTPS](/vi/installation/tailscale/) (mặc định 443) |
 | `--no-tailscale`            | Ngừng công khai qua Tailscale                                          |
 | `--no-auth[=false]`         | Tắt đăng nhập                                                          |
-| `--mux <tmux\|herdr\|zellij>` | Backend terminal (mặc định: dò tìm ở lần đầu; zellij: Linux, macOS)  |
+| `--mux <tmux\|herdr\|zellij\|hc>` | Backend terminal (mặc định: dò tìm ở lần đầu; zellij: Linux, macOS; hc: herdr-core) |
 | `--allow-host <name>`       | Cho phép thêm một tên trong header `Host` (lặp được, không có ký tự đại diện) |
 | `--remove-host <name>`      | Bỏ một tên đã cho phép (lặp được)                                      |
 | `--allow-local-user <name>` | Cho một OS user khác trên máy này kết nối, ví dụ proxy đứng trước      |
@@ -164,6 +165,7 @@ sẽ khởi động server y như lần trước. Tùy chọn kiểu bật/tắt
 | `--allow-path <dir>`        | Hiện một thư mục trong Files, ở mục [Places](/vi/usage/files-changes/#places) (lặp được) |
 | `--remove-path <dir>`       | Bỏ một thư mục đã cho phép (lặp được)                                  |
 | `--allow-herdr-no-auth`     | Bắt buộc khi dùng `--mux herdr --no-auth`                              |
+| `--allow-hc-no-auth`        | Bắt buộc khi dùng `--mux hc --no-auth`                                 |
 | `--user <name>`             | Tên đăng nhập (mặc định `admin`; dùng chung với container)             |
 | `--fresh`                   | Đặt mật khẩu mới                                                       |
 
@@ -271,6 +273,41 @@ và, trên macOS, `TMPDIR` từ shell của bạn sang service, để service th
   - Đóng một phiên từ Termote sẽ xóa nó: Zellij không thể khôi phục lại.
   - Trên Windows, `--mux zellij` ở chế độ native bị từ chối; hãy dùng `termote container up --mux zellij`, xem
   [Cài đặt Container](/vi/installation/docker/#backend-terminal).
+</Aside>
+
+## Backend herdr-core
+
+[herdr-core](https://herdr.dev/core/) giữ các terminal chạy cho ứng dụng herdr và mọi client khác. Với
+`--mux hc`, Termote là thêm một client như thế: nó hiện đúng các space, tab và pane mà ứng dụng herdr đang hiện
+trên máy này, theo bố cục của ứng dụng. Cần có `hc` 0.1.16 trở lên trong PATH (bản phát hành của hc chỉ kèm
+mã băm để đối chiếu, không có chữ ký); `start` kiểm phiên bản rồi lưu lại đường dẫn tới `hc`. Termote không bao giờ tự
+chọn backend này:
+
+```bash
+termote start --mux hc
+```
+
+- **Ứng dụng herdr không cần đang chạy.** Có bố cục của ứng dụng thì Termote đọc bố cục đó, không có thì xếp
+  terminal theo nhãn của chúng. Tab, split hay đóng pane làm trong Termote hiện bên ứng dụng sau khoảng một
+  giây, và ngược lại.
+- **Chỉ terminal của ứng dụng herdr được hiện.** Terminal do chương trình khác mở trong phần lõi mà không mang
+  nhãn của ứng dụng thì bị ẩn, giống trong ứng dụng.
+- **Gõ từ điện thoại không đổi khổ pane trên desktop.** Pane giữ khổ của desktop, trừ khi bạn bật
+  **Fit herdr pane to this device** trong Settings.
+- **Trạng thái agent** do chính agent báo (Claude Code báo `working`, `blocked` và `done`). Agent bạn đã xem trong
+  Termote thôi hiện "done" bên ứng dụng, và ngược lại.
+- **Group mới không có tên**: ứng dụng đặt tên space theo thư mục, nên Termote chỉ hỏi thư mục, và không đổi tên
+  group được. Zoom, swap, resize và tên pane để ứng dụng lo.
+- **Termote tự khởi động phần lõi** khi bạn mở trang mà nó chưa chạy, giống cách Termote khởi động Herdr. Phần
+  lõi do Termote khởi động mang môi trường của service, và terminal ứng dụng mở sau đó thừa hưởng môi trường
+  ấy. `termote stop` và `termote uninstall` không bao giờ dừng phần lõi.
+- `start` lưu `HC_SESSION` và `HC_SOCKET` của shell vào config, để service nói chuyện với đúng phần lõi mà shell
+  đó dùng; lần `start` sau từ một shell không có hai biến này vẫn giữ giá trị đã lưu.
+
+<Aside type="caution" title="herdr-core không có đăng nhập riêng">
+  Ai chạm được tới socket của phần lõi là điều khiển được mọi terminal. Vì vậy Termote không bao giờ chạy
+  backend này trong container (`container up --mux hc` bị từ chối), và `--mux hc --no-auth` bị từ chối nếu
+  không kèm `--allow-hc-no-auth`. Terminal của các máy khác nối vào phần lõi không được hiện.
 </Aside>
 
 ## Quản lý server

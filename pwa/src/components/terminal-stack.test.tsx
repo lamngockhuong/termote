@@ -275,6 +275,24 @@ describe('TerminalStack', () => {
     expect(onSelect).toHaveBeenCalledWith('a')
   })
 
+  it('counts as looked at only the panes drawn, and only when the page does', () => {
+    const view = { ...props().view, watched: true }
+    const { update } = renderStack({ view })
+    expect(views.get('a')!.watched).toBe(true)
+    expect(views.get('b')!.watched).toBe(true)
+    // A desktop zoom hides every pane but the zoomed one
+    const zoomed = { ...LAYOUT, zoomed: true, zoomedPaneId: 'b' }
+    update({ view, layout: zoomed })
+    expect(views.get('a')!.watched).toBe(false)
+    expect(views.get('b')!.watched).toBe(true)
+    update({ view: { ...view, watched: false }, layout: zoomed })
+    expect(views.get('b')!.watched).toBe(false)
+    // Under the Chat view only the pane it shows is looked at
+    update({ view: { ...view, covered: true } })
+    expect(views.get('a')!.watched).toBe(true)
+    expect(views.get('b')!.watched).toBe(false)
+  })
+
   it('a pane picked during a zoom shows, and stays picked after it', () => {
     const zoomed = { ...LAYOUT, zoomed: true, zoomedPaneId: 'b' }
     const { update } = renderStack({ activePaneId: 'b', layout: zoomed })
