@@ -632,11 +632,59 @@ func TestTmuxPaneDirInRealSession(t *testing.T) {
 		got, key, err = tmuxMux{}.PaneDir(ctx, "0")
 		return got == dir
 	})
-	if err != nil || got != dir || !tmuxPaneIDRe.MatchString(key) {
+	if id, pid, ok := strings.Cut(key, "@"); err != nil || got != dir || !ok || !tmuxPaneIDRe.MatchString(id) || pid == "" {
 		t.Fatalf("PaneDir(0) = %q, %q, %v", got, key, err)
 	}
 	if _, _, err := (tmuxMux{}).PaneDir(ctx, "5"); !errors.Is(err, errUnknownPane) {
 		t.Errorf("PaneDir(5) with a window named 5-x = %v, want unknown pane", err)
+	}
+}
+
+// A restarted tmux server numbers its panes from %0 again: the new pane's
+// root is its own directory at once, not the one the old pane with its id
+// settled on (a route with the new root would answer root changed).
+func TestTmuxPaneRootAfterServerRestart(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil || runtime.GOOS == "windows" {
+		t.Skip("needs tmux with a private socket")
+	}
+	origSocket, origSession := tmuxSocket, tmuxSession
+	tmuxSocket = filepath.Join(t.TempDir(), "tmux.sock")
+	tmuxSession = fmt.Sprintf("termote-restart-%d", os.Getpid())
+	t.Cleanup(func() {
+		tmuxCmd(context.Background(), "kill-server").Run()
+		tmuxSocket, tmuxSession = origSocket, origSession
+	})
+	ctx := context.Background()
+	rr := newRootResolver(newGitRunner())
+	open := func(dir string) (filesRoot, string) {
+		t.Helper()
+		if err := tmuxCmd(ctx, "-f", "/dev/null", "new-session", "-d", "-s", tmuxSession, "-c", dir, "exec sleep 60").Run(); err != nil {
+			t.Fatal(err)
+		}
+		var key string
+		waitUntil(t, "pane directory", func() bool {
+			got, k, _ := tmuxMux{}.PaneDir(ctx, "0")
+			key = k
+			return got == dir
+		})
+		root, err := rr.paneRoot(ctx, tmuxMux{}, "0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return root, key
+	}
+	a, _ := filepath.EvalSymlinks(t.TempDir())
+	b, _ := filepath.EvalSymlinks(t.TempDir())
+	rootA, keyA := open(a)
+	if rootA.Root != a {
+		t.Fatalf("root before restart = %q, want %q", rootA.Root, a)
+	}
+	if err := tmuxCmd(ctx, "kill-server").Run(); err != nil {
+		t.Fatal(err)
+	}
+	rootB, keyB := open(b)
+	if rootB.Root != b {
+		t.Errorf("root after restart = %q (keys %q, %q), want %q", rootB.Root, keyA, keyB, b)
 	}
 }
 

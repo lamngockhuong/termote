@@ -265,12 +265,12 @@ func TestTmuxPaneRoutesTakeAPaneID(t *testing.T) {
 	if _, _, err := m.AgentSession(ctx, "%4"); err == nil || err.Error() != "unknown pane" {
 		t.Errorf("AgentSession with another pane's reply = %v", err)
 	}
-	useFakeTmuxScript(t, map[string]fakeTmuxReply{"display-message": {out: "$0:1:%5:main:/tmp\n"}})
+	useFakeTmuxScript(t, map[string]fakeTmuxReply{"display-message": {out: "$0:1:%5:77:main:/tmp\n"}})
 	if _, _, err := m.PaneDir(ctx, "%4"); err == nil || err.Error() != "unknown pane" {
 		t.Errorf("PaneDir with another pane's reply = %v", err)
 	}
-	args = useFakeTmuxScript(t, map[string]fakeTmuxReply{"display-message": {out: "$9:1:%4:main:/tmp\n"}})
-	if dir, key, err := m.PaneDir(ctx, "%4"); err != nil || dir != "/tmp" || key != "%4" {
+	args = useFakeTmuxScript(t, map[string]fakeTmuxReply{"display-message": {out: "$9:1:%4:77:main:/tmp\n"}})
+	if dir, key, err := m.PaneDir(ctx, "%4"); err != nil || dir != "/tmp" || key != "%4@77" {
 		t.Errorf("PaneDir = %q %q %v", dir, key, err)
 	}
 	if !strings.Contains(args(), "-t %4 ") {
@@ -337,7 +337,7 @@ func TestTmuxPanesInRealServer(t *testing.T) {
 		t.Errorf("active pane = %s, want %s", got, third)
 	}
 	// A tab id is its active pane.
-	if dir, key, err := m.PaneDir(ctx, "0"); err != nil || key != third || dir == "" {
+	if dir, key, err := m.PaneDir(ctx, "0"); err != nil || !strings.HasPrefix(key, third+"@") || dir == "" {
 		t.Errorf("PaneDir(0) = %q %q %v", dir, key, err)
 	}
 
@@ -347,7 +347,7 @@ func TestTmuxPanesInRealServer(t *testing.T) {
 	if err := tmuxCmd(ctx, "swap-pane", "-s", first, "-t", third).Run(); err != nil {
 		t.Fatal(err)
 	}
-	if _, key, err := m.PaneDir(ctx, third); err != nil || key != third {
+	if _, key, err := m.PaneDir(ctx, third); err != nil || !strings.HasPrefix(key, third+"@") {
 		t.Errorf("PaneDir(%s) after a swap = %q %v", third, key, err)
 	}
 	if err := m.SendKeys(ctx, second, "x"); !errors.Is(err, errUnknownPane) {
