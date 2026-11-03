@@ -859,3 +859,26 @@ func TestTaskRunScriptSkipsTools(t *testing.T) {
 		t.Fatalf("make = %d %v", code, body)
 	}
 }
+
+// A restarted multiplexer gave the running run's pane id to another, idle
+// shell: the run is gone at once, and Run opens a new tab instead of
+// answering task_running until taskEndedAge.
+func TestTaskRunTargetTakenByAnotherShell(t *testing.T) {
+	fx := newTaskFixture(t)
+	_, body := fx.run(t, map[string]any{"kind": "make", "name": "build"})
+	runID := body["runId"].(string)
+	fx.m.mu.Lock()
+	fx.m.busy["%1"] = false
+	fx.m.pids["%1"] = 4242
+	fx.m.mu.Unlock()
+	code, body := fx.run(t, map[string]any{"kind": "make", "name": "build"})
+	if code != 200 || body["reused"] != false || body["tabId"] != "t2" {
+		t.Fatalf("taken target = %d %v", code, body)
+	}
+	if _, st := fx.state(t, runID); st["state"] != "gone" {
+		t.Errorf("taken target run = %v", st)
+	}
+	if typed := fx.m.typedLines(); len(typed) != 2 || !strings.HasPrefix(typed[1], "%2 ") {
+		t.Errorf("typed %q", typed)
+	}
+}

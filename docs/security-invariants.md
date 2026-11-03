@@ -1914,7 +1914,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   h; a restart forgets them: 404 `run_not_found`), checked at most every 2 s whoever asks; a
   shell still running something is `running` without its text being read; else the last 400
   lines are searched for the run's end marker (`exited` with its code); a shell back at its prompt
-  for 2 s without it (the screen cleared) is `ended`, a closed pane `gone`. The markers are a hint:
+  for 2 s without it (the screen cleared) is `ended`, a closed pane `gone`, and so is a pane now
+  running another shell than the run's (both pids known: a restarted tmux gave its id to another
+  pane), so Run opens a new tab at once instead of 409 `task_running`. The markers are a hint:
   a program in the same terminal can print one. **Send to agent** has no route of its own: the PWA
   reads the task pane through `panes/{id}/text` (at most the Settings line count, 100-5000, default
   400) and sends through `agent/message` (with a cursor from the transcript, `session_changed`
