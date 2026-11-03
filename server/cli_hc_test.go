@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +17,25 @@ import (
 type relRunner struct{ *fakeRunner }
 
 func (relRunner) LookPath(string) (string, error) { return "./hc", exec.ErrDot }
+
+// testHcBin is an absolute path to hc on the host running the test: on
+// Windows filepath.IsAbs needs a volume, so /usr/bin/hc is not one there.
+var testHcBin = func() string {
+	if runtime.GOOS == "windows" {
+		return `C:\hc\hc.exe`
+	}
+	return "/usr/bin/hc"
+}()
+
+// absHcRunner finds hc, once on the fake PATH, at testHcBin.
+type absHcRunner struct{ *fakeRunner }
+
+func (r absHcRunner) LookPath(name string) (string, error) {
+	if !r.paths[name] {
+		return "", exec.ErrNotFound
+	}
+	return testHcBin, nil
+}
 
 func TestValidateMuxHc(t *testing.T) {
 	if err := validateMux("hc", false, false, false); err != nil {
@@ -41,6 +61,7 @@ func TestValidateMuxHc(t *testing.T) {
 
 func TestFindHc(t *testing.T) {
 	tc := newTestCLI(t, "linux")
+	tc.run = absHcRunner{tc.runner}
 	if _, err := tc.findHc(); err == nil || !strings.Contains(err.Error(), "herdr.dev/core") {
 		t.Fatalf("missing = %v", err)
 	}
@@ -48,12 +69,12 @@ func TestFindHc(t *testing.T) {
 	if _, err := tc.findHc(); err == nil || !strings.Contains(err.Error(), "could not read the hc version") {
 		t.Fatalf("no version = %v", err)
 	}
-	tc.runner.outputs["/usr/bin/hc --version"] = "hc 0.1.15\n"
+	tc.runner.outputs[testHcBin+" --version"] = "hc 0.1.15\n"
 	if _, err := tc.findHc(); err == nil || !strings.Contains(err.Error(), "hc update") {
 		t.Fatalf("0.1.15 = %v", err)
 	}
-	tc.runner.outputs["/usr/bin/hc --version"] = "hc 0.1.16 (built 2026-11-01)\n"
-	if bin, err := tc.findHc(); err != nil || bin != "/usr/bin/hc" {
+	tc.runner.outputs[testHcBin+" --version"] = "hc 0.1.16 (built 2026-11-01)\n"
+	if bin, err := tc.findHc(); err != nil || bin != testHcBin {
 		t.Fatalf("0.1.16 = %q, %v", bin, err)
 	}
 	if err := tc.preflight("hc"); err != nil {
@@ -164,7 +185,7 @@ func TestNewMuxHc(t *testing.T) {
 	// The saved session, never the serve process's own HC_* variables.
 	t.Setenv("HC_SESSION", "other")
 	t.Setenv("HC_TERMINAL_ID", "t9")
-	m, err := newMux(ctx, serveConfig{MuxBackend: "hc", HcBin: "/usr/bin/hc", HcEnv: hcEnv{Session: "work"}})
+	m, err := newMux(ctx, serveConfig{MuxBackend: "hc", HcBin: testHcBin, HcEnv: hcEnv{Session: "work"}})
 	if err != nil || m.Name() != "hc" {
 		t.Fatalf("newMux(hc) = %v, %v", m, err)
 	}
