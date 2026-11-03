@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.19.0](https://github.com/lamngockhuong/termote/compare/v2.18.0...v2.19.0) (2026-11-03)
+
+
+### Features
+
+* **sidebar:** set workspaces apart with a bold header and indented rows ([#690](https://github.com/lamngockhuong/termote/issues/690)) ([d4bf9a9](https://github.com/lamngockhuong/termote/commit/d4bf9a9e25dc7deda61316433dd05970e61db2f0))
+
 ## [2.18.0](https://github.com/lamngockhuong/termote/compare/v2.17.1...v2.18.0) (2026-11-03)
 
 
