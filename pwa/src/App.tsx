@@ -1439,14 +1439,18 @@ export default function App({
   // must not follow the pane meanwhile, or the overview never opens
   const overviewComingRef = useRef(false)
   useEffect(() => {
-    const onHashChange = () => {
-      const overview = parseScreenLink(window.location.hash) === 'overview'
+    // The link navigated to, from the event: the address may already hold
+    // another, the pane on screen written back by a render that landed
+    // between the navigation and its event. A synthetic event carries none.
+    const onHashChange = (e: HashChangeEvent) => {
+      const hash = e.newURL ? new URL(e.newURL).hash : window.location.hash
+      const overview = parseScreenLink(hash) === 'overview'
       // Kept until a render shows it open: an effect of the render before
       // may still be waiting to run
       if (!overview) overviewComingRef.current = false
       setOverviewOpen(overview)
       if (overview) return
-      pendingLinkRef.current = parseDeepLink(window.location.hash)
+      pendingLinkRef.current = parseDeepLink(hash)
       setLinkRequest((n) => n + 1)
     }
     window.addEventListener('hashchange', onHashChange)

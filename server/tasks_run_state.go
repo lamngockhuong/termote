@@ -51,13 +51,18 @@ func (t *tasksAPI) check(ctx context.Context, tm taskMux, run *taskRun, fresh bo
 // read looks at run's pane once (run.checkMu held).
 func (t *tasksAPI) read(ctx context.Context, tm taskMux, run *taskRun) (string, int) {
 	rs := t.runs
-	_, _, idle, err := tm.IdleShell(ctx, run.target)
+	_, pid, idle, err := tm.IdleShell(ctx, run.target)
 	if errors.Is(err, errTaskTargetGone) {
 		return taskStateGone, 0
 	}
 	if err != nil {
 		log.Printf("task run check: %v", err)
 		return taskStateRunning, 0
+	}
+	// Another shell under the same target (a restarted multiplexer gave
+	// the pane id to a new pane): the run's shell is gone with its run.
+	if pid != 0 && run.shellPID != 0 && pid != run.shellPID {
+		return taskStateGone, 0
 	}
 	now := rs.now()
 	rs.mu.Lock()

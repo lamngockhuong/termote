@@ -1866,9 +1866,11 @@ func tmuxAgentSession(ctx context.Context, paneID string, find func(string, int)
 // tmuxAgentSession, the session and window index in the reply must be the
 // ones asked for: tmux would otherwise answer with another window. The path
 // goes last so a ':' in it is kept; a session name has none (tmux turns it
-// into '_'). The pane id it returns keys the root's state, so it must be
+// into '_'). The key it returns keys the root's state, so it must be
 // unique on the server: never on psmux, which has no Files (and no
-// directory to report).
+// directory to report). A restarted server numbers its panes from %0
+// again, so the key is the pane id with the server's pid: a new pane never
+// starts from the root an old one with its id had.
 func (tmuxMux) PaneDir(ctx context.Context, paneID string) (string, string, error) {
 	if !tmuxFilesSupported {
 		return "", "", errUnsupported
@@ -1878,16 +1880,19 @@ func (tmuxMux) PaneDir(ctx context.Context, paneID string) (string, string, erro
 		return "", "", inputError("invalid pane id")
 	}
 	out, err := tmuxCmd(ctx, "display-message", "-p", "-t", w.target(),
-		"#{session_id}:#{window_index}:#{pane_id}:#{session_name}:#{pane_current_path}").Output()
-	parts := strings.SplitN(strings.TrimRight(string(out), "\r\n"), ":", 5)
-	if err != nil || len(parts) != 5 || !w.matches(parts[0], parts[3], parts[1], parts[2]) ||
+		"#{session_id}:#{window_index}:#{pane_id}:#{pid}:#{session_name}:#{pane_current_path}").Output()
+	parts := strings.SplitN(strings.TrimRight(string(out), "\r\n"), ":", 6)
+	if err != nil || len(parts) != 6 || !w.matches(parts[0], parts[4], parts[1], parts[2]) ||
 		!tmuxPaneIDRe.MatchString(parts[2]) {
 		return "", "", errUnknownPane
 	}
-	if parts[4] == "" || strings.HasPrefix(parts[4], "#{") {
+	if pid, err := strconv.Atoi(parts[3]); err != nil || pid <= 0 {
+		return "", "", errUnknownPane
+	}
+	if parts[5] == "" || strings.HasPrefix(parts[5], "#{") {
 		return "", "", errUnsupported
 	}
-	return parts[4], parts[2], nil
+	return parts[5], parts[2] + "@" + parts[3], nil
 }
 
 // Capture returns the pane's visible screen with its SGR attributes.

@@ -929,7 +929,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   is the pane's, shared by every reader (Files, Changes, the overview's changes, agent commands)
   and every client, a view-only one included (it is set before `viewHidesRoot`, which still
   refuses that client the root): one Refresh moves it for all of them, only ever to the
-  directory the pane reports, and plain reads settle it again as before.
+  directory the pane reports, and plain reads settle it again as before. The settle state is kept
+  per pane for as long as it lives: on tmux by its pane id and the server's pid, since a restarted
+  server numbers its panes from `%0` again and a new pane must not start from an old one's root.
   `GET files/content` takes an `encoding` of a fixed set (`utf-8`, `utf-16le`, `utf-16be`,
   `shift_jis`, `euc-jp`; another → 400, ignored by `?hash=1`) or detects one
   (`server/files_encoding.go`: a BOM, then valid UTF-8, then Shift-JIS/EUC-JP only when the
@@ -1914,7 +1916,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   h; a restart forgets them: 404 `run_not_found`), checked at most every 2 s whoever asks; a
   shell still running something is `running` without its text being read; else the last 400
   lines are searched for the run's end marker (`exited` with its code); a shell back at its prompt
-  for 2 s without it (the screen cleared) is `ended`, a closed pane `gone`. The markers are a hint:
+  for 2 s without it (the screen cleared) is `ended`, a closed pane `gone`, and so is a pane now
+  running another shell than the run's (both pids known: a restarted tmux gave its id to another
+  pane), so Run opens a new tab at once instead of 409 `task_running`. The markers are a hint:
   a program in the same terminal can print one. **Send to agent** has no route of its own: the PWA
   reads the task pane through `panes/{id}/text` (at most the Settings line count, 100-5000, default
   400) and sends through `agent/message` (with a cursor from the transcript, `session_changed`

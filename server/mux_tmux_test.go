@@ -593,8 +593,8 @@ func TestTmuxPaneDirChecksTheSession(t *testing.T) {
 	orig := tmuxSession
 	defer func() { tmuxSession = orig }()
 	tmuxSession = "main"
-	useFakeTmux(t, "$3:1:%5:work:/srv/a:b")
-	if dir, key, err := (tmuxMux{}).PaneDir(context.Background(), "$3:1"); err != nil || dir != "/srv/a:b" || key != "%5" {
+	useFakeTmux(t, "$3:1:%5:77:work:/srv/a:b")
+	if dir, key, err := (tmuxMux{}).PaneDir(context.Background(), "$3:1"); err != nil || dir != "/srv/a:b" || key != "%5@77" {
 		t.Errorf("PaneDir($3:1) = %q, %q, %v", dir, key, err)
 	}
 	for _, id := range []string{"1", "$4:1", "$3:0"} {
@@ -602,11 +602,11 @@ func TestTmuxPaneDirChecksTheSession(t *testing.T) {
 			t.Errorf("PaneDir(%q) = %v, want unknown pane", id, err)
 		}
 	}
-	useFakeTmux(t, "$0:1:%5:main:/home/u")
+	useFakeTmux(t, "$0:1:%5:77:main:/home/u")
 	if dir, _, err := (tmuxMux{}).PaneDir(context.Background(), "1"); err != nil || dir != "/home/u" {
 		t.Errorf("PaneDir(1) = %q, %v", dir, err)
 	}
-	useFakeTmux(t, "$0:1:%5:main:")
+	useFakeTmux(t, "$0:1:%5:77:main:")
 	if _, _, err := (tmuxMux{}).PaneDir(context.Background(), "1"); !errors.Is(err, errUnsupported) {
 		t.Errorf("PaneDir without a path = %v", err)
 	}
