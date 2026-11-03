@@ -685,6 +685,31 @@ func TestTailscaleMapping(t *testing.T) {
 	if err := tc.setupTailscale("box.ts.net:8443", 7681, 7680); err != nil {
 		t.Fatalf("port change refused: %v", err)
 	}
+	// A mapping that already points at this server is not applied again:
+	// tailscaled keeps it while stopped, when `tailscale serve` fails.
+	delete(tc.runner.outputs, "tailscale serve --bg --https=8443 http://127.0.0.1:7680")
+	if err := tc.setupTailscale("box.ts.net:8443", 7680, 0); err != nil {
+		t.Fatalf("existing mapping refused: %v", err)
+	}
+	if tc.runner.called("tailscale serve --bg --https=8443 http://127.0.0.1:7680") {
+		t.Fatal("existing mapping applied again")
+	}
+	if strings.Contains(tc.stdout.String(), "tailscale up") {
+		t.Fatalf("warned without a known state: %q", tc.stdout.String())
+	}
+	// A stopped Tailscale is warned about: the link answers only after `tailscale up`.
+	tc.runner.outputs["tailscale status --json"] = `{"BackendState":"Stopped"}`
+	if err := tc.setupTailscale("box.ts.net:8443", 7680, 0); err != nil {
+		t.Fatalf("existing mapping refused while stopped: %v", err)
+	}
+	if !strings.Contains(tc.stdout.String(), "Tailscale is stopped: https://box.ts.net:8443 answers once you run: tailscale up") {
+		t.Fatalf("no stopped warning: %q", tc.stdout.String())
+	}
+	tc.stdout.Reset()
+	tc.runner.outputs["tailscale status --json"] = `{"BackendState":"Running"}`
+	if err := tc.setupTailscale("box.ts.net:8443", 7680, 0); err != nil || tc.stdout.Len() != 0 {
+		t.Fatalf("running Tailscale: err %v, output %q", err, tc.stdout.String())
+	}
 	delete(tc.runner.outputs, "tailscale serve status --json")
 	err := tc.setupTailscale("box.ts.net", 7680, 0) // fake refuses: no output configured
 	if err == nil || !strings.Contains(err.Error(), "tailscale set --operator") {
