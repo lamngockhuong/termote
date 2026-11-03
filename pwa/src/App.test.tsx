@@ -5258,6 +5258,23 @@ describe('App views, view-only and deep links', () => {
       )
     })
 
+    it('a link opens what it names though the address was written over before its hashchange', async () => {
+      render(<App views={VIEWS} />)
+      await screen.findByTestId('terminal-view')
+      expect(screen.queryByTestId('chat-main')).toBeNull()
+      // The link navigated to, then a render writes the pane on screen
+      // back to the address before the event is handled
+      const link = `${window.location.origin}/#/s/w1/w1%3At1?view=chat`
+      window.history.pushState(null, '', link)
+      window.history.replaceState(null, '', '/#/s/w1/w1%3At1')
+      act(() => {
+        window.dispatchEvent(
+          new HashChangeEvent('hashchange', { newURL: link }),
+        )
+      })
+      expect(await screen.findByTestId('chat-main')).toBeInTheDocument()
+    })
+
     it('Forward onto the entry of a closed viewer drops its mark', async () => {
       render(<App />)
       await screen.findByTestId('terminal-view')
