@@ -129,6 +129,11 @@ yours is listed), a tab a Zellij tab and a pane a terminal pane. Zellij is never
 automatically: choose it with `--mux zellij`, the menu (`termote` with no command) or the
 container's first-run question.
 
+If you use the herdr app, `termote start --mux hc` shows the spaces, tabs and panes the app shows
+on this machine, as one more client of [herdr-core](https://herdr.dev/core/) (`hc` 0.1.16 or later,
+on every OS). A tab or split made in Termote shows in the app within about a second, and the other
+way round. herdr-core is never picked automatically and never runs in the container.
+
 ### Touch Gestures
 
 | Gesture     | Action                             |

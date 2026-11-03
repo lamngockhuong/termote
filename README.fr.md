@@ -56,6 +56,8 @@ Contrôlez à distance des outils CLI (Claude Code, GitHub Copilot, n'importe qu
 - **Tasks** : lancez les scripts `package.json` et les cibles Makefile d'un volet, envoyez une exécution échouée à un agent — voir [Tasks](https://termote.ohnice.app/usage/tasks/)
 - **Fenêtres séparées** (bureau) : ouvrez un fichier, un diff, un onglet, un volet ou la vue d'ensemble dans sa propre fenêtre
 - **Pièces jointes image** : envoyez une image depuis le téléphone vers le terminal ou dans un message de la vue Chat, pour que l'agent la lise par son chemin
+- **Backend Zellij** (Linux, macOS ou dans le conteneur) : pilotez vos sessions, onglets et volets Zellij à la place de tmux (Zellij 0.45.0 ou plus récent), choisi avec `--mux zellij` — voir [Installation native](https://termote.ohnice.app/installation/native/)
+- **Backend herdr-core** (natif, tout OS) : affichez les espaces, onglets et volets que montre l'app herdr, en tant que client de plus de herdr-core (`hc` 0.1.16 ou plus récent), choisi avec `--mux hc` — voir [Backend herdr-core](https://termote.ohnice.app/installation/native/#herdr-core-backend)
 - **Plugin Herdr** : ouvrez dans Termote le volet Herdr actif, affichez son lien en QR code pour un téléphone, démarrez ou arrêtez le serveur, sans quitter Herdr — voir [Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/)
 - **Adapté au mobile** : Barre d'outils clavier virtuel (Tab/Ctrl/Shift/flèches, extensible)
 - **Support des gestes** : Balayage pour Ctrl+C, Tab, défilement
@@ -104,10 +106,12 @@ flowchart TB
         Auth["Basic Auth"]
     end
 
-    subgraph Backend["Backend Mux (tmux/psmux ou Herdr)"]
+    subgraph Backend["Backend Mux (tmux/psmux, Herdr, Zellij ou herdr-core)"]
         Mux["Interface Mux"]
         tmux["tmux/psmux (PTY)"]
         herdr["Herdr"]
+        zellij["Zellij"]
+        hc["herdr-core (hc)"]
         Shell["Shell"]
         Tools["Outils CLI"]
     end
@@ -121,7 +125,7 @@ flowchart TB
     Auth -.-> Static & Stream & API
     Stream --> Mux
     API --> Mux
-    Mux --> tmux & herdr
+    Mux --> tmux & herdr & zellij & hc
     tmux --> Shell --> Tools
 ```
 
@@ -156,7 +160,7 @@ termote start
 
 L'installateur n'a besoin que de `curl`, `tar` et `sha256sum`/`shasum` (PowerShell sous Windows), sans sudo ni droits administrateur. Il vérifie la somme de contrôle de l'archive, installe la commande `termote` et ne démarre rien. `termote start` enregistre les options, crée un mot de passe la première fois (affiché une seule fois ; `termote show-password` le réaffiche), enregistre le service et le démarre. Ouvrez `http://127.0.0.1:7680` (Windows : `http://127.0.0.1:7690`).
 
-Un backend de terminal doit être installé au préalable : tmux (`sudo apt install tmux`, `brew install tmux`), psmux sous Windows (`winget install psmux`) ou [Herdr](https://termote.ohnice.app/installation/native/). Le premier `start` détecte lequel utiliser.
+Un backend de terminal doit être installé au préalable : tmux (`sudo apt install tmux`, `brew install tmux`), psmux sous Windows (`winget install psmux`) ou [Herdr](https://termote.ohnice.app/installation/native/). Le premier `start` détecte lequel utiliser. [Zellij](https://zellij.dev/documentation/installation) 0.45.0 ou plus récent (Linux, macOS) n'est jamais détecté : choisissez-le avec `--mux zellij`. [herdr-core](https://herdr.dev/core/) (`hc` 0.1.16 ou plus récent, tout OS, natif uniquement) n'est jamais détecté non plus : choisissez-le avec `--mux hc`.
 
 ### Options courantes
 
@@ -164,6 +168,8 @@ Un backend de terminal doit être installé au préalable : tmux (`sudo apt inst
 termote start --lan                  # Listen on the LAN, not only this machine
 termote start --tailscale myhost.ts.net  # Publish over Tailscale HTTPS
 termote start --mux herdr            # Drive Herdr workspaces instead of tmux
+termote start --mux zellij           # Drive Zellij sessions instead of tmux (Linux, macOS)
+termote start --mux hc               # Show the herdr app's terminals through herdr-core
 termote start --no-auth              # Disable basic auth (local use only)
 ```
 
@@ -196,7 +202,7 @@ termote update --version 1.0.0
 $env:TERMOTE_VERSION='1.0.0'; irm https://termote.ohnice.app/install.ps1 | iex
 ```
 
-Sans `TERMOTE_VERSION`, l'installateur prend la release stable 1.x la plus récente et ne touche pas à une installation existante. Avec elle, cette version est installée à côté de la version actuelle et devient la version active, ce qui permet aussi de réparer une installation cassée.
+Sans `TERMOTE_VERSION`, l'installateur prend la release stable la plus récente (1.0 ou ultérieure) et ne touche pas à une installation existante. Avec elle, cette version est installée à côté de la version actuelle et devient la version active, ce qui permet aussi de réparer une installation cassée. Une pré-release (`X.Y.Z-rc.N`) n'est installée que si elle est nommée ainsi (ou avec `termote update --version`), et seulement une fois publiée ; voir le [Deployment Guide](docs/deployment-guide.md#pre-releases).
 
 ### Mode conteneur
 
@@ -253,12 +259,12 @@ Il n'y a pas de mise à niveau depuis 0.x : 1.0 s'installe à un autre endroit e
 flowchart LR
     subgraph Container["Mode Conteneur"]
         direction TB
-        C1["Docker/Podman"] --> C2["termote :7680 (diffuse lui-même le terminal)"] --> C3["tmux / Herdr"]
+        C1["Docker/Podman"] --> C2["termote :7680 (diffuse lui-même le terminal)"] --> C3["tmux / Herdr / Zellij"]
     end
 
     subgraph Native["Mode Natif"]
         direction TB
-        N1["Système Hôte"] --> N2["termote :7680 (diffuse lui-même le terminal)"] --> N3["tmux/psmux ou Herdr + Outils Hôte"]
+        N1["Système Hôte"] --> N2["termote :7680 (diffuse lui-même le terminal)"] --> N3["tmux/psmux, Herdr, Zellij ou herdr-core + Outils Hôte"]
     end
 
     User["Utilisateur"] --> Container & Native
@@ -273,23 +279,24 @@ Le serveur natif tourne comme service utilisateur : une unité utilisateur syste
 
 ### Options de `start`
 
-| Flag                         | Description                                                                                                                   |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `--port <port>`              | Port (par défaut : 7680, Windows : 7690)                                                                                      |
-| `--lan[=false]`              | Écouter sur toutes les interfaces (par défaut : localhost uniquement)                                                         |
-| `--tailscale <host[:port]>`  | Publier via Tailscale HTTPS (port par défaut 443)                                                                             |
-| `--no-tailscale`             | Arrêter la publication via Tailscale                                                                                          |
-| `--no-auth[=false]`          | Désactiver l'authentification basique                                                                                         |
-| `--mux <tmux\|herdr>`        | Backend du terminal (par défaut : herdr s'il tourne, sinon tmux)                                                              |
-| `--allow-host <name>`        | Autoriser une valeur supplémentaire d'en-tête Host (répétable ; pas de joker, voir les notes de sécurité)                     |
-| `--remove-host <name>`       | Retirer un nom de Host autorisé (répétable)                                                                                   |
-| `--allow-local-user <name>`  | Autoriser un autre utilisateur système de cette machine à se connecter, par ex. un reverse proxy (répétable ; Linux, Windows) |
-| `--remove-local-user <name>` | Ne plus autoriser cet utilisateur à se connecter (répétable)                                                                  |
-| `--allow-path <dir>`         | Proposer un dossier dans Files, sous Places (répétable)                                                                       |
-| `--remove-path <dir>`        | Retirer un dossier autorisé (répétable)                                                                                       |
-| `--allow-herdr-no-auth`      | Obligatoire avec `--mux herdr --no-auth`                                                                                      |
-| `--user <name>`              | Nom d'utilisateur de connexion (par défaut : `admin` ; partagé avec le conteneur)                                             |
-| `--fresh`                    | Définir un nouveau mot de passe                                                                                               |
+| Flag                              | Description                                                                                                                   |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `--port <port>`                   | Port (par défaut : 7680, Windows : 7690)                                                                                      |
+| `--lan[=false]`                   | Écouter sur toutes les interfaces (par défaut : localhost uniquement)                                                         |
+| `--tailscale <host[:port]>`       | Publier via Tailscale HTTPS (port par défaut 443)                                                                             |
+| `--no-tailscale`                  | Arrêter la publication via Tailscale                                                                                          |
+| `--no-auth[=false]`               | Désactiver l'authentification basique                                                                                         |
+| `--mux <tmux\|herdr\|zellij\|hc>` | Backend du terminal (par défaut : herdr s'il tourne, sinon tmux; zellij: Linux, macOS; hc: herdr-core)                        |
+| `--allow-host <name>`             | Autoriser une valeur supplémentaire d'en-tête Host (répétable ; pas de joker, voir les notes de sécurité)                     |
+| `--remove-host <name>`            | Retirer un nom de Host autorisé (répétable)                                                                                   |
+| `--allow-local-user <name>`       | Autoriser un autre utilisateur système de cette machine à se connecter, par ex. un reverse proxy (répétable ; Linux, Windows) |
+| `--remove-local-user <name>`      | Ne plus autoriser cet utilisateur à se connecter (répétable)                                                                  |
+| `--allow-path <dir>`              | Proposer un dossier dans Files, sous Places (répétable)                                                                       |
+| `--remove-path <dir>`             | Retirer un dossier autorisé (répétable)                                                                                       |
+| `--allow-herdr-no-auth`           | Obligatoire avec `--mux herdr --no-auth`                                                                                      |
+| `--allow-hc-no-auth`              | Obligatoire avec `--mux hc --no-auth`                                                                                         |
+| `--user <name>`                   | Nom d'utilisateur de connexion (par défaut : `admin` ; partagé avec le conteneur)                                             |
+| `--fresh`                         | Définir un nouveau mot de passe                                                                                               |
 
 ### Avec Tailscale HTTPS
 
@@ -332,7 +339,7 @@ La barre d'outils virtuelle fournit : Tab, Esc, Ctrl, Shift, touches fléchées 
 ```
 termote/
 ├── Makefile                # Build/test/run commands
-├── Dockerfile              # Container image (termote + tmux + herdr)
+├── Dockerfile              # Container image (termote + tmux + herdr + zellij)
 ├── docker-compose.yml      # Development from a checkout only
 ├── entrypoint.sh           # Container entrypoint
 ├── docs/                   # Documentation
@@ -350,6 +357,9 @@ termote/
 │   ├── mux.go              # Mux interface + /api/mux/* routes
 │   ├── mux_tmux.go         # tmux/psmux backend
 │   ├── mux_herdr.go        # Herdr backend
+│   ├── mux_zellij*.go      # Zellij backend (commands, Chat view and Files)
+│   ├── zellij_*.go         # Termote's Zellij clients, view-only stream, a pane's shell
+│   ├── mux_hc*.go, hc_*.go # herdr-core backend (hc connect client, herdr-app document)
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
 │   ├── cli*.go             # start/stop/update/container/logs/menu subcommands
 │   └── webui/              # PWA embedded in the binary (filled by make build)
@@ -418,9 +428,12 @@ termote start --fresh      # If the saved password can no longer be read
 - **Gardes Origin/CSRF** - les requêtes `/api/mux/*` qui modifient l'état et le WebSocket `/api/mux/stream` rejettent les `Sec-Fetch-Site`/`Origin` intersites et exigent un jeton de flux à usage unique de même origine
 - **Protection anti-brute-force intégrée** - limitation de débit (5 tentatives échouées/min par IP, 20/min par IPv6 /64)
 - **Backend Herdr** - expose tous les workspaces Herdr de l'hôte, donc `--mux herdr --no-auth` est refusé sauf si `--allow-herdr-no-auth` est aussi fourni
+- **Backend Zellij** - expose toutes les sessions Zellij en cours de l'utilisateur, comme tmux (pas de garde `--no-auth` supplémentaire) ; les touches et les messages du Chat n'atteignent un volet que par le terminal d'un client Zellij de Termote, jamais par des arguments de processus que d'autres utilisateurs locaux pourraient lire
+- **Backend herdr-core** - herdr-core n'a pas de connexion propre, donc `--mux hc --no-auth` est refusé sauf si `--allow-hc-no-auth` est aussi fourni, et `container up --mux hc` est refusé
 - **Aucun secret dans les fichiers de service** - l'unité systemd, l'agent launchd et la tâche planifiée ne contiennent jamais le mot de passe
 - Utilisez HTTPS (Tailscale) pour la production
 - Restreignez aux réseaux de confiance/VPN
+- Ce qu'un appareil connecté ou appairé peut faire, et que faire si l'un d'eux est perdu : [Modèle de sécurité](docs/security-model.md)
 
 ## Autres Projets
 

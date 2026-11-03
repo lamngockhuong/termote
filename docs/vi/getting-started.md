@@ -100,6 +100,8 @@ Bạn có thể dùng [Herdr](https://herdr.dev/#install) thay cho tmux bằng `
 
 Trên Linux và macOS bạn cũng có thể dùng [Zellij](https://zellij.dev/documentation/installation) 0.45.0 trở lên bằng `termote start --mux zellij`, hoặc `termote container up --mux zellij` trên mọi máy (image đã có sẵn Zellij). Khi đó một nhóm là một phiên Zellij (mọi phiên đang chạy của bạn đều được liệt kê), một tab là một tab Zellij và một pane là một pane terminal. Zellij không bao giờ được tự chọn: hãy chọn bằng `--mux zellij`, menu (`termote` không kèm lệnh) hoặc câu hỏi lần chạy đầu của container.
 
+Nếu bạn dùng ứng dụng herdr, `termote start --mux hc` hiện đúng các space, tab và pane mà ứng dụng đang hiện trên máy này, với Termote là thêm một client của [herdr-core](https://herdr.dev/core/) (`hc` 0.1.16 trở lên, chạy trên mọi hệ điều hành). Tab hay pane chia mới tạo trong Termote xuất hiện trong ứng dụng sau khoảng một giây, và ngược lại. herdr-core không bao giờ được tự chọn và không chạy trong container.
+
 ### Cử chỉ cảm ứng
 
 | Cử chỉ     | Hành động                               |

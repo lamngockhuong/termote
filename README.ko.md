@@ -54,6 +54,8 @@
 - **Tasks**: pane의 `package.json` 스크립트와 Makefile 타깃을 실행하고, 실패한 실행을 에이전트에게 보냄 — [Tasks](https://termote.ohnice.app/usage/tasks/) 참고
 - **별도 창** (데스크톱): 파일, diff, 탭, pane 또는 개요를 별도 창에서 열기
 - **이미지 첨부**: 휴대폰의 이미지를 터미널이나 Chat 뷰 메시지로 보내 에이전트가 경로로 읽을 수 있게 함
+- **Zellij 백엔드** (Linux, macOS 또는 컨테이너 안): tmux 대신 Zellij 세션, 탭, 패널을 제어 (Zellij 0.45.0 이상), `--mux zellij`로 선택 — [네이티브 설치](https://termote.ohnice.app/installation/native/) 참고
+- **herdr-core 백엔드** (네이티브, 모든 OS): herdr-core의 클라이언트 하나로서 herdr 앱이 보여 주는 스페이스, 탭, 패널을 그대로 표시 (`hc` 0.1.16 이상), `--mux hc`로 선택 — [herdr-core 백엔드](https://termote.ohnice.app/installation/native/#herdr-core-backend) 참고
 - **Herdr 플러그인**: Herdr를 벗어나지 않고 포커스된 Herdr pane을 Termote에서 열고, 링크를 휴대폰용 QR 코드로 표시하고, 서버를 시작하거나 중지 — [Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/) 참고
 - **모바일 친화적**: 가상 키보드 툴바 (Tab/Ctrl/Shift/방향키, 확장 가능)
 - **제스처 지원**: 스와이프로 Ctrl+C, Tab, 스크롤
@@ -102,10 +104,12 @@ flowchart TB
         Auth["Basic Auth"]
     end
 
-    subgraph Backend["Mux 백엔드 (tmux/psmux 또는 Herdr)"]
+    subgraph Backend["Mux 백엔드 (tmux/psmux, Herdr, Zellij 또는 herdr-core)"]
         Mux["Mux 인터페이스"]
         tmux["tmux/psmux (PTY)"]
         herdr["Herdr"]
+        zellij["Zellij"]
+        hc["herdr-core (hc)"]
         Shell["Shell"]
         Tools["CLI 도구"]
     end
@@ -119,7 +123,7 @@ flowchart TB
     Auth -.-> Static & Stream & API
     Stream --> Mux
     API --> Mux
-    Mux --> tmux & herdr
+    Mux --> tmux & herdr & zellij & hc
     tmux --> Shell --> Tools
 ```
 
@@ -154,7 +158,7 @@ termote start
 
 설치 프로그램에는 `curl`, `tar`, `sha256sum`/`shasum`(Windows에서는 PowerShell)만 필요하며 sudo나 관리자 권한은 필요 없습니다. 아카이브의 체크섬을 검증한 뒤 `termote` 명령을 설치하고, 아무것도 실행하지 않습니다. `termote start`는 옵션을 저장하고, 처음 실행할 때 비밀번호를 만들고(한 번만 표시되며 나중에 `termote show-password`로 다시 볼 수 있음), 서비스를 등록해 시작합니다. `http://127.0.0.1:7680`(Windows: `http://127.0.0.1:7690`)을 여세요.
 
-터미널 백엔드를 먼저 설치해야 합니다: tmux(`sudo apt install tmux`, `brew install tmux`), Windows에서는 psmux(`winget install psmux`), 또는 [Herdr](https://termote.ohnice.app/installation/native/). 어떤 것을 쓸지는 첫 `start`가 감지합니다.
+터미널 백엔드를 먼저 설치해야 합니다: tmux(`sudo apt install tmux`, `brew install tmux`), Windows에서는 psmux(`winget install psmux`), 또는 [Herdr](https://termote.ohnice.app/installation/native/). 어떤 것을 쓸지는 첫 `start`가 감지합니다. [Zellij](https://zellij.dev/documentation/installation) 0.45.0 이상(Linux, macOS)은 감지되지 않으므로 `--mux zellij`로 선택합니다. [herdr-core](https://herdr.dev/core/)(`hc` 0.1.16 이상, 모든 OS, 네이티브 전용)도 감지되지 않으므로 `--mux hc`로 선택합니다.
 
 ### 자주 쓰는 옵션
 
@@ -162,6 +166,8 @@ termote start
 termote start --lan                  # Listen on the LAN, not only this machine
 termote start --tailscale myhost.ts.net  # Publish over Tailscale HTTPS
 termote start --mux herdr            # Drive Herdr workspaces instead of tmux
+termote start --mux zellij           # Drive Zellij sessions instead of tmux (Linux, macOS)
+termote start --mux hc               # Show the herdr app's terminals through herdr-core
 termote start --no-auth              # Disable basic auth (local use only)
 ```
 
@@ -194,7 +200,7 @@ termote update --version 1.0.0
 $env:TERMOTE_VERSION='1.0.0'; irm https://termote.ohnice.app/install.ps1 | iex
 ```
 
-`TERMOTE_VERSION`이 없으면 설치 프로그램은 최신 안정 1.x 릴리스를 가져오며 기존 설치는 건드리지 않습니다. 지정하면 해당 버전을 현재 버전 옆에 설치하고 활성 버전으로 전환하므로, 망가진 설치를 복구할 때도 쓸 수 있습니다.
+`TERMOTE_VERSION`이 없으면 설치 프로그램은 최신 안정 릴리스(1.0 이상)를 가져오며 기존 설치는 건드리지 않습니다. 지정하면 해당 버전을 현재 버전 옆에 설치하고 활성 버전으로 전환하므로, 망가진 설치를 복구할 때도 쓸 수 있습니다. 프리릴리스(`X.Y.Z-rc.N`)는 이렇게 이름을 지정했을 때(또는 `termote update --version`)만, 그리고 공개된 뒤에만 설치됩니다. [Deployment Guide](docs/deployment-guide.md#pre-releases)를 참고하세요.
 
 ### 컨테이너 모드
 
@@ -251,12 +257,12 @@ make build
 flowchart LR
     subgraph Container["컨테이너 모드"]
         direction TB
-        C1["Docker/Podman"] --> C2["termote :7680 (터미널 직접 스트리밍)"] --> C3["tmux / Herdr"]
+        C1["Docker/Podman"] --> C2["termote :7680 (터미널 직접 스트리밍)"] --> C3["tmux / Herdr / Zellij"]
     end
 
     subgraph Native["네이티브 모드"]
         direction TB
-        N1["호스트 시스템"] --> N2["termote :7680 (터미널 직접 스트리밍)"] --> N3["tmux/psmux 또는 Herdr + 호스트 도구"]
+        N1["호스트 시스템"] --> N2["termote :7680 (터미널 직접 스트리밍)"] --> N3["tmux/psmux, Herdr, Zellij 또는 herdr-core + 호스트 도구"]
     end
 
     User["사용자"] --> Container & Native
@@ -271,23 +277,24 @@ flowchart LR
 
 ### `start` 옵션
 
-| 플래그                       | 설명                                                                                |
-| ---------------------------- | ----------------------------------------------------------------------------------- |
-| `--port <port>`              | 포트 (기본값: 7680, Windows: 7690)                                                  |
-| `--lan[=false]`              | 모든 인터페이스에서 수신 (기본값: localhost만)                                      |
-| `--tailscale <host[:port]>`  | Tailscale HTTPS로 공개 (기본 포트 443)                                              |
-| `--no-tailscale`             | Tailscale 공개 중지                                                                 |
-| `--no-auth[=false]`          | 기본 인증 비활성화                                                                  |
-| `--mux <tmux\|herdr>`        | 터미널 백엔드 (기본값: herdr가 실행 중이면 herdr, 아니면 tmux)                      |
-| `--allow-host <name>`        | 추가 Host 헤더 값 허용 (반복 가능, 와일드카드 없음, 보안 참고 참조)                 |
-| `--remove-host <name>`       | 허용된 Host 이름 제거 (반복 가능)                                                   |
-| `--allow-local-user <name>`  | 이 머신의 다른 OS 사용자(예: 리버스 프록시)의 연결 허용 (반복 가능; Linux, Windows) |
-| `--remove-local-user <name>` | 해당 사용자의 연결 허용 해제 (반복 가능)                                            |
-| `--allow-path <dir>`         | 폴더를 Files의 Places에 표시 (반복 가능)                                            |
-| `--remove-path <dir>`        | 허용된 폴더 제거 (반복 가능)                                                        |
-| `--allow-herdr-no-auth`      | `--mux herdr --no-auth`와 함께 쓸 때 필수                                           |
-| `--user <name>`              | 로그인 사용자 이름 (기본값: `admin`, 컨테이너와 공유)                               |
-| `--fresh`                    | 새 비밀번호 설정                                                                    |
+| 플래그                            | 설명                                                                                                 |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `--port <port>`                   | 포트 (기본값: 7680, Windows: 7690)                                                                   |
+| `--lan[=false]`                   | 모든 인터페이스에서 수신 (기본값: localhost만)                                                       |
+| `--tailscale <host[:port]>`       | Tailscale HTTPS로 공개 (기본 포트 443)                                                               |
+| `--no-tailscale`                  | Tailscale 공개 중지                                                                                  |
+| `--no-auth[=false]`               | 기본 인증 비활성화                                                                                   |
+| `--mux <tmux\|herdr\|zellij\|hc>` | 터미널 백엔드 (기본값: herdr가 실행 중이면 herdr, 아니면 tmux; zellij: Linux, macOS; hc: herdr-core) |
+| `--allow-host <name>`             | 추가 Host 헤더 값 허용 (반복 가능, 와일드카드 없음, 보안 참고 참조)                                  |
+| `--remove-host <name>`            | 허용된 Host 이름 제거 (반복 가능)                                                                    |
+| `--allow-local-user <name>`       | 이 머신의 다른 OS 사용자(예: 리버스 프록시)의 연결 허용 (반복 가능; Linux, Windows)                  |
+| `--remove-local-user <name>`      | 해당 사용자의 연결 허용 해제 (반복 가능)                                                             |
+| `--allow-path <dir>`              | 폴더를 Files의 Places에 표시 (반복 가능)                                                             |
+| `--remove-path <dir>`             | 허용된 폴더 제거 (반복 가능)                                                                         |
+| `--allow-herdr-no-auth`           | `--mux herdr --no-auth`와 함께 쓸 때 필수                                                            |
+| `--allow-hc-no-auth`              | `--mux hc --no-auth`와 함께 쓸 때 필수                                                               |
+| `--user <name>`                   | 로그인 사용자 이름 (기본값: `admin`, 컨테이너와 공유)                                                |
+| `--fresh`                         | 새 비밀번호 설정                                                                                     |
 
 ### Tailscale HTTPS 사용
 
@@ -330,7 +337,7 @@ sudo tailscale set --operator=$USER                    # Linux, once: let termot
 ```
 termote/
 ├── Makefile                # Build/test/run commands
-├── Dockerfile              # Container image (termote + tmux + herdr)
+├── Dockerfile              # Container image (termote + tmux + herdr + zellij)
 ├── docker-compose.yml      # Development from a checkout only
 ├── entrypoint.sh           # Container entrypoint
 ├── docs/                   # Documentation
@@ -348,6 +355,9 @@ termote/
 │   ├── mux.go              # Mux interface + /api/mux/* routes
 │   ├── mux_tmux.go         # tmux/psmux backend
 │   ├── mux_herdr.go        # Herdr backend
+│   ├── mux_zellij*.go      # Zellij backend (commands, Chat view and Files)
+│   ├── zellij_*.go         # Termote's Zellij clients, view-only stream, a pane's shell
+│   ├── mux_hc*.go, hc_*.go # herdr-core backend (hc connect client, herdr-app document)
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
 │   ├── cli*.go             # start/stop/update/container/logs/menu subcommands
 │   └── webui/              # PWA embedded in the binary (filled by make build)
@@ -416,9 +426,12 @@ termote start --fresh      # If the saved password can no longer be read
 - **Origin/CSRF 가드** - 상태를 바꾸는 `/api/mux/*` 요청과 `/api/mux/stream` WebSocket은 교차 사이트 `Sec-Fetch-Site`/`Origin`을 거부하고, 동일 출처의 일회용 스트림 토큰을 요구
 - **내장 무차별 대입 방지** - 속도 제한 (IP당 실패 5회/분, IPv6 /64당 20회/분)
 - **Herdr 백엔드** - 호스트의 모든 Herdr 워크스페이스를 노출하므로, `--allow-herdr-no-auth`를 함께 지정하지 않으면 `--mux herdr --no-auth`는 거부됨
+- **Zellij 백엔드** - tmux처럼 사용자의 실행 중인 모든 Zellij 세션을 노출함 (`--no-auth`에 대한 추가 보호 없음); 키 입력과 Chat 메시지는 Termote Zellij 클라이언트의 터미널을 통해서만 패널에 전달되며, 다른 로컬 사용자가 읽을 수 있는 프로세스 인자로는 절대 전달되지 않음
+- **herdr-core 백엔드** - herdr-core에는 자체 로그인이 없으므로, `--allow-hc-no-auth`를 함께 지정하지 않으면 `--mux hc --no-auth`는 거부되며 `container up --mux hc`도 거부됨
 - **서비스 파일에 비밀 정보 없음** - systemd 유닛, launchd 에이전트, 예약된 작업에는 비밀번호가 들어가지 않음
 - 프로덕션에는 HTTPS(Tailscale) 사용
 - 신뢰할 수 있는 네트워크/VPN으로 제한
+- 로그인했거나 페어링된 기기가 할 수 있는 일과 기기를 잃어버렸을 때 할 일: [보안 모델](docs/security-model.md)
 
 ## 다른 프로젝트
 

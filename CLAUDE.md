@@ -197,7 +197,7 @@ and no PowerShell `-Flag` variants in 1.0.
 
 The `update` command:
 
-- Fetches the newest published stable 1.x release from GitHub (the releases list, never the
+- Fetches the newest published stable release (1.0 or later) from GitHub (the releases list, never the
   tags: a draft waiting for approval already has its tag), or uses `--version` to pin
 - Downloads the archive + its checksum (mandatory) into `versions/<v>`, switches `current` atomically;
   from 1.10.0 (`firstSignedVersion`) the checksum must come from the release's `checksums.txt`,

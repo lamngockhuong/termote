@@ -54,6 +54,8 @@
 - **Tasks**：运行窗格的 `package.json` 脚本和 Makefile 目标，并把失败的运行发送给代理——参见[Tasks](https://termote.ohnice.app/usage/tasks/)
 - **独立窗口**（桌面端）：在独立窗口中打开文件、diff、标签页、窗格或概览
 - **图片附件**：从手机向终端或 Chat 视图消息发送图片，代理可通过路径读取
+- **Zellij 后端**（Linux、macOS 或容器内）：用 Zellij 会话、标签页和窗格代替 tmux（Zellij 0.45.0 或更高版本），通过 `--mux zellij` 选择——参见[原生安装](https://termote.ohnice.app/installation/native/)
+- **herdr-core 后端**（原生，所有操作系统）：作为 herdr-core 的又一个客户端，显示 herdr 应用所显示的空间、标签页和窗格（`hc` 0.1.16 或更高版本），通过 `--mux hc` 选择——参见[herdr-core 后端](https://termote.ohnice.app/installation/native/#herdr-core-backend)
 - **Herdr 插件**：无需离开 Herdr，即可在 Termote 中打开当前聚焦的 Herdr 窗格、将其链接显示为二维码供手机扫描、启动或停止服务器——参见[Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/)
 - **移动端友好**：虚拟键盘工具栏（Tab/Ctrl/Shift/方向键，可展开）
 - **手势支持**：滑动执行 Ctrl+C、Tab、滚动
@@ -102,10 +104,12 @@ flowchart TB
         Auth["Basic Auth"]
     end
 
-    subgraph Backend["Mux 后端（tmux/psmux 或 Herdr）"]
+    subgraph Backend["Mux 后端（tmux/psmux、Herdr、Zellij 或 herdr-core）"]
         Mux["Mux 接口"]
         tmux["tmux/psmux (PTY)"]
         herdr["Herdr"]
+        zellij["Zellij"]
+        hc["herdr-core (hc)"]
         Shell["Shell"]
         Tools["CLI 工具"]
     end
@@ -119,7 +123,7 @@ flowchart TB
     Auth -.-> Static & Stream & API
     Stream --> Mux
     API --> Mux
-    Mux --> tmux & herdr
+    Mux --> tmux & herdr & zellij & hc
     tmux --> Shell --> Tools
 ```
 
@@ -154,7 +158,7 @@ termote start
 
 安装程序只需要 `curl`、`tar` 和 `sha256sum`/`shasum`（Windows 上为 PowerShell），不需要 sudo 或管理员权限。它会校验压缩包的校验和，安装 `termote` 命令，但不会启动任何东西。`termote start` 会保存选项，首次运行时创建密码（只显示一次，之后可用 `termote show-password` 再次查看），然后注册服务并启动。打开 `http://127.0.0.1:7680`（Windows：`http://127.0.0.1:7690`）。
 
-需要先安装终端后端：tmux（`sudo apt install tmux`、`brew install tmux`），Windows 上为 psmux（`winget install psmux`），或者 [Herdr](https://termote.ohnice.app/installation/native/)。首次 `start` 会检测使用哪一个。
+需要先安装终端后端：tmux（`sudo apt install tmux`、`brew install tmux`），Windows 上为 psmux（`winget install psmux`），或者 [Herdr](https://termote.ohnice.app/installation/native/)。首次 `start` 会检测使用哪一个。[Zellij](https://zellij.dev/documentation/installation) 0.45.0 或更高版本（Linux、macOS）不会被自动检测，请用 `--mux zellij` 选择。[herdr-core](https://herdr.dev/core/)（`hc` 0.1.16 或更高版本，所有操作系统，仅原生模式）同样不会被检测，请用 `--mux hc` 选择。
 
 ### 常用选项
 
@@ -162,6 +166,8 @@ termote start
 termote start --lan                  # Listen on the LAN, not only this machine
 termote start --tailscale myhost.ts.net  # Publish over Tailscale HTTPS
 termote start --mux herdr            # Drive Herdr workspaces instead of tmux
+termote start --mux zellij           # Drive Zellij sessions instead of tmux (Linux, macOS)
+termote start --mux hc               # Show the herdr app's terminals through herdr-core
 termote start --no-auth              # Disable basic auth (local use only)
 ```
 
@@ -194,7 +200,7 @@ termote update --version 1.0.0
 $env:TERMOTE_VERSION='1.0.0'; irm https://termote.ohnice.app/install.ps1 | iex
 ```
 
-不设置 `TERMOTE_VERSION` 时，安装程序会获取最新的 1.x 稳定版，且不会改动已有的安装。设置后，会将该版本安装在当前版本旁边并设为当前使用的版本，这也可以用来修复损坏的安装。
+不设置 `TERMOTE_VERSION` 时，安装程序会获取最新的稳定版（1.0 或更高版本），且不会改动已有的安装。设置后，会将该版本安装在当前版本旁边并设为当前使用的版本，这也可以用来修复损坏的安装。预发布版本（`X.Y.Z-rc.N`）只有按这种方式指定（或使用 `termote update --version`）时才会安装，且仅在发布之后；参见[部署指南](docs/deployment-guide.md#pre-releases)。
 
 ### 容器模式
 
@@ -251,12 +257,12 @@ make build
 flowchart LR
     subgraph Container["容器模式"]
         direction TB
-        C1["Docker/Podman"] --> C2["termote :7680 (自行传输终端流)"] --> C3["tmux / Herdr"]
+        C1["Docker/Podman"] --> C2["termote :7680 (自行传输终端流)"] --> C3["tmux / Herdr / Zellij"]
     end
 
     subgraph Native["原生模式"]
         direction TB
-        N1["主机系统"] --> N2["termote :7680 (自行传输终端流)"] --> N3["tmux/psmux 或 Herdr + 主机工具"]
+        N1["主机系统"] --> N2["termote :7680 (自行传输终端流)"] --> N3["tmux/psmux、Herdr、Zellij 或 herdr-core + 主机工具"]
     end
 
     User["用户"] --> Container & Native
@@ -271,23 +277,24 @@ flowchart LR
 
 ### `start` 的选项
 
-| 参数                         | 说明                                                                 |
-| ---------------------------- | -------------------------------------------------------------------- |
-| `--port <port>`              | 端口（默认：7680，Windows：7690）                                    |
-| `--lan[=false]`              | 在所有网络接口上监听（默认：仅 localhost）                           |
-| `--tailscale <host[:port]>`  | 通过 Tailscale HTTPS 发布（默认端口 443）                            |
-| `--no-tailscale`             | 停止通过 Tailscale 发布                                              |
-| `--no-auth[=false]`          | 禁用基本认证                                                         |
-| `--mux <tmux\|herdr>`        | 终端后端（默认：herdr 正在运行时用 herdr，否则用 tmux）              |
-| `--allow-host <name>`        | 允许额外的 Host 头值（可重复；无通配符，参见安全说明）               |
-| `--remove-host <name>`       | 移除已允许的 Host 名称（可重复）                                     |
-| `--allow-local-user <name>`  | 允许本机的另一个系统用户连接，例如反向代理（可重复；Linux、Windows） |
-| `--remove-local-user <name>` | 不再允许该用户连接（可重复）                                         |
-| `--allow-path <dir>`         | 在 Files 的 Places 中提供一个文件夹（可重复）                        |
-| `--remove-path <dir>`        | 移除已允许的文件夹（可重复）                                         |
-| `--allow-herdr-no-auth`      | 与 `--mux herdr --no-auth` 一起使用时必需                            |
-| `--user <name>`              | 登录用户名（默认：`admin`；与容器共用）                              |
-| `--fresh`                    | 设置新密码                                                           |
+| 参数                              | 说明                                                                                          |
+| --------------------------------- | --------------------------------------------------------------------------------------------- |
+| `--port <port>`                   | 端口（默认：7680，Windows：7690）                                                             |
+| `--lan[=false]`                   | 在所有网络接口上监听（默认：仅 localhost）                                                    |
+| `--tailscale <host[:port]>`       | 通过 Tailscale HTTPS 发布（默认端口 443）                                                     |
+| `--no-tailscale`                  | 停止通过 Tailscale 发布                                                                       |
+| `--no-auth[=false]`               | 禁用基本认证                                                                                  |
+| `--mux <tmux\|herdr\|zellij\|hc>` | 终端后端（默认：herdr 正在运行时用 herdr，否则用 tmux；zellij：Linux、macOS；hc：herdr-core） |
+| `--allow-host <name>`             | 允许额外的 Host 头值（可重复；无通配符，参见安全说明）                                        |
+| `--remove-host <name>`            | 移除已允许的 Host 名称（可重复）                                                              |
+| `--allow-local-user <name>`       | 允许本机的另一个系统用户连接，例如反向代理（可重复；Linux、Windows）                          |
+| `--remove-local-user <name>`      | 不再允许该用户连接（可重复）                                                                  |
+| `--allow-path <dir>`              | 在 Files 的 Places 中提供一个文件夹（可重复）                                                 |
+| `--remove-path <dir>`             | 移除已允许的文件夹（可重复）                                                                  |
+| `--allow-herdr-no-auth`           | 与 `--mux herdr --no-auth` 一起使用时必需                                                     |
+| `--allow-hc-no-auth`              | 与 `--mux hc --no-auth` 一起使用时必需                                                        |
+| `--user <name>`                   | 登录用户名（默认：`admin`；与容器共用）                                                       |
+| `--fresh`                         | 设置新密码                                                                                    |
 
 ### 使用 Tailscale HTTPS
 
@@ -330,7 +337,7 @@ sudo tailscale set --operator=$USER                    # Linux, once: let termot
 ```
 termote/
 ├── Makefile                # Build/test/run commands
-├── Dockerfile              # Container image (termote + tmux + herdr)
+├── Dockerfile              # Container image (termote + tmux + herdr + zellij)
 ├── docker-compose.yml      # Development from a checkout only
 ├── entrypoint.sh           # Container entrypoint
 ├── docs/                   # Documentation
@@ -348,6 +355,9 @@ termote/
 │   ├── mux.go              # Mux interface + /api/mux/* routes
 │   ├── mux_tmux.go         # tmux/psmux backend
 │   ├── mux_herdr.go        # Herdr backend
+│   ├── mux_zellij*.go      # Zellij backend (commands, Chat view and Files)
+│   ├── zellij_*.go         # Termote's Zellij clients, view-only stream, a pane's shell
+│   ├── mux_hc*.go, hc_*.go # herdr-core backend (hc connect client, herdr-app document)
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
 │   ├── cli*.go             # start/stop/update/container/logs/menu subcommands
 │   └── webui/              # PWA embedded in the binary (filled by make build)
@@ -416,9 +426,12 @@ termote start --fresh      # If the saved password can no longer be read
 - **Origin/CSRF 防护** -- 会改变状态的 `/api/mux/*` 请求和 `/api/mux/stream` WebSocket 会拒绝跨站的 `Sec-Fetch-Site`/`Origin`，并要求同源的一次性流令牌
 - **内置暴力破解防护** -- 速率限制（每 IP 每分钟 5 次失败尝试，每个 IPv6 /64 每分钟 20 次）
 - **Herdr 后端** -- 会暴露主机上的所有 Herdr 工作区，因此除非同时指定 `--allow-herdr-no-auth`，否则拒绝 `--mux herdr --no-auth`
+- **Zellij 后端** -- 与 tmux 一样，会暴露该用户所有正在运行的 Zellij 会话（`--no-auth` 没有额外防护）；按键和 Chat 消息只通过 Termote 的 Zellij 客户端终端送达窗格，绝不经由其他本地用户可读取的进程参数
+- **herdr-core 后端** -- herdr-core 没有自己的登录，因此除非同时指定 `--allow-hc-no-auth`，否则拒绝 `--mux hc --no-auth`，并且拒绝 `container up --mux hc`
 - **服务文件不含机密** -- systemd 单元、launchd 代理和计划任务中都不包含密码
 - 生产环境请使用 HTTPS（Tailscale）
 - 限制在受信任的网络/VPN 中使用
+- 已登录或已配对的设备能做什么，以及设备丢失时该怎么办：[安全模型](docs/security-model.md)
 
 ## 其他项目
 

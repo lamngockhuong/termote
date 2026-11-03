@@ -56,6 +56,8 @@
 - **Task**: chạy script trong `package.json` và target trong Makefile của pane, gửi lần chạy lỗi cho agent — xem [Task](https://termote.ohnice.app/vi/usage/tasks/)
 - **Cửa sổ riêng** (desktop): mở một file, diff, tab, pane hoặc trang tổng quan trong cửa sổ riêng
 - **Đính kèm ảnh**: gửi ảnh từ điện thoại vào terminal hoặc vào tin nhắn trong view Chat, agent đọc ảnh qua đường dẫn
+- **Backend Zellij** (Linux, macOS hoặc trong container): điều khiển các phiên, tab và pane Zellij của bạn thay cho tmux (Zellij 0.45.0 trở lên), chọn bằng `--mux zellij` — xem [Cài đặt Native](https://termote.ohnice.app/vi/installation/native/)
+- **Backend herdr-core** (native, mọi hệ điều hành): hiện đúng các space, tab và pane mà ứng dụng herdr đang hiện, với Termote là thêm một client của herdr-core (`hc` 0.1.16 trở lên), chọn bằng `--mux hc` — xem [Backend herdr-core](https://termote.ohnice.app/vi/installation/native/#backend-herdr-core)
 - **Plugin Herdr**: mở pane Herdr đang dùng trong Termote, hiện liên kết thành mã QR để quét bằng điện thoại, bật hoặc tắt server mà không rời Herdr — xem [Plugin Herdr](https://termote.ohnice.app/vi/usage/herdr-plugin/)
 - **Thân thiện mobile**: Bàn phím ảo (Tab/Ctrl/Shift/mũi tên, mở rộng được)
 - **Hỗ trợ cử chỉ**: Vuốt cho Ctrl+C, Tab, cuộn màn hình
@@ -104,10 +106,12 @@ flowchart TB
         Auth["Basic Auth"]
     end
 
-    subgraph Backend["Mux Backend (tmux/psmux hoặc Herdr)"]
+    subgraph Backend["Mux Backend (tmux/psmux, Herdr, Zellij hoặc herdr-core)"]
         Mux["Mux interface"]
         tmux["tmux/psmux (PTY)"]
         herdr["Herdr"]
+        zellij["Zellij"]
+        hc["herdr-core (hc)"]
         Shell["Shell"]
         Tools["CLI Tools"]
     end
@@ -121,7 +125,7 @@ flowchart TB
     Auth -.-> Static & Stream & API
     Stream --> Mux
     API --> Mux
-    Mux --> tmux & herdr
+    Mux --> tmux & herdr & zellij & hc
     tmux --> Shell --> Tools
 ```
 
@@ -156,7 +160,7 @@ termote start
 
 Trình cài đặt chỉ cần `curl`, `tar` và `sha256sum`/`shasum` (trên Windows là PowerShell), không cần sudo hay quyền admin. Nó kiểm tra mã băm SHA-256 của gói tải về, cài lệnh `termote` và không khởi động gì cả. `termote start` lưu các tùy chọn, tạo mật khẩu ở lần chạy đầu (chỉ in ra một lần; xem lại bằng `termote show-password`), đăng ký service rồi khởi động nó. Mở `http://127.0.0.1:7680` (Windows: `http://127.0.0.1:7690`).
 
-Cần cài sẵn một backend terminal: tmux (`sudo apt install tmux`, `brew install tmux`), psmux trên Windows (`winget install psmux`), hoặc [Herdr](https://termote.ohnice.app/vi/installation/native/). Lần `start` đầu tiên sẽ tự nhận ra nên dùng backend nào.
+Cần cài sẵn một backend terminal: tmux (`sudo apt install tmux`, `brew install tmux`), psmux trên Windows (`winget install psmux`), hoặc [Herdr](https://termote.ohnice.app/vi/installation/native/). Lần `start` đầu tiên sẽ tự nhận ra nên dùng backend nào. [Zellij](https://zellij.dev/documentation/installation) 0.45.0 trở lên (Linux, macOS) không bao giờ được tự nhận ra: hãy chọn bằng `--mux zellij`. [herdr-core](https://herdr.dev/core/) (`hc` 0.1.16 trở lên, mọi hệ điều hành, chỉ chạy native) cũng không được tự nhận ra: hãy chọn bằng `--mux hc`.
 
 ### Tùy chọn thường dùng
 
@@ -164,6 +168,8 @@ Cần cài sẵn một backend terminal: tmux (`sudo apt install tmux`, `brew in
 termote start --lan                  # Listen on the LAN, not only this machine
 termote start --tailscale myhost.ts.net  # Publish over Tailscale HTTPS
 termote start --mux herdr            # Drive Herdr workspaces instead of tmux
+termote start --mux zellij           # Drive Zellij sessions instead of tmux (Linux, macOS)
+termote start --mux hc               # Show the herdr app's terminals through herdr-core
 termote start --no-auth              # Disable basic auth (local use only)
 ```
 
@@ -196,7 +202,7 @@ termote update --version 1.0.0
 $env:TERMOTE_VERSION='1.0.0'; irm https://termote.ohnice.app/install.ps1 | iex
 ```
 
-Không có `TERMOTE_VERSION`, trình cài đặt lấy bản phát hành 1.x ổn định mới nhất và để nguyên bản đã cài. Có biến này, phiên bản đó được cài bên cạnh bản hiện tại và trở thành phiên bản đang dùng; cách này cũng sửa được một bản cài bị hỏng.
+Không có `TERMOTE_VERSION`, trình cài đặt lấy bản phát hành ổn định mới nhất (từ 1.0 trở lên) và để nguyên bản đã cài. Có biến này, phiên bản đó được cài bên cạnh bản hiện tại và trở thành phiên bản đang dùng; cách này cũng sửa được một bản cài bị hỏng. Bản phát hành thử (`X.Y.Z-rc.N`) chỉ được cài khi chỉ định tên theo cách này (hoặc bằng `termote update --version`), và chỉ sau khi đã phát hành; xem [Hướng dẫn triển khai](docs/deployment-guide.md#pre-releases).
 
 ### Chế độ container
 
@@ -253,12 +259,12 @@ Không có đường nâng cấp từ 0.x: bản 1.0 cài vào chỗ khác và k
 flowchart LR
     subgraph Container["Chế Độ Container"]
         direction TB
-        C1["Docker/Podman"] --> C2["termote :7680 (tự truyền luồng terminal)"] --> C3["tmux / Herdr"]
+        C1["Docker/Podman"] --> C2["termote :7680 (tự truyền luồng terminal)"] --> C3["tmux / Herdr / Zellij"]
     end
 
     subgraph Native["Chế Độ Native"]
         direction TB
-        N1["Hệ Thống Host"] --> N2["termote :7680 (tự truyền luồng terminal)"] --> N3["tmux/psmux hoặc Herdr + Công Cụ Host"]
+        N1["Hệ Thống Host"] --> N2["termote :7680 (tự truyền luồng terminal)"] --> N3["tmux/psmux, Herdr, Zellij hoặc herdr-core + Công Cụ Host"]
     end
 
     User["Người Dùng"] --> Container & Native
@@ -273,23 +279,24 @@ Server native chạy dưới dạng service của người dùng: systemd user u
 
 ### Tùy chọn của `start`
 
-| Flag                         | Mô Tả                                                                                                         |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `--port <port>`              | Port (mặc định: 7680, Windows: 7690)                                                                          |
-| `--lan[=false]`              | Lắng nghe trên mọi interface (mặc định: chỉ localhost)                                                        |
-| `--tailscale <host[:port]>`  | Công bố qua Tailscale HTTPS (port mặc định 443)                                                               |
-| `--no-tailscale`             | Ngừng công bố qua Tailscale                                                                                   |
-| `--no-auth[=false]`          | Tắt xác thực (basic auth)                                                                                     |
-| `--mux <tmux\|herdr>`        | Backend terminal (mặc định: herdr nếu đang chạy, nếu không thì tmux)                                          |
-| `--allow-host <name>`        | Cho phép thêm một giá trị header Host (lặp lại được; không có ký tự đại diện, xem ghi chú bảo mật)            |
-| `--remove-host <name>`       | Bỏ một tên Host đã cho phép (lặp lại được)                                                                    |
-| `--allow-local-user <name>`  | Cho một người dùng hệ điều hành khác trên máy này kết nối, ví dụ reverse proxy (lặp lại được; Linux, Windows) |
-| `--remove-local-user <name>` | Thôi cho người dùng đó kết nối (lặp lại được)                                                                 |
-| `--allow-path <dir>`         | Đưa một thư mục vào Files, trong mục Places (lặp lại được)                                                    |
-| `--remove-path <dir>`        | Bỏ một thư mục đã cho phép (lặp lại được)                                                                     |
-| `--allow-herdr-no-auth`      | Bắt buộc khi dùng cùng `--mux herdr --no-auth`                                                                |
-| `--user <name>`              | Tên đăng nhập (mặc định: `admin`; dùng chung với container)                                                   |
-| `--fresh`                    | Đặt mật khẩu mới                                                                                              |
+| Flag                              | Mô Tả                                                                                                         |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `--port <port>`                   | Port (mặc định: 7680, Windows: 7690)                                                                          |
+| `--lan[=false]`                   | Lắng nghe trên mọi interface (mặc định: chỉ localhost)                                                        |
+| `--tailscale <host[:port]>`       | Công bố qua Tailscale HTTPS (port mặc định 443)                                                               |
+| `--no-tailscale`                  | Ngừng công bố qua Tailscale                                                                                   |
+| `--no-auth[=false]`               | Tắt xác thực (basic auth)                                                                                     |
+| `--mux <tmux\|herdr\|zellij\|hc>` | Backend terminal (mặc định: herdr nếu đang chạy, nếu không thì tmux; zellij: Linux, macOS; hc: herdr-core)    |
+| `--allow-host <name>`             | Cho phép thêm một giá trị header Host (lặp lại được; không có ký tự đại diện, xem ghi chú bảo mật)            |
+| `--remove-host <name>`            | Bỏ một tên Host đã cho phép (lặp lại được)                                                                    |
+| `--allow-local-user <name>`       | Cho một người dùng hệ điều hành khác trên máy này kết nối, ví dụ reverse proxy (lặp lại được; Linux, Windows) |
+| `--remove-local-user <name>`      | Thôi cho người dùng đó kết nối (lặp lại được)                                                                 |
+| `--allow-path <dir>`              | Đưa một thư mục vào Files, trong mục Places (lặp lại được)                                                    |
+| `--remove-path <dir>`             | Bỏ một thư mục đã cho phép (lặp lại được)                                                                     |
+| `--allow-herdr-no-auth`           | Bắt buộc khi dùng cùng `--mux herdr --no-auth`                                                                |
+| `--allow-hc-no-auth`              | Bắt buộc khi dùng cùng `--mux hc --no-auth`                                                                   |
+| `--user <name>`                   | Tên đăng nhập (mặc định: `admin`; dùng chung với container)                                                   |
+| `--fresh`                         | Đặt mật khẩu mới                                                                                              |
 
 ### Với Tailscale HTTPS
 
@@ -332,7 +339,7 @@ Thanh công cụ ảo cung cấp: Tab, Esc, Ctrl, Shift, phím mũi tên, và c�
 ```
 termote/
 ├── Makefile                # Build/test/run commands
-├── Dockerfile              # Container image (termote + tmux + herdr)
+├── Dockerfile              # Container image (termote + tmux + herdr + zellij)
 ├── docker-compose.yml      # Development from a checkout only
 ├── entrypoint.sh           # Container entrypoint
 ├── docs/                   # Documentation
@@ -350,6 +357,9 @@ termote/
 │   ├── mux.go              # Mux interface + /api/mux/* routes
 │   ├── mux_tmux.go         # tmux/psmux backend
 │   ├── mux_herdr.go        # Herdr backend
+│   ├── mux_zellij*.go      # Zellij backend (commands, Chat view and Files)
+│   ├── zellij_*.go         # Termote's Zellij clients, view-only stream, a pane's shell
+│   ├── mux_hc*.go, hc_*.go # herdr-core backend (hc connect client, herdr-app document)
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
 │   ├── cli*.go             # start/stop/update/container/logs/menu subcommands
 │   └── webui/              # PWA embedded in the binary (filled by make build)
@@ -418,9 +428,12 @@ termote start --fresh      # If the saved password can no longer be read
 - **Chặn Origin/CSRF**: các request thay đổi trạng thái tới `/api/mux/*` và WebSocket `/api/mux/stream` từ chối request có `Sec-Fetch-Site`/`Origin` đến từ site khác, đồng thời yêu cầu stream token cùng origin và chỉ dùng một lần
 - **Chống brute-force tích hợp** - rate limiting (5 lần thử sai/phút mỗi IP, 20/phút mỗi dải IPv6 /64)
 - **Backend Herdr**: để lộ mọi workspace Herdr trên máy host, nên `--mux herdr --no-auth` bị từ chối nếu không kèm `--allow-herdr-no-auth`
+- **Backend Zellij**: để lộ mọi phiên Zellij đang chạy của người dùng, giống tmux (không có thêm chốt chặn cho `--no-auth`); phím và tin nhắn Chat chỉ đến pane qua terminal của một client Zellij do Termote mở, không bao giờ qua tham số tiến trình mà người dùng cục bộ khác đọc được
+- **Backend herdr-core**: herdr-core không có đăng nhập riêng, nên `--mux hc --no-auth` bị từ chối nếu không kèm `--allow-hc-no-auth`, và `container up --mux hc` luôn bị từ chối
 - **File service không chứa bí mật**: systemd unit, launchd agent và Scheduled Task không bao giờ chứa mật khẩu
 - Dùng HTTPS (Tailscale) cho production
 - Giới hạn trong mạng tin cậy/VPN
+- Thiết bị đã đăng nhập hoặc đã ghép nối làm được gì, và cần làm gì khi mất một thiết bị: [Mô hình bảo mật](docs/security-model.md)
 
 ## Dự Án Khác
 
