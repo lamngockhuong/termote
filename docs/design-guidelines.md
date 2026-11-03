@@ -281,4 +281,8 @@ There is no Quick actions sheet and no floating button.
 - Toasts appear near the top, with status colours, so they never cover the toolbar; a swipe up or
   sideways dismisses one, and holding it pauses its timer
 - Sidebar: collapsible on desktop (icon-only when collapsed)
+- Sidebar groups: the header (workspace or tmux session) is `text-fg font-semibold`, above its rows;
+  on desktop the rows start under the header's name (`pl-4.5`), a phone's swipe rows keep the full
+  width. A thin `border-t border-border` and a gap set top-level groups apart (none above the first
+  shown); a linked worktree is indented under its checkout with a `border-l` instead
 - Fullscreen: desktop only (Fullscreen API), toggle in the header, syncs with F11/Esc
