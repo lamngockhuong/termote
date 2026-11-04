@@ -32,6 +32,9 @@ type zellijMux struct {
 	reads    map[string]zellijRead   // session → last good read
 	tabKeys  map[zellijTabRef]string // a tab's Key while its id lives
 	skipped  map[string]bool         // names left out, logged once
+	// clientErrs: sessions whose list-clients fails, logged once until it
+	// works again (made on first use).
+	clientErrs map[string]bool
 	// names: the name termote gave each pane (zellijPaneKey), which
 	// list-panes shows only as the pane's title, until that title changes.
 	names map[string]zellijPaneName
@@ -392,18 +395,30 @@ func (m *zellijMux) pruneTabKeys(names []string, reads []zellijRead) {
 	}
 }
 
-// readClients lists the clients of every listed session: it checks the
-// drift of Termote's stream clients there, and returns the panes the user's
-// own clients show (native viewers). A failed listing is logged, and counts
-// no one.
+// readClients lists the clients of every listed session, a few at a time
+// (zellijReadConcurrency): it checks the drift of Termote's stream clients
+// there, and returns the panes the user's own clients show (native viewers).
+// A failed listing counts no one, and is logged once until it works again.
 func (m *zellijMux) readClients(ctx context.Context, names []string) map[string]bool {
+	lists := make([]map[string]string, len(names))
+	errs := make([]error, len(names))
+	sem := make(chan struct{}, zellijReadConcurrency)
+	var wg sync.WaitGroup
+	for i, s := range names {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			lists[i], errs[i] = zellijClients(ctx, s)
+		}()
+	}
+	wg.Wait()
+	m.noteClientErrs(ctx, names, errs)
 	viewers := map[string]bool{}
-	for _, s := range names {
-		clients, err := zellijClients(ctx, s)
-		if err != nil {
-			if ctx.Err() == nil {
-				log.Printf("zellij list-clients %q: %v", s, err)
-			}
+	for i, s := range names {
+		clients := lists[i]
+		if errs[i] != nil {
 			continue
 		}
 		own := m.ownClientIDs(s)
@@ -418,6 +433,24 @@ func (m *zellijMux) readClients(ctx context.Context, names []string) map[string]
 		zellijNativeViewers(viewers, s, clients, own)
 	}
 	return viewers
+}
+
+// noteClientErrs logs each session's failed list-clients once, until it
+// works again; a session no longer listed is forgotten.
+func (m *zellijMux) noteClientErrs(ctx context.Context, names []string, errs []error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	failing := map[string]bool{}
+	for i, s := range names {
+		if errs[i] == nil || ctx.Err() != nil {
+			continue
+		}
+		failing[s] = true
+		if !m.clientErrs[s] {
+			log.Printf("zellij list-clients %q: %v", s, errs[i])
+		}
+	}
+	m.clientErrs = failing
 }
 
 // ownClientIDs is the ids of session's clients that are Termote's: those it

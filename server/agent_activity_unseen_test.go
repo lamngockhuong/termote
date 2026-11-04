@@ -307,6 +307,28 @@ func TestUnseenZellijRenameMovesViewers(t *testing.T) {
 	}
 }
 
+// A stream off screen during a rename is counted under the new key once
+// shown again.
+func TestUnseenRenameWhileOff(t *testing.T) {
+	tr, _ := newOverlayTracker(true, false)
+	a, b := zellijGroupID("a"), zellijGroupID("b")
+	w := tr.watcher(a, zellijPaneKey("a", 1))
+	w.set(true)
+	w.set(false)
+	tr.renameGroup(a, b)
+	w.set(true)
+	if v := tr.viewers[zellijPaneKey("b", 1)]; v == nil || v.count != 1 {
+		t.Fatalf("viewers = %v", tr.viewers)
+	}
+	if v := tr.viewers[zellijPaneKey("a", 1)]; v != nil && v.count != 0 {
+		t.Errorf("old key counted: %d", v.count)
+	}
+	w.end()
+	if len(tr.watches) != 0 {
+		t.Errorf("watches kept: %d", len(tr.watches))
+	}
+}
+
 // A psmux tab renumbering forgets its panes, unseen turns too: a known
 // limit.
 func TestUnseenPsmuxRenumberForgets(t *testing.T) {

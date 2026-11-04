@@ -272,14 +272,15 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   the stream's end; tmux by group, the stream showing its session's current window; Herdr and
   Zellij by pane), and the snapshot's unexported `viewers`, filled by the mux's own read (below).
   Memory: one viewer entry per stream, so no more than the hub allows, dropped once no stream
-  holds it and a fold passed its last sighting; a Zellij rename moves the keys of live streams too.
+  holds it and a fold passed its last sighting; a Zellij rename moves the key of every stream's
+  watch, off screen as well as on, until the stream ends.
   **Native viewers** (`server/native_viewers.go`): tmux runs `list-clients -F
   #{client_pid}:#{client_activity}:#{window_id}` through argv (`tmuxCmd`), never a shell; a client
   whose pid is a terminal Termote runs (`ownTerminals`, filled by `startTerminal`) or with no key
   for 5 minutes (`nativeViewerIdle`) is left out; psmux is skipped. Zellij reuses its
   `list-clients`, leaving out Termote's clients (its own and those closed a moment ago) and every
-  client of a session whose slot is held (a client starting). A failed listing is logged and
-  counts no one. No pid, tty or client id reaches the snapshot JSON (`viewers` is unexported)
+  client of a session whose slot is held (a client starting); sessions are listed 4 at a time. A
+  failed listing counts no one and is logged once until it works again. No pid, tty or client id reaches the snapshot JSON (`viewers` is unexported)
 - **Agent overview** (`server/agent_overview.go`, `GET /api/mux/overview`): `requireMethod(GET)`,
   `crossSiteRejection`, `requireAgentRead`; internal errors are logged only. It summarizes the
   panes with an agent in the activity tracker's last snapshot (64 at most) and never reads the

@@ -102,9 +102,9 @@ type activityTracker struct {
 	// group's current window (tmux), so viewers are counted by group, not
 	// by pane.
 	overlay, byGroup bool
-	// viewers by group id (byGroup) or paneKey; watches: the live ones,
-	// whose keys a rename moves; lastFold: when the last snapshot was
-	// folded.
+	// viewers by group id (byGroup) or paneKey; watches: every stream's
+	// watch until it ends, on or off, whose keys a rename moves; lastFold:
+	// when the last snapshot was folded.
 	viewers  map[string]*activityViewers
 	watches  map[*activityWatch]struct{}
 	lastFold time.Time
@@ -131,7 +131,13 @@ func (t *activityTracker) watcher(group, pane string) *activityWatch {
 	if t.byGroup {
 		key = group
 	}
-	return &activityWatch{t: t, key: key}
+	w := &activityWatch{t: t, key: key}
+	// Listed from the start, off as well as on, so a rename moves its key
+	// before it is first counted.
+	t.mu.Lock()
+	t.watches[w] = struct{}{}
+	t.mu.Unlock()
+	return w
 }
 
 // set counts the stream as a viewer while on. A repeated value, or one after
@@ -162,6 +168,7 @@ func (w *activityWatch) end() {
 		return
 	}
 	w.ended = true
+	delete(t.watches, w)
 	if w.on {
 		w.on = false
 		t.watchLocked(w, false)
@@ -177,11 +184,9 @@ func (t *activityTracker) watchLocked(w *activityWatch, on bool) {
 	v.lastSeen = t.now().UTC()
 	if on {
 		v.count++
-		t.watches[w] = struct{}{}
 		return
 	}
 	v.count--
-	delete(t.watches, w)
 }
 
 // begin numbers a snapshot read; call it before reading, and give the number

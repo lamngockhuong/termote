@@ -109,6 +109,15 @@ func TestZellijReadClientsFails(t *testing.T) {
 	if err != nil || len(snap.viewers) != 0 {
 		t.Errorf("failed list-clients = %v, %v", snap.viewers, err)
 	}
+	if !m.clientErrs["main"] {
+		t.Error("failing session not noted")
+	}
+	// Logged once: a second failure keeps the note; a success clears it.
+	m.Snapshot(t.Context())
+	m.noteClientErrs(t.Context(), []string{"main"}, []error{nil})
+	if len(m.clientErrs) != 0 {
+		t.Errorf("clientErrs = %v", m.clientErrs)
+	}
 	// Cancelled: nothing logged, nothing counted.
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
