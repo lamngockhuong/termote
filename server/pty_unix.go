@@ -35,8 +35,12 @@ func startTerminal(argv []string, size Size) (TermStream, error) {
 		return nil, err
 	}
 	s := &ptyStream{f: f, cmd: cmd, done: make(chan struct{})}
+	// A tmux client it runs is Termote's own, never a native viewer.
+	pid := cmd.Process.Pid
+	addOwnTerminal(pid)
 	go func() {
 		err := cmd.Wait()
+		removeOwnTerminal(pid)
 		var ee *exec.ExitError
 		switch {
 		case err == nil:

@@ -239,7 +239,7 @@ func (m *zellijMux) snapshot(ctx context.Context, create bool) (Snapshot, error)
 		snap.Groups = append(snap.Groups, g)
 	}
 	m.pruneTabKeys(names, reads)
-	m.checkDriftAll(ctx, names)
+	snap.viewers = m.readClients(ctx, names)
 	if agentProcSupported && len(agentPanes) > 0 {
 		m.fillAgents(ctx, snap.Groups, agentPanes)
 	}
@@ -392,17 +392,47 @@ func (m *zellijMux) pruneTabKeys(names []string, reads []zellijRead) {
 	}
 }
 
-// checkDriftAll checks the stream clients of every listed session that has
-// any.
-func (m *zellijMux) checkDriftAll(ctx context.Context, names []string) {
+// readClients lists the clients of every listed session: it checks the
+// drift of Termote's stream clients there, and returns the panes the user's
+// own clients show (native viewers). A failed listing is logged, and counts
+// no one.
+func (m *zellijMux) readClients(ctx context.Context, names []string) map[string]bool {
+	viewers := map[string]bool{}
 	for _, s := range names {
-		if len(m.sessionClients(s)) == 0 {
+		clients, err := zellijClients(ctx, s)
+		if err != nil {
+			if ctx.Err() == nil {
+				log.Printf("zellij list-clients %q: %v", s, err)
+			}
 			continue
 		}
-		if clients, err := zellijClients(ctx, s); err == nil {
+		own := m.ownClientIDs(s)
+		if len(own) > 0 {
 			m.checkDrift(s, clients)
 		}
+		// A client starting or being positioned holds the session's slot,
+		// and its id is not known yet: no one counts until it is.
+		if len(m.sessionSlot(s)) > 0 {
+			continue
+		}
+		zellijNativeViewers(viewers, s, clients, own)
 	}
+	return viewers
+}
+
+// ownClientIDs is the ids of session's clients that are Termote's: those it
+// runs, and those it closed that may still be listed.
+func (m *zellijMux) ownClientIDs(session string) map[string]bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	own := map[string]bool{}
+	for _, c := range m.clients[session] {
+		own[c.id] = true
+	}
+	for id := range m.departed[session] {
+		own[id] = true
+	}
+	return own
 }
 
 // createDefault starts the default session when no session runs, in the

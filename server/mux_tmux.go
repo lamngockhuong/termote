@@ -501,6 +501,7 @@ func tmuxSnapshot(ctx context.Context, create bool) (Snapshot, error) {
 	for i, g := range groups {
 		snap.Groups[i] = g.Group
 	}
+	snap.viewers = tmuxNativeViewers(ctx, snap.Groups, time.Now())
 	return snap, nil
 }
 
