@@ -55,12 +55,20 @@ jobs:
           node-version: "24"
           package-manager-cache: false
 
+      # The PWA's too: the site publishes the interactive demo
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --filter @termote/website...
+        run: pnpm install --frozen-lockfile --filter @termote/website... --filter termote...
 
       - name: Build
         run: pnpm build
         working-directory: website
+
+      # The PWA of the tag, built in its demo mode (pwa/src/demo): no server,
+      # served at /demo/
+      - name: Build the demo
+        run: |
+          pnpm --filter termote build:demo
+          cp -R pwa/dist-demo website/dist/demo
 
       # The installers people pipe into a shell must be the tag's, byte for
       # byte, before anything is published (verify checks the served ones).
