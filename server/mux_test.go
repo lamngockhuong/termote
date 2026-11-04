@@ -19,8 +19,9 @@ type fakeMux struct {
 	err    error
 	calls  []string
 	attach func(pane string, size Size) (TermStream, error)
-	// caps replaces the default caps when set.
+	// caps replaces the default caps when set; name the backend's name.
 	caps *Caps
+	name string
 	// move runs in MoveTab and MoveGroup when set, with the request's
 	// context; moveID is MoveTab's id (else the id given).
 	move   func(ctx context.Context) error
@@ -30,7 +31,12 @@ type fakeMux struct {
 	more bool
 }
 
-func (f *fakeMux) Name() string { return "fake" }
+func (f *fakeMux) Name() string {
+	if f.name != "" {
+		return f.name
+	}
+	return "fake"
+}
 func (f *fakeMux) Caps() Caps {
 	if f.caps != nil {
 		return *f.caps

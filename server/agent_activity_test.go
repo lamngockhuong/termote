@@ -18,9 +18,13 @@ func (c *fakeClock) now() time.Time            { return c.t }
 func (c *fakeClock) advance(d time.Duration)   { c.t = c.t.Add(d) }
 func (c *fakeClock) at(d time.Duration) string { return c.t.Add(d).UTC().Format(activityTimeFormat) }
 
-func newTestTracker() (*activityTracker, *fakeClock) {
+func newTestTracker() (*activityTracker, *fakeClock) { return newOverlayTracker(false, false) }
+
+// newOverlayTracker is a tracker that overlays unseen turns (overlay), with
+// viewers by group (byGroup, tmux).
+func newOverlayTracker(overlay, byGroup bool) (*activityTracker, *fakeClock) {
 	c := &fakeClock{t: time.Date(2026, 10, 13, 9, 0, 0, 0, time.UTC)}
-	return newActivityTracker(c.now), c
+	return newActivityTracker(c.now, overlay, byGroup), c
 }
 
 // herdrLike is one group of Herdr-like panes (ids that never shift), with

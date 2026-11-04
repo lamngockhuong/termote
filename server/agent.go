@@ -412,6 +412,10 @@ type agentLookup struct {
 
 func newAgentAPI(m Mux) *agentAPI {
 	loc, _ := m.(agentSessionLocator)
+	backend := ""
+	if m != nil {
+		backend = m.Name()
+	}
 	return &agentAPI{
 		m:         m,
 		loc:       loc,
@@ -420,7 +424,7 @@ func newAgentAPI(m Mux) *agentAPI {
 		sensitive: &sensitiveCalls{ids: map[string]struct{}{}},
 		input:     newAgentInput(),
 		starts:    newAgentStarts(),
-		activity:  newActivityTracker(time.Now),
+		activity:  newActivityTracker(time.Now, overlayBackend(backend), backend == "tmux"),
 		overview:  newTTLCache[overviewRead](overviewTTL),
 		changes:   newOverviewChanges(),
 

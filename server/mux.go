@@ -234,6 +234,10 @@ type Snapshot struct {
 	// InstanceID names this server (kept in its state dir): the PWA keeps
 	// open tabs and drafts on the device under it.
 	InstanceID string `json:"instanceId,omitempty"`
+	// viewers: the panes (by paneKey) a terminal client of the backend's own
+	// shows, a user active there lately (tmux, Zellij list-clients); the
+	// activity tracker counts them as seen. Never sent.
+	viewers map[string]bool
 }
 
 // Group is a tmux session or a herdr workspace.
