@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import badgeFixture from '../../../server/testdata/badge-snapshot.json'
+import { buildSessions } from '../hooks/use-local-sessions'
+import type { MuxSnapshot } from '../hooks/use-mux-api'
 import type { Session } from '../types/session'
 import {
   applyBadge,
@@ -62,6 +65,16 @@ describe('badgeCount', () => {
     ]
     expect(badgeCount(sessions)).toBe(3)
     expect(badgeCount([])).toBe(0)
+  })
+
+  // The worker counts the same snapshot (src/sw/notify-sw.test.ts)
+  it('counts the shared snapshot fixture as the server does', () => {
+    const built = buildSessions(
+      badgeFixture.snapshot as unknown as MuxSnapshot,
+      {},
+      (k) => k,
+    )
+    expect(badgeCount(built.sessions)).toBe(badgeFixture.expected)
   })
 })
 

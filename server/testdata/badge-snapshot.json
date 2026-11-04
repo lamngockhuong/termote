@@ -1,0 +1,55 @@
+{
+  "comment": "The app badge's count of a snapshot: every pane whose agent is blocked or done, once. pwa/src/utils/app-badge.ts (through buildSessions) and pwa/public/notify-sw.js must both give expected; app_badge_fixture_test.go checks the server's own JSON shape.",
+  "expected": 4,
+  "snapshot": {
+    "apiVersion": 1,
+    "backend": "tmux",
+    "caps": {},
+    "groups": [
+      {
+        "id": "$1",
+        "name": "work",
+        "tabs": [
+          {
+            "id": "$1:0",
+            "key": "@1",
+            "name": "split",
+            "active": true,
+            "panes": [
+              { "id": "%1", "active": true, "agent": { "name": "claude", "status": "blocked" } },
+              { "id": "%2", "active": false, "agent": { "name": "codex", "status": "done" } },
+              { "id": "%3", "active": false }
+            ]
+          },
+          {
+            "id": "$1:1",
+            "key": "@2",
+            "name": "busy",
+            "active": false,
+            "panes": [
+              { "id": "%4", "active": true, "agent": { "name": "claude", "status": "working" } }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "w1",
+        "name": "herdr",
+        "tabs": [
+          {
+            "id": "w1:t1",
+            "key": "w1:t1",
+            "name": "t",
+            "active": true,
+            "panes": [
+              { "id": "w1:p1", "active": true, "agent": { "name": "claude", "status": "done" } },
+              { "id": "w1:p2", "active": false, "agent": { "name": "claude", "status": "idle" } },
+              { "id": "w1:p3", "active": false, "agent": { "name": "claude", "status": "unknown" } },
+              { "id": "w1:p4", "active": false, "agent": { "name": "claude", "status": "blocked" } }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
