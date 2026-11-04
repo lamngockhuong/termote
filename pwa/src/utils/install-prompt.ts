@@ -1,3 +1,4 @@
+import { isDemo } from './demo'
 import { isIos, isStandalone } from './notify-permission'
 import type { InstallOffer } from './welcome'
 
@@ -34,9 +35,10 @@ export function onInstallOfferChange(fn: () => void): () => void {
   return () => listeners.delete(fn)
 }
 
-// How this browser can add the app now: none once it runs installed
+// How this browser can add the app now: none once it runs installed, nor in
+// the demo, which has no manifest to install
 export function installOffer(): InstallOffer {
-  if (isStandalone()) return null
+  if (isDemo || isStandalone()) return null
   if (deferred) return 'prompt'
   return isIos() ? 'ios' : null
 }

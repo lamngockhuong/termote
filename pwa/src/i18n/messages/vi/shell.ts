@@ -43,6 +43,10 @@ export default {
   'shell.localhost.open': 'Mở 127.0.0.1',
   'shell.localhost.body':
     'Trang này mở qua localhost: lần kết nối nào cũng thử IPv6 trước, nên mỗi lần chuyển tab có thể chậm. Hãy dùng 127.0.0.1. Với trình duyệt, đó là một địa chỉ khác: bạn phải đăng nhập lại, cài đặt và bản nháp chưa lưu vẫn ở lại đây, còn app đã cài phải cài lại.',
+  'shell.demo.label':
+    'Bản demo, dữ liệu giả: không có gì ở đây chạy trên máy thật',
+  'shell.demo.install': 'Cài Termote',
+  'shell.demo.dismiss': 'Ẩn thông báo demo',
   'shell.languageNotice.body':
     'Termote giờ có tiếng Việt cho toàn bộ giao diện.',
   'shell.languageNotice.english': 'Chuyển về English',

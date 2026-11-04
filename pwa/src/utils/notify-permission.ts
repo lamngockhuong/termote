@@ -1,6 +1,8 @@
 // Notification permission, and whether the active service worker has the
 // notification handlers (public/notify-sw.js) a click needs.
 
+import { isDemo } from './demo'
+
 export type NotifySupport = NotificationPermission | 'unsupported'
 
 // Answered by notify-sw.js; a worker from before it never answers, and one
@@ -8,8 +10,13 @@ export type NotifySupport = NotificationPermission | 'unsupported'
 export const NOTIFY_WORKER_VERSION = 2
 const PING_TIMEOUT_MS = 500
 
+// The demo registers no service worker and never asks for the permission.
 export function notificationSupport(): NotifySupport {
-  if (typeof Notification === 'undefined' || !('serviceWorker' in navigator)) {
+  if (
+    isDemo ||
+    typeof Notification === 'undefined' ||
+    !('serviceWorker' in navigator)
+  ) {
     return 'unsupported'
   }
   return Notification.permission
@@ -36,7 +43,7 @@ export function isStandalone(nav: IosNavigator = navigator): boolean {
 // iPhone and iPad notify only from the app added to the Home Screen (iOS
 // 16.4+); in Safari, Notification does not exist at all.
 export function needsHomeScreenApp(nav: IosNavigator = navigator): boolean {
-  return isIos(nav) && !isStandalone(nav)
+  return !isDemo && isIos(nav) && !isStandalone(nav)
 }
 
 // Called first thing in a click: Safari asks only from a user gesture.
