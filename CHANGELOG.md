@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.19.2](https://github.com/lamngockhuong/termote/compare/v2.19.1...v2.19.2) (2026-11-04)
+
+
+### Bug Fixes
+
+* **pwa:** keep the command palette's picked row when a list reset lags ([#697](https://github.com/lamngockhuong/termote/issues/697)) ([6990d67](https://github.com/lamngockhuong/termote/commit/6990d673e3e9a293d82490361430c1cef5a98a1b))
+* **start:** keep a saved Tailscale mapping while Tailscale is stopped ([#696](https://github.com/lamngockhuong/termote/issues/696)) ([03c5ddf](https://github.com/lamngockhuong/termote/commit/03c5ddf8270dd8f97404d67caa085ad51798551a))
+
 ## [2.19.1](https://github.com/lamngockhuong/termote/compare/v2.19.0...v2.19.1) (2026-11-03)
 
 
