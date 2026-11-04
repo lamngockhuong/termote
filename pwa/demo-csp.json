@@ -1,0 +1,21 @@
+{
+  "app": [
+    "default-src 'self'",
+    "script-src 'self' {scripts}",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "connect-src 'self' https://api.github.com",
+    "worker-src 'self'",
+    "manifest-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'"
+  ],
+  "sandbox": [
+    "default-src 'none'",
+    "script-src {scripts}",
+    "worker-src blob:",
+    "base-uri 'none'",
+    "form-action 'none'"
+  ]
+}

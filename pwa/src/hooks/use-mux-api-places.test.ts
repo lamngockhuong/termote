@@ -69,10 +69,16 @@ describe('files requests of a Place', () => {
   })
 
   // A files URL built by hand would leave the Place out: every one goes
-  // through filesUrl
+  // through filesUrl. The demo (src/demo) answers those URLs in place of
+  // the server: it names its routes, it builds no request.
   it('no source file builds a files URL itself', () => {
     const sources = import.meta.glob<string>(
-      ['../**/*.{ts,tsx}', '!../**/*.test.{ts,tsx}', '!./use-mux-api.ts'],
+      [
+        '../**/*.{ts,tsx}',
+        '!../**/*.test.{ts,tsx}',
+        '!./use-mux-api.ts',
+        '!../demo/**',
+      ],
       { query: '?raw', import: 'default', eager: true },
     )
     expect(Object.keys(sources).length).toBeGreaterThan(100)

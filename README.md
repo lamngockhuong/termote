@@ -76,6 +76,8 @@ Remote control CLI tools (Claude Code, GitHub Copilot, any terminal) from mobile
 
 ## Screenshots
 
+**[Try the demo](https://termote.ohnice.app/demo/)**: the real app in your browser, on a phone or a desktop, with fake data and no install.
+
 <p align="center">
   <img src="docs/images/screenshots/phones.png" alt="Terminal, Chat and Changes on a phone" width="720" />
 </p>

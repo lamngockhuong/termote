@@ -180,6 +180,13 @@ serves at `https://termote.ohnice.app/install.sh`/`install.ps1` — on the versi
 `releases/latest` installs, while `main` runs ahead of it. Test a pre-release installer from
 the raw GitHub tag URL instead (see [`deployment-guide.md`](deployment-guide.md#pre-releases)).
 
+The deploy also builds the tag's PWA in its demo mode (`pnpm --filter termote build:demo`, the
+code under `pwa/src/demo/`) and publishes it at `https://termote.ohnice.app/demo/`: the real
+app with no server, answering its own requests from fixtures. A PWA that fails to build
+therefore blocks the docs deploy too. The site counts page views and the `demo-open`,
+`install-copy` and `github-click` events with GoatCounter (site `termote`, no cookies; never on
+localhost nor inside `/demo/`).
+
 ## Maintaining 0.x
 
 0.x lives on the `release/0.x` branch (cut from `v0.1.0`) and only takes security and critical

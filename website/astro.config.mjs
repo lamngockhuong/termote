@@ -1,6 +1,16 @@
+import { readFileSync } from "node:fs";
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 import starlightVersions from "starlight-versions";
+
+// Page views and three events (src/scripts/track-events.js), counted by
+// GoatCounter: no cookie, nothing personal, never on localhost. Not in the
+// demo (/demo/), which is the PWA's own page. The script is pinned by its
+// hash: a new version of count.js is a change here.
+const GOATCOUNTER = "https://termote.goatcounter.com/count";
+const GOATCOUNTER_SCRIPT = "https://gc.zgo.at/count.v4.js";
+const GOATCOUNTER_SRI = "sha384-nRw6qfbWyJha9LhsOtSb2YJDyZdKvvCFh0fJYlkquSFjUxp9FVNugbfy8q1jdxI+";
+const trackEvents = readFileSync(new URL("./src/scripts/track-events.js", import.meta.url), "utf8");
 
 export default defineConfig({
   site: "https://termote.ohnice.app",
@@ -38,6 +48,17 @@ export default defineConfig({
         { tag: "meta", attrs: { property: "og:image:alt", content: "Termote: Your Terminal, Anywhere." } },
         { tag: "meta", attrs: { name: "twitter:card", content: "summary_large_image" } },
         { tag: "meta", attrs: { name: "twitter:image", content: "https://termote.ohnice.app/og-image.png" } },
+        {
+          tag: "script",
+          attrs: {
+            "data-goatcounter": GOATCOUNTER,
+            async: true,
+            src: GOATCOUNTER_SCRIPT,
+            integrity: GOATCOUNTER_SRI,
+            crossorigin: "anonymous",
+          },
+        },
+        { tag: "script", content: trackEvents },
       ],
       social: [
         {

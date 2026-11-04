@@ -1,6 +1,6 @@
 /// <reference types="vitest" />
 import { createHash } from 'node:crypto'
-import { cpSync, createReadStream, existsSync, statSync } from 'node:fs'
+import { cpSync, createReadStream, existsSync, readFileSync, statSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, normalize, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -60,7 +60,7 @@ const PDFJS_FILES = [
   'wasm/jbig2_nowasm_fallback.js',
 ]
 
-function pdfjsAssets(): Plugin {
+function pdfjsAssets(base: string): Plugin {
   let outDir = 'dist'
   return {
     name: 'termote-pdfjs-assets',
@@ -69,7 +69,7 @@ function pdfjsAssets(): Plugin {
     },
     // Dev: served from the package, at the paths of the build
     configureServer(server) {
-      server.middlewares.use(`/${PDFJS_ASSETS}/`, (req, res, next) => {
+      server.middlewares.use(`${base}${PDFJS_ASSETS}/`, (req, res, next) => {
         let rel: string
         try {
           rel = normalize(decodeURIComponent((req.url ?? '').split('?')[0]))
@@ -109,6 +109,47 @@ function pdfjsAssets(): Plugin {
 const SANDBOX_DEV = 'assets/mermaid-sandbox-dev.html'
 const PWA_ROOT = dirname(fileURLToPath(import.meta.url))
 
+// The demo's Content-Security-Policy: the server's (server/security_headers.go)
+// less what a meta policy cannot hold (frame-ancestors, sandbox), as
+// directives with {scripts} standing for the page's inline script hashes. A
+// Go test (TestDemoPolicyMatchesServer) keeps the two equal.
+const DEMO_CSP: { app: string[]; sandbox: string[] } = JSON.parse(
+  readFileSync(join(PWA_ROOT, 'demo-csp.json'), 'utf8'),
+)
+
+// The CSP source of an inline script, hashed as the browser does
+function scriptHash(script: string): string {
+  return `'sha256-${createHash('sha256').update(script).digest('base64')}'`
+}
+
+function cspMeta(directives: string[], scripts: string[]): string {
+  const policy = directives
+    .map((d) => d.replace('{scripts}', scripts.join(' ')).trim())
+    .join('; ')
+  return `<meta http-equiv="Content-Security-Policy" content="${policy}">`
+}
+
+// The demo page's policy, after its last change: one hash per inline script
+// without attributes (the theme script), as the server allows them
+function demoPolicy(): Plugin {
+  return {
+    name: 'termote-demo-csp',
+    transformIndexHtml: {
+      order: 'post',
+      handler(html) {
+        const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
+          (m) => scriptHash(m[1]),
+        )
+        const charset = /(<meta charset="UTF-8" \/>)/
+        // Without its policy the demo would run with none, and no test of
+        // violations would notice
+        if (!charset.test(html)) throw new Error('demo: no <meta charset> to put the CSP after')
+        return html.replace(charset, `$1\n    ${cspMeta(DEMO_CSP.app, scripts)}`)
+      },
+    },
+  }
+}
+
 // One classic script of entry and all it imports
 async function iife(entry: string, define: Record<string, string>) {
   const out = (await build({
@@ -126,7 +167,9 @@ async function iife(entry: string, define: Record<string, string>) {
   return chunk.code
 }
 
-async function sandboxPage(): Promise<string> {
+// csp: the page's own policy as a meta element (the demo: GitHub Pages
+// sends no header), {scripts} standing for its script's hash
+async function sandboxPage(csp?: string[]): Promise<string> {
   const worker = await iife('src/utils/mermaid-worker.ts', {})
   const code = await iife('src/mermaid-sandbox-main.ts', {
     __MERMAID_WORKER__: JSON.stringify(worker),
@@ -134,10 +177,11 @@ async function sandboxPage(): Promise<string> {
   // Never let the HTML parser end or reopen the script early: both only
   // occur inside the worker's string, where \/ and \! read as / and !.
   const safe = code.replace(/<\/(script)/gi, '<\\/$1').replace(/<!--/g, '<\\!--')
-  return `<!doctype html><meta charset="utf-8"><title>Mermaid</title><script>${safe}</script>\n`
+  const meta = csp ? cspMeta(csp, [scriptHash(safe)]) : ''
+  return `<!doctype html><meta charset="utf-8">${meta}<title>Mermaid</title><script>${safe}</script>\n`
 }
 
-function mermaidSandbox(): Plugin {
+function mermaidSandbox(base: string, csp?: string[]): Plugin {
   let built: { fileName: string; html: string } | undefined
   let dev: Promise<string> | undefined
   return {
@@ -146,17 +190,17 @@ function mermaidSandbox(): Plugin {
     async config(_, { command }) {
       let fileName = SANDBOX_DEV
       if (command === 'build') {
-        const html = await sandboxPage()
+        const html = await sandboxPage(csp)
         const hash = createHash('sha256').update(html).digest('hex').slice(0, 10)
         fileName = `assets/mermaid-sandbox-${hash}.html`
         built = { fileName, html }
       }
-      return { define: { __MERMAID_SANDBOX_URL__: JSON.stringify(`/${fileName}`) } }
+      return { define: { __MERMAID_SANDBOX_URL__: JSON.stringify(`${base}${fileName}`) } }
     },
     // Dev: built on the first request, and again after a failed build
     configureServer(server) {
-      server.middlewares.use(`/${SANDBOX_DEV}`, (_req, res, next) => {
-        dev ??= sandboxPage()
+      server.middlewares.use(`${base}${SANDBOX_DEV}`, (_req, res, next) => {
+        dev ??= sandboxPage(csp)
         dev.then(
           (html) => {
             res.setHeader('Content-Type', 'text/html; charset=utf-8')
@@ -175,180 +219,193 @@ function mermaidSandbox(): Plugin {
   }
 }
 
-export default defineConfig({
-  define: {
-    __APP_NAME__: JSON.stringify(pkg.name),
-    __APP_VERSION__: JSON.stringify(pkg.version),
-    __PDFJS_ASSETS__: JSON.stringify(`/${PDFJS_ASSETS}/`),
-  },
-  plugins: [
-    react(),
-    pdfjsAssets(),
-    mermaidSandbox(),
-    VitePWA({
-      // Disable SW in development
-      selfDestroying: process.env.NODE_ENV !== 'production',
-      // A new worker waits until the user reloads (the update banner): taking
-      // over on its own would reload the page and lose an unsaved edit.
-      registerType: 'prompt',
-      // main.tsx registers through virtual:pwa-register.
-      injectRegister: false,
-      includeAssets: ['favicon.ico', 'favicon.svg', 'robots.txt', 'apple-touch-icon.png'],
-      manifest: {
-        name: 'Termote',
-        short_name: 'Termote',
-        description: 'Remote control CLI tools from mobile',
-        // --tm-bg of the default (neutral) style in dark; a static manifest
-        // cannot follow the chosen style.
-        theme_color: '#1a1a1d',
-        background_color: '#1a1a1d',
-        display: 'standalone',
-        orientation: 'any',
-        start_url: '/',
-        scope: '/',
-        icons: [
-          { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-          // Full bleed, the mark inside the safe circle: Android crops it to its own shape
-          {
-            src: 'pwa-maskable-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable',
-          },
-          // Alpha only: Android's themed icons tint it
-          {
-            src: 'pwa-monochrome-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'monochrome',
-          },
-        ],
-      },
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        // Every module worker and the chunks it imports (the highlighter, its
-        // themes and grammars; the CSV workers):
-        // fetched (then cached) the first time they are needed, never
-        // installed upfront.
-        // Likewise the editor's languages and Vim mode (assets/cm/), and the
-        // document viewers with pdf.js's maps, fonts and decoders
-        // (assets/doc/).
-        // The Mermaid sandbox page (Pele inline) likewise.
-        globIgnores: [
-          '**/assets/mermaid-sandbox-*.html',
-          '**/assets/shiki/**',
-          '**/assets/cm/**',
-          '**/assets/doc/**',
-        ],
-        // Notification click (and push) handlers: public/notify-sw.js
-        importScripts: ['notify-sw.js'],
-        runtimeCaching: [
-          {
-            urlPattern: ({ url }) => url.pathname.startsWith('/assets/shiki/'),
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'shiki',
-              // Hashed names: a new build adds entries, so old ones expire
-              // Grammars and themes: about 100 files; the document workers
-              // (pdf.js, SheetJS, mammoth)
-              expiration: { maxEntries: 300, maxAgeSeconds: 30 * 24 * 3600 },
-            },
-          },
-          {
-            urlPattern: ({ url }) => url.pathname.startsWith('/assets/mermaid-sandbox-'),
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'mermaid',
-              // One page per build
-              expiration: { maxEntries: 2, maxAgeSeconds: 30 * 24 * 3600 },
-            },
-          },
-          {
-            urlPattern: ({ url }) => url.pathname.startsWith('/assets/cm/'),
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'cm',
-              // About 50 language chunks and Vim mode
-              expiration: { maxEntries: 150, maxAgeSeconds: 30 * 24 * 3600 },
-            },
-          },
-          {
-            urlPattern: ({ url }) => url.pathname.startsWith('/assets/doc/'),
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'doc',
-              // The viewers, and the character maps and fonts a PDF asks
-              // for (about 190 files in all)
-              expiration: { maxEntries: 300, maxAgeSeconds: 30 * 24 * 3600 },
-            },
-          },
-        ],
-        // /login and /pair are the server's sign-in and pairing forms: the
-        // cached app shell in their place would leave a signed-out device
-        // with no way to sign in. /login/link takes the CLI's sign-in link
-        // (a POST); a GET that lands there gets the server's page too.
-        // The Mermaid sandbox page (its iframe is a navigation), like any
-        // asset, is never the app shell.
-        navigateFallbackDenylist: [
-          /^\/api\//,
-          /^\/assets\//,
-          /^\/login(\?|$)/,
-          /^\/pair(\?|$)/,
-          /^\/login\/link(\?|$)/,
-        ],
-      },
-    }),
-  ],
-  build: {
-    rolldownOptions: {
-      output: { chunkFileNames: chunkFileName, assetFileNames: assetFileName },
+// The demo (--mode demo) is served at /demo/ and installs nothing: no
+// manifest, no service worker (virtual:pwa-register is a no-op)
+export default defineConfig(({ mode }) => {
+  const demo = mode === 'demo'
+  const base = demo ? '/demo/' : '/'
+  return {
+    base,
+    define: {
+      __APP_NAME__: JSON.stringify(pkg.name),
+      __APP_VERSION__: JSON.stringify(pkg.version),
+      __PDFJS_ASSETS__: JSON.stringify(`${base}${PDFJS_ASSETS}/`),
     },
-  },
-  worker: {
-    // A module worker, so each grammar it imports is a chunk of its own
-    format: 'es',
-    rolldownOptions: {
-      output: {
-        entryFileNames: 'assets/shiki/[name]-[hash].js',
-        chunkFileNames: 'assets/shiki/[name]-[hash].js',
-      },
-    },
-  },
-  test: {
-    environment: 'jsdom',
-    globals: true,
-    setupFiles: './src/test-setup.ts',
-    // Vitest blanks CSS imports; theme-tokens.test.ts reads index.css as text.
-    css: { include: [/src\/index\.css/] },
-    exclude: ['e2e/**', 'node_modules/**'],
-    coverage: {
-      provider: 'v8',
-      reporter: ['text', 'lcov'],
-      include: ['src/**/*.{ts,tsx}'],
-      exclude: [
-        'src/test-setup.ts',
-        'src/**/*.test.{ts,tsx}',
-        'src/**/*.d.ts',
-        'src/vite-env.d.ts',
-        'src/main.tsx',
-        'src/mermaid-sandbox-main.ts',
-      ],
-      thresholds: {
-        lines: 100,
-        functions: 100,
-        branches: 100,
-        statements: 100,
+    plugins: [
+      react(),
+      pdfjsAssets(base),
+      mermaidSandbox(base, demo ? DEMO_CSP.sandbox : undefined),
+      ...(demo ? [demoPolicy()] : []),
+      VitePWA({
+        disable: demo,
+        // Disable SW in development
+        selfDestroying: process.env.NODE_ENV !== 'production',
+        // A new worker waits until the user reloads (the update banner): taking
+        // over on its own would reload the page and lose an unsaved edit.
+        registerType: 'prompt',
+        // main.tsx registers through virtual:pwa-register.
+        injectRegister: false,
+        includeAssets: ['favicon.ico', 'favicon.svg', 'robots.txt', 'apple-touch-icon.png'],
+        manifest: {
+          name: 'Termote',
+          short_name: 'Termote',
+          description: 'Remote control CLI tools from mobile',
+          // --tm-bg of the default (neutral) style in dark; a static manifest
+          // cannot follow the chosen style.
+          theme_color: '#1a1a1d',
+          background_color: '#1a1a1d',
+          display: 'standalone',
+          orientation: 'any',
+          start_url: '/',
+          scope: '/',
+          icons: [
+            { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+            { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+            // Full bleed, the mark inside the safe circle: Android crops it to its own shape
+            {
+              src: 'pwa-maskable-512x512.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'maskable',
+            },
+            // Alpha only: Android's themed icons tint it
+            {
+              src: 'pwa-monochrome-512x512.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'monochrome',
+            },
+          ],
+        },
+        workbox: {
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+          // Every module worker and the chunks it imports (the highlighter, its
+          // themes and grammars; the CSV workers):
+          // fetched (then cached) the first time they are needed, never
+          // installed upfront.
+          // Likewise the editor's languages and Vim mode (assets/cm/), and the
+          // document viewers with pdf.js's maps, fonts and decoders
+          // (assets/doc/).
+          // The Mermaid sandbox page (Pele inline) likewise.
+          globIgnores: [
+            '**/assets/mermaid-sandbox-*.html',
+            '**/assets/shiki/**',
+            '**/assets/cm/**',
+            '**/assets/doc/**',
+          ],
+          // Notification click (and push) handlers: public/notify-sw.js
+          importScripts: ['notify-sw.js'],
+          runtimeCaching: [
+            {
+              urlPattern: ({ url }) => url.pathname.startsWith('/assets/shiki/'),
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'shiki',
+                // Hashed names: a new build adds entries, so old ones expire
+                // Grammars and themes: about 100 files; the document workers
+                // (pdf.js, SheetJS, mammoth)
+                expiration: { maxEntries: 300, maxAgeSeconds: 30 * 24 * 3600 },
+              },
+            },
+            {
+              urlPattern: ({ url }) => url.pathname.startsWith('/assets/mermaid-sandbox-'),
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'mermaid',
+                // One page per build
+                expiration: { maxEntries: 2, maxAgeSeconds: 30 * 24 * 3600 },
+              },
+            },
+            {
+              urlPattern: ({ url }) => url.pathname.startsWith('/assets/cm/'),
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'cm',
+                // About 50 language chunks and Vim mode
+                expiration: { maxEntries: 150, maxAgeSeconds: 30 * 24 * 3600 },
+              },
+            },
+            {
+              urlPattern: ({ url }) => url.pathname.startsWith('/assets/doc/'),
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'doc',
+                // The viewers, and the character maps and fonts a PDF asks
+                // for (about 190 files in all)
+                expiration: { maxEntries: 300, maxAgeSeconds: 30 * 24 * 3600 },
+              },
+            },
+          ],
+          // /login and /pair are the server's sign-in and pairing forms: the
+          // cached app shell in their place would leave a signed-out device
+          // with no way to sign in. /login/link takes the CLI's sign-in link
+          // (a POST); a GET that lands there gets the server's page too.
+          // The Mermaid sandbox page (its iframe is a navigation), like any
+          // asset, is never the app shell.
+          navigateFallbackDenylist: [
+            /^\/api\//,
+            /^\/assets\//,
+            /^\/login(\?|$)/,
+            /^\/pair(\?|$)/,
+            /^\/login\/link(\?|$)/,
+          ],
+        },
+      }),
+    ],
+    build: {
+      rolldownOptions: {
+        output: { chunkFileNames: chunkFileName, assetFileNames: assetFileName },
       },
     },
-  },
-  server: {
-    proxy: {
-      // Dev: proxy to termote serve mode (no rewrite, routes are /api/mux/*)
-      '/api/mux': {
-        target: 'http://127.0.0.1:7680',
-        ws: true,
+    worker: {
+      // A module worker, so each grammar it imports is a chunk of its own
+      format: 'es',
+      rolldownOptions: {
+        output: {
+          entryFileNames: 'assets/shiki/[name]-[hash].js',
+          chunkFileNames: 'assets/shiki/[name]-[hash].js',
+        },
       },
     },
-  },
+    test: {
+      environment: 'jsdom',
+      globals: true,
+      setupFiles: './src/test-setup.ts',
+      // Vitest blanks CSS imports; theme-tokens.test.ts reads index.css as text.
+      css: { include: [/src\/index\.css/] },
+      exclude: ['e2e/**', 'node_modules/**'],
+      coverage: {
+        provider: 'v8',
+        reporter: ['text', 'lcov'],
+        include: ['src/**/*.{ts,tsx}'],
+        exclude: [
+          'src/test-setup.ts',
+          'src/**/*.test.{ts,tsx}',
+          'src/**/*.d.ts',
+          'src/vite-env.d.ts',
+          'src/main.tsx',
+          'src/mermaid-sandbox-main.ts',
+          // The demo layer, never in the release build: its routes are held
+          // to the app's by src/demo/router.test.ts, its pages by
+          // e2e/demo.spec.ts
+          'src/demo/**',
+        ],
+        thresholds: {
+          lines: 100,
+          functions: 100,
+          branches: 100,
+          statements: 100,
+        },
+      },
+    },
+    server: {
+      proxy: {
+        // Dev: proxy to termote serve mode (no rewrite, routes are /api/mux/*)
+        '/api/mux': {
+          target: 'http://127.0.0.1:7680',
+          ws: true,
+        },
+      },
+    },
+  }
 })

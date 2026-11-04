@@ -371,5 +371,11 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/hooks/use-push-subscription.ts`          | This device's Web Push subscription, repaired                  |
 | `pwa/public/notify-sw.js`                         | SW handlers: push, notification click, resubscribe             |
 | `herdr-plugin/herdr-plugin.toml`                  | Herdr plugin manifest (actions + `panel` popup)                |
+| `pwa/src/demo/install-demo.ts`                    | Demo only: answers `fetch` and the stream in the browser       |
+| `pwa/src/demo/router.ts`                          | Demo `/api/mux` routes; logs `demo: unhandled` otherwise       |
+| `pwa/src/demo/state.ts`                           | Demo state in memory, from `pwa/src/demo/fixtures/`            |
+| `pwa/src/demo/fake-stream.ts`                     | Demo terminal: recorded Claude Code screens replayed           |
+| `pwa/demo-csp.json`                               | Demo page's meta CSP: the server's, a Go test keeps it equal   |
+| `website/src/scripts/track-events.js`             | Website GoatCounter events (demo, install copy, GitHub)        |
 | `Dockerfile`                                      | Docker mode container                                          |
 | `entrypoint.sh`                                   | Container entrypoint                                           |

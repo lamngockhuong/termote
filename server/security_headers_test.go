@@ -3,9 +3,11 @@ package main
 import (
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -176,5 +178,42 @@ func TestPermissionsPolicyKeepsClipboard(t *testing.T) {
 		if !strings.Contains(permissionsPolicy, f) {
 			t.Errorf("policy lacks %s", f)
 		}
+	}
+}
+
+// The interactive demo (pwa/src/demo) is a static page: GitHub Pages sends no
+// header, so it carries the policy as a meta element, built from
+// pwa/demo-csp.json. That list is the server's policy less what a meta
+// policy cannot hold (frame-ancestors, sandbox), with {scripts} standing for
+// the page's inline script hashes.
+func TestDemoPolicyMatchesServer(t *testing.T) {
+	raw, err := os.ReadFile("../pwa/demo-csp.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var demo struct {
+		App     []string `json:"app"`
+		Sandbox []string `json:"sandbox"`
+	}
+	if err := json.Unmarshal(raw, &demo); err != nil {
+		t.Fatal(err)
+	}
+	metaOnly := func(policy string) []string {
+		var out []string
+		for _, d := range strings.Split(policy, "; ") {
+			name, _, _ := strings.Cut(d, " ")
+			if name != "frame-ancestors" && name != "sandbox" {
+				out = append(out, d)
+			}
+		}
+		return out
+	}
+	scripts := []string{"{scripts}"}
+	// No Host the policy can name: the demo's stream never reaches a server
+	if want := metaOnly(contentSecurityPolicy(scripts, "")); !slices.Equal(demo.App, want) {
+		t.Errorf("demo-csp.json app =\n%q\nwant the server's\n%q", demo.App, want)
+	}
+	if want := metaOnly(sandboxPolicy(scripts)); !slices.Equal(demo.Sandbox, want) {
+		t.Errorf("demo-csp.json sandbox =\n%q\nwant the server's\n%q", demo.Sandbox, want)
 	}
 }

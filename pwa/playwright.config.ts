@@ -30,6 +30,9 @@ const credentials = getCredentials()
 
 export default defineConfig({
   testDir: './e2e',
+  // The demo runs without a server, under its own config
+  // (playwright.demo.config.ts)
+  testIgnore: ['demo.spec.ts'],
   timeout: 30000,
   use: {
     // 127.0.0.1, as `termote url` prints: through localhost the page shows

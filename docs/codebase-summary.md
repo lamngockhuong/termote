@@ -22,9 +22,11 @@ termote/
 │   │   ├── i18n/               # t(), <Trans>, Intl formats, messages/<locale>/<area>.ts (EN, VI)
 │   │   ├── contexts/           # Theme provider
 │   │   ├── types/              # Group/Tab/Pane/AgentStatus types
+│   │   ├── demo/               # The interactive demo (--mode demo only): /api/mux and the stream answered in the browser
 │   │   └── utils/              # Pure helpers: terminal bridge, highlighting, Markdown, uploads, deep links
 │   ├── scripts/                # check-i18n.mjs: interface text outside t() (none allowed)
-│   └── e2e/                    # Playwright specs; every spec imports `test` from fixtures.ts (CSP check)
+│   └── e2e/                    # Playwright specs; every spec imports `test` from fixtures.ts (CSP check);
+│                               #   demo.spec.ts runs on the built demo (playwright.demo.config.ts)
 ├── server/                     # Go server + CLI, one binary, flat `package main`
 │   ├── main.go                 # Entry point (`serve` runs the server, no args opens the menu)
 │   ├── serve*.go, guard.go, security_headers.go # HTTP server, auth, Host/Origin guards, CSP

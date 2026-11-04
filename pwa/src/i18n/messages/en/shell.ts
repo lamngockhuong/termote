@@ -52,6 +52,11 @@ export default {
   'shell.localhost.open': 'Open 127.0.0.1',
   'shell.localhost.body':
     'Opened through localhost: every connection tries IPv6 first, which can slow each tab switch. Use 127.0.0.1 instead. It is another address to the browser: you sign in again there, settings and unsaved drafts stay here, and an installed app has to be installed again.',
+  // The strip above the demo at termote.ohnice.app/demo/ (demo/demo-banner.tsx)
+  'shell.demo.label':
+    'Demo with fake data: nothing here runs on a real machine',
+  'shell.demo.install': 'Install Termote',
+  'shell.demo.dismiss': 'Hide the demo notice',
   // The one-time banner of a device that picked Vietnamese for the welcome
   // screen before the whole app spoke it (components/language-notice.tsx)
   'shell.languageNotice.body':
