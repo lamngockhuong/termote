@@ -61,7 +61,8 @@ React SPA with:
 - **Pane Strip**: Second-level switcher shown only when a tab has more than one pane (split panes; on tmux it moves the shared focus, not the stream)
 - **Pane Menu**: Header menu (`pane-layout-menu.tsx`) and palette category `Panes` to split, zoom, swap, resize and close the pane shown, and to pick the previous or next pane (no default key); hidden on a view-only device and without `caps.paneLayout` (the palette keeps the commands, disabled with the reason); with `caps.paneStream` (Herdr, whose stream is one pane) it offers split and close alone in the pane strip, since zoom, swap and resize would change only the desktop, and all of them in the layout view. While the tab is zoomed, Zoom ends the zoom on the zoomed pane
 - **Herdr layout view** (`terminal-stack.tsx`, `utils/layout-view.ts`): on a desktop with full rights, a Herdr tab of 2 to 4 panes (`MAX_LAYOUT_PANES`) shows as the desktop arranges them, from the snapshot's `tab.layout` (`{cols, rows, zoomed, zoomedPaneId?, panes:[{id,x,y,cols,rows}]}`, cells from the top left of the tab's area): a terminal per pane, each its own `observe` stream, placed at its rect, all at the font the area fits at (measured from the terminal font's cell, rows rounded up as xterm.js draws them). Picking a pane (a click, the strip, the palette) changes only the page's pane, never Herdr's focus. No pane drives the size. A zoom on the desktop shows the zoomed pane alone and the page works on it. The pane strip stays in use on a phone, view-only, with more than 4 panes (a toast says so once per tab and page load, also on opening a tab already past it, and again after the tab has been back under the limit, a snapshot without its layout aside; `layoutPanesOverLimit`), without `caps.paneLayout`/`caps.paneStream`, with the setting off (`herdrLayoutView`, on by default), or when the font would fall below `MIN_FONT_SIZE` (it comes back a pixel above it). Strip and layout are one React tree, so picking a pane, a zoom, or switching between them opens no stream for the active pane
-- **Agent Status Badge**: Per-pane coding-agent status (idle/working/blocked/done) shown next to the pane, only ever set by the Herdr backend
+- **Agent Status Badge**: Per-pane coding-agent status (idle/working/blocked/done) shown next to the pane. Herdr and hc report it; tmux and Zellij read it from the agent's session file (`claudeStatus`, Codex) as idle, working or blocked, and the activity tracker shows a turn no one saw as done (see Agent notifications)
+- **App icon badge** (`use-app-badge.ts`, setting `appBadge`): the installed app's icon counts the panes whose agent is blocked or done (Windows, macOS, ChromeOS, iOS 16.4+; not Android or Linux Chromium)
 - **Keyboard Toolbar**: Virtual keys, Ctrl combos, scroll controls (respects default expanded setting)
 - **More Menu**: Font size (mobile), theme (light/dark/system), Settings, Help & gestures, About, Copy link, Clear cache & reload
 - **Interface Styles**: Neutral, Terminal, Native; semantic tokens in `pwa/src/index.css`, selected by `data-ui-style` on `<html>` (see [design-guidelines.md](design-guidelines.md))
@@ -275,7 +276,8 @@ Client → Server:
   - binary frame                      (input bytes)
   - {"type":"resize","cols":N,"rows":N} (text frame)
   - {"type":"drive","on":true|false}   (caps.driveSize: take over / give back the pane size)
-  - {"type":"visible","on":true|false} (a full client has the pane on screen; hc writes herdr.seen)
+  - {"type":"visible","on":true|false} (a full client has the pane on screen; hc writes herdr.seen,
+                                        the others count it as a viewer of unseen turns)
 
 Server → Client:
   - binary frame                      (output bytes)
@@ -1468,7 +1470,7 @@ Agent status (Herdr event / Claude session file)
   └── server watcher, every 5 s, only with ≥1 subscription → peekSnapshot (never creates)
         → transitions → queue (64, oldest dropped) → sender (4 at a time, 5 s each)
         → push service (allowlist, IP check after DNS, no proxy, no redirects)
-  notify-sw.js: push → names from /api/mux/snapshot?peek=1 (3 s) → showNotification (always)
+  notify-sw.js: push → /api/mux/snapshot?peek=1 (3 s) → app badge, names → showNotification (always)
                 notificationclick → keep hash in Cache Storage (termote-notify)
                   → focus a window + postMessage(hash), or openWindow
   page: the message, or the kept hash when it shows again (read at 0/0.3/1/2.5 s, taken once,
@@ -1477,6 +1479,23 @@ Agent status (Herdr event / Claude session file)
                 pushsubscriptionchange → POST the new subscription
 ```
 
+- **Unseen turns** (`server/agent_activity.go`, `server/native_viewers.go`): on tmux, Zellij and
+  Herdr the server keeps, in memory and shared by every device, which panes ended a turn while no
+  one looked, and every snapshot shows them as `done` until someone does. A viewer is a full
+  client with the pane on screen (its stream's `visible` frames; tmux counts every pane of the
+  session's current window, since one stream follows tab switches; Herdr and Zellij count one
+  pane), or a desktop terminal attached to tmux or Zellij that is not Termote's own (tmux: with a
+  key in the last 5 minutes; Zellij reports no activity, so every attached client counts). A
+  view-only client never counts. Seen in Termote, Herdr's `done` shows `idle` while the Herdr app
+  may still show `done`. Limits: unseen turns are lost on a server restart and on a psmux tab
+  renumbering; a turn shorter than the poll can go unnoticed; the activity log still records
+  `idle`; psmux on Windows counts no desktop client (its `list-clients` and ConPTY pids are
+  unchecked). hc keeps `herdr.seen`.
+- **App badge**: the page counts the panes `blocked` or `done` after each poll; the service
+  worker counts them from the snapshot it reads for a push (the payload stays ids only), clears
+  the badge on 401/403 and leaves it to a visible page. A device whose page is closed keeps its
+  count until the next push or until the page opens. Both count as
+  `server/testdata/badge-snapshot.json` says.
 - **Watcher**: started by `runServer` only. tmux's `peekSnapshot` reads the sessions there
   without `ensureSession`, so a closed default session is not recreated, and the others still
   notify; `snapshot?peek=1` (the service worker naming a push) reads the same way; Herdr's `Snapshot` is cached

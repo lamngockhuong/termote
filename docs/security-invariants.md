@@ -262,7 +262,24 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   non-negative integer (else 400 `invalid_after`); a cursor past the latest or before the
   oldest kept event answers the whole ring with `reset`. It returns ids, keys, agent names and
   statuses with times, which the snapshot already gives a view-only client, so view-only may
-  read it; nothing from a transcript or a screen
+  read it; nothing from a transcript or a screen. **Unseen turns** (tmux, Zellij, Herdr; never
+  hc, which keeps `herdr.seen`; the flag comes from `m.Name()` when the tracker is made, never from
+  `snap.Backend`, empty at `observe`): a turn that ends (`working` → `idle`, Herdr's `done`) with no
+  viewer since the previous fold is kept unseen and annotated `done` on the copy; once seen, Herdr's
+  own `done` reads `idle`. It is an annotation only: no event, `since` unchanged, the push watcher
+  folds the raw statuses. Two more inputs, both counts and no command: a full stream's `visible`
+  frames (`activityWatch`, one per stream, flipped only when its value changes and counted out at
+  the stream's end; tmux by group, the stream showing its session's current window; Herdr and
+  Zellij by pane), and the snapshot's unexported `viewers`, filled by the mux's own read (below).
+  Memory: one viewer entry per stream, so no more than the hub allows, dropped once no stream
+  holds it and a fold passed its last sighting; a Zellij rename moves the keys of live streams too.
+  **Native viewers** (`server/native_viewers.go`): tmux runs `list-clients -F
+  #{client_pid}:#{client_activity}:#{window_id}` through argv (`tmuxCmd`), never a shell; a client
+  whose pid is a terminal Termote runs (`ownTerminals`, filled by `startTerminal`) or with no key
+  for 5 minutes (`nativeViewerIdle`) is left out; psmux is skipped. Zellij reuses its
+  `list-clients`, leaving out Termote's clients (its own and those closed a moment ago) and every
+  client of a session whose slot is held (a client starting). A failed listing is logged and
+  counts no one. No pid, tty or client id reaches the snapshot JSON (`viewers` is unexported)
 - **Agent overview** (`server/agent_overview.go`, `GET /api/mux/overview`): `requireMethod(GET)`,
   `crossSiteRejection`, `requireAgentRead`; internal errors are logged only. It summarizes the
   panes with an agent in the activity tracker's last snapshot (64 at most) and never reads the
@@ -451,7 +468,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `notes.md` beside a tracked `Notes.md` hidden); anything else is 404 as if missing, a list cut
   short (`findMaxPaths`, git's output cap) refuses what it lacks, and a list that cannot be read
   refuses the request. The snapshot uses `peekSnapshot` (tmux does not recreate the default session).
-  A view stream drops every input frame, `resize`, `drive` and `visible`; tmux attaches `-E -r` to the
+  A view stream drops every input frame, `resize`, `drive` and `visible` (so it never counts as a
+  viewer: no `herdr.seen`, no seen turn in the activity tracker); tmux attaches `-E -r` to the
   session's active window only (another `pane` → 403; tmux ≥ 3.2, older tmux and psmux → 501,
   `caps.viewStream` false), Herdr and hc only `observe`. Limits: 2 streams and 4 waiting stream tokens
   per view device; a view stream or token never evicts a full one (full evicts view first; a full
@@ -1740,7 +1758,14 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   (`termote-notify`, for iOS, which drops the message to a resumed home screen app) and the page
   takes it once, kept since the page was last hidden and at most 60 s old, through
   `parseDeepLink`, and opens it as any deep link. Neither `focus()` nor `openWindow()` waits on it.
-  The CSP is unchanged: the server, not the page, talks to push services. The container opens
+  The CSP is unchanged: the server, not the page, talks to push services. **App badge** (setting
+  `appBadge`, on by default, `pwa/src/utils/app-badge.ts`): the page sets the Badging API count to the
+  panes whose agent is `blocked` or `done` after every poll and when shown again; the service worker
+  sets it on a push from the same `snapshot?peek=1` read it names the push from, never from the
+  payload, which stays ids only: a revoked device's push gets 401/403 and clears the badge, an
+  offline read keeps it, a visible page is left to set its own, and the setting is read from
+  Cache Storage (`termote-prefs`, `/__badge`, on when unreadable). Log out and any 401 of the
+  snapshot or health read clear it. The container opens
   `/home/termote/.local/state` 1777 like `.cache`/`.config`
 - **Prompt templates** (`/api/mux/templates*`, `server/template_store.go`,
   `server/template_routes.go`, `caps.templates`; PWA `pwa/src/hooks/use-prompt-templates.ts`,
