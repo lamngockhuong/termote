@@ -63,6 +63,9 @@ export default {
   'settings.notify.reload': 'Reload to turn on',
   'settings.notify.desc':
     'A dialog waits or a turn finished. On a phone, needs the installed app',
+  'settings.appBadge': 'Count on the app icon',
+  'settings.appBadgeDesc':
+    'The installed app shows how many agents wait on you: blocked, or with a turn no one has seen',
   'settings.stuck': 'Stuck agent',
   'settings.stuckDesc':
     'Mark a working agent quiet for {minutes} min in the overview',

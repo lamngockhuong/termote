@@ -32,6 +32,7 @@ import type { MessageKey } from '../i18n/messages/en'
 import type { Translate } from '../i18n/translate'
 import { UI_STYLES, type UiStyle } from '../ui-style'
 import { STUCK_MINUTES_OPTIONS } from '../utils/agent-stuck'
+import { badgeSupported } from '../utils/app-badge'
 import type { AppCommand } from '../utils/app-commands'
 import type { ServerInfo } from '../utils/app-update'
 import {
@@ -928,6 +929,18 @@ export function SettingsModal({
               onEnable={onEnableNotify}
               onDisable={onDisableNotify}
             />
+          )}
+          {badgeSupported() && (
+            <SettingsRow
+              title={t('settings.appBadge')}
+              desc={t('settings.appBadgeDesc')}
+            >
+              <Switch
+                label={t('settings.appBadge')}
+                checked={settings.appBadge}
+                onChange={(v) => onUpdateSetting('appBadge', v)}
+              />
+            </SettingsRow>
           )}
           <SettingsRow
             title={t('settings.stuck')}

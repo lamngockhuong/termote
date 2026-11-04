@@ -344,6 +344,19 @@ describe('useSettings', () => {
     expect(result.current.settings.stuckMinutes).toBe(30)
   })
 
+  it('counts on the app icon unless turned off, for older settings too', () => {
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.appBadge).toBe(true)
+    act(() => result.current.updateSetting('appBadge', false))
+    expect(result.current.settings.appBadge).toBe(false)
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ notifyAgents: true }),
+    )
+    const again = renderHook(() => useSettings())
+    expect(again.result.current.settings.appBadge).toBe(true)
+  })
+
   it('shows the usage chip unless turned off', () => {
     const { result } = renderHook(() => useSettings())
     expect(result.current.settings.showUsageChip).toBe(true)

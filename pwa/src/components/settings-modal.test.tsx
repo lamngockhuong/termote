@@ -89,6 +89,7 @@ const DEFAULT_SETTINGS: Settings = {
   searchWord: false,
   searchRegex: false,
   notifyAgents: false,
+  appBadge: true,
   stuckMinutes: 10,
   showUsageChip: true,
   showHostChip: true,
@@ -790,6 +791,29 @@ describe('SettingsModal', () => {
     expect(sw).toHaveAttribute('aria-checked', 'true')
     fireEvent.click(sw)
     expect(onUpdateSetting).toHaveBeenCalledWith('showUsageChip', false)
+  })
+
+  it('toggles the app badge where the browser has one', () => {
+    Object.defineProperty(navigator, 'setAppBadge', {
+      configurable: true,
+      value: async () => {},
+    })
+    try {
+      const { onUpdateSetting } = renderModal()
+      const sw = screen.getByRole('switch', { name: 'Count on the app icon' })
+      expect(sw).toHaveAttribute('aria-checked', 'true')
+      fireEvent.click(sw)
+      expect(onUpdateSetting).toHaveBeenCalledWith('appBadge', false)
+    } finally {
+      Reflect.deleteProperty(navigator, 'setAppBadge')
+    }
+  })
+
+  it('hides the app badge row without the Badging API', () => {
+    renderModal()
+    expect(
+      screen.queryByRole('switch', { name: 'Count on the app icon' }),
+    ).toBeNull()
   })
 
   it('toggles the host chip, on by default', () => {

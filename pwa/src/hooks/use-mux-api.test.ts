@@ -135,6 +135,16 @@ describe('mux API client', () => {
 
   it('opens the sign-in page with the current path when the session ended', async () => {
     window.history.replaceState(null, '', '/?view=chat&pane=%251#x')
+    // The app's badge goes too: no count left for the next user
+    const clearAppBadge = vi.fn(async () => {})
+    Object.defineProperty(navigator, 'setAppBadge', {
+      configurable: true,
+      value: vi.fn(),
+    })
+    Object.defineProperty(navigator, 'clearAppBadge', {
+      configurable: true,
+      value: clearAppBadge,
+    })
     for (const read of [fetchSnapshot, fetchHealth]) {
       mockFetch({ body: 'Unauthorized', status: 401 })
       const signIn = vi.fn()
@@ -146,6 +156,9 @@ describe('mux API client', () => {
         '/login?next=%2F%3Fview%3Dchat%26pane%3D%25251%23x',
       )
     }
+    Reflect.deleteProperty(navigator, 'setAppBadge')
+    Reflect.deleteProperty(navigator, 'clearAppBadge')
+    expect(clearAppBadge).toHaveBeenCalledTimes(2)
     window.history.replaceState(null, '', '/')
   })
 
