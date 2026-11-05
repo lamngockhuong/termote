@@ -37,6 +37,7 @@ import type { Translate } from '../i18n/translate'
 import {
   type Session,
   type SessionGroup,
+  type SessionPane,
   worstAgentStatus,
 } from '../types/session'
 import { dropIndex, movableGroups, targetIndex } from '../utils/reorder'
@@ -48,10 +49,12 @@ import {
   summarizeSessions,
 } from '../utils/session-filter'
 import { matchesQuery, searchTerms } from '../utils/session-search'
+import type { SidebarLayout } from '../utils/sidebar-layout'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { AgentFilterBar } from './agent-filter-bar'
 import { AgentStatusBadge } from './agent-status-badge'
 import { BrandMark } from './brand-mark'
+import { CompactGroupRow } from './compact-group-row'
 import {
   type GroupKind,
   groupNoun,
@@ -62,18 +65,17 @@ import {
 import { IconPicker } from './icon-picker'
 import { MetaChips, OnlyPaneLine, onlyPaneOf } from './meta-chips'
 import { SearchToggle, SessionSearchField } from './session-search-field'
+import { SidebarAgents } from './sidebar-agents'
+import {
+  ACTIVE_ROW_CLASSES,
+  ROW_CLASSES,
+  ROW_PRESS,
+} from './sidebar-row-classes'
 import { SwipeableSessionItem } from './swipeable-session-item'
 import { Button, FOCUS_RING, IconButton } from './ui/button'
 import { Menu, MenuItem } from './ui/menu'
 import { Sheet } from './ui/sheet'
 
-// The row on screen: a soft accent fill, or an accent edge in the terminal style.
-const ACTIVE_ROW_CLASSES =
-  'bg-accent-soft text-fg font-medium ui-terminal:bg-surface-raised ui-terminal:shadow-[inset_2px_0_0_var(--color-accent)]'
-const ROW_CLASSES = 'text-fg-muted hover:bg-surface-raised hover:text-fg'
-// A press shrinks a row a little (less than a button: a row is wide)
-const ROW_PRESS =
-  'transition-[color,background-color,scale] duration-(--duration-fast) ease-standard motion-safe:active:scale-[0.98]'
 // The content inside keeps its final width while the width animates, so it is
 // revealed or clipped instead of laid out again at every frame.
 // The top padding keeps the sidebar below the status bar of an installed iPad
@@ -119,6 +121,17 @@ interface Props {
   groupActions?: GroupActions
   // Moving tabs and groups (caps.reorderTabs, caps.reorderGroups)
   reorder?: ReorderActions
+  // Desktop: each workspace with its tabs (detailed) or on one line (compact)
+  layout?: SidebarLayout
+  // Compact: a workspace picked as a whole; it opens on a tab of its own
+  // choosing (App's pickGroupTab). Without it, its first tab opens.
+  onSelectGroup?: (groupId: string) => void
+  // Compact: the Agents section under the list, a row opening its pane
+  onOpenAgent?: (session: Session, pane: SessionPane) => void
+  // The pane on screen, marked among the agents
+  activePaneId?: string
+  // Server time minus this device's (ms), for how long each agent has been so
+  clockOffset?: number
 }
 
 export interface ReorderActions {
@@ -258,6 +271,11 @@ export function SessionSidebar({
   sortBlockedFirst = false,
   groupActions,
   reorder,
+  layout = 'detailed',
+  onSelectGroup,
+  onOpenAgent,
+  activePaneId,
+  clockOffset = 0,
 }: Props) {
   const { t } = useT()
   const coarsePointer = useMediaQuery('(pointer: coarse)')
@@ -292,10 +310,12 @@ export function SessionSidebar({
   const editingSession = sessions.find((s) => keyOf(s) === editingKey)
   const editingId = editingSession?.id ?? null
 
-  // A filter applies only with the bar that can clear it.
-  const activeFilter = onFilterChange
-    ? effectiveFilter(sessions, filter)
-    : 'all'
+  // A phone's sheet always lists each workspace with its tabs
+  const compact = layout === 'compact' && !isMobile
+  // A filter applies only with the bar that can clear it; the compact
+  // layout has none, the saved filter kept for the detailed one.
+  const activeFilter =
+    onFilterChange && !compact ? effectiveFilter(sessions, filter) : 'all'
   const filtering = activeFilter !== 'all'
   // The search box: opened from its magnifier, never saved; a phone's sheet
   // closing clears it.
@@ -327,7 +347,7 @@ export function SessionSidebar({
   const gone = (key: string) => !known.has(key)
   const summary = summarizeSessions(sessions)
   // Hidden with no agent anywhere: there is nothing to filter by.
-  const showFilterBar = !!onFilterChange && summary.agents > 0
+  const showFilterBar = !!onFilterChange && !compact && summary.agents > 0
   // The row being edited stays even when it stops matching, so a poll does
   // not take the form away mid-edit.
   const arrange = (list: Session[]) => {
@@ -450,6 +470,14 @@ export function SessionSidebar({
   // while not filtering (collapsed, or dragging), when they are indented.
   const worktreesOf = (id: string) =>
     groups.filter((g) => g.worktree?.parent === id)
+  // A group's badge: collapsed, it speaks for its hidden worktrees too
+  const groupStatus = (group: SessionGroup, collapsed: boolean) =>
+    collapsed
+      ? worstAgentStatus([
+          group.agentStatus,
+          ...worktreesOf(group.id).map((w) => w.agentStatus),
+        ])
+      : group.agentStatus
   // The last group drawn for a group and its worktrees: a group moves with
   // them, so a drop after it lands after them
   const blockEnd = (id: string) =>
@@ -935,12 +963,7 @@ export function SessionSidebar({
     const parent = group.worktree?.parent
     const nested = !narrowed && !!parent && groupById.has(parent)
     if (nested && isGroupCollapsed(parent)) return null
-    const status = collapsed
-      ? worstAgentStatus([
-          group.agentStatus,
-          ...worktreesOf(group.id).map((w) => w.agentStatus),
-        ])
-      : group.agentStatus
+    const status = groupStatus(group, collapsed)
     return (
       <section
         key={group.id}
@@ -1054,6 +1077,88 @@ export function SessionSidebar({
     )
   }
 
+  // Compact: a workspace on one line, its tabs in the header's bar. A
+  // worktree is indented under its checkout, hidden while it is collapsed;
+  // a search lists every group with a match, worktrees held open.
+  const renderCompactGroup = (group: SessionGroup) => {
+    const shownTabs = (id: string) =>
+      arrange(sessions.filter((s) => s.groupId === id))
+    const tabs = shownTabs(group.id)
+    if (narrowed && tabs.length === 0) return null
+    // Indented only under a checkout on screen
+    const parent = group.worktree?.parent
+    const nested =
+      !!parent &&
+      groupById.has(parent) &&
+      (!narrowed || shownTabs(parent).length > 0)
+    if (nested && !narrowed && isGroupCollapsed(parent)) return null
+    const collapsible = !nested && worktreesOf(group.id).length > 0
+    const collapsed = collapsible && !narrowed && isGroupCollapsed(group.id)
+    const name = visibleUnsafe(group.name || group.id)
+    const movable = canMoveGroup(group)
+    const rowKey = `group:${group.id}`
+    if (groupActions && renamingGroup === group.id) {
+      return <div key={group.id}>{renderGroupRename(groupActions, group)}</div>
+    }
+    const select = () => {
+      // A search opens the group's first match, as Enter in the box does
+      const match = searching ? tabs[0] : undefined
+      if (match) onSelect(match.id)
+      else if (onSelectGroup) onSelectGroup(group.id)
+      else if (tabs[0]) onSelect(tabs[0].id)
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!movable || !e.altKey) return
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
+      e.preventDefault()
+      const delta = e.key === 'ArrowUp' ? -1 : 1
+      if (targetIndex(movableIds, group.id, delta) === null) return
+      stepGroup(group, delta)
+      refocusKey.current = rowKey
+    }
+    return (
+      <div
+        key={group.id}
+        className="relative"
+        {...dragProps(
+          { kind: 'group', id: group.id },
+          movable,
+          movableIds,
+          reorder?.onMoveGroup,
+        )}
+      >
+        {dropTarget?.id === group.id && !dropTarget.after && dropLine(false)}
+        <CompactGroupRow
+          group={group}
+          status={groupStatus(group, collapsed)}
+          active={activeSession?.groupId === group.id}
+          nested={nested}
+          tabCount={groupTabIds(group.id).length}
+          collapsible={collapsible}
+          collapsed={collapsed}
+          toggleDisabled={narrowed}
+          onToggle={() => toggleGroup(group.id)}
+          onSelect={select}
+          onRename={
+            groupActions?.canRename(group.id)
+              ? () => startGroupRename(group)
+              : undefined
+          }
+          onKeyDown={onKeyDown}
+          keyShortcuts={movable ? 'Alt+ArrowUp Alt+ArrowDown' : undefined}
+          buttonRef={(el) => {
+            if (el) rowButtons.current.set(rowKey, el)
+            else rowButtons.current.delete(rowKey)
+          }}
+          menu={renderGroupMenu(group, name) || undefined}
+        />
+        {dropTarget?.after &&
+          blockEnd(dropTarget.id) === group.id &&
+          dropLine(true)}
+      </div>
+    )
+  }
+
   const addForm = (
     <div className={formClasses}>
       <div className="flex min-w-0 items-center gap-2">
@@ -1139,7 +1244,14 @@ export function SessionSidebar({
       onClose={closeSearch}
       onSubmit={() => firstMatch && onSelect(firstMatch.id)}
       onArrowDown={() =>
-        firstMatch && rowButtons.current.get(keyOf(firstMatch))?.focus()
+        firstMatch &&
+        rowButtons.current
+          .get(
+            compact && groups.length
+              ? `group:${firstMatch.groupId}`
+              : keyOf(firstMatch),
+          )
+          ?.focus()
       }
       autoFocus={focusSearch}
     />
@@ -1153,12 +1265,18 @@ export function SessionSidebar({
         <Button
           size="sm"
           onClick={() => {
-            onFilterChange?.('all')
+            // The compact layout applies no filter: the saved one stays
+            if (!compact) onFilterChange?.('all')
             setQuery('')
           }}
         >
           {t('shell.sidebar.showAll')}
         </Button>
+      </div>
+    ) : compact && groups.length ? (
+      // Even a single group (tmux): its tabs are in the header's bar
+      <div className="flex flex-col gap-px">
+        {groups.map(renderCompactGroup)}
       </div>
     ) : showGroups ? (
       // Their own parent, so first: finds the first group shown, not a form
@@ -1398,9 +1516,12 @@ export function SessionSidebar({
           </span>
         </div>
         <div className="shrink-0 px-3 pb-2">
+          {/* Compact: a tab is added from the header's bar; the form shows
+              only when the rail's + asked for it */}
           {showAddForm
             ? addForm
-            : canAdd && (
+            : canAdd &&
+              !compact && (
                 <Button
                   variant="primary"
                   onClick={() => setShowAddForm(true)}
@@ -1418,6 +1539,15 @@ export function SessionSidebar({
         <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2 scrollbar-hover">
           {sessionList}
         </div>
+        {compact && onOpenAgent && (
+          <SidebarAgents
+            sessions={sessions}
+            groups={groups}
+            activePaneId={activePaneId}
+            clockOffset={clockOffset}
+            onOpen={onOpenAgent}
+          />
+        )}
       </div>
     </aside>
   )

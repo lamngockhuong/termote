@@ -12,6 +12,11 @@ import {
   type SidebarFilter,
 } from '../utils/session-filter'
 import { SIDE_PANEL_DEFAULT } from '../utils/side-panel-width'
+import {
+  DEFAULT_SIDEBAR_LAYOUT,
+  resolveSidebarLayout,
+  type SidebarLayout,
+} from '../utils/sidebar-layout'
 
 const STORAGE_KEY = 'termote-settings'
 
@@ -138,6 +143,7 @@ export interface Settings {
   // herdr, desktop: a split tab's panes side by side, as the desktop has them
   herdrLayoutView: boolean
   sidebarFilter: SidebarFilter // which sessions the sidebar lists
+  sidebarLayout: SidebarLayout // desktop sidebar: tabs under each workspace, or one line each
   sortBlockedFirst: boolean // sessions waiting on the user first in each group
   markdownPreview: boolean // Files: Markdown rendered (else its source)
   markdownEditLayout: MarkdownEditLayout // Files: Markdown being edited (above)
@@ -178,6 +184,7 @@ const DEFAULTS: Settings = {
   driveTerminalSize: false,
   herdrLayoutView: true,
   sidebarFilter: DEFAULT_SIDEBAR_FILTER,
+  sidebarLayout: DEFAULT_SIDEBAR_LAYOUT,
   sortBlockedFirst: false,
   markdownPreview: true,
   markdownEditLayout: 'split',
@@ -230,6 +237,7 @@ function getSnapshot(): Settings {
         ...merged,
         uiStyle: resolveUiStyle(merged.uiStyle),
         sidebarFilter: resolveSidebarFilter(merged.sidebarFilter),
+        sidebarLayout: resolveSidebarLayout(merged.sidebarLayout),
         findIncludeIgnored: merged.findIncludeIgnored === true,
         findExcludes: resolveFindExcludes(merged.findExcludes),
         notifyAgents: merged.notifyAgents === true,

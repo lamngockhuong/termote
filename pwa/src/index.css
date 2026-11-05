@@ -45,6 +45,14 @@
   --color-info: var(--tm-info);
   --color-diff-add: var(--tm-diff-add);
   --color-diff-del: var(--tm-diff-del);
+  --color-avatar-1: var(--tm-avatar-1);
+  --color-avatar-2: var(--tm-avatar-2);
+  --color-avatar-3: var(--tm-avatar-3);
+  --color-avatar-4: var(--tm-avatar-4);
+  --color-avatar-5: var(--tm-avatar-5);
+  --color-avatar-6: var(--tm-avatar-6);
+  --color-avatar-7: var(--tm-avatar-7);
+  --color-avatar-8: var(--tm-avatar-8);
   --radius-control: var(--tm-radius-control);
   --radius-panel: var(--tm-radius-panel);
   --radius-sheet: var(--tm-radius-sheet);
@@ -107,6 +115,14 @@
   --tm-radius-sheet: 14px;
   --tm-font-ui: var(--tm-font-sans);
   --tm-font-label: var(--tm-font-sans);
+  --tm-avatar-1: #b91c1c;
+  --tm-avatar-2: #c2410c;
+  --tm-avatar-3: #a16207;
+  --tm-avatar-4: #15803d;
+  --tm-avatar-5: #0f766e;
+  --tm-avatar-6: #0369a1;
+  --tm-avatar-7: #4f46e5;
+  --tm-avatar-8: #a21caf;
 }
 :root.dark,
 :root[data-ui-style="neutral"].dark {
@@ -129,6 +145,14 @@
   --tm-info: #60a5fa;
   --tm-diff-add: #163020;
   --tm-diff-del: #3b1a1a;
+  --tm-avatar-1: #991b1b;
+  --tm-avatar-2: #9a3412;
+  --tm-avatar-3: #854d0e;
+  --tm-avatar-4: #166534;
+  --tm-avatar-5: #115e59;
+  --tm-avatar-6: #075985;
+  --tm-avatar-7: #4338ca;
+  --tm-avatar-8: #86198f;
 }
 
 /* ── Terminal: chrome is the terminal, one accent, mono labels ── */
@@ -159,6 +183,14 @@
   --tm-font-label: var(--tm-font-mono);
   --tm-duration-fast: 100ms;
   --tm-duration-base: 120ms;
+  --tm-avatar-1: #a8322d;
+  --tm-avatar-2: #b04a12;
+  --tm-avatar-3: #8a6100;
+  --tm-avatar-4: #0d7a41;
+  --tm-avatar-5: #0b7068;
+  --tm-avatar-6: #0b5cb8;
+  --tm-avatar-7: #5b4bc4;
+  --tm-avatar-8: #9a2a8a;
 }
 :root[data-ui-style="terminal"].dark {
   --tm-bg: #0f1110;
@@ -180,6 +212,14 @@
   --tm-info: #74b9ff;
   --tm-diff-add: #10291b;
   --tm-diff-del: #341515;
+  --tm-avatar-1: #8c2a26;
+  --tm-avatar-2: #8f3d0f;
+  --tm-avatar-3: #6f4e00;
+  --tm-avatar-4: #0a6234;
+  --tm-avatar-5: #085a54;
+  --tm-avatar-6: #094b96;
+  --tm-avatar-7: #4a3da3;
+  --tm-avatar-8: #7d2270;
 }
 
 /* ── Native: raised surfaces, large radii, sheets, system blue ── */
@@ -209,6 +249,14 @@
   --tm-font-ui: var(--tm-font-sans);
   --tm-font-label: var(--tm-font-sans);
   --tm-duration-base: 240ms;
+  --tm-avatar-1: #c8001a;
+  --tm-avatar-2: #b34700;
+  --tm-avatar-3: #8f6a00;
+  --tm-avatar-4: #1f7a36;
+  --tm-avatar-5: #00727a;
+  --tm-avatar-6: #0062cc;
+  --tm-avatar-7: #5e3fd6;
+  --tm-avatar-8: #b0207a;
 }
 :root[data-ui-style="native"].dark {
   --tm-bg: #121214;
@@ -230,6 +278,14 @@
   --tm-info: #64d2ff;
   --tm-diff-add: #0e2a16;
   --tm-diff-del: #3a1512;
+  --tm-avatar-1: #a30016;
+  --tm-avatar-2: #933a00;
+  --tm-avatar-3: #755700;
+  --tm-avatar-4: #19652c;
+  --tm-avatar-5: #005e64;
+  --tm-avatar-6: #0051a8;
+  --tm-avatar-7: #4c32b3;
+  --tm-avatar-8: #911a64;
 }
 
 /* The app's height. An iOS home-screen app (black-translucent status bar)

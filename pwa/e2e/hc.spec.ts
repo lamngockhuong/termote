@@ -175,6 +175,19 @@ async function paneAction(page: Page, item: string) {
   await page.getByRole('menuitem', { name: item, exact: true }).click()
 }
 
+// Switches this page to the compact sidebar, as Settings would, and reloads
+async function compactSidebar(page: Page) {
+  await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('termote-settings') ?? '{}')
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ ...saved, sidebarLayout: 'compact' }),
+    )
+  })
+  await page.reload()
+  await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 15000 })
+}
+
 test.describe('herdr-core from the PWA', () => {
   test.skip(!enabled, 'needs TERMOTE_E2E_HC=1: a herdr-core of its own (the e2e-hc job)')
   test.describe.configure({ timeout: 90000 })
@@ -280,6 +293,16 @@ test.describe('herdr-core from the PWA', () => {
     await typeIn(page, a, String.raw`printf '\033]7501;state=done:app=claude-code\033\\'`)
     await expect.poll(() => terminal(a).turn, { timeout: 15000 }).toBeGreaterThan(0)
     await expect.poll(() => terminal(a).labels?.['herdr.seen'], { timeout: 15000 }).toBe(String(terminal(a).turn))
+  })
+
+  test('the compact sidebar: the space on one line, its tab in the header', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await openTab(page, space, tab)
+    await compactSidebar(page)
+    const row = page.getByRole('complementary').getByRole('button', { name: /^e2e-space, 1 tab/ })
+    await expect(row).toBeVisible()
+    await expect(row).toHaveAttribute('aria-current', 'true')
+    await expect(page.getByRole('tablist', { name: 'Sessions' }).getByRole('tab', { name: /e2e-tab/ })).toBeVisible()
   })
 
   test("a new tab and a split from the page carry herdr-app's labels, then close", async ({ page, request }) => {

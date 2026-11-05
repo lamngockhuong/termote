@@ -109,6 +109,22 @@ function contrast(a: string, b: string) {
   return (hi + 0.05) / (lo + 0.05)
 }
 
+describe('avatar colours', () => {
+  const modes = styles.flatMap((s) => [
+    { name: `${s.id} light`, t: s.light },
+    { name: `${s.id} dark`, t: s.dark },
+  ])
+  it.each(modes)('$name: a white letter reads on every avatar', ({ t }) => {
+    for (let i = 1; i <= 8; i++) {
+      const bg = t.get(`--tm-avatar-${i}`)!
+      expect(
+        contrast('#ffffff', bg),
+        `--tm-avatar-${i} ${bg}`,
+      ).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+})
+
 describe('diff colours', () => {
   const modes = styles.flatMap((s) => [
     { name: `${s.id} light`, t: s.light },

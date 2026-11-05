@@ -41,6 +41,7 @@ import {
   notifyWorkerReady,
   requestNotify,
 } from '../utils/notify-permission'
+import { SIDEBAR_LAYOUTS, type SidebarLayout } from '../utils/sidebar-layout'
 import { DevicesSection } from './devices-section'
 import { PromptTemplatesSection } from './prompt-templates-section'
 import { ShortcutsSection } from './shortcuts-section'
@@ -547,6 +548,11 @@ function StylePreview({ style }: { style: UiStyle }) {
   )
 }
 
+const SIDEBAR_LAYOUT_LABEL: Record<SidebarLayout, MessageKey> = {
+  detailed: 'settings.sidebarLayout.detailed',
+  compact: 'settings.sidebarLayout.compact',
+}
+
 const STYLE_LABEL: Record<UiStyle, MessageKey> = {
   neutral: 'settings.style.neutral',
   terminal: 'settings.style.terminal',
@@ -730,6 +736,9 @@ export function SettingsModal({
   const hasActions = onShowWelcome || onStartTour || onClearHistory
 
   const themeLabel = THEMES.find((m) => m.value === theme)?.label
+  // The compact sidebar has no tabs of its own: the header's bar is where
+  // they are, so it shows whatever the switch says (a phone keeps detailed)
+  const compactSidebar = !isMobile && settings.sidebarLayout === 'compact'
   const groups: GroupDef[] = [
     {
       id: 'appearance',
@@ -904,10 +913,33 @@ export function SettingsModal({
       title: t('settings.group.sessions'),
       rows: (
         <>
-          <SettingsRow title={t('settings.tabs')} desc={t('settings.tabsDesc')}>
+          <SettingsRow
+            title={t('settings.sidebarLayout')}
+            desc={t('settings.sidebarLayoutDesc')}
+          >
+            <SegmentedControl
+              label={t('settings.sidebarLayout')}
+              options={SIDEBAR_LAYOUTS.map((l) => ({
+                value: l,
+                label: t(SIDEBAR_LAYOUT_LABEL[l]),
+                content: t(SIDEBAR_LAYOUT_LABEL[l]),
+              }))}
+              value={settings.sidebarLayout}
+              onChange={(v) => onUpdateSetting('sidebarLayout', v)}
+            />
+          </SettingsRow>
+          <SettingsRow
+            title={t('settings.tabs')}
+            desc={t(
+              compactSidebar
+                ? 'settings.tabsForcedByCompact'
+                : 'settings.tabsDesc',
+            )}
+          >
             <Switch
               label={t('settings.tabs')}
-              checked={settings.showSessionTabs}
+              checked={settings.showSessionTabs || compactSidebar}
+              disabled={compactSidebar}
               onChange={(v) => onUpdateSetting('showSessionTabs', v)}
             />
           </SettingsRow>

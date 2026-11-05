@@ -78,6 +78,7 @@ const DEFAULT_SETTINGS: Settings = {
   uiStyle: 'neutral',
   driveTerminalSize: false,
   sidebarFilter: 'all',
+  sidebarLayout: 'detailed',
   sortBlockedFirst: false,
   markdownPreview: true,
   tablePreview: true,
@@ -337,6 +338,30 @@ describe('SettingsModal', () => {
     const { onUpdateSetting } = renderModal()
     fireEvent.click(screen.getByRole('switch', { name: 'Show session tabs' }))
     expect(onUpdateSetting).toHaveBeenCalledWith('showSessionTabs', true)
+  })
+
+  it('picks the sidebar layout', () => {
+    const { onUpdateSetting } = renderModal()
+    const layout = screen.getByRole('radiogroup', { name: 'Sidebar layout' })
+    expect(
+      within(layout).getByRole('radio', { name: 'Detailed' }),
+    ).toHaveAttribute('aria-checked', 'true')
+    fireEvent.click(within(layout).getByRole('radio', { name: 'Compact' }))
+    expect(onUpdateSetting).toHaveBeenCalledWith('sidebarLayout', 'compact')
+  })
+
+  it('keeps session tabs on and locked with the compact sidebar', () => {
+    renderModal({
+      settings: { ...DEFAULT_SETTINGS, sidebarLayout: 'compact' },
+    })
+    const tabs = screen.getByRole('switch', { name: 'Show session tabs' })
+    expect(tabs).toBeDisabled()
+    expect(tabs).toHaveAttribute('aria-checked', 'true')
+    expect(
+      screen.getByText(
+        'Always shown with the compact sidebar, which keeps the tabs there',
+      ),
+    ).toBeInTheDocument()
   })
 
   it('starts with the Appearance group and lists the three styles', () => {
@@ -1250,6 +1275,16 @@ describe('SettingsModal on a phone', () => {
       within(list()!).getByRole('button', { name: 'Keyboard' }),
     ).toHaveFocus()
     expect(screen.queryByRole('region')).toBeNull()
+  })
+
+  it('leaves the session tabs switch free with a compact sidebar saved', () => {
+    renderPhone({
+      settings: { ...DEFAULT_SETTINGS, sidebarLayout: 'compact' },
+    })
+    fireEvent.click(within(list()!).getByRole('button', { name: 'Sessions' }))
+    const tabs = screen.getByRole('switch', { name: 'Show session tabs' })
+    expect(tabs).toBeEnabled()
+    expect(tabs).toHaveAttribute('aria-checked', 'false')
   })
 
   it('goes back to the list on Back of the history, staying open', async () => {

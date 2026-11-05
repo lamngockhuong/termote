@@ -103,6 +103,20 @@ With this switch on, the PWA sets the pane's size to fit its own screen while th
 
 This setting only appears with the Herdr and herdr-core backends. On macOS, if the server is killed (`kill -9`) while a device drives the size, the pane keeps that size until the service starts again.
 
+## Sidebar Layout (Desktop Only)
+
+How the desktop sidebar lists your sessions. Settings → Sessions → **Sidebar layout**.
+
+| Option   | Behavior                                                                      | Default |
+| -------- | ----------------------------------------------------------------------------- | ------- |
+| Detailed | Each workspace with its tabs under it, the agent filter above the list        | ✓       |
+| Compact  | One line per workspace, its tabs in the header, the running agents underneath |         |
+
+The compact layout always shows the session tabs in the header, since that is where a workspace's
+tabs are: **Show session tabs** is then on and locked. The agent filter is hidden while it is
+compact; the filter you saved comes back with the detailed layout. A phone keeps its sessions
+sheet whichever you pick. See [Compact Layout](/usage/sessions/#compact-layout).
+
 ## Show Session Tabs (Desktop Only)
 
 Displays browser-like session tabs in the header row for quick session switching on desktop. The sidebar remains available for more detailed session management.
@@ -112,7 +126,8 @@ Displays browser-like session tabs in the header row for quick session switching
 | On     | Show session tabs in header           | ✓       |
 | Off    | Hide tabs, use sidebar only           |         |
 
-This setting only appears on desktop devices.
+This setting only appears on desktop devices. With the compact
+[sidebar layout](#sidebar-layout-desktop-only) the tabs are always shown and the switch is locked.
 
 ## Blocked Sessions First
 

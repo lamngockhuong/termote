@@ -15,6 +15,13 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/i18n/`                                   | `t()`, `<Trans>`, locales, messages per area (EN, VI)          |
 | `pwa/src/components/language-notice.tsx`          | Once, to a device that picked VI before: the app speaks it now |
 | `pwa/src/components/session-tabs.tsx`             | Session tab bar for window switching                           |
+| `pwa/src/utils/sidebar-layout.ts`                 | Sidebar layout setting: detailed (tabs listed) or compact      |
+| `pwa/src/components/compact-group-row.tsx`        | Compact sidebar: one workspace on one line, worktree indented  |
+| `pwa/src/utils/group-avatar.ts`                   | Workspace avatar: first letter, a stable `--tm-avatar-N`       |
+| `pwa/src/utils/pick-group-tab.ts`                 | Tab a picked workspace opens: last shown here, then server's   |
+| `pwa/src/components/sidebar-agents.tsx`           | Compact sidebar's Agents: by status, opens a pane, resizable   |
+| `pwa/src/hooks/use-sidebar-agents-collapsed.ts`   | Agents section folded or not, kept on the device               |
+| `pwa/src/components/sidebar-row-classes.ts`       | Row classes of the sidebar's tabs, workspaces and agents       |
 | `pwa/src/components/connection-indicator.tsx`     | Connection status indicator with retry                         |
 | `pwa/src/components/localhost-notice.tsx`         | Offers a page opened through localhost the same at 127.0.0.1   |
 | `pwa/src/utils/loopback-address.ts`               | Why 127.0.0.1, not localhost (::1); the page's 127.0.0.1 URL   |
@@ -101,6 +108,8 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/utils/host-format.ts`                    | Host levels (80/95, battery 20/10), bytes, minutes             |
 | `pwa/src/utils/usage-format.ts`                   | Usage labels: level, `~72%`, `5h`/`7d`, "resets 14:30"         |
 | `pwa/src/utils/overview-order.ts`                 | Overview order: blocked, working, done, idle; oldest first     |
+| `pwa/src/utils/agent-cards.ts`                    | Panes running an agent with their tab; grouped by status       |
+| `pwa/src/hooks/use-now.ts`                        | Server time now, read every 30 s (overview, sidebar Agents)    |
 | `pwa/src/components/status-timeline.tsx`          | A card's last hour by status, from the activity log            |
 | `pwa/src/utils/timeline-segments.ts`              | Cuts a pane's events (by key) into the strip's segments        |
 | `pwa/src/components/subagent-tree.tsx`            | A Claude card's subagents: status, type, last tool, time       |

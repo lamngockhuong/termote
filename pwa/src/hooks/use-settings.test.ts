@@ -255,6 +255,33 @@ describe('useSettings', () => {
     expect(result.current.settings.sidebarFilter).toBe('working')
   })
 
+  it('reads a config without sidebarLayout as detailed', () => {
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ sidebarFilter: 'working' }),
+    )
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.sidebarLayout).toBe('detailed')
+  })
+
+  it('replaces an unknown saved sidebarLayout with detailed', () => {
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ sidebarLayout: 'grid' }),
+    )
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.sidebarLayout).toBe('detailed')
+  })
+
+  it('updates sidebarLayout and persists', () => {
+    const { result } = renderHook(() => useSettings())
+    act(() => result.current.updateSetting('sidebarLayout', 'compact'))
+    expect(result.current.settings.sidebarLayout).toBe('compact')
+    expect(
+      JSON.parse(localStorage.getItem('termote-settings')!).sidebarLayout,
+    ).toBe('compact')
+  })
+
   it('returns default sortBlockedFirst of false', () => {
     const { result } = renderHook(() => useSettings())
     expect(result.current.settings.sortBlockedFirst).toBe(false)

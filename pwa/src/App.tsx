@@ -143,6 +143,7 @@ import {
 import { lazyRetry } from './utils/lazy-retry'
 import { type OpenWindowEvent, openInWindow } from './utils/open-window'
 import { loadPaneView, savePaneView } from './utils/pane-view'
+import { pickGroupTab } from './utils/pick-group-tab'
 import { isApplePlatform } from './utils/platform'
 import { formatRunning, uniqueNames } from './utils/running-commands'
 import { errorKey } from './utils/server-error'
@@ -333,6 +334,8 @@ export default function App({
   const isMobile = useIsMobile()
   // Opened from "Open in new window": only the link's target, nothing kept
   const focus = isFocusWindow()
+  // Desktop: one line per workspace, its tabs always in the header's bar
+  const compactSidebar = !isMobile && settings.sidebarLayout === 'compact'
   // Desktop only: the command palette, app shortcuts and other windows
   const finePointer = useMediaQuery('(pointer: fine)')
   const desktop = finePointer && !isMobile
@@ -346,6 +349,7 @@ export default function App({
     activeSession,
     sessions,
     groups = [],
+    activeTabByGroup,
     switchSession,
     selectPane,
     addSession,
@@ -1699,6 +1703,16 @@ export default function App({
     (pane: SessionPane) => !!mux.caps.agentChat && chatAgent(pane.agentName),
     [mux.caps.agentChat],
   )
+  // The compact sidebar's Agents: a row opens its pane as a card does
+  const openAgentFromSidebar = useCallback(
+    (session: Session, pane: SessionPane) =>
+      openFromOverview(
+        session,
+        pane,
+        overviewOpensChat(pane) ? 'chat' : 'terminal',
+      ),
+    [openFromOverview, overviewOpensChat],
+  )
   const overviewCanAnswer = useCallback(
     (pane: SessionPane) =>
       !!mux.caps.agentChat && chatInputAgent(pane.agentName),
@@ -1748,6 +1762,25 @@ export default function App({
       return selectSession(id)
     },
     [selectSession],
+  )
+
+  // The tab last shown in each group on this device (kept in memory only):
+  // a workspace picked in the compact sidebar opens on it again
+  const lastTabByGroup = useRef(new Map<string, string>())
+  useEffect(() => {
+    if (activeSession.groupId)
+      lastTabByGroup.current.set(activeSession.groupId, activeSession.id)
+  }, [activeSession.groupId, activeSession.id])
+  const selectGroup = useCallback(
+    (groupId: string) => {
+      const id = pickGroupTab(
+        sessions.filter((s) => s.groupId === groupId).map((s) => s.id),
+        lastTabByGroup.current.get(groupId),
+        activeTabByGroup.get(groupId),
+      )
+      if (id) void selectFromList(id)
+    },
+    [sessions, activeTabByGroup, selectFromList],
   )
 
   // The welcome screen's waiting agent: its pane, in the terminal
@@ -1970,6 +2003,11 @@ export default function App({
             sortBlockedFirst={settings.sortBlockedFirst}
             groupActions={groupActions}
             reorder={reorder}
+            layout={compactSidebar ? 'compact' : 'detailed'}
+            onSelectGroup={selectGroup}
+            onOpenAgent={openAgentFromSidebar}
+            activePaneId={activeSession.paneId}
+            clockOffset={clockOffset}
           />
         )}
 
@@ -2003,7 +2041,9 @@ export default function App({
             groupName={groupName}
             blockedElsewhere={blockedElsewhere}
             showBrand={focus || sidebarCollapsed}
-            showSessionTabs={!focus && settings.showSessionTabs}
+            showSessionTabs={
+              !focus && (settings.showSessionTabs || compactSidebar)
+            }
             canRemoveTab={!readOnly && sessions.length > 1}
             onSelectTab={selectFromList}
             onAddTab={readOnly || focus ? undefined : () => addTab('New')}

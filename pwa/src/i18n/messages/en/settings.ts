@@ -51,8 +51,15 @@ export default {
   'settings.layoutView': 'Show herdr panes side by side',
   'settings.layoutViewDesc': "A tab of 2 to 4 panes shows herdr's own layout",
   // Sessions
+  'settings.sidebarLayout': 'Sidebar layout',
+  'settings.sidebarLayoutDesc':
+    'Compact lists each workspace on one line, its tabs in the header and the running agents below (wide screens)',
+  'settings.sidebarLayout.detailed': 'Detailed',
+  'settings.sidebarLayout.compact': 'Compact',
   'settings.tabs': 'Show session tabs',
   'settings.tabsDesc': 'Display tab bar for quick session switching (desktop)',
+  'settings.tabsForcedByCompact':
+    'Always shown with the compact sidebar, which keeps the tabs there',
   'settings.blockedFirst': 'Blocked sessions first',
   'settings.blockedFirstDesc':
     'List sessions waiting on you at the top of each group',

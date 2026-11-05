@@ -2822,3 +2822,429 @@ describe('SessionSidebar — search', () => {
     })
   })
 })
+
+describe('SessionSidebar — compact layout', () => {
+  const tab = (
+    id: string,
+    name: string,
+    groupId: string,
+    over: Partial<Session> = {},
+  ): Session => ({
+    id,
+    key: `@${id}`,
+    name,
+    icon: '💻',
+    description: '',
+    groupId,
+    ...over,
+  })
+  const GROUPS: SessionGroup[] = [
+    { id: 'main', name: 'main', worktree: { linked: false, branch: 'trunk' } },
+    {
+      id: 'w9',
+      name: 'main-wt',
+      worktree: { linked: true, parent: 'main', branch: 'feat/x' },
+    },
+    { id: '$3', name: 'work', agentStatus: 'blocked' },
+  ]
+  const TABS = [
+    tab('1', 'shell', 'main'),
+    tab('2', 'logs', 'main'),
+    tab('w9:1', 'edit', 'w9'),
+    tab('$3:0', 'build', '$3', { agentStatus: 'blocked', hasAgent: true }),
+    tab('$3:1', 'test', '$3'),
+  ]
+  const groupActions = {
+    kind: 'workspace' as const,
+    onNew: vi.fn(),
+    onRename: vi.fn(async () => {}),
+    onClose: vi.fn(),
+    canRename: (id: string) => id !== 'w9',
+  }
+  const reorderOf = (over = {}) => ({
+    tabs: true,
+    groups: true,
+    moving: false,
+    onMoveTab: vi.fn(),
+    onMoveGroup: vi.fn(),
+    ...over,
+  })
+  const props = (over: Partial<Parameters<typeof SessionSidebar>[0]> = {}) => ({
+    sessions: TABS,
+    groups: GROUPS,
+    activeId: '2',
+    onSelect: vi.fn(),
+    onAdd: vi.fn(),
+    onRemove: vi.fn(),
+    onUpdate: vi.fn(),
+    groupActions,
+    layout: 'compact' as const,
+    onSelectGroup: vi.fn(),
+    filter: 'all' as const,
+    onFilterChange: vi.fn(),
+    ...over,
+  })
+  const row = (name: RegExp) => screen.getByRole('button', { name })
+  const groupRows = () => screen.getAllByRole('button', { name: /, \d+ tabs?/ })
+
+  beforeEach(() => localStorage.clear())
+
+  it('lists each workspace on one line, its tabs left to the header', () => {
+    const p = props()
+    render(<SessionSidebar {...p} />)
+    expect(groupRows().map((b) => b.getAttribute('aria-label'))).toEqual([
+      'main, 2 tabs, branch trunk',
+      'feat/x, 1 tab',
+      'work, 2 tabs, Agent blocked',
+    ])
+    expect(screen.queryByText('shell')).toBeNull()
+    expect(row(/^main,/)).toHaveAttribute('aria-current', 'true')
+    expect(row(/^work,/)).not.toHaveAttribute('aria-current')
+    // A tab is added from the header's bar
+    expect(screen.queryByRole('button', { name: 'New session' })).toBeNull()
+    expect(
+      screen.getByRole('button', { name: 'New workspace' }),
+    ).toBeInTheDocument()
+  })
+
+  it('fits fifteen workspaces of three tabs each in fifteen rows', () => {
+    const groups = Array.from({ length: 15 }, (_, i) => ({
+      id: `g${i}`,
+      name: `project ${i}`,
+    }))
+    const sessions = groups.flatMap((g) =>
+      [0, 1, 2].map((n) => tab(`${g.id}:${n}`, `t${n}`, g.id)),
+    )
+    render(
+      <SessionSidebar
+        {...props({
+          groups,
+          sessions,
+          activeId: 'g0:0',
+          groupActions: undefined,
+        })}
+      />,
+    )
+    expect(groupRows()).toHaveLength(15)
+  })
+
+  it('opens a workspace through onSelectGroup, else its first tab', () => {
+    const p = props()
+    const { rerender } = render(<SessionSidebar {...p} />)
+    fireEvent.click(row(/^work,/))
+    expect(p.onSelectGroup).toHaveBeenCalledWith('$3')
+    expect(p.onSelect).not.toHaveBeenCalled()
+    rerender(<SessionSidebar {...p} onSelectGroup={undefined} />)
+    fireEvent.click(row(/^work,/))
+    expect(p.onSelect).toHaveBeenCalledWith('$3:0')
+  })
+
+  it('opens nothing for a workspace without tabs and no onSelectGroup', () => {
+    const p = props({
+      groups: [...GROUPS, { id: 'empty', name: 'empty' }],
+      onSelectGroup: undefined,
+    })
+    render(<SessionSidebar {...p} />)
+    fireEvent.click(row(/^empty,/))
+    expect(p.onSelect).not.toHaveBeenCalled()
+  })
+
+  it('indents a worktree, hidden with its checkout collapsed, the badge then for both', () => {
+    const groups: SessionGroup[] = [
+      { ...GROUPS[0], agentStatus: 'working' },
+      { ...GROUPS[1], agentStatus: 'blocked' },
+      { ...GROUPS[2], agentStatus: undefined },
+    ]
+    render(<SessionSidebar {...props({ groups })} />)
+    expect(row(/^feat\/x,/).parentElement!.className).toContain('ml-3')
+    expect(row(/^main,/)).toHaveAttribute(
+      'aria-label',
+      'main, 2 tabs, branch trunk, Agent working',
+    )
+    const chevron = screen.getByRole('button', { name: 'Worktrees of main' })
+    fireEvent.click(chevron)
+    expect(chevron).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('button', { name: /^feat\/x,/ })).toBeNull()
+    expect(row(/^main,/)).toHaveAttribute(
+      'aria-label',
+      'main, 2 tabs, branch trunk, Agent blocked',
+    )
+    // Only a checkout with worktrees has a chevron
+    expect(
+      screen.queryByRole('button', { name: 'Worktrees of work' }),
+    ).toBeNull()
+  })
+
+  it('keeps the collapsed state across a layout change', () => {
+    const p = props()
+    const { rerender } = render(<SessionSidebar {...p} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Worktrees of main' }))
+    rerender(<SessionSidebar {...p} layout="detailed" />)
+    expect(
+      screen
+        .getByRole('region', { name: 'main' })
+        .querySelector('button[aria-expanded]'),
+    ).toHaveAttribute('aria-expanded', 'false')
+    rerender(<SessionSidebar {...p} />)
+    expect(
+      screen.getByRole('button', { name: 'Worktrees of main' }),
+    ).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('has no filter bar, a saved filter left alone and not applied', () => {
+    const p = props({ filter: 'needs-you' })
+    const { rerender } = render(<SessionSidebar {...p} />)
+    expect(screen.queryByRole('radiogroup')).toBeNull()
+    expect(groupRows()).toHaveLength(3)
+    expect(p.onFilterChange).not.toHaveBeenCalled()
+    // The detailed layout still has it, on the saved filter
+    rerender(<SessionSidebar {...p} layout="detailed" />)
+    expect(screen.getByRole('radiogroup')).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'main' })).toBeNull()
+  })
+
+  it('lists only the workspaces a search matches, worktrees held open', () => {
+    const p = props()
+    render(<SessionSidebar {...p} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Search sessions' }))
+    // Collapsing is no part of a search
+    fireEvent.change(screen.getByRole('searchbox'), {
+      target: { value: 'edit' },
+    })
+    // Its checkout is not listed: a row of its own, not indented under it
+    expect(groupRows().map((b) => b.getAttribute('aria-label'))).toEqual([
+      'main-wt, 1 tab, branch feat/x',
+    ])
+    expect(row(/^main-wt,/).parentElement!.className).not.toContain('ml-3')
+    // A search opens the group's first match
+    fireEvent.click(row(/^main-wt,/))
+    expect(p.onSelect).toHaveBeenCalledWith('w9:1')
+    expect(p.onSelectGroup).not.toHaveBeenCalled()
+    // ArrowDown in the box goes to the match's workspace
+    fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'ArrowDown' })
+    expect(row(/^main-wt,/)).toHaveFocus()
+  })
+
+  it('keeps a worktree indented while a search lists its checkout too', () => {
+    localStorage.setItem(
+      'termote-group-collapsed',
+      JSON.stringify({ main: true }),
+    )
+    render(<SessionSidebar {...props()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Search sessions' }))
+    fireEvent.change(screen.getByRole('searchbox'), {
+      target: { value: 'main' },
+    })
+    // Collapsed or not, a search shows the worktree; toggling would change
+    // the saved state without showing it
+    expect(row(/^feat\/x,/).parentElement!.className).toContain('ml-3')
+    const chevron = screen.getByRole('button', { name: 'Worktrees of main' })
+    expect(chevron).toHaveAttribute('aria-expanded', 'true')
+    expect(chevron).toBeDisabled()
+  })
+
+  it('says so when nothing matches', () => {
+    const onFilterChange = vi.fn()
+    render(
+      <SessionSidebar {...props({ filter: 'needs-you', onFilterChange })} />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Search sessions' }))
+    fireEvent.change(screen.getByRole('searchbox'), {
+      target: { value: 'zzz' },
+    })
+    expect(screen.getByText('No sessions match')).toBeInTheDocument()
+    // Show all clears the search and leaves the saved filter alone
+    fireEvent.click(screen.getByRole('button', { name: 'Show all' }))
+    expect(groupRows()).toHaveLength(3)
+    expect(onFilterChange).not.toHaveBeenCalled()
+  })
+
+  it('moves a workspace with Alt+Up/Down, focus following it', () => {
+    const r = reorderOf()
+    const p = props({ reorder: r })
+    const { rerender } = render(<SessionSidebar {...p} />)
+    const work = row(/^work,/)
+    expect(work).toHaveAttribute(
+      'aria-keyshortcuts',
+      'Alt+ArrowUp Alt+ArrowDown',
+    )
+    work.focus()
+    // Not Alt, or not an arrow: nothing
+    fireEvent.keyDown(work, { key: 'ArrowUp' })
+    fireEvent.keyDown(work, { key: 'Enter', altKey: true })
+    // The last one: down goes nowhere
+    fireEvent.keyDown(work, { key: 'ArrowDown', altKey: true })
+    expect(r.onMoveGroup).not.toHaveBeenCalled()
+    fireEvent.keyDown(work, { key: 'ArrowUp', altKey: true })
+    expect(r.onMoveGroup).toHaveBeenCalledWith('$3', 0)
+    // The move comes back as a new snapshot, in the new order: focus goes
+    // back to work
+    act(() => (document.activeElement as HTMLElement).blur())
+    rerender(
+      <SessionSidebar
+        {...p}
+        sessions={[...TABS]}
+        groups={[GROUPS[2], GROUPS[0], GROUPS[1]]}
+      />,
+    )
+    expect(row(/^work,/)).toHaveFocus()
+    // A linked worktree does not move on its own
+    expect(row(/^feat\/x,/)).not.toHaveAttribute('aria-keyshortcuts')
+    fireEvent.keyDown(row(/^feat\/x,/), { key: 'ArrowUp', altKey: true })
+    expect(r.onMoveGroup).toHaveBeenCalledTimes(1)
+  })
+
+  it('moves a workspace by dragging its row', () => {
+    const r = reorderOf()
+    render(<SessionSidebar {...props({ reorder: r })} />)
+    const wrapper = (name: RegExp) =>
+      row(name).parentElement!.parentElement as HTMLElement
+    const dt = () => ({ setData: vi.fn(), effectAllowed: '', dropEffect: '' })
+    const dragAt = (
+      type: 'dragOver' | 'drop',
+      el: HTMLElement,
+      clientY: number,
+    ) => {
+      const ev = createEvent[type](el, { dataTransfer: dt() })
+      Object.defineProperty(ev, 'clientY', { value: clientY })
+      fireEvent(el, ev)
+    }
+    fireEvent.dragStart(wrapper(/^work,/), { dataTransfer: dt() })
+    dragAt('dragOver', wrapper(/^main,/), 0)
+    expect(
+      wrapper(/^main,/).querySelector(':scope > .bg-accent'),
+    ).not.toBeNull()
+    dragAt('drop', wrapper(/^main,/), 0)
+    expect(r.onMoveGroup).toHaveBeenCalledWith('$3', 0)
+    // After main: the line is drawn after its worktree
+    fireEvent.dragStart(wrapper(/^work,/), { dataTransfer: dt() })
+    dragAt('dragOver', wrapper(/^main,/), 5)
+    expect(
+      wrapper(/^feat\/x,/).querySelector(':scope > .bg-accent'),
+    ).not.toBeNull()
+  })
+
+  it('renames a workspace on double click, where it can', async () => {
+    const onRename = vi.fn(async () => {})
+    render(
+      <SessionSidebar
+        {...props({ groupActions: { ...groupActions, onRename } })}
+      />,
+    )
+    // A worktree here cannot be renamed
+    fireEvent.doubleClick(row(/^feat\/x,/))
+    expect(screen.queryByRole('textbox')).toBeNull()
+    fireEvent.doubleClick(row(/^work,/))
+    const field = screen.getByRole('textbox', {
+      name: 'New name for workspace work',
+    })
+    fireEvent.change(field, { target: { value: 'web' } })
+    await act(async () => {
+      fireEvent.submit(field.closest('form')!)
+    })
+    expect(onRename).toHaveBeenCalledWith('$3', 'web')
+    expect(screen.queryByRole('textbox')).toBeNull()
+  })
+
+  it('offers the workspace menu on its row, named by id without a name', () => {
+    render(
+      <SessionSidebar
+        {...props({ groups: [...GROUPS, { id: 'nameless', name: '' }] })}
+      />,
+    )
+    expect(
+      screen.getByRole('button', { name: 'Actions for workspace nameless' }),
+    ).toBeInTheDocument()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Actions for workspace work' }),
+    )
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Close' }))
+    expect(groupActions.onClose).toHaveBeenCalledWith('$3')
+  })
+
+  it('draws a row for the single tmux session, groups unmanaged', () => {
+    render(
+      <SessionSidebar
+        {...props({
+          groups: [{ id: 'main', name: 'main' }],
+          sessions: [tab('1', 'shell', 'main'), tab('2', 'logs', 'main')],
+          groupActions: undefined,
+        })}
+      />,
+    )
+    expect(groupRows().map((b) => b.getAttribute('aria-label'))).toEqual([
+      'main, 2 tabs',
+    ])
+    expect(screen.queryByRole('button', { name: /^Actions for/ })).toBeNull()
+  })
+
+  it('keeps the flat list before any group is known', () => {
+    render(
+      <SessionSidebar
+        {...props({ groups: [], sessions: SESSIONS, activeId: '1' })}
+      />,
+    )
+    expect(screen.getByText('Shell')).toBeInTheDocument()
+  })
+
+  it('shows the add form only when the rail asked for it', () => {
+    const p = props({ onToggleCollapse: vi.fn() })
+    const { rerender } = render(<SessionSidebar {...p} isCollapsed />)
+    // The rail is the same in both layouts: tabs by icon
+    expect(screen.queryByRole('button', { name: /, \d+ tabs?/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Add new session' }))
+    rerender(<SessionSidebar {...p} />)
+    expect(screen.getByPlaceholderText('Session name')).toBeInTheDocument()
+  })
+
+  it('lists the agents under the workspaces, only in the expanded compact sidebar', () => {
+    const sessions = TABS.map((t) =>
+      t.id === '$3:0'
+        ? {
+            ...t,
+            panes: [
+              {
+                id: 'p1',
+                label: 'claude',
+                hasAgent: true,
+                agentStatus: 'blocked' as const,
+              },
+            ],
+          }
+        : t,
+    )
+    const onOpenAgent = vi.fn()
+    const p = props({
+      sessions,
+      onOpenAgent,
+      activePaneId: 'p1',
+      clockOffset: 0,
+    })
+    const { rerender } = render(<SessionSidebar {...p} />)
+    const agents = screen.getByRole('region', { name: 'Running agents' })
+    fireEvent.click(within(agents).getByRole('button', { name: /work/ }))
+    expect(onOpenAgent).toHaveBeenCalledWith(sessions[3], sessions[3].panes![0])
+    expect(
+      within(agents).getByRole('button', { name: /work/ }),
+    ).toHaveAttribute('aria-current', 'true')
+    // Not in the detailed layout, the rail or a phone's sheet
+    for (const over of [
+      { layout: 'detailed' as const },
+      { isCollapsed: true },
+      { isMobile: true },
+      { onOpenAgent: undefined },
+    ]) {
+      rerender(<SessionSidebar {...p} {...over} />)
+      expect(
+        screen.queryByRole('region', { name: 'Running agents' }),
+      ).toBeNull()
+    }
+  })
+
+  it('leaves a phone’s sheet as it is', () => {
+    render(<SessionSidebar {...props({ isMobile: true })} />)
+    expect(screen.queryByRole('button', { name: /, \d+ tabs?/ })).toBeNull()
+    expect(screen.getByRole('region', { name: 'main' })).toBeInTheDocument()
+    expect(screen.getByRole('radiogroup')).toBeInTheDocument()
+  })
+})

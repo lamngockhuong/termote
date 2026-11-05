@@ -511,7 +511,15 @@ vi.mock('./components/session-sidebar', () => ({
     groupActions,
     reorder,
     onOpenOverview,
+    layout,
+    onSelectGroup,
+    onOpenAgent,
+    sessions,
   }: {
+    sessions: { panes?: object[] }[]
+    onOpenAgent?: (session: object, pane: object) => void
+    layout?: string
+    onSelectGroup?: (groupId: string) => void
     onOpenOverview?: () => void
     reorder?: {
       tabs: boolean
@@ -537,7 +545,11 @@ vi.mock('./components/session-sidebar', () => ({
     onFilterChange?: (filter: string) => void
     onRemove?: (id: string) => void
   }) => (
-    <div data-testid="session-sidebar" data-open={String(!!isOpen)}>
+    <div
+      data-testid="session-sidebar"
+      data-open={String(!!isOpen)}
+      data-layout={layout}
+    >
       {onRemove && <button onClick={() => onRemove('1')}>SBRemove</button>}
       {onRemove && !isMobile && (
         <button onClick={() => onRemove('gone')}>SBRemoveGone</button>
@@ -565,6 +577,18 @@ vi.mock('./components/session-sidebar', () => ({
       {!isMobile && onSelect && (
         <button onClick={() => onSelect('w2:t1')}>SBSelectW2</button>
       )}
+      {!isMobile && onOpenAgent && sessions[0].panes && (
+        <button onClick={() => onOpenAgent(sessions[0], sessions[0].panes![0])}>
+          SBOpenAgent
+        </button>
+      )}
+      {!isMobile &&
+        onSelectGroup &&
+        ['w1', 'w2', 'empty'].map((g) => (
+          <button key={g} onClick={() => onSelectGroup(g)}>
+            SBGroup {g}
+          </button>
+        ))}
       {isMobile && onClose && <button onClick={onClose}>MobileClose</button>}
       {isMobile && onAdd && (
         <button onClick={() => onAdd('Fresh', '🚀')}>MobileAdd</button>
@@ -1993,6 +2017,48 @@ describe('App', () => {
     await waitFor(() => screen.getByRole('button', { name: 'QAText' }))
     fireEvent.click(screen.getByRole('button', { name: 'QAText' }))
     expect(mockSendTextToTerminal).toHaveBeenCalledWith(null, 'hello')
+  })
+
+  it('shows the tab bar with a compact sidebar on desktop, tabs switched off', async () => {
+    // Not a literal: the mock's settings type has no sidebarLayout
+    const settings = {
+      ...mockUseSettings().settings,
+      showSessionTabs: false,
+      sidebarLayout: 'compact',
+    }
+    mockUseSettings.mockReturnValue({ ...mockUseSettings(), settings })
+    render(<App />)
+    expect(await screen.findByTestId('session-tabs')).toBeInTheDocument()
+    expect(screen.getByTestId('session-sidebar')).toHaveAttribute(
+      'data-layout',
+      'compact',
+    )
+  })
+
+  it('keeps a phone on its own sheet and settings with a compact sidebar saved', async () => {
+    mockIsMobile.mockReturnValue(true)
+    // Not a literal: the mock's settings type has no sidebarLayout
+    const settings = {
+      ...mockUseSettings().settings,
+      showSessionTabs: false,
+      sidebarLayout: 'compact',
+    }
+    mockUseSettings.mockReturnValue({ ...mockUseSettings(), settings })
+    render(<App />)
+    await screen.findByTestId('session-sidebar')
+    expect(screen.queryByTestId('session-tabs')).toBeNull()
+    expect(screen.getByTestId('session-sidebar')).not.toHaveAttribute(
+      'data-layout',
+    )
+  })
+
+  it('passes the detailed layout to the desktop sidebar by default', async () => {
+    render(<App />)
+    expect(await screen.findByTestId('session-sidebar')).toHaveAttribute(
+      'data-layout',
+      'detailed',
+    )
+    expect(screen.queryByTestId('session-tabs')).toBeNull()
   })
 
   it('SessionTabs onAdd calls addSession("New") on desktop with showSessionTabs=true', async () => {
@@ -5837,6 +5903,45 @@ describe('App views, view-only and deep links', () => {
         screen.getByRole('button', { name: 'NoFileWindow' }),
       ).toBeInTheDocument()
     })
+  })
+
+  it('a workspace picked whole opens the tab last shown in it, else the server’s', async () => {
+    mockSessions()
+    const base = mockUseLocalSessions()
+    const tabs = [...base.sessions, tab('w2:t2', 'w2')]
+    const at = (active: string) =>
+      mockUseLocalSessions.mockReturnValue({
+        ...base,
+        sessions: tabs,
+        activeSession: tabs.find((t) => t.id === active)!,
+        activeTabByGroup: new Map([['w2', 'w2:t2']]),
+      } as any)
+    at('w1:t1')
+    const { rerender } = render(<App />)
+    const pick = (g: string) =>
+      fireEvent.click(screen.getByRole('button', { name: `SBGroup ${g}` }))
+    pick('w2')
+    expect(switchSession).toHaveBeenLastCalledWith('w2:t2', undefined)
+    // w2:t1 shown, then back to w1: w2 opens on w2:t1 again
+    at('w2:t1')
+    rerender(<App />)
+    at('w1:t1')
+    rerender(<App />)
+    switchSession.mockClear()
+    pick('w2')
+    expect(switchSession).toHaveBeenLastCalledWith('w2:t1', undefined)
+    // A group without tabs opens nothing
+    switchSession.mockClear()
+    pick('empty')
+    expect(switchSession).not.toHaveBeenCalled()
+  })
+
+  it('a row of the sidebar’s agents opens its pane, as a card does', async () => {
+    mockSessions()
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'SBOpenAgent' }))
+    expect(window.location.hash).toBe('#/s/w1/w1%3At1/w1%3At1%3Ap1')
+    window.history.replaceState(null, '', '/')
   })
 
   describe('agent overview', () => {
