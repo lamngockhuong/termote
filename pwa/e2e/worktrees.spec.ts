@@ -156,14 +156,11 @@ test.describe('Herdr worktrees from the PWA', () => {
     )
     const aside = page.getByRole('complementary')
     await expect(aside.getByRole('button', { name: new RegExp(`^${SOURCE}, \\d+ tabs?`) })).toBeVisible()
-    if (group.worktree.parent) {
-      // Under its open checkout: indented, named by its branch
-      const row = aside.getByRole('button', { name: new RegExp(`^${branch}, \\d+ tabs?`) })
-      await expect(row).toBeVisible()
-      await expect(row.locator('xpath=..')).toHaveClass(/ml-3/)
-    } else {
-      await expect(aside.getByRole('button', { name: new RegExp(`, branch ${branch}`) })).toBeVisible()
-    }
+    // Its checkout (e2e-repo) is open: indented under it, named by its branch
+    expect(group.worktree.parent, 'the worktree names its checkout').toBeTruthy()
+    const row = aside.getByRole('button', { name: new RegExp(`^${branch}, \\d+ tabs?`) })
+    await expect(row).toBeVisible()
+    await expect(row.locator('xpath=..')).toHaveClass(/ml-3/)
     // Its tabs are in the header's bar, not under it
     await expect(page.getByRole('tablist', { name: 'Sessions' })).toBeVisible()
   })

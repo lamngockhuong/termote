@@ -3044,12 +3044,19 @@ describe('SessionSidebar — compact layout', () => {
   })
 
   it('says so when nothing matches', () => {
-    render(<SessionSidebar {...props()} />)
+    const onFilterChange = vi.fn()
+    render(
+      <SessionSidebar {...props({ filter: 'needs-you', onFilterChange })} />,
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Search sessions' }))
     fireEvent.change(screen.getByRole('searchbox'), {
       target: { value: 'zzz' },
     })
     expect(screen.getByText('No sessions match')).toBeInTheDocument()
+    // Show all clears the search and leaves the saved filter alone
+    fireEvent.click(screen.getByRole('button', { name: 'Show all' }))
+    expect(groupRows()).toHaveLength(3)
+    expect(onFilterChange).not.toHaveBeenCalled()
   })
 
   it('moves a workspace with Alt+Up/Down, focus following it', () => {
@@ -3228,7 +3235,9 @@ describe('SessionSidebar — compact layout', () => {
       { onOpenAgent: undefined },
     ]) {
       rerender(<SessionSidebar {...p} {...over} />)
-      expect(screen.queryByRole('region', { name: 'Running agents' })).toBeNull()
+      expect(
+        screen.queryByRole('region', { name: 'Running agents' }),
+      ).toBeNull()
     }
   })
 

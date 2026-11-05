@@ -1265,7 +1265,8 @@ export function SessionSidebar({
         <Button
           size="sm"
           onClick={() => {
-            onFilterChange?.('all')
+            // The compact layout applies no filter: the saved one stays
+            if (!compact) onFilterChange?.('all')
             setQuery('')
           }}
         >
