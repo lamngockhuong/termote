@@ -71,6 +71,7 @@ const SETTINGS: Settings = {
   searchWord: false,
   searchRegex: false,
   notifyAgents: false,
+  appBadge: true,
   stuckMinutes: 10,
   showUsageChip: true,
   showHostChip: true,

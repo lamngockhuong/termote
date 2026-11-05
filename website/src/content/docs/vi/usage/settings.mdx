@@ -174,6 +174,38 @@ Giới hạn:
 | Tắt      | Không có thông báo                            | ✓        |
 | Bật      | Báo khi agent đang chờ hoặc đã làm xong       |          |
 
+## Số trên icon của app
+
+Settings → Sessions → **Count on the app icon** hiện một con số trên icon của app đã cài: số agent
+đang chờ bạn. Agent được tính khi hộp thoại của nó đang chờ bạn trả lời, hoặc khi nó đã xong một
+lượt mà chưa ai xem. Số giảm khi bạn trả lời agent, khi bạn mở pane của nó trên bất kỳ thiết bị nào
+đăng nhập với quyền đầy đủ, hoặc khi bạn đọc nó trong terminal tmux hay Zellij trên máy bàn. Thiết
+bị chỉ có quyền xem vẫn hiện số nhưng không bao giờ làm số giảm.
+
+Server nhớ lượt nào đã được xem, chung cho mọi thiết bị. Với tmux, một pane được tính là đã xem
+khi window của nó đang được hiện. Terminal trên máy bàn đánh dấu đã xem mọi pane trong window
+(tmux) hoặc tab (Zellij) mà nó đang hiện. Terminal gắn vào tmux chỉ được tính khi bạn có gõ phím
+trong đó trong 5 phút gần nhất; terminal gắn vào Zellij thì luôn được tính. Với Herdr, lượt
+đã xem trong Termote hiện là đã xong và đã đọc, dù app Herdr có thể vẫn đánh dấu nó.
+
+Dòng này chỉ hiện khi trình duyệt hỗ trợ: app đã cài trên Windows, macOS và ChromeOS, và app trên
+Màn hình chính của iOS 16.4 trở lên, nơi còn cần cho phép thông báo. Android chỉ hiện một
+chấm theo thông báo, còn Chromium trên Linux không hiện gì.
+
+Giới hạn:
+
+- Khi app đã đóng, số chỉ đổi lúc có push đến (cần bật **Notify when an agent needs me**). Trả lời
+  ở thiết bị khác không làm số giảm cho tới lần push sau, hoặc tới khi mở app.
+- Server khởi động lại thì quên lượt nào đã xem, và một lượt ngắn hơn chu kỳ cập nhật có thể không
+  được tính.
+- psmux trên Windows không bao giờ tính terminal trên máy bàn là người xem.
+- Đăng xuất sẽ xóa số.
+
+| Tùy chọn | Hành vi                                                 | Mặc định |
+| -------- | ------------------------------------------------------- | -------- |
+| Tắt      | Không hiện số trên icon                                 |          |
+| Bật      | Đếm agent đang chờ hoặc có lượt chưa ai xem             | ✓        |
+
 ## Font terminal
 
 Font mà terminal dùng, nhập theo tên (ví dụ `JetBrainsMono Nerd Font`). Font phải được cài trên thiết bị đang chạy trình duyệt; nếu chưa cài, terminal quay về font monospace của hệ thống. Có thể nhập nhiều tên, cách nhau bằng dấu phẩy. Giá trị được lưu khi rời khỏi ô nhập hoặc khi nhấn Enter.

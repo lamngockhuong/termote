@@ -397,7 +397,7 @@ func handleStream(w http.ResponseWriter, r *http.Request, m Mux, tokens *tokenSt
 	}
 	activity.observe(gen, snap)
 	serverSelect := !m.Caps().ClientSideSelect
-	_, tab, _, ok := findSnapshotPane(snap, pane, serverSelect)
+	group, tab, found, ok := findSnapshotPane(snap, pane, serverSelect)
 	if !ok {
 		jsonError(w, "unknown pane", http.StatusBadRequest)
 		return
@@ -463,7 +463,15 @@ func handleStream(w http.ResponseWriter, r *http.Request, m Mux, tokens *tokenSt
 	if sd, ok := ts.(sizeDriver); ok && !view && q.Get("drive") == "1" {
 		sd.Drive(true)
 	}
-	runStream(sctx, scancel, conn, ts, view, streamPingEvery, func() error { return hub.recheck(entry) })
+	// A full stream counts as a viewer of its pane (tmux: of its session's
+	// current window) while the client has it on screen; a view-only one
+	// never does (runStream drops its frames).
+	var watch *activityWatch
+	if !view {
+		watch = activity.watcher(group.ID, paneKey(found))
+		defer watch.end()
+	}
+	runStream(sctx, scancel, conn, ts, view, streamPingEvery, func() error { return hub.recheck(entry) }, watch.set)
 }
 
 // viewAttacher is a backend that can attach a client that changes nothing:
@@ -507,12 +515,13 @@ func viewSnapshot(ctx context.Context, m Mux) (Snapshot, error) {
 // gone by then.
 //
 // A view-only stream (readOnly) drops every input frame, resize, drive and
-// visible: nothing it sends reaches the pane, its size or its labels.
+// visible: nothing it sends reaches the pane, its size or its labels, nor
+// counts it as a viewer (visible, the activity tracker's).
 //
 // It pings the client each pingEvery (streamPingEvery). Each ping first asks
 // recheck, and ends the stream with the error it returns (errDeviceRevoked, errSessionRevoked), so an expiry or a revoke the
 // hub was not told of closes it within one ping.
-func runStream(ctx context.Context, cancel context.CancelCauseFunc, conn *websocket.Conn, ts TermStream, readOnly bool, pingEvery time.Duration, recheck func() error) {
+func runStream(ctx context.Context, cancel context.CancelCauseFunc, conn *websocket.Conn, ts TermStream, readOnly bool, pingEvery time.Duration, recheck func() error, visible func(bool)) {
 	outDone := make(chan struct{})
 	go func() {
 		defer close(outDone)
@@ -563,10 +572,14 @@ func runStream(ctx context.Context, cancel context.CancelCauseFunc, conn *websoc
 				if sd, ok := ts.(sizeDriver); ok {
 					sd.Drive(*msg.On)
 				}
-			// Whether the client has the pane on screen (herdr.seen, hc).
+			// Whether the client has the pane on screen (herdr.seen, hc; the
+			// activity tracker's unseen turns, every other backend).
 			case msg.Type == "visible" && msg.On != nil:
 				if vs, ok := ts.(visibleSetter); ok {
 					vs.SetVisible(*msg.On)
+				}
+				if visible != nil {
+					visible(*msg.On)
 				}
 			}
 		}

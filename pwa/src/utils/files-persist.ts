@@ -1,3 +1,4 @@
+import { clearBadge } from './app-badge'
 import { isFocusWindow } from './focus-mode'
 import {
   paneGroupOf,
@@ -522,6 +523,8 @@ export function onDraftChangedElsewhere(fn: (key: string) => void): () => void {
 // Signs this page out (its session was revoked here) and shows sign-in
 export function signOutPage() {
   signedOut()
+  // A shared computer's taskbar keeps no count of this account's agents
+  clearBadge()
   window.location.assign('/login')
 }
 

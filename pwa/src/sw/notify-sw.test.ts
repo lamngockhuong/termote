@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import badgeFixture from '../../../server/testdata/badge-snapshot.json'
 import source from '../../public/notify-sw.js?raw'
 import { LOCALES } from '../i18n'
 import { tFor } from '../i18n/i18n-context'
@@ -9,7 +10,7 @@ type Listener = (event: unknown) => void
 
 // Runs public/notify-sw.js against a fake service worker scope and returns
 // its listeners.
-function loadWorker(windows: unknown[] = []) {
+function loadWorker(windows: unknown[] = [], navigator?: unknown) {
   const listeners = new Map<string, Listener>()
   const clients = {
     matchAll: vi.fn().mockResolvedValue(windows),
@@ -29,6 +30,7 @@ function loadWorker(windows: unknown[] = []) {
   const self = {
     clients,
     registration,
+    navigator,
     addEventListener: (type: string, fn: Listener) => listeners.set(type, fn),
   }
   new Function('self', source)(self)
@@ -518,5 +520,127 @@ describe('notify-sw.js', () => {
           .applicationServerKey,
       ).toEqual(new Uint8Array([251, 255]))
     })
+  })
+})
+
+// The Badging API of a worker's navigator, recording each call
+function badgeNav(fail = false) {
+  return {
+    setAppBadge: vi.fn(async (_n: number) => {
+      if (fail) throw new Error('refused')
+    }),
+    clearAppBadge: vi.fn(async () => {
+      if (fail) throw new Error('refused')
+    }),
+  }
+}
+
+const SNAP_URL = '/api/mux/snapshot?peek=1'
+
+describe('notify-sw.js app badge', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('counts the snapshot as the page does, payload unchanged', async () => {
+    stubFetch({ [SNAP_URL]: { body: badgeFixture.snapshot } })
+    const nav = badgeNav()
+    // A window open but hidden does not set it
+    const { registration, dispatch } = loadWorker(
+      [{ visibilityState: 'hidden' }],
+      nav,
+    )
+    await dispatch('push', pushData(EVENT))
+    expect(nav.setAppBadge).toHaveBeenCalledWith(badgeFixture.expected)
+    expect(registration.showNotification).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears it at 0 and when signed out or revoked', async () => {
+    for (const route of [
+      { body: { groups: [] } },
+      { status: 401 },
+      { status: 403 },
+    ]) {
+      stubFetch({ [SNAP_URL]: route })
+      const nav = badgeNav()
+      const { registration, dispatch } = loadWorker([], nav)
+      await dispatch('push', pushData(EVENT))
+      expect(nav.clearAppBadge).toHaveBeenCalledTimes(1)
+      expect(nav.setAppBadge).not.toHaveBeenCalled()
+      expect(registration.showNotification).toHaveBeenCalledTimes(1)
+    }
+  })
+
+  it('keeps the last count offline or on a failed read', async () => {
+    const failed: Record<string, { status: number }>[] = [
+      {},
+      { [SNAP_URL]: { status: 500 } },
+    ]
+    for (const routes of failed) {
+      stubFetch(routes)
+      const nav = badgeNav()
+      const { dispatch } = loadWorker([], nav)
+      await dispatch('push', pushData(EVENT))
+      expect(nav.setAppBadge).not.toHaveBeenCalled()
+      expect(nav.clearAppBadge).not.toHaveBeenCalled()
+    }
+  })
+
+  it('leaves it to a page on screen', async () => {
+    stubFetch({ [SNAP_URL]: { body: SNAPSHOT } })
+    const nav = badgeNav()
+    const { dispatch } = loadWorker([{ visibilityState: 'visible' }], nav)
+    await dispatch('push', pushData(EVENT))
+    expect(nav.setAppBadge).not.toHaveBeenCalled()
+    expect(nav.clearAppBadge).not.toHaveBeenCalled()
+  })
+
+  it('follows the setting, on when it cannot be read', async () => {
+    stubFetch({ [SNAP_URL]: { body: SNAPSHOT } })
+    for (const [kept, on] of [
+      ['0', false],
+      ['1', true],
+      [null, true],
+    ] as const) {
+      const match = vi.fn(async (url: string, opts?: { cacheName: string }) =>
+        url === '/__badge' && opts?.cacheName === 'termote-prefs' && kept
+          ? new Response(kept)
+          : undefined,
+      )
+      vi.stubGlobal('caches', { match })
+      const nav = badgeNav()
+      const { dispatch } = loadWorker([], nav)
+      await dispatch('push', pushData(EVENT))
+      if (on) expect(nav.setAppBadge).toHaveBeenCalledWith(1)
+      else expect(nav.clearAppBadge).toHaveBeenCalled()
+    }
+    vi.stubGlobal('caches', {
+      match: async () => {
+        throw new Error('denied')
+      },
+    })
+    const nav = badgeNav()
+    const { dispatch } = loadWorker([], nav)
+    await dispatch('push', pushData(EVENT))
+    expect(nav.setAppBadge).toHaveBeenCalledWith(1)
+  })
+
+  it('still notifies without the API, or when it is refused', async () => {
+    stubFetch({ [SNAP_URL]: { body: SNAPSHOT } })
+    for (const nav of [undefined, {}, badgeNav(true)]) {
+      const { registration, dispatch } = loadWorker([], nav)
+      await dispatch('push', pushData(EVENT))
+      expect(registration.showNotification).toHaveBeenCalledTimes(1)
+    }
+  })
+
+  it('reads nothing for a malformed push', async () => {
+    const calls = stubFetch({ [SNAP_URL]: { body: SNAPSHOT } })
+    const nav = badgeNav()
+    const { dispatch } = loadWorker([], nav)
+    await dispatch('push', pushData('not json'))
+    expect(calls).toHaveLength(0)
+    expect(nav.setAppBadge).not.toHaveBeenCalled()
   })
 })

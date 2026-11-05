@@ -57,6 +57,28 @@ type activityState struct {
 	tabID     string
 	paneID    string
 	key       string
+	// unseen: the agent finished a turn (working to idle, Herdr's done)
+	// while no one looked at the pane, and no one has since. Only kept
+	// where the tracker overlays it (activityTracker.overlay).
+	unseen bool
+}
+
+// activityViewers is who looks at one pane, or at one tmux group's current
+// window: how many full streams have it on screen, and when the last one
+// stopped (or started).
+type activityViewers struct {
+	count    int
+	lastSeen time.Time
+}
+
+// activityWatch is one full stream counted as a viewer while it has its
+// pane on screen. Its fields are guarded by the tracker's mutex; a nil watch
+// does nothing.
+type activityWatch struct {
+	t     *activityTracker
+	key   string
+	on    bool
+	ended bool
 }
 
 type activityTracker struct {
@@ -74,10 +96,97 @@ type activityTracker struct {
 	seq       uint64
 	last      Snapshot
 	hasLast   bool
+
+	// overlay: a finished turn no one saw shows as "done" (tmux, Zellij,
+	// Herdr; hc has herdr.seen of its own). byGroup: a stream shows its
+	// group's current window (tmux), so viewers are counted by group, not
+	// by pane.
+	overlay, byGroup bool
+	// viewers by group id (byGroup) or paneKey; watches: every stream's
+	// watch until it ends, on or off, whose keys a rename moves; lastFold:
+	// when the last snapshot was folded.
+	viewers  map[string]*activityViewers
+	watches  map[*activityWatch]struct{}
+	lastFold time.Time
 }
 
-func newActivityTracker(now func() time.Time) *activityTracker {
-	return &activityTracker{now: now, states: map[string]activityState{}, indexTabs: map[string]string{}}
+func newActivityTracker(now func() time.Time, overlay, byGroup bool) *activityTracker {
+	return &activityTracker{now: now, states: map[string]activityState{}, indexTabs: map[string]string{},
+		overlay: overlay, byGroup: byGroup, viewers: map[string]*activityViewers{}, watches: map[*activityWatch]struct{}{}}
+}
+
+// overlayBackend reports whether a backend's finished turns are tracked as
+// unseen: every one but hc, which keeps herdr.seen.
+func overlayBackend(name string) bool {
+	return name == "tmux" || name == "zellij" || name == "herdr"
+}
+
+// watcher is the viewer a full stream of pane (group's, a paneKey) counts
+// as: nil where nothing is overlaid, or without a tracker.
+func (t *activityTracker) watcher(group, pane string) *activityWatch {
+	if t == nil || !t.overlay {
+		return nil
+	}
+	key := pane
+	if t.byGroup {
+		key = group
+	}
+	w := &activityWatch{t: t, key: key}
+	// Listed from the start, off as well as on, so a rename moves its key
+	// before it is first counted.
+	t.mu.Lock()
+	t.watches[w] = struct{}{}
+	t.mu.Unlock()
+	return w
+}
+
+// set counts the stream as a viewer while on. A repeated value, or one after
+// end, changes nothing, so the count follows the stream's own.
+func (w *activityWatch) set(on bool) {
+	if w == nil {
+		return
+	}
+	t := w.t
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if w.ended || w.on == on {
+		return
+	}
+	w.on = on
+	t.watchLocked(w, on)
+}
+
+// end counts the stream out; later frames change nothing.
+func (w *activityWatch) end() {
+	if w == nil {
+		return
+	}
+	t := w.t
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if w.ended {
+		return
+	}
+	w.ended = true
+	delete(t.watches, w)
+	if w.on {
+		w.on = false
+		t.watchLocked(w, false)
+	}
+}
+
+func (t *activityTracker) watchLocked(w *activityWatch, on bool) {
+	v := t.viewers[w.key]
+	if v == nil {
+		v = &activityViewers{}
+		t.viewers[w.key] = v
+	}
+	v.lastSeen = t.now().UTC()
+	if on {
+		v.count++
+		return
+	}
+	v.count--
 }
 
 // begin numbers a snapshot read; call it before reading, and give the number
@@ -106,6 +215,8 @@ func (t *activityTracker) observe(gen uint64, snap Snapshot) Snapshot {
 	if gen > t.applied {
 		t.applied = gen
 		t.fold(snap, now)
+		t.lastFold = now
+		t.pruneViewers()
 	}
 	out := t.annotate(snap)
 	out.ServerNow = now.Format(activityTimeFormat)
@@ -148,6 +259,9 @@ func (t *activityTracker) fold(snap Snapshot, now time.Time) {
 				}
 				s := activityState{status: status, agent: p.Agent.Name, since: prev.since, firstSeen: prev.firstSeen,
 					groupID: g.ID, tabID: tab.ID, paneID: p.ID, key: activityKey(tab, p)}
+				if t.overlay {
+					s.unseen = nextUnseen(prev, known, status, t.viewed(snap, g, tab, p))
+				}
 				switch {
 				case !known:
 					s.since, s.firstSeen = now, true
@@ -161,6 +275,50 @@ func (t *activityTracker) fold(snap Snapshot, now time.Time) {
 				}
 				t.states[k] = s
 			}
+		}
+	}
+}
+
+// nextUnseen is whether a pane is left unseen: a turn that ends (working to
+// idle, or Herdr's done) with no viewer since the last fold is; a new turn
+// or a prompt (working, blocked), Herdr's own done to idle (seen in Herdr),
+// or a viewer clears it. A first sighting is never unseen.
+func nextUnseen(prev activityState, known bool, status string, viewed bool) bool {
+	switch {
+	case !known, status == "working", status == "blocked", viewed:
+		return false
+	case prev.status == "working":
+		return true
+	case prev.status == "done" && status == "idle":
+		return false
+	}
+	return prev.unseen
+}
+
+// viewed reports whether someone looked at p since the last fold: a client
+// of the backend's own shows it now (snap.viewers), or a full stream has it
+// on screen, or had it after the last fold. A tmux stream shows its group's
+// current window, every pane of it.
+func (t *activityTracker) viewed(snap Snapshot, g Group, tab Tab, p Pane) bool {
+	if snap.viewers[paneKey(p)] {
+		return true
+	}
+	key := paneKey(p)
+	if t.byGroup {
+		if !tab.Active {
+			return false
+		}
+		key = g.ID
+	}
+	v := t.viewers[key]
+	return v != nil && (v.count > 0 || !v.lastSeen.Before(t.lastFold))
+}
+
+// pruneViewers drops the keys no stream looks at and no fold still needs.
+func (t *activityTracker) pruneViewers() {
+	for k, v := range t.viewers {
+		if v.count <= 0 && v.lastSeen.Before(t.lastFold) {
+			delete(t.viewers, k)
 		}
 	}
 }
@@ -232,7 +390,9 @@ func (t *activityTracker) record(now time.Time, s activityState, from, to string
 }
 
 // annotate copies snap, giving every tracked pane a new AgentInfo with its
-// since.
+// since. Where the tracker overlays (overlay), an unseen finished turn shows
+// as "done", and Herdr's own done, once seen here, as "idle"; a status that
+// is not a rest one (an older read's working) is left as read.
 func (t *activityTracker) annotate(snap Snapshot) Snapshot {
 	out := copySnapshot(snap)
 	for gi := range out.Groups {
@@ -247,6 +407,12 @@ func (t *activityTracker) annotate(snap Snapshot) Snapshot {
 				if s, ok := t.states[paneKey(*p)]; ok {
 					a.Since = s.since.Format(activityTimeFormat)
 					a.SinceFirstSeen = s.firstSeen
+					if t.overlay && (a.Status == "idle" || a.Status == "done") {
+						a.Status = "idle"
+						if s.unseen {
+							a.Status = "done"
+						}
+					}
 				}
 				p.Agent = &a
 			}
@@ -301,6 +467,14 @@ func (t *activityTracker) renameGroup(from, to string) {
 		states[renamedGroupID(k, from, to)] = s
 	}
 	t.states = states
+	viewers := make(map[string]*activityViewers, len(t.viewers))
+	for k, v := range t.viewers {
+		viewers[renamedGroupID(k, from, to)] = v
+	}
+	t.viewers = viewers
+	for w := range t.watches {
+		w.key = renamedGroupID(w.key, from, to)
+	}
 	for i := range t.ring {
 		e := &t.ring[i]
 		e.GroupID = renamedGroupID(e.GroupID, from, to)

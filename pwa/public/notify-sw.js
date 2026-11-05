@@ -134,28 +134,89 @@
     return ev
   }
 
-  // Group, tab, pane and agent names of the event's pane, or null when the
-  // snapshot cannot be read (signed out, offline, slow).
-  async function readNames(ev) {
+  // Every pane, read with this device's credentials: { snap } when read,
+  // { denied: true } when signed out or revoked (401, 403), {} when offline,
+  // slow or failed.
+  async function readSnapshot() {
     try {
       // peek: no page is open, so nothing may be created for this read.
       const res = await fetch('/api/mux/snapshot?peek=1', {
         credentials: 'same-origin',
         signal: AbortSignal.timeout(SNAPSHOT_TIMEOUT_MS),
       })
-      if (!res.ok) return null
-      const snap = await res.json()
-      const group = snap.groups?.find((g) => g.id === ev.groupId)
-      const tab = group?.tabs?.find((t) => t.id === ev.tabId)
-      const pane = tab?.panes?.find((p) => p.id === ev.paneId)
-      return {
-        group: group?.name,
-        tab: tab?.name,
-        pane: pane?.name,
-        agent: pane?.agent?.name,
-      }
+      if (res.status === 401 || res.status === 403) return { denied: true }
+      if (!res.ok) return {}
+      return { snap: await res.json() }
     } catch {
-      return null
+      return {}
+    }
+  }
+
+  // Group, tab, pane and agent names of the event's pane, or null without a
+  // snapshot.
+  function namesOf(snap, ev) {
+    if (!snap) return null
+    const group = snap.groups?.find((g) => g.id === ev.groupId)
+    const tab = group?.tabs?.find((t) => t.id === ev.tabId)
+    const pane = tab?.panes?.find((p) => p.id === ev.paneId)
+    return {
+      group: group?.name,
+      tab: tab?.name,
+      pane: pane?.name,
+      agent: pane?.agent?.name,
+    }
+  }
+
+  // Where the page keeps the badge setting ('0' off). Equal to BADGE_URL in
+  // src/utils/app-badge.ts, in LOCALE_CACHE.
+  const BADGE_URL = '/__badge'
+
+  // The panes whose agent is blocked or has a finished turn no one saw, each
+  // once: badgeCount in src/utils/app-badge.ts counts the page's the same way.
+  function badgeCount(snap) {
+    let n = 0
+    for (const g of snap.groups ?? []) {
+      for (const t of g.tabs ?? []) {
+        for (const p of t.panes ?? []) {
+          const status = p.agent?.status
+          if (status === 'blocked' || status === 'done') n++
+        }
+      }
+    }
+    return n
+  }
+
+  // On unless the page turned it off; on when it cannot be read.
+  async function badgeEnabled() {
+    try {
+      const res = await caches.match(BADGE_URL, { cacheName: LOCALE_CACHE })
+      return !res || (await res.text()) !== '0'
+    } catch {
+      return true
+    }
+  }
+
+  // Sets the app's badge from the snapshot read for the push. Signed out:
+  // cleared. Offline: the last count stays. A page on screen sets its own,
+  // from a newer read. The push itself carries ids only, never a count.
+  async function updateBadge(read) {
+    const nav = self.navigator
+    if (!nav || !('setAppBadge' in nav)) return
+    try {
+      if (read.denied) {
+        await nav.clearAppBadge()
+        return
+      }
+      if (!read.snap) return
+      const windows = await self.clients.matchAll({
+        type: 'window',
+        includeUncontrolled: true,
+      })
+      if (windows.some((w) => w.visibilityState === 'visible')) return
+      const n = (await badgeEnabled()) ? badgeCount(read.snap) : 0
+      await (n > 0 ? nav.setAppBadge(n) : nav.clearAppBadge())
+    } catch {
+      // Not installed, or refused: the notification still shows
     }
   }
 
@@ -180,7 +241,9 @@
       })
       return
     }
-    const names = await readNames(ev)
+    const read = await readSnapshot()
+    await updateBadge(read)
+    const names = namesOf(read.snap, ev)
     const options = {
       tag: ev.paneId,
       renotify: true,

@@ -64,6 +64,9 @@ export default {
   'settings.notify.reload': 'Tải lại trang để bật',
   'settings.notify.desc':
     'Khi có hộp thoại đang chờ hoặc một lượt vừa xong. Trên điện thoại, cần app đã cài',
+  'settings.appBadge': 'Số trên icon của app',
+  'settings.appBadgeDesc':
+    'App đã cài hiện số agent đang chờ bạn: đang bị chặn, hoặc đã xong một lượt mà chưa ai xem',
   'settings.stuck': 'Agent bị kẹt',
   'settings.stuckDesc':
     'Trang tổng quan đánh dấu agent đang chạy mà im lặng quá {minutes} phút',

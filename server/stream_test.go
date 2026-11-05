@@ -828,7 +828,7 @@ func TestStreamPingRechecks(t *testing.T) {
 					return cause
 				}
 				return nil
-			})
+			}, nil)
 		}))
 		c, _, err := websocket.Dial(context.Background(), "ws"+strings.TrimPrefix(srv.URL, "http"), nil)
 		if err != nil {

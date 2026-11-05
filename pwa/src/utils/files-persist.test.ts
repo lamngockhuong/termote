@@ -507,8 +507,20 @@ describe('signing out', () => {
     vi.spyOn(window, 'location', 'get').mockReturnValue({
       assign,
     } as unknown as Location)
+    const clearAppBadge = vi.fn(async () => {})
+    Object.defineProperty(navigator, 'setAppBadge', {
+      configurable: true,
+      value: vi.fn(),
+    })
+    Object.defineProperty(navigator, 'clearAppBadge', {
+      configurable: true,
+      value: clearAppBadge,
+    })
     writeDraft('1', draft('a'), 1)
     signOutPage()
+    Reflect.deleteProperty(navigator, 'setAppBadge')
+    Reflect.deleteProperty(navigator, 'clearAppBadge')
+    expect(clearAppBadge).toHaveBeenCalled()
     expect(assign).toHaveBeenCalledWith('/login')
     expect(loadDrafts('1')).toEqual([])
   })

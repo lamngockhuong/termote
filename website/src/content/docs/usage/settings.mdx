@@ -161,6 +161,38 @@ Limits:
 | Off    | No notifications                             | ✓       |
 | On     | Notify when an agent is blocked or finished  |         |
 
+## Count on the App Icon
+
+Settings → Sessions → **Count on the app icon** shows a number on the icon of the installed app:
+how many agents wait on you. An agent counts when its dialog waits for an answer, or when it
+finished a turn that no one has seen yet. The count goes down when you answer the agent, or when
+you open its pane on any device signed in with full rights, or when you read it in a tmux or
+Zellij terminal on the desktop. A device with view-only rights shows the count but never lowers it.
+
+The server remembers which turns were seen, for every device at once. On tmux, a pane counts as
+seen while its window is the one shown. A desktop terminal counts for every pane of the window
+(tmux) or tab (Zellij) it shows. One attached to tmux counts only while you typed in it in the last
+5 minutes; one attached to Zellij always counts. With Herdr, a turn seen
+in Termote shows as finished but read, even if the Herdr app still marks it.
+
+The row shows only where the browser supports it: the installed app on Windows, macOS and
+ChromeOS, and the Home Screen app on iOS 16.4 or later, which also needs notifications allowed.
+Android shows only a dot for the notifications, and Chromium on Linux shows nothing.
+
+Limits:
+
+- With the app closed, the count changes only when a push arrives (**Notify when an agent needs
+  me** on). Answering on another device does not lower it until the next push, or until the app
+  opens.
+- A server restart forgets which turns were seen, and a turn shorter than the poll may not count.
+- psmux on Windows never counts a desktop terminal as a viewer.
+- Logging out clears the count.
+
+| Option | Behavior                                                | Default |
+| ------ | ------------------------------------------------------- | ------- |
+| Off    | No count on the icon                                    |         |
+| On     | Count the agents blocked or with a turn no one has seen | ✓       |
+
 ## Terminal Font
 
 The font the terminal uses, typed by name (e.g. `JetBrainsMono Nerd Font`). It must be installed on the device the browser runs on; if it is not, the terminal falls back to the system monospace font. Several names can be given, separated by commas. The value is saved when the field loses focus or you press Enter.

@@ -150,6 +150,7 @@ export interface Settings {
   searchWord: boolean // Files content search: Whole word
   searchRegex: boolean // Files content search: a regular expression
   notifyAgents: boolean // notify when an agent is blocked or ends a turn
+  appBadge: boolean // the installed app's icon counts the agents waiting on you
   stuckMinutes: number // overview: a working agent quiet this long may be stuck
   showUsageChip: boolean // header: the open pane's agent's context and limits
   showHostChip: boolean // header: CPU, memory and battery of termote's machine
@@ -189,6 +190,7 @@ const DEFAULTS: Settings = {
   searchWord: false,
   searchRegex: false,
   notifyAgents: false,
+  appBadge: true,
   stuckMinutes: DEFAULT_STUCK_MINUTES,
   showUsageChip: true,
   showHostChip: true,
@@ -231,6 +233,7 @@ function getSnapshot(): Settings {
         findIncludeIgnored: merged.findIncludeIgnored === true,
         findExcludes: resolveFindExcludes(merged.findExcludes),
         notifyAgents: merged.notifyAgents === true,
+        appBadge: merged.appBadge !== false,
         stuckMinutes: resolveStuckMinutes(merged.stuckMinutes),
         copyOnSelect: merged.copyOnSelect === true,
         showUsageChip: merged.showUsageChip !== false,

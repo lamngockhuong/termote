@@ -1,4 +1,5 @@
 import type { TabLayout } from '../types/session'
+import { clearBadge } from '../utils/app-badge'
 
 const API_BASE = '/api/mux'
 
@@ -222,6 +223,7 @@ async function readJSON<T>(
   signIn: (url: string) => void,
 ): Promise<T> {
   if (res.status === 401) {
+    clearBadge()
     signIn(signInUrl())
     throw new RequestError(401, 'unauthorized', 'sign-in required')
   }

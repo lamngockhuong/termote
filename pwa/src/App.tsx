@@ -75,6 +75,7 @@ import {
 } from './components/worktree-dialog'
 import { useTheme } from './contexts/theme-context'
 import { useAgentNotifications } from './hooks/use-agent-notifications'
+import { useAppBadge } from './hooks/use-app-badge'
 import { useCommandHistory } from './hooks/use-command-history'
 import { useExitTransition } from './hooks/use-exit-transition'
 import { followInFiles, requestFilesFocus, usePlaces } from './hooks/use-files'
@@ -393,6 +394,7 @@ export default function App({
     enabled: settings.notifyAgents,
     pushActive: push.pushActive,
   })
+  useAppBadge({ sessions, enabled: settings.appBadge })
   // Ends the session on the server, then shows the sign-in page. This
   // device stops getting pushes first (the server forgets it within 3 s).
   const disablePush = push.disable
