@@ -245,6 +245,7 @@ export default {
   'shell.sidebar.tabCount_other': '{count} tab',
   'shell.sidebar.worktreesOf': 'Các worktree của {name}',
   'shell.sidebar.agents': 'Agent',
+  'shell.sidebar.agentsList': 'Agent đang chạy',
   'shell.sidebar.agentsToggle': 'Hiện hoặc ẩn danh sách agent',
   'shell.sidebar.agentsResize': 'Đổi chiều cao danh sách agent',
   'shell.sidebar.branch': 'nhánh',

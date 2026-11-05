@@ -241,7 +241,8 @@ function AgentsSection({
       )}
       <section
         ref={sectionRef}
-        aria-label={t('shell.sidebar.agents')}
+        // Not "Agents": the overview's region has that name
+        aria-label={t('shell.sidebar.agentsList')}
         style={isCollapsed ? undefined : { height: shown }}
         className="flex shrink-0 flex-col border-t border-border"
       >

@@ -69,6 +69,19 @@ async function askRemove(page: Page, branch: string) {
   await page.getByRole('menuitem', { name: 'Remove worktree' }).click()
 }
 
+// Switches this page to the compact sidebar, as Settings would, and reloads
+async function compactSidebar(page: Page) {
+  await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('termote-settings') ?? '{}')
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ ...saved, sidebarLayout: 'compact' }),
+    )
+  })
+  await page.reload()
+  await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 15000 })
+}
+
 test.describe('Herdr worktrees from the PWA', () => {
   test.skip(!enabled, 'needs TERMOTE_E2E_HERDR=1: a Herdr of its own (the e2e-herdr job)')
 
@@ -127,6 +140,32 @@ test.describe('Herdr worktrees from the PWA', () => {
     expect(worktrees().map((w) => w.path)).not.toContain(path)
     // The branch is kept
     expect(git('branch', '--list', branch)).toContain(branch)
+  })
+
+  test('the compact sidebar draws a worktree on one line, under its checkout', async ({
+    page,
+    request,
+  }) => {
+    await open(page)
+    const branch = fresh()
+    await createWorktree(page, branch)
+    await compactSidebar(page)
+    const snap = await (await request.get('/api/mux/snapshot')).json()
+    const group = snap.groups.find(
+      (g: { worktree?: { branch?: string } }) => g.worktree?.branch === branch,
+    )
+    const aside = page.getByRole('complementary')
+    await expect(aside.getByRole('button', { name: new RegExp(`^${SOURCE}, \\d+ tabs?`) })).toBeVisible()
+    if (group.worktree.parent) {
+      // Under its open checkout: indented, named by its branch
+      const row = aside.getByRole('button', { name: new RegExp(`^${branch}, \\d+ tabs?`) })
+      await expect(row).toBeVisible()
+      await expect(row.locator('xpath=..')).toHaveClass(/ml-3/)
+    } else {
+      await expect(aside.getByRole('button', { name: new RegExp(`, branch ${branch}`) })).toBeVisible()
+    }
+    // Its tabs are in the header's bar, not under it
+    await expect(page.getByRole('tablist', { name: 'Sessions' })).toBeVisible()
   })
 
   test('an existing branch is checked out without a base', async ({ page }) => {

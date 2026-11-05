@@ -117,6 +117,20 @@ Thiết bị bị giành mất khổ sẽ hiện một thông báo và tiếp t�
 
 Tùy chọn này chỉ hiện khi dùng backend Herdr hoặc herdr-core. Trên macOS, nếu server bị kill (`kill -9`) lúc một thiết bị đang giữ khổ pane, pane giữ nguyên khổ đó cho tới khi service khởi động lại.
 
+## Bố cục sidebar (Chỉ desktop)
+
+Chọn cách sidebar trên desktop liệt kê các phiên, trong Settings → Sessions → **Sidebar layout**.
+
+| Tùy chọn | Hành vi                                                                   | Mặc định |
+| -------- | ------------------------------------------------------------------------- | -------- |
+| Detailed | Tab của mỗi workspace nằm ngay dưới nó, thanh lọc agent ở trên danh sách  | ✓        |
+| Compact  | Mỗi workspace một dòng, tab nằm trên header, agent đang chạy gom ở dưới   |          |
+
+Ở bố cục gọn, tab của workspace chỉ còn nằm trên header, nên thanh tab phiên luôn hiện: công tắc
+**Show session tabs** lúc đó bật sẵn và không đổi được. Thanh lọc agent cũng ẩn đi, còn bộ lọc đã
+lưu vẫn giữ nguyên và quay lại khi bạn chuyển về bố cục chi tiết. Trên điện thoại, danh sách phiên
+vẫn là bảng trượt như cũ, dù chọn bố cục nào. Xem thêm [Bố cục gọn](/vi/usage/sessions/#bố-cục-gọn).
+
 ## Hiện thanh tab phiên (Chỉ desktop)
 
 Bật/tắt hiển thị các tab phiên kiểu trình duyệt trên header ở desktop để chuyển đổi phiên nhanh chóng. Khi tắt, dùng sidebar để quản lý phiên.
@@ -126,7 +140,8 @@ Bật/tắt hiển thị các tab phiên kiểu trình duyệt trên header ở 
 | Bật      | Thanh tab phiên hiển thị trên desktop     | ✓        |
 | Tắt      | Ẩn thanh tab, chỉ dùng sidebar            |          |
 
-Tùy chọn này chỉ hiện trên thiết bị desktop.
+Tùy chọn này chỉ hiện trên thiết bị desktop. Khi [bố cục sidebar](#bố-cục-sidebar-chỉ-desktop)
+là Compact, thanh tab luôn hiện và công tắc này bị khóa.
 
 ## Phiên đang chờ lên đầu
 

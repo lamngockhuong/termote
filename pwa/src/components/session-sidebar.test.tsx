@@ -3214,7 +3214,7 @@ describe('SessionSidebar — compact layout', () => {
       clockOffset: 0,
     })
     const { rerender } = render(<SessionSidebar {...p} />)
-    const agents = screen.getByRole('region', { name: 'Agents' })
+    const agents = screen.getByRole('region', { name: 'Running agents' })
     fireEvent.click(within(agents).getByRole('button', { name: /work/ }))
     expect(onOpenAgent).toHaveBeenCalledWith(sessions[3], sessions[3].panes![0])
     expect(
@@ -3228,7 +3228,7 @@ describe('SessionSidebar — compact layout', () => {
       { onOpenAgent: undefined },
     ]) {
       rerender(<SessionSidebar {...p} {...over} />)
-      expect(screen.queryByRole('region', { name: 'Agents' })).toBeNull()
+      expect(screen.queryByRole('region', { name: 'Running agents' })).toBeNull()
     }
   })
 

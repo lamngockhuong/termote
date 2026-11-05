@@ -93,6 +93,19 @@ const tabRow = (page: Page, name: string) =>
     .locator('aside .group')
     .filter({ has: page.locator('span.truncate', { hasText: new RegExp(`^${name}$`) }) })
 
+// Switches this page to the compact sidebar, as Settings would, and reloads
+async function compactSidebar(page: Page) {
+  await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('termote-settings') ?? '{}')
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ ...saved, sidebarLayout: 'compact' }),
+    )
+  })
+  await page.reload()
+  await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 15000 })
+}
+
 test.describe('Zellij from the PWA', () => {
   test.skip(!enabled, 'needs TERMOTE_E2E_ZELLIJ=1: a Zellij of its own (the e2e-zellij job)')
   test.describe.configure({ timeout: 90000 })
@@ -134,6 +147,15 @@ test.describe('Zellij from the PWA', () => {
     await expect(page.locator('aside section[aria-label="main"]')).toBeVisible()
     await run(page, echo('zellij-e2e'))
     await expect(rows(page)).toContainText('zellij-e2e', { timeout: 15000 })
+  })
+
+  test('the compact sidebar puts the session on one line', async ({ page }) => {
+    await open(page)
+    await compactSidebar(page)
+    await expect(
+      page.getByRole('complementary').getByRole('button', { name: /^main, \d+ tabs?/ }),
+    ).toBeVisible()
+    await expect(page.getByRole('tablist', { name: 'Sessions' })).toBeVisible()
   })
 
   test('a new tab: rename, switch with the stream following, Ctrl+P, close', async ({ page, request }) => {

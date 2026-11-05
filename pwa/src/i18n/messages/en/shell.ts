@@ -272,6 +272,7 @@ export default {
   'shell.sidebar.tabCount_other': '{count} tabs',
   'shell.sidebar.worktreesOf': 'Worktrees of {name}',
   'shell.sidebar.agents': 'Agents',
+  'shell.sidebar.agentsList': 'Running agents',
   'shell.sidebar.agentsToggle': 'Show or hide the agents',
   'shell.sidebar.agentsResize': 'Resize the agents',
   'shell.sidebar.branch': 'branch',

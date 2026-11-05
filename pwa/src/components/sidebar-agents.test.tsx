@@ -62,7 +62,7 @@ const renderAgents = (
   )
   return { ...view, onOpen }
 }
-const agents = () => screen.getByRole('region', { name: 'Agents' })
+const agents = () => screen.getByRole('region', { name: 'Running agents' })
 const toggle = () => within(agents()).getByRole('button', { name: /Agents/ })
 const handle = () =>
   screen.getByRole('separator', { name: 'Resize the agents' })
