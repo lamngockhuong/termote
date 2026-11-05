@@ -201,6 +201,9 @@ type fakeService struct {
 	users  map[string]string // version -> the only user it lets in with "pw" (none: no auth)
 	srv    *http.Server
 	calls  []string
+	// held is port, kept open from setup to the first Start: closed in
+	// between, a listener the test opens itself can be given the same port.
+	held net.Listener
 }
 
 func (f *fakeService) Name() string                            { return "fake" }
@@ -229,9 +232,13 @@ func (f *fakeService) Start() error {
 	if f.broken[v] == "wrong" {
 		reported = "0.0.1"
 	}
-	ln, err := net.Listen("tcp", "127.0.0.1:"+strconv.Itoa(f.port))
-	if err != nil {
-		return err
+	ln := f.held
+	f.held = nil
+	if ln == nil {
+		var err error
+		if ln, err = net.Listen("tcp", "127.0.0.1:"+strconv.Itoa(f.port)); err != nil {
+			return err
+		}
 	}
 	user := f.users[v]
 	f.srv = &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -260,7 +267,11 @@ func setupUpdate(t *testing.T) (*testCLI, *fakeReleases, *fakeService) {
 		t.Fatal(err)
 	}
 	tc.exe = tc.versionBinary("1.0.0")
-	port := freePort(t)
+	held, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := held.Addr().(*net.TCPAddr).Port
 	tc.saveConfig(savedConfig{Port: port, NoAuth: true, Mux: "tmux", AllowHosts: []string{"box.lan"}})
 
 	gh := &fakeReleases{tags: []string{"v0.1.0", "v1.0.0-rc.1", "v1.0.0", "v1.0.1", "latest", "v1.0.2:draft", "v1.0.3:pre"}, assets: map[string][]byte{}, goos: tc.goos}
@@ -270,7 +281,7 @@ func setupUpdate(t *testing.T) (*testCLI, *fakeReleases, *fakeService) {
 	tc.http = srv.Client()
 	tc.apiBase, tc.downloadBase = srv.URL, srv.URL
 
-	svc := &fakeService{c: tc.cli, port: port, broken: map[string]string{}}
+	svc := &fakeService{c: tc.cli, port: port, broken: map[string]string{}, held: held}
 	tc.testSupervisors = []supervisor{svc}
 	if err := svc.Start(); err != nil {
 		t.Fatal(err)
