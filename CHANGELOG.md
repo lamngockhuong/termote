@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.21.0](https://github.com/lamngockhuong/termote/compare/v2.20.0...v2.21.0) (2026-11-05)
+
+
+### Features
+
+* **pwa:** compact sidebar layout, one line per workspace with an Agents section ([#702](https://github.com/lamngockhuong/termote/issues/702)) ([1277b1b](https://github.com/lamngockhuong/termote/commit/1277b1bead17b78c5c9911c6b8993fa90ca811a2))
+* **pwa:** give the header's session tabs a menu, so the compact sidebar loses nothing ([#704](https://github.com/lamngockhuong/termote/issues/704)) ([dc30375](https://github.com/lamngockhuong/termote/commit/dc303751fa04c6bbe9e2056f84c7aab6f0576a8b))
+
 ## [2.20.0](https://github.com/lamngockhuong/termote/compare/v2.19.2...v2.20.0) (2026-11-05)
 
 
