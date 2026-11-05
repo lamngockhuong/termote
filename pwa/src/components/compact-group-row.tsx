@@ -67,6 +67,11 @@ export function CompactGroupRow({
   const branch = group.worktree?.branch && visibleUnsafe(group.worktree.branch)
   const shownName = nested ? branch || name : name
   // Spoken as one: the parts on screen would run into each other
+  // Room for the menu while it shows: the branch truncates before it
+  // instead of running under it
+  const menuRoom = menu
+    ? 'pointer-coarse:pr-12 group-hover/crow:pr-8 group-focus-within/crow:pr-8 group-has-[[aria-expanded=true]]/crow:pr-8'
+    : ''
   const label = [
     shownName,
     t('shell.sidebar.tabCount', { count: tabCount }),
@@ -109,7 +114,7 @@ export function CompactGroupRow({
         onDoubleClick={onRename}
         onKeyDown={onKeyDown}
         title={branch ? `${name}\n${branch}` : name}
-        className={`flex h-8 min-w-0 flex-1 items-center gap-2 rounded-control pl-1 pr-2 text-left text-[13px] ${FOCUS_RING} focus-visible:-outline-offset-2`}
+        className={`flex h-8 min-w-0 flex-1 items-center gap-2 rounded-control pl-1 pr-2 text-left text-[13px] ${menuRoom} ${FOCUS_RING} focus-visible:-outline-offset-2`}
       >
         {nested ? (
           <GitBranch
@@ -143,9 +148,12 @@ export function CompactGroupRow({
         )}
         <AgentStatusBadge status={status} size={12} />
       </button>
-      {/* opacity, not hidden: the button stays in the Tab order */}
+      {/* opacity, not hidden: the button stays in the Tab order. No fill of
+          its own: the row makes room for it. With a mouse its trigger is
+          smaller than the row, so it reads as a button on the row rather than
+          a block filling its height. */}
       {menu && (
-        <span className="absolute right-1 top-1/2 flex -translate-y-1/2 rounded-control bg-surface-raised opacity-0 pointer-coarse:opacity-100 group-hover/crow:opacity-100 group-focus-within/crow:opacity-100 has-[[aria-expanded=true]]:opacity-100">
+        <span className="absolute right-1 top-1/2 pointer-fine:[&>div>button]:size-6 flex -translate-y-1/2 opacity-0 pointer-coarse:opacity-100 group-hover/crow:opacity-100 group-focus-within/crow:opacity-100 has-[[aria-expanded=true]]:opacity-100">
           {menu}
         </span>
       )}
