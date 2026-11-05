@@ -30,6 +30,11 @@ const STATUS_STYLE: Record<
   },
 }
 
+// The words for status, as the badge's label says it
+export function agentStatusLabel(status: AgentStatus): MessageKey {
+  return STATUS_STYLE[status].label
+}
+
 interface Props {
   status?: AgentStatus
   size?: number

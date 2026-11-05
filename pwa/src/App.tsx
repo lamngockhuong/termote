@@ -143,6 +143,7 @@ import {
 import { lazyRetry } from './utils/lazy-retry'
 import { type OpenWindowEvent, openInWindow } from './utils/open-window'
 import { loadPaneView, savePaneView } from './utils/pane-view'
+import { pickGroupTab } from './utils/pick-group-tab'
 import { isApplePlatform } from './utils/platform'
 import { formatRunning, uniqueNames } from './utils/running-commands'
 import { errorKey } from './utils/server-error'
@@ -348,6 +349,7 @@ export default function App({
     activeSession,
     sessions,
     groups = [],
+    activeTabByGroup,
     switchSession,
     selectPane,
     addSession,
@@ -1752,6 +1754,25 @@ export default function App({
     [selectSession],
   )
 
+  // The tab last shown in each group on this device (kept in memory only):
+  // a workspace picked in the compact sidebar opens on it again
+  const lastTabByGroup = useRef(new Map<string, string>())
+  useEffect(() => {
+    if (activeSession.groupId)
+      lastTabByGroup.current.set(activeSession.groupId, activeSession.id)
+  }, [activeSession.groupId, activeSession.id])
+  const selectGroup = useCallback(
+    (groupId: string) => {
+      const id = pickGroupTab(
+        sessions.filter((s) => s.groupId === groupId).map((s) => s.id),
+        lastTabByGroup.current.get(groupId),
+        activeTabByGroup.get(groupId),
+      )
+      if (id) void selectFromList(id)
+    },
+    [sessions, activeTabByGroup, selectFromList],
+  )
+
   // The welcome screen's waiting agent: its pane, in the terminal
   const openWaitingPane = useCallback(
     (agent: WaitingAgent) => {
@@ -1973,6 +1994,7 @@ export default function App({
             groupActions={groupActions}
             reorder={reorder}
             layout={compactSidebar ? 'compact' : 'detailed'}
+            onSelectGroup={selectGroup}
           />
         )}
 

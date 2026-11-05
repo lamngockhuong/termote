@@ -242,6 +242,8 @@ export default {
   'shell.sidebar.actions': 'Thao tác với {name}',
   'shell.sidebar.edit': 'Sửa',
   'shell.sidebar.delete': 'Xóa',
+  'shell.sidebar.tabCount_other': '{count} tab',
+  'shell.sidebar.worktreesOf': 'Các worktree của {name}',
   'shell.sidebar.branch': 'nhánh',
   'shell.sidebar.searchNoun': 'phiên',
   'shell.sidebar.find': 'Tìm phiên',

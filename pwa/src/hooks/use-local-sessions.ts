@@ -319,6 +319,11 @@ export function nextClockOffset(
 export function useLocalSessions(pollInterval = 5) {
   const [sessions, setSessions] = useState<Session[]>([])
   const [groups, setGroups] = useState<SessionGroup[]>([])
+  // The server's current tab of each group (its first when none is), by
+  // group id: where a workspace opens when picked as a whole
+  const [activeTabByGroup, setActiveTabByGroup] = useState<
+    ReadonlyMap<string, string>
+  >(() => new Map())
   const [activeSession, setActiveSession] = useState<Session | null>(null)
   const [isReady, setIsReady] = useState(false)
   const [isServerReachable, setIsServerReachable] = useState(true)
@@ -439,6 +444,9 @@ export function useLocalSessions(pollInterval = 5) {
       )
       setSessions(built.sessions)
       setGroups(built.groups)
+      setActiveTabByGroup(
+        new Map([...built.activeByGroup].map(([g, tab]) => [g, tab.id])),
+      )
       const fallback = built.serverActive ?? built.sessions[0] ?? null
       if (version !== selectionVersionRef.current) return
       const pending = pendingGroupRef.current
@@ -1036,6 +1044,7 @@ export function useLocalSessions(pollInterval = 5) {
     },
     sessions,
     groups,
+    activeTabByGroup,
     switchSession,
     selectPane,
     addSession,

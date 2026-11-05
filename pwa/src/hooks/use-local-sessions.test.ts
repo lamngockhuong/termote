@@ -1035,6 +1035,27 @@ describe('useLocalSessions with several tmux sessions', () => {
     expect(saved()).toEqual({ tabId: '0', groupId: 'main' })
   })
 
+  it("reports each group's current tab, the first where none is", async () => {
+    mockSnapshot.extra = {
+      groups: groups('1', 'none').map((g) => ({
+        ...g,
+        tabs: g.tabs.map((t) => ({ ...t, active: t.id === '1' })),
+      })),
+    }
+    const { result } = renderHook(() => useLocalSessions(1))
+    expect(result.current.activeTabByGroup.size).toBe(0)
+    await act(async () => {})
+    expect([...result.current.activeTabByGroup]).toEqual([
+      ['main', '1'],
+      ['$3', '$3:0'],
+    ])
+    mockSnapshot.extra = { groups: groups('0', '$3:1') }
+    await act(async () => {
+      await result.current.refreshSessions()
+    })
+    expect(result.current.activeTabByGroup.get('$3')).toBe('$3:1')
+  })
+
   it('shows the current window of the saved session', async () => {
     localStorage.setItem(
       'termote-selection-tmux',

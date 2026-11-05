@@ -512,8 +512,10 @@ vi.mock('./components/session-sidebar', () => ({
     reorder,
     onOpenOverview,
     layout,
+    onSelectGroup,
   }: {
     layout?: string
+    onSelectGroup?: (groupId: string) => void
     onOpenOverview?: () => void
     reorder?: {
       tabs: boolean
@@ -571,6 +573,13 @@ vi.mock('./components/session-sidebar', () => ({
       {!isMobile && onSelect && (
         <button onClick={() => onSelect('w2:t1')}>SBSelectW2</button>
       )}
+      {!isMobile &&
+        onSelectGroup &&
+        ['w1', 'w2', 'empty'].map((g) => (
+          <button key={g} onClick={() => onSelectGroup(g)}>
+            SBGroup {g}
+          </button>
+        ))}
       {isMobile && onClose && <button onClick={onClose}>MobileClose</button>}
       {isMobile && onAdd && (
         <button onClick={() => onAdd('Fresh', '🚀')}>MobileAdd</button>
@@ -5885,6 +5894,37 @@ describe('App views, view-only and deep links', () => {
         screen.getByRole('button', { name: 'NoFileWindow' }),
       ).toBeInTheDocument()
     })
+  })
+
+  it('a workspace picked whole opens the tab last shown in it, else the server’s', async () => {
+    mockSessions()
+    const base = mockUseLocalSessions()
+    const tabs = [...base.sessions, tab('w2:t2', 'w2')]
+    const at = (active: string) =>
+      mockUseLocalSessions.mockReturnValue({
+        ...base,
+        sessions: tabs,
+        activeSession: tabs.find((t) => t.id === active)!,
+        activeTabByGroup: new Map([['w2', 'w2:t2']]),
+      } as any)
+    at('w1:t1')
+    const { rerender } = render(<App />)
+    const pick = (g: string) =>
+      fireEvent.click(screen.getByRole('button', { name: `SBGroup ${g}` }))
+    pick('w2')
+    expect(switchSession).toHaveBeenLastCalledWith('w2:t2', undefined)
+    // w2:t1 shown, then back to w1: w2 opens on w2:t1 again
+    at('w2:t1')
+    rerender(<App />)
+    at('w1:t1')
+    rerender(<App />)
+    switchSession.mockClear()
+    pick('w2')
+    expect(switchSession).toHaveBeenLastCalledWith('w2:t1', undefined)
+    // A group without tabs opens nothing
+    switchSession.mockClear()
+    pick('empty')
+    expect(switchSession).not.toHaveBeenCalled()
   })
 
   describe('agent overview', () => {
