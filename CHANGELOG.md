@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.20.0](https://github.com/lamngockhuong/termote/compare/v2.19.2...v2.20.0) (2026-11-05)
+
+
+### Features
+
+* count waiting agents on the installed app's icon ([#701](https://github.com/lamngockhuong/termote/issues/701)) ([9919ee1](https://github.com/lamngockhuong/termote/commit/9919ee11b97d8cdbd69ca6bbff2e7f847343ceba))
+* interactive demo page at termote.ohnice.app/demo/ ([#699](https://github.com/lamngockhuong/termote/issues/699)) ([ce62675](https://github.com/lamngockhuong/termote/commit/ce62675810a49091b9c7251cdc8afb98f541559b))
+
 ## [2.19.2](https://github.com/lamngockhuong/termote/compare/v2.19.1...v2.19.2) (2026-11-04)
 
 
