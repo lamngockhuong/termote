@@ -28,7 +28,16 @@ needed for different workflows (e.g., Claude Code, Copilot, builds).
 - **Edit**: Double-click session name, or hover and click pencil icon
 - **Remove**: Hover and click X icon (requires 2+ sessions), then confirm with "Close session"
 - **Touch screen (iPad)**: With no hover to show the icons, swipe a session in the sidebar to the right to edit it, or to the left to remove it, as on a phone
-- **Add**: Click "New session" in the sidebar, or the "+" after the session tabs
+- **Add**: Click "New session" in the sidebar, or the "+" after the session tabs. In the
+  [compact layout](#compact-layout) the "+" first asks for a name and an icon
+- **A tab's menu**: Right-click a session tab, or press **Shift+F10** (or the menu key) while it
+  has focus: **Rename** (**F2**, edited in place: Enter saves, Escape cancels), **Edit icon**,
+  **Move left** and **Move right** (**Alt+←** and **Alt+→**), **New session…** (**N**, a name and an
+  icon) and **Close** (**Delete**, with the same confirmation as the X). Each item shows its key on the
+  right. Rename is dimmed, saying why, where the backend keeps the tab's name, and the moves only
+  appear where the backend can reorder tabs. A view-only device gets no menu
+- **A tab's hover**: Besides the name and description, it lists what runs in the tab and, for a
+  tab with one pane, that pane's name and metadata
 - **Collapse sidebar**: Click the collapse icon (top-right of sidebar) to show icons only — maximizes terminal width
 - **Fullscreen**: Click the fullscreen button in the header to enter fullscreen mode (not shown where the browser cannot go fullscreen, such as iPhone)
 - **Session tabs**: Browser-like tabs that share the header row, for quick tab switching on desktop. Can be toggled via Settings → Sessions → "Show session tabs"
@@ -50,14 +59,17 @@ With many workspaces open, the sidebar's list of every tab gets long. The compac
 workspace one line and moves its tabs to the header. Turn it on in Settings → Sessions → **Sidebar
 layout** → **Compact** (desktop only; a phone keeps its sessions sheet).
 
-- **A workspace's line**: a coloured letter, its name, its branch on the right when known, and the
-  badge of its agents. Its menu (rename, move, worktrees, close) shows on hover or focus;
-  double-click the line to rename it.
+- **A workspace's line**: a coloured letter, its name, the first chip of its
+  [metadata](#naming-a-pane) (then **+N**), its branch on the right when known, and
+  the badge of its agents. Its tab count and its menu (rename, move, worktrees, close) show on
+  hover or focus; double-click the line to rename it.
 - **Picking a workspace** opens the tab you last looked at in it on this device, or else the tab
   the backend has current. Its tabs are in the header's tab bar, which the compact layout always
-  shows.
+  shows, with the [tab menu](#desktop) for everything the sidebar's tabs offer in the detailed
+  layout. The "+" there asks for the new tab's name and icon.
 - **Worktrees** sit indented under their repository's checkout, named by their branch. The chevron
-  beside the checkout hides or shows them; hidden, the checkout's badge speaks for them too.
+  beside the checkout hides or shows them; hidden, the checkout's badge speaks for them too, and
+  the checkout is marked as the current line when the tab on screen is in one of them.
 - **Moving**: drag a line, or press **Alt+↑** and **Alt+↓** with it focused, as in the detailed
   layout.
 - **Search** keeps the workspaces with a match, and **Enter** or a click opens the first match.
@@ -183,7 +195,7 @@ device. How each backend keeps it:
 **Herdr metadata.** Herdr plugins and tools can report short tokens for a workspace or a pane (a
 PR number, an environment). Termote shows them read-only as small faint chips with a dashed
 border beside the workspace's name, the pane in the pane strip, or the row of a one-pane tab:
-three at most, then `+N`, and the tooltip lists them all and says they come from a Herdr plugin.
+three at most (one on a workspace's line in the compact layout), then `+N`, and the tooltip lists them all and says they come from a Herdr plugin.
 They are always plain text, never a link, so a plugin cannot make one look like a Termote
 message. The server keeps at most 8 tokens of up to 64 characters each, and a view-only device
 gets none.
@@ -195,7 +207,8 @@ backend keeps, so Herdr's own tab bar and sidebar agree with it.
 
 - **Desktop**: drag a tab in the sidebar above or below another tab of the same group; a line
   shows where it lands. With a tab focused, **Alt+↑** and **Alt+↓** move it one place. The tabs
-  in the header row drag too: drop one to the left or right of another.
+  in the header row drag too: drop one to the left or right of another, or press **Alt+←** and
+  **Alt+→** with one focused, or use **Move left** and **Move right** in its menu (right click).
 - **Mobile**: the **Current session** row of the sessions sheet has **↑** and **↓** buttons that
   move the tab on screen within its group.
 - **Herdr workspaces**: **Move up** and **Move down** in a workspace's **⋯** menu, or drag its

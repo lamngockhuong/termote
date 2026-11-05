@@ -29,6 +29,17 @@ export default {
   'shell.tabs.label': 'Sessions',
   'shell.tabs.close': 'Close {name}',
   'shell.tabs.add': 'Add session',
+  // The context menu of a tab (right click, Shift+F10 or the menu key)
+  'shell.tabs.menu': 'Actions for {name}',
+  'shell.tabs.rename': 'Rename',
+  'shell.tabs.editIcon': 'Edit icon',
+  'shell.tabs.moveLeft': 'Move left',
+  'shell.tabs.moveRight': 'Move right',
+  'shell.tabs.new': 'New session…',
+  'shell.tabs.closeItem': 'Close',
+  'shell.tabs.renameField': 'New name for {name}',
+  // The form a new tab is named in, under the tab bar
+  'shell.tabs.newForm': 'New session',
   // The pane strip (components/pane-strip.tsx)
   'shell.panes.close': 'Close pane {name}',
   // The layout view (components/terminal-stack.tsx): one pane of it

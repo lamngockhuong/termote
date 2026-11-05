@@ -35,11 +35,6 @@ export function IconPicker({ value, onChange }: Props) {
   const { t } = useT()
   const [isOpen, setIsOpen] = useState(false)
 
-  const handleSelect = (icon: string) => {
-    onChange(icon)
-    setIsOpen(false)
-  }
-
   return (
     <>
       <button
@@ -50,32 +45,58 @@ export function IconPicker({ value, onChange }: Props) {
       >
         {value}
       </button>
-
-      <Sheet
+      <IconSheet
         isOpen={isOpen}
+        value={value}
         onClose={() => setIsOpen(false)}
-        title={t('shell.icon.choose')}
-        closeLabel={t('common.cancel')}
-        className="md:max-w-sm"
-      >
-        <div className="grid grid-cols-6 gap-2 p-4">
-          {ICONS.map((icon) => (
-            <button
-              key={icon}
-              type="button"
-              aria-pressed={value === icon}
-              onClick={() => handleSelect(icon)}
-              className={`flex aspect-square items-center justify-center rounded-control text-xl transition-colors duration-(--duration-fast) ${FOCUS_RING} ${
-                value === icon
-                  ? 'bg-accent-soft ring-2 ring-accent'
-                  : 'bg-surface hover:bg-surface-raised'
-              }`}
-            >
-              {icon}
-            </button>
-          ))}
-        </div>
-      </Sheet>
+        onSelect={(icon) => {
+          onChange(icon)
+          setIsOpen(false)
+        }}
+      />
     </>
+  )
+}
+
+// The icons to choose from, on their own: a tab's menu opens them with no
+// form around them
+export function IconSheet({
+  isOpen,
+  value,
+  onClose,
+  onSelect,
+}: {
+  isOpen: boolean
+  value: string
+  onClose: () => void
+  onSelect: (icon: string) => void
+}) {
+  const { t } = useT()
+  return (
+    <Sheet
+      isOpen={isOpen}
+      onClose={onClose}
+      title={t('shell.icon.choose')}
+      closeLabel={t('common.cancel')}
+      className="md:max-w-sm"
+    >
+      <div className="grid grid-cols-6 gap-2 p-4">
+        {ICONS.map((icon) => (
+          <button
+            key={icon}
+            type="button"
+            aria-pressed={value === icon}
+            onClick={() => onSelect(icon)}
+            className={`flex aspect-square items-center justify-center rounded-control text-xl transition-colors duration-(--duration-fast) ${FOCUS_RING} ${
+              value === icon
+                ? 'bg-accent-soft ring-2 ring-accent'
+                : 'bg-surface hover:bg-surface-raised'
+            }`}
+          >
+            {icon}
+          </button>
+        ))}
+      </div>
+    </Sheet>
   )
 }

@@ -2975,6 +2975,25 @@ describe('SessionSidebar — compact layout', () => {
     ).toBeNull()
   })
 
+  it('marks a collapsed checkout whose hidden worktree holds the tab on screen', () => {
+    render(<SessionSidebar {...props({ activeId: 'w9:1' })} />)
+    expect(row(/^feat\/x,/)).toHaveAttribute('aria-current', 'true')
+    expect(row(/^main,/)).not.toHaveAttribute('aria-current')
+    fireEvent.click(screen.getByRole('button', { name: 'Worktrees of main' }))
+    expect(row(/^main,/)).toHaveAttribute('aria-current', 'true')
+    expect(row(/^work,/)).not.toHaveAttribute('aria-current')
+  })
+
+  it('ignores Blocked sessions first: workspaces still move', () => {
+    const reorder = reorderOf()
+    render(<SessionSidebar {...props({ reorder, sortBlockedFirst: true })} />)
+    expect(row(/^main,/)).toHaveAttribute(
+      'aria-keyshortcuts',
+      'Alt+ArrowUp Alt+ArrowDown',
+    )
+    expect(screen.queryByText(/Blocked sessions first/)).toBeNull()
+  })
+
   it('keeps the collapsed state across a layout change', () => {
     const p = props()
     const { rerender } = render(<SessionSidebar {...p} />)

@@ -8,26 +8,32 @@ export const META_SHOWN = 3
 interface Props {
   tokens?: MetaToken[]
   className?: string
+  // How many show before the rest collapse into "+N" (a one-line row: 1)
+  shown?: number
 }
 
 // The metadata a Herdr plugin or tool reported for a workspace or a pane:
 // text from outside termote, so only ever text (never markup, never a
 // link), drawn faint with a dashed border unlike termote's own badges, and
 // titled with where it comes from.
-export function MetaChips({ tokens, className = '' }: Props) {
+export function MetaChips({
+  tokens,
+  className = '',
+  shown = META_SHOWN,
+}: Props) {
   const { t } = useT()
   if (!tokens?.length) return null
   const text = (m: MetaToken) =>
     `${visibleUnsafe(m.key)}: ${visibleUnsafe(m.value)}`
   const title = [t('shell.meta.source'), ...tokens.map(text)].join('\n')
-  const rest = tokens.length - META_SHOWN
+  const rest = tokens.length - shown
   return (
     <span
       data-meta-chips
       title={title}
       className={`inline-flex min-w-0 shrink items-center gap-1 overflow-hidden ${className}`}
     >
-      {tokens.slice(0, META_SHOWN).map((m) => (
+      {tokens.slice(0, shown).map((m) => (
         <span
           key={m.key}
           className="max-w-[120px] shrink-0 truncate rounded-full border border-dashed border-border px-1.5 text-[10px] leading-4 text-fg-subtle"

@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
+import { useRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   Menu,
@@ -510,6 +511,53 @@ describe('Menu in the top layer', () => {
     tapOpen()
     fireEvent.scroll(document)
     expect(menu()).toBeNull()
+  })
+
+  it('a context menu follows its element as the list holding it scrolls', () => {
+    function Anchored() {
+      const anchor = useRef<HTMLButtonElement>(null)
+      return (
+        <div data-testid="list">
+          <button type="button" ref={anchor}>
+            tab
+          </button>
+          <Menu
+            label="Tab"
+            trigger={null}
+            anchorRef={anchor}
+            align="start"
+            open
+          >
+            <MenuItem>Rename</MenuItem>
+          </Menu>
+        </div>
+      )
+    }
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+    rect.mockReturnValue({
+      left: 100,
+      top: 10,
+      right: 160,
+      bottom: 40,
+    } as DOMRect)
+    vi.spyOn(document.documentElement, 'clientWidth', 'get').mockReturnValue(
+      1000,
+    )
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(256)
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(100)
+    render(<Anchored />)
+    expect(menu()!.style.left).toBe('100px')
+    // No trigger of its own
+    expect(screen.queryByRole('button', { name: 'Tab' })).toBeNull()
+    rect.mockReturnValue({
+      left: 40,
+      top: 10,
+      right: 100,
+      bottom: 40,
+    } as DOMRect)
+    fireEvent.scroll(screen.getByTestId('list'))
+    expect(menu()).toBeInTheDocument()
+    expect(menu()!.style.left).toBe('40px')
   })
 
   it('caps its height when neither side holds it, and scrolls inside', () => {

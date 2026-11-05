@@ -348,6 +348,9 @@ export function SessionSidebar({
   const summary = summarizeSessions(sessions)
   // Hidden with no agent anywhere: there is nothing to filter by.
   const showFilterBar = !!onFilterChange && !compact && summary.agents > 0
+  // The compact list shows workspaces, not tabs: nothing to sort, and
+  // workspaces stay movable
+  const sortsBlocked = sortBlockedFirst && !compact
   // The row being edited stays even when it stops matching, so a poll does
   // not take the form away mid-edit.
   const arrange = (list: Session[]) => {
@@ -357,14 +360,14 @@ export function SessionSidebar({
         (matchesFilter(s, activeFilter) &&
           matchesQuery(s, terms, groupById.get(s.groupId ?? ''))),
     )
-    return sortBlockedFirst ? blockedFirst(matching) : matching
+    return sortsBlocked ? blockedFirst(matching) : matching
   }
   const visibleSessions = arrange(sessions)
   const activeSession = sessions.find((s) => s.id === activeId)
 
   // Reordering works on the list in the server's order: hidden while the
   // list on screen is filtered or sorted, with a hint saying what to undo.
-  const canReorder = !!reorder && !narrowed && !sortBlockedFirst
+  const canReorder = !!reorder && !narrowed && !sortsBlocked
   const reorderPaused = !!reorder && !canReorder
   const groupTabIds = (groupId?: string) =>
     sessions.filter((s) => s.groupId === groupId).map((s) => s.id)
@@ -377,12 +380,7 @@ export function SessionSidebar({
     !!reorder?.groups && movableIds.length > 1 && movableIds.includes(group.id)
   const canMoveGroup = (group: SessionGroup) =>
     canReorder && groupMovable(group)
-  const pausedHint = reorderPausedHint(
-    t,
-    filtering,
-    sortBlockedFirst,
-    searching,
-  )
+  const pausedHint = reorderPausedHint(t, filtering, sortsBlocked, searching)
 
   // Move a tab one place up or down in its group; nothing at an end.
   const stepTab = (session: Session, delta: -1 | 1) => {
@@ -1131,7 +1129,15 @@ export function SessionSidebar({
         <CompactGroupRow
           group={group}
           status={groupStatus(group, collapsed)}
-          active={activeSession?.groupId === group.id}
+          // A checkout whose hidden worktree holds the tab on screen stands
+          // for it
+          active={
+            activeSession?.groupId === group.id ||
+            (collapsed &&
+              worktreesOf(group.id).some(
+                (w) => w.id === activeSession?.groupId,
+              ))
+          }
           nested={nested}
           tabCount={groupTabIds(group.id).length}
           collapsible={collapsible}

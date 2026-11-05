@@ -28,7 +28,16 @@ workflow khác nhau (ví dụ: Claude Code, Copilot, build).
 - **Sửa**: Nhấp đúp vào tên phiên, hoặc rê chuột lên phiên rồi nhấp icon bút chì
 - **Xóa**: Rê chuột lên phiên rồi nhấp icon X (cần 2+ phiên), sau đó chọn "Close session" để xác nhận
 - **Màn hình cảm ứng (iPad)**: Không rê chuột được nên các icon không hiện; vuốt phiên trong sidebar sang phải để sửa, sang trái để xóa, giống trên điện thoại
-- **Thêm**: Nhấp "New session" trong sidebar, hoặc dấu "+" sau các tab phiên
+- **Thêm**: Nhấp "New session" trong sidebar, hoặc dấu "+" sau các tab phiên. Ở
+  [bố cục gọn](#bố-cục-gọn), dấu "+" hỏi tên và biểu tượng trước khi tạo
+- **Menu của tab**: Nhấp chuột phải vào một tab phiên, hoặc nhấn **Shift+F10** (hay phím menu) khi
+  tab có focus. Menu có **Rename** (**F2**, sửa tên ngay trên tab: Enter để lưu, Escape để hủy),
+  **Edit icon**, **Move left** và **Move right** (**Alt+←** và **Alt+→**), **New session…** (**N**, nhập
+  tên và chọn biểu tượng) và **Close** (**Delete**, cũng hỏi xác nhận như nút X). Phím của từng mục hiện
+  ở bên phải. Nếu backend không cho đổi tên tab, mục Rename bị làm mờ kèm lý do; hai mục di chuyển
+  chỉ có khi backend sắp xếp lại được tab. Thiết bị chỉ xem không có menu này
+- **Rê chuột lên tab**: ngoài tên và mô tả, chú thích còn liệt kê các lệnh đang chạy trong tab, và
+  với tab chỉ có một pane thì có thêm tên pane cùng các chip thông tin của nó
 - **Thu gọn sidebar**: Nhấp icon thu gọn (góc trên phải sidebar) để chỉ hiện icon — tối đa hóa diện tích terminal
 - **Toàn màn hình**: Nhấp nút fullscreen trên header để vào chế độ toàn màn hình (nút không hiện ở nơi trình duyệt không cho toàn màn hình, như iPhone)
 - **Thanh tab phiên**: các tab kiểu trình duyệt nằm chung hàng với header, để chuyển tab nhanh trên desktop. Bật/tắt qua Settings → Sessions → "Show session tabs"
@@ -50,15 +59,18 @@ Khi mở nhiều workspace, sidebar liệt kê mọi tab nên rất dài. Bố c
 dòng và đưa tab của nó lên header. Bật trong Settings → Sessions → **Sidebar layout** → **Compact**
 (chỉ trên desktop; điện thoại vẫn dùng bảng trượt danh sách phiên).
 
-- **Dòng của workspace** gồm một chữ cái trên nền màu, tên workspace, branch căn phải nếu biết, và
-  badge trạng thái agent. Menu của workspace (đổi tên, di chuyển, worktree, đóng) hiện khi rê chuột
-  hoặc khi dòng có focus; nhấp đúp vào dòng để đổi tên.
+- **Dòng của workspace** gồm một chữ cái trên nền màu, tên workspace, chip đầu tiên trong các
+  [chip thông tin](#đặt-tên-pane) của nó (phần còn lại gộp thành **+N**), branch căn phải nếu biết, và
+  badge trạng thái agent. Số tab và menu của workspace (đổi tên, di chuyển, worktree, đóng) hiện
+  khi rê chuột hoặc khi dòng có focus; nhấp đúp vào dòng để đổi tên.
 - **Chọn một workspace** thì mở tab bạn xem lần cuối trong đó trên thiết bị này. Nếu chưa xem tab
   nào, Termote mở tab mà backend đang để hiện tại. Tab của workspace nằm trên thanh tab ở header,
-  thanh này luôn hiện ở bố cục gọn.
+  thanh này luôn hiện ở bố cục gọn. Ở bố cục chi tiết, tab trong sidebar làm được gì thì
+  [menu của tab](#desktop) cũng làm được, còn dấu "+" ở đó hỏi tên và biểu tượng của tab mới.
 - **Worktree** nằm thụt vào dưới workspace gốc của repository, mang tên branch của nó. Mũi tên
   cạnh workspace gốc ẩn hoặc hiện các worktree; khi ẩn, badge của workspace gốc tính luôn trạng
-  thái của chúng.
+  thái của chúng, và nếu tab đang mở nằm trong một worktree bị ẩn thì dòng workspace gốc được tô
+  như dòng đang chọn.
 - **Di chuyển**: kéo dòng, hoặc nhấn **Alt+↑** và **Alt+↓** khi dòng có focus, giống bố cục chi
   tiết.
 - **Tìm kiếm** chỉ giữ lại các workspace có kết quả khớp; **Enter** hoặc nhấp vào dòng sẽ mở kết
@@ -177,7 +189,7 @@ một cách:
 **Thông tin plugin Herdr báo.** Plugin và công cụ của Herdr có thể báo vài token ngắn cho một workspace hay
 một pane (số PR, môi trường). Termote chỉ đọc và hiện chúng thành chip nhỏ, màu nhạt, viền nét đứt,
 cạnh tên workspace, cạnh pane trong dải pane, hoặc trên dòng của tab một pane. Mỗi chỗ hiện tối đa ba
-chip, phần còn lại gộp thành `+N`; trỏ chuột vào sẽ thấy đủ danh sách, kèm dòng ghi rõ chúng do plugin
+chip (dòng workspace ở bố cục gọn chỉ hiện một), phần còn lại gộp thành `+N`; trỏ chuột vào sẽ thấy đủ danh sách, kèm dòng ghi rõ chúng do plugin
 Herdr báo. Chip luôn
 là chữ thường, không bao giờ là link, nên plugin không thể giả làm thông báo của Termote. Server giữ
 tối đa 8 token, mỗi token dài tối đa 64 ký tự, và không gửi token nào cho thiết bị chỉ xem.
@@ -189,7 +201,9 @@ Tab giữ thứ tự lúc được tạo cho tới khi bạn di chuyển nó, v�
 
 - **Desktop**: kéo một tab trong sidebar lên trên hoặc xuống dưới một tab khác cùng group; một vạch
   cho thấy chỗ nó sẽ nằm. Khi một tab đang được focus, **Alt+↑** và **Alt+↓** di chuyển nó một bậc.
-  Các tab ở hàng tiêu đề cũng kéo được: thả một tab vào bên trái hoặc bên phải tab khác.
+  Các tab ở hàng tiêu đề cũng kéo được: thả một tab vào bên trái hoặc bên phải tab khác. Cũng có
+  thể nhấn **Alt+←** và **Alt+→** khi tab có focus, hoặc chọn **Move left** và **Move right** trong
+  menu chuột phải của tab.
 - **Mobile**: hàng **Current session** trong bảng phiên có nút **↑** và **↓** để di chuyển tab đang
   xem trong group của nó.
 - **Workspace Herdr**: **Move up** và **Move down** trong menu **⋯** của workspace, hoặc kéo header

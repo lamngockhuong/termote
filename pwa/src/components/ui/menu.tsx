@@ -4,6 +4,7 @@ import {
   type KeyboardEvent,
   type MouseEvent,
   type ReactNode,
+  type RefObject,
   useContext,
   useEffect,
   useId,
@@ -84,6 +85,11 @@ interface MenuProps {
   onOpenChange?: (open: boolean) => void
   // Names the menu for the tour (data-tour)
   tourAnchor?: string
+  // A context menu: no trigger of its own, placed by this element (a tab
+  // right clicked) and giving focus back to it; open is set from outside
+  anchorRef?: RefObject<HTMLElement | null>
+  // Opened from the keyboard (Shift+F10): its first item takes focus
+  focusFirst?: boolean
 }
 
 // menuitem and menuitemradio
@@ -111,6 +117,8 @@ export function Menu({
   open,
   onOpenChange,
   tourAnchor,
+  anchorRef,
+  focusFirst = false,
 }: MenuProps) {
   const [ownOpen, setOwnOpen] = useState(false)
   const isOpen = open ?? ownOpen
@@ -124,6 +132,8 @@ export function Menu({
   const rootRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  // What the menu hangs from: its trigger, or the element it was asked on
+  const anchor = () => anchorRef?.current ?? triggerRef.current
   const menuId = useId()
   // Opened by Enter/Space (a click with detail 0) rather than a pointer.
   const openedByKeyRef = useRef(false)
@@ -140,7 +150,7 @@ export function Menu({
   // the item opened gives focus back.
   const close = (byKey = true) => {
     setIsOpen(false)
-    triggerRef.current?.focus({ focusVisible: byKey })
+    anchor()?.focus({ focusVisible: byKey })
   }
 
   // Opened from the keyboard, focus the first item so the arrow keys work at
@@ -151,10 +161,10 @@ export function Menu({
     if (!isOpen) return
     // preventScroll: a menu in the top layer is already in view; scrolling
     // a list under it to "show" it would close it.
-    if (openedByKeyRef.current)
+    if (openedByKeyRef.current || focusFirst)
       items(listRef.current!)[0]?.focus({ preventScroll: true })
     else listRef.current!.focus({ preventScroll: true })
-  }, [isOpen])
+  }, [isOpen, focusFirst])
 
   // In the top layer the menu is placed in the viewport (placeMenu). Else it
   // is kept on the screen: a trigger away from the edge it is aligned to (a
@@ -167,7 +177,7 @@ export function Menu({
     const list = listRef.current!
     const vv = window.visualViewport
     const at = placeMenu(
-      triggerRef.current!.getBoundingClientRect(),
+      anchor()!.getBoundingClientRect(),
       { width: list.offsetWidth, height: list.offsetHeight },
       align,
       {
@@ -208,18 +218,21 @@ export function Menu({
   }, [closing, inTopLayer])
 
   // Placed in the viewport, the menu would drift off its trigger as a list
-  // holding the trigger scrolls: that closes it. Any other scroll (a Chat
-  // following new messages, a table under its own menu) and a scroll inside
-  // the menu leave it; a resized window (a phone's keyboard closing) places
-  // it again.
+  // holding the trigger scrolls: that closes it. A context menu (anchorRef)
+  // follows its element instead: the list may scroll on its own (the tab bar
+  // bringing a new tab into view as it is right clicked). Any other scroll
+  // (a Chat following new messages, a table under its own menu) and a scroll
+  // inside the menu leave it; a resized window (a phone's keyboard closing)
+  // places it again.
   useEffect(() => {
     if (!isOpen || !inTopLayer) return
     const onScroll = (e: Event) => {
       const target = e.target as Node
       if (listRef.current?.contains(target)) return
-      const trigger = triggerRef.current
-      if (trigger && (target === document || target.contains(trigger)))
-        setIsOpenRef.current(false)
+      const trigger = anchorRef?.current ?? triggerRef.current
+      if (!trigger || (target !== document && !target.contains(trigger))) return
+      if (anchorRef) placeRef.current()
+      else setIsOpenRef.current(false)
     }
     const onResize = () => placeRef.current()
     document.addEventListener('scroll', onScroll, true)
@@ -228,7 +241,7 @@ export function Menu({
       document.removeEventListener('scroll', onScroll, true)
       window.removeEventListener('resize', onResize)
     }
-  }, [isOpen, inTopLayer])
+  }, [isOpen, inTopLayer, anchorRef])
 
   // pointerdown, not mousedown: a touch that scrolls elsewhere sends no mouse events.
   useEffect(() => {
@@ -300,7 +313,7 @@ export function Menu({
           setIsOpen(false)
       }}
     >
-      {textTrigger === undefined ? (
+      {anchorRef ? null : textTrigger === undefined ? (
         <IconButton size={triggerSize} {...triggerProps} />
       ) : (
         <button
@@ -320,6 +333,9 @@ export function Menu({
           aria-label={label}
           tabIndex={-1}
           onKeyDown={onKeyDown}
+          // The menu key opens a menu on keydown, then the browser's own on
+          // keyup, over the item that has the focus by then
+          onContextMenu={(e) => e.preventDefault()}
           // manual: no light dismiss and no focus handling of its own; the
           // menu keeps doing both
           popover={inTopLayer ? 'manual' : undefined}
@@ -347,6 +363,9 @@ interface MenuItemProps {
   keepOpen?: boolean
   // Says more about what the item does, on hover
   title?: string
+  // The key that does the same where the menu was opened, shown on the
+  // right (aria-keyshortcuts: the ARIA form, e.g. Alt+ArrowLeft)
+  shortcut?: { label: string; aria: string }
 }
 
 function ItemButton({
@@ -357,6 +376,7 @@ function ItemButton({
   disabled = false,
   keepOpen = false,
   title,
+  shortcut,
   checked,
   checkbox = false,
 }: MenuItemProps & { checked?: boolean; checkbox?: boolean }) {
@@ -375,6 +395,7 @@ function ItemButton({
       tabIndex={-1}
       disabled={disabled}
       title={title}
+      aria-keyshortcuts={shortcut?.aria}
       onClick={(e) => {
         onSelect?.({ shiftKey: e.shiftKey })
         if (!keepOpen) close(e.detail === 0)
@@ -390,6 +411,14 @@ function ItemButton({
         </span>
       )}
       <span className="min-w-0 flex-1">{children}</span>
+      {shortcut && (
+        <span
+          aria-hidden="true"
+          className="shrink-0 font-label text-[11px] text-fg-subtle"
+        >
+          {shortcut.label}
+        </span>
+      )}
       {checked && (
         <Check size={16} aria-hidden="true" className="shrink-0 text-accent" />
       )}

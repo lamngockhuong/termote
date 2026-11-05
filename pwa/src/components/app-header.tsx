@@ -34,10 +34,18 @@ interface Props {
   canRemoveTab: boolean
   onSelectTab: (id: string) => void
   // Unset (view-only role): no Add button
-  onAddTab?: () => void
+  onAddTab?: (name?: string, icon?: string) => void
+  // The Add button asks for a name and icon first (compact sidebar)
+  addTabAsksName?: boolean
+  // Unset (view-only role): a tab's menu offers no rename and no icon
+  onUpdateTab?: (id: string, updates: { name?: string; icon?: string }) => void
+  // The backend can rename tabs (caps.renameTab)
+  renameTab?: boolean
   onRemoveTab: (id: string) => void
   // Unset (view-only role, or the server cannot move tabs): tabs do not drag
   onMoveTab?: (id: string, index: number) => void
+  // A move is on its way to the server
+  movingTab?: boolean
   connectionState: ConnectionState
   onRetry: () => void
   // Mobile: the sessions sheet
@@ -178,9 +186,13 @@ function DesktopHeader(p: Props) {
           activeId={session.id}
           onSelect={p.onSelectTab}
           onAdd={p.onAddTab}
+          askName={p.addTabAsksName}
           onRemove={p.onRemoveTab}
           canRemove={p.canRemoveTab}
           onMove={p.onMoveTab}
+          moving={p.movingTab}
+          onUpdate={p.onUpdateTab}
+          renameTab={p.renameTab}
         />
       ) : (
         <SessionName session={session} className="mb-2" />

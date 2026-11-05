@@ -36,6 +36,38 @@ describe('CompactGroupRow', () => {
     expect(main()).not.toHaveAttribute('aria-current')
   })
 
+  it('shows its tab count faintly on hover or focus, already in its name', () => {
+    renderRow()
+    const count = [...main().querySelectorAll('[aria-hidden="true"]')].find(
+      (el) => el.textContent === '3',
+    )!
+    expect(count).toHaveClass(
+      'hidden',
+      'group-hover/crow:inline',
+      'group-focus-within/crow:inline',
+    )
+  })
+
+  it('shows the workspace’s metadata as one chip, the rest counted', () => {
+    renderRow({
+      group: {
+        id: 'w1',
+        name: 'termote',
+        worktree: { linked: false, branch: 'main' },
+        meta: [
+          { key: 'pr', value: '#7' },
+          { key: 'ci', value: 'green' },
+        ],
+      },
+    })
+    const chips = main().querySelector('[data-meta-chips]')!
+    expect(chips).toHaveTextContent('pr: #7+1')
+    expect(chips).not.toHaveTextContent('ci')
+    // Before the branch, and shrinking first
+    expect(chips.nextElementSibling).toHaveTextContent('main')
+    expect(chips).toHaveClass('max-w-[40%]', 'shrink', 'overflow-hidden')
+  })
+
   it('says one tab in the singular', () => {
     renderRow({ tabCount: 1 })
     expect(main()).toHaveAccessibleName('termote, 1 tab')

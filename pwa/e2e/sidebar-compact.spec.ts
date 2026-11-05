@@ -250,4 +250,122 @@ test.describe('compact sidebar', () => {
     ).toHaveCount(0)
     await expect(agents(page)).toHaveCount(0)
   })
+
+  // Last: it renames, moves and adds windows of A
+  test('a tab’s menu renames, moves, adds a named tab and closes', async ({
+    page,
+  }) => {
+    const windows = () =>
+      tmux('list-windows', '-t', `=${A}`, '-F', '#{window_name}').split('\n')
+    const tab = (name: string) =>
+      // After its icon
+      tabBar(page).getByRole('tab', { name: new RegExp(`(^|\\s)${name}$`) })
+    const menu = page.getByRole('menu')
+    await open(page, { sidebarLayout: 'compact' })
+    await groupRow(page, A).click()
+    await tab('a-one').click()
+    await expect(tab('a-one')).toHaveAttribute('aria-selected', 'true')
+
+    // F2 renames in place
+    await tab('a-one').focus()
+    await page.keyboard.press('F2')
+    const field = tabBar(page).getByRole('textbox', {
+      name: 'New name for a-one',
+    })
+    await expect(field).toBeFocused()
+    await field.fill('a-first')
+    await page.keyboard.press('Enter')
+    await expect.poll(windows).toEqual(['a-first', 'a-two'])
+    await expect(tab('a-first')).toBeVisible()
+
+    // So does the menu, its keys on the right
+    await tab('a-two').click({ button: 'right' })
+    await expect(menu).toHaveAccessibleName('Actions for a-two')
+    await expect(menu.getByRole('menuitem', { name: /Rename/ })).toContainText(
+      'F2',
+    )
+    await menu.getByRole('menuitem', { name: /Rename/ }).click()
+    await tabBar(page)
+      .getByRole('textbox', { name: 'New name for a-two' })
+      .fill('a-second')
+    await page.keyboard.press('Enter')
+    await expect.poll(windows).toEqual(['a-first', 'a-second'])
+
+    // Move right from the menu, back with Alt+Left
+    await tab('a-first').click({ button: 'right' })
+    await expect(
+      menu.getByRole('menuitem', { name: /Move left/ }),
+    ).toBeDisabled()
+    await menu.getByRole('menuitem', { name: /Move right/ }).click()
+    await expect.poll(windows).toEqual(['a-second', 'a-first'])
+    await expect(tabBar(page).getByRole('tab').first()).toHaveAccessibleName(
+      /\sa-second$/,
+    )
+    await tab('a-first').focus()
+    await page.keyboard.press('Alt+ArrowLeft')
+    await expect.poll(windows).toEqual(['a-first', 'a-second'])
+    await expect(tab('a-first')).toBeFocused()
+    // To the right the focus follows too, so the key works twice in a row
+    const first = tabBar(page).getByRole('tab').first()
+    await expect(first).toHaveAccessibleName(/\sa-first$/)
+    await page.keyboard.press('Alt+ArrowRight')
+    await expect.poll(windows).toEqual(['a-second', 'a-first'])
+    await expect(first).toHaveAccessibleName(/\sa-second$/)
+    await expect(tab('a-first')).toBeFocused()
+    await page.keyboard.press('Alt+ArrowLeft')
+    await expect.poll(windows).toEqual(['a-first', 'a-second'])
+    await expect(tab('a-first')).toBeFocused()
+
+    // + asks for a name and an icon in the compact layout
+    await page.getByRole('button', { name: 'Add session' }).click()
+    const form = page.getByRole('form', { name: 'New session' })
+    await form.getByRole('textbox', { name: 'Session name' }).fill('a-named')
+    await page.keyboard.press('Enter')
+    await expect.poll(windows).toContain('a-named')
+    await expect(tab('a-named')).toBeVisible()
+    // The menu's New session… opens the same form; Escape leaves it
+    await tab('a-named').click({ button: 'right' })
+    await expect(
+      menu.getByRole('menuitem', { name: 'New session…' }),
+    ).toContainText('N')
+    await menu.getByRole('menuitem', { name: 'New session…' }).click()
+    await expect(form).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(form).toBeHidden()
+    // So does N on a focused tab, the focus back on it after
+    await tab('a-named').focus()
+    await page.keyboard.press('n')
+    const nameField = form.getByRole('textbox', { name: 'Session name' })
+    await expect(nameField).toBeFocused()
+    // The key opened the form and typed nothing into it
+    await expect(nameField).toHaveValue('')
+    await page.keyboard.press('Escape')
+    await expect(tab('a-named')).toBeFocused()
+
+    // Close, from the keyboard: Shift+F10 opens the menu on its first item
+    await tab('a-named').focus()
+    await page.keyboard.press('Shift+F10')
+    await expect(menu.getByRole('menuitem', { name: /Rename/ })).toBeFocused()
+    await menu.getByRole('menuitem', { name: /Close/ }).click()
+    await page
+      .getByRole('dialog', { name: 'Close session?' })
+      .getByRole('button', { name: 'Close session' })
+      .click()
+    await expect.poll(windows).toEqual(['a-first', 'a-second'])
+    await expect(tab('a-named')).toHaveCount(0)
+
+    // Windows 0 and 2, 1 closed: a move renumbers the one moved, whose old
+    // id fades out while the focus stays on the live tab
+    tmux('new-window', '-d', '-t', `=${A}:`, '-n', 'a-third')
+    tmux('kill-window', '-t', `=${A}:=a-second`)
+    await expect(tab('a-second')).toHaveCount(0)
+    await expect(tab('a-third')).toBeVisible()
+    await tab('a-third').focus()
+    await page.keyboard.press('Alt+ArrowLeft')
+    await expect.poll(windows).toEqual(['a-third', 'a-first'])
+    await expect(tabBar(page).getByRole('tab').first()).toHaveAccessibleName(
+      /\sa-third$/,
+    )
+    await expect(tab('a-third')).toBeFocused()
+  })
 })
