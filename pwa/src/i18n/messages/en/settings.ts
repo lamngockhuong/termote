@@ -63,6 +63,8 @@ export default {
   'settings.blockedFirst': 'Blocked sessions first',
   'settings.blockedFirstDesc':
     'List sessions waiting on you at the top of each group',
+  'settings.blockedFirstOffByCompact':
+    'Not used by the compact sidebar, which lists no sessions to sort',
   'settings.notify': 'Notify when an agent needs me',
   'settings.notify.homeScreen':
     'iPhone/iPad: works only from the Home Screen app (iOS 16.4+)',

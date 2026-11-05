@@ -2046,9 +2046,17 @@ export default function App({
             }
             canRemoveTab={!readOnly && sessions.length > 1}
             onSelectTab={selectFromList}
-            onAddTab={readOnly || focus ? undefined : () => addTab('New')}
+            onAddTab={
+              readOnly || focus
+                ? undefined
+                : (name = 'New', icon?: string) => addTab(name, icon)
+            }
+            addTabAsksName={compactSidebar}
+            onUpdateTab={readOnly ? undefined : updateSession}
+            renameTab={mux.caps.renameTab !== false}
             onRemoveTab={requestRemove}
             onMoveTab={reorder?.tabs ? reorder.onMoveTab : undefined}
+            movingTab={moving}
             connectionState={connectionState}
             onRetry={() => terminalRef.current?.reconnect()}
             sessionsOpen={sidebarOpen}

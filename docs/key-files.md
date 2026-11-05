@@ -14,9 +14,10 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/utils/tour-steps.ts`                     | Tour steps (phone, desktop), which show, where the bubble goes |
 | `pwa/src/i18n/`                                   | `t()`, `<Trans>`, locales, messages per area (EN, VI)          |
 | `pwa/src/components/language-notice.tsx`          | Once, to a device that picked VI before: the app speaks it now |
-| `pwa/src/components/session-tabs.tsx`             | Session tab bar for window switching                           |
+| `pwa/src/components/session-tabs.tsx`             | Header tab bar; a tab's menu: rename (F2), icon, move, close   |
+| `pwa/src/components/new-tab-form.tsx`             | A new tab's name and icon, under the header's tab bar          |
 | `pwa/src/utils/sidebar-layout.ts`                 | Sidebar layout setting: detailed (tabs listed) or compact      |
-| `pwa/src/components/compact-group-row.tsx`        | Compact sidebar: one workspace on one line, worktree indented  |
+| `pwa/src/components/compact-group-row.tsx`        | Compact sidebar: one workspace per line, its chip, tab count   |
 | `pwa/src/utils/group-avatar.ts`                   | Workspace avatar: first letter, a stable `--tm-avatar-N`       |
 | `pwa/src/utils/pick-group-tab.ts`                 | Tab a picked workspace opens: last shown here, then server's   |
 | `pwa/src/components/sidebar-agents.tsx`           | Compact sidebar's Agents: by status, opens a pane, resizable   |

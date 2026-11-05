@@ -956,19 +956,33 @@ vi.mock('./components/session-tabs', () => ({
   SessionTabs: ({
     sessions,
     onAdd,
+    askName,
     onRemove,
     onMove,
+    onUpdate,
+    renameTab,
   }: {
     sessions: { id: string }[]
-    onAdd: () => void
+    onAdd: (name?: string, icon?: string) => void
+    askName?: boolean
     onRemove: (id: string) => void
     onMove?: (id: string, index: number) => void
+    onUpdate?: (id: string, updates: { name?: string }) => void
+    renameTab?: boolean
   }) => (
     <div
       data-testid="session-tabs"
       data-ids={sessions.map((s) => s.id).join(',')}
+      data-ask-name={String(!!askName)}
+      data-rename-tab={String(renameTab)}
     >
-      <button onClick={onAdd}>STAdd</button>
+      <button onClick={() => onAdd()}>STAdd</button>
+      <button onClick={() => onAdd('api', '🚀')}>STAddNamed</button>
+      {onUpdate && (
+        <button onClick={() => onUpdate('1', { name: 'Renamed' })}>
+          STRename
+        </button>
+      )}
       <button onClick={() => onRemove('1')}>STRemove</button>
       {onMove && <button onClick={() => onMove('1', 0)}>STMove</button>}
     </div>
@@ -2035,6 +2049,38 @@ describe('App', () => {
     )
   })
 
+  it('the tab bar’s menu and form reach the sessions; + asks for a name only when compact', async () => {
+    const addSession = vi.fn()
+    const updateSession = vi.fn()
+    const base = mockUseLocalSessions()
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      addSession,
+      updateSession,
+      mux: { ...base.mux, caps: { ...base.mux.caps, renameTab: false } },
+    } as any)
+    const settings = { ...mockUseSettings().settings, showSessionTabs: true }
+    mockUseSettings.mockReturnValue({ ...mockUseSettings(), settings })
+    const { unmount } = render(<App />)
+    const bar = await screen.findByTestId('session-tabs')
+    expect(bar).toHaveAttribute('data-ask-name', 'false')
+    expect(bar).toHaveAttribute('data-rename-tab', 'false')
+    fireEvent.click(screen.getByRole('button', { name: 'STAddNamed' }))
+    expect(addSession).toHaveBeenCalledWith('api', '🚀')
+    fireEvent.click(screen.getByRole('button', { name: 'STRename' }))
+    expect(updateSession).toHaveBeenCalledWith('1', { name: 'Renamed' })
+    unmount()
+    mockUseSettings.mockReturnValue({
+      ...mockUseSettings(),
+      settings: { ...settings, sidebarLayout: 'compact' } as typeof settings,
+    })
+    render(<App readOnly />)
+    const compactBar = await screen.findByTestId('session-tabs')
+    expect(compactBar).toHaveAttribute('data-ask-name', 'true')
+    // View-only: nothing to rename
+    expect(screen.queryByRole('button', { name: 'STRename' })).toBeNull()
+  })
+
   it('keeps a phone on its own sheet and settings with a compact sidebar saved', async () => {
     mockIsMobile.mockReturnValue(true)
     // Not a literal: the mock's settings type has no sidebarLayout
@@ -2108,7 +2154,7 @@ describe('App', () => {
     render(<App />)
     await waitFor(() => screen.getByRole('button', { name: 'STAdd' }))
     fireEvent.click(screen.getByRole('button', { name: 'STAdd' }))
-    expect(mockAddSession).toHaveBeenCalledWith('New')
+    expect(mockAddSession).toHaveBeenCalledWith('New', undefined)
     // The server cannot move tabs: they do not drag
     expect(screen.queryByRole('button', { name: 'STMove' })).toBeNull()
   })
@@ -5941,6 +5987,32 @@ describe('App views, view-only and deep links', () => {
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'SBOpenAgent' }))
     expect(window.location.hash).toBe('#/s/w1/w1%3At1/w1%3At1%3Ap1')
+    window.history.replaceState(null, '', '/')
+  })
+
+  it('a row of the sidebar’s agents opens Chat for an agent that has it', async () => {
+    mockSessions()
+    const value = mockUseLocalSessions()
+    const sessions = value.sessions.map((t: any) => ({
+      ...t,
+      panes: t.panes?.map((p: any) =>
+        p.hasAgent ? { ...p, agentName: 'claude' } : p,
+      ),
+    }))
+    mockUseLocalSessions.mockReturnValue({
+      ...value,
+      sessions,
+      activeSession: sessions[0],
+      mux: {
+        ...value.mux,
+        caps: { ...value.mux.caps, agentChat: true } as any,
+      },
+    })
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'SBOpenAgent' }))
+    expect(window.location.hash).toBe('#/s/w1/w1%3At1/w1%3At1%3Ap1?view=chat')
+    // The hashchange lands here, not in the next test
+    await act(() => new Promise((r) => setTimeout(r, 0)))
     window.history.replaceState(null, '', '/')
   })
 

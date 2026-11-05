@@ -5,6 +5,7 @@ import type { AgentStatus, SessionGroup } from '../types/session'
 import { avatarLetter, avatarTone } from '../utils/group-avatar'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { AgentStatusBadge, agentStatusLabel } from './agent-status-badge'
+import { MetaChips } from './meta-chips'
 import {
   ACTIVE_ROW_CLASSES,
   ROW_CLASSES,
@@ -41,8 +42,9 @@ interface Props {
 }
 
 // One workspace on one line (the compact sidebar): a letter on its colour,
-// the name, the branch on the right, the agents' badge and, on hover, its
-// menu. Its tabs are in the header's bar, not here.
+// the name, its metadata (one chip, then +N), the branch on the right, the
+// agents' badge and, on hover or with focus, its tab count and menu. Its tabs
+// are in the header's bar, not here.
 export function CompactGroupRow({
   group,
   status,
@@ -126,6 +128,14 @@ export function CompactGroupRow({
         <span className="min-w-0 flex-1 truncate ui-terminal:font-label ui-terminal:text-[12px]">
           {shownName}
         </span>
+        {/* Already in the button's name */}
+        <span
+          aria-hidden="true"
+          className="hidden shrink-0 text-[11px] tabular-nums text-fg-subtle group-hover/crow:inline group-focus-within/crow:inline"
+        >
+          {tabCount}
+        </span>
+        <MetaChips tokens={group.meta} shown={1} className="max-w-[40%]" />
         {!nested && branch && (
           <span className="min-w-0 max-w-[45%] shrink truncate text-[11px] font-normal text-fg-subtle">
             {branch}

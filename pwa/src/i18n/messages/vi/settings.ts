@@ -64,6 +64,8 @@ export default {
   'settings.blockedFirst': 'Phiên đang chờ lên đầu',
   'settings.blockedFirstDesc':
     'Phiên nào đang chờ bạn thì xếp lên đầu nhóm của nó',
+  'settings.blockedFirstOffByCompact':
+    'Sidebar ở bố cục gọn không liệt kê phiên nên không dùng tới',
   'settings.notify': 'Báo khi agent cần tôi',
   'settings.notify.homeScreen':
     'iPhone/iPad: chỉ chạy khi mở từ app trên màn hình chính (iOS 16.4 trở lên)',

@@ -945,11 +945,16 @@ export function SettingsModal({
           </SettingsRow>
           <SettingsRow
             title={t('settings.blockedFirst')}
-            desc={t('settings.blockedFirstDesc')}
+            desc={t(
+              compactSidebar
+                ? 'settings.blockedFirstOffByCompact'
+                : 'settings.blockedFirstDesc',
+            )}
           >
             <Switch
               label={t('settings.blockedFirst')}
               checked={settings.sortBlockedFirst}
+              disabled={compactSidebar}
               onChange={(v) => onUpdateSetting('sortBlockedFirst', v)}
             />
           </SettingsRow>

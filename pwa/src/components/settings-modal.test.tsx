@@ -364,6 +364,25 @@ describe('SettingsModal', () => {
     ).toBeInTheDocument()
   })
 
+  it('turns Blocked sessions first off with the compact sidebar, saying why', () => {
+    renderModal({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        sidebarLayout: 'compact',
+        sortBlockedFirst: true,
+      },
+    })
+    const sort = screen.getByRole('switch', { name: 'Blocked sessions first' })
+    expect(sort).toBeDisabled()
+    // The saved value stays, for the detailed layout
+    expect(sort).toHaveAttribute('aria-checked', 'true')
+    expect(
+      screen.getByText(
+        'Not used by the compact sidebar, which lists no sessions to sort',
+      ),
+    ).toBeInTheDocument()
+  })
+
   it('starts with the Appearance group and lists the three styles', () => {
     renderModal()
     const groups = document.querySelectorAll('[data-group]')
@@ -1285,6 +1304,9 @@ describe('SettingsModal on a phone', () => {
     const tabs = screen.getByRole('switch', { name: 'Show session tabs' })
     expect(tabs).toBeEnabled()
     expect(tabs).toHaveAttribute('aria-checked', 'false')
+    expect(
+      screen.getByRole('switch', { name: 'Blocked sessions first' }),
+    ).toBeEnabled()
   })
 
   it('goes back to the list on Back of the history, staying open', async () => {
