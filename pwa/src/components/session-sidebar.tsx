@@ -37,6 +37,7 @@ import type { Translate } from '../i18n/translate'
 import {
   type Session,
   type SessionGroup,
+  type SessionPane,
   worstAgentStatus,
 } from '../types/session'
 import { dropIndex, movableGroups, targetIndex } from '../utils/reorder'
@@ -64,6 +65,7 @@ import {
 import { IconPicker } from './icon-picker'
 import { MetaChips, OnlyPaneLine, onlyPaneOf } from './meta-chips'
 import { SearchToggle, SessionSearchField } from './session-search-field'
+import { SidebarAgents } from './sidebar-agents'
 import {
   ACTIVE_ROW_CLASSES,
   ROW_CLASSES,
@@ -124,6 +126,12 @@ interface Props {
   // Compact: a workspace picked as a whole; it opens on a tab of its own
   // choosing (App's pickGroupTab). Without it, its first tab opens.
   onSelectGroup?: (groupId: string) => void
+  // Compact: the Agents section under the list, a row opening its pane
+  onOpenAgent?: (session: Session, pane: SessionPane) => void
+  // The pane on screen, marked among the agents
+  activePaneId?: string
+  // Server time minus this device's (ms), for how long each agent has been so
+  clockOffset?: number
 }
 
 export interface ReorderActions {
@@ -265,6 +273,9 @@ export function SessionSidebar({
   reorder,
   layout = 'detailed',
   onSelectGroup,
+  onOpenAgent,
+  activePaneId,
+  clockOffset = 0,
 }: Props) {
   const { t } = useT()
   const coarsePointer = useMediaQuery('(pointer: coarse)')
@@ -1527,6 +1538,15 @@ export function SessionSidebar({
         <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2 scrollbar-hover">
           {sessionList}
         </div>
+        {compact && onOpenAgent && (
+          <SidebarAgents
+            sessions={sessions}
+            groups={groups}
+            activePaneId={activePaneId}
+            clockOffset={clockOffset}
+            onOpen={onOpenAgent}
+          />
+        )}
       </div>
     </aside>
   )

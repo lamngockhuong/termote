@@ -1703,6 +1703,16 @@ export default function App({
     (pane: SessionPane) => !!mux.caps.agentChat && chatAgent(pane.agentName),
     [mux.caps.agentChat],
   )
+  // The compact sidebar's Agents: a row opens its pane as a card does
+  const openAgentFromSidebar = useCallback(
+    (session: Session, pane: SessionPane) =>
+      openFromOverview(
+        session,
+        pane,
+        overviewOpensChat(pane) ? 'chat' : 'terminal',
+      ),
+    [openFromOverview, overviewOpensChat],
+  )
   const overviewCanAnswer = useCallback(
     (pane: SessionPane) =>
       !!mux.caps.agentChat && chatInputAgent(pane.agentName),
@@ -1995,6 +2005,9 @@ export default function App({
             reorder={reorder}
             layout={compactSidebar ? 'compact' : 'detailed'}
             onSelectGroup={selectGroup}
+            onOpenAgent={openAgentFromSidebar}
+            activePaneId={activeSession.paneId}
+            clockOffset={clockOffset}
           />
         )}
 

@@ -513,7 +513,11 @@ vi.mock('./components/session-sidebar', () => ({
     onOpenOverview,
     layout,
     onSelectGroup,
+    onOpenAgent,
+    sessions,
   }: {
+    sessions: { panes?: object[] }[]
+    onOpenAgent?: (session: object, pane: object) => void
     layout?: string
     onSelectGroup?: (groupId: string) => void
     onOpenOverview?: () => void
@@ -572,6 +576,11 @@ vi.mock('./components/session-sidebar', () => ({
       )}
       {!isMobile && onSelect && (
         <button onClick={() => onSelect('w2:t1')}>SBSelectW2</button>
+      )}
+      {!isMobile && onOpenAgent && sessions[0].panes && (
+        <button onClick={() => onOpenAgent(sessions[0], sessions[0].panes![0])}>
+          SBOpenAgent
+        </button>
       )}
       {!isMobile &&
         onSelectGroup &&
@@ -5925,6 +5934,14 @@ describe('App views, view-only and deep links', () => {
     switchSession.mockClear()
     pick('empty')
     expect(switchSession).not.toHaveBeenCalled()
+  })
+
+  it('a row of the sidebar’s agents opens its pane, as a card does', async () => {
+    mockSessions()
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'SBOpenAgent' }))
+    expect(window.location.hash).toBe('#/s/w1/w1%3At1/w1%3At1%3Ap1')
+    window.history.replaceState(null, '', '/')
   })
 
   describe('agent overview', () => {

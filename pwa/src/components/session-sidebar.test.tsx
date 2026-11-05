@@ -3190,6 +3190,48 @@ describe('SessionSidebar — compact layout', () => {
     expect(screen.getByPlaceholderText('Session name')).toBeInTheDocument()
   })
 
+  it('lists the agents under the workspaces, only in the expanded compact sidebar', () => {
+    const sessions = TABS.map((t) =>
+      t.id === '$3:0'
+        ? {
+            ...t,
+            panes: [
+              {
+                id: 'p1',
+                label: 'claude',
+                hasAgent: true,
+                agentStatus: 'blocked' as const,
+              },
+            ],
+          }
+        : t,
+    )
+    const onOpenAgent = vi.fn()
+    const p = props({
+      sessions,
+      onOpenAgent,
+      activePaneId: 'p1',
+      clockOffset: 0,
+    })
+    const { rerender } = render(<SessionSidebar {...p} />)
+    const agents = screen.getByRole('region', { name: 'Agents' })
+    fireEvent.click(within(agents).getByRole('button', { name: /work/ }))
+    expect(onOpenAgent).toHaveBeenCalledWith(sessions[3], sessions[3].panes![0])
+    expect(
+      within(agents).getByRole('button', { name: /work/ }),
+    ).toHaveAttribute('aria-current', 'true')
+    // Not in the detailed layout, the rail or a phone's sheet
+    for (const over of [
+      { layout: 'detailed' as const },
+      { isCollapsed: true },
+      { isMobile: true },
+      { onOpenAgent: undefined },
+    ]) {
+      rerender(<SessionSidebar {...p} {...over} />)
+      expect(screen.queryByRole('region', { name: 'Agents' })).toBeNull()
+    }
+  })
+
   it('leaves a phone’s sheet as it is', () => {
     render(<SessionSidebar {...props({ isMobile: true })} />)
     expect(screen.queryByRole('button', { name: /, \d+ tabs?/ })).toBeNull()

@@ -14,7 +14,8 @@ vi.mock('../hooks/use-mux-api', async (orig) => ({
 
 import { resetActivityLog } from '../hooks/use-activity-log'
 import { resetAgentOverview } from '../hooks/use-agent-overview'
-import { agentCards, OVERVIEW_TICK, OverviewScreen } from './overview-screen'
+import { agentCards } from '../utils/agent-cards'
+import { OVERVIEW_TICK, OverviewScreen } from './overview-screen'
 
 const NOW = Date.parse('2026-10-13T09:10:00Z')
 

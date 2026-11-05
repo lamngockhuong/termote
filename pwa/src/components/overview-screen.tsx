@@ -4,9 +4,11 @@ import { useActivityLog } from '../hooks/use-activity-log'
 import { useAgentOverview } from '../hooks/use-agent-overview'
 import { useMediaQuery } from '../hooks/use-media-query'
 import { ENTER_FROM, useNewKeys } from '../hooks/use-new-keys'
+import { NOW_TICK, useNow } from '../hooks/use-now'
 import { LEAVE_TO, usePresenceList } from '../hooks/use-presence-list'
 import { useT } from '../i18n/i18n-context'
 import type { Session, SessionGroup, SessionPane } from '../types/session'
+import { agentCards, type OverviewCard } from '../utils/agent-cards'
 import { stuckFor } from '../utils/agent-stuck'
 import { overviewOrder } from '../utils/overview-order'
 import { sessionPaneKey } from '../utils/pane-remap'
@@ -25,30 +27,8 @@ import { SearchToggle, SessionSearchField } from './session-search-field'
 import { Button, IconButton } from './ui/button'
 import { Sheet } from './ui/sheet'
 
-// The card's time is a coarse "3 min ago": a tick every 30 s keeps it right
-// without rendering the list every second.
-export const OVERVIEW_TICK = 30_000
-
-export interface OverviewCard {
-  session: Session
-  pane: SessionPane
-  status?: SessionPane['agentStatus']
-  since?: string
-}
-
-// Every pane running an agent, with its tab, in the sidebar's order.
-export function agentCards(sessions: Session[]): OverviewCard[] {
-  return sessions.flatMap((session) =>
-    (session.panes ?? [])
-      .filter((p) => p.hasAgent)
-      .map((pane) => ({
-        session,
-        pane,
-        status: pane.agentStatus,
-        since: pane.agentSince,
-      })),
-  )
-}
+// The card's time is a coarse "3 min ago", read again this often
+export const OVERVIEW_TICK = NOW_TICK
 
 interface Props {
   sessions: Session[]
@@ -130,15 +110,7 @@ export function OverviewScreen({
     setQuery('')
     setSearchOpen(false)
   }
-  const [now, setNow] = useState(() => Date.now() + clockOffset)
-  useEffect(() => {
-    setNow(Date.now() + clockOffset)
-    const id = setInterval(
-      () => setNow(Date.now() + clockOffset),
-      OVERVIEW_TICK,
-    )
-    return () => clearInterval(id)
-  }, [clockOffset])
+  const now = useNow(clockOffset)
 
   const cards = useMemo(() => overviewOrder(agentCards(sessions)), [sessions])
   const summary = useMemo(
