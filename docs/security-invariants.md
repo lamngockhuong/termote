@@ -204,7 +204,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
     `validHcAddress`), checked in the params (`hcCheck`) before anything is sent; a name or
     `m/t7` never reaches the core. Every pane route goes through `requirePane`: the id must be a
     live terminal of the snapshot with a `herdr.space` label (`hcShown`), so a terminal of another
-    app (no label) cannot be attached, read, killed or labelled.
+    app (no label) cannot be attached, read, killed or labelled. One exception, on purpose: closing
+    a pane, a tab or a space (`kill`, a full client only) also kills the live terminals each of its
+    panes started that carry no `herdr.space` label, and theirs, 17 generations deep (`children`),
+    as herdr-app does, so its sub-agents do not run on alone. They are found through the core's
+    `parent` field, never through an id the client sent.
   - Autostart (the only place termote starts the core): `hc connect` starts a core that does not
     run (`connect_or_start`), so it is spawned only when the core answers, or for a full client's
     page snapshot (`startingSnapshot`), never for a peek, a view-only device, the stream,
@@ -2245,6 +2249,18 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   hooks `lefthook install` wrote before 2.2.0 runs them unchecked until `pnpm install` runs once
   (`CONTRIBUTING.md` says so). `pnpm install` itself runs the branch's `package.json` scripts
   (accepted: a maintainer reads that diff first, `CONTRIBUTING.md`)
+- **Interactive demo** (`pwa/src/demo/`, `pnpm --filter termote build:demo`, published at `/demo/`
+  of the website by `deploy-website.yml`): the PWA built with `--mode demo` answers its own
+  requests in the browser from fixtures. It talks to no termote server and holds no credential.
+  Vite replaces `import.meta.env.MODE` at build time, so the release build drops the branch that
+  loads it (`pwa/src/main.tsx`) and its chunk; CI's build (`ci.yml`) fails when the non-demo
+  build holds its marker (`DEMO_MARKER`, `termote-demo-mode`); `release.yml` does not repeat that
+  check. `isDemo` (`pwa/src/utils/demo.ts`) only turns off the install offer and notifications,
+  never a check. The fake `fetch` answers only `/api/mux/*` on
+  the page's own origin and the fake WebSocket only the stream path; anything else goes to the
+  browser's own. The demo build has its own CSP (`pwa/demo-csp.json`, a meta tag put in by
+  `demoPolicy`, `connect-src 'self' https://api.github.com`), no manifest and no service worker
+  (`VitePWA` disabled)
 - **Tailscale mapping**: `serve` removes its `tailscale serve` mapping when it stops (only while
   it still proxies to its port), so the name never leads to a free port another user could take;
   `start --lan` warns when lingering is off (the port is free while the user is logged out)
