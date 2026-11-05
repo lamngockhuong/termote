@@ -242,7 +242,7 @@ func (m *zellijMux) snapshot(ctx context.Context, create bool) (Snapshot, error)
 		snap.Groups = append(snap.Groups, g)
 	}
 	m.pruneTabKeys(names, reads)
-	snap.viewers = m.readClients(ctx, names)
+	snap.viewers = panesOfTabsShowing(snap.Groups, m.readClients(ctx, names))
 	if agentProcSupported && len(agentPanes) > 0 {
 		m.fillAgents(ctx, snap.Groups, agentPanes)
 	}

@@ -1485,7 +1485,8 @@ Agent status (Herdr event / Claude session file)
   client with the pane on screen (its stream's `visible` frames; tmux counts every pane of the
   session's current window, since one stream follows tab switches; Herdr and Zellij count one
   pane), or a desktop terminal attached to tmux or Zellij that is not Termote's own (tmux: with a
-  key in the last 5 minutes; Zellij reports no activity, so every attached client counts). A
+  key in the last 5 minutes, every pane of its window; Zellij reports no activity, so every
+  attached client counts, every pane of the tab it shows). A
   view-only client never counts. Seen in Termote, Herdr's `done` shows `idle` while the Herdr app
   may still show `done`. Limits: unseen turns are lost on a server restart and on a psmux tab
   renumbering; a turn shorter than the poll can go unnoticed; the activity log still records

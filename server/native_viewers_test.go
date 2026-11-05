@@ -47,6 +47,17 @@ func TestOwnTerminals(t *testing.T) {
 	}
 }
 
+func TestPanesOfTabsShowing(t *testing.T) {
+	groups := tmuxTabs(0, []string{"%1", "%2"}, []string{"%3"}).Groups
+	if got := panesOfTabsShowing(groups, nil); got != nil {
+		t.Errorf("none shown = %v", got)
+	}
+	got := panesOfTabsShowing(groups, map[string]bool{"%2": true})
+	if len(got) != 2 || !got["%1"] || !got["%2"] {
+		t.Errorf("panes = %v", got)
+	}
+}
+
 func TestZellijNativeViewers(t *testing.T) {
 	viewers := map[string]bool{}
 	clients := map[string]string{"1": "terminal_0", "2": "terminal_3", "3": "plugin_1", "4": "terminal_x"}
@@ -72,8 +83,10 @@ func TestZellijReadClients(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]bool{zellijPaneKey("main", 3): true, zellijPaneKey("other", 3): true,
-		zellijPaneKey("other", 1): true, zellijPaneKey("other", 2): true}
+	// A client shows its whole tab: pane 1 beside the focused 3 in main; a
+	// pane no tab has (terminal_2) adds nothing.
+	want := map[string]bool{zellijPaneKey("main", 3): true, zellijPaneKey("main", 1): true,
+		zellijPaneKey("other", 3): true, zellijPaneKey("other", 1): true}
 	if len(snap.viewers) != len(want) {
 		t.Fatalf("viewers = %v", snap.viewers)
 	}
@@ -93,7 +106,7 @@ func TestZellijReadClients(t *testing.T) {
 	slot <- struct{}{}
 	snap, _ = m.Snapshot(t.Context())
 	<-slot
-	if len(snap.viewers) != 1 || !snap.viewers[zellijPaneKey("main", 3)] {
+	if len(snap.viewers) != 2 || !snap.viewers[zellijPaneKey("main", 3)] || !snap.viewers[zellijPaneKey("main", 1)] {
 		t.Errorf("while a client starts = %v", snap.viewers)
 	}
 }

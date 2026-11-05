@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -109,9 +110,31 @@ func panesOfWindows(groups []Group, windows map[string]bool) map[string]bool {
 	return viewers
 }
 
-// zellijNativeViewers adds to viewers the panes of session that a client not
-// Termote's shows (clients: list-clients, id to pane). Zellij reports no
-// activity, so every such client counts.
+// panesOfTabsShowing is every pane key of the tabs that hold a pane in
+// shown: a Zellij client shows its whole tab, the pane with focus and the
+// others beside it; nil when none.
+func panesOfTabsShowing(groups []Group, shown map[string]bool) map[string]bool {
+	if len(shown) == 0 {
+		return nil
+	}
+	viewers := map[string]bool{}
+	for _, g := range groups {
+		for _, tab := range g.Tabs {
+			if !slices.ContainsFunc(tab.Panes, func(p Pane) bool { return shown[paneKey(p)] }) {
+				continue
+			}
+			for _, p := range tab.Panes {
+				viewers[paneKey(p)] = true
+			}
+		}
+	}
+	return viewers
+}
+
+// zellijNativeViewers adds to viewers the pane with focus of each client of
+// session that is not Termote's (clients: list-clients, id to pane);
+// panesOfTabsShowing widens it to its tab. Zellij reports no activity, so
+// every such client counts.
 func zellijNativeViewers(viewers map[string]bool, session string, clients map[string]string, own map[string]bool) {
 	for id, pane := range clients {
 		n, ok := strings.CutPrefix(pane, "terminal_")

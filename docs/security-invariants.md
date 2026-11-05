@@ -279,7 +279,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   whose pid is a terminal Termote runs (`ownTerminals`, filled by `startTerminal`) or with no key
   for 5 minutes (`nativeViewerIdle`) is left out; psmux is skipped. Zellij reuses its
   `list-clients`, leaving out Termote's clients (its own and those closed a moment ago) and every
-  client of a session whose slot is held (a client starting); sessions are listed 4 at a time. A
+  client of a session whose slot is held (a client starting), and counts every pane of the tab
+  holding a client's pane (`panesOfTabsShowing`); sessions are listed 4 at a time. A
   failed listing counts no one and is logged once until it works again. No pid, tty or client id reaches the snapshot JSON (`viewers` is unexported)
 - **Agent overview** (`server/agent_overview.go`, `GET /api/mux/overview`): `requireMethod(GET)`,
   `crossSiteRejection`, `requireAgentRead`; internal errors are logged only. It summarizes the

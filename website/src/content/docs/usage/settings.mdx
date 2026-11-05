@@ -170,8 +170,9 @@ you open its pane on any device signed in with full rights, or when you read it 
 Zellij terminal on the desktop. A device with view-only rights shows the count but never lowers it.
 
 The server remembers which turns were seen, for every device at once. On tmux, a pane counts as
-seen while its window is the one shown. A desktop terminal attached to tmux counts only while you
-typed in it in the last 5 minutes; one attached to Zellij always counts. With Herdr, a turn seen
+seen while its window is the one shown. A desktop terminal counts for every pane of the window
+(tmux) or tab (Zellij) it shows. One attached to tmux counts only while you typed in it in the last
+5 minutes; one attached to Zellij always counts. With Herdr, a turn seen
 in Termote shows as finished but read, even if the Herdr app still marks it.
 
 The row shows only where the browser supports it: the installed app on Windows, macOS and
