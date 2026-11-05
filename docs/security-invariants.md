@@ -183,7 +183,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
     environment is `terminalEnv()` (no `TERMOTE_*`) without any `HC_*` variable (a pane's
     `HC_TERMINAL_ID` would make termote that terminal's caller), plus `HC_SESSION` and
     `HC_SOCKET` as saved in the config by `start` from its shell (`TERMOTE_HC_SESSION`,
-    `TERMOTE_HC_SOCKET`; a shell without one keeps the saved value), never the service's own.
+    `TERMOTE_HC_SOCKET`; a shell without one keeps the saved value), never the service's own
+    while a saved config exists. Only `serve` with no config file (`newServeConfigFromEnv`, a
+    manual run or a test) takes `HC_SESSION` and `HC_SOCKET` from its own environment.
   - Typed allowlist: the params types are the only calls (`server.status`, `terminal.list`,
     `get`, `run`, `kill`, `label`, `read`, `attach`, `events.subscribe`, `doc.get`, `doc.set`; a
     test checks). No `terminal.on`, `send`, `keys`, `rm`. `doc.get` and `doc.set` name only the
