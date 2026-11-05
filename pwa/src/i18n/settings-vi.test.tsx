@@ -60,6 +60,7 @@ const SETTINGS: Settings = {
   uiStyle: 'neutral',
   driveTerminalSize: false,
   sidebarFilter: 'all',
+  sidebarLayout: 'detailed',
   sortBlockedFirst: false,
   markdownPreview: true,
   tablePreview: true,

@@ -333,6 +333,8 @@ export default function App({
   const isMobile = useIsMobile()
   // Opened from "Open in new window": only the link's target, nothing kept
   const focus = isFocusWindow()
+  // Desktop: one line per workspace, its tabs always in the header's bar
+  const compactSidebar = !isMobile && settings.sidebarLayout === 'compact'
   // Desktop only: the command palette, app shortcuts and other windows
   const finePointer = useMediaQuery('(pointer: fine)')
   const desktop = finePointer && !isMobile
@@ -1970,6 +1972,7 @@ export default function App({
             sortBlockedFirst={settings.sortBlockedFirst}
             groupActions={groupActions}
             reorder={reorder}
+            layout={compactSidebar ? 'compact' : 'detailed'}
           />
         )}
 
@@ -2003,7 +2006,9 @@ export default function App({
             groupName={groupName}
             blockedElsewhere={blockedElsewhere}
             showBrand={focus || sidebarCollapsed}
-            showSessionTabs={!focus && settings.showSessionTabs}
+            showSessionTabs={
+              !focus && (settings.showSessionTabs || compactSidebar)
+            }
             canRemoveTab={!readOnly && sessions.length > 1}
             onSelectTab={selectFromList}
             onAddTab={readOnly || focus ? undefined : () => addTab('New')}

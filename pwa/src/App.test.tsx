@@ -511,7 +511,9 @@ vi.mock('./components/session-sidebar', () => ({
     groupActions,
     reorder,
     onOpenOverview,
+    layout,
   }: {
+    layout?: string
     onOpenOverview?: () => void
     reorder?: {
       tabs: boolean
@@ -537,7 +539,11 @@ vi.mock('./components/session-sidebar', () => ({
     onFilterChange?: (filter: string) => void
     onRemove?: (id: string) => void
   }) => (
-    <div data-testid="session-sidebar" data-open={String(!!isOpen)}>
+    <div
+      data-testid="session-sidebar"
+      data-open={String(!!isOpen)}
+      data-layout={layout}
+    >
       {onRemove && <button onClick={() => onRemove('1')}>SBRemove</button>}
       {onRemove && !isMobile && (
         <button onClick={() => onRemove('gone')}>SBRemoveGone</button>
@@ -1993,6 +1999,48 @@ describe('App', () => {
     await waitFor(() => screen.getByRole('button', { name: 'QAText' }))
     fireEvent.click(screen.getByRole('button', { name: 'QAText' }))
     expect(mockSendTextToTerminal).toHaveBeenCalledWith(null, 'hello')
+  })
+
+  it('shows the tab bar with a compact sidebar on desktop, tabs switched off', async () => {
+    // Not a literal: the mock's settings type has no sidebarLayout
+    const settings = {
+      ...mockUseSettings().settings,
+      showSessionTabs: false,
+      sidebarLayout: 'compact',
+    }
+    mockUseSettings.mockReturnValue({ ...mockUseSettings(), settings })
+    render(<App />)
+    expect(await screen.findByTestId('session-tabs')).toBeInTheDocument()
+    expect(screen.getByTestId('session-sidebar')).toHaveAttribute(
+      'data-layout',
+      'compact',
+    )
+  })
+
+  it('keeps a phone on its own sheet and settings with a compact sidebar saved', async () => {
+    mockIsMobile.mockReturnValue(true)
+    // Not a literal: the mock's settings type has no sidebarLayout
+    const settings = {
+      ...mockUseSettings().settings,
+      showSessionTabs: false,
+      sidebarLayout: 'compact',
+    }
+    mockUseSettings.mockReturnValue({ ...mockUseSettings(), settings })
+    render(<App />)
+    await screen.findByTestId('session-sidebar')
+    expect(screen.queryByTestId('session-tabs')).toBeNull()
+    expect(screen.getByTestId('session-sidebar')).not.toHaveAttribute(
+      'data-layout',
+    )
+  })
+
+  it('passes the detailed layout to the desktop sidebar by default', async () => {
+    render(<App />)
+    expect(await screen.findByTestId('session-sidebar')).toHaveAttribute(
+      'data-layout',
+      'detailed',
+    )
+    expect(screen.queryByTestId('session-tabs')).toBeNull()
   })
 
   it('SessionTabs onAdd calls addSession("New") on desktop with showSessionTabs=true', async () => {

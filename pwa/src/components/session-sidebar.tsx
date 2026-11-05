@@ -48,6 +48,7 @@ import {
   summarizeSessions,
 } from '../utils/session-filter'
 import { matchesQuery, searchTerms } from '../utils/session-search'
+import type { SidebarLayout } from '../utils/sidebar-layout'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { AgentFilterBar } from './agent-filter-bar'
 import { AgentStatusBadge } from './agent-status-badge'
@@ -119,6 +120,8 @@ interface Props {
   groupActions?: GroupActions
   // Moving tabs and groups (caps.reorderTabs, caps.reorderGroups)
   reorder?: ReorderActions
+  // Desktop: each workspace with its tabs (detailed) or on one line (compact)
+  layout?: SidebarLayout
 }
 
 export interface ReorderActions {

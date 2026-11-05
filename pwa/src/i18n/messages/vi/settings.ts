@@ -52,8 +52,15 @@ export default {
   'settings.layoutView': 'Hiện các pane herdr cạnh nhau',
   'settings.layoutViewDesc': 'Tab có 2–4 pane hiện đúng bố cục của herdr',
 
+  'settings.sidebarLayout': 'Bố cục sidebar',
+  'settings.sidebarLayoutDesc':
+    'Gọn: mỗi workspace một dòng, tab nằm trên header, agent đang chạy gom ở dưới (màn hình rộng)',
+  'settings.sidebarLayout.detailed': 'Chi tiết',
+  'settings.sidebarLayout.compact': 'Gọn',
   'settings.tabs': 'Hiện tab phiên',
   'settings.tabsDesc': 'Thanh tab để chuyển phiên nhanh (máy tính)',
+  'settings.tabsForcedByCompact':
+    'Luôn hiện khi sidebar ở bố cục gọn, vì tab nằm ở đó',
   'settings.blockedFirst': 'Phiên đang chờ lên đầu',
   'settings.blockedFirstDesc':
     'Phiên nào đang chờ bạn thì xếp lên đầu nhóm của nó',
