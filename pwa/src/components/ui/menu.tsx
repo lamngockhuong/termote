@@ -218,18 +218,21 @@ export function Menu({
   }, [closing, inTopLayer])
 
   // Placed in the viewport, the menu would drift off its trigger as a list
-  // holding the trigger scrolls: that closes it. Any other scroll (a Chat
-  // following new messages, a table under its own menu) and a scroll inside
-  // the menu leave it; a resized window (a phone's keyboard closing) places
-  // it again.
+  // holding the trigger scrolls: that closes it. A context menu (anchorRef)
+  // follows its element instead: the list may scroll on its own (the tab bar
+  // bringing a new tab into view as it is right clicked). Any other scroll
+  // (a Chat following new messages, a table under its own menu) and a scroll
+  // inside the menu leave it; a resized window (a phone's keyboard closing)
+  // places it again.
   useEffect(() => {
     if (!isOpen || !inTopLayer) return
     const onScroll = (e: Event) => {
       const target = e.target as Node
       if (listRef.current?.contains(target)) return
       const trigger = anchorRef?.current ?? triggerRef.current
-      if (trigger && (target === document || target.contains(trigger)))
-        setIsOpenRef.current(false)
+      if (!trigger || (target !== document && !target.contains(trigger))) return
+      if (anchorRef) placeRef.current()
+      else setIsOpenRef.current(false)
     }
     const onResize = () => placeRef.current()
     document.addEventListener('scroll', onScroll, true)
