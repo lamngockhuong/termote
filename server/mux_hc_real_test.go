@@ -752,3 +752,39 @@ func TestHcRealDocumentWrite(t *testing.T) {
 		t.Errorf("group %+v", g)
 	}
 }
+
+// Typing opens an attach of its own that termote only writes to: a burst of
+// output past its credit window must not hold the terminal's output back
+// from the other viewers while that attach stays open.
+func TestHcRealTypingDoesNotStallViewers(t *testing.T) {
+	c := newHcRealCore(t)
+	m := c.mux()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	g := newHcRealGroup(t, c, m)
+	pane := g.Tabs[0].Panes[0].ID
+	v, err := m.AttachView(ctx, pane, Size{Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatalf("AttachView: %v", err)
+	}
+	defer v.Close()
+	out := readHcStream(v)
+	waitHc(t, "the view's first paint", func() bool { return out.len() > 0 })
+	// A full viewer too, as herdr-app is: the core may treat it apart from an
+	// observer.
+	t0, _ := m.state.terminal(pane)
+	full, err := m.Attach(ctx, pane, hcSize(t0))
+	if err != nil {
+		t.Fatalf("Attach: %v", err)
+	}
+	defer full.Close()
+	fullOut := readHcStream(full)
+	waitHc(t, "the full stream's first paint", func() bool { return fullOut.len() > 0 })
+	// 1 MiB of output (4 x hcWindow), then a marker the view has to see. The
+	// input attach SendKeys opened stays open through it (hcInputIdle).
+	if err := m.SendKeys(ctx, pane, "head -c 1048576 /dev/zero | tr '\\0' x; echo; echo burst-$((70+7))\r"); err != nil {
+		t.Fatal(err)
+	}
+	waitHc(t, "the marker after the burst in the view", func() bool { return out.has("burst-77") })
+	waitHc(t, "the marker after the burst in the full stream", func() bool { return fullOut.has("burst-77") })
+}
