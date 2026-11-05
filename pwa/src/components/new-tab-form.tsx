@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { type Ref, useEffect, useRef, useState } from 'react'
 import { useT } from '../i18n/i18n-context'
+import { imeComposing } from '../utils/ime-composing'
 import { IconPicker } from './icon-picker'
 import { Button } from './ui/button'
 
@@ -8,13 +9,18 @@ const INPUT_CLASSES =
 
 interface Props {
   onAdd: (name: string, icon: string) => void
-  onClose: () => void
+  // byPress: a press outside closed it, so the focus stays where it went
+  onClose: (byPress?: boolean) => void
+  // The name field, for a key asking for the form while it is open
+  nameRef?: Ref<HTMLInputElement>
+  // Presses on these do not close it (+ toggles it itself)
+  toggleSelector?: string
 }
 
 // A new tab's name and icon, in a panel under the header's tab bar (the
 // sidebar's own form is not on screen there). Enter adds, Escape or a press
 // outside closes; the icon sheet it opens is inside it.
-export function NewTabForm({ onAdd, onClose }: Props) {
+export function NewTabForm({ onAdd, onClose, nameRef, toggleSelector }: Props) {
   const { t } = useT()
   const [name, setName] = useState('')
   const [icon, setIcon] = useState('💻')
@@ -25,17 +31,16 @@ export function NewTabForm({ onAdd, onClose }: Props) {
   useEffect(() => {
     const onDown = (e: PointerEvent) => {
       const target = e.target as Element
-      // + toggles the form itself
       if (
         ref.current!.contains(target) ||
-        target.closest('[data-new-tab-toggle]')
+        (toggleSelector && target.closest(toggleSelector))
       )
         return
-      closeRef.current()
+      closeRef.current(true)
     }
     document.addEventListener('pointerdown', onDown)
     return () => document.removeEventListener('pointerdown', onDown)
-  }, [])
+  }, [toggleSelector])
 
   return (
     <form
@@ -52,7 +57,7 @@ export function NewTabForm({ onAdd, onClose }: Props) {
         // IME composition closes nothing
         if (
           e.key !== 'Escape' ||
-          e.nativeEvent.isComposing ||
+          imeComposing(e) ||
           (e.target as Element).closest('dialog')
         )
           return
@@ -67,6 +72,7 @@ export function NewTabForm({ onAdd, onClose }: Props) {
           type="text"
           aria-label={t('shell.sidebar.sessionName')}
           placeholder={t('shell.sidebar.sessionName')}
+          ref={nameRef}
           value={name}
           onChange={(e) => setName(e.target.value)}
           className={INPUT_CLASSES}
@@ -77,7 +83,7 @@ export function NewTabForm({ onAdd, onClose }: Props) {
         <Button type="submit" variant="primary" size="sm" className="flex-1">
           {t('shell.sidebar.add')}
         </Button>
-        <Button size="sm" onClick={onClose}>
+        <Button size="sm" onClick={() => onClose()}>
           {t('common.cancel')}
         </Button>
       </div>

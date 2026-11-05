@@ -11,6 +11,7 @@ import { LEAVE_TO, usePresenceList } from '../hooks/use-presence-list'
 import { useWheelScrollX } from '../hooks/use-wheel-scroll-x'
 import { useT } from '../i18n/i18n-context'
 import type { Session } from '../types/session'
+import { imeComposing } from '../utils/ime-composing'
 import { dropIndex, targetIndex } from '../utils/reorder'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { AgentStatusBadge } from './agent-status-badge'
@@ -85,7 +86,7 @@ interface DropTarget {
 // A new tab fades in; a closed one fades out, inert and out of the tab order
 // and of dragging, then the others close up.
 // A right click, Shift+F10 or the menu key opens a tab's menu: rename (F2,
-// in place), icon, move (Alt+Left/Right), a new tab with a name, close.
+// in place), icon, move (Alt+Left/Right), a new tab with a name (N), close.
 export function SessionTabs({
   sessions,
   activeId,
@@ -122,10 +123,14 @@ export function SessionTabs({
   // A tab moved by its keys, or renamed, takes the focus back once it is
   // drawn in its place: moving the focused node in the DOM drops its focus
   const refocus = useRef<string | null>(null)
+  // Only when the focus was lost: one taken elsewhere meanwhile (a click in
+  // the terminal during a slow move) stays there
   useEffect(() => {
     const key = refocus.current
     if (!key || renaming || moving) return
     refocus.current = null
+    const now = document.activeElement
+    if (now !== document.body && !scrollRef.current!.contains(now)) return
     tabButtons.current.get(key)?.focus()
   })
 
@@ -161,13 +166,16 @@ export function SessionTabs({
   // The form opened from a tab's menu gives the focus back to that tab,
   // from + to +
   const formFrom = useRef<HTMLElement | null>(null)
+  const formName = useRef<HTMLInputElement>(null)
   const openForm = (from: HTMLElement | null) => {
     formFrom.current = from
-    setFormOpen(true)
+    // Already open: its name field takes the focus again
+    if (formOpen) formName.current!.focus()
+    else setFormOpen(true)
   }
-  const closeForm = () => {
+  const closeForm = (byPress = false) => {
     setFormOpen(false)
-    formFrom.current?.focus()
+    if (!byPress) formFrom.current?.focus()
   }
   const addTab = () =>
     askName ? (formOpen ? closeForm() : openForm(addRef.current)) : onAdd!()
@@ -212,6 +220,20 @@ export function SessionTabs({
       if (!canRename) return
       e.preventDefault()
       startRename(sessions[at])
+      return
+    }
+    // N, the key where it is on any layout: a new tab with a name. Only on
+    // a focused tab, so no typing and no browser key is taken.
+    if (
+      e.code === 'KeyN' &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      !e.altKey &&
+      !e.shiftKey
+    ) {
+      if (!onAdd) return
+      e.preventDefault()
+      openForm(tabs[at])
       return
     }
     if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
@@ -303,6 +325,7 @@ export function SessionTabs({
             hasMenu && 'Shift+F10',
             canRename && 'F2',
             onMove && 'Alt+ArrowLeft Alt+ArrowRight',
+            onAdd && 'N',
             canRemove && 'Delete',
           ].filter(Boolean)
           return (
@@ -348,7 +371,7 @@ export function SessionTabs({
                     onChange={(e) => setDraft(e.target.value)}
                     onKeyDown={(e) => {
                       // Enter or Escape that ends an IME composition
-                      if (e.nativeEvent.isComposing) return
+                      if (imeComposing(e)) return
                       if (e.key !== 'Enter' && e.key !== 'Escape') return
                       e.preventDefault()
                       endRename(e.key === 'Enter')
@@ -362,6 +385,9 @@ export function SessionTabs({
                 <button
                   ref={(el) => {
                     if (active) activeRef.current = el
+                    // A tab fading out (a tmux window renumbered by a move
+                    // leaves its old id behind) is not the one to focus
+                    if (leaving) return
                     if (el) tabButtons.current.set(lastingKey(session), el)
                     else tabButtons.current.delete(lastingKey(session))
                   }}
@@ -403,8 +429,9 @@ export function SessionTabs({
         <IconButton
           ref={addRef}
           size="sm"
-          // Not a press outside the form: + itself closes it
-          data-new-tab-toggle
+          // Not a press outside the form: + itself closes it, where it is
+          // the one that opens it
+          data-new-tab-toggle={askName || undefined}
           onClick={addTab}
           aria-expanded={askName ? formOpen : undefined}
           className="mb-1"
@@ -418,6 +445,8 @@ export function SessionTabs({
         <NewTabForm
           onAdd={(name, icon) => onAdd!(name, icon)}
           onClose={closeForm}
+          nameRef={formName}
+          toggleSelector={askName ? '[data-new-tab-toggle]' : undefined}
         />
       )}
       {menuSession && (
@@ -467,7 +496,11 @@ export function SessionTabs({
             </>
           )}
           {onAdd && (
-            <MenuItem onSelect={() => openForm(menuAnchor.current)}>
+            <MenuItem
+              // i18n-ignore: a key's name
+              shortcut={{ label: 'N', aria: 'N' }}
+              onSelect={() => openForm(menuAnchor.current)}
+            >
               {t('shell.tabs.new')}
             </MenuItem>
           )}

@@ -63,7 +63,7 @@ describe('SessionTabs: a tab’s menu', () => {
     expect(item(/Move right/)).toHaveTextContent('Alt+→')
     expect(item(/Close/)).toHaveAttribute('aria-keyshortcuts', 'Delete')
     expect(item('Edit icon')).toBeEnabled()
-    expect(item('New session…')).toBeEnabled()
+    expect(item(/New session…/)).toHaveAttribute('aria-keyshortcuts', 'N')
     // Opened by the pointer, the box has the focus, not an item
     expect(document.activeElement).toBe(menu())
     // The browser's menu stays shut over it (the menu key's keyup)
@@ -96,7 +96,7 @@ describe('SessionTabs: a tab’s menu', () => {
     render(<SessionTabs {...props()} />)
     expect(tabOf('Alpha')).toHaveAttribute(
       'aria-keyshortcuts',
-      'Shift+F10 F2 Alt+ArrowLeft Alt+ArrowRight Delete',
+      'Shift+F10 F2 Alt+ArrowLeft Alt+ArrowRight N Delete',
     )
   })
 
@@ -183,6 +183,16 @@ describe('SessionTabs: a tab’s menu', () => {
       fireEvent.keyDown(field, { key: 'Enter', isComposing: true })
       fireEvent.keyDown(field, { key: 'Escape', isComposing: true })
       expect(field).toBeInTheDocument()
+      expect(p.onUpdate).not.toHaveBeenCalled()
+    })
+
+    it('Safari’s Enter confirming an IME word (keyCode 229) saves nothing', () => {
+      const p = props()
+      render(<SessionTabs {...p} />)
+      keyOn(tabOf('Alpha'), 'F2')
+      const field = screen.getByRole('textbox')
+      fireEvent.change(field, { target: { value: 'Ápi' } })
+      fireEvent.keyDown(field, { key: 'Enter', keyCode: 229 })
       expect(p.onUpdate).not.toHaveBeenCalled()
     })
 
@@ -312,6 +322,73 @@ describe('SessionTabs: a tab’s menu', () => {
       ).toBeVisible()
     })
 
+    it('leaves the focus taken elsewhere during a slow move', () => {
+      const p = props()
+      const { rerender } = render(
+        <>
+          <SessionTabs {...p} />
+          <button type="button">terminal</button>
+        </>,
+      )
+      keyOn(tabOf('Alpha'), 'ArrowRight', { altKey: true })
+      const other = screen.getByRole('button', { name: 'terminal' })
+      rerender(
+        <>
+          <SessionTabs {...p} moving />
+          <button type="button">terminal</button>
+        </>,
+      )
+      other.focus()
+      rerender(
+        <>
+          <SessionTabs {...p} sessions={[THREE[1], THREE[0], THREE[2]]} />
+          <button type="button">terminal</button>
+        </>,
+      )
+      expect(other).toHaveFocus()
+    })
+
+    it('focuses the live tab, not the copy of its old id fading out', () => {
+      // The tabs' transition, as the stylesheet gives it in a browser
+      const real = window.getComputedStyle
+      vi.spyOn(window, 'getComputedStyle').mockImplementation((el) =>
+        el.classList.contains('group')
+          ? ({
+              transitionDuration: '150ms',
+              transitionDelay: '0s',
+            } as CSSStyleDeclaration)
+          : real(el),
+      )
+      const p = props()
+      const win = (id: string, key: string, name: string): Session => ({
+        id,
+        key,
+        name,
+        icon: '💻',
+        description: '',
+      })
+      // tmux windows 0 and 2 (1 was closed): moving "two" left makes it 0
+      // and "one" 1, so id :2 goes and fades out with "two" in it
+      const { rerender } = render(
+        <SessionTabs
+          {...p}
+          sessions={[win('$1:0', '@5', 'one'), win('$1:2', '@6', 'two')]}
+        />,
+      )
+      keyOn(tabOf('two'), 'ArrowLeft', { altKey: true })
+      rerender(
+        <SessionTabs
+          {...p}
+          sessions={[win('$1:0', '@6', 'two'), win('$1:1', '@5', 'one')]}
+        />,
+      )
+      const live = screen
+        .getAllByRole('tab', { hidden: true })
+        .filter((t) => !t.closest('[data-leaving]'))
+      expect(document.activeElement).toBe(live[0])
+      expect(live[0]).toHaveTextContent('two')
+    })
+
     it('a moved tab gone before it is drawn again takes no focus', () => {
       const p = props()
       const { rerender } = render(<SessionTabs {...p} />)
@@ -381,6 +458,68 @@ describe('SessionTabs: a tab’s menu', () => {
       expect(screen.queryByRole('form')).toBeNull()
       // Back on the tab it was asked from
       expect(tabOf('Alpha')).toHaveFocus()
+    })
+
+    it('N on a focused tab opens it, focus back on that tab after', () => {
+      const p = props()
+      render(<SessionTabs {...p} />)
+      // Taken by nothing else: with a modifier it is not this key
+      for (const mod of ['ctrlKey', 'metaKey', 'altKey', 'shiftKey'])
+        keyOn(tabOf('Beta'), 'n', { code: 'KeyN', [mod]: true })
+      expect(screen.queryByRole('form')).toBeNull()
+      // The key where it is, whatever the layout writes there
+      keyOn(tabOf('Beta'), 'т', { code: 'KeyN' })
+      expect(
+        screen.getByRole('textbox', { name: 'Session name' }),
+      ).toHaveFocus()
+      fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' })
+      expect(tabOf('Beta')).toHaveFocus()
+    })
+
+    it('N with the form open puts the focus back in its name', () => {
+      render(<SessionTabs {...props()} />)
+      keyOn(tabOf('Alpha'), 'n', { code: 'KeyN' })
+      const name = screen.getByRole('textbox', { name: 'Session name' })
+      fireEvent.change(name, { target: { value: 'kept' } })
+      keyOn(tabOf('Beta'), 'n', { code: 'KeyN' })
+      expect(name).toHaveFocus()
+      expect(name).toHaveValue('kept')
+      // Closed now, the focus goes to the tab that asked last
+      fireEvent.keyDown(name, { key: 'Escape' })
+      expect(tabOf('Beta')).toHaveFocus()
+    })
+
+    it('a press outside closes it and leaves the focus where it went', () => {
+      render(<SessionTabs {...props()} />)
+      keyOn(tabOf('Alpha'), 'n', { code: 'KeyN' })
+      act(() => {
+        fireEvent.pointerDown(document.body)
+      })
+      expect(screen.queryByRole('form')).toBeNull()
+      expect(tabOf('Alpha')).not.toHaveFocus()
+    })
+
+    it('detailed: + still adds at once, closing a form opened by N', () => {
+      const p = props()
+      render(<SessionTabs {...p} />)
+      const add = screen.getByRole('button', { name: 'Add session' })
+      expect(add).not.toHaveAttribute('data-new-tab-toggle')
+      keyOn(tabOf('Alpha'), 'n', { code: 'KeyN' })
+      act(() => {
+        fireEvent.pointerDown(add)
+      })
+      fireEvent.click(add)
+      expect(screen.queryByRole('form')).toBeNull()
+      expect(p.onAdd).toHaveBeenCalledWith()
+    })
+
+    it('N does nothing where no tab can be added', () => {
+      render(<SessionTabs {...props()} onAdd={undefined} />)
+      tabOf('Alpha').focus()
+      expect(
+        fireEvent.keyDown(tabOf('Alpha'), { key: 'n', code: 'KeyN' }),
+      ).toBe(true)
+      expect(screen.queryByRole('form')).toBeNull()
     })
 
     it('the Add button asks for it where askName is set, else adds at once', () => {

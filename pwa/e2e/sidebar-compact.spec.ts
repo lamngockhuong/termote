@@ -325,10 +325,22 @@ test.describe('compact sidebar', () => {
     await expect(tab('a-named')).toBeVisible()
     // The menu's New session… opens the same form; Escape leaves it
     await tab('a-named').click({ button: 'right' })
+    await expect(
+      menu.getByRole('menuitem', { name: 'New session…' }),
+    ).toContainText('N')
     await menu.getByRole('menuitem', { name: 'New session…' }).click()
     await expect(form).toBeVisible()
     await page.keyboard.press('Escape')
     await expect(form).toBeHidden()
+    // So does N on a focused tab, the focus back on it after
+    await tab('a-named').focus()
+    await page.keyboard.press('n')
+    const nameField = form.getByRole('textbox', { name: 'Session name' })
+    await expect(nameField).toBeFocused()
+    // The key opened the form and typed nothing into it
+    await expect(nameField).toHaveValue('')
+    await page.keyboard.press('Escape')
+    await expect(tab('a-named')).toBeFocused()
 
     // Close, from the keyboard: Shift+F10 opens the menu on its first item
     await tab('a-named').focus()
@@ -341,5 +353,19 @@ test.describe('compact sidebar', () => {
       .click()
     await expect.poll(windows).toEqual(['a-first', 'a-second'])
     await expect(tab('a-named')).toHaveCount(0)
+
+    // Windows 0 and 2, 1 closed: a move renumbers the one moved, whose old
+    // id fades out while the focus stays on the live tab
+    tmux('new-window', '-d', '-t', `=${A}:`, '-n', 'a-third')
+    tmux('kill-window', '-t', `=${A}:=a-second`)
+    await expect(tab('a-second')).toHaveCount(0)
+    await expect(tab('a-third')).toBeVisible()
+    await tab('a-third').focus()
+    await page.keyboard.press('Alt+ArrowLeft')
+    await expect.poll(windows).toEqual(['a-third', 'a-first'])
+    await expect(tabBar(page).getByRole('tab').first()).toHaveAccessibleName(
+      /\sa-third$/,
+    )
+    await expect(tab('a-third')).toBeFocused()
   })
 })
