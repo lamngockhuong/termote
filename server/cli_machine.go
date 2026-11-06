@@ -556,4 +556,3 @@ func (c *cli) machineWhereami() error {
 	}
 	return json.NewEncoder(c.out).Encode(w)
 }
-

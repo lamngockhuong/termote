@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -81,5 +82,8 @@ func (c *cli) loadServeConfig() (serveConfig, error) {
 	cfg := serveConfigFromSaved(*saved, c.defaultPort())
 	// Native only: the container runs from the environment.
 	cfg.LocalSocketDir = c.localSocketDir()
+	cfg.MachinesFile = c.machinesFile()
+	cfg.MachineSSHDir = c.machineSSHDir()
+	cfg.MachineCtlDir = filepath.Join(c.localSocketDir(), "ssh")
 	return cfg, nil
 }

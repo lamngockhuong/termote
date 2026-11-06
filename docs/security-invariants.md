@@ -2161,6 +2161,24 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   lines there (matched on the key's base64) and drops the host key (`ssh-keygen -R`). The running
   server is told over the local socket only (`machines/reload`). `uninstall --purge` removes the store
   and key with the config dir; the lines on the machines stay
+- **Machine transport** (`server/machine_link.go`, `server/machine_conn.go`, `server/machine_serve.go`,
+  `server/machine_proc_*.go`): the server reads `machines.json` only with a saved config (never in the
+  container). Each machine gets one master `ssh -M -N -S <ctl> -o ControlPersist=no` (Unix) at
+  `<stateDir>/run/ssh/<id>` (dir 0700, `ensureSocketDir`), at most 86 bytes since OpenSSH binds
+  `<path>.<16 chars>` first, else `$TMPDIR/termote-<uid>/<id>`, else no multiplexing; a socket left
+  there gets `-O exit` and is removed before a new master. Every HTTP connection is one
+  `ssh -S <ctl> ... -- <alias> bridge` (Windows: its own ssh) with the service options of the Machines
+  CLI entry, used only after the greeting line (10 s) and, after any failure, an equal `apiVersion`
+  over a connection of its own; at most 16 per machine, idle 90 s. Every ssh runs in its own process
+  group with `Pdeathsig` (Linux), is reaped as an orphan at start on macOS (`HostKeyAlias=termote-`
+  in its command line) or sits in a kill-on-close Job Object (Windows), and is stopped (SIGTERM, then
+  SIGKILL after 1 s) when its connection closes, its machine is removed, or the server stops. ssh's
+  stderr (4 KB) is classified (`unauthorized|hostkey|incompatible|offline`) and logged (5 lines, 200
+  B each) on a status change, never sent to a client. After a failure requests fail at once for a
+  backoff of 5 s doubling to 5 min. Masters stop after 10 min unused unless Web Push is on (every
+  machine is then polled). `TERMOTE_E2E_MACHINE_BRIDGE` (`<label>=<port>@<dir>`, comma-separated)
+  joins bridge sockets of this machine instead of ssh: read only without a saved config, like every
+  `TERMOTE_*`, and scrubbed from the environment
 - **Signed-in browsers** (`server/sessions.go`, `server/signin_routes.go`, `caps.signins`): each
   password session (memory, 24 h, 256, LRU) keeps id (16 hex of the token's SHA-256), created,
   last used (1 min), `via` (`form|basic|link`), IP and a cleaned User-Agent (200 B). Basic auth

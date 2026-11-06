@@ -115,6 +115,16 @@ type serveConfig struct {
 	// server on without the password (<stateDir>/run; Windows uses a named
 	// pipe and ignores it); empty opens none (the container, tests).
 	LocalSocketDir string
+	// MachinesFile lists the machines reached over SSH (machines.json),
+	// MachineSSHDir holds termote's key and known_hosts for them and
+	// MachineCtlDir their masters' sockets; empty: no machines (the
+	// container, tests).
+	MachinesFile  string
+	MachineSSHDir string
+	MachineCtlDir string
+	// MachineBridges (TERMOTE_E2E_MACHINE_BRIDGE, read only without a saved
+	// config) joins bridge sockets of servers on this machine instead.
+	MachineBridges string
 	// OnListen runs once the port is bound (serve records its PID then, so
 	// a server that cannot bind never replaces the running one's PID file).
 	OnListen func()
@@ -142,6 +152,7 @@ func newServeConfigFromEnv() serveConfig {
 		// header is trusted from any source (the bridge gateway).
 		ProxyClientHeader:    canonicalProxyHeader(os.Getenv("TERMOTE_PROXY_CLIENT_HEADER")),
 		ProxyClientAnySource: true,
+		MachineBridges:       os.Getenv("TERMOTE_E2E_MACHINE_BRIDGE"),
 	}
 	// Where the host user's home dir sits in the container's workspace, when
 	// the workspace holds it ("." for the workspace itself).
@@ -159,6 +170,7 @@ var termoteEnvKeys = []string{
 	"TERMOTE_PASS", "TERMOTE_USER", "TERMOTE_PORT", "TERMOTE_BIND", "TERMOTE_NO_AUTH",
 	"TERMOTE_PWA_DIR", "TERMOTE_ALLOWED_HOSTS", "TERMOTE_MUX", "TERMOTE_HERDR_ALLOW_NO_AUTH",
 	"TERMOTE_PROJECT_DIR", "TERMOTE_WORKSPACE_HOME", "TERMOTE_PLACES", "TERMOTE_PROXY_CLIENT_HEADER",
+	"TERMOTE_E2E_MACHINE_BRIDGE",
 }
 
 // scrubTermoteEnv removes every TERMOTE_* variable from the process
@@ -532,6 +544,8 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 		sessions.onEnd = func(id string) { devices.codes.dropCreator(sessionCreator(id)) }
 	}
 	agent := registerMuxRoutes(mux, m, tokenStore, uploads, push)
+	// Web Push polls every machine, so their masters stay up with it.
+	agent.machines = newServeMachines(cfg, push != nil)
 	agent.instanceID = loadInstanceID(cfg.InstanceDir)
 	agent.devices = devices != nil
 	agent.signins = sessions != nil
@@ -739,6 +753,7 @@ func runServer(ctx context.Context, cfg serveConfig, m Mux, ln net.Listener) err
 	}
 	// Here, not in buildServer: a handler built for a test sends nothing
 	// and reads no host stats in the background.
+	defer agent.machines.stop()
 	startPushWatcher(ctx, m, push, agent.activity)
 	stopSystem := startSystemSampler(ctx, agent.system)
 	defer stopSystem()
