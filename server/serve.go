@@ -544,8 +544,9 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 		sessions.onEnd = func(id string) { devices.codes.dropCreator(sessionCreator(id)) }
 	}
 	agent := registerMuxRoutes(mux, m, tokenStore, uploads, push)
-	// Web Push polls every machine, so their masters stay up with it.
-	agent.machines = newServeMachines(cfg, push != nil)
+	// While a device is subscribed to Web Push, every machine is polled for
+	// its agents, so their masters stay up.
+	agent.machines = newServeMachines(cfg, func() bool { return push != nil && len(push.list()) > 0 })
 	if agent.machines != nil {
 		agent.machinePoll = newMachinePoller(agent.machines)
 	}

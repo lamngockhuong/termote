@@ -12,6 +12,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -100,12 +101,15 @@ func TestForwardedStreamRecheck(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { hub.shutdown(context.Background()); agent.machines.stop() })
-	srv := httptest.NewServer(h)
-	t.Cleanup(srv.Close)
+	// Set before anything reads it, restored after the server is gone
 	old := forwardedStreamRecheck
 	forwardedStreamRecheck = 20 * time.Millisecond
 	t.Cleanup(func() { forwardedStreamRecheck = old })
+	var gone atomic.Bool
+	hub.linked[0].alive = func(string) bool { return !gone.Load() }
+	t.Cleanup(func() { hub.shutdown(context.Background()); agent.machines.stop() })
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
 	full := pairDevice(t, h, "full")
 	base := "/api/machines/" + agent.machines.all()[0].rec.ID + "/mux/"
 	tok := decodeBody(t, serve(h, asDevice("GET", base+"stream-token", "", full)))["token"].(string)
@@ -118,7 +122,7 @@ func TestForwardedStreamRecheck(t *testing.T) {
 		t.Fatalf("stream: %v", err)
 	}
 	defer ws.CloseNow()
-	hub.linked[0].alive = func(string) bool { return false }
+	gone.Store(true)
 	for {
 		if _, _, err := ws.Read(ctx); err != nil {
 			if ctx.Err() != nil {
@@ -251,9 +255,9 @@ func TestCheckMachineHealthAnswers(t *testing.T) {
 	if err := checkMachineHealth(context.Background(), a); !errors.Is(err, errMachineIncompatible) {
 		t.Errorf("500: %v", err)
 	}
-	a, b = net.Pipe()
-	b.Close()
-	if err := checkMachineHealth(context.Background(), a); !errors.Is(err, errMachineOffline) {
+	dead, deadEnd := net.Pipe()
+	deadEnd.Close()
+	if err := checkMachineHealth(context.Background(), dead); !errors.Is(err, errMachineOffline) {
 		t.Errorf("closed: %v", err)
 	}
 }

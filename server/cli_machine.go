@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"text/tabwriter"
 	"time"
 )
@@ -264,13 +265,12 @@ func (c *cli) checkMachine(m machineRecord) error {
 // checkMachineHealth asks the bridge for health over conn: an apiVersion
 // other than this one's is incompatible.
 func checkMachineHealth(ctx context.Context, conn net.Conn) error {
-	used := false
+	var used atomic.Bool
 	cl := &http.Client{Transport: &http.Transport{DisableKeepAlives: true,
 		DialContext: func(context.Context, string, string) (net.Conn, error) {
-			if used {
+			if used.Swap(true) {
 				return nil, errors.New("connection already used")
 			}
-			used = true
 			return conn, nil
 		}}}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+localSocketHost+"/api/mux/health", nil)

@@ -213,12 +213,25 @@ func TestMachineManagerStopIdle(t *testing.T) {
 	l.mu.Lock()
 	l.lastUsed = time.Now().Add(-machineIdleStop - time.Second)
 	l.mu.Unlock()
-	mm.keepUp = true
+	mm.keepUp = func() bool { return true }
 	mm.stopIdle()
 	if len(d.idled) != 0 {
 		t.Error("idled while Web Push keeps masters up")
 	}
-	mm.keepUp = false
+	mm.keepUp = func() bool { return false }
+	// A stream still forwarded keeps it in use, however long ago it began
+	l.begin()
+	l.mu.Lock()
+	l.lastUsed = time.Now().Add(-machineIdleStop - time.Second)
+	l.mu.Unlock()
+	mm.stopIdle()
+	if len(d.idled) != 0 {
+		t.Error("a machine with an open stream was idled")
+	}
+	l.end()
+	l.mu.Lock()
+	l.lastUsed = time.Now().Add(-machineIdleStop - time.Second)
+	l.mu.Unlock()
 	mm.stopIdle()
 	if len(d.idled) != 1 {
 		t.Error("an idle machine kept its master")
@@ -226,16 +239,16 @@ func TestMachineManagerStopIdle(t *testing.T) {
 }
 
 func TestNewServeMachines(t *testing.T) {
-	if newServeMachines(serveConfig{}, false) != nil {
+	if newServeMachines(serveConfig{}, nil) != nil {
 		t.Error("a manager without machines")
 	}
-	if newServeMachines(serveConfig{MachineBridges: "bad"}, false) != nil {
+	if newServeMachines(serveConfig{MachineBridges: "bad"}, nil) != nil {
 		t.Error("a manager from a bridge list with no valid entry")
 	}
-	mm := newServeMachines(serveConfig{MachineBridges: "Remote=7681@/tmp/run, x, =1@/d, L=x@/d", MachinesFile: "/ignored"}, true)
+	mm := newServeMachines(serveConfig{MachineBridges: "Remote=7681@/tmp/run, x, =1@/d, L=x@/d", MachinesFile: "/ignored"}, func() bool { return true })
 	t.Cleanup(mm.stop)
 	all := mm.all()
-	if len(all) != 1 || all[0].rec.Label != "Remote" || !machineIDRe.MatchString(all[0].rec.ID) || !mm.keepUp {
+	if len(all) != 1 || all[0].rec.Label != "Remote" || !machineIDRe.MatchString(all[0].rec.ID) || !mm.keptUp() {
 		t.Fatalf("bridges: %+v", all)
 	}
 	mm.reload()
@@ -266,7 +279,7 @@ func TestNewServeMachines(t *testing.T) {
 	sd.forget("x")
 	sd.stop()
 
-	file := newServeMachines(serveConfig{MachinesFile: filepath.Join(t.TempDir(), "m.json"), MachineSSHDir: "/s", MachineCtlDir: ""}, false)
+	file := newServeMachines(serveConfig{MachinesFile: filepath.Join(t.TempDir(), "m.json"), MachineSSHDir: "/s", MachineCtlDir: ""}, nil)
 	t.Cleanup(file.stop)
 	if file == nil || len(file.all()) != 0 {
 		t.Error("a store manager")

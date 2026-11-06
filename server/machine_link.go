@@ -61,10 +61,62 @@ type machineLink struct {
 	nextTry  time.Time
 	checked  bool // health compared since the last failure
 	lastUsed time.Time
+	// active counts the requests and streams forwarded to the machine now:
+	// a machine in use is never idle, even on pooled connections.
+	active int
+	// conns are the bridge connections open now (in use or idle): closed
+	// when the machine is removed, a forwarded stream with them, also
+	// where no master's exit would end them (Windows).
+	conns map[*linkConn]struct{}
+}
+
+// linkConn is a bridge connection its link keeps track of.
+type linkConn struct {
+	net.Conn
+	l    *machineLink
+	once sync.Once
+}
+
+func (c *linkConn) Close() error {
+	c.once.Do(func() {
+		c.l.mu.Lock()
+		delete(c.l.conns, c)
+		c.l.mu.Unlock()
+	})
+	return c.Conn.Close()
+}
+
+// closeAll closes every connection open to the machine.
+func (l *machineLink) closeAll() {
+	l.transport.CloseIdleConnections()
+	l.mu.Lock()
+	open := make([]*linkConn, 0, len(l.conns))
+	for c := range l.conns {
+		open = append(open, c)
+	}
+	l.mu.Unlock()
+	for _, c := range open {
+		c.Close()
+	}
+}
+
+// begin and end bracket a request (or stream) forwarded to the machine.
+func (l *machineLink) begin() {
+	l.mu.Lock()
+	l.active++
+	l.lastUsed = time.Now()
+	l.mu.Unlock()
+}
+
+func (l *machineLink) end() {
+	l.mu.Lock()
+	l.active--
+	l.lastUsed = time.Now()
+	l.mu.Unlock()
 }
 
 func newMachineLink(rec machineRecord, d machineDialer) *machineLink {
-	l := &machineLink{rec: rec, dialer: d, status: machineConnecting}
+	l := &machineLink{rec: rec, dialer: d, status: machineConnecting, conns: map[*linkConn]struct{}{}}
 	l.transport = &http.Transport{
 		DialContext:         func(ctx context.Context, _, _ string) (net.Conn, error) { return l.dial(ctx) },
 		MaxConnsPerHost:     machineMaxConns,
@@ -115,7 +167,11 @@ func (l *machineLink) dial(ctx context.Context) (net.Conn, error) {
 		return nil, err
 	}
 	l.succeed()
-	return conn, nil
+	tc := &linkConn{Conn: conn, l: l}
+	l.mu.Lock()
+	l.conns[tc] = struct{}{}
+	l.mu.Unlock()
+	return tc, nil
 }
 
 // fail records a failed connection: the status, ssh's stderr in the log
@@ -177,9 +233,10 @@ type machineManager struct {
 	// fixed replaces the store (the E2E suite's bridges).
 	fixed  []machineRecord
 	dialer machineDialer
-	// keepUp keeps each machine's master up without a client: Web Push
-	// polls every machine.
-	keepUp bool
+	// keepUp reports whether each machine's master stays up without a
+	// client: Web Push has a subscription, so every machine is polled. nil:
+	// never.
+	keepUp func() bool
 
 	mu    sync.Mutex
 	links map[string]*machineLink
@@ -200,7 +257,7 @@ func newMachineManager(storePath string, d machineDialer) *machineManager {
 	if err := mm.reload(); err != nil {
 		log.Printf("machines: %v", err)
 	}
-	go mm.janitor()
+	go mm.janitor(machineJanitorEvery)
 	return mm
 }
 
@@ -215,8 +272,8 @@ func (mm *machineManager) reload() error {
 		}
 	}
 	mm.mu.Lock()
-	defer mm.mu.Unlock()
 	keep := map[string]bool{}
+	var dropped []*machineLink
 	mm.order = mm.order[:0]
 	for _, rec := range list {
 		keep[rec.ID] = true
@@ -225,24 +282,24 @@ func (mm *machineManager) reload() error {
 			l.retryNow()
 			continue
 		} else if ok {
-			mm.dropLocked(rec.ID)
+			dropped = append(dropped, l)
 		}
 		mm.links[rec.ID] = newMachineLink(rec, mm.dialer)
 	}
-	for id := range mm.links {
+	for id, l := range mm.links {
 		if !keep[id] {
-			mm.dropLocked(id)
+			dropped = append(dropped, l)
+			delete(mm.links, id)
 		}
 	}
-	return nil
-}
-
-func (mm *machineManager) dropLocked(id string) {
-	if l, ok := mm.links[id]; ok {
-		l.transport.CloseIdleConnections()
-		mm.dialer.forget(id)
-		delete(mm.links, id)
+	mm.mu.Unlock()
+	// Stopping an ssh takes up to a second: never while the list is held
+	// (the snapshot reads it).
+	for _, l := range dropped {
+		l.closeAll()
+		mm.dialer.forget(l.rec.ID)
 	}
+	return nil
 }
 
 // link is the machine with id, or nil.
@@ -271,8 +328,8 @@ func (mm *machineManager) all() []*machineLink {
 
 // janitor stops the master of a machine nothing used for machineIdleStop,
 // unless keepUp.
-func (mm *machineManager) janitor() {
-	t := time.NewTicker(machineJanitorEvery)
+func (mm *machineManager) janitor(every time.Duration) {
+	t := time.NewTicker(every)
 	defer t.Stop()
 	for {
 		select {
@@ -285,12 +342,12 @@ func (mm *machineManager) janitor() {
 }
 
 func (mm *machineManager) stopIdle() {
-	if mm.keepUp {
+	if mm.keptUp() {
 		return
 	}
 	for _, l := range mm.all() {
 		l.mu.Lock()
-		idle := !l.lastUsed.IsZero() && time.Since(l.lastUsed) > machineIdleStop
+		idle := l.active == 0 && !l.lastUsed.IsZero() && time.Since(l.lastUsed) > machineIdleStop
 		l.mu.Unlock()
 		if idle {
 			l.transport.CloseIdleConnections()
@@ -298,6 +355,9 @@ func (mm *machineManager) stopIdle() {
 		}
 	}
 }
+
+// keptUp reports whether every machine stays up and polled (keepUp).
+func (mm *machineManager) keptUp() bool { return mm.keepUp != nil && mm.keepUp() }
 
 // stop closes every connection and stops every ssh.
 func (mm *machineManager) stop() {

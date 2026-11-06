@@ -16,7 +16,7 @@ import (
 // cfg.MachinesFile over SSH, or (only without a saved config, for the E2E
 // suite) the bridges cfg.MachineBridges names, joined directly. nil when
 // there is neither: no machine, no ssh.
-func newServeMachines(cfg serveConfig, keepUp bool) *machineManager {
+func newServeMachines(cfg serveConfig, keepUp func() bool) *machineManager {
 	var mm *machineManager
 	switch {
 	case cfg.MachineBridges != "":
@@ -41,7 +41,7 @@ func newServeMachines(cfg serveConfig, keepUp bool) *machineManager {
 func newFixedMachineManager(recs []machineRecord, d machineDialer) *machineManager {
 	mm := &machineManager{dialer: d, fixed: recs, links: map[string]*machineLink{}, done: make(chan struct{})}
 	mm.reload()
-	go mm.janitor()
+	go mm.janitor(machineJanitorEvery)
 	return mm
 }
 

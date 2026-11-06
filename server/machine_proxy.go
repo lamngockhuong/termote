@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -97,7 +98,61 @@ func stripMachineHeaders(h http.Header, proxyHeader string) {
 	}
 }
 
+// machineTokenWindow is how long a stream token lives on the machine; a
+// client asks at most machineTokenMax of them (machineViewTokenMax for the
+// view role) per machine in that window. On the machine every forwarded
+// token has the same (empty) device, so its own per-device cap cannot tell
+// one client from another: without this, one client could push every other
+// client's pending tokens out of the machine's store.
+const (
+	machineTokenWindow  = 30 * time.Second
+	machineTokenMax     = 16
+	machineViewTokenMax = maxViewStreamTokens
+)
+
+// tokenLimiter counts recent stream-token requests per client and machine.
+type tokenLimiter struct {
+	mu   sync.Mutex
+	seen map[string][]time.Time
+}
+
+// allow records a request of key and reports whether it is within max.
+func (t *tokenLimiter) allow(key string, max int, now time.Time) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for k, ts := range t.seen {
+		kept := ts[:0]
+		for _, at := range ts {
+			if now.Sub(at) < machineTokenWindow {
+				kept = append(kept, at)
+			}
+		}
+		if len(kept) == 0 {
+			delete(t.seen, k)
+		} else {
+			t.seen[k] = kept
+		}
+	}
+	if len(t.seen[key]) >= max {
+		return false
+	}
+	t.seen[key] = append(t.seen[key], now)
+	return true
+}
+
+// tokenClient names who asks for a token, apart from every other client.
+func tokenClient(a authInfo) string {
+	switch {
+	case a.DeviceID != "":
+		return "device:" + a.DeviceID
+	case a.SessionID != "":
+		return "session:" + a.SessionID
+	}
+	return "password"
+}
+
 func registerMachineProxy(mux *http.ServeMux, agent *agentAPI, fwd *streamHub, allowed hostAllowlist, proxyHeader string) {
+	tokens := &tokenLimiter{seen: map[string][]time.Time{}}
 	mux.HandleFunc("/api/machines/", func(w http.ResponseWriter, r *http.Request) {
 		// The id and the route are read from the decoded path; the path is
 		// forwarded as it was escaped (a tmux pane id holds a '%'), but
@@ -132,6 +187,16 @@ func registerMachineProxy(mux *http.ServeMux, agent *agentAPI, fwd *streamHub, a
 			return
 		}
 		a, _ := authFrom(r.Context())
+		if rest == "stream-token" {
+			max := machineTokenMax
+			if isViewOnly(r) {
+				max = machineViewTokenMax
+			}
+			if !tokens.allow(id+"|"+tokenClient(a), max, time.Now()) {
+				jsonErrorCode(w, errTokensBusy.code, errTokensBusy.msg, errTokensBusy.status)
+				return
+			}
+		}
 		if isWriteMethod(r.Method) {
 			auditf("machine-request", "id", id, "method", r.Method, "path", machinePathClass(rest), "by", auditBy(a))
 			limit := machineBodyLimit("/api/mux/" + rest)
@@ -154,7 +219,7 @@ func registerMachineProxy(mux *http.ServeMux, agent *agentAPI, fwd *streamHub, a
 				}
 			},
 			ModifyResponse: func(resp *http.Response) error {
-				resp.Header.Del("Set-Cookie")
+				confineMachineResponse(resp)
 				return nil
 			},
 			ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
@@ -170,6 +235,8 @@ func registerMachineProxy(mux *http.ServeMux, agent *agentAPI, fwd *streamHub, a
 			},
 			FlushInterval: -1,
 		}
+		l.begin()
+		defer l.end()
 		if rest != "stream" || !isWebSocket(r) {
 			proxy.ServeHTTP(w, r)
 			return
@@ -217,6 +284,27 @@ func serveForwardedStream(w http.ResponseWriter, r *http.Request, proxy *httputi
 		}
 	}()
 	proxy.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// machineResponseDrop are headers of a machine's answer never passed on:
+// they would act on this server's origin (its cookies, its service worker,
+// its cache) on behalf of another computer.
+var machineResponseDrop = []string{"Set-Cookie", "Service-Worker-Allowed", "Clear-Site-Data", "Refresh", "Link"}
+
+// confineMachineResponse keeps a machine's answer from acting as a page of
+// this origin: what it serves runs sandboxed (an opaque origin, no script),
+// as this server's own downloads do, so a machine that turned hostile
+// cannot reach this server's routes or the other machines with the
+// user's cookies. A WebSocket upgrade carries no page.
+func confineMachineResponse(resp *http.Response) {
+	for _, k := range machineResponseDrop {
+		resp.Header.Del(k)
+	}
+	if resp.StatusCode == http.StatusSwitchingProtocols {
+		return
+	}
+	resp.Header.Add("Content-Security-Policy", svgPolicy)
+	resp.Header.Set("X-Content-Type-Options", "nosniff")
 }
 
 // originAuth names how a request signed in here, for the machine's audit.

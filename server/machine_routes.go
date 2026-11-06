@@ -93,7 +93,7 @@ func (p *machinePoller) touch() {
 func (p *machinePoller) active() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.mm.keepUp || time.Since(p.listed) < machineListActive
+	return p.mm.keptUp() || time.Since(p.listed) < machineListActive
 }
 
 // run polls until ctx ends.

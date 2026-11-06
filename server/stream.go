@@ -302,25 +302,29 @@ func (h *streamHub) remove(e *hubEntry) {
 // shutdown closes every stream and waits for their processes to exit, or for
 // ctx to expire.
 func (h *streamHub) shutdown(ctx context.Context) error {
-	for _, l := range h.linked {
-		if err := l.shutdown(ctx); err != nil {
-			return err
-		}
-	}
 	h.mu.Lock()
 	h.closing = true
 	for _, s := range h.streams {
 		s.cancel(errServerShutdown)
 	}
 	h.mu.Unlock()
-	done := make(chan struct{})
-	go func() { h.wg.Wait(); close(done) }()
 	if h.onShutdown != nil {
 		defer h.onShutdown()
 	}
+	// The linked hubs after this one's streams are cancelled: one that
+	// runs out of time never keeps this one's from closing or its store
+	// from being written.
+	var linkedErr error
+	for _, l := range h.linked {
+		if err := l.shutdown(ctx); err != nil && linkedErr == nil {
+			linkedErr = err
+		}
+	}
+	done := make(chan struct{})
+	go func() { h.wg.Wait(); close(done) }()
 	select {
 	case <-done:
-		return nil
+		return linkedErr
 	case <-ctx.Done():
 		return ctx.Err()
 	}

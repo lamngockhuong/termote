@@ -146,7 +146,7 @@ func TestMachinePoller(t *testing.T) {
 	if s, _ := l.state(); s != "offline" {
 		t.Errorf("status after a failed poll: %q", s)
 	}
-	mm.keepUp = true
+	mm.keepUp = func() bool { return true }
 	p.listed = time.Time{}
 	if !p.active() {
 		t.Error("inactive while Web Push keeps machines polled")
@@ -184,5 +184,98 @@ func TestPushWatcherObserveMachine(t *testing.T) {
 	}
 	if w.machinePrev["m2/"+paneKey(Pane{ID: "p"})] != "working" {
 		t.Errorf("machine statuses: %v", w.machinePrev)
+	}
+}
+
+// A linked hub that runs out of time never keeps the main one's streams
+// open or its store unwritten.
+func TestStreamHubShutdownLinkedTimeout(t *testing.T) {
+	hub := newStreamHub(4)
+	fwd := newStreamHub(4)
+	hub.linked = []*streamHub{fwd}
+	flushed := false
+	hub.onShutdown = func() { flushed = true }
+	var cause error
+	hub.addFor(func(err error) { cause = err }, roleFull, "", "")
+	fwd.addFor(func(error) {}, roleFull, "", "")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := hub.shutdown(ctx); err == nil {
+		t.Error("shutdown past its deadline reported nothing")
+	}
+	if !errors.Is(cause, errServerShutdown) || !flushed {
+		t.Errorf("main hub: cause %v, flushed %v", cause, flushed)
+	}
+}
+
+// A machine's answer never acts on this origin: sandboxed, no cookie,
+// service worker scope, site data clearing or refresh.
+func TestConfineMachineResponse(t *testing.T) {
+	resp := &http.Response{StatusCode: http.StatusOK, Header: http.Header{}}
+	for _, k := range machineResponseDrop {
+		resp.Header.Set(k, "x")
+	}
+	resp.Header.Set("Content-Type", "text/html")
+	confineMachineResponse(resp)
+	for _, k := range machineResponseDrop {
+		if resp.Header.Get(k) != "" {
+			t.Errorf("%s passed on", k)
+		}
+	}
+	if !strings.HasPrefix(resp.Header.Get("Content-Security-Policy"), "sandbox") || resp.Header.Get("X-Content-Type-Options") != "nosniff" {
+		t.Errorf("not confined: %v", resp.Header)
+	}
+	up := &http.Response{StatusCode: http.StatusSwitchingProtocols, Header: http.Header{"Set-Cookie": {"a"}}}
+	confineMachineResponse(up)
+	if up.Header.Get("Set-Cookie") != "" || up.Header.Get("Content-Security-Policy") != "" {
+		t.Errorf("upgrade: %v", up.Header)
+	}
+}
+
+// A client asks a machine for at most so many stream tokens per window:
+// the others' pending tokens stay in the machine's store.
+func TestTokenLimiter(t *testing.T) {
+	l := &tokenLimiter{seen: map[string][]time.Time{}}
+	now := time.Now()
+	for i := 0; i < 2; i++ {
+		if !l.allow("m|device:a", 2, now) {
+			t.Fatalf("request %d refused", i)
+		}
+	}
+	if l.allow("m|device:a", 2, now) {
+		t.Error("past the limit")
+	}
+	if !l.allow("m|device:b", 2, now) {
+		t.Error("another client refused")
+	}
+	if !l.allow("m|device:a", 2, now.Add(machineTokenWindow)) || len(l.seen["m|device:b"]) != 0 {
+		t.Error("the window did not pass")
+	}
+	for a, want := range map[authInfo]string{{DeviceID: "d"}: "device:d", {SessionID: "s"}: "session:s", {}: "password"} {
+		if got := tokenClient(a); got != want {
+			t.Errorf("tokenClient(%+v) = %q", a, got)
+		}
+	}
+}
+
+// Removing a machine closes its connections, in use or not.
+func TestMachineRemovedClosesConns(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "machines.json")
+	saveMachines(path, []machineRecord{testMachine("0123456789abcdef", "Box", "box")})
+	d := &fakeDialer{t: t, v: apiVersion}
+	mm := newMachineManager(path, d)
+	t.Cleanup(mm.stop)
+	l := mm.link("0123456789abcdef")
+	c, err := l.dial(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	saveMachines(path, nil)
+	mm.reload()
+	if _, err := c.Write([]byte("x")); err == nil {
+		t.Error("a connection of a removed machine stayed open")
+	}
+	if len(l.conns) != 0 {
+		t.Error("closed connections still tracked")
 	}
 }

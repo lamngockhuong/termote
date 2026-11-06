@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -78,6 +79,9 @@ type sshProc struct {
 	cmd    *exec.Cmd
 	stdin  io.WriteCloser
 	stdout *bufio.Reader
+	// out is stdout's read end, ours: Wait never closes it, so what ssh
+	// wrote before it exited is still read (a last answer, a close frame).
+	out    *os.File
 	stderr *lockedCapped
 	waited chan struct{}
 	once   sync.Once
@@ -91,18 +95,26 @@ var startSSH = func(argv []string) (*sshProc, error) {
 	if err != nil {
 		return nil, err
 	}
-	out, err := cmd.StdoutPipe()
+	out, w, err := os.Pipe()
 	if err != nil {
+		in.Close()
 		return nil, err
 	}
-	p := &sshProc{cmd: cmd, stdin: in, stdout: bufio.NewReader(out), stderr: &lockedCapped{}, waited: make(chan struct{})}
+	cmd.Stdout = w
+	// A child that left ssh's group and kept stderr open never holds Wait.
+	cmd.WaitDelay = sshKillWait
+	p := &sshProc{cmd: cmd, stdin: in, stdout: bufio.NewReader(out), out: out, stderr: &lockedCapped{}, waited: make(chan struct{})}
 	cmd.Stderr = p.stderr
-	if err := cmd.Start(); err != nil {
+	err = cmd.Start()
+	w.Close()
+	if err != nil {
+		out.Close()
 		return nil, err
 	}
 	if err := p.attach(); err != nil {
 		cmd.Process.Kill()
 		cmd.Wait()
+		out.Close()
 		return nil, err
 	}
 	go func() {
@@ -116,8 +128,14 @@ var startSSH = func(argv []string) (*sshProc, error) {
 func (p *sshProc) stop() {
 	p.once.Do(func() {
 		p.stdin.Close()
-		p.kill()
+		select {
+		case <-p.waited:
+			// Exited and reaped: its pid may name another process now.
+		default:
+			p.kill()
+		}
 		<-p.waited
+		p.out.Close()
 	})
 }
 

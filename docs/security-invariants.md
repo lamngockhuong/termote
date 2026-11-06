@@ -2164,7 +2164,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   service's own connection (`BatchMode`, `StrictHostKeyChecking=yes`, `IdentitiesOnly`,
   `IdentityAgent=none`) read the bridge greeting and an equal `apiVersion` (`--no-check` skips it);
   an alias with a `ProxyCommand`/`ProxyJump` is warned about. `remove` asks before dropping the key's
-  lines there (matched on the key's base64) and drops the host key (`ssh-keygen -R`). The running
+  lines there (matched on the key's base64; the file is rewritten only from a whole copy, so a full disk
+  never empties it) and drops the host key (`ssh-keygen -R`). The running
   server is told over the local socket only (`machines/reload`). `uninstall --purge` removes the store
   and key with the config dir; the lines on the machines stay
 - **Machine transport** (`server/machine_link.go`, `server/machine_conn.go`, `server/machine_serve.go`,
@@ -2181,8 +2182,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   SIGKILL after 1 s) when its connection closes, its machine is removed, or the server stops. ssh's
   stderr (4 KB) is classified (`unauthorized|hostkey|incompatible|offline`) and logged (5 lines, 200
   B each) on a status change, never sent to a client. After a failure requests fail at once for a
-  backoff of 5 s doubling to 5 min. Masters stop after 10 min unused unless Web Push is on (every
-  machine is then polled). `TERMOTE_E2E_MACHINE_BRIDGE` (`<label>=<port>@<dir>`, comma-separated)
+  backoff of 5 s doubling to 5 min. Masters stop after 10 min with no request or stream forwarded
+  (counted while each runs), unless a device has a Web Push subscription (every machine is then polled).
+  Removing a machine closes every connection open to it, a forwarded stream too, then stops its master.
+  stdout is read from a pipe of termote's own, so `Wait` never drops what ssh wrote last; `WaitDelay`
+  bounds a child holding stderr, and an exited ssh's pid is never signalled again. `TERMOTE_E2E_MACHINE_BRIDGE` (`<label>=<port>@<dir>`, comma-separated)
   joins bridge sockets of this machine instead of ssh: read only without a saved config, like every
   `TERMOTE_*`, and scrubbed from the environment
 - **Machine proxy** (`server/machine_proxy.go`, `/api/machines/{id}/mux/{rest}`): an ordinary route
@@ -2200,7 +2204,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `Referer`, `Forwarded`, every `Sec-Fetch-*`, `X-Termote-*`, `X-Forwarded-*`, `CF-Connecting-IP`,
   `X-Real-IP` and the configured proxy client header, sets `X-Termote-Role` from `requestRole` and
   `X-Termote-Origin-Auth`, sends the escaped path to `termote.local-socket`, and drops `Set-Cookie`
-  from the answer. A machine that cannot be reached answers 502 `machine_offline|machine_unauthorized|
+  from the answer, with `Service-Worker-Allowed`, `Clear-Site-Data`, `Refresh` and `Link`; every
+  answer but a 101 gets `Content-Security-Policy: sandbox; default-src 'none'` (plus inline style and
+  `data:` images) and `nosniff`, so nothing a machine serves runs as a page of this origin. A client asks
+  one machine for at most 16 stream tokens per 30 s (4 for the view role; else 429 `busy`): on the machine
+  every forwarded token has the same empty device. A machine that cannot be reached answers 502 `machine_offline|machine_unauthorized|
   machine_incompatible` (a changed host key is `machine_unauthorized`); transport errors are logged
   only. Writes are logged `audit: machine-request id method path=<first segment> by`
 - **Machines list** (`server/machine_routes.go`): `GET /api/mux/machines` (same-site read, every role)
