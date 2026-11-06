@@ -31,6 +31,12 @@ export default {
   'settings.ime.sendOnlyDesc': 'Send text to terminal without Enter',
   'settings.ime.sendEnter': 'Send + Enter',
   'settings.ime.sendEnterDesc': 'Send text then press Enter automatically',
+  'settings.chatSend': 'Send messages and comments with',
+  'settings.chatSend.ctrlEnter': 'Ctrl+Enter',
+  'settings.chatSend.ctrlEnterDesc':
+    'Enter starts a new line; Ctrl+Enter (Cmd+Enter on a Mac) sends',
+  'settings.chatSend.enter': 'Enter',
+  'settings.chatSend.enterDesc': 'Enter sends; Shift+Enter starts a new line',
   'settings.paste': 'Paste button source',
   'settings.paste.clipboard': 'System clipboard',
   'settings.paste.clipboardDesc': 'Paste from device clipboard (Ctrl+Shift+V)',

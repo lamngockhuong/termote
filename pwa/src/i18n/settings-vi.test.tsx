@@ -46,6 +46,7 @@ const SETTINGS: Settings = {
   herdrLayoutView: true,
   markdownEditLayout: 'split',
   imeSendBehavior: 'send-only',
+  chatSendKey: 'ctrl-enter',
   pasteSource: 'clipboard',
   toolbarDefaultExpanded: false,
   disableContextMenu: true,

@@ -683,6 +683,57 @@ describe('ChatComposer', () => {
     expect(box()).toHaveAttribute('placeholder', 'Message')
   })
 
+  describe('with Enter set to send', () => {
+    beforeEach(() => {
+      localStorage.setItem(
+        'termote-settings',
+        JSON.stringify({ chatSendKey: 'enter' }),
+      )
+    })
+    afterEach(() => localStorage.removeItem('termote-settings'))
+
+    it('Enter sends, Shift+Enter is a new line, and the hint says so', async () => {
+      render(<ChatComposer {...props()} />)
+      expect(box()).toHaveAccessibleDescription(
+        'Enter to send, Shift+Enter for a new line',
+      )
+      type('hi')
+      fireEvent.keyDown(box(), { key: 'Enter', shiftKey: true })
+      fireEvent.keyDown(box(), { key: 'Enter', altKey: true })
+      expect(mockSend).not.toHaveBeenCalled()
+      await act(async () => {
+        fireEvent.keyDown(box(), { key: 'Enter' })
+      })
+      expect(mockSend).toHaveBeenCalledWith('%3', 'hi', 'cur1', [], [])
+      type('again')
+      await act(async () => {
+        fireEvent.keyDown(box(), { key: 'Enter', metaKey: true })
+      })
+      expect(mockSend).toHaveBeenCalledTimes(2)
+    })
+
+    it('an Enter that ends an IME composition does not send', () => {
+      render(<ChatComposer {...props()} />)
+      type('xin chào')
+      fireEvent.keyDown(box(), { key: 'Enter', isComposing: true })
+      expect(mockSend).not.toHaveBeenCalled()
+    })
+
+    it('a phone still sends only with its button', () => {
+      render(<ChatComposer {...props({ isMobile: true })} />)
+      type('hi')
+      fireEvent.keyDown(box(), { key: 'Enter' })
+      expect(mockSend).not.toHaveBeenCalled()
+    })
+  })
+
+  it('by default Enter alone is a new line', () => {
+    render(<ChatComposer {...props()} />)
+    type('hi')
+    fireEvent.keyDown(box(), { key: 'Enter' })
+    expect(mockSend).not.toHaveBeenCalled()
+  })
+
   it('counts bytes, not characters, and blocks past 16 KB', () => {
     expect(byteLength('tiếng')).toBe(7)
     render(<ChatComposer {...props()} />)

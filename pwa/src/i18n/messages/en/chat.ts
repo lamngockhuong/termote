@@ -281,6 +281,7 @@ export default {
   'chat.composer.size':
     '{used} KB of {max} KB: shorten the message to send it.',
   'chat.composer.hint': 'Ctrl+Enter to send',
+  'chat.composer.hintEnter': 'Enter to send, Shift+Enter for a new line',
   'chat.attach.list': 'Attached images',
   'chat.attach.item': 'Attachment {n}, {state}',
   'chat.attach.uploading': 'uploading',

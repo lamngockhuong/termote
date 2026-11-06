@@ -30,6 +30,12 @@ export default {
   'settings.ime.sendOnlyDesc': 'Gửi chữ vào terminal, không nhấn Enter',
   'settings.ime.sendEnter': 'Gửi + Enter',
   'settings.ime.sendEnterDesc': 'Gửi chữ rồi tự nhấn Enter',
+  'settings.chatSend': 'Gửi tin nhắn và bình luận bằng',
+  'settings.chatSend.ctrlEnter': 'Ctrl+Enter',
+  'settings.chatSend.ctrlEnterDesc':
+    'Enter xuống dòng; Ctrl+Enter (Cmd+Enter trên Mac) gửi',
+  'settings.chatSend.enter': 'Enter',
+  'settings.chatSend.enterDesc': 'Enter gửi; Shift+Enter xuống dòng',
   'settings.paste': 'Nút dán lấy từ đâu',
   'settings.paste.clipboard': 'Clipboard hệ thống',
   'settings.paste.clipboardDesc':

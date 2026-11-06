@@ -114,6 +114,19 @@ describe('useSettings', () => {
     expect(result.current.settings.pollInterval).toBe(10)
   })
 
+  it('keeps a saved chat send key, anything else is Ctrl+Enter', () => {
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.chatSendKey).toBe('ctrl-enter')
+    act(() => result.current.updateSetting('chatSendKey', 'enter'))
+    expect(result.current.settings.chatSendKey).toBe('enter')
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ chatSendKey: 'space' }),
+    )
+    const { result: again } = renderHook(() => useSettings())
+    expect(again.current.settings.chatSendKey).toBe('ctrl-enter')
+  })
+
   it('replaces an unknown saved uiStyle with neutral', () => {
     localStorage.setItem(
       'termote-settings',

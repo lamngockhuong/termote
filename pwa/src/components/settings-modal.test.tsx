@@ -64,6 +64,7 @@ const DEFAULT_SETTINGS: Settings = {
   herdrLayoutView: true,
   markdownEditLayout: 'split',
   imeSendBehavior: 'send-only',
+  chatSendKey: 'ctrl-enter',
   pasteSource: 'clipboard',
   toolbarDefaultExpanded: false,
   disableContextMenu: true,
@@ -249,6 +250,26 @@ describe('SettingsModal', () => {
     })
     fireEvent.click(screen.getByRole('radio', { name: 'Send text only' }))
     expect(onUpdateSetting).toHaveBeenCalledWith('imeSendBehavior', 'send-only')
+  })
+
+  it('picks the key that sends a chat message, Ctrl+Enter by default', () => {
+    const { onUpdateSetting } = renderModal()
+    expect(screen.getByRole('radio', { name: 'Ctrl+Enter' })).toBeChecked()
+    expect(
+      screen.getByText(
+        'Enter starts a new line; Ctrl+Enter (Cmd+Enter on a Mac) sends',
+      ),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('radio', { name: 'Enter' }))
+    expect(onUpdateSetting).toHaveBeenCalledWith('chatSendKey', 'enter')
+  })
+
+  it('shows what Enter does once it sends', () => {
+    renderModal({ settings: { ...DEFAULT_SETTINGS, chatSendKey: 'enter' } })
+    expect(screen.getByRole('radio', { name: 'Enter' })).toBeChecked()
+    expect(
+      screen.getByText('Enter sends; Shift+Enter starts a new line'),
+    ).toBeInTheDocument()
   })
 
   it('shows the hint of the selected send behavior', () => {
@@ -1285,6 +1306,12 @@ describe('SettingsModal on a phone', () => {
     expect(
       screen.getByRole('radiogroup', { name: 'Text input send behavior' }),
     ).toBeInTheDocument()
+    // A phone sends a chat message with its button, never a key
+    expect(
+      screen.queryByRole('radiogroup', {
+        name: 'Send messages and comments with',
+      }),
+    ).toBeNull()
     expect(window.history.length).toBe(before + 1)
 
     fireEvent.click(back()!)

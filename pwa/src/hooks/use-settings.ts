@@ -118,10 +118,15 @@ export function resolveSeenVersion(value: unknown): number {
 }
 
 export type ImeSendBehavior = 'send-only' | 'send-enter'
+// The key that sends a chat message with a keyboard (a phone keeps its send
+// button, Enter a new line): Ctrl/Cmd+Enter, or Enter alone with Shift+Enter
+// for a new line
+export type ChatSendKey = 'ctrl-enter' | 'enter'
 export type PasteSource = 'clipboard' | 'tmux'
 
 export interface Settings {
   imeSendBehavior: ImeSendBehavior
+  chatSendKey: ChatSendKey // chat composer on desktop (above)
   toolbarDefaultExpanded: boolean
   disableContextMenu: boolean
   copyOnSelect: boolean // copy the terminal selection when a mouse drag ends
@@ -169,6 +174,7 @@ export interface Settings {
 
 const DEFAULTS: Settings = {
   imeSendBehavior: 'send-only',
+  chatSendKey: 'ctrl-enter',
   toolbarDefaultExpanded: false,
   disableContextMenu: true,
   copyOnSelect: false,
@@ -225,7 +231,11 @@ let cachedJson = ''
 let cachedSettings = DEFAULTS
 
 function getSnapshot(): Settings {
-  const json = localStorage.getItem(STORAGE_KEY) ?? ''
+  // Blocked storage (a private window, site data off) reads as no settings
+  let json = ''
+  try {
+    json = localStorage.getItem(STORAGE_KEY) ?? ''
+  } catch {}
   if (json !== cachedJson) {
     cachedJson = json
     try {
@@ -236,6 +246,7 @@ function getSnapshot(): Settings {
       cachedSettings = {
         ...merged,
         uiStyle: resolveUiStyle(merged.uiStyle),
+        chatSendKey: merged.chatSendKey === 'enter' ? 'enter' : 'ctrl-enter',
         sidebarFilter: resolveSidebarFilter(merged.sidebarFilter),
         sidebarLayout: resolveSidebarLayout(merged.sidebarLayout),
         findIncludeIgnored: merged.findIncludeIgnored === true,

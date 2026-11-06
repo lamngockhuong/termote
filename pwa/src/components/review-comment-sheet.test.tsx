@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReviewTarget } from '../utils/review-draft'
 import { ReviewCommentSheet } from './review-comment-sheet'
 
@@ -99,5 +99,50 @@ describe('ReviewCommentSheet', () => {
     expect(onSave).toHaveBeenCalledWith('old')
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(onClose).toHaveBeenCalled()
+  })
+})
+
+describe('ReviewCommentSheet with Enter set to send', () => {
+  const desktopMatchMedia = window.matchMedia
+  beforeEach(() => {
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ chatSendKey: 'enter' }),
+    )
+  })
+  afterEach(() => {
+    localStorage.removeItem('termote-settings')
+    window.matchMedia = desktopMatchMedia
+  })
+
+  it('adds with Enter, Shift+Enter is a new line, an IME Enter commits', () => {
+    const { onSave } = show(on())
+    expect(screen.getByRole('button', { name: 'Add' })).toHaveAttribute(
+      'title',
+      'Enter',
+    )
+    type('Why?')
+    fireEvent.keyDown(box(), { key: 'Enter', shiftKey: true })
+    fireEvent.keyDown(box(), { key: 'Enter', isComposing: true })
+    expect(onSave).not.toHaveBeenCalled()
+    fireEvent.keyDown(box(), { key: 'Enter' })
+    expect(onSave).toHaveBeenCalledWith('Why?')
+  })
+
+  it("keeps a phone's Enter a new line, Ctrl+Enter still adds", () => {
+    window.matchMedia = ((query: string) => ({
+      ...desktopMatchMedia(query),
+      matches: query === '(max-width: 767px)',
+    })) as unknown as typeof window.matchMedia
+    const { onSave } = show(on())
+    expect(screen.getByRole('button', { name: 'Add' })).toHaveAttribute(
+      'title',
+      'Ctrl+Enter',
+    )
+    type('Why?')
+    fireEvent.keyDown(box(), { key: 'Enter' })
+    expect(onSave).not.toHaveBeenCalled()
+    fireEvent.keyDown(box(), { key: 'Enter', ctrlKey: true })
+    expect(onSave).toHaveBeenCalledWith('Why?')
   })
 })
