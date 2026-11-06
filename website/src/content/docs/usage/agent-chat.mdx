@@ -109,7 +109,10 @@ contains it. Each row shows where the command comes from:
   `CLAUDE_CONFIG_DIR`).
 - `plugin`: commands and skills of the plugins you have installed and enabled, named
   `/<plugin>:<name>`. A plugin turned off in the project's `.claude/settings.json` or
-  `.claude/settings.local.json` is left out.
+  `.claude/settings.local.json` is left out. A plugin bundle placed in your config dir's
+  `skills/` (a folder holding `.claude-plugin/plugin.json`, as some kits install
+  themselves) is listed the same way, named after its manifest; its links may also lead into a
+  hidden folder right under your home, such as `~/.<kit>`.
 
 Skills carry a `skill` tag as well.
 

@@ -107,7 +107,10 @@ dòng ghi lệnh lấy từ đâu:
   `CLAUDE_CONFIG_DIR`).
 - `plugin`: lệnh và skill của các plugin bạn đã cài và đang bật, có tên dạng
   `/<plugin>:<name>`. Plugin bị tắt trong `.claude/settings.json` hoặc
-  `.claude/settings.local.json` của dự án sẽ không có trong danh sách.
+  `.claude/settings.local.json` của dự án sẽ không có trong danh sách. Một gói plugin đặt trong
+  `skills/` của thư mục cấu hình (thư mục có `.claude-plugin/plugin.json`, như cách một số bộ
+  kit tự cài) cũng được liệt kê như vậy, đặt tên theo manifest; liên kết bên trong nó được phép
+  trỏ thêm vào một thư mục ẩn ngay dưới home của bạn, như `~/.<kit>`.
 
 Skill có thêm nhãn `skill`.
 
