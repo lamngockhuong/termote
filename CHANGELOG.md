@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.21.1](https://github.com/lamngockhuong/termote/compare/v2.21.0...v2.21.1) (2026-11-05)
+
+
+### Bug Fixes
+
+* a port race in the update tests, and when serve reads HC_SESSION ([#708](https://github.com/lamngockhuong/termote/issues/708)) ([f4d6ad7](https://github.com/lamngockhuong/termote/commit/f4d6ad7143863028bd21996e92ceb703f58c8d5f))
+* close three findings of the 9702242..8b941c2 security review ([#705](https://github.com/lamngockhuong/termote/issues/705)) ([5f5fc74](https://github.com/lamngockhuong/termote/commit/5f5fc7453450c9154b91734988d76d63eb5fc511))
+* **pwa:** fit the compact workspace row's menu button inside the row ([#706](https://github.com/lamngockhuong/termote/issues/706)) ([6350e3b](https://github.com/lamngockhuong/termote/commit/6350e3b40e72de507d0238cd6053cc21105d1ac6))
+
 ## [2.21.0](https://github.com/lamngockhuong/termote/compare/v2.20.0...v2.21.0) (2026-11-05)
 
 
