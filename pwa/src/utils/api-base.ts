@@ -19,16 +19,11 @@ export function isMachineId(id: unknown): id is string {
 
 // The machine in a location's search, or '' for this server.
 export function machineFromSearch(search: string): string {
-  try {
-    const id = new URLSearchParams(search).get('machine')
-    return isMachineId(id) ? id : ''
-  } catch {
-    return ''
-  }
+  const id = new URLSearchParams(search).get('machine')
+  return isMachineId(id) ? id : ''
 }
 
-let current =
-  typeof window === 'undefined' ? '' : machineFromSearch(window.location.search)
+let current = machineFromSearch(window.location.search)
 
 // The machine open in this page, '' for this server.
 export function currentMachine(): string {

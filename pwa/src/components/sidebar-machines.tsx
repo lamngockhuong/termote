@@ -1,10 +1,6 @@
 import { ChevronDown, ChevronRight, Monitor, Server } from 'lucide-react'
 import { useState } from 'react'
-import type {
-  MachineInfo,
-  MachinePane,
-  MachineStatus,
-} from '../hooks/use-mux-api'
+import type { MachineInfo, MachineStatus } from '../hooks/use-mux-api'
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
 import type { AgentStatus } from '../types/session'
@@ -42,19 +38,27 @@ function knownStatus(s: string): MachineStatus {
   return Object.hasOwn(STATUS_LABEL, s) ? (s as MachineStatus) : 'offline'
 }
 
+interface MachineAgent {
+  key: string
+  // Its group and tab names
+  place: string
+  // The pane's own name, else its agent's
+  name: string
+  status: string
+}
+
 // Every pane of the machine running an agent, with where it runs
-export function machineAgents(
-  m: MachineInfo,
-): Array<{ key: string; place: string; pane: MachinePane }> {
-  const out: Array<{ key: string; place: string; pane: MachinePane }> = []
+export function machineAgents(m: MachineInfo): MachineAgent[] {
+  const out: MachineAgent[] = []
   for (const g of m.groups ?? []) {
-    for (const t of g.tabs ?? []) {
-      for (const p of t.panes ?? []) {
+    for (const t of g.tabs) {
+      for (const p of t.panes) {
         if (!p.agent) continue
         out.push({
           key: `${g.id}/${t.id}/${p.id}`,
           place: [g.name, t.name].filter(Boolean).join(' / '),
-          pane: p,
+          name: p.name || p.agent.name,
+          status: p.agent.status,
         })
       }
     }
@@ -65,8 +69,7 @@ export function machineAgents(
 // The agents that need the user or are working
 export function busyCount(m: MachineInfo): number {
   return machineAgents(m).filter(
-    ({ pane }) =>
-      pane.agent?.status === 'blocked' || pane.agent?.status === 'working',
+    ({ status }) => status === 'blocked' || status === 'working',
   ).length
 }
 
@@ -193,8 +196,7 @@ export function SidebarMachines({ machines, current, onSelect }: Props) {
                       </p>
                     ) : (
                       <ul className="m-0 flex list-none flex-col p-0">
-                        {agents.map(({ key, place, pane }) => {
-                          const s = pane.agent?.status ?? ''
+                        {agents.map(({ key, place, name, status: s }) => {
                           return (
                             <li
                               key={key}
@@ -209,10 +211,8 @@ export function SidebarMachines({ machines, current, onSelect }: Props) {
                                 size={12}
                               />
                               <span className="min-w-0 flex-1 truncate">
-                                {visibleUnsafe(
-                                  pane.name || pane.agent?.name || place,
-                                )}
-                                {place && (pane.name || pane.agent?.name) && (
+                                {visibleUnsafe(name)}
+                                {place && (
                                   <span className="text-fg-subtle">
                                     {' · '}
                                     {visibleUnsafe(place)}

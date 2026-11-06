@@ -74,6 +74,7 @@ describe('useMachines', () => {
     mockFetch
       .mockResolvedValueOnce([BOX])
       .mockRejectedValueOnce(new Error('offline'))
+      .mockRejectedValueOnce(new RequestError(502, 'machine_offline', 'x'))
       .mockRejectedValueOnce(new RequestError(404, '', 'not found'))
     const { result } = renderHook(() => useMachines())
     await act(async () => {})
@@ -85,9 +86,25 @@ describe('useMachines', () => {
       vi.advanceTimersByTime(MACHINES_POLL)
     })
     await act(async () => {
+      vi.advanceTimersByTime(MACHINES_POLL)
+    })
+    await act(async () => {
       vi.advanceTimersByTime(MACHINES_POLL * 10)
     })
-    expect(mockFetch).toHaveBeenCalledTimes(3)
+    expect(mockFetch).toHaveBeenCalledTimes(4)
+  })
+
+  it('drops a read that ends after unmount, and never reads twice at once', async () => {
+    let finish: (v: unknown) => void = () => {}
+    mockFetch.mockReturnValue(new Promise((r) => (finish = r)))
+    const { result, unmount } = renderHook(() => useMachines())
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+    unmount()
+    await act(async () => finish([BOX]))
+    expect(result.current).toEqual([])
   })
 
   it('reads nothing while hidden, and at once when shown', async () => {

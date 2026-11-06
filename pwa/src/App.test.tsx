@@ -29,6 +29,7 @@ import { useHistoryClose } from './hooks/use-history-close'
 import type { MuxSnapshot } from './hooks/use-mux-api'
 import { usePushSubscription } from './hooks/use-push-subscription'
 import { resetAllShortcuts, setShortcut } from './hooks/use-shortcuts'
+import { setCurrentMachineForTest } from './utils/api-base'
 import { takeDraftInsert } from './utils/chat-draft'
 import { setFocusWindowForTest } from './utils/focus-mode'
 import {
@@ -105,6 +106,11 @@ vi.mock('./hooks/use-files', async (orig) => ({
 vi.mock('./hooks/use-git-changes', async (orig) => ({
   ...(await orig<typeof import('./hooks/use-git-changes')>()),
   openChangeFromLink: (...a: unknown[]) => mockOpenChangeFromLink(...a),
+}))
+// The machines this server reaches: none unless a test sets some
+let mockMachines: import('./hooks/use-mux-api').MachineInfo[] = []
+vi.mock('./hooks/use-machines', () => ({
+  useMachines: () => mockMachines,
 }))
 vi.mock('./hooks/use-local-sessions', () => ({
   useLocalSessions: (...args: any[]) =>
@@ -515,7 +521,9 @@ vi.mock('./components/session-sidebar', () => ({
     onSelectGroup,
     onOpenAgent,
     sessions,
+    machines,
   }: {
+    machines?: import('react').ReactNode
     sessions: { panes?: object[] }[]
     onOpenAgent?: (session: object, pane: object) => void
     layout?: string
@@ -550,6 +558,7 @@ vi.mock('./components/session-sidebar', () => ({
       data-open={String(!!isOpen)}
       data-layout={layout}
     >
+      {machines}
       {onRemove && <button onClick={() => onRemove('1')}>SBRemove</button>}
       {onRemove && !isMobile && (
         <button onClick={() => onRemove('gone')}>SBRemoveGone</button>
@@ -1061,6 +1070,24 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByTestId('terminal-view')).toBeInTheDocument()
     })
+  })
+
+  it('lists the machines and names the open one in the title', async () => {
+    const id = '0123456789abcdef'
+    mockMachines = [{ id, label: 'Box', status: 'online' }]
+    setCurrentMachineForTest(id)
+    try {
+      const { unmount } = render(<App />)
+      expect(
+        await screen.findByRole('button', { name: /^Box/ }),
+      ).toHaveAttribute('aria-current', 'true')
+      expect(document.title).toBe('Box — Termote')
+      unmount()
+      expect(document.title).not.toContain('Box')
+    } finally {
+      mockMachines = []
+      setCurrentMachineForTest('')
+    }
   })
 
   it('renders desktop sidebar (not mobile)', async () => {
