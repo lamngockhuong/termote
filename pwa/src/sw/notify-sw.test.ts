@@ -137,6 +137,7 @@ describe('notify-sw.js', () => {
     expect(win.postMessage).toHaveBeenCalledWith({
       type: 'termote-open',
       hash: '#/s/g/t/p',
+      machine: '',
     })
     expect(win.focus).toHaveBeenCalled()
     expect(clients.openWindow).not.toHaveBeenCalled()
@@ -162,6 +163,7 @@ describe('notify-sw.js', () => {
     expect(open).toHaveBeenCalledWith('termote-notify')
     expect(await kept.get('/__termote/pending-link')?.json()).toEqual({
       hash: '#/s/g/t/p',
+      machine: '',
       at: 1000,
     })
     expect(win.postMessage).toHaveBeenCalled()
@@ -222,6 +224,33 @@ describe('notify-sw.js', () => {
     expect(clients.openWindow).toHaveBeenCalledWith('/#/s/g/t/p')
   })
 
+  it("opens a machine's pane on that machine", async () => {
+    const machine = '0123456789abcdef'
+    const { clients, dispatch } = loadWorker()
+    await dispatch('notificationclick', click({ hash: '#/s/g/t/p', machine }))
+    expect(clients.openWindow).toHaveBeenCalledWith(
+      `/?machine=${machine}#/s/g/t/p`,
+    )
+    const win = windowClient()
+    const open = loadWorker([win])
+    await open.dispatch(
+      'notificationclick',
+      click({ hash: '#/s/g/t', machine }),
+    )
+    expect(win.postMessage).toHaveBeenCalledWith({
+      type: 'termote-open',
+      hash: '#/s/g/t',
+      machine,
+    })
+    // Anything but a machine id is this server
+    const bad = loadWorker()
+    await bad.dispatch(
+      'notificationclick',
+      click({ hash: '#/s/g/t', machine: '../x' }),
+    )
+    expect(bad.clients.openWindow).toHaveBeenCalledWith('/#/s/g/t')
+  })
+
   it('never follows anything but a pane link', async () => {
     const win = windowClient()
     const { dispatch } = loadWorker([win])
@@ -258,6 +287,20 @@ describe('notify-sw.js', () => {
       expect(page.options.body).toBe('claude · work / build')
       expect(calls[0].init?.credentials).toBe('same-origin')
       expect(calls[0].init?.signal).toBeInstanceOf(AbortSignal)
+    })
+
+    it("reads a machine's names through this server", async () => {
+      const machine = '0123456789abcdef'
+      const calls = stubFetch({
+        [`/api/machines/${machine}/mux/snapshot?peek=1`]: { body: SNAPSHOT },
+      })
+      const { registration, dispatch } = loadWorker()
+      await dispatch('push', pushData({ ...EVENT, machineId: machine }))
+      expect(calls[0].url).toBe(`/api/machines/${machine}/mux/snapshot?peek=1`)
+      const [, options] = registration.showNotification.mock.calls[0]
+      expect(options.tag).toBe(`${machine}/%3`)
+      expect(options.data).toEqual({ hash: '#/s/%241/%241%3A2/%253', machine })
+      expect(options.body).toBe('claude · work / build')
     })
 
     it('names the pane by the name the user gave it, cleaned', async () => {

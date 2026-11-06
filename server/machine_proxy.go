@@ -55,16 +55,12 @@ var (
 // cannot be reached; what ssh said stays in the log.
 func machineErrorCode(err error) *codedError {
 	switch {
-	case errors.Is(err, errMachineUnauthorized):
-		return &codedError{code: "machine_unauthorized", msg: "the machine refused this server's key", status: http.StatusBadGateway}
-	case errors.Is(err, errMachineIncompatible), errors.Is(err, errMachineHostKey):
+	case errors.Is(err, errMachineUnauthorized), errors.Is(err, errMachineHostKey):
 		// A changed host key is never connected to: to a client it is a
-		// machine that cannot be used until the CLI fixes it.
-		code := "machine_incompatible"
-		if errors.Is(err, errMachineHostKey) {
-			code = "machine_unauthorized"
-		}
-		return &codedError{code: code, msg: "the machine cannot be used (see termote machine status)", status: http.StatusBadGateway}
+		// machine that refuses until the CLI fixes it.
+		return &codedError{code: "machine_unauthorized", msg: "the machine refused this server's connection", status: http.StatusBadGateway}
+	case errors.Is(err, errMachineIncompatible):
+		return &codedError{code: "machine_incompatible", msg: "the machine runs another release (see termote machine status)", status: http.StatusBadGateway}
 	}
 	return &codedError{code: "machine_offline", msg: "the machine is offline", status: http.StatusBadGateway}
 }

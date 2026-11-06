@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setCurrentMachineForTest } from '../utils/api-base'
 import {
   AgentRequestError,
   answerAgentPrompt,
@@ -35,6 +36,7 @@ import {
   fetchHealth,
   fetchHostStats,
   fetchLastCommit,
+  fetchMachines,
   fetchOverview,
   fetchPaneText,
   fetchSignins,
@@ -131,6 +133,30 @@ describe('mux API client', () => {
     const { calls } = mockFetch({ body: snap })
     expect(await fetchSnapshot()).toEqual(snap)
     expect(calls[0].url).toBe('/api/mux/snapshot')
+  })
+
+  it("reads the open machine's routes through this server, this server's own here", async () => {
+    setCurrentMachineForTest('0123456789abcdef')
+    try {
+      const { calls } = mockFetch({ body: { groups: [] } })
+      await fetchSnapshot()
+      expect(calls[0].url).toBe('/api/machines/0123456789abcdef/mux/snapshot')
+      mockFetch({
+        body: { machines: [{ id: 'x', label: 'X', status: 'online' }] },
+      })
+      const machines = await fetchMachines()
+      expect(machines).toHaveLength(1)
+    } finally {
+      setCurrentMachineForTest('')
+    }
+  })
+
+  it('fetchMachines reads this server, an odd answer as none', async () => {
+    const { calls } = mockFetch({ body: {} })
+    expect(await fetchMachines()).toEqual([])
+    expect(calls[0].url).toBe('/api/mux/machines')
+    mockFetch({ status: 404, body: { error: 'not found' } })
+    await expect(fetchMachines()).rejects.toMatchObject({ status: 404 })
   })
 
   it('opens the sign-in page with the current path when the session ended', async () => {

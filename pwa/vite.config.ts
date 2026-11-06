@@ -405,6 +405,11 @@ export default defineConfig(({ mode }) => {
           target: 'http://127.0.0.1:7680',
           ws: true,
         },
+        // A machine's routes, forwarded by the server (streams included)
+        '/api/machines': {
+          target: 'http://127.0.0.1:7680',
+          ws: true,
+        },
       },
     },
   }

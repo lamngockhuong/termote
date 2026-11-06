@@ -24,11 +24,11 @@ function fakeCaches() {
     const body = store.get(opts?.cacheName ?? '')?.get(url)
     return body === undefined ? undefined : new Response(body)
   }
-  const keep = (hash: unknown, at = Date.now()) =>
+  const keep = (hash: unknown, at = Date.now(), machine?: string) =>
     open('termote-notify').then((c) =>
       c.put(
         '/__termote/pending-link',
-        new Response(JSON.stringify({ hash, at })),
+        new Response(JSON.stringify({ hash, machine, at })),
       ),
     )
   const kept = () =>
@@ -188,6 +188,18 @@ describe('useAgentNotifications', () => {
       })
     send({ type: 'termote-open', hash: '#/s/g/t-p2/p2' })
     expect(window.location.hash).toBe('#/s/g/t-p2/p2')
+    // A pane of another machine loads the app on it
+    const assign = vi.fn()
+    vi.stubGlobal('location', { ...window.location, assign })
+    send({
+      type: 'termote-open',
+      hash: '#/s/g/t-p1/p1',
+      machine: '0123456789abcdef',
+    })
+    expect(assign).toHaveBeenCalledWith(
+      '/?machine=0123456789abcdef#/s/g/t-p1/p1',
+    )
+    vi.unstubAllGlobals()
     send({ type: 'termote-open', hash: 'javascript:alert(1)' })
     send({ type: 'other', hash: '#/s/g/t-p1' })
     send(null)
@@ -224,6 +236,32 @@ describe('useAgentNotifications', () => {
       window.location.hash = '#/s/g/t-p1/p1'
       await show()
       expect(window.location.hash).toBe('#/s/g/t-p1/p1')
+    })
+
+    it("opens a machine's kept link on that machine", async () => {
+      setup({})
+      const assign = vi.fn()
+      const loc = window.location
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: { ...loc, assign },
+      })
+      try {
+        visibility = 'hidden'
+        document.dispatchEvent(new Event('visibilitychange'))
+        await caches.keep('#/s/g/t-p2/p2', Date.now(), '0123456789abcdef')
+        await show()
+        await waitFor(() =>
+          expect(assign).toHaveBeenCalledWith(
+            '/?machine=0123456789abcdef#/s/g/t-p2/p2',
+          ),
+        )
+      } finally {
+        Object.defineProperty(window, 'location', {
+          configurable: true,
+          value: loc,
+        })
+      }
     })
 
     it('takes one the worker keeps only after the page shows', async () => {

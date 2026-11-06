@@ -1,7 +1,6 @@
 import type { TabLayout } from '../types/session'
+import { apiBase, LOCAL_API } from '../utils/api-base'
 import { clearBadge } from '../utils/app-badge'
-
-const API_BASE = '/api/mux'
 
 // /api/mux/* version this bundle speaks; must match apiVersion in
 // server/mux.go. A server reporting another version gets a reload.
@@ -164,6 +163,8 @@ export interface MuxSnapshot {
     // View-only role: the backend can stream a pane to it (tmux 3.2 or
     // later, Herdr); off, the stream is refused.
     viewStream?: boolean
+    // This server reaches other machines (GET /api/mux/machines).
+    machines?: boolean
   }
   groups: MuxGroup[]
   // The server's time when it answered (RFC 3339), for the client's clock
@@ -172,6 +173,47 @@ export interface MuxSnapshot {
   // Names this server (kept in its state dir): what the PWA keeps on the
   // device for a pane is stored under it. Absent from an older server.
   instanceId?: string
+  // The machines this server reaches, with their status
+  machines?: MachineInfo[]
+}
+
+// A machine this server reaches over SSH: what GET /api/mux/machines lists.
+// The server never names its host, user or key.
+export type MachineStatus =
+  | 'online'
+  | 'offline'
+  | 'connecting'
+  | 'incompatible'
+  | 'unauthorized'
+  | 'hostkey'
+
+export interface MachinePane {
+  id: string
+  name?: string
+  agent?: MuxAgent
+}
+
+export interface MachineInfo {
+  id: string
+  label: string
+  status: MachineStatus
+  // Its last snapshot, cut down to names and agents (online machines only)
+  groups?: Array<{
+    id: string
+    name: string
+    tabs: Array<{ id: string; name: string; panes: MachinePane[] }>
+  }>
+}
+
+// The machines this server reaches; always this server's list, whatever
+// machine is open.
+export async function fetchMachines(): Promise<MachineInfo[]> {
+  const res = await fetch(`${LOCAL_API}/machines`, {
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res)
+  const body = (await res.json()) as { machines?: MachineInfo[] }
+  return Array.isArray(body.machines) ? body.machines : []
 }
 
 // State-changing calls always send JSON: the server rejects any other
@@ -181,7 +223,7 @@ async function write(
   path: string,
   body?: unknown,
 ): Promise<{ ok?: boolean; id?: string; code?: string; error?: string }> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(`${apiBase()}${path}`, {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -239,7 +281,7 @@ const openSignIn = (url: string) => window.location.assign(url)
 // ended is noticed within one poll.
 export async function fetchSnapshot(signIn = openSignIn): Promise<MuxSnapshot> {
   return readJSON(
-    await fetch(`${API_BASE}/snapshot`, {
+    await fetch(`${apiBase()}/snapshot`, {
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     }),
     signIn,
@@ -274,7 +316,7 @@ export interface ActivityPage {
 // The status changes since seq after (every kept one without it).
 export async function fetchActivity(after?: number): Promise<ActivityPage> {
   const q = after === undefined ? '' : `?after=${after}`
-  const res = await fetch(`${API_BASE}/activity${q}`, {
+  const res = await fetch(`${apiBase()}/activity${q}`, {
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   })
   if (!res.ok) throw await requestError(res)
@@ -337,7 +379,7 @@ export interface Overview {
 // pane, that pane's alone and without its changes (the header's chip).
 export async function fetchOverview(pane?: string): Promise<Overview> {
   const q = pane === undefined ? '' : `?pane=${encodeURIComponent(pane)}`
-  const res = await fetch(`${API_BASE}/overview${q}`, {
+  const res = await fetch(`${apiBase()}/overview${q}`, {
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   })
   if (!res.ok) throw await requestError(res)
@@ -396,7 +438,7 @@ export interface HostStats {
 }
 
 export async function fetchHostStats(): Promise<HostStats> {
-  const res = await fetch(`${API_BASE}/system`, {
+  const res = await fetch(`${apiBase()}/system`, {
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   })
   if (!res.ok) throw await requestError(res)
@@ -428,7 +470,7 @@ export interface Subagents {
 // The subagents of the pane's Claude session (none for another agent).
 export async function fetchSubagents(paneId: string): Promise<Subagents> {
   const res = await fetch(
-    `${API_BASE}/panes/${encodeURIComponent(paneId)}/agent/subagents`,
+    `${apiBase()}/panes/${encodeURIComponent(paneId)}/agent/subagents`,
     { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) },
   )
   if (!res.ok) throw await requestError(res)
@@ -452,7 +494,7 @@ export interface Health {
 
 export async function fetchHealth(signIn = openSignIn): Promise<Health> {
   return readJSON(
-    await fetch(`${API_BASE}/health`, {
+    await fetch(`${LOCAL_API}/health`, {
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     }),
     signIn,
@@ -462,7 +504,7 @@ export async function fetchHealth(signIn = openSignIn): Promise<Health> {
 // Ends this browser's session on the server and expires its cookie.
 // Resolves to whether the server did.
 export async function logout(): Promise<boolean> {
-  const res = await fetch(`${API_BASE}/logout`, {
+  const res = await fetch(`${LOCAL_API}/logout`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: '{}',
@@ -474,7 +516,7 @@ export async function logout(): Promise<boolean> {
 // The server's Web Push key (caps.push): a subscription's
 // applicationServerKey, base64url.
 export async function getPushKey(): Promise<string> {
-  const res = await fetch(`${API_BASE}/push/key`, {
+  const res = await fetch(`${LOCAL_API}/push/key`, {
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   })
   if (!res.ok) throw await requestError(res)
@@ -487,7 +529,7 @@ async function pushWrite(
   body: unknown,
   signal: AbortSignal,
 ): Promise<void> {
-  const res = await fetch(`${API_BASE}/push/subscribe`, {
+  const res = await fetch(`${LOCAL_API}/push/subscribe`, {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -540,7 +582,7 @@ async function tabWrite(
   path: string,
   body?: unknown,
 ): Promise<boolean> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(`${apiBase()}${path}`, {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -591,7 +633,7 @@ async function groupWrite(
   body?: unknown,
   timeoutMs = REQUEST_TIMEOUT_MS,
 ): Promise<{ id?: string; alreadyOpen?: boolean }> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(`${apiBase()}${path}`, {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -642,7 +684,7 @@ export async function listRecentGroups(): Promise<{
   groups: RecentGroup[]
   readOnly: boolean
 }> {
-  const res = await fetch(`${API_BASE}/recent-groups`, {
+  const res = await fetch(`${apiBase()}/recent-groups`, {
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   })
   if (!res.ok) throw await requestError(res)
@@ -681,7 +723,7 @@ export interface WorktreeList {
 // The worktrees of the workspace's repository and its local branches.
 export async function listWorktrees(groupId: string): Promise<WorktreeList> {
   const res = await fetch(
-    `${API_BASE}/worktrees?groupId=${encodeURIComponent(groupId)}`,
+    `${apiBase()}/worktrees?groupId=${encodeURIComponent(groupId)}`,
     { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) },
   )
   if (!res.ok) throw await requestError(res)
@@ -856,7 +898,7 @@ export async function fetchPaneText(
   signal?: AbortSignal,
 ): Promise<PaneText> {
   const res = await fetch(
-    `${API_BASE}/panes/${encodeURIComponent(paneId)}/text?lines=${lines}`,
+    `${apiBase()}/panes/${encodeURIComponent(paneId)}/text?lines=${lines}`,
     { signal },
   )
   if (!res.ok) throw await requestError(res, true)
@@ -872,7 +914,7 @@ export async function fetchTerminalToken(): Promise<string> {
     /* v8 ignore next */
     const timeout = setTimeout(() => ctrl.abort(), 5000)
     try {
-      const res = await fetch(`${API_BASE}/stream-token`, {
+      const res = await fetch(`${apiBase()}/stream-token`, {
         signal: ctrl.signal,
       })
       clearTimeout(timeout)
@@ -1052,7 +1094,7 @@ async function requestError(
 }
 
 const agentPath = (paneId: string, op: string) =>
-  `${API_BASE}/panes/${encodeURIComponent(paneId)}/agent/${op}`
+  `${apiBase()}/panes/${encodeURIComponent(paneId)}/agent/${op}`
 
 export async function fetchTranscript(
   paneId: string,
@@ -1369,7 +1411,7 @@ export function filesUrl(
   for (const [k, v] of Object.entries({ ...query, place: target.place }))
     for (const one of Array.isArray(v) ? v : [v]) if (one) params.append(k, one)
   const qs = params.toString()
-  return `${API_BASE}/panes/${encodeURIComponent(target.paneId)}/files/${op}${qs ? `?${qs}` : ''}`
+  return `${apiBase()}/panes/${encodeURIComponent(target.paneId)}/files/${op}${qs ? `?${qs}` : ''}`
 }
 
 async function filesGet<T>(
@@ -1392,7 +1434,7 @@ export interface FilesPlace {
 
 // The Places a full client may open (none for a view-only one)
 export async function fetchPlaces(): Promise<FilesPlace[]> {
-  const res = await fetch(`${API_BASE}/files/places`)
+  const res = await fetch(`${apiBase()}/files/places`)
   if (!res.ok) throw await requestError(res, true)
   const data: { places?: FilesPlace[] } = await res.json()
   return data.places ?? []
@@ -2074,7 +2116,7 @@ export interface PairingCode {
 export async function fetchDevices(
   signal?: AbortSignal,
 ): Promise<PairedDevice[]> {
-  const res = await fetch(`${API_BASE}/devices`, {
+  const res = await fetch(`${LOCAL_API}/devices`, {
     signal: signal ?? AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   })
   if (!res.ok) throw await requestError(res)
@@ -2090,7 +2132,7 @@ export async function createPairingCode(
   name: string,
   validFor: number | null = null,
 ): Promise<PairingCode> {
-  const res = await fetch(`${API_BASE}/devices/pair`, {
+  const res = await fetch(`${LOCAL_API}/devices/pair`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(
@@ -2131,7 +2173,7 @@ export interface SignedInBrowsers {
 export async function fetchSignins(
   signal?: AbortSignal,
 ): Promise<SignedInBrowsers> {
-  const res = await fetch(`${API_BASE}/signins`, {
+  const res = await fetch(`${LOCAL_API}/signins`, {
     signal: signal ?? AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   })
   if (!res.ok) throw await requestError(res)
@@ -2142,7 +2184,7 @@ export async function fetchSignins(
 // Signs one browser out: its next request is refused and its streams close.
 // Throws RequestError (unknown_session, full_needs_password).
 export async function revokeSignin(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/signins/${encodeURIComponent(id)}`, {
+  const res = await fetch(`${LOCAL_API}/signins/${encodeURIComponent(id)}`, {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
@@ -2158,7 +2200,7 @@ export function devicesKept(err: unknown): boolean {
 
 // Signs out every browser but this one. Resolves to how many went.
 export async function revokeOtherSignins(): Promise<number> {
-  const res = await fetch(`${API_BASE}/signins`, {
+  const res = await fetch(`${LOCAL_API}/signins`, {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
@@ -2171,7 +2213,7 @@ export async function revokeOtherSignins(): Promise<number> {
 // Revokes a device and every device it paired: their next requests are
 // refused and their streams close. Resolves to the ids revoked, id first.
 export async function revokeDevice(id: string): Promise<string[]> {
-  const res = await fetch(`${API_BASE}/devices/${encodeURIComponent(id)}`, {
+  const res = await fetch(`${LOCAL_API}/devices/${encodeURIComponent(id)}`, {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
@@ -2197,7 +2239,7 @@ export interface PromptTemplates {
   readOnly: boolean
 }
 
-const templatesPath = `${API_BASE}/templates`
+const templatesPath = `${apiBase()}/templates`
 
 async function templateRequest(
   url: string,
@@ -2387,7 +2429,7 @@ export interface PaneTasks {
 }
 
 const tasksUrl = (paneId: string, op = '') =>
-  `${API_BASE}/panes/${encodeURIComponent(paneId)}/tasks${op}`
+  `${apiBase()}/panes/${encodeURIComponent(paneId)}/tasks${op}`
 
 // What the pane's root offers to run. root: the root the client saw, if
 // any (409 root_changed with the new one otherwise).
@@ -2458,7 +2500,7 @@ export async function fetchTaskRun(
   runId: string,
 ): Promise<{ state: TaskRunState; code?: number }> {
   const res = await fetch(
-    `${API_BASE}/tasks/runs/${encodeURIComponent(runId)}`,
+    `${apiBase()}/tasks/runs/${encodeURIComponent(runId)}`,
     {
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     },
@@ -2467,7 +2509,7 @@ export async function fetchTaskRun(
   return res.json()
 }
 
-const userTasksPath = `${API_BASE}/tasks`
+const userTasksPath = `${apiBase()}/tasks`
 
 export interface UserTasks {
   tasks: UserTask[]

@@ -13,6 +13,7 @@ export default {
     'The branch exists, so it is checked out without a base',
   'errors.busy': 'Another change is still running. Try again',
   'errors.changed': 'It changed since it was read. Look again',
+  'errors.cli_only': 'Only the termote CLI on that machine can do this',
   'errors.conflict': 'It was changed somewhere else',
   'errors.create_failed': 'Git could not create the worktree',
   'errors.creator_gone': 'This code is no longer valid',
@@ -70,6 +71,16 @@ export default {
   'errors.linked_source': 'The source workspace is a linked worktree',
   'errors.linked_worktree':
     "A linked worktree moves with its repository's workspace",
+  'errors.machine_forbidden': 'Not available through another termote',
+  'errors.machine_incompatible':
+    'This machine runs another Termote release. Update both to the same one',
+  'errors.machine_offline':
+    'This machine does not answer. Check it with: termote machine status',
+  'errors.machine_route_forbidden': 'Not available on another machine',
+  'errors.machine_unauthorized':
+    'This machine refused the connection. Check it with: termote machine status',
+  'errors.machine_unknown': 'This machine was removed',
+  'errors.machines_unreadable': 'The machines file cannot be read',
   'errors.name_taken': 'This name is already used',
   'errors.newer_format':
     'A newer Termote saved this. Update Termote to change it',

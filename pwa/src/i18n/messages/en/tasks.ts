@@ -195,6 +195,7 @@ export default {
   'tasks.command.agentStart': 'Start an agent',
   'tasks.command.settings': 'Open Settings',
   'tasks.command.settingsDevices': 'Open Settings: Devices',
+  'tasks.command.switchMachine': 'Switch to the next machine',
   'tasks.command.settingsShortcuts': 'Open Settings: Shortcuts',
   'tasks.command.resizeLeft': 'Resize pane left',
   'tasks.command.resizeRight': 'Resize pane right',
@@ -227,6 +228,8 @@ export default {
   'tasks.commandOff.noNextPane': 'No pane after this one',
   'tasks.commandOff.noPaneAfter': 'No pane after this one',
   'tasks.commandOff.noDevices': 'Not available on this server',
+  'tasks.commandOff.noMachines':
+    'No other machine is added (termote machine add)',
   'tasks.commandOff.noFullscreen': 'Not supported by this browser',
   'tasks.commandOff.noLink': 'No link names this pane',
 } as const

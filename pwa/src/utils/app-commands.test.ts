@@ -22,6 +22,9 @@ function context(over: Partial<AppCommandContext> = {}): AppCommandContext {
     startOffered: true,
     hasAgent: false,
     devices: true,
+    machines: [''],
+    machine: '',
+    switchMachine: vi.fn(),
     canFullscreen: true,
     previousTab: 'a',
     nextTab: 'c',
@@ -267,6 +270,18 @@ describe('buildAppCommands', () => {
         command(context({ devices: false }), 'settings.devices').disabledReason,
       ),
     ).toBe('Not available on this server')
+  })
+
+  it('switches to the next machine, back to this one after the last', () => {
+    const ctx = context({ machines: ['', 'a', 'b'], machine: 'a' })
+    expect(command(ctx, 'machine.next').disabledReason).toBeUndefined()
+    command(ctx, 'machine.next').run()
+    expect(ctx.switchMachine).toHaveBeenLastCalledWith('b')
+    command({ ...ctx, machine: 'b' }, 'machine.next').run()
+    expect(ctx.switchMachine).toHaveBeenLastCalledWith('')
+    expect(en(command(context(), 'machine.next').disabledReason)).toBe(
+      'No other machine is added (termote machine add)',
+    )
   })
 
   it('runs the app and terminal toggles', () => {

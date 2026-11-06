@@ -8,6 +8,7 @@ export default {
   'errors.branch_exists': 'Nhánh đã có, nên được mở ra mà không cần nhánh gốc',
   'errors.busy': 'Một thay đổi khác vẫn đang chạy. Hãy thử lại',
   'errors.changed': 'Đã thay đổi từ lúc đọc. Hãy xem lại',
+  'errors.cli_only': 'Chỉ CLI termote trên máy đó làm được việc này',
   'errors.conflict': 'Đã bị sửa ở nơi khác',
   'errors.create_failed': 'Git không tạo được worktree',
   'errors.creator_gone': 'Mã này không còn dùng được',
@@ -65,6 +66,16 @@ export default {
   'errors.linked_source': 'Workspace nguồn là một worktree liên kết',
   'errors.linked_worktree':
     'Worktree liên kết đi theo workspace của repository',
+  'errors.machine_forbidden': 'Không dùng được qua một termote khác',
+  'errors.machine_incompatible':
+    'Máy này chạy bản Termote khác. Hãy cập nhật cả hai lên cùng một bản',
+  'errors.machine_offline':
+    'Máy này không phản hồi. Kiểm tra bằng: termote machine status',
+  'errors.machine_route_forbidden': 'Không dùng được trên máy khác',
+  'errors.machine_unauthorized':
+    'Máy này từ chối kết nối. Kiểm tra bằng: termote machine status',
+  'errors.machine_unknown': 'Máy này đã bị gỡ',
+  'errors.machines_unreadable': 'Không đọc được file danh sách máy',
   'errors.name_taken': 'Tên này đã được dùng',
   'errors.newer_format':
     'Một bản Termote mới hơn đã lưu mục này. Hãy cập nhật Termote để sửa nó',

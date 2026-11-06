@@ -1,5 +1,6 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setCurrentMachineForTest } from '../utils/api-base'
 import {
   BACKOFF_MAX_MS,
   backoffDelay,
@@ -123,6 +124,17 @@ describe('streamURL', () => {
     expect(url).toBe(
       `ws://${window.location.host}/api/mux/stream?token=t&pane=p%3A1&cols=80&rows=24`,
     )
+  })
+
+  it("streams the open machine's pane through this server", () => {
+    setCurrentMachineForTest('0123456789abcdef')
+    try {
+      expect(streamURL('t', 'p', null)).toBe(
+        `ws://${window.location.host}/api/machines/0123456789abcdef/mux/stream?token=t&pane=p`,
+      )
+    } finally {
+      setCurrentMachineForTest('')
+    }
   })
 
   it('asks to drive the size with drive=1', () => {
