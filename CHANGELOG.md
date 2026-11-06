@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.22.0](https://github.com/lamngockhuong/termote/compare/v2.21.1...v2.22.0) (2026-11-06)
+
+
+### Features
+
+* **chat:** list plugin bundles placed in the user's skills dir ([#711](https://github.com/lamngockhuong/termote/issues/711)) ([96b0577](https://github.com/lamngockhuong/termote/commit/96b05770c76de4c75e78c74ddc8ad1e4f8dec880))
+* **files:** follow symlinks into another worktree of the repository ([#709](https://github.com/lamngockhuong/termote/issues/709)) ([46bcc14](https://github.com/lamngockhuong/termote/commit/46bcc140b77c1909a8dc9c71d482547f7c11a142))
+* **herdr:** offer worktree workspaces on Windows ([#717](https://github.com/lamngockhuong/termote/issues/717)) ([383084c](https://github.com/lamngockhuong/termote/commit/383084ce0b58e713883fb2220fd8a8ca1f1946c4)), closes [#395](https://github.com/lamngockhuong/termote/issues/395)
+* **pwa:** let Enter alone send a chat message or a review comment ([#713](https://github.com/lamngockhuong/termote/issues/713)) ([e18bb1a](https://github.com/lamngockhuong/termote/commit/e18bb1a9d9e9d9b513514ecec869926267c49b34))
+* serve behind a Cloudflare Tunnel and count failed sign-ins per proxied client ([#712](https://github.com/lamngockhuong/termote/issues/712)) ([2ee3486](https://github.com/lamngockhuong/termote/commit/2ee3486c46882182793a50178adb62f5217f00e3))
+
+
+### Performance Improvements
+
+* **server:** find duplicate names in a template import in linear time ([#716](https://github.com/lamngockhuong/termote/issues/716)) ([cfca2ae](https://github.com/lamngockhuong/termote/commit/cfca2aec76a2c8af32931e584bf18923a2ced35c)), closes [#684](https://github.com/lamngockhuong/termote/issues/684)
+* **server:** stop a files search right after a late glob filter ([#719](https://github.com/lamngockhuong/termote/issues/719)) ([fe65a01](https://github.com/lamngockhuong/termote/commit/fe65a0119696c15e76db739b7a5a9cc772b9b7fa))
+
 ## [2.21.1](https://github.com/lamngockhuong/termote/compare/v2.21.0...v2.21.1) (2026-11-05)
 
 
