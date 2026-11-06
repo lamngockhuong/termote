@@ -353,9 +353,9 @@ type agentAPI struct {
 	// their snapshots; nil without any.
 	machines    *machineManager
 	machinePoll *machinePoller
-	loc      agentSessionLocator // nil when the backend has none
-	sessions *ttlCache[agentLookup]
-	reads    *ttlCache[transcriptResponse]
+	loc         agentSessionLocator // nil when the backend has none
+	sessions    *ttlCache[agentLookup]
+	reads       *ttlCache[transcriptResponse]
 	// sensitive remembers which calls named a sensitive file, for their
 	// results read after them
 	sensitive *sensitiveCalls

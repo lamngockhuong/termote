@@ -80,7 +80,7 @@ func newPushWatcher(peek func(context.Context) (Snapshot, error), store *pushSto
 		backoff: map[string]time.Time{},
 
 		machinePrev: map[string]string{},
-		logged:  map[string]time.Time{},
+		logged:      map[string]time.Time{},
 	}
 }
 
