@@ -351,13 +351,13 @@ Chạy Herdr trên một socket và `HOME` riêng để thử, đừng dùng Her
       changed; try again" và không đóng gì
 - [ ] psmux: ghi lại ở đây `tmux display-message -p '#{window_id}'` có in ra `@N` hay không
 
-### Worktree (Herdr 0.9.2+, Linux/macOS)
+### Worktree (Herdr 0.9.2+)
 
 Chạy với một Herdr riêng (`HERDR_SOCKET_PATH`, `HOME` và các thư mục XDG nằm trong thư mục tạm),
 hoặc trên một repo có thể bỏ đi.
 
-- [ ] Menu ⋯ của workspace có New worktree và Open worktree; tmux, Windows và Herdr 0.9.1 không có
-      cả hai (`caps.worktrees` là false)
+- [ ] Menu ⋯ của workspace có New worktree và Open worktree, kể cả trên Windows; tmux, psmux và
+      Herdr 0.9.1 không có cả hai (`caps.worktrees` là false)
 - [ ] New worktree từ Current HEAD và từ một base khác: workspace hiện ra, được chọn, và header của
       nó ghi tên nhánh, trên cả điện thoại (390×844) lẫn máy tính
 - [ ] Gõ tên một nhánh đã có thì ô base ẩn đi ("Checks out the existing branch") và nhánh đó được

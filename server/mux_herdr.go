@@ -170,13 +170,13 @@ func (m *herdrMux) Caps() Caps {
 	reorder := herdrCanReorder(v, herdrStartGOOS)
 	return Caps{ClientSideSelect: true, Scroll: true, PaneText: true, DriveSize: true, AgentChat: true, Files: true, Groups: true,
 		RenameGroup: true, RenameTab: true, AgentStart: start, AgentStartCodex: start && agentStartKind("codex"),
-		Worktrees: herdrCanWorktrees(v, herdrStartGOOS), ReorderTabs: reorder, ReorderGroups: reorder,
+		Worktrees: herdrCanWorktrees(v), ReorderTabs: reorder, ReorderGroups: reorder,
 		PaneLayout: herdrCanPaneLayout(v, herdrStartGOOS), PaneStream: true, RenamePane: herdrCanPaneMeta(v)}
 }
 
-// herdrStartGOOS is the OS the worktree gate, a start's idle check
-// (paneIdleShell) and pane process names (paneProcessName) use; tests set it
-// so they run on Windows too.
+// herdrStartGOOS is the OS a start's idle check (paneIdleShell) and pane
+// process names (paneProcessName) use; tests set it so they run on Windows
+// too.
 var herdrStartGOOS = runtime.GOOS
 
 // herdrProcChildren lists each process's children (paneIdleShell on
@@ -187,10 +187,11 @@ var herdrProcChildren = procChildrenFunc
 // over the repository's own workspace (a remove then closed that one).
 const herdrWorktreesMin = "0.9.2"
 
-// herdrCanWorktrees: worktrees are offered on Herdr version v. Not on
-// Windows until someone checks them there.
-func herdrCanWorktrees(v, goos string) bool {
-	return goos != "windows" && versionRe.MatchString(v) && compareVersions(v, herdrWorktreesMin) >= 0
+// herdrCanWorktrees: worktrees are offered on Herdr version v, on every OS.
+// On Windows Herdr ends a worktree's terminals before removing it, even
+// without force, and checks it for changes itself.
+func herdrCanWorktrees(v string) bool {
+	return versionRe.MatchString(v) && compareVersions(v, herdrWorktreesMin) >= 0
 }
 
 // herdrReorderMin is the first Herdr with workspace.move_block, which moves
@@ -794,7 +795,7 @@ func (m *herdrMux) subscribeOnce(ctx context.Context) (live bool, err error) {
 	}
 	// An older Herdr refuses a type it does not know, and the whole
 	// subscription with it.
-	if herdrCanWorktrees(p.Version, herdrStartGOOS) {
+	if herdrCanWorktrees(p.Version) {
 		for _, t := range herdrWorktreeEventTypes {
 			subs = append(subs, herdrSubscription{Type: t})
 		}

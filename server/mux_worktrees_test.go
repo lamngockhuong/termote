@@ -518,20 +518,24 @@ func TestHerdrWorktreeErrors(t *testing.T) {
 
 func TestHerdrCanWorktrees(t *testing.T) {
 	for _, c := range []struct {
-		v, goos string
-		want    bool
+		v    string
+		want bool
 	}{
-		{"", "linux", false},
-		{"unknown", "linux", false},
-		{"0.9.1", "linux", false},
-		{"0.9.2", "linux", true},
-		{"0.9.3", "darwin", true},
-		{"0.10.0", "linux", true},
-		{"0.9.3", "windows", false},
+		{"", false},
+		{"unknown", false},
+		{"0.9.1", false},
+		{"0.9.2", true},
+		{"0.9.3", true},
+		{"0.10.0", true},
 	} {
-		if got := herdrCanWorktrees(c.v, c.goos); got != c.want {
-			t.Errorf("herdrCanWorktrees(%q, %q) = %v", c.v, c.goos, got)
+		if got := herdrCanWorktrees(c.v); got != c.want {
+			t.Errorf("herdrCanWorktrees(%q) = %v", c.v, got)
 		}
+	}
+	// Offered on Windows too (#395)
+	_, m := newWorktreeHerdr(t)
+	if !m.Caps().Worktrees {
+		t.Error("caps.worktrees off on Windows")
 	}
 }
 
@@ -552,10 +556,12 @@ func withWorktrees(f *fakeHerdr) {
 		"focused": false, "pane_count": 0, "tab_count": 0, "active_tab_id": ""})
 }
 
+// The worktree tests run as on Windows, whatever the OS: the gate is the
+// same everywhere, and Windows is the OS checked last.
 func newWorktreeHerdr(t *testing.T) (*fakeHerdr, *herdrMux) {
 	t.Helper()
 	orig := herdrStartGOOS
-	herdrStartGOOS = "linux"
+	herdrStartGOOS = "windows"
 	t.Cleanup(func() { herdrStartGOOS = orig })
 	f := newFakeHerdr(t)
 	withWorktrees(f)

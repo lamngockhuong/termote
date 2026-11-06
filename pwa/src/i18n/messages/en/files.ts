@@ -907,7 +907,8 @@ export default {
   'files.worktree.remove': 'Remove worktree',
   // <name></name>: the branch
   'files.worktree.branchLine': 'Branch <name></name>',
-  // <name></name>: the checkout's folder
+  // <name></name>: the checkout's folder. On Windows Herdr ends the
+  // terminals first even without force; elsewhere closing the workspace does
   'files.worktree.deletes':
-    'Deletes <name></name> and closes this workspace. Files ignored by git (.env, node_modules) are deleted too. The branch is kept.',
+    'Ends its terminals, deletes <name></name> and closes this workspace. Files ignored by git (.env, node_modules) are deleted too. The branch is kept.',
 } as const

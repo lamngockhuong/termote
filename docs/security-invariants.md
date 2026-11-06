@@ -634,7 +634,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `POST /api/mux/worktrees` `{groupId, branch, base, label}` → `{ok, id}`, `POST
   /api/mux/worktrees/open` `{groupId, branch}` → `{ok, id, alreadyOpen}`, `DELETE
   /api/mux/worktrees/{id}` `{force, path, branch}`; `server/mux_worktrees.go`, `caps.worktrees`:
-  Herdr ≥ 0.9.2 from the `ping` version, never on Windows until checked there; tmux has none, 501
+  Herdr ≥ 0.9.2 from the `ping` version, on every OS (on Windows Herdr ends the panes before git
+  runs even without `force`, and reports `dirty` itself); tmux has none, 501
   `unsupported`): writes go through `writeGuard` (same-site JSON), `requireWriteRole` first (a
   view-only client gets 403 `view_only`), the 8 KB body; the GET through
   `crossSiteRejection` (so `Sec-Fetch-Site: none` too). Everything is checked before the slot:
@@ -659,7 +660,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   the files routes' `gitRunner` (`for-each-ref --count=500`, heavy, no backoff, 160 KiB, the
   last line dropped when cut, names failing `validBranchName` dropped, `[]` when git refuses).
   Create and remove run git with the user's config (hooks, LFS filters), as typing the command
-  would; a remove deletes ignored files too and, with `force`, ends the panes first; the branch
+  would; a remove deletes ignored files too and, with `force` (on Windows always), ends the panes first; the branch
   is kept. The snapshot's `worktree: {linked, branch?, parent?}` comes from `session.snapshot`'s
   membership (kept across a Herdr restart); the branch from a cache apart from the view
   (`herdr_worktree_branches.go`): served stale while one background `worktree.list` per

@@ -356,7 +356,10 @@ describe('WorktreeRemoveDialog', () => {
     expect(
       await screen.findByText('Remove worktree "feat/x"?'),
     ).toBeInTheDocument()
-    expect(screen.getByText('/wt/repo/feat-x')).toBeInTheDocument()
+    // Terminals end first on Windows, even without force (#395)
+    expect(screen.getByText('/wt/repo/feat-x').parentElement).toHaveTextContent(
+      'Ends its terminals, deletes /wt/repo/feat-x and closes this workspace.',
+    )
     // In full, where the title may be cut short
     expect(screen.getByText('feat/x', { selector: 'span' })).toBeInTheDocument()
     // Waits for the dialog to be open (showModal runs in an effect)
@@ -409,6 +412,25 @@ describe('WorktreeRemoveDialog', () => {
       path: '/wt/repo/detached/',
       branch: '',
     })
+  })
+
+  it('names a Windows checkout by its folder and sends its path as is', async () => {
+    const path = 'C:\\Users\\me\\.herdr\\worktrees\\repo\\detached\\'
+    const p = renderRemove(
+      {},
+      {
+        ...LIST,
+        worktrees: [{ path, linked: true, openable: false, groupId: 'w2' }],
+      },
+    )
+    expect(
+      await screen.findByText('Remove worktree "detached"?'),
+    ).toBeInTheDocument()
+    expect(screen.getByText(path)).toBeInTheDocument()
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Remove worktree' }),
+    )
+    expect(p.onConfirm).toHaveBeenCalledWith({ force: false, path, branch: '' })
   })
 
   it('names the root folder as it is', async () => {

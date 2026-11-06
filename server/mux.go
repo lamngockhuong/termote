@@ -145,7 +145,7 @@ type Caps struct {
 	// snapshot route, not by the backend.
 	Push bool `json:"push"`
 	// Worktrees: git worktree workspaces can be listed, created, opened and
-	// removed (/api/mux/worktrees): Herdr 0.9.2 or later, not on Windows.
+	// removed (/api/mux/worktrees): Herdr 0.9.2 or later.
 	Worktrees bool `json:"worktrees"`
 	// ReorderTabs: a tab can be moved within its group
 	// (/api/mux/tabs/{id}/move): Herdr 0.8.0 or later, not on Windows; tmux
