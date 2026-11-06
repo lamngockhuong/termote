@@ -97,10 +97,18 @@ termote machine add winbox --remote-exe "C:\Users\me\AppData\Local\termote\versi
 trị thì vào `C:\ProgramData\ssh\administrators_authorized_keys`. Đường dẫn trỏ vào một phiên bản cụ thể,
 nên sau khi chạy `termote update` trên máy đó, hãy thêm lại máy.
 
+Lệnh bắt buộc `command=` và `restrict` đã được thử với OpenSSH for Windows 10.4: khoá chỉ nhận được dòng
+đầu của bridge, lệnh gửi kèm bị bỏ qua, chuyển tiếp cổng và TTY đều bị từ chối. Muốn tự kiểm trên máy của
+bạn, `ssh -i ~/.config/termote/ssh/id_ed25519 -o IdentitiesOnly=yes winbox` phải in ra
+`TERMOTE-BRIDGE 1 <phiên bản>` và không gì khác.
+
 <Aside type="caution">
-  Lệnh bắt buộc `command=` và `restrict` mới được thử với OpenSSH trên Linux và macOS. Với máy Windows, hãy kiểm tra
-  rằng khoá không mở được shell (`ssh -i ~/.config/termote/ssh/id_ed25519 winbox` chỉ được in dòng đầu
-  của bridge và không gì khác) trước khi dựa vào nó.
+  Với tài khoản domain trên một máy Windows không liên lạc được máy chủ quản lý domain (log của `sshd` có
+  `lookup_sid() failed: 1789`), `sshd` có thể không nhận ra tài khoản thuộc nhóm `administrators`, nên không
+  đọc `administrators_authorized_keys`: hãy đặt thêm dòng khoá vào `.ssh\authorized_keys` của tài khoản.
+  Kể cả khi đó, service OpenSSH vẫn có thể ngắt mọi phiên đăng nhập bằng khoá ngay sau khi nhận khoá, trước
+  khi chạy bất cứ thứ gì: đó là service không đăng nhập được tài khoản khi không có mật khẩu, không phải lỗi
+  của Termote. Hãy dùng tài khoản local, hoặc nối khi máy liên lạc được domain.
 </Aside>
 
 ## Giới hạn

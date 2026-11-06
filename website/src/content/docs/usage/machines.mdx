@@ -98,10 +98,18 @@ termote machine add winbox --remote-exe "C:\Users\me\AppData\Local\termote\versi
 account, to `C:\ProgramData\ssh\administrators_authorized_keys`. The path names one version, so after
 `termote update` on that computer, add the machine again.
 
+The forced command and `restrict` were checked with OpenSSH for Windows 10.4: the key gets the bridge's
+first line and nothing else, a command sent with it is ignored, and port forwarding and a TTY are refused.
+To check yours, `ssh -i ~/.config/termote/ssh/id_ed25519 -o IdentitiesOnly=yes winbox` must print
+`TERMOTE-BRIDGE 1 <version>` and nothing else.
+
 <Aside type="caution">
-  The forced command and `restrict` were tested with OpenSSH on Linux and macOS. On a Windows machine,
-  check that the key cannot open a shell (`ssh -i ~/.config/termote/ssh/id_ed25519 winbox` must print the
-  bridge's first line and nothing else) before you rely on it.
+  A domain account on a Windows computer that cannot reach its domain controller (sshd logs
+  `lookup_sid() failed: 1789`) may not be found in the `administrators` group, so sshd never reads
+  `administrators_authorized_keys`: put the line in the account's `.ssh\authorized_keys` too. Even then the
+  OpenSSH service may end every key-based session right after it accepts the key, before anything runs:
+  that is the service failing to log the account on without a password, not Termote. Use a local account,
+  or connect while the domain is reachable.
 </Aside>
 
 ## Limits
