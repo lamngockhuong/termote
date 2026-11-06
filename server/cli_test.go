@@ -83,6 +83,25 @@ func (f *fakeRunner) RunQuiet(input string, name string, args ...string) error {
 	return nil
 }
 
+func (f *fakeRunner) Interact(input string, name string, args ...string) ([]byte, error) {
+	key := f.record(name, args)
+	f.mu.Lock()
+	f.inputs = append(f.inputs, input)
+	f.mu.Unlock()
+	if f.fail[key] {
+		return []byte(f.outputs[key]), errors.New("fake: " + key + " failed")
+	}
+	if out, ok := f.outputs[key]; ok {
+		return []byte(out), nil
+	}
+	if f.onOutput != nil {
+		if out, ok := f.onOutput(append([]string{name}, args...), nil); ok {
+			return []byte(out), nil
+		}
+	}
+	return nil, nil
+}
+
 func (f *fakeRunner) called(prefix string) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()

@@ -2140,6 +2140,27 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   then copies bytes both ways until either side closes; it never reads `SSH_ORIGINAL_COMMAND` or
   runs anything else. A process of the same user can open the bridge: it already has the CLI's
   socket (accepted)
+- **Machines CLI** (`server/cli_machine.go`, `server/machine_store.go`, `server/machine_ssh_args.go`):
+  only `termote machine add|remove|import --herdr` change `machines.json` (config dir, 0600, temp file
+  renamed, at most 32, id 16 random hex); a record failing a check (alias
+  `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`, printable label ≤ 64, remote paths absolute with no quote,
+  backslash, dollar, backtick or control character) fails the whole read. Every ssh/ssh-keygen argv is built in
+  `machine_ssh_args.go`: the alias always follows `--`, no `-o` takes data, and each ssh overrides the
+  alias's config block (`ClearAllForwardings`, `ForwardAgent=no`, `ForwardX11=no`,
+  `PermitLocalCommand=no`, `RemoteCommand=none`, `RequestTTY=no`, `Tunnel=no`, `ControlMaster=no`,
+  `ControlPath=none`, `UpdateHostKeys=no`, `CheckHostIP=no`) and keys the host as
+  `HostKeyAlias=termote-<id>` in termote's own `ssh/known_hosts`. termote's key (`ssh/id_ed25519`, dir
+  0700, no passphrase) is made by `ssh-keygen` and never printed. `add` runs the user's ssh at the
+  terminal (`StrictHostKeyChecking=ask`: the only TOFU), asks `termote machine whereami` there for its
+  stable path (Windows: `termote.exe`, never the `.cmd` shim) and socket dir, and after a yes (or
+  `--yes`) appends `command="'<exe>' bridge --socket-dir '<dir>'",restrict <pub>` once, sent on stdin;
+  `--print-key` (and every Windows machine) only prints it. A machine is saved only after the
+  service's own connection (`BatchMode`, `StrictHostKeyChecking=yes`, `IdentitiesOnly`,
+  `IdentityAgent=none`) read the bridge greeting and an equal `apiVersion` (`--no-check` skips it);
+  an alias with a `ProxyCommand`/`ProxyJump` is warned about. `remove` asks before dropping the key's
+  lines there (matched on the key's base64) and drops the host key (`ssh-keygen -R`). The running
+  server is told over the local socket only (`machines/reload`). `uninstall --purge` removes the store
+  and key with the config dir; the lines on the machines stay
 - **Signed-in browsers** (`server/sessions.go`, `server/signin_routes.go`, `caps.signins`): each
   password session (memory, 24 h, 256, LRU) keeps id (16 hex of the token's SHA-256), created,
   last used (1 min), `via` (`form|basic|link`), IP and a cleaned User-Agent (200 B). Basic auth

@@ -35,6 +35,10 @@ type commandRunner interface {
 	// discarded, so a child it leaves running (a browser) holds no pipe open
 	// and the call returns when the command itself exits.
 	RunQuiet(input string, name string, args ...string) error
+	// Interact runs a command attached to the user's terminal for its
+	// prompts (ssh asks on the TTY) and stderr, with input on its stdin, and
+	// returns its stdout.
+	Interact(input string, name string, args ...string) ([]byte, error)
 }
 
 type execRunner struct{}
@@ -52,6 +56,13 @@ func (execRunner) RunQuiet(input string, name string, args ...string) error {
 	cmd := exec.Command(name, args...)
 	cmd.Stdin = strings.NewReader(input)
 	return cmd.Run()
+}
+
+func (execRunner) Interact(input string, name string, args ...string) ([]byte, error) {
+	cmd := exec.Command(name, args...)
+	cmd.Stdin = strings.NewReader(input)
+	cmd.Stderr = os.Stderr
+	return cmd.Output()
 }
 
 func (execRunner) Run(dir string, env []string, name string, args ...string) error {
@@ -257,6 +268,8 @@ func (c *cli) dispatch(cmd string, args []string) error {
 		return c.cmdShowPassword()
 	case "bridge":
 		return c.cmdBridge(args)
+	case "machine", "machines":
+		return c.cmdMachine(args)
 	case "menu":
 		return c.cmdMenu()
 	case "version", "-v", "--version":
@@ -486,6 +499,8 @@ Commands:
   logs [service]       View logs (server, all, follow, clean)
   link / unlink        Create or remove the 'termote' command in ~/.local/bin
   show-password        Show the saved username and password
+  machine <cmd>        Machines this termote reaches over SSH: add <ssh alias>, list,
+                       remove <id|label>, status, import --herdr
   version              Show version
   serve                Run the server in the foreground (what the service runs)
   bridge               What another termote's key runs here over SSH (never by hand)
@@ -542,6 +557,13 @@ Options of pair (the code works once, for 5 minutes):
   --name <name>              The device's name (default: asked on it, else its browser)
   --expires <12h|7d|2w|never>  How long the device stays signed in once paired
                              (1h to 400d, default: 30d)
+
+Options of machine add (asks to install a key that can only run 'termote bridge'):
+  --label <name>             The name the app shows (default: the alias)
+  --print-key                Print the key line to install yourself (a Windows machine)
+  --remote-exe <path>        termote's path on the machine, instead of finding it
+  --no-check                 Add it without checking that it answers
+  --yes                      Install the key without asking
 
 Options of update:
   --version <X.Y.Z>          Update to a specific version
