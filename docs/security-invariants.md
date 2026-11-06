@@ -31,8 +31,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
 - termote binds to `127.0.0.1` by default; only `--lan` makes it listen on `0.0.0.0`
 - **Host allowlist** (`hostGuard`): requests with an unrecognised `Host` header get a 403; the
   allowed set is loopback + (with `--lan`) the address the request arrived on, so it keeps
-  working as the LAN IP changes + the Tailscale name + `--allow-host` entries, with no
-  wildcard to disable the check
+  working as the LAN IP changes + the Tailscale name + the Cloudflare hostname (`--cloudflare`) +
+  `--allow-host` entries, with no wildcard to disable the check
 - **Write/CSRF guard** (`writeGuard`): state-changing `/api/mux/*` requests must be
   same-site (`Sec-Fetch-Site`/`Origin` on the allowlist) with `Content-Type: application/json`;
   only the paths `/api/mux/uploads` and `.../files/image` (`isFilesImagePath`, anchored, on the
@@ -2043,13 +2043,25 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   sets it for a tailnet user and removes one the client sent, not for a tagged node or Funnel)
   counts under `ts:<login>` instead of the address, so one tailnet user's typos never lock the
   others out; the header is ignored off loopback and without `--tailscale` (another proxy on
-  loopback would pass a client's header through). Every attempt over loopback, whatever its key, also counts toward
-  one shared cap of 30/min (`authMaxLoopbackFailures`): a local process setting the header itself
-  (no owner check on macOS loopback) guesses no faster than that. A refund takes back both. A
-  container behind NAT still counts under the gateway address. The pairing limiter stays per
-  address. Failed logins and
-  blocked clients are logged with the client address (never the credentials), at most one
-  line per 10s each
+  loopback would pass a client's header through). With a proxy client header (`--proxy-client-header`,
+  or `CF-Connecting-IP` implied by `--cloudflare`; `authOpts.ProxyHeader`), an attempt counts under
+  `px:<address>` (`proxyClientIP`): the header's value, the last entry of `X-Forwarded-For`, used only
+  when it parses as an IP address (zone dropped, IPv4-mapped unmapped), else the request's own
+  address; `Tailscale-User-Login` still wins over it. Natively the header is read over loopback only;
+  in the container (`TERMOTE_PROXY_CLIENT_HEADER`, `ProxyClientAnySource`) from any source, which is
+  why `container up` refuses a client header with `--lan` (a LAN machine comes in through the
+  gateway like the proxy) and passes it only with the port published on `127.0.0.1`. The /64 cap
+  applies to `px:` addresses too, under a `px:` prefix of its own. Every attempt over loopback or
+  under a `ts:` or `px:` key also counts toward one shared cap of 30/min (`authMaxProxiedFailures`,
+  key `proxied`): a local process setting a header itself (no owner check on macOS loopback), or a
+  tailnet node whose `tailscale serve` passes the client's `CF-Connecting-IP` through, guesses no
+  faster than that. A refund takes back all of them. A container without a client header still
+  counts under the gateway address. The pairing limiter keys the same way except that it never
+  reads `Tailscale-User-Login`. Failed logins and blocked clients are logged with the client
+  address (`<proxy-reported address> via <proxy address>` for a `px:` key; the reported address is
+  only what the proxy says), never the credentials, at most one line per 10s each. `validateConfig`
+  refuses a header name that is not an HTTP token of at most 64 bytes, or is `Host`, `Cookie`,
+  `Authorization` or `Proxy-Authorization`; `start` and `container up` check it the same way
 - **Server hardening**: ReadHeaderTimeout (Slowloris protection), a 60s read deadline on every
   request, the terminal stream's handshake included (a body sent a byte at a time; hijacking the
   connection for the WebSocket clears it); an authenticated image upload
@@ -2302,6 +2314,20 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   browser's own. The demo build has its own CSP (`pwa/demo-csp.json`, a meta tag put in by
   `demoPolicy`, `connect-src 'self' https://api.github.com`), no manifest and no service worker
   (`VitePWA` disabled)
+- **Cloudflare hostname** (`--cloudflare <host>`, `server/cloudflare.go`): Termote never runs or
+  watches `cloudflared` and never holds a tunnel token; the user runs the tunnel, pointed at
+  `http://127.0.0.1:<port>`. The hostname (a DNS name of two labels or more, lower-cased; no scheme,
+  port or path) is added to the Host allowlist and implies `CF-Connecting-IP` as the proxy client
+  header unless `--proxy-client-header` names another. `start` and `container up` refuse it with
+  `--no-auth`, a saved one included, and natively `validateConfig` also refuses `Cloudflare` with `NoAuth`
+  (the container's `serve` is not told the hostname; only `container up` refuses there). After
+  the server answers, `start`, `container up`, `status` (and `status --json`'s `cloudflareAccess`)
+  and `panel` (once when it opens) probe `https://<host>/api/mux/health` from outside: no password,
+  no cookie, no redirect followed, 5 s, headers only. A redirect to `/cdn-cgi/access/login` or a 401
+  naming `cloudflare-access-protected-resource` is Access (`on`); Termote's own Basic challenge or a
+  200 is `off` and prints a warning; anything else (403, 530, unreachable) is `unknown`. The probe
+  only warns, never fails a command, and grants nothing: the server never trusts a `Cf-Access-*`
+  header
 - **Tailscale mapping**: `serve` removes its `tailscale serve` mapping when it stops (only while
   it still proxies to its port), so the name never leads to a free port another user could take;
   `start --lan` warns when lingering is off (the port is free while the user is logged out)

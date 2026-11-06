@@ -86,14 +86,18 @@ giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tà
 - **Dịch vụ khác cùng tên máy.** Cookie không gắn với cổng: mọi dịch vụ dưới tên máy đó đều nhận cookie của
   Termote. Hãy cho Termote một tên máy riêng.
 - **Chương trình khác của cùng tài khoản hệ điều hành.** Chúng đọc được đúng những file Termote đọc.
-- **HTTP không mã hoá.** Không có HTTPS (Tailscale, hoặc proxy có chứng chỉ) thì mật khẩu và cookie đi
-  qua mạng ở dạng đọc được.
+- **HTTP không mã hoá.** Không có HTTPS (Tailscale, Cloudflare Tunnel, hoặc proxy có chứng chỉ) thì mật
+  khẩu và cookie đi qua mạng ở dạng đọc được.
 - **Dòng audit không phải bằng chứng.** `termote logs clean`, hay bất kỳ thiết bị toàn quyền nào, xoá được
   chúng. Sau proxy (`tailscale serve`), địa chỉ ghi trong đó là của proxy, tức một địa chỉ nội bộ như `127.0.0.1`.
 - **Extension của trình duyệt.** Extension được phép chạy trên trang thì đọc được trang và gõ vào đó thay
   bạn. Termote không phân biệt được thao tác của nó với của bạn.
 - **Công cụ chuyển tiếp cổng.** VS Code Remote và Dev Tunnels, `ngrok` hay Cloudflare Tunnel chuyển tiếp cổng
   từ một tiến trình của chính tài khoản bạn: ai tới được địa chỉ mà công cụ đó mở ra là tới được Termote, chỉ còn mật khẩu chặn.
+  Với [`--cloudflare`](/vi/installation/cloudflare/) (hoặc `--proxy-client-header` cho ngrok), số lần đăng nhập
+  sai được đếm theo từng client, nên một người lạ đoán sai không khoá được mọi người khác. Nhưng chỉ Cloudflare Access
+  (hoặc phần đăng nhập riêng của đường hầm) mới giữ người lạ khỏi trang đăng nhập. Termote cảnh báo khi một
+  hostname Cloudflare trả lời mà không có Access đứng trước.
 - **Proxy chạy dưới root hoặc SYSTEM.** `tailscale serve`, `docker-proxy` và các proxy chạy dưới root khác
   được tin (root vốn đọc được cấu hình đã lưu), nên mọi tài khoản trên máy đều đi qua chúng được. Trên Windows,
   một dịch vụ đang chạy mà tài khoản chạy server mở được tiến trình nhưng không đọc được token cũng vậy: chỉ

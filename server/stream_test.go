@@ -46,6 +46,10 @@ func TestMain(m *testing.M) {
 		return nil, errors.New("tests never start hc")
 	}
 	hcCoreRunning = func(context.Context, []string) bool { return false }
+	// Nor probe a real Cloudflare hostname: the probe tests set their own.
+	cloudflareProbe = func(context.Context, string) accessResult {
+		return accessResult{accessUnknown, "tests never probe"}
+	}
 	switch os.Getenv(helperEnv) {
 	case "":
 		os.Exit(m.Run())

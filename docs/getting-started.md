@@ -77,7 +77,7 @@ Open that URL on your phone.
 
 The server only accepts requests whose `Host` header is on its allowlist: loopback always, and
 with `--lan` the address the request actually arrived on (so it keeps working as your LAN IP
-changes), plus the Tailscale name with `--tailscale`. If you reach it by another hostname (for
+changes), plus the Tailscale name with `--tailscale` and the Cloudflare hostname with `--cloudflare`. If you reach it by another hostname (for
 example the machine's name on your network), add it with `--allow-host <name>` (repeatable):
 
 ```bash

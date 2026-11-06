@@ -493,6 +493,14 @@ Options of start (saved; a flag not given keeps its saved value):
   --lan[=false]              Listen on every interface, not only this machine
   --tailscale <host[:port]>  Publish over Tailscale HTTPS (default port 443)
   --no-tailscale             Stop publishing over Tailscale
+  --cloudflare <host>        Allow the public hostname of a Cloudflare Tunnel you run
+                             (cloudflared to http://127.0.0.1:<port>), show its URL and
+                             count failed sign-ins per client (refused with --no-auth)
+  --no-cloudflare            Forget the Cloudflare hostname
+  --proxy-client-header <name>  Header a proxy on this machine sets to the client's
+                             address (default with --cloudflare: CF-Connecting-IP;
+                             X-Forwarded-For takes its last entry)
+  --no-proxy-client-header   Stop reading it
   --no-auth[=false]          Disable authentication
   --mux <tmux|herdr|zellij|hc>  Terminal backend (default: herdr when it runs, else
                              tmux; zellij: Linux and macOS; hc: herdr-core, native only)
@@ -511,6 +519,8 @@ Options of start (saved; a flag not given keeps its saved value):
 
 Options of container up (saved apart from start's; the username and password are shared):
   --port --lan --tailscale --no-tailscale --no-auth --allow-host --remove-host --user --fresh
+  --cloudflare --no-cloudflare --proxy-client-header --no-proxy-client-header
+                             As for start, with the tunnel on this host; refused with --lan
   --allow-path <dir>         Mount a host folder as a Place in Files (repeatable; not one
                              holding or inside the workspace; --remove-path drops one)
   --workspace <dir>          Directory mounted at /workspace (default: ~/termote-workspace)

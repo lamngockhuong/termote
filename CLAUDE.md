@@ -43,6 +43,7 @@ termote start                              # native: host tools (Claude Code, gi
 termote start --lan                        # native, LAN accessible
 termote start --no-auth                    # native, without auth (local dev only)
 termote start --tailscale host             # native, Tailscale HTTPS
+termote start --cloudflare term.example.com  # native, behind a Cloudflare Tunnel you run
 termote start --fresh                      # native, force a new password
 termote start --mux herdr                  # native, Herdr backend instead of tmux
 termote start --mux zellij                 # native, Zellij backend (Linux, macOS)
@@ -182,7 +183,10 @@ There is no `install` command in 1.0 (it prints the replacement above).
 
 `start` options (saved in the config; a flag not given keeps its saved value; a boolean is
 turned off with `=false`): `--port <port>` (default 7680, Windows 7690), `--lan[=false]`,
-`--tailscale <host[:port]>`, `--no-tailscale`, `--no-auth[=false]`, `--mux <tmux|herdr|zellij|hc>` (zellij refused natively on Windows, hc in a container),
+`--tailscale <host[:port]>`, `--no-tailscale`, `--cloudflare <host>`/`--no-cloudflare` (a tunnel the user
+runs; refused with `--no-auth`, and in `container up` with `--lan`),
+`--proxy-client-header <name>`/`--no-proxy-client-header` (default with `--cloudflare`: `CF-Connecting-IP`),
+`--no-auth[=false]`, `--mux <tmux|herdr|zellij|hc>` (zellij refused natively on Windows, hc in a container),
 `--allow-host <name>` (repeatable), `--remove-host <name>` (repeatable),
 `--allow-local-user <name>`/`--remove-local-user <name>` (repeatable; native Linux and Windows),
 `--allow-path <dir>`/`--remove-path <dir>` (repeatable; a Place in Files, refused at or above home,

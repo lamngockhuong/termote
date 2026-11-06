@@ -1,0 +1,110 @@
+---
+title: Cloudflare Tunnel
+description: Truy cập Termote qua Cloudflare Tunnel do bạn tự chạy, có Cloudflare Access đứng trước
+---
+
+import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
+
+Với Cloudflare Tunnel, Termote có một địa chỉ HTTPS trên tên miền của bạn mà không phải mở cổng nào. Bạn tự chạy
+đường hầm (`cloudflared`), còn Termote chỉ cần biết hostname của nó. Termote không bao giờ khởi động `cloudflared`
+và không bao giờ thấy token của đường hầm.
+
+<Aside type="danger" title="Hãy đặt Cloudflare Access phía trước">
+Đường hầm đưa trang đăng nhập lên Internet. Thiếu Cloudflare Access thì người lạ chỉ còn cách một shell trên máy
+bạn đúng một lớp mật khẩu Termote. Termote kiểm tra Access khi khởi động và trong `termote status`, và cảnh báo
+rõ khi không thấy nó.
+</Aside>
+
+## Yêu cầu
+
+- Một tên miền đặt trên Cloudflare (gói nào cũng được, kể cả Free)
+- `cloudflared` đã cài trên máy chạy Termote
+  ([tải về](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/downloads/))
+
+## Thiết lập
+
+<Steps>
+1. Trong dashboard Cloudflare, mở **Zero Trust → Networks → Tunnels** rồi tạo một đường hầm (loại
+   **Cloudflared**).
+
+2. Cài nó thành service bằng lệnh dashboard đưa ra. Service giữ token nên chạy dưới root trên Linux và macOS,
+   và với quyền quản trị trên Windows:
+
+   ```bash
+   sudo cloudflared service install <token>
+   ```
+
+3. Thêm một **public hostname**, ví dụ `term.example.com`, trỏ tới service `http://127.0.0.1:7680` (Windows:
+   `http://127.0.0.1:7690`; container: cổng `--port` của nó).
+
+4. Bật Cloudflare Access cho hostname đó: **Zero Trust → Access → Applications → Add an application →
+   Self-hosted**, cùng hostname, với một policy chỉ cho bạn vào (ví dụ theo email của bạn).
+
+5. Báo hostname cho Termote
+
+   <Tabs>
+     <TabItem label="Native">
+
+       ```bash
+       termote start --cloudflare term.example.com
+       ```
+     </TabItem>
+     <TabItem label="Container">
+
+       ```bash
+       termote container up --cloudflare term.example.com
+       ```
+     </TabItem>
+   </Tabs>
+
+6. Mở https://term.example.com: Access hỏi bạn là ai, sau đó Termote hỏi mật khẩu của nó.
+
+</Steps>
+
+## `--cloudflare` làm những gì
+
+- Thêm hostname vào danh sách tên `Host` được chấp nhận (như `--allow-host`), để request đi qua đường hầm không bị
+  từ chối.
+- Hiện `https://term.example.com` trong `termote url`, `termote panel` (kèm mã QR) và `termote status` (các
+  trường `cloudflare` và `urls.cloudflare` của `status --json`).
+- Đếm số lần đăng nhập sai theo từng client, dựa vào header `CF-Connecting-IP` do đường hầm đặt. Năm lần sai mật
+  khẩu chỉ khoá client đã gõ sai. Mọi lần thử đi qua proxy vẫn chung một giới hạn 30 lần mỗi phút, nên một
+  chương trình trên máy bạn tự đặt header cũng không đoán nhanh hơn được; nhiều địa chỉ cùng đoán thì vẫn lấp
+  đầy giới hạn đó và chặn mọi người trong một phút. Có Access đứng trước thì người lạ không tới được bước này.
+- Từ bên ngoài, kiểm tra xem Access có trả lời cho hostname không, lúc `start`, `container up`, `status` và khi
+  mở `panel` (trường `cloudflareAccess` của `status --json`: `on`, `off` hoặc `unknown`). `unknown` thường có
+  nghĩa là `cloudflared` chưa chạy.
+
+Tuỳ chọn này được lưu lại; `--no-cloudflare` xoá nó. Không dùng được cùng `--no-auth`.
+
+## Container
+
+Chạy `cloudflared` trên máy host, trỏ tới `http://127.0.0.1:<port>`, và đừng mở container ra LAN.
+`container up` từ chối `--cloudflare` đi cùng `--lan`: bên trong container, một máy trong LAN đi vào giống hệt
+đường hầm và có thể tự đặt header client.
+
+## Native: tài khoản chạy `cloudflared`
+
+Trên Linux và Windows, server từ chối kết nối từ các tài khoản khác trên cùng máy. `cloudflared` cài thành
+service thì chạy dưới root (SYSTEM trên Windows), và tài khoản này được chấp nhận. Nếu bạn chạy nó dưới một tài
+khoản khác, hãy cho phép tài khoản đó: `termote start --allow-local-user <tên>`.
+
+## Các loại đường hầm khác
+
+| Công cụ | Cách làm |
+| --- | --- |
+| ngrok | `termote start --proxy-client-header X-Forwarded-For --allow-host <tên miền ngrok của bạn>`; Termote lấy địa chỉ cuối của danh sách, tức địa chỉ do ngrok thêm vào. Bật cả phần đăng nhập (OAuth) của ngrok |
+| VS Code Dev Tunnels | Header client không giúp được gì, vì dịch vụ ghi địa chỉ nội bộ của chính nó vào đó. Hãy để đường hầm ở chế độ riêng tư (đăng nhập bằng tài khoản GitHub hoặc Microsoft) |
+| Proxy ngược chạy trên máy này | `--proxy-client-header` với header proxy đó đặt địa chỉ client vào (ví dụ `X-Real-IP`) |
+
+`--proxy-client-header` thay cho giá trị mặc định `CF-Connecting-IP` của `--cloudflare`;
+`--no-proxy-client-header` thôi đọc header.
+
+## Lưu ý
+
+- **Pseudo IPv4.** Khi **Network → Pseudo IPv4** đặt là *Overwrite headers*, `CF-Connecting-IP` chứa một địa chỉ
+  IPv4 giả cho khách dùng IPv6. Hãy để *Off* hoặc *Add header*.
+- **Tải file lên.** Gói Free và Pro của Cloudflare chỉ nhận body request tối đa 100 MB, nên file lớn hơn tải
+  lên qua đường hầm sẽ thất bại.
+- **WebSocket** không cần cấu hình gì: Termote ping luồng terminal mỗi 15 giây, ngắn hơn nhiều so với thời gian
+  chờ khi rảnh của Cloudflare.

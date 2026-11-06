@@ -220,6 +220,10 @@ setup wizard, tips or release notes) and starts the session `main`.
 | `--lan[=false]`                   | Listen on `0.0.0.0` instead of `127.0.0.1`                                                  | ✓       | ✓              |
 | `--tailscale <host[:port]>`       | Publish over Tailscale HTTPS (default port 443)                                             | ✓       | ✓              |
 | `--no-tailscale`                  | Stop publishing over Tailscale                                                              | ✓       | ✓              |
+| `--cloudflare <host>`             | Hostname of a Cloudflare Tunnel you run (see Cloudflare Tunnel below; not with `--no-auth`) | ✓       | ✓ (no `--lan`) |
+| `--no-cloudflare`                 | Forget the Cloudflare hostname                                                              | ✓       | ✓              |
+| `--proxy-client-header <name>`    | Header a proxy sets to the client's address (default with `--cloudflare`: CF-Connecting-IP) | ✓       | ✓ (no `--lan`) |
+| `--no-proxy-client-header`        | Stop reading it                                                                             | ✓       | ✓              |
 | `--no-auth[=false]`               | Disable basic authentication                                                                | ✓       | ✓              |
 | `--port <port>`                   | Listen port (default 7680, Windows 7690 for `start`)                                        | ✓       | ✓              |
 | `--mux <tmux\|herdr\|zellij\|hc>` | Terminal backend (`start`: detected, zellij and hc never; container: asked; hc native only) | ✓       | ✓              |
@@ -333,6 +337,31 @@ server's local-user check refuses every connection `tailscale serve` makes
 (`local-user-refused ... reason="Access is denied."` in the log, a 502 in the browser) and
 `--tailscale` does not work there; `--allow-local-user` cannot help, as the account is never read.
 
+## Cloudflare Tunnel
+
+Termote does not run `cloudflared` and never sees the tunnel token: you create the tunnel in the
+Cloudflare dashboard, point its public hostname at `http://127.0.0.1:7680` (Windows 7690; the
+container's `--port`), and run `cloudflared` as a service. Then name the hostname:
+
+```bash
+termote start --cloudflare term.example.com
+termote container up --cloudflare term.example.com   # cloudflared on this host, no --lan
+```
+
+The hostname joins the Host allowlist, its `https://` URL shows in `url`, `panel` (QR code),
+`status` and `status --json` (`cloudflare`, `urls.cloudflare`), and failed sign-ins count per
+client by the `CF-Connecting-IP` header, so one stranger's wrong guesses do not lock out everyone else. Every
+attempt through a proxy still shares one cap of 30 a minute. `--cloudflare` is refused with
+`--no-auth`, and `container up` refuses a client header with `--lan` (LAN machines would come in
+the way the proxy does).
+
+`start`, `container up`, `status` and `panel` check from outside whether Cloudflare Access is in
+front of the hostname (`status --json`: `cloudflareAccess` is `on`, `off` or `unknown`) and
+warn when it is not: without Access anyone on the Internet reaches the sign-in page. Turn
+Access on for the hostname. Other proxies: `--proxy-client-header X-Forwarded-For` for ngrok
+(Termote takes the last entry); Dev Tunnels hides the client's address, so use a private tunnel
+there instead. Step by step: [Cloudflare Tunnel](https://termote.ohnice.app/installation/cloudflare/).
+
 ## Environment Variables (no saved config only)
 
 `termote serve` reads the saved config and ignores every `TERMOTE_*` variable whenever one
@@ -351,6 +380,7 @@ manual `go run`/`termote-dev serve` from a checkout:
 | `TERMOTE_MUX`                 | `tmux`       | Backend: `tmux`, `herdr` or `zellij`; in the image, also picks what starts                                                                                                      |
 | `TERMOTE_ALLOWED_HOSTS`       | (empty)      | Extra `Host` header values, comma-separated; loopback always allowed                                                                                                            |
 | `TERMOTE_HERDR_ALLOW_NO_AUTH` | `false`      | Required with `TERMOTE_MUX=herdr` and `TERMOTE_NO_AUTH=true`                                                                                                                    |
+| `TERMOTE_PROXY_CLIENT_HEADER` | (empty)      | Header a proxy sets to the client's address, trusted from any source; `container up` sets it only with the port on `127.0.0.1`                                                  |
 | `TERMOTE_WORKSPACE_HOME`      | (empty)      | Where your home dir sits in `/workspace` (`.`: the workspace itself) when the mounted workspace is it or holds it; view-only devices read nothing there. `container up` sets it |
 
 You do not set these by hand for a normal install: `termote start`/`container up` compute and
@@ -394,7 +424,7 @@ kept by `container down` and removed by `uninstall --purge`. Design, limits and 
 
 - Requests with an unrecognised `Host` header are rejected (DNS-rebinding protection); the
   allowed set is loopback + (with `--lan`) the address the request arrived on + the Tailscale
-  name + `--allow-host` entries, with no wildcard to disable the check
+  name + the Cloudflare hostname + `--allow-host` entries, with no wildcard to disable the check
 - State-changing `/api/mux/*` requests and the terminal WebSocket require a same-site
   Origin and (for the WebSocket) a single-use token
 
@@ -525,7 +555,7 @@ and memory over the last 15 minutes.
 
 ## Links and the Herdr Plugin
 
-`termote url` prints the address to open, on Tailscale, else the first LAN address, else
+`termote url` prints the address to open, on Tailscale, else Cloudflare, else the first LAN address, else
 `127.0.0.1` (never with the password): `--group/--tab/--pane` (the ids of
 `/api/mux/snapshot`) and `--view` make it a deep link, `--herdr` takes them from a Herdr plugin
 context, and `--open`, `--copy`, `--qr` open it, copy it or print a QR code. Only the link goes to

@@ -28,6 +28,9 @@ func serveConfigFromSaved(s savedConfig, defaultPort int) serveConfig {
 		host, _ := splitTailscale(s.Tailscale)
 		hosts = append(hosts, strings.ToLower(host))
 	}
+	if s.Cloudflare != "" {
+		hosts = append(hosts, strings.ToLower(s.Cloudflare))
+	}
 	hosts = append(hosts, s.AllowHosts...)
 	return serveConfig{
 		Port:             strconv.Itoa(port),
@@ -43,9 +46,13 @@ func serveConfigFromSaved(s savedConfig, defaultPort int) serveConfig {
 		HcBin:            s.HcBin,
 		HcEnv:            s.HcEnv,
 		Tailscale:        s.Tailscale,
-		CheckLocalUsers:  true,
-		AllowLocalUsers:  s.AllowLocalUsers,
-		Places:           placeSpecs(s.AllowPaths),
+		Cloudflare:       s.Cloudflare,
+		// Natively the proxy (cloudflared, ngrok) reaches the server over
+		// loopback only: the header is read from there alone.
+		ProxyClientHeader: canonicalProxyHeader(proxyClientHeader(s.Cloudflare, s.ProxyClientHeader)),
+		CheckLocalUsers:   true,
+		AllowLocalUsers:   s.AllowLocalUsers,
+		Places:            placeSpecs(s.AllowPaths),
 	}
 }
 

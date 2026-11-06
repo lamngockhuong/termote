@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"mime"
 	"net"
@@ -226,6 +227,14 @@ func validateConfig(cfg serveConfig) error {
 	}
 	if cfg.NoAuth && cfg.MuxBackend == "herdr" && !cfg.HerdrAllowNoAuth {
 		return errors.New("TERMOTE_NO_AUTH=true with TERMOTE_MUX=herdr would expose every herdr workspace without a password; set TERMOTE_HERDR_ALLOW_NO_AUTH=true to accept that")
+	}
+	if cfg.NoAuth && cfg.Cloudflare != "" {
+		return errors.New("a Cloudflare hostname with auth disabled would open the terminal to the Internet without a password; remove --cloudflare or --no-auth")
+	}
+	if cfg.ProxyClientHeader != "" {
+		if err := validProxyClientHeader(cfg.ProxyClientHeader); err != nil {
+			return fmt.Errorf("TERMOTE_PROXY_CLIENT_HEADER: %w", err)
+		}
 	}
 	if cfg.NoAuth && cfg.MuxBackend == "hc" && !cfg.HcAllowNoAuth {
 		return errors.New("TERMOTE_NO_AUTH=true with TERMOTE_MUX=hc would expose every herdr-core terminal without a password; set TERMOTE_HC_ALLOW_NO_AUTH=true to accept that")

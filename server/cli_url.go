@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -20,14 +21,18 @@ type accessURLs struct {
 	Local     string   `json:"local"`
 	LAN       []string `json:"lan"`
 	Tailscale string   `json:"tailscale"`
+	// Cloudflare is the tunnel's https URL ("" without --cloudflare).
+	Cloudflare string `json:"cloudflare"`
 }
 
-// primary is the URL another device most likely reaches: Tailscale, else the
-// first LAN address, else this machine.
+// primary is the URL another device most likely reaches: Tailscale, else
+// Cloudflare, else the first LAN address, else this machine.
 func (u accessURLs) primary() string {
 	switch {
 	case u.Tailscale != "":
 		return u.Tailscale
+	case u.Cloudflare != "":
+		return u.Cloudflare
 	case len(u.LAN) > 0:
 		return u.LAN[0]
 	}
@@ -51,6 +56,9 @@ func (c *cli) accessURLs(saved *savedConfig, port int) accessURLs {
 			u.Tailscale += ":" + tsPort
 		}
 	}
+	if saved.Cloudflare != "" {
+		u.Cloudflare = cloudflareURL(saved.Cloudflare)
+	}
 	return u
 }
 
@@ -73,9 +81,14 @@ type statusReport struct {
 	LAN     bool   `json:"lan"`
 	Auth    bool   `json:"auth"`
 	// Tailscale is the saved `host[:port]` ("" when not published).
-	Tailscale  string     `json:"tailscale"`
-	URLs       accessURLs `json:"urls"`
-	Supervisor string     `json:"supervisor"`
+	Tailscale string `json:"tailscale"`
+	// Cloudflare is the saved tunnel hostname ("" without --cloudflare);
+	// CloudflareAccess what probing it found: "on", "off", "unknown", or ""
+	// without one.
+	Cloudflare       string     `json:"cloudflare"`
+	CloudflareAccess string     `json:"cloudflareAccess"`
+	URLs             accessURLs `json:"urls"`
+	Supervisor       string     `json:"supervisor"`
 	// Via is how the CLI reached the server: "socket" (the local socket,
 	// no password sent) or "tcp"; "" when nothing answered.
 	Via string `json:"via,omitempty"`
@@ -89,7 +102,7 @@ func (c *cli) statusReport(saved *savedConfig, port int) statusReport {
 	r := statusReport{Port: port, Auth: true, URLs: c.accessURLs(saved, port)}
 	if saved != nil {
 		pass = saved.Password
-		r.LAN, r.Auth, r.Tailscale = saved.LAN, !saved.NoAuth, saved.Tailscale
+		r.LAN, r.Auth, r.Tailscale, r.Cloudflare = saved.LAN, !saved.NoAuth, saved.Tailscale, saved.Cloudflare
 	}
 	h, code, via := c.fetchHealthVia(port, saved.authUser(), pass)
 	if code != 0 {
@@ -220,6 +233,9 @@ func (c *cli) printStatusJSON(port int) error {
 		port = c.savedPort(saved)
 	}
 	r := c.statusReport(saved, port)
+	if r.Cloudflare != "" {
+		r.CloudflareAccess = string(cloudflareProbe(context.Background(), r.Cloudflare).State)
+	}
 	enc := json.NewEncoder(c.out)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(r); err != nil {

@@ -287,6 +287,10 @@ The native server runs as a user service: a systemd user unit on Linux (a detach
 | `--lan[=false]`                   | Listen on every interface (default: localhost only)                                             |
 | `--tailscale <host[:port]>`       | Publish over Tailscale HTTPS (default port 443)                                                 |
 | `--no-tailscale`                  | Stop publishing over Tailscale                                                                  |
+| `--cloudflare <host>`             | Hostname of a Cloudflare Tunnel you run; warns when Cloudflare Access is not in front of it     |
+| `--no-cloudflare`                 | Forget the Cloudflare hostname                                                                  |
+| `--proxy-client-header <name>`    | Header a proxy sets to the client's address (default with `--cloudflare`: `CF-Connecting-IP`)   |
+| `--no-proxy-client-header`        | Stop reading it                                                                                 |
 | `--no-auth[=false]`               | Disable basic authentication                                                                    |
 | `--mux <tmux\|herdr\|zellij\|hc>` | Terminal backend (default: herdr when it runs, else tmux; zellij: Linux, macOS; hc: herdr-core) |
 | `--allow-host <name>`             | Allow an extra Host header value (repeatable; no wildcard, see security notes)                  |
