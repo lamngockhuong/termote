@@ -781,7 +781,20 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   a denied dir or with a sensitive name is never read; every file and every dir listed is opened
   nonblocking, so a FIFO in its place never holds the cached walk), with the same
   `Sec-Fetch-Site`/`Origin` check as the files routes. A symlinked skill dir is followed only
-  into that config dir, the pane root or `~/.agents/skills`. On Windows a directory junction
+  into that config dir, the pane root or `~/.agents/skills`. A plugin bundle in the config dir's
+  `skills` (`server/agent_commands_bundles.go`: an entry, dir or link, holding
+  `.claude-plugin/plugin.json` and no `SKILL.md`, as some kit installers lay it out)
+  lists its `commands`/`skills` as `<manifest name>:<name>` (source `plugin`); the bundle, those two
+  dirs and each skill dir in `skills` may be links into the dirs above or into a hidden dir right
+  under the user's home (`~/.<kit>`, where a kit keeps its store; never `~/Documents` or another
+  visible dir, whose `.md` first lines would otherwise reach a view-only client; none when home
+  is a filesystem root), each opened as an `os.Root` of its own with the skip check made from
+  every allowed dir and home. Only the manifest's `name` is read (a regular file of at most 1 MB,
+  the `SameFile` check; a name with `:` or not a valid command name: no bundle). All bundles share
+  one visit budget (5000 entries) and one cap (500 entries), at most 50 bundles; they come before
+  the enabled plugins, so a bundle named like one shadows its entries (names only). Never in the
+  pane root: a cloned repo cannot widen where links lead. Accepted gap, as for linked skill dirs: a
+  path component swapped for a link between the containment check and `os.OpenRoot`. On Windows a directory junction
   (mount-point reparse point) there is followed like a symlinked skill dir, and every containment
   check here (allowed dirs, linked skill dirs, plugin base, `installPath`, `projectPath`) compares
   real paths from `GetFinalPathNameByHandle` (`resolveLinkedDir`; `filepath.EvalSymlinks` no longer

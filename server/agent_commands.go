@@ -132,7 +132,8 @@ func (a *agentAPI) commandSkip(dir, rel string) bool {
 // skills), then those of the plugins enabled and installed there. Any dir may
 // be empty. A name met twice keeps its first entry, project before user
 // before plugin. A symlinked skill dir is followed into claudeDir, root or
-// home's ~/.agents/skills (where skill managers install). skip, when set,
+// home's ~/.agents/skills (where skill managers install); a plugin bundle in
+// claudeDir/skills (readSkillBundles) may also lead under home. skip, when set,
 // refuses a file by its dir and path (the files routes' denied dirs and
 // sensitive names).
 func listAgentCommands(root, claudeDir, home string, skip func(dir, rel string) bool) commandsResponse {
@@ -148,6 +149,7 @@ func listAgentCommands(root, claudeDir, home string, skip func(dir, rel string) 
 	}
 	if claudeDir != "" {
 		out = append(out, readCommandDir(claudeDir, ".", commandOpts{source: "user", allow: allow, skip: skip})...)
+		out = append(out, readSkillBundles(claudeDir, home, allow, skip)...)
 		out = append(out, readPluginCommands(root, claudeDir, skip)...)
 	}
 	seen := map[string]bool{}
@@ -343,20 +345,26 @@ func (r *commandReader) readLinkedSkill(p string) (commandMeta, bool) {
 	}
 	defer rt.Close()
 	linked := &commandReader{rt: rt, dir: target}
-	if r.skip != nil {
-		// Checked from each allowed dir holding the target too: a .git dir
-		// on the way to it is only seen from above.
-		linked.skip = func(dir, rel string) bool {
-			full := filepath.Join(dir, rel)
-			for _, d := range r.allow {
-				if rel, err := filepath.Rel(d, full); err == nil && pathWithin(d, full) && r.skip(d, rel) {
-					return true
-				}
-			}
-			return r.skip(dir, rel)
-		}
-	}
+	linked.skip = skipFromAllowed(r.allow, r.skip)
 	return linked.readHead("SKILL.md")
+}
+
+// skipFromAllowed returns skip checked from each allowed dir holding the file
+// too, for a dir reached through a link: a .git dir on the way to it is only
+// seen from above. A nil skip stays nil.
+func skipFromAllowed(allow []string, skip func(dir, rel string) bool) func(dir, rel string) bool {
+	if skip == nil {
+		return nil
+	}
+	return func(dir, rel string) bool {
+		full := filepath.Join(dir, rel)
+		for _, d := range allow {
+			if rel, err := filepath.Rel(d, full); err == nil && pathWithin(d, full) && skip(d, rel) {
+				return true
+			}
+		}
+		return skip(dir, rel)
+	}
 }
 
 // readHead reads the start of p when it is a regular file, not a symlink,
