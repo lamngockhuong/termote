@@ -459,9 +459,14 @@ func TestFilesSearchDeadline(t *testing.T) {
 	req := &filesRequest{ctx: context.Background(), root: filesRoot{Root: root}}
 	list := findList{entries: []findEntry{newFindEntry("a.txt", false)}}
 	in, _ := parseSearchQuery(url.Values{"q": {"hit"}})
+	base := runtime.NumGoroutine()
 	res, wait, err := f.searchList(context.Background(), time.Now().Add(-time.Second), req, list, in)
+	// Stopped in the glob filter: no feeder or worker was started.
+	if n := runtime.NumGoroutine(); n > base {
+		t.Errorf("past deadline started %d goroutines", n-base)
+	}
 	wait()
-	if err != nil || !res.Incomplete || len(res.Files) != 0 {
+	if err != nil || !res.Incomplete || res.Files == nil || len(res.Files) != 0 {
 		t.Errorf("past deadline = %+v %v", res, err)
 	}
 	res, wait, err = f.searchList(context.Background(), time.Now().Add(time.Minute), req, list, in)

@@ -360,8 +360,12 @@ func (f *filesAPI) searchList(ctx context.Context, deadline time.Time, req *file
 	var todo []string
 	for i, e := range list.entries {
 		if i%64 == 0 && scanCtx.Err() != nil {
+			// Out of time already: the merge would answer the same for no
+			// file, so neither sort nor start the workers.
+			stop()
+			rt.Close()
 			res.Incomplete = true
-			break
+			return res, func() {}, nil
 		}
 		if (len(in.files) > 0 && !matchAny(in.files, e.rel)) || matchAny(in.skip, e.rel) {
 			continue
