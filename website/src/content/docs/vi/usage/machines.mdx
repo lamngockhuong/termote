@@ -1,0 +1,115 @@
+---
+title: Máy
+description: Xem và điều khiển agent trên các máy khác từ một Termote, qua SSH
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Một Termote có thể nối tới Termote trên những máy khác của bạn qua SSH. Các máy đó hiện ở mục **Máy**
+trong sidebar, mỗi máy kèm trạng thái và các agent đang chạy trên nó. Mở một máy thì cả app làm việc trên
+máy đó: terminal, Chat, Files và Changes đều đọc ghi ổ đĩa của chính máy ấy. Bạn vẫn dùng một địa chỉ và
+một lần đăng nhập; máy kia không cần mở cổng nào, chỉ cần SSH.
+
+Chỉ có thể thêm và gỡ máy từ terminal của máy chạy Termote chính. App chỉ chọn máy, không bao giờ thấy tên
+host, user hay khoá của máy đó.
+
+## Trước khi bắt đầu
+
+- Trên máy kia: đã cài Termote và chạy ở chế độ native (`termote start`). Termote chạy trong container thì
+  không nối tới được.
+- Trên máy này: có OpenSSH client (`ssh` và `ssh-keygen`), và từ terminal của bạn đã SSH được sang máy kia
+  (một `Host` trong `~/.ssh/config` hoặc tên host). Hai máy chạy cùng một bản Termote.
+
+## Thêm máy
+
+```bash
+termote machine add pi                  # alias trong ~/.ssh/config, hoặc tên host
+termote machine add pi --label "Pi nhà bếp"
+```
+
+`add` làm bốn việc:
+
+1. Lần đầu, tạo một khoá riêng của Termote (`~/.config/termote/ssh/id_ed25519`), không đặt mật khẩu cho
+   khoá vì server dùng nó khi không có ai ngồi trước máy.
+2. Nối sang bằng chính tài khoản SSH của bạn. Nếu Termote chưa từng thấy máy đó, OpenSSH hỏi bạn xác nhận
+   host key; key này được lưu vào `known_hosts` riêng của Termote, tách khỏi của bạn.
+3. Hỏi Termote trên máy đó xem nó được cài ở đâu.
+4. Khi bạn đồng ý, thêm một dòng vào `~/.ssh/authorized_keys` trên máy đó: khoá của Termote, chỉ được chạy
+   `termote bridge` (lệnh bắt buộc trong `command=` kèm `restrict`: không shell, không chuyển tiếp cổng,
+   không TTY).
+
+Sau đó nó nối thử đúng như server sẽ nối (khoá của Termote, không hỏi gì), và chỉ lưu máy khi lần nối này
+thành công. `--yes` cài khoá mà không hỏi, `--no-check` lưu máy mà bỏ qua lần kiểm cuối, `--print-key` chỉ
+in dòng khoá để bạn tự cài.
+
+Muốn lấy các máy Herdr đã biết thì dùng `termote machine import --herdr`: lệnh hỏi từng máy rồi chạy `add`
+cho máy đó.
+
+## Dùng một máy
+
+Trong sidebar, mục **Máy** liệt kê **Máy này** trước, rồi tới từng máy với một chấm màu và số agent đang
+cần bạn hoặc đang chạy. Mũi tên trước tên máy mở danh sách các agent đó. Bấm vào một máy để mở: trang tải
+lại trên máy đó (địa chỉ có thêm `?machine=<id>`), tiêu đề hiện tên máy, và mọi thao tác đều diễn ra ở đó.
+Bấm **Máy này** để quay về. Trong command palette, **Chuyển sang máy kế tiếp** lần lượt đổi qua từng máy.
+
+Dù đang mở máy nào, những thứ sau vẫn thuộc máy này: đăng xuất, Web Push, thiết bị đã pair, trình duyệt
+đã đăng nhập, và việc kiểm tra phiên bản của app. Thông báo từ agent trên máy khác sẽ mở app trên đúng máy
+đó.
+
+## Trạng thái
+
+```bash
+termote machine list                    # id, nhãn, alias, ngày thêm
+termote machine status                  # trạng thái server đang thấy: online, offline, ...
+```
+
+| Trạng thái | Nghĩa là | Cần làm |
+| --- | --- | --- |
+| Trực tuyến | Máy đang trả lời | |
+| Đang kết nối | Chưa thử nối | Chờ một chút |
+| Ngoại tuyến | Không nối SSH được, hoặc máy đó không chạy server Termote | Kiểm tra máy đang bật, và chạy `termote start` trên đó |
+| Khoá bị từ chối | Khoá của Termote chưa được cài trên máy đó | `termote machine remove` rồi `add` lại |
+| Host key đã đổi | Host key của máy khác với key đã lưu | Nếu bạn biết lý do, `remove` rồi `add` lại |
+| Khác bản Termote | Hai Termote dùng hai phiên bản API khác nhau | Cập nhật cả hai lên cùng một bản |
+
+Sau mỗi lần lỗi, server chờ rồi mới thử lại (5 giây, mỗi lần gấp đôi, tối đa 5 phút); `termote machine
+status` và sidebar cho biết nguyên nhân.
+
+## Gỡ máy
+
+```bash
+termote machine remove pi               # theo nhãn hoặc id
+```
+
+Lệnh quên máy và host key của nó, rồi hỏi có gỡ luôn dòng khoá của Termote trên máy đó không (qua tài
+khoản SSH của bạn). `termote uninstall --purge` xoá danh sách máy và khoá của Termote khỏi máy này; các
+dòng khoá trên những máy kia vẫn còn cho tới khi bạn tự gỡ.
+
+## Máy chạy Windows
+
+Termote trên Windows cũng có thể là một máy, với OpenSSH Server. Khoá phải cài bằng tay:
+
+```powershell
+termote machine add winbox --remote-exe "C:\Users\me\AppData\Local\termote\versions\2.0.0\bin\termote.exe"
+```
+
+`add` in ra dòng cần thêm vào `.ssh\authorized_keys` của tài khoản trên máy đó, hoặc với tài khoản quản
+trị thì vào `C:\ProgramData\ssh\administrators_authorized_keys`. Đường dẫn trỏ vào một phiên bản cụ thể,
+nên sau khi chạy `termote update` trên máy đó, hãy thêm lại máy.
+
+<Aside type="caution">
+  Lệnh bắt buộc `command=` và `restrict` mới được thử với OpenSSH trên Linux và macOS. Với máy Windows, hãy kiểm tra
+  rằng khoá không mở được shell (`ssh -i ~/.config/termote/ssh/id_ed25519 winbox` chỉ được in dòng đầu
+  của bridge và không gì khác) trước khi dựa vào nó.
+</Aside>
+
+## Giới hạn
+
+- Ai điều khiển Termote này thì điều khiển mọi máy đã thêm vào nó, với đúng vai trò họ có ở đây: thiết bị
+  chỉ xem ở đây thì sang máy kia cũng chỉ xem. Khoá chỉ chạm tới Termote trên máy kia, không bao giờ mở
+  shell.
+- Alias đi qua `ProxyCommand` hoặc `ProxyJump` sẽ bị cảnh báo: máy trung gian phải chấp nhận khoá của
+  Termote, và SSH agent của bạn không bao giờ được dùng.
+- Termote chạy trong container không thể là một máy.
+- Khi máy chính chạy Windows, mỗi kết nối là một lần đăng nhập SSH mới (không dùng chung kết nối), nên danh
+  sách máy làm mới chậm hơn.

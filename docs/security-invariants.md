@@ -452,7 +452,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   history can hold secrets a program printed: the same a signed-in user saw on the stream
 - **View-only role** (`server/auth_role.go`, `caps.role` = `full|view`, `caps.viewStream`): Basic,
   session and `--no-auth` are always `full`; a device carries its role, and a role other than
-  `full` (empty, unknown) reads as `view`. `basicAuth` refuses every
+  `full` (empty, unknown) reads as `view`. Another termote over the machine bridge (`authMachine`) carries the role
+  its `X-Termote-Role` names, `view` without one; the main server sends the role of the request it
+  forwards, so a view-only device is view-only on every machine. `basicAuth` refuses every
   non-GET/HEAD/OPTIONS method of a view-only client on any path (403 `{"error", "code":
   "view_only"}`) before a handler runs, except `POST /api/mux/logout`; handlers repeat it with
   `requireWriteRole`, so a route added later is closed without remembering to. Reads: transcript,

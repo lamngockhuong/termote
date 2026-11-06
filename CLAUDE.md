@@ -56,6 +56,7 @@ termote container up --mux herdr           # container, Herdr inside it instead 
 termote container up --mux zellij          # container, Zellij inside it (any host)
 termote start --user alice                 # native, log in as alice instead of admin
 termote show-password                      # print the saved username and password
+termote machine add pi                     # reach another termote over SSH (Machines in the sidebar)
 termote link / unlink                      # create/remove the 'termote' global command
 termote update                             # update to the latest release
 termote update --version 1.0.0 --force     # pin/reinstall a specific version
@@ -171,6 +172,8 @@ uninstall [--purge]  Remove the service, the command, the install and uploads (-
 logs [service]       View logs (server, all, follow, clean)
 link / unlink        Create or remove the 'termote' command in ~/.local/bin
 show-password        Show the saved username and password
+machine <cmd>        Machines reached over SSH: add <alias> [--label --print-key --remote-exe --no-check --yes], list, remove, status, import --herdr
+bridge               The forced command another termote's key runs here (never by hand)
 pair [options]       Make a one-time code (5 min) that signs a new device in; --role <view|full> (default view), --name <name>, --expires <12h|7d|2w|never> (default 30d)
 devices              List the paired devices; `devices revoke <id>` signs one out with every device it paired
 signins              List the browsers signed in with the password; `signins revoke <id>|--all` signs them out
@@ -297,6 +300,10 @@ pnpm --filter termote test:e2e:ui           # Run with UI debugger
 `e2e-herdr` job runs it against a headless Herdr 0.9.5 (sha256 pinned) on its own socket,
 `HOME` and XDG dirs, a throwaway repo with a branch `e2e-base` and a workspace `e2e-repo`. Never
 point it at your own Herdr.
+
+`pwa/e2e/machines.spec.ts` skips unless `TERMOTE_E2E_MACHINE=1` (with `TERMOTE_E2E_MACHINE_HOME`): CI's
+`e2e-machines` job starts a native server with a saved config in its own HOME and XDG dirs (the machine,
+no sign-in, port 7681) and this server with `TERMOTE_E2E_MACHINE_BRIDGE` joining its bridge socket (no sshd).
 
 `pwa/e2e/hc.spec.ts` skips unless `TERMOTE_E2E_HC=1` (with `HC_SOCKET`, `HC_SESSION`,
 `TERMOTE_E2E_HC_DIR` and `TERMOTE_PASS`): CI's `e2e-hc` job runs it against hc 0.1.16 (sha256 pinned)

@@ -79,6 +79,11 @@ what Termote can reach, run it as another user with less access.
 - **Other services on the same host name.** A cookie is not bound to a port: every service on that name
   receives Termote's cookies. Give Termote a host name of its own.
 - **Programs of the same OS user.** Anything else running as that user reads the same files Termote does.
+- **Machines added to this Termote.** Whoever controls this Termote controls every machine added with
+  `termote machine add`, with the role they have here. The key installed on each machine runs only
+  `termote bridge` (forced command, `restrict`) and signs in there as another termote, never as its CLI:
+  it cannot pair, revoke, sign in or out or subscribe to Web Push there. A full device here can still
+  type into that machine's terminals.
 - **Plain HTTP.** Without HTTPS (Tailscale, a Cloudflare Tunnel, or a proxy with a certificate), the
   password and cookies cross the network in clear text.
 - **The audit lines are not proof.** `termote logs clean`, or any full device, deletes them. Behind a

@@ -1,0 +1,115 @@
+---
+title: Machines
+description: Watch and drive the agents of other computers from one Termote, over SSH
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+One Termote can reach the Termote of other computers you own over SSH. They show up under **Machines**
+in the sidebar, each with its status and the agents running on it. Open one and the whole app works on
+that computer: its terminals, the Chat view, Files and Changes read and write its own disk. You keep one
+address and one sign-in; the other computers need no port of their own, only SSH.
+
+Machines are added and removed only from the terminal of the computer running the main Termote. The app
+picks a machine but never sees its host name, user or key.
+
+## Before you start
+
+- On the other computer: Termote installed and started natively (`termote start`). A Termote in
+  container mode cannot be reached.
+- On this computer: the OpenSSH client (`ssh` and `ssh-keygen`), and an SSH login to the other computer
+  that works from your terminal (a `Host` in `~/.ssh/config` or a host name). Both computers on the same
+  Termote release.
+
+## Add a machine
+
+```bash
+termote machine add pi                  # an alias of ~/.ssh/config, or a host name
+termote machine add pi --label "Kitchen Pi"
+```
+
+`add` does four things:
+
+1. The first time, it makes a key of Termote's own (`~/.config/termote/ssh/id_ed25519`), without a
+   passphrase: the server uses it unattended.
+2. It connects with your own SSH login. OpenSSH asks you to confirm the computer's host key if Termote has
+   not seen it before; it is saved in Termote's own `known_hosts`, apart from yours.
+3. It asks Termote on that computer where it is installed.
+4. After you confirm, it appends one line to `~/.ssh/authorized_keys` there: Termote's key, allowed to run
+   nothing but `termote bridge` (a forced command with `restrict`: no shell, no forwarding, no TTY).
+
+It then connects the way the server will (Termote's key, no prompts) and saves the machine only if that
+works. `--yes` installs the key without asking, `--no-check` saves it without the last check,
+`--print-key` only prints the line so you can install it yourself.
+
+Import the machines Herdr knows with `termote machine import --herdr`: it asks about each one, then runs
+`add` for it.
+
+## Use a machine
+
+In the sidebar, **Machines** lists **This machine** first, then each machine with a coloured dot and the
+number of its agents that need you or are working. The arrow before a machine shows those agents. Click a
+machine to open it: the page reloads on it (its address gets `?machine=<id>`), the title shows its name,
+and everything you do happens there. Click **This machine** to come back. In the command palette,
+**Switch to the next machine** cycles through them.
+
+What stays on this computer whatever machine is open: signing out, Web Push, paired devices and signed-in
+browsers, and the app's version check. A notification from an agent on another machine opens the app on
+that machine.
+
+## Status
+
+```bash
+termote machine list                    # id, label, alias, when it was added
+termote machine status                  # what the running server sees: online, offline, ...
+```
+
+| Status | Meaning | What to do |
+| --- | --- | --- |
+| Online | It answers | |
+| Connecting | Not tried yet | Wait a moment |
+| Offline | No SSH connection, or no Termote server running there | Check the computer is on, and `termote start` there |
+| Key refused | Termote's key is not installed there | `termote machine remove`, then `add` again |
+| Host key changed | The computer's host key is not the one saved | If you expected it, `remove` and `add` again |
+| Another Termote release | The two Termotes speak different API versions | Update both to the same release |
+
+After a failure the server waits before trying again (5 seconds, doubling up to 5 minutes); `termote
+machine status` and the sidebar show why.
+
+## Remove a machine
+
+```bash
+termote machine remove pi               # by label or id
+```
+
+It forgets the machine and its host key, and asks whether to remove Termote's key line from that
+computer too (over your SSH login). `termote uninstall --purge` removes the machine list and Termote's key
+from this computer; the key lines on the other computers stay until you remove them.
+
+## A Windows machine
+
+Termote on Windows can be a machine too, with OpenSSH Server. Install the key by hand:
+
+```powershell
+termote machine add winbox --remote-exe "C:\Users\me\AppData\Local\termote\versions\2.0.0\bin\termote.exe"
+```
+
+`add` prints the line to add to the account's `.ssh\authorized_keys` there, or, for an administrator
+account, to `C:\ProgramData\ssh\administrators_authorized_keys`. The path names one version, so after
+`termote update` on that computer, add the machine again.
+
+<Aside type="caution">
+  The forced command and `restrict` were tested with OpenSSH on Linux and macOS. On a Windows machine,
+  check that the key cannot open a shell (`ssh -i ~/.config/termote/ssh/id_ed25519 winbox` must print the
+  bridge's first line and nothing else) before you rely on it.
+</Aside>
+
+## Limits
+
+- Whoever controls this Termote controls every machine added to it, with the role they have here: a
+  view-only device here is view-only there. The key can only reach Termote there, never a shell.
+- An alias that goes through a `ProxyCommand` or `ProxyJump` is warned about: the jump host would have to
+  accept Termote's key, and your agent is never used.
+- A Termote in container mode cannot be a machine.
+- On Windows as the main computer, every connection is a new SSH login (no connection sharing), so the
+  machines list refreshes less often.

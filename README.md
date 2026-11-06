@@ -58,6 +58,7 @@ Remote control CLI tools (Claude Code, GitHub Copilot, any terminal) from mobile
 - **Image attachments**: send an image from the phone to the terminal or to a Chat view message, so the agent can read it by path
 - **Zellij backend** (Linux, macOS, or the container): drive your Zellij sessions, tabs and panes instead of tmux (Zellij 0.45.0 or later), chosen with `--mux zellij` — see [Native Installation](https://termote.ohnice.app/installation/native/)
 - **herdr-core backend** (native, every OS): show the spaces, tabs and panes the herdr app shows, as one more client of herdr-core (`hc` 0.1.16 or later), chosen with `--mux hc` — see [herdr-core Backend](https://termote.ohnice.app/installation/native/#herdr-core-backend)
+- **Machines**: watch and drive the agents of your other computers from one Termote, over SSH with a key that can only reach Termote there (`termote machine add <alias>`) — see [Machines](https://termote.ohnice.app/usage/machines/)
 - **Herdr plugin**: open the focused Herdr pane in Termote, show its link as a QR code for a phone, start or stop the server, without leaving Herdr — see [Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/)
 - **Mobile-friendly**: Virtual keyboard toolbar (Tab/Ctrl/Shift/arrows, expandable)
 - **Gesture support**: Swipe for Ctrl+C, Tab, scrolling
@@ -185,6 +186,7 @@ termote stop                         # Stop (it starts again at the next login)
 termote restart                      # Restart with the saved options
 termote logs follow                  # Tail the logs
 termote show-password                # Print the saved username and password
+termote machine add <ssh alias>      # Reach another computer's Termote (Machines in the sidebar)
 termote update                       # Update to the latest release
 termote uninstall                    # Remove the service, the command and the install
 ```
