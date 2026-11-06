@@ -946,7 +946,11 @@ the container).
 
 **Paths.** A client path is relative to the root: absolute paths, `..`, NUL and (Windows)
 drive or device names are refused with 400, and every open goes through `os.Root`, so a symlink
-that leaves the root fails too (400 `path outside root`). Termote's config and state
+that leaves the root fails too (400 `path outside root`), except one leading into another work
+tree of the same repository (`server/files_linked.go`: `git worktree list`, the path read through
+`os.Root` at that work tree by tree, content, raw and document, read-only, full clients only;
+`server/files_find_linked.go` adds what an untracked directory link holds to Find's lists, as
+that work tree's `git ls-files` sorts it). Termote's config and state
 directories (`serveConfig.FilesDenyDirs`, filled by `runServe`), `/proc`, `/sys`, `/dev`, the
 repository's `.git` and its git directory wherever it is (`git rev-parse --absolute-git-dir`,
 for a `--separate-git-dir` inside the root) are never served (403 `path not allowed`), checked

@@ -86,7 +86,13 @@ it. On Windows, Places need the Herdr backend (`--mux herdr`).
 
 - Folders come first, then files, ignoring case. Tap a folder to open or close it.
 - A folder shows at most 5000 entries. A longer folder says that only the first 5000 are shown.
-- Devices, sockets and links that point outside the root are greyed out and do not open.
+- Devices, sockets and links that point outside the root are greyed out and do not open. One
+  exception: in a git worktree, a link to a file or folder in another worktree of the same
+  repository (such as `docs/records` linked to the main checkout) opens like one of the root's,
+  read-only. Find and Search look inside such a folder when git does not track the link (and the
+  link is not inside a folder git does not track), and sort its files as that worktree's git
+  does: a file it ignores is found only with ignored files on, and never searched. Windows
+  junctions are not followed, only symbolic links.
 - A file opens in place of the tree, in a tab (see [Open Files as Tabs](#open-files-as-tabs)),
   with its path, its size, a button to copy the path and one to wrap long lines (on by default on
   a phone). Long lines scroll inside the code area, never
@@ -1142,7 +1148,9 @@ Some paths are never served (or saved, created in, deleted, or found by name), e
 - the repository's `.git` directory, which is not listed in Files either
 
 Paths are checked on the server against the root: `..`, absolute paths and links that lead
-outside the root are refused.
+outside the root are refused, except a link into another worktree of the same repository,
+which is read-only, never served to a view-only device and still refused inside a `.git` or one
+of the directories above.
 
 ## How git Is Run
 

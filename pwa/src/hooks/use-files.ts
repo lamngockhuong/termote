@@ -186,7 +186,8 @@ export const joinPath = (dir: string, name: string) =>
 export const isDir = (e: FileEntry) => e.type === 'dir' || e.target === 'dir'
 
 // Neither a file nor a directory that can be opened: a device, a socket, a
-// symlink that is broken or leaves the root
+// symlink that is broken or leaves the root (except into another worktree of
+// the repository, which the server follows)
 export const isOpenable = (e: FileEntry) =>
   isDir(e) || e.type === 'file' || e.target === 'file'
 

@@ -1243,7 +1243,8 @@ export async function answerAgentPrompt(
 export interface FileEntry {
   name: string
   type: 'dir' | 'file' | 'symlink' | 'other'
-  // What a symlink inside the root leads to; absent when it leaves the root
+  // What a symlink inside the root, or one leading into another worktree of
+  // the repository, leads to; absent when it leaves the root otherwise
   target?: 'dir' | 'file' | 'other'
   size: number
   sensitive: boolean

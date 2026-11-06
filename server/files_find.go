@@ -362,7 +362,11 @@ func (f *filesAPI) findTracked(ctx context.Context, root filesRoot, untracked bo
 			l.dirs[d] = true
 		}
 	}
-	return l, nil
+	// A view-only client's list (committed) never leaves the root
+	if !untracked || l.incomplete {
+		return l, nil
+	}
+	return f.withLinked(ctx, root, l, false, nil), nil
 }
 
 // findIgnored lists the ignored files of a repo. git names a directory
@@ -394,7 +398,11 @@ func (f *filesAPI) findIgnored(ctx context.Context, root filesRoot, ex findExclu
 			break
 		}
 	}
-	return findList{entries: w.out, read: w.read, incomplete: cut || w.b.stopped || w.deep}, nil
+	l := findList{entries: w.out, read: w.read, incomplete: cut || w.b.stopped || w.deep}
+	if l.incomplete {
+		return l, nil
+	}
+	return f.withLinked(ctx, root, l, true, ex), nil
 }
 
 func hasExcludedPart(rel string, ex findExcludes) bool {
@@ -507,7 +515,7 @@ func (f *filesAPI) handleFind(w http.ResponseWriter, r *http.Request) {
 	var res findResponse
 	lists, err := f.findLists(req.ctx, req.root, in)
 	if err == nil {
-		res, err = f.findResults(req.root, in.q, lists)
+		res, err = f.findResults(req.ctx, req.root, in.q, lists)
 	}
 	if err != nil {
 		f.error(w, "files find", err)
@@ -518,8 +526,10 @@ func (f *filesAPI) handleFind(w http.ResponseWriter, r *http.Request) {
 
 // findResults ranks the lists against q and keeps the best findMaxResults
 // paths that are served (f.denied, through symlinks) and still files on the
-// disk, so truncated is only set when one more would have been sent.
-func (f *filesAPI) findResults(root filesRoot, q string, lists []findList) (findResponse, error) {
+// disk, so truncated is only set when one more would have been sent. A path
+// under a directory link into another work tree (findLinkedFiles) is checked
+// there (linkedTarget).
+func (f *filesAPI) findResults(ctx context.Context, root filesRoot, q string, lists []findList) (findResponse, error) {
 	rt, err := os.OpenRoot(root.Root)
 	if err != nil {
 		return findResponse{}, err
@@ -531,12 +541,23 @@ func (f *filesAPI) findResults(root filesRoot, q string, lists []findList) (find
 		entries[i] = l.entries
 		res.Incomplete = res.Incomplete || l.incomplete
 	}
+	var trees []string
+	listed := false
 	for _, e := range rankFind(q, entries...) {
 		rel := filepath.FromSlash(e.rel)
 		if f.denied(root.Root, rel, root.GitDir) {
 			continue
 		}
-		if fi, err := rt.Lstat(rel); err != nil || fi.IsDir() {
+		fi, err := rt.Lstat(rel)
+		if isPathEscape(err) {
+			if !listed {
+				trees, listed = f.worktreeRoots(ctx, root), true
+			}
+			if t, ok := f.linkedTarget(root, rel, trees); ok {
+				fi, err = os.Lstat(filepath.Join(t.root, t.rel))
+			}
+		}
+		if err != nil || fi.IsDir() {
 			continue
 		}
 		if len(res.Results) == findMaxResults {

@@ -83,7 +83,13 @@ các thư mục chứa socket điều khiển máy host (`/tmp`, `/run`, `/var/r
 
 - Thư mục xếp trước, rồi tới file, không phân biệt hoa thường. Chạm vào thư mục để mở hoặc đóng.
 - Mỗi thư mục hiện tối đa 5000 mục. Thư mục dài hơn sẽ ghi là chỉ hiện 5000 mục đầu.
-- Thiết bị, socket và link trỏ ra ngoài gốc hiện mờ và không mở được.
+- Thiết bị, socket và link trỏ ra ngoài gốc hiện mờ và không mở được. Có một ngoại lệ: trong một
+  git worktree, link tới file hay thư mục thuộc worktree khác của cùng repo (ví dụ `docs/records`
+  trỏ về thư mục chính) mở được như của chính gốc, ở chế độ chỉ đọc. Find và Search tìm cả bên trong
+  thư mục đó khi git không theo dõi chính link (và link không nằm trong một thư mục git chưa theo
+  dõi), rồi phân loại file theo git của worktree kia: file bị git ở đó bỏ qua chỉ hiện khi bật tìm
+  cả file bị bỏ qua, và Search không tìm trong nó. Junction trên Windows không được theo, chỉ
+  symlink.
 - File mở ra thay chỗ cây thư mục, trong một tab (xem
   [Mở nhiều file theo tab](#mở-nhiều-file-theo-tab)), kèm đường dẫn, kích thước, nút chép đường
   dẫn và nút xuống dòng cho dòng dài (trên điện thoại bật sẵn). Dòng dài cuộn ngang trong khung code, không bao giờ
@@ -1130,7 +1136,8 @@ tên), kể cả khi đã xác nhận:
 - Thư mục `.git` của repo, thư mục này cũng không hiện trong Files
 
 Server kiểm mọi đường dẫn so với gốc: `..`, đường dẫn tuyệt đối và link dẫn ra ngoài gốc đều bị từ
-chối.
+chối, trừ link vào worktree khác của cùng repo. Nội dung ở đó chỉ đọc được, không bao giờ gửi cho
+thiết bị chỉ xem, và vẫn bị từ chối khi nằm trong `.git` hay một trong các thư mục ở trên.
 
 ## Termote chạy git ra sao
 

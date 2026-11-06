@@ -12,7 +12,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -237,7 +236,7 @@ func (f *filesAPI) raw(w http.ResponseWriter, req *filesRequest, q url.Values) e
 	}
 	switch side := q.Get("side"); side {
 	case "":
-		return f.serveWorktreeImage(w, req.root, q.Get("path"), reveal)
+		return f.serveWorktreeImage(req.ctx, w, req.root, q.Get("path"), reveal, req.view == nil)
 	case "old", "new":
 		return f.serveImageVersion(w, req.ctx, req.root, q.Get("path"), q.Get("orig"), q.Get("staged") == "1", side, reveal, req.view != nil)
 	default:
@@ -247,8 +246,9 @@ func (f *filesAPI) raw(w http.ResponseWriter, req *filesRequest, q url.Values) e
 
 // serveWorktreeImage streams a file under the root. Every check runs on the
 // open handle, in content()'s order: a missing file is 404 even when its name
-// is sensitive.
-func (f *filesAPI) serveWorktreeImage(w http.ResponseWriter, root filesRoot, p string, reveal bool) error {
+// is sensitive. linked: a path into another work tree of the repository is
+// read there (rootFor).
+func (f *filesAPI) serveWorktreeImage(ctx context.Context, w http.ResponseWriter, root filesRoot, p string, reveal, linked bool) error {
 	rel, err := cleanRelPath(p)
 	if err != nil {
 		return err
@@ -256,12 +256,7 @@ func (f *filesAPI) serveWorktreeImage(w http.ResponseWriter, root filesRoot, p s
 	if f.denied(root.Root, rel, root.GitDir) {
 		return errPathNotAllowed
 	}
-	rt, err := os.OpenRoot(root.Root)
-	if err != nil {
-		return err
-	}
-	defer rt.Close()
-	fh, err := rt.OpenFile(rel, os.O_RDONLY|openNonblock, 0)
+	fh, err := f.openRead(ctx, root, rel, linked)
 	if err != nil {
 		return err
 	}
@@ -317,7 +312,8 @@ func (f *filesAPI) serveImageVersion(w http.ResponseWriter, ctx context.Context,
 		return errNoVersion
 	}
 	if worktree {
-		return f.serveWorktreeImage(w, root, path, reveal)
+		// A path git status lists: none leads through a link
+		return f.serveWorktreeImage(ctx, w, root, path, reveal, false)
 	}
 	// cat-file --batch reads one name per line, and drops a '\r' ending
 	// it: "a.png\r" would be read as a.png.

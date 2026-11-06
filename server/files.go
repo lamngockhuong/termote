@@ -78,7 +78,9 @@ type filesAPI struct {
 	statuses *ttlCache[gitStatus]  // root → git status
 	commits  *ttlCache[commitList] // root and commit hash → its files
 	finds    *ttlCache[findList]   // root + list kind → file list (files/find)
-	rawSlots chan struct{}         // raw requests running, server-wide
+	// worktrees: root → its repository's work trees (worktreeRoots)
+	worktrees *ttlCache[[]string]
+	rawSlots  chan struct{} // raw requests running, server-wide
 	// searchSlots are the content searches running, server-wide.
 	searchSlots chan struct{}
 	// decodeSlots are the reads of a file not in UTF-8 running,
@@ -134,6 +136,7 @@ func registerFilesRoutes(mux *http.ServeMux, m Mux, allowed hostAllowlist, denyD
 		statuses:       newTTLCache[gitStatus](filesRootTTL),
 		commits:        newTTLCache[commitList](commitFilesTTL),
 		finds:          newTTLCache[findList](findListTTL),
+		worktrees:      newTTLCache[[]string](filesRootTTL),
 		rawSlots:       make(chan struct{}, rawMaxRunning),
 		searchSlots:    make(chan struct{}, searchMaxRunning),
 		decodeSlots:    make(chan struct{}, decodeMaxRunning),
@@ -477,8 +480,9 @@ func sensitivePath(root, rel string) bool {
 type fileEntry struct {
 	Name string `json:"name"`
 	Type string `json:"type"` // dir | file | symlink | other
-	// Target is what a symlink inside the root leads to (dir | file | other);
-	// empty for a broken one or one that leaves the root.
+	// Target is what a symlink inside the root, or one leading into another
+	// work tree of the repository (linkedTarget), leads to (dir | file |
+	// other); empty for a broken one or one that leaves the root otherwise.
 	Target    string `json:"target,omitempty"`
 	Size      int64  `json:"size"`
 	Sensitive bool   `json:"sensitive"`
@@ -509,7 +513,7 @@ func (f *filesAPI) handleTree(w http.ResponseWriter, r *http.Request) {
 		f.error(w, "files tree", fs.ErrNotExist)
 		return
 	}
-	res, err := f.tree(req.root, p)
+	res, err := f.tree(req.ctx, req.root, p, req.view == nil)
 	if err != nil {
 		f.error(w, "files tree", err)
 		return
@@ -544,7 +548,10 @@ func paneDirRel(root filesRoot) string {
 	return filepath.ToSlash(rel)
 }
 
-func (f *filesAPI) tree(root filesRoot, p string) (treeResponse, error) {
+// tree lists the directory p under root. linked: a path leaving the root
+// into another work tree of the repository (rootFor, linkedTarget) is listed
+// or shows what it leads to; a view-only client never reads one.
+func (f *filesAPI) tree(ctx context.Context, root filesRoot, p string, linked bool) (treeResponse, error) {
 	rel, err := cleanRelPath(p)
 	if err != nil {
 		return treeResponse{}, err
@@ -552,12 +559,13 @@ func (f *filesAPI) tree(root filesRoot, p string) (treeResponse, error) {
 	if f.denied(root.Root, rel, root.GitDir) {
 		return treeResponse{}, errPathNotAllowed
 	}
-	rt, err := os.OpenRoot(root.Root)
+	at, err := f.rootFor(ctx, root, rel, linked)
 	if err != nil {
 		return treeResponse{}, err
 	}
+	rt := at.rt
 	defer rt.Close()
-	d, err := rt.OpenFile(rel, os.O_RDONLY|openNonblock, 0)
+	d, err := rt.OpenFile(at.rel, os.O_RDONLY|openNonblock, 0)
 	if err != nil {
 		return treeResponse{}, err
 	}
@@ -572,6 +580,9 @@ func (f *filesAPI) tree(root filesRoot, p string) (treeResponse, error) {
 		return treeResponse{}, err
 	}
 	res := treeResponse{Root: root.Root, IsRepo: root.IsRepo, Path: filepath.ToSlash(rel), Entries: []fileEntry{}}
+	// Listed once, on the first link that leaves the root
+	var trees []string
+	listed := false
 	if len(ents) > maxDirEntries {
 		ents, res.Truncated = ents[:maxDirEntries], true
 	}
@@ -580,6 +591,7 @@ func (f *filesAPI) tree(root filesRoot, p string) (treeResponse, error) {
 			continue
 		}
 		child := filepath.Join(rel, e.Name())
+		inner := filepath.Join(at.rel, e.Name())
 		fe := fileEntry{Name: e.Name(), Type: entryType(e.Type())}
 		switch fe.Type {
 		case "file":
@@ -589,13 +601,29 @@ func (f *filesAPI) tree(root filesRoot, p string) (treeResponse, error) {
 		case "symlink":
 			// Stat through the root: a link that leaves it fails. A link
 			// into a denied dir shows nothing of its target.
-			if f.denied(root.Root, child, root.GitDir) {
+			if f.denied(root.Root, child, root.GitDir) || at.via.root != "" && f.denied(at.via.root, inner, root.GitDir, commonGitDir(root.GitDir)) {
 				break
 			}
-			if info, err := rt.Stat(child); err == nil {
+			info, err := rt.Stat(inner)
+			if err == nil {
 				fe.Target = entryType(info.Mode().Type())
 				if fe.Target == "file" {
 					fe.Size = info.Size()
+				}
+				break
+			}
+			if !linked || !isPathEscape(err) {
+				break
+			}
+			if !listed {
+				trees, listed = f.worktreeRoots(ctx, root), true
+			}
+			if t, ok := f.linkedTarget(root, child, trees); ok {
+				if info, err := os.Lstat(filepath.Join(t.root, t.rel)); err == nil {
+					fe.Target = entryType(info.Mode().Type())
+					if fe.Target == "file" {
+						fe.Size = info.Size()
+					}
 				}
 			}
 		}
@@ -699,7 +727,7 @@ func (f *filesAPI) handleContent(w http.ResponseWriter, r *http.Request) {
 		f.error(w, "files content", fs.ErrNotExist)
 		return
 	}
-	res, release, err := f.content(req.root, q.Get("path"), q.Get("reveal") == "1", enc)
+	res, release, err := f.content(req.ctx, req.root, q.Get("path"), q.Get("reveal") == "1", enc, req.view == nil)
 	if release != nil {
 		// Held until the answer is written, which a client that stopped
 		// reading would otherwise hold forever
@@ -716,8 +744,9 @@ func (f *filesAPI) handleContent(w http.ResponseWriter, r *http.Request) {
 // content reads the file p for the content route, decoded from enc, or
 // from the encoding detectEncoding finds when enc is empty. A file past
 // maxPreviewSize takes one of largeReadSlots: release, when not nil, frees
-// it once the answer is written.
-func (f *filesAPI) content(root filesRoot, p string, reveal bool, enc textEncoding) (res any, release func(), err error) {
+// it once the answer is written. linked: a path leaving the root is read
+// when it leads into another work tree of the repository (rootFor).
+func (f *filesAPI) content(ctx context.Context, root filesRoot, p string, reveal bool, enc textEncoding, linked bool) (res any, release func(), err error) {
 	rel, err := cleanRelPath(p)
 	if err != nil {
 		return nil, nil, err
@@ -725,12 +754,12 @@ func (f *filesAPI) content(root filesRoot, p string, reveal bool, enc textEncodi
 	if f.denied(root.Root, rel, root.GitDir) {
 		return nil, nil, errPathNotAllowed
 	}
-	rt, err := os.OpenRoot(root.Root)
+	at, err := f.rootFor(ctx, root, rel, linked)
 	if err != nil {
 		return nil, nil, err
 	}
-	defer rt.Close()
-	fh, err := rt.OpenFile(rel, os.O_RDONLY|openNonblock, 0)
+	defer at.rt.Close()
+	fh, err := at.rt.OpenFile(at.rel, os.O_RDONLY|openNonblock, 0)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -790,7 +819,11 @@ func (f *filesAPI) content(root filesRoot, p string, reveal bool, enc textEncodi
 		}
 	}
 	d := decodeText(b, enc)
-	why := f.editCheck(rt, root, rel, d)
+	// Read through a link into another work tree: never saved through it
+	why := "symlink"
+	if at.via.root == "" {
+		why = f.editCheck(at.rt, root, rel, d)
+	}
 	return contentResponse{
 		Root: root.Root, Path: slash, Size: size, Text: d.Text,
 		Hash: hashHex(b), Encoding: string(d.Enc), BOM: d.BOM,
