@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -100,7 +101,7 @@ func TestMachineAddInstallsKeyAndSaves(t *testing.T) {
 	if want := authorizedKeyLine(m, "ssh-ed25519 AAAAtest termote@box") + "\n"; installed != want {
 		t.Errorf("installed %q, want %q", installed, want)
 	}
-	if fi, err := os.Stat(tc.machineSSHDir()); err != nil || fi.Mode().Perm() != 0o700 {
+	if fi, err := os.Stat(tc.machineSSHDir()); err != nil || (runtime.GOOS != "windows" && fi.Mode().Perm() != 0o700) {
 		t.Errorf("ssh dir: %v %v", fi, err)
 	}
 	if strings.Contains(tc.stdout.String(), "PRIVATE") {
@@ -385,6 +386,7 @@ func TestMachineImportHerdr(t *testing.T) {
 
 func TestMachineWhereami(t *testing.T) {
 	tc := newTestCLI(t, "linux")
+	tc.exe = "/opt/termote/bin/termote" // a path of the machine, whatever OS runs the test
 	if err := tc.cmdMachine([]string{"whereami"}); err != nil {
 		t.Fatal(err)
 	}

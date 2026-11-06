@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"strings"
 )
 
 // cmdBridge joins stdin and stdout to the machine bridge of the server
@@ -26,7 +27,12 @@ func (c *cli) cmdBridge(args []string) error {
 	}
 	dir := c.localSocketDir()
 	if socketDir != "" {
-		if !filepath.IsAbs(socketDir) {
+		// The forced command writes the dir in this machine's own form.
+		abs := strings.HasPrefix(socketDir, "/")
+		if c.goos == "windows" {
+			abs = filepath.IsAbs(socketDir)
+		}
+		if !abs {
 			return usageError("--socket-dir must be an absolute path")
 		}
 		dir = socketDir

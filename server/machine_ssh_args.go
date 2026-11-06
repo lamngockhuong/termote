@@ -123,9 +123,10 @@ const installKeyScript = `sh -c 'umask 077; f="$HOME/.ssh/authorized_keys"; mkdi
 // on its stdin, keeping the file's mode. The file is rewritten only once the
 // copy without those lines is whole (grep exits 0, or 1 when no line is
 // left): a copy cut short (a full disk) never replaces it, so no other key
-// is lost.
+// is lost. The copy is created before grep runs: bash (macOS's sh) exits 1
+// when a redirection fails, which would read as grep's "no line left".
 const removeKeyScript = `sh -c 'f="$HOME/.ssh/authorized_keys"; t="$f.termote"; key=$(cat); [ -n "$key" ] && [ -f "$f" ] || exit 0; ` +
-	`umask 077; grep -vF "$key" "$f" > "$t"; rc=$?; if [ "$rc" -le 1 ] && [ -f "$t" ]; then cat "$t" > "$f" || exit 1; fi; rm -f "$t"; [ "$rc" -le 1 ]'`
+	`umask 077; : > "$t" || exit 1; grep -vF "$key" "$f" > "$t"; rc=$?; if [ "$rc" -le 1 ] && [ -f "$t" ]; then cat "$t" > "$f" || exit 1; fi; rm -f "$t"; [ "$rc" -le 1 ]'`
 
 // whereami is what `termote machine whereami` prints: where termote runs on a
 // machine, for the forced command of its key.
