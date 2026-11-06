@@ -378,16 +378,34 @@ func (s *templateStore) remove(id, updated string) error {
 	})
 }
 
+// foldKey maps s to a key that two strings share exactly when
+// strings.EqualFold says they are equal: each rune becomes the smallest rune
+// of its unicode.SimpleFold orbit, which is the relation EqualFold compares
+// rune by rune.
+func foldKey(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		low := r
+		for f := unicode.SimpleFold(r); f != r; f = unicode.SimpleFold(f) {
+			low = min(low, f)
+		}
+		b.WriteRune(low)
+	}
+	return b.String()
+}
+
 // importPlan applies an import to list: a name already there (EqualFold)
 // is replaced, keeping its id, any other added. added and replaced are the
 // names as imported.
 func (s *templateStore) importPlan(list []promptTemplate, items []templateInput) (next []promptTemplate, added, replaced []string, err error) {
 	// More entries than may be kept always end in too_many: refused before
-	// the names are compared pair by pair.
+	// any entry is validated.
 	if len(items) > maxTemplates {
 		return nil, nil, nil, errTooManyTemplates
 	}
 	clean := make([]templateInput, len(items))
+	seen := make(map[string]struct{}, len(items))
 	for i, in := range items {
 		name, text, err := validateTemplate(in.Name, in.Text)
 		if err != nil {
@@ -397,11 +415,11 @@ func (s *templateStore) importPlan(list []promptTemplate, items []templateInput)
 			}
 			return nil, nil, nil, err
 		}
-		for j := range i {
-			if strings.EqualFold(clean[j].Name, name) {
-				return nil, nil, nil, &templateInputError{codedError{"duplicate_name", "two templates in the import have the same name", http.StatusBadRequest}, i, "name"}
-			}
+		key := foldKey(name)
+		if _, dup := seen[key]; dup {
+			return nil, nil, nil, &templateInputError{codedError{"duplicate_name", "two templates in the import have the same name", http.StatusBadRequest}, i, "name"}
 		}
+		seen[key] = struct{}{}
 		clean[i] = templateInput{name, text}
 	}
 	added, replaced = []string{}, []string{}
