@@ -46,17 +46,29 @@ func (c *cli) cmdBridge(args []string) error {
 	if _, err := fmt.Fprintf(c.out, "%s%s\n", bridgeGreeting, c.version); err != nil {
 		return err
 	}
-	// Whichever side ends first ends the bridge: the server closing an
-	// idle connection, or the other termote closing its SSH session.
-	done := make(chan struct{}, 2)
+	// The server's side ending (an idle connection closed) ends the bridge.
+	// stdin ending (the other termote closed its SSH session, or a client
+	// sent its last request) closes only the way to the server: what the
+	// server still answers is copied out before the bridge ends.
+	fromServer := make(chan struct{})
+	toServer := make(chan struct{})
 	go func() {
+		defer close(toServer)
 		_, _ = io.Copy(conn, c.in)
-		done <- struct{}{}
 	}()
 	go func() {
+		defer close(fromServer)
 		_, _ = io.Copy(c.out, conn)
-		done <- struct{}{}
 	}()
-	<-done
+	select {
+	case <-fromServer:
+		return nil
+	case <-toServer:
+	}
+	cw, ok := conn.(interface{ CloseWrite() error })
+	if !ok || cw.CloseWrite() != nil {
+		return nil
+	}
+	<-fromServer
 	return nil
 }

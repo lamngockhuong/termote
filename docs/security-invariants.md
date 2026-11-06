@@ -51,7 +51,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   evicts the oldest view stream first, then the oldest stream (4001). A stream closed with 4001
   never reconnects by itself, a pane of the layout view included: that pane shows Reconnect in
   its own box, the layout stays, and no other stream opens (two devices never evict each other
-  in a loop). The `{"type":"layout"}` frame carries nothing but its type. A stream forwarded to a
+  in a loop). The `{"type":"layout"}` frame carries nothing but its type. A new stream reads no input
+  (keys, resize, drive, visible) before the terminal's first output, at most `streamInputHold` (3 s): an
+  attach client not reading yet would drop it. A stream forwarded to a
   machine (`/api/machines/{id}/mux/stream`) is registered in a hub of its own (32, never evicting this
   server's), linked to the main one: a device revoke, a sign-out and shutdown close it, and a 15 s
   recheck closes it once its device or session is gone from the store or expired; its token is the
@@ -2143,7 +2145,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `termote bridge` (the forced command of the key `machine add` installs) takes only
   `--socket-dir <abs>`, reads the saved config for the port (none → error, nothing on stdout),
   dials the bridge with the owner check of `dialSocketOS`, writes `TERMOTE-BRIDGE 1 <version>\n`
-  then copies bytes both ways until either side closes; it never reads `SSH_ORIGINAL_COMMAND` or
+  then copies bytes both ways until the server's side closes (stdin closing only half-closes the way to
+  the server, where the connection can, so its last answer still goes out); it never reads `SSH_ORIGINAL_COMMAND` or
   runs anything else. A process of the same user can open the bridge: it already has the CLI's
   socket (accepted)
 - **Machines CLI** (`server/cli_machine.go`, `server/machine_store.go`, `server/machine_ssh_args.go`):

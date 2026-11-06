@@ -50,6 +50,9 @@ func TestMain(m *testing.M) {
 	cloudflareProbe = func(context.Context, string) accessResult {
 		return accessResult{accessUnknown, "tests never probe"}
 	}
+	// A fake terminal may never draw: its input goes through at once, except
+	// in the tests of the hold itself.
+	streamInputHold = 0
 	switch os.Getenv(helperEnv) {
 	case "":
 		os.Exit(m.Run())

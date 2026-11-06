@@ -41,6 +41,10 @@ const (
 	processKillWait = 5 * time.Second
 )
 
+// streamInputHold bounds how long a new stream's input waits for the
+// terminal's first output. A variable so tests can turn it off.
+var streamInputHold = 3 * time.Second
+
 // Size is a terminal size in character cells.
 type Size struct {
 	Cols int `json:"cols"`
@@ -541,12 +545,17 @@ func viewSnapshot(ctx context.Context, m Mux) (Snapshot, error) {
 // hub was not told of closes it within one ping.
 func runStream(ctx context.Context, cancel context.CancelCauseFunc, conn *websocket.Conn, ts TermStream, readOnly bool, pingEvery time.Duration, recheck func() error, visible func(bool)) {
 	outDone := make(chan struct{})
+	// ready closes with the terminal's first output: the attach client drew
+	// the pane, so it reads its input now.
+	ready := make(chan struct{})
+	var readyOnce sync.Once
 	go func() {
 		defer close(outDone)
 		buf := make([]byte, 32*1024)
 		for {
 			n, err := ts.Read(buf)
 			if n > 0 {
+				readyOnce.Do(func() { close(ready) })
 				if werr := writeFrame(conn, websocket.MessageBinary, buf[:n]); werr != nil {
 					cancel(werr)
 					return
@@ -558,8 +567,21 @@ func runStream(ctx context.Context, cancel context.CancelCauseFunc, conn *websoc
 		}
 	}()
 
-	// Ends when the connection closes.
+	// Ends when the connection closes. Nothing is read before the terminal
+	// drew its first screen (at most streamInputHold): keys typed as the
+	// stream opens wait in the connection instead of reaching an attach
+	// client that is not reading yet (psmux, over a slow link), which drops
+	// them.
 	go func() {
+		if streamInputHold > 0 {
+			hold := time.NewTimer(streamInputHold)
+			select {
+			case <-ready:
+			case <-hold.C:
+			case <-ctx.Done():
+			}
+			hold.Stop()
+		}
 		for {
 			typ, data, err := conn.Read(context.Background())
 			if err != nil {

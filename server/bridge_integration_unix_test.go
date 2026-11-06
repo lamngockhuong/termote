@@ -177,3 +177,29 @@ func TestBridgeSocketBesideLocalSocket(t *testing.T) {
 	}
 	c.Close()
 }
+
+// A client that sends its request then closes stdin still gets the answer:
+// the bridge closes only the way to the server and copies the rest out.
+func TestBridgeAnswersAfterStdinCloses(t *testing.T) {
+	dir, port := bridgeTestServer(t)
+	tc := newTestCLI(t, "linux")
+	tc.saveConfig(savedConfig{Port: port, Password: "secret"})
+	req := "GET /api/mux/health HTTP/1.1\r\nHost: " + localSocketHost + "\r\n\r\n"
+	tc.in = bufio.NewReader(strings.NewReader(req))
+	var out strings.Builder
+	tc.out = &out
+	done := make(chan error, 1)
+	go func() { done <- tc.cmdBridge([]string{"--socket-dir", dir}) }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the bridge never ended after the server answered")
+	}
+	got := out.String()
+	if !strings.HasPrefix(got, bridgeGreeting) || !strings.Contains(got, "HTTP/1.1 200 OK") || !strings.Contains(got, `"apiVersion"`) {
+		t.Errorf("bridge output:\n%s", got)
+	}
+}
