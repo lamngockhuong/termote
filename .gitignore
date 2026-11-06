@@ -50,6 +50,8 @@ server/webui/dist/*
 pwa/test-results/
 pwa/coverage/
 pwa/e2e/*.png
+# Playwright MCP's snapshots, screenshots and console logs
+.playwright-mcp/
 
 # TypeScript incremental build info
 *.tsbuildinfo
