@@ -350,7 +350,7 @@ describe('the git dialogs in Vietnamese', () => {
       'Nhánh feat/x',
     )
     expect(screen.getByText('/wt/repo/feat-x').parentElement).toHaveTextContent(
-      'Xóa /wt/repo/feat-x và đóng workspace này.',
+      'Dừng các terminal của nó, xóa /wt/repo/feat-x rồi đóng workspace này.',
     )
   })
 

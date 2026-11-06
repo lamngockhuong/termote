@@ -430,7 +430,7 @@ call timed out; the start is followed as if typed) and 500 `start_failed`. The C
 offered on such a pane and holds the start buttons; Codex writes its rollout only with its first
 message, so after a Codex start the Chat view asks for that message in the terminal.
 
-`/worktrees` (`caps.worktrees`: Herdr 0.9.2 or later, not on Windows) drives Herdr's
+`/worktrees` (`caps.worktrees`: Herdr 0.9.2 or later) drives Herdr's
 `worktree.*` calls from a workspace's menu. The GET lists the worktrees of the workspace's
 repository (`worktree.list`) and its local branches, newest commit first, read by the server's
 own git (`for-each-ref`, at most 500). The POST checks out `branch` in a new worktree, made from
@@ -439,8 +439,8 @@ exists, so that pair answers 409 `branch_exists` instead. `open` opens an existi
 worktree (by its branch), never a branch without one. The DELETE carries the path and branch the
 user confirmed and removes nothing unless the workspace still shows that linked checkout (409
 `changed`); without `force` a worktree with changes answers 409 `dirty`, which the PWA asks
-about a second time. Removing deletes the checkout (ignored files too, and with `force` the
-panes end first) and closes the workspace; the branch is kept. Changes run one at a time (503
+about a second time. Removing deletes the checkout (ignored files too; the panes end first with
+`force`, and on Windows always, where Herdr also checks for changes itself) and closes the workspace; the branch is kept. Changes run one at a time (503
 `busy` after a 5 s wait) and outlive the client for up to 60 s; past that the answer is 504
 `unknown` (Herdr may still finish). The snapshot's `worktree` marks a workspace of a Herdr
 worktree group (`linked`: a linked worktree, else the repository's own checkout); its `branch`

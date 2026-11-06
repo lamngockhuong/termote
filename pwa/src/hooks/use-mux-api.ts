@@ -122,7 +122,7 @@ export interface MuxSnapshot {
     // (/agent/start): Herdr 0.8.2 or later.
     agentStart?: boolean
     // Git worktree workspaces can be listed, created, opened and removed
-    // (/worktrees): Herdr 0.9.2 or later, not on Windows.
+    // (/worktrees): Herdr 0.9.2 or later.
     worktrees?: boolean
     // Codex can be started too (it has a Chat view on this server's OS).
     agentStartCodex?: boolean

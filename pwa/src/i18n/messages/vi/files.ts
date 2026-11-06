@@ -810,5 +810,5 @@ export default {
   'files.worktree.remove': 'Xóa worktree',
   'files.worktree.branchLine': 'Nhánh <name></name>',
   'files.worktree.deletes':
-    'Xóa <name></name> và đóng workspace này. File mà git bỏ qua (.env, node_modules) cũng bị xóa. Nhánh vẫn được giữ.',
+    'Dừng các terminal của nó, xóa <name></name> rồi đóng workspace này. File mà git bỏ qua (.env, node_modules) cũng bị xóa. Nhánh vẫn được giữ.',
 } satisfies Translation<typeof en>
