@@ -1,8 +1,11 @@
 import { type KeyboardEvent, type RefObject, useRef, useState } from 'react'
+import { useIsMobile } from '../hooks/use-media-query'
+import { useSettings } from '../hooks/use-settings'
 import { useT } from '../i18n/i18n-context'
 import { formatKib } from '../utils/files-format'
 import { MAX_COMMENT_BYTES, type ReviewTarget } from '../utils/review-draft'
 import { lineText } from '../utils/review-message'
+import { isSendKey } from '../utils/send-key'
 import { utf8Bytes } from '../utils/task-failure-message'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { Button, FOCUS_RING } from './ui/button'
@@ -58,8 +61,13 @@ function CommentForm({
   const save = () => {
     if (ok) onSave(text)
   }
+  // Enter alone saves only with a keyboard, as Settings says for messages: a
+  // phone's Enter is a new line
+  const { settings } = useSettings()
+  const isMobile = useIsMobile()
+  const enterSends = settings.chatSendKey === 'enter' && !isMobile
   const onKeyDown = (e: KeyboardEvent) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    if (isSendKey(e, enterSends)) {
       e.preventDefault()
       save()
     }
@@ -108,7 +116,7 @@ function CommentForm({
           onClick={save}
           disabled={!ok}
           // i18n-ignore: a key's name
-          title="Ctrl+Enter"
+          title={enterSends ? 'Enter' : 'Ctrl+Enter'}
         >
           {t(
             initialText === undefined

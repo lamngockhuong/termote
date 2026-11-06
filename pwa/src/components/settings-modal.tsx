@@ -16,6 +16,7 @@ import {
 } from '../hooks/use-history-close'
 import { useIsMobile } from '../hooks/use-media-query'
 import {
+  type ChatSendKey,
   EDITOR_FONT_SIZES,
   EDITOR_TAB_SIZES,
   type EditorTabSize,
@@ -406,6 +407,23 @@ const IME_SEND_OPTIONS: {
   },
 ]
 
+const CHAT_SEND_OPTIONS: {
+  value: ChatSendKey
+  label: MessageKey
+  desc: MessageKey
+}[] = [
+  {
+    value: 'ctrl-enter',
+    label: 'settings.chatSend.ctrlEnter',
+    desc: 'settings.chatSend.ctrlEnterDesc',
+  },
+  {
+    value: 'enter',
+    label: 'settings.chatSend.enter',
+    desc: 'settings.chatSend.enterDesc',
+  },
+]
+
 function pasteSourceOptions(
   bufferLabel: string,
   t: Translate<MessageKey>,
@@ -728,6 +746,9 @@ export function SettingsModal({
   const imeOption = IME_SEND_OPTIONS.find(
     (o) => o.value === settings.imeSendBehavior,
   )
+  const chatSendOption = CHAT_SEND_OPTIONS.find(
+    (o) => o.value === settings.chatSendKey,
+  )
   const pasteOptions = pasteSourceOptions(
     pasteBufferLabel ?? t('shell.buffer.session'),
     t,
@@ -816,6 +837,24 @@ export function SettingsModal({
               onChange={(v) => onUpdateSetting('imeSendBehavior', v)}
             />
           </SettingsRow>
+          {/* A phone sends with its button; Enter there is a new line */}
+          {!isMobile && (
+            <SettingsRow
+              title={t('settings.chatSend')}
+              desc={chatSendOption && t(chatSendOption.desc)}
+            >
+              <SegmentedControl
+                label={t('settings.chatSend')}
+                options={CHAT_SEND_OPTIONS.map((o) => ({
+                  value: o.value,
+                  label: t(o.label),
+                  content: t(o.label),
+                }))}
+                value={settings.chatSendKey}
+                onChange={(v) => onUpdateSetting('chatSendKey', v)}
+              />
+            </SettingsRow>
+          )}
           {tmuxBufferSupported && (
             <SettingsRow title={t('settings.paste')} desc={pasteOption?.desc}>
               <SegmentedControl

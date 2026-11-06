@@ -24,6 +24,7 @@ import {
   sendAgentMessage,
 } from '../hooks/use-mux-api'
 import { usePromptTemplates } from '../hooks/use-prompt-templates'
+import { useSettings } from '../hooks/use-settings'
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
 import type { Translate } from '../i18n/translate'
@@ -42,6 +43,7 @@ import {
   removeImageToken,
 } from '../utils/chat-image-tokens'
 import { matchTemplates } from '../utils/prompt-templates'
+import { isSendKey } from '../utils/send-key'
 import { serverErrorText } from '../utils/server-error'
 import {
   applyPick,
@@ -147,6 +149,7 @@ export function ChatComposer({
   const agent = agentLabel(session.agentName)
   const t = useAgentTranscript(session.paneId)
   const { t: translate } = useT()
+  const enterSends = useSettings().settings.chatSendKey === 'enter'
   const status = toAgentStatus(t.status)
   const p = useAgentPrompt(session.paneId, status)
   // Blocked with no dialog the server can read. Only once a dialog read came
@@ -538,8 +541,8 @@ export function ChatComposer({
       return
     }
     // On a phone Enter is a new line and the button sends; with a keyboard,
-    // Ctrl/Cmd+Enter sends.
-    if (e.key === 'Enter' && !isMobile && (e.ctrlKey || e.metaKey)) {
+    // Ctrl/Cmd+Enter sends, or Enter alone when Settings says so
+    if (!isMobile && isSendKey(e, enterSends)) {
       e.preventDefault()
       send()
     }
@@ -751,7 +754,9 @@ export function ChatComposer({
                 id={hintId}
                 className="whitespace-nowrap text-[12px] text-fg-subtle"
               >
-                {translate('chat.composer.hint')}
+                {translate(
+                  enterSends ? 'chat.composer.hintEnter' : 'chat.composer.hint',
+                )}
               </span>
             )}
             {sendButton}
