@@ -71,7 +71,7 @@ func TestLocalSocketAuditsAsCLI(t *testing.T) {
 }
 
 func TestIsCLI(t *testing.T) {
-	for kind, want := range map[authKind]bool{authBasic: true, authLocal: true, authSession: false, authDevice: false} {
+	for kind, want := range map[authKind]bool{authBasic: true, authLocal: true, authSession: false, authDevice: false, authMachine: false} {
 		if got := isCLI(authInfo{Kind: kind}); got != want {
 			t.Errorf("isCLI(%d) = %v, want %v", kind, got, want)
 		}

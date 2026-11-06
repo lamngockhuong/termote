@@ -36,8 +36,12 @@ func auditLine(event string, kv ...any) string {
 // auditBy names who did something in an audit line: a paired device by its
 // id, a browser signed in with the password by its session id, anyone else
 // with the password (Basic auth, and the CLI over the local socket: only the
-// server's own OS user, who can read it, opens that).
+// server's own OS user, who can read it, opens that). Another termote over
+// the machine bridge is "machine".
 func auditBy(a authInfo) string {
+	if a.Kind == authMachine {
+		return "machine"
+	}
 	if a.Kind == authDevice {
 		return "device:" + a.DeviceID
 	}

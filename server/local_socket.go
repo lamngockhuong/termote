@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"strconv"
 	"time"
 )
 
@@ -49,10 +50,13 @@ func (l localSocketListener) Accept() (net.Conn, error) {
 }
 
 // localSocketConnContext is the server's ConnContext: it marks connections
-// of the local socket.
+// of the local socket and of the machine bridge.
 func localSocketConnContext(ctx context.Context, c net.Conn) context.Context {
-	if _, ok := c.(*localSocketConn); ok {
+	switch c.(type) {
+	case *localSocketConn:
 		return context.WithValue(ctx, localSocketKey{}, true)
+	case *bridgeConn:
+		return context.WithValue(ctx, bridgeKey{}, true)
 	}
 	return ctx
 }
@@ -72,3 +76,8 @@ const localDialTimeout = time.Second
 // socket dir, unused on Windows) and checks who holds its server end. Tests
 // replace it.
 var dialLocalServer = dialLocalServerOS
+
+// dialLocalServerOS connects to the local socket of the server on port.
+func dialLocalServerOS(dir string, port int) (net.Conn, error) {
+	return dialSocketOS(dir, strconv.Itoa(port))
+}

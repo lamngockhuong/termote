@@ -298,10 +298,13 @@ func deviceViews(recs []deviceRecord, current string, now time.Time) []deviceVie
 
 // requestIP is the address a request came from, without its port. Behind a
 // proxy (tailscale serve) it is the proxy's, loopback; over the local socket
-// it is "local".
+// it is "local", over the machine bridge "machine".
 func requestIP(r *http.Request) string {
 	if isLocalSocket(r.Context()) {
 		return "local"
+	}
+	if isBridge(r.Context()) {
+		return "machine"
 	}
 	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
 	if ip == "" {

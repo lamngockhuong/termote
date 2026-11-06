@@ -25,6 +25,9 @@ const (
 	// authLocal: the CLI over the native server's local socket, which only
 	// the server's own OS user can open (see local_socket.go).
 	authLocal
+	// authMachine: another termote over the machine bridge (bridge_socket.go),
+	// with the role it sends. Never the CLI.
+	authMachine
 )
 
 // isCLI reports whether a signed in as the CLI does: Basic auth (with the
@@ -39,6 +42,10 @@ type authInfo struct {
 	DeviceID string
 	// SessionID: the password session's id (authSession only).
 	SessionID string
+	// OriginAuth: how the request signed in on the other termote
+	// (authMachine only, "password" or "device"); written to the audit log,
+	// never used to grant anything.
+	OriginAuth string
 }
 
 // authCtxKey holds the authInfo of a request basicAuth let through.

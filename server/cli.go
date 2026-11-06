@@ -255,6 +255,8 @@ func (c *cli) dispatch(cmd string, args []string) error {
 		return c.cmdUnlink()
 	case "show-password":
 		return c.cmdShowPassword()
+	case "bridge":
+		return c.cmdBridge(args)
 	case "menu":
 		return c.cmdMenu()
 	case "version", "-v", "--version":
@@ -486,6 +488,7 @@ Commands:
   show-password        Show the saved username and password
   version              Show version
   serve                Run the server in the foreground (what the service runs)
+  bridge               What another termote's key runs here over SSH (never by hand)
   (no command)         Interactive menu
 
 Options of start (saved; a flag not given keeps its saved value):

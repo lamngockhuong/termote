@@ -8,7 +8,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"strconv"
 	"syscall"
 )
 
@@ -139,14 +138,14 @@ func openLocalSocket(dir, port string) (net.Listener, func(), error) {
 // connection. Tests replace it.
 var localPeerUID = unixPeerUID
 
-// dialLocalServerOS connects to <dir>/<port>.sock after checking dir is the
-// current user's own 0700 dir, then checks the server end belongs to the
-// current user or root.
-func dialLocalServerOS(dir string, port int) (net.Conn, error) {
+// dialSocketOS connects to <dir>/<name>.sock (name: the port, or the
+// bridge's bridgeSocketName) after checking dir is the current user's own
+// 0700 dir, then checks the server end belongs to the current user or root.
+func dialSocketOS(dir, name string) (net.Conn, error) {
 	if err := checkSocketDir(dir); err != nil {
 		return nil, err
 	}
-	path := localSocketPath(dir, strconv.Itoa(port))
+	path := localSocketPath(dir, name)
 	if len(path) > maxSocketPath {
 		return nil, fmt.Errorf("the path %s is longer than %d bytes", path, maxSocketPath)
 	}

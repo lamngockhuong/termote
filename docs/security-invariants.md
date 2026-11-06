@@ -2121,6 +2121,25 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   CLI entry below), and never resends a write that was sent. `status` prints `Via: socket`
   or `Via: TCP` (`--json`: `via`). The exit cleanup removes the socket only while it is its own and
   nothing answers on it (an update's new server keeps its socket)
+- **Machine bridge** (`server/bridge_socket.go`, `server/cli_bridge.go`): beside the CLI's socket the
+  native server opens `<stateDir>/run/<port>.bridge.sock` or the pipe `termote-<SID>-<port>-bridge`
+  through the same `openLocalSocket` (same modes, owner, SDDL, exclusive first instance, cleanup); the
+  container opens none. A connection there gets its own context mark (`bridgeKey`, from the connection
+  type only), never the CLI's: `isLocalSocket` is false, so `basicAuth` never makes it `authLocal`.
+  `bridgeAuth` sits outside `basicAuth` (applies with `--no-auth` too) and signs every bridge request in
+  as `authMachine` with the role of `X-Termote-Role` (`full|view`; missing → `view`; anything else
+  400); the header is ignored on every other connection. `X-Termote-Origin-Auth` (`password|device`)
+  only reaches the audit `via` (`machine:<origin>`), never a grant. `isCLI` is false for
+  `authMachine`. On the bridge, sign-in and sign-out (`/login`, `/pair`, `/login/link`,
+  `/api/mux/logout`), `login-links`, `devices*`, `signins*` and `push*` answer 403
+  `machine_forbidden` before any handler, whatever the role (cleaned path). `hostGuard` takes
+  `termote.local-socket` on the bridge as on the CLI's socket; audit `ip=machine by=machine`.
+  `termote bridge` (the forced command of the key `machine add` installs) takes only
+  `--socket-dir <abs>`, reads the saved config for the port (none → error, nothing on stdout),
+  dials the bridge with the owner check of `dialSocketOS`, writes `TERMOTE-BRIDGE 1 <version>\n`
+  then copies bytes both ways until either side closes; it never reads `SSH_ORIGINAL_COMMAND` or
+  runs anything else. A process of the same user can open the bridge: it already has the CLI's
+  socket (accepted)
 - **Signed-in browsers** (`server/sessions.go`, `server/signin_routes.go`, `caps.signins`): each
   password session (memory, 24 h, 256, LRU) keeps id (16 hex of the token's SHA-256), created,
   last used (1 min), `via` (`form|basic|link`), IP and a cleaned User-Agent (200 B). Basic auth

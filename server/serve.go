@@ -616,6 +616,9 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 			ProxyAnySource: cfg.ProxyClientAnySource,
 		}, handler)
 	}
+	// Outside basicAuth, so another termote over the machine bridge signs in
+	// as authMachine with --no-auth too.
+	handler = bridgeAuth(mux, handler)
 	handler = writeGuard(allowed, handler)
 	// Inside hostGuard: the policy names the request's Host, so only an
 	// allowed one.
@@ -780,9 +783,11 @@ func runServer(ctx context.Context, cfg serveConfig, m Mux, ln net.Listener) err
 	return nil
 }
 
-// serveLocalSocket serves srv on the local socket too when cfg names one,
-// and returns what removes it once srv is shut down. Without the socket the
-// server runs all the same: the CLI then uses TCP and the password.
+// serveLocalSocket serves srv on the local socket and the machine bridge
+// too when cfg names a socket dir, and returns what removes them once srv is
+// shut down. Without the socket the server runs all the same: the CLI then
+// uses TCP and the password; without the bridge, no other termote reaches
+// this one.
 func serveLocalSocket(srv *http.Server, cfg serveConfig, ln net.Listener) func() {
 	if cfg.LocalSocketDir == "" {
 		return func() {}
@@ -791,15 +796,28 @@ func serveLocalSocket(srv *http.Server, cfg serveConfig, ln net.Listener) func()
 	if a, ok := ln.Addr().(*net.TCPAddr); ok {
 		port = strconv.Itoa(a.Port)
 	}
-	sock, cleanup, err := openLocalSocket(cfg.LocalSocketDir, port)
+	cleanCLI := serveSocket(srv, cfg.LocalSocketDir, port, "local socket for the CLI",
+		"the CLI uses TCP and the password", func(l net.Listener) net.Listener { return localSocketListener{l} })
+	cleanBridge := serveSocket(srv, cfg.LocalSocketDir, bridgeSocketName(port), "machine bridge",
+		"no other termote can reach this one", func(l net.Listener) net.Listener { return bridgeListener{l} })
+	return func() {
+		cleanCLI()
+		cleanBridge()
+	}
+}
+
+// serveSocket opens the socket name in dir, serves srv on it through wrap,
+// and returns what closes and removes it.
+func serveSocket(srv *http.Server, dir, name, what, without string, wrap func(net.Listener) net.Listener) func() {
+	sock, cleanup, err := openLocalSocket(dir, name)
 	if err != nil {
-		log.Printf("local socket for the CLI not opened (the CLI uses TCP and the password): %v", err)
+		log.Printf("%s not opened (%s): %v", what, without, err)
 		return func() {}
 	}
-	log.Printf("local socket for the CLI: %s", sock.Addr())
+	log.Printf("%s: %s", what, sock.Addr())
 	go func() {
-		if err := srv.Serve(localSocketListener{sock}); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Printf("local socket: %v", err)
+		if err := srv.Serve(wrap(sock)); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Printf("%s: %v", what, err)
 		}
 	}()
 	// Closed here too: srv.Close may run before Serve has taken the
