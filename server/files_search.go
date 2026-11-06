@@ -335,7 +335,10 @@ type searchScan struct {
 	// hideDots: the root holds a home dir, so no dot-path is read, by its
 	// name or where it leads
 	hideDots bool
-	used     atomic.Int64 // bytes read
+	// trees are the repository's work trees, listed at the first file
+	// leading out of the root (worktreeRoots)
+	trees func() []string
+	used  atomic.Int64 // bytes read
 }
 
 // searchList scans list's files for in. The files go to searchWorkers
@@ -372,6 +375,7 @@ func (f *filesAPI) searchList(ctx context.Context, deadline time.Time, req *file
 	slices.Sort(todo)
 
 	sc := &searchScan{f: f, root: req.root, rt: rt, view: req.view, in: in, hideDots: hideDots}
+	sc.trees = sync.OnceValue(func() []string { return f.worktreeRoots(ctx, req.root) })
 	window := 2 * searchWorkers
 	tokens := make(chan struct{}, window)
 	jobs := make(chan int)
@@ -508,6 +512,9 @@ func (sc *searchScan) file(ctx context.Context, i int, rel string) searchOutcome
 	}
 	searchBeforeFile(rel)
 	fh, err := sc.rt.OpenFile(native, os.O_RDONLY|openNonblock, 0)
+	if isPathEscape(err) && sc.view == nil {
+		fh, err = sc.openLinked(native)
+	}
 	if err != nil {
 		return out // gone, or a link out of the root
 	}
@@ -526,6 +533,17 @@ func (sc *searchScan) file(ctx context.Context, i int, rel string) searchOutcome
 	}
 	out.matches, out.more, out.cut, out.stopped = searchLines(ctx, sc.in.re, b)
 	return out
+}
+
+// openLinked opens native, a path leading out of the root, in the work tree
+// of the repository it leads into (linkedTarget, with its deny checks): a
+// file under a linked directory (findLinkedFiles).
+func (sc *searchScan) openLinked(native string) (*os.File, error) {
+	t, ok := sc.f.linkedTarget(sc.root, native, sc.trees())
+	if !ok {
+		return nil, os.ErrNotExist
+	}
+	return openInRoot(t.root, t.rel)
 }
 
 // searchLines finds the matching lines of a text file: up to

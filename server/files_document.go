@@ -124,12 +124,8 @@ func (f *filesAPI) openDocument(req *filesRequest, q url.Values) (*os.File, stri
 	if f.denied(root.Root, rel, root.GitDir) {
 		return nil, "", 0, errPathNotAllowed
 	}
-	rt, err := os.OpenRoot(root.Root)
-	if err != nil {
-		return nil, "", 0, err
-	}
-	defer rt.Close()
-	fh, err := rt.OpenFile(rel, os.O_RDONLY|openNonblock, 0)
+	// A path into another work tree of the repository is read there (rootFor)
+	fh, err := f.openRead(req.ctx, root, rel, req.view == nil)
 	if err != nil {
 		return nil, "", 0, err
 	}

@@ -486,7 +486,7 @@ func TestFilesFindUnreadableRoot(t *testing.T) {
 	if _, err := f.findWalkRoot(filesRoot{Root: plain}, nil); err == nil {
 		t.Error("findWalkRoot: no error")
 	}
-	if _, err := f.findResults(root, "a", nil); err == nil {
+	if _, err := f.findResults(t.Context(), root, "a", nil); err == nil {
 		t.Error("findResults: no error")
 	}
 	// A directory gone between the listing and the walk is skipped.

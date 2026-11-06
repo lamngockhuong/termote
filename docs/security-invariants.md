@@ -948,6 +948,32 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   (on Linux a path differing only in case is denied when its directory is the same one: WSL
   `/mnt/c`, casefold, vfat);
   sensitive names (`.env`, keys, ...) return contents or a diff only with `reveal=1`.
+  A path that leaves the root through a symlink (the path itself or a directory above it,
+  `server/files_linked.go`) is read by `files/tree`, `files/content`, `files/raw` (the worktree
+  file, never a `side`) and `files/document` (`rootFor`) only for a full client, only when it
+  resolves inside another work tree of the root's own repository (`git worktree list --porcelain
+  -z` through `gitRunner`, bare entries and paths that do not resolve left out, the deepest work
+  tree holding it), and only when that path is under no deny dir, the root's git dir, the shared
+  git dir (`commonGitDir`) or a `.git` below that work tree (a link listed inside such a directory
+  is checked the same way); it is opened through `os.Root` at that work tree by its resolved path,
+  never by the link, so a swap stays in that work tree. Anything else, or a view-only client:
+  refused as before (400 `path outside root`, view-only 404). Sensitive names are checked on the
+  path and where it leads (`reveal`); a save, rename or delete never goes through it (`editable:
+  false`, `symlink`; the write routes refuse a symlink on the way). Find's tracked and ignored
+  lists (`server/files_find_linked.go`, never the view-only `committed` list nor its
+  `files`/`dirs` index) add the files under an untracked symlink of the root (`git ls-files -o
+  --directory`, at most `maxLinkedDirs` = 64) that leads to such a directory, listed by that work
+  tree's own `git ls-files` (`:(literal)` pathspec, the `findCall` limits, `--exclude-standard`,
+  `safe.directory` set to that work tree only when the root had one; an ignored ancestor git names
+  whole is read as the linked directory only; ignored dirs walked through `os.Root` at that work
+  tree; a link of an excluded name is not walked) and named under the link, within one
+  `findMaxPaths` budget; a tracked symlink, or one inside an untracked directory, is not looked at.
+  A git failure there only marks the list incomplete. `findResults` and the content search check
+  each such path through `linkedTarget` (deny dirs, git dirs) and open it through `os.Root` at that
+  work tree; a view-only client's `committed` list holds none, and its search never opens one. The
+  list's stamp stats a directory under the link by its path (`stampStat`, its time only). The work
+  trees are listed once per root every `filesRootTTL` (`worktreeRoots`). A Windows junction is not
+  followed (Go reports it irregular): only a symlink is.
   The pane's root moves only once reads 2 s apart agree on it (`rootSettle`), except for
   `GET files/tree?now=1` (Refresh), which takes it from where the pane is now
   (`rootResolver.paneRootNow`): still the directory the backend reports, resolved by the server,

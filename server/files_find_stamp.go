@@ -84,7 +84,7 @@ func newFindStamp(at time.Time, root filesRoot, l findList) *findStamp {
 	for d := range seen {
 		var mod time.Time
 		if rt != nil {
-			if fi, err := rt.Stat(filepath.FromSlash(d)); err == nil {
+			if fi, err := stampStat(rt, root.Root, d); err == nil {
 				mod = fi.ModTime()
 			}
 		}
@@ -106,6 +106,17 @@ func newFindStamp(at time.Time, root filesRoot, l findList) *findStamp {
 		s.unsure = s.unsure || d.mod.IsZero() || near(d.mod)
 	}
 	return s
+}
+
+// stampStat stats the directory rel ('/'-separated) of root through rt; one
+// under a directory link leading out of the root (a list's linked
+// directories, findLinkedFiles) by its path, only for its time.
+func stampStat(rt *os.Root, root, rel string) (fs.FileInfo, error) {
+	fi, err := rt.Stat(filepath.FromSlash(rel))
+	if isPathEscape(err) {
+		return os.Stat(filepath.Join(root, filepath.FromSlash(rel)))
+	}
+	return fi, err
 }
 
 // findStampMod is the time of the file at p; zero when there is none, ok
@@ -150,7 +161,7 @@ func (s *findStamp) differs(root string) bool {
 	}
 	defer rt.Close()
 	for _, d := range s.dirs {
-		fi, err := rt.Stat(filepath.FromSlash(d.rel))
+		fi, err := stampStat(rt, root, d.rel)
 		if err != nil || !fi.IsDir() || !fi.ModTime().Equal(d.mod) {
 			return true
 		}

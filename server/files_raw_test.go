@@ -609,7 +609,7 @@ func TestFilesRawFailures(t *testing.T) {
 		t.Error("failing status: no error")
 	}
 	gone := filesRoot{Root: filepath.Join(t.TempDir(), "gone")}
-	if err := f.serveWorktreeImage(httptest.NewRecorder(), gone, "a.png", false); err == nil {
+	if err := f.serveWorktreeImage(t.Context(), httptest.NewRecorder(), gone, "a.png", false, false); err == nil {
 		t.Error("root gone: no error")
 	}
 }
