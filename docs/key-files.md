@@ -307,6 +307,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/serve_config.go`                          | Server config from the saved config, else the environment      |
 | `server/install_layout.go`                        | Versioned install layout (`versions/<v>`, `current`, prune)    |
 | `server/tailscale.go`                             | `tailscale serve` mapping (apply/remove, never sudo)           |
+| `server/cloudflare.go`                            | `--cloudflare`/`--proxy-client-header` flags, Access probe     |
 | `server/release_tags.go`                          | Picks the newest published stable 1.x release                  |
 | `server/cli_start.go`                             | `start`/`stop`/`restart`: options, service registration        |
 | `server/cli_allow_path.go`                        | `--allow-path` checks: deny lists, home, termote's dirs, git   |

@@ -35,6 +35,8 @@ type startOptions struct {
 	port        int
 	tailscale   string
 	noTailscale bool
+	// proxy holds --cloudflare and --proxy-client-header.
+	proxy       proxyFlags
 	mux         string
 	user        string   // Basic auth username, shared with the container
 	allowHosts  []string // user-added names, persisted
@@ -69,6 +71,7 @@ func (c *cli) parseStartArgs(args []string) (startOptions, map[string]bool, erro
 	fs.IntVar(&o.port, "port", 0, "")
 	fs.StringVar(&o.tailscale, "tailscale", "", "")
 	fs.BoolVar(&o.noTailscale, "no-tailscale", false, "")
+	o.proxy.add(fs)
 	fs.StringVar(&o.mux, "mux", "", "")
 	fs.StringVar(&o.user, "user", "", "")
 	fs.Var(&hosts, "allow-host", "")
@@ -88,6 +91,9 @@ func (c *cli) parseStartArgs(args []string) (startOptions, map[string]bool, erro
 	fs.Visit(func(f *flag.Flag) { set[f.Name] = true })
 	if set["tailscale"] && o.noTailscale {
 		return o, nil, usageError("--tailscale and --no-tailscale cannot be combined")
+	}
+	if err := o.proxy.checkSet(set); err != nil {
+		return o, nil, err
 	}
 	o.allowHosts, o.removeHosts = hosts, remove
 	o.allowLocalUsers, o.removeLocalUsers = localUsers, removeLocalUsers
@@ -120,6 +126,7 @@ func mergeSaved(o *startOptions, set map[string]bool, s *savedConfig) {
 	if !set["tailscale"] && !o.noTailscale {
 		o.tailscale = s.Tailscale
 	}
+	o.proxy.merge(set, s.Cloudflare, s.ProxyClientHeader)
 	if !set["mux"] {
 		o.mux = s.Mux
 	}
@@ -190,7 +197,7 @@ func (c *cli) validateStart(o *startOptions) error {
 			return usageError("%v", err)
 		}
 	}
-	return nil
+	return o.proxy.validate(o.noAuth)
 }
 
 // validateMux checks a --mux value ("" is not chosen yet) and refuses herdr
@@ -433,21 +440,23 @@ func (c *cli) cmdStart(args []string) error {
 		c.removeTailscale(prevTS, prevPort)
 	}
 	if err := c.saveConfig(savedConfig{
-		LAN:              o.lan,
-		NoAuth:           o.noAuth,
-		Port:             o.port,
-		Tailscale:        o.tailscale,
-		Mux:              o.mux,
-		AllowHosts:       o.allowHosts,
-		AllowLocalUsers:  o.allowLocalUsers,
-		AllowPaths:       o.allowPaths,
-		HerdrAllowNoAuth: o.herdrNoAuth,
-		HcAllowNoAuth:    o.hcNoAuth,
-		HcBin:            o.hcBin,
-		HcEnv:            o.hcEnv,
-		User:             o.user,
-		Password:         c.keptPassword(pass, saved),
-		Container:        c.savedContainer(saved),
+		LAN:               o.lan,
+		NoAuth:            o.noAuth,
+		Port:              o.port,
+		Tailscale:         o.tailscale,
+		Cloudflare:        o.proxy.cloudflare,
+		ProxyClientHeader: o.proxy.proxyHeader,
+		Mux:               o.mux,
+		AllowHosts:        o.allowHosts,
+		AllowLocalUsers:   o.allowLocalUsers,
+		AllowPaths:        o.allowPaths,
+		HerdrAllowNoAuth:  o.herdrNoAuth,
+		HcAllowNoAuth:     o.hcNoAuth,
+		HcBin:             o.hcBin,
+		HcEnv:             o.hcEnv,
+		User:              o.user,
+		Password:          c.keptPassword(pass, saved),
+		Container:         c.savedContainer(saved),
 	}); err != nil {
 		return fmt.Errorf("save config: %w", err)
 	}
@@ -471,6 +480,9 @@ func (c *cli) cmdStart(args []string) error {
 	}
 	c.lanLingerWarning(o.lan, o.port, sup)
 	c.showAccessInfo(o, pass, reused)
+	if o.proxy.cloudflare != "" {
+		c.reportCloudflareAccess(o.proxy.cloudflare)
+	}
 	c.showLocalUsers(o)
 	if saved != nil && saved.Container != nil && o.user != saved.authUser() {
 		c.infof("The container shares this username; it takes it at its next 'termote container up'")
@@ -981,6 +993,16 @@ func (c *cli) cmdStatus(args []string) error {
 			host, tsPort := splitTailscale(saved.Tailscale)
 			fmt.Fprintf(c.out, "  Tailscale: https://%s:%s\n", host, tsPort)
 		}
+		if saved.Cloudflare != "" {
+			r := cloudflareProbe(context.Background(), saved.Cloudflare)
+			fmt.Fprintf(c.out, "  Cloudflare: %s (Access: %s)\n", cloudflareURL(saved.Cloudflare), describeAccess(r))
+			if r.State == accessOff {
+				c.warnf("Cloudflare Access is OFF for %s: anyone on the Internet reaches the sign-in page (%s)", saved.Cloudflare, cloudflareAccessDocs)
+			}
+		}
+		if h := proxyClientHeader(saved.Cloudflare, saved.ProxyClientHeader); h != "" {
+			fmt.Fprintf(c.out, "  Client header: %s\n", h)
+		}
 	}
 	if sup := c.installedSupervisor(); sup != nil {
 		fmt.Fprintf(c.out, "  Supervisor: %s\n", sup.Name())
@@ -1073,6 +1095,9 @@ func (c *cli) warnExposure(o startOptions) {
 	case o.lan:
 		c.warnf("LAN access is on: every device on this network can reach the login page (turn it off: --lan=false)")
 	}
+	if o.proxy.cloudflare != "" {
+		c.warnf("%s is on the Internet through your Cloudflare Tunnel: put Cloudflare Access in front of it, or the password is all that stands in the way", o.proxy.cloudflare)
+	}
 }
 
 // noAuthReach says who can reach a server without auth that listens on this
@@ -1133,6 +1158,9 @@ func (c *cli) showAccessInfo(o startOptions, pass string, reused bool) {
 		host, port := splitTailscale(o.tailscale)
 		fmt.Fprintf(c.out, "Tailscale: %s\n", c.paint(ansiCyan, "https://"+host+":"+port))
 	}
+	if o.proxy.cloudflare != "" {
+		fmt.Fprintf(c.out, "Cloudflare: %s\n", c.paint(ansiCyan, cloudflareURL(o.proxy.cloudflare)))
+	}
 	fmt.Fprintf(c.out, "Local: %s\n", c.paint(ansiCyan, fmt.Sprintf("http://127.0.0.1:%d", o.port)))
 	if o.lan {
 		for _, ip := range c.localIPv4s() {
@@ -1147,6 +1175,9 @@ func (c *cli) showAccessInfo(o startOptions, pass string, reused bool) {
 	if o.tailscale != "" {
 		host, _ := splitTailscale(o.tailscale)
 		hosts = append(hosts, host)
+	}
+	if o.proxy.cloudflare != "" {
+		hosts = append(hosts, o.proxy.cloudflare)
 	}
 	fmt.Fprintf(c.out, "Allowed hosts: %s\n", strings.Join(append(hosts, o.allowHosts...), ", "))
 	fmt.Fprintf(c.out, "%s\n", c.paint(ansiDim, "  (another name? add it with: termote start --allow-host <name>)"))

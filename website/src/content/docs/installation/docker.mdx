@@ -99,6 +99,10 @@ off with `=false`.
 | `--lan[=false]`             | Expose to the LAN (default: this machine only)                         |
 | `--tailscale <host[:port]>` | Publish over [Tailscale HTTPS](/installation/tailscale/) (default 443) |
 | `--no-tailscale`            | Stop publishing over Tailscale                                         |
+| `--cloudflare <host>`       | Hostname of a [Cloudflare Tunnel](/installation/cloudflare/) you run (not with `--no-auth` or `--lan`) |
+| `--no-cloudflare`           | Forget the Cloudflare hostname                                         |
+| `--proxy-client-header <name>` | Header a proxy sets to the client's address (default with `--cloudflare`: `CF-Connecting-IP`) |
+| `--no-proxy-client-header`  | Stop reading it                                                        |
 | `--no-auth[=false]`         | Disable the login                                                      |
 | `--mux <tmux\|herdr\|zellij>` | Terminal backend (asked the first time, tmux without a terminal)     |
 | `--allow-herdr-no-auth`     | Required together with `--mux herdr --no-auth`                         |

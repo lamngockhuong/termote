@@ -111,7 +111,7 @@ nothing it opens inherits one. Only without a saved config (the container image,
 | `TERMOTE_WORKSPACE_HOME`      | (empty)      | The host home dir's place in `/workspace` (`.`: the workspace) when the workspace holds it: view-only Files refuse it (`container up` sets it) |
 
 For a native install, `termote start` computes the equivalent of `TERMOTE_ALLOWED_HOSTS` from
-`--lan`/`--tailscale`/`--allow-host` and saves it in the config; see `serveConfigFromSaved` in
+`--lan`/`--tailscale`/`--cloudflare`/`--allow-host` and saves it in the config; see `serveConfigFromSaved` in
 `server/serve_config.go`.
 
 ### Mux Backend
@@ -1659,6 +1659,20 @@ termote container up --tailscale myhost.ts.net
   `start --no-tailscale` and `uninstall` remove only Termote's own mapping
   (`tailscale serve --https=<port> off`, never `serve reset`)
 
+### With a Cloudflare Tunnel
+
+```bash
+termote start --cloudflare term.example.com
+termote container up --cloudflare term.example.com
+```
+
+- The user runs `cloudflared` (a service pointed at `http://127.0.0.1:<port>`); Termote never runs
+  it nor holds its token, only allows the hostname as a Host and shows its URL
+- Failed sign-ins count per client by `CF-Connecting-IP` (`rateKey`, `px:<address>`), all of them
+  under the shared cap for proxied attempts; `--proxy-client-header` names another header
+- `start`, `container up`, `status` and `panel` probe the hostname from outside and warn when
+  Cloudflare Access is not in front of it (`server/cloudflare.go`)
+
 ### Uninstall
 
 ```bash
@@ -1720,7 +1734,8 @@ termote update --force           # Force reinstall current version
    auth (`Sec-Fetch-Mode`, a page load, or a session cookie it already holds), so curl and the CLI
    never push real sessions out of the 256 kept; see item 18 for the list and revoke
 4. **Host allowlist**: every request's `Host` header must match loopback, the address the
-   request arrived on when `--lan` is set, the Tailscale name (`--tailscale`), or a name added
+   request arrived on when `--lan` is set, the Tailscale name (`--tailscale`), the Cloudflare
+   hostname (`--cloudflare`), or a name added
    with `--allow-host`; there is no wildcard, so DNS rebinding from an attacker-controlled page
    cannot reach the server
 5. **Write/CSRF guard**: state-changing `/api/mux/*` requests must be same-site

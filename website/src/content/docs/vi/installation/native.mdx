@@ -156,6 +156,10 @@ sẽ khởi động server y như lần trước. Tùy chọn kiểu bật/tắt
 | `--lan[=false]`             | Lắng nghe trên mọi giao diện mạng thay vì chỉ `127.0.0.1`              |
 | `--tailscale <host[:port]>` | Công khai qua [Tailscale HTTPS](/vi/installation/tailscale/) (mặc định 443) |
 | `--no-tailscale`            | Ngừng công khai qua Tailscale                                          |
+| `--cloudflare <host>`       | Hostname của [Cloudflare Tunnel](/vi/installation/cloudflare/) do bạn tự chạy (không dùng cùng `--no-auth`) |
+| `--no-cloudflare`           | Xoá hostname Cloudflare đã lưu                                         |
+| `--proxy-client-header <name>` | Header mà proxy đặt địa chỉ client vào (mặc định với `--cloudflare`: `CF-Connecting-IP`) |
+| `--no-proxy-client-header`  | Thôi đọc header đó                                                     |
 | `--no-auth[=false]`         | Tắt đăng nhập                                                          |
 | `--mux <tmux\|herdr\|zellij\|hc>` | Backend terminal (mặc định: dò tìm ở lần đầu; zellij: Linux, macOS; hc: herdr-core) |
 | `--allow-host <name>`       | Cho phép thêm một tên trong header `Host` (lặp được, không có ký tự đại diện) |

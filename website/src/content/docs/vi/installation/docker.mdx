@@ -99,6 +99,10 @@ bật/tắt được tắt bằng `=false`.
 | `--lan[=false]`             | Mở cho mạng LAN (mặc định: chỉ máy này)                                |
 | `--tailscale <host[:port]>` | Công khai qua [Tailscale HTTPS](/vi/installation/tailscale/) (mặc định 443) |
 | `--no-tailscale`            | Ngừng công khai qua Tailscale                                          |
+| `--cloudflare <host>`       | Hostname của [Cloudflare Tunnel](/vi/installation/cloudflare/) do bạn tự chạy (không dùng cùng `--no-auth` hay `--lan`) |
+| `--no-cloudflare`           | Xoá hostname Cloudflare đã lưu                                         |
+| `--proxy-client-header <name>` | Header mà proxy đặt địa chỉ client vào (mặc định với `--cloudflare`: `CF-Connecting-IP`) |
+| `--no-proxy-client-header`  | Thôi đọc header đó                                                     |
 | `--no-auth[=false]`         | Tắt đăng nhập                                                          |
 | `--mux <tmux\|herdr\|zellij>` | Backend terminal (hỏi ở lần đầu; không có terminal thì dùng tmux)    |
 | `--allow-herdr-no-auth`     | Bắt buộc khi dùng `--mux herdr --no-auth`                              |

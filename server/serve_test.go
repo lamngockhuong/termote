@@ -8,7 +8,10 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1038,7 +1041,7 @@ func TestTokenExpiryOnWallClock(t *testing.T) {
 // Behind tailscale serve every tailnet user comes over loopback: each counts
 // under its own login, so one user's wrong passwords leave the others able
 // to sign in, while every attempt over loopback together stays under
-// authMaxLoopbackFailures however the header changes. Off loopback, or
+// authMaxProxiedFailures however the header changes. Off loopback, or
 // without --tailscale (another proxy on loopback would pass the client's
 // header through), the header is ignored.
 func TestBasicAuthTailscaleUsers(t *testing.T) {
@@ -1055,7 +1058,7 @@ func TestBasicAuthTailscaleUsers(t *testing.T) {
 		return rec.Code
 	}
 
-	tailnet := func() http.Handler { return newBasicAuth("admin", "secret", nil, nil, true, inner) }
+	tailnet := func() http.Handler { return newBasicAuth("admin", "secret", nil, nil, authOpts{Tailnet: true}, inner) }
 	h := tailnet()
 	for range authMaxFailures {
 		try(h, "127.0.0.1:1", "alice@example.com", "wrong")
@@ -1072,7 +1075,7 @@ func TestBasicAuthTailscaleUsers(t *testing.T) {
 
 	// A header changed each time does not pass the shared cap.
 	h = tailnet()
-	for i := range authMaxLoopbackFailures {
+	for i := range authMaxProxiedFailures {
 		if code := try(h, "[::1]:1", fmt.Sprintf("u%d@example.com", i), "wrong"); code != http.StatusUnauthorized {
 			t.Fatalf("attempt %d = %d, want 401", i, code)
 		}
@@ -1107,7 +1110,7 @@ func TestBasicAuthTailscaleUsers(t *testing.T) {
 // loopback cap.
 func TestAuthRateLimiterLoopbackRefund(t *testing.T) {
 	rl := newAuthRateLimiter()
-	for range authMaxLoopbackFailures + 5 {
+	for range authMaxProxiedFailures + 5 {
 		if blocked := rl.reserve("ts:alice@example.com"); blocked != "" {
 			t.Fatalf("blocked by %s", blocked)
 		}
@@ -1115,5 +1118,179 @@ func TestAuthRateLimiterLoopbackRefund(t *testing.T) {
 	}
 	if n := len(rl.failures); n != 0 {
 		t.Errorf("after refunds: %v", rl.failures)
+	}
+}
+
+// rateKey reads the proxy client header only when one is set and the request
+// came from where the proxy does, and only an IP address in it.
+func TestRateKeyProxyClient(t *testing.T) {
+	cf := authOpts{ProxyHeader: cloudflareClientHeader}
+	xff := authOpts{ProxyHeader: "X-Forwarded-For"}
+	for _, tc := range []struct {
+		name, addr string
+		header     map[string][]string
+		opts       authOpts
+		want       string
+	}{
+		{"cloudflare over loopback", "127.0.0.1:1", map[string][]string{"Cf-Connecting-Ip": {"203.0.113.5"}}, cf, "px:203.0.113.5"},
+		{"over IPv6 loopback", "[::1]:1", map[string][]string{"Cf-Connecting-Ip": {"2001:db8::5"}}, cf, "px:2001:db8::5"},
+		{"no header set", "127.0.0.1:1", map[string][]string{"Cf-Connecting-Ip": {"203.0.113.5"}}, authOpts{}, "127.0.0.1"},
+		{"off loopback natively", "192.0.2.9:1", map[string][]string{"Cf-Connecting-Ip": {"203.0.113.5"}}, cf, "192.0.2.9"},
+		{"any source in the container", "10.88.0.1:1", map[string][]string{"Cf-Connecting-Ip": {"203.0.113.5"}}, authOpts{ProxyHeader: cloudflareClientHeader, ProxyAnySource: true}, "px:203.0.113.5"},
+		{"not an address", "127.0.0.1:1", map[string][]string{"Cf-Connecting-Ip": {"evil"}}, cf, "127.0.0.1"},
+		{"missing", "127.0.0.1:1", nil, cf, "127.0.0.1"},
+		{"mapped and zoned", "127.0.0.1:1", map[string][]string{"Cf-Connecting-Ip": {" ::ffff:203.0.113.5 "}}, cf, "px:203.0.113.5"},
+		{"last forwarded entry", "127.0.0.1:1", map[string][]string{"X-Forwarded-For": {"1.1.1.1, 203.0.113.5"}}, xff, "px:203.0.113.5"},
+		{"last forwarded line", "127.0.0.1:1", map[string][]string{"X-Forwarded-For": {"1.1.1.1", "198.51.100.2 , 203.0.113.6"}}, xff, "px:203.0.113.6"},
+		{"forwarded entry not an address", "127.0.0.1:1", map[string][]string{"X-Forwarded-For": {"203.0.113.5, unknown"}}, xff, "127.0.0.1"},
+		{"Tailscale login wins", "127.0.0.1:1", map[string][]string{"Cf-Connecting-Ip": {"203.0.113.5"}, "Tailscale-User-Login": {"alice@example.com"}}, authOpts{Tailnet: true, ProxyHeader: cloudflareClientHeader}, "ts:alice@example.com"},
+		{"proxy header without a login", "127.0.0.1:1", map[string][]string{"Cf-Connecting-Ip": {"203.0.113.5"}}, authOpts{Tailnet: true, ProxyHeader: cloudflareClientHeader}, "px:203.0.113.5"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/", nil)
+			req.RemoteAddr = tc.addr
+			for k, vs := range tc.header {
+				for _, v := range vs {
+					req.Header.Add(k, v)
+				}
+			}
+			if got := rateKey(req, tc.opts); got != tc.want {
+				t.Errorf("rateKey = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// Behind a proxy named by the client header every client counts on its own,
+// all of them together under authMaxProxiedFailures, and an IPv6 client's
+// /64 under authMaxPrefixFailures.
+func TestBasicAuthProxyClients(t *testing.T) {
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+	opts := authOpts{ProxyHeader: cloudflareClientHeader}
+	try := func(h http.Handler, client, pass string) int {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.SetBasicAuth("admin", pass)
+		req.RemoteAddr = "127.0.0.1:1"
+		req.Header.Set(cloudflareClientHeader, client)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	logs := captureLog(t)
+
+	h := newBasicAuth("admin", "secret", nil, nil, opts, inner)
+	for range authMaxFailures {
+		try(h, "203.0.113.5", "wrong")
+	}
+	if code := try(h, "203.0.113.5", "secret"); code != http.StatusTooManyRequests {
+		t.Errorf("client A after %d failures = %d, want 429", authMaxFailures, code)
+	}
+	if code := try(h, "198.51.100.7", "secret"); code != http.StatusOK {
+		t.Errorf("client B after A's failures = %d, want 200", code)
+	}
+	if !strings.Contains(logs.String(), "failed login from 203.0.113.5 via 127.0.0.1") {
+		t.Errorf("log does not name the client and the proxy:\n%s", logs.String())
+	}
+
+	// A header changed each time does not pass the shared cap.
+	h = newBasicAuth("admin", "secret", nil, nil, opts, inner)
+	for i := range authMaxProxiedFailures {
+		if code := try(h, fmt.Sprintf("203.0.113.%d", i+1), "wrong"); code != http.StatusUnauthorized {
+			t.Fatalf("attempt %d = %d, want 401", i, code)
+		}
+	}
+	if code := try(h, "198.51.100.200", "secret"); code != http.StatusTooManyRequests {
+		t.Errorf("past the proxied cap = %d, want 429", code)
+	}
+
+	// Addresses of one IPv6 /64 count together.
+	h = newBasicAuth("admin", "secret", nil, nil, opts, inner)
+	for i := range authMaxPrefixFailures {
+		try(h, fmt.Sprintf("2001:db8::%x", i+1), "wrong")
+	}
+	if code := try(h, "2001:db8::ffff", "secret"); code != http.StatusTooManyRequests {
+		t.Errorf("past the /64 cap = %d, want 429", code)
+	}
+	if code := try(h, "2001:db8:1::1", "secret"); code != http.StatusOK {
+		t.Errorf("another /64 = %d, want 200", code)
+	}
+}
+
+// Wrong pairing codes count per client behind the proxy too.
+func TestPairProxyClients(t *testing.T) {
+	store, err := newDeviceStore(filepath.Join(t.TempDir(), "devices"), "admin", "secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dev := newDeviceAuth(store, newStreamTokenStore(), newStreamHub(4))
+	h := newBasicAuth("admin", "secret", dev, nil, authOpts{ProxyHeader: cloudflareClientHeader, Tailnet: true}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	code, _, err := dev.codes.create(roleView, "", "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	from := func(client string) func(*http.Request) {
+		return func(r *http.Request) {
+			r.RemoteAddr = "127.0.0.1:1"
+			r.Header.Set(cloudflareClientHeader, client)
+			// Never a pairing key, even with --tailscale.
+			r.Header.Set("Tailscale-User-Login", client+"@example.com")
+		}
+	}
+	logs := captureLog(t)
+	for range authMaxFailures {
+		postPair(h, url.Values{"code": {"WRONG-CODE"}}, from("203.0.113.5"))
+	}
+	if rec := postPair(h, url.Values{"code": {code}}, from("203.0.113.5")); rec.Code != http.StatusTooManyRequests {
+		t.Errorf("client A after %d wrong codes = %d, want 429", authMaxFailures, rec.Code)
+	}
+	if rec := postPair(h, url.Values{"code": {code}}, from("198.51.100.7")); rec.Code != http.StatusSeeOther {
+		t.Errorf("client B after A's wrong codes = %d, want 303", rec.Code)
+	}
+	if !strings.Contains(logs.String(), "wrong pairing code from 203.0.113.5 via 127.0.0.1") {
+		t.Errorf("log does not name the client and the proxy:\n%s", logs.String())
+	}
+}
+
+func TestValidProxyClientHeader(t *testing.T) {
+	for _, ok := range []string{"CF-Connecting-IP", "X-Forwarded-For", "X-Real-IP", "True-Client-IP"} {
+		if err := validProxyClientHeader(ok); err != nil {
+			t.Errorf("%s: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"", "Host", "cookie", "Authorization", "Proxy-Authorization", "X Real", "X:Y", strings.Repeat("a", maxProxyHeaderLen+1), "é"} {
+		if err := validProxyClientHeader(bad); err == nil {
+			t.Errorf("%q accepted", bad)
+		}
+	}
+	if got := canonicalProxyHeader(" cf-connecting-ip "); got != cloudflareClientHeader {
+		t.Errorf("canonical cf = %q", got)
+	}
+	if got := canonicalProxyHeader("x-forwarded-for"); got != "X-Forwarded-For" {
+		t.Errorf("canonical xff = %q", got)
+	}
+	cfg := serveConfig{Pass: "p", ProxyClientHeader: "Host"}
+	if err := validateConfig(cfg); err == nil {
+		t.Error("validateConfig accepted Host as the proxy client header")
+	}
+	cfg = serveConfig{NoAuth: true, Cloudflare: "term.example.com"}
+	if err := validateConfig(cfg); err == nil {
+		t.Error("validateConfig accepted --cloudflare with --no-auth")
+	}
+}
+
+// The container reads the header from TERMOTE_PROXY_CLIENT_HEADER and trusts
+// it from any source; without the variable it reads none.
+func TestServeConfigProxyClientEnv(t *testing.T) {
+	t.Setenv("TERMOTE_PROXY_CLIENT_HEADER", "cf-connecting-ip")
+	cfg := newServeConfigFromEnv()
+	if cfg.ProxyClientHeader != cloudflareClientHeader || !cfg.ProxyClientAnySource {
+		t.Errorf("from env: %q any=%v", cfg.ProxyClientHeader, cfg.ProxyClientAnySource)
+	}
+	t.Setenv("TERMOTE_PROXY_CLIENT_HEADER", "")
+	if cfg := newServeConfigFromEnv(); cfg.ProxyClientHeader != "" {
+		t.Errorf("without the variable: %q", cfg.ProxyClientHeader)
+	}
+	if !slices.Contains(termoteEnvKeys, "TERMOTE_PROXY_CLIENT_HEADER") {
+		t.Error("TERMOTE_PROXY_CLIENT_HEADER is not scrubbed from the environment")
 	}
 }

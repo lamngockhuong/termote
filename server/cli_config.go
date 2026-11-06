@@ -27,13 +27,18 @@ import (
 // native server's settings come first; the container keeps its own, and the
 // password is shared by both.
 type savedConfig struct {
-	LAN             bool
-	NoAuth          bool
-	Port            int
-	Tailscale       string
-	Mux             string
-	AllowHosts      []string // hosts added with --allow-host only
-	AllowLocalUsers []string // OS users added with --allow-local-user
+	LAN       bool
+	NoAuth    bool
+	Port      int
+	Tailscale string
+	// Cloudflare is the hostname a Cloudflare Tunnel the user runs serves
+	// this server on (--cloudflare); ProxyClientHeader the header set with
+	// --proxy-client-header (see proxyClientHeader).
+	Cloudflare        string
+	ProxyClientHeader string
+	Mux               string
+	AllowHosts        []string // hosts added with --allow-host only
+	AllowLocalUsers   []string // OS users added with --allow-local-user
 	// AllowPaths are the folders added with --allow-path, offered as Places
 	// in Files.
 	AllowPaths       []string
@@ -60,13 +65,17 @@ type savedConfig struct {
 
 // containerConfig is the container's part of the config.
 type containerConfig struct {
-	LAN        bool
-	NoAuth     bool
-	Port       int
-	Tailscale  string
-	AllowHosts []string
-	AllowPaths []string // host folders mounted as Places
-	Workspace  string
+	LAN       bool
+	NoAuth    bool
+	Port      int
+	Tailscale string
+	// Cloudflare and ProxyClientHeader are the container's own, as in
+	// savedConfig.
+	Cloudflare        string
+	ProxyClientHeader string
+	AllowHosts        []string
+	AllowPaths        []string // host folders mounted as Places
+	Workspace         string
 	// Mux is the backend inside the container, apart from the native one;
 	// "" until the first up picks one.
 	Mux              string
@@ -211,6 +220,8 @@ const (
 	keyUser             = "TERMOTE_USER"
 	keyAllowLocalUsers  = "TERMOTE_ALLOWED_LOCAL_USERS"
 	keyAllowPaths       = "TERMOTE_ALLOWED_PATHS" // ':'-separated
+	keyCloudflare       = "TERMOTE_CLOUDFLARE"
+	keyProxyHeader      = "TERMOTE_PROXY_CLIENT_HEADER"
 
 	// The container's keys; present once `container up` ran.
 	keyContainerLAN         = "TERMOTE_CONTAINER_LAN"
@@ -222,6 +233,8 @@ const (
 	keyContainerWorkspace   = "TERMOTE_CONTAINER_WORKSPACE"
 	keyContainerMux         = "TERMOTE_CONTAINER_MUX"
 	keyContainerHerdrNoAuth = "TERMOTE_CONTAINER_HERDR_ALLOW_NO_AUTH"
+	keyContainerCloudflare  = "TERMOTE_CONTAINER_CLOUDFLARE"
+	keyContainerProxyHeader = "TERMOTE_CONTAINER_PROXY_CLIENT_HEADER"
 )
 
 func parseUnixConfig(data []byte, key func() string) (*savedConfig, error) {
@@ -243,30 +256,34 @@ func parseUnixConfig(data []byte, key func() string) (*savedConfig, error) {
 		return nil, err
 	}
 	cfg := &savedConfig{
-		LAN:              kv[keyLAN] == "true",
-		NoAuth:           kv[keyNoAuth] == "true",
-		Tailscale:        kv[keyTailscale],
-		Mux:              kv[keyMux],
-		AllowHosts:       splitHosts(kv[keyAllowedHosts]),
-		AllowLocalUsers:  splitHosts(kv[keyAllowLocalUsers]),
-		AllowPaths:       splitPaths(kv[keyAllowPaths]),
-		HerdrAllowNoAuth: kv[keyHerdrAllowNoAuth] == "true",
-		HcAllowNoAuth:    kv[keyHcAllowNoAuth] == "true",
-		HcBin:            kv[keyHcBin],
-		HcEnv:            hcEnv{Session: kv[keyHcSession], Socket: kv[keyHcSocket]},
-		User:             kv[keyUser],
+		LAN:               kv[keyLAN] == "true",
+		NoAuth:            kv[keyNoAuth] == "true",
+		Tailscale:         kv[keyTailscale],
+		Cloudflare:        kv[keyCloudflare],
+		ProxyClientHeader: kv[keyProxyHeader],
+		Mux:               kv[keyMux],
+		AllowHosts:        splitHosts(kv[keyAllowedHosts]),
+		AllowLocalUsers:   splitHosts(kv[keyAllowLocalUsers]),
+		AllowPaths:        splitPaths(kv[keyAllowPaths]),
+		HerdrAllowNoAuth:  kv[keyHerdrAllowNoAuth] == "true",
+		HcAllowNoAuth:     kv[keyHcAllowNoAuth] == "true",
+		HcBin:             kv[keyHcBin],
+		HcEnv:             hcEnv{Session: kv[keyHcSession], Socket: kv[keyHcSocket]},
+		User:              kv[keyUser],
 	}
 	cfg.Port, _ = strconv.Atoi(kv[keyPort])
 	if _, ok := kv[keyContainerPort]; ok {
 		cc := &containerConfig{
-			LAN:              kv[keyContainerLAN] == "true",
-			NoAuth:           kv[keyContainerNoAuth] == "true",
-			Tailscale:        kv[keyContainerTailscale],
-			AllowHosts:       splitHosts(kv[keyContainerHosts]),
-			AllowPaths:       splitPaths(kv[keyContainerPaths]),
-			Workspace:        kv[keyContainerWorkspace],
-			Mux:              kv[keyContainerMux],
-			HerdrAllowNoAuth: kv[keyContainerHerdrNoAuth] == "true",
+			LAN:               kv[keyContainerLAN] == "true",
+			NoAuth:            kv[keyContainerNoAuth] == "true",
+			Tailscale:         kv[keyContainerTailscale],
+			Cloudflare:        kv[keyContainerCloudflare],
+			ProxyClientHeader: kv[keyContainerProxyHeader],
+			AllowHosts:        splitHosts(kv[keyContainerHosts]),
+			AllowPaths:        splitPaths(kv[keyContainerPaths]),
+			Workspace:         kv[keyContainerWorkspace],
+			Mux:               kv[keyContainerMux],
+			HerdrAllowNoAuth:  kv[keyContainerHerdrNoAuth] == "true",
 		}
 		cc.Port, _ = strconv.Atoi(kv[keyContainerPort])
 		cfg.Container = cc
@@ -291,10 +308,10 @@ func formatUnixConfig(cfg savedConfig, key string) ([]byte, error) {
 		}
 		mac = passwordMAC(enc, key)
 	}
-	values := []string{cfg.Tailscale, cfg.Mux, strings.Join(cfg.AllowHosts, ","), strings.Join(cfg.AllowLocalUsers, ","), cfg.User, cfg.HcBin, cfg.HcEnv.Session, cfg.HcEnv.Socket}
+	values := []string{cfg.Tailscale, cfg.Cloudflare, cfg.ProxyClientHeader, cfg.Mux, strings.Join(cfg.AllowHosts, ","), strings.Join(cfg.AllowLocalUsers, ","), cfg.User, cfg.HcBin, cfg.HcEnv.Session, cfg.HcEnv.Socket}
 	paths := slices.Clone(cfg.AllowPaths)
 	if cc := cfg.Container; cc != nil {
-		values = append(values, cc.Tailscale, strings.Join(cc.AllowHosts, ","), cc.Workspace, cc.Mux)
+		values = append(values, cc.Tailscale, cc.Cloudflare, cc.ProxyClientHeader, strings.Join(cc.AllowHosts, ","), cc.Workspace, cc.Mux)
 		paths = append(paths, cc.AllowPaths...)
 	}
 	// The path lists are ':'-separated.
@@ -333,6 +350,12 @@ func formatUnixConfig(cfg savedConfig, key string) ([]byte, error) {
 	if len(cfg.AllowPaths) > 0 {
 		w(keyAllowPaths, strings.Join(cfg.AllowPaths, ":"))
 	}
+	if cfg.Cloudflare != "" {
+		w(keyCloudflare, cfg.Cloudflare)
+	}
+	if cfg.ProxyClientHeader != "" {
+		w(keyProxyHeader, cfg.ProxyClientHeader)
+	}
 	if cc := cfg.Container; cc != nil {
 		w(keyContainerLAN, strconv.FormatBool(cc.LAN))
 		w(keyContainerNoAuth, strconv.FormatBool(cc.NoAuth))
@@ -345,6 +368,12 @@ func formatUnixConfig(cfg savedConfig, key string) ([]byte, error) {
 		w(keyContainerWorkspace, cc.Workspace)
 		w(keyContainerMux, cc.Mux)
 		w(keyContainerHerdrNoAuth, strconv.FormatBool(cc.HerdrAllowNoAuth))
+		if cc.Cloudflare != "" {
+			w(keyContainerCloudflare, cc.Cloudflare)
+		}
+		if cc.ProxyClientHeader != "" {
+			w(keyContainerProxyHeader, cc.ProxyClientHeader)
+		}
 	}
 	return []byte(b.String()), nil
 }
@@ -356,6 +385,8 @@ type windowsConfigFile struct {
 	NoAuth           bool                 `json:"NoAuth"`
 	Port             int                  `json:"Port"`
 	Tailscale        string               `json:"Tailscale"`
+	Cloudflare       string               `json:"Cloudflare,omitempty"`
+	ProxyHeader      string               `json:"ProxyClientHeader,omitempty"`
 	EncryptedPass    string               `json:"EncryptedPass"`
 	Mux              string               `json:"Mux,omitempty"`
 	AllowHost        []string             `json:"AllowHost,omitempty"`
@@ -376,6 +407,8 @@ type windowsContainerCfg struct {
 	NoAuth           bool     `json:"NoAuth"`
 	Port             int      `json:"Port"`
 	Tailscale        string   `json:"Tailscale,omitempty"`
+	Cloudflare       string   `json:"Cloudflare,omitempty"`
+	ProxyHeader      string   `json:"ProxyClientHeader,omitempty"`
 	AllowHost        []string `json:"AllowHost,omitempty"`
 	AllowPath        []string `json:"AllowPath,omitempty"`
 	Workspace        string   `json:"Workspace,omitempty"`
@@ -398,22 +431,25 @@ func parseWindowsConfig(data []byte) (*savedConfig, error) {
 		return nil, fmt.Errorf("read config: %w", err)
 	}
 	cfg := &savedConfig{
-		LAN:              f.Lan,
-		NoAuth:           f.NoAuth,
-		Port:             f.Port,
-		Tailscale:        f.Tailscale,
-		Mux:              f.Mux,
-		AllowHosts:       f.AllowHost,
-		AllowLocalUsers:  f.AllowLocalUser,
-		AllowPaths:       f.AllowPath,
-		HerdrAllowNoAuth: f.HerdrAllowNoAuth,
-		HcAllowNoAuth:    f.HcAllowNoAuth,
-		HcBin:            f.HcBin,
-		HcEnv:            hcEnv{Session: f.HcSession, Socket: f.HcSocket},
-		User:             f.User,
+		LAN:               f.Lan,
+		NoAuth:            f.NoAuth,
+		Port:              f.Port,
+		Tailscale:         f.Tailscale,
+		Cloudflare:        f.Cloudflare,
+		ProxyClientHeader: f.ProxyHeader,
+		Mux:               f.Mux,
+		AllowHosts:        f.AllowHost,
+		AllowLocalUsers:   f.AllowLocalUser,
+		AllowPaths:        f.AllowPath,
+		HerdrAllowNoAuth:  f.HerdrAllowNoAuth,
+		HcAllowNoAuth:     f.HcAllowNoAuth,
+		HcBin:             f.HcBin,
+		HcEnv:             hcEnv{Session: f.HcSession, Socket: f.HcSocket},
+		User:              f.User,
 	}
 	if cc := f.Container; cc != nil {
-		cfg.Container = &containerConfig{LAN: cc.Lan, NoAuth: cc.NoAuth, Port: cc.Port, Tailscale: cc.Tailscale, AllowHosts: cc.AllowHost, AllowPaths: cc.AllowPath,
+		cfg.Container = &containerConfig{LAN: cc.Lan, NoAuth: cc.NoAuth, Port: cc.Port, Tailscale: cc.Tailscale, Cloudflare: cc.Cloudflare, ProxyClientHeader: cc.ProxyHeader,
+			AllowHosts: cc.AllowHost, AllowPaths: cc.AllowPath,
 			Workspace: cc.Workspace, Mux: cc.Mux, HerdrAllowNoAuth: cc.HerdrAllowNoAuth}
 	}
 	if f.EncryptedPass != "" {
@@ -437,6 +473,8 @@ func formatWindowsConfig(cfg savedConfig, now time.Time) ([]byte, error) {
 		NoAuth:           cfg.NoAuth,
 		Port:             cfg.Port,
 		Tailscale:        cfg.Tailscale,
+		Cloudflare:       cfg.Cloudflare,
+		ProxyHeader:      cfg.ProxyClientHeader,
 		Mux:              cfg.Mux,
 		AllowHost:        cfg.AllowHosts,
 		AllowLocalUser:   cfg.AllowLocalUsers,
@@ -450,7 +488,8 @@ func formatWindowsConfig(cfg savedConfig, now time.Time) ([]byte, error) {
 		SavedAt:          now.Format(time.RFC3339),
 	}
 	if cc := cfg.Container; cc != nil {
-		f.Container = &windowsContainerCfg{Lan: cc.LAN, NoAuth: cc.NoAuth, Port: cc.Port, Tailscale: cc.Tailscale, AllowHost: cc.AllowHosts, AllowPath: cc.AllowPaths,
+		f.Container = &windowsContainerCfg{Lan: cc.LAN, NoAuth: cc.NoAuth, Port: cc.Port, Tailscale: cc.Tailscale, Cloudflare: cc.Cloudflare, ProxyHeader: cc.ProxyClientHeader,
+			AllowHost: cc.AllowHosts, AllowPath: cc.AllowPaths,
 			Workspace: cc.Workspace, Mux: cc.Mux, HerdrAllowNoAuth: cc.HerdrAllowNoAuth}
 	}
 	if cfg.Password != "" {

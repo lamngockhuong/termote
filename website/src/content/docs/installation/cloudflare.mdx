@@ -1,0 +1,110 @@
+---
+title: Cloudflare Tunnel
+description: Reach Termote over a Cloudflare Tunnel you run, behind Cloudflare Access
+---
+
+import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
+
+A Cloudflare Tunnel gives Termote an HTTPS address on your own domain without opening a port. You run the
+tunnel (`cloudflared`); Termote only needs to know its hostname. Termote never starts `cloudflared` and never
+sees the tunnel token.
+
+<Aside type="danger" title="Put Cloudflare Access in front of it">
+A tunnel puts the sign-in page on the Internet. Without Cloudflare Access, the Termote password is all that
+stands between a stranger and a shell on your machine. Termote checks for Access when it starts and in
+`termote status`, and warns loudly when it is missing.
+</Aside>
+
+## Prerequisites
+
+- A domain on Cloudflare (any plan, Free included)
+- `cloudflared` installed on the machine that runs Termote
+  ([downloads](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/downloads/))
+
+## Setup
+
+<Steps>
+1. In the Cloudflare dashboard, open **Zero Trust → Networks → Tunnels** and create a tunnel
+   (type **Cloudflared**).
+
+2. Install it as a service with the command the dashboard shows. It holds the token, so it runs as root on
+   Linux and macOS and as an administrator on Windows:
+
+   ```bash
+   sudo cloudflared service install <token>
+   ```
+
+3. Add a **public hostname**, for example `term.example.com`, with the service
+   `http://127.0.0.1:7680` (Windows: `http://127.0.0.1:7690`; the container: its `--port`).
+
+4. Turn on Cloudflare Access for that hostname: **Zero Trust → Access → Applications → Add an application →
+   Self-hosted**, with the same hostname and a policy that lets in only you (for example, your email).
+
+5. Tell Termote the hostname
+
+   <Tabs>
+     <TabItem label="Native">
+
+       ```bash
+       termote start --cloudflare term.example.com
+       ```
+     </TabItem>
+     <TabItem label="Container">
+
+       ```bash
+       termote container up --cloudflare term.example.com
+       ```
+     </TabItem>
+   </Tabs>
+
+6. Open https://term.example.com: Access asks who you are, then Termote asks for its password.
+
+</Steps>
+
+## What `--cloudflare` does
+
+- Adds the hostname to the allowed `Host` names (like `--allow-host`), so requests through the tunnel are not
+  refused.
+- Shows `https://term.example.com` in `termote url`, `termote panel` (and its QR code) and `termote status`
+  (`cloudflare` and `urls.cloudflare` in `status --json`).
+- Counts failed sign-ins per client, by the `CF-Connecting-IP` header the tunnel sets. Five wrong passwords
+  lock out only the client that typed them. Every attempt through a proxy still shares one limit of 30 a
+  minute, so a program on your machine that sets the header itself cannot guess faster; many addresses
+  guessing together can fill that limit and hold everyone off for a minute. With Access in front, strangers never get that far.
+- Checks from outside, at `start`, `container up`, `status` and when `panel` opens, whether Access answers
+  for the hostname (`cloudflareAccess` in `status --json`: `on`, `off` or `unknown`). `unknown` usually means
+  `cloudflared` is not running.
+
+The option is saved; `--no-cloudflare` forgets it. It is refused together with `--no-auth`.
+
+## Container
+
+Run `cloudflared` on the host, pointed at `http://127.0.0.1:<port>`, and keep the container off the LAN.
+`container up` refuses `--cloudflare` together with `--lan`: inside the container a LAN machine arrives the same
+way as the tunnel and could set the client header itself.
+
+## Native: the user `cloudflared` runs as
+
+On Linux and Windows the server refuses connections from other local users. `cloudflared` installed as a
+service runs as root (SYSTEM on Windows), which is allowed. If you run it as another user, allow that user:
+`termote start --allow-local-user <name>`.
+
+## Other tunnels
+
+| Tool | What to do |
+| --- | --- |
+| ngrok | `termote start --proxy-client-header X-Forwarded-For --allow-host <your ngrok domain>`; Termote takes the last address of the list, the one ngrok adds. Turn on ngrok's own sign-in (OAuth) |
+| VS Code Dev Tunnels | The client header does not help: the service puts its own internal address there. Keep the tunnel private (signed in with your GitHub or Microsoft account) |
+| A reverse proxy on this machine | `--proxy-client-header` with the header it sets to the client's address (for example `X-Real-IP`) |
+
+`--proxy-client-header` overrides the `CF-Connecting-IP` default of `--cloudflare`; `--no-proxy-client-header`
+stops reading a header.
+
+## Notes
+
+- **Pseudo IPv4.** With **Network → Pseudo IPv4** set to *Overwrite headers*, `CF-Connecting-IP` holds a
+  made-up IPv4 address for IPv6 visitors. Leave it *Off* or on *Add header*.
+- **Uploads.** Cloudflare's Free and Pro plans accept request bodies up to 100 MB, so a larger file upload
+  through the tunnel fails.
+- **WebSockets** need nothing: Termote pings the terminal stream every 15 seconds, well inside Cloudflare's idle
+  timeout.

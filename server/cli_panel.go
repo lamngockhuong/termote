@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -20,8 +21,17 @@ func (c *cli) cmdPanel(args []string) error {
 		sel = deepLink{}
 	}
 	msg := ""
+	// Probed once, not at every redraw: it goes out to the Internet.
+	var access *accessResult
 	for {
 		info := c.resolveLink(sel, fromHerdr)
+		if info.report.Cloudflare != "" && access == nil {
+			r := cloudflareProbe(context.Background(), info.report.Cloudflare)
+			access = &r
+		}
+		if access != nil {
+			info.report.CloudflareAccess = string(access.State)
+		}
 		c.drawPanel(info, fromHerdr, msg)
 		msg = ""
 		if !c.interactive || !c.outTTY || c.readKey == nil {
@@ -122,6 +132,16 @@ func (c *cli) drawPanel(info linkInfo, fromHerdr bool, msg string) {
 	}
 	if r.URLs.Tailscale != "" {
 		fmt.Fprintf(c.out, "Tailscale: %s\n", r.URLs.Tailscale)
+	}
+	if r.URLs.Cloudflare != "" {
+		line := "Cloudflare: " + r.URLs.Cloudflare
+		if r.CloudflareAccess != "" {
+			line += " (Access: " + r.CloudflareAccess + ")"
+		}
+		fmt.Fprintf(c.out, "%s\n", line)
+		if r.CloudflareAccess == string(accessOff) {
+			fmt.Fprintf(c.out, "%s\n", c.paint(ansiYellow, "Cloudflare Access is OFF: anyone on the Internet reaches the sign-in page"))
+		}
 	}
 	notes := info.notes
 	if !fromHerdr {

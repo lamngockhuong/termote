@@ -110,6 +110,14 @@ func (c *cli) menuStart() error {
 	} else {
 		args = append(args, "--no-tailscale")
 	}
+	// Refused without auth: the tunnel opens the server to the Internet.
+	if !noAuth && c.confirm("Serve through a Cloudflare Tunnel you run (cloudflared)?") {
+		if h := c.prompt("Cloudflare hostname (e.g. term.example.com): "); h != "" {
+			args = append(args, "--cloudflare", h)
+		}
+	} else {
+		args = append(args, "--no-cloudflare")
+	}
 	return c.cmdStart(args)
 }
 

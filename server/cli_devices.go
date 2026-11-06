@@ -88,7 +88,7 @@ func (c *cli) deviceTarget() deviceTarget {
 		if !ct.NoAuth {
 			t.pass = saved.Password
 		}
-		t.urls = c.accessURLs(&savedConfig{LAN: ct.LAN, Tailscale: ct.Tailscale}, ct.Port)
+		t.urls = c.accessURLs(&savedConfig{LAN: ct.LAN, Tailscale: ct.Tailscale, Cloudflare: ct.Cloudflare}, ct.Port)
 		return t
 	}
 	t := deviceTarget{port: c.savedPort(saved), user: saved.authUser(), pipeOnly: c.goos == "windows", urls: c.accessURLs(saved, c.savedPort(saved))}

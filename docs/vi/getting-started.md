@@ -62,7 +62,7 @@ termote start --lan
 
 Lệnh này gắn server vào `0.0.0.0` thay vì `127.0.0.1` (ví dụ: truy cập được qua `http://192.168.1.100:7680`). Mở URL đó trên điện thoại.
 
-Server chỉ chấp nhận request có header `Host` nằm trong danh sách được phép: luôn cho phép chính máy này (`localhost`, `127.0.0.1`, `::1`), và khi dùng `--lan` thì cho phép đúng địa chỉ mà request thực sự gửi tới (nên vẫn hoạt động khi IP LAN đổi), cộng với tên Tailscale khi dùng `--tailscale`. Nếu bạn truy cập bằng một hostname khác (ví dụ tên máy trong mạng nội bộ), hãy thêm nó bằng `--allow-host <name>` (lặp lại được):
+Server chỉ chấp nhận request có header `Host` nằm trong danh sách được phép: luôn cho phép chính máy này (`localhost`, `127.0.0.1`, `::1`), và khi dùng `--lan` thì cho phép đúng địa chỉ mà request thực sự gửi tới (nên vẫn hoạt động khi IP LAN đổi), cộng với tên Tailscale khi dùng `--tailscale` và hostname Cloudflare khi dùng `--cloudflare`. Nếu bạn truy cập bằng một hostname khác (ví dụ tên máy trong mạng nội bộ), hãy thêm nó bằng `--allow-host <name>` (lặp lại được):
 
 ```bash
 termote start --lan --allow-host mypc.local

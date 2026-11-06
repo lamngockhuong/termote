@@ -57,6 +57,7 @@ type containerOptions struct {
 	port        int
 	tailscale   string
 	noTailscale bool
+	proxy       proxyFlags
 	workspace   string
 	mux         string
 	herdrNoAuth bool
@@ -99,6 +100,7 @@ func (c *cli) parseContainerArgs(args []string) (containerOptions, map[string]bo
 	fs.IntVar(&o.port, "port", 0, "")
 	fs.StringVar(&o.tailscale, "tailscale", "", "")
 	fs.BoolVar(&o.noTailscale, "no-tailscale", false, "")
+	o.proxy.add(fs)
 	fs.StringVar(&o.workspace, "workspace", "", "")
 	fs.StringVar(&o.mux, "mux", "", "")
 	fs.BoolVar(&o.herdrNoAuth, "allow-herdr-no-auth", false, "")
@@ -119,6 +121,9 @@ func (c *cli) parseContainerArgs(args []string) (containerOptions, map[string]bo
 	fs.Visit(func(f *flag.Flag) { set[f.Name] = true })
 	if set["tailscale"] && o.noTailscale {
 		return o, nil, usageError("--tailscale and --no-tailscale cannot be combined")
+	}
+	if err := o.proxy.checkSet(set); err != nil {
+		return o, nil, err
 	}
 	o.allowHosts, o.removeHosts = hosts, remove
 	if o.newPaths, err = normalizeAllowPaths(paths); err != nil {
@@ -148,6 +153,7 @@ func (c *cli) mergeContainer(o *containerOptions, set map[string]bool, s *contai
 	if !set["tailscale"] && !o.noTailscale {
 		o.tailscale = s.Tailscale
 	}
+	o.proxy.merge(set, s.Cloudflare, s.ProxyClientHeader)
 	if !set["workspace"] {
 		o.workspace = s.Workspace
 	}
@@ -195,6 +201,15 @@ func (c *cli) mergeContainer(o *containerOptions, set map[string]bool, s *contai
 		if err := validTailscale(o.tailscale); err != nil {
 			return usageError("%v", err)
 		}
+	}
+	if err := o.proxy.validate(o.noAuth); err != nil {
+		return err
+	}
+	// The container trusts the client header from any source (a proxy on
+	// the host comes in from the bridge gateway), so its port must not be
+	// open to the LAN, whose machines come in the same way.
+	if h := o.proxy.header(); h != "" && o.lan {
+		return usageError("--lan with a proxy client header (%s) would let any machine on the LAN set it; run the tunnel (cloudflared) on this host, pointed at http://127.0.0.1:%d, and drop --lan (--lan=false)", h, o.port)
 	}
 	if o.workspace == "" {
 		o.workspace = filepath.Join(c.home, "termote-workspace")
@@ -323,6 +338,19 @@ func (c *cli) containerUp(args []string) error {
 		}
 	}
 
+	// A LAN port forward left from the previous up (Windows) would keep the
+	// LAN reaching the container, which then trusts a client header from
+	// any source: it goes before anything is replaced, and a header is
+	// refused while it stays.
+	if prev != nil && prev.LAN && c.goos == "windows" && (!o.lan || o.port != prev.Port) {
+		if err := c.runElevated(portProxyScript(prev.Port, false)); err != nil {
+			if h := o.proxy.header(); h != "" {
+				return fmt.Errorf("could not remove the LAN port forwarding of port %d (%v), so LAN machines could still set %s; run as Administrator: netsh interface portproxy delete v4tov4 listenport=%d listenaddress=0.0.0.0", prev.Port, err, h, prev.Port)
+			}
+			c.warnf("Could not remove the LAN port forwarding of port %d: %v", prev.Port, err)
+		}
+	}
+
 	c.heading("Termote Container")
 	image := containerImage + ":" + c.version
 	if build {
@@ -358,7 +386,7 @@ func (c *cli) containerUp(args []string) error {
 	if prev != nil && prev.Tailscale != "" && prev.Tailscale != o.tailscale {
 		c.removeTailscale(prev.Tailscale, prev.Port)
 	}
-	hosts := computeAllowedHosts(o.lan, o.tailscale, o.allowHosts, c.localIPv4s())
+	hosts := computeAllowedHosts(o.lan, o.tailscale, o.proxy.cloudflare, o.allowHosts, c.localIPv4s())
 	if err := c.runContainer(rt, image, bind, o, pass, hosts); err != nil {
 		return err
 	}
@@ -373,7 +401,8 @@ func (c *cli) containerUp(args []string) error {
 		cfg.Password = pass
 	}
 	cfg.User = o.user
-	cfg.Container = &containerConfig{LAN: o.lan, NoAuth: o.noAuth, Port: o.port, Tailscale: o.tailscale, AllowHosts: o.allowHosts, AllowPaths: o.allowPaths,
+	cfg.Container = &containerConfig{LAN: o.lan, NoAuth: o.noAuth, Port: o.port, Tailscale: o.tailscale,
+		Cloudflare: o.proxy.cloudflare, ProxyClientHeader: o.proxy.proxyHeader, AllowHosts: o.allowHosts, AllowPaths: o.allowPaths,
 		Workspace: o.workspace, Mux: o.mux, HerdrAllowNoAuth: o.herdrNoAuth}
 	if err := c.saveConfig(cfg); err != nil {
 		c.warnf("Could not save the container settings: %v", err)
@@ -392,7 +421,10 @@ func (c *cli) containerUp(args []string) error {
 		c.infof("Podman has no daemon to restart the container after a reboot; to keep it, run it as a Quadlet unit (see: https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html)")
 	}
 	c.infof("Container running (%s, image %s)", rt, image)
-	c.showAccessInfo(startOptions{lan: o.lan, noAuth: o.noAuth, port: o.port, tailscale: o.tailscale, mux: o.mux, user: o.user, allowHosts: o.allowHosts, allowPaths: o.mounted}, pass, reused)
+	c.showAccessInfo(startOptions{lan: o.lan, noAuth: o.noAuth, port: o.port, tailscale: o.tailscale, proxy: o.proxy, mux: o.mux, user: o.user, allowHosts: o.allowHosts, allowPaths: o.mounted}, pass, reused)
+	if o.proxy.cloudflare != "" {
+		c.reportCloudflareAccess(o.proxy.cloudflare)
+	}
 	// One password and username for both: a new one also changes the native
 	// server's.
 	if !reused && pass != "" && saved != nil && saved.Password != "" {
@@ -418,6 +450,12 @@ func (c *cli) runContainer(rt, image, bind string, o containerOptions, pass stri
 		"TERMOTE_HERDR_ALLOW_NO_AUTH": strconv.FormatBool(o.herdrNoAuth),
 		"TERMOTE_WORKSPACE_HOME":      c.workspaceHome(o.workspace),
 	})
+	// Set only without --lan (see mergeContainer): the port is then
+	// published on loopback, and the server trusts the header from any
+	// source.
+	if h := o.proxy.header(); h != "" {
+		env = append(env, "TERMOTE_PROXY_CLIENT_HEADER="+h)
+	}
 	places, mounts := containerPlaces(o.mounted)
 	if len(places) > 0 {
 		b, err := json.Marshal(places)
@@ -436,6 +474,9 @@ func (c *cli) runContainer(rt, image, bind string, o containerOptions, pass stri
 	args = append(args, mounts...)
 	if len(places) > 0 {
 		args = append(args, "-e", "TERMOTE_PLACES")
+	}
+	if o.proxy.header() != "" {
+		args = append(args, "-e", "TERMOTE_PROXY_CLIENT_HEADER")
 	}
 	args = append(args, c.containerUserArgs(rt)...)
 	if _, err := c.run.Output("", env, rt, append(args, image)...); err != nil {
@@ -752,10 +793,10 @@ func syncPWABuild(src, dst string) error {
 }
 
 // computeAllowedHosts is the container's TERMOTE_ALLOWED_HOSTS: LAN
-// addresses with --lan, the Tailscale name and the --allow-host names. The
-// server always adds loopback. (A native server checks its own local address
-// instead of a LAN list.)
-func computeAllowedHosts(lan bool, ts string, allowHosts, lanIPs []string) []string {
+// addresses with --lan, the Tailscale and Cloudflare names and the
+// --allow-host names. The server always adds loopback. (A native server
+// checks its own local address instead of a LAN list.)
+func computeAllowedHosts(lan bool, ts, cloudflare string, allowHosts, lanIPs []string) []string {
 	var hosts []string
 	add := func(h string) {
 		h = strings.ToLower(h)
@@ -772,6 +813,7 @@ func computeAllowedHosts(lan bool, ts string, allowHosts, lanIPs []string) []str
 		host, _ := splitTailscale(ts)
 		add(host)
 	}
+	add(cloudflare)
 	for _, h := range allowHosts {
 		add(h)
 	}

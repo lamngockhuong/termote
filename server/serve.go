@@ -58,6 +58,15 @@ type serveConfig struct {
 	// Tailscale is "host[:port]" to publish over Tailscale HTTPS once
 	// listening; empty publishes nothing.
 	Tailscale string
+	// Cloudflare is the hostname a Cloudflare Tunnel the user runs serves
+	// this server on (--cloudflare); it is refused with NoAuth.
+	Cloudflare string
+	// ProxyClientHeader (canonical form) names the header a proxy in front
+	// sets to the client's address, so failed sign-ins count per client
+	// (rateKey); "" reads none. ProxyClientAnySource trusts it from any
+	// source (the container), else only over loopback.
+	ProxyClientHeader    string
+	ProxyClientAnySource bool
 	// CheckLocalUsers refuses a connection made from this machine by a
 	// process of another OS user (see localPeerCheck); set only for a
 	// server run from the saved config (native). AllowLocalUsers names the
@@ -128,6 +137,11 @@ func newServeConfigFromEnv() serveConfig {
 		HcAllowNoAuth:    os.Getenv("TERMOTE_HC_ALLOW_NO_AUTH") == "true",
 		HcEnv:            hcEnv{Session: os.Getenv("HC_SESSION"), Socket: os.Getenv("HC_SOCKET")},
 		Places:           parsePlacesEnv(os.Getenv("TERMOTE_PLACES")),
+		// Set by container up only with the port published on loopback:
+		// what reaches the container then comes from the host, so the
+		// header is trusted from any source (the bridge gateway).
+		ProxyClientHeader:    canonicalProxyHeader(os.Getenv("TERMOTE_PROXY_CLIENT_HEADER")),
+		ProxyClientAnySource: true,
 	}
 	// Where the host user's home dir sits in the container's workspace, when
 	// the workspace holds it ("." for the workspace itself).
@@ -144,7 +158,7 @@ func newServeConfigFromEnv() serveConfig {
 var termoteEnvKeys = []string{
 	"TERMOTE_PASS", "TERMOTE_USER", "TERMOTE_PORT", "TERMOTE_BIND", "TERMOTE_NO_AUTH",
 	"TERMOTE_PWA_DIR", "TERMOTE_ALLOWED_HOSTS", "TERMOTE_MUX", "TERMOTE_HERDR_ALLOW_NO_AUTH",
-	"TERMOTE_PROJECT_DIR", "TERMOTE_WORKSPACE_HOME", "TERMOTE_PLACES",
+	"TERMOTE_PROJECT_DIR", "TERMOTE_WORKSPACE_HOME", "TERMOTE_PLACES", "TERMOTE_PROXY_CLIENT_HEADER",
 }
 
 // scrubTermoteEnv removes every TERMOTE_* variable from the process
@@ -596,7 +610,11 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 
 	var handler http.Handler = mux
 	if !cfg.NoAuth {
-		handler = newBasicAuth(cfg.User, cfg.Pass, devices, sessions, cfg.Tailscale != "", handler)
+		handler = newBasicAuth(cfg.User, cfg.Pass, devices, sessions, authOpts{
+			Tailnet:        cfg.Tailscale != "",
+			ProxyHeader:    cfg.ProxyClientHeader,
+			ProxyAnySource: cfg.ProxyClientAnySource,
+		}, handler)
 	}
 	handler = writeGuard(allowed, handler)
 	// Inside hostGuard: the policy names the request's Host, so only an
@@ -817,40 +835,144 @@ const authMaxFailures = 5
 // device's typos do not lock out the other devices of its LAN or tailnet.
 const authMaxPrefixFailures = 20
 
-// authMaxLoopbackFailures failed attempts within a minute over loopback, by
-// every key together, block further ones over loopback. tailscale serve
-// proxies every tailnet user over loopback, each counted under its own login
-// (rateKey), and a local process can set that header itself: this cap keeps
-// such a process from guessing faster by changing it, while one tailnet
-// user's typos still leave the others room to sign in.
-const authMaxLoopbackFailures = 30
+// authMaxProxiedFailures failed attempts within a minute through a proxy, by
+// every key together, block further ones through it. tailscale serve proxies
+// every tailnet user over loopback, each counted under its own login, and a
+// proxy named by --proxy-client-header (cloudflared, ngrok) every Internet
+// client, each counted under the address it reports (rateKey). A local
+// process (or, in the container, anything reaching its port) can set those
+// headers itself: this cap keeps it from guessing faster by changing them,
+// while one client's typos still leave the others room to sign in. Every
+// attempt over loopback counts under it too.
+const authMaxProxiedFailures = 30
 
-// authLoopbackKey counts every failure over loopback.
-const authLoopbackKey = "loopback"
+// authProxiedKey counts every failure through a proxy or over loopback.
+const authProxiedKey = "proxied"
 
 // authTailscalePrefix starts the key of a tailnet user's attempts.
 const authTailscalePrefix = "ts:"
 
+// authProxyPrefix starts the key of a client a proxy reported in the
+// proxy client header.
+const authProxyPrefix = "px:"
+
+// cloudflareClientHeader is the header cloudflared sets to the client's
+// address (Cloudflare replaces one the client sent).
+const cloudflareClientHeader = "CF-Connecting-IP"
+
+// authOpts says which proxy headers name the client of a sign-in attempt.
+type authOpts struct {
+	// Tailnet: the server publishes itself over Tailscale (--tailscale), the
+	// only case where Tailscale-User-Login is read.
+	Tailnet bool
+	// ProxyHeader is the header (canonical form) a proxy sets to the
+	// client's address: CF-Connecting-IP for cloudflared; "" reads none.
+	ProxyHeader string
+	// ProxyAnySource trusts ProxyHeader whatever the request came from (the
+	// container, which a proxy on the host reaches from the bridge gateway
+	// and whose port the CLI then publishes on loopback only); otherwise
+	// only over loopback.
+	ProxyAnySource bool
+}
+
 // rateKey is the key a sign-in attempt from r counts under: its address
-// (requestIP), or, when the server publishes itself over Tailscale (tailnet)
+// (requestIP); or, when the server publishes itself over Tailscale (Tailnet)
 // and r came over loopback with the Tailscale-User-Login header tailscale
 // serve sets for a tailnet user (it removes one the client sent),
-// ts:<login>. Off loopback, or without --tailscale (another proxy on this
-// machine would pass a client's header through), the header is ignored.
-func rateKey(r *http.Request, tailnet bool) string {
+// ts:<login>; or, with a proxy client header set (proxyClientIP), px:<the
+// address it names>. Off loopback, or without --tailscale (another proxy on
+// this machine would pass a client's header through), Tailscale-User-Login
+// is ignored.
+func rateKey(r *http.Request, o authOpts) string {
 	ip := requestIP(r)
-	if a, err := netip.ParseAddr(ip); !tailnet || err != nil || !a.IsLoopback() {
-		return ip
+	if a, err := netip.ParseAddr(ip); o.Tailnet && err == nil && a.IsLoopback() {
+		if login := capBytes(stripUnsafeRunes(r.Header.Get("Tailscale-User-Login")), 256); login != "" {
+			return authTailscalePrefix + login
+		}
 	}
-	if login := capBytes(stripUnsafeRunes(r.Header.Get("Tailscale-User-Login")), 256); login != "" {
-		return authTailscalePrefix + login
+	if client := proxyClientIP(r, o); client != "" {
+		return authProxyPrefix + client
 	}
 	return ip
 }
 
-// viaLoopback reports whether key counts an attempt that came over loopback.
-func viaLoopback(key string) bool {
-	if strings.HasPrefix(key, authTailscalePrefix) {
+// proxyClientIP is the client address the proxy put in o.ProxyHeader, or ""
+// when none is configured, r did not come from where the proxy does (over
+// loopback, or anywhere with ProxyAnySource), or the value is no IP address.
+// Of X-Forwarded-For only the last entry counts: a proxy appends the address
+// it saw to what the client sent.
+func proxyClientIP(r *http.Request, o authOpts) string {
+	if o.ProxyHeader == "" {
+		return ""
+	}
+	if !o.ProxyAnySource {
+		a, err := netip.ParseAddr(requestIP(r))
+		if err != nil || !a.IsLoopback() {
+			return ""
+		}
+	}
+	values := r.Header.Values(o.ProxyHeader)
+	if len(values) == 0 {
+		return ""
+	}
+	v := values[len(values)-1]
+	if o.ProxyHeader == "X-Forwarded-For" {
+		if i := strings.LastIndexByte(v, ','); i >= 0 {
+			v = v[i+1:]
+		}
+	}
+	a, err := netip.ParseAddr(strings.TrimSpace(v))
+	if err != nil {
+		return ""
+	}
+	return a.WithZone("").Unmap().String()
+}
+
+// maxProxyHeaderLen bounds the name of a proxy client header.
+const maxProxyHeaderLen = 64
+
+// canonicalProxyHeader is name in canonical form (CF-Connecting-IP is kept
+// as Cloudflare spells it), or "" for an empty one.
+func canonicalProxyHeader(name string) string {
+	name = strings.TrimSpace(name)
+	if strings.EqualFold(name, cloudflareClientHeader) {
+		return cloudflareClientHeader
+	}
+	return http.CanonicalHeaderKey(name)
+}
+
+// validProxyClientHeader checks a proxy client header's name: an HTTP token
+// of at most maxProxyHeaderLen bytes, and none of the headers that carry the
+// request's target or credentials.
+func validProxyClientHeader(name string) error {
+	if name == "" || len(name) > maxProxyHeaderLen {
+		return fmt.Errorf("a proxy client header name has 1 to %d characters", maxProxyHeaderLen)
+	}
+	for _, c := range []byte(name) {
+		if !isTokenByte(c) {
+			return fmt.Errorf("%q is not a header name", name)
+		}
+	}
+	switch http.CanonicalHeaderKey(name) {
+	case "Host", "Cookie", "Authorization", "Proxy-Authorization":
+		return fmt.Errorf("%s cannot be the proxy client header", name)
+	}
+	return nil
+}
+
+// isTokenByte reports whether c may appear in an HTTP token (RFC 9110).
+func isTokenByte(c byte) bool {
+	switch {
+	case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+		return true
+	}
+	return strings.IndexByte("!#$%&'*+-.^_`|~", c) >= 0
+}
+
+// viaProxy reports whether key counts an attempt that came through a proxy
+// or over loopback.
+func viaProxy(key string) bool {
+	if strings.HasPrefix(key, authTailscalePrefix) || strings.HasPrefix(key, authProxyPrefix) {
 		return true
 	}
 	a, err := netip.ParseAddr(key)
@@ -858,9 +980,11 @@ func viaLoopback(key string) bool {
 }
 
 // authPrefix is the /64 of an IPv6 address (zone dropped), or "" for IPv4,
-// IPv4-mapped IPv6 and anything that does not parse.
+// IPv4-mapped IPv6 and anything that does not parse. A px: key's /64 keeps
+// the prefix, apart from the /64 of direct clients.
 func authPrefix(ip string) string {
-	a, err := netip.ParseAddr(ip)
+	addr, proxied := strings.CutPrefix(ip, authProxyPrefix)
+	a, err := netip.ParseAddr(addr)
 	if err != nil || a.Unmap().Is4() {
 		return ""
 	}
@@ -868,7 +992,20 @@ func authPrefix(ip string) string {
 	if err != nil {
 		return ""
 	}
+	if proxied {
+		return authProxyPrefix + p.String()
+	}
 	return p.String()
+}
+
+// rateKeyLog names the client of key for a log line: ip, or, for a px: key,
+// the address the proxy reported and the proxy's own (that address is only
+// what the proxy says).
+func rateKeyLog(ip, key string) string {
+	if client, ok := strings.CutPrefix(key, authProxyPrefix); ok {
+		return client + " via " + ip
+	}
+	return ip
 }
 
 // recentLocked returns ip's failures of the last minute, dropping older
@@ -901,28 +1038,28 @@ func (rl *authRateLimiter) isBlocked(ip string) bool {
 // before its credentials are compared: a burst of concurrent requests cannot
 // all pass the check before any failure is recorded. It returns "" when the
 // attempt may go on, else the key that is blocked: ip (a rateKey), its IPv6
-// /64, or authLoopbackKey.
+// /64, or authProxiedKey.
 func (rl *authRateLimiter) reserve(ip string) string {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 	now := time.Now()
 	prefix := authPrefix(ip)
-	loopback := viaLoopback(ip)
+	proxied := viaProxy(ip)
 	if len(rl.recentLocked(ip, now)) >= authMaxFailures {
 		return ip
 	}
 	if prefix != "" && len(rl.recentLocked(prefix, now)) >= authMaxPrefixFailures {
 		return prefix
 	}
-	if loopback && len(rl.recentLocked(authLoopbackKey, now)) >= authMaxLoopbackFailures {
-		return authLoopbackKey
+	if proxied && len(rl.recentLocked(authProxiedKey, now)) >= authMaxProxiedFailures {
+		return authProxiedKey
 	}
 	rl.addLocked(ip, now)
 	if prefix != "" {
 		rl.addLocked(prefix, now)
 	}
-	if loopback {
-		rl.addLocked(authLoopbackKey, now)
+	if proxied {
+		rl.addLocked(authProxiedKey, now)
 	}
 	return ""
 }
@@ -936,8 +1073,8 @@ func (rl *authRateLimiter) refund(ip string) {
 	if prefix := authPrefix(ip); prefix != "" {
 		rl.dropLastLocked(prefix)
 	}
-	if viaLoopback(ip) {
-		rl.dropLastLocked(authLoopbackKey)
+	if viaProxy(ip) {
+		rl.dropLastLocked(authProxiedKey)
 	}
 }
 
@@ -1021,17 +1158,18 @@ const (
 // Note: uses r.RemoteAddr for rate limiting. Behind a reverse proxy, all clients
 // may share one IP — consider the proxy's own rate limiting in that setup.
 func basicAuth(user, pass string, next http.Handler) http.Handler {
-	return newBasicAuth(user, pass, nil, nil, false, next)
+	return newBasicAuth(user, pass, nil, nil, authOpts{}, next)
 }
 
 // newBasicAuth is basicAuth that also signs paired devices in (dev, nil
 // without a usable device store): their cookie, the /pair form, and Log out
 // revoking the device. sessions holds the password sessions (nil: a store of
-// its own, which ends no stream). tailnet: the server publishes itself over
-// Tailscale (--tailscale), the only case where rateKey reads
-// Tailscale-User-Login.
-func newBasicAuth(user, pass string, dev *deviceAuth, sessions *sessionAuth, tailnet bool, next http.Handler) http.Handler {
+// its own, which ends no stream). opts names the proxy headers rateKey reads.
+func newBasicAuth(user, pass string, dev *deviceAuth, sessions *sessionAuth, opts authOpts, next http.Handler) http.Handler {
 	limiter := newAuthRateLimiter()
+	// Pairing codes count per client too, but never per tailnet login.
+	pairOpts := opts
+	pairOpts.Tailnet = false
 	if sessions == nil {
 		sessions = newSessionAuth(nil, nil)
 	}
@@ -1134,14 +1272,14 @@ func newBasicAuth(user, pass string, dev *deviceAuth, sessions *sessionAuth, tai
 		next := safeNext(r.PostForm.Get("next"))
 		// A phone's keyboard suggestion ends the username with a space.
 		username := strings.TrimSpace(r.PostForm.Get("username"))
-		key := rateKey(r, tailnet)
+		key := rateKey(r, opts)
 		if blocked := limiter.reserve(key); blocked != "" {
-			blockedLogins.printf("auth: %s blocked after too many failed logins from %s", ip, blocked)
+			blockedLogins.printf("auth: %s blocked after too many failed logins from %s", rateKeyLog(ip, key), blocked)
 			writeLoginPage(w, http.StatusTooManyRequests, loginForm{next, "Too many failed attempts. Wait a minute and try again.", username, dev != nil})
 			return
 		}
 		if !credsMatch(username, r.PostForm.Get("password")) {
-			failedLogins.printf("auth: failed login from %s", ip)
+			failedLogins.printf("auth: failed login from %s", rateKeyLog(ip, key))
 			writeLoginPage(w, http.StatusUnauthorized, loginForm{next, "Wrong username or password.", username, dev != nil})
 			return
 		}
@@ -1245,20 +1383,21 @@ func newBasicAuth(user, pass string, dev *deviceAuth, sessions *sessionAuth, tai
 			writePairPage(w, http.StatusUnauthorized, form)
 			return
 		}
-		if blocked := dev.limiter.reserve(ip); blocked != "" {
-			blockedPairs.printf("auth: %s blocked after too many wrong pairing codes from %s", ip, blocked)
+		pairKey := rateKey(r, pairOpts)
+		if blocked := dev.limiter.reserve(pairKey); blocked != "" {
+			blockedPairs.printf("auth: %s blocked after too many wrong pairing codes from %s", rateKeyLog(ip, pairKey), blocked)
 			form.Error = "Too many wrong codes. Wait a minute and try again."
 			writePairPage(w, http.StatusTooManyRequests, form)
 			return
 		}
 		p, ok := dev.codes.redeem(code)
 		if !ok {
-			failedPairs.printf("auth: wrong pairing code from %s", ip)
+			failedPairs.printf("auth: wrong pairing code from %s", rateKeyLog(ip, pairKey))
 			form.Error = "Wrong or expired code."
 			writePairPage(w, http.StatusUnauthorized, form)
 			return
 		}
-		dev.limiter.refund(ip)
+		dev.limiter.refund(pairKey)
 		token, rec, err := dev.store.add(pairName(p, name, r), p.role, deviceAddOpts{PairedBy: p.creator, ValidFor: p.validFor})
 		if err != nil {
 			msg := "Pairing failed. Ask for a new code."
@@ -1380,9 +1519,9 @@ func newBasicAuth(user, pass string, dev *deviceAuth, sessions *sessionAuth, tai
 		}
 
 		// Counted as a failure until the credentials prove right.
-		key := rateKey(r, tailnet)
+		key := rateKey(r, opts)
 		if blocked := limiter.reserve(key); blocked != "" {
-			blockedLogins.printf("auth: %s blocked after too many failed logins from %s", ip, blocked)
+			blockedLogins.printf("auth: %s blocked after too many failed logins from %s", rateKeyLog(ip, key), blocked)
 			http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
 			return
 		}
@@ -1395,7 +1534,7 @@ func newBasicAuth(user, pass string, dev *deviceAuth, sessions *sessionAuth, tai
 		}
 		if !credsMatch(u, p) {
 			// Wrong credentials — the reservation stays as a failed attempt
-			failedLogins.printf("auth: failed login from %s", ip)
+			failedLogins.printf("auth: failed login from %s", rateKeyLog(ip, key))
 			challenge(w, r)
 			return
 		}

@@ -156,6 +156,10 @@ server exactly as last time. A boolean option is turned off with `=false`.
 | `--lan[=false]`             | Listen on every interface instead of `127.0.0.1` only                  |
 | `--tailscale <host[:port]>` | Publish over [Tailscale HTTPS](/installation/tailscale/) (default 443) |
 | `--no-tailscale`            | Stop publishing over Tailscale                                         |
+| `--cloudflare <host>`       | Hostname of a [Cloudflare Tunnel](/installation/cloudflare/) you run (not with `--no-auth`) |
+| `--no-cloudflare`           | Forget the Cloudflare hostname                                         |
+| `--proxy-client-header <name>` | Header a proxy sets to the client's address (default with `--cloudflare`: `CF-Connecting-IP`) |
+| `--no-proxy-client-header`  | Stop reading it                                                        |
 | `--no-auth[=false]`         | Disable the login                                                      |
 | `--mux <tmux\|herdr\|zellij\|hc>` | Terminal backend (default: detected the first time; zellij: Linux, macOS; hc: herdr-core) |
 | `--allow-host <name>`       | Allow another `Host` header name (repeatable, no wildcard)             |

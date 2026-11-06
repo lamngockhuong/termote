@@ -79,15 +79,21 @@ what Termote can reach, run it as another user with less access.
 - **Other services on the same host name.** A cookie is not bound to a port: every service on that name
   receives Termote's cookies. Give Termote a host name of its own.
 - **Programs of the same OS user.** Anything else running as that user reads the same files Termote does.
-- **Plain HTTP.** Without HTTPS (Tailscale, or a proxy with a certificate), the password and cookies cross
-  the network in clear text.
+- **Plain HTTP.** Without HTTPS (Tailscale, a Cloudflare Tunnel, or a proxy with a certificate), the
+  password and cookies cross the network in clear text.
 - **The audit lines are not proof.** `termote logs clean`, or any full device, deletes them. Behind a
-  proxy (`tailscale serve`) the address they name is the proxy's, loopback.
+  proxy (`tailscale serve`) the address they name is the proxy's, loopback; with a proxy client header
+  the failed sign-in lines also name the address the proxy reported, which is only what it says.
 - **Browser extensions.** An extension allowed on the page reads it and types into it as you. Termote
   cannot tell its input from yours.
 - **Port forwarding tools.** VS Code Remote and Dev Tunnels, ngrok or Cloudflare Tunnel forward the port
   from a process of your own user: whoever reaches the tunnel reaches Termote, with only the password in
-  the way.
+  the way. `--cloudflare` (or `--proxy-client-header` for ngrok) makes failed sign-ins count per client,
+  so one stranger's wrong guesses no longer lock out everyone else (many addresses guessing together can
+  still fill the shared limit below for a minute), but only Cloudflare Access (or the tunnel's own
+  sign-in, such as private Dev Tunnels) keeps strangers from the sign-in page. `start` and `status`
+  warn when a Cloudflare hostname answers without Access. A local process can set the client header
+  itself; every attempt through a proxy shares one cap of 30 a minute.
 - **Proxies running as root or SYSTEM.** `tailscale serve`, `docker-proxy` and other root proxies are
   trusted (root reads the saved config anyway), so every local user can go through them. On Windows the
   same holds for a running service whose process the server's user can open but whose token it cannot
