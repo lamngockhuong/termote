@@ -12,6 +12,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 func newTestTemplateStore(t *testing.T, dir string) *templateStore {
@@ -260,6 +262,7 @@ func TestTemplateStoreImportRefuses(t *testing.T) {
 	}{
 		{"invalid", []templateInput{{"ok", "x"}, {"bad", "\u202e"}}, "invalid_template", 1},
 		{"duplicate", []templateInput{{"Same", "x"}, {"other", "y"}, {"same", "z"}}, "duplicate_name", 2},
+		{"duplicate fold", []templateInput{{"\u212Aelvin", "x"}, {"kelvin", "y"}}, "duplicate_name", 1},
 	} {
 		for _, dry := range []bool{true, false} {
 			var err error
@@ -284,6 +287,31 @@ func TestTemplateStoreImportRefuses(t *testing.T) {
 	wantCode(t, err, "too_many")
 	if list, _ := s.templates(); len(list) != 1 {
 		t.Fatalf("a refused import wrote: %d", len(list))
+	}
+}
+
+// foldKey agrees with strings.EqualFold: every rune shares its key with
+// exactly the runes EqualFold matches it to.
+func TestFoldKeyMatchesEqualFold(t *testing.T) {
+	for r := rune(0); r <= unicode.MaxRune; r++ {
+		if !utf8.ValidRune(r) {
+			continue
+		}
+		s := string(r)
+		k := foldKey(s)
+		if !strings.EqualFold(s, k) || foldKey(k) != k {
+			t.Fatalf("%U: key %q", r, k)
+		}
+		for f := unicode.SimpleFold(r); f != r; f = unicode.SimpleFold(f) {
+			if foldKey(string(f)) != k {
+				t.Fatalf("%U and %U: keys differ", r, f)
+			}
+		}
+	}
+	for _, p := range [][2]string{{"Straße", "STRASSE"}, {"ſ", "S"}, {"Σίσυφος", "ΣΊΣΥΦΟΣ"}, {"a", "b"}} {
+		if (foldKey(p[0]) == foldKey(p[1])) != strings.EqualFold(p[0], p[1]) {
+			t.Errorf("%q %q", p[0], p[1])
+		}
 	}
 }
 
