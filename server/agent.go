@@ -349,8 +349,10 @@ var (
 // agentAPI serves /api/mux/panes/{id}/agent/*.
 type agentAPI struct {
 	m Mux
-	// machines are the machines this server reaches; nil without any.
-	machines *machineManager
+	// machines are the machines this server reaches, machinePoll reads
+	// their snapshots; nil without any.
+	machines    *machineManager
+	machinePoll *machinePoller
 	loc      agentSessionLocator // nil when the backend has none
 	sessions *ttlCache[agentLookup]
 	reads    *ttlCache[transcriptResponse]

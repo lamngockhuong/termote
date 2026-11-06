@@ -4,12 +4,29 @@ import (
 	"context"
 	"errors"
 	"net"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 )
+
+// helperSSHMaster stands in for `ssh -M`: it listens on the control socket
+// until it is killed.
+func helperSSHMaster() {
+	ln, err := net.Listen("unix", os.Getenv("TEST_SSH_CTL"))
+	if err != nil {
+		os.Exit(1)
+	}
+	for {
+		c, err := ln.Accept()
+		if err != nil {
+			os.Exit(0)
+		}
+		c.Close()
+	}
+}
 
 // fakeDialer answers each dial with err, or a connection whose far end
 // answers health with apiVersion v.

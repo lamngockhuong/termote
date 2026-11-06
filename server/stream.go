@@ -144,6 +144,9 @@ type streamHub struct {
 	// onShutdown runs once shutdown has closed every stream (it writes what
 	// the device store holds in memory).
 	onShutdown func()
+	// linked hubs (the streams forwarded to machines) are closed with this
+	// one: a revoked device, a signed out session, shutdown.
+	linked []*streamHub
 }
 
 type hubEntry struct {
@@ -236,6 +239,9 @@ func (h *streamHub) closeDevice(deviceID string) {
 	if deviceID == "" {
 		return
 	}
+	for _, l := range h.linked {
+		l.closeDevice(deviceID)
+	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for _, s := range h.streams {
@@ -251,6 +257,9 @@ func (h *streamHub) closeDevice(deviceID string) {
 func (h *streamHub) closeSession(sessionID string) {
 	if sessionID == "" {
 		return
+	}
+	for _, l := range h.linked {
+		l.closeSession(sessionID)
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -293,6 +302,11 @@ func (h *streamHub) remove(e *hubEntry) {
 // shutdown closes every stream and waits for their processes to exit, or for
 // ctx to expire.
 func (h *streamHub) shutdown(ctx context.Context) error {
+	for _, l := range h.linked {
+		if err := l.shutdown(ctx); err != nil {
+			return err
+		}
+	}
 	h.mu.Lock()
 	h.closing = true
 	for _, s := range h.streams {

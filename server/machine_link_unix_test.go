@@ -6,7 +6,6 @@ import (
 	"bufio"
 	"context"
 	"errors"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,22 +15,6 @@ import (
 	"testing"
 	"time"
 )
-
-// helperSSHMaster stands in for `ssh -M`: it listens on the control socket
-// until it is killed.
-func helperSSHMaster() {
-	ln, err := net.Listen("unix", os.Getenv("TEST_SSH_CTL"))
-	if err != nil {
-		os.Exit(1)
-	}
-	for {
-		c, err := ln.Accept()
-		if err != nil {
-			os.Exit(0)
-		}
-		c.Close()
-	}
-}
 
 // fakeSSH replaces startSSH: a master is helperSSHMaster (or masterScript
 // when set), -O exit succeeds, and a bridge greets and echoes. It records

@@ -51,7 +51,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   evicts the oldest view stream first, then the oldest stream (4001). A stream closed with 4001
   never reconnects by itself, a pane of the layout view included: that pane shows Reconnect in
   its own box, the layout stays, and no other stream opens (two devices never evict each other
-  in a loop). The `{"type":"layout"}` frame carries nothing but its type
+  in a loop). The `{"type":"layout"}` frame carries nothing but its type. A stream forwarded to a
+  machine (`/api/machines/{id}/mux/stream`) is registered in a hub of its own (32, never evicting this
+  server's), linked to the main one: a device revoke, a sign-out and shutdown close it, and a 15 s
+  recheck closes it once its device or session is gone from the store or expired; its token is the
+  machine's, consumed there
 - **Herdr guard**: `--mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also
   given, since Herdr exposes every workspace on the host
 - **Herdr autostart** (`server/herdr_autostart*.go`; the only place serve starts `herdr`): `GET
@@ -2179,6 +2183,33 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   machine is then polled). `TERMOTE_E2E_MACHINE_BRIDGE` (`<label>=<port>@<dir>`, comma-separated)
   joins bridge sockets of this machine instead of ssh: read only without a saved config, like every
   `TERMOTE_*`, and scrubbed from the environment
+- **Machine proxy** (`server/machine_proxy.go`, `/api/machines/{id}/mux/{rest}`): an ordinary route
+  behind `basicAuth`, `writeGuard`, `securityHeaders` and `hostGuard`; `writeGuard`'s raw-body cases
+  (`uploads`, `files/upload`, `files/image`) match on the path with the prefix removed
+  (`machineRest`). The id is 16 hex of a stored machine (else 404 `machine_unknown`); `rest` must
+  match the allowlist (`snapshot`, `overview`, `activity`, `system`, `stream-token`, `stream`,
+  `health`, `uploads`, `files/places`, `tabs*`, `panes*`, `groups*`, `worktrees*`, `tasks*`,
+  `templates*`, `recent-groups*`), hold no `.`/`..` segment, empty segment, `%2F` or `%5C`, else 404
+  `machine_route_forbidden` (so never `devices*`, `signins*`, `push*`, `login-links`, `logout`,
+  `machines*`). Before forwarding it runs `crossSiteRejection` on every method, refuses
+  `stream-token` as a navigation, checks a stream's Origin, refuses a view role's writes, caps the
+  body (100 MiB for `files/upload`, else the largest other route limit; the machine applies its
+  own) and extends the read deadline for a write. It removes `Cookie`, `Authorization`, `Origin`,
+  `Referer`, `Forwarded`, every `Sec-Fetch-*`, `X-Termote-*`, `X-Forwarded-*`, `CF-Connecting-IP`,
+  `X-Real-IP` and the configured proxy client header, sets `X-Termote-Role` from `requestRole` and
+  `X-Termote-Origin-Auth`, sends the escaped path to `termote.local-socket`, and drops `Set-Cookie`
+  from the answer. A machine that cannot be reached answers 502 `machine_offline|machine_unauthorized|
+  machine_incompatible` (a changed host key is `machine_unauthorized`); transport errors are logged
+  only. Writes are logged `audit: machine-request id method path=<first segment> by`
+- **Machines list** (`server/machine_routes.go`): `GET /api/mux/machines` (same-site read, every role)
+  → `{machines: [{id, label, status, groups?}]}`, groups cut to group/tab/pane ids and names and the
+  agent's name, status and since (no title, process, metadata or path); never an alias, user or
+  path. The snapshot carries `machines: [{id, label, status}]` and `caps.machines`. Listing keeps
+  every machine's snapshot polled (`peek=1`, as view) every 5 s (Windows 15 s) for 60 s, or always
+  with Web Push; a failed poll only changes the machine's status. `POST /api/mux/machines/reload` is
+  the local socket's only (403 `cli_only` otherwise, with or without sign-in). Web Push events of a
+  machine's agents go to this server's subscriptions with `machineId` (panes keyed `<id>/<paneKey>`,
+  the topic too)
 - **Signed-in browsers** (`server/sessions.go`, `server/signin_routes.go`, `caps.signins`): each
   password session (memory, 24 h, 256, LRU) keeps id (16 hex of the token's SHA-256), created,
   last used (1 min), `via` (`form|basic|link`), IP and a cleaned User-Agent (200 B). Basic auth

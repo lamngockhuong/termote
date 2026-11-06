@@ -546,6 +546,9 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 	agent := registerMuxRoutes(mux, m, tokenStore, uploads, push)
 	// Web Push polls every machine, so their masters stay up with it.
 	agent.machines = newServeMachines(cfg, push != nil)
+	if agent.machines != nil {
+		agent.machinePoll = newMachinePoller(agent.machines)
+	}
 	agent.instanceID = loadInstanceID(cfg.InstanceDir)
 	agent.devices = devices != nil
 	agent.signins = sessions != nil
@@ -609,6 +612,13 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 	registerPaneLayoutRoutes(mux, m, files.deny)
 	registerReorderRoutes(mux, m)
 	registerWorktreeRoutes(mux, m, files.git, allowed)
+	// Streams forwarded to machines have a hub of their own (they never push
+	// this server's out), closed with the main one and asking the same
+	// device and session stores.
+	fwd := newStreamHub(maxForwardedStreams)
+	fwd.alive, fwd.sessionAlive = hub.alive, hub.sessionAlive
+	hub.linked = append(hub.linked, fwd)
+	registerMachineRoutes(mux, agent, agent.machinePoll, fwd, allowed, cfg.ProxyClientHeader)
 	// Unknown /api/ paths get JSON 404 instead of the SPA fallback.
 	mux.HandleFunc("/api/", apiNotFound)
 
@@ -754,7 +764,10 @@ func runServer(ctx context.Context, cfg serveConfig, m Mux, ln net.Listener) err
 	// Here, not in buildServer: a handler built for a test sends nothing
 	// and reads no host stats in the background.
 	defer agent.machines.stop()
-	startPushWatcher(ctx, m, push, agent.activity)
+	if agent.machinePoll != nil {
+		go agent.machinePoll.run(ctx)
+	}
+	startPushWatcher(ctx, m, push, agent.activity, agent.machinePoll)
 	stopSystem := startSystemSampler(ctx, agent.system)
 	defer stopSystem()
 	pwa := "embedded"

@@ -188,6 +188,9 @@ type machineManager struct {
 	once  sync.Once
 }
 
+// machineJanitorEvery is how often idle masters are looked for.
+var machineJanitorEvery = time.Minute
+
 // machineIdleStop is how long a master without a client stays up when
 // nothing polls it.
 var machineIdleStop = 10 * time.Minute
@@ -269,7 +272,7 @@ func (mm *machineManager) all() []*machineLink {
 // janitor stops the master of a machine nothing used for machineIdleStop,
 // unless keepUp.
 func (mm *machineManager) janitor() {
-	t := time.NewTicker(time.Minute)
+	t := time.NewTicker(machineJanitorEvery)
 	defer t.Stop()
 	for {
 		select {
