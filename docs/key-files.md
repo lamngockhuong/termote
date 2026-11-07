@@ -318,7 +318,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/install_layout.go`                        | Versioned install layout (`versions/<v>`, `current`, prune)    |
 | `server/tailscale.go`                             | `tailscale serve` mapping (apply/remove, never sudo)           |
 | `server/cloudflare.go`                            | `--cloudflare`/`--proxy-client-header` flags, Access probe     |
-| `server/release_tags.go`                          | Picks the newest published stable 1.x release                  |
+| `server/release_tags.go`                          | Picks the newest published stable release (1.0 or later)       |
 | `server/cli_start.go`                             | `start`/`stop`/`restart`: options, service registration        |
 | `server/cli_allow_path.go`                        | `--allow-path` checks: deny lists, home, termote's dirs, git   |
 | `server/cli_service*.go`                          | OS supervisor registration (systemd/launchd/Scheduled Task)    |

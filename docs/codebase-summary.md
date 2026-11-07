@@ -138,7 +138,7 @@ nothing re-execs the running process.
 
 ### Release installers (`scripts/install.sh` / `install.ps1`)
 
-Downloads the newest stable 1.x release (or `TERMOTE_VERSION`) for the OS/arch, verifies its
+Downloads the newest stable release (1.0 or later) (or `TERMOTE_VERSION`) for the OS/arch, verifies its
 `.sha256` (mandatory), lays it out under the versioned install root, and prints `termote
 start` — they never start the server or touch any saved config.
 

@@ -1,7 +1,13 @@
 ---
 title: Termote
-description: Điều khiển công cụ CLI từ xa từ điện thoại/máy tính qua PWA
+description: PWA mã nguồn mở, tự host, để điều khiển Claude Code, Codex và các phiên tmux, Herdr, Zellij từ điện thoại hoặc máy tính khác.
 template: splash
+# A landing page: no "Last updated" line
+lastUpdated: false
+# The page title, in place of Starlight's "Termote | Termote"
+head:
+  - tag: title
+    content: "Termote: Điều khiển Claude Code và terminal từ điện thoại"
 hero:
   title: Your Terminal, Anywhere.
   tagline: Điều khiển Claude Code, GitHub Copilot và bất kỳ CLI nào từ điện thoại.
@@ -30,6 +36,13 @@ import IntroVideo from '../../../components/IntroVideo.astro';
 
 <HeroVideo />
 
+Termote là ứng dụng web mã nguồn mở (MIT), tự host, đưa các phiên terminal trên máy của bạn lên điện thoại hoặc một
+máy tính khác. Chỉ một file `termote` chạy trên Linux, macOS hoặc Windows, phục vụ một PWA mở các phiên tmux, Herdr
+hoặc Zellij (Linux, macOS) qua mạng bạn chọn: mạng LAN, Tailscale hoặc Cloudflare Tunnel, có mật khẩu bảo vệ. Từ đó bạn có thể
+[trả lời Claude Code hoặc Codex như chat](/vi/usage/agent-chat/), [chuyển phiên](/vi/usage/sessions/), xem
+[file và diff git](/vi/usage/files-changes/) của pane, và gõ bằng [thanh phím](/vi/usage/keyboard/) dành cho màn hình
+cảm ứng. Phần [mô hình bảo mật](/vi/usage/security/) nói rõ những gì được mở ra mạng và cách bảo vệ.
+
 ## Tính năng
 
 <CardGrid stagger>
@@ -49,7 +62,7 @@ import IntroVideo from '../../../components/IntroVideo.astro';
     Vuốt trái Ctrl+C, phải Tab, lên/xuống để cuộn
   </Card>
   <Card title="PWA" icon="puzzle">
-    Cài đặt về màn hình chính, hoạt động offline
+    Cài lên màn hình chính và mở như một ứng dụng
   </Card>
   <Card title="Herdr plugin" icon="laptop">
     Mở pane đang đứng trong Termote, hoặc hiện link của nó thành mã QR

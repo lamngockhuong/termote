@@ -50,7 +50,7 @@ so), and remove it with `termote uninstall && brew uninstall termote`. Keep one 
 machine, the installer's or brew's: both register the same service, and the last `start` wins.
 
 The installer needs only `curl`, `tar` and `sha256sum`/`shasum` (Windows: PowerShell) — no
-sudo/admin. It downloads the newest stable 1.x release for your OS/arch, verifies its
+sudo/admin. It downloads the newest stable release (1.0 or later) for your OS/arch, verifies its
 `.sha256` (mandatory), lays it out under a versioned install root and prints `termote start` —
 it never starts anything itself. From 1.10.0 on, `install.sh` also checks the release
 signature (see Updating) when OpenSSL 3 is there. Without it (LibreSSL on macOS), and always
@@ -76,7 +76,7 @@ and made current.
 ### Pre-releases
 
 A pre-release (`X.Y.Z-rc.N`) is never picked on its own: without `TERMOTE_VERSION` the installer,
-like `termote update` without `--version`, takes the newest **published** stable 1.x release. A
+like `termote update` without `--version`, takes the newest **published** stable release (1.0 or later). A
 release counts once it is published, not when its tag appears: release-please pushes the tag
 while the release is still a draft waiting for the `release` environment's approval, and a
 draft's archives cannot be downloaded. Name the pre-release to install it:
@@ -871,7 +871,7 @@ curl -u admin:password http://127.0.0.1:7680/api/mux/health   # or the name set 
 ## Updating
 
 ```bash
-termote update                   # Update to the latest stable 1.x release
+termote update                   # Update to the latest stable release (1.0 or later)
 termote update --version 1.0.1   # Pin to a specific version
 termote update --version 1.13.0-rc.1  # A pre-release (never picked without --version)
 termote update --force           # Force reinstall current version

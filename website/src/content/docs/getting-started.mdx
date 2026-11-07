@@ -40,7 +40,7 @@ No sudo or administrator rights are needed: everything goes into your home direc
 </Tabs>
 
 <Steps>
-1. The installer picks the newest stable 1.x release, downloads the archive for your platform, checks its
+1. The installer picks the newest stable release (1.0 or later), downloads the archive for your platform, checks its
    `.sha256` (always; there is no way to skip it) and puts the `termote` command on your PATH. It never starts
    anything.
 
@@ -87,7 +87,7 @@ newest release.
 ### Pre-releases
 
 The installer, like `termote update`, only picks a pre-release (`X.Y.Z-rc.N`) when you name it with `TERMOTE_VERSION`
-(or `termote update --version X.Y.Z-rc.N`). Without it, you get the newest **published** stable 1.x release: a
+(or `termote update --version X.Y.Z-rc.N`). Without it, you get the newest **published** stable release (1.0 or later): a
 release still waiting to be published already has its tag, but none of its files can be downloaded yet. The same
 goes for a pre-release you name: until it is published, the install fails with `still publishing`.
 
