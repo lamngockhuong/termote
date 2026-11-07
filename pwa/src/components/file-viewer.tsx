@@ -8,6 +8,7 @@ import {
   Download,
   Ellipsis,
   Eye,
+  GitCommitHorizontal,
   Image as ImageIcon,
   Lock,
   MessageSquarePlus,
@@ -35,6 +36,7 @@ import {
 } from '../hooks/use-document-bytes'
 import { useDomSelection } from '../hooks/use-dom-selection'
 import { useElementWidth } from '../hooks/use-element-width'
+import { type BlameError, useFileBlame } from '../hooks/use-file-blame'
 import {
   type FileDraft,
   type FilesError,
@@ -522,6 +524,20 @@ interface Props {
   onLineComment?: (range: LineRange) => void
   // The lines a comment is on
   commentedLines?: Set<number>
+  // The root is a git repository: Blame is offered for a text file read
+  canBlame?: boolean
+  // Blame is on (kept by the caller across files), and how it is turned
+  blameOn?: boolean
+  onBlameChange?: (on: boolean) => void
+}
+
+// Why a blame cannot be shown
+const BLAME_ERRORS: Record<BlameError, MessageKey> = {
+  'not-repo': 'files.blame.error.notRepo',
+  'not-tracked': 'files.blame.error.notTracked',
+  'too-large': 'files.blame.error.tooLarge',
+  timeout: 'files.blame.error.timeout',
+  failed: 'files.blame.error.failed',
 }
 
 // A header button after the main ones: pressed is set for an on/off one
@@ -642,6 +658,9 @@ export function FileViewer({
   compact = false,
   onLineComment,
   commentedLines,
+  canBlame = false,
+  blameOn = false,
+  onBlameChange,
 }: Props) {
   const { t, locale } = useT()
   const [state, setState] = useState<Loaded>({ kind: 'loading' })
@@ -750,6 +769,23 @@ export function FileViewer({
     : asDocument
       ? documentErrorCode(doc) === 'sensitive'
       : state.kind === 'sensitive'
+  // Who changed each line, for the text shown in read mode (never while
+  // editing, a preview or an image): the bytes it was read as, by hash
+  const blameShown =
+    canBlame &&
+    !!onBlameChange &&
+    !mine &&
+    !binaryView &&
+    !previewOn &&
+    state.kind === 'text'
+  const blame = useFileBlame(
+    paneId,
+    blameShown && blameOn && state.kind === 'text'
+      ? { path, hash: state.hash, root, reveal, place }
+      : null,
+    () => setReload((n) => n + 1),
+    onRootChanged,
+  )
   // Text selected in the file, for a template's {{selection}}: never from a
   // sensitive file the user chose to show
   const selectionPane = reveal || mine?.reveal ? undefined : paneId
@@ -1316,6 +1352,14 @@ export function FileViewer({
         if (lines) onLineComment(lineRange(lines, dirty))
       },
     })
+  if (blameShown)
+    extras.push({
+      label: t('files.blame.toggle'),
+      title: t('files.blame.toggleTitle'),
+      icon: <GitCommitHorizontal size={15} />,
+      pressed: blameOn,
+      onClick: () => onBlameChange?.(!blameOn),
+    })
   if (!binaryView)
     extras.push({
       label: t('files.viewer.wrap'),
@@ -1629,6 +1673,14 @@ export function FileViewer({
           {markdown && tooLarge && (
             <Banner>{t('files.viewer.tooLargeToPreview')}</Banner>
           )}
+          {blame.status === 'error' && (
+            <Banner>{t(BLAME_ERRORS[blame.error])}</Banner>
+          )}
+          {blame.status === 'loading' && (
+            <p className="sr-only" role="status">
+              {t('files.blame.loading')}
+            </p>
+          )}
           <CodeBlock
             text={state.text}
             path={path}
@@ -1641,6 +1693,11 @@ export function FileViewer({
               ((lines) => onLineComment(lineRange(lines, false)))
             }
             commentedLines={commentedLines}
+            blame={
+              blame.status === 'ready'
+                ? { data: blame.blame, compact, notify }
+                : undefined
+            }
           />
         </>
       )}

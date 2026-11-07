@@ -23,8 +23,19 @@ const MENU_GAP = 8
 // The top layer (Popover API) lifts the open menu out of every scrolling or
 // transformed ancestor: a sidebar list no longer cuts it. Without it (jsdom,
 // older browsers) the menu stays absolute under its trigger.
-const topLayer = () =>
+export const topLayer = () =>
   typeof HTMLElement !== 'undefined' && 'showPopover' in HTMLElement.prototype
+
+// The part of the viewport a popup is placed in (placeMenu): an open
+// keyboard (visualViewport) is left out.
+export function menuViewport() {
+  const vv = window.visualViewport
+  return {
+    width: document.documentElement.clientWidth,
+    top: vv?.offsetTop ?? 0,
+    height: vv?.height ?? window.innerHeight,
+  }
+}
 
 // Where the menu goes in the viewport (position: fixed): under the trigger,
 // aligned to its edge as before and kept on the screen; above it when there
@@ -232,13 +243,8 @@ export function Menu({
   // called while the menu is open, so both elements are there.
   const placeInViewport = () => {
     const list = listRef.current!
-    const vv = window.visualViewport
     const size = { width: list.offsetWidth, height: list.offsetHeight }
-    const view = {
-      width: document.documentElement.clientWidth,
-      top: vv?.offsetTop ?? 0,
-      height: vv?.height ?? window.innerHeight,
-    }
+    const view = menuViewport()
     const at = point
       ? placeMenuAtPoint(point, size, view)
       : placeMenu(anchor()!.getBoundingClientRect(), size, align, view, side)

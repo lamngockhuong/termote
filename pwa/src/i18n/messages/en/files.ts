@@ -843,6 +843,23 @@ export default {
   'files.commit.noMessage': '(no message)',
   'files.commit.merge': 'Merge: changes against the first parent',
   'files.commit.backToCommit': 'Back to the commit',
+  'files.blame.toggle': 'Blame',
+  'files.blame.toggleTitle': 'Show who last changed each line',
+  'files.blame.notCommitted': 'Not committed',
+  'files.blame.cellLabel': '{author}, {age}: line {line}',
+  'files.blame.details': 'Commit details',
+  'files.blame.copyHash': 'Copy hash',
+  'files.blame.hashCopied': 'Hash copied',
+  'files.blame.hashCopyFailed': 'Could not copy the hash',
+  'files.blame.mismatch':
+    'Blame is hidden: git counts the lines of this file differently (its encoding)',
+  'files.blame.loading': 'Reading who changed each line…',
+  'files.blame.error.notRepo': 'Blame needs a git repository',
+  'files.blame.error.notTracked':
+    'Not in the last commit yet: nothing to blame',
+  'files.blame.error.tooLarge': 'Too large to blame (over 1 MiB)',
+  'files.blame.error.timeout': 'git took too long to blame this file',
+  'files.blame.error.failed': 'Could not read who changed each line',
   // Review comments on lines (components/line-comment-bar.tsx,
   // review-comment-sheet.tsx, review-panel.tsx). What is sent to the agent
   // stays in English (utils/review-message.ts).

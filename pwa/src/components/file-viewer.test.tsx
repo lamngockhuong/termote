@@ -39,6 +39,7 @@ const mockContent = vi.fn()
 const mockImage = vi.fn()
 const mockDocument = vi.fn()
 const mockSave = vi.fn()
+const mockBlame = vi.fn()
 // The desktop editor: shows where it was told to open
 // What the desktop editor gives a preview that scrolls with it, when set
 const sync = vi.hoisted(() => ({ side: undefined as SyncSide | undefined }))
@@ -94,6 +95,7 @@ vi.mock('../hooks/use-mux-api', async (orig) => ({
   fetchFileContent: (...a: unknown[]) => mockContent(...a),
   fetchFileImage: (...a: unknown[]) => mockImage(...a),
   fetchFileDocument: (...a: unknown[]) => mockDocument(...a),
+  fetchFileBlame: (...a: unknown[]) => mockBlame(...a),
   saveFileContent: (...a: unknown[]) => mockSave(...a),
 }))
 const mockPasteUpload = vi.fn()
@@ -3641,5 +3643,117 @@ describe('FileViewer: encodings of a table', () => {
     expect(
       renderHook(() => useFileDraft('%1', '/r', 'd.csv')).result.current[0],
     ).toMatchObject({ encoding: 'shift_jis' })
+  })
+})
+
+describe('FileViewer: blame', () => {
+  const HASH = 'c'.repeat(40)
+  const BLAME = {
+    root: '/r',
+    path: 'src/a.ts',
+    lines: 2,
+    commits: { [HASH]: { author: 'Alice', time: 1_700_000_000, summary: 's' } },
+    ranges: [{ start: 1, count: 1, commit: HASH }],
+    uncommitted: [{ start: 2, count: 1 }],
+  }
+  beforeEach(() => {
+    mockBlame.mockReset()
+  })
+  const blamed = (over: Partial<Parameters<typeof FileViewer>[0]> = {}) => {
+    mockContent.mockResolvedValue(editable('x\ny\n'))
+    return show({ canBlame: true, onBlameChange: vi.fn(), ...over })
+  }
+
+  it('is offered for a text file of a repository only', async () => {
+    mockContent.mockResolvedValue(editable('x'))
+    const view = show()
+    await screen.findByTestId('code-block')
+    expect(screen.queryByRole('button', { name: 'Blame' })).toBeNull()
+    view.unmount()
+    show({ canBlame: true })
+    await screen.findByTestId('code-block')
+    expect(screen.queryByRole('button', { name: 'Blame' })).toBeNull()
+  })
+
+  it('turns on and off from the header, reading nothing while off', async () => {
+    const p = blamed()
+    const toggle = await screen.findByRole('button', { name: 'Blame' })
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    expect(toggle).toHaveAttribute('title', 'Show who last changed each line')
+    fireEvent.click(toggle)
+    expect(p.onBlameChange).toHaveBeenCalledWith(true)
+    expect(mockBlame).not.toHaveBeenCalled()
+  })
+
+  it('shows who changed each line of the bytes shown', async () => {
+    mockBlame.mockReturnValueOnce(new Promise(() => {}))
+    blamed({ blameOn: true, place: 'p' })
+    await screen.findByTestId('code-block')
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Reading who changed each line…',
+    )
+    expect(mockBlame).toHaveBeenCalledWith(
+      { paneId: '%1', place: 'p' },
+      'src/a.ts',
+      { hash: 'h:x\ny\n', root: '/r', reveal: false },
+      expect.any(AbortSignal),
+    )
+  })
+
+  it('draws the column once the blame comes, with the details a cell opens', async () => {
+    mockBlame.mockResolvedValue(BLAME)
+    const p = blamed({ blameOn: true })
+    expect(
+      await screen.findByRole('button', { name: /^Alice,/ }),
+    ).toHaveTextContent('Alice')
+    expect(screen.getByText('Not committed')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Blame' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    vi.stubGlobal('isSecureContext', true)
+    vi.stubGlobal('navigator', {
+      clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /^Alice,/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Copy hash' }))
+    await waitFor(() => expect(p.notify).toHaveBeenCalledWith('Hash copied'))
+  })
+
+  it('says why there is no blame, the file still shown', async () => {
+    mockBlame.mockRejectedValue(new RequestError(404, 'not_tracked', ''))
+    blamed({ blameOn: true })
+    expect(
+      await screen.findByText('Not in the last commit yet: nothing to blame'),
+    ).toBeInTheDocument()
+    expect(screen.getByTestId('code-block')).toHaveTextContent('x')
+  })
+
+  it('reads the file again when it changed since it was shown', async () => {
+    mockBlame
+      .mockRejectedValueOnce(new RequestError(409, 'file_changed', ''))
+      .mockResolvedValue(BLAME)
+    blamed({ blameOn: true })
+    await waitFor(() => expect(mockContent).toHaveBeenCalledTimes(2))
+  })
+
+  it('is not offered while editing', async () => {
+    mockBlame.mockResolvedValue(BLAME)
+    blamed({ blameOn: true, canEdit: true })
+    await screen.findByRole('button', { name: /^Alice,/ })
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    expect(screen.queryByRole('button', { name: 'Blame' })).toBeNull()
+  })
+
+  it('is a checkbox of the menu on a narrow screen, with initials', async () => {
+    mockBlame.mockResolvedValue(BLAME)
+    blamed({ blameOn: true, compact: true })
+    expect(
+      await screen.findByRole('button', { name: /^Alice,/ }),
+    ).toHaveTextContent(/^A/)
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }))
+    expect(
+      screen.getByRole('menuitemcheckbox', { name: 'Blame' }),
+    ).toHaveAttribute('aria-checked', 'true')
   })
 })

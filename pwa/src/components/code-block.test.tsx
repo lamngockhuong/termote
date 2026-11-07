@@ -9,6 +9,7 @@ import {
 import { createRoot } from 'react-dom/client'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider } from '../contexts/theme-context'
+import type { FileBlame } from '../hooks/use-mux-api'
 import {
   CodeBlock,
   MAX_LINES,
@@ -379,5 +380,98 @@ describe('CodeBlock lines picked for a comment', () => {
     )
     fireEvent.doubleClick(num(1))
     expect(onDoubleClick).not.toHaveBeenCalled()
+  })
+})
+
+describe('CodeBlock blame', () => {
+  const H1 = '1'.repeat(40)
+  const H2 = '2'.repeat(40)
+  const blameOf = (lines: number, ranges: FileBlame['ranges']): FileBlame => ({
+    root: '/r',
+    path: 'a.ts',
+    lines,
+    commits: {
+      [H1]: { author: 'Alice', time: 1_700_000_000, summary: 'first' },
+      [H2]: { author: 'Bob', time: 1_700_000_000, summary: 'second' },
+    },
+    ranges,
+    uncommitted: [],
+  })
+  const BLAME = blameOf(4, [
+    { start: 1, count: 2, commit: H1 },
+    { start: 4, count: 1, commit: H2 },
+  ])
+  const shown = (
+    text: string,
+    data: FileBlame,
+    extra: Partial<Parameters<typeof CodeBlock>[0]> = {},
+  ) => {
+    mockHighlight.mockResolvedValue(null)
+    const notify = vi.fn()
+    const view = render(
+      <ThemeProvider>
+        <CodeBlock
+          text={text}
+          path="a.ts"
+          wrap={false}
+          blame={{ data, compact: false, notify }}
+          {...extra}
+        />
+      </ThemeProvider>,
+    )
+    return { notify, ...view }
+  }
+  const cellOf = (n: number) =>
+    screen.getByTestId('code-block').querySelector(`[data-line="${n}"]`)
+      ?.firstElementChild?.firstElementChild as HTMLElement
+
+  it('writes the commit once per run of lines, before the numbers', () => {
+    shown('a\nb\nc\nd\n', BLAME)
+    expect(cellOf(1)).toHaveTextContent('Alice')
+    expect(cellOf(2)).toHaveTextContent('')
+    expect(cellOf(3)).toHaveTextContent('Not committed')
+    expect(cellOf(4)).toHaveTextContent('Bob')
+    // The blame and the number stay put together
+    expect(cellOf(1).parentElement?.className).toContain('sticky')
+    expect(screen.queryByText(/git counts the lines/)).toBeNull()
+  })
+
+  it("opens a commit's details from its cell, and closes them", () => {
+    shown('a\nb\nc\nd\n', BLAME)
+    fireEvent.click(screen.getByRole('button', { name: /^Bob,/ }))
+    expect(screen.getByRole('dialog')).toHaveTextContent('second')
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('leaves the column out, with a note, when git counted other lines', () => {
+    shown('a\nb\n', BLAME)
+    expect(
+      screen.getByText(
+        'Blame is hidden: git counts the lines of this file differently (its encoding)',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Alice')).toBeNull()
+  })
+
+  it('blames no line of an empty file', () => {
+    shown('', blameOf(0, []))
+    expect(screen.queryByText(/git counts the lines/)).toBeNull()
+  })
+
+  it('keeps the line buttons of a comment beside the column', () => {
+    shown('a\nb\nc\nd\n', BLAME, { onLineComment: vi.fn() })
+    expect(screen.getByRole('button', { name: 'Line 2' })).toBeInTheDocument()
+    expect(cellOf(1)).toHaveTextContent('Alice')
+  })
+
+  it('counts the column in the width of a long file not wrapped', () => {
+    const text = `${'x\n'.repeat(WINDOW_FROM_LINES)}${'y'.repeat(80)}\n`
+    const lines = WINDOW_FROM_LINES + 1
+    shown(text, blameOf(lines, [{ start: 1, count: lines, commit: H1 }]))
+    const inner = screen.getByTestId('code-block')
+      .firstElementChild as HTMLElement
+    expect(inner.style.minWidth).toContain('11.5rem')
+    expect(cellOf(1)).toHaveTextContent('Alice')
   })
 })

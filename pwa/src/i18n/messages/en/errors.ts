@@ -28,6 +28,7 @@ export default {
   'errors.empty_match': 'The pattern matches empty text',
   'errors.encrypted': 'The file is protected by a password',
   'errors.exists': 'Something with this name already exists',
+  'errors.file_changed': 'The file changed since it was read',
   'errors.filtered': 'The file goes through a git filter. Use a terminal',
   'errors.full_needs_password':
     'Only a password sign-in or the CLI can do this',
@@ -106,7 +107,9 @@ export default {
   'errors.not_image': 'Not a PNG, JPEG, GIF, WebP or SVG image',
   'errors.not_in_trash': 'It is no longer in the trash',
   'errors.not_linked': 'Herdr does not manage this worktree',
+  'errors.not_repo': 'Not in a git repository',
   'errors.not_text': 'The text is not valid UTF-8',
+  'errors.not_tracked': 'Not in the last commit',
   'errors.open_failed': 'The worktree exists but its workspace did not open',
   'errors.pane_busy': 'The pane is running something other than its shell',
   'errors.partial_paste':
