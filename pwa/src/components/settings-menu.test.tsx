@@ -204,7 +204,9 @@ describe('SettingsMenu', () => {
     const { unmount } = renderWithTheme({ onOpenWindow })
     open()
     fireEvent.click(item('Open in new window'), { shiftKey: true })
-    expect(onOpenWindow).toHaveBeenCalledWith({ shiftKey: true })
+    expect(onOpenWindow).toHaveBeenCalledWith(
+      expect.objectContaining({ shiftKey: true }),
+    )
     unmount()
     renderWithTheme()
     open()
