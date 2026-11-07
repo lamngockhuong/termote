@@ -1,5 +1,30 @@
 # Changelog
 
+## [2.23.0](https://github.com/lamngockhuong/termote/compare/v2.22.0...v2.23.0) (2026-11-07)
+
+
+### Features
+
+* **pwa:** block the browser's context menu over the app's chrome ([#727](https://github.com/lamngockhuong/termote/issues/727)) ([dd0a901](https://github.com/lamngockhuong/termote/commit/dd0a9018817ac17dba65b9d951412dc7a7505d3b))
+* **pwa:** drag a file tab to reorder it ([#736](https://github.com/lamngockhuong/termote/issues/736)) ([e15bfab](https://github.com/lamngockhuong/termote/commit/e15bfab062464a8e0c49282feeab8f13b4428d99))
+* **pwa:** drag the desktop sidebar's edge to resize it ([#731](https://github.com/lamngockhuong/termote/issues/731)) ([d8ebcc6](https://github.com/lamngockhuong/termote/commit/d8ebcc644819771492612f9f871583ceac25560e))
+* **pwa:** give the desktop header's room to the tabs, with an optional right toolbar ([#723](https://github.com/lamngockhuong/termote/issues/723)) ([54bda06](https://github.com/lamngockhuong/termote/commit/54bda06b50fe5881751a77515c6133b16cfdc0d9))
+* **pwa:** show the agent's logo as a tab's icon until one is picked ([#732](https://github.com/lamngockhuong/termote/issues/732)) ([c86ac79](https://github.com/lamngockhuong/termote/commit/c86ac7987109a0e5522f837a5cd11971ff398af8))
+* reach other computers' Termote over SSH (machines) ([#721](https://github.com/lamngockhuong/termote/issues/721)) ([570510e](https://github.com/lamngockhuong/termote/commit/570510e470e673d0b3dadd7e1afbb4e5042518cd))
+* **server:** machine add installs or updates termote on the machine ([#724](https://github.com/lamngockhuong/termote/issues/724)) ([d44e1f2](https://github.com/lamngockhuong/termote/commit/d44e1f265f74393e24ef859f77ec0e9a48098fef))
+
+
+### Bug Fixes
+
+* **chat:** send a message the terminal's box already holds, and offer to replace another draft ([#729](https://github.com/lamngockhuong/termote/issues/729)) ([e8f9e2f](https://github.com/lamngockhuong/termote/commit/e8f9e2f159f67e16adec1a24e41ff3bee0ff4085))
+* **deps:** update dependency lucide-react to v1.68.0 ([#553](https://github.com/lamngockhuong/termote/issues/553)) ([44cf2e2](https://github.com/lamngockhuong/termote/commit/44cf2e2dd27127af6660f3e788ac8272f49b6c71))
+* **pwa:** draw the timeline's idle time as a fill inside a framed track ([#728](https://github.com/lamngockhuong/termote/issues/728)) ([855934b](https://github.com/lamngockhuong/termote/commit/855934b346b34d83717e58a0949ed2cdae942975))
+* **pwa:** keep a dragged header tab inside the tab bar ([#730](https://github.com/lamngockhuong/termote/issues/730)) ([289fcfd](https://github.com/lamngockhuong/termote/commit/289fcfdfbeb1168fd35cdd450c1e6afca4c90c19))
+* **pwa:** line an inactive header tab up with the active one ([#733](https://github.com/lamngockhuong/termote/issues/733)) ([5fe95a8](https://github.com/lamngockhuong/termote/commit/5fe95a8f8adaba168ac4cd5ebbfa2eb5060e6dbc))
+* **pwa:** no focus ring on a tab renamed with a pointer ([#735](https://github.com/lamngockhuong/termote/issues/735)) ([0b8ef10](https://github.com/lamngockhuong/termote/commit/0b8ef10be347b0add8fcb4866340644f87e37d71))
+* **pwa:** thin the terminal's scrollbar to 8px ([#725](https://github.com/lamngockhuong/termote/issues/725)) ([117e389](https://github.com/lamngockhuong/termote/commit/117e389a9221cdb0bcd77e84a11452f866c7f986))
+* **server:** accept ~ and ~/dir as a new group's directory ([#726](https://github.com/lamngockhuong/termote/issues/726)) ([55e21a2](https://github.com/lamngockhuong/termote/commit/55e21a21064ba1777acb2d149c9e77d93dc2393b))
+
 ## [2.22.0](https://github.com/lamngockhuong/termote/compare/v2.21.1...v2.22.0) (2026-11-06)
 
 
