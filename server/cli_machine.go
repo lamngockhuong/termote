@@ -222,14 +222,14 @@ func (c *cli) findRemoteTermote(alias string, rec machineRecord, paths sshPaths,
 		if w, err = c.whereamiOn(alias, rec, paths); err != nil {
 			return w, fmt.Errorf("%s: %w", alias, err)
 		}
-		if !w.Native {
-			c.stepf("ssh", "Starting termote on %s", alias)
-			if _, err := c.interact("", sshUserArgv(paths.KnownHosts, rec, remoteExeScript(w.Exe, "start"))); err != nil {
-				return w, fmt.Errorf("starting termote on %s failed: %v (run 'termote start' there)", alias, err)
-			}
-			return c.whereamiOn(alias, rec, paths)
+		// Started even when a saved config is there: one left by an
+		// uninstall without --purge says nothing runs, and a termote
+		// just installed cannot be running yet. start keeps its options.
+		c.stepf("ssh", "Starting termote on %s", alias)
+		if _, err := c.interact("", sshUserArgv(paths.KnownHosts, rec, remoteExeScript(w.Exe, "start"))); err != nil {
+			return w, fmt.Errorf("starting termote on %s failed: %v (run 'termote start' there)", alias, err)
 		}
-		return w, nil
+		return c.whereamiOn(alias, rec, paths)
 	case errors.Is(err, errTermoteTooOld):
 		// Too old for whereami, so too old for the bridge: it has to be
 		// updated before it can be added.
