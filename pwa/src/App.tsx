@@ -1952,6 +1952,7 @@ export default function App({
   const keymap = useKeymap(commands)
   const paletteKey = keymap.byId['palette.commands']?.key
   const quickOpenKey = keymap.byId['palette.quickOpen']?.key
+  const fullscreenKey = keymap.byId['app.fullscreen']?.key
   // The palette's keys, as the welcome screen and the tour show them
   const paletteKeys = {
     commands: paletteKey && formatChord(paletteKey, isApplePlatform()),
@@ -2160,6 +2161,9 @@ export default function App({
             }
             paletteKey={
               paletteKey && formatChord(paletteKey, isApplePlatform())
+            }
+            fullscreenKey={
+              fullscreenKey && formatChord(fullscreenKey, isApplePlatform())
             }
             menu={{
               onOpenAbout: () => setAboutOpen(true),

@@ -1,4 +1,4 @@
-import { AppWindow, Command, Maximize, Minimize } from 'lucide-react'
+import { AppWindow } from 'lucide-react'
 import type { ComponentProps, ReactNode } from 'react'
 import { useCompactLabels } from '../hooks/use-compact-labels'
 import { useT } from '../i18n/i18n-context'
@@ -58,8 +58,10 @@ interface Props {
   onDecreaseFont: () => void
   onIncreaseFont: () => void
   isFullscreen: boolean
-  // Unset (the browser cannot go fullscreen, e.g. iPhone): no button
+  // Unset (the browser cannot go fullscreen, e.g. iPhone): not offered
   onToggleFullscreen?: () => void
+  // Desktop: its key as shown, if it has one
+  fullscreenKey?: string
   // Views of the pane; the switcher shows once there are two
   views: ViewOption<string>[]
   viewId: string
@@ -91,8 +93,8 @@ interface Props {
 
 // The top bar. Mobile: the session chip, the view menu and the overflow
 // menu (which also holds the font size). Desktop: one row with the session
-// tabs, the view switcher, the side panel toggles, font size, fullscreen,
-// connection and the menu.
+// tabs, the view switcher, the side panel toggles, font size, connection and
+// the menu (which also holds the command palette and fullscreen).
 export function AppHeader(props: Props) {
   return props.isMobile ? (
     <MobileHeader {...props} />
@@ -253,46 +255,23 @@ function DesktopHeader(p: Props) {
           </div>
         )}
         {p.paneMenu}
-        {p.onToggleFullscreen && (
-          <IconButton
-            size="sm"
-            onClick={p.onToggleFullscreen}
-            aria-label={
-              p.isFullscreen
-                ? t('shell.header.exitFullscreen')
-                : t('shell.header.enterFullscreen')
-            }
-            title={
-              p.isFullscreen
-                ? t('shell.header.exitFullscreen')
-                : t('shell.header.fullscreen')
-            }
-          >
-            {p.isFullscreen ? (
-              <Minimize size={16} aria-hidden="true" />
-            ) : (
-              <Maximize size={16} aria-hidden="true" />
-            )}
-          </IconButton>
-        )}
-        {p.onOpenPalette && (
-          <IconButton
-            size="sm"
-            onClick={p.onOpenPalette}
-            data-tour="palette"
-            aria-label={t('common.commandPalette')}
-            title={
-              p.paletteKey
-                ? `${t('common.commandPalette')} (${p.paletteKey})`
-                : t('common.commandPalette')
-            }
-          >
-            <Command size={16} aria-hidden="true" />
-          </IconButton>
-        )}
         {p.onOpenInMain && <OpenInMainButton onClick={p.onOpenInMain} />}
         <ConnectionIndicator state={p.connectionState} onRetry={p.onRetry} />
-        <SettingsMenu {...p.menu} />
+        {/* The palette and fullscreen are in the menu, so the tabs keep
+            the room; the tour points at it for the palette */}
+        <SettingsMenu
+          {...p.menu}
+          tourAnchor={p.onOpenPalette ? 'palette' : undefined}
+          onOpenPalette={p.onOpenPalette}
+          paletteKey={p.paletteKey}
+          fullscreen={
+            p.onToggleFullscreen && {
+              active: p.isFullscreen,
+              onToggle: p.onToggleFullscreen,
+              key: p.fullscreenKey,
+            }
+          }
+        />
       </div>
     </header>
   )

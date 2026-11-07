@@ -364,8 +364,9 @@ interface MenuItemProps {
   // Says more about what the item does, on hover
   title?: string
   // The key that does the same where the menu was opened, shown on the
-  // right (aria-keyshortcuts: the ARIA form, e.g. Alt+ArrowLeft)
-  shortcut?: { label: string; aria: string }
+  // right (aria-keyshortcuts: the ARIA form, e.g. Alt+ArrowLeft; left out
+  // for a key the user picks, shown only)
+  shortcut?: { label: string; aria?: string }
 }
 
 function ItemButton({

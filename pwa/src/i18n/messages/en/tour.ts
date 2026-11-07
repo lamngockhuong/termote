@@ -36,7 +36,9 @@ export default {
     'The tabs are the windows of this session. The strip below lists every pane in the window: click one to focus it, <kbd>×</kbd> to close it.',
   'tour.paletteTitle': 'Everything, by name',
   'tour.paletteBody':
-    'The command palette runs any action: switch session, open a file, run a task, change a setting.',
+    'The command palette is in this menu, and its keys open it from anywhere. It runs any action: switch session, open a file, run a task, change a setting.',
+  'tour.paletteBodyRail':
+    'The command palette is at the foot of this bar, and its keys open it from anywhere. It runs any action: switch session, open a file, run a task, change a setting.',
   'tour.allCommands': 'All commands',
   'tour.goToFile': 'Go to file',
   'tour.paletteFoot':

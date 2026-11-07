@@ -112,7 +112,7 @@ test.describe('demo on a desktop', () => {
     await expect(terminal(page)).toContainText('Claude Code')
     // Keys typed in the terminal go to the pane: from the header, as a
     // person reaching for the palette would
-    await page.getByRole('button', { name: 'Command palette' }).focus()
+    await page.getByRole('button', { name: /^More/ }).focus()
     await page.keyboard.press('Control+P')
     const palette = page.getByRole('dialog').filter({ has: page.getByRole('combobox') })
     await expect(palette.getByRole('combobox')).toBeFocused()

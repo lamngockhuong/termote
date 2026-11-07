@@ -205,15 +205,16 @@ describe('AppHeader — desktop', () => {
     expect(screen.getByTitle('Code')).toHaveTextContent(/^🤖Code$/)
   })
 
-  it('has font size, fullscreen and connection controls outside the menu', () => {
+  it('has font size and connection controls outside the menu', () => {
     const props = renderHeader()
     expect(screen.getByTestId('font-size')).toHaveTextContent('14')
     fireEvent.click(screen.getByRole('button', { name: 'Decrease font size' }))
     fireEvent.click(screen.getByRole('button', { name: 'Increase font size' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Enter fullscreen' }))
     expect(props.onDecreaseFont).toHaveBeenCalledOnce()
     expect(props.onIncreaseFont).toHaveBeenCalledOnce()
-    expect(props.onToggleFullscreen).toHaveBeenCalledOnce()
+    expect(
+      screen.queryByRole('button', { name: 'Enter fullscreen' }),
+    ).toBeNull()
     expect(screen.getByRole('button', { name: 'Connected' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'More' })).toBeInTheDocument()
     expect(
@@ -221,19 +222,27 @@ describe('AppHeader — desktop', () => {
     ).toBeNull()
   })
 
-  it('labels the fullscreen button by state', () => {
-    renderHeader({ isFullscreen: true })
-    expect(
-      screen.getByRole('button', { name: 'Exit fullscreen' }),
-    ).toBeVisible()
+  it('offers fullscreen in the menu, named by state, with its key', () => {
+    const props = renderHeader({ fullscreenKey: 'F11' })
+    fireEvent.click(screen.getByRole('button', { name: 'More' }))
+    const item = screen.getByRole('menuitem', { name: /Enter fullscreen/ })
+    expect(item).toHaveTextContent('F11')
+    fireEvent.click(item)
+    expect(props.onToggleFullscreen).toHaveBeenCalledOnce()
   })
 
-  it('has no fullscreen button without onToggleFullscreen', () => {
-    renderHeader({ onToggleFullscreen: undefined })
+  it('names the fullscreen item Exit once fullscreen', () => {
+    renderHeader({ isFullscreen: true })
+    fireEvent.click(screen.getByRole('button', { name: 'More' }))
     expect(
-      screen.queryByRole('button', { name: 'Enter fullscreen' }),
-    ).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Exit fullscreen' })).toBeNull()
+      screen.getByRole('menuitem', { name: 'Exit fullscreen' }),
+    ).toBeInTheDocument()
+  })
+
+  it('has no fullscreen item without onToggleFullscreen', () => {
+    renderHeader({ onToggleFullscreen: undefined })
+    fireEvent.click(screen.getByRole('button', { name: 'More' }))
+    expect(screen.queryByRole('menuitem', { name: /fullscreen/ })).toBeNull()
   })
 
   it('keeps the touch-size view and font buttons level with the tabs', () => {
@@ -262,9 +271,6 @@ describe('AppHeader — desktop', () => {
     expect(
       screen.queryByRole('button', { name: 'Decrease font size' }),
     ).toBeNull()
-    expect(
-      screen.getByRole('button', { name: 'Enter fullscreen' }),
-    ).toBeInTheDocument()
   })
 
   it('keeps the font size out of the desktop menu', () => {
@@ -394,25 +400,44 @@ describe('AppHeader side panel toggles', () => {
 })
 
 describe('AppHeader — command palette', () => {
-  it('opens it from a desktop button that names its key', () => {
+  it('opens it from the desktop menu, which names its key', () => {
     const onOpenPalette = vi.fn()
     renderHeader({ onOpenPalette, paletteKey: 'Ctrl+Shift+P' })
-    const button = screen.getByRole('button', { name: 'Command palette' })
-    expect(button).toHaveAttribute('title', 'Command palette (Ctrl+Shift+P)')
-    fireEvent.click(button)
+    expect(screen.queryByRole('button', { name: 'Command palette' })).toBeNull()
+    const more = screen.getByRole('button', { name: 'More' })
+    // The tour's palette step points at the menu
+    expect(more.parentElement).toHaveAttribute('data-tour', 'palette')
+    fireEvent.click(more)
+    const item = screen.getByRole('menuitem', { name: /Command palette/ })
+    expect(item).toHaveTextContent('Ctrl+Shift+P')
+    fireEvent.click(item)
     expect(onOpenPalette).toHaveBeenCalledOnce()
   })
 
-  it('names no key when it has none, and has no button without a handler', () => {
-    renderHeader({ onOpenPalette: vi.fn() })
+  it('names no key when it has none, and has no item without a handler', () => {
+    const { unmount } = render(
+      <ThemeProvider>
+        <AppHeader {...headerProps({ onOpenPalette: vi.fn() })} />
+      </ThemeProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'More' }))
     expect(
-      screen.getByRole('button', { name: 'Command palette' }),
-    ).toHaveAttribute('title', 'Command palette')
+      screen.getByRole('menuitem', { name: 'Command palette' }),
+    ).toHaveTextContent(/^Command palette$/)
+    unmount()
+    renderHeader()
+    const more = screen.getByRole('button', { name: 'More' })
+    expect(more.parentElement).not.toHaveAttribute('data-tour')
+    fireEvent.click(more)
+    expect(screen.queryByRole('menuitem', { name: /palette/ })).toBeNull()
   })
 
-  it('is not on the phone header', () => {
+  it('is not on the phone header nor in its menu', () => {
     renderHeader({ isMobile: true, onOpenPalette: vi.fn() })
     expect(screen.queryByRole('button', { name: 'Command palette' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'More' }))
+    expect(screen.queryByRole('menuitem', { name: /palette/ })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: /fullscreen/ })).toBeNull()
   })
 })
 

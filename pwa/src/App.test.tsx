@@ -748,6 +748,9 @@ vi.mock('./components/settings-menu', () => ({
     onLogout,
     updateVersion,
     onOpenUpdates,
+    onOpenPalette,
+    paletteKey,
+    fullscreen,
   }: {
     onOpenAbout: () => void
     onOpenHelp: () => void
@@ -758,8 +761,29 @@ vi.mock('./components/settings-menu', () => ({
     onLogout?: () => void
     updateVersion?: string | null
     onOpenUpdates?: () => void
+    onOpenPalette?: () => void
+    paletteKey?: string
+    fullscreen?: { active: boolean; onToggle: () => void; key?: string }
   }) => (
     <div>
+      {onOpenPalette && (
+        <button
+          type="button"
+          onClick={onOpenPalette}
+          data-key={paletteKey}
+          aria-label="Command palette"
+        />
+      )}
+      {fullscreen && (
+        <button
+          type="button"
+          onClick={fullscreen.onToggle}
+          data-key={fullscreen.key}
+          aria-label={
+            fullscreen.active ? 'Exit fullscreen' : 'Enter fullscreen'
+          }
+        />
+      )}
       {updateVersion && (
         <button onClick={onOpenUpdates}>MenuUpdate {updateVersion}</button>
       )}
@@ -6917,12 +6941,12 @@ describe('App command palette and shortcuts', () => {
     resetAllShortcuts()
   })
 
-  it('opens from the header button and the keys, desktop only', async () => {
+  it('opens from the menu and the keys, desktop only', async () => {
     render(<App />)
     const button = await screen.findByRole('button', {
       name: 'Command palette',
     })
-    expect(button).toHaveAttribute('title', 'Command palette (Ctrl+Shift+P)')
+    expect(button).toHaveAttribute('data-key', 'Ctrl+Shift+P')
     press('KeyP', { ctrlKey: true })
     expect(await screen.findByTestId('command-palette')).toHaveAttribute(
       'data-mode',
@@ -6951,7 +6975,7 @@ describe('App command palette and shortcuts', () => {
     render(<App />)
     expect(
       await screen.findByRole('button', { name: 'Command palette' }),
-    ).toHaveAttribute('title', 'Command palette')
+    ).not.toHaveAttribute('data-key')
   })
 
   it('runs a command once the palette has closed: dialogs', async () => {

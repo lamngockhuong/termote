@@ -1,10 +1,13 @@
 import {
   AppWindow,
   ArrowUpCircle,
+  Command,
   Info,
   LifeBuoy,
   Link,
   LogOut,
+  Maximize,
+  Minimize,
   MoreHorizontal,
   RotateCcw,
   Settings,
@@ -29,6 +32,13 @@ interface FontSizeControls {
   onIncrease: () => void
 }
 
+interface FullscreenControls {
+  active: boolean
+  onToggle: () => void
+  // Its key as shown, if it has one
+  key?: string
+}
+
 interface Props {
   onOpenAbout: () => void
   onOpenHelp: () => void
@@ -45,6 +55,13 @@ interface Props {
   // that calls onOpenUpdates (Settings at Updates)
   updateVersion?: string | null
   onOpenUpdates?: () => void
+  // Desktop, where the header has no button for them: the command palette
+  // (its key as shown, if it has one) and fullscreen (where the browser can)
+  onOpenPalette?: () => void
+  paletteKey?: string
+  fullscreen?: FullscreenControls
+  // Names the trigger for the tour (data-tour)
+  tourAnchor?: string
 }
 
 // Each step runs whatever the one before did: a browser that refuses the
@@ -73,7 +90,8 @@ async function clearCacheAndReload() {
   window.location.reload()
 }
 
-// The header's overflow menu: font size (mobile), theme, and the dialogs.
+// The header's overflow menu: the palette and fullscreen (desktop), font
+// size (mobile), theme, and the dialogs.
 export function SettingsMenu({
   onOpenAbout,
   onOpenHelp,
@@ -84,6 +102,10 @@ export function SettingsMenu({
   onLogout,
   updateVersion,
   onOpenUpdates,
+  onOpenPalette,
+  paletteKey,
+  fullscreen,
+  tourAnchor,
 }: Props) {
   const { t } = useT()
   const update = updateVersion && onOpenUpdates
@@ -97,6 +119,7 @@ export function SettingsMenu({
 
   return (
     <Menu
+      tourAnchor={tourAnchor}
       label={
         update
           ? t('shell.menu.moreUpdate', { version: updateVersion })
@@ -122,6 +145,37 @@ export function SettingsMenu({
           >
             {t('shell.menu.update', { version: updateVersion })}
           </MenuItem>
+          <MenuSeparator />
+        </>
+      )}
+      {(onOpenPalette || fullscreen) && (
+        <>
+          {onOpenPalette && (
+            <MenuItem
+              icon={<Command size={17} />}
+              onSelect={onOpenPalette}
+              shortcut={paletteKey ? { label: paletteKey } : undefined}
+            >
+              {t('common.commandPalette')}
+            </MenuItem>
+          )}
+          {fullscreen && (
+            <MenuItem
+              icon={
+                fullscreen.active ? (
+                  <Minimize size={17} />
+                ) : (
+                  <Maximize size={17} />
+                )
+              }
+              onSelect={fullscreen.onToggle}
+              shortcut={fullscreen.key ? { label: fullscreen.key } : undefined}
+            >
+              {fullscreen.active
+                ? t('shell.header.exitFullscreen')
+                : t('shell.header.enterFullscreen')}
+            </MenuItem>
+          )}
           <MenuSeparator />
         </>
       )}
