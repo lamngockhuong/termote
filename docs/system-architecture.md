@@ -366,6 +366,7 @@ GET    /api/mux/panes/{id}/files/find?q=&root=&ignored=1&exclude=&fresh=1 → {r
 GET    /api/mux/panes/{id}/files/search?q=&root=&case=1&word=1&regex=1&files=&skip=&exclude=&fresh=1 → {root, isRepo, files, truncated, incomplete, skipped} | {error, code}
 GET    /api/mux/panes/{id}/files/changes?root=                  → {root, isRepo, branch, entries, truncated}
 GET    /api/mux/panes/{id}/files/diff?path=&orig=&staged=&root=&reveal= → {root, path, binary, conflict, truncated, sensitive, reason, hunks}
+GET    /api/mux/panes/{id}/files/blame?path=&hash=&root=&reveal= → {root, path, lines, commits, ranges, uncommitted} | {root, path, sensitive} | {error, code}
 GET    /api/mux/panes/{id}/files/raw?path=&root=&reveal=[&side=old|new&staged=&orig=] → image bytes | {error, code}
 GET    /api/mux/panes/{id}/files/download?path=&root=&reveal=[&check=1] → file bytes (attachment) | {root, path, size} (check=1) | {error, code}
 POST   /api/mux/uploads            body: raw image (image/png|jpeg|gif|webp) → {id, path, insert}

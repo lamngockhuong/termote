@@ -1065,6 +1065,23 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   may read); a full client reads them all. A commit's
   file list is kept 30 s per root and hash (a hash never changes what it names); a sensitive name
   is checked again when its diff is read. Message and author are shown with `visibleUnsafe`.
+  Blame (`files/blame`, `server/files_git_blame.go`) is a read route (`begin`: `crossSiteRejection`,
+  a view-only client allowed, through `viewHides` like `content`, `reveal=1` refused to it). The
+  file is read like `content`'s: `cleanRelPath`, the deny lists, `rootFor` (a link into another
+  work tree of the repository is followed, git then runs in that work tree with `safe.directory`
+  set to it only when the root had one), opened through `os.Root`, a regular file of at most
+  `maxPreviewSize` (1 MiB, else 413 `too_large`, no large-read slot), a sensitive name without
+  `reveal=1` answers `{sensitive: true}` before the hash is compared. The client sends the sha256
+  of the bytes it shows (`hash`, required, else 400); other bytes on disk are 409 `file_changed`.
+  Those bytes go to `git blame --incremental --no-ignore-revs-file --no-textconv --contents - --
+  <path>` on stdin, so git never opens the worktree path, and the path (where a symlink inside the
+  root leads) only names the history to follow from `HEAD`: no client rev reaches git. `heavy`
+  (semaphore slot, timeout, backoff), `noFilters`, output capped at 8 MiB (413 `too_large`).
+  A failure for a path `HEAD` does not hold (`cat-file -e HEAD:./<path>`) is 404 `not_tracked`,
+  outside a repo 404 `not_repo`; any other git failure is logged only. The answer holds the line
+  count, runs of lines per commit hash (the all-zero hash goes to `uncommitted`) and per commit
+  only author name, author time and a summary cut at 512 bytes: no e-mail, no line text. git
+  applies the repo's `.mailmap` to the author name (a read, nothing runs).
 - **Places** (`--allow-path`, `server/cli_allow_path.go`, `server/files_places.go`): folders the
   operator names on the host with `termote start --allow-path <dir>` / `--remove-path <dir>`
   (saved like `--allow-host`, `TERMOTE_ALLOWED_PATHS` `:`-separated on Unix, refused by the Unix

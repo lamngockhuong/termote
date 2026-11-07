@@ -276,6 +276,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/files_places.go`                          | Places: folders allowed with `--allow-path`, served as roots   |
 | `server/files_git.go`                             | git status and diff for the Changes view                       |
 | `server/files_git_commit.go`                      | `files/commit`, `files/commit/diff`: HEAD and its file diffs   |
+| `server/files_git_blame.go`                       | `files/blame`: who last changed each line of a file            |
 | `server/files_git_apply.go`                       | `POST files/changes/apply`: stage, unstage, discard a change   |
 | `server/files_git_patch.go`                       | Hunk ids, the patch of one hunk, a hunk undone in Go           |
 | `server/files_sensitive.go`                       | Names of files that usually hold secrets                       |
