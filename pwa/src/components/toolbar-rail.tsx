@@ -34,7 +34,9 @@ const withKey = (name: string, key?: string) =>
 // Desktop, with the toolbar on the right: a bar down the right edge holding
 // the view switcher, the side panel toggles and the Pane menu at its top,
 // fullscreen and the command palette at its foot, so the header keeps its
-// room for the tabs. Icons only, each named in its tooltip. It sits beside
+// room for the tabs. Icons only, each named in its tooltip. In a short
+// window the top part scrolls, so fullscreen and the palette stay in reach
+// (the palette may have no key). It sits beside
 // the views and the side panel, not over them: a maximized panel leaves it
 // in reach, and the terminal fits the width left.
 export function ToolbarRail(p: Props) {
@@ -45,25 +47,27 @@ export function ToolbarRail(p: Props) {
   return (
     <nav
       aria-label={t('shell.toolbar')}
-      className="flex w-10 shrink-0 flex-col items-center gap-1 border-l border-border bg-surface py-1.5 ui-terminal:bg-bg"
+      className="flex w-10 shrink-0 flex-col items-center gap-1 border-l border-border bg-surface py-1.5 pointer-coarse:w-14 ui-terminal:bg-bg"
     >
-      <ViewSwitcher
-        views={p.views}
-        value={p.viewId}
-        onChange={p.onViewChange}
-        panelId={p.viewPanelId}
-        orientation="vertical"
-      />
-      {p.onTogglePanel && (
-        <PanelToggles
-          views={p.panelViews ?? []}
-          open={p.sidePanelId ?? null}
-          onToggle={p.onTogglePanel}
+      <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-1 overflow-y-auto scrollbar-hide">
+        <ViewSwitcher
+          views={p.views}
+          value={p.viewId}
+          onChange={p.onViewChange}
+          panelId={p.viewPanelId}
           orientation="vertical"
         />
-      )}
-      {p.paneMenu}
-      <div className="mt-auto flex flex-col items-center gap-1">
+        {p.onTogglePanel && (
+          <PanelToggles
+            views={p.panelViews ?? []}
+            open={p.sidePanelId ?? null}
+            onToggle={p.onTogglePanel}
+            orientation="vertical"
+          />
+        )}
+        {p.paneMenu}
+      </div>
+      <div className="flex shrink-0 flex-col items-center gap-1">
         {p.onToggleFullscreen && (
           <IconButton
             size="sm"

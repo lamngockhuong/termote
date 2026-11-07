@@ -50,7 +50,7 @@ export function PanelToggles({
             title={
               pressed ? t('shell.sidePanel.close', { name: label }) : label
             }
-            className={`relative before:absolute before:inset-x-0 before:-inset-y-1 before:content-[''] flex ${BUTTON_SIZE[orientation]} items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] text-[12px] ui-native:rounded-full ${FOCUS_RING} ${
+            className={`relative before:absolute before:content-[''] flex ${BUTTON_SIZE[orientation]} items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] text-[12px] ui-native:rounded-full ${FOCUS_RING} ${
               pressed
                 ? 'bg-surface-raised text-fg shadow-sm ui-terminal:bg-accent-soft ui-terminal:text-accent ui-terminal:shadow-none'
                 : 'text-fg-muted hover:text-fg'

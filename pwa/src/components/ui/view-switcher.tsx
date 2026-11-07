@@ -22,14 +22,17 @@ export const LABEL_PROPS = { [COMPACT_LABEL_ATTR]: '' }
 export type Orientation = 'horizontal' | 'vertical'
 
 // The group and its buttons in a row (the header) or a column (the right
-// bar, where a button is a 32px square showing its icon only)
+// bar, where a button is a square showing its icon only, 44px on a touch
+// screen). In a row the hit area reaches above and below the button; in a
+// column it stays on the button, or it would take the next one's edge.
 export const GROUP_CLASS: Record<Orientation, string> = {
   horizontal: 'flex shrink-0',
   vertical: 'flex shrink-0 flex-col',
 }
 export const BUTTON_SIZE: Record<Orientation, string> = {
-  horizontal: 'h-7 px-2.5 pointer-coarse:h-9',
-  vertical: 'size-8',
+  horizontal:
+    'h-7 px-2.5 pointer-coarse:h-9 before:inset-x-0 before:-inset-y-1',
+  vertical: 'size-8 pointer-coarse:size-touch before:inset-0',
 }
 
 interface Props<T extends string> {
@@ -105,7 +108,7 @@ export function ViewSwitcher<T extends string>({
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(id)}
             title={label}
-            className={`relative before:absolute before:inset-x-0 before:-inset-y-1 before:content-[''] flex items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] ui-native:rounded-full ${FOCUS_RING} ${BUTTON_SIZE[orientation]} text-[12px] ${
+            className={`relative before:absolute before:content-[''] flex items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] ui-native:rounded-full ${FOCUS_RING} ${BUTTON_SIZE[orientation]} text-[12px] ${
               selected
                 ? 'bg-surface-raised text-fg shadow-sm ui-terminal:bg-accent-soft ui-terminal:text-accent ui-terminal:shadow-none'
                 : 'text-fg-muted hover:text-fg'

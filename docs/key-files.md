@@ -201,7 +201,9 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/docx-preview.tsx`             | A Word document from the worker's tree as React elements       |
 | `pwa/src/utils/docx-worker.ts`                    | mammoth and xmldom in a worker, the result sanitized           |
 | `pwa/src/utils/docx-sanitize.ts`                  | Allowlist of tags and attributes, limits, as a JSON tree       |
-| `pwa/src/components/panel-toggles.tsx`            | Desktop header toggles of the side panel (Files, Changes)      |
+| `pwa/src/components/panel-toggles.tsx`            | Side panel toggles (Files, Changes), header or right bar       |
+| `pwa/src/components/toolbar-rail.tsx`             | Desktop right bar: views, panels, Pane, fullscreen, palette    |
+| `pwa/src/hooks/use-compact-labels.ts`             | Header view labels hidden while the session tabs overflow      |
 | `pwa/src/hooks/use-files.ts`                      | File tree of a pane's root, one store per pane                 |
 | `pwa/src/hooks/use-git-changes.ts`                | Polls a pane's git status, the Changes tabs, one store a pane  |
 | `pwa/src/utils/highlight.ts`                      | Syntax highlighting through a Shiki worker, with a timeout     |
