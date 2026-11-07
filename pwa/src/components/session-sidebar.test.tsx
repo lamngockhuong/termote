@@ -21,13 +21,28 @@ vi.mock('./icon-picker', () => ({
   IconPicker: ({
     value,
     onChange,
+    auto,
+    onAuto,
   }: {
     value: string
     onChange: (v: string) => void
+    auto?: boolean
+    onAuto?: () => void
   }) => (
-    <button data-testid="icon-picker" onClick={() => onChange('🚀')}>
-      {value}
-    </button>
+    <>
+      <button
+        data-testid="icon-picker"
+        data-auto={auto ? 'true' : 'false'}
+        onClick={() => onChange('🚀')}
+      >
+        {value}
+      </button>
+      {onAuto && (
+        <button data-testid="icon-auto" onClick={onAuto}>
+          auto
+        </button>
+      )}
+    </>
   ),
 }))
 
@@ -370,7 +385,7 @@ describe('SessionSidebar — desktop expanded (default)', () => {
     const input = screen.getByPlaceholderText('Session name')
     fireEvent.change(input, { target: { value: 'NewSess' } })
     fireEvent.keyDown(input, { key: 'Enter' })
-    expect(onAdd).toHaveBeenCalledWith('NewSess', '💻')
+    expect(onAdd).toHaveBeenCalledWith('NewSess', undefined)
   })
 
   it('add form: clicking Add button calls onAdd', () => {
@@ -380,7 +395,7 @@ describe('SessionSidebar — desktop expanded (default)', () => {
       target: { value: 'NewSess' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Add' }))
-    expect(onAdd).toHaveBeenCalledWith('NewSess', '💻')
+    expect(onAdd).toHaveBeenCalledWith('NewSess', undefined)
   })
 
   it('add form: does not call onAdd if name is empty', () => {
@@ -463,7 +478,7 @@ describe('SessionSidebar — desktop expanded (default)', () => {
     const input = screen.getByDisplayValue('Shell')
     fireEvent.change(input, { target: { value: 'Renamed' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    expect(onUpdate).toHaveBeenCalledWith('1', { name: 'Renamed', icon: '💻' })
+    expect(onUpdate).toHaveBeenCalledWith('1', { name: 'Renamed' })
   })
 
   it('edit form: a backend without tab renaming keeps the name', () => {
@@ -476,7 +491,7 @@ describe('SessionSidebar — desktop expanded (default)', () => {
       'Open herdr-app once to rename this tab; only its icon changes here.',
     )
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    expect(onUpdate).toHaveBeenCalledWith('1', { name: 'Shell', icon: '💻' })
+    expect(onUpdate).toHaveBeenCalledWith('1', { name: 'Shell' })
   })
 
   it('edit form: Save does nothing if name is empty', () => {
@@ -514,6 +529,50 @@ describe('SessionSidebar — desktop expanded (default)', () => {
     fireEvent.click(iconPickers[0]) // changes to 🚀
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(onUpdate).toHaveBeenCalledWith('1', { name: 'Shell', icon: '🚀' })
+  })
+
+  it('edit form: Automatic gives the session back its automatic icon', () => {
+    renderDesktop()
+    const editBtns = document.querySelectorAll('button[title="Edit session"]')
+    fireEvent.click(editBtns[0])
+    const picker = () => screen.getAllByTestId('icon-picker')[0]
+    // No icon picked yet: automatic, the default shown
+    expect(picker()).toHaveAttribute('data-auto', 'true')
+    expect(picker()).toHaveTextContent('📺')
+    fireEvent.click(picker())
+    expect(picker()).toHaveAttribute('data-auto', 'false')
+    expect(picker()).toHaveTextContent('🚀')
+    fireEvent.click(screen.getAllByTestId('icon-auto')[0])
+    expect(picker()).toHaveAttribute('data-auto', 'true')
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(onUpdate).toHaveBeenCalledWith('1', {
+      name: 'Shell',
+      customIcon: false,
+    })
+  })
+
+  it('edit form: a picked icon shows as it is, not automatic', () => {
+    renderDesktop([
+      { id: '1', name: 'Shell', icon: '🔨', customIcon: true, description: '' },
+      { id: '2', name: 'Logs', icon: '📜', description: '' },
+    ])
+    const editBtns = document.querySelectorAll('button[title="Edit session"]')
+    fireEvent.click(editBtns[0])
+    const picker = screen.getAllByTestId('icon-picker')[0]
+    expect(picker).toHaveAttribute('data-auto', 'false')
+    expect(picker).toHaveTextContent('🔨')
+  })
+
+  it('add form: an icon picked, then Automatic, adds none', () => {
+    renderDesktop()
+    fireEvent.click(screen.getByTitle('Add new session'))
+    fireEvent.click(screen.getAllByTestId('icon-picker')[0])
+    fireEvent.click(screen.getAllByTestId('icon-auto')[0])
+    fireEvent.change(screen.getByPlaceholderText('Session name'), {
+      target: { value: 'Plain' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+    expect(onAdd).toHaveBeenCalledWith('Plain', undefined)
   })
 
   it('remove button shown when sessions.length > 1', () => {
@@ -823,7 +882,7 @@ describe('SessionSidebar — mobile mode', () => {
       target: { value: 'Mobile Session' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Add' }))
-    expect(onAdd).toHaveBeenCalledWith('Mobile Session', '💻')
+    expect(onAdd).toHaveBeenCalledWith('Mobile Session', undefined)
   })
 
   it('mobile edit form: Save calls onUpdate', () => {
@@ -836,7 +895,7 @@ describe('SessionSidebar — mobile mode', () => {
     const input = screen.getByDisplayValue('Shell')
     fireEvent.change(input, { target: { value: 'Updated' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    expect(onUpdate).toHaveBeenCalledWith('1', { name: 'Updated', icon: '💻' })
+    expect(onUpdate).toHaveBeenCalledWith('1', { name: 'Updated' })
   })
 
   // Opens the current session's menu and picks Edit
@@ -949,7 +1008,7 @@ describe('SessionSidebar — mobile mode', () => {
       target: { value: 'Renamed' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    expect(onUpdate).toHaveBeenCalledWith('1', { name: 'Renamed', icon: '💻' })
+    expect(onUpdate).toHaveBeenCalledWith('1', { name: 'Renamed' })
     expect(
       within(current).getByRole('button', { name: 'Actions for Shell' }),
     ).toBeInTheDocument()
@@ -1553,7 +1612,7 @@ describe('SessionSidebar — filter bar', () => {
     fireEvent.change(input, { target: { value: 'Fresh' } })
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(onFilterChange).toHaveBeenCalledWith('all')
-    expect(onAdd).toHaveBeenCalledWith('Fresh', '💻')
+    expect(onAdd).toHaveBeenCalledWith('Fresh', undefined)
   })
 
   it('does not touch the filter when adding without one', () => {
@@ -2507,7 +2566,7 @@ describe('SessionSidebar — reorder', () => {
     expect(input).toHaveValue('c')
     fireEvent.change(input, { target: { value: 'c2' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    expect(onUpdate).toHaveBeenCalledWith('1', { name: 'c2', icon: '💻' })
+    expect(onUpdate).toHaveBeenCalledWith('1', { name: 'c2' })
     fireEvent.click(screen.getByRole('button', { name: 'Edit a' }))
     rerender(
       <SessionSidebar

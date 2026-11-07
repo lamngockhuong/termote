@@ -447,6 +447,7 @@ describe('useLocalSessions', () => {
     expect(meta['tmux:name:vim']).toEqual({
       icon: '🖥️',
       description: 'My editor',
+      picked: true,
     })
   })
 
@@ -579,6 +580,98 @@ describe('useLocalSessions', () => {
     await act(async () => {})
     expect(result.current.sessions[0].icon).toBe('🐚')
     expect(result.current.sessions[0].description).toBe('My shell')
+  })
+
+  it('counts an icon as picked once chosen, not a default saved before', async () => {
+    const shown = async (saved: object) => {
+      localStorage.setItem(
+        'termote-sessions',
+        JSON.stringify({ 'tmux:name:shell': saved }),
+      )
+      mockFetchTabs.mockResolvedValue([WIN_SHELL])
+      const { result, unmount } = renderHook(() => useLocalSessions(1))
+      await act(async () => {})
+      const { icon, customIcon } = result.current.sessions[0]
+      unmount()
+      return [icon, customIcon]
+    }
+    // The form saved 💻 (or 📺) whether or not the user chose it
+    expect(await shown({ icon: '💻', description: '' })).toEqual([
+      '💻',
+      undefined,
+    ])
+    expect(await shown({ icon: '📺', description: '' })).toEqual([
+      '📺',
+      undefined,
+    ])
+    expect(await shown({ icon: '🔨', description: '' })).toEqual(['🔨', true])
+    expect(await shown({ icon: '💻', description: '', picked: true })).toEqual([
+      '💻',
+      true,
+    ])
+  })
+
+  it('a new tab without an icon keeps none picked; one picked later is', async () => {
+    mockFetchTabs
+      .mockResolvedValueOnce([WIN_SHELL])
+      .mockResolvedValue([WIN_SHELL, WIN_VIM])
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    await act(async () => {
+      await result.current.addSession('vim')
+    })
+    const meta = () => JSON.parse(localStorage.getItem('termote-sessions')!)
+    expect(meta()['tmux:name:vim']).toEqual({ icon: '📺', description: '' })
+    const vim = () => result.current.sessions.find((s) => s.name === 'vim')!
+    expect(vim().customIcon).toBeUndefined()
+    // A rename keeps it unpicked
+    mockRenameTab.mockResolvedValue(true)
+    mockFetchTabs.mockResolvedValue([WIN_SHELL, { ...WIN_VIM, name: 'edit' }])
+    await act(async () => {
+      await result.current.updateSession(vim().id, { name: 'edit' })
+    })
+    expect(meta()['tmux:name:edit']).toEqual({ icon: '📺', description: '' })
+    const edit = () => result.current.sessions.find((s) => s.name === 'edit')!
+    expect(edit().customIcon).toBeUndefined()
+    await act(async () => {
+      await result.current.updateSession(edit().id, { icon: '📺' })
+    })
+    expect(meta()['tmux:name:edit']).toEqual({
+      icon: '📺',
+      description: '',
+      picked: true,
+    })
+    expect(edit().customIcon).toBe(true)
+    // Automatic again: no icon picked, the default saved
+    await act(async () => {
+      await result.current.updateSession(edit().id, { customIcon: false })
+    })
+    expect(meta()['tmux:name:edit']).toEqual({ icon: '📺', description: '' })
+    expect(edit().customIcon).toBe(false)
+    expect(edit().icon).toBe('📺')
+  })
+
+  it('Automatic drops a picked icon for the default', async () => {
+    localStorage.setItem(
+      'termote-sessions',
+      JSON.stringify({ 'tmux:name:shell': { icon: '🔨', description: 'x' } }),
+    )
+    mockFetchTabs.mockResolvedValue([WIN_SHELL])
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    expect(result.current.sessions[0].customIcon).toBe(true)
+    await act(async () => {
+      await result.current.updateSession(result.current.sessions[0].id, {
+        customIcon: false,
+      })
+    })
+    expect(JSON.parse(localStorage.getItem('termote-sessions')!)).toEqual({
+      'tmux:name:shell': { icon: '📺', description: 'x' },
+    })
+    expect(result.current.sessions[0]).toMatchObject({
+      icon: '📺',
+      customIcon: false,
+    })
   })
 
   it('moves 0.x metadata keyed by window name under the tmux prefix', async () => {
@@ -1164,6 +1257,7 @@ describe('useLocalSessions with several tmux sessions', () => {
     expect(meta['tmux:name:$3\u0000shell']).toEqual({
       icon: '🧪',
       description: 'tests',
+      picked: true,
     })
     expect(meta['tmux:name:shell']).toBeUndefined()
   })
@@ -1748,7 +1842,7 @@ describe('useLocalSessions with herdr', () => {
     expect(result.current.activeSession.icon).toBe('🚀')
     const meta = JSON.parse(localStorage.getItem('termote-sessions')!)
     expect(meta).toEqual({
-      'herdr:w2:t9': { icon: '🚀', description: 'Fresh' },
+      'herdr:w2:t9': { icon: '🚀', description: 'Fresh', picked: true },
     })
   })
 
@@ -1781,7 +1875,9 @@ describe('useLocalSessions with herdr', () => {
     })
     expect(mockRenameTab).toHaveBeenCalledWith('w1:t2', 'renamed', 'w1:t2')
     const meta = JSON.parse(localStorage.getItem('termote-sessions')!)
-    expect(meta).toEqual({ 'herdr:w1:t2': { icon: '⭐', description: '' } })
+    expect(meta).toEqual({
+      'herdr:w1:t2': { icon: '⭐', description: '', picked: true },
+    })
   })
 
   it('removeSession drops metadata keyed by tab id', async () => {
@@ -2252,7 +2348,7 @@ describe('useLocalSessions with zellij', () => {
       await result.current.updateSession('zZGV2:t0', { icon: '⭐' })
     })
     expect(meta()).toEqual({
-      'zellij:zZGV2/terminal_0': { icon: '⭐', description: '' },
+      'zellij:zZGV2/terminal_0': { icon: '⭐', description: '', picked: true },
     })
     expect(result.current.sessions.map((s) => s.icon)).toEqual(['📺', '⭐'])
     // Saved metadata survives a reload under its prefix (no 0.x migration)
@@ -2291,7 +2387,11 @@ describe('useLocalSessions with zellij', () => {
     })
     expect(mockCreateTab).toHaveBeenCalledWith('new', 'zZGV2')
     expect(meta()).toEqual({
-      'zellij:zZGV2/terminal_3': { icon: '🚀', description: 'Fresh' },
+      'zellij:zZGV2/terminal_3': {
+        icon: '🚀',
+        description: 'Fresh',
+        picked: true,
+      },
     })
     expect(result.current.activeSession.id).toBe('zZGV2:t1')
     expect(result.current.activeSession.icon).toBe('🚀')
@@ -2416,7 +2516,7 @@ describe('useLocalSessions with zellij', () => {
       'hello main',
     )
     expect(meta()).toEqual({
-      'zellij:zb3Bz/terminal_0': { icon: '⭐', description: '' },
+      'zellij:zb3Bz/terminal_0': { icon: '⭐', description: '', picked: true },
     })
   })
 
@@ -2470,7 +2570,7 @@ describe('useLocalSessions with zellij', () => {
       await result.current.updateSession('zZGV2:t0', { icon: '⭐' })
     })
     expect(meta()).toEqual({
-      'zellij:zZGV2:t0': { icon: '⭐', description: '' },
+      'zellij:zZGV2:t0': { icon: '⭐', description: '', picked: true },
     })
   })
 

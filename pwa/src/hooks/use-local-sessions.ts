@@ -3,6 +3,7 @@ import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
 import type { Translate } from '../i18n/translate'
 import {
+  DEFAULT_TAB_ICON,
   SESSIONS_STORAGE_KEY,
   type Session,
   type SessionGroup,
@@ -84,13 +85,30 @@ function sameMux(a: MuxInfo, b: MuxInfo): boolean {
   )
 }
 
-// Store metadata (icon, description) in localStorage since the mux only stores tab names
+// Store metadata (icon, description) in localStorage since the mux only stores tab names.
+// picked: the user chose the icon, so it shows even while the tab runs an
+// agent (whose logo shows otherwise).
 interface SessionMeta {
   icon: string
   description: string
+  picked?: boolean
 }
 
-const DEFAULT_META: SessionMeta = { icon: '📺', description: '' }
+const DEFAULT_META: SessionMeta = { icon: DEFAULT_TAB_ICON, description: '' }
+
+// Before picked was kept, a new tab saved the form's icon whether or not the
+// user chose it: those two count as not chosen.
+const UNPICKED_ICONS = ['📺', '💻']
+
+const iconPicked = (m: SessionMeta) =>
+  m.picked === true || !UNPICKED_ICONS.includes(m.icon)
+
+// A new tab's metadata: icon given only when the user chose one.
+const newMeta = (icon: string | undefined, description: string) => ({
+  icon: icon ?? DEFAULT_TAB_ICON,
+  description,
+  ...(icon !== undefined && { picked: true }),
+})
 
 // tmux keys metadata by window name, as 0.x did, so it survives window
 // renumbering; other backends have stable tab ids. A window of a session
@@ -273,6 +291,7 @@ export function buildSessions(
         key: tab.key ?? tab.id,
         name: tab.name,
         icon: m.icon,
+        ...(iconPicked(m) && { customIcon: true }),
         description: m.description,
         groupId: g.id,
         paneId: pane?.id,
@@ -647,14 +666,13 @@ export function useLocalSessions(pollInterval = 5) {
   // client attached to the session) reaches the caller, after the refresh;
   // other failures show on the next snapshot.
   const addSession = useCallback(
-    async (name: string, icon = '📺', description = '') => {
+    async (name: string, icon?: string, description = '') => {
+      const meta = newMeta(icon, description)
       const { backend, caps } = muxRef.current
       // tmux keys metadata by name, so it can be saved before the tab exists
       if (backend === 'tmux') {
-        metaRef.current[metaKey(backend, '', name, activeSession?.groupId)] = {
-          icon,
-          description,
-        }
+        metaRef.current[metaKey(backend, '', name, activeSession?.groupId)] =
+          meta
         saveMeta(metaRef.current)
       }
 
@@ -667,7 +685,7 @@ export function useLocalSessions(pollInterval = 5) {
         return null
       })
       if (id && backend !== 'tmux' && backend !== 'zellij') {
-        metaRef.current[metaKey(backend, id, name)] = { icon, description }
+        metaRef.current[metaKey(backend, id, name)] = meta
         saveMeta(metaRef.current)
       }
       // herdr creates tabs in the background; show the new one here
@@ -683,13 +701,17 @@ export function useLocalSessions(pollInterval = 5) {
       // snapshot: saved now and shown at once.
       const key = id && backend === 'zellij' && keysRef.current.get(id)
       if (key) {
-        metaRef.current[metaKey(backend, id, name, undefined, key)] = {
-          icon,
-          description,
-        }
+        metaRef.current[metaKey(backend, id, name, undefined, key)] = meta
         saveMeta(metaRef.current)
         const withMeta = (s: Session) =>
-          s.id === id ? { ...s, icon, description } : s
+          s.id === id
+            ? {
+                ...s,
+                icon: meta.icon,
+                description,
+                ...(iconPicked(meta) && { customIcon: true }),
+              }
+            : s
         setSessions((prev) => prev.map(withMeta))
         setActiveSession((prev) => prev && withMeta(prev))
       }
@@ -854,19 +876,31 @@ export function useLocalSessions(pollInterval = 5) {
         if (oldKey !== newKey) delete metaRef.current[oldKey]
       }
 
+      // An icon given is one the user chose; saved metadata from before
+      // picked was kept stays as it was, read by iconPicked. customIcon
+      // false: back to automatic (the agent's logo, else the default icon).
+      const auto = updates.customIcon === false
+      const picked = !auto && (updates.icon !== undefined || oldMeta.picked)
+      const icon = auto ? DEFAULT_TAB_ICON : (updates.icon ?? oldMeta.icon)
       metaRef.current[newKey] = {
-        icon: updates.icon ?? oldMeta.icon,
+        icon,
         description: updates.description ?? oldMeta.description,
+        ...(picked && { picked: true }),
       }
       saveMeta(metaRef.current)
 
       // Update local state
+      const changes = {
+        ...updates,
+        ...(auto && { icon }),
+        ...(!auto && updates.icon !== undefined && { customIcon: true }),
+      }
       setSessions((prev) =>
-        prev.map((s) => (s.id === sessionId ? { ...s, ...updates } : s)),
+        prev.map((s) => (s.id === sessionId ? { ...s, ...changes } : s)),
       )
       if (activeSession?.id === sessionId) {
         /* v8 ignore next */
-        setActiveSession((prev) => (prev ? { ...prev, ...updates } : prev))
+        setActiveSession((prev) => (prev ? { ...prev, ...changes } : prev))
       }
     },
     [sessions, activeSession?.id],

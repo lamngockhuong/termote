@@ -5,6 +5,7 @@ import type { Session } from '../types/session'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { AgentStatusBadge } from './agent-status-badge'
 import { OnlyPaneLine, onlyPaneOf } from './meta-chips'
+import { TabIcon } from './tab-icon'
 
 interface Props {
   session: Session
@@ -231,7 +232,7 @@ export function SwipeableSessionItem({
             }`}
           >
             <span className="flex size-9 shrink-0 items-center justify-center rounded-control bg-surface text-[18px] ui-native:bg-bg">
-              {session.icon}
+              <TabIcon session={session} />
             </span>
             <span className="min-w-0 flex-1">
               <span

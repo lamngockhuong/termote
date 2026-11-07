@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { IconPicker } from './icon-picker'
 
@@ -83,5 +83,40 @@ describe('IconPicker', () => {
     // The modal grid button (not the trigger)
     fireEvent.click(laptopBtns[laptopBtns.length - 1])
     expect(onChange).toHaveBeenCalledWith('💻')
+  })
+
+  it('offers Automatic only when asked, pressed while auto', () => {
+    const onAuto = vi.fn()
+    const onChange = vi.fn()
+    const { rerender } = render(<IconPicker value="📺" onChange={onChange} />)
+    fireEvent.click(screen.getByTitle('Change icon'))
+    expect(screen.queryByRole('button', { name: /Automatic/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    rerender(<IconPicker value="📺" onChange={onChange} auto onAuto={onAuto} />)
+    fireEvent.click(screen.getByTitle('Change icon'))
+    const autoButton = screen.getByRole('button', { name: /Automatic/ })
+    expect(autoButton).toHaveAttribute('aria-pressed', 'true')
+    // No emoji is the choice while auto
+    const sheet = screen.getByRole('dialog', { name: 'Choose Icon' })
+    expect(within(sheet).getByRole('button', { name: '📺' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+    fireEvent.click(autoButton)
+    expect(onAuto).toHaveBeenCalledTimes(1)
+    expect(onChange).not.toHaveBeenCalled()
+    expect(screen.queryByText('Choose Icon')).not.toBeInTheDocument()
+    rerender(<IconPicker value="🚀" onChange={onChange} onAuto={onAuto} />)
+    fireEvent.click(screen.getByTitle('Change icon'))
+    expect(screen.getByRole('button', { name: /Automatic/ })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+    expect(
+      within(screen.getByRole('dialog', { name: 'Choose Icon' })).getByRole(
+        'button',
+        { name: '🚀' },
+      ),
+    ).toHaveAttribute('aria-pressed', 'true')
   })
 })

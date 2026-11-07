@@ -4,6 +4,7 @@ import type { Session } from '../types/session'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { AgentStatusBadge } from './agent-status-badge'
 import { ConnectionDot, type ConnectionState } from './connection-indicator'
+import { TabIcon } from './tab-icon'
 import { FOCUS_RING } from './ui/button'
 
 interface Props {
@@ -47,7 +48,9 @@ export function SessionSwitcherChip({
       aria-expanded={expanded}
       className={`flex h-10 min-w-0 flex-1 items-center gap-2 rounded-control px-2 text-left transition-colors duration-(--duration-fast) hover:bg-surface ui-native:rounded-full ui-native:bg-surface ui-native:px-3 ${FOCUS_RING}`}
     >
-      <span className="shrink-0 text-[18px] leading-none">{session.icon}</span>
+      <span className="shrink-0 text-[18px] leading-none">
+        <TabIcon session={session} />
+      </span>
       <span className="min-w-0 flex-1">
         <span className="flex min-w-0 items-center gap-1.5">
           <span className="truncate text-[15px] font-semibold leading-tight ui-terminal:font-label ui-terminal:text-[14px]">

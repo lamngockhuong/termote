@@ -57,6 +57,7 @@ import {
 import { requestTemplateFill } from '../utils/template-fill-request'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { FIND_DEBOUNCE_MS, FIND_ERRORS } from './file-search'
+import { TabIcon } from './tab-icon'
 import { Sheet } from './ui/sheet'
 
 // "Searching…" shows once a search takes this long
@@ -99,6 +100,8 @@ export interface CommandPaletteProps {
 interface Item {
   key: string
   label: string
+  // Shown before the label (a tab's icon)
+  icon?: ReactNode
   description?: string
   // The group shown before the label (a command's category)
   group?: string
@@ -505,7 +508,8 @@ export function CommandPalette({
     const groupName = new Map(groups.map((g) => [g.id, g.name]))
     const items: Item[] = sessions.map((s) => ({
       key: `tab:${s.id}`,
-      label: `${s.icon} ${s.name}`,
+      label: s.name,
+      icon: <TabIcon session={s} />,
       description:
         s.id === session.id
           ? t('tasks.palette.currentTab')
@@ -644,6 +648,14 @@ export function CommandPalette({
                   aria-hidden="true"
                   className="shrink-0 text-fg-muted"
                 />
+              )}
+              {item.icon && (
+                <span
+                  aria-hidden="true"
+                  className="shrink-0 text-[15px] leading-none"
+                >
+                  {item.icon}
+                </span>
               )}
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate text-fg">

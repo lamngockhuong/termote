@@ -121,6 +121,8 @@ export default {
   // A session's icon (components/icon-picker.tsx)
   'shell.icon.change': 'Change icon',
   'shell.icon.choose': 'Choose Icon',
+  'shell.icon.auto': 'Automatic',
+  'shell.icon.autoHint': 'The logo of the agent it runs, if any',
   // An agent's last hour (components/status-timeline.tsx)
   'shell.timeline.blocked': 'needs you',
   'shell.timeline.working': 'working',

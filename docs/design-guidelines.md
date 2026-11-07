@@ -261,7 +261,8 @@ There is no Quick actions sheet and no floating button.
 
 ## Icons
 
-- Lucide React icons; emoji for session icons (user-selectable)
+- Lucide React icons; emoji for session icons (user-selectable); a session with none picked that runs an agent shows
+  the agent's logo (`agent-logo.tsx`, from lobe-icons, MIT)
 - Sizes are set per component (toolbar keys 18px, header 20px)
 
 ## Animation
