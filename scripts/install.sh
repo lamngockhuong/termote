@@ -156,6 +156,8 @@ Start it (it asks for nothing; see '$CMD help' for options such as --lan):
 
   $CMD start
 
+Setting this up with a coding agent? It can read: $CMD help agent
+
 EOF
 }
 

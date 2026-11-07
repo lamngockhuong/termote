@@ -387,9 +387,28 @@ func TestAccessInfoHidesPasswordInHerdrPlugin(t *testing.T) {
 		t.Fatalf("reused password output:\n%s", out)
 	}
 	delete(tc.env, "HERDR_PLUGIN_ID")
+	tc.outTTY = true
 	tc.stdout.Reset()
 	tc.showAccessInfo(startOptions{port: 7680, mux: "herdr", user: "bob"}, "S3cret-pass", false)
 	if out := tc.stdout.String(); !strings.Contains(out, "S3cret-pass") || !strings.Contains(out, "Username: bob") {
+		t.Fatalf("terminal output lost the new credentials:\n%s", out)
+	}
+}
+
+// A new password goes to a terminal only, never to a coding agent's pipe.
+func TestAccessInfoHidesPasswordOffTerminal(t *testing.T) {
+	tc := newTestCLI(t, "linux")
+	tc.outTTY = false
+	tc.showAccessInfo(startOptions{port: 7680, mux: "tmux", user: "bob"}, "S3cret-pass", false)
+	out := tc.stdout.String()
+	if strings.Contains(out, "S3cret-pass") || strings.Contains(out, "TERMOTE CREDENTIALS") ||
+		!strings.Contains(out, "Username: bob, with a new password; show it with: termote show-password") {
+		t.Fatalf("output off a terminal:\n%s", out)
+	}
+	tc.outTTY = true
+	tc.stdout.Reset()
+	tc.showAccessInfo(startOptions{port: 7680, mux: "tmux", user: "bob"}, "S3cret-pass", false)
+	if out := tc.stdout.String(); !strings.Contains(out, "S3cret-pass") || !strings.Contains(out, "TERMOTE CREDENTIALS") {
 		t.Fatalf("terminal output lost the new credentials:\n%s", out)
 	}
 }

@@ -321,6 +321,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/cli_container.go`                         | `container up/down/logs/status`                                |
 | `server/cli_url.go`                               | `status --json`, `url` (deep link, open, copy, QR), Host line  |
 | `server/cli_panel.go`                             | `panel`: the Herdr plugin's popup                              |
+| `server/cli_agent_guide.go`, `agent-guide.md`     | `help agent`: the guide for coding agents (also `/agents.md`)  |
 | `server/listener_owner*.go`                       | Saved password sent only to the current user's listener        |
 | `server/peer_user_listener.go`                    | Refuses connections from other local OS users (`peer_user_*`)  |
 | `server/local_socket*.go`                         | CLI ↔ native server over a Unix socket / named pipe            |

@@ -1199,9 +1199,10 @@ func (c *cli) showAccessInfo(o startOptions, pass string, reused bool) {
 		c.infof("Username: %s, with the saved password (show it with: termote show-password; new one: termote start --fresh)", o.user)
 		return
 	}
-	// A Herdr plugin action's output is kept in Herdr's plugin log, so the
-	// password is not printed there.
-	if c.getenv("HERDR_PLUGIN_ID") != "" {
+	// A new password is printed only to a terminal: a Herdr plugin action's
+	// output is kept in Herdr's plugin log, and output that is not a terminal
+	// (a coding agent, a pipe, a log file) can end up in a transcript.
+	if c.getenv("HERDR_PLUGIN_ID") != "" || !c.outTTY {
 		c.infof("Username: %s, with a new password; show it with: termote show-password", o.user)
 		return
 	}

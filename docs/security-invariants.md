@@ -2453,4 +2453,13 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
 - **Config persistence**: the saved password is AES-256-CBC with an HMAC, keyed by a random
   per-install `secret` file (0600) on Unix, DPAPI on Windows; the config file is also chmod
   600. The password is never written to the systemd unit, launchd plist, Scheduled Task or any
-  process command line; print it again with `termote show-password`.
+  process command line; print it again with `termote show-password`. `start` and `container up`
+  print a new password (`showAccessInfo`) only when stdout is a terminal and no Herdr plugin runs
+  them (`HERDR_PLUGIN_ID`); otherwise only the username and `termote show-password`, since a coding
+  agent's output, a pipe or a log can end up in a transcript or a file.
+- **Agent guide** (`termote help agent`, `server/cli_agent_guide.go`): prints `server/agent-guide.md`,
+  embedded in the binary, as it is: no request, no config read, no secret. The website publishes the
+  same file as `/agents.md`. The guide tells an agent never to run `termote show-password` or
+  `termote pair` for the user, never to combine `--no-auth` with `--lan`, `--tailscale` or
+  `--cloudflare`, and never to use `sudo`; a test checks that the password rule stays and that
+  every command and flag it names is in `termote help`.
