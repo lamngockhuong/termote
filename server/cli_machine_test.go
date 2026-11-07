@@ -385,13 +385,15 @@ func TestMachineImportHerdr(t *testing.T) {
 }
 
 func TestMachineWhereami(t *testing.T) {
+	// Read as printed: the paths are this test host's, which parseWhereami
+	// (TestParseWhereami) would refuse for a linux machine on Windows.
 	tc := newTestCLI(t, "linux")
-	tc.exe = "/opt/termote/bin/termote" // a path of the machine, whatever OS runs the test
 	if err := tc.cmdMachine([]string{"whereami"}); err != nil {
 		t.Fatal(err)
 	}
-	w, err := parseWhereami(tc.stdout.Bytes())
-	if err != nil || w.SocketDir != tc.localSocketDir() || w.Native || w.APIVersion != apiVersion {
+	var w whereami
+	err := json.Unmarshal(tc.stdout.Bytes(), &w)
+	if err != nil || w.Exe != tc.exe || w.SocketDir != tc.localSocketDir() || w.OS != "linux" || w.Native || w.APIVersion != apiVersion {
 		t.Errorf("whereami: %+v %v", w, err)
 	}
 	win := newTestCLI(t, "windows")
