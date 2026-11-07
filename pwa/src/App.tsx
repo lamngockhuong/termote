@@ -58,6 +58,7 @@ import {
 } from './components/session-sidebar'
 import { SettingsModal } from './components/settings-modal'
 import { SidePanel } from './components/side-panel'
+import { SidebarMachines } from './components/sidebar-machines'
 import { SpotlightTour } from './components/spotlight-tour'
 import { TemplateFillDialog } from './components/template-fill-dialog'
 import { TerminalStack } from './components/terminal-stack'
@@ -90,6 +91,7 @@ import {
 } from './hooks/use-history-close'
 import { useKeyboardVisible } from './hooks/use-keyboard-visible'
 import { useLocalSessions } from './hooks/use-local-sessions'
+import { useMachines } from './hooks/use-machines'
 import { useIsMobile, useMediaQuery } from './hooks/use-media-query'
 import {
   logout,
@@ -109,6 +111,7 @@ import { Trans } from './i18n/trans'
 import type { Translate } from './i18n/translate'
 import type { Session, SessionPane } from './types/session'
 import { applyUiStyle, syncThemeColor } from './ui-style'
+import { currentMachine, switchMachine } from './utils/api-base'
 import { buildAppCommands, type PaletteMode } from './utils/app-commands'
 import { APP_INFO } from './utils/app-info'
 import {
@@ -334,6 +337,25 @@ export default function App({
   const isMobile = useIsMobile()
   // Opened from "Open in new window": only the link's target, nothing kept
   const focus = isFocusWindow()
+  // The machines this server reaches; the sidebar lists them above the tabs
+  const machines = useMachines()
+  const openMachine = machines.find((m) => m.id === currentMachine())
+  const machinesSection = (
+    <SidebarMachines
+      machines={machines}
+      current={currentMachine()}
+      onSelect={switchMachine}
+    />
+  )
+  // The tab's title names the machine open, when it is not this one
+  useEffect(() => {
+    if (!openMachine) return
+    const before = document.title
+    document.title = `${openMachine.label} — Termote`
+    return () => {
+      document.title = before
+    }
+  }, [openMachine])
   // Desktop: one line per workspace, its tabs always in the header's bar
   const compactSidebar = !isMobile && settings.sidebarLayout === 'compact'
   // Desktop only: the command palette, app shortcuts and other windows
@@ -1831,6 +1853,9 @@ export default function App({
         startOffered: startOffered(viewContext),
         hasAgent: !!activeSession.hasAgent,
         devices: !!mux.caps.devices && !readOnly,
+        machines: ['', ...machines.map((m) => m.id)],
+        machine: currentMachine(),
+        switchMachine,
         canFullscreen,
         previousTab,
         nextTab,
@@ -1889,6 +1914,7 @@ export default function App({
       activeSession.hasAgent,
       mux.caps.devices,
       canFullscreen,
+      machines,
       previousTab,
       nextTab,
       previousPane,
@@ -1986,6 +2012,7 @@ export default function App({
         {/* Desktop sidebar; a focus window has none */}
         {!isMobile && !focus && (
           <SessionSidebar
+            machines={machinesSection}
             sessions={sessions}
             groups={groups}
             activeId={activeSession.id}
@@ -2014,6 +2041,7 @@ export default function App({
         {/* Mobile sessions sheet, opened from the session chip */}
         {isMobile && !focus && (
           <SessionSidebar
+            machines={machinesSection}
             sessions={sessions}
             groups={groups}
             activeId={activeSession.id}

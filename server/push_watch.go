@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 )
@@ -38,6 +39,9 @@ type pushEvent struct {
 	TabID   string `json:"tabId"`
 	PaneID  string `json:"paneId"`
 	Kind    string `json:"kind"`
+	// MachineID: the pane is on that machine (its snapshot is read through
+	// the machine poll); empty for this server's own.
+	MachineID string `json:"machineId,omitempty"`
 }
 
 // pushSendFunc sends one push (sendPush through the hardened client).
@@ -54,6 +58,10 @@ type pushWatcher struct {
 
 	// prev is the last known status of each pane; only the tick reads it.
 	prev map[string]string
+	// machinePrev is prev for the machines' panes, keyed <id>/<paneKey>;
+	// the machine poll writes it under mmu.
+	mmu         sync.Mutex
+	machinePrev map[string]string
 
 	// mu guards the sender's per-host state.
 	mu      sync.Mutex
@@ -70,13 +78,15 @@ func newPushWatcher(peek func(context.Context) (Snapshot, error), store *pushSto
 		queue:   make(chan pushEvent, pushQueueLen),
 		prev:    map[string]string{},
 		backoff: map[string]time.Time{},
-		logged:  map[string]time.Time{},
+
+		machinePrev: map[string]string{},
+		logged:      map[string]time.Time{},
 	}
 }
 
 // startPushWatcher runs the watcher until ctx is done; nothing without a
 // store. Its reads feed activity too.
-func startPushWatcher(ctx context.Context, m Mux, store *pushStore, activity *activityTracker) {
+func startPushWatcher(ctx context.Context, m Mux, store *pushStore, activity *activityTracker, machines *machinePoller) {
 	if store == nil {
 		return
 	}
@@ -89,6 +99,11 @@ func startPushWatcher(ctx context.Context, m Mux, store *pushStore, activity *ac
 		},
 	)
 	w.activity = activity
+	if machines != nil {
+		// The machines' agents notify through this server's subscriptions:
+		// a device subscribes here only.
+		machines.setOnSnapshot(w.observeMachine)
+	}
 	go w.run(ctx)
 	go w.deliver(ctx)
 }
@@ -191,8 +206,36 @@ func (w *pushWatcher) tick(ctx context.Context) {
 	}
 }
 
-// enqueue never blocks the tick: a full queue loses its oldest event. Only
-// the tick sends to the queue.
+// observeMachine queues the events of a machine's snapshot, as tick does
+// for this server's: its panes are keyed under the machine's id, and each
+// event names the machine.
+func (w *pushWatcher) observeMachine(id string, snap Snapshot) {
+	w.mmu.Lock()
+	defer w.mmu.Unlock()
+	if len(w.store.list()) == 0 {
+		clear(w.machinePrev)
+		return
+	}
+	prefix := id + "/"
+	prev := map[string]string{}
+	for k, v := range w.machinePrev {
+		if rest, ok := strings.CutPrefix(k, prefix); ok {
+			prev[rest] = v
+			delete(w.machinePrev, k)
+		}
+	}
+	next, events := transitions(prev, snap)
+	for k, v := range next {
+		w.machinePrev[prefix+k] = v
+	}
+	for _, e := range events {
+		e.MachineID = id
+		w.enqueue(e)
+	}
+}
+
+// enqueue never blocks the tick: a full queue loses its oldest event. The
+// tick and the machine poll send to the queue.
 func (w *pushWatcher) enqueue(e pushEvent) {
 	for {
 		select {
@@ -230,7 +273,11 @@ type pushResult struct {
 func (w *pushWatcher) deliverEvent(ctx context.Context, e pushEvent) {
 	payload, _ := json.Marshal(e)
 	_, topicKey := w.store.keys()
-	topic := pushTopic(topicKey, e.PaneID, e.Kind)
+	pane := e.PaneID
+	if e.MachineID != "" {
+		pane = e.MachineID + "/" + pane
+	}
+	topic := pushTopic(topicKey, pane, e.Kind)
 	now := w.now()
 	w.mu.Lock()
 	for h, until := range w.backoff {

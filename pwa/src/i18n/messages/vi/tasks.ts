@@ -175,6 +175,7 @@ export default {
   'tasks.command.agentStart': 'Khởi động một agent',
   'tasks.command.settings': 'Mở Cài đặt',
   'tasks.command.settingsDevices': 'Mở Cài đặt: Thiết bị',
+  'tasks.command.switchMachine': 'Chuyển sang máy kế tiếp',
   'tasks.command.settingsShortcuts': 'Mở Cài đặt: Phím tắt',
   'tasks.command.help': 'Hiện trợ giúp',
   'tasks.command.about': 'Giới thiệu Termote',
@@ -206,6 +207,7 @@ export default {
   'tasks.commandOff.noNextPane': 'Không có pane nào sau pane này',
   'tasks.commandOff.noPaneAfter': 'Không có pane nào sau pane này',
   'tasks.commandOff.noDevices': 'Server này không hỗ trợ',
+  'tasks.commandOff.noMachines': 'Chưa thêm máy nào khác (termote machine add)',
   'tasks.commandOff.noFullscreen': 'Trình duyệt này không hỗ trợ',
   'tasks.commandOff.noLink': 'Không có liên kết nào trỏ tới pane này',
 } satisfies Translation<typeof en>

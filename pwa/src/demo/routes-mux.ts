@@ -273,6 +273,8 @@ export const MUX_ROUTES: Record<string, Handler> = {
   'GET /activity': activity,
   'GET /overview': overview,
   'GET /system': ({ state }) => json(demoHostStats(state.now())),
+  // The demo reaches no other machine
+  'GET /machines': () => json({ machines: [] }),
   'GET /stream-token': () => json({ token: 'demo' }),
   'POST /tabs': createTab,
   'PATCH /tabs/{id}': changeTab,

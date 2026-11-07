@@ -620,6 +620,126 @@ jobs:
   # against one core on HC_SOCKET with its own HC_SESSION, HOME and XDG
   # dirs, and the server with TERMOTE_MUX=hc and sign-in on. The spec runs
   # only with TERMOTE_E2E_HC=1, and fails there (never skips).
+  e2e-machines:
+    name: E2E (machines)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.pwa == 'true' || needs.changes.outputs.api == 'true'
+    env:
+      TERMOTE_MUX: tmux
+      TERMOTE_BIND: 127.0.0.1
+      TERMOTE_PORT: "7680"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install tmux
+        run: sudo apt-get update && sudo apt-get install -y tmux && tmux -V
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 12.14.0
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27"
+          check-latest: true
+          cache-dependency-path: server/go.mod
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --filter termote...
+
+      - name: Playwright version
+        id: playwright
+        working-directory: pwa
+        run: |
+          v="$(node -p "require('@playwright/test/package.json').version")"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ env.ImageOS }}-${{ steps.playwright.outputs.version }}
+
+      - name: Install Playwright browser
+        working-directory: pwa
+        run: pnpm exec playwright install chromium
+
+      - name: Build PWA and server
+        run: |
+          pnpm --filter termote build
+          cp -R pwa/dist/. server/webui/dist/
+          cd server && CGO_ENABLED=0 go build -o termote-dev .
+
+      # Two servers, each with its own HOME, XDG dirs and tmux socket: the
+      # machine is native (a saved config, so it opens its bridge socket),
+      # without sign-in, on 7681; this one runs from the environment with
+      # sign-in on and joins the machine's bridge socket directly
+      # (TERMOTE_E2E_MACHINE_BRIDGE), no sshd. The password is made here and
+      # never printed.
+      - name: Start the machine and the server
+        run: |
+          R="$RUNNER_TEMP/machine"; M="$RUNNER_TEMP/main"
+          for d in "$R" "$M"; do
+            mkdir -p "$d/home" "$d/config/termote" "$d/state" "$d/cache" "$d/data" "$d/tmux"
+            chmod 700 "$d/tmux"
+          done
+          printf 'TERMOTE_PORT="7681"\nTERMOTE_NO_AUTH="true"\nTERMOTE_MUX="tmux"\n' > "$R/config/termote/config"
+          chmod 600 "$R/config/termote/config"
+          pass="$(openssl rand -hex 16)"
+          echo "::add-mask::$pass"
+          {
+            echo "E2E_MACHINE_PASS=$pass"
+            echo "TERMOTE_E2E_MACHINE_HOME=$R/home"
+          } >> "$GITHUB_ENV"
+          env -u TERMOTE_MUX -u TERMOTE_BIND -u TERMOTE_PORT SHELL=/bin/bash HOME="$R/home" \
+            XDG_CONFIG_HOME="$R/config" XDG_STATE_HOME="$R/state" XDG_CACHE_HOME="$R/cache" \
+            XDG_DATA_HOME="$R/data" TMUX_TMPDIR="$R/tmux" \
+            nohup ./server/termote-dev serve > "$R/serve.log" 2>&1 &
+          for _ in $(seq 1 30); do
+            [ -S "$R/state/termote/run/7681.bridge.sock" ] && break
+            sleep 1
+          done
+          SHELL=/bin/bash HOME="$M/home" XDG_CONFIG_HOME="$M/config" XDG_STATE_HOME="$M/state" \
+            XDG_CACHE_HOME="$M/cache" XDG_DATA_HOME="$M/data" TMUX_TMPDIR="$M/tmux" \
+            TERMOTE_PASS="$pass" TERMOTE_E2E_MACHINE_BRIDGE="Remote box=7681@$R/state/termote/run" \
+            nohup ./server/termote-dev serve > "$M/serve.log" 2>&1 &
+          for _ in $(seq 1 30); do
+            # The password goes to curl on stdin (printf is a builtin), never in argv
+            printf 'user = "admin:%s"\n' "$pass" |
+              curl -fsS -K - -H 'Sec-Fetch-Site: same-origin' "http://127.0.0.1:$TERMOTE_PORT/api/mux/machines" |
+              grep -q '"status":"online"' && exit 0
+            sleep 1
+          done
+          cat "$R/serve.log" "$M/serve.log"
+          exit 1
+
+      - name: Run Playwright
+        working-directory: pwa
+        env:
+          TERMOTE_E2E_MACHINE: "1"
+          TERMOTE_PASS: ${{ env.E2E_MACHINE_PASS }}
+        run: pnpm exec playwright test machines.spec --workers=1
+
+      - name: Logs
+        if: failure()
+        run: cat "$RUNNER_TEMP/machine/serve.log" "$RUNNER_TEMP/main/serve.log" || true
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-results-machines
+          path: pwa/test-results
+          retention-days: 7
+
   e2e-hc:
     name: E2E (herdr-core)
     runs-on: ubuntu-latest

@@ -20,6 +20,14 @@
     return typeof hash === 'string' && hash.startsWith('#/s/') ? hash : ''
   }
 
+  // A machine id as the server gives it (isMachineId in
+  // src/utils/api-base.ts), or '' for this server and anything else.
+  function machineOf(value) {
+    return typeof value === 'string' && /^[0-9a-f]{16}$/.test(value)
+      ? value
+      : ''
+  }
+
   // iOS resumes a home screen app without delivering the message below (and
   // refuses its focus()), so the link is also kept here: the page takes it
   // when it shows again. Equal to PENDING_LINK_CACHE and PENDING_LINK_URL in
@@ -27,12 +35,12 @@
   const PENDING_LINK_CACHE = 'termote-notify'
   const PENDING_LINK_URL = '/__termote/pending-link'
 
-  async function keepLink(hash) {
+  async function keepLink(hash, machine) {
     try {
       const cache = await caches.open(PENDING_LINK_CACHE)
       await cache.put(
         PENDING_LINK_URL,
-        new Response(JSON.stringify({ hash, at: Date.now() }), {
+        new Response(JSON.stringify({ hash, machine, at: Date.now() }), {
           headers: { 'Content-Type': 'application/json' },
         }),
       )
@@ -46,8 +54,10 @@
   // focus() and openWindow() are allowed only shortly after the click, so
   // neither waits on the link being kept; the message does, so that the
   // page that takes it also drops the kept copy.
-  async function openPane(hash) {
-    const kept = hash ? keepLink(hash) : Promise.resolve()
+  // machine: the pane is on that machine ('' for this server's); the page
+  // switches to it, and a new window opens on it.
+  async function openPane(hash, machine) {
+    const kept = hash ? keepLink(hash, machine) : Promise.resolve()
     const windows = await self.clients.matchAll({
       type: 'window',
       includeUncontrolled: true,
@@ -56,16 +66,18 @@
     if (client) {
       const focused = client.focus().catch(() => {})
       await kept
-      if (hash) client.postMessage({ type: 'termote-open', hash })
+      if (hash) client.postMessage({ type: 'termote-open', hash, machine })
       await focused
       return
     }
-    await Promise.all([self.clients.openWindow(`/${hash}`), kept])
+    const search = machine ? `?machine=${machine}` : ''
+    await Promise.all([self.clients.openWindow(`/${search}${hash}`), kept])
   }
 
   self.addEventListener('notificationclick', (event) => {
     event.notification.close()
-    event.waitUntil(openPane(paneHash(event.notification.data)))
+    const data = event.notification.data
+    event.waitUntil(openPane(paneHash(data), machineOf(data?.machine)))
   })
 
   // Web Push from the server: ids only. The text is made here, with the
@@ -134,13 +146,14 @@
     return ev
   }
 
-  // Every pane, read with this device's credentials: { snap } when read,
-  // { denied: true } when signed out or revoked (401, 403), {} when offline,
-  // slow or failed.
-  async function readSnapshot() {
+  // Every pane, read with this device's credentials (of machine when set,
+  // through this server): { snap } when read, { denied: true } when signed
+  // out or revoked (401, 403), {} when offline, slow or failed.
+  async function readSnapshot(machine) {
+    const base = machine ? `/api/machines/${machine}/mux` : '/api/mux'
     try {
       // peek: no page is open, so nothing may be created for this read.
-      const res = await fetch('/api/mux/snapshot?peek=1', {
+      const res = await fetch(`${base}/snapshot?peek=1`, {
         credentials: 'same-origin',
         signal: AbortSignal.timeout(SNAPSHOT_TIMEOUT_MS),
       })
@@ -241,15 +254,19 @@
       })
       return
     }
-    const read = await readSnapshot()
-    await updateBadge(read)
+    const machine = machineOf(ev.machineId)
+    const read = await readSnapshot(machine)
+    // The badge counts this server's agents only
+    if (!machine) await updateBadge(read)
     const names = namesOf(read.snap, ev)
     const options = {
-      tag: ev.paneId,
+      tag: machine ? `${machine}/${ev.paneId}` : ev.paneId,
       renotify: true,
       icon: ICON,
       badge: BADGE,
-      data: { hash: deepLink(ev) },
+      data: machine
+        ? { hash: deepLink(ev), machine }
+        : { hash: deepLink(ev) },
     }
     if (names) {
       // The name the user gave the pane tells two agents' panes apart

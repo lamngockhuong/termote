@@ -64,10 +64,11 @@ func (a hostAllowlist) allows(r *http.Request, hostport string) bool {
 	if h == "" {
 		return false
 	}
-	// The local socket's fixed name, on that socket only: a TCP request
-	// naming it is refused even when --allow-host lists it.
+	// The local socket's fixed name, on that socket and the machine
+	// bridge only: a TCP request naming it is refused even when
+	// --allow-host lists it.
 	if h == localSocketHost {
-		return isLocalSocket(r.Context())
+		return isLocalSocket(r.Context()) || isBridge(r.Context())
 	}
 	if _, ok := a.names[h]; ok {
 		return true
@@ -154,6 +155,9 @@ func writeGuard(allowed hostAllowlist, next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		// A route forwarded to a machine takes the same bodies as the
+		// machine's own.
+		p := machineRest(r.URL.Path)
 		if msg := crossSiteRejection(allowed, r); msg != "" {
 			jsonError(w, msg, http.StatusForbidden)
 			return
@@ -161,7 +165,7 @@ func writeGuard(allowed hostAllowlist, next http.Handler) http.Handler {
 		// A file sent to files/upload is raw application/octet-stream:
 		// not CORS-safelisted, so another site needs the preflight too.
 		// Its check=1 is JSON like any other write.
-		if isFilesUploadPath(r.URL.Path) && r.URL.Query().Get("check") != "1" {
+		if isFilesUploadPath(p) && r.URL.Query().Get("check") != "1" {
 			if mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type")); err == nil && mt == "application/octet-stream" {
 				next.ServeHTTP(w, r)
 				return
@@ -173,7 +177,7 @@ func writeGuard(allowed hostAllowlist, next http.Handler) http.Handler {
 		// image body: image/* is not CORS-safelisted either, so another site
 		// still needs the preflight we never answer. Multipart stays
 		// refused: a form posts it without any preflight.
-		image := r.URL.Path == "/api/mux/uploads" || isFilesImagePath(r.URL.Path)
+		image := p == "/api/mux/uploads" || isFilesImagePath(p)
 		mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 		if err == nil && image && isUploadType(mt) {
 			next.ServeHTTP(w, r)

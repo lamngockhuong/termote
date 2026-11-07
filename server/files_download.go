@@ -228,6 +228,11 @@ func auditWho(r *http.Request) (by, via string) {
 		via = "basic"
 	case authLocal:
 		via = "local"
+	case authMachine:
+		via = "machine"
+		if a.OriginAuth != "" {
+			via += ":" + a.OriginAuth
+		}
 	default:
 		via = "unknown"
 	}

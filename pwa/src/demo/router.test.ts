@@ -38,7 +38,7 @@ function sourcePaths(sources: Record<string, string>): Set<string> {
       if (p && !p.endsWith('/')) found.add(p)
     }
     for (const m of src.matchAll(
-      /(?:\$\{API_BASE\}|\/api\/mux)((?:\/(?:[a-z-]+|\{id\}))*\/?)/g,
+      /(?:\$\{API_BASE\}|\$\{apiBase\(\)\}|\$\{LOCAL_API\}|\/api\/mux)((?:\/(?:[a-z-]+|\{id\}))*\/?)/g,
     ))
       add(m[1])
     for (const m of src.matchAll(/agentPath\([^,]+,\s*'([^']+)'\)/g))

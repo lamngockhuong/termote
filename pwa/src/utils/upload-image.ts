@@ -6,6 +6,7 @@
 import { type FilesTarget, filesUrl } from '../hooks/use-mux-api'
 import type { MessageKey } from '../i18n/messages/en'
 import type { Translate } from '../i18n/translate'
+import { apiBase } from './api-base'
 
 // Mirrors the server's limit; the server still decides.
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
@@ -95,7 +96,7 @@ async function postImage(
 // The reason comes from the JSON code, not the status alone: an old server
 // answers this route with a plain 404.
 export async function uploadImage(blob: Blob): Promise<UploadResult> {
-  const sent = await postImage('/api/mux/uploads', blob)
+  const sent = await postImage(`${apiBase()}/uploads`, blob)
   if (!sent.ok) return sent
   const { res } = sent
   const data = sent.data as (Partial<Upload> & { code?: string }) | null

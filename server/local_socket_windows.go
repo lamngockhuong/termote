@@ -3,7 +3,6 @@ package main
 import (
 	"net"
 	"os"
-	"strconv"
 
 	"github.com/Microsoft/go-winio"
 	"golang.org/x/sys/windows"
@@ -90,16 +89,16 @@ func pipeServerTrusted(h windows.Handle) bool {
 	return windows.EqualSid(owner, self.User.Sid) || windows.EqualSid(owner, system)
 }
 
-// dialLocalServerOS connects to the named pipe for port (dir is unused) and
-// checks the pipe is owned by the current user or SYSTEM: any user can
-// create a pipe of any free name.
-func dialLocalServerOS(_ string, port int) (net.Conn, error) {
-	name, err := localPipeName(strconv.Itoa(port))
+// dialSocketOS connects to the named pipe for name (the port, or the
+// bridge's bridgeSocketName; dir is unused) and checks the pipe is owned by
+// the current user or SYSTEM: any user can create a pipe of any free name.
+func dialSocketOS(_ string, name string) (net.Conn, error) {
+	pipe, err := localPipeName(name)
 	if err != nil {
 		return nil, err
 	}
 	timeout := localDialTimeout
-	c, err := winio.DialPipe(name, &timeout)
+	c, err := winio.DialPipe(pipe, &timeout)
 	if err != nil {
 		return nil, err
 	}

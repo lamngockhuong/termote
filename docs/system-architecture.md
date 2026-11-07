@@ -1523,6 +1523,38 @@ Agent status (Herdr event / Claude session file)
   The page notifies itself only while the server has not confirmed this device's
   subscription. Log out removes the subscription first.
 
+## Machines over SSH
+
+The main server reaches the Termote of other computers (`termote machine add`, `server/cli_machine.go`).
+
+```
+PWA ──► main termote ── /api/machines/{id}/mux/* ──► ssh -S <master> ... -- <alias> bridge
+                                                       │ (key: command="termote bridge",restrict)
+                                                       ▼
+                                          machine: termote bridge ──► <port>.bridge.sock
+                                                                         │ authMachine, role from
+                                                                         ▼ X-Termote-Role
+                                                                      /api/mux/* there
+```
+
+- **Remote side** (`server/bridge_socket.go`, `server/cli_bridge.go`): the native server opens a bridge
+  socket beside the CLI's. `termote bridge` writes `TERMOTE-BRIDGE 1 <version>` and joins stdin/stdout to
+  it. Requests there are `authMachine`, view unless `X-Termote-Role: full`, and never reach devices,
+  sign-ins, Web Push or sign-in links.
+- **Transport** (`server/machine_link.go`, `server/machine_conn.go`): one ControlMaster per machine (not on
+  Windows), one ssh per HTTP connection, all tracked and stopped with the server; status
+  `connecting|online|offline|unauthorized|hostkey|incompatible` with a backoff after a failure.
+- **API** (`server/machine_routes.go`, `server/machine_proxy.go`): `GET /api/mux/machines` lists machines
+  and their agents (a poll of each one's snapshot); `/api/machines/{id}/mux/{rest}` forwards an allowlist of
+  routes after this server's guards, with the cross-site checks done at the edge. Forwarded streams sit in
+  a hub of their own that a revoke or sign-out closes. Web Push events of a machine carry `machineId`.
+- **PWA** (`pwa/src/utils/api-base.ts`): the open machine is the page's `?machine=<id>`; `apiBase()`
+  sends pane, files and stream requests to it, while health, sign-out, Web Push, devices and sign-ins stay
+  local (`LOCAL_API`).
+
+Every invariant: [`security-invariants.md`](security-invariants.md) (Machine bridge, Machines CLI,
+Machine transport, Machine proxy, Machines list).
+
 ## Paired devices and the view-only role
 
 The code is `server/auth_role.go` (roles, the default refusal), `server/device_store.go` (store),

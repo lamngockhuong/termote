@@ -1081,6 +1081,9 @@ func (c *cli) cmdUninstall(args []string) error {
 		if dir := c.recentGroupsDir(); fileExists(filepath.Join(dir, recentGroupsFile)) {
 			c.infof("Kept the directories of the groups created last in %s; --purge removes them", dir)
 		}
+		if fileExists(c.machinesFile()) || isDir(c.machineSSHDir()) {
+			c.infof("Kept the machines and termote's SSH key in %s; --purge removes them (their key lines stay on the machines)", c.configDir())
+		}
 	}
 	return nil
 }

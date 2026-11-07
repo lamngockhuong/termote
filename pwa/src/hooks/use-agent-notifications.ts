@@ -6,6 +6,7 @@ import {
   notificationContent,
   shouldNotify,
 } from '../utils/agent-notify'
+import { currentMachine, isMachineId, switchMachine } from '../utils/api-base'
 import { parseDeepLink } from '../utils/deep-link'
 import { notificationSupport } from '../utils/notify-permission'
 import { onPaneRemap, remapEntries } from '../utils/pane-remap'
@@ -88,7 +89,7 @@ export function useAgentNotifications(opts: Options) {
     const onMessage = (e: MessageEvent) => {
       if (e.data?.type !== 'termote-open') return
       stop()
-      openLink(e.data.hash)
+      openLink(e.data.hash, e.data.machine)
       // Delivered: the kept copy must not reopen it later
       void takePendingLink(0)
     }
@@ -103,10 +104,10 @@ export function useAgentNotifications(opts: Options) {
       const from = since
       timers = PENDING_LINK_READS_MS.map((ms) =>
         setTimeout(() => {
-          void takePendingLink(from).then((hash) => {
-            if (!hash) return
+          void takePendingLink(from).then((link) => {
+            if (!link) return
             stop()
-            openLink(hash)
+            openLink(link.hash, link.machine)
           })
         }, ms),
       )
@@ -131,16 +132,24 @@ export const PENDING_LINK_MAX_AGE_MS = 60_000
 // When the page looks for a kept link after it shows (ms)
 export const PENDING_LINK_READS_MS = [0, 300, 1000, 2500]
 
-function openLink(hash: unknown) {
-  if (typeof hash === 'string' && parseDeepLink(hash)) {
-    window.location.hash = hash
+// Opens hash on machine ('' or anything not an id: this server). A pane of
+// another machine than the one open loads the app on that one.
+function openLink(hash: unknown, machine?: unknown) {
+  if (typeof hash !== 'string' || !parseDeepLink(hash)) return
+  const target = isMachineId(machine) ? machine : ''
+  if (target !== currentMachine()) {
+    switchMachine(target, hash)
+    return
   }
+  window.location.hash = hash
 }
 
 // The link the worker kept, once: it is removed as it is read. Null when
 // there is none, it was kept before since (ms) or is stale, or Cache
 // Storage is unavailable.
-async function takePendingLink(since: number): Promise<string | null> {
+async function takePendingLink(
+  since: number,
+): Promise<{ hash: string; machine?: string } | null> {
   if (typeof caches === 'undefined') return null
   try {
     const res = await caches.match(PENDING_LINK_URL, {
@@ -150,7 +159,7 @@ async function takePendingLink(since: number): Promise<string | null> {
     await caches
       .open(PENDING_LINK_CACHE)
       .then((c) => c.delete(PENDING_LINK_URL))
-    const { hash, at } = await res.json()
+    const { hash, machine, at } = await res.json()
     const age = Date.now() - at
     if (
       typeof hash !== 'string' ||
@@ -158,7 +167,7 @@ async function takePendingLink(since: number): Promise<string | null> {
     ) {
       return null
     }
-    return hash
+    return { hash, machine }
   } catch {
     return null
   }

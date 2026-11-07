@@ -132,6 +132,9 @@ interface Props {
   activePaneId?: string
   // Server time minus this device's (ms), for how long each agent has been so
   clockOffset?: number
+  // The Machines section (SidebarMachines), above the list; none without
+  // machines
+  machines?: ReactNode
 }
 
 export interface ReorderActions {
@@ -251,6 +254,7 @@ function renameProblem(
 
 // The session list: a bottom sheet on phones, a collapsible sidebar on desktop.
 export function SessionSidebar({
+  machines,
   sessions,
   groups = [],
   activeId,
@@ -1370,6 +1374,7 @@ export function SessionSidebar({
         }
       >
         {pinned}
+        {machines}
         <div ref={sheetListRef} className="flex flex-col gap-2 px-2 pb-3 pt-1">
           {showAddForm && addForm}
           {newGroupButton}
@@ -1542,6 +1547,7 @@ export function SessionSidebar({
           {searchField && <div className="mt-2">{searchField}</div>}
           {filterBar && <div className="mt-2">{filterBar}</div>}
         </div>
+        {machines}
         <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2 scrollbar-hover">
           {sessionList}
         </div>

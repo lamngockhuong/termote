@@ -52,6 +52,11 @@ export interface AppCommandContext {
   startOffered: boolean
   hasAgent: boolean
   devices: boolean
+  // The machines to switch between, this one ('') first, and the one open;
+  // switchMachine loads the app on another
+  machines: string[]
+  machine: string
+  switchMachine: (id: string) => void
   canFullscreen: boolean
   // A focus window (focus-mode.ts): it shows one target, so commands that
   // move to another session, tab or screen are off
@@ -335,6 +340,17 @@ function allCommands(ctx: AppCommandContext): AppCommand[] {
       disabledReason: ctx.devices ? undefined : 'tasks.commandOff.noDevices',
       restoreFocus: true,
       run: () => ctx.openSettings('devices'),
+    },
+    {
+      id: 'machine.next',
+      title: 'tasks.command.switchMachine',
+      category: 'tasks.category.app',
+      disabledReason:
+        ctx.machines.length > 1 ? undefined : 'tasks.commandOff.noMachines',
+      run: () => {
+        const i = ctx.machines.indexOf(ctx.machine)
+        ctx.switchMachine(ctx.machines[(i + 1) % ctx.machines.length])
+      },
     },
     {
       id: 'settings.shortcuts',

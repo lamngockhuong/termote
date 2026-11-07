@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ConnectionState } from '../components/connection-indicator'
+import { apiBase } from '../utils/api-base'
 import { reportLargePacketLoss } from '../utils/large-packet-loss'
 import { fetchTerminalToken } from './use-mux-api'
 
@@ -85,7 +86,7 @@ export function streamURL(
     q.set('rows', String(size.rows))
   }
   if (drive) q.set('drive', '1')
-  return `${proto}://${window.location.host}/api/mux/stream?${q}`
+  return `${proto}://${window.location.host}${apiBase()}/stream?${q}`
 }
 
 const encoder = new TextEncoder()

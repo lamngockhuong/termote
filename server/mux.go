@@ -199,6 +199,8 @@ type Caps struct {
 	// Set by the snapshot route for that role only: the stream refuses it
 	// with a 501 a browser's WebSocket cannot read.
 	ViewStream bool `json:"viewStream,omitempty"`
+	// Machines: this server reaches other machines (GET /api/mux/machines).
+	Machines bool `json:"machines,omitempty"`
 }
 
 // snapshotPeeker is a backend whose Snapshot has side effects (tmux makes
@@ -234,6 +236,8 @@ type Snapshot struct {
 	// InstanceID names this server (kept in its state dir): the PWA keeps
 	// open tabs and drafts on the device under it.
 	InstanceID string `json:"instanceId,omitempty"`
+	// Machines are the machines this server reaches, with their status.
+	Machines []MachineInfo `json:"machines,omitempty"`
 	// viewers: the panes (by paneKey) a terminal client of the backend's own
 	// shows, a user active there lately (tmux, Zellij list-clients); the
 	// activity tracker counts them as seen. Never sent.
@@ -483,6 +487,10 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 		snap.Caps.Tasks = agent.tasks && snap.Caps.Files
 		snap.Caps.UserTasks = agent.userTasks
 		snap.InstanceID = agent.instanceID
+		if agent.machinePoll != nil {
+			snap.Machines = agent.machinePoll.infos(false)
+			snap.Caps.Machines = len(snap.Machines) > 0
+		}
 		if snap.Groups == nil {
 			snap.Groups = []Group{}
 		}

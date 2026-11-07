@@ -318,6 +318,19 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/listener_owner*.go`                       | Saved password sent only to the current user's listener        |
 | `server/peer_user_listener.go`                    | Refuses connections from other local OS users (`peer_user_*`)  |
 | `server/local_socket*.go`                         | CLI ↔ native server over a Unix socket / named pipe            |
+| `server/bridge_socket.go`                         | Machine bridge socket, `bridgeAuth` (`authMachine`)            |
+| `server/cli_bridge.go`                            | `bridge`: the forced command another termote's key runs        |
+| `server/cli_machine.go`                           | `machine add/list/remove/status/import/whereami`               |
+| `server/machine_store.go`                         | `machines.json`: records, checks, atomic save                  |
+| `server/machine_ssh_args.go`                      | Every ssh/ssh-keygen argv, forced command, key line            |
+| `server/machine_conn.go`                          | ssh process as a `net.Conn`, greeting, stderr status           |
+| `server/machine_link.go`                          | Per-machine transport, status, backoff, ControlMaster          |
+| `server/machine_serve.go`                         | Manager from the config; the E2E bridge dialer                 |
+| `server/machine_routes.go`                        | `/api/mux/machines`, `machines/reload`, snapshot poll          |
+| `server/machine_proxy.go`                         | `/api/machines/{id}/mux/*` proxy, forwarded streams            |
+| `pwa/src/utils/api-base.ts`                       | Open machine (`?machine=`), `apiBase()`, `LOCAL_API`           |
+| `pwa/src/hooks/use-machines.ts`                   | Machines list poll                                             |
+| `pwa/src/components/sidebar-machines.tsx`         | Sidebar Machines: status, agents, switch                       |
 | `server/sessions.go`                              | Password sessions: metadata, list, revoke, `sessionAlive`      |
 | `server/signin_routes.go`                         | `/api/mux/signins*`: list, revoke one or all others            |
 | `server/cli_signins.go`                           | `signins`, `signins revoke <id>\|--all`                        |

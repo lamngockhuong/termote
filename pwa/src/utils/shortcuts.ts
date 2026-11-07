@@ -38,6 +38,7 @@ export const COMMAND_IDS = {
   'settings.open': true,
   'settings.devices': true,
   'settings.shortcuts': true,
+  'machine.next': true,
   'app.help': true,
   'app.about': true,
   'app.docs': true,

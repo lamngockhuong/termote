@@ -115,6 +115,16 @@ type serveConfig struct {
 	// server on without the password (<stateDir>/run; Windows uses a named
 	// pipe and ignores it); empty opens none (the container, tests).
 	LocalSocketDir string
+	// MachinesFile lists the machines reached over SSH (machines.json),
+	// MachineSSHDir holds termote's key and known_hosts for them and
+	// MachineCtlDir their masters' sockets; empty: no machines (the
+	// container, tests).
+	MachinesFile  string
+	MachineSSHDir string
+	MachineCtlDir string
+	// MachineBridges (TERMOTE_E2E_MACHINE_BRIDGE, read only without a saved
+	// config) joins bridge sockets of servers on this machine instead.
+	MachineBridges string
 	// OnListen runs once the port is bound (serve records its PID then, so
 	// a server that cannot bind never replaces the running one's PID file).
 	OnListen func()
@@ -142,6 +152,7 @@ func newServeConfigFromEnv() serveConfig {
 		// header is trusted from any source (the bridge gateway).
 		ProxyClientHeader:    canonicalProxyHeader(os.Getenv("TERMOTE_PROXY_CLIENT_HEADER")),
 		ProxyClientAnySource: true,
+		MachineBridges:       os.Getenv("TERMOTE_E2E_MACHINE_BRIDGE"),
 	}
 	// Where the host user's home dir sits in the container's workspace, when
 	// the workspace holds it ("." for the workspace itself).
@@ -159,6 +170,7 @@ var termoteEnvKeys = []string{
 	"TERMOTE_PASS", "TERMOTE_USER", "TERMOTE_PORT", "TERMOTE_BIND", "TERMOTE_NO_AUTH",
 	"TERMOTE_PWA_DIR", "TERMOTE_ALLOWED_HOSTS", "TERMOTE_MUX", "TERMOTE_HERDR_ALLOW_NO_AUTH",
 	"TERMOTE_PROJECT_DIR", "TERMOTE_WORKSPACE_HOME", "TERMOTE_PLACES", "TERMOTE_PROXY_CLIENT_HEADER",
+	"TERMOTE_E2E_MACHINE_BRIDGE",
 }
 
 // scrubTermoteEnv removes every TERMOTE_* variable from the process
@@ -532,6 +544,12 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 		sessions.onEnd = func(id string) { devices.codes.dropCreator(sessionCreator(id)) }
 	}
 	agent := registerMuxRoutes(mux, m, tokenStore, uploads, push)
+	// While a device is subscribed to Web Push, every machine is polled for
+	// its agents, so their masters stay up.
+	agent.machines = newServeMachines(cfg, func() bool { return push != nil && len(push.list()) > 0 })
+	if agent.machines != nil {
+		agent.machinePoll = newMachinePoller(agent.machines)
+	}
 	agent.instanceID = loadInstanceID(cfg.InstanceDir)
 	agent.devices = devices != nil
 	agent.signins = sessions != nil
@@ -595,6 +613,13 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 	registerPaneLayoutRoutes(mux, m, files.deny)
 	registerReorderRoutes(mux, m)
 	registerWorktreeRoutes(mux, m, files.git, allowed)
+	// Streams forwarded to machines have a hub of their own (they never push
+	// this server's out), closed with the main one and asking the same
+	// device and session stores.
+	fwd := newStreamHub(maxForwardedStreams)
+	fwd.alive, fwd.sessionAlive = hub.alive, hub.sessionAlive
+	hub.linked = append(hub.linked, fwd)
+	registerMachineRoutes(mux, agent, agent.machinePoll, fwd, allowed, cfg.ProxyClientHeader)
 	// Unknown /api/ paths get JSON 404 instead of the SPA fallback.
 	mux.HandleFunc("/api/", apiNotFound)
 
@@ -616,6 +641,9 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 			ProxyAnySource: cfg.ProxyClientAnySource,
 		}, handler)
 	}
+	// Outside basicAuth, so another termote over the machine bridge signs in
+	// as authMachine with --no-auth too.
+	handler = bridgeAuth(mux, handler)
 	handler = writeGuard(allowed, handler)
 	// Inside hostGuard: the policy names the request's Host, so only an
 	// allowed one.
@@ -736,7 +764,11 @@ func runServer(ctx context.Context, cfg serveConfig, m Mux, ln net.Listener) err
 	}
 	// Here, not in buildServer: a handler built for a test sends nothing
 	// and reads no host stats in the background.
-	startPushWatcher(ctx, m, push, agent.activity)
+	defer agent.machines.stop()
+	if agent.machinePoll != nil {
+		go agent.machinePoll.run(ctx)
+	}
+	startPushWatcher(ctx, m, push, agent.activity, agent.machinePoll)
 	stopSystem := startSystemSampler(ctx, agent.system)
 	defer stopSystem()
 	pwa := "embedded"
@@ -780,9 +812,11 @@ func runServer(ctx context.Context, cfg serveConfig, m Mux, ln net.Listener) err
 	return nil
 }
 
-// serveLocalSocket serves srv on the local socket too when cfg names one,
-// and returns what removes it once srv is shut down. Without the socket the
-// server runs all the same: the CLI then uses TCP and the password.
+// serveLocalSocket serves srv on the local socket and the machine bridge
+// too when cfg names a socket dir, and returns what removes them once srv is
+// shut down. Without the socket the server runs all the same: the CLI then
+// uses TCP and the password; without the bridge, no other termote reaches
+// this one.
 func serveLocalSocket(srv *http.Server, cfg serveConfig, ln net.Listener) func() {
 	if cfg.LocalSocketDir == "" {
 		return func() {}
@@ -791,15 +825,28 @@ func serveLocalSocket(srv *http.Server, cfg serveConfig, ln net.Listener) func()
 	if a, ok := ln.Addr().(*net.TCPAddr); ok {
 		port = strconv.Itoa(a.Port)
 	}
-	sock, cleanup, err := openLocalSocket(cfg.LocalSocketDir, port)
+	cleanCLI := serveSocket(srv, cfg.LocalSocketDir, port, "local socket for the CLI",
+		"the CLI uses TCP and the password", func(l net.Listener) net.Listener { return localSocketListener{l} })
+	cleanBridge := serveSocket(srv, cfg.LocalSocketDir, bridgeSocketName(port), "machine bridge",
+		"no other termote can reach this one", func(l net.Listener) net.Listener { return bridgeListener{l} })
+	return func() {
+		cleanCLI()
+		cleanBridge()
+	}
+}
+
+// serveSocket opens the socket name in dir, serves srv on it through wrap,
+// and returns what closes and removes it.
+func serveSocket(srv *http.Server, dir, name, what, without string, wrap func(net.Listener) net.Listener) func() {
+	sock, cleanup, err := openLocalSocket(dir, name)
 	if err != nil {
-		log.Printf("local socket for the CLI not opened (the CLI uses TCP and the password): %v", err)
+		log.Printf("%s not opened (%s): %v", what, without, err)
 		return func() {}
 	}
-	log.Printf("local socket for the CLI: %s", sock.Addr())
+	log.Printf("%s: %s", what, sock.Addr())
 	go func() {
-		if err := srv.Serve(localSocketListener{sock}); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Printf("local socket: %v", err)
+		if err := srv.Serve(wrap(sock)); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Printf("%s: %v", what, err)
 		}
 	}()
 	// Closed here too: srv.Close may run before Serve has taken the
