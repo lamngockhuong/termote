@@ -99,8 +99,8 @@ importers:
         specifier: 2.0.8
         version: 2.0.8
       lucide-react:
-        specifier: 1.59.0
-        version: 1.59.0(@types/react@19.3.0)(react@19.3.1)
+        specifier: 1.68.0
+        version: 1.68.0(@types/react@19.3.0)(react@19.3.1)
       mammoth:
         specifier: 1.13.0
         version: 1.13.0
@@ -4502,8 +4502,8 @@ packages:
     resolution: {integrity: sha512-Jo6dJ04CmSjuznwJSS3pUeWmd/H0ffTlkXXgwZi+eq1UCmqQwCh+eLsYOYCwY991i2Fah4h1BEMCx4qThGbsiA==}
     engines: {node: '>=10'}
 
-  lucide-react@1.59.0:
-    resolution: {integrity: sha512-5qgMyyCPU6OvnKpLS2t693+ZtiqA8oaSweWoUows0BLFKFf6V75m4+CptpmohZHpD5IuOVIBXHBBiv2vpLJmtw==}
+  lucide-react@1.68.0:
+    resolution: {integrity: sha512-9i7NKWm2QlOprMhcwkhBOlIt9zB7cp2GIyFY+oMue0EsprolUFxva5rkdBbyfs4k1eejpa0JRnRgVOGiart+Xg==}
     peerDependencies:
       '@types/react': '*'
       react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
@@ -10675,7 +10675,7 @@ snapshots:
     dependencies:
       yallist: 4.0.0
 
-  lucide-react@1.59.0(@types/react@19.3.0)(react@19.3.1):
+  lucide-react@1.68.0(@types/react@19.3.0)(react@19.3.1):
     dependencies:
       react: 19.3.1
     optionalDependencies:
