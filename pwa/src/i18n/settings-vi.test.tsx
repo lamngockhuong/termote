@@ -68,6 +68,7 @@ const SETTINGS: Settings = {
   tablePreview: true,
   svgPreview: false,
   sidePanelWidth: 440,
+  sidebarWidth: 256,
   findIncludeIgnored: false,
   findExcludes: FIND_EXCLUDES_DEFAULT,
   searchCase: false,

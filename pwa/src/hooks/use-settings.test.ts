@@ -38,6 +38,7 @@ describe('useSettings', () => {
     expect(result.current.settings.pollInterval).toBe(5)
     expect(result.current.settings.driveTerminalSize).toBe(false)
     expect(result.current.settings.sidePanelWidth).toBe(440)
+    expect(result.current.settings.sidebarWidth).toBe(256)
   })
 
   it('keeps a known language and the welcome version seen', () => {

@@ -317,6 +317,7 @@ export default {
   'shell.sidebar.expand': 'Expand sidebar',
   'shell.sidebar.expandFiltered': 'Expand sidebar, filtered',
   'shell.sidebar.expandFilteredTitle': 'Expand sidebar (filtered)',
+  'shell.sidebar.resize': 'Resize the sidebar',
   'shell.sidebar.collapse': 'Collapse sidebar',
   // The terminal (components/terminal-view.tsx)
   'shell.terminal.lost': 'Connection lost',

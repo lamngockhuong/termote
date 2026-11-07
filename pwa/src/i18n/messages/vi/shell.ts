@@ -288,6 +288,7 @@ export default {
   'shell.sidebar.expand': 'Mở rộng thanh bên',
   'shell.sidebar.expandFiltered': 'Mở rộng thanh bên, đang lọc',
   'shell.sidebar.expandFilteredTitle': 'Mở rộng thanh bên (đang lọc)',
+  'shell.sidebar.resize': 'Đổi độ rộng thanh bên',
   'shell.sidebar.collapse': 'Thu gọn thanh bên',
 
   'shell.terminal.lost': 'Kết nối bị đứt',

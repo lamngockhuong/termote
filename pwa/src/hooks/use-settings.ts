@@ -17,6 +17,7 @@ import {
   resolveSidebarLayout,
   type SidebarLayout,
 } from '../utils/sidebar-layout'
+import { SIDEBAR_DEFAULT } from '../utils/sidebar-width'
 import {
   DEFAULT_TOOLBAR_POSITION,
   resolveToolbarPosition,
@@ -161,6 +162,7 @@ export interface Settings {
   tablePreview: boolean // Files: CSV/TSV shown as a table (else its source)
   svgPreview: boolean // Files/Changes: an SVG shown as an image (else as text)
   sidePanelWidth: number // desktop Files/Changes panel, in px
+  sidebarWidth: number // desktop sidebar, expanded, in px
   findIncludeIgnored: boolean // Files search: a repo's ignored files too
   findExcludes: string[] // Files search: folder names never searched (above)
   searchCase: boolean // Files content search: Match case
@@ -204,6 +206,7 @@ const DEFAULTS: Settings = {
   tablePreview: true,
   svgPreview: false,
   sidePanelWidth: SIDE_PANEL_DEFAULT,
+  sidebarWidth: SIDEBAR_DEFAULT,
   findIncludeIgnored: false,
   findExcludes: FIND_EXCLUDES_DEFAULT,
   searchCase: false,
