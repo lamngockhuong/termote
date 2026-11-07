@@ -447,6 +447,15 @@ describe('Changes tabs', () => {
     expect(isDraftDirty('%1', '/r', 'b')).toBe(true)
   })
 
+  it('move puts a diff tab at another index', async () => {
+    const { result } = await loaded()
+    act(() => result.current.open(side('a'), { pin: true }))
+    act(() => result.current.open(side('b'), { pin: true }))
+    const [a, b] = result.current.tabs
+    act(() => result.current.move(a.id, 1))
+    expect(result.current.tabs.map((t) => t.id)).toEqual([b.id, a.id])
+  })
+
   it('a renamed file: its editors follow as untracked, its diffs close', async () => {
     const { result } = await loaded()
     act(() => result.current.open(side('a'), { pin: true }))

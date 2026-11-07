@@ -12,6 +12,7 @@ import type { Delimiter } from '../utils/csv-parse'
 import { isFileEncoding } from '../utils/file-encoding'
 import {
   closeTab,
+  moveTab,
   openTab,
   pinTab,
   retargetTabs,
@@ -218,6 +219,8 @@ interface Store {
   // Shows tab id, or the tree (null)
   activate: (id: string | null) => void
   pin: (id: string) => void
+  // Moves tab id to index to among the tabs
+  move: (id: string, to: number) => void
   // Closes tab id; its unsaved changes are dropped (asked before)
   close: (id: string) => void
   // Follows a link of the tab shown (left at scrollTop): a file opens in
@@ -791,6 +794,9 @@ function createStore(id: string): Store {
         ),
       })
     },
+    move(id, to) {
+      set({ tabs: moveTab(state.tabs, id, to) })
+    },
     close,
     follow,
     back() {
@@ -940,6 +946,7 @@ export function useFiles(paneId: string) {
     ),
     activate: useCallback((id: string | null) => store.activate(id), [store]),
     pin: useCallback((id: string) => store.pin(id), [store]),
+    move: useCallback((id: string, to: number) => store.move(id, to), [store]),
     close: useCallback((id: string) => store.close(id), [store]),
     follow: useCallback(
       (t: LinkPath, scrollTop: number, opts?: FollowOptions) =>

@@ -474,6 +474,7 @@ function PaneFiles({
     onActivate: f.activate,
     onClose: requestClose,
     onPin: f.pin,
+    onMove: f.move,
     panelId,
   }
   // A phone has a sheet of the open files in place of the tab bar

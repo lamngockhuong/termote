@@ -781,6 +781,16 @@ describe('tabs', () => {
     expect(result.current.tabs).toHaveLength(2)
   })
 
+  it('move puts a tab at another index, the one shown staying', async () => {
+    const { result } = await loaded()
+    for (const p of ['a.md', 'b.md', 'c.md'])
+      act(() => result.current.open(p, { pin: true }))
+    const c = result.current.tabs[2]
+    act(() => result.current.move(c.id, 0))
+    expect(paths(result.current.tabs)).toEqual(['c.md', 'a.md', 'b.md'])
+    expect(result.current.active?.id).toBe(c.id)
+  })
+
   it('past 10 tabs the least recently used clean one closes', async () => {
     const { result } = await loaded()
     for (let i = 0; i < 10; i++)

@@ -690,6 +690,9 @@ Chạy trên tmux (Linux/macOS) và Herdr; psmux (Windows) không có hai view n
 - [ ] Đóng tab còn thay đổi chưa lưu thì hỏi "Discard changes?"; nhấn chuột giữa hoặc Delete thì
       đóng tab; mở file thứ 11 thì tab sạch lâu không dùng nhất bị đóng, không bao giờ là tab có bản
       nháp
+- [ ] Máy tính: kéo một tab file qua tab khác; các tab khác dạt sang, thả ra thì giữ thứ tự mới (cả
+      sau khi tải lại trang), nhấn Escape giữa chừng thì tab về chỗ cũ, nhấn mà không kéo vẫn hiện
+      tab; Alt+Trái/Phải dời tab đang chọn; Files luôn đứng đầu; tab diff của Changes cũng kéo được
 - [ ] Ctrl/Cmd+nhấn hoặc nhấn chuột giữa vào link Markdown thì mở tab mới; nhấn thường thì đi tiếp
       trong cùng tab và Back quay lại
 - [ ] Điện thoại: không có thanh tab; "Open files (N)" trên thanh của file và phía trên cây mở một

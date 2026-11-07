@@ -13,7 +13,7 @@ import { useWheelScrollX } from '../hooks/use-wheel-scroll-x'
 import { useT } from '../i18n/i18n-context'
 import type { Session } from '../types/session'
 import { imeComposing } from '../utils/ime-composing'
-import { targetIndex } from '../utils/reorder'
+import { slidePlace, slideShift, targetIndex } from '../utils/reorder'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { AgentStatusBadge } from './agent-status-badge'
 import { IconSheet } from './icon-picker'
@@ -408,18 +408,10 @@ export function SessionTabs({
         box.right - self.right,
       )
       el.style.translate = `${x}px 0`
-      // Its place: past every tab whose middle its leading edge has crossed
-      // (at an end of the strip, past the tab there, whatever their widths)
-      const left = self.left + x
-      const right = self.right + x
-      to = boxes.filter((b, i) => {
-        const middle = b.left + b.width / 2
-        return i < from ? middle < left : i > from && middle <= right
-      }).length
+      to = slidePlace(boxes, from, x)
       tabs.forEach((tab, i) => {
         if (i === from) return
-        const shift =
-          i > from && i <= to ? -room : i < from && i >= to ? room : 0
+        const shift = slideShift(i, from, to, room)
         tab.style.translate = shift ? `${shift}px 0` : ''
       })
     }

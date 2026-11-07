@@ -134,3 +134,18 @@ export function enforceCap<T extends TabBase>(
   }
   return { tabs: next, closed }
 }
+
+// Moves tab id to index to (clamped to the tabs); pinned state, the tab
+// shown and when each was last used stay.
+export function moveTab<T extends TabBase>(
+  tabs: T[],
+  id: string,
+  to: number,
+): T[] {
+  const from = tabs.findIndex((t) => t.id === id)
+  const at = Math.min(Math.max(to, 0), tabs.length - 1)
+  if (from < 0 || at === from) return tabs
+  const next = tabs.filter((t) => t.id !== id)
+  next.splice(at, 0, tabs[from])
+  return next
+}

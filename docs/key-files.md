@@ -126,7 +126,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/files-view.tsx`               | Files view: the pane's directory as a tree, opens a file       |
 | `pwa/src/components/places-menu.tsx`              | Files next to its root: the pane's folder or an allowed Place  |
 | `pwa/src/utils/file-tabs.ts`                      | Open files as tabs: preview tab, pin, close, cap of 10 (LRU)   |
-| `pwa/src/components/file-tab-bar.tsx`             | Desktop tab bar of the open files (keys, middle click, pin)    |
+| `pwa/src/components/file-tab-bar.tsx`             | Desktop tab bar of open files (keys, middle click, pin, drag)  |
 | `pwa/src/components/open-files-sheet.tsx`         | Phone: "Open files (N)" button and the sheet listing them      |
 | `pwa/src/components/tab-close-dialogs.tsx`        | Files/Changes: Discard a tab's changes, close on a root move   |
 | `pwa/src/hooks/use-long-press.ts`                 | Long press of a finger (a Markdown link opens a new tab)       |
