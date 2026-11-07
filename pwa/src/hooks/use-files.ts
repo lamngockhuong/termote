@@ -122,6 +122,9 @@ export interface FileTab extends TabBase {
 
 export interface FilesState {
   root?: string
+  // The pane's directory under root ("/"-separated), absent at the root,
+  // outside it or in a Place: where a path typed for the agent starts from
+  dir?: string
   // The Place shown (its id), absent for the pane's own folder. Switching
   // works as the root moving: clean tabs of the old root close.
   place?: string
@@ -207,6 +210,8 @@ interface Store {
   // Reads the root once there is a reader
   load: () => void
   toggle: (path: string) => void
+  // Closes every open directory
+  collapseAll: () => void
   // Reads the root and every open directory again; the root is taken from
   // where the pane is now (a cd shows at once)
   refresh: () => void
@@ -366,6 +371,7 @@ function createStore(id: string): Store {
     if (gen !== generation) return
     if (!path) switching = false
     set({ root: tree.root, isRepo: tree.isRepo })
+    if (!path) set({ dir: tree.dir })
     setDir(path, {
       entries: tree.entries,
       truncated: tree.truncated,
@@ -730,6 +736,7 @@ function createStore(id: string): Store {
     const asked = state.tabs.filter((t) => t.root !== root).map((t) => t.id)
     set({
       root,
+      dir: undefined,
       dirs: {},
       expanded: {},
       rootChanges: state.rootChanges + (picked ? 0 : 1),
@@ -750,7 +757,7 @@ function createStore(id: string): Store {
     // The root is not known yet: the read sends the old one, and the 409
     // that answers it starts the tree again (rootChanged)
     generation++
-    set({ dirs: {}, expanded: {} })
+    set({ dir: undefined, dirs: {}, expanded: {} })
     read('')
   }
 
@@ -772,6 +779,9 @@ function createStore(id: string): Store {
       set({ expanded: { ...state.expanded, [path]: true } })
       const dir = state.dirs[path]
       if (!dir || dir.error) read(path)
+    },
+    collapseAll() {
+      set({ expanded: {} })
     },
     refresh() {
       // The user asked: a cd in the pane shows now, not once the server saw
@@ -939,6 +949,7 @@ export function useFiles(paneId: string) {
     active: activeTab(state),
     load: useCallback(() => store.load(), [store]),
     toggle: useCallback((p: string) => store.toggle(p), [store]),
+    collapseAll: useCallback(() => store.collapseAll(), [store]),
     refresh: useCallback(() => store.refresh(), [store]),
     open: useCallback(
       (p: string, opts?: FileOpenOptions) => store.open(p, opts),

@@ -61,6 +61,10 @@ export interface ViewProps extends ViewContext {
   openTab?: (id: string, paneId?: string, view?: string) => void
   // Reads the tabs again (a tab the server just opened)
   refreshSessions?: () => Promise<void>
+  // Types text into the pane's terminal for the agent, without Enter (a
+  // file's @path), then shows the terminal; false when it could not (the
+  // stream not open). Absent for view-only.
+  insertText?: (text: string) => boolean
 }
 
 // A file under the pane's root in the Files view, or its diff in Changes

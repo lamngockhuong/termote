@@ -884,6 +884,18 @@ export default function App({
     mux.caps.clientSideSelect,
     openLinkWindow,
   ])
+  // A file's @path from Files typed at the agent: the terminal it went to
+  // shows (a view over it gives way), focused on a desktop; a phone's
+  // keyboard stays down until the user taps the terminal
+  const insertText = useCallback(
+    (text: string) => {
+      if (!getTerminal()?.paste(`${text} `)) return false
+      if (!isTerminalView) showView(TERMINAL_VIEW_ID)
+      if (!isMobile) requestAnimationFrame(() => focusTerminal(getTerminal()))
+      return true
+    },
+    [getTerminal, isTerminalView, showView, isMobile],
+  )
   const viewProps = {
     ...viewContext,
     isMobile,
@@ -894,6 +906,7 @@ export default function App({
     sessions,
     openTab,
     refreshSessions,
+    insertText: readOnly ? undefined : insertText,
   }
   // A view fading out keeps what it showed: another pane picked meanwhile
   // (on the terminal) must not draw, or load, that pane's view under it

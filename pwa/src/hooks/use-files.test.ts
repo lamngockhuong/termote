@@ -105,6 +105,48 @@ describe('useFiles', () => {
     expect(mockTree).toHaveBeenCalledTimes(2)
   })
 
+  it("keeps the pane's directory from the root's read, until the root moves", async () => {
+    mockTree.mockImplementation(async (_p, path) =>
+      path === ''
+        ? { ...tree('', [dir('src')]), dir: 'pwa' }
+        : { ...tree(path, []), dir: 'elsewhere' },
+    )
+    const { result } = renderHook(() => useFiles('%1'))
+    act(() => result.current.load())
+    await waitFor(() => expect(result.current.dir).toBe('pwa'))
+    // A folder's read leaves it
+    act(() => result.current.toggle('src'))
+    await waitFor(() => expect(result.current.dirs.src.entries).toEqual([]))
+    expect(result.current.dir).toBe('pwa')
+    mockTree.mockImplementation(() => new Promise(() => {}))
+    act(() => result.current.rootChanged('/other'))
+    expect(result.current.dir).toBeUndefined()
+  })
+
+  it('a Place picked drops the pane directory', async () => {
+    mockTree.mockResolvedValueOnce({ ...tree('', []), dir: 'pwa' })
+    const { result } = renderHook(() => useFiles('%1'))
+    act(() => result.current.load())
+    await waitFor(() => expect(result.current.dir).toBe('pwa'))
+    mockTree.mockImplementation(() => new Promise(() => {}))
+    act(() => result.current.openPlace('notes'))
+    expect(result.current.dir).toBeUndefined()
+  })
+
+  it('collapseAll closes every open directory', async () => {
+    mockTree.mockImplementation(async (_p, path) =>
+      path === '' ? tree('', [dir('a'), dir('b')]) : tree(path, []),
+    )
+    const { result } = renderHook(() => useFiles('%1'))
+    act(() => result.current.load())
+    await waitFor(() => expect(result.current.dirs['']?.entries).toBeDefined())
+    act(() => result.current.toggle('a'))
+    act(() => result.current.toggle('b'))
+    expect(result.current.expanded).toEqual({ a: true, b: true })
+    act(() => result.current.collapseAll())
+    expect(result.current.expanded).toEqual({})
+  })
+
   it('keeps one store per pane', async () => {
     mockTree.mockResolvedValue(tree('', []))
     const a = renderHook(() => useFiles('%1'))
