@@ -150,6 +150,10 @@ describe('MarkdownPreview: rendering', () => {
     const [h1, h2] = screen.getAllByRole('heading')
     expect(h1.id).toBe('user-content-getting-started')
     expect(h2.id).toBe('user-content-getting-started-1')
+    // The text keeps the browser's menu
+    expect(screen.getByTestId('markdown-preview')).toHaveAttribute(
+      'data-native-menu',
+    )
   })
 
   it('keeps inline code in the terminal font, outside a code block', () => {

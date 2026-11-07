@@ -167,6 +167,15 @@ describe('PdfPreview', () => {
     ;(s.viewer as Record<string, unknown>).currentScaleValue = '2'
     fireEvent.click(screen.getByRole('button', { name: 'Fit width' }))
     expect(s.viewer?.currentScaleValue).toBe('page-width')
+    // The pages keep the browser's menu, the toolbar does not
+    expect(
+      document.querySelector('.pdfViewer')?.closest('[data-native-menu]'),
+    ).not.toBeNull()
+    expect(
+      screen
+        .getByRole('button', { name: 'Zoom in' })
+        .closest('[data-native-menu]'),
+    ).toBeNull()
   })
 
   it('finds text, steps through it and closes', async () => {

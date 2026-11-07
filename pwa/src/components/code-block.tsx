@@ -233,6 +233,7 @@ export function CodeBlock({
         style={win ? { overflowAnchor: 'none' } : undefined}
         data-testid="code-block"
         data-scroll-restore
+        data-native-menu
       >
         <div
           className={wrap ? '' : 'w-max min-w-full'}

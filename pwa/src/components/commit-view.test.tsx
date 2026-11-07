@@ -111,6 +111,15 @@ describe('CommitView', () => {
     ).toBeInTheDocument()
     expect(screen.getByText('Sensitive')).toBeInTheDocument()
     expect(screen.queryByText(/Merge:/)).not.toBeInTheDocument()
+    // The commit keeps the browser's menu, the header does not
+    expect(
+      screen.getByText('Why it broke.').closest('[data-native-menu]'),
+    ).not.toBeNull()
+    expect(
+      screen
+        .getByRole('button', { name: 'Back to changes' })
+        .closest('[data-native-menu]'),
+    ).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Back to changes' }))
     expect(p.onBack).toHaveBeenCalled()
   })

@@ -273,6 +273,7 @@ export default function PdfPreview({
         <div
           ref={containerRef}
           className="absolute inset-0 overflow-auto bg-surface"
+          data-native-menu
         >
           <div ref={viewerRef} className="pdfViewer" />
         </div>

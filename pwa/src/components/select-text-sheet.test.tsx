@@ -76,6 +76,15 @@ describe('SelectTextSheet', () => {
   it('shows the text from the bottom and passes its sources on', () => {
     const { readBuffer } = renderSheet()
     expect(screen.getByTestId('select-text').textContent).toBe('one\ntwo')
+    // The text keeps the browser's menu, the buttons do not
+    expect(
+      screen.getByTestId('select-text').closest('[data-native-menu]'),
+    ).not.toBeNull()
+    expect(
+      screen
+        .getByRole('button', { name: 'Copy all' })
+        .closest('[data-native-menu]'),
+    ).toBeNull()
     expect(paneText.args).toEqual({ paneId: '0', useServer: true, readBuffer })
     expect(screen.queryByText(/Only what the terminal/)).toBeNull()
     expect(screen.queryByText(/oldest lines/)).toBeNull()

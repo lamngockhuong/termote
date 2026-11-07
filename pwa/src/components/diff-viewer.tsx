@@ -606,6 +606,7 @@ export function DiffBody({
           className={CODE_FRAME}
           data-testid="diff"
           data-scroll-restore
+          data-native-menu
         >
           <div className={wrap ? '' : 'w-max min-w-full'}>
             {hunks.map((h, i) => (

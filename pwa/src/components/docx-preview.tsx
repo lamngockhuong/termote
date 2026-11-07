@@ -159,7 +159,7 @@ export default function DocxPreview({ blob, onDownload }: DocumentViewerProps) {
           {notes.join(t('files.docx.noteSeparator'))}
         </Banner>
       )}
-      <div className="min-h-0 flex-1 overflow-auto bg-bg">
+      <div className="min-h-0 flex-1 overflow-auto bg-bg" data-native-menu>
         <article className={PROSE}>{renderDocTree(doc.tree, t)}</article>
       </div>
     </div>

@@ -172,6 +172,13 @@ describe('ChatView', () => {
     expect(screen.getByText('Claude Code')).toBeInTheDocument()
     expect(screen.getByText('message 2')).toBeInTheDocument()
     expect(screen.getByText('Reconnecting…')).toBeInTheDocument()
+    // The messages keep the browser's menu, the header does not
+    expect(
+      screen.getByText('message 2').closest('[data-native-menu]'),
+    ).not.toBeNull()
+    expect(
+      screen.getByText('Claude Code').closest('[data-native-menu]'),
+    ).toBeNull()
   })
 
   it('keeps text selected in the conversation for a template', () => {

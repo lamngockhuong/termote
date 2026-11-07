@@ -114,6 +114,11 @@ describe('DiffViewer', () => {
     expect(add).toHaveClass('bg-diff-add')
     expect(add).toHaveTextContent('2+new (no newline at end of file)')
     expect(screen.getByText('Not staged')).toBeInTheDocument()
+    // The hunks keep the browser's menu, the header does not
+    expect(screen.getByTestId('diff')).toHaveAttribute('data-native-menu')
+    expect(
+      screen.getByText('Not staged').closest('[data-native-menu]'),
+    ).toBeNull()
   })
 
   it('keeps one number column on a narrow screen and wraps there', async () => {
