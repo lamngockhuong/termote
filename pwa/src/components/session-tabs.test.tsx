@@ -91,6 +91,19 @@ describe('SessionTabs', () => {
     )
   })
 
+  it('lines an inactive tab label up with the active one', () => {
+    // The active tab is 36 px tall with a 1 px top border, its label
+    // centred 17.5 px above the bar's bottom; an inactive 32 px tab sits
+    // 2 px up so its label (and its hover fill) is centred at 18 px
+    render(<SessionTabs {...defaultProps} />)
+    expect(screen.getByRole('tab', { name: /Code/ }).parentElement).toHaveClass(
+      'mb-0.5',
+    )
+    expect(screen.getByRole('button', { name: 'Add session' })).toHaveClass(
+      'mb-0.5',
+    )
+  })
+
   it('never nests the close button in the tab', () => {
     render(<SessionTabs {...defaultProps} />)
     expect(
