@@ -66,7 +66,7 @@ import { PromptCard, WaitingCard } from './prompt-card'
 import { SlashCommandList, slashOptionId } from './slash-command-list'
 import { TemplatePicker } from './template-picker'
 import { Banner, type BannerVariant } from './ui/banner'
-import { IconButton } from './ui/button'
+import { Button, IconButton } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
 
 // The server's limit on a message, in UTF-8 bytes.
@@ -84,6 +84,8 @@ interface Notice {
   text: string
   // Offer the terminal: the screen needs a look there
   terminal?: boolean
+  // Offer to clear the terminal's draft and send this message instead
+  replace?: boolean
 }
 
 // What to tell the user when the server refuses a message: by its code, or
@@ -98,6 +100,13 @@ function noticeFor(err: unknown, t: Translate<MessageKey>): Notice {
   switch (err.code) {
     case 'input_not_ready':
       return { variant: 'warning', text: notSent, terminal: true }
+    case 'input_has_draft':
+      return {
+        variant: 'warning',
+        text: notSent,
+        terminal: true,
+        replace: true,
+      }
     case 'partial_paste':
       return {
         variant: 'danger',
@@ -314,6 +323,7 @@ export function ChatComposer({
     confirmed = false,
     imageIds: string[] = [],
     imageAt: number[] = [],
+    replaceDraft = false,
   ) => {
     if (sending || !t.cursor) return
     // With images the agent receives "[Image #1] /cmd": text, not a command.
@@ -342,6 +352,7 @@ export function ChatComposer({
         t.cursor,
         imageIds,
         imageAt,
+        replaceDraft,
       )
       if (queued) {
         setNotice({
@@ -371,13 +382,14 @@ export function ChatComposer({
     }
   }
 
-  const send = () => {
+  // replaceDraft: the user chose to clear the terminal's draft for it
+  const send = (replaceDraft = false) => {
     if (!canSend) return
     const m = messageWithImages(
       dollar ? closeTrailingSkill(text) : text,
       images.ready,
     )
-    submit(m.text, false, m.ids, m.at)
+    submit(m.text, false, m.ids, m.at, replaceDraft)
   }
 
   // An image attached goes where the caret is, as its "[Image #n]" token
@@ -660,7 +672,7 @@ export function ChatComposer({
       aria-label={translate('chat.composer.send')}
       variant="primary"
       disabled={!canSend}
-      onClick={send}
+      onClick={() => send()}
     >
       <SendHorizontal size={18} aria-hidden="true" />
     </IconButton>
@@ -671,7 +683,21 @@ export function ChatComposer({
       {notice && (
         <Banner
           variant={notice.variant}
-          action={notice.terminal && <OpenTerminalButton showView={showView} />}
+          action={
+            <>
+              {/* C-c would interrupt a working agent: the server refuses */}
+              {notice.replace && status !== 'working' && (
+                <Button
+                  size="sm"
+                  disabled={!canSend}
+                  onClick={() => send(true)}
+                >
+                  {translate('chat.composer.replaceDraft')}
+                </Button>
+              )}
+              {notice.terminal && <OpenTerminalButton showView={showView} />}
+            </>
+          }
         >
           {notice.text}
         </Banner>

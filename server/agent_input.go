@@ -380,6 +380,9 @@ func (a *agentAPI) handleMessage(w http.ResponseWriter, r *http.Request) {
 		// At: where each image goes, a byte offset into Text, in order.
 		// Without it the images go before the text.
 		At []int `json:"at"`
+		// ReplaceDraft: the user chose to clear a draft typed in the
+		// terminal's box (refused input_has_draft before) for this message.
+		ReplaceDraft bool `json:"replaceDraft"`
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, agentMessageBody)
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -439,6 +442,10 @@ func (a *agentAPI) handleMessage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	budget := messageBudget(len(paths), textWait)
+	if body.ReplaceDraft {
+		// clearDraft's checks and its wait for the box to empty
+		budget += agentConfirmWait + muxTimeout
+	}
 	if len(paths) > 0 || budget > messageBudget(0, agentConfirmWait) {
 		// The body is read: the read deadline only has to outlast the
 		// pastes, which may pass requestReadTimeout with several images
@@ -448,7 +455,7 @@ func (a *agentAPI) handleMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), budget)
 	defer cancel()
-	switch err := a.sendMessage(ctx, wr, paneID, c.Session, parts, paths); {
+	switch err := a.sendMessage(ctx, wr, paneID, c.Session, parts, paths, body.ReplaceDraft); {
 	case errors.Is(err, errQueued):
 		// The agent took the message into its queue, to read when ready
 		w.WriteHeader(http.StatusAccepted)
@@ -530,8 +537,9 @@ func (a *agentAPI) imagePaths(ids []string) ([]string, error) {
 
 // sendMessage pastes a message into an empty input box of session and
 // submits it: parts[i] before the image at paths[i], the last part after the
-// last image (one part more than paths).
-func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, session string, parts, paths []string) error {
+// last image (one part more than paths). replace clears a draft the box
+// holds first (clearDraft); without it a draft is refused.
+func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, session string, parts, paths []string, replace bool) error {
 	text := parts[len(parts)-1]
 	s, err := sessionNow(ctx, wr, paneID)
 	if err != nil {
@@ -572,10 +580,24 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 	if agentWorking(s, sc) && !agentQueueing[s.Agent].commands && len(paths) == 0 && strings.HasPrefix(strings.TrimSpace(text), "/") {
 		return fail(http.StatusConflict, "input_not_ready", "the agent is working; send a command once it is done")
 	}
+	// resend: the box already holds this very message, as text, not a
+	// token: an earlier send whose paste showed only after it gave up
+	// (paste_not_confirmed), sent again. It is submitted as it is rather
+	// than refused as the user's draft or pasted twice.
+	resend := false
 	switch sc.input {
 	case inputEmpty:
 	case inputDraft:
-		return fail(http.StatusConflict, "input_not_ready", "the input box already holds a draft")
+		switch {
+		case len(paths) == 0 && draftIsText(sc.draft, text):
+			resend = true
+		case replace:
+			if err := a.clearDraft(ctx, wr, paneID, s); err != nil {
+				return err
+			}
+		default:
+			return fail(http.StatusConflict, "input_has_draft", "the input box already holds a draft")
+		}
 	default:
 		if sc.prompt != nil {
 			return fail(http.StatusConflict, "input_not_ready", "a dialog is open")
@@ -672,7 +694,7 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 		}
 	}
 	final := append(slices.Clone(box[:len(box)-1]), pasted)
-	if pasted != "" {
+	if pasted != "" && !resend {
 		if n > 0 && !stillReady() {
 			return a.abandon(ctx, wr, paneID, s, tried, errPartialPaste)
 		}
@@ -785,6 +807,43 @@ func (a *agentAPI) abandon(ctx context.Context, wr agentWriter, paneID string, s
 		return errPartialPaste
 	}
 	return failure
+}
+
+// clearDraft empties a box holding a draft the user chose to replace: C-c,
+// which clears a box with text in it, sent only when the same agent is idle
+// (it would interrupt a working one) and the box still holds a draft (on an
+// empty box it arms the agent's exit). The box must then show empty.
+func (a *agentAPI) clearDraft(ctx context.Context, wr agentWriter, paneID string, s AgentSession) error {
+	now, err := sessionNow(ctx, wr, paneID)
+	if err != nil {
+		return err
+	}
+	if !sameAgent(now, s) {
+		return errSessionChanged
+	}
+	if err := agentReady(now, false); err != nil {
+		return err
+	}
+	screen, err := wr.Capture(ctx, s.Target)
+	if err != nil {
+		return err
+	}
+	switch sc := readAgentScreen(s.Agent, screen); {
+	case sc.input == inputEmpty:
+		return nil
+	case sc.input != inputDraft:
+		return fail(http.StatusConflict, "input_not_ready", "the screen is not the input box")
+	case sc.working:
+		return fail(http.StatusConflict, "input_not_ready", "the agent is working")
+	}
+	if err := wr.SendKeySequence(ctx, s.Target, []string{"C-c"}); err != nil {
+		log.Printf("agent message: clear draft: %v", err)
+		return fail(http.StatusConflict, "input_has_draft", "the draft could not be cleared")
+	}
+	if !pollScreen(ctx, wr, s.Agent, s.Target, func(sc agentScreen) bool { return sc.input == inputEmpty }) {
+		return fail(http.StatusConflict, "input_has_draft", "the draft could not be cleared")
+	}
+	return nil
 }
 
 // ownDraft: the box holds one of the states a request tried to paste, as

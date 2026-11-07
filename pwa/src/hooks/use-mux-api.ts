@@ -1123,13 +1123,19 @@ export async function sendAgentMessage(
   images: string[] = [],
   // Where each image goes in text: a UTF-8 byte offset (none: before it)
   at: number[] = [],
+  // Clear a draft typed in the terminal's input box first (the user chose
+  // to, after input_has_draft); the server does it only for an idle agent.
+  replaceDraft = false,
 ): Promise<{ queued: boolean }> {
   const res = await fetch(agentPath(paneId, 'message'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(
-      images.length > 0 ? { text, cursor, images, at } : { text, cursor },
-    ),
+    body: JSON.stringify({
+      text,
+      cursor,
+      ...(images.length > 0 && { images, at }),
+      ...(replaceDraft && { replaceDraft }),
+    }),
   })
   if (!res.ok) throw await requestError(res)
   return { queued: res.status === 202 }

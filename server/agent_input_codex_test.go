@@ -151,7 +151,7 @@ func TestCodexMessageRefusals(t *testing.T) {
 		code   string
 		pasted bool
 	}{
-		{"draft in the composer", func(f *fakeWriter) { f.screen = codexBox("half typed") }, "", 409, "input_not_ready", false},
+		{"draft in the composer", func(f *fakeWriter) { f.screen = codexBox("half typed") }, "", 409, "input_has_draft", false},
 		{"status unknown", func(f *fakeWriter) { f.session = unknown }, "", 409, "input_not_ready", false},
 		{"dialog open", func(f *fakeWriter) { f.screen = codexCapture(t, "0.159.3-approval-exec") }, "", 409, "input_not_ready", false},
 		{"session changed", nil, cursorFor(testSessionID), 409, "session_changed", false},

@@ -38,6 +38,8 @@ export default {
   'errors.import_changed': 'It changed since the preview',
   'errors.in_use': 'The file is open in another program',
   'errors.index_locked': 'Another git command holds the index lock',
+  'errors.input_has_draft':
+    "The terminal's input box already holds text; send or clear it there",
   'errors.input_not_ready': 'The agent cannot take input right now',
   'errors.invalid_action': 'This action is not known',
   'errors.invalid_after': 'The position asked for is not valid',

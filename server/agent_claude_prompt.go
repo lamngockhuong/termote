@@ -832,6 +832,16 @@ func draftShows(draft, text string) bool {
 	return draft != "" && strip(draft) == strip(text)
 }
 
+// draftIsText reports whether the box shows text itself: draftShows without
+// the long-paste tokens, which carry a count and not the text, so another
+// paste of the same size reads the same.
+func draftIsText(draft, text string) bool {
+	if pastedTokenRe.MatchString(draft) || codexPastedTokenRe.MatchString(draft) {
+		return false
+	}
+	return draftShows(draft, text)
+}
+
 // draftShowsParts reports whether the box shows a message pasted around
 // image tokens: parts[0], a token, parts[1] and so on, each part as
 // draftShows reads it (nothing for a blank part). A token is not counted

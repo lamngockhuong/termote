@@ -247,7 +247,7 @@ func TestMessageQueuedWhileWorking(t *testing.T) {
 	f.session = working
 	f.screen = fixtureScreen(t, "2.1.310-working-draft")
 	code, body := postJSON(t, agentMux(f), "/api/mux/panes/0/agent/message", map[string]string{"text": "hello", "cursor": cursorFor(testSessionID)})
-	if code != http.StatusConflict || body["code"] != "input_not_ready" || len(f.pasted) != 0 {
+	if code != http.StatusConflict || body["code"] != "input_has_draft" || len(f.pasted) != 0 {
 		t.Errorf("draft: POST = %d %v pasted %q", code, body, f.pasted)
 	}
 }
@@ -365,7 +365,7 @@ func TestMessageRefusals(t *testing.T) {
 		{"cursor from before a restart", nil, "forged.cursor", 409, "session_changed", false, false},
 		{"agent gone", func(f *fakeWriter) { f.found = false }, "", 409, "target_changed", false, false},
 		{"waiting on a dialog", func(f *fakeWriter) { f.session = blocked }, "", 409, "input_not_ready", false, false},
-		{"draft in the box", func(f *fakeWriter) { f.screen = boxScreen("half typed") }, "", 409, "input_not_ready", false, false},
+		{"draft in the box", func(f *fakeWriter) { f.screen = boxScreen("half typed") }, "", 409, "input_has_draft", false, false},
 		{"dialog open", func(f *fakeWriter) { f.screen = fixtureScreen(t, "2.1.286-permission-bash") }, "", 409, "input_not_ready", false, false},
 		{"unknown screen", func(f *fakeWriter) { f.screen = "$ ls\nfile\n$ " }, "", 409, "input_not_ready", false, false},
 		{"paste never shows", func(f *fakeWriter) { f.onPaste = nil }, "", 409, "paste_not_confirmed", true, false},
@@ -1249,7 +1249,7 @@ func TestMessageTextPasteFailsAfterImages(t *testing.T) {
 	f := newFakeWriter()
 	imageAgent(f, 0)
 	_, _, paths := imageMux(t, f, 1)
-	err := newAgentAPI(nil).sendMessage(context.Background(), textPasteFails{f}, "0", testSessionID, []string{"", "hello"}, paths)
+	err := newAgentAPI(nil).sendMessage(context.Background(), textPasteFails{f}, "0", testSessionID, []string{"", "hello"}, paths, false)
 	var af *agentFailure
 	if !errors.As(err, &af) || af.code != "paste_not_confirmed" || len(f.keys) != 1 || f.keys[0][0] != "C-c" {
 		t.Errorf("err = %v keys = %v", err, f.keys)
@@ -1431,5 +1431,165 @@ func TestMessageWithImagesOutlastsReadDeadline(t *testing.T) {
 	res.Body.Close()
 	if res.StatusCode != http.StatusNoContent {
 		t.Errorf("POST = %d", res.StatusCode)
+	}
+}
+
+// A message whose paste showed only after the send gave up stays in the box;
+// sending it again submits it as it is, pasted once. Any other draft, a
+// long-paste token that only counts lines, or a message with images is
+// still the user's.
+func TestMessageResendOwnDraft(t *testing.T) {
+	shortConfirm(t)
+	f := newFakeWriter()
+	late := make(chan struct{})
+	f.onPaste = func(f *fakeWriter, text string) {
+		go func() {
+			time.Sleep(3 * agentConfirmWait)
+			f.setScreen(boxScreen(text))
+			close(late)
+		}()
+	}
+	mux := agentMux(f)
+	msg := map[string]string{"text": "hello there", "cursor": cursorFor(testSessionID)}
+	if code, body := postJSON(t, mux, "/api/mux/panes/0/agent/message", msg); code != http.StatusConflict || body["code"] != "paste_not_confirmed" {
+		t.Fatalf("first POST = %d %v, want paste_not_confirmed", code, body)
+	}
+	<-late
+	typing(f)
+	if code, body := postJSON(t, mux, "/api/mux/panes/0/agent/message", msg); code != http.StatusNoContent {
+		t.Fatalf("resend POST = %d %v, want 204", code, body)
+	}
+	if len(f.pasted) != 1 || len(f.keys) != 1 || f.keys[0][0] != "Enter" {
+		t.Errorf("pasted %q keys %v, want one paste and Enter", f.pasted, f.keys)
+	}
+
+	refused := []struct {
+		name  string
+		draft string
+		body  map[string]any
+	}{
+		{"another draft", "hello", map[string]any{"text": "hello there"}},
+		{"a long-paste token", "[Pasted text #1 +1 lines]", map[string]any{"text": "a\nb"}},
+	}
+	for _, tt := range refused {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFakeWriter()
+			f.screen = boxScreen(tt.draft)
+			tt.body["cursor"] = cursorFor(testSessionID)
+			code, body := postJSON(t, agentMux(f), "/api/mux/panes/0/agent/message", tt.body)
+			if code != http.StatusConflict || body["code"] != "input_has_draft" || len(f.pasted) != 0 || len(f.keys) != 0 {
+				t.Errorf("POST = %d %v pasted %q keys %v, want input_has_draft", code, body, f.pasted, f.keys)
+			}
+		})
+	}
+	t.Run("with an image", func(t *testing.T) {
+		f := newFakeWriter()
+		f.screen = boxScreen("hello")
+		mux, ids, _ := imageMux(t, f, 1)
+		code, body := postMessage(t, mux, "hello", ids)
+		if code != http.StatusConflict || body["code"] != "input_has_draft" || len(f.pasted) != 0 || len(f.keys) != 0 {
+			t.Errorf("POST = %d %v pasted %q keys %v, want input_has_draft", code, body, f.pasted, f.keys)
+		}
+	})
+}
+
+// replaceDraft clears the user's draft with C-c, only from an idle agent
+// whose box then shows empty, and sends the message in its place.
+func TestMessageReplaceDraft(t *testing.T) {
+	shortConfirm(t)
+	working := labSession
+	working.Status = "working"
+	tests := []struct {
+		name   string
+		setup  func(f *fakeWriter)
+		status int
+		code   string
+		keys   []string
+	}{
+		{"idle", func(f *fakeWriter) {}, http.StatusNoContent, "", []string{"C-c", "Enter"}},
+		{"cleared already", func(f *fakeWriter) { f.screens = []string{boxScreen("half typed")}; f.screen = boxScreen("") }, http.StatusNoContent, "", []string{"Enter"}},
+		{"working", func(f *fakeWriter) { f.session = working; f.screen = fixtureScreen(t, "2.1.310-working-draft") }, http.StatusConflict, "input_not_ready", nil},
+		{"C-c leaves it", func(f *fakeWriter) {
+			next := f.onKeys
+			f.onKeys = func(f *fakeWriter, keys []string) {
+				if keys[0] != "C-c" {
+					next(f, keys)
+				}
+			}
+		}, http.StatusConflict, "input_has_draft", []string{"C-c"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFakeWriter()
+			f.screen = boxScreen("half typed")
+			enter := f.onKeys
+			f.onKeys = func(f *fakeWriter, keys []string) {
+				if keys[0] == "C-c" {
+					f.setScreen(boxScreen(""))
+				}
+				enter(f, keys)
+			}
+			tt.setup(f)
+			code, body := postJSON(t, agentMux(f), "/api/mux/panes/0/agent/message", map[string]any{"text": "hello", "cursor": cursorFor(testSessionID), "replaceDraft": true})
+			if code != tt.status || (tt.code != "" && body["code"] != tt.code) {
+				t.Fatalf("POST = %d %v, want %d %s", code, body, tt.status, tt.code)
+			}
+			var keys []string
+			for _, k := range f.keys {
+				keys = append(keys, k[0])
+			}
+			if strings.Join(keys, ",") != strings.Join(tt.keys, ",") {
+				t.Errorf("keys = %v, want %v", keys, tt.keys)
+			}
+			if wantPaste := tt.status == http.StatusNoContent; wantPaste != (len(f.pasted) == 1) {
+				t.Errorf("pasted %q", f.pasted)
+			}
+		})
+	}
+}
+
+// clearDraft sends no C-c unless the same agent is idle and its box still
+// holds a draft, and fails when the key does.
+func TestClearDraftRefusals(t *testing.T) {
+	shortConfirm(t)
+	a := newAgentAPI(nil)
+	other := labSession
+	other.PID = 43
+	shell := labSession
+	shell.Agent = "bash"
+	tests := []struct {
+		name  string
+		setup func(f *fakeWriter) agentWriter
+		code  string
+	}{
+		{"another agent", func(f *fakeWriter) agentWriter { f.session = shell; return f }, ""},
+		{"another process", func(f *fakeWriter) agentWriter { f.session = other; return f }, "session_changed"},
+		{"capture fails", func(f *fakeWriter) agentWriter { return captureErrWriter{f} }, ""},
+		{"a dialog", func(f *fakeWriter) agentWriter { f.screen = fixtureScreen(t, "2.1.286-permission-bash"); return f }, "input_not_ready"},
+		{"codex working line", func(f *fakeWriter) agentWriter {
+			f.session = codexSession
+			f.screen = codexRows("• Working (3s • esc to interrupt)", "", "› half typed", "", codexModelRow)
+			return f
+		}, "input_not_ready"},
+		{"key fails", func(f *fakeWriter) agentWriter { f.keyErr = errors.New("send-keys failed"); return f }, "input_has_draft"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFakeWriter()
+			f.screen = boxScreen("half typed")
+			wr := tt.setup(f)
+			s := labSession
+			if f.session.Agent == "codex" {
+				s = codexSession
+			}
+			err := a.clearDraft(context.Background(), wr, "0", s)
+			var af *agentFailure
+			if err == nil || (tt.code != "" && (!errors.As(err, &af) || af.code != tt.code)) {
+				t.Errorf("clearDraft = %v, want %q", err, tt.code)
+			}
+			if tt.name != "key fails" && len(f.keys) != 0 {
+				t.Errorf("keys = %v", f.keys)
+			}
+		})
 	}
 }

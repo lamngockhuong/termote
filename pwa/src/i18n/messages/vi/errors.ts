@@ -33,6 +33,8 @@ export default {
   'errors.import_changed': 'Đã thay đổi từ lúc xem trước',
   'errors.in_use': 'File đang mở trong một chương trình khác',
   'errors.index_locked': 'Một lệnh git khác đang giữ khóa index',
+  'errors.input_has_draft':
+    'Ô nhập trong terminal đang có chữ; hãy gửi hoặc xóa nó trong terminal',
   'errors.input_not_ready': 'Lúc này agent chưa nhận được nội dung nhập',
   'errors.invalid_action': 'Không rõ thao tác này',
   'errors.invalid_after': 'Vị trí yêu cầu không hợp lệ',
