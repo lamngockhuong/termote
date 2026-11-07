@@ -125,6 +125,35 @@ test.describe('reordering tmux windows', () => {
       .locator('..')
       .dragTo(headerTab(b).locator('..'), { targetPosition: { x: (box?.width ?? 0) - 2, y: 10 } })
     await expect.poll(order).toEqual([a, b, c])
+    // Like a browser's tabs, a dragged tab stays in the tab bar: pulled down
+    // over the page it slides across only, and Escape puts it back. Measured
+    // once the moved tabs have settled (a move renumbers tmux windows, so
+    // their tabs fade in again)
+    await expect(headerTabs).toHaveText([new RegExp(a), new RegExp(b), new RegExp(c)])
+    const held = headerTab(c).locator('..')
+    const centre = async () => {
+      const box = (await held.boundingBox())!
+      return { x: Math.round(box.x + box.width / 2), y: Math.round(box.y + box.height / 2) }
+    }
+    let start = await centre()
+    await expect
+      .poll(async () => {
+        const now = await centre()
+        const same = now.x === start.x && now.y === start.y
+        start = now
+        return same
+      })
+      .toBe(true)
+    await page.mouse.move(start.x, start.y)
+    await page.mouse.down()
+    await page.mouse.move(start.x - 60, start.y + 400, { steps: 5 })
+    const pulled = await centre()
+    expect(pulled.y).toBe(start.y)
+    expect(pulled.x).toBeLessThan(start.x - 30)
+    await page.keyboard.press('Escape')
+    await page.mouse.up()
+    await expect.poll(centre).toEqual(start)
+    expect(order()).toEqual([a, b, c])
     // A click still selects a tab
     await headerTab(b).click()
     await expect.poll(() => tmux('display-message', '-p', '-t', sid, '#{window_name}')).toBe(b)

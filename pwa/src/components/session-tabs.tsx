@@ -1,7 +1,7 @@
 import { Plus, X } from 'lucide-react'
 import {
-  type DragEvent,
   type KeyboardEvent,
+  type PointerEvent,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -75,6 +75,9 @@ function tabTitle(session: Session): string {
     .join('\n')
 }
 
+// How far (px) a pressed tab moves before it drags
+const DRAG_SLOP = 4
+
 // Where a dragged tab would land: before or after the tab under the pointer
 interface DropTarget {
   id: string
@@ -140,10 +143,13 @@ export function SessionTabs({
     return () => ro.disconnect()
   }, [])
   const activeRef = useRef<HTMLButtonElement>(null)
-  // The tab being dragged, kept here: while dragging over a tab the browser
-  // shows only the data's types, never the data.
-  const dragged = useRef<string | null>(null)
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null)
+  // Ends a drag in progress (its window listeners), also on unmount
+  const endDrag = useRef<(() => void) | null>(null)
+  // What a drag reads when it moves and lands: the tabs can change meanwhile
+  const latest = useRef({ sessions, onMove })
+  latest.current = { sessions, onMove }
+  useEffect(() => () => endDrag.current?.(), [])
   const { entries, ref } = usePresenceList(sessions, sessionId)
   const isNew = useNewKeys(sessions.map(sessionId))
   // By a tab's lasting key: a tmux tab's id is its window number, which a
@@ -300,45 +306,112 @@ export function SessionTabs({
   const menuSession = menuAt === -1 ? undefined : sessions[menuAt]
   const iconSession = sessions.find((s) => s.id === iconFor)
 
-  // Drag and drop (desktop): the half of the tab under the pointer says
-  // before or after it.
+  // Dragging (desktop, a mouse or a pen): like a browser's tabs, the tab
+  // slides along the row only, held inside the strip, never over the page.
+  // The half of the tab under the pointer says before or after it; a press
+  // that moves less than DRAG_SLOP is still a click.
   const movable = !!onMove && sessions.length > 1
   const dragProps = (id: string) => {
     if (!movable) return {}
-    const isAfter = (e: DragEvent<HTMLElement>) => {
-      const box = e.currentTarget.getBoundingClientRect()
-      return e.clientX > box.left + box.width / 2
-    }
-    const end = () => {
-      dragged.current = null
-      setDropTarget(null)
-    }
     return {
-      draggable: true,
-      onDragStart: (e: DragEvent) => {
-        dragged.current = id
-        e.dataTransfer.effectAllowed = 'move'
-        e.dataTransfer.setData('text/x-termote-tab', id)
+      'data-movable': true,
+      onPointerDown: (e: PointerEvent<HTMLElement>) => {
+        if (e.button !== 0 || e.pointerType === 'touch' || endDrag.current)
+          return
+        // The close button closes; it does not drag
+        if ((e.target as HTMLElement).closest('button:not([role="tab"])'))
+          return
+        startDrag(id, e.currentTarget, e.clientX)
       },
-      onDragOver: (e: DragEvent<HTMLElement>) => {
-        if (!dragged.current) return
-        e.preventDefault()
-        e.dataTransfer.dropEffect = 'move'
-        const after = isAfter(e)
-        if (dropTarget?.id !== id || dropTarget.after !== after) {
-          setDropTarget({ id, after })
-        }
-      },
-      onDrop: (e: DragEvent<HTMLElement>) => {
-        const from = dragged.current
-        if (!from) return
-        e.preventDefault()
-        const index = dropIndex(ids, from, id, isAfter(e))
-        if (index !== null) onMove(from, index)
-        end()
-      },
-      onDragEnd: end,
     }
+  }
+  const startDrag = (id: string, el: HTMLElement, startX: number) => {
+    const list = scrollRef.current!
+    let active = false
+    let target: DropTarget | null = null
+    // The tabs still here, in the sessions' order
+    const others = () =>
+      [...list.children].filter(
+        (c): c is HTMLElement =>
+          c instanceof HTMLElement && !c.hasAttribute('data-leaving'),
+      )
+    const onMoveEvent = (ev: globalThis.PointerEvent) => {
+      const dx = ev.clientX - startX
+      if (!active) {
+        if (Math.abs(dx) < DRAG_SLOP) return
+        active = true
+        el.setAttribute('data-dragging', 'true')
+      }
+      const box = list.getBoundingClientRect()
+      const self = el.getBoundingClientRect()
+      // The tab's place without the slide, so the bounds do not drift
+      const shift = Number.parseFloat(el.style.translate) || 0
+      const left = self.left - shift
+      const right = self.right - shift
+      const x = Math.min(Math.max(dx, box.left - left), box.right - right)
+      el.style.translate = `${x}px 0`
+      // The tab under the pointer, the pointer held inside the strip
+      const px = Math.min(Math.max(ev.clientX, box.left), box.right - 1)
+      // (the dragged tab, which covers its neighbours, is not one of them)
+      const { sessions: now } = latest.current
+      const tabs = others()
+      const over = tabs.findIndex((t) => {
+        if (t === el) return false
+        const r = t.getBoundingClientRect()
+        return px >= r.left && px < r.right
+      })
+      const r = over === -1 ? null : tabs[over].getBoundingClientRect()
+      const next: DropTarget | null =
+        r && now[over]
+          ? { id: now[over].id, after: px > r.left + r.width / 2 }
+          : null
+      if (next?.id !== target?.id || next?.after !== target?.after) {
+        target = next
+        setDropTarget(next)
+      }
+    }
+    const finish = (drop: boolean) => {
+      window.removeEventListener('pointermove', onMoveEvent)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onCancel)
+      window.removeEventListener('keydown', onKey, true)
+      endDrag.current = null
+      el.removeAttribute('data-dragging')
+      el.style.translate = ''
+      setDropTarget(null)
+      if (!active) return
+      // The click that ends a drag (fired in the same task as the release,
+      // when it is over the tab) does not select the tab
+      window.addEventListener('click', swallow, { capture: true, once: true })
+      setTimeout(() => window.removeEventListener('click', swallow, true))
+      if (!drop || !target) return
+      const { sessions: now, onMove: move } = latest.current
+      const index = dropIndex(
+        now.map((s) => s.id),
+        id,
+        target.id,
+        target.after,
+      )
+      if (index !== null) move?.(id, index)
+    }
+    const swallow = (c: MouseEvent) => {
+      c.stopPropagation()
+      c.preventDefault()
+    }
+    const onUp = () => finish(true)
+    const onCancel = () => finish(false)
+    // Escape puts the tab back
+    const onKey = (k: globalThis.KeyboardEvent) => {
+      if (k.key !== 'Escape' || !active) return
+      k.preventDefault()
+      k.stopPropagation()
+      finish(false)
+    }
+    window.addEventListener('pointermove', onMoveEvent)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onCancel)
+    window.addEventListener('keydown', onKey, true)
+    endDrag.current = () => finish(false)
   }
 
   return (
@@ -381,10 +454,10 @@ export function SessionTabs({
                 e.preventDefault()
                 openMenu(session.id, false)
               }}
-              className={`group relative flex h-9 shrink-0 items-center pr-1.5 text-[13px] transition-[color,background-color,border-color,opacity,translate,scale] duration-(--duration-fast) ease-standard motion-safe:active:scale-[0.98] ${isNew(key) ? ENTER_FROM : ''} ${leaving ? LEAVE_TO : ''} ${
+              className={`group relative flex h-9 shrink-0 items-center pr-1.5 text-[13px] transition-[color,background-color,border-color,opacity,translate,scale] duration-(--duration-fast) ease-standard motion-safe:active:scale-[0.98] data-dragging:z-20 data-dragging:transition-none ${isNew(key) ? ENTER_FROM : ''} ${leaving ? LEAVE_TO : ''} ${
                 looksActive
                   ? 'pointer-coarse:h-11 rounded-t-control border border-b-0 border-border bg-term text-fg shadow-sm ui-terminal:shadow-[inset_0_2px_0_var(--color-accent)] ui-native:rounded-t-panel ui-native:border-0'
-                  : 'mb-1 h-8 pointer-coarse:h-10 rounded-control text-fg-muted hover:bg-surface-raised hover:text-fg'
+                  : 'mb-1 h-8 pointer-coarse:h-10 rounded-control text-fg-muted hover:bg-surface-raised hover:text-fg data-dragging:bg-surface-raised data-dragging:text-fg'
               }`}
             >
               {/* Inside the tab's edge: the scrolling tablist cuts off
@@ -436,7 +509,7 @@ export function SessionTabs({
                   onClick={() => onSelect(session.id)}
                   aria-keyshortcuts={keys.join(' ') || undefined}
                   title={tabTitle(session)}
-                  className={`flex h-full items-center gap-2 whitespace-nowrap rounded-control pl-3 pr-1 ${FOCUS_RING} focus-visible:-outline-offset-2`}
+                  className={`flex h-full select-none items-center gap-2 whitespace-nowrap rounded-control pl-3 pr-1 ${FOCUS_RING} focus-visible:-outline-offset-2`}
                 >
                   <span className="text-base leading-none">{session.icon}</span>
                   <span className="max-w-[140px] truncate ui-terminal:font-label">
