@@ -54,7 +54,7 @@ async function clearRecent(request: APIRequestContext, dir: string) {
 
 async function createInDialog(page: Page, name: string) {
   await page.getByLabel('Name', { exact: true }).fill(name)
-  await page.getByLabel('Directory (an absolute path on the host)').fill('/tmp')
+  await page.getByLabel('Directory (an absolute path or ~/… on the host)').fill('/tmp')
   await page.getByRole('button', { name: 'Create' }).click()
 }
 
@@ -121,7 +121,7 @@ test.describe('tmux sessions from the PWA', () => {
     await createInDialog(page, snap.groups[0].name)
     await expect(page.getByRole('alert')).toHaveText('A tmux session of that name already exists')
     // What was typed stays
-    await expect(page.getByLabel('Directory (an absolute path on the host)')).toHaveValue('/tmp')
+    await expect(page.getByLabel('Directory (an absolute path or ~/… on the host)')).toHaveValue('/tmp')
   })
 
   test('create a session from the mobile sessions sheet', async ({ page, request }) => {
@@ -155,7 +155,7 @@ test.describe('tmux sessions from the PWA', () => {
       // Made, then closed.
       await page.getByRole('button', { name: 'New tmux session' }).click()
       await page.getByLabel('Name', { exact: true }).fill(name)
-      await page.getByLabel('Directory (an absolute path on the host)').fill(dir)
+      await page.getByLabel('Directory (an absolute path or ~/… on the host)').fill(dir)
       await page.getByRole('button', { name: 'Create' }).click()
       await expect.poll(sessionNames, { timeout: 10000 }).toContain(name)
       // Closed from the PWA, which moves its terminal off it first: killed
@@ -175,7 +175,7 @@ test.describe('tmux sessions from the PWA', () => {
       await expect(use).toHaveAccessibleName(`Use ${name} in ${dir}`)
       await use.click()
       await expect(page.getByLabel('Name', { exact: true })).toHaveValue(name)
-      await expect(page.getByLabel('Directory (an absolute path on the host)')).toHaveValue(dir)
+      await expect(page.getByLabel('Directory (an absolute path or ~/… on the host)')).toHaveValue(dir)
       await page.getByRole('button', { name: 'Create' }).click()
       await expect.poll(sessionNames, { timeout: 10000 }).toContain(name)
       await expect(page.locator(`aside section[aria-label="${name}"]`)).toBeVisible()

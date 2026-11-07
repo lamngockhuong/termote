@@ -502,7 +502,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   backend is asked: `direction` `right|down` (split), `prev|next` (swap), `left|right|up|down`
   (resize), else 400 `invalid_direction`; `mode` `toggle|on|off`, else 400 `invalid_mode`;
   `amount` a whole number of cells 1–50 (1.5, 0, 51 or missing: 400 `invalid_amount`). A
-  non-empty `cwd` goes through the groups' `resolveGroupCwd` (absolute, existing directory,
+  non-empty `cwd` goes through the groups' `resolveGroupCwd` (absolute or `~/…`, existing directory,
   symlinks resolved, the files deny list: 400 `invalid_cwd`/`not_found`, 409 `not_directory`, 403
   `not_allowed`, 503 `busy` when the directory does not answer in time); an empty one stays empty and the new pane starts in the pane's own directory
   (never the home a new group gets). It is no boundary: the shell can `cd` anywhere. A pane id
@@ -575,7 +575,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   one. The name is 1–64 bytes, no control character, no trailing `;`; tmux also refuses `:` `.`
   `*` `?` `[` `\` (stored escaped) and a leading `=` or `-` in a new session's name. The `cwd` check is against
   mistakes, **not a security boundary** (the shell that opens can `cd` anywhere; signing in is
-  the boundary): empty → the server user's home, absolute only, on Windows only `X:\…` (a UNC
+  the boundary): empty or `~` → the server user's home, `~/dir` (Windows also `~\dir`) → `dir` under it (`~user` is refused, no shell expands anything), otherwise absolute only, on Windows only `X:\…` (a UNC
   `\\host\share`, `\\?\` or `\\.\` would make the stat send the NTLM hash to that host),
   `EvalSymlinks` + `Stat` in a goroutine bounded by `muxTimeout` (a hung mount → 503 `busy`; a local symlink to a UNC path still reaches it, an accepted gap:
   only someone with the host can make one), and

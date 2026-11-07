@@ -43,7 +43,8 @@ export default {
   'errors.invalid_after': 'The position asked for is not valid',
   'errors.invalid_amount': 'The amount is out of range',
   'errors.invalid_choice': 'That is not one of the options',
-  'errors.invalid_cwd': 'The directory must be an absolute path on the host',
+  'errors.invalid_cwd':
+    'The directory must be an absolute path or ~/… on the host',
   'errors.invalid_direction': 'The direction is not valid',
   'errors.invalid_endpoint': 'The notification address is not valid',
   'errors.invalid_exclude': 'An excluded name is not valid',

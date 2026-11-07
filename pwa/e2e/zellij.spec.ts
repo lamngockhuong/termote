@@ -258,7 +258,7 @@ test.describe('Zellij from the PWA', () => {
     madeGroups.push(name)
     await page.getByRole('button', { name: 'New Zellij session' }).click()
     await page.getByLabel('Name', { exact: true }).fill(name)
-    await page.getByLabel('Directory (an absolute path on the host)').fill('/tmp')
+    await page.getByLabel('Directory (an absolute path or ~/… on the host)').fill('/tmp')
     await page.getByRole('button', { name: 'Create' }).click()
 
     // Made and shown: this page's stream is its client

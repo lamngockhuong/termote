@@ -170,7 +170,7 @@ export default {
   'shell.group.invalidNameTmux':
     'Không dùng được tên này. Tránh : . * ? [ \\ và dấu = hay - ở đầu',
   'shell.group.invalidCwd':
-    'Nhập một đường dẫn tuyệt đối trên máy chủ, hoặc để trống',
+    'Nhập đường dẫn tuyệt đối hoặc ~/… trên máy chủ, hoặc để trống',
   'shell.group.notFound': 'Máy chủ không có thư mục này',
   'shell.group.notDirectory': 'Đường dẫn này là file, không phải thư mục',
   'shell.group.notAllowed': 'Không mở được {noun} trong thư mục đó',
@@ -184,7 +184,8 @@ export default {
     'Có thể {noun} đã được tạo. Hãy xem lại danh sách.',
   'shell.group.new': 'Tạo {noun}',
   'shell.group.name': 'Tên',
-  'shell.group.directory': 'Thư mục (đường dẫn tuyệt đối trên máy chủ)',
+  'shell.group.directory':
+    'Thư mục (đường dẫn tuyệt đối hoặc ~/… trên máy chủ)',
   'shell.group.home': 'Thư mục home',
   'shell.group.create': 'Tạo',
   'shell.group.recent': 'Gần đây',

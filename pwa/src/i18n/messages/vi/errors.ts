@@ -38,7 +38,8 @@ export default {
   'errors.invalid_after': 'Vị trí yêu cầu không hợp lệ',
   'errors.invalid_amount': 'Mức thay đổi nằm ngoài giới hạn',
   'errors.invalid_choice': 'Đó không phải một lựa chọn có sẵn',
-  'errors.invalid_cwd': 'Thư mục phải là đường dẫn tuyệt đối trên máy host',
+  'errors.invalid_cwd':
+    'Thư mục phải là đường dẫn tuyệt đối hoặc ~/… trên máy host',
   'errors.invalid_direction': 'Hướng không hợp lệ',
   'errors.invalid_endpoint': 'Địa chỉ nhận thông báo không hợp lệ',
   'errors.invalid_exclude': 'Có một tên loại trừ không hợp lệ',

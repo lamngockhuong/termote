@@ -24,7 +24,7 @@ var (
 	errDefaultSession    = &codedError{"default_session", "the default session cannot be renamed", http.StatusConflict}
 	errHasWorktrees      = &codedError{"has_worktrees", "this workspace has linked worktrees; close it in Herdr", http.StatusConflict}
 	errGroupsUnsupported = &codedError{"unsupported", "groups cannot be changed on this backend", http.StatusNotImplemented}
-	errInvalidCwd        = &codedError{"invalid_cwd", "the directory must be an absolute path on this host", http.StatusBadRequest}
+	errInvalidCwd        = &codedError{"invalid_cwd", "the directory must be an absolute path or ~/... on this host", http.StatusBadRequest}
 	errCwdNotFound       = &codedError{"not_found", "no such directory", http.StatusBadRequest}
 	errCwdNotDirectory   = &codedError{"not_directory", "not a directory", http.StatusConflict}
 	errCwdNotAllowed     = &codedError{"not_allowed", "this directory is not allowed", http.StatusForbidden}
@@ -180,18 +180,20 @@ func groupError(w http.ResponseWriter, m Mux, op string, err error) {
 }
 
 // resolveGroupCwd checks the directory a new group starts in and returns it
-// with its symlinks resolved; empty is the server user's home directory.
+// with its symlinks resolved; empty is the server user's home directory, as
+// is ~, and ~/dir (~\dir on Windows) is dir in it: no shell reads the path
+// to expand them.
 // This keeps a mistyped or unwanted directory out, it is no security
 // boundary: the shell that opens can cd anywhere, and signing in (plus
 // requireWriteRole) is what guards it. The checks run in a goroutine bounded
 // by ctx, since a hung network mount would otherwise hold the request.
 func resolveGroupCwd(ctx context.Context, cwd string, deny []string) (string, error) {
-	if cwd == "" {
+	if rest, ok := homeRelativeCwd(cwd, runtime.GOOS == "windows"); ok {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return "", err
 		}
-		cwd = home
+		cwd = filepath.Join(home, rest)
 	}
 	if !validCwdForm(cwd, runtime.GOOS == "windows") {
 		return "", errInvalidCwd
@@ -213,6 +215,19 @@ func resolveGroupCwd(ctx context.Context, cwd string, deny []string) (string, er
 	case <-ctx.Done():
 		return "", errCwdBusy
 	}
+}
+
+// homeRelativeCwd reports whether p is empty, ~, or starts with ~/ (or ~\
+// on Windows), and returns the part after the home directory. ~user is not
+// one: it names another user's home, which validCwdForm then refuses.
+func homeRelativeCwd(p string, windows bool) (string, bool) {
+	if p == "" || p == "~" {
+		return "", true
+	}
+	if strings.HasPrefix(p, "~/") || (windows && strings.HasPrefix(p, `~\`)) {
+		return p[2:], true
+	}
+	return "", false
 }
 
 // validCwdForm accepts an absolute path, on Windows only one on a drive
