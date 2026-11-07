@@ -3117,6 +3117,41 @@ describe('FilesView context menu', () => {
     expect(item('src')).toHaveFocus()
   })
 
+  it('an empty root offers a first file or folder on a right click', async () => {
+    const empty = async (path: string) => ({
+      root: '/home/kim/app',
+      isRepo: true,
+      path,
+      entries: [],
+      truncated: false,
+    })
+    mockTree.mockImplementation(empty)
+    await show()
+    const message = screen.getByText('This directory is empty')
+    const ev = createEvent.contextMenu(message, { clientX: 50, clientY: 60 })
+    fireEvent(message, ev)
+    expect(ev.defaultPrevented).toBe(true)
+    expect(screen.getByRole('menu', { name: 'Files actions' }))
+    expect(names()).toEqual([
+      'New file',
+      'New folder',
+      'Upload files',
+      'Refresh',
+    ])
+    // A right click inside the open menu is the menu's
+    fireEvent.contextMenu(screen.getAllByRole('menuitem')[0])
+    expect(screen.getAllByRole('menu')).toHaveLength(1)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New folder' }))
+    expect(screen.getByRole('dialog', { name: 'New folder' }))
+    expect(screen.getByRole('textbox')).toHaveValue('')
+    expect(screen.queryByRole('menu')).toBeNull()
+    cleanup()
+    // View-only: Refresh only
+    await show({ readOnly: true })
+    fireEvent.contextMenu(screen.getByText('This directory is empty'))
+    expect(names()).toEqual(['Refresh'])
+  })
+
   it("view-only: the empty area's menu refreshes and collapses only", async () => {
     await show({ readOnly: true })
     fireEvent.contextMenu(screen.getByRole('tree'), { clientX: 5, clientY: 5 })

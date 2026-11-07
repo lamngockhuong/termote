@@ -884,6 +884,33 @@ function PaneFiles({
     e.preventDefault()
     upload(files, focusedFolder(f, focused))
   }
+  // What the tree's menus (and the empty root's) offer
+  const treeActions: TreeActions = {
+    notify,
+    insertText,
+    onCreate:
+      newFileRoot === undefined
+        ? undefined
+        : (dir, kind) =>
+            setCreating({
+              root: newFileRoot,
+              initialPath: dir ? `${dir}/` : '',
+              kind,
+            }),
+    onUpload:
+      newFileRoot === undefined
+        ? undefined
+        : (dir) => {
+            uploadInto.current = {
+              dir,
+              root: newFileRoot,
+            }
+            fileInput.current?.click()
+          },
+    onRefresh: refresh,
+    onCollapseAll: f.collapseAll,
+    paneDir: () => paneDirNow(paneId, f.root as string),
+  }
   return (
     <div
       ref={viewRef}
@@ -1210,7 +1237,7 @@ function PaneFiles({
                 hideIgnored={readOnly}
               >
                 {root.entries.length === 0 ? (
-                  <ViewMessage>{t('files.tree.dirEmpty')}</ViewMessage>
+                  <EmptyTree actions={treeActions} />
                 ) : (
                   <FileTree
                     state={f}
@@ -1234,32 +1261,7 @@ function PaneFiles({
                           (path) => askRename(path, false)
                         : undefined
                     }
-                    actions={{
-                      notify,
-                      insertText,
-                      onCreate:
-                        newFileRoot === undefined
-                          ? undefined
-                          : (dir, kind) =>
-                              setCreating({
-                                root: newFileRoot,
-                                initialPath: dir ? `${dir}/` : '',
-                                kind,
-                              }),
-                      onUpload:
-                        newFileRoot === undefined
-                          ? undefined
-                          : (dir) => {
-                              uploadInto.current = {
-                                dir,
-                                root: newFileRoot,
-                              }
-                              fileInput.current?.click()
-                            },
-                      onRefresh: refresh,
-                      onCollapseAll: f.collapseAll,
-                      paneDir: () => paneDirNow(paneId, f.root as string),
-                    }}
+                    actions={treeActions}
                   />
                 )}
               </FileSearch>
@@ -1530,7 +1532,6 @@ function FileTree({
       />
     )
   }
-  const { onCreate, onUpload } = actions
 
   return (
     <>
@@ -1599,39 +1600,89 @@ function FileTree({
         onOpenChange={(open) => menuChange(null, open)}
         point={menu?.path === null ? menu.point : null}
       >
-        {onCreate && (
-          <>
-            <MenuItem
-              icon={<FilePlus size={16} />}
-              onSelect={() => onCreate('', 'file')}
-            >
-              {t('files.new.title')}
-            </MenuItem>
-            <MenuItem
-              icon={<FolderPlus size={16} />}
-              onSelect={() => onCreate('', 'dir')}
-            >
-              {t('files.actions.newFolder')}
-            </MenuItem>
-          </>
-        )}
-        {onUpload && (
-          <MenuItem icon={<Upload size={16} />} onSelect={() => onUpload('')}>
-            {t('files.upload')}
-          </MenuItem>
-        )}
-        {(onCreate || onUpload) && <MenuSeparator />}
-        <MenuItem icon={<RefreshCw size={16} />} onSelect={actions.onRefresh}>
-          {t('files.refresh')}
-        </MenuItem>
-        <MenuItem
-          icon={<ChevronsDownUp size={16} />}
-          onSelect={actions.onCollapseAll}
-        >
-          {t('files.actions.collapseAll')}
-        </MenuItem>
+        <TreeAreaItems actions={actions} collapse />
       </Menu>
     </>
+  )
+}
+
+// The tree's own menu, a right click below its rows (or on an empty root's
+// message): new, upload, refresh, and collapse all where folders show
+function TreeAreaItems({
+  actions: { onCreate, onUpload, onRefresh, onCollapseAll },
+  collapse = false,
+}: {
+  actions: TreeActions
+  collapse?: boolean
+}) {
+  const { t } = useT()
+  return (
+    <>
+      {onCreate && (
+        <>
+          <MenuItem
+            icon={<FilePlus size={16} />}
+            onSelect={() => onCreate('', 'file')}
+          >
+            {t('files.new.title')}
+          </MenuItem>
+          <MenuItem
+            icon={<FolderPlus size={16} />}
+            onSelect={() => onCreate('', 'dir')}
+          >
+            {t('files.actions.newFolder')}
+          </MenuItem>
+        </>
+      )}
+      {onUpload && (
+        <MenuItem icon={<Upload size={16} />} onSelect={() => onUpload('')}>
+          {t('files.upload')}
+        </MenuItem>
+      )}
+      {(onCreate || onUpload) && <MenuSeparator />}
+      <MenuItem icon={<RefreshCw size={16} />} onSelect={onRefresh}>
+        {t('files.refresh')}
+      </MenuItem>
+      {collapse && (
+        <MenuItem icon={<ChevronsDownUp size={16} />} onSelect={onCollapseAll}>
+          {t('files.actions.collapseAll')}
+        </MenuItem>
+      )}
+    </>
+  )
+}
+
+// An empty root: its message, with the tree's menu on a right click (a
+// first folder can be made from there)
+function EmptyTree({ actions }: { actions: TreeActions }) {
+  const { t } = useT()
+  const areaRef = useRef<HTMLDivElement>(null)
+  const [menu, setMenu] = useState<{
+    point: { x: number; y: number }
+    open: boolean
+  }>()
+  return (
+    <div
+      ref={areaRef}
+      className="flex min-h-0 flex-1 flex-col"
+      onContextMenu={(e) => {
+        if (fromMenu(e)) return
+        e.preventDefault()
+        setMenu({ point: { x: e.clientX, y: e.clientY }, open: true })
+      }}
+    >
+      <ViewMessage>{t('files.tree.dirEmpty')}</ViewMessage>
+      <Menu
+        label={t('files.actions.tree')}
+        trigger={null}
+        anchorRef={areaRef}
+        open={!!menu?.open}
+        onOpenChange={(open) => setMenu((m) => m && { ...m, open })}
+        point={menu?.point}
+      >
+        <TreeAreaItems actions={actions} />
+      </Menu>
+    </div>
   )
 }
 
