@@ -113,6 +113,19 @@ with a warning.
 [Coming from a 0.x install](getting-started.md#coming-from-a-0x-install) for the commands),
 then install 1.0 fresh with the command above.
 
+### With a coding agent
+
+A coding agent (Claude Code, Codex, ...) on the machine can install and start Termote by
+following [`/agents.md`](https://termote.ohnice.app/agents.md), the guide in
+[`server/agent-guide.md`](../server/agent-guide.md); `termote help agent` prints the same guide
+for the installed version, and both installers name that command. The guide tells the agent to ask
+how the user will reach Termote, to check the result with `termote status --json`, and never to
+read the password: off a terminal, `start` prints the username alone. The website page
+[Install with an agent](https://termote.ohnice.app/installation/agent/) gives users the prompt to
+paste. The site also serves `/llms.txt`, `/llms-full.txt` and `/llms-small.txt`
+(`starlight-llms-txt`); the archived 0.x pages are left out of `llms-small.txt` and come last in
+`llms-full.txt`.
+
 ## Deployment Modes
 
 ### Native
@@ -296,6 +309,9 @@ deleted permanently. On Windows the default tmux backend (psmux) has no Files, s
 - On restart, the existing config is loaded automatically; a flag not given on the command
   line keeps its saved value
 - The password is reused unless `--fresh` is given (view it again with `termote show-password`)
+- A new password is printed only when stdout is a terminal (and not in a Herdr plugin action):
+  run by a coding agent, a script or into a pipe, `start` and `container up` print the username and
+  `termote show-password` instead
 - The username is kept unless `--user <name>` is given: 1 to 64 letters, digits, `.`, `_`, `-`
   or `@`, starting with a letter or digit (no `:`, which separates it from the password)
 

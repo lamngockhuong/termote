@@ -158,7 +158,9 @@ irm https://termote.ohnice.app/install.ps1 | iex
 termote start
 ```
 
-Der Installer braucht nur `curl`, `tar` und `sha256sum`/`shasum` (unter Windows PowerShell), weder sudo noch Administratorrechte. Er prüft die Prüfsumme des Archivs, installiert den Befehl `termote` und startet nichts. `termote start` speichert die Optionen, erzeugt beim ersten Mal ein Passwort (einmal ausgegeben; `termote show-password` zeigt es erneut an), registriert den Dienst und startet ihn. Danach `http://127.0.0.1:7680` öffnen (Windows: `http://127.0.0.1:7690`).
+**Mit einem Coding-Agent:** Füge den Prompt aus [Install with an agent](https://termote.ohnice.app/installation/agent/) in Claude Code, Codex oder einen anderen Agent ein. Er folgt [`agents.md`](https://termote.ohnice.app/agents.md), prüft, ob der Server antwortet, und überlässt dir das Passwort.
+
+Der Installer braucht nur `curl`, `tar` und `sha256sum`/`shasum` (unter Windows PowerShell), weder sudo noch Administratorrechte. Er prüft die Prüfsumme des Archivs, installiert den Befehl `termote` und startet nichts. `termote start` speichert die Optionen, erzeugt beim ersten Mal ein Passwort (einmal ausgegeben, nur in einem Terminal; `termote show-password` zeigt es erneut an), registriert den Dienst und startet ihn. Danach `http://127.0.0.1:7680` öffnen (Windows: `http://127.0.0.1:7690`).
 
 Vorher muss ein Terminal-Backend installiert sein: tmux (`sudo apt install tmux`, `brew install tmux`), unter Windows psmux (`winget install psmux`) oder [Herdr](https://termote.ohnice.app/installation/native/). Der erste `start` erkennt, welches verwendet wird. [Zellij](https://zellij.dev/documentation/installation) 0.45.0 oder neuer (Linux, macOS) wird nie erkannt: wählen Sie es mit `--mux zellij`. [herdr-core](https://herdr.dev/core/) (`hc` 0.1.16 oder neuer, jedes Betriebssystem, nur nativ) wird ebenfalls nie erkannt: wählen Sie es mit `--mux hc`.
 

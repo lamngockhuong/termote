@@ -158,7 +158,9 @@ irm https://termote.ohnice.app/install.ps1 | iex
 termote start
 ```
 
-Trình cài đặt chỉ cần `curl`, `tar` và `sha256sum`/`shasum` (trên Windows là PowerShell), không cần sudo hay quyền admin. Nó kiểm tra mã băm SHA-256 của gói tải về, cài lệnh `termote` và không khởi động gì cả. `termote start` lưu các tùy chọn, tạo mật khẩu ở lần chạy đầu (chỉ in ra một lần; xem lại bằng `termote show-password`), đăng ký service rồi khởi động nó. Mở `http://127.0.0.1:7680` (Windows: `http://127.0.0.1:7690`).
+**Cài bằng agent lập trình:** dán prompt ở trang [Cài bằng agent](https://termote.ohnice.app/vi/installation/agent/) vào Claude Code, Codex hoặc agent khác. Agent làm theo [`agents.md`](https://termote.ohnice.app/agents.md), kiểm tra server đã trả lời rồi để bạn tự xem mật khẩu.
+
+Trình cài đặt chỉ cần `curl`, `tar` và `sha256sum`/`shasum` (trên Windows là PowerShell), không cần sudo hay quyền admin. Nó kiểm tra mã băm SHA-256 của gói tải về, cài lệnh `termote` và không khởi động gì cả. `termote start` lưu các tùy chọn, tạo mật khẩu ở lần chạy đầu (chỉ in ra một lần, và chỉ khi chạy trong terminal; xem lại bằng `termote show-password`), đăng ký service rồi khởi động nó. Mở `http://127.0.0.1:7680` (Windows: `http://127.0.0.1:7690`).
 
 Cần cài sẵn một backend terminal: tmux (`sudo apt install tmux`, `brew install tmux`), psmux trên Windows (`winget install psmux`), hoặc [Herdr](https://termote.ohnice.app/vi/installation/native/). Lần `start` đầu tiên sẽ tự nhận ra nên dùng backend nào. [Zellij](https://zellij.dev/documentation/installation) 0.45.0 trở lên (Linux, macOS) không bao giờ được tự nhận ra: hãy chọn bằng `--mux zellij`. [herdr-core](https://herdr.dev/core/) (`hc` 0.1.16 trở lên, mọi hệ điều hành, chỉ chạy native) cũng không được tự nhận ra: hãy chọn bằng `--mux hc`.
 

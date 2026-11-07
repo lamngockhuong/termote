@@ -156,7 +156,9 @@ irm https://termote.ohnice.app/install.ps1 | iex
 termote start
 ```
 
-安装程序只需要 `curl`、`tar` 和 `sha256sum`/`shasum`（Windows 上为 PowerShell），不需要 sudo 或管理员权限。它会校验压缩包的校验和，安装 `termote` 命令，但不会启动任何东西。`termote start` 会保存选项，首次运行时创建密码（只显示一次，之后可用 `termote show-password` 再次查看），然后注册服务并启动。打开 `http://127.0.0.1:7680`（Windows：`http://127.0.0.1:7690`）。
+**使用编码智能体：** 把 [Install with an agent](https://termote.ohnice.app/installation/agent/) 中的提示词粘贴到 Claude Code、Codex 或其他智能体。它会按照 [`agents.md`](https://termote.ohnice.app/agents.md) 操作，确认服务器有响应，并让你自己查看密码。
+
+安装程序只需要 `curl`、`tar` 和 `sha256sum`/`shasum`（Windows 上为 PowerShell），不需要 sudo 或管理员权限。它会校验压缩包的校验和，安装 `termote` 命令，但不会启动任何东西。`termote start` 会保存选项，首次运行时创建密码（仅在终端中运行时显示一次，之后可用 `termote show-password` 再次查看），然后注册服务并启动。打开 `http://127.0.0.1:7680`（Windows：`http://127.0.0.1:7690`）。
 
 需要先安装终端后端：tmux（`sudo apt install tmux`、`brew install tmux`），Windows 上为 psmux（`winget install psmux`），或者 [Herdr](https://termote.ohnice.app/installation/native/)。首次 `start` 会检测使用哪一个。[Zellij](https://zellij.dev/documentation/installation) 0.45.0 或更高版本（Linux、macOS）不会被自动检测，请用 `--mux zellij` 选择。[herdr-core](https://herdr.dev/core/)（`hc` 0.1.16 或更高版本，所有操作系统，仅原生模式）同样不会被检测，请用 `--mux hc` 选择。
 

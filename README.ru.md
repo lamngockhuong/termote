@@ -158,7 +158,9 @@ irm https://termote.ohnice.app/install.ps1 | iex
 termote start
 ```
 
-Установщику нужны только `curl`, `tar` и `sha256sum`/`shasum` (в Windows — PowerShell), без sudo и прав администратора. Он проверяет контрольную сумму архива, устанавливает команду `termote` и ничего не запускает. `termote start` сохраняет параметры, при первом запуске создаёт пароль (выводится один раз; `termote show-password` покажет его снова), регистрирует службу и запускает её. Откройте `http://127.0.0.1:7680` (Windows: `http://127.0.0.1:7690`).
+**С помощью агента для кода:** вставьте промпт со страницы [Install with an agent](https://termote.ohnice.app/installation/agent/) в Claude Code, Codex или другой агент. Агент следует [`agents.md`](https://termote.ohnice.app/agents.md), проверяет, что сервер отвечает, и оставляет пароль вам.
+
+Установщику нужны только `curl`, `tar` и `sha256sum`/`shasum` (в Windows — PowerShell), без sudo и прав администратора. Он проверяет контрольную сумму архива, устанавливает команду `termote` и ничего не запускает. `termote start` сохраняет параметры, при первом запуске создаёт пароль (выводится один раз и только в терминале; `termote show-password` покажет его снова), регистрирует службу и запускает её. Откройте `http://127.0.0.1:7680` (Windows: `http://127.0.0.1:7690`).
 
 Сначала должен быть установлен терминальный бэкенд: tmux (`sudo apt install tmux`, `brew install tmux`), psmux в Windows (`winget install psmux`) или [Herdr](https://termote.ohnice.app/installation/native/). Первый `start` сам определяет, какой из них использовать. [Zellij](https://zellij.dev/documentation/installation) 0.45.0 или новее (Linux, macOS) никогда не определяется автоматически: выберите его через `--mux zellij`. [herdr-core](https://herdr.dev/core/) (`hc` 0.1.16 или новее, любая ОС, только нативно) тоже не определяется: выберите его через `--mux hc`.
 
