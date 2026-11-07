@@ -36,6 +36,11 @@ Codex dùng được theo cách tương tự, có yêu cầu riêng và một đ
   thay đổi. Khi không đọc được dòng trạng thái, nó vẫn báo agent đang làm việc và đã bao lâu.
   Khi Claude Code kết thúc lượt mà các lệnh chạy nền vẫn chưa xong, dòng này cho biết còn lại những
   gì (`Đã xong lượt · 2 shells vẫn đang chạy`) cho tới khi chúng xong và agent tự làm tiếp.
+- Khi phiên Claude Code có agent con đang chạy, một dải phía trên ô soạn tin cho biết số lượng
+  (`2 subagent đang chạy`) và liệt kê chúng như terminal: loại, mô tả, tool gọi gần nhất, thời gian
+  đã chạy và số token của lần gọi model gần nhất. Agent con do agent con khác tạo ra thì thụt vào
+  dưới agent đó. Chạm vào dải để thu gọn; dải tự ẩn khi không còn agent con nào chạy. Trang
+  [tổng quan](/vi/usage/overview/) liệt kê cả những agent con đã xong.
 - Khối code có khung ghi tên ngôn ngữ, được tô màu cú pháp và có nút Copy. Khối ` ```mermaid ` được
   vẽ thành sơ đồ, với các nút Show source, xuất ảnh và xem toàn màn hình giống
   [bản xem trước Markdown](/vi/usage/files-changes/#xem-trước-markdown); sơ đồ không vẽ được thì vẫn

@@ -117,8 +117,9 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/hooks/use-now.ts`                        | Server time now, read every 30 s (overview, sidebar Agents)    |
 | `pwa/src/components/status-timeline.tsx`          | A card's last hour by status, from the activity log            |
 | `pwa/src/utils/timeline-segments.ts`              | Cuts a pane's events (by key) into the strip's segments        |
-| `pwa/src/components/subagent-tree.tsx`            | A Claude card's subagents: status, type, last tool, time       |
-| `pwa/src/hooks/use-subagents.ts`                  | Polls a pane's subagent tree while its card is open (3 s)      |
+| `pwa/src/components/subagent-tree.tsx`            | Claude subagents: status, type, last tool, time, tokens        |
+| `pwa/src/components/chat-subagents.tsx`           | Chat's strip of a Claude session's running subagents           |
+| `pwa/src/hooks/use-subagents.ts`                  | Polls a pane's subagents while its card or Chat is open        |
 | `pwa/src/components/activity-log.tsx`             | Overview: every status change, newest first, opens its pane    |
 | `pwa/src/hooks/use-activity-log.ts`               | Polls `/api/mux/activity` for new events while shown           |
 | `pwa/src/hooks/use-agent-transcript.ts`           | Polls a pane's transcript, one store per pane                  |

@@ -2,8 +2,9 @@ import { useCallback, useSyncExternalStore } from 'react'
 import { fetchSubagents, type Subagents } from './use-mux-api'
 
 // A pane's subagent tree, polled every SUBAGENTS_POLL while a card shows it
-// open and the page is visible; nothing is read for a closed card. What
-// was read stays after it closes, for the closed card's count.
+// open or the pane's Chat is on screen, and the page is visible; nothing is
+// read for a closed card. What was read stays after it closes, for the
+// closed card's count.
 
 export const SUBAGENTS_POLL = 3000
 

@@ -102,11 +102,11 @@ func TestSubagentTree(t *testing.T) {
 	}
 	one := nodeByID(res.Nodes, "aaa1")
 	if one.Status != "done" || one.EndTS != "2026-10-13T10:04:00.000Z" || one.StartTS != "2026-10-13T10:00:02.500Z" ||
-		one.Type != "code-reviewer" || one.Description != "Review parser" || one.LastTool != "Read" || one.Depth != 1 {
+		one.Type != "code-reviewer" || one.Description != "Review parser" || one.LastTool != "Read" || one.Tokens != 1234 || one.Depth != 1 {
 		t.Errorf("aaa1 = %+v", one)
 	}
 	two := nodeByID(res.Nodes, "aaa2")
-	if two.Status != "running" || two.EndTS != "" || two.LastTool != "Agent" || two.Description != "Trace the lexer" {
+	if two.Status != "running" || two.EndTS != "" || two.LastTool != "Agent" || two.Tokens != 0 || two.Description != "Trace the lexer" {
 		t.Errorf("aaa2 = %+v", two)
 	}
 	if len(two.Children) != 1 || two.Children[0].ID != "aaa4" || two.Children[0].Depth != 2 || two.Children[0].Status != "running" {
@@ -470,15 +470,33 @@ func TestSubagentFileReads(t *testing.T) {
 	os.WriteFile(p, []byte(body), 0o600)
 	f, _ = os.Open(p)
 	defer f.Close()
-	if got := lastToolName(f, int64(len(body))); got != "Bash" {
-		t.Errorf("last tool = %q", got)
+	if got := readSubagentTail(f, int64(len(body))); got.lastTool != "Bash" || got.tokens != 0 {
+		t.Errorf("last tool = %+v", got)
 	}
 	// A tail with no line start at all
 	os.WriteFile(p, []byte(strings.Repeat("z", subagentTailRead+10)), 0o600)
 	f2, _ := os.Open(p)
 	defer f2.Close()
-	if got := lastToolName(f2, subagentTailRead+10); got != "" {
-		t.Errorf("no line = %q", got)
+	if got := readSubagentTail(f2, subagentTailRead+10); got != (subagentTail{}) {
+		t.Errorf("no line = %+v", got)
+	}
+
+	// The tokens of the last request: prompt (input, cache read, cache
+	// write) and reply. A <synthetic> row, a row of zero usage and a user
+	// row naming "assistant" do not count; a text reply does.
+	request := func(model string, in, read, write, out int) string {
+		return fmt.Sprintf(`{"type":"assistant","message":{"model":%q,"content":[{"type":"text","text":"ok"}],`+
+			`"usage":{"input_tokens":%d,"cache_read_input_tokens":%d,"cache_creation_input_tokens":%d,"output_tokens":%d}}}`+"\n",
+			model, in, read, write, out)
+	}
+	body = request("claude-x", 1, 1, 1, 1) + call("Grep") + request("claude-x", 2, 29237, 678, 503) +
+		request("<synthetic>", 9, 9, 9, 9) + request("claude-x", 0, 0, 0, 0) +
+		`{"type":"user","message":{"content":"assistant"}}` + "\n"
+	os.WriteFile(p, []byte(body), 0o600)
+	f3, _ := os.Open(p)
+	defer f3.Close()
+	if got := readSubagentTail(f3, int64(len(body))); got.lastTool != "Grep" || got.tokens != 30420 {
+		t.Errorf("tokens = %+v", got)
 	}
 
 	// readPlainFile refuses a file over its limit.

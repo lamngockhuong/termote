@@ -457,6 +457,8 @@ export interface SubagentNode {
   startTs?: string
   endTs?: string
   lastTool?: string
+  // The tokens of its last request: prompt and reply
+  tokens?: number
   depth: number
   children: SubagentNode[]
 }

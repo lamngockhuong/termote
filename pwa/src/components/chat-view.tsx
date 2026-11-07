@@ -25,6 +25,7 @@ import { AgentStatusBadge } from './agent-status-badge'
 import { ChatActivity, ChatBackground } from './chat-activity-row'
 import { ChatFileLinkContext } from './chat-file-link'
 import { ChatMarkdownContext, ChatMessage, chatSide } from './chat-message'
+import { ChatSubagents } from './chat-subagents'
 import {
   chatItems,
   hasPending,
@@ -149,6 +150,7 @@ function AgentChat({
   agentStart,
   notify,
   isMobile,
+  clockOffset,
 }: ViewProps) {
   const t = useAgentTranscript(session.paneId)
   const { t: translate } = useT()
@@ -463,6 +465,10 @@ function AgentChat({
           </ChatMarkdownContext.Provider>
         </ChatFileLinkContext.Provider>
       </section>
+      {/* Only Claude Code's sessions have a subagent tree to read */}
+      {session.agentName === 'claude' && paneId && (
+        <ChatSubagents paneId={paneId} clockOffset={clockOffset} />
+      )}
       {readOnly && p.prompt && (
         <PromptCard
           readOnly

@@ -83,6 +83,8 @@ export default {
   'chat.subagent.seconds': '{n} giây',
   'chat.subagent.minutes': '{n} phút',
   'chat.subagent.hours': '{n} giờ',
+  'chat.subagent.runningCount_one': '{count} subagent đang chạy',
+  'chat.subagent.runningCount_other': '{count} subagent đang chạy',
   'chat.subagent.readFailed': 'Không đọc được danh sách subagent.',
   'chat.subagent.none': 'Không có subagent nào.',
   'chat.subagent.list': 'Subagent',

@@ -7,6 +7,7 @@ import { resetChatAttachments } from '../hooks/use-chat-attachments'
 import type {
   AgentActivity,
   AgentPrompt,
+  Subagents,
   TranscriptEntry,
 } from '../hooks/use-mux-api'
 import type { MessageKey } from '../i18n/messages/en'
@@ -47,6 +48,17 @@ vi.mock('../hooks/use-agent-transcript', async (orig) => ({
     refresh: transcript.refresh,
     loadOlder: transcript.loadOlder,
   }),
+}))
+
+const subagents = {
+  tree: undefined as Subagents | undefined,
+  panes: [] as string[],
+}
+vi.mock('../hooks/use-subagents', () => ({
+  useSubagents: (pane: string) => {
+    subagents.panes.push(pane)
+    return { tree: subagents.tree, error: false }
+  },
 }))
 
 const mockFollowPath = vi.fn()
@@ -114,6 +126,8 @@ beforeEach(() => {
   set({})
   promptStore.prompt = null
   promptStore.activity = null
+  subagents.tree = undefined
+  subagents.panes = []
 })
 
 describe('ChatView', () => {
@@ -694,6 +708,38 @@ describe('ChatView agent state', () => {
     )
     expect(promptStore.livePane).toBeUndefined()
     expect(screen.getByRole('status')).toHaveTextContent('agent is working…')
+  })
+
+  it("shows a Claude session's running subagents under the conversation", () => {
+    set({ entries: entries(1) })
+    subagents.tree = {
+      nodes: [
+        {
+          id: 'r1',
+          type: 'seo-technical',
+          status: 'running',
+          tokens: 30_300,
+          depth: 1,
+          children: [],
+        },
+      ],
+    }
+    const { rerender } = render(<ChatView {...props} />)
+    expect(subagents.panes).toContain('0')
+    expect(
+      screen.getByRole('button', { name: '1 subagent running' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('seo-technical')).toBeInTheDocument()
+    // Another agent has no tree to read
+    subagents.panes = []
+    rerender(
+      <ChatView
+        {...props}
+        session={{ ...props.session, agentName: 'codex' }}
+      />,
+    )
+    expect(subagents.panes).toEqual([])
+    expect(screen.queryByText('seo-technical')).toBeNull()
   })
 
   it('view-only does not read the dialog of an agent without input', () => {

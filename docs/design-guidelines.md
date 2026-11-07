@@ -193,7 +193,9 @@ activity log by the pane's key so a moved tmux window or a renamed Zellij sessio
 time before the first event, or after the agent went, stays blank. Blocked is striped and idle hollow,
 and the legend names each with its status icon. A Claude card also lists its subagents (read every 3 s,
 only while open): an icon per status, a running one glowing by opacity under `motion-safe:` only, a
-guess marked "(guessed)", 20 at most; closed, the button keeps the count. The header's **Activity**
+guess marked "(guessed)", 20 at most; closed, the button keeps the count. The Chat view shows the
+running ones of the same tree in a strip above the composer (a toggle with the count, the list under it
+at most 30vh high), drawn only while one runs. The header's **Activity**
 button opens every status change, newest first, filtered by the status changed to: a column beside the
 cards from 1280 px, a sheet below. A row opens its pane under its current id, found by key; a pane that
 has gone is plain text.

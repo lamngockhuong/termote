@@ -45,6 +45,8 @@ export interface ViewContext {
 
 export interface ViewProps extends ViewContext {
   isMobile: boolean
+  // The server's clock minus this device's (ms), for times the server wrote
+  clockOffset?: number
   // A short notice (a toast), with a button (Undo) or a tone when given
   notify: (message: string, options?: NotifyOptions) => void
   // Switches to another view of the pane (the terminal, as a way out)

@@ -4,6 +4,7 @@ import type { SubagentNode } from '../hooks/use-mux-api'
 import { tFor } from '../i18n/i18n-context'
 import {
   flattenSubagents,
+  formatTokens,
   SUBAGENT_TREE_MAX,
   SubagentTree,
   subagentDuration,
@@ -32,6 +33,7 @@ const TREE = {
       startTs: '2026-10-13T09:50:00Z',
       endTs: '2026-10-13T09:53:30Z',
       lastTool: 'Read',
+      tokens: 30_300,
     }),
     node({
       id: 'a2',
@@ -113,7 +115,11 @@ describe('SubagentTree', () => {
       'error',
       'done',
     ])
-    expect(items[0]).toHaveTextContent('code-reviewer· done · 3 min')
+    expect(items[0]).toHaveTextContent(
+      'code-reviewer· done · 3 min · ↓ 30k tokens',
+    )
+    // No count without a request read
+    expect(items[1]).not.toHaveTextContent('tokens')
     expect(items[0]).toHaveTextContent('Review parser')
     expect(items[1]).toHaveTextContent('Grep')
     expect(items[2]).toHaveTextContent('failed')
@@ -160,5 +166,15 @@ describe('SubagentTree', () => {
     expect(screen.getByText('Could not read subagents.')).toBeInTheDocument()
     rerender(<SubagentTree tree={{ nodes: [] }} error={false} now={NOW} />)
     expect(screen.getByText('No subagents.')).toBeInTheDocument()
+  })
+})
+
+describe('formatTokens', () => {
+  it('fits the count in a few characters', () => {
+    expect(formatTokens(950)).toBe('950')
+    expect(formatTokens(12_345)).toBe('12k')
+    expect(formatTokens(1_234)).toBe('1.2k')
+    expect(formatTokens(184_400)).toBe('184k')
+    expect(formatTokens(1_250_000)).toBe('1.3M')
   })
 })
