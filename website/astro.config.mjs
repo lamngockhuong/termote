@@ -52,6 +52,7 @@ export default defineConfig({
         dark: "./src/assets/brand/symbol-dark.svg",
         alt: "",
       },
+      customCss: ["./src/styles/custom.css"],
       favicon: "/favicon.svg",
       head: [
         { tag: "link", attrs: { rel: "apple-touch-icon", href: "/apple-touch-icon.png" } },

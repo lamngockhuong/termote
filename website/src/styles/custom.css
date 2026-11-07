@@ -1,0 +1,52 @@
+/* Homepage hero (template: splash). */
+
+/* A faint grid with two soft accent glows behind the hero, fading out before
+   the features, so the top of the homepage is not a blank white page. */
+:root {
+  --termote-hero-grid: rgb(15 23 42 / 0.06);
+  --termote-hero-glow-1: hsl(234 90% 62% / 0.38);
+  --termote-hero-glow-2: hsl(275 85% 68% / 0.22);
+}
+
+:root[data-theme="dark"] {
+  --termote-hero-grid: rgb(255 255 255 / 0.05);
+  --termote-hero-glow-1: hsl(234 90% 60% / 0.32);
+  --termote-hero-glow-2: hsl(275 85% 65% / 0.16);
+}
+
+[data-has-hero] .main-frame {
+  position: relative;
+  isolation: isolate;
+}
+
+[data-has-hero] .main-frame::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: min(100rem, 140vh);
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 50% 60% at 78% 22%, var(--termote-hero-glow-1), transparent 70%),
+    radial-gradient(ellipse 45% 50% at 0% 55%, var(--termote-hero-glow-2), transparent 70%),
+    linear-gradient(to right, var(--termote-hero-grid) 1px, transparent 1px) 0 0 / 40px 40px,
+    linear-gradient(to bottom, var(--termote-hero-grid) 1px, transparent 1px) 0 0 / 40px 40px;
+  mask-image: linear-gradient(to bottom, #000 45%, transparent);
+}
+
+/* Two even lines instead of one word left alone on the last. */
+.hero .tagline {
+  text-wrap: balance;
+}
+
+@media (min-width: 50rem) {
+  /* Less room above the title, so the demo video under the hero starts on the
+     first screen; and a smaller owl, so it does not outweigh the title. */
+  .hero {
+    padding-block: clamp(2rem, calc(0.5rem + 5vmin), 4.5rem);
+  }
+
+  .hero > img {
+    width: min(100%, 17rem);
+  }
+}
