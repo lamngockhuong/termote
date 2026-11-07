@@ -162,6 +162,7 @@ test_fresh_install() {
         pass "archive laid down as versions/<v> (bin/termote, LICENSE)" || fail "layout" "bin/termote + LICENSE" "$(ls -R "$DATA")"
     check "links the command through the new binary" "1.10.10 link" "$(cat "$TMP/bin.log")"
     echo "$OUT" | grep -q "termote start" && pass "prints the next step" || fail "next step" "termote start" "$OUT"
+    echo "$OUT" | grep -q "termote help agent" && pass "points a coding agent at its guide" || fail "agent guide" "termote help agent" "$OUT"
     echo "$OUT" | grep -q "is not on your PATH" && pass "warns when ~/.local/bin is not on PATH" || fail "PATH hint" "warning" "$OUT"
     [[ -z "$(ls -A "$DATA" | grep -v -e '^versions$' -e '^current$')" ]] &&
         pass "no leftovers in the install dir" || fail "leftovers" "versions current" "$(ls -A "$DATA")"

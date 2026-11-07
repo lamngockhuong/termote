@@ -128,6 +128,8 @@ function Complete-Install {
     Write-Host ""
     Write-Host "  termote start"
     Write-Host ""
+    Write-Host "Setting this up with a coding agent? It can read: termote help agent"
+    Write-Host ""
 }
 
 if ($Rescue -and (Test-Path $Exe)) {

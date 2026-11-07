@@ -234,6 +234,7 @@ try {
     Write-TestResult "Archive laid down as versions\<v>" (Test-Path (Join-Path $Dir 'versions\1.10.10\bin\termote.exe'))
     Write-TestResult "Runs termote link" ((Get-Content $BinLog -Raw) -match 'link')
     Write-TestResult "Prints the next step" ($script:Out -match 'termote start')
+    Write-TestResult "Points a coding agent at its guide" ($script:Out -match 'termote help agent')
 
     $ok = Invoke-Installer
     Write-TestResult "Existing install left alone" ($ok -and $script:Out -match 'termote update' -and $global:TermoteDownloads.Count -eq 0) $script:Out

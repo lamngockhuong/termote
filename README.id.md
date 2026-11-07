@@ -158,7 +158,9 @@ irm https://termote.ohnice.app/install.ps1 | iex
 termote start
 ```
 
-Installer hanya membutuhkan `curl`, `tar` dan `sha256sum`/`shasum` (PowerShell di Windows), tanpa sudo atau hak admin. Installer memverifikasi checksum arsip, memasang perintah `termote`, dan tidak menjalankan apa pun. `termote start` menyimpan opsi, membuat password saat pertama kali (ditampilkan sekali; `termote show-password` menampilkannya lagi), mendaftarkan service lalu menjalankannya. Buka `http://127.0.0.1:7680` (Windows: `http://127.0.0.1:7690`).
+**Dengan coding agent:** tempel prompt dari [Install with an agent](https://termote.ohnice.app/installation/agent/) ke Claude Code, Codex, atau agent lain. Agent mengikuti [`agents.md`](https://termote.ohnice.app/agents.md), memeriksa bahwa server menjawab, dan membiarkan Anda melihat kata sandinya sendiri.
+
+Installer hanya membutuhkan `curl`, `tar` dan `sha256sum`/`shasum` (PowerShell di Windows), tanpa sudo atau hak admin. Installer memverifikasi checksum arsip, memasang perintah `termote`, dan tidak menjalankan apa pun. `termote start` menyimpan opsi, membuat password saat pertama kali (ditampilkan sekali, dan hanya di terminal; `termote show-password` menampilkannya lagi), mendaftarkan service lalu menjalankannya. Buka `http://127.0.0.1:7680` (Windows: `http://127.0.0.1:7690`).
 
 Backend terminal harus sudah terpasang lebih dulu: tmux (`sudo apt install tmux`, `brew install tmux`), psmux di Windows (`winget install psmux`), atau [Herdr](https://termote.ohnice.app/installation/native/). `start` yang pertama mendeteksi backend mana yang dipakai. [Zellij](https://zellij.dev/documentation/installation) 0.45.0 atau lebih baru (Linux, macOS) tidak pernah dideteksi: pilih dengan `--mux zellij`. [herdr-core](https://herdr.dev/core/) (`hc` 0.1.16 atau lebih baru, semua OS, hanya native) juga tidak pernah dideteksi: pilih dengan `--mux hc`.
 

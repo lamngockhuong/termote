@@ -156,7 +156,9 @@ irm https://termote.ohnice.app/install.ps1 | iex
 termote start
 ```
 
-インストーラーに必要なのは`curl`、`tar`、`sha256sum`/`shasum`（WindowsではPowerShell）だけで、sudoや管理者権限は不要です。アーカイブのチェックサムを検証して`termote`コマンドをインストールしますが、何も起動しません。`termote start`はオプションを保存し、初回はパスワードを作成して（一度だけ表示され、あとで`termote show-password`で再表示できます）、サービスを登録して起動します。`http://127.0.0.1:7680`（Windowsでは`http://127.0.0.1:7690`）を開いてください。
+**コーディングエージェントで:** [Install with an agent](https://termote.ohnice.app/installation/agent/) のプロンプトを Claude Code、Codex などのエージェントに貼り付けてください。エージェントは [`agents.md`](https://termote.ohnice.app/agents.md) に従い、サーバーの応答を確認し、パスワードの確認はあなたに任せます。
+
+インストーラーに必要なのは`curl`、`tar`、`sha256sum`/`shasum`（WindowsではPowerShell）だけで、sudoや管理者権限は不要です。アーカイブのチェックサムを検証して`termote`コマンドをインストールしますが、何も起動しません。`termote start`はオプションを保存し、初回はパスワードを作成して（ターミナルで実行したときに一度だけ表示され、あとで`termote show-password`で再表示できます）、サービスを登録して起動します。`http://127.0.0.1:7680`（Windowsでは`http://127.0.0.1:7690`）を開いてください。
 
 先にターミナルバックエンドをインストールしておく必要があります: tmux（`sudo apt install tmux`、`brew install tmux`）、Windowsではpsmux（`winget install psmux`）、または[Herdr](https://termote.ohnice.app/installation/native/)。どれを使うかは最初の`start`が検出します。[Zellij](https://zellij.dev/documentation/installation) 0.45.0以降（Linux、macOS）は検出されないため、`--mux zellij`で選択します。[herdr-core](https://herdr.dev/core/)（`hc` 0.1.16以降、全OS、ネイティブのみ）も検出されないため、`--mux hc`で選択します。
 

@@ -178,11 +178,17 @@ pair [options]       Make a one-time code (5 min) that signs a new device in; --
 devices              List the paired devices; `devices revoke <id>` signs one out with every device it paired
 signins              List the browsers signed in with the password; `signins revoke <id>|--all` signs them out
 version              Show version
+help agent           A guide for coding agents that install and run termote (server/agent-guide.md)
 serve                Run the server in the foreground (what the service runs)
 (no command)         Interactive menu
 ```
 
 There is no `install` command in 1.0 (it prints the replacement above).
+
+`help agent` prints `server/agent-guide.md`, embedded in the binary; the website build copies the same
+file to `/agents.md` (a test checks that every command and flag it names is in `termote help`). A new
+password from `start`/`container up` is printed only when stdout is a terminal (not to an agent or a
+pipe, nor in a Herdr plugin action): the username and `termote show-password` instead.
 
 `start` options (saved in the config; a flag not given keeps its saved value; a boolean is
 turned off with `=false`): `--port <port>` (default 7680, Windows 7690), `--lan[=false]`,

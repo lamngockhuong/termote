@@ -1,0 +1,53 @@
+---
+title: Install with an agent
+description: Let Claude Code, Codex or another coding agent install and start Termote, and keep the password out of its transcript
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+
+A coding agent running on the machine that will run Termote can install and start it for you. Paste this
+prompt into Claude Code, Codex or another agent:
+
+```text
+Install and start Termote on this machine. Follow https://termote.ohnice.app/agents.md.
+Ask me how I want to reach it (only this machine, my phone on the same Wi-Fi, Tailscale,
+or a Cloudflare Tunnel I run) before you start it. Do not show me the password; tell me
+to run termote show-password.
+```
+
+## What the agent does
+
+<Steps>
+1. Asks where you will open Termote from, and whether it runs natively or in a container.
+2. Checks whether Termote is already installed (`termote version`, `termote status --json`), and installs it
+   with the [online installer](/installation/native/) or Homebrew when it is not. It never uses `sudo`.
+3. Starts it with the options that match your answer, such as `termote start --lan`.
+4. Checks that the server answers with `termote status --json`, then gives you the link.
+</Steps>
+
+The agent follows [`/agents.md`](/agents.md), a guide written for agents. Once Termote is installed,
+`termote help agent` prints the same guide for the installed version.
+
+## The password stays with you
+
+An agent's output goes into its transcript, which may be sent to the model provider. So the agent does not
+read the password: when `termote start` or `termote container up` runs outside a terminal, it prints the
+username and no password. See it yourself:
+
+- run `termote show-password` in your own terminal (in Claude Code, type `! termote show-password`);
+- or run `termote panel`, which shows the links and a QR code to open on your phone.
+
+<Aside>
+To sign a phone in without typing the password, run `termote pair --role full` yourself and enter the code on
+the phone ([Pair a Device](/usage/devices/)). The code is a secret too, so do not ask the agent to make it.
+</Aside>
+
+## For agents and tools
+
+- [`/agents.md`](/agents.md): how to install, start, check and hand over Termote.
+- [`/llms.txt`](/llms.txt): an index of these docs; [`/llms-full.txt`](/llms-full.txt) holds every page.
+
+## See also
+
+- [Native installation](/installation/native/) and [Container](/installation/docker/)
+- [Tailscale HTTPS](/installation/tailscale/) and [Cloudflare Tunnel](/installation/cloudflare/)

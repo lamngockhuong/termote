@@ -42,11 +42,13 @@ irm https://termote.ohnice.app/install.ps1 | iex
 termote start
 ```
 
-Trình cài đặt chỉ tải bản phát hành đúng hệ điều hành/kiến trúc, kiểm tra checksum rồi đặt vào đúng vị trí — nó không tự khởi động bất cứ thứ gì. `termote start` tạo mật khẩu lần đầu và in ra một lần duy nhất, đăng ký server với hệ điều hành (systemd/launchd/Scheduled Task) để nó tồn tại qua các lần đăng nhập, rồi in URL ngay khi server phản hồi — mở URL đó trong trình duyệt. Xem lại mật khẩu bất cứ lúc nào bằng:
+Trình cài đặt chỉ tải bản phát hành đúng hệ điều hành/kiến trúc, kiểm tra checksum rồi đặt vào đúng vị trí — nó không tự khởi động bất cứ thứ gì. `termote start` tạo mật khẩu lần đầu và in ra một lần duy nhất (chỉ khi chạy trong terminal; agent lập trình hay pipe chỉ thấy tên đăng nhập), đăng ký server với hệ điều hành (systemd/launchd/Scheduled Task) để nó tồn tại qua các lần đăng nhập, rồi in URL ngay khi server phản hồi — mở URL đó trong trình duyệt. Xem lại mật khẩu bất cứ lúc nào bằng:
 
 ```bash
 termote show-password
 ```
+
+Nhờ agent lập trình (Claude Code, Codex...) cài Termote? Chỉ cho nó [`/agents.md`](https://termote.ohnice.app/agents.md), hoặc `termote help agent` khi đã cài.
 
 Muốn chạy container thay vì cài native? Chạy `termote container up` (cần podman hoặc docker) thay cho `termote start`; xem [Hướng dẫn triển khai](deployment-guide.md) để biết các cờ của lệnh này.
 

@@ -50,13 +50,16 @@ termote start
 
 The installer only downloads the release for your OS/arch, verifies its checksum, and lays it
 out — it never starts anything itself. `termote start` creates a password the first time and
-prints it once, registers the server with your OS (systemd/launchd/Scheduled Task) so it
+prints it once (only in a terminal: a coding agent or a pipe sees the username alone), registers the server with your OS (systemd/launchd/Scheduled Task) so it
 survives logins, and prints the URL once the server answers — open it in your browser. Print
 the password again any time with:
 
 ```bash
 termote show-password
 ```
+
+Setting Termote up with a coding agent (Claude Code, Codex, ...)? Point it at
+[`/agents.md`](https://termote.ohnice.app/agents.md), or at `termote help agent` once installed.
 
 Want a container instead of a native install? Run `termote container up` (needs podman or
 docker) instead of `termote start`; see the [Deployment Guide](deployment-guide.md) for its

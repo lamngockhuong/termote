@@ -120,7 +120,8 @@ nháp chưa lưu vẫn nằm ở `localhost`, và app đã cài phải được 
    bằng `--mux zellij` hay `--mux hc`, hoặc qua menu (`termote` không kèm lệnh).
 
 2. **Tạo mật khẩu admin** ở lần đầu (hoặc khi có `--fresh`): gõ một mật khẩu, hoặc nhấn Enter để tự sinh. Mật
-   khẩu chỉ được in ra một lần; về sau `termote show-password` sẽ hiện lại.
+   khẩu chỉ được in ra một lần, và chỉ khi `start` chạy trong terminal: khi agent lập trình, script hay một pipe
+   chạy nó, `start` chỉ in tên đăng nhập. Về sau `termote show-password` sẽ hiện lại.
 
 3. **Kiểm tra cổng và Tailscale trước.** Nếu có gì hỏng, server đang chạy vẫn được giữ nguyên, nên một lần gõ
    sai không cắt kết nối mà bạn có thể đang dùng.

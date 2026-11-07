@@ -276,8 +276,7 @@ func (c *cli) dispatch(cmd string, args []string) error {
 		fmt.Fprintf(c.out, "Termote v%s\n", c.version)
 		return nil
 	case "help", "-h", "--help":
-		c.printHelp()
-		return nil
+		return c.cmdHelp(args)
 	case "install":
 		c.printHelp()
 		return usageError("install was replaced by: termote start [options] (native) and termote container up (container)")
@@ -502,6 +501,7 @@ Commands:
   machine <cmd>        Machines this termote reaches over SSH: add <ssh alias>, list,
                        remove <id|label>, status, import --herdr
   version              Show version
+  help agent           A guide for coding agents that install and run termote
   serve                Run the server in the foreground (what the service runs)
   bridge               What another termote's key runs here over SSH (never by hand)
   (no command)         Interactive menu
