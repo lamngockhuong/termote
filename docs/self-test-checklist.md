@@ -718,6 +718,12 @@ Run on tmux (Linux/macOS) and Herdr; psmux (Windows) offers neither view.
 - [ ] Desktop: drag a file tab past another; the others slide aside, the drop keeps the new order
       (also after a reload), Escape mid-drag puts it back, a click without moving still shows the
       tab; Alt+Left/Right moves the focused tab; Files stays first; Changes' diff tabs drag too
+- [ ] Right click a file, a folder, the tree's empty area, an empty root, a file tab (desktop) and a
+      Changes row: each opens its menu at the pointer, never the browser's; Shift+F10 and a long
+      press open it by the row
+- [ ] Copy relative/absolute path gives the right text; Insert @path in terminal types it into the
+      pane without Enter (from the pane's directory after a `cd`); New folder makes an empty folder,
+      shown open; Upload files here writes into that folder; view-only shows the copies only
 - [ ] Ctrl/Cmd+click or a middle click on a Markdown link opens a new tab; a plain click goes on in
       the same tab and Back returns
 - [ ] Phone: no tab bar; "Open files (N)" in the file's bar and above the tree opens a sheet to
