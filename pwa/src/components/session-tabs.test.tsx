@@ -421,3 +421,76 @@ describe('SessionTabs', () => {
     })
   })
 })
+
+describe('SessionTabs spare room', () => {
+  let observed: (() => void)[] = []
+  class FakeResizeObserver {
+    constructor(cb: () => void) {
+      observed.push(cb)
+    }
+    observe() {}
+    disconnect() {}
+  }
+  const props = {
+    sessions: SESSIONS,
+    activeId: 'shell',
+    onSelect: vi.fn(),
+    onRemove: vi.fn(),
+  }
+  const resize = () => {
+    for (const cb of observed) act(cb)
+  }
+
+  beforeEach(() => {
+    observed = []
+    Element.prototype.scrollIntoView = vi.fn()
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('reports the room after Add, and the overflow as negative', () => {
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver)
+    const onSpareChange = vi.fn()
+    render(
+      <SessionTabs {...props} onAdd={vi.fn()} onSpareChange={onSpareChange} />,
+    )
+    // jsdom lays nothing out: no room, no overflow
+    expect(onSpareChange).toHaveBeenLastCalledWith(0)
+    const list = screen.getByRole('tablist')
+    const row = list.parentElement!
+    row.getBoundingClientRect = () => ({ right: 500 }) as DOMRect
+    screen.getByRole('button', { name: 'Add session' }).getBoundingClientRect =
+      () => ({ right: 380 }) as DOMRect
+    resize()
+    expect(onSpareChange).toHaveBeenLastCalledWith(120)
+    Object.defineProperty(list, 'scrollWidth', { value: 700 })
+    Object.defineProperty(list, 'clientWidth', { value: 400 })
+    resize()
+    expect(onSpareChange).toHaveBeenLastCalledWith(120 - 300)
+    // The same room again: not reported twice
+    onSpareChange.mockClear()
+    resize()
+    expect(onSpareChange).not.toHaveBeenCalled()
+  })
+
+  it('measures from the tab list when there is no Add button', () => {
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver)
+    const onSpareChange = vi.fn()
+    render(<SessionTabs {...props} onSpareChange={onSpareChange} />)
+    const list = screen.getByRole('tablist')
+    list.parentElement!.getBoundingClientRect = () =>
+      ({ right: 300 }) as DOMRect
+    list.getBoundingClientRect = () => ({ right: 260 }) as DOMRect
+    resize()
+    expect(onSpareChange).toHaveBeenLastCalledWith(40)
+  })
+
+  it('reports nothing without ResizeObserver or a listener', () => {
+    vi.stubGlobal('ResizeObserver', undefined)
+    const onSpareChange = vi.fn()
+    render(<SessionTabs {...props} onSpareChange={onSpareChange} />)
+    expect(onSpareChange).not.toHaveBeenCalled()
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver)
+    render(<SessionTabs {...props} />)
+    resize()
+  })
+})

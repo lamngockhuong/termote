@@ -1,7 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { MessageSquare, SquareTerminal } from 'lucide-react'
 import type { ComponentProps } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider } from '../contexts/theme-context'
 import type { Session } from '../types/session'
 import { AppHeader } from './app-header'
@@ -442,5 +442,69 @@ describe('AppHeader — focus window', () => {
     expect(
       screen.queryByRole('button', { name: 'Open in main window' }),
     ).toBeNull()
+  })
+})
+
+describe('AppHeader — labels give way to the tabs', () => {
+  let resize: () => void = () => {}
+  class FakeResizeObserver {
+    constructor(cb: () => void) {
+      resize = () => act(cb)
+    }
+    observe() {}
+    disconnect() {}
+  }
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn()
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver)
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  const overflow = (by: number) => {
+    const list = screen.getByRole('tablist', { name: 'Sessions' })
+    Object.defineProperty(list, 'scrollWidth', {
+      value: 400 + by,
+      configurable: true,
+    })
+    Object.defineProperty(list, 'clientWidth', {
+      value: 400,
+      configurable: true,
+    })
+    resize()
+  }
+
+  it('drops the view and panel labels while the tabs overflow', () => {
+    renderHeader({
+      views: TWO_VIEWS,
+      panelViews: [{ id: 'files', label: 'Files', Icon: SquareTerminal }],
+      onTogglePanel: vi.fn(),
+    })
+    const labels = ['Terminal', 'Files'].map((n) => screen.getByText(n))
+    for (const l of labels) expect(l).toHaveClass('@[60rem]:not-sr-only')
+    overflow(50)
+    for (const l of labels) expect(l).not.toHaveClass('@[60rem]:not-sr-only')
+    // jsdom measures the labels as 0 px: back once 24 px are spare
+    overflow(-23)
+    expect(labels[0]).not.toHaveClass('@[60rem]:not-sr-only')
+    overflow(-24)
+    for (const l of labels) expect(l).toHaveClass('@[60rem]:not-sr-only')
+  })
+
+  it('keeps the labels when the tabs are not in the header', () => {
+    const { rerender } = render(
+      <ThemeProvider>
+        <AppHeader {...headerProps({ views: TWO_VIEWS })} />
+      </ThemeProvider>,
+    )
+    overflow(50)
+    expect(screen.getByText('Chat')).not.toHaveClass('@[60rem]:not-sr-only')
+    rerender(
+      <ThemeProvider>
+        <AppHeader
+          {...headerProps({ views: TWO_VIEWS, showSessionTabs: false })}
+        />
+      </ThemeProvider>,
+    )
+    expect(screen.getByText('Chat')).toHaveClass('@[60rem]:not-sr-only')
   })
 })

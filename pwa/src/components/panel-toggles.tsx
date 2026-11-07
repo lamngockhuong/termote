@@ -1,18 +1,25 @@
 import { useT } from '../i18n/i18n-context'
 import { FOCUS_RING } from './ui/button'
-import { HEADER_LABEL, type ViewOption } from './ui/view-switcher'
+import { headerLabel, LABEL_PROPS, type ViewOption } from './ui/view-switcher'
 
 interface Props {
   views: ViewOption<string>[]
   // The view in the side panel, if any
   open: string | null
   onToggle: (id: string | null) => void
+  // The header's tabs need the room: icons only
+  compact?: boolean
 }
 
 // Desktop: the views shown in the side panel next to the terminal (files,
 // changes), one at a time. A pressed button closes its panel. Sized like the
 // view switcher beside it.
-export function PanelToggles({ views, open, onToggle }: Props) {
+export function PanelToggles({
+  views,
+  open,
+  onToggle,
+  compact = false,
+}: Props) {
   const { t } = useT()
   if (views.length === 0) return null
   return (
@@ -39,7 +46,10 @@ export function PanelToggles({ views, open, onToggle }: Props) {
             }`}
           >
             <Icon size={14} aria-hidden="true" />
-            <span className={`ui-terminal:font-label ${HEADER_LABEL}`}>
+            <span
+              {...LABEL_PROPS}
+              className={`ui-terminal:font-label ${headerLabel(compact)}`}
+            >
               {label}
             </span>
           </button>

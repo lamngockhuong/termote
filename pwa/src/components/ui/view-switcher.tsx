@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import { type KeyboardEvent, useRef } from 'react'
+import { COMPACT_LABEL_ATTR } from '../../hooks/use-compact-labels'
 import { useT } from '../../i18n/i18n-context'
 import { FOCUS_RING } from './button'
 
@@ -10,9 +11,13 @@ export interface ViewOption<T extends string> {
 }
 
 // A view or panel button's label: read out always, shown once the header
-// (an @container) is at least 60rem wide; narrower, the buttons show their
-// icon only and name it in the tooltip
-export const HEADER_LABEL = 'sr-only @[60rem]:not-sr-only'
+// (an @container) is at least 60rem wide and its tabs have room (compact
+// off); otherwise the buttons show their icon only and name it in the tooltip
+export const headerLabel = (compact: boolean) =>
+  compact ? 'sr-only' : 'sr-only @[60rem]:not-sr-only'
+
+// Marks a label for useCompactLabels, which measures the shown ones
+export const LABEL_PROPS = { [COMPACT_LABEL_ATTR]: '' }
 
 interface Props<T extends string> {
   views: ViewOption<T>[]
@@ -20,6 +25,8 @@ interface Props<T extends string> {
   onChange: (id: T) => void
   // Id of the role="tabpanel" element that shows a view (for aria-controls)
   panelId?: (id: T) => string
+  // The header's tabs need the room: icons only
+  compact?: boolean
 }
 
 // Desktop header tabs switching the pane between its views (terminal, chat,
@@ -31,6 +38,7 @@ export function ViewSwitcher<T extends string>({
   value,
   onChange,
   panelId,
+  compact = false,
 }: Props<T>) {
   const { t } = useT()
   const listRef = useRef<HTMLDivElement>(null)
@@ -84,7 +92,10 @@ export function ViewSwitcher<T extends string>({
             }`}
           >
             <Icon size={14} aria-hidden="true" />
-            <span className={`ui-terminal:font-label ${HEADER_LABEL}`}>
+            <span
+              {...LABEL_PROPS}
+              className={`ui-terminal:font-label ${headerLabel(compact)}`}
+            >
               {label}
             </span>
           </button>
