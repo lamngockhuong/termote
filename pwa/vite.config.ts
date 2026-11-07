@@ -129,11 +129,27 @@ function cspMeta(directives: string[], scripts: string[]): string {
   return `<meta http-equiv="Content-Security-Policy" content="${policy}">`
 }
 
-// The demo page's policy, after its last change: one hash per inline script
-// without attributes (the theme script), as the server allows them
-function demoPolicy(): Plugin {
+// What search engines show for the demo page (termote.ohnice.app/demo/, in
+// the site's sitemap). The installed app keeps the bare title: it is not on
+// the web, and a canonical there would point at the demo.
+const DEMO_HEAD = [
+  '<title>Termote Demo: Try the Terminal Remote Control in Your Browser</title>',
+  '<meta name="description" content="Try Termote in your browser with sample sessions, Agent Chat and git changes, without installing anything. Termote controls Claude Code and your terminal from your phone." />',
+  '<link rel="canonical" href="https://termote.ohnice.app/demo/" />',
+  '<meta property="og:title" content="Termote Demo" />',
+  '<meta property="og:description" content="Try Termote in your browser, without installing anything." />',
+  '<meta property="og:type" content="website" />',
+  '<meta property="og:url" content="https://termote.ohnice.app/demo/" />',
+  '<meta property="og:image" content="https://termote.ohnice.app/og-image.png" />',
+  '<meta name="twitter:card" content="summary_large_image" />',
+].join('\n    ')
+
+// The demo page's head: its policy, after its last change (one hash per
+// inline script without attributes, the theme script, as the server allows
+// them), and DEMO_HEAD in place of the bare title
+function demoHead(): Plugin {
   return {
-    name: 'termote-demo-csp',
+    name: 'termote-demo-head',
     transformIndexHtml: {
       order: 'post',
       handler(html) {
@@ -144,7 +160,11 @@ function demoPolicy(): Plugin {
         // Without its policy the demo would run with none, and no test of
         // violations would notice
         if (!charset.test(html)) throw new Error('demo: no <meta charset> to put the CSP after')
-        return html.replace(charset, `$1\n    ${cspMeta(DEMO_CSP.app, scripts)}`)
+        const title = /<title>Termote<\/title>/
+        if (!title.test(html)) throw new Error('demo: no <title>Termote</title> to replace')
+        return html
+          .replace(charset, `$1\n    ${cspMeta(DEMO_CSP.app, scripts)}`)
+          .replace(title, DEMO_HEAD)
       },
     },
   }
@@ -235,7 +255,7 @@ export default defineConfig(({ mode }) => {
       react(),
       pdfjsAssets(base),
       mermaidSandbox(base, demo ? DEMO_CSP.sandbox : undefined),
-      ...(demo ? [demoPolicy()] : []),
+      ...(demo ? [demoHead()] : []),
       VitePWA({
         disable: demo,
         // Disable SW in development

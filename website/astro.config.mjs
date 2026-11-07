@@ -1,8 +1,12 @@
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "astro/config";
+import sitemap from "@astrojs/sitemap";
 import starlight from "@astrojs/starlight";
 import starlightLlmsTxt from "starlight-llms-txt";
 import starlightVersions from "starlight-versions";
+import { ARCHIVED } from "./src/archived.mjs";
 
 // Page views and three events (src/scripts/track-events.js), counted by
 // GoatCounter: no cookie, nothing personal, never on localhost. Not in the
@@ -13,14 +17,43 @@ const GOATCOUNTER_SCRIPT = "https://gc.zgo.at/count.v4.js";
 const GOATCOUNTER_SRI = "sha384-nRw6qfbWyJha9LhsOtSb2YJDyZdKvvCFh0fJYlkquSFjUxp9FVNugbfy8q1jdxI+";
 const trackEvents = readFileSync(new URL("./src/scripts/track-events.js", import.meta.url), "utf8");
 
+const SITE = "https://termote.ohnice.app";
+
+// The date of the last commit to a page's source, for the sitemap's lastmod:
+// a build date would mark every page changed on every release. Needs the
+// full history (deploy-website.yml checks out with fetch-depth 0); undefined
+// for a page with no source here, such as the demo.
+function lastCommitDate(pathname) {
+  const slug = pathname.replace(/^\/|\/$/g, "") || "index";
+  const base = fileURLToPath(new URL(`./src/content/docs/${slug}`, import.meta.url));
+  const file = [".mdx", ".md", "/index.mdx", "/index.md"].map((ext) => base + ext).find(existsSync);
+  if (!file) return undefined;
+  const date = execFileSync("git", ["log", "-1", "--format=%cI", "--", file], { encoding: "utf8" }).trim();
+  return date || undefined;
+}
+
 export default defineConfig({
-  site: "https://termote.ohnice.app",
+  site: SITE,
   integrations: [
+    // Starlight adds no sitemap of its own when one is here; the i18n block
+    // keeps its hreflang alternates (en, vi)
+    sitemap({
+      i18n: { defaultLocale: "en", locales: { en: "en", vi: "vi" } },
+      filter: (page) => !ARCHIVED.test(new URL(page).pathname),
+      // The interactive demo: the PWA's demo build, which deploy-website.yml
+      // copies into the site after this build
+      customPages: [`${SITE}/demo/`],
+      serialize(item) {
+        const lastmod = lastCommitDate(new URL(item.url).pathname);
+        return lastmod ? { ...item, lastmod } : item;
+      },
+    }),
     starlight({
       plugins: [
-        // The root docs are the current (1.x) release; 0.x is archived under /0.x/.
+        // The root docs are the current release (1.0 or later); 0.x is archived under
+        // /0.x/ and kept out of search (src/route-data.ts, the sitemap filter).
         starlightVersions({
-          current: { label: "1.x" },
+          current: { label: "Latest" },
           versions: [{ slug: "0.x" }],
         }),
         // /llms.txt, /llms-full.txt and /llms-small.txt of the current docs;
@@ -53,6 +86,10 @@ export default defineConfig({
         alt: "",
       },
       customCss: ["./src/styles/custom.css"],
+      // noindex for the archived 0.x docs, JSON-LD on the home page
+      routeMiddleware: "./src/route-data.ts",
+      // The date of the page's last commit, from git (full history in CI)
+      lastUpdated: true,
       favicon: "/favicon.svg",
       head: [
         { tag: "link", attrs: { rel: "apple-touch-icon", href: "/apple-touch-icon.png" } },

@@ -1,7 +1,13 @@
 ---
 title: Termote
-description: Remote control CLI tools from mobile/desktop via PWA
+description: Open-source, self-hosted PWA to control Claude Code, Codex and your tmux, Herdr or Zellij sessions from your phone or another computer.
 template: splash
+# A landing page: no "Last updated" line
+lastUpdated: false
+# The page title, in place of Starlight's "Termote | Termote"
+head:
+  - tag: title
+    content: "Termote: Control Claude Code and Your Terminal from Your Phone"
 hero:
   title: Your Terminal, Anywhere.
   tagline: Control Claude Code, GitHub Copilot, and any CLI from your phone.
@@ -30,6 +36,13 @@ import IntroVideo from '../../components/IntroVideo.astro';
 
 <HeroVideo />
 
+Termote is an open-source (MIT), self-hosted web app that puts the terminal sessions of your machine on your phone or
+another computer. One `termote` binary runs on Linux, macOS or Windows and serves a PWA that opens your tmux, Herdr or
+Zellij (Linux, macOS) sessions over the network you choose: your LAN, Tailscale or a Cloudflare Tunnel, behind a password. From there
+you can answer [Claude Code or Codex as a chat](/usage/agent-chat/), [switch sessions](/usage/sessions/), read a
+pane's [files and git diff](/usage/files-changes/), and type with a [keyboard toolbar](/usage/keyboard/) made for
+touch. See the [security model](/usage/security/) for what is exposed and how.
+
 ## Features
 
 <CardGrid stagger>
@@ -49,7 +62,7 @@ import IntroVideo from '../../components/IntroVideo.astro';
     Swipe left for Ctrl+C, right for Tab, up/down to scroll
   </Card>
   <Card title="PWA Ready" icon="puzzle">
-    Install to homescreen, works offline
+    Install it to your home screen and open it like an app
   </Card>
   <Card title="Herdr Plugin" icon="laptop">
     Open the pane you are on in Termote, or show its link as a QR code
