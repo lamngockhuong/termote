@@ -377,8 +377,9 @@ export function Menu({
 
 interface MenuItemProps {
   // Without it the item only closes the menu: a disabled item that says why
-  // something is not offered. Shift says whether it was held (a popup).
-  onSelect?: (e: { shiftKey: boolean }) => void
+  // something is not offered. Shift says whether it was held (a popup);
+  // byKey, whether it was chosen with Enter or Space rather than a pointer.
+  onSelect?: (e: { shiftKey: boolean; byKey: boolean }) => void
   children: ReactNode
   icon?: ReactNode
   danger?: boolean
@@ -422,8 +423,9 @@ function ItemButton({
       title={title}
       aria-keyshortcuts={shortcut?.aria}
       onClick={(e) => {
-        onSelect?.({ shiftKey: e.shiftKey })
-        if (!keepOpen) close(e.detail === 0)
+        const byKey = e.detail === 0
+        onSelect?.({ shiftKey: e.shiftKey, byKey })
+        if (!keepOpen) close(byKey)
       }}
       className={`flex h-10 w-full items-center gap-3 px-3 text-left text-[14px] hover:bg-surface focus:bg-surface disabled:opacity-50 pointer-coarse:h-touch ui-terminal:font-label ui-terminal:text-[13px] ${FOCUS_RING} focus-visible:-outline-offset-2 ${danger ? 'text-danger' : 'text-fg'}`}
     >
