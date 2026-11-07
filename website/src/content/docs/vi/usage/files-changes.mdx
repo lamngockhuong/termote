@@ -247,6 +247,25 @@ sau không bao giờ được tìm:
 
 Thiết bị chỉ xem (view-only) tìm trong đúng những file mà nó được mở.
 
+## Blame
+
+Với file nằm trong repository git, nút **Blame** trên thanh tiêu đề của trình xem (trên điện thoại
+thì nằm trong menu **More actions**) thêm một cột trước số dòng. Cột này cho biết ai sửa từng dòng
+gần nhất và cách đây bao lâu; mỗi nhóm dòng liền nhau thuộc cùng một commit chỉ ghi một lần. Dòng
+chưa commit hiện `Not committed`. Chạm vào tên để xem tóm tắt, tác giả, thời điểm và hash rút gọn
+của commit, kèm nút **Copy hash**; nhấn Escape hoặc chạm ra chỗ khác để đóng. Chạm **Blame** lần
+nữa để ẩn cột. Cột vẫn bật khi bạn mở file khác, cho tới khi tải lại Termote.
+
+- Blame lần theo các commit tới được từ `HEAD`. File chưa có trong commit gần nhất thì chưa có gì
+  để blame, và trình xem báo điều đó.
+- Nút chỉ có khi xem chữ ở chế độ đọc: không có lúc đang sửa, cũng không có ở chế độ xem trước
+  Markdown, dạng bảng hay ảnh.
+- File lớn hơn 1 MiB không được blame.
+- Nếu file trên máy chủ đã đổi kể từ lúc mở, trình xem đọc lại file trước, để mỗi tên đứng đúng
+  cạnh dòng mà nó nói tới.
+- Nếu git đếm số dòng của file khác với trình xem (file UTF-16), cột bị ẩn và có một dòng ghi chú.
+- Thiết bị chỉ xem cũng thấy blame, với những file nó được đọc.
+
 ## Sửa file
 
 Nút bút chì (**Edit**) trên thanh của file văn bản mở nội dung file trong trình soạn thảo, thay
@@ -1184,7 +1203,8 @@ thiết bị chỉ xem, và vẫn bị từ chối khi nằm trong `.git` hay m�
 ## Termote chạy git ra sao
 
 Termote tự chạy `git status` và `git diff` để lấy dữ liệu cho Changes, `git rev-parse`, `git log` và
-`git diff-tree` để đọc commit cuối (chỉ `HEAD`, không bao giờ là commit do trình duyệt chỉ định), và
+`git diff-tree` để đọc commit cuối (chỉ `HEAD`, không bao giờ là commit do trình duyệt chỉ định),
+`git blame` cho cột blame (tính từ `HEAD`, nhận đúng nội dung đang hiện qua đầu vào), và
 `git cat-file` để đọc bản trước và bản sau của ảnh. Stage và Unstage là các lệnh duy nhất có ghi, và chúng chỉ ghi index
 (`git add`, `git restore --staged`, `git reset`, `git apply --cached`); bản vá của một hunk do Termote tự dựng,
 không bao giờ lấy từ trình duyệt. Cấu hình riêng của một repo

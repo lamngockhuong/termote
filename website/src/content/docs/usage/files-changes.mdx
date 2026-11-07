@@ -253,6 +253,26 @@ never searched:
 
 A view-only device searches the same files it can open.
 
+## Blame
+
+In a file of a git repository, the **Blame** button in the viewer's header (on a phone, in the
+**More actions** menu) adds a column before the line numbers: who last changed each line and how
+long ago, written once for each run of lines from the same commit. Lines not committed yet read
+`Not committed`. Tap a name to see the commit's summary, author, date and short hash, with a
+**Copy hash** button; Escape or a tap elsewhere closes it. Tap **Blame** again to hide the column.
+It stays on as you open other files, until Termote is reloaded.
+
+- Blame follows the commits reachable from `HEAD`. A file that is not in the last commit yet has
+  nothing to blame, and the viewer says so.
+- It is offered for the text in read mode only: not while editing, nor in a Markdown preview, a
+  table or an image.
+- A file larger than 1 MiB is not blamed.
+- When the file changed on the host since it was opened, the viewer reads it again first, so each
+  name stands beside the line it is about.
+- When git counts the lines of the file differently from the viewer (a UTF-16 file), the column is
+  hidden with a note.
+- A view-only device sees blame too, for the files it may read.
+
 ## Editing a File
 
 The pencil button (**Edit**) in a text file's bar turns its text into an editor, with
@@ -1197,7 +1217,7 @@ of the directories above.
 ## How git Is Run
 
 Termote runs `git status` and `git diff` itself to fill Changes, `git rev-parse`, `git log` and
-`git diff-tree` for the last commit (of `HEAD` only, never a commit named by the browser), and `git cat-file` to read the
+`git diff-tree` for the last commit (of `HEAD` only, never a commit named by the browser), `git blame` for the blame column (from `HEAD`, given the text shown on its input), and `git cat-file` to read the
 before and after versions of an image. Stage and Unstage are the only commands that write, and
 they write the index only (`git add`, `git restore --staged`, `git reset`, `git apply --cached`); the
 patch of a hunk is built by Termote, never taken from the browser. A repository's own settings
