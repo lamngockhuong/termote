@@ -1,5 +1,6 @@
 import { type Ref, useEffect, useRef, useState } from 'react'
 import { useT } from '../i18n/i18n-context'
+import { DEFAULT_TAB_ICON } from '../types/session'
 import { imeComposing } from '../utils/ime-composing'
 import { IconPicker } from './icon-picker'
 import { Button } from './ui/button'
@@ -8,7 +9,8 @@ const INPUT_CLASSES =
   'h-9 w-full min-w-0 rounded-control border border-border bg-bg px-2.5 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent'
 
 interface Props {
-  onAdd: (name: string, icon: string) => void
+  // icon: only one the user picked
+  onAdd: (name: string, icon?: string) => void
   // byPress: a press outside closed it, so the focus stays where it went
   onClose: (byPress?: boolean) => void
   // The name field, for a key asking for the form while it is open
@@ -23,7 +25,7 @@ interface Props {
 export function NewTabForm({ onAdd, onClose, nameRef, toggleSelector }: Props) {
   const { t } = useT()
   const [name, setName] = useState('')
-  const [icon, setIcon] = useState('💻')
+  const [icon, setIcon] = useState<string>()
   const ref = useRef<HTMLFormElement>(null)
   const closeRef = useRef(onClose)
   closeRef.current = onClose
@@ -67,7 +69,12 @@ export function NewTabForm({ onAdd, onClose, nameRef, toggleSelector }: Props) {
       className="absolute right-0 top-full z-40 mt-1 flex w-72 flex-col gap-2 rounded-panel border border-border bg-surface-raised p-2 shadow-xl ui-native:border-0"
     >
       <div className="flex min-w-0 items-center gap-2">
-        <IconPicker value={icon} onChange={setIcon} />
+        <IconPicker
+          value={icon ?? DEFAULT_TAB_ICON}
+          onChange={setIcon}
+          auto={icon === undefined}
+          onAuto={() => setIcon(undefined)}
+        />
         <input
           type="text"
           aria-label={t('shell.sidebar.sessionName')}

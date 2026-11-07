@@ -27,11 +27,15 @@ const ICONS = [
 interface Props {
   value: string
   onChange: (icon: string) => void
+  // The Automatic choice (no icon picked: the agent's logo while one runs),
+  // pressed while auto
+  auto?: boolean
+  onAuto?: () => void
 }
 
 // The picker is a Sheet (a modal <dialog> in the top layer): opened from the
 // sessions sheet, a fixed overlay would be clipped by that sheet's transform.
-export function IconPicker({ value, onChange }: Props) {
+export function IconPicker({ value, onChange, auto, onAuto }: Props) {
   const { t } = useT()
   const [isOpen, setIsOpen] = useState(false)
 
@@ -47,12 +51,20 @@ export function IconPicker({ value, onChange }: Props) {
       </button>
       <IconSheet
         isOpen={isOpen}
-        value={value}
+        value={auto ? '' : value}
         onClose={() => setIsOpen(false)}
         onSelect={(icon) => {
           onChange(icon)
           setIsOpen(false)
         }}
+        auto={auto}
+        onAuto={
+          onAuto &&
+          (() => {
+            onAuto()
+            setIsOpen(false)
+          })
+        }
       />
     </>
   )
@@ -65,11 +77,16 @@ export function IconSheet({
   value,
   onClose,
   onSelect,
+  auto,
+  onAuto,
 }: {
   isOpen: boolean
   value: string
   onClose: () => void
   onSelect: (icon: string) => void
+  auto?: boolean
+  // Unset: no Automatic choice
+  onAuto?: () => void
 }) {
   const { t } = useT()
   return (
@@ -80,6 +97,27 @@ export function IconSheet({
       closeLabel={t('common.cancel')}
       className="md:max-w-sm"
     >
+      {onAuto && (
+        <div className="px-4 pt-4">
+          <button
+            type="button"
+            aria-pressed={!!auto}
+            onClick={onAuto}
+            className={`flex w-full flex-col items-start rounded-control px-3 py-2 text-left transition-colors duration-(--duration-fast) ${FOCUS_RING} ${
+              auto
+                ? 'bg-accent-soft ring-2 ring-accent'
+                : 'bg-surface hover:bg-surface-raised'
+            }`}
+          >
+            <span className="text-sm font-medium text-fg">
+              {t('shell.icon.auto')}
+            </span>
+            <span className="text-xs text-fg-muted">
+              {t('shell.icon.autoHint')}
+            </span>
+          </button>
+        </div>
+      )}
       <div className="grid grid-cols-6 gap-2 p-4">
         {ICONS.map((icon) => (
           <button

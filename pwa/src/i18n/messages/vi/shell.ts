@@ -100,6 +100,8 @@ export default {
   'shell.panel.maximize': 'Phóng to panel',
   'shell.icon.change': 'Đổi biểu tượng',
   'shell.icon.choose': 'Chọn biểu tượng',
+  'shell.icon.auto': 'Tự động',
+  'shell.icon.autoHint': 'Logo của agent đang chạy trong phiên, nếu có',
   'shell.timeline.blocked': 'chờ bạn',
   'shell.timeline.working': 'đang chạy',
   'shell.timeline.done': 'xong',

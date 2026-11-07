@@ -19,6 +19,7 @@ import { AgentStatusBadge } from './agent-status-badge'
 import { IconSheet } from './icon-picker'
 import { onlyPaneOf } from './meta-chips'
 import { NewTabForm } from './new-tab-form'
+import { TabIcon } from './tab-icon'
 import { FOCUS_RING, IconButton } from './ui/button'
 import { Menu, MenuItem, MenuSeparator } from './ui/menu'
 
@@ -41,7 +42,11 @@ interface Props {
   // A move is on its way to the server: the tab is not in its new place yet
   moving?: boolean
   // Unset (view-only role): no rename and no icon in the tab's menu
-  onUpdate?: (id: string, updates: { name?: string; icon?: string }) => void
+  // customIcon false: back to the automatic icon
+  onUpdate?: (
+    id: string,
+    updates: { name?: string; icon?: string; customIcon?: boolean },
+  ) => void
   // The backend can rename this tab (caps.renameTab); false: only its icon
   renameTab?: boolean
   // The room left after the last tab (and Add) in px, negative while the
@@ -509,7 +514,9 @@ export function SessionTabs({
             >
               {renaming === session.id ? (
                 <span className="flex h-full items-center gap-2 pl-3 pr-1">
-                  <span className="text-base leading-none">{session.icon}</span>
+                  <span className="text-base leading-none">
+                    <TabIcon session={session} />
+                  </span>
                   <input
                     type="text"
                     aria-label={t('shell.tabs.renameField', {
@@ -547,7 +554,9 @@ export function SessionTabs({
                   title={tabTitle(session)}
                   className={`flex h-full select-none items-center gap-2 whitespace-nowrap rounded-control pl-3 pr-1 ${FOCUS_RING} focus-visible:-outline-offset-2`}
                 >
-                  <span className="text-base leading-none">{session.icon}</span>
+                  <span className="text-base leading-none">
+                    <TabIcon session={session} />
+                  </span>
                   <span className="max-w-[140px] truncate ui-terminal:font-label">
                     {visibleUnsafe(session.name)}
                   </span>
@@ -669,10 +678,15 @@ export function SessionTabs({
       {onUpdate && (
         <IconSheet
           isOpen={!!iconSession}
-          value={iconSession?.icon ?? ''}
+          value={iconSession?.customIcon ? iconSession.icon : ''}
           onClose={() => setIconFor(null)}
           onSelect={(icon) => {
             onUpdate(iconSession!.id, { icon })
+            setIconFor(null)
+          }}
+          auto={!iconSession?.customIcon}
+          onAuto={() => {
+            onUpdate(iconSession!.id, { customIcon: false })
             setIconFor(null)
           }}
         />

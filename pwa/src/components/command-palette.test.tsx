@@ -642,9 +642,9 @@ describe('CommandPalette', () => {
     it('lists the tabs of every group, names shown safely', () => {
       const p = renderPalette({ mode: 'sessions' })
       expect(options().map((o) => o.textContent)).toEqual([
-        '💻 ShellCurrent tab',
-        '📜 Logsmain',
-        '🐚 evil⟨U+202E⟩exeother',
+        '💻ShellCurrent tab',
+        '📜Logsmain',
+        '🐚evil⟨U+202E⟩exeother',
       ])
       type('@logs')
       key('Enter')
@@ -737,7 +737,7 @@ describe('CommandPalette', () => {
         ],
       })
       type('@loose')
-      expect(options().map((o) => o.textContent)).toEqual(['💻 loose'])
+      expect(options().map((o) => o.textContent)).toEqual(['💻loose'])
     })
 
     it('lists no pane where the backend picks it', () => {

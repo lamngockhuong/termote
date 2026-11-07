@@ -5,7 +5,7 @@ import { SessionTabs } from './session-tabs'
 
 const THREE: Session[] = [
   { id: 'a', name: 'Alpha', icon: '💻', description: '' },
-  { id: 'b', name: 'Beta', icon: '🤖', description: '' },
+  { id: 'b', name: 'Beta', icon: '🤖', customIcon: true, description: '' },
   { id: 'c', name: 'Gamma', icon: '📁', description: '' },
 ]
 
@@ -251,6 +251,23 @@ describe('SessionTabs: a tab’s menu', () => {
     expect(p.onUpdate).toHaveBeenCalledTimes(1)
   })
 
+  it('Automatic in the icons gives a tab back its automatic icon', () => {
+    const p = props()
+    render(<SessionTabs {...p} />)
+    // Beta has a picked icon
+    fireEvent.contextMenu(tabOf('Beta'))
+    fireEvent.click(item('Edit icon'))
+    const auto = () => screen.getByRole('button', { name: /Automatic/ })
+    expect(auto()).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(auto())
+    expect(p.onUpdate).toHaveBeenCalledWith('b', { customIcon: false })
+    expect(screen.queryByRole('dialog', { name: 'Choose Icon' })).toBeNull()
+    // Alpha has none
+    fireEvent.contextMenu(tabOf('Alpha'))
+    fireEvent.click(item('Edit icon'))
+    expect(auto()).toHaveAttribute('aria-pressed', 'true')
+  })
+
   describe('move', () => {
     it('Alt+Left/Right moves the focused tab and keeps the focus on it', () => {
       const p = props()
@@ -458,6 +475,42 @@ describe('SessionTabs: a tab’s menu', () => {
       expect(screen.queryByRole('form')).toBeNull()
       // Back on the tab it was asked from
       expect(tabOf('Alpha')).toHaveFocus()
+    })
+
+    it('a new session with no icon picked leaves the icon to its agent', () => {
+      const p = props()
+      render(<SessionTabs {...p} />)
+      fireEvent.contextMenu(tabOf('Alpha'))
+      fireEvent.click(item('New session…'))
+      const form = screen.getByRole('form', { name: 'New session' })
+      // The icon it gets meanwhile
+      expect(within(form).getByTitle('Change icon')).toHaveTextContent('📺')
+      fireEvent.change(
+        within(form).getByRole('textbox', { name: 'Session name' }),
+        { target: { value: 'api' } },
+      )
+      fireEvent.click(within(form).getByRole('button', { name: 'Add' }))
+      expect(p.onAdd).toHaveBeenCalledWith('api', undefined)
+    })
+
+    it('a new session picked an icon, then Automatic, has none', () => {
+      const p = props()
+      render(<SessionTabs {...p} />)
+      fireEvent.contextMenu(tabOf('Alpha'))
+      fireEvent.click(item('New session…'))
+      const form = screen.getByRole('form', { name: 'New session' })
+      fireEvent.click(within(form).getByTitle('Change icon'))
+      fireEvent.click(screen.getByRole('button', { name: '🚀' }))
+      expect(within(form).getByTitle('Change icon')).toHaveTextContent('🚀')
+      fireEvent.click(within(form).getByTitle('Change icon'))
+      fireEvent.click(screen.getByRole('button', { name: /Automatic/ }))
+      expect(within(form).getByTitle('Change icon')).toHaveTextContent('📺')
+      fireEvent.change(
+        within(form).getByRole('textbox', { name: 'Session name' }),
+        { target: { value: 'api' } },
+      )
+      fireEvent.click(within(form).getByRole('button', { name: 'Add' }))
+      expect(p.onAdd).toHaveBeenCalledWith('api', undefined)
     })
 
     it('N on a focused tab opens it, focus back on that tab after', () => {

@@ -67,6 +67,8 @@ export interface Session {
   key?: string
   name: string
   icon: string
+  // The user picked icon (else a tab running an agent shows its logo).
+  customIcon?: boolean
   description: string
   // Group (tmux session, herdr workspace) the tab belongs to.
   groupId?: string
@@ -96,6 +98,9 @@ export interface SessionGroup {
   worktree?: { linked: boolean; branch?: string; parent?: string }
   meta?: MetaToken[]
 }
+
+// A tab's icon while the user picked none and it runs no agent
+export const DEFAULT_TAB_ICON = '📺'
 
 // Default sessions (single session on fresh install)
 export const DEFAULT_SESSIONS: Session[] = [

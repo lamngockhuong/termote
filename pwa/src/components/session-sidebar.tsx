@@ -35,6 +35,7 @@ import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
 import type { Translate } from '../i18n/translate'
 import {
+  DEFAULT_TAB_ICON,
   type Session,
   type SessionGroup,
   type SessionPane,
@@ -72,6 +73,7 @@ import {
   ROW_PRESS,
 } from './sidebar-row-classes'
 import { SwipeableSessionItem } from './swipeable-session-item'
+import { TabIcon } from './tab-icon'
 import { Button, FOCUS_RING, IconButton } from './ui/button'
 import { Menu, MenuItem } from './ui/menu'
 import { Sheet } from './ui/sheet'
@@ -287,12 +289,16 @@ export function SessionSidebar({
   const canAdd = !!onAdd
   const canRemove = !!onRemove && sessions.length > 1
   const [newName, setNewName] = useState('')
-  const [newIcon, setNewIcon] = useState('💻')
+  // Only an icon the user picked; a tab without one shows its agent's logo
+  const [newIcon, setNewIcon] = useState<string>()
   // The tab being edited, by key: a move that shifts its id (tmux) leaves
   // the form on it, and it closes when the tab is gone.
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [editIcon, setEditIcon] = useState('')
+  // The icon choice made in the edit form: unset while untouched, null for
+  // Automatic
+  const [editIconChoice, setEditIconChoice] = useState<string | null>()
   // Mobile: the edit was started from the current session row, which then
   // holds the form instead of the list.
   const [editingInCurrent, setEditingInCurrent] = useState(false)
@@ -313,6 +319,9 @@ export function SessionSidebar({
   const refocusKey = useRef<string | null>(null)
   const editingSession = sessions.find((s) => keyOf(s) === editingKey)
   const editingId = editingSession?.id ?? null
+  const editAuto =
+    editIconChoice === null ||
+    (editIconChoice === undefined && !editingSession?.customIcon)
 
   // A phone's sheet always lists each workspace with its tabs
   const compact = layout === 'compact' && !isMobile
@@ -520,7 +529,7 @@ export function SessionSidebar({
       setQuery('')
       onAdd(newName.trim(), newIcon)
       setNewName('')
-      setNewIcon('💻')
+      setNewIcon(undefined)
       setShowAddForm(false)
     }
   }
@@ -534,11 +543,17 @@ export function SessionSidebar({
     setEditingKey(keyOf(session))
     setEditName(session.name)
     setEditIcon(session.icon)
+    setEditIconChoice(undefined)
   }
 
   const saveEdit = () => {
     if (editingId && editName.trim() && onUpdate) {
-      onUpdate(editingId, { name: editName.trim(), icon: editIcon })
+      // The icon only once chosen: saving a name keeps it as it was
+      onUpdate(editingId, {
+        name: editName.trim(),
+        ...(typeof editIconChoice === 'string' && { icon: editIconChoice }),
+        ...(editIconChoice === null && { customIcon: false }),
+      })
     }
     setEditingKey(null)
   }
@@ -551,7 +566,15 @@ export function SessionSidebar({
   const renderEditForm = () => (
     <div className={formClasses}>
       <div className="flex min-w-0 items-center gap-2">
-        <IconPicker value={editIcon} onChange={setEditIcon} />
+        <IconPicker
+          value={editAuto ? DEFAULT_TAB_ICON : editIcon}
+          onChange={(icon) => {
+            setEditIcon(icon)
+            setEditIconChoice(icon)
+          }}
+          auto={editAuto}
+          onAuto={() => setEditIconChoice(null)}
+        />
         <input
           type="text"
           aria-label={t('shell.sidebar.sessionName')}
@@ -628,7 +651,7 @@ export function SessionSidebar({
           } ${FOCUS_RING} focus-visible:-outline-offset-2`}
         >
           <span className="shrink-0 text-[15px] leading-none">
-            {session.icon}
+            <TabIcon session={session} />
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate ui-terminal:font-label ui-terminal:text-[13px]">
@@ -1172,7 +1195,12 @@ export function SessionSidebar({
   const addForm = (
     <div className={formClasses}>
       <div className="flex min-w-0 items-center gap-2">
-        <IconPicker value={newIcon} onChange={setNewIcon} />
+        <IconPicker
+          value={newIcon ?? DEFAULT_TAB_ICON}
+          onChange={setNewIcon}
+          auto={newIcon === undefined}
+          onAuto={() => setNewIcon(undefined)}
+        />
         <input
           type="text"
           value={newName}
@@ -1315,7 +1343,7 @@ export function SessionSidebar({
       ) : (
         <div className="flex min-w-0 items-center gap-2">
           <span className="flex size-8 shrink-0 items-center justify-center rounded-control bg-surface text-[16px] ui-native:bg-bg">
-            {activeSession.icon}
+            <TabIcon session={activeSession} />
           </span>
           <span className="min-w-0 truncate text-[15px] font-semibold ui-terminal:font-label ui-terminal:text-[14px]">
             {visibleUnsafe(activeSession.name)}
@@ -1399,7 +1427,7 @@ export function SessionSidebar({
         title={visibleUnsafe(session.name)}
       >
         <span className="relative text-lg leading-none">
-          {session.icon}
+          <TabIcon session={session} />
           {session.agentStatus && (
             <span className="absolute -top-1.5 -right-2 flex size-3.5 items-center justify-center rounded-full bg-surface ui-terminal:bg-bg">
               <AgentStatusBadge status={session.agentStatus} size={10} />

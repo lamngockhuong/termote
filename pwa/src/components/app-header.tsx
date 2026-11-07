@@ -15,6 +15,7 @@ import { PanelToggles } from './panel-toggles'
 import { SessionSwitcherChip } from './session-switcher-chip'
 import { SessionTabs } from './session-tabs'
 import { SettingsMenu } from './settings-menu'
+import { TabIcon } from './tab-icon'
 import { FOCUS_RING, IconButton } from './ui/button'
 import { ViewMenu } from './ui/view-menu'
 import { type ViewOption, ViewSwitcher } from './ui/view-switcher'
@@ -40,7 +41,10 @@ interface Props {
   // The Add button asks for a name and icon first (compact sidebar)
   addTabAsksName?: boolean
   // Unset (view-only role): a tab's menu offers no rename and no icon
-  onUpdateTab?: (id: string, updates: { name?: string; icon?: string }) => void
+  onUpdateTab?: (
+    id: string,
+    updates: { name?: string; icon?: string; customIcon?: boolean },
+  ) => void
   // The backend can rename tabs (caps.renameTab)
   renameTab?: boolean
   onRemoveTab: (id: string) => void
@@ -301,7 +305,9 @@ function SessionName({
       className={`flex min-w-0 flex-1 items-center gap-2 px-1 ${className}`}
       title={`${visibleUnsafe(session.name)}${session.description ? ` - ${session.description}` : ''}`}
     >
-      <span className="shrink-0 text-lg leading-none">{session.icon}</span>
+      <span className="shrink-0 text-lg leading-none">
+        <TabIcon session={session} />
+      </span>
       <span className="truncate font-medium ui-terminal:font-label">
         {visibleUnsafe(session.name)}
       </span>
