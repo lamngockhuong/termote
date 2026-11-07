@@ -113,6 +113,9 @@ export function useSettings() {
 - Mobile-first responsive: base → `sm:` → `md:` → `lg:`
 - Touch targets: `touch-manipulation` class for buttons
 - Safe areas: `pb-safe` for bottom padding
+- Browser context menu: `utils/context-menu-guard.ts` blocks it everywhere except fields, links,
+  images, selected text and elements marked `data-native-menu`. Mark a new region of text to read
+  and copy (a viewer, a preview) with `data-native-menu`, never its header or toolbar
 
 ```tsx
 <button className="px-3 py-2 bg-zinc-700 active:bg-zinc-600 touch-manipulation">

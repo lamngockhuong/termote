@@ -31,6 +31,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/hooks/use-scroll-edges.ts`               | Which ends of a scroller hide content, the fading mask         |
 | `pwa/src/hooks/use-wheel-scroll-x.ts`             | A vertical wheel scrolls a row of tabs sideways                |
 | `pwa/src/utils/classic-scrollbars.ts`             | Measures classic scrollbars, which index.css makes thin        |
+| `pwa/src/utils/context-menu-guard.ts`             | Blocks the browser's menu on chrome, keeps it in text, fields  |
 | `pwa/src/components/select-text-sheet.tsx`        | Select text: the pane's text to select and copy (phone)        |
 | `pwa/src/hooks/use-pane-text.ts`                  | Pane text for the sheet: server history, else xterm buffer     |
 | `pwa/src/utils/copy-text.ts`                      | Clipboard write, `execCommand('copy')` fallback over HTTP      |
