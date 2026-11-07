@@ -1953,6 +1953,54 @@ export function fetchCommitDiff(
   })
 }
 
+export interface BlameCommit {
+  author: string
+  // Author date, Unix seconds
+  time: number
+  summary: string
+}
+
+// A run of lines (start is 1-based); commit is absent in uncommitted
+export interface BlameRange {
+  start: number
+  count: number
+  commit?: string
+}
+
+// Who last changed each line of a file (server/files_git_blame.go): lines
+// is how many lines git blamed, which the view compares with its own
+export interface FileBlame {
+  root: string
+  path: string
+  lines: number
+  commits: Record<string, BlameCommit>
+  ranges: BlameRange[]
+  uncommitted: BlameRange[]
+}
+
+// The blame of the file as read with hash (FileContent.hash). A refusal is a
+// RequestError with the server's code (not_repo, not_tracked, too_large,
+// file_changed: the file is other bytes now); a sensitive file not revealed
+// answers { sensitive: true }.
+export async function fetchFileBlame(
+  target: FilesTarget,
+  path: string,
+  opts: { hash: string; root?: string; reveal?: boolean },
+  signal?: AbortSignal,
+): Promise<FileBlame | { sensitive: true }> {
+  const res = await fetch(
+    filesUrl(target, 'blame', {
+      path,
+      hash: opts.hash,
+      reveal: opts.reveal ? '1' : undefined,
+      root: opts.root,
+    }),
+    { signal },
+  )
+  if (!res.ok) throw await requestError(res, true)
+  return res.json()
+}
+
 // Which version of an image files/raw reads. Without side, the file in the
 // working tree (Files view); with it, one side of a git status entry, as
 // fetchFileDiff picks the entry (Changes view).

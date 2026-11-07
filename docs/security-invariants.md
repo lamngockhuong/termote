@@ -1065,6 +1065,27 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   may read); a full client reads them all. A commit's
   file list is kept 30 s per root and hash (a hash never changes what it names); a sensitive name
   is checked again when its diff is read. Message and author are shown with `visibleUnsafe`.
+  Blame (`files/blame`, `server/files_git_blame.go`) is a read route (`begin`: `crossSiteRejection`,
+  a view-only client allowed, through `viewHides` like `content`, `reveal=1` refused to it). The
+  file is read like `content`'s: `cleanRelPath`, the deny lists, `rootFor` (a link into another
+  work tree of the repository is followed, git then runs in that work tree with `safe.directory`
+  set to it only when the root had one), opened through `os.Root`, a regular file of at most
+  `maxPreviewSize` (1 MiB, else 413 `too_large`, no large-read slot), a sensitive name without
+  `reveal=1` answers `{sensitive: true}` before the hash is compared. The client sends the sha256
+  of the bytes it shows (`hash`, required, else 400); other bytes on disk are 409 `file_changed`.
+  Those bytes go to `git blame --incremental --no-ignore-revs-file --no-textconv --contents - --
+  <path>` on stdin, so git never opens the worktree path, and the path (where a symlink inside the
+  root leads) only names the history to follow from `HEAD`: no client rev reaches git. `heavy`
+  with `tryOnly` and `noBackoff`: it never takes the last free git slot nor waits for one (503
+  `busy`), and a slow one never backs the root off, so one long history cannot hold up Changes.
+  `noFilters`, output capped at 8 MiB (413 `too_large`). A request out of time is 503, never
+  `not_tracked`; a failure for a path `HEAD` does not hold (`cat-file -e HEAD:./<path>`) is 404
+  `not_tracked`, outside a repo 404 `not_repo`; any other git failure is logged only. Blame serves
+  a Place that is its own repo (full role only, as every Place route); a file with a
+  `working-tree-encoding` attribute whose lines git counts otherwise is a plain 500. The answer holds the line
+  count, runs of lines per commit hash (the all-zero hash goes to `uncommitted`) and per commit
+  only author name, author time and a summary cut at 512 bytes: no e-mail, no line text. git
+  applies the repo's `.mailmap` to the author name (a read, nothing runs).
 - **Places** (`--allow-path`, `server/cli_allow_path.go`, `server/files_places.go`): folders the
   operator names on the host with `termote start --allow-path <dir>` / `--remove-path <dir>`
   (saved like `--allow-host`, `TERMOTE_ALLOWED_PATHS` `:`-separated on Unix, refused by the Unix
@@ -1088,7 +1109,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   enclosing repo's git dir stays a deny extra. From there every Files check of a pane root applies
   unchanged (`os.Root`, deny lists, `reveal=1`, trash, `writeDeny`, `requireWriteRole`). Full role
   only (see View-only role). Changes stays pane-scoped: `changes`, `changes/apply`, `diff`,
-  `commit`, `commit/diff` and `raw` with `side=` refuse `place` (400 `place_not_supported`). A
+  `commit`, `commit/diff` and `raw` with `side=` refuse `place` (400 `place_not_supported`);
+  `blame` is a Files route and serves a Place whose git toplevel is the Place. A
   file's write lock is keyed by its absolute path and a write drops the find/status caches of every
   root that holds it or lies in it, so a pane root and a Place inside it never interleave saves of
   one file (the per-root lock of creates, deletes and renames is still per root string: a create

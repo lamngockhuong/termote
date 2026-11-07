@@ -23,6 +23,7 @@ export default {
   'errors.empty_match': 'Mẫu tìm khớp cả chuỗi rỗng',
   'errors.encrypted': 'File được bảo vệ bằng mật khẩu',
   'errors.exists': 'Đã có thứ khác mang tên này',
+  'errors.file_changed': 'File đã đổi từ lúc đọc',
   'errors.filtered': 'File đi qua một bộ lọc git. Hãy dùng terminal',
   'errors.full_needs_password':
     'Chỉ phiên đăng nhập bằng mật khẩu hoặc CLI mới được làm thế',
@@ -101,7 +102,9 @@ export default {
   'errors.not_image': 'Không phải ảnh PNG, JPEG, GIF, WebP hay SVG',
   'errors.not_in_trash': 'Không còn trong thùng rác',
   'errors.not_linked': 'Herdr không quản lý worktree này',
+  'errors.not_repo': 'Không nằm trong repository git',
   'errors.not_text': 'Chữ không phải UTF-8 hợp lệ',
+  'errors.not_tracked': 'Chưa có trong commit gần nhất',
   'errors.open_failed': 'Worktree đã có nhưng workspace của nó không mở được',
   'errors.pane_busy': 'Pane đang chạy một chương trình khác ngoài shell',
   'errors.partial_paste':

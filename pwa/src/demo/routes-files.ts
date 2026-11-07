@@ -1,4 +1,4 @@
-import type { FileEntry, SearchFile } from '../hooks/use-mux-api'
+import type { BlameRange, FileEntry, SearchFile } from '../hooks/use-mux-api'
 import { LAST_COMMIT } from './fixtures/changes'
 import { type DemoRequest, fail, type Handler, json, unsupported } from './http'
 import { diffHunks } from './line-diff'
@@ -391,6 +391,51 @@ const commitDiff = withRoot(({ state, query }, t) => {
   })
 })
 
+// Every committed line is the one commit's; a line the worktree added or
+// changed since is not committed
+const blame = withRoot(({ state, query }, t) => {
+  if (!t.isRepo) return fail(404, 'not_repo', 'not a git repository')
+  const path = changePath(t, query.get('path'))
+  if (path === null) return invalidPath()
+  const text = worktreeText(state, path)
+  if (text === undefined) return notFound()
+  if (query.get('hash') !== textHash(text))
+    return fail(409, 'file_changed', 'the file changed since it was read')
+  const head = state.head.get(path)
+  if (head === undefined)
+    return fail(404, 'not_tracked', 'the file is not in the last commit')
+  const added = new Set<number>()
+  for (const h of diffHunks(head, text))
+    for (const l of h.lines) if (l.kind === 'add') added.add(l.new as number)
+  const lines = text === '' ? 0 : text.replace(/\n$/, '').split('\n').length
+  const ranges: BlameRange[] = []
+  const uncommitted: BlameRange[] = []
+  for (let n = 1; n <= lines; n++) {
+    const list = added.has(n) ? uncommitted : ranges
+    const last = list[list.length - 1]
+    if (last && last.start + last.count === n) last.count++
+    else
+      list.push(
+        added.has(n)
+          ? { start: n, count: 1 }
+          : { start: n, count: 1, commit: LAST_COMMIT.hash },
+      )
+  }
+  const { author, time, message } = LAST_COMMIT
+  return json({
+    root: t.root,
+    path: clean(query.get('path')),
+    lines,
+    commits: ranges.length
+      ? {
+          [LAST_COMMIT.hash]: { author, time, summary: message.split('\n')[0] },
+        }
+      : {},
+    ranges,
+    uncommitted,
+  })
+})
+
 export const FILES_ROUTES: Record<string, Handler> = {
   'GET /files/places': () => json({ places: [] }),
   'GET /panes/{id}/files/tree': tree,
@@ -410,6 +455,7 @@ export const FILES_ROUTES: Record<string, Handler> = {
   'GET /panes/{id}/files/diff': diff,
   'GET /panes/{id}/files/commit': commit,
   'GET /panes/{id}/files/commit/diff': commitDiff,
+  'GET /panes/{id}/files/blame': blame,
   // The demo holds text files only, and nothing leaves the page
   'GET /panes/{id}/files/raw': () => fail(415, 'not_image', 'not an image'),
   'GET /panes/{id}/files/document': () =>

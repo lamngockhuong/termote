@@ -25,6 +25,7 @@ import {
   fetchAgentPrompt,
   fetchCommitDiff,
   fetchDevices,
+  fetchFileBlame,
   fetchFileContent,
   fetchFileDiff,
   fetchFileDocument,
@@ -1563,6 +1564,45 @@ describe('files API client', () => {
         { signal: ctl.signal },
       ],
     ])
+  })
+
+  it('reads the blame of the bytes shown, refusals as RequestError', async () => {
+    const body = {
+      root: '/r',
+      path: 'a',
+      lines: 0,
+      commits: {},
+      ranges: [],
+      uncommitted: [],
+    }
+    const spy = vi.fn(async () => Response.json(body))
+    vi.stubGlobal('fetch', spy)
+    const ctl = new AbortController()
+    expect(await fetchFileBlame({ paneId: '1' }, 'a', { hash: 'h' })).toEqual(
+      body,
+    )
+    await fetchFileBlame(
+      { paneId: '1', place: 'p' },
+      'd/b',
+      { hash: 'h', reveal: true, root: '/r' },
+      ctl.signal,
+    )
+    expect(spy.mock.calls).toEqual([
+      ['/api/mux/panes/1/files/blame?path=a&hash=h', { signal: undefined }],
+      [
+        '/api/mux/panes/1/files/blame?path=d%2Fb&hash=h&reveal=1&root=%2Fr&place=p',
+        { signal: ctl.signal },
+      ],
+    ])
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json({ error: 'x', code: 'not_tracked' }, { status: 404 }),
+      ),
+    )
+    await expect(
+      fetchFileBlame({ paneId: '1' }, 'a', { hash: 'h' }),
+    ).rejects.toMatchObject({ status: 404, code: 'not_tracked' })
   })
 
   it('reads a document as a blob', async () => {

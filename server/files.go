@@ -168,6 +168,7 @@ func registerFilesRoutes(mux *http.ServeMux, m Mux, allowed hostAllowlist, denyD
 	mux.HandleFunc("/api/mux/panes/{id}/files/diff", f.handleDiff)
 	mux.HandleFunc("/api/mux/panes/{id}/files/commit", f.handleCommit)
 	mux.HandleFunc("/api/mux/panes/{id}/files/commit/diff", f.handleCommitDiff)
+	mux.HandleFunc("/api/mux/panes/{id}/files/blame", f.handleBlame)
 	mux.HandleFunc("/api/mux/panes/{id}/files/raw", f.handleRaw)
 	mux.HandleFunc("/api/mux/panes/{id}/files/download", f.handleDownload)
 	mux.HandleFunc("/api/mux/panes/{id}/files/document", f.handleDocument)

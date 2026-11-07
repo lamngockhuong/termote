@@ -28,6 +28,7 @@ import {
   useState,
 } from 'react'
 import type { ViewProps } from '../app-views'
+import { useBlameOn } from '../hooks/use-file-blame'
 import {
   cancelUploads,
   confirmUpload,
@@ -370,6 +371,8 @@ function PaneFiles({
   }
   // The tab with unsaved changes the Discard box is open for
   const [closing, setClosing] = useState<string>()
+  // Blame turned on in one file stays on in the next, and after Changes
+  const [blameOn, setBlameOn] = useBlameOn()
   // The file a click in the tree just opened. The viewer takes the tree's
   // place under the pointer, so a double click's second click lands on the
   // viewer: a double click that soon pins the tab.
@@ -1190,6 +1193,9 @@ function PaneFiles({
               commenting ? (r) => review.open(tab.path, 'file', r) : undefined
             }
             commentedLines={commented}
+            canBlame={f.isRepo}
+            blameOn={blameOn}
+            onBlameChange={setBlameOn}
           />
         ) : root?.error ? (
           <ViewMessage>{t(ERRORS[root.error])}</ViewMessage>

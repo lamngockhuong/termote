@@ -10,11 +10,13 @@ import {
 import { useTheme } from '../contexts/theme-context'
 import { useLinePick } from '../hooks/use-line-pick'
 import { BLOCK_LINES, useLineWindow } from '../hooks/use-line-window'
+import type { FileBlame } from '../hooks/use-mux-api'
 import { formatNumber } from '../i18n/format'
 import { useT } from '../i18n/i18n-context'
 import { highlight, type Token } from '../utils/highlight'
 import { inPick, pickSpan, type TextLines } from '../utils/line-range'
 import { lineText } from '../utils/review-message'
+import { BlameCell, BlamePopover, blameWidth, lineOwners } from './blame-gutter'
 import { LineCommentBar, LineGutterButton } from './line-comment-bar'
 
 // The code frame shared by Files and Changes: a gutter of line numbers that
@@ -77,6 +79,17 @@ interface Props {
   onLineComment?: (lines: TextLines) => void
   // The lines a comment is on
   commentedLines?: Set<number>
+  // Who last changed each line: a column before the line numbers, left out
+  // (with a note) when git blamed another number of lines than are shown
+  blame?: BlameView
+}
+
+export interface BlameView {
+  data: FileBlame
+  // Initials instead of names: a narrow screen
+  compact: boolean
+  // Tells the user something (the hash copied)
+  notify: (msg: string) => void
 }
 
 // A text file with line numbers, highlighted once the worker answers; plain
@@ -90,6 +103,7 @@ export function CodeBlock({
   jump,
   onLineComment,
   commentedLines,
+  blame,
 }: Props) {
   const { resolvedTheme } = useTheme()
   const { t, locale } = useT()
@@ -157,6 +171,19 @@ export function CodeBlock({
     }
   }, [text, path, resolvedTheme])
 
+  // Blamed lines are the file's: none for an empty one, which still shows one
+  const blamed = blame?.data
+  const owners = useMemo(
+    () =>
+      blamed && blamed.lines === (text === '' ? 0 : all.length)
+        ? lineOwners(blamed)
+        : null,
+    [blamed, text, all],
+  )
+  const [opened, setOpened] = useState<{ hash: string; anchor: HTMLElement }>()
+  const openedCommit = opened && owners && blame?.data.commits[opened.hash]
+  const blameW = owners ? blameWidth(!!blame?.compact) : ''
+
   const gutter = `${String(lines.length).length + 1}ch`
   const span = pick && pickSpan(pick)
   // Unwrapped, the rows in the page are as wide as the widest line, not
@@ -178,33 +205,49 @@ export function CodeBlock({
         </span>
       ))
     }
+    const number = onLineComment ? (
+      <LineGutterButton
+        line={i + 1}
+        commented={!!commentedLines?.has(i + 1)}
+        onPress={(shift) => press(0, i + 1, shift)}
+      >
+        <span
+          className={`${GUTTER_CELL} text-fg-subtle`}
+          style={{ minWidth: gutter }}
+        >
+          {i + 1}
+        </span>
+      </LineGutterButton>
+    ) : (
+      <span
+        aria-hidden="true"
+        className={`${GUTTER} text-fg-subtle`}
+        style={{ minWidth: gutter }}
+      >
+        {i + 1}
+      </span>
+    )
     return (
       <div
         key={i}
         data-line={i + 1}
         className={`flex ${marked === i + 1 || inPick(pick, 0, i + 1) ? 'bg-accent/15' : 'bg-bg'}`}
       >
-        {onLineComment ? (
-          <LineGutterButton
-            line={i + 1}
-            commented={!!commentedLines?.has(i + 1)}
-            onPress={(shift) => press(0, i + 1, shift)}
-          >
-            <span
-              className={`${GUTTER_CELL} text-fg-subtle`}
-              style={{ minWidth: gutter }}
-            >
-              {i + 1}
-            </span>
-          </LineGutterButton>
+        {owners ? (
+          // One sticky box: the blame and the number stay put together
+          <div className="sticky left-0 z-[1] flex shrink-0 bg-inherit">
+            <BlameCell
+              owner={owners[i]}
+              first={i === 0 || owners[i - 1] !== owners[i]}
+              line={i + 1}
+              commit={blame?.data.commits[owners[i]]}
+              compact={!!blame?.compact}
+              onOpen={(hash, anchor) => setOpened({ hash, anchor })}
+            />
+            {number}
+          </div>
         ) : (
-          <span
-            aria-hidden="true"
-            className={`${GUTTER} text-fg-subtle`}
-            style={{ minWidth: gutter }}
-          >
-            {i + 1}
-          </span>
+          number
         )}
         <code className={codeText(wrap)}>{content || ' '}</code>
       </div>
@@ -225,6 +268,11 @@ export function CodeBlock({
   }
   return (
     <>
+      {blame && !owners && (
+        <p className="shrink-0 border-b border-border px-3 py-1 font-sans text-[12px] text-fg-subtle">
+          {t('files.blame.mismatch')}
+        </p>
+      )}
       <div
         ref={frame}
         className={CODE_FRAME}
@@ -239,7 +287,9 @@ export function CodeBlock({
           className={wrap ? '' : 'w-max min-w-full'}
           style={
             widest
-              ? { minWidth: `max(100%, calc(${gutter} + ${widest}ch + 2rem))` }
+              ? {
+                  minWidth: `max(100%, calc(${blameW || '0px'} + ${gutter} + ${widest}ch + 2rem))`,
+                }
               : undefined
           }
         >
@@ -273,6 +323,15 @@ export function CodeBlock({
             clear()
           }}
           onClear={clear}
+        />
+      )}
+      {opened && openedCommit && blame && (
+        <BlamePopover
+          hash={opened.hash}
+          commit={openedCommit}
+          anchor={opened.anchor}
+          notify={blame.notify}
+          onClose={() => setOpened(undefined)}
         />
       )}
     </>

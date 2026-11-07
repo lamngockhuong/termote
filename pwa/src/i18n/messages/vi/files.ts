@@ -759,6 +759,27 @@ export default {
   'files.commit.noMessage': '(không có thông điệp)',
   'files.commit.merge': 'Merge: thay đổi so với commit cha đầu tiên',
   'files.commit.backToCommit': 'Quay lại commit',
+  'files.blame.toggle': 'Blame',
+  'files.blame.toggleTitle': 'Hiện người sửa gần nhất của từng dòng',
+  'files.blame.notCommitted': 'Chưa commit',
+  'files.blame.cellLabel': '{author}, {age}: dòng {line}',
+  'files.blame.details': 'Chi tiết commit',
+  'files.blame.copyHash': 'Sao chép hash',
+  'files.blame.hashCopied': 'Đã sao chép hash',
+  'files.blame.hashCopyFailed': 'Không sao chép được hash',
+  'files.blame.mismatch':
+    'Đã ẩn blame: git đếm số dòng của file này khác với số dòng đang hiện (do bảng mã)',
+  'files.blame.loading': 'Đang đọc người sửa từng dòng…',
+  'files.blame.error.notRepo': 'Blame chỉ có trong repository git',
+  'files.blame.error.notTracked':
+    'File chưa có trong commit gần nhất nên chưa có gì để blame',
+  'files.blame.error.tooLarge': 'File quá lớn để blame (trên 1 MiB)',
+  'files.blame.error.timeout': 'git mất quá lâu để blame file này',
+  'files.blame.error.busy':
+    'git đang bận việc khác: tắt rồi bật lại Blame để thử lại',
+  'files.blame.error.changing':
+    'File liên tục thay đổi: tải lại file để xem người sửa từng dòng',
+  'files.blame.error.failed': 'Không đọc được người sửa từng dòng',
   'files.review.comment': 'Bình luận',
   'files.review.clearLines': 'Bỏ chọn các dòng',
   'files.review.gutterLine': 'Dòng {line}',
