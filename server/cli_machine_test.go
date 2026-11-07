@@ -300,18 +300,20 @@ func TestMachineAddInstallsTermote(t *testing.T) {
 		t.Errorf("saved: %+v", list)
 	}
 
-	// Already configured once installed: not started again. A checkout's
-	// version that is no release installs the latest one.
+	// A config left by an earlier install (uninstall without --purge):
+	// started all the same, since nothing runs. A checkout's version that
+	// is no release installs the latest one.
 	tc = machineCLI(t, "", nil)
 	tc.version = "dev"
 	cmds = nil
 	tc.run = &scriptedInteract{fakeRunner: tc.runner,
-		whereamis: []string{"TERMOTE-NOT-FOUND", testWhereami},
+		whereamis: []string{"TERMOTE-NOT-FOUND", testWhereami, testWhereami},
 		fn:        func(c string) error { cmds = append(cmds, c); return nil }}
 	if err := tc.cmdMachine([]string{"add", "box", "--yes"}); err != nil {
 		t.Fatal(err)
 	}
-	if len(cmds) != 2 || cmds[0] != remoteInstallScript("") || strings.Contains(cmds[0], "TERMOTE_VERSION") {
+	if len(cmds) != 3 || cmds[0] != remoteInstallScript("") || strings.Contains(cmds[0], "TERMOTE_VERSION") ||
+		cmds[1] != remoteExeScript("/home/u/.local/share/termote/current/bin/termote", "start") {
 		t.Errorf("commands: %q", cmds)
 	}
 }
