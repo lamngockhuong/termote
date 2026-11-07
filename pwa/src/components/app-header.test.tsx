@@ -136,7 +136,7 @@ describe('AppHeader — desktop', () => {
     const style = vi
       .spyOn(window, 'getComputedStyle')
       .mockImplementation((el) =>
-        el.getAttribute('draggable') !== null || el.classList.contains('group')
+        el.classList.contains('group')
           ? ({
               transitionDuration: '150ms',
               transitionDelay: '0s',

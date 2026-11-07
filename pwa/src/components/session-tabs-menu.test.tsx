@@ -215,7 +215,7 @@ describe('SessionTabs: a tab’s menu', () => {
       const field = screen.getByRole('textbox', { name: 'New name for Gamma' })
       expect(field).toHaveFocus()
       const wrapper = field.closest('.group') as HTMLElement
-      expect(wrapper).not.toHaveAttribute('draggable')
+      expect(wrapper).not.toHaveAttribute('data-movable')
       expect(fireEvent.contextMenu(wrapper)).toBe(true)
       expect(menu()).toBeNull()
     })

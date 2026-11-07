@@ -1,7 +1,7 @@
 import { Plus, X } from 'lucide-react'
 import {
-  type DragEvent,
   type KeyboardEvent,
+  type PointerEvent,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -13,7 +13,7 @@ import { useWheelScrollX } from '../hooks/use-wheel-scroll-x'
 import { useT } from '../i18n/i18n-context'
 import type { Session } from '../types/session'
 import { imeComposing } from '../utils/ime-composing'
-import { dropIndex, targetIndex } from '../utils/reorder'
+import { targetIndex } from '../utils/reorder'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { AgentStatusBadge } from './agent-status-badge'
 import { IconSheet } from './icon-picker'
@@ -75,18 +75,17 @@ function tabTitle(session: Session): string {
     .join('\n')
 }
 
-// Where a dragged tab would land: before or after the tab under the pointer
-interface DropTarget {
-  id: string
-  after: boolean
-}
+// How far (px) a pressed tab moves before it drags
+const DRAG_SLOP = 4
+// How long (ms) a dropped tab waits in its new place for the new order
+const HOLD_MS = 5000
 
 // Browser-style tabs in the desktop header row. A tab is a role="tab"
 // button; its close button is a sibling, never nested in it, and Add sits
 // outside the tablist. Arrow keys move focus between tabs; Enter or Space
 // switches, since every switch is a request to the backend; Delete closes the
 // focused tab, so the close buttons stay out of the tab order. With onMove,
-// a tab drags before or after another; a 2 px line shows where it lands.
+// a tab drags along the row, the others making room for it.
 // A new tab fades in; a closed one fades out, inert and out of the tab order
 // and of dragging, then the others close up.
 // A right click, Shift+F10 or the menu key opens a tab's menu: rename (F2,
@@ -140,12 +139,43 @@ export function SessionTabs({
     return () => ro.disconnect()
   }, [])
   const activeRef = useRef<HTMLButtonElement>(null)
-  // The tab being dragged, kept here: while dragging over a tab the browser
-  // shows only the data's types, never the data.
-  const dragged = useRef<string | null>(null)
-  const [dropTarget, setDropTarget] = useState<DropTarget | null>(null)
-  const { entries, ref } = usePresenceList(sessions, sessionId)
-  const isNew = useNewKeys(sessions.map(sessionId))
+  // Ends a drag in progress (its window listeners), also on unmount
+  const endDrag = useRef<(() => void) | null>(null)
+  // What a drag reads when it moves and lands: the tabs can change meanwhile
+  const latest = useRef({ sessions, onMove })
+  latest.current = { sessions, onMove }
+  useEffect(() => () => endDrag.current?.(), [])
+  // A dropped tab and the ones that made room stay where they were drawn
+  // until the server's new order arrives; then they are let go
+  const held = useRef<{ tabs: HTMLElement[]; timer: number } | null>(null)
+  const letGo = useRef((animate: boolean) => {
+    const h = held.current
+    if (!h) return
+    held.current = null
+    clearTimeout(h.timer)
+    for (const tab of h.tabs) {
+      // Drawn in its new place in this frame: no slide from the old one
+      if (!animate) tab.style.transition = 'none'
+      tab.style.translate = ''
+    }
+    if (animate) return
+    void scrollRef.current?.offsetWidth
+    for (const tab of h.tabs) tab.style.transition = ''
+  })
+  const order = sessions.map(lastingKey).join('\n')
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new order lets the tabs go
+  useLayoutEffect(() => letGo.current(false), [order])
+  // A move that ends without a new order (refused): the tabs slide back
+  const wasMoving = useRef(moving)
+  useEffect(() => {
+    if (wasMoving.current && !moving) letGo.current(true)
+    wasMoving.current = moving
+  }, [moving])
+  useEffect(() => () => letGo.current(false), [])
+  // By a tab's lasting key: a tmux move renumbers the windows, and a tab
+  // keyed by its id would fade out and in again
+  const { entries, ref } = usePresenceList(sessions, lastingKey)
+  const isNew = useNewKeys(sessions.map(lastingKey))
   // By a tab's lasting key: a tmux tab's id is its window number, which a
   // move renumbers
   const tabButtons = useRef(new Map<string, HTMLButtonElement>())
@@ -300,45 +330,135 @@ export function SessionTabs({
   const menuSession = menuAt === -1 ? undefined : sessions[menuAt]
   const iconSession = sessions.find((s) => s.id === iconFor)
 
-  // Drag and drop (desktop): the half of the tab under the pointer says
-  // before or after it.
+  // Dragging (desktop, a mouse or a pen), like a browser's tabs: the tab
+  // slides along the row only, held inside the strip, never over the page,
+  // and the others slide aside to make room where it would land. A press
+  // that moves less than DRAG_SLOP is still a click.
   const movable = !!onMove && sessions.length > 1
   const dragProps = (id: string) => {
     if (!movable) return {}
-    const isAfter = (e: DragEvent<HTMLElement>) => {
-      const box = e.currentTarget.getBoundingClientRect()
-      return e.clientX > box.left + box.width / 2
-    }
-    const end = () => {
-      dragged.current = null
-      setDropTarget(null)
-    }
     return {
-      draggable: true,
-      onDragStart: (e: DragEvent) => {
-        dragged.current = id
-        e.dataTransfer.effectAllowed = 'move'
-        e.dataTransfer.setData('text/x-termote-tab', id)
+      'data-movable': true,
+      onPointerDown: (e: PointerEvent<HTMLElement>) => {
+        if (
+          e.button !== 0 ||
+          e.pointerType === 'touch' ||
+          endDrag.current ||
+          held.current ||
+          moving
+        )
+          return
+        // The close button closes; it does not drag
+        if ((e.target as HTMLElement).closest('button:not([role="tab"])'))
+          return
+        startDrag(id, e.currentTarget, e.clientX)
       },
-      onDragOver: (e: DragEvent<HTMLElement>) => {
-        if (!dragged.current) return
-        e.preventDefault()
-        e.dataTransfer.dropEffect = 'move'
-        const after = isAfter(e)
-        if (dropTarget?.id !== id || dropTarget.after !== after) {
-          setDropTarget({ id, after })
-        }
-      },
-      onDrop: (e: DragEvent<HTMLElement>) => {
-        const from = dragged.current
-        if (!from) return
-        e.preventDefault()
-        const index = dropIndex(ids, from, id, isAfter(e))
-        if (index !== null) onMove(from, index)
-        end()
-      },
-      onDragEnd: end,
     }
+  }
+  const startDrag = (id: string, el: HTMLElement, startX: number) => {
+    const list = scrollRef.current!
+    // Set when the drag starts: the tabs still here, in the sessions'
+    // order, their boxes without any slide, and the room the dragged one
+    // takes (its width and the gap after it)
+    let tabs: HTMLElement[] = []
+    let boxes: DOMRect[] = []
+    let from = -1
+    let to = -1
+    let room = 0
+    const begin = () => {
+      tabs = [...list.children].filter(
+        (c): c is HTMLElement =>
+          c instanceof HTMLElement && !c.hasAttribute('data-leaving'),
+      )
+      boxes = tabs.map((t) => t.getBoundingClientRect())
+      from = tabs.indexOf(el)
+      to = from
+      room =
+        boxes[from].width +
+        (Number.parseFloat(getComputedStyle(list).columnGap) || 0)
+      el.setAttribute('data-dragging', 'true')
+      // A focus ring would follow the tab around
+      if (el.contains(document.activeElement))
+        (document.activeElement as HTMLElement).blur()
+    }
+    const onMoveEvent = (ev: globalThis.PointerEvent) => {
+      const dx = ev.clientX - startX
+      if (from === -1) {
+        if (Math.abs(dx) < DRAG_SLOP) return
+        begin()
+      }
+      const box = list.getBoundingClientRect()
+      const self = boxes[from]
+      const x = Math.min(
+        Math.max(dx, box.left - self.left),
+        box.right - self.right,
+      )
+      el.style.translate = `${x}px 0`
+      // Its place: past every tab whose middle its leading edge has crossed
+      // (at an end of the strip, past the tab there, whatever their widths)
+      const left = self.left + x
+      const right = self.right + x
+      to = boxes.filter((b, i) => {
+        const middle = b.left + b.width / 2
+        return i < from ? middle < left : i > from && middle <= right
+      }).length
+      tabs.forEach((tab, i) => {
+        if (i === from) return
+        const shift =
+          i > from && i <= to ? -room : i < from && i >= to ? room : 0
+        tab.style.translate = shift ? `${shift}px 0` : ''
+      })
+    }
+    const finish = (drop: boolean) => {
+      window.removeEventListener('pointermove', onMoveEvent)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onCancel)
+      window.removeEventListener('keydown', onKey, true)
+      endDrag.current = null
+      el.removeAttribute('data-dragging')
+      if (from === -1) return
+      // The click that ends a drag (fired in the same task as the release,
+      // when it is over the tab) does not select the tab
+      window.addEventListener('click', swallow, { capture: true, once: true })
+      setTimeout(() => window.removeEventListener('click', swallow, true))
+      const { sessions: now, onMove: move } = latest.current
+      // The tabs changed under the drag: their places no longer hold
+      const same = now.length === tabs.length && now[from]?.id === id && !!move
+      if (!drop || to === from || !same) {
+        for (const tab of tabs) tab.style.translate = ''
+        return
+      }
+      // Into its slot, the others still aside, until the new order
+      const slot =
+        to > from
+          ? boxes[to].right - boxes[from].right
+          : boxes[to].left - boxes[from].left
+      el.style.translate = `${slot}px 0`
+      held.current = {
+        tabs,
+        // In case no order and no end of a move ever comes
+        timer: window.setTimeout(() => letGo.current(true), HOLD_MS),
+      }
+      move(id, to)
+    }
+    const swallow = (c: MouseEvent) => {
+      c.stopPropagation()
+      c.preventDefault()
+    }
+    const onUp = () => finish(true)
+    const onCancel = () => finish(false)
+    // Escape puts the tab back
+    const onKey = (k: globalThis.KeyboardEvent) => {
+      if (k.key !== 'Escape' || from === -1) return
+      k.preventDefault()
+      k.stopPropagation()
+      finish(false)
+    }
+    window.addEventListener('pointermove', onMoveEvent)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onCancel)
+    window.addEventListener('keydown', onKey, true)
+    endDrag.current = () => finish(false)
   }
 
   return (
@@ -381,22 +501,12 @@ export function SessionTabs({
                 e.preventDefault()
                 openMenu(session.id, false)
               }}
-              className={`group relative flex h-9 shrink-0 items-center pr-1.5 text-[13px] transition-[color,background-color,border-color,opacity,translate,scale] duration-(--duration-fast) ease-standard motion-safe:active:scale-[0.98] ${isNew(key) ? ENTER_FROM : ''} ${leaving ? LEAVE_TO : ''} ${
+              className={`group relative flex h-9 shrink-0 items-center pr-1.5 text-[13px] transition-[color,background-color,border-color,opacity,translate,scale] duration-(--duration-fast) ease-standard motion-safe:active:scale-[0.98] data-dragging:z-20 data-dragging:transition-none ${isNew(key) ? ENTER_FROM : ''} ${leaving ? LEAVE_TO : ''} ${
                 looksActive
                   ? 'pointer-coarse:h-11 rounded-t-control border border-b-0 border-border bg-term text-fg shadow-sm ui-terminal:shadow-[inset_0_2px_0_var(--color-accent)] ui-native:rounded-t-panel ui-native:border-0'
-                  : 'mb-1 h-8 pointer-coarse:h-10 rounded-control text-fg-muted hover:bg-surface-raised hover:text-fg'
+                  : 'mb-1 h-8 pointer-coarse:h-10 rounded-control text-fg-muted hover:bg-surface-raised hover:text-fg data-dragging:bg-surface-raised data-dragging:text-fg'
               }`}
             >
-              {/* Inside the tab's edge: the scrolling tablist cuts off
-                  anything past its first and last tab */}
-              {dropTarget?.id === session.id && (
-                <span
-                  aria-hidden="true"
-                  className={`pointer-events-none absolute inset-y-1 z-10 w-0.5 rounded-full bg-accent ${
-                    dropTarget.after ? 'right-0' : 'left-0'
-                  }`}
-                />
-              )}
               {renaming === session.id ? (
                 <span className="flex h-full items-center gap-2 pl-3 pr-1">
                   <span className="text-base leading-none">{session.icon}</span>
@@ -423,8 +533,7 @@ export function SessionTabs({
                 <button
                   ref={(el) => {
                     if (active) activeRef.current = el
-                    // A tab fading out (a tmux window renumbered by a move
-                    // leaves its old id behind) is not the one to focus
+                    // A closed tab fading out is not the one to focus
                     if (leaving) return
                     if (el) tabButtons.current.set(lastingKey(session), el)
                     else tabButtons.current.delete(lastingKey(session))
@@ -436,7 +545,7 @@ export function SessionTabs({
                   onClick={() => onSelect(session.id)}
                   aria-keyshortcuts={keys.join(' ') || undefined}
                   title={tabTitle(session)}
-                  className={`flex h-full items-center gap-2 whitespace-nowrap rounded-control pl-3 pr-1 ${FOCUS_RING} focus-visible:-outline-offset-2`}
+                  className={`flex h-full select-none items-center gap-2 whitespace-nowrap rounded-control pl-3 pr-1 ${FOCUS_RING} focus-visible:-outline-offset-2`}
                 >
                   <span className="text-base leading-none">{session.icon}</span>
                   <span className="max-w-[140px] truncate ui-terminal:font-label">
@@ -572,5 +681,4 @@ export function SessionTabs({
   )
 }
 
-const sessionId = (s: Session) => s.id
 const lastingKey = (s: Session) => s.key ?? s.id
