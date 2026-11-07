@@ -108,6 +108,12 @@ export default {
   'files.new.permission': "The server can't create a file there",
   'files.new.maybeCreated': 'The file may have been created. Refresh to check.',
   'files.new.failed': 'Could not create the file',
+  'files.newFolder.askSensitive': 'Create this folder?',
+  'files.newFolder.notAllowed': "Folders can't be created there",
+  'files.newFolder.permission': "The server can't create a folder there",
+  'files.newFolder.maybeCreated':
+    'The folder may have been created. Refresh to check.',
+  'files.newFolder.failed': 'Could not create the folder',
   // Rename (components/rename-file-dialog.tsx)
   'files.rename.title': 'Rename',
   'files.rename.pathLabel':

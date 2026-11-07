@@ -103,6 +103,12 @@ export default {
   'files.new.permission': 'Server không có quyền tạo file ở đó',
   'files.new.maybeCreated': 'File có thể đã được tạo. Hãy làm mới để kiểm tra.',
   'files.new.failed': 'Không tạo được file',
+  'files.newFolder.askSensitive': 'Tạo thư mục này?',
+  'files.newFolder.notAllowed': 'Không tạo được thư mục ở đó',
+  'files.newFolder.permission': 'Server không có quyền tạo thư mục ở đó',
+  'files.newFolder.maybeCreated':
+    'Thư mục có thể đã được tạo. Hãy làm mới để kiểm tra.',
+  'files.newFolder.failed': 'Không tạo được thư mục',
   'files.rename.title': 'Đổi tên',
   'files.rename.pathLabel':
     'Đường dẫn mới tính từ thư mục của pane. Đổi thư mục để chuyển file đi; thư mục nào chưa có sẽ được tạo.',

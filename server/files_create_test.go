@@ -355,3 +355,81 @@ func TestCreateError(t *testing.T) {
 		}
 	}
 }
+
+func TestFilesCreateDir(t *testing.T) {
+	fx := newFilesFixture(t)
+	isEmptyDir := func(rel string) {
+		t.Helper()
+		entries, err := os.ReadDir(filepath.Join(fx.root, filepath.FromSlash(rel)))
+		if err != nil || len(entries) != 0 {
+			t.Errorf("%s = %v %v", rel, entries, err)
+		}
+	}
+	code, body := fx.create(t, fx.root, map[string]any{"path": "docs", "dir": true})
+	if code != http.StatusCreated || body["root"] != fx.root || body["path"] != "docs" {
+		t.Fatalf("create = %d %v", code, body)
+	}
+	isEmptyDir("docs")
+	// The missing directories above it are made, and an existing one taken.
+	if code, body := fx.create(t, fx.root, map[string]any{"path": "a/b/c", "dir": true}); code != http.StatusCreated || body["path"] != "a/b/c" {
+		t.Errorf("nested = %d %v", code, body)
+	}
+	isEmptyDir("a/b/c")
+	if code, body := fx.create(t, fx.root, map[string]any{"path": "sub/new", "dir": true}); code != http.StatusCreated {
+		t.Errorf("sub/new = %d %v", code, body)
+	}
+	// A taken name, a file's or a directory's, is reported and left alone.
+	for _, rel := range []string{"a.txt", "sub", "docs"} {
+		code, got := fx.create(t, fx.root, map[string]any{"path": rel, "dir": true})
+		if code != http.StatusConflict || got["code"] != "exists" || got["path"] != rel {
+			t.Errorf("%s = %d %v", rel, code, got)
+		}
+	}
+	if readText(t, filepath.Join(fx.root, "a.txt")) != "hello\n" {
+		t.Error("a.txt replaced")
+	}
+	// The same checks as a file's
+	for rel, want := range map[string]string{
+		".git/hooks2":                        "not_allowed",
+		"conf/secrets.d":                     "sensitive",
+		"x.":                                 "invalid_name",
+		"../out":                             "invalid_name",
+		"a.txt/inside":                       "not_directory",
+		strings.Repeat("n", createMaxName+1): "invalid_name",
+	} {
+		code, got := fx.create(t, fx.root, map[string]any{"path": rel, "dir": true})
+		if code < 400 || got["code"] != want {
+			t.Errorf("%s = %d %v, want %s", rel, code, got, want)
+		}
+	}
+	notExist(t, filepath.Join(fx.root, "conf"))
+	// With reveal, a sensitive name is made
+	if code, got := fx.create(t, fx.root, map[string]any{"path": "conf/secrets.d", "dir": true, "reveal": true}); code != http.StatusCreated {
+		t.Errorf("reveal = %d %v", code, got)
+	}
+}
+
+func TestFilesCreateDirThroughSymlink(t *testing.T) {
+	fx := newFilesFixture(t)
+	out := t.TempDir()
+	if err := os.Symlink(out, filepath.Join(fx.root, "out")); err != nil {
+		t.Skip("no symlinks here:", err)
+	}
+	code, got := fx.create(t, fx.root, map[string]any{"path": "out/new", "dir": true})
+	if code != http.StatusForbidden || got["code"] != "symlink" {
+		t.Errorf("through a link = %d %v", code, got)
+	}
+	notExist(t, filepath.Join(out, "new"))
+}
+
+func TestFilesCreateDirViewOnly(t *testing.T) {
+	fx := newFilesFixture(t)
+	mux := http.NewServeMux()
+	registerFilesRoutes(mux, &filesFakeMux{dir: fx.root, files: true}, hostAllowlist{}, nil)
+	path := "/api/mux/panes/0/files/create?root=" + url.QueryEscape(fx.root)
+	rec := serve(mux, asView(apiRequest("POST", path, `{"path":"v","dir":true}`)))
+	if code, key := rawCode(t, rec); code != http.StatusForbidden || key != "view_only" {
+		t.Errorf("view-only = %d %s", code, key)
+	}
+	notExist(t, filepath.Join(fx.root, "v"))
+}

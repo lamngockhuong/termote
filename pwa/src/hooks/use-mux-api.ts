@@ -1534,7 +1534,8 @@ export interface CreatedFile {
 // not have been made.
 export async function createFile(
   target: FilesTarget,
-  create: { root: string; path: string; reveal: boolean },
+  // dir: an empty directory instead of a file
+  create: { root: string; path: string; reveal: boolean; dir?: boolean },
 ): Promise<CreatedFile> {
   const { root, ...body } = create
   const res = await fetch(filesUrl(target, 'create', { root }), {

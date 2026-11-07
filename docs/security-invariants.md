@@ -1306,11 +1306,12 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   and equals this one, else it opens a new window. A stream closed with 4001 (evicted) shows
   `Disconnected by a newer window` and reconnects only when asked, each pane of Herdr's layout
   view on its own
-- **Creating a file** (`POST files/create?root=`, `server/files_create.go`): an empty file and
-  the directories missing above it (0666/0777 under the umask; directories made before a later
+- **Creating a file** (`POST files/create?root=`, `server/files_create.go`): an empty file (an
+  empty directory with `dir: true`: New folder of the Files menus) and the directories missing
+  above it (0666/0777 under the umask; directories made before a later
   failure stay, as with `mkdir -p`); the text then goes through `PUT files/content`. Same guards
   as a save (`writeGuard`, the handler's cross-site check, `requireWriteRole`, `root` required:
-  400, 409 once it moved); the body (`{path, reveal}`, 8 KB) is read first, and its read deadline
+  400, 409 once it moved); the body (`{path, reveal, dir}`, 8 KB) is read first, and its read deadline
   stays 60s; 201 `{root, path}`. The name is checked
   before the disk is touched (400 `invalid_name`): no empty component, at most 32 components and
   1024 bytes, 255 a component, none ending in a dot or a space, no control character, no
@@ -1328,7 +1329,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `storage_full` (as uploads); each directory is
   checked against the deny lists again once it exists, before anything is made inside it (an 8.3
   name or a junction is only caught there). The file is opened `O_CREATE|O_EXCL` on its parent's
-  handle: anything there, a dangling symlink included → 409 `exists` with the cleaned `path`
+  handle, a directory made with `Mkdir` on it, after every check above (a `dir` create skips
+  none): anything there, a dangling symlink included → 409 `exists` with the cleaned `path`
   (`/`-separated; Open it opens that), never replaced. A reply after the box was closed opens
   nothing, the tree is only read again. A create
   drops the root's cached git status. Accepted risk: a new file can be one another tool trusts

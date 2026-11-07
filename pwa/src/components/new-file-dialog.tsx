@@ -7,7 +7,12 @@ import { Button } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
 import { Sheet } from './ui/sheet'
 
-// Why the server would not create the file, by its code
+// Why the server would not create the file, by its code; a folder's own
+// wording where a file's would be wrong
+const FOLDER_REFUSED: Record<string, MessageKey> = {
+  not_allowed: 'files.newFolder.notAllowed',
+  permission: 'files.newFolder.permission',
+}
 const REFUSED: Record<string, MessageKey> = {
   not_directory: 'files.new.notDirectory',
   symlink: 'files.refused.symlink',
@@ -38,11 +43,13 @@ interface Props {
   onCreated: (path: string, root: string, reveal: boolean) => void
   onRootChanged: (root: string) => void
   onRefresh: () => void
+  // What is made: a file (the default) or an empty folder
+  kind?: 'file' | 'dir'
 }
 
-// Asks for the path of a new file under the pane's root and creates it,
-// empty. A name that usually holds secrets is created only after a second
-// ask.
+// Asks for the path of a new file (or folder) under the pane's root and
+// creates it, empty. A name that usually holds secrets is created only after
+// a second ask.
 export function NewFileDialog({
   paneId,
   place,
@@ -52,8 +59,10 @@ export function NewFileDialog({
   onCreated,
   onRootChanged,
   onRefresh,
+  kind = 'file',
 }: Props) {
   const { t } = useT()
+  const folder = kind === 'dir'
   const [path, setPath] = useState(initialPath)
   const [sending, setSending] = useState(false)
   const [problem, setProblem] = useState<Problem>()
@@ -85,7 +94,10 @@ export function NewFileDialog({
     setSending(true)
     setProblem(undefined)
     try {
-      const res = await createFile({ paneId, place }, { root, path, reveal })
+      const res = await createFile(
+        { paneId, place },
+        { root, path, reveal, dir: folder || undefined },
+      )
       // Closed meanwhile: the file is there, so the tree shows it, but it
       // is not opened
       if (closed.current) {
@@ -103,7 +115,9 @@ export function NewFileDialog({
         // Lost on the way back, perhaps after the file was made: never
         // guessed from the tree, where an agent may have made one too
         setProblem({
-          message: t('files.new.maybeCreated'),
+          message: t(
+            folder ? 'files.newFolder.maybeCreated' : 'files.new.maybeCreated',
+          ),
           action: { kind: 'refresh' },
         })
       } else if (err.status === 409 && err.root) {
@@ -120,7 +134,11 @@ export function NewFileDialog({
         })
       } else {
         setProblem({
-          message: t(REFUSED[err.code] ?? 'files.new.failed'),
+          message: t(
+            (folder && FOLDER_REFUSED[err.code]) ||
+              REFUSED[err.code] ||
+              (folder ? 'files.newFolder.failed' : 'files.new.failed'),
+          ),
         })
       }
     } finally {
@@ -142,7 +160,7 @@ export function NewFileDialog({
       <Sheet
         isOpen
         onClose={close}
-        title={t('files.new.title')}
+        title={t(folder ? 'files.actions.newFolder' : 'files.new.title')}
         focusOnOpen={focusOnOpen}
       >
         <form onSubmit={submit} className="flex flex-col gap-3 p-4">
@@ -155,7 +173,7 @@ export function NewFileDialog({
             type="text"
             value={path}
             // i18n-ignore: a path, the same in every language
-            placeholder="docs/notes.md"
+            placeholder={folder ? 'docs/notes' : 'docs/notes.md'}
             spellCheck={false}
             autoCapitalize="off"
             autoCorrect="off"
@@ -203,7 +221,9 @@ export function NewFileDialog({
       </Sheet>
       <ConfirmDialog
         isOpen={ask === 'sensitive'}
-        title={t('files.new.askSensitive')}
+        title={t(
+          folder ? 'files.newFolder.askSensitive' : 'files.new.askSensitive',
+        )}
         confirmLabel={t('files.new.create')}
         onConfirm={() => {
           setAsk(undefined)
