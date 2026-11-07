@@ -220,6 +220,32 @@ describe('SessionTabs: a tab’s menu', () => {
       expect(menu()).toBeNull()
     })
 
+    it('the tab gets its focus ring back after Enter only when the rename began from the keyboard', () => {
+      const focus = vi.spyOn(HTMLElement.prototype, 'focus')
+      const save = () => {
+        const field = screen.getByRole('textbox')
+        fireEvent.change(field, { target: { value: 'Other' } })
+        focus.mockClear()
+        fireEvent.keyDown(field, { key: 'Enter' })
+      }
+      render(<SessionTabs {...props()} />)
+      // A click on Rename: the Enter that saves is a key, yet no ring
+      fireEvent.contextMenu(tabOf('Gamma'))
+      fireEvent.click(item(/Rename/), { detail: 1 })
+      save()
+      expect(tabOf('Gamma')).toHaveFocus()
+      expect(focus).toHaveBeenCalledWith({ focusVisible: false })
+      // Rename chosen with Enter, or F2: the ring shows
+      fireEvent.contextMenu(tabOf('Gamma'))
+      fireEvent.click(item(/Rename/), { detail: 0 })
+      save()
+      expect(focus).toHaveBeenCalledWith({ focusVisible: true })
+      keyOn(tabOf('Alpha'), 'F2')
+      save()
+      expect(tabOf('Alpha')).toHaveFocus()
+      expect(focus).toHaveBeenCalledWith({ focusVisible: true })
+    })
+
     it('a backend that keeps its tab names: Rename says why it is off, F2 does nothing', () => {
       render(<SessionTabs {...props()} renameTab={false} />)
       keyOn(tabOf('Alpha'), 'F2')

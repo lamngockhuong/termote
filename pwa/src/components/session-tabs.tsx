@@ -194,15 +194,18 @@ export function SessionTabs({
   // A tab moved by its keys, or renamed, takes the focus back once it is
   // drawn in its place: moving the focused node in the DOM drops its focus
   const refocus = useRef<string | null>(null)
+  const refocusRing = useRef(true)
   // Only when the focus was lost: one taken elsewhere meanwhile (a click in
   // the terminal during a slow move) stays there
   useEffect(() => {
     const key = refocus.current
     if (!key || renaming || moving) return
     refocus.current = null
+    const ring = refocusRing.current
+    refocusRing.current = true
     const now = document.activeElement
     if (now !== document.body && !scrollRef.current!.contains(now)) return
-    tabButtons.current.get(key)?.focus()
+    tabButtons.current.get(key)?.focus({ focusVisible: ring })
   })
 
   const canRename = !!onUpdate && renameTab
@@ -215,7 +218,12 @@ export function SessionTabs({
     )!
     setMenu({ id, byKey })
   }
-  const startRename = (session: Session) => {
+  // The tab renamed gets the focus back with a ring only when the rename
+  // was started from the keyboard: the Enter that saves it is a key, so a
+  // rename started with a pointer would ring the tab too
+  const renameByKey = useRef(false)
+  const startRename = (session: Session, byKey: boolean) => {
+    renameByKey.current = byKey
     setDraft(session.name)
     setRenaming(session.id)
   }
@@ -225,6 +233,7 @@ export function SessionTabs({
     const name = draft.trim()
     if (save && name && name !== session.name) onUpdate!(session.id, { name })
     refocus.current = lastingKey(session)
+    refocusRing.current = renameByKey.current
     setRenaming(null)
   }
   const step = (id: string, delta: -1 | 1) => {
@@ -289,7 +298,7 @@ export function SessionTabs({
     if (e.key === 'F2') {
       if (!canRename) return
       e.preventDefault()
-      startRename(sessions[at])
+      startRename(sessions[at], true)
       return
     }
     // N, the key where it is on any layout: a new tab with a name. Only on
@@ -622,7 +631,7 @@ export function SessionTabs({
                 title={renameTab ? undefined : t('shell.sidebar.tabNameFixed')}
                 // i18n-ignore: a key's name
                 shortcut={{ label: 'F2', aria: 'F2' }}
-                onSelect={() => startRename(menuSession)}
+                onSelect={(e) => startRename(menuSession, e.byKey)}
               >
                 {t('shell.tabs.rename')}
               </MenuItem>
