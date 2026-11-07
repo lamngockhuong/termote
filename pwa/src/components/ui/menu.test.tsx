@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   Menu,
@@ -8,6 +8,7 @@ import {
   MenuItemRadio,
   MenuSeparator,
   placeMenu,
+  placeMenuAtPoint,
 } from './menu'
 import { SegmentedControl } from './segmented-control'
 
@@ -456,6 +457,37 @@ describe('placeMenu', () => {
   })
 })
 
+describe('placeMenuAtPoint', () => {
+  const view = { width: 1000, top: 0, height: 800 }
+  const menu = { width: 256, height: 200 }
+
+  it('opens with its corner at the point', () => {
+    expect(placeMenuAtPoint({ x: 100, y: 100 }, menu, view)).toEqual({
+      left: 100,
+      top: 100,
+      maxHeight: undefined,
+    })
+  })
+
+  it('flips left of the point at the right edge, and above at the bottom', () => {
+    expect(placeMenuAtPoint({ x: 900, y: 100 }, menu, view).left).toBe(644)
+    expect(placeMenuAtPoint({ x: 100, y: 700 }, menu, view).top).toBe(500)
+    expect(placeMenuAtPoint({ x: 900, y: 700 }, menu, view)).toEqual({
+      left: 644,
+      top: 500,
+      maxHeight: undefined,
+    })
+  })
+
+  it('stays on a screen narrower than the menu, and caps its height', () => {
+    const narrow = { width: 200, top: 0, height: 800 }
+    expect(placeMenuAtPoint({ x: 150, y: 10 }, menu, narrow).left).toBe(8)
+    expect(
+      placeMenuAtPoint({ x: 10, y: 10 }, { width: 256, height: 900 }, view),
+    ).toEqual({ left: 10, top: 10, maxHeight: 782 })
+  })
+})
+
 describe('Menu in the top layer', () => {
   const show = vi.fn()
   beforeEach(() => {
@@ -599,6 +631,61 @@ describe('Menu in the top layer', () => {
     fireEvent.scroll(screen.getByTestId('list'))
     expect(menu()).toBeInTheDocument()
     expect(menu()!.style.left).toBe('40px')
+  })
+
+  it('opens at a point, moves to a new one, and gives focus to its trigger', () => {
+    vi.spyOn(document.documentElement, 'clientWidth', 'get').mockReturnValue(
+      1000,
+    )
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(800)
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(256)
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(200)
+    function AtPoint({ point }: { point: { x: number; y: number } | null }) {
+      const [open, setOpen] = useState(true)
+      return (
+        <div data-testid="list">
+          <Menu
+            label="More"
+            trigger="⋯"
+            open={open}
+            onOpenChange={setOpen}
+            point={point}
+          >
+            <MenuItem>Rename</MenuItem>
+          </Menu>
+        </div>
+      )
+    }
+    const { rerender } = render(<AtPoint point={{ x: 900, y: 700 }} />)
+    expect(menu()!.style.left).toBe('644px')
+    expect(menu()!.style.top).toBe('500px')
+    rerender(<AtPoint point={{ x: 50, y: 60 }} />)
+    expect(menu()!.style.left).toBe('50px')
+    expect(menu()!.style.top).toBe('60px')
+    // The trigger is still drawn and takes the focus back
+    fireEvent.keyDown(menu()!, { key: 'Escape' })
+    expect(menu()).toBeNull()
+    expect(trigger()).toHaveFocus()
+  })
+
+  it('at a point, closes when the list holding its trigger scrolls', () => {
+    const onOpenChange = vi.fn()
+    render(
+      <div data-testid="list">
+        <Menu
+          label="More"
+          trigger="⋯"
+          open
+          onOpenChange={onOpenChange}
+          point={{ x: 5, y: 5 }}
+        >
+          <MenuItem>Rename</MenuItem>
+        </Menu>
+      </div>,
+    )
+    // A point does not follow the row it was on
+    fireEvent.scroll(screen.getByTestId('list'))
+    expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 
   it('caps its height when neither side holds it, and scrolls inside', () => {

@@ -78,6 +78,35 @@ export function placeMenu(
   return { left, top: view.top + MENU_MARGIN, maxHeight: above }
 }
 
+// A context menu opened at the pointer: its top left corner at the point,
+// flipped to the left of it or above it where the screen has no room, and
+// capped in height on the roomier side when neither holds it (placeMenu).
+export function placeMenuAtPoint(
+  point: { x: number; y: number },
+  menu: { width: number; height: number },
+  view: { width: number; top: number; height: number },
+) {
+  const at = placeMenu(
+    {
+      left: point.x,
+      right: point.x,
+      top: point.y + MENU_GAP,
+      bottom: point.y - MENU_GAP,
+    } as DOMRect,
+    menu,
+    'start',
+    view,
+  )
+  const left =
+    point.x + menu.width <= view.width - MENU_MARGIN
+      ? point.x
+      : Math.max(
+          MENU_MARGIN,
+          Math.min(point.x - menu.width, view.width - MENU_MARGIN - menu.width),
+        )
+  return { ...at, left }
+}
+
 // Where the menu opens from its trigger: under it, or to its left
 export type MenuSide = 'below' | 'left'
 
@@ -112,6 +141,10 @@ interface MenuProps {
   anchorRef?: RefObject<HTMLElement | null>
   // Opened from the keyboard (Shift+F10): its first item takes focus
   focusFirst?: boolean
+  // Right clicked: placed at this point of the viewport rather than by its
+  // trigger, which stays and takes the focus back. A new point while open
+  // moves it there.
+  point?: { x: number; y: number } | null
 }
 
 // menuitem and menuitemradio
@@ -142,6 +175,7 @@ export function Menu({
   tourAnchor,
   anchorRef,
   focusFirst = false,
+  point = null,
 }: MenuProps) {
   const [ownOpen, setOwnOpen] = useState(false)
   const isOpen = open ?? ownOpen
@@ -199,17 +233,15 @@ export function Menu({
   const placeInViewport = () => {
     const list = listRef.current!
     const vv = window.visualViewport
-    const at = placeMenu(
-      anchor()!.getBoundingClientRect(),
-      { width: list.offsetWidth, height: list.offsetHeight },
-      align,
-      {
-        width: document.documentElement.clientWidth,
-        top: vv?.offsetTop ?? 0,
-        height: vv?.height ?? window.innerHeight,
-      },
-      side,
-    )
+    const size = { width: list.offsetWidth, height: list.offsetHeight }
+    const view = {
+      width: document.documentElement.clientWidth,
+      top: vv?.offsetTop ?? 0,
+      height: vv?.height ?? window.innerHeight,
+    }
+    const at = point
+      ? placeMenuAtPoint(point, size, view)
+      : placeMenu(anchor()!.getBoundingClientRect(), size, align, view, side)
     list.style.left = `${at.left}px`
     list.style.top = `${at.top}px`
     list.style.maxHeight = at.maxHeight === undefined ? '' : `${at.maxHeight}px`
@@ -231,6 +263,13 @@ export function Menu({
     if (rect.left < MENU_MARGIN) setShift(MENU_MARGIN - rect.left)
     else if (rect.right > edge) setShift(edge - rect.right)
   }, [isOpen, inTopLayer])
+  // Right clicked again elsewhere while open: moved there, not closed
+  const pointX = point?.x
+  const pointY = point?.y
+  useLayoutEffect(() => {
+    if (isOpen && inTopLayer && pointX !== undefined && pointY !== undefined)
+      placeRef.current()
+  }, [isOpen, inTopLayer, pointX, pointY])
   // Kept while it fades out, so it leaves from where it was
   useLayoutEffect(() => {
     if (!mounted) setShift(0)
