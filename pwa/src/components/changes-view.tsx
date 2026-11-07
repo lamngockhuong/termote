@@ -923,6 +923,12 @@ function PaneChanges({
                       rowMenuAnchor.current = button
                       setRowMenu({ item: it, point, byKey, open: true })
                     }}
+                    menuOpen={
+                      !!rowMenu?.open &&
+                      rowMenu.item.staged === it.staged &&
+                      rowMenu.item.entry.path === it.entry.path &&
+                      rowMenu.item.entry.orig === it.entry.orig
+                    }
                   />
                 </li>
               ))}
@@ -1050,10 +1056,13 @@ function ChangeRow({
   onOpen,
   actions,
   onMenu,
+  menuOpen,
 }: {
   item: Item
   onOpen: () => void
   actions: ReactNode
+  // Its menu is open: the row shows which one it acts on
+  menuOpen: boolean
   onMenu: (
     button: HTMLElement,
     point: { x: number; y: number } | null,
@@ -1079,7 +1088,9 @@ function ChangeRow({
         e.preventDefault()
         onMenu(button(), null, true)
       }}
-      className="group flex items-center [-webkit-touch-callout:none] pointer-coarse:select-none hover:bg-surface"
+      // The row the open menu acts on stays marked
+      data-menu-open={menuOpen || undefined}
+      className={`group flex items-center [-webkit-touch-callout:none] pointer-coarse:select-none ${menuOpen ? 'bg-accent/15' : 'hover:bg-surface'}`}
     >
       <ChangeRowButton
         code={code}

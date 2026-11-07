@@ -338,13 +338,15 @@ export function FileTabBar({
               key={tab.id}
               role="presentation"
               data-tab={tab.id}
+              // The tab the open menu acts on stays marked
+              data-menu-open={(menu?.open && menu.id === tab.id) || undefined}
               {...(menuFor && press)}
               onPointerDown={(e) => {
                 pressed.current = tab.id
                 if (menuFor) press.onPointerDown(e)
                 onPointerDown(e, tab.id)
               }}
-              className={`group relative flex shrink-0 items-center border-r border-border data-dragging:z-10 data-dragging:bg-surface-raised data-dragging:text-fg data-dragging:shadow-sm ${movable ? 'transition-[translate] duration-(--duration-fast) ease-standard data-dragging:transition-none' : ''} ${shown ? 'bg-bg text-fg' : 'text-fg-muted hover:text-fg'}`}
+              className={`group relative flex shrink-0 items-center border-r border-border data-dragging:z-10 data-dragging:bg-surface-raised data-dragging:text-fg data-dragging:shadow-sm data-menu-open:bg-accent/15 ${movable ? 'transition-[translate] duration-(--duration-fast) ease-standard data-dragging:transition-none' : ''} ${shown ? 'bg-bg text-fg' : 'text-fg-muted hover:text-fg'}`}
             >
               <button
                 ref={ref(tab.id)}

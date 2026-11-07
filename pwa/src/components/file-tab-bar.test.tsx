@@ -419,6 +419,11 @@ describe('FileTabBar menu', () => {
     expect(ev.defaultPrevented).toBe(true)
     expect(screen.getByRole('menu', { name: 'Actions for b.md' }))
     expect(screen.getByRole('menuitem', { name: 'Item of b' }))
+    // The tab the menu acts on is marked, no other, until it closes
+    expect(tabBox('b.md')).toHaveAttribute('data-menu-open', 'true')
+    expect(tabBox('a.md')).not.toHaveAttribute('data-menu-open')
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+    expect(tabBox('b.md')).not.toHaveAttribute('data-menu-open')
     expect(tab(/^b\.md/)).toHaveAttribute(
       'aria-keyshortcuts',
       'Delete Alt+ArrowLeft Alt+ArrowRight Shift+F10',

@@ -1818,5 +1818,11 @@ describe('ChangesView row menu', () => {
     ])
     // A finger's press never selects the row's text (iOS)
     expect(row('Changes', 'both.ts')).toHaveClass('pointer-coarse:select-none')
+    // The side the menu acts on is marked, not the same file's other side
+    expect(row('Changes', 'both.ts')).toHaveAttribute('data-menu-open', 'true')
+    expect(row('Changes', 'both.ts')).toHaveClass('bg-accent/15')
+    expect(row('Staged', 'both.ts')).not.toHaveAttribute('data-menu-open')
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+    expect(row('Changes', 'both.ts')).not.toHaveAttribute('data-menu-open')
   })
 })

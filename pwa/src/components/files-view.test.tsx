@@ -1706,6 +1706,13 @@ describe('FilesView rename', () => {
     expect(screen.queryByRole('menuitem', { name: 'Rename' })).toBeNull()
     // A finger's press never selects the row's text (iOS) on a touch screen
     expect(item('README.md')).toHaveClass('pointer-coarse:select-none')
+    // The row the menu acts on is marked, no other, until it closes
+    expect(item('README.md')).toHaveAttribute('data-menu-open', 'true')
+    expect(item('README.md')).toHaveClass('bg-accent/15')
+    expect(item('src')).not.toHaveAttribute('data-menu-open')
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+    expect(item('README.md')).not.toHaveAttribute('data-menu-open')
+    expect(item('README.md')).toHaveClass('hover:bg-surface')
     cleanup()
     await show()
     fireEvent.click(

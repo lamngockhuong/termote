@@ -1746,9 +1746,12 @@ function TreeItem({
       tabIndex={tabbable ? 0 : -1}
       // Where a drop on the row goes is worked out from it (dropFolder)
       data-path={row.path}
+      // The row the open menu acts on stays marked (a long press shows the
+      // menu over other rows: no Delete on the wrong one)
+      data-menu-open={menu?.open || undefined}
       onClick={onClick}
       {...press}
-      className={`group flex min-h-9 [-webkit-touch-callout:none] pointer-coarse:select-none cursor-default items-center gap-1.5 pr-1 text-[13px] hover:bg-surface pointer-coarse:min-h-touch ${entering ? `transition-[opacity,translate] duration-(--duration-base) ease-standard ${ENTER_FROM}` : ''} ${dropTarget ? 'bg-accent/10 ring-1 ring-accent ring-inset' : ''} ${FOCUS_RING} focus-visible:-outline-offset-2 ${can ? 'text-fg' : 'text-fg-subtle'}`}
+      className={`group flex min-h-9 [-webkit-touch-callout:none] pointer-coarse:select-none cursor-default items-center gap-1.5 pr-1 text-[13px] ${menu?.open ? 'bg-accent/15' : 'hover:bg-surface'} pointer-coarse:min-h-touch ${entering ? `transition-[opacity,translate] duration-(--duration-base) ease-standard ${ENTER_FROM}` : ''} ${dropTarget ? 'bg-accent/10 ring-1 ring-accent ring-inset' : ''} ${FOCUS_RING} focus-visible:-outline-offset-2 ${can ? 'text-fg' : 'text-fg-subtle'}`}
       style={{ paddingLeft: `${(level - 1) * 16 + 8}px` }}
     >
       <ChevronRight
