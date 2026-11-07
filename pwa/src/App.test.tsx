@@ -4907,6 +4907,56 @@ describe('App views, view-only and deep links', () => {
       return probe.current!
     }
 
+    it('insertText types at the agent and shows the terminal, focused on a desktop', async () => {
+      const paste = vi.fn(() => true)
+      const focus = mockFocusTerminal
+      focus.mockClear()
+      terminalHandle = { paste }
+      // The focus waits for the next frame
+      const frame = () => act(() => new Promise((r) => setTimeout(r, 50)))
+      try {
+        const props = await open()
+        let typed = false
+        act(() => {
+          typed = props.insertText!('@src/a.ts')
+        })
+        expect(typed).toBe(true)
+        expect(paste).toHaveBeenCalledWith('@src/a.ts ')
+        expect(screen.queryByTestId('probe-main')).toBeNull()
+        await frame()
+        expect(focus).toHaveBeenCalledWith(terminalHandle)
+        // A phone: the terminal shows, its keyboard stays down
+        cleanup()
+        focus.mockClear()
+        const views = [...APP_VIEWS, PROBE]
+        const view = render(<App views={views} />)
+        fireEvent.click(await screen.findByRole('tab', { name: 'Probe' }))
+        mockIsMobile.mockReturnValue(true)
+        view.rerender(<App views={views} />)
+        expect(probe.current!.isMobile).toBe(true)
+        act(() => {
+          probe.current!.insertText!('@b')
+        })
+        await frame()
+        expect(paste).toHaveBeenLastCalledWith('@b ')
+        expect(screen.queryByTestId('probe-main')).toBeNull()
+        expect(focus).not.toHaveBeenCalled()
+      } finally {
+        terminalHandle = null
+        mockIsMobile.mockReturnValue(false)
+      }
+    })
+
+    it('insertText says when nothing went out, and a view-only device gets none', async () => {
+      const props = await open()
+      expect(props.insertText!('@a')).toBe(false)
+      expect(screen.getByTestId('probe-main')).toBeInTheDocument()
+      cleanup()
+      render(<App readOnly views={[...APP_VIEWS, PROBE]} />)
+      fireEvent.click(await screen.findByRole('tab', { name: 'Probe' }))
+      expect(probe.current!.insertText).toBeUndefined()
+    })
+
     it('a view gets the tabs and a way to read them again', async () => {
       const props = await open()
       const mux = mockUseLocalSessions()
