@@ -30,6 +30,7 @@ const { FakeTerminal, FakeFit } = vi.hoisted(() => {
       theme: unknown
       disableStdin?: boolean
       linkHandler?: { activate: (event: MouseEvent, uri: string) => void }
+      overviewRuler?: { width?: number }
     }
     cols = 80
     rows = 24
@@ -71,12 +72,14 @@ const { FakeTerminal, FakeFit } = vi.hoisted(() => {
       fontFamily?: string
       theme: unknown
       linkHandler?: { activate: (event: MouseEvent, uri: string) => void }
+      overviewRuler?: { width?: number }
     }) {
       this.options = {
         fontSize: opts.fontSize,
         fontFamily: opts.fontFamily,
         theme: opts.theme,
         linkHandler: opts.linkHandler,
+        overviewRuler: opts.overviewRuler,
       }
       FakeTerminal.last = this
     }
@@ -313,6 +316,12 @@ describe('TerminalView', () => {
     expect(term.loadAddon).toHaveBeenCalledWith(fit)
     expect(term.open).toHaveBeenCalledWith(screen.getByTestId('terminal-view'))
     expect(fit.fit).toHaveBeenCalled()
+  })
+
+  it('keeps the scrollbar as thin as the other scrollbars', () => {
+    // xterm.js and FitAddon both read this width; unset, they use 14px
+    const { term } = renderView()
+    expect(term.options.overviewRuler?.width).toBe(8)
   })
 
   it('pads the terminal element, where FitAddon counts it', () => {
