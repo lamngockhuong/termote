@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
+import starlightLlmsTxt from "starlight-llms-txt";
 import starlightVersions from "starlight-versions";
 
 // Page views and three events (src/scripts/track-events.js), counted by
@@ -21,6 +22,18 @@ export default defineConfig({
         starlightVersions({
           current: { label: "1.x" },
           versions: [{ slug: "0.x" }],
+        }),
+        // /llms.txt, /llms-full.txt and /llms-small.txt of the current docs;
+        // a coding agent that sets Termote up reads /agents.md first.
+        starlightLlmsTxt({
+          description:
+            "Termote serves a PWA that controls terminal sessions (tmux, Herdr, Zellij, herdr-core) of a machine from a phone or another computer.",
+          details:
+            "Coding agents asked to install, start or check Termote: follow [the agent guide](https://termote.ohnice.app/agents.md). Once installed, `termote help agent` prints the guide for the installed version.",
+          // llms-full.txt cannot leave pages out (starlight-llms-txt 0.12.0):
+          // the archived 0.x docs go last there, and out of llms-small.txt.
+          exclude: ["0.x/**"],
+          demote: ["0.x/**"],
         }),
       ],
       components: {
@@ -79,6 +92,7 @@ export default defineConfig({
           items: [
             { label: "Container", link: "/installation/docker/" },
             { label: "Native", link: "/installation/native/" },
+            { label: "Install with an agent", link: "/installation/agent/", translations: { vi: "Cài bằng agent" } },
             { label: "Tailscale", link: "/installation/tailscale/" },
             { label: "Cloudflare Tunnel", link: "/installation/cloudflare/" },
           ],

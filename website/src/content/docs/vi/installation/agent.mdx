@@ -1,0 +1,55 @@
+---
+title: Cài bằng agent
+description: Để Claude Code, Codex hay agent lập trình khác cài và khởi động Termote, mà mật khẩu không lọt vào transcript của nó
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+
+Agent lập trình chạy trên chính máy sẽ chạy Termote có thể cài và khởi động Termote giúp bạn. Dán prompt dưới đây
+vào Claude Code, Codex hoặc agent khác:
+
+```text
+Install and start Termote on this machine. Follow https://termote.ohnice.app/agents.md.
+Ask me how I want to reach it (only this machine, my phone on the same Wi-Fi, Tailscale,
+or a Cloudflare Tunnel I run) before you start it. Do not show me the password; tell me
+to run termote show-password.
+```
+
+Prompt để nguyên tiếng Anh vì agent đọc nó; bạn vẫn có thể trò chuyện với agent bằng tiếng Việt.
+
+## Agent sẽ làm gì
+
+<Steps>
+1. Hỏi bạn sẽ mở Termote từ đâu, và chạy native hay trong container.
+2. Kiểm tra Termote đã được cài chưa (`termote version`, `termote status --json`); nếu chưa, cài bằng
+   [trình cài đặt online](/vi/installation/native/) hoặc Homebrew. Agent không bao giờ dùng `sudo`.
+3. Khởi động với các tùy chọn hợp với câu trả lời của bạn, ví dụ `termote start --lan`.
+4. Dùng `termote status --json` để chắc server đã trả lời, rồi đưa bạn đường link.
+</Steps>
+
+Agent làm theo [`/agents.md`](/agents.md), bản hướng dẫn viết riêng cho agent (tiếng Anh). Khi Termote đã
+được cài, `termote help agent` in đúng hướng dẫn đó cho phiên bản đang có trên máy.
+
+## Mật khẩu chỉ bạn biết
+
+Mọi thứ agent in ra đều nằm trong transcript, và transcript có thể được gửi tới nhà cung cấp model. Vì thế agent
+không đọc mật khẩu: khi `termote start` hay `termote container up` chạy ngoài terminal, lệnh chỉ in tên đăng nhập,
+không in mật khẩu. Bạn tự xem bằng một trong hai cách:
+
+- chạy `termote show-password` trong terminal của bạn (trong Claude Code, gõ `! termote show-password`);
+- hoặc chạy `termote panel` để xem các link và một mã QR mở trên điện thoại.
+
+<Aside>
+Muốn đăng nhập trên điện thoại mà không gõ mật khẩu, hãy tự chạy `termote pair --role full` rồi nhập mã trên
+điện thoại ([Ghép thiết bị](/vi/usage/devices/)). Mã này cũng là bí mật, nên đừng nhờ agent tạo.
+</Aside>
+
+## Dành cho agent và công cụ
+
+- [`/agents.md`](/agents.md): cách cài, khởi động, kiểm tra Termote rồi bàn giao cho người dùng.
+- [`/llms.txt`](/llms.txt): mục lục tài liệu tiếng Anh; [`/llms-full.txt`](/llms-full.txt) chứa toàn bộ các trang.
+
+## Xem thêm
+
+- [Cài native](/vi/installation/native/) và [Container](/vi/installation/docker/)
+- [Tailscale HTTPS](/vi/installation/tailscale/) và [Cloudflare Tunnel](/vi/installation/cloudflare/)

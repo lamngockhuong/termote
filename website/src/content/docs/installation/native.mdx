@@ -120,7 +120,8 @@ unsaved drafts stay with `localhost`, and an installed app has to be installed a
    detected: choose them with `--mux zellij` or `--mux hc`, or the menu (`termote` with no command).
 
 2. **Creates the admin password** the first time (or with `--fresh`): type one, or press Enter to generate
-   one. It is printed once; `termote show-password` shows it again later.
+   one. It is printed once, and only when `start` runs in a terminal: run by a coding agent, a script or into a
+   pipe, `start` prints the username alone. `termote show-password` shows it again later.
 
 3. **Checks the port and Tailscale first.** If anything fails, a server that is already running is left
    running, so a mistake does not cut the connection you may be using.
