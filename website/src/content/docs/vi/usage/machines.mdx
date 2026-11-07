@@ -15,8 +15,8 @@ host, user hay khoá của máy đó.
 
 ## Trước khi bắt đầu
 
-- Trên máy kia: đã cài Termote và chạy ở chế độ native (`termote start`). Termote chạy trong container thì
-  không nối tới được.
+- Trên máy kia: đã cài Termote và chạy ở chế độ native (`termote start`); trên Linux và macOS, `add` đề
+  nghị làm cả hai việc này giúp bạn. Termote chạy trong container thì không nối tới được.
 - Trên máy này: có OpenSSH client (`ssh` và `ssh-keygen`), và từ terminal của bạn đã SSH được sang máy kia
   (một `Host` trong `~/.ssh/config` hoặc tên host). Hai máy chạy cùng một bản Termote.
 
@@ -33,13 +33,17 @@ termote machine add pi --label "Pi nhà bếp"
    khoá vì server dùng nó khi không có ai ngồi trước máy.
 2. Nối sang bằng chính tài khoản SSH của bạn. Nếu Termote chưa từng thấy máy đó, OpenSSH hỏi bạn xác nhận
    host key; key này được lưu vào `known_hosts` riêng của Termote, tách khỏi của bạn.
-3. Hỏi Termote trên máy đó xem nó được cài ở đâu.
+3. Hỏi Termote trên máy đó xem nó được cài ở đâu. Trên Linux và macOS, nếu máy đó chưa có Termote, lệnh
+   đề nghị cài đúng phiên bản của máy này bằng trình cài đặt trực tuyến (máy kia cần có `curl`) rồi chạy
+   nó, đồng thời hiện những gì `termote start` in ra ở đó, kể cả mật khẩu mới. Nếu Termote ở đó cũ hơn máy
+   này, lệnh đề nghị cập nhật (`termote update --version`, server bên đó sẽ khởi động lại); bản cũ tới mức
+   chưa có tính năng máy thì phải cập nhật xong mới thêm được.
 4. Khi bạn đồng ý, thêm một dòng vào `~/.ssh/authorized_keys` trên máy đó: khoá của Termote, chỉ được chạy
    `termote bridge` (lệnh bắt buộc trong `command=` kèm `restrict`: không shell, không chuyển tiếp cổng,
    không TTY).
 
 Sau đó nó nối thử đúng như server sẽ nối (khoá của Termote, không hỏi gì), và chỉ lưu máy khi lần nối này
-thành công. `--yes` cài khoá mà không hỏi, `--no-check` lưu máy mà bỏ qua lần kiểm cuối, `--print-key` chỉ
+thành công. `--yes` cài Termote, cập nhật và cài khoá mà không hỏi, `--no-check` lưu máy mà bỏ qua lần kiểm cuối, `--print-key` chỉ
 in dòng khoá để bạn tự cài.
 
 Muốn lấy các máy Herdr đã biết thì dùng `termote machine import --herdr`: lệnh hỏi từng máy rồi chạy `add`

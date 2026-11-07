@@ -15,8 +15,8 @@ picks a machine but never sees its host name, user or key.
 
 ## Before you start
 
-- On the other computer: Termote installed and started natively (`termote start`). A Termote in
-  container mode cannot be reached.
+- On the other computer: Termote installed and started natively (`termote start`); on Linux and macOS,
+  `add` offers to do both for you. A Termote in container mode cannot be reached.
 - On this computer: the OpenSSH client (`ssh` and `ssh-keygen`), and an SSH login to the other computer
   that works from your terminal (a `Host` in `~/.ssh/config` or a host name). Both computers on the same
   Termote release.
@@ -34,12 +34,16 @@ termote machine add pi --label "Kitchen Pi"
    passphrase: the server uses it unattended.
 2. It connects with your own SSH login. OpenSSH asks you to confirm the computer's host key if Termote has
    not seen it before; it is saved in Termote's own `known_hosts`, apart from yours.
-3. It asks Termote on that computer where it is installed.
+3. It asks Termote on that computer where it is installed. On Linux and macOS, if Termote is not there,
+   it offers to install this computer's release with the online installer (which needs `curl` there) and
+   to start it, showing what `termote start` prints there, its new password included; if Termote there
+   is older than this one, it offers to update it (`termote update --version`, which restarts it); one
+   too old to have machines at all has to be updated before it can be added.
 4. After you confirm, it appends one line to `~/.ssh/authorized_keys` there: Termote's key, allowed to run
    nothing but `termote bridge` (a forced command with `restrict`: no shell, no forwarding, no TTY).
 
 It then connects the way the server will (Termote's key, no prompts) and saves the machine only if that
-works. `--yes` installs the key without asking, `--no-check` saves it without the last check,
+works. `--yes` installs, updates and installs the key without asking, `--no-check` saves it without the last check,
 `--print-key` only prints the line so you can install it yourself.
 
 Import the machines Herdr knows with `termote machine import --herdr`: it asks about each one, then runs

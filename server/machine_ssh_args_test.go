@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -114,6 +115,16 @@ func TestParseWhereami(t *testing.T) {
 	w, err = parseWhereami([]byte(`{"exe":"C:\\Users\\u\\termote.exe","socketDir":"C:\\x","os":"windows"}`))
 	if err != nil || w.Exe != "C:/Users/u/termote.exe" || w.SocketDir != "" {
 		t.Fatalf("windows whereami: %+v %v", w, err)
+	}
+	// Too old for whereami: its path and version, a path the forced command
+	// could not hold dropped.
+	w, err = parseWhereami([]byte("TERMOTE-OLD\nexe=/home/u/.local/bin/termote\nTermote v2.22.0\n"))
+	if !errors.Is(err, errTermoteTooOld) || w.Exe != "/home/u/.local/bin/termote" || w.Version != "2.22.0" {
+		t.Fatalf("old: %+v %v", w, err)
+	}
+	w, err = parseWhereami([]byte("TERMOTE-OLD\nexe=/a'b\n"))
+	if !errors.Is(err, errTermoteTooOld) || w.Exe != "" || w.Version != "" {
+		t.Fatalf("old, bad exe: %+v %v", w, err)
 	}
 	for name, out := range map[string]string{
 		"missing":   "TERMOTE-NOT-FOUND\n",

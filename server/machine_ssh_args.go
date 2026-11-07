@@ -110,9 +110,37 @@ func sshForgetHostArgv(kh, id string) []string {
 }
 
 // whereamiScript finds termote on a Unix machine, even when the shell ssh
-// runs there reads no profile, and asks it where it lives.
+// runs there reads no profile, and asks it where it lives. A termote too old
+// to know machine whereami gets TERMOTE-OLD, its path and its version line.
 const whereamiScript = `sh -c 'PATH="$PATH:$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/home/linuxbrew/.linuxbrew/bin"; ` +
-	`t=$(command -v termote) || { echo TERMOTE-NOT-FOUND; exit 3; }; exec "$t" machine whereami'`
+	`t=$(command -v termote) || { echo TERMOTE-NOT-FOUND; exit 3; }; ` +
+	`o=$("$t" machine whereami 2>/dev/null) && { printf "%s\n" "$o"; exit 0; }; ` +
+	`echo TERMOTE-OLD; printf "exe=%s\n" "$t"; "$t" version 2>/dev/null | head -n 1; exit 4'`
+
+// installScriptURL is the online installer, which verifies the release it
+// lays out.
+const installScriptURL = "https://termote.ohnice.app/install.sh"
+
+// remoteInstallScript runs the online installer on a Unix machine, pinned to
+// version when it is one (a checkout's version may not be). The installer is
+// saved first, so a failed download fails here instead of feeding sh nothing.
+// Its output goes to stderr: the user's terminal.
+func remoteInstallScript(version string) string {
+	env := ""
+	if versionRe.MatchString(version) {
+		env = "TERMOTE_VERSION=" + version + " "
+	}
+	return `sh -c 'command -v curl >/dev/null || { echo "curl is required on the machine" >&2; exit 1; }; ` +
+		`f=$(mktemp) || exit 1; curl -fsSL ` + installScriptURL + ` -o "$f" && ` + env + `sh "$f" >&2 </dev/null; rc=$?; rm -f "$f"; exit $rc'`
+}
+
+// remoteExeScript runs termote at exe (a path validRemotePath accepted, so
+// it holds no quote) with args (fixed words or a checked version) on a Unix
+// machine, without a terminal, so start makes a password and asks nothing.
+// Its output goes to the user's terminal, as when run there by hand.
+func remoteExeScript(exe string, args ...string) string {
+	return `sh -c 'exec "$0" "$@" </dev/null >&2' '` + exe + `' ` + strings.Join(args, " ")
+}
 
 // installKeyScript appends the line on its stdin to ~/.ssh/authorized_keys,
 // once; a new dir and file get 0700 and 0600.
@@ -161,11 +189,35 @@ func validRemotePath(p, goos string) error {
 	return nil
 }
 
+// errTermoteNotFound is the machine's answer when no termote is on its PATH
+// (nor in ~/.local/bin or Homebrew's bin).
+var errTermoteNotFound = errors.New("termote was not found on the machine: install it there first (https://termote.ohnice.app), " +
+	"run 'termote link' there, or add it with --remote-exe <path of termote>")
+
+// errTermoteTooOld is the machine's answer when its termote predates
+// machine whereami (and the bridge): whereami then holds only its path and,
+// when it said, its version.
+var errTermoteTooOld = errors.New("termote on the machine is too old to be reached: update it there (termote update)")
+
+var oldVersionRe = regexp.MustCompile(`(?m)^Termote v(\S+)$`)
+
 // parseWhereami reads whereami's output: the last line, as JSON.
 func parseWhereami(out []byte) (whereami, error) {
 	s := strings.TrimSpace(string(out))
 	if strings.Contains(s, "TERMOTE-NOT-FOUND") {
-		return whereami{}, errors.New("termote was not found on the machine: install it there first (https://termote.ohnice.app)")
+		return whereami{}, errTermoteNotFound
+	}
+	if strings.Contains(s, "TERMOTE-OLD") {
+		var w whereami
+		for _, l := range strings.Split(s, "\n") {
+			if exe, ok := strings.CutPrefix(strings.TrimSpace(l), "exe="); ok && validRemotePath(exe, "linux") == nil {
+				w.Exe = exe
+			}
+		}
+		if m := oldVersionRe.FindStringSubmatch(s); m != nil && versionRe.MatchString(m[1]) {
+			w.Version = m[1]
+		}
+		return w, errTermoteTooOld
 	}
 	if i := strings.LastIndexByte(s, '\n'); i >= 0 {
 		s = s[i+1:]

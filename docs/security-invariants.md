@@ -2161,7 +2161,16 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `HostKeyAlias=termote-<id>` in termote's own `ssh/known_hosts`. termote's key (`ssh/id_ed25519`, dir
   0700, no passphrase) is made by `ssh-keygen` and never printed. `add` runs the user's ssh at the
   terminal (`StrictHostKeyChecking=ask`: the only TOFU), asks `termote machine whereami` there for its
-  stable path (Windows: `termote.exe`, never the `.cmd` shim) and socket dir, and after a yes (or
+  stable path (Windows: `termote.exe`, never the `.cmd` shim) and socket dir. Where that Unix script says
+  `TERMOTE-NOT-FOUND` (exit 3, reported as such, never as ssh failing), only after a yes (or `--yes`) it
+  runs the online installer there over the same ssh, downloaded to a `mktemp` file first (a failed
+  download fails the step) and pinned with `TERMOTE_VERSION` to this release when that matches
+  `versionRe`, then `'<exe>' start` without stdin when it has no saved config; where whereami's version is older than this release,
+  or the script says `TERMOTE-OLD` (exit 4: a termote without `machine whereami`, its `exe=` path checked
+  by `validRemotePath` and its `Termote v<X>` line by `versionRe`; `add` stops unless it is updated),
+  after a yes `'<exe>' update --version <this>`. `<exe>` is whereami's path, passed as `$0` to `sh -c`
+  after `validRemotePath`, and the only arguments are fixed words and a `versionRe` version; their output,
+  the new password included, goes to the user's terminal (stderr), never to a log. Then, after a yes (or
   `--yes`) appends `command="'<exe>' bridge --socket-dir '<dir>'",restrict <pub>` once, sent on stdin;
   `--print-key` (and every Windows machine) only prints it. A machine is saved only after the
   service's own connection (`BatchMode`, `StrictHostKeyChecking=yes`, `IdentitiesOnly`,
