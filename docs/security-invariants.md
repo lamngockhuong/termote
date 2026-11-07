@@ -1339,6 +1339,15 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   has a shell anyway, and a view-only client gets 403 `view_only` for creates as well as saves.
   The root's lock is keyed `root + "\x01create"`: `"\x00create"` was the key of a file named
   `create` at the root, and a delete takes both
+- **Files menus** (`pwa/src/components/file-actions-menu.tsx`, `pwa/src/utils/file-paths.ts`): a
+  right click on a tree row, the tree, a file tab or a Changes row opens the app's menu
+  (`preventDefault`, so `context-menu-guard.ts` leaves it). Copied and typed paths are built in the
+  PWA from the `root` and `dir` the tree route returned and the tree path; nothing goes back to the
+  server, and no new route exists. **Insert @path in terminal** sends text into the pane (a
+  bracketed paste, no Enter), so it is offered only to a full client: `App` gives views no
+  `insertText` when view-only. New file, New folder, Upload, Download, Rename and Delete go
+  through their own routes and dialogs above, offered by the same role checks as their buttons;
+  a view-only client sees the copies, Refresh and Collapse all only
 - **Pasting an image into Markdown** (`POST files/image?root=&dir=[&reveal=1]`,
   `server/files_image.go`): an image pasted into a `.md`/`.mdx` file being edited becomes a new
   file next to it. Raw `image/png|jpeg|gif|webp` body (never SVG, never multipart: `writeGuard`
