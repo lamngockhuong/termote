@@ -715,6 +715,9 @@ Run on tmux (Linux/macOS) and Herdr; psmux (Windows) offers neither view.
 - [ ] Switching tabs brings back the scroll offset (code, Markdown, table, editor) and the draft
 - [ ] Closing a tab with unsaved changes asks "Discard changes?"; a middle click or Delete closes a
       tab; opening an 11th file closes the least recently used clean tab, never one with a draft
+- [ ] Desktop: drag a file tab past another; the others slide aside, the drop keeps the new order
+      (also after a reload), Escape mid-drag puts it back, a click without moving still shows the
+      tab; Alt+Left/Right moves the focused tab; Files stays first; Changes' diff tabs drag too
 - [ ] Ctrl/Cmd+click or a middle click on a Markdown link opens a new tab; a plain click goes on in
       the same tab and Back returns
 - [ ] Phone: no tab bar; "Open files (N)" in the file's bar and above the tree opens a sheet to

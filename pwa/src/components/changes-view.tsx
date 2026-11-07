@@ -619,6 +619,7 @@ function PaneChanges({
     onActivate: c.activate,
     onClose: requestClose,
     onPin: c.pin,
+    onMove: c.move,
     panelId,
   }
   // A phone has a sheet of the open diffs in place of the tab bar

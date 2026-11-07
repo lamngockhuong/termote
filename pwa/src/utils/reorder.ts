@@ -33,3 +33,29 @@ export function dropIndex(
   const to = after ? at + 1 : at
   return to === from ? null : to
 }
+
+// Where an item dragged along a row lands: the index past every item whose
+// middle its leading edge has crossed (at an end of the row, past the item
+// there, whatever their widths). boxes are the items' boxes as the drag
+// started, from the dragged one's index, x how far it has slid.
+export function slidePlace(
+  boxes: Pick<DOMRect, 'left' | 'right' | 'width'>[],
+  from: number,
+  x: number,
+): number {
+  const left = boxes[from].left + x
+  const right = boxes[from].right + x
+  return boxes.filter((b, i) => {
+    const middle = b.left + b.width / 2
+    return i < from ? middle < left : i > from && middle <= right
+  }).length
+}
+
+// How far item i slides aside while the dragged one (at from) would land at
+// to, room being the dragged one's width and the gap after it
+export const slideShift = (
+  i: number,
+  from: number,
+  to: number,
+  room: number,
+) => (i > from && i <= to ? -room : i < from && i >= to ? room : 0)

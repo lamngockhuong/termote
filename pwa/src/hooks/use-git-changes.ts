@@ -1,5 +1,11 @@
 import { useCallback, useSyncExternalStore } from 'react'
-import { closeTab, openTab, pinTab, type TabBase } from '../utils/file-tabs'
+import {
+  closeTab,
+  moveTab,
+  openTab,
+  pinTab,
+  type TabBase,
+} from '../utils/file-tabs'
 import {
   loadTabs,
   onSignedOutElsewhere,
@@ -137,6 +143,8 @@ interface Store {
   // Shows tab id, or the list (null)
   activate: (id: string | null) => void
   pin: (id: string) => void
+  // Moves tab id to index to among the tabs
+  move: (id: string, to: number) => void
   // Closes tab id; the unsaved changes of its editor are dropped (asked
   // before)
   close: (id: string) => void
@@ -516,6 +524,7 @@ function createStore(id: string): Store {
     open,
     activate,
     pin: (id) => set({ tabs: pinTab(state.tabs, id) }),
+    move: (id, to) => set({ tabs: moveTab(state.tabs, id, to) }),
     close,
     setEditing(id, on, line) {
       const tab = state.tabs.find((t) => t.id === id)
@@ -593,6 +602,7 @@ export function useGitChanges(paneId: string) {
     ),
     activate: useCallback((id: string | null) => store.activate(id), [store]),
     pin: useCallback((id: string) => store.pin(id), [store]),
+    move: useCallback((id: string, to: number) => store.move(id, to), [store]),
     close: useCallback((id: string) => store.close(id), [store]),
     setEditing: useCallback(
       (id: string, on: boolean, line?: number) =>

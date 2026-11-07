@@ -3,6 +3,7 @@ import {
   closeTab,
   enforceCap,
   MAX_TABS,
+  moveTab,
   openTab,
   pinTab,
   retargetTabs,
@@ -212,5 +213,27 @@ describe('retargetTabs', () => {
     const tabs = [tab('a'), tab('b')]
     expect(retargetTabs(tabs, 'z', 'b').tabs).toBe(tabs)
     expect(retargetTabs(tabs, 'a', 'a').tabs).toBe(tabs)
+  })
+})
+
+describe('moveTab', () => {
+  const tabs = ['a', 'b', 'c'].map((id, i) => ({
+    id,
+    pinned: id !== 'b',
+    lastUsed: i,
+  }))
+  const ids = (t: { id: string }[]) => t.map((x) => x.id)
+
+  it('puts the tab at the index, everything else kept', () => {
+    expect(ids(moveTab(tabs, 'c', 0))).toEqual(['c', 'a', 'b'])
+    expect(ids(moveTab(tabs, 'a', 2))).toEqual(['b', 'c', 'a'])
+    expect(moveTab(tabs, 'b', 0)[0]).toBe(tabs[1])
+  })
+
+  it('clamps the index, and leaves the tabs alone when nothing moves', () => {
+    expect(ids(moveTab(tabs, 'a', 9))).toEqual(['b', 'c', 'a'])
+    expect(ids(moveTab(tabs, 'c', -1))).toEqual(['c', 'a', 'b'])
+    expect(moveTab(tabs, 'b', 1)).toBe(tabs)
+    expect(moveTab(tabs, 'nope', 0)).toBe(tabs)
   })
 })

@@ -1,9 +1,11 @@
 import { FolderTree, X } from 'lucide-react'
-import { type KeyboardEvent, useEffect, useRef } from 'react'
+import { type KeyboardEvent, type PointerEvent, useEffect, useRef } from 'react'
+import { flushSync } from 'react-dom'
 import { useWheelScrollX } from '../hooks/use-wheel-scroll-x'
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
 import type { Translate } from '../i18n/translate'
+import { slidePlace, slideShift, targetIndex } from '../utils/reorder'
 import { FOCUS_RING } from './ui/button'
 
 // A tab as the tab bar and the open-files sheet show it
@@ -37,6 +39,9 @@ export interface TabListProps {
   // Asks first when the tab has unsaved changes
   onClose: (id: string) => void
   onPin: (id: string) => void
+  // Moves tab id to index to among the tabs (desktop: dragged, or
+  // Alt+Left/Right); unset, tabs do not move
+  onMove?: (id: string, to: number) => void
   // The element showing the tab (desktop): each tab controls it, and its
   // id names it
   panelId?: string
@@ -46,11 +51,16 @@ export interface TabListProps {
 export const tabElementId = (panelId: string, id: string | null) =>
   `${panelId}-tab-${id ?? 'list'}`
 
+// How far (px) a pressed tab moves before it drags
+const DRAG_SLOP = 4
+
 const TAB = `flex h-8 shrink-0 items-center gap-1.5 px-2.5 text-[12px] ${FOCUS_RING} focus-visible:-outline-offset-2`
 
 // The open files above the viewer (desktop): the list's entry first, then a
 // tab per file. Arrow keys, Home and End move between tabs, Enter or Space
 // shows one, Delete closes it; a middle click closes, a double click pins.
+// With onMove a tab drags along the row (a mouse or a pen), the others
+// making room for it, and Alt+Left/Right moves the focused one.
 export function FileTabBar({
   tabs,
   activeId,
@@ -58,6 +68,7 @@ export function FileTabBar({
   onActivate,
   onClose,
   onPin,
+  onMove,
   panelId,
 }: TabListProps) {
   const tabIds = (id: string | null) =>
@@ -67,6 +78,12 @@ export function FileTabBar({
   const barRef = useRef<HTMLDivElement>(null)
   useWheelScrollX(barRef)
   const ids: (string | null)[] = [null, ...tabs.map((tab) => tab.id)]
+  // Ends a drag in progress (its window listeners), also on unmount
+  const endDrag = useRef<(() => void) | null>(null)
+  // What a drag reads when it lands: the tabs can change meanwhile
+  const latest = useRef({ tabs, onMove })
+  latest.current = { tabs, onMove }
+  useEffect(() => () => endDrag.current?.(), [])
 
   // The tab shown stays in view as the bar scrolls sideways
   useEffect(() => {
@@ -76,6 +93,15 @@ export function FileTabBar({
   }, [activeId])
 
   const onKeyDown = (e: KeyboardEvent, id: string | null) => {
+    if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      if (id === null || !onMove) return
+      // Alt+Left would also go back a page
+      e.preventDefault()
+      const files = tabs.map((tab) => tab.id)
+      const to = targetIndex(files, id, e.key === 'ArrowLeft' ? -1 : 1)
+      if (to !== null) onMove(id, to)
+      return
+    }
     const at = ids.indexOf(id)
     let next: string | null | undefined
     switch (e.key) {
@@ -110,6 +136,120 @@ export function FileTabBar({
     if (el) items.current.set(id, el)
     else items.current.delete(id)
   }
+  // Dragging, like a browser's tabs: the tab slides along the files' part
+  // of the row only, and the others slide aside to make room where it would
+  // land. A press that moves less than DRAG_SLOP is still a click; touch
+  // scrolls the row instead.
+  const movable = !!onMove && tabs.length > 1
+  const onPointerDown = (e: PointerEvent<HTMLElement>, id: string) => {
+    if (
+      !movable ||
+      e.button !== 0 ||
+      e.pointerType === 'touch' ||
+      endDrag.current
+    )
+      return
+    // The close button closes; it does not drag
+    if ((e.target as HTMLElement).closest('button:not([role="tab"])')) return
+    startDrag(id, e.currentTarget, e.clientX)
+  }
+  const startDrag = (id: string, el: HTMLElement, startX: number) => {
+    const bar = barRef.current!
+    // Set when the drag starts: the file tabs, their boxes without any
+    // slide, and the room the dragged one takes
+    let els: HTMLElement[] = []
+    let boxes: DOMRect[] = []
+    let from = -1
+    let to = -1
+    const begin = () => {
+      els = [...bar.children].filter(
+        (c): c is HTMLElement =>
+          c instanceof HTMLElement && c.hasAttribute('data-tab'),
+      )
+      boxes = els.map((c) => c.getBoundingClientRect())
+      from = els.indexOf(el)
+      to = from
+      el.setAttribute('data-dragging', 'true')
+      // A focus ring would follow the tab around
+      if (el.contains(document.activeElement))
+        (document.activeElement as HTMLElement).blur()
+    }
+    const onMoveEvent = (ev: globalThis.PointerEvent) => {
+      const dx = ev.clientX - startX
+      if (from === -1) {
+        if (Math.abs(dx) < DRAG_SLOP) return
+        begin()
+      }
+      const self = boxes[from]
+      const x = Math.min(
+        Math.max(dx, boxes[0].left - self.left),
+        bar.getBoundingClientRect().right - self.right,
+      )
+      el.style.translate = `${x}px 0`
+      to = slidePlace(boxes, from, x)
+      els.forEach((c, i) => {
+        if (i === from) return
+        const shift = slideShift(i, from, to, self.width)
+        c.style.translate = shift ? `${shift}px 0` : ''
+      })
+    }
+    const finish = (drop: boolean) => {
+      window.removeEventListener('pointermove', onMoveEvent)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onCancel)
+      window.removeEventListener('keydown', onKey, true)
+      endDrag.current = null
+      if (from === -1) {
+        el.removeAttribute('data-dragging')
+        return
+      }
+      // The click that ends a drag (fired in the same task as the release,
+      // when it is over the tab) does not show the tab
+      window.addEventListener('click', swallow, { capture: true, once: true })
+      setTimeout(() => window.removeEventListener('click', swallow, true))
+      const { tabs: now, onMove: move } = latest.current
+      // The tabs changed under the drag: their places no longer hold
+      const same = now.length === els.length && now[from]?.id === id
+      if (!drop || to === from || !same || !move) {
+        // Back to their places, sliding
+        el.removeAttribute('data-dragging')
+        for (const c of els) c.style.translate = ''
+        return
+      }
+      // Into the new order at once: the tabs' slides go in the same frame
+      // as the order changes, none sliding from where it was drawn
+      for (const c of els) {
+        c.style.transition = 'none'
+        c.style.translate = ''
+      }
+      el.removeAttribute('data-dragging')
+      flushSync(() => move(id, to))
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          for (const c of els) c.style.transition = ''
+        }),
+      )
+    }
+    const swallow = (c: MouseEvent) => {
+      c.stopPropagation()
+      c.preventDefault()
+    }
+    const onUp = () => finish(true)
+    const onCancel = () => finish(false)
+    // Escape puts the tab back
+    const onKey = (k: globalThis.KeyboardEvent) => {
+      if (k.key !== 'Escape' || from === -1) return
+      k.preventDefault()
+      k.stopPropagation()
+      finish(false)
+    }
+    window.addEventListener('pointermove', onMoveEvent)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onCancel)
+    window.addEventListener('keydown', onKey, true)
+    endDrag.current = () => finish(false)
+  }
+
   // Keyboard focus stays on the tab shown (else the list's entry)
   const tabbable = ids.includes(activeId) ? activeId : null
 
@@ -140,7 +280,9 @@ export function FileTabBar({
           <div
             key={tab.id}
             role="presentation"
-            className={`group flex shrink-0 items-center border-r border-border ${shown ? 'bg-bg text-fg' : 'text-fg-muted hover:text-fg'}`}
+            data-tab
+            onPointerDown={(e) => onPointerDown(e, tab.id)}
+            className={`group relative flex shrink-0 items-center border-r border-border data-dragging:z-10 data-dragging:bg-surface-raised data-dragging:text-fg data-dragging:shadow-sm ${movable ? 'transition-[translate] duration-(--duration-fast) ease-standard data-dragging:transition-none' : ''} ${shown ? 'bg-bg text-fg' : 'text-fg-muted hover:text-fg'}`}
           >
             <button
               ref={ref(tab.id)}
@@ -148,7 +290,9 @@ export function FileTabBar({
               role="tab"
               {...tabIds(tab.id)}
               aria-selected={shown}
-              aria-keyshortcuts="Delete"
+              aria-keyshortcuts={
+                movable ? 'Delete Alt+ArrowLeft Alt+ArrowRight' : 'Delete'
+              }
               tabIndex={tabbable === tab.id ? 0 : -1}
               title={tabTitle(tab, t)}
               onClick={() => onActivate(tab.id)}

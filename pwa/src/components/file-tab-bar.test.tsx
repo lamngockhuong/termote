@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { FileTabBar, type TabEntry, type TabListProps } from './file-tab-bar'
 
 const entry = (id: string, over: Partial<TabEntry> = {}): TabEntry => ({
@@ -164,5 +164,216 @@ describe('FileTabBar', () => {
     expect(gone).toHaveAttribute('title', 'docs/a.md — File not found')
     expect(gone.querySelector('.line-through')).toHaveTextContent('a.md')
     expect(tab('b.md')).toHaveAttribute('title', 'docs/b.md')
+  })
+
+  describe('moving a tab', () => {
+    // The box around a tab's button, the one that drags
+    const box = (name: RegExp) => tab(name).parentElement as HTMLElement
+    const A = /^a\.md/
+    const B = /^b\.md/
+    const C = /^c\.md/
+    const slide = (name: RegExp) => box(name).style.translate
+    // jsdom lays nothing out: Files spans 0-80, then a 100 px tab each,
+    // the bar ending at 400
+    const layOut = () => {
+      const rect = (left: number, width: number) =>
+        ({ left, right: left + width, width, top: 0, bottom: 32 }) as DOMRect
+      vi.spyOn(
+        screen.getByRole('tablist'),
+        'getBoundingClientRect',
+      ).mockReturnValue(rect(0, 400))
+      ;[A, B, C].forEach((name, i) => {
+        vi.spyOn(box(name), 'getBoundingClientRect').mockReturnValue(
+          rect(80 + i * 100, 100),
+        )
+      })
+    }
+    const press = (el: HTMLElement, clientX: number, init = {}) =>
+      fireEvent.pointerDown(el, {
+        button: 0,
+        pointerType: 'mouse',
+        clientX,
+        ...init,
+      })
+    const moveTo = (clientX: number) =>
+      fireEvent.pointerMove(window, { clientX })
+    const release = () => fireEvent.pointerUp(window)
+    afterEach(async () => {
+      vi.restoreAllMocks()
+      // A drag's swallowed click is let go after its task
+      await new Promise((r) => setTimeout(r))
+    })
+
+    it('drags a tab along the files, the others making room', async () => {
+      const p = show({ onMove: vi.fn() })
+      layOut()
+      tab(C).focus()
+      press(box(C), 330)
+      // Under the slop it is still a click
+      moveTo(328)
+      expect(box(C)).not.toHaveAttribute('data-dragging')
+      // Past the first file tab: it stops there, never over Files; its
+      // focus ring does not follow it
+      moveTo(-100)
+      expect(box(C)).toHaveAttribute('data-dragging', 'true')
+      expect(slide(C)).toBe('-200px 0')
+      expect(document.activeElement).toBe(document.body)
+      expect(slide(A)).toBe('100px 0')
+      expect(slide(B)).toBe('100px 0')
+      // Back past b's middle only
+      moveTo(250)
+      expect(slide(A)).toBe('')
+      expect(slide(B)).toBe('100px 0')
+      release()
+      expect(p.onMove).toHaveBeenCalledWith('c', 1)
+      expect(box(C)).not.toHaveAttribute('data-dragging')
+      // Into the new order without sliding there from where each was drawn
+      expect(slide(C)).toBe('')
+      expect(slide(B)).toBe('')
+      expect(box(C).style.transition).toBe('none')
+      expect(box(B).style.transition).toBe('none')
+      // The click that ends the drag does not show the tab
+      fireEvent.click(tab(C))
+      expect(p.onActivate).not.toHaveBeenCalled()
+      // They slide again from the frame after
+      await new Promise((r) =>
+        requestAnimationFrame(() => requestAnimationFrame(r)),
+      )
+      expect(box(C).style.transition).toBe('')
+    })
+
+    it('a cancelled drag slides the tabs back', () => {
+      show({ onMove: vi.fn() })
+      layOut()
+      press(box(A), 100)
+      moveTo(300)
+      fireEvent.pointerCancel(window)
+      expect(slide(A)).toBe('')
+      expect(box(A).style.transition).toBe('')
+      expect(box(A)).not.toHaveAttribute('data-dragging')
+    })
+
+    it('a press released without moving is a click', () => {
+      const p = show({ onMove: vi.fn() })
+      layOut()
+      press(box(B), 200)
+      release()
+      fireEvent.click(tab(B))
+      expect(p.onActivate).toHaveBeenCalledWith('b')
+      expect(p.onMove).not.toHaveBeenCalled()
+    })
+
+    it('stops at the end of the bar, and a drop in place sends nothing', () => {
+      const p = show({ onMove: vi.fn() })
+      layOut()
+      press(box(A), 100)
+      moveTo(900)
+      expect(slide(A)).toBe('220px 0')
+      moveTo(110)
+      release()
+      expect(p.onMove).not.toHaveBeenCalled()
+    })
+
+    it('Escape or a cancel puts the tab back', () => {
+      const p = show({ onMove: vi.fn() })
+      layOut()
+      // A key before the drag starts is left alone
+      press(box(A), 100)
+      fireEvent.keyDown(window, { key: 'Escape' })
+      moveTo(300)
+      fireEvent.keyDown(window, { key: 'x' })
+      expect(box(A)).toHaveAttribute('data-dragging', 'true')
+      fireEvent.keyDown(window, { key: 'Escape' })
+      expect(box(A)).not.toHaveAttribute('data-dragging')
+      expect(slide(B)).toBe('')
+      release()
+      press(box(A), 100)
+      moveTo(300)
+      fireEvent.pointerCancel(window)
+      expect(p.onMove).not.toHaveBeenCalled()
+    })
+
+    it('sends nothing when the tabs changed under the drag', () => {
+      const p = show({ onMove: vi.fn() })
+      layOut()
+      press(box(A), 100)
+      moveTo(300)
+      p.rerender(<FileTabBar {...p} tabs={p.tabs.slice(1)} />)
+      release()
+      expect(p.onMove).not.toHaveBeenCalled()
+    })
+
+    it('does not drag by touch, a right button, the close button, or during a drag', () => {
+      const p = show({ onMove: vi.fn() })
+      layOut()
+      press(box(A), 100, { pointerType: 'touch' })
+      moveTo(300)
+      press(box(A), 100, { button: 2 })
+      moveTo(300)
+      const close = box(A).querySelector('button:not([role="tab"])')!
+      press(close as HTMLElement, 100)
+      moveTo(300)
+      expect(box(A)).not.toHaveAttribute('data-dragging')
+      press(box(A), 100)
+      press(box(B), 200)
+      moveTo(300)
+      expect(box(A)).toHaveAttribute('data-dragging', 'true')
+      expect(box(B)).not.toHaveAttribute('data-dragging')
+      release()
+      expect(p.onMove).toHaveBeenCalledTimes(1)
+    })
+
+    it('stops listening when the bar goes away mid-drag', () => {
+      const p = show({ onMove: vi.fn() })
+      layOut()
+      press(box(A), 100)
+      moveTo(300)
+      p.unmount()
+      moveTo(350)
+      release()
+      expect(p.onMove).not.toHaveBeenCalled()
+    })
+
+    it('does not drag without onMove, nor a single tab', () => {
+      const p = show()
+      press(box(A), 100)
+      moveTo(300)
+      expect(box(A)).not.toHaveAttribute('data-dragging')
+      release()
+      p.unmount()
+      const one = show({ tabs: [entry('a')], onMove: vi.fn() })
+      press(box(A), 100)
+      moveTo(300)
+      expect(box(A)).not.toHaveAttribute('data-dragging')
+      expect(tab(A)).toHaveAttribute('aria-keyshortcuts', 'Delete')
+      release()
+      expect(one.onMove).not.toHaveBeenCalled()
+    })
+
+    it('Alt+Left/Right moves the focused tab one place', () => {
+      const p = show({ onMove: vi.fn() })
+      expect(tab(B)).toHaveAttribute(
+        'aria-keyshortcuts',
+        'Delete Alt+ArrowLeft Alt+ArrowRight',
+      )
+      fireEvent.keyDown(tab(B), { key: 'ArrowLeft', altKey: true })
+      expect(p.onMove).toHaveBeenLastCalledWith('b', 0)
+      fireEvent.keyDown(tab(B), { key: 'ArrowRight', altKey: true })
+      expect(p.onMove).toHaveBeenLastCalledWith('b', 2)
+      // Not past an end, and not the list's entry; focus stays put
+      fireEvent.keyDown(tab(A), { key: 'ArrowLeft', altKey: true })
+      fireEvent.keyDown(tab(C), { key: 'ArrowRight', altKey: true })
+      fireEvent.keyDown(tab('Files'), { key: 'ArrowRight', altKey: true })
+      expect(p.onMove).toHaveBeenCalledTimes(2)
+    })
+
+    it('Alt+Left/Right does nothing without onMove', () => {
+      const p = show()
+      tab(B).focus()
+      const e = fireEvent.keyDown(tab(B), { key: 'ArrowLeft', altKey: true })
+      expect(e).toBe(true)
+      expect(document.activeElement).toBe(tab(B))
+      expect(p.onActivate).not.toHaveBeenCalled()
+    })
   })
 })
