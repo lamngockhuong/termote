@@ -10,14 +10,16 @@ import {
 } from '../utils/timeline-segments'
 import { AgentStatusBadge } from './agent-status-badge'
 
-// Fill of each status. Blocked is also striped and idle hollow, so the
+// Fill of each status. Blocked is also striped and idle a muted grey, so the
 // strip reads without colour; the legend names each with its icon's word.
+// Idle is a fill, not an outline: a bordered box inside the rounded,
+// clipped track lost its corners at the ends and looked apart from the bar.
 const SEGMENT_STYLE: Record<string, string> = {
   blocked:
     'bg-danger bg-[repeating-linear-gradient(135deg,transparent_0_3px,rgb(0_0_0/0.25)_3px_6px)]',
   working: 'bg-warning',
   done: 'bg-success',
-  idle: 'border border-fg-subtle bg-transparent',
+  idle: 'bg-fg-subtle/35',
 }
 
 const STATUS_WORDS: Record<string, MessageKey> = {
@@ -65,7 +67,7 @@ export function StatusTimeline({ events, paneKey, now }: Props) {
         role="img"
         aria-label={label}
         title={label}
-        className="relative h-3 w-full overflow-hidden rounded-control bg-surface-raised"
+        className="relative h-3 w-full overflow-hidden rounded-control bg-surface-raised ring-1 ring-border ring-inset"
       >
         {segments.map((s) => (
           <span
