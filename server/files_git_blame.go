@@ -26,6 +26,7 @@ var (
 	errBlameNotTracked = &codedError{"not_tracked", "the file is not in the last commit", http.StatusNotFound}
 	errBlameTooLarge   = &codedError{"too_large", "file is larger than 1 MiB", http.StatusRequestEntityTooLarge}
 	errBlameChanged    = &codedError{"file_changed", "the file changed since it was read", http.StatusConflict}
+	errBlameBusy       = &codedError{"busy", "git is busy; try again", http.StatusServiceUnavailable}
 	errBlameNoHash     = inputError("hash is required")
 )
 
@@ -122,13 +123,26 @@ func (f *filesAPI) blame(ctx context.Context, root filesRoot, p, hash string, re
 			c.safeDir = at.via.root
 		}
 	}
+	// Its cost is one file's history: it never takes the last free slot nor
+	// waits for one (status and diff of the root come first), and a slow one
+	// never backs the root off.
 	run := c
-	run.heavy, run.noFilters, run.stdin, run.limit = true, true, b, maxBlameOutput
+	run.heavy, run.tryOnly, run.noBackoff, run.noFilters, run.stdin, run.limit = true, true, true, true, b, maxBlameOutput
 	out, cut, err := f.git.output(ctx, run, "blame", "--incremental", "--no-ignore-revs-file",
 		"--no-textconv", "--contents", "-", "--", gitRel)
+	if errors.Is(err, errGitBusy) {
+		return nil, errBlameBusy
+	}
 	var ge *gitError
-	if errors.As(err, &ge) && !f.inHead(ctx, c, gitRel) {
-		return nil, errBlameNotTracked
+	if errors.As(err, &ge) {
+		// Killed because the request ran out of time: not a reason to say
+		// the file is not committed
+		if ctx.Err() != nil {
+			return nil, errGitTimeout
+		}
+		if !f.inHead(ctx, c, gitRel) {
+			return nil, errBlameNotTracked
+		}
 	}
 	if err != nil {
 		return nil, err

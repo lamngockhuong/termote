@@ -1076,9 +1076,13 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   Those bytes go to `git blame --incremental --no-ignore-revs-file --no-textconv --contents - --
   <path>` on stdin, so git never opens the worktree path, and the path (where a symlink inside the
   root leads) only names the history to follow from `HEAD`: no client rev reaches git. `heavy`
-  (semaphore slot, timeout, backoff), `noFilters`, output capped at 8 MiB (413 `too_large`).
-  A failure for a path `HEAD` does not hold (`cat-file -e HEAD:./<path>`) is 404 `not_tracked`,
-  outside a repo 404 `not_repo`; any other git failure is logged only. The answer holds the line
+  with `tryOnly` and `noBackoff`: it never takes the last free git slot nor waits for one (503
+  `busy`), and a slow one never backs the root off, so one long history cannot hold up Changes.
+  `noFilters`, output capped at 8 MiB (413 `too_large`). A request out of time is 503, never
+  `not_tracked`; a failure for a path `HEAD` does not hold (`cat-file -e HEAD:./<path>`) is 404
+  `not_tracked`, outside a repo 404 `not_repo`; any other git failure is logged only. Blame serves
+  a Place that is its own repo (full role only, as every Place route); a file with a
+  `working-tree-encoding` attribute whose lines git counts otherwise is a plain 500. The answer holds the line
   count, runs of lines per commit hash (the all-zero hash goes to `uncommitted`) and per commit
   only author name, author time and a summary cut at 512 bytes: no e-mail, no line text. git
   applies the repo's `.mailmap` to the author name (a read, nothing runs).
@@ -1105,7 +1109,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   enclosing repo's git dir stays a deny extra. From there every Files check of a pane root applies
   unchanged (`os.Root`, deny lists, `reveal=1`, trash, `writeDeny`, `requireWriteRole`). Full role
   only (see View-only role). Changes stays pane-scoped: `changes`, `changes/apply`, `diff`,
-  `commit`, `commit/diff` and `raw` with `side=` refuse `place` (400 `place_not_supported`). A
+  `commit`, `commit/diff` and `raw` with `side=` refuse `place` (400 `place_not_supported`);
+  `blame` is a Files route and serves a Place whose git toplevel is the Place. A
   file's write lock is keyed by its absolute path and a write drops the find/status caches of every
   root that holds it or lies in it, so a pane root and a Place inside it never interleave saves of
   one file (the per-root lock of creates, deletes and renames is still per root string: a create

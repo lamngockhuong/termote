@@ -859,6 +859,10 @@ export default {
     'Not in the last commit yet: nothing to blame',
   'files.blame.error.tooLarge': 'Too large to blame (over 1 MiB)',
   'files.blame.error.timeout': 'git took too long to blame this file',
+  'files.blame.error.busy':
+    'git is busy with other work: turn Blame off and on to try again',
+  'files.blame.error.changing':
+    'The file keeps changing: reload it to see who changed each line',
   'files.blame.error.failed': 'Could not read who changed each line',
   // Review comments on lines (components/line-comment-bar.tsx,
   // review-comment-sheet.tsx, review-panel.tsx). What is sent to the agent

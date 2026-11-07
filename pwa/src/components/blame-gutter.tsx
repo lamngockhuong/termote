@@ -146,15 +146,18 @@ export function BlamePopover({
       if (!ref.current?.contains(target) && !anchor.contains(target))
         closeRef.current()
     }
-    // The code scrolling moves the cell away from the details
-    const onScroll = (e: Event) => {
-      if (!ref.current?.contains(e.target as Node)) closeRef.current()
-    }
+    // The code scrolling (or the window resized) moves the cell away from
+    // the details; a terminal or a chat scrolling beside it does not
+    const frame: EventTarget =
+      anchor.closest('[data-scroll-restore]') ?? document
+    const close = () => closeRef.current()
     document.addEventListener('pointerdown', onDown)
-    document.addEventListener('scroll', onScroll, true)
+    frame.addEventListener('scroll', close)
+    window.addEventListener('resize', close)
     return () => {
       document.removeEventListener('pointerdown', onDown)
-      document.removeEventListener('scroll', onScroll, true)
+      frame.removeEventListener('scroll', close)
+      window.removeEventListener('resize', close)
     }
   }, [anchor])
 

@@ -1,6 +1,10 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { type BlameRequest, useFileBlame } from './use-file-blame'
+import {
+  type BlameRequest,
+  CHANGED_AGAIN_MS,
+  useFileBlame,
+} from './use-file-blame'
 import { type FileBlame, RequestError } from './use-mux-api'
 
 const mockBlame = vi.fn()
@@ -112,6 +116,7 @@ describe('useFileBlame', () => {
     [new RequestError(404, 'not_tracked', ''), 'not-tracked'],
     [new RequestError(413, 'too_large', ''), 'too-large'],
     [new RequestError(503, '', 'git timed out'), 'timeout'],
+    [new RequestError(503, 'busy', 'git is busy'), 'busy'],
     [new RequestError(500, '', 'failed'), 'failed'],
     [new RequestError(409, 'other', ''), 'failed'],
     [new TypeError('offline'), 'failed'],
@@ -121,6 +126,28 @@ describe('useFileBlame', () => {
     await waitFor(() =>
       expect(result.current).toEqual({ status: 'error', error }),
     )
+  })
+
+  it('stops reading the file again when it keeps changing', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(100_000)
+    const onChanged = vi.fn()
+    mockBlame.mockRejectedValue(new RequestError(409, 'file_changed', ''))
+    const { result, rerender } = hook(
+      { req: { path: 'a', hash: '1' } },
+      onChanged,
+    )
+    await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1))
+    // Read again, and changed again at once
+    rerender({ req: { path: 'a', hash: '2' } })
+    await waitFor(() =>
+      expect(result.current).toEqual({ status: 'error', error: 'changing' }),
+    )
+    expect(onChanged).toHaveBeenCalledTimes(1)
+    // Long after: read again
+    now.mockReturnValue(100_000 + CHANGED_AGAIN_MS)
+    rerender({ req: { path: 'a', hash: '3' } })
+    await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(2))
+    now.mockRestore()
   })
 
   it('reads the file again when it changed, follows a new root', async () => {

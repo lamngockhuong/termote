@@ -775,6 +775,10 @@ export default {
     'File chưa có trong commit gần nhất nên chưa có gì để blame',
   'files.blame.error.tooLarge': 'File quá lớn để blame (trên 1 MiB)',
   'files.blame.error.timeout': 'git mất quá lâu để blame file này',
+  'files.blame.error.busy':
+    'git đang bận việc khác: tắt rồi bật lại Blame để thử lại',
+  'files.blame.error.changing':
+    'File liên tục thay đổi: tải lại file để xem người sửa từng dòng',
   'files.blame.error.failed': 'Không đọc được người sửa từng dòng',
   'files.review.comment': 'Bình luận',
   'files.review.clearLines': 'Bỏ chọn các dòng',

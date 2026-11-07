@@ -537,6 +537,8 @@ const BLAME_ERRORS: Record<BlameError, MessageKey> = {
   'not-tracked': 'files.blame.error.notTracked',
   'too-large': 'files.blame.error.tooLarge',
   timeout: 'files.blame.error.timeout',
+  busy: 'files.blame.error.busy',
+  changing: 'files.blame.error.changing',
   failed: 'files.blame.error.failed',
 }
 

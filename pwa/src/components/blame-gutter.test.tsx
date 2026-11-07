@@ -186,7 +186,7 @@ describe('BlamePopover', () => {
     expect(anchor).toHaveFocus()
   })
 
-  it('closes on a press outside it and its cell, or a scroll outside it', () => {
+  it('closes on a press outside it and its cell, a scroll of the page or a resize', () => {
     const { anchor, onClose } = open()
     const box = screen.getByRole('dialog')
     fireEvent.pointerDown(box)
@@ -197,6 +197,32 @@ describe('BlamePopover', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
     fireEvent.scroll(document)
     expect(onClose).toHaveBeenCalledTimes(2)
+    fireEvent(window, new Event('resize'))
+    expect(onClose).toHaveBeenCalledTimes(3)
+  })
+
+  it('closes when the code it is in scrolls, not when something else does', () => {
+    const frame = document.createElement('div')
+    frame.dataset.scrollRestore = ''
+    const other = document.createElement('div')
+    const anchor = document.createElement('button')
+    frame.append(anchor)
+    document.body.append(frame, other)
+    const onClose = vi.fn()
+    render(
+      <BlamePopover
+        hash={HASH}
+        commit={commit}
+        anchor={anchor}
+        notify={vi.fn()}
+        onClose={onClose}
+      />,
+    )
+    fireEvent.scroll(other)
+    fireEvent.scroll(document)
+    expect(onClose).not.toHaveBeenCalled()
+    fireEvent.scroll(frame)
+    expect(onClose).toHaveBeenCalledTimes(1)
   })
 
   it('goes in the top layer where the browser has one', () => {

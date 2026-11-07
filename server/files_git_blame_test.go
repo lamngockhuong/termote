@@ -373,6 +373,37 @@ func TestBlameRelPath(t *testing.T) {
 	}
 }
 
+// Blame never takes the last free slot, and a request out of time is a
+// timeout, never "not tracked".
+func TestFilesBlameBusyAndRequestTimeout(t *testing.T) {
+	requireUnixShell(t)
+	requireGit(t)
+	repo := newTestRepo(t)
+	g := newGitRunner()
+	f := &filesAPI{git: g, roots: newRootResolver(g)}
+	b, _ := os.ReadFile(filepath.Join(repo, "a.txt"))
+	root := filesRoot{Root: repo, IsRepo: true}
+	for range cap(g.sem) - 1 {
+		g.sem <- struct{}{}
+	}
+	if _, err := f.blame(t.Context(), root, "a.txt", hashHex(b), false, false); err != errBlameBusy {
+		t.Errorf("busy = %v", err)
+	}
+	for len(g.sem) > 0 {
+		<-g.sem
+	}
+	g.bin = writeScript(t, `for a; do [ "$a" = blame ] && exec sleep 5; done; exec git "$@"`)
+	ctx, cancel := context.WithTimeout(t.Context(), 300*time.Millisecond)
+	defer cancel()
+	if _, err := f.blame(ctx, root, "a.txt", hashHex(b), false, false); !errors.Is(err, errGitTimeout) {
+		t.Errorf("request timeout = %v", err)
+	}
+	// A slow blame never backs the root off
+	if g.backingOff(repo) {
+		t.Error("root backed off")
+	}
+}
+
 // writeFailingGit is a git that blames nothing and fails, while answering
 // the other commands as git does.
 func writeFailingGit(t *testing.T) string {
