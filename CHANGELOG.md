@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.24.0](https://github.com/lamngockhuong/termote/compare/v2.23.0...v2.24.0) (2026-11-07)
+
+
+### Features
+
+* a guide for coding agents (termote help agent, /agents.md, llms.txt) ([#738](https://github.com/lamngockhuong/termote/issues/738)) ([b036eec](https://github.com/lamngockhuong/termote/commit/b036eec4d825e62c4c287d69c7978a8be45972dd))
+* git blame in the file viewer ([#740](https://github.com/lamngockhuong/termote/issues/740)) ([a992b7a](https://github.com/lamngockhuong/termote/commit/a992b7a1eefee323c191a0eae29f2743f041bfe8))
+* **pwa:** name the machine the sidebar list belongs to ([#743](https://github.com/lamngockhuong/termote/issues/743)) ([48a4c13](https://github.com/lamngockhuong/termote/commit/48a4c136af669944c1b55d074b39f50027082384))
+* right-click menus for Files, file tabs and Changes ([#737](https://github.com/lamngockhuong/termote/issues/737)) ([99393e5](https://github.com/lamngockhuong/termote/commit/99393e50a4109f4482dd46890ef7f50bdeba0150))
+* running subagents and their tokens in the Chat view ([#744](https://github.com/lamngockhuong/termote/issues/744)) ([9b9708f](https://github.com/lamngockhuong/termote/commit/9b9708fcf3b3b06abadbb6c74a69f6d15b71c977))
+* **website:** search titles, JSON-LD, sitemap dates and a robots.txt for the site ([#745](https://github.com/lamngockhuong/termote/issues/745)) ([4cc72dd](https://github.com/lamngockhuong/termote/commit/4cc72ddb202faa29947445be0e3691c979c7cd99))
+
+
+### Bug Fixes
+
+* **machine:** start termote after installing it, even with a leftover config ([#742](https://github.com/lamngockhuong/termote/issues/742)) ([06dac2d](https://github.com/lamngockhuong/termote/commit/06dac2dd1fcbbc6d8d1937f8bbd541bd0065bdcd))
+* **website:** one primary hero action, balanced tagline and a hero background ([#741](https://github.com/lamngockhuong/termote/issues/741)) ([8691764](https://github.com/lamngockhuong/termote/commit/86917645e52b87a635b7db43c7d9e53a3e176890))
+
 ## [2.23.0](https://github.com/lamngockhuong/termote/compare/v2.22.0...v2.23.0) (2026-11-07)
 
 
