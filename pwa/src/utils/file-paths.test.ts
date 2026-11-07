@@ -66,6 +66,10 @@ describe('mentionPath', () => {
       '@/home/me/repo/pwa',
     )
     expect(mentionPath({ root, path: '' })).toBe('@/home/me/repo')
+    // Where the pane is not known
+    expect(mentionPath({ root, dir: null, path: 'a.ts' })).toBe(
+      '@/home/me/repo/a.ts',
+    )
     expect(
       mentionPath({ root: '/home/me/notes', place: 'p1', path: 'todo.md' }),
     ).toBe('@/home/me/notes/todo.md')

@@ -252,6 +252,7 @@ export default {
   'files.actions.nameCopyFailed': 'Could not copy the name',
   'files.actions.insert': 'Insert @path in terminal',
   'files.actions.notInserted': 'Not inserted in the terminal: {path}',
+  'files.actions.openFile': 'Open file',
   'files.actions.newFolder': 'New folder',
   'files.actions.uploadHere': 'Upload files here',
   'files.actions.collapseAll': 'Collapse all',

@@ -23,7 +23,8 @@ export interface FileActionsProps {
   // The root the tree route returned, the pane's directory under it and the
   // Place shown: what the copied and typed paths are made from
   root: string
-  dir?: string
+  // null: not known (the @path is absolute then)
+  dir?: string | null
   place?: string
   notify: ViewProps['notify']
   // Each action is offered only when given: the caller decides by role

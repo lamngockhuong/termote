@@ -1,6 +1,14 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import {
+  act,
+  createEvent,
+  fireEvent,
+  render,
+  screen,
+} from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { LONG_PRESS_MS } from '../hooks/use-long-press'
 import { FileTabBar, type TabEntry, type TabListProps } from './file-tab-bar'
+import { MenuItem } from './ui/menu'
 
 const entry = (id: string, over: Partial<TabEntry> = {}): TabEntry => ({
   id,
@@ -375,5 +383,86 @@ describe('FileTabBar', () => {
       expect(document.activeElement).toBe(tab(B))
       expect(p.onActivate).not.toHaveBeenCalled()
     })
+  })
+})
+
+describe('FileTabBar menu', () => {
+  function withMenu() {
+    const menuFor = vi.fn((id: string) => (
+      <MenuItem onSelect={vi.fn()}>Item of {id}</MenuItem>
+    ))
+    const view = render(
+      <FileTabBar
+        tabs={[entry('a'), entry('b', { pinned: false })]}
+        activeId="a"
+        homeLabel="Files"
+        onActivate={vi.fn()}
+        onClose={vi.fn()}
+        onPin={vi.fn()}
+        onMove={vi.fn()}
+        menuFor={menuFor}
+      />,
+    )
+    return { menuFor, ...view }
+  }
+  const tabBox = (name: string) =>
+    screen.getByRole('tab', { name: new RegExp(`^${name}`) })
+      .parentElement as HTMLElement
+
+  it("a right click on a file tab opens its menu, the browser's kept shut", () => {
+    withMenu()
+    const ev = createEvent.contextMenu(tabBox('b.md'), {
+      clientX: 30,
+      clientY: 10,
+    })
+    fireEvent(tabBox('b.md'), ev)
+    expect(ev.defaultPrevented).toBe(true)
+    expect(screen.getByRole('menu', { name: 'Actions for b.md' }))
+    expect(screen.getByRole('menuitem', { name: 'Item of b' }))
+    expect(tab(/^b\.md/)).toHaveAttribute(
+      'aria-keyshortcuts',
+      'Delete Alt+ArrowLeft Alt+ArrowRight Shift+F10',
+    )
+    // The list's entry has none
+    const home = createEvent.contextMenu(tab('Files'))
+    fireEvent(tab('Files'), home)
+    expect(home.defaultPrevented).toBe(false)
+  })
+
+  it('the menu key opens the focused tab’s menu, its first item focused; Escape gives the tab the focus back', () => {
+    withMenu()
+    fireEvent.keyDown(tab('a.md'), { key: 'F10', shiftKey: true })
+    expect(screen.getByRole('menuitem', { name: 'Item of a' })).toHaveFocus()
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(tab('a.md')).toHaveFocus()
+    // Not on the list's entry
+    fireEvent.keyDown(tab('Files'), { key: 'ContextMenu' })
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('a finger resting on a tab opens its menu once', () => {
+    vi.useFakeTimers()
+    try {
+      const { menuFor } = withMenu()
+      fireEvent.pointerDown(tabBox('b.md'), {
+        pointerType: 'touch',
+        button: 0,
+      })
+      act(() => vi.advanceTimersByTime(LONG_PRESS_MS))
+      expect(screen.getByRole('menuitem', { name: 'Item of b' }))
+      fireEvent.contextMenu(tabBox('b.md'))
+      expect(menuFor.mock.calls.every(([id]) => id === 'b')).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('without menuFor, a right click is the browser’s', () => {
+    show()
+    const ev = createEvent.contextMenu(tab('a.md').parentElement as Element)
+    fireEvent(tab('a.md').parentElement as Element, ev)
+    expect(ev.defaultPrevented).toBe(false)
+    expect(tab('a.md')).toHaveAttribute('aria-keyshortcuts', 'Delete')
   })
 })

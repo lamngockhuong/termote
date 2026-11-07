@@ -9,8 +9,10 @@ import {
   FolderOpen,
   FolderPlus,
   Lock,
+  Pin,
   RefreshCw,
   Upload,
+  X,
 } from 'lucide-react'
 import {
   type ClipboardEvent,
@@ -37,6 +39,7 @@ import {
   dropDraft,
   type FilesError,
   type FilesState,
+  type FileTab,
   FOLLOW_NOTICES,
   fileRenamed,
   hasDirtyDraftAt,
@@ -510,6 +513,56 @@ function PaneFiles({
   const openFiles = isMobile && f.tabs.length > 0 && (
     <OpenFilesButton count={f.tabs.length} onClick={() => setListing(true)} />
   )
+  // A file tab's menu (the tab bar's right click): Keep open and Close, then
+  // what the tree's row offers. A tab kept from a root the pane has left
+  // only copies and closes: its file is not under the root the server has.
+  const tabMenu = (id: string) => {
+    const tab = f.tabs.find((x) => x.id === id) as FileTab
+    const here = tab.root === f.root
+    const revealed = !!tab.reveal
+    return (
+      <>
+        {!tab.pinned && (
+          <MenuItem icon={<Pin size={16} />} onSelect={() => f.pin(id)}>
+            {t('files.tabs.keep')}
+          </MenuItem>
+        )}
+        <MenuItem icon={<X size={16} />} onSelect={() => requestClose(id)}>
+          {t('common.close')}
+        </MenuItem>
+        <MenuSeparator />
+        <FileActionItems
+          path={tab.path}
+          root={tab.root}
+          dir={here ? (f.dir ?? '') : null}
+          place={f.place}
+          notify={notify}
+          insertText={insertText}
+          // As the viewer's: never through a link the tree knows of
+          onDownload={
+            here && canDownload && !throughLink(f, tab.path)
+              ? () => askDownload(tab.path, false, revealed)
+              : undefined
+          }
+          onRename={
+            here && canRename ? () => askRename(tab.path, revealed) : undefined
+          }
+          onDelete={
+            here && canDelete
+              ? () =>
+                  setDeleting({
+                    root: tab.root,
+                    place: f.place,
+                    path: tab.path,
+                    kind: 'file',
+                    sensitive: !!entryAt(f, tab.path)?.sensitive || revealed,
+                  })
+              : undefined
+          }
+        />
+      </>
+    )
+  }
   const closingTab = f.tabs.find((t) => t.id === closing)
   const moved = f.pendingRootClose?.length ?? 0
 
@@ -912,7 +965,7 @@ function PaneFiles({
         {!tab && openFiles}
       </PaneDirHeader>
       <UploadStatusRow />
-      {tabBar && <FileTabBar {...tabList} />}
+      {tabBar && <FileTabBar {...tabList} menuFor={tabMenu} />}
       <OpenFilesSheet
         {...tabList}
         isOpen={isMobile && listing}

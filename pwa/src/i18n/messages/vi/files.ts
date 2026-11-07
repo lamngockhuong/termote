@@ -232,6 +232,7 @@ export default {
   'files.actions.nameCopyFailed': 'Không sao chép được tên',
   'files.actions.insert': 'Chèn @path vào terminal',
   'files.actions.notInserted': 'Chưa chèn được vào terminal: {path}',
+  'files.actions.openFile': 'Mở file',
   'files.actions.newFolder': 'Thư mục mới',
   'files.actions.uploadHere': 'Tải file lên đây',
   'files.actions.collapseAll': 'Thu gọn tất cả',

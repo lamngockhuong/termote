@@ -1770,6 +1770,128 @@ describe('FilesView tabs', () => {
     await screen.findByTestId('code-block')
   }
 
+  const menuItems = () =>
+    screen.getAllByRole('menuitem').map((m) => m.textContent?.trim())
+
+  it("a file tab's menu keeps, closes, and offers the row's actions", async () => {
+    mockDownload.mockReset()
+    mockTrash.mockResolvedValue({ entries: [] })
+    const insertText = vi.fn(() => true)
+    await show({
+      insertText,
+      mux: {
+        backend: 'tmux',
+        caps: {
+          clientSideSelect: false,
+          copyMode: true,
+          files: true,
+          trash: true,
+        },
+      },
+    })
+    fireEvent.click(item('README.md'))
+    await screen.findByTestId('markdown-preview')
+    const right = () =>
+      fireEvent.contextMenu(tab(/^README\.md/).parentElement as Element, {
+        clientX: 20,
+        clientY: 10,
+      })
+    right()
+    expect(menuItems()).toEqual([
+      'Keep open',
+      'Close',
+      'Copy relative path',
+      'Copy absolute path',
+      'Copy name',
+      'Insert @path in terminal',
+      'Download',
+      'Rename',
+      'Delete',
+    ])
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Keep open' }))
+    expect(tabs()).toEqual(['Files', 'README.md'])
+    right()
+    expect(menuItems()[0]).toBe('Close')
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Insert @path in terminal' }),
+    )
+    expect(insertText).toHaveBeenCalledWith('@README.md')
+    right()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Download' }))
+    expect(mockDownload).toHaveBeenCalledWith(
+      {
+        paneId: '%1',
+        root: '/home/kim/app',
+        path: 'README.md',
+        reveal: false,
+      },
+      expect.any(Function),
+      expect.any(Function),
+      expect.any(Function),
+    )
+    right()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }))
+    expect(screen.getByRole('dialog', { name: 'Rename' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    right()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }))
+    expect(await screen.findByText('Delete file?')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    right()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Close' }))
+    expect(screen.queryByRole('tablist')).toBeNull()
+  })
+
+  it('a tab kept from a root the pane left only copies, types and closes', async () => {
+    const insertText = vi.fn(() => true)
+    await show({ insertText })
+    fireEvent.click(item('README.md'))
+    await screen.findByTestId('markdown-preview')
+    // Unsaved changes keep it open as the root moves
+    const { result } = renderHook(() =>
+      useFileDraft('%1', '/home/kim/app', 'README.md'),
+    )
+    act(() =>
+      result.current[1]({
+        root: '/home/kim/app',
+        path: 'README.md',
+        baseHash: 'h:README.md',
+        base: 'a',
+        crlf: false,
+        text: 'changed',
+        reveal: false,
+      }),
+    )
+    mockTree.mockImplementation(async (_p: string, path: string) => ({
+      root: '/home/kim/other',
+      isRepo: true,
+      path,
+      entries: DIRS[path],
+      truncated: false,
+    }))
+    mockTree.mockRejectedValueOnce(
+      new RequestError(409, '', 'root changed', { root: '/home/kim/other' }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+    await act(async () => {})
+    fireEvent.contextMenu(tab(/^README\.md/).parentElement as Element, {
+      clientX: 20,
+      clientY: 10,
+    })
+    expect(menuItems()).toEqual([
+      'Keep open',
+      'Close',
+      'Copy relative path',
+      'Copy absolute path',
+      'Copy name',
+      'Insert @path in terminal',
+    ])
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Insert @path in terminal' }),
+    )
+    expect(insertText).toHaveBeenCalledWith('@/home/kim/app/README.md')
+  })
+
   it('a single click opens the preview tab, a double click keeps it', async () => {
     await show()
     expect(screen.queryByRole('tablist')).toBeNull()

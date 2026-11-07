@@ -21,20 +21,22 @@ export function absolutePath(root: string, path: string): string {
 
 // path as the agent in the pane reads it after @: from the pane's directory
 // (dir, under root) when the file is below it, or from the root when the
-// pane sits at the root; otherwise (above or beside the pane's directory, or
-// in a Place) the absolute path. Claude Code's own completion quotes a path
+// pane sits at the root (dir ""); otherwise (above or beside the pane's
+// directory, in a Place, or where the pane's directory is not known: dir
+// null) the absolute path. Claude Code's own completion quotes a path
 // with whitespace as @"my notes.txt"; a backslash before the space is not
 // taken.
 export function mentionPath(o: {
   root: string
-  dir?: string
+  dir?: string | null
   place?: string
   path: string
 }): string {
   const { root, dir = '', place, path } = o
+  const known = dir !== null && !place
   let at: string
-  if (!place && path && !dir) at = path
-  else if (!place && dir && path.startsWith(`${dir}/`))
+  if (known && path && !dir) at = path
+  else if (known && dir && path.startsWith(`${dir}/`))
     at = path.slice(dir.length + 1)
   else at = absolutePath(root, path)
   return /\s/.test(at) ? `@"${at}"` : `@${at}`

@@ -1,12 +1,22 @@
 import { FolderTree, X } from 'lucide-react'
-import { type KeyboardEvent, type PointerEvent, useEffect, useRef } from 'react'
+import {
+  type KeyboardEvent,
+  type PointerEvent,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+  useEffect,
+  useRef,
+  useState,
+} from 'react'
 import { flushSync } from 'react-dom'
+import { useLongPress } from '../hooks/use-long-press'
 import { useWheelScrollX } from '../hooks/use-wheel-scroll-x'
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
 import type { Translate } from '../i18n/translate'
 import { slidePlace, slideShift, targetIndex } from '../utils/reorder'
 import { FOCUS_RING } from './ui/button'
+import { Menu } from './ui/menu'
 
 // A tab as the tab bar and the open-files sheet show it
 export interface TabEntry {
@@ -54,13 +64,28 @@ export const tabElementId = (panelId: string, id: string | null) =>
 // How far (px) a pressed tab moves before it drags
 const DRAG_SLOP = 4
 
+// Shift+F10 or the context menu key: the focused tab's menu
+const menuKey = (e: KeyboardEvent) =>
+  e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)
+
+// The tab menu open: at the pointer (a right click) or by the tab (point
+// null: a long press, the menu key). Kept once closed, so it fades out.
+interface TabMenu {
+  id: string
+  point: { x: number; y: number } | null
+  byKey: boolean
+  open: boolean
+}
+
 const TAB = `flex h-8 shrink-0 items-center gap-1.5 px-2.5 text-[12px] ${FOCUS_RING} focus-visible:-outline-offset-2`
 
 // The open files above the viewer (desktop): the list's entry first, then a
 // tab per file. Arrow keys, Home and End move between tabs, Enter or Space
 // shows one, Delete closes it; a middle click closes, a double click pins.
 // With onMove a tab drags along the row (a mouse or a pen), the others
-// making room for it, and Alt+Left/Right moves the focused one.
+// making room for it, and Alt+Left/Right moves the focused one. With
+// menuFor a right click, a long press, Shift+F10 or the menu key opens a
+// file tab's menu (never the list's entry).
 export function FileTabBar({
   tabs,
   activeId,
@@ -70,7 +95,11 @@ export function FileTabBar({
   onPin,
   onMove,
   panelId,
-}: TabListProps) {
+  menuFor,
+}: TabListProps & {
+  // The items of tab id's menu, built when it opens
+  menuFor?: (id: string) => ReactNode
+}) {
   const tabIds = (id: string | null) =>
     panelId ? { id: tabElementId(panelId, id), 'aria-controls': panelId } : {}
   const { t } = useT()
@@ -85,6 +114,27 @@ export function FileTabBar({
   latest.current = { tabs, onMove }
   useEffect(() => () => endDrag.current?.(), [])
 
+  const [menu, setMenu] = useState<TabMenu>()
+  // The tab the menu hangs from and gives the focus back to
+  const menuAnchor = useRef<HTMLElement | null>(null)
+  const openMenu = (id: string, point: TabMenu['point'], byKey = false) => {
+    // A tab opens its menu only while it is drawn
+    menuAnchor.current = items.current.get(id) as HTMLElement
+    setMenu({ id, point, byKey, open: true })
+  }
+  // The tab a finger rests on: a long press opens its menu
+  const pressed = useRef<string>(undefined)
+  const press = useLongPress(
+    () => openMenu(pressed.current as string, null),
+    (e: ReactMouseEvent) => {
+      e.preventDefault()
+      openMenu((e.currentTarget as HTMLElement).dataset.tab as string, {
+        x: e.clientX,
+        y: e.clientY,
+      })
+    },
+  )
+
   // The tab shown stays in view as the bar scrolls sideways
   useEffect(() => {
     items.current
@@ -93,6 +143,11 @@ export function FileTabBar({
   }, [activeId])
 
   const onKeyDown = (e: KeyboardEvent, id: string | null) => {
+    if (menuFor && id !== null && menuKey(e)) {
+      e.preventDefault()
+      openMenu(id, null, true)
+      return
+    }
     if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
       if (id === null || !onMove) return
       // Alt+Left would also go back a page
@@ -253,99 +308,125 @@ export function FileTabBar({
   // Keyboard focus stays on the tab shown (else the list's entry)
   const tabbable = ids.includes(activeId) ? activeId : null
 
+  const menuTab = menu && tabs.find((tab) => tab.id === menu.id)
   return (
-    <div
-      ref={barRef}
-      role="tablist"
-      aria-label={t('files.tabs.open')}
-      className="flex shrink-0 overflow-x-auto scrollbar-hide border-b border-border bg-surface ui-terminal:bg-bg"
-    >
-      <button
-        ref={ref(null)}
-        type="button"
-        role="tab"
-        {...tabIds(null)}
-        aria-selected={activeId === null}
-        tabIndex={tabbable === null ? 0 : -1}
-        onClick={() => onActivate(null)}
-        onKeyDown={(e) => onKeyDown(e, null)}
-        className={`${TAB} border-r border-border ${activeId === null ? 'bg-bg text-fg' : 'text-fg-muted hover:text-fg'}`}
+    <>
+      <div
+        ref={barRef}
+        role="tablist"
+        aria-label={t('files.tabs.open')}
+        className="flex shrink-0 overflow-x-auto scrollbar-hide border-b border-border bg-surface ui-terminal:bg-bg"
       >
-        <FolderTree size={14} aria-hidden="true" />
-        {homeLabel}
-      </button>
-      {tabs.map((tab) => {
-        const shown = tab.id === activeId
-        return (
-          <div
-            key={tab.id}
-            role="presentation"
-            data-tab
-            onPointerDown={(e) => onPointerDown(e, tab.id)}
-            className={`group relative flex shrink-0 items-center border-r border-border data-dragging:z-10 data-dragging:bg-surface-raised data-dragging:text-fg data-dragging:shadow-sm ${movable ? 'transition-[translate] duration-(--duration-fast) ease-standard data-dragging:transition-none' : ''} ${shown ? 'bg-bg text-fg' : 'text-fg-muted hover:text-fg'}`}
-          >
-            <button
-              ref={ref(tab.id)}
-              type="button"
-              role="tab"
-              {...tabIds(tab.id)}
-              aria-selected={shown}
-              aria-keyshortcuts={
-                movable ? 'Delete Alt+ArrowLeft Alt+ArrowRight' : 'Delete'
-              }
-              tabIndex={tabbable === tab.id ? 0 : -1}
-              title={tabTitle(tab, t)}
-              onClick={() => onActivate(tab.id)}
-              onDoubleClick={() => onPin(tab.id)}
-              // No autoscroll: a middle click closes the tab
-              onMouseDown={(e) => {
-                if (e.button === 1) e.preventDefault()
+        <button
+          ref={ref(null)}
+          type="button"
+          role="tab"
+          {...tabIds(null)}
+          aria-selected={activeId === null}
+          tabIndex={tabbable === null ? 0 : -1}
+          onClick={() => onActivate(null)}
+          onKeyDown={(e) => onKeyDown(e, null)}
+          className={`${TAB} border-r border-border ${activeId === null ? 'bg-bg text-fg' : 'text-fg-muted hover:text-fg'}`}
+        >
+          <FolderTree size={14} aria-hidden="true" />
+          {homeLabel}
+        </button>
+        {tabs.map((tab) => {
+          const shown = tab.id === activeId
+          return (
+            <div
+              key={tab.id}
+              role="presentation"
+              data-tab={tab.id}
+              {...(menuFor && press)}
+              onPointerDown={(e) => {
+                pressed.current = tab.id
+                if (menuFor) press.onPointerDown(e)
+                onPointerDown(e, tab.id)
               }}
-              onAuxClick={(e) => {
-                if (e.button !== 1) return
-                e.preventDefault()
-                onClose(tab.id)
-              }}
-              onKeyDown={(e) => onKeyDown(e, tab.id)}
-              className={`${TAB} max-w-48 pr-1`}
+              className={`group relative flex shrink-0 items-center border-r border-border data-dragging:z-10 data-dragging:bg-surface-raised data-dragging:text-fg data-dragging:shadow-sm ${movable ? 'transition-[translate] duration-(--duration-fast) ease-standard data-dragging:transition-none' : ''} ${shown ? 'bg-bg text-fg' : 'text-fg-muted hover:text-fg'}`}
             >
-              <span
-                className={`truncate ${tab.pinned ? '' : 'italic'} ${tab.missing ? 'text-fg-subtle line-through' : ''}`}
+              <button
+                ref={ref(tab.id)}
+                type="button"
+                role="tab"
+                {...tabIds(tab.id)}
+                aria-selected={shown}
+                aria-keyshortcuts={[
+                  'Delete',
+                  movable && 'Alt+ArrowLeft Alt+ArrowRight',
+                  menuFor && 'Shift+F10',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                tabIndex={tabbable === tab.id ? 0 : -1}
+                title={tabTitle(tab, t)}
+                onClick={() => onActivate(tab.id)}
+                onDoubleClick={() => onPin(tab.id)}
+                // No autoscroll: a middle click closes the tab
+                onMouseDown={(e) => {
+                  if (e.button === 1) e.preventDefault()
+                }}
+                onAuxClick={(e) => {
+                  if (e.button !== 1) return
+                  e.preventDefault()
+                  onClose(tab.id)
+                }}
+                onKeyDown={(e) => onKeyDown(e, tab.id)}
+                className={`${TAB} max-w-48 pr-1`}
               >
-                {tab.name}
-              </span>
-              {!tab.pinned && (
-                <span className="sr-only"> {t('files.tabs.preview')}</span>
-              )}
-              {tab.missing && (
-                <span className="sr-only"> {t('files.tabs.notFound')}</span>
-              )}
-              {tab.dirty && (
-                <>
-                  <span
-                    aria-hidden="true"
-                    className="size-1.5 shrink-0 rounded-full bg-accent"
-                  />
-                  <span className="sr-only"> {t('files.tabs.unsaved')}</span>
-                </>
-              )}
-            </button>
-            <button
-              type="button"
-              // For the mouse: a tablist holds only tabs, and the tab's
-              // Delete key closes it from the keyboard
-              tabIndex={-1}
-              aria-hidden="true"
-              aria-label={t('files.tabs.closeName', { name: tab.name })}
-              title={t('common.close')}
-              onClick={() => onClose(tab.id)}
-              className={`mr-1 flex size-5 shrink-0 items-center justify-center rounded-control hover:bg-surface ${FOCUS_RING} ${shown ? '' : 'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100'}`}
-            >
-              <X size={12} aria-hidden="true" />
-            </button>
-          </div>
-        )
-      })}
-    </div>
+                <span
+                  className={`truncate ${tab.pinned ? '' : 'italic'} ${tab.missing ? 'text-fg-subtle line-through' : ''}`}
+                >
+                  {tab.name}
+                </span>
+                {!tab.pinned && (
+                  <span className="sr-only"> {t('files.tabs.preview')}</span>
+                )}
+                {tab.missing && (
+                  <span className="sr-only"> {t('files.tabs.notFound')}</span>
+                )}
+                {tab.dirty && (
+                  <>
+                    <span
+                      aria-hidden="true"
+                      className="size-1.5 shrink-0 rounded-full bg-accent"
+                    />
+                    <span className="sr-only"> {t('files.tabs.unsaved')}</span>
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                // For the mouse: a tablist holds only tabs, and the tab's
+                // Delete key closes it from the keyboard
+                tabIndex={-1}
+                aria-hidden="true"
+                aria-label={t('files.tabs.closeName', { name: tab.name })}
+                title={t('common.close')}
+                onClick={() => onClose(tab.id)}
+                className={`mr-1 flex size-5 shrink-0 items-center justify-center rounded-control hover:bg-surface ${FOCUS_RING} ${shown ? '' : 'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100'}`}
+              >
+                <X size={12} aria-hidden="true" />
+              </button>
+            </div>
+          )
+        })}
+      </div>
+      {menuFor && (
+        <Menu
+          label={t('files.tree.actions', { name: menuTab?.name ?? '' })}
+          trigger={null}
+          anchorRef={menuAnchor}
+          align="start"
+          open={!!menuTab && (menu as TabMenu).open}
+          onOpenChange={(open) => setMenu((m) => m && { ...m, open })}
+          point={menu?.point}
+          focusFirst={menu?.byKey}
+        >
+          {menuTab && menuFor(menuTab.id)}
+        </Menu>
+      )}
+    </>
   )
 }
