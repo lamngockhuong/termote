@@ -58,7 +58,10 @@ import {
 } from './components/session-sidebar'
 import { SettingsModal } from './components/settings-modal'
 import { SidePanel } from './components/side-panel'
-import { SidebarMachines } from './components/sidebar-machines'
+import {
+  MachineListHeading,
+  SidebarMachines,
+} from './components/sidebar-machines'
 import { SpotlightTour } from './components/spotlight-tour'
 import { TemplateFillDialog } from './components/template-fill-dialog'
 import { TerminalStack } from './components/terminal-stack'
@@ -342,11 +345,14 @@ export default function App({
   const machines = useMachines()
   const openMachine = machines.find((m) => m.id === currentMachine())
   const machinesSection = (
-    <SidebarMachines
-      machines={machines}
-      current={currentMachine()}
-      onSelect={switchMachine}
-    />
+    <>
+      <SidebarMachines
+        machines={machines}
+        current={currentMachine()}
+        onSelect={switchMachine}
+      />
+      <MachineListHeading machines={machines} current={currentMachine()} />
+    </>
   )
   // The tab's title names the machine open, when it is not this one
   useEffect(() => {

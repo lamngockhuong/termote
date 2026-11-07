@@ -185,7 +185,7 @@ export function SidebarMachines({ machines, current, onSelect }: Props) {
                   </button>
                 </div>
                 {isOpen && (
-                  <div className="pl-8 text-[12px]">
+                  <div className="ml-3 border-l border-border pl-5 text-[12px]">
                     {failed ? (
                       <p className="m-0 px-2 py-1 text-fg-muted">
                         {t(STATUS_LABEL[status])}. {t('shell.machines.hint')}
@@ -232,5 +232,28 @@ export function SidebarMachines({ machines, current, onSelect }: Props) {
         </ul>
       )}
     </section>
+  )
+}
+
+// Under the Machines, names the machine the list after it belongs to, so that
+// list does not read as part of a machine opened just above. Nothing without
+// a machine (no Machines either), or while the one open is not listed yet.
+export function MachineListHeading({
+  machines,
+  current,
+}: Pick<Props, 'machines' | 'current'>) {
+  const { t } = useT()
+  if (machines.length === 0 && current === '') return null
+  const label =
+    current === ''
+      ? t('shell.machines.local')
+      : machines.find((m) => m.id === current)?.label
+  if (label === undefined) return null
+  return (
+    <h2 className="m-0 flex h-8 shrink-0 items-center px-3 pt-1 font-label text-[11px] font-semibold uppercase tracking-wider text-fg-muted">
+      <span className="min-w-0 truncate">
+        {t('shell.machines.on', { label: visibleUnsafe(label) })}
+      </span>
+    </h2>
   )
 }

@@ -1,7 +1,12 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { MachineInfo } from '../hooks/use-mux-api'
-import { busyCount, machineAgents, SidebarMachines } from './sidebar-machines'
+import {
+  busyCount,
+  MachineListHeading,
+  machineAgents,
+  SidebarMachines,
+} from './sidebar-machines'
 
 const BOX: MachineInfo = {
   id: '0123456789abcdef',
@@ -115,5 +120,27 @@ describe('SidebarMachines', () => {
     expect(machineAgents(BOX)).toHaveLength(4)
     expect(busyCount(BOX)).toBe(2)
     expect(busyCount({ ...BOX, groups: undefined })).toBe(0)
+  })
+})
+
+describe('MachineListHeading', () => {
+  it('names the machine whose list follows', () => {
+    const { rerender } = render(
+      <MachineListHeading machines={[BOX]} current="" />,
+    )
+    expect(
+      screen.getByRole('heading', { name: 'On This machine' }),
+    ).toBeInTheDocument()
+    rerender(<MachineListHeading machines={[BOX]} current={BOX.id} />)
+    expect(screen.getByRole('heading', { name: 'On Box' })).toBeInTheDocument()
+  })
+
+  it('shows nothing without a machine, or before the open one is listed', () => {
+    const { container, rerender } = render(
+      <MachineListHeading machines={[]} current="" />,
+    )
+    expect(container).toBeEmptyDOMElement()
+    rerender(<MachineListHeading machines={[BOX]} current="ffffffffffffffff" />)
+    expect(container).toBeEmptyDOMElement()
   })
 })
