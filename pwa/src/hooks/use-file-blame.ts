@@ -1,5 +1,27 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { type FileBlame, fetchFileBlame, RequestError } from './use-mux-api'
+
+// Whether Blame is on: one switch for the page, kept while Files is closed
+// (Changes shown instead) and across files, until the page is reloaded
+let blameOn = false
+const blameListeners = new Set<() => void>()
+const subscribeBlame = (fn: () => void) => {
+  blameListeners.add(fn)
+  return () => {
+    blameListeners.delete(fn)
+  }
+}
+function setBlameOn(on: boolean) {
+  blameOn = on
+  for (const fn of blameListeners) fn()
+}
+export function useBlameOn(): [boolean, (on: boolean) => void] {
+  return [useSyncExternalStore(subscribeBlame, () => blameOn), setBlameOn]
+}
+// Tests: off again
+export function resetBlameOn() {
+  blameOn = false
+}
 
 // The file the blame is asked for: hash is the sha256 of the bytes shown
 // (FileContent.hash), so the lines blamed are the lines on the screen

@@ -100,6 +100,14 @@ test.describe('blame in the file viewer', () => {
     await page.keyboard.press('Escape')
     await expect(details).toBeHidden()
 
+    // Still on after Changes was shown and Files opened again (no reload)
+    const side = page.getByRole('group', { name: 'Side panel' })
+    await side.getByRole('button', { name: 'Changes' }).click()
+    await expect(page.getByRole('complementary', { name: 'Changes' })).toBeVisible()
+    await side.getByRole('button', { name: 'Files' }).click()
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    await expect(cellOf(page, 3)).toHaveText('Not committed')
+
     // Off again: the column goes
     await toggle.click()
     await expect(page.getByText('Not committed')).toBeHidden()

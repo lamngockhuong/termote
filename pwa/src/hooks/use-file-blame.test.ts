@@ -1,8 +1,10 @@
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   type BlameRequest,
   CHANGED_AGAIN_MS,
+  resetBlameOn,
+  useBlameOn,
   useFileBlame,
 } from './use-file-blame'
 import { type FileBlame, RequestError } from './use-mux-api'
@@ -178,5 +180,24 @@ describe('useFileBlame', () => {
         error: 'failed',
       }),
     )
+  })
+})
+
+describe('useBlameOn', () => {
+  beforeEach(() => {
+    resetBlameOn()
+  })
+
+  it('is one switch for the page, kept when the view using it goes', () => {
+    const first = renderHook(() => useBlameOn())
+    expect(first.result.current[0]).toBe(false)
+    act(() => first.result.current[1](true))
+    expect(first.result.current[0]).toBe(true)
+    // Files closed (Changes shown) and opened again
+    first.unmount()
+    const again = renderHook(() => useBlameOn())
+    expect(again.result.current[0]).toBe(true)
+    act(() => again.result.current[1](false))
+    expect(again.result.current[0]).toBe(false)
   })
 })
