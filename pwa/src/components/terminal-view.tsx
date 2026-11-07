@@ -612,6 +612,10 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
         theme: terminalTheme(theme),
         cursorBlink: true,
         scrollback: 5000,
+        // xterm.js sizes its scrollbar (and FitAddon the room it keeps for
+        // it) from this width, 14px when unset; 8px matches the thin
+        // scrollbars in index.css. With no decorations the ruler draws nothing.
+        overviewRuler: { width: 8 },
         linkHandler: { activate: (_event, uri) => openTerminalLink(uri) },
       })
       const fit = new FitAddon()
