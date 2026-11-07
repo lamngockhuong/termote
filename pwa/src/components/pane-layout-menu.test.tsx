@@ -26,6 +26,11 @@ function show(over: Partial<Parameters<typeof PaneLayoutMenu>[0]> = {}) {
 const item = (name: string) => screen.getByRole('menuitem', { name })
 
 describe('PaneLayoutMenu', () => {
+  it('opens to the left of its button when asked (the right bar)', () => {
+    show({ side: 'left' })
+    expect(screen.getByRole('menu')).toHaveClass('right-full')
+  })
+
   it('runs each action on the pane', () => {
     const p = show()
     fireEvent.click(item('Split right'))

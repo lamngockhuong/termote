@@ -3,6 +3,7 @@ import type { ComponentProps, ReactNode } from 'react'
 import { useCompactLabels } from '../hooks/use-compact-labels'
 import { useT } from '../i18n/i18n-context'
 import type { Session } from '../types/session'
+import type { ToolbarPosition } from '../utils/toolbar-position'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { BrandMark } from './brand-mark'
 import {
@@ -88,6 +89,10 @@ interface Props {
   // A focus window: its session can't be switched here, and this hands its
   // target back to the main window
   onOpenInMain?: () => void
+  // Desktop: right leaves the views, panels, Pane menu, fullscreen and the
+  // palette to the ToolbarRail, keeping only the tabs and what is about the
+  // connection and the machine here
+  toolbar?: ToolbarPosition
   menu: MenuProps
 }
 
@@ -169,6 +174,7 @@ function DesktopHeader(p: Props) {
   // and take them back once the tabs would still fit with them
   const labels = useCompactLabels()
   const compact = p.showSessionTabs && labels.compact
+  const inHeader = p.toolbar !== 'right'
   return (
     // At least 44px, padded below the status bar of an installed iPad app;
     // it grows when touch-sized controls are taller than the row, instead of
@@ -213,14 +219,16 @@ function DesktopHeader(p: Props) {
       >
         {p.hostChip}
         {p.usageChip}
-        <ViewSwitcher
-          views={p.views}
-          value={p.viewId}
-          onChange={p.onViewChange}
-          panelId={p.viewPanelId}
-          compact={compact}
-        />
-        {p.onTogglePanel && (
+        {inHeader && (
+          <ViewSwitcher
+            views={p.views}
+            value={p.viewId}
+            onChange={p.onViewChange}
+            panelId={p.viewPanelId}
+            compact={compact}
+          />
+        )}
+        {inHeader && p.onTogglePanel && (
           <PanelToggles
             views={p.panelViews ?? []}
             open={p.sidePanelId ?? null}
@@ -254,22 +262,25 @@ function DesktopHeader(p: Props) {
             </button>
           </div>
         )}
-        {p.paneMenu}
+        {inHeader && p.paneMenu}
         {p.onOpenInMain && <OpenInMainButton onClick={p.onOpenInMain} />}
         <ConnectionIndicator state={p.connectionState} onRetry={p.onRetry} />
-        {/* The palette and fullscreen are in the menu, so the tabs keep
-            the room; the tour points at it for the palette */}
+        {/* With the toolbar here, the palette and fullscreen are in the
+            menu, so the tabs keep the room; the tour points at it for the
+            palette */}
         <SettingsMenu
           {...p.menu}
-          tourAnchor={p.onOpenPalette ? 'palette' : undefined}
-          onOpenPalette={p.onOpenPalette}
+          tourAnchor={inHeader && p.onOpenPalette ? 'palette' : undefined}
+          onOpenPalette={inHeader ? p.onOpenPalette : undefined}
           paletteKey={p.paletteKey}
           fullscreen={
-            p.onToggleFullscreen && {
-              active: p.isFullscreen,
-              onToggle: p.onToggleFullscreen,
-              key: p.fullscreenKey,
-            }
+            inHeader && p.onToggleFullscreen
+              ? {
+                  active: p.isFullscreen,
+                  onToggle: p.onToggleFullscreen,
+                  key: p.fullscreenKey,
+                }
+              : undefined
           }
         />
       </div>

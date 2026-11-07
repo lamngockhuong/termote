@@ -43,6 +43,10 @@ import {
   requestNotify,
 } from '../utils/notify-permission'
 import { SIDEBAR_LAYOUTS, type SidebarLayout } from '../utils/sidebar-layout'
+import {
+  TOOLBAR_POSITIONS,
+  type ToolbarPosition,
+} from '../utils/toolbar-position'
 import { DevicesSection } from './devices-section'
 import { PromptTemplatesSection } from './prompt-templates-section'
 import { ShortcutsSection } from './shortcuts-section'
@@ -571,6 +575,11 @@ const SIDEBAR_LAYOUT_LABEL: Record<SidebarLayout, MessageKey> = {
   compact: 'settings.sidebarLayout.compact',
 }
 
+const TOOLBAR_POSITION_LABEL: Record<ToolbarPosition, MessageKey> = {
+  header: 'settings.toolbarPosition.header',
+  right: 'settings.toolbarPosition.right',
+}
+
 const STYLE_LABEL: Record<UiStyle, MessageKey> = {
   neutral: 'settings.style.neutral',
   terminal: 'settings.style.terminal',
@@ -982,6 +991,24 @@ export function SettingsModal({
               onChange={(v) => onUpdateSetting('showSessionTabs', v)}
             />
           </SettingsRow>
+          {/* The phone header keeps its own controls */}
+          {!isMobile && (
+            <SettingsRow
+              title={t('settings.toolbarPosition')}
+              desc={t('settings.toolbarPositionDesc')}
+            >
+              <SegmentedControl
+                label={t('settings.toolbarPosition')}
+                options={TOOLBAR_POSITIONS.map((p) => ({
+                  value: p,
+                  label: t(TOOLBAR_POSITION_LABEL[p]),
+                  content: t(TOOLBAR_POSITION_LABEL[p]),
+                }))}
+                value={settings.toolbarPosition}
+                onChange={(v) => onUpdateSetting('toolbarPosition', v)}
+              />
+            </SettingsRow>
+          )}
           <SettingsRow
             title={t('settings.blockedFirst')}
             desc={t(

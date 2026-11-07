@@ -533,3 +533,39 @@ describe('AppHeader — labels give way to the tabs', () => {
     expect(screen.getByText('Chat')).toHaveClass('@[60rem]:not-sr-only')
   })
 })
+
+describe('AppHeader — toolbar on the right bar', () => {
+  it('keeps the tabs, chips, font size, connection and menu only', () => {
+    renderHeader({
+      toolbar: 'right',
+      views: TWO_VIEWS,
+      panelViews: [{ id: 'files', label: 'Files', Icon: SquareTerminal }],
+      onTogglePanel: vi.fn(),
+      paneMenu: <button type="button">Pane</button>,
+      onOpenPalette: vi.fn(),
+      hostChip: <span>cpu 3%</span>,
+    })
+    expect(screen.getByRole('tablist', { name: 'Sessions' })).toBeVisible()
+    expect(screen.getByText('cpu 3%')).toBeInTheDocument()
+    expect(screen.getByTestId('font-size')).toBeInTheDocument()
+    expect(screen.queryByRole('tablist', { name: 'View' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Files' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Pane' })).toBeNull()
+    const more = screen.getByRole('button', { name: 'More' })
+    // The bar's own palette button is the tour's anchor
+    expect(more.parentElement).not.toHaveAttribute('data-tour')
+    fireEvent.click(more)
+    expect(screen.queryByRole('menuitem', { name: /palette/ })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: /fullscreen/ })).toBeNull()
+  })
+
+  it('keeps the phone header as it is', () => {
+    renderHeader({
+      isMobile: true,
+      toolbar: 'right',
+      views: TWO_VIEWS,
+      paneMenu: <button type="button">Pane</button>,
+    })
+    expect(screen.getByRole('button', { name: 'Pane' })).toBeInTheDocument()
+  })
+})

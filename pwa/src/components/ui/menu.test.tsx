@@ -422,6 +422,28 @@ describe('placeMenu', () => {
     })
   })
 
+  it('opens to the left of the trigger, its top level with it', () => {
+    // A trigger on a bar down the right edge
+    expect(placeMenu(at(960, 100), menu, 'end', view, 'left')).toEqual({
+      left: 960 - 8 - 256,
+      top: 100,
+      maxHeight: undefined,
+    })
+  })
+
+  it('on the left, moves up to stay on the screen, and scrolls past it', () => {
+    expect(placeMenu(at(960, 700), menu, 'end', view, 'left').top).toBe(
+      800 - 8 - 200,
+    )
+    expect(placeMenu(at(100, 100), menu, 'end', view, 'left').left).toBe(8)
+    const tall = { width: 256, height: 900 }
+    expect(placeMenu(at(960, 100), tall, 'end', view, 'left')).toEqual({
+      left: 696,
+      top: 8,
+      maxHeight: 784,
+    })
+  })
+
   it('counts only the visible part of the viewport (an open keyboard)', () => {
     // 400px visible from 100px down: 260px left under a trigger at 200
     const kb = { width: 1000, top: 100, height: 400 }
@@ -489,6 +511,25 @@ describe('Menu in the top layer', () => {
     expect(list.style.left).toBe('276px')
     expect(list.style.top).toBe('140px')
     expect(list.style.maxHeight).toBe('')
+  })
+
+  it('places a menu on the left beside its trigger', () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      left: 960,
+      top: 100,
+      right: 992,
+      bottom: 132,
+    } as DOMRect)
+    vi.spyOn(document.documentElement, 'clientWidth', 'get').mockReturnValue(
+      1000,
+    )
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(256)
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(200)
+    renderMenu({ side: 'left' })
+    tapOpen()
+    const list = menu()!
+    expect(list.style.left).toBe('696px')
+    expect(list.style.top).toBe('100px')
   })
 
   it('closes when a list holding its trigger scrolls, not another', () => {
@@ -612,5 +653,13 @@ describe('Menu without the top layer', () => {
     expect(menu).toHaveClass('absolute', 'top-full', 'right-0')
     fireEvent.scroll(document.body)
     expect(menu).toBeInTheDocument()
+  })
+
+  it('stays beside its trigger on the left, when asked', () => {
+    renderMenu({ side: 'left' })
+    tapOpen()
+    const menu = screen.getByRole('menu')
+    expect(menu).toHaveClass('absolute', 'right-full', 'top-0')
+    expect(menu).not.toHaveClass('top-full')
   })
 })

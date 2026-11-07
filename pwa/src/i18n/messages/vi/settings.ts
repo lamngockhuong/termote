@@ -67,6 +67,11 @@ export default {
   'settings.tabsDesc': 'Thanh tab để chuyển phiên nhanh (máy tính)',
   'settings.tabsForcedByCompact':
     'Luôn hiện khi sidebar ở bố cục gọn, vì tab nằm ở đó',
+  'settings.toolbarPosition': 'Vị trí thanh công cụ',
+  'settings.toolbarPositionDesc':
+    'Thanh bên phải: các nút chuyển kiểu xem, panel, pane, toàn màn hình và bảng lệnh chuyển sang một thanh dọc ở mép phải, header chỉ còn tab (máy tính)',
+  'settings.toolbarPosition.header': 'Header',
+  'settings.toolbarPosition.right': 'Thanh bên phải',
   'settings.blockedFirst': 'Phiên đang chờ lên đầu',
   'settings.blockedFirstDesc':
     'Phiên nào đang chờ bạn thì xếp lên đầu nhóm của nó',

@@ -3811,6 +3811,26 @@ describe('App groups and panes', () => {
     return screen.getByRole('menuitem', { name })
   }
 
+  it('the right bar holds the Pane menu, opening to its left', async () => {
+    const a = await mockLayout('herdr')
+    mockUseSettings.mockReturnValue({
+      ...mockUseSettings(),
+      settings: {
+        ...mockUseSettings().settings,
+        toolbarPosition: 'right',
+      } as any,
+    })
+    onTestFinished(() => mockUseSettings.mockRestore())
+    render(<App />)
+    const bar = await screen.findByRole('navigation', { name: 'Toolbar' })
+    const pane = within(bar).getByRole('button', { name: 'Pane' })
+    expect(screen.getAllByRole('button', { name: 'Pane' })).toEqual([pane])
+    fireEvent.click(pane)
+    expect(screen.getByRole('menu', { name: 'Pane' })).toHaveClass('right-full')
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Split right' }))
+    expect(a.splitPane).toHaveBeenCalledWith('right')
+  })
+
   it('the Pane menu acts on the pane shown, and words a refusal', async () => {
     const a = await mockLayout('herdr')
     render(<App />)
@@ -4327,6 +4347,26 @@ describe('App views, view-only and deep links', () => {
     fireEvent.click(await screen.findByRole('tab', { name: 'Chat' }))
     expect(screen.queryByTestId('keyboard-toolbar')).toBeNull()
     expect(screen.queryByTestId('chat-input')).toBeNull()
+  })
+
+  it('desktop: the right bar toggles the panel, beside the views', async () => {
+    mockUseSettings.mockReturnValue({
+      ...mockUseSettings(),
+      settings: {
+        ...mockUseSettings().settings,
+        toolbarPosition: 'right',
+      } as any,
+    })
+    onTestFinished(() => mockUseSettings.mockRestore())
+    render(<App views={PANEL_VIEWS} />)
+    const bar = await screen.findByRole('navigation', { name: 'Toolbar' })
+    expect(bar).toContainElement(filesToggle())
+    fireEvent.click(filesToggle())
+    const panel = screen.getByRole('complementary', { name: 'Files' })
+    expect(filesToggle()).toHaveAttribute('aria-pressed', 'true')
+    // Not inside the views' isolated row, which the panel can fill
+    expect(panel.parentElement).not.toContainElement(bar)
+    expect(panel.parentElement!.parentElement).toContainElement(bar)
   })
 
   it('desktop: a panel view opens next to the terminal from its header toggle', async () => {
@@ -6976,6 +7016,75 @@ describe('App command palette and shortcuts', () => {
     expect(
       await screen.findByRole('button', { name: 'Command palette' }),
     ).not.toHaveAttribute('data-key')
+  })
+
+  it('moves the controls to the right bar with the toolbar there', async () => {
+    const settings = {
+      ...mockUseSettings().settings,
+      toolbarPosition: 'right',
+    }
+    mockUseSettings.mockReturnValue({ ...mockUseSettings(), settings })
+    onTestFinished(() => mockUseSettings.mockRestore())
+    const { unmount } = render(<App views={[APP_VIEWS[0], CHAT, FILES]} />)
+    const bar = await screen.findByRole('navigation', { name: 'Toolbar' })
+    // The header's menu no longer holds them: one of each, on the bar
+    const palette = screen.getByRole('button', { name: 'Command palette' })
+    expect(bar).toContainElement(palette)
+    expect(bar).toContainElement(
+      screen.getByRole('button', { name: 'Enter fullscreen' }),
+    )
+    expect(bar).toContainElement(screen.getByRole('tablist', { name: 'View' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Enter fullscreen' }))
+    expect(toggleFullscreen).toHaveBeenCalledOnce()
+    fireEvent.click(palette)
+    expect(await screen.findByTestId('command-palette')).toHaveAttribute(
+      'data-mode',
+      'commands',
+    )
+    unmount()
+    // A phone keeps its header
+    mockIsMobile.mockReturnValue(true)
+    render(<App />)
+    await screen.findByTestId('terminal-view')
+    expect(screen.queryByRole('navigation', { name: 'Toolbar' })).toBeNull()
+  })
+
+  it('names the fullscreen key the user gave it, in the menu', async () => {
+    setShortcut('app.fullscreen', { key: 'Mod+Shift+M' })
+    render(<App />)
+    expect(
+      await screen.findByRole('button', { name: 'Enter fullscreen' }),
+    ).toHaveAttribute('data-key', 'Ctrl+Shift+M')
+  })
+
+  it('has no fullscreen on the right bar where the browser has none', async () => {
+    mockUseFullscreen.mockReturnValue({
+      isFullscreen: false,
+      isSupported: false,
+      toggleFullscreen,
+    })
+    const settings = {
+      ...mockUseSettings().settings,
+      toolbarPosition: 'right',
+    }
+    mockUseSettings.mockReturnValue({ ...mockUseSettings(), settings })
+    onTestFinished(() => mockUseSettings.mockRestore())
+    render(<App />)
+    await screen.findByRole('navigation', { name: 'Toolbar' })
+    expect(screen.queryByRole('button', { name: /fullscreen/ })).toBeNull()
+  })
+
+  it('has no palette on the right bar on a touch screen', async () => {
+    mockFinePointer.mockReturnValue(false)
+    const settings = {
+      ...mockUseSettings().settings,
+      toolbarPosition: 'right',
+    }
+    mockUseSettings.mockReturnValue({ ...mockUseSettings(), settings })
+    onTestFinished(() => mockUseSettings.mockRestore())
+    render(<App />)
+    await screen.findByRole('navigation', { name: 'Toolbar' })
+    expect(screen.queryByRole('button', { name: 'Command palette' })).toBeNull()
   })
 
   it('runs a command once the palette has closed: dialogs', async () => {

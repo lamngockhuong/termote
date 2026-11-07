@@ -18,7 +18,13 @@ import {
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
 import type { Translate } from '../i18n/translate'
-import { Menu, MenuGroup, MenuItem, MenuSeparator } from './ui/menu'
+import {
+  Menu,
+  MenuGroup,
+  MenuItem,
+  MenuSeparator,
+  type MenuSide,
+} from './ui/menu'
 
 // How many cells one Resize item moves the pane's edge
 export const RESIZE_STEP = 5
@@ -45,6 +51,8 @@ interface Props {
   onClose: () => void
   // Asks for the pane's name; without it no Rename item is shown
   onRename?: () => void
+  // left: opens beside its button on the right bar
+  side?: MenuSide
 }
 
 const ICON = 15
@@ -76,6 +84,7 @@ export function PaneLayoutMenu(p: Props) {
       trigger={<Columns2 size={16} aria-hidden="true" />}
       triggerSize="sm"
       align="end"
+      side={p.side}
     >
       {p.onRename && (
         <MenuItem icon={<Pencil size={ICON} />} onSelect={p.onRename}>

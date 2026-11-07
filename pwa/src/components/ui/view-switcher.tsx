@@ -19,6 +19,19 @@ export const headerLabel = (compact: boolean) =>
 // Marks a label for useCompactLabels, which measures the shown ones
 export const LABEL_PROPS = { [COMPACT_LABEL_ATTR]: '' }
 
+export type Orientation = 'horizontal' | 'vertical'
+
+// The group and its buttons in a row (the header) or a column (the right
+// bar, where a button is a 32px square showing its icon only)
+export const GROUP_CLASS: Record<Orientation, string> = {
+  horizontal: 'flex shrink-0',
+  vertical: 'flex shrink-0 flex-col',
+}
+export const BUTTON_SIZE: Record<Orientation, string> = {
+  horizontal: 'h-7 px-2.5 pointer-coarse:h-9',
+  vertical: 'size-8',
+}
+
 interface Props<T extends string> {
   views: ViewOption<T>[]
   value: T
@@ -27,6 +40,8 @@ interface Props<T extends string> {
   panelId?: (id: T) => string
   // The header's tabs need the room: icons only
   compact?: boolean
+  // vertical: on the right bar, icons only, Up and Down move between views
+  orientation?: Orientation
 }
 
 // Desktop header tabs switching the pane between its views (terminal, chat,
@@ -39,7 +54,9 @@ export function ViewSwitcher<T extends string>({
   onChange,
   panelId,
   compact = false,
+  orientation = 'horizontal',
 }: Props<T>) {
+  const vertical = orientation === 'vertical'
   const { t } = useT()
   const listRef = useRef<HTMLDivElement>(null)
   if (views.length < 2) return null
@@ -50,9 +67,11 @@ export function ViewSwitcher<T extends string>({
 
   const onKeyDown = (e: KeyboardEvent) => {
     const last = views.length - 1
+    const forward = current === last ? 0 : current + 1
+    const back = current === 0 ? last : current - 1
     const next = {
-      ArrowRight: current === last ? 0 : current + 1,
-      ArrowLeft: current === 0 ? last : current - 1,
+      [vertical ? 'ArrowDown' : 'ArrowRight']: forward,
+      [vertical ? 'ArrowUp' : 'ArrowLeft']: back,
       Home: 0,
       End: last,
     }[e.key]
@@ -70,8 +89,9 @@ export function ViewSwitcher<T extends string>({
       data-tour="view-switcher"
       role="tablist"
       aria-label={t('shell.view')}
+      aria-orientation={vertical ? 'vertical' : undefined}
       onKeyDown={onKeyDown}
-      className="flex shrink-0 gap-0.5 border border-border bg-surface p-0.5 rounded-control ui-native:rounded-full ui-native:border-0"
+      className={`${GROUP_CLASS[orientation]} gap-0.5 border border-border bg-surface p-0.5 rounded-control ui-native:rounded-full ui-native:border-0`}
     >
       {views.map(({ id, label, Icon }, i) => {
         const selected = i === current
@@ -85,7 +105,7 @@ export function ViewSwitcher<T extends string>({
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(id)}
             title={label}
-            className={`relative before:absolute before:inset-x-0 before:-inset-y-1 before:content-[''] flex items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] ui-native:rounded-full ${FOCUS_RING} h-7 px-2.5 text-[12px] pointer-coarse:h-9 ${
+            className={`relative before:absolute before:inset-x-0 before:-inset-y-1 before:content-[''] flex items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] ui-native:rounded-full ${FOCUS_RING} ${BUTTON_SIZE[orientation]} text-[12px] ${
               selected
                 ? 'bg-surface-raised text-fg shadow-sm ui-terminal:bg-accent-soft ui-terminal:text-accent ui-terminal:shadow-none'
                 : 'text-fg-muted hover:text-fg'
@@ -94,7 +114,7 @@ export function ViewSwitcher<T extends string>({
             <Icon size={14} aria-hidden="true" />
             <span
               {...LABEL_PROPS}
-              className={`ui-terminal:font-label ${headerLabel(compact)}`}
+              className={`ui-terminal:font-label ${headerLabel(compact || vertical)}`}
             >
               {label}
             </span>

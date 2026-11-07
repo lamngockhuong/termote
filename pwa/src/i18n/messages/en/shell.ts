@@ -217,6 +217,7 @@ export default {
   'shell.group.recentRemoveFailed': 'Could not remove it. Try again.',
   'shell.group.recentMore': 'Show {n} more',
   // The view switch (components/ui/view-switcher.tsx, ui/view-menu.tsx)
+  'shell.toolbar': 'Toolbar',
   'shell.view': 'View',
   'shell.view.current': 'View: {name}',
   'shell.view.agents': 'Agents',

@@ -70,6 +70,7 @@ const DEFAULT_SETTINGS: Settings = {
   disableContextMenu: true,
   copyOnSelect: false,
   showSessionTabs: false,
+  toolbarPosition: 'header',
   pollInterval: 5,
   welcomeSeenVersion: 0,
   language: 'auto',
@@ -369,6 +370,18 @@ describe('SettingsModal', () => {
     ).toHaveAttribute('aria-checked', 'true')
     fireEvent.click(within(layout).getByRole('radio', { name: 'Compact' }))
     expect(onUpdateSetting).toHaveBeenCalledWith('sidebarLayout', 'compact')
+  })
+
+  it('picks where the toolbar goes', () => {
+    const { onUpdateSetting } = renderModal()
+    const position = screen.getByRole('radiogroup', {
+      name: 'Toolbar position',
+    })
+    expect(
+      within(position).getByRole('radio', { name: 'Header' }),
+    ).toHaveAttribute('aria-checked', 'true')
+    fireEvent.click(within(position).getByRole('radio', { name: 'Right bar' }))
+    expect(onUpdateSetting).toHaveBeenCalledWith('toolbarPosition', 'right')
   })
 
   it('keeps session tabs on and locked with the compact sidebar', () => {
@@ -1334,6 +1347,17 @@ describe('SettingsModal on a phone', () => {
     expect(
       screen.getByRole('switch', { name: 'Blocked sessions first' }),
     ).toBeEnabled()
+  })
+
+  it('offers no toolbar position, the phone header keeping its own', () => {
+    renderPhone()
+    fireEvent.click(within(list()!).getByRole('button', { name: 'Sessions' }))
+    expect(
+      screen.getByRole('switch', { name: 'Show session tabs' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('radiogroup', { name: 'Toolbar position' }),
+    ).toBeNull()
   })
 
   it('goes back to the list on Back of the history, staying open', async () => {

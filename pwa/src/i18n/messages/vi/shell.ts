@@ -193,6 +193,7 @@ export default {
   'shell.group.recentRemoveFailed': 'Chưa xoá được. Thử lại.',
   'shell.group.recentMore': 'Xem thêm {n} mục',
 
+  'shell.toolbar': 'Thanh công cụ',
   'shell.view': 'Cách xem',
   'shell.view.current': 'Cách xem: {name}',
   'shell.view.agents': 'Agent',
