@@ -1704,6 +1704,8 @@ describe('FilesView rename', () => {
     }
     expect(screen.getByRole('menu')).toBeInTheDocument()
     expect(screen.queryByRole('menuitem', { name: 'Rename' })).toBeNull()
+    // A finger's press never selects the row's text (iOS) on a touch screen
+    expect(item('README.md')).toHaveClass('pointer-coarse:select-none')
     cleanup()
     await show()
     fireEvent.click(

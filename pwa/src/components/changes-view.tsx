@@ -1079,7 +1079,7 @@ function ChangeRow({
         e.preventDefault()
         onMenu(button(), null, true)
       }}
-      className="group flex items-center [-webkit-touch-callout:none] hover:bg-surface"
+      className="group flex items-center [-webkit-touch-callout:none] pointer-coarse:select-none hover:bg-surface"
     >
       <ChangeRowButton
         code={code}

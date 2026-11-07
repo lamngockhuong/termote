@@ -1816,5 +1816,7 @@ describe('ChangesView row menu', () => {
       'Copy absolute path',
       'Copy name',
     ])
+    // A finger's press never selects the row's text (iOS)
+    expect(row('Changes', 'both.ts')).toHaveClass('pointer-coarse:select-none')
   })
 })
