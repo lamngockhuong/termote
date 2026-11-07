@@ -7,6 +7,7 @@ import { I18nProvider } from './i18n/i18n-context'
 import { APP_INFO } from './utils/app-info'
 import { markStale, onChunkLoadError } from './utils/app-update'
 import { markClassicScrollbars } from './utils/classic-scrollbars'
+import { guardContextMenu } from './utils/context-menu-guard'
 import { registerInstallPrompt } from './utils/install-prompt'
 import './index.css'
 import { watchIPadWindow } from './utils/ipad-window'
@@ -18,6 +19,7 @@ watchIPadWindow()
 // Chromium may offer the install before the welcome screen asks for it
 registerInstallPrompt()
 markClassicScrollbars()
+guardContextMenu()
 // Before the first render, so Settings knows the page was just updated
 recordVersion(APP_INFO.version)
 

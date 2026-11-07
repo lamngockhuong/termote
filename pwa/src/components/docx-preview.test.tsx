@@ -119,6 +119,8 @@ describe('DocxPreview', () => {
       PNG,
     )
     expect(screen.queryByRole('banner')).toBeNull()
+    // The document keeps the browser's menu
+    expect(cell.closest('[data-native-menu]')).not.toBeNull()
   })
 
   it('never changes the location hash when a link is clicked', async () => {

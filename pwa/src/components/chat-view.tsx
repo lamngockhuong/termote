@@ -387,6 +387,7 @@ function AgentChat({
         onScroll={onScroll}
         aria-label={translate('chat.view.conversation')}
         className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-3"
+        data-native-menu
       >
         <ChatFileLinkContext.Provider value={openFile}>
           <ChatMarkdownContext.Provider value={markdown}>

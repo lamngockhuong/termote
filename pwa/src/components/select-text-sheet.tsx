@@ -97,6 +97,7 @@ export function SelectTextSheet({
         <div
           ref={scrollRef}
           className="mx-4 my-3 h-[55vh] overflow-auto rounded-control border border-border bg-bg"
+          data-native-menu
         >
           {loading ? (
             <p className="m-0 p-3 text-[13px] text-fg-muted">

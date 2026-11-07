@@ -49,6 +49,8 @@ describe('CodeBlock', () => {
     mockHighlight.mockReturnValue(new Promise((r) => (done = r)))
     show('const a\n\nb\n')
     expect(lines()).toEqual(['const a', ' ', 'b'])
+    // The text keeps the browser's menu
+    expect(screen.getByTestId('code-block')).toHaveAttribute('data-native-menu')
     expect(screen.getByText('3')).toHaveAttribute('aria-hidden', 'true')
     expect(mockHighlight).toHaveBeenCalledWith(
       'const a\n\nb\n',

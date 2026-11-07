@@ -367,6 +367,7 @@ export default function MarkdownPreview({
         ref={ref}
         className="min-h-0 flex-1 overflow-auto bg-bg"
         data-testid="markdown-preview"
+        data-native-menu
         data-scroll-restore={editing ? undefined : ''}
         // Focused when the editor hides (MarkdownEditLayout)
         tabIndex={editing ? -1 : undefined}

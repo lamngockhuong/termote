@@ -130,7 +130,7 @@ export function CommitView({
         <ViewMessage>{t('files.commit.none')}</ViewMessage>
       )}
       {commit && (
-        <div className="min-h-0 flex-1 overflow-y-auto pb-2">
+        <div className="min-h-0 flex-1 overflow-y-auto pb-2" data-native-menu>
           <CommitMeta commit={commit} />
           {commit.truncated && <Banner>{t('files.commit.truncated')}</Banner>}
           <section aria-label={t('files.commit.files')}>
