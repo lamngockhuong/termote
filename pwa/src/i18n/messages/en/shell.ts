@@ -194,7 +194,7 @@ export default {
   'shell.group.invalidNameTmux':
     "This name can't be used. Avoid : . * ? [ \\ and a leading = or -",
   'shell.group.invalidCwd':
-    'Enter an absolute path on the host, or leave it empty',
+    'Enter an absolute path or ~/… on the host, or leave it empty',
   'shell.group.notFound': 'No such directory on the host',
   'shell.group.notDirectory': 'That path is a file, not a directory',
   'shell.group.notAllowed': "A {noun} can't start in that directory",
@@ -208,7 +208,7 @@ export default {
     'The {noun} may have been created. Check the list.',
   'shell.group.new': 'New {noun}',
   'shell.group.name': 'Name',
-  'shell.group.directory': 'Directory (an absolute path on the host)',
+  'shell.group.directory': 'Directory (an absolute path or ~/… on the host)',
   'shell.group.home': 'Home directory',
   'shell.group.create': 'Create',
   'shell.group.recent': 'Recent',

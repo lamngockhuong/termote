@@ -234,6 +234,64 @@ func TestValidCwdForm(t *testing.T) {
 	}
 }
 
+func TestHomeRelativeCwd(t *testing.T) {
+	for _, c := range []struct {
+		p       string
+		windows bool
+		rest    string
+		ok      bool
+	}{
+		{"", false, "", true},
+		{"~", false, "", true},
+		{"~/", false, "", true},
+		{"~/develop", false, "develop", true},
+		{"~/a/b", false, "a/b", true},
+		{`~\develop`, false, "", false},
+		{`~\develop`, true, "develop", true},
+		{"~/develop", true, "develop", true},
+		{"~alice", false, "", false},
+		{"~alice/x", false, "", false},
+		{"/home/u", false, "", false},
+		{"develop", false, "", false},
+	} {
+		rest, ok := homeRelativeCwd(c.p, c.windows)
+		if rest != c.rest || ok != c.ok {
+			t.Errorf("homeRelativeCwd(%q, %v) = %q, %v", c.p, c.windows, rest, ok)
+		}
+	}
+}
+
+// ~ and ~/dir resolve under the home directory; ~user is refused.
+func TestResolveGroupCwdHomeRelative(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	if err := os.Mkdir(filepath.Join(home, "develop"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	realHome, err := filepath.EvalSymlinks(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for p, want := range map[string]string{
+		"~":          realHome,
+		"~/":         realHome,
+		"~/develop":  filepath.Join(realHome, "develop"),
+		"~/develop/": filepath.Join(realHome, "develop"),
+	} {
+		got, err := resolveGroupCwd(context.Background(), p, nil)
+		if err != nil || got != want {
+			t.Errorf("resolveGroupCwd(%q) = %q, %v, want %q", p, got, err, want)
+		}
+	}
+	if _, err := resolveGroupCwd(context.Background(), "~/missing", nil); !errors.Is(err, errCwdNotFound) {
+		t.Errorf("resolveGroupCwd(~/missing) = %v, want not found", err)
+	}
+	if _, err := resolveGroupCwd(context.Background(), "~root", nil); !errors.Is(err, errInvalidCwd) {
+		t.Errorf("resolveGroupCwd(~root) = %v, want invalid", err)
+	}
+}
+
 // A directory that does not answer (a hung network mount) gives busy, and
 // the request does not wait for it.
 func TestResolveGroupCwdTimesOut(t *testing.T) {

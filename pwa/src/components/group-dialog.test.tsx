@@ -45,7 +45,9 @@ const setup = (onCreate = vi.fn(async () => {})) => {
     onCreate,
     onClose,
     name: screen.getByLabelText('Name'),
-    cwd: screen.getByLabelText('Directory (an absolute path on the host)'),
+    cwd: screen.getByLabelText(
+      'Directory (an absolute path or ~/… on the host)',
+    ),
     create: screen.getByRole('button', { name: 'Create' }),
   }
 }
@@ -170,7 +172,9 @@ const setupRecent = async (
     onCreate,
     onClose,
     name: screen.getByLabelText('Name'),
-    cwd: screen.getByLabelText('Directory (an absolute path on the host)'),
+    cwd: screen.getByLabelText(
+      'Directory (an absolute path or ~/… on the host)',
+    ),
     list: () => screen.queryByRole('region', { name: 'Recent' }),
     use: (g: RecentGroup) =>
       screen.getByRole('button', { name: `Use ${g.name} in ${g.cwd}` }),
@@ -198,7 +202,7 @@ describe('GroupDialog without a name (herdr-core)', () => {
     await act(async () => {})
     expect(screen.queryByLabelText('Name')).toBeNull()
     const cwd = screen.getByLabelText(
-      'Directory (an absolute path on the host)',
+      'Directory (an absolute path or ~/… on the host)',
     )
     await waitFor(() => expect(cwd).toHaveFocus())
     // A recent one fills the directory alone
@@ -429,7 +433,10 @@ describe('groupProblem', () => {
         'invalid_name',
         "This name can't be used. Avoid : . * ? [ \\ and a leading = or -",
       ],
-      ['invalid_cwd', 'Enter an absolute path on the host, or leave it empty'],
+      [
+        'invalid_cwd',
+        'Enter an absolute path or ~/… on the host, or leave it empty',
+      ],
       ['not_found', 'No such directory on the host'],
       ['not_directory', 'That path is a file, not a directory'],
       ['not_allowed', "A tmux session can't start in that directory"],
