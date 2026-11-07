@@ -1815,7 +1815,7 @@ describe('FilesView tabs', () => {
     fireEvent.click(
       screen.getByRole('menuitem', { name: 'Insert @path in terminal' }),
     )
-    expect(insertText).toHaveBeenCalledWith('@README.md')
+    await waitFor(() => expect(insertText).toHaveBeenCalledWith('@README.md'))
     right()
     fireEvent.click(screen.getByRole('menuitem', { name: 'Download' }))
     expect(mockDownload).toHaveBeenCalledWith(
@@ -1889,7 +1889,9 @@ describe('FilesView tabs', () => {
     fireEvent.click(
       screen.getByRole('menuitem', { name: 'Insert @path in terminal' }),
     )
-    expect(insertText).toHaveBeenCalledWith('@/home/kim/app/README.md')
+    await waitFor(() =>
+      expect(insertText).toHaveBeenCalledWith('@/home/kim/app/README.md'),
+    )
   })
 
   it('a single click opens the preview tab, a double click keeps it', async () => {
@@ -2488,6 +2490,37 @@ describe('FilesView upload', () => {
     expect(dirs()).toEqual(['src', '.', '.'])
   })
 
+  it("a folder's menu upload is dropped when the pane moved while picking", async () => {
+    const p = await show()
+    fireEvent.contextMenu(item('src'), { clientX: 10, clientY: 10 })
+    const input = screen.getByTestId('upload-input') as HTMLInputElement
+    vi.spyOn(input, 'click').mockImplementation(() => {})
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Upload files here' }))
+    mockTree.mockRejectedValueOnce(
+      new RequestError(409, '', 'root changed', { root: '/home/kim/other' }),
+    )
+    mockTree.mockImplementation(async (_p: string, path: string) => ({
+      root: '/home/kim/other',
+      isRepo: true,
+      path,
+      entries: DIRS[path],
+      truncated: false,
+    }))
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+    await act(async () => {})
+    // The picker answers once the new root shows
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('upload-input'), {
+        target: { files: [pdf()] },
+      })
+    })
+    expect(mockCheckUpload).not.toHaveBeenCalled()
+    expect(p.notify).toHaveBeenLastCalledWith(
+      "This file's folder isn't the pane's any more: not uploaded",
+      { variant: 'warning' },
+    )
+  })
+
   it('a link to a folder, and a folder through one, are not taken: the nearest folder above is', async () => {
     mockTree.mockImplementation(async (_p: string, path: string) => ({
       root: ROOT,
@@ -3077,6 +3110,13 @@ describe('FilesView context menu', () => {
     expect(screen.getByRole('dialog', { name: 'New file' }))
   })
 
+  it("Escape on the empty area's menu gives the focus back to the tree's row", async () => {
+    await show()
+    fireEvent.contextMenu(screen.getByRole('tree'), { clientX: 5, clientY: 5 })
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+    expect(item('src')).toHaveFocus()
+  })
+
   it("view-only: the empty area's menu refreshes and collapses only", async () => {
     await show({ readOnly: true })
     fireEvent.contextMenu(screen.getByRole('tree'), { clientX: 5, clientY: 5 })
@@ -3100,6 +3140,6 @@ describe('FilesView context menu', () => {
     fireEvent.click(
       screen.getByRole('menuitem', { name: 'Insert @path in terminal' }),
     )
-    expect(insertText).toHaveBeenCalledWith('@a.ts')
+    await waitFor(() => expect(insertText).toHaveBeenCalledWith('@a.ts'))
   })
 })

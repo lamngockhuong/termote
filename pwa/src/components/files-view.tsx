@@ -46,6 +46,7 @@ import {
   isDir,
   isOpenable,
   joinPath,
+  paneDirNow,
   useDirtyCheck,
   useFiles,
   useFilesFocusRequest,
@@ -439,7 +440,7 @@ function PaneFiles({
   }>()
   // The folder the file picker opened from a folder's menu uploads into;
   // the header's Upload goes to the focused folder
-  const uploadInto = useRef<string>(undefined)
+  const uploadInto = useRef<{ dir: string; root: string }>(undefined)
   const [deleting, setDeleting] = useState<Deleting>()
   const [renaming, setRenaming] = useState<Renaming>()
   // The sensitive file the download confirmation is open for
@@ -534,8 +535,8 @@ function PaneFiles({
         <FileActionItems
           path={tab.path}
           root={tab.root}
-          dir={here ? (f.dir ?? '') : null}
           place={f.place}
+          paneDir={here ? () => paneDirNow(paneId, tab.root) : undefined}
           notify={notify}
           insertText={insertText}
           // As the viewer's: never through a link the tree knows of
@@ -944,9 +945,15 @@ function PaneFiles({
                 const files = Array.from(e.currentTarget.files as FileList)
                 // The same file can be picked again
                 e.currentTarget.value = ''
-                const dir = uploadInto.current ?? focusedFolder(f, focused)
+                const into = uploadInto.current
                 uploadInto.current = undefined
-                upload(files, dir)
+                // The pane moved while the picker was open: that folder is
+                // the old root's
+                if (into && into.root !== f.root) {
+                  notify(t('files.upload.rootLeft'), { variant: 'warning' })
+                  return
+                }
+                upload(files, into?.dir ?? focusedFolder(f, focused))
               }}
             />
           </>
@@ -1243,11 +1250,15 @@ function PaneFiles({
                         newFileRoot === undefined
                           ? undefined
                           : (dir) => {
-                              uploadInto.current = dir
+                              uploadInto.current = {
+                                dir,
+                                root: newFileRoot,
+                              }
                               fileInput.current?.click()
                             },
                       onRefresh: refresh,
                       onCollapseAll: f.collapseAll,
+                      paneDir: () => paneDirNow(paneId, f.root as string),
                     }}
                   />
                 )}
@@ -1342,6 +1353,8 @@ function throughLink(f: FilesState, path: string): boolean {
 interface TreeActions {
   notify: ViewProps['notify']
   insertText?: ViewProps['insertText']
+  // The pane's directory under the tree's root, read now
+  paneDir: () => Promise<string | null>
   // A new file or folder in dir ("" for the root), or files uploaded into it
   onCreate?: (dir: string, kind: 'file' | 'dir') => void
   onUpload?: (dir: string) => void
@@ -1411,6 +1424,7 @@ function FileTree({
   )
   const treeRef = useRef<HTMLDivElement>(null)
   const [menu, setMenu] = useState<TreeMenu>()
+  const areaAnchor = useRef<HTMLElement | null>(null)
   const openMenu = (
     path: string | null,
     point: TreeMenu['point'],
@@ -1497,8 +1511,8 @@ function FileTree({
         path={r.path}
         // The tree shows once the root is read
         root={state.root as string}
-        dir={state.dir}
         place={state.place}
+        paneDir={actions.paneDir}
         notify={actions.notify}
         insertText={actions.insertText}
         onNewFile={create && (() => create(r.path, 'file'))}
@@ -1530,6 +1544,9 @@ function FileTree({
           if (fromMenu(e) || (e.target as Element).closest('[role="treeitem"]'))
             return
           e.preventDefault()
+          // Escape gives the focus back to the tree's row (the tree itself
+          // takes none)
+          areaAnchor.current = items.current.get(current.path) as HTMLElement
           openMenu(null, { x: e.clientX, y: e.clientY })
         }}
         className="min-h-0 flex-1 overflow-y-auto py-1"
@@ -1577,7 +1594,7 @@ function FileTree({
       <Menu
         label={t('files.actions.tree')}
         trigger={null}
-        anchorRef={treeRef}
+        anchorRef={areaAnchor}
         open={menu?.path === null && menu.open}
         onOpenChange={(open) => menuChange(null, open)}
         point={menu?.path === null ? menu.point : null}

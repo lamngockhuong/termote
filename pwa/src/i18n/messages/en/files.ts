@@ -253,6 +253,8 @@ export default {
   'files.actions.insert': 'Insert @path in terminal',
   'files.actions.notInserted': 'Not inserted in the terminal: {path}',
   'files.actions.openFile': 'Open file',
+  'files.actions.notPasteable':
+    "This path has a line break or a quote; it can't be typed into the terminal",
   'files.actions.newFolder': 'New folder',
   'files.actions.uploadHere': 'Upload files here',
   'files.actions.collapseAll': 'Collapse all',

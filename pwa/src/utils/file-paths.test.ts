@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { absolutePath, fileName, mentionPath } from './file-paths'
+import { absolutePath, fileName, mentionPath, pasteable } from './file-paths'
 
 describe('fileName', () => {
   it('is the last part of the path', () => {
@@ -82,5 +82,22 @@ describe('mentionPath', () => {
     expect(
       mentionPath({ root: 'C:\\Users\\Jane Doe', place: 'p', path: 'a.txt' }),
     ).toBe('@"C:\\Users\\Jane Doe\\a.txt"')
+  })
+})
+
+describe('pasteable', () => {
+  it('refuses a line break, a control character or a quote', () => {
+    expect(pasteable('/home/me/my notes.md')).toBe(true)
+    expect(pasteable('@src/a.ts')).toBe(true)
+    for (const bad of [
+      'a\nb',
+      'a\rb',
+      'a\tb',
+      'a\u0003b',
+      'a\u007fb',
+      'a\u009bb',
+      'a"b',
+    ])
+      expect(pasteable(bad)).toBe(false)
   })
 })

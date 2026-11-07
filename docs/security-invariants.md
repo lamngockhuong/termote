@@ -1344,8 +1344,13 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   (`preventDefault`, so `context-menu-guard.ts` leaves it). Copied and typed paths are built in the
   PWA from the `root` and `dir` the tree route returned and the tree path; nothing goes back to the
   server, and no new route exists. **Insert @path in terminal** sends text into the pane (a
-  bracketed paste, no Enter), so it is offered only to a full client: `App` gives views no
-  `insertText` when view-only. New file, New folder, Upload, Download, Rename and Delete go
+  bracketed paste where the program asked for one, no Enter), so it is offered only to a full
+  client: `App` gives views no `insertText` when view-only. A name may hold any byte but NUL, and
+  a pane that takes no bracketed paste runs what follows a line break: a path with a C0/C1 control
+  character, DEL or `"` (which would end `@"…"`) is never typed (`pasteable`), only refused with a
+  toast. The pane's directory a relative `@path` starts from is read at that moment
+  (`paneDirNow`, `files/tree?now=1` with the root shown; a moved root or a failed read types the
+  absolute path), never one kept from an earlier read. New file, New folder, Upload, Download, Rename and Delete go
   through their own routes and dialogs above, offered by the same role checks as their buttons;
   a view-only client sees the copies, Refresh and Collapse all only
 - **Pasting an image into Markdown** (`POST files/image?root=&dir=[&reveal=1]`,

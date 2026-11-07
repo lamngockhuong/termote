@@ -5,6 +5,7 @@ import {
   render,
   renderHook,
   screen,
+  waitFor,
   within,
 } from '@testing-library/react'
 import {
@@ -1717,11 +1718,11 @@ describe('ChangesView row menu', () => {
       'Stage file',
       'Discard file',
     ])
-    // Files has not read this root: the pane's directory is not known
+    // The pane sits at the root (read now)
     fireEvent.click(
       screen.getByRole('menuitem', { name: 'Insert @path in terminal' }),
     )
-    expect(insertText).toHaveBeenCalledWith('@/r/src/both.ts')
+    await waitFor(() => expect(insertText).toHaveBeenCalledWith('@src/both.ts'))
     fireEvent.contextMenu(row('Staged', 'both.ts'), { clientX: 1, clientY: 1 })
     expect(items().slice(-1)).toEqual(['Unstage file'])
     await act(async () =>
@@ -1733,7 +1734,7 @@ describe('ChangesView row menu', () => {
     expect(p.showView).toHaveBeenCalledWith(FILES_VIEW_ID)
   })
 
-  it('types the path from the pane directory once Files has read the root', async () => {
+  it('types the path from the pane directory, or whole when it cannot be read', async () => {
     mockTree.mockResolvedValue({
       root: '/r',
       isRepo: true,
@@ -1742,16 +1743,24 @@ describe('ChangesView row menu', () => {
       entries: [],
       truncated: false,
     })
-    const files = renderHook(() => useFiles('%1'))
-    act(() => files.result.current.load())
-    await settle()
     const insertText = vi.fn(() => true)
     await show({ insertText })
-    fireEvent.contextMenu(row('Changes', 'both.ts'), { clientX: 1, clientY: 1 })
-    fireEvent.click(
-      screen.getByRole('menuitem', { name: 'Insert @path in terminal' }),
+    const insert = () => {
+      fireEvent.contextMenu(row('Changes', 'both.ts'), {
+        clientX: 1,
+        clientY: 1,
+      })
+      fireEvent.click(
+        screen.getByRole('menuitem', { name: 'Insert @path in terminal' }),
+      )
+    }
+    insert()
+    await waitFor(() => expect(insertText).toHaveBeenCalledWith('@both.ts'))
+    mockTree.mockRejectedValue(new RequestError(409, '', 'moved'))
+    insert()
+    await waitFor(() =>
+      expect(insertText).toHaveBeenLastCalledWith('@/r/src/both.ts'),
     )
-    expect(insertText).toHaveBeenCalledWith('@both.ts')
   })
 
   it('a deleted file has nothing to open; Discard asks first', async () => {

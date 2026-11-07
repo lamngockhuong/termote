@@ -41,3 +41,12 @@ export function mentionPath(o: {
   else at = absolutePath(root, path)
   return /\s/.test(at) ? `@"${at}"` : `@${at}`
 }
+
+// Whether text may be typed into a terminal as one word: a name may hold
+// anything but NUL, and a line break would run what follows it in a shell
+// that takes no bracketed paste; a quote would end the @"…" early.
+export const pasteable = (text: string) =>
+  ![...text].some((ch) => {
+    const code = ch.charCodeAt(0)
+    return code < 0x20 || (code >= 0x7f && code <= 0x9f) || ch === '"'
+  })

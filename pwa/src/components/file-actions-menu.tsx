@@ -13,7 +13,12 @@ import type { ViewProps } from '../app-views'
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
 import { copyText } from '../utils/copy-text'
-import { absolutePath, fileName, mentionPath } from '../utils/file-paths'
+import {
+  absolutePath,
+  fileName,
+  mentionPath,
+  pasteable,
+} from '../utils/file-paths'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { MenuItem, MenuSeparator } from './ui/menu'
 
@@ -23,9 +28,10 @@ export interface FileActionsProps {
   // The root the tree route returned, the pane's directory under it and the
   // Place shown: what the copied and typed paths are made from
   root: string
-  // null: not known (the @path is absolute then)
-  dir?: string | null
   place?: string
+  // The pane's directory under root, read when the @path is typed (null,
+  // or left out: not known, and the @path is absolute)
+  paneDir?: () => Promise<string | null>
   notify: ViewProps['notify']
   // Each action is offered only when given: the caller decides by role
   insertText?: ViewProps['insertText']
@@ -47,8 +53,8 @@ export interface FileActionsProps {
 export function FileActionItems({
   path,
   root,
-  dir,
   place,
+  paneDir,
   notify,
   insertText,
   onNewFile,
@@ -70,7 +76,13 @@ export function FileActionItems({
     copy(text, 'files.viewer.pathCopied', 'files.viewer.pathCopyFailed')
   const insert =
     insertText &&
-    (() => {
+    (async () => {
+      // Never typed: a line break would run the rest in a shell
+      if (!pasteable(absolutePath(root, path))) {
+        notify(t('files.actions.notPasteable'), { variant: 'warning' })
+        return
+      }
+      const dir = paneDir && !place ? await paneDir() : null
       const at = mentionPath({ root, dir, place, path })
       if (insertText(at)) return
       notify(t('files.actions.notInserted', { path: visibleUnsafe(at) }), {

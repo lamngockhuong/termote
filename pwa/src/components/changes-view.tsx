@@ -14,7 +14,7 @@ import {
   FOLLOW_NOTICES,
   followInFiles,
   openInFiles,
-  peekFilesState,
+  paneDirNow,
   useDirtyCheck,
 } from '../hooks/use-files'
 import {
@@ -518,9 +518,6 @@ function PaneChanges({
   const rowMenuItems = ({ entry, staged }: Item) => {
     // The list shows only once the root is read
     const root = c.root as string
-    // The pane's directory, when Files has read this root (else unknown)
-    const files = peekFilesState(paneId)
-    const dir = files?.root === root && !files.place ? (files.dir ?? '') : null
     const gone =
       entry.unstaged === 'D' || (entry.staged === 'D' && !entry.unstaged)
     const actions = actionsOf(entry, staged)
@@ -543,7 +540,7 @@ function PaneChanges({
         <FileActionItems
           path={entry.path}
           root={root}
-          dir={dir}
+          paneDir={() => paneDirNow(paneId, root)}
           notify={notify}
           insertText={insertText}
         />

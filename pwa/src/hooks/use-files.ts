@@ -122,9 +122,6 @@ export interface FileTab extends TabBase {
 
 export interface FilesState {
   root?: string
-  // The pane's directory under root ("/"-separated), absent at the root,
-  // outside it or in a Place: where a path typed for the agent starts from
-  dir?: string
   // The Place shown (its id), absent for the pane's own folder. Switching
   // works as the root moving: clean tabs of the old root close.
   place?: string
@@ -371,7 +368,6 @@ function createStore(id: string): Store {
     if (gen !== generation) return
     if (!path) switching = false
     set({ root: tree.root, isRepo: tree.isRepo })
-    if (!path) set({ dir: tree.dir })
     setDir(path, {
       entries: tree.entries,
       truncated: tree.truncated,
@@ -736,7 +732,6 @@ function createStore(id: string): Store {
     const asked = state.tabs.filter((t) => t.root !== root).map((t) => t.id)
     set({
       root,
-      dir: undefined,
       dirs: {},
       expanded: {},
       rootChanges: state.rootChanges + (picked ? 0 : 1),
@@ -757,7 +752,7 @@ function createStore(id: string): Store {
     // The root is not known yet: the read sends the old one, and the 409
     // that answers it starts the tree again (rootChanged)
     generation++
-    set({ dir: undefined, dirs: {}, expanded: {} })
+    set({ dirs: {}, expanded: {} })
     read('')
   }
 
@@ -1097,6 +1092,22 @@ export function followInFiles(
   const store = storeFor(paneId)
   store.switchTo(place)
   return store.follow(target, 0, { fresh: true })
+}
+
+// paneId's directory under root ("/"-separated, "" at the root) as the
+// server sees it now, where a path typed for the agent starts from; null
+// when the pane has left root or it could not be read (the path is then
+// typed whole). Read at the time: a cd in the pane moves it.
+export async function paneDirNow(
+  paneId: string,
+  root: string,
+): Promise<string | null> {
+  try {
+    const tree = await fetchFilesTree({ paneId }, '', root, true)
+    return tree.root === root ? (tree.dir ?? '') : null
+  } catch {
+    return null
+  }
 }
 
 // Opens a path the agent wrote in paneId's Files view, at line when given:

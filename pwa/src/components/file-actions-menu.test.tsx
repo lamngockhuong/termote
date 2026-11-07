@@ -20,7 +20,7 @@ function renderItems(props: Partial<FileActionsProps> = {}) {
       <FileActionItems
         path="pwa/src/my file.ts"
         root="/home/me/repo"
-        dir="pwa"
+        paneDir={async () => 'pwa'}
         notify={notify}
         {...props}
       />
@@ -113,12 +113,41 @@ describe('FileActionItems', () => {
     ])
   })
 
-  it('types the @path from the pane directory at the agent', () => {
+  it('types the @path from the pane directory, read now, at the agent', async () => {
     const insertText = vi.fn(() => true)
     const { notify } = renderItems({ insertText })
     choose('Insert @path in terminal')
-    expect(insertText).toHaveBeenCalledWith('@"src/my file.ts"')
+    await waitFor(() =>
+      expect(insertText).toHaveBeenCalledWith('@"src/my file.ts"'),
+    )
     expect(notify).not.toHaveBeenCalled()
+  })
+
+  it('types the whole path when the pane directory is not known', async () => {
+    const insertText = vi.fn(() => true)
+    renderItems({ insertText, paneDir: undefined })
+    choose('Insert @path in terminal')
+    await waitFor(() =>
+      expect(insertText).toHaveBeenCalledWith(
+        '@"/home/me/repo/pwa/src/my file.ts"',
+      ),
+    )
+  })
+
+  it('never types a name with a line break or a quote', async () => {
+    const insertText = vi.fn(() => true)
+    const { notify } = renderItems({
+      insertText,
+      path: 'pwa/a"\ntouch x\nb',
+    })
+    choose('Insert @path in terminal')
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith(
+        "This path has a line break or a quote; it can't be typed into the terminal",
+        { variant: 'warning' },
+      ),
+    )
+    expect(insertText).not.toHaveBeenCalled()
   })
 
   it('offers to copy the @path when it could not be typed', async () => {
@@ -128,6 +157,7 @@ describe('FileActionItems', () => {
       insertText: () => false,
     })
     choose('Insert @path in terminal')
+    await waitFor(() => expect(notify).toHaveBeenCalled())
     const [text, opts] = notify.mock.calls[0]
     expect(text).toBe(
       'Not inserted in the terminal: @/home/me/repo/server/main.go',

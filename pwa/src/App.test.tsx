@@ -4947,6 +4947,39 @@ describe('App views, view-only and deep links', () => {
       }
     })
 
+    it('insertText from a side panel keeps the panel, the terminal already shown', async () => {
+      const panel: { current?: ViewProps } = {}
+      const SIDE: AppView = {
+        id: 'side',
+        label: 'Side',
+        Icon: MessageSquare,
+        available: () => true,
+        placement: 'panel',
+        Main: () => <div data-testid="side-main" />,
+        Panel: (p) => {
+          panel.current = p
+          return <div data-testid="side-panel" />
+        },
+      }
+      const paste = vi.fn(() => true)
+      terminalHandle = { paste }
+      try {
+        render(<App views={[...APP_VIEWS, SIDE]} />)
+        fireEvent.click(await screen.findByRole('button', { name: 'Side' }))
+        await screen.findByTestId('side-panel')
+        mockSelectTab.mockClear()
+        act(() => {
+          panel.current!.insertText!('@a')
+        })
+        expect(paste).toHaveBeenCalledWith('@a ')
+        // The terminal was not reselected: it is the main view already
+        expect(mockSelectTab).not.toHaveBeenCalled()
+        expect(screen.getByTestId('side-panel')).toBeInTheDocument()
+      } finally {
+        terminalHandle = null
+      }
+    })
+
     it('insertText says when nothing went out, and a view-only device gets none', async () => {
       const props = await open()
       expect(props.insertText!('@a')).toBe(false)

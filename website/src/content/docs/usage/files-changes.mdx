@@ -124,8 +124,10 @@ row, its first item focused.
 - **Insert @path in terminal** types the path after `@` into the pane, without Enter, and shows
   the terminal. A file under the pane's directory gets a path from there (`@src/app.ts`), any
   other (above it, beside it, or in a Place) its absolute path; one with a space is quoted
-  (`@"my notes.md"`), as Claude Code writes it. When the terminal is not connected, a toast offers
-  to copy it instead.
+  (`@"my notes.md"`), as Claude Code writes it. The pane's directory is read at that moment, so a
+  `cd` in the pane counts. A name with a line break or a `"` is never typed (it could run a
+  command in a shell): a toast says so. When the terminal is not connected, a toast offers to
+  copy the path instead.
 - On a folder: **New file**, **New folder** and **Upload files here**, the box starting in that
   folder. A link to a folder, or a folder reached through one, offers none of them.
 - **Download**, **Rename** and **Delete**, as described below.
@@ -137,7 +139,8 @@ On a desktop, a right click on a file's tab opens the same menu with **Keep open
 tab) and **Close** first. A tab kept from a directory the pane has left only copies, types its
 absolute path and closes.
 
-A view-only device sees the copies, **Refresh** and **Collapse all** only.
+A view-only device sees the copies, **Refresh** and **Collapse all** only (and, on a tab,
+**Keep open** and **Close**).
 
 ## Open Files as Tabs
 
@@ -1060,8 +1063,7 @@ Diffs open as tabs, the same way files do in Files (see
   secrets work as in Files.
 - A right click on a row of the list (a long press on a phone, Shift+F10 or the menu key) opens
   its menu: **Open file** in Files (not for a deleted file), the copies and
-  **Insert @path in terminal** as in Files (the absolute path until Files has read the pane's
-  directory), then **Stage file**, **Unstage file** or **Discard file** for that side.
+  **Insert @path in terminal** as in Files, then **Stage file**, **Unstage file** or **Discard file** for that side.
 
 When the list has more than 15 entries, a **Filter changes…** box appears above it. It keeps the
 files whose path contains what you typed, ignoring case (for a rename, the old path counts too).

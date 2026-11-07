@@ -121,8 +121,10 @@ dòng và đưa focus vào mục đầu tiên.
 - **Insert @path in terminal** gõ `@` cùng đường dẫn vào pane, không nhấn Enter, rồi chuyển về
   terminal. File nằm dưới thư mục của pane nhận đường dẫn tính từ đó (`@src/app.ts`); file ở chỗ
   khác (phía trên, bên cạnh, hay trong một Place) nhận đường dẫn tuyệt đối. Đường dẫn có khoảng
-  trắng được đặt trong ngoặc kép (`@"my notes.md"`), đúng cách Claude Code tự viết. Terminal chưa
-  kết nối thì một toast mời bạn chép đường dẫn thay vào đó.
+  trắng được đặt trong ngoặc kép (`@"my notes.md"`), đúng cách Claude Code tự viết. Thư mục của
+  pane được đọc ngay lúc bấm, nên một lệnh `cd` trong pane cũng được tính. Tên có ký tự xuống dòng
+  hoặc dấu `"` thì không bao giờ được gõ vào (trong shell, nó có thể chạy một lệnh); một toast báo
+  lý do. Terminal chưa kết nối thì một toast mời bạn chép đường dẫn thay vào đó.
 - Trên một thư mục còn có **New file**, **New folder** và **Upload files here**, ô nhập điền sẵn
   thư mục đó. Link tới thư mục, hay thư mục đi qua một link, không có các mục này.
 - **Download**, **Rename** và **Delete**, như các mục bên dưới.
@@ -134,7 +136,8 @@ Trên máy tính, bấm chuột phải lên tab của một file mở cùng menu
 xem trước) và **Close** ở đầu. Tab còn giữ lại từ thư mục pane đã rời đi chỉ chép được đường dẫn,
 gõ đường dẫn tuyệt đối và đóng.
 
-Thiết bị chỉ xem chỉ thấy các mục chép, **Refresh** và **Collapse all**.
+Thiết bị chỉ xem chỉ thấy các mục chép, **Refresh** và **Collapse all** (trên tab thì có thêm
+**Keep open** và **Close**).
 
 ## Mở nhiều file theo tab
 
@@ -1048,8 +1051,7 @@ Diff cũng mở theo tab giống file trong Files (xem
   trong Files.
 - Bấm chuột phải lên một dòng của danh sách (giữ ngón tay trên điện thoại, Shift+F10 hoặc phím
   menu) để mở menu của nó: **Open file** để mở trong Files (file đã xoá thì không có), các mục chép
-  và **Insert @path in terminal** như trong Files (dùng đường dẫn tuyệt đối khi Files chưa đọc thư
-  mục của pane), rồi **Stage file**, **Unstage file** hoặc **Discard file** cho phía đó.
+  và **Insert @path in terminal** như trong Files, rồi **Stage file**, **Unstage file** hoặc **Discard file** cho phía đó.
 
 Khi danh sách có hơn 15 mục, một ô **Filter changes…** hiện phía trên nó. Ô này giữ lại những file
 có đường dẫn chứa chuỗi bạn gõ, không phân biệt hoa thường (với file đổi tên, đường dẫn cũ cũng
