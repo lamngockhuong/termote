@@ -1,21 +1,25 @@
 import {
   ChevronRight,
-  Download,
+  ChevronsDownUp,
   Ellipsis,
   File,
   FilePlus,
   FileSymlink,
   Folder,
   FolderOpen,
+  FolderPlus,
   Lock,
-  TextCursorInput,
-  Trash2,
+  Pin,
+  RefreshCw,
   Upload,
+  X,
 } from 'lucide-react'
 import {
   type ClipboardEvent,
   type DragEvent,
   type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
   useCallback,
   useEffect,
   useId,
@@ -35,12 +39,14 @@ import {
   dropDraft,
   type FilesError,
   type FilesState,
+  type FileTab,
   FOLLOW_NOTICES,
   fileRenamed,
   hasDirtyDraftAt,
   isDir,
   isOpenable,
   joinPath,
+  paneDirNow,
   useDirtyCheck,
   useFiles,
   useFilesFocusRequest,
@@ -82,6 +88,7 @@ import {
   matchStart,
 } from './content-search'
 import { DeleteFileDialog, type DeleteOutcome } from './delete-file-dialog'
+import { FileActionItems } from './file-actions-menu'
 import { FileSearch } from './file-search'
 import { FileTabBar, type TabListProps, tabElementId } from './file-tab-bar'
 import { FileViewer } from './file-viewer'
@@ -96,7 +103,7 @@ import { DiscardTabDialog, RootCloseDialog } from './tab-close-dialogs'
 import { TrashButton, TrashSheet } from './trash-sheet'
 import { Button, FOCUS_RING, IconButton } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
-import { Menu, MenuItem } from './ui/menu'
+import { Menu, MenuItem, MenuSeparator } from './ui/menu'
 import { SegmentedControl } from './ui/segmented-control'
 import { SkeletonLines } from './ui/skeleton'
 
@@ -115,6 +122,8 @@ type Row =
       entry: FileEntry
       level: number
       parent: string
+      // Reached through a symbolic link: the server writes nothing there
+      viaLink: boolean
     }
   | {
       kind: 'note'
@@ -130,7 +139,12 @@ type EntryRow = Extract<Row, { kind: 'entry' }>
 // are not there.
 // A directory is in dirs from the moment it opens: toggle starts its read in
 // the same event.
-function visibleRows(s: FilesState, dir = '', level = 1): Row[] {
+function visibleRows(
+  s: FilesState,
+  dir = '',
+  level = 1,
+  viaLink = false,
+): Row[] {
   const d = s.dirs[dir]
   const rows: Row[] = []
   if (!d.entries) {
@@ -139,9 +153,11 @@ function visibleRows(s: FilesState, dir = '', level = 1): Row[] {
   }
   for (const entry of d.entries) {
     const path = joinPath(dir, entry.name)
-    rows.push({ kind: 'entry', path, entry, level, parent: dir })
+    rows.push({ kind: 'entry', path, entry, level, parent: dir, viaLink })
     if (isDir(entry) && s.expanded[path])
-      rows.push(...visibleRows(s, path, level + 1))
+      rows.push(
+        ...visibleRows(s, path, level + 1, viaLink || entry.type === 'symlink'),
+      )
   }
   if (d.truncated) {
     rows.push({
@@ -234,6 +250,7 @@ export function FilesView({
   showView,
   sessions,
   openTab,
+  insertText,
 }: ViewProps) {
   const { t } = useT()
   // Before the first snapshot there is no pane to read
@@ -259,6 +276,7 @@ export function FilesView({
       // and every Place
       canPlaces={!readOnly && !!mux.caps.places}
       openWindow={openWindow}
+      insertText={insertText}
     />
   )
 }
@@ -298,6 +316,7 @@ function PaneFiles({
   openTab,
   showView,
   canSendToAgent,
+  insertText,
 }: {
   paneId: string
   canDelete: boolean
@@ -315,6 +334,7 @@ function PaneFiles({
   | 'session'
   | 'openTab'
   | 'showView'
+  | 'insertText'
 >) {
   const { t } = useT()
   const f = useFiles(paneId)
@@ -411,8 +431,16 @@ function PaneFiles({
       },
       { notify, t, ...opts },
     )
-  // The root the New file box was opened under, while it is open
-  const [creating, setCreating] = useState<string>()
+  // What the New file box was opened for, while it is open: under which
+  // root, starting in which folder, for a file or a folder
+  const [creating, setCreating] = useState<{
+    root: string
+    initialPath: string
+    kind: 'file' | 'dir'
+  }>()
+  // The folder the file picker opened from a folder's menu uploads into;
+  // the header's Upload goes to the focused folder
+  const uploadInto = useRef<{ dir: string; root: string }>(undefined)
   const [deleting, setDeleting] = useState<Deleting>()
   const [renaming, setRenaming] = useState<Renaming>()
   // The sensitive file the download confirmation is open for
@@ -486,6 +514,56 @@ function PaneFiles({
   const openFiles = isMobile && f.tabs.length > 0 && (
     <OpenFilesButton count={f.tabs.length} onClick={() => setListing(true)} />
   )
+  // A file tab's menu (the tab bar's right click): Keep open and Close, then
+  // what the tree's row offers. A tab kept from a root the pane has left
+  // only copies and closes: its file is not under the root the server has.
+  const tabMenu = (id: string) => {
+    const tab = f.tabs.find((x) => x.id === id) as FileTab
+    const here = tab.root === f.root
+    const revealed = !!tab.reveal
+    return (
+      <>
+        {!tab.pinned && (
+          <MenuItem icon={<Pin size={16} />} onSelect={() => f.pin(id)}>
+            {t('files.tabs.keep')}
+          </MenuItem>
+        )}
+        <MenuItem icon={<X size={16} />} onSelect={() => requestClose(id)}>
+          {t('common.close')}
+        </MenuItem>
+        <MenuSeparator />
+        <FileActionItems
+          path={tab.path}
+          root={tab.root}
+          place={f.place}
+          paneDir={here ? () => paneDirNow(paneId, tab.root) : undefined}
+          notify={notify}
+          insertText={insertText}
+          // As the viewer's: never through a link the tree knows of
+          onDownload={
+            here && canDownload && !throughLink(f, tab.path)
+              ? () => askDownload(tab.path, false, revealed)
+              : undefined
+          }
+          onRename={
+            here && canRename ? () => askRename(tab.path, revealed) : undefined
+          }
+          onDelete={
+            here && canDelete
+              ? () =>
+                  setDeleting({
+                    root: tab.root,
+                    place: f.place,
+                    path: tab.path,
+                    kind: 'file',
+                    sensitive: !!entryAt(f, tab.path)?.sensitive || revealed,
+                  })
+              : undefined
+          }
+        />
+      </>
+    )
+  }
   const closingTab = f.tabs.find((t) => t.id === closing)
   const moved = f.pendingRootClose?.length ?? 0
 
@@ -806,6 +884,33 @@ function PaneFiles({
     e.preventDefault()
     upload(files, focusedFolder(f, focused))
   }
+  // What the tree's menus (and the empty root's) offer
+  const treeActions: TreeActions = {
+    notify,
+    insertText,
+    onCreate:
+      newFileRoot === undefined
+        ? undefined
+        : (dir, kind) =>
+            setCreating({
+              root: newFileRoot,
+              initialPath: dir ? `${dir}/` : '',
+              kind,
+            }),
+    onUpload:
+      newFileRoot === undefined
+        ? undefined
+        : (dir) => {
+            uploadInto.current = {
+              dir,
+              root: newFileRoot,
+            }
+            fileInput.current?.click()
+          },
+    onRefresh: refresh,
+    onCollapseAll: f.collapseAll,
+    paneDir: () => paneDirNow(paneId, f.root as string),
+  }
   return (
     <div
       ref={viewRef}
@@ -830,7 +935,13 @@ function PaneFiles({
           <IconButton
             size="sm"
             variant="ghost"
-            onClick={() => setCreating(newFileRoot)}
+            onClick={() =>
+              setCreating({
+                root: newFileRoot,
+                initialPath: focusedDir(f, focused),
+                kind: 'file',
+              })
+            }
             aria-label={t('files.new.title')}
             title={t('files.new.title')}
           >
@@ -842,7 +953,10 @@ function PaneFiles({
             <IconButton
               size="sm"
               variant="ghost"
-              onClick={() => fileInput.current?.click()}
+              onClick={() => {
+                uploadInto.current = undefined
+                fileInput.current?.click()
+              }}
               aria-label={t('files.upload')}
               title={t('files.upload')}
             >
@@ -858,7 +972,15 @@ function PaneFiles({
                 const files = Array.from(e.currentTarget.files as FileList)
                 // The same file can be picked again
                 e.currentTarget.value = ''
-                upload(files, focusedFolder(f, focused))
+                const into = uploadInto.current
+                uploadInto.current = undefined
+                // The pane moved while the picker was open: that folder is
+                // the old root's
+                if (into && into.root !== f.root) {
+                  notify(t('files.upload.rootLeft'), { variant: 'warning' })
+                  return
+                }
+                upload(files, into?.dir ?? focusedFolder(f, focused))
               }}
             />
           </>
@@ -877,7 +999,7 @@ function PaneFiles({
         {!tab && openFiles}
       </PaneDirHeader>
       <UploadStatusRow />
-      {tabBar && <FileTabBar {...tabList} />}
+      {tabBar && <FileTabBar {...tabList} menuFor={tabMenu} />}
       <OpenFilesSheet
         {...tabList}
         isOpen={isMobile && listing}
@@ -903,8 +1025,9 @@ function PaneFiles({
         <NewFileDialog
           paneId={paneId}
           place={f.place}
-          root={creating}
-          initialPath={focusedDir(f, focused)}
+          root={creating.root}
+          initialPath={creating.initialPath}
+          kind={creating.kind}
           onClose={() => setCreating(undefined)}
           onCreated={f.created}
           onRootChanged={f.rootChanged}
@@ -1114,7 +1237,7 @@ function PaneFiles({
                 hideIgnored={readOnly}
               >
                 {root.entries.length === 0 ? (
-                  <ViewMessage>{t('files.tree.dirEmpty')}</ViewMessage>
+                  <EmptyTree actions={treeActions} />
                 ) : (
                   <FileTree
                     state={f}
@@ -1138,6 +1261,7 @@ function PaneFiles({
                           (path) => askRename(path, false)
                         : undefined
                     }
+                    actions={treeActions}
                   />
                 )}
               </FileSearch>
@@ -1227,6 +1351,37 @@ function throughLink(f: FilesState, path: string): boolean {
   })
 }
 
+// What the tree's menus offer beyond the copies: absent for view-only
+interface TreeActions {
+  notify: ViewProps['notify']
+  insertText?: ViewProps['insertText']
+  // The pane's directory under the tree's root, read now
+  paneDir: () => Promise<string | null>
+  // A new file or folder in dir ("" for the root), or files uploaded into it
+  onCreate?: (dir: string, kind: 'file' | 'dir') => void
+  onUpload?: (dir: string) => void
+  onRefresh: () => void
+  onCollapseAll: () => void
+}
+
+// The menu open in the tree: a row's (by path) or the empty area's (null),
+// at the pointer or by the row's … button (point null). Kept once closed
+// with open false, so it fades out with its items.
+interface TreeMenu {
+  path: string | null
+  point: { x: number; y: number } | null
+  byKey: boolean
+  open: boolean
+}
+
+// Shift+F10 or the context menu key: the focused row's menu
+const menuKey = (e: KeyboardEvent) =>
+  e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)
+
+// A context menu event from inside an open menu: the menu handles it
+const fromMenu = (e: MouseEvent) =>
+  !!(e.target as Element).closest('[role="menu"]')
+
 function FileTree({
   state,
   items,
@@ -1238,6 +1393,7 @@ function FileTree({
   onDelete,
   onRename,
   onDownload,
+  actions,
 }: {
   state: FilesState
   // The rows by path, kept by the view: it focuses an uploaded file's
@@ -1256,6 +1412,7 @@ function FileTree({
   // Offered on each regular file's row when downloading is allowed (the
   // server refuses a symlink)
   onDownload?: (path: string, entry: FileEntry) => void
+  actions: TreeActions
 }) {
   const { t } = useT()
   const rows = visibleRows(state)
@@ -1267,6 +1424,18 @@ function FileTree({
     entries.map((r) => r.path),
     `${state.root}\0${state.place}`,
   )
+  const treeRef = useRef<HTMLDivElement>(null)
+  const [menu, setMenu] = useState<TreeMenu>()
+  const areaAnchor = useRef<HTMLElement | null>(null)
+  const openMenu = (
+    path: string | null,
+    point: TreeMenu['point'],
+    byKey = false,
+  ) => setMenu({ path, point, byKey, open: true })
+  // A menu closing closes only itself: a row's left behind (its … button
+  // losing the focus to the menu opened next) never shuts that one
+  const menuChange = (path: string | null, open: boolean) =>
+    setMenu((m) => (m?.path === path ? { ...m, open } : m))
 
   const focus = (path: string) => {
     setFocused(path)
@@ -1279,6 +1448,11 @@ function FileTree({
   }
 
   const onKeyDown = (e: KeyboardEvent) => {
+    if (menuKey(e)) {
+      e.preventDefault()
+      openMenu(current.path, null, true)
+      return
+    }
     const at = entries.indexOf(current)
     const open = isDir(current.entry) && !!state.expanded[current.path]
     let next: string | undefined
@@ -1326,56 +1500,188 @@ function FileTree({
     if (next) focus(next)
   }
 
+  // The items of a row's menu: a real folder (not one reached through a
+  // link, which the server refuses to write through) takes new files,
+  // folders and uploads
+  const rowItems = (r: EntryRow) => {
+    const folder = r.entry.type === 'dir' && !r.viaLink
+    const create = folder ? actions.onCreate : undefined
+    const upload = folder ? actions.onUpload : undefined
+    const file = r.entry.type === 'file'
+    return (
+      <FileActionItems
+        path={r.path}
+        // The tree shows once the root is read
+        root={state.root as string}
+        place={state.place}
+        paneDir={actions.paneDir}
+        notify={actions.notify}
+        insertText={actions.insertText}
+        onNewFile={create && (() => create(r.path, 'file'))}
+        onNewFolder={create && (() => create(r.path, 'dir'))}
+        onUpload={upload && (() => upload(r.path))}
+        onDownload={
+          onDownload && file ? () => onDownload(r.path, r.entry) : undefined
+        }
+        onRename={
+          onRename && file ? () => onRename(r.path, r.entry) : undefined
+        }
+        onDelete={onDelete && (() => onDelete(r.path, r.entry))}
+        // A folder read and found to hold something cannot go
+        deleteBlocked={isDir(r.entry) && !!state.dirs[r.path]?.entries?.length}
+      />
+    )
+  }
+
+  return (
+    <>
+      <div
+        ref={treeRef}
+        role="tree"
+        aria-label={t('common.files')}
+        onKeyDown={onKeyDown}
+        // Right click below or between the rows: the tree's own menu
+        onContextMenu={(e) => {
+          if (fromMenu(e) || (e.target as Element).closest('[role="treeitem"]'))
+            return
+          e.preventDefault()
+          // Escape gives the focus back to the tree's row (the tree itself
+          // takes none)
+          areaAnchor.current = items.current.get(current.path) as HTMLElement
+          openMenu(null, { x: e.clientX, y: e.clientY })
+        }}
+        className="min-h-0 flex-1 overflow-y-auto py-1"
+      >
+        {rows.map((r) =>
+          r.kind === 'note' ? (
+            <div
+              key={r.path}
+              // A drop on a folder's note goes in that folder
+              data-path={r.dir}
+              className="py-1.5 pr-3 text-[12px] text-fg-subtle"
+              style={{ paddingLeft: `${r.level * 16 + 12}px` }}
+            >
+              {t(r.text)}
+            </div>
+          ) : (
+            <TreeItem
+              key={r.path}
+              row={r}
+              expanded={isDir(r.entry) ? !!state.expanded[r.path] : undefined}
+              tabbable={r === current}
+              entering={isNew(r.path)}
+              dropTarget={r.path === dropAt}
+              itemRef={(el) => {
+                if (el) items.current.set(r.path, el)
+                else items.current.delete(r.path)
+              }}
+              onClick={() => {
+                setFocused(r.path)
+                activate(r)
+              }}
+              menu={menu?.path === r.path ? menu : undefined}
+              menuItems={menu?.path === r.path ? rowItems(r) : null}
+              onMenu={(point) => {
+                setFocused(r.path)
+                openMenu(r.path, point)
+              }}
+              onMenuChange={(open) =>
+                open ? openMenu(r.path, null) : menuChange(r.path, false)
+              }
+            />
+          ),
+        )}
+      </div>
+      <Menu
+        label={t('files.actions.tree')}
+        trigger={null}
+        anchorRef={areaAnchor}
+        open={menu?.path === null && menu.open}
+        onOpenChange={(open) => menuChange(null, open)}
+        point={menu?.path === null ? menu.point : null}
+      >
+        <TreeAreaItems actions={actions} collapse />
+      </Menu>
+    </>
+  )
+}
+
+// The tree's own menu, a right click below its rows (or on an empty root's
+// message): new, upload, refresh, and collapse all where folders show
+function TreeAreaItems({
+  actions: { onCreate, onUpload, onRefresh, onCollapseAll },
+  collapse = false,
+}: {
+  actions: TreeActions
+  collapse?: boolean
+}) {
+  const { t } = useT()
+  return (
+    <>
+      {onCreate && (
+        <>
+          <MenuItem
+            icon={<FilePlus size={16} />}
+            onSelect={() => onCreate('', 'file')}
+          >
+            {t('files.new.title')}
+          </MenuItem>
+          <MenuItem
+            icon={<FolderPlus size={16} />}
+            onSelect={() => onCreate('', 'dir')}
+          >
+            {t('files.actions.newFolder')}
+          </MenuItem>
+        </>
+      )}
+      {onUpload && (
+        <MenuItem icon={<Upload size={16} />} onSelect={() => onUpload('')}>
+          {t('files.upload')}
+        </MenuItem>
+      )}
+      {(onCreate || onUpload) && <MenuSeparator />}
+      <MenuItem icon={<RefreshCw size={16} />} onSelect={onRefresh}>
+        {t('files.refresh')}
+      </MenuItem>
+      {collapse && (
+        <MenuItem icon={<ChevronsDownUp size={16} />} onSelect={onCollapseAll}>
+          {t('files.actions.collapseAll')}
+        </MenuItem>
+      )}
+    </>
+  )
+}
+
+// An empty root: its message, with the tree's menu on a right click (a
+// first folder can be made from there)
+function EmptyTree({ actions }: { actions: TreeActions }) {
+  const { t } = useT()
+  const areaRef = useRef<HTMLDivElement>(null)
+  const [menu, setMenu] = useState<{
+    point: { x: number; y: number }
+    open: boolean
+  }>()
   return (
     <div
-      role="tree"
-      aria-label={t('common.files')}
-      onKeyDown={onKeyDown}
-      className="min-h-0 flex-1 overflow-y-auto py-1"
+      ref={areaRef}
+      className="flex min-h-0 flex-1 flex-col"
+      onContextMenu={(e) => {
+        if (fromMenu(e)) return
+        e.preventDefault()
+        setMenu({ point: { x: e.clientX, y: e.clientY }, open: true })
+      }}
     >
-      {rows.map((r) =>
-        r.kind === 'note' ? (
-          <div
-            key={r.path}
-            // A drop on a folder's note goes in that folder
-            data-path={r.dir}
-            className="py-1.5 pr-3 text-[12px] text-fg-subtle"
-            style={{ paddingLeft: `${r.level * 16 + 12}px` }}
-          >
-            {t(r.text)}
-          </div>
-        ) : (
-          <TreeItem
-            key={r.path}
-            row={r}
-            expanded={isDir(r.entry) ? !!state.expanded[r.path] : undefined}
-            tabbable={r === current}
-            entering={isNew(r.path)}
-            dropTarget={r.path === dropAt}
-            // A folder read and found to hold something cannot go
-            notEmpty={!!state.dirs[r.path]?.entries?.length}
-            itemRef={(el) => {
-              if (el) items.current.set(r.path, el)
-              else items.current.delete(r.path)
-            }}
-            onClick={() => {
-              setFocused(r.path)
-              activate(r)
-            }}
-            onDelete={onDelete && (() => onDelete(r.path, r.entry))}
-            onRename={
-              onRename && r.entry.type === 'file'
-                ? () => onRename(r.path, r.entry)
-                : undefined
-            }
-            onDownload={
-              onDownload && r.entry.type === 'file'
-                ? () => onDownload(r.path, r.entry)
-                : undefined
-            }
-          />
-        ),
-      )}
+      <ViewMessage>{t('files.tree.dirEmpty')}</ViewMessage>
+      <Menu
+        label={t('files.actions.tree')}
+        trigger={null}
+        anchorRef={areaRef}
+        open={!!menu?.open}
+        onOpenChange={(open) => setMenu((m) => m && { ...m, open })}
+        point={menu?.point}
+      >
+        <TreeAreaItems actions={actions} />
+      </Menu>
     </div>
   )
 }
@@ -1386,31 +1692,39 @@ function TreeItem({
   tabbable,
   entering,
   dropTarget,
-  notEmpty,
   itemRef,
   onClick,
-  onDelete,
-  onRename,
-  onDownload,
+  menu,
+  menuItems,
+  onMenu,
+  onMenuChange,
 }: {
   row: EntryRow
   expanded?: boolean
   tabbable: boolean
   entering: boolean
   dropTarget: boolean
-  notEmpty: boolean
   itemRef: (el: HTMLElement | null) => void
   onClick: () => void
-  onDelete?: () => void
-  onRename?: () => void
-  onDownload?: () => void
+  // This row's menu, when it is the one open (or fading out)
+  menu?: TreeMenu
+  menuItems: ReactNode
+  // Right clicked at point, or pressed long (null: by the … button)
+  onMenu: (point: TreeMenu['point']) => void
+  onMenuChange: (open: boolean) => void
 }) {
   const { t } = useT()
   const { entry, level } = row
-  const hasMenu = !!(onDelete || onRename || onDownload)
-  const [menuOpen, setMenuOpen] = useState(false)
-  // A finger resting on a row with a menu opens it, as the … button does
-  const press = useLongPress(() => setMenuOpen(true))
+  // A finger resting on a row opens its menu, as the … button does; a
+  // right click opens it at the pointer
+  const press = useLongPress(
+    () => onMenu(null),
+    (e) => {
+      if (fromMenu(e)) return
+      e.preventDefault()
+      onMenu({ x: e.clientX, y: e.clientY })
+    },
+  )
   const dir = isDir(entry)
   const can = isOpenable(entry)
   const Icon = dir
@@ -1428,12 +1742,16 @@ function TreeItem({
       aria-level={level}
       aria-expanded={expanded}
       aria-disabled={can ? undefined : true}
+      aria-keyshortcuts="Shift+F10"
       tabIndex={tabbable ? 0 : -1}
       // Where a drop on the row goes is worked out from it (dropFolder)
       data-path={row.path}
+      // The row the open menu acts on stays marked (a long press shows the
+      // menu over other rows: no Delete on the wrong one)
+      data-menu-open={menu?.open || undefined}
       onClick={onClick}
-      {...(hasMenu && press)}
-      className={`group flex min-h-9 [-webkit-touch-callout:none] cursor-default items-center gap-1.5 pr-1 text-[13px] hover:bg-surface pointer-coarse:min-h-touch ${entering ? `transition-[opacity,translate] duration-(--duration-base) ease-standard ${ENTER_FROM}` : ''} ${dropTarget ? 'bg-accent/10 ring-1 ring-accent ring-inset' : ''} ${FOCUS_RING} focus-visible:-outline-offset-2 ${can ? 'text-fg' : 'text-fg-subtle'}`}
+      {...press}
+      className={`group flex min-h-9 [-webkit-touch-callout:none] pointer-coarse:select-none cursor-default items-center gap-1.5 pr-1 text-[13px] ${menu?.open ? 'bg-accent/15' : 'hover:bg-surface'} pointer-coarse:min-h-touch ${entering ? `transition-[opacity,translate] duration-(--duration-base) ease-standard ${ENTER_FROM}` : ''} ${dropTarget ? 'bg-accent/10 ring-1 ring-accent ring-inset' : ''} ${FOCUS_RING} focus-visible:-outline-offset-2 ${can ? 'text-fg' : 'text-fg-subtle'}`}
       style={{ paddingLeft: `${(level - 1) * 16 + 8}px` }}
     >
       <ChevronRight
@@ -1456,51 +1774,27 @@ function TreeItem({
           <span className="sr-only">{t('files.sensitive')}</span>
         </span>
       )}
-      {hasMenu && (
-        // Its own clicks and keys never reach the row (open, toggle, the
-        // tree's keys). Shown on hover or focus with a mouse, always on a
-        // touch screen.
-        <div
-          onClick={(e) => e.stopPropagation()}
-          onKeyDown={(e) => e.stopPropagation()}
-          className="shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100"
+      {/* Its own clicks and keys never reach the row (open, toggle, the
+          tree's keys). Shown on hover or focus with a mouse, always on a
+          touch screen, and while its menu is open. */}
+      <div
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+        className={`shrink-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100 ${menu?.open ? '' : 'opacity-0'}`}
+      >
+        <Menu
+          label={t('files.tree.actions', { name: entry.name })}
+          trigger={<Ellipsis size={14} aria-hidden="true" />}
+          triggerTabIndex={-1}
+          triggerSize="sm"
+          open={!!menu?.open}
+          onOpenChange={onMenuChange}
+          point={menu?.point}
+          focusFirst={menu?.byKey}
         >
-          <Menu
-            label={t('files.tree.actions', { name: entry.name })}
-            trigger={<Ellipsis size={14} aria-hidden="true" />}
-            triggerTabIndex={-1}
-            triggerSize="sm"
-            open={menuOpen}
-            onOpenChange={setMenuOpen}
-          >
-            {onDownload && (
-              <MenuItem icon={<Download size={16} />} onSelect={onDownload}>
-                {t('files.download')}
-              </MenuItem>
-            )}
-            {onRename && (
-              <MenuItem
-                icon={<TextCursorInput size={16} />}
-                onSelect={onRename}
-              >
-                {t('files.rename.title')}
-              </MenuItem>
-            )}
-            {onDelete && (
-              <MenuItem
-                icon={<Trash2 size={16} />}
-                danger
-                disabled={dir && notEmpty}
-                onSelect={onDelete}
-              >
-                {dir && notEmpty
-                  ? t('files.tree.deleteNotEmpty')
-                  : t('files.delete')}
-              </MenuItem>
-            )}
-          </Menu>
-        </div>
-      )}
+          {menuItems}
+        </Menu>
+      </div>
     </div>
   )
 }

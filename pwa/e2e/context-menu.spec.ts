@@ -78,7 +78,12 @@ test.describe('browser context menu', () => {
 
     const search = page.getByRole('button', { name: 'Search sessions' })
     expect(await blocked(search)).toBe(true)
+    // A tree row's right click opens the app's own menu in its place
     expect(await blocked(file)).toBe(true)
+    const menu = page.getByRole('menu', { name: 'Actions for notes.txt' })
+    await expect(menu).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(menu).toBeHidden()
 
     await search.click()
     const box = page.getByRole('searchbox', { name: 'Find a session' })

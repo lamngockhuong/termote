@@ -83,6 +83,28 @@ describe('useLongPress', () => {
     expect(menu.preventDefault).toHaveBeenCalled()
   })
 
+  it("hands a right click or the menu key to onContextMenu, never a press's", () => {
+    const fn = vi.fn()
+    const onMenu = vi.fn()
+    const h = renderHook(() => useLongPress(fn, onMenu))
+    const on = () => h.result.current
+    // A right click: the mouse's press resets a finger's earlier one
+    on().onPointerDown(pointer(0, 0, 'mouse'))
+    const right = mouse()
+    on().onContextMenu(right)
+    expect(onMenu).toHaveBeenCalledExactlyOnceWith(right)
+    // A long press opens once: the contextmenu during it or after it is
+    // swallowed and not handed on
+    on().onPointerDown(pointer(0, 0))
+    on().onContextMenu(mouse())
+    act(() => vi.advanceTimersByTime(LONG_PRESS_MS))
+    const after = mouse()
+    on().onContextMenu(after)
+    expect(after.preventDefault).toHaveBeenCalled()
+    expect(fn).toHaveBeenCalledTimes(1)
+    expect(onMenu).toHaveBeenCalledTimes(1)
+  })
+
   it('a mouse never long-presses', () => {
     const { fn, on } = setup()
     on().onPointerDown(pointer(0, 0, 'mouse'))

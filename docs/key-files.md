@@ -129,7 +129,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/file-tab-bar.tsx`             | Desktop tab bar of open files (keys, middle click, pin, drag)  |
 | `pwa/src/components/open-files-sheet.tsx`         | Phone: "Open files (N)" button and the sheet listing them      |
 | `pwa/src/components/tab-close-dialogs.tsx`        | Files/Changes: Discard a tab's changes, close on a root move   |
-| `pwa/src/hooks/use-long-press.ts`                 | Long press of a finger (a Markdown link opens a new tab)       |
+| `pwa/src/hooks/use-long-press.ts`                 | Long press of a finger; hands a right click to a menu handler  |
 | `pwa/src/components/changes-view.tsx`             | Changes view: git status grouped, diffs as tabs, edits a file  |
 | `pwa/src/components/commit-view.tsx`              | Last commit from an empty Changes list: message, files, diffs  |
 | `pwa/src/components/change-status.tsx`            | One changed file of a list: status letter, name, directory     |
@@ -138,7 +138,9 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/utils/file-encoding.ts`                  | Encoding names the Files view shows, the fixed set             |
 | `pwa/src/components/code-editor.tsx`              | Desktop editor (CodeMirror, lazy chunk), Vim mode              |
 | `pwa/src/utils/cm-languages.ts`                   | The desktop editor's languages, one chunk each                 |
-| `pwa/src/components/new-file-dialog.tsx`          | Files: asks for a new file's path, creates it, says why not    |
+| `pwa/src/components/new-file-dialog.tsx`          | Files: asks for a new file's or folder's path, creates it      |
+| `pwa/src/components/file-actions-menu.tsx`        | Items of a file's menu (copy paths, @path, new, upload, …)     |
+| `pwa/src/utils/file-paths.ts`                     | A tree path as copied (absolute) or typed for the agent (@)    |
 | `pwa/src/components/group-dialog.tsx`             | New group: name, directory, why refused, recent directories    |
 | `pwa/src/components/worktree-dialog.tsx`          | New/Open worktree, the Remove confirmations, why refused       |
 | `pwa/src/utils/git-ref.ts`                        | Branch names the server accepts (validBranchName)              |

@@ -109,6 +109,38 @@ các thư mục chứa socket điều khiển máy host (`/tmp`, `/run`, `/var/r
 | `Not previewable (binary, special file or larger than 4 MiB)`  | File nhị phân không phải ảnh hay tài liệu, file lớn hơn 4 MiB, hoặc thứ không phải file thường |
 | `This file can't be shown`                                     | Đường dẫn Termote không bao giờ trả về (xem bên dưới)                                            |
 
+## Menu chuột phải
+
+Bấm chuột phải lên một file hay thư mục trên cây thì menu của nó mở ngay tại con trỏ. Nút **…**
+trên dòng, giữ ngón tay trên điện thoại, Shift+F10 hoặc phím menu cũng mở menu đó, nhưng đặt cạnh
+dòng và đưa focus vào mục đầu tiên.
+
+- **Copy relative path**, **Copy absolute path** và **Copy name**. Đường dẫn tương đối tính từ gốc
+  cây đang hiện; đường dẫn tuyệt đối dùng dấu phân cách của máy chủ (`\` trên Windows). Với một
+  link, đó là đường dẫn của chính link, không phải nơi link trỏ tới.
+- **Insert @path in terminal** gõ `@` cùng đường dẫn vào pane, không nhấn Enter, rồi chuyển về
+  terminal. File nằm dưới thư mục của pane nhận đường dẫn tính từ đó (`@src/app.ts`); file ở chỗ
+  khác (phía trên, bên cạnh, hay trong một Place) nhận đường dẫn tuyệt đối. Đường dẫn có khoảng
+  trắng được đặt trong ngoặc kép (`@"my notes.md"`), đúng cách Claude Code tự viết. Thư mục của
+  pane được đọc ngay lúc bấm, nên một lệnh `cd` trong pane cũng được tính. Tên có ký tự xuống dòng
+  hoặc dấu `"` thì không bao giờ được gõ vào (trong shell, nó có thể chạy một lệnh); một toast báo
+  lý do. Terminal chưa kết nối thì một toast mời bạn chép đường dẫn thay vào đó.
+- Trên một thư mục còn có **New file**, **New folder** và **Upload files here**, ô nhập điền sẵn
+  thư mục đó. Link tới thư mục, hay thư mục đi qua một link, không có các mục này.
+- **Download**, **Rename** và **Delete**, như các mục bên dưới.
+
+Bấm chuột phải vào khoảng trống dưới các dòng thì mở menu của cây: **New file**, **New folder**,
+**Upload files** (vào gốc), **Refresh** và **Collapse all**. Thư mục trống thì hiện một dòng
+thông báo thay cho cây; bấm chuột phải vào đó cũng mở menu này (không có **Collapse all**), nhờ vậy
+vẫn tạo được thư mục đầu tiên.
+
+Trên máy tính, bấm chuột phải lên tab của một file mở cùng menu đó, thêm **Keep open** (với tab
+xem trước) và **Close** ở đầu. Tab còn giữ lại từ thư mục pane đã rời đi chỉ chép được đường dẫn,
+gõ đường dẫn tuyệt đối và đóng.
+
+Thiết bị chỉ xem chỉ thấy các mục chép, **Refresh** và **Collapse all** (trên tab thì có thêm
+**Keep open** và **Close**).
+
 ## Mở nhiều file theo tab
 
 Mở thêm file thì các file đang mở vẫn còn: mỗi file một tab, quay lại tab nào thì file đó vẫn ở
@@ -395,6 +427,10 @@ không hiện lúc đang xem một file.
   nhưng không mở ra.
 - Thư mục đã tạo cho đường dẫn vẫn giữ nguyên khi một bước sau đó lỗi, giống `mkdir -p`. File mới
   để trống cũng vẫn còn đó.
+
+**New folder** trong menu của một thư mục hay của cây (xem [Menu chuột phải](#menu-chuột-phải))
+hỏi đường dẫn theo cùng cách, tạo một thư mục rỗng rồi hiện nó trên cây ở trạng thái đang mở. Tên
+nào bị từ chối và lời báo nào hiện ra đều giống như khi tạo file.
 
 | Hiện ra                                        | Lý do                                                                                               |
 | ---------------------------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -1015,6 +1051,9 @@ Diff cũng mở theo tab giống file trong Files (xem
   đóng lại và app báo `No changes left in <file>`. Tab đang sửa thì vẫn ở lại.
 - Đóng tab, giới hạn 10 tab, danh sách trên điện thoại, gốc đổi và file có thể chứa bí mật đều như
   trong Files.
+- Bấm chuột phải lên một dòng của danh sách (giữ ngón tay trên điện thoại, Shift+F10 hoặc phím
+  menu) để mở menu của nó: **Open file** để mở trong Files (file đã xoá thì không có), các mục chép
+  và **Insert @path in terminal** như trong Files, rồi **Stage file**, **Unstage file** hoặc **Discard file** cho phía đó.
 
 Khi danh sách có hơn 15 mục, một ô **Filter changes…** hiện phía trên nó. Ô này giữ lại những file
 có đường dẫn chứa chuỗi bạn gõ, không phân biệt hoa thường (với file đổi tên, đường dẫn cũ cũng

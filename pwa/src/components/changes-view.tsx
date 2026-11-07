@@ -1,5 +1,6 @@
-import { GitCommitHorizontal, Minus, Plus, Undo2 } from 'lucide-react'
+import { FileText, GitCommitHorizontal, Minus, Plus, Undo2 } from 'lucide-react'
 import {
+  type KeyboardEvent,
   type ReactNode,
   useCallback,
   useEffect,
@@ -13,6 +14,7 @@ import {
   FOLLOW_NOTICES,
   followInFiles,
   openInFiles,
+  paneDirNow,
   useDirtyCheck,
 } from '../hooks/use-files'
 import {
@@ -24,6 +26,7 @@ import {
   openChangeFromLink,
   useGitChanges,
 } from '../hooks/use-git-changes'
+import { useLongPress } from '../hooks/use-long-press'
 import {
   type AppliedChange,
   applyChange,
@@ -60,6 +63,7 @@ import {
   APPLY_STALE,
   DiscardChangeDialog,
 } from './discard-change-dialog'
+import { FileActionItems } from './file-actions-menu'
 import { FileTabBar, type TabListProps, tabElementId } from './file-tab-bar'
 import { FileViewer } from './file-viewer'
 import { OpenFilesButton, OpenFilesSheet } from './open-files-sheet'
@@ -70,6 +74,7 @@ import { DiscardTabDialog, RootCloseDialog } from './tab-close-dialogs'
 import { Banner } from './ui/banner'
 import { Button, IconButton } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
+import { Menu, MenuItem, MenuSeparator } from './ui/menu'
 import { SkeletonLines } from './ui/skeleton'
 
 const ERRORS: Record<ChangesError, MessageKey> = {
@@ -316,6 +321,7 @@ export function ChangesView({
   mux,
   sessions,
   openTab,
+  insertText,
 }: ViewProps) {
   const { t } = useT()
   if (!session.paneId)
@@ -335,6 +341,7 @@ export function ChangesView({
       // The server refuses a view-only client's discards as well, and any
       // discard without a trash to keep the file in
       canDiscard={!readOnly && !!mux.caps.trash}
+      insertText={insertText}
     />
   )
 }
@@ -351,6 +358,7 @@ function PaneChanges({
   sessions,
   openTab,
   canSendToAgent,
+  insertText,
 }: {
   paneId: string
   canDiscard: boolean
@@ -365,6 +373,7 @@ function PaneChanges({
   | 'openWindow'
   | 'session'
   | 'openTab'
+  | 'insertText'
 >) {
   const c = useGitChanges(paneId)
   const { settings } = useSettings()
@@ -493,6 +502,66 @@ function PaneChanges({
   const [discarding, setDiscarding] = useState<Discarding>()
   const [asking, setAsking] = useState<Asking>()
   const busy = running || !!discarding
+
+  // A row's menu: at the pointer (a right click), or by the row (a long
+  // press, the menu key). Kept once closed, so it fades out with its items.
+  const [rowMenu, setRowMenu] = useState<{
+    item: Item
+    point: { x: number; y: number } | null
+    byKey: boolean
+    open: boolean
+  }>()
+  // The row's button: the menu hangs from it and gives it the focus back
+  const rowMenuAnchor = useRef<HTMLElement | null>(null)
+  // A side's menu: open its file in Files (not one deleted from the disk),
+  // copy or type its path, then its stage, unstage or discard
+  const rowMenuItems = ({ entry, staged }: Item) => {
+    // The list shows only once the root is read
+    const root = c.root as string
+    const gone =
+      entry.unstaged === 'D' || (entry.staged === 'D' && !entry.unstaged)
+    const actions = actionsOf(entry, staged)
+    return (
+      <>
+        {!gone && (
+          <>
+            <MenuItem
+              icon={<FileText size={16} />}
+              onSelect={() => {
+                openInFiles(paneId, root, entry.path)
+                showView(FILES_VIEW_ID)
+              }}
+            >
+              {t('files.actions.openFile')}
+            </MenuItem>
+            <MenuSeparator />
+          </>
+        )}
+        <FileActionItems
+          path={entry.path}
+          root={root}
+          paneDir={() => paneDirNow(paneId, root)}
+          notify={notify}
+          insertText={insertText}
+        />
+        {actions.length > 0 && <MenuSeparator />}
+        {actions.map((a) => {
+          const Icon = ACTION_ICON[a]
+          return (
+            <MenuItem
+              key={a}
+              icon={<Icon size={16} />}
+              danger={a === 'discard'}
+              disabled={busy}
+              onSelect={() => run(a, entry, staged)}
+            >
+              {t(ACTION_LABELS[a].file)}
+            </MenuItem>
+          )
+        })}
+      </>
+    )
+  }
   // What a side offers: only what the server takes for its letter (no
   // conflict, type change or intent to add), nothing to a view-only client
   const actionsOf = (entry: ChangeEntry, staged: boolean): ChangeAction[] => {
@@ -850,12 +919,36 @@ function PaneChanges({
                         onAction={(a) => run(a, it.entry, it.staged)}
                       />
                     }
+                    onMenu={(button, point, byKey) => {
+                      rowMenuAnchor.current = button
+                      setRowMenu({ item: it, point, byKey, open: true })
+                    }}
+                    menuOpen={
+                      !!rowMenu?.open &&
+                      rowMenu.item.staged === it.staged &&
+                      rowMenu.item.entry.path === it.entry.path &&
+                      rowMenu.item.entry.orig === it.entry.orig
+                    }
                   />
                 </li>
               ))}
             </ul>
           </section>
         ))}
+        <Menu
+          label={t('files.tree.actions', {
+            name: splitPath(rowMenu?.item.entry.path ?? '')[1],
+          })}
+          trigger={null}
+          anchorRef={rowMenuAnchor}
+          align="start"
+          open={!!rowMenu?.open}
+          onOpenChange={(open) => setRowMenu((m) => m && { ...m, open })}
+          point={rowMenu?.point}
+          focusFirst={rowMenu?.byKey}
+        >
+          {rowMenu && rowMenuItems(rowMenu.item)}
+        </Menu>
       </div>
     )
   }
@@ -950,20 +1043,55 @@ function PaneChanges({
   )
 }
 
+// Shift+F10 or the context menu key: the focused row's menu
+const menuKey = (e: KeyboardEvent) =>
+  e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)
+
 // A side in the list: a button that opens its diff, and its actions,
-// shown on hover or focus (always on a touch screen)
+// shown on hover or focus (always on a touch screen). A right click, a long
+// press, Shift+F10 or the menu key opens its menu (onMenu, with the row's
+// button it hangs from).
 function ChangeRow({
   item,
   onOpen,
   actions,
+  onMenu,
+  menuOpen,
 }: {
   item: Item
   onOpen: () => void
   actions: ReactNode
+  // Its menu is open: the row shows which one it acts on
+  menuOpen: boolean
+  onMenu: (
+    button: HTMLElement,
+    point: { x: number; y: number } | null,
+    byKey: boolean,
+  ) => void
 }) {
   const { entry, code } = item
+  const rowRef = useRef<HTMLDivElement>(null)
+  const button = () => rowRef.current?.querySelector('button') as HTMLElement
+  const press = useLongPress(
+    () => onMenu(button(), null, false),
+    (e) => {
+      e.preventDefault()
+      onMenu(button(), { x: e.clientX, y: e.clientY }, false)
+    },
+  )
   return (
-    <div className="group flex items-center hover:bg-surface">
+    <div
+      ref={rowRef}
+      {...press}
+      onKeyDown={(e) => {
+        if (!menuKey(e)) return
+        e.preventDefault()
+        onMenu(button(), null, true)
+      }}
+      // The row the open menu acts on stays marked
+      data-menu-open={menuOpen || undefined}
+      className={`group flex items-center [-webkit-touch-callout:none] pointer-coarse:select-none ${menuOpen ? 'bg-accent/15' : 'hover:bg-surface'}`}
+    >
       <ChangeRowButton
         code={code}
         path={entry.path}

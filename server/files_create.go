@@ -49,6 +49,8 @@ var createBeforeOpenDir = func(dir *os.Root, name string) {}
 type createRequest struct {
 	Path   string `json:"path"`
 	Reveal bool   `json:"reveal"`
+	// Dir makes an empty directory at Path instead of an empty file
+	Dir bool `json:"dir"`
 }
 
 type createResponse struct {
@@ -56,8 +58,9 @@ type createResponse struct {
 	Path string `json:"path"`
 }
 
-// handleCreateFile serves POST files/create?root=: it creates an empty file,
-// and the directories missing above it, under the pane's root. The contents
+// handleCreateFile serves POST files/create?root=: it creates an empty file
+// (an empty directory with dir), and the directories missing above it, under
+// the pane's root. The contents
 // go through PUT files/content. writeGuard has refused a cross-site or
 // non-JSON POST already.
 func (f *filesAPI) handleCreateFile(w http.ResponseWriter, r *http.Request) {
@@ -90,8 +93,8 @@ func (f *filesAPI) handleCreateFile(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(res)
 }
 
-// createFile creates in.Path under root as an empty file, never replacing
-// anything. The directories above it are walked one level at a time, each
+// createFile creates in.Path under root as an empty file, or an empty
+// directory with in.Dir, never replacing anything. The directories above it are walked one level at a time, each
 // opened from the one before: none may be a symlink, each opened is the one
 // checked, and each is checked against the denied dirs once it exists,
 // before anything is created inside it (a path that does not exist yet can
@@ -133,14 +136,20 @@ func (f *filesAPI) createFile(root filesRoot, in createRequest) (createResponse,
 		return createResponse{}, createError(err)
 	}
 	defer dir.Close()
-	fh, err := dir.OpenFile(filepath.Base(rel), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o666)
+	if in.Dir {
+		err = dir.Mkdir(filepath.Base(rel), 0o777)
+	} else {
+		var fh *os.File
+		if fh, err = dir.OpenFile(filepath.Base(rel), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o666); err == nil {
+			fh.Close()
+		}
+	}
 	if err != nil {
 		if err = createError(err); err == errCreateExists {
 			err = &createExistsError{filepath.ToSlash(rel)}
 		}
 		return createResponse{}, err
 	}
-	fh.Close()
 	// The Changes view lists the new file right away, and find finds it.
 	f.forgetRoot(root.Root)
 	return createResponse{Root: root.Root, Path: filepath.ToSlash(rel)}, nil

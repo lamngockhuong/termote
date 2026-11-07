@@ -112,6 +112,38 @@ it. On Windows, Places need the Herdr backend (`--mux herdr`).
 | `Not previewable (binary, special file or larger than 4 MiB)`  | A binary file that is not an image or a document, a file over 4 MiB, or something that is not a regular file |
 | `This file can't be shown`                                     | A path termote never serves (see below)                                                          |
 
+## Right-Click Menus
+
+A right click on a file or folder of the tree opens its menu where the pointer is; the **…**
+button on the row, a long press on a phone, Shift+F10 or the menu key open the same menu by the
+row, its first item focused.
+
+- **Copy relative path**, **Copy absolute path** and **Copy name**. The relative path is from the
+  root the tree shows; the absolute one uses the host's separator (`\` on Windows), and a link's is
+  the link's own path, not where it leads.
+- **Insert @path in terminal** types the path after `@` into the pane, without Enter, and shows
+  the terminal. A file under the pane's directory gets a path from there (`@src/app.ts`), any
+  other (above it, beside it, or in a Place) its absolute path; one with a space is quoted
+  (`@"my notes.md"`), as Claude Code writes it. The pane's directory is read at that moment, so a
+  `cd` in the pane counts. A name with a line break or a `"` is never typed (it could run a
+  command in a shell): a toast says so. When the terminal is not connected, a toast offers to
+  copy the path instead.
+- On a folder: **New file**, **New folder** and **Upload files here**, the box starting in that
+  folder. A link to a folder, or a folder reached through one, offers none of them.
+- **Download**, **Rename** and **Delete**, as described below.
+
+A right click below the rows opens the tree's own menu: **New file**, **New folder**,
+**Upload files** (into the root), **Refresh** and **Collapse all**. An empty directory shows a
+message in place of the tree; a right click on it opens the same menu, without **Collapse all**,
+so a first folder can be made there.
+
+On a desktop, a right click on a file's tab opens the same menu with **Keep open** (for a preview
+tab) and **Close** first. A tab kept from a directory the pane has left only copies, types its
+absolute path and closes.
+
+A view-only device sees the copies, **Refresh** and **Collapse all** only (and, on a tab,
+**Keep open** and **Close**).
+
 ## Open Files as Tabs
 
 Opening a file keeps the ones already open: each has a tab, and going back to a tab brings back
@@ -398,6 +430,10 @@ tree only, not while a file is shown.
   asking to show it.
 - When the connection drops before the server answers, the box says
   `The file may have been created. Refresh to check.`, and **Refresh** reads the tree again.
+
+**New folder**, in a folder's menu or the tree's (see [Right-Click Menus](#right-click-menus)),
+asks the same way and makes an empty folder, which then shows open in the tree. The same names are
+refused, and the same answers given, as for a file.
 - Closing the box while **Create** runs does not stop it: the file is still made and shows in the
   tree, but it does not open.
 - The folders made for the path stay when a later step fails, as with `mkdir -p`. A new file left
@@ -1027,6 +1063,9 @@ Diffs open as tabs, the same way files do in Files (see
   `No changes left in <file>`. A tab being edited stays open.
 - Closing, the limit of 10, the sheet on a phone, a move of the root and a file that may contain
   secrets work as in Files.
+- A right click on a row of the list (a long press on a phone, Shift+F10 or the menu key) opens
+  its menu: **Open file** in Files (not for a deleted file), the copies and
+  **Insert @path in terminal** as in Files, then **Stage file**, **Unstage file** or **Discard file** for that side.
 
 When the list has more than 15 entries, a **Filter changes…** box appears above it. It keeps the
 files whose path contains what you typed, ignoring case (for a rename, the old path counts too).

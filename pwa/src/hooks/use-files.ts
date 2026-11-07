@@ -207,6 +207,8 @@ interface Store {
   // Reads the root once there is a reader
   load: () => void
   toggle: (path: string) => void
+  // Closes every open directory
+  collapseAll: () => void
   // Reads the root and every open directory again; the root is taken from
   // where the pane is now (a cd shows at once)
   refresh: () => void
@@ -773,6 +775,9 @@ function createStore(id: string): Store {
       const dir = state.dirs[path]
       if (!dir || dir.error) read(path)
     },
+    collapseAll() {
+      set({ expanded: {} })
+    },
     refresh() {
       // The user asked: a cd in the pane shows now, not once the server saw
       // the new directory for 2 s. A Place does not follow the pane.
@@ -939,6 +944,7 @@ export function useFiles(paneId: string) {
     active: activeTab(state),
     load: useCallback(() => store.load(), [store]),
     toggle: useCallback((p: string) => store.toggle(p), [store]),
+    collapseAll: useCallback(() => store.collapseAll(), [store]),
     refresh: useCallback(() => store.refresh(), [store]),
     open: useCallback(
       (p: string, opts?: FileOpenOptions) => store.open(p, opts),
@@ -1086,6 +1092,22 @@ export function followInFiles(
   const store = storeFor(paneId)
   store.switchTo(place)
   return store.follow(target, 0, { fresh: true })
+}
+
+// paneId's directory under root ("/"-separated, "" at the root) as the
+// server sees it now, where a path typed for the agent starts from; null
+// when the pane has left root or it could not be read (the path is then
+// typed whole). Read at the time: a cd in the pane moves it.
+export async function paneDirNow(
+  paneId: string,
+  root: string,
+): Promise<string | null> {
+  try {
+    const tree = await fetchFilesTree({ paneId }, '', root, true)
+    return tree.root === root ? (tree.dir ?? '') : null
+  } catch {
+    return null
+  }
 }
 
 // Opens a path the agent wrote in paneId's Files view, at line when given:

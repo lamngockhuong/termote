@@ -18,6 +18,7 @@ import {
   hydrateDrafts,
   isDraftDirty,
   isOpenable,
+  paneDirNow,
   peekFilesState,
   requestFilesFocus,
   resetFilesStores,
@@ -75,6 +76,24 @@ describe('peekFilesState', () => {
   })
 })
 
+describe('paneDirNow', () => {
+  it("reads the pane's directory under root now", async () => {
+    mockTree.mockResolvedValueOnce({ ...tree('', []), dir: 'pwa' })
+    expect(await paneDirNow('%1', '/r')).toBe('pwa')
+    expect(mockTree).toHaveBeenCalledWith({ paneId: '%1' }, '', '/r', true)
+    // At the root
+    mockTree.mockResolvedValueOnce(tree('', []))
+    expect(await paneDirNow('%1', '/r')).toBe('')
+  })
+
+  it('is null once the pane left root, or when the read fails', async () => {
+    mockTree.mockResolvedValueOnce(tree('', [], '/other'))
+    expect(await paneDirNow('%1', '/r')).toBeNull()
+    mockTree.mockRejectedValueOnce(new RequestError(409, '', 'moved'))
+    expect(await paneDirNow('%1', '/r')).toBeNull()
+  })
+})
+
 describe('useFiles', () => {
   it('reads the root once, then each directory as it opens', async () => {
     mockTree.mockImplementation(async (_p, path) =>
@@ -103,6 +122,20 @@ describe('useFiles', () => {
     expect(result.current.expanded.src).toBeUndefined()
     act(() => result.current.toggle('src'))
     expect(mockTree).toHaveBeenCalledTimes(2)
+  })
+
+  it('collapseAll closes every open directory', async () => {
+    mockTree.mockImplementation(async (_p, path) =>
+      path === '' ? tree('', [dir('a'), dir('b')]) : tree(path, []),
+    )
+    const { result } = renderHook(() => useFiles('%1'))
+    act(() => result.current.load())
+    await waitFor(() => expect(result.current.dirs['']?.entries).toBeDefined())
+    act(() => result.current.toggle('a'))
+    act(() => result.current.toggle('b'))
+    expect(result.current.expanded).toEqual({ a: true, b: true })
+    act(() => result.current.collapseAll())
+    expect(result.current.expanded).toEqual({})
   })
 
   it('keeps one store per pane', async () => {

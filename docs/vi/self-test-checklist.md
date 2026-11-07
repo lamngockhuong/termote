@@ -693,6 +693,12 @@ Chạy trên tmux (Linux/macOS) và Herdr; psmux (Windows) không có hai view n
 - [ ] Máy tính: kéo một tab file qua tab khác; các tab khác dạt sang, thả ra thì giữ thứ tự mới (cả
       sau khi tải lại trang), nhấn Escape giữa chừng thì tab về chỗ cũ, nhấn mà không kéo vẫn hiện
       tab; Alt+Trái/Phải dời tab đang chọn; Files luôn đứng đầu; tab diff của Changes cũng kéo được
+- [ ] Bấm chuột phải lên một file, một thư mục, vùng trống của cây, gốc rỗng, một tab file (máy
+      tính) và một dòng Changes: mỗi chỗ mở menu của nó tại con trỏ, không bao giờ là menu của trình
+      duyệt; Shift+F10 và giữ ngón tay mở menu cạnh dòng
+- [ ] Copy relative/absolute path chép đúng chuỗi; Insert @path in terminal gõ đường dẫn vào pane
+      mà không nhấn Enter (tính từ thư mục của pane, kể cả sau khi `cd`); New folder tạo thư mục rỗng
+      và hiện nó đang mở; Upload files here ghi vào đúng thư mục đó; view-only chỉ thấy các mục chép
 - [ ] Ctrl/Cmd+nhấn hoặc nhấn chuột giữa vào link Markdown thì mở tab mới; nhấn thường thì đi tiếp
       trong cùng tab và Back quay lại
 - [ ] Điện thoại: không có thanh tab; "Open files (N)" trên thanh của file và phía trên cây mở một

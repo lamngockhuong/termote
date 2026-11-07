@@ -1306,11 +1306,12 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   and equals this one, else it opens a new window. A stream closed with 4001 (evicted) shows
   `Disconnected by a newer window` and reconnects only when asked, each pane of Herdr's layout
   view on its own
-- **Creating a file** (`POST files/create?root=`, `server/files_create.go`): an empty file and
-  the directories missing above it (0666/0777 under the umask; directories made before a later
+- **Creating a file** (`POST files/create?root=`, `server/files_create.go`): an empty file (an
+  empty directory with `dir: true`: New folder of the Files menus) and the directories missing
+  above it (0666/0777 under the umask; directories made before a later
   failure stay, as with `mkdir -p`); the text then goes through `PUT files/content`. Same guards
   as a save (`writeGuard`, the handler's cross-site check, `requireWriteRole`, `root` required:
-  400, 409 once it moved); the body (`{path, reveal}`, 8 KB) is read first, and its read deadline
+  400, 409 once it moved); the body (`{path, reveal, dir}`, 8 KB) is read first, and its read deadline
   stays 60s; 201 `{root, path}`. The name is checked
   before the disk is touched (400 `invalid_name`): no empty component, at most 32 components and
   1024 bytes, 255 a component, none ending in a dot or a space, no control character, no
@@ -1328,7 +1329,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `storage_full` (as uploads); each directory is
   checked against the deny lists again once it exists, before anything is made inside it (an 8.3
   name or a junction is only caught there). The file is opened `O_CREATE|O_EXCL` on its parent's
-  handle: anything there, a dangling symlink included → 409 `exists` with the cleaned `path`
+  handle, a directory made with `Mkdir` on it, after every check above (a `dir` create skips
+  none): anything there, a dangling symlink included → 409 `exists` with the cleaned `path`
   (`/`-separated; Open it opens that), never replaced. A reply after the box was closed opens
   nothing, the tree is only read again. A create
   drops the root's cached git status. Accepted risk: a new file can be one another tool trusts
@@ -1337,6 +1339,20 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   has a shell anyway, and a view-only client gets 403 `view_only` for creates as well as saves.
   The root's lock is keyed `root + "\x01create"`: `"\x00create"` was the key of a file named
   `create` at the root, and a delete takes both
+- **Files menus** (`pwa/src/components/file-actions-menu.tsx`, `pwa/src/utils/file-paths.ts`): a
+  right click on a tree row, the tree, a file tab or a Changes row opens the app's menu
+  (`preventDefault`, so `context-menu-guard.ts` leaves it). Copied and typed paths are built in the
+  PWA from the `root` and `dir` the tree route returned and the tree path; nothing goes back to the
+  server, and no new route exists. **Insert @path in terminal** sends text into the pane (a
+  bracketed paste where the program asked for one, no Enter), so it is offered only to a full
+  client: `App` gives views no `insertText` when view-only. A name may hold any byte but NUL, and
+  a pane that takes no bracketed paste runs what follows a line break: a path with a C0/C1 control
+  character, DEL or `"` (which would end `@"…"`) is never typed (`pasteable`), only refused with a
+  toast. The pane's directory a relative `@path` starts from is read at that moment
+  (`paneDirNow`, `files/tree?now=1` with the root shown; a moved root or a failed read types the
+  absolute path), never one kept from an earlier read. New file, New folder, Upload, Download, Rename and Delete go
+  through their own routes and dialogs above, offered by the same role checks as their buttons;
+  a view-only client sees the copies, Refresh and Collapse all only
 - **Pasting an image into Markdown** (`POST files/image?root=&dir=[&reveal=1]`,
   `server/files_image.go`): an image pasted into a `.md`/`.mdx` file being edited becomes a new
   file next to it. Raw `image/png|jpeg|gif|webp` body (never SVG, never multipart: `writeGuard`

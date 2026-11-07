@@ -1,9 +1,11 @@
 import {
   act,
+  createEvent,
   fireEvent,
   render,
   renderHook,
   screen,
+  waitFor,
   within,
 } from '@testing-library/react'
 import {
@@ -1672,5 +1674,155 @@ describe('ChangesView review comments', () => {
     expect(
       screen.queryByRole('button', { name: 'Comment on lines' }),
     ).toBeNull()
+  })
+})
+
+describe('ChangesView row menu', () => {
+  beforeEach(() => {
+    // Open file reads the tree of Files
+    mockTree.mockResolvedValue({
+      root: '/r',
+      isRepo: true,
+      path: '',
+      entries: [],
+      truncated: false,
+    })
+    mockApply.mockReset()
+    mockApply.mockResolvedValue({ root: '/r', path: 'x' })
+    mockHash.mockReset()
+    mockHash.mockResolvedValue({ root: '/r', path: 'x', size: 1, hash: 'h1' })
+  })
+  // The row of a side in group name, by its file's name
+  const row = (name: string, file: string) =>
+    rows(name).find((b) => b.textContent?.includes(file))
+      ?.parentElement as HTMLElement
+  const items = () =>
+    screen.getAllByRole('menuitem').map((m) => m.textContent?.trim())
+
+  it("a right click opens the side's menu, the browser's kept shut", async () => {
+    const insertText = vi.fn(() => true)
+    const p = await show({ insertText })
+    const ev = createEvent.contextMenu(row('Changes', 'both.ts'), {
+      clientX: 30,
+      clientY: 40,
+    })
+    fireEvent(row('Changes', 'both.ts'), ev)
+    expect(ev.defaultPrevented).toBe(true)
+    expect(screen.getByRole('menu', { name: 'Actions for both.ts' }))
+    expect(items()).toEqual([
+      'Open file',
+      'Copy relative path',
+      'Copy absolute path',
+      'Copy name',
+      'Insert @path in terminal',
+      'Stage file',
+      'Discard file',
+    ])
+    // The pane sits at the root (read now)
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Insert @path in terminal' }),
+    )
+    await waitFor(() => expect(insertText).toHaveBeenCalledWith('@src/both.ts'))
+    fireEvent.contextMenu(row('Staged', 'both.ts'), { clientX: 1, clientY: 1 })
+    expect(items().slice(-1)).toEqual(['Unstage file'])
+    await act(async () =>
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Unstage file' })),
+    )
+    expect(mockApply).toHaveBeenCalled()
+    fireEvent.contextMenu(row('Changes', 'both.ts'), { clientX: 1, clientY: 1 })
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Open file' }))
+    expect(p.showView).toHaveBeenCalledWith(FILES_VIEW_ID)
+  })
+
+  it('types the path from the pane directory, or whole when it cannot be read', async () => {
+    mockTree.mockResolvedValue({
+      root: '/r',
+      isRepo: true,
+      dir: 'src',
+      path: '',
+      entries: [],
+      truncated: false,
+    })
+    const insertText = vi.fn(() => true)
+    await show({ insertText })
+    const insert = () => {
+      fireEvent.contextMenu(row('Changes', 'both.ts'), {
+        clientX: 1,
+        clientY: 1,
+      })
+      fireEvent.click(
+        screen.getByRole('menuitem', { name: 'Insert @path in terminal' }),
+      )
+    }
+    insert()
+    await waitFor(() => expect(insertText).toHaveBeenCalledWith('@both.ts'))
+    mockTree.mockRejectedValue(new RequestError(409, '', 'moved'))
+    insert()
+    await waitFor(() =>
+      expect(insertText).toHaveBeenLastCalledWith('@/r/src/both.ts'),
+    )
+  })
+
+  it('a deleted file has nothing to open; Discard asks first', async () => {
+    mockChanges.mockResolvedValue(
+      changes({ entries: [c('gone.txt', '', 'D'), c('rm.txt', 'D', '')] }),
+    )
+    await show()
+    fireEvent.contextMenu(row('Changes', 'gone.txt'), {
+      clientX: 1,
+      clientY: 1,
+    })
+    expect(items()[0]).toBe('Copy relative path')
+    await act(async () =>
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Discard file' })),
+    )
+    expect(screen.getByRole('button', { name: 'Restore' })).toBeInTheDocument()
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' })),
+    )
+    fireEvent.contextMenu(row('Staged', 'rm.txt'), { clientX: 1, clientY: 1 })
+    expect(items()[0]).toBe('Copy relative path')
+  })
+
+  it('the menu key opens it on the focused row, first item focused', async () => {
+    await show()
+    const button = rows('Changes').find((b) =>
+      b.textContent?.includes('both.ts'),
+    ) as HTMLElement
+    button.focus()
+    fireEvent.keyDown(button, { key: 'F10', shiftKey: true })
+    expect(screen.getAllByRole('menuitem')[0]).toHaveFocus()
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+    expect(button).toHaveFocus()
+    // Other keys stay the row's
+    fireEvent.keyDown(button, { key: 'ArrowDown' })
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('a finger resting on a row opens it; view-only offers opening and copies', async () => {
+    await show({ readOnly: true, insertText: undefined })
+    vi.useFakeTimers()
+    try {
+      fireEvent.pointerDown(row('Changes', 'both.ts'), {
+        pointerType: 'touch',
+      })
+      act(() => vi.advanceTimersByTime(600))
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(items()).toEqual([
+      'Open file',
+      'Copy relative path',
+      'Copy absolute path',
+      'Copy name',
+    ])
+    // A finger's press never selects the row's text (iOS)
+    expect(row('Changes', 'both.ts')).toHaveClass('pointer-coarse:select-none')
+    // The side the menu acts on is marked, not the same file's other side
+    expect(row('Changes', 'both.ts')).toHaveAttribute('data-menu-open', 'true')
+    expect(row('Changes', 'both.ts')).toHaveClass('bg-accent/15')
+    expect(row('Staged', 'both.ts')).not.toHaveAttribute('data-menu-open')
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+    expect(row('Changes', 'both.ts')).not.toHaveAttribute('data-menu-open')
   })
 })

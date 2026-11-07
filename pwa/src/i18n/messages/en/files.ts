@@ -108,6 +108,12 @@ export default {
   'files.new.permission': "The server can't create a file there",
   'files.new.maybeCreated': 'The file may have been created. Refresh to check.',
   'files.new.failed': 'Could not create the file',
+  'files.newFolder.askSensitive': 'Create this folder?',
+  'files.newFolder.notAllowed': "Folders can't be created there",
+  'files.newFolder.permission': "The server can't create a folder there",
+  'files.newFolder.maybeCreated':
+    'The folder may have been created. Refresh to check.',
+  'files.newFolder.failed': 'Could not create the folder',
   // Rename (components/rename-file-dialog.tsx)
   'files.rename.title': 'Rename',
   'files.rename.pathLabel':
@@ -239,6 +245,20 @@ export default {
   'files.tree.unreadable': "This folder can't be read",
   'files.tree.actions': 'Actions for {name}',
   'files.tree.deleteNotEmpty': 'Delete (not empty)',
+  'files.actions.copyRelative': 'Copy relative path',
+  'files.actions.copyAbsolute': 'Copy absolute path',
+  'files.actions.copyName': 'Copy name',
+  'files.actions.nameCopied': 'Name copied',
+  'files.actions.nameCopyFailed': 'Could not copy the name',
+  'files.actions.insert': 'Insert @path in terminal',
+  'files.actions.notInserted': 'Not inserted in the terminal: {path}',
+  'files.actions.openFile': 'Open file',
+  'files.actions.notPasteable':
+    "This path has a line break or a quote; it can't be typed into the terminal",
+  'files.actions.newFolder': 'New folder',
+  'files.actions.uploadHere': 'Upload files here',
+  'files.actions.collapseAll': 'Collapse all',
+  'files.actions.tree': 'Files actions',
   'files.paneMoved': 'The pane is in another folder now',
   'files.rootChanged': "The pane's directory changed",
   'files.placeLost': "That place isn't available; showing the pane's folder",

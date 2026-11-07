@@ -283,3 +283,82 @@ describe('NewFileDialog', () => {
     expect(mockCreate).not.toHaveBeenCalled()
   })
 })
+
+describe('NewFileDialog for a folder', () => {
+  function showFolder() {
+    const p = {
+      onClose: vi.fn(),
+      onCreated: vi.fn(),
+      onRootChanged: vi.fn(),
+      onRefresh: vi.fn(),
+    }
+    render(
+      <NewFileDialog
+        paneId="%1"
+        root="/r"
+        initialPath="docs/"
+        kind="dir"
+        {...p}
+      />,
+    )
+    return p
+  }
+
+  it('creates an empty folder, which the tree then shows opened', async () => {
+    mockCreate.mockResolvedValue({ root: '/r', path: 'docs/notes' })
+    const p = showFolder()
+    expect(dialog('New folder')).toBeInTheDocument()
+    expect(box()).toHaveAttribute('placeholder', 'docs/notes')
+    type('docs/notes')
+    await create()
+    expect(mockCreate).toHaveBeenCalledWith(
+      { paneId: '%1' },
+      { root: '/r', path: 'docs/notes', reveal: false, dir: true },
+    )
+    expect(p.onCreated).toHaveBeenCalledWith('docs/notes', '/r', false)
+  })
+
+  it('a taken name offers to open what is there', async () => {
+    mockCreate.mockRejectedValue(refused(409, 'exists', undefined, 'docs'))
+    const p = showFolder()
+    type('docs')
+    await create()
+    fireEvent.click(
+      within(screen.getByRole('alert')).getByRole('button', {
+        name: 'Open it',
+      }),
+    )
+    expect(p.onCreated).toHaveBeenCalledWith('docs', '/r', false)
+  })
+
+  it('asks about a name that usually holds secrets', async () => {
+    mockCreate.mockRejectedValueOnce(refused(403, 'sensitive'))
+    showFolder()
+    type('secrets.d')
+    await create()
+    expect(dialog('Create this folder?')).toBeInTheDocument()
+  })
+
+  it.each([
+    [403, 'not_allowed', "Folders can't be created there"],
+    [403, 'permission', "The server can't create a folder there"],
+    [409, 'not_directory', 'Part of this path is a file, not a directory'],
+    [500, '', 'Could not create the folder'],
+  ])('%i %s says why, for a folder', async (status, code, message) => {
+    mockCreate.mockRejectedValue(refused(status, code))
+    showFolder()
+    type('x/y')
+    await create()
+    expect(screen.getByRole('alert')).toHaveTextContent(message)
+  })
+
+  it('a lost reply says the folder may exist', async () => {
+    mockCreate.mockRejectedValue(new TypeError('Failed to fetch'))
+    showFolder()
+    type('x')
+    await create()
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'The folder may have been created. Refresh to check.',
+    )
+  })
+})

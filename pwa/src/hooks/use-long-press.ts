@@ -14,14 +14,21 @@ export const LONG_PRESS_SLOP = 10
 // rests on it: onLongPress runs once the press lasts LONG_PRESS_MS without
 // moving more than LONG_PRESS_SLOP pixels. The click that ends such a press
 // is swallowed, and so is the context menu the press would open. A mouse
-// never long-presses.
-export function useLongPress(onLongPress: () => void) {
+// never long-presses. onContextMenu gets every other context menu event (a
+// right click, the menu key): never one a finger's press sends, so a long
+// press opens a menu once (Android sends contextmenu during it, or after).
+export function useLongPress(
+  onLongPress: () => void,
+  onContextMenu?: (e: MouseEvent) => void,
+) {
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const start = useRef<{ x: number; y: number }>(undefined)
   // The press ran onLongPress: the click (and menu) after it are not acted on
   const fired = useRef(false)
   const callback = useRef(onLongPress)
   callback.current = onLongPress
+  const menuCallback = useRef(onContextMenu)
+  menuCallback.current = onContextMenu
 
   const cancel = useCallback(() => {
     clearTimeout(timer.current)
@@ -60,6 +67,7 @@ export function useLongPress(onLongPress: () => void) {
     },
     onContextMenu(e: MouseEvent) {
       if (start.current || fired.current) e.preventDefault()
+      else menuCallback.current?.(e)
     },
   }
 }
