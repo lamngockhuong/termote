@@ -97,7 +97,7 @@ test.describe('command palette', () => {
     await page.waitForResponse((r) => r.url().includes('/api/mux/snapshot'), { timeout: 8000 })
     await expect(tab).toHaveAttribute('aria-selected', 'true', { timeout: 500 })
     await expect(rows(page)).toHaveText(/\S/, { timeout: 15000 })
-    await page.getByRole('button', { name: 'Command palette' }).focus()
+    await page.getByRole('button', { name: /^More/ }).focus()
   }
 
   test('Ctrl+P opens a file typed in two keys, Enter before the results', async ({ page }) => {

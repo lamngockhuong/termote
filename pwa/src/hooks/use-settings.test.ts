@@ -286,6 +286,31 @@ describe('useSettings', () => {
     expect(result.current.settings.sidebarLayout).toBe('detailed')
   })
 
+  it('reads a config without toolbarPosition as the header', () => {
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ sidebarFilter: 'working' }),
+    )
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.toolbarPosition).toBe('header')
+  })
+
+  it('keeps a saved right bar and replaces an unknown position', () => {
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ toolbarPosition: 'right' }),
+    )
+    const { result, unmount } = renderHook(() => useSettings())
+    expect(result.current.settings.toolbarPosition).toBe('right')
+    unmount()
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ toolbarPosition: 'left' }),
+    )
+    const again = renderHook(() => useSettings())
+    expect(again.result.current.settings.toolbarPosition).toBe('header')
+  })
+
   it('updates sidebarLayout and persists', () => {
     const { result } = renderHook(() => useSettings())
     act(() => result.current.updateSetting('sidebarLayout', 'compact'))

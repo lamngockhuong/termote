@@ -3,6 +3,7 @@ import {
   type DragEvent,
   type KeyboardEvent,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from 'react'
@@ -43,6 +44,9 @@ interface Props {
   onUpdate?: (id: string, updates: { name?: string; icon?: string }) => void
   // The backend can rename this tab (caps.renameTab); false: only its icon
   renameTab?: boolean
+  // The room left after the last tab (and Add) in px, negative while the
+  // tabs overflow; called when it changes. Not called without ResizeObserver.
+  onSpareChange?: (spare: number) => void
 }
 
 // Shift+F10 or the context menu key: the menu of the focused tab
@@ -99,10 +103,42 @@ export function SessionTabs({
   moving = false,
   onUpdate,
   renameTab = true,
+  onSpareChange,
 }: Props) {
   const { t } = useT()
+  const rowRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   useWheelScrollX(scrollRef)
+  const addRef = useRef<HTMLButtonElement>(null)
+  // The spare room, measured again when the row is resized and after every
+  // render (a tab added, closed or renamed changes the tabs' width only)
+  const spareChange = useRef(onSpareChange)
+  spareChange.current = onSpareChange
+  const lastSpare = useRef<number | null>(null)
+  const reportSpare = useRef(() => {
+    const report = spareChange.current
+    const row = rowRef.current
+    const list = scrollRef.current
+    if (!report || !row || !list || typeof ResizeObserver === 'undefined')
+      return
+    const end = (addRef.current ?? list).getBoundingClientRect().right
+    const spare = Math.round(
+      row.getBoundingClientRect().right -
+        end -
+        (list.scrollWidth - list.clientWidth),
+    )
+    if (spare === lastSpare.current) return
+    lastSpare.current = spare
+    report(spare)
+  })
+  useLayoutEffect(() => reportSpare.current())
+  useEffect(() => {
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => reportSpare.current())
+    ro.observe(rowRef.current!)
+    ro.observe(scrollRef.current!)
+    return () => ro.disconnect()
+  }, [])
   const activeRef = useRef<HTMLButtonElement>(null)
   // The tab being dragged, kept here: while dragging over a tab the browser
   // shows only the data's types, never the data.
@@ -162,7 +198,6 @@ export function SessionTabs({
     refocus.current = lastingKey(sessions[ids.indexOf(id)])
     onMove!(id, index)
   }
-  const addRef = useRef<HTMLButtonElement>(null)
   // The form opened from a tab's menu gives the focus back to that tab,
   // from + to +
   const formFrom = useRef<HTMLElement | null>(null)
@@ -307,7 +342,10 @@ export function SessionTabs({
   }
 
   return (
-    <div className="relative flex min-w-0 flex-1 items-end gap-1 self-stretch">
+    <div
+      ref={rowRef}
+      className="relative flex min-w-0 flex-1 items-end gap-1 self-stretch"
+    >
       <div
         ref={scrollRef}
         data-tour="session-tabs"

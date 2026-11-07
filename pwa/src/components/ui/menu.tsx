@@ -30,13 +30,30 @@ const topLayer = () =>
 // aligned to its edge as before and kept on the screen; above it when there
 // is not room below and more room above; capped in height, scrolling inside,
 // when neither side holds it. The visible part of the viewport counts, so an
-// open keyboard (visualViewport) is left out.
+// open keyboard (visualViewport) is left out. side 'left': beside the
+// trigger instead, to its left, its top level with the trigger's and moved
+// up as far as it must to stay on the screen (a bar down the right edge).
 export function placeMenu(
   trigger: DOMRect,
   menu: { width: number; height: number },
   align: 'start' | 'end',
   view: { width: number; top: number; height: number },
+  side: MenuSide = 'below',
 ) {
+  if (side === 'left') {
+    const room = view.height - 2 * MENU_MARGIN
+    return {
+      left: Math.max(MENU_MARGIN, trigger.left - MENU_GAP - menu.width),
+      top: Math.max(
+        view.top + MENU_MARGIN,
+        Math.min(
+          trigger.top,
+          view.top + view.height - MENU_MARGIN - menu.height,
+        ),
+      ),
+      maxHeight: menu.height <= room ? undefined : room,
+    }
+  }
   const left = Math.max(
     MENU_MARGIN,
     Math.min(
@@ -61,6 +78,9 @@ export function placeMenu(
   return { left, top: view.top + MENU_MARGIN, maxHeight: above }
 }
 
+// Where the menu opens from its trigger: under it, or to its left
+export type MenuSide = 'below' | 'left'
+
 // Closes the menu; byKey says an item was chosen with Enter or Space
 const MenuContext = createContext<(byKey?: boolean) => void>(() => {})
 
@@ -71,6 +91,8 @@ interface MenuProps {
   trigger: ReactNode
   children: ReactNode
   align?: 'start' | 'end'
+  // below (the default) or left of the trigger (placeMenu)
+  side?: MenuSide
   className?: string
   // The trigger's tab order: -1 keeps it out of Tab (a row's own key opens
   // what it offers)
@@ -110,6 +132,7 @@ export function Menu({
   trigger,
   children,
   align = 'end',
+  side = 'below',
   className = '',
   triggerTabIndex,
   triggerSize,
@@ -185,6 +208,7 @@ export function Menu({
         top: vv?.offsetTop ?? 0,
         height: vv?.height ?? window.innerHeight,
       },
+      side,
     )
     list.style.left = `${at.left}px`
     list.style.top = `${at.top}px`
@@ -342,7 +366,7 @@ export function Menu({
           style={shift ? { transform: `translateX(${shift}px)` } : undefined}
           // In the top layer: fixed, placed by style; the UA's popover inset,
           // margin and padding reset so these classes decide the look
-          className={`z-50 outline-none w-64 border border-border bg-surface-raised py-1 text-fg shadow-xl rounded-panel ui-native:border-0 exit-discrete duration-(--duration-fast) ease-standard starting:-translate-y-1 starting:opacity-0 ${closing ? 'pointer-events-none -translate-y-1 opacity-0' : ''} ${inTopLayer ? 'fixed inset-auto m-0 overflow-y-auto px-0' : `absolute top-full mt-2 ${align === 'end' ? 'right-0' : 'left-0'}`} ${className}`}
+          className={`z-50 outline-none w-64 border border-border bg-surface-raised py-1 text-fg shadow-xl rounded-panel ui-native:border-0 exit-discrete duration-(--duration-fast) ease-standard starting:-translate-y-1 starting:opacity-0 ${closing ? 'pointer-events-none -translate-y-1 opacity-0' : ''} ${inTopLayer ? 'fixed inset-auto m-0 overflow-y-auto px-0' : side === 'left' ? 'absolute right-full top-0 mr-2' : `absolute top-full mt-2 ${align === 'end' ? 'right-0' : 'left-0'}`} ${className}`}
         >
           <MenuContext.Provider value={close}>{children}</MenuContext.Provider>
         </div>
@@ -364,8 +388,9 @@ interface MenuItemProps {
   // Says more about what the item does, on hover
   title?: string
   // The key that does the same where the menu was opened, shown on the
-  // right (aria-keyshortcuts: the ARIA form, e.g. Alt+ArrowLeft)
-  shortcut?: { label: string; aria: string }
+  // right (aria-keyshortcuts: the ARIA form, e.g. Alt+ArrowLeft; left out
+  // for a key the user picks, shown only)
+  shortcut?: { label: string; aria?: string }
 }
 
 function ItemButton({

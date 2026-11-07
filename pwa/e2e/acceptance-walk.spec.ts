@@ -206,7 +206,7 @@ test.describe('acceptance: a working day without another editor', () => {
     await expect(files(page).getByRole('treeitem', { name: 'src' })).toBeVisible()
 
     // Quick open from outside the terminal
-    await page.getByRole('button', { name: 'Command palette' }).focus()
+    await page.getByRole('button', { name: /^More/ }).focus()
     await page.keyboard.press('Control+P')
     const palette = page.getByRole('dialog', { name: /palette|Go to file/i })
     await expect(palette).toBeVisible()

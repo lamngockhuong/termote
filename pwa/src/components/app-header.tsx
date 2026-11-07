@@ -1,7 +1,9 @@
-import { AppWindow, Command, Maximize, Minimize } from 'lucide-react'
+import { AppWindow } from 'lucide-react'
 import type { ComponentProps, ReactNode } from 'react'
+import { useCompactLabels } from '../hooks/use-compact-labels'
 import { useT } from '../i18n/i18n-context'
 import type { Session } from '../types/session'
+import type { ToolbarPosition } from '../utils/toolbar-position'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { BrandMark } from './brand-mark'
 import {
@@ -57,8 +59,10 @@ interface Props {
   onDecreaseFont: () => void
   onIncreaseFont: () => void
   isFullscreen: boolean
-  // Unset (the browser cannot go fullscreen, e.g. iPhone): no button
+  // Unset (the browser cannot go fullscreen, e.g. iPhone): not offered
   onToggleFullscreen?: () => void
+  // Desktop: its key as shown, if it has one
+  fullscreenKey?: string
   // Views of the pane; the switcher shows once there are two
   views: ViewOption<string>[]
   viewId: string
@@ -85,13 +89,17 @@ interface Props {
   // A focus window: its session can't be switched here, and this hands its
   // target back to the main window
   onOpenInMain?: () => void
+  // Desktop: right leaves the views, panels, Pane menu, fullscreen and the
+  // palette to the ToolbarRail, keeping only the tabs and what is about the
+  // connection and the machine here
+  toolbar?: ToolbarPosition
   menu: MenuProps
 }
 
 // The top bar. Mobile: the session chip, the view menu and the overflow
 // menu (which also holds the font size). Desktop: one row with the session
-// tabs, the view switcher, the side panel toggles, font size, fullscreen,
-// connection and the menu.
+// tabs, the view switcher, the side panel toggles, font size, connection and
+// the menu (which also holds the command palette and fullscreen).
 export function AppHeader(props: Props) {
   return props.isMobile ? (
     <MobileHeader {...props} />
@@ -162,12 +170,17 @@ const FONT_BUTTON = `relative flex h-8 w-7 pointer-coarse:h-9 before:absolute be
 function DesktopHeader(p: Props) {
   const { t } = useT()
   const { session } = p
+  // The view and panel buttons drop their labels while the tabs overflow,
+  // and take them back once the tabs would still fit with them
+  const labels = useCompactLabels()
+  const compact = p.showSessionTabs && labels.compact
+  const inHeader = p.toolbar !== 'right'
   return (
     // At least 44px, padded below the status bar of an installed iPad app;
     // it grows when touch-sized controls are taller than the row, instead of
-    // cutting off their top. A container: below 60rem the view
-    // and panel buttons drop their labels, so the session tabs keep room
-    // (an iPad beside the sidebar)
+    // cutting off their top. A container: below 60rem the view and panel
+    // buttons drop their labels too, so the session tabs keep room (an iPad
+    // beside the sidebar)
     <header className="@container relative z-10 flex min-h-11 shrink-0 items-end gap-2 border-b border-border bg-surface px-2 pt-[env(safe-area-inset-top)] ui-terminal:bg-bg">
       {/* The expanded sidebar carries the brand; the phone header has no
           room to spare */}
@@ -193,26 +206,34 @@ function DesktopHeader(p: Props) {
           moving={p.movingTab}
           onUpdate={p.onUpdateTab}
           renameTab={p.renameTab}
+          onSpareChange={labels.onSpareChange}
         />
       ) : (
         <SessionName session={session} className="mb-2" />
       )}
       {/* 2px above the border: the controls' middle then sits between the
           middle of the active tab (on the border) and of the others (4px up) */}
-      <div className="mb-0.5 flex shrink-0 items-center gap-1">
+      <div
+        ref={labels.controlsRef}
+        className="mb-0.5 flex shrink-0 items-center gap-1"
+      >
         {p.hostChip}
         {p.usageChip}
-        <ViewSwitcher
-          views={p.views}
-          value={p.viewId}
-          onChange={p.onViewChange}
-          panelId={p.viewPanelId}
-        />
-        {p.onTogglePanel && (
+        {inHeader && (
+          <ViewSwitcher
+            views={p.views}
+            value={p.viewId}
+            onChange={p.onViewChange}
+            panelId={p.viewPanelId}
+            compact={compact}
+          />
+        )}
+        {inHeader && p.onTogglePanel && (
           <PanelToggles
             views={p.panelViews ?? []}
             open={p.sidePanelId ?? null}
             onToggle={p.onTogglePanel}
+            compact={compact}
           />
         )}
         {p.showFontSize && (
@@ -241,47 +262,27 @@ function DesktopHeader(p: Props) {
             </button>
           </div>
         )}
-        {p.paneMenu}
-        {p.onToggleFullscreen && (
-          <IconButton
-            size="sm"
-            onClick={p.onToggleFullscreen}
-            aria-label={
-              p.isFullscreen
-                ? t('shell.header.exitFullscreen')
-                : t('shell.header.enterFullscreen')
-            }
-            title={
-              p.isFullscreen
-                ? t('shell.header.exitFullscreen')
-                : t('shell.header.fullscreen')
-            }
-          >
-            {p.isFullscreen ? (
-              <Minimize size={16} aria-hidden="true" />
-            ) : (
-              <Maximize size={16} aria-hidden="true" />
-            )}
-          </IconButton>
-        )}
-        {p.onOpenPalette && (
-          <IconButton
-            size="sm"
-            onClick={p.onOpenPalette}
-            data-tour="palette"
-            aria-label={t('common.commandPalette')}
-            title={
-              p.paletteKey
-                ? `${t('common.commandPalette')} (${p.paletteKey})`
-                : t('common.commandPalette')
-            }
-          >
-            <Command size={16} aria-hidden="true" />
-          </IconButton>
-        )}
+        {inHeader && p.paneMenu}
         {p.onOpenInMain && <OpenInMainButton onClick={p.onOpenInMain} />}
         <ConnectionIndicator state={p.connectionState} onRetry={p.onRetry} />
-        <SettingsMenu {...p.menu} />
+        {/* With the toolbar here, the palette and fullscreen are in the
+            menu, so the tabs keep the room; the tour points at it for the
+            palette */}
+        <SettingsMenu
+          {...p.menu}
+          tourAnchor={inHeader && p.onOpenPalette ? 'palette' : undefined}
+          onOpenPalette={inHeader ? p.onOpenPalette : undefined}
+          paletteKey={p.paletteKey}
+          fullscreen={
+            inHeader && p.onToggleFullscreen
+              ? {
+                  active: p.isFullscreen,
+                  onToggle: p.onToggleFullscreen,
+                  key: p.fullscreenKey,
+                }
+              : undefined
+          }
+        />
       </div>
     </header>
   )

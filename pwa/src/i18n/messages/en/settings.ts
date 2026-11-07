@@ -66,6 +66,11 @@ export default {
   'settings.tabsDesc': 'Display tab bar for quick session switching (desktop)',
   'settings.tabsForcedByCompact':
     'Always shown with the compact sidebar, which keeps the tabs there',
+  'settings.toolbarPosition': 'Toolbar position',
+  'settings.toolbarPositionDesc':
+    'Right bar moves the view, panel and pane buttons, fullscreen and the command palette to a bar down the right edge, leaving the header to the tabs (desktop)',
+  'settings.toolbarPosition.header': 'Header',
+  'settings.toolbarPosition.right': 'Right bar',
   'settings.blockedFirst': 'Blocked sessions first',
   'settings.blockedFirstDesc':
     'List sessions waiting on you at the top of each group',

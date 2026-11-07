@@ -52,6 +52,7 @@ const SETTINGS: Settings = {
   disableContextMenu: true,
   copyOnSelect: false,
   showSessionTabs: false,
+  toolbarPosition: 'header',
   pollInterval: 5,
   welcomeSeenVersion: 0,
   language: 'auto',

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   DESKTOP_STEPS,
+  desktopSteps,
   EDGE,
   GAP,
   MOBILE_STEPS,
@@ -107,5 +108,25 @@ describe('placeBubble', () => {
       side: null,
       arrow: 0,
     })
+  })
+})
+
+describe('desktopSteps', () => {
+  it('keeps the steps with the toolbar in the header', () => {
+    expect(desktopSteps('header')).toBe(DESKTOP_STEPS)
+  })
+
+  it('lights the views and the palette from the left on the right bar', () => {
+    const steps = desktopSteps('right')
+    expect(steps.map((s) => s.id)).toEqual(DESKTOP_STEPS.map((s) => s.id))
+    const byId = Object.fromEntries(steps.map((s) => [s.id, s]))
+    expect(byId.views.placement).toBe('left')
+    expect(byId.palette).toMatchObject({
+      placement: 'left',
+      body: 'tour.paletteBodyRail',
+      anchors: ['palette'],
+    })
+    expect(byId.sessions).toBe(DESKTOP_STEPS[0])
+    expect(byId.palette.title).toBe('tour.paletteTitle')
   })
 })

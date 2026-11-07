@@ -1,25 +1,43 @@
 import { useT } from '../i18n/i18n-context'
 import { FOCUS_RING } from './ui/button'
-import { HEADER_LABEL, type ViewOption } from './ui/view-switcher'
+import {
+  BUTTON_SIZE,
+  GROUP_CLASS,
+  headerLabel,
+  LABEL_PROPS,
+  type Orientation,
+  type ViewOption,
+} from './ui/view-switcher'
 
 interface Props {
   views: ViewOption<string>[]
   // The view in the side panel, if any
   open: string | null
   onToggle: (id: string | null) => void
+  // The header's tabs need the room: icons only
+  compact?: boolean
+  // vertical: on the right bar, icons only
+  orientation?: Orientation
 }
 
 // Desktop: the views shown in the side panel next to the terminal (files,
 // changes), one at a time. A pressed button closes its panel. Sized like the
 // view switcher beside it.
-export function PanelToggles({ views, open, onToggle }: Props) {
+export function PanelToggles({
+  views,
+  open,
+  onToggle,
+  compact = false,
+  orientation = 'horizontal',
+}: Props) {
+  const vertical = orientation === 'vertical'
   const { t } = useT()
   if (views.length === 0) return null
   return (
     <fieldset
       data-tour="panel-toggles"
       aria-label={t('shell.sidePanel')}
-      className="flex shrink-0 gap-0.5 border border-border bg-surface p-0.5 rounded-control ui-native:rounded-full ui-native:border-0"
+      className={`${GROUP_CLASS[orientation]} gap-0.5 border border-border bg-surface p-0.5 rounded-control ui-native:rounded-full ui-native:border-0`}
     >
       {views.map(({ id, label, Icon }) => {
         const pressed = open === id
@@ -32,14 +50,17 @@ export function PanelToggles({ views, open, onToggle }: Props) {
             title={
               pressed ? t('shell.sidePanel.close', { name: label }) : label
             }
-            className={`relative before:absolute before:inset-x-0 before:-inset-y-1 before:content-[''] flex h-7 items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] px-2.5 text-[12px] ui-native:rounded-full pointer-coarse:h-9 ${FOCUS_RING} ${
+            className={`relative before:absolute before:content-[''] flex ${BUTTON_SIZE[orientation]} items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] text-[12px] ui-native:rounded-full ${FOCUS_RING} ${
               pressed
                 ? 'bg-surface-raised text-fg shadow-sm ui-terminal:bg-accent-soft ui-terminal:text-accent ui-terminal:shadow-none'
                 : 'text-fg-muted hover:text-fg'
             }`}
           >
             <Icon size={14} aria-hidden="true" />
-            <span className={`ui-terminal:font-label ${HEADER_LABEL}`}>
+            <span
+              {...LABEL_PROPS}
+              className={`ui-terminal:font-label ${headerLabel(compact || vertical)}`}
+            >
               {label}
             </span>
           </button>

@@ -1,7 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { MessageSquare, SquareTerminal } from 'lucide-react'
 import type { ComponentProps } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider } from '../contexts/theme-context'
 import type { Session } from '../types/session'
 import { AppHeader } from './app-header'
@@ -205,15 +205,16 @@ describe('AppHeader — desktop', () => {
     expect(screen.getByTitle('Code')).toHaveTextContent(/^🤖Code$/)
   })
 
-  it('has font size, fullscreen and connection controls outside the menu', () => {
+  it('has font size and connection controls outside the menu', () => {
     const props = renderHeader()
     expect(screen.getByTestId('font-size')).toHaveTextContent('14')
     fireEvent.click(screen.getByRole('button', { name: 'Decrease font size' }))
     fireEvent.click(screen.getByRole('button', { name: 'Increase font size' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Enter fullscreen' }))
     expect(props.onDecreaseFont).toHaveBeenCalledOnce()
     expect(props.onIncreaseFont).toHaveBeenCalledOnce()
-    expect(props.onToggleFullscreen).toHaveBeenCalledOnce()
+    expect(
+      screen.queryByRole('button', { name: 'Enter fullscreen' }),
+    ).toBeNull()
     expect(screen.getByRole('button', { name: 'Connected' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'More' })).toBeInTheDocument()
     expect(
@@ -221,19 +222,27 @@ describe('AppHeader — desktop', () => {
     ).toBeNull()
   })
 
-  it('labels the fullscreen button by state', () => {
-    renderHeader({ isFullscreen: true })
-    expect(
-      screen.getByRole('button', { name: 'Exit fullscreen' }),
-    ).toBeVisible()
+  it('offers fullscreen in the menu, named by state, with its key', () => {
+    const props = renderHeader({ fullscreenKey: 'F11' })
+    fireEvent.click(screen.getByRole('button', { name: 'More' }))
+    const item = screen.getByRole('menuitem', { name: /Enter fullscreen/ })
+    expect(item).toHaveTextContent('F11')
+    fireEvent.click(item)
+    expect(props.onToggleFullscreen).toHaveBeenCalledOnce()
   })
 
-  it('has no fullscreen button without onToggleFullscreen', () => {
-    renderHeader({ onToggleFullscreen: undefined })
+  it('names the fullscreen item Exit once fullscreen', () => {
+    renderHeader({ isFullscreen: true })
+    fireEvent.click(screen.getByRole('button', { name: 'More' }))
     expect(
-      screen.queryByRole('button', { name: 'Enter fullscreen' }),
-    ).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Exit fullscreen' })).toBeNull()
+      screen.getByRole('menuitem', { name: 'Exit fullscreen' }),
+    ).toBeInTheDocument()
+  })
+
+  it('has no fullscreen item without onToggleFullscreen', () => {
+    renderHeader({ onToggleFullscreen: undefined })
+    fireEvent.click(screen.getByRole('button', { name: 'More' }))
+    expect(screen.queryByRole('menuitem', { name: /fullscreen/ })).toBeNull()
   })
 
   it('keeps the touch-size view and font buttons level with the tabs', () => {
@@ -262,9 +271,6 @@ describe('AppHeader — desktop', () => {
     expect(
       screen.queryByRole('button', { name: 'Decrease font size' }),
     ).toBeNull()
-    expect(
-      screen.getByRole('button', { name: 'Enter fullscreen' }),
-    ).toBeInTheDocument()
   })
 
   it('keeps the font size out of the desktop menu', () => {
@@ -394,25 +400,44 @@ describe('AppHeader side panel toggles', () => {
 })
 
 describe('AppHeader — command palette', () => {
-  it('opens it from a desktop button that names its key', () => {
+  it('opens it from the desktop menu, which names its key', () => {
     const onOpenPalette = vi.fn()
     renderHeader({ onOpenPalette, paletteKey: 'Ctrl+Shift+P' })
-    const button = screen.getByRole('button', { name: 'Command palette' })
-    expect(button).toHaveAttribute('title', 'Command palette (Ctrl+Shift+P)')
-    fireEvent.click(button)
+    expect(screen.queryByRole('button', { name: 'Command palette' })).toBeNull()
+    const more = screen.getByRole('button', { name: 'More' })
+    // The tour's palette step points at the menu
+    expect(more.parentElement).toHaveAttribute('data-tour', 'palette')
+    fireEvent.click(more)
+    const item = screen.getByRole('menuitem', { name: /Command palette/ })
+    expect(item).toHaveTextContent('Ctrl+Shift+P')
+    fireEvent.click(item)
     expect(onOpenPalette).toHaveBeenCalledOnce()
   })
 
-  it('names no key when it has none, and has no button without a handler', () => {
-    renderHeader({ onOpenPalette: vi.fn() })
+  it('names no key when it has none, and has no item without a handler', () => {
+    const { unmount } = render(
+      <ThemeProvider>
+        <AppHeader {...headerProps({ onOpenPalette: vi.fn() })} />
+      </ThemeProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'More' }))
     expect(
-      screen.getByRole('button', { name: 'Command palette' }),
-    ).toHaveAttribute('title', 'Command palette')
+      screen.getByRole('menuitem', { name: 'Command palette' }),
+    ).toHaveTextContent(/^Command palette$/)
+    unmount()
+    renderHeader()
+    const more = screen.getByRole('button', { name: 'More' })
+    expect(more.parentElement).not.toHaveAttribute('data-tour')
+    fireEvent.click(more)
+    expect(screen.queryByRole('menuitem', { name: /palette/ })).toBeNull()
   })
 
-  it('is not on the phone header', () => {
+  it('is not on the phone header nor in its menu', () => {
     renderHeader({ isMobile: true, onOpenPalette: vi.fn() })
     expect(screen.queryByRole('button', { name: 'Command palette' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'More' }))
+    expect(screen.queryByRole('menuitem', { name: /palette/ })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: /fullscreen/ })).toBeNull()
   })
 })
 
@@ -442,5 +467,105 @@ describe('AppHeader — focus window', () => {
     expect(
       screen.queryByRole('button', { name: 'Open in main window' }),
     ).toBeNull()
+  })
+})
+
+describe('AppHeader — labels give way to the tabs', () => {
+  let resize: () => void = () => {}
+  class FakeResizeObserver {
+    constructor(cb: () => void) {
+      resize = () => act(cb)
+    }
+    observe() {}
+    disconnect() {}
+  }
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn()
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver)
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  const overflow = (by: number) => {
+    const list = screen.getByRole('tablist', { name: 'Sessions' })
+    Object.defineProperty(list, 'scrollWidth', {
+      value: 400 + by,
+      configurable: true,
+    })
+    Object.defineProperty(list, 'clientWidth', {
+      value: 400,
+      configurable: true,
+    })
+    resize()
+  }
+
+  it('drops the view and panel labels while the tabs overflow', () => {
+    renderHeader({
+      views: TWO_VIEWS,
+      panelViews: [{ id: 'files', label: 'Files', Icon: SquareTerminal }],
+      onTogglePanel: vi.fn(),
+    })
+    const labels = ['Terminal', 'Files'].map((n) => screen.getByText(n))
+    for (const l of labels) expect(l).toHaveClass('@[60rem]:not-sr-only')
+    overflow(50)
+    for (const l of labels) expect(l).not.toHaveClass('@[60rem]:not-sr-only')
+    // jsdom measures the labels as 0 px: back once 24 px are spare
+    overflow(-23)
+    expect(labels[0]).not.toHaveClass('@[60rem]:not-sr-only')
+    overflow(-24)
+    for (const l of labels) expect(l).toHaveClass('@[60rem]:not-sr-only')
+  })
+
+  it('keeps the labels when the tabs are not in the header', () => {
+    const { rerender } = render(
+      <ThemeProvider>
+        <AppHeader {...headerProps({ views: TWO_VIEWS })} />
+      </ThemeProvider>,
+    )
+    overflow(50)
+    expect(screen.getByText('Chat')).not.toHaveClass('@[60rem]:not-sr-only')
+    rerender(
+      <ThemeProvider>
+        <AppHeader
+          {...headerProps({ views: TWO_VIEWS, showSessionTabs: false })}
+        />
+      </ThemeProvider>,
+    )
+    expect(screen.getByText('Chat')).toHaveClass('@[60rem]:not-sr-only')
+  })
+})
+
+describe('AppHeader — toolbar on the right bar', () => {
+  it('keeps the tabs, chips, font size, connection and menu only', () => {
+    renderHeader({
+      toolbar: 'right',
+      views: TWO_VIEWS,
+      panelViews: [{ id: 'files', label: 'Files', Icon: SquareTerminal }],
+      onTogglePanel: vi.fn(),
+      paneMenu: <button type="button">Pane</button>,
+      onOpenPalette: vi.fn(),
+      hostChip: <span>cpu 3%</span>,
+    })
+    expect(screen.getByRole('tablist', { name: 'Sessions' })).toBeVisible()
+    expect(screen.getByText('cpu 3%')).toBeInTheDocument()
+    expect(screen.getByTestId('font-size')).toBeInTheDocument()
+    expect(screen.queryByRole('tablist', { name: 'View' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Files' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Pane' })).toBeNull()
+    const more = screen.getByRole('button', { name: 'More' })
+    // The bar's own palette button is the tour's anchor
+    expect(more.parentElement).not.toHaveAttribute('data-tour')
+    fireEvent.click(more)
+    expect(screen.queryByRole('menuitem', { name: /palette/ })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: /fullscreen/ })).toBeNull()
+  })
+
+  it('keeps the phone header as it is', () => {
+    renderHeader({
+      isMobile: true,
+      toolbar: 'right',
+      views: TWO_VIEWS,
+      paneMenu: <button type="button">Pane</button>,
+    })
+    expect(screen.getByRole('button', { name: 'Pane' })).toBeInTheDocument()
   })
 })

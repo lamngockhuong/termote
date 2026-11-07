@@ -103,3 +103,26 @@ describe('ViewSwitcher', () => {
     expect(tab('Terminal')).toHaveAttribute('aria-selected', 'true')
   })
 })
+
+describe('ViewSwitcher labels', () => {
+  it('shows a label from 60rem, and never while compact', () => {
+    const { rerender } = render(
+      <ViewSwitcher views={VIEWS} value="terminal" onChange={vi.fn()} />,
+    )
+    const label = screen.getByText('Terminal')
+    expect(label).toHaveClass('sr-only', '@[60rem]:not-sr-only')
+    expect(label).toHaveAttribute('data-header-label')
+    rerender(
+      <ViewSwitcher
+        views={VIEWS}
+        value="terminal"
+        onChange={vi.fn()}
+        compact
+      />,
+    )
+    expect(label).toHaveClass('sr-only')
+    expect(label).not.toHaveClass('@[60rem]:not-sr-only')
+    // Still named, and in the tooltip
+    expect(tab('Terminal')).toHaveAttribute('title', 'Terminal')
+  })
+})

@@ -480,10 +480,14 @@ test.describe('sidebar collapse', () => {
 })
 
 test.describe('fullscreen toggle', () => {
-  test('fullscreen button visible on desktop', async ({ page }) => {
+  test('fullscreen and the palette are in the desktop menu', async ({ page }) => {
     await page.goto('/')
     await waitForTerminal(page)
-    await expect(page.getByRole('button', { name: 'Enter fullscreen' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Enter fullscreen' })).toHaveCount(0)
+    await page.getByRole('button', { name: /^More/ }).click()
+    await expect(page.getByRole('menuitem', { name: /Enter fullscreen/ })).toBeVisible()
+    await page.getByRole('menuitem', { name: /Command palette/ }).click()
+    await expect(page.getByRole('dialog').filter({ has: page.getByRole('combobox') })).toBeVisible()
   })
 })
 

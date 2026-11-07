@@ -1,4 +1,5 @@
 import type { MessageKey } from '../i18n/messages/en'
+import type { ToolbarPosition } from './toolbar-position'
 
 // Where the bubble goes from what it points at; it turns to the other side
 // when that one has no room
@@ -81,6 +82,20 @@ export const DESKTOP_STEPS: TourStep[] = [
     placement: 'bottom',
   },
 ]
+
+// The desktop steps for where the toolbar is: on the right bar, the views
+// and the palette are lit from their left, and the palette is a button
+// there rather than an item of the header's menu
+export function desktopSteps(toolbar: ToolbarPosition): TourStep[] {
+  if (toolbar === 'header') return DESKTOP_STEPS
+  return DESKTOP_STEPS.map((step) =>
+    step.id === 'views'
+      ? { ...step, placement: 'left' }
+      : step.id === 'palette'
+        ? { ...step, body: 'tour.paletteBodyRail', placement: 'left' }
+        : step,
+  )
+}
 
 export interface Rect {
   top: number
