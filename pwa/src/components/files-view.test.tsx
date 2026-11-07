@@ -969,9 +969,10 @@ describe('FilesView delete', () => {
     expect(screen.queryByRole('menuitem', { name: /^Delete/ })).toBeNull()
     unmount()
     const second = await withTrash({ readOnly: true })
-    expect(
-      within(item('README.md')).queryByRole('button', { name: /Actions/ }),
-    ).toBeNull()
+    // View-only: the copies only
+    fireEvent.click(actions('README.md'))
+    expect(screen.queryByRole('menuitem', { name: /^Delete/ })).toBeNull()
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
     // The Delete key does nothing then
     fireEvent.keyDown(screen.getByRole('tree'), { key: 'Delete' })
     expect(screen.queryByText('Delete file?')).toBeNull()
@@ -1693,10 +1694,7 @@ describe('FilesView rename', () => {
 
   it('never offered to a view-only client, nor on a link', async () => {
     await show({ readOnly: true })
-    expect(
-      within(item('README.md')).queryByRole('button', { name: /Actions/ }),
-    ).toBeNull()
-    // Nor does a finger resting on a row open anything
+    // A finger resting on a row opens the copies only
     vi.useFakeTimers()
     try {
       fireEvent.pointerDown(item('README.md'), { pointerType: 'touch' })
@@ -1704,12 +1702,14 @@ describe('FilesView rename', () => {
     } finally {
       vi.useRealTimers()
     }
-    expect(screen.queryByRole('menu')).toBeNull()
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Rename' })).toBeNull()
     cleanup()
     await show()
-    expect(
-      within(item('link')).queryByRole('button', { name: /Actions/ }),
-    ).toBeNull()
+    fireEvent.click(
+      within(item('link')).getByRole('button', { name: /Actions/ }),
+    )
+    expect(screen.queryByRole('menuitem', { name: 'Rename' })).toBeNull()
   })
 
   it('a finger resting on a row opens its menu', async () => {
@@ -2067,6 +2067,9 @@ describe('FilesView download', () => {
     await show({ mux: trashCaps })
     fireEvent.click(actions('README.md'))
     expect(screen.getAllByRole('menuitem').map((m) => m.textContent)).toEqual([
+      'Copy relative path',
+      'Copy absolute path',
+      'Copy name',
       'Download',
       'Rename',
       'Delete',
@@ -2085,9 +2088,8 @@ describe('FilesView download', () => {
 
   it('is not offered to a view-only client', async () => {
     await show({ readOnly: true })
-    expect(
-      within(item('README.md')).queryByRole('button', { name: /Actions/ }),
-    ).toBeNull()
+    fireEvent.click(actions('README.md'))
+    expect(screen.queryByRole('menuitem', { name: 'Download' })).toBeNull()
   })
 
   it('downloads a file of the tree', async () => {
@@ -2327,6 +2329,41 @@ describe('FilesView upload', () => {
     expect(p.notify).toHaveBeenCalledWith('Uploaded a.pdf', {
       variant: 'success',
     })
+  })
+
+  it("a folder's menu uploads into that folder, and the header's next goes to the focused one", async () => {
+    const p = await show()
+    fireEvent.contextMenu(item('src'), { clientX: 10, clientY: 10 })
+    const input = screen.getByTestId('upload-input') as HTMLInputElement
+    const click = vi.spyOn(input, 'click').mockImplementation(() => {})
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Upload files here' }))
+    expect(click).toHaveBeenCalled()
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [pdf()] } })
+    })
+    // Once it is in (its row would take the focus from the next menu)
+    await waitFor(() =>
+      expect(p.notify).toHaveBeenCalledWith('Uploaded a.pdf', {
+        variant: 'success',
+      }),
+    )
+    // The empty area's Upload goes to the root
+    fireEvent.contextMenu(screen.getByRole('tree'), {
+      clientX: 5,
+      clientY: 400,
+    })
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Upload files' }))
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [pdf('b.pdf')] } })
+    })
+    // A picker left without a pick: the header's next goes to the focused
+    // row's folder (the root's README.md), not where that picker was for
+    fireEvent.contextMenu(item('src'), { clientX: 10, clientY: 10 })
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Upload files here' }))
+    fireEvent.keyDown(item('src'), { key: 'End' })
+    expect(item('README.md')).toHaveFocus()
+    await pick(pdf('c.pdf'))
+    expect(dirs()).toEqual(['src', '.', '.'])
   })
 
   it('a link to a folder, and a folder through one, are not taken: the nearest folder above is', async () => {
@@ -2774,5 +2811,173 @@ describe('FilesView upload', () => {
       fireEvent.paste(preview, { clipboardData: { files: [pdf()] } }),
     ).toBe(true)
     expect(mockCheckUpload).not.toHaveBeenCalled()
+  })
+})
+
+describe('FilesView context menu', () => {
+  beforeEach(() => {
+    mockCreate.mockReset()
+    HTMLDialogElement.prototype.showModal = vi.fn(function (
+      this: HTMLDialogElement,
+    ) {
+      this.setAttribute('open', '')
+    })
+    HTMLDialogElement.prototype.close = vi.fn()
+  })
+  const names = () =>
+    screen.getAllByRole('menuitem').map((m) => m.textContent?.trim())
+
+  it("a right click opens the row's menu, its own browser menu kept shut", async () => {
+    await show()
+    const ev = createEvent.contextMenu(item('README.md'), {
+      clientX: 40,
+      clientY: 50,
+    })
+    fireEvent(item('README.md'), ev)
+    expect(ev.defaultPrevented).toBe(true)
+    expect(screen.getByRole('menu', { name: 'Actions for README.md' }))
+    expect(names()).toEqual([
+      'Copy relative path',
+      'Copy absolute path',
+      'Copy name',
+      'Download',
+      'Rename',
+    ])
+    // The … button shows while the menu is open
+    expect(
+      within(item('README.md')).getByRole('button', { name: /Actions/ })
+        .parentElement?.parentElement,
+    ).not.toHaveClass('opacity-0')
+    // A right click inside the open menu is the menu's
+    const inner = createEvent.contextMenu(screen.getAllByRole('menuitem')[0])
+    fireEvent(screen.getAllByRole('menuitem')[0], inner)
+    expect(screen.getAllByRole('menu')).toHaveLength(1)
+    // Another row's right click moves the menu there
+    fireEvent.contextMenu(item('src'), { clientX: 40, clientY: 10 })
+    expect(screen.getByRole('menu', { name: 'Actions for src' }))
+    expect(names()).toEqual([
+      'Copy relative path',
+      'Copy absolute path',
+      'Copy name',
+      'New file',
+      'New folder',
+      'Upload files here',
+    ])
+  })
+
+  it('a link to a folder takes nothing new; view-only gets the copies', async () => {
+    await show()
+    fireEvent.contextMenu(item('link'), { clientX: 1, clientY: 1 })
+    expect(names()).toEqual([
+      'Copy relative path',
+      'Copy absolute path',
+      'Copy name',
+    ])
+    cleanup()
+    await show({ readOnly: true, insertText: vi.fn() })
+    fireEvent.contextMenu(item('src'), { clientX: 1, clientY: 1 })
+    expect(names()).toEqual([
+      'Copy relative path',
+      'Copy absolute path',
+      'Copy name',
+      'Insert @path in terminal',
+    ])
+  })
+
+  it("the menu key and Shift+F10 open the focused row's menu, its first item focused", async () => {
+    await show()
+    fireEvent.keyDown(item('src'), { key: 'ContextMenu' })
+    const menu = screen.getByRole('menu', { name: 'Actions for src' })
+    expect(screen.getAllByRole('menuitem')[0]).toHaveFocus()
+    fireEvent.keyDown(menu, { key: 'Escape' })
+    expect(screen.queryByRole('menu')).toBeNull()
+    fireEvent.keyDown(item('src'), { key: 'ArrowDown' })
+    fireEvent.keyDown(item('link'), { key: 'F10', shiftKey: true })
+    expect(screen.getByRole('menu', { name: 'Actions for link' }))
+    expect(item('link')).toHaveAttribute('aria-keyshortcuts', 'Shift+F10')
+  })
+
+  it("New file and New folder start in the row's folder", async () => {
+    mockCreate.mockResolvedValue({ root: '/home/kim/app', path: 'src/n' })
+    mockContent.mockReturnValue(new Promise(() => {}))
+    await show()
+    fireEvent.contextMenu(item('src'), { clientX: 1, clientY: 1 })
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New file' }))
+    expect(screen.getByRole('dialog', { name: 'New file' }))
+    expect(screen.getByRole('textbox')).toHaveValue('src/')
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    fireEvent.contextMenu(item('src'), { clientX: 1, clientY: 1 })
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New folder' }))
+    expect(screen.getByRole('dialog', { name: 'New folder' }))
+    fireEvent.change(screen.getByRole('textbox'), {
+      target: { value: 'src/n' },
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+    })
+    expect(mockCreate).toHaveBeenCalledWith(
+      { paneId: '%1' },
+      { root: '/home/kim/app', path: 'src/n', reveal: false, dir: true },
+    )
+  })
+
+  it("the empty area's menu: new, upload, refresh, collapse all", async () => {
+    await show()
+    fireEvent.click(item('src'))
+    await act(async () => {})
+    expect(item('src')).toHaveAttribute('aria-expanded', 'true')
+    const tree = screen.getByRole('tree')
+    const ev = createEvent.contextMenu(tree, { clientX: 5, clientY: 400 })
+    fireEvent(tree, ev)
+    expect(ev.defaultPrevented).toBe(true)
+    expect(screen.getByRole('menu', { name: 'Files actions' }))
+    expect(names()).toEqual([
+      'New file',
+      'New folder',
+      'Upload files',
+      'Refresh',
+      'Collapse all',
+    ])
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Collapse all' }))
+    expect(item('src')).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.contextMenu(tree, { clientX: 5, clientY: 400 })
+    mockTree.mockClear()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Refresh' }))
+    await act(async () => {})
+    expect(mockTree).toHaveBeenCalled()
+    fireEvent.contextMenu(tree, { clientX: 5, clientY: 400 })
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New folder' }))
+    expect(screen.getByRole('dialog', { name: 'New folder' }))
+    expect(screen.getByRole('textbox')).toHaveValue('')
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    fireEvent.contextMenu(tree, { clientX: 5, clientY: 400 })
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New file' }))
+    expect(screen.getByRole('dialog', { name: 'New file' }))
+  })
+
+  it("view-only: the empty area's menu refreshes and collapses only", async () => {
+    await show({ readOnly: true })
+    fireEvent.contextMenu(screen.getByRole('tree'), { clientX: 5, clientY: 5 })
+    expect(names()).toEqual(['Refresh', 'Collapse all'])
+  })
+
+  it('types the @path of a row at the agent', async () => {
+    const insertText = vi.fn(() => true)
+    mockTree.mockImplementation(async (_p: string, path: string) => ({
+      root: '/home/kim/app',
+      isRepo: true,
+      dir: 'src',
+      path,
+      entries: DIRS[path],
+      truncated: false,
+    }))
+    await show({ insertText })
+    fireEvent.click(item('src'))
+    await act(async () => {})
+    fireEvent.contextMenu(item('a.ts'), { clientX: 1, clientY: 1 })
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Insert @path in terminal' }),
+    )
+    expect(insertText).toHaveBeenCalledWith('@a.ts')
   })
 })

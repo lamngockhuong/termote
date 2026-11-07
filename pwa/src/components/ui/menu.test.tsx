@@ -688,6 +688,31 @@ describe('Menu in the top layer', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 
+  it('anchored to an element but opened at a point, closes on a scroll', () => {
+    function Area() {
+      const anchor = useRef<HTMLDivElement>(null)
+      const [open, setOpen] = useState(true)
+      return (
+        <div data-testid="list" ref={anchor}>
+          <Menu
+            label="Area"
+            trigger={null}
+            anchorRef={anchor}
+            open={open}
+            onOpenChange={setOpen}
+            point={{ x: 5, y: 5 }}
+          >
+            <MenuItem>Refresh</MenuItem>
+          </Menu>
+        </div>
+      )
+    }
+    render(<Area />)
+    expect(menu()).toBeInTheDocument()
+    fireEvent.scroll(screen.getByTestId('list'))
+    expect(menu()).toBeNull()
+  })
+
   it('caps its height when neither side holds it, and scrolls inside', () => {
     vi.spyOn(document.documentElement, 'clientWidth', 'get').mockReturnValue(
       1000,

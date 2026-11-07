@@ -286,7 +286,8 @@ export function Menu({
   // bringing a new tab into view as it is right clicked). Any other scroll
   // (a Chat following new messages, a table under its own menu) and a scroll
   // inside the menu leave it; a resized window (a phone's keyboard closing)
-  // places it again.
+  // places it again. A menu at a point stays there: a scroll closes it.
+  const atPoint = !!point
   useEffect(() => {
     if (!isOpen || !inTopLayer) return
     const onScroll = (e: Event) => {
@@ -294,7 +295,7 @@ export function Menu({
       if (listRef.current?.contains(target)) return
       const trigger = anchorRef?.current ?? triggerRef.current
       if (!trigger || (target !== document && !target.contains(trigger))) return
-      if (anchorRef) placeRef.current()
+      if (anchorRef && !atPoint) placeRef.current()
       else setIsOpenRef.current(false)
     }
     const onResize = () => placeRef.current()
@@ -304,7 +305,7 @@ export function Menu({
       document.removeEventListener('scroll', onScroll, true)
       window.removeEventListener('resize', onResize)
     }
-  }, [isOpen, inTopLayer, anchorRef])
+  }, [isOpen, inTopLayer, anchorRef, atPoint])
 
   // pointerdown, not mousedown: a touch that scrolls elsewhere sends no mouse events.
   useEffect(() => {
