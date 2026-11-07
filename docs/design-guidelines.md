@@ -70,7 +70,7 @@ restyling raw elements. Each is written against the tokens, so it is correct in 
 | `Sheet`                      | Bottom sheet on phones, centred dialog on desktop; Escape, close button or scrim press closes it and focus returns to the opener |
 | `Menu`                       | Arrow keys, Home and End move over items; closes on Escape, focus leaving, outside press                                         |
 | `Switch`, `SegmentedControl` | `SegmentedControl` uses a roving tabindex                                                                                        |
-| `ViewSwitcher`               | Desktop header tabs with labels; renders nothing while only one view exists                                                      |
+| `ViewSwitcher`               | Desktop header tabs with labels; vertical and icons only on the right bar; renders nothing while only one view exists            |
 | `ViewMenu`                   | Mobile header: one button with the current view's icon (`View: <name>`) opening a menu of views; nothing below two views         |
 | `Banner`                     | Inline status message                                                                                                            |
 
@@ -78,10 +78,10 @@ restyling raw elements. Each is written against the tokens, so it is correct in 
 
 ### Breakpoints
 
-| Breakpoint | Width   | Layout                                                                 |
-| ---------- | ------- | ---------------------------------------------------------------------- |
-| Mobile     | < 768px | Header with session chip, sessions bottom sheet, keyboard toolbar      |
-| Desktop    | ≥ 768px | Session tabs in the header row, collapsible sidebar, fullscreen toggle |
+| Breakpoint | Width   | Layout                                                                  |
+| ---------- | ------- | ----------------------------------------------------------------------- |
+| Mobile     | < 768px | Header with session chip, sessions bottom sheet, keyboard toolbar       |
+| Desktop    | ≥ 768px | Session tabs in the header row, collapsible sidebar, optional right bar |
 
 There is no bottom navigation: the terminal takes that height.
 
@@ -109,7 +109,7 @@ There is no bottom navigation: the terminal takes that height.
 
 ```text
 ┌──────────┬───────────────────────────────────────────┐
-│ Sidebar  │ Session tabs · font · fullscreen · More   │
+│ Sidebar  │ Session tabs · views · font · More        │
 │(collapse)├─────────────────────────────┬─────────────┤
 │          │ Terminal / view             │ Side panel  │
 │          │                             │ (Files,     │
@@ -118,6 +118,17 @@ There is no bottom navigation: the terminal takes that height.
 └──────────┴─────────────────────────────┴─────────────┘
 ```
 
+- The header's view and panel buttons drop their labels (icon and tooltip only) below 60rem, and
+  while the session tabs overflow (`hooks/use-compact-labels.ts`). They come back only once the tabs
+  have room for the labels plus 24px, so a width near the edge does not flip them.
+- The command palette and fullscreen are items of the More menu (with their keys), not header
+  buttons; the tour's palette step lights that menu.
+- Settings → Sessions → "Toolbar position" → Right bar (desktop only) moves the view switcher, the
+  side panel toggles and the Pane menu (top), fullscreen and the palette (foot) to a 40px bar
+  (`ToolbarRail`, `<nav>` "Toolbar") down the right edge; the header keeps the tabs, the chips, font
+  size, the connection and More. The bar sits beside the views' isolated row, not in it: a maximized
+  side panel leaves it in reach, the overview covers the views only, and the Pane menu opens to its
+  left (`Menu side="left"`). Its views move with Up and Down (`aria-orientation="vertical"`).
 - The input area (key toolbar, Chat composer, view-only bar) sits under the view's column only, so
   the sidebar and the side panel run the full height; a maximized side panel covers it too.
 - The Chat conversation and composer take the view's whole width; the reader's own messages sit on
@@ -285,4 +296,4 @@ There is no Quick actions sheet and no floating button.
   on desktop the rows start under the header's name (`pl-4.5`), a phone's swipe rows keep the full
   width. A thin `border-t border-border` and a gap set top-level groups apart (none above the first
   shown); a linked worktree is indented under its checkout with a `border-l` instead
-- Fullscreen: desktop only (Fullscreen API), toggle in the header, syncs with F11/Esc
+- Fullscreen: desktop only (Fullscreen API), in the More menu or on the right bar, syncs with F11/Esc

@@ -156,3 +156,32 @@ test.describe('tour on desktop', () => {
     await expect(page.getByRole('dialog')).toContainText('1 /')
   })
 })
+
+test.describe('tour on desktop with the toolbar on the right bar', () => {
+  test.use({ viewport: { width: 1280, height: 800 } })
+
+  test('lights the views and the palette on the bar', async ({ page }) => {
+    await page.goto('/')
+    await page.evaluate(() =>
+      localStorage.setItem('termote-settings', JSON.stringify({ toolbarPosition: 'right' })),
+    )
+    await openApp(page)
+    const bar = page.getByRole('navigation', { name: 'Toolbar' })
+    await expect(bar).toBeVisible()
+    await startTour(page)
+    const bubble = page.getByRole('dialog')
+    await page.keyboard.press('ArrowRight')
+    await expect(bubble).toHaveAccessibleName('Views and the side panel')
+    await page.keyboard.press('ArrowRight')
+    if ((await bubble.textContent())?.includes('Windows and panes')) await page.keyboard.press('ArrowRight')
+    await expect(bubble).toHaveAccessibleName('Everything, by name')
+    await expect(bubble).toContainText('at the foot of this bar')
+    await expectLit(page, bar.locator('[data-tour="palette"]'))
+    // Beside the bar, on its left
+    const box = (await bubble.boundingBox())!
+    const barBox = (await bar.boundingBox())!
+    expect(box.x + box.width).toBeLessThanOrEqual(barBox.x)
+    await expectInViewport(page)
+    await page.keyboard.press('Escape')
+  })
+})
