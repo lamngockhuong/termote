@@ -31,6 +31,7 @@ import { useMediaQuery } from '../hooks/use-media-query'
 import { RequestError } from '../hooks/use-mux-api'
 import { ENTER_FROM, useNewKeys } from '../hooks/use-new-keys'
 import { LEAVE_TO, usePresenceList } from '../hooks/use-presence-list'
+import { useSidebarWidth } from '../hooks/use-sidebar-width'
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
 import type { Translate } from '../i18n/translate'
@@ -50,6 +51,7 @@ import {
 } from '../utils/session-filter'
 import { matchesQuery, searchTerms } from '../utils/session-search'
 import type { SidebarLayout } from '../utils/sidebar-layout'
+import { SIDEBAR_MIN } from '../utils/sidebar-width'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { AgentFilterBar } from './agent-filter-bar'
 import { AgentStatusBadge } from './agent-status-badge'
@@ -106,6 +108,12 @@ interface Props {
   isMobile?: boolean
   isCollapsed?: boolean
   onToggleCollapse?: () => void
+  // Desktop, expanded: the saved width (shown within the row's limits), set
+  // by dragging the right edge; without onWidthChange there is no handle.
+  // onResizingChange is true while the edge is dragged.
+  width?: unknown
+  onWidthChange?: (width: number) => void
+  onResizingChange?: (resizing: boolean) => void
   // Desktop: the button that opens the overview of every agent, and whether
   // it is open
   onOpenOverview?: () => void
@@ -268,6 +276,9 @@ export function SessionSidebar({
   isMobile = false,
   isCollapsed = false,
   onToggleCollapse,
+  width,
+  onWidthChange,
+  onResizingChange,
   onOpenOverview,
   overviewOpen,
   filter = 'all',
@@ -283,6 +294,12 @@ export function SessionSidebar({
 }: Props) {
   const { t } = useT()
   const coarsePointer = useMediaQuery('(pointer: coarse)')
+  const resize = useSidebarWidth({
+    active: !isMobile && !isCollapsed,
+    width,
+    onWidthChange,
+    onResizingChange,
+  })
   const [showAddForm, setShowAddForm] = useState(false)
   const canAdd = !!onAdd
   const canRemove = !!onRemove && sessions.length > 1
@@ -1506,8 +1523,34 @@ export function SessionSidebar({
 
   // Desktop: expanded sidebar
   return (
-    <aside data-tour="sidebar" className={`w-64 ${SIDEBAR_BASE_CLASSES}`}>
-      <div className={`w-64 ${SIDEBAR_CONTENT_CLASSES}`}>
+    <aside
+      ref={resize.asideRef}
+      data-tour="sidebar"
+      // No width animation while dragging: the edge follows the pointer
+      style={{
+        width: resize.shown,
+        transition: resize.dragging ? 'none' : undefined,
+      }}
+      className={`relative ${SIDEBAR_BASE_CLASSES}`}
+    >
+      {onWidthChange && (
+        // biome-ignore lint/a11y/useSemanticElements: an <hr> cannot be focused or dragged
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label={t('shell.sidebar.resize')}
+          aria-valuenow={resize.shown}
+          aria-valuemin={SIDEBAR_MIN}
+          aria-valuemax={resize.max}
+          tabIndex={0}
+          title={t('shell.panel.resizeHint')}
+          {...resize.handleProps}
+          className={`absolute inset-y-0 right-0 z-20 w-2 cursor-col-resize touch-none outline-none hover:bg-accent/40 focus-visible:bg-accent ${
+            resize.dragging ? 'bg-accent/40' : ''
+          }`}
+        />
+      )}
+      <div style={{ width: resize.shown }} className={SIDEBAR_CONTENT_CLASSES}>
         <div className="flex h-12 shrink-0 items-center justify-between pl-3 pr-1.5">
           <span className="flex items-center gap-2 text-[15px] font-semibold text-fg ui-terminal:font-label">
             <BrandMark className="size-6 shrink-0" blink="hover" />

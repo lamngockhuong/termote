@@ -522,8 +522,14 @@ vi.mock('./components/session-sidebar', () => ({
     onOpenAgent,
     sessions,
     machines,
+    width,
+    onWidthChange,
+    onResizingChange,
   }: {
     machines?: import('react').ReactNode
+    width?: unknown
+    onWidthChange?: (width: number) => void
+    onResizingChange?: (resizing: boolean) => void
     sessions: { panes?: object[] }[]
     onOpenAgent?: (session: object, pane: object) => void
     layout?: string
@@ -557,8 +563,18 @@ vi.mock('./components/session-sidebar', () => ({
       data-testid="session-sidebar"
       data-open={String(!!isOpen)}
       data-layout={layout}
+      data-width={width === undefined ? undefined : String(width)}
     >
       {machines}
+      {onResizingChange && (
+        <>
+          <button onClick={() => onResizingChange(true)}>SBDragStart</button>
+          <button onClick={() => onResizingChange(false)}>SBDragEnd</button>
+        </>
+      )}
+      {onWidthChange && (
+        <button onClick={() => onWidthChange(320)}>SBWidth</button>
+      )}
       {onRemove && <button onClick={() => onRemove('1')}>SBRemove</button>}
       {onRemove && !isMobile && (
         <button onClick={() => onRemove('gone')}>SBRemoveGone</button>
@@ -4516,6 +4532,38 @@ describe('App views, view-only and deep links', () => {
     expect(
       screen.getByRole('button', { name: 'View: Files' }),
     ).toBeInTheDocument()
+  })
+
+  describe('desktop sidebar width', () => {
+    const coveredNow = () =>
+      (vi.mocked(TerminalView).mock.lastCall![0] as { covered: boolean })
+        .covered
+
+    it('passes the saved width and saves a new one', async () => {
+      const updateSetting = vi.fn()
+      const settings = mockUseSettings()
+      mockUseSettings.mockReturnValue({
+        settings: { ...settings.settings, sidebarWidth: 300 },
+        updateSetting,
+      } as any)
+      render(<App />)
+      expect(await screen.findByTestId('session-sidebar')).toHaveAttribute(
+        'data-width',
+        '300',
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'SBWidth' }))
+      expect(updateSetting).toHaveBeenCalledWith('sidebarWidth', 320)
+    })
+
+    it('the terminal keeps its size while the edge is dragged', async () => {
+      render(<App />)
+      await screen.findByTestId('session-sidebar')
+      expect(coveredNow()).toBe(false)
+      fireEvent.click(screen.getByRole('button', { name: 'SBDragStart' }))
+      expect(coveredNow()).toBe(true)
+      fireEvent.click(screen.getByRole('button', { name: 'SBDragEnd' }))
+      expect(coveredNow()).toBe(false)
+    })
   })
 
   describe('desktop side panel size', () => {

@@ -915,12 +915,19 @@ export default function App({
   useEffect(() => {
     if (panelMaximized) setHistoryOpen(false)
   }, [panelMaximized])
-  const holdTerminalSize = hasSidePanel && (panelResizing || panelMaximized)
+  // The sidebar's edge being dragged: fitted once on release
+  const [sidebarResizing, setSidebarResizing] = useState(false)
+  const holdTerminalSize =
+    sidebarResizing || (hasSidePanel && (panelResizing || panelMaximized))
   // A focus window's file covers the terminal: no stream there, which would
   // only take one of the server's
   const streamOff = focus && hasSidePanel && panelMaximized
   const setSidePanelWidth = useCallback(
     (width: number) => updateSetting('sidePanelWidth', width),
+    [updateSetting],
+  )
+  const setSidebarWidth = useCallback(
+    (width: number) => updateSetting('sidebarWidth', width),
     [updateSetting],
   )
   // tabpanel roles only mean something next to the desktop tabs; the mobile
@@ -2059,6 +2066,9 @@ export default function App({
             renameTab={mux.caps.renameTab !== false}
             isCollapsed={sidebarCollapsed}
             onToggleCollapse={toggleSidebarCollapsed}
+            width={settings.sidebarWidth}
+            onWidthChange={setSidebarWidth}
+            onResizingChange={setSidebarResizing}
             overviewOpen={overviewOpen}
             onOpenOverview={openOverview}
             filter={settings.sidebarFilter}
@@ -2325,8 +2335,9 @@ export default function App({
                             !readOnly &&
                             isTerminalView,
                           onDriveLost: onDriveLost,
-                          // Also while the side panel is dragged (fitted once on
-                          // release) or covers it maximized (no resize at all)
+                          // Also while the side panel or the sidebar is dragged
+                          // (fitted once on release) or the panel covers it
+                          // maximized (no resize at all)
                           covered: !isTerminalView || holdTerminalSize,
                           // Someone looks at the pane: the terminal shows (not
                           // under the maximized side panel or the overview), or
