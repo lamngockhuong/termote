@@ -217,6 +217,7 @@ describe('ChatComposer images', () => {
       'cur1',
       ['id1', 'id2'],
       [16, 17],
+      false,
     )
     expect(screen.queryByRole('list', { name: 'Attached images' })).toBeNull()
   })
@@ -227,7 +228,7 @@ describe('ChatComposer images', () => {
     await attach()
     expect(sendButton()).toBeEnabled()
     await send()
-    expect(mockSend).toHaveBeenCalledWith('%3', '', 'cur1', ['id1'], [0])
+    expect(mockSend).toHaveBeenCalledWith('%3', '', 'cur1', ['id1'], [0], false)
   })
 
   it('a cancelled picker attaches nothing', async () => {
@@ -373,6 +374,7 @@ describe('ChatComposer images', () => {
       'cur1',
       ['id1'],
       [4],
+      false,
     )
     type('/model')
     await act(async () => {
@@ -386,6 +388,7 @@ describe('ChatComposer images', () => {
       'cur1',
       ['id2'],
       [7],
+      false,
     )
     expect(showView).not.toHaveBeenCalled()
     confirm.mockRestore()
@@ -403,6 +406,7 @@ describe('ChatComposer images', () => {
       'cur1',
       ['id1'],
       [new TextEncoder().encode('xem [Image #1] nhé ').length],
+      false,
     )
   })
 
@@ -455,6 +459,7 @@ describe('ChatComposer images', () => {
         enc.encode('ảnh số 1 ').length,
         enc.encode('ảnh số 1  ảnh số 2 ').length,
       ],
+      false,
     )
   })
 
@@ -478,7 +483,7 @@ describe('ChatComposer images', () => {
     await act(async () => {
       fireEvent.keyDown(box(), { key: 'Enter' })
     })
-    expect(mockSend).toHaveBeenCalledWith('%3', '/model', 'cur1', [], [])
+    expect(mockSend).toHaveBeenCalledWith('%3', '/model', 'cur1', [], [], false)
   })
 })
 
@@ -498,6 +503,7 @@ describe('ChatComposer', () => {
       'cur1',
       [],
       [],
+      false,
     )
     expect(box()).toHaveValue('')
     expect(sessionStorage.getItem('termote-chat-draft:%3')).toBeNull()
@@ -704,7 +710,7 @@ describe('ChatComposer', () => {
       await act(async () => {
         fireEvent.keyDown(box(), { key: 'Enter' })
       })
-      expect(mockSend).toHaveBeenCalledWith('%3', 'hi', 'cur1', [], [])
+      expect(mockSend).toHaveBeenCalledWith('%3', 'hi', 'cur1', [], [], false)
       type('again')
       await act(async () => {
         fireEvent.keyDown(box(), { key: 'Enter', metaKey: true })
@@ -790,7 +796,14 @@ describe('ChatComposer', () => {
     expect(mockSend).not.toHaveBeenCalled()
     confirm.mockReturnValue(true)
     await send()
-    expect(mockSend).toHaveBeenCalledWith('%3', '!rm -rf build', 'cur1', [], [])
+    expect(mockSend).toHaveBeenCalledWith(
+      '%3',
+      '!rm -rf build',
+      'cur1',
+      [],
+      [],
+      false,
+    )
     confirm.mockRestore()
   })
 
@@ -800,6 +813,13 @@ describe('ChatComposer', () => {
       409,
       'a dialog is open',
       'Not sent: The agent cannot take input right now.',
+      true,
+    ],
+    [
+      'input_has_draft',
+      409,
+      'the input box already holds a draft',
+      "Not sent: The terminal's input box already holds text; send or clear it there.",
       true,
     ],
     [
@@ -916,7 +936,7 @@ describe('ChatComposer', () => {
     )
     type('x')
     await send()
-    expect(mockSend).toHaveBeenCalledWith('', 'x', 'cur1', [], [])
+    expect(mockSend).toHaveBeenCalledWith('', 'x', 'cur1', [], [], false)
   })
 
   it('502 delivered_not_submitted never retries, even after time passes', async () => {
@@ -1131,7 +1151,14 @@ describe('ChatComposer', () => {
       await act(async () => {
         key('Enter', { ctrlKey: true })
       })
-      expect(mockSend).toHaveBeenCalledWith('%3', '/comp', 'cur1', [], [])
+      expect(mockSend).toHaveBeenCalledWith(
+        '%3',
+        '/comp',
+        'cur1',
+        [],
+        [],
+        false,
+      )
     })
 
     it('Escape closes it until the "/" is gone', () => {
@@ -1220,7 +1247,14 @@ describe('ChatComposer', () => {
       await act(async () => {
         key('Enter')
       })
-      expect(mockSend).toHaveBeenCalledWith('%3', '/model', 'cur1', [], [])
+      expect(mockSend).toHaveBeenCalledWith(
+        '%3',
+        '/model',
+        'cur1',
+        [],
+        [],
+        false,
+      )
       expect(showView).toHaveBeenCalledWith('terminal')
       expect(box()).toHaveValue('')
     })
@@ -1235,6 +1269,7 @@ describe('ChatComposer', () => {
         'cur1',
         [],
         [],
+        false,
       )
       expect(showView).not.toHaveBeenCalled()
       mockSend.mockRejectedValueOnce(
@@ -1263,7 +1298,14 @@ describe('ChatComposer', () => {
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: 'Exit' }))
       })
-      expect(mockSend).toHaveBeenCalledWith('%3', '/quit', 'cur1', [], [])
+      expect(mockSend).toHaveBeenCalledWith(
+        '%3',
+        '/quit',
+        'cur1',
+        [],
+        [],
+        false,
+      )
       expect(box()).toHaveValue('')
     })
 
@@ -1399,6 +1441,7 @@ describe('ChatComposer', () => {
           'cur1',
           [],
           [],
+          false,
         )
         expect(box()).toHaveValue('')
         expect(screen.queryByRole('listbox')).toBeNull()
@@ -1411,6 +1454,7 @@ describe('ChatComposer', () => {
           'cur1',
           [],
           [],
+          false,
         )
       })
 
@@ -1432,7 +1476,14 @@ describe('ChatComposer', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
         type('/cwd')
         await send()
-        expect(mockSend).toHaveBeenCalledWith('%3', '/cwd', 'cur1', [], [])
+        expect(mockSend).toHaveBeenCalledWith(
+          '%3',
+          '/cwd',
+          'cur1',
+          [],
+          [],
+          false,
+        )
       })
 
       it('Claude Code opens nothing on "$", and sends it as typed', async () => {
@@ -1440,7 +1491,14 @@ describe('ChatComposer', () => {
         type('$sk')
         expect(screen.queryByRole('listbox')).toBeNull()
         await send()
-        expect(mockSend).toHaveBeenCalledWith('%3', '$sk', 'cur1', [], [])
+        expect(mockSend).toHaveBeenCalledWith(
+          '%3',
+          '$sk',
+          'cur1',
+          [],
+          [],
+          false,
+        )
       })
 
       it('follows the caret before the agent turns to Codex', () => {
@@ -1665,7 +1723,14 @@ describe('ChatComposer while the agent works', () => {
     render(<ChatComposer {...props()} />)
     type('next step')
     await send()
-    expect(mockSend).toHaveBeenCalledWith('%3', 'next step', 'cur1', [], [])
+    expect(mockSend).toHaveBeenCalledWith(
+      '%3',
+      'next step',
+      'cur1',
+      [],
+      [],
+      false,
+    )
     expect(box()).toHaveValue('')
     expect(screen.getByRole('status')).toHaveTextContent(
       'Queued: Claude Code reads it when it is ready.',
@@ -1678,7 +1743,7 @@ describe('ChatComposer while the agent works', () => {
     render(<ChatComposer {...props()} />)
     type('/model')
     await send()
-    expect(mockSend).toHaveBeenCalledWith('%3', '/model', 'cur1', [], [])
+    expect(mockSend).toHaveBeenCalledWith('%3', '/model', 'cur1', [], [], false)
     expect(showView).not.toHaveBeenCalled()
   })
 
@@ -1687,5 +1752,52 @@ describe('ChatComposer while the agent works', () => {
     type('hello')
     await send()
     expect(screen.queryByRole('status')).toBeNull()
+  })
+})
+
+describe('ChatComposer over a draft in the terminal', () => {
+  const refuse = () =>
+    mockSend.mockRejectedValueOnce(
+      new AgentRequestError(409, 'input_has_draft', 'a draft'),
+    )
+
+  it('offers to clear it and send the message in its place', async () => {
+    refuse()
+    render(<ChatComposer {...props()} />)
+    type('hello')
+    await send()
+    expect(box()).toHaveValue('hello')
+    mockSend.mockResolvedValueOnce({ queued: false })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Clear it and send' }))
+    })
+    expect(mockSend).toHaveBeenLastCalledWith(
+      '%3',
+      'hello',
+      'cur1',
+      [],
+      [],
+      true,
+    )
+    expect(box()).toHaveValue('')
+    expect(
+      screen.queryByRole('button', { name: 'Clear it and send' }),
+    ).toBeNull()
+  })
+
+  it('does not offer it while the agent works', async () => {
+    transcript.status = 'working'
+    refuse()
+    render(<ChatComposer {...props()} />)
+    type('hello')
+    await send()
+    expect(
+      screen.getAllByText(
+        "Not sent: The terminal's input box already holds text; send or clear it there.",
+      ).length,
+    ).toBeGreaterThan(0)
+    expect(
+      screen.queryByRole('button', { name: 'Clear it and send' }),
+    ).toBeNull()
   })
 })

@@ -722,7 +722,8 @@ else is refused and sends nothing:
 | ------------------------- | ------ | -------------------------------------------------------------------------------------- |
 | `session_changed`         | 409    | The pane runs another session now (the client's `cursor` names the old one)            |
 | `target_changed`          | 409    | The agent is no longer in this pane, or its process, session or rollout changed        |
-| `input_not_ready`         | 409    | Not an empty input box: a dialog, a draft, the agent waiting on a dialog, copy mode    |
+| `input_has_draft`         | 409    | The input box holds text that is not this message (typed in the terminal)              |
+| `input_not_ready`         | 409    | Not an input box: a dialog, the agent waiting on a dialog, copy mode                   |
 | `paste_not_confirmed`     | 409    | The pasted text did not show in the input box; Enter was not sent                      |
 | `delivered_not_submitted` | 502    | The text is in the input box but was not submitted; check the terminal                 |
 | `prompt_changed`          | 409    | The dialog on screen is not the one the client answered; the reply carries the new one |
@@ -736,7 +737,11 @@ else is refused and sends nothing:
 
 `message` pastes the text (bracketed paste, through a named tmux buffer or Herdr's writer) only
 when the screen shows an empty input box, waits until the text shows in it, checks the session
-again, then sends Enter. A working agent (status `working`) still shows its input box and takes
+again, then sends Enter. A box that already holds this very message as text, left by an earlier
+send whose paste showed only after `paste_not_confirmed`, is submitted as it is, without a second
+paste; any other draft is refused `input_has_draft`, unless the body carries `replaceDraft: true`
+(the Chat view's "Clear it and send" on that refusal): the server then clears the box with C-c,
+only for an idle agent, and sends the message once the box shows empty. A working agent (status `working`) still shows its input box and takes
 the message into its own queue, read when it is ready (Claude Code 2.1.310 shows "Press up to
 edit queued messages" in the box, read as empty): the route then answers 202 instead of 204, and
 the Chat view says the message is queued. A `blocked` agent is still refused. On psmux `paste-buffer -b` finds no buffer (3.3.8), so `Paste` types the

@@ -65,9 +65,9 @@ phím nào:
 | Thông báo                                                  | Mã                        | Ý nghĩa                                                                              |
 | ---------------------------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------ |
 | `Not sent: the agent is waiting for an answer`              | `input_not_ready`         | Claude Code đang mở hộp thoại                                                        |
-| `Not sent: the input box already holds a draft`             | `input_not_ready`         | Ô nhập trong terminal đang có chữ; gửi hoặc xoá nó trong terminal                    |
+| `Not sent: the terminal's input box already holds text`     | `input_has_draft`         | Ô nhập trong terminal đang có nội dung khác; gửi hoặc xoá nó trong terminal, hoặc bấm **Xóa nó và gửi** (không có khi agent đang chạy) |
 | `Not sent: the pane is in copy mode`                       | `input_not_ready`         | Pane tmux đang cuộn lại trong copy mode; thoát nó (`q`) trong terminal               |
-| `Not sent: the text did not show in the input box`          | `paste_not_confirmed`     | Enter chưa được gửi; có thể chữ đã nằm trong ô nhập                                  |
+| `Not sent: the text did not show in the input box`          | `paste_not_confirmed`     | Enter chưa được gửi; có thể chữ đã nằm trong ô nhập. Gửi lại đúng tin nhắn đó sẽ gửi nó đi |
 | `The text was pasted but not submitted`                     | `delivered_not_submitted` | Chữ đã vào ô nhập nhưng chưa có Enter; xem lại terminal trước khi gửi lần nữa        |
 | `The conversation changed; it has been reloaded`            | `session_changed`         | Pane giờ chạy phiên khác (`/clear`, resume); gửi lại nếu bạn vẫn muốn                |
 | `Too long: the limit is 16 KB.`                            | `text_too_long`           | Tin dài quá 16 KB (UTF-8); hãy chia nhỏ                                              |

@@ -740,7 +740,14 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   server user's config dir. The session id must be a UUID. Every write (Claude Code or Codex)
   takes a lock on the pane, re-checks the process, session and screen, and sends nothing unless
   the screen shows the expected state (an empty input box, the dialog the client saw with a
-  single-use `promptId`). A message also goes while the agent works (status `working`): the
+  single-use `promptId`). A box that already holds this very message as text (an earlier send
+  refused `paste_not_confirmed` whose paste showed later) gets no second paste: it is submitted
+  as it is. Any other draft, a long-paste token (it carries a count, not the text) or a message
+  with images is refused 409 `input_has_draft` with no key sent, unless the body asks
+  `replaceDraft` (the user's button on that refusal): then one C-c clears the box, sent only to the
+  same agent, idle (C-c interrupts a working one: 409 `input_not_ready`) and with the box still
+  holding a draft (on an empty box C-c arms the exit), and the paste waits for the box to show
+  empty (else 409 `input_has_draft`). A message also goes while the agent works (status `working`): the
   agent takes it into its own queue (Claude Code: Enter; Codex: Tab, since its Enter steers the
   running turn), and the route answers 202 instead of 204; an agent waiting on a dialog
   (`blocked`) or of unknown status still gets nothing, and so does a `/` command to a working

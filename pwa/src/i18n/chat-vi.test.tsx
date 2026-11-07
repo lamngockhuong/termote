@@ -301,6 +301,7 @@ describe('the composer in Vietnamese', () => {
       'cur1',
       [],
       [],
+      false,
     )
   })
 
@@ -328,7 +329,14 @@ describe('the composer in Vietnamese', () => {
     await act(async () => {
       fireEvent.keyDown(box(), { key: 'Enter', ctrlKey: true })
     })
-    expect(mockSend).toHaveBeenCalledWith('%3', '/compact ', 'cur1', [], [])
+    expect(mockSend).toHaveBeenCalledWith(
+      '%3',
+      '/compact ',
+      'cur1',
+      [],
+      [],
+      false,
+    )
   })
 
   it('says why a message was refused, by its code', async () => {
@@ -360,7 +368,7 @@ describe('the composer in Vietnamese', () => {
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Thoát' }))
     })
-    expect(mockSend).toHaveBeenCalledWith('%3', '/exit', 'cur1', [], [])
+    expect(mockSend).toHaveBeenCalledWith('%3', '/exit', 'cur1', [], [], false)
   })
 })
 

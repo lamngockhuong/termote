@@ -265,6 +265,7 @@ export default {
     'The conversation changed; it has been reloaded. Send again if you still want to.',
   'chat.composer.tooLong': 'Too long: the limit is {size} KB.',
   'chat.composer.shellConfirm': 'Run this as a shell command in {agent}?',
+  'chat.composer.replaceDraft': 'Clear it and send',
   'chat.composer.queued': 'Queued: {agent} reads it when it is ready.',
   'chat.composer.asks': '{agent} asks: {title}',
   'chat.composer.aQuestion': 'a question',

@@ -891,6 +891,12 @@ describe('agent API client', () => {
     expect(calls[0].init?.body).toBe(
       JSON.stringify({ text: '', cursor: 'cur', images: ['a1', 'b2'], at: [] }),
     )
+    // Clearing the terminal's draft first, which the user asked for
+    await sendAgentMessage('1', 'hi', 'cur', [], [], true)
+    expect(calls[1].init?.body).toBe(
+      JSON.stringify({ text: 'hi', cursor: 'cur', replaceDraft: true }),
+    )
+    calls.splice(1, 1)
     // With where each image goes in the text
     await sendAgentMessage('1', 'a b', 'cur', ['a1', 'b2'], [1, 3])
     expect(calls[1].init?.body).toBe(

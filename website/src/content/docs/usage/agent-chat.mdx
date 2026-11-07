@@ -66,9 +66,9 @@ gets no key at all:
 | Message                                                    | Code                      | Meaning                                                                                      |
 | ---------------------------------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------- |
 | Not sent: the agent is waiting for an answer               | `input_not_ready`         | A dialog is open                                                                             |
-| Not sent: the input box already holds a draft              | `input_not_ready`         | Something is typed in the terminal's input box; send or clear it there                       |
+| Not sent: the terminal's input box already holds text      | `input_has_draft`         | Something else is typed in the terminal's input box; send or clear it there, or press **Clear it and send** (not while the agent works) |
 | Not sent: the pane is in copy mode                         | `input_not_ready`         | The tmux pane is scrolled back in copy mode; leave it (`q`) in the terminal                  |
-| Not sent: the text did not show in the input box           | `paste_not_confirmed`     | Enter was not sent; the text may be in the input box now                                     |
+| Not sent: the text did not show in the input box           | `paste_not_confirmed`     | Enter was not sent; the text may be in the input box now. Sending the same message again submits it |
 | The text was pasted but not submitted                      | `delivered_not_submitted` | The text is in the input box but Enter was not sent; check the terminal before sending again |
 | The conversation changed; it has been reloaded             | `session_changed`         | The pane runs another session now (`/clear`, a resume); send again if you still want to      |
 | Too long: the limit is 16 KB.                              | `text_too_long`           | The message is over 16 KB (UTF-8); split it                                                  |

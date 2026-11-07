@@ -250,6 +250,7 @@ export default {
   'chat.composer.tooLong': 'Quá dài: tối đa {size} KB.',
   'chat.composer.shellConfirm':
     'Chạy nội dung này như lệnh shell trong {agent}?',
+  'chat.composer.replaceDraft': 'Xóa nó và gửi',
   'chat.composer.queued': 'Đã xếp hàng: {agent} sẽ đọc khi sẵn sàng.',
   'chat.composer.asks': '{agent} hỏi: {title}',
   'chat.composer.aQuestion': 'một câu hỏi',
