@@ -140,14 +140,9 @@ func (c *cli) addMachine(alias string, o machineAddOpts) error {
 			return fmt.Errorf("ssh %s failed: %v", alias, err)
 		}
 	} else {
-		c.stepf("ssh", "Connecting to %s to find termote there", alias)
-		out, err := c.interact("", sshUserArgv(paths.KnownHosts, rec, whereamiScript))
-		w, perr := parseWhereami(out)
-		if perr != nil && err != nil {
-			return fmt.Errorf("ssh %s failed: %v (a Windows machine: add it with --remote-exe <path of termote.exe> --print-key)", alias, err)
-		}
-		if perr != nil {
-			return perr
+		w, err := c.findRemoteTermote(alias, rec, paths, o.yes)
+		if err != nil {
+			return err
 		}
 		rec.RemoteExe, rec.SocketDir, rec.RemoteOS = w.Exe, w.SocketDir, w.OS
 		if !w.Native {
@@ -183,6 +178,92 @@ func (c *cli) addMachine(alias string, o machineAddOpts) error {
 	c.infof("Added %s (id %s)", rec.Label, rec.ID)
 	c.reloadMachines()
 	return nil
+}
+
+// whereamiOn asks termote on the machine where it lives (whereamiScript).
+func (c *cli) whereamiOn(alias string, rec machineRecord, paths sshPaths) (whereami, error) {
+	out, err := c.interact("", sshUserArgv(paths.KnownHosts, rec, whereamiScript))
+	w, perr := parseWhereami(out)
+	// The script exits 3 or 4 after saying termote is missing or too old:
+	// that answer came from the machine, so it wins over ssh's exit status.
+	if errors.Is(perr, errTermoteNotFound) || errors.Is(perr, errTermoteTooOld) {
+		return w, perr
+	}
+	if perr != nil && err != nil {
+		return w, fmt.Errorf("ssh %s failed: %v (a Windows machine: add it with --remote-exe <path of termote.exe> --print-key)", alias, err)
+	}
+	return w, perr
+}
+
+// findRemoteTermote finds termote on a Unix machine. Where it is missing,
+// it offers to install this release there and start it; where it is older
+// than this one, to update it. Both run the machine's own installer or
+// termote, over the user's ssh, after a yes (or --yes).
+func (c *cli) findRemoteTermote(alias string, rec machineRecord, paths sshPaths, yes bool) (whereami, error) {
+	c.stepf("ssh", "Connecting to %s to find termote there", alias)
+	w, err := c.whereamiOn(alias, rec, paths)
+	pin := c.version
+	if !versionRe.MatchString(pin) {
+		pin = ""
+	}
+	switch {
+	case errors.Is(err, errTermoteNotFound):
+		what := "the latest Termote"
+		if pin != "" {
+			what = "Termote " + pin
+		}
+		if !yes && !c.confirm(fmt.Sprintf("termote was not found on %s. Install %s there and start it?", alias, what)) {
+			return w, fmt.Errorf("%s: %w", alias, err)
+		}
+		c.stepf("ssh", "Installing %s on %s", what, alias)
+		if _, err := c.interact("", sshUserArgv(paths.KnownHosts, rec, remoteInstallScript(pin))); err != nil {
+			return w, fmt.Errorf("installing termote on %s failed: %v", alias, err)
+		}
+		if w, err = c.whereamiOn(alias, rec, paths); err != nil {
+			return w, fmt.Errorf("%s: %w", alias, err)
+		}
+		if !w.Native {
+			c.stepf("ssh", "Starting termote on %s", alias)
+			if _, err := c.interact("", sshUserArgv(paths.KnownHosts, rec, remoteExeScript(w.Exe, "start"))); err != nil {
+				return w, fmt.Errorf("starting termote on %s failed: %v (run 'termote start' there)", alias, err)
+			}
+			return c.whereamiOn(alias, rec, paths)
+		}
+		return w, nil
+	case errors.Is(err, errTermoteTooOld):
+		// Too old for whereami, so too old for the bridge: it has to be
+		// updated before it can be added.
+		old := "an older version"
+		if w.Version != "" {
+			old = w.Version
+		}
+		if pin == "" || w.Exe == "" {
+			return w, fmt.Errorf("%s: termote there is %s, too old to be reached: update it there (termote update), then add it again", alias, old)
+		}
+		if !yes && !c.confirm(fmt.Sprintf("termote on %s is %s, too old to be reached. Update it there to %s (its server restarts)?", alias, old, pin)) {
+			return w, fmt.Errorf("%s: termote there is %s, too old to be reached: update it there (termote update), then add it again", alias, old)
+		}
+		c.stepf("ssh", "Updating termote on %s to %s", alias, pin)
+		if _, err := c.interact("", sshUserArgv(paths.KnownHosts, rec, remoteExeScript(w.Exe, "update", "--version", pin))); err != nil {
+			return w, fmt.Errorf("updating termote on %s failed: %v (update it there, then add it again)", alias, err)
+		}
+		if w, err = c.whereamiOn(alias, rec, paths); err != nil {
+			return w, fmt.Errorf("%s: %w", alias, err)
+		}
+		return w, nil
+	case err != nil:
+		return w, err
+	}
+	if pin != "" && versionRe.MatchString(w.Version) && compareVersions(w.Version, pin) < 0 &&
+		(yes || c.confirm(fmt.Sprintf("termote on %s is %s, this one %s. Update it there (its server restarts)?", alias, w.Version, pin))) {
+		c.stepf("ssh", "Updating termote on %s to %s", alias, pin)
+		if _, err := c.interact("", sshUserArgv(paths.KnownHosts, rec, remoteExeScript(w.Exe, "update", "--version", pin))); err != nil {
+			c.warnf("updating termote on %s failed: %v", alias, err)
+			return w, nil
+		}
+		return c.whereamiOn(alias, rec, paths)
+	}
+	return w, nil
 }
 
 // printKeyLine prints the line to install by hand.

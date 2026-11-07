@@ -558,12 +558,14 @@ Options of pair (the code works once, for 5 minutes):
   --expires <12h|7d|2w|never>  How long the device stays signed in once paired
                              (1h to 400d, default: 30d)
 
-Options of machine add (asks to install a key that can only run 'termote bridge'):
+Options of machine add (asks to install a key that can only run 'termote bridge';
+on Linux and macOS, to install termote there when it is missing, or update it when older):
   --label <name>             The name the app shows (default: the alias)
   --print-key                Print the key line to install yourself (a Windows machine)
   --remote-exe <path>        termote's path on the machine, instead of finding it
   --no-check                 Add it without checking that it answers
-  --yes                      Install the key without asking
+  --yes                      Install the key without asking, and on Linux and macOS install,
+                             start or update termote there to this release
 
 Options of update:
   --version <X.Y.Z>          Update to a specific version

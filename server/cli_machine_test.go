@@ -210,8 +210,21 @@ func TestMachineAddDiscoveryFailures(t *testing.T) {
 		}
 		return "", false
 	}
-	if err := tc.cmdMachine([]string{"add", "box", "--yes"}); err == nil || !strings.Contains(err.Error(), "not found") {
+	// No terminal and no --yes: nothing is installed there.
+	if err := tc.cmdMachine([]string{"add", "box"}); err == nil || !strings.Contains(err.Error(), "not found") {
 		t.Errorf("termote missing there: %v", err)
+	}
+	// The real script exits 3 after saying so: still "not found", not the
+	// Windows hint for an ssh that failed.
+	old := tc.run
+	tc.run = notFoundInteract{tc.runner}
+	err := tc.cmdMachine([]string{"add", "box"})
+	tc.run = old
+	if err == nil || !strings.Contains(err.Error(), "box: termote was not found") || strings.Contains(err.Error(), "Windows") {
+		t.Errorf("termote missing there, exit 3: %v", err)
+	}
+	if tc.runner.called("ssh") && slices.ContainsFunc(tc.runner.calls, func(c string) bool { return strings.Contains(c, "install.sh") }) {
+		t.Error("installed termote without a yes")
 	}
 	// ssh itself failed and printed nothing useful.
 	tc.runner.onOutput = func(argv, _ []string) (string, bool) {
@@ -220,11 +233,210 @@ func TestMachineAddDiscoveryFailures(t *testing.T) {
 		}
 		return "", false
 	}
-	old := tc.run
 	tc.run = failingInteract{tc.runner}
 	defer func() { tc.run = old }()
 	if err := tc.cmdMachine([]string{"add", "box", "--yes"}); err == nil || !strings.Contains(err.Error(), "--remote-exe") {
 		t.Errorf("ssh failed: %v", err)
+	}
+}
+
+// notFoundInteract answers every Interact call as whereamiScript does on a
+// machine without termote: the marker, then exit status 3.
+type notFoundInteract struct{ *fakeRunner }
+
+func (f notFoundInteract) Interact(string, string, ...string) ([]byte, error) {
+	return []byte("TERMOTE-NOT-FOUND\n"), errors.New("exit status 3")
+}
+
+// scriptedInteract answers the user's ssh by the remote command it runs:
+// whereamiScript gets the next of whereamis, every other one fn.
+type scriptedInteract struct {
+	*fakeRunner
+	whereamis []string
+	fn        func(command string) error
+}
+
+func (f *scriptedInteract) Interact(input string, name string, args ...string) ([]byte, error) {
+	f.record(name, args)
+	cmd := args[len(args)-1]
+	if cmd != whereamiScript {
+		return nil, f.fn(cmd)
+	}
+	if len(f.whereamis) == 0 {
+		return nil, errors.New("no more whereami")
+	}
+	out := f.whereamis[0]
+	f.whereamis = f.whereamis[1:]
+	if out == "TERMOTE-NOT-FOUND" {
+		return []byte(out + "\n"), errors.New("exit status 3")
+	}
+	if strings.HasPrefix(out, "TERMOTE-OLD") {
+		return []byte(out + "\n"), errors.New("exit status 4")
+	}
+	return []byte(out + "\n"), nil
+}
+
+const testWhereamiNoConfig = `{"exe":"/home/u/.local/share/termote/current/bin/termote","socketDir":"/home/u/.local/state/termote/run","os":"linux","version":"1.0.0","apiVersion":2,"native":false}`
+
+// Without termote there, add installs this release, starts it and adds it.
+func TestMachineAddInstallsTermote(t *testing.T) {
+	tc := machineCLI(t, "y\ny\n", nil)
+	var cmds []string
+	tc.run = &scriptedInteract{fakeRunner: tc.runner,
+		whereamis: []string{"TERMOTE-NOT-FOUND", testWhereamiNoConfig, testWhereami},
+		fn:        func(c string) error { cmds = append(cmds, c); return nil }}
+	if err := tc.cmdMachine([]string{"add", "box"}); err != nil {
+		t.Fatalf("%v\n%s", err, tc.stdout)
+	}
+	if len(cmds) != 3 || cmds[0] != remoteInstallScript("1.0.0") || !strings.Contains(cmds[0], "TERMOTE_VERSION=1.0.0 ") ||
+		cmds[1] != remoteExeScript("/home/u/.local/share/termote/current/bin/termote", "start") || cmds[2] != installKeyScript {
+		t.Errorf("commands: %q", cmds)
+	}
+	if !strings.Contains(tc.stdout.String(), "Install Termote 1.0.0 there and start it?") {
+		t.Errorf("asked:\n%s", tc.stdout)
+	}
+	list, _ := loadMachines(tc.machinesFile())
+	if len(list) != 1 || list[0].RemoteExe != "/home/u/.local/share/termote/current/bin/termote" {
+		t.Errorf("saved: %+v", list)
+	}
+
+	// Already configured once installed: not started again. A checkout's
+	// version that is no release installs the latest one.
+	tc = machineCLI(t, "", nil)
+	tc.version = "dev"
+	cmds = nil
+	tc.run = &scriptedInteract{fakeRunner: tc.runner,
+		whereamis: []string{"TERMOTE-NOT-FOUND", testWhereami},
+		fn:        func(c string) error { cmds = append(cmds, c); return nil }}
+	if err := tc.cmdMachine([]string{"add", "box", "--yes"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(cmds) != 2 || cmds[0] != remoteInstallScript("") || strings.Contains(cmds[0], "TERMOTE_VERSION") {
+		t.Errorf("commands: %q", cmds)
+	}
+}
+
+func TestMachineAddInstallFailures(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		whereamis []string
+		failOn    string
+		want      string
+	}{
+		{"install", []string{"TERMOTE-NOT-FOUND"}, "install.sh", "installing termote on box failed"},
+		{"still missing", []string{"TERMOTE-NOT-FOUND", "TERMOTE-NOT-FOUND"}, "", "box: termote was not found"},
+		{"start", []string{"TERMOTE-NOT-FOUND", testWhereamiNoConfig}, "' start", "starting termote on box failed"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			tc := machineCLI(t, "", nil)
+			tc.run = &scriptedInteract{fakeRunner: tc.runner, whereamis: tt.whereamis, fn: func(c string) error {
+				if tt.failOn != "" && strings.Contains(c, tt.failOn) {
+					return errors.New("exit status 1")
+				}
+				return nil
+			}}
+			if err := tc.cmdMachine([]string{"add", "box", "--yes"}); err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("got %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
+// An older termote there is updated to this release after a yes.
+func TestMachineAddUpdatesOlderTermote(t *testing.T) {
+	newer := strings.Replace(testWhereami, `"2.0.0"`, `"3.0.0"`, 1)
+	exe := "/home/u/.local/share/termote/current/bin/termote"
+	for _, tt := range []struct {
+		name, input string
+		flags       []string
+		fail        bool
+		updated     bool
+	}{
+		{"yes", "y\ny\n", nil, false, true},
+		{"--yes", "", []string{"--yes"}, false, true},
+		{"declined", "n\ny\n", nil, false, false},
+		{"update fails", "", []string{"--yes"}, true, true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			tc := machineCLI(t, tt.input, nil)
+			tc.version = "3.0.0"
+			var cmds []string
+			tc.run = &scriptedInteract{fakeRunner: tc.runner, whereamis: []string{testWhereami, newer},
+				fn: func(c string) error {
+					cmds = append(cmds, c)
+					if tt.fail && c != installKeyScript {
+						return errors.New("exit status 1")
+					}
+					return nil
+				}}
+			if err := tc.cmdMachine(append([]string{"add", "box"}, tt.flags...)); err != nil {
+				t.Fatal(err)
+			}
+			if got := slices.Contains(cmds, remoteExeScript(exe, "update", "--version", "3.0.0")); got != tt.updated {
+				t.Errorf("updated %v, commands %q", got, cmds)
+			}
+			if tt.fail && !strings.Contains(tc.stderr.String()+tc.stdout.String(), "updating termote on box failed") {
+				t.Errorf("no warning:\n%s%s", tc.stdout, tc.stderr)
+			}
+		})
+	}
+	// Same or newer there: nothing to update.
+	tc := machineCLI(t, "", nil)
+	var cmds []string
+	tc.run = &scriptedInteract{fakeRunner: tc.runner, whereamis: []string{testWhereami},
+		fn: func(c string) error { cmds = append(cmds, c); return nil }}
+	if err := tc.cmdMachine([]string{"add", "box", "--yes"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(cmds) != 1 || cmds[0] != installKeyScript {
+		t.Errorf("commands: %q", cmds)
+	}
+}
+
+const testWhereamiOld = "TERMOTE-OLD\nexe=/home/u/.local/bin/termote\nTermote v2.22.0"
+
+// A termote too old for whereami (and the bridge) is updated to this release
+// after a yes, then asked again; otherwise add stops and says why.
+func TestMachineAddUpdatesTooOldTermote(t *testing.T) {
+	update := remoteExeScript("/home/u/.local/bin/termote", "update", "--version", "3.0.0")
+	for _, tt := range []struct {
+		name, input, version string
+		flags                []string
+		whereamis            []string
+		fail                 bool
+		want                 string // "" when added
+		updated              bool
+	}{
+		{"yes", "y\ny\n", "3.0.0", nil, []string{testWhereamiOld, testWhereami}, false, "", true},
+		{"--yes", "", "3.0.0", []string{"--yes"}, []string{testWhereamiOld, testWhereami}, false, "", true},
+		{"declined", "n\n", "3.0.0", nil, []string{testWhereamiOld}, false, "box: termote there is 2.22.0, too old", false},
+		{"no version said", "n\n", "3.0.0", nil, []string{"TERMOTE-OLD\nexe=/home/u/.local/bin/termote"}, false, "an older version, too old", false},
+		{"checkout", "", "dev", []string{"--yes"}, []string{testWhereamiOld}, false, "too old to be reached: update it there", false},
+		{"update fails", "", "3.0.0", []string{"--yes"}, []string{testWhereamiOld}, true, "updating termote on box failed", true},
+		{"still old", "", "3.0.0", []string{"--yes"}, []string{testWhereamiOld, testWhereamiOld}, false, "box: termote on the machine is too old", true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			tc := machineCLI(t, tt.input, nil)
+			tc.version = tt.version
+			var cmds []string
+			tc.run = &scriptedInteract{fakeRunner: tc.runner, whereamis: tt.whereamis, fn: func(c string) error {
+				cmds = append(cmds, c)
+				if tt.fail {
+					return errors.New("exit status 1")
+				}
+				return nil
+			}}
+			err := tc.cmdMachine(append([]string{"add", "box"}, tt.flags...))
+			if tt.want == "" && err != nil || tt.want != "" && (err == nil || !strings.Contains(err.Error(), tt.want)) {
+				t.Errorf("got %v, want %q", err, tt.want)
+			}
+			if err != nil && strings.Contains(err.Error(), "Windows") {
+				t.Errorf("Windows hint for an old termote: %v", err)
+			}
+			if got := slices.Contains(cmds, update); got != tt.updated {
+				t.Errorf("updated %v, commands %q", got, cmds)
+			}
+		})
 	}
 }
 

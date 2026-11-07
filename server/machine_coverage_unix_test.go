@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -259,5 +261,75 @@ func TestCheckMachineHealthAnswers(t *testing.T) {
 	deadEnd.Close()
 	if err := checkMachineHealth(context.Background(), dead); !errors.Is(err, errMachineOffline) {
 		t.Errorf("closed: %v", err)
+	}
+}
+
+// remoteInstallScript and remoteExeScript run under a real sh: the
+// installer gets the pinned version, a failed download fails the step, and
+// termote gets its arguments with its output on stderr.
+func TestRemoteScriptsRun(t *testing.T) {
+	requireUnixShell(t)
+	// Only the tools the scripts use: never a real curl.
+	bin := t.TempDir()
+	for _, tool := range []string{"sh", "mktemp", "rm", "head"} {
+		p, err := exec.LookPath(tool)
+		if err != nil {
+			t.Skip(tool + " not found")
+		}
+		os.Symlink(p, filepath.Join(bin, tool))
+	}
+	run := func(script string, env ...string) (string, string, error) {
+		cmd := exec.Command(filepath.Join(bin, "sh"), "-c", script)
+		cmd.Env = append([]string{"PATH=" + bin, "HOME=" + t.TempDir()}, env...)
+		var out, errOut strings.Builder
+		cmd.Stdout, cmd.Stderr = &out, &errOut
+		err := cmd.Run()
+		return out.String(), errOut.String(), err
+	}
+	curl := filepath.Join(bin, "curl")
+	os.WriteFile(curl, []byte("#!/bin/sh\n[ -n \"$CURL_FAIL\" ] && exit 22\n"+
+		"while [ $# -gt 0 ]; do [ \"$1\" = -o ] && { shift; echo 'echo \"v=$TERMOTE_VERSION\"' > \"$1\"; }; shift; done\n"), 0o755)
+	out, errOut, err := run(remoteInstallScript("1.2.3"))
+	if err != nil || out != "" || !strings.Contains(errOut, "v=1.2.3") {
+		t.Errorf("install: %v %q %q", err, out, errOut)
+	}
+	if _, errOut, err = run(remoteInstallScript("")); err != nil || !strings.Contains(errOut, "v=\n") {
+		t.Errorf("install latest: %v %q", err, errOut)
+	}
+	if _, _, err = run(remoteInstallScript("1.2.3"), "CURL_FAIL=1"); err == nil {
+		t.Error("a failed download did not fail the install")
+	}
+	os.Remove(curl)
+	if _, errOut, err = run(remoteInstallScript("1.2.3")); err == nil || !strings.Contains(errOut, "curl is required") {
+		t.Errorf("no curl: %v %q", err, errOut)
+	}
+
+	// whereamiScript finds termote in ~/.local/bin: a current one answers,
+	// an old one (unknown command) gets its path and version reported.
+	home := t.TempDir()
+	os.MkdirAll(filepath.Join(home, ".local", "bin"), 0o755)
+	found := filepath.Join(home, ".local", "bin", "termote")
+	whereami := func(body string) (string, error) {
+		os.WriteFile(found, []byte("#!/bin/sh\n"+body+"\n"), 0o755)
+		out, _, err := run(whereamiScript, "HOME="+home)
+		return out, err
+	}
+	if out, err := whereami(`[ "$1 $2" = "machine whereami" ] && echo '{"exe":"/x"}'`); err != nil || out != "{\"exe\":\"/x\"}\n" {
+		t.Errorf("current: %v %q", err, out)
+	}
+	out, err = whereami(`[ "$1" = version ] && { echo "Termote v2.22.0"; exit 0; }; echo "unknown command: $1" >&2; exit 2`)
+	if err == nil || out != "TERMOTE-OLD\nexe="+found+"\nTermote v2.22.0\n" {
+		t.Errorf("old: %v %q", err, out)
+	}
+	os.Remove(found)
+	if out, _, err := run(whereamiScript, "HOME="+home); err == nil || out != "TERMOTE-NOT-FOUND\n" {
+		t.Errorf("missing: %v %q", err, out)
+	}
+
+	exe := filepath.Join(t.TempDir(), "termote")
+	os.WriteFile(exe, []byte("#!/bin/sh\necho \"args=$*\"; read -r x; echo \"stdin=$x\"\n"), 0o755)
+	out, errOut, err = run(remoteExeScript(exe, "update", "--version", "1.2.3"))
+	if err != nil || out != "" || errOut != "args=update --version 1.2.3\nstdin=\n" {
+		t.Errorf("exe: %v %q %q", err, out, errOut)
 	}
 }
