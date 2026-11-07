@@ -905,6 +905,7 @@ export default function App({
   const viewProps = {
     ...viewContext,
     isMobile,
+    clockOffset,
     notify,
     showView,
     openSettings,

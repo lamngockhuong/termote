@@ -537,6 +537,10 @@ Chạy trên tmux (Linux/macOS), psmux (Windows) và Herdr (đã chạy `herdr i
       request nào tới origin khác)
 - [ ] `/clear` hoặc `/resume` trong terminal: trong vòng 2 giây chat chuyển sang transcript mới,
       không lẫn hai transcript
+- [ ] Claude Code chạy 2-3 agent con ở nền: một dải phía trên ô soạn tin ghi `3 subagent đang chạy`
+      và liệt kê từng agent con với loại, mô tả, tool gần nhất, thời gian (tăng mỗi giây) và
+      `↓ 30k token` gần với số terminal hiện; chạm vào dải thì thu gọn, và dải biến mất khi agent con
+      cuối cùng xong
 
 ### Gửi Tin Nhắn
 

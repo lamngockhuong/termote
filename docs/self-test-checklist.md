@@ -551,6 +551,10 @@ Run on tmux (Linux/macOS), psmux (Windows) and Herdr (`herdr integration install
       the browser's network panel)
 - [ ] `/clear` or `/resume` in the terminal: the chat switches to the new transcript within 2 seconds,
       without mixing the two
+- [ ] Claude Code running 2-3 background subagents: a strip above the composer says
+      `3 subagents running` and lists each with its type, description, last tool, time (counting up
+      each second) and `↓ 30k tokens` close to the terminal's count; one folds the strip on a tap and
+      the strip goes once the last one ends
 
 ### Sending
 

@@ -313,7 +313,7 @@ existing pane from the last snapshot.
 GET    /api/mux/snapshot          → {apiVersion, backend, caps, serverNow, groups:[{id,name,worktree?:{linked,branch?},meta?,tabs:[{id,key,name,active,processes?,panes:[{id,active,title,name?,agent?:{name,status,since?,sinceFirstSeen?},process?,meta?:[{key,value}]}]}]}]}   (meta: Herdr, not to a view-only client)
 GET    /api/mux/overview[?pane=]  → {serverNow, panes:[{paneId,key,lastText?,lastTs?,branch?,changed?,changedTruncated?,usage?:{contextTokens,model?,contextWindow?,contextPercent?,exact},accountKey?,unavailable?:["transcript"|"changes"]}], accounts?:[{key,agent:"codex",plan?,windows:[{usedPercent,windowMinutes,resetsAt?}],updatedAt}]}
 GET    /api/mux/activity?after=   → {events:[{seq,ts,key,groupId,tabId,paneId,agent,from,to}], latest, oldest, reset?, serverNow} | 400 invalid_after
-GET    /api/mux/panes/{id}/agent/subagents → {nodes:[{id,type,description?,status:running|done|error,statusGuessed?,startTs?,endTs?,lastTool?,depth,children}], truncated?} | 404
+GET    /api/mux/panes/{id}/agent/subagents → {nodes:[{id,type,description?,status:running|done|error,statusGuessed?,startTs?,endTs?,lastTool?,tokens?,depth,children}], truncated?} | 404
 POST   /api/mux/tabs               body: {groupId, name}       → {ok, id}
 PATCH  /api/mux/tabs/{id}          body: {name, key?}          → {ok} | 409 changed
 DELETE /api/mux/tabs/{id}?key=                                  → {ok} | 409 changed
@@ -1451,8 +1451,9 @@ subagent file.
 
 `server/agent_subagents.go` lists the subagents of a pane's Claude session from
 `<claudeDir>/projects/<proj>/<sessionId>/subagents`: each `agent-<id>.meta.json` gives the type,
-description and `parentAgentId` (nesting), and each `agent-<id>.jsonl` its start (first line) and
-last tool (its tail). Subagents run in the background, so the Agent call's tool result says
+description and `parentAgentId` (nesting), and each `agent-<id>.jsonl` its start (first line), last
+tool and tokens (its tail: input, cache read, cache write and output of the last assistant row that
+is not `<synthetic>`, as Claude Code counts a subagent's tokens). Subagents run in the background, so the Agent call's tool result says
 nothing about the end; the end is a `queue-operation` row of the session's transcript whose
 `<task-notification>` names the agent id and a `<status>` (`completed` is `done`, anything else
 `error`). Background shell commands write the same rows with ids that match no file and are

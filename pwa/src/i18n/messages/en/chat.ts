@@ -94,6 +94,8 @@ export default {
   'chat.subagent.seconds': '{n} s',
   'chat.subagent.minutes': '{n} min',
   'chat.subagent.hours': '{n} h',
+  'chat.subagent.runningCount_one': '{count} subagent running',
+  'chat.subagent.runningCount_other': '{count} subagents running',
   'chat.subagent.readFailed': 'Could not read subagents.',
   'chat.subagent.none': 'No subagents.',
   'chat.subagent.list': 'Subagents',

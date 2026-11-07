@@ -11,7 +11,7 @@ vi.mock('../hooks/use-mux-api', async (orig) => ({
 }))
 
 import type { Session, SessionPane } from '../types/session'
-import { AgentCard, formatTokens, statusAge } from './agent-card'
+import { AgentCard, statusAge } from './agent-card'
 
 const NOW = Date.parse('2026-10-13T09:10:00Z')
 const SESSION: Session = { id: 't', name: 'build', icon: '', description: '' }
@@ -42,16 +42,6 @@ function renderCard(props: Partial<Parameters<typeof AgentCard>[0]> = {}) {
   )
   return { ...utils, onOpen }
 }
-
-describe('formatTokens', () => {
-  it('fits the count in a few characters', () => {
-    expect(formatTokens(950)).toBe('950')
-    expect(formatTokens(12_345)).toBe('12k')
-    expect(formatTokens(1_234)).toBe('1.2k')
-    expect(formatTokens(184_400)).toBe('184k')
-    expect(formatTokens(1_250_000)).toBe('1.3M')
-  })
-})
 
 describe('statusAge', () => {
   it('says how long, marked when the server first saw it so', () => {

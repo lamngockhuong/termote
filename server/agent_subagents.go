@@ -71,7 +71,9 @@ var (
 // subagentNode is one subagent. Status is running until the transcript
 // reports its end: done when that status is completed, error otherwise.
 // StatusGuessed: done is a guess from the file's age (subagentGuessIdle).
-// Depth is 1 for a subagent of the session itself.
+// Tokens is the size of its last request: the prompt and the reply, as
+// Claude Code counts a subagent's tokens. Depth is 1 for a subagent of the
+// session itself.
 type subagentNode struct {
 	ID            string         `json:"id"`
 	Type          string         `json:"type"`
@@ -81,6 +83,7 @@ type subagentNode struct {
 	StartTS       string         `json:"startTs,omitempty"`
 	EndTS         string         `json:"endTs,omitempty"`
 	LastTool      string         `json:"lastTool,omitempty"`
+	Tokens        int64          `json:"tokens,omitempty"`
 	Depth         int            `json:"depth"`
 	Children      []subagentNode `json:"children"`
 	parent        string
@@ -169,10 +172,17 @@ type subagentEnd struct{ status, ts string }
 
 // subagentFile is what was read of a subagent's .jsonl at size and mtime.
 type subagentFile struct {
-	size     int64
-	mtime    time.Time
-	start    time.Time
+	size  int64
+	mtime time.Time
+	start time.Time
+	subagentTail
+}
+
+// subagentTail is what the end of a subagent's file says: the last tool it
+// called and the tokens of its last request.
+type subagentTail struct {
 	lastTool string
+	tokens   int64
 }
 
 func newSubagentStore(now func() time.Time) *subagentStore {
@@ -535,7 +545,7 @@ func (ss *subagentSession) tree(dir *os.Root, now time.Time) subagentsResponse {
 				n.start = f.file.start
 			}
 			changed = f.file.mtime
-			n.LastTool = f.file.lastTool
+			n.LastTool, n.Tokens = f.file.lastTool, f.file.tokens
 		}
 		if !n.start.IsZero() {
 			n.StartTS = n.start.UTC().Format(activityTimeFormat)
@@ -627,7 +637,7 @@ func (ss *subagentSession) readMeta(dir *os.Root, id string, e fs.DirEntry) (sub
 
 // readFile returns what is known of a subagent's file, read again only
 // when its size or mtime changed: its start (the first line's time, read
-// once) and the last tool it called.
+// once), the last tool it called and its tokens.
 func (ss *subagentSession) readFile(dir *os.Root, id string, e fs.DirEntry) (subagentFile, bool) {
 	f, fi, ok := openPlainFile(dir, e)
 	if !ok {
@@ -638,12 +648,17 @@ func (ss *subagentSession) readFile(dir *os.Root, id string, e fs.DirEntry) (sub
 	if had && prev.size == fi.Size() && prev.mtime.Equal(fi.ModTime()) {
 		return prev, true
 	}
-	v := subagentFile{size: fi.Size(), mtime: fi.ModTime(), start: prev.start, lastTool: prev.lastTool}
+	v := subagentFile{size: fi.Size(), mtime: fi.ModTime(), start: prev.start, subagentTail: prev.subagentTail}
 	if v.start.IsZero() {
 		v.start = firstLineTime(f)
 	}
-	if t := lastToolName(f, fi.Size()); t != "" {
-		v.lastTool = t
+	// A tail without a call or a request keeps what an earlier one found.
+	tail := readSubagentTail(f, fi.Size())
+	if tail.lastTool != "" {
+		v.lastTool = tail.lastTool
+	}
+	if tail.tokens > 0 {
+		v.tokens = tail.tokens
 	}
 	ss.files[id] = v
 	return v, true
@@ -701,33 +716,41 @@ func firstLineTime(f *os.File) time.Time {
 	return t
 }
 
-// lastToolName is the name of the last tool called in the complete lines of
-// f's last subagentTailRead bytes, "" when none is.
-func lastToolName(f *os.File, size int64) string {
+// readSubagentTail reads the complete assistant lines of f's last
+// subagentTailRead bytes for the name of the last tool called and the tokens
+// of the last request: its whole prompt (input, cache read and cache write)
+// and its reply. Claude Code writes an error or an interruption as a row of
+// model <synthetic> with zero usage, which is no request.
+func readSubagentTail(f *os.File, size int64) subagentTail {
+	var tail subagentTail
 	start := max(0, size-subagentTailRead)
 	b := make([]byte, size-start)
 	if _, err := f.ReadAt(b, start); err != nil && !errors.Is(err, io.EOF) {
-		return ""
+		return tail
 	}
 	if start > 0 && !atLineStart(f, start) {
 		i := bytes.IndexByte(b, '\n')
 		if i < 0 {
-			return ""
+			return tail
 		}
 		b = b[i+1:]
 	}
-	name := ""
 	for line := range bytes.Lines(b) {
-		if !bytes.HasSuffix(line, []byte("\n")) || !bytes.Contains(line, []byte(`"tool_use"`)) {
+		if !bytes.HasSuffix(line, []byte("\n")) || !bytes.Contains(line, []byte(`"assistant"`)) {
 			continue
 		}
 		var row struct {
 			Type    string `json:"type"`
 			Message struct {
+				Model   string `json:"model"`
 				Content []struct {
 					Type string `json:"type"`
 					Name string `json:"name"`
 				} `json:"content"`
+				Usage *struct {
+					claudeUsage
+					OutputTokens int64 `json:"output_tokens"`
+				} `json:"usage"`
 			} `json:"message"`
 		}
 		if json.Unmarshal(line, &row) != nil || row.Type != "assistant" {
@@ -735,11 +758,16 @@ func lastToolName(f *os.File, size int64) string {
 		}
 		for _, c := range row.Message.Content {
 			if c.Type == "tool_use" && c.Name != "" {
-				name = cutRunes(collapseSpace(c.Name), subagentNameMax)
+				tail.lastTool = cutRunes(collapseSpace(c.Name), subagentNameMax)
+			}
+		}
+		if u := row.Message.Usage; u != nil && row.Message.Model != "<synthetic>" {
+			if n := u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens + u.OutputTokens; n > 0 {
+				tail.tokens = n
 			}
 		}
 	}
-	return name
+	return tail
 }
 
 // collapseSpace is s with every run of white space made one space.

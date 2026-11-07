@@ -83,7 +83,7 @@ phút. Khoảng trước lần đổi trạng thái đầu tiên mà server ghi 
 làm gì, chứ không phải agent đang idle.
 
 Với Claude Code, phần này còn liệt kê các agent con của phiên. Mỗi agent con có loại, mô tả, trạng thái,
-tool gọi gần nhất và thời gian đã chạy. Agent con do một agent con khác tạo ra thì thụt vào dưới agent
+tool gọi gần nhất, thời gian đã chạy và số token của lần gọi model gần nhất. Agent con do một agent con khác tạo ra thì thụt vào dưới agent
 đó. Khi transcript không cho biết agent con đã xong hay chưa, Termote coi nó là xong nếu file của nó
 không đổi trong 10 phút và ghi thêm `(guessed)`. Thu gọn lại, nút vẫn ghi số lượng, ví dụ
 `2 subagents, 1 running`.

@@ -351,9 +351,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   every file is opened nonblocking. The overview reads only the new transcript rows and the listing.
   Memory: per session asked for in the last 10 minutes, the ends, meta and file facts of the subagents
   listed. Limits: 200 nodes (the newest), 4 levels, a parent loop dropped, `truncated` set. It
-  returns agent ids, the type, the description (200 runes), status, times and the last tool's name;
+  returns agent ids, the type, the description (200 runes), status, times, the last tool's name and
+  a token count;
   never a prompt, a tool input or result, a path or a file name, so view-only may read it; the PWA
-  shows the type, the description and the tool's name through `visibleUnsafe`, as the overview's text. The
+  shows the type, the description and the tool's name through `visibleUnsafe`, in the overview's card
+  and in the Chat view's strip of running subagents. The
   newest write of a running subagent becomes the overview's `lastTs`
 - **Host stats** (`server/system*.go`, `GET /api/mux/system`, the PWA's Host chip and sheet,
   `termote status`): `requireMethod(GET)`, `crossSiteRejection`, no parameters, no role check: a
