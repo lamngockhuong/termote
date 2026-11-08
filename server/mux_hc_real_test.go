@@ -788,3 +788,13 @@ func TestHcRealTypingDoesNotStallViewers(t *testing.T) {
 	waitHc(t, "the marker after the burst in the view", func() bool { return out.has("burst-77") })
 	waitHc(t, "the marker after the burst in the full stream", func() bool { return fullOut.has("burst-77") })
 }
+
+func TestHcRealWorktreeRoundTrip(t *testing.T) {
+	c := newHcRealCore(t)
+	m := c.mux()
+	hcRealSnapshot(t, m)
+	worktreeRoundTrip(t, m, worktreeRepo(t), false, func(what string, cond func() bool) {
+		t.Helper()
+		waitHc(t, what, cond)
+	})
+}

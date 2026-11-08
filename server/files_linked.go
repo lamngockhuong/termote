@@ -99,11 +99,18 @@ func ownWorktrees(trees []string, common string) []string {
 	}
 	var own []string
 	for _, w := range trees {
-		if g, ok := gitEntryTarget(w); ok && (sameAllowPath(g, common) || sameAllowPath(filepath.Dir(g), filepath.Join(common, "worktrees"))) {
+		if ownWorktree(w, common) {
 			own = append(own, w)
 		}
 	}
 	return own
+}
+
+// ownWorktree reports whether the work tree w's .git leads back to common
+// (see ownWorktrees).
+func ownWorktree(w, common string) bool {
+	g, ok := gitEntryTarget(w)
+	return ok && common != "" && (sameAllowPath(g, common) || sameAllowPath(filepath.Dir(g), filepath.Join(common, "worktrees")))
 }
 
 // commonGitDir is the git directory shared by every work tree of the repo

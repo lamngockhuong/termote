@@ -56,6 +56,10 @@ type hcMux struct {
 	topMu   sync.Mutex
 	tops    map[string]string // folder → its git checkout ("" outside one)
 	topBusy map[string]bool
+
+	// nester nests linked worktrees as the snapshot route does, for a move
+	// (set once by the server; nil moves through the plain order).
+	nester *gitNester
 }
 
 // newHcMux makes the backend for hc at bin, with env for hc connect, and

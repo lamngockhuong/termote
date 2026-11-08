@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -49,6 +50,8 @@ func (m *hcMux) Caps() Caps {
 		// Names and order are written to herdr-app's document (mux_hc_doc.go),
 		// once herdr-app has written one.
 		RenameTab: doc, RenameGroup: doc, ReorderTabs: doc, ReorderGroups: doc,
+		// Worktrees through git (gitWorktreeMux), not on Windows.
+		Worktrees: runtime.GOOS != "windows",
 	}
 }
 

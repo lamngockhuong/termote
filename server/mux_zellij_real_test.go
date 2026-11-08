@@ -512,3 +512,11 @@ func TestZellijRealRenamePane(t *testing.T) {
 		t.Errorf("missing pane = %v", err)
 	}
 }
+
+func TestZellijRealWorktreeRoundTrip(t *testing.T) {
+	m := realZellij(t)
+	worktreeRoundTrip(t, m, worktreeRepo(t), true, func(what string, cond func() bool) {
+		t.Helper()
+		zellijWaitFor(t, what, cond)
+	})
+}

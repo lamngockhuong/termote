@@ -278,18 +278,32 @@ func (m *hcMux) MoveTab(ctx context.Context, tabID string, index int) (string, e
 	return tabID, nil
 }
 
-// MoveGroup moves a space among the spaces, as MoveTab moves a tab.
+// MoveGroup moves a space among the spaces, as MoveTab moves a tab. The
+// index is among the spaces that can move in the nested view the snapshot
+// route sends: a linked worktree cannot (errLinkedWorktree), it keeps its
+// place in the document and the view lists it under its repository's space,
+// so it moves with that one.
 func (m *hcMux) MoveGroup(ctx context.Context, groupID string, index int) error {
 	snap, err := m.snapshot(ctx, false)
 	if err != nil {
 		return err
 	}
+	snap = m.nester.nest(snap, false)
 	shown := make([]string, 0, len(snap.Groups))
+	found := false
 	for _, g := range snap.Groups {
-		shown = append(shown, g.ID)
+		if g.ID == groupID {
+			found = true
+			if g.Worktree != nil && g.Worktree.Linked {
+				return errLinkedWorktree
+			}
+		}
+		if g.Worktree == nil || !g.Worktree.Linked {
+			shown = append(shown, g.ID)
+		}
 	}
 	switch {
-	case !slices.Contains(shown, groupID):
+	case !found:
 		return errUnknownGroup
 	case index >= len(shown):
 		return errInvalidIndex
