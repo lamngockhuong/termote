@@ -387,6 +387,7 @@ test_signed_releases() {
     else
         test_ssh_signed_releases
     fi
+    test_no_signature_tool
 
     # A 1.10.0 pre-release, like everything before 1.10.0, has no signature.
     new_home signed-rc
@@ -397,8 +398,8 @@ test_signed_releases() {
 }
 
 # Without OpenSSL 3, from FIRST_SSHSIG_VERSION on: ssh-keygen checks the
-# SSHSIG signature, refuses a bad or missing one, and an ssh-keygen without -Y
-# only gets the note. Runs inside test_signed_releases (its signed script).
+# SSHSIG signature and refuses a bad or missing one. Runs inside
+# test_signed_releases (its signed script).
 test_ssh_signed_releases() {
     local first
     first=$(sed -n 's/^FIRST_SSHSIG_VERSION=//p' "$INSTALL_SCRIPT")
@@ -424,18 +425,51 @@ test_ssh_signed_releases() {
             unlisted) echo "$OUT" | grep -q "does not vouch" && pass "ssh-keygen: unlisted archive explained" || fail "ssh unlisted" "does not vouch" "$OUT" ;;
         esac
     done
+    rm -f "$FAKE_PATH/openssl"
+}
 
-    # An ssh-keygen before OpenSSH 8.1: installs with the note.
-    new_home ssh-old
+# Neither OpenSSL 3 nor an ssh-keygen with -Y: a release from
+# FIRST_SSHSIG_VERSION on is refused, since its sha256 comes from whoever
+# published it, unless it is pinned and TERMOTE_SKIP_SIGNATURE_CHECK=1 says to
+# go on. Runs inside test_signed_releases (its signed script).
+test_no_signature_tool() {
+    local first
+    first=$(sed -n 's/^FIRST_SSHSIG_VERSION=//p' "$INSTALL_SCRIPT")
+    fake_libressl
+    fake_old_ssh_keygen
     make_release "$first"
     sign_release "$first"
     sshsign_release "$first"
-    fake_old_ssh_keygen
+
+    new_home no-tool-pinned
     run_install TERMOTE_VERSION="$first"
-    rm -f "$FAKE_PATH/ssh-keygen"
-    check "old ssh-keygen: installs" "0" "$CODE"
-    echo "$OUT" | grep -q "signature was not checked" && pass "old ssh-keygen: says the signature was not checked" || fail "old ssh-keygen" "note" "$OUT"
-    rm -f "$FAKE_PATH/openssl"
+    [[ $CODE -ne 0 && ! -e "$DATA/current" ]] && echo "$OUT" | grep -q "TERMOTE_SKIP_SIGNATURE_CHECK=1" &&
+        pass "no signature tool: pinned release refused, the opt-out named" || fail "no tool, pinned" "refused" "$OUT"
+
+    new_home no-tool-unpinned
+    FAKE_TAGS="v$first" run_install TERMOTE_SKIP_SIGNATURE_CHECK=1
+    [[ $CODE -ne 0 && ! -e "$DATA/current" ]] && echo "$OUT" | grep -q "neither OpenSSL 3 nor ssh-keygen" &&
+        pass "no signature tool: unpinned release refused even with the opt-out" || fail "no tool, unpinned" "refused" "$OUT"
+
+    new_home no-tool-other-value
+    run_install TERMOTE_VERSION="$first" TERMOTE_SKIP_SIGNATURE_CHECK=yes
+    [[ $CODE -ne 0 && ! -e "$DATA/current" ]] &&
+        pass "no signature tool: an opt-out other than 1 refused" || fail "no tool, value yes" "refused" "$OUT"
+
+    new_home no-tool-opt-out
+    run_install TERMOTE_VERSION="$first" TERMOTE_SKIP_SIGNATURE_CHECK=1
+    check "no signature tool: pinned release with the opt-out installs" "0" "$CODE"
+    check "no signature tool: current points at it" "versions/$first" "$(readlink "$DATA/current")"
+    echo "$OUT" | grep -q "signature was not checked" && pass "no signature tool: says the signature was not checked" || fail "no tool, opt-out" "note" "$OUT"
+
+    # Before FIRST_SSHSIG_VERSION no tool here could check it: the note only.
+    new_home no-tool-older
+    make_release 1.11.0
+    sign_release 1.11.0
+    run_install TERMOTE_VERSION=1.11.0
+    check "no signature tool: a release before $first still installs" "0" "$CODE"
+    echo "$OUT" | grep -q "signature was not checked" && pass "no signature tool: older release gets the note" || fail "no tool, older" "note" "$OUT"
+    rm -f "$FAKE_PATH/ssh-keygen" "$FAKE_PATH/openssl"
 }
 
 test_syntax

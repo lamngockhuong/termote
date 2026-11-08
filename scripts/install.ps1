@@ -14,7 +14,10 @@
     it ends by printing `termote start`. TERMOTE_VERSION=X.Y.Z installs that
     exact release; with a version already installed it is the rescue path (the
     named version goes beside it and current points at it). GH_TOKEN only
-    raises the GitHub API rate limit.
+    raises the GitHub API rate limit. TERMOTE_SKIP_SIGNATURE_CHECK=1, with
+    TERMOTE_VERSION, installs a 2.14.0 or later release on a machine with no
+    ssh-keygen -Y verify (the sha256 is still checked); without it such a
+    machine is refused.
 #>
 
 $ErrorActionPreference = 'Stop'
@@ -160,18 +163,22 @@ function Invoke-Native([string]$Exe, [string]$Arguments, [string]$StdinFile) {
     return @{ Code = $p.ExitCode; Text = $text }
 }
 
-# Get-SshKeygen: the path of an ssh-keygen with -Y verify, or $null. One
-# before OpenSSH 8.1 says "unknown option -- Y".
+# Get-SshKeygen: the path of the first ssh-keygen on PATH with -Y verify, or
+# $null. One before OpenSSH 8.1 says "unknown option -- Y"; Windows 10's own
+# (System32\OpenSSH, 7.7) can come before a newer one installed later.
 function Get-SshKeygen {
-    $cmd = Get-Command ssh-keygen -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-    if (-not $cmd) { return $null }
-    if ((Invoke-Native $cmd.Source '-Y verify' $null).Text -match 'option -- Y') { return $null }
-    return $cmd.Source
+    foreach ($cmd in @(Get-Command ssh-keygen -All -CommandType Application -ErrorAction SilentlyContinue)) {
+        if ((Invoke-Native $cmd.Source '-Y verify' $null).Text -notmatch 'option -- Y') { return $cmd.Source }
+    }
+    return $null
 }
 
 # Confirm-Signature: checks the release's signed checksums.txt with
 # ssh-keygen -Y verify and that it lists $Name.zip with the sha256 $Actual.
-# Without such an ssh-keygen it says the signature was not checked.
+# Without such an ssh-keygen, a release from FirstSshsigVersion on is refused,
+# since whoever can publish a release also writes its sha256: only a pinned
+# version with TERMOTE_SKIP_SIGNATURE_CHECK=1 goes on. An older release, which
+# carries no .sshsig, gets a note.
 function Confirm-Signature([string]$Actual) {
     $checksums = Join-Path $Tmp 'checksums.txt'
     try {
@@ -181,11 +188,18 @@ function Confirm-Signature([string]$Actual) {
     $keygen = Get-SshKeygen
     $sshsig = Join-Path $Tmp 'checksums.txt.sshsig'
     $haveSshsig = $false
+    $carriesSshsig = [version](($Version -split '-', 2)[0]) -ge $FirstSshsigVersion
     if ($keygen) {
         try { Invoke-WebRequest -UseBasicParsing -Uri "$Base/checksums.txt.sshsig" -OutFile $sshsig; $haveSshsig = $true } catch {}
-        if (-not $haveSshsig -and [version](($Version -split '-', 2)[0]) -ge $FirstSshsigVersion) {
+        if (-not $haveSshsig -and $carriesSshsig) {
             Stop-Install "release $Version has no checksums.txt.sshsig; refusing to install it."
         }
+    } elseif ($carriesSshsig) {
+        if (-not $Pin -or "$env:TERMOTE_SKIP_SIGNATURE_CHECK" -ne '1') {
+            Stop-Install "no ssh-keygen -Y verify (OpenSSH 8.1 or later) is here to check the signature of release $Version, so it was not installed. Install OpenSSH 8.1 or later (the one in Settings > Optional features on Windows 10 is 7.7, too old; a current release is at https://github.com/PowerShell/Win32-OpenSSH/releases) and run this again. To install it with only its sha256 checked, name the version and say so: `$env:TERMOTE_VERSION='$Version'; `$env:TERMOTE_SKIP_SIGNATURE_CHECK='1'"
+        }
+        Write-Host "note: the release signature was not checked (TERMOTE_SKIP_SIGNATURE_CHECK=1; the sha256 was). 'termote update' checks it from now on." -ForegroundColor Yellow
+        return
     }
     if (-not $haveSshsig) {
         Write-Host "note: the release signature was not checked (the sha256 was): this needs ssh-keygen -Y verify (OpenSSH 8.1 or later) and release $FirstSshsigVersion or later. 'termote update' checks it from now on." -ForegroundColor Yellow

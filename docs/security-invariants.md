@@ -2439,8 +2439,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   not verify. Without OpenSSL 3, `install.sh`, and `install.ps1` always, check the `.sshsig`
   with an `ssh-keygen` that has `-Y` (OpenSSH 8.1+; one that answers "option -- Y" counts as
   absent), refuse a bad one, and refuse a release from `FIRST_SSHSIG_VERSION` (2.14.0) without
-  one; with no such `ssh-keygen`, or before that version, they print that the signature was not
-  checked. Both check the archive's line in the verified `checksums.txt`; `install.ps1` writes it
+  one. With neither tool, a release from that version on is refused too, since whoever can
+  publish a release also writes its `.sha256`: only a pinned version (`TERMOTE_VERSION`) with
+  `TERMOTE_SKIP_SIGNATURE_CHECK=1` (that value exactly) installs, with the sha256 alone and a note;
+  an unpinned one is refused even with it. Before that version, which no tool there could check,
+  they print that the signature was not checked. Both check the archive's line in the verified `checksums.txt`; `install.ps1` writes it
   to `ssh-keygen`'s stdin byte for byte (`Invoke-Native`: `Start-Process` rewrites its lines).
   `container up` runs the image by that digest,
   and only from a signed list that names the version's own archives (`listsVersion`:
