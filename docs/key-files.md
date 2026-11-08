@@ -341,7 +341,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/machine_proxy.go`                         | `/api/machines/{id}/mux/*` proxy, forwarded streams            |
 | `pwa/src/utils/api-base.ts`                       | Open machine (`?machine=`), `apiBase()`, `LOCAL_API`           |
 | `pwa/src/hooks/use-machines.ts`                   | Machines list poll                                             |
-| `pwa/src/components/sidebar-machines.tsx`         | Sidebar Machines: status, agents, switch                       |
+| `pwa/src/components/sidebar-machines.tsx`         | Sidebar Machines: status, busy agents, switch                  |
 | `server/sessions.go`                              | Password sessions: metadata, list, revoke, `sessionAlive`      |
 | `server/signin_routes.go`                         | `/api/mux/signins*`: list, revoke one or all others            |
 | `server/cli_signins.go`                           | `signins`, `signins revoke <id>\|--all`                        |
