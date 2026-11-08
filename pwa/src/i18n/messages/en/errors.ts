@@ -130,6 +130,7 @@ export default {
   'errors.sensitive': 'This file may hold secrets. Reveal it first',
   'errors.session_changed': 'The pane runs another session now',
   'errors.shell_busy': "The tab's shell is busy",
+  'errors.signed_out': 'This sign-in has ended. Sign in again',
   'errors.stale_hunk': 'The change no longer matches the file',
   'errors.start_failed': 'Could not start the agent',
   'errors.start_pending': 'Herdr still holds the last start in this pane',

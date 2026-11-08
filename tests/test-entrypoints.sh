@@ -71,10 +71,11 @@ test_auth_setup() {
         fail "password gen" "openssl rand" "not found"
     fi
 
-    # A generated password goes to a 0600 file, not to the container log
+    # A generated password goes to a 0600 file, never to the container log:
+    # where the file cannot be written the entrypoint stops instead.
     if grep -q 'umask 077 && mkdir -p "${pass_file%/\*}" && printf' "$PROJECT_DIR/entrypoint.sh" &&
-        ! grep -B2 'Password: \$TERMOTE_PASS' "$PROJECT_DIR/entrypoint.sh" | grep -q 'auto-generated'; then
-        pass "generated password saved to a private file"
+        ! grep -E '^[^#]*echo.*\$\{?TERMOTE_PASS' "$PROJECT_DIR/entrypoint.sh" >/dev/null; then
+        pass "generated password saved to a private file, never echoed"
     else
         fail "generated password" "written to a 0600 file" "printed to the log"
     fi
@@ -245,6 +246,7 @@ test_container_runtime() {
     runtime_backend "$image" zellij
     runtime_unknown_mux "$image"
     runtime_generated_password "$image"
+    runtime_unwritable_password "$image"
 }
 
 # runtime_backend IMAGE MUX runs the image with TERMOTE_MUX=MUX.
@@ -390,6 +392,23 @@ runtime_generated_password() {
         pass "generated password kept out of the log"
     else
         fail "generated password" "in a file under .config" "$(grep 'Password:' <<<"$out")"
+    fi
+}
+
+# runtime_unwritable_password IMAGE: with no TERMOTE_PASS and nowhere to save
+# the generated one (a read-only root), the container stops with an error and
+# the log never holds the password.
+runtime_unwritable_password() {
+    local image="$1" rt="$RT" out code
+    echo ""
+    echo "--- generated password, read-only home ---"
+    out=$("$rt" run --rm --read-only --user 1000:1000 -e TERMOTE_MUX=screen "$image" 2>&1)
+    code=$?
+    if [[ $code -ne 0 && "$out" == *"cannot save the generated password"* ]] &&
+        ! grep -qE 'Password: [A-Za-z0-9]{12}$' <<<"$out" && [[ "$out" != *"unknown TERMOTE_MUX"* ]]; then
+        pass "unwritable password file stops the container, password not logged"
+    else
+        fail "unwritable password file" "exit != 0, error, no password" "exit $code: $(tail -3 <<<"$out")"
     fi
 }
 

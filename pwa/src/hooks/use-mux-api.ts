@@ -542,7 +542,7 @@ async function pushWrite(
 
 // Stores this device's subscription on the server (repeating it is no
 // harm). Throws RequestError when refused (invalid_endpoint, invalid_keys,
-// push_unavailable).
+// signed_out, push_unavailable).
 export function subscribePush(
   sub: PushSubscriptionJSON,
   signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS),

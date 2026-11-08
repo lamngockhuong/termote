@@ -539,10 +539,31 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 			}
 		}
 	}
-	if sessions != nil && devices != nil {
-		// A revoked or signed out session's waiting codes pair nothing.
-		devices.store.sessionAlive = sessions.alive
-		sessions.onEnd = func(id string) { devices.codes.dropCreator(sessionCreator(id)) }
+	if sessions != nil {
+		var ends []func(id string)
+		if devices != nil {
+			// A revoked or signed out session's waiting codes pair nothing.
+			devices.store.sessionAlive = sessions.alive
+			ends = append(ends, func(id string) { devices.codes.dropCreator(sessionCreator(id)) })
+		}
+		if push != nil {
+			push.sessionAlive = sessions.alive
+			// Sessions live in memory: none made before this start is alive,
+			// so a subscription of one goes, as it goes when its session ends.
+			if err := push.removeSessions(sessions.alive); err != nil {
+				log.Printf("push subscriptions of ended sessions: %v", err)
+			}
+			ends = append(ends, func(id string) {
+				if err := push.removeSessions(func(s string) bool { return s != id }); err != nil {
+					log.Printf("push subscriptions of ended sessions: %v", err)
+				}
+			})
+		}
+		sessions.onEnd = func(id string) {
+			for _, end := range ends {
+				end(id)
+			}
+		}
 	}
 	agent := registerMuxRoutes(mux, m, tokenStore, uploads, push)
 	// While a device is subscribed to Web Push, every machine is polled for

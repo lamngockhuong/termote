@@ -1844,7 +1844,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   Agent chat). `Caps.uploads` tells the PWA (snapshot); a view-only client
   gets 403 `view_only`. The container
   creates `/home/termote/.cache` and `/home/termote/.config` mode 1777 so the host uid can
-  create its upload dir and the generated password's file (kept out of the log). The store is
+  create its upload dir and the generated password's file (kept out of the log: where that file
+  cannot be written, the entrypoint stops with an error and never prints the password). The store is
   never served by the Files view, even when a pane's root holds it
 - **Notifications / Web Push** (`/api/mux/push/*`, `caps.push`): the setting "Notify when an
   agent needs me" notifies when an agent becomes `blocked` or ends a turn (`working` →
@@ -1871,7 +1872,12 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   evicted; each bound to `gen` = HMAC(bindKey, user + password), so `start --fresh` or a new
   password drops every device until it signs in again (its page re-subscribes). One made by a
   paired device carries its id and goes when the device ends (revoke, expiry, a cascade, a reload
-  that no longer finds it), and at start for a device no longer live; the password's stay. One a
+  that no longer finds it), and at start for a device no longer live. One made by a browser signed
+  in with the password carries its session id and goes when the session ends (revoked, signed out,
+  expired, pushed out), and at start, since sessions live in memory; the store asks whether the
+  session is still alive under its own lock when it adds one, so a subscribe racing the session's end
+  is refused (401 `signed_out`) rather than left behind its removal; one made with Basic auth
+  carries neither and stays, like one subscribed before session ids were recorded. One a
   device made before this (no id) reads as the password's until its page subscribes again (on load,
   and every 10 minutes while visible), so a device revoked before that keeps receiving pushes. Only 404/410
   drop a subscription; 401/403 are logged and kept ("check the server clock" when all fail);
@@ -2146,7 +2152,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   a local browser, and a `tailscale serve` request with no login, from a tagged node or Funnel)
   counts toward a cap of the same size of its own (`sharedKey`, key `loopback`), since any `127.x`
   source address is a new key: attempts under a `ts:` or `px:` key filling theirs do not lock it out,
-  and a local process gets 30/min under each, 60 in all.
+  and a local process gets 30/min under each, 60 in all. The price of the shared cap: anyone
+  reaching the tunnel can fill it with wrong passwords from a handful of addresses and lock every
+  password sign-in through the tunnel (tailnet users' too) until the minute passes; sessions and
+  paired devices already signed in keep working. Cloudflare Access in front of the tunnel stops
+  this, and `status` warns when Access is off (accepted by the Tech Lead, 2026-11-08).
   A refund takes back all of them. A container without a client header still
   counts under the gateway address. The pairing limiter keys the same way except that it never
   reads `Tailscale-User-Login`. Failed logins and blocked clients are logged with the client
@@ -2282,7 +2292,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   connection of its own; at most 16 per machine (a forwarded stream frees its slot once upgraded), idle
   90 s, and an answer's headers awaited at most 8 min (`machineResponseHeaderWait`, above the longest agent
   message, `messageBudget`, and a worktree change, a test checks), a health answer at most 20 s
-  (`machineHealthWait`), so a machine that never answers does not hold them. Every ssh runs in its own process
+  (`machineHealthWait`), so a machine that never answers does not hold them. Once the headers came,
+  each read of an answer's body (a WebSocket upgrade excepted) gets 2 min and the whole body 30 min
+  (`machineResponseIdleWait`, `machineResponseBodyMost`, a download's own `downloadIdleTimeout` and
+  `downloadMaxDuration`): the request's context ends then, which closes the connection and its ssh,
+  since an ssh pipe has no read deadline, so a machine that stalls its body does not hold them either. Every ssh runs in its own process
   group with `Pdeathsig` (Linux), is reaped as an orphan at start on macOS (`HostKeyAlias=termote-`
   in its command line) or sits in a kill-on-close Job Object (Windows), and is stopped (SIGTERM, then
   SIGKILL after 1 s) when its connection closes, its machine is removed, or the server stops. ssh's
@@ -2460,7 +2474,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   one (`releaseSigned`, `server/cli_update.go`), and without `TERMOTE_VERSION`, `install.sh` and
   `install.ps1` refuse a release before 1.10.0. The `docker` job pins the binfmt (QEMU) and
   BuildKit images it builds with by digest, like the actions; a Renovate `customManagers` entry
-  updates both tags and digests.
+  updates both tags and digests. `docker-tags`, which holds the registry tokens, runs buildx with
+  the `docker` driver, so it starts no BuildKit container at all (`imagetools` only talks to the
+  registries).
   The `homebrew` job (after `publish`, stable releases only, never a dry run) writes
   `Formula/termote.rb` only from a `checksums.txt` whose `.sig` verifies with the key `install.sh`
   pins, since brew checks nothing but the hash the formula names; it pushes with

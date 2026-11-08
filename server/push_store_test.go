@@ -469,3 +469,27 @@ func TestPushStoreAuthorizationCache(t *testing.T) {
 		t.Fatal("a token for a bad endpoint")
 	}
 }
+
+// A subscription whose session ended before it was stored is refused, so a
+// subscribe racing a revoke cannot outlive the revoke's removal.
+func TestPushStoreRefusesEndedSession(t *testing.T) {
+	s, err := newPushStore(filepath.Join(t.TempDir(), "push"), "admin", "secret", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.sessionAlive = func(id string) bool { return id == "live" }
+	for i, c := range []struct {
+		id   string
+		want error
+	}{{"live", nil}, {"gone", errPushSignedOut}, {"", nil}} {
+		id, want := c.id, c.want
+		sub := fcmSub(t, i+1)
+		sub.Session = id
+		if err := s.add(sub); err != want {
+			t.Errorf("session %q: add = %v, want %v", id, err, want)
+		}
+	}
+	if n := len(s.list()); n != 2 {
+		t.Errorf("stored %d, want 2", n)
+	}
+}

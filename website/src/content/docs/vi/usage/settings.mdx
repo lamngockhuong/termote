@@ -207,6 +207,10 @@ Giới hạn:
 - `termote start --fresh`, hay bất kỳ lần đổi mật khẩu nào, dừng push tới mọi thiết bị. Một thiết
   bị nhận lại push khi nó mở Termote và đăng nhập bằng mật khẩu mới.
 - Đăng xuất cũng dừng push tới thiết bị đó.
+- Một trình duyệt đăng nhập bằng mật khẩu chỉ nhận push khi lần đăng nhập đó còn hiệu lực: push dừng
+  khi lần đăng nhập bị thu hồi (Cài đặt, hoặc `termote signins revoke`) hay hết hạn (24 giờ), và khi
+  server khởi động lại hoặc cập nhật. Mở Termote và đăng nhập lại thì push hoạt động trở lại. Một
+  thiết bị đã ghép đôi vẫn nhận push cho đến khi bị thu hồi hoặc hết hạn.
 
 | Tùy chọn | Hành vi                                       | Mặc định |
 | -------- | --------------------------------------------- | -------- |
