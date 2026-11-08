@@ -4,6 +4,7 @@ import (
 	"log"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -104,6 +105,7 @@ func dupWriteFiles(pid int, refs []handleRef, match func(string) bool) []procFil
 		}
 		held = append(held, h)
 		if f, ok := diskFileOf(h, match); ok {
+			f.handle = strconv.FormatUint(uint64(r.value), 10)
 			found, values = append(found, f), append(values, r.value)
 		}
 	}

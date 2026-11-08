@@ -48,19 +48,21 @@ func envGetter(env []string) func(string) string {
 }
 
 // parseLsofWriteFiles reads `lsof -F0an` output: one set of NUL-terminated
-// fields per line, 'p' starting a process and 'f' a file, with 'a' the access
-// mode (r, w, u) and 'n' the name. It keeps the absolute names opened for
+// fields per line, 'p' starting a process and 'f' a file (its fd), with 'a'
+// the access mode (r, w, u) and 'n' the name. It keeps the absolute names opened for
 // writing whose base name passes match; a name holding a control character
 // (lsof escapes some, not all) is dropped.
 func parseLsofWriteFiles(out []byte, match func(name string) bool) []procFile {
 	var files []procFile
 	for _, line := range bytes.Split(out, []byte{'\n'}) {
-		var mode, name string
+		var fd, mode, name string
 		for _, f := range bytes.Split(line, []byte{0}) {
 			if len(f) == 0 {
 				continue
 			}
 			switch f[0] {
+			case 'f':
+				fd = string(f[1:])
 			case 'a':
 				mode = string(f[1:])
 			case 'n':
@@ -70,7 +72,7 @@ func parseLsofWriteFiles(out []byte, match func(name string) bool) []procFile {
 		if (mode != "w" && mode != "u") || !filepath.IsAbs(name) || strings.ContainsFunc(name, isControl) || !match(filepath.Base(name)) {
 			continue
 		}
-		files = append(files, procFile{path: name})
+		files = append(files, procFile{path: name, handle: fd})
 	}
 	return files
 }

@@ -629,7 +629,14 @@ On psmux, Chat messages work; a long one may take seconds to show (the paste is 
       skills of `.codex/skills` (`project`), `~/.codex/skills` and `~/.agents/skills` (`user`)
       and Codex's bundled ones (`system`); a pick replaces only that word with `$name`
 - [ ] A message `use $<skill> to ...` sent from the Chat view runs the skill in Codex
-- [ ] tmux: `/new` in the terminal removes the Chat view until Codex is restarted
+- [ ] tmux and psmux: after `/new` in the terminal and a first message, the Chat view shows the
+      new conversation
+- [ ] tmux and psmux: with the Chat view open, `/resume` of an older conversation shows that
+      conversation right away, before any message
+- [ ] Herdr: with the Chat view open, `/resume` shows the resumed conversation before any message
+      (Herdr itself reports its id only at the first message)
+- [ ] Restart the server while Codex holds two conversations: no Chat view until the next
+      message, then the conversation on screen
 - [ ] tmux: an approval dialog (run a command, make edits) shows a read-only card with "Answer
       this dialog in the terminal."
 - [ ] Herdr: the approval card's buttons pick the option, "Cancel (Esc)" sends Escape

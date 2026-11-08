@@ -175,7 +175,7 @@ func procWriteFiles(pid int, match func(name string) bool) []procFile {
 		if err != nil || procFDFlags(string(info))&procAccMode == 0 {
 			continue
 		}
-		f := procFile{path: target}
+		f := procFile{path: target, handle: fd.Name()}
 		if fi, err := os.Stat(filepath.Join(dir, "fd", fd.Name())); err == nil {
 			f.id = fileIdentity(fi)
 		}

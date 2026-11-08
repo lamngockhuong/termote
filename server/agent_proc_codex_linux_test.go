@@ -130,7 +130,7 @@ func TestFindCodexSessionRefusals(t *testing.T) {
 		"app-server daemon":      {[]string{"CODEX_HOME=" + home, "R=" + user}, `exec 3>>"$R"`, []string{"app-server", "--managed-daemon"}},
 		"file outside sessions":  {[]string{"CODEX_HOME=" + home, "R=" + outside}, `exec 3>>"$R"`, nil},
 		"symlink out of session": {[]string{"CODEX_HOME=" + home, "R=" + link}, `exec 3>>"$R"`, nil},
-		"two user threads":       {[]string{"CODEX_HOME=" + home, "R=" + user, "S=" + other}, `exec 3>>"$R" 4>>"$S"`, nil},
+		"two threads, unknown":   {[]string{"CODEX_HOME=" + home, "R=" + user, "S=" + other}, `exec 3>>"$R" 4>>"$S"`, nil},
 		"relative CODEX_HOME":    {[]string{"CODEX_HOME=rel", "R=" + user}, `exec 3>>"$R"`, nil},
 		"no rollout yet":         {[]string{"CODEX_HOME=" + home}, `:`, nil},
 	} {
@@ -179,6 +179,72 @@ func TestFindCodexSessionFollowsNew(t *testing.T) {
 	// The walk is still cached; the rollout is read again.
 	if s, ok := findClaudeSession(key, root); !ok || s.ID != testCodexSubID {
 		t.Errorf("after the switch = %+v, %v", s, ok)
+	}
+}
+
+// codexDoneRow is a status row appended to a rollout, as Codex writes one.
+const codexDoneRow = `{"type":"event_msg","payload":{"type":"task_complete"}}`
+
+func TestFindCodexSessionFollowsNewAndResume(t *testing.T) {
+	home := t.TempDir()
+	a := writeCodexRollout(t, home, testCodexID, "user")
+	b := writeCodexRollout(t, home, testCodexSubID, "user")
+	old := time.Unix(1_700_000_000, 0)
+	os.Chtimes(a, old, old)
+	os.Chtimes(b, old, old)
+	gate := filepath.Join(t.TempDir(), "go")
+	// As Codex 0.167.0 does: /new opens B at its first message and keeps A
+	// open; /resume A opens A again on a new fd, closes the old one and
+	// writes nothing.
+	root, _ := startFakeCodex(t, []string{"CODEX_HOME=" + home, "A=" + a, "B=" + b, "G=" + gate, "ROW=" + codexDoneRow},
+		`exec 3>>"$A"
+while [ ! -e "$G.1" ]; do sleep 0.02; done
+exec 4>>"$B"; printf '%s\n' "$ROW" >&4; : > "$G.1.done"
+while [ ! -e "$G.2" ]; do sleep 0.02; done
+exec 5>>"$A" 3>&-; : > "$G.2.done"`)
+	key := "codex-new-resume"
+	step := func(n string) {
+		t.Helper()
+		os.WriteFile(gate+"."+n, nil, 0o600)
+		waitFor(t, func() bool { _, err := os.Stat(gate + "." + n + ".done"); return err == nil })
+	}
+	if s, ok := findClaudeSession(key, root); !ok || s.ID != testCodexID {
+		t.Fatalf("first = %+v, %v", s, ok)
+	}
+	step("1")
+	// The walk is still cached; the rollouts are read again.
+	if s, ok := findClaudeSession(key, root); !ok || s.ID != testCodexSubID {
+		t.Errorf("after /new = %+v, %v", s, ok)
+	}
+	step("2")
+	for _, when := range []string{"after /resume", "next lookup"} {
+		if s, ok := findClaudeSession(key, root); !ok || s.ID != testCodexID {
+			t.Errorf("%s = %+v, %v", when, s, ok)
+		}
+	}
+	// A message in B after all: B.
+	appendFile(t, b, codexDoneRow+"\n")
+	if s, ok := findClaudeSession(key, root); !ok || s.ID != testCodexSubID {
+		t.Errorf("B written = %+v, %v", s, ok)
+	}
+}
+
+func TestFindCodexSessionByIDShowsTheActiveThread(t *testing.T) {
+	home := t.TempDir()
+	const idA = "01a0fbc9-0a6b-7c2e-9d3f-1b2c3d4e5f60"
+	const idB = "01a0fbc9-0a6b-7c2e-9d3f-1b2c3d4e5f61"
+	a := writeCodexRollout(t, home, idA, "user")
+	b := writeCodexRollout(t, home, idB, "user")
+	_, codex := startFakeCodex(t, []string{"CODEX_HOME=" + home, "A=" + a, "B=" + b}, `exec 3>>"$A" 4>>"$B"`)
+	// Two threads and nothing yet to tell which one is on screen: the id as
+	// Herdr reports it.
+	if s, ok := findCodexSession(idA); !ok || s.PID != codex || s.ID != idA {
+		t.Errorf("not told apart = %+v, %v", s, ok)
+	}
+	// B is written while Herdr still reports A, the thread the TUI left: B.
+	appendFile(t, b, codexDoneRow+"\n")
+	if s, ok := findCodexSession(idA); !ok || s.PID != codex || s.ID != idB {
+		t.Errorf("by the old id = %+v, %v", s, ok)
 	}
 }
 
@@ -275,7 +341,7 @@ func TestProcLinuxCodexHelpers(t *testing.T) {
 		t.Errorf("own CODEX_HOME = %q, %v; want %q, %v", got, ok, want, wantOK)
 	}
 	// A CODEX_HOME without a sessions dir holds no rollout.
-	if _, _, _, ok := codexRollout(os.Getpid(), t.TempDir(), ""); ok {
+	if _, _, _, ok := codexRollout(claudeProc{pid: os.Getpid(), codexHome: t.TempDir()}, ""); ok {
 		t.Error("rollout found without a sessions dir")
 	}
 	if procFDFlags("pos:\t0\nflags:\t02102002\n") != 0o2102002 || procFDFlags("flags:\tzz\n") != 0 || procFDFlags("") != 0 {

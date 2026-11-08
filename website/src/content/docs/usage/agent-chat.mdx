@@ -288,10 +288,12 @@ What to expect:
 - A Codex that has received no message yet has no conversation to show: Codex writes its session
   file with the first message. On tmux the Chat button appears then; on Herdr it is there from
   the start and says no session was found until then.
-- After `/new`, a tmux pane loses the Chat view until Codex is restarted, since it then holds two
-  sessions and Termote does not guess which one is on screen. On Herdr the Chat view shows the
-  session Herdr reports for the pane, which can still be the previous one until Herdr reports
-  the new one.
+- After `/new`, the Chat view moves to the new conversation once you send it a first message
+  (Codex creates its session file then). After `/resume`, it shows the resumed conversation right
+  away, on every backend. Codex keeps the earlier sessions open, and Termote follows the one it
+  sees Codex open or write to. When it could not watch the switch (Termote restarted, or `/new`
+  and `/resume` both happened while no Termote page was open), the Chat view waits for your next
+  message instead of guessing, so a message from it never lands in another conversation.
 - On Herdr, a pane that started the shared background process before you switched to
   `--no-daemon` can keep reporting a session that is not its own, even another pane's, until
   Codex restarts in it.

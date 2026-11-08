@@ -37,26 +37,49 @@ func handleIdentity(h windows.Handle) string {
 
 // rolloutIdentity is the identity of a rollout file, comparable with the
 // procFile.id procWriteFiles reports: through f when it is open, else
-// through path opened for its attributes only (never conflicting with the
-// writer's share mode). os.FileInfo carries no file index on Windows, so fi
-// is unused here.
+// through path opened for its attributes only. os.FileInfo carries no file
+// index on Windows, so fi is unused here.
 func rolloutIdentity(path string, f *os.File, _ os.FileInfo) string {
 	if f != nil {
 		return handleIdentity(windows.Handle(f.Fd()))
 	}
-	if _, ok := winDrivePath(path); !ok {
-		return ""
-	}
-	p, err := windows.UTF16PtrFromString(path)
-	if err != nil {
-		return ""
-	}
-	h, err := windows.CreateFile(p, windows.FILE_READ_ATTRIBUTES,
-		windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE,
-		nil, windows.OPEN_EXISTING, windows.FILE_FLAG_BACKUP_SEMANTICS, 0)
-	if err != nil {
+	h, ok := openAttributes(path)
+	if !ok {
 		return ""
 	}
 	defer windows.CloseHandle(h)
 	return handleIdentity(h)
+}
+
+// openAttributes opens a file on a drive for its attributes only, never
+// conflicting with the writer's share mode.
+func openAttributes(path string) (windows.Handle, bool) {
+	if _, ok := winDrivePath(path); !ok {
+		return 0, false
+	}
+	p, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		return 0, false
+	}
+	h, err := windows.CreateFile(p, windows.FILE_READ_ATTRIBUTES,
+		windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE,
+		nil, windows.OPEN_EXISTING, windows.FILE_FLAG_BACKUP_SEMANTICS, 0)
+	return h, err == nil
+}
+
+// rolloutStamp is the last write time (ns) and size of a rollout file, read
+// through a handle: os.Stat can read them from the directory entry, which
+// NTFS updates late while another process appends to the file. fi is the
+// fallback when the file cannot be opened.
+func rolloutStamp(path string, fi os.FileInfo) (int64, int64) {
+	h, ok := openAttributes(path)
+	if !ok {
+		return fi.ModTime().UnixNano(), fi.Size()
+	}
+	defer windows.CloseHandle(h)
+	var d windows.ByHandleFileInformation
+	if windows.GetFileInformationByHandle(h, &d) != nil {
+		return fi.ModTime().UnixNano(), fi.Size()
+	}
+	return d.LastWriteTime.Nanoseconds(), int64(d.FileSizeHigh)<<32 | int64(d.FileSizeLow)
 }

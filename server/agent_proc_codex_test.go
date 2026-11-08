@@ -107,7 +107,8 @@ func TestParseLsofWriteFiles(t *testing.T) {
 		"",
 	}, "\n")
 	files := parseLsofWriteFiles([]byte(out), func(n string) bool { return strings.HasSuffix(n, name) })
-	if len(files) != 2 || files[0].path != "/Users/u/.codex/sessions/"+name || files[1].path != "/Users/u/.codex/sessions/b-"+name || files[0].id != "" {
+	if len(files) != 2 || files[0].path != "/Users/u/.codex/sessions/"+name || files[1].path != "/Users/u/.codex/sessions/b-"+name || files[0].id != "" ||
+		files[0].handle != "3" || files[1].handle != "4" {
 		t.Errorf("files = %+v", files)
 	}
 }
@@ -173,7 +174,7 @@ func TestCodexRolloutChecksTheOpenFile(t *testing.T) {
 		"path names another": {procFile{path: p, id: "0:0"}, false},
 	} {
 		procWriteFilesFn = func(int, func(string) bool) []procFile { return []procFile{c.file} }
-		if _, _, _, ok := codexRollout(1, home, ""); ok != c.ok && (id != "" || c.file.id == "") {
+		if _, _, _, ok := codexRollout(claudeProc{pid: 1, codexHome: home}, ""); ok != c.ok && (id != "" || c.file.id == "") {
 			t.Errorf("%s: ok = %v", name, ok)
 		}
 	}
@@ -187,7 +188,7 @@ func TestCodexRolloutSameFileTwice(t *testing.T) {
 	t.Cleanup(func() { procWriteFilesFn = orig })
 	// One file on two fds (a dup) is one rollout.
 	procWriteFilesFn = func(int, func(string) bool) []procFile { return []procFile{{path: p}, {path: p}} }
-	if _, id, _, ok := codexRollout(1, home, ""); !ok || id != testCodexID {
+	if _, id, _, ok := codexRollout(claudeProc{pid: 1, codexHome: home}, ""); !ok || id != testCodexID {
 		t.Errorf("same file twice = %q, %v", id, ok)
 	}
 	// session_meta is remembered per file.
@@ -270,7 +271,7 @@ func TestCodexSessionOfLogsMissOnce(t *testing.T) {
 			t.Fatal("found a rollout that is not open")
 		}
 	}
-	if n := strings.Count(buf.String(), "holds no single rollout"); n != 1 {
+	if n := strings.Count(buf.String(), "holds no rollout of its own"); n != 1 {
 		t.Errorf("logged %d times: %q", n, buf.String())
 	}
 }
@@ -291,4 +292,165 @@ func helperCodexRollout() {
 	fmt.Println("READY")
 	time.Sleep(5 * time.Minute)
 	runtime.KeepAlive(held)
+}
+
+const testCodexID2 = "01a0fbc2-4df0-7f32-864d-eb33100e552e"
+
+// codexMeta is the session_meta row of a user thread.
+func codexMeta(id string) string {
+	return `{"type":"session_meta","payload":{"id":"` + id + `","thread_source":"user"}}` + "\n"
+}
+
+func TestPickCodexRollout(t *testing.T) {
+	c := func(key string, mtime int64, opens ...string) codexCand {
+		return codexCand{key: key, mtime: mtime, size: 10, opens: opens}
+	}
+	seen := func(pick string, opens map[string]int64) codexSeen {
+		s := codexSeen{pick: pick, opens: map[string][2]int64{}}
+		for k, m := range opens {
+			s.opens[k] = [2]int64{m, 10}
+		}
+		return s
+	}
+	a, b := c("A", 1, "3"), c("B", 2, "4")
+	for name, tc := range map[string]struct {
+		cands []codexCand
+		prev  codexSeen
+		had   bool
+		want  string // "" for none
+	}{
+		"none":                         {nil, codexSeen{}, false, ""},
+		"one":                          {[]codexCand{a}, codexSeen{}, false, "A"},
+		"first lookup: no telling":     {[]codexCand{a, b}, codexSeen{}, false, ""},
+		"new thread after /new":        {[]codexCand{a, b}, seen("A", map[string]int64{"3\x00A": 1}), true, "B"},
+		"resumed on a new fd":          {[]codexCand{c("A", 1, "5"), b}, seen("B", map[string]int64{"3\x00A": 1, "4\x00B": 2}), true, "A"},
+		"resumed, old fd still open":   {[]codexCand{c("A", 1, "3", "5"), b}, seen("B", map[string]int64{"3\x00A": 1, "4\x00B": 2}), true, "A"},
+		"written since":                {[]codexCand{c("A", 3, "3"), b}, seen("B", map[string]int64{"3\x00A": 1, "4\x00B": 2}), true, "A"},
+		"grown, same time":             {[]codexCand{{key: "A", mtime: 1, size: 11, opens: []string{"3"}}, b}, seen("B", map[string]int64{"3\x00A": 1, "4\x00B": 2}), true, "A"},
+		"nothing changed: the pick":    {[]codexCand{a, b}, seen("A", map[string]int64{"3\x00A": 1, "4\x00B": 2}), true, "A"},
+		"pick closed":                  {[]codexCand{a, b}, seen("C", map[string]int64{"3\x00A": 1, "4\x00B": 2}), true, ""},
+		"refused before":               {[]codexCand{a, b}, seen("", map[string]int64{"3\x00A": 1, "4\x00B": 2}), true, ""},
+		"two new":                      {[]codexCand{c("A", 1, "5"), c("B", 1, "6")}, seen("A", map[string]int64{"3\x00A": 1, "4\x00B": 1}), true, ""},
+		"/new and /resume, no lookup":  {[]codexCand{c("A", 1, "5"), b}, seen("A", map[string]int64{"3\x00A": 1}), true, ""},
+		"two written, a tie: the pick": {[]codexCand{c("A", 5, "3"), c("B", 5, "4")}, seen("B", map[string]int64{"3\x00A": 1, "4\x00B": 2}), true, "B"},
+		"two written, a tie, no pick":  {[]codexCand{c("A", 5, "3"), c("B", 5, "4")}, seen("", map[string]int64{"3\x00A": 1, "4\x00B": 2}), true, ""},
+		"two written: the latest":      {[]codexCand{c("A", 5, "3"), c("B", 4, "4")}, seen("B", map[string]int64{"3\x00A": 1, "4\x00B": 2}), true, "A"},
+		"a fd reused for another file": {[]codexCand{c("B", 1, "3"), c("C", 2, "4")}, seen("C", map[string]int64{"3\x00A": 1, "4\x00C": 2}), true, "B"},
+	} {
+		i, ok := pickCodexRollout(tc.cands, tc.prev, tc.had)
+		got := ""
+		if ok {
+			got = tc.cands[i].key
+		}
+		if got != tc.want {
+			t.Errorf("%s: picked %q, want %q", name, got, tc.want)
+		}
+	}
+}
+
+func TestCodexRolloutPicksTheActiveThread(t *testing.T) {
+	home := t.TempDir()
+	pa := writeRollout(t, home, testCodexID, codexMeta(testCodexID))
+	pb := writeRollout(t, home, testCodexID2, codexMeta(testCodexID2))
+	setTime := func(p string, sec int64) {
+		t.Helper()
+		tm := time.Unix(1_700_000_000+sec, 0)
+		if err := os.Chtimes(p, tm, tm); err != nil {
+			t.Fatal(err)
+		}
+	}
+	orig := procWriteFilesFn
+	t.Cleanup(func() { procWriteFilesFn = orig })
+	var held []procFile
+	procWriteFilesFn = func(int, func(string) bool) []procFile { return held }
+	proc := claudeProc{agent: "codex", pid: 2, procStart: t.Name(), codexHome: home}
+	lookup := func() string {
+		t.Helper()
+		_, id, _, ok := codexRollout(proc, "")
+		if !ok {
+			return ""
+		}
+		return id
+	}
+
+	// Before /new only A; /new opens B at its first message.
+	setTime(pa, 1)
+	held = []procFile{{path: pa, handle: "3"}}
+	if got := lookup(); got != testCodexID {
+		t.Fatalf("one thread = %q", got)
+	}
+	setTime(pb, 2)
+	held = []procFile{{path: pa, handle: "3"}, {path: pb, handle: "4"}}
+	if got := lookup(); got != testCodexID2 {
+		t.Errorf("after /new = %q", got)
+	}
+	// /resume A opens it again on a new fd, writing nothing.
+	held = []procFile{{path: pb, handle: "4"}, {path: pa, handle: "5"}}
+	if got := lookup(); got != testCodexID {
+		t.Errorf("after /resume = %q", got)
+	}
+	if got := lookup(); got != testCodexID {
+		t.Errorf("resumed, next lookup = %q", got)
+	}
+	// B is written again (a /resume of B that reused fd 4 would only show
+	// here): B.
+	setTime(pb, 3)
+	if got := lookup(); got != testCodexID2 {
+		t.Errorf("B written = %q", got)
+	}
+	// A lookup by id answers for that id and leaves the pick alone.
+	if _, id, _, ok := codexRollout(proc, testCodexID); !ok || id != testCodexID {
+		t.Errorf("by id = %q, %v", id, ok)
+	}
+	if got := lookup(); got != testCodexID2 {
+		t.Errorf("after a lookup by id = %q", got)
+	}
+
+	// Another process whose two threads were written at the same time: no
+	// guess.
+	setTime(pa, 4)
+	setTime(pb, 4)
+	other := claudeProc{agent: "codex", pid: 3, procStart: t.Name(), codexHome: home}
+	if _, id, _, ok := codexRollout(other, ""); ok {
+		t.Errorf("a tie picked %q", id)
+	}
+}
+
+func TestCodexPicksCap(t *testing.T) {
+	cands := []codexCand{{key: "A", opens: []string{"3"}, mtime: 1}}
+	pick := func(pid int) {
+		t.Helper()
+		if i, ok := codexPickActive(claudeProc{pid: pid, procStart: t.Name()}, cands); !ok || i != 0 {
+			t.Fatalf("picked %d, %v", i, ok)
+		}
+	}
+	size := func() int {
+		codexPicks.Lock()
+		defer codexPicks.Unlock()
+		return len(codexPicks.m)
+	}
+	// Only gone processes are forgotten when the cache is full.
+	self, _ := procStartTime(os.Getpid())
+	codexPicks.Lock()
+	clear(codexPicks.m)
+	codexPicks.m["self"] = codexSeen{pid: os.Getpid(), start: self}
+	for i := len(codexPicks.m); i < codexScansMax; i++ {
+		codexPicks.m[strings.Repeat("k", i)] = codexSeen{pid: -1}
+	}
+	codexPicks.Unlock()
+	pick(4)
+	if n := size(); self != "" && n != 2 {
+		t.Errorf("cache holds %d entries after the cap", n)
+	}
+	// None gone: all of them.
+	codexPicks.Lock()
+	clear(codexPicks.m)
+	for i := range codexScansMax {
+		codexPicks.m[strings.Repeat("j", i)] = codexSeen{pid: os.Getpid(), start: self}
+	}
+	codexPicks.Unlock()
+	pick(5)
+	if n := size(); n != 1 && self != "" {
+		t.Errorf("cache holds %d entries after a full cap", n)
+	}
 }
