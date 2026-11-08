@@ -2152,7 +2152,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   a local browser, and a `tailscale serve` request with no login, from a tagged node or Funnel)
   counts toward a cap of the same size of its own (`sharedKey`, key `loopback`), since any `127.x`
   source address is a new key: attempts under a `ts:` or `px:` key filling theirs do not lock it out,
-  and a local process gets 30/min under each, 60 in all.
+  and a local process gets 30/min under each, 60 in all. The price of the shared cap: anyone
+  reaching the tunnel can fill it with wrong passwords from a handful of addresses and lock every
+  password sign-in through the tunnel (tailnet users' too) until the minute passes; sessions and
+  paired devices already signed in keep working. Cloudflare Access in front of the tunnel stops
+  this, and `status` warns when Access is off (accepted by the Tech Lead, 2026-11-08).
   A refund takes back all of them. A container without a client header still
   counts under the gateway address. The pairing limiter keys the same way except that it never
   reads `Tailscale-User-Login`. Failed logins and blocked clients are logged with the client
