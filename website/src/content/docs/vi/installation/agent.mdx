@@ -39,7 +39,9 @@ Mọi thứ agent in ra đều nằm trong transcript, và transcript có thể 
 không đọc mật khẩu: khi `termote start` hay `termote container up` chạy ngoài terminal, lệnh chỉ in tên đăng nhập,
 không in mật khẩu. Bạn tự xem bằng một trong hai cách:
 
-- chạy `termote show-password` trong terminal của bạn (trong Claude Code, gõ `! termote show-password`);
+- chạy `termote show-password` trong một terminal của riêng bạn, không chạy qua agent: lệnh chạy qua agent (`!`
+  trong Claude Code) cũng nằm trong transcript của nó, và thiết bị chỉ xem đọc được transcript đó trong Chat view
+  của Termote;
 - hoặc chạy `termote panel` để xem các link và một mã QR mở trên điện thoại.
 
 <Aside>

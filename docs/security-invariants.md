@@ -2501,5 +2501,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   embedded in the binary, as it is: no request, no config read, no secret. The website publishes the
   same file as `/agents.md`. The guide tells an agent never to run `termote show-password` or
   `termote pair` for the user, never to combine `--no-auth` with `--lan`, `--tailscale` or
-  `--cloudflare`, and never to use `sudo`; a test checks that the password rule stays and that
-  every command and flag it names is in `termote help`.
+  `--cloudflare`, and never to use `sudo`; and it tells the user to see the password in a terminal of
+  their own, never through the agent (`!` in Claude Code): that output goes into the transcript, which
+  every role reads in the Chat view. A test checks that the password rule stays, that neither the guide
+  nor its website page suggests `! termote show-password`, and that every command and flag it names is
+  in `termote help`.

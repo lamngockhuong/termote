@@ -118,7 +118,9 @@ no password.
 
 Tell the user to see the password themselves:
 
-- `termote show-password` in their own terminal (in Claude Code: `! termote show-password`);
+- `termote show-password` in a terminal of their own, not through you: a command they run through
+  you (`!` in Claude Code) goes into your transcript too, which a view-only device reads in
+  Termote's Chat view;
 - or `termote panel`, which shows the links and a QR code to open on the phone.
 
 To sign a phone in without the password, the user can run `termote pair --role full` and enter

@@ -37,7 +37,8 @@ An agent's output goes into its transcript, which may be sent to the model provi
 read the password: when `termote start` or `termote container up` runs outside a terminal, it prints the
 username and no password. See it yourself:
 
-- run `termote show-password` in your own terminal (in Claude Code, type `! termote show-password`);
+- run `termote show-password` in a terminal of your own, not through the agent: a command you run through it
+  (`!` in Claude Code) goes into its transcript too, which a view-only device reads in Termote's Chat view;
 - or run `termote panel`, which shows the links and a QR code to open on your phone.
 
 <Aside>
