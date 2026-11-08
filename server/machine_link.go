@@ -50,10 +50,11 @@ const machineMaxConns = 16
 
 // machineResponseHeaderWait bounds the wait for a machine's answer to a
 // request, so one that never answers does not hold the connections; what a
-// machine does for a request is bounded below it, the longest an agent
-// message (messageBudget: five images and 16 KB pasted slowly, about 7
-// minutes), then a worktree change (worktreeLockWait + worktreeTimeout). A
-// test checks both.
+// machine does for a request is bounded below it, the longest a write to an
+// agent (agentRequestMost: the wait for the pane's lock, then at most an
+// agent message, five images and 16 KB pasted slowly, about 7 minutes),
+// then a worktree change (worktreeLockWait + worktreeTimeout). A test checks
+// both.
 var machineResponseHeaderWait = 8 * time.Minute
 
 // machineLink is one machine: its record, status and HTTP transport.

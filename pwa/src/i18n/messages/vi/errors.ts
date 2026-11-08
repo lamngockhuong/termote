@@ -36,6 +36,8 @@ export default {
   'errors.index_locked': 'Một lệnh git khác đang giữ khóa index',
   'errors.input_has_draft':
     'Ô nhập trong terminal đang có chữ; hãy gửi hoặc xóa nó trong terminal',
+  'errors.input_busy':
+    'Một tin nhắn trước đó tới pane này vẫn đang được gửi. Hãy thử lại',
   'errors.input_not_ready': 'Lúc này agent chưa nhận được nội dung nhập',
   'errors.invalid_action': 'Không rõ thao tác này',
   'errors.invalid_after': 'Vị trí yêu cầu không hợp lệ',

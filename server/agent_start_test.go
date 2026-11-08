@@ -361,6 +361,27 @@ func TestAgentStartStateDuringPost(t *testing.T) {
 	}
 }
 
+// A start to a pane whose lock (a message being sent) stays taken past what
+// agentRequestMost leaves it is refused input_busy before Herdr is asked.
+func TestAgentStartWhilePaneLocked(t *testing.T) {
+	old := agentRequestMost
+	agentRequestMost = 0
+	t.Cleanup(func() { agentRequestMost = old })
+	f := newFakeHerdr(t)
+	h, a := startAPI(t, f)
+	unlock := a.input.lock(startPane)
+	defer unlock()
+	rec := serve(h, apiRequest(http.MethodPost, startPath, `{"kind":"claude"}`))
+	if out := decodeBody(t, rec); rec.Code != http.StatusConflict || out["code"] != "input_busy" {
+		t.Errorf("POST = %d %v", rec.Code, out)
+	}
+	for _, c := range startCalls(f) {
+		if c != "pane.get" {
+			t.Errorf("Herdr called %q", c)
+		}
+	}
+}
+
 // An id that is not a pane of this Herdr is refused before the pane lock,
 // so the locks map never holds it.
 func TestAgentStartUnknownPane(t *testing.T) {

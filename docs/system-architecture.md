@@ -408,7 +408,8 @@ has a Chat view, `caps.agentStartCodex`, else 501 `unsupported`)
 in a pane that shows only its shell, through Herdr's `agent.start`. Only `kind` is read: the arguments come from a fixed
 table and the alias Herdr tracks the agent by is the server's (`termote-<kind>-<8 hex>`, one
 retry on `agent_name_taken`). The pane is resolved before the pane lock (the one `message` and
-`answer` take); then a start of this server still running there answers 409 `starting`; a
+`answer` take; a write waits for it at most `agentRequestMost` less its own bound, else 409
+`input_busy`, so one over a machine ends before the hub's header wait); then a start of this server still running there answers 409 `starting`; a
 pane whose foreground is not its shell alone, read again for up to 1.5 s, answers 409
 `pane_busy` with nothing typed (on Windows Herdr never reports a program other than an agent or
 the shell as foreground, so the shell must also have no child process, else a running `ping` or

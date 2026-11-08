@@ -324,7 +324,8 @@ func (d *silentDialer) dial(context.Context, machineRecord) (net.Conn, string, e
 }
 
 // The wait for a machine's answer outlasts the longest request a machine
-// serves: an agent message at its limits, and a worktree change.
+// serves: an agent write with its wait for the pane's lock, and a worktree
+// change.
 func TestMachineResponseHeaderWaitBound(t *testing.T) {
 	// The longest: every image, the text split around them, the draft
 	// replaced first (agentInput's message handler).
@@ -333,8 +334,17 @@ func TestMachineResponseHeaderWaitBound(t *testing.T) {
 		textWait += pasteGrowMost(strings.Repeat("x", agentMaxText/(agentMaxImages+1)))
 	}
 	message := messageBudget(agentMaxImages, textWait) + agentConfirmWait + muxTimeout
-	if machineResponseHeaderWait <= message || machineResponseHeaderWait <= worktreeLockWait+worktreeTimeout {
-		t.Errorf("machineResponseHeaderWait %v, an agent message takes up to %v", machineResponseHeaderWait, message)
+	// A write to an agent waits for its pane's lock only what
+	// agentRequestMost leaves its work: that has to be room for the longest,
+	// and the whole has to end before the hub gives up, the pane looked up
+	// before (muxTimeout).
+	answer := 12*agentConfirmWait + muxTimeout
+	start := 2*agentStartIdleWait + agentStartClearWait + 4*agentStartCallTimeout
+	if agentRequestMost <= max(message, answer, start) {
+		t.Errorf("agentRequestMost %v, an agent message takes up to %v", agentRequestMost, message)
+	}
+	if machineResponseHeaderWait <= agentRequestMost+muxTimeout || machineResponseHeaderWait <= worktreeLockWait+worktreeTimeout {
+		t.Errorf("machineResponseHeaderWait %v, an agent write takes up to %v", machineResponseHeaderWait, agentRequestMost+muxTimeout)
 	}
 }
 

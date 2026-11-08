@@ -113,6 +113,8 @@ function noticeFor(err: unknown, t: Translate<MessageKey>): Notice {
         text: t('chat.composer.partialPaste'),
         terminal: true,
       }
+    case 'input_busy':
+      return { variant: 'warning', text: notSent }
     case 'uploads_unavailable':
       return { variant: 'warning', text: t('chat.composer.noImages') }
     case 'invalid_request':
