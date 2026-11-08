@@ -1,0 +1,41 @@
+[0m[48;2;57;57;71m                                                                                                [0m
+[0m[48;2;57;57;71m  Meet GPT-6 Sol                                                                                [0m
+[0m[48;2;57;57;71m                                                                                                [0m
+[0m[48;2;57;57;71m  Our latest Sol is more intelligent and more efficient so your usage limits go further. This   [0m
+[0m[48;2;57;57;71m  model is a great daily driver for complex tasks, especially coding.                           [0m
+[0m[48;2;57;57;71m                                                                                                [0m
+[0m[1m[38;2;0;0;46m[48;2;99;168;248m› 1. Try new model                                                                             [0m
+[0m[48;2;57;57;71m  2. Use existing model                                                                         [0m
+[0m[48;2;57;57;71m                                                                                                [0m
+[0m[48;2;57;57;71m  [0m[1m[38;2;205;214;244m[48;2;57;57;71menter/esc[0m[2m[48;2;57;57;71m confirm · [0m[1m[38;2;205;214;244m[48;2;57;57;71m^c[0m[2m[48;2;57;57;71m quit[0m[48;2;57;57;71m                                                                   [0m
+[0m[48;2;57;57;71m                                                                                                [0m
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 

@@ -12,7 +12,9 @@ import (
 // 120x40), "0.160.0-herdr-*" through herdr pane.read ansi, where Codex draws
 // its composer on a background, "0.162.1-model-picker" and
 // "0.162.1-effort-picker" (/model and its effort step) in psmux (capture-pane
-// -p -e, 160 columns).
+// -p -e, 160 columns), "0.167.0-herdr-*" through herdr pane.read ansi (95
+// columns, the tmux it ran in answering the background colour, so Codex draws
+// the option under its pointer on a background, not in reverse video).
 func codexCapture(t *testing.T, name string) string {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join("testdata", "codex", "screens", name+".txt"))
@@ -70,6 +72,12 @@ func TestReadCodexScreenRecorded(t *testing.T) {
 			options: "1:Yes, proceed|2:Yes, and don't ask again for commands that start with `sleep 8`|3:No, and tell Codex what to do differently",
 			pointer: 1,
 		},
+		// On herdr a dialog's pointer row has no reverse video: its footer of
+		// key hints makes it a dialog, a numbered draft stays a draft.
+		{screen: "0.167.0-herdr-dialog-new-model", kind: "unsupported", title: "Our latest Sol is more intelligent and more efficient so your usage limits go further. This"},
+		{screen: "0.167.0-herdr-model-picker", kind: "unsupported", title: "Select Model and Effort"},
+		{screen: "0.167.0-herdr-permissions-picker", kind: "unsupported", title: "Update Model Permissions"},
+		{screen: "0.167.0-herdr-input-draft-numbered", input: inputDraft, draft: "1. foo 2. bar"},
 		{screen: "0.160.0-herdr-input-empty", input: inputEmpty},
 		{screen: "0.160.0-herdr-input-draft", input: inputDraft, draft: "bản nháp chưa gửi"},
 		// The working line goes on with a background terminal.
@@ -219,9 +227,57 @@ func TestReadCodexScreenPickerWithoutReverse(t *testing.T) {
 		{"draft", codexRows("› 2. GPT-6-Astra", "", codexModelRow, codexHintsRow), inputDraft, "2. GPT-6-Astra"},
 		{"wrapped draft", codexRows("› 2. GPT-6-Astra", "  enter select ·", "  esc back", "", codexModelRow, codexHintsRow), inputDraft, "2. GPT-6-Astra enter select · esc back"},
 		{"no option", codexRows("› GPT-6-Astra", "", "  enter select · esc back"), inputDraft, "GPT-6-Astra"},
+		// Options not numbered on from the pointer's are no dialog.
+		{"numbers skip", codexRows("› 1. Try new model", "  3. Use existing model", "", "  enter/esc confirm · ^c quit"), inputDraft, "1. Try new model 3. Use existing model"},
+		{"row not indented", codexRows("› 1. Try new model", " 2. Use existing model", "", "  enter/esc confirm · ^c quit"), inputDraft, "1. Try new model"},
+		{"hint row", codexRows("› 1. foo", "  2. bar", "", "  tab to queue message            100% context left"), inputDraft, "1. foo 2. bar"},
 	} {
 		if sc := readCodexScreen(tt.capture); sc.input != tt.input || sc.draft != tt.draft || sc.prompt != nil {
 			t.Fatalf("%s: input %q draft %q prompt %+v", tt.name, sc.input, sc.draft, sc.prompt)
+		}
+	}
+}
+
+// A dialog other than a picker ends with its own key hints; the pointer may
+// be on its last option, and a narrow pane wraps the footer.
+func TestReadCodexScreenDialogFooter(t *testing.T) {
+	head := []string{"  Meet GPT-6 Sol", "", "  1. Try new model"}
+	for _, tt := range []struct {
+		name string
+		rows []string
+	}{
+		{"one row", append(head, "› 2. Use existing model", "", "  enter/esc confirm · ^c quit")},
+		{"wrapped", append(head, "› 2. Use existing model", "", "  enter/esc confirm ·", "  ^c quit")},
+		{"wrapped option", append(head, "› 2. Use existing", "     model", "", "  space toggle · enter save · esc save/close")},
+	} {
+		sc := readCodexScreen(codexRows(tt.rows...))
+		if sc.input != inputNone || sc.prompt == nil || sc.prompt.Kind != "unsupported" || sc.prompt.Title != "Meet GPT-6 Sol" || sc.sig == "" {
+			t.Fatalf("%s: input %q draft %q prompt %+v", tt.name, sc.input, sc.draft, sc.prompt)
+		}
+	}
+}
+
+func TestCodexKeyFooterRe(t *testing.T) {
+	for _, footer := range []string{
+		"enter select · esc back",
+		"enter default · s session · esc back",
+		"enter/esc confirm · ^c quit",
+		"space toggle · enter save · esc save/close",
+	} {
+		if !codexKeyFooterRe.MatchString(footer) {
+			t.Errorf("%q: no footer", footer)
+		}
+	}
+	for _, row := range []string{
+		"enter select",
+		"tab to queue message            100% context left",
+		"GPT-5.6-Terra medium · /home/user/proj",
+		"? for shortcuts",
+		codexApprovalFooter,
+		"select · esc back",
+	} {
+		if codexKeyFooterRe.MatchString(row) {
+			t.Errorf("%q: read as a footer", row)
 		}
 	}
 }

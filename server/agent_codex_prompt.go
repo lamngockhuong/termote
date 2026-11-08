@@ -12,13 +12,15 @@ import (
 // Reading a Codex screen: whether its composer is at the bottom and empty,
 // and which approval dialog is open. Pure functions over a capture with SGR
 // escapes, checked against screens recorded from Codex 0.159.3, 0.160.0 and
-// 0.162.0 on tmux and herdr, and 0.162.1 on psmux (testdata/codex/screens).
-// Codex draws no frame: the composer is a "›" row at column 0 with the model
-// and shortcut hints under it, and an approval dialog replaces the composer
-// with its title, its fields, numbered options (the one under the pointer
-// drawn in reverse video) and a footer as the last row. A picker (/model, its
-// effort step) is drawn the same way with its own footer ("enter select ·
-// esc back"). Anything not recognised is "not ready", as for Claude Code.
+// 0.162.0 on tmux and herdr, 0.162.1 on psmux and 0.167.0 on herdr
+// (testdata/codex/screens). Codex draws no frame: the composer is a "›" row
+// at column 0 with the model and shortcut hints under it, and an approval
+// dialog replaces the composer with its title, its fields, numbered options
+// (the one under the pointer drawn in reverse video on tmux, on a background
+// on herdr) and a footer as the last row. Another dialog (/model, its effort
+// step, a rate-limit or new-model prompt) is drawn the same way with a footer
+// of key hints ("enter select · esc back", "enter/esc confirm · ^c quit").
+// Anything not recognised is "not ready", as for Claude Code.
 
 const (
 	// codexMaxFooterRows: the rows Codex draws under the composer (a blank
@@ -53,10 +55,13 @@ var (
 	codexOptionRe = regexp.MustCompile(`^(?:› )?(\d+)\.\s+(.+)$`)
 	// codexOptionKeyRe: the key Codex shows at the end of an option.
 	codexOptionKeyRe = regexp.MustCompile(`^(.+?)\s+\([a-z]+\)$`)
-	// codexPickerFooterRe: the footer a picker (/model and its effort step)
-	// ends with, "enter select · esc back" or "enter default · s session ·
-	// esc back" in Codex 0.162.1.
-	codexPickerFooterRe = regexp.MustCompile(`^enter [a-z]+(?: · .+)? · esc back$`)
+	// codexKeyFooterRe: the key hints a dialog other than an approval ends
+	// with, a key and what it does, separated by " · ": "enter select · esc
+	// back", "enter default · s session · esc back" (/model, Codex 0.162.1),
+	// "enter/esc confirm · ^c quit" (a new-model prompt, 0.167.0). The first
+	// key is enter, esc, space or tab; the composer's own hint row ("tab to
+	// queue message   100% context left") has no " · " between hints.
+	codexKeyFooterRe = regexp.MustCompile(`^(?:enter|esc|space|tab)(?:/\S+)? [a-z]+(?:[ /][a-z]+)*(?: · \S+ [a-z]+(?:[ /][a-z]+)*)+$`)
 	// codexWorkingRe: the working line, which may go on with background
 	// terminals ("… esc to interrupt) · 1 background terminal running").
 	codexWorkingRe = regexp.MustCompile(`^• .*\besc to interrupt\)`)
@@ -99,8 +104,9 @@ func atColumnZero(l screenLine) bool {
 // findCodexComposer looks for the composer at the bottom: a "›" row at column
 // 0 not drawn in reverse video, its wrapped rows, then at most
 // codexMaxFooterRows indented or blank rows. The option under a dialog's
-// pointer is drawn in reverse video; the composer never is, though some
-// terminals (herdr) get it on a background.
+// pointer is drawn in reverse video on tmux; the composer never is, though
+// on herdr both get a background, so a dialog is also told by its shape
+// (codexDialogAt).
 func findCodexComposer(lines []screenLine) (agentScreen, bool) {
 	n := len(lines)
 	for p := n - 1; p >= 0 && p >= n-1-codexMaxFooterRows-codexMaxBoxRows; p-- {
@@ -110,9 +116,9 @@ func findCodexComposer(lines []screenLine) (agentScreen, bool) {
 		if !strings.HasPrefix(lines[p].text, "›") || strings.TrimSpace(lines[p].rv) != "" {
 			return agentScreen{}, false
 		}
-		// A picker's selected row: herdr draws it in colours, not reverse
+		// A dialog's selected row: herdr draws it in colours, not reverse
 		// video, and it would read as a draft "2. GPT-…".
-		if codexPicker(lines, p) {
+		if codexDialogAt(lines, p) {
 			return agentScreen{}, false
 		}
 		end := p + 1
@@ -130,13 +136,37 @@ func findCodexComposer(lines []screenLine) (agentScreen, bool) {
 	return agentScreen{}, false
 }
 
-// codexPicker: row p is a numbered option under the pointer ("› 2. …") and
-// a picker's footer ends the screen below it (on one row, or two in a narrow
-// pane). A draft that starts with "2. " has the model and the shortcut hints
-// under it instead.
-func codexPicker(lines []screenLine, p int) bool {
-	return codexOptionRe.MatchString(lines[p].text) && strings.HasPrefix(lines[p].text, "›") &&
-		codexFooterRow(lines, codexPickerFooterRe.MatchString) > p
+// codexDialogAt: row p is a numbered option under the pointer ("› 2. …"), a
+// footer of key hints ends the screen below it (on one row, or two in a
+// narrow pane), and the rows between are indented: the options after it,
+// numbered on from p's, the rows they wrap onto, blank rows. A draft that
+// starts with "2. " has the composer's hint rows under it instead.
+func codexDialogAt(lines []screenLine, p int) bool {
+	m := codexOptionRe.FindStringSubmatch(lines[p].text)
+	if m == nil || !strings.HasPrefix(lines[p].text, "›") {
+		return false
+	}
+	footer := codexFooterRow(lines, codexKeyFooterRe.MatchString)
+	if footer <= p {
+		return false
+	}
+	next, _ := strconv.Atoi(m[1])
+	for _, l := range lines[p+1 : footer] {
+		if strings.TrimSpace(l.text) == "" {
+			continue
+		}
+		if !atIndent(l) {
+			return false
+		}
+		// An option row is indented two columns; its wrapped rows further.
+		if o := codexOptionRe.FindStringSubmatch(l.text[2:]); o != nil {
+			if n, _ := strconv.Atoi(o[1]); n != next+1 {
+				return false
+			}
+			next++
+		}
+	}
+	return true
 }
 
 // readCodexComposer reads the composer's rows. Codex paints its placeholder
@@ -353,8 +383,8 @@ func codexPointer(opts [][]screenLine) int {
 }
 
 // findCodexDialog recognises a dialog this code does not answer: an option
-// under the pointer (in reverse video, or ending in a picker's footer) near
-// the bottom with no composer under it. The card shows
+// under the pointer (in reverse video, or above a footer of key hints,
+// codexDialogAt) near the bottom with no composer under it. The card shows
 // the rows right above its options and is read only.
 func findCodexDialog(lines []screenLine) agentScreen {
 	n := len(lines)
@@ -364,7 +394,7 @@ func findCodexDialog(lines []screenLine) agentScreen {
 			continue
 		}
 		if !codexOptionRe.MatchString(l.text) || !strings.HasPrefix(l.text, "›") ||
-			(strings.TrimSpace(l.rv) == "" && !codexPicker(lines, i)) {
+			(strings.TrimSpace(l.rv) == "" && !codexDialogAt(lines, i)) {
 			return agentScreen{}
 		}
 		top, _, ok := codexOptions(lines, i+1)
