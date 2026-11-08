@@ -39,11 +39,16 @@ jobs:
         id: filter
         with:
           filters: |
+            # A workflow change runs every job, so the CI it changes runs on
+            # its own pull request
+            ci: &ci
+              - '.github/workflows/**'
             workspace: &workspace
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
               - 'package.json'
             pwa:
+              - *ci
               - *workspace
               - 'pwa/**'
               # Agent transition cases and shell names, also read by the PWA tests
@@ -52,10 +57,12 @@ jobs:
               # Claude Code screens the demo's terminal replays (pwa/src/demo/screens.ts)
               - 'server/testdata/claude/screens/**'
             api:
+              - *ci
               - 'server/**'
               # The demo's policy, which a Go test keeps equal to the server's
               - 'pwa/demo-csp.json'
             scripts:
+              - *ci
               - 'scripts/**'
               - 'tests/**'
               - 'lefthook.yml'
@@ -63,13 +70,16 @@ jobs:
               - 'Makefile'
               - 'entrypoint.sh'
             docker:
+              - *ci
               - 'Dockerfile'
               - 'entrypoint.sh'
               - 'docker-compose.yml'
             website:
+              - *ci
               - *workspace
               - 'website/**'
             docs:
+              - *ci
               - 'docs/**'
               - 'dprint.json'
 
@@ -237,11 +247,24 @@ jobs:
   # stand-in Claude Code (tests/fixtures/fake-claude.sh) and a stand-in Codex
   # (tests/fixtures/fake-codex.sh) in windows of the server's own tmux socket;
   # the screenshot spec only refreshes docs images.
+  # Four Playwright shards, each on its own runner with its own server and
+  # tmux, still one worker inside a shard; the "sign-in, Places" entry runs
+  # the two other servers and their specs. fail-fast off: one failing shard
+  # leaves the others to finish and upload their own results.
   e2e:
-    name: E2E
+    name: E2E (${{ matrix.name }})
     runs-on: ubuntu-latest
     needs: changes
     if: needs.changes.outputs.pwa == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.scripts == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: "1/4", slug: shard-1, shard: "1/4" }
+          - { name: "2/4", slug: shard-2, shard: "2/4" }
+          - { name: "3/4", slug: shard-3, shard: "3/4" }
+          - { name: "4/4", slug: shard-4, shard: "4/4" }
+          - { name: "sign-in, Places", slug: signin-places, extra: true }
     env:
       TERMOTE_NO_AUTH: "true"
       TERMOTE_BIND: 127.0.0.1
@@ -308,6 +331,7 @@ jobs:
       # XDG_CACHE_HOME keeps the image uploads in the run's own dir, and
       # XDG_STATE_HOME the recent groups (groups.spec.ts empties them).
       - name: Start server
+        if: ${{ !matrix.extra }}
         run: |
           echo "TMUX_SOCKET=$RUNNER_TEMP/tmux.sock" >> "$GITHUB_ENV"
           XDG_CONFIG_HOME="$RUNNER_TEMP/xdg" XDG_CACHE_HOME="$RUNNER_TEMP/cache" XDG_STATE_HOME="$RUNNER_TEMP/state" \
@@ -326,10 +350,12 @@ jobs:
       # the trash's file system, next to it. Not as XDG_CACHE_HOME, which
       # would move where Playwright looks for its browsers.
       - name: Run Playwright
+        if: ${{ !matrix.extra }}
         working-directory: pwa
         env:
           TERMOTE_E2E_CACHE: ${{ runner.temp }}/cache
-        run: pnpm exec playwright test --workers=1 --grep-invert "Capture screenshots"
+          SHARD: ${{ matrix.shard }}
+        run: pnpm exec playwright test --workers=1 --shard="$SHARD" --grep-invert "Capture screenshots"
 
       # Pairing, the view-only role and the sign-in list need sign-in: a
       # second server with a password, on its own port, tmux socket, session
@@ -339,6 +365,7 @@ jobs:
       # files-upload.spec.ts alone. The password is made here and
       # never printed.
       - name: Start server with sign-in
+        if: ${{ matrix.extra }}
         run: |
           pass="$(openssl rand -hex 16)"
           echo "::add-mask::$pass"
@@ -357,6 +384,7 @@ jobs:
       # TERMOTE_E2E_AUTH=1: the spec fails (never skips) when the server
       # cannot pair devices.
       - name: Run Playwright (devices and sign-ins, with sign-in)
+        if: ${{ matrix.extra }}
         working-directory: pwa
         env:
           TERMOTE_NO_AUTH: ""
@@ -374,6 +402,7 @@ jobs:
       # acceptance-walk.spec.ts, a working day walked end to end on one
       # project (it needs a Place and no sign-in).
       - name: Start server with a Place
+        if: ${{ matrix.extra }}
         run: |
           P="$RUNNER_TEMP/places"
           mkdir -p "$P/notes"
@@ -391,6 +420,7 @@ jobs:
           exit 1
 
       - name: Run Playwright (Places)
+        if: ${{ matrix.extra }}
         working-directory: pwa
         env:
           TERMOTE_PORT: "7682"
@@ -401,7 +431,7 @@ jobs:
       - name: Server log
         if: failure()
         run: |
-          cat "$RUNNER_TEMP/serve.log"
+          cat "$RUNNER_TEMP/serve.log" 2>/dev/null || true
           cat "$RUNNER_TEMP/serve-auth.log" 2>/dev/null || true
           cat "$RUNNER_TEMP/serve-places.log" 2>/dev/null || true
 
@@ -409,7 +439,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: playwright-results
+          name: playwright-results-${{ matrix.slug }}
           path: pwa/test-results
           retention-days: 7
 
