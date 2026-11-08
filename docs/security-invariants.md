@@ -2106,15 +2106,26 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   or `CF-Connecting-IP` implied by `--cloudflare`; `authOpts.ProxyHeader`), an attempt counts under
   `px:<address>` (`proxyClientIP`): the header's value, the last entry of `X-Forwarded-For`, used only
   when it parses as an IP address (zone dropped, IPv4-mapped unmapped), else the request's own
-  address; `Tailscale-User-Login` still wins over it. Natively the header is read over loopback only;
-  in the container (`TERMOTE_PROXY_CLIENT_HEADER`, `ProxyClientAnySource`) from any source, which is
-  why `container up` refuses a client header with `--lan` (a LAN machine comes in through the
-  gateway like the proxy) and passes it only with the port published on `127.0.0.1`. The /64 cap
-  applies to `px:` addresses too, under a `px:` prefix of its own. Every attempt over loopback or
-  under a `ts:` or `px:` key also counts toward one shared cap of 30/min (`authMaxProxiedFailures`,
-  key `proxied`): a local process setting a header itself (no owner check on macOS loopback), or a
-  tailnet node whose `tailscale serve` passes the client's `CF-Connecting-IP` through, guesses no
-  faster than that. A refund takes back all of them. A container without a client header still
+  address. A `px:` key comes before `Tailscale-User-Login`: cloudflared passes on what an Internet
+  client sent, a login included, so that client could otherwise count its failures under a tailnet
+  user's `ts:` key and lock that user out (cloudflared always sets its header; a value that is no
+  address leaves the login, else the address, as the key). With `X-Forwarded-For` as the client
+  header, a tailnet user whose request carries one counts under `px:` too. Natively the header is read over
+  loopback only; in the container (`TERMOTE_PROXY_CLIENT_HEADER`, `ProxyClientAnySource`, set only
+  when `runningInContainer`: a server run by hand from the environment reads it over loopback only)
+  from any source, which is why `container up` refuses a client header with `--lan` (a LAN machine
+  comes in through the gateway like the proxy) and passes it only with the port published on
+  `127.0.0.1`. The /64 cap applies to `px:` addresses too, under a `px:` prefix of its own. Every
+  attempt under a `ts:` or `px:` key also counts toward one shared cap of 30/min
+  (`authMaxProxiedFailures`, key `proxied`): a local process setting a header itself (no owner check
+  on macOS loopback), or a tailnet node whose `tailscale serve` passes the client's
+  `CF-Connecting-IP` through (counted under that `px:` address then, not its login), guesses no faster
+  than that with a header. Every attempt over loopback under its own address (no proxy key: the CLI,
+  a local browser, and a `tailscale serve` request with no login, from a tagged node or Funnel)
+  counts toward a cap of the same size of its own (`sharedKey`, key `loopback`), since any `127.x`
+  source address is a new key: attempts under a `ts:` or `px:` key filling theirs do not lock it out,
+  and a local process gets 30/min under each, 60 in all.
+  A refund takes back all of them. A container without a client header still
   counts under the gateway address. The pairing limiter keys the same way except that it never
   reads `Tailscale-User-Login`. Failed logins and blocked clients are logged with the client
   address (`<proxy-reported address> via <proxy address>` for a `px:` key; the reported address is

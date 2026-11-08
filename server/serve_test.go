@@ -1040,7 +1040,7 @@ func TestTokenExpiryOnWallClock(t *testing.T) {
 
 // Behind tailscale serve every tailnet user comes over loopback: each counts
 // under its own login, so one user's wrong passwords leave the others able
-// to sign in, while every attempt over loopback together stays under
+// to sign in, while every attempt under a login together stays under
 // authMaxProxiedFailures however the header changes. Off loopback, or
 // without --tailscale (another proxy on loopback would pass the client's
 // header through), the header is ignored.
@@ -1081,10 +1081,10 @@ func TestBasicAuthTailscaleUsers(t *testing.T) {
 		}
 	}
 	if code := try(h, "127.0.0.1:1", "fresh@example.com", "secret"); code != http.StatusTooManyRequests {
-		t.Errorf("past the loopback cap = %d, want 429", code)
+		t.Errorf("past the proxied cap = %d, want 429", code)
 	}
 	if code := try(h, "192.0.2.1:1", "", "secret"); code != http.StatusOK {
-		t.Errorf("another address past the loopback cap = %d, want 200", code)
+		t.Errorf("another address past the proxied cap = %d, want 200", code)
 	}
 
 	// Off loopback the header is not a key.
@@ -1107,7 +1107,7 @@ func TestBasicAuthTailscaleUsers(t *testing.T) {
 }
 
 // A refund takes back the reservation from the user's key and from the
-// loopback cap.
+// proxied cap.
 func TestAuthRateLimiterLoopbackRefund(t *testing.T) {
 	rl := newAuthRateLimiter()
 	for range authMaxProxiedFailures + 5 {
@@ -1143,7 +1143,10 @@ func TestRateKeyProxyClient(t *testing.T) {
 		{"last forwarded entry", "127.0.0.1:1", map[string][]string{"X-Forwarded-For": {"1.1.1.1, 203.0.113.5"}}, xff, "px:203.0.113.5"},
 		{"last forwarded line", "127.0.0.1:1", map[string][]string{"X-Forwarded-For": {"1.1.1.1", "198.51.100.2 , 203.0.113.6"}}, xff, "px:203.0.113.6"},
 		{"forwarded entry not an address", "127.0.0.1:1", map[string][]string{"X-Forwarded-For": {"203.0.113.5, unknown"}}, xff, "127.0.0.1"},
-		{"Tailscale login wins", "127.0.0.1:1", map[string][]string{"Cf-Connecting-Ip": {"203.0.113.5"}, "Tailscale-User-Login": {"alice@example.com"}}, authOpts{Tailnet: true, ProxyHeader: cloudflareClientHeader}, "ts:alice@example.com"},
+		// The proxy's client sent the login: it never names a tailnet user
+		{"proxy header wins over a login", "127.0.0.1:1", map[string][]string{"Cf-Connecting-Ip": {"203.0.113.5"}, "Tailscale-User-Login": {"alice@example.com"}}, authOpts{Tailnet: true, ProxyHeader: cloudflareClientHeader}, "px:203.0.113.5"},
+		{"login without the proxy header", "127.0.0.1:1", map[string][]string{"Tailscale-User-Login": {"alice@example.com"}}, authOpts{Tailnet: true, ProxyHeader: cloudflareClientHeader}, "ts:alice@example.com"},
+		{"proxy header not an address keeps the login", "127.0.0.1:1", map[string][]string{"Cf-Connecting-Ip": {"x"}, "Tailscale-User-Login": {"alice@example.com"}}, authOpts{Tailnet: true, ProxyHeader: cloudflareClientHeader}, "ts:alice@example.com"},
 		{"proxy header without a login", "127.0.0.1:1", map[string][]string{"Cf-Connecting-Ip": {"203.0.113.5"}}, authOpts{Tailnet: true, ProxyHeader: cloudflareClientHeader}, "px:203.0.113.5"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1201,6 +1204,33 @@ func TestBasicAuthProxyClients(t *testing.T) {
 	}
 	if code := try(h, "198.51.100.200", "secret"); code != http.StatusTooManyRequests {
 		t.Errorf("past the proxied cap = %d, want 429", code)
+	}
+	// Loopback without the header (the CLI, a local browser) has a cap of
+	// its own: a full proxied cap does not lock it out.
+	local := func(addr, pass string) int {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.SetBasicAuth("admin", pass)
+		req.RemoteAddr = addr
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	if code := local("127.0.0.1:1", "secret"); code != http.StatusOK {
+		t.Errorf("loopback without the header past the proxied cap = %d, want 200", code)
+	}
+	// Every loopback address counts toward that cap, so a new source
+	// address for each try guesses no faster.
+	h = newBasicAuth("admin", "secret", nil, nil, opts, inner)
+	for i := range authMaxProxiedFailures {
+		if code := local(fmt.Sprintf("127.0.%d.%d:1", i/4, i%4+1), "wrong"); code != http.StatusUnauthorized {
+			t.Fatalf("loopback attempt %d = %d, want 401", i, code)
+		}
+	}
+	if code := local("127.9.9.9:1", "secret"); code != http.StatusTooManyRequests {
+		t.Errorf("past the proxied cap = %d, want 429", code)
+	}
+	if code := try(h, "198.51.100.201", "secret"); code != http.StatusOK {
+		t.Errorf("proxied client past the loopback cap = %d, want 200", code)
 	}
 
 	// Addresses of one IPv6 /64 count together.
@@ -1278,13 +1308,18 @@ func TestValidProxyClientHeader(t *testing.T) {
 	}
 }
 
-// The container reads the header from TERMOTE_PROXY_CLIENT_HEADER and trusts
-// it from any source; without the variable it reads none.
+// The server reads the header from TERMOTE_PROXY_CLIENT_HEADER, from any
+// source only in the container (a server run by hand from the environment
+// reads it over loopback only); without the variable it reads none.
 func TestServeConfigProxyClientEnv(t *testing.T) {
 	t.Setenv("TERMOTE_PROXY_CLIENT_HEADER", "cf-connecting-ip")
-	cfg := newServeConfigFromEnv()
-	if cfg.ProxyClientHeader != cloudflareClientHeader || !cfg.ProxyClientAnySource {
-		t.Errorf("from env: %q any=%v", cfg.ProxyClientHeader, cfg.ProxyClientAnySource)
+	orig := envInContainer
+	t.Cleanup(func() { envInContainer = orig })
+	for _, in := range []bool{true, false} {
+		envInContainer = func() bool { return in }
+		if cfg := newServeConfigFromEnv(); cfg.ProxyClientHeader != cloudflareClientHeader || cfg.ProxyClientAnySource != in {
+			t.Errorf("from env, in a container %v: %q any=%v", in, cfg.ProxyClientHeader, cfg.ProxyClientAnySource)
+		}
 	}
 	t.Setenv("TERMOTE_PROXY_CLIENT_HEADER", "")
 	if cfg := newServeConfigFromEnv(); cfg.ProxyClientHeader != "" {

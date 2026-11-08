@@ -73,8 +73,10 @@ signed-in client can do.
   (`cloudflare` and `urls.cloudflare` in `status --json`).
 - Counts failed sign-ins per client, by the `CF-Connecting-IP` header the tunnel sets. Five wrong passwords
   lock out only the client that typed them. Every attempt through a proxy still shares one limit of 30 a
-  minute, so a program on your machine that sets the header itself cannot guess faster; many addresses
-  guessing together can fill that limit and hold everyone off for a minute. With Access in front, strangers never get that far.
+  minute, so a program on your machine that sets the header itself cannot guess faster that way; many addresses
+  guessing together can fill that limit and hold everyone signing in through a proxy off for a minute. Natively,
+  sign-ins on the machine itself without a proxy have a limit of 30 of their own. With Access in front, strangers never
+  get that far.
 - Checks from outside, at `start`, `container up`, `status` and when `panel` opens, whether Access answers
   for the hostname (`cloudflareAccess` in `status --json`: `on`, `off` or `unknown`). `unknown` usually means
   `cloudflared` is not running.

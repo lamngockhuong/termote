@@ -367,7 +367,9 @@ termote container up --cloudflare term.example.com   # cloudflared on this host,
 The hostname joins the Host allowlist, its `https://` URL shows in `url`, `panel` (QR code),
 `status` and `status --json` (`cloudflare`, `urls.cloudflare`), and failed sign-ins count per
 client by the `CF-Connecting-IP` header, so one stranger's wrong guesses do not lock out everyone else. Every
-attempt through a proxy still shares one cap of 30 a minute. `--cloudflare` is refused with
+attempt through a proxy still shares one cap of 30 a minute; natively the rest of loopback (the CLI, a
+local browser) has one of its own, while in a container they usually come from the bridge gateway and count
+under its address. `--cloudflare` is refused with
 `--no-auth`, and `container up` refuses a client header with `--lan` (LAN machines would come in
 the way the proxy does).
 
@@ -396,7 +398,7 @@ manual `go run`/`termote-dev serve` from a checkout:
 | `TERMOTE_MUX`                 | `tmux`       | Backend: `tmux`, `herdr` or `zellij`; in the image, also picks what starts                                                                                                      |
 | `TERMOTE_ALLOWED_HOSTS`       | (empty)      | Extra `Host` header values, comma-separated; loopback always allowed                                                                                                            |
 | `TERMOTE_HERDR_ALLOW_NO_AUTH` | `false`      | Required with `TERMOTE_MUX=herdr` and `TERMOTE_NO_AUTH=true`                                                                                                                    |
-| `TERMOTE_PROXY_CLIENT_HEADER` | (empty)      | Header a proxy sets to the client's address, trusted from any source; `container up` sets it only with the port on `127.0.0.1`                                                  |
+| `TERMOTE_PROXY_CLIENT_HEADER` | (empty)      | Header a proxy sets to the client's address, trusted from any source in the container (else over loopback only); `container up` sets it only with the port on `127.0.0.1`       |
 | `TERMOTE_WORKSPACE_HOME`      | (empty)      | Where your home dir sits in `/workspace` (`.`: the workspace itself) when the mounted workspace is it or holds it; view-only devices read nothing there. `container up` sets it |
 
 You do not set these by hand for a normal install: `termote start`/`container up` compute and
