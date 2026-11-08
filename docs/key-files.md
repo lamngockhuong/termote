@@ -249,6 +249,9 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/mux_hc_seen.go`                           | Viewers per terminal and the shared `herdr.seen` label         |
 | `server/mux_worktrees.go`                         | `/api/mux/worktrees*`: list, create, open, remove; name check  |
 | `server/herdr_worktree_branches.go`               | Each worktree workspace's branch, read in the background       |
+| `server/git_worktrees.go`                         | tmux, Zellij, hc: repo info, worktree list/add/remove, slug    |
+| `server/git_worktree_mux.go`                      | tmux, Zellij, hc: worktree routes' backend over git and groups |
+| `server/git_worktree_nest.go`                     | tmux, Zellij, hc: nesting linked worktrees, cached, background |
 | `server/stream.go`                                | Terminal WebSocket (`/api/mux/stream`)                         |
 | `server/mux_pane_text.go`                         | `GET panes/{id}/text`: pane history as plain text, capped      |
 | `server/agent.go`                                 | `/api/mux/panes/{id}/agent/*` routes, transcript reads         |

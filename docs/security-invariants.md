@@ -643,42 +643,78 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
 - **Worktrees** (`GET /api/mux/worktrees?groupId=` → `{repoName, worktrees, branches}`,
   `POST /api/mux/worktrees` `{groupId, branch, base, label}` → `{ok, id}`, `POST
   /api/mux/worktrees/open` `{groupId, branch}` → `{ok, id, alreadyOpen}`, `DELETE
-  /api/mux/worktrees/{id}` `{force, path, branch}`; `server/mux_worktrees.go`, `caps.worktrees`:
-  Herdr ≥ 0.9.2 from the `ping` version, on every OS (on Windows Herdr ends the panes before git
-  runs even without `force`, and reports `dirty` itself); tmux has none, 501
-  `unsupported`): writes go through `writeGuard` (same-site JSON), `requireWriteRole` first (a
-  view-only client gets 403 `view_only`), the 8 KB body; the GET through
-  `crossSiteRejection` (so `Sec-Fetch-Site: none` too). Everything is checked before the slot:
-  `branch` by `validBranchName` (git's `check-ref-format --branch` rules, 1–255 bytes, no leading
-  `-`, not `HEAD` or `@`, and no Unicode control, format or space character, which git accepts
-  and would let a name pose as another in the Remove confirmation), `base` empty (HEAD), `HEAD`
-  or the same check (Herdr passes it to git positionally without `--`), a non-empty `label` by
-  `validateTmuxTarget`. Creates, opens and removes take one slot (a one-slot channel, waited for
-  at most `muxTimeout`, then 503 `busy`); once held, the read deadline grows and the change runs
-  under `WithoutCancel` for 60 s (open: `muxTimeout`), so a client leaving never cuts git short;
-  past that 504 `unknown` (Herdr may still finish; the PWA treats its own 75 s abort the same).
-  Create with a non-empty `base` first runs `git show-ref --verify refs/heads/<branch>` on the
-  repo root `worktree.list` names: Herdr ignores the base of an existing branch, so that is 409
-  `branch_exists`. The DELETE needs all three fields (400 `invalid_request`; only a JSON `true`
-  forces) and lists again under the slot: unless the entry whose `open_workspace_id` is the id is
-  linked with that path and branch → 409 `changed` (`not_linked` for the repo's own). Herdr codes
-  map to `unknown_group`, `not_found`, `not_git`, `linked_source`, `not_linked`, `ambiguous`,
-  `create_failed`, `open_failed`, `dirty` (the PWA asks again, then sends `force`), `busy`,
-  `unsupported` (also `invalid_request` naming a `worktree.` method), else 500
-  `worktree_failed`; Herdr's message (git's stderr, with paths) is logged, never returned. Herdr
-  never gets `trust_repository`, `path`, `cwd` or `close_group`. The GET's `branches` come from
-  the files routes' `gitRunner` (`for-each-ref --count=500`, heavy, no backoff, 160 KiB, the
-  last line dropped when cut, names failing `validBranchName` dropped, `[]` when git refuses).
-  Create and remove run git with the user's config (hooks, LFS filters), as typing the command
-  would; a remove deletes ignored files too and, with `force` (on Windows always), ends the panes first; the branch
-  is kept. The snapshot's `worktree: {linked, branch?, parent?}` comes from `session.snapshot`'s
-  membership (kept across a Herdr restart); the branch from a cache apart from the view
-  (`herdr_worktree_branches.go`): served stale while one background `worktree.list` per
-  repository refreshes it (10 s fresh, 1.5 s budget, 30 s kept after failures, 5 minutes off
-  after `worktree_busy`/`invalid_request`), never filled by `peekSnapshot` (push watcher,
-  `snapshot?peek=1`). The `worktree.*` event types are subscribed only when the gate holds (an
-  older Herdr would refuse the subscription); an event or a change makes the branches stale.
-  Closing a workspace with worktrees stays 409 `has_worktrees`
+  /api/mux/worktrees/{id}` `{force, path, branch}`; `server/mux_worktrees.go`, two
+  implementations behind `worktreeMux`, picked by `worktreeMuxFor`). `caps.worktrees`: Herdr ≥
+  0.9.2 from the `ping` version, on every OS; tmux (not psmux), Zellij and hc off Windows through
+  termote's own git (`gitWorktreeBackend`); psmux and hc on Windows have none, 501 `unsupported`.
+  Shared route rules: writes go through `writeGuard` (same-site JSON), `requireWriteRole` first (a
+  view-only client gets 403 `view_only`), the 8 KB body; the GET through `crossSiteRejection` (so
+  `Sec-Fetch-Site: none` too). Everything is checked before the slot: `branch` by
+  `validBranchName` (git's `check-ref-format --branch` rules, 1–255 bytes, no leading `-`, not
+  `HEAD` or `@`, and no Unicode control, format or space character, which git accepts and would
+  let a name pose as another in the Remove confirmation), `base` empty (HEAD), `HEAD` or the same
+  check (Herdr passes it to git positionally without `--`), a non-empty `label` by
+  `validateTmuxTarget`. No path comes from the client. Creates, opens and removes take one slot (a
+  one-slot channel, waited for at most `muxTimeout`, then 503 `busy`); once held, the read deadline
+  grows and the change runs under `WithoutCancel` for 60 s (open: `muxTimeout`), so a client
+  leaving never cuts git short; past that 504 `unknown` (the change may still finish; the PWA
+  treats its own 75 s abort the same). Create with a non-empty `base` first runs `git show-ref
+  --verify refs/heads/<branch>` on the repository root the list names: an existing branch is
+  checked out as it is, so that is 409 `branch_exists`. The DELETE needs all three fields (400
+  `invalid_request`; only a JSON `true` forces) and lists again under the slot: unless the entry
+  whose group is the id is linked with that path and branch → 409 `changed` (`not_linked` for the
+  repo's own). Codes: `unknown_group`, `not_found`, `not_git`, `linked_source`, `not_linked`,
+  `ambiguous`, `create_failed`, `open_failed`, `dirty` (the PWA asks again, then sends `force`),
+  `busy`, `unsupported`, else 500 `worktree_failed`; the backend's or git's message (git's stderr,
+  with paths) is logged, never returned. The GET's `branches` come from the files routes'
+  `gitRunner` (`for-each-ref --count=500`, heavy, no backoff, 160 KiB, the last line dropped when
+  cut, names failing `validBranchName` dropped, `[]` when git refuses). A remove deletes ignored
+  files too; the branch is kept.
+  - _Herdr_ (`server/mux_herdr.go`): on Windows Herdr ends the panes before git runs even without
+    `force`, and reports `dirty` itself. Herdr codes map to the list above (`unsupported` also for
+    `invalid_request` naming a `worktree.` method). Herdr never gets `trust_repository`, `path`,
+    `cwd` or `close_group`. Create and remove run git with the user's config (hooks, LFS
+    filters), as typing the command would; with `force` (on Windows always) the panes end first.
+    The snapshot's `worktree: {linked, branch?, parent?}` comes from `session.snapshot`'s
+    membership (kept across a Herdr restart); the branch from a cache apart from the view
+    (`herdr_worktree_branches.go`): served stale while one background `worktree.list` per
+    repository refreshes it (10 s fresh, 1.5 s budget, 30 s kept after failures, 5 minutes off
+    after `worktree_busy`/`invalid_request`), never filled by `peekSnapshot` (push watcher,
+    `snapshot?peek=1`). The `worktree.*` event types are subscribed only when the gate holds (an
+    older Herdr would refuse the subscription); an event or a change makes the branches stale.
+    Closing a workspace with worktrees stays 409 `has_worktrees`.
+  - _git, for tmux, Zellij and hc_ (`server/git_worktrees.go`, `server/git_worktree_mux.go`): a
+    group's repository is the one its first pane (first tab) works in, resolved through the files
+    routes' `rootResolver`. A new checkout's path is built by the server only:
+    `<base>/<main checkout's base name>/<branchSlug(branch)>`, base fixed per backend
+    (`worktreeBase`: hc `~/.herdr/worktrees`, tmux and Zellij `~/.termote/worktrees`, in the
+    container under `/workspace`); refused (`create_failed`) when the repository name is not one
+    clean path element, the target exists, or it (as given, or resolved for the part that exists)
+    is under a files deny dir; the slug refuses a name left empty, dots only or a git directory's name
+    (`invalid_name`). On tmux and Zellij the new group's name (the label, else the slug) is checked
+    with the backend's own name rule before `git worktree add` (`invalid_name`); hc ignores the label.
+    The group opens through `resolveGroupCwd` with the same deny list. A create or open from a
+    linked worktree is 409 `linked_source`. git runs only through the files routes' `gitRunner`
+    (hooks, fsmonitor off; `GIT_*`/`TERMOTE_*` stripped; `safe.directory` from the resolver):
+    `worktree list --porcelain -z` (newline form on a git without `-z`; output capped, a cut list
+    is an error; an entry whose `.git` does not lead back to the repository is dropped),
+    `worktree add [-b]` and `worktree remove [--force]` (`write`, `--` before the path, filters off,
+    so Git LFS gives pointer files), `status --porcelain -z --untracked-files=normal`
+    (filters off; any output, a cut one or an initialized submodule is `dirty`), `show-ref
+    --verify`, `symbolic-ref -q --short HEAD`, and `rev-parse --show-toplevel --absolute-git-dir`
+    (the resolver). Remove re-derives the path from git's own list for the group's work tree,
+    never from the body; the main checkout is `not_linked`; without `force` a dirty one is 409
+    `dirty` and nothing changes; a locked one is refused (500) before anything closes. Every group
+    whose first pane works in that worktree (the remove may name any of them) is closed, its
+    processes ended, before `git worktree remove`, so nothing runs in a deleted folder; a remove
+    git refuses after that leaves the checkout and the groups closed. The route's branch list and
+    existing-branch check pass the resolver's `safe.directory` too. On tmux and Zellij a group name taken already is
+    `open_failed` with the checkout kept. Nesting (`server/git_worktree_nest.go`): the snapshot
+    route nests by a cache only; lookups run in the background (at most 4 at once, `muxTimeout`
+    each, 10 s fresh, 30 s after a failure, 512 folders, cleared after every worktree change),
+    started only by a full client's non-peek read; a view-only or peek read uses what is cached.
+    hc's `MoveGroup` reads the same nested view: a linked worktree alone is 409
+    `linked_worktree`. Closing a repository's group with linked worktrees open is not refused.
 - **tmux sessions**: every session on the tmux server is a group, the user's own ones made
   outside Termote included, so anyone signed in sees, switches to and types into them (as Herdr
   exposes every workspace; accepted). `TMUX_SESSION` (default `main`; no `:`, `.`, leading `=`
