@@ -1,6 +1,6 @@
 import type { SessionGroup } from '../types/session'
 
-// Groups that can be moved, in order: a Herdr linked worktree moves only
+// Groups that can be moved, in order: a linked worktree moves only
 // with its repository's workspace.
 export function movableGroups(groups: SessionGroup[]): SessionGroup[] {
   return groups.filter((g) => !g.worktree?.linked)

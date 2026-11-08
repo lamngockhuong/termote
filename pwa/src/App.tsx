@@ -602,7 +602,7 @@ export default function App({
     (s) => s.groupId === pendingGroupCloseId,
   )
   const pendingGroupTabs = pendingGroupSessions.length
-  // Git worktrees of a workspace's repository (Herdr): the New/Open dialog
+  // Git worktrees of a group's repository (caps.worktrees): the New/Open dialog
   // and the removal, asked twice when the worktree has changes.
   const [worktreeDialog, setWorktreeDialog] = useState<{
     mode: 'new' | 'open'

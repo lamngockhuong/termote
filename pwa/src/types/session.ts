@@ -92,7 +92,7 @@ export interface SessionGroup {
   name: string
   // Heaviest agent status among the group's tabs.
   agentStatus?: AgentStatus
-  // Its place in a Herdr worktree group (linked worktree, or the
+  // Its place in a repository's worktree group (linked worktree, or the
   // repository's own checkout), the branch, when known, and a linked
   // worktree's repository checkout (parent), when open.
   worktree?: { linked: boolean; branch?: string; parent?: string }

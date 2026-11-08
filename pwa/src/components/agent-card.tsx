@@ -98,7 +98,7 @@ interface Props {
   // words ("workspace api"), when there are several
   where: string
   groupTitle?: string
-  // The group is a worktree of a Herdr worktree group
+  // The group is a linked worktree of a repository
   worktree?: boolean
   // What /api/mux/overview read for the pane, once read
   overview?: OverviewPane
