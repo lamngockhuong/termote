@@ -818,11 +818,13 @@ On Herdr it reports `blocked`, so an approval card has options and a single-use 
 approval request, so the status is never `blocked`: `AgentSession.DialogsReadOnly` makes
 `prompt` answer `unsupported` with no options and no `promptId` (the PWA shows "Answer this
 dialog in the terminal."), and `answer` has nothing to consume. Other Codex dialogs (model
-picker, rate-limit prompt, …) are always read only, on either backend. A list or picker screen
-(`/model` and its effort step) has a selected numbered `› N.` row and a footer such as `enter
-select · esc back` as the last row or two; herdr draws that row in colours, not reverse video. It reads
-as a read-only dialog, never as a composer draft, so `/model` is confirmed submitted and a message
-onto an open picker gets 409 `input_not_ready`.
+picker, rate-limit prompt, …) are always read only, on either backend. A list, picker or other
+dialog screen (`/model` and its effort step, a rate-limit or new-model prompt) has a selected
+numbered `› N.` row, the options after it numbered on, and a footer of key hints such as `enter
+select · esc back` or `enter/esc confirm · ^c quit` as the last row or two; herdr draws that row in
+colours, not reverse video. It reads as a read-only dialog, never as a composer draft (a typed
+`1. foo` has the composer's hint rows under it instead), so `/model` is confirmed submitted and a
+message onto an open dialog gets 409 `input_not_ready`.
 
 `prompt` reads the screen and recognises the dialog anchored at its bottom: `permission`, a
 single-choice `select` (at most 9 options), a `multiselect` tab, or `unsupported` for anything

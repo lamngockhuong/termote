@@ -1,0 +1,25 @@
+
+
+
+  [0m[38;2;99;168;248m>_ [0m[1mOpenAI Codex[0m[2m (v0.167.0)[0m
+     [0m[2m/home/user/proj[0m
+
+[0m[2m  To get started, describe a task or try one of these commands:[0m
+
+  /init[0m[2m - create an AGENTS.md file with instructions for Codex[0m
+  /status[0m[2m - show current session configuration[0m
+  /permissions[0m[2m - choose what Codex is allowed to do[0m
+  /model[0m[2m - choose what model and reasoning effort to use[0m
+  /review[0m[2m - review any changes and find issues[0m
+ 
+[0m[48;2;57;57;71m                                                                                               [0m
+[0m[48;2;57;57;71m  [0m[1m[48;2;57;57;71mUpdate Model Permissions[0m[48;2;57;57;71m                                                                     [0m
+[0m[48;2;57;57;71m                                                                                               [0m
+[0m[48;2;57;57;71m                                                                                               [0m
+[0m[1m[38;2;0;0;46m[48;2;99;168;248m› 1. Ask for approval  [0m[38;2;0;0;46m[48;2;99;168;248mRead and edit workspace files and run commands, with approval required[0m[1m[38;2;0;0;46m[48;2;99;168;248m  [0m
+[0m[1m[38;2;0;0;46m[48;2;99;168;248m                       [0m[38;2;0;0;46m[48;2;99;168;248mfor internet access or edits outside the workspace[0m[1m[38;2;0;0;46m[48;2;99;168;248m                      [0m
+[0m[48;2;57;57;71m  2. Approve for me    [0m[2m[48;2;57;57;71mOnly ask for actions detected as potentially unsafe[0m[48;2;57;57;71m                     [0m
+[0m[48;2;57;57;71m  3. Full Access       [0m[2m[48;2;57;57;71mUse with caution: Codex can edit files outside this workspace and access[0m
+[0m[48;2;57;57;71m                       [0m[2m[48;2;57;57;71mthe internet without approval[0m[48;2;57;57;71m                                           [0m
+[0m[48;2;57;57;71m                                                                                               [0m
+  [0m[1m[38;2;205;214;244menter[0m[2m select · [0m[1m[38;2;205;214;244mesc[0m[2m back                                                                      [0m
