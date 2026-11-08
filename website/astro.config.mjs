@@ -164,6 +164,11 @@ export default defineConfig({
               link: "/guides/claude-code-from-phone/",
               translations: { vi: "Claude Code từ điện thoại" },
             },
+            {
+              label: "Remote Control Alternatives",
+              link: "/guides/remote-control-alternatives/",
+              translations: { vi: "Thay Remote Control" },
+            },
           ],
         },
         {

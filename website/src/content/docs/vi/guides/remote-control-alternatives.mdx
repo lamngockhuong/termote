@@ -1,0 +1,68 @@
+---
+title: Các lựa chọn thay Remote Control
+description: "Termote, Remote Control của Anthropic, SSH kèm tmux, tmux-webui và mobux đặt cạnh nhau: tự host, gói Claude, phiên mới, agent, phím, file và giấy phép."
+head:
+  - tag: title
+    content: "Các lựa chọn tự host thay Claude Remote Control | Termote"
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Remote Control của Anthropic là một cách vào Claude Code từ điện thoại, nhưng không phải cách duy nhất. Trang này
+đặt nó cạnh các lựa chọn tự host: ứng dụng SSH kèm tmux, hai giao diện web cho tmux (tmux-webui và mobux), và
+Termote, công cụ mà trang web này viết tài liệu.
+
+<Aside>
+  Đối chiếu với tài liệu của từng dự án vào tháng 11/2026. Mỗi ô chỉ ghi điều tài liệu đó nói; "không thấy trong tài
+  liệu" nghĩa là chúng tôi không tìm thấy thông tin theo hướng nào. Hãy mở liên kết nguồn trước khi dựa vào một chi
+  tiết.
+</Aside>
+
+## Đặt cạnh nhau
+
+| | Termote | Remote Control | Ứng dụng SSH + tmux | tmux-webui | mobux |
+| --- | --- | --- | --- | --- | --- |
+| Chạy ở đâu | Máy của bạn, kết nối thẳng | Máy của bạn, chuyển tiếp qua API của Anthropic | Máy của bạn, qua SSH | Máy của bạn | Máy của bạn |
+| Gói Claude cần có | Không cần (gói trả phí hay API key) | Pro, Max, Ultra, Team hoặc Enterprise; không dùng API key | Không cần | Không cần | Không cần |
+| Mở phiên mới từ điện thoại | Có | Có, ở server mode | Có (`tmux new`) | Không thấy trong tài liệu | Có (tạo phiên tmux) |
+| Agent | Claude Code và Codex dạng chat; CLI bất kỳ trong terminal | Chỉ Claude Code | CLI bất kỳ, dạng terminal | CLI bất kỳ, dạng terminal; báo khi agent chờ | CLI bất kỳ, dạng terminal |
+| Phím trên điện thoại | Thanh phím Tab, Esc, Ctrl, mũi tên; cử chỉ | Ứng dụng chat, không có terminal | Tuỳ ứng dụng SSH | Thanh phím nhanh | Thanh nhập kèm dải phím |
+| File và git diff | Duyệt file, xem trước, diff và stage | Gửi ảnh và file vào phiên | Qua lệnh shell | Không thấy trong tài liệu | Chỉ tải file lên |
+| Thông báo | Web Push khi agent làm xong hoặc cần bạn | Đẩy khi một task xong hoặc Claude cần bạn quyết định | Không có | Đẩy khi một pane agent đang chờ | Web Push theo tiếng chuông của tmux |
+| Giấy phép | MIT | Một phần của Claude Code | tmux: ISC; ứng dụng tuỳ loại | MIT | MIT |
+| Máy phải luôn bật | Có | Có | Có | Có | Có |
+
+Nguồn: [tài liệu Termote](/vi/getting-started/),
+[Remote Control](https://code.claude.com/docs/en/remote-control),
+[tmux](https://github.com/tmux/tmux),
+[tmux-webui](https://github.com/operonlab/tmux-webui),
+[mobux](https://github.com/mvhenten/mobux).
+
+## Khi nào chọn cái nào
+
+- **Remote Control** hợp khi bạn đã trả tiền cho một gói Claude, không muốn cài gì trên điện thoại ngoài ứng dụng
+  Claude, và chỉ cần Claude Code. Máy bạn không mở cổng nào để nghe; đổi lại, transcript của phiên được lưu trên
+  server của Anthropic trong lúc kết nối, và cách dùng bằng API key bị loại ra.
+- **Ứng dụng SSH kèm tmux** hợp khi một terminal trên điện thoại là đủ và bạn vốn đã SSH vào máy được. Máy tính
+  không cần cài thêm gì, nhưng không có gì báo cho bạn khi agent đang chờ.
+- **tmux-webui hoặc mobux** hợp khi bạn muốn tmux trong trình duyệt trên điện thoại, có phím cho điện thoại và thông
+  báo đẩy, không cần view chat. tmux-webui còn điều khiển tmux trên các host khác từ cùng một trang; mobux có nhập
+  bằng giọng nói.
+- **Termote** hợp khi bạn muốn Claude Code và Codex dạng chat, file và git diff của phiên, cùng mọi terminal của máy
+  trong một ứng dụng, với gói Claude nào hay API key cũng được, trên tmux, Herdr hoặc Zellij.
+
+## Termote kém ở đâu
+
+- Bạn tự cài, tự chạy, và tự chọn cách để điện thoại vào được: mạng LAN, Tailscale, hoặc Cloudflare Tunnel có Access
+  đứng trước. Remote Control thì không cần dựng mạng gì.
+- Máy tính phải luôn bật và không ngủ. Điều này đúng với mọi lựa chọn ở đây, kể cả Remote Control.
+- Nó là một shell từ xa: ai đăng nhập với toàn quyền thì làm được mọi thứ người dùng của bạn làm được. Hãy đọc
+  [mô hình bảo mật](/vi/usage/security/) trước khi mở nó ra ngoài máy của bạn.
+- View Chat chỉ dành cho Claude Code và Codex. Agent khác, như GitHub Copilot CLI, chỉ dùng được trong view
+  terminal.
+
+## Bước tiếp theo
+
+- [Điều khiển Claude Code từ điện thoại](/vi/guides/claude-code-from-phone/) - Cài Termote từng bước
+- [Bắt đầu](/vi/getting-started/) - Cài bằng hai lệnh
+- [Mô hình bảo mật](/vi/usage/security/) - Termote bảo vệ được gì và không chặn được gì
