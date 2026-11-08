@@ -367,11 +367,15 @@ jobs:
       contents: read
       packages: write
     steps:
-      # The buildx whose cross-registry imagetools copy was tested.
+      # The buildx whose cross-registry imagetools copy was tested. The
+      # docker driver starts no BuildKit container: imagetools only talks to
+      # the registries, and the default docker-container driver would pull
+      # buildkit by tag while this job holds the registry tokens.
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
         with:
           version: v0.36.1
+          driver: docker
 
       - name: Login to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0

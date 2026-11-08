@@ -2470,7 +2470,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   one (`releaseSigned`, `server/cli_update.go`), and without `TERMOTE_VERSION`, `install.sh` and
   `install.ps1` refuse a release before 1.10.0. The `docker` job pins the binfmt (QEMU) and
   BuildKit images it builds with by digest, like the actions; a Renovate `customManagers` entry
-  updates both tags and digests.
+  updates both tags and digests. `docker-tags`, which holds the registry tokens, runs buildx with
+  the `docker` driver, so it starts no BuildKit container at all (`imagetools` only talks to the
+  registries).
   The `homebrew` job (after `publish`, stable releases only, never a dry run) writes
   `Formula/termote.rb` only from a `checksums.txt` whose `.sig` verifies with the key `install.sh`
   pins, since brew checks nothing but the hash the formula names; it pushes with
