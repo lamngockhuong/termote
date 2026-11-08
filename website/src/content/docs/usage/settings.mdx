@@ -194,6 +194,10 @@ Limits:
 - `termote start --fresh`, or any change of the password, stops push to every device. A device
   gets it again once it opens Termote and signs in with the new password.
 - Logging out also stops push to that device.
+- A browser signed in with the password gets push only while that sign-in lasts: it stops when the
+  sign-in is revoked (Settings, or `termote signins revoke`) or expires (24 hours), and when the
+  server restarts or updates. Opening Termote and signing in again turns it back on. A paired
+  device keeps getting push until it is revoked or expires.
 
 | Option | Behavior                                     | Default |
 | ------ | -------------------------------------------- | ------- |

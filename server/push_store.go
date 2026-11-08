@@ -50,6 +50,7 @@ var (
 
 var (
 	errPushInvalidKeys = &codedError{"invalid_keys", "the subscription keys are not a P-256 key and a 16-byte secret", http.StatusBadRequest}
+	errPushSignedOut   = &codedError{"signed_out", "signed out", http.StatusUnauthorized}
 )
 
 // pushSub is one device's push subscription. Gen ties it to the credential
@@ -57,12 +58,15 @@ var (
 // password), so it ends with that device; Created is when it was last
 // subscribed (an upsert renews it), the age the cap evicts by.
 type pushSub struct {
-	Endpoint string    `json:"endpoint"`
-	P256dh   string    `json:"p256dh"`
-	Auth     string    `json:"auth"`
-	Gen      string    `json:"gen"`
-	Device   string    `json:"device,omitempty"`
-	Created  time.Time `json:"created"`
+	Endpoint string `json:"endpoint"`
+	P256dh   string `json:"p256dh"`
+	Auth     string `json:"auth"`
+	Gen      string `json:"gen"`
+	Device   string `json:"device,omitempty"`
+	// Session: the password session (sign-in) that subscribed; none for
+	// one made with Basic auth or before sessions were recorded.
+	Session string    `json:"session,omitempty"`
+	Created time.Time `json:"created"`
 }
 
 // vapidKeys is vapid.json: the VAPID private scalar, the key of the Topic
@@ -89,6 +93,11 @@ type pushStore struct {
 	bindKey  []byte
 	gen      string
 	now      func() time.Time
+
+	// sessionAlive, when set, reports whether a password session still
+	// exists; add asks it under mu, so a session ending while its
+	// subscription is added cannot leave one behind its removal.
+	sessionAlive func(id string) bool
 
 	// mu covers subs, tokens and every write of subscriptions.json.
 	mu     sync.Mutex
@@ -306,7 +315,7 @@ func capSubs(subs []pushSub) []pushSub {
 }
 
 // add stores sub, or renews the entry with its endpoint, bound to the
-// current credential. Its errors are codedErrors (invalid_endpoint,
+// current credential. Its errors are codedErrors (invalid_endpoint, signed_out,
 // invalid_keys) except a failed save.
 func (s *pushStore) add(sub pushSub) error {
 	if err := validEndpoint(sub.Endpoint); err != nil {
@@ -317,6 +326,9 @@ func (s *pushStore) add(sub pushSub) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if sub.Session != "" && s.sessionAlive != nil && !s.sessionAlive(sub.Session) {
+		return errPushSignedOut
+	}
 	sub.Gen = s.gen
 	sub.Created = s.now().UTC()
 	next := make([]pushSub, 0, len(s.subs)+1)
@@ -347,11 +359,21 @@ func (s *pushStore) remove(endpoint string) error {
 }
 
 // removeDevices deletes the subscriptions of the paired devices keep does
-// not keep (revoked, expired); the password's stay.
+// not keep (revoked, expired).
 func (s *pushStore) removeDevices(keep func(id string) bool) error {
+	return s.removeWhere(func(sub pushSub) bool { return sub.Device != "" && !keep(sub.Device) })
+}
+
+// removeSessions deletes the subscriptions of the password sessions keep
+// does not keep (revoked, signed out, expired, pushed out). One with no
+// session (Basic auth, or older than this field) stays.
+func (s *pushStore) removeSessions(keep func(id string) bool) error {
+	return s.removeWhere(func(sub pushSub) bool { return sub.Session != "" && !keep(sub.Session) })
+}
+
+func (s *pushStore) removeWhere(gone func(pushSub) bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	gone := func(sub pushSub) bool { return sub.Device != "" && !keep(sub.Device) }
 	if !slices.ContainsFunc(s.subs, gone) {
 		return nil
 	}

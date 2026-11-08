@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -275,4 +276,72 @@ func TestPushSubscriptionOfDeviceGoneAtStart(t *testing.T) {
 	if subs := store.list(); len(subs) != 1 || subs[0].Endpoint != password.Endpoint {
 		t.Errorf("after the restart: %+v", subs)
 	}
+}
+
+// A browser signed in with the password subscribes under its session: the
+// subscription ends with the session (revoked, signed out, or a restart,
+// since sessions live in memory). One made with Basic auth, which names no
+// session, stays as before.
+func TestPushSubscriptionEndsWithItsSession(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.PushDir = filepath.Join(t.TempDir(), "push")
+	h, hub, store, err := buildServer(cfg, &fakeMux{snap: oneTabSnapshot()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, b := signIn(t, h, "Browser A"), signIn(t, h, "Browser B")
+	subA, subB, basic := fcmSub(t, 1), fcmSub(t, 2), fcmSub(t, 3)
+	for _, req := range []*http.Request{
+		asDevice("POST", "/api/mux/push/subscribe", subscribeBody(t, subA), a),
+		asDevice("POST", "/api/mux/push/subscribe", subscribeBody(t, subB), b),
+		apiRequest("POST", "/api/mux/push/subscribe", subscribeBody(t, basic)),
+	} {
+		if rec := serve(h, req); rec.Code != http.StatusOK {
+			t.Fatalf("subscribe = %d %s", rec.Code, rec.Body)
+		}
+	}
+	endpoints := func(subs []pushSub) []string {
+		var out []string
+		for _, s := range subs {
+			out = append(out, s.Endpoint)
+		}
+		slices.Sort(out)
+		return out
+	}
+	want := func(when string, subs ...pushSub) {
+		t.Helper()
+		got, exp := endpoints(store.list()), endpoints(subs)
+		if !slices.Equal(got, exp) {
+			t.Errorf("%s: %q, want %q", when, got, exp)
+		}
+	}
+	want("subscribed", subA, subB, basic)
+
+	var idB string
+	for _, v := range listSignins(t, h, asDevice("GET", "/api/mux/signins", "", a)) {
+		if !v.Current {
+			idB = v.ID
+		}
+	}
+	if rec := serve(h, apiRequest("DELETE", "/api/mux/signins/"+idB, "")); rec.Code != http.StatusOK {
+		t.Fatalf("revoke = %d %s", rec.Code, rec.Body)
+	}
+	want("after the revoke", subA, basic)
+
+	// Signed in again, then out: the new session's subscription goes.
+	c := signIn(t, h, "Browser C")
+	serve(h, asDevice("POST", "/api/mux/push/subscribe", subscribeBody(t, subB), c))
+	want("subscribed again", subA, subB, basic)
+	if rec := serve(h, asDevice("POST", logoutPath, "{}", c)); rec.Code != http.StatusNoContent {
+		t.Fatalf("logout = %d", rec.Code)
+	}
+	want("after the logout", subA, basic)
+	hub.shutdown(context.Background())
+
+	_, hub, store, err = buildServer(cfg, &fakeMux{snap: oneTabSnapshot()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { hub.shutdown(context.Background()) })
+	want("after a restart", basic)
 }

@@ -1872,7 +1872,12 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   evicted; each bound to `gen` = HMAC(bindKey, user + password), so `start --fresh` or a new
   password drops every device until it signs in again (its page re-subscribes). One made by a
   paired device carries its id and goes when the device ends (revoke, expiry, a cascade, a reload
-  that no longer finds it), and at start for a device no longer live; the password's stay. One a
+  that no longer finds it), and at start for a device no longer live. One made by a browser signed
+  in with the password carries its session id and goes when the session ends (revoked, signed out,
+  expired, pushed out), and at start, since sessions live in memory; the store asks whether the
+  session is still alive under its own lock when it adds one, so a subscribe racing the session's end
+  is refused (401 `signed_out`) rather than left behind its removal; one made with Basic auth
+  carries neither and stays, like one subscribed before session ids were recorded. One a
   device made before this (no id) reads as the password's until its page subscribes again (on load,
   and every 10 minutes while visible), so a device revoked before that keeps receiving pushes. Only 404/410
   drop a subscription; 401/403 are logged and kept ("check the server clock" when all fail);
