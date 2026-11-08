@@ -57,7 +57,45 @@ var (
 	errGitBusy          = errors.New("git busy")
 	errDirNotAvailable  = inputError("directory not available")
 	errUnsafeRepoConfig = errors.New("repository config defines a filter driver or hook that cannot be disabled")
+	errNoHooksDir       = errors.New("no empty hooks directory for git")
 )
+
+// noHooksDir is the core.hooksPath every Files git command runs with: an
+// empty directory termote owns, by absolute path. Not the null device: on
+// Windows that is NUL, a relative path git resolves against the worktree,
+// where a repository can ship NUL/post-index-change. Made at first use
+// under the user's cache dir; tests point it at a temporary one.
+var noHooksDir = sync.OnceValues(func() (string, error) {
+	cache, err := os.UserCacheDir()
+	if err == nil {
+		cache, err = makeNoHooksDir(filepath.Join(cache, "termote", "no-hooks"))
+	}
+	if err != nil {
+		log.Printf("files: git disabled: %v", err)
+	}
+	return cache, err
+})
+
+// makeNoHooksDir creates dir (0700) and checks it is absolute, a real
+// directory the server user owns and empty, so no hook can be found in it.
+func makeNoHooksDir(dir string) (string, error) {
+	if !filepath.IsAbs(dir) {
+		return "", errors.New("hooks directory is not absolute")
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	if fi, err := os.Lstat(dir); err != nil || !fi.IsDir() {
+		return "", errors.New("hooks directory is not a directory")
+	}
+	if err := checkPrivateDir(dir); err != nil {
+		return "", err
+	}
+	if entries, err := os.ReadDir(dir); err != nil || len(entries) > 0 {
+		return "", errors.New("hooks directory is not empty")
+	}
+	return dir, nil
+}
 
 // filesRoot is what a pane's directory resolves to.
 type filesRoot struct {
@@ -174,20 +212,21 @@ type repoOverrides struct {
 
 // argv builds the full git command line. Overrides go through -c, so they
 // win over every config file of the repo.
-func (g *gitRunner) argv(c gitCall, o repoOverrides, args []string) []string {
+func (g *gitRunner) argv(c gitCall, o repoOverrides, hooksDir string, args []string) []string {
 	// protocol.allow=never: no transport by default. It does not override
 	// a protocol.<name>.allow of the repo's own config, which is why
 	// gitEnv also sets an empty GIT_ALLOW_PROTOCOL. -c settings reach any
 	// git git runs itself.
-	// core.hooksPath to the null device: no hook file of the repo runs (diff
-	// refreshing the index would run post-index-change), and
+	// core.hooksPath to an empty directory (noHooksDir): no hook file of
+	// the repo runs (diff refreshing the index would run
+	// post-index-change), and
 	// diff.autoRefreshIndex=false keeps diff from writing the index at all.
 	// A hook defined in config runs whatever core.hooksPath says (git 2.54
 	// and later): hook.<name>.enabled=false turns each one off, and a git
 	// without such hooks ignores the setting.
 	argv := []string{"-C", c.root, "--no-pager",
 		"-c", "core.fsmonitor=false", "-c", "core.untrackedCache=false", "-c", "protocol.allow=never",
-		"-c", "core.hooksPath=" + os.DevNull, "-c", "diff.autoRefreshIndex=false"}
+		"-c", "core.hooksPath=" + hooksDir, "-c", "diff.autoRefreshIndex=false"}
 	if c.safeDir != "" {
 		argv = append(argv, "-c", "safe.directory="+c.safeDir)
 	}
@@ -289,6 +328,10 @@ func (g *gitRunner) backingOff(root string) bool {
 }
 
 func (g *gitRunner) exec(ctx context.Context, c gitCall, o repoOverrides, args ...string) ([]byte, bool, error) {
+	hooksDir, err := noHooksDir()
+	if err != nil {
+		return nil, false, errNoHooksDir
+	}
 	timeout := g.timeout
 	if c.write {
 		ctx, timeout = context.WithoutCancel(ctx), g.writeTimeout
@@ -318,7 +361,7 @@ func (g *gitRunner) exec(ctx context.Context, c gitCall, o repoOverrides, args .
 
 	run, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	cmd := exec.CommandContext(run, g.bin, g.argv(c, o, args)...)
+	cmd := exec.CommandContext(run, g.bin, g.argv(c, o, hooksDir, args)...)
 	if c.write {
 		cmd.Cancel = interruptProcess(cmd)
 	}
@@ -338,7 +381,7 @@ func (g *gitRunner) exec(ctx context.Context, c gitCall, o repoOverrides, args .
 	var stderr bytes.Buffer
 	cmd.Stdout = stdout
 	cmd.Stderr = &limitedWriter{w: &stderr, n: gitStderrMax}
-	err := cmd.Run()
+	err = cmd.Run()
 	if stdout.truncated {
 		// git was stopped because the rest is not wanted.
 		return stdout.buf.Bytes(), true, nil
@@ -543,8 +586,9 @@ func (rr *rootResolver) resolve(ctx context.Context, dir string) (filesRoot, err
 		switch {
 		case err == nil:
 			return rootFromToplevel(abs, top, gitDir, ""), nil
-		case errors.As(err, &ge), errors.Is(err, exec.ErrNotFound):
-			// Not a repo, or no git: the directory itself.
+		case errors.As(err, &ge), errors.Is(err, exec.ErrNotFound), errors.Is(err, errNoHooksDir):
+			// Not a repo, no git, or no hooks dir to run git with: the
+			// directory itself.
 			return filesRoot{Root: abs}, nil
 		default:
 			return filesRoot{}, err

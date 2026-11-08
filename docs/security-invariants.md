@@ -781,7 +781,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   over a machine ends before its hub's `machineResponseHeaderWait` and is never delivered after
   the hub answered 502; a test checks both bounds); it re-checks the process, session and screen, and sends nothing unless
   the screen shows the expected state (an empty input box, the dialog the client saw with a
-  single-use `promptId`). A box that already holds this very message as text (an earlier send
+  single-use `promptId`). The dialog card shows every text it reads off the screen (title, body,
+  option labels and details, tab labels) with its hidden characters as `⟨U+XXXX⟩` (`visibleUnsafe`,
+  the body keeping its line breaks), so a bidi override in a proposed command cannot make it read as
+  another one before the user approves it. A box that already holds this very message as text (an earlier send
   refused `paste_not_confirmed` whose paste showed later) gets no second paste: it is submitted
   as it is. Any other draft, a long-paste token (it carries a count, not the text) or a message
   with images is refused 409 `input_has_draft` with no key sent, unless the body asks
@@ -1090,8 +1093,13 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   reads a file again only when the user asks, so nothing makes the many requests a compression
   oracle (guessing a file's secret by the answer's length) needs.
   Content search and git diffs stay UTF-8 only. git runs
-  without a shell, with `GIT_*`/`TERMOTE_*` stripped, hooks (`core.hooksPath` to the null
-  device, which does not reach a hook defined in config: every `hook.<name>.*` the config
+  without a shell, with `GIT_*`/`TERMOTE_*` stripped, hooks (`core.hooksPath` to an empty
+  directory termote owns, `<user cache dir>/termote/no-hooks` (`noHooksDir`: absolute, a real directory,
+  empty, and on Unix 0700 and owned by the server user (`checkPrivateDir`), else no git runs at all,
+  `errNoHooksDir`: Files browses the folder as a plain directory, as with no git, and the allow-path
+  probe counts it as a git dir). Never the null device: Windows' `NUL` is relative, and git resolves a
+  relative `core.hooksPath` against the worktree, where a repository can ship
+  `NUL/post-index-change`. Neither reaches a hook defined in config: every `hook.<name>.*` the config
   lists, includes followed, gets `-c hook.<name>.enabled=false` on every command, looked up in
   the same `git config` call as the filter drivers; a name `-c` cannot carry (`=`, a line break)
   fails the command, `errUnsafeRepoConfig`, and a config git cannot read fails it with git's own

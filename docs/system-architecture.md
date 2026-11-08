@@ -1006,8 +1006,9 @@ a warning, not a boundary; the deny list above is the boundary.
 `truncated`). An untracked or conflicted file has no diff: it is read whole through `os.Root`
 with the content route's checks. git is run as an argument array (no shell), with `GIT_*` and
 `TERMOTE_*` removed from its environment and overrides a repository cannot undo:
-`core.fsmonitor=false`, `core.hooksPath` set to the null device (no hook file runs, even the
-`post-index-change` an index refresh would trigger), `hook.<name>.enabled=false` for every hook
+`core.fsmonitor=false`, `core.hooksPath` set to an empty directory termote owns, by absolute path
+(`<user cache dir>/termote/no-hooks`; no hook file runs, even the `post-index-change` an index refresh
+would trigger; not the null device, since Windows' `NUL` is relative to the worktree), `hook.<name>.enabled=false` for every hook
 its config defines (git 2.54 and later run those whatever `core.hooksPath` says),
 `diff.autoRefreshIndex=false`, every `filter.<driver>` it configures emptied, `--no-ext-diff`, `--no-textconv`,
 `--ignore-submodules=all`, no lazy fetch and no transport at all (an empty
