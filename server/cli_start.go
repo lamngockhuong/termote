@@ -1248,12 +1248,6 @@ func (c *cli) startAllowPaths(o startOptions, saved *savedConfig) error {
 		before = saved.AllowPaths
 	}
 	c.unknownRemovedPaths(before, o.removePaths)
-	if _, err := c.checkAllowPaths(o.allowPaths, o.newPaths, "start", nil); err != nil {
-		return err
-	}
-	// psmux reports no pane directory, so Files (and its Places) needs herdr.
-	if len(o.allowPaths) > 0 && o.mux == "tmux" && c.goos == "windows" {
-		c.warnf("Places need a backend with Files (on Windows: --mux herdr)")
-	}
-	return nil
+	_, err := c.checkAllowPaths(o.allowPaths, o.newPaths, "start", nil)
+	return err
 }

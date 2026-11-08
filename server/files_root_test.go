@@ -592,12 +592,6 @@ func TestHerdrPaneDir(t *testing.T) {
 }
 
 func TestTmuxPaneDirRejectsBadIDs(t *testing.T) {
-	if !tmuxFilesSupported {
-		if _, _, err := (tmuxMux{}).PaneDir(context.Background(), "0"); !errors.Is(err, errUnsupported) {
-			t.Errorf("PaneDir without support = %v", err)
-		}
-		return
-	}
 	for _, bad := range []string{"-t", "main:0", "name", ""} {
 		var ie inputError
 		if _, _, err := (tmuxMux{}).PaneDir(context.Background(), bad); !errors.As(err, &ie) {

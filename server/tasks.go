@@ -111,6 +111,11 @@ func (t *tasksAPI) handleList(w http.ResponseWriter, r *http.Request) {
 	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
+	// psmux runs no tasks (runsTasks), so it lists none either.
+	if isPsmux(t.files.m) {
+		t.files.error(w, "tasks list", errUnsupported)
+		return
+	}
 	req, cancel, ok := t.start(w, r)
 	if !ok {
 		return

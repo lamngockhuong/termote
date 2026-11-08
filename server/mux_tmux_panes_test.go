@@ -265,11 +265,11 @@ func TestTmuxPaneRoutesTakeAPaneID(t *testing.T) {
 	if _, _, err := m.AgentSession(ctx, "%4"); err == nil || err.Error() != "unknown pane" {
 		t.Errorf("AgentSession with another pane's reply = %v", err)
 	}
-	useFakeTmuxScript(t, map[string]fakeTmuxReply{"display-message": {out: "$0:1:%5:77:main:/tmp\n"}})
+	useFakeTmuxScript(t, map[string]fakeTmuxReply{"display-message": {out: "$0:1:%5:77:900:main:/tmp\n"}})
 	if _, _, err := m.PaneDir(ctx, "%4"); err == nil || err.Error() != "unknown pane" {
 		t.Errorf("PaneDir with another pane's reply = %v", err)
 	}
-	args = useFakeTmuxScript(t, map[string]fakeTmuxReply{"display-message": {out: "$9:1:%4:77:main:/tmp\n"}})
+	args = useFakeTmuxScript(t, map[string]fakeTmuxReply{"display-message": {out: "$9:1:%4:77:900:main:/tmp\n"}})
 	if dir, key, err := m.PaneDir(ctx, "%4"); err != nil || dir != "/tmp" || key != "%4@77" {
 		t.Errorf("PaneDir = %q %q %v", dir, key, err)
 	}

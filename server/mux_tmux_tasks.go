@@ -11,7 +11,14 @@ import (
 
 // A task runs in a window of its own, addressed by its pane's id (%N):
 // a window index shifts with a move or renumber-windows, a pane id never
-// names another pane. Not on psmux, which has no Files (so no root).
+// names another pane. Not on psmux, which numbers panes per session: a %N
+// there can name another session's pane.
+
+// runsTasks reports whether m runs tasks (caps.tasks, with caps.files).
+func runsTasks(m Mux) bool {
+	_, ok := m.(taskMux)
+	return ok && !isPsmux(m)
+}
 
 // NewTaskTab opens a window in groupID's session whose shell starts in dir,
 // without making it the session's current window (-d). dir and name go

@@ -582,34 +582,56 @@ func TestTmuxAgentSessionArgv(t *testing.T) {
 	if !(tmuxMux{}).Caps().AgentChat {
 		t.Error("Caps().AgentChat = false")
 	}
-	if (tmuxMux{}).Caps().Files != tmuxFilesSupported {
-		t.Error("Caps().Files does not follow tmuxFilesSupported")
+	if !(tmuxMux{}).Caps().Files {
+		t.Error("Caps().Files = false")
 	}
 }
 
 func TestTmuxPaneDirChecksTheSession(t *testing.T) {
-	if !tmuxFilesSupported {
-		t.Skip("no Files on this platform")
-	}
 	orig := tmuxSession
 	defer func() { tmuxSession = orig }()
 	tmuxSession = "main"
-	useFakeTmux(t, "$3:1:%5:77:work:/srv/a:b")
+	args := useFakeTmux(t, "$3:1:%5:77:900:work:/srv/a:b")
 	if dir, key, err := (tmuxMux{}).PaneDir(context.Background(), "$3:1"); err != nil || dir != "/srv/a:b" || key != "%5@77" {
 		t.Errorf("PaneDir($3:1) = %q, %q, %v", dir, key, err)
+	}
+	if got := strings.TrimSpace(args()); got != "display-message -p -t $3:=1 #{session_id}:#{window_index}:#{pane_id}:#{pid}:#{pane_pid}:#{session_name}:#{pane_current_path}" {
+		t.Errorf("argv = %q", got)
 	}
 	for _, id := range []string{"1", "$4:1", "$3:0"} {
 		if _, _, err := (tmuxMux{}).PaneDir(context.Background(), id); !errors.Is(err, errUnknownPane) {
 			t.Errorf("PaneDir(%q) = %v, want unknown pane", id, err)
 		}
 	}
-	useFakeTmux(t, "$0:1:%5:77:main:/home/u")
+	useFakeTmux(t, "$0:1:%5:77:900:main:/home/u")
 	if dir, _, err := (tmuxMux{}).PaneDir(context.Background(), "1"); err != nil || dir != "/home/u" {
 		t.Errorf("PaneDir(1) = %q, %v", dir, err)
 	}
-	useFakeTmux(t, "$0:1:%5:77:main:")
+	useFakeTmux(t, "$0:1:%5:77:900:main:")
 	if _, _, err := (tmuxMux{}).PaneDir(context.Background(), "1"); !errors.Is(err, errUnsupported) {
 		t.Errorf("PaneDir without a path = %v", err)
+	}
+	// psmux numbers panes per session: %1 in two sessions are two keys, and
+	// a session id reused for a new pane (another pid) is a third.
+	origPsmux := tmuxIsPsmux
+	tmuxIsPsmux = true
+	t.Cleanup(func() { tmuxIsPsmux = origPsmux })
+	for _, tc := range []struct{ id, reply, dir, key string }{
+		{"$3:1", `$3:1:%1:77:900:work:C:\a`, `C:\a`, "$3:%1@900"},
+		{"$4:1", `$4:1:%1:78:901:other:C:\b`, `C:\b`, "$4:%1@901"},
+		{"$3:1", `$3:1:%1:79:902:work:C:\a`, `C:\a`, "$3:%1@902"},
+	} {
+		useFakeTmux(t, tc.reply)
+		if dir, key, err := (tmuxMux{}).PaneDir(context.Background(), tc.id); err != nil || dir != tc.dir || key != tc.key {
+			t.Errorf("psmux PaneDir(%s) = %q, %q, %v", tc.id, dir, key, err)
+		}
+	}
+	tmuxIsPsmux = origPsmux
+	for _, bad := range []string{"$0:1:%5:0:900:main:/h", "$0:1:%5:77:x:main:/h", "$0:1:%5:77::main:/h", "$0:1:%5:77:-3:main:/h"} {
+		useFakeTmux(t, bad)
+		if _, _, err := (tmuxMux{}).PaneDir(context.Background(), "1"); !errors.Is(err, errUnknownPane) {
+			t.Errorf("PaneDir(%q) = %v, want unknown pane", bad, err)
+		}
 	}
 	if _, _, err := (tmuxMux{}).PaneDir(context.Background(), "shell"); !paneMissing(err) {
 		t.Errorf("PaneDir(shell) = %v", err)

@@ -598,7 +598,7 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 	}
 	agent.registerCommandsRoute(mux, files, allowed)
 	registerTaskRoutes(mux, files, userTasks, agent.input)
-	_, agent.tasks = m.(taskMux)
+	agent.tasks = runsTasks(m)
 	var recent *recentGroupStore
 	if cfg.RecentGroupsDir != "" {
 		var err error

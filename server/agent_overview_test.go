@@ -340,7 +340,7 @@ func TestOverviewWithoutFilesOrSession(t *testing.T) {
 	m := &overviewFakeMux{filesFakeMux: filesFakeMux{fakeMux: fakeMux{snap: agentPanes(2)}}}
 	mux, _ := newOverviewServer(t, m)
 	serve(mux, httptest.NewRequest(http.MethodGet, "/api/mux/snapshot", nil))
-	// psmux: no files, no git; no session: nothing to say, nothing pending.
+	// A backend without files: no git; no session: nothing to say, nothing pending.
 	for _, p := range getOverview(t, mux, false).Panes {
 		if strings.Join(p.Unavailable, ",") != "changes" || p.LastText != "" || p.Usage != nil {
 			t.Errorf("pane = %+v", p)

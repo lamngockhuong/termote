@@ -436,7 +436,7 @@ Open it from the sidebar's grid button (desktop) or the view menu's "Agent overv
 - [ ] One card per pane running an agent, in every group: blocked first, then working, done, idle,
       the longest in its state first; the time matches on two devices with clocks set apart
 - [ ] A Claude card shows its last message, branch and changed files, and its context share, tokens
-      and model; psmux shows no branch or changed files, and no error
+      and model, on psmux too
 - [ ] Claude Code on Opus 5.5 with no `--model`: the card's window is 1M, no `~`; after
       `/model claude-sonnet-4-6` it turns 200k, after `/model claude-sonnet-4-6[1m]` 1M again; the
       share matches the status line and `/context`
@@ -688,7 +688,18 @@ Windows, Herdr 0.8.2 or later, pwsh as the pane shell, `termote start --mux herd
 
 ## Files and Changes
 
-Run on tmux (Linux/macOS) and Herdr; psmux (Windows) offers neither view.
+Run on tmux (Linux/macOS), psmux (Windows) and Herdr.
+
+- [ ] psmux: the desktop header shows Files and Changes and the phone's view menu lists them; both
+      show the pane's repo and follow `cd`, `Set-Location` and `pushd` in pwsh 7, and `cd /d` in
+      cmd.exe, once the new directory holds for 2 s
+- [ ] psmux: two sessions, each in another repo (both panes are `%1` there): each pane's Files
+      shows its own repo, with both views open on two devices
+- [ ] psmux: `cmd /c "cd /d C:\Windows && timeout 30"` moves the root to `C:\Windows` after 2 s and
+      back when it ends; Windows PowerShell 5.1 (`powershell.exe`) keeps the directory it started
+      in after `cd`, with no error in the view
+- [ ] psmux: a directory with `#`, `%`, spaces and Vietnamese or Japanese characters opens; a UNC
+      directory (`Set-Location \\localhost\c$\Windows`) behaves as on Herdr for Windows
 
 ### Files
 

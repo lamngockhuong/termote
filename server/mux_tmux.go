@@ -305,7 +305,7 @@ func (tmuxMux) Name() string { return "tmux" }
 func (tmuxMux) Caps() Caps {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	return Caps{CopyMode: true, AgentChat: agentProcSupported, Files: tmuxFilesSupported, Groups: true,
+	return Caps{CopyMode: true, AgentChat: agentProcSupported, Files: true, Groups: true,
 		RenameGroup: true, RenameTab: true, ReorderTabs: tmuxCanReorder(ctx), PaneText: !tmuxIsPsmux, PaneLayout: !tmuxIsPsmux, RenamePane: tmuxCanNamePanes(ctx)}
 }
 
@@ -1867,33 +1867,41 @@ func tmuxAgentSession(ctx context.Context, paneID string, find func(string, int)
 // tmuxAgentSession, the session and window index in the reply must be the
 // ones asked for: tmux would otherwise answer with another window. The path
 // goes last so a ':' in it is kept; a session name has none (tmux turns it
-// into '_'). The key it returns keys the root's state, so it must be
-// unique on the server: never on psmux, which has no Files (and no
-// directory to report). A restarted server numbers its panes from %0
-// again, so the key is the pane id with the server's pid: a new pane never
-// starts from the root an old one with its id had.
+// into '_', psmux refuses it). The path is the foreground process's working
+// directory, verbatim (psmux too: pwsh 7 and cmd.exe keep it in step,
+// Windows PowerShell 5.1 does not). The key it returns keys the root's
+// state, so it must be unique on the server. A restarted tmux numbers its
+// panes from %0 again, so there the key is the pane id with the server's
+// pid: a new pane never starts from the root an old one with its id had.
+// psmux numbers panes per session (two sessions both have %1) and does not
+// hand out session ids in order, so there it is the session id and the pane
+// id with the pane's pid, which a session id reused within rootStateIdle
+// does not share.
 func (tmuxMux) PaneDir(ctx context.Context, paneID string) (string, string, error) {
-	if !tmuxFilesSupported {
-		return "", "", errUnsupported
-	}
 	w, ok := parseTmuxPaneID(paneID)
 	if !ok {
 		return "", "", inputError("invalid pane id")
 	}
 	out, err := tmuxCmd(ctx, "display-message", "-p", "-t", w.target(),
-		"#{session_id}:#{window_index}:#{pane_id}:#{pid}:#{session_name}:#{pane_current_path}").Output()
-	parts := strings.SplitN(strings.TrimRight(string(out), "\r\n"), ":", 6)
-	if err != nil || len(parts) != 6 || !w.matches(parts[0], parts[4], parts[1], parts[2]) ||
-		!tmuxPaneIDRe.MatchString(parts[2]) {
+		"#{session_id}:#{window_index}:#{pane_id}:#{pid}:#{pane_pid}:#{session_name}:#{pane_current_path}").Output()
+	parts := strings.SplitN(strings.TrimRight(string(out), "\r\n"), ":", 7)
+	if err != nil || len(parts) != 7 || !w.matches(parts[0], parts[5], parts[1], parts[2]) ||
+		!tmuxPaneIDRe.MatchString(parts[2]) || !positivePID(parts[3]) || !positivePID(parts[4]) {
 		return "", "", errUnknownPane
 	}
-	if pid, err := strconv.Atoi(parts[3]); err != nil || pid <= 0 {
-		return "", "", errUnknownPane
-	}
-	if parts[5] == "" || strings.HasPrefix(parts[5], "#{") {
+	if parts[6] == "" || strings.HasPrefix(parts[6], "#{") {
 		return "", "", errUnsupported
 	}
-	return parts[5], parts[2] + "@" + parts[3], nil
+	if tmuxIsPsmux {
+		return parts[6], parts[0] + ":" + parts[2] + "@" + parts[4], nil
+	}
+	return parts[6], parts[2] + "@" + parts[3], nil
+}
+
+// positivePID reports whether s is a process id tmux printed.
+func positivePID(s string) bool {
+	pid, err := strconv.Atoi(s)
+	return err == nil && pid > 0
 }
 
 // Capture returns the pane's visible screen with its SGR attributes.

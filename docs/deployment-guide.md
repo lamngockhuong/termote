@@ -306,8 +306,7 @@ checked again at every `start` (a saved folder that now fails is shown as skippe
 that removes it) and by the server when it starts. On Unix a path holding `:` cannot be saved. In
 the container a path holding `,`, or holding or inside the workspace, is refused, and each Place is
 mounted at `/places/<id>-<name>`. A Place on another file system than Termote's trash can only be
-deleted permanently. On Windows the default tmux backend (psmux) has no Files, so Places need
-`--mux herdr` there; `start` says so.
+deleted permanently.
 
 **Reusing saved config:**
 

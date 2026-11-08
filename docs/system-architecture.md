@@ -917,10 +917,13 @@ the PWA's `readOnly` mode already hides the composer and the answer buttons.
 ### Files and changes (`/api/mux/panes/{id}/files/*`)
 
 The PWA's Files and Changes views read a pane's directory, offered when the snapshot reports
-`caps.files`: tmux on Linux and macOS (`#{pane_current_path}` of the window's active pane) and
+`caps.files`: tmux (`#{pane_current_path}` of the window's active pane; psmux on Windows too),
 Herdr (`foreground_cwd`, else `cwd`, of the pane; a Herdr that reports neither answers 501) and
 Zellij on Linux and macOS (the pane's cwd as Zellij lists it).
-psmux does not report the directory, so `caps.files` is off on Windows tmux. Every route is
+psmux reports the working directory of the pane's foreground process, read live: pwsh 7 and
+cmd.exe keep it in step with `cd`, Windows PowerShell 5.1 does not (the pane keeps the directory it
+started in, unless the profile sets `[Environment]::CurrentDirectory = $PWD.ProviderPath` in
+`prompt`), and a child that changes its own directory after it starts is not followed. Every route is
 registered for every backend and answers 501 where it is off. Eight are read-only GETs (`find`, `search` and
 `download` included); `PUT files/content` saves a text file, `POST files/create` creates an empty one,
 `POST files/upload` saves a file from the device (`check=1` first; `unsupported_type` 415, `upload_busy`
@@ -1425,7 +1428,7 @@ branch and number of changed files. The panes are those of the activity tracker'
 the transcript tail comes through the Chat view's read cache. Branch and changes are read in the
 background, one `git status` at a time, only when a git slot is free and without backing the
 root off, so the Changes view always comes first; until read, a pane answers `unavailable:
-["changes"]` (always on psmux, which has no Files).
+["changes"]`.
 
 How full the context is (`server/agent_context_window.go`): Claude's transcript records the
 tokens of each request but never the window. Claude Code (from 2.1.270) writes the model it runs as
