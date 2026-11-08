@@ -785,6 +785,22 @@ describe('ChatComposer', () => {
     expect(box()).toHaveAccessibleDescription(/shorten the message/)
   })
 
+  it('input_busy asks to send again later, without the terminal', async () => {
+    mockSend.mockRejectedValueOnce(
+      new AgentRequestError(409, 'input_busy', 'still sending'),
+    )
+    render(<ChatComposer {...props()} />)
+    type('hello')
+    await send()
+    expect(
+      screen.getAllByText(
+        /Not sent: An earlier message to this pane is still being sent\. Try again/,
+      ).length,
+    ).toBeGreaterThan(0)
+    expect(screen.queryByRole('button', { name: /terminal/i })).toBeNull()
+    expect(box()).toHaveValue('hello')
+  })
+
   it('asks before sending a shell command', async () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
     render(<ChatComposer {...props()} />)
