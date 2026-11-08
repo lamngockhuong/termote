@@ -27,7 +27,7 @@
   <a href="https://unikorn.vn/p/termote?ref=embed-termote" target="_blank"><img src="https://unikorn.vn/api/widgets/badge/termote?theme=dark" alt="Termote trên Unikorn.vn" width="170" height="42" /></a>
 </p>
 
-Controle remotamente ferramentas CLI (Claude Code, GitHub Copilot, qualquer terminal) de dispositivos moveis/desktop via PWA.
+Controle remotamente ferramentas CLI (Claude Code, Codex, qualquer terminal) de dispositivos moveis/desktop via PWA.
 
 > [!NOTE]
 > O Termote 1.0 nao atualiza uma instalacao 0.x. Desinstale o 0.x conforme a

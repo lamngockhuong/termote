@@ -1,13 +1,16 @@
 ---
 title: Machines
-description: Watch and drive the agents of other computers from one Termote, over SSH
+description: "Watch and drive the coding agents of other computers from one Termote over SSH: add a machine, open its sessions, check its status and remove it."
+head:
+  - tag: title
+    content: "Control Agents on Other Machines over SSH | Termote"
 ---
 
 import { Aside } from "@astrojs/starlight/components";
 
 One Termote can reach the Termote of other computers you own over SSH. They show up under **Machines**
 in the sidebar, each with its status and the agents running on it. Open one and the whole app works on
-that computer: its terminals, the Chat view, Files and Changes read and write its own disk. You keep one
+that computer: its terminals, the [Chat view](/usage/agent-chat/), Files and Changes read and write its own disk. You keep one
 address and one sign-in; the other computers need no port of their own, only SSH.
 
 Machines are added and removed only from the terminal of the computer running the main Termote. The app
@@ -58,7 +61,7 @@ and everything you do happens there. Under **Machines**, a heading such as **On 
 machine the list below belongs to. Click **This machine** to come back. In the command palette,
 **Switch to the next machine** cycles through them.
 
-What stays on this computer whatever machine is open: signing out, Web Push, paired devices and signed-in
+What stays on this computer whatever machine is open: signing out, Web Push, [paired devices](/usage/devices/) and signed-in
 browsers, and the app's version check. A notification from an agent on another machine opens the app on
 that machine.
 
@@ -120,7 +123,7 @@ To check yours, `ssh -i ~/.config/termote/ssh/id_ed25519 -o IdentitiesOnly=yes w
 ## Limits
 
 - Whoever controls this Termote controls every machine added to it, with the role they have here: a
-  view-only device here is view-only there. The key can only reach Termote there, never a shell.
+  [view-only device](/usage/security/#who-can-do-what) here is view-only there. The key can only reach Termote there, never a shell.
 - An alias that goes through a `ProxyCommand` or `ProxyJump` is warned about: the jump host would have to
   accept Termote's key, and your agent is never used.
 - A Termote in container mode cannot be a machine.

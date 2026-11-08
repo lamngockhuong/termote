@@ -27,7 +27,7 @@
   <a href="https://unikorn.vn/p/termote?ref=embed-termote" target="_blank"><img src="https://unikorn.vn/api/widgets/badge/termote?theme=dark" alt="Termote trên Unikorn.vn" width="170" height="42" /></a>
 </p>
 
-Удалённое управление CLI-инструментами (Claude Code, GitHub Copilot, любой терминал) с мобильных устройств и десктопа через PWA.
+Удалённое управление CLI-инструментами (Claude Code, Codex, любой терминал) с мобильных устройств и десктопа через PWA.
 
 > [!NOTE]
 > Termote 1.0 не обновляет установку 0.x. Удалите 0.x, как описано в

@@ -27,7 +27,7 @@
   <a href="https://unikorn.vn/p/termote?ref=embed-termote" target="_blank"><img src="https://unikorn.vn/api/widgets/badge/termote?theme=dark" alt="Termote trên Unikorn.vn" width="170" height="42" /></a>
 </p>
 
-CLI-Tools (Claude Code, GitHub Copilot, jedes Terminal) per PWA von Mobilgeräten/Desktop fernsteuern.
+CLI-Tools (Claude Code, Codex, jedes Terminal) per PWA von Mobilgeräten/Desktop fernsteuern.
 
 > [!NOTE]
 > Termote 1.0 aktualisiert keine 0.x-Installation. 0.x wie in der

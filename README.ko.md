@@ -27,7 +27,7 @@
   <a href="https://unikorn.vn/p/termote?ref=embed-termote" target="_blank"><img src="https://unikorn.vn/api/widgets/badge/termote?theme=dark" alt="Termote trên Unikorn.vn" width="170" height="42" /></a>
 </p>
 
-모바일/데스크톱에서 PWA를 통해 CLI 도구(Claude Code, GitHub Copilot, 모든 터미널)를 원격 제어.
+모바일/데스크톱에서 PWA를 통해 CLI 도구(Claude Code, Codex, 모든 터미널)를 원격 제어.
 
 > [!NOTE]
 > Termote 1.0은 0.x 설치를 업그레이드하지 않습니다. [보관된 0.x 문서](https://termote.ohnice.app/0.x/)에 따라 0.x를 제거한 다음, [빠른 시작](#빠른-시작)의 명령으로 1.0을 설치하세요.

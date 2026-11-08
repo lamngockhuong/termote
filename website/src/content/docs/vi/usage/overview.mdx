@@ -1,6 +1,9 @@
 ---
 title: Tổng quan agent
-description: Xem mọi agent lập trình ở mọi session trên một màn hình, trả lời các hộp thoại đang chờ bạn ở cùng một chỗ
+description: "Xem mọi agent lập trình ở mọi phiên trên một màn hình: context và giới hạn, agent bị kẹt, lịch sử, và trả lời các hộp thoại đang chờ bạn ở cùng một chỗ."
+head:
+  - tag: title
+    content: "Tổng quan agent: mọi agent trên một màn hình | Termote"
 ---
 
 import { Aside } from "@astrojs/starlight/components";
@@ -32,7 +35,7 @@ thì agent ở lâu hơn đứng trước. Mỗi thẻ cho biết:
 - context đã đầy tới đâu: một thanh, phần trăm cửa sổ context đã dùng và số token, ví dụ
   `72% 144k/200k`, kèm model với Claude Code. Thanh chuyển vàng từ 70% và đỏ từ 90%.
 
-Chạm vào thẻ để mở agent: Claude Code và Codex mở ở Chat view, agent khác mở terminal. Thẻ có Chat view
+Chạm vào thẻ để mở agent: Claude Code và Codex mở ở [Chat view](/vi/usage/agent-chat/), agent khác mở terminal. Thẻ có Chat view
 còn có thêm nút mở terminal. Bộ lọc phía trên đếm theo agent và là bộ lọc riêng của màn hình này, không
 làm thay đổi bộ lọc của sidebar.
 
@@ -71,7 +74,7 @@ lời hoặc bấm **Skip**; agent nào bắt đầu chờ sau thì xếp vào c
 xong, thẻ ghi **Answered**, và phải bấm **Next** thì hộp thoại kế mới hiện ra, nên chạm thêm một lần
 cũng không vô tình trả lời agent khác. Nút `Show again` đưa các hộp thoại đã bỏ qua trở lại.
 
-Thiết bị chỉ xem thấy hộp thoại nhưng không có nút. Agent mà Termote không đọc hay trả lời được hộp thoại
+[Thiết bị chỉ xem](/vi/usage/devices/#chỉ-xem) thấy hộp thoại nhưng không có nút. Agent mà Termote không đọc hay trả lời được hộp thoại
 thì chỉ có nút **Open terminal**. Với Zellij, nếu lúc đó câu trả lời chưa tới được pane, thẻ sẽ báo và
 bạn thử lại.
 
@@ -102,5 +105,5 @@ gợi ý trên thẻ, không có thông báo nào được gửi.
 
 <Aside type="caution">
 Thời gian lấy theo đồng hồ của server, tính từ lúc server thấy agent lần đầu, và chỉ được ghi lại khi có
-trang đang mở hoặc có thiết bị bật thông báo.
+trang đang mở hoặc có thiết bị bật [thông báo](/vi/usage/settings/#báo-khi-agent-cần-tôi).
 </Aside>

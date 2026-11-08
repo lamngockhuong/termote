@@ -75,7 +75,9 @@ export default defineConfig({
         SiteTitle: "./src/components/SiteTitle.astro",
       },
       title: "Termote",
-      description: "Remote control CLI tools from mobile/desktop via PWA",
+      // The home page's description, for pages without one of their own
+      description:
+        "Open-source, self-hosted PWA to control Claude Code, Codex and your tmux, Herdr or Zellij sessions from your phone or another computer.",
       // Prompt Owl, generated from assets/branding by `make brand-assets`.
       // The header draws it inline (src/components/SiteTitle.astro), which
       // does not read this option; kept so dropping the override brings the
@@ -94,6 +96,7 @@ export default defineConfig({
       head: [
         { tag: "link", attrs: { rel: "apple-touch-icon", href: "/apple-touch-icon.png" } },
         { tag: "meta", attrs: { property: "og:image", content: "https://termote.ohnice.app/og-image.png" } },
+        { tag: "meta", attrs: { property: "og:image:type", content: "image/png" } },
         { tag: "meta", attrs: { property: "og:image:width", content: "1280" } },
         { tag: "meta", attrs: { property: "og:image:height", content: "640" } },
         { tag: "meta", attrs: { property: "og:image:alt", content: "Termote: Your Terminal, Anywhere." } },

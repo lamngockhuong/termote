@@ -1,6 +1,9 @@
 ---
 title: Cloudflare Tunnel
-description: Truy cập Termote qua Cloudflare Tunnel do bạn tự chạy, có Cloudflare Access đứng trước
+description: "Truy cập Termote từ bất cứ đâu qua Cloudflare Tunnel do bạn tự chạy, có Cloudflare Access đứng trước, hostname được cho phép và giới hạn đăng nhập theo client."
+head:
+  - tag: title
+    content: "Termote sau Cloudflare Tunnel và Access | Termote"
 ---
 
 import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
@@ -12,7 +15,8 @@ và không bao giờ thấy token của đường hầm.
 <Aside type="danger" title="Hãy đặt Cloudflare Access phía trước">
 Đường hầm đưa trang đăng nhập lên Internet. Thiếu Cloudflare Access thì người lạ chỉ còn cách một shell trên máy
 bạn đúng một lớp mật khẩu Termote. Termote kiểm tra Access khi khởi động và trong `termote status`, và cảnh báo
-rõ khi không thấy nó.
+rõ khi không thấy nó. Phần [mô hình bảo mật](/vi/usage/security/) liệt kê những gì một client đã đăng nhập
+làm được.
 </Aside>
 
 ## Yêu cầu

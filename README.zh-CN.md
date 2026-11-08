@@ -27,7 +27,7 @@
   <a href="https://unikorn.vn/p/termote?ref=embed-termote" target="_blank"><img src="https://unikorn.vn/api/widgets/badge/termote?theme=dark" alt="Termote trên Unikorn.vn" width="170" height="42" /></a>
 </p>
 
-通过 PWA 从移动端/桌面端远程控制 CLI 工具（Claude Code、GitHub Copilot 及任何终端）。
+通过 PWA 从移动端/桌面端远程控制 CLI 工具（Claude Code、Codex 及任何终端）。
 
 > [!NOTE]
 > Termote 1.0 不会升级 0.x 的安装。请按照[归档的 0.x 文档](https://termote.ohnice.app/0.x/)卸载 0.x，然后使用[快速开始](#快速开始)中的命令安装 1.0。

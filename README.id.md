@@ -27,7 +27,7 @@
   <a href="https://unikorn.vn/p/termote?ref=embed-termote" target="_blank"><img src="https://unikorn.vn/api/widgets/badge/termote?theme=dark" alt="Termote trên Unikorn.vn" width="170" height="42" /></a>
 </p>
 
-Kendalikan alat CLI (Claude Code, GitHub Copilot, terminal apa pun) dari jarak jauh melalui mobile/desktop via PWA.
+Kendalikan alat CLI (Claude Code, Codex, terminal apa pun) dari jarak jauh melalui mobile/desktop via PWA.
 
 > [!NOTE]
 > Termote 1.0 tidak meng-upgrade instalasi 0.x. Hapus instalasi 0.x sesuai

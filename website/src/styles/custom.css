@@ -50,3 +50,10 @@
     width: min(100%, 17rem);
   }
 }
+
+/* The license and signed releases line under the hero image. */
+.trust-strip {
+  font-size: var(--sl-text-sm);
+  color: var(--sl-color-gray-2);
+  text-align: center;
+}

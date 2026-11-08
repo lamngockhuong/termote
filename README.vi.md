@@ -27,7 +27,7 @@
   <a href="https://unikorn.vn/p/termote?ref=embed-termote" target="_blank"><img src="https://unikorn.vn/api/widgets/badge/termote?theme=dark" alt="Termote trên Unikorn.vn" width="170" height="42" /></a>
 </p>
 
-Điều khiển từ xa các công cụ CLI (Claude Code, GitHub Copilot, terminal bất kỳ) từ mobile/desktop qua PWA.
+Điều khiển từ xa các công cụ CLI (Claude Code, Codex, terminal bất kỳ) từ mobile/desktop qua PWA.
 
 > [!NOTE]
 > Termote 1.0 không nâng cấp được bản cài 0.x. Hãy gỡ 0.x theo

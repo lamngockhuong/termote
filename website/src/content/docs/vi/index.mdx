@@ -10,7 +10,7 @@ head:
     content: "Termote: Điều khiển Claude Code và terminal từ điện thoại"
 hero:
   title: Your Terminal, Anywhere.
-  tagline: Điều khiển Claude Code, GitHub Copilot và bất kỳ CLI nào từ điện thoại.
+  tagline: Điều khiển Claude Code, Codex và bất kỳ CLI nào từ điện thoại.
   image:
     light: ../../../assets/brand/symbol-blink-light.svg
     dark: ../../../assets/brand/symbol-blink-dark.svg
@@ -30,11 +30,19 @@ hero:
       variant: minimal
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components';
+import { Card, CardGrid, Steps } from '@astrojs/starlight/components';
 import HeroVideo from '../../../components/HeroVideo.astro';
 import IntroVideo from '../../../components/IntroVideo.astro';
 
 <HeroVideo />
+
+<div class="trust-strip">
+
+[Giấy phép MIT](https://github.com/lamngockhuong/termote/blob/main/LICENSE) ·
+Bản phát hành ký bằng Ed25519 (từ 1.10.0) ·
+[Các bản phát hành và changelog](https://github.com/lamngockhuong/termote/releases)
+
+</div>
 
 Termote là ứng dụng web mã nguồn mở (MIT), tự host, đưa các phiên terminal trên máy của bạn lên điện thoại hoặc một
 máy tính khác. Chỉ một file `termote` chạy trên Linux, macOS hoặc Windows, phục vụ một PWA mở các phiên tmux, Herdr
@@ -47,31 +55,51 @@ cảm ứng. Phần [mô hình bảo mật](/vi/usage/security/) nói rõ nhữn
 
 <CardGrid stagger>
   <Card title="Chuyển đổi phiên" icon="rocket">
-    Chuyển nhanh giữa các phiên, tab và pane của tmux hoặc Herdr
+    Giao diện web cho tmux, Herdr và Zellij: [chuyển nhanh giữa các phiên](/vi/usage/sessions/), tab và pane
   </Card>
   <Card title="Chat với agent" icon="comment-alt">
-    Đọc và trả lời Claude Code hoặc Codex dưới dạng chat, gửi kèm ảnh và lệnh slash
+    [Đọc và trả lời Claude Code hoặc Codex dưới dạng chat](/vi/usage/agent-chat/), gửi kèm ảnh và lệnh slash
   </Card>
   <Card title="Files và Changes" icon="document">
-    Xem file trong thư mục của pane và diff git, có xem trước Markdown
+    [Xem file trong thư mục của pane và diff git](/vi/usage/files-changes/), có xem trước Markdown
   </Card>
   <Card title="Tối ưu cho di động" icon="setting">
-    Thanh công cụ bàn phím với Tab, Esc, Ctrl, phím mũi tên
+    [Thanh công cụ bàn phím](/vi/usage/keyboard/) với Tab, Esc, Ctrl, phím mũi tên
   </Card>
   <Card title="Hỗ trợ cử chỉ" icon="pencil">
-    Vuốt trái Ctrl+C, phải Tab, lên/xuống để cuộn
+    [Vuốt](/vi/usage/gestures/) trái Ctrl+C, phải Tab, lên/xuống để cuộn
   </Card>
   <Card title="PWA" icon="puzzle">
-    Cài lên màn hình chính và mở như một ứng dụng
+    [Thêm vào màn hình chính](/vi/getting-started/#mở-termote-trên-điện-thoại) và mở như một ứng dụng
   </Card>
   <Card title="Herdr plugin" icon="laptop">
-    Mở pane đang đứng trong Termote, hoặc hiện link của nó thành mã QR
+    [Mở pane đang đứng trong Termote](/vi/usage/herdr-plugin/), hoặc hiện link của nó thành mã QR
   </Card>
 </CardGrid>
 
 ## Xem trong một phút
 
 <IntroVideo label="Termote trong một phút: video giới thiệu các tính năng" />
+
+## Cách hoạt động
+
+<Steps>
+1. **Cài lên máy đang chạy agent.** Một lệnh trên Linux, macOS hoặc Windows, không cần sudo: xem
+   [Bắt đầu](/vi/getting-started/).
+
+2. **Cho điện thoại truy cập được.** `termote start --lan` mở cho mạng trong nhà; `termote start --tailscale <host>`
+   phục vụ qua HTTPS trong [tailnet](/vi/installation/tailscale/), ra khỏi nhà vẫn dùng được.
+
+3. **Mở trên điện thoại.** Quét mã QR mà `termote panel` hoặc `termote url --qr` hiện ra, đăng nhập, rồi thêm vào
+   màn hình chính. Sau đó trả lời Claude Code hoặc Codex trong [Chat với agent](/vi/usage/agent-chat/).
+</Steps>
+
+## Có an toàn không?
+
+Termote là một shell từ xa: ai đăng nhập được thì làm được mọi thứ người dùng của bạn làm được trên máy đó. Đăng
+nhập bật sẵn, server chỉ nghe trên chính máy này cho tới khi bạn thêm `--lan`, và từ chối mọi request tới tên host
+không nằm trong danh sách cho phép. Hãy dùng mạng LAN hoặc Tailscale thay vì mở ra Internet, ghép các thiết bị khác
+ở chế độ chỉ xem, và đọc [mô hình bảo mật](/vi/usage/security/) để biết Termote bảo vệ được gì và không chặn được gì.
 
 ## Cài đặt nhanh
 

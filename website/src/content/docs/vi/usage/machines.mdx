@@ -1,13 +1,16 @@
 ---
 title: Máy
-description: Xem và điều khiển agent trên các máy khác từ một Termote, qua SSH
+description: "Xem và điều khiển agent lập trình của các máy khác từ một Termote qua SSH: thêm máy, mở các phiên của nó, xem trạng thái và gỡ máy khi không dùng."
+head:
+  - tag: title
+    content: "Điều khiển agent trên máy khác qua SSH | Termote"
 ---
 
 import { Aside } from "@astrojs/starlight/components";
 
 Một Termote có thể nối tới Termote trên những máy khác của bạn qua SSH. Các máy đó hiện ở mục **Máy**
 trong sidebar, mỗi máy kèm trạng thái và các agent đang chạy trên nó. Mở một máy thì cả app làm việc trên
-máy đó: terminal, Chat, Files và Changes đều đọc ghi ổ đĩa của chính máy ấy. Bạn vẫn dùng một địa chỉ và
+máy đó: terminal, [Chat](/vi/usage/agent-chat/), Files và Changes đều đọc ghi ổ đĩa của chính máy ấy. Bạn vẫn dùng một địa chỉ và
 một lần đăng nhập; máy kia không cần mở cổng nào, chỉ cần SSH.
 
 Chỉ có thể thêm và gỡ máy từ terminal của máy chạy Termote chính. App chỉ chọn máy, không bao giờ thấy tên
@@ -57,7 +60,7 @@ lại trên máy đó (địa chỉ có thêm `?machine=<id>`), tiêu đề hi�
 Dưới mục **Máy**, một dòng tiêu đề như **Trên Máy này** cho biết danh sách bên dưới thuộc máy nào. Bấm
 **Máy này** để quay về. Trong command palette, **Chuyển sang máy kế tiếp** lần lượt đổi qua từng máy.
 
-Dù đang mở máy nào, những thứ sau vẫn thuộc máy này: đăng xuất, Web Push, thiết bị đã pair, trình duyệt
+Dù đang mở máy nào, những thứ sau vẫn thuộc máy này: đăng xuất, Web Push, [thiết bị đã pair](/vi/usage/devices/), trình duyệt
 đã đăng nhập, và việc kiểm tra phiên bản của app. Thông báo từ agent trên máy khác sẽ mở app trên đúng máy
 đó.
 
@@ -118,8 +121,8 @@ bạn, `ssh -i ~/.config/termote/ssh/id_ed25519 -o IdentitiesOnly=yes winbox` ph
 
 ## Giới hạn
 
-- Ai điều khiển Termote này thì điều khiển mọi máy đã thêm vào nó, với đúng vai trò họ có ở đây: thiết bị
-  chỉ xem ở đây thì sang máy kia cũng chỉ xem. Khoá chỉ chạm tới Termote trên máy kia, không bao giờ mở
+- Ai điều khiển Termote này thì điều khiển mọi máy đã thêm vào nó, với đúng vai trò họ có ở đây: [thiết bị
+  chỉ xem](/vi/usage/security/) ở đây thì sang máy kia cũng chỉ xem. Khoá chỉ chạm tới Termote trên máy kia, không bao giờ mở
   shell.
 - Alias đi qua `ProxyCommand` hoặc `ProxyJump` sẽ bị cảnh báo: máy trung gian phải chấp nhận khoá của
   Termote, và SSH agent của bạn không bao giờ được dùng.

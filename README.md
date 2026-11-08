@@ -27,7 +27,7 @@
   <a href="https://unikorn.vn/p/termote?ref=embed-termote" target="_blank"><img src="https://unikorn.vn/api/widgets/badge/termote?theme=dark" alt="Termote trên Unikorn.vn" width="170" height="42" /></a>
 </p>
 
-Remote control CLI tools (Claude Code, GitHub Copilot, any terminal) from mobile/desktop via PWA.
+Remote control CLI tools (Claude Code, Codex, any terminal) from mobile/desktop via PWA.
 
 > [!NOTE]
 > Termote 1.0 does not upgrade a 0.x install. Uninstall 0.x as described in the

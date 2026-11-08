@@ -1,6 +1,9 @@
 ---
 title: Tailscale HTTPS
-description: Tự động SSL qua tailscale serve
+description: "Phục vụ Termote qua HTTPS trong tailnet bằng tailscale serve: chứng chỉ được lo sẵn, không mở cổng nào ra Internet, Termote không chạy sudo."
+head:
+  - tag: title
+    content: "Termote qua HTTPS với Tailscale Serve | Termote"
 ---
 
 import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
@@ -65,7 +68,9 @@ termote start --no-tailscale
 Hai tùy chọn `--tailscale` và `--no-tailscale` cũng dùng được với `termote container up`.
 
 <Aside type="tip">
-  Tailscale là cách được khuyến nghị để công khai Termote an toàn qua internet.
+  Tailscale là cách được khuyến nghị để công khai Termote an toàn qua internet (xem
+  [mô hình bảo mật](/vi/usage/security/#khuyến-nghị)). Muốn điện thoại đăng nhập mà không phải gõ mật khẩu thì
+  [ghép nó](/vi/usage/devices/) bằng mã dùng một lần.
 </Aside>
 
 ## Cách hoạt động

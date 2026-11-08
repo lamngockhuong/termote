@@ -10,7 +10,7 @@ head:
     content: "Termote: Control Claude Code and Your Terminal from Your Phone"
 hero:
   title: Your Terminal, Anywhere.
-  tagline: Control Claude Code, GitHub Copilot, and any CLI from your phone.
+  tagline: Control Claude Code, Codex, and any CLI from your phone.
   image:
     light: ../../assets/brand/symbol-blink-light.svg
     dark: ../../assets/brand/symbol-blink-dark.svg
@@ -30,11 +30,19 @@ hero:
       variant: minimal
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components';
+import { Card, CardGrid, Steps } from '@astrojs/starlight/components';
 import HeroVideo from '../../components/HeroVideo.astro';
 import IntroVideo from '../../components/IntroVideo.astro';
 
 <HeroVideo />
+
+<div class="trust-strip">
+
+[MIT License](https://github.com/lamngockhuong/termote/blob/main/LICENSE) ·
+Releases signed with Ed25519 (since 1.10.0) ·
+[Releases and changelog](https://github.com/lamngockhuong/termote/releases)
+
+</div>
 
 Termote is an open-source (MIT), self-hosted web app that puts the terminal sessions of your machine on your phone or
 another computer. One `termote` binary runs on Linux, macOS or Windows and serves a PWA that opens your tmux, Herdr or
@@ -47,31 +55,52 @@ touch. See the [security model](/usage/security/) for what is exposed and how.
 
 <CardGrid stagger>
   <Card title="Session Switching" icon="rocket">
-    Switch between tmux or Herdr sessions, tabs and panes instantly
+    A web UI for tmux, Herdr and Zellij: [switch between sessions](/usage/sessions/), tabs and panes instantly
   </Card>
   <Card title="Agent Chat" icon="comment-alt">
-    Read and answer Claude Code or Codex as a chat, with images and slash commands
+    [Read and answer Claude Code or Codex as a chat](/usage/agent-chat/), with images and slash commands
   </Card>
   <Card title="Files and Changes" icon="document">
-    Browse a pane's files and its git diff, with a Markdown preview
+    [Browse a pane's files and its git diff](/usage/files-changes/), with a Markdown preview
   </Card>
   <Card title="Mobile Optimized" icon="setting">
-    Virtual keyboard toolbar with Tab, Esc, Ctrl, arrows
+    [Virtual keyboard toolbar](/usage/keyboard/) with Tab, Esc, Ctrl, arrows
   </Card>
   <Card title="Gesture Support" icon="pencil">
-    Swipe left for Ctrl+C, right for Tab, up/down to scroll
+    [Swipe](/usage/gestures/) left for Ctrl+C, right for Tab, up/down to scroll
   </Card>
   <Card title="PWA Ready" icon="puzzle">
-    Install it to your home screen and open it like an app
+    [Add it to your home screen](/getting-started/#open-termote-on-your-phone) and open it like an app
   </Card>
   <Card title="Herdr Plugin" icon="laptop">
-    Open the pane you are on in Termote, or show its link as a QR code
+    [Open the pane you are on in Termote](/usage/herdr-plugin/), or show its link as a QR code
   </Card>
 </CardGrid>
 
 ## See It in a Minute
 
 <IntroVideo label="Termote in a minute: a video of its features" />
+
+## How It Works
+
+<Steps>
+1. **Install it on the machine that runs your agents.** One command on Linux, macOS or Windows, no sudo:
+   see [Getting Started](/getting-started/).
+
+2. **Make it reachable from your phone.** `termote start --lan` opens it to your home network;
+   `termote start --tailscale <host>` serves it over HTTPS on your [tailnet](/installation/tailscale/), away
+   from home too.
+
+3. **Open it on your phone.** Scan the QR code that `termote panel` or `termote url --qr` shows, sign in, and
+   add it to the home screen. Then answer Claude Code or Codex in [Agent Chat](/usage/agent-chat/).
+</Steps>
+
+## Is It Safe?
+
+Termote is a remote shell: whoever signs in can do what your user can on that machine. Sign-in is on by
+default, the server listens only on this machine until you pass `--lan`, and it refuses requests for host names
+that are not on its allowlist. Prefer your LAN or Tailscale to opening it to the Internet, pair other devices
+view-only, and read the [security model](/usage/security/) for what it protects and what it cannot.
 
 ## Quick Install
 

@@ -1,24 +1,23 @@
 ---
 title: Bắt đầu
-description: Cài Termote bằng hai lệnh trên Linux, macOS hoặc Windows
+description: "Cài Termote trên Linux, macOS hoặc Windows bằng hai lệnh, khởi động server rồi mở các phiên terminal và Claude Code từ điện thoại của bạn."
+head:
+  - tag: title
+    content: "Cài Termote trên Linux, macOS hoặc Windows | Termote"
 ---
 
 import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
 
-Termote chỉ là một file binary, trong đó có sẵn PWA, luồng terminal, API và phần đăng nhập. Bạn cài nó bằng một
-lệnh, sau đó `termote start` đăng ký nó thành dịch vụ của người dùng hiện tại rồi khởi động.
+Termote đưa các phiên terminal trên máy của bạn, cùng Claude Code hay Codex đang chạy trong đó, lên điện thoại hoặc
+một máy tính khác. Termote chỉ là một file binary, trong đó có sẵn PWA, luồng terminal, API và phần đăng nhập. Bạn
+cài nó bằng một lệnh, sau đó `termote start` đăng ký nó thành dịch vụ của người dùng hiện tại rồi khởi động.
 
 ## Yêu cầu
 
-- **Linux / macOS:** [tmux](https://github.com/tmux/tmux) (`sudo apt install tmux`, `brew install tmux`), hoặc
-  [Herdr](https://herdr.dev/#install), hoặc [Zellij](https://zellij.dev/documentation/installation)
-  0.45.0 trở lên (chọn bằng `--mux zellij`, không bao giờ tự dò), hoặc [herdr-core](https://herdr.dev/core/)
-  0.1.16 trở lên (chọn bằng `--mux hc`, không bao giờ tự dò; có cả trên Windows). Cần thêm `curl`, `tar` và `sha256sum` (hoặc `shasum`); phần
-  lớn hệ thống đã có sẵn các lệnh này.
-- **Windows:** [psmux](https://github.com/psmux/psmux) (`winget install psmux`) và PowerShell.
-- **Chỉ cho chế độ container:** Podman hoặc Docker. Xem trang [Container](/vi/installation/docker/).
-
-Không cần sudo hay quyền quản trị: mọi thứ đều nằm trong thư mục home của bạn.
+Cần [tmux](https://github.com/tmux/tmux) trên Linux hoặc macOS (`sudo apt install tmux`, `brew install tmux`), hoặc
+[psmux](https://github.com/psmux/psmux) trên Windows (`winget install psmux`); Herdr, Zellij và herdr-core cũng dùng
+được ([các backend](/vi/installation/native/#yêu-cầu)), còn [chế độ container](/vi/installation/docker/) thì cần
+Podman hoặc Docker. Không cần sudo hay quyền quản trị: mọi thứ đều nằm trong thư mục home của bạn.
 
 ## Cài đặt
 
@@ -57,7 +56,25 @@ Không cần sudo hay quyền quản trị: mọi thứ đều nằm trong thư 
   trong PATH, trình cài đặt in ra dòng `export PATH=...` để bạn thêm vào.
 </Aside>
 
-### Cố định phiên bản hoặc sửa bản cài
+## Mở Termote trên điện thoại
+
+<Steps>
+1. Cho điện thoại truy cập được: `termote start --lan` trong mạng ở nhà, hoặc `termote start --tailscale <host>` để
+   dùng HTTPS qua [Tailscale](/vi/installation/tailscale/), ra khỏi nhà vẫn vào được. Tùy chọn này được lưu cho lần
+   khởi động sau.
+
+2. Chạy `termote url --qr` (hoặc `termote panel`), quét mã QR bằng camera điện thoại, rồi đăng nhập bằng đúng tên và
+   mật khẩu đó. Muốn điện thoại khỏi phải gõ mật khẩu thì [ghép nó](/vi/usage/devices/) bằng mã dùng một lần.
+
+3. Thêm vào màn hình chính (Safari: **Share → Add to Home Screen**; Chrome: **Add to Home screen** hoặc
+   **Install app**) để mở như một ứng dụng. Trên iPhone và iPad,
+   [thông báo](/vi/usage/settings/#báo-khi-agent-cần-tôi) từ agent chỉ chạy trong ứng dụng ở màn hình chính.
+
+4. Mở một pane đang chạy Claude Code hoặc Codex, rồi chuyển sang [Chat với agent](/vi/usage/agent-chat/) để đọc và
+   trả lời.
+</Steps>
+
+## Cố định phiên bản hoặc sửa bản cài
 
 Đặt `TERMOTE_VERSION` để cài đúng một bản phát hành (`X.Y.Z`, hoặc `X.Y.Z-rc.N` cho bản thử nghiệm):
 
@@ -83,7 +100,7 @@ không còn chạy được. Cấu hình của bạn được giữ nguyên tron
 `GH_TOKEN` hoặc `GITHUB_TOKEN`, nếu được đặt, chỉ nâng giới hạn gọi GitHub API mà trình cài đặt dùng để tìm bản
 mới nhất.
 
-### Bản thử nghiệm
+## Bản thử nghiệm
 
 Trình cài đặt, cũng như `termote update`, chỉ chọn bản thử nghiệm (`X.Y.Z-rc.N`) khi bạn ghi rõ nó trong
 `TERMOTE_VERSION` (hoặc `termote update --version X.Y.Z-rc.N`). Không ghi thì bạn nhận bản ổn định mới nhất (từ 1.0 trở lên) **đã
@@ -153,9 +170,11 @@ lời nhắc dùng `termote start` và `termote container up`.
 | Cấu hình        | `~/.config/termote/config` và `secret` (`$XDG_CONFIG_HOME`)    | `%APPDATA%\termote\config.json` (mật khẩu mã hóa bằng DPAPI) |
 | Log, file PID   | `~/.local/state/termote/` (`$XDG_STATE_HOME`)                  | `%LOCALAPPDATA%\termote\state`                             |
 
-## Tiếp theo
+## Bước tiếp theo
 
+- [Chat với agent](/vi/usage/agent-chat/) - Đọc và trả lời Claude Code, Codex từ điện thoại
+- [Ghép thiết bị](/vi/usage/devices/) - Cho điện thoại đăng nhập bằng mã dùng một lần thay vì mật khẩu
+- [Tailscale HTTPS](/vi/installation/tailscale/) - Truy cập từ xa an toàn, ra khỏi nhà vẫn dùng được
+- [Mô hình bảo mật](/vi/usage/security/) - Termote bảo vệ được gì, không chặn được gì, và cần làm gì khi mất thiết bị
 - [Native](/vi/installation/native/) - Tùy chọn khởi động, dịch vụ, cập nhật và gỡ cài đặt
 - [Container](/vi/installation/docker/) - Chạy server trong Podman hoặc Docker
-- [Tailscale HTTPS](/vi/installation/tailscale/) - Truy cập từ xa an toàn
-- [Cử chỉ di động](/vi/usage/gestures/) - Điều khiển cảm ứng
