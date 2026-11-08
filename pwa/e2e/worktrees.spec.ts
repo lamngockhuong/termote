@@ -55,13 +55,24 @@ const fresh = () => {
   return name
 }
 
+// With sign-in on (TERMOTE_PASS, the e2e-hc job) the page signs in on the
+// server's form: Basic credentials reach the API, not the page.
+const pass = process.env.TERMOTE_PASS ?? ''
+
 async function open(page: Page) {
   await page.goto('/')
   await page.evaluate(() => {
     localStorage.clear()
   })
-  await page.reload()
-  await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
+  if (pass) {
+    await page.goto('/login')
+    await page.getByLabel('Username').fill(process.env.TERMOTE_USER || 'admin')
+    await page.getByLabel('Password').fill(pass)
+    await page.getByRole('button', { name: 'Sign in' }).click()
+  } else {
+    await page.reload()
+  }
+  await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 15000 })
 }
 
 // The group's menu: "Actions for <noun> <name>", the noun the backend's
