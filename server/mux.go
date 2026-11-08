@@ -52,8 +52,8 @@ type Mux interface {
 	// move changes.
 	MoveTab(ctx context.Context, tabID string, index int) (newID string, err error)
 	// MoveGroup moves groupID to position index (0-based) among the groups
-	// that can move (a Herdr linked worktree cannot, it moves with its
-	// repository's workspace).
+	// that can move (a linked worktree cannot, it moves with its
+	// repository's group).
 	MoveGroup(ctx context.Context, groupID string, index int) error
 	// NewGroup opens a group (a tmux session, a Herdr workspace) named name,
 	// starting in cwd (absolute, already checked), and returns its id.
@@ -249,15 +249,16 @@ type Group struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 	Tabs []Tab  `json:"tabs"`
-	// Worktree: the group belongs to a Herdr worktree group, as the
-	// repository's own checkout or as a linked worktree.
+	// Worktree: the group belongs to a repository's worktree group, as the
+	// repository's own checkout or as a linked worktree (Herdr's, or by git
+	// for tmux, Zellij and herdr-core: git_worktree_nest.go).
 	Worktree *GroupWorktree `json:"worktree,omitempty"`
 	// Meta: the metadata tokens Herdr plugins and tools reported for the
 	// workspace (cleanMeta); never sent to a view-only client.
 	Meta []MetaToken `json:"meta,omitempty"`
 }
 
-// GroupWorktree is a group's place in a Herdr worktree group. Branch is the
+// GroupWorktree is a group's place in a repository's worktree group. Branch is the
 // checked out branch when known (read in the background, so it can lag).
 // Parent is, for a linked worktree, the group of its repository's own
 // checkout when that is open; the snapshot lists the worktree right after it.
@@ -457,6 +458,12 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 		if err != nil {
 			muxError(w, m, "snapshot", err)
 			return
+		}
+		// tmux, Zellij and herdr-core nest linked worktrees by git (Herdr's
+		// snapshot nests them already); only a full client's read starts a
+		// lookup.
+		if gitWorktreeBackend(m) {
+			snap = agent.nester.nest(snap, r.URL.Query().Get("peek") != "1" && !isViewOnly(r))
 		}
 		// Whichever read ran (a view-only device's service worker peeks
 		// too), such a device gets no metadata.

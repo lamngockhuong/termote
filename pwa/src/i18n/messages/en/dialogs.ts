@@ -43,15 +43,13 @@ export default {
   'dialogs.worktree.linkedSource':
     "Open it from the repository's own workspace",
   'dialogs.worktree.changed': 'This worktree changed; look again',
-  'dialogs.worktree.ambiguous':
-    'More than one worktree uses this branch; open it in Herdr',
+  'dialogs.worktree.ambiguous': 'More than one worktree uses this branch',
   'dialogs.worktree.gone': 'It no longer exists; the list was refreshed',
   'dialogs.worktree.busy':
     'Another worktree change is still running; try again',
   'dialogs.worktree.unknown':
-    'Herdr is still working on it; check the list in a moment',
-  'dialogs.worktree.unsupported':
-    'This Herdr cannot manage worktrees (needs 0.9.2 or later)',
+    'The change is still running; check the list in a moment',
+  'dialogs.worktree.unsupported': 'This backend cannot manage worktrees',
   // An image that could not be attached (utils/upload-image.ts), where
   // errors.* says it otherwise
   'dialogs.upload.tooLarge': 'Image is larger than 10 MB',

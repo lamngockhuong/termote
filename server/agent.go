@@ -349,6 +349,9 @@ var (
 // agentAPI serves /api/mux/panes/{id}/agent/*.
 type agentAPI struct {
 	m Mux
+	// nester nests linked worktrees by git in the snapshot (tmux, Zellij,
+	// herdr-core); nil leaves the snapshot as the backend gives it.
+	nester *gitNester
 	// machines are the machines this server reaches, machinePoll reads
 	// their snapshots; nil without any.
 	machines    *machineManager

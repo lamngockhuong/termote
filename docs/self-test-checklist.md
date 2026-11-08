@@ -369,8 +369,8 @@ Run against a Herdr of its own (`HERDR_SOCKET_PATH`, `HOME` and XDG dirs under a
 Windows also `USERPROFILE` and `APPDATA`), or on a repo you can throw away. Last checked on
 Windows 11 (26200) with Herdr 0.9.4 (#395).
 
-- [ ] A workspace's ⋯ menu has New worktree and Open worktree, Windows included; tmux, psmux and
-      Herdr 0.9.1 have neither (`caps.worktrees` false)
+- [ ] A workspace's ⋯ menu has New worktree and Open worktree, Windows included; psmux, herdr-core
+      on Windows and Herdr 0.9.1 have neither (`caps.worktrees` false)
 - [ ] New worktree from Current HEAD and from another base: the workspace appears, is selected and
       its header shows the branch, on a phone (390×844) and on desktop
 - [ ] Typing an existing branch hides the base ("Checks out the existing branch") and checks it

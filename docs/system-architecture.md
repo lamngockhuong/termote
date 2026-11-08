@@ -432,9 +432,15 @@ call timed out; the start is followed as if typed) and 500 `start_failed`. The C
 offered on such a pane and holds the start buttons; Codex writes its rollout only with its first
 message, so after a Codex start the Chat view asks for that message in the terminal.
 
-`/worktrees` (`caps.worktrees`: Herdr 0.9.2 or later) drives Herdr's
-`worktree.*` calls from a workspace's menu. The GET lists the worktrees of the workspace's
-repository (`worktree.list`) and its local branches, newest commit first, read by the server's
+`/worktrees` (`caps.worktrees`: Herdr 0.9.2 or later; tmux, not psmux; Zellij; hc, not on
+Windows) is driven from a group's menu. On Herdr it calls Herdr's `worktree.*`; on tmux, Zellij
+and hc termote runs git itself (`gitWorktreeMux`, `server/git_worktree_mux.go`) and opens or
+closes the group through the backend's own `NewGroup`/`CloseGroup`: a group's worktree is the one
+its first pane works in, a new checkout goes to `~/.herdr/worktrees/<repo>/<slug>` (hc, where
+herdr-app keeps its own) or `~/.termote/worktrees/<repo>/<slug>` (tmux, Zellij; under
+`/workspace` in the container), and git runs with hooks and, for the checkout, filters off. The
+GET lists the worktrees of the group's repository (`worktree.list`, or `git worktree list`) and
+its local branches, newest commit first, read by the server's
 own git (`for-each-ref`, at most 500). The POST checks out `branch` in a new worktree, made from
 `base` (empty: the current HEAD) when the branch is new; Herdr ignores the base of a branch that
 exists, so that pair answers 409 `branch_exists` instead. `open` opens an existing linked
@@ -444,14 +450,18 @@ user confirmed and removes nothing unless the workspace still shows that linked 
 about a second time. Removing deletes the checkout (ignored files too; the panes end first with
 `force`, and on Windows always, where Herdr also checks for changes itself) and closes the workspace; the branch is kept. Changes run one at a time (503
 `busy` after a 5 s wait) and outlive the client for up to 60 s; past that the answer is 504
-`unknown` (Herdr may still finish). The snapshot's `worktree` marks a workspace of a Herdr
-worktree group (`linked`: a linked worktree, else the repository's own checkout); its `branch`
+`unknown` (the change may still finish). On tmux, Zellij and hc the group closes before `git
+worktree remove`, so a remove git refuses then leaves the checkout and the group closed. The
+snapshot's `worktree` marks a group of a worktree group (`linked`: a linked worktree, else the repository's own checkout); its `branch`
 is read from `worktree.list` in the background, at most every 10 s per repository and never on
-the snapshot's own path, so it can be missing for a moment. As Herdr's sidebar draws them, the
+the snapshot's own path, so it can be missing for a moment. On tmux, Zellij and hc the snapshot
+route nests by git the same way (`gitNester`, `server/git_worktree_nest.go`): each group's first
+pane folder is looked up in the background and cached for 10 s, so a group can show unnested for a
+few seconds. As Herdr's sidebar draws them, the
 snapshot lists a repository's linked worktrees right after its own checkout, whose id is their
 `parent` (the PWA indents them under it); with the checkout not open they stay together where
-the first one is. Only the snapshot is reordered: a move reads Herdr's own order. See Security
-Model.
+the first one is. Only the snapshot is reordered: a move reads the backend's own order (hc's moves through the
+nested view, so a linked worktree alone is 409 `linked_worktree`). See Security Model.
 
 `/move` reorders. `index` is the final 0-based position: for a tab, among its own group's tabs
 (never into another group); for a group, among the groups that can move. It must be a JSON
@@ -1870,14 +1880,18 @@ termote update --force           # Force reinstall current version
     dialled must be public (no loopback, private, link-local, CGNAT, ULA, multicast or
     IPv4-mapped), with no proxy and no redirects. Payloads carry ids only; the names are read
     by the service worker from the snapshot and stripped of control, bidi and zero-width space characters
-15. **Worktrees** (Herdr): writes go through the write guard and `requireWriteRole`; the GET
+15. **Worktrees** (Herdr; termote's git for tmux, Zellij and hc): writes go through the write guard and `requireWriteRole`; the GET
     refuses any cross-site or `Sec-Fetch-Site: none` read. Branch and base names are checked
     against git's ref rules and more (no leading `-`, which Herdr would pass to git as an option,
     no `HEAD`, no control, format or space character, so a name cannot pose as another in the
     Remove confirmation). Herdr never gets `trust_repository`, a `path` or `close_group`; its
     messages (git's stderr, with paths) are logged, never returned. A remove is bound to the
-    path and branch the user confirmed. Create and remove run git with the user's own config,
-    hooks and filters included, as typing the command would; a remove deletes ignored files.
+    path and branch the user confirmed. On Herdr, create and remove run git with the user's own
+    config, hooks and filters included, as typing the command would. On tmux, Zellij and hc no
+    path comes from the client (the server builds it from the branch under a fixed base, and
+    re-derives a remove's from git's list), git runs only through the files routes' `gitRunner`
+    with hooks off (filters off for the checkout and `status`), and the group closes before the
+    remove. A remove deletes ignored files.
 16. **Connections from other local users** (`server/peer_user_*.go`): a native server (run from
     the saved config, `CheckLocalUsers`) wraps its listener so each connection is checked on its
     own goroutine before its first read or write, never in `Accept`. A client address that is

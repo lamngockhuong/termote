@@ -38,15 +38,13 @@ export default {
   'dialogs.worktree.linkedSource':
     'Hãy mở nó từ workspace của chính repository',
   'dialogs.worktree.changed': 'Worktree này đã đổi; hãy xem lại',
-  'dialogs.worktree.ambiguous':
-    'Có hơn một worktree dùng nhánh này; hãy mở nó trong Herdr',
+  'dialogs.worktree.ambiguous': 'Có hơn một worktree dùng nhánh này',
   'dialogs.worktree.gone': 'Nó không còn nữa; danh sách đã được làm mới',
   'dialogs.worktree.busy':
     'Một thay đổi worktree khác vẫn đang chạy; hãy thử lại',
   'dialogs.worktree.unknown':
-    'Herdr vẫn đang xử lý; lát nữa hãy xem lại danh sách',
-  'dialogs.worktree.unsupported':
-    'Herdr này không quản lý được worktree (cần bản 0.9.2 trở lên)',
+    'Thay đổi vẫn đang chạy; lát nữa hãy xem lại danh sách',
+  'dialogs.worktree.unsupported': 'Backend này không quản lý được worktree',
   'dialogs.upload.tooLarge': 'Ảnh lớn hơn 10 MB',
   'dialogs.upload.heic':
     'Không hỗ trợ ảnh HEIC. Hãy chia sẻ ảnh dưới dạng JPEG',

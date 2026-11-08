@@ -634,7 +634,14 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 	registerRecentGroupRoutes(mux, recent, files.deny, allowed)
 	registerPaneLayoutRoutes(mux, m, files.deny)
 	registerReorderRoutes(mux, m)
-	registerWorktreeRoutes(mux, m, files.git, allowed)
+	// tmux, Zellij and herdr-core get worktrees and their nesting from git,
+	// on the files routes' runner and resolver.
+	nester := newGitNester(files.roots)
+	agent.nester = nester
+	if hc, ok := m.(*hcMux); ok {
+		hc.nester = nester
+	}
+	registerWorktreeRoutes(mux, m, worktreeMuxFor(m, files, nester), files.git, allowed)
 	// Streams forwarded to machines have a hub of their own (they never push
 	// this server's out), closed with the main one and asking the same
 	// device and session stores.

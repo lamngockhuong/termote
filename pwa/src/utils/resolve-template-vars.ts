@@ -24,7 +24,7 @@ const branchName = (b: string | undefined) => (b && b !== '(detached)' ? b : '')
 // What is known now, without asking the server: the file shown in the
 // pane's Files view, the selection (terminalText: what the terminal has
 // selected now, before the latest one kept), the branch from the Changes
-// view or the Herdr worktree group. {{input}} starts empty.
+// view or the group's worktree. {{input}} starts empty.
 export function knownTemplateValues(
   paneId: string,
   ctx: { terminalText?: string; worktreeBranch?: string } = {},

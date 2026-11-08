@@ -475,13 +475,10 @@ describe('worktreeProblem', () => {
     ['invalid_name', 'Not a valid branch name'],
     ['dirty', 'Could not change the worktree'],
     ['changed', 'This worktree changed; look again'],
-    ['unknown', 'Herdr is still working on it; check the list in a moment'],
+    ['unknown', 'The change is still running; check the list in a moment'],
     ['unknown_group', 'It no longer exists; the list was refreshed'],
     ['busy', 'Another worktree change is still running; try again'],
-    [
-      'unsupported',
-      'This Herdr cannot manage worktrees (needs 0.9.2 or later)',
-    ],
+    ['unsupported', 'This backend cannot manage worktrees'],
     ['', 'Could not change the worktree'],
   ])('%s', (code, message) => {
     expect(worktreeProblem(code, tFor('en'))).toBe(message)

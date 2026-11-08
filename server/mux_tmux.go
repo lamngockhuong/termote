@@ -306,7 +306,9 @@ func (tmuxMux) Caps() Caps {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	return Caps{CopyMode: true, AgentChat: agentProcSupported, Files: true, Groups: true,
-		RenameGroup: true, RenameTab: true, ReorderTabs: tmuxCanReorder(ctx), PaneText: !tmuxIsPsmux, PaneLayout: !tmuxIsPsmux, RenamePane: tmuxCanNamePanes(ctx)}
+		RenameGroup: true, RenameTab: true, ReorderTabs: tmuxCanReorder(ctx), PaneText: !tmuxIsPsmux, PaneLayout: !tmuxIsPsmux, RenamePane: tmuxCanNamePanes(ctx),
+		// Worktrees through git (gitWorktreeMux); not on psmux.
+		Worktrees: !tmuxIsPsmux}
 }
 
 // tmuxReorderMin is the first tmux whose move-window takes -b (insert

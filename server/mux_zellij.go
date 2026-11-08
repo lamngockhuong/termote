@@ -137,6 +137,8 @@ func (*zellijMux) Caps() Caps {
 		ReorderTabs:      true,
 		Files:            true,
 		AgentChat:        agentProcSupported,
+		// Worktrees through git (gitWorktreeMux).
+		Worktrees: true,
 	}
 }
 

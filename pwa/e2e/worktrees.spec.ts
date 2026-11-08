@@ -1,16 +1,33 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, realpathSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, relative } from 'node:path'
 import { expect, type Page, test } from './fixtures'
 
-// Git worktree workspaces from the PWA, against a Herdr of their own: the
-// e2e-herdr CI job starts a headless Herdr on its own socket, a throwaway
-// repo (TERMOTE_E2E_REPO, with a branch e2e-base) and a workspace labelled
-// e2e-repo in it. Without TERMOTE_E2E_HERDR=1 the spec skips, so a run
-// against a developer's own Herdr never touches it.
-const enabled = process.env.TERMOTE_E2E_HERDR === '1'
+// Git worktrees from the PWA, on any backend that has them, against a server
+// of its own: a throwaway repo (TERMOTE_E2E_REPO, with a branch e2e-base)
+// under a temporary directory, and a group named e2e-repo working in it
+// (made here when the server has none: on herdr-core a space takes its
+// folder's name, so the repo's folder is e2e-repo). CI runs it on Herdr
+// (e2e-herdr, which makes the workspace itself), tmux (e2e) and herdr-core
+// (e2e-hc), each with its own HOME, where tmux and herdr-core put the new
+// checkouts. Without TERMOTE_E2E_WORKTREES=1 (or TERMOTE_E2E_HERDR=1) the
+// spec skips, so a run against a developer's own server never touches it.
+const enabled =
+  process.env.TERMOTE_E2E_WORKTREES === '1' || process.env.TERMOTE_E2E_HERDR === '1'
 const repo = process.env.TERMOTE_E2E_REPO ?? ''
 const SOURCE = 'e2e-repo'
+
+// The repo must be under a temporary directory (the system's or the CI
+// runner's): never a developer's own checkout.
+function underTemp(path: string): boolean {
+  const roots = [tmpdir(), process.env.RUNNER_TEMP ?? ''].filter(Boolean)
+  const real = realpathSync(path)
+  return roots.some((root) => {
+    const rel = relative(realpathSync(root), real)
+    return rel !== '' && !rel.startsWith('..') && !rel.startsWith('/')
+  })
+}
 
 const git = (...args: string[]) =>
   execFileSync('git', ['-C', repo, ...args], {
@@ -38,17 +55,32 @@ const fresh = () => {
   return name
 }
 
+// With sign-in on (TERMOTE_PASS, the e2e-hc job) the page signs in on the
+// server's form: Basic credentials reach the API, not the page.
+const pass = process.env.TERMOTE_PASS ?? ''
+
 async function open(page: Page) {
   await page.goto('/')
   await page.evaluate(() => {
     localStorage.clear()
   })
-  await page.reload()
-  await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
+  if (pass) {
+    await page.goto('/login')
+    await page.getByLabel('Username').fill(process.env.TERMOTE_USER || 'admin')
+    await page.getByLabel('Password').fill(pass)
+    await page.getByRole('button', { name: 'Sign in' }).click()
+  } else {
+    await page.reload()
+  }
+  await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 15000 })
 }
 
+// The group's menu: "Actions for <noun> <name>", the noun the backend's
+// (workspace, tmux session)
 const menuOf = (page: Page, name: string) =>
-  page.getByRole('button', { name: `Actions for workspace ${name}` })
+  page.getByRole('button', {
+    name: new RegExp(`^Actions for .+ ${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`),
+  })
 
 // The sidebar section of the workspace showing branch
 const sectionOf = (page: Page, branch: string) =>
@@ -82,14 +114,30 @@ async function compactSidebar(page: Page) {
   await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 15000 })
 }
 
-test.describe('Herdr worktrees from the PWA', () => {
-  test.skip(!enabled, 'needs TERMOTE_E2E_HERDR=1: a Herdr of its own (the e2e-herdr job)')
+test.describe('Worktrees from the PWA', () => {
+  test.skip(
+    !enabled,
+    'needs TERMOTE_E2E_WORKTREES=1: a server of its own and a throwaway repo (the e2e, e2e-hc and e2e-herdr jobs)',
+  )
 
   test.beforeEach(async ({ request }) => {
     expect(repo, 'TERMOTE_E2E_REPO').not.toBe('')
-    const snap = await (await request.get('/api/mux/snapshot')).json()
-    // The job runs Herdr 0.9.3: a missing cap is a failure, not a skip
+    expect(underTemp(repo), 'TERMOTE_E2E_REPO is under a temporary directory').toBe(true)
+    let snap = await (await request.get('/api/mux/snapshot')).json()
+    // Every job runs a backend with worktrees: a missing cap is a failure,
+    // not a skip
     expect(snap.caps.worktrees, 'caps.worktrees').toBe(true)
+    if (!snap.groups.some((g: { name: string }) => g.name === SOURCE)) {
+      const made = await request.post('/api/mux/groups', { data: { name: SOURCE, cwd: repo } })
+      expect(made.ok(), await made.text()).toBe(true)
+      // The group's folder is read in the background (tmux, herdr-core)
+      await expect
+        .poll(async () => {
+          snap = await (await request.get('/api/mux/snapshot')).json()
+          return snap.groups.some((g: { name: string }) => g.name === SOURCE)
+        })
+        .toBe(true)
+    }
   })
 
   test.afterEach(async ({ request }) => {
@@ -125,7 +173,7 @@ test.describe('Herdr worktrees from the PWA', () => {
     const branch = fresh()
     await createWorktree(page, branch)
 
-    // Herdr made the checkout; the new workspace is the one on screen
+    // The checkout was made; the new group is the one on screen
     const path = pathOf(branch)
     expect(path).not.toBe('')
     await expect(sectionOf(page, branch).locator('[aria-current="true"]')).toHaveCount(1)
@@ -201,6 +249,40 @@ test.describe('Herdr worktrees from the PWA', () => {
       .click()
     await expect(sectionOf(page, branch)).toHaveCount(0, { timeout: 30000 })
     expect(existsSync(path)).toBe(false)
+  })
+
+  test('Open worktree on one already open goes to its group', async ({ page, request }) => {
+    await open(page)
+    const branch = fresh()
+    await createWorktree(page, branch)
+    // The dialog shows a worktree with a group by going to that group
+    const opens: string[] = []
+    page.on('request', (r) => {
+      if (r.method() === 'POST' && r.url().endsWith('/api/mux/worktrees/open')) opens.push(r.url())
+    })
+    await menuOf(page, SOURCE).click()
+    await page.getByRole('menuitem', { name: 'Open worktree' }).click()
+    // The entry reads its branch, its folder's name and "open"
+    const item = page
+      .getByRole('dialog', { name: 'Open worktree' })
+      .getByRole('button', { name: new RegExp(`^${branch}.* open$`) })
+    await expect(item).toBeVisible({ timeout: 15000 })
+    await item.click()
+    await expect(sectionOf(page, branch)).toHaveCount(1)
+    await expect(sectionOf(page, branch).locator('[aria-current="true"]')).toHaveCount(1)
+    expect(opens).toEqual([])
+
+    // The server answers the same: the group showing it, no new one
+    const snap = await (await request.get('/api/mux/snapshot')).json()
+    const source = snap.groups.find((g: { name: string }) => g.name === SOURCE)
+    const shown = snap.groups.filter(
+      (g: { worktree?: { branch?: string } }) => g.worktree?.branch === branch,
+    )
+    expect(shown).toHaveLength(1)
+    const res = await request.post('/api/mux/worktrees/open', {
+      data: { groupId: source.id, branch },
+    })
+    expect(await res.json()).toMatchObject({ ok: true, id: shown[0].id, alreadyOpen: true })
   })
 
   test('an invalid name is pointed out and nothing is sent', async ({ page }) => {

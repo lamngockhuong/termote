@@ -6,19 +6,21 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"os/exec"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
 	"unicode/utf8"
 )
 
-// Git worktree workspaces (/api/mux/worktrees*, Herdr only): list a
+// Git worktree workspaces (/api/mux/worktrees*: Herdr's own, or termote's
+// git implementation for tmux, Zellij and herdr-core, git_worktree_mux.go): list a
 // workspace's worktrees and its local branches, create a worktree (a new
 // branch, or an existing one checked out as it is), open an existing
 // worktree as a workspace, and remove a worktree workspace with its checkout.
 
-// worktreeMux is a backend that manages git worktree workspaces (Herdr).
+// worktreeMux manages git worktree workspaces: Herdr itself, or
+// gitWorktreeMux.
 type worktreeMux interface {
 	// ValidGroupID reports whether id has the form of a group id.
 	ValidGroupID(id string) bool
@@ -36,8 +38,11 @@ type worktreeMux interface {
 
 // WorktreeList is a repository's worktrees, as the GET answers them.
 type WorktreeList struct {
-	RepoName  string     `json:"repoName"`
-	RepoRoot  string     `json:"-"` // for the branch list only, never sent
+	RepoName string `json:"repoName"`
+	RepoRoot string `json:"-"` // for the branch list only, never sent
+	// SafeDir is passed to git as safe.directory in RepoRoot (see
+	// filesRoot.SafeDir); never sent.
+	SafeDir   string     `json:"-"`
 	Worktrees []Worktree `json:"worktrees"`
 	Branches  []string   `json:"branches"` // filled by the route
 }
@@ -51,6 +56,23 @@ type Worktree struct {
 	// detached, which Open worktree can open by its branch.
 	Openable bool   `json:"openable"`
 	GroupID  string `json:"groupId,omitempty"` // the workspace showing it
+	// groups: every group working in it, NUL-separated (gitWorktreeMux;
+	// GroupID is the first), any of which a remove may name. A string keeps
+	// Worktree comparable. Never sent.
+	groups string
+}
+
+// groupIDs lists the groups working in the worktree.
+func (w Worktree) groupIDs() []string {
+	if w.groups == "" {
+		return nil
+	}
+	return strings.Split(w.groups, "\x00")
+}
+
+// shownBy reports whether group id shows the worktree.
+func (w Worktree) shownBy(id string) bool {
+	return w.GroupID == id || slices.Contains(w.groupIDs(), id)
 }
 
 const (
@@ -72,7 +94,8 @@ var (
 	worktreeCallTimeout = muxTimeout
 )
 
-// Errors of the worktree routes; Herdr's own message is logged, never sent.
+// Errors of the worktree routes; the backend's or git's own message is
+// logged, never sent.
 var (
 	errWorktreeUnsupported  = &codedError{"unsupported", "this backend cannot manage worktrees", http.StatusNotImplemented}
 	errWorktreeName         = &codedError{"invalid_name", "invalid branch name", http.StatusBadRequest}
@@ -80,7 +103,7 @@ var (
 	errWorktreeNotFound     = &codedError{"not_found", "no such worktree", http.StatusNotFound}
 	errWorktreeNotGit       = &codedError{"not_git", "this workspace is not in a git repository", http.StatusConflict}
 	errWorktreeLinkedSource = &codedError{"linked_source", "the source workspace is a linked worktree", http.StatusConflict}
-	errWorktreeNotLinked    = &codedError{"not_linked", "this workspace is not a worktree Herdr manages", http.StatusConflict}
+	errWorktreeNotLinked    = &codedError{"not_linked", "this workspace is not a linked worktree", http.StatusConflict}
 	errWorktreeChanged      = &codedError{"changed", "the worktree changed", http.StatusConflict}
 	errWorktreeBranchExists = &codedError{"branch_exists", "the branch exists, so it is checked out without a base", http.StatusConflict}
 	errWorktreeAmbiguous    = &codedError{"ambiguous", "more than one worktree uses this branch", http.StatusConflict}
@@ -88,7 +111,7 @@ var (
 	errWorktreeOpenFailed   = &codedError{"open_failed", "the worktree exists but its workspace did not open", http.StatusConflict}
 	errWorktreeDirty        = &codedError{"dirty", "the worktree has uncommitted or untracked changes", http.StatusConflict}
 	errWorktreeBusy         = &codedError{"busy", "another worktree change is still running; try again", http.StatusServiceUnavailable}
-	errWorktreeUnknown      = &codedError{"unknown", "Herdr did not answer in time; check the list", http.StatusGatewayTimeout}
+	errWorktreeUnknown      = &codedError{"unknown", "the worktree change did not finish in time; check the list", http.StatusGatewayTimeout}
 	errWorktreeFailed       = &codedError{"worktree_failed", "could not change the worktree", http.StatusInternalServerError}
 )
 
@@ -131,11 +154,11 @@ type worktreeAPI struct {
 	sem     chan struct{}
 }
 
-// registerWorktreeRoutes mounts the worktree routes. git is the files
+// registerWorktreeRoutes mounts the worktree routes. wm is the backend's
+// worktree implementation (worktreeMuxFor), nil for none. git is the files
 // routes' runner (the branch list and the existing-branch check). Patterns
 // carry no method so a wrong one gets a JSON 405.
-func registerWorktreeRoutes(mux *http.ServeMux, m Mux, git *gitRunner, allowed hostAllowlist) {
-	wm, _ := m.(worktreeMux)
+func registerWorktreeRoutes(mux *http.ServeMux, m Mux, wm worktreeMux, git *gitRunner, allowed hostAllowlist) {
 	a := &worktreeAPI{m: m, wm: wm, git: git, allowed: allowed, sem: make(chan struct{}, 1)}
 	mux.HandleFunc("/api/mux/worktrees", a.handleWorktrees)
 	mux.HandleFunc("/api/mux/worktrees/open", a.handleOpen)
@@ -183,7 +206,7 @@ func (a *worktreeAPI) handleList(w http.ResponseWriter, r *http.Request) {
 		worktreeFailure(w, "list worktrees", listFailure(err))
 		return
 	}
-	list.Branches = a.branches(r.Context(), list.RepoRoot)
+	list.Branches = a.branches(r.Context(), list.RepoRoot, list.SafeDir)
 	if list.Worktrees == nil {
 		list.Worktrees = []Worktree{}
 	}
@@ -193,12 +216,12 @@ func (a *worktreeAPI) handleList(w http.ResponseWriter, r *http.Request) {
 // branches lists the repository's local branches, most recently committed
 // first, without the names validBranchName refuses. A failure (git refused
 // the repository) gives none.
-func (a *worktreeAPI) branches(ctx context.Context, root string) []string {
+func (a *worktreeAPI) branches(ctx context.Context, root, safeDir string) []string {
 	out := []string{}
 	if root == "" {
 		return out
 	}
-	raw, truncated, err := a.git.output(ctx, gitCall{root: root, heavy: true, noBackoff: true, limit: branchListLimit},
+	raw, truncated, err := a.git.output(ctx, gitCall{root: root, safeDir: safeDir, heavy: true, noBackoff: true, limit: branchListLimit},
 		"for-each-ref", "--count=500", "--sort=-committerdate", "--format=%(refname:lstrip=2)", "refs/heads")
 	if err != nil {
 		log.Printf("worktrees: branch list in %s: %v", root, err)
@@ -279,12 +302,7 @@ func (a *worktreeAPI) branchExists(ctx context.Context, sourceID, branch string)
 	if list.RepoRoot == "" {
 		return false, errors.New("worktree.list named no repository root")
 	}
-	_, _, err = a.git.output(ctx, gitCall{root: list.RepoRoot}, "show-ref", "--verify", "--quiet", "refs/heads/"+branch)
-	var ee *exec.ExitError
-	if errors.As(err, &ee) && ee.ExitCode() == 1 {
-		return false, nil
-	}
-	return err == nil, err
+	return branchExistsIn(ctx, a.git, gitCall{root: list.RepoRoot, safeDir: list.SafeDir}, branch)
 }
 
 func (a *worktreeAPI) handleOpen(w http.ResponseWriter, r *http.Request) {
@@ -362,7 +380,7 @@ func (a *worktreeAPI) handleRemove(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		err = errWorktreeChanged
 		for _, wt := range list.Worktrees {
-			if wt.GroupID == id {
+			if wt.shownBy(id) {
 				err = confirmedWorktree(wt, *body.Path, *body.Branch)
 				break
 			}
@@ -416,7 +434,7 @@ func (a *worktreeAPI) acquire(w http.ResponseWriter, r *http.Request, limit time
 // nothing, so it is busy (try again), not unknown.
 func listFailure(err error) error {
 	if isContextError(err) {
-		log.Printf("herdr worktree.list: %v", err)
+		log.Printf("worktree list: %v", err)
 		return errWorktreeBusy
 	}
 	return err
@@ -427,18 +445,18 @@ func isContextError(err error) bool {
 }
 
 // worktreeFailure answers err: a change that ran out of time may still
-// complete in Herdr (unknown); a coded error with its code; anything else is
+// complete (unknown); a coded error with its code; anything else is
 // logged and answered generically.
 func worktreeFailure(w http.ResponseWriter, op string, err error) {
 	var ce *codedError
 	switch {
 	case isContextError(err):
-		log.Printf("herdr %s: %v", op, err)
+		log.Printf("worktree %s: %v", op, err)
 		err = errWorktreeUnknown
 	case errors.Is(err, errUnsupported):
 		err = errWorktreeUnsupported
 	case !errors.As(err, &ce):
-		log.Printf("herdr %s: %v", op, err)
+		log.Printf("worktree %s: %v", op, err)
 		err = errWorktreeFailed
 	}
 	errors.As(err, &ce)

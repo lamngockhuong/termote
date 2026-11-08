@@ -241,7 +241,7 @@ export interface GroupActions {
   canRename: (id: string) => boolean
   // Git worktrees (caps.worktrees): a new worktree of the group's
   // repository and an existing one opened (not from a linked worktree,
-  // which Herdr refuses as the source), and the group removed with its
+  // which the server refuses as the source), and the group removed with its
   // checkout (a linked worktree only)
   onNewWorktree?: (id: string) => void
   onOpenWorktree?: (id: string) => void

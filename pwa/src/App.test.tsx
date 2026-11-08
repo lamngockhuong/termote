@@ -6962,7 +6962,7 @@ describe('App — group actions', () => {
       render(<App />)
       for (const [code, text] of [
         ['changed', 'This worktree changed; look again'],
-        ['unknown', 'Herdr is still working on it; check the list in a moment'],
+        ['unknown', 'The change is still running; check the list in a moment'],
         ['not_linked', 'Herdr does not manage this worktree'],
       ] as const) {
         removeWorktree.mockRejectedValueOnce(new RequestError(409, code, 'x'))

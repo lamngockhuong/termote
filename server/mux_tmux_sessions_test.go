@@ -529,3 +529,12 @@ func TestTmuxAttachViewChangesNothing(t *testing.T) {
 		t.Error("AttachView took an invalid id")
 	}
 }
+
+func TestTmuxRealWorktreeRoundTrip(t *testing.T) {
+	useRealTmux(t, "termote-wt")
+	tmuxNewSession(t, "keep", t.TempDir())
+	worktreeRoundTrip(t, tmuxMux{}, worktreeRepo(t), true, func(what string, cond func() bool) {
+		t.Helper()
+		waitFor(t, cond)
+	})
+}

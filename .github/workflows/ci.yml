@@ -428,12 +428,49 @@ jobs:
           TERMOTE_E2E_PLACES: ${{ env.E2E_PLACE_DIR }}
         run: TMUX_SOCKET="$RUNNER_TEMP/tmux-places.sock" pnpm exec playwright test e2e/acceptance-walk places --workers=1
 
+      # Worktrees on tmux (termote's own git implementation): a fourth server
+      # on its own port, tmux socket and session, with its own HOME (where
+      # new checkouts go, ~/.termote/worktrees) and XDG dirs, and a throwaway
+      # repo with a branch e2e-base. worktrees.spec.ts makes the e2e-repo
+      # session itself, and fails (never skips) without caps.worktrees.
+      - name: Start server for worktrees
+        if: ${{ matrix.extra }}
+        run: |
+          W="$RUNNER_TEMP/worktrees"
+          mkdir -p "$W/home" "$W/xdg-config" "$W/xdg-cache" "$W/xdg-state" "$W/xdg-data"
+          git init -q -b main "$W/e2e-repo"
+          git -C "$W/e2e-repo" -c user.name=e2e -c user.email=e2e@example.com commit -q --allow-empty -m init
+          git -C "$W/e2e-repo" branch e2e-base
+          echo "E2E_WORKTREES_REPO=$W/e2e-repo" >> "$GITHUB_ENV"
+          HOME="$W/home" TERMOTE_PORT=7683 TMUX_SESSION=e2e-worktrees TMUX_SOCKET="$RUNNER_TEMP/tmux-wt.sock" \
+            XDG_CONFIG_HOME="$W/xdg-config" XDG_CACHE_HOME="$W/xdg-cache" \
+            XDG_STATE_HOME="$W/xdg-state" XDG_DATA_HOME="$W/xdg-data" \
+            nohup ./server/termote-dev serve > "$RUNNER_TEMP/serve-worktrees.log" 2>&1 &
+          for _ in $(seq 1 30); do
+            curl -fsS -H 'Sec-Fetch-Site: same-origin' http://localhost:7683/api/mux/snapshot |
+              grep -q '"worktrees":true' && exit 0
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/serve-worktrees.log"
+          exit 1
+
+      - name: Run Playwright (worktrees)
+        if: ${{ matrix.extra }}
+        working-directory: pwa
+        env:
+          TERMOTE_PORT: "7683"
+          TMUX_SESSION: e2e-worktrees
+          TERMOTE_E2E_WORKTREES: "1"
+          TERMOTE_E2E_REPO: ${{ env.E2E_WORKTREES_REPO }}
+        run: TMUX_SOCKET="$RUNNER_TEMP/tmux-wt.sock" pnpm exec playwright test worktrees --workers=1
+
       - name: Server log
         if: failure()
         run: |
           cat "$RUNNER_TEMP/serve.log" 2>/dev/null || true
           cat "$RUNNER_TEMP/serve-auth.log" 2>/dev/null || true
           cat "$RUNNER_TEMP/serve-places.log" 2>/dev/null || true
+          cat "$RUNNER_TEMP/serve-worktrees.log" 2>/dev/null || true
 
       - name: Upload Playwright report
         if: failure()
@@ -617,6 +654,7 @@ jobs:
         working-directory: pwa
         env:
           TERMOTE_E2E_HERDR: "1"
+          TERMOTE_E2E_WORKTREES: "1"
         run: pnpm exec playwright test worktrees terminal-copy tasks pane-layout pane-rename --workers=1
 
       # Stops the job's Herdr and opens the page: termote starts Herdr again
@@ -867,7 +905,14 @@ jobs:
             echo "HC_SESSION=e2e"
             echo "TERMOTE_E2E_HC_DIR=$H"
             echo "E2E_HC_PASS=$pass"
+            echo "TERMOTE_E2E_REPO=$H/e2e-repo"
           } >> "$GITHUB_ENV"
+          # A throwaway repo for worktrees.spec.ts: the space it makes there
+          # takes the folder's name (e2e-repo); new checkouts go under the
+          # server's HOME, ~/.herdr/worktrees.
+          git init -q -b main "$H/e2e-repo"
+          git -C "$H/e2e-repo" -c user.name=e2e -c user.email=e2e@example.com commit -q --allow-empty -m init
+          git -C "$H/e2e-repo" branch e2e-base
           export HOME="$H/home" XDG_CONFIG_HOME="$H/config" XDG_STATE_HOME="$H/state" \
             XDG_CACHE_HOME="$H/cache" XDG_DATA_HOME="$H/data" XDG_RUNTIME_DIR="$H" \
             HC_SOCKET="$H/hc.sock" HC_SESSION=e2e
@@ -889,6 +934,15 @@ jobs:
           TERMOTE_E2E_HC: "1"
           TERMOTE_PASS: ${{ env.E2E_HC_PASS }}
         run: pnpm exec playwright test hc.spec --workers=1
+
+      # Worktrees on hc: the spec makes the e2e-repo space and leaves it, so
+      # it runs on its own, after hc.spec.
+      - name: Run Playwright (worktrees)
+        working-directory: pwa
+        env:
+          TERMOTE_E2E_WORKTREES: "1"
+          TERMOTE_PASS: ${{ env.E2E_HC_PASS }}
+        run: pnpm exec playwright test worktrees --workers=1
 
       - name: Stop hc
         if: always()
