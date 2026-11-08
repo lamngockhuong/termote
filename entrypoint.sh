@@ -32,13 +32,15 @@ if [[ "$NO_AUTH" != "true" ]]; then
         echo "============================================"
         echo "  TERMOTE CREDENTIALS (auto-generated)"
         echo "  Username: $TERMOTE_USER"
-        if (umask 077 && mkdir -p "${pass_file%/*}" && printf '%s\n' "$TERMOTE_PASS" > "$pass_file") 2>/dev/null; then
-            echo "  Password: in $pass_file"
-            echo "    (docker exec <container> cat $pass_file)"
-        else
-            # Nowhere to keep it: the log is the only way to learn it.
-            echo "  Password: $TERMOTE_PASS"
+        if ! (umask 077 && mkdir -p "${pass_file%/*}" && printf '%s\n' "$TERMOTE_PASS" > "$pass_file") 2>/dev/null; then
+            # Nowhere to keep it, and the log is no place for it: stop.
+            echo "============================================"
+            echo "termote: cannot save the generated password to $pass_file (is the home read-only?)." >&2
+            echo "termote: set TERMOTE_PASS, or give the container a writable $HOME/.config." >&2
+            exit 1
         fi
+        echo "  Password: in $pass_file"
+        echo "    (docker exec <container> cat $pass_file)"
         echo "============================================"
         echo ""
     else

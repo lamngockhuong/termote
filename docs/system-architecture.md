@@ -1675,7 +1675,8 @@ The container runs as the host uid, which cannot create directories in the root-
 `termote serve` can create its upload dir `~/.cache/termote/uploads` (0700, its own). The
 agent runs in the same container, so the path it is given is valid there. `/home/termote/.config`
 is 1777 too, so a password the entrypoint generates (no `TERMOTE_PASS`) goes to
-`~/.config/termote/password` (0600) rather than to the container log.
+`~/.config/termote/password` (0600) rather than to the container log; where it cannot be written
+(a read-only root), the entrypoint stops with an error instead of printing it.
 
 ### Native
 

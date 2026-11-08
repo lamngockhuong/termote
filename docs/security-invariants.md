@@ -1844,7 +1844,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   Agent chat). `Caps.uploads` tells the PWA (snapshot); a view-only client
   gets 403 `view_only`. The container
   creates `/home/termote/.cache` and `/home/termote/.config` mode 1777 so the host uid can
-  create its upload dir and the generated password's file (kept out of the log). The store is
+  create its upload dir and the generated password's file (kept out of the log: where that file
+  cannot be written, the entrypoint stops with an error and never prints the password). The store is
   never served by the Files view, even when a pane's root holds it
 - **Notifications / Web Push** (`/api/mux/push/*`, `caps.push`): the setting "Notify when an
   agent needs me" notifies when an agent becomes `blocked` or ends a turn (`working` →
