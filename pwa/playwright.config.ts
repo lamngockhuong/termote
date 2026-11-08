@@ -48,3 +48,4 @@ export default defineConfig({
     video: 'on-first-retry',
   },
 })
+// Temporary: makes CI run the E2E jobs for the sharding change; reverted before merge
