@@ -44,6 +44,11 @@ for (const lang of ["en", "vi"]) {
   // The first visit's welcome screen, in the language of the shots
   await page.locator("button", { hasText: new RegExp(`^${lang.toUpperCase()}$`) }).click();
   await page.getByRole("button", { name: /Open the terminal|Mở terminal/ }).click();
+  // No Host stats chip in the header: on a phone it pushes the session's name out of view
+  await page.evaluate(() => {
+    const settings = JSON.parse(localStorage.getItem("termote-settings") || "{}");
+    localStorage.setItem("termote-settings", JSON.stringify({ ...settings, showHostChip: false }));
+  });
   await page.close();
   // A fresh page for each shot: what the last one opened stays behind
   for (const [name, hash, before] of shots) {
