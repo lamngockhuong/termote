@@ -34,8 +34,9 @@ termote machine add pi --label "Pi nhà bếp"
 
 1. Lần đầu, tạo một khoá riêng của Termote (`~/.config/termote/ssh/id_ed25519`), không đặt mật khẩu cho
    khoá vì server dùng nó khi không có ai ngồi trước máy.
-2. Nối sang bằng chính tài khoản SSH của bạn. Nếu Termote chưa từng thấy máy đó, OpenSSH hỏi bạn xác nhận
-   host key; key này được lưu vào `known_hosts` riêng của Termote, tách khỏi của bạn.
+2. Nối sang bằng chính tài khoản SSH của bạn. Nếu `known_hosts` của bạn đã có host key của máy đó, Termote chép
+   nó sang `known_hosts` riêng của Termote (tách khỏi của bạn), nên key đó được kiểm tra và key khác bị từ chối;
+   nếu chưa có, OpenSSH hỏi bạn xác nhận host key, và key được lưu ở đó.
 3. Hỏi Termote trên máy đó xem nó được cài ở đâu. Trên Linux và macOS, nếu máy đó chưa có Termote, lệnh
    đề nghị cài đúng phiên bản của máy này bằng trình cài đặt trực tuyến (máy kia cần có `curl`) rồi chạy
    nó, đồng thời hiện những gì `termote start` in ra ở đó, kể cả mật khẩu mới. Nếu Termote ở đó cũ hơn máy
@@ -77,7 +78,7 @@ termote machine status                  # trạng thái server đang thấy: onl
 | Đang kết nối | Chưa thử nối | Chờ một chút |
 | Ngoại tuyến | Không nối SSH được, hoặc máy đó không chạy server Termote | Kiểm tra máy đang bật, và chạy `termote start` trên đó |
 | Khoá bị từ chối | Khoá của Termote chưa được cài trên máy đó | `termote machine remove` rồi `add` lại |
-| Host key đã đổi | Host key của máy khác với key đã lưu | Nếu bạn biết lý do, `remove` rồi `add` lại |
+| Host key đã đổi | Host key của máy khác với key đã lưu | Nếu bạn biết lý do, `remove`, xoá key cũ trong `known_hosts` của bạn (`ssh-keygen -R <host>`), rồi `add` lại |
 | Khác bản Termote | Hai Termote dùng hai phiên bản API khác nhau | Cập nhật cả hai lên cùng một bản |
 
 Sau mỗi lần lỗi, server chờ rồi mới thử lại (5 giây, mỗi lần gấp đôi, tối đa 5 phút); `termote machine

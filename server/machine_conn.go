@@ -203,8 +203,10 @@ func dialMachineSSH(ctx context.Context, argv []string) (net.Conn, string, error
 	}
 	got := make(chan result, 1)
 	go func() {
-		line, err := p.stdout.ReadString('\n')
-		got <- result{line, err}
+		// At most the reader's buffer: a first line longer than that is
+		// no greeting, and is not held in memory to its end.
+		line, err := p.stdout.ReadSlice('\n')
+		got <- result{string(line), err}
 	}()
 	timer := time.NewTimer(bridgeGreetingWait)
 	defer timer.Stop()
@@ -217,6 +219,10 @@ func dialMachineSSH(ctx context.Context, argv []string) (net.Conn, string, error
 	case <-ctx.Done():
 		p.stop()
 		return nil, "", ctx.Err()
+	}
+	if errors.Is(r.err, bufio.ErrBufferFull) {
+		p.stop()
+		return nil, "first line from the machine too long", errMachineIncompatible
 	}
 	if r.err != nil {
 		// Let ssh finish writing why it gave up.

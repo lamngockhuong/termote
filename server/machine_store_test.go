@@ -35,6 +35,11 @@ func TestMachineStoreRoundTrip(t *testing.T) {
 	if findMachine(got, "Pi") != 1 || findMachine(got, "0123456789abcdef") != 0 || findMachine(got, "nope") != -1 {
 		t.Error("findMachine by label or id")
 	}
+	// A label that is another machine's id never stands for that machine.
+	clash := []machineRecord{testMachine("0123456789abcdef", "fedcba9876543210", "box"), testMachine("fedcba9876543210", "Pi", "pi.lan")}
+	if i := findMachine(clash, "fedcba9876543210"); i != 1 {
+		t.Errorf("findMachine by an id another machine has as its label = %d, want 1", i)
+	}
 	if err := saveMachines(path, nil); err != nil {
 		t.Fatal(err)
 	}

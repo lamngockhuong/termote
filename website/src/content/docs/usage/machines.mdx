@@ -35,8 +35,9 @@ termote machine add pi --label "Kitchen Pi"
 
 1. The first time, it makes a key of Termote's own (`~/.config/termote/ssh/id_ed25519`), without a
    passphrase: the server uses it unattended.
-2. It connects with your own SSH login. OpenSSH asks you to confirm the computer's host key if Termote has
-   not seen it before; it is saved in Termote's own `known_hosts`, apart from yours.
+2. It connects with your own SSH login. If your own `known_hosts` already holds the computer's host key, Termote
+   copies it into its own `known_hosts` (apart from yours), so that key is checked and a different one refused;
+   otherwise OpenSSH asks you to confirm the key, and it is saved there.
 3. It asks Termote on that computer where it is installed. On Linux and macOS, if Termote is not there,
    it offers to install this computer's release with the online installer (which needs `curl` there) and
    to start it, showing what `termote start` prints there, its new password included; if Termote there
@@ -78,7 +79,7 @@ termote machine status                  # what the running server sees: online, 
 | Connecting | Not tried yet | Wait a moment |
 | Offline | No SSH connection, or no Termote server running there | Check the computer is on, and `termote start` there |
 | Key refused | Termote's key is not installed there | `termote machine remove`, then `add` again |
-| Host key changed | The computer's host key is not the one saved | If you expected it, `remove` and `add` again |
+| Host key changed | The computer's host key is not the one saved | If you expected it, `remove`, remove the old key from your own `known_hosts` (`ssh-keygen -R <host>`), and `add` again |
 | Another Termote release | The two Termotes speak different API versions | Update both to the same release |
 
 After a failure the server waits before trying again (5 seconds, doubling up to 5 minutes); `termote

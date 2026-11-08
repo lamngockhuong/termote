@@ -2220,8 +2220,13 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `PermitLocalCommand=no`, `RemoteCommand=none`, `RequestTTY=no`, `Tunnel=no`, `ControlMaster=no`,
   `ControlPath=none`, `UpdateHostKeys=no`, `CheckHostIP=no`) and keys the host as
   `HostKeyAlias=termote-<id>` in termote's own `ssh/known_hosts`. termote's key (`ssh/id_ed25519`, dir
-  0700, no passphrase) is made by `ssh-keygen` and never printed. `add` runs the user's ssh at the
-  terminal (`StrictHostKeyChecking=ask`: the only TOFU), asks `termote machine whereami` there for its
+  0700, no passphrase) is made by `ssh-keygen` and never printed. Before its first ssh, `add` copies
+  what the user's own known_hosts files (`ssh -G`'s `userknownhostsfile` and `globalknownhostsfile`)
+  hold for the host (`ssh-keygen -F` on its `HostKeyAlias`, else its host, `[host]:port` off port 22)
+  into termote's, as `termote-<id>`, a `@revoked` marker kept and `@cert-authority` lines left out (a
+  certificate never names `termote-<id>`) (`seedHostKeys`), so a host whose key the user already
+  trusts is checked against that key and a changed one refused. `add` runs the user's ssh at the
+  terminal (`StrictHostKeyChecking=ask`: the only TOFU, for a host none of those files knows), asks `termote machine whereami` there for its
   stable path (Windows: `termote.exe`, never the `.cmd` shim) and socket dir. Where that Unix script says
   `TERMOTE-NOT-FOUND` (exit 3, reported as such, never as ssh failing), only after a yes (or `--yes`) it
   runs the online installer there over the same ssh, downloaded to a `mktemp` file first (a failed
@@ -2236,9 +2241,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `--print-key` (and every Windows machine) only prints it. A machine is saved only after the
   service's own connection (`BatchMode`, `StrictHostKeyChecking=yes`, `IdentitiesOnly`,
   `IdentityAgent=none`) read the bridge greeting and an equal `apiVersion` (`--no-check` skips it);
-  an alias with a `ProxyCommand`/`ProxyJump` is warned about. `remove` asks before dropping the key's
+  an alias with a `ProxyCommand`/`ProxyJump` is warned about. `remove <id|label>` matches an id before a
+  label, since a label may look like another machine's id (`findMachine`), and asks before dropping the key's
   lines there (matched on the key's base64; the file is rewritten only from a whole copy, so a full disk
-  never empties it) and drops the host key (`ssh-keygen -R`). The running
+  never empties it) and drops the host key (`forgetMachineHost`: `ssh-keygen -R`, then the `@revoked` lines
+  it keeps, the file rewritten from a whole copy), as a failed `add` does for the lines it copied or learnt. The running
   server is told over the local socket only (`machines/reload`). `uninstall --purge` removes the store
   and key with the config dir; the lines on the machines stay
 - **Machine transport** (`server/machine_link.go`, `server/machine_conn.go`, `server/machine_serve.go`,
@@ -2248,13 +2255,18 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `<path>.<16 chars>` first, else `$TMPDIR/termote-<uid>/<id>`, else no multiplexing; a socket left
   there gets `-O exit` and is removed before a new master. Every HTTP connection is one
   `ssh -S <ctl> ... -- <alias> bridge` (Windows: its own ssh) with the service options of the Machines
-  CLI entry, used only after the greeting line (10 s) and, after any failure, an equal `apiVersion`
-  over a connection of its own; at most 16 per machine, idle 90 s. Every ssh runs in its own process
+  CLI entry, used only after the greeting line (10 s, read up to the reader's 4 KB buffer: a longer first
+  line is incompatible, greeting or not, never read to its end) and, after any failure, an equal `apiVersion` over a
+  connection of its own; at most 16 per machine (a forwarded stream frees its slot once upgraded), idle
+  90 s, and an answer's headers awaited at most 8 min (`machineResponseHeaderWait`, above the longest agent
+  message, `messageBudget`, and a worktree change, a test checks), a health answer at most 20 s
+  (`machineHealthWait`), so a machine that never answers does not hold them. Every ssh runs in its own process
   group with `Pdeathsig` (Linux), is reaped as an orphan at start on macOS (`HostKeyAlias=termote-`
   in its command line) or sits in a kill-on-close Job Object (Windows), and is stopped (SIGTERM, then
   SIGKILL after 1 s) when its connection closes, its machine is removed, or the server stops. ssh's
   stderr (4 KB) is classified (`unauthorized|hostkey|incompatible|offline`) and logged (5 lines, 200
-  B each) on a status change, never sent to a client. After a failure requests fail at once for a
+  B each, control characters removed by `stripUnsafeRunes` so the machine cannot rewrite the log in a
+  terminal) on a status change, never sent to a client. After a failure requests fail at once for a
   backoff of 5 s doubling to 5 min. Masters stop after 10 min with no request or stream forwarded
   (counted while each runs), unless a device has a Web Push subscription (every machine is then polled).
   Removing a machine closes every connection open to it, a forwarded stream too, then stops its master.

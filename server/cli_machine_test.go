@@ -474,6 +474,58 @@ func TestMachineAddWarnings(t *testing.T) {
 	}
 }
 
+// A host the user's own known_hosts already holds is not a new TOFU: its
+// keys go into termote's known_hosts under the machine's name before the
+// first connection, so that ssh checks the key instead of asking. A machine
+// not added takes them out again.
+func TestMachineAddSeedsKnownHostKeys(t *testing.T) {
+	for _, check := range []error{nil, errMachineOffline} {
+		t.Run(map[bool]string{true: "added", false: "not added"}[check == nil], func(t *testing.T) {
+			tc := machineCLI(t, "y\n", check)
+			dir := t.TempDir()
+			user, global := filepath.Join(dir, "known_hosts"), filepath.Join(dir, "ssh_known_hosts")
+			os.WriteFile(user, []byte("# the user's\n"), 0o600)
+			base := tc.runner.onOutput
+			var atFirstSSH, id string
+			tc.runner.onOutput = func(argv, env []string) (string, bool) {
+				switch {
+				case slices.Contains(argv, "-G"):
+					return "hostname box.lan\nport 2222\nuserknownhostsfile " + user + " " + filepath.Join(dir, "missing") + "\nglobalknownhostsfile " + global + "\nproxycommand none\n", true
+				case argv[0] == "ssh-keygen" && slices.Contains(argv, "-F"):
+					if !slices.Equal(argv[1:], []string{"-F", "[box.lan]:2222", "-f", user}) {
+						t.Errorf("ssh-keygen %v", argv[1:])
+						return "", false
+					}
+					return "# Host [box.lan]:2222 found: line 2\n|1|c2FsdA==|aGFzaA== ssh-ed25519 AAAAhost\n@revoked [box.lan]:2222 ssh-rsa AAAAold\n@cert-authority *.lan ssh-ed25519 AAAAca\n", true
+				case argv[0] == "ssh" && argv[len(argv)-1] == whereamiScript && atFirstSSH == "":
+					b, _ := os.ReadFile(tc.machineSSHPaths().KnownHosts)
+					atFirstSSH = string(b) + "\x00"
+					if f := strings.Fields(string(b)); len(f) > 0 {
+						id = strings.TrimPrefix(f[0], "termote-")
+					}
+				}
+				return base(argv, env)
+			}
+			err := tc.cmdMachine([]string{"add", "box"})
+			name := "termote-" + id
+			if want := name + " ssh-ed25519 AAAAhost\n@revoked " + name + " ssh-rsa AAAAold\n\x00"; atFirstSSH != want {
+				t.Errorf("termote's known_hosts at the first ssh = %q, want %q", atFirstSSH, want)
+			}
+			list, _ := loadMachines(tc.machinesFile())
+			if check == nil {
+				if err != nil || len(list) != 1 || list[0].ID != id {
+					t.Fatalf("add: %v %+v\n%s", err, list, tc.stderr)
+				}
+				return
+			}
+			b, _ := os.ReadFile(tc.machineSSHPaths().KnownHosts)
+			if err == nil || len(list) != 0 || strings.Contains(string(b), "@revoked") || !tc.runner.called("ssh-keygen -R "+name+" -f "+tc.machineSSHPaths().KnownHosts) {
+				t.Errorf("not added: %v %+v, known_hosts %q", err, list, b)
+			}
+		})
+	}
+}
+
 func TestMachineListRemoveStatus(t *testing.T) {
 	tc := machineCLI(t, "y\n", nil)
 	if err := tc.cmdMachine(nil); err != nil || !strings.Contains(tc.stdout.String(), "None") {
@@ -482,7 +534,7 @@ func TestMachineListRemoveStatus(t *testing.T) {
 	saveMachines(tc.machinesFile(), []machineRecord{testMachine("0123456789abcdef", "Box", "box")})
 	os.MkdirAll(tc.machineSSHDir(), 0o700)
 	os.WriteFile(tc.machineSSHPaths().Key+".pub", []byte("ssh-ed25519 AAAAtest c\n"), 0o644)
-	os.WriteFile(tc.machineSSHPaths().KnownHosts, []byte("x"), 0o600)
+	os.WriteFile(tc.machineSSHPaths().KnownHosts, []byte("other ssh-ed25519 AAAAo\n@revoked termote-0123456789abcdef ssh-rsa AAAAold\n"), 0o600)
 
 	tc.stdout.Reset()
 	if err := tc.cmdMachine([]string{"list"}); err != nil || !strings.Contains(tc.stdout.String(), "Box") {
@@ -515,6 +567,9 @@ func TestMachineListRemoveStatus(t *testing.T) {
 	}
 	if !tc.runner.called("ssh-keygen -R termote-0123456789abcdef -f " + tc.machineSSHPaths().KnownHosts) {
 		t.Errorf("the host key was not forgotten: %v", tc.runner.calls)
+	}
+	if b, _ := os.ReadFile(tc.machineSSHPaths().KnownHosts); string(b) != "other ssh-ed25519 AAAAo\n" {
+		t.Errorf("known_hosts after remove = %q", b)
 	}
 	tc.stdout.Reset()
 	if err := tc.cmdMachine([]string{"status"}); err != nil || !strings.Contains(tc.stdout.String(), "None") {

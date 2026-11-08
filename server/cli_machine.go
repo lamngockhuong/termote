@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"text/tabwriter"
@@ -84,7 +85,7 @@ func (c *cli) machineAdd(args []string) error {
 	return c.addMachine(pos[0], o)
 }
 
-func (c *cli) addMachine(alias string, o machineAddOpts) error {
+func (c *cli) addMachine(alias string, o machineAddOpts) (err error) {
 	if err := validAlias(alias); err != nil {
 		return usageError("%v", err)
 	}
@@ -121,7 +122,15 @@ func (c *cli) addMachine(alias string, o machineAddOpts) error {
 	}
 	rec := machineRecord{ID: id, Label: o.label, Alias: alias, AddedAt: time.Now().UTC()}
 	paths := c.machineSSHPaths()
-	c.warnProxy(alias)
+	sshCfg := c.sshConfigOf(alias)
+	c.warnProxy(alias, sshCfg)
+	c.seedHostKeys(alias, sshCfg, paths.KnownHosts, rec.ID)
+	defer func() {
+		// Not added: the host's lines, copied or learnt, go with it.
+		if err != nil {
+			c.forgetMachineHost(paths.KnownHosts, rec.ID)
+		}
+	}()
 
 	// The user's own ssh: OpenSSH asks about the host key (saved in
 	// termote's known_hosts), then termote there says where it lives.
@@ -308,20 +317,105 @@ func (c *cli) ensureMachineKey() (string, error) {
 	return strings.TrimSpace(string(pub)), nil
 }
 
+// sshConfigOf is what the user's ssh resolves for alias (ssh -G): each
+// option's first value line, the words after its name; nil when ssh cannot
+// say.
+func (c *cli) sshConfigOf(alias string) map[string][]string {
+	out, err := c.run.Output("", nil, "ssh", "-G", "--", alias)
+	if err != nil {
+		return nil
+	}
+	cfg := map[string][]string{}
+	for _, l := range strings.Split(string(out), "\n") {
+		if f := strings.Fields(l); len(f) >= 2 && cfg[f[0]] == nil {
+			cfg[f[0]] = f[1:]
+		}
+	}
+	return cfg
+}
+
 // warnProxy warns when the alias reaches its machine through a
 // ProxyCommand or ProxyJump: termote's key would have to open the jump
 // host too.
-func (c *cli) warnProxy(alias string) {
-	out, err := c.run.Output("", nil, "ssh", "-G", "--", alias)
-	if err != nil {
-		return
-	}
-	for _, l := range strings.Split(string(out), "\n") {
-		f := strings.Fields(l)
-		if len(f) >= 2 && (f[0] == "proxycommand" || f[0] == "proxyjump") && f[1] != "none" {
-			c.warnf("%s goes through a %s, which termote does not support: it may not connect", alias, f[0])
+func (c *cli) warnProxy(alias string, cfg map[string][]string) {
+	for _, k := range []string{"proxycommand", "proxyjump"} {
+		if v := cfg[k]; len(v) > 0 && v[0] != "none" {
+			c.warnf("%s goes through a %s, which termote does not support: it may not connect", alias, k)
 			return
 		}
+	}
+}
+
+// seedHostKeys copies the keys the user's own known_hosts files hold for
+// alias's host (as their ssh names it: HostKeyAlias, or host and port)
+// into termote's known_hosts kh under the machine's name, revoked ones
+// marked so. The first connection then checks the key the user already
+// trusts, and refuses a changed one, instead of asking about it as a new
+// host. A host they never connected to, or trust only through a CA (a
+// certificate never names the machine's name), is still asked about.
+func (c *cli) seedHostKeys(alias string, cfg map[string][]string, kh, id string) {
+	name := ""
+	if v := cfg["hostkeyalias"]; len(v) > 0 && v[0] != "none" {
+		name = v[0]
+	} else if v := cfg["hostname"]; len(v) > 0 {
+		name = v[0]
+		if p := cfg["port"]; len(p) > 0 && p[0] != "22" {
+			name = "[" + name + "]:" + p[0]
+		}
+	}
+	if name == "" {
+		return
+	}
+	home, _ := os.UserHomeDir()
+	var lines []string
+	trusted := false
+	for _, file := range append(slices.Clone(cfg["userknownhostsfile"]), cfg["globalknownhostsfile"]...) {
+		if rest, ok := strings.CutPrefix(file, "~/"); ok && home != "" {
+			file = filepath.Join(home, rest)
+		}
+		if strings.Contains(file, "%") {
+			continue
+		}
+		if fi, err := os.Stat(file); err != nil || !fi.Mode().IsRegular() {
+			continue
+		}
+		out, err := c.run.Output("", nil, "ssh-keygen", "-F", name, "-f", file)
+		if err != nil {
+			continue
+		}
+		for _, l := range strings.Split(string(out), "\n") {
+			f := strings.Fields(l)
+			marker := ""
+			if len(f) > 0 && strings.HasPrefix(f[0], "@") {
+				marker, f = f[0]+" ", f[1:]
+			}
+			if len(f) < 3 || strings.HasPrefix(f[0], "#") || marker != "" && marker != "@revoked " {
+				continue
+			}
+			trusted = trusted || marker == ""
+			if line := marker + "termote-" + id + " " + f[1] + " " + f[2]; !slices.Contains(lines, line) {
+				lines = append(lines, line)
+			}
+		}
+	}
+	if len(lines) == 0 {
+		return
+	}
+	fh, err := os.OpenFile(kh, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
+	if err != nil {
+		c.warnf("cannot write %s: %v", kh, err)
+		return
+	}
+	_, err = fh.WriteString(strings.Join(lines, "\n") + "\n")
+	if cerr := fh.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		c.warnf("cannot write %s: %v", kh, err)
+		return
+	}
+	if trusted {
+		c.infof("%s is in your known_hosts: its host key is checked against it, and a changed one refused (reinstalled? remove the old key from your known_hosts first)", alias)
 	}
 }
 
@@ -343,11 +437,17 @@ func (c *cli) checkMachine(m machineRecord) error {
 	return checkMachineHealth(ctx, conn)
 }
 
-// checkMachineHealth asks the bridge for health over conn: an apiVersion
-// other than this one's is incompatible.
+// machineHealthWait bounds the wait for a machine's health answer, which
+// it gives at once: a machine that hangs after its greeting is offline
+// soon, not after machineResponseHeaderWait.
+var machineHealthWait = 20 * time.Second
+
+// checkMachineHealth asks the bridge for health over conn, waiting at most
+// machineHealthWait for its answer: an apiVersion other than this one's is
+// incompatible.
 func checkMachineHealth(ctx context.Context, conn net.Conn) error {
 	var used atomic.Bool
-	cl := &http.Client{Transport: &http.Transport{DisableKeepAlives: true,
+	cl := &http.Client{Transport: &http.Transport{DisableKeepAlives: true, ResponseHeaderTimeout: machineHealthWait,
 		DialContext: func(context.Context, string, string) (net.Conn, error) {
 			if used.Swap(true) {
 				return nil, errors.New("connection already used")
@@ -375,7 +475,7 @@ func machineCheckHint(err error) string {
 	case errors.Is(err, errMachineUnauthorized):
 		return "unauthorized: the key is not installed there (or without the forced command)"
 	case errors.Is(err, errMachineHostKey):
-		return "host key changed: if that is expected, remove the machine and add it again"
+		return "host key changed: if that is expected, remove the machine and the old key from your own known_hosts, then add it again"
 	case errors.Is(err, errMachineIncompatible):
 		return "incompatible: update termote on both machines to the same release"
 	case errors.Is(err, errMachineNoServer):
@@ -453,11 +553,44 @@ func (c *cli) machineRemove(args []string) error {
 			}
 		}
 	}
-	if fileExists(paths.KnownHosts) {
-		argv := sshForgetHostArgv(paths.KnownHosts, m.ID)
-		if _, err := c.run.Output("", nil, argv[0], argv[1:]...); err != nil {
-			c.warnf("its host key stays in %s: %v", paths.KnownHosts, err)
+	c.forgetMachineHost(paths.KnownHosts, m.ID)
+	return nil
+}
+
+// forgetMachineHost drops machine id's host key lines from termote's
+// known_hosts kh: ssh-keygen -R (which also finds a hashed one), then the
+// @revoked and @cert-authority lines it keeps.
+func (c *cli) forgetMachineHost(kh, id string) {
+	if !fileExists(kh) {
+		return
+	}
+	argv := sshForgetHostArgv(kh, id)
+	if _, err := c.run.Output("", nil, argv[0], argv[1:]...); err != nil {
+		c.warnf("its host key stays in %s: %v", kh, err)
+		return
+	}
+	if err := dropMarkedHostLines(kh, "termote-"+id); err != nil {
+		c.warnf("its host key stays in %s: %v", kh, err)
+	}
+}
+
+// dropMarkedHostLines removes the lines of known_hosts file kh that name
+// host after a marker (@revoked, @cert-authority), rewriting it from a
+// whole copy only when one does.
+func dropMarkedHostLines(kh, host string) error {
+	b, err := os.ReadFile(kh)
+	if err != nil {
+		return err
+	}
+	var keep []string
+	for _, l := range strings.SplitAfter(string(b), "\n") {
+		if f := strings.Fields(l); len(f) >= 2 && strings.HasPrefix(f[0], "@") && f[1] == host {
+			continue
 		}
+		keep = append(keep, l)
+	}
+	if out := strings.Join(keep, ""); out != string(b) {
+		return writePrivateFile(kh, []byte(out))
 	}
 	return nil
 }
