@@ -125,11 +125,18 @@ func TestGitDirProbe(t *testing.T) {
 			t.Fatalf("git %v: %v\n%s", args, err, out)
 		}
 	}
+	// A config whose hook cannot be turned off fails closed: refused as one.
+	odd := filepath.Join(dir, "odd.git")
+	for _, args := range [][]string{{"init", "-q", "--bare", odd}, {"-C", odd, "config", "hook.a=b.command", "x"}} {
+		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
 	probe := gitDirProbe(newGitRunner())
 	plain := mkdir(t, filepath.Join(dir, "plain"))
 	for d, want := range map[string]bool{
 		bare: true, filepath.Join(bare, "objects"): true, filepath.Join(work, ".git"): true,
-		work: false, mkdir(t, filepath.Join(work, "sub")): false, plain: false,
+		work: false, mkdir(t, filepath.Join(work, "sub")): false, plain: false, filepath.Join(odd, "objects"): true,
 	} {
 		if got := probe(d); got != want {
 			t.Errorf("%s: %v, want %v", d, got, want)

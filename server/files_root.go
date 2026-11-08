@@ -39,7 +39,7 @@ const (
 	// this long, so every polling client backs off together.
 	gitFailBackoff = 30 * time.Second
 	// filesRootTTL caches what a directory resolves to and the filter
-	// drivers of a root.
+	// drivers and hooks a root's config defines.
 	filesRootTTL = 2 * time.Second
 	// rootSettle: a pane's new directory replaces its root only once two
 	// resolves at least this far apart agree, since #{pane_current_path}
@@ -56,7 +56,7 @@ var (
 	// errGitBusy: a tryOnly command found every slot taken.
 	errGitBusy          = errors.New("git busy")
 	errDirNotAvailable  = inputError("directory not available")
-	errUnsafeRepoConfig = errors.New("repository config defines a filter driver that cannot be disabled")
+	errUnsafeRepoConfig = errors.New("repository config defines a filter driver or hook that cannot be disabled")
 )
 
 // filesRoot is what a pane's directory resolves to.
@@ -84,7 +84,7 @@ type gitRunner struct {
 	timeout      time.Duration
 	writeTimeout time.Duration
 	sem          chan struct{}
-	filters      *ttlCache[[]string]
+	overrides    *ttlCache[repoOverrides]
 
 	mu       sync.Mutex
 	failedAt map[string]time.Time // root → last timeout
@@ -96,7 +96,7 @@ func newGitRunner() *gitRunner {
 		timeout:      gitTimeout,
 		writeTimeout: gitWriteTimeout,
 		sem:          make(chan struct{}, gitMaxRunning),
-		filters:      newTTLCache[[]string](filesRootTTL),
+		overrides:    newTTLCache[repoOverrides](filesRootTTL),
 		failedAt:     map[string]time.Time{},
 	}
 }
@@ -161,23 +161,40 @@ func containsFold(list []string, s string) bool {
 	return false
 }
 
+// repoOverrides names what the repo's config defines that would run a
+// program, for argv to turn off one by one.
+type repoOverrides struct {
+	// filters: the filter drivers (filter.<driver>.*), turned off when
+	// gitCall.noFilters.
+	filters []string
+	// hooks: the hooks defined in config (hook.<name>.*), which
+	// core.hooksPath does not reach, turned off for every command.
+	hooks []string
+}
+
 // argv builds the full git command line. Overrides go through -c, so they
 // win over every config file of the repo.
-func (g *gitRunner) argv(c gitCall, filters []string, args []string) []string {
+func (g *gitRunner) argv(c gitCall, o repoOverrides, args []string) []string {
 	// protocol.allow=never: no transport by default. It does not override
 	// a protocol.<name>.allow of the repo's own config, which is why
 	// gitEnv also sets an empty GIT_ALLOW_PROTOCOL. -c settings reach any
 	// git git runs itself.
-	// core.hooksPath to the null device: no hook of the repo runs (diff
+	// core.hooksPath to the null device: no hook file of the repo runs (diff
 	// refreshing the index would run post-index-change), and
 	// diff.autoRefreshIndex=false keeps diff from writing the index at all.
+	// A hook defined in config runs whatever core.hooksPath says (git 2.54
+	// and later): hook.<name>.enabled=false turns each one off, and a git
+	// without such hooks ignores the setting.
 	argv := []string{"-C", c.root, "--no-pager",
 		"-c", "core.fsmonitor=false", "-c", "core.untrackedCache=false", "-c", "protocol.allow=never",
 		"-c", "core.hooksPath=" + os.DevNull, "-c", "diff.autoRefreshIndex=false"}
 	if c.safeDir != "" {
 		argv = append(argv, "-c", "safe.directory="+c.safeDir)
 	}
-	for _, f := range filters {
+	for _, h := range o.hooks {
+		argv = append(argv, "-c", "hook."+h+".enabled=false")
+	}
+	for _, f := range o.filters {
 		argv = append(argv,
 			"-c", "filter."+f+".clean=",
 			"-c", "filter."+f+".smudge=",
@@ -187,49 +204,62 @@ func (g *gitRunner) argv(c gitCall, filters []string, args []string) []string {
 	return append(argv, args...)
 }
 
-// filterDrivers lists the filter drivers the repo's config defines (includes
-// followed). Reading config runs nothing. A driver name -c cannot express
-// fails closed.
-func (g *gitRunner) filterDrivers(ctx context.Context, c gitCall) ([]string, error) {
+// repoOverrides lists the filter drivers and hooks the repo's config
+// defines (includes followed), or the user's config outside a repo. Reading
+// config runs nothing. A name -c cannot express fails closed; a config git
+// cannot read fails the command with git's own error, which the command
+// itself would have met (a repo owned by another user, a broken file).
+func (g *gitRunner) repoOverrides(ctx context.Context, c gitCall) (repoOverrides, error) {
 	// The result is shared: it must not fail because the first caller left.
 	ctx = context.WithoutCancel(ctx)
-	return g.filters.do(c.root+"\x00"+c.safeDir, func() ([]string, error) {
+	return g.overrides.do(c.root+"\x00"+c.safeDir, func() (repoOverrides, error) {
 		out, _, err := g.exec(ctx, gitCall{root: c.root, safeDir: c.safeDir, limit: 1 << 20},
-			nil, "config", "-z", "--name-only", "--get-regexp", `^filter\.`)
+			repoOverrides{}, "config", "-z", "--name-only", "--get-regexp", `^(filter|hook)\.`)
 		var ee *exec.ExitError
 		if errors.As(err, &ee) && ee.ExitCode() == 1 {
-			return nil, nil // no match
+			return repoOverrides{}, nil // no match
 		}
 		if err != nil {
-			return nil, err
+			return repoOverrides{}, err
 		}
-		return parseFilterDrivers(out)
+		return parseRepoOverrides(out)
 	})
 }
 
-// parseFilterDrivers takes `git config -z --name-only` output: keys like
-// "filter.<driver>.clean", the driver possibly containing dots.
-func parseFilterDrivers(out []byte) ([]string, error) {
+// parseRepoOverrides takes `git config -z --name-only` output: keys like
+// "filter.<driver>.clean" or "hook.<name>.command", the name possibly
+// containing dots or empty ([hook ""] runs like any other). A key with no
+// subsection at all (hook.jobs) names nothing.
+func parseRepoOverrides(out []byte) (repoOverrides, error) {
+	var o repoOverrides
 	seen := map[string]bool{}
-	var drivers []string
 	for _, key := range strings.Split(string(out), "\x00") {
 		key = strings.TrimSpace(key)
-		rest, ok := strings.CutPrefix(key, "filter.")
+		section, rest, _ := strings.Cut(key, ".")
 		i := strings.LastIndexByte(rest, '.')
-		if !ok || i <= 0 {
+		if i < 0 {
 			continue
 		}
-		d := rest[:i]
-		// -c splits key from value at the first '='.
-		if strings.ContainsAny(d, "=\n\x00") {
-			return nil, errUnsafeRepoConfig
+		name := rest[:i]
+		var list *[]string
+		switch strings.ToLower(section) {
+		case "filter":
+			list = &o.filters
+		case "hook":
+			list = &o.hooks
+		default:
+			continue
 		}
-		if !seen[d] {
-			seen[d] = true
-			drivers = append(drivers, d)
+		// -c splits key from value at the first '='.
+		if strings.ContainsAny(name, "=\n\x00") {
+			return repoOverrides{}, errUnsafeRepoConfig
+		}
+		if k := section + "\x00" + name; !seen[k] {
+			seen[k] = true
+			*list = append(*list, name)
 		}
 	}
-	return drivers, nil
+	return o, nil
 }
 
 // output runs git in c.root and returns its stdout, cut at c.limit.
@@ -237,15 +267,14 @@ func (g *gitRunner) output(ctx context.Context, c gitCall, args ...string) ([]by
 	if c.heavy && g.backingOff(c.root) {
 		return nil, false, errGitTimeout
 	}
-	var filters []string
-	if c.noFilters {
-		f, err := g.filterDrivers(ctx, c)
-		if err != nil {
-			return nil, false, err
-		}
-		filters = f
+	o, err := g.repoOverrides(ctx, c)
+	if err != nil {
+		return nil, false, err
 	}
-	return g.exec(ctx, c, filters, args...)
+	if !c.noFilters {
+		o.filters = nil
+	}
+	return g.exec(ctx, c, o, args...)
 }
 
 func (g *gitRunner) backingOff(root string) bool {
@@ -259,7 +288,7 @@ func (g *gitRunner) backingOff(root string) bool {
 	return ok
 }
 
-func (g *gitRunner) exec(ctx context.Context, c gitCall, filters []string, args ...string) ([]byte, bool, error) {
+func (g *gitRunner) exec(ctx context.Context, c gitCall, o repoOverrides, args ...string) ([]byte, bool, error) {
 	timeout := g.timeout
 	if c.write {
 		ctx, timeout = context.WithoutCancel(ctx), g.writeTimeout
@@ -289,7 +318,7 @@ func (g *gitRunner) exec(ctx context.Context, c gitCall, filters []string, args 
 
 	run, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	cmd := exec.CommandContext(run, g.bin, g.argv(c, filters, args)...)
+	cmd := exec.CommandContext(run, g.bin, g.argv(c, o, args)...)
 	if c.write {
 		cmd.Cancel = interruptProcess(cmd)
 	}

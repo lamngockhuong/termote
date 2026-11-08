@@ -1055,7 +1055,12 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   oracle (guessing a file's secret by the answer's length) needs.
   Content search and git diffs stay UTF-8 only. git runs
   without a shell, with `GIT_*`/`TERMOTE_*` stripped, hooks (`core.hooksPath` to the null
-  device), index refresh on diff, fsmonitor, filter drivers, external diff and textconv off,
+  device, which does not reach a hook defined in config: every `hook.<name>.*` the config
+  lists, includes followed, gets `-c hook.<name>.enabled=false` on every command, looked up in
+  the same `git config` call as the filter drivers; a name `-c` cannot carry (`=`, a line break)
+  fails the command, `errUnsafeRepoConfig`, and a config git cannot read fails it with git's own
+  error), index refresh on diff,
+  fsmonitor, filter drivers, external diff and textconv off,
   submodules ignored, 10s timeout, 2 at a time (a command that writes the index runs under the
   same `-c` overrides but another timeout and cancellation: Staging and discarding a change).
   `files/raw` serves an image's bytes (Files: the worktree file, streamed from the open handle;
@@ -1120,7 +1125,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   the container they would let a terminal drive the host's tmux or docker) (so `~/.config`,
   `~/.cache` and `~/.local` are refused, `~/.config/fish` is not); a
   component matching `isGitDirName`, or a dir git (through `gitRunner`) calls a git dir or a bare
-  repo; a quote, line break or NUL; an unknown home (fails closed). `start` refuses a new path that
+  repo (a config whose hooks or filter drivers cannot be turned off counts as one); a quote, line
+  break or NUL; an unknown home (fails closed). `start` refuses a new path that
   fails (exit 2, nothing saved or stopped) and re-checks every saved one, printing a failing one as
   skipped with the `--remove-path` that drops it; `serve` checks each again against its own user and
   dirs and skips a failing one with a log line. Each request re-resolves the Place (1 s cache) and
