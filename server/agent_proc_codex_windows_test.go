@@ -11,12 +11,6 @@ import (
 	"testing"
 )
 
-const testCodexID2 = "01a0fbc2-4df0-7f32-864d-eb33100e552e"
-
-func codexMeta(id string) string {
-	return `{"type":"session_meta","payload":{"id":"` + id + `","thread_source":"user"}}` + "\n"
-}
-
 // fakeCodexExe copies the test binary to <tmp>\codex.exe: the lookup goes by
 // executable name.
 func fakeCodexExe(t *testing.T) string {
@@ -122,7 +116,8 @@ func TestCodexOnWindowsDaemonAndNew(t *testing.T) {
 	if _, ok := codexProcOf(startFakeCodex(t, exe, []string{"app-server", "--managed-daemon"}, p)); ok {
 		t.Error("app-server taken for a Codex TUI")
 	}
-	// After /new the TUI holds two rollouts: no telling which one it shows.
+	// The TUI holds two rollouts: nothing tells which one is on screen until
+	// one is written (its size, read through a handle, grows).
 	p2 := writeRollout(t, codexHome, testCodexID2, codexMeta(testCodexID2))
 	proc, ok := codexProcOf(startFakeCodex(t, exe, []string{"--no-daemon"}, p, p2))
 	if !ok {
@@ -130,5 +125,15 @@ func TestCodexOnWindowsDaemonAndNew(t *testing.T) {
 	}
 	if s, ok := codexSessionOf(proc, "", true); ok {
 		t.Errorf("two rollouts gave %+v", s)
+	}
+	row := `{"type":"event_msg","payload":{"type":"task_complete"}}` + "\n"
+	appendFile(t, p2, row)
+	if s, ok := codexSessionOf(proc, "", true); !ok || s.ID != testCodexID2 {
+		t.Errorf("after a message in the new thread = %+v, %v", s, ok)
+	}
+	// A message after /resume of the first thread: it is shown.
+	appendFile(t, p, row)
+	if s, ok := codexSessionOf(proc, "", true); !ok || s.ID != testCodexID {
+		t.Errorf("after /resume and a message = %+v, %v", s, ok)
 	}
 }

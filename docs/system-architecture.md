@@ -570,14 +570,25 @@ above also takes a process as Codex when all of these hold: its executable is na
 its files are listed, so a pane without Codex costs no fd scan; its argv does not contain
 `app-server`; it holds open **for writing** (`fdinfo` flags on Linux, `lsof` on macOS) a regular
 file `rollout-*-<uuid>.jsonl` that resolves inside `<CODEX_HOME>/sessions`, with `CODEX_HOME`
-read from its environment (else `$HOME/.codex`); and exactly one such file has
-`session_meta.thread_source` `user` (sub-agent threads are skipped). After `/new` the process
-holds the old and the new rollout, so the pane has no Chat view until Codex is restarted. Herdr
-reports the session id (`herdr integration install codex`); the server accepts it only when a
-process among all of the host's passes the same checks holding that very rollout, and takes
-`CODEX_HOME` from that process. It trusts the id as Herdr reports it: after `/new` the process
-still holds the old rollout, so the pane shows whichever session Herdr names, and a pane whose
-hook once ran in a daemon can name another pane's session. On Windows (psmux, Herdr) the files a
+read from its environment (else `$HOME/.codex`); and the file has
+`session_meta.thread_source` `user` (sub-agent threads are skipped). After `/new` and `/resume`
+the process holds several such rollouts (Codex 0.167.0 keeps the old ones open): `/new` opens
+the new thread's rollout at its first message, `/resume` opens the resumed one again on a new fd
+or handle and writes nothing until the next message. `pickCodexRollout`
+(`server/agent_proc_codex.go`) compares each lookup with the previous one of the same process
+(pid and start time, remembered per process; gone processes are forgotten when 256 are kept):
+the one file on a new fd or handle wins, then the file written last among those written since
+(size or last write time; a tie goes to the file picked before), then the file picked before
+while it is still held. Anything else (no previous lookup, as after a server restart, several
+files on new opens, the pick gone) cannot tell a resumed thread from the one written last, so no
+file is picked and the pane has no Chat view until Codex writes again: a message sent from a
+wrong pick would reach another thread. Herdr reports the session id
+(`herdr integration install codex`); the server accepts it only when a process among all of the
+host's passes the same checks holding that very rollout, and takes `CODEX_HOME` from that
+process. Herdr's hook reports a thread reached with `/new` or `/resume` only at its first
+message, so the pane shows the rollout that process is on now by the same rule, and the id as
+Herdr reports it only when the process's rollouts cannot be told apart; a pane whose hook once
+ran in a daemon can name another pane's session. On Windows (psmux, Herdr) the files a
 process holds come from the system handle table (`NtQuerySystemInformation`
 `SystemExtendedHandleInformation`, cached 1 s): File handles with write or append access of a
 `codex` process the server's user can open are duplicated with `FILE_READ_ATTRIBUTES` only and

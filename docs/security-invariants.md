@@ -869,13 +869,16 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   view asks for that message in the terminal
 - **Codex chat**: a rollout is read only when a process whose executable is named
   `codex`, without `app-server` in its argv, holds it open for writing as a regular
-  `rollout-*-<uuid>.jsonl` inside its own `CODEX_HOME/sessions` (resolved), with exactly one
-  such rollout of a user thread; its dev:inode (Windows: volume serial and file index) is checked
-  again after opening. Herdr's session id
-  is trusted only when such a process holds that rollout. So only `codex --no-daemon` has a Chat
-  view (the shared daemon writes every pane's rollout; on Windows 0.162.0 runs it as a child of
-  the first TUI, refused by its `app-server` argv), and `/new` gives 404 on tmux until Codex
-  restarts. On Windows (#295; psmux, Herdr) the holder comes from the system handle table
+  `rollout-*-<uuid>.jsonl` inside its own `CODEX_HOME/sessions` (resolved), of a user thread;
+  its dev:inode (Windows: volume serial and file index) is checked again after opening. When the
+  process holds several (after `/new` or `/resume`), the one read is picked among those only
+  (`pickCodexRollout`: the one file on a new fd or handle, then the latest write since the last
+  lookup of that process, then the previous pick; no previous lookup, several new opens or a pick
+  no longer held are refused until Codex writes again, never guessed, since a message sent from
+  the view goes to the file picked). Herdr's session id is trusted only when such a process holds that rollout, and
+  the rollout shown is then that same process's pick (the reported id when it refuses). So only
+  `codex --no-daemon` has a Chat view (the shared daemon writes every pane's rollout; on Windows
+  0.162.0 runs it as a child of the first TUI, refused by its `app-server` argv). On Windows (#295; psmux, Herdr) the holder comes from the system handle table
   (`NtQuerySystemInformation`, one query cached 1 s, `server/agent_proc_handles_windows.go`):
   only File handles with write or append access (Codex opens its rollout append-only) of a
   `codex` process the server's user can open with `PROCESS_DUP_HANDLE` and whose token's user SID

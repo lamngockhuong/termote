@@ -288,9 +288,12 @@ Những điều cần biết:
 - Codex chưa nhận tin nào thì chưa có hội thoại để hiện, vì Codex chỉ tạo file phiên khi có tin
   đầu tiên. Trên tmux, nút Chat xuất hiện từ lúc đó; trên Herdr nút có ngay từ đầu, nhưng tới lúc
   đó view chỉ báo không tìm thấy phiên.
-- Sau `/new`, pane tmux mất view Chat cho tới khi khởi động lại Codex: lúc đó Codex giữ hai phiên,
-  và Termote không đoán phiên nào đang hiện trên màn hình. Trên Herdr, view Chat hiện phiên mà
-  Herdr báo cho pane, nên có thể vẫn là phiên trước cho tới khi Herdr báo phiên mới.
+- Sau `/new`, view Chat chuyển sang hội thoại mới khi bạn gửi tin đầu tiên, vì Codex tạo file
+  phiên lúc đó. Sau `/resume`, view hiện ngay hội thoại vừa mở lại, trên mọi backend. Codex vẫn
+  giữ các phiên trước, và Termote theo phiên mà nó thấy Codex mở hoặc ghi vào. Nếu Termote không
+  theo dõi được lúc chuyển (Termote vừa khởi động lại, hoặc cả `/new` lẫn `/resume` diễn ra khi
+  không có trang Termote nào mở), view Chat chờ tin tiếp theo của bạn chứ không đoán, nên tin gửi
+  từ view không bao giờ rơi vào hội thoại khác.
 - Trên Herdr, pane đã từng khởi động tiến trình nền dùng chung trước khi bạn chuyển sang
   `--no-daemon` có thể vẫn báo một phiên không phải của nó, kể cả phiên của pane khác, cho tới
   khi Codex chạy lại trong pane đó.
