@@ -62,7 +62,9 @@ signature (see Updating) when OpenSSL 3 is there. Without it (LibreSSL on macOS)
 in `install.ps1` (Windows PowerShell has no Ed25519), the installer checks the same key's
 `checksums.txt.sshsig` with `ssh-keygen -Y verify` (OpenSSH 8.1 or later: current macOS has it,
 the OpenSSH of older Windows 10 builds, 7.7, does not) for a release from 2.14.0 on, and
-refuses one that lacks it; with no such `ssh-keygen`, or an older release, it says the
+refuses one that lacks it. With neither OpenSSL 3 nor such an `ssh-keygen`, it refuses a release
+from 2.14.0 on: install one of them, or name the version and accept the sha256 alone with
+`TERMOTE_VERSION=X.Y.Z TERMOTE_SKIP_SIGNATURE_CHECK=1`. For a release before 2.14.0 it says the
 signature was not checked. Without a pin, both refuse a newest release older than 1.10.0, which
 has no signature to check. Pin a version, or rescue a broken install, with `TERMOTE_VERSION`:
 

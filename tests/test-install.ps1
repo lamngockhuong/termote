@@ -287,26 +287,73 @@ try {
             Write-TestResult "ssh-keygen $($c.Mode): $($c.Want)" ($ok -eq $c.Ok -and $script:Out -match $c.Want -and
                 ($c.Ok -or -not (Test-Path (Join-Path $Dir 'current.txt')))) $script:Out
         }
+    }
 
-        # An ssh-keygen before OpenSSH 8.1, with no -Y: installs with the note.
-        $fakeBin = Join-Path $Tmp 'oldssh'
-        New-Item -ItemType Directory -Path $fakeBin -Force | Out-Null
-        if ([System.IO.Path]::DirectorySeparatorChar -eq '\') {
-            Set-Content (Join-Path $fakeBin 'ssh-keygen.cmd') "@echo ssh-keygen: unknown option -- Y 1>&2`r`n@exit /b 1"
-        } else {
-            Set-Content (Join-Path $fakeBin 'ssh-keygen') "#!/bin/sh`necho 'ssh-keygen: unknown option -- Y' >&2`nexit 1"
-            chmod +x (Join-Path $fakeBin 'ssh-keygen')
-        }
-        # PATH: Linux names environment variables with case.
-        $savedPath = $env:PATH
+    # An ssh-keygen before OpenSSH 8.1, with no -Y, cannot check the signature:
+    # a release from FirstSshsigVersion on is refused unless it is pinned and
+    # TERMOTE_SKIP_SIGNATURE_CHECK=1 says to go on with the sha256 alone.
+    $fakeBin = Join-Path $Tmp 'oldssh'
+    New-Item -ItemType Directory -Path $fakeBin -Force | Out-Null
+    if ([System.IO.Path]::DirectorySeparatorChar -eq '\') {
+        Set-Content (Join-Path $fakeBin 'ssh-keygen.cmd') "@echo ssh-keygen: unknown option -- Y 1>&2`r`n@exit /b 1"
+    } else {
+        Set-Content (Join-Path $fakeBin 'ssh-keygen') "#!/bin/sh`necho 'ssh-keygen: unknown option -- Y' >&2`nexit 1"
+        chmod +x (Join-Path $fakeBin 'ssh-keygen')
+    }
+    # PATH: Linux names environment variables with case.
+    $savedPath = $env:PATH
+    if ($keygen -and (& $keygen.Source -Y verify 2>&1 | Out-String) -notmatch 'option -- Y') {
+        # Windows 10's own ssh-keygen (7.7) first on PATH, a newer one after it:
+        # the newer one checks the signature.
         $env:PATH = "$fakeBin$([System.IO.Path]::PathSeparator)$env:PATH"
         try {
-            $env:LOCALAPPDATA = Join-Path $Tmp 'local-oldssh'
+            $env:LOCALAPPDATA = Join-Path $Tmp 'local-oldssh-first'
             $Dir = Join-Path $env:LOCALAPPDATA 'termote'
             New-SignedRelease $first
             $ok = Invoke-Installer $first $signed
-            Write-TestResult "Old ssh-keygen: installs with the note" ($ok -and $script:Out -match 'signature was not checked') $script:Out
+            Write-TestResult "Old ssh-keygen first on PATH: a newer one after it checks the signature" ($ok -and
+                $script:Out -match 'Signature verified') $script:Out
         } finally { $env:PATH = $savedPath }
+    }
+
+    # The releases are made first: the rest runs with the old ssh-keygen alone
+    # on PATH (go builds them).
+    New-SignedRelease $first
+    New-SignedRelease '1.11.0' 'none'
+    $env:PATH = $fakeBin
+    try {
+        $env:LOCALAPPDATA = Join-Path $Tmp 'local-oldssh'
+        $Dir = Join-Path $env:LOCALAPPDATA 'termote'
+        $ok = Invoke-Installer $first $signed
+        Write-TestResult "Old ssh-keygen: pinned release refused without the opt-out" ((-not $ok) -and
+            $script:Out -match 'TERMOTE_SKIP_SIGNATURE_CHECK' -and -not (Test-Path (Join-Path $Dir 'current.txt'))) $script:Out
+
+        $env:TERMOTE_SKIP_SIGNATURE_CHECK = '1'
+        $global:TermoteFakeTags = @("v$first")
+        $ok = Invoke-Installer '' $signed
+        Write-TestResult "Old ssh-keygen: unpinned release refused even with the opt-out" ((-not $ok) -and
+            $script:Out -match 'no ssh-keygen -Y verify' -and -not (Test-Path (Join-Path $Dir 'current.txt'))) $script:Out
+
+        $env:TERMOTE_SKIP_SIGNATURE_CHECK = 'yes'
+        $ok = Invoke-Installer $first $signed
+        Write-TestResult "Old ssh-keygen: an opt-out other than 1 refused" ((-not $ok) -and
+            -not (Test-Path (Join-Path $Dir 'current.txt'))) $script:Out
+        $env:TERMOTE_SKIP_SIGNATURE_CHECK = '1'
+
+        $ok = Invoke-Installer $first $signed
+        Write-TestResult "Old ssh-keygen: pinned release with the opt-out installs with the note" ($ok -and
+            $script:Out -match 'signature was not checked' -and (Get-Current) -eq $first) $script:Out
+
+        # Before FirstSshsigVersion no release carries an .sshsig: the note only.
+        Remove-Item Env:TERMOTE_SKIP_SIGNATURE_CHECK -ErrorAction SilentlyContinue
+        $env:LOCALAPPDATA = Join-Path $Tmp 'local-oldssh-older'
+        $Dir = Join-Path $env:LOCALAPPDATA 'termote'
+        $ok = Invoke-Installer '1.11.0' $signed
+        Write-TestResult "Old ssh-keygen: a release before $first installs with the note" ($ok -and
+            $script:Out -match 'signature was not checked' -and (Get-Current) -eq '1.11.0') $script:Out
+    } finally {
+        $env:PATH = $savedPath
+        Remove-Item Env:TERMOTE_SKIP_SIGNATURE_CHECK -ErrorAction SilentlyContinue
     }
 } finally {
     $env:LOCALAPPDATA = $savedLocal
