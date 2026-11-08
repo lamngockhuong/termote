@@ -687,7 +687,7 @@ func TestGitBlobOutput(t *testing.T) {
 		`printf 'abc blob 3\nabcdef'`:    "",
 	} {
 		f.git.bin = writeScript(t, "cat >/dev/null; "+out)
-		f.git.filters = newTTLCache[[]string](filesRootTTL)
+		f.git.overrides = newTTLCache[repoOverrides](filesRootTTL)
 		b, err := f.gitBlob(context.Background(), root, ":0:a.png")
 		if want == "" {
 			if err != nil || string(b) != "abc" {

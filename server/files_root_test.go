@@ -69,25 +69,28 @@ func requireUnixShell(t *testing.T) {
 	}
 }
 
-func TestParseFilterDrivers(t *testing.T) {
-	got, err := parseFilterDrivers([]byte("filter.lfs.clean\x00filter.lfs.smudge\x00filter.Evil.x.process\x00filter.noname\x00core.x\x00"))
-	if err != nil || !slices.Equal(got, []string{"lfs", "Evil.x"}) {
-		t.Fatalf("drivers = %q, %v", got, err)
+func TestParseRepoOverrides(t *testing.T) {
+	got, err := parseRepoOverrides([]byte("filter.lfs.clean\x00filter.lfs.smudge\x00filter.Evil.x.process\x00filter.noname\x00core.x\x00" +
+		"hook.lint.command\x00hook.lint.event\x00hook.My.Hook.event\x00hook.jobs\x00Hook.Up.command\x00hooks.x.y\x00hook..command\x00"))
+	if err != nil || !slices.Equal(got.filters, []string{"lfs", "Evil.x"}) || !slices.Equal(got.hooks, []string{"lint", "My.Hook", "Up", ""}) {
+		t.Fatalf("overrides = %+v, %v", got, err)
 	}
-	if _, err := parseFilterDrivers([]byte("filter.a=b.clean\x00")); !errors.Is(err, errUnsafeRepoConfig) {
-		t.Errorf("driver with '=': %v", err)
+	for _, key := range []string{"filter.a=b.clean", "hook.a=b.command", "hook.a\nb.event"} {
+		if _, err := parseRepoOverrides([]byte(key + "\x00")); !errors.Is(err, errUnsafeRepoConfig) {
+			t.Errorf("%q: %v", key, err)
+		}
 	}
-	if got, err := parseFilterDrivers(nil); err != nil || len(got) != 0 {
-		t.Errorf("empty = %q, %v", got, err)
+	if got, err := parseRepoOverrides(nil); err != nil || len(got.filters)+len(got.hooks) != 0 {
+		t.Errorf("empty = %+v, %v", got, err)
 	}
 }
 
 func TestGitArgvOverrides(t *testing.T) {
 	g := newGitRunner()
-	argv := g.argv(gitCall{root: "/r", safeDir: "/r"}, []string{"Evil.x"}, []string{"status"})
+	argv := g.argv(gitCall{root: "/r", safeDir: "/r"}, repoOverrides{filters: []string{"Evil.x"}, hooks: []string{"My.Hook"}}, []string{"status"})
 	joined := strings.Join(argv, " ")
 	for _, want := range []string{"-C /r --no-pager", "core.fsmonitor=false", "protocol.allow=never", "safe.directory=/r",
-		"core.hooksPath=" + os.DevNull, "diff.autoRefreshIndex=false",
+		"core.hooksPath=" + os.DevNull, "diff.autoRefreshIndex=false", "hook.My.Hook.enabled=false",
 		"filter.Evil.x.clean=", "filter.Evil.x.smudge=", "filter.Evil.x.process=", "filter.Evil.x.required=false"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("argv %q lacks %q", joined, want)
@@ -95,6 +98,73 @@ func TestGitArgvOverrides(t *testing.T) {
 	}
 	if argv[len(argv)-1] != "status" {
 		t.Errorf("args must come last: %q", argv)
+	}
+}
+
+// A git that runs hooks defined in config (2.54 and later) runs them whatever
+// core.hooksPath says; one that does not ignores hook.<name>.enabled. Either
+// way, an index write through the runner runs no hook and still works.
+func TestGitRunnerTurnsOffConfigHooks(t *testing.T) {
+	requireGit(t)
+	requireUnixShell(t)
+	repo := newTestRepo(t)
+	marker := filepath.Join(t.TempDir(), "ran")
+	inc := filepath.Join(t.TempDir(), "inc")
+	// An empty name is a hook too.
+	writeFile(t, inc, "[hook \"Inc.x\"]\n\tevent = post-index-change\n\tcommand = touch "+marker+"\n"+
+		"[hook \"\"]\n\tevent = post-index-change\n\tcommand = touch "+marker+"\n")
+	gitT(t, repo, "config", "include.path", inc)
+	gitT(t, repo, "config", "hook.evil.event", "post-index-change")
+	gitT(t, repo, "config", "hook.evil.command", "touch "+marker)
+	gitT(t, repo, "config", "hook.evil.enabled", "true")
+
+	// Without the runner: does this git run hooks from config at all?
+	writeFile(t, filepath.Join(repo, "a.txt"), "control\n")
+	gitT(t, repo, "-c", "core.hooksPath="+os.DevNull, "add", "a.txt")
+	_, err := os.Stat(marker)
+	supported := err == nil
+	os.Remove(marker)
+	t.Logf("git runs hooks defined in config: %v", supported)
+
+	writeFile(t, filepath.Join(repo, "b.txt"), "new\n")
+	g := newGitRunner()
+	if _, _, err := g.output(context.Background(), gitCall{root: repo, write: true}, "add", "--", ":(literal)b.txt"); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	if !strings.Contains(gitT(t, repo, "ls-files", "--stage", "b.txt"), "b.txt") {
+		t.Error("add through the runner did not stage the file")
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("a hook defined in the repo config ran")
+	}
+}
+
+// What the runner passes for each hook, on a fake git that lists one: the
+// override reaches every command, a light one included.
+func TestGitRunnerPassesHookOverrides(t *testing.T) {
+	requireUnixShell(t)
+	log := filepath.Join(t.TempDir(), "argv")
+	g := newGitRunner()
+	g.bin = writeScript(t, `echo "$*" >>`+log+`
+case "$*" in *"config -z --name-only"*) printf 'hook.evil.command\0hook.evil.event\0' ;; esac`)
+	if _, _, err := g.output(context.Background(), gitCall{root: t.TempDir()}, "rev-parse", "--show-toplevel"); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(log)
+	lines := strings.Split(strings.TrimSpace(string(b)), "\n")
+	if len(lines) != 2 || !strings.Contains(lines[1], "-c hook.evil.enabled=false") || !strings.HasSuffix(lines[1], "rev-parse --show-toplevel") {
+		t.Errorf("git calls = %q", lines)
+	}
+}
+
+func TestGitRunnerFailsClosedOnUnsafeHookName(t *testing.T) {
+	requireGit(t)
+	repo := newTestRepo(t)
+	gitT(t, repo, "config", "hook.a=b.command", "x")
+	g := newGitRunner()
+	// A light command too: the hook would not be turned off.
+	if _, _, err := g.output(context.Background(), gitCall{root: repo}, "rev-parse", "HEAD"); !errors.Is(err, errUnsafeRepoConfig) {
+		t.Errorf("err = %v, want errUnsafeRepoConfig", err)
 	}
 }
 
@@ -283,7 +353,7 @@ func TestResolveFilesRoot(t *testing.T) {
 	}
 	// No git: browsed as a plain directory.
 	nogit := newRootResolver(&gitRunner{bin: "termote-no-such-git", timeout: time.Second,
-		sem: make(chan struct{}, 1), filters: newTTLCache[[]string](0), failedAt: map[string]time.Time{}})
+		sem: make(chan struct{}, 1), overrides: newTTLCache[repoOverrides](0), failedAt: map[string]time.Time{}})
 	if r, err := nogit.resolve(ctx, sub); err != nil || r != (filesRoot{Root: sub}) {
 		t.Errorf("without git = %+v, %v", r, err)
 	}
@@ -392,7 +462,7 @@ func TestGitRunnerTruncates(t *testing.T) {
 	if err != nil || truncated || string(out) != "ok\n" {
 		t.Errorf("out=%q truncated=%v err=%v", out, truncated, err)
 	}
-	g.bin = writeScript(t, "echo nope >&2; exit 3")
+	g.bin = writeScript(t, `case "$*" in *"config -z --name-only"*) exit 1 ;; esac; echo nope >&2; exit 3`)
 	var ge *gitError
 	if _, _, err = g.output(context.Background(), gitCall{root: t.TempDir()}, "status"); !errors.As(err, &ge) || !strings.Contains(ge.Error(), "nope") {
 		t.Errorf("failing git: %v", err)
@@ -406,7 +476,8 @@ func TestGitRunnerTimeoutBacksOff(t *testing.T) {
 	root := t.TempDir()
 	count := filepath.Join(t.TempDir(), "count")
 	g := newGitRunner()
-	g.bin = writeScript(t, "echo x >> "+count+"; sleep 5")
+	// Only status is slow: the config lookup before it answers at once.
+	g.bin = writeScript(t, `case "$*" in *status*) echo x >> `+count+`; sleep 5 ;; esac`)
 	g.timeout = 200 * time.Millisecond
 	start := time.Now()
 	heavy := gitCall{root: root, heavy: true}
@@ -726,7 +797,7 @@ func TestGitLazyFetchRunsNothingWithoutNoLazyFetch(t *testing.T) {
 		for i := 0; i < len(cfg); i += 2 {
 			gitT(t, clone, "config", cfg[i], cfg[i+1])
 		}
-		cmd := exec.Command("git", g.argv(gitCall{root: clone}, nil, []string{"cat-file", "blob", "HEAD~1:a.txt"})...)
+		cmd := exec.Command("git", g.argv(gitCall{root: clone}, repoOverrides{}, []string{"cat-file", "blob", "HEAD~1:a.txt"})...)
 		cmd.Env = env
 		out, _ := cmd.CombinedOutput()
 		if _, err := os.Stat(marker); err == nil {

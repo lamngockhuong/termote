@@ -255,25 +255,30 @@ func TestFilesCommitPlainDirAndGitFailure(t *testing.T) {
 
 	f := registerFilesRoutes(http.NewServeMux(), &filesFakeMux{dir: gx.repo, files: true}, hostAllowlist{}, nil)
 	root := filesRoot{Root: gx.repo, IsRepo: true}
+	// Each fake git below lists no config (exit 1), then acts as written.
+	setGit := func(body string) {
+		f.git.bin = writeScript(t, `case "$*" in *"config -z --name-only"*) exit 1 ;; esac
+`+body)
+	}
 	// rev-parse fails with output: not an unborn HEAD but an error.
-	f.git.bin = writeScript(t, "echo oops; exit 2")
+	setGit("echo oops; exit 2")
 	if _, err := f.headCommit(t.Context(), root); err == nil {
 		t.Error("failing rev-parse: no error")
 	}
 	if _, err := f.commitDiff(t.Context(), root, strings.Repeat("a", 40), "a.txt", "", false, false); err == nil || err == errHeadMoved {
 		t.Errorf("commit diff, failing rev-parse = %v", err)
 	}
-	f.git.bin = writeScript(t, "echo nothex")
+	setGit("echo nothex")
 	if _, err := f.headCommit(t.Context(), root); err == nil {
 		t.Error("bad rev-parse output: no error")
 	}
 	hash := strings.Repeat("a", 40)
 	// A fake git: HEAD is hash; the subcommand named in $FAIL fails
 	fake := func(fail string) {
-		f.git.bin = writeScript(t, `case " $* " in
-*" `+fail+` "*) exit 1 ;;
-*" rev-parse "*) echo `+hash+` ;;
-*" log "*) printf '`+hash+`\000\000me\0001\000msg' ;;
+		setGit(`case " $* " in
+*" ` + fail + ` "*) exit 1 ;;
+*" rev-parse "*) echo ` + hash + ` ;;
+*" log "*) printf '` + hash + `\000\000me\0001\000msg' ;;
 *" diff-tree "*) printf 'M\000a.txt\000' ;;
 esac`)
 	}
@@ -281,7 +286,7 @@ esac`)
 	if _, err := f.headCommit(t.Context(), root); err == nil {
 		t.Error("failing log: no error")
 	}
-	f.git.bin = writeScript(t, `if [ "$(echo "$@" | grep -c rev-parse)" = 1 ]; then echo `+hash+`; else printf other; fi`)
+	setGit(`if [ "$(echo "$@" | grep -c rev-parse)" = 1 ]; then echo ` + hash + `; else printf other; fi`)
 	if _, err := f.headCommit(t.Context(), root); err == nil {
 		t.Error("bad log output: no error")
 	}
@@ -293,10 +298,10 @@ esac`)
 	}
 	// The file list read, its diff fails (the failed list is no longer kept)
 	f.commits = newTTLCache[commitList](commitFilesTTL)
-	f.git.bin = writeScript(t, `case " $* " in
+	setGit(`case " $* " in
 *" -p "*) exit 1 ;;
-*" rev-parse "*) echo `+hash+` ;;
-*" log "*) printf '`+hash+`\000\000me\0001\000msg' ;;
+*" rev-parse "*) echo ` + hash + ` ;;
+*" log "*) printf '` + hash + `\000\000me\0001\000msg' ;;
 *" diff-tree "*) printf 'M\000a.txt\000' ;;
 esac`)
 	if _, err := f.commitDiff(t.Context(), root, hash, "a.txt", "", false, false); err == nil {

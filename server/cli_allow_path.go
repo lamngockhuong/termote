@@ -64,13 +64,17 @@ func defaultSocketDirs(getenv func(string) string) []string {
 
 // gitDirProbe asks git whether dir is a git directory or a bare repository,
 // through the gitRunner (no hook, filter or fsmonitor runs). A dir git does
-// not know as a repo, or no git at all, is not one.
+// not know as a repo, or no git at all, is not one; a config whose hooks or
+// filter drivers cannot be turned off counts as one, so it is refused.
 func gitDirProbe(g *gitRunner) func(string) bool {
 	return func(dir string) bool {
 		ctx, cancel := context.WithTimeout(context.Background(), gitTimeout)
 		defer cancel()
 		out, _, err := g.output(ctx, gitCall{root: dir, safeDir: dir, limit: 4096},
 			"rev-parse", "--is-inside-git-dir", "--is-bare-repository")
+		if errors.Is(err, errUnsafeRepoConfig) {
+			return true
+		}
 		return err == nil && slices.Contains(strings.Fields(string(out)), "true")
 	}
 }
