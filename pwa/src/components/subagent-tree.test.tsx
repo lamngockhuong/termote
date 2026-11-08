@@ -132,6 +132,8 @@ describe('SubagentTree', () => {
       /motion-safe:animate-pulse/,
     )
     expect(items[1].contains(pulsing[0])).toBe(true)
+    // It only glows, so it is not drawn as a spinner that never turns
+    expect(pulsing[0].getAttribute('class')).not.toMatch(/lucide-loader/)
   })
 
   it('counts what it does not draw', () => {

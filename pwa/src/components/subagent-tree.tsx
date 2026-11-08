@@ -1,4 +1,4 @@
-import { CircleAlert, CircleCheck, LoaderCircle } from 'lucide-react'
+import { CircleAlert, CircleCheck, CircleDot } from 'lucide-react'
 import type { SubagentNode, Subagents } from '../hooks/use-mux-api'
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
@@ -9,11 +9,12 @@ import { Skeleton } from './ui/skeleton'
 // At most this many subagents are drawn; the rest are counted.
 export const SUBAGENT_TREE_MAX = 20
 
-// Each status has its own icon; a running one glows slowly (opacity only),
-// still when the user asks for reduced motion.
+// Each status has its own icon. A running one glows slowly (opacity only),
+// still when the user asks for reduced motion, so it is not shaped like a
+// spinner: one that never turns reads as frozen.
 const NODE_STYLE = {
   running: {
-    Icon: LoaderCircle,
+    Icon: CircleDot,
     className: 'text-warning motion-safe:animate-pulse',
     word: 'chat.subagent.running',
   },

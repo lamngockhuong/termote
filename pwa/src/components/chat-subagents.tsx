@@ -1,4 +1,4 @@
-import { ChevronDown, LoaderCircle } from 'lucide-react'
+import { Bot, ChevronDown } from 'lucide-react'
 import { useEffect, useId, useMemo, useState } from 'react'
 import type { SubagentNode } from '../hooks/use-mux-api'
 import { useSubagents } from '../hooks/use-subagents'
@@ -59,7 +59,7 @@ export function ChatSubagents({
         onClick={() => setOpen((o) => !o)}
         className="flex w-full min-w-0 items-center gap-2 rounded-sm text-left text-[12px] text-fg-muted hover:text-fg focus-visible:outline-2 focus-visible:outline-accent"
       >
-        <LoaderCircle
+        <Bot
           size={13}
           aria-hidden="true"
           className="shrink-0 text-warning motion-safe:animate-pulse"
