@@ -983,8 +983,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `server/files_linked.go`) is read by `files/tree`, `files/content`, `files/raw` (the worktree
   file, never a `side`) and `files/document` (`rootFor`) only for a full client, only when it
   resolves inside another work tree of the root's own repository (`git worktree list --porcelain
-  -z` through `gitRunner`, bare entries and paths that do not resolve left out, the deepest work
-  tree holding it), and only when that path is under no deny dir, the root's git dir, the shared
+  -z` through `gitRunner`, bare entries, paths that do not resolve and work trees whose `.git` does
+  not lead back to the shared git dir or a `worktrees/<name>` under it left out (`ownWorktrees`: git
+  lists a work tree from that record, which can name any directory), the deepest work tree holding
+  it), and only when that path is under no deny dir, the root's git dir, the shared
   git dir (`commonGitDir`) or a `.git` below that work tree (a link listed inside such a directory
   is checked the same way); it is opened through `os.Root` at that work tree by its resolved path,
   never by the link, so a swap stays in that work tree. Anything else, or a view-only client:
@@ -1529,7 +1531,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   dot-path is skipped (`skipped.hidden`: shell histories hold secrets under ordinary names);
   then one `EvalSymlinks` shared by `deniedPaths` (deny dirs, the git dir, `.git` parts, on
   both paths), the view-only target check (where a link leads must be listed), the dot-path
-  rule on where a link leads (a link of an ordinary name to `.bash_history`) and
+  rule on where a link leads (a link of an ordinary name to `.bash_history`; for a link into another
+  work tree, its path in that work tree, checked before it is opened) and
   `isSensitive` on both paths (never opened, `skipped.sensitive`). Only then `os.Root`
   `OpenFile` with `openNonblock`, and every check on the handle (`readTextFile`, shared with
   content): regular, at most 1 MiB (`skipped.tooLarge`), a NUL in the first 8 KiB stops the read

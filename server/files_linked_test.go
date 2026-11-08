@@ -255,15 +255,50 @@ func TestParseWorktreeList(t *testing.T) {
 }
 
 func TestCommonGitDir(t *testing.T) {
+	dir := t.TempDir()
+	// A linked worktree's git dir holds commondir; a main one does not, even
+	// in a directory named worktrees.
+	for _, d := range []string{"r/.git/worktrees/wt", "srv/repo.git/worktrees/feature"} {
+		writeFile(t, filepath.Join(dir, filepath.FromSlash(d), "commondir"), "../..\n")
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "x", "worktrees", ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	for in, want := range map[string]string{
-		"":                                "",
-		"/r/.git":                         "/r/.git",
-		"/r/.git/worktrees/wt":            "/r/.git",
-		"/srv/repo.git/worktrees/feature": "/srv/repo.git",
+		"":                               "",
+		"r/.git":                         "r/.git",
+		"r/.git/worktrees/wt":            "r/.git",
+		"srv/repo.git/worktrees/feature": "srv/repo.git",
+		"x/worktrees/.git":               "x/worktrees/.git",
 	} {
-		in, want = filepath.FromSlash(in), filepath.FromSlash(want)
+		if in != "" {
+			in, want = filepath.Join(dir, filepath.FromSlash(in)), filepath.Join(dir, filepath.FromSlash(want))
+		}
 		if got := commonGitDir(in); got != want {
 			t.Errorf("commonGitDir(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// A work tree git lists only because the repository's own record of it
+// names that directory (a gitdir file written by hand, or unpacked from an
+// archive) is no work tree of the repository: its .git does not lead back,
+// so a link into it is not followed.
+func TestFilesLinkedForgedWorktree(t *testing.T) {
+	fx := newLinkedFixture(t)
+	gitRun(t, fx.main, "worktree", "add", "-q", filepath.Join(filepath.Dir(fx.main), "wt2"))
+	record := filepath.Join(fx.main, ".git", "worktrees", "wt2", "gitdir")
+	if err := os.WriteFile(record, []byte(filepath.Join(fx.outside, ".git")+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, body := fx.get(t, fullRequest("/api/mux/panes/0/files/content?path=out.md")); code != http.StatusBadRequest || body["text"] != nil {
+		t.Errorf("out.md through a forged work tree = %d %v", code, body)
+	}
+	f := &filesAPI{git: newGitRunner()}
+	root := filesRoot{Root: fx.wt, IsRepo: true, GitDir: filepath.Join(fx.main, ".git", "worktrees", "wt")}
+	for _, w := range f.worktreeRoots(t.Context(), root) {
+		if w == fx.outside {
+			t.Errorf("worktreeRoots lists %s", w)
 		}
 	}
 }
