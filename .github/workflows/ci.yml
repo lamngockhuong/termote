@@ -39,11 +39,16 @@ jobs:
         id: filter
         with:
           filters: |
+            # A workflow change runs every job, so the CI it changes runs on
+            # its own pull request
+            ci: &ci
+              - '.github/workflows/**'
             workspace: &workspace
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
               - 'package.json'
             pwa:
+              - *ci
               - *workspace
               - 'pwa/**'
               # Agent transition cases and shell names, also read by the PWA tests
@@ -52,10 +57,12 @@ jobs:
               # Claude Code screens the demo's terminal replays (pwa/src/demo/screens.ts)
               - 'server/testdata/claude/screens/**'
             api:
+              - *ci
               - 'server/**'
               # The demo's policy, which a Go test keeps equal to the server's
               - 'pwa/demo-csp.json'
             scripts:
+              - *ci
               - 'scripts/**'
               - 'tests/**'
               - 'lefthook.yml'
@@ -63,13 +70,16 @@ jobs:
               - 'Makefile'
               - 'entrypoint.sh'
             docker:
+              - *ci
               - 'Dockerfile'
               - 'entrypoint.sh'
               - 'docker-compose.yml'
             website:
+              - *ci
               - *workspace
               - 'website/**'
             docs:
+              - *ci
               - 'docs/**'
               - 'dprint.json'
 
