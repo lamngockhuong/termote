@@ -1,4 +1,11 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import type { ViewProps } from '../app-views'
 import { agentLabel } from '../chat-agents'
 import { useHaptic } from '../hooks/use-haptic'
@@ -10,6 +17,7 @@ import {
   MAX_FREE_TEXT_BYTES,
 } from '../hooks/use-mux-api'
 import { useT } from '../i18n/i18n-context'
+import { visibleUnsafe } from '../utils/unsafe-chars'
 import { OpenTerminalButton } from './open-terminal-button'
 import { Button } from './ui/button'
 
@@ -186,10 +194,10 @@ export function PromptCard({
         </span>
       )}
       <span className="min-w-0 break-words">
-        {o.label}
+        {visibleUnsafe(o.label)}
         {o.detail && (
           <span className="block break-words text-[12px] font-normal text-fg-muted">
-            {o.detail}
+            {visibleUnsafe(o.detail)}
           </span>
         )}
       </span>
@@ -265,7 +273,7 @@ export function PromptCard({
           </ol>
         )}
         <p id={titleId} className="font-medium text-fg">
-          {prompt.title ||
+          {visibleUnsafe(prompt.title) ||
             t('chat.prompt.asking', { agent: agentLabel(agentName) })}
         </p>
         {prompt.body && (
@@ -436,6 +444,8 @@ function PromptBody({
   const [expanded, setExpanded] = useState(false)
   const [overflows, setOverflows] = useState(false)
   const [atEnd, setAtEnd] = useState(false)
+  // Hidden characters as ⟨U+XXXX⟩, worked out once per body, not per scroll
+  const shown = useMemo(() => visibleUnsafe(body, true), [body])
   // Measured before paint, so a long command never shows its buttons
   // enabled for a frame. Opened, the box has no height to overflow.
   useLayoutEffect(() => {
@@ -469,7 +479,7 @@ function PromptBody({
           onScroll={(e) => setAtEnd(scrolledToEnd(e.currentTarget))}
           className={`whitespace-pre-wrap break-words font-mono text-[12px] text-fg-muted ${expanded ? '' : 'max-h-40 overflow-y-auto'}`}
         >
-          {body}
+          {shown}
         </p>
         {overflows && !expanded && !atEnd && (
           <div
@@ -513,7 +523,7 @@ function StepLabel({ step }: { step: NonNullable<AgentPrompt['steps']>[0] }) {
           ✓
         </span>
       )}
-      {step.label}
+      {visibleUnsafe(step.label)}
       {step.answered && (
         <>
           {' '}

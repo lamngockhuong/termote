@@ -781,7 +781,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   over a machine ends before its hub's `machineResponseHeaderWait` and is never delivered after
   the hub answered 502; a test checks both bounds); it re-checks the process, session and screen, and sends nothing unless
   the screen shows the expected state (an empty input box, the dialog the client saw with a
-  single-use `promptId`). A box that already holds this very message as text (an earlier send
+  single-use `promptId`). The dialog card shows every text it reads off the screen (title, body,
+  option labels and details, tab labels) with its hidden characters as `⟨U+XXXX⟩` (`visibleUnsafe`,
+  the body keeping its line breaks), so a bidi override in a proposed command cannot make it read as
+  another one before the user approves it. A box that already holds this very message as text (an earlier send
   refused `paste_not_confirmed` whose paste showed later) gets no second paste: it is submitted
   as it is. Any other draft, a long-paste token (it carries a count, not the text) or a message
   with images is refused 409 `input_has_draft` with no key sent, unless the body asks

