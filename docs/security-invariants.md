@@ -2288,7 +2288,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   connection of its own; at most 16 per machine (a forwarded stream frees its slot once upgraded), idle
   90 s, and an answer's headers awaited at most 8 min (`machineResponseHeaderWait`, above the longest agent
   message, `messageBudget`, and a worktree change, a test checks), a health answer at most 20 s
-  (`machineHealthWait`), so a machine that never answers does not hold them. Every ssh runs in its own process
+  (`machineHealthWait`), so a machine that never answers does not hold them. Once the headers came,
+  each read of an answer's body (a WebSocket upgrade excepted) gets 2 min and the whole body 30 min
+  (`machineResponseIdleWait`, `machineResponseBodyMost`, a download's own `downloadIdleTimeout` and
+  `downloadMaxDuration`): the request's context ends then, which closes the connection and its ssh,
+  since an ssh pipe has no read deadline, so a machine that stalls its body does not hold them either. Every ssh runs in its own process
   group with `Pdeathsig` (Linux), is reaped as an orphan at start on macOS (`HostKeyAlias=termote-`
   in its command line) or sits in a kill-on-close Job Object (Windows), and is stopped (SIGTERM, then
   SIGKILL after 1 s) when its connection closes, its machine is removed, or the server stops. ssh's

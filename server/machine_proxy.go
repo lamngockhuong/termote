@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"io"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -38,6 +39,32 @@ func machineRest(p string) string {
 // machineRouteRe is the allowlist of routes forwarded to a machine.
 var machineRouteRe = regexp.MustCompile(`^(?:snapshot|overview|activity|system|stream-token|stream|health|uploads|files/places|` +
 	`(?:tabs|panes|groups|worktrees|tasks|templates|recent-groups)(?:/.*)?)$`)
+
+// machineResponseIdleWait and machineResponseBodyMost bound reading a
+// machine's answer once its header came: machineConn has no read deadline (an
+// ssh pipe), so a machine that sent a header and then stalled would hold one
+// of machineMaxConns until the client left. Each read of the body gets the
+// idle wait, the whole body the most, as a download from this server gets
+// (downloadIdleTimeout, downloadMaxDuration). A WebSocket stream (101) is
+// bounded by neither.
+var (
+	machineResponseIdleWait = downloadIdleTimeout
+	machineResponseBodyMost = downloadMaxDuration
+)
+
+// idleBody restarts idle each time a read returns bytes.
+type idleBody struct {
+	io.ReadCloser
+	idle *time.Timer
+}
+
+func (b *idleBody) Read(p []byte) (int, error) {
+	n, err := b.ReadCloser.Read(p)
+	if n > 0 {
+		b.idle.Reset(machineResponseIdleWait)
+	}
+	return n, err
+}
 
 // maxForwardedStreams bounds the terminal streams forwarded to machines,
 // apart from this server's own maxStreams.
@@ -207,6 +234,18 @@ func registerMachineProxy(mux *http.ServeMux, agent *agentAPI, fwd *streamHub, a
 			}
 			_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(wait))
 		}
+		// Ending the request's context makes the transport close the
+		// connection (and its ssh), which frees the slot.
+		ctx, cancel := context.WithCancel(r.Context())
+		defer cancel()
+		r = r.WithContext(ctx)
+		var idle, most *time.Timer
+		defer func() {
+			if idle != nil {
+				idle.Stop()
+				most.Stop()
+			}
+		}()
 		proxy := &httputil.ReverseProxy{
 			Transport: l.transport,
 			Rewrite: func(pr *httputil.ProxyRequest) {
@@ -220,6 +259,11 @@ func registerMachineProxy(mux *http.ServeMux, agent *agentAPI, fwd *streamHub, a
 			},
 			ModifyResponse: func(resp *http.Response) error {
 				confineMachineResponse(resp)
+				if resp.StatusCode != http.StatusSwitchingProtocols {
+					idle = time.AfterFunc(machineResponseIdleWait, cancel)
+					most = time.AfterFunc(machineResponseBodyMost, cancel)
+					resp.Body = &idleBody{ReadCloser: resp.Body, idle: idle}
+				}
 				return nil
 			},
 			ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {

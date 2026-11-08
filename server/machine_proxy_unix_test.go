@@ -193,7 +193,9 @@ func TestMachineProxyOffline(t *testing.T) {
 // A terminal stream opens through the proxy with a token the machine
 // minted, and a revoke of the device here closes it.
 func TestMachineProxyStreamAndRevoke(t *testing.T) {
-	h, _, id := mainWithMachine(t)
+	// A stream (101) is bounded by neither body wait.
+	setMachineBodyWaits(t, 50*time.Millisecond, 100*time.Millisecond)
+	h, agent, id := mainWithMachine(t)
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
 	full := pairDevice(t, h, "full")
@@ -216,6 +218,13 @@ func TestMachineProxyStreamAndRevoke(t *testing.T) {
 		t.Fatalf("stream through the proxy: %v", err)
 	}
 	defer ws.CloseNow()
+	l := agent.machines.link(id)
+	conns := func() int { l.mu.Lock(); defer l.mu.Unlock(); return len(l.conns) }
+	before := conns()
+	time.Sleep(300 * time.Millisecond)
+	if after := conns(); after < before {
+		t.Errorf("connections to the machine %d → %d: a body wait closed the stream", before, after)
+	}
 
 	// A foreign Origin on the upgrade is refused at the edge.
 	bad := hdr.Clone()
