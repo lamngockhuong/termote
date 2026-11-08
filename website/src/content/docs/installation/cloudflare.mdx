@@ -1,6 +1,9 @@
 ---
 title: Cloudflare Tunnel
-description: Reach Termote over a Cloudflare Tunnel you run, behind Cloudflare Access
+description: "Reach Termote from anywhere through a Cloudflare Tunnel you run, behind Cloudflare Access, with the hostname allowed and sign-in limits per client."
+head:
+  - tag: title
+    content: "Termote behind a Cloudflare Tunnel and Access | Termote"
 ---
 
 import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
@@ -12,7 +15,8 @@ sees the tunnel token.
 <Aside type="danger" title="Put Cloudflare Access in front of it">
 A tunnel puts the sign-in page on the Internet. Without Cloudflare Access, the Termote password is all that
 stands between a stranger and a shell on your machine. Termote checks for Access when it starts and in
-`termote status`, and warns loudly when it is missing.
+`termote status`, and warns loudly when it is missing. The [security model](/usage/security/) lists what a
+signed-in client can do.
 </Aside>
 
 ## Prerequisites

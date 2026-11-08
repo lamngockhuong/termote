@@ -1,9 +1,14 @@
 ---
 title: Thanh công cụ bàn phím
-description: Bàn phím ảo cho điều khiển terminal di động
+description: "Thanh công cụ bàn phím của Termote cho điện thoại: phím Tab, Esc, Ctrl và mũi tên, phím bổ trợ, lịch sử lệnh, đính kèm ảnh và gõ tiếng Việt."
+head:
+  - tag: title
+    content: "Thanh bàn phím cho terminal trên điện thoại | Termote"
 ---
 
 import { Aside } from "@astrojs/starlight/components";
+import { Image } from "astro:assets";
+import screenshot from "../../../../assets/screenshots/phone-keyboard.vi.webp";
 
 Thanh công cụ bàn phím có các nút cảm ứng cho những phím terminal hay dùng. Hàng dưới cùng giữ các
 phím dùng nhiều nhất. Nút **Extra keys** (⋯) ghim ở cuối hàng mở ra các hàng mở rộng chứa mọi phím
@@ -11,6 +16,8 @@ còn lại.
 
 Trên máy tính có bàn phím, phím tắt của ứng dụng và bảng lệnh được mô tả ở trang
 [Phím tắt và bảng lệnh](/vi/usage/keyboard-shortcuts/).
+
+<Image src={screenshot} alt="Thanh bàn phím trên điện thoại khi mở các hàng phím khác: thao tác, chữ và cuộn, và các phím di chuyển" width={293} densities={[1, 2]} class="phone-shot" />
 
 ## Hàng dưới cùng
 
@@ -239,7 +246,7 @@ phiên chỉ xem.
 ## Sửa file
 
 Các phím này dành cho trình soạn thảo của Files và Changes trên máy tính dùng chuột, không phải
-cho terminal; danh sách đầy đủ ở [Sửa file](/vi/usage/files-changes/#sửa-file).
+cho terminal; danh sách đầy đủ ở [Sửa file](/vi/usage/file-editing/#sửa-file).
 
 | Phím                      | Tác dụng          |
 | ------------------------- | ----------------- |

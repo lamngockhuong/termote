@@ -1,24 +1,25 @@
 ---
 title: Getting Started
-description: Install Termote with two commands on Linux, macOS or Windows
+description: "Install Termote on Linux, macOS or Windows with two commands, start the server, and open your terminal sessions and Claude Code from your phone."
+head:
+  - tag: title
+    content: "Install Termote on Linux, macOS or Windows | Termote"
 ---
 
 import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
+import { Image } from "astro:assets";
+import screenshot from "../../assets/screenshots/phone-sessions.webp";
 
-Termote is one binary: the PWA, the terminal stream, the API and the login all live in it. You install it
-with one command, then `termote start` registers it as a service of your user and starts it.
+Termote puts the terminal sessions of your machine, and the Claude Code or Codex running in them, on your phone or
+another computer. It is one binary: the PWA, the terminal stream, the API and the login all live in it. You install
+it with one command, then `termote start` registers it as a service of your user and starts it.
 
 ## Prerequisites
 
-- **Linux / macOS:** [tmux](https://github.com/tmux/tmux) (`sudo apt install tmux`, `brew install tmux`), or
-  [Herdr](https://herdr.dev/#install), or [Zellij](https://zellij.dev/documentation/installation)
-  0.45.0 or later (chosen with `--mux zellij`, never detected), or [herdr-core](https://herdr.dev/core/) 0.1.16 or
-  later (`--mux hc`, never detected; also on Windows). Plus `curl`, `tar` and `sha256sum` (or `shasum`), which most systems
-  already have.
-- **Windows:** [psmux](https://github.com/psmux/psmux) (`winget install psmux`) and PowerShell.
-- **Container mode only:** Podman or Docker. See [Container](/installation/docker/).
-
-No sudo or administrator rights are needed: everything goes into your home directory.
+[tmux](https://github.com/tmux/tmux) on Linux or macOS (`sudo apt install tmux`, `brew install tmux`), or
+[psmux](https://github.com/psmux/psmux) on Windows (`winget install psmux`); Herdr, Zellij and herdr-core work too
+([backends](/installation/native/#prerequisites)), and [container mode](/installation/docker/) needs Podman or Docker
+instead. No sudo or administrator rights are needed: everything goes into your home directory.
 
 ## Install
 
@@ -58,7 +59,26 @@ No sudo or administrator rights are needed: everything goes into your home direc
   `export PATH=...` line to add when `~/.local/bin` is not on your PATH yet.
 </Aside>
 
-### Pin a version, or repair an install
+## Open Termote on Your Phone
+
+<Image src={screenshot} alt="Termote on a phone: the Sessions sheet lists each workspace and its agents, with how many wait on you" width={293} densities={[1, 2]} class="phone-shot" />
+
+<Steps>
+1. Make it reachable from the phone: `termote start --lan` on your home network, or
+   `termote start --tailscale <host>` for HTTPS through [Tailscale](/installation/tailscale/), away from home too.
+   The option is saved for the next start.
+
+2. Run `termote url --qr` (or `termote panel`) and scan the QR code with the phone's camera, then sign in with the
+   same name and password. To skip the password on the phone, [pair it](/usage/devices/) with a one-time code.
+
+3. Add it to the home screen (Safari: **Share → Add to Home Screen**; Chrome: **Add to Home screen** or
+   **Install app**) to open it like an app. On an iPhone or iPad, agent
+   [notifications](/usage/settings/#notify-when-an-agent-needs-me) work only from the Home Screen app.
+
+4. Open a pane running Claude Code or Codex, and switch to [Agent Chat](/usage/agent-chat/) to read and answer it.
+</Steps>
+
+## Pin a version, or repair an install
 
 Set `TERMOTE_VERSION` to install one exact release (`X.Y.Z`, or `X.Y.Z-rc.N` for a pre-release):
 
@@ -84,7 +104,7 @@ rescue an install that no longer runs. Your config is kept either way.
 `GH_TOKEN` or `GITHUB_TOKEN`, when set, only raise the GitHub API rate limit the installer uses to find the
 newest release.
 
-### Pre-releases
+## Pre-releases
 
 The installer, like `termote update`, only picks a pre-release (`X.Y.Z-rc.N`) when you name it with `TERMOTE_VERSION`
 (or `termote update --version X.Y.Z-rc.N`). Without it, you get the newest **published** stable release (1.0 or later): a
@@ -154,9 +174,12 @@ points you to `termote start` and `termote container up`.
 | Config          | `~/.config/termote/config` and `secret` (`$XDG_CONFIG_HOME`)   | `%APPDATA%\termote\config.json` (password DPAPI-encrypted) |
 | Logs, PID file  | `~/.local/state/termote/` (`$XDG_STATE_HOME`)                  | `%LOCALAPPDATA%\termote\state`                             |
 
-## What's Next
+## Next Steps
 
+- [Control Claude Code from Your Phone](/guides/claude-code-from-phone/) - The whole setup, step by step
+- [Agent Chat](/usage/agent-chat/) - Read and answer Claude Code and Codex from your phone
+- [Pair a Device](/usage/devices/) - Sign a phone in with a one-time code instead of the password
+- [Tailscale HTTPS](/installation/tailscale/) - Secure remote access, away from home too
+- [Security Model](/usage/security/) - What Termote protects, what it cannot, and what to do when a device is lost
 - [Native](/installation/native/) - Start options, the service, update and uninstall
 - [Container](/installation/docker/) - Run the server in Podman or Docker
-- [Tailscale HTTPS](/installation/tailscale/) - Secure remote access
-- [Mobile Gestures](/usage/gestures/) - Touch controls

@@ -39,6 +39,38 @@
   text-wrap: balance;
 }
 
+/* Touch targets on a phone: 48 px for the hero's buttons, 44 px for the
+   header's menu and search buttons. */
+.hero .actions .sl-link-button {
+  min-height: 3rem;
+}
+
+.sl-menu-button,
+site-search button[data-open-modal] {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+}
+
+@media (max-width: 49.99rem) {
+  /* A smaller owl, so the image under the hero starts on the first screen,
+     and one full-width button a row instead of two and a lone third. */
+  .hero > img {
+    width: min(100%, 8rem);
+  }
+
+  .hero .actions {
+    display: grid;
+    justify-content: stretch;
+    width: 100%;
+    gap: 0.75rem;
+  }
+
+  .hero .actions .sl-link-button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
 @media (min-width: 50rem) {
   /* Less room above the title, so the demo video under the hero starts on the
      first screen; and a smaller owl, so it does not outweigh the title. */
@@ -49,4 +81,19 @@
   .hero > img {
     width: min(100%, 17rem);
   }
+}
+
+/* The license and signed releases line under the hero image. */
+.trust-strip {
+  font-size: var(--sl-text-sm);
+  color: var(--sl-color-gray-2);
+  text-align: center;
+}
+
+/* A phone screenshot in the docs: its own size, centered, framed. */
+.sl-markdown-content .phone-shot {
+  display: block;
+  margin-inline: auto;
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 1rem;
 }

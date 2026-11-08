@@ -6,7 +6,7 @@ import sitemap from "@astrojs/sitemap";
 import starlight from "@astrojs/starlight";
 import starlightLlmsTxt from "starlight-llms-txt";
 import starlightVersions from "starlight-versions";
-import { ARCHIVED } from "./src/archived.mjs";
+import { ARCHIVED, MOVED } from "./src/archived.mjs";
 
 // Page views and three events (src/scripts/track-events.js), counted by
 // GoatCounter: no cookie, nothing personal, never on localhost. Not in the
@@ -39,7 +39,8 @@ export default defineConfig({
     // keeps its hreflang alternates (en, vi)
     sitemap({
       i18n: { defaultLocale: "en", locales: { en: "en", vi: "vi" } },
-      filter: (page) => !ARCHIVED.test(new URL(page).pathname),
+      // Not the archived docs, nor the pages that only send a reader on
+      filter: (page) => !ARCHIVED.test(new URL(page).pathname) && !MOVED.test(new URL(page).pathname),
       // The interactive demo: the PWA's demo build, which deploy-website.yml
       // copies into the site after this build
       customPages: [`${SITE}/demo/`],
@@ -75,7 +76,9 @@ export default defineConfig({
         SiteTitle: "./src/components/SiteTitle.astro",
       },
       title: "Termote",
-      description: "Remote control CLI tools from mobile/desktop via PWA",
+      // The home page's description, for pages without one of their own
+      description:
+        "Open-source, self-hosted PWA to control Claude Code, Codex and your tmux, Herdr or Zellij sessions from your phone or another computer.",
       // Prompt Owl, generated from assets/branding by `make brand-assets`.
       // The header draws it inline (src/components/SiteTitle.astro), which
       // does not read this option; kept so dropping the override brings the
@@ -90,10 +93,13 @@ export default defineConfig({
       routeMiddleware: "./src/route-data.ts",
       // The date of the page's last commit, from git (full history in CI)
       lastUpdated: true,
+      // "Edit page" opens the page's source on main
+      editLink: { baseUrl: "https://github.com/lamngockhuong/termote/edit/main/website/" },
       favicon: "/favicon.svg",
       head: [
         { tag: "link", attrs: { rel: "apple-touch-icon", href: "/apple-touch-icon.png" } },
         { tag: "meta", attrs: { property: "og:image", content: "https://termote.ohnice.app/og-image.png" } },
+        { tag: "meta", attrs: { property: "og:image:type", content: "image/png" } },
         { tag: "meta", attrs: { property: "og:image:width", content: "1280" } },
         { tag: "meta", attrs: { property: "og:image:height", content: "640" } },
         { tag: "meta", attrs: { property: "og:image:alt", content: "Termote: Your Terminal, Anywhere." } },
@@ -110,6 +116,20 @@ export default defineConfig({
           },
         },
         { tag: "script", content: trackEvents },
+        // Fetch an internal page when the pointer rests on its link or a
+        // finger touches it, so it opens at once; not the demo, a whole app
+        {
+          tag: "script",
+          attrs: { type: "speculationrules" },
+          content: JSON.stringify({
+            prefetch: [
+              {
+                where: { and: [{ href_matches: "/*" }, { not: { href_matches: "/demo/*" } }] },
+                eagerness: "moderate",
+              },
+            ],
+          }),
+        },
       ],
       social: [
         {
@@ -136,11 +156,30 @@ export default defineConfig({
           ],
         },
         {
+          label: "Guides",
+          translations: { vi: "Hướng dẫn" },
+          items: [
+            {
+              label: "Claude Code from Your Phone",
+              link: "/guides/claude-code-from-phone/",
+              translations: { vi: "Claude Code từ điện thoại" },
+            },
+            {
+              label: "Remote Control Alternatives",
+              link: "/guides/remote-control-alternatives/",
+              translations: { vi: "Lựa chọn thay Remote Control" },
+            },
+          ],
+        },
+        {
           label: "Usage",
           items: [
             { label: "Agent Chat", link: "/usage/agent-chat/" },
             { label: "Agent Overview", link: "/usage/overview/", translations: { vi: "Tổng quan agent" } },
-            { label: "Files and Changes", link: "/usage/files-changes/" },
+            { label: "Files", link: "/usage/files/" },
+            { label: "Editing Files", link: "/usage/file-editing/", translations: { vi: "Sửa file" } },
+            { label: "File Previews", link: "/usage/file-previews/", translations: { vi: "Xem trước file" } },
+            { label: "Changes", link: "/usage/changes/" },
             { label: "Gestures", link: "/usage/gestures/" },
             { label: "Herdr Plugin", link: "/usage/herdr-plugin/" },
             { label: "Keyboard", link: "/usage/keyboard/" },
@@ -157,6 +196,12 @@ export default defineConfig({
             { label: "Settings", link: "/usage/settings/" },
             { label: "Tasks", link: "/usage/tasks/", translations: { vi: "Task" } },
           ],
+        },
+        { label: "About", link: "/about/", translations: { vi: "Giới thiệu" } },
+        {
+          label: "Changelog",
+          link: "https://github.com/lamngockhuong/termote/releases",
+          translations: { vi: "Nhật ký thay đổi" },
         },
       ],
     }),

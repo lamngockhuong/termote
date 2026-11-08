@@ -1,7 +1,12 @@
 ---
 title: Mô hình bảo mật
-description: Termote bảo vệ được gì, không chặn được gì, và cần làm gì khi mất một thiết bị
+description: "Termote bảo vệ được gì và không chặn được gì: ai được làm gì, server bắt buộc những gì, cách mở ra mạng an toàn, và cần làm gì khi mất một thiết bị."
+head:
+  - tag: title
+    content: "Mô hình bảo mật: Termote bảo vệ được gì | Termote"
 ---
+
+import { Aside } from "@astrojs/starlight/components";
 
 Trang này nói Termote bảo vệ được gì, không chặn được gì, và cần làm gì khi mất một thiết bị. Cách ghép
 thiết bị nằm ở trang [Ghép thiết bị](/vi/usage/devices/).
@@ -144,6 +149,55 @@ giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tà
   này không đóng terminal đang mở ở server kia; server kia từ chối thiết bị từ request kế tiếp. Mọi lần ghi
   danh sách thiết bị đều lấy khóa trước, nên server này không làm sống lại thiết bị server kia đã thu hồi
   (một bản cũ chạy song song thì không lấy khóa).
+
+## Files và Changes
+
+Những gì view [Files](/vi/usage/files/) và [Changes](/vi/usage/changes/) không bao giờ hiện, và cách chúng chạy git.
+
+### File có thể chứa bí mật
+
+File có tên thường dùng để chứa bí mật được đánh dấu bằng ổ khoá và chữ `Sensitive`: ví dụ
+`.env`, `.env.*`, `*.env` và `.envrc`, khoá riêng (`*.pem`, `*.key`, `*.jks`, `id_rsa*`,
+`id_ed25519*`), `.netrc`, `.npmrc`, `.pgpass`, `.my.cnf`, `.vault-token`, `.git-credentials`,
+`credentials*`, `auth.json`, `secrets.*`, `.dev.vars`, state và biến của Terraform (`*.tfstate`,
+`*.tfvars`) và
+mọi thứ trong `.ssh`, `.gnupg`, `.aws`, `.kube`, `.docker`, `.config/gh` hoặc `.config/gcloud`.
+Link trỏ tới một file như vậy cũng tính, file đổi tên từ hoặc thành một file như vậy cũng tính.
+
+Khi mở, Termote hỏi trước `This file may contain secrets. Show its contents?`, cả với file lẫn
+diff của nó. Câu trả lời không được nhớ: lần sau mở lại, Termote lại hỏi. Server tự kiểm tra lại:
+chưa xác nhận thì server không gửi chút nội dung nào.
+
+<Aside type="caution">
+  Ổ khoá chỉ là cảnh báo dựa theo tên, không phải bảo đảm. Bí mật nằm trong một file có tên bình
+  thường (`prod-creds.yaml`) vẫn hiện mà không hỏi. Ai đăng nhập được Termote đều đọc được mọi file
+  trong thư mục của pane.
+</Aside>
+
+### Không bao giờ hiện
+
+Một số đường dẫn không bao giờ được trả về (hay được lưu, tạo file trong đó, xoá, hay tìm theo
+tên), kể cả khi đã xác nhận:
+
+- Thư mục cấu hình và trạng thái của chính Termote (mật khẩu đã lưu, log) và thùng rác của nó
+- `/proc`, `/sys` và `/dev` (biến môi trường của tiến trình và thiết bị)
+- Thư mục `.git` của repo, thư mục này cũng không hiện trong Files
+
+Server kiểm mọi đường dẫn so với gốc: `..`, đường dẫn tuyệt đối và link dẫn ra ngoài gốc đều bị từ
+chối, trừ link vào worktree khác của cùng repo. Nội dung ở đó chỉ đọc được, không bao giờ gửi cho
+thiết bị chỉ xem, và vẫn bị từ chối khi nằm trong `.git` hay một trong các thư mục ở trên.
+
+### Termote chạy git ra sao
+
+Termote tự chạy `git status` và `git diff` để lấy dữ liệu cho Changes, `git rev-parse`, `git log` và
+`git diff-tree` để đọc commit cuối (chỉ `HEAD`, không bao giờ là commit do trình duyệt chỉ định),
+`git blame` cho cột blame (tính từ `HEAD`, nhận đúng nội dung đang hiện qua đầu vào), và
+`git cat-file` để đọc bản trước và bản sau của ảnh. Stage và Unstage là các lệnh duy nhất có ghi, và chúng chỉ ghi index
+(`git add`, `git restore --staged`, `git reset`, `git apply --cached`); bản vá của một hunk do Termote tự dựng,
+không bao giờ lấy từ trình duyệt. Cấu hình riêng của một repo
+không thể khiến Termote chạy chương trình nào: với các lệnh này, Termote tắt bộ theo dõi hệ thống
+file, filter driver, công cụ diff bên ngoài và bước chuyển đổi văn bản, đồng thời bỏ qua repo con.
+Mỗi lúc chạy tối đa hai lệnh git, mỗi lệnh giới hạn 10 giây (lệnh ghi index thì 30 giây).
 
 ## Khuyến nghị
 

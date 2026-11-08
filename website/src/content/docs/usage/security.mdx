@@ -1,7 +1,12 @@
 ---
 title: Security Model
-description: What Termote protects, what it cannot, and what to do when a device is lost
+description: "What Termote protects and what it cannot: who can do what, what the server enforces, how to expose it safely, and what to do when a device is lost."
+head:
+  - tag: title
+    content: "Security Model: What Termote Protects and What It Cannot"
 ---
+
+import { Aside } from "@astrojs/starlight/components";
 
 What Termote protects, what it does not, and what to do when a device is lost. Pairing itself is on
 [Pair a Device](/usage/devices/).
@@ -142,6 +147,53 @@ what Termote can reach, run it as another user with less access.
   does not close the terminals open in the other; the other refuses the device from its next request.
   Writes to the paired devices take a lock first, so neither brings back a device the other revoked
   (an older release running beside it does not take the lock).
+
+## Files and Changes
+
+What the [Files](/usage/files/) and [Changes](/usage/changes/) views refuse to show, and how they run git.
+
+### Files That May Contain Secrets
+
+Files whose names usually mean secrets are listed with a lock and the word `Sensitive`: for
+example `.env`, `.env.*`, `*.env` and `.envrc`, private keys (`*.pem`, `*.key`, `*.jks`,
+`id_rsa*`, `id_ed25519*`), `.netrc`, `.npmrc`, `.pgpass`, `.my.cnf`, `.vault-token`,
+`.git-credentials`, `credentials*`, `auth.json`, `secrets.*`, `.dev.vars`, Terraform state and
+variables (`*.tfstate`, `*.tfvars`) and anything under `.ssh`, `.gnupg`, `.aws`, `.kube`, `.docker`, `.config/gh`
+or `.config/gcloud`. A link to such a file counts too, as does a rename from or to one.
+
+Opening one asks `This file may contain secrets. Show its contents?` first, for the file and for
+its diff. The answer is not remembered: the next time, it asks again. The server checks this
+itself: without the confirmation it sends no contents at all.
+
+<Aside type="caution">
+  The lock is a warning based on names, not a guarantee. A secret in a file with an ordinary
+  name (`prod-creds.yaml`) is shown without asking. Anyone who can sign in to Termote can read
+  every file under the pane's directory.
+</Aside>
+
+### Never Shown
+
+Some paths are never served (or saved, created in, deleted, or found by name), even after confirming:
+
+- Termote's own config and state directories (the saved password, logs) and its trash
+- `/proc`, `/sys` and `/dev` (process environments and devices)
+- the repository's `.git` directory, which is not listed in Files either
+
+Paths are checked on the server against the root: `..`, absolute paths and links that lead
+outside the root are refused, except a link into another worktree of the same repository,
+which is read-only, never served to a view-only device and still refused inside a `.git` or one
+of the directories above.
+
+### How git Is Run
+
+Termote runs `git status` and `git diff` itself to fill Changes, `git rev-parse`, `git log` and
+`git diff-tree` for the last commit (of `HEAD` only, never a commit named by the browser), `git blame` for the blame column (from `HEAD`, given the text shown on its input), and `git cat-file` to read the
+before and after versions of an image. Stage and Unstage are the only commands that write, and
+they write the index only (`git add`, `git restore --staged`, `git reset`, `git apply --cached`); the
+patch of a hunk is built by Termote, never taken from the browser. A repository's own settings
+cannot make it run a program: file system monitors, filter drivers, external diff tools and text
+conversion are turned off for these commands, and submodules are skipped. At most two git
+commands run at a time, each limited to 10 seconds (30 seconds for one that writes the index).
 
 ## Recommendations
 

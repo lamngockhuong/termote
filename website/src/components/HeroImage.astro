@@ -1,0 +1,43 @@
+---
+// The homepage image under the hero: Termote on a desktop and a phone, the
+// first frame of video/'s `TermoteHero`. The page's largest image, so it loads
+// first; AVIF and WebP from scripts/hero-images.mjs, the JPEG for the rest.
+interface Props {
+  alt: string;
+}
+const { alt } = Astro.props;
+const sizes = "(min-width: 75rem) 1152px, calc(100vw - 2rem)";
+---
+
+<picture>
+  <source
+    type="image/avif"
+    srcset="/video/termote-hero-760.avif 760w, /video/termote-hero-1520.avif 1520w"
+    sizes={sizes}
+  />
+  <source
+    type="image/webp"
+    srcset="/video/termote-hero-760.webp 760w, /video/termote-hero-1520.webp 1520w"
+    sizes={sizes}
+  />
+  <img
+    class="hero-image"
+    src="/video/termote-hero.jpg"
+    width="1920"
+    height="1080"
+    fetchpriority="high"
+    decoding="async"
+    alt={alt}
+  />
+</picture>
+
+<style>
+  .hero-image {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 0.75rem;
+    border: 1px solid var(--sl-color-gray-5);
+    background: #101316;
+  }
+</style>

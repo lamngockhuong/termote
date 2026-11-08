@@ -1,0 +1,177 @@
+---
+title: "The Changes View"
+description: "Read what git reports as changed in a pane's repository from your phone: the diff of each file, the last commit, staging hunks, review comments and blame."
+head:
+  - tag: title
+    content: "Read and Stage Git Diffs from Your Phone | Termote"
+---
+
+import { Image } from "astro:assets";
+import screenshot from "../../../assets/screenshots/phone-changes.webp";
+
+When a pane's directory is in a git repository, **Changes** lists the files git reports as changed and shows the diff of each one; for an image, the version before and after. The pane's files themselves are in [Files](/usage/files/).
+
+<Image src={screenshot} alt="The Changes view on a phone: two changed files and an untracked one, each with stage and discard buttons" width={293} densities={[1, 2]} class="phone-shot" />
+
+## Changes
+
+The list follows `git status` and is read again every 5 seconds while the view is open and the
+browser tab is visible. It is grouped:
+
+- **Conflicts**: files with an unresolved merge conflict
+- **Staged**: changes added to the index
+- **Changes**: changes in the working tree that are not staged
+- **Untracked**: new files git does not track yet
+
+Each file shows a letter: `M` modified, `A` added, `D` deleted, `R` renamed (with the old path),
+`C` copied, `T` type changed, `U` conflict, `?` untracked. A file with both staged and unstaged
+changes is listed in both groups, and each opens the diff of its own side. An untracked file
+opens as all added lines. A diff reads the file's bytes as UTF-8 only: in another encoding its
+lines show garbled characters, and an untracked or conflicted one shows as a binary file. Its
+preview (a Markdown file's current version) is decoded as in Files.
+
+The diff shows each hunk with the old and new line numbers (one column on a narrow phone
+screen), added lines on green and removed lines on red, with `+` and `-` kept so the colour is
+never the only sign.
+
+| Shown                            | Why                                                                         |
+| -------------------------------- | --------------------------------------------------------------------------- |
+| `Not a git repository`            | The pane's directory is not inside a git repository                         |
+| `Binary file changed`             | git reports a binary change; there are no lines to show                     |
+| `Diff truncated at 1 MiB`         | The diff of this file is longer than 1 MiB; only its start is shown         |
+| `Unresolved conflict`             | A conflicted file is shown whole, as it is now in the working tree          |
+| `No longer changed`               | git stopped listing this side of the file while it was being read           |
+| `git took too long; trying again` | `git status` took over 10 seconds (a very large repository); it backs off   |
+
+Submodules are not listed, and their contents are not compared.
+
+Diffs open as tabs, the same way files do in Files (see
+[Open Files as Tabs](/usage/files/#open-files-as-tabs)), with tabs of their own:
+
+- Each side of a file is a tab: the staged and the unstaged diff of one file are two tabs, the
+  staged one named `(staged)`. The first tab, **Changes**, shows the list.
+- A single click opens the preview tab; a double click (on the list or on the tab) or **Edit**
+  keeps it. **Edit** opens the editor in that tab, and switching tabs keeps it with its unsaved
+  changes. Back from the diff shows the list; the tab stays open.
+- When git no longer lists a side (committed, staged, reverted), its tab closes with
+  `No changes left in <file>`. A tab being edited stays open.
+- Closing, the limit of 10, the sheet on a phone, a move of the root and a file that may contain
+  secrets work as in Files.
+- A right click on a row of the list (a long press on a phone, Shift+F10 or the menu key) opens
+  its menu: **Open file** in Files (not for a deleted file), the copies and
+  **Insert @path in terminal** as in Files, then **Stage file**, **Unstage file** or **Discard file** for that side.
+
+When the list has more than 15 entries, a **Filter changes…** box appears above it. It keeps the
+files whose path contains what you typed, ignoring case (for a rename, the old path counts too).
+Groups with nothing left are hidden, the counts show the filtered numbers, and
+`No changes match` shows when nothing is left. Escape clears the box. The filter lives in the
+page only: it is cleared when you leave the view or when the root moves.
+
+### Last Commit
+
+When there is nothing left to list, Changes says `No changes since the last commit` with a
+**Show last commit** button. It opens the commit `HEAD` points at, read only: its message, its
+short hash, author and date, and the files it changed, each with the same letters as the list.
+Tap a file to see its diff; Back returns to the commit, then to Changes.
+
+- A merge commit shows what it brought into the branch: its diff against the first parent.
+- A file that may contain secrets asks first, as in the list; a view-only device never shows it.
+- When another commit lands while a diff is being opened, the view reads `HEAD` again and shows
+  the new commit.
+- A repository with no commit yet shows `No commits yet`.
+
+Only the last commit is shown: there is no history to walk back through.
+
+### Staging, Unstaging and Discarding
+
+A row of the list has **Stage**, **Unstage** or **Discard** buttons, and the same ones are in
+the header of an open diff. On a diff, each hunk has its own, so one hunk can go to the index or
+be thrown away alone.
+
+- **Stage** adds the file (or the hunk) to the index, **Unstage** takes it out again. Only the
+  index changes; the file in the working tree is never touched.
+- **Discard** throws away the change in the working tree and makes the file what the index
+  holds. A dialog asks first and shows the path. A deleted file is made again, and an untracked
+  file is deleted.
+- Discard is not final. What it replaces is kept in Termote's trash (see
+  [Deleting a File](/usage/file-editing/#deleting-a-file) for how long), and a toast with **Undo** puts it back. Undo
+  works only while the file still holds what the discard left: if something (often the agent)
+  changed it since, nothing is overwritten.
+- An untracked file is discarded as a delete: on another file system than the trash it asks a
+  second time before deleting it for good.
+
+Some changes are applied as a whole file only, or not at all:
+
+- A hunk can be applied alone only for a change in place of a regular file, with no rename,
+  copy, mode change or binary content. A renamed file is staged and unstaged whole (the old and
+  the new path together).
+- A file with a merge conflict cannot be staged, unstaged or discarded here, nor can a symbolic
+  link or a submodule be discarded; use a terminal.
+- A file that goes through a git filter (such as Git LFS) cannot be changed here either: the
+  filters are off, so staging it would store the wrong content.
+- A changed or deleted file larger than 1 MiB cannot be discarded here (an untracked one can:
+  it is deleted into the trash).
+- When the file changed after the diff was read (a hunk is gone or moved), the app refuses and
+  the list is read again. When another git command holds the repository's index lock, try again
+  in a moment.
+- A file that may contain secrets asks for confirmation first, as for its diff.
+- A view-only session cannot change anything.
+
+### Review Comments
+
+Instead of typing a file name and line numbers into Chat, comment on the lines themselves and send
+the whole review to the agent at once.
+
+- **Pick lines**: click a line number in a diff, or in a file open in Files. Shift+click another
+  number to extend the range; on a touch screen, tap a second number. Tapping the only line picked
+  again clears it. A range stays inside one hunk of a diff. In the editor, select the lines (or put
+  the cursor on one) and press **Comment on lines** in the header.
+- **Comment**: press **Comment** under the code, write the comment and press **Add**
+  (Ctrl/Cmd+Enter, or Enter alone when **Settings → Keyboard** says so). A line with a comment has a mark next to its number.
+- **Review**: the **Review** button in the header shows how many comments are waiting. It lists them
+  by file, each with its lines and where they were read (`unstaged diff`, `staged diff`, `file`, or
+  `file (unsaved edits)` from an editor with changes not saved yet). Click one to open its diff or
+  file at that line, or edit or delete it. **Clear** deletes them all.
+- **Send**: the review goes as one message: each comment under its file and lines, with the lines
+  quoted as they were when you commented. When the pane runs Claude Code or Codex, it goes to that
+  agent. Otherwise pick a pane running one; Termote remembers the pick for the tabs of that group, the
+  same pick as Tasks' [Send to agent](/usage/tasks/#send-to-agent).
+
+The comments are cleared only once the agent took the message (or queued it while busy). When the
+send is refused, they all stay. A comment added while a send is on its way stays too.
+
+| Shown                                | Why                                                            |
+| ------------------------------------ | -------------------------------------------------------------- |
+| `No pane runs Claude Code or Codex`  | No agent can receive the review; start one in a pane first     |
+| `Too long for one message: …`        | The review is over 16 KiB; delete or shorten comments, nothing is cut |
+| `Review is full (50 comments)`       | A pane's review holds up to 50 comments                        |
+| `The pane is in another folder now`  | The comment was made under another root than the pane's now    |
+
+Each comment holds up to 4 KiB, and quotes up to 60 lines (the rest is counted). Characters that
+change or hide text without showing are written out as `⟨U+200B⟩`, as for Tasks.
+
+The review lives in this browser tab only (like an unsent Chat message): it stays across a reload and
+when you switch tabs, and is gone when the browser tab closes or you sign out. A window of its own
+(**Open in new window**) and a view-only device have no review comments. A file that may contain
+secrets can be commented on once shown, but its lines are never quoted, neither in the message nor
+in what the tab keeps: only the file and line numbers go.
+
+## Blame
+
+In a file of a git repository, the **Blame** button in the viewer's header (on a phone, in the
+**More actions** menu) adds a column before the line numbers: who last changed each line and how
+long ago, written once for each run of lines from the same commit. Lines not committed yet read
+`Not committed`. Tap a name to see the commit's summary, author, date and short hash, with a
+**Copy hash** button; Escape or a tap elsewhere closes it. Tap **Blame** again to hide the column.
+It stays on as you open other files, until Termote is reloaded.
+
+- Blame follows the commits reachable from `HEAD`. A file that is not in the last commit yet has
+  nothing to blame, and the viewer says so.
+- It is offered for the text in read mode only: not while editing, nor in a Markdown preview, a
+  table or an image.
+- A file larger than 1 MiB is not blamed.
+- When the file changed on the host since it was opened, the viewer reads it again first, so each
+  name stands beside the line it is about.
+- When git counts the lines of the file differently from the viewer (a UTF-16 file), the column is
+  hidden with a note.
+- A view-only device sees blame too, for the files it may read.

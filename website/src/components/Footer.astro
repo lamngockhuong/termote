@@ -1,7 +1,7 @@
 ---
 import Default from '@astrojs/starlight/components/Footer.astro';
 
-// The analytics note in the page's language
+// The license, releases and analytics notes in the page's language
 const vi = Astro.url.pathname.startsWith('/vi/');
 ---
 
@@ -22,6 +22,11 @@ const vi = Astro.url.pathname.startsWith('/vi/');
     justify-content: center;
     align-items: center;
     gap: 0.25rem;
+  }
+
+  .license-row {
+    margin-top: 0.35rem;
+    gap: 0.5rem;
   }
 
   .sponsor-row {
@@ -115,6 +120,11 @@ const vi = Astro.url.pathname.startsWith('/vi/');
 <footer class="custom-footer">
   <div class="footer-row">
     Made with <span class="heart">♥</span> by <a href="https://khuong.dev" target="_blank" rel="noopener">Khuong Dev</a>
+  </div>
+  <div class="footer-row license-row">
+    <a href="https://github.com/lamngockhuong/termote/blob/main/LICENSE" target="_blank" rel="noopener">{vi ? 'Giấy phép MIT' : 'MIT License'}</a>
+    <span class="dot-separator">·</span>
+    <a href="https://github.com/lamngockhuong/termote/releases" target="_blank" rel="noopener">{vi ? 'Các bản phát hành' : 'Releases'}</a>
   </div>
   <div class="footer-row sponsor-row">
     <span class="sponsor-label">☕ Support:</span>

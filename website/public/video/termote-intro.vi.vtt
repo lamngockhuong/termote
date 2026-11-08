@@ -1,0 +1,82 @@
+WEBVTT
+
+1
+00:01.333 --> 00:04.500
+Agent của bạn đang chờ.
+Còn bạn thì không ngồi ở bàn.
+
+2
+00:04.967 --> 00:07.667
+Termote
+Your Terminal, Anywhere.
+
+3
+00:07.867 --> 00:15.167
+Hai lệnh. Một mã QR.
+Cài, khởi động trên mạng của bạn, quét bằng điện thoại.
+
+4
+00:15.367 --> 00:22.333
+Terminal thật, làm cho ngón tay cái.
+Shell nào, agent CLI nào cũng được. Có phím Esc, Ctrl và mũi tên; vuốt trái là Ctrl+C, vuốt phải là Tab.
+
+5
+00:22.533 --> 00:32.500
+Chat với Claude Code và Codex.
+Gửi tin nhắn tiếp theo, xem agent đang làm, trả lời câu hỏi của nó bằng một lần chạm.
+
+6
+00:32.700 --> 00:39.667
+Thấy rõ những gì đã đổi.
+Duyệt file, xem trước Markdown và sơ đồ, review diff của agent.
+
+7
+00:39.867 --> 00:42.167
+Gửi file từ điện thoại.
+Tải lên bằng nút bấm, kéo thả hoặc dán.
+
+8
+00:42.167 --> 00:44.167
+Lỡ tay xoá?
+File nằm trong thùng rác: khôi phục, hoặc xoá hẳn.
+
+9
+00:44.367 --> 00:49.333
+Herdr hay tmux. Mọi agent ở một chỗ.
+Workspace Herdr kèm trạng thái từng agent, hoặc các phiên tmux của bạn: vẫn Chat, Files và Changes như nhau.
+
+10
+00:49.533 --> 00:54.333
+Các pane cạnh nhau.
+Chia, phóng to, đổi chỗ và đổi cỡ từ menu Pane, trên tmux, Herdr và Zellij.
+
+11
+00:54.533 --> 00:56.667
+Chạy các task của dự án.
+npm, make, Go, Gradle, Maven, Cargo và nhiều nữa: một lần chạm, chạy trong tab riêng.
+
+12
+00:56.667 --> 00:58.833
+Có cả tiếng Việt.
+Cả ứng dụng bằng tiếng Anh hoặc tiếng Việt, chọn trong Settings.
+
+13
+00:59.033 --> 01:01.833
+Được báo khi xong việc.
+Thông báo đẩy khi agent làm xong hoặc cần bạn.
+
+14
+01:01.833 --> 01:04.667
+Chia sẻ một thiết bị chỉ xem.
+Mã dùng một lần ghép máy tính bảng hay điện thoại của đồng đội, không cần mật khẩu.
+
+15
+01:04.867 --> 01:09.167
+Riêng tư ngay từ đầu.
+Mặc định chỉ nghe trên 127.0.0.1 · Mật khẩu hoặc thiết bị đã ghép · Vai trò chỉ xem · Tailscale HTTPS · Bản phát hành có chữ ký
+
+16
+01:09.433 --> 01:14.667
+Your Terminal, Anywhere.
+curl -fsSL https://termote.ohnice.app/install.sh | sh
+termote.ohnice.app · Mã nguồn mở, MIT

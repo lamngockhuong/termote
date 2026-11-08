@@ -1,0 +1,139 @@
+---
+title: Điều khiển Claude Code từ điện thoại
+description: "Ba cách theo dõi và trả lời Claude Code đang chạy trên máy bạn từ điện thoại: Remote Control của Anthropic, SSH kèm tmux, và Termote tự host, từng bước."
+head:
+  - tag: title
+    content: "Điều khiển Claude Code từ điện thoại (tự host) | Termote"
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+import { Image } from "astro:assets";
+import screenshot from "../../../../assets/screenshots/phone-chat.vi.webp";
+
+Claude Code chạy trên máy tính của bạn, trong một terminal, và thỉnh thoảng nó dừng lại: để xin quyền, để hỏi một
+câu, hoặc vì đã làm xong. Bạn không ngồi ở bàn thì nó cứ chờ. Bài này so sánh ba cách vào phiên đó từ điện thoại,
+rồi hướng dẫn cài từng bước cách tự host là Termote.
+
+<Aside>
+  Phần so sánh được đối chiếu với tài liệu của từng công cụ vào tháng 11/2026. Công cụ thay đổi theo thời gian: hãy
+  mở các liên kết để kiểm tra lại chi tiết quan trọng với bạn.
+</Aside>
+
+## Ba cách vào Claude Code từ điện thoại
+
+### Remote Control của Anthropic
+
+[Remote Control](https://code.claude.com/docs/en/remote-control) nối ứng dụng Claude hoặc claude.ai/code với một
+phiên Claude Code trên máy bạn. `claude remote-control` chờ kết nối và tạo được phiên mới từ điện thoại; nó hiện mã
+QR để quét.
+
+- **Ưu điểm:** trên điện thoại chỉ cần ứng dụng Claude, máy bạn không mở cổng nào (nó chỉ gửi request HTTPS ra
+  ngoài), gửi được ảnh và file từ điện thoại, phiên tự nối lại sau khi laptop ngủ.
+- **Hạn chế:** cần gói Pro, Max, Ultra, Team hoặc Enterprise; không dùng được API key, và với Team, Enterprise thì
+  một Owner phải bật tính năng này. Trong lúc kết nối, transcript của phiên được lưu trên server của Anthropic. Nó
+  chỉ hiện Claude Code, không hiện các terminal hay agent khác của bạn.
+
+### SSH, tmux và một ứng dụng terminal trên điện thoại
+
+Chạy Claude Code trong [tmux](https://github.com/tmux/tmux) trên máy tính, rồi kết nối từ một ứng dụng SSH trên
+điện thoại (Termius, Blink Shell hay ứng dụng khác) và gắn vào phiên tmux đó.
+
+- **Ưu điểm:** dùng được với mọi gói hoặc API key, với mọi chương trình terminal chứ không chỉ Claude Code; ngoài
+  kết nối SSH do bạn tự dựng, không có gì rời khỏi mạng của bạn.
+- **Hạn chế:** bạn đọc Claude Code dưới dạng terminal trên màn hình điện thoại và gõ phím của nó bằng bàn phím điện
+  thoại; điện thoại thường tạm dừng ứng dụng SSH khi chạy nền, nên kết nối rớt và bạn phải gắn lại (Mosh đỡ được
+  phần này); không có gì báo cho bạn biết khi Claude Code đang chờ.
+
+### Termote
+
+[Termote](/vi/) là ứng dụng web tự host (giấy phép MIT), đưa các phiên tmux, Herdr hoặc Zellij lên trình duyệt, và
+hiện Claude Code, Codex dưới dạng chat.
+
+- **Ưu điểm:** Claude Code đăng nhập bằng cách nào cũng được (gói trả phí hay API key), vì Termote chỉ đọc và gõ vào
+  terminal của nó; có [view Chat](/vi/usage/agent-chat/) với nút bấm cho các hộp thoại của Claude Code; có
+  [thông báo](/vi/usage/settings/#báo-khi-agent-cần-tôi) đẩy khi agent làm xong hoặc cần bạn; xem được
+  [file và git diff](/vi/usage/changes/) của phiên; mọi terminal trên máy, không chỉ Claude Code. Không có gì đi qua
+  server của bên thứ ba: điện thoại nói chuyện thẳng với máy bạn qua mạng do bạn chọn.
+- **Hạn chế:** bạn phải cài nó lên máy tính và tự chọn cách để điện thoại vào được (mạng LAN, Tailscale hoặc
+  Cloudflare Tunnel); máy tính phải luôn bật, như mọi cách khác trong bài. Nó là một shell từ xa: ai đăng nhập được
+  thì làm được mọi thứ người dùng của bạn làm được, nên hãy đọc [mô hình bảo mật](/vi/usage/security/).
+
+## Cài Termote từng bước
+
+<Steps>
+1. **Cài Termote lên máy đang chạy Claude Code** (Linux, macOS hoặc Windows, không cần sudo). Bạn cũng cần tmux trên
+   Linux và macOS, hoặc psmux trên Windows: xem [Bắt đầu](/vi/getting-started/).
+
+   ```bash
+   curl -fsSL https://termote.ohnice.app/install.sh | sh
+   ```
+
+2. **Khởi động nó trên mạng mà điện thoại vào được.** Ở nhà, `--lan` mở nó cho mạng LAN. Ra ngoài thì
+   [Tailscale](/vi/installation/tailscale/) phục vụ nó qua HTTPS trong tailnet, không mở cổng nào ra Internet.
+
+   ```bash
+   termote start --lan                                    # cùng Wi-Fi
+   termote start --tailscale myhost.tailnet-name.ts.net   # ở bất cứ đâu, qua Tailscale HTTPS
+   ```
+
+3. **Mở nó trên điện thoại.** `termote url --qr` in ra mã QR của địa chỉ; quét mã, rồi đăng nhập bằng tên và mật
+   khẩu mà `termote start` đã in (`termote show-password` hiện lại). Muốn điện thoại khỏi gõ mật khẩu thì
+   [ghép nó](/vi/usage/devices/) bằng mã dùng một lần.
+
+4. **Thêm vào màn hình chính.** Safari: **Share → Add to Home Screen**; Chrome: **Add to Home screen** hoặc
+   **Install app**. Từ đó nó mở như một ứng dụng, và trên iPhone, iPad thì đây là điều kiện để nhận thông báo.
+
+5. **Chạy Claude Code trong một phiên.** Gõ `claude` trong một terminal tmux trên máy tính, hoặc từ điện thoại: mở
+   terminal của một phiên và gõ lệnh đó. Với Herdr, view Chat của một pane trống có nút **Claude Code** để khởi động
+   nó.
+
+6. **Trả lời trong Chat.** Chuyển pane sang **Chat**: tin nhắn của Claude Code hiện thành cuộc trò chuyện, còn hộp
+   thoại xin quyền và câu hỏi của nó hiện thành nút bấm. Gõ tin nhắn tiếp theo ở ô dưới cùng.
+
+7. **Bật thông báo.** Settings → Sessions → **Notify when an agent needs me**: điện thoại nhận thông báo đẩy khi
+   agent làm xong hoặc đang chờ một hộp thoại, kể cả khi đã đóng ứng dụng.
+</Steps>
+
+<Image src={screenshot} alt="View Chat của Termote trên điện thoại: thay đổi của Claude Code trên login.go dạng diff, câu trả lời của nó và ô nhập tin nhắn" width={293} densities={[1, 2]} class="phone-shot" />
+
+## Câu hỏi thường gặp
+
+### Có cần gói Claude Pro hay Max không?
+
+Termote thì không. Nó hiện Claude Code đang chạy trong terminal của bạn, đăng nhập bằng cách nào cũng được: gói Pro,
+Max, Team hay API key. Remote Control của Anthropic mới là thứ cần gói trả phí.
+
+### Dùng API key được không?
+
+Được. Termote không bao giờ gọi Anthropic; chỉ Claude Code gọi, bằng thông tin đăng nhập nó đang có.
+
+### Mở được phiên Claude Code mới từ điện thoại không?
+
+Được. Thêm một phiên từ danh sách phiên (**New session**) rồi gõ `claude` trong terminal của nó, hoặc với Herdr thì
+chạm **Claude Code** trong view Chat của một pane trống. Xem [Quản lý phiên](/vi/usage/sessions/) và
+[Chat với agent](/vi/usage/agent-chat/#khởi-động-agent-herdr).
+
+### Khoá màn hình điện thoại thì có bị dừng không?
+
+Không. Claude Code vẫn chạy trong tmux, Herdr hoặc Zellij trên máy tính, điện thoại làm gì cũng vậy. Khi mở lại
+Termote, nó tự nối lại và hiện phiên ở trạng thái hiện tại; nếu agent cần bạn trong lúc đó thì đã có thông báo.
+
+### Mở ra mạng có an toàn không?
+
+Đăng nhập bật sẵn, server chỉ nghe trên chính máy tính cho tới khi bạn thêm `--lan`, và từ chối mọi tên host không
+nằm trong danh sách cho phép. Hãy dùng mạng LAN hoặc Tailscale thay vì mở ra Internet; nếu dùng Cloudflare Tunnel
+thì đặt [Cloudflare Access](/vi/installation/cloudflare/) phía trước. Trang [mô hình bảo mật](/vi/usage/security/)
+liệt kê Termote bảo vệ được gì và không chặn được gì.
+
+### Dùng với Codex được không?
+
+Được: view Chat hiện Codex giống như Claude Code, còn agent hay CLI khác thì dùng trong view terminal. Xem
+[Chat với agent](/vi/usage/agent-chat/#codex).
+
+## Bước tiếp theo
+
+- [Chat với agent](/vi/usage/agent-chat/) - View Chat hiện những gì và cách trả lời hộp thoại
+- [Tổng quan agent](/vi/usage/overview/) - Mọi agent của mọi phiên trên một màn hình
+- [Ghép thiết bị](/vi/usage/devices/) - Cho điện thoại đăng nhập bằng mã dùng một lần
+- [Các lựa chọn thay Remote Control](/vi/guides/remote-control-alternatives/) - Termote và các lựa chọn khác đặt
+  cạnh nhau

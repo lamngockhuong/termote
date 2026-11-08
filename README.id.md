@@ -27,7 +27,7 @@
   <a href="https://unikorn.vn/p/termote?ref=embed-termote" target="_blank"><img src="https://unikorn.vn/api/widgets/badge/termote?theme=dark" alt="Termote trên Unikorn.vn" width="170" height="42" /></a>
 </p>
 
-Kendalikan alat CLI (Claude Code, GitHub Copilot, terminal apa pun) dari jarak jauh melalui mobile/desktop via PWA.
+Kendalikan alat CLI (Claude Code, Codex, terminal apa pun) dari jarak jauh melalui mobile/desktop via PWA.
 
 > [!NOTE]
 > Termote 1.0 tidak meng-upgrade instalasi 0.x. Hapus instalasi 0.x sesuai
@@ -48,11 +48,11 @@ Kendalikan alat CLI (Claude Code, GitHub Copilot, terminal apa pun) dari jarak j
 - **Tab session**: Bilah tab horizontal untuk berpindah jendela dengan cepat
 - **Backend Herdr** (native atau di dalam container): kendalikan workspace Herdr sebagai pengganti tmux, dengan lencana status coding agent di setiap pane — lihat [Instalasi Native](https://termote.ohnice.app/installation/native/)
 - **Tampilan Chat**: baca dan balas pane yang menjalankan Claude Code (atau Codex yang dijalankan dengan `--no-daemon`) sebagai obrolan, dengan saran slash command dan jawaban dialog — lihat [Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
-- **Tampilan Files dan Changes**: jelajahi direktori pane dan perubahan git-nya, dengan pratinjau Markdown — lihat [Files and Changes](https://termote.ohnice.app/usage/files-changes/)
+- **Tampilan Files dan Changes**: jelajahi direktori pane dan perubahan git-nya, dengan pratinjau Markdown — lihat [Files and Changes](https://termote.ohnice.app/usage/files/)
 - **Antrean pesan dan tautan file di Chat**: antrekan pesan saat agent masih bekerja; ketuk path file yang ditulis agent untuk membukanya di Files, tepat di barisnya
 - **Review dan staging**: beri komentar pada baris di Changes dan Files lalu kirim review ke agent; stage, unstage, atau buang perubahan per file atau per hunk
 - **Pratinjau dan pengeditan di Files**: PDF, .xlsx, dan .docx hanya-baca; buka dan simpan file Shift-JIS, EUC-JP, dan UTF-16; edit Markdown di samping pratinjau langsung
-- **Places**: tawarkan folder di luar pane di Files dengan `termote start --allow-path <dir>` — lihat [Places](https://termote.ohnice.app/usage/files-changes/#places)
+- **Places**: tawarkan folder di luar pane di Files dengan `termote start --allow-path <dir>` — lihat [Places](https://termote.ohnice.app/usage/files/#places)
 - **Tasks**: jalankan script `package.json` dan target Makefile milik pane, kirim run yang gagal ke agent — lihat [Tasks](https://termote.ohnice.app/usage/tasks/)
 - **Jendela terpisah** (desktop): buka file, diff, tab, pane, atau ringkasan di jendelanya sendiri
 - **Lampiran gambar**: kirim gambar dari ponsel ke terminal atau ke pesan di tampilan Chat, agar agent dapat membacanya lewat path

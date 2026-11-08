@@ -1,0 +1,61 @@
+---
+title: Remote Control Alternatives
+description: "Termote, Anthropic's Remote Control and an SSH app with tmux side by side: where each runs, the Claude plan it needs, new sessions, agents, files and license."
+head:
+  - tag: title
+    content: "Claude Remote Control Alternatives, Self-Hosted | Termote"
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Anthropic's Remote Control is one way to reach Claude Code from a phone, and not the only one. This page sets it
+beside two self-hosted options: an SSH app with tmux, and Termote, which this site documents.
+
+<Aside>
+  Checked against each project's own documentation in November 2026. A cell says only what that documentation
+  says. Follow the source links before relying on a detail.
+</Aside>
+
+## Side by Side
+
+| | Termote | Remote Control | SSH app + tmux |
+| --- | --- | --- | --- |
+| Runs on | Your machine, reached directly | Your machine, relayed through Anthropic's API | Your machine, over SSH |
+| Claude plan needed | None (plan or API key) | Pro, Max, Ultra, Team or Enterprise; no API keys | None |
+| New session from the phone | Yes | Yes, in server mode | Yes (`tmux new`) |
+| Agents | Claude Code and Codex as a chat; any CLI in the terminal | Claude Code only | Any CLI, as a terminal |
+| Phone keys | Toolbar with Tab, Esc, Ctrl, arrows; gestures | Chat app, no terminal | Depends on the SSH app |
+| Files and git diff | File browser, previews, diff and staging | Send images and files to the session | Through shell commands |
+| Notifications | Web Push when an agent finishes or needs you | Push when a task finishes or Claude needs a decision | None |
+| License | MIT | Part of Claude Code | tmux: ISC; apps vary |
+| Machine must stay on | Yes | Yes | Yes |
+
+Sources: [Termote docs](/getting-started/),
+[Remote Control](https://code.claude.com/docs/en/remote-control),
+[tmux](https://github.com/tmux/tmux).
+
+## When Each One Fits
+
+- **Remote Control** fits if you already pay for a Claude plan, want nothing to install on the phone besides the
+  Claude app, and only need Claude Code. Nothing listens on your machine; in exchange the session's transcript is
+  stored on Anthropic's servers while connected, and API-key setups are left out.
+- **An SSH app with tmux** fits if a terminal on the phone is enough and you already reach the machine over SSH.
+  It needs nothing new on the computer, but nothing tells you when the agent waits.
+- **Termote** fits if you want Claude Code and Codex as a chat, the session's files and git diff, and every terminal
+  of the machine in one app, on any Claude plan or an API key, with tmux, Herdr or Zellij.
+
+## Where Termote Is Weaker
+
+- You install and run it yourself, and choose how the phone reaches it: your LAN, Tailscale, or a Cloudflare
+  Tunnel behind Access. Remote Control needs no network setup at all.
+- The computer has to stay on and awake. That is true of every option here, Remote Control included.
+- It is a remote shell: whoever signs in with full access can do what your user can. Read the
+  [security model](/usage/security/) before you open it beyond your own machine.
+- The Chat view covers Claude Code and Codex. Other agents, such as GitHub Copilot CLI, work in the terminal view
+  only.
+
+## Next Steps
+
+- [Control Claude Code from your phone](/guides/claude-code-from-phone/) - Set up Termote step by step
+- [Getting Started](/getting-started/) - Install with two commands
+- [Security Model](/usage/security/) - What Termote protects, and what it cannot

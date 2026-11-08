@@ -1,0 +1,370 @@
+---
+title: "File Previews"
+description: "Preview a pane's files in Termote: Markdown with diagrams, CSV and TSV as a table you can search and edit, images, and PDF, Excel and Word documents."
+head:
+  - tag: title
+    content: "Preview Markdown, CSV, Images and PDFs | Termote"
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Besides text, [Files](/usage/files/) shows some kinds of file as what they are: Markdown as a page, CSV and TSV as a table, an image as the picture, and PDF, Excel and Word documents as a read-only preview.
+
+## Markdown Preview
+
+A Markdown file (`.md`, `.markdown`, `.mdx`) opens rendered: headings, lists, tables (they
+scroll sideways on a phone), task lists, footnotes and code. The eye button in its bar switches
+between the preview and the source; the choice is remembered on this device. A Markdown file
+over 256 KiB opens as its source, with a note that it is too large to preview.
+
+- **Code blocks** are highlighted in the language named after the opening fence (` ```ts `,
+  ` ```bash `, ` ```go `...), with a button to copy the block. A block in a language not covered
+  is shown as plain text. The wrap button wraps code blocks too.
+- **Mermaid diagrams** (` ```mermaid `) are drawn as images once you scroll to them: flowcharts,
+  sequence, class, state, Gantt and the other kinds. The code button in the block's bar switches
+  between the diagram and its source; Copy always copies the source. A wide diagram scrolls
+  sideways. The diagram is a picture: nodes and links in it cannot be clicked, and the diagram
+  follows the light or dark theme of Termote, whatever its `%%{init}%%` line or front matter
+  asks for. A shape with an image or an icon (`@{ img: ... }`) is drawn without it, so nothing
+  is loaded. The source is shown instead, with the reason, when the diagram is too large (over
+  50 KB, or over 500 links), is not valid Mermaid, is of a kind the renderer does not know, takes
+  longer than 10 seconds, or the renderer cannot be loaded. The renderer is downloaded the first
+  time a diagram is shown, not when the app is installed: offline, until then, diagrams show as
+  their source with "Could not load the diagram renderer". Diagrams are drawn in the background,
+  so even a large one never makes the page stop responding.
+- **Saving a diagram.** Once drawn, a diagram's bar has three more buttons, also in its full
+  screen view: **Share** opens the share sheet with the diagram as a PNG (on an iPad or iPhone:
+  Save Image, Notes, Files or any note app), **Copy image** puts the PNG on the clipboard to
+  paste into a note, and **Download SVG** saves the diagram as an SVG file. The PNG is twice the
+  diagram's size (less for a very large one), in the theme it is shown in, with that theme's
+  background; the SVG file keeps that background too. Named after the file and the diagram's
+  number, as `README-mermaid-1.png`. Share and Copy image show only where the browser offers
+  them (Firefox on a desktop and Chrome on Linux have no Share), and only on a secure page:
+  over HTTPS (such as `termote start --tailscale`) or on `localhost`. Opened over plain HTTP
+  on the LAN, only Download SVG shows. In the app added to the Home Screen on iOS, Download
+  SVG goes through the share sheet (Save to Files). An SVG pasted into a note app usually shows as text: use the PNG
+  there.
+- **Front matter** (the `---` block at the top of docs and MDX pages) is shown as a code block.
+- **Raw HTML and MDX components** are shown as the text they are, never run. The one exception
+  is a `<details>` block with its `<summary>`: it shows as a section you tap to expand, and the
+  Markdown inside it renders as usual. Only its `open` attribute is kept, and a `<details>`
+  without its `</details>` stays text.
+- **Images are never loaded.** An image inside the root shows as a link that opens the file in
+  Files; an image on the web shows as a link to its site.
+
+Links:
+
+- A link to another file under the root (`docs/guide.md`, `../README.md`, `/src/main.go`) opens
+  it in the same tab; `guide.md#install` opens it at that heading. A leading `/` means the root.
+  A file already open in another tab shows that tab.
+- Ctrl+click (Cmd+click on a Mac), a middle click, or a long press on a phone opens the link in
+  a new tab.
+- A link to a folder shows the tree with that folder open.
+- `#heading` scrolls to the heading in the same file.
+- The back button returns to the file the link was followed from in that tab, where you left
+  it, before going back to the tree.
+- A link to a missing file says `Not found`. A link that leaves the root, or that uses another
+  scheme than `http`/`https` (`javascript:`, `file:`, `data:`), is shown as plain text.
+- `http`/`https` links open in a new tab; hovering shows the site they go to.
+
+In **Changes**, a changed Markdown file has the same eye button over its diff: it shows the
+current version of the file, rendered with the same rules. A deleted file has no preview. Its
+links open in Files.
+
+## CSV and TSV as a Table
+
+A `.csv`, `.tsv` or `.tab` file opens as a table: the header row stays at the top and the row
+numbers at the left while the rest scrolls, and a 1 MiB file scrolls as smoothly as a short one.
+The eye button in its bar switches between the table and the source; the choice is remembered on
+this device, apart from the one for Markdown. Changes shows the diff of a CSV file as text
+first; its eye button shows the current version of the file as a table, to read only (Edit opens
+it for changes). A deleted file has no table.
+
+- **Delimiter**: a `.tsv` or `.tab` file is read with tabs. For a `.csv` file the delimiter is
+  guessed from its first lines (comma, semicolon, tab or pipe); the **Delimiter** menu reads it
+  again with another one.
+- **Quotes** follow RFC 4180: a value in double quotes can hold the delimiter, a line break and
+  `""` for one quote. A value that holds a line break shows `↵` in its cell.
+- **Header row** (on at first) takes the first row as the column names. Turned off, the
+  columns are `Column 1`, `Column 2`… and the first row is a row like the others.
+- **Sorting**: press a column name to sort by it, again to reverse, a third time to go back to
+  the file's order. Text sorts without regard to case and runs of digits by their value
+  (`item 2` before `item 10`; decimals are compared digit run by digit run, so `1.5` comes after
+  `1.25`). Empty cells go last, and the header row is never sorted.
+- **Filter rows** keeps the rows where any cell contains what you typed, ignoring case, and
+  shows how many are left (`12 / 340 rows`). It searches hidden columns too: while any column is
+  hidden, the count says so (`12 / 340 rows · 2 columns hidden`).
+- **Column widths**: drag the line at the right edge of a column name, with a mouse or a finger,
+  to make that column wider or narrower; a drag never sorts. Double-click or double-tap the line
+  to fit the column to its values. From the keyboard, Tab to the line, then Left and Right change
+  the width 2 characters at a time, Home and End go to the narrowest and widest, and Enter fits.
+  A column is 4 to 120 characters wide.
+- The **Columns** button in the bar has **Fit columns**, which fits every column to the rows on
+  screen (up to 1000, from the first one in view), **Reset widths**, back to the widths the table
+  opened with, **Wrap**, a list of the columns, and **Lines**: 3, 6 or 10 (3 at first). A wrapped
+  column shows up to that many lines of each value (a line break still ends with `↵`) and its name
+  has a wrap icon; while any column wraps, every row is that many lines tall, and a longer value
+  is cut. The whole value is in its cell's sheet, or its field while editing.
+- Each column name has a ⋯ button (shown on hover, or always on a touch screen); right-clicking a
+  name opens the same menu. **Pin column** keeps that column at the left, next to the row numbers,
+  its name too: it stays in its place until the table scrolls sideways to it, then the columns
+  before it pass under it. One column is pinned at a time; **Unpin column** in the same menu unpins
+  it, and so does **Unpin name** in the **Columns** menu, there while a column is pinned. While the
+  row numbers and the pinned column take more than half the table's width (a phone, a very wide
+  column), it scrolls with the others, so the table can still be read. **Hide column** in the ⋯ menu
+  hides that column, as **Show** below does; a pinned column hidden is unpinned.
+- **Show** in the **Columns** menu lists the columns, each ticked while it is shown: untick one to
+  hide it from the table and from Records, which also says how many are hidden. **Show all**
+  brings them back. The last column shown cannot be hidden, and hiding the column the table is
+  sorted by goes back to the file's order. Hidden columns are skipped by the
+  arrow keys, Home and End, and Tab in a cell, and **Fit columns** fits only the ones shown.
+- **Records** shows one row at a time as `column: value`, with **Previous** and **Next**, for a
+  phone where a row is wider than the screen. Press or tap a row number to open that row in
+  Records; turned off, Records goes back to the table where you left it.
+- Tap a cell (or press Enter on it) to see its whole value, with a button to copy it. A cell
+  shows at most 1024 characters; the full value is only in that sheet. With a mouse, a click only
+  selects the cell, as in a spreadsheet, and a double-click opens it: in the sheet, or on a file you
+  can edit in the cell itself (see below); a value opened from Records still shows in its sheet.
+- A row with another number of cells than the header has its number in orange; hovering or a
+  screen reader says how many cells it has.
+- From the keyboard, the arrow keys, Page Up and Page Down move between cells; Home and End go to
+  the first and last column of the row, and Ctrl+Home and Ctrl+End (Cmd on a Mac) to the first
+  and last cell of the table, in the order shown.
+
+Sorting, filtering, the delimiter, the header row, column widths, wrapped columns, the pinned
+column and hidden columns only change what is shown. Nothing is written to the file, and they are
+forgotten when the file is closed. Widths, wrapped columns and their lines, the pinned column and
+hidden columns also stay while you show another tab and come back, and go back to the defaults when
+the delimiter or the header row changes.
+
+| Shown                                                   | Why                                                                     |
+| ------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `Unclosed quote on line N: shown as source`             | A quote opened on that line never closes; the file shows as its source |
+| `Showing 200 of N columns. See all in Source`           | Only the first 200 columns are shown; the source has them all           |
+| `No rows`                                               | The file is empty                                                       |
+
+<Aside type="caution">
+  A value is shown as text, never run: a formula such as `=HYPERLINK(...)` shows as typed.
+  Characters that could make a value read as something else, such as the right-to-left override
+  that makes `0001` read `1000`, control characters and zero-width spaces, show as marks like
+  `⟨U+202E⟩`. **Copy** in a cell's sheet copies the value itself, those characters included,
+  without the quotes that wrap it in the file.
+</Aside>
+
+### Finding in a Table
+
+Ctrl+F (Cmd+F on a Mac) on a table, whether you are only viewing it or editing it, opens a find
+box under its bar; what you typed last is selected, ready to type over. Unlike **Filter rows**, it
+hides no row: every cell that matches is tinted, the current one outlined, and the box counts them
+(`3 of 17`). Typed in the filter, a cell's field or a sheet, Ctrl+F is still the browser's own.
+
+- Enter and Shift+Enter in the box, or F3 and Shift+F3 anywhere in the table, go to the next or
+  previous match, round from the last to the first, scrolling it into view. From the box the
+  focus stays in it; from a cell the focus goes to the match. F3 with the box closed opens it
+  again on the next match. In a cell's field, F3 sets the value first, as leaving the cell does.
+- Matches go row by row in the order shown (after sorting and filtering), then along the columns
+  shown. The header row and hidden columns are not searched; while any column is hidden, the box
+  says so.
+- The search ignores case and matches part of a value. **Aa** matches case, the boxed **ab**
+  matches only a whole value, and **.\*** reads what you type as a regular expression (JavaScript,
+  Unicode); one that does not compile shows `Invalid pattern`. Values are searched whole, past the
+  1024 characters a cell shows. Characters that hide or reorder text, typed in the box, show below
+  it as `⟨U+XXXX⟩`.
+- An edit, a sort, a filter or a hidden column finds again: the current match stays on its cell
+  while that still matches, else it moves to the next one.
+- Escape or the close button closes the box and puts the focus back on the current match.
+
+A regular expression, and any search of a file over 256 KiB, runs apart from the page, so the
+table never freezes; one still running after 10 seconds (30 for the first search, while that
+part loads) is stopped and the box says `Search took too long`; one too deep for the browser
+says `Search failed`. At most 100,000 matches are counted (`100000+`).
+
+### Selecting, Copying and Pasting
+
+With a mouse and a keyboard, Shift with the arrow keys, Home, End, Page Up or Page Down (and
+Ctrl+Home or Ctrl+End) grows a range of cells from the cell in focus; Shift+click or a drag from
+one cell to another selects the cells between, and a drag near the top or bottom of the table
+scrolls it. An arrow key alone, a click or Escape drops the range. On a phone nothing is
+selected.
+
+- Ctrl+C (Cmd+C on a Mac), while only viewing too, copies the range, or the cell in focus, or
+  from a row number its row, as a spreadsheet does: tab separated, one line a row, in the order
+  shown, hidden columns left out. Values are copied whole, past the 1024 characters a cell
+  shows; one that holds a tab, a line break or a quote is put in quotes, so it pastes into a
+  single cell. At most 100,000 cells are copied at once.
+- Ctrl+V while editing pastes a block copied from a spreadsheet or another table, from the cell in
+  focus (or the range's top-left cell) along the rows and columns shown, as one change that one
+  Ctrl+Z takes back; a cell given its own value is left as it is. A block wider than the columns
+  left is refused. A longer one, while the table is neither sorted nor filtered, asks to add the
+  rows it needs at the end; sorted or filtered, it is refused, saying why. Saving changes only the
+  cells pasted.
+- A range the block fits into a whole number of times, both down and across, gets the block over
+  and over, as in a spreadsheet: one copied cell fills every cell of the range, a copied row fills
+  every row of a range as wide, and a short line's missing cells are emptied. Any other range, or
+  a row number with no range selected, takes the block once, from its top-left cell. The 100,000
+  cell limit counts the cells of the range filled.
+- Delete or Backspace while editing clears every cell of the range, along the rows and columns
+  shown, as one change that one Ctrl+Z takes back. At most 100,000 cells are cleared at once.
+- No clipboard permission is asked, so this works over plain HTTP on the LAN too, and on a Mac
+  with no text selected. Pasted in a cell's field, the filter or the find box, the text goes into
+  that box.
+
+### Editing a Table
+
+**Edit** on a file shown as a table keeps the table and makes each cell editable, with **Cancel**
+and **Save** in the bar as for any file. Opened from Changes, or shown as its source, the file is
+edited as text instead.
+
+- Tap a cell to change its value in a sheet: the value can hold several lines, and characters
+  that hide or reorder text show below it as `⟨U+XXXX⟩`. **Apply** puts it in the table; a cell
+  a short row does not have can be set too.
+- With a mouse, a double-click on a cell, or F2 or Enter on the cell in focus, edits the value in
+  the cell itself, the field growing over the rows below to show up to 20 lines (past them it
+  scrolls), at least 12rem wide; a single click only selects the cell, so Ctrl+V on it pastes a
+  block (see above), and a tap on a touch screen, a laptop's too, still opens it. A double-click
+  while only viewing a file you can edit starts editing first. Enter sets it, Shift+Enter or
+  Alt+Enter breaks the line, and Escape drops what you typed: the table stays in editing, **Cancel**
+  leaves it. Tab and Shift+Tab set it and go to the next or previous cell, from the end of a row
+  onto the next one. Clicking elsewhere, or scrolling the cell out of view, sets it too. The ⤢
+  button in the cell takes what you typed to the cell's sheet, for more room and for **Add row
+  below** and **Delete row**. A value longer than 1024 characters, or one that holds characters
+  which hide or reorder text, opens in the sheet.
+- With a keyboard, typing on the cell in focus starts editing it with what you type, which
+  replaces its value (Escape keeps the old one); on a file you are only viewing, it starts
+  editing first. A value the field cannot take opens in the sheet with what you typed. Delete or
+  Backspace clears the cell, and one Ctrl+Z brings the value back. With an input method (IME),
+  the first key opens the field: if the first character you composed does not show in it, type
+  it again there. On a phone, typing on a cell does nothing.
+- **Insert row above** and **Add row below** (in that sheet) and the **Add a row at the end**
+  button add an empty row and open its first cell. **Delete row** asks first, and says when the
+  row is the file's first one, which is the header when **Header row** is on. To delete the
+  header, turn **Header row** off first: the header row is then a row you can open.
+- While editing, the ⋯ menu of a column name also has the edits below, and right-clicking a cell,
+  or pressing Shift+F10 or the context menu key on a name or a cell, opens the same menu.
+  **Insert column left** and **Insert column right** add an empty column: a delimiter
+  in each row long enough to reach it, nothing else; a shorter row and a blank line stay as they
+  are. With **Header row** on, the new column's name is asked for at once (Escape leaves it
+  empty). **Delete column** asks first, saying how many cells with a value go with it; the last
+  column cannot go. A row left with one empty cell keeps it as `""`, so it does not become a
+  blank line. Opened from a cell, the menu also has **Insert row above** and **Insert row below**.
+- **Rename column** in that menu, F2 on a column name, or a double-click on it (the first click
+  still sorts) edits the name in place, with **Header row** on; on a touch screen, or for a name
+  the field cannot take, it opens in the sheet, which adds or deletes no row around the header.
+  Widths, wrapped and hidden columns and the sort follow their columns when one is added or
+  deleted, undone, or dropped with **Cancel**; a deleted column brought back by Undo has its
+  values, not its width or wrap.
+- **Undo** and **Redo**, or Ctrl+Z and Ctrl+Shift+Z (Cmd on a Mac) on the table, walk through
+  your changes; Ctrl+S saves. Typed in the sheet, a cell or the filter, Ctrl+Z and Ctrl+Shift+Z
+  belong to that box; Ctrl+S in a cell sets it, then saves.
+- Saving changes only the characters of the cells you set: a value that needs quotes (it holds
+  the delimiter, a quote, a line break, or a space at either end) gets them, a cell that had
+  quotes keeps them, and a new row or column uses the file's delimiter and line breaks. Every
+  other byte stays as it was.
+- The delimiter cannot change while editing. When the one you are viewing with is not the one
+  found in the file, Edit asks first: edits written with another delimiter can shift the columns.
+- Sorting and filtering still work while editing; they never change the file.
+
+If the file changed on the host since you opened it, Save says so and writes nothing. **Reload
+and reapply** reads the file again and applies each of your changes to the row it was made on,
+found by that row's values rather than its number, so a row an agent added or removed above it
+does not matter. A change whose row is gone, or matches more than one row, is listed with why, and
+a cell's value can be copied to set it again by hand; changes after an added or deleted row that
+could not be applied are listed too, since they may concern that row. A column added or deleted
+is found again by its name in the header row, wherever that column moved, and with **Header row**
+off at its place while the file has as many columns as before; when its column is gone, or two
+columns have that name, it is listed, and so is every change after it. A pasted block finds each
+of its rows the same way and is applied whole or not at all, so one that set a row matching
+another (two empty rows, say) is listed; rows it added go at the new end of the file. When the file read again is
+no longer a table that can be edited, nothing is applied and Save stays off. Nothing is saved
+until you press Save.
+
+## Images
+
+A PNG, JPEG, GIF or WebP file (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`) opens as the picture,
+fit to the width of the view, over a checkerboard so transparent parts show. Under it are its
+size in pixels and its file size. The server checks the file's contents, not only its name: a
+file named `.png` that holds something else is not shown.
+
+An SVG file opens as its source first, like any text file. The **Image** button in its bar
+switches between the source and the picture; the choice is remembered on this device. In
+Changes, the same button switches between the diff and the pictures.
+
+**Full screen.** Tap or click an image (in Files, either side in Changes) or a Mermaid diagram
+of a Markdown preview to open it full screen:
+
+- On a phone: pinch to zoom, drag with one finger, double tap to zoom in (and again to fit).
+  The page behind does not move.
+- On a desktop: the mouse wheel (or a trackpad pinch) zooms around the pointer, dragging moves
+  the picture, and the buttons or the keys `+`, `-` and `0` zoom in, zoom out and fit.
+- Zoom goes from half the fitted size to 8 times it. A diagram or an SVG is drawn again at the
+  new size once you stop, so it stays sharp.
+- The back gesture or button, the close button and Escape close it, leaving the file where it
+  was.
+- A diagram has its Share, Copy image and Download SVG buttons in a bar at the bottom; what
+  they did shows there for a few seconds.
+
+In **Changes**, a changed image shows the version before and after, side by side on a desktop
+and one above the other on a phone:
+
+| Side                 | Before    | After          |
+| -------------------- | --------- | -------------- |
+| Not staged (Changes) | the index | the working tree |
+| Staged               | `HEAD`    | the index      |
+
+A new image shows only the after side (`Added`), a deleted one only the before side
+(`Deleted`). A renamed image reads the before side from its old path, shown next to the label.
+For a conflict, only the file as it is now in the working tree is shown. The pictures are read
+again when you press Refresh or when the file's status changes, not every 5 seconds.
+
+| Shown                                                          | Why                                                                     |
+| -------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `Larger than 10 MiB`                                            | Images over 10 MiB are not shown                                         |
+| `Too many pixels to show (over 40 megapixels)`                  | An image (or a GIF frame) over 40 million pixels, which a phone may not hold |
+| `Not previewable (not a PNG, JPEG, GIF, WebP or SVG image)`     | The contents are not one of these types (or an SVG without an `<svg>`)  |
+| `Stored in Git LFS: only the pointer is in git`                 | git holds a Git LFS pointer, not the image; termote does not fetch it   |
+| `The image could not be decoded`                                | The browser could not read the file (damaged, or a format it lacks)     |
+| `Busy, try again`                                               | Several images are being read at once; the **Retry** button reads it again |
+
+A name that usually holds secrets asks first, as for text. An SVG opened by its address never
+runs a script: the server sends it with a policy that forbids scripts, and as a download.
+
+## PDF, Excel and Word Documents
+
+A `.pdf`, `.xlsx` or `.docx` file opens as a read-only preview. Nothing can be edited in it;
+**Download** saves the whole file to open it in its own app. The file is read and taken apart
+in a background worker of the browser, so a large file does not freeze the app, and a file that
+takes too long is given up on with the reason and Download.
+
+- **PDF**: the pages scroll one after another and are drawn as they come into view. The bar
+  above shows the page you are on, the zoom with **−** and **+**, **Fit width**, and **Find**
+  (Enter and Shift+Enter go to the next and previous match, **Aa** matches case). Text can be
+  selected and copied. A link to a web page opens in a new tab; a link inside the document goes
+  to its page. Forms, scripts and attachments in the PDF are not run.
+- **Excel**: each sheet shown in Excel has a tab (the arrow keys move between tabs); hidden
+  sheets have none, and a note counts them. A sheet opens in the same table as a CSV file, with
+  filter, sort, find and records, but without editing. A cell shows its value as Excel shows it:
+  dates and percentages formatted, a formula as its value when the file was last saved (a
+  formula never calculated by Excel shows empty), an error as `#DIV/0!`. A merged cell has its
+  value in its first cell. A sheet whose text is over 1 MiB, or wider than 200 columns, shows
+  its first rows or columns, with a note and Download.
+- **Word**: the text with its headings, bold, italic, lists, tables (merged cells included),
+  links to web pages and images. Text boxes, columns, headers, footers, comments and tracked
+  changes are not shown. Links inside the document and footnote marks show as plain text. Find
+  with the browser's own find (Ctrl+F or the browser menu).
+
+On a phone the same views show, with buttons to zoom a PDF (no pinch).
+
+| Shown                                                    | Why                                                                         |
+| -------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `Larger than 30 MiB (…)`                                 | Documents over 30 MiB are not previewed; the size is shown                  |
+| `Password-protected or encrypted file`                   | An Office file saved with a password (a PDF with one says `Password-protected PDF`) |
+| `Not previewable (not a valid PDF, .xlsx or .docx file)` | The contents do not match the name                                          |
+| `The file could not be read (damaged or not supported)`  | The file is damaged, or uses something the preview cannot read              |
+| `Too large to preview once unpacked`                     | An Excel or Word file that says it unpacks to more than 200 MiB             |
+| `Took too long to open`                                  | The preview gave up; **Retry** reads it again                               |
+| `The download was cut off`                               | The connection dropped while the file was read; **Retry** reads it again    |
+
+Older formats (`.xls`, `.doc`, `.ppt`, `.pptx`) are not previewed: they show as binary files,
+with Download. Changes shows documents as binary too. A document with a name that usually holds
+secrets asks first, as for text. A view-only session sees the preview, without Download; each
+read of a document is written to the server's log.

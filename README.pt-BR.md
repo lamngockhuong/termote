@@ -27,7 +27,7 @@
   <a href="https://unikorn.vn/p/termote?ref=embed-termote" target="_blank"><img src="https://unikorn.vn/api/widgets/badge/termote?theme=dark" alt="Termote trên Unikorn.vn" width="170" height="42" /></a>
 </p>
 
-Controle remotamente ferramentas CLI (Claude Code, GitHub Copilot, qualquer terminal) de dispositivos moveis/desktop via PWA.
+Controle remotamente ferramentas CLI (Claude Code, Codex, qualquer terminal) de dispositivos moveis/desktop via PWA.
 
 > [!NOTE]
 > O Termote 1.0 nao atualiza uma instalacao 0.x. Desinstale o 0.x conforme a
@@ -48,11 +48,11 @@ Controle remotamente ferramentas CLI (Claude Code, GitHub Copilot, qualquer term
 - **Abas de sessions**: Barra de abas horizontal para troca rapida entre janelas
 - **Backend Herdr** (nativo ou no contêiner): controle workspaces do Herdr em vez do tmux, com selos de status do agente de codigo em cada painel — veja [Instalacao nativa](https://termote.ohnice.app/installation/native/)
 - **Visualizacao Chat**: leia e responda como um chat a um painel que executa Claude Code (ou Codex iniciado com `--no-daemon`), com sugestoes de comandos slash e respostas a dialogos — veja [Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
-- **Visualizacoes Files e Changes**: navegue pelo diretorio de um painel e suas alteracoes no git, com pre-visualizacao de Markdown — veja [Files and Changes](https://termote.ohnice.app/usage/files-changes/)
+- **Visualizacoes Files e Changes**: navegue pelo diretorio de um painel e suas alteracoes no git, com pre-visualizacao de Markdown — veja [Files and Changes](https://termote.ohnice.app/usage/files/)
 - **Fila de mensagens e links de arquivos no Chat**: deixe uma mensagem na fila enquanto o agente trabalha; toque em um caminho de arquivo escrito pelo agente para abri-lo no Files, na sua linha
 - **Revisao e staging**: comente linhas no Changes e no Files e envie a revisao a um agente; faca stage, unstage ou descarte uma alteracao por arquivo ou por hunk
 - **Pre-visualizacao e edicao no Files**: PDF, .xlsx e .docx somente leitura; abra e salve arquivos Shift-JIS, EUC-JP e UTF-16; edite Markdown ao lado de uma pre-visualizacao ao vivo
-- **Places**: ofereca no Files uma pasta fora do painel com `termote start --allow-path <dir>` — veja [Places](https://termote.ohnice.app/usage/files-changes/#places)
+- **Places**: ofereca no Files uma pasta fora do painel com `termote start --allow-path <dir>` — veja [Places](https://termote.ohnice.app/usage/files/#places)
 - **Tasks**: execute os scripts do `package.json` e os targets do Makefile de um painel, envie uma execucao com falha a um agente — veja [Tasks](https://termote.ohnice.app/usage/tasks/)
 - **Janelas proprias** (desktop): abra um arquivo, diff, aba, painel ou a visao geral em sua propria janela
 - **Anexos de imagem**: envie uma imagem do celular para o terminal ou para uma mensagem da visualizacao Chat, para que o agente a leia pelo caminho

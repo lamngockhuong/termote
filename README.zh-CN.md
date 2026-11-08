@@ -27,7 +27,7 @@
   <a href="https://unikorn.vn/p/termote?ref=embed-termote" target="_blank"><img src="https://unikorn.vn/api/widgets/badge/termote?theme=dark" alt="Termote trên Unikorn.vn" width="170" height="42" /></a>
 </p>
 
-通过 PWA 从移动端/桌面端远程控制 CLI 工具（Claude Code、GitHub Copilot 及任何终端）。
+通过 PWA 从移动端/桌面端远程控制 CLI 工具（Claude Code、Codex 及任何终端）。
 
 > [!NOTE]
 > Termote 1.0 不会升级 0.x 的安装。请按照[归档的 0.x 文档](https://termote.ohnice.app/0.x/)卸载 0.x，然后使用[快速开始](#快速开始)中的命令安装 1.0。
@@ -46,11 +46,11 @@
 - **会话标签**：水平标签栏，快速切换窗口
 - **Herdr 后端**（原生或容器内）：用 Herdr 工作区代替 tmux，每个窗格都显示编码代理的状态徽标——参见[原生安装](https://termote.ohnice.app/installation/native/)
 - **Chat 视图**：以对话形式阅读并回复运行 Claude Code（或以 `--no-daemon` 启动的 Codex）的窗格，支持斜杠命令提示和对话框应答——参见[Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
-- **Files 和 Changes 视图**：浏览窗格所在目录及其 git 变更，支持 Markdown 预览——参见[Files and Changes](https://termote.ohnice.app/usage/files-changes/)
+- **Files 和 Changes 视图**：浏览窗格所在目录及其 git 变更，支持 Markdown 预览——参见[Files and Changes](https://termote.ohnice.app/usage/files/)
 - **Chat 消息队列和文件链接**：代理工作时可把消息排入队列；点击代理写出的文件路径，即可在 Files 中打开该文件并定位到对应行
 - **评审与暂存**：在 Changes 和 Files 中对代码行添加评论，并把评审发送给代理；按文件或按 hunk 暂存、取消暂存或丢弃变更
 - **Files 中的预览与编辑**：只读预览 PDF、.xlsx 和 .docx；打开并保存 Shift-JIS、EUC-JP 和 UTF-16 文件；在实时预览旁编辑 Markdown
-- **Places**：通过 `termote start --allow-path <dir>` 在 Files 中提供窗格之外的文件夹——参见[Places](https://termote.ohnice.app/usage/files-changes/#places)
+- **Places**：通过 `termote start --allow-path <dir>` 在 Files 中提供窗格之外的文件夹——参见[Places](https://termote.ohnice.app/usage/files/#places)
 - **Tasks**：运行窗格的 `package.json` 脚本和 Makefile 目标，并把失败的运行发送给代理——参见[Tasks](https://termote.ohnice.app/usage/tasks/)
 - **独立窗口**（桌面端）：在独立窗口中打开文件、diff、标签页、窗格或概览
 - **图片附件**：从手机向终端或 Chat 视图消息发送图片，代理可通过路径读取

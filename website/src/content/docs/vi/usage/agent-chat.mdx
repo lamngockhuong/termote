@@ -1,15 +1,22 @@
 ---
 title: Chat với agent
-description: Đọc và trả lời Claude Code và Codex trong view chat thay cho terminal
+description: "Đọc và trả lời Claude Code, Codex trong view chat trên điện thoại thay cho terminal: tin nhắn, ảnh, lệnh slash và các hộp thoại xin quyền."
+head:
+  - tag: title
+    content: "Trả lời Claude Code và Codex từ điện thoại | Termote"
 ---
 
 import { Aside } from "@astrojs/starlight/components";
+import { Image } from "astro:assets";
+import screenshot from "../../../../assets/screenshots/phone-chat.vi.webp";
 
 Trên điện thoại, câu trả lời dài trong terminal rất khó đọc, gõ lệnh vào đó cũng vậy. Khi một
 pane chạy **Claude Code** hoặc **Codex**, header hiện nút chuyển **Terminal / Chat** (trên điện thoại là một nút
 view, chạm vào sẽ mở danh sách các view). View Chat là cách nhìn thứ hai vào cùng một phiên:
 tin bạn gửi ở đây được gõ vào pane, còn agent viết gì thì cả hai view đều thấy. Không có gì tự chạy ngầm.
 Codex dùng được theo cách tương tự, có yêu cầu riêng và một điểm khác ở hộp thoại (xem [Codex](#codex)).
+
+<Image src={screenshot} alt="View Chat trên điện thoại: thay đổi của Claude Code trên login.go dạng diff, câu trả lời của nó và ô nhập tin nhắn" width={293} densities={[1, 2]} class="phone-shot" />
 
 ## Yêu cầu
 
@@ -19,6 +26,9 @@ Codex dùng được theo cách tương tự, có yêu cầu riêng và một đ
   - **Herdr** trên mọi hệ điều hành, sau khi đã chạy `herdr integration install claude` một lần
 - Cài native (`termote start`). Container của Termote không cài sẵn Claude Code.
 - Với Codex: xem [Codex](#codex).
+
+
+Cài từ đầu? Làm theo bài [Điều khiển Claude Code từ điện thoại](/vi/guides/claude-code-from-phone/).
 
 ## View Chat hiện gì
 
@@ -43,9 +53,9 @@ Codex dùng được theo cách tương tự, có yêu cầu riêng và một đ
   [tổng quan](/vi/usage/overview/) liệt kê cả những agent con đã xong.
 - Khối code có khung ghi tên ngôn ngữ, được tô màu cú pháp và có nút Copy. Khối ` ```mermaid ` được
   vẽ thành sơ đồ, với các nút Show source, xuất ảnh và xem toàn màn hình giống
-  [bản xem trước Markdown](/vi/usage/files-changes/#xem-trước-markdown); sơ đồ không vẽ được thì vẫn
+  [bản xem trước Markdown](/vi/usage/file-previews/#xem-trước-markdown); sơ đồ không vẽ được thì vẫn
   hiện code kèm lý do.
-- Đường dẫn file thành link tới [view Files](/vi/usage/files-changes/) của pane: đường dẫn trên thẻ
+- Đường dẫn file thành link tới [view Files](/vi/usage/files/) của pane: đường dẫn trên thẻ
   tool, inline code chỉ tới một file (`src/app.ts`, `./run.sh`, `src/app.ts:42`, `src/app.ts#L42`) và
   link Markdown tương đối. Chạm vào một link sẽ mở file đó trong Files, nhảy tới dòng nếu có ghi số
   dòng. Đường dẫn tương đối được tính từ thư mục của pane, rồi mới tới thư mục gốc; đường dẫn nằm ngoài

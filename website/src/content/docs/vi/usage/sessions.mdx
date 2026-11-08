@@ -1,9 +1,14 @@
 ---
 title: Quản lý phiên
-description: Quản lý phiên terminal với tmux, Herdr, Zellij hoặc herdr-core
+description: "Quản lý phiên terminal với tmux, Herdr, Zellij hoặc herdr-core trong Termote: thêm, đổi tên, chuyển và đóng phiên, liên kết sâu và xử lý sự cố."
+head:
+  - tag: title
+    content: "Quản lý phiên tmux, Herdr và Zellij | Termote"
 ---
 
 import { Aside, Steps } from "@astrojs/starlight/components";
+import { Image } from "astro:assets";
+import screenshot from "../../../../assets/screenshots/phone-sessions.vi.webp";
 
 Dù chạy trên tmux, Herdr hay Zellij, Termote cũng tổ chức terminal theo ba cấp: **group → tab → pane**.
 Với tmux (mặc định), mỗi group là một tmux session, mỗi tab là một tmux window và mỗi pane là một
@@ -15,12 +20,14 @@ của Termote (`main`, trừ khi `TMUX_SESSION` đặt tên khác) luôn đứng
 nhớ session mình đang xem; trong cùng một session, mọi thiết bị đang gắn vào dùng chung window
 hiện tại.
 
+<Image src={screenshot} alt="Bảng Sessions trên điện thoại: các workspace cùng phiên của chúng, trạng thái từng agent và nút New session" width={293} densities={[1, 2]} class="phone-shot" />
+
 ## Phiên mặc định
 
 Cài đặt mới bắt đầu với một phiên **Shell** (group) duy nhất. Tạo thêm group khi cần cho các
 workflow khác nhau (ví dụ: Claude Code, Copilot, build).
 
-## Quản lý phiên
+## Thêm, sửa và chuyển phiên
 
 ### Desktop
 

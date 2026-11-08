@@ -1,0 +1,140 @@
+---
+title: Control Claude Code from Your Phone
+description: "Three ways to watch and answer Claude Code on your machine from a phone: Anthropic's Remote Control, SSH with tmux, and self-hosted Termote, step by step."
+head:
+  - tag: title
+    content: "How to Control Claude Code from Your Phone (Self-Hosted)"
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+import { Image } from "astro:assets";
+import screenshot from "../../../assets/screenshots/phone-chat.webp";
+
+Claude Code runs on your computer, in a terminal, and every now and then it stops: to ask for a permission, to
+ask a question, or because it finished. If you are not at your desk, it waits. This guide compares three ways to
+reach that session from a phone, then sets up the self-hosted one, Termote, step by step.
+
+<Aside>
+  The comparison was checked against each tool's own documentation in November 2026. Tools change: follow the links
+  to confirm a detail that matters to you.
+</Aside>
+
+## Three Ways to Reach Claude Code from a Phone
+
+### Anthropic's Remote Control
+
+[Remote Control](https://code.claude.com/docs/en/remote-control) connects the Claude app or claude.ai/code to a
+Claude Code session on your machine. `claude remote-control` waits for connections and can start new sessions from
+the phone; it shows a QR code to scan.
+
+- **Good:** nothing to install on the phone besides the Claude app, no port opened on your machine (it makes
+  outbound HTTPS requests only), images and files from the phone, and the session reconnects after the laptop
+  sleeps.
+- **Limits:** it needs a Pro, Max, Ultra, Team or Enterprise plan; API keys are not supported, and on Team and
+  Enterprise an Owner has to turn it on. While connected, the session's transcript is stored on Anthropic's
+  servers. It shows Claude Code only, not your other terminals or agents.
+
+### SSH, tmux and a Phone Terminal
+
+Run Claude Code inside [tmux](https://github.com/tmux/tmux) on the computer, then connect from an SSH app on the
+phone (Termius, Blink Shell or another) and attach to the tmux session.
+
+- **Good:** works with any plan or an API key, and with every terminal program, not only Claude Code; nothing
+  leaves your network but the SSH connection you set up.
+- **Limits:** you read Claude Code as a terminal on a phone screen and type its keys on a phone keyboard; a phone
+  usually suspends the SSH app in the background, so the connection drops and you attach again (Mosh helps); nothing tells you when Claude Code is
+  waiting for you.
+
+### Termote
+
+[Termote](/) is a self-hosted web app (MIT License) that serves your tmux, Herdr or Zellij sessions to a browser,
+with Claude Code and Codex shown as a chat.
+
+- **Good:** works with however Claude Code is signed in (a plan or an API key), since Termote only reads and types
+  into its terminal; a [Chat view](/usage/agent-chat/) with buttons for Claude Code's dialogs; a push
+  [notification](/usage/settings/#notify-when-an-agent-needs-me) when an agent finishes or needs you; the
+  [files and git diff](/usage/changes/) of the session; every terminal of the machine, not only Claude Code.
+  Nothing goes through a third-party server: the phone talks to your machine over the network you choose.
+- **Limits:** you install it on the computer and choose how the phone reaches it (your LAN, Tailscale or a
+  Cloudflare Tunnel); the computer must stay on, as with every option here. It is a remote shell: anyone who signs
+  in can do what your user can, so read the [security model](/usage/security/).
+
+## Set Up Termote Step by Step
+
+<Steps>
+1. **Install Termote on the computer that runs Claude Code** (Linux, macOS or Windows, no sudo). You also need
+   tmux on Linux and macOS, or psmux on Windows: see [Getting Started](/getting-started/).
+
+   ```bash
+   curl -fsSL https://termote.ohnice.app/install.sh | sh
+   ```
+
+2. **Start it on a network your phone can reach.** At home, `--lan` opens it to your LAN. Away from home,
+   [Tailscale](/installation/tailscale/) serves it over HTTPS on your tailnet, with no port opened to the Internet.
+
+   ```bash
+   termote start --lan                                    # same Wi-Fi
+   termote start --tailscale myhost.tailnet-name.ts.net   # anywhere, over Tailscale HTTPS
+   ```
+
+3. **Open it on the phone.** `termote url --qr` prints a QR code of the address; scan it, then sign in with the name
+   and password `termote start` printed (`termote show-password` shows them again). To skip the password on the
+   phone, [pair it](/usage/devices/) with a one-time code.
+
+4. **Add it to the home screen.** Safari: **Share → Add to Home Screen**; Chrome: **Add to Home screen** or
+   **Install app**. It then opens like an app, and on an iPhone or iPad this is what lets notifications arrive.
+
+5. **Start Claude Code in a session.** Run `claude` in a terminal on the computer inside tmux, or from the phone:
+   open a session's terminal and type it. With Herdr, an empty pane's Chat view has a **Claude Code** button that
+   starts it.
+
+6. **Answer it in Chat.** Switch the pane to **Chat**: Claude Code's messages show as a conversation, and its
+   permission dialogs and questions as buttons. Type the next message at the bottom.
+
+7. **Turn on notifications.** Settings → Sessions → **Notify when an agent needs me**: the phone gets a push when an
+   agent finishes or waits on a dialog, even with the app closed.
+</Steps>
+
+<Image src={screenshot} alt="Termote's Chat view on a phone: Claude Code's edit of login.go as a diff, its answer, and the message box" width={293} densities={[1, 2]} class="phone-shot" />
+
+## Questions
+
+### Do I need a Claude Pro or Max plan?
+
+Not for Termote. It shows the Claude Code that runs in your terminal, however it is signed in: a Pro, Max or Team
+plan, or an API key. Anthropic's Remote Control is the one that needs a plan.
+
+### Can I use an API key?
+
+Yes. Termote never talks to Anthropic; Claude Code does, with whatever credentials it already has.
+
+### Can I start a new Claude Code session from my phone?
+
+Yes. Add a session from the sessions list (**New session**) and type `claude` in its terminal, or, with Herdr, tap
+**Claude Code** in an empty pane's Chat view. See [Sessions](/usage/sessions/) and
+[Agent Chat](/usage/agent-chat/#starting-an-agent-herdr).
+
+### Does it stop when the phone locks?
+
+No. Claude Code keeps running in tmux, Herdr or Zellij on the computer, whatever the phone does. When you open
+Termote again, it reconnects and shows where the session is now; a notification tells you if the agent needed you
+meanwhile.
+
+### Is it safe to open to the network?
+
+Sign-in is on by default, the server listens only on the computer until you pass `--lan`, and it refuses host
+names that are not on its allowlist. Prefer your LAN or Tailscale to opening it to the Internet, and if you use a
+Cloudflare Tunnel, put [Cloudflare Access](/installation/cloudflare/) in front of it. The
+[security model](/usage/security/) lists what Termote protects and what it cannot.
+
+### Does it work with Codex too?
+
+Yes: the Chat view shows Codex like Claude Code, and any other agent or CLI works in the terminal view. See
+[Agent Chat](/usage/agent-chat/#codex).
+
+## Next Steps
+
+- [Agent Chat](/usage/agent-chat/) - What the Chat view shows and how to answer dialogs
+- [Agent Overview](/usage/overview/) - Every agent of every session on one screen
+- [Pair a Device](/usage/devices/) - Sign a phone in with a one-time code
+- [Remote Control alternatives](/guides/remote-control-alternatives/) - Termote and other options side by side

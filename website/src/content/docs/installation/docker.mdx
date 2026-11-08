@@ -1,6 +1,9 @@
 ---
 title: Container Installation
-description: Run the Termote server in Podman or Docker with termote container up
+description: "Run the Termote server in Podman or Docker with termote container up: options, the terminal backend, updating, troubleshooting and uninstalling."
+head:
+  - tag: title
+    content: "Run Termote in Podman or Docker | Termote"
 ---
 
 import { Aside, Steps } from "@astrojs/starlight/components";
@@ -108,7 +111,7 @@ off with `=false`.
 | `--allow-herdr-no-auth`     | Required together with `--mux herdr --no-auth`                         |
 | `--allow-host <name>`       | Allow another `Host` header name (repeatable, no wildcard)             |
 | `--remove-host <name>`      | Remove an allowed name (repeatable)                                    |
-| `--allow-path <dir>`        | Mount a host folder as a [Place](/usage/files-changes/#places) in Files (repeatable; `--remove-path` drops one) |
+| `--allow-path <dir>`        | Mount a host folder as a [Place](/usage/files/#places) in Files (repeatable; `--remove-path` drops one) |
 | `--workspace <dir>`         | Directory mounted at `/workspace` (default `~/termote-workspace`)      |
 | `--user <name>`             | Login username (default `admin`; shared with the native server)        |
 | `--fresh`                   | Set a new password (shared with the native server)                     |

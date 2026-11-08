@@ -1,0 +1,33 @@
+---
+// A page that moved: sends the reader to its new address at once, the old
+// #anchor to the page that now holds that section. GitHub Pages has no
+// server redirect, so this is a meta refresh with a canonical link, kept out
+// of search (noindex) and of the sitemap (astro.config.mjs).
+interface Props {
+  lang: string;
+  title: string;
+  to: string;
+  anchors: Record<string, string>;
+}
+const { lang, title, to, anchors } = Astro.props;
+const canonical = new URL(to, Astro.site).href;
+---
+
+<!doctype html>
+<html lang={lang}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, follow" />
+    <link rel="canonical" href={canonical} />
+    <script is:inline define:vars={{ anchors, to }}>
+      const anchor = decodeURIComponent(location.hash.slice(1));
+      location.replace((anchors[anchor] ?? to) + location.hash);
+    </script>
+    <meta http-equiv="refresh" content={`0; url=${to}`} />
+    <title>{title}</title>
+  </head>
+  <body>
+    <p><a href={to}>{title}</a></p>
+  </body>
+</html>

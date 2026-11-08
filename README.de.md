@@ -27,7 +27,7 @@
   <a href="https://unikorn.vn/p/termote?ref=embed-termote" target="_blank"><img src="https://unikorn.vn/api/widgets/badge/termote?theme=dark" alt="Termote trên Unikorn.vn" width="170" height="42" /></a>
 </p>
 
-CLI-Tools (Claude Code, GitHub Copilot, jedes Terminal) per PWA von Mobilgeräten/Desktop fernsteuern.
+CLI-Tools (Claude Code, Codex, jedes Terminal) per PWA von Mobilgeräten/Desktop fernsteuern.
 
 > [!NOTE]
 > Termote 1.0 aktualisiert keine 0.x-Installation. 0.x wie in der
@@ -48,11 +48,11 @@ CLI-Tools (Claude Code, GitHub Copilot, jedes Terminal) per PWA von Mobilgeräte
 - **Session-Tabs**: Horizontale Tab-Leiste zum schnellen Fensterwechsel
 - **Herdr-Backend** (nativ oder im Container): Herdr-Workspaces statt tmux steuern, mit Statusabzeichen des Coding-Agents in jedem Pane — siehe [Native Installation](https://termote.ohnice.app/installation/native/)
 - **Chat-Ansicht**: Ein Pane, in dem Claude Code (oder mit `--no-daemon` gestartetes Codex) läuft, als Chat lesen und beantworten, mit Vorschlägen für Slash-Befehle und Antworten auf Dialoge — siehe [Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
-- **Files- und Changes-Ansicht**: Das Verzeichnis eines Panes und seine Git-Änderungen durchsuchen, mit Markdown-Vorschau — siehe [Files and Changes](https://termote.ohnice.app/usage/files-changes/)
+- **Files- und Changes-Ansicht**: Das Verzeichnis eines Panes und seine Git-Änderungen durchsuchen, mit Markdown-Vorschau — siehe [Files and Changes](https://termote.ohnice.app/usage/files/)
 - **Warteschlange und Dateilinks im Chat**: eine Nachricht vormerken, während der Agent arbeitet; einen Dateipfad des Agenten antippen, um die Datei in Files an ihrer Zeile zu öffnen
 - **Review und Staging**: Zeilen in Changes und Files kommentieren und das Review an einen Agenten senden; eine Änderung pro Datei oder pro Hunk stagen, unstagen oder verwerfen
 - **Vorschau und Bearbeitung in Files**: PDF, .xlsx und .docx schreibgeschützt ansehen; Dateien in Shift-JIS, EUC-JP und UTF-16 öffnen und speichern; Markdown neben einer Live-Vorschau bearbeiten
-- **Places**: einen Ordner außerhalb des Panes mit `termote start --allow-path <dir>` in Files anbieten — siehe [Places](https://termote.ohnice.app/usage/files-changes/#places)
+- **Places**: einen Ordner außerhalb des Panes mit `termote start --allow-path <dir>` in Files anbieten — siehe [Places](https://termote.ohnice.app/usage/files/#places)
 - **Tasks**: die `package.json`-Skripte und Makefile-Targets eines Panes ausführen, einen fehlgeschlagenen Lauf an einen Agenten senden — siehe [Tasks](https://termote.ohnice.app/usage/tasks/)
 - **Eigene Fenster** (Desktop): eine Datei, einen Diff, einen Tab, ein Pane oder die Übersicht in einem eigenen Fenster öffnen
 - **Bildanhänge**: Ein Bild vom Handy an das Terminal oder an eine Nachricht in der Chat-Ansicht senden, damit der Agent es über seinen Pfad lesen kann

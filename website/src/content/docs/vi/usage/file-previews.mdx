@@ -1,0 +1,366 @@
+---
+title: "Xem trước file"
+description: "Xem trước file của pane trong Termote: Markdown kèm sơ đồ, CSV và TSV dạng bảng tìm và sửa được, ảnh, cùng tài liệu PDF, Excel và Word."
+head:
+  - tag: title
+    content: "Xem trước Markdown, CSV, ảnh và PDF | Termote"
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Ngoài file text, [Files](/vi/usage/files/) hiện một số loại file đúng như bản chất của chúng: Markdown thành trang, CSV và TSV thành bảng, ảnh thành hình, còn tài liệu PDF, Excel và Word thành bản xem trước chỉ đọc.
+
+## Xem trước Markdown
+
+File Markdown (`.md`, `.markdown`, `.mdx`) mở ra ở dạng đã hiển thị: tiêu đề, danh sách, bảng
+(trên điện thoại cuộn ngang được), danh sách việc cần làm, chú thích cuối trang và code. Nút hình
+con mắt trên thanh của file chuyển qua lại giữa bản xem trước và mã nguồn; máy này sẽ nhớ lựa
+chọn đó. File Markdown lớn hơn 256 KiB mở ở dạng mã nguồn, kèm dòng báo file quá lớn để xem trước.
+
+- **Khối code** được tô màu theo ngôn ngữ ghi sau dấu mở khối (` ```ts `, ` ```bash `,
+  ` ```go `...), có nút chép cả khối. Khối viết bằng ngôn ngữ chưa hỗ trợ hiện dạng chữ thường.
+  Nút xuống dòng cũng áp dụng cho khối code.
+- **Sơ đồ Mermaid** (` ```mermaid `) được vẽ thành ảnh khi bạn cuộn tới: lưu đồ, sơ đồ tuần
+  tự, sơ đồ lớp, sơ đồ trạng thái, Gantt và các loại khác. Nút code trên thanh của khối chuyển qua lại giữa sơ đồ
+  và mã nguồn; nút chép luôn chép mã nguồn. Sơ đồ rộng thì cuộn ngang. Sơ đồ chỉ là một bức
+  ảnh: không bấm được vào node hay link bên trong, và luôn theo giao diện sáng hoặc tối của
+  Termote, dù dòng `%%{init}%%` hay khối `---` ở đầu sơ đồ đòi gì. Hình có ảnh hoặc biểu tượng
+  (`@{ img: ... }`) được vẽ mà không có ảnh, nên không tải gì. App hiện mã nguồn kèm lý do thay
+  cho sơ đồ khi sơ đồ quá lớn (hơn 50 KB hoặc hơn 500 đường nối), không phải Mermaid hợp lệ, thuộc
+  loại bộ vẽ không biết, vẽ lâu quá 10 giây, hoặc không tải được bộ vẽ sơ đồ.
+  Bộ vẽ chỉ được tải về lần đầu có sơ đồ cần hiện, không tải sẵn khi cài app: nếu đang offline
+  mà chưa tải lần nào, sơ đồ hiện dạng mã nguồn kèm dòng `Could not load the diagram renderer`.
+  Sơ đồ được vẽ ở nền, nên dù lớn cũng không làm trang đứng.
+- **Lưu sơ đồ.** Khi sơ đồ đã vẽ xong, thanh của khối có thêm ba nút, ở chế độ toàn màn hình
+  cũng có: **Share** mở bảng chia sẻ với sơ đồ dạng PNG (trên iPad hay iPhone: Lưu hình ảnh,
+  Ghi chú, Tệp hoặc app ghi chú bất kỳ), **Copy image** đưa ảnh PNG vào bộ nhớ tạm để dán vào
+  ghi chú, còn **Download SVG** lưu sơ đồ thành file SVG. Ảnh PNG lớn gấp đôi cỡ sơ đồ (sơ đồ
+  rất lớn thì nhỏ hơn), theo giao diện sáng hoặc tối đang hiện, kèm màu nền của giao diện đó;
+  file SVG cũng giữ màu nền này. Tên file lấy theo tên file Markdown và số thứ tự sơ đồ, ví dụ
+  `README-mermaid-1.png`. Share và Copy image chỉ hiện khi trình duyệt có hai tính năng này
+  (Firefox trên máy tính và Chrome trên Linux không có Share), và chỉ trên trang an toàn: qua
+  HTTPS (như `termote start --tailscale`) hoặc trên `localhost`. Mở qua HTTP thường trong mạng
+  LAN thì chỉ còn Download SVG. Trong app đã thêm vào Màn hình chính trên iOS, Download SVG đi
+  qua bảng chia sẻ (Lưu vào Tệp). File SVG dán vào app ghi chú thường hiện ra chữ, nên ở đó hãy dùng ảnh PNG.
+- **Khối `---` ở đầu file** (thường gặp ở trang tài liệu và trang MDX) hiện thành một khối code.
+- **HTML thô và component MDX** hiện nguyên văn bản, không bao giờ được chạy. Ngoại lệ duy nhất
+  là khối `<details>` cùng `<summary>` của nó: khối hiện thành một mục chạm vào để mở ra, phần
+  Markdown bên trong vẫn hiển thị như thường. Trong các thuộc tính của thẻ, chỉ `open` được giữ;
+  `<details>` không có `</details>` đi kèm vẫn hiện dạng văn bản.
+- **Ảnh không bao giờ được tải.** Ảnh nằm trong thư mục gốc hiện thành link mở file đó trong
+  Files; ảnh trên web hiện thành link tới trang chứa nó.
+
+Link:
+
+- Link tới file khác trong thư mục gốc (`docs/guide.md`, `../README.md`, `/src/main.go`) mở file
+  đó ngay trong tab đang xem; `guide.md#install` mở file và nhảy tới tiêu đề đó. Dấu `/` ở đầu
+  nghĩa là thư mục gốc. File đã mở ở tab khác thì app chuyển sang tab đó.
+- Giữ Ctrl (Cmd trên macOS) rồi bấm, bấm chuột giữa, hoặc nhấn giữ trên điện thoại thì link mở ở
+  tab mới.
+- Link tới thư mục hiện cây thư mục với thư mục đó đang mở.
+- `#tieu-de` cuộn tới tiêu đề trong cùng file.
+- Nút quay lại đưa bạn về file chứa link vừa bấm trong tab đó, đúng chỗ đang đọc dở, rồi mới về cây
+  thư mục.
+- Link tới file không tồn tại báo `Not found`. Link ra ngoài thư mục gốc, hoặc dùng giao thức
+  khác `http`/`https` (`javascript:`, `file:`, `data:`), chỉ hiện dạng chữ.
+- Link `http`/`https` mở trong tab mới; rê chuột lên sẽ thấy trang mà link dẫn tới.
+
+Trong **Changes**, file Markdown có thay đổi cũng có nút con mắt phía trên diff: bấm vào sẽ thấy
+phiên bản hiện tại của file, hiển thị theo cùng các quy tắc trên. File đã bị xoá thì không có bản
+xem trước. Link trong đó mở ở Files.
+
+## CSV và TSV dạng bảng
+
+File `.csv`, `.tsv` hay `.tab` mở ra thành bảng: khi cuộn, dòng tiêu đề vẫn nằm trên cùng và cột
+số dòng vẫn nằm bên trái; file 1 MiB cuộn mượt như file ngắn. Nút hình con mắt trên thanh của file
+chuyển qua lại giữa bảng và văn bản gốc; máy này nhớ lựa chọn đó, tách riêng với lựa chọn của
+Markdown. Trong Changes, diff của file CSV hiện dạng văn bản trước; nút con mắt phía trên diff cho
+xem phiên bản hiện tại của file dưới dạng bảng, chỉ để đọc (muốn sửa thì bấm Edit). File đã bị xoá
+thì không có bảng.
+
+- **Dấu phân cách**: file `.tsv` hay `.tab` luôn đọc theo dấu tab. Với file `.csv`, dấu phân cách
+  được đoán từ vài dòng đầu (dấu phẩy, chấm phẩy, tab hoặc gạch đứng); menu **Delimiter** đọc lại
+  file theo dấu khác.
+- **Dấu ngoặc kép** theo RFC 4180: giá trị nằm trong ngoặc kép có thể chứa dấu phân cách, xuống
+  dòng, và `""` để ghi một dấu ngoặc kép. Ô có giá trị xuống dòng hiện `↵` ở chỗ xuống dòng.
+- **Header row** (bật sẵn) lấy dòng đầu làm tên cột. Tắt đi thì cột tên là `Column 1`,
+  `Column 2`…, còn dòng đầu thành một dòng như mọi dòng khác.
+- **Sắp xếp**: bấm tên cột để xếp theo cột đó, bấm lần nữa để đảo chiều, lần thứ ba để về thứ tự
+  trong file. Chữ so không phân biệt hoa thường, còn các cụm chữ số so theo giá trị (`item 2` đứng
+  trước `item 10`; số thập phân được so từng cụm chữ số, nên `1.5` đứng sau `1.25`). Ô rỗng luôn
+  nằm cuối, và dòng tiêu đề không bao giờ bị xếp lẫn.
+- **Filter rows** chỉ giữ những dòng có ô chứa chuỗi bạn gõ, không phân biệt hoa thường, và cho
+  biết còn lại bao nhiêu dòng (`12 / 340 rows`). Bộ lọc tìm cả trong các cột đang ẩn: khi có cột
+  bị ẩn, số đếm ghi rõ điều đó (`12 / 340 rows · 2 columns hidden`).
+- **Độ rộng cột**: kéo vạch ở mép phải tên cột, bằng chuột hay ngón tay, để cột đó rộng ra hay
+  hẹp lại; kéo không bao giờ sắp xếp bảng. Nhấp đúp hoặc chạm hai lần vào vạch thì cột vừa với các
+  giá trị của nó. Với bàn phím, nhấn Tab tới vạch, rồi phím mũi tên trái và phải đổi độ rộng mỗi
+  lần 2 ký tự, Home và End đưa cột về hẹp nhất và rộng nhất, Enter cho cột vừa nội dung. Mỗi cột
+  rộng từ 4 tới 120 ký tự.
+- Nút **Columns** trên thanh có bốn phần. **Fit columns** cho mọi cột vừa với các dòng đang hiện
+  (tối đa 1000 dòng, tính từ dòng đầu tiên trên màn hình). **Reset widths** trả mọi cột về độ rộng
+  lúc bảng mới mở. **Wrap** liệt kê các cột, còn **Lines** chọn 3, 6 hay 10 dòng (mặc định 3): cột
+  được bật Wrap hiện tối đa ngần ấy dòng của mỗi giá trị (chỗ xuống dòng vẫn có `↵`) và tên cột có
+  biểu tượng xuống dòng; chỉ cần một cột được bật là mọi dòng cao bằng ngần ấy dòng chữ, giá trị
+  dài hơn bị cắt bớt. Giá trị đầy đủ nằm trong bảng nhỏ của ô đó, hoặc trong ô sửa khi đang sửa.
+- Mỗi tên cột có nút ⋯ (hiện khi rê chuột, trên màn hình cảm ứng thì luôn hiện); nhấp phải vào tên
+  cột cũng mở đúng menu ấy. **Pin column** ghim cột đó, cả tên cột, ở bên trái cạnh số dòng: cột vẫn
+  đứng đúng chỗ của nó cho tới khi bảng cuộn ngang tới, rồi dừng lại ở đó, các cột phía trước trượt
+  xuống dưới nó. Mỗi lần chỉ ghim được một cột; **Unpin column** trong cùng menu bỏ ghim. Khi đang
+  có cột được ghim, menu **Columns** cũng có mục **Unpin tên cột** để bỏ ghim. Khi số dòng và cột
+  được ghim chiếm quá nửa chiều rộng bảng (trên điện thoại, hoặc cột rất rộng), cột đó cuộn theo các
+  cột khác để vẫn đọc được bảng. **Hide column** trong menu ⋯ ẩn cột đó, giống **Show** bên dưới;
+  cột đang ghim mà bị ẩn thì cũng thôi được ghim.
+- **Show** trong menu **Columns** liệt kê các cột, cột nào đang hiện thì có dấu chọn: bỏ dấu chọn
+  để ẩn cột đó khỏi bảng và khỏi Records, nơi cũng ghi có bao nhiêu cột đang ẩn. **Show all** hiện
+  lại tất cả. Không ẩn được cột cuối cùng còn hiện; ẩn cột đang dùng để sắp xếp thì bảng trở về thứ
+  tự trong file. Phím mũi tên, Home, End và Tab trong ô sửa đều
+  bỏ qua cột ẩn, và **Fit columns** chỉ chỉnh các cột đang hiện.
+- **Records** hiện từng dòng một dưới dạng `cột: giá trị`, có nút trước và sau, dành cho điện
+  thoại khi một dòng rộng hơn màn hình. Bấm hoặc chạm số dòng để mở đúng dòng đó trong Records;
+  tắt Records thì bảng vẫn ở đúng chỗ bạn đã rời đi.
+- Chạm vào một ô (hoặc nhấn Enter trên ô đó) để xem đủ giá trị, kèm nút chép. Mỗi ô hiện tối đa
+  1024 ký tự; giá trị đầy đủ chỉ có trong bảng hiện ra khi chạm. Dùng chuột thì khác: nhấp một lần
+  chỉ chọn ô, như trong bảng tính, còn nhấp đúp mới mở ô: mở trong bảng nhỏ, hoặc với file sửa được
+  thì sửa ngay trong ô (xem mục dưới); giá trị mở từ Records vẫn hiện trong bảng nhỏ.
+- Dòng có số ô khác với dòng tiêu đề thì số dòng chuyển màu cam; rê chuột lên số dòng, hoặc trình
+  đọc màn hình, sẽ cho biết dòng đó có bao nhiêu ô.
+- Trên bàn phím, các phím mũi tên, Page Up và Page Down đi giữa các ô; Home và End tới cột đầu và
+  cột cuối của dòng, còn Ctrl+Home và Ctrl+End (Cmd trên macOS) tới ô đầu và ô cuối của bảng, theo
+  thứ tự đang hiện.
+
+Sắp xếp, lọc, đổi dấu phân cách, bật tắt dòng tiêu đề, độ rộng cột, các cột bật Wrap, cột ghim và
+cột ẩn chỉ đổi cách hiển thị. Không có gì được ghi vào file, và các lựa chọn này mất khi đóng file.
+Riêng độ rộng, Wrap, số dòng Lines, cột ghim và cột ẩn vẫn còn khi bạn sang tab khác rồi quay lại,
+và về mặc định khi đổi dấu phân cách hay bật tắt dòng tiêu đề.
+
+| Thông báo                                               | Lý do                                                                   |
+| ------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `Unclosed quote on line N: shown as source`             | Dấu ngoặc kép mở ở dòng đó không bao giờ đóng; file hiện ở dạng văn bản gốc |
+| `Showing 200 of N columns. See all in Source`           | Chỉ 200 cột đầu được hiện; văn bản gốc có đủ                             |
+| `No rows`                                               | File rỗng                                                               |
+
+<Aside type="caution">
+  Giá trị chỉ được hiện dạng chữ, không bao giờ được chạy: công thức như `=HYPERLINK(...)` hiện
+  đúng như đã gõ. Những ký tự có thể khiến một giá trị đọc ra thành giá trị khác, như ký tự đảo
+  chiều chữ làm `0001` đọc thành `1000`, ký tự điều khiển và khoảng trắng độ rộng 0, đều hiện
+  thành dấu như `⟨U+202E⟩`. Nút chép trong bảng của một ô chép chính giá trị đó, gồm cả những ký
+  tự kể trên, không kèm dấu ngoặc kép bao quanh nó trong file.
+</Aside>
+
+### Tìm trong bảng
+
+Nhấn Ctrl+F (Cmd+F trên macOS) trên bảng, dù đang chỉ xem hay đang sửa, thì một hộp tìm mở ra
+ngay dưới thanh trên cùng; chữ tìm lần trước được chọn sẵn để gõ đè. Khác **Filter rows**, hộp tìm
+không giấu dòng nào: ô khớp được tô nền, ô khớp hiện tại có thêm viền, và hộp đếm số ô khớp
+(`3 of 17`). Nhấn Ctrl+F trong ô lọc, trong ô đang sửa hay trong bảng nhỏ thì vẫn là tìm của
+trình duyệt.
+
+- Enter và Shift+Enter trong hộp, hoặc F3 và Shift+F3 ở bất kỳ đâu trong bảng, đưa tới ô khớp kế
+  tiếp hay ô trước đó, hết cuối thì vòng về đầu, và cuộn ô đó vào tầm nhìn. Bấm từ hộp thì con trỏ
+  vẫn ở trong hộp; bấm từ một ô thì con trỏ sang ô khớp. Hộp đã đóng mà nhấn F3 thì hộp mở lại và
+  đi tới ô khớp kế tiếp. Đang sửa trong ô mà nhấn F3 thì giá trị được ghi trước, như khi rời ô.
+- Thứ tự ô khớp đi theo từng dòng đúng như đang hiện (sau khi sắp xếp và lọc), trong mỗi dòng thì
+  theo các cột đang hiện. Dòng tiêu đề và cột ẩn không được tìm; khi có cột ẩn, hộp ghi rõ điều đó.
+- Mặc định không phân biệt hoa thường và khớp một phần giá trị. **Aa** phân biệt hoa thường,
+  **ab** có khung chỉ khớp khi cả giá trị trùng, còn **.\*** coi chữ gõ vào là biểu thức chính quy
+  (JavaScript, có Unicode); biểu thức sai thì hộp báo `Invalid pattern`. Hộp tìm trên cả giá trị,
+  kể cả phần quá 1024 ký tự mà ô không hiện. Ký tự làm chữ bị ẩn hay đảo thứ tự, nếu gõ vào hộp,
+  hiện ngay bên dưới dưới dạng `⟨U+XXXX⟩`.
+- Sau khi sửa, sắp xếp, lọc hay ẩn cột, bảng tìm lại: ô khớp hiện tại giữ nguyên chỗ nếu ô đó vẫn
+  khớp, không thì chuyển sang ô khớp kế tiếp.
+- Esc hoặc nút đóng tắt hộp tìm và đưa con trỏ về ô khớp hiện tại.
+
+Biểu thức chính quy, và mọi lần tìm trên file lớn hơn 256 KiB, chạy tách khỏi trang nên bảng không
+bao giờ bị treo; lần tìm nào chạy quá 10 giây (lần đầu là 30 giây, trong lúc phần tìm còn đang
+tải) thì bị dừng và hộp báo `Search took too long`; biểu thức lồng quá sâu so với khả năng của
+trình duyệt thì hộp báo `Search failed`. Hộp đếm tối đa 100.000 ô khớp (`100000+`).
+
+### Chọn, chép và dán
+
+Có chuột và bàn phím thì giữ Shift cùng phím mũi tên, Home, End, Page Up hay Page Down (cả
+Ctrl+Home, Ctrl+End) để mở rộng một vùng ô tính từ ô đang chọn; Shift+nhấp, hoặc kéo chuột từ ô
+này sang ô khác, chọn các ô ở giữa, và kéo tới gần mép trên hay mép dưới của bảng thì bảng tự cuộn.
+Nhấn phím mũi tên không kèm Shift, nhấp một ô hay nhấn Esc thì bỏ vùng chọn. Trên điện thoại không
+chọn vùng được.
+
+- Ctrl+C (Cmd+C trên macOS), kể cả khi chỉ xem, chép vùng đang chọn, hoặc ô đang chọn, hoặc cả dòng
+  khi đang ở số dòng, theo kiểu bảng tính: các ô cách nhau bằng tab, mỗi dòng một hàng, đúng thứ tự
+  đang hiện và bỏ qua cột ẩn. Giá trị được chép đầy đủ, kể cả phần quá 1024 ký tự mà ô không hiện;
+  giá trị có tab, xuống dòng hay dấu ngoặc kép được bọc trong ngoặc kép để khi dán vẫn nằm gọn trong
+  một ô. Mỗi lần chép tối đa 100.000 ô.
+- Ctrl+V khi đang sửa dán một khối chép từ bảng tính hay từ bảng khác, bắt đầu từ ô đang chọn (hoặc
+  ô trên cùng bên trái của vùng chọn), theo các dòng và cột đang hiện, thành một thay đổi duy nhất
+  mà một lần Ctrl+Z là lùi lại được; ô nhận đúng giá trị đang có thì giữ nguyên. Khối rộng hơn số
+  cột còn lại thì bị từ chối. Khối dài hơn số dòng còn lại thì, khi bảng không sắp xếp và không
+  lọc, hộp thoại hỏi có thêm số dòng cần thiết vào cuối không; đang sắp xếp hay lọc thì bị từ chối
+  kèm lý do. Khi lưu, chỉ các ô được dán là đổi.
+- Vùng chọn chứa vừa khít một số nguyên lần khối, cả theo chiều dọc lẫn chiều ngang, thì khối được
+  lặp lại cho kín vùng, giống bảng tính: chép một ô thì mọi ô trong vùng đều nhận giá trị đó, chép
+  một dòng thì mọi dòng của vùng cùng độ rộng đều nhận dòng đó, còn dòng nào trong khối thiếu ô thì
+  các ô thiếu bị để trống. Vùng khác, hoặc số thứ tự dòng khi chưa chọn vùng nào, thì khối chỉ được
+  dán một lần, từ ô trên cùng bên trái. Giới hạn 100.000 ô tính theo số ô của vùng được điền.
+- Delete hoặc Backspace khi đang sửa xóa trắng mọi ô trong vùng chọn, theo các dòng và cột đang
+  hiện, gộp thành một thay đổi mà một lần Ctrl+Z lùi lại được. Mỗi lần xóa tối đa 100.000 ô.
+- Không cần cấp quyền clipboard, nên dùng được cả qua HTTP thường trong mạng LAN, và trên máy Mac
+  khi không có chữ nào được bôi đen. Dán vào ô đang sửa, ô lọc hay hộp tìm thì chữ vào đúng ô đó.
+
+### Sửa trong bảng
+
+Bấm **Edit** khi file đang hiện dạng bảng thì bảng vẫn giữ nguyên và từng ô sửa được; thanh trên
+cùng có **Cancel** và **Save** như với mọi file. Mở từ Changes, hoặc đang xem văn bản gốc, thì
+file được sửa dạng văn bản.
+
+- Chạm một ô để đổi giá trị của nó trong một bảng nhỏ hiện lên: giá trị có thể nhiều dòng, và
+  những ký tự làm chữ bị ẩn hay đảo thứ tự hiện bên dưới dưới dạng `⟨U+XXXX⟩`. **Apply** đưa giá
+  trị vào bảng; ô mà một dòng thiếu cũng đặt được giá trị.
+- Dùng chuột thì giá trị được sửa ngay trong ô: nhấp đúp vào ô, hoặc nhấn F2 hay Enter trên ô đang
+  chọn. Ô đang sửa cao dần theo nội dung, phủ lên các hàng bên dưới, hiện được tới 20 dòng (dài hơn
+  thì cuộn bên trong) và rộng ít nhất 12rem. Nhấp một lần chỉ chọn ô, nên Ctrl+V khi đó dán cả khối
+  (xem mục trên); chạm trên màn hình cảm ứng, kể cả của laptop, vẫn mở ô. Đang chỉ xem một file sửa
+  được mà nhấp đúp vào ô thì bảng chuyển sang sửa trước. Enter ghi giá trị, Shift+Enter hay
+  Alt+Enter xuống dòng, Esc bỏ những gì vừa gõ; bảng vẫn ở chế độ sửa, muốn thoát thì bấm
+  **Cancel**. Tab và Shift+Tab ghi rồi sang ô kế tiếp hay ô trước, hết dòng thì sang dòng sau. Bấm
+  ra chỗ khác, hoặc cuộn ô ra khỏi màn hình, cũng ghi giá trị. Nút ⤢ trong ô mở bảng nhỏ của ô với
+  những gì bạn đang gõ, rộng chỗ hơn và có **Add row below**, **Delete row**. Giá trị dài hơn 1024
+  ký tự, hoặc có ký tự làm chữ bị ẩn hay đảo thứ tự, thì mở thẳng trong bảng nhỏ.
+- Có bàn phím thì gõ ngay trên ô đang chọn là bắt đầu sửa ô đó, chữ gõ vào thay cho giá trị cũ (Esc
+  giữ lại giá trị cũ); đang chỉ xem file thì bảng chuyển sang sửa trước. Giá trị mà ô không sửa tại
+  chỗ được thì mở bảng nhỏ với chữ vừa gõ. Delete hay Backspace xoá trắng ô, một lần Ctrl+Z trả lại
+  giá trị. Gõ bằng bộ gõ (IME) thì phím đầu tiên mở ô sửa: nếu chữ ghép đầu tiên không hiện trong
+  ô, gõ lại chữ đó trong ô. Trên điện thoại, gõ trên ô không làm gì.
+- **Insert row above**, **Add row below** (trong bảng nhỏ đó) và nút **Add a row at the end** thêm
+  một dòng trống rồi mở ô đầu tiên của nó. **Delete row** hỏi trước khi xoá, và nói rõ khi đó là
+  dòng đầu của file, tức dòng tiêu đề lúc **Header row** đang bật. Muốn xoá dòng tiêu đề, hãy tắt
+  **Header row** trước: khi đó dòng tiêu đề thành một dòng mở được như mọi dòng khác.
+- Khi đang sửa, menu ⋯ của tên cột có thêm các thao tác sửa dưới đây; nhấp phải vào một ô, hoặc
+  nhấn Shift+F10 hay phím menu ngữ cảnh trên tên cột hay một ô, cũng mở đúng menu ấy.
+  **Insert column left** và **Insert column right** thêm một cột trống: mỗi dòng đủ
+  dài để có cột đó nhận thêm một dấu phân cách, ngoài ra không đổi gì; dòng ngắn hơn và dòng trống
+  giữ nguyên. Khi **Header row** bật, tên cột mới được hỏi ngay (Esc thì để trống). **Delete
+  column** hỏi trước và cho biết bao nhiêu ô có giá trị sẽ mất theo; không xoá được cột cuối cùng.
+  Dòng nào chỉ còn một ô rỗng thì ô đó được ghi thành `""` để dòng không thành dòng trống. Mở từ
+  một ô thì menu có thêm **Insert row above** và **Insert row below**.
+- **Rename column** trong menu đó, F2 trên tên cột, hoặc nhấp đúp vào tên (lần nhấp đầu vẫn sắp
+  xếp) cho sửa tên ngay tại chỗ khi **Header row** bật; trên màn hình cảm ứng, hoặc với tên mà ô
+  sửa tại chỗ không nhận được, tên mở trong bảng nhỏ, và bảng nhỏ đó không thêm hay xoá dòng nào
+  quanh dòng tiêu đề. Khi một cột được thêm, xoá, hoàn tác hay bị bỏ bằng **Cancel**, độ rộng,
+  Wrap, cột ẩn và cột đang sắp xếp vẫn đi theo đúng cột của chúng; cột đã xoá mà Undo đưa lại thì
+  có lại giá trị, nhưng không có lại độ rộng hay Wrap.
+- **Undo** và **Redo**, hoặc Ctrl+Z và Ctrl+Shift+Z (Cmd trên macOS) khi đang ở bảng, lùi và tiến
+  qua các thay đổi của bạn; Ctrl+S để lưu. Gõ trong bảng nhỏ, trong ô hay ô lọc thì Ctrl+Z và
+  Ctrl+Shift+Z thuộc về chỗ đang gõ; Ctrl+S trong ô thì ghi giá trị rồi lưu file.
+- Khi lưu, chỉ ký tự của những ô bạn đã đặt là đổi: giá trị cần ngoặc kép (chứa dấu phân cách,
+  dấu ngoặc kép, xuống dòng, hay khoảng trắng ở đầu hoặc cuối) được bọc ngoặc, ô vốn có ngoặc vẫn
+  giữ ngoặc, dòng hay cột mới dùng dấu phân cách và kiểu xuống dòng của file. Mọi byte khác giữ
+  nguyên.
+- Trong lúc sửa không đổi được dấu phân cách. Nếu dấu bạn đang dùng để xem khác dấu dò được trong
+  file, Edit hỏi trước: ghi bằng dấu khác có thể làm lệch cột.
+- Sắp xếp và lọc vẫn dùng được khi sửa, và không bao giờ đổi file.
+
+Nếu file trên máy đã đổi từ lúc bạn mở, Save báo như vậy và không ghi gì. **Reload and reapply**
+đọc lại file rồi áp từng thay đổi của bạn vào đúng dòng đã sửa. Dòng được tìm theo các giá trị
+của nó chứ không theo số thứ tự, nên một dòng agent thêm hay xoá phía trên không ảnh hưởng gì.
+Thay đổi nào không còn dòng của nó, hoặc khớp với nhiều hơn một dòng, sẽ được liệt kê kèm lý do,
+và giá trị của ô đó chép được để đặt lại bằng tay. Các thay đổi nằm sau một lần thêm hay xoá dòng
+không áp được cũng được liệt kê, vì chúng có thể nhắm vào chính dòng đó. Cột được thêm hay xoá
+thì được tìm lại theo tên ở dòng tiêu đề, dù cột đó đã dời đi đâu; khi **Header row** tắt thì
+tìm theo vị trí, miễn file vẫn có đúng số cột như trước. Không còn cột đó, hoặc có hai cột cùng
+tên, thì thay đổi ấy được liệt kê, cùng mọi thay đổi sau nó. Khối đã dán cũng tìm lại từng dòng
+của nó theo cách đó, và chỉ được áp khi tìm đủ mọi dòng, nên khối có một dòng trùng với dòng khác
+(chẳng hạn hai dòng trống) sẽ được liệt kê; các dòng khối đó đã thêm thì được thêm lại vào cuối
+file mới. Nếu file đọc lại không
+còn là bảng sửa được, không thay đổi nào được áp và Save vẫn tắt. Chưa có gì được lưu cho tới khi
+bạn bấm Save.
+
+## Ảnh
+
+File PNG, JPEG, GIF hoặc WebP (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`) mở ra thành hình, co vừa
+chiều rộng của view, trên nền kẻ ô vuông để thấy được phần trong suốt. Bên dưới hình ghi kích
+thước tính bằng điểm ảnh và dung lượng file. Server xem nội dung file chứ không chỉ dựa vào tên: file đặt
+tên `.png` mà bên trong là thứ khác thì không được hiện.
+
+File SVG mở ra ở dạng mã nguồn trước, như mọi file văn bản. Nút **Image** trên thanh của file
+chuyển qua lại giữa mã nguồn và hình; máy này sẽ nhớ lựa chọn đó. Trong Changes, cũng nút này
+chuyển qua lại giữa diff và hình.
+
+**Xem toàn màn hình.** Chạm hoặc bấm vào một ảnh (trong Files, hay bên nào cũng được trong
+Changes) hoặc một sơ đồ Mermaid trong bản xem trước Markdown để mở nó toàn màn hình:
+
+- Trên điện thoại: chụm hai ngón để phóng to, một ngón để kéo, chạm hai lần để phóng to (chạm
+  hai lần nữa để về vừa màn hình). Trang phía sau đứng yên.
+- Trên máy tính: con lăn chuột (hoặc chụm hai ngón trên bàn di chuột) phóng to quanh con trỏ,
+  kéo chuột để di chuyển hình, còn các nút hoặc phím `+`, `-`, `0` lần lượt phóng to, thu nhỏ
+  và đưa về vừa màn hình.
+- Mức phóng đi từ một nửa đến gấp 8 lần cỡ vừa màn hình. Sơ đồ hoặc ảnh SVG được vẽ lại ở cỡ mới
+  khi bạn dừng tay, nên vẫn sắc nét.
+- Cử chỉ hay nút quay lại, nút đóng và phím Escape đều đóng nó, file vẫn ở nguyên chỗ cũ.
+- Với sơ đồ, các nút Share, Copy image và Download SVG nằm ở một thanh dưới đáy; kết quả của
+  nút vừa bấm hiện ở đó trong vài giây.
+
+Trong **Changes**, ảnh có thay đổi hiện bản trước và bản sau: trên máy tính đặt cạnh nhau, trên
+điện thoại xếp chồng lên nhau.
+
+| Phía                         | Trước  | Sau              |
+| ---------------------------- | ------ | ---------------- |
+| Chưa đưa vào index (Changes) | index  | thư mục làm việc |
+| Đã đưa vào index (Staged)    | `HEAD` | index            |
+
+Ảnh mới chỉ có bản sau (ghi `Added`), ảnh đã xoá chỉ có bản trước (ghi `Deleted`). Ảnh đổi tên
+lấy bản trước từ đường dẫn cũ, đường dẫn này ghi cạnh nhãn. Khi có conflict, chỉ hiện file đang
+nằm trong thư mục làm việc. Hình được đọc lại khi bạn bấm Refresh hoặc khi trạng thái của file
+đổi, chứ không phải 5 giây một lần.
+
+| Hiện ra                                                        | Lý do                                                                    |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `Larger than 10 MiB`                                            | Ảnh lớn hơn 10 MiB không được hiện                                        |
+| `Too many pixels to show (over 40 megapixels)`                  | Ảnh (hoặc một khung hình GIF) quá 40 triệu điểm ảnh, điện thoại có thể không chứa nổi |
+| `Not previewable (not a PNG, JPEG, GIF, WebP or SVG image)`     | Nội dung không thuộc các loại này (hoặc file SVG không có thẻ `<svg>`)   |
+| `Stored in Git LFS: only the pointer is in git`                 | git chỉ giữ con trỏ Git LFS chứ không giữ ảnh; termote không tải ảnh về  |
+| `The image could not be decoded`                                | Trình duyệt không đọc được file (file hỏng, hoặc định dạng nó không hỗ trợ) |
+| `Busy, try again`                                               | Đang có nhiều ảnh được đọc cùng lúc; nút **Retry** đọc lại ảnh đó         |
+
+Tên file thường chứa bí mật thì được hỏi trước, giống như với văn bản. File SVG mở thẳng bằng địa
+chỉ của nó không bao giờ chạy script: server gửi file kèm một chính sách cấm script, và gửi dưới
+dạng file tải về.
+
+## Tài liệu PDF, Excel và Word
+
+File `.pdf`, `.xlsx` hoặc `.docx` mở ra thành bản xem trước chỉ đọc, không sửa được gì trong đó.
+Muốn mở bằng ứng dụng của nó thì bấm **Download** để lưu cả file về máy. Trình duyệt đọc và tách
+file trong một worker chạy nền, nên file lớn không làm app đứng; file đọc quá lâu thì bị bỏ, kèm
+lý do và nút Download.
+
+- **PDF**: các trang nối nhau theo chiều dọc, trang nào cuộn tới mới được vẽ. Thanh phía trên
+  ghi trang đang xem, mức zoom với hai nút **−** và **+**, nút **Fit width** và nút **Find**
+  (Enter sang kết quả sau, Shift+Enter về kết quả trước, **Aa** phân biệt hoa thường). Chọn và
+  chép được chữ. Liên kết tới trang web mở trong tab mới, liên kết trong tài liệu nhảy tới trang
+  của nó. Biểu mẫu, script và file đính kèm trong PDF không bao giờ chạy.
+- **Excel**: mỗi sheet hiện trong Excel có một tab (phím mũi tên chuyển qua lại giữa các tab);
+  sheet bị ẩn thì không có tab, một dòng ghi chú cho biết có bao nhiêu sheet ẩn. Sheet mở ra
+  trong cùng bảng với file CSV, lọc, sắp xếp, tìm và xem từng bản ghi được, nhưng không sửa được.
+  Ô hiện giá trị đúng như Excel hiện: ngày và phần trăm theo định dạng của ô, công thức hiện giá
+  trị lúc file được lưu lần cuối (công thức Excel chưa từng tính thì ô trống), ô lỗi hiện mã lỗi
+  như `#DIV/0!`. Ô gộp có giá trị ở ô đầu tiên. Sheet có chữ quá 1 MiB, hoặc rộng quá 200 cột,
+  chỉ hiện những hàng hay cột đầu, kèm ghi chú và nút Download.
+- **Word**: chữ cùng heading, đậm, nghiêng, danh sách, bảng (kể cả ô gộp), liên kết tới trang web
+  và hình. Hộp chữ, chia cột, header, footer, bình luận và các thay đổi được theo dõi không được
+  hiện. Liên kết trỏ vào chính tài liệu và dấu chú thích cuối trang hiện thành chữ thường. Tìm chữ
+  bằng chức năng tìm của trình duyệt (Ctrl+F hoặc menu của trình duyệt).
+
+Trên điện thoại vẫn là những view này; PDF zoom bằng nút, không zoom bằng hai ngón tay.
+
+| Hiện ra                                                  | Lý do                                                                        |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `Larger than 30 MiB (…)`                                 | Tài liệu lớn hơn 30 MiB không được xem trước; dung lượng file được ghi kèm   |
+| `Password-protected or encrypted file`                   | File Office được lưu kèm mật khẩu (PDF có mật khẩu thì hiện `Password-protected PDF`) |
+| `Not previewable (not a valid PDF, .xlsx or .docx file)` | Nội dung không khớp với tên file                                             |
+| `The file could not be read (damaged or not supported)`  | File hỏng, hoặc có phần bản xem trước không đọc được                         |
+| `Too large to preview once unpacked`                     | File Excel hay Word tự khai rằng giải nén ra hơn 200 MiB                     |
+| `Took too long to open`                                  | Bản xem trước đã bỏ cuộc; nút **Retry** đọc lại                              |
+| `The download was cut off`                               | Kết nối bị ngắt lúc đang đọc file; nút **Retry** đọc lại                     |
+
+Định dạng cũ (`.xls`, `.doc`, `.ppt`, `.pptx`) không có bản xem trước: chúng hiện như file nhị
+phân, có nút Download. Trong Changes, tài liệu cũng hiện như file nhị phân. Tên file thường chứa
+bí mật thì được hỏi trước, giống như với văn bản. Phiên chỉ xem vẫn xem trước được nhưng không
+có nút Download; mỗi lần đọc một tài liệu đều được ghi vào log của server.

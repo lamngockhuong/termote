@@ -27,7 +27,7 @@
   <a href="https://unikorn.vn/p/termote?ref=embed-termote" target="_blank"><img src="https://unikorn.vn/api/widgets/badge/termote?theme=dark" alt="Termote trên Unikorn.vn" width="170" height="42" /></a>
 </p>
 
-Điều khiển từ xa các công cụ CLI (Claude Code, GitHub Copilot, terminal bất kỳ) từ mobile/desktop qua PWA.
+Điều khiển từ xa các công cụ CLI (Claude Code, Codex, terminal bất kỳ) từ mobile/desktop qua PWA.
 
 > [!NOTE]
 > Termote 1.0 không nâng cấp được bản cài 0.x. Hãy gỡ 0.x theo
@@ -48,11 +48,11 @@
 - **Tab sessions**: Thanh tab ngang để chuyển nhanh giữa các cửa sổ
 - **Backend Herdr** (native hoặc trong container): điều khiển workspace của Herdr thay cho tmux, kèm huy hiệu trạng thái của agent lập trình trên từng pane — xem [Cài đặt Native](https://termote.ohnice.app/vi/installation/native/)
 - **View Chat**: đọc và trả lời một pane đang chạy Claude Code (hoặc Codex khởi động với `--no-daemon`) như một cuộc trò chuyện, có gợi ý slash command và nút trả lời hộp thoại — xem [Chat với agent](https://termote.ohnice.app/vi/usage/agent-chat/)
-- **View Files và Changes**: duyệt thư mục của pane và các thay đổi git trong đó, xem trước file Markdown — xem [Files và Changes](https://termote.ohnice.app/vi/usage/files-changes/)
+- **View Files và Changes**: duyệt thư mục của pane và các thay đổi git trong đó, xem trước file Markdown — xem [Files và Changes](https://termote.ohnice.app/vi/usage/files/)
 - **Hàng đợi tin nhắn và link file trong Chat**: viết sẵn tin nhắn khi agent còn đang làm, tin nhắn được gửi khi agent xong; chạm vào đường dẫn file agent đã viết để mở file đó trong Files, đúng dòng
 - **Review và stage**: comment trên từng dòng trong Changes và Files rồi gửi bản review cho agent; stage, bỏ stage hoặc hủy thay đổi theo từng file hay từng hunk
 - **Xem và sửa trong Files**: xem PDF, .xlsx, .docx ở chế độ chỉ đọc; mở và lưu file Shift-JIS, EUC-JP, UTF-16; sửa Markdown cạnh bản xem trước cập nhật ngay khi gõ
-- **Places**: đưa một thư mục nằm ngoài pane vào Files bằng `termote start --allow-path <dir>` — xem [Places](https://termote.ohnice.app/vi/usage/files-changes/#places)
+- **Places**: đưa một thư mục nằm ngoài pane vào Files bằng `termote start --allow-path <dir>` — xem [Places](https://termote.ohnice.app/vi/usage/files/#places)
 - **Task**: chạy script trong `package.json` và target trong Makefile của pane, gửi lần chạy lỗi cho agent — xem [Task](https://termote.ohnice.app/vi/usage/tasks/)
 - **Cửa sổ riêng** (desktop): mở một file, diff, tab, pane hoặc trang tổng quan trong cửa sổ riêng
 - **Đính kèm ảnh**: gửi ảnh từ điện thoại vào terminal hoặc vào tin nhắn trong view Chat, agent đọc ảnh qua đường dẫn

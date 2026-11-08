@@ -1,9 +1,14 @@
 ---
 title: Session Management
-description: Managing terminal sessions with tmux, Herdr, Zellij or herdr-core
+description: "Manage terminal sessions with tmux, Herdr, Zellij or herdr-core in Termote: add, rename, switch and close sessions, deep links and troubleshooting."
+head:
+  - tag: title
+    content: "Manage tmux, Herdr and Zellij Sessions | Termote"
 ---
 
 import { Aside, Steps } from "@astrojs/starlight/components";
+import { Image } from "astro:assets";
+import screenshot from "../../../assets/screenshots/phone-sessions.webp";
 
 Termote models terminals as three levels — **group → tab → pane** — regardless of backend.
 With the default tmux backend a group is a tmux session, a tab is a tmux window and a pane is a
@@ -14,6 +19,8 @@ yourself outside Termote (`tmux new -s work`): anyone signed in to Termote can s
 type into them. Termote's own session (`main` unless `TMUX_SESSION` says otherwise) is always
 listed first. Each device remembers which session it shows; within a session, every device
 attached to it shares the current window.
+
+<Image src={screenshot} alt="The Sessions sheet on a phone: workspaces with their sessions, each agent's status, and New session" width={293} densities={[1, 2]} class="phone-shot" />
 
 ## Default Session
 

@@ -1,6 +1,9 @@
 ---
 title: Tailscale HTTPS
-description: Auto SSL via tailscale serve
+description: "Serve Termote over HTTPS on your tailnet with tailscale serve: certificates handled for you, no port opened to the Internet, and no sudo from Termote."
+head:
+  - tag: title
+    content: "Termote over HTTPS with Tailscale Serve | Termote"
 ---
 
 import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
@@ -64,7 +67,9 @@ termote start --no-tailscale
 The same `--tailscale` and `--no-tailscale` options work with `termote container up`.
 
 <Aside type="tip">
-  Tailscale is the recommended way to expose Termote securely over the internet.
+  Tailscale is the recommended way to expose Termote securely over the internet (see the
+  [security model](/usage/security/#recommendations)). To sign a phone in without typing the password,
+  [pair it](/usage/devices/) with a one-time code.
 </Aside>
 
 ## How It Works

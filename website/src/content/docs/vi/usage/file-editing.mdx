@@ -1,0 +1,319 @@
+---
+title: "Sửa file"
+description: "Sửa và lưu file text trong Termote, tạo file mới, xoá file hoặc thư mục rỗng vào thùng rác, đổi tên hoặc chuyển file, trên điện thoại hay máy tính."
+head:
+  - tag: title
+    content: "Sửa, tạo, xoá và chuyển file từ điện thoại | Termote"
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+File text mở trong [Files](/vi/usage/files/) hay [Changes](/vi/usage/changes/) đều sửa và lưu được ngay tại đó; từ Files còn tạo, xoá, đổi tên hoặc chuyển được file.
+
+## Sửa file
+
+Nút bút chì (**Edit**) trên thanh của file văn bản mở nội dung file trong trình soạn thảo, thay
+các nút khác bằng **Cancel** và **Save**. Nút này dành cho sửa nhỏ, chẳng hạn đổi
+`status: review` thành `status: approved` trong front matter của một bản ghi, khỏi phải nhờ agent
+hay gõ `sed`.
+
+Trên máy tính dùng chuột, trình soạn thảo có số dòng, tô màu mã nguồn và nhận các phím ở bảng
+dưới. Trên điện thoại hay máy tính bảng cảm ứng, văn bản vẫn nằm trong ô nhập thường như trước.
+Khi không tải được trình soạn thảo (mất kết nối), ô nhập thường hiện ra thay cho nó, kèm dòng
+`Could not load the editor` và nút **Retry**; chữ bạn đã gõ không mất trong cả hai trường hợp.
+
+| Phím                                   | Tác dụng                                                      |
+| -------------------------------------- | ------------------------------------------------------------- |
+| Ctrl+S (Cmd+S trên macOS)              | Lưu                                                           |
+| Ctrl+F (Cmd+F trên macOS)              | Tìm trong file; Enter hoặc F3 sang chỗ khớp kế tiếp, Escape đóng ô tìm |
+| Ctrl+H                                 | Tìm và thay (trên macOS còn có Cmd+Alt+F)                     |
+| Ctrl+G                                 | Nhảy tới một dòng                                             |
+| Ctrl+D (Cmd+D trên macOS)              | Chọn thêm chỗ tiếp theo giống phần đang chọn                  |
+| Alt+kéo chuột, Ctrl+Alt+↑/↓ (Cmd+Alt+↑/↓ trên macOS)            | Nhiều con trỏ                                                 |
+| Ctrl+Z, Ctrl+Shift+Z (Cmd+Z, Cmd+Shift+Z trên macOS)                   | Hoàn tác, làm lại                                             |
+| Tab, Shift+Tab                         | Thụt lề, bỏ thụt lề                                           |
+
+Trên macOS, Ctrl+H và Ctrl+G vẫn là phím Ctrl: ở đó Cmd+H ẩn trình duyệt, còn Cmd+G sang chỗ khớp
+kế tiếp. Trong trình soạn thảo, Tab dùng để thụt lề; muốn đưa con trỏ bàn phím ra ngoài, nhấn
+Ctrl+M (Shift+Alt+M trên macOS) rồi Tab. Cỡ chữ, độ rộng tab, gói dòng và phím Vim nằm trong nhóm
+Files của Settings (xem [Cài đặt](/vi/usage/settings/#trình-soạn-thảo)). Khi bật phím Vim, mọi phím
+theo Vim (`/` để tìm, `:w` để lưu), riêng Ctrl+S vẫn lưu.
+
+Đang sửa một file mà chọn một kết quả tìm của chính file đó, con trỏ nhảy tới đúng chỗ khớp. Bấm
+Edit trong Changes thì trình soạn thảo mở ở chỗ thay đổi đầu tiên của diff.
+
+- File Markdown được sửa ngay cạnh bản xem trước (xem [Sửa Markdown](#sửa-markdown)). File CSV hay TSV đang xem dạng
+  bảng thì sửa ngay trong bảng (xem [Sửa trong bảng](/vi/usage/file-previews/#sửa-trong-bảng)); đang xem văn bản gốc,
+  hoặc mở từ Changes, thì sửa ở văn bản gốc.
+- Ctrl+S (Cmd+S trên macOS) để lưu. Bấm Cancel hoặc Back khi còn thay đổi chưa lưu thì app hỏi
+  `Discard changes?` trước.
+- Xuống dòng giữ nguyên như file đang dùng: file xuống dòng kiểu Windows (`\r\n`) vẫn giữ kiểu đó.
+- Đổi view, chuyển tab, hay đóng rồi mở lại panel, văn bản đang sửa vẫn còn. Mỗi file giữ phần sửa
+  dở của riêng nó, nên sửa được nhiều file cùng lúc; file sửa từ Changes dùng chung văn bản với
+  chính file đó trong Files. Văn bản chỉ nằm trong bộ nhớ của trang, không bao giờ vào bộ nhớ của trình duyệt, nên đóng hoặc tải lại app là mất (điện thoại có
+  thể tự đóng app để chạy nền).
+- Trong **Changes**, diff của file mà working tree vẫn còn ở dạng văn bản cũng có nút Edit này
+  (ở phía đã đưa vào index thì nút là **Edit working copy**: thứ được lưu là file trong working tree). Lưu xong
+  thì diff phần chưa đưa vào index hiện ra, đã đọc lại; nếu lúc đó file đã khớp index thì danh sách hiện
+  lại, kèm `No changes left in <file>`.
+
+Khi lưu không thành công, văn bản của bạn vẫn còn trong ô:
+
+| Hiện ra                                               | Nên làm gì                                                                                          |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `The file changed on the host since you opened it`    | Có thứ gì đó (thường là agent) vừa ghi vào file. **Reload** đọc lại file và bỏ văn bản của bạn; **Copy my text** chép văn bản đó ra trước. Lưu không bao giờ ghi đè thay đổi kia. |
+| `This pane's folder changed`                           | Pane đã chuyển sang thư mục khác. Chép văn bản của bạn ra, rồi bấm Cancel để xem file ở thư mục mới. |
+| `Not sure the file was saved. Saving again is safe.`   | Mất kết nối, hoặc server không trả lời trong 30 giây. Cứ lưu lại: cùng một nội dung thì không tính là xung đột. |
+| `The server can't write this file`                     | File chỉ đọc, thuộc người dùng khác, hoặc thư mục chứa nó không ghi được                                    |
+| `The file system there is read-only`                   | File nằm trên ổ đĩa hay mount chỉ đọc, ví dụ volume container gắn ở chế độ chỉ đọc                          |
+| `The host's disk or quota is full`                     | Ổ đĩa của máy chủ, hoặc hạn mức đĩa của bạn, đã hết chỗ                                                     |
+| `Line 3 has "😀", which Shift-JIS can't hold`          | Bảng mã của file không có ký tự này (xem [Bảng mã](#bảng-mã)). Đổi ký tự đó, hoặc lưu thành UTF-8           |
+| `Reload the app to save this file`                     | Văn bản do một bản Termote cũ giữ lại, cho một file giờ không còn là UTF-8. Chép văn bản ra, tải lại app rồi mở lại file |
+
+Có những file không có nút Edit, vì server sẽ từ chối khi lưu: liên kết mềm (hay file nằm dưới một
+thư mục là liên kết mềm), file có nhiều liên kết cứng, file trộn nhiều kiểu xuống dòng hoặc có ký tự NUL, file
+lớn hơn 1 MiB, ảnh, và file trong thư mục dữ liệu hay thư mục upload của chính Termote. File mà
+mã hoá lại không ra đúng các byte cũ cũng vậy (xem [Bảng mã](#bảng-mã)). File có thể chứa bí mật
+thì sửa được sau khi đã bấm hiện nội dung.
+
+<Aside type="caution">
+  Lưu là thay file bằng một file mới trong cùng thư mục. Nếu agent ghi đúng file đó vào khoảnh khắc
+  giữa lần kiểm tra cuối và lúc thay, thay đổi của agent sẽ mất. File mới giữ quyền truy cập của
+  file cũ, nhưng không giữ thuộc tính mở rộng hay ACL.
+</Aside>
+
+Phiên chỉ xem (khi đã có quyền này) không có nút Edit. Chừng nào server chưa kiểm quyền, nút này
+chỉ được ẩn trong app.
+
+### Sửa Markdown
+
+Khi sửa file Markdown, nút cạnh **Save** (trên điện thoại thì nằm trong menu **More actions**) chọn
+một trong ba cách hiển thị. Lựa chọn được nhớ trên thiết bị này:
+
+| Cách hiển thị                    | Thấy gì                                                                                          |
+| -------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `Source and preview` (mặc định)  | Trình soạn thảo bên trái, file đã hiển thị bên phải                                              |
+| `Source`                         | Chỉ có trình soạn thảo                                                                           |
+| `Preview`                        | Chỉ có file đã hiển thị. Trình soạn thảo chỉ bị ẩn đi: khi quay lại vẫn hoàn tác được, con trỏ vẫn ở chỗ cũ, và Ctrl+S vẫn lưu |
+
+- Muốn xem song song thì cần chuột và view Files rộng từ 768 px trở lên: kéo rộng panel bên cạnh,
+  hoặc mở file trong cửa sổ riêng. Hẹp hơn, hoặc trên màn hình cảm ứng, nút chỉ chuyển qua lại
+  giữa văn bản gốc và bản xem trước; khi đủ chỗ, cách hiển thị đã chọn tự quay lại.
+- Gõ xong một lúc thì bản xem trước cập nhật theo (bản đang sửa dài hơn 65.536 ký tự thì chờ lâu
+  hơn một chút). Sơ
+  đồ Mermaid giữ hình cũ trong lúc bạn gõ mã của nó, và vẽ lại khi mã đứng yên một lúc; mã gõ dở
+  chưa vẽ được thì lý do hiện dưới thanh của sơ đồ.
+- Khi xem song song, hai bên cuộn cùng nhau: cuộn bên nào thì đoạn tương ứng của file lên đầu bên
+  kia.
+- Bấm một liên kết trong bản xem trước sẽ mở file kia; Back đưa bạn về bản đang sửa, trình soạn
+  thảo vẫn ở chỗ cũ.
+- Bản đang sửa dài hơn 262.144 ký tự thì chỉ hiện văn bản gốc, kèm dòng
+  `Too large to preview: shown as source`.
+
+#### Dán ảnh
+
+Dán một ảnh (ảnh chụp màn hình, ảnh chép từ app khác) vào trình soạn thảo của file Markdown, ảnh
+được lưu trên máy chủ cạnh file đó: vào thư mục `assets` của file nếu có, không thì vào chính thư
+mục chứa file, với tên `pasted-<ngày>-<giờ>.png` (hoặc `.jpg`, `.gif`, `.webp`). Trong lúc gửi,
+chỗ con trỏ có `![Uploading …]()`; gửi xong, chỗ đó thành liên kết tới ảnh, tính từ file, ví dụ
+`![pasted-20261027-090507](assets/pasted-20261027-090507.png)`. Hoàn tác thì liên kết mất, còn ảnh
+vẫn nằm trên máy chủ.
+
+- Nhận PNG, JPEG, GIF và WebP, tối đa 10 MB và 40 megapixel. Ảnh HEIC (ảnh chụp từ iPhone) bị từ
+  chối: hãy chia sẻ ảnh ở dạng JPEG.
+- Chép từ bảng tính hay trang web thì clipboard có cả văn bản: dán ra vẫn là văn bản.
+- Không thư mục nào được tạo, không file nào bị ghi đè: tên đã có thì ảnh mang thêm `-2`, `-3`, cứ
+  thế tiếp.
+- Dán liền nhiều ảnh thì chúng được gửi lần lượt.
+- Bỏ bản đang sửa, hoặc xoá chỗ giữ chỗ, trước khi ảnh tới thì không có liên kết nào được thêm: một
+  thông báo cho biết ảnh đã lưu ở đâu. Nếu lưu file trong lúc đó, chỗ giữ chỗ được ghi vào file, và
+  thông báo cũng nói điều này.
+- Thư mục có thể chứa bí mật (`.ssh` và tương tự) chỉ nhận ảnh khi file đang sửa đã được bấm hiện
+  nội dung.
+- Bản xem trước không bao giờ tải ảnh: ảnh hiện thành liên kết `image: <tên>`, bấm vào thì mở ảnh
+  trong Files.
+
+### Bảng mã
+
+Dòng thứ hai trên thanh của một file văn bản ghi kích thước rồi tới bảng mã của file, ví dụ
+`12.0 KiB · Shift-JIS`. Files đọc và lưu được:
+
+- UTF-8, có hoặc không có BOM (`UTF-8 with BOM`);
+- UTF-16 LE và UTF-16 BE có BOM;
+- Shift-JIS và EUC-JP, được nhận ra khi các byte của file hợp lệ theo bảng mã đó và phần lớn văn
+  bản là chữ Nhật (kana và kanji).
+
+Khi lưu, file được ghi lại bằng chính bảng mã của nó, giữ nguyên BOM và kiểu xuống dòng: những byte
+bạn không sửa vẫn y như cũ.
+
+- Bấm vào tên bảng mã để đọc lại file bằng bảng mã khác (**Reopen with encoding**). File UTF-16
+  không có BOM, hay file Shift-JIS ngắn không có kana, mở theo cách này: ban đầu nó hiện
+  `Not previewable`, dưới tên file có **Open with encoding…**. Khi văn bản đang sửa còn thay đổi
+  chưa lưu thì không đọc lại được (`Save or discard your changes first`). Lựa chọn này chỉ áp
+  dụng cho tab đó: mở file trong cửa sổ mới, hay mở lại sau này, thì bảng mã được nhận diện lại từ
+  đầu.
+- **Save as UTF-8** nằm trong cùng menu, có ở file không phải UTF-8 thuần. Termote hỏi lại trước,
+  rồi ghi file thành UTF-8 không có BOM. Từ đó công cụ nào còn đọc file theo bảng mã cũ sẽ hiện sai
+  chữ.
+- Một số file Shift-JIS giải mã được, nhưng mã hoá lại thì không ra đúng các byte cũ, vì ký tự ở
+  vùng mở rộng của IBM (như 髙, 﨑) có hai mã. File như vậy không có nút Edit, trong menu ghi
+  `Can't be edited in this encoding`; muốn sửa thì lưu nó thành UTF-8 trước.
+- File có byte không hợp lệ theo bảng mã của nó (file bị hỏng, hoặc đọc nhầm bảng mã) sẽ hiện các
+  byte đó thành �. File như vậy không sửa được, cũng không lưu thành UTF-8 được, vì các byte đó sẽ
+  mất: menu ghi `Can't be edited: some bytes are not valid in this encoding`. Hãy thử bảng mã khác.
+- Với Shift-JIS và EUC-JP, ký tự gõ từ iPhone, iPad hay Mac mà file lưu ở dạng khác sẽ được lưu
+  theo dạng của file: 〜 → ～, − → －, ‖ → ∥, ¢ → ￠, £ → ￡, ¬ → ￢, — → ―, ¥ → ￥. Ký tự nào khác
+  mà bảng mã không chứa được, như biểu tượng cảm xúc, sẽ chặn việc lưu và báo dòng có nó:
+  `Line 3 has "😀", which Shift-JIS can't hold. Change it or save as UTF-8`. Ký tự đó không bao giờ
+  bị thay bằng `?`.
+- Các bảng mã khác (Windows-1252, Latin-1, GBK, Big5, ISO-2022-JP...) không đọc được: file như vậy
+  hiện `Not previewable`. Một file ngắn có thể tình cờ trông giống Shift-JIS; khi đó Reopen with
+  encoding cho xem nó theo bảng mã khác. Lưu cũng không âm thầm làm hỏng file, vì những byte bạn
+  không sửa được ghi lại y như cũ.
+
+## Tạo file mới
+
+Ở đầu Files có nút **New file** (hình trang giấy kèm dấu cộng). Bấm vào, app hỏi đường dẫn tính từ
+thư mục của pane, chẳng hạn `docs/notes/today.md`, và điền sẵn thư mục bạn bấm gần nhất trên cây.
+**Create** tạo một file rỗng, tạo luôn các thư mục còn thiếu trên đường dẫn, rồi mở file trong ô
+nhập văn bản, ở một tab riêng, để bạn gõ nội dung và bấm **Save**. Nút chỉ hiện khi đang xem cây,
+không hiện lúc đang xem một file.
+
+- File hay thư mục đã có thì không bao giờ bị thay: ô báo
+  `A file or directory of that name already exists`, kèm nút **Open it** để mở chính nó.
+- Tên thường chứa bí mật (ví dụ `.env.local`) thì app hỏi
+  `This name usually holds secrets. Create it anyway?` một lần; tạo xong, file mở ra luôn mà không
+  hỏi lại có hiện nội dung không.
+- Mất kết nối trước khi server trả lời thì ô báo
+  `The file may have been created. Refresh to check.`, bấm **Refresh** để đọc lại cây.
+- Đóng ô trong lúc **Create** đang chạy không dừng được nó: file vẫn được tạo và hiện trên cây,
+  nhưng không mở ra.
+- Thư mục đã tạo cho đường dẫn vẫn giữ nguyên khi một bước sau đó lỗi, giống `mkdir -p`. File mới
+  để trống cũng vẫn còn đó.
+
+**New folder** trong menu của một thư mục hay của cây (xem [Menu chuột phải](/vi/usage/files/#menu-chuột-phải))
+hỏi đường dẫn theo cùng cách, tạo một thư mục rỗng rồi hiện nó trên cây ở trạng thái đang mở. Tên
+nào bị từ chối và lời báo nào hiện ra đều giống như khi tạo file.
+
+| Hiện ra                                        | Lý do                                                                                               |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `Part of this path is a file, not a directory` | Trên đường dẫn có một chỗ là file chứ không phải thư mục                                            |
+| `Part of this path is a symbolic link`         | Trên đường dẫn có một thư mục là liên kết mềm: không bao giờ tạo gì xuyên qua liên kết mềm          |
+| `Files can't be created there`                 | Đường dẫn Termote không bao giờ trả về (xem [Không bao giờ hiện](/vi/usage/security/#không-bao-giờ-hiện)), hoặc thư mục dữ liệu hay thư mục upload của chính Termote |
+| `The server can't create a file there`         | Thư mục đó không ghi được                                                                           |
+| `The file system there is read-only`           | Thư mục nằm trên ổ đĩa hay mount chỉ đọc, ví dụ volume container gắn ở chế độ chỉ đọc               |
+| `The host's disk or quota is full`             | Ổ đĩa của máy chủ, hoặc hạn mức đĩa của bạn, đã hết chỗ                                             |
+| `This name can't be used`                      | Có phần rỗng (`a//b`, dấu `/` ở cuối), có phần kết thúc bằng dấu chấm hay khoảng trắng, có ký tự điều khiển như dấu xuống dòng, sâu quá 32 cấp hoặc dài quá 1024 byte, hoặc trên Windows có một trong các ký tự `<>:"\|?*` |
+
+<Aside type="caution">
+  File mới có thể là file mà công cụ khác tự đọc hay tự chạy, như `.claude/settings.local.json`,
+  `.vscode/tasks.json` hoặc một file trong `.github/workflows`. Ai đăng nhập được Termote thì vốn đã
+  chạy được lệnh trong terminal, nên tính năng này không cho thêm quyền gì, nhưng hãy xem kỹ thứ mình
+  tạo ở những chỗ đó.
+</Aside>
+
+Phiên chỉ xem (khi đã có quyền này) cũng không có nút New file; chừng nào server chưa kiểm quyền,
+nút chỉ được ẩn trong app.
+
+## Xoá file
+
+Trong Files, xoá được một file hoặc một thư mục **rỗng**, theo ba cách: **Delete** trong menu **⋯**
+của một dòng ở cây thư mục (dùng chuột thì nút hiện khi rê chuột hoặc khi có focus; trên màn hình
+cảm ứng thì luôn hiện), phím Delete khi dòng đang có focus, hoặc nút **Delete** trên đầu file đang
+mở (không hiện khi đang sửa file). Hộp thoại hiện đầy đủ đường dẫn và hỏi trước; **Cancel** đang
+có focus, nên nhấn Enter không xoá.
+
+- File bị xoá không mất hẳn: nó được chuyển vào thùng rác của Termote trên máy chủ. Một toast ghi
+  `Deleted <name>` kèm nút **Undo** trong 10 giây; Undo đặt file về chỗ cũ (và không bao giờ ghi
+  đè thứ gì đang có ở đó). Thư mục rỗng đã xoá thì Undo tạo lại.
+- Thùng rác giữ một file 7 ngày, tổng cộng tối đa 1 GiB (file cũ nhất bị xoá trước), và không bao
+  giờ xoá file mới hơn một giờ. Khi toast đã mất, mở [Thùng rác](#thùng-rác) để lấy file lại.
+- Thư mục không rỗng không xoá được, thư mục gốc cũng vậy.
+- Khi xoá, server kiểm tra file vẫn đúng là file bạn đã thấy. Nếu trong lúc đó có thứ gì (thường
+  là agent) đã sửa nó thì không xoá gì cả.
+- Nếu file nằm trên hệ thống file khác với thùng rác (`/mnt/c` của WSL, một ổ đĩa gắn ngoài,
+  `/workspace` của container), không thể chuyển nó vào thùng rác. Hộp thoại khi đó hỏi lần thứ
+  hai, `Delete permanently? This cannot be undone.`, và chỉ sau đó mới xoá, không có Undo. Trong
+  container, mọi lần xoá dưới `/workspace` đều là xoá vĩnh viễn theo cách này.
+- File có tên thường dùng để chứa bí mật được ghi `This is a sensitive file` trong hộp thoại.
+
+| Hiện                                                          | Vì sao                                                           |
+| ------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `The folder is not empty`                                      | Chỉ xoá được thư mục rỗng                                        |
+| `The file changed since it was read`                           | File đã đổi sau khi hộp thoại đọc nó                             |
+| `Part of this path is a symbolic link`                         | Không xoá gì qua link, và bản thân link cũng không bị xoá        |
+| `This file has several hard links; delete it from a terminal`  | Một tên khác vẫn giữ file lại                                    |
+| `The server can't delete this`                                 | File thuộc về người dùng khác                                    |
+| `The file system there is read-only`                           | File nằm trên đĩa hoặc mount chỉ đọc                             |
+| `Too large to delete here; use the terminal`                   | File lớn hơn 512 MiB                                             |
+| `Deleting is not available on this server`                     | Server không có thùng rác dùng được                              |
+
+Phiên chỉ xem (khi vai trò đó có) không có nút Delete; cho tới khi server áp dụng vai trò, nút chỉ
+bị ẩn trong ứng dụng.
+
+<Aside type="note">
+  `termote uninstall` giữ lại thùng rác và in ra đường dẫn của nó; `termote uninstall --purge`
+  xoá cả thùng rác. Xem [Gỡ cài đặt](/vi/installation/native/#gỡ-cài-đặt).
+</Aside>
+
+### Thùng rác
+
+Nút **Trash** trên đầu Files mở một bảng liệt kê những gì đã xoá trong thư mục đang hiện, mục mới
+nhất ở trên. Nút có khi phiên có toàn quyền và server có thùng rác, kể cả lúc đang mở file hay
+đang ở một Place. Mỗi mục ghi tên và thư mục chứa nó, loại (file, thư mục, hay thay đổi đã bỏ trong
+[Changes](/vi/usage/changes/#đưa-vào-index-bỏ-khỏi-index-và-bỏ-thay-đổi)), lúc xoá, kích thước và
+`Removed by <date> at the latest`. Mỗi lần mở bảng, danh sách được đọc lại.
+
+- **Restore** đặt mục về chỗ cũ, không bao giờ ghi đè thứ đang có ở đó. File nhạy cảm thì hỏi
+  trước. Với một thay đổi đã bỏ, nội dung cũ được ghi lại vào file, nhưng chỉ khi file vẫn y như
+  lúc bỏ thay đổi; tab đang mở file đó và Changes cùng đọc lại.
+- **Delete permanently** hỏi trước rồi xoá hẳn một mục, kể cả mục vừa xoá xong.
+- **Empty trash** hỏi trước rồi xoá hẳn đúng các mục đang hiện trong bảng, không mục nào khác:
+  thứ vừa xoá trong lúc đó, ở thiết bị này hay thiết bị khác, vẫn còn (và Undo của nó vẫn dùng
+  được). Khi thùng rác giữ hơn 500 mục, bảng chỉ hiện 500 mục mới nhất và chỉ xoá chúng; danh sách
+  được đọc lại để hiện các mục cũ hơn.
+- Mục đã được khôi phục hay xoá ở nơi khác thì rời khỏi danh sách, kèm thông báo
+  `Already restored or removed`.
+- Chỉ phiên có toàn quyền mới thấy Trash; phiên chỉ xem không có nút này.
+
+<Aside type="caution">
+  Bảng chỉ hiện những gì đã xoá khi thư mục đang hiện là thư mục gốc. Thứ xoá từ thư mục khác,
+  trước khi `cd` vào thư mục con hay từ một Place hoặc repository chứa thư mục này, nằm trong
+  Trash của thư mục đó: hãy mở nó ở đấy. File trên hệ thống file khác với thùng rác bị xoá vĩnh
+  viễn, nên không bao giờ có trong Trash.
+</Aside>
+
+## Đổi tên hoặc chuyển file
+
+Trong Files, đổi tên một file bằng **Rename** trong menu **⋯** của dòng file đó ở cây thư mục,
+hoặc bằng nút **Rename** trên đầu file đang mở (nút này không hiện khi đang sửa; file còn thay đổi
+chưa lưu thì đổi tên từ dòng của nó trên cây). Trên điện thoại, đặt ngón tay giữ yên trên một dòng
+cũng mở menu đó. Hộp thoại hiện đường dẫn tính từ thư mục của pane, phần tên (không kèm đuôi) được
+chọn sẵn.
+
+- Sửa phần thư mục trong đường dẫn là chuyển file sang chỗ khác. Thư mục chưa có sẽ được tạo.
+- Không bao giờ ghi đè: nếu đã có file hay thư mục mang tên mới, hộp thoại báo và cho nút
+  **Open it**.
+- Tab đang mở, các thay đổi chưa lưu và trình sửa trong Changes của file đều đi theo đường dẫn mới,
+  ở mọi pane đang xem cùng thư mục. Lưu sau đó là ghi vào đường dẫn mới.
+- Một toast ghi `Renamed <old> to <new>` (hoặc `Moved <name> to <folder>`) kèm nút **Undo** để đổi
+  lại tên cũ. Thư mục đã tạo cho lần chuyển vẫn còn. Nếu server không nhận tên cũ làm tên file mới
+  (tên kết thúc bằng dấu chấm hay khoảng trắng) thì không có Undo.
+- Sau đó Changes hiện một file bị xoá và một file chưa được git theo dõi, giống như sau `mv`, cho
+  tới khi bạn đưa chúng vào index; Termote không chạy `git mv`.
+- Chỉ đổi tên được file, không đổi tên thư mục hay link.
+- Tên cũ hoặc tên mới là tên thường dùng để chứa bí mật thì app hỏi thêm một lần trước khi đổi.
+
+| Hiện                                                     | Vì sao                                                                      |
+| -------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `A file or directory of that name already exists`        | Đường dẫn mới đã có thứ khác; không có gì bị ghi đè                         |
+| `This file no longer exists`                             | Có thứ đã xoá hoặc chuyển file sau khi cây thư mục được đọc                 |
+| `<path> has unsaved changes. Save or discard them first` | File ở đường dẫn mới đang được sửa                                          |
+| `The file changed while it was being renamed`            | Có thứ đã thay file trong lúc đổi tên; không có gì bị chuyển                |
+| `Can't move a file to another file system`               | Thư mục mới nằm trên đĩa hoặc mount khác; file không bao giờ bị chép        |
+| `The file is open in another program on the host`        | Windows: một chương trình khác đang giữ file mở                             |
+| `Part of this path is a symbolic link`                   | Không đổi tên gì qua link                                                   |
+| `The server can't rename this file`                      | File hoặc thư mục của nó thuộc người dùng khác, hoặc thư mục không ghi được |
+| `The file system there is read-only`                     | File nằm trên đĩa hoặc mount chỉ đọc                                        |
+
+Phiên chỉ xem không có nút Rename.
