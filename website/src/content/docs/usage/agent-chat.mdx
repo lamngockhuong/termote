@@ -88,6 +88,7 @@ gets no key at all:
 | Too long: the limit is 16 KB.                              | `text_too_long`           | The message is over 16 KB (UTF-8); split it                                                  |
 | Not sent: the input box holds part of this message         | `partial_paste`           | The input box may hold some of the message's images or text; check and clear it there        |
 | Not sent: an image is no longer on the host                | `invalid_request`         | The host deleted the upload (older than 7 days, or storage full); remove it and attach again |
+| Not sent: an earlier message to this pane is still being sent | `input_busy`           | Earlier messages to the same pane took too long to go in; nothing was typed, send it again once they are in |
 
 Every refusal that leaves something to check offers **Open terminal**.
 

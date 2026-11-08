@@ -231,11 +231,17 @@ func (a *agentAPI) startAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	// The pane's lock is the one message and answer take (Herdr's
 	// AgentSession.Target is the pane id).
-	unlock := a.input.lock(paneID)
+	work := 2*agentStartIdleWait + agentStartClearWait + 4*agentStartCallTimeout
+	holdForLock(w)
+	unlock, err := a.input.lockWithin(r.Context(), paneID, agentRequestMost-work)
+	if err != nil {
+		a.writeFailure(w, err)
+		return
+	}
 	defer unlock()
 	// Once the line is cleared the start must go on even if the client
 	// leaves, or the pane is left with nothing typed for no reason.
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 2*agentStartIdleWait+agentStartClearWait+4*agentStartCallTimeout)
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), work)
 	defer cancel()
 	if p, ok := a.starts.get(paneID, time.Now()); ok && p.ended.IsZero() {
 		if !startFinal(a.followStart(ctx, st, paneID, p)) {

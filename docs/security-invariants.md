@@ -740,7 +740,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   else `~/.claude`; psmux: `%USERPROFILE%\.claude`), and only for a process whose start time
   matches its session file's `procStart`; Herdr reports the session id itself, read from the
   server user's config dir. The session id must be a UUID. Every write (Claude Code or Codex)
-  takes a lock on the pane, re-checks the process, session and screen, and sends nothing unless
+  takes a lock on the pane, waiting for it at most `agentRequestMost` (7.5 min) less the write's own
+  bound and only while the client is there, else 409 `input_busy` with nothing sent (so a write
+  over a machine ends before its hub's `machineResponseHeaderWait` and is never delivered after
+  the hub answered 502; a test checks both bounds); it re-checks the process, session and screen, and sends nothing unless
   the screen shows the expected state (an empty input box, the dialog the client saw with a
   single-use `promptId`). A box that already holds this very message as text (an earlier send
   refused `paste_not_confirmed` whose paste showed later) gets no second paste: it is submitted
@@ -836,7 +839,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   sent to Herdr; the PWA then offers only Claude Code); arguments and the Herdr alias
   (`termote-<kind>-<8 hex>`, one retry on `agent_name_taken`) are the server's. The pane is
   resolved (`requirePane`) before the pane lock, the one message/answer take, so the locks map
-  holds only existing panes (404 `not_found`). Under it: a start of this server still running
+  holds only existing panes (404 `not_found`); the lock is waited for as theirs is (409
+  `input_busy` past it, nothing sent). Under it: a start of this server still running
   there → 409 `starting`; the pane must be an idle shell (`paneIdleShell`: one foreground
   process, the shell, leading its group, a `knownShells` name, shared with the PWA through
   `server/testdata/known-shells.json`), read again every 250 ms for 1.5 s, else 409 `pane_busy`

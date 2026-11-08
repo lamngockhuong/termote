@@ -192,6 +192,67 @@ func TestMessageSendsVerbatimAndSubmits(t *testing.T) {
 
 // A message sent while the agent redraws (the screen cleared after an
 // answer, the box not back yet) goes once the empty box shows.
+// A request waits for a pane's lock at most the time it is given, and only
+// while its client is there; a free lock is taken however short that is.
+func TestLockWithin(t *testing.T) {
+	in := newAgentInput()
+	unlock, err := in.lockWithin(context.Background(), "%3", 0)
+	if err != nil {
+		t.Fatalf("free lock: %v", err)
+	}
+	if _, err := in.lockWithin(context.Background(), "%3", 20*time.Millisecond); err != errInputBusy {
+		t.Errorf("held lock = %v, want input_busy", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := in.lockWithin(ctx, "%3", time.Minute); err != errInputBusy {
+		t.Errorf("client gone = %v, want input_busy", err)
+	}
+	// Released while another waits: that one takes it.
+	got := make(chan error, 1)
+	go func() {
+		u, err := in.lockWithin(context.Background(), "%3", time.Second)
+		if err == nil {
+			u()
+		}
+		got <- err
+	}()
+	time.Sleep(20 * time.Millisecond)
+	unlock()
+	if err := <-got; err != nil {
+		t.Errorf("after release = %v", err)
+	}
+	if u, err := in.lockWithin(context.Background(), "%3", 0); err != nil {
+		t.Errorf("released lock = %v", err)
+	} else {
+		u()
+	}
+}
+
+// A message, an answer or a start to a pane whose lock stays taken past what
+// agentRequestMost leaves them is refused input_busy, with nothing typed:
+// over a machine its hub would otherwise give up while the machine still
+// typed it.
+func TestWritesRefusedWhilePaneBusy(t *testing.T) {
+	old := agentRequestMost
+	agentRequestMost = 0
+	t.Cleanup(func() { agentRequestMost = old })
+	f := newFakeWriter()
+	a := newAgentAPI(f)
+	mux := http.NewServeMux()
+	a.registerInputRoutes(mux)
+	unlock := a.input.lock(labSession.Target)
+	defer unlock()
+	code, body := postJSON(t, mux, "/api/mux/panes/0/agent/message", map[string]string{"text": "hi", "cursor": cursorFor(testSessionID)})
+	if code != http.StatusConflict || body["code"] != "input_busy" || len(f.pasted) != 0 || len(f.keys) != 0 {
+		t.Errorf("message = %d %v, pasted %v keys %v", code, body, f.pasted, f.keys)
+	}
+	code, body = postJSON(t, mux, "/api/mux/panes/0/agent/answer", map[string]any{"promptId": "p", "choice": 1})
+	if code != http.StatusConflict || body["code"] != "input_busy" || len(f.keys) != 0 {
+		t.Errorf("answer = %d %v, keys %v", code, body, f.keys)
+	}
+}
+
 func TestMessageWaitsForRedraw(t *testing.T) {
 	shortConfirm(t)
 	f := newFakeWriter()

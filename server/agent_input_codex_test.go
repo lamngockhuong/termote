@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"strings"
@@ -339,7 +340,7 @@ func TestWriteRoutesRefuseAnAgentWithoutAReader(t *testing.T) {
 func TestWriteLockIsThePanes(t *testing.T) {
 	f := newCodexWriter()
 	a := newAgentAPI(f)
-	unlock, err := a.lockPane("0")
+	unlock, err := a.lockPane(context.Background(), "0", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -350,7 +351,7 @@ func TestWriteLockIsThePanes(t *testing.T) {
 	time.Sleep(agentCacheTTL)
 	got := make(chan struct{})
 	go func() {
-		u, err := a.lockPane("0")
+		u, err := a.lockPane(context.Background(), "0", 0)
 		if err == nil {
 			u()
 		}

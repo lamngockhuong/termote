@@ -160,7 +160,19 @@ var (
 	// queue, and the route answers 202
 	errQueued       = errors.New("queued by the agent")
 	errPartialPaste = fail(http.StatusConflict, "partial_paste", "the input box holds part of this message; clear it in the terminal")
+	// errInputBusy: the pane's lock stayed taken (earlier messages to it
+	// still being sent) past what the request may wait; nothing was typed
+	errInputBusy = fail(http.StatusConflict, "input_busy", "an earlier message to this pane is still being sent; try again")
 )
+
+// agentRequestMost bounds a write to an agent's pane from the wait for the
+// pane's lock to the end of the work under it: a request waits for the lock
+// at most agentRequestMost less its own work's bound, then answers
+// input_busy. It sits above the longest work (an agent message at its
+// limits, about 7 minutes) and below machineResponseHeaderWait, so a hub
+// never gives up on a machine still typing a queued message. A test checks
+// both.
+var agentRequestMost = 7*time.Minute + 30*time.Second
 
 // promptRecord is a dialog a client was shown, bound to the pane, the
 // session and the screen region it was read from.
@@ -181,7 +193,7 @@ type answeredMark struct {
 // agentInput holds the per-pane locks and the issued promptIds.
 type agentInput struct {
 	locksMu sync.Mutex
-	locks   map[string]*sync.Mutex
+	locks   map[string]chan struct{} // a pane's lock: a slot of one
 
 	promptsMu   sync.Mutex
 	prompts     map[string]*promptRecord // id → record
@@ -191,7 +203,7 @@ type agentInput struct {
 
 func newAgentInput() *agentInput {
 	return &agentInput{
-		locks:       map[string]*sync.Mutex{},
+		locks:       map[string]chan struct{}{},
 		prompts:     map[string]*promptRecord{},
 		answeredSig: map[string]answeredMark{},
 		captures:    newTTLCache[string](agentCacheTTL),
@@ -201,15 +213,50 @@ func newAgentInput() *agentInput {
 // lock serialises every check → capture → write → confirm sequence on one
 // pane, so two requests never interleave their keys.
 func (in *agentInput) lock(pane string) func() {
-	in.locksMu.Lock()
-	m := in.locks[pane]
-	if m == nil {
-		m = &sync.Mutex{}
-		in.locks[pane] = m
+	slot := in.slot(pane)
+	slot <- struct{}{}
+	return func() { <-slot }
+}
+
+// lockWithin is lock waiting at most wait, and only while ctx lives:
+// errInputBusy otherwise. A handler calls holdForLock first.
+func (in *agentInput) lockWithin(ctx context.Context, pane string, wait time.Duration) (func(), error) {
+	slot := in.slot(pane)
+	unlock := func() { <-slot }
+	select {
+	case slot <- struct{}{}: // free: taken even when wait is spent
+		return unlock, nil
+	default:
 	}
-	in.locksMu.Unlock()
-	m.Lock()
-	return m.Unlock
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case slot <- struct{}{}:
+		return unlock, nil
+	case <-timer.C:
+	case <-ctx.Done():
+	}
+	return nil, errInputBusy
+}
+
+// holdForLock extends the read deadline of a request whose body is read to
+// agentRequestMost, the wait for the pane's lock and the work under it:
+// past requestReadTimeout net/http's background read would cancel the
+// request's context, and a queued request would give up as busy.
+// Fails only on a writer without a connection (tests).
+func holdForLock(w http.ResponseWriter) {
+	_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(agentRequestMost + muxTimeout))
+}
+
+func (in *agentInput) slot(pane string) chan struct{} {
+	in.locksMu.Lock()
+	defer in.locksMu.Unlock()
+	slot := in.locks[pane]
+	if slot == nil {
+		slot = make(chan struct{}, 1)
+		in.locks[pane] = slot
+	}
+	return slot
 }
 
 // issuePrompt returns the promptId for a dialog, reusing one not yet used
@@ -318,8 +365,9 @@ func (a *agentAPI) writer(w http.ResponseWriter) (agentWriter, bool) {
 
 // lockPane takes the write lock of the pane paneID resolves to, keyed by the
 // backend address, so the locks map only holds panes that exist and two ids
-// of one pane share a lock.
-func (a *agentAPI) lockPane(paneID string) (func(), error) {
+// of one pane share a lock. work bounds what the request does once it holds
+// the lock: the wait for it is what agentRequestMost leaves.
+func (a *agentAPI) lockPane(ctx context.Context, paneID string, work time.Duration) (func(), error) {
 	s, err := a.session(paneID)
 	if err != nil {
 		if paneMissing(err) || errors.Is(err, errAgentUnsupported) {
@@ -331,7 +379,7 @@ func (a *agentAPI) lockPane(paneID string) (func(), error) {
 		return nil, errAgentUnsupported
 	}
 	// By the pane alone: two agents in turn on one pane share its lock.
-	return a.input.lock(s.Target), nil
+	return a.input.lockWithin(ctx, s.Target, agentRequestMost-work)
 }
 
 // sessionNow re-reads the pane's session, bypassing every cache.
@@ -424,15 +472,6 @@ func (a *agentAPI) handleMessage(w http.ResponseWriter, r *http.Request) {
 		a.writeFailure(w, errSessionChanged)
 		return
 	}
-	paneID := r.PathValue("id")
-	unlock, err := a.lockPane(paneID)
-	if err != nil {
-		a.writeFailure(w, err)
-		return
-	}
-	defer unlock()
-	// Once text is pasted, the Enter must follow even if the client goes
-	// away, or the text stays stranded in the input box.
 	// The text's longest wait for any agent: an upper bound of what
 	// sendMessage waits for it.
 	var textWait time.Duration
@@ -446,13 +485,18 @@ func (a *agentAPI) handleMessage(w http.ResponseWriter, r *http.Request) {
 		// clearDraft's checks and its wait for the box to empty
 		budget += agentConfirmWait + muxTimeout
 	}
-	if len(paths) > 0 || budget > messageBudget(0, agentConfirmWait) {
-		// The body is read: the read deadline only has to outlast the
-		// pastes, which may pass requestReadTimeout with several images
-		// or a long text. Never earlier than readDeadline set it.
-		// Fails only on a writer without a connection (tests).
-		_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(max(budget+muxTimeout, requestReadTimeout)))
+	// The body is read: the read deadline has to outlast the wait for
+	// the pane's lock and the pastes, which may pass requestReadTimeout.
+	holdForLock(w)
+	paneID := r.PathValue("id")
+	unlock, err := a.lockPane(r.Context(), paneID, budget)
+	if err != nil {
+		a.writeFailure(w, err)
+		return
 	}
+	defer unlock()
+	// Once text is pasted, the Enter must follow even if the client goes
+	// away, or the text stays stranded in the input box.
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), budget)
 	defer cancel()
 	switch err := a.sendMessage(ctx, wr, paneID, c.Session, parts, paths, body.ReplaceDraft); {
@@ -1020,15 +1064,17 @@ func (a *agentAPI) handleAnswer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	paneID := r.PathValue("id")
-	unlock, err := a.lockPane(paneID)
+	// A typed answer takes up to one poll per key; once text is typed, the
+	// key that submits it must follow even if the client goes away.
+	work := 12*agentConfirmWait + muxTimeout
+	holdForLock(w)
+	unlock, err := a.lockPane(r.Context(), paneID, work)
 	if err != nil {
 		a.writeFailure(w, err)
 		return
 	}
 	defer unlock()
-	// A typed answer takes up to one poll per key; once text is typed, the
-	// key that submits it must follow even if the client goes away.
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 12*agentConfirmWait+muxTimeout)
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), work)
 	defer cancel()
 	if err := a.answer(ctx, wr, paneID, body.PromptID, body.Choice); err != nil {
 		a.writeFailure(w, err)
