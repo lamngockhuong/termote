@@ -1,0 +1,168 @@
+---
+title: "View Changes"
+description: "Đọc những gì git báo là đã đổi trong repo của pane ngay trên điện thoại: diff của từng file, commit cuối, stage từng hunk, bình luận review và blame."
+head:
+  - tag: title
+    content: "Đọc và stage git diff từ điện thoại | Termote"
+---
+
+Khi thư mục của pane nằm trong một repo git, **Changes** liệt kê các file git báo là đã đổi và hiện diff của từng file; với ảnh là bản trước và sau. Bản thân các file của pane nằm ở [Files](/vi/usage/files/).
+
+## Changes
+
+Danh sách lấy theo `git status`, đọc lại mỗi 5 giây khi view đang mở và tab trình duyệt đang hiện.
+Danh sách chia nhóm:
+
+- **Conflicts**: file còn xung đột khi merge, chưa giải quyết
+- **Staged**: thay đổi đã đưa vào index
+- **Changes**: thay đổi trong thư mục làm việc, chưa đưa vào index
+- **Untracked**: file mới git chưa theo dõi
+
+Mỗi file có một chữ cái: `M` sửa, `A` thêm, `D` xoá, `R` đổi tên (kèm đường dẫn cũ), `C` sao chép,
+`T` đổi loại, `U` xung đột, `?` chưa theo dõi. File vừa có thay đổi đã vào index vừa có thay đổi
+chưa vào index nằm ở cả hai nhóm, mở từ nhóm nào thì thấy diff của phía đó. File chưa theo dõi mở ra thành
+toàn bộ là dòng thêm. Diff chỉ đọc các byte của file theo UTF-8: với bảng mã khác, các dòng sẽ lỗi
+chữ, còn file chưa theo dõi hay đang xung đột thì hiện như file nhị phân. Bản xem trước (phiên bản
+hiện tại của một file Markdown) thì được giải mã như trong Files.
+
+Diff hiện từng hunk với số dòng cũ và mới (trên màn hình điện thoại hẹp chỉ còn một cột), dòng
+thêm nền xanh, dòng xoá nền đỏ, vẫn giữ dấu `+` và `-` để không chỉ dựa vào màu.
+
+| Hiện                             | Vì sao                                                                       |
+| -------------------------------- | ---------------------------------------------------------------------------- |
+| `Not a git repository`            | Thư mục của pane không nằm trong repo git nào                               |
+| `Binary file changed`             | git báo thay đổi nhị phân; không có dòng nào để hiện                         |
+| `Diff truncated at 1 MiB`         | Diff của file này dài hơn 1 MiB; chỉ hiện phần đầu                          |
+| `Unresolved conflict`             | File đang xung đột được hiện nguyên, đúng như hiện có trong thư mục làm việc |
+| `No longer changed`               | Trong lúc diff đang được đọc, git không còn liệt kê phía này của file        |
+| `git took too long; trying again` | `git status` chạy quá 10 giây (repo rất lớn); view giãn dần các lần đọc lại  |
+
+Repo con (`submodule`) không được liệt kê, nội dung bên trong cũng không được so sánh.
+
+Diff cũng mở theo tab giống file trong Files (xem
+[Mở nhiều file theo tab](/vi/usage/files/#mở-nhiều-file-theo-tab)), nhưng Changes có dãy tab riêng:
+
+- Mỗi phía của một file là một tab: diff đã vào index và diff chưa vào index của cùng một file là
+  hai tab, tab phía index có thêm chữ `(staged)`. Tab đầu tiên, **Changes**, hiện danh sách.
+- Bấm một lần là mở ở tab xem trước; bấm đúp (trên danh sách hoặc trên tab) hay bấm **Edit** thì
+  tab được giữ lại. **Edit** mở trình sửa ngay trong tab đó, chuyển sang tab khác rồi quay lại thì
+  trình sửa vẫn còn, kèm phần sửa chưa lưu. Back từ diff về danh sách, tab vẫn mở.
+- Khi git không còn liệt kê một phía (đã commit, đã đưa vào index, đã hoàn lại), tab của phía đó
+  đóng lại và app báo `No changes left in <file>`. Tab đang sửa thì vẫn ở lại.
+- Đóng tab, giới hạn 10 tab, danh sách trên điện thoại, gốc đổi và file có thể chứa bí mật đều như
+  trong Files.
+- Bấm chuột phải lên một dòng của danh sách (giữ ngón tay trên điện thoại, Shift+F10 hoặc phím
+  menu) để mở menu của nó: **Open file** để mở trong Files (file đã xoá thì không có), các mục chép
+  và **Insert @path in terminal** như trong Files, rồi **Stage file**, **Unstage file** hoặc **Discard file** cho phía đó.
+
+Khi danh sách có hơn 15 mục, một ô **Filter changes…** hiện phía trên nó. Ô này giữ lại những file
+có đường dẫn chứa chuỗi bạn gõ, không phân biệt hoa thường (với file đổi tên, đường dẫn cũ cũng
+được tính). Nhóm không còn mục nào thì ẩn, số đếm là số sau khi lọc, và khi không còn gì thì hiện
+`No changes match`. Escape xoá ô. Bộ lọc chỉ nằm trong trang: nó được xoá khi bạn rời view hoặc
+khi gốc đổi.
+
+### Commit cuối
+
+Khi không còn gì để liệt kê, Changes báo `No changes since the last commit` kèm nút
+**Show last commit**. Nút này mở commit mà `HEAD` đang trỏ tới, chỉ để xem: message, hash rút
+gọn, tác giả, thời điểm và các file commit đó đã đổi, mỗi file mang chữ cái giống trong danh sách.
+Chạm vào một file để xem diff của nó; Back quay về commit, rồi về Changes.
+
+- Với commit merge, view hiện những gì nó đưa vào nhánh, tức là diff so với commit cha đầu tiên.
+- File có thể chứa bí mật được hỏi trước, giống trong danh sách; thiết bị chỉ xem không bao giờ hiện
+  file đó.
+- Nếu có commit mới trong lúc diff đang mở, view đọc lại `HEAD` và hiện commit mới.
+- Repo chưa có commit nào thì hiện `No commits yet`.
+
+View chỉ hiện commit cuối, không có lịch sử để lùi lại các commit trước.
+
+### Đưa vào index, bỏ khỏi index và bỏ thay đổi
+
+Mỗi dòng của danh sách có nút **Stage**, **Unstage** hoặc **Discard**, và đầu một diff đang mở
+cũng có các nút đó. Trong diff, mỗi hunk có nút riêng, nên có thể đưa một hunk vào index hoặc vứt
+riêng nó đi.
+
+- **Stage** đưa file (hoặc hunk) vào index, **Unstage** lấy nó ra lại. Chỉ index thay đổi; file
+  trong thư mục làm việc không bị động tới.
+- **Discard** bỏ thay đổi trong thư mục làm việc, đưa file về đúng như index đang giữ. Một hộp
+  thoại hỏi trước và hiện đường dẫn. File đã xoá được tạo lại, file chưa theo dõi thì bị xoá.
+- Discard không phải là mất hẳn. Phần bị thay thế được giữ trong thùng rác của Termote (thời gian
+  giữ xem ở [Xoá file](/vi/usage/file-editing/#xoá-file)), và toast có nút **Undo** đặt nó về. Undo chỉ chạy khi file
+  vẫn đúng như lúc discard để lại: nếu từ đó có thứ gì (thường là agent) sửa nó, không có gì bị
+  ghi đè.
+- File chưa theo dõi bị discard theo đường của việc xoá: nếu nó nằm trên hệ thống file khác với
+  thùng rác, Termote hỏi lần thứ hai trước khi xoá hẳn.
+
+Một số thay đổi chỉ áp dụng được cho cả file, hoặc không áp dụng được:
+
+- Chỉ khi thay đổi nằm ngay trong file thường, không đổi tên, không sao chép, không đổi quyền
+  hay chế độ file và không phải nhị phân thì mới áp dụng riêng được từng hunk. File đổi tên chỉ được dùng
+  **Stage** và **Unstage** cho cả file (đường dẫn cũ và mới cùng lúc).
+- File đang xung đột merge không dùng được **Stage**, **Unstage** hay **Discard** ở đây; link
+  tượng trưng và repo con thì không dùng được **Discard**. Hãy dùng terminal.
+- File đi qua một filter của git (như Git LFS) cũng không đổi được ở đây: filter đang tắt, nên
+  đưa nó vào index sẽ lưu nhầm nội dung.
+- File đã sửa hoặc đã xóa mà lớn hơn 1 MiB thì không dùng được **Discard** ở đây. File chưa
+  theo dõi thì vẫn được, vì nó bị xóa vào thùng rác.
+- Khi file đã đổi sau lúc đọc diff (hunk đã mất hoặc đã dời chỗ), app từ chối và danh sách được
+  đọc lại. Khi lệnh git khác đang giữ khoá index của repo, hãy thử lại sau giây lát.
+- File có thể chứa bí mật được hỏi xác nhận trước, giống như với diff của nó.
+- Phiên chỉ xem không đổi được gì.
+
+### Bình luận review
+
+Thay vì gõ lại tên file và số dòng vào Chat, bạn bình luận ngay trên các dòng rồi gửi cả bản review
+cho agent trong một lần.
+
+- **Chọn dòng**: bấm số dòng trong diff, hoặc trong file đang mở ở Files. Giữ Shift rồi bấm số khác
+  để kéo dài khoảng; trên màn cảm ứng thì chạm số thứ hai. Chạm lại dòng duy nhất đang chọn thì bỏ
+  chọn. Một khoảng chỉ nằm trong một hunk của diff. Trong trình soạn thảo, hãy chọn các dòng (hoặc
+  đặt con trỏ trên một dòng) rồi bấm **Comment on lines** ở đầu khung.
+- **Bình luận**: bấm **Comment** bên dưới mã, viết bình luận rồi bấm **Add** (Ctrl/Cmd+Enter, hoặc chỉ Enter nếu đã chọn trong **Cài đặt → Bàn phím**). Dòng
+  đã có bình luận được đánh dấu cạnh số dòng.
+- **Review**: nút **Review** ở đầu khung cho biết có bao nhiêu bình luận đang chờ. Bảng của nó liệt
+  kê chúng theo file, mỗi bình luận kèm các dòng và nơi đọc ra chúng (`unstaged diff`, `staged diff`,
+  `file`, hoặc `file (unsaved edits)` khi lấy từ trình soạn thảo còn thay đổi chưa lưu). Bấm vào một
+  bình luận để mở diff hoặc file của nó tại dòng đó, hoặc sửa, xoá nó. **Clear** xoá hết.
+- **Gửi**: bản review đi thành một tin nhắn, mỗi bình luận nằm dưới file và các dòng của nó, các dòng
+  được trích đúng như lúc bạn bình luận. Pane đang chạy Claude Code hoặc Codex thì tin đi tới agent
+  đó. Nếu không, hãy chọn một pane đang chạy agent; Termote nhớ lựa chọn này cho các tab của nhóm, và
+  đây cũng là lựa chọn mà [Gửi cho agent](/vi/usage/tasks/#gửi-cho-agent) của Tasks dùng.
+
+Chỉ khi agent đã nhận tin (hoặc xếp vào hàng đợi lúc đang bận) thì các bình luận mới bị xoá. Server
+từ chối thì tất cả vẫn còn. Bình luận thêm vào trong lúc đang gửi cũng được giữ lại.
+
+| Hiện                                 | Lý do                                                                     |
+| ------------------------------------ | ------------------------------------------------------------------------- |
+| `No pane runs Claude Code or Codex`  | Không agent nào nhận được bản review; hãy chạy một agent trong pane trước |
+| `Too long for one message: …`        | Bản review dài quá 16 KiB; hãy xoá hoặc rút gọn bình luận, không có gì bị cắt |
+| `Review is full (50 comments)`       | Mỗi pane giữ tối đa 50 bình luận                                         |
+| `The pane is in another folder now`  | Bình luận được viết dưới thư mục gốc khác với thư mục hiện tại của pane   |
+
+Mỗi bình luận dài tối đa 4 KiB và trích tối đa 60 dòng (số dòng còn lại được đếm). Ký tự làm đổi hoặc
+che chữ mà không hiện ra được viết thành dạng `⟨U+200B⟩`, giống như Tasks.
+
+Bản review chỉ nằm trong tab trình duyệt này (như tin nhắn Chat chưa gửi): reload hay đổi tab vẫn còn,
+đóng tab trình duyệt hoặc đăng xuất thì mất. Cửa sổ riêng (**Open in new window**) và thiết bị chỉ
+xem không có bình luận review. File có thể chứa bí mật vẫn bình luận được sau khi đã cho hiện, nhưng
+các dòng của nó không bao giờ được trích, kể cả trong tin nhắn lẫn trong những gì tab giữ lại: chỉ
+có tên file và số dòng được gửi đi.
+
+## Blame
+
+Với file nằm trong repository git, nút **Blame** trên thanh tiêu đề của trình xem (trên điện thoại
+thì nằm trong menu **More actions**) thêm một cột trước số dòng. Cột này cho biết ai sửa từng dòng
+gần nhất và cách đây bao lâu; mỗi nhóm dòng liền nhau thuộc cùng một commit chỉ ghi một lần. Dòng
+chưa commit hiện `Not committed`. Chạm vào tên để xem tóm tắt, tác giả, thời điểm và hash rút gọn
+của commit, kèm nút **Copy hash**; nhấn Escape hoặc chạm ra chỗ khác để đóng. Chạm **Blame** lần
+nữa để ẩn cột. Cột vẫn bật khi bạn mở file khác, cho tới khi tải lại Termote.
+
+- Blame lần theo các commit tới được từ `HEAD`. File chưa có trong commit gần nhất thì chưa có gì
+  để blame, và trình xem báo điều đó.
+- Nút chỉ có khi xem chữ ở chế độ đọc: không có lúc đang sửa, cũng không có ở chế độ xem trước
+  Markdown, dạng bảng hay ảnh.
+- File lớn hơn 1 MiB không được blame.
+- Nếu file trên máy chủ đã đổi kể từ lúc mở, trình xem đọc lại file trước, để mỗi tên đứng đúng
+  cạnh dòng mà nó nói tới.
+- Nếu git đếm số dòng của file khác với trình xem (file UTF-16), cột bị ẩn và có một dòng ghi chú.
+- Thiết bị chỉ xem cũng thấy blame, với những file nó được đọc.

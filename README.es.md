@@ -48,11 +48,11 @@ Controla remotamente herramientas CLI (Claude Code, Codex, cualquier terminal) d
 - **Pestanas de sesiones**: Barra de pestanas horizontal para cambiar rapidamente entre ventanas
 - **Backend Herdr** (nativo o en el contenedor): controla workspaces de Herdr en lugar de tmux, con insignias de estado del agente de codigo en cada panel — ver [Instalacion nativa](https://termote.ohnice.app/installation/native/)
 - **Vista Chat**: lee y responde como un chat a un panel que ejecuta Claude Code (o Codex iniciado con `--no-daemon`), con sugerencias de comandos slash y respuestas a dialogos — ver [Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
-- **Vistas Files y Changes**: explora el directorio de un panel y sus cambios de git, con vista previa de Markdown — ver [Files and Changes](https://termote.ohnice.app/usage/files-changes/)
+- **Vistas Files y Changes**: explora el directorio de un panel y sus cambios de git, con vista previa de Markdown — ver [Files and Changes](https://termote.ohnice.app/usage/files/)
 - **Cola de mensajes y enlaces a archivos en Chat**: deja un mensaje en cola mientras el agente trabaja; toca una ruta de archivo que escribio el agente para abrirlo en Files, en su linea
 - **Revision y staging**: comenta lineas en Changes y Files y envia la revision a un agente; haz stage, unstage o descarta un cambio por archivo o por hunk
 - **Vista previa y edicion en Files**: PDF, .xlsx y .docx en solo lectura; abre y guarda archivos Shift-JIS, EUC-JP y UTF-16; edita Markdown junto a una vista previa en vivo
-- **Places**: ofrece en Files una carpeta fuera del panel con `termote start --allow-path <dir>` — ver [Places](https://termote.ohnice.app/usage/files-changes/#places)
+- **Places**: ofrece en Files una carpeta fuera del panel con `termote start --allow-path <dir>` — ver [Places](https://termote.ohnice.app/usage/files/#places)
 - **Tasks**: ejecuta los scripts de `package.json` y los targets del Makefile de un panel, y envia una ejecucion fallida a un agente — ver [Tasks](https://termote.ohnice.app/usage/tasks/)
 - **Ventanas propias** (escritorio): abre un archivo, un diff, una pestana, un panel o la vista general en su propia ventana
 - **Imagenes adjuntas**: envia una imagen desde el movil a la terminal o a un mensaje de la vista Chat, para que el agente la lea por su ruta

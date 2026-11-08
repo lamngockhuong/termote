@@ -1,0 +1,350 @@
+---
+title: "View Files"
+description: "Duyệt file trong thư mục của pane từ điện thoại: Places, menu chuột phải, mở file theo tab, tìm file theo tên hoặc nội dung, tải file về và tải lên."
+head:
+  - tag: title
+    content: "Duyệt file của pane từ điện thoại | Termote"
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Muốn biết agent đã sửa gì, thường bạn phải gõ `ls`, `cat`, `git diff` trên bàn phím điện thoại rồi
+đọc kết quả trong terminal. Termote có hai view để xem nhanh:
+
+- **Files**: thư mục của pane dạng cây, mở từng thư mục một. File văn bản mở ra có số dòng và tô
+  màu cú pháp, file CSV hoặc TSV mở ra thành bảng, file ảnh mở ra thành hình, còn tài liệu PDF,
+  Excel hay Word mở ra thành bản xem trước chỉ đọc.
+- **Changes**: khi thư mục nằm trong một repo git, danh sách file git báo đã đổi, kèm diff của
+  từng file (với ảnh thì là bản trước và bản sau khi đổi).
+
+Trong Files, bạn tìm được file theo tên (xem [Tìm file](#tìm-file)). Ở cả hai view đều sửa và lưu
+được file văn bản (xem [Sửa file](/vi/usage/file-editing/#sửa-file)); riêng trong Files thì tạo được file mới (xem
+[Tạo file mới](/vi/usage/file-editing/#tạo-file-mới)), xoá được file hoặc thư mục rỗng (xem [Xoá file](/vi/usage/file-editing/#xoá-file)), và
+đổi tên hay chuyển được file (xem [Đổi tên hoặc chuyển file](/vi/usage/file-editing/#đổi-tên-hoặc-chuyển-file)). Changes còn
+đưa thay đổi vào index hoặc bỏ thay đổi được (xem
+[Đưa vào index, bỏ khỏi index và bỏ thay đổi](/vi/usage/changes/#đưa-vào-index-bỏ-khỏi-index-và-bỏ-thay-đổi)).
+Ngoài ra không đổi được gì khác: không đổi tên thư mục và không commit.
+
+## Mở ở đâu
+
+- **Desktop**: nút **Files** và **Changes** trên header mở một panel bên phải terminal. Terminal
+  vẫn ở trên màn hình và vẫn dùng được. Mỗi lúc chỉ có một panel; bấm lại nút của nó để đóng.
+  - Kéo mép trái của panel để nới rộng hay thu hẹp nó (luôn chừa chỗ cho terminal); nhấp đúp vào
+    mép để về độ rộng mặc định. Dùng bàn phím thì đặt focus vào mép rồi bấm mũi tên trái/phải,
+    Home và End. Thiết bị này nhớ độ rộng đã chọn. Terminal chỉ đổi kích thước một lần, lúc thả
+    chuột.
+  - Nút **Maximize panel** ở đầu panel cho panel tạm che terminal hoặc view Chat; bấm lại nút đó
+    hoặc Escape để trả về như cũ. Terminal bên dưới giữ nguyên kích thước, nên các thiết bị khác
+    đang xem cùng cửa sổ tmux không thấy gì thay đổi.
+- **Điện thoại**: Files và Changes là các view trong nút view trên header, cùng với Terminal (và
+  Chat, khi pane chạy Claude Code). Nút này hiện icon của view đang mở; chạm vào để chọn view
+  khác. Mỗi view chiếm cả màn hình.
+
+Khi cửa sổ to lên hoặc nhỏ đi qua ranh giới giữa hai bố cục, view đang mở đi theo: từ view trên
+điện thoại sang panel trên desktop, và ngược lại.
+
+## Thư mục nào được hiện
+
+Gốc là **thư mục làm việc của pane đang xem**. Khi thư mục đó nằm trong một repo git, gốc là thư
+mục trên cùng của repo, nên Files và Changes bao cả repo. Gốc hiện ở đầu cả hai view, thư mục nhà
+viết tắt là `~`.
+
+Thư mục này là của chương trình đang chạy trong pane, nên nó đổi theo lệnh `cd` trong shell. Một
+lệnh chỉ ghé qua thư mục khác trong chốc lát thì không làm gốc đổi. Khi gốc thật sự đổi lúc view
+đang mở, view tải lại từ gốc mới và báo `The pane's directory changed`.
+
+Các bộ quản lý phiên hỗ trợ:
+
+- **tmux** trên Linux và macOS, cài native hay trong container đều được
+- **Herdr** trên mọi hệ điều hành. Herdr phải báo được thư mục của pane (`cwd`); bản Herdr cũ không
+  báo thì view hiện `Not supported by this backend`.
+- **psmux** trên Windows chưa hỗ trợ: psmux không báo thư mục của pane, nên hai view này không có.
+
+### Places
+
+Files còn hiện được một thư mục nằm ngoài pane, như thư mục cấu hình shell hay ghi chú của bạn,
+sau khi bạn khai báo nó trên máy host:
+
+```bash
+termote start --allow-path ~/.config/fish --allow-path ~/notes
+termote start --remove-path ~/notes
+termote container up --allow-path ~/notes   # container giữ danh sách riêng
+```
+
+Chọn nó trong **Places** (biểu tượng thư mục ở đầu Files); chọn **Pane folder** để quay lại. Một
+Place dùng như thư mục của pane: duyệt, tìm kiếm, sửa, tạo, đổi tên, xóa có Undo, tải xuống và
+dán ảnh. Changes luôn chỉ hiện repository của pane. Chỉ thiết bị có toàn quyền mới thấy Places,
+thiết bị chỉ xem thì không, và ứng dụng không bao giờ tự thêm hay bỏ một Place.
+
+Termote từ chối chính thư mục home cùng mọi thư mục phía trên nó, `~/.ssh`, `~/.gnupg`, các thư
+mục cấu hình, trạng thái, dữ liệu và bộ nhớ đệm của Termote (cả thư mục chứa chúng, như
+`~/.config`, `~/.cache` hay `~/.local`; còn `~/.config/fish` thì được), `/proc`, `/sys`, `/dev`,
+các thư mục chứa socket điều khiển máy host (`/tmp`, `/run`, `/var/run`), và thư mục `.git`. Thư mục
+đã lưu mà nay không còn, hoặc trỏ tới chỗ bị từ chối, sẽ bị bỏ qua, và `start` in ra lệnh
+`--remove-path` để bỏ nó. Trên Windows, Places cần backend Herdr (`--mux herdr`).
+
+## Files
+
+- Thư mục xếp trước, rồi tới file, không phân biệt hoa thường. Chạm vào thư mục để mở hoặc đóng.
+- Mỗi thư mục hiện tối đa 5000 mục. Thư mục dài hơn sẽ ghi là chỉ hiện 5000 mục đầu.
+- Thiết bị, socket và link trỏ ra ngoài gốc hiện mờ và không mở được. Có một ngoại lệ: trong một
+  git worktree, link tới file hay thư mục thuộc worktree khác của cùng repo (ví dụ `docs/records`
+  trỏ về thư mục chính) mở được như của chính gốc, ở chế độ chỉ đọc. Find và Search tìm cả bên trong
+  thư mục đó khi git không theo dõi chính link (và link không nằm trong một thư mục git chưa theo
+  dõi), rồi phân loại file theo git của worktree kia: file bị git ở đó bỏ qua chỉ hiện khi bật tìm
+  cả file bị bỏ qua, và Search không tìm trong nó. Junction trên Windows không được theo, chỉ
+  symlink.
+- File mở ra thay chỗ cây thư mục, trong một tab (xem
+  [Mở nhiều file theo tab](#mở-nhiều-file-theo-tab)), kèm đường dẫn, kích thước, nút chép đường
+  dẫn và nút xuống dòng cho dòng dài (trên điện thoại bật sẵn). Dòng dài cuộn ngang trong khung code, không bao giờ
+  làm cả trang cuộn ngang.
+- Tô màu áp dụng cho các ngôn ngữ và tên file thường gặp (TypeScript, Go, Python, shell,
+  Dockerfile, Makefile, YAML, JSON, Markdown và nhiều loại khác). Phần này chỉ tải về lần đầu có
+  file cần đến, nên máy nào chưa từng mở Files thì không tải.
+- File dài hơn 2000 dòng chỉ giữ trong trang những dòng gần chỗ đang xem, nên dài bao nhiêu cũng
+  mở và cuộn nhanh như file ngắn. Khi đó tìm kiếm của trình duyệt (Ctrl+F) và thao tác bôi đen
+  chỉ chạm tới những dòng ấy: hãy dùng Search trong Files, hoặc tải file về. File dài hơn
+  400.000 dòng chỉ hiện 400.000 dòng đầu, kèm số dòng còn lại.
+
+| Hiện                                                          | Vì sao                                                                                           |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Chữ có màu                                                    | File văn bản tối đa 256 KiB, tối đa 5000 dòng, không dòng nào quá 2000 ký tự                     |
+| Chữ thường, không màu                                         | File văn bản lớn hơn (tới 4 MiB), ngôn ngữ chưa hỗ trợ, hoặc tô màu mất quá 3 giây              |
+| `Not previewable (binary, special file or larger than 4 MiB)`  | File nhị phân không phải ảnh hay tài liệu, file lớn hơn 4 MiB, hoặc thứ không phải file thường |
+| `This file can't be shown`                                     | Đường dẫn Termote không bao giờ trả về (xem bên dưới)                                            |
+
+## Menu chuột phải
+
+Bấm chuột phải lên một file hay thư mục trên cây thì menu của nó mở ngay tại con trỏ. Nút **…**
+trên dòng, giữ ngón tay trên điện thoại, Shift+F10 hoặc phím menu cũng mở menu đó, nhưng đặt cạnh
+dòng và đưa focus vào mục đầu tiên.
+
+- **Copy relative path**, **Copy absolute path** và **Copy name**. Đường dẫn tương đối tính từ gốc
+  cây đang hiện; đường dẫn tuyệt đối dùng dấu phân cách của máy chủ (`\` trên Windows). Với một
+  link, đó là đường dẫn của chính link, không phải nơi link trỏ tới.
+- **Insert @path in terminal** gõ `@` cùng đường dẫn vào pane, không nhấn Enter, rồi chuyển về
+  terminal. File nằm dưới thư mục của pane nhận đường dẫn tính từ đó (`@src/app.ts`); file ở chỗ
+  khác (phía trên, bên cạnh, hay trong một Place) nhận đường dẫn tuyệt đối. Đường dẫn có khoảng
+  trắng được đặt trong ngoặc kép (`@"my notes.md"`), đúng cách Claude Code tự viết. Thư mục của
+  pane được đọc ngay lúc bấm, nên một lệnh `cd` trong pane cũng được tính. Tên có ký tự xuống dòng
+  hoặc dấu `"` thì không bao giờ được gõ vào (trong shell, nó có thể chạy một lệnh); một toast báo
+  lý do. Terminal chưa kết nối thì một toast mời bạn chép đường dẫn thay vào đó.
+- Trên một thư mục còn có **New file**, **New folder** và **Upload files here**, ô nhập điền sẵn
+  thư mục đó. Link tới thư mục, hay thư mục đi qua một link, không có các mục này.
+- **Download**, **Rename** và **Delete**, như các mục bên dưới.
+
+Bấm chuột phải vào khoảng trống dưới các dòng thì mở menu của cây: **New file**, **New folder**,
+**Upload files** (vào gốc), **Refresh** và **Collapse all**. Thư mục trống thì hiện một dòng
+thông báo thay cho cây; bấm chuột phải vào đó cũng mở menu này (không có **Collapse all**), nhờ vậy
+vẫn tạo được thư mục đầu tiên.
+
+Trên máy tính, bấm chuột phải lên tab của một file mở cùng menu đó, thêm **Keep open** (với tab
+xem trước) và **Close** ở đầu. Tab còn giữ lại từ thư mục pane đã rời đi chỉ chép được đường dẫn,
+gõ đường dẫn tuyệt đối và đóng.
+
+Thiết bị chỉ xem chỉ thấy các mục chép, **Refresh** và **Collapse all** (trên tab thì có thêm
+**Keep open** và **Close**).
+
+## Mở nhiều file theo tab
+
+Mở thêm file thì các file đang mở vẫn còn: mỗi file một tab, quay lại tab nào thì file đó vẫn ở
+đúng chỗ bạn đang đọc, phần sửa dở chưa lưu cũng còn nguyên.
+
+- **Bấm một lần là mở ở tab xem trước**, tên tab in nghiêng: file kế tiếp mở cùng cách sẽ thế chỗ
+  nó. File được giữ ở tab riêng khi bạn bấm đúp vào nó (trên cây hoặc trên tab), bắt đầu sửa, vừa
+  tạo nó, hoặc bấm **Keep open** (hình ghim trên thanh của file).
+- File đã mở rồi thì app chuyển sang tab của nó, không bao giờ mở thêm tab thứ hai.
+- Tab đầu tiên, **Files**, hiện cây thư mục; các file vẫn mở phía sau. Bấm Back khi không còn link
+  nào để quay lại cũng về cây thư mục.
+- **Đóng tab**: bấm nút ×, bấm chuột giữa, hoặc nhấn Delete khi tab đang được chọn. Tab còn thay
+  đổi chưa lưu (có chấm sau tên) thì app hỏi `Discard changes?` trước.
+- **Đổi thứ tự tab** (máy tính): dùng chuột kéo tab dọc thanh tab, các tab khác dạt sang để chừa
+  chỗ, nhấn Escape thì tab về chỗ cũ. Alt+Trái hoặc Alt+Phải dời tab đang chọn đi một chỗ. Tab
+  **Files** luôn đứng đầu. Tab diff trong Changes cũng đổi chỗ được như vậy.
+- **Tối đa 10 tab.** Mở thêm thì tab lâu không dùng nhất sẽ đóng, trừ tab đang xem và tab còn thay
+  đổi chưa lưu. Nếu mọi tab khác đều còn thay đổi chưa lưu thì app để mở quá 10 tab.
+- **Trên điện thoại** không có thanh tab. Nút ghi số file đang mở (`Open files (N)`), nằm trên thanh
+  của file và trên cây thư mục, mở ra danh sách các file: chạm một file để xem, giữ nó lại, hoặc
+  đóng nó.
+- Xoá file trong Termote thì tab của file đó đóng theo; đổi tên file trong Termote thì tab vẫn giữ,
+  mang tên mới. File bị thứ khác xoá hay đổi tên thì tab vẫn ở lại, hiện `File not found` kèm nút
+  **Close tab**; từ lúc đó tên tab bị gạch ngang trên thanh tab và trong danh sách file đang mở, cho
+  tới khi tìm lại được file.
+- Pane chuyển sang thư mục khác thì các tab mở ở thư mục cũ đóng lại. Tab nào còn thay đổi chưa
+  lưu thì app hỏi trước: **Discard and close** bỏ các thay đổi, **Keep** giữ tab lại để bạn chép văn
+  bản ra (không lưu được nữa).
+- File có thể chứa bí mật thì mỗi tab mới đều hỏi lại. Tab nào bạn đã chọn hiện thì vẫn hiện cho tới
+  khi đóng tab.
+- Tab chỉ nằm trong bộ nhớ của trang: tải lại app là không còn tab nào.
+
+## Tìm file
+
+Ô **Find a file…** ở đầu Files (trên điện thoại, nằm ngay trên bàn phím) tìm theo tên các file dưới
+gốc. Kết quả thay chỗ cây thư mục sau một nhịp ngừng gõ ngắn; mỗi dòng hiện đường dẫn của file.
+
+- Chạm vào một kết quả, hoặc nhấn Enter khi đang chọn nó, để mở file; cây thư mục mở sẵn tới file
+  đó, và nút Back đưa bạn về danh sách kết quả. Phím mũi tên chuyển giữa ô nhập và các kết quả,
+  Escape xoá nội dung ô.
+- File mà git bỏ qua (ignored) chỉ được tìm khi bật **Include ignored** (công tắc cạnh ô nhập, chỉ
+  hiện trong repo git). Kết quả loại này hiện mờ, kèm nhãn `ignored`. Thiết bị này nhớ lựa chọn của
+  bạn.
+- File có tên thường dùng để chứa bí mật có ổ khoá, giống trong cây thư mục. Ô này chỉ tìm theo
+  tên; muốn tìm trong nội dung file thì dùng tab **Search** (xem
+  [Tìm trong nội dung file](#tìm-trong-nội-dung-file)).
+- Chỉ hiện 200 kết quả đầu (`More than 200 matches — type more to narrow`). Trong repo hoặc thư
+  mục rất lớn, việc tìm có thể dừng sớm, và danh sách ghi `Search stopped early in a large tree`.
+- Danh sách file được giữ 30 giây; lưu, tạo hoặc xoá một file thì danh sách bị bỏ đi. Nút
+  **Refresh** đọc lại nó.
+- Ngoài repo git, Termote duyệt thư mục (sâu tối đa 32 cấp, trong 5 giây) và không đi vào thư mục
+  là link.
+
+Các thư mục không bao giờ được tìm khi xét file bị git bỏ qua đặt ở mục Files của Settings, ô
+`Excluded folders` (xem [Cài đặt](/vi/usage/settings/#thư-mục-loại-trừ)). File mà git theo dõi thì
+luôn tìm được, kể cả nằm dưới một trong các thư mục đó.
+
+Những đường dẫn Termote không bao giờ trả về (xem [Không bao giờ hiện](/vi/usage/security/#không-bao-giờ-hiện)) cũng
+không bao giờ xuất hiện trong kết quả.
+
+## Tìm trong nội dung file
+
+Ở đầu Files có công tắc **Files | Search**; chọn **Search** để tìm trong văn bản của các file dưới
+gốc. Trên máy tính, đang ở bất kỳ đâu trong Files hay ở chỗ khác của ứng dụng, nhấn Ctrl+Shift+F
+(Cmd+Shift+F trên macOS) sẽ mở tab này và đặt con trỏ vào ô nhập; nếu panel Files đang đóng, panel
+mở ra trước. Khi con trỏ đang ở terminal, tổ hợp phím đó vẫn thuộc về terminal. Bạn đổi được phím
+này trong [Settings > Shortcuts](/vi/usage/keyboard-shortcuts/#đổi-phím-tắt).
+
+- Termote tìm ngay khi bạn gõ, sau một nhịp ngừng ngắn, miễn là ô nhập có từ 2 ký tự trở lên. Chuỗi
+  được tìm đúng như bạn gõ, kể cả khoảng trắng ở hai đầu.
+- Ba nút cạnh ô nhập, `Match case`, `Whole word` và `Regular expression`, đổi cách so khớp;
+  thiết bị này nhớ lựa chọn của bạn. Khi tắt `Match case`, chữ hoa và chữ thường được coi như nhau.
+  Biểu thức chính quy viết theo cú pháp của Go (RE2). Với `Whole word`, một từ chỉ gồm chữ cái `A`–`Z`,
+  `a`–`z`, chữ số và `_`. Biểu thức có thể khớp chuỗi rỗng, chẳng hạn `a*`, bị từ chối
+  (`This pattern matches empty text`); hãy viết `a+`.
+- Nút **…** mở thêm hai ô: `Files to include` và `Files to exclude`. Mỗi ô nhận một danh sách
+  mẫu cách nhau bằng dấu phẩy, chẳng hạn `*.ts, src/`. Mẫu không chứa `/` khớp tên file ở mọi thư
+  mục, `**` thay cho bao nhiêu cấp thư mục cũng được, còn mẫu kết thúc bằng `/` khớp mọi thứ trong
+  thư mục đó.
+- Kết quả được gom theo file, kèm số dòng khớp của từng file. Mỗi dòng hiện số dòng và phần khớp
+  được tô sáng. Từ file thứ 51 trở đi, nhóm kết quả mở ra ở trạng thái thu gọn. Chạm vào một dòng,
+  hoặc nhấn Enter khi đang chọn nó, để mở file ngay tại dòng đó: dòng nằm giữa khung nhìn và được
+  tô sáng. File Markdown, CSV/TSV và SVG mở ở dạng văn bản gốc trong tab đó, bất kể cài đặt xem
+  trước. Nút Back đưa bạn về đúng danh sách kết quả cũ. Phím mũi tên chuyển giữa ô nhập và các kết
+  quả, Escape đưa con trỏ về ô nhập.
+- Termote hiện tối đa 2000 dòng (`Showing the first 2000 lines`) và 100 dòng cho mỗi file; số dòng
+  còn lại được đếm dưới tên file. Một lượt tìm dừng sau 5 giây hoặc khi đã đọc 256 MiB
+  (`Stopped early: some files were not searched`). Dòng dài hơn 16 KiB chỉ được tìm ở phần đầu.
+  Máy chủ chạy tối đa hai lượt tìm cùng lúc; lượt thứ ba báo `Search busy, try again`.
+- Nếu thư mục của pane đã đổi từ lúc tìm, kết quả hiện mờ và không mở được cho tới lượt tìm sau.
+
+Termote tìm trong đúng những file mà **Find a file** liệt kê khi tắt **Include ignored**. Những file
+sau không bao giờ được tìm:
+
+- file mà git bỏ qua, khi ở trong repo git;
+- file có thể chứa bí mật (xem [File có thể chứa bí mật](/vi/usage/security/#file-có-thể-chứa-bí-mật)); số lượng được
+  ghi dưới kết quả (`2 sensitive files not searched`);
+- file và thư mục bắt đầu bằng dấu chấm, khi thư mục đang xem là thư mục home của bạn hoặc chứa nó
+  (lịch sử shell và cấu hình công cụ giữ bí mật dưới những cái tên bình thường); số lượng cũng được
+  ghi lại;
+- file nhị phân, file không phải văn bản UTF-8 (file Shift-JIS, EUC-JP hay UTF-16 vẫn mở được trong
+  Files, nhưng không được tìm) và file lớn hơn 1 MiB;
+- những đường dẫn Termote không bao giờ trả về (xem [Không bao giờ hiện](/vi/usage/security/#không-bao-giờ-hiện)).
+
+Thiết bị chỉ xem (view-only) tìm trong đúng những file mà nó được mở.
+
+## Tải file về máy
+
+Có thể lưu một bản sao của file về thiết bị đang dùng: **Download** trong menu **⋯** của dòng file
+đó ở cây thư mục (trên điện thoại, đặt ngón tay giữ yên trên dòng để mở menu), hoặc nút
+**Download** trên đầu file đang mở (trên điện thoại nằm trong menu của phần đầu). Trình duyệt lưu
+file như mọi lần tải khác, dưới tên của file; không có gì được mở hay hiện ra, dù file chứa gì.
+
+- Tải được mọi file thường, kể cả file Termote không xem trước được (nhị phân, lớn hơn 4 MiB), tối
+  đa **100 MiB**.
+- File có tên thường dùng để chứa bí mật thì app hỏi thêm một lần; file đang mở mà bạn đã chọn
+  hiện thì tải ngay.
+- Chỉ tải được file, không tải thư mục hay link, và không tải qua một thư mục là link.
+- Trong app iOS đã thêm vào Màn hình chính, file mở trong bảng chia sẻ: chọn **Lưu vào Tệp**
+  (Save to Files). Đóng bảng thì không lưu gì.
+- Mỗi lần tải được ghi vào log của server thành một dòng `audit: download` (đường dẫn trong thư
+  mục của pane, kích thước và ai tải).
+
+| Hiện                                                   | Vì sao                                                              |
+| ------------------------------------------------------ | ------------------------------------------------------------------- |
+| `<name> is larger than 100 MiB, too large to download` | File vượt giới hạn                                                  |
+| `Too many files at once; try again`                    | Đang đọc các lần tải hoặc ảnh khác; thử lại sau chốc lát            |
+| `<name> is gone`                                       | Có thứ đã xoá hoặc chuyển file sau khi cây thư mục được đọc         |
+| `<name> is not a regular file; not downloaded`         | FIFO, socket hoặc thiết bị                                          |
+| `A link on that path; not downloaded`                  | File hoặc một thư mục trên đường dẫn là symbolic link               |
+| `<name> can't be downloaded from here`                 | Thư mục của chính Termote, dữ liệu cài đặt, `.git` và kho ảnh tải lên |
+| `<name> changed; try again`                            | Có thứ đã thay file trong lúc kiểm tra                              |
+
+Phiên chỉ xem không có nút Download.
+
+## Tải file lên
+
+File trên thiết bị đang dùng, loại nào cũng được (PDF, CSV, zip, ảnh chụp màn hình, log), có thể
+đưa vào một thư mục của Files theo ba cách:
+
+- Nút **Upload files** (mũi tên hướng lên, cạnh New file) mở trình chọn file của thiết bị; trên
+  điện thoại có cả thư viện ảnh, máy ảnh và app Tệp. Chọn được nhiều file một lần. File vào thư mục
+  bạn chạm gần nhất trên cây, hoặc thư mục chứa file bạn chạm gần nhất, nếu không thì vào thư mục
+  trên cùng.
+- **Thả** file từ trình quản lý file của máy tính lên Files: thả lên dòng thư mục thì file vào thư
+  mục đó, thả lên dòng file thì vào thư mục chứa file ấy, thả xuống khoảng trống dưới các dòng thì
+  vào thư mục trên cùng. Thư mục là symbolic link, hoặc nằm bên trong một link như vậy, sẽ chuyển
+  file sang thư mục thật gần nhất phía trên nó. Khi đang mở một file, file thả vào sẽ nằm cùng thư mục với file đang mở,
+  và thông báo kết quả ghi rõ thư mục. Nội dung file thả vào không bao giờ bị chèn vào văn bản
+  đang sửa.
+- **Dán** file đã sao chép trong trình quản lý file (Ctrl+V, ⌘V trên Mac) khi cây thư mục đang
+  hiện: file vào cùng thư mục như nút Upload files. Dán vào ô tìm kiếm, hoặc dán khi đang mở file,
+  thì không có gì xảy ra. Mỗi trình duyệt và hệ điều hành đặt vào clipboard một thứ khác nhau khi
+  sao chép file (trên Linux thường chỉ có đường dẫn), nên nếu dán không thấy gì, hãy dùng nút hoặc
+  kéo thả.
+
+File được gửi lần lượt từng cái. Dưới đầu Files có một dòng cho biết file đang gửi, đã gửi được
+bao nhiêu phần trăm và còn mấy file, kèm nút **Cancel**. Một file đã gửi xong thì nút Cancel tắt
+đi, vì lúc đó server sẽ lưu file dù thế nào. Chuyển sang terminal hay view khác, file vẫn tiếp tục
+được tải lên, file nào vào đúng thư mục của file ấy; quay lại Files sẽ thấy dòng tiến độ. Xong cả lượt, một thông báo cho biết kết quả, chẳng hạn `Uploaded 3 files.` hoặc
+`1 of 3 uploaded. big.zip: File is larger than 100 MB (1 more not uploaded)`.
+
+- Mỗi file tối đa **100 MiB**, bằng giới hạn khi tải về.
+- File có sẵn không bao giờ bị ghi đè: tên đã có file khác dùng thì được đánh số, `report.pdf` thành
+  `report (2).pdf`, tới `(99)`. Thông báo ghi `Saved as report (2).pdf`.
+- Thư mục thường chứa bí mật (`.ssh`, `.aws`, …) hoặc tên file thường chứa bí mật (`.env`) thì app
+  hỏi trước, một lần cho các file gửi cùng nhau, kèm tên file và nơi nó sẽ vào. Nhấn Enter là
+  chọn không gửi; trả lời không thì không file nào trong số đó được gửi, và app cũng không báo gì.
+- Chỉ tải lên được file, không tải được thư mục: thư mục thả vào bị bỏ qua và app báo điều đó.
+- Khi đang có một lượt tải lên khác (từ thiết bị khác, hoặc từ một tab khác), dòng tiến độ hiện `Waiting for another upload…`; file được
+  gửi ngay khi lượt kia xong, hoặc sau hai phút rưỡi chờ thì app báo lỗi.
+- Nếu mất kết nối sau khi file đã gửi xong, Files đọc lại thư mục để xem file đã tới chưa; không
+  biết chắc thì báo `Not sure the file was saved. Check the folder`.
+- File được ghi dưới một tên tạm ẩn (`.termote-upload-…`) và chỉ mang tên thật khi đã nhận đủ, nên
+  một file gửi dở không bao giờ hiện dưới tên của nó (trong lúc gửi, file tạm có thể hiện trên cây,
+  có dấu nhạy cảm). Nếu server dừng giữa chừng, file tạm còn lại sẽ
+  bị xoá ở lần tải lên kế tiếp vào thư mục đó, khi nó đã quá một giờ.
+- Mỗi lần tải lên được ghi vào log của server thành một dòng `audit: upload` (đường dẫn, kích
+  thước và ai gửi).
+
+| Hiện                                                   | Vì sao                                                                                 |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| `File is larger than 100 MB`                           | File vượt giới hạn                                                                     |
+| `The folder is a link: not uploaded`                   | Một thư mục trên đường dẫn là symbolic link mà cây chưa hiện như vậy: không ghi gì qua link |
+| `Files can't be uploaded to this folder`               | Đường dẫn Termote không bao giờ trả về (xem [Không bao giờ hiện](/vi/usage/security/#không-bao-giờ-hiện)), `.git`, hoặc thư mục của chính Termote |
+| `This file's name can't be used on the host`           | Tên có `\`, tên thiết bị của Windows (`NUL`, `CON.txt`, `COM1`), ký tự vô hình hoặc ký tự đảo chiều chữ, ký tự điều khiển, dài hơn 255 byte, kết thúc bằng dấu chấm hay dấu cách, hoặc trên máy chủ Windows có một trong `<>:"\|?*` |
+| `Too many files with this name. Rename one first`      | Từ `name (2)` tới `name (99)` đều đã có                                                |
+| `The folder is no longer on the host`                  | Thư mục đã bị xoá hoặc chuyển đi sau khi cây được đọc                                  |
+| `The server can't write in this folder`                | Không ghi được vào thư mục                                                             |
+| `The file system there is read-only`                   | Thư mục nằm trên ổ đĩa hoặc mount chỉ đọc                                              |
+| `The host's disk or quota is full`                     | Ổ đĩa của máy chủ, hoặc hạn mức của bạn, đã hết chỗ                                    |
+| `The upload stalled. Try again on a better connection` | Hai phút không nhận được gì, hoặc file gửi quá 30 phút                                 |
+| `Another upload is running. Try again shortly`         | Đã chờ hết thời gian mà lượt tải lên khác vẫn chưa xong                                |
+
+<Aside type="caution">
+  File tải lên được tin cậy như file tạo bằng New file: một công cụ có thể tự đọc hoặc tự chạy nó
+  (trên Windows, file chạy theo phần mở rộng, nên file `.exe` hay `.ps1` tải lên có thể được khởi
+  chạy như mọi file khác). Ai đăng nhập được Termote thì đã chạy được lệnh trong terminal, nên điều
+  này không mở thêm quyền gì, nhưng hãy xem kỹ thứ bạn tải lên những chỗ như vậy.
+</Aside>
+
+Phiên chỉ xem không có nút Upload files và dán không có tác dụng; thả file vào chỉ hiện
+`A view-only device cannot upload`, và trình duyệt không bao giờ mở file vừa thả.

@@ -46,11 +46,11 @@
 - **세션 탭**: 빠른 창 전환을 위한 가로 탭 바
 - **Herdr 백엔드** (네이티브 또는 컨테이너 안): tmux 대신 Herdr 워크스페이스를 제어하고, 패널마다 코딩 에이전트 상태 배지를 표시 — [네이티브 설치](https://termote.ohnice.app/installation/native/) 참고
 - **Chat 뷰**: Claude Code(또는 `--no-daemon`으로 시작한 Codex)를 실행 중인 pane을 채팅처럼 읽고 답할 수 있으며, 슬래시 명령 제안과 대화상자 응답을 지원 — [Agent Chat](https://termote.ohnice.app/usage/agent-chat/) 참고
-- **Files 및 Changes 뷰**: pane의 디렉터리와 git 변경 사항을 탐색하고 Markdown을 미리보기 — [Files and Changes](https://termote.ohnice.app/usage/files-changes/) 참고
+- **Files 및 Changes 뷰**: pane의 디렉터리와 git 변경 사항을 탐색하고 Markdown을 미리보기 — [Files and Changes](https://termote.ohnice.app/usage/files/) 참고
 - **Chat 메시지 대기열과 파일 링크**: 에이전트가 작업하는 동안 메시지를 대기열에 넣고, 에이전트가 쓴 파일 경로를 탭하면 Files에서 해당 줄로 파일을 엶
 - **리뷰와 스테이징**: Changes와 Files에서 줄에 댓글을 달고 리뷰를 에이전트에게 보냄. 변경 사항을 파일 또는 hunk 단위로 stage, unstage, 폐기
 - **Files의 미리보기와 편집**: PDF, .xlsx, .docx를 읽기 전용으로 미리보기. Shift-JIS, EUC-JP, UTF-16 파일 열기와 저장. 실시간 미리보기 옆에서 Markdown 편집
-- **Places**: `termote start --allow-path <dir>`로 pane 밖의 폴더를 Files에 표시 — [Places](https://termote.ohnice.app/usage/files-changes/#places) 참고
+- **Places**: `termote start --allow-path <dir>`로 pane 밖의 폴더를 Files에 표시 — [Places](https://termote.ohnice.app/usage/files/#places) 참고
 - **Tasks**: pane의 `package.json` 스크립트와 Makefile 타깃을 실행하고, 실패한 실행을 에이전트에게 보냄 — [Tasks](https://termote.ohnice.app/usage/tasks/) 참고
 - **별도 창** (데스크톱): 파일, diff, 탭, pane 또는 개요를 별도 창에서 열기
 - **이미지 첨부**: 휴대폰의 이미지를 터미널이나 Chat 뷰 메시지로 보내 에이전트가 경로로 읽을 수 있게 함

@@ -46,11 +46,11 @@
 - **セッションタブ**: ウィンドウをすばやく切り替えるための水平タブバー
 - **Herdrバックエンド**（ネイティブまたはコンテナ内）: tmuxの代わりにHerdrのワークスペースを操作し、ペインごとにコーディングエージェントの状態バッジを表示 — [ネイティブインストール](https://termote.ohnice.app/installation/native/)を参照
 - **Chatビュー**: Claude Code（または`--no-daemon`で起動したCodex）を実行中のペインをチャットとして読み、返信できます。スラッシュコマンドの候補表示とダイアログへの応答に対応 — [Agent Chat](https://termote.ohnice.app/usage/agent-chat/)を参照
-- **Files・Changesビュー**: ペインのディレクトリとそのgitの変更を閲覧し、Markdownをプレビュー — [Files and Changes](https://termote.ohnice.app/usage/files-changes/)を参照
+- **Files・Changesビュー**: ペインのディレクトリとそのgitの変更を閲覧し、Markdownをプレビュー — [Files and Changes](https://termote.ohnice.app/usage/files/)を参照
 - **Chatのメッセージキューとファイルリンク**: エージェントの作業中にメッセージをキューに入れられます。エージェントが書いたファイルパスをタップすると、Filesでそのファイルを該当行で開きます
 - **レビューとステージ**: ChangesとFilesで行にコメントし、レビューをエージェントに送信。変更をファイル単位またはhunk単位でステージ、アンステージ、破棄
 - **Filesでのプレビューと編集**: PDF・.xlsx・.docxを読み取り専用でプレビュー。Shift-JIS・EUC-JP・UTF-16のファイルを開いて保存。Markdownをライブプレビューの横で編集
-- **Places**: `termote start --allow-path <dir>`でペイン外のフォルダをFilesに表示 — [Places](https://termote.ohnice.app/usage/files-changes/#places)を参照
+- **Places**: `termote start --allow-path <dir>`でペイン外のフォルダをFilesに表示 — [Places](https://termote.ohnice.app/usage/files/#places)を参照
 - **Tasks**: ペインの`package.json`スクリプトとMakefileターゲットを実行し、失敗した実行をエージェントに送信 — [Tasks](https://termote.ohnice.app/usage/tasks/)を参照
 - **別ウィンドウ**（デスクトップ）: ファイル、diff、タブ、ペイン、概要を専用のウィンドウで開く
 - **画像の添付**: スマートフォンから画像をターミナルやChatビューのメッセージに送り、エージェントがパスから読み取れるようにします

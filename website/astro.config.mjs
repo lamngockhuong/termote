@@ -6,7 +6,7 @@ import sitemap from "@astrojs/sitemap";
 import starlight from "@astrojs/starlight";
 import starlightLlmsTxt from "starlight-llms-txt";
 import starlightVersions from "starlight-versions";
-import { ARCHIVED } from "./src/archived.mjs";
+import { ARCHIVED, MOVED } from "./src/archived.mjs";
 
 // Page views and three events (src/scripts/track-events.js), counted by
 // GoatCounter: no cookie, nothing personal, never on localhost. Not in the
@@ -39,7 +39,8 @@ export default defineConfig({
     // keeps its hreflang alternates (en, vi)
     sitemap({
       i18n: { defaultLocale: "en", locales: { en: "en", vi: "vi" } },
-      filter: (page) => !ARCHIVED.test(new URL(page).pathname),
+      // Not the archived docs, nor the pages that only send a reader on
+      filter: (page) => !ARCHIVED.test(new URL(page).pathname) && !MOVED.test(new URL(page).pathname),
       // The interactive demo: the PWA's demo build, which deploy-website.yml
       // copies into the site after this build
       customPages: [`${SITE}/demo/`],
@@ -159,7 +160,10 @@ export default defineConfig({
           items: [
             { label: "Agent Chat", link: "/usage/agent-chat/" },
             { label: "Agent Overview", link: "/usage/overview/", translations: { vi: "Tổng quan agent" } },
-            { label: "Files and Changes", link: "/usage/files-changes/" },
+            { label: "Files", link: "/usage/files/" },
+            { label: "Editing Files", link: "/usage/file-editing/", translations: { vi: "Sửa file" } },
+            { label: "File Previews", link: "/usage/file-previews/", translations: { vi: "Xem trước file" } },
+            { label: "Changes", link: "/usage/changes/" },
             { label: "Gestures", link: "/usage/gestures/" },
             { label: "Herdr Plugin", link: "/usage/herdr-plugin/" },
             { label: "Keyboard", link: "/usage/keyboard/" },

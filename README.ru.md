@@ -48,11 +48,11 @@
 - **Вкладки сессий**: Горизонтальная панель вкладок для быстрого переключения окон
 - **Бэкенд Herdr** (нативно или в контейнере): управление рабочими пространствами Herdr вместо tmux, со значками состояния ИИ-агента в каждой панели — см. [Нативная установка](https://termote.ohnice.app/installation/native/)
 - **Вид Chat**: читайте панель с Claude Code (или Codex, запущенным с `--no-daemon`) как чат и отвечайте в ней, с подсказками slash-команд и ответами на диалоги — см. [Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
-- **Виды Files и Changes**: просмотр каталога панели и её изменений в git с предпросмотром Markdown — см. [Files and Changes](https://termote.ohnice.app/usage/files-changes/)
+- **Виды Files и Changes**: просмотр каталога панели и её изменений в git с предпросмотром Markdown — см. [Files and Changes](https://termote.ohnice.app/usage/files/)
 - **Очередь сообщений и ссылки на файлы в Chat**: ставьте сообщение в очередь, пока агент работает; нажмите на путь к файлу, написанный агентом, чтобы открыть файл в Files на нужной строке
 - **Ревью и staging**: комментируйте строки в Changes и Files и отправляйте ревью агенту; добавляйте в индекс, убирайте из индекса или отменяйте изменение по файлу или по hunk
 - **Предпросмотр и редактирование в Files**: PDF, .xlsx и .docx только для чтения; открытие и сохранение файлов в Shift-JIS, EUC-JP и UTF-16; редактирование Markdown рядом с живым предпросмотром
-- **Places**: папка вне панели в Files через `termote start --allow-path <dir>` — см. [Places](https://termote.ohnice.app/usage/files-changes/#places)
+- **Places**: папка вне панели в Files через `termote start --allow-path <dir>` — см. [Places](https://termote.ohnice.app/usage/files/#places)
 - **Tasks**: запуск скриптов `package.json` и целей Makefile панели, отправка неудачного запуска агенту — см. [Tasks](https://termote.ohnice.app/usage/tasks/)
 - **Отдельные окна** (десктоп): файл, diff, вкладка, панель или обзор в собственном окне
 - **Вложения изображений**: отправка изображения с телефона в терминал или в сообщение вида Chat, чтобы агент прочитал его по пути

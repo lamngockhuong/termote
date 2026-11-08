@@ -48,11 +48,11 @@ Contrôlez à distance des outils CLI (Claude Code, Codex, n'importe quel termin
 - **Onglets de session** : Barre d'onglets horizontale pour basculer rapidement entre les fenêtres
 - **Backend Herdr** (natif ou dans le conteneur) : pilotez les workspaces Herdr à la place de tmux, avec un badge d'état de l'agent de code sur chaque volet — voir [Installation native](https://termote.ohnice.app/installation/native/)
 - **Vue Chat** : lisez un volet qui exécute Claude Code (ou Codex lancé avec `--no-daemon`) comme une conversation et répondez-y, avec des suggestions de commandes slash et des réponses aux boîtes de dialogue — voir [Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
-- **Vues Files et Changes** : parcourez le répertoire d'un volet et ses modifications git, avec un aperçu Markdown — voir [Files and Changes](https://termote.ohnice.app/usage/files-changes/)
+- **Vues Files et Changes** : parcourez le répertoire d'un volet et ses modifications git, avec un aperçu Markdown — voir [Files and Changes](https://termote.ohnice.app/usage/files/)
 - **File d'attente et liens de fichiers dans le Chat** : mettez un message en attente pendant que l'agent travaille ; touchez un chemin de fichier écrit par l'agent pour l'ouvrir dans Files, à sa ligne
 - **Revue et staging** : commentez des lignes dans Changes et Files et envoyez la revue à un agent ; indexez, désindexez ou annulez une modification par fichier ou par hunk
 - **Aperçus et édition dans Files** : PDF, .xlsx et .docx en lecture seule ; fichiers Shift-JIS, EUC-JP et UTF-16 ouverts et enregistrés ; Markdown édité à côté d'un aperçu en direct
-- **Places** : proposez dans Files un dossier hors du volet avec `termote start --allow-path <dir>` — voir [Places](https://termote.ohnice.app/usage/files-changes/#places)
+- **Places** : proposez dans Files un dossier hors du volet avec `termote start --allow-path <dir>` — voir [Places](https://termote.ohnice.app/usage/files/#places)
 - **Tasks** : lancez les scripts `package.json` et les cibles Makefile d'un volet, envoyez une exécution échouée à un agent — voir [Tasks](https://termote.ohnice.app/usage/tasks/)
 - **Fenêtres séparées** (bureau) : ouvrez un fichier, un diff, un onglet, un volet ou la vue d'ensemble dans sa propre fenêtre
 - **Pièces jointes image** : envoyez une image depuis le téléphone vers le terminal ou dans un message de la vue Chat, pour que l'agent la lise par son chemin
