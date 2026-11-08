@@ -3,8 +3,10 @@ package main
 import (
 	"bytes"
 	"context"
+	"log"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 // A symlink that leaves the pane's root is followed only into another work
@@ -23,10 +25,15 @@ type linkedFile struct {
 // maxWorktreeList caps git worktree list's output.
 const maxWorktreeList = 256 << 10
 
-// worktreeRoots lists the work trees of root's repository (bare ones left
-// out), resolved; none when root is not a repo or git cannot list them. The
-// list is kept for filesRootTTL (f.worktrees), as a tree, an image or a
-// search asks for it once per link.
+// worktreeListFailed logs once that git worktree list failed: an older git
+// than 2.36 has no -z, and links into other work trees are not followed.
+var worktreeListFailed sync.Once
+
+// worktreeRoots lists the work trees of root's repository (bare ones and
+// ones that do not lead back to it left out, see ownWorktrees), resolved;
+// none when root is not a repo or git cannot list them. The list is kept
+// for filesRootTTL (f.worktrees), as a tree, an image or a search asks for
+// it once per link.
 func (f *filesAPI) worktreeRoots(ctx context.Context, root filesRoot) []string {
 	if !root.IsRepo {
 		return nil
@@ -34,10 +41,15 @@ func (f *filesAPI) worktreeRoots(ctx context.Context, root filesRoot) []string {
 	list := func() ([]string, error) {
 		out, truncated, err := f.git.output(ctx, gitCall{root: root.Root, safeDir: root.SafeDir, limit: maxWorktreeList},
 			"worktree", "list", "--porcelain", "-z")
+		if err != nil {
+			worktreeListFailed.Do(func() {
+				log.Printf("files: git worktree list failed, links into other work trees are not followed (needs git 2.36 or later): %v", err)
+			})
+		}
 		if err != nil || truncated {
 			return nil, nil
 		}
-		return parseWorktreeList(out), nil
+		return ownWorktrees(parseWorktreeList(out), commonGitDir(root.GitDir)), nil
 	}
 	if f.worktrees == nil {
 		trees, _ := list()
@@ -76,14 +88,33 @@ func parseWorktreeList(out []byte) []string {
 	return trees
 }
 
+// ownWorktrees keeps the work trees whose .git leads back to the shared git
+// directory common: the main one's is common itself, a linked one's
+// <common>/worktrees/<name>. git lists a linked work tree from the record
+// under <common>/worktrees, which can name any directory (written by hand,
+// or unpacked with the repository).
+func ownWorktrees(trees []string, common string) []string {
+	if common == "" {
+		return nil
+	}
+	var own []string
+	for _, w := range trees {
+		if g, ok := gitEntryTarget(w); ok && (sameAllowPath(g, common) || sameAllowPath(filepath.Dir(g), filepath.Join(common, "worktrees"))) {
+			own = append(own, w)
+		}
+	}
+	return own
+}
+
 // commonGitDir is the git directory shared by every work tree of the repo
 // whose git dir (resolved) is gitDir: a linked worktree's is
-// <common>/worktrees/<name>.
+// <common>/worktrees/<name>, which holds a commondir file (a main one in a
+// directory named worktrees does not).
 func commonGitDir(gitDir string) string {
 	if gitDir == "" {
 		return ""
 	}
-	if parent := filepath.Dir(gitDir); filepath.Base(parent) == "worktrees" {
+	if parent := filepath.Dir(gitDir); filepath.Base(parent) == "worktrees" && fileExists(filepath.Join(gitDir, "commondir")) {
 		return filepath.Dir(parent)
 	}
 	return gitDir

@@ -565,22 +565,30 @@ func rootFromToplevel(dir, top, gitDir, safeDir string) filesRoot {
 // repo (core.worktree pointing at a parent with a repo of its own, such as
 // a home directory under dotfiles) does not count.
 func gitEntryLeadsTo(top, gitDir string) bool {
+	target, ok := gitEntryTarget(top)
+	return ok && underDir(target, gitDir) && underDir(gitDir, target)
+}
+
+// gitEntryTarget is the git directory top's .git leads to, resolved: that
+// directory, or the one a gitfile names. ok false when top has no .git or a
+// file there names none.
+func gitEntryTarget(top string) (string, bool) {
 	entry := filepath.Join(top, ".git")
 	fi, err := os.Lstat(entry)
 	if err != nil {
-		return false
+		return "", false
 	}
 	target := entry
 	if fi.Mode().IsRegular() {
 		f, err := os.Open(entry)
 		if err != nil {
-			return false
+			return "", false
 		}
 		b, _ := io.ReadAll(io.LimitReader(f, 4096))
 		f.Close()
 		p, ok := strings.CutPrefix(strings.TrimSpace(string(b)), "gitdir:")
 		if !ok {
-			return false
+			return "", false
 		}
 		target = filepath.FromSlash(strings.TrimSpace(p))
 		if !filepath.IsAbs(target) {
@@ -590,8 +598,7 @@ func gitEntryLeadsTo(top, gitDir string) bool {
 	if r, err := filepath.EvalSymlinks(target); err == nil {
 		target = r
 	}
-	target = filepath.Clean(target)
-	return underDir(target, gitDir) && underDir(gitDir, target)
+	return filepath.Clean(target), true
 }
 
 // trustRepo decides whether to pass safe.directory for a repo git refused

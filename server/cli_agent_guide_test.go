@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -48,6 +50,23 @@ func TestHelpUnknownTopic(t *testing.T) {
 func TestAgentGuideKeepsPasswordRule(t *testing.T) {
 	if !strings.Contains(agentGuide, "Do not run `termote show-password`") {
 		t.Fatal("the agent guide lost the rule that agents do not run termote show-password")
+	}
+	// Nor does it, or the page for people, tell the user to show it through
+	// the agent: a `!` command's output goes into the agent's transcript,
+	// which every role reads in the Chat view.
+	pages := map[string]string{"server/agent-guide.md": agentGuide}
+	for _, p := range []string{"website/src/content/docs/installation/agent.mdx", "website/src/content/docs/vi/installation/agent.mdx"} {
+		b, err := os.ReadFile(filepath.Join("..", filepath.FromSlash(p)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		pages[p] = string(b)
+	}
+	viaAgent := regexp.MustCompile(`!\s*termote show-password`)
+	for p, text := range pages {
+		if viaAgent.MatchString(text) {
+			t.Errorf("%s tells the user to show the password through the agent", p)
+		}
 	}
 }
 

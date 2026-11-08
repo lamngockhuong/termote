@@ -953,7 +953,7 @@ the container).
 **Paths.** A client path is relative to the root: absolute paths, `..`, NUL and (Windows)
 drive or device names are refused with 400, and every open goes through `os.Root`, so a symlink
 that leaves the root fails too (400 `path outside root`), except one leading into another work
-tree of the same repository (`server/files_linked.go`: `git worktree list`, the path read through
+tree of the same repository (`server/files_linked.go`: `git worktree list`, git 2.36 or later, the path read through
 `os.Root` at that work tree by tree, content, raw and document, read-only, full clients only;
 `server/files_find_linked.go` adds what an untracked directory link holds to Find's lists, as
 that work tree's `git ls-files` sorts it). Termote's config and state
@@ -1800,7 +1800,8 @@ termote update --force           # Force reinstall current version
    guard; keys and Chat messages reach a Zellij pane only through a Termote client's PTY, never
    argv, which other local users could read
 9. **Rate limiting**: 5 failed basic-auth attempts/min per IP (per tailnet login behind
-   `tailscale serve`, with 30/min for all of loopback together), and 20/min per IPv6 /64 → 429
+   `tailscale serve`, with 30/min for all of the proxied attempts together and 30/min for the rest
+   of loopback), and 20/min per IPv6 /64 → 429
    (expired entries swept at most every 10s, so many source addresses cannot make each failure
    scan the whole table);
    failed logins, blocked clients and rejected Hosts are logged with the client address (never

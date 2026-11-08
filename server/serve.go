@@ -149,9 +149,10 @@ func newServeConfigFromEnv() serveConfig {
 		Places:           parsePlacesEnv(os.Getenv("TERMOTE_PLACES")),
 		// Set by container up only with the port published on loopback:
 		// what reaches the container then comes from the host, so the
-		// header is trusted from any source (the bridge gateway).
+		// header is trusted from any source (the bridge gateway). A server
+		// run by hand from the environment trusts it over loopback only.
 		ProxyClientHeader:    canonicalProxyHeader(os.Getenv("TERMOTE_PROXY_CLIENT_HEADER")),
-		ProxyClientAnySource: true,
+		ProxyClientAnySource: envInContainer(),
 		MachineBridges:       os.Getenv("TERMOTE_E2E_MACHINE_BRIDGE"),
 	}
 	// Where the host user's home dir sits in the container's workspace, when
@@ -889,12 +890,17 @@ const authMaxPrefixFailures = 20
 // client, each counted under the address it reports (rateKey). A local
 // process (or, in the container, anything reaching its port) can set those
 // headers itself: this cap keeps it from guessing faster by changing them,
-// while one client's typos still leave the others room to sign in. Every
-// attempt over loopback counts under it too.
+// while one client's typos still leave the others room to sign in. Attempts
+// over loopback without such a key (the CLI, a local browser) have a cap of
+// the same size of their own (authLoopbackKey): any 127.x address is a new
+// key, and clients through a proxy filling theirs do not lock them out.
 const authMaxProxiedFailures = 30
 
-// authProxiedKey counts every failure through a proxy or over loopback.
+// authProxiedKey counts every failure under a ts: or px: key.
 const authProxiedKey = "proxied"
+
+// authLoopbackKey counts every failure over loopback under its address.
+const authLoopbackKey = "loopback"
 
 // authTailscalePrefix starts the key of a tailnet user's attempts.
 const authTailscalePrefix = "ts:"
@@ -922,23 +928,28 @@ type authOpts struct {
 	ProxyAnySource bool
 }
 
-// rateKey is the key a sign-in attempt from r counts under: its address
-// (requestIP); or, when the server publishes itself over Tailscale (Tailnet)
-// and r came over loopback with the Tailscale-User-Login header tailscale
-// serve sets for a tailnet user (it removes one the client sent),
-// ts:<login>; or, with a proxy client header set (proxyClientIP), px:<the
-// address it names>. Off loopback, or without --tailscale (another proxy on
-// this machine would pass a client's header through), Tailscale-User-Login
-// is ignored.
+// envInContainer is runningInContainer, for newServeConfigFromEnv (a test
+// sets it).
+var envInContainer = runningInContainer
+
+// rateKey is the key a sign-in attempt from r counts under: with a proxy
+// client header that names an address (proxyClientIP), px:<that address>;
+// else, when the server publishes itself over Tailscale (Tailnet) and r came
+// over loopback with the Tailscale-User-Login header tailscale serve sets
+// for a tailnet user (it removes one the client sent), ts:<login>; else its
+// address (requestIP). The proxy's address comes first: cloudflared passes
+// on what an Internet client sent, a login included, and always sets its
+// header. Off loopback or without --tailscale (another proxy on this machine
+// would pass a client's header through), Tailscale-User-Login is ignored.
 func rateKey(r *http.Request, o authOpts) string {
 	ip := requestIP(r)
+	if client := proxyClientIP(r, o); client != "" {
+		return authProxyPrefix + client
+	}
 	if a, err := netip.ParseAddr(ip); o.Tailnet && err == nil && a.IsLoopback() {
 		if login := capBytes(stripUnsafeRunes(r.Header.Get("Tailscale-User-Login")), 256); login != "" {
 			return authTailscalePrefix + login
 		}
-	}
-	if client := proxyClientIP(r, o); client != "" {
-		return authProxyPrefix + client
 	}
 	return ip
 }
@@ -1016,14 +1027,17 @@ func isTokenByte(c byte) bool {
 	return strings.IndexByte("!#$%&'*+-.^_`|~", c) >= 0
 }
 
-// viaProxy reports whether key counts an attempt that came through a proxy
-// or over loopback.
-func viaProxy(key string) bool {
+// sharedKey is the key whose cap (authMaxProxiedFailures) an attempt counted
+// under key also counts toward: authProxiedKey through a proxy,
+// authLoopbackKey over loopback, "" for any other address.
+func sharedKey(key string) string {
 	if strings.HasPrefix(key, authTailscalePrefix) || strings.HasPrefix(key, authProxyPrefix) {
-		return true
+		return authProxiedKey
 	}
-	a, err := netip.ParseAddr(key)
-	return err == nil && a.IsLoopback()
+	if a, err := netip.ParseAddr(key); err == nil && a.IsLoopback() {
+		return authLoopbackKey
+	}
+	return ""
 }
 
 // authPrefix is the /64 of an IPv6 address (zone dropped), or "" for IPv4,
@@ -1085,28 +1099,28 @@ func (rl *authRateLimiter) isBlocked(ip string) bool {
 // before its credentials are compared: a burst of concurrent requests cannot
 // all pass the check before any failure is recorded. It returns "" when the
 // attempt may go on, else the key that is blocked: ip (a rateKey), its IPv6
-// /64, or authProxiedKey.
+// /64, or its sharedKey.
 func (rl *authRateLimiter) reserve(ip string) string {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 	now := time.Now()
 	prefix := authPrefix(ip)
-	proxied := viaProxy(ip)
+	shared := sharedKey(ip)
 	if len(rl.recentLocked(ip, now)) >= authMaxFailures {
 		return ip
 	}
 	if prefix != "" && len(rl.recentLocked(prefix, now)) >= authMaxPrefixFailures {
 		return prefix
 	}
-	if proxied && len(rl.recentLocked(authProxiedKey, now)) >= authMaxProxiedFailures {
-		return authProxiedKey
+	if shared != "" && len(rl.recentLocked(shared, now)) >= authMaxProxiedFailures {
+		return shared
 	}
 	rl.addLocked(ip, now)
 	if prefix != "" {
 		rl.addLocked(prefix, now)
 	}
-	if proxied {
-		rl.addLocked(authProxiedKey, now)
+	if shared != "" {
+		rl.addLocked(shared, now)
 	}
 	return ""
 }
@@ -1120,8 +1134,8 @@ func (rl *authRateLimiter) refund(ip string) {
 	if prefix := authPrefix(ip); prefix != "" {
 		rl.dropLastLocked(prefix)
 	}
-	if viaProxy(ip) {
-		rl.dropLastLocked(authProxiedKey)
+	if shared := sharedKey(ip); shared != "" {
+		rl.dropLastLocked(shared)
 	}
 }
 

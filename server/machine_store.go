@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -144,10 +145,25 @@ func saveMachines(path string, list []machineRecord) error {
 	if err != nil {
 		return err
 	}
+	return writePrivateFile(path, append(data, '\n'))
+}
+
+// findMachine returns the index of the machine whose id is key, else of the
+// one whose label is key, or -1: a label may look like another machine's id.
+func findMachine(list []machineRecord, key string) int {
+	if i := slices.IndexFunc(list, func(m machineRecord) bool { return m.ID == key }); i >= 0 {
+		return i
+	}
+	return slices.IndexFunc(list, func(m machineRecord) bool { return m.Label == key })
+}
+
+// writePrivateFile replaces path with data, mode 0600, from a whole copy
+// written beside it: a full disk never leaves it half written.
+func writePrivateFile(path string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".machines-*.json")
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+"-*")
 	if err != nil {
 		return err
 	}
@@ -156,7 +172,7 @@ func saveMachines(path string, list []machineRecord) error {
 		tmp.Close()
 		return err
 	}
-	if _, err := tmp.Write(append(data, '\n')); err != nil {
+	if _, err := tmp.Write(data); err != nil {
 		tmp.Close()
 		return err
 	}
@@ -164,15 +180,4 @@ func saveMachines(path string, list []machineRecord) error {
 		return err
 	}
 	return os.Rename(tmp.Name(), path)
-}
-
-// findMachine returns the index of the machine whose id or label is key,
-// or -1.
-func findMachine(list []machineRecord, key string) int {
-	for i, m := range list {
-		if m.ID == key || m.Label == key {
-			return i
-		}
-	}
-	return -1
 }

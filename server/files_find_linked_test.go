@@ -90,7 +90,7 @@ func TestSearchLinkedDirs(t *testing.T) {
 func TestFindLinkedDirsEdges(t *testing.T) {
 	fx := newLinkedFixture(t)
 	f := &filesAPI{git: newGitRunner()}
-	root := filesRoot{Root: fx.wt, IsRepo: true}
+	root := filesRoot{Root: fx.wt, IsRepo: true, GitDir: filepath.Join(fx.main, ".git", "worktrees", "wt")}
 	writeFile(t, filepath.Join(fx.wt, "untracked.md"), "x\n")
 	writeFile(t, filepath.Join(fx.wt, "newdir", "a.md"), "x\n")
 	for link, target := range map[string]string{
@@ -188,5 +188,43 @@ func TestFindLinkedUnderIgnoredDir(t *testing.T) {
 	got := fx.findPaths(t, fullRequest("/api/mux/panes/0/files/find?q=p.md&ignored=1"))
 	if !slices.Contains(got, "hp/p.md") || slices.ContainsFunc(got, func(p string) bool { return strings.Contains(p, "other") }) {
 		t.Errorf("find under an ignored dir = %v", got)
+	}
+}
+
+// A root holding the home dir reads no dot-path, by its name or where it
+// leads, and neither does a link into a work tree holding it: a link of an
+// ordinary name into another work tree is not searched when the path it
+// leads to there has a dot part.
+func TestSearchLinkedDotTargetUnderHome(t *testing.T) {
+	fx := newLinkedFixture(t)
+	writeFile(t, filepath.Join(fx.main, ".notesrc"), "needle\n")
+	writeFile(t, filepath.Join(fx.main, ".cfg", "a.md"), "needle\n")
+	writeFile(t, filepath.Join(fx.main, "plain.md"), "needle\n")
+	for link, to := range map[string]string{
+		"rc.md":     filepath.Join(fx.main, ".notesrc"),
+		"cfg.md":    filepath.Join(fx.main, ".cfg", "a.md"),
+		"plain2.md": filepath.Join(fx.main, "plain.md"),
+	} {
+		if err := os.Symlink(to, filepath.Join(fx.wt, link)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The pane's root holds home, or the work tree the links lead into does.
+	for _, home := range []string{fx.wt, fx.main} {
+		t.Setenv("HOME", home)
+		code, body := fx.get(t, fullRequest("/api/mux/panes/0/files/search?q=needle"))
+		if code != http.StatusOK {
+			t.Fatalf("HOME %s: search = %d %v", home, code, body)
+		}
+		var paths []string
+		for _, f := range body["files"].([]any) {
+			paths = append(paths, f.(map[string]any)["path"].(string))
+		}
+		if want := []string{"plain2.md"}; !slices.Equal(paths, want) {
+			t.Errorf("HOME %s: search = %v, want %v", home, paths, want)
+		}
+		if skipped, _ := body["skipped"].(map[string]any); skipped["hidden"] != float64(2) {
+			t.Errorf("HOME %s: skipped = %v", home, body["skipped"])
+		}
 	}
 }

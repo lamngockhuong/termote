@@ -75,7 +75,14 @@ func TestDialMachineSSHTimeoutAndCancel(t *testing.T) {
 	if _, _, err := dialMachineSSH(context.Background(), shArgv(`exec sleep 30`)); !errors.Is(err, errMachineOffline) {
 		t.Errorf("timeout: %v", err)
 	}
+	// A first line longer than a greeting is not read to its end: the
+	// machine is no bridge, whatever it goes on sending.
 	bridgeGreetingWait = 10 * time.Second
+	for _, script := range []string{`head -c 70000 /dev/zero; exec sleep 30`, `printf 'TERMOTE-BRIDGE 1 '; head -c 70000 /dev/zero; exec sleep 30`} {
+		if _, _, err := dialMachineSSH(context.Background(), shArgv(script)); !errors.Is(err, errMachineIncompatible) {
+			t.Errorf("endless first line %q: %v", script, err)
+		}
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() { time.Sleep(30 * time.Millisecond); cancel() }()
 	if _, _, err := dialMachineSSH(ctx, shArgv(`exec sleep 30`)); !errors.Is(err, context.Canceled) {

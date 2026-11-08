@@ -48,6 +48,14 @@ var (
 // machineMaxConns bounds the connections (ssh processes) open to a machine.
 const machineMaxConns = 16
 
+// machineResponseHeaderWait bounds the wait for a machine's answer to a
+// request, so one that never answers does not hold the connections; what a
+// machine does for a request is bounded below it, the longest an agent
+// message (messageBudget: five images and 16 KB pasted slowly, about 7
+// minutes), then a worktree change (worktreeLockWait + worktreeTimeout). A
+// test checks both.
+var machineResponseHeaderWait = 8 * time.Minute
+
 // machineLink is one machine: its record, status and HTTP transport.
 type machineLink struct {
 	rec       machineRecord
@@ -118,11 +126,12 @@ func (l *machineLink) end() {
 func newMachineLink(rec machineRecord, d machineDialer) *machineLink {
 	l := &machineLink{rec: rec, dialer: d, status: machineConnecting, conns: map[*linkConn]struct{}{}}
 	l.transport = &http.Transport{
-		DialContext:         func(ctx context.Context, _, _ string) (net.Conn, error) { return l.dial(ctx) },
-		MaxConnsPerHost:     machineMaxConns,
-		MaxIdleConnsPerHost: 4,
-		IdleConnTimeout:     90 * time.Second,
-		DisableCompression:  true,
+		DialContext:           func(ctx context.Context, _, _ string) (net.Conn, error) { return l.dial(ctx) },
+		MaxConnsPerHost:       machineMaxConns,
+		MaxIdleConnsPerHost:   4,
+		IdleConnTimeout:       90 * time.Second,
+		ResponseHeaderTimeout: machineResponseHeaderWait,
+		DisableCompression:    true,
 	}
 	return l
 }
@@ -212,11 +221,13 @@ func (l *machineLink) retryNow() {
 	l.mu.Unlock()
 }
 
-// logSSHStderr writes a few lines of ssh's stderr to the log.
+// logSSHStderr writes a few lines of ssh's stderr to the log, without
+// control characters: the machine writes some of it, and a \r or an escape
+// sequence would rewrite the log in a terminal.
 func logSSHStderr(label, stderr string) {
 	lines := strings.Split(strings.TrimSpace(stderr), "\n")
 	for i, line := range lines {
-		if line = strings.TrimSpace(line); line == "" {
+		if line = strings.TrimSpace(stripUnsafeRunes(line)); line == "" {
 			continue
 		}
 		if i == 5 {

@@ -98,7 +98,10 @@ what Termote can reach, run it as another user with less access.
   still fill the shared limit below for a minute), but only Cloudflare Access (or the tunnel's own
   sign-in, such as private Dev Tunnels) keeps strangers from the sign-in page. `start` and `status`
   warn when a Cloudflare hostname answers without Access. A local process can set the client header
-  itself; every attempt through a proxy shares one cap of 30 a minute.
+  itself; every attempt through a proxy client header or a tailnet login shares one cap of 30 a
+  minute, and the rest of loopback (sign-ins on the machine itself, and a `tailscale serve` request
+  without a login) has one of its own, so such a process gets 60 a minute in all; in a container the
+  host's own sign-ins usually come from the bridge gateway and count under its address.
 - **Proxies running as root or SYSTEM.** `tailscale serve`, `docker-proxy` and other root proxies are
   trusted (root reads the saved config anyway), so every local user can go through them. On Windows the
   same holds for a running service whose process the server's user can open but whose token it cannot

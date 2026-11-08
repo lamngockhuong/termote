@@ -517,7 +517,11 @@ func (sc *searchScan) file(ctx context.Context, i int, rel string) searchOutcome
 	searchBeforeFile(rel)
 	fh, err := sc.rt.OpenFile(native, os.O_RDONLY|openNonblock, 0)
 	if isPathEscape(err) && sc.view == nil {
-		fh, err = sc.openLinked(native)
+		var hidden bool
+		if fh, hidden, err = sc.openLinked(native); hidden {
+			out.skip = skipHidden
+			return out
+		}
 	}
 	if err != nil {
 		return out // gone, or a link out of the root
@@ -541,13 +545,19 @@ func (sc *searchScan) file(ctx context.Context, i int, rel string) searchOutcome
 
 // openLinked opens native, a path leading out of the root, in the work tree
 // of the repository it leads into (linkedTarget, with its deny checks): a
-// file under a linked directory (findLinkedFiles).
-func (sc *searchScan) openLinked(native string) (*os.File, error) {
+// file under a linked directory (findLinkedFiles). hidden, and nothing
+// opened, when the root or that work tree holds a home dir and the path it
+// leads to in that work tree has a dot part.
+func (sc *searchScan) openLinked(native string) (fh *os.File, hidden bool, err error) {
 	t, ok := sc.f.linkedTarget(sc.root, native, sc.trees())
 	if !ok {
-		return nil, os.ErrNotExist
+		return nil, false, os.ErrNotExist
 	}
-	return openInRoot(t.root, t.rel)
+	if hasDotPart(filepath.ToSlash(t.rel)) && (sc.hideDots || sc.f.holdsHome(t.root)) {
+		return nil, true, nil
+	}
+	fh, err = openInRoot(t.root, t.rel)
+	return fh, false, err
 }
 
 // searchLines finds the matching lines of a text file: up to

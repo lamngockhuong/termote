@@ -983,8 +983,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `server/files_linked.go`) is read by `files/tree`, `files/content`, `files/raw` (the worktree
   file, never a `side`) and `files/document` (`rootFor`) only for a full client, only when it
   resolves inside another work tree of the root's own repository (`git worktree list --porcelain
-  -z` through `gitRunner`, bare entries and paths that do not resolve left out, the deepest work
-  tree holding it), and only when that path is under no deny dir, the root's git dir, the shared
+  -z` through `gitRunner`, git 2.36 or later: an older git fails it, logged once, and no link is
+  followed; bare entries, paths that do not resolve and work trees whose `.git` does
+  not lead back to the shared git dir or a `worktrees/<name>` under it left out (`ownWorktrees`: git
+  lists a work tree from that record, which can name any directory), the deepest work tree holding
+  it), and only when that path is under no deny dir, the root's git dir, the shared
   git dir (`commonGitDir`) or a `.git` below that work tree (a link listed inside such a directory
   is checked the same way); it is opened through `os.Root` at that work tree by its resolved path,
   never by the link, so a swap stays in that work tree. Anything else, or a view-only client:
@@ -1529,7 +1532,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   dot-path is skipped (`skipped.hidden`: shell histories hold secrets under ordinary names);
   then one `EvalSymlinks` shared by `deniedPaths` (deny dirs, the git dir, `.git` parts, on
   both paths), the view-only target check (where a link leads must be listed), the dot-path
-  rule on where a link leads (a link of an ordinary name to `.bash_history`) and
+  rule on where a link leads (a link of an ordinary name to `.bash_history`; for a link into another
+  work tree, its path in that work tree, checked before it is opened) and
   `isSensitive` on both paths (never opened, `skipped.sensitive`). Only then `os.Root`
   `OpenFile` with `openNonblock`, and every check on the handle (`readTextFile`, shared with
   content): regular, at most 1 MiB (`skipped.tooLarge`), a NUL in the first 8 KiB stops the read
@@ -2103,15 +2107,26 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   or `CF-Connecting-IP` implied by `--cloudflare`; `authOpts.ProxyHeader`), an attempt counts under
   `px:<address>` (`proxyClientIP`): the header's value, the last entry of `X-Forwarded-For`, used only
   when it parses as an IP address (zone dropped, IPv4-mapped unmapped), else the request's own
-  address; `Tailscale-User-Login` still wins over it. Natively the header is read over loopback only;
-  in the container (`TERMOTE_PROXY_CLIENT_HEADER`, `ProxyClientAnySource`) from any source, which is
-  why `container up` refuses a client header with `--lan` (a LAN machine comes in through the
-  gateway like the proxy) and passes it only with the port published on `127.0.0.1`. The /64 cap
-  applies to `px:` addresses too, under a `px:` prefix of its own. Every attempt over loopback or
-  under a `ts:` or `px:` key also counts toward one shared cap of 30/min (`authMaxProxiedFailures`,
-  key `proxied`): a local process setting a header itself (no owner check on macOS loopback), or a
-  tailnet node whose `tailscale serve` passes the client's `CF-Connecting-IP` through, guesses no
-  faster than that. A refund takes back all of them. A container without a client header still
+  address. A `px:` key comes before `Tailscale-User-Login`: cloudflared passes on what an Internet
+  client sent, a login included, so that client could otherwise count its failures under a tailnet
+  user's `ts:` key and lock that user out (cloudflared always sets its header; a value that is no
+  address leaves the login, else the address, as the key). With `X-Forwarded-For` as the client
+  header, a tailnet user whose request carries one counts under `px:` too. Natively the header is read over
+  loopback only; in the container (`TERMOTE_PROXY_CLIENT_HEADER`, `ProxyClientAnySource`, set only
+  when `runningInContainer`: a server run by hand from the environment reads it over loopback only)
+  from any source, which is why `container up` refuses a client header with `--lan` (a LAN machine
+  comes in through the gateway like the proxy) and passes it only with the port published on
+  `127.0.0.1`. The /64 cap applies to `px:` addresses too, under a `px:` prefix of its own. Every
+  attempt under a `ts:` or `px:` key also counts toward one shared cap of 30/min
+  (`authMaxProxiedFailures`, key `proxied`): a local process setting a header itself (no owner check
+  on macOS loopback), or a tailnet node whose `tailscale serve` passes the client's
+  `CF-Connecting-IP` through (counted under that `px:` address then, not its login), guesses no faster
+  than that with a header. Every attempt over loopback under its own address (no proxy key: the CLI,
+  a local browser, and a `tailscale serve` request with no login, from a tagged node or Funnel)
+  counts toward a cap of the same size of its own (`sharedKey`, key `loopback`), since any `127.x`
+  source address is a new key: attempts under a `ts:` or `px:` key filling theirs do not lock it out,
+  and a local process gets 30/min under each, 60 in all.
+  A refund takes back all of them. A container without a client header still
   counts under the gateway address. The pairing limiter keys the same way except that it never
   reads `Tailscale-User-Login`. Failed logins and blocked clients are logged with the client
   address (`<proxy-reported address> via <proxy address>` for a `px:` key; the reported address is
@@ -2206,8 +2221,13 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `PermitLocalCommand=no`, `RemoteCommand=none`, `RequestTTY=no`, `Tunnel=no`, `ControlMaster=no`,
   `ControlPath=none`, `UpdateHostKeys=no`, `CheckHostIP=no`) and keys the host as
   `HostKeyAlias=termote-<id>` in termote's own `ssh/known_hosts`. termote's key (`ssh/id_ed25519`, dir
-  0700, no passphrase) is made by `ssh-keygen` and never printed. `add` runs the user's ssh at the
-  terminal (`StrictHostKeyChecking=ask`: the only TOFU), asks `termote machine whereami` there for its
+  0700, no passphrase) is made by `ssh-keygen` and never printed. Before its first ssh, `add` copies
+  what the user's own known_hosts files (`ssh -G`'s `userknownhostsfile` and `globalknownhostsfile`)
+  hold for the host (`ssh-keygen -F` on its `HostKeyAlias`, else its host, `[host]:port` off port 22)
+  into termote's, as `termote-<id>`, a `@revoked` marker kept and `@cert-authority` lines left out (a
+  certificate never names `termote-<id>`) (`seedHostKeys`), so a host whose key the user already
+  trusts is checked against that key and a changed one refused. `add` runs the user's ssh at the
+  terminal (`StrictHostKeyChecking=ask`: the only TOFU, for a host none of those files knows), asks `termote machine whereami` there for its
   stable path (Windows: `termote.exe`, never the `.cmd` shim) and socket dir. Where that Unix script says
   `TERMOTE-NOT-FOUND` (exit 3, reported as such, never as ssh failing), only after a yes (or `--yes`) it
   runs the online installer there over the same ssh, downloaded to a `mktemp` file first (a failed
@@ -2222,9 +2242,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `--print-key` (and every Windows machine) only prints it. A machine is saved only after the
   service's own connection (`BatchMode`, `StrictHostKeyChecking=yes`, `IdentitiesOnly`,
   `IdentityAgent=none`) read the bridge greeting and an equal `apiVersion` (`--no-check` skips it);
-  an alias with a `ProxyCommand`/`ProxyJump` is warned about. `remove` asks before dropping the key's
+  an alias with a `ProxyCommand`/`ProxyJump` is warned about. `remove <id|label>` matches an id before a
+  label, since a label may look like another machine's id (`findMachine`), and asks before dropping the key's
   lines there (matched on the key's base64; the file is rewritten only from a whole copy, so a full disk
-  never empties it) and drops the host key (`ssh-keygen -R`). The running
+  never empties it) and drops the host key (`forgetMachineHost`: `ssh-keygen -R`, then the `@revoked` lines
+  it keeps, the file rewritten from a whole copy), as a failed `add` does for the lines it copied or learnt. The running
   server is told over the local socket only (`machines/reload`). `uninstall --purge` removes the store
   and key with the config dir; the lines on the machines stay
 - **Machine transport** (`server/machine_link.go`, `server/machine_conn.go`, `server/machine_serve.go`,
@@ -2234,13 +2256,18 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `<path>.<16 chars>` first, else `$TMPDIR/termote-<uid>/<id>`, else no multiplexing; a socket left
   there gets `-O exit` and is removed before a new master. Every HTTP connection is one
   `ssh -S <ctl> ... -- <alias> bridge` (Windows: its own ssh) with the service options of the Machines
-  CLI entry, used only after the greeting line (10 s) and, after any failure, an equal `apiVersion`
-  over a connection of its own; at most 16 per machine, idle 90 s. Every ssh runs in its own process
+  CLI entry, used only after the greeting line (10 s, read up to the reader's 4 KB buffer: a longer first
+  line is incompatible, greeting or not, never read to its end) and, after any failure, an equal `apiVersion` over a
+  connection of its own; at most 16 per machine (a forwarded stream frees its slot once upgraded), idle
+  90 s, and an answer's headers awaited at most 8 min (`machineResponseHeaderWait`, above the longest agent
+  message, `messageBudget`, and a worktree change, a test checks), a health answer at most 20 s
+  (`machineHealthWait`), so a machine that never answers does not hold them. Every ssh runs in its own process
   group with `Pdeathsig` (Linux), is reaped as an orphan at start on macOS (`HostKeyAlias=termote-`
   in its command line) or sits in a kill-on-close Job Object (Windows), and is stopped (SIGTERM, then
   SIGKILL after 1 s) when its connection closes, its machine is removed, or the server stops. ssh's
   stderr (4 KB) is classified (`unauthorized|hostkey|incompatible|offline`) and logged (5 lines, 200
-  B each) on a status change, never sent to a client. After a failure requests fail at once for a
+  B each, control characters removed by `stripUnsafeRunes` so the machine cannot rewrite the log in a
+  terminal) on a status change, never sent to a client. After a failure requests fail at once for a
   backoff of 5 s doubling to 5 min. Masters stop after 10 min with no request or stream forwarded
   (counted while each runs), unless a device has a Web Push subscription (every machine is then polled).
   Removing a machine closes every connection open to it, a forwarded stream too, then stops its master.
@@ -2501,5 +2528,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   embedded in the binary, as it is: no request, no config read, no secret. The website publishes the
   same file as `/agents.md`. The guide tells an agent never to run `termote show-password` or
   `termote pair` for the user, never to combine `--no-auth` with `--lan`, `--tailscale` or
-  `--cloudflare`, and never to use `sudo`; a test checks that the password rule stays and that
-  every command and flag it names is in `termote help`.
+  `--cloudflare`, and never to use `sudo`; and it tells the user to see the password in a terminal of
+  their own, never through the agent (`!` in Claude Code): that output goes into the transcript, which
+  every role reads in the Chat view. A test checks that the password rule stays, that neither the guide
+  nor its website page suggests `! termote show-password`, and that every command and flag it names is
+  in `termote help`.

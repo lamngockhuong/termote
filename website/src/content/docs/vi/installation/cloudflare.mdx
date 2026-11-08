@@ -73,8 +73,9 @@ làm được.
   trường `cloudflare` và `urls.cloudflare` của `status --json`).
 - Đếm số lần đăng nhập sai theo từng client, dựa vào header `CF-Connecting-IP` do đường hầm đặt. Năm lần sai mật
   khẩu chỉ khoá client đã gõ sai. Mọi lần thử đi qua proxy vẫn chung một giới hạn 30 lần mỗi phút, nên một
-  chương trình trên máy bạn tự đặt header cũng không đoán nhanh hơn được; nhiều địa chỉ cùng đoán thì vẫn lấp
-  đầy giới hạn đó và chặn mọi người trong một phút. Có Access đứng trước thì người lạ không tới được bước này.
+  chương trình trên máy bạn tự đặt header cũng không đoán nhanh hơn được theo cách đó; nhiều địa chỉ cùng đoán
+  thì vẫn lấp đầy giới hạn đó và chặn mọi người đăng nhập qua proxy trong một phút. Khi chạy native, đăng nhập ngay trên
+  máy, không qua proxy, có giới hạn 30 lần riêng. Có Access đứng trước thì người lạ không tới được bước này.
 - Từ bên ngoài, kiểm tra xem Access có trả lời cho hostname không, lúc `start`, `container up`, `status` và khi
   mở `panel` (trường `cloudflareAccess` của `status --json`: `on`, `off` hoặc `unknown`). `unknown` thường có
   nghĩa là `cloudflared` chưa chạy.

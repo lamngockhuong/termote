@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"errors"
+	"io"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -154,6 +156,12 @@ func TestLogSSHStderr(t *testing.T) {
 	if !strings.Contains(out, "ssh: a") || strings.Contains(out, "ssh: g") || !strings.Contains(out, "more lines") {
 		t.Errorf("stderr log:\n%s", out)
 	}
+	// What the machine wrote cannot move the cursor or color the log
+	logs.Reset()
+	logSSHStderr("Box", "x\rforged line\x1b[2K\x1b[31m\u202e\n")
+	if out := logs.String(); strings.ContainsAny(out, "\r\x1b\u202e") || !strings.Contains(out, "ssh: xforged line[2K[31m") {
+		t.Errorf("control characters reached the log: %q", out)
+	}
 }
 
 // reload follows the store: new machines get a link, removed ones are
@@ -291,5 +299,61 @@ func TestNewServeMachines(t *testing.T) {
 		t.Error("a broken store gave no manager")
 	} else {
 		m.stop()
+	}
+}
+
+// silentDialer connects to a machine that reads requests and never answers
+// them, after answering the first connection's health check when healthy.
+type silentDialer struct {
+	fakeDialer
+	healthy bool
+}
+
+func (d *silentDialer) dial(context.Context, machineRecord) (net.Conn, string, error) {
+	d.mu.Lock()
+	d.dials++
+	first := d.dials == 1
+	d.mu.Unlock()
+	if first && d.healthy {
+		return newHealthConn(d.t, apiVersion), "", nil
+	}
+	mine, theirs := net.Pipe()
+	go io.Copy(io.Discard, theirs)
+	d.t.Cleanup(func() { theirs.Close() })
+	return mine, "", nil
+}
+
+// The wait for a machine's answer outlasts the longest request a machine
+// serves: an agent message at its limits, and a worktree change.
+func TestMachineResponseHeaderWaitBound(t *testing.T) {
+	// The longest: every image, the text split around them, the draft
+	// replaced first (agentInput's message handler).
+	var textWait time.Duration
+	for range agentMaxImages + 1 {
+		textWait += pasteGrowMost(strings.Repeat("x", agentMaxText/(agentMaxImages+1)))
+	}
+	message := messageBudget(agentMaxImages, textWait) + agentConfirmWait + muxTimeout
+	if machineResponseHeaderWait <= message || machineResponseHeaderWait <= worktreeLockWait+worktreeTimeout {
+		t.Errorf("machineResponseHeaderWait %v, an agent message takes up to %v", machineResponseHeaderWait, message)
+	}
+}
+
+// A machine that never answers its health check or a request frees the
+// connection after machineHealthWait or machineResponseHeaderWait, not when
+// the client gives up.
+func TestMachineLinkResponseHeaderWait(t *testing.T) {
+	old, oldHealth := machineResponseHeaderWait, machineHealthWait
+	machineResponseHeaderWait, machineHealthWait = 50*time.Millisecond, 50*time.Millisecond
+	t.Cleanup(func() { machineResponseHeaderWait, machineHealthWait = old, oldHealth })
+	for _, healthy := range []bool{false, true} {
+		l := newMachineLink(testMachine("0123456789abcdef", "Box", "box"), &silentDialer{fakeDialer: fakeDialer{t: t}, healthy: healthy})
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		req, _ := http.NewRequestWithContext(ctx, "GET", "http://machine/api/mux/snapshot", nil)
+		start := time.Now()
+		_, err := l.transport.RoundTrip(req)
+		cancel()
+		if err == nil || time.Since(start) > 2*time.Second {
+			t.Errorf("healthy=%v: RoundTrip = %v after %v, want a header timeout", healthy, err, time.Since(start))
+		}
 	}
 }
