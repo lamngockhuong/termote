@@ -1,5 +1,32 @@
 # Changelog
 
+## [2.24.0](https://github.com/lamngockhuong/termote/compare/v2.23.0...v2.24.0) (2026-11-08)
+
+
+### Features
+
+* a guide for coding agents (termote help agent, /agents.md, llms.txt) ([#738](https://github.com/lamngockhuong/termote/issues/738)) ([b036eec](https://github.com/lamngockhuong/termote/commit/b036eec4d825e62c4c287d69c7978a8be45972dd))
+* git blame in the file viewer ([#740](https://github.com/lamngockhuong/termote/issues/740)) ([a992b7a](https://github.com/lamngockhuong/termote/commit/a992b7a1eefee323c191a0eae29f2743f041bfe8))
+* **pwa:** name the machine the sidebar list belongs to ([#743](https://github.com/lamngockhuong/termote/issues/743)) ([48a4c13](https://github.com/lamngockhuong/termote/commit/48a4c136af669944c1b55d074b39f50027082384))
+* right-click menus for Files, file tabs and Changes ([#737](https://github.com/lamngockhuong/termote/issues/737)) ([99393e5](https://github.com/lamngockhuong/termote/commit/99393e50a4109f4482dd46890ef7f50bdeba0150))
+* running subagents and their tokens in the Chat view ([#744](https://github.com/lamngockhuong/termote/issues/744)) ([9b9708f](https://github.com/lamngockhuong/termote/commit/9b9708fcf3b3b06abadbb6c74a69f6d15b71c977))
+* **server:** follow Codex /new and /resume in the Chat view ([#752](https://github.com/lamngockhuong/termote/issues/752)) ([8c5c83b](https://github.com/lamngockhuong/termote/commit/8c5c83b6c7f5d51967a5dea70a367ce077b875b5)), closes [#289](https://github.com/lamngockhuong/termote/issues/289)
+* **server:** offer Files and Changes on Windows with psmux ([#755](https://github.com/lamngockhuong/termote/issues/755)) ([5351a70](https://github.com/lamngockhuong/termote/commit/5351a708326e334e3cb3303c4549de0963eb168a)), closes [#552](https://github.com/lamngockhuong/termote/issues/552)
+* **website:** keyword titles, guides, docs JSON-LD, a lighter home page and a split Files page ([#749](https://github.com/lamngockhuong/termote/issues/749)) ([2025685](https://github.com/lamngockhuong/termote/commit/2025685db46566a1dc1c5446bf39ea2f98d26034))
+* **website:** search titles, JSON-LD, sitemap dates and a robots.txt for the site ([#745](https://github.com/lamngockhuong/termote/issues/745)) ([4cc72dd](https://github.com/lamngockhuong/termote/commit/4cc72ddb202faa29947445be0e3691c979c7cd99))
+
+
+### Bug Fixes
+
+* bound the wait for a pane's lock so machine writes end before the hub gives up ([#753](https://github.com/lamngockhuong/termote/issues/753)) ([5bca315](https://github.com/lamngockhuong/termote/commit/5bca315f713453832209a4502ccb3edcc30cdc2c))
+* harden the agent guide, linked work trees, sign-in rate limits and machines ([#750](https://github.com/lamngockhuong/termote/issues/750)) ([7f31e20](https://github.com/lamngockhuong/termote/commit/7f31e208ae5af57cdbc7bcf54577a32014a2c268))
+* harden the container password, push sign-ins, machine bodies and image tagging ([#758](https://github.com/lamngockhuong/termote/issues/758)) ([0962e4a](https://github.com/lamngockhuong/termote/commit/0962e4a689e9fc6d2d1a02814e7a11dc0e4f1a27))
+* **install:** refuse a signed release no local tool can verify ([#756](https://github.com/lamngockhuong/termote/issues/756)) ([639a377](https://github.com/lamngockhuong/termote/commit/639a377b81de4d2e476777a4dff93cbf9f0c2dd7))
+* **machine:** start termote after installing it, even with a leftover config ([#742](https://github.com/lamngockhuong/termote/issues/742)) ([06dac2d](https://github.com/lamngockhuong/termote/commit/06dac2dd1fcbbc6d8d1937f8bbd541bd0065bdcd))
+* **server:** show Codex dialogs on Herdr as a read-only card by their shape ([#754](https://github.com/lamngockhuong/termote/issues/754)) ([f4b9d9d](https://github.com/lamngockhuong/termote/commit/f4b9d9da42d72af4b45968947863154ebafd39c2)), closes [#293](https://github.com/lamngockhuong/termote/issues/293)
+* **server:** turn off hooks defined in git config for Files' git ([#757](https://github.com/lamngockhuong/termote/issues/757)) ([7fe180c](https://github.com/lamngockhuong/termote/commit/7fe180cf4d86f69394cf85239fe82ccd9b83ea88))
+* **website:** one primary hero action, balanced tagline and a hero background ([#741](https://github.com/lamngockhuong/termote/issues/741)) ([8691764](https://github.com/lamngockhuong/termote/commit/86917645e52b87a635b7db43c7d9e53a3e176890))
+
 ## [2.23.0](https://github.com/lamngockhuong/termote/compare/v2.22.0...v2.23.0) (2026-11-07)
 
 
