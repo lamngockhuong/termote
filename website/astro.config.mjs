@@ -156,6 +156,17 @@ export default defineConfig({
           ],
         },
         {
+          label: "Guides",
+          translations: { vi: "Hướng dẫn" },
+          items: [
+            {
+              label: "Claude Code from Your Phone",
+              link: "/guides/claude-code-from-phone/",
+              translations: { vi: "Claude Code từ điện thoại" },
+            },
+          ],
+        },
+        {
           label: "Usage",
           items: [
             { label: "Agent Chat", link: "/usage/agent-chat/" },
