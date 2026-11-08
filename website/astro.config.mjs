@@ -167,7 +167,7 @@ export default defineConfig({
             {
               label: "Remote Control Alternatives",
               link: "/guides/remote-control-alternatives/",
-              translations: { vi: "Thay Remote Control" },
+              translations: { vi: "Lựa chọn thay Remote Control" },
             },
           ],
         },
