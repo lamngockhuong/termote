@@ -124,6 +124,7 @@ export default {
   'errors.sensitive': 'File này có thể chứa bí mật. Hãy hiện nó trước',
   'errors.session_changed': 'Pane giờ đang chạy một phiên khác',
   'errors.shell_busy': 'Shell của tab đang bận',
+  'errors.signed_out': 'Lần đăng nhập này đã kết thúc. Hãy đăng nhập lại',
   'errors.stale_hunk': 'Thay đổi không còn khớp với file',
   'errors.start_failed': 'Không khởi động được agent',
   'errors.start_pending':
