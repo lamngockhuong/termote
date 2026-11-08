@@ -115,6 +115,20 @@ export default defineConfig({
           },
         },
         { tag: "script", content: trackEvents },
+        // Fetch an internal page when the pointer rests on its link or a
+        // finger touches it, so it opens at once; not the demo, a whole app
+        {
+          tag: "script",
+          attrs: { type: "speculationrules" },
+          content: JSON.stringify({
+            prefetch: [
+              {
+                where: { and: [{ href_matches: "/*" }, { not: { href_matches: "/demo/*" } }] },
+                eagerness: "moderate",
+              },
+            ],
+          }),
+        },
       ],
       social: [
         {

@@ -1,32 +1,103 @@
 ---
 // The one-minute feature intro with its sound, played only when asked. Made by
-// video/ (`TermoteIntro`, poster `TermotePoster`).
+// video/ (`TermoteIntro`, poster `TermotePoster`). Until then only its poster
+// is on the page, loaded as it nears the screen; a tap puts the player in its
+// place and starts it.
 interface Props {
   label: string;
 }
 const { label } = Astro.props;
 ---
 
-<video
-  class="intro-video"
-  src="/video/termote-intro.mp4"
-  poster="/video/termote-intro.jpg"
-  width="1920"
-  height="1080"
-  controls
-  playsinline
-  preload="none"
-  aria-label={label}
->
-</video>
+<div class="intro-video">
+  <button type="button" class="intro-video-start" aria-label={label}>
+    <img
+      class="intro-video-frame"
+      src="/video/termote-intro.jpg"
+      width="1920"
+      height="1080"
+      loading="lazy"
+      decoding="async"
+      alt=""
+    />
+    <span class="intro-video-play" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor"><path d="M8 5v14l11-7z"></path></svg>
+    </span>
+  </button>
+  <template>
+    <video
+      class="intro-video-frame"
+      src="/video/termote-intro.mp4"
+      poster="/video/termote-intro.jpg"
+      width="1920"
+      height="1080"
+      controls
+      playsinline
+      preload="none"
+      aria-label={label}
+    >
+    </video>
+  </template>
+</div>
+
+<script>
+  for (const box of document.querySelectorAll<HTMLElement>(".intro-video")) {
+    const start = box.querySelector("button");
+    const template = box.querySelector("template");
+    start?.addEventListener("click", () => {
+      const video = template?.content.querySelector("video")?.cloneNode(true);
+      if (!(video instanceof HTMLVideoElement)) return;
+      start.replaceWith(video);
+      video.focus();
+      void video.play().catch(() => {
+        // Autoplay refused: the controls are there to start it
+      });
+    });
+  }
+</script>
 
 <style>
-  .intro-video {
+  .intro-video-start {
+    position: relative;
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+  }
+
+  .intro-video-frame {
     display: block;
     width: 100%;
     height: auto;
     border-radius: 0.75rem;
     border: 1px solid var(--sl-color-gray-5);
     background: #101316;
+  }
+
+  .intro-video-play {
+    position: absolute;
+    inset: 50% auto auto 50%;
+    display: grid;
+    place-items: center;
+    width: 4.5rem;
+    height: 4.5rem;
+    border-radius: 50%;
+    color: #fff;
+    background: rgb(0 0 0 / 0.6);
+    transform: translate(-50%, -50%);
+    transition: background 0.15s;
+  }
+
+  .intro-video-start:hover .intro-video-play,
+  .intro-video-start:focus-visible .intro-video-play {
+    background: var(--sl-color-accent);
+  }
+
+  .intro-video-start:focus-visible {
+    outline: 2px solid var(--sl-color-accent);
+    outline-offset: 2px;
+    border-radius: 0.75rem;
   }
 </style>
