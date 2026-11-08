@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -82,6 +83,9 @@ func TestGitWorktreeRepoInfo(t *testing.T) {
 }
 
 func TestGitWorktreeParseEntries(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix paths; no worktrees from git on Windows")
+	}
 	out := "worktree /r\x00HEAD 1\x00branch refs/heads/main\x00\x00" +
 		"worktree /r/a\x00HEAD 2\x00detached\x00\x00" +
 		"worktree /r/b\x00HEAD 3\x00branch refs/heads/a​b\x00prunable gitdir file points to non-existent location\x00\x00" +
@@ -211,7 +215,8 @@ func TestGitWorktreeAddRemove(t *testing.T) {
 	if err := addWorktree(ctx, rr.git, src, newPath, "feat/new", "e2e-base", false); err != nil {
 		t.Fatal(err)
 	}
-	if fi, err := os.Stat(filepath.Dir(newPath)); err != nil || fi.Mode().Perm() != 0o700 {
+	// Windows has no Unix modes (and no worktrees from git).
+	if fi, err := os.Stat(filepath.Dir(newPath)); err != nil || runtime.GOOS != "windows" && fi.Mode().Perm() != 0o700 {
 		t.Errorf("parent folder: %v %v", fi, err)
 	}
 	nw := mustRepoInfo(t, newTestRoots(), newPath)
