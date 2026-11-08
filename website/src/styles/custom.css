@@ -89,3 +89,11 @@ site-search button[data-open-modal] {
   color: var(--sl-color-gray-2);
   text-align: center;
 }
+
+/* A phone screenshot in the docs: its own size, centered, framed. */
+.sl-markdown-content .phone-shot {
+  display: block;
+  margin-inline: auto;
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 1rem;
+}

@@ -7,12 +7,16 @@ head:
 ---
 
 import { Aside } from "@astrojs/starlight/components";
+import { Image } from "astro:assets";
+import screenshot from "../../../../assets/screenshots/phone-chat.vi.webp";
 
 Trên điện thoại, câu trả lời dài trong terminal rất khó đọc, gõ lệnh vào đó cũng vậy. Khi một
 pane chạy **Claude Code** hoặc **Codex**, header hiện nút chuyển **Terminal / Chat** (trên điện thoại là một nút
 view, chạm vào sẽ mở danh sách các view). View Chat là cách nhìn thứ hai vào cùng một phiên:
 tin bạn gửi ở đây được gõ vào pane, còn agent viết gì thì cả hai view đều thấy. Không có gì tự chạy ngầm.
 Codex dùng được theo cách tương tự, có yêu cầu riêng và một điểm khác ở hộp thoại (xem [Codex](#codex)).
+
+<Image src={screenshot} alt="View Chat trên điện thoại: thay đổi của Claude Code trên login.go dạng diff, câu trả lời của nó và ô nhập tin nhắn" width={293} densities={[1, 2]} class="phone-shot" />
 
 ## Yêu cầu
 

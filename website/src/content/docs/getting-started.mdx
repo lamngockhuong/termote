@@ -7,6 +7,8 @@ head:
 ---
 
 import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
+import { Image } from "astro:assets";
+import screenshot from "../../assets/screenshots/phone-sessions.webp";
 
 Termote puts the terminal sessions of your machine, and the Claude Code or Codex running in them, on your phone or
 another computer. It is one binary: the PWA, the terminal stream, the API and the login all live in it. You install
@@ -58,6 +60,8 @@ instead. No sudo or administrator rights are needed: everything goes into your h
 </Aside>
 
 ## Open Termote on Your Phone
+
+<Image src={screenshot} alt="Termote on a phone: the Sessions sheet lists each workspace and its agents, with how many wait on you" width={293} densities={[1, 2]} class="phone-shot" />
 
 <Steps>
 1. Make it reachable from the phone: `termote start --lan` on your home network, or

@@ -7,6 +7,8 @@ head:
 ---
 
 import { Aside } from "@astrojs/starlight/components";
+import { Image } from "astro:assets";
+import screenshot from "../../../assets/screenshots/phone-files.webp";
 
 To see what an agent changed, you would otherwise type `ls`, `cat` and `git diff` on a phone
 keyboard and read the output in a terminal. Termote has two views for this:
@@ -24,6 +26,8 @@ Files (see [Creating a File](/usage/file-editing/#creating-a-file)), a file or a
 [Renaming or Moving a File](/usage/file-editing/#renaming-or-moving-a-file)). Changes can also stage and discard
 ([Staging, Unstaging and Discarding](/usage/changes/#staging-unstaging-and-discarding)). Nothing
 else changes from them: no folder is renamed, and nothing is committed.
+
+<Image src={screenshot} alt="The Files view on a phone: the folders and files of the pane's directory, with find a file and search" width={293} densities={[1, 2]} class="phone-shot" />
 
 ## Where to Find Them
 

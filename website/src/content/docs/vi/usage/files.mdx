@@ -7,6 +7,8 @@ head:
 ---
 
 import { Aside } from "@astrojs/starlight/components";
+import { Image } from "astro:assets";
+import screenshot from "../../../../assets/screenshots/phone-files.vi.webp";
 
 Muốn biết agent đã sửa gì, thường bạn phải gõ `ls`, `cat`, `git diff` trên bàn phím điện thoại rồi
 đọc kết quả trong terminal. Termote có hai view để xem nhanh:
@@ -24,6 +26,8 @@ Trong Files, bạn tìm được file theo tên (xem [Tìm file](#tìm-file)). �
 đưa thay đổi vào index hoặc bỏ thay đổi được (xem
 [Đưa vào index, bỏ khỏi index và bỏ thay đổi](/vi/usage/changes/#đưa-vào-index-bỏ-khỏi-index-và-bỏ-thay-đổi)).
 Ngoài ra không đổi được gì khác: không đổi tên thư mục và không commit.
+
+<Image src={screenshot} alt="View Files trên điện thoại: các thư mục và file trong thư mục của pane, kèm ô tìm file và tìm nội dung" width={293} densities={[1, 2]} class="phone-shot" />
 
 ## Mở ở đâu
 

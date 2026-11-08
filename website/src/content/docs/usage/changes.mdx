@@ -6,7 +6,12 @@ head:
     content: "Read and Stage Git Diffs from Your Phone | Termote"
 ---
 
+import { Image } from "astro:assets";
+import screenshot from "../../../assets/screenshots/phone-changes.webp";
+
 When a pane's directory is in a git repository, **Changes** lists the files git reports as changed and shows the diff of each one; for an image, the version before and after. The pane's files themselves are in [Files](/usage/files/).
+
+<Image src={screenshot} alt="The Changes view on a phone: two changed files and an untracked one, each with stage and discard buttons" width={293} densities={[1, 2]} class="phone-shot" />
 
 ## Changes
 

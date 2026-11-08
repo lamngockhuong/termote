@@ -7,6 +7,8 @@ head:
 ---
 
 import { Aside } from "@astrojs/starlight/components";
+import { Image } from "astro:assets";
+import screenshot from "../../../../assets/screenshots/phone-keyboard.vi.webp";
 
 Thanh công cụ bàn phím có các nút cảm ứng cho những phím terminal hay dùng. Hàng dưới cùng giữ các
 phím dùng nhiều nhất. Nút **Extra keys** (⋯) ghim ở cuối hàng mở ra các hàng mở rộng chứa mọi phím
@@ -14,6 +16,8 @@ còn lại.
 
 Trên máy tính có bàn phím, phím tắt của ứng dụng và bảng lệnh được mô tả ở trang
 [Phím tắt và bảng lệnh](/vi/usage/keyboard-shortcuts/).
+
+<Image src={screenshot} alt="Thanh bàn phím trên điện thoại khi mở các hàng phím khác: thao tác, chữ và cuộn, và các phím di chuyển" width={293} densities={[1, 2]} class="phone-shot" />
 
 ## Hàng dưới cùng
 

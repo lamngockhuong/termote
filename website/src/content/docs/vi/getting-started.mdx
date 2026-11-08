@@ -7,6 +7,8 @@ head:
 ---
 
 import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
+import { Image } from "astro:assets";
+import screenshot from "../../../assets/screenshots/phone-sessions.vi.webp";
 
 Termote đưa các phiên terminal trên máy của bạn, cùng Claude Code hay Codex đang chạy trong đó, lên điện thoại hoặc
 một máy tính khác. Termote chỉ là một file binary, trong đó có sẵn PWA, luồng terminal, API và phần đăng nhập. Bạn
@@ -57,6 +59,8 @@ Podman hoặc Docker. Không cần sudo hay quyền quản trị: mọi thứ đ
 </Aside>
 
 ## Mở Termote trên điện thoại
+
+<Image src={screenshot} alt="Termote trên điện thoại: bảng Sessions liệt kê từng workspace cùng các agent của nó, và số agent đang chờ bạn" width={293} densities={[1, 2]} class="phone-shot" />
 
 <Steps>
 1. Cho điện thoại truy cập được: `termote start --lan` trong mạng ở nhà, hoặc `termote start --tailscale <host>` để

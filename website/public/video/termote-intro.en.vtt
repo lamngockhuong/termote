@@ -1,0 +1,82 @@
+WEBVTT
+
+1
+00:01.333 --> 00:04.500
+Your agent is waiting.
+And you're not at your desk.
+
+2
+00:04.967 --> 00:07.667
+Termote
+Your Terminal, Anywhere.
+
+3
+00:07.867 --> 00:15.167
+Two commands. One QR code.
+Install, start on your network, scan it with your phone.
+
+4
+00:15.367 --> 00:22.333
+A real terminal, built for thumbs.
+Any shell, any CLI agent. Keys for Esc, Ctrl and arrows; swipe left for Ctrl+C, right for Tab.
+
+5
+00:22.533 --> 00:32.500
+Chat with Claude Code and Codex.
+Send the next message, see that it works, answer its questions with one tap.
+
+6
+00:32.700 --> 00:39.667
+See exactly what changed.
+Browse the files, preview Markdown and diagrams, review the agent's diff.
+
+7
+00:39.867 --> 00:42.167
+Send files from your phone.
+Upload with a button, a drop or a paste.
+
+8
+00:42.167 --> 00:44.167
+Deleted by mistake?
+It waits in the trash: restore it, or delete it for good.
+
+9
+00:44.367 --> 00:49.333
+Herdr or tmux. Every agent, one place.
+Herdr workspaces with each agent's status, or your tmux sessions: the same Chat, Files and Changes.
+
+10
+00:49.533 --> 00:54.333
+Panes side by side.
+Split, zoom, swap and resize them from the Pane menu, on tmux, Herdr and Zellij.
+
+11
+00:54.533 --> 00:56.667
+Run the project's tasks.
+npm, make, Go, Gradle, Maven, Cargo and more: one tap, in a tab of its own.
+
+12
+00:56.667 --> 00:58.833
+Tiếng Việt, too.
+The whole app in English or Vietnamese, picked in Settings.
+
+13
+00:59.033 --> 01:01.833
+Get pinged when it's done.
+A push when an agent finishes or needs you.
+
+14
+01:01.833 --> 01:04.667
+Share a view-only device.
+A one-time code pairs a tablet or a teammate's phone, without the password.
+
+15
+01:04.867 --> 01:09.167
+Private by default.
+Listens on 127.0.0.1 by default · Password or paired devices · View-only role · Tailscale HTTPS · Signed releases
+
+16
+01:09.433 --> 01:14.667
+Your Terminal, Anywhere.
+curl -fsSL https://termote.ohnice.app/install.sh | sh
+termote.ohnice.app · Open source, MIT

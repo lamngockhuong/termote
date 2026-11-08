@@ -7,6 +7,8 @@ head:
 ---
 
 import { Aside, Steps } from "@astrojs/starlight/components";
+import { Image } from "astro:assets";
+import screenshot from "../../../../assets/screenshots/phone-sessions.vi.webp";
 
 Dù chạy trên tmux, Herdr hay Zellij, Termote cũng tổ chức terminal theo ba cấp: **group → tab → pane**.
 Với tmux (mặc định), mỗi group là một tmux session, mỗi tab là một tmux window và mỗi pane là một
@@ -17,6 +19,8 @@ Termote (`tmux new -s work`): ai đăng nhập Termote cũng chuyển sang và g
 của Termote (`main`, trừ khi `TMUX_SESSION` đặt tên khác) luôn đứng đầu danh sách. Mỗi thiết bị
 nhớ session mình đang xem; trong cùng một session, mọi thiết bị đang gắn vào dùng chung window
 hiện tại.
+
+<Image src={screenshot} alt="Bảng Sessions trên điện thoại: các workspace cùng phiên của chúng, trạng thái từng agent và nút New session" width={293} densities={[1, 2]} class="phone-shot" />
 
 ## Phiên mặc định
 

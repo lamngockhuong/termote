@@ -6,7 +6,12 @@ head:
     content: "Đọc và stage git diff từ điện thoại | Termote"
 ---
 
+import { Image } from "astro:assets";
+import screenshot from "../../../../assets/screenshots/phone-changes.vi.webp";
+
 Khi thư mục của pane nằm trong một repo git, **Changes** liệt kê các file git báo là đã đổi và hiện diff của từng file; với ảnh là bản trước và sau. Bản thân các file của pane nằm ở [Files](/vi/usage/files/).
+
+<Image src={screenshot} alt="View Changes trên điện thoại: hai file đã đổi và một file chưa theo dõi, mỗi file có nút stage và bỏ thay đổi" width={293} densities={[1, 2]} class="phone-shot" />
 
 ## Changes
 

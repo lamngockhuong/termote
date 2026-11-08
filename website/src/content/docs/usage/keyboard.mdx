@@ -7,6 +7,8 @@ head:
 ---
 
 import { Aside } from "@astrojs/starlight/components";
+import { Image } from "astro:assets";
+import screenshot from "../../../assets/screenshots/phone-keyboard.webp";
 
 The keyboard toolbar provides touch-friendly buttons for common terminal keys. Its bottom row holds
 the keys used most; the **Extra keys** button (⋯), pinned at its right end, shows the expanded rows
@@ -14,6 +16,8 @@ with every other key.
 
 On a desktop keyboard, the app's own keys and the command palette are in
 [Keyboard Shortcuts & Command Palette](/usage/keyboard-shortcuts/).
+
+<Image src={screenshot} alt="The keyboard toolbar on a phone with its extra rows open: actions, text and scroll, and navigation keys" width={293} densities={[1, 2]} class="phone-shot" />
 
 ## Bottom Row
 

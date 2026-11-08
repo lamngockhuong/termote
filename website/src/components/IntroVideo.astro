@@ -2,11 +2,17 @@
 // The one-minute feature intro with its sound, played only when asked. Made by
 // video/ (`TermoteIntro`, poster `TermotePoster`). Until then only its poster
 // is on the page, loaded as it nears the screen; a tap puts the player in its
-// place and starts it.
+// place and starts it. Its captions (public/video/*.vtt, the words on screen)
+// are on in the page's language.
 interface Props {
   label: string;
+  lang: "en" | "vi";
 }
-const { label } = Astro.props;
+const { label, lang } = Astro.props;
+const captions = [
+  { srclang: "en", label: "English" },
+  { srclang: "vi", label: "Tiếng Việt" },
+];
 ---
 
 <div class="intro-video">
@@ -36,6 +42,17 @@ const { label } = Astro.props;
       preload="none"
       aria-label={label}
     >
+      {
+        captions.map((c) => (
+          <track
+            kind="captions"
+            src={`/video/termote-intro.${c.srclang}.vtt`}
+            srclang={c.srclang}
+            label={c.label}
+            default={c.srclang === lang}
+          />
+        ))
+      }
     </video>
   </template>
 </div>

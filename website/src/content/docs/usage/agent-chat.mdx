@@ -7,6 +7,8 @@ head:
 ---
 
 import { Aside } from "@astrojs/starlight/components";
+import { Image } from "astro:assets";
+import screenshot from "../../../assets/screenshots/phone-chat.webp";
 
 Long replies are hard to read in a terminal on a phone, and so is typing a prompt into one. When
 a pane runs **Claude Code** or **Codex**, the header shows a **Terminal / Chat** switcher (on a phone, one
@@ -14,6 +16,8 @@ view button that opens a menu of views). The Chat view is a second way to look a
 session: what you send there is typed into the pane, and what the agent writes shows up in both
 views. Nothing runs in the background on its own. Codex works the same way, with its own requirements
 and one difference for dialogs (see [Codex](#codex)).
+
+<Image src={screenshot} alt="The Chat view on a phone: Claude Code's edit of login.go as a diff, its answer, and the message box" width={293} densities={[1, 2]} class="phone-shot" />
 
 ## Requirements
 
