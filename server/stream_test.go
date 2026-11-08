@@ -55,7 +55,16 @@ func TestMain(m *testing.M) {
 	streamInputHold = 0
 	switch os.Getenv(helperEnv) {
 	case "":
-		os.Exit(m.Run())
+		// Files' git runs with an empty hooks dir of the tests' own, not
+		// one in the user's cache dir.
+		hooks, err := os.MkdirTemp("", "termote-no-hooks-")
+		if err != nil {
+			panic(err)
+		}
+		noHooksDir = func() (string, error) { return hooks, nil }
+		code := m.Run()
+		os.RemoveAll(hooks)
+		os.Exit(code)
 	case "hc-connect":
 		helperHcConnect()
 	case "tree":

@@ -1093,8 +1093,13 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   reads a file again only when the user asks, so nothing makes the many requests a compression
   oracle (guessing a file's secret by the answer's length) needs.
   Content search and git diffs stay UTF-8 only. git runs
-  without a shell, with `GIT_*`/`TERMOTE_*` stripped, hooks (`core.hooksPath` to the null
-  device, which does not reach a hook defined in config: every `hook.<name>.*` the config
+  without a shell, with `GIT_*`/`TERMOTE_*` stripped, hooks (`core.hooksPath` to an empty
+  directory termote owns, `<user cache dir>/termote/no-hooks` (`noHooksDir`: absolute, a real directory,
+  empty, and on Unix 0700 and owned by the server user (`checkPrivateDir`), else no git runs at all,
+  `errNoHooksDir`: Files browses the folder as a plain directory, as with no git, and the allow-path
+  probe counts it as a git dir). Never the null device: Windows' `NUL` is relative, and git resolves a
+  relative `core.hooksPath` against the worktree, where a repository can ship
+  `NUL/post-index-change`. Neither reaches a hook defined in config: every `hook.<name>.*` the config
   lists, includes followed, gets `-c hook.<name>.enabled=false` on every command, looked up in
   the same `git config` call as the filter drivers; a name `-c` cannot carry (`=`, a line break)
   fails the command, `errUnsafeRepoConfig`, and a config git cannot read fails it with git's own

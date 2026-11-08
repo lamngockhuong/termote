@@ -87,10 +87,11 @@ func TestParseRepoOverrides(t *testing.T) {
 
 func TestGitArgvOverrides(t *testing.T) {
 	g := newGitRunner()
-	argv := g.argv(gitCall{root: "/r", safeDir: "/r"}, repoOverrides{filters: []string{"Evil.x"}, hooks: []string{"My.Hook"}}, []string{"status"})
+	hooks := filepath.Join(t.TempDir(), "no-hooks")
+	argv := g.argv(gitCall{root: "/r", safeDir: "/r"}, repoOverrides{filters: []string{"Evil.x"}, hooks: []string{"My.Hook"}}, hooks, []string{"status"})
 	joined := strings.Join(argv, " ")
 	for _, want := range []string{"-C /r --no-pager", "core.fsmonitor=false", "protocol.allow=never", "safe.directory=/r",
-		"core.hooksPath=" + os.DevNull, "diff.autoRefreshIndex=false", "hook.My.Hook.enabled=false",
+		"core.hooksPath=" + hooks, "diff.autoRefreshIndex=false", "hook.My.Hook.enabled=false",
 		"filter.Evil.x.clean=", "filter.Evil.x.smudge=", "filter.Evil.x.process=", "filter.Evil.x.required=false"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("argv %q lacks %q", joined, want)
@@ -98,6 +99,90 @@ func TestGitArgvOverrides(t *testing.T) {
 	}
 	if argv[len(argv)-1] != "status" {
 		t.Errorf("args must come last: %q", argv)
+	}
+}
+
+// git resolves a relative core.hooksPath against the worktree, so the
+// directory hooks are looked up in must be absolute on every OS (Windows'
+// null device, NUL, is relative), real and empty.
+func TestNoHooksDir(t *testing.T) {
+	base := t.TempDir()
+	made, err := makeNoHooksDir(filepath.Join(base, "a", "no-hooks"))
+	if err != nil {
+		t.Fatalf("makeNoHooksDir: %v", err)
+	}
+	if fi, err := os.Stat(made); err != nil || !fi.IsDir() {
+		t.Fatalf("not made: %v", err)
+	} else if runtime.GOOS != "windows" && fi.Mode().Perm() != 0o700 {
+		t.Errorf("mode = %v, want 0700", fi.Mode().Perm())
+	}
+	if _, err := makeNoHooksDir(made); err != nil {
+		t.Errorf("an existing empty dir must do: %v", err)
+	}
+	if _, err := makeNoHooksDir(os.DevNull); err == nil {
+		t.Errorf("%q must be refused", os.DevNull)
+	}
+	if _, err := makeNoHooksDir("no-hooks"); err == nil {
+		t.Error("a relative dir must be refused")
+	}
+	writeFile(t, filepath.Join(made, "post-index-change"), "#!/bin/sh\n")
+	if _, err := makeNoHooksDir(made); err == nil {
+		t.Error("a dir holding a hook must be refused")
+	}
+	file := filepath.Join(base, "file")
+	writeFile(t, file, "x")
+	if _, err := makeNoHooksDir(file); err == nil {
+		t.Error("a file must be refused")
+	}
+}
+
+// Without its empty hooks dir the runner runs no git at all.
+func TestGitRunnerNeedsNoHooksDir(t *testing.T) {
+	requireGit(t)
+	repo := newTestRepo(t)
+	saved := noHooksDir
+	t.Cleanup(func() { noHooksDir = saved })
+	noHooksDir = func() (string, error) { return "", errors.New("no cache dir") }
+	_, _, err := newGitRunner().output(context.Background(), gitCall{root: repo, safeDir: repo}, "status")
+	if !errors.Is(err, errNoHooksDir) {
+		t.Fatalf("err = %v, want errNoHooksDir", err)
+	}
+	if !gitDirProbe(newGitRunner())(repo) {
+		t.Error("the allow-path probe must count it as a git dir, refused")
+	}
+	// Files still browses the folder, as with no git at all.
+	if r, err := newRootResolver(newGitRunner()).resolve(t.Context(), repo); err != nil || r.IsRepo {
+		t.Errorf("resolve = %+v, %v; want a plain directory", r, err)
+	}
+}
+
+// A repository shipping NUL/post-index-change: with core.hooksPath=NUL, the
+// value Windows' null device gave, git runs it; through the runner it does
+// not run.
+func TestGitRunnerRunsNoRepoHookDir(t *testing.T) {
+	requireGit(t)
+	requireUnixShell(t)
+	repo := newTestRepo(t)
+	marker := filepath.Join(t.TempDir(), "ran")
+	writeFile(t, filepath.Join(repo, "NUL", "post-index-change"), "#!/bin/sh\ntouch '"+marker+"'\n")
+	if err := os.Chmod(filepath.Join(repo, "NUL", "post-index-change"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(repo, "a.txt"), "control\n")
+	gitT(t, repo, "-c", "core.hooksPath=NUL", "add", "a.txt")
+	if _, err := os.Stat(marker); err != nil {
+		t.Skipf("this git does not run a relative hooksPath's hook: %v", err)
+	}
+	os.Remove(marker)
+
+	writeFile(t, filepath.Join(repo, "b.txt"), "new\n")
+	g := newGitRunner()
+	c := gitCall{root: repo, safeDir: repo, write: true}
+	if _, _, err := g.output(context.Background(), c, "add", "b.txt"); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("the repository's NUL/post-index-change ran")
 	}
 }
 
@@ -797,7 +882,7 @@ func TestGitLazyFetchRunsNothingWithoutNoLazyFetch(t *testing.T) {
 		for i := 0; i < len(cfg); i += 2 {
 			gitT(t, clone, "config", cfg[i], cfg[i+1])
 		}
-		cmd := exec.Command("git", g.argv(gitCall{root: clone}, repoOverrides{}, []string{"cat-file", "blob", "HEAD~1:a.txt"})...)
+		cmd := exec.Command("git", g.argv(gitCall{root: clone}, repoOverrides{}, t.TempDir(), []string{"cat-file", "blob", "HEAD~1:a.txt"})...)
 		cmd.Env = env
 		out, _ := cmd.CombinedOutput()
 		if _, err := os.Stat(marker); err == nil {
