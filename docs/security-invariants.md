@@ -983,7 +983,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `server/files_linked.go`) is read by `files/tree`, `files/content`, `files/raw` (the worktree
   file, never a `side`) and `files/document` (`rootFor`) only for a full client, only when it
   resolves inside another work tree of the root's own repository (`git worktree list --porcelain
-  -z` through `gitRunner`, bare entries, paths that do not resolve and work trees whose `.git` does
+  -z` through `gitRunner`, git 2.36 or later: an older git fails it, logged once, and no link is
+  followed; bare entries, paths that do not resolve and work trees whose `.git` does
   not lead back to the shared git dir or a `worktrees/<name>` under it left out (`ownWorktrees`: git
   lists a work tree from that record, which can name any directory), the deepest work tree holding
   it), and only when that path is under no deny dir, the root's git dir, the shared

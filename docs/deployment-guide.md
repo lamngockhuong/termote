@@ -10,6 +10,7 @@
 | hc 0.1.16+    | One of tmux, herdr, zellij or hc (`--mux hc`)     | One of psmux, herdr or hc | -              |
 | psmux         | -                                                 | One of psmux, herdr or hc | -              |
 | Docker/Podman | -                                                 | -                         | Required       |
+| git 2.36+     | For Files and Changes                             | For Files and Changes     | In the image   |
 
 Native mode needs one terminal backend, not both: tmux (psmux on Windows), or
 [Herdr](https://herdr.dev/#install). Herdr need not be running: termote starts its server when a page opens (see [Herdr backend issues](#herdr-backend-issues)). The first `termote start` detects which one is there (a Herdr that answers, or tmux/psmux installed), and asks when it finds both. On Linux and
@@ -19,6 +20,10 @@ macOS, [Zellij](https://zellij.dev/documentation/installation) 0.45.0 or later (
 version; on Windows it is refused before anything is saved. On every OS,
 [herdr-core](https://herdr.dev/core/) (`hc` 0.1.16 or later) is a fourth choice, native only and
 never detected either: pick it with `--mux hc` (see [herdr-core backend](#herdr-core-backend)).
+
+Files and Changes in a git repository use the host's git; following a link into another work tree of the
+repository needs git 2.36 or later (`git worktree list -z`). With an older git such links are not followed,
+and the server logs it once.
 
 > **Windows Support**: native mode requires psmux, Herdr or herdr-core; container mode
 > requires Docker Desktop or Podman Desktop. Report any issues on GitHub.

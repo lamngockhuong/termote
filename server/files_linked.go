@@ -3,8 +3,10 @@ package main
 import (
 	"bytes"
 	"context"
+	"log"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 // A symlink that leaves the pane's root is followed only into another work
@@ -23,6 +25,10 @@ type linkedFile struct {
 // maxWorktreeList caps git worktree list's output.
 const maxWorktreeList = 256 << 10
 
+// worktreeListFailed logs once that git worktree list failed: an older git
+// than 2.36 has no -z, and links into other work trees are not followed.
+var worktreeListFailed sync.Once
+
 // worktreeRoots lists the work trees of root's repository (bare ones and
 // ones that do not lead back to it left out, see ownWorktrees), resolved;
 // none when root is not a repo or git cannot list them. The list is kept
@@ -35,6 +41,11 @@ func (f *filesAPI) worktreeRoots(ctx context.Context, root filesRoot) []string {
 	list := func() ([]string, error) {
 		out, truncated, err := f.git.output(ctx, gitCall{root: root.Root, safeDir: root.SafeDir, limit: maxWorktreeList},
 			"worktree", "list", "--porcelain", "-z")
+		if err != nil {
+			worktreeListFailed.Do(func() {
+				log.Printf("files: git worktree list failed, links into other work trees are not followed (needs git 2.36 or later): %v", err)
+			})
+		}
 		if err != nil || truncated {
 			return nil, nil
 		}

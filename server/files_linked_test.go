@@ -46,6 +46,9 @@ func newLinkedFixture(t *testing.T) *linkedFixture {
 	gitRun(t, fx.main, "add", "-A")
 	gitRun(t, fx.main, "commit", "-q", "-m", "init")
 	gitRun(t, fx.main, "worktree", "add", "-q", fx.wt)
+	if err := exec.Command("git", "-C", fx.main, "worktree", "list", "--porcelain", "-z").Run(); err != nil {
+		t.Skip("following a link into another work tree needs git 2.36 or later (worktree list -z)")
+	}
 	writeFile(t, filepath.Join(fx.main, "plans", "plan.md"), "# plan\n")
 	writeFile(t, filepath.Join(fx.main, ".env"), "TOKEN=x\n")
 	writeFile(t, filepath.Join(fx.main, "plans", "spec.pdf"), "%PDF-1.4\n")
