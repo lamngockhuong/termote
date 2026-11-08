@@ -92,6 +92,8 @@ export default defineConfig({
       routeMiddleware: "./src/route-data.ts",
       // The date of the page's last commit, from git (full history in CI)
       lastUpdated: true,
+      // "Edit page" opens the page's source on main
+      editLink: { baseUrl: "https://github.com/lamngockhuong/termote/edit/main/website/" },
       favicon: "/favicon.svg",
       head: [
         { tag: "link", attrs: { rel: "apple-touch-icon", href: "/apple-touch-icon.png" } },
@@ -160,6 +162,12 @@ export default defineConfig({
             { label: "Settings", link: "/usage/settings/" },
             { label: "Tasks", link: "/usage/tasks/", translations: { vi: "Task" } },
           ],
+        },
+        { label: "About", link: "/about/", translations: { vi: "Giới thiệu" } },
+        {
+          label: "Changelog",
+          link: "https://github.com/lamngockhuong/termote/releases",
+          translations: { vi: "Nhật ký thay đổi" },
         },
       ],
     }),

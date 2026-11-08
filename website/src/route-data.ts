@@ -22,6 +22,7 @@ const homeGraph = {
       "@id": `${SITE}/#author`,
       name: "Lam Ngoc Khuong",
       url: "https://github.com/lamngockhuong",
+      sameAs: [`${SITE}/about/`, "https://khuong.dev/en/about/", "https://www.linkedin.com/in/lamngockhuong"],
     },
     {
       "@type": "SoftwareApplication",

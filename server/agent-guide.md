@@ -4,7 +4,8 @@ You are a coding agent (Claude Code, Codex or another) asked to install, start o
 for the person you work with. Follow this guide; every command in it runs as written.
 
 Once Termote is installed, `termote help agent` prints this guide for the installed version.
-The copy at https://termote.ohnice.app/agents.md follows the latest release.
+The copy at https://termote.ohnice.app/agents.md follows the latest stable release; `termote version`
+shows which version is installed here.
 
 ## What Termote is
 
