@@ -62,7 +62,10 @@ Các bộ quản lý phiên hỗ trợ:
 - **tmux** trên Linux và macOS, cài native hay trong container đều được
 - **Herdr** trên mọi hệ điều hành. Herdr phải báo được thư mục của pane (`cwd`); bản Herdr cũ không
   báo thì view hiện `Not supported by this backend`.
-- **psmux** trên Windows chưa hỗ trợ: psmux không báo thư mục của pane, nên hai view này không có.
+- **psmux** trên Windows. Hai view đi theo lệnh `cd` trong PowerShell 7 (`pwsh`) và `cmd.exe`.
+  Windows PowerShell 5.1 (`powershell.exe`) không báo cho Windows khi bạn đổi thư mục, nên view vẫn
+  ở thư mục lúc shell khởi động. Hãy dùng PowerShell 7, hoặc thêm dòng sau vào hàm `prompt` trong
+  profile của 5.1: `[Environment]::CurrentDirectory = $PWD.ProviderPath`.
 
 ### Places
 
@@ -85,7 +88,7 @@ mục cấu hình, trạng thái, dữ liệu và bộ nhớ đệm của Termot
 `~/.config`, `~/.cache` hay `~/.local`; còn `~/.config/fish` thì được), `/proc`, `/sys`, `/dev`,
 các thư mục chứa socket điều khiển máy host (`/tmp`, `/run`, `/var/run`), và thư mục `.git`. Thư mục
 đã lưu mà nay không còn, hoặc trỏ tới chỗ bị từ chối, sẽ bị bỏ qua, và `start` in ra lệnh
-`--remove-path` để bỏ nó. Trên Windows, Places cần backend Herdr (`--mux herdr`).
+`--remove-path` để bỏ nó.
 
 ## Files
 

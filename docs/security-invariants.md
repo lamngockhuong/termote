@@ -1027,7 +1027,12 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   refuses that client the root): one Refresh moves it for all of them, only ever to the
   directory the pane reports, and plain reads settle it again as before. The settle state is kept
   per pane for as long as it lives: on tmux by its pane id and the server's pid, since a restarted
-  server numbers its panes from `%0` again and a new pane must not start from an old one's root.
+  server numbers its panes from `%0` again and a new pane must not start from an old one's root;
+  on psmux, which numbers panes per session (two sessions both have `%1`) and hands out session ids
+  out of order, by the session id, the pane id and the pane's pid (`PaneDir`). psmux reports the
+  foreground process's directory verbatim (`#`, `%`, non-ASCII and a UNC path are not expanded or
+  changed) and refuses `:` in a session name, so the path, read last, stays whole; a UNC directory
+  goes through the same checks as on Herdr for Windows.
   `GET files/content` takes an `encoding` of a fixed set (`utf-8`, `utf-16le`, `utf-16be`,
   `shift_jis`, `euc-jp`; another → 400, ignored by `?hash=1`) or detects one
   (`server/files_encoding.go`: a BOM, then valid UTF-8, then Shift-JIS/EUC-JP only when the
@@ -1137,8 +1142,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `/places/<id>-<name>` (`[A-Za-z0-9._-]`), refused with `,` or overlapping the workspace, a saved
   one failing on the host is not mounted; `TERMOTE_PLACES` (JSON id, name, container path) goes by
   name with `-e`, is in `termoteEnvKeys`, and `trustRepo` trusts these mounts like `/workspace`.
-  `start` warns when the backend has no Files (psmux on Windows). A Place on another file system
-  than the trash gets permanent delete only (`cross_device`).
+  A Place on another file system than the trash gets permanent delete only (`cross_device`).
 - **`<details>` in a previewed Markdown file** (`detailsBlocks` in
   `pwa/src/utils/markdown-safety.ts`, Files/Changes only): raw HTML is never parsed or passed to
   React. A remark plugin, run before `htmlAsText`, folds an html node that is exactly a
@@ -1968,10 +1972,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `/api/mux/tasks/runs/{runId}`, `/api/mux/tasks[/{id}]`; `server/tasks.go`,
   `tasks_discover.go`, `tasks_tools.go`, `tasks_tools_toml.go`, `tasks_shell.go`, `tasks_run.go`, `tasks_run_state.go`, `task_store.go`,
   `task_routes.go`, `mux_{tmux,herdr,zellij}_tasks.go`; `caps.tasks`: the Files routes work and
-  the backend runs tasks (`taskMux`: tmux, Herdr, Zellij; never psmux, which has no Files);
+  the backend runs tasks (`taskMux` and `runsTasks`: tmux, Herdr, Zellij; never psmux, whose `%N` can name
+  another session's pane);
   `caps.userTasks`: the store is usable). Every route is a full client's only, reads included
   (403 `view_only`): a script's command, a user task's command and a run's output can hold a
-  token or a path. **Listing** (`GET .../tasks`): `requireMethod(GET)`, then the Files routes'
+  token or a path. **Listing** (`GET .../tasks`): `requireMethod(GET)`, psmux → 501 (before the root is read), then the Files routes'
   `start` with `requireWriteRole` (never `begin`, which lets a view-only client through and runs
   git for it), so cross-site, the role and `?root=` (409 with the current root) are checked
   before anything is read; `no-store`. Nothing runs: `package.json` and one Makefile (the one make

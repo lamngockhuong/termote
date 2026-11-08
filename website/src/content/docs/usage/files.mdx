@@ -64,8 +64,10 @@ Supported backends:
 - **tmux** on Linux and macOS, natively or in the container
 - **Herdr** on any OS. Herdr must report the pane's directory (`cwd`); an older Herdr that does
   not shows `Not supported by this backend`.
-- **psmux** on Windows is not supported: it does not report the pane's directory, and the two
-  views are not offered.
+- **psmux** on Windows. The views follow `cd` in PowerShell 7 (`pwsh`) and in `cmd.exe`. Windows
+  PowerShell 5.1 (`powershell.exe`) does not tell Windows when you change directory, so the views
+  stay on the directory the shell started in. Use PowerShell 7, or add this line to the `prompt`
+  function in your 5.1 profile: `[Environment]::CurrentDirectory = $PWD.ProviderPath`.
 
 ### Places
 
@@ -88,7 +90,7 @@ config, state, data and cache folders (and any folder holding them, such as `~/.
 or `~/.local`; `~/.config/fish` is fine), `/proc`, `/sys`, `/dev`, the folders holding the host's
 control sockets (`/tmp`, `/run`, `/var/run`), and a `.git` folder. A saved folder that is
 gone or now points somewhere refused is skipped, and `start` prints the `--remove-path` that drops
-it. On Windows, Places need the Herdr backend (`--mux herdr`).
+it.
 
 ## Files
 

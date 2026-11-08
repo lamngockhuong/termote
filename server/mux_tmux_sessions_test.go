@@ -148,7 +148,7 @@ func TestTmuxSessionsInRealServer(t *testing.T) {
 	if err := tmuxCmd(ctx, "kill-session", "-t", sid).Run(); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := m.PaneDir(ctx, sid+":0"); tmuxFilesSupported && !errors.Is(err, errUnknownPane) {
+	if _, _, err := m.PaneDir(ctx, sid+":0"); !errors.Is(err, errUnknownPane) {
 		t.Errorf("PaneDir of a closed session = %v", err)
 	}
 	if _, _, err := m.AgentSession(ctx, sid+":0"); !errors.Is(err, errUnknownPane) {
@@ -175,9 +175,6 @@ func TestTmuxSessionsInRealServer(t *testing.T) {
 
 func waitPaneDir(t *testing.T, id, want string) string {
 	t.Helper()
-	if !tmuxFilesSupported {
-		return want
-	}
 	var got string
 	waitUntil(t, "pane directory", func() bool {
 		got, _, _ = tmuxMux{}.PaneDir(context.Background(), id)

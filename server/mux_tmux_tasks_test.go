@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -176,10 +178,22 @@ func TestTmuxTaskArgvAndErrors(t *testing.T) {
 		}
 	}
 
-	// psmux has no Files, so no tasks.
+	// psmux numbers panes per session, so no tasks.
+	if !runsTasks(tm) {
+		t.Error("tmux runs no tasks")
+	}
 	origPsmux := tmuxIsPsmux
 	tmuxIsPsmux = true
 	defer func() { tmuxIsPsmux = origPsmux }()
+	if runsTasks(tm) || runsTasks(&tm) {
+		t.Error("psmux runs tasks")
+	}
+	// ... nor lists them, before the pane's root is read.
+	rec := httptest.NewRecorder()
+	(&tasksAPI{files: &filesAPI{m: tm, dirs: tm, roots: newRootResolver(newGitRunner())}}).handleList(rec, apiRequest("GET", "/api/mux/panes/0/tasks", ""))
+	if rec.Code != http.StatusNotImplemented {
+		t.Errorf("psmux tasks list = %d %s", rec.Code, rec.Body)
+	}
 	if _, err := tm.NewTaskTab(ctx, "$3", "", "/r"); !errors.Is(err, errUnsupported) {
 		t.Errorf("psmux tab = %v", err)
 	}

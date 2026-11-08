@@ -81,7 +81,7 @@ func pasteGrowMost(text string) time.Duration {
 // slowPaste: the agent takes a long paste slowly, Codex anywhere and any
 // agent on psmux.
 func slowPaste(wr agentWriter, agent string) bool {
-	return agent == "codex" || writerIsPsmux(wr)
+	return agent == "codex" || isPsmux(wr)
 }
 
 // pasteConfirmWait is how long a message's pasted text may take to show in
@@ -95,9 +95,9 @@ func pasteConfirmWait(wr agentWriter, agent, text string) time.Duration {
 	return agentConfirmWait
 }
 
-// writerIsPsmux: the pane is psmux's (Windows), not a real tmux or herdr.
-func writerIsPsmux(wr agentWriter) bool {
-	switch wr.(type) {
+// isPsmux: the backend is psmux (Windows), not a real tmux or herdr.
+func isPsmux(m any) bool {
+	switch m.(type) {
 	case tmuxMux, *tmuxMux:
 		return tmuxIsPsmux
 	}

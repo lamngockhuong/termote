@@ -217,20 +217,15 @@ func TestStartAllowPaths(t *testing.T) {
 		t.Errorf("unknown remove: %v\n%s", err, tc.stdout.String())
 	}
 
-	// psmux has no Files: a Place needs herdr on Windows. ':' is fine there.
+	// ':' is fine on Windows, and psmux has Files: no warning there.
 	win := allowPathCLI(t, "windows")
 	if err := win.savablePath(`C:\notes`); err != nil {
 		t.Errorf("':' refused on Windows: %v", err)
 	}
 	wnotes := mkdir(t, filepath.Join(win.home, "notes"))
 	o = startOptions{mux: "tmux", allowPaths: []string{wnotes}, newPaths: []string{wnotes}}
-	if err := win.startAllowPaths(o, nil); err != nil || !strings.Contains(win.stdout.String(), "Places need a backend with Files (on Windows: --mux herdr)") {
-		t.Errorf("windows tmux: %v\n%s", err, win.stdout.String())
-	}
-	win.stdout.Reset()
-	o.mux = "herdr"
 	if err := win.startAllowPaths(o, nil); err != nil || strings.Contains(win.stdout.String(), "Places need") {
-		t.Errorf("windows herdr warned: %v\n%s", err, win.stdout.String())
+		t.Errorf("windows tmux: %v\n%s", err, win.stdout.String())
 	}
 }
 

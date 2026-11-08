@@ -425,7 +425,7 @@ Mở bằng nút lưới trên sidebar (máy tính) hoặc mục "Agent overview
 - [ ] Mỗi pane đang chạy agent có một thẻ, ở mọi group: blocked đứng đầu, rồi working, done, idle;
       cùng trạng thái thì agent ở lâu hơn đứng trước; hai thiết bị lệch giờ vẫn hiện cùng thời gian
 - [ ] Thẻ Claude có tin nhắn cuối, branch, số file đổi, số context token và model; thẻ Codex không
-      có token; psmux không có branch hay số file và không báo lỗi
+      có token; psmux cũng có branch và số file
 - [ ] tmux/psmux có dòng `Only the active pane of each window is tracked`; Herdr và Zellij thì không
 - [ ] Bấm thẻ Claude mở Chat view của đúng pane, kể cả ở group khác; nút terminal trên thẻ mở
       terminal; agent không có Chat thì bấm thẻ mở terminal
@@ -666,7 +666,18 @@ Windows, Herdr 0.8.2 trở lên, shell của pane là pwsh, `termote start --mux
 
 ## Files và Changes
 
-Chạy trên tmux (Linux/macOS) và Herdr; psmux (Windows) không có hai view này.
+Chạy trên tmux (Linux/macOS), psmux (Windows) và Herdr.
+
+- [ ] psmux: header trên máy tính có Files và Changes, menu view trên điện thoại cũng có; cả hai hiện
+      repo của pane và đi theo `cd`, `Set-Location`, `pushd` trong pwsh 7, `cd /d` trong cmd.exe,
+      sau khi thư mục mới giữ nguyên được 2 giây
+- [ ] psmux: hai session, mỗi session ở một repo khác (cả hai pane đều là `%1`): Files của mỗi pane
+      hiện đúng repo của nó, kể cả khi mở cả hai view trên hai thiết bị
+- [ ] psmux: `cmd /c "cd /d C:\Windows && timeout 30"` chuyển gốc sang `C:\Windows` sau 2 giây và
+      quay lại khi lệnh kết thúc; Windows PowerShell 5.1 (`powershell.exe`) vẫn ở thư mục lúc khởi
+      động sau `cd`, view không báo lỗi
+- [ ] psmux: thư mục có `#`, `%`, dấu cách, chữ tiếng Việt hay tiếng Nhật mở được; thư mục UNC
+      (`Set-Location \\localhost\c$\Windows`) chạy giống Herdr trên Windows
 
 ### Files
 

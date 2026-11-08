@@ -10,9 +10,6 @@ import (
 	"syscall"
 )
 
-// tmuxFilesSupported: tmux reports #{pane_current_path}.
-const tmuxFilesSupported = true
-
 // openNonblock opens a FIFO without waiting for a writer, so a request for
 // one never hangs; regular files ignore it.
 const openNonblock = syscall.O_NONBLOCK
