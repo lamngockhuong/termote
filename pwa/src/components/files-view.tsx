@@ -23,6 +23,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -1253,6 +1254,8 @@ function PaneFiles({
                     onFocus={setFocused}
                     onToggle={f.toggle}
                     onOpen={openFromTree}
+                    scrollTop={f.treeScroll}
+                    onScroll={f.setTreeScroll}
                     onDelete={canDelete ? askDelete : undefined}
                     onDownload={
                       canDownload
@@ -1400,6 +1403,8 @@ function FileTree({
   onRename,
   onDownload,
   actions,
+  scrollTop,
+  onScroll,
 }: {
   state: FilesState
   // The rows by path, kept by the view: it focuses an uploaded file's
@@ -1419,6 +1424,10 @@ function FileTree({
   // server refuses a symlink)
   onDownload?: (path: string, entry: FileEntry) => void
   actions: TreeActions
+  // Where the tree was left scrolled, read once it shows again (a file
+  // shown in its place unmounts it), and each scroll kept by the view
+  scrollTop: () => number
+  onScroll: (top: number) => void
 }) {
   const { t } = useT()
   const rows = visibleRows(state)
@@ -1431,6 +1440,12 @@ function FileTree({
     `${state.root}\0${state.place}`,
   )
   const treeRef = useRef<HTMLDivElement>(null)
+  // Back from a file: the tree scrolled as it was left
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once per mount
+  useLayoutEffect(() => {
+    const tree = treeRef.current as HTMLDivElement
+    tree.scrollTop = scrollTop()
+  }, [])
   const [menu, setMenu] = useState<TreeMenu>()
   const areaAnchor = useRef<HTMLElement | null>(null)
   const openMenu = (
@@ -1546,6 +1561,7 @@ function FileTree({
         role="tree"
         aria-label={t('common.files')}
         onKeyDown={onKeyDown}
+        onScroll={(e) => onScroll(e.currentTarget.scrollTop)}
         // Right click below or between the rows: the tree's own menu
         onContextMenu={(e) => {
           if (fromMenu(e) || (e.target as Element).closest('[role="treeitem"]'))
