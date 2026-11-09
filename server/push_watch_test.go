@@ -277,6 +277,38 @@ func TestPushWatcherSkipsEndedSession(t *testing.T) {
 	}
 }
 
+// A paired device past its validUntil gets no push even though its expiry
+// timer, on the monotonic clock, has not fired yet (the host slept): the
+// store reads the limit on the wall clock. A device with no limit still does.
+func TestPushWatcherSkipsExpiredDevice(t *testing.T) {
+	w, f, _ := newTestWatcher(t, nil)
+	devs, clock := clockedStore(t, t.TempDir())
+	w.store.deviceAlive = devs.alive
+	_, limited, err := devs.add("Phone", roleView, deviceAddOpts{ValidFor: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, forever, err := devs.add("Tablet", roleView, deviceAddOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	expired, live := fcmSub(t, 1), fcmSub(t, 2)
+	expired.Device, live.Device = limited.ID, forever.ID
+	for _, sub := range []pushSub{expired, live} {
+		if err := w.store.add(sub); err != nil {
+			t.Fatal(err)
+		}
+	}
+	*clock = clock.Add(time.Hour)
+	w.deliverEvent(context.Background(), pushEvent{PaneID: "%1", Kind: "blocked"})
+	if f.count() != 1 || !strings.HasPrefix(f.sent[0], live.Endpoint+" ") {
+		t.Fatalf("sent %v, want only the device with no limit", f.sent)
+	}
+	if !errors.Is(w.store.add(expired), errPushSignedOut) {
+		t.Fatal("an expired device subscribed again")
+	}
+}
+
 func TestPushWatcherAllRejectedLogsOnce(t *testing.T) {
 	w, f, _ := newTestWatcher(t, nil)
 	logs := captureLog(t)
