@@ -699,7 +699,8 @@ Run on tmux (Linux/macOS), psmux (Windows) and Herdr.
       back when it ends; Windows PowerShell 5.1 (`powershell.exe`) keeps the directory it started
       in after `cd`, with no error in the view
 - [ ] psmux: a directory with `#`, `%`, spaces and Vietnamese or Japanese characters opens; a UNC
-      directory (`Set-Location \\localhost\c$\Windows`) behaves as on Herdr for Windows
+      directory (`Set-Location \\localhost\c$\Windows`) shows "directory not available", and opens
+      once `termote start --allow-path \\localhost\c$\Windows` makes it a Place
 
 ### Files
 

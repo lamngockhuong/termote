@@ -677,7 +677,8 @@ Chạy trên tmux (Linux/macOS), psmux (Windows) và Herdr.
       quay lại khi lệnh kết thúc; Windows PowerShell 5.1 (`powershell.exe`) vẫn ở thư mục lúc khởi
       động sau `cd`, view không báo lỗi
 - [ ] psmux: thư mục có `#`, `%`, dấu cách, chữ tiếng Việt hay tiếng Nhật mở được; thư mục UNC
-      (`Set-Location \\localhost\c$\Windows`) chạy giống Herdr trên Windows
+      (`Set-Location \\localhost\c$\Windows`) báo "directory not available", và mở được khi
+      `termote start --allow-path \\localhost\c$\Windows` biến nó thành một Place
 
 ### Files
 

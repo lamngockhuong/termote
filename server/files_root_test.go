@@ -618,6 +618,44 @@ func (f *fakePaneDirer) PaneDir(context.Context, string) (string, string, error)
 	return f.dir, f.key, f.err
 }
 
+// announcingPaneDirer is a backend whose pane directory can come from what
+// the pane printed (psmux).
+type announcingPaneDirer struct{ fakePaneDirer }
+
+func (*announcingPaneDirer) dirFromPaneOutput() bool { return true }
+
+// A directory a pane can announce is taken only on a drive letter or inside
+// a Place: \\host\share would make the server's stat send the NTLM hash.
+// Elsewhere than Windows the temp dir is on no drive letter, so it stands in
+// for a UNC path that exists.
+func TestPaneRootAnnouncedDirOnlyOnDriveOrPlace(t *testing.T) {
+	ctx := context.Background()
+	a, _ := filepath.EvalSymlinks(t.TempDir())
+	rr := newRootResolver(newGitRunner())
+	off := a
+	if runtime.GOOS == "windows" {
+		off = `\\termote-test.invalid\share`
+	}
+	d := &announcingPaneDirer{fakePaneDirer{dir: off, key: "%1"}}
+	if _, err := rr.paneRoot(ctx, d, "0"); !errors.Is(err, errDirNotAvailable) {
+		t.Fatalf("a directory off a drive letter, not a Place: err = %v", err)
+	}
+	if r, err := rr.paneRoot(ctx, &fakePaneDirer{dir: a, key: "%2"}, "1"); err != nil || r.Root != a {
+		t.Fatalf("a backend reporting the process's directory: %+v %v", r, err)
+	}
+	if runtime.GOOS == "windows" {
+		d.dir = a
+		if r, err := rr.paneRoot(ctx, d, "0"); err != nil || r.Root != a {
+			t.Fatalf("on a drive letter: %+v %v", r, err)
+		}
+		return
+	}
+	rr.placeDirs = []string{filepath.Dir(a)}
+	if r, err := rr.paneRoot(ctx, d, "0"); err != nil || r.Root != a {
+		t.Fatalf("inside a Place: %+v %v", r, err)
+	}
+}
+
 func TestPaneRootSettles(t *testing.T) {
 	requireGit(t)
 	ctx := context.Background()

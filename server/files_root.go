@@ -26,6 +26,13 @@ type PaneDirer interface {
 	PaneDir(ctx context.Context, paneID string) (dir, stableKey string, err error)
 }
 
+// paneOutputDirer is a PaneDirer whose directory can be what the pane printed
+// rather than a process's: psmux 3.4 takes OSC 7 / OSC 9;9 while ssh.exe or
+// wsl.exe runs in the pane, so a remote host can name \\host\share.
+type paneOutputDirer interface {
+	dirFromPaneOutput() bool
+}
+
 const (
 	// gitTimeout bounds one git command. Longer than muxTimeout: git status
 	// on a large repo is slow, and the reply is cached for every client.
@@ -515,6 +522,11 @@ func (rr *rootResolver) paneRootAt(ctx context.Context, d PaneDirer, paneID stri
 	if err != nil {
 		return filesRoot{}, err
 	}
+	// Before anything stats it: a UNC path would make Windows send the
+	// user's NTLM hash to that host. A Place is the user's own choice.
+	if od, ok := d.(paneOutputDirer); ok && od.dirFromPaneOutput() && !validCwdForm(dir, true) && !rr.inPlace(dir) {
+		return filesRoot{}, errDirNotAvailable
+	}
 	root, err := rr.resolve(ctx, dir)
 	if err != nil {
 		return filesRoot{}, err
@@ -690,6 +702,11 @@ func (rr *rootResolver) trustRepo(path string) bool {
 		return true
 	}
 	// A Place is mounted from the host like the workspace.
+	return rr.inPlace(path)
+}
+
+// inPlace reports whether path is inside one of the Places.
+func (rr *rootResolver) inPlace(path string) bool {
 	return slices.ContainsFunc(rr.placeDirs, func(d string) bool { return underDir(d, path) })
 }
 

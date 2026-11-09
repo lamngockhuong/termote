@@ -1070,8 +1070,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   on psmux, which numbers panes per session (two sessions both have `%1`) and hands out session ids
   out of order, by the session id, the pane id and the pane's pid (`PaneDir`). psmux reports the
   foreground process's directory verbatim (`#`, `%`, non-ASCII and a UNC path are not expanded or
-  changed) and refuses `:` in a session name, so the path, read last, stays whole; a UNC directory
-  goes through the same checks as on Herdr for Windows.
+  changed) and refuses `:` in a session name, so the path, read last, stays whole. From psmux 3.4
+  that path can be what the pane printed (OSC 7 / OSC 9;9 while `ssh.exe` or `wsl.exe` runs in it),
+  so a remote host can name `\\host\share`: a psmux pane's directory not on a drive letter is
+  refused (`paneOutputDirer`, 400 `directory not available`, as a directory that is gone) before anything stats it, unless it is inside
+  a Place (`--allow-path`). Herdr's goes through the same checks as before.
   `GET files/content` takes an `encoding` of a fixed set (`utf-8`, `utf-16le`, `utf-16be`,
   `shift_jis`, `euc-jp`; another → 400, ignored by `?hash=1`) or detects one
   (`server/files_encoding.go`: a BOM, then valid UTF-8, then Shift-JIS/EUC-JP only when the

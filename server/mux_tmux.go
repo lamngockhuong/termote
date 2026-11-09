@@ -1900,6 +1900,12 @@ func (tmuxMux) PaneDir(ctx context.Context, paneID string) (string, string, erro
 	return parts[6], parts[2] + "@" + parts[3], nil
 }
 
+// dirFromPaneOutput: psmux 3.4 fills pane_current_path from OSC 7 / OSC 9;9
+// while ssh.exe or wsl.exe runs in the pane; tmux reads the process.
+func (tmuxMux) dirFromPaneOutput() bool { return tmuxIsPsmux }
+
+var _ paneOutputDirer = tmuxMux{}
+
 // positivePID reports whether s is a process id tmux printed.
 func positivePID(s string) bool {
 	pid, err := strconv.Atoi(s)
