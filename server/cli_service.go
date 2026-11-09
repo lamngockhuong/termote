@@ -111,8 +111,11 @@ func (c *cli) serviceEnv() map[string]string {
 func sortedKeys(env map[string]string) []string { return slices.Sorted(maps.Keys(env)) }
 
 // readPIDFile returns the PID serve recorded, or 0.
-func (c *cli) readPIDFile() int {
-	b, err := os.ReadFile(c.pidFile())
+func (c *cli) readPIDFile() int { return readPID(c.pidFile()) }
+
+// readPID returns the PID in path, or 0.
+func readPID(path string) int {
+	b, err := os.ReadFile(path)
 	if err != nil {
 		return 0
 	}
@@ -123,8 +126,11 @@ func (c *cli) readPIDFile() int {
 // serverProcess returns the running server recorded in the PID file. The PID
 // must still run `termote serve` (the binary is shared with the CLI, so the
 // name alone proves nothing), which also guards against a reused PID.
-func (c *cli) serverProcess() (procInfo, bool) {
-	pid := c.readPIDFile()
+func (c *cli) serverProcess() (procInfo, bool) { return c.serveProcessIn(c.pidFile()) }
+
+// serveProcessIn is serverProcess for the PID recorded in path.
+func (c *cli) serveProcessIn(path string) (procInfo, bool) {
+	pid := readPID(path)
 	if pid <= 0 || pid == c.pid {
 		return procInfo{}, false
 	}
@@ -195,16 +201,18 @@ func (d *detachedSupervisor) Start() error {
 	return nil
 }
 
+// Stop ends the listening server and one still starting: a serve that has not
+// bound its port yet has no PID file, and left running it takes the port (and
+// on Windows holds its binary) after the next start.
 func (d *detachedSupervisor) Stop() error {
-	p, ok := d.c.serverProcess()
-	if !ok {
-		removeFile(d.c.pidFile())
-		return nil
+	for _, path := range []string{d.c.pidFile(), d.c.startingPIDFile()} {
+		if p, ok := d.c.serveProcessIn(path); ok {
+			if err := d.c.terminate(p.PID, processKillWait); err != nil {
+				return err
+			}
+		}
+		removeFile(path)
 	}
-	if err := d.c.terminate(p.PID, processKillWait); err != nil {
-		return err
-	}
-	removeFile(d.c.pidFile())
 	return nil
 }
 
@@ -265,16 +273,22 @@ func (c *cli) waitStopped(port int, timeout time.Duration) error {
 }
 
 // writePIDFile records this server for stop and status.
-func (c *cli) writePIDFile() error {
+func (c *cli) writePIDFile() error { return c.writePID(c.pidFile()) }
+
+// writePID records this process in path.
+func (c *cli) writePID(path string) error {
 	if err := c.ensureStateDir(); err != nil {
 		return err
 	}
-	return os.WriteFile(c.pidFile(), []byte(strconv.Itoa(os.Getpid())+"\n"), 0o600)
+	return os.WriteFile(path, []byte(strconv.Itoa(os.Getpid())+"\n"), 0o600)
 }
 
 // removePIDFile deletes the PID file if it still names this process.
-func (c *cli) removePIDFile() {
-	if c.readPIDFile() == os.Getpid() {
-		removeFile(c.pidFile())
+func (c *cli) removePIDFile() { removeOwnPID(c.pidFile()) }
+
+// removeOwnPID deletes path if it still names this process.
+func removeOwnPID(path string) {
+	if readPID(path) == os.Getpid() {
+		removeFile(path)
 	}
 }

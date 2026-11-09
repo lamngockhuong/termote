@@ -387,6 +387,10 @@ func (c *cli) localSocketDir() string { return filepath.Join(c.stateDir(), "run"
 func (c *cli) logDir() string  { return c.stateDir() }
 func (c *cli) pidFile() string { return filepath.Join(c.stateDir(), "termote.pid") }
 
+// startingPIDFile names a serve that has not bound its port yet (pidFile is
+// written only then), so stop can end it too.
+func (c *cli) startingPIDFile() string { return filepath.Join(c.stateDir(), "termote-starting.pid") }
+
 // envDir returns the directory in env var key, or fallback when it is unset
 // or relative (the XDG spec says to ignore a relative path).
 func (c *cli) envDir(key, fallback string) string {
