@@ -56,6 +56,13 @@ func runServe(args []string) int {
 			}
 		}
 	}
+	// Recorded apart from the PID file, so a serve that cannot bind (another
+	// one runs) never overwrites the running server's PID, yet stop still
+	// ends a serve that has not bound its port yet.
+	if err := c.writePID(c.startingPIDFile()); err != nil {
+		fmt.Fprintf(os.Stderr, "[WARN] cannot write %s: %v\n", c.startingPIDFile(), err)
+	}
+	defer removeOwnPID(c.startingPIDFile())
 	cfg, err := c.loadServeConfig()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
@@ -91,6 +98,11 @@ func runServe(args []string) int {
 		if err := c.writePIDFile(); err != nil {
 			fmt.Fprintf(os.Stderr, "[WARN] cannot write %s: %v\n", c.pidFile(), err)
 		}
+		removeOwnPID(c.startingPIDFile())
+	}
+	cfg.OnFatal = func() {
+		removeOwnPID(c.startingPIDFile())
+		c.removePIDFile()
 	}
 	defer c.removePIDFile()
 	startServeMode(cfg)

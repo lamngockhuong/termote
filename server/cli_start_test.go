@@ -597,6 +597,41 @@ func TestDetachedServerProcessNeedsServeCmdline(t *testing.T) {
 	}
 }
 
+// A server still starting (not listening, so termote.pid is not written yet)
+// must be stopped too: otherwise update's rollback leaves it running, holding
+// the port and, on Windows, its binary.
+func TestDetachedStopKillsStartingServer(t *testing.T) {
+	tc := newTestCLI(t, "linux")
+	procs := []procInfo{
+		{PID: 40, Cmdline: "/home/u/.local/share/termote/current/bin/termote serve"},
+		{PID: 41, Cmdline: "/home/u/.local/share/termote/current/bin/termote serve --service"},
+	}
+	tc.procs = func() ([]procInfo, error) { return procs, nil }
+	d := &detachedSupervisor{c: tc.cli}
+
+	// Only starting: no termote.pid at all.
+	writeFile(t, tc.startingPIDFile(), "41\n")
+	if err := d.Stop(); err != nil || !slices.Equal(tc.killed, []int{41}) || fileExists(tc.startingPIDFile()) {
+		t.Fatalf("starting only: %v killed %v", err, tc.killed)
+	}
+
+	// Both: the listening one and one starting after it.
+	tc.killed = nil
+	writeFile(t, tc.pidFile(), "40\n")
+	writeFile(t, tc.startingPIDFile(), "41\n")
+	if err := d.Stop(); err != nil || !slices.Equal(tc.killed, []int{40, 41}) || fileExists(tc.pidFile()) || fileExists(tc.startingPIDFile()) {
+		t.Fatalf("both: %v killed %v", err, tc.killed)
+	}
+
+	// A reused PID in the starting file is not a server: never killed.
+	tc.killed = nil
+	procs[1].Cmdline = "vim notes"
+	writeFile(t, tc.startingPIDFile(), "41\n")
+	if err := d.Stop(); err != nil || len(tc.killed) != 0 || fileExists(tc.startingPIDFile()) {
+		t.Fatalf("reused pid: %v killed %v", err, tc.killed)
+	}
+}
+
 func TestStableExeFollowsInstallLayout(t *testing.T) {
 	tc := newTestCLI(t, "linux")
 	tc.exe = filepath.Join(tc.home, ".local", "share", "termote", "versions", "1.0.0", "bin", "termote")
@@ -837,6 +872,21 @@ func TestStartEndToEnd(t *testing.T) {
 	}
 	if _, code := fetchHealth(port, adminUser, cfg.Password); code != http.StatusUnauthorized {
 		t.Fatalf("admin still accepted after --user bob: %d", code)
+	}
+	if fileExists(tc.startingPIDFile()) {
+		t.Error("the listening server left its starting PID file")
+	}
+	// A second serve cannot bind the port: it exits, keeps the running
+	// server's PID file and leaves no starting PID file behind.
+	second := exec.Command(tc.exe, "serve")
+	if out, err := second.CombinedOutput(); err == nil {
+		t.Fatalf("a second serve on a busy port exited 0:\n%s", out)
+	}
+	if got := tc.readPIDFile(); got != pid {
+		t.Errorf("PID file %d after a failed serve, want %d", got, pid)
+	}
+	if fileExists(tc.startingPIDFile()) {
+		t.Error("a serve that could not bind left its starting PID file")
 	}
 
 	tc.stdout.Reset()

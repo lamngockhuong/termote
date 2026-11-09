@@ -128,6 +128,9 @@ type serveConfig struct {
 	// OnListen runs once the port is bound (serve records its PID then, so
 	// a server that cannot bind never replaces the running one's PID file).
 	OnListen func()
+	// OnFatal runs before serve exits on an error (log.Fatal skips defers),
+	// so its PID files do not outlive it.
+	OnFatal func()
 }
 
 // newServeConfigFromEnv creates config from environment variables with defaults
@@ -718,14 +721,20 @@ const shutdownTimeout = processKillWait + 2*time.Second
 
 // startServeMode starts the server (PWA static files + terminal stream + mux API + basic auth)
 func startServeMode(cfg serveConfig) {
-	if err := validateConfig(cfg); err != nil {
+	fatal := func(err error) {
+		if cfg.OnFatal != nil {
+			cfg.OnFatal()
+		}
 		log.Fatal(err)
+	}
+	if err := validateConfig(cfg); err != nil {
+		fatal(err)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	m, err := newMux(ctx, cfg)
 	if err != nil {
-		log.Fatal(err)
+		fatal(err)
 	}
 	switch m.Name() {
 	case "tmux":
@@ -744,7 +753,7 @@ func startServeMode(cfg serveConfig) {
 	}
 	ln, err := net.Listen("tcp", net.JoinHostPort(cfg.Bind, cfg.Port))
 	if err != nil {
-		log.Fatal(err)
+		fatal(err)
 	}
 	if cfg.CheckLocalUsers {
 		if check := newLocalPeerCheck(cfg.AllowLocalUsers); check != nil {
@@ -759,7 +768,7 @@ func startServeMode(cfg serveConfig) {
 	// After the first signal, a second one kills the process as usual.
 	go func() { <-ctx.Done(); stop() }()
 	if err := serveAndPublish(ctx, cfg, m, ln); err != nil {
-		log.Fatal(err)
+		fatal(err)
 	}
 }
 
