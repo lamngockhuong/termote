@@ -25,6 +25,7 @@ import {
   findExcludeProblem,
   type ImeSendBehavior,
   type PasteSource,
+  POLL_INTERVAL_OPTIONS,
   type Settings,
   TASK_HISTORY_LINE_CHOICES,
 } from '../hooks/use-settings'
@@ -391,8 +392,6 @@ const formatSeconds = (s: number, t: Translate<MessageKey>) =>
   s >= 60
     ? t('settings.pollMinutes', { n: s / 60 })
     : t('settings.pollSeconds', { n: s })
-
-const POLL_INTERVAL_OPTIONS = [3, 5, 10, 15, 30, 60, 120, 300]
 
 const IME_SEND_OPTIONS: {
   value: ImeSendBehavior

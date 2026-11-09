@@ -66,6 +66,7 @@ export default {
   'errors.invalid_request': 'The server could not use this request',
   'errors.invalid_role': 'The access level is not valid',
   'errors.invalid_root': "The pane's directory cannot be used for a task",
+  'errors.invalid_settings': 'The proposed settings are not valid',
   'errors.invalid_tab_id': 'The tab is not valid',
   'errors.invalid_task': 'The task is not valid. Edit it in Settings',
   'errors.invalid_template': 'The template is not valid',

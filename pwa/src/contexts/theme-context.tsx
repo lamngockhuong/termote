@@ -6,6 +6,7 @@ import {
   useEffect,
   useLayoutEffect,
   useState,
+  useSyncExternalStore,
 } from 'react'
 
 export type Theme = 'light' | 'dark' | 'system'
@@ -27,7 +28,55 @@ export const THEMES = [
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
-const STORAGE_KEY = 'termote-theme'
+export const THEME_KEY = 'termote-theme'
+
+const THEME_VALUES: readonly Theme[] = ['light', 'dark', 'system']
+
+// A saved colour mode, kept only when it is one
+export function resolveTheme(value: unknown): Theme {
+  return THEME_VALUES.includes(value as Theme) ? (value as Theme) : 'system'
+}
+
+// The saved mode, read from storage on every call so a change made by
+// another tab, or by an applied proposal, shows at once
+const themeListeners = new Set<() => void>()
+
+export function readStoredTheme(): Theme {
+  try {
+    return resolveTheme(localStorage.getItem(THEME_KEY))
+  } catch {
+    return 'system'
+  }
+}
+
+function notifyTheme() {
+  for (const fn of themeListeners) fn()
+}
+
+// Another tab of this browser changed the theme
+function onThemeStorage(e: StorageEvent) {
+  if (e.key === THEME_KEY || e.key === null) notifyTheme()
+}
+
+function subscribeTheme(listener: () => void) {
+  if (!themeListeners.size) window.addEventListener('storage', onThemeStorage)
+  themeListeners.add(listener)
+  return () => {
+    themeListeners.delete(listener)
+    if (!themeListeners.size)
+      window.removeEventListener('storage', onThemeStorage)
+  }
+}
+
+// Save the colour mode of this browser; every ThemeProvider shows it
+export function setStoredTheme(theme: Theme) {
+  try {
+    localStorage.setItem(THEME_KEY, resolveTheme(theme))
+  } catch {
+    // storage full or blocked: nothing to keep
+  }
+  notifyTheme()
+}
 
 function getSystemTheme(): ResolvedTheme {
   return window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -36,22 +85,24 @@ function getSystemTheme(): ResolvedTheme {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(() => {
-    const stored = localStorage.getItem(STORAGE_KEY) as Theme | null
-    return stored || 'system'
-  })
+  const theme = useSyncExternalStore(
+    subscribeTheme,
+    readStoredTheme,
+    /* v8 ignore next */
+    () => 'system' as Theme,
+  )
 
   const [systemTheme, setSystemTheme] = useState<ResolvedTheme>(getSystemTheme)
   const resolvedTheme: ResolvedTheme = theme === 'system' ? systemTheme : theme
 
   // Apply theme class to <html>. A layout effect, so it is in place before any
   // passive effect (the terminal, the theme-color sync) reads the tokens.
+  // It never writes the mode back: another tab may have just saved one.
   useLayoutEffect(() => {
     const root = document.documentElement
     root.classList.remove('light', 'dark')
     root.classList.add(resolvedTheme)
-    localStorage.setItem(STORAGE_KEY, theme)
-  }, [theme, resolvedTheme])
+  }, [resolvedTheme])
 
   // Listen for system theme changes
   useEffect(() => {
@@ -63,7 +114,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return () => mq.removeEventListener('change', handler)
   }, [])
 
-  const setTheme = (newTheme: Theme) => setThemeState(newTheme)
+  const setTheme = setStoredTheme
 
   return (
     <ThemeContext.Provider value={{ theme, resolvedTheme, setTheme }}>

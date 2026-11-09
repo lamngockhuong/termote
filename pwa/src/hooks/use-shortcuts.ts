@@ -97,6 +97,33 @@ export function resetAllShortcuts() {
   save({})
 }
 
+// The saved overrides now, for code outside React (settings-registry.ts)
+export function readSavedShortcuts(): SavedShortcuts {
+  return getSnapshot()
+}
+
+// Apply a patch of commands: an entry replaces that command's override
+// (checked as a stored one is), null puts its default back. Commands left
+// out stay as they are.
+export function applyShortcutsPatch(
+  patch: Partial<Record<CommandId, SavedShortcut | null>>,
+) {
+  const next: SavedShortcuts = { ...getSnapshot() }
+  const entries: Record<string, SavedShortcut> = {}
+  for (const [id, entry] of Object.entries(patch) as [
+    CommandId,
+    SavedShortcut | null,
+  ][]) {
+    delete next[id]
+    if (entry) entries[id] = entry
+  }
+  Object.assign(
+    next,
+    readSaved({ v: SHORTCUTS_VERSION, keys: entries }, isApplePlatform()),
+  )
+  save(next)
+}
+
 export function useSavedShortcuts(): SavedShortcuts {
   /* v8 ignore next */
   return useSyncExternalStore(subscribe, getSnapshot, () => ({}))

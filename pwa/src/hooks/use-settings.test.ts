@@ -614,3 +614,38 @@ describe('resolveSeenVersion', () => {
     expect(resolveSeenVersion(null)).toBe(0)
   })
 })
+
+describe('another tab', () => {
+  it('shows settings another tab saved', () => {
+    const { result } = renderHook(() => useSettings())
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ editorVim: true }),
+    )
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent('storage', { key: 'termote-settings' }),
+      )
+    })
+    expect(result.current.settings.editorVim).toBe(true)
+    // Another key's change is not one to read
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ editorVim: false }),
+    )
+    act(() => {
+      window.dispatchEvent(new StorageEvent('storage', { key: 'other' }))
+    })
+    expect(result.current.settings.editorVim).toBe(true)
+    act(() => {
+      window.dispatchEvent(new StorageEvent('storage', { key: null }))
+    })
+    expect(result.current.settings.editorVim).toBe(false)
+  })
+
+  it('reads a stored value that is not an object as the defaults', () => {
+    localStorage.setItem('termote-settings', '[1]')
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.editorFontSize).toBe(13)
+  })
+})
