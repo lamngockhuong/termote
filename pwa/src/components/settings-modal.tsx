@@ -50,6 +50,7 @@ import {
 } from '../utils/toolbar-position'
 import { DevicesSection } from './devices-section'
 import { PromptTemplatesSection } from './prompt-templates-section'
+import { SettingsTransferSection } from './settings-transfer-section'
 import { ShortcutsSection } from './shortcuts-section'
 import { SigninsSection } from './signins-section'
 import { Button, FOCUS_RING, IconButton } from './ui/button'
@@ -1233,6 +1234,12 @@ export function SettingsModal({
       ),
     })
   }
+
+  groups.push({
+    id: 'transfer',
+    title: t('settings.group.transfer'),
+    rows: <SettingsTransferSection />,
+  })
 
   if (updates) {
     groups.push({

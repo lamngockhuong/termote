@@ -367,4 +367,7 @@ export default {
   'shell.viewFailed': 'Không tải được cách xem này',
   'shell.meta.source': 'Do một plugin Herdr báo',
   'shell.meta.more': '+{n}',
+  'shell.settingsProposal.body_other': 'Agent đề xuất {count} thay đổi cài đặt',
+  'shell.settingsProposal.view': 'Xem',
+  'shell.settingsProposal.dismiss': 'Bỏ qua',
 } satisfies Translation<typeof en>

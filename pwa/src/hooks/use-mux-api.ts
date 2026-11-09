@@ -165,6 +165,9 @@ export interface MuxSnapshot {
     viewStream?: boolean
     // This server reaches other machines (GET /api/mux/machines).
     machines?: boolean
+    // An agent's proposal of PWA settings can be read
+    // (GET /api/mux/settings/proposal); never through a machine.
+    settingsProposals?: boolean
   }
   groups: MuxGroup[]
   // The server's time when it answered (RFC 3339), for the client's clock
@@ -175,6 +178,38 @@ export interface MuxSnapshot {
   instanceId?: string
   // The machines this server reaches, with their status
   machines?: MachineInfo[]
+  // An agent proposed PWA settings (termote settings propose): each device
+  // reads them and the user applies them there
+  settingsProposal?: SettingsProposalRef
+}
+
+export interface SettingsProposalRef {
+  id: string
+  expiresAt: string // RFC 3339, the server's clock
+}
+
+export interface SettingsProposal extends SettingsProposalRef {
+  values: Record<string, unknown>
+}
+
+// The settings proposal of this server, whatever machine is open; null when
+// there is none (it expired, or another replaced it and expired)
+export async function fetchSettingsProposal(): Promise<SettingsProposal | null> {
+  const res = await fetch(`${LOCAL_API}/settings/proposal`, {
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+  if (res.status === 404) return null
+  if (!res.ok) throw await requestError(res)
+  const body = (await res.json()) as Partial<SettingsProposal>
+  if (
+    typeof body.id !== 'string' ||
+    typeof body.expiresAt !== 'string' ||
+    !body.values ||
+    typeof body.values !== 'object' ||
+    Array.isArray(body.values)
+  )
+    return null
+  return { id: body.id, expiresAt: body.expiresAt, values: body.values }
 }
 
 // A machine this server reaches over SSH: what GET /api/mux/machines lists.

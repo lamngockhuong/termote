@@ -118,7 +118,7 @@ describe('notify-sw.js', () => {
       data: { type: 'termote-notify-ping' },
       ports: [port],
     })
-    expect(port.postMessage).toHaveBeenCalledWith({ version: 2 })
+    expect(port.postMessage).toHaveBeenCalledWith({ version: 3 })
     await dispatch('message', { data: { type: 'SKIP_WAITING' }, ports: [port] })
     await dispatch('message', { data: null, ports: [] })
     await dispatch('message', {
@@ -685,5 +685,61 @@ describe('notify-sw.js app badge', () => {
     await dispatch('push', pushData('not json'))
     expect(calls).toHaveLength(0)
     expect(nav.setAppBadge).not.toHaveBeenCalled()
+  })
+})
+
+describe('notify-sw.js settings proposals', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  const keep = (locale?: string) =>
+    vi.stubGlobal('caches', {
+      match: vi.fn(async () =>
+        locale === undefined ? undefined : new Response(locale),
+      ),
+    })
+
+  it.each(LOCALES)(
+    'shows a settings push in %s, with no value and no snapshot read',
+    async (locale) => {
+      keep(locale)
+      const calls = stubFetch({})
+      const { registration, dispatch } = loadWorker()
+      await dispatch('push', pushData({ kind: 'settings' }))
+      expect(registration.showNotification).toHaveBeenCalledWith(
+        tFor(locale)('dialogs.notify.settings'),
+        {
+          tag: 'termote-settings',
+          renotify: true,
+          icon: '/pwa-192x192.png',
+          badge: '/badge-96x96.png',
+          data: { settings: true },
+        },
+      )
+      expect(calls).toEqual([])
+    },
+  )
+
+  it("opens this server's page, never a machine's", async () => {
+    const machine = {
+      url: 'https://h/?machine=0123456789abcdef',
+      focus: vi.fn(),
+    }
+    const broken = { url: 'not a url', focus: vi.fn() }
+    const own = {
+      url: 'https://h/#/s/g/t',
+      focus: vi.fn().mockRejectedValue(new Error('not allowed')),
+    }
+    const w = loadWorker([machine, broken, own])
+    await w.dispatch('notificationclick', click({ settings: true }))
+    expect(own.focus).toHaveBeenCalled()
+    expect(machine.focus).not.toHaveBeenCalled()
+    expect(w.clients.openWindow).not.toHaveBeenCalled()
+
+    const none = loadWorker([machine])
+    await none.dispatch('notificationclick', click({ settings: true }))
+    expect(none.clients.openWindow).toHaveBeenCalledWith('/')
   })
 })
