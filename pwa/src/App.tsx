@@ -56,7 +56,9 @@ import {
   type ReorderActions,
   SessionSidebar,
 } from './components/session-sidebar'
+import { SettingsDiffDialog } from './components/settings-diff-dialog'
 import { SettingsModal } from './components/settings-modal'
+import { SettingsProposalBar } from './components/settings-proposal-bar'
 import { SidePanel } from './components/side-panel'
 import {
   MachineListHeading,
@@ -105,6 +107,7 @@ import {
 } from './hooks/use-mux-api'
 import { usePushSubscription } from './hooks/use-push-subscription'
 import { useSettings } from './hooks/use-settings'
+import { useSettingsProposal } from './hooks/use-settings-proposal'
 import { useKeymap, useShortcutDispatcher } from './hooks/use-shortcuts'
 import { useSidebarCollapsed } from './hooks/use-sidebar-collapsed'
 import { useStartAgent } from './hooks/use-start-agent'
@@ -155,6 +158,11 @@ import { isApplePlatform } from './utils/platform'
 import { formatRunning, uniqueNames } from './utils/running-commands'
 import { errorKey } from './utils/server-error'
 import { matchesFilter } from './utils/session-filter'
+import {
+  applySettings,
+  diffSettings,
+  type SettingChange,
+} from './utils/settings-registry'
 import { formatChord } from './utils/shortcuts'
 import {
   attachImageToTerminal,
@@ -405,7 +413,33 @@ export default function App({
     refreshSessions,
     mux,
     clockOffset,
+    settingsProposal,
   } = useLocalSessions(settings.pollInterval)
+  // An agent's proposal of settings: shown until this browser applies or
+  // dismisses it. The dialog keeps the proposal it opened on and applies
+  // only that one.
+  const proposal = useSettingsProposal(
+    settingsProposal,
+    !!mux.caps.settingsProposals && !currentMachine(),
+    clockOffset,
+  )
+  const proposalRows = proposal.proposal
+    ? diffSettings(proposal.proposal.values)
+    : []
+  const proposalCount = proposalRows.filter((r) => !r.skip).length
+  const [reviewing, setReviewing] = useState<{
+    id: string
+    rows: SettingChange[]
+  } | null>(null)
+  const applyProposal = () => {
+    // Apply shows only while reviewing
+    /* v8 ignore next */
+    if (!reviewing) return
+    const count = applySettings(reviewing.rows)
+    proposal.markSeen(reviewing.id)
+    setReviewing(null)
+    showToast(t('settings.transfer.applied', { count }), 'success')
+  }
   // The server refuses every write of a view-only device; the UI hides them.
   const readOnly = readOnlyProp || mux.caps.role === 'view'
   // The Places, read once: a root found by a search or a file opened
@@ -2246,6 +2280,35 @@ export default function App({
               onDismiss={() => updateSetting('languageNoticeSeen', true)}
             />
           )}
+          {proposal.proposal && proposalCount > 0 && (
+            <SettingsProposalBar
+              count={proposalCount}
+              onView={() =>
+                proposal.proposal &&
+                setReviewing({
+                  id: proposal.proposal.id,
+                  rows: proposalRows,
+                })
+              }
+              onDismiss={() =>
+                proposal.proposal && proposal.markSeen(proposal.proposal.id)
+              }
+            />
+          )}
+          <SettingsDiffDialog
+            isOpen={reviewing !== null}
+            title={t('settings.diff.titleProposal')}
+            rows={reviewing?.rows ?? []}
+            stale={
+              !reviewing || proposal.latestId === reviewing.id
+                ? undefined
+                : proposal.latestId === undefined
+                  ? 'gone'
+                  : 'newer'
+            }
+            onApply={applyProposal}
+            onCancel={() => setReviewing(null)}
+          />
           {!settings.hasSeenLocalhostNotice && (
             <LocalhostNotice
               onDismiss={() => updateSetting('hasSeenLocalhostNotice', true)}

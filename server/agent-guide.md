@@ -126,6 +126,29 @@ Tell the user to see the password themselves:
 To sign a phone in without the password, the user can run `termote pair --role full` and enter
 the code on the phone. That code is a secret too: let the user run it.
 
+## Change the user's PWA settings
+
+Termote's settings (theme, fonts, the editor, file search, keyboard shortcuts...) live in each
+browser, not on the server. You can propose a change; the user applies it in each browser.
+
+```bash
+termote settings schema --json                         # every key, its values and its default
+termote settings propose '{"editorVim":true,"theme":"dark"}'
+echo '{"findExcludes":["node_modules","out"]}' | termote settings propose -
+```
+
+`propose` checks every key first and exits 1 with `<key>: <reason>` for each value it refuses;
+fix them and run it again. On Windows PowerShell, pipe the JSON to `propose -`: PowerShell 5.1
+drops the quotes inside an argument. A shortcut entry replaces that command's shortcut whole:
+include `key` to keep a custom chord. A proposal replaces the one before and waits 15 minutes. Then tell the
+user to open Termote: every browser shows the proposal, and Review lists each setting before and
+after. Nothing changes until the user applies it, and only in that browser.
+
+Notifications and the app badge are not proposed: turning them on asks for a permission, so the
+user turns them on in Settings. Never change a browser's settings any other way (its storage, a
+script). `propose` works with the native server only: in container mode it says so; tell the user
+which settings to change, or to move them with Settings > Export & import.
+
 ## Never
 
 - `--no-auth` together with `--lan`, `--tailscale` or `--cloudflare`. Without a password,

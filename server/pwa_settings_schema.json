@@ -1,0 +1,366 @@
+{
+  "v": 1,
+  "deviceOnly": [
+    "welcomeSeenVersion",
+    "languageNoticeSeen",
+    "hasSeenLocalhostNotice",
+    "notifyAgents",
+    "appBadge"
+  ],
+  "keys": [
+    {
+      "key": "theme",
+      "store": "theme",
+      "type": "enum",
+      "values": ["light", "dark", "system"],
+      "default": "system",
+      "description": "Colour mode; system follows the device"
+    },
+    {
+      "key": "uiStyle",
+      "store": "settings",
+      "type": "enum",
+      "values": ["neutral", "terminal", "native"],
+      "default": "neutral",
+      "description": "Visual style of the app chrome"
+    },
+    {
+      "key": "language",
+      "store": "settings",
+      "type": "enum",
+      "values": ["auto", "en", "vi"],
+      "default": "auto",
+      "description": "App language; auto follows the browser"
+    },
+    {
+      "key": "terminalFontSize",
+      "store": "font-size",
+      "type": "integer",
+      "min": 6,
+      "max": 24,
+      "default": 14,
+      "description": "Terminal text size in px"
+    },
+    {
+      "key": "terminalFont",
+      "store": "settings",
+      "type": "string",
+      "maxBytes": 200,
+      "default": "",
+      "description": "Font installed on the device, tried before the defaults (empty: the defaults)"
+    },
+    {
+      "key": "disableContextMenu",
+      "store": "settings",
+      "type": "boolean",
+      "default": true,
+      "description": "Terminal: no browser context menu on right click or long press"
+    },
+    {
+      "key": "copyOnSelect",
+      "store": "settings",
+      "type": "boolean",
+      "default": false,
+      "description": "Terminal: copy the selection when a mouse drag ends"
+    },
+    {
+      "key": "pasteSource",
+      "store": "settings",
+      "type": "enum",
+      "values": ["clipboard", "tmux"],
+      "default": "clipboard",
+      "description": "Paste button: the system clipboard, or the backend's paste buffer"
+    },
+    {
+      "key": "imeSendBehavior",
+      "store": "settings",
+      "type": "enum",
+      "values": ["send-only", "send-enter"],
+      "default": "send-only",
+      "description": "Phone input bar: send the text only, or the text and Enter"
+    },
+    {
+      "key": "chatSendKey",
+      "store": "settings",
+      "type": "enum",
+      "values": ["ctrl-enter", "enter"],
+      "default": "ctrl-enter",
+      "description": "Chat composer on desktop: the key that sends"
+    },
+    {
+      "key": "toolbarDefaultExpanded",
+      "store": "settings",
+      "type": "boolean",
+      "default": false,
+      "description": "Phone: the keyboard toolbar opens expanded"
+    },
+    {
+      "key": "toolbarPosition",
+      "store": "settings",
+      "type": "enum",
+      "values": ["header", "right"],
+      "default": "header",
+      "description": "Desktop: view and pane controls in the header or on a bar at the right"
+    },
+    {
+      "key": "showSessionTabs",
+      "store": "settings",
+      "type": "boolean",
+      "default": true,
+      "description": "Desktop: the tabs bar above the terminal"
+    },
+    {
+      "key": "showUsageChip",
+      "store": "settings",
+      "type": "boolean",
+      "default": true,
+      "description": "Header: the open pane's agent context and limits"
+    },
+    {
+      "key": "showHostChip",
+      "store": "settings",
+      "type": "boolean",
+      "default": true,
+      "description": "Header: CPU, memory and battery of the server's machine"
+    },
+    {
+      "key": "pollInterval",
+      "store": "settings",
+      "type": "enum",
+      "values": [3, 5, 10, 15, 30, 60, 120, 300],
+      "default": 5,
+      "description": "Seconds between session list refreshes"
+    },
+    {
+      "key": "sidebarFilter",
+      "store": "settings",
+      "type": "enum",
+      "values": ["all", "needs-you", "agents", "working"],
+      "default": "all",
+      "description": "Which sessions the sidebar lists"
+    },
+    {
+      "key": "sidebarLayout",
+      "store": "settings",
+      "type": "enum",
+      "values": ["detailed", "compact"],
+      "default": "detailed",
+      "description": "Desktop sidebar: tabs under each workspace, or one line each"
+    },
+    {
+      "key": "sortBlockedFirst",
+      "store": "settings",
+      "type": "boolean",
+      "default": false,
+      "description": "Sessions waiting on the user first in each group"
+    },
+    {
+      "key": "sidebarWidth",
+      "store": "settings",
+      "type": "integer",
+      "min": 208,
+      "max": 560,
+      "default": 256,
+      "description": "Desktop sidebar width in px"
+    },
+    {
+      "key": "sidePanelWidth",
+      "store": "settings",
+      "type": "integer",
+      "min": 320,
+      "max": 4096,
+      "default": 440,
+      "description": "Desktop Files and Changes panel width in px (narrowed to fit the window)"
+    },
+    {
+      "key": "stuckMinutes",
+      "store": "settings",
+      "type": "enum",
+      "values": [3, 5, 10, 15, 20, 30, 45, 60],
+      "default": 10,
+      "description": "Overview: minutes a working agent stays quiet before it may be stuck"
+    },
+    {
+      "key": "driveTerminalSize",
+      "store": "settings",
+      "type": "boolean",
+      "default": false,
+      "description": "Herdr: size the pane to this device while it shows it"
+    },
+    {
+      "key": "herdrLayoutView",
+      "store": "settings",
+      "type": "boolean",
+      "default": true,
+      "description": "Herdr on desktop: a split tab's panes side by side"
+    },
+    {
+      "key": "markdownPreview",
+      "store": "settings",
+      "type": "boolean",
+      "default": true,
+      "description": "Files: Markdown rendered, else its source"
+    },
+    {
+      "key": "markdownEditLayout",
+      "store": "settings",
+      "type": "enum",
+      "values": ["source", "split", "preview"],
+      "default": "split",
+      "description": "Files: how Markdown being edited shows"
+    },
+    {
+      "key": "tablePreview",
+      "store": "settings",
+      "type": "boolean",
+      "default": true,
+      "description": "Files: CSV and TSV shown as a table, else their source"
+    },
+    {
+      "key": "svgPreview",
+      "store": "settings",
+      "type": "boolean",
+      "default": false,
+      "description": "Files and Changes: an SVG shown as an image, else as text"
+    },
+    {
+      "key": "findIncludeIgnored",
+      "store": "settings",
+      "type": "boolean",
+      "default": false,
+      "description": "Files search: a repository's ignored files too"
+    },
+    {
+      "key": "findExcludes",
+      "store": "settings",
+      "type": "names",
+      "maxItems": 50,
+      "maxBytes": 255,
+      "default": [
+        "node_modules",
+        ".venv",
+        "venv",
+        "__pycache__",
+        "dist",
+        "build",
+        "target",
+        ".next",
+        ".nuxt",
+        ".turbo",
+        ".cache",
+        "coverage",
+        "vendor"
+      ],
+      "description": "Files search: folder names never searched; replaces the whole list (one directory name each, no path or pattern)"
+    },
+    {
+      "key": "searchCase",
+      "store": "settings",
+      "type": "boolean",
+      "default": false,
+      "description": "Files content search: match case"
+    },
+    {
+      "key": "searchWord",
+      "store": "settings",
+      "type": "boolean",
+      "default": false,
+      "description": "Files content search: whole word"
+    },
+    {
+      "key": "searchRegex",
+      "store": "settings",
+      "type": "boolean",
+      "default": false,
+      "description": "Files content search: a regular expression"
+    },
+    {
+      "key": "editorFontSize",
+      "store": "settings",
+      "type": "enum",
+      "values": [11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+      "default": 13,
+      "description": "Desktop editor text size in px"
+    },
+    {
+      "key": "editorTabSize",
+      "store": "settings",
+      "type": "enum",
+      "values": [2, 4, 8],
+      "default": 4,
+      "description": "Desktop editor: columns of a tab"
+    },
+    {
+      "key": "editorWrap",
+      "store": "settings",
+      "type": "boolean",
+      "default": false,
+      "description": "Desktop editor: lines wrapped by default"
+    },
+    {
+      "key": "editorVim",
+      "store": "settings",
+      "type": "boolean",
+      "default": false,
+      "description": "Desktop editor: Vim key bindings"
+    },
+    {
+      "key": "taskHistoryLines",
+      "store": "settings",
+      "type": "integer",
+      "min": 100,
+      "max": 5000,
+      "default": 400,
+      "description": "Tasks: lines read for Send to agent"
+    },
+    {
+      "key": "shortcuts",
+      "store": "shortcuts",
+      "type": "shortcuts",
+      "default": {},
+      "commands": [
+        "palette.quickOpen",
+        "palette.commands",
+        "palette.goToLine",
+        "palette.sessions",
+        "view.terminal",
+        "view.chat",
+        "view.filesPanel",
+        "view.changesPanel",
+        "view.tasks",
+        "view.overview",
+        "files.searchContent",
+        "tab.new",
+        "tab.previous",
+        "tab.next",
+        "pane.previous",
+        "pane.next",
+        "pane.splitRight",
+        "pane.splitDown",
+        "pane.zoom",
+        "pane.swapNext",
+        "pane.resizeLeft",
+        "pane.resizeRight",
+        "pane.resizeUp",
+        "pane.resizeDown",
+        "agent.start",
+        "settings.open",
+        "settings.devices",
+        "settings.shortcuts",
+        "machine.next",
+        "app.help",
+        "app.about",
+        "app.docs",
+        "app.toggleSidebar",
+        "app.fullscreen",
+        "window.openNew",
+        "terminal.fontIncrease",
+        "terminal.fontDecrease",
+        "theme.light",
+        "theme.dark",
+        "theme.system"
+      ],
+      "description": "Desktop keyboard shortcuts, merged per command: {\"<command>\": {\"key\": \"Mod+Shift+K\" | null, \"inTerminal\": true}} replaces that command's shortcut whole, so include key to keep a custom one (key null: no shortcut), {\"<command>\": null} puts the default back. A chord holds Mod (Cmd on Apple, else Ctrl), Ctrl or Meta, with Alt and Shift, in the order Mod+Ctrl+Meta+Alt+Shift+<key>, or is F1-F12 alone"
+    }
+  ]
+}

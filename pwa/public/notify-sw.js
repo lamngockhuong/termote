@@ -5,9 +5,10 @@
 ;(() => {
   // The page turns notifications on only once the active worker answers this,
   // since an older worker kept active (registerType 'prompt') lacks the click
-  // handler, and one from before 2 lacks the push handler. Equal to
-  // NOTIFY_WORKER_VERSION in src/utils/notify-permission.ts.
-  const NOTIFY_VERSION = 2
+  // handler, one from before 2 lacks the push handler, and one from before 3
+  // the settings proposal push. Equal to NOTIFY_WORKER_VERSION in
+  // src/utils/notify-permission.ts.
+  const NOTIFY_VERSION = 3
 
   self.addEventListener('message', (event) => {
     if (event.data?.type !== 'termote-notify-ping') return
@@ -74,9 +75,34 @@
     await Promise.all([self.clients.openWindow(`/${search}${hash}`), kept])
   }
 
+  // An agent proposed settings: this server's own page shows them, never a
+  // window open on a machine (its proposals are that machine's).
+  async function openProposal() {
+    const windows = await self.clients.matchAll({
+      type: 'window',
+      includeUncontrolled: true,
+    })
+    const own = windows.find((w) => {
+      try {
+        return !new URL(w.url).searchParams.has('machine')
+      } catch {
+        return false
+      }
+    })
+    if (own) {
+      await own.focus().catch(() => {})
+      return
+    }
+    await self.clients.openWindow('/')
+  }
+
   self.addEventListener('notificationclick', (event) => {
     event.notification.close()
     const data = event.notification.data
+    if (data?.settings === true) {
+      event.waitUntil(openProposal())
+      return
+    }
     event.waitUntil(openPane(paneHash(data), machineOf(data?.machine)))
   })
 
@@ -92,12 +118,14 @@
       done: 'Agent finished',
       agent: 'Agent',
       fallback: 'An agent may need you',
+      settings: 'An agent proposes settings changes',
     },
     vi: {
       blocked: 'Agent cần bạn',
       done: 'Agent đã xong',
       agent: 'Agent',
       fallback: 'Có thể một agent đang cần bạn',
+      settings: 'Agent đề xuất thay đổi cài đặt',
     },
   }
   // Where the page keeps the app's language, so a push read with no page
@@ -243,9 +271,30 @@
 
   // Every push shows a notification: Safari revokes the permission of a
   // site whose push shows none, and Chrome shows one of its own.
+  // {"kind":"settings"}: an agent proposed settings. Read before
+  // readEvent, which wants a pane's ids.
+  function isSettingsPush(data) {
+    try {
+      return data?.json()?.kind === 'settings'
+    } catch {
+      return false
+    }
+  }
+
   async function showPush(data) {
-    const ev = readEvent(data)
     const text = await readText()
+    if (isSettingsPush(data)) {
+      // Never a value: the page shows what would change
+      await self.registration.showNotification(text.settings, {
+        tag: 'termote-settings',
+        renotify: true,
+        icon: ICON,
+        badge: BADGE,
+        data: { settings: true },
+      })
+      return
+    }
+    const ev = readEvent(data)
     if (!ev) {
       await self.registration.showNotification('Termote', {
         body: text.fallback,

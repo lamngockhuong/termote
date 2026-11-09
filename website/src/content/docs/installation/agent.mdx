@@ -46,6 +46,15 @@ To sign a phone in without typing the password, run `termote pair --role full` y
 the phone ([Pair a Device](/usage/devices/)). The code is a secret too, so do not ask the agent to make it.
 </Aside>
 
+## Settings the agent proposes
+
+Termote's settings live in each browser, not on the server. Ask the agent for a change, such as "use Vim keys
+in Termote's editor": it runs `termote settings propose`, and every browser open on Termote shows a bar to
+review the change, setting by setting, and apply or dismiss it. Nothing changes until you apply it, and then
+only in that browser. Notifications and the count on the app icon ask for a permission, so you turn them on in
+Settings yourself. The container install has no way for the agent to propose: move settings between browsers
+with Settings → Export & import ([Settings](/usage/settings/#export-and-import)).
+
 ## For agents and tools
 
 - [`/agents.md`](/agents.md): how to install, start, check and hand over Termote.

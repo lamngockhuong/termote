@@ -1,6 +1,9 @@
 // Width of the desktop side panel (Files, Changes), dragged from its left edge.
 export const SIDE_PANEL_DEFAULT = 440
 export const SIDE_PANEL_MIN = 320
+// Widest width kept in the settings (server/pwa_settings_schema.json); the
+// row narrows it further
+export const SIDE_PANEL_SAVED_MAX = 4096
 // Room the terminal or the Chat view always keeps next to the panel
 export const MAIN_MIN = 360
 // One arrow key press on the resize handle

@@ -6,18 +6,23 @@ import {
   DEFAULT_STUCK_MINUTES,
   resolveStuckMinutes,
 } from '../utils/agent-stuck'
+import { hiddenChars } from '../utils/prompt-templates'
 import {
   DEFAULT_SIDEBAR_FILTER,
   resolveSidebarFilter,
   type SidebarFilter,
 } from '../utils/session-filter'
-import { SIDE_PANEL_DEFAULT } from '../utils/side-panel-width'
+import {
+  SIDE_PANEL_DEFAULT,
+  SIDE_PANEL_MIN,
+  SIDE_PANEL_SAVED_MAX,
+} from '../utils/side-panel-width'
 import {
   DEFAULT_SIDEBAR_LAYOUT,
   resolveSidebarLayout,
   type SidebarLayout,
 } from '../utils/sidebar-layout'
-import { SIDEBAR_DEFAULT } from '../utils/sidebar-width'
+import { clampSidebarWidth, SIDEBAR_DEFAULT } from '../utils/sidebar-width'
 import {
   DEFAULT_TOOLBAR_POSITION,
   resolveToolbarPosition,
@@ -123,12 +128,66 @@ export function resolveSeenVersion(value: unknown): number {
     : 0
 }
 
+// The refresh intervals Settings offers, in seconds
+export const POLL_INTERVAL_OPTIONS = [3, 5, 10, 15, 30, 60, 120, 300]
+
+export function resolvePollInterval(value: unknown): number {
+  return POLL_INTERVAL_OPTIONS.includes(value as number) ? (value as number) : 5
+}
+
+// A font name of at most this many bytes, without control or hidden
+// characters (server/pwa_settings_schema.json)
+export const TERMINAL_FONT_MAX = 200
+
+// A saved font is kept as written; a proposed or imported one must also
+// pass terminalFontProblem
+export function resolveTerminalFont(value: unknown): string {
+  return typeof value === 'string' ? value : ''
+}
+
+// Whether a proposed or imported font cannot be taken: spaces around it,
+// longer than TERMINAL_FONT_MAX bytes, or a hidden character
+export function terminalFontProblem(font: string): boolean {
+  return (
+    font.trim() !== font ||
+    new TextEncoder().encode(font).length > TERMINAL_FONT_MAX ||
+    hiddenChars(font, false).length > 0
+  )
+}
+
+// A saved width, a whole number within the limits; anything else the
+// default (the view narrows it further to fit its row)
+export function resolveSidePanelWidth(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value))
+    return SIDE_PANEL_DEFAULT
+  return Math.min(
+    Math.max(Math.round(value), SIDE_PANEL_MIN),
+    SIDE_PANEL_SAVED_MAX,
+  )
+}
+
+export function resolveSidebarWidth(value: unknown): number {
+  return clampSidebarWidth(value, null)
+}
+
 export type ImeSendBehavior = 'send-only' | 'send-enter'
+
+export function resolveImeSendBehavior(value: unknown): ImeSendBehavior {
+  return value === 'send-enter' ? 'send-enter' : 'send-only'
+}
 // The key that sends a chat message with a keyboard (a phone keeps its send
 // button, Enter a new line): Ctrl/Cmd+Enter, or Enter alone with Shift+Enter
 // for a new line
 export type ChatSendKey = 'ctrl-enter' | 'enter'
 export type PasteSource = 'clipboard' | 'tmux'
+
+export function resolveChatSendKey(value: unknown): ChatSendKey {
+  return value === 'enter' ? 'enter' : 'ctrl-enter'
+}
+
+export function resolvePasteSource(value: unknown): PasteSource {
+  return value === 'tmux' ? 'tmux' : 'clipboard'
+}
 
 export interface Settings {
   imeSendBehavior: ImeSendBehavior
@@ -180,7 +239,7 @@ export interface Settings {
   taskHistoryLines: number // Tasks: lines read for Send to agent (above)
 }
 
-const DEFAULTS: Settings = {
+export const DEFAULTS: Settings = {
   imeSendBehavior: 'send-only',
   chatSendKey: 'ctrl-enter',
   toolbarDefaultExpanded: false,
@@ -224,6 +283,76 @@ const DEFAULTS: Settings = {
   taskHistoryLines: TASK_HISTORY_LINES_DEFAULT,
 }
 
+// Settings of this device alone: never proposed by an agent nor carried by
+// Export/Import. Turning notifications or the badge on asks for a permission
+// and subscribes to Web Push in the same click (use-push-subscription.ts),
+// which a value written to storage would skip. Equal to deviceOnly in
+// server/pwa_settings_schema.json (a test checks).
+export const DEVICE_ONLY_KEYS = [
+  'welcomeSeenVersion',
+  'languageNoticeSeen',
+  'hasSeenLocalhostNotice',
+  'notifyAgents',
+  'appBadge',
+] as const satisfies readonly (keyof Settings)[]
+
+type BooleanKey = {
+  [K in keyof Settings]: Settings[K] extends boolean ? K : never
+}[keyof Settings]
+
+// A saved switch, kept when it is a boolean; otherwise its default
+export function resolveBoolean(key: BooleanKey, value: unknown): boolean {
+  return typeof value === 'boolean' ? value : DEFAULTS[key]
+}
+
+// Each setting's resolver: what a stored (or proposed) value is kept as.
+// A value it keeps unchanged is a valid one.
+export const SETTING_RESOLVERS: {
+  [K in keyof Settings]: (value: unknown) => Settings[K]
+} = {
+  imeSendBehavior: resolveImeSendBehavior,
+  chatSendKey: resolveChatSendKey,
+  toolbarDefaultExpanded: (v) => resolveBoolean('toolbarDefaultExpanded', v),
+  disableContextMenu: (v) => resolveBoolean('disableContextMenu', v),
+  copyOnSelect: (v) => resolveBoolean('copyOnSelect', v),
+  pollInterval: resolvePollInterval,
+  welcomeSeenVersion: resolveSeenVersion,
+  language: resolveLanguage,
+  languageNoticeSeen: (v) => resolveBoolean('languageNoticeSeen', v),
+  hasSeenLocalhostNotice: (v) => resolveBoolean('hasSeenLocalhostNotice', v),
+  pasteSource: resolvePasteSource,
+  showSessionTabs: (v) => resolveBoolean('showSessionTabs', v),
+  toolbarPosition: resolveToolbarPosition,
+  terminalFont: resolveTerminalFont,
+  uiStyle: resolveUiStyle,
+  driveTerminalSize: (v) => resolveBoolean('driveTerminalSize', v),
+  herdrLayoutView: (v) => resolveBoolean('herdrLayoutView', v),
+  sidebarFilter: resolveSidebarFilter,
+  sidebarLayout: resolveSidebarLayout,
+  sortBlockedFirst: (v) => resolveBoolean('sortBlockedFirst', v),
+  markdownPreview: (v) => resolveBoolean('markdownPreview', v),
+  markdownEditLayout: resolveMarkdownEditLayout,
+  tablePreview: (v) => resolveBoolean('tablePreview', v),
+  svgPreview: (v) => resolveBoolean('svgPreview', v),
+  sidePanelWidth: resolveSidePanelWidth,
+  sidebarWidth: resolveSidebarWidth,
+  findIncludeIgnored: (v) => resolveBoolean('findIncludeIgnored', v),
+  findExcludes: resolveFindExcludes,
+  searchCase: (v) => resolveBoolean('searchCase', v),
+  searchWord: (v) => resolveBoolean('searchWord', v),
+  searchRegex: (v) => resolveBoolean('searchRegex', v),
+  notifyAgents: (v) => resolveBoolean('notifyAgents', v),
+  appBadge: (v) => resolveBoolean('appBadge', v),
+  stuckMinutes: resolveStuckMinutes,
+  showUsageChip: (v) => resolveBoolean('showUsageChip', v),
+  showHostChip: (v) => resolveBoolean('showHostChip', v),
+  editorFontSize: resolveEditorFontSize,
+  editorTabSize: resolveEditorTabSize,
+  editorWrap: (v) => resolveBoolean('editorWrap', v),
+  editorVim: (v) => resolveBoolean('editorVim', v),
+  taskHistoryLines: resolveTaskHistoryLines,
+}
+
 // Listeners for useSyncExternalStore
 const listeners = new Set<() => void>()
 
@@ -231,9 +360,31 @@ function notifyListeners() {
   for (const fn of listeners) fn()
 }
 
+// Another tab of this browser changed the settings: getSnapshot reads them
+// again
+function onStorage(e: StorageEvent) {
+  if (e.key === STORAGE_KEY || e.key === null) notifyListeners()
+}
+
 function subscribe(listener: () => void) {
+  if (!listeners.size) window.addEventListener('storage', onStorage)
   listeners.add(listener)
-  return () => listeners.delete(listener)
+  return () => {
+    listeners.delete(listener)
+    if (!listeners.size) window.removeEventListener('storage', onStorage)
+  }
+}
+
+// Every setting through its resolver: an edited or future config may hold
+// anything
+function resolveSettings(raw: Record<string, unknown>): Settings {
+  // A key this version does not know (a newer one wrote it) stays
+  const out: Record<string, unknown> = { ...DEFAULTS, ...raw }
+  for (const [key, resolve] of Object.entries(SETTING_RESOLVERS))
+    out[key] = (resolve as (v: unknown) => unknown)(
+      Object.hasOwn(raw, key) ? raw[key] : undefined,
+    )
+  return out as unknown as Settings
 }
 
 // Snapshot for useSyncExternalStore (stable reference when unchanged)
@@ -249,42 +400,26 @@ function getSnapshot(): Settings {
   if (json !== cachedJson) {
     cachedJson = json
     try {
-      const merged: Settings = json
-        ? { ...DEFAULTS, ...JSON.parse(json) }
-        : DEFAULTS
-      // An edited or future config may hold a style this version does not know.
-      cachedSettings = {
-        ...merged,
-        uiStyle: resolveUiStyle(merged.uiStyle),
-        chatSendKey: merged.chatSendKey === 'enter' ? 'enter' : 'ctrl-enter',
-        sidebarFilter: resolveSidebarFilter(merged.sidebarFilter),
-        sidebarLayout: resolveSidebarLayout(merged.sidebarLayout),
-        toolbarPosition: resolveToolbarPosition(merged.toolbarPosition),
-        findIncludeIgnored: merged.findIncludeIgnored === true,
-        findExcludes: resolveFindExcludes(merged.findExcludes),
-        notifyAgents: merged.notifyAgents === true,
-        appBadge: merged.appBadge !== false,
-        stuckMinutes: resolveStuckMinutes(merged.stuckMinutes),
-        copyOnSelect: merged.copyOnSelect === true,
-        showUsageChip: merged.showUsageChip !== false,
-        showHostChip: merged.showHostChip !== false,
-        editorFontSize: resolveEditorFontSize(merged.editorFontSize),
-        editorTabSize: resolveEditorTabSize(merged.editorTabSize),
-        editorWrap: merged.editorWrap === true,
-        editorVim: merged.editorVim === true,
-        taskHistoryLines: resolveTaskHistoryLines(merged.taskHistoryLines),
-        markdownEditLayout: resolveMarkdownEditLayout(
-          merged.markdownEditLayout,
-        ),
-        welcomeSeenVersion: resolveSeenVersion(merged.welcomeSeenVersion),
-        language: resolveLanguage(merged.language),
-        languageNoticeSeen: merged.languageNoticeSeen === true,
-      }
+      const parsed: unknown = json ? JSON.parse(json) : {}
+      cachedSettings =
+        parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+          ? resolveSettings(parsed as Record<string, unknown>)
+          : DEFAULTS
     } catch {
       cachedSettings = DEFAULTS
     }
   }
   return cachedSettings
+}
+
+// The settings now, for code outside React (settings-registry.ts)
+export function readSettings(): Settings {
+  return getSnapshot()
+}
+
+// Change several settings at once, each through its resolver
+export function writeSettingsPatch(patch: Partial<Settings>) {
+  writeSettings(resolveSettings({ ...getSnapshot(), ...patch }))
 }
 
 function writeSettings(settings: Settings) {

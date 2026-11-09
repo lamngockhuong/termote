@@ -592,6 +592,8 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 	}
 	agent.templates = templates != nil
 	registerTemplateRoutes(mux, templates, allowed)
+	agent.settings = newSettingsProposals()
+	registerSettingsProposalRoutes(mux, agent.settings, allowed)
 	var userTasks *taskStore
 	if cfg.TasksDir != "" {
 		var err error
@@ -807,7 +809,9 @@ func runServer(ctx context.Context, cfg serveConfig, m Mux, ln net.Listener) err
 	if agent.machinePoll != nil {
 		go agent.machinePoll.run(ctx)
 	}
-	startPushWatcher(ctx, m, push, agent.activity, agent.machinePoll)
+	if w := startPushWatcher(ctx, m, push, agent.activity, agent.machinePoll); w != nil {
+		agent.settings.setNotify(w.notifySettings)
+	}
 	stopSystem := startSystemSampler(ctx, agent.system)
 	defer stopSystem()
 	pwa := "embedded"

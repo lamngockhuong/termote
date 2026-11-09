@@ -25,6 +25,7 @@ import {
   findExcludeProblem,
   type ImeSendBehavior,
   type PasteSource,
+  POLL_INTERVAL_OPTIONS,
   type Settings,
   TASK_HISTORY_LINE_CHOICES,
 } from '../hooks/use-settings'
@@ -49,6 +50,7 @@ import {
 } from '../utils/toolbar-position'
 import { DevicesSection } from './devices-section'
 import { PromptTemplatesSection } from './prompt-templates-section'
+import { SettingsTransferSection } from './settings-transfer-section'
 import { ShortcutsSection } from './shortcuts-section'
 import { SigninsSection } from './signins-section'
 import { Button, FOCUS_RING, IconButton } from './ui/button'
@@ -391,8 +393,6 @@ const formatSeconds = (s: number, t: Translate<MessageKey>) =>
   s >= 60
     ? t('settings.pollMinutes', { n: s / 60 })
     : t('settings.pollSeconds', { n: s })
-
-const POLL_INTERVAL_OPTIONS = [3, 5, 10, 15, 30, 60, 120, 300]
 
 const IME_SEND_OPTIONS: {
   value: ImeSendBehavior
@@ -1234,6 +1234,12 @@ export function SettingsModal({
       ),
     })
   }
+
+  groups.push({
+    id: 'transfer',
+    title: t('settings.group.transfer'),
+    rows: <SettingsTransferSection />,
+  })
 
   if (updates) {
     groups.push({

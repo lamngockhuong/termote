@@ -1,5 +1,6 @@
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { setCurrentMachineForTest } from '../utils/api-base'
 import { setFocusWindowForTest } from '../utils/focus-mode'
 
 // vi.mock is hoisted — use vi.hoisted to declare mocks before the factory runs
@@ -174,6 +175,29 @@ describe('useLocalSessions', () => {
     })
     expect(result.current.clockOffset).toBe(30_000)
     vi.restoreAllMocks()
+  })
+
+  it("passes on this server's settings proposal, never a machine's", async () => {
+    const ref = { id: 'p1', expiresAt: '2026-11-09T12:15:00Z' }
+    mockSnapshot.extra = { settingsProposal: ref }
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    expect(result.current.settingsProposal).toEqual(ref)
+    const first = result.current.settingsProposal
+    // The same proposal read again keeps its object
+    await act(async () => {
+      await result.current.refreshSessions()
+    })
+    expect(result.current.settingsProposal).toBe(first)
+    setCurrentMachineForTest('0123456789abcdef')
+    try {
+      await act(async () => {
+        await result.current.refreshSessions()
+      })
+      expect(result.current.settingsProposal).toBeUndefined()
+    } finally {
+      setCurrentMachineForTest('')
+    }
   })
 
   it('sets isReady=true after first fetch', async () => {

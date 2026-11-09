@@ -11,6 +11,7 @@ import {
   toAgentStatus,
   worstAgentStatus,
 } from '../types/session'
+import { currentMachine } from '../utils/api-base'
 import { adoptChatDrafts, remapChatDrafts } from '../utils/chat-draft'
 import {
   adoptPersisted,
@@ -60,6 +61,7 @@ import {
   RequestError,
   type ResizeDirection,
   renameTab,
+  type SettingsProposalRef,
   type SplitDirection,
   type SwapDirection,
   selectTab,
@@ -350,6 +352,9 @@ export function useLocalSessions(pollInterval = 5) {
   // Server time minus this device's (ms): add it to Date.now() to compare
   // with the server's times (an agent's since).
   const [clockOffset, setClockOffset] = useState(0)
+  const [settingsProposal, setSettingsProposal] = useState<
+    SettingsProposalRef | undefined
+  >()
   const metaRef = useRef<Record<string, SessionMeta>>(loadMeta())
   // Read at each snapshot, so the poll's callbacks stay as they are
   const { t } = useT()
@@ -538,6 +543,13 @@ export function useLocalSessions(pollInterval = 5) {
       setMux((prev) => (sameMux(prev, next) ? prev : next))
       const now = Date.now()
       setClockOffset((prev) => nextClockOffset(prev, snap.serverNow, now))
+      // Only this server's own: a machine's proposal is for its browsers
+      const proposal = currentMachine() ? undefined : snap.settingsProposal
+      setSettingsProposal((prev) =>
+        prev?.id === proposal?.id && prev?.expiresAt === proposal?.expiresAt
+          ? prev
+          : proposal,
+      )
       applySnapshot(snap, version)
       setIsReady(true)
       isReadyRef.current = true
@@ -1105,5 +1117,6 @@ export function useLocalSessions(pollInterval = 5) {
     refreshSessions,
     mux,
     clockOffset,
+    settingsProposal,
   }
 }

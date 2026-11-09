@@ -40,6 +40,7 @@ import {
   fetchMachines,
   fetchOverview,
   fetchPaneText,
+  fetchSettingsProposal,
   fetchSignins,
   fetchSnapshot,
   fetchSubagents,
@@ -158,6 +159,36 @@ describe('mux API client', () => {
     expect(calls[0].url).toBe('/api/mux/machines')
     mockFetch({ status: 404, body: { error: 'not found' } })
     await expect(fetchMachines()).rejects.toMatchObject({ status: 404 })
+  })
+
+  it("fetchSettingsProposal reads this server's, whatever machine is open", async () => {
+    setCurrentMachineForTest('0123456789abcdef')
+    try {
+      const p = {
+        id: 'abc',
+        expiresAt: '2026-11-09T12:00:00Z',
+        values: { editorVim: true },
+      }
+      const { calls } = mockFetch({ body: p })
+      expect(await fetchSettingsProposal()).toEqual(p)
+      expect(calls[0].url).toBe('/api/mux/settings/proposal')
+    } finally {
+      setCurrentMachineForTest('')
+    }
+    mockFetch({ status: 404, body: { code: 'not_found' } })
+    expect(await fetchSettingsProposal()).toBeNull()
+    for (const body of [
+      {},
+      { id: 'a', expiresAt: 'x', values: [] },
+      { id: 'a', expiresAt: 'x', values: null },
+      { id: 'a', expiresAt: 1, values: {} },
+      { id: 'a', expiresAt: 'x', values: 'v' },
+    ]) {
+      mockFetch({ body })
+      expect(await fetchSettingsProposal()).toBeNull()
+    }
+    mockFetch({ status: 403, body: { error: 'origin not allowed' } })
+    await expect(fetchSettingsProposal()).rejects.toMatchObject({ status: 403 })
   })
 
   it('opens the sign-in page with the current path when the session ended', async () => {

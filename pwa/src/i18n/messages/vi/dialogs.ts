@@ -83,4 +83,5 @@ export default {
   'dialogs.notify.done': 'Agent đã xong',
   'dialogs.notify.agent': 'Agent',
   'dialogs.notify.fallback': 'Có thể một agent đang cần bạn',
+  'dialogs.notify.settings': 'Agent đề xuất thay đổi cài đặt',
 } satisfies Translation<typeof en>

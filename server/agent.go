@@ -410,6 +410,9 @@ type agentAPI struct {
 	// instanceID: this server's id (the snapshot's instanceId); set by
 	// buildServer.
 	instanceID string
+	// settings holds an agent's proposal of PWA settings (the snapshot's
+	// settingsProposal); set by buildServer.
+	settings *settingsProposals
 }
 
 type agentLookup struct {

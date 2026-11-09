@@ -367,6 +367,21 @@ A device that picked Tiếng Việt before the whole app was translated (on the 
 Settings when the setting covered only the welcome screen and the tour) switches to Vietnamese with
 the update. A banner says so, with **Switch to English**, until either of its buttons is pressed.
 
+## Export and Import
+
+Settings → Export & import moves this browser's settings to another browser: **Save to a file** or **Copy**,
+then in the other browser **Import a file…**, or paste the text and press **Review**. A table lists each
+setting as it is now and as it would be, and nothing changes until **Apply**. Notifications and the count on
+the app icon stay with each device: turning them on asks for a permission.
+
+## Settings an Agent Proposes
+
+A coding agent on the server's machine can propose settings with `termote settings propose` (see
+[Install with an agent](/installation/agent/#settings-the-agent-proposes)). Every browser open on Termote
+shows a bar under the top bar: **Review** opens the same before/after table, **Apply** changes that browser
+only, and **Dismiss** hides the proposal there (its other tabs too). A proposal waits 15 minutes, and a device
+with notifications on is notified once. Native installs only: the container has no local socket for the CLI.
+
 ## Persistence
 
 All settings are saved to your browser's local storage (`termote-settings` key) and persist across sessions. Clearing browser data or using "Clear cache & reload" (in the **More** menu) will reset settings to defaults.

@@ -81,8 +81,13 @@ const mockFetchOverview = vi.fn(async () => ({
 const mockLogout = vi.fn(async () => true)
 // The listener the App registers for a write refused as view-only
 let viewOnlyListener: (() => void) | undefined
+const mockFetchSettingsProposal = vi.fn(
+  async (): Promise<import('./hooks/use-mux-api').SettingsProposal | null> =>
+    null,
+)
 vi.mock('./hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('./hooks/use-mux-api')>()),
+  fetchSettingsProposal: () => mockFetchSettingsProposal(),
   selectTab: (id: string) => mockSelectTab(id),
   fetchOverview: () => mockFetchOverview(),
   logout: () => mockLogout(),
@@ -195,14 +200,16 @@ vi.mock('./hooks/use-keyboard-visible', () => ({
   useKeyboardVisible: () => mockUseKeyboardVisible(),
 }))
 
-vi.mock('./contexts/theme-context', () => ({
+vi.mock('./contexts/theme-context', async (orig) => ({
+  ...(await orig<typeof import('./contexts/theme-context')>()),
   useTheme: () => ({ theme: 'dark', resolvedTheme: 'dark', setTheme: vi.fn() }),
   ThemeProvider: ({ children }: { children: React.ReactNode }) => (
     <>{children}</>
   ),
 }))
 
-vi.mock('./hooks/use-font-size', () => ({
+vi.mock('./hooks/use-font-size', async (orig) => ({
+  ...(await orig<typeof import('./hooks/use-font-size')>()),
   useFontSize: () => ({ fontSize: 14, increase: vi.fn(), decrease: vi.fn() }),
 }))
 
@@ -226,7 +233,9 @@ const mockUseSettings = vi.fn(() => ({
   },
   updateSetting: vi.fn(),
 }))
-vi.mock('./hooks/use-settings', () => ({
+// The real module (the settings registry reads and writes it), but the hook
+vi.mock('./hooks/use-settings', async (orig) => ({
+  ...(await orig<typeof import('./hooks/use-settings')>()),
   useSettings: (...args: any[]) =>
     (mockUseSettings as (...a: any[]) => unknown)(...args),
 }))
@@ -7504,5 +7513,127 @@ describe('App prompt templates', () => {
     expect(mockTerminalSelection).toHaveBeenCalled()
     expect(props.terminalText('pane2')).toBe('')
     mockUseLocalSessions.mockReturnValue(base as any)
+  })
+})
+
+describe('App settings proposals', () => {
+  const expiresAt = () => new Date(Date.now() + 60_000).toISOString()
+  const withProposal = (id: string, enabled = true) => {
+    const base = mockUseLocalSessions()
+    const at = expiresAt()
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      mux: {
+        ...base.mux,
+        caps: { ...base.mux.caps, settingsProposals: enabled },
+      },
+      settingsProposal: { id, expiresAt: at },
+      clockOffset: 0,
+    } as any)
+    mockFetchSettingsProposal.mockResolvedValue({
+      id,
+      expiresAt: at,
+      values: { editorVim: true, notifyAgents: true },
+    })
+  }
+
+  beforeEach(() => {
+    localStorage.clear()
+    mockFetchSettingsProposal.mockReset()
+    mockFetchSettingsProposal.mockResolvedValue(null)
+    HTMLDialogElement.prototype.showModal = vi.fn(function (
+      this: HTMLDialogElement,
+    ) {
+      this.setAttribute('open', '')
+    })
+    HTMLDialogElement.prototype.close = vi.fn()
+  })
+
+  it('shows a proposal and applies it to this browser only', async () => {
+    withProposal('p1')
+    render(<App />)
+    const bar = await screen.findByText('An agent proposes 1 settings change')
+    expect(bar).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: 'Review' }))
+    const dialog = screen.getByRole('dialog', {
+      name: 'Settings an agent proposes',
+    })
+    expect(dialog).toHaveTextContent('Skipped: set on each device')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Apply' }))
+    const saved = JSON.parse(localStorage.getItem('termote-settings') ?? '{}')
+    expect(saved.editorVim).toBe(true)
+    expect(saved.notifyAgents).toBe(false)
+    expect(screen.getByTestId('toast')).toHaveTextContent('Applied 1 change')
+    expect(screen.queryByText('An agent proposes 1 settings change')).toBeNull()
+    expect(localStorage.getItem('termote-settings-proposal-seen')).toBe(
+      '["p1"]',
+    )
+  })
+
+  it('dismisses it, and cancels the dialog without a change', async () => {
+    withProposal('p2')
+    render(<App />)
+    await screen.findByText('An agent proposes 1 settings change')
+    fireEvent.click(screen.getByRole('button', { name: 'Review' }))
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Cancel',
+      }),
+    )
+    expect(localStorage.getItem('termote-settings')).toBeNull()
+    const bar = screen.getByText('An agent proposes 1 settings change')
+      .parentElement as HTMLElement
+    fireEvent.click(within(bar).getByRole('button', { name: 'Dismiss' }))
+    expect(screen.queryByText('An agent proposes 1 settings change')).toBeNull()
+    expect(localStorage.getItem('termote-settings-proposal-seen')).toBe(
+      '["p2"]',
+    )
+  })
+
+  it('turns Apply off when a newer proposal arrives while it is open', async () => {
+    withProposal('p3')
+    const { rerender } = render(<App />)
+    await screen.findByText('An agent proposes 1 settings change')
+    fireEvent.click(screen.getByRole('button', { name: 'Review' }))
+    withProposal('p4')
+    rerender(<App />)
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveTextContent('The agent proposed something newer')
+    expect(within(dialog).getByRole('button', { name: 'Apply' })).toBeDisabled()
+  })
+
+  it('says when the proposal it shows is gone', async () => {
+    withProposal('p7')
+    const { rerender } = render(<App />)
+    await screen.findByText('An agent proposes 1 settings change')
+    fireEvent.click(screen.getByRole('button', { name: 'Review' }))
+    const base = mockUseLocalSessions()
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      settingsProposal: undefined,
+    } as any)
+    rerender(<App />)
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveTextContent('This proposal expired')
+    expect(within(dialog).getByRole('button', { name: 'Apply' })).toBeDisabled()
+  })
+
+  it('shows nothing that would change nothing, nor without the cap', async () => {
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ editorVim: true }),
+    )
+    withProposal('p5')
+    render(<App />)
+    await act(async () => {})
+    expect(mockFetchSettingsProposal).toHaveBeenCalled()
+    expect(screen.queryByText(/An agent proposes/)).toBeNull()
+    cleanup()
+    mockFetchSettingsProposal.mockClear()
+    localStorage.clear()
+    withProposal('p6', false)
+    render(<App />)
+    await act(async () => {})
+    expect(mockFetchSettingsProposal).not.toHaveBeenCalled()
   })
 })

@@ -383,6 +383,21 @@ khi mục này mới chỉ áp dụng cho màn chào và phần hướng dẫn) 
 nhật. Một banner báo điều đó, kèm nút **Chuyển về English**, và chỉ ẩn khi bấm một trong hai nút
 của nó.
 
+## Xuất và nhập
+
+Cài đặt → Xuất và nhập chuyển cài đặt của trình duyệt này sang trình duyệt khác: bấm **Lưu ra file** hoặc
+**Chép**, sang trình duyệt kia bấm **Nhập từ file…**, hoặc dán nội dung vào rồi bấm **Xem trước**. Một bảng
+liệt kê từng cài đặt hiện tại và sau khi đổi; bạn chưa bấm **Áp dụng** thì chưa có gì thay đổi. Thông báo và số
+trên icon của app vẫn đặt riêng trên từng thiết bị, vì bật chúng cần cấp quyền.
+
+## Cài đặt do agent đề xuất
+
+Agent lập trình chạy trên máy chủ có thể đề xuất cài đặt bằng `termote settings propose` (xem
+[Cài bằng agent](/vi/installation/agent/#cài-đặt-do-agent-đề-xuất)). Mọi trình duyệt đang mở Termote hiện một
+thanh dưới thanh trên cùng: **Xem** mở cùng bảng trước/sau, **Áp dụng** chỉ đổi trình duyệt đó, còn **Bỏ qua**
+ẩn đề xuất ở trình duyệt đó (kể cả các tab khác của nó). Mỗi đề xuất chờ 15 phút, và thiết bị đã bật thông báo
+nhận một thông báo. Chỉ bản cài native dùng được, vì container không có socket cục bộ cho CLI.
+
 ## Lưu trữ
 
 Tất cả cài đặt được lưu trong local storage của trình duyệt (key `termote-settings`) và được giữ lại qua các phiên làm việc. Xóa dữ liệu trình duyệt hoặc dùng `Clear cache & reload` (trong menu **More**) sẽ đặt lại cài đặt về mặc định.

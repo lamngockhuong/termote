@@ -464,6 +464,39 @@ jobs:
           TERMOTE_E2E_REPO: ${{ env.E2E_WORKTREES_REPO }}
         run: TMUX_SOCKET="$RUNNER_TEMP/tmux-wt.sock" pnpm exec playwright test worktrees --workers=1
 
+      # Settings proposals (termote settings propose) reach only a native
+      # server's local socket, which a server opens only from a saved config:
+      # a fifth server, without sign-in, on its own port, HOME, XDG dirs and
+      # tmux dir. settings-proposal.spec.ts runs its CLI with the same dirs.
+      - name: Start server for settings proposals
+        if: ${{ matrix.extra }}
+        run: |
+          S="$RUNNER_TEMP/settings"
+          mkdir -p "$S/home" "$S/config/termote" "$S/state" "$S/cache" "$S/data" "$S/tmux"
+          chmod 700 "$S/tmux"
+          printf 'TERMOTE_PORT="7684"\nTERMOTE_NO_AUTH="true"\nTERMOTE_MUX="tmux"\n' > "$S/config/termote/config"
+          chmod 600 "$S/config/termote/config"
+          env -u TERMOTE_MUX -u TERMOTE_BIND -u TERMOTE_PORT -u TERMOTE_NO_AUTH SHELL=/bin/bash HOME="$S/home" \
+            XDG_CONFIG_HOME="$S/config" XDG_STATE_HOME="$S/state" XDG_CACHE_HOME="$S/cache" \
+            XDG_DATA_HOME="$S/data" TMUX_TMPDIR="$S/tmux" \
+            nohup ./server/termote-dev serve > "$RUNNER_TEMP/serve-settings.log" 2>&1 &
+          for _ in $(seq 1 30); do
+            [ -S "$S/state/termote/run/7684.sock" ] &&
+              curl -fsS http://127.0.0.1:7684/api/mux/snapshot > /dev/null && exit 0
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/serve-settings.log"
+          exit 1
+
+      - name: Run Playwright (settings proposals)
+        if: ${{ matrix.extra }}
+        working-directory: pwa
+        env:
+          TERMOTE_PORT: "7684"
+          TERMOTE_E2E_SETTINGS_CLI: ${{ github.workspace }}/server/termote-dev
+          TERMOTE_E2E_SETTINGS_ROOT: ${{ runner.temp }}/settings
+        run: pnpm exec playwright test settings-proposal --workers=1
+
       - name: Server log
         if: failure()
         run: |
@@ -471,6 +504,7 @@ jobs:
           cat "$RUNNER_TEMP/serve-auth.log" 2>/dev/null || true
           cat "$RUNNER_TEMP/serve-places.log" 2>/dev/null || true
           cat "$RUNNER_TEMP/serve-worktrees.log" 2>/dev/null || true
+          cat "$RUNNER_TEMP/serve-settings.log" 2>/dev/null || true
 
       - name: Upload Playwright report
         if: failure()

@@ -400,4 +400,10 @@ export default {
   // (components/meta-chips.tsx)
   'shell.meta.source': 'Reported by a Herdr plugin',
   'shell.meta.more': '+{n}',
+  'shell.settingsProposal.body_one':
+    'An agent proposes {count} settings change',
+  'shell.settingsProposal.body_other':
+    'An agent proposes {count} settings changes',
+  'shell.settingsProposal.view': 'Review',
+  'shell.settingsProposal.dismiss': 'Dismiss',
 } as const

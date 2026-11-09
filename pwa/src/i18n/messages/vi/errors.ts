@@ -61,6 +61,7 @@ export default {
   'errors.invalid_request': 'Server không dùng được yêu cầu này',
   'errors.invalid_role': 'Mức quyền không hợp lệ',
   'errors.invalid_root': 'Không chạy tác vụ được trong thư mục của pane',
+  'errors.invalid_settings': 'Cài đặt được đề xuất không hợp lệ',
   'errors.invalid_tab_id': 'Tab không hợp lệ',
   'errors.invalid_task': 'Tác vụ không hợp lệ. Hãy sửa nó trong Cài đặt',
   'errors.invalid_template': 'Mẫu không hợp lệ',

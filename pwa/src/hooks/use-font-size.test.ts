@@ -1,6 +1,11 @@
 import { act, renderHook } from '@testing-library/react'
-import { beforeEach, describe, expect, it } from 'vitest'
-import { useFontSize } from './use-font-size'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  readStoredFontSize,
+  resolveFontSize,
+  setStoredFontSize,
+  useFontSize,
+} from './use-font-size'
 
 describe('useFontSize', () => {
   beforeEach(() => {
@@ -67,4 +72,66 @@ describe('useFontSize', () => {
     expect(result.current.fontSize).toBe(14)
     expect(localStorage.getItem('terminal-font-size')).toBe('14')
   })
+})
+
+describe('font size store', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('follows a size another tab saved', () => {
+    const { result } = renderHook(() => useFontSize())
+    localStorage.setItem('terminal-font-size', '20')
+    act(() => {
+      window.dispatchEvent(new StorageEvent('storage', { key: 'other' }))
+    })
+    expect(result.current.fontSize).toBe(14)
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent('storage', { key: 'terminal-font-size' }),
+      )
+    })
+    expect(result.current.fontSize).toBe(20)
+    act(() => setStoredFontSize(8))
+    expect(result.current.fontSize).toBe(8)
+  })
+
+  it('keeps whole numbers in range only', () => {
+    expect(resolveFontSize(12)).toBe(12)
+    expect(resolveFontSize('12')).toBe(12)
+    expect(resolveFontSize('')).toBe(14)
+    expect(resolveFontSize(12.5)).toBe(14)
+    expect(resolveFontSize(null)).toBe(14)
+  })
+
+  it('works with storage blocked', () => {
+    const get = vi
+      .spyOn(Storage.prototype, 'getItem')
+      .mockImplementation(() => {
+        throw new Error('blocked')
+      })
+    const set = vi
+      .spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(() => {
+        throw new Error('blocked')
+      })
+    try {
+      expect(readStoredFontSize()).toBe(14)
+      expect(() => setStoredFontSize(20)).not.toThrow()
+    } finally {
+      get.mockRestore()
+      set.mockRestore()
+    }
+  })
+})
+
+it('keeps listening while another view still shows the size', () => {
+  localStorage.clear()
+  const a = renderHook(() => useFontSize())
+  const b = renderHook(() => useFontSize())
+  a.unmount()
+  localStorage.setItem('terminal-font-size', '22')
+  act(() => {
+    window.dispatchEvent(new StorageEvent('storage', { key: null }))
+  })
+  expect(b.result.current.fontSize).toBe(22)
+  b.unmount()
 })

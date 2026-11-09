@@ -1,7 +1,13 @@
 import { act, renderHook } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ThemeProvider, useTheme } from './theme-context'
+import {
+  readStoredTheme,
+  resolveTheme,
+  setStoredTheme,
+  ThemeProvider,
+  useTheme,
+} from './theme-context'
 
 function wrapper({ children }: { children: ReactNode }) {
   return <ThemeProvider>{children}</ThemeProvider>
@@ -134,4 +140,66 @@ describe('ThemeContext', () => {
     window.matchMedia = originalMatchMedia
     expect(result.current.resolvedTheme).toBe('light')
   })
+})
+
+describe('theme store', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('follows a mode another tab saved', () => {
+    const { result } = renderHook(() => useTheme(), { wrapper })
+    localStorage.setItem('termote-theme', 'dark')
+    act(() => {
+      window.dispatchEvent(new StorageEvent('storage', { key: 'other' }))
+    })
+    expect(result.current.theme).toBe('system')
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent('storage', { key: 'termote-theme' }),
+      )
+    })
+    expect(result.current.theme).toBe('dark')
+    act(() => setStoredTheme('light'))
+    expect(result.current.theme).toBe('light')
+  })
+
+  it('reads an unknown mode as system, and never writes one back', () => {
+    localStorage.setItem('termote-theme', 'blue')
+    const { result } = renderHook(() => useTheme(), { wrapper })
+    expect(result.current.theme).toBe('system')
+    expect(localStorage.getItem('termote-theme')).toBe('blue')
+    expect(resolveTheme('dark')).toBe('dark')
+  })
+
+  it('works with storage blocked', () => {
+    const get = vi
+      .spyOn(Storage.prototype, 'getItem')
+      .mockImplementation(() => {
+        throw new Error('blocked')
+      })
+    const set = vi
+      .spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(() => {
+        throw new Error('blocked')
+      })
+    try {
+      expect(readStoredTheme()).toBe('system')
+      expect(() => setStoredTheme('dark')).not.toThrow()
+    } finally {
+      get.mockRestore()
+      set.mockRestore()
+    }
+  })
+})
+
+it('keeps listening while another provider still shows the mode', () => {
+  localStorage.clear()
+  const a = renderHook(() => useTheme(), { wrapper })
+  const b = renderHook(() => useTheme(), { wrapper })
+  a.unmount()
+  localStorage.setItem('termote-theme', 'dark')
+  act(() => {
+    window.dispatchEvent(new StorageEvent('storage', { key: null }))
+  })
+  expect(b.result.current.theme).toBe('dark')
+  b.unmount()
 })

@@ -95,4 +95,5 @@ export default {
   'dialogs.notify.done': 'Agent finished',
   'dialogs.notify.agent': 'Agent',
   'dialogs.notify.fallback': 'An agent may need you',
+  'dialogs.notify.settings': 'An agent proposes settings changes',
 } as const

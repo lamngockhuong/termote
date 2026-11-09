@@ -275,6 +275,9 @@ export const MUX_ROUTES: Record<string, Handler> = {
   'GET /system': ({ state }) => json(demoHostStats(state.now())),
   // The demo reaches no other machine
   'GET /machines': () => json({ machines: [] }),
+  // No agent proposes settings in the demo (its snapshot never names one)
+  'GET /settings/proposal': () =>
+    json({ error: 'no settings proposal', code: 'not_found' }, 404),
   'GET /stream-token': () => json({ token: 'demo' }),
   'POST /tabs': createTab,
   'PATCH /tabs/{id}': changeTab,
