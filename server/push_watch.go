@@ -293,7 +293,7 @@ func (w *pushWatcher) deliverEvent(ctx context.Context, e pushEvent) {
 	w.mu.Unlock()
 
 	var subs []pushSub
-	for _, sub := range w.store.list() {
+	for _, sub := range w.store.sendable() {
 		if !w.backedOff(endpointHost(sub.Endpoint), now) {
 			subs = append(subs, sub)
 		}

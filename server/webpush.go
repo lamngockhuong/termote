@@ -238,6 +238,12 @@ func sendPush(ctx context.Context, client *http.Client, s *pushStore, sub pushSu
 	req.Header.Set("Authorization", authz)
 	resp, err := client.Do(req)
 	if err != nil {
+		// The caller logs it: a *url.Error names the whole endpoint, whose
+		// path is the device's capability, so only its cause goes back.
+		var ue *url.Error
+		if errors.As(err, &ue) {
+			err = ue.Err
+		}
 		return 0, 0, err
 	}
 	defer resp.Body.Close()

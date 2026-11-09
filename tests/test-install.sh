@@ -208,6 +208,14 @@ test_refusals() {
     [[ $CODE -ne 0 ]] && echo "$OUT" | grep -q "is not a version" && pass "malformed TERMOTE_VERSION" || fail "malformed" "refused" "$OUT"
     run_install TERMOTE_VERSION='1.0.0;rm -rf ~'
     [[ $CODE -ne 0 ]] && pass "TERMOTE_VERSION with shell characters refused" || fail "injection" "refused" "$OUT"
+    # A part too large for shell arithmetic made release_signed false, which
+    # skipped the signature check of a release with only a sha256.
+    make_release 99999999999999999999.0.0
+    # Nor is such a release the newest one an unpinned install picks.
+    FAKE_TAGS="v1.0.10 v99999999999999999999.0.0" run_install
+    [[ $CODE -ne 0 ]] && echo "$OUT" | grep -q "the newest release for .*, 1.0.10," && pass "release too large to compare is not the newest" || fail "oversized newest" "1.0.10 picked" "$OUT"
+    run_install TERMOTE_VERSION=99999999999999999999.0.0
+    [[ $CODE -ne 0 ]] && echo "$OUT" | grep -q "is not a version" && pass "TERMOTE_VERSION too large to compare refused" || fail "oversized version" "refused" "$OUT"
 
     make_release 2.0.0 bad
     run_install TERMOTE_VERSION=2.0.0

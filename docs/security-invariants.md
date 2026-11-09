@@ -1070,8 +1070,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   on psmux, which numbers panes per session (two sessions both have `%1`) and hands out session ids
   out of order, by the session id, the pane id and the pane's pid (`PaneDir`). psmux reports the
   foreground process's directory verbatim (`#`, `%`, non-ASCII and a UNC path are not expanded or
-  changed) and refuses `:` in a session name, so the path, read last, stays whole; a UNC directory
-  goes through the same checks as on Herdr for Windows.
+  changed) and refuses `:` in a session name, so the path, read last, stays whole. From psmux 3.4
+  that path can be what the pane printed (OSC 7 / OSC 9;9 while `ssh.exe` or `wsl.exe` runs in it),
+  so a remote host can name `\\host\share`: a psmux pane's directory not on a drive letter is
+  refused (`paneOutputDirer`, 400 `directory not available`, as a directory that is gone) before anything stats it, unless it is inside
+  a Place (`--allow-path`). Herdr's goes through the same checks as before.
   `GET files/content` takes an `encoding` of a fixed set (`utf-8`, `utf-16le`, `utf-16be`,
   `shift_jis`, `euc-jp`; another → 400, ignored by `?hash=1`) or detects one
   (`server/files_encoding.go`: a BOM, then valid UTF-8, then Shift-JIS/EUC-JP only when the
@@ -1918,13 +1921,17 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   paired device carries its id and goes when the device ends (revoke, expiry, a cascade, a reload
   that no longer finds it), and at start for a device no longer live. One made by a browser signed
   in with the password carries its session id and goes when the session ends (revoked, signed out,
-  expired, pushed out), and at start, since sessions live in memory; the store asks whether the
+  expired, pushed out), and at start, since sessions live in memory; the watcher sends to none whose
+  session has ended (`pushStore.sendable`, the expiry on the wall clock), since the timer that removes
+  it runs on the monotonic clock and fires late after the host slept; the store asks whether the
   session is still alive under its own lock when it adds one, so a subscribe racing the session's end
   is refused (401 `signed_out`) rather than left behind its removal; one made with Basic auth
   carries neither and stays, like one subscribed before session ids were recorded. One a
   device made before this (no id) reads as the password's until its page subscribes again (on load,
   and every 10 minutes while visible), so a device revoked before that keeps receiving pushes. Only 404/410
-  drop a subscription; 401/403 are logged and kept ("check the server clock" when all fail);
+  drop a subscription; 401/403 are logged and kept ("check the server clock" when all fail); a log
+  line names the push service's host, never the endpoint's path (`sendPush` returns a `*url.Error`'s
+  cause, not the error that quotes the URL);
   429 and timeouts back the push service off (`Retry-After`, at most 1 h). The watcher runs only
   from `runServer`, every 5 s and only with a subscription, reading tmux through `peekSnapshot`,
   which reads the sessions there and never recreates the default one; the service worker names a
@@ -2506,7 +2513,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   one. With neither tool, a release from that version on is refused too, since whoever can
   publish a release also writes its `.sha256`: only a pinned version (`TERMOTE_VERSION`) with
   `TERMOTE_SKIP_SIGNATURE_CHECK=1` (that value exactly) installs, with the sha256 alone and a note;
-  an unpinned one is refused even with it. Before that version, which no tool there could check,
+  an unpinned one is refused even with it. `install.sh` takes at most 9 digits a version part, pinned or picked as the newest, so
+  the shell arithmetic that tells a signed release cannot fail and read as unsigned. Before that version, which no tool there could check,
   they print that the signature was not checked. Both check the archive's line in the verified `checksums.txt`; `install.ps1` writes it
   to `ssh-keygen`'s stdin byte for byte (`Invoke-Native`: `Start-Process` rewrites its lines).
   `container up` runs the image by that digest,

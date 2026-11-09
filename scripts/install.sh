@@ -32,7 +32,10 @@ if [ -n "$PIN" ]; then
   # One line only: grep checks each line on its own.
   case "$PIN" in *"
 "*) die "TERMOTE_VERSION must be a single line." ;; esac
-  printf '%s\n' "$PIN" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$' ||
+  # At most 9 digits a part, as for the newest release below: release_signed
+  # compares them with shell arithmetic, which errors (reads as unsigned) past
+  # the shell's integers.
+  printf '%s\n' "$PIN" | grep -qE '^[0-9]{1,9}\.[0-9]{1,9}\.[0-9]{1,9}(-[0-9A-Za-z.]+)?$' ||
     die "TERMOTE_VERSION='$PIN' is not a version. It has to look like 1.0.0, or 1.0.0-rc.1 for a pre-release."
 fi
 
@@ -120,7 +123,7 @@ else
         if (r["draft"] == "false" && r["prerelease"] == "false") print r["tag_name"]
         delete r["tag_name"]; delete r["draft"]; delete r["prerelease"]
       } }' |
-    sed 's/^v//' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | grep -vE '^0\.' | sort -t. -k1,1n -k2,2n -k3,3n | tail -n 1 || true)
+    sed 's/^v//' | grep -E '^[0-9]{1,9}\.[0-9]{1,9}\.[0-9]{1,9}$' | grep -vE '^0\.' | sort -t. -k1,1n -k2,2n -k3,3n | tail -n 1 || true)
   [ -n "$VERSION" ] || die "no 1.x release found for ${REPO}. Name one with TERMOTE_VERSION=X.Y.Z (see https://github.com/${REPO}/releases)."
 fi
 

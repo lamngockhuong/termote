@@ -326,7 +326,7 @@ func (s *pushStore) add(sub pushSub) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if sub.Session != "" && s.sessionAlive != nil && !s.sessionAlive(sub.Session) {
+	if s.sessionEndedLocked(sub) {
 		return errPushSignedOut
 	}
 	sub.Gen = s.gen
@@ -390,6 +390,22 @@ func (s *pushStore) list() []pushSub {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return append([]pushSub(nil), s.subs...)
+}
+
+// sendable returns the subscriptions to send to: not one of a password
+// session that has ended. The session's expiry timer removes its
+// subscriptions, but it runs on the monotonic clock and fires late after the
+// host slept; sessionAlive reads the expiry on the wall clock.
+func (s *pushStore) sendable() []pushSub {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.DeleteFunc(slices.Clone(s.subs), s.sessionEndedLocked)
+}
+
+// sessionEndedLocked reports whether sub was made by a password session that
+// no longer exists. s.mu is held.
+func (s *pushStore) sessionEndedLocked(sub pushSub) bool {
+	return sub.Session != "" && s.sessionAlive != nil && !s.sessionAlive(sub.Session)
 }
 
 // keys returns the VAPID public key as base64url (the PWA's
