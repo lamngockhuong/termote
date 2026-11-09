@@ -227,6 +227,7 @@ export default {
   'files.tree.deleteNotEmpty': 'Xóa (thư mục không trống)',
   'files.actions.copyRelative': 'Sao chép đường dẫn tương đối',
   'files.actions.copyAbsolute': 'Sao chép đường dẫn tuyệt đối',
+  'files.actions.copyWindows': 'Sao chép đường dẫn Windows',
   'files.actions.copyName': 'Sao chép tên',
   'files.actions.nameCopied': 'Đã sao chép tên',
   'files.actions.nameCopyFailed': 'Không sao chép được tên',
@@ -235,6 +236,15 @@ export default {
   'files.actions.openFile': 'Mở file',
   'files.actions.notPasteable':
     'Đường dẫn này có ký tự xuống dòng hoặc dấu ngoặc kép nên không thể gõ vào terminal',
+  'files.actions.openWindows': 'Mở trên Windows',
+  // Windows mở một file cho Files (utils/open-in-windows.ts)
+  'files.openWindows.done': 'Đã mở {name} trên Windows',
+  'files.openWindows.failed': 'Windows không mở được {name}',
+  'files.openWindows.unavailable':
+    'Server này không gọi được Windows (WSL interop đang tắt)',
+  'files.openWindows.sensitive': '{name} có thể chứa bí mật nên không mở',
+  'files.openWindows.notAllowed': 'Không mở được {name} từ đây',
+  'files.openWindows.symlink': 'Đường dẫn đi qua một liên kết nên không mở',
   'files.actions.newFolder': 'Thư mục mới',
   'files.actions.uploadHere': 'Tải file lên đây',
   'files.actions.collapseAll': 'Thu gọn tất cả',

@@ -74,6 +74,7 @@ import { fileNameProblem } from '../utils/file-name'
 import { splitPath } from '../utils/files-format'
 import { isFocusWindow } from '../utils/focus-mode'
 import type { LinkPath } from '../utils/markdown-links'
+import { openFileInWindows } from '../utils/open-in-windows'
 import { isApplePlatform } from '../utils/platform'
 import { restoreFailure } from '../utils/restore-failure'
 import { commentedFileLines, type ReviewComment } from '../utils/review-draft'
@@ -539,6 +540,7 @@ function PaneFiles({
           path={tab.path}
           root={tab.root}
           place={f.place}
+          windowsRoot={here ? f.windowsRoot : undefined}
           paneDir={here ? () => paneDirNow(paneId, tab.root) : undefined}
           notify={notify}
           insertText={insertText}
@@ -546,6 +548,15 @@ function PaneFiles({
           onDownload={
             here && canDownload && !throughLink(f, tab.path)
               ? () => askDownload(tab.path, false, revealed)
+              : undefined
+          }
+          // A sensitive file only once shown
+          onOpenWindows={
+            here &&
+            f.windowsOpen &&
+            !throughLink(f, tab.path) &&
+            (revealed || !entryAt(f, tab.path)?.sensitive)
+              ? () => openWindows(tab.path, revealed)
               : undefined
           }
           onRename={
@@ -723,6 +734,16 @@ function PaneFiles({
   const download = (root: string, path: string, reveal: boolean) =>
     downloadFile(
       { paneId, place: f.place, root, path, reveal },
+      notify,
+      t,
+      f.rootChanged,
+    )
+
+  // Windows opens a file or folder of the tree (server under WSL)
+  const openWindows = (path: string, reveal: boolean) =>
+    openFileInWindows(
+      // The tree and a file show once the root is read
+      { paneId, place: f.place, root: f.root as string, path, reveal },
       notify,
       t,
       f.rootChanged,
@@ -1260,6 +1281,11 @@ function PaneFiles({
                             askDownload(path, entry.sensitive, false)
                         : undefined
                     }
+                    onOpenWindows={
+                      f.windowsOpen
+                        ? (path) => openWindows(path, false)
+                        : undefined
+                    }
                     onRename={
                       canRename
                         ? // A sensitive name is asked about: renaming it to an
@@ -1399,6 +1425,7 @@ function FileTree({
   onDelete,
   onRename,
   onDownload,
+  onOpenWindows,
   actions,
 }: {
   state: FilesState
@@ -1418,6 +1445,10 @@ function FileTree({
   // Offered on each regular file's row when downloading is allowed (the
   // server refuses a symlink)
   onDownload?: (path: string, entry: FileEntry) => void
+  // Offered on each file's and folder's row, not a sensitive one's nor one
+  // reached through a link (the server refuses both), when Windows can open
+  // it (server under WSL)
+  onOpenWindows?: (path: string) => void
   actions: TreeActions
 }) {
   const { t } = useT()
@@ -1514,12 +1545,15 @@ function FileTree({
     const create = folder ? actions.onCreate : undefined
     const upload = folder ? actions.onUpload : undefined
     const file = r.entry.type === 'file'
+    const openable =
+      (file || r.entry.type === 'dir') && !r.viaLink && !r.entry.sensitive
     return (
       <FileActionItems
         path={r.path}
         // The tree shows once the root is read
         root={state.root as string}
         place={state.place}
+        windowsRoot={state.windowsRoot}
         paneDir={actions.paneDir}
         notify={actions.notify}
         insertText={actions.insertText}
@@ -1528,6 +1562,9 @@ function FileTree({
         onUpload={upload && (() => upload(r.path))}
         onDownload={
           onDownload && file ? () => onDownload(r.path, r.entry) : undefined
+        }
+        onOpenWindows={
+          onOpenWindows && openable ? () => onOpenWindows(r.path) : undefined
         }
         onRename={
           onRename && file ? () => onRename(r.path, r.entry) : undefined

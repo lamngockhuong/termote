@@ -1344,6 +1344,11 @@ export interface FilesTree {
   path: string
   entries: FileEntry[]
   truncated: boolean
+  // root as Windows names it, when the server runs under WSL
+  // (\\wsl.localhost\Ubuntu\home\u, or C:\x under /mnt/c)
+  windowsRoot?: string
+  // files/open-windows works for this client (WSL with interop, full role)
+  windowsOpen?: boolean
 }
 
 // The encodings the server reads and saves a text file in. The PWA only
@@ -1788,6 +1793,25 @@ export async function renameFile(
   })
   if (!res.ok) throw await requestError(res)
   return res.json()
+}
+
+// Has Windows open the file or folder path under root with its default
+// program, on the machine the server runs on (WSL). A refusal is a
+// RequestError with the server's code (unavailable, sensitive, not_allowed,
+// symlink, not_file, busy), a 404 once the file is gone, or a 409 with the
+// root once it moved.
+export async function openInWindows(
+  target: FilesTarget,
+  open: { root: string; path: string; reveal: boolean },
+): Promise<void> {
+  const { root, ...body } = open
+  const res = await fetch(filesUrl(target, 'open-windows', { root }), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(SAVE_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res)
 }
 
 // Puts a deleted file (or directory) back at its path, never replacing
