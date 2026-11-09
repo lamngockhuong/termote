@@ -120,7 +120,8 @@ type openWindowsRequest struct {
 
 // handleOpenWindows serves POST files/open-windows?root=: Windows opens a
 // file or folder under the root with its default program (a page in the
-// browser, a folder in Explorer), on the machine the server runs on.
+// browser, a folder in Explorer), on the machine the server runs on: never
+// for another termote over the machine bridge, whose user sits elsewhere.
 // writeGuard has refused a cross-site or non-JSON POST already.
 func (f *filesAPI) handleOpenWindows(w http.ResponseWriter, r *http.Request) {
 	var in openWindowsRequest
@@ -129,7 +130,7 @@ func (f *filesAPI) handleOpenWindows(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer cancel()
-	if f.wsl.explorer == "" {
+	if f.wsl.explorer == "" || isBridge(r.Context()) {
 		f.error(w, "files open-windows", errWSLUnavailable)
 		return
 	}
@@ -206,8 +207,13 @@ func (f *filesAPI) checkOpenWindows(root filesRoot, in openWindowsRequest) (stri
 }
 
 // wslTreeFields fills what the tree answer says about Windows: the root as
-// Windows names it, and whether this client may open a file there.
-func (f *filesAPI) wslTreeFields(res *treeResponse, root string, viewOnly bool) {
+// Windows names it, and whether this client may open a file there. Nothing
+// for another termote over the machine bridge: the path names a file of
+// this machine, not of the device its user holds.
+func (f *filesAPI) wslTreeFields(res *treeResponse, root string, viewOnly, bridged bool) {
+	if bridged {
+		return
+	}
 	res.WindowsRoot = f.wsl.windowsPath(filepath.ToSlash(root))
 	res.WindowsOpen = res.WindowsRoot != "" && f.wsl.explorer != "" && !viewOnly
 }

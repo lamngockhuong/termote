@@ -260,6 +260,15 @@ func TestFilesOpenWindows(t *testing.T) {
 		<-fx.f.rawSlots
 	}
 
+	// Another termote over the machine bridge: 501, nothing run
+	b, _ := json.Marshal(openWindowsRequest{Path: "site"})
+	req := apiRequest("POST", "/api/mux/panes/0/files/open-windows?"+url.Values{"root": {fx.root}}.Encode(), string(b))
+	req.Header.Del("Origin")
+	req = req.WithContext(context.WithValue(withAuth(req.Context(), *full), bridgeKey{}, true))
+	if rec := serve(fx.mux, req); rec.Code != 501 {
+		t.Errorf("bridge = %d %s", rec.Code, rec.Body)
+	}
+
 	// Not under WSL, or interop off: 501
 	fx.f.wsl.explorer = ""
 	if res := fx.open(openWindowsRequest{Path: "site"}, full); res.StatusCode != 501 || errorCode(t, res) != "unavailable" {
@@ -314,9 +323,15 @@ func TestFilesTreeWindowsRoot(t *testing.T) {
 	}
 	// A view-only client copies the path but never opens it
 	var res treeResponse
-	fx.f.wslTreeFields(&res, fx.root, true)
+	fx.f.wslTreeFields(&res, fx.root, true, false)
 	if res.WindowsRoot != want || res.WindowsOpen {
 		t.Errorf("view-only = %+v", res)
+	}
+	// Another termote over the machine bridge: neither
+	req := apiRequest("GET", "/api/mux/panes/0/files/tree", "")
+	req = req.WithContext(context.WithValue(withAuth(req.Context(), full), bridgeKey{}, true))
+	if b := decodeBody(t, serve(fx.mux, req)); b["windowsRoot"] != nil || b["windowsOpen"] != nil {
+		t.Errorf("bridge = %v %v", b["windowsRoot"], b["windowsOpen"])
 	}
 	fx.f.wsl.explorer = ""
 	if b := get(full); b["windowsRoot"] != want || b["windowsOpen"] != nil {

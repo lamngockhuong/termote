@@ -541,7 +541,7 @@ func (f *filesAPI) handleTree(w http.ResponseWriter, r *http.Request) {
 	if req.view != nil && res.Dir != "" && !req.view.listed(res.Dir, true) {
 		res.Dir = ""
 	}
-	f.wslTreeFields(&res, req.root.Root, req.view != nil)
+	f.wslTreeFields(&res, req.root.Root, req.view != nil, isBridge(r.Context()))
 	jsonOK(w, res)
 }
 
