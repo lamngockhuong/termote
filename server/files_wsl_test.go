@@ -323,3 +323,20 @@ func TestFilesTreeWindowsRoot(t *testing.T) {
 		t.Errorf("interop off = %v %v", b["windowsRoot"], b["windowsOpen"])
 	}
 }
+
+// A root gone between its resolve and the check is an error, nothing run.
+func TestCheckOpenWindowsRootGone(t *testing.T) {
+	fx, _ := newOpenFixture(t)
+	gone := filepath.Join(fx.root, "gone")
+	if _, _, err := fx.f.checkOpenWindows(filesRoot{Root: gone}, openWindowsRequest{Path: "a.html"}); err == nil {
+		t.Error("no error for a missing root")
+	}
+}
+
+// The real runner gives a program's output and runs it outside any share.
+func TestWSLRunRunsProgram(t *testing.T) {
+	out, err := wslRun(context.Background(), "go", "env", "GOOS")
+	if err != nil || strings.TrimSpace(out) != runtime.GOOS {
+		t.Errorf("go env GOOS = %q, %v", out, err)
+	}
+}
