@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.25.0](https://github.com/lamngockhuong/termote/compare/v2.24.0...v2.25.0) (2026-11-09)
+
+
+### Features
+
+* worktrees for tmux, Zellij and herdr-core ([#762](https://github.com/lamngockhuong/termote/issues/762)) ([5c2e9df](https://github.com/lamngockhuong/termote/commit/5c2e9df3fc12f24b7c1a0d5176c9e108b74c2bea))
+
+
+### Bug Fixes
+
+* bound installer version parts, keep push endpoints out of logs, refuse psmux UNC pane roots and stop pushes to expired sign-ins ([#765](https://github.com/lamngockhuong/termote/issues/765)) ([441c0bf](https://github.com/lamngockhuong/termote/commit/441c0bf34c00afb6634a945cb962a509cf46cb18))
+* mark hidden characters in the Chat approval card and run Files' git with an owned empty hooks directory ([#764](https://github.com/lamngockhuong/termote/issues/764)) ([c3ed71b](https://github.com/lamngockhuong/termote/commit/c3ed71b3247fb6007feff324ea916fd04b3fecb5))
+* **pwa:** draw running subagents with icons that are not spinners ([#763](https://github.com/lamngockhuong/termote/issues/763)) ([47aab10](https://github.com/lamngockhuong/termote/commit/47aab10ad3b6744f2a2a49da4899b7d79629757e))
+* **pwa:** list machines level with this machine, without their agents ([#760](https://github.com/lamngockhuong/termote/issues/760)) ([f2e7e5c](https://github.com/lamngockhuong/termote/commit/f2e7e5c17c35a4b1b4892172ff82fe46208bd204))
+
 ## [2.24.0](https://github.com/lamngockhuong/termote/compare/v2.23.0...v2.24.0) (2026-11-08)
 
 
