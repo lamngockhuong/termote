@@ -3,6 +3,7 @@ import {
   fetchHealth,
   type InstallKind,
   MUX_API_VERSION,
+  RequestError,
 } from '../hooks/use-mux-api'
 import { APP_INFO } from './app-info'
 
@@ -182,14 +183,23 @@ export async function reloadToNewVersion(
 export const RELOAD_SETTLE_MS = 3000
 
 /**
- * A lazy view's chunk failed to load (Vite's vite:preloadError): this page
- * is older than the worker now serving it (another tab let it take over), so
- * its chunks are gone. Reload into the new version; an unsaved Files edit
- * still asks first.
+ * A lazy view's chunk failed to load (Vite's vite:preloadError). The session
+ * may have ended (a revoked device, an expired sign-in): every request then
+ * gets 401, and the health read opens the sign-in page as any other read
+ * does, instead of a reload that shows the form without leaving this URL.
+ * Otherwise this page is older than the worker now serving it (another tab
+ * let it take over), so its chunks are gone. Reload into the new version; an
+ * unsaved Files edit still asks first.
  */
-export function onChunkLoadError() {
+export async function onChunkLoadError(): Promise<void> {
+  try {
+    await fetchHealth()
+  } catch (err) {
+    if (err instanceof RequestError && err.status === 401) return
+    // Unreachable (it may be restarting): the reload still reaches it later.
+  }
   markStale()
-  reloadToNewVersion()
+  await reloadToNewVersion()
 }
 
 // A new service worker waits (registerSW's onNeedRefresh), or another tab
