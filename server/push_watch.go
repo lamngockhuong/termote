@@ -35,9 +35,11 @@ const (
 // pushEvent is what a push carries: ids only, never names or screen text.
 // The service worker reads the names itself from the snapshot.
 type pushEvent struct {
-	GroupID string `json:"groupId"`
-	TabID   string `json:"tabId"`
-	PaneID  string `json:"paneId"`
+	// The ids are empty for kind "settings" (an agent proposed PWA
+	// settings), which names no pane.
+	GroupID string `json:"groupId,omitempty"`
+	TabID   string `json:"tabId,omitempty"`
+	PaneID  string `json:"paneId,omitempty"`
 	Kind    string `json:"kind"`
 	// MachineID: the pane is on that machine (its snapshot is read through
 	// the machine poll); empty for this server's own.
@@ -84,11 +86,11 @@ func newPushWatcher(peek func(context.Context) (Snapshot, error), store *pushSto
 	}
 }
 
-// startPushWatcher runs the watcher until ctx is done; nothing without a
-// store. Its reads feed activity too.
-func startPushWatcher(ctx context.Context, m Mux, store *pushStore, activity *activityTracker, machines *machinePoller) {
+// startPushWatcher runs the watcher until ctx is done and returns it;
+// nothing (nil) without a store. Its reads feed activity too.
+func startPushWatcher(ctx context.Context, m Mux, store *pushStore, activity *activityTracker, machines *machinePoller) *pushWatcher {
 	if store == nil {
-		return
+		return nil
 	}
 	client := pushHTTPClient()
 	w := newPushWatcher(
@@ -106,6 +108,13 @@ func startPushWatcher(ctx context.Context, m Mux, store *pushStore, activity *ac
 	}
 	go w.run(ctx)
 	go w.deliver(ctx)
+	return w
+}
+
+// notifySettings queues the push saying an agent proposed PWA settings:
+// its kind only, never a value.
+func (w *pushWatcher) notifySettings() {
+	w.enqueue(pushEvent{Kind: "settings"})
 }
 
 // pushStatuses are the statuses that count as an observation; anything

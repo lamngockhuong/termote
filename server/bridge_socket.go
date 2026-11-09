@@ -80,13 +80,14 @@ var errMachineForbidden = &codedError{code: "machine_forbidden", msg: "not avail
 
 // machineForbiddenPath reports whether p (cleaned) is a route a bridge
 // request never reaches: signing in or out, pairing a device, sign-in links,
-// the devices and sign-ins lists with their revokes, and Web Push.
+// the devices and sign-ins lists with their revokes, Web Push, and settings
+// proposals (a machine's are for its own browsers).
 func machineForbiddenPath(p string) bool {
 	switch p {
 	case loginPath, pairPath, loginLinkPath, logoutPath, loginLinksRoute:
 		return true
 	}
-	for _, prefix := range []string{"/api/mux/devices", "/api/mux/signins", "/api/mux/push"} {
+	for _, prefix := range []string{"/api/mux/devices", "/api/mux/signins", "/api/mux/push", "/api/mux/settings"} {
 		if p == prefix || strings.HasPrefix(p, prefix+"/") {
 			return true
 		}

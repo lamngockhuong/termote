@@ -1,0 +1,619 @@
+{
+ "cases": [
+  {
+   "name": "one boolean",
+   "values": {
+    "editorVim": true
+   },
+   "bad": []
+  },
+  {
+   "name": "theme and font size",
+   "values": {
+    "theme": "dark",
+    "terminalFontSize": 16
+   },
+   "bad": []
+  },
+  {
+   "name": "every kind",
+   "values": {
+    "uiStyle": "terminal",
+    "pollInterval": 10,
+    "sidebarWidth": 300,
+    "terminalFont": "JetBrains Mono",
+    "findExcludes": [
+     "node_modules",
+     "out"
+    ],
+    "taskHistoryLines": 1234,
+    "shortcuts": {
+     "palette.commands": {
+      "key": "Mod+Shift+K",
+      "inTerminal": true
+     },
+     "tab.new": {
+      "key": null
+     },
+     "pane.zoom": null,
+     "app.help": {
+      "key": "F1"
+     }
+    }
+   },
+   "bad": []
+  },
+  {
+   "name": "empty font",
+   "values": {
+    "terminalFont": ""
+   },
+   "bad": []
+  },
+  {
+   "name": "empty list",
+   "values": {
+    "findExcludes": []
+   },
+   "bad": []
+  },
+  {
+   "name": "whole-number float",
+   "values": {
+    "editorFontSize": 14.0
+   },
+   "bad": []
+  },
+  {
+   "name": "editor font size out of range",
+   "values": {
+    "editorFontSize": 99
+   },
+   "bad": [
+    "editorFontSize"
+   ]
+  },
+  {
+   "name": "unknown key",
+   "values": {
+    "nope": 1,
+    "editorVim": true
+   },
+   "bad": [
+    "nope"
+   ]
+  },
+  {
+   "name": "device-only keys",
+   "values": {
+    "notifyAgents": true,
+    "appBadge": false,
+    "welcomeSeenVersion": 3
+   },
+   "bad": [
+    "appBadge",
+    "notifyAgents",
+    "welcomeSeenVersion"
+   ]
+  },
+  {
+   "name": "wrong types",
+   "values": {
+    "editorVim": "yes",
+    "theme": 1,
+    "sidebarWidth": "300",
+    "terminalFont": 5
+   },
+   "bad": [
+    "editorVim",
+    "sidebarWidth",
+    "terminalFont",
+    "theme"
+   ]
+  },
+  {
+   "name": "null",
+   "values": {
+    "editorVim": null
+   },
+   "bad": [
+    "editorVim"
+   ]
+  },
+  {
+   "name": "integer bounds",
+   "values": {
+    "sidebarWidth": 207,
+    "terminalFontSize": 25,
+    "taskHistoryLines": 100.5
+   },
+   "bad": [
+    "sidebarWidth",
+    "taskHistoryLines",
+    "terminalFontSize"
+   ]
+  },
+  {
+   "name": "enum not offered",
+   "values": {
+    "pollInterval": 7,
+    "stuckMinutes": 4
+   },
+   "bad": [
+    "pollInterval",
+    "stuckMinutes"
+   ]
+  },
+  {
+   "name": "font too long",
+   "values": {
+    "terminalFont": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+   },
+   "bad": [
+    "terminalFont"
+   ]
+  },
+  {
+   "name": "font with spaces around",
+   "values": {
+    "terminalFont": " Mono "
+   },
+   "bad": [
+    "terminalFont"
+   ]
+  },
+  {
+   "name": "font with a bidi override",
+   "values": {
+    "terminalFont": "Mono\u202e"
+   },
+   "bad": [
+    "terminalFont"
+   ]
+  },
+  {
+   "name": "font with a zero width space",
+   "values": {
+    "terminalFont": "Mo\u200bno"
+   },
+   "bad": [
+    "terminalFont"
+   ]
+  },
+  {
+   "name": "font with a newline",
+   "values": {
+    "terminalFont": "Mono\nX"
+   },
+   "bad": [
+    "terminalFont"
+   ]
+  },
+  {
+   "name": "font with a joiner",
+   "values": {
+    "terminalFont": "Mono\u200d"
+   },
+   "bad": []
+  },
+  {
+   "name": "exclude a path",
+   "values": {
+    "findExcludes": [
+     "a/b"
+    ]
+   },
+   "bad": [
+    "findExcludes"
+   ]
+  },
+  {
+   "name": "exclude a backslash path",
+   "values": {
+    "findExcludes": [
+     "a\\b"
+    ]
+   },
+   "bad": [
+    "findExcludes"
+   ]
+  },
+  {
+   "name": "exclude a pattern",
+   "values": {
+    "findExcludes": [
+     "*.log"
+    ]
+   },
+   "bad": [
+    "findExcludes"
+   ]
+  },
+  {
+   "name": "exclude a bracket",
+   "values": {
+    "findExcludes": [
+     "a[1"
+    ]
+   },
+   "bad": [
+    "findExcludes"
+   ]
+  },
+  {
+   "name": "exclude dot",
+   "values": {
+    "findExcludes": [
+     ".."
+    ]
+   },
+   "bad": [
+    "findExcludes"
+   ]
+  },
+  {
+   "name": "exclude empty",
+   "values": {
+    "findExcludes": [
+     ""
+    ]
+   },
+   "bad": [
+    "findExcludes"
+   ]
+  },
+  {
+   "name": "exclude twice",
+   "values": {
+    "findExcludes": [
+     "a",
+     "a"
+    ]
+   },
+   "bad": [
+    "findExcludes"
+   ]
+  },
+  {
+   "name": "exclude hidden",
+   "values": {
+    "findExcludes": [
+     "a\u2066b"
+    ]
+   },
+   "bad": [
+    "findExcludes"
+   ]
+  },
+  {
+   "name": "exclude too long",
+   "values": {
+    "findExcludes": [
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    ]
+   },
+   "bad": [
+    "findExcludes"
+   ]
+  },
+  {
+   "name": "exclude longest",
+   "values": {
+    "findExcludes": [
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    ]
+   },
+   "bad": []
+  },
+  {
+   "name": "exclude too many",
+   "values": {
+    "findExcludes": [
+     "n0",
+     "n1",
+     "n2",
+     "n3",
+     "n4",
+     "n5",
+     "n6",
+     "n7",
+     "n8",
+     "n9",
+     "n10",
+     "n11",
+     "n12",
+     "n13",
+     "n14",
+     "n15",
+     "n16",
+     "n17",
+     "n18",
+     "n19",
+     "n20",
+     "n21",
+     "n22",
+     "n23",
+     "n24",
+     "n25",
+     "n26",
+     "n27",
+     "n28",
+     "n29",
+     "n30",
+     "n31",
+     "n32",
+     "n33",
+     "n34",
+     "n35",
+     "n36",
+     "n37",
+     "n38",
+     "n39",
+     "n40",
+     "n41",
+     "n42",
+     "n43",
+     "n44",
+     "n45",
+     "n46",
+     "n47",
+     "n48",
+     "n49",
+     "n50"
+    ]
+   },
+   "bad": [
+    "findExcludes"
+   ]
+  },
+  {
+   "name": "exclude not a list",
+   "values": {
+    "findExcludes": "node_modules"
+   },
+   "bad": [
+    "findExcludes"
+   ]
+  },
+  {
+   "name": "exclude a number",
+   "values": {
+    "findExcludes": [
+     1
+    ]
+   },
+   "bad": [
+    "findExcludes"
+   ]
+  },
+  {
+   "name": "shortcut unknown command",
+   "values": {
+    "shortcuts": {
+     "nope": {
+      "key": "Mod+K"
+     }
+    }
+   },
+   "bad": [
+    "shortcuts"
+   ]
+  },
+  {
+   "name": "shortcut without a modifier",
+   "values": {
+    "shortcuts": {
+     "tab.new": {
+      "key": "K"
+     }
+    }
+   },
+   "bad": [
+    "shortcuts"
+   ]
+  },
+  {
+   "name": "shortcut shift only",
+   "values": {
+    "shortcuts": {
+     "tab.new": {
+      "key": "Shift+K"
+     }
+    }
+   },
+   "bad": [
+    "shortcuts"
+   ]
+  },
+  {
+   "name": "shortcut out of order",
+   "values": {
+    "shortcuts": {
+     "tab.new": {
+      "key": "Shift+Mod+K"
+     }
+    }
+   },
+   "bad": [
+    "shortcuts"
+   ]
+  },
+  {
+   "name": "shortcut lower case",
+   "values": {
+    "shortcuts": {
+     "tab.new": {
+      "key": "Mod+k"
+     }
+    }
+   },
+   "bad": [
+    "shortcuts"
+   ]
+  },
+  {
+   "name": "shortcut unknown key",
+   "values": {
+    "shortcuts": {
+     "tab.new": {
+      "key": "Mod+F13"
+     }
+    }
+   },
+   "bad": [
+    "shortcuts"
+   ]
+  },
+  {
+   "name": "shortcut twice a modifier",
+   "values": {
+    "shortcuts": {
+     "tab.new": {
+      "key": "Mod+Mod+K"
+     }
+    }
+   },
+   "bad": [
+    "shortcuts"
+   ]
+  },
+  {
+   "name": "shortcut the browser keeps",
+   "values": {
+    "shortcuts": {
+     "tab.new": {
+      "key": "Mod+W"
+     }
+    }
+   },
+   "bad": [
+    "shortcuts"
+   ]
+  },
+  {
+   "name": "shortcut for text",
+   "values": {
+    "shortcuts": {
+     "tab.new": {
+      "key": "Mod+C"
+     }
+    }
+   },
+   "bad": [
+    "shortcuts"
+   ]
+  },
+  {
+   "name": "shortcut named key",
+   "values": {
+    "shortcuts": {
+     "tab.new": {
+      "key": "Mod+Alt+ArrowLeft"
+     }
+    }
+   },
+   "bad": []
+  },
+  {
+   "name": "shortcut F12 alone",
+   "values": {
+    "shortcuts": {
+     "tab.new": {
+      "key": "F12"
+     }
+    }
+   },
+   "bad": []
+  },
+  {
+   "name": "shortcut inTerminal only",
+   "values": {
+    "shortcuts": {
+     "tab.new": {
+      "inTerminal": false
+     }
+    }
+   },
+   "bad": []
+  },
+  {
+   "name": "shortcut inTerminal not boolean",
+   "values": {
+    "shortcuts": {
+     "tab.new": {
+      "inTerminal": 1
+     }
+    }
+   },
+   "bad": [
+    "shortcuts"
+   ]
+  },
+  {
+   "name": "shortcut unknown field",
+   "values": {
+    "shortcuts": {
+     "tab.new": {
+      "chord": "Mod+K"
+     }
+    }
+   },
+   "bad": [
+    "shortcuts"
+   ]
+  },
+  {
+   "name": "shortcut empty entry",
+   "values": {
+    "shortcuts": {
+     "tab.new": {}
+    }
+   },
+   "bad": [
+    "shortcuts"
+   ]
+  },
+  {
+   "name": "shortcut key not a string",
+   "values": {
+    "shortcuts": {
+     "tab.new": {
+      "key": 5
+     }
+    }
+   },
+   "bad": [
+    "shortcuts"
+   ]
+  },
+  {
+   "name": "shortcut entry not an object",
+   "values": {
+    "shortcuts": {
+     "tab.new": "Mod+K"
+    }
+   },
+   "bad": [
+    "shortcuts"
+   ]
+  },
+  {
+   "name": "shortcuts empty",
+   "values": {
+    "shortcuts": {}
+   },
+   "bad": [
+    "shortcuts"
+   ]
+  },
+  {
+   "name": "shortcuts a list",
+   "values": {
+    "shortcuts": []
+   },
+   "bad": [
+    "shortcuts"
+   ]
+  }
+ ]
+}

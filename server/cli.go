@@ -270,6 +270,8 @@ func (c *cli) dispatch(cmd string, args []string) error {
 		return c.cmdBridge(args)
 	case "machine", "machines":
 		return c.cmdMachine(args)
+	case "settings":
+		return c.cmdSettings(args)
 	case "menu":
 		return c.cmdMenu()
 	case "version", "-v", "--version":
@@ -504,6 +506,8 @@ Commands:
   show-password        Show the saved username and password
   machine <cmd>        Machines this termote reaches over SSH: add <ssh alias>, list,
                        remove <id|label>, status, import --herdr
+  settings <cmd>       PWA settings an agent may propose: schema [--json] lists them,
+                       propose <json|-> shows a change the user applies in the PWA
   version              Show version
   help agent           A guide for coding agents that install and run termote
   serve                Run the server in the foreground (what the service runs)

@@ -201,6 +201,10 @@ type Caps struct {
 	ViewStream bool `json:"viewStream,omitempty"`
 	// Machines: this server reaches other machines (GET /api/mux/machines).
 	Machines bool `json:"machines,omitempty"`
+	// SettingsProposals: an agent's proposal of PWA settings can be read
+	// (GET /api/mux/settings/proposal); never through the machine bridge.
+	// Set by the snapshot route.
+	SettingsProposals bool `json:"settingsProposals"`
 }
 
 // snapshotPeeker is a backend whose Snapshot has side effects (tmux makes
@@ -238,6 +242,10 @@ type Snapshot struct {
 	InstanceID string `json:"instanceId,omitempty"`
 	// Machines are the machines this server reaches, with their status.
 	Machines []MachineInfo `json:"machines,omitempty"`
+	// SettingsProposal: an agent proposed PWA settings, which each device
+	// reads and applies itself. Never through the machine bridge: a
+	// machine's proposal is for that machine's own browsers.
+	SettingsProposal *settingsProposalRef `json:"settingsProposal,omitempty"`
 	// viewers: the panes (by paneKey) a terminal client of the backend's own
 	// shows, a user active there lately (tmux, Zellij list-clients); the
 	// activity tracker counts them as seen. Never sent.
@@ -497,6 +505,10 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 		if agent.machinePoll != nil {
 			snap.Machines = agent.machinePoll.infos(false)
 			snap.Caps.Machines = len(snap.Machines) > 0
+		}
+		if agent.settings != nil && !isBridge(r.Context()) {
+			snap.Caps.SettingsProposals = true
+			snap.SettingsProposal = agent.settings.ref()
 		}
 		if snap.Groups == nil {
 			snap.Groups = []Group{}
