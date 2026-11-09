@@ -1507,7 +1507,7 @@ so one agent's status is never paired with another's; events still carry the cur
 Agent status (Herdr event / Claude session file)
   ├── PWA open: each snapshot poll → transitions → notify (no confirmed push on this device,
   │     not the visible, focused pane) through the service worker
-  └── server watcher, every 5 s, only with ≥1 subscription → peekSnapshot (never creates)
+  └── server watcher, every 5 s, only with ≥1 sendable subscription → peekSnapshot (never creates)
         → transitions → queue (64, oldest dropped) → sender (4 at a time, 5 s each)
         → push service (allowlist, IP check after DNS, no proxy, no redirects)
   notify-sw.js: push → /api/mux/snapshot?peek=1 (3 s) → app badge, names → showNotification (always)

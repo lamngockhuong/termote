@@ -406,6 +406,14 @@ func (s *pushStore) sendable() []pushSub {
 	return slices.DeleteFunc(slices.Clone(s.subs), s.endedLocked)
 }
 
+// anySendable reports whether sendable would return a subscription: the
+// watcher reads the panes and polls the machines only then.
+func (s *pushStore) anySendable() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.ContainsFunc(s.subs, func(sub pushSub) bool { return !s.endedLocked(sub) })
+}
+
 // endedLocked reports whether sub was made by a password session that no
 // longer exists or by a paired device no longer alive. s.mu is held; the
 // device store's lock is taken after it, never the other way round.

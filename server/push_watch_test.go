@@ -167,6 +167,36 @@ func TestPushWatcherNoPeekWithoutSubscriptions(t *testing.T) {
 	}
 }
 
+// Subscriptions whose sign-in has ended, still in the store until their
+// expiry timer fires late after the host slept, read no pane and queue no
+// machine event: nothing would be sent to them.
+func TestPushWatcherNoPeekWithOnlyEndedSubscriptions(t *testing.T) {
+	w, _, peeks := newTestWatcher(t, func() (Snapshot, error) {
+		return statusSnap(map[string]string{"p1": "blocked"}), nil
+	})
+	alive := map[string]bool{"s1": true}
+	w.store.sessionAlive = func(id string) bool { return alive[id] }
+	sub := fcmSub(t, 1)
+	sub.Session = "s1"
+	if err := w.store.add(sub); err != nil {
+		t.Fatal(err)
+	}
+	if !w.store.anySendable() {
+		t.Fatal("a live session's subscription is not sendable")
+	}
+	alive["s1"] = false
+	w.prev["p1"] = "working"
+	w.machinePrev["m1/p1"] = "working"
+	w.tick(context.Background())
+	w.observeMachine("m1", statusSnap(map[string]string{"p1": "blocked"}))
+	if peeks.Load() != 0 || len(w.prev) != 0 || len(w.machinePrev) != 0 || len(w.queue) != 0 {
+		t.Fatalf("peeks %d, prev %v, machinePrev %v, queued %d", peeks.Load(), w.prev, w.machinePrev, len(w.queue))
+	}
+	if w.store.anySendable() || len(w.store.list()) != 1 {
+		t.Fatalf("anySendable %v with %d stored", w.store.anySendable(), len(w.store.list()))
+	}
+}
+
 func TestPushWatcherQueuesTransitions(t *testing.T) {
 	snap := statusSnap(map[string]string{"p1": "working", "p2": "idle"})
 	var err error
