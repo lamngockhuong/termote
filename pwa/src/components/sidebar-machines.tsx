@@ -66,7 +66,7 @@ export function SidebarMachines({ machines, current, onSelect }: Props) {
   const [collapsed, setCollapsed] = useState(false)
   if (machines.length === 0 && current === '') return null
   const row = (active: boolean) =>
-    `flex h-8 min-w-0 flex-1 items-center gap-2 rounded-control px-2 text-left text-[13px] ${ROW_PRESS} ${
+    `flex h-8 w-full min-w-0 items-center gap-2 rounded-control px-2 text-left text-[13px] ${ROW_PRESS} ${
       active ? ACTIVE_ROW_CLASSES : ROW_CLASSES
     } ${FOCUS_RING} focus-visible:-outline-offset-2`
   return (
