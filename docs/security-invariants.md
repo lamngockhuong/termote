@@ -784,7 +784,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   single-use `promptId`). The dialog card shows every text it reads off the screen (title, body,
   option labels and details, tab labels) with its hidden characters as `⟨U+XXXX⟩` (`visibleUnsafe`,
   the body keeping its line breaks), so a bidi override in a proposed command cannot make it read as
-  another one before the user approves it. A box that already holds this very message as text (an earlier send
+  another one before the user approves it. A Claude Code dialog taller than the pane, its top
+  edge off the screen, is answerable only as a `permission` dialog (`findCutDialog`: no rule at
+  column 0 above the footer), its body opening with a `…` row so the card never passes a command's
+  visible tail for the whole of it. A box that already holds this very message as text (an earlier send
   refused `paste_not_confirmed` whose paste showed later) gets no second paste: it is submitted
   as it is. Any other draft, a long-paste token (it carries a count, not the text) or a message
   with images is refused 409 `input_has_draft` with no key sent, unless the body asks
