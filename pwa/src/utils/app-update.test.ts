@@ -21,6 +21,11 @@ const mockReload = vi.fn()
 vi.mock('../hooks/use-mux-api', () => ({
   fetchHealth: () => mockFetchHealth(),
   MUX_API_VERSION: 1,
+  RequestError: class extends Error {
+    constructor(readonly status: number) {
+      super('request failed')
+    }
+  },
 }))
 
 // A fixed page version, so the comparisons do not change with each release
@@ -381,9 +386,36 @@ describe('app-update', () => {
         .spyOn(window, 'location', 'get')
         .mockReturnValue({ reload: mockReload } as unknown as Location)
       const { result } = renderHook(() => useAppUpdate())
-      act(() => onChunkLoadError())
+      await act(() => onChunkLoadError())
       expect(result.current.stale).toBe(true)
-      await vi.waitFor(() => expect(mockReload).toHaveBeenCalledTimes(1))
+      expect(mockReload).toHaveBeenCalledTimes(1)
+      location.mockRestore()
+    })
+
+    // The health read has opened the sign-in page; the page is no older
+    // than the server, so it is neither marked stale nor reloaded.
+    it('leaves a chunk refused for an ended session to the sign-in page', async () => {
+      const { RequestError } = await import('../hooks/use-mux-api')
+      mockFetchHealth.mockRejectedValue(
+        new RequestError(401, 'unauthorized', 'sign-in required'),
+      )
+      const location = vi
+        .spyOn(window, 'location', 'get')
+        .mockReturnValue({ reload: mockReload } as unknown as Location)
+      const { result } = renderHook(() => useAppUpdate())
+      await act(() => onChunkLoadError())
+      expect(result.current.stale).toBe(false)
+      expect(mockReload).not.toHaveBeenCalled()
+      location.mockRestore()
+    })
+
+    it('still reloads when the server cannot be reached', async () => {
+      mockFetchHealth.mockRejectedValue(new TypeError('Failed to fetch'))
+      const location = vi
+        .spyOn(window, 'location', 'get')
+        .mockReturnValue({ reload: mockReload } as unknown as Location)
+      await act(() => onChunkLoadError())
+      expect(mockReload).toHaveBeenCalledTimes(1)
       location.mockRestore()
     })
 
