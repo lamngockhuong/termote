@@ -2506,7 +2506,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   one. With neither tool, a release from that version on is refused too, since whoever can
   publish a release also writes its `.sha256`: only a pinned version (`TERMOTE_VERSION`) with
   `TERMOTE_SKIP_SIGNATURE_CHECK=1` (that value exactly) installs, with the sha256 alone and a note;
-  an unpinned one is refused even with it. Before that version, which no tool there could check,
+  an unpinned one is refused even with it. `install.sh` takes at most 9 digits a version part, pinned or picked as the newest, so
+  the shell arithmetic that tells a signed release cannot fail and read as unsigned. Before that version, which no tool there could check,
   they print that the signature was not checked. Both check the archive's line in the verified `checksums.txt`; `install.ps1` writes it
   to `ssh-keygen`'s stdin byte for byte (`Invoke-Native`: `Start-Process` rewrites its lines).
   `container up` runs the image by that digest,
