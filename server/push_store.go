@@ -98,6 +98,9 @@ type pushStore struct {
 	// exists; add asks it under mu, so a session ending while its
 	// subscription is added cannot leave one behind its removal.
 	sessionAlive func(id string) bool
+	// deviceAlive, when set, reports whether a paired device is still live
+	// and within its validUntil, read on the wall clock.
+	deviceAlive func(id string) bool
 
 	// mu covers subs, tokens and every write of subscriptions.json.
 	mu     sync.Mutex
@@ -326,7 +329,7 @@ func (s *pushStore) add(sub pushSub) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.sessionEndedLocked(sub) {
+	if s.endedLocked(sub) {
 		return errPushSignedOut
 	}
 	sub.Gen = s.gen
@@ -393,19 +396,24 @@ func (s *pushStore) list() []pushSub {
 }
 
 // sendable returns the subscriptions to send to: not one of a password
-// session that has ended. The session's expiry timer removes its
-// subscriptions, but it runs on the monotonic clock and fires late after the
-// host slept; sessionAlive reads the expiry on the wall clock.
+// session that has ended, nor of a paired device revoked or past its
+// validUntil. The session's and the device's expiry timers remove their
+// subscriptions, but they run on the monotonic clock and fire late after the
+// host slept; sessionAlive and deviceAlive read the expiry on the wall clock.
 func (s *pushStore) sendable() []pushSub {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return slices.DeleteFunc(slices.Clone(s.subs), s.sessionEndedLocked)
+	return slices.DeleteFunc(slices.Clone(s.subs), s.endedLocked)
 }
 
-// sessionEndedLocked reports whether sub was made by a password session that
-// no longer exists. s.mu is held.
-func (s *pushStore) sessionEndedLocked(sub pushSub) bool {
-	return sub.Session != "" && s.sessionAlive != nil && !s.sessionAlive(sub.Session)
+// endedLocked reports whether sub was made by a password session that no
+// longer exists or by a paired device no longer alive. s.mu is held; the
+// device store's lock is taken after it, never the other way round.
+func (s *pushStore) endedLocked(sub pushSub) bool {
+	if sub.Session != "" && s.sessionAlive != nil && !s.sessionAlive(sub.Session) {
+		return true
+	}
+	return sub.Device != "" && s.deviceAlive != nil && !s.deviceAlive(sub.Device)
 }
 
 // keys returns the VAPID public key as base64url (the PWA's

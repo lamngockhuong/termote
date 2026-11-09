@@ -1922,10 +1922,12 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   that no longer finds it), and at start for a device no longer live. One made by a browser signed
   in with the password carries its session id and goes when the session ends (revoked, signed out,
   expired, pushed out), and at start, since sessions live in memory; the watcher sends to none whose
-  session has ended (`pushStore.sendable`, the expiry on the wall clock), since the timer that removes
-  it runs on the monotonic clock and fires late after the host slept; the store asks whether the
-  session is still alive under its own lock when it adds one, so a subscribe racing the session's end
-  is refused (401 `signed_out`) rather than left behind its removal; one made with Basic auth
+  session has ended or whose device is revoked or past its `validUntil` (`pushStore.sendable`,
+  `sessionAlive`/`deviceAlive`, the expiry on the wall clock), since the timers that remove them run
+  on the monotonic clock and fire late after the host slept; the store asks whether the session or
+  device is still alive under its own lock when it adds one (the device store's lock taken after the
+  push store's, never the reverse), so a subscribe racing its end is refused (401 `signed_out`)
+  rather than left behind its removal; one made with Basic auth
   carries neither and stays, like one subscribed before session ids were recorded. One a
   device made before this (no id) reads as the password's until its page subscribes again (on load,
   and every 10 minutes while visible), so a device revoked before that keeps receiving pushes. Only 404/410
