@@ -413,10 +413,18 @@ func TestSendPushContextTimeout(t *testing.T) {
 	srv, client := pushTestServer(t, func(http.ResponseWriter, *http.Request) { <-release })
 	defer close(release)
 	store := newTestPushStore(t)
-	sub, _, _ := testPushSub(t, srv.URL+"/push")
+	sub, _, _ := testPushSub(t, srv.URL+"/push/device-capability")
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
-	if _, _, err := sendPush(ctx, client, store, sub, []byte("{}"), ""); err == nil {
+	_, _, err := sendPush(ctx, client, store, sub, []byte("{}"), "")
+	if err == nil {
 		t.Fatal("no error past the deadline")
+	}
+	// The error is logged: the endpoint's path is the device's capability.
+	if strings.Contains(err.Error(), "device-capability") {
+		t.Fatalf("the error names the endpoint's path: %v", err)
+	}
+	if !isTimeout(err) {
+		t.Fatalf("a timeout no longer reads as one: %v", err)
 	}
 }

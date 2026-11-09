@@ -1924,7 +1924,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   carries neither and stays, like one subscribed before session ids were recorded. One a
   device made before this (no id) reads as the password's until its page subscribes again (on load,
   and every 10 minutes while visible), so a device revoked before that keeps receiving pushes. Only 404/410
-  drop a subscription; 401/403 are logged and kept ("check the server clock" when all fail);
+  drop a subscription; 401/403 are logged and kept ("check the server clock" when all fail); a log
+  line names the push service's host, never the endpoint's path (`sendPush` returns a `*url.Error`'s
+  cause, not the error that quotes the URL);
   429 and timeouts back the push service off (`Retry-After`, at most 1 h). The watcher runs only
   from `runServer`, every 5 s and only with a subscription, reading tmux through `peekSnapshot`,
   which reads the sessions there and never recreates the default one; the service worker names a
