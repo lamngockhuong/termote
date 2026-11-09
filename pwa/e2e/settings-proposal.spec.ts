@@ -86,7 +86,7 @@ test.describe('settings proposed by an agent', () => {
 
     await bar(pageA).getByRole('button', { name: 'Review' }).click()
     const dialog = pageA.getByRole('dialog', { name: 'Settings an agent proposes' })
-    await expect(dialog.getByRole('rowheader', { name: 'theme' })).toBeVisible()
+    await expect(dialog.getByRole('rowheader', { name: 'Theme' })).toBeVisible()
     await dialog.getByRole('button', { name: 'Apply' }).click()
     // At once, without a reload, in both tabs of A
     await expect(pageA.locator('html')).toHaveClass(/dark/)

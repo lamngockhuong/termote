@@ -2,8 +2,13 @@ import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
 import type { Translate } from '../i18n/translate'
 import { isApplePlatform } from '../utils/platform'
+import {
+  COMMAND_LABEL,
+  SETTING_LABEL,
+  VALUE_LABEL,
+} from '../utils/setting-labels'
 import type { SettingChange, SkipReason } from '../utils/settings-registry'
-import { formatChord } from '../utils/shortcuts'
+import { formatChord, isCommandId } from '../utils/shortcuts'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { Button } from './ui/button'
 import { Sheet } from './ui/sheet'
@@ -29,6 +34,17 @@ export function formatSettingValue(
 ): string {
   if (v === undefined)
     return row.command ? t('settings.diff.default') : t('settings.diff.unset')
+  const word =
+    (typeof v === 'string' || typeof v === 'number') &&
+    Object.hasOwn(VALUE_LABEL, row.key) &&
+    Object.hasOwn(VALUE_LABEL[row.key], String(v))
+      ? VALUE_LABEL[row.key][String(v)]
+      : undefined
+  if (word) return t(word)
+  if (row.key === 'pollInterval' && typeof v === 'number')
+    return v >= 60
+      ? t('settings.pollMinutes', { n: v / 60 })
+      : t('settings.pollSeconds', { n: v })
   if (typeof v === 'boolean')
     return t(v ? 'settings.diff.on' : 'settings.diff.off')
   if (typeof v === 'number') return String(v)
@@ -53,6 +69,22 @@ export function formatSettingValue(
   }
   // Values come from JSON: they stringify
   return visibleUnsafe(JSON.stringify(v))
+}
+
+// The name a row shows: the setting as Settings names it, a shortcut by its
+// command's title; a key this version does not know as it came, its hidden
+// characters marked
+export function settingName(
+  row: SettingChange,
+  t: Translate<MessageKey>,
+): string {
+  if (row.command !== undefined)
+    return isCommandId(row.command)
+      ? t('settings.key.shortcut', { command: t(COMMAND_LABEL[row.command]) })
+      : visibleUnsafe(row.command)
+  return Object.hasOwn(SETTING_LABEL, row.key)
+    ? t(SETTING_LABEL[row.key])
+    : visibleUnsafe(row.key)
 }
 
 interface Props {
@@ -117,11 +149,8 @@ export function SettingsDiffDialog({
                     data-skip={row.skip}
                     className="border-t border-border align-top"
                   >
-                    <th
-                      scope="row"
-                      className="py-1.5 pr-2 font-mono font-normal break-all text-fg"
-                    >
-                      {visibleUnsafe(row.command ?? row.key)}
+                    <th scope="row" className="py-1.5 pr-2 font-normal text-fg">
+                      {settingName(row, t)}
                     </th>
                     <td className="py-1.5 pr-2 break-all text-fg-muted">
                       {formatSettingValue(row, row.before, t, apple)}

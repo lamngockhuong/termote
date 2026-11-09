@@ -2,7 +2,11 @@ import { fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { tFor } from '../i18n/i18n-context'
 import type { SettingChange } from '../utils/settings-registry'
-import { formatSettingValue, SettingsDiffDialog } from './settings-diff-dialog'
+import {
+  formatSettingValue,
+  SettingsDiffDialog,
+  settingName,
+} from './settings-diff-dialog'
 
 const t = tFor('en')
 
@@ -87,8 +91,8 @@ describe('SettingsDiffDialog', () => {
     const dialog = screen.getByRole('dialog')
     expect(dialog).toHaveTextContent('Only this browser changes.')
     const table = within(dialog).getByRole('table')
-    const theme = within(table).getByRole('row', { name: /theme/ })
-    expect(theme).toHaveTextContent('systemdark')
+    const theme = within(table).getByRole('row', { name: /Theme/ })
+    expect(theme).toHaveTextContent('SystemDark')
     for (const text of [
       'Skipped: not a value it can take',
       'Skipped: this version does not know it',
@@ -97,7 +101,15 @@ describe('SettingsDiffDialog', () => {
     ])
       expect(table).toHaveTextContent(text)
     expect(
-      within(table).getByRole('rowheader', { name: 'pane.next' }),
+      within(table).getByRole('rowheader', { name: 'Shortcut: Next pane' }),
+    ).toBeVisible()
+    // A key this version does not know shows as it came
+    expect(
+      within(table).getByRole('rowheader', { name: 'future' }),
+    ).toBeVisible()
+    // A key this version does not know shows as it came
+    expect(
+      within(table).getByRole('rowheader', { name: 'future' }),
     ).toBeVisible()
     fireEvent.click(within(dialog).getByRole('button', { name: 'Apply' }))
     expect(onApply).toHaveBeenCalledOnce()
@@ -148,5 +160,43 @@ describe('SettingsDiffDialog', () => {
     )
     expect(screen.queryByRole('table')).toBeNull()
     expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled()
+  })
+})
+
+describe('settingName and value words', () => {
+  it('names a setting and a shortcut as Settings does', () => {
+    expect(settingName({ key: 'showHostChip', before: 1, after: 2 }, t)).toBe(
+      'Host stats in the header',
+    )
+    expect(
+      settingName(
+        { key: 'shortcuts', command: 'palette.sessions', before: 1, after: 2 },
+        t,
+      ),
+    ).toMatch(/^Shortcut: /)
+    expect(
+      settingName(
+        { key: 'shortcuts', command: 'x\u202e', before: 1, after: 2 },
+        t,
+      ),
+    ).toBe('x⟨U+202E⟩')
+    expect(settingName({ key: 'a\u200bb', before: 1, after: 2 }, t)).toBe(
+      'a⟨U+200B⟩b',
+    )
+    expect(tFor('vi')('settings.key.shortcut', { command: 'X' })).toBe(
+      'Phím tắt: X',
+    )
+  })
+
+  it('words a choice and an interval', () => {
+    const row = (key: string): SettingChange => ({ key, before: 1, after: 2 })
+    expect(formatSettingValue(row('theme'), 'dark', t, false)).toBe('Dark')
+    expect(formatSettingValue(row('pasteSource'), 'tmux', t, false)).toBe(
+      'Paste buffer',
+    )
+    expect(formatSettingValue(row('theme'), 'blue', t, false)).toBe('blue')
+    expect(formatSettingValue(row('pollInterval'), 10, t, false)).toBe('10s')
+    expect(formatSettingValue(row('pollInterval'), 120, t, false)).toBe('2m')
+    expect(formatSettingValue(row('editorFontSize'), 14, t, false)).toBe('14')
   })
 })
