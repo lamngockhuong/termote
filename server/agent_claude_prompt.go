@@ -387,7 +387,7 @@ func findDialog(lines []screenLine) agentScreen {
 		}
 	}
 	if top < 0 {
-		return agentScreen{}
+		return findCutDialog(lines, footer)
 	}
 	var hints []string
 	for _, l := range lines[footer:] {
@@ -396,6 +396,30 @@ func findDialog(lines []screenLine) agentScreen {
 	// Only a question whose options have previews offers notes.
 	preview := strings.Contains(strings.Join(hints, " "), "n to add notes")
 	return agentScreen{sig: dialogSig(lines[top:]), prompt: parseDialog(lines[top+1:footer], preview)}
+}
+
+// findCutDialog reads a permission dialog taller than the pane: Claude Code
+// draws a file to create or a long command whole, so its top edge and title
+// are above the screen, and kept in no history either (Claude Code 2.1.319,
+// Herdr 0.9.5). With no rule at column 0 anywhere above the footer, the
+// screen's first row is inside the dialog. Only a permission dialog is
+// taken this way, its question ("Do you want to create x?") as the title and
+// the rows above it as the body after a "…" row, which says the card, like
+// the terminal, does not show the dialog's start.
+func findCutDialog(lines []screenLine, footer int) agentScreen {
+	for _, l := range lines[:footer] {
+		if isEdgeRule(l) {
+			return agentScreen{} // a dialog taller than the search, or not one
+		}
+	}
+	p := parseDialog(lines[:footer], false)
+	if p.Kind != "permission" {
+		return agentScreen{}
+	}
+	head := append([]string{p.Title}, strings.Split(p.Body, "\n")...)
+	p.Title = head[len(head)-1]
+	p.Body = strings.Join(append([]string{"…"}, head[:len(head)-1]...), "\n")
+	return agentScreen{sig: dialogSig(lines), prompt: p}
 }
 
 // vimFooterRe: the mode Claude Code's vim editor mode puts first in the

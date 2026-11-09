@@ -851,7 +851,12 @@ bounds them), so the card can show all a dialog asks. The dialog's top edge is a
 and the card never starts partway through the command. Claude Code 2.1.288 draws a command's rows
 behind a `│`, a file's behind its line number and a carriage return in a file as `�`, and refuses a
 Bash command holding a control character, so neither a wide character nor a carriage return puts
-a rule at column 0 (recorded on tmux and Herdr). In a narrow pane Claude Code can draw `3. No`
+a rule at column 0 (recorded on tmux and Herdr). A dialog taller than the pane (a long file to
+create, a long command) has its top edge and title above the screen and in no history (Claude
+Code 2.1.319 on Herdr 0.9.5): with no rule at column 0 anywhere above the footer, the screen's
+first row is inside the dialog, and only a `permission` dialog is read that way, its question as
+the title and every row the screen shows above it as the body, after a `…` row saying the card,
+like the terminal, does not show the dialog's start. In a narrow pane Claude Code can draw `3. No`
 over the last row of a wrapped path above it without clearing that row's end (`3. Nooject`):
 the last option of a `permission` dialog, under one that wraps, reading `No` followed by anything
 but `,` is read as `No`, and the option above gets `…` for the row it lost. In the PWA the card

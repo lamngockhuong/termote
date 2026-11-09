@@ -871,3 +871,66 @@ func TestRefusalLabel(t *testing.T) {
 		t.Errorf("%+v", p)
 	}
 }
+
+// cutWriteScreen is a Write dialog taller than a 43-row pane in the shape
+// Herdr 0.9.5 read it from Claude Code 2.1.319 (pane.read visible ansi, rows
+// ending in a carriage return): the file's last rows behind their line
+// numbers, the ╌ rule, the question and the options. Its top edge and
+// "Create file" title are above the screen and in no history.
+func cutWriteScreen(numbered int) string {
+	const fg = "\x1b[38;2;248;248;242m"
+	var b strings.Builder
+	for i := 0; i < numbered; i++ {
+		b.WriteString(" \x1b[0m\x1b[2m" + fg + " " + strconv.Itoa(160+i) + " \x1b[0m" + fg + "- finding " + strconv.Itoa(i) + " stays open\x1b[0m\r\n")
+	}
+	b.WriteString("\x1b[0m\x1b[38;2;80;80;80m" + strings.Repeat("╌", 80) + "\x1b[0m\r\n")
+	b.WriteString(" Do you want to create \x1b[0m\x1b[1mreview-findings.md\x1b[0m?\r\n")
+	b.WriteString(" \x1b[0m\x1b[38;2;177;185;249m❯ \x1b[0m\x1b[38;2;153;153;153m1. \x1b[0m\x1b[38;2;177;185;249mYes\x1b[0m\r\n")
+	b.WriteString("   \x1b[0m\x1b[38;2;153;153;153m2. \x1b[0mNo\r\n\r\n")
+	b.WriteString(" \x1b[0m\x1b[38;2;153;153;153mEsc to cancel · Tab to amend\x1b[0m")
+	return b.String()
+}
+
+func TestReadClaudeScreenCutPermission(t *testing.T) {
+	sc := readClaudeScreen(cutWriteScreen(38))
+	p := sc.prompt
+	if p == nil || sc.sig == "" || p.Kind != "permission" {
+		t.Fatalf("%+v", sc)
+	}
+	if p.Title != "Do you want to create review-findings.md?" || labels(p) != "1. Yes | 2. No" || p.pointer != 1 {
+		t.Errorf("title=%q options=%q pointer=%d", p.Title, labels(p), p.pointer)
+	}
+	// Every row the screen shows, after a row saying its start is not shown.
+	if !strings.HasPrefix(p.Body, "…\n160 - finding 0 stays open\n") || !strings.HasSuffix(p.Body, "197 - finding 37 stays open") {
+		t.Errorf("body = %q", p.Body)
+	}
+	// Scrolled on, it is another dialog for a promptId.
+	if other := readClaudeScreen("\r\n" + cutWriteScreen(38)); other.sig == sc.sig {
+		t.Error("same signature for another screen")
+	}
+
+	t.Run("an edge above the search bound", func(t *testing.T) {
+		s := strings.Repeat("─", 40) + "\n Create file\n" + cutWriteScreen(claudeMaxDialogRows+2)
+		if sc := readClaudeScreen(s); sc.prompt != nil {
+			t.Errorf("%+v", sc.prompt)
+		}
+	})
+	t.Run("no question above the options", func(t *testing.T) {
+		s := strings.Replace(cutWriteScreen(5), "?", ".", 1)
+		if sc := readClaudeScreen(s); sc.prompt != nil {
+			t.Errorf("%+v", sc.prompt)
+		}
+	})
+	t.Run("a question of AskUserQuestion", func(t *testing.T) {
+		s := " ☐ Size\n\n Which size do you want?\n\n ❯ 1. Small\n   2. Large\n   3. Type something.\n\n Enter to select · ↑/↓ to navigate · Esc to cancel\n"
+		if sc := readClaudeScreen(s); sc.prompt != nil {
+			t.Errorf("%+v", sc.prompt)
+		}
+	})
+	t.Run("numbering not from 1", func(t *testing.T) {
+		s := strings.Replace(strings.Replace(cutWriteScreen(5), "1. ", "3. ", 1), "2. ", "4. ", 1)
+		if sc := readClaudeScreen(s); sc.prompt != nil {
+			t.Errorf("%+v", sc.prompt)
+		}
+	})
+}
