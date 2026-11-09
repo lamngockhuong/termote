@@ -230,10 +230,13 @@ describe('useFiles', () => {
     act(() => result.current.load())
     await waitFor(() => expect(result.current.dirs['']?.entries).toBeDefined())
     act(() => result.current.open('README.md'))
+    result.current.setTreeScroll(80)
     act(() => result.current.toggle('src'))
     await waitFor(() => expect(result.current.root).toBe('/n'))
     expect(result.current.rootChanges).toBe(1)
     expect(result.current.expanded).toEqual({})
+    // The new root's tree starts at the top
+    expect(result.current.treeScroll()).toBe(0)
     // The file opened under the old root closes: nothing unsaved in it
     expect(result.current.tabs).toEqual([])
     await waitFor(() =>
@@ -243,6 +246,19 @@ describe('useFiles', () => {
     // Told again about the same root: nothing to do
     act(() => result.current.rootChanged('/n'))
     expect(result.current.rootChanges).toBe(1)
+  })
+
+  it("keeps the tree's scroll offset until another Place shows", async () => {
+    mockTree.mockResolvedValue(tree('', [dir('src')]))
+    const { result } = renderHook(() => useFiles('%1'))
+    act(() => result.current.load())
+    await waitFor(() => expect(result.current.dirs['']?.entries).toBeDefined())
+    result.current.setTreeScroll(120)
+    act(() => result.current.open('README.md'))
+    act(() => result.current.back())
+    expect(result.current.treeScroll()).toBe(120)
+    act(() => result.current.openPlace('n1'))
+    expect(result.current.treeScroll()).toBe(0)
   })
 
   it('drops a read sent for a root that has since moved', async () => {

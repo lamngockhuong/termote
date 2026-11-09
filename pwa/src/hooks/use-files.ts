@@ -238,6 +238,10 @@ interface Store {
   // Where tab id is scrolled to: kept for when it shows again, without
   // telling readers (no render per scroll event)
   setScroll: (id: string, top: number) => void
+  // Where the tree is scrolled to, kept the same way while a file shows in
+  // its place; another root or Place starts at the top
+  treeScroll: () => number
+  setTreeScroll: (top: number) => void
   // Tab id's table layout: kept like its scroll offset
   setTableLayout: (id: string, layout: TableLayout) => void
   // The user chose to show tab id's sensitive file
@@ -297,6 +301,8 @@ function createStore(id: string): Store {
   const listeners = new Set<() => void>()
   // Bumped when the root moves: a read sent for the old one is dropped.
   let generation = 0
+  // The tree's scroll offset (setTreeScroll)
+  let treeScroll = 0
   // Another source was picked and its root is not read yet
   let switching = false
   // When each tab was last shown, and the ids of new ones
@@ -730,6 +736,7 @@ function createStore(id: string): Store {
     // Every tab still of another root: one asked about before that is of
     // this root again (the pane came back) is no longer asked about
     const asked = state.tabs.filter((t) => t.root !== root).map((t) => t.id)
+    treeScroll = 0
     set({
       root,
       dirs: {},
@@ -752,6 +759,7 @@ function createStore(id: string): Store {
     // The root is not known yet: the read sends the old one, and the 409
     // that answers it starts the tree again (rootChanged)
     generation++
+    treeScroll = 0
     set({ dirs: {}, expanded: {} })
     read('')
   }
@@ -843,6 +851,10 @@ function createStore(id: string): Store {
       tab.line = undefined
       tab.col = undefined
       persist()
+    },
+    treeScroll: () => treeScroll,
+    setTreeScroll(top) {
+      treeScroll = top
     },
     setTableLayout(id, layout) {
       const tab = state.tabs.find((t) => t.id === id)
@@ -962,6 +974,11 @@ export function useFiles(paneId: string) {
     back: useCallback(() => store.back(), [store]),
     setScroll: useCallback(
       (id: string, top: number) => store.setScroll(id, top),
+      [store],
+    ),
+    treeScroll: useCallback(() => store.treeScroll(), [store]),
+    setTreeScroll: useCallback(
+      (top: number) => store.setTreeScroll(top),
       [store],
     ),
     setTableLayout: useCallback(

@@ -242,6 +242,23 @@ describe('FilesView', () => {
     expect(screen.getByRole('tree')).toBeInTheDocument()
   })
 
+  it('comes back from a file to the tree scrolled as it was left', async () => {
+    mockContent.mockResolvedValue({
+      root: '/home/kim/app',
+      path: 'README.md',
+      size: 3,
+      text: 'hi',
+    })
+    await show()
+    const tree = screen.getByRole('tree')
+    tree.scrollTop = 140
+    fireEvent.scroll(tree)
+    fireEvent.click(item('README.md'))
+    await screen.findByTestId('markdown-preview')
+    fireEvent.click(screen.getByRole('button', { name: 'Back to files' }))
+    expect(screen.getByRole('tree').scrollTop).toBe(140)
+  })
+
   it.each([
     [false, true],
     [true, false],
