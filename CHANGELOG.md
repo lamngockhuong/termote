@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.25.1](https://github.com/lamngockhuong/termote/compare/v2.25.0...v2.25.1) (2026-11-09)
+
+
+### Bug Fixes
+
+* **server:** stop a server that has not bound its port yet ([#773](https://github.com/lamngockhuong/termote/issues/773)) ([ce741b1](https://github.com/lamngockhuong/termote/commit/ce741b17b0606609fdf4e5156768b296e3709c90))
+* **server:** stop pushes to a paired device past its expiry after the host slept ([#768](https://github.com/lamngockhuong/termote/issues/768)) ([8e15c75](https://github.com/lamngockhuong/termote/commit/8e15c759efa4e856a3fcd229693c1c82c41557c5))
+* **server:** stop the push watcher reading panes and polling machines for ended sign-ins ([#770](https://github.com/lamngockhuong/termote/issues/770)) ([c15fe34](https://github.com/lamngockhuong/termote/commit/c15fe34c08d101d31b883a865462910b6e241b03)), closes [#767](https://github.com/lamngockhuong/termote/issues/767)
+
 ## [2.25.0](https://github.com/lamngockhuong/termote/compare/v2.24.0...v2.25.0) (2026-11-09)
 
 
