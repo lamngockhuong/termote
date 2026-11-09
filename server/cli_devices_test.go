@@ -134,7 +134,6 @@ func TestDevicesErrors(t *testing.T) {
 		pass string
 		want string
 	}{
-		{"not running", free(), "secret", "termote is not running on port"},
 		{"wrong password", answer(401, ""), "secret", "did not accept the saved password"},
 		{"no auth", answer(501, `{"error":"x","code":"unsupported"}`), "secret", "needs sign-in and a usable state dir"},
 		{"older server", answer(404, "404 page not found"), "secret", "cannot pair devices; update it"},
@@ -144,6 +143,15 @@ func TestDevicesErrors(t *testing.T) {
 		{"other status", answer(502, ""), "secret", "the server answered HTTP 502"},
 		{"bad answer", answer(200, "not json"), "secret", "unexpected answer from the server"},
 	}
+	// The free port is taken after every answering server holds its own: a
+	// port freed before one of them listens can be handed to it, and "not
+	// running" then reaches a server that answers.
+	cases = append(cases, struct {
+		name string
+		port int
+		pass string
+		want string
+	}{"not running", free(), "secret", "termote is not running on port"})
 	for _, c := range cases {
 		tc := newTestCLI(t, "linux")
 		tc.saveConfig(savedConfig{Port: c.port, Password: c.pass})
