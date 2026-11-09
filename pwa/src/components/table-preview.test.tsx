@@ -6,7 +6,8 @@ import {
   waitFor,
   within,
 } from '@testing-library/react'
-import { useState } from 'react'
+import { useLayoutEffect, useState } from 'react'
+import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider } from '../contexts/theme-context'
 import { makeOp, reapply, redoOp, type TableOp } from '../utils/csv-edits'
@@ -454,6 +455,64 @@ describe('TablePreview', () => {
     act(() => grid.focus())
     fireEvent.keyDown(grid, { key: 'Home', ctrlKey: true })
     expect(at()).toEqual(['99', '2'])
+  })
+
+  it('focuses the cell a key reaches while an earlier render still has its effects to run', async () => {
+    // Outside act, as the app runs. A render that is not the key's (a poll,
+    // an edit saved) has committed and its effects have not run when the key
+    // comes: they run first, with that render's active cell. Here the key is
+    // sent from the commit itself, before those effects.
+    const env = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    const acting = env.IS_REACT_ACT_ENVIRONMENT
+    env.IS_REACT_ACT_ENVIRONMENT = false
+    const host = document.body.appendChild(document.createElement('div'))
+    const root = createRoot(host)
+    let onCommit: (() => void) | undefined
+    function Committed() {
+      useLayoutEffect(() => onCommit?.())
+      return null
+    }
+    const ui = () => (
+      <ThemeProvider>
+        <TablePreview
+          text={'name,price,note\npear,2,ripe\nplum,3,\nfig,4,dry\n'}
+          path="data.csv"
+          wrap={false}
+          notify={vi.fn()}
+        />
+        <Committed />
+      </ThemeProvider>
+    )
+    try {
+      root.render(ui())
+      await waitFor(() =>
+        expect(within(host).getAllByRole('gridcell').length).toBeGreaterThan(0),
+      )
+      const first = within(host).getByRole('gridcell', { name: 'pear' })
+      first.focus()
+      const pressed = new Promise<void>((resolve) => {
+        onCommit = () => {
+          onCommit = undefined
+          first.dispatchEvent(
+            new KeyboardEvent('keydown', {
+              key: 'End',
+              ctrlKey: true,
+              bubbles: true,
+            }),
+          )
+          resolve()
+        }
+      })
+      root.render(ui())
+      await pressed
+      const dry = within(host).getByRole('gridcell', { name: 'dry' })
+      await waitFor(() => expect(dry).toHaveAttribute('tabindex', '0'))
+      await waitFor(() => expect(document.activeElement).toBe(dry))
+    } finally {
+      root.unmount()
+      host.remove()
+      env.IS_REACT_ACT_ENVIRONMENT = acting
+    }
   })
 
   it('a table only viewed takes no key typed, nor Delete', () => {

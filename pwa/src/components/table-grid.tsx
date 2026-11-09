@@ -325,7 +325,12 @@ export function TableGrid({
   // The cell keyboard focus moves from: its place in rows, and its place
   // in cols (-1 is the row number)
   const [active, setActive] = useState({ pos: 0, col: 0 })
-  const focusing = useRef(false)
+  // The cell to give the focus (or, with focus false, to scroll into view
+  // sideways) once it is rendered active. It names the cell, never only
+  // that one is wanted: the effects of an earlier render (committed before
+  // the key, still waiting for the scheduler) run first and must not take
+  // the request with their own active cell.
+  const wanted = useRef<{ pos: number; col: number; focus: boolean }>(undefined)
   // The column whose menu is open, and the file row of the cell it was
   // asked from
   const [menu, setMenu] = useState<{ col: number; row?: number }>()
@@ -336,10 +341,6 @@ export function TableGrid({
   const dragFrom = useRef<GridCell>(undefined)
   // A drag moved off its first cell; the click it ends with opens nothing
   const dragged = useRef(false)
-  // The cell made active by a goTo without the focus: scrolled into view
-  // sideways once rendered
-  const showing = useRef(false)
-
   useLayoutEffect(() => {
     const el = frame.current as HTMLDivElement
     const read = () => {
@@ -426,14 +427,19 @@ export function TableGrid({
 
   // Focus follows the arrow keys onto the cell they reached, once rendered
   useEffect(() => {
-    if (!focusing.current && !showing.current) return
+    const want = wanted.current
+    if (
+      !want ||
+      Math.min(want.pos, Math.max(rows.length - 1, 0)) !== pos ||
+      Math.min(want.col, cols.length - 1) !== col
+    )
+      return
+    wanted.current = undefined
     const cell = frame.current?.querySelector<HTMLElement>(
       `[data-pos="${pos}"][data-at="${col}"]`,
     )
-    if (focusing.current) cell?.focus()
+    if (want.focus) cell?.focus()
     else cell?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
-    focusing.current = false
-    showing.current = false
   })
 
   // The menu gives the focus back to its ⋯ as it closes: from there, back
@@ -442,7 +448,7 @@ export function TableGrid({
     if (!backFromMenu.current) return
     backFromMenu.current = false
     if (!document.activeElement?.closest('[aria-haspopup="menu"]')) return
-    focusing.current = true
+    wanted.current = { pos, col, focus: true }
     reveal({ pos, col })
   })
 
@@ -575,7 +581,7 @@ export function TableGrid({
         focus: { pos: next.pos, at: next.col },
       })
     } else setSel(undefined)
-    focusing.current = true
+    wanted.current = { ...next, focus: true }
     reveal(next)
   }
 
@@ -635,7 +641,7 @@ export function TableGrid({
     setSel({ anchor: start, focus: to })
     // The cell reached is the active one, in focus: Shift and a key grow
     // the range on from there
-    focusing.current = true
+    wanted.current = { pos: to.pos, col: to.at, focus: true }
     setActive({ pos: to.pos, col: to.at })
   }
   const onPointerUp = () => {
@@ -661,10 +667,14 @@ export function TableGrid({
     if (!goTo || goTo.seq === went.current) return
     went.current = goTo.seq
     const el = frame.current as HTMLDivElement
-    const focus = goTo.focus || el.contains(document.activeElement)
-    focusing.current = focus
-    showing.current = !focus
-    reveal(goTo.cell ? { pos: goTo.cell.pos, col: goTo.cell.at } : { pos, col })
+    const next = goTo.cell
+      ? { pos: goTo.cell.pos, col: goTo.cell.at }
+      : { pos, col }
+    wanted.current = {
+      ...next,
+      focus: !!goTo.focus || el.contains(document.activeElement),
+    }
+    reveal(next)
   })
 
   // The cell edited becomes the active one, scrolled into view (Tab may
@@ -684,7 +694,7 @@ export function TableGrid({
     if (at < 0 || place < 0) return
     if (editingCell) reveal({ pos: at, col: place })
     else if (document.activeElement === frame.current) {
-      focusing.current = true
+      wanted.current = { pos: at, col: place, focus: true }
       setActive({ pos: at, col: place })
     }
   })
@@ -720,7 +730,7 @@ export function TableGrid({
     // Shift+click: the range from the active cell to this one
     // Safari and Firefox on a Mac give a clicked button no focus: the cell
     // takes it, for the keys that act on it (F2, typing, Delete)
-    focusing.current = true
+    wanted.current = { ...at, focus: true }
     if (e.shiftKey && at.col >= 0) {
       setSel({
         anchor: sel?.anchor ?? { pos, at: Math.max(col, 0) },
