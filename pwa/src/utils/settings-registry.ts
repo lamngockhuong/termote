@@ -21,6 +21,7 @@ import {
   readSettings,
   SETTING_RESOLVERS,
   type Settings,
+  terminalFontProblem,
   writeSettingsPatch,
 } from '../hooks/use-settings'
 import { applyShortcutsPatch, readSavedShortcuts } from '../hooks/use-shortcuts'
@@ -153,6 +154,9 @@ export function checkValue(
     (value as string[]).some((n) => hiddenChars(n, false).length)
   )
     return 'invalid'
+  // Any saved font is kept; a proposed one has the server's limits
+  if (key === 'terminalFont' && terminalFontProblem(value as string))
+    return 'invalid'
 }
 
 // The changes one command's shortcut entry makes on this device
@@ -278,7 +282,9 @@ export function parseImport(
   }
   if (!isPlainObject(data) || data.termote !== 'settings')
     return { error: 'format' }
-  if (data.v !== EXPORT_VERSION) return { error: 'version' }
+  if (typeof data.v === 'number' && data.v > EXPORT_VERSION)
+    return { error: 'version' }
+  if (data.v !== EXPORT_VERSION) return { error: 'format' }
   if (!isPlainObject(data.values)) return { error: 'format' }
   return { values: data.values }
 }

@@ -59,8 +59,9 @@ interface Props {
   isOpen: boolean
   title: string
   rows: SettingChange[]
-  // A newer proposal arrived since this one was opened: applying is off
-  stale?: boolean
+  // Applying is off: a newer proposal arrived since this one was opened,
+  // or it is gone (expired, the server restarted, a machine opened)
+  stale?: 'newer' | 'gone'
   onApply: () => void
   onCancel: () => void
 }
@@ -72,7 +73,7 @@ export function SettingsDiffDialog({
   isOpen,
   title,
   rows,
-  stale = false,
+  stale,
   onApply,
   onCancel,
 }: Props) {
@@ -85,7 +86,7 @@ export function SettingsDiffDialog({
         <p className="m-0 text-sm text-fg-muted">{t('settings.diff.intro')}</p>
         {stale && (
           <p role="alert" className="m-0 text-sm text-warning">
-            {t('settings.diff.stale')}
+            {t(stale === 'gone' ? 'settings.diff.gone' : 'settings.diff.stale')}
           </p>
         )}
         {applicable === 0 && (
@@ -120,7 +121,7 @@ export function SettingsDiffDialog({
                       scope="row"
                       className="py-1.5 pr-2 font-mono font-normal break-all text-fg"
                     >
-                      {row.command ?? row.key}
+                      {visibleUnsafe(row.command ?? row.key)}
                     </th>
                     <td className="py-1.5 pr-2 break-all text-fg-muted">
                       {formatSettingValue(row, row.before, t, apple)}
@@ -145,7 +146,7 @@ export function SettingsDiffDialog({
           <Button onClick={onCancel}>{t('common.cancel')}</Button>
           <Button
             variant="primary"
-            disabled={stale || applicable === 0}
+            disabled={!!stale || applicable === 0}
             onClick={onApply}
           >
             {t('settings.diff.apply')}

@@ -15,6 +15,8 @@ import {
 // shown again here, and a tab of the same browser hides it at once
 export const PROPOSAL_SEEN_KEY = 'termote-settings-proposal-seen'
 const SEEN_MAX = 10
+// A failed read of the proposal is tried again after this
+export const PROPOSAL_RETRY_MS = 5000
 
 const listeners = new Set<() => void>()
 let cachedJson: string | null = null
@@ -103,6 +105,9 @@ export function useSettingsProposal(
   const [fetched, setFetched] = useState<SettingsProposal | null>(null)
   // Bumped when the shown proposal's time is up, to read the clock again
   const [tick, setTick] = useState(0)
+  // Bumped a while after a failed read, to read again: the snapshot keeps
+  // naming the same proposal, which changes nothing here
+  const [retry, setRetry] = useState(0)
   const wanted =
     enabled &&
     !!ref &&
@@ -111,20 +116,24 @@ export function useSettingsProposal(
   const refId = wanted ? ref?.id : undefined
 
   useEffect(() => {
+    void retry
     if (!refId || fetched?.id === refId) return
     let live = true
+    let timer: ReturnType<typeof setTimeout> | undefined
     fetchSettingsProposal().then(
       (p) => {
         if (live) setFetched(p)
       },
       () => {
-        // Read again with the next snapshot that names it
+        if (live)
+          timer = setTimeout(() => setRetry((n) => n + 1), PROPOSAL_RETRY_MS)
       },
     )
     return () => {
       live = false
+      clearTimeout(timer)
     }
-  }, [refId, fetched?.id])
+  }, [refId, fetched?.id, retry])
 
   const proposal = useMemo(() => {
     void tick

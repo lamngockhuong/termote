@@ -138,7 +138,9 @@ echo '{"findExcludes":["node_modules","out"]}' | termote settings propose -
 ```
 
 `propose` checks every key first and exits 1 with `<key>: <reason>` for each value it refuses;
-fix them and run it again. A proposal replaces the one before and waits 15 minutes. Then tell the
+fix them and run it again. On Windows PowerShell, pipe the JSON to `propose -`: PowerShell 5.1
+drops the quotes inside an argument. A shortcut entry replaces that command's shortcut whole:
+include `key` to keep a custom chord. A proposal replaces the one before and waits 15 minutes. Then tell the
 user to open Termote: every browser shows the proposal, and Review lists each setting before and
 after. Nothing changes until the user applies it, and only in that browser.
 

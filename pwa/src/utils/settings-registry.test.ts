@@ -114,10 +114,12 @@ describe('schema', () => {
           break
         }
         case 'string':
-          expect(resolve('x'.repeat(k.maxBytes ?? 0))).toBe(
-            'x'.repeat(k.maxBytes ?? 0),
+          // Any saved text is kept; a proposed one has the limit
+          expect(checkValue(k.key, 'x'.repeat(k.maxBytes ?? 0))).toBeUndefined()
+          expect(checkValue(k.key, 'x'.repeat((k.maxBytes ?? 0) + 1))).toBe(
+            'invalid',
           )
-          expect(resolve('x'.repeat((k.maxBytes ?? 0) + 1))).toBe('')
+          expect(resolve(5)).toBe('')
           break
         case 'names': {
           const many = Array.from(
@@ -353,6 +355,10 @@ describe('export and import', () => {
     expect(parseImport('{"termote":"settings","v":2,"values":{}}')).toEqual({
       error: 'version',
     })
+    for (const v of ['0', '"1"', 'null'])
+      expect(
+        parseImport(`{"termote":"settings","v":${v},"values":{}}`),
+      ).toEqual({ error: 'format' })
     expect(parseImport('{"termote":"settings","v":1,"values":[]}')).toEqual({
       error: 'format',
     })
@@ -371,5 +377,27 @@ describe('resolvers', () => {
       expect(
         (resolve as (v: unknown) => unknown)(DEFAULTS[key as keyof Settings]),
       ).toEqual(DEFAULTS[key as keyof Settings])
+  })
+})
+
+describe('a saved terminal font', () => {
+  it('stays whatever its length, through a reload and another change', () => {
+    const font = Array.from({ length: 20 }, (_, i) => `Font Family ${i}`).join(
+      ', ',
+    )
+    expect(new TextEncoder().encode(font).length).toBeGreaterThan(200)
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ terminalFont: font }),
+    )
+    expect(readSettings().terminalFont).toBe(font)
+    writeSettingsPatch({ editorVim: true })
+    expect(
+      JSON.parse(localStorage.getItem('termote-settings') ?? '{}').terminalFont,
+    ).toBe(font)
+    // Proposing or importing it is refused, and the table says so
+    expect(diffSettings({ terminalFont: `${font}x` })[0].skip).toBe('invalid')
+    expect(checkValue('terminalFont', ' Mono')).toBe('invalid')
+    expect(checkValue('terminalFont', 'Mo\u200bno')).toBe('invalid')
   })
 })

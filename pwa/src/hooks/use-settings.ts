@@ -139,13 +139,20 @@ export function resolvePollInterval(value: unknown): number {
 // characters (server/pwa_settings_schema.json)
 export const TERMINAL_FONT_MAX = 200
 
+// A saved font is kept as written; a proposed or imported one must also
+// pass terminalFontProblem
 export function resolveTerminalFont(value: unknown): string {
-  if (typeof value !== 'string') return ''
-  const font = value.trim()
-  return new TextEncoder().encode(font).length <= TERMINAL_FONT_MAX &&
-    !hiddenChars(font, false).length
-    ? font
-    : ''
+  return typeof value === 'string' ? value : ''
+}
+
+// Whether a proposed or imported font cannot be taken: spaces around it,
+// longer than TERMINAL_FONT_MAX bytes, or a hidden character
+export function terminalFontProblem(font: string): boolean {
+  return (
+    font.trim() !== font ||
+    new TextEncoder().encode(font).length > TERMINAL_FONT_MAX ||
+    hiddenChars(font, false).length > 0
+  )
 }
 
 // A saved width, a whole number within the limits; anything else the

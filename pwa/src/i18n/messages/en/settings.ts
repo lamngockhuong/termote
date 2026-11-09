@@ -466,6 +466,8 @@ export default {
   'settings.diff.intro': 'Only this browser changes.',
   'settings.diff.stale':
     'The agent proposed something newer. Close this and review the new proposal.',
+  'settings.diff.gone':
+    'This proposal expired or is no longer on the server. Ask the agent to propose it again.',
   'settings.diff.nothing': 'Nothing would change in this browser.',
   'settings.diff.setting': 'Setting',
   'settings.diff.before': 'Now',

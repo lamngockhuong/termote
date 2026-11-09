@@ -446,6 +446,8 @@ export default {
   'settings.diff.intro': 'Chỉ trình duyệt này thay đổi.',
   'settings.diff.stale':
     'Agent vừa có đề xuất mới hơn. Hãy đóng bảng này rồi xem đề xuất mới.',
+  'settings.diff.gone':
+    'Đề xuất này đã hết hạn hoặc không còn trên server. Hãy nhờ agent đề xuất lại.',
   'settings.diff.nothing': 'Trình duyệt này không có gì thay đổi.',
   'settings.diff.setting': 'Cài đặt',
   'settings.diff.before': 'Hiện tại',

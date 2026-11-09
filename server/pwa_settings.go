@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"regexp"
 	"slices"
@@ -106,7 +107,9 @@ func validateSettingsProposal(raw []byte) (map[string]json.RawMessage, []setting
 	}
 	var obj map[string]json.RawMessage
 	dec := json.NewDecoder(bytes.NewReader(raw))
-	if err := dec.Decode(&obj); err != nil || obj == nil || dec.More() {
+	// Anything after the object, a stray } included, is refused as
+	// JSON.parse refuses it
+	if err := dec.Decode(&obj); err != nil || obj == nil || dec.Decode(&struct{}{}) != io.EOF {
 		return nil, whole("the proposal is not one JSON object")
 	}
 	if len(obj) == 0 {

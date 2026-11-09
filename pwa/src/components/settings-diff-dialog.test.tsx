@@ -111,13 +111,27 @@ describe('SettingsDiffDialog', () => {
         isOpen
         title="T"
         rows={rows}
-        stale
+        stale="newer"
         onApply={vi.fn()}
         onCancel={vi.fn()}
       />,
     )
     expect(screen.getByRole('alert')).toHaveTextContent(
       'The agent proposed something newer',
+    )
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled()
+    rerender(
+      <SettingsDiffDialog
+        isOpen
+        title="T"
+        rows={rows}
+        stale="gone"
+        onApply={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'This proposal expired or is no longer on the server',
     )
     expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled()
     rerender(

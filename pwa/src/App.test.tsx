@@ -7602,6 +7602,22 @@ describe('App settings proposals', () => {
     expect(within(dialog).getByRole('button', { name: 'Apply' })).toBeDisabled()
   })
 
+  it('says when the proposal it shows is gone', async () => {
+    withProposal('p7')
+    const { rerender } = render(<App />)
+    await screen.findByText('An agent proposes 1 settings change')
+    fireEvent.click(screen.getByRole('button', { name: 'Review' }))
+    const base = mockUseLocalSessions()
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      settingsProposal: undefined,
+    } as any)
+    rerender(<App />)
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveTextContent('This proposal expired')
+    expect(within(dialog).getByRole('button', { name: 'Apply' })).toBeDisabled()
+  })
+
   it('shows nothing that would change nothing, nor without the cap', async () => {
     localStorage.setItem(
       'termote-settings',

@@ -50,6 +50,8 @@ func TestSettingsProposalWhole(t *testing.T) {
 		"null":         `null`,
 		"empty":        `{}`,
 		"two objects":  `{"editorVim":true} {"editorVim":false}`,
+		"a stray }":    `{"editorVim":true} }`,
+		"a stray ]":    `{"editorVim":true}]`,
 		"a string":     `"x"`,
 		"too large":    `{"terminalFont":"` + strings.Repeat("a", maxSettingsProposal) + `"}`,
 		"empty string": ``,

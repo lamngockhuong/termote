@@ -360,7 +360,7 @@
         "theme.dark",
         "theme.system"
       ],
-      "description": "Desktop keyboard shortcuts, merged per command: {\"<command>\": {\"key\": \"Mod+Shift+K\" | null, \"inTerminal\": true}} replaces that command's shortcut (key null: no shortcut), {\"<command>\": null} puts the default back. A chord holds Mod (Cmd on Apple, else Ctrl), Ctrl or Meta, with Alt and Shift, in the order Mod+Ctrl+Meta+Alt+Shift+<key>, or is F1-F12 alone"
+      "description": "Desktop keyboard shortcuts, merged per command: {\"<command>\": {\"key\": \"Mod+Shift+K\" | null, \"inTerminal\": true}} replaces that command's shortcut whole, so include key to keep a custom one (key null: no shortcut), {\"<command>\": null} puts the default back. A chord holds Mod (Cmd on Apple, else Ctrl), Ctrl or Meta, with Alt and Shift, in the order Mod+Ctrl+Meta+Alt+Shift+<key>, or is F1-F12 alone"
     }
   ]
 }

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SettingsProposal, SettingsProposalRef } from './use-mux-api'
 import {
   markProposalSeen,
+  PROPOSAL_RETRY_MS,
   PROPOSAL_SEEN_KEY,
   proposalExpired,
   useSettingsProposal,
@@ -121,12 +122,49 @@ describe('useSettingsProposal', () => {
     expect(none.result.current.proposal).toBeNull()
   })
 
-  it('keeps a failed read for the next snapshot', async () => {
-    api.fetchSettingsProposal.mockRejectedValue(new Error('offline'))
-    const { result, unmount } = render(proposal('a'))
-    await waitFor(() => expect(api.fetchSettingsProposal).toHaveBeenCalled())
+  it('reads again a while after a failed read', async () => {
+    const p = proposal('a')
+    api.fetchSettingsProposal.mockRejectedValueOnce(new Error('offline'))
+    api.fetchSettingsProposal.mockResolvedValue(p)
+    const { result } = render(p)
+    await waitFor(() =>
+      expect(api.fetchSettingsProposal).toHaveBeenCalledTimes(1),
+    )
     expect(result.current.proposal).toBeNull()
+    await act(async () => {
+      vi.advanceTimersByTime(PROPOSAL_RETRY_MS)
+    })
+    await waitFor(() => expect(result.current.proposal).toEqual(p))
+    expect(api.fetchSettingsProposal).toHaveBeenCalledTimes(2)
+  })
+
+  it('stops retrying once it no longer wants the proposal', async () => {
+    api.fetchSettingsProposal.mockRejectedValue(new Error('offline'))
+    const { unmount } = render(proposal('a'))
+    await waitFor(() =>
+      expect(api.fetchSettingsProposal).toHaveBeenCalledTimes(1),
+    )
     unmount()
+    act(() => {
+      vi.advanceTimersByTime(PROPOSAL_RETRY_MS * 2)
+    })
+    expect(api.fetchSettingsProposal).toHaveBeenCalledTimes(1)
+  })
+
+  it('drops a failed read that arrives after it stopped wanting it', async () => {
+    let reject: (e: Error) => void = () => {}
+    api.fetchSettingsProposal.mockReturnValueOnce(
+      new Promise((_, r) => {
+        reject = r
+      }),
+    )
+    const { rerender } = render(proposal('a'))
+    rerender({ ref: undefined, enabled: true, offset: 0 })
+    await act(async () => reject(new Error('offline')))
+    act(() => {
+      vi.advanceTimersByTime(PROPOSAL_RETRY_MS)
+    })
+    expect(api.fetchSettingsProposal).toHaveBeenCalledTimes(1)
   })
 
   it('drops an answer that arrives after it stopped wanting it', async () => {

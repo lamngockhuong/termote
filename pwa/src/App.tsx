@@ -2299,7 +2299,13 @@ export default function App({
             isOpen={reviewing !== null}
             title={t('settings.diff.titleProposal')}
             rows={reviewing?.rows ?? []}
-            stale={!!reviewing && proposal.latestId !== reviewing.id}
+            stale={
+              !reviewing || proposal.latestId === reviewing.id
+                ? undefined
+                : proposal.latestId === undefined
+                  ? 'gone'
+                  : 'newer'
+            }
             onApply={applyProposal}
             onCancel={() => setReviewing(null)}
           />
