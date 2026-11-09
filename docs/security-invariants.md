@@ -1833,6 +1833,29 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   path through a link the tree has read) and on each regular file's row menu (a sensitive one asks
   first); never on a directory or a symlink row, never for a view-only client. Out of scope:
   directories, git versions, ranges
+- **Opening a file in Windows** (`POST files/open-windows?root=` `{path, reveal}`,
+  `server/files_wsl.go`): only when the server runs under WSL outside a container
+  (`systemScope() == "wsl"`), with WSL interop on (`WSLInterop` or `WSLInterop-late` reads
+  `enabled`) and `explorer.exe` found under the drives' mount (`wslpath -u C:\` at startup, never
+  `WSL_DISTRO_NAME` or `PATH`), and never over the machine bridge (`isBridge`: the user of another
+  termote sits at another device); otherwise 501 `unavailable`. `startJSONWrite` (POST, `root`
+  required, `writeGuard`, `requireWriteRole`: a view-only client gets 403 `view_only`), one of the 4
+  `files/raw` slots (429 `busy`, no wait). The path: `cleanRelPath` (`.` is the root, opened as a
+  folder), `createDenied` → 403 `not_allowed`, parents through `walkParents` (symlink, junction or
+  swapped directory → 403 `symlink`, missing → 404), the entry's `Lstat` (symlink/junction → 403
+  `symlink`; only a regular file or a directory, else 400 `not_file`), a sensitive name without
+  `reveal` → 403 `sensitive`. The Windows path is built from the absolute path (`/mnt/<x>/…` →
+  `X:\…`, else the distribution's share from `wslpath -w /`) and refused when it holds NUL, a line
+  break or `"`; `explorer.exe` runs with it as its only argv entry (never a shell, `cmd.exe` or
+  `start`), cwd `/`, a 10 s timeout, its exit status ignored (it exits 1 on success); a program that
+  never started is logged and answered as an internal error. One `audit: open-windows path by via`
+  line before the run. Windows then opens it with the default program for its type, on the machine
+  the server runs on: a full client can run a Windows program this way, as it can from its shell.
+  The tree answer carries `windowsRoot` (the root as Windows names it, also to a view-only client:
+  it already gets `root`) and `windowsOpen` (full role and the route usable), neither over the
+  machine bridge. The PWA offers Copy
+  Windows path on every row and tab menu, and Open in Windows on a file's or folder's row and on a
+  tab of the current root, never for a sensitive file not shown nor for a path through a link
 - **Reading a document to preview** (`GET files/document?root=&path=&reveal=`,
   `server/files_document.go`): the bytes of a `.pdf`, `.xlsx` or `.docx` under the pane root, for
   the PWA to parse in a worker. Read like `files/raw`'s worktree file: `begin`, `viewHides` (a

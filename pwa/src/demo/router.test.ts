@@ -221,6 +221,16 @@ describe('router', () => {
     expect(body.code).toBe('unsupported')
   })
 
+  it('cannot open a file in Windows: the demo is not under WSL', async () => {
+    const { status, body } = await call(
+      'POST',
+      '/panes/%25w1%3Ap1/files/open-windows?root=%2Fdemo',
+      { path: 'README.md', reveal: false },
+    )
+    expect(status).toBe(501)
+    expect(body).toMatchObject({ code: 'unavailable' })
+  })
+
   it('renames a pane and lists the new name', async () => {
     expect(
       (await call('PATCH', pane('w1:p2'), { name: 'dev server' })).status,

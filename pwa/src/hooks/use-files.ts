@@ -129,6 +129,10 @@ export interface FilesState {
   // elsewhere now) and the view went back to the pane's folder
   placeLost: number
   isRepo: boolean
+  // root as Windows names it (server under WSL), and whether this client
+  // may have Windows open a file there
+  windowsRoot?: string
+  windowsOpen?: boolean
   // Directories read so far, by path ("" is the root)
   dirs: Record<string, DirState>
   expanded: Record<string, boolean>
@@ -373,7 +377,12 @@ function createStore(id: string): Store {
     }
     if (gen !== generation) return
     if (!path) switching = false
-    set({ root: tree.root, isRepo: tree.isRepo })
+    set({
+      root: tree.root,
+      isRepo: tree.isRepo,
+      windowsRoot: tree.windowsRoot,
+      windowsOpen: !!tree.windowsOpen,
+    })
     setDir(path, {
       entries: tree.entries,
       truncated: tree.truncated,

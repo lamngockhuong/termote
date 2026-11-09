@@ -108,6 +108,9 @@ type filesAPI struct {
 	// placeNow caches where each leads now, checked on every request.
 	places   []place
 	placeNow *ttlCache[string]
+	// wsl is how Windows names the files here (detectWSLWindows); zero
+	// outside WSL.
+	wsl wslWindows
 }
 
 // filesDenyDirs returns the directories the files routes never serve, as
@@ -172,6 +175,7 @@ func registerFilesRoutes(mux *http.ServeMux, m Mux, allowed hostAllowlist, denyD
 	mux.HandleFunc("/api/mux/panes/{id}/files/raw", f.handleRaw)
 	mux.HandleFunc("/api/mux/panes/{id}/files/download", f.handleDownload)
 	mux.HandleFunc("/api/mux/panes/{id}/files/document", f.handleDocument)
+	mux.HandleFunc("/api/mux/panes/{id}/files/open-windows", f.handleOpenWindows)
 	mux.HandleFunc("/api/mux/files/places", f.handlePlaces)
 	return f
 }
@@ -499,6 +503,11 @@ type treeResponse struct {
 	Path      string      `json:"path"`
 	Entries   []fileEntry `json:"entries"`
 	Truncated bool        `json:"truncated"`
+	// WindowsRoot is Root as Windows names it when the server runs under
+	// WSL (`\\wsl.localhost\Ubuntu\home\u`, `C:\x` under /mnt/c);
+	// WindowsOpen: files/open-windows works for this client.
+	WindowsRoot string `json:"windowsRoot,omitempty"`
+	WindowsOpen bool   `json:"windowsOpen,omitempty"`
 }
 
 func (f *filesAPI) handleTree(w http.ResponseWriter, r *http.Request) {
@@ -532,6 +541,7 @@ func (f *filesAPI) handleTree(w http.ResponseWriter, r *http.Request) {
 	if req.view != nil && res.Dir != "" && !req.view.listed(res.Dir, true) {
 		res.Dir = ""
 	}
+	f.wslTreeFields(&res, req.root.Root, req.view != nil, isBridge(r.Context()))
 	jsonOK(w, res)
 }
 

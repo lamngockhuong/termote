@@ -247,6 +247,7 @@ export default {
   'files.tree.deleteNotEmpty': 'Delete (not empty)',
   'files.actions.copyRelative': 'Copy relative path',
   'files.actions.copyAbsolute': 'Copy absolute path',
+  'files.actions.copyWindows': 'Copy Windows path',
   'files.actions.copyName': 'Copy name',
   'files.actions.nameCopied': 'Name copied',
   'files.actions.nameCopyFailed': 'Could not copy the name',
@@ -255,6 +256,15 @@ export default {
   'files.actions.openFile': 'Open file',
   'files.actions.notPasteable':
     "This path has a line break or a quote; it can't be typed into the terminal",
+  'files.actions.openWindows': 'Open in Windows',
+  // Windows opening a file for the Files view (utils/open-in-windows.ts)
+  'files.openWindows.done': 'Opened {name} in Windows',
+  'files.openWindows.failed': 'Windows could not open {name}',
+  'files.openWindows.unavailable':
+    "Windows can't be reached from this server (WSL interop is off)",
+  'files.openWindows.sensitive': '{name} may contain secrets; not opened',
+  'files.openWindows.notAllowed': "{name} can't be opened from here",
+  'files.openWindows.symlink': 'A link on that path; not opened',
   'files.actions.newFolder': 'New folder',
   'files.actions.uploadHere': 'Upload files here',
   'files.actions.collapseAll': 'Collapse all',

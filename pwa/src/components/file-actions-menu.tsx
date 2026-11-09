@@ -2,6 +2,7 @@ import {
   AtSign,
   Copy,
   Download,
+  ExternalLink,
   FilePlus,
   FolderPlus,
   TextCursorInput,
@@ -29,6 +30,9 @@ export interface FileActionsProps {
   // Place shown: what the copied and typed paths are made from
   root: string
   place?: string
+  // root as Windows names it (the server runs under WSL): adds Copy
+  // Windows path
+  windowsRoot?: string
   // The pane's directory under root, read when the @path is typed (null,
   // or left out: not known, and the @path is absolute)
   paneDir?: () => Promise<string | null>
@@ -39,6 +43,8 @@ export interface FileActionsProps {
   onNewFolder?: () => void
   onUpload?: () => void
   onDownload?: () => void
+  // Windows opens it with its default program (server under WSL)
+  onOpenWindows?: () => void
   onRename?: () => void
   onDelete?: () => void
   // A folder that holds something: Delete stays, off, and says why
@@ -46,14 +52,16 @@ export interface FileActionsProps {
 }
 
 // The items of a file's or folder's menu, for a Menu the caller owns (a tree
-// row's, a file tab's, a Changes row's): copy its path or name, type its
-// @path at the agent, make a file or folder in it or upload into it, then
-// Download, Rename and Delete. Groups with nothing in them are left out with
+// row's, a file tab's, a Changes row's): copy its path (also as Windows
+// names it, under WSL) or name, type its @path at the agent, make a file or
+// folder in it or upload into it, then Open in Windows, Download, Rename and
+// Delete. Groups with nothing in them are left out with
 // their separator.
 export function FileActionItems({
   path,
   root,
   place,
+  windowsRoot,
   paneDir,
   notify,
   insertText,
@@ -61,6 +69,7 @@ export function FileActionItems({
   onNewFolder,
   onUpload,
   onDownload,
+  onOpenWindows,
   onRename,
   onDelete,
   deleteBlocked = false,
@@ -109,6 +118,15 @@ export function FileActionItems({
       >
         {t('files.actions.copyAbsolute')}
       </MenuItem>,
+      windowsRoot ? (
+        <MenuItem
+          key="windows"
+          icon={<Copy size={16} />}
+          onSelect={() => copyPath(absolutePath(windowsRoot, path))}
+        >
+          {t('files.actions.copyWindows')}
+        </MenuItem>
+      ) : undefined,
       <MenuItem
         key="name"
         icon={<Copy size={16} />}
@@ -152,6 +170,15 @@ export function FileActionItems({
       ),
     ],
     [
+      onOpenWindows && (
+        <MenuItem
+          key="open-windows"
+          icon={<ExternalLink size={16} />}
+          onSelect={onOpenWindows}
+        >
+          {t('files.actions.openWindows')}
+        </MenuItem>
+      ),
       onDownload && (
         <MenuItem
           key="download"

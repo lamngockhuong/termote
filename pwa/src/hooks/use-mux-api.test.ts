@@ -60,6 +60,7 @@ import {
   moveGroup,
   moveTab,
   onViewOnlyRefusal,
+  openInWindows,
   openWorktree,
   previewTemplateImport,
   REQUEST_TIMEOUT_MS,
@@ -1405,6 +1406,32 @@ describe('files API client', () => {
     })
     expect(timeout).toHaveBeenCalledWith(SAVE_TIMEOUT_MS)
     timeout.mockRestore()
+  })
+
+  it('opens in Windows with POST, the root in the query, with a timeout', async () => {
+    const { calls } = mockFetch({ body: { path: 'a.html' } })
+    const timeout = vi.spyOn(AbortSignal, 'timeout')
+    await openInWindows(
+      { paneId: '%1' },
+      { root: '/r', path: 'a.html', reveal: false },
+    )
+    expect(calls[0].url).toBe(
+      '/api/mux/panes/%251/files/open-windows?root=%2Fr',
+    )
+    expect(calls[0].init?.method).toBe('POST')
+    expect(JSON.parse(calls[0].init?.body as string)).toEqual({
+      path: 'a.html',
+      reveal: false,
+    })
+    expect(timeout).toHaveBeenCalledWith(SAVE_TIMEOUT_MS)
+    timeout.mockRestore()
+  })
+
+  it('a refused open in Windows throws its code', async () => {
+    mockFetch({ body: { error: 'x', code: 'unavailable' }, status: 501 })
+    await expect(
+      openInWindows({ paneId: '%1' }, { root: '/r', path: 'a', reveal: false }),
+    ).rejects.toMatchObject({ status: 501, code: 'unavailable' })
   })
 
   it('a refused rename throws its code and the path it names', async () => {

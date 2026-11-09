@@ -72,6 +72,10 @@ const mockDownload = vi.fn()
 vi.mock('../utils/download-file', () => ({
   downloadFile: (...a: unknown[]) => mockDownload(...a),
 }))
+const mockOpenWindows = vi.fn()
+vi.mock('../utils/open-in-windows', () => ({
+  openFileInWindows: (...a: unknown[]) => mockOpenWindows(...a),
+}))
 vi.mock('../utils/highlight', async (orig) => ({
   ...(await orig<typeof import('../utils/highlight')>()),
   highlight: async () => null,
@@ -3202,5 +3206,92 @@ describe('FilesView context menu', () => {
       screen.getByRole('menuitem', { name: 'Insert @path in terminal' }),
     )
     await waitFor(() => expect(insertText).toHaveBeenCalledWith('@a.ts'))
+  })
+})
+
+describe('FilesView under WSL', () => {
+  const ROOT = '/home/kim/app'
+  beforeEach(() => {
+    mockOpenWindows.mockReset()
+    mockTree.mockImplementation(async (_p: string, path: string) => ({
+      root: ROOT,
+      isRepo: true,
+      path,
+      entries: DIRS[path],
+      truncated: false,
+      windowsRoot: '\\\\wsl.localhost\\Ubuntu\\home\\kim\\app',
+      windowsOpen: true,
+    }))
+  })
+  const actions = (name: string) =>
+    within(item(name)).getByRole('button', { name: `Actions for ${name}` })
+  const closeMenu = () =>
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: 'Escape',
+    })
+  const openItem = () =>
+    screen.queryByRole('menuitem', { name: 'Open in Windows' })
+
+  it('opens a file or folder of the tree in Windows, never a sensitive one or a link', async () => {
+    const p = await show()
+    fireEvent.click(actions('README.md'))
+    expect(
+      screen.getByRole('menuitem', { name: 'Copy Windows path' }),
+    ).toBeTruthy()
+    fireEvent.click(openItem() as HTMLElement)
+    expect(mockOpenWindows).toHaveBeenCalledWith(
+      { paneId: '%1', root: ROOT, path: 'README.md', reveal: false },
+      p.notify,
+      expect.any(Function),
+      expect.any(Function),
+    )
+    fireEvent.click(actions('src'))
+    fireEvent.click(openItem() as HTMLElement)
+    expect(mockOpenWindows.mock.calls[1][0].path).toBe('src')
+    for (const name of ['.env', 'link']) {
+      fireEvent.click(actions(name))
+      expect(openItem()).toBeNull()
+      closeMenu()
+    }
+  })
+
+  it("opens a file tab's file in Windows", async () => {
+    mockContent.mockResolvedValue({
+      root: ROOT,
+      path: 'README.md',
+      size: 3,
+      text: '# a',
+      hash: 'h',
+      encoding: 'utf-8',
+      editable: true,
+    })
+    await show()
+    fireEvent.click(item('README.md'))
+    await screen.findByTestId('markdown-preview')
+    fireEvent.contextMenu(
+      screen.getByRole('tab', { name: /^README\.md/ }).parentElement as Element,
+      { clientX: 20, clientY: 10 },
+    )
+    fireEvent.click(openItem() as HTMLElement)
+    expect(mockOpenWindows.mock.calls[0][0]).toEqual({
+      paneId: '%1',
+      root: ROOT,
+      path: 'README.md',
+      reveal: false,
+    })
+  })
+
+  it('only copies the Windows path when Windows cannot be reached', async () => {
+    const real = mockTree.getMockImplementation()!
+    mockTree.mockImplementation(async (...a: [string, string]) => ({
+      ...(await real(...a)),
+      windowsOpen: undefined,
+    }))
+    await show()
+    fireEvent.click(actions('README.md'))
+    expect(
+      screen.getByRole('menuitem', { name: 'Copy Windows path' }),
+    ).toBeTruthy()
+    expect(openItem()).toBeNull()
   })
 })

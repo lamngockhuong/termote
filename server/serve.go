@@ -617,6 +617,7 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 	files.writeDeny = filesDenyDirs(append(cfg.FilesWriteDenyDirs, cfg.UploadDir, cfg.TrashDir)...)
 	files.homeDirs = cfg.ViewHomeDirs
 	files.setPlaces(buildPlaces(cfg.Places, cfg.PlaceEnv))
+	files.wsl = detectWSLWindows(systemScope())
 	if cfg.TrashDir != "" {
 		var err error
 		if files.trash, err = newTrashStore(cfg.TrashDir); err != nil {

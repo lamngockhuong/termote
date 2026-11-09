@@ -101,6 +101,36 @@ describe('FileActionItems', () => {
     ])
   })
 
+  it('copies the path as Windows names it, and opens it there (WSL)', async () => {
+    const onOpenWindows = vi.fn()
+    const { notify } = renderItems({
+      windowsRoot: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo',
+      onOpenWindows,
+      onDownload: vi.fn(),
+    })
+    expect(items()).toEqual([
+      'Copy relative path',
+      'Copy absolute path',
+      'Copy Windows path',
+      'Copy name',
+      'Open in Windows',
+      'Download',
+    ])
+    choose('Copy Windows path')
+    expect(copyText).toHaveBeenLastCalledWith(
+      '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo\\pwa\\src\\my file.ts',
+    )
+    await waitFor(() => expect(notify).toHaveBeenCalledWith('Path copied'))
+    choose('Open in Windows')
+    expect(onOpenWindows).toHaveBeenCalledOnce()
+  })
+
+  it('copies a drive path for a root under a mounted drive', () => {
+    renderItems({ path: 'a/b.html', windowsRoot: 'C:\\' })
+    choose('Copy Windows path')
+    expect(copyText).toHaveBeenLastCalledWith('C:\\a\\b.html')
+  })
+
   it('says when the clipboard refused', async () => {
     copyText.mockResolvedValue('failed')
     const { notify } = renderItems()
