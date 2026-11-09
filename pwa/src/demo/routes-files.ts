@@ -463,4 +463,7 @@ export const FILES_ROUTES: Record<string, Handler> = {
   'GET /panes/{id}/files/download': unsupported,
   'POST /panes/{id}/files/image': unsupported,
   'POST /panes/{id}/files/upload': unsupported,
+  // The demo is not under WSL: its tree names no Windows root either
+  'POST /panes/{id}/files/open-windows': () =>
+    fail(501, 'unavailable', 'Windows cannot be reached from here'),
 }
