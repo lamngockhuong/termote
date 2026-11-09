@@ -252,6 +252,31 @@ func TestPushWatcherDeliver(t *testing.T) {
 	}
 }
 
+// A session past its expiry on the wall clock gets no push, even while its
+// expiry timer (monotonic, late after the host slept) has not removed it.
+func TestPushWatcherSkipsEndedSession(t *testing.T) {
+	w, f, _ := newTestWatcher(t, nil)
+	alive := map[string]bool{"s1": true, "s2": true}
+	w.store.sessionAlive = func(id string) bool { return alive[id] }
+	ended, live, basic := fcmSub(t, 1), fcmSub(t, 2), fcmSub(t, 3)
+	ended.Session, live.Session = "s1", "s2"
+	for _, sub := range []pushSub{ended, live, basic} {
+		if err := w.store.add(sub); err != nil {
+			t.Fatal(err)
+		}
+	}
+	alive["s1"] = false
+	w.deliverEvent(context.Background(), pushEvent{PaneID: "%1", Kind: "blocked"})
+	if f.count() != 2 {
+		t.Fatalf("sent %d, want 2: %v", f.count(), f.sent)
+	}
+	for _, s := range f.sent {
+		if strings.HasPrefix(s, ended.Endpoint+" ") {
+			t.Fatalf("sent to the ended session: %s", s)
+		}
+	}
+}
+
 func TestPushWatcherAllRejectedLogsOnce(t *testing.T) {
 	w, f, _ := newTestWatcher(t, nil)
 	logs := captureLog(t)

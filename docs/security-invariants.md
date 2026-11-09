@@ -1918,7 +1918,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   paired device carries its id and goes when the device ends (revoke, expiry, a cascade, a reload
   that no longer finds it), and at start for a device no longer live. One made by a browser signed
   in with the password carries its session id and goes when the session ends (revoked, signed out,
-  expired, pushed out), and at start, since sessions live in memory; the store asks whether the
+  expired, pushed out), and at start, since sessions live in memory; the watcher sends to none whose
+  session has ended (`pushStore.sendable`, the expiry on the wall clock), since the timer that removes
+  it runs on the monotonic clock and fires late after the host slept; the store asks whether the
   session is still alive under its own lock when it adds one, so a subscribe racing the session's end
   is refused (401 `signed_out`) rather than left behind its removal; one made with Basic auth
   carries neither and stays, like one subscribed before session ids were recorded. One a
