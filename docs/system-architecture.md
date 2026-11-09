@@ -1560,9 +1560,29 @@ Agent status (Herdr event / Claude session file)
   setting on (a repair started meanwhile waits for it), and repeats the subscribe POST (an
   upsert) on load, when `caps.push` turns on, every 10 minutes while shown and when shown again
   after as long; a new server key makes it subscribe again. Nothing subscribes while the active
-  service worker answers an older version than 2 (no push handler).
+  service worker answers an older version than 3 (2 has no settings proposal push, 1 no push
+  handler).
   The page notifies itself only while the server has not confirmed this device's
   subscription. Log out removes the subscription first.
+
+### Settings proposals (`/api/mux/settings/proposal`)
+
+An agent proposes PWA settings with `termote settings propose <json>`; every browser shows them and
+the user applies them there. The settings stay in each browser; the server only holds the newest
+proposal, in memory, for 15 minutes.
+
+```
+termote settings propose ─ checks with server/pwa_settings_schema.json
+  └── local socket only → POST /api/mux/settings/proposal (TCP, bridge: 403 cli_only)
+        → checked again → kept (one, 15 min) → audit line (keys only)
+        → Web Push {"kind":"settings"} (at most every 5 min)
+snapshot.settingsProposal {id, expiresAt} (never over the machine bridge)
+  └── PWA (no machine open) → GET /api/mux/settings/proposal → before/after table
+        → Apply: this browser's storage through settings-registry.ts; Dismiss: hidden here
+```
+
+Settings > Export & import moves the same settings between browsers through the same table.
+Notifications and the app badge are never proposed, exported or imported.
 
 ## Machines over SSH
 

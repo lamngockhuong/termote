@@ -175,6 +175,7 @@ link / unlink        Create or remove the 'termote' command in ~/.local/bin
 show-password        Show the saved username and password
 machine <cmd>        Machines reached over SSH: add <alias> [--label --print-key --remote-exe --no-check --yes], list, remove, status, import --herdr
 bridge               The forced command another termote's key runs here (never by hand)
+settings <cmd>       PWA settings an agent may propose: schema [--json], propose <json|-> (native only, the user applies it per browser)
 pair [options]       Make a one-time code (5 min) that signs a new device in; --role <view|full> (default view), --name <name>, --expires <12h|7d|2w|never> (default 30d)
 devices              List the paired devices; `devices revoke <id>` signs one out with every device it paired
 signins              List the browsers signed in with the password; `signins revoke <id>|--all` signs them out

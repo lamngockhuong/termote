@@ -2002,6 +2002,40 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   container keep separate templates; a name differing only by a look-alike character is another
   name (the import confirmation lists every name); with tmux, a selection in another split of the
   window is kept for the pane shown
+- **Settings proposals** (`termote settings schema|propose`, `server/cli_settings.go`,
+  `server/pwa_settings.go`, `server/pwa_settings_schema.json`, `server/settings_proposal*.go`,
+  `caps.settingsProposals`; PWA `pwa/src/utils/settings-registry.ts`,
+  `hooks/use-settings-proposal.ts`, `settings-proposal-bar.tsx`, `settings-diff-dialog.tsx`,
+  `settings-transfer-section.tsx`): an agent proposes PWA settings and each browser decides for
+  itself; the server never learns a device's settings and never applies anything.
+  `POST /api/mux/settings/proposal` checks `isLocalSocket` first: TCP and the machine bridge get 403
+  `cli_only` with or without sign-in, `--no-auth` included. `writeGuard` lets it by (the CLI sends
+  JSON from `termote.local-socket`) and `requireWriteRole` adds nothing: only processes of the
+  server's OS user open that socket, and they are `authLocal`, full. The body is at most 32 KiB
+  (413 `too_large`) and is checked again with the CLI's validator (`validateSettingsProposal`, every
+  key in the schema, values in its ranges; 400 `invalid_settings` with `problems: [{key, reason}]`);
+  the CLI's own check is never trusted. Free text (`terminalFont`) and each `findExcludes` name refuse
+  control characters and characters that show nothing (`hiddenRune`, as prompt templates), so the
+  before/after table hides nothing; a name is one directory name (the PWA's `findExcludeProblem`
+  rules), and a chord must be in normal form and not one every platform refuses. The server keeps
+  only the newest proposal, in memory, for 15 minutes on the wall clock (`Round(0)`, so a machine
+  that slept compares as the PWA does), and writes one `audit: settings_proposed` line with the id
+  and the key names, never a value. `GET` of the same path (every role: a view-only browser applies
+  its own settings too) goes through `crossSiteRejection` with `no-store`; 404 `not_found` without
+  one. A new proposal queues one Web Push `{"kind":"settings"}` (no id, no value) at most every 5
+  minutes, on a topic of its own; the service worker shows it without reading anything and opens
+  the server's own page, never a window open on a machine. The PWA reads `GET` from `LOCAL_API`
+  only while no machine is open, applies nothing until Apply in the before/after table, applies only
+  the proposal the dialog opened on (a newer id turns Apply off), and keeps the ids applied or
+  dismissed in `termote-settings-proposal-seen` (the last 10). The settings that need a permission in
+  a click (`notifyAgents`, `appBadge`) and the device's own markers (`welcomeSeenVersion`,
+  `languageNoticeSeen`, `hasSeenLocalhostNotice`) are `deviceOnly` in the schema and
+  `DEVICE_ONLY_KEYS` in the PWA: never proposed (the CLI and the server refuse them), never exported,
+  never imported, never written by `applySettings`. Import reads at most 64 KiB, and every value goes
+  through the setting's resolver: one the resolver would change, or with a hidden character, shows as
+  skipped, never replaced by a default. Limits: the container has no local socket, so `settings
+  propose` refuses there; a proposal is lost when the server restarts; every browser open on the
+  server sees it, and one Dismiss there is enough
 - **Recent groups** (`GET /api/mux/recent-groups` → `{groups:[{id,name,cwd}], readOnly}`,
   `DELETE /api/mux/recent-groups/{id}`; `server/recent_group_store.go`,
   `server/recent_group_routes.go`, `caps.recentGroups`; PWA `group-dialog.tsx`): the groups created
@@ -2289,8 +2323,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   400); the header is ignored on every other connection. `X-Termote-Origin-Auth` (`password|device`)
   only reaches the audit `via` (`machine:<origin>`), never a grant. `isCLI` is false for
   `authMachine`. On the bridge, sign-in and sign-out (`/login`, `/pair`, `/login/link`,
-  `/api/mux/logout`), `login-links`, `devices*`, `signins*` and `push*` answer 403
-  `machine_forbidden` before any handler, whatever the role (cleaned path). `hostGuard` takes
+  `/api/mux/logout`), `login-links`, `devices*`, `signins*`, `push*` and `settings*` answer 403
+  `machine_forbidden` before any handler, whatever the role (cleaned path); a snapshot read over the
+  bridge carries no `settingsProposal` and `caps.settingsProposals` false, so a machine's settings
+  proposal never reaches a browser open on it through another termote. `hostGuard` takes
   `termote.local-socket` on the bridge as on the CLI's socket; audit `ip=machine by=machine`.
   `termote bridge` (the forced command of the key `machine add` installs) takes only
   `--socket-dir <abs>`, reads the saved config for the port (none → error, nothing on stdout),

@@ -352,6 +352,14 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/cli_login_link.go`                        | `url --open`: token into a 0600 file that posts it             |
 | `pwa/src/components/signins-section.tsx`          | Settings > Signed-in browsers: list, sign out                  |
 | `pwa/src/hooks/use-signins.ts`                    | Signed-in browsers list and revoke calls                       |
+| `server/pwa_settings_schema.json`                 | PWA settings an agent may propose; read by Go and PWA tests    |
+| `server/pwa_settings.go`                          | Proposal validator shared by the CLI and the server            |
+| `server/cli_settings.go`                          | `settings schema`, `settings propose` (local socket only)      |
+| `server/settings_proposal_routes.go`              | `/api/mux/settings/proposal`: CLI posts, every device reads    |
+| `server/testdata/pwa-settings-cases.json`         | Proposal cases shared by the PWA and the server                |
+| `pwa/src/utils/settings-registry.ts`              | Read, compare, apply, export, import the proposable settings   |
+| `pwa/src/hooks/use-settings-proposal.ts`          | The proposal to show, and the ids applied or dismissed         |
+| `pwa/src/components/settings-diff-dialog.tsx`     | Before/after table: proposals, and Settings > Export & import  |
 | `server/template_store.go`                        | Prompt templates (`<stateDir>/templates`), limits, lock        |
 | `server/template_routes.go`                       | `/api/mux/templates*`: list, save, delete, import              |
 | `server/recent_group_store.go`                    | Recent groups (`<stateDir>/recent-groups`), merge, set aside   |
