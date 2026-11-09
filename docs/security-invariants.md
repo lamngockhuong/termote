@@ -1923,7 +1923,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   in with the password carries its session id and goes when the session ends (revoked, signed out,
   expired, pushed out), and at start, since sessions live in memory; the watcher sends to none whose
   session has ended or whose device is revoked or past its `validUntil` (`pushStore.sendable`,
-  `sessionAlive`/`deviceAlive`, the expiry on the wall clock), since the timers that remove them run
+  `sessionAlive`/`deviceAlive`, the expiry on the wall clock), and reads no pane and polls no
+  machine while only such ones are left (`anySendable`), since the timers that remove them run
   on the monotonic clock and fire late after the host slept; the store asks whether the session or
   device is still alive under its own lock when it adds one (the device store's lock taken after the
   push store's, never the reverse), so a subscribe racing its end is refused (401 `signed_out`)
@@ -2357,7 +2358,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   B each, control characters removed by `stripUnsafeRunes` so the machine cannot rewrite the log in a
   terminal) on a status change, never sent to a client. After a failure requests fail at once for a
   backoff of 5 s doubling to 5 min. Masters stop after 10 min with no request or stream forwarded
-  (counted while each runs), unless a device has a Web Push subscription (every machine is then polled).
+  (counted while each runs), unless a device has a Web Push subscription the watcher would send to
+  (`pushStore.anySendable`: not one of an ended sign-in or device; every machine is then polled).
   Removing a machine closes every connection open to it, a forwarded stream too, then stops its master.
   stdout is read from a pipe of termote's own, so `Wait` never drops what ssh wrote last; `WaitDelay`
   bounds a child holding stderr, and an exited ssh's pid is never signalled again. `TERMOTE_E2E_MACHINE_BRIDGE` (`<label>=<port>@<dir>`, comma-separated)

@@ -182,11 +182,11 @@ func (w *pushWatcher) run(ctx context.Context) {
 	}
 }
 
-// tick reads the panes and queues the events. Without a subscription it
-// reads nothing, and forgets the statuses: they would be stale by the time
-// one arrives. A failed read keeps them.
+// tick reads the panes and queues the events. Without a subscription to send
+// to (anySendable) it reads nothing, and forgets the statuses: they would be
+// stale by the time one arrives. A failed read keeps them.
 func (w *pushWatcher) tick(ctx context.Context) {
-	if len(w.store.list()) == 0 {
+	if !w.store.anySendable() {
 		clear(w.prev)
 		return
 	}
@@ -212,7 +212,7 @@ func (w *pushWatcher) tick(ctx context.Context) {
 func (w *pushWatcher) observeMachine(id string, snap Snapshot) {
 	w.mmu.Lock()
 	defer w.mmu.Unlock()
-	if len(w.store.list()) == 0 {
+	if !w.store.anySendable() {
 		clear(w.machinePrev)
 		return
 	}
