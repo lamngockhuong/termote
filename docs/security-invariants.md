@@ -2644,7 +2644,14 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   accepted by the Tech Lead, 2026-10-23).
   Immutable releases are on for the repo, so assets and tags cannot change after publishing.
   `release-please.yml` starts `release.yml` with `workflow_dispatch` on the tag, never as a
-  called workflow: a `workflow_call` job does not get the environment's secret (actions/runner#1490)
+  called workflow: a `workflow_call` job does not get the environment's secret (actions/runner#1490).
+  The website (`deploy-website.yml`) serves `install.sh` and `install.ps1`, which pin the release
+  key, so they are the root of this trust. Its `build` job runs the site's and the PWA's
+  dependencies and uploads the built site as a plain artifact; the Pages artifact is made by
+  `package`, a job that runs no dependency code (checkout of the tag's `scripts/`, download,
+  upload): it copies the tag's installers over whatever the build left and compares them byte for
+  byte. A background process a build dependency left running cannot reach that job, since the
+  runner ends a job's processes with it. `verify` compares the served files after the deploy
 - **Git hooks** (`scripts/install-git-hooks.mjs`, `lefthook.yml`): `pnpm install` writes the
   `pre-commit` and `pre-push` hooks itself (`lefthook install` is never run, and `lefthook run` gets
   `--no-auto-install`, so lefthook never rewrites them; `lefthook.yml` sets `no_auto_install: true`
