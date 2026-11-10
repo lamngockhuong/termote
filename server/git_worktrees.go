@@ -308,16 +308,43 @@ func removeWorktree(ctx context.Context, git *gitRunner, repo gitRepoInfo, path 
 }
 
 // worktreeDirty reports whether the work tree has changes git keeps it for:
-// modified, staged or untracked (not ignored) files, or an initialized
-// submodule (gitDir/modules), whose remove git refuses without force.
+// modified, staged or untracked (not ignored) files, or a submodule
+// (gitDir/modules, or a gitlink in the index), which git refuses to remove.
+// status never enters a submodule: gitRunner turns off only the filters the
+// repository's own config names, and a submodule's config can define more.
 func worktreeDirty(ctx context.Context, git *gitRunner, repo gitRepoInfo) (bool, error) {
 	if fileExists(filepath.Join(repo.GitDir, "modules")) {
 		return true, nil
 	}
-	out, truncated, err := git.output(ctx, gitCall{root: repo.Top, safeDir: repo.SafeDir, heavy: true, noFilters: true, limit: 4 << 10},
-		"status", "--porcelain", "-z", "--untracked-files=normal")
+	c := gitCall{root: repo.Top, safeDir: repo.SafeDir, heavy: true, noFilters: true, limit: worktreeIndexLimit}
+	// ls-files reads the index only; a cut list counts as dirty.
+	index, truncated, err := git.output(ctx, c, "ls-files", "--stage", "-z")
+	if err != nil {
+		return false, err
+	}
+	if truncated || hasGitlink(index) {
+		return true, nil
+	}
+	c.limit = 4 << 10
+	out, truncated, err := git.output(ctx, c,
+		"status", "--porcelain", "-z", "--untracked-files=normal", "--ignore-submodules=all")
 	if err != nil {
 		return false, err
 	}
 	return truncated || len(out) > 0, nil
+}
+
+// worktreeIndexLimit caps the index list worktreeDirty reads (some 200k
+// entries); a larger index is dirty, and only a forced remove takes it.
+const worktreeIndexLimit = 16 << 20
+
+// hasGitlink reports whether `ls-files --stage -z` output ("<mode> <oid>
+// <stage>\t<path>" records) holds a gitlink (mode 160000).
+func hasGitlink(out []byte) bool {
+	for rec := range bytes.SplitSeq(out, []byte{0}) {
+		if bytes.HasPrefix(rec, []byte("160000 ")) {
+			return true
+		}
+	}
+	return false
 }

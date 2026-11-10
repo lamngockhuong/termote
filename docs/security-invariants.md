@@ -699,8 +699,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
     `worktree list --porcelain -z` (newline form on a git without `-z`; output capped, a cut list
     is an error; an entry whose `.git` does not lead back to the repository is dropped),
     `worktree add [-b]` and `worktree remove [--force]` (`write`, `--` before the path, filters off,
-    so Git LFS gives pointer files), `status --porcelain -z --untracked-files=normal`
-    (filters off; any output, a cut one or an initialized submodule is `dirty`), `show-ref
+    so Git LFS gives pointer files), `ls-files --stage -z` (the index only;
+    a gitlink or a list cut at 16 MiB is `dirty`, as is an initialized submodule, `gitDir/modules`),
+    then `status --porcelain -z --untracked-files=normal --ignore-submodules=all` (filters off, and
+    never entering a submodule, whose own config can define filters `gitRunner` does not know of;
+    any output or a cut one is `dirty`), `show-ref
     --verify`, `symbolic-ref -q --short HEAD`, and `rev-parse --show-toplevel --absolute-git-dir`
     (the resolver). Remove re-derives the path from git's own list for the group's work tree,
     never from the body; the main checkout is `not_linked`; without `force` a dirty one is 409
