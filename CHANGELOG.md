@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.26.1](https://github.com/lamngockhuong/termote/compare/v2.26.0...v2.26.1) (2026-11-10)
+
+
+### Bug Fixes
+
+* harden worktree checkout, Open in Windows, the website installers, machine answers and Places ([#792](https://github.com/lamngockhuong/termote/issues/792)) ([052c280](https://github.com/lamngockhuong/termote/commit/052c2802c64f0410442ea9f27dd32dbd705550de))
+* harden worktree filters, Open in Windows, machine answers and the release artifacts ([#797](https://github.com/lamngockhuong/termote/issues/797)) ([255d24d](https://github.com/lamngockhuong/termote/commit/255d24df9996a4a5fc8c2e4014a288e0458b28f5))
+* **server:** follow CLAUDE_CONFIG_DIR and CODEX_HOME set in a Windows pane ([#795](https://github.com/lamngockhuong/termote/issues/795)) ([cdcbb3e](https://github.com/lamngockhuong/termote/commit/cdcbb3e8deb2c1a1eb2f05472fd060a8cdd5733b)), closes [#791](https://github.com/lamngockhuong/termote/issues/791)
+
 ## [2.26.0](https://github.com/lamngockhuong/termote/compare/v2.25.1...v2.26.0) (2026-11-10)
 
 
