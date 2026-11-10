@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 )
 
 // gitIn runs git in dir for a test's setup.
@@ -270,5 +271,51 @@ func TestGitWorktreeAddRemove(t *testing.T) {
 	}
 	if dirty, err := worktreeDirty(ctx, rr.git, si); err != nil || !dirty {
 		t.Errorf("submodule: dirty = %v %v", dirty, err)
+	}
+}
+
+// A submodule's own config is outside what gitRunner turns off: the dirty
+// check must not run its clean filter, and a gitlink counts as dirty (git
+// refuses to remove a worktree holding one).
+func TestGitWorktreeDirtySubmoduleFilter(t *testing.T) {
+	repo := worktreeRepo(t)
+	rr := newTestRoots()
+	ctx := context.Background()
+	src := mustRepoInfo(t, rr, repo)
+	path := filepath.Join(tempDirReal(t), "w", "repo", "feat-sub")
+	if err := addWorktree(ctx, rr.git, src, path, "feat/sub", "", false); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(tempDirReal(t), "ran")
+	sub := filepath.Join(path, "sub")
+	if err := os.MkdirAll(sub, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sub, "a.txt"), []byte("y\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sub, ".gitattributes"), []byte("*.txt filter=x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	user := []string{"-c", "user.name=t", "-c", "user.email=t@t"}
+	gitIn(t, sub, "init", "-q")
+	gitIn(t, sub, "add", ".")
+	gitIn(t, sub, append(user, "commit", "-q", "-m", "s")...)
+	gitIn(t, sub, "config", "filter.x.clean", "touch '"+filepath.ToSlash(marker)+"'; cat")
+	gitIn(t, path, "add", "sub")
+	gitIn(t, path, append(user, "commit", "-q", "-m", "gitlink")...)
+	// Same size, other mtime: git has to hash the file again, through the filter.
+	old := time.Date(2001, 1, 1, 0, 0, 0, 0, time.UTC)
+	if err := os.Chtimes(filepath.Join(sub, "a.txt"), old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	info := mustRepoInfo(t, newTestRoots(), path)
+	dirty, err := worktreeDirty(ctx, rr.git, info)
+	if err != nil || !dirty {
+		t.Errorf("worktree with a gitlink: dirty = %v %v", dirty, err)
+	}
+	if _, err := os.Stat(marker); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the submodule's clean filter ran: %v", err)
 	}
 }
