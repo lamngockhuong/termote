@@ -285,6 +285,11 @@ export function PromptCard({
             onSeen={setBodySeen}
           />
         )}
+        {prompt.autoBlock && (
+          <p className="text-[12px] text-warning">
+            {t('chat.prompt.autoBlock')}
+          </p>
+        )}
         {locked && answerable && (
           <p id={lockedId} className="text-[12px] text-warning">
             {t('chat.prompt.readWhole')}

@@ -1241,6 +1241,8 @@ export interface AgentPrompt {
   steps?: { label: string; answered?: boolean; current?: boolean }[]
   // The question's "Type something" option, empty: answered with text
   freeText?: { index: number; label: string }
+  // Claude Code refuses the dialog by itself when nobody answers in time
+  autoBlock?: boolean
 }
 
 // The working line the agent draws while a turn runs, read off its screen:
