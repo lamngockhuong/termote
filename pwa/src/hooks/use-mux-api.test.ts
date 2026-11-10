@@ -1427,6 +1427,19 @@ describe('files API client', () => {
     timeout.mockRestore()
   })
 
+  it('sends run once the user said to run the file', async () => {
+    const { calls } = mockFetch({ body: { path: 'a.cmd' } })
+    await openInWindows(
+      { paneId: '%1' },
+      { root: '/r', path: 'a.cmd', reveal: false, run: true },
+    )
+    expect(JSON.parse(calls[0].init?.body as string)).toEqual({
+      path: 'a.cmd',
+      reveal: false,
+      run: true,
+    })
+  })
+
   it('a refused open in Windows throws its code', async () => {
     mockFetch({ body: { error: 'x', code: 'unavailable' }, status: 501 })
     await expect(

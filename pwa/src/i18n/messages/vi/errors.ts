@@ -122,6 +122,8 @@ export default {
   'errors.read_only': 'Hệ thống file chỉ cho đọc',
   'errors.recent_unavailable': 'Server này không có danh sách nhóm gần đây',
   'errors.run_not_found': 'Lần chạy này không còn nữa',
+  'errors.runs_program':
+    'Windows sẽ chạy file này như một chương trình. Hãy xác nhận để chạy',
   'errors.sensitive': 'File này có thể chứa bí mật. Hãy hiện nó trước',
   'errors.session_changed': 'Pane giờ đang chạy một phiên khác',
   'errors.shell_busy': 'Shell của tab đang bận',
@@ -173,6 +175,8 @@ export default {
   'errors.upload_failed': 'Tải lên không thành công',
   'errors.uploads_unavailable': 'Server này không nhận file tải lên',
   'errors.view_only': 'Thiết bị này chỉ được xem',
+  'errors.windows_name':
+    'Windows hiểu đường dẫn này khác đi (có \\, dấu phẩy hoặc ký tự tương tự)',
   'errors.worktree_failed': 'Không thay đổi được worktree',
   'errors.zellij_socket_dir':
     'Thư mục socket của Zellij không phải của riêng người dùng này',

@@ -128,6 +128,8 @@ export default {
   'errors.read_only': 'The file system is read-only',
   'errors.recent_unavailable': 'Recent groups are not available on this server',
   'errors.run_not_found': 'This run no longer exists',
+  'errors.runs_program':
+    'Windows runs this file as a program. Confirm to run it',
   'errors.sensitive': 'This file may hold secrets. Reveal it first',
   'errors.session_changed': 'The pane runs another session now',
   'errors.shell_busy': "The tab's shell is busy",
@@ -178,6 +180,8 @@ export default {
   'errors.upload_failed': 'Upload failed',
   'errors.uploads_unavailable': 'Uploads are not available on this server',
   'errors.view_only': 'This device is view-only',
+  'errors.windows_name':
+    'Windows reads this path differently (a \\, comma or similar character)',
   'errors.worktree_failed': 'Could not change the worktree',
   'errors.zellij_socket_dir':
     'The Zellij socket directory is not private to this user',
