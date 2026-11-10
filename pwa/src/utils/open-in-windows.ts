@@ -39,6 +39,8 @@ export function openInWindowsError(
       return t('files.openWindows.windowsName', { name })
     case 'runs_program':
       return t('files.openWindows.runsProgram', { name })
+    case 'folder_reaches':
+      return t('files.openWindows.folderReaches', { name })
     case 'busy':
       return t('files.downloadError.busy')
     case 'view_only':

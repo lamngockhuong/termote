@@ -33,7 +33,11 @@ describe('openInWindowsError', () => {
     ],
     [
       err(403, 'runs_program'),
-      'Windows would run a.html as a program; not opened',
+      'Windows may run a.html as a program; not opened',
+    ],
+    [
+      err(403, 'folder_reaches'),
+      'a.html holds shortcuts (.url, .lnk, desktop.ini) Windows may follow to another computer while it shows the folder; not opened',
     ],
     [err(400, 'not_file'), 'Windows could not open a.html'],
     [new Error('offline'), 'Windows could not open a.html'],
@@ -125,7 +129,7 @@ describe('openFileInWindows', () => {
     )
     expect(ask).not.toHaveBeenCalled()
     expect(notify).toHaveBeenCalledWith(
-      'Windows would run index.html as a program; not opened',
+      'Windows may run index.html as a program; not opened',
       { variant: 'danger' },
     )
   })

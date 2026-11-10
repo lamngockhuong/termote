@@ -30,6 +30,8 @@ export default {
   'errors.exists': 'Something with this name already exists',
   'errors.file_changed': 'The file changed since it was read',
   'errors.filtered': 'The file goes through a git filter. Use a terminal',
+  'errors.folder_reaches':
+    'The folder holds shortcuts Windows may follow to another computer. Open it from Windows',
   'errors.full_needs_password':
     'Only a password sign-in or the CLI can do this',
   'errors.hardlink': 'The file has several hard links',
@@ -129,7 +131,7 @@ export default {
   'errors.recent_unavailable': 'Recent groups are not available on this server',
   'errors.run_not_found': 'This run no longer exists',
   'errors.runs_program':
-    'Windows runs this file as a program. Confirm to run it',
+    'Windows may run this file as a program. Confirm to run it',
   'errors.sensitive': 'This file may hold secrets. Reveal it first',
   'errors.session_changed': 'The pane runs another session now',
   'errors.shell_busy': "The tab's shell is busy",

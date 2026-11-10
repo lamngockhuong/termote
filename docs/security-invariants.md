@@ -1863,15 +1863,21 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `createDenied` → 403 `not_allowed`, parents through `walkParents` (symlink, junction or
   swapped directory → 403 `symlink`, missing → 404), the entry's `Lstat` (symlink/junction → 403
   `symlink`; only a regular file or a directory, else 400 `not_file`), a sensitive name without
-  `reveal` → 403 `sensitive`, a regular file whose extension (any case) Windows runs as a program
-  without `run: true` → 403 `runs_program`: `.bat .cmd .com .exe .msi .msp .ps1 .psm1 .psc1 .vbs
-  .vbe .vb .js .jse .wsf .wsh .ws .wsc .sct .hta .chm .lnk .url .scr .pif .cpl .reg .msc .jar .jnlp
-  .appref-ms .application .appx .appxbundle .msix .msixbundle .appinstaller .diagcab .xll .gadget
-  .scf .inf .settingcontent-ms .library-ms .search-ms .searchconnector-ms` (`windowsRuns`: a
-  program, a file handed to one that runs what it says (an installer, a help file with script), or
-  one that points Explorer at a location it names; a directory and any other extension open as
-  before). Windows
-  asks before such a file only when its zone says so (on the machine checked, a `.cmd` under
+  `reveal` → 403 `sensitive`, a regular file Windows may run as a program without `run: true` → 403
+  `runs_program` (`windowsMayRun`): an allow list, not a deny list, since a deny list kept missing
+  types Windows or a common program runs on open (`.sh` with Git for Windows, `.py` with the `py`
+  launcher, `.wsb`, a theme, a disk image). Only an extension in `windowsViews` (text and code,
+  documents such as `.pdf .docx .xlsx .pptx`, pictures, sound, video, `.zip`; compared in ASCII
+  lower case) opens without asking, and so does a name with no extension (Windows asks which program);
+  any other, a dotfile's whole name included, asks, and so does any extension holding a byte beyond
+  ASCII (Windows folds case its own way: U+017F is an S to it). A directory named like a shell object
+  (an extension starting `.{`, `x.{CLSID}`) asks too. A directory, the root included, that directly
+  holds a `.url .lnk .scf .library-ms .searchconnector-ms .search-ms .website` or a `desktop.ini`
+  (any case; or more than 10000 entries, or one that cannot be read) is refused, run or not, 403
+  `folder_reaches`: Explorer reads their icon or the folder's settings from a location they name, a
+  share on another computer among them, while it only shows the folder, sending the Windows user's
+  NTLM hash there. Windows
+  asks before running a file only when its zone says so (on the machine checked, a `.cmd` under
   `\\wsl.localhost` was asked about, one under `/mnt/c` ran at once), so termote asks itself. The Windows path is built from the absolute
   path (`/mnt/<x>/…` → `X:\…`, else the distribution's share from `wslpath -w /`) and refused (400
   `not_file`) when it is empty or holds NUL, a line break or `"`; `explorer.exe` runs with it as its only argv entry (never a shell, `cmd.exe` or

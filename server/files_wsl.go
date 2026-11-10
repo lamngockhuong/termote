@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"io"
 	"io/fs"
 	"log"
 	"net/http"
@@ -23,22 +24,96 @@ var (
 	errWSLBusy        = &codedError{"busy", "too many files at once; try again", http.StatusTooManyRequests}
 	errWSLName        = &codedError{"windows_name", "Windows would read this path as another; not opened", http.StatusBadRequest}
 	errWSLRuns        = &codedError{"runs_program", "Windows runs this file as a program; run to open it", http.StatusForbidden}
+	errWSLReaches     = &codedError{"folder_reaches", "the folder holds shortcuts Windows may follow to another computer; not opened", http.StatusForbidden}
 )
 
-// windowsRuns: the extensions, lowercase, of a file Windows runs as a
-// program (or hands to one that runs what it says, an installer or a help
-// file that runs script) when it opens it, or that points Explorer at a
-// location of the file's choosing (a library, a search connector).
-var windowsRuns = map[string]bool{
-	".bat": true, ".cmd": true, ".com": true, ".exe": true, ".msi": true, ".msp": true,
-	".ps1": true, ".psm1": true, ".psc1": true, ".vbs": true, ".vbe": true, ".vb": true,
-	".js": true, ".jse": true, ".wsf": true, ".wsh": true, ".ws": true, ".wsc": true,
-	".sct": true, ".hta": true, ".chm": true, ".lnk": true, ".url": true, ".scr": true,
-	".pif": true, ".cpl": true, ".reg": true, ".msc": true, ".jar": true, ".jnlp": true,
-	".appref-ms": true, ".application": true, ".appx": true, ".appxbundle": true,
-	".msix": true, ".msixbundle": true, ".appinstaller": true, ".diagcab": true,
-	".xll": true, ".gadget": true, ".scf": true, ".inf": true, ".settingcontent-ms": true,
-	".library-ms": true, ".search-ms": true, ".searchconnector-ms": true,
+// windowsViews: the extensions, lowercase, of a file Windows opens to show
+// it (text, code, a document, a picture, a sound or a video) with the
+// program installed for it. Any other extension may run: a deny list kept
+// missing types Windows or a common program runs on open (.sh with Git for
+// Windows, .py with the py launcher, .wsb, a theme, a disk image), so an
+// extension not listed here asks first.
+var windowsViews = map[string]bool{}
+
+func init() {
+	for _, ext := range strings.Fields(`
+		.txt .text .md .markdown .rst .adoc .log .csv .tsv .json .jsonc .json5 .ndjson .yaml .yml .toml
+		.xml .html .htm .css .scss .less .svg .diff .patch .sql .graphql .proto .tex .bib
+		.c .h .cc .cpp .cxx .hpp .hh .cs .go .rs .java .kt .kts .scala .swift .m .mm .dart .zig .nim
+		.ts .tsx .mts .cts .jsx .mjs .cjs .vue .svelte .astro .lua .ex .exs .erl .hs .ml .clj .r .jl
+		.png .jpg .jpeg .gif .webp .bmp .ico .tif .tiff .heic .heif .avif
+		.mp3 .wav .ogg .oga .flac .m4a .aac .opus .mp4 .m4v .mov .webm .mkv .avi
+		.pdf .docx .xlsx .pptx .odt .ods .odp .rtf .epub .zip`) {
+		windowsViews[ext] = true
+	}
+}
+
+// windowsMayRun: Windows may run the file name when it opens it, unless its
+// extension is one it opens to show (windowsViews). An extension holding a
+// letter beyond ASCII may run too, whatever it looks like: Windows folds
+// case its own way (U+017F, a long s, is an S to it, not to strings.ToLower).
+// A name with no extension makes Windows ask which program to open it with.
+func windowsMayRun(name string) bool {
+	ext := filepath.Ext(name)
+	if ext == "" {
+		return false
+	}
+	for i := 0; i < len(ext); i++ {
+		if ext[i] >= 0x80 {
+			return true
+		}
+	}
+	return !windowsViews[strings.ToLower(ext)]
+}
+
+// windowsFolderMayRun: a folder named like x.{CLSID} is a shell object to
+// Explorer, not a folder.
+func windowsFolderMayRun(name string) bool {
+	return strings.HasPrefix(filepath.Ext(name), ".{")
+}
+
+// windowsReaches: names of files that make Explorer reach a location they
+// name (another computer's share among them) while it only shows the folder
+// holding them: their icon or the folder's settings come from there.
+func windowsReaches(name string) bool {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".url", ".lnk", ".scf", ".library-ms", ".searchconnector-ms", ".search-ms", ".website":
+		return true
+	}
+	return strings.EqualFold(name, "desktop.ini")
+}
+
+// windowsFolderEntriesMost bounds the entries read to look for one that
+// windowsReaches: a folder holding more is refused, as if it held one.
+const windowsFolderEntriesMost = 10000
+
+// folderReaches reports whether the folder dir (under rt) directly holds an
+// entry windowsReaches names, or more entries than can be looked at.
+func folderReaches(rt *os.Root, dir string) (bool, error) {
+	d, err := rt.Open(dir)
+	if err != nil {
+		return false, err
+	}
+	defer d.Close()
+	seen := 0
+	for {
+		names, err := d.Readdirnames(256)
+		for _, n := range names {
+			if windowsReaches(n) {
+				return true, nil
+			}
+		}
+		seen += len(names)
+		if seen > windowsFolderEntriesMost {
+			return true, nil
+		}
+		if errors.Is(err, io.EOF) {
+			return false, nil
+		}
+		if err != nil {
+			return false, err
+		}
+	}
 }
 
 // windowsReadsAsIs: Windows names the Linux path p as the same file. A `\`
@@ -248,8 +323,25 @@ func (f *filesAPI) checkOpenWindows(root filesRoot, in openWindowsRequest) (stri
 		if sensitivePath(root.Root, rel) && !in.Reveal {
 			return "", "", errWSLSensitive
 		}
-		if fi.Mode().IsRegular() && windowsRuns[strings.ToLower(filepath.Ext(rel))] && !in.Run {
+		if !in.Run && (fi.Mode().IsRegular() && windowsMayRun(rel) || fi.IsDir() && windowsFolderMayRun(rel)) {
 			return "", "", errWSLRuns
+		}
+		if fi.IsDir() {
+			if err := checkFolderReaches(parent, filepath.Base(rel)); err != nil {
+				return "", "", err
+			}
+		}
+	} else {
+		rt, err := os.OpenRoot(root.Root)
+		if err != nil {
+			return "", "", err
+		}
+		defer rt.Close()
+		if !in.Run && windowsFolderMayRun(root.Root) {
+			return "", "", errWSLRuns
+		}
+		if err := checkFolderReaches(rt, "."); err != nil {
+			return "", "", err
 		}
 	}
 	winPath := f.wsl.windowsPath(abs)
@@ -258,6 +350,20 @@ func (f *filesAPI) checkOpenWindows(root filesRoot, in openWindowsRequest) (stri
 		return "", "", errWSLNotFile
 	}
 	return rel, winPath, nil
+}
+
+// checkFolderReaches refuses a folder Explorer would reach out of while it
+// shows it (folderReaches); an error reading it refuses it too.
+func checkFolderReaches(rt *os.Root, dir string) error {
+	reaches, err := folderReaches(rt, dir)
+	if err != nil {
+		log.Printf("files open-windows: %v", err)
+		return errWSLReaches
+	}
+	if reaches {
+		return errWSLReaches
+	}
+	return nil
 }
 
 // wslTreeFields fills what the tree answer says about Windows: the root as
