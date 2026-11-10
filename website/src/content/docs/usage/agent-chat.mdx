@@ -279,8 +279,8 @@ Requirements:
 - **tmux** on Linux or macOS, **psmux** on Windows, or **Herdr** on any of them after running
   `herdr integration install codex` once. On psmux the Chat view shows the conversation and its
   status, but sending from it does not work yet ([#408](https://github.com/lamngockhuong/termote/issues/408)).
-- On Windows, Codex must run as you, not as administrator, and keep its sessions in
-  `%USERPROFILE%\.codex` (a `CODEX_HOME` set only in the pane is not followed).
+- On Windows, Codex must run as you, not as administrator. A `CODEX_HOME` set in the pane is
+  followed when it is a path on a drive letter.
 - Checked with Codex 0.159.3, and with 0.162.0 on Windows. A later version that writes its session elsewhere loses the Chat
   view; on tmux the server log notes once that it found Codex without a session file.
 
@@ -339,8 +339,6 @@ an agent only in a pane you know is at its prompt.
 
 - tmux: the chat follows the pane that has focus in the window. In a split window, it talks to
   the focused pane.
-- psmux: only `%USERPROFILE%\.claude` is read. A `CLAUDE_CONFIG_DIR` set inside the pane is not
-  followed.
 - Herdr: the transcript is read from `~/.claude` of the user running Termote. A Claude Code
   started with another `CLAUDE_CONFIG_DIR` shows no history.
 - Container mode is not supported.

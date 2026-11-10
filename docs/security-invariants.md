@@ -783,7 +783,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `unknown_pane`
 - **Agent chat** (`/api/mux/panes/{id}/agent/*`): for Claude Code on tmux the server reads only
   the transcript in the Claude config dir of the process found in the pane (`CLAUDE_CONFIG_DIR`,
-  else `~/.claude`; psmux: `%USERPROFILE%\.claude`), and only for a process whose start time
+  else `~/.claude`; Windows: `CLAUDE_CONFIG_DIR` from the process's PEB environment block, read with
+  `PROCESS_QUERY_INFORMATION | PROCESS_VM_READ` and at most 1 MiB, a value only on a drive letter
+  (no UNC or device path), else the server user's `%USERPROFILE%\.claude` when the block cannot be
+  read), and only for a process whose start time
   matches its session file's `procStart`; Herdr reports the session id itself, read from the
   server user's config dir. The session id must be a UUID. Every write (Claude Code or Codex)
   takes a lock on the pane, waiting for it at most `agentRequestMost` (7.5 min) less the write's own
@@ -949,9 +952,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   kept must still allow writing in a table read after the duplicate (the cached one can be 1 s
   old; the kernel hides the object addresses that would tie the two), and a listing past 2 s
   gives nothing (logged once; no other starts while one is stuck). The argv comes from
-  `NtQueryInformationProcess` (command line class) and `CODEX_HOME` is the server user's
-  `%USERPROFILE%\.codex` only (no PEB read), so a pane-only `CODEX_HOME` or another user's Codex
-  has no Chat view, nor (expected, not checked live) an elevated one. `message` and `answer` write under the Claude Code rules: the
+  `NtQueryInformationProcess` (command line class) and `CODEX_HOME` from its PEB environment block
+  under the same rules as `CLAUDE_CONFIG_DIR` above (else the server user's `%USERPROFILE%\.codex`),
+  so another user's Codex has no Chat view, nor (expected, not checked live) an elevated one. `message` and `answer` write under the Claude Code rules: the
   pane lock (keyed by the pane address alone), then the process, session, rollout (path and
   dev:inode) and screen read again right before each write. A message is pasted (bracketed)
   only onto an empty composer with status idle/done/working (status working, or a working line

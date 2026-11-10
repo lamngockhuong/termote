@@ -279,8 +279,8 @@ Yêu cầu:
 - **tmux** trên Linux hoặc macOS, **psmux** trên Windows, hoặc **Herdr** trên cả ba sau khi đã
   chạy `herdr integration install codex` một lần. Trên psmux, view Chat hiện hội thoại và trạng
   thái nhưng chưa gửi tin được ([#408](https://github.com/lamngockhuong/termote/issues/408)).
-- Trên Windows, Codex phải chạy bằng tài khoản của bạn, không chạy quyền quản trị, và lưu phiên
-  trong `%USERPROFILE%\.codex` (`CODEX_HOME` chỉ đặt trong pane thì không được dùng).
+- Trên Windows, Codex phải chạy bằng tài khoản của bạn, không chạy quyền quản trị. `CODEX_HOME`
+  đặt trong pane vẫn được dùng nếu là đường dẫn trên một ổ đĩa.
 - Đã kiểm với Codex 0.159.3, và với 0.162.0 trên Windows. Bản mới hơn mà ghi phiên ra chỗ khác thì mất view Chat; trên tmux,
   log của server ghi một lần rằng nó thấy Codex mà không tìm được file phiên.
 
@@ -338,8 +338,6 @@ Ctrl+C. Chỉ khởi động agent ở pane mà bạn biết chắc đang ở d�
 
 - tmux: chat đi theo pane đang được focus trong cửa sổ tmux. Ở cửa sổ chia đôi, chat nói chuyện với pane
   đang focus.
-- psmux: chỉ đọc `%USERPROFILE%\.claude`. `CLAUDE_CONFIG_DIR` đặt riêng bên trong pane không được
-  dùng tới.
 - Herdr: transcript được đọc từ `~/.claude` của người dùng chạy Termote. Claude Code chạy với
   `CLAUDE_CONFIG_DIR` khác sẽ không hiện lịch sử.
 - Chưa hỗ trợ chế độ container.
