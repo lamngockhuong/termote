@@ -332,8 +332,11 @@ func serveForwardedStream(w http.ResponseWriter, r *http.Request, proxy *httputi
 
 // machineResponseDrop are headers of a machine's answer never passed on:
 // they would act on this server's origin (its cookies, its service worker,
-// its cache) on behalf of another computer.
-var machineResponseDrop = []string{"Set-Cookie", "Service-Worker-Allowed", "Clear-Site-Data", "Refresh", "Link"}
+// its cache) on behalf of another computer, or send the browser elsewhere
+// (Refresh, Location: a download link a machine answers with a 3xx would
+// navigate the tab to a page of its choosing). termote answers no route a
+// machine serves with a redirect.
+var machineResponseDrop = []string{"Set-Cookie", "Service-Worker-Allowed", "Clear-Site-Data", "Refresh", "Link", "Location"}
 
 // confineMachineResponse keeps a machine's answer from acting as a page of
 // this origin: what it serves runs sandboxed (an opaque origin, no script),

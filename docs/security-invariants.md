@@ -2480,7 +2480,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `Referer`, `Forwarded`, every `Sec-Fetch-*`, `X-Termote-*`, `X-Forwarded-*`, `CF-Connecting-IP`,
   `X-Real-IP` and the configured proxy client header, sets `X-Termote-Role` from `requestRole` and
   `X-Termote-Origin-Auth`, sends the escaped path to `termote.local-socket`, and drops `Set-Cookie`
-  from the answer, with `Service-Worker-Allowed`, `Clear-Site-Data`, `Refresh` and `Link`; every
+  from the answer, with `Service-Worker-Allowed`, `Clear-Site-Data`, `Refresh`, `Link` and
+  `Location` (a 3xx to a download link would navigate the tab to a page the machine picks; termote
+  redirects on no route a machine serves); every
   answer but a 101 gets `Content-Security-Policy: sandbox; default-src 'none'` (plus inline style and
   `data:` images) and `nosniff`, so nothing a machine serves runs as a page of this origin. A client asks
   one machine for at most 16 stream tokens per 30 s (4 for the view role; else 429 `busy`): on the machine
