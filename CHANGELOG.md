@@ -1,5 +1,26 @@
 # Changelog
 
+## [2.26.0](https://github.com/lamngockhuong/termote/compare/v2.25.1...v2.26.0) (2026-11-10)
+
+
+### Features
+
+* copy a file's Windows path and open it in Windows under WSL ([#783](https://github.com/lamngockhuong/termote/issues/783)) ([1e1dc66](https://github.com/lamngockhuong/termote/commit/1e1dc6669e2b56680a5af99e5ff3bbb6d539d5b0))
+* let an agent propose PWA settings, and export and import them ([#782](https://github.com/lamngockhuong/termote/issues/782)) ([779acbb](https://github.com/lamngockhuong/termote/commit/779acbb2ebedec31916c3d0f1eb2d0b8512de0d3))
+
+
+### Bug Fixes
+
+* **deps:** update astro monorepo ([#551](https://github.com/lamngockhuong/termote/issues/551)) ([e964fb3](https://github.com/lamngockhuong/termote/commit/e964fb3adbab497bbbaec970c64f3cff3ad23029))
+* keep a dialog card answerable while Claude Code counts down to block it ([#788](https://github.com/lamngockhuong/termote/issues/788)) ([8f88567](https://github.com/lamngockhuong/termote/commit/8f885673ef6d7ebe23bcfc8323cd3304045d541f))
+* **pwa:** keep a machine row in the sidebar as tall as This machine ([#777](https://github.com/lamngockhuong/termote/issues/777)) ([7350cf8](https://github.com/lamngockhuong/termote/commit/7350cf851a83cdc69e76e22cd7c20b39e5a5ea46))
+* **pwa:** keep the Files tree scrolled as it was left when back from a file ([#784](https://github.com/lamngockhuong/termote/issues/784)) ([4fd79df](https://github.com/lamngockhuong/termote/commit/4fd79df9e50c94b83984b383d21ffeb6dfa563da))
+* **pwa:** sign-in for a chunk refused after a revoke, and grid focus on key moves ([#781](https://github.com/lamngockhuong/termote/issues/781)) ([7fb8258](https://github.com/lamngockhuong/termote/commit/7fb8258ff3a42d898e3c9e1ddf406a8ab91c8259))
+* refuse paths Windows reads differently and confirm before running programs in Open in Windows ([#787](https://github.com/lamngockhuong/termote/issues/787)) ([a61519b](https://github.com/lamngockhuong/termote/commit/a61519b360f001d6af4816993dcafb3bcd1616bc))
+* **server:** ask before Open in Windows opens more file types that run ([#790](https://github.com/lamngockhuong/termote/issues/790)) ([9d1134f](https://github.com/lamngockhuong/termote/commit/9d1134f7bc1280f812d1a01180d5a2ebc9bf2cc4))
+* **server:** keep the worktree dirty check out of submodules ([#786](https://github.com/lamngockhuong/termote/issues/786)) ([d229c0c](https://github.com/lamngockhuong/termote/commit/d229c0c8f33896b4e7ffd6ddf1ca68a4fb0d6e73))
+* **server:** show a permission dialog taller than the pane as a card ([#779](https://github.com/lamngockhuong/termote/issues/779)) ([9d8d968](https://github.com/lamngockhuong/termote/commit/9d8d968206f743af8729c5185e914cb01cffa542))
+
 ## [2.25.1](https://github.com/lamngockhuong/termote/compare/v2.25.0...v2.25.1) (2026-11-09)
 
 
