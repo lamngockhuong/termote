@@ -245,6 +245,14 @@ export default {
   'files.openWindows.sensitive': '{name} có thể chứa bí mật nên không mở',
   'files.openWindows.notAllowed': 'Không mở được {name} từ đây',
   'files.openWindows.symlink': 'Đường dẫn đi qua một liên kết nên không mở',
+  'files.openWindows.windowsName':
+    'Đường dẫn của {name} có ký tự mà Windows hiểu khác (như \\ hoặc dấu phẩy) nên không mở',
+  'files.openWindows.runsProgram':
+    'Windows sẽ chạy {name} như một chương trình nên không mở',
+  'files.openWindows.askRun': 'Chạy file này như một chương trình?',
+  'files.openWindows.askRunBody':
+    'Windows sẽ chạy <name></name> như một chương trình trên máy chạy server, với quyền của tài khoản Windows của bạn, chứ không chỉ hiển thị nó. Chỉ chạy khi bạn tin file này.',
+  'files.openWindows.run': 'Chạy',
   'files.actions.newFolder': 'Thư mục mới',
   'files.actions.uploadHere': 'Tải file lên đây',
   'files.actions.collapseAll': 'Thu gọn tất cả',

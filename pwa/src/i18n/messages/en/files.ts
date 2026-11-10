@@ -265,6 +265,14 @@ export default {
   'files.openWindows.sensitive': '{name} may contain secrets; not opened',
   'files.openWindows.notAllowed': "{name} can't be opened from here",
   'files.openWindows.symlink': 'A link on that path; not opened',
+  'files.openWindows.windowsName':
+    "{name}'s path has a character Windows reads differently (such as \\ or a comma); not opened",
+  'files.openWindows.runsProgram':
+    'Windows would run {name} as a program; not opened',
+  'files.openWindows.askRun': 'Run this file as a program?',
+  'files.openWindows.askRunBody':
+    "Windows will run <name></name> as a program on the computer the server runs on, with your Windows account's access, not just show it. Run it only if you trust it.",
+  'files.openWindows.run': 'Run',
   'files.actions.newFolder': 'New folder',
   'files.actions.uploadHere': 'Upload files here',
   'files.actions.collapseAll': 'Collapse all',

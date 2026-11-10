@@ -27,6 +27,14 @@ describe('openInWindowsError', () => {
     [err(403, 'view_only'), 'This device is view only'],
     [err(404), 'a.html is gone'],
     [err(409, 'x', '/new'), "The pane's directory changed"],
+    [
+      err(400, 'windows_name'),
+      "a.html's path has a character Windows reads differently (such as \\ or a comma); not opened",
+    ],
+    [
+      err(403, 'runs_program'),
+      'Windows would run a.html as a program; not opened',
+    ],
     [err(400, 'not_file'), 'Windows could not open a.html'],
     [new Error('offline'), 'Windows could not open a.html'],
   ])('%s', (e, text) => {
@@ -78,6 +86,46 @@ describe('openFileInWindows', () => {
     expect(moved).toHaveBeenCalledOnce()
     expect(notify).toHaveBeenLastCalledWith(
       'index.html may contain secrets; not opened',
+      { variant: 'danger' },
+    )
+  })
+
+  it('asks before a file Windows runs, then sends run', async () => {
+    mockOpen.mockRejectedValueOnce(err(403, 'runs_program'))
+    const notify = vi.fn()
+    const ask = vi.fn()
+    const cmd = { ...file, path: 'tools/build.cmd' }
+    await openFileInWindows(cmd, notify, tFor('en'), undefined, ask)
+    expect(ask).toHaveBeenCalledWith(cmd)
+    expect(notify).not.toHaveBeenCalled()
+
+    mockOpen.mockResolvedValueOnce(undefined)
+    await openFileInWindows({ ...cmd, run: true }, notify, tFor('en'))
+    expect(mockOpen.mock.calls[1][1]).toEqual({
+      root: '/home/me/repo',
+      path: 'tools/build.cmd',
+      reveal: false,
+      run: true,
+    })
+    expect(notify).toHaveBeenCalledWith('Opened build.cmd in Windows', {
+      variant: 'success',
+    })
+  })
+
+  it('never asks again once run was sent', async () => {
+    mockOpen.mockRejectedValueOnce(err(403, 'runs_program'))
+    const notify = vi.fn()
+    const ask = vi.fn()
+    await openFileInWindows(
+      { ...file, run: true },
+      notify,
+      tFor('en'),
+      undefined,
+      ask,
+    )
+    expect(ask).not.toHaveBeenCalled()
+    expect(notify).toHaveBeenCalledWith(
+      'Windows would run index.html as a program; not opened',
       { variant: 'danger' },
     )
   })

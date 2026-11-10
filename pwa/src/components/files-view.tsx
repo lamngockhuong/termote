@@ -75,7 +75,10 @@ import { fileNameProblem } from '../utils/file-name'
 import { splitPath } from '../utils/files-format'
 import { isFocusWindow } from '../utils/focus-mode'
 import type { LinkPath } from '../utils/markdown-links'
-import { openFileInWindows } from '../utils/open-in-windows'
+import {
+  type OpenInWindowsTarget,
+  openFileInWindows,
+} from '../utils/open-in-windows'
 import { isApplePlatform } from '../utils/platform'
 import { restoreFailure } from '../utils/restore-failure'
 import { commentedFileLines, type ReviewComment } from '../utils/review-draft'
@@ -453,6 +456,8 @@ function PaneFiles({
     root: string
     path: string
   }>()
+  // The file Windows would run as a program, asked about before it runs
+  const [running, setRunning] = useState<OpenInWindowsTarget>()
   // The search box's text: kept while a result is open, so Back returns
   // to the results
   const [query, setQuery] = useState('')
@@ -740,7 +745,8 @@ function PaneFiles({
       f.rootChanged,
     )
 
-  // Windows opens a file or folder of the tree (server under WSL)
+  // Windows opens a file or folder of the tree (server under WSL); one it
+  // would run as a program is asked about first
   const openWindows = (path: string, reveal: boolean) =>
     openFileInWindows(
       // The tree and a file show once the root is read
@@ -748,6 +754,7 @@ function PaneFiles({
       notify,
       t,
       f.rootChanged,
+      setRunning,
     )
 
   // A file of the tree, or the one shown, to rename
@@ -1089,6 +1096,30 @@ function PaneFiles({
           <Trans
             k="files.download.askSensitiveBody"
             tags={{ name: () => visibleUnsafe(baseName(downloading.path)) }}
+          />
+        </ConfirmDialog>
+      )}
+      {running && (
+        <ConfirmDialog
+          isOpen
+          title={t('files.openWindows.askRun')}
+          confirmLabel={t('files.openWindows.run')}
+          destructive
+          defaultAction="cancel"
+          onConfirm={() => {
+            setRunning(undefined)
+            openFileInWindows(
+              { ...running, run: true },
+              notify,
+              t,
+              f.rootChanged,
+            )
+          }}
+          onCancel={() => setRunning(undefined)}
+        >
+          <Trans
+            k="files.openWindows.askRunBody"
+            tags={{ name: () => visibleUnsafe(baseName(running.path)) }}
           />
         </ConfirmDialog>
       )}

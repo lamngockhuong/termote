@@ -3213,6 +3213,12 @@ describe('FilesView under WSL', () => {
   const ROOT = '/home/kim/app'
   beforeEach(() => {
     mockOpenWindows.mockReset()
+    HTMLDialogElement.prototype.showModal = vi.fn(function (
+      this: HTMLDialogElement,
+    ) {
+      this.setAttribute('open', '')
+    })
+    HTMLDialogElement.prototype.close = vi.fn()
     mockTree.mockImplementation(async (_p: string, path: string) => ({
       root: ROOT,
       isRepo: true,
@@ -3244,6 +3250,7 @@ describe('FilesView under WSL', () => {
       p.notify,
       expect.any(Function),
       expect.any(Function),
+      expect.any(Function),
     )
     fireEvent.click(actions('src'))
     fireEvent.click(openItem() as HTMLElement)
@@ -3253,6 +3260,47 @@ describe('FilesView under WSL', () => {
       expect(openItem()).toBeNull()
       closeMenu()
     }
+  })
+
+  it('asks before Windows runs a file as a program, and runs it only on Run', async () => {
+    const p = await show()
+    // The server refused: Windows would run the file as a program
+    const refuse = async (...a: unknown[]) =>
+      (a[4] as (f: unknown) => void)(a[0])
+    mockOpenWindows.mockImplementationOnce(refuse)
+    fireEvent.click(actions('README.md'))
+    fireEvent.click(openItem() as HTMLElement)
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Run this file as a program?',
+    })
+    expect(dialog.textContent).toContain('Windows will run README.md')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(mockOpenWindows).toHaveBeenCalledOnce()
+
+    mockOpenWindows.mockImplementationOnce(refuse)
+    fireEvent.click(actions('README.md'))
+    fireEvent.click(openItem() as HTMLElement)
+    fireEvent.click(
+      within(
+        await screen.findByRole('dialog', {
+          name: 'Run this file as a program?',
+        }),
+      ).getByRole('button', { name: 'Run' }),
+    )
+    await waitFor(() => expect(mockOpenWindows).toHaveBeenCalledTimes(3))
+    expect(mockOpenWindows.mock.calls[2]).toEqual([
+      {
+        paneId: '%1',
+        root: ROOT,
+        path: 'README.md',
+        reveal: false,
+        run: true,
+      },
+      p.notify,
+      expect.any(Function),
+      expect.any(Function),
+    ])
   })
 
   it("opens a file tab's file in Windows", async () => {

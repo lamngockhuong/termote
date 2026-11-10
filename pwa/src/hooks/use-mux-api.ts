@@ -1798,11 +1798,11 @@ export async function renameFile(
 // Has Windows open the file or folder path under root with its default
 // program, on the machine the server runs on (WSL). A refusal is a
 // RequestError with the server's code (unavailable, sensitive, not_allowed,
-// symlink, not_file, busy), a 404 once the file is gone, or a 409 with the
-// root once it moved.
+// symlink, not_file, windows_name, runs_program without run, busy), a 404
+// once the file is gone, or a 409 with the root once it moved.
 export async function openInWindows(
   target: FilesTarget,
-  open: { root: string; path: string; reveal: boolean },
+  open: { root: string; path: string; reveal: boolean; run?: boolean },
 ): Promise<void> {
   const { root, ...body } = open
   const res = await fetch(filesUrl(target, 'open-windows', { root }), {
