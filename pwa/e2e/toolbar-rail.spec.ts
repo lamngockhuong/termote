@@ -127,7 +127,9 @@ test.describe('labels giving way to the tabs', () => {
     await page.goto('/')
     await page.evaluate(() => {
       localStorage.clear()
-      localStorage.setItem('termote-settings', JSON.stringify({ pollInterval: 1 }))
+      // The shortest refresh the settings take (POLL_INTERVAL_OPTIONS); another
+      // value falls back to 5 s
+      localStorage.setItem('termote-settings', JSON.stringify({ pollInterval: 3 }))
     })
     const snap = await (await page.request.get('/api/mux/snapshot')).json()
     const tab = snap.groups.find((g: { id: string }) => g.id === sid).tabs[0]
@@ -142,13 +144,14 @@ test.describe('labels giving way to the tabs', () => {
     const extra = Array.from({ length: 14 }, (_, i) => `a-rather-long-window-${i}`)
     for (const name of extra) tmux('new-window', '-d', '-t', `${sid}:`, '-n', name)
     const tabs = page.locator('header [data-tour="session-tabs"] [role="tab"]')
-    await expect(tabs).toHaveCount(extra.length + 1)
+    // Up to two refreshes of the session list
+    await expect(tabs).toHaveCount(extra.length + 1, { timeout: 10_000 })
     await expect(label).toHaveCSS('position', 'absolute')
     // Still named by the button
     await expect(page.locator('header').getByRole('button', { name: 'Files' })).toBeVisible()
 
     for (const name of extra) tmux('kill-window', '-t', `${sid}:=${name}`)
-    await expect(tabs).toHaveCount(1)
+    await expect(tabs).toHaveCount(1, { timeout: 10_000 })
     await expect(label).toHaveCSS('position', 'static')
   })
 })
