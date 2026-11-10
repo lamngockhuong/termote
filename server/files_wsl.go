@@ -21,7 +21,41 @@ var (
 	errWSLSensitive   = &codedError{"sensitive", "sensitive file; reveal to open it", http.StatusForbidden}
 	errWSLNotFile     = &codedError{"not_file", "not a file or folder", http.StatusBadRequest}
 	errWSLBusy        = &codedError{"busy", "too many files at once; try again", http.StatusTooManyRequests}
+	errWSLName        = &codedError{"windows_name", "Windows would read this path as another; not opened", http.StatusBadRequest}
+	errWSLRuns        = &codedError{"runs_program", "Windows runs this file as a program; run to open it", http.StatusForbidden}
 )
+
+// windowsRuns: the extensions, lowercase, of a file Windows runs as a
+// program (or hands to one that runs what it says) when it opens it.
+var windowsRuns = map[string]bool{
+	".bat": true, ".cmd": true, ".com": true, ".exe": true, ".msi": true, ".msp": true,
+	".ps1": true, ".psm1": true, ".vbs": true, ".vbe": true, ".js": true, ".jse": true,
+	".wsf": true, ".wsh": true, ".hta": true, ".lnk": true, ".url": true, ".scr": true,
+	".pif": true, ".cpl": true, ".reg": true, ".msc": true, ".jar": true, ".appref-ms": true,
+	".application": true, ".scf": true, ".inf": true, ".settingcontent-ms": true,
+}
+
+// windowsReadsAsIs: Windows names the Linux path p as the same file. A `\`
+// in a Linux name is a separator to Windows (`..\x` climbs out of the
+// root), explorer.exe splits its argument at a comma, `:` names a stream, a
+// component ending in a dot or a space loses it (`a.cmd.` is `a.cmd`), and
+// `* ? " < > |` and control characters are not allowed in a Windows name.
+func windowsReadsAsIs(p string) bool {
+	if strings.ContainsAny(p, `\:*?"<>|,`) {
+		return false
+	}
+	for _, r := range p {
+		if r < 0x20 {
+			return false
+		}
+	}
+	for _, c := range strings.Split(p, "/") {
+		if strings.HasSuffix(c, ".") || strings.HasSuffix(c, " ") {
+			return false
+		}
+	}
+	return true
+}
 
 // wslWindows is how Windows names this WSL distribution's files, read once
 // at startup; the zero value (not WSL, or a container under it) names none.
@@ -116,6 +150,8 @@ func (w wslWindows) windowsPath(p string) string {
 type openWindowsRequest struct {
 	Path   string `json:"path"`
 	Reveal bool   `json:"reveal"`
+	// Run: the user confirmed that Windows runs this file as a program
+	Run bool `json:"run"`
 }
 
 // handleOpenWindows serves POST files/open-windows?root=: Windows opens a
@@ -147,7 +183,11 @@ func (f *filesAPI) handleOpenWindows(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	by, via := auditWho(r)
-	auditf("open-windows", "path", filepath.ToSlash(rel), "by", by, "via", via)
+	if in.Run {
+		auditf("open-windows", "path", filepath.ToSlash(rel), "run", true, "by", by, "via", via)
+	} else {
+		auditf("open-windows", "path", filepath.ToSlash(rel), "by", by, "via", via)
+	}
 	ctx, stop := context.WithTimeout(context.Background(), wslTimeout)
 	defer stop()
 	// explorer.exe exits 1 when it handed the file on, as when it did not:
@@ -164,11 +204,16 @@ func (f *filesAPI) handleOpenWindows(w http.ResponseWriter, r *http.Request) {
 
 // checkOpenWindows checks rel under root as a download does, a folder
 // allowed too: not denied, no symlink or junction on the way or at the end,
-// a sensitive name only with reveal. It answers the Windows path to open.
+// a sensitive name only with reveal, a file Windows runs only with run, and
+// a path Windows reads as this one. It answers the Windows path to open.
 func (f *filesAPI) checkOpenWindows(root filesRoot, in openWindowsRequest) (string, string, error) {
 	rel, err := cleanRelPath(in.Path)
 	if err != nil {
 		return "", "", err
+	}
+	abs := filepath.ToSlash(filepath.Join(root.Root, rel))
+	if !windowsReadsAsIs(abs) {
+		return "", "", errWSLName
 	}
 	if f.createDenied(root, rel) {
 		return "", "", errCreateNotAllowed
@@ -197,8 +242,11 @@ func (f *filesAPI) checkOpenWindows(root filesRoot, in openWindowsRequest) (stri
 		if sensitivePath(root.Root, rel) && !in.Reveal {
 			return "", "", errWSLSensitive
 		}
+		if fi.Mode().IsRegular() && windowsRuns[strings.ToLower(filepath.Ext(rel))] && !in.Run {
+			return "", "", errWSLRuns
+		}
 	}
-	winPath := f.wsl.windowsPath(filepath.ToSlash(filepath.Join(root.Root, rel)))
+	winPath := f.wsl.windowsPath(abs)
 	// Never a switch of explorer.exe, nor a line break in its command line
 	if winPath == "" || strings.HasPrefix(winPath, "/") || strings.ContainsAny(winPath, "\x00\r\n\"") {
 		return "", "", errWSLNotFile

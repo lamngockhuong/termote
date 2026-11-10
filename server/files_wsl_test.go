@@ -162,7 +162,7 @@ func TestFilesOpenWindows(t *testing.T) {
 	fx, calls := newOpenFixture(t)
 	logs := captureLog(t)
 	full := &authInfo{Kind: authSession, Role: roleFull}
-	fx.write(t, "site/a,b c.html", "<h1>x</h1>")
+	fx.write(t, "site/a b.html", "<h1>x</h1>")
 	fx.write(t, ".env", "K=v")
 	fx.write(t, "cfg/secret", "k")
 	exe := "/mnt/c/Windows/explorer.exe "
@@ -172,7 +172,7 @@ func TestFilesOpenWindows(t *testing.T) {
 		reveal bool
 		want   string
 	}{
-		{"site/a,b c.html", false, share + `\site\a,b c.html`},
+		{"site/a b.html", false, share + `\site\a b.html`},
 		{"site", false, share + `\site`},
 		{".", false, share},
 		{".env", true, share + `\.env`},
@@ -206,14 +206,14 @@ func TestFilesOpenWindows(t *testing.T) {
 		if err := os.Symlink("site", filepath.Join(fx.root, "in")); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.Symlink("site/a,b c.html", filepath.Join(fx.root, "link.html")); err != nil {
+		if err := os.Symlink("site/a b.html", filepath.Join(fx.root, "link.html")); err != nil {
 			t.Fatal(err)
 		}
 		cases["symlinked parent"] = struct {
 			path   string
 			status int
 			code   string
-		}{"in/a,b c.html", 403, "symlink"}
+		}{"in/a b.html", 403, "symlink"}
 		cases["symlinked file"] = struct {
 			path   string
 			status int
@@ -355,5 +355,19 @@ func TestWSLRunRunsProgram(t *testing.T) {
 	out, err := wslRun(context.Background(), "go", "env", "GOOS")
 	if err != nil || strings.TrimSpace(out) != runtime.GOOS {
 		t.Errorf("go env GOOS = %q, %v", out, err)
+	}
+}
+
+// The share Windows names is checked too: none, or one with a quote,
+// opens nothing.
+func TestCheckOpenWindowsOddShare(t *testing.T) {
+	fx, _ := newOpenFixture(t)
+	fx.write(t, "a.html", "x")
+	for _, distro := range []string{"", `\\wsl.localhost\a"b`} {
+		fx.f.wsl.distro = distro
+		_, _, err := fx.f.checkOpenWindows(filesRoot{Root: fx.root}, openWindowsRequest{Path: "a.html"})
+		if err != errWSLNotFile {
+			t.Errorf("distro %q: %v", distro, err)
+		}
 	}
 }
