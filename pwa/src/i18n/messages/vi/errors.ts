@@ -25,6 +25,8 @@ export default {
   'errors.exists': 'Đã có thứ khác mang tên này',
   'errors.file_changed': 'File đã đổi từ lúc đọc',
   'errors.filtered': 'File đi qua một bộ lọc git. Hãy dùng terminal',
+  'errors.folder_reaches':
+    'Thư mục chứa shortcut mà Windows có thể đi theo tới máy khác. Hãy tự mở nó từ Windows',
   'errors.full_needs_password':
     'Chỉ phiên đăng nhập bằng mật khẩu hoặc CLI mới được làm thế',
   'errors.hardlink': 'File có nhiều liên kết cứng',
@@ -123,7 +125,7 @@ export default {
   'errors.recent_unavailable': 'Server này không có danh sách nhóm gần đây',
   'errors.run_not_found': 'Lần chạy này không còn nữa',
   'errors.runs_program':
-    'Windows sẽ chạy file này như một chương trình. Hãy xác nhận để chạy',
+    'Windows có thể chạy file này như một chương trình. Hãy xác nhận để chạy',
   'errors.sensitive': 'File này có thể chứa bí mật. Hãy hiện nó trước',
   'errors.session_changed': 'Pane giờ đang chạy một phiên khác',
   'errors.shell_busy': 'Shell của tab đang bận',

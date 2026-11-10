@@ -175,10 +175,11 @@ func TestFilesOpenWindows(t *testing.T) {
 		{"site/a b.html", false, share + `\site\a b.html`},
 		{"site", false, share + `\site`},
 		{".", false, share},
+		// An extension Windows is not known to show asks to run, a dotfile's included
 		{".env", true, share + `\.env`},
 	} {
 		*calls = nil
-		res := fx.open(openWindowsRequest{Path: c.path, Reveal: c.reveal}, full)
+		res := fx.open(openWindowsRequest{Path: c.path, Reveal: c.reveal, Run: c.reveal}, full)
 		if res.StatusCode != 200 {
 			t.Fatalf("%s = %d %s", c.path, res.StatusCode, errorCode(t, res))
 		}

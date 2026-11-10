@@ -13,7 +13,8 @@ on:
         type: string
   workflow_dispatch:
 
-# Only the deploy job may publish: build runs the site's dependencies.
+# Only the deploy job may publish: build runs the site's dependencies, and
+# package, which runs none, makes the Pages artifact with the tag's installers.
 permissions:
   contents: read
 
@@ -82,13 +83,51 @@ jobs:
               { echo "::error::website/dist/$f differs from scripts/$f in the tag"; exit 1; }
           done
 
+      # Not the Pages artifact yet: a process the build's dependencies left
+      # running could still rewrite dist after the check above. package
+      # makes the Pages artifact in a job that runs none of their code.
+      - name: Upload the built site
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: site
+          path: website/dist
+          retention-days: 1
+          if-no-files-found: error
+
+  # The Pages artifact, made where no dependency code runs: the installers
+  # people pipe into a shell are copied from the tag over whatever the build
+  # left, then checked byte for byte once more.
+  package:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the installers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          sparse-checkout: scripts
+          path: src
+
+      - name: Download the built site
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: site
+          path: site
+
+      - name: Put the tag's installers in
+        run: |
+          for f in install.sh install.ps1; do
+            cp "src/scripts/$f" "site/$f"
+            cmp "src/scripts/$f" "site/$f"
+          done
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
-          path: website/dist
+          path: site
 
   deploy:
-    needs: build
+    needs: package
     runs-on: ubuntu-latest
     permissions:
       pages: write

@@ -67,8 +67,9 @@ func TestWindowsReadsAsIs(t *testing.T) {
 	}
 }
 
-// A file Windows runs as a program opens only once the user said to run
-// it; any other file, and a folder whatever its name, opens as before.
+// A file Windows may run as a program (any extension it is not known to open
+// to show) opens only once the user said to run it; a file it shows, and a
+// folder whatever its name but a shell object's, opens as before.
 func TestFilesOpenWindowsRunsProgram(t *testing.T) {
 	fx, calls := newOpenFixture(t)
 	logs := captureLog(t)
@@ -77,6 +78,8 @@ func TestFilesOpenWindowsRunsProgram(t *testing.T) {
 		"probe.cmd", "probe.BAT", "x.js", "x.lnk", "x.ps1", "x.hta", "x.url",
 		"x.appref-ms", "x.settingcontent-ms", "help.CHM", "x.msix", "x.appinstaller",
 		"x.diagcab", "x.library-ms", "x.searchconnector-ms", "x.xll", "x.sct", "x.jnlp",
+		"build.sh", "setup.py", "x.pyw", "x.wsb", "x.theme", "disk.iso", "x.vhdx", "x.rdp",
+		"x.vb\u017f", "x.unknown",
 	}
 	for _, name := range runs {
 		fx.write(t, name, "x")
@@ -99,9 +102,11 @@ func TestFilesOpenWindowsRunsProgram(t *testing.T) {
 		t.Errorf("audit lines with run = %d:\n%s", n, logs)
 	}
 	fx.write(t, "page.html", "x")
+	fx.write(t, "notes.MD", "x")
+	fx.write(t, "main.go", "x")
 	fx.write(t, "tool.cmd/inside.txt", "x")
 	fx.write(t, "cmd", "x")
-	for _, name := range []string{"page.html", "tool.cmd", "cmd"} {
+	for _, name := range []string{"page.html", "notes.MD", "main.go", "tool.cmd", "cmd"} {
 		*calls = nil
 		if res := fx.open(openWindowsRequest{Path: name}, full); res.StatusCode != 200 || len(*calls) != 1 {
 			t.Errorf("%s = %d, ran %q", name, res.StatusCode, *calls)
@@ -121,5 +126,55 @@ func TestFilesOpenWindowsRunsProgram(t *testing.T) {
 	}
 	if len(*calls) != 0 {
 		t.Errorf("ran %q", *calls)
+	}
+}
+
+// A folder named like a shell object asks first; a folder Explorer would
+// reach out of while it shows it (a shortcut or desktop.ini directly in it)
+// is not opened, run or not.
+func TestFilesOpenWindowsFolders(t *testing.T) {
+	fx, calls := newOpenFixture(t)
+	full := &authInfo{Kind: authSession, Role: roleFull}
+	shell := "x.{20D04FE0-3AEA-1069-A2D8-08002B30309D}"
+	fx.write(t, shell+"/a.txt", "x")
+	if res := fx.open(openWindowsRequest{Path: shell}, full); res.StatusCode != 403 || errorCode(t, res) != "runs_program" {
+		t.Errorf("shell folder = %d", res.StatusCode)
+	}
+	if res := fx.open(openWindowsRequest{Path: shell, Run: true}, full); res.StatusCode != 200 {
+		t.Errorf("shell folder run = %d", res.StatusCode)
+	}
+	for _, name := range []string{"icon.url", "a.LNK", "x.scf", "desktop.ini", "x.library-ms"} {
+		dir := "d-" + strings.ReplaceAll(name, ".", "-")
+		fx.write(t, dir+"/"+name, "x")
+		*calls = nil
+		for _, run := range []bool{false, true} {
+			res := fx.open(openWindowsRequest{Path: dir, Run: run}, full)
+			if res.StatusCode != 403 || errorCode(t, res) != "folder_reaches" {
+				t.Errorf("%s (run %v) = %d", dir, run, res.StatusCode)
+			}
+		}
+		if len(*calls) != 0 {
+			t.Errorf("%s ran %q", dir, *calls)
+		}
+	}
+	// Only what is directly in it counts: the root holds folders, not shortcuts.
+	if res := fx.open(openWindowsRequest{Path: "."}, full); res.StatusCode != 200 {
+		t.Errorf("root = %d %s", res.StatusCode, errorCode(t, res))
+	}
+	fx.write(t, "top.url", "x")
+	if res := fx.open(openWindowsRequest{Path: "."}, full); res.StatusCode != 403 || errorCode(t, res) != "folder_reaches" {
+		t.Errorf("root with a shortcut = %d", res.StatusCode)
+	}
+}
+
+func TestWindowsMayRun(t *testing.T) {
+	for name, want := range map[string]bool{
+		"a.txt": false, "a.TXT": false, "dir/a.md": false, "Makefile": false, "a.pdf": false,
+		"a.cmd": true, "a.sh": true, "a.py": true, "a.vb\u017f": true, "a.t\u00e9xt": true,
+		".bashrc": true, "a.": true,
+	} {
+		if got := windowsMayRun(name); got != want {
+			t.Errorf("windowsMayRun(%q) = %v", name, got)
+		}
 	}
 }

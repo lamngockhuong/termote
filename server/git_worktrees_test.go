@@ -237,7 +237,7 @@ func TestGitWorktreeAddRemove(t *testing.T) {
 	if dirty, err := worktreeDirty(ctx, rr.git, ex); err != nil || dirty {
 		t.Fatalf("clean worktree dirty = %v %v", dirty, err)
 	}
-	if err := removeWorktree(ctx, rr.git, ex, existing, false); err != nil {
+	if err := removeWorktree(ctx, rr.git, ex, existing); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(existing); !errors.Is(err, os.ErrNotExist) {
@@ -250,10 +250,7 @@ func TestGitWorktreeAddRemove(t *testing.T) {
 	if dirty, err := worktreeDirty(ctx, rr.git, nw); err != nil || !dirty {
 		t.Fatalf("untracked file: dirty = %v %v", dirty, err)
 	}
-	if err := removeWorktree(ctx, rr.git, nw, newPath, false); err != errWorktreeFailed {
-		t.Errorf("dirty remove without force: %v", err)
-	}
-	if err := removeWorktree(ctx, rr.git, nw, newPath, true); err != nil {
+	if err := removeWorktree(ctx, rr.git, nw, newPath); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(newPath); !errors.Is(err, os.ErrNotExist) {
@@ -317,5 +314,64 @@ func TestGitWorktreeDirtySubmoduleFilter(t *testing.T) {
 	}
 	if _, err := os.Stat(marker); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("the submodule's clean filter ran: %v", err)
+	}
+}
+
+// A filter the repository declares for its worktrees only (an includeIf on
+// gitdir:worktrees/) is not listed from the main checkout: neither creating
+// the worktree nor removing it may run it.
+func TestGitWorktreeIncludeIfFilter(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no worktrees from git on Windows")
+	}
+	repo := worktreeRepo(t)
+	marks := tempDirReal(t)
+	user := []string{"-c", "user.name=t", "-c", "user.email=t@t"}
+	if err := os.WriteFile(filepath.Join(repo, ".gitattributes"), []byte("* filter=x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, repo, "add", ".gitattributes")
+	gitIn(t, repo, append(user, "commit", "-q", "-m", "attributes")...)
+	cfg := filepath.Join(repo, ".git", "worktree-only.cfg")
+	for _, kind := range []string{"smudge", "clean"} {
+		cmd := "touch '" + filepath.ToSlash(filepath.Join(marks, kind)) + "'; cat"
+		gitIn(t, repo, "config", "-f", cfg, "filter.x."+kind, cmd)
+	}
+	gitIn(t, repo, "config", "includeIf.gitdir:worktrees/.path", cfg)
+	ran := func(kind string) bool {
+		_, err := os.Stat(filepath.Join(marks, kind))
+		return err == nil
+	}
+
+	rr := newTestRoots()
+	ctx := context.Background()
+	src := mustRepoInfo(t, rr, repo)
+	path := filepath.Join(tempDirReal(t), "w", "repo", "feat-x")
+	if err := addWorktree(ctx, rr.git, src, path, "feat/x", "", false); err != nil {
+		t.Fatal(err)
+	}
+	if ran("smudge") {
+		t.Error("the worktree's smudge filter ran on add")
+	}
+	if _, err := os.Stat(filepath.Join(path, ".gitattributes")); err != nil {
+		t.Errorf("files not checked out: %v", err)
+	}
+	info := mustRepoInfo(t, newTestRoots(), path)
+	if dirty, err := worktreeDirty(ctx, rr.git, info); err != nil || dirty {
+		t.Fatalf("fresh worktree dirty = %v %v", dirty, err)
+	}
+	// Same size, other mtime: a status would hash the file again, through the filter.
+	old := time.Date(2001, 1, 1, 0, 0, 0, 0, time.UTC)
+	if err := os.Chtimes(filepath.Join(path, ".gitattributes"), old, old); err != nil {
+		t.Fatal(err)
+	}
+	if err := removeWorktree(ctx, rr.git, info, path); err != nil {
+		t.Fatal(err)
+	}
+	if ran("clean") {
+		t.Error("the worktree's clean filter ran on remove")
+	}
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("worktree still there: %v", err)
 	}
 }

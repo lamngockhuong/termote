@@ -209,7 +209,7 @@ func TestStreamHubShutdownLinkedTimeout(t *testing.T) {
 }
 
 // A machine's answer never acts on this origin: sandboxed, no cookie,
-// service worker scope, site data clearing or refresh.
+// service worker scope, site data clearing, refresh or redirect.
 func TestConfineMachineResponse(t *testing.T) {
 	resp := &http.Response{StatusCode: http.StatusOK, Header: http.Header{}}
 	for _, k := range machineResponseDrop {

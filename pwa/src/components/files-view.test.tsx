@@ -3273,7 +3273,7 @@ describe('FilesView under WSL', () => {
     const dialog = await screen.findByRole('dialog', {
       name: 'Run this file as a program?',
     })
-    expect(dialog.textContent).toContain('Windows will run README.md')
+    expect(dialog.textContent).toContain('Windows may run README.md')
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(mockOpenWindows).toHaveBeenCalledOnce()

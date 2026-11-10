@@ -698,8 +698,14 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
     (hooks, fsmonitor off; `GIT_*`/`TERMOTE_*` stripped; `safe.directory` from the resolver):
     `worktree list --porcelain -z` (newline form on a git without `-z`; output capped, a cut list
     is an error; an entry whose `.git` does not lead back to the repository is dropped),
-    `worktree add [-b]` and `worktree remove [--force]` (`write`, `--` before the path, filters off,
-    so Git LFS gives pointer files), `ls-files --stage -z` (the index only;
+    `worktree add --no-checkout [-b]`, then `reset --hard --no-recurse-submodules` run in the new
+    worktree, and `worktree remove --force` (`write`, `--` before the path, filters off, so Git LFS
+    gives pointer files). The checkout runs in the worktree, never inside `worktree add`, and the
+    remove always takes one `--force` (after the dirty check below, which also counts a submodule),
+    so git never checks out or runs `status` in a child process: `gitRunner` lists the filters to
+    turn off from the config read in its own root, and a filter the repository declares for its
+    worktrees only (an `includeIf` on `gitdir:worktrees/`, a `config.worktree`) is listed only in
+    the worktree. A failed checkout removes the new worktree again. `ls-files --stage -z` (the index only;
     a gitlink or a list cut at 16 MiB is `dirty`, as is an initialized submodule, `gitDir/modules`),
     then `status --porcelain -z --untracked-files=normal --ignore-submodules=all` (filters off, and
     never entering a submodule, whose own config can define filters `gitRunner` does not know of;
@@ -707,7 +713,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
     --verify`, `symbolic-ref -q --short HEAD`, and `rev-parse --show-toplevel --absolute-git-dir`
     (the resolver). Remove re-derives the path from git's own list for the group's work tree,
     never from the body; the main checkout is `not_linked`; without `force` a dirty one is 409
-    `dirty` and nothing changes; a locked one is refused (500) before anything closes. Every group
+    `dirty` and nothing changes (the check is termote's own, since git's is skipped by `--force`); a
+    locked one is refused (500) before anything closes, and one `--force` still refuses a lock. Every group
     whose first pane works in that worktree (the remove may name any of them) is closed, its
     processes ended, before `git worktree remove`, so nothing runs in a deleted folder; a remove
     git refuses after that leaves the checkout and the groups closed. The route's branch list and
@@ -1178,7 +1185,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   above it; a path at, inside or above `~/.ssh`, `~/.gnupg`, termote's config, state, data and cache
   dirs (the cache holds the trash and uploads), `/proc` `/sys` `/dev`, and on Unix the dirs holding
   the host's control sockets (`/tmp`, `/run`, `/var/run`, `$TMPDIR`, `$XDG_RUNTIME_DIR`: mounted in
-  the container they would let a terminal drive the host's tmux or docker) (so `~/.config`,
+  the container they would let a terminal drive the host's tmux or docker), and the user's own mux
+  sockets elsewhere (`muxControlDirs`: Herdr's config dir `$XDG_CONFIG_HOME/herdr` or
+  `~/.config/herdr`, which holds `herdr.sock`; herdr-core's state dir `$XDG_STATE_HOME/herdr-core`
+  or `~/.local/state/herdr-core`; the folders of `$HERDR_SOCKET_PATH` and `$HC_SOCKET`;
+  `$ZELLIJ_SOCKET_DIR`; `$TMUX_TMPDIR`; an absolute value only) (so `~/.config`,
   `~/.cache` and `~/.local` are refused, `~/.config/fish` is not); a
   component matching `isGitDirName`, or a dir git (through `gitRunner`) calls a git dir or a bare
   repo (a config whose hooks or filter drivers cannot be turned off counts as one); a quote, line
@@ -1856,15 +1867,21 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `createDenied` → 403 `not_allowed`, parents through `walkParents` (symlink, junction or
   swapped directory → 403 `symlink`, missing → 404), the entry's `Lstat` (symlink/junction → 403
   `symlink`; only a regular file or a directory, else 400 `not_file`), a sensitive name without
-  `reveal` → 403 `sensitive`, a regular file whose extension (any case) Windows runs as a program
-  without `run: true` → 403 `runs_program`: `.bat .cmd .com .exe .msi .msp .ps1 .psm1 .psc1 .vbs
-  .vbe .vb .js .jse .wsf .wsh .ws .wsc .sct .hta .chm .lnk .url .scr .pif .cpl .reg .msc .jar .jnlp
-  .appref-ms .application .appx .appxbundle .msix .msixbundle .appinstaller .diagcab .xll .gadget
-  .scf .inf .settingcontent-ms .library-ms .search-ms .searchconnector-ms` (`windowsRuns`: a
-  program, a file handed to one that runs what it says (an installer, a help file with script), or
-  one that points Explorer at a location it names; a directory and any other extension open as
-  before). Windows
-  asks before such a file only when its zone says so (on the machine checked, a `.cmd` under
+  `reveal` → 403 `sensitive`, a regular file Windows may run as a program without `run: true` → 403
+  `runs_program` (`windowsMayRun`): an allow list, not a deny list, since a deny list kept missing
+  types Windows or a common program runs on open (`.sh` with Git for Windows, `.py` with the `py`
+  launcher, `.wsb`, a theme, a disk image). Only an extension in `windowsViews` (text and code,
+  documents such as `.pdf .docx .xlsx .pptx`, pictures, sound, video, `.zip`; compared in ASCII
+  lower case) opens without asking, and so does a name with no extension (Windows asks which program);
+  any other, a dotfile's whole name included, asks, and so does any extension holding a byte beyond
+  ASCII (Windows folds case its own way: U+017F is an S to it). A directory named like a shell object
+  (an extension starting `.{`, `x.{CLSID}`) asks too. A directory, the root included, that directly
+  holds a `.url .lnk .scf .library-ms .searchconnector-ms .search-ms .website` or a `desktop.ini`
+  (any case; or more than 10000 entries, or one that cannot be read) is refused, run or not, 403
+  `folder_reaches`: Explorer reads their icon or the folder's settings from a location they name, a
+  share on another computer among them, while it only shows the folder, sending the Windows user's
+  NTLM hash there. Windows
+  asks before running a file only when its zone says so (on the machine checked, a `.cmd` under
   `\\wsl.localhost` was asked about, one under `/mnt/c` ran at once), so termote asks itself. The Windows path is built from the absolute
   path (`/mnt/<x>/…` → `X:\…`, else the distribution's share from `wslpath -w /`) and refused (400
   `not_file`) when it is empty or holds NUL, a line break or `"`; `explorer.exe` runs with it as its only argv entry (never a shell, `cmd.exe` or
@@ -2467,7 +2484,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `Referer`, `Forwarded`, every `Sec-Fetch-*`, `X-Termote-*`, `X-Forwarded-*`, `CF-Connecting-IP`,
   `X-Real-IP` and the configured proxy client header, sets `X-Termote-Role` from `requestRole` and
   `X-Termote-Origin-Auth`, sends the escaped path to `termote.local-socket`, and drops `Set-Cookie`
-  from the answer, with `Service-Worker-Allowed`, `Clear-Site-Data`, `Refresh` and `Link`; every
+  from the answer, with `Service-Worker-Allowed`, `Clear-Site-Data`, `Refresh`, `Link` and
+  `Location` (a 3xx to a download link would navigate the tab to a page the machine picks; termote
+  redirects on no route a machine serves); every
   answer but a 101 gets `Content-Security-Policy: sandbox; default-src 'none'` (plus inline style and
   `data:` images) and `nosniff`, so nothing a machine serves runs as a page of this origin. A client asks
   one machine for at most 16 stream tokens per 30 s (4 for the view role; else 429 `busy`): on the machine
@@ -2637,7 +2656,14 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   accepted by the Tech Lead, 2026-10-23).
   Immutable releases are on for the repo, so assets and tags cannot change after publishing.
   `release-please.yml` starts `release.yml` with `workflow_dispatch` on the tag, never as a
-  called workflow: a `workflow_call` job does not get the environment's secret (actions/runner#1490)
+  called workflow: a `workflow_call` job does not get the environment's secret (actions/runner#1490).
+  The website (`deploy-website.yml`) serves `install.sh` and `install.ps1`, which pin the release
+  key, so they are the root of this trust. Its `build` job runs the site's and the PWA's
+  dependencies and uploads the built site as a plain artifact; the Pages artifact is made by
+  `package`, a job that runs no dependency code (checkout of the tag's `scripts/`, download,
+  upload): it copies the tag's installers over whatever the build left and compares them byte for
+  byte. A background process a build dependency left running cannot reach that job, since the
+  runner ends a job's processes with it. `verify` compares the served files after the deploy
 - **Git hooks** (`scripts/install-git-hooks.mjs`, `lefthook.yml`): `pnpm install` writes the
   `pre-commit` and `pre-push` hooks itself (`lefthook install` is never run, and `lefthook run` gets
   `--no-auto-install`, so lefthook never rewrites them; `lefthook.yml` sets `no_auto_install: true`

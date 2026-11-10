@@ -248,10 +248,12 @@ export default {
   'files.openWindows.windowsName':
     'Đường dẫn của {name} có ký tự mà Windows hiểu khác (như \\ hoặc dấu phẩy) nên không mở',
   'files.openWindows.runsProgram':
-    'Windows sẽ chạy {name} như một chương trình nên không mở',
+    'Windows có thể chạy {name} như một chương trình nên không mở',
+  'files.openWindows.folderReaches':
+    '{name} chứa shortcut (.url, .lnk, desktop.ini) mà Windows có thể đi theo tới máy khác khi hiển thị thư mục nên không mở',
   'files.openWindows.askRun': 'Chạy file này như một chương trình?',
   'files.openWindows.askRunBody':
-    'Windows sẽ chạy <name></name> như một chương trình trên máy chạy server, với quyền của tài khoản Windows của bạn, chứ không chỉ hiển thị nó. Chỉ chạy khi bạn tin file này.',
+    'Windows có thể chạy <name></name> như một chương trình trên máy chạy server, với quyền của tài khoản Windows của bạn, chứ không chỉ hiển thị nó: đây không phải loại file Windows chỉ hiển thị. Chỉ chạy khi bạn tin file này.',
   'files.openWindows.run': 'Chạy',
   'files.actions.newFolder': 'Thư mục mới',
   'files.actions.uploadHere': 'Tải file lên đây',
