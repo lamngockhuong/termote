@@ -1123,7 +1123,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   relative `core.hooksPath` against the worktree, where a repository can ship
   `NUL/post-index-change`. Neither reaches a hook defined in config: every `hook.<name>.*` the config
   lists, includes followed, gets `-c hook.<name>.enabled=false` on every command, looked up in
-  the same `git config` call as the filter drivers; a name `-c` cannot carry (`=`, a line break)
+  the same `git config` call as the filter drivers. That call is cached per root for 2 s, except
+  for a command that could run a filter or a hook (`noFilters`, `write`), which reads it afresh:
+  an include can name a file a checkout has just written (a new worktree's branch), and a list
+  read before it would leave that file's filter on. A name `-c` cannot carry (`=`, a line break)
   fails the command, `errUnsafeRepoConfig`, and a config git cannot read fails it with git's own
   error), index refresh on diff,
   fsmonitor, filter drivers, external diff and textconv off,
@@ -1866,7 +1869,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   separator to Windows, so a Linux name `..\..\x` opens a file outside the root, checked on WSL),
   no `,` (explorer.exe splits its argument there and opens what is before it: `a.txt,z` opened
   `a.txt`), no `:` (a stream), no `* ? " < > |` or control character (not allowed in a Windows
-  name), no component ending in `.` or a space (Windows drops it: `a.cmd.` opens `a.cmd`); then
+  name), no component ending in `.` or a space (Windows drops it: `a.cmd.` opens `a.cmd`), no
+  U+F000 to U+F0FF (WSL shows a Linux name holding one of those characters to Windows with it moved
+  there and moves it back on access, so `d` U+F03A opens the Linux `d:`); then
   `createDenied` → 403 `not_allowed`, parents through `walkParents` (symlink, junction or
   swapped directory → 403 `symlink`, missing → 404), the entry's `Lstat` (symlink/junction → 403
   `symlink`; only a regular file or a directory, else 400 `not_file`), a sensitive name without
@@ -1874,13 +1879,18 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `runs_program` (`windowsMayRun`): an allow list, not a deny list, since a deny list kept missing
   types Windows or a common program runs on open (`.sh` with Git for Windows, `.py` with the `py`
   launcher, `.wsb`, a theme, a disk image). Only an extension in `windowsViews` (text and code,
-  documents such as `.pdf .docx .xlsx .pptx`, pictures, sound, video, `.zip`; compared in ASCII
-  lower case) opens without asking, and so does a name with no extension (Windows asks which program);
+  `.pdf`, pictures, sound, video; compared in ASCII lower case) opens without asking. Left out, so
+  asked about: a type whose program acts on what the file says as it opens it (Office, ODF and
+  `.rtf` fetch a remote template, Excel opens `.csv`/`.tsv`, an `.xml` names the Office program, a
+  browser opens `.html .htm .svg .epub`, an interpreter may own `.lua` or `.jl`), and `.zip`, which
+  Explorer shows as a folder without the folder check below, and so does a name with no extension (Windows asks which program);
   any other, a dotfile's whole name included, asks, and so does any extension holding a byte beyond
   ASCII (Windows folds case its own way: U+017F is an S to it). A directory named like a shell object
   (an extension starting `.{`, `x.{CLSID}`) asks too. A directory, the root included, that directly
-  holds a `.url .lnk .scf .library-ms .searchconnector-ms .search-ms .website` or a `desktop.ini`
-  (any case; or more than 10000 entries, or one that cannot be read) is refused, run or not, 403
+  holds a `.url .lnk .scf .library-ms .searchconnector-ms .search-ms .website` or a `desktop.ini`,
+  or holds a subfolder (not a link) that holds a `desktop.ini`, which Explorer reads to show that
+  subfolder (any case; or more than 10000 entries across both levels, or one that cannot be read;
+  a shortcut deeper down is not shown, so not looked for) is refused, run or not, 403
   `folder_reaches`: Explorer reads their icon or the folder's settings from a location they name, a
   share on another computer among them, while it only shows the folder, sending the Windows user's
   NTLM hash there. Windows
@@ -2486,10 +2496,14 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   own) and extends the read deadline for a write. It removes `Cookie`, `Authorization`, `Origin`,
   `Referer`, `Forwarded`, every `Sec-Fetch-*`, `X-Termote-*`, `X-Forwarded-*`, `CF-Connecting-IP`,
   `X-Real-IP` and the configured proxy client header, sets `X-Termote-Role` from `requestRole` and
-  `X-Termote-Origin-Auth`, sends the escaped path to `termote.local-socket`, and drops `Set-Cookie`
-  from the answer, with `Service-Worker-Allowed`, `Clear-Site-Data`, `Refresh`, `Link` and
-  `Location` (a 3xx to a download link would navigate the tab to a page the machine picks; termote
-  redirects on no route a machine serves); every
+  `X-Termote-Origin-Auth`, sends the escaped path to `termote.local-socket`, and passes on only the
+  answer headers in `machineResponseKeep` (content type, length, disposition, encoding and range,
+  caching and validators, `Vary`, `Allow`, `Retry-After`, `Date`, the machine's own CSP and
+  `nosniff`; on a 101 only the WebSocket upgrade headers): an allow list, since every header a
+  deny list kept missing could act on this origin (`Set-Cookie`, `Service-Worker-Allowed`,
+  `Clear-Site-Data`, `NEL`/`Report-To` sending later requests' URLs to the machine's collector,
+  `WWW-Authenticate` asking for a password in this origin's name) or navigate the tab (`Refresh`,
+  `Location`: termote redirects on no route a machine serves); every
   answer but a 101 gets `Content-Security-Policy: sandbox; default-src 'none'` (plus inline style and
   `data:` images) and `nosniff`, so nothing a machine serves runs as a page of this origin. A client asks
   one machine for at most 16 stream tokens per 30 s (4 for the view role; else 429 `busy`): on the machine
@@ -2661,12 +2675,22 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `release-please.yml` starts `release.yml` with `workflow_dispatch` on the tag, never as a
   called workflow: a `workflow_call` job does not get the environment's secret (actions/runner#1490).
   The website (`deploy-website.yml`) serves `install.sh` and `install.ps1`, which pin the release
-  key, so they are the root of this trust. Its `build` job runs the site's and the PWA's
-  dependencies and uploads the built site as a plain artifact; the Pages artifact is made by
-  `package`, a job that runs no dependency code (checkout of the tag's `scripts/`, download,
-  upload): it copies the tag's installers over whatever the build left and compares them byte for
-  byte. A background process a build dependency left running cannot reach that job, since the
-  runner ends a job's processes with it. `verify` compares the served files after the deploy
+  key, so they are the root of this trust, and `/agents.md` (`server/agent-guide.md`), which
+  `llms.txt` and the install docs tell a coding agent to follow, with the install commands in it.
+  Its `build` job runs the site's and the PWA's dependencies and uploads the built site as a plain
+  artifact, naming its id as a job output. The Pages artifact is made and deployed by `deploy`, one
+  job that runs no dependency code, after the `github-pages` approval and with no wait between the
+  upload and the deploy (a sparse checkout of the tag's `scripts/` and `server/agent-guide.md`
+  without credentials, a download of the built site by id, upload, deploy): it copies those three
+  files from the tag over whatever the build left and compares them byte for byte. A background
+  process a build dependency left running cannot reach that job, since the runner ends a job's
+  processes with it; an artifact deleted and uploaded again under the same name, with a runtime
+  token such a process took, has another id and is not the one downloaded. `verify` compares the
+  three served files with the tag after the deploy.
+  The release workflow does the same for the binaries the `release` job signs: each `build` leg
+  names its artifact's id as an output of its own (`linux_amd64`, ...), and `docker` and
+  `release` download by those ids, never by name or all of the run's artifacts; an id no longer
+  found is only a warning to `download-artifact`, so `release` fails on its count of 5 archives.
 - **Git hooks** (`scripts/install-git-hooks.mjs`, `lefthook.yml`): `pnpm install` writes the
   `pre-commit` and `pre-push` hooks itself (`lefthook install` is never run, and `lefthook run` gets
   `--no-auto-install`, so lefthook never rewrites them; `lefthook.yml` sets `no_auto_install: true`

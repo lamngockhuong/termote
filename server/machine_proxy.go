@@ -330,22 +330,42 @@ func serveForwardedStream(w http.ResponseWriter, r *http.Request, proxy *httputi
 	proxy.ServeHTTP(w, r.WithContext(ctx))
 }
 
-// machineResponseDrop are headers of a machine's answer never passed on:
-// they would act on this server's origin (its cookies, its service worker,
-// its cache) on behalf of another computer, or send the browser elsewhere
-// (Refresh, Location: a download link a machine answers with a 3xx would
-// navigate the tab to a page of its choosing). termote answers no route a
-// machine serves with a redirect.
-var machineResponseDrop = []string{"Set-Cookie", "Service-Worker-Allowed", "Clear-Site-Data", "Refresh", "Link", "Location"}
+// machineResponseKeep are the headers of a machine's answer passed on, in
+// canonical form; every other one is dropped. A header can act on this
+// server's origin on behalf of another computer (Set-Cookie, a service
+// worker's scope, Clear-Site-Data, NEL and Report-To sending later requests'
+// URLs elsewhere, WWW-Authenticate asking for a password in this origin's
+// name) or send the browser elsewhere (Refresh, Location), and a list of
+// those kept missing some. termote answers no route a machine serves with
+// a redirect or a challenge.
+var machineResponseKeep = map[string]bool{
+	"Content-Type": true, "Content-Length": true, "Content-Disposition": true, "Content-Encoding": true,
+	"Content-Range": true, "Accept-Ranges": true, "Content-Security-Policy": true,
+	"Cache-Control": true, "Pragma": true, "Etag": true, "Last-Modified": true, "Vary": true,
+	"Allow": true, "Retry-After": true, "Date": true, "X-Content-Type-Options": true,
+}
+
+// machineUpgradeKeep are the headers a WebSocket upgrade answers with.
+var machineUpgradeKeep = map[string]bool{
+	"Connection": true, "Upgrade": true, "Sec-Websocket-Accept": true,
+	"Sec-Websocket-Protocol": true, "Sec-Websocket-Extensions": true, "Date": true,
+}
 
 // confineMachineResponse keeps a machine's answer from acting as a page of
-// this origin: what it serves runs sandboxed (an opaque origin, no script),
-// as this server's own downloads do, so a machine that turned hostile
-// cannot reach this server's routes or the other machines with the
-// user's cookies. A WebSocket upgrade carries no page.
+// this origin: only the headers it needs pass, and what it serves runs
+// sandboxed (an opaque origin, no script), as this server's own downloads
+// do, so a machine that turned hostile cannot reach this server's routes or
+// the other machines with the user's cookies. A WebSocket upgrade carries
+// no page.
 func confineMachineResponse(resp *http.Response) {
-	for _, k := range machineResponseDrop {
-		resp.Header.Del(k)
+	keep := machineResponseKeep
+	if resp.StatusCode == http.StatusSwitchingProtocols {
+		keep = machineUpgradeKeep
+	}
+	for k := range resp.Header {
+		if !keep[http.CanonicalHeaderKey(k)] {
+			delete(resp.Header, k)
+		}
 	}
 	if resp.StatusCode == http.StatusSwitchingProtocols {
 		return

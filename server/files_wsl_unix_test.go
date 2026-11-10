@@ -60,6 +60,9 @@ func TestWindowsReadsAsIs(t *testing.T) {
 		"/home/u/proj./x.txt":         false,
 		"/home/u/proj /x.txt":         false,
 		`/home/u/x\y`:                 false,
+		"/home/u/d\uf03a/x.txt":       false,
+		"/home/u/x.txt\uf02e":         false,
+		"/home/u/\uefff\uf100":        true,
 	} {
 		if got := windowsReadsAsIs(p); got != want {
 			t.Errorf("windowsReadsAsIs(%q) = %v, want %v", p, got, want)
@@ -101,12 +104,12 @@ func TestFilesOpenWindowsRunsProgram(t *testing.T) {
 	if n := strings.Count(logs.String(), `run="true"`); n != len(runs) {
 		t.Errorf("audit lines with run = %d:\n%s", n, logs)
 	}
-	fx.write(t, "page.html", "x")
+	fx.write(t, "page.txt", "x")
 	fx.write(t, "notes.MD", "x")
 	fx.write(t, "main.go", "x")
 	fx.write(t, "tool.cmd/inside.txt", "x")
 	fx.write(t, "cmd", "x")
-	for _, name := range []string{"page.html", "notes.MD", "main.go", "tool.cmd", "cmd"} {
+	for _, name := range []string{"page.txt", "notes.MD", "main.go", "tool.cmd", "cmd"} {
 		*calls = nil
 		if res := fx.open(openWindowsRequest{Path: name}, full); res.StatusCode != 200 || len(*calls) != 1 {
 			t.Errorf("%s = %d, ran %q", name, res.StatusCode, *calls)
@@ -157,13 +160,20 @@ func TestFilesOpenWindowsFolders(t *testing.T) {
 			t.Errorf("%s ran %q", dir, *calls)
 		}
 	}
-	// Only what is directly in it counts: the root holds folders, not shortcuts.
-	if res := fx.open(openWindowsRequest{Path: "."}, full); res.StatusCode != 200 {
-		t.Errorf("root = %d %s", res.StatusCode, errorCode(t, res))
+	// A subfolder counts for its desktop.ini only, which Explorer reads to
+	// show it; a shortcut in it is not shown, nor is anything deeper.
+	fx.write(t, "n/a/b/desktop.ini", "x")
+	fx.write(t, "n/a/icon.url", "x")
+	if res := fx.open(openWindowsRequest{Path: "n"}, full); res.StatusCode != 200 {
+		t.Errorf("folder over nested shortcuts = %d %s", res.StatusCode, errorCode(t, res))
 	}
-	fx.write(t, "top.url", "x")
+	fx.write(t, "n/c/Desktop.INI", "x")
+	if res := fx.open(openWindowsRequest{Path: "n"}, full); res.StatusCode != 403 || errorCode(t, res) != "folder_reaches" {
+		t.Errorf("folder over a subfolder's desktop.ini = %d", res.StatusCode)
+	}
+	// The root holds d-desktop-ini, whose desktop.ini Explorer reads.
 	if res := fx.open(openWindowsRequest{Path: "."}, full); res.StatusCode != 403 || errorCode(t, res) != "folder_reaches" {
-		t.Errorf("root with a shortcut = %d", res.StatusCode)
+		t.Errorf("root over a subfolder's desktop.ini = %d", res.StatusCode)
 	}
 }
 
@@ -172,6 +182,8 @@ func TestWindowsMayRun(t *testing.T) {
 		"a.txt": false, "a.TXT": false, "dir/a.md": false, "Makefile": false, "a.pdf": false,
 		"a.cmd": true, "a.sh": true, "a.py": true, "a.vb\u017f": true, "a.t\u00e9xt": true,
 		".bashrc": true, "a.": true,
+		"a.docx": true, "a.rtf": true, "a.xml": true, "a.html": true, "a.svg": true, "a.lua": true,
+		"a.jl": true, "a.csv": true, "a.epub": true, "a.zip": true,
 	} {
 		if got := windowsMayRun(name); got != want {
 			t.Errorf("windowsMayRun(%q) = %v", name, got)

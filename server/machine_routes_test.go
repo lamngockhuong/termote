@@ -208,27 +208,45 @@ func TestStreamHubShutdownLinkedTimeout(t *testing.T) {
 	}
 }
 
-// A machine's answer never acts on this origin: sandboxed, no cookie,
-// service worker scope, site data clearing, refresh or redirect.
+// A machine's answer never acts on this origin: sandboxed, and only the
+// headers a page of it needs pass (no cookie, service worker scope, site
+// data clearing, reporting, challenge, refresh or redirect).
 func TestConfineMachineResponse(t *testing.T) {
+	drop := []string{"Set-Cookie", "Service-Worker-Allowed", "Clear-Site-Data", "Refresh", "Link",
+		"Location", "NEL", "Report-To", "Reporting-Endpoints", "WWW-Authenticate", "Strict-Transport-Security",
+		"X-Anything"}
 	resp := &http.Response{StatusCode: http.StatusOK, Header: http.Header{}}
-	for _, k := range machineResponseDrop {
+	for _, k := range drop {
 		resp.Header.Set(k, "x")
 	}
+	resp.Header["nel"] = []string{"x"} // not canonical
 	resp.Header.Set("Content-Type", "text/html")
+	resp.Header.Set("Content-Disposition", "attachment")
+	resp.Header.Set("ETag", `"1"`)
 	confineMachineResponse(resp)
-	for _, k := range machineResponseDrop {
-		if resp.Header.Get(k) != "" {
+	for _, k := range append(drop, "nel") {
+		if len(resp.Header[k]) != 0 || resp.Header.Get(k) != "" {
 			t.Errorf("%s passed on", k)
+		}
+	}
+	for _, k := range []string{"Content-Type", "Content-Disposition", "ETag"} {
+		if resp.Header.Get(k) == "" {
+			t.Errorf("%s dropped", k)
 		}
 	}
 	if !strings.HasPrefix(resp.Header.Get("Content-Security-Policy"), "sandbox") || resp.Header.Get("X-Content-Type-Options") != "nosniff" {
 		t.Errorf("not confined: %v", resp.Header)
 	}
-	up := &http.Response{StatusCode: http.StatusSwitchingProtocols, Header: http.Header{"Set-Cookie": {"a"}}}
+	up := &http.Response{StatusCode: http.StatusSwitchingProtocols, Header: http.Header{
+		"Set-Cookie": {"a"}, "Nel": {"x"}, "Connection": {"Upgrade"}, "Upgrade": {"websocket"},
+		"Sec-Websocket-Accept": {"k"},
+	}}
 	confineMachineResponse(up)
-	if up.Header.Get("Set-Cookie") != "" || up.Header.Get("Content-Security-Policy") != "" {
+	if up.Header.Get("Set-Cookie") != "" || up.Header.Get("Nel") != "" || up.Header.Get("Content-Security-Policy") != "" {
 		t.Errorf("upgrade: %v", up.Header)
+	}
+	if up.Header.Get("Upgrade") != "websocket" || up.Header.Get("Sec-Websocket-Accept") != "k" {
+		t.Errorf("upgrade headers dropped: %v", up.Header)
 	}
 }
 

@@ -258,7 +258,7 @@ func (g *gitRunner) argv(c gitCall, o repoOverrides, hooksDir string, args []str
 func (g *gitRunner) repoOverrides(ctx context.Context, c gitCall) (repoOverrides, error) {
 	// The result is shared: it must not fail because the first caller left.
 	ctx = context.WithoutCancel(ctx)
-	return g.overrides.do(c.root+"\x00"+c.safeDir, func() (repoOverrides, error) {
+	load := func() (repoOverrides, error) {
 		out, _, err := g.exec(ctx, gitCall{root: c.root, safeDir: c.safeDir, limit: 1 << 20},
 			repoOverrides{}, "config", "-z", "--name-only", "--get-regexp", `^(filter|hook)\.`)
 		var ee *exec.ExitError
@@ -269,7 +269,15 @@ func (g *gitRunner) repoOverrides(ctx context.Context, c gitCall) (repoOverrides
 			return repoOverrides{}, err
 		}
 		return parseRepoOverrides(out)
-	})
+	}
+	// A command that would run a filter or a hook reads the list afresh: a
+	// config include can name a file a checkout has just written (a new
+	// worktree's branch, a branch switched to), and a list read before it
+	// would leave that file's filter on for as long as it is cached.
+	if c.noFilters || c.write {
+		return load()
+	}
+	return g.overrides.do(c.root+"\x00"+c.safeDir, load)
 }
 
 // parseRepoOverrides takes `git config -z --name-only` output: keys like
