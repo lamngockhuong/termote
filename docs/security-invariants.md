@@ -2672,12 +2672,22 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `release-please.yml` starts `release.yml` with `workflow_dispatch` on the tag, never as a
   called workflow: a `workflow_call` job does not get the environment's secret (actions/runner#1490).
   The website (`deploy-website.yml`) serves `install.sh` and `install.ps1`, which pin the release
-  key, so they are the root of this trust. Its `build` job runs the site's and the PWA's
-  dependencies and uploads the built site as a plain artifact; the Pages artifact is made by
-  `package`, a job that runs no dependency code (checkout of the tag's `scripts/`, download,
-  upload): it copies the tag's installers over whatever the build left and compares them byte for
-  byte. A background process a build dependency left running cannot reach that job, since the
-  runner ends a job's processes with it. `verify` compares the served files after the deploy
+  key, so they are the root of this trust, and `/agents.md` (`server/agent-guide.md`), which
+  `llms.txt` and the install docs tell a coding agent to follow, with the install commands in it.
+  Its `build` job runs the site's and the PWA's dependencies and uploads the built site as a plain
+  artifact, naming its id as a job output. The Pages artifact is made and deployed by `deploy`, one
+  job that runs no dependency code, after the `github-pages` approval and with no wait between the
+  upload and the deploy (a sparse checkout of the tag's `scripts/` and `server/agent-guide.md`
+  without credentials, a download of the built site by id, upload, deploy): it copies those three
+  files from the tag over whatever the build left and compares them byte for byte. A background
+  process a build dependency left running cannot reach that job, since the runner ends a job's
+  processes with it; an artifact deleted and uploaded again under the same name, with a runtime
+  token such a process took, has another id and is not the one downloaded. `verify` compares the
+  three served files with the tag after the deploy.
+  The release workflow does the same for the binaries the `release` job signs: each `build` leg
+  names its artifact's id as an output of its own (`linux_amd64`, ...), and `docker` and
+  `release` download by those ids, never by name or all of the run's artifacts; an id no longer
+  found is only a warning to `download-artifact`, so `release` fails on its count of 5 archives.
 - **Git hooks** (`scripts/install-git-hooks.mjs`, `lefthook.yml`): `pnpm install` writes the
   `pre-commit` and `pre-push` hooks itself (`lefthook install` is never run, and `lefthook run` gets
   `--no-auto-install`, so lefthook never rewrites them; `lefthook.yml` sets `no_auto_install: true`

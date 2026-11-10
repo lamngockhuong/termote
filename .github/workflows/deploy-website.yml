@@ -14,7 +14,8 @@ on:
   workflow_dispatch:
 
 # Only the deploy job may publish: build runs the site's dependencies, and
-# package, which runs none, makes the Pages artifact with the tag's installers.
+# deploy, which runs none, makes the Pages artifact with the tag's installers
+# and agent guide.
 permissions:
   contents: read
 
@@ -84,9 +85,10 @@ jobs:
           done
 
       # Not the Pages artifact yet: a process the build's dependencies left
-      # running could still rewrite dist after the check above. package
+      # running could still rewrite dist after the check above. deploy
       # makes the Pages artifact in a job that runs none of their code.
       - name: Upload the built site
+        id: site
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: site
@@ -94,31 +96,58 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
-  # The Pages artifact, made where no dependency code runs: the installers
-  # people pipe into a shell are copied from the tag over whatever the build
-  # left, then checked byte for byte once more.
-  package:
+      - name: Name the site artifact's id
+        id: artifact
+        env:
+          ID: ${{ steps.site.outputs.artifact-id }}
+        run: |
+          case "$ID" in ''|*[!0-9]*) echo "::error::no artifact id from the upload"; exit 1 ;; esac
+          echo "site=$ID" >> "$GITHUB_OUTPUT"
+    outputs:
+      site: ${{ steps.artifact.outputs.site }}
+
+  # The Pages artifact is made and deployed in this one job, after the
+  # environment's approval and with no wait between the two: the files people
+  # pipe into a shell or hand to a coding agent are copied from the tag over
+  # whatever the build left, and checked byte for byte once more. The built
+  # site is downloaded by id, so one deleted and uploaded again under its name
+  # (with a runtime token a build dependency took) is not the one read; no
+  # code of a dependency runs here.
+  deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Checkout the installers
+      - name: Checkout the files taken from the tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.tag || github.ref }}
-          sparse-checkout: scripts
+          persist-credentials: false
+          sparse-checkout: |
+            scripts
+            server/agent-guide.md
           path: src
 
       - name: Download the built site
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: site
+          artifact-ids: ${{ needs.build.outputs.site }}
           path: site
 
-      - name: Put the tag's installers in
+      # The agent guide is what llms.txt and the install docs tell a coding
+      # agent to follow, with the install commands in it.
+      - name: Put the tag's installers and agent guide in
         run: |
-          for f in install.sh install.ps1; do
-            cp "src/scripts/$f" "site/$f"
-            cmp "src/scripts/$f" "site/$f"
+          for pair in scripts/install.sh:install.sh scripts/install.ps1:install.ps1 server/agent-guide.md:agents.md; do
+            from="src/${pair%%:*}" to="site/${pair#*:}"
+            cp "$from" "$to"
+            cmp "$from" "$to"
           done
 
       - name: Upload artifact
@@ -126,22 +155,12 @@ jobs:
         with:
           path: site
 
-  deploy:
-    needs: package
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
 
-  # The installers people pipe into a shell must be byte for byte the ones in
-  # the tag, served as text (not an HTML error page).
+  # The installers people pipe into a shell, and the guide a coding agent
+  # follows, must be byte for byte the ones in the tag, served as text (not an HTML error page).
   verify:
     needs: deploy
     runs-on: ubuntu-latest
@@ -150,17 +169,17 @@ jobs:
         with:
           ref: ${{ inputs.tag || github.ref }}
 
-      - name: Check the served installers
+      - name: Check the served installers and agent guide
         run: |
-          for f in install.sh install.ps1; do
-            url="https://termote.ohnice.app/$f"
+          for pair in scripts/install.sh:install.sh scripts/install.ps1:install.ps1 server/agent-guide.md:agents.md; do
+            src=${pair%%:*} url="https://termote.ohnice.app/${pair#*:}"
             # The Pages CDN may keep the old file for up to 10 minutes.
             for i in $(seq 1 24); do
               curl -fsSL -H 'Cache-Control: no-cache' -D headers.txt -o served "$url?deploy=${GITHUB_RUN_ID}" &&
-                cmp -s served "scripts/$f" && break
+                cmp -s served "$src" && break
               echo "waiting for $url to serve the new file..."; sleep 30
             done
-            cmp served "scripts/$f" || { echo "::error::$url differs from scripts/$f"; exit 1; }
+            cmp served "$src" || { echo "::error::$url differs from $src"; exit 1; }
             grep -qi '^content-type: *\(text/\|application/octet-stream\|application/x-sh\)' headers.txt ||
               { echo "::error::$url is not served as text: $(grep -i '^content-type' headers.txt)"; exit 1; }
           done
