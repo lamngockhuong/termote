@@ -513,9 +513,10 @@ func dialogSig(rows []screenLine) string {
 }
 
 // blockCountdownRe is the row Claude Code (2.1.321) draws above the question
-// of a dialog it refuses by itself when nobody answers in time. A narrow pane
+// of a dialog it refuses by itself when nobody answers in time (auto mode): the
+// time as "0:35", or "about 35 seconds" / "about 2 minutes". A narrow pane
 // wraps it, so the rows are matched joined.
-var blockCountdownRe = regexp.MustCompile(`^(?:⚠\x{FE0F}?\s*)?Claude Code will automatically block this request in \d+:\d{2}, to avoid holding up an unattended session$`)
+var blockCountdownRe = regexp.MustCompile(`^(?:⚠\x{FE0F}?\s*)?Claude Code will automatically block this request in (?:\d+:\d{2}|about \d+ (?:second|minute)s?), to avoid holding up an unattended session$`)
 
 // withoutBlockCountdown returns rows without Claude Code's countdown to
 // refusing the dialog. Its time changes every second: left in, each poll would

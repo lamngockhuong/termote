@@ -956,6 +956,10 @@ func TestBlockCountdownIsNotPartOfTheDialog(t *testing.T) {
 		" ⚠ Claude Code will automatically block this request in 0:35, to avoid holding up an unattended session",
 		" ⚠ Claude Code will automatically block this request in 0:34, to avoid holding up an unattended session",
 		" ⚠️ Claude Code will automatically block this request in 1:00, to avoid holding up an unattended session",
+		// Claude Code's other wording of the time.
+		" ⚠ Claude Code will automatically block this request in about 35 seconds, to avoid holding up an unattended session",
+		" ⚠ Claude Code will automatically block this request in about 1 second, to avoid holding up an unattended session",
+		" ⚠ Claude Code will automatically block this request in about 2 minutes, to avoid holding up an unattended session",
 		// A narrow pane wraps it.
 		" ⚠ Claude Code will automatically block this request in 0:09, to\n avoid holding up an unattended\n session",
 	} {
