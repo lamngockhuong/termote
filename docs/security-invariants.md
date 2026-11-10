@@ -2493,10 +2493,14 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   own) and extends the read deadline for a write. It removes `Cookie`, `Authorization`, `Origin`,
   `Referer`, `Forwarded`, every `Sec-Fetch-*`, `X-Termote-*`, `X-Forwarded-*`, `CF-Connecting-IP`,
   `X-Real-IP` and the configured proxy client header, sets `X-Termote-Role` from `requestRole` and
-  `X-Termote-Origin-Auth`, sends the escaped path to `termote.local-socket`, and drops `Set-Cookie`
-  from the answer, with `Service-Worker-Allowed`, `Clear-Site-Data`, `Refresh`, `Link` and
-  `Location` (a 3xx to a download link would navigate the tab to a page the machine picks; termote
-  redirects on no route a machine serves); every
+  `X-Termote-Origin-Auth`, sends the escaped path to `termote.local-socket`, and passes on only the
+  answer headers in `machineResponseKeep` (content type, length, disposition, encoding and range,
+  caching and validators, `Vary`, `Allow`, `Retry-After`, `Date`, the machine's own CSP and
+  `nosniff`; on a 101 only the WebSocket upgrade headers): an allow list, since every header a
+  deny list kept missing could act on this origin (`Set-Cookie`, `Service-Worker-Allowed`,
+  `Clear-Site-Data`, `NEL`/`Report-To` sending later requests' URLs to the machine's collector,
+  `WWW-Authenticate` asking for a password in this origin's name) or navigate the tab (`Refresh`,
+  `Location`: termote redirects on no route a machine serves); every
   answer but a 101 gets `Content-Security-Policy: sandbox; default-src 'none'` (plus inline style and
   `data:` images) and `nosniff`, so nothing a machine serves runs as a page of this origin. A client asks
   one machine for at most 16 stream tokens per 30 s (4 for the view role; else 429 `busy`): on the machine
