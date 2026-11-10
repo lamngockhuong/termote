@@ -1120,7 +1120,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   relative `core.hooksPath` against the worktree, where a repository can ship
   `NUL/post-index-change`. Neither reaches a hook defined in config: every `hook.<name>.*` the config
   lists, includes followed, gets `-c hook.<name>.enabled=false` on every command, looked up in
-  the same `git config` call as the filter drivers; a name `-c` cannot carry (`=`, a line break)
+  the same `git config` call as the filter drivers. That call is cached per root for 2 s, except
+  for a command that could run a filter or a hook (`noFilters`, `write`), which reads it afresh:
+  an include can name a file a checkout has just written (a new worktree's branch), and a list
+  read before it would leave that file's filter on. A name `-c` cannot carry (`=`, a line break)
   fails the command, `errUnsafeRepoConfig`, and a config git cannot read fails it with git's own
   error), index refresh on diff,
   fsmonitor, filter drivers, external diff and textconv off,

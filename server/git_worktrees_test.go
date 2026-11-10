@@ -375,3 +375,43 @@ func TestGitWorktreeIncludeIfFilter(t *testing.T) {
 		t.Errorf("worktree still there: %v", err)
 	}
 }
+
+// A config include naming a file the new worktree's branch checks out
+// defines its filter only once the checkout wrote that file: a filters-off
+// status right after the create must read the list afresh, not the one
+// cached while the worktree was still empty.
+func TestGitWorktreeIncludedFilterAfterCheckout(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no worktrees from git on Windows")
+	}
+	repo := worktreeRepo(t)
+	mark := filepath.Join(tempDirReal(t), "clean")
+	path := filepath.Join(tempDirReal(t), "w", "repo", "feat-x")
+	user := []string{"-c", "user.name=t", "-c", "user.email=t@t"}
+	gitIn(t, repo, "checkout", "-q", "-b", "feat/x")
+	for name, body := range map[string]string{".gitattributes": "*.txt filter=x\n", "a.txt": "hello\n"} {
+		if err := os.WriteFile(filepath.Join(repo, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	gitIn(t, repo, "config", "-f", filepath.Join(repo, "x.cfg"), "filter.x.clean",
+		"touch '"+filepath.ToSlash(mark)+"'; cat")
+	gitIn(t, repo, "add", ".gitattributes", "a.txt", "x.cfg")
+	gitIn(t, repo, append(user, "commit", "-q", "-m", "included filter")...)
+	gitIn(t, repo, "checkout", "-q", "main")
+	gitIn(t, repo, "config", "include.path", filepath.Join(path, "x.cfg"))
+
+	rr := newTestRoots()
+	ctx := context.Background()
+	src := mustRepoInfo(t, rr, repo)
+	if err := addWorktree(ctx, rr.git, src, path, "feat/x", "", true); err != nil {
+		t.Fatal(err)
+	}
+	c := gitCall{root: path, safeDir: src.SafeDir, noFilters: true}
+	if _, _, err := rr.git.output(ctx, c, "status", "--porcelain"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(mark); err == nil {
+		t.Error("the included clean filter ran on the first status after the create")
+	}
+}
