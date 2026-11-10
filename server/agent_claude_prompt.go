@@ -190,6 +190,9 @@ type AgentPrompt struct {
 	// FreeText is the question's "Type something" option, empty and ready
 	// to take an answer typed on the client.
 	FreeText *PromptFreeText `json:"freeText,omitempty"`
+	// AutoBlock: Claude Code counts down to refusing the dialog by itself
+	// when nobody answers it. The time is left out (it changes every second).
+	AutoBlock bool `json:"autoBlock,omitempty"`
 	// moveThenEnter: a question whose options have previews. A digit only
 	// moves the pointer there; Enter picks the option under it.
 	moveThenEnter bool
@@ -496,6 +499,7 @@ func findSubmitTab(lines []screenLine) agentScreen {
 // the pointer, so moving the pointer is the same dialog. The open tab is part
 // of it: two tabs can read the same.
 func dialogSig(rows []screenLine) string {
+	rows, _ = withoutBlockCountdown(rows)
 	h := sha256.New()
 	for _, l := range rows {
 		h.Write([]byte(strings.TrimRight(strings.ReplaceAll(l.text, "❯", " "), " ")))
@@ -508,7 +512,62 @@ func dialogSig(rows []screenLine) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
+// blockCountdownRe is the row Claude Code (2.1.321) draws above the question
+// of a dialog it refuses by itself when nobody answers in time (auto mode): the
+// time as "0:35", or "about 35 seconds" / "about 2 minutes". A narrow pane
+// wraps it, so the rows are matched joined.
+var blockCountdownRe = regexp.MustCompile(`^(?:⚠\x{FE0F}?\s*)?Claude Code will automatically block this request in (?:\d+:\d{2}|about \d+ (?:second|minute)s?), to avoid holding up an unattended session$`)
+
+// withoutBlockCountdown returns rows without Claude Code's countdown to
+// refusing the dialog. Its time changes every second: left in, each poll would
+// read another dialog, so the promptId a client holds is refused as changed
+// before it can be answered and the card is drawn anew (its scroll back at the
+// top). Only the countdown right above the question is dropped, never a row of
+// the command that reads the same, which the card must show. found reports a countdown dropped.
+func withoutBlockCountdown(rows []screenLine) (kept []screenLine, found bool) {
+	for i, l := range rows {
+		if !strings.Contains(l.text, "Claude Code will automatically block") {
+			continue
+		}
+		joined := strings.TrimSpace(l.text)
+		for end := i; end < len(rows) && end < i+4; end++ {
+			if end > i {
+				joined += " " + strings.TrimSpace(rows[end].text)
+			}
+			if blockCountdownRe.MatchString(joined) && questionNext(rows[end+1:]) {
+				return append(append([]screenLine(nil), rows[:i]...), rows[end+1:]...), true
+			}
+		}
+		return rows, false
+	}
+	return rows, false
+}
+
+// questionNext reports whether rows hold one blank row or more, the question
+// of a dialog (up to three rows, the last ending in "?") and then its first
+// option.
+func questionNext(rows []screenLine) bool {
+	var question []string
+	for i, l := range rows {
+		t := strings.TrimSpace(l.text)
+		switch {
+		case t == "" && len(question) == 0:
+		case i == 0:
+			return false
+		case optionRowRe.MatchString(t):
+			n := len(question)
+			return n > 0 && strings.HasSuffix(question[n-1], "?") && optionRowRe.FindStringSubmatch(t)[1] == "1"
+		case t == "" || isBareRule(t) || isDashedRule(t) || len(question) == 3:
+			return false
+		default:
+			question = append(question, t)
+		}
+	}
+	return false
+}
+
 func parseDialog(region []screenLine, preview bool) *AgentPrompt {
+	region, autoBlock := withoutBlockCountdown(region)
 	type opt struct {
 		PromptOption
 		row     int
@@ -575,7 +634,7 @@ func parseDialog(region []screenLine, preview bool) *AgentPrompt {
 			head = append(head, t)
 		}
 	}
-	p := &AgentPrompt{Kind: "unsupported", Steps: steps}
+	p := &AgentPrompt{Kind: "unsupported", Steps: steps, AutoBlock: autoBlock}
 	// The body and option details are kept whole, never cut: the card must
 	// show all a dialog asks before it is answered. The dialog search bounds
 	// them (claudeMaxDialogRows).

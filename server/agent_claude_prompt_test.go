@@ -934,3 +934,75 @@ func TestReadClaudeScreenCutPermission(t *testing.T) {
 		}
 	})
 }
+
+func TestBlockCountdownIsNotPartOfTheDialog(t *testing.T) {
+	b, err := os.ReadFile("testdata/claude/screens/2.1.286-permission-bash.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const question = "\x1b[39m Do you want to proceed?"
+	if !strings.Contains(string(b), question) {
+		t.Fatal("fixture changed")
+	}
+	countdown := func(rows string) string {
+		return strings.Replace(string(b), question, "\x1b[38;5;220m"+rows+"\x1b[39m\n\n\n"+question, 1)
+	}
+	plain := readClaudeScreen(string(b))
+	if plain.prompt == nil || plain.prompt.Kind != "permission" || plain.prompt.AutoBlock {
+		t.Fatalf("%+v", plain)
+	}
+	first := readClaudeScreen(countdown(" ⚠ Claude Code will automatically block this request in 0:36, to avoid holding up an unattended session"))
+	for _, rows := range []string{
+		" ⚠ Claude Code will automatically block this request in 0:35, to avoid holding up an unattended session",
+		" ⚠ Claude Code will automatically block this request in 0:34, to avoid holding up an unattended session",
+		" ⚠️ Claude Code will automatically block this request in 1:00, to avoid holding up an unattended session",
+		// Claude Code's other wording of the time.
+		" ⚠ Claude Code will automatically block this request in about 35 seconds, to avoid holding up an unattended session",
+		" ⚠ Claude Code will automatically block this request in about 1 second, to avoid holding up an unattended session",
+		" ⚠ Claude Code will automatically block this request in about 2 minutes, to avoid holding up an unattended session",
+		// A narrow pane wraps it.
+		" ⚠ Claude Code will automatically block this request in 0:09, to\n avoid holding up an unattended\n session",
+	} {
+		sc := readClaudeScreen(countdown(rows))
+		if sc.prompt == nil || sc.prompt.Kind != "permission" || !sc.prompt.AutoBlock {
+			t.Fatalf("%q: %+v", rows, sc)
+		}
+		// The same dialog every second: a promptId stays answerable and the
+		// card keeps its scroll.
+		if sc.prompt.Body != plain.prompt.Body || sc.prompt.Title != plain.prompt.Title || labels(sc.prompt) != labels(plain.prompt) {
+			t.Errorf("%q: body changed: %q", rows, sc.prompt.Body)
+		}
+		if !strings.Contains(rows, "\n") && sc.sig != first.sig {
+			t.Errorf("%q: signature changed", rows)
+		}
+	}
+
+	t.Run("the same words in the command are shown", func(t *testing.T) {
+		row := "Claude Code will automatically block this request in 0:35, to avoid holding up an unattended session"
+		s := strings.Replace(string(b), "\x1b[39m touch scratch-one.txt", "\x1b[39m touch scratch-one.txt\n "+row, 1)
+		sc := readClaudeScreen(s)
+		if sc.prompt == nil || !strings.Contains(sc.prompt.Body, row) || sc.sig == plain.sig || sc.prompt.AutoBlock {
+			t.Errorf("%+v", sc.prompt)
+		}
+	})
+	t.Run("not right above the question", func(t *testing.T) {
+		rows := []screenLine{
+			{text: " ⚠ Claude Code will automatically block this request in 0:35, to avoid holding up an unattended session"},
+			{text: " echo hi"},
+			{text: " Do you want to proceed?"},
+			{text: " ❯ 1. Yes"},
+		}
+		if got, found := withoutBlockCountdown(rows); len(got) != len(rows) || found {
+			t.Errorf("dropped: %+v", got)
+		}
+		rows[1] = screenLine{text: ""}
+		rows[3] = screenLine{text: "   2. No"}
+		if got, found := withoutBlockCountdown(rows); len(got) != len(rows) || found {
+			t.Errorf("dropped above option 2: %+v", got)
+		}
+		rows[3] = screenLine{text: " ❯ 1. Yes"}
+		if got, found := withoutBlockCountdown(rows); len(got) != 3 || !found {
+			t.Errorf("kept: %+v", got)
+		}
+	})
+}

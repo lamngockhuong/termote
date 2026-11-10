@@ -226,6 +226,24 @@ describe('PromptCard', () => {
     expect(screen.getByText(shown)).toBeInTheDocument()
   })
 
+  it('says when Claude Code blocks the request by itself', () => {
+    const text =
+      'Claude Code blocks this request by itself if it is not answered soon.'
+    const { rerender } = renderCard(permission)
+    expect(screen.queryByText(text)).not.toBeInTheDocument()
+    rerender(
+      <PromptCard
+        paneId="%3"
+        agentName="claude"
+        prompt={{ ...permission, autoBlock: true }}
+        showView={showView}
+        onAnswered={onAnswered}
+        onChanged={onChanged}
+      />,
+    )
+    expect(screen.getByText(text)).toBeInTheDocument()
+  })
+
   it('every card has the way to the terminal', () => {
     renderCard(permission)
     fireEvent.click(screen.getByRole('button', { name: 'Open terminal' }))

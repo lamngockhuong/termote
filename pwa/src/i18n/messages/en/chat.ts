@@ -309,6 +309,8 @@ export default {
   'chat.prompt.asking': '{agent} is asking',
   'chat.prompt.readWhole': 'Read the whole dialog to answer.',
   'chat.prompt.inTerminal': 'Answer this dialog in the terminal.',
+  'chat.prompt.autoBlock':
+    'Claude Code blocks this request by itself if it is not answered soon.',
   'chat.prompt.cancelEsc': 'Cancel (Esc)',
   'chat.prompt.sent': 'Answer sent…',
   'chat.prompt.waitingFor': 'Waiting for {agent}…',

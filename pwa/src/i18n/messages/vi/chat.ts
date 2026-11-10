@@ -295,6 +295,8 @@ export default {
   'chat.prompt.asking': '{agent} đang hỏi',
   'chat.prompt.readWhole': 'Đọc hết hộp thoại rồi mới trả lời được.',
   'chat.prompt.inTerminal': 'Hãy trả lời hộp thoại này trong terminal.',
+  'chat.prompt.autoBlock':
+    'Claude Code sẽ tự chặn yêu cầu này nếu không được trả lời sớm.',
   'chat.prompt.cancelEsc': 'Hủy (Esc)',
   'chat.prompt.sent': 'Đã gửi câu trả lời…',
   'chat.prompt.waitingFor': 'Đang chờ {agent}…',

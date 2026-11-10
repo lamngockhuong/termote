@@ -787,7 +787,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   single-use `promptId`). The dialog card shows every text it reads off the screen (title, body,
   option labels and details, tab labels) with its hidden characters as `⟨U+XXXX⟩` (`visibleUnsafe`,
   the body keeping its line breaks), so a bidi override in a proposed command cannot make it read as
-  another one before the user approves it. A Claude Code dialog taller than the pane, its top
+  another one before the user approves it. The one row left out is Claude Code's countdown to refusing
+  the dialog by itself (`withoutBlockCountdown`: its exact wording, followed by a blank row, the question and
+  option 1), whose time would make every poll another dialog: the card states it without the time
+  (`autoBlock`); the same words inside a command are kept and shown. A Claude Code dialog taller than the pane, its top
   edge off the screen, is answerable only as a `permission` dialog (`findCutDialog`: no rule at
   column 0 above the footer), its body opening with a `…` row so the card never passes a command's
   visible tail for the whole of it. A box that already holds this very message as text (an earlier send
