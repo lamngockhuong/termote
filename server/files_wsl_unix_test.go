@@ -75,7 +75,8 @@ func TestFilesOpenWindowsRunsProgram(t *testing.T) {
 	full := &authInfo{Kind: authSession, Role: roleFull}
 	runs := []string{
 		"probe.cmd", "probe.BAT", "x.js", "x.lnk", "x.ps1", "x.hta", "x.url",
-		"x.appref-ms", "x.settingcontent-ms",
+		"x.appref-ms", "x.settingcontent-ms", "help.CHM", "x.msix", "x.appinstaller",
+		"x.diagcab", "x.library-ms", "x.searchconnector-ms", "x.xll", "x.sct", "x.jnlp",
 	}
 	for _, name := range runs {
 		fx.write(t, name, "x")

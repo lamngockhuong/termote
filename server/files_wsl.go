@@ -26,13 +26,19 @@ var (
 )
 
 // windowsRuns: the extensions, lowercase, of a file Windows runs as a
-// program (or hands to one that runs what it says) when it opens it.
+// program (or hands to one that runs what it says, an installer or a help
+// file that runs script) when it opens it, or that points Explorer at a
+// location of the file's choosing (a library, a search connector).
 var windowsRuns = map[string]bool{
 	".bat": true, ".cmd": true, ".com": true, ".exe": true, ".msi": true, ".msp": true,
-	".ps1": true, ".psm1": true, ".vbs": true, ".vbe": true, ".js": true, ".jse": true,
-	".wsf": true, ".wsh": true, ".hta": true, ".lnk": true, ".url": true, ".scr": true,
-	".pif": true, ".cpl": true, ".reg": true, ".msc": true, ".jar": true, ".appref-ms": true,
-	".application": true, ".scf": true, ".inf": true, ".settingcontent-ms": true,
+	".ps1": true, ".psm1": true, ".psc1": true, ".vbs": true, ".vbe": true, ".vb": true,
+	".js": true, ".jse": true, ".wsf": true, ".wsh": true, ".ws": true, ".wsc": true,
+	".sct": true, ".hta": true, ".chm": true, ".lnk": true, ".url": true, ".scr": true,
+	".pif": true, ".cpl": true, ".reg": true, ".msc": true, ".jar": true, ".jnlp": true,
+	".appref-ms": true, ".application": true, ".appx": true, ".appxbundle": true,
+	".msix": true, ".msixbundle": true, ".appinstaller": true, ".diagcab": true,
+	".xll": true, ".gadget": true, ".scf": true, ".inf": true, ".settingcontent-ms": true,
+	".library-ms": true, ".search-ms": true, ".searchconnector-ms": true,
 }
 
 // windowsReadsAsIs: Windows names the Linux path p as the same file. A `\`

@@ -1857,9 +1857,13 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   swapped directory → 403 `symlink`, missing → 404), the entry's `Lstat` (symlink/junction → 403
   `symlink`; only a regular file or a directory, else 400 `not_file`), a sensitive name without
   `reveal` → 403 `sensitive`, a regular file whose extension (any case) Windows runs as a program
-  without `run: true` → 403 `runs_program`: `.bat .cmd .com .exe .msi .msp .ps1 .psm1 .vbs .vbe .js
-  .jse .wsf .wsh .hta .lnk .url .scr .pif .cpl .reg .msc .jar .appref-ms .application .scf .inf
-  .settingcontent-ms` (`windowsRuns`; a directory and any other extension open as before). Windows
+  without `run: true` → 403 `runs_program`: `.bat .cmd .com .exe .msi .msp .ps1 .psm1 .psc1 .vbs
+  .vbe .vb .js .jse .wsf .wsh .ws .wsc .sct .hta .chm .lnk .url .scr .pif .cpl .reg .msc .jar .jnlp
+  .appref-ms .application .appx .appxbundle .msix .msixbundle .appinstaller .diagcab .xll .gadget
+  .scf .inf .settingcontent-ms .library-ms .search-ms .searchconnector-ms` (`windowsRuns`: a
+  program, a file handed to one that runs what it says (an installer, a help file with script), or
+  one that points Explorer at a location it names; a directory and any other extension open as
+  before). Windows
   asks before such a file only when its zone says so (on the machine checked, a `.cmd` under
   `\\wsl.localhost` was asked about, one under `/mnt/c` ran at once), so termote asks itself. The Windows path is built from the absolute
   path (`/mnt/<x>/…` → `X:\…`, else the distribution's share from `wslpath -w /`) and refused (400
