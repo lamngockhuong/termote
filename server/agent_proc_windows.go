@@ -17,7 +17,7 @@ const agentProcSupported = true
 // found in the system handle table (procWriteFiles). Every step fails
 // closed: a Codex run elevated or by another user cannot be opened, an
 // unreadable command line or a rollout off a drive letter is no Codex, and
-// CODEX_HOME is the server user's %USERPROFILE%\.codex only (procCodexHome).
+// CODEX_HOME is read from its environment block (procCodexHome).
 const codexProcSupported = true
 
 // procCmdLineMax caps the command line read: 32767 UTF-16 characters plus
@@ -75,16 +75,9 @@ func procArgs(pid int) []string {
 	return nil
 }
 
-// procCodexHome is %USERPROFILE%\.codex of the user running the server, as
-// procClaudeDir: another process's environment lives in its PEB, which is
-// not read here, so a CODEX_HOME set only inside the pane gives no Chat view.
-func procCodexHome(int) (string, bool) {
-	home, err := os.UserHomeDir()
-	if err != nil || !filepath.IsAbs(home) {
-		return "", false
-	}
-	return filepath.Join(home, ".codex"), true
-}
+// procCodexHome reads CODEX_HOME from the process's environment block, else
+// %USERPROFILE%\.codex of the user running the server (procConfigDir).
+func procCodexHome(pid int) (string, bool) { return procConfigDir(pid, "CODEX_HOME", ".codex") }
 
 // toolhelpProcesses calls fn with the pid and parent pid of every process,
 // from one Toolhelp32 snapshot.
@@ -138,15 +131,11 @@ func procStartTime(pid int) (string, bool) {
 	return strconv.FormatUint(uint64(created.HighDateTime)<<32|uint64(created.LowDateTime), 10), true
 }
 
-// procClaudeDir is %USERPROFILE%\.claude of the user running the server:
-// another process's environment lives in its PEB, which is not read here, so
-// a CLAUDE_CONFIG_DIR set only inside the pane is not followed.
-func procClaudeDir(int) (string, bool) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", false
-	}
-	return filepath.Join(home, ".claude"), true
+// procClaudeDir reads CLAUDE_CONFIG_DIR from the process's environment
+// block, else %USERPROFILE%\.claude of the user running the server
+// (procConfigDir).
+func procClaudeDir(pid int) (string, bool) {
+	return procConfigDir(pid, "CLAUDE_CONFIG_DIR", ".claude")
 }
 
 // claudePIDDomain is empty: the start time alone identifies the process.

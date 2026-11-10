@@ -558,8 +558,8 @@ process with a session file `<claudeDir>/sessions/<pid>.json` in its **own** Cla
 (`CLAUDE_CONFIG_DIR`, else `~/.claude`, read from `/proc/<pid>/environ` on Linux) whose
 `procStart` matches the process's real start time, and on Linux whose `pidDomain` matches this
 pid namespace. Claude Code never removes those files, so a file alone proves nothing: a dead
-session's pid can be reused by another process. psmux reads only `%USERPROFILE%\.claude`
-(Windows does not expose another process's environment). tmux pane ids in these routes are the
+session's pid can be reused by another process. On Windows (psmux, hc) `CLAUDE_CONFIG_DIR` is read
+from the process's PEB environment block, else `%USERPROFILE%\.claude`. tmux pane ids in these routes are the
 window's active pane: a split window chats with the pane that has focus. Reads and writes go to
 tmux's own pane id (`%N`, unique on the server, which stays on its pane) on tmux, and to the
 window (`$N:i`, from psmux's reply rather than the client's id, so one window has one pane lock)
@@ -606,7 +606,7 @@ process holds come from the system handle table (`NtQuerySystemInformation`
 checked again in a table read after the duplicate (the cached one can be 1 s old), the
 path taken from `GetFinalPathNameByHandle` (drive letters only, never UNC), the identity from
 `GetFileInformationByHandle` (volume serial and file index); the argv from
-`NtQueryInformationProcess`, `CODEX_HOME` = `%USERPROFILE%\.codex`. Any failure or a listing
+`NtQueryInformationProcess`, `CODEX_HOME` from its PEB environment block, else `%USERPROFILE%\.codex`. Any failure or a listing
 past 2 s gives no session; an elevated Codex cannot be opened, so it has none either (expected,
 not checked live). On tmux, a Codex found
 in a pane without such a rollout is logged once per run (usually a Codex before its first
