@@ -331,7 +331,7 @@ func (g *gitWorktreeMux) RemoveWorktree(ctx context.Context, groupID string, for
 			return err
 		}
 	}
-	return removeWorktree(ctx, g.git, repo, entries[i].Path, force)
+	return removeWorktree(ctx, g.git, repo, entries[i].Path)
 }
 
 // branchExistsIn reports whether branch is a local branch of the repository

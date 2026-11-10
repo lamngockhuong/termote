@@ -271,36 +271,49 @@ func resolveExisting(p string) (string, bool) {
 // from base (HEAD when empty). Filters stay off (a Git LFS repository gets
 // pointer files) and so do hooks (no post-checkout). git's message is logged,
 // never answered.
+//
+// The files are checked out in a second command run in the new worktree, not
+// by worktree add: gitRunner turns off the filters the config read in its
+// root lists, and a filter the repository declares for its worktrees only
+// (an includeIf on gitdir:worktrees/, a config.worktree) is listed only
+// there. worktree add would check out in a child git of its own.
 func addWorktree(ctx context.Context, git *gitRunner, repo gitRepoInfo, path, branch, base string, exists bool) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		log.Printf("worktree add: %v", err)
 		return errWorktreeCreateFailed
 	}
-	args := []string{"worktree", "add", "--", path, branch}
+	args := []string{"worktree", "add", "--no-checkout", "--", path, branch}
 	if !exists {
 		if base == "" {
 			base = "HEAD"
 		}
-		args = []string{"worktree", "add", "-b", branch, "--", path, base}
+		args = []string{"worktree", "add", "--no-checkout", "-b", branch, "--", path, base}
 	}
 	if _, _, err := git.output(ctx, gitCall{root: repo.gitDir(), safeDir: repo.SafeDir, noFilters: true, write: true}, args...); err != nil {
 		log.Printf("worktree add %s in %s: %v", path, repo.gitDir(), err)
 		return errWorktreeCreateFailed
 	}
+	c := gitCall{root: path, safeDir: repo.SafeDir, noFilters: true, write: true}
+	if _, _, err := git.output(ctx, c, "reset", "--hard", "--no-recurse-submodules", "--quiet"); err != nil {
+		log.Printf("worktree checkout %s: %v", path, err)
+		// Nothing of the branch is checked out yet: the folder goes.
+		if err := removeWorktree(ctx, git, repo, path); err != nil {
+			log.Printf("worktree add: %s left after a failed checkout", path)
+		}
+		return errWorktreeCreateFailed
+	}
 	return nil
 }
 
-// removeWorktree deletes the linked worktree at path (git refuses a dirty
-// one without force). git's message is logged, never answered.
-func removeWorktree(ctx context.Context, git *gitRunner, repo gitRepoInfo, path string, force bool) error {
-	args := []string{"worktree", "remove"}
-	if force {
-		args = append(args, "--force")
-	}
-	args = append(args, "--", path)
-	// Filters off: without --force git checks the work tree's status first.
+// removeWorktree deletes the linked worktree at path, whatever it holds: the
+// caller checks it first (worktreeDirty) unless the user asked for force.
+// --force always, so git never runs its own status in the worktree: that
+// status would run in a child git where a filter declared for the worktrees
+// only is not turned off (see addWorktree). One --force still refuses a
+// locked worktree. git's message is logged, never answered.
+func removeWorktree(ctx context.Context, git *gitRunner, repo gitRepoInfo, path string) error {
 	c := gitCall{root: repo.gitDir(), safeDir: repo.SafeDir, noFilters: true, write: true}
-	if _, _, err := git.output(ctx, c, args...); err != nil {
+	if _, _, err := git.output(ctx, c, "worktree", "remove", "--force", "--", path); err != nil {
 		log.Printf("worktree remove %s in %s: %v", path, repo.gitDir(), err)
 		return errWorktreeFailed
 	}

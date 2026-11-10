@@ -698,8 +698,14 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
     (hooks, fsmonitor off; `GIT_*`/`TERMOTE_*` stripped; `safe.directory` from the resolver):
     `worktree list --porcelain -z` (newline form on a git without `-z`; output capped, a cut list
     is an error; an entry whose `.git` does not lead back to the repository is dropped),
-    `worktree add [-b]` and `worktree remove [--force]` (`write`, `--` before the path, filters off,
-    so Git LFS gives pointer files), `ls-files --stage -z` (the index only;
+    `worktree add --no-checkout [-b]`, then `reset --hard --no-recurse-submodules` run in the new
+    worktree, and `worktree remove --force` (`write`, `--` before the path, filters off, so Git LFS
+    gives pointer files). The checkout runs in the worktree, never inside `worktree add`, and the
+    remove always takes one `--force` (after the dirty check below, which also counts a submodule),
+    so git never checks out or runs `status` in a child process: `gitRunner` lists the filters to
+    turn off from the config read in its own root, and a filter the repository declares for its
+    worktrees only (an `includeIf` on `gitdir:worktrees/`, a `config.worktree`) is listed only in
+    the worktree. A failed checkout removes the new worktree again. `ls-files --stage -z` (the index only;
     a gitlink or a list cut at 16 MiB is `dirty`, as is an initialized submodule, `gitDir/modules`),
     then `status --porcelain -z --untracked-files=normal --ignore-submodules=all` (filters off, and
     never entering a submodule, whose own config can define filters `gitRunner` does not know of;
@@ -707,7 +713,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
     --verify`, `symbolic-ref -q --short HEAD`, and `rev-parse --show-toplevel --absolute-git-dir`
     (the resolver). Remove re-derives the path from git's own list for the group's work tree,
     never from the body; the main checkout is `not_linked`; without `force` a dirty one is 409
-    `dirty` and nothing changes; a locked one is refused (500) before anything closes. Every group
+    `dirty` and nothing changes (the check is termote's own, since git's is skipped by `--force`); a
+    locked one is refused (500) before anything closes, and one `--force` still refuses a lock. Every group
     whose first pane works in that worktree (the remove may name any of them) is closed, its
     processes ended, before `git worktree remove`, so nothing runs in a deleted folder; a remove
     git refuses after that leaves the checkout and the groups closed. The route's branch list and
