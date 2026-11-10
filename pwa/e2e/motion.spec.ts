@@ -20,7 +20,9 @@ async function open(page: Page, hash = '') {
   await page.goto('/')
   await page.evaluate(() => {
     localStorage.clear()
-    localStorage.setItem('termote-settings', JSON.stringify({ pollInterval: 1 }))
+    // The shortest refresh the settings take (POLL_INTERVAL_OPTIONS); another
+    // value falls back to 5 s
+    localStorage.setItem('termote-settings', JSON.stringify({ pollInterval: 3 }))
   })
   await page.goto(`/${hash}`)
   await page.reload()
