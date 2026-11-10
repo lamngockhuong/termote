@@ -1866,7 +1866,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   separator to Windows, so a Linux name `..\..\x` opens a file outside the root, checked on WSL),
   no `,` (explorer.exe splits its argument there and opens what is before it: `a.txt,z` opened
   `a.txt`), no `:` (a stream), no `* ? " < > |` or control character (not allowed in a Windows
-  name), no component ending in `.` or a space (Windows drops it: `a.cmd.` opens `a.cmd`); then
+  name), no component ending in `.` or a space (Windows drops it: `a.cmd.` opens `a.cmd`), no
+  U+F000 to U+F0FF (WSL shows a Linux name holding one of those characters to Windows with it moved
+  there and moves it back on access, so `d` U+F03A opens the Linux `d:`); then
   `createDenied` → 403 `not_allowed`, parents through `walkParents` (symlink, junction or
   swapped directory → 403 `symlink`, missing → 404), the entry's `Lstat` (symlink/junction → 403
   `symlink`; only a regular file or a directory, else 400 `not_file`), a sensitive name without
@@ -1874,13 +1876,18 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `runs_program` (`windowsMayRun`): an allow list, not a deny list, since a deny list kept missing
   types Windows or a common program runs on open (`.sh` with Git for Windows, `.py` with the `py`
   launcher, `.wsb`, a theme, a disk image). Only an extension in `windowsViews` (text and code,
-  documents such as `.pdf .docx .xlsx .pptx`, pictures, sound, video, `.zip`; compared in ASCII
-  lower case) opens without asking, and so does a name with no extension (Windows asks which program);
+  `.pdf`, pictures, sound, video; compared in ASCII lower case) opens without asking. Left out, so
+  asked about: a type whose program acts on what the file says as it opens it (Office, ODF and
+  `.rtf` fetch a remote template, Excel opens `.csv`/`.tsv`, an `.xml` names the Office program, a
+  browser opens `.html .htm .svg .epub`, an interpreter may own `.lua` or `.jl`), and `.zip`, which
+  Explorer shows as a folder without the folder check below, and so does a name with no extension (Windows asks which program);
   any other, a dotfile's whole name included, asks, and so does any extension holding a byte beyond
   ASCII (Windows folds case its own way: U+017F is an S to it). A directory named like a shell object
   (an extension starting `.{`, `x.{CLSID}`) asks too. A directory, the root included, that directly
-  holds a `.url .lnk .scf .library-ms .searchconnector-ms .search-ms .website` or a `desktop.ini`
-  (any case; or more than 10000 entries, or one that cannot be read) is refused, run or not, 403
+  holds a `.url .lnk .scf .library-ms .searchconnector-ms .search-ms .website` or a `desktop.ini`,
+  or holds a subfolder (not a link) that holds a `desktop.ini`, which Explorer reads to show that
+  subfolder (any case; or more than 10000 entries across both levels, or one that cannot be read;
+  a shortcut deeper down is not shown, so not looked for) is refused, run or not, 403
   `folder_reaches`: Explorer reads their icon or the folder's settings from a location they name, a
   share on another computer among them, while it only shows the folder, sending the Windows user's
   NTLM hash there. Windows

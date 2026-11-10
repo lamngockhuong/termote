@@ -28,22 +28,27 @@ var (
 )
 
 // windowsViews: the extensions, lowercase, of a file Windows opens to show
-// it (text, code, a document, a picture, a sound or a video) with the
-// program installed for it. Any other extension may run: a deny list kept
-// missing types Windows or a common program runs on open (.sh with Git for
-// Windows, .py with the py launcher, .wsb, a theme, a disk image), so an
-// extension not listed here asks first.
+// it (text, code, a PDF, a picture, a sound or a video) with the program
+// installed for it. Any other extension may run: a deny list kept missing
+// types Windows or a common program runs on open (.sh with Git for Windows,
+// .py with the py launcher, .wsb, a theme, a disk image), so an extension
+// not listed here asks first. Left out too: a type whose program acts on
+// what the file says as it opens it (Office and RTF fetch a remote template
+// or picture, Excel opens a .csv, an .xml names the Office program to open
+// it with, a browser opens .html, .svg and .epub, an interpreter may be the
+// default program for .lua or .jl), and .zip, which Explorer shows as a
+// folder without the folder check.
 var windowsViews = map[string]bool{}
 
 func init() {
 	for _, ext := range strings.Fields(`
-		.txt .text .md .markdown .rst .adoc .log .csv .tsv .json .jsonc .json5 .ndjson .yaml .yml .toml
-		.xml .html .htm .css .scss .less .svg .diff .patch .sql .graphql .proto .tex .bib
+		.txt .text .md .markdown .rst .adoc .log .json .jsonc .json5 .ndjson .yaml .yml .toml
+		.css .scss .less .diff .patch .sql .graphql .proto .tex .bib
 		.c .h .cc .cpp .cxx .hpp .hh .cs .go .rs .java .kt .kts .scala .swift .m .mm .dart .zig .nim
-		.ts .tsx .mts .cts .jsx .mjs .cjs .vue .svelte .astro .lua .ex .exs .erl .hs .ml .clj .r .jl
+		.ts .tsx .mts .cts .jsx .mjs .cjs .vue .svelte .astro .ex .exs .erl .hs .ml .clj .r
 		.png .jpg .jpeg .gif .webp .bmp .ico .tif .tiff .heic .heif .avif
 		.mp3 .wav .ogg .oga .flac .m4a .aac .opus .mp4 .m4v .mov .webm .mkv .avi
-		.pdf .docx .xlsx .pptx .odt .ods .odp .rtf .epub .zip`) {
+		.pdf`) {
 		windowsViews[ext] = true
 	}
 }
@@ -84,27 +89,55 @@ func windowsReaches(name string) bool {
 }
 
 // windowsFolderEntriesMost bounds the entries read to look for one that
-// windowsReaches: a folder holding more is refused, as if it held one.
+// windowsReaches: a folder holding more, its subfolders' entries counted
+// too, is refused, as if it held one.
 const windowsFolderEntriesMost = 10000
 
 // folderReaches reports whether the folder dir (under rt) directly holds an
-// entry windowsReaches names, or more entries than can be looked at.
+// entry windowsReaches names, or a subfolder holding a desktop.ini (Explorer
+// reads a subfolder's own settings and icon to show it), or more entries
+// than can be looked at. A shortcut deeper down is not shown, so not read.
 func folderReaches(rt *os.Root, dir string) (bool, error) {
+	seen := 0
+	var subdirs []string
+	reaches, err := readFolderNames(rt, dir, &seen, func(e fs.DirEntry) bool {
+		if e.IsDir() {
+			subdirs = append(subdirs, e.Name())
+		}
+		return windowsReaches(e.Name())
+	})
+	if reaches || err != nil {
+		return reaches, err
+	}
+	for _, sub := range subdirs {
+		reaches, err := readFolderNames(rt, filepath.Join(dir, sub), &seen, func(e fs.DirEntry) bool {
+			return strings.EqualFold(e.Name(), "desktop.ini")
+		})
+		if reaches || err != nil {
+			return reaches, err
+		}
+	}
+	return false, nil
+}
+
+// readFolderNames calls match on each entry of dir until it answers true,
+// counting the entries in seen; past windowsFolderEntriesMost it answers
+// true as well.
+func readFolderNames(rt *os.Root, dir string, seen *int, match func(fs.DirEntry) bool) (bool, error) {
 	d, err := rt.Open(dir)
 	if err != nil {
 		return false, err
 	}
 	defer d.Close()
-	seen := 0
 	for {
-		names, err := d.Readdirnames(256)
-		for _, n := range names {
-			if windowsReaches(n) {
+		entries, err := d.ReadDir(256)
+		for _, e := range entries {
+			if match(e) {
 				return true, nil
 			}
 		}
-		seen += len(names)
-		if seen > windowsFolderEntriesMost {
+		*seen += len(entries)
+		if *seen > windowsFolderEntriesMost {
 			return true, nil
 		}
 		if errors.Is(err, io.EOF) {
@@ -126,7 +159,10 @@ func windowsReadsAsIs(p string) bool {
 		return false
 	}
 	for _, r := range p {
-		if r < 0x20 {
+		// U+F000 to U+F0FF: WSL shows a Linux name holding one of the
+		// characters above to Windows with that character moved there, and
+		// moves it back on access, so `d\uF03A` opens the Linux `d:`.
+		if r < 0x20 || r >= 0xf000 && r <= 0xf0ff {
 			return false
 		}
 	}
