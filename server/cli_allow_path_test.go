@@ -296,6 +296,57 @@ func TestAllowPathSocketDirs(t *testing.T) {
 	}
 }
 
+// The folders of the user's own mux sockets (Herdr's config dir, herdr-core's
+// state dir, and the ones the environment names) are never a Place: mounted
+// in the container they would let a terminal drive the host's mux.
+func TestAllowPathMuxControlDirs(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("named pipes")
+	}
+	home := tempDirReal(t)
+	other := tempDirReal(t)
+	mk := func(p string) string {
+		if err := os.MkdirAll(p, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	vars := map[string]string{
+		"HERDR_SOCKET_PATH": filepath.Join(mk(filepath.Join(other, "herdr-sock")), "herdr.sock"),
+		"HC_SOCKET":         filepath.Join(mk(filepath.Join(other, "hc-sock")), "core.sock"),
+		"ZELLIJ_SOCKET_DIR": mk(filepath.Join(other, "zellij")),
+		"TMUX_TMPDIR":       mk(filepath.Join(other, "tmux")),
+		"XDG_STATE_HOME":    "relative/state", // not absolute: the default is kept
+	}
+	old := allowPathSocketDirs
+	t.Cleanup(func() { allowPathSocketDirs = old })
+	allowPathSocketDirs = func(func(string) string) []string { return nil }
+	env := newAllowPathEnv(home, func(k string) string { return vars[k] })
+	env.isGitDir = nil
+	for _, p := range []string{
+		mk(filepath.Join(home, ".config", "herdr")),
+		mk(filepath.Join(home, ".config", "herdr", "plugins")),
+		mk(filepath.Join(home, ".local", "state", "herdr-core", "default")),
+		filepath.Join(other, "herdr-sock"),
+		filepath.Join(other, "hc-sock"),
+		filepath.Join(other, "zellij"),
+		filepath.Join(other, "tmux"),
+	} {
+		if err := validateAllowPath(p, env); err == nil {
+			t.Errorf("%s allowed", p)
+		}
+	}
+	if err := validateAllowPath(mk(filepath.Join(home, ".config", "fish")), env); err != nil {
+		t.Errorf("~/.config/fish: %v", err)
+	}
+	vars["XDG_CONFIG_HOME"] = mk(filepath.Join(other, "cfg"))
+	env = newAllowPathEnv(home, func(k string) string { return vars[k] })
+	env.isGitDir = nil
+	if err := validateAllowPath(mk(filepath.Join(other, "cfg", "herdr")), env); err == nil {
+		t.Error("$XDG_CONFIG_HOME/herdr allowed")
+	}
+}
+
 func TestAllowPathRefusesTermoteCache(t *testing.T) {
 	tc := allowPathCLI(t, runtime.GOOS)
 	mkdir(t, filepath.Join(tc.cacheDir(), "termote", "trash"))

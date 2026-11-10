@@ -32,6 +32,7 @@ func newAllowPathEnv(home string, getenv func(string) string, termoteDirs ...str
 	}
 	dirs = append(dirs, systemDenyDirs...)
 	dirs = append(dirs, allowPathSocketDirs(getenv)...)
+	dirs = append(dirs, muxControlDirs(home, getenv)...)
 	return allowPathEnv{home: home, deny: filesDenyDirs(dirs...), isGitDir: gitDirProbe(newGitRunner())}
 }
 
@@ -43,7 +44,7 @@ func (c *cli) allowPathEnv() allowPathEnv {
 }
 
 // allowPathSocketDirs are where the host's control sockets live (tmux and
-// Herdr in /tmp or $TMPDIR, docker.sock under /run, the user's runtime dir):
+// Zellij in /tmp or $TMPDIR, docker.sock under /run, the user's runtime dir):
 // mounted in the container, a Place there would let a terminal drive the
 // host. Windows uses named pipes. A variable: tests, whose temp dirs are
 // under /tmp, replace it.
@@ -57,6 +58,54 @@ func defaultSocketDirs(getenv func(string) string) []string {
 	if getenv != nil {
 		if d := getenv("XDG_RUNTIME_DIR"); filepath.IsAbs(d) {
 			dirs = append(dirs, d)
+		}
+	}
+	return dirs
+}
+
+// muxControlDirs are the folders of the user's own mux control sockets
+// outside allowPathSocketDirs: Herdr's (herdr.sock in its config dir, or
+// $HERDR_SOCKET_PATH's folder), herdr-core's (its state dir holds core.lock
+// and the socket, or $HC_SOCKET's folder), and $ZELLIJ_SOCKET_DIR and
+// $TMUX_TMPDIR when set. Mounted in the container, a Place there would let
+// a terminal drive the host's mux as the host's user. Windows uses named
+// pipes. A relative or empty value names nothing.
+func muxControlDirs(home string, getenv func(string) string) []string {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	env := func(k string) string {
+		if getenv == nil {
+			return ""
+		}
+		if v := getenv(k); filepath.IsAbs(v) {
+			return v
+		}
+		return ""
+	}
+	under := func(xdg string, rel ...string) string {
+		if base := env(xdg); base != "" {
+			return filepath.Join(append([]string{base}, rel[1:]...)...)
+		}
+		if home == "" {
+			return ""
+		}
+		return filepath.Join(append([]string{home}, rel...)...)
+	}
+	var dirs []string
+	for _, d := range []string{
+		under("XDG_CONFIG_HOME", ".config", "herdr"),
+		under("XDG_STATE_HOME", ".local/state", "herdr-core"),
+		env("ZELLIJ_SOCKET_DIR"),
+		env("TMUX_TMPDIR"),
+	} {
+		if d != "" {
+			dirs = append(dirs, d)
+		}
+	}
+	for _, k := range []string{"HERDR_SOCKET_PATH", "HC_SOCKET"} {
+		if p := env(k); p != "" {
+			dirs = append(dirs, filepath.Dir(p))
 		}
 	}
 	return dirs

@@ -1185,7 +1185,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   above it; a path at, inside or above `~/.ssh`, `~/.gnupg`, termote's config, state, data and cache
   dirs (the cache holds the trash and uploads), `/proc` `/sys` `/dev`, and on Unix the dirs holding
   the host's control sockets (`/tmp`, `/run`, `/var/run`, `$TMPDIR`, `$XDG_RUNTIME_DIR`: mounted in
-  the container they would let a terminal drive the host's tmux or docker) (so `~/.config`,
+  the container they would let a terminal drive the host's tmux or docker), and the user's own mux
+  sockets elsewhere (`muxControlDirs`: Herdr's config dir `$XDG_CONFIG_HOME/herdr` or
+  `~/.config/herdr`, which holds `herdr.sock`; herdr-core's state dir `$XDG_STATE_HOME/herdr-core`
+  or `~/.local/state/herdr-core`; the folders of `$HERDR_SOCKET_PATH` and `$HC_SOCKET`;
+  `$ZELLIJ_SOCKET_DIR`; `$TMUX_TMPDIR`; an absolute value only) (so `~/.config`,
   `~/.cache` and `~/.local` are refused, `~/.config/fish` is not); a
   component matching `isGitDirName`, or a dir git (through `gitRunner`) calls a git dir or a bare
   repo (a config whose hooks or filter drivers cannot be turned off counts as one); a quote, line
