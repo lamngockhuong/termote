@@ -1879,21 +1879,30 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `runs_program` (`windowsMayRun`): an allow list, not a deny list, since a deny list kept missing
   types Windows or a common program runs on open (`.sh` with Git for Windows, `.py` with the `py`
   launcher, `.wsb`, a theme, a disk image). Only an extension in `windowsViews` (text and code,
-  `.pdf`, pictures, sound, video; compared in ASCII lower case) opens without asking. Left out, so
+  `.pdf`, pictures; compared in ASCII lower case) opens without asking. Left out, so
   asked about: a type whose program acts on what the file says as it opens it (Office, ODF and
   `.rtf` fetch a remote template, Excel opens `.csv`/`.tsv`, an `.xml` names the Office program, a
-  browser opens `.html .htm .svg .epub`, an interpreter may own `.lua` or `.jl`), and `.zip`, which
+  browser opens `.html .htm .svg .epub`, an interpreter may own `.lua` or `.jl`, Photoshop and
+  ExtendScript run a `.jsx`, WinGHCi a `.hs`, and a media player such as VLC reads a sound or a
+  video by its content, a playlist naming another computer's share among them), and `.zip`, which
   Explorer shows as a folder without the folder check below, and so does a name with no extension (Windows asks which program);
   any other, a dotfile's whole name included, asks, and so does any extension holding a byte beyond
   ASCII (Windows folds case its own way: U+017F is an S to it). A directory named like a shell object
   (an extension starting `.{`, `x.{CLSID}`) asks too. A directory, the root included, that directly
-  holds a `.url .lnk .scf .library-ms .searchconnector-ms .search-ms .website` or a `desktop.ini`,
-  or holds a subfolder (not a link) that holds a `desktop.ini`, which Explorer reads to show that
-  subfolder (any case; or more than 10000 entries across both levels, or one that cannot be read;
-  a shortcut deeper down is not shown, so not looked for) is refused, run or not, 403
-  `folder_reaches`: Explorer reads their icon or the folder's settings from a location they name, a
+  holds a `.url .lnk .scf .library-ms .searchconnector-ms .search-ms .website`, a theme (`.theme
+  .themepack .deskthemepack`, whose thumbnail has loaded a remote wallpaper), a `.pif`, a name whose
+  extension holds a byte beyond ASCII (`x.ſcf` is a `.scf` to Windows) or a `desktop.ini`
+  (any case, a letter beyond ASCII standing for any letter: `desktop.ıni`), or holds a subfolder,
+  or a link to a folder inside the root (Windows may follow it), that holds a `desktop.ini`, which
+  Explorer reads to show that subfolder (or a link out of the root, more than 10000 entries across
+  both levels, or one that cannot be read; a shortcut deeper down is not shown, so not looked for)
+  is refused, run or not, 403 `folder_reaches`. So is a folder below the root when a `desktop.ini`
+  sits in a folder Explorer's navigation pane shows on the way to it, expanded to it: each folder
+  from the root down to its parent, and the folders beside each (their own count of 10000 entries).
+  Explorer reads their icon or the folder's settings from a location they name, a
   share on another computer among them, while it only shows the folder, sending the Windows user's
-  NTLM hash there. Windows
+  NTLM hash there. The check is of the folder as it is when opened: a file a later `git pull` adds
+  to the open Explorer window is not looked at, nor is a folder above the root. Windows
   asks before running a file only when its zone says so (on the machine checked, a `.cmd` under
   `\\wsl.localhost` was asked about, one under `/mnt/c` ran at once), so termote asks itself. The Windows path is built from the absolute
   path (`/mnt/<x>/…` → `X:\…`, else the distribution's share from `wslpath -w /`) and refused (400

@@ -3,6 +3,8 @@
 package main
 
 import (
+	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -160,10 +162,44 @@ func TestFilesOpenWindowsFolders(t *testing.T) {
 			t.Errorf("%s ran %q", dir, *calls)
 		}
 	}
-	// A subfolder counts for its desktop.ini only, which Explorer reads to
-	// show it; a shortcut in it is not shown, nor is anything deeper.
+	// The root holds d-desktop-ini, whose desktop.ini Explorer reads.
+	if res := fx.open(openWindowsRequest{Path: "."}, full); res.StatusCode != 403 || errorCode(t, res) != "folder_reaches" {
+		t.Errorf("root over a subfolder's desktop.ini = %d", res.StatusCode)
+	}
+}
+
+// Names Windows reads as a shortcut or a desktop.ini that Go's case
+// folding does not, and theme files, make the folder reach too.
+func TestFilesOpenWindowsFoldersOddNames(t *testing.T) {
+	fx, _ := newOpenFixture(t)
+	full := &authInfo{Kind: authSession, Role: roleFull}
+	for i, name := range []string{"x.\u017fcf", "x.library-m\u017f", "x.l\u0131brary-ms", "x.theme", "x.themepack",
+		"x.deskthemepack", "x.pif", "desktop.\u0131ni", "DESKTOP.\u0130NI"} {
+		dir := fmt.Sprintf("d%d", i)
+		fx.write(t, dir+"/"+name, "x")
+		if res := fx.open(openWindowsRequest{Path: dir, Run: true}, full); res.StatusCode != 403 || errorCode(t, res) != "folder_reaches" {
+			t.Errorf("%q = %d", name, res.StatusCode)
+		}
+	}
+	plain, _ := newOpenFixture(t)
+	plain.write(t, "ok/desktop.in", "x")
+	plain.write(t, "ok/a.txt", "x")
+	if res := plain.open(openWindowsRequest{Path: "ok"}, full); res.StatusCode != 200 {
+		t.Errorf("plain folder = %d %s", res.StatusCode, errorCode(t, res))
+	}
+}
+
+// A subfolder counts for its desktop.ini only, which Explorer reads to
+// show it; a shortcut in it is not shown, nor is anything deeper. A link
+// to a folder counts as a subfolder, and a link out of the root refuses.
+func TestFilesOpenWindowsSubfolders(t *testing.T) {
+	fx, _ := newOpenFixture(t)
+	full := &authInfo{Kind: authSession, Role: roleFull}
 	fx.write(t, "n/a/b/desktop.ini", "x")
 	fx.write(t, "n/a/icon.url", "x")
+	if err := os.Symlink("nowhere", filepath.Join(fx.root, "n", "dangling")); err != nil {
+		t.Fatal(err)
+	}
 	if res := fx.open(openWindowsRequest{Path: "n"}, full); res.StatusCode != 200 {
 		t.Errorf("folder over nested shortcuts = %d %s", res.StatusCode, errorCode(t, res))
 	}
@@ -171,9 +207,42 @@ func TestFilesOpenWindowsFolders(t *testing.T) {
 	if res := fx.open(openWindowsRequest{Path: "n"}, full); res.StatusCode != 403 || errorCode(t, res) != "folder_reaches" {
 		t.Errorf("folder over a subfolder's desktop.ini = %d", res.StatusCode)
 	}
-	// The root holds d-desktop-ini, whose desktop.ini Explorer reads.
-	if res := fx.open(openWindowsRequest{Path: "."}, full); res.StatusCode != 403 || errorCode(t, res) != "folder_reaches" {
-		t.Errorf("root over a subfolder's desktop.ini = %d", res.StatusCode)
+
+	fx.write(t, "l/a.txt", "x")
+	fx.write(t, "hidden/deep/desktop.ini", "x")
+	if err := os.Symlink("../hidden/deep", filepath.Join(fx.root, "l", "sub")); err != nil {
+		t.Fatal(err)
+	}
+	if res := fx.open(openWindowsRequest{Path: "l"}, full); res.StatusCode != 403 || errorCode(t, res) != "folder_reaches" {
+		t.Errorf("folder over a link to a folder holding a desktop.ini = %d", res.StatusCode)
+	}
+	fx.write(t, "out/a.txt", "x")
+	if err := os.Symlink(t.TempDir(), filepath.Join(fx.root, "out", "sub")); err != nil {
+		t.Fatal(err)
+	}
+	if res := fx.open(openWindowsRequest{Path: "out"}, full); res.StatusCode != 403 || errorCode(t, res) != "folder_reaches" {
+		t.Errorf("folder over a link out of the root = %d", res.StatusCode)
+	}
+}
+
+// Explorer's navigation pane shows the folders on the way to the one
+// opened and the folders beside each: their desktop.ini refuses it too.
+func TestFilesOpenWindowsNavigationPane(t *testing.T) {
+	fx, _ := newOpenFixture(t)
+	full := &authInfo{Kind: authSession, Role: roleFull}
+	fx.write(t, "repo/src/a/x.txt", "x")
+	fx.write(t, "repo/src/b/icon.url", "x") // a shortcut beside is not shown in the pane
+	if res := fx.open(openWindowsRequest{Path: "repo/src/a"}, full); res.StatusCode != 200 {
+		t.Errorf("plain tree = %d %s", res.StatusCode, errorCode(t, res))
+	}
+	for _, ini := range []string{"repo/docs/desktop.ini", "repo/desktop.ini", "top/desktop.ini", "desktop.ini"} {
+		fx.write(t, ini, "x")
+		if res := fx.open(openWindowsRequest{Path: "repo/src/a"}, full); res.StatusCode != 403 || errorCode(t, res) != "folder_reaches" {
+			t.Errorf("%s beside the way = %d", ini, res.StatusCode)
+		}
+		if err := os.Remove(filepath.Join(fx.root, filepath.FromSlash(ini))); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
@@ -184,6 +253,7 @@ func TestWindowsMayRun(t *testing.T) {
 		".bashrc": true, "a.": true,
 		"a.docx": true, "a.rtf": true, "a.xml": true, "a.html": true, "a.svg": true, "a.lua": true,
 		"a.jl": true, "a.csv": true, "a.epub": true, "a.zip": true,
+		"a.jsx": true, "a.hs": true, "a.mp4": true, "a.mp3": true, "a.mkv": true, "a.png": false, "a.ts": false,
 	} {
 		if got := windowsMayRun(name); got != want {
 			t.Errorf("windowsMayRun(%q) = %v", name, got)
