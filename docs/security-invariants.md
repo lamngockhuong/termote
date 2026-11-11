@@ -2701,7 +2701,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   three served files with the tag after the deploy.
   The release workflow does the same for the binaries the `release` job signs: each `build` leg
   names its artifact's id as an output of its own (`linux_amd64`, ...), and `docker` and
-  `release` download by those ids, never by name or all of the run's artifacts; an id no longer
+  `release` download by those ids, never by name or all of the run's artifacts. No `build` leg runs
+  a dependency's code (`CGO_ENABLED=0`; the binary is run only by `check-version`, a job of its own
+  whose outputs nothing reads, before `release`), since a process one left behind could write
+  another leg's key into the outputs the release signs from; an id no longer
   found is only a warning to `download-artifact`, so `release` fails on its count of 5 archives.
 - **Git hooks** (`scripts/install-git-hooks.mjs`, `lefthook.yml`): `pnpm install` writes the
   `pre-commit` and `pre-push` hooks itself (`lefthook install` is never run, and `lefthook run` gets
