@@ -1879,21 +1879,30 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `runs_program` (`windowsMayRun`): an allow list, not a deny list, since a deny list kept missing
   types Windows or a common program runs on open (`.sh` with Git for Windows, `.py` with the `py`
   launcher, `.wsb`, a theme, a disk image). Only an extension in `windowsViews` (text and code,
-  `.pdf`, pictures, sound, video; compared in ASCII lower case) opens without asking. Left out, so
+  `.pdf`, pictures; compared in ASCII lower case) opens without asking. Left out, so
   asked about: a type whose program acts on what the file says as it opens it (Office, ODF and
   `.rtf` fetch a remote template, Excel opens `.csv`/`.tsv`, an `.xml` names the Office program, a
-  browser opens `.html .htm .svg .epub`, an interpreter may own `.lua` or `.jl`), and `.zip`, which
+  browser opens `.html .htm .svg .epub`, an interpreter may own `.lua` or `.jl`, Photoshop and
+  ExtendScript run a `.jsx`, WinGHCi a `.hs`, and a media player such as VLC reads a sound or a
+  video by its content, a playlist naming another computer's share among them), and `.zip`, which
   Explorer shows as a folder without the folder check below, and so does a name with no extension (Windows asks which program);
   any other, a dotfile's whole name included, asks, and so does any extension holding a byte beyond
   ASCII (Windows folds case its own way: U+017F is an S to it). A directory named like a shell object
   (an extension starting `.{`, `x.{CLSID}`) asks too. A directory, the root included, that directly
-  holds a `.url .lnk .scf .library-ms .searchconnector-ms .search-ms .website` or a `desktop.ini`,
-  or holds a subfolder (not a link) that holds a `desktop.ini`, which Explorer reads to show that
-  subfolder (any case; or more than 10000 entries across both levels, or one that cannot be read;
-  a shortcut deeper down is not shown, so not looked for) is refused, run or not, 403
-  `folder_reaches`: Explorer reads their icon or the folder's settings from a location they name, a
+  holds a `.url .lnk .scf .library-ms .searchconnector-ms .search-ms .website`, a theme (`.theme
+  .themepack .deskthemepack`, whose thumbnail has loaded a remote wallpaper), a `.pif`, a name whose
+  extension holds a byte beyond ASCII (`x.ſcf` is a `.scf` to Windows) or a `desktop.ini`
+  (any case, a letter beyond ASCII standing for any letter: `desktop.ıni`), or holds a subfolder,
+  or a link to a folder inside the root (Windows may follow it), that holds a `desktop.ini`, which
+  Explorer reads to show that subfolder (or a link out of the root, more than 10000 entries across
+  both levels, or one that cannot be read; a shortcut deeper down is not shown, so not looked for)
+  is refused, run or not, 403 `folder_reaches`. So is a folder below the root when a `desktop.ini`
+  sits in a folder Explorer's navigation pane shows on the way to it, expanded to it: each folder
+  from the root down to its parent, and the folders beside each (their own count of 10000 entries).
+  Explorer reads their icon or the folder's settings from a location they name, a
   share on another computer among them, while it only shows the folder, sending the Windows user's
-  NTLM hash there. Windows
+  NTLM hash there. The check is of the folder as it is when opened: a file a later `git pull` adds
+  to the open Explorer window is not looked at, nor is a folder above the root. Windows
   asks before running a file only when its zone says so (on the machine checked, a `.cmd` under
   `\\wsl.localhost` was asked about, one under `/mnt/c` ran at once), so termote asks itself. The Windows path is built from the absolute
   path (`/mnt/<x>/…` → `X:\…`, else the distribution's share from `wslpath -w /`) and refused (400
@@ -2503,7 +2512,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   deny list kept missing could act on this origin (`Set-Cookie`, `Service-Worker-Allowed`,
   `Clear-Site-Data`, `NEL`/`Report-To` sending later requests' URLs to the machine's collector,
   `WWW-Authenticate` asking for a password in this origin's name) or navigate the tab (`Refresh`,
-  `Location`: termote redirects on no route a machine serves); every
+  `Location`: termote redirects on no route a machine serves); no interim answer (a 1xx but 101, such as 103 Early
+  Hints) is passed on (`machineInterimDrop`: `httputil.ReverseProxy` would send one with every header
+  the machine gave it, before `ModifyResponse`, and clear this server's own headers, which are put
+  back in front of the final answer's); every
   answer but a 101 gets `Content-Security-Policy: sandbox; default-src 'none'` (plus inline style and
   `data:` images) and `nosniff`, so nothing a machine serves runs as a page of this origin. A client asks
   one machine for at most 16 stream tokens per 30 s (4 for the view role; else 429 `busy`): on the machine
@@ -2675,21 +2687,34 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `release-please.yml` starts `release.yml` with `workflow_dispatch` on the tag, never as a
   called workflow: a `workflow_call` job does not get the environment's secret (actions/runner#1490).
   The website (`deploy-website.yml`) serves `install.sh` and `install.ps1`, which pin the release
-  key, so they are the root of this trust, and `/agents.md` (`server/agent-guide.md`), which
-  `llms.txt` and the install docs tell a coding agent to follow, with the install commands in it.
+  key, so they are the root of this trust, `/agents.md` (`server/agent-guide.md`), which
+  `llms.txt` and the install docs tell a coding agent to follow, with the install commands in it,
+  and `/llms.txt` (`website/llms.txt`, which CI's `build-website` compares with the one the build
+  makes of `astro.config.mjs`), which sends a coding agent there.
   Its `build` job runs the site's and the PWA's dependencies and uploads the built site as a plain
   artifact, naming its id as a job output. The Pages artifact is made and deployed by `deploy`, one
   job that runs no dependency code, after the `github-pages` approval and with no wait between the
-  upload and the deploy (a sparse checkout of the tag's `scripts/` and `server/agent-guide.md`
-  without credentials, a download of the built site by id, upload, deploy): it copies those three
-  files from the tag over whatever the build left and compares them byte for byte. A background
+  upload and the deploy (a sparse checkout of the tag's `scripts/`, `server/agent-guide.md` and `website/llms.txt`
+  without credentials, a download of the built site by id, upload, deploy): it copies those four
+  files from the tag over whatever the build left and compares them byte for byte, then runs the
+  tag's `scripts/check-site-installs.mjs` on every other `.html`, `.txt` and `.md` file (pages,
+  `llms-full.txt`, `llms-small.txt`): each command piping a download into a shell (`curl … | sh`,
+  `irm … | iex`, `iex (irm …)`, in a page's text, its markup or a copy button's `data-code`) and each
+  link to an install script, the agent guide or an llms file must name `https://termote.ohnice.app/`
+  or `https://raw.githubusercontent.com/lamngockhuong/termote/`, else the deploy fails (CI runs it on
+  every website build too). A page is still the build's: a script a dependency injected into it can
+  change what it shows once it runs, and wording the check does not read (prose naming another
+  download) passes; only the four files and the commands are held to the tag. A background
   process a build dependency left running cannot reach that job, since the runner ends a job's
   processes with it; an artifact deleted and uploaded again under the same name, with a runtime
   token such a process took, has another id and is not the one downloaded. `verify` compares the
-  three served files with the tag after the deploy.
+  four served files with the tag after the deploy.
   The release workflow does the same for the binaries the `release` job signs: each `build` leg
   names its artifact's id as an output of its own (`linux_amd64`, ...), and `docker` and
-  `release` download by those ids, never by name or all of the run's artifacts; an id no longer
+  `release` download by those ids, never by name or all of the run's artifacts. No `build` leg runs
+  a dependency's code (`CGO_ENABLED=0`; the binary is run only by `check-version`, a job of its own
+  whose outputs nothing reads, before `release`), since a process one left behind could write
+  another leg's key into the outputs the release signs from; an id no longer
   found is only a warning to `download-artifact`, so `release` fails on its count of 5 archives.
 - **Git hooks** (`scripts/install-git-hooks.mjs`, `lefthook.yml`): `pnpm install` writes the
   `pre-commit` and `pre-push` hooks itself (`lefthook install` is never run, and `lefthook run` gets

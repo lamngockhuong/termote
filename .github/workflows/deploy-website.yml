@@ -132,6 +132,7 @@ jobs:
           sparse-checkout: |
             scripts
             server/agent-guide.md
+            website/llms.txt
           path: src
 
       - name: Download the built site
@@ -141,14 +142,22 @@ jobs:
           path: site
 
       # The agent guide is what llms.txt and the install docs tell a coding
-      # agent to follow, with the install commands in it.
-      - name: Put the tag's installers and agent guide in
+      # agent to follow, with the install commands in it; llms.txt is what
+      # sends a coding agent there.
+      - name: Put the tag's installers, agent guide and llms.txt in
         run: |
-          for pair in scripts/install.sh:install.sh scripts/install.ps1:install.ps1 server/agent-guide.md:agents.md; do
+          for pair in scripts/install.sh:install.sh scripts/install.ps1:install.ps1 server/agent-guide.md:agents.md website/llms.txt:llms.txt; do
             from="src/${pair%%:*}" to="site/${pair#*:}"
             cp "$from" "$to"
             cmp "$from" "$to"
           done
+
+      # Every other page was written by the build's dependencies: each
+      # command piping a download into a shell and each link to an install
+      # script, the agent guide or an llms.txt must name this project's
+      # own files. The tag's check, run by the runner's own node.
+      - name: Check the site's install commands
+        run: node src/scripts/check-site-installs.mjs site
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
@@ -159,8 +168,9 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
 
-  # The installers people pipe into a shell, and the guide a coding agent
-  # follows, must be byte for byte the ones in the tag, served as text (not an HTML error page).
+  # The installers people pipe into a shell, the guide a coding agent
+  # follows and the llms.txt that sends it there must be byte for byte the
+  # ones in the tag, served as text (not an HTML error page).
   verify:
     needs: deploy
     runs-on: ubuntu-latest
@@ -169,9 +179,9 @@ jobs:
         with:
           ref: ${{ inputs.tag || github.ref }}
 
-      - name: Check the served installers and agent guide
+      - name: Check the served installers, agent guide and llms.txt
         run: |
-          for pair in scripts/install.sh:install.sh scripts/install.ps1:install.ps1 server/agent-guide.md:agents.md; do
+          for pair in scripts/install.sh:install.sh scripts/install.ps1:install.ps1 server/agent-guide.md:agents.md website/llms.txt:llms.txt; do
             src=${pair%%:*} url="https://termote.ohnice.app/${pair#*:}"
             # The Pages CDN may keep the old file for up to 10 minutes.
             for i in $(seq 1 24); do

@@ -78,6 +78,7 @@ jobs:
               - *ci
               - *workspace
               - 'website/**'
+              - 'scripts/check-site-installs.mjs'
             docs:
               - *ci
               - 'docs/**'
@@ -1160,6 +1161,9 @@ jobs:
       - name: Run git hooks installer tests
         run: ./tests/test-git-hooks.sh
 
+      - name: Run website install check tests
+        run: ./tests/test-check-site-installs.sh
+
   # install.sh is POSIX sh; macOS has BSD tools and shasum.
   test-install-macos:
     name: Test installer (macOS)
@@ -1289,6 +1293,13 @@ jobs:
       - name: Build
         working-directory: website
         run: pnpm build
+
+      # What the deploy job checks before it publishes; and the llms.txt it
+      # serves from the tag must be what the build makes of astro.config.mjs.
+      - name: Check the site's install commands and llms.txt
+        run: |
+          node scripts/check-site-installs.mjs website/dist
+          cmp website/llms.txt website/dist/llms.txt
 
   format-check:
     name: Format Check

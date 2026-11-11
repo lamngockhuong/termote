@@ -1,7 +1,7 @@
 # Termote Makefile
 # Usage: make <target>
 
-.PHONY: help build build-pwa build-api test test-go test-hc test-cli test-install test-homebrew-formula test-entrypoints test-herdr-plugin test-git-hooks start container-up container-down uninstall health clean release release-dry fmt fmt-check brand-assets claude-chat-tags codex-chat-items
+.PHONY: help build build-pwa build-api test test-go test-hc test-cli test-install test-homebrew-formula test-entrypoints test-herdr-plugin test-git-hooks test-site-installs start container-up container-down uninstall health clean release release-dry fmt fmt-check brand-assets claude-chat-tags codex-chat-items
 
 # Default target
 help:
@@ -72,7 +72,7 @@ container-down:
 	./scripts/termote.sh container down
 
 # Test targets
-test: test-go test-cli test-install test-homebrew-formula test-entrypoints test-herdr-plugin test-git-hooks
+test: test-go test-cli test-install test-homebrew-formula test-entrypoints test-herdr-plugin test-git-hooks test-site-installs
 	@echo ""
 	@echo "All tests completed!"
 
@@ -107,6 +107,10 @@ test-herdr-plugin:
 test-git-hooks:
 	@chmod +x tests/test-git-hooks.sh
 	@./tests/test-git-hooks.sh
+
+test-site-installs:
+	@chmod +x tests/test-check-site-installs.sh
+	@./tests/test-check-site-installs.sh
 
 # Format targets (dprint)
 fmt:

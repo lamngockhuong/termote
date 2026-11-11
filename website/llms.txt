@@ -1,0 +1,15 @@
+# Termote
+
+> Termote serves a PWA that controls terminal sessions (tmux, Herdr, Zellij, herdr-core) of a machine from a phone or another computer.
+
+Coding agents asked to install, start or check Termote: follow [the agent guide](https://termote.ohnice.app/agents.md). Once installed, `termote help agent` prints the guide for the installed version.
+
+## Documentation Sets
+
+- [Abridged documentation](https://termote.ohnice.app/llms-small.txt): a compact version of the documentation for Termote, with non-essential content removed
+- [Complete documentation](https://termote.ohnice.app/llms-full.txt): the full documentation for Termote
+
+## Notes
+
+- The complete documentation includes all content from the official documentation
+- The content is automatically generated from the same source as the official documentation

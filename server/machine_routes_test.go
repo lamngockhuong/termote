@@ -4,7 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"net/http/httptest"
+	"net/http/httptrace"
+	"net/http/httputil"
+	"net/textproto"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -247,6 +253,53 @@ func TestConfineMachineResponse(t *testing.T) {
 	}
 	if up.Header.Get("Upgrade") != "websocket" || up.Header.Get("Sec-Websocket-Accept") != "k" {
 		t.Errorf("upgrade headers dropped: %v", up.Header)
+	}
+}
+
+// A machine's interim answer (103 Early Hints) carries none of its headers
+// to the browser, and leaves this server's own headers on the final one.
+func TestMachineInterimAnswerDropped(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Set-Cookie", "x=1; Path=/")
+		w.Header().Set("Nel", `{"report_to":"x","max_age":1}`)
+		w.WriteHeader(http.StatusEarlyHints)
+		w.Header().Del("Set-Cookie")
+		w.Header().Del("Nel")
+		w.Header().Set("Content-Type", "text/plain")
+		fmt.Fprint(w, "ok")
+	}))
+	defer backend.Close()
+	u, _ := url.Parse(backend.URL)
+	proxy := &httputil.ReverseProxy{
+		Rewrite:        func(pr *httputil.ProxyRequest) { pr.SetURL(u) },
+		ModifyResponse: func(resp *http.Response) error { confineMachineResponse(resp); return nil },
+	}
+	front := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Frame-Options", "DENY")
+		proxy.ServeHTTP(newMachineInterimDrop(w), r)
+	}))
+	defer front.Close()
+	var interim []int
+	req, _ := http.NewRequest(http.MethodGet, front.URL, nil)
+	req = req.WithContext(httptrace.WithClientTrace(req.Context(), &httptrace.ClientTrace{
+		Got1xxResponse: func(code int, h textproto.MIMEHeader) error {
+			interim = append(interim, code)
+			return nil
+		},
+	}))
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if len(interim) != 0 {
+		t.Errorf("interim answers passed on: %v", interim)
+	}
+	if resp.StatusCode != http.StatusOK || resp.Header.Get("Set-Cookie") != "" || resp.Header.Get("Nel") != "" {
+		t.Errorf("final answer: %d %v", resp.StatusCode, resp.Header)
+	}
+	if resp.Header.Get("X-Frame-Options") != "DENY" || !strings.HasPrefix(resp.Header.Get("Content-Security-Policy"), "sandbox") {
+		t.Errorf("own or confining headers lost: %v", resp.Header)
 	}
 }
 
