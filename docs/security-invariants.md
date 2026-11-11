@@ -2503,7 +2503,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   deny list kept missing could act on this origin (`Set-Cookie`, `Service-Worker-Allowed`,
   `Clear-Site-Data`, `NEL`/`Report-To` sending later requests' URLs to the machine's collector,
   `WWW-Authenticate` asking for a password in this origin's name) or navigate the tab (`Refresh`,
-  `Location`: termote redirects on no route a machine serves); every
+  `Location`: termote redirects on no route a machine serves); no interim answer (a 1xx but 101, such as 103 Early
+  Hints) is passed on (`machineInterimDrop`: `httputil.ReverseProxy` would send one with every header
+  the machine gave it, before `ModifyResponse`, and clear this server's own headers, which are put
+  back in front of the final answer's); every
   answer but a 101 gets `Content-Security-Policy: sandbox; default-src 'none'` (plus inline style and
   `data:` images) and `nosniff`, so nothing a machine serves runs as a page of this origin. A client asks
   one machine for at most 16 stream tokens per 30 s (4 for the view role; else 429 `busy`): on the machine

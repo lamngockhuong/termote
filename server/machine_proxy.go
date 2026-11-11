@@ -281,6 +281,7 @@ func registerMachineProxy(mux *http.ServeMux, agent *agentAPI, fwd *streamHub, a
 		}
 		l.begin()
 		defer l.end()
+		w = newMachineInterimDrop(w)
 		if rest != "stream" || !isWebSocket(r) {
 			proxy.ServeHTTP(w, r)
 			return
@@ -329,6 +330,39 @@ func serveForwardedStream(w http.ResponseWriter, r *http.Request, proxy *httputi
 	}()
 	proxy.ServeHTTP(w, r.WithContext(ctx))
 }
+
+// machineInterimDrop passes on none of a machine's interim answers (1xx but
+// 101): httputil.ReverseProxy sends one with every header the machine gave
+// it, before ModifyResponse sees the final answer, then clears the header
+// map, this server's own headers (its CSP, X-Frame-Options) with it. Those
+// are put back in front of the final answer's.
+type machineInterimDrop struct {
+	http.ResponseWriter
+	base    http.Header
+	dropped bool
+}
+
+func newMachineInterimDrop(w http.ResponseWriter) *machineInterimDrop {
+	return &machineInterimDrop{ResponseWriter: w, base: w.Header().Clone()}
+}
+
+func (d *machineInterimDrop) WriteHeader(code int) {
+	if code >= 100 && code < 200 && code != http.StatusSwitchingProtocols {
+		d.dropped = true
+		return
+	}
+	if d.dropped {
+		h := d.ResponseWriter.Header()
+		for k, v := range d.base {
+			h[k] = append(append([]string(nil), v...), h[k]...)
+		}
+		d.dropped = false
+	}
+	d.ResponseWriter.WriteHeader(code)
+}
+
+// Unwrap lets http.ResponseController reach the connection (flush, hijack).
+func (d *machineInterimDrop) Unwrap() http.ResponseWriter { return d.ResponseWriter }
 
 // machineResponseKeep are the headers of a machine's answer passed on, in
 // canonical form; every other one is dropped. A header can act on this
