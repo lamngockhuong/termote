@@ -2687,18 +2687,28 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `release-please.yml` starts `release.yml` with `workflow_dispatch` on the tag, never as a
   called workflow: a `workflow_call` job does not get the environment's secret (actions/runner#1490).
   The website (`deploy-website.yml`) serves `install.sh` and `install.ps1`, which pin the release
-  key, so they are the root of this trust, and `/agents.md` (`server/agent-guide.md`), which
-  `llms.txt` and the install docs tell a coding agent to follow, with the install commands in it.
+  key, so they are the root of this trust, `/agents.md` (`server/agent-guide.md`), which
+  `llms.txt` and the install docs tell a coding agent to follow, with the install commands in it,
+  and `/llms.txt` (`website/llms.txt`, which CI's `build-website` compares with the one the build
+  makes of `astro.config.mjs`), which sends a coding agent there.
   Its `build` job runs the site's and the PWA's dependencies and uploads the built site as a plain
   artifact, naming its id as a job output. The Pages artifact is made and deployed by `deploy`, one
   job that runs no dependency code, after the `github-pages` approval and with no wait between the
-  upload and the deploy (a sparse checkout of the tag's `scripts/` and `server/agent-guide.md`
-  without credentials, a download of the built site by id, upload, deploy): it copies those three
-  files from the tag over whatever the build left and compares them byte for byte. A background
+  upload and the deploy (a sparse checkout of the tag's `scripts/`, `server/agent-guide.md` and `website/llms.txt`
+  without credentials, a download of the built site by id, upload, deploy): it copies those four
+  files from the tag over whatever the build left and compares them byte for byte, then runs the
+  tag's `scripts/check-site-installs.mjs` on every other `.html`, `.txt` and `.md` file (pages,
+  `llms-full.txt`, `llms-small.txt`): each command piping a download into a shell (`curl … | sh`,
+  `irm … | iex`, `iex (irm …)`, in a page's text, its markup or a copy button's `data-code`) and each
+  link to an install script, the agent guide or an llms file must name `https://termote.ohnice.app/`
+  or `https://raw.githubusercontent.com/lamngockhuong/termote/`, else the deploy fails (CI runs it on
+  every website build too). A page is still the build's: a script a dependency injected into it can
+  change what it shows once it runs, and wording the check does not read (prose naming another
+  download) passes; only the four files and the commands are held to the tag. A background
   process a build dependency left running cannot reach that job, since the runner ends a job's
   processes with it; an artifact deleted and uploaded again under the same name, with a runtime
   token such a process took, has another id and is not the one downloaded. `verify` compares the
-  three served files with the tag after the deploy.
+  four served files with the tag after the deploy.
   The release workflow does the same for the binaries the `release` job signs: each `build` leg
   names its artifact's id as an output of its own (`linux_amd64`, ...), and `docker` and
   `release` download by those ids, never by name or all of the run's artifacts. No `build` leg runs

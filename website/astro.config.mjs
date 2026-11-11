@@ -58,7 +58,9 @@ export default defineConfig({
           versions: [{ slug: "0.x" }],
         }),
         // /llms.txt, /llms-full.txt and /llms-small.txt of the current docs;
-        // a coding agent that sets Termote up reads /agents.md first.
+        // a coding agent that sets Termote up reads /agents.md first. The
+        // site serves website/llms.txt from the tag in place of the
+        // generated /llms.txt; CI checks the two are the same.
         starlightLlmsTxt({
           description:
             "Termote serves a PWA that controls terminal sessions (tmux, Herdr, Zellij, herdr-core) of a machine from a phone or another computer.",
