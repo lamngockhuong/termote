@@ -190,8 +190,8 @@ importers:
         specifier: 4.0.536
         version: 4.0.536(csso@5.0.5)(lightningcss@1.33.0)(postcss@8.5.32)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(supports-color@8.1.1)(typescript@5.9.3)
       '@remotion/eslint-config-flat':
-        specifier: 4.0.536
-        version: 4.0.536(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
+        specifier: 4.0.542
+        version: 4.0.542(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
       '@remotion/google-fonts':
         specifier: 4.0.536
         version: 4.0.536(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -1956,8 +1956,8 @@ packages:
   '@remotion/elevenlabs@4.0.536':
     resolution: {integrity: sha512-Anj3etnBHjGw88pCxiMDPm6ZzKU9Zcnc83wPq2zbC5s2vGTOy7zd/N3eVxHmDctC32rV1wQyHisOaImEPh6EJg==}
 
-  '@remotion/eslint-config-flat@4.0.536':
-    resolution: {integrity: sha512-ZvNh3bFTYZIDQWObYXQBkziWgmSPmB/bu4s8NJZYoaGDfnKkNnnHosZNGjKacmdtCTUwXdl1dBpftIEIhZu13A==}
+  '@remotion/eslint-config-flat@4.0.542':
+    resolution: {integrity: sha512-ae+miUqAuHIURlfibzrxt7RGExKIppdUu6HIST/YPR2JXHaG0UaVAz8WQvhDM+wTv7cK2sB+zMsusDQFpb7eLw==}
     peerDependencies:
       eslint: ^9.0.0 || ^10.0.0
 
@@ -8269,14 +8269,14 @@ snapshots:
       '@remotion/captions': 4.0.536
       zod: 4.5.4
 
-  '@remotion/eslint-config-flat@4.0.536(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)':
+  '@remotion/eslint-config-flat@4.0.542(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)':
     dependencies:
       eslint: 9.39.5(jiti@2.7.0)(supports-color@8.1.1)
       eslint-plugin-react-hooks: 7.1.1(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
+      typescript: 5.9.3
       typescript-eslint: 8.71.2(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
     transitivePeerDependencies:
       - supports-color
-      - typescript
 
   '@remotion/google-fonts@4.0.536(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
     dependencies:
