@@ -223,8 +223,8 @@ importers:
         specifier: 19.3.1
         version: 19.3.1(react@19.3.1)
       remotion:
-        specifier: 4.0.536
-        version: 4.0.536(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+        specifier: 4.0.542
+        version: 4.0.542(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -5384,6 +5384,12 @@ packages:
 
   remotion@4.0.536:
     resolution: {integrity: sha512-e2e1TCk7a2qmTY+ow0Tco1NMY9/m/Vss6eBfh9WkZSlLB5EyTWRnUvLKUK/wYMLHDdlvOfUJ9kqtuQyX6RCNRw==}
+    peerDependencies:
+      react: '>=16.8.0'
+      react-dom: '>=16.8.0'
+
+  remotion@4.0.542:
+    resolution: {integrity: sha512-GLd8+Ri0I8UShZF2IHHyvPlBqxh1JX1ffm6JDaMgWkc29FdtajFaNtHDBTYMoOPz2tfTRkhBo+GOdluYGjoBaA==}
     peerDependencies:
       react: '>=16.8.0'
       react-dom: '>=16.8.0'
@@ -12139,6 +12145,11 @@ snapshots:
       - supports-color
 
   remotion@4.0.536(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
+    dependencies:
+      react: 19.3.1
+      react-dom: 19.3.1(react@19.3.1)
+
+  remotion@4.0.542(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
     dependencies:
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
