@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.26.4](https://github.com/lamngockhuong/termote/compare/v2.26.3...v2.26.4) (2026-11-13)
+
+
+### Bug Fixes
+
+* check links in a subfolder before Open in Windows shows a folder ([#813](https://github.com/lamngockhuong/termote/issues/813)) ([dfb0d1b](https://github.com/lamngockhuong/termote/commit/dfb0d1bb404260c7b10faf4b9053ffa631862ef8))
+* **files:** check links in a subfolder before Open in Windows shows a folder ([dfb0d1b](https://github.com/lamngockhuong/termote/commit/dfb0d1bb404260c7b10faf4b9053ffa631862ef8))
+* read the Claude Code config dir of the Herdr pane's own process ([#810](https://github.com/lamngockhuong/termote/issues/810)) ([d276eec](https://github.com/lamngockhuong/termote/commit/d276eec52bcf22c9895e6cc45302f37ea534b200)), closes [#796](https://github.com/lamngockhuong/termote/issues/796)
+* **website:** serve llms-full.txt and llms-small.txt from the tag ([#814](https://github.com/lamngockhuong/termote/issues/814)) ([dfb15d9](https://github.com/lamngockhuong/termote/commit/dfb15d9efc6544292641dd3b8e7873d9e1e100c5))
+
 ## [2.26.3](https://github.com/lamngockhuong/termote/compare/v2.26.2...v2.26.3) (2026-11-13)
 
 
