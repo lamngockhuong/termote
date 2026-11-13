@@ -949,6 +949,8 @@ Test trên thiết bị di động thật:
 - [ ] Ký tự đổi chiều chữ hoặc khoảng trắng độ rộng 0 hiện thành `⟨U+XXXX⟩`, dán ra lại đúng ký tự gốc
 - [ ] Thiết bị chỉ xem: mở bảng từ thanh View only, chỉ có phần màn hình, không gửi request `/text`
 - [ ] Cài đặt > Copy on select: nhả chuột sau khi kéo thì chữ được chép, có toast ngắn; mặc định tắt
+- [ ] Copy on select khi `tmux set -g mouse on`: kéo thường không chép gì và hiện toast nhắc Shift (Option
+      trên macOS), mỗi lần tải trang một lần; Shift+kéo (Option+kéo trên macOS) bôi đen và chép được
 - [ ] Mở trang qua HTTP thường trong LAN (không phải secure context): vẫn chép được, hoặc có toast báo lỗi rõ ràng
 
 ### Màn Chào Và Hướng Dẫn Nhanh

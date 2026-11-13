@@ -77,6 +77,10 @@ Copies the text you select in the terminal with the mouse as soon as you release
 shows a short "Copied" toast. Off, select the text and press Ctrl+Shift+C (Cmd+C on a Mac) instead;
 see [Copy text](/usage/keyboard/#copy-text).
 
+A program that takes the mouse (tmux with `set -g mouse on`, vim with `mouse=a`, htop) receives a plain
+drag itself, so nothing is selected. Hold Shift while dragging (Option on a Mac) to select and copy the
+text anyway; the first such drag on a page shows a toast that says so.
+
 | Option | Behavior                                         | Default |
 | ------ | ------------------------------------------------ | ------- |
 | Off    | A selection is copied with Ctrl+Shift+C or Cmd+C | ✓       |

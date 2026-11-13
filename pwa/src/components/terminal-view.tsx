@@ -18,6 +18,7 @@ import { readToken, type UiStyle } from '../ui-style'
 import { backendIsPaneStream } from '../utils/backend'
 import { safeUrl } from '../utils/markdown-safety'
 import { recordSelection } from '../utils/pane-selection'
+import { isApplePlatform } from '../utils/platform'
 import {
   blockContextMenu,
   copyTerminalSelection,
@@ -115,6 +116,9 @@ interface Props {
   // A selection was copied: by Ctrl+Shift+C ('key') or a drag ending with
   // copyOnSelect ('select').
   onCopy?: (result: 'ok' | 'failed', how: 'key' | 'select') => void
+  // With copyOnSelect, a mouse drag went to the program in the pane as mouse
+  // reports (tmux mouse on, vim mouse=a), so nothing was selected.
+  onDragReported?: () => void
 }
 
 // What the Reconnect button says, by why the stream is down
@@ -208,6 +212,9 @@ export function stripTerminalReplies(data: string): string {
   return data.replace(TERMINAL_REPLY, '')
 }
 
+// How far the mouse has to move between press and release for a drag
+const DRAG_MIN_PX = 4
+
 // biome-ignore lint/suspicious/noControlCharactersInRegex: matches the paste end marker
 const PASTE_END = /\x1b\[201~/g
 
@@ -297,6 +304,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       onPasteImage,
       copyOnSelect = false,
       onCopy,
+      onDragReported,
       fixedFontSize,
       onLayoutSignal,
     },
@@ -349,6 +357,8 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
     onPasteImageRef.current = onPasteImage
     const onCopyRef = useRef(onCopy)
     onCopyRef.current = onCopy
+    const onDragReportedRef = useRef(onDragReported)
+    onDragReportedRef.current = onDragReported
     const driveSizeRef = useRef(driveSize)
     driveSizeRef.current = driveSize
     const onDriveLostRef = useRef(onDriveLost)
@@ -638,6 +648,9 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
         // scrollbars in index.css. With no decorations the ruler draws nothing.
         overviewRuler: { width: 8 },
         linkHandler: { activate: (_event, uri) => openTerminalLink(uri) },
+        // On a Mac, Option+drag selects in a pane that takes the mouse, as
+        // Shift+drag does elsewhere.
+        macOptionClickForcesSelection: true,
       })
       const fit = new FitAddon()
       term.loadAddon(fit)
@@ -805,22 +818,35 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
     // With copyOnSelect, the end of a mouse drag copies what it selected,
     // inside the mouseup gesture (Safari and Firefox let a page write the
     // clipboard only then), once per selection. A drag that starts in the
-    // terminal may end anywhere on the page.
+    // terminal may end anywhere on the page. A drag the program in the pane
+    // took as mouse reports selects nothing: onDragReported says so, unless
+    // the drag held the key that makes xterm.js select anyway.
     useEffect(() => {
       const container = containerRef.current
       const term = termRef.current
       /* v8 ignore next */
       if (!copyOnSelect || !container || !term) return
+      const apple = isApplePlatform()
       let copied = ''
-      let dragging = false
+      let start: MouseEvent | null = null
       const onMouseDown = (e: MouseEvent) => {
-        if (e.button === 0) dragging = true
+        if (e.button === 0) start = e
       }
       const onMouseUp = (e: MouseEvent) => {
-        if (e.button !== 0 || !dragging) return
-        dragging = false
+        if (e.button !== 0 || !start) return
+        const down = start
+        start = null
         const text = term.hasSelection() ? term.getSelection() : ''
-        if (!text || text === copied) return
+        if (!text) {
+          const moved =
+            Math.hypot(e.clientX - down.clientX, e.clientY - down.clientY) >=
+            DRAG_MIN_PX
+          const forced = apple ? down.altKey : down.shiftKey
+          if (moved && !forced && term.modes.mouseTrackingMode !== 'none')
+            onDragReportedRef.current?.()
+          return
+        }
+        if (text === copied) return
         copied = text
         void copyTerminalSelection(handleRef.current).then((result) => {
           if (result !== 'empty') onCopyRef.current?.(result, 'select')

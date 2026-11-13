@@ -31,6 +31,7 @@ const { FakeTerminal, FakeFit } = vi.hoisted(() => {
       disableStdin?: boolean
       linkHandler?: { activate: (event: MouseEvent, uri: string) => void }
       overviewRuler?: { width?: number }
+      macOptionClickForcesSelection?: boolean
     }
     cols = 80
     rows = 24
@@ -74,6 +75,7 @@ const { FakeTerminal, FakeFit } = vi.hoisted(() => {
       theme: unknown
       linkHandler?: { activate: (event: MouseEvent, uri: string) => void }
       overviewRuler?: { width?: number }
+      macOptionClickForcesSelection?: boolean
     }) {
       this.options = {
         fontSize: opts.fontSize,
@@ -81,6 +83,7 @@ const { FakeTerminal, FakeFit } = vi.hoisted(() => {
         theme: opts.theme,
         linkHandler: opts.linkHandler,
         overviewRuler: opts.overviewRuler,
+        macOptionClickForcesSelection: opts.macOptionClickForcesSelection,
       }
       FakeTerminal.last = this
     }
@@ -323,6 +326,11 @@ describe('TerminalView', () => {
     // xterm.js and FitAddon both read this width; unset, they use 14px
     const { term } = renderView()
     expect(term.options.overviewRuler?.width).toBe(8)
+  })
+
+  it('lets Option+drag select on a Mac in a pane that takes the mouse', () => {
+    const { term } = renderView()
+    expect(term.options.macOptionClickForcesSelection).toBe(true)
   })
 
   it('pads the terminal element, where FitAddon counts it', () => {
@@ -1462,6 +1470,76 @@ describe('TerminalView', () => {
       term.selection = 'new'
       drag()
       expect(bridge.copyTerminalSelection).toHaveBeenCalledTimes(2)
+    })
+
+    it('reports a drag the pane took as mouse reports, with copyOnSelect', () => {
+      const onDragReported = vi.fn()
+      const { term, rerender, ref } = renderView({ onDragReported })
+      const el = screen.getByTestId('terminal-view')
+      const drag = (
+        down: MouseEventInit = {},
+        dx = 40,
+        target: Element = el,
+      ) => {
+        fireEvent.mouseDown(el, {
+          button: 0,
+          clientX: 10,
+          clientY: 10,
+          ...down,
+        })
+        fireEvent.mouseUp(target, { button: 0, clientX: 10 + dx, clientY: 10 })
+      }
+      term.modes.mouseTrackingMode = 'drag'
+      // Off: nothing is watched
+      drag()
+      expect(onDragReported).not.toHaveBeenCalled()
+
+      rerender(
+        <TerminalView
+          ref={ref}
+          paneId="0"
+          copyOnSelect
+          onDragReported={onDragReported}
+        />,
+      )
+      // A click, not a drag
+      drag({}, 2)
+      // Shift (not on a Mac) made xterm.js select: nothing to say
+      drag({ shiftKey: true })
+      expect(onDragReported).not.toHaveBeenCalled()
+      drag({}, 40, document.body)
+      expect(onDragReported).toHaveBeenCalledTimes(1)
+      // A selection was made: it is copied, no hint
+      term.selection = 'abc'
+      drag()
+      expect(onDragReported).toHaveBeenCalledTimes(1)
+      // No mouse reporting: an empty drag is just an empty drag
+      term.selection = ''
+      term.modes.mouseTrackingMode = 'none'
+      drag()
+      expect(onDragReported).toHaveBeenCalledTimes(1)
+    })
+
+    it('takes Option, not Shift, as the select key on a Mac', () => {
+      const platform = vi
+        .spyOn(navigator, 'platform', 'get')
+        .mockReturnValue('MacIntel')
+      try {
+        const onDragReported = vi.fn()
+        const { term } = renderView({ onDragReported, copyOnSelect: true })
+        const el = screen.getByTestId('terminal-view')
+        term.modes.mouseTrackingMode = 'vt200'
+        const drag = (down: MouseEventInit) => {
+          fireEvent.mouseDown(el, { button: 0, clientX: 0, ...down })
+          fireEvent.mouseUp(el, { button: 0, clientX: 30 })
+        }
+        drag({ altKey: true })
+        expect(onDragReported).not.toHaveBeenCalled()
+        drag({ shiftKey: true })
+        expect(onDragReported).toHaveBeenCalledTimes(1)
+      } finally {
+        platform.mockRestore()
+      }
     })
   })
 

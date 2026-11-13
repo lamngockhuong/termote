@@ -329,6 +329,8 @@ export default {
   'shell.image.insert': 'Chèn',
   'shell.copied': 'Đã sao chép',
   'shell.copyFailed': 'Không sao chép được',
+  'shell.dragReported':
+    'Chương trình trong pane này đang nhận chuột nên kéo không bôi đen được gì. Giữ {key} khi kéo để bôi đen và sao chép.',
   'shell.group.hasWorktrees':
     'Workspace này còn worktree; hãy xóa chúng trước, hoặc đóng nó trong Herdr',
   'shell.group.closeFailed': 'Không đóng được {noun}',

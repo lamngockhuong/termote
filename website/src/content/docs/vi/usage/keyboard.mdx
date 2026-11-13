@@ -136,7 +136,8 @@ thiết bị thì dùng một trong ba cách sau:
 - **Ctrl+Shift+C** (máy tính, trừ macOS): khi đã bôi đen bằng chuột, tổ hợp này chép vùng chọn và không
   gửi gì vào terminal; chưa bôi đen thì phím vẫn tới chương trình như trước. Combo ^⇧C trên thanh công
   cụ cũng vậy. Trên macOS, Cmd+C chép vùng chọn.
-- **Copy on select** trong [Cài đặt](/vi/usage/settings/): chép ngay khi nhả nút chuột.
+- **Copy on select** trong [Cài đặt](/vi/usage/settings/): chép ngay khi nhả nút chuột. Nếu chương trình
+  đang nhận chuột (tmux bật mouse, vim `mouse=a`), giữ Shift khi kéo (Option trên macOS).
 
 Trang mở bằng HTTP thường (địa chỉ LAN) không có Clipboard API. Khi đó trình duyệt chép bằng lệnh copy
 của chính nó, và báo lỗi nếu lệnh này cũng bị từ chối. Terminal Herdr vẽ lại cả màn hình mỗi khi luồng

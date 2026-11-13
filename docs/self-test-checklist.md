@@ -987,6 +987,8 @@ Test on real mobile device:
 - [ ] A bidi or zero-width character shows as `⟨U+XXXX⟩` and pastes as the character itself
 - [ ] View-only device: the sheet opens from the View only bar, shows the screen only, sends no `/text` request
 - [ ] Settings > Copy on select: releasing a mouse drag copies, with a short toast; off by default
+- [ ] Copy on select with `tmux set -g mouse on`: a plain drag copies nothing and shows a toast naming Shift
+      (Option on a Mac), once per page load; Shift+drag (Option+drag on a Mac) selects and copies
 - [ ] Over plain HTTP on the LAN (no secure context): copying still works, or a clear error toast
 
 ### Welcome Screen and Tour

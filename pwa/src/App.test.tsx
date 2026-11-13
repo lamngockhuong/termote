@@ -349,6 +349,7 @@ let reportStreamState: (state: string) => void = () => {}
 let pasteImage: ((image: File) => void) | undefined
 let terminalCopy: ((result: 'ok' | 'failed') => void) | undefined
 let terminalCopyOnSelect: boolean | undefined
+let terminalDragReported: (() => void) | undefined
 // The handle the mocked terminal hands App through its ref; none by default.
 let terminalHandle: { paste: (text: string) => boolean } | null = null
 // The real stack; layoutShown makes it report the layout view as shown,
@@ -382,12 +383,14 @@ vi.mock('./components/terminal-view', () => ({
       onPasteImage?: (image: File) => void
       onCopy?: (result: 'ok' | 'failed') => void
       copyOnSelect?: boolean
+      onDragReported?: () => void
       ref?: { current: unknown } | ((h: unknown) => void)
     }) => {
       reportStreamState = props.onConnectionStateChange
       pasteImage = props.onPasteImage
       terminalCopy = props.onCopy
       terminalCopyOnSelect = props.copyOnSelect
+      terminalDragReported = props.onDragReported
       if (typeof props.ref === 'function') props.ref(terminalHandle)
       else if (props.ref) props.ref.current = terminalHandle
       return <div data-testid="terminal-view">Terminal</div>
@@ -1705,6 +1708,37 @@ describe('App', () => {
     const toast = await screen.findByTestId('toast')
     expect(toast).toHaveTextContent('Could not copy')
     expect(toast).toHaveAttribute('data-variant', 'danger')
+  })
+
+  it('says once per load which key selects in a pane that takes the mouse', async () => {
+    render(<App />)
+    await waitFor(() => expect(terminalDragReported).toBeDefined())
+    act(() => terminalDragReported!())
+    const toast = await screen.findByTestId('toast')
+    expect(toast).toHaveTextContent('Hold Shift while dragging')
+    expect(toast).toHaveAttribute('data-variant', 'info')
+    act(() => terminalCopy!('failed'))
+    await waitFor(() =>
+      expect(screen.getByTestId('toast')).toHaveTextContent('Could not copy'),
+    )
+    act(() => terminalDragReported!())
+    expect(screen.getByTestId('toast')).toHaveTextContent('Could not copy')
+  })
+
+  it('names Option as the select key on a Mac', async () => {
+    const platform = vi
+      .spyOn(navigator, 'platform', 'get')
+      .mockReturnValue('MacIntel')
+    try {
+      render(<App />)
+      await waitFor(() => expect(terminalDragReported).toBeDefined())
+      act(() => terminalDragReported!())
+      expect(await screen.findByTestId('toast')).toHaveTextContent(
+        'Hold Option while dragging',
+      )
+    } finally {
+      platform.mockRestore()
+    }
   })
 
   it('handleScroll calls scrollTmux', async () => {
