@@ -80,6 +80,9 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/utils/layout-view.ts`                    | Layout view: when it shows, pane boxes, the font it fits at    |
 | `pwa/src/utils/backend.ts`                        | Backends streaming one pane at their own size (Herdr, hc)      |
 | `pwa/src/utils/terminal-bridge.ts`                | Drives the xterm.js terminal (key mapping, clipboard paste)    |
+| `pwa/src/utils/terminal-webgl.ts`                 | WebGL renderer: load, DOM fallback, context loss, 8 per page   |
+| `pwa/src/utils/spare-stream-token.ts`             | One stream token fetched ahead for a full-role client          |
+| `pwa/src/utils/terminal-probe.ts`                 | E2E only: a terminal's rows read from its buffer               |
 | `pwa/src/components/chat-view.tsx`                | Chat view of a pane running Claude Code (lazy-loaded)          |
 | `pwa/src/components/chat-composer.tsx`            | Chat view message box                                          |
 | `pwa/src/components/chat-activity-row.tsx`        | Chat view: working line; what a done turn left running         |

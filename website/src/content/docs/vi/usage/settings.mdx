@@ -87,6 +87,19 @@ kéo đầu tiên như vậy trên trang sẽ hiện thông báo nhắc điều 
 | Tắt      | Vùng chọn được chép bằng Ctrl+Shift+C hoặc Cmd+C | ✓        |
 | Bật      | Vùng chọn được chép khi nhả chuột                 |          |
 
+## Vẽ terminal bằng GPU
+
+Nhãn trong ứng dụng: **Draw the terminal with the GPU**.
+Terminal được vẽ bằng WebGL2 trên GPU của thiết bị, nên output dài vẫn mượt. Trình duyệt không có WebGL2,
+hoặc mất nó giữa chừng, thì terminal vẽ như trước, không dùng GPU; app quay lại từ nền thì thử lại GPU. Trên
+máy tính, mỗi trang có tối đa 8 terminal dùng GPU, các terminal còn lại vẽ không dùng GPU. Tắt đi nếu chữ bị
+mờ, nháy hoặc sai màu trên thiết bị này. Cài đặt này ở riêng từng thiết bị: Xuất và nhập không mang nó theo.
+
+| Tùy chọn | Hành vi                                     | Mặc định |
+| -------- | ------------------------------------------- | -------- |
+| Bật      | Terminal được vẽ bằng WebGL2 khi chạy được | ✓        |
+| Tắt      | Terminal được vẽ không dùng GPU             |          |
+
 ## Hiện các pane Herdr cạnh nhau (Herdr, chỉ máy tính)
 
 Nhãn trong ứng dụng: **Show herdr panes side by side**.
@@ -392,7 +405,8 @@ của nó.
 Cài đặt → Xuất và nhập chuyển cài đặt của trình duyệt này sang trình duyệt khác: bấm **Lưu ra file** hoặc
 **Chép**, sang trình duyệt kia bấm **Nhập từ file…**, hoặc dán nội dung vào rồi bấm **Xem trước**. Một bảng
 liệt kê từng cài đặt hiện tại và sau khi đổi; bạn chưa bấm **Áp dụng** thì chưa có gì thay đổi. Thông báo và số
-trên icon của app vẫn đặt riêng trên từng thiết bị, vì bật chúng cần cấp quyền.
+trên icon của app vẫn đặt riêng trên từng thiết bị, vì bật chúng cần cấp quyền; Vẽ terminal bằng GPU cũng
+vậy, vì nó tuỳ vào GPU của thiết bị.
 
 ## Cài đặt do agent đề xuất
 

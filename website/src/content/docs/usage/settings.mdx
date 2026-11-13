@@ -86,6 +86,19 @@ text anyway; the first such drag on a page shows a toast that says so.
 | Off    | A selection is copied with Ctrl+Shift+C or Cmd+C | ✓       |
 | On     | A selection is copied when the mouse is released |         |
 
+## Draw the Terminal with the GPU
+
+Draws the terminal with WebGL2 on this device's GPU, which keeps large output smooth. Where the browser has no
+WebGL2, or loses it, the terminal draws as before, without the GPU; after the app has been in the background,
+it tries the GPU again. On a computer, up to 8 terminals of a page use the GPU, the others draw without it.
+Turn it off if text looks blurry, flickers or has the wrong colours on this device. The setting stays with this
+device: Export and Import do not carry it.
+
+| Option | Behavior                                         | Default |
+| ------ | ------------------------------------------------ | ------- |
+| On     | The terminal is drawn with WebGL2 where it runs | ✓       |
+| Off    | The terminal is drawn without the GPU            |         |
+
 ## Show Herdr Panes Side by Side (Herdr, Desktop Only)
 
 On a computer, a Herdr tab of 2 to 4 panes shows its panes side by side, in the Herdr desktop's layout, each one its own terminal, all at the font size that fits the window. Click a pane, or pick it in the pane strip, to type into it. With the switch off, or when the panes would be too small to read, Termote shows one pane at a time with the pane strip. See [Herdr Backend](/usage/sessions/#herdr-backend).
@@ -376,7 +389,8 @@ the update. A banner says so, with **Switch to English**, until either of its bu
 Settings → Export & import moves this browser's settings to another browser: **Save to a file** or **Copy**,
 then in the other browser **Import a file…**, or paste the text and press **Review**. A table lists each
 setting as it is now and as it would be, and nothing changes until **Apply**. Notifications and the count on
-the app icon stay with each device: turning them on asks for a permission.
+the app icon stay with each device, since turning them on asks for a permission, and so does Draw the
+terminal with the GPU, which depends on the device's GPU.
 
 ## Settings an Agent Proposes
 
