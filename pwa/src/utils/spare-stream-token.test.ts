@@ -113,13 +113,16 @@ describe('refill', () => {
     ['a network error', () => Promise.reject(new TypeError('offline'))],
     ['a reply without a token', () => reply(200, {})],
     ['an empty token', () => reply(200, { token: '' })],
-  ])('keeps nothing after %s, and tries again on the next call', async (_n, answer) => {
-    fetchMock.mockImplementationOnce(answer)
-    refill()
-    await settle()
-    expect(await takeToken()).toEqual({ token: 'fresh', spare: false })
-    fetchMock.mockReturnValueOnce(reply(200, { token: 'kept' }))
-    refill()
-    expect(fetchMock).toHaveBeenCalledTimes(2)
-  })
+  ])(
+    'keeps nothing after %s, and tries again on the next call',
+    async (_n, answer) => {
+      fetchMock.mockImplementationOnce(answer)
+      refill()
+      await settle()
+      expect(await takeToken()).toEqual({ token: 'fresh', spare: false })
+      fetchMock.mockReturnValueOnce(reply(200, { token: 'kept' }))
+      refill()
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    },
+  )
 })

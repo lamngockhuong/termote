@@ -1,7 +1,10 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setCurrentMachineForTest } from '../utils/api-base'
-import { resetSpareForTest, SPARE_MAX_AGE_MS } from '../utils/spare-stream-token'
+import {
+  resetSpareForTest,
+  SPARE_MAX_AGE_MS,
+} from '../utils/spare-stream-token'
 import {
   BACKOFF_MAX_MS,
   backoffDelay,
@@ -771,7 +774,11 @@ describe('useTermSocket spare token', () => {
   const token = (ws: FakeWS) => new URL(ws.url).searchParams.get('token')
 
   it('opens the next stream with the token fetched after the last one opened', async () => {
-    const { rerender } = setup({ paneId: 'p1', streamKey: 'a', spareToken: true })
+    const { rerender } = setup({
+      paneId: 'p1',
+      streamKey: 'a',
+      spareToken: true,
+    })
     await flush()
     expect(token(last())).toBe('tok')
     act(() => last().open())
@@ -789,7 +796,11 @@ describe('useTermSocket spare token', () => {
   })
 
   it('fetches a token itself when the spare is too old', async () => {
-    const { rerender } = setup({ paneId: 'p1', streamKey: 'a', spareToken: true })
+    const { rerender } = setup({
+      paneId: 'p1',
+      streamKey: 'a',
+      spareToken: true,
+    })
     await flush()
     act(() => last().open())
     await flush()
