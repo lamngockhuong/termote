@@ -338,8 +338,13 @@ Ctrl+C. Chỉ khởi động agent ở pane mà bạn biết chắc đang ở d�
 
 - tmux: chat đi theo pane đang được focus trong cửa sổ tmux. Ở cửa sổ chia đôi, chat nói chuyện với pane
   đang focus.
-- Herdr: transcript được đọc từ `~/.claude` của người dùng chạy Termote. Claude Code chạy với
-  `CLAUDE_CONFIG_DIR` khác sẽ không hiện lịch sử.
+- Herdr trước 0.9.3: transcript được đọc từ `~/.claude` của người dùng chạy Termote. Claude
+  Code chạy với `CLAUDE_CONFIG_DIR` khác sẽ không hiện lịch sử. Từ Herdr 0.9.3, Termote dùng thư
+  mục cấu hình của chính Claude Code đang chạy trong pane, giống như trên tmux.
+- Herdr: Claude Code báo phiên của nó cho Herdr qua các hook trong chính thư mục cấu hình của nó.
+  Claude Code chạy với `CLAUDE_CONFIG_DIR` khác (ví dụ một hàm shell riêng cho từng tài khoản)
+  cũng phải cài tích hợp vào thư mục đó, nếu không view Chat sẽ báo không tìm thấy phiên:
+  `CLAUDE_CONFIG_DIR=~/.claude-work herdr integration install claude`, rồi khởi động lại Claude Code.
 - Chưa hỗ trợ chế độ container.
 - Hiện chỉ có Claude Code và Codex.
 

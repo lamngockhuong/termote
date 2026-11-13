@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.26.3](https://github.com/lamngockhuong/termote/compare/v2.26.2...v2.26.3) (2026-11-13)
+
+
+### Bug Fixes
+
+* end subagents the user stops in Claude Code as stopped ([#803](https://github.com/lamngockhuong/termote/issues/803)) ([c9b9ab2](https://github.com/lamngockhuong/termote/commit/c9b9ab28c9d98cc31f4f37faf058b9ccce216393))
+* harden Open in Windows, the website's install check and the Go toolchain ([#807](https://github.com/lamngockhuong/termote/issues/807)) ([3e7d0dd](https://github.com/lamngockhuong/termote/commit/3e7d0ddf77482651e0f06455a44744e82a9176b8))
+* name the path itself in the symbolic link refusal ([#809](https://github.com/lamngockhuong/termote/issues/809)) ([06e3049](https://github.com/lamngockhuong/termote/commit/06e30490564fe6768e2850ef6543de3f5deb4689))
+* read the open file again on Refresh in Files ([#808](https://github.com/lamngockhuong/termote/issues/808)) ([60db48d](https://github.com/lamngockhuong/termote/commit/60db48d34d249e0a089436e4c92959a43f1949e9))
+* say which key selects when a pane takes the mouse with Copy on select ([#806](https://github.com/lamngockhuong/termote/issues/806)) ([36a95b9](https://github.com/lamngockhuong/termote/commit/36a95b94aa2f9e1ef384256cf66e4fa025b3d188)), closes [#801](https://github.com/lamngockhuong/termote/issues/801)
+* scroll a fullscreen agent on the hc backend with wheel reports ([#805](https://github.com/lamngockhuong/termote/issues/805)) ([5c71142](https://github.com/lamngockhuong/termote/commit/5c71142b213cc0971ad44a7e9f9603bb3539124f))
+
 ## [2.26.2](https://github.com/lamngockhuong/termote/compare/v2.26.1...v2.26.2) (2026-11-13)
 
 

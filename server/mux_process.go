@@ -207,10 +207,7 @@ func (c *herdrProcCache) refresh(ctx context.Context, stale []string, fetch func
 					e.name, e.ok = name, e.fetched
 				}
 				c.entries[p] = e
-				var he *herdrError
-				if errors.As(err, &he) && he.Code == "invalid_request" {
-					c.disabled = c.now().Add(herdrProcRetry)
-				}
+				c.pauseOnLocked(err)
 				c.mu.Unlock()
 			}
 		}()
@@ -231,6 +228,29 @@ feed:
 	}
 	close(jobs)
 	wg.Wait()
+}
+
+// off reports whether pane.process_info calls are paused because Herdr
+// lacks it.
+func (c *herdrProcCache) off() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.now().Before(c.disabled)
+}
+
+// noteErr pauses pane.process_info calls when err says Herdr lacks it.
+func (c *herdrProcCache) noteErr(err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.pauseOnLocked(err)
+}
+
+// pauseOnLocked is noteErr with c.mu held.
+func (c *herdrProcCache) pauseOnLocked(err error) {
+	var he *herdrError
+	if errors.As(err, &he) && he.Code == "invalid_request" {
+		c.disabled = c.now().Add(herdrProcRetry)
+	}
 }
 
 // herdrProcessInfo is the part of pane.process_info this server decodes:

@@ -798,7 +798,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   (no UNC or device path), else the server user's `%USERPROFILE%\.claude` when the block cannot be
   read), and only for a process whose start time
   matches its session file's `procStart`; Herdr reports the session id itself, read from the
-  server user's config dir. The session id must be a UUID. Every write (Claude Code or Codex)
+  config dir of the Claude Code found under the pane's `shell_pid` (`pane.process_info`, Herdr
+  0.9.3+, same checks, `paneClaudeDir`) only when its session file names that id, else the server
+  user's config dir (`defaultClaudeDir`; also while a Herdr without `pane.process_info` is left
+  alone, `herdrProcRetry`). The session id must be a UUID. Every write (Claude Code or Codex)
   takes a lock on the pane, waiting for it at most `agentRequestMost` (7.5 min) less the write's own
   bound and only while the client is there, else 409 `input_busy` with nothing sent (so a write
   over a machine ends before its hub's `machineResponseHeaderWait` and is never delivered after
