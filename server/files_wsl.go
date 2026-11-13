@@ -375,14 +375,16 @@ func detectWSLWindows(scope string) wslWindows {
 // another computer's share that drvfs may show to Linux as a plain file),
 // "none" otherwise. The item and the folders on the way are looked at
 // before the folder is listed, so a link is never followed to list it.
-// Other reparse points (OneDrive's placeholders) are not links. A fixed
+// Other reparse points (OneDrive's placeholders) are not links. Written for
+// Windows PowerShell 5.1, the one every Windows has (Split-Path's
+// -LiteralPath with -Parent needs 6). A fixed
 // script, no double quote in it, with the path as data: nothing of the path
 // is read as PowerShell.
 const windowsLinksScript = `$ErrorActionPreference = 'Stop'; ` +
 	`$p = $env:TERMOTE_OPEN_PATH; ` +
 	`function L($x) { $x.LinkType -eq 'SymbolicLink' -or $x.LinkType -eq 'Junction' }; ` +
 	`$i = Get-Item -LiteralPath $p -Force; if (L $i) { 'link'; exit }; ` +
-	`for ($d = Split-Path -LiteralPath $p -Parent; $d; $d = Split-Path -LiteralPath $d -Parent) { if (L (Get-Item -LiteralPath $d -Force)) { 'link'; exit } }; ` +
+	`for ($d = [IO.Path]::GetDirectoryName($p); $d; $d = [IO.Path]::GetDirectoryName($d)) { if (L (Get-Item -LiteralPath $d -Force)) { 'link'; exit } }; ` +
 	`if ($i.PSIsContainer) { foreach ($x in Get-ChildItem -LiteralPath $p -Force) { if (L $x) { 'link'; exit } } }; ` +
 	`'none'`
 

@@ -481,7 +481,7 @@ func TestWindowsLinksScript(t *testing.T) {
 	if strings.Contains(s, `"`) || !strings.Contains(s, "$env:TERMOTE_OPEN_PATH") {
 		t.Errorf("script %q", s)
 	}
-	if i, j := strings.Index(s, "if (L $i)"), strings.Index(s, "Get-ChildItem"); i < 0 || j < 0 || i > j || strings.Index(s, "Split-Path") > j {
+	if i, j := strings.Index(s, "if (L $i)"), strings.Index(s, "Get-ChildItem"); i < 0 || j < 0 || i > j || strings.Index(s, "GetDirectoryName") > j || strings.Contains(s, "Split-Path") {
 		t.Errorf("the folder is listed before its links are looked at: %q", s)
 	}
 }
