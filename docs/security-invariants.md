@@ -2701,22 +2701,82 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   The website (`deploy-website.yml`) serves `install.sh` and `install.ps1`, which pin the release
   key, so they are the root of this trust, `/agents.md` (`server/agent-guide.md`), which
   `llms.txt` and the install docs tell a coding agent to follow, with the install commands in it,
-  and `/llms.txt` (`website/llms.txt`, which CI's `build-website` compares with the one the build
+  and `/llms.txt` (`website/llms.txt`, which CI's `check-website` compares with the one the build
   makes of `astro.config.mjs`), which sends a coding agent there.
   Its `build` job runs the site's and the PWA's dependencies and uploads the built site as a plain
   artifact, naming its id as a job output. The Pages artifact is made and deployed by `deploy`, one
   job that runs no dependency code, after the `github-pages` approval and with no wait between the
-  upload and the deploy (a sparse checkout of the tag's `scripts/`, `server/agent-guide.md` and `website/llms.txt`
+  upload and the deploy (a sparse checkout of the tag's `scripts/`, `server/agent-guide.md`, `website/llms.txt`,
+  `website/astro.config.mjs`, `website/src/` and `website/public/`
   without credentials, a download of the built site by id, upload, deploy): it copies those four
   files from the tag over whatever the build left and compares them byte for byte, then runs the
-  tag's `scripts/check-site-installs.mjs` on every other `.html`, `.txt` and `.md` file (pages,
-  `llms-full.txt`, `llms-small.txt`): each command piping a download into a shell (`curl … | sh`,
-  `irm … | iex`, `iex (irm …)`, in a page's text, its markup or a copy button's `data-code`) and each
-  link to an install script, the agent guide or an llms file must name `https://termote.ohnice.app/`
-  or `https://raw.githubusercontent.com/lamngockhuong/termote/`, else the deploy fails (CI runs it on
-  every website build too). A page is still the build's: a script a dependency injected into it can
-  change what it shows once it runs, and wording the check does not read (prose naming another
-  download) passes; only the four files and the commands are held to the tag. A background
+  tag's `scripts/check-site-installs.mjs` on every other file but scripts, style sheets and binary
+  types (pages, sitemaps and SVG files as markup, `llms-full.txt`, `llms-small.txt`, captions and
+  other `.md .txt .vtt .json .webmanifest` files or files with no extension as text; any other type,
+  a link in the artifact, an `xml-stylesheet` instruction, a `<foreignObject>` or `xml:base` in an
+  XML file is an error; an XML file's element is read by its local name, `h:base` as `base`, an HTML
+  page's by its whole name; a text file's prose, its code taken out, is read as HTML too, its
+  a reference it does not decode refused only with its `;`, and held to the same refusals; a
+  paragraph that may start an HTML block is read both as markdown and whole as HTML, and a
+  `<pre>`, `<script>`, `<style>` or `<textarea>` block whole to its end tag),
+  against the tag's sources. A page is read as the HTML specification tokenizes it (a tag only at
+  `<` and a letter, HTML whitespace only, attributes after whitespace, `/` or a quote, an end tag's
+  too, comments; only `<script>` and `<style>` skipped as raw text (their bodies read for install
+  links and downloads like an attribute's text), ended by their own end tag, and
+  not inside `<svg>`/`<math>` or in an XML file; `<template>` read as markup; `<textarea>` and
+  `<title>` as text; whitespace collapsed outside `<pre>`, a line broken by `<br>`, at a block's start and at
+  the end of a block that is open), and what the check does not model is refused: a `<base>` off the site,
+  `<plaintext>`, `<xmp>`, `<listing>`, `<iframe>`, `<noscript>`, `<noembed>`, `<noframes>`,
+  `<object>`, `<embed>`, `<frame>`, `<frameset>`, `<portal>`, `<fencedframe>`, CDATA, a DOCTYPE other
+  than `<!DOCTYPE html>`, a processing instruction other than the XML declaration, a charset or XML
+  encoding other than UTF-8, a script holding `<!--`, a `<style>`, `<script>` or HTML integration
+  point (`foreignObject`, `annotation-xml`, `mi`…), an HTML element that ends them there (`p`,
+  `div`, `span`, `pre`…), or an element inside an svg `<title>` or `<desc>` (text only)
+  or a `<textarea>` inside
+  `<svg>`/`<math>` of a page, a `</svg>` or `</math>` that closes no open one, inside code a `hidden`
+  attribute, a `style` setting anything but custom properties (`--0:#fff`), or any element but `span div code pre br wbr b i em strong mark kbd samp var a sub sup
+  small s u del ins` (an `<img alt>`, an `<input value>`, a `<ruby>` show other text), code holding a line break
+  it does not split at (U+2028, U+2029, U+0085, a vertical tab, a form feed, DEL, a carriage
+  return written as a reference), a named
+  character reference
+  other than `&amp; &lt; &gt; &quot; &nbsp; &AMP; &LT; &GT; &QUOT;` (with their `;` or without) and
+  `&apos;` (numeric ones are decoded as a browser does).
+  Then two allow lists: every line of code a file shows (a `<pre>` or `<code>`, a copy button's
+  `data-code`, a markdown fence, read both at the top level and after any indent, quote marks or
+  list marker, ended with its list item or quote (its lines read by their quote marks and the
+  item's indent in columns), a fence closed by a less indented one read both as closed and as
+  reopened; a paragraph that starts an HTML block holds no code span; a triple-backtick span loses
+  its first word only when that word is a language the sources' fences name;
+  or an inline code span found as CommonMark finds it, within its paragraph; an indented block is read as prose) must be a
+  whole line, code line or code span of those sources, whitespace collapsed and nothing else changed
+  (a fenced block as one line too, as `llms-small.txt` writes it); every link to an install script
+  (`.sh .bash .zsh .ps1 .psm1 .cmd .bat .py`, the pathname decoded), the agent guide or an llms file,
+  in an attribute or a markdown link (relative and protocol-relative ones resolved against the
+  page's own address or its first `<base>`) or written out, must be exactly one of `https://termote.ohnice.app/` `install.sh`, `install.ps1`,
+  `agents.md`, `llms.txt`, `llms-full.txt`, `llms-small.txt`, or
+  `https://raw.githubusercontent.com/lamngockhuong/termote/` `release/0.x` or a version tag, then
+  `/scripts/install` or `/scripts/get` `.sh`/`.ps1` (a markdown destination's escapes undone, its
+  references decoded; a reference definition read after quote marks and list markers too; an IPv6
+  host written out read as one); and a meta refresh, `url=` or not, stays on the site and is held
+  to the same link rule; links resolve against the page's own address or its first `<base>`. A file with a UTF-16
+  byte order mark or a NUL byte is refused. Else the deploy fails. CI runs the same check on every
+  website build, in a job of its own (`check-website`) that runs no dependency code, on the built
+  site downloaded as an artifact by id (the demo included, as deploy builds it), and compares the four
+  files deploy takes from the tag with the ones the build copied from the checkout. Prose is not held to the tag: a line
+  outside code that pipes a download into a shell or an interpreter (`curl … | sh`, `| /bin/sh`,
+  `| doas sh`, `irm … | iex`, `iex (…)`, `$(curl …)`, `<(curl …)`, a backtick around one) fails only
+  when it names no address, or an address other than those above or this computer's (`localhost`, `127.0.0.1`), a
+  host with no scheme or an IP address, a backslash, a proxy (`*_proxy=`) or a curl option that
+  leads the download elsewhere (`--resolve`, `--connect-to`, `-x` and `-K` in a cluster too,
+  `--proxy…`, `--socks…`, `--dns-…`), and is not a line of the sources; in a line over 500
+  characters it reads from an unclosed `$(`, `<(` or `iex (` before the fetch word, or 300
+  characters before it, to the first sink after it; prose naming another download in a form it does
+  not know passes, and so do several inline code elements side by side, each a source line, that
+  read together as one command. A page is still the
+  build's: a script or a style sheet (CSS `content:`, a hidden block) a dependency injected into it
+  can change what it shows once it loads, and the search index (pagefind fragments, shown by its
+  script) is not read. An install link is told by its path's ending (`.sh`, `/agents.md`…): a
+  link to another host's `…/agents` without one passes. Only the four files and the code are held to the tag. A background
   process a build dependency left running cannot reach that job, since the runner ends a job's
   processes with it; an artifact deleted and uploaded again under the same name, with a runtime
   token such a process took, has another id and is not the one downloaded. `verify` compares the

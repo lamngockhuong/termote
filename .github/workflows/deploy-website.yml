@@ -129,10 +129,15 @@ jobs:
         with:
           ref: ${{ inputs.tag || github.ref }}
           persist-credentials: false
+          # The sources check-site-installs.mjs reads (its SOURCES): keep
+          # the two lists alike.
           sparse-checkout: |
             scripts
             server/agent-guide.md
             website/llms.txt
+            website/astro.config.mjs
+            website/src
+            website/public
           path: src
 
       - name: Download the built site
@@ -152,12 +157,14 @@ jobs:
             cmp "$from" "$to"
           done
 
-      # Every other page was written by the build's dependencies: each
-      # command piping a download into a shell and each link to an install
-      # script, the agent guide or an llms.txt must name this project's
-      # own files. The tag's check, run by the runner's own node.
+      # Every other page was written by the build's dependencies: each line
+      # of code must be one of the tag's sources (src), a download into a
+      # shell in prose may name only this project's own addresses, and each
+      # link to an install script, the agent guide or an llms file must be
+      # one of this project's own files. The tag's check, run by the
+      # runner's own node.
       - name: Check the site's install commands
-        run: node src/scripts/check-site-installs.mjs site
+        run: node src/scripts/check-site-installs.mjs site src
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
