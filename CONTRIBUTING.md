@@ -46,7 +46,11 @@ pnpm lint         # Biome
 ```bash
 pnpm --filter @termote/website dev    # Docs site
 pnpm --filter @termote/website build
+make llms                             # After a docs change: regenerate website/llms-full.txt and llms-small.txt
 ```
+
+The site serves `llms-full.txt` and `llms-small.txt` from the committed files, so a docs change commits them
+too; CI fails while they differ from the build.
 
 ### Server Development
 
