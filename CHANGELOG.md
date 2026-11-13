@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.26.2](https://github.com/lamngockhuong/termote/compare/v2.26.1...v2.26.2) (2026-11-13)
+
+
+### Bug Fixes
+
+* harden machine answers, Open in Windows, the release workflow and the website's install commands ([#799](https://github.com/lamngockhuong/termote/issues/799)) ([fa88ee6](https://github.com/lamngockhuong/termote/commit/fa88ee684dcb5937b46a6eafa0e428726a384770))
+* harden Open in Windows and the website's install check ([#802](https://github.com/lamngockhuong/termote/issues/802)) ([b77e2f9](https://github.com/lamngockhuong/termote/commit/b77e2f934502bc4f2d92b17c12456d6b08605699))
+
 ## [2.26.1](https://github.com/lamngockhuong/termote/compare/v2.26.0...v2.26.1) (2026-11-10)
 
 
