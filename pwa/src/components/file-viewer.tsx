@@ -455,6 +455,9 @@ interface Props {
   line?: number
   col?: number
   jump?: number
+  // The tree's Refresh, each time it changes: the file is read again as it
+  // is on the host now, never while it is being edited
+  refresh?: number
   // Where the desktop editor opens when editing starts here (Changes: the
   // first changed line), without forcing the source view like line does
   editAt?: EditorAt
@@ -631,6 +634,7 @@ export function FileViewer({
   line,
   col,
   jump,
+  refresh,
   editAt,
   tableLayout,
   onTableLayout,
@@ -695,6 +699,8 @@ export function FileViewer({
   // Table edits a reload could not apply again
   const [skipped, setSkipped] = useState<Skipped[]>([])
   const [reload, setReload] = useState(0)
+  // The next read is a Refresh's (below)
+  const quietRead = useRef(false)
   const [wrap, setWrap] = useState(wrapByDefault)
   const { settings, updateSetting } = useSettings()
   // The search result picked last in this tab: its line shows in the
@@ -908,7 +914,11 @@ export function FileViewer({
   useEffect(() => {
     if (binaryView) return
     let live = true
-    setState({ kind: 'loading' })
+    // A Refresh keeps the text shown while it reads: no flash of Loading,
+    // and the view (its scroll, an open preview) stays
+    const quiet = quietRead.current
+    quietRead.current = false
+    if (!quiet) setState({ kind: 'loading' })
     fetchFileContent(target, path, { root, reveal, encoding: override }).then(
       (c) => {
         if (!live) return
@@ -943,6 +953,23 @@ export function FileViewer({
     onRootChanged,
     reload,
   ])
+
+  // The tree's Refresh: the file read again, quietly. Not while a draft is
+  // open: what the user edits stays, and its save still refuses a file
+  // that changed since it was read.
+  const refreshed = useRef(refresh)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once per Refresh
+  useEffect(() => {
+    if (refresh === refreshed.current) return
+    refreshed.current = refresh
+    if (mineRef.current) return
+    if (binaryView) {
+      setRetry((n) => n + 1)
+      return
+    }
+    quietRead.current = true
+    setReload((n) => n + 1)
+  }, [refresh])
 
   // A draft found when the file is read (one kept from before the app
   // closed, or from before a remount) is checked against the file: one the

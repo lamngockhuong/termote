@@ -462,6 +462,9 @@ function PaneFiles({
   // to the results
   const [query, setQuery] = useState('')
   const [refreshTick, setRefreshTick] = useState(0)
+  // Bumped by Refresh: the file shown reads again (only its tab's viewer is
+  // mounted; another tab reads its file when it is shown)
+  const [fileRefresh, setFileRefresh] = useState(0)
   // Where the tree shows: the tree with the name box, or the content search,
   // whose query, results and scroll are kept here the same way
   const [pane, setPane] = useState<'files' | 'search'>('files')
@@ -607,6 +610,7 @@ function PaneFiles({
 
   const refresh = () => {
     f.refresh()
+    setFileRefresh((n) => n + 1)
     if (query.trim() || search.query) setRefreshTick((n) => n + 1)
   }
 
@@ -1183,6 +1187,7 @@ function PaneFiles({
             line={tab.line}
             col={tab.col}
             jump={tab.jump}
+            refresh={fileRefresh}
             tableLayout={tab.table}
             onTableLayout={(l) => f.setTableLayout(tab.id, l)}
             backTo={tab.history[tab.history.length - 1]?.path}
