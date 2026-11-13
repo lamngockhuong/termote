@@ -209,10 +209,10 @@ func herdrCanStartAgents(v string) bool {
 // pane, straight from pane.get rather than the snapshot cache, so /clear or a
 // resume shows up on the next poll. herdr keeps the last session reported
 // for a pane even after another agent replaced it, hence the agent check.
-// herdr does not expose the pane's process, so a Claude Code transcript is
-// looked up in the config dir of a Claude Code started by the server's user,
-// and a Codex session counts only while a Codex process holds its rollout
-// (findCodexSession).
+// A Claude Code transcript is looked up in the config dir of the Claude Code
+// process found under the pane's shell (paneClaudeDir), and a Codex session
+// counts only while a Codex process holds its rollout (findCodexSession, which
+// reads that process's own CODEX_HOME).
 func (m *herdrMux) AgentSession(ctx context.Context, paneID string) (AgentSession, bool, error) {
 	if !herdrPaneIDRe.MatchString(paneID) {
 		return AgentSession{}, false, inputError("invalid pane id")
@@ -250,8 +250,33 @@ func (m *herdrMux) AgentSession(ctx context.Context, paneID string) (AgentSessio
 	}
 	return AgentSession{
 		Agent: "claude", ID: ref.Value, Status: status,
-		ClaudeDir: defaultClaudeDir(), Target: paneID,
+		ClaudeDir: m.paneClaudeDir(ctx, paneID, ref.Value), Target: paneID,
 	}, true, nil
+}
+
+// herdrClaudeSession is findClaudeSession; tests replace it.
+var herdrClaudeSession = findClaudeSession
+
+// paneClaudeDir is the config dir of the pane's Claude Code session id: the
+// one its own process uses (CLAUDE_CONFIG_DIR set in the pane), when the
+// Claude Code found under the pane's shell (pane.process_info, Herdr 0.9.3+)
+// has a session file naming id with its pid and start time. Otherwise, or
+// while a Herdr without pane.process_info is left alone, defaultClaudeDir.
+// Herdr runs on this host, so its pids are this host's.
+func (m *herdrMux) paneClaudeDir(ctx context.Context, paneID, id string) string {
+	if m.procs.off() {
+		return defaultClaudeDir()
+	}
+	ctx, cancel := context.WithTimeout(ctx, herdrProcBudget)
+	defer cancel()
+	info, err := m.paneProcess(ctx, paneID)
+	m.procs.noteErr(err)
+	if err == nil && info.ShellPID > 0 {
+		if s, ok := herdrClaudeSession(paneID, info.ShellPID); ok && s.Agent == "claude" && s.ID == id && s.ClaudeDir != "" {
+			return s.ClaudeDir
+		}
+	}
+	return defaultClaudeDir()
 }
 
 // Health pings the server now; a missing socket or an unknown protocol version

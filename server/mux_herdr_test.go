@@ -1601,11 +1601,21 @@ func TestHerdrStaleSnapshotKeepsNewerSize(t *testing.T) {
 	noChange(t, ts, "stale snapshot")
 }
 
+// stubHerdrClaudeSession replaces the process walk behind a Herdr pane's
+// Claude Code config dir for the test.
+func stubHerdrClaudeSession(t *testing.T, find func(string, int) (AgentSession, bool)) {
+	t.Helper()
+	old := herdrClaudeSession
+	herdrClaudeSession = find
+	t.Cleanup(func() { herdrClaudeSession = old })
+}
+
 func TestHerdrAgentSession(t *testing.T) {
 	f := newFakeHerdr(t)
 	m := newTestHerdrMux(t, f)
 	ctx := context.Background()
 	t.Setenv("CLAUDE_CONFIG_DIR", "/cfg/claude")
+	stubHerdrClaudeSession(t, func(string, int) (AgentSession, bool) { return AgentSession{}, false })
 	set := func(agent string, extra map[string]any) {
 		f.mu.Lock()
 		f.agent, f.paneExtra = agent, extra
@@ -1650,6 +1660,83 @@ func TestHerdrAgentSession(t *testing.T) {
 	}
 	if c := m.Caps(); !c.AgentChat || !c.Files || !c.PaneStream {
 		t.Errorf("Caps() = %+v, want AgentChat, Files and PaneStream", c)
+	}
+}
+
+func TestHerdrAgentSessionClaudeDir(t *testing.T) {
+	f := newFakeHerdr(t)
+	m := newTestHerdrMux(t, f)
+	ctx := context.Background()
+	t.Setenv("CLAUDE_CONFIG_DIR", "/cfg/claude")
+	f.mu.Lock()
+	f.agent, f.paneExtra = "claude", map[string]any{"agent_status": "idle", "agent_session": map[string]any{
+		"agent": "claude", "kind": "id", "value": testSessionID, "source": "herdr:claude"}}
+	f.procs = map[string]any{"wR:p3": fakeProcessInfo("wR:p3", 4242, 4300, fakeProc(4300, "claude", "claude"))}
+	f.mu.Unlock()
+
+	var found AgentSession
+	var ok bool
+	var gotKey string
+	var gotPID int
+	stubHerdrClaudeSession(t, func(key string, pid int) (AgentSession, bool) {
+		gotKey, gotPID = key, pid
+		return found, ok
+	})
+	dir := func(name string) string {
+		t.Helper()
+		s, sok, err := m.AgentSession(ctx, "wR:p3")
+		if err != nil || !sok || s.ID != testSessionID {
+			t.Fatalf("%s: AgentSession = %+v, %v, %v", name, s, sok, err)
+		}
+		return s.ClaudeDir
+	}
+
+	// The pane's own Claude Code, started with CLAUDE_CONFIG_DIR set in it.
+	found, ok = AgentSession{Agent: "claude", ID: testSessionID, ClaudeDir: "/home/u/.claude-work"}, true
+	if d := dir("own config dir"); d != "/home/u/.claude-work" {
+		t.Errorf("own config dir = %q", d)
+	}
+	if gotKey != "wR:p3" || gotPID != 4242 {
+		t.Errorf("walk under %q pid %d, want the pane's shell 4242", gotKey, gotPID)
+	}
+	for name, s := range map[string]AgentSession{
+		"another session": {Agent: "claude", ID: "00000000-0000-4000-8000-000000000000", ClaudeDir: "/x"},
+		"codex":           {Agent: "codex", ID: testSessionID, CodexHome: "/x"},
+		"no config dir":   {Agent: "claude", ID: testSessionID},
+	} {
+		found, ok = s, true
+		if d := dir(name); d != "/cfg/claude" {
+			t.Errorf("%s: config dir = %q, want the default", name, d)
+		}
+	}
+	found, ok = AgentSession{}, false
+	if d := dir("no process"); d != "/cfg/claude" {
+		t.Errorf("no process: config dir = %q", d)
+	}
+
+	// A pane without a shell pid is never walked.
+	f.mu.Lock()
+	f.procs["wR:p3"] = fakeProcessInfo("wR:p3", 0, 0)
+	f.mu.Unlock()
+	gotPID = -1
+	found, ok = AgentSession{Agent: "claude", ID: testSessionID, ClaudeDir: "/x"}, true
+	if d := dir("no shell pid"); d != "/cfg/claude" || gotPID != -1 {
+		t.Errorf("no shell pid: config dir = %q, walked pid %d", d, gotPID)
+	}
+
+	// A Herdr without pane.process_info: the default, and no more calls
+	// while lookups are paused.
+	f.mu.Lock()
+	f.procFail = "invalid_request"
+	f.mu.Unlock()
+	before := f.count("pane.process_info")
+	for range 3 {
+		if d := dir("no process_info"); d != "/cfg/claude" {
+			t.Errorf("no process_info: config dir = %q", d)
+		}
+	}
+	if n := f.count("pane.process_info") - before; n != 1 {
+		t.Errorf("pane.process_info called %d times, want 1 before the pause", n)
 	}
 }
 

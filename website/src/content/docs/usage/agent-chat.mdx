@@ -339,8 +339,9 @@ an agent only in a pane you know is at its prompt.
 
 - tmux: the chat follows the pane that has focus in the window. In a split window, it talks to
   the focused pane.
-- Herdr: the transcript is read from `~/.claude` of the user running Termote. A Claude Code
-  started with another `CLAUDE_CONFIG_DIR` shows no history.
+- Herdr before 0.9.3: the transcript is read from `~/.claude` of the user running Termote. A
+  Claude Code started with another `CLAUDE_CONFIG_DIR` shows no history. From Herdr 0.9.3 the
+  config dir of the Claude Code running in the pane is used, as on tmux.
 - Container mode is not supported.
 - Only Claude Code and Codex for now.
 
