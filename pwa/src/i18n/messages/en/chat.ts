@@ -85,6 +85,7 @@ export default {
   // A Claude session's subagents (components/subagent-tree.tsx)
   'chat.subagent.running': 'running',
   'chat.subagent.done': 'done',
+  'chat.subagent.stopped': 'stopped',
   'chat.subagent.failed': 'failed',
   'chat.subagent.guessed': '(guessed)',
   'chat.subagent.count_one': '{count} subagent',

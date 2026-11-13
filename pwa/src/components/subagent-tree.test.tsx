@@ -52,6 +52,7 @@ const TREE = {
       ],
     }),
     node({ id: 'a3', status: 'done', statusGuessed: true }),
+    node({ id: 'a5', status: 'stopped', endTs: '2026-10-13T10:00:00Z' }),
   ],
 }
 
@@ -85,8 +86,9 @@ describe('subagent helpers', () => {
       'a2',
       'a4',
       'a3',
+      'a5',
     ])
-    expect(subagentSummary(TREE, en)).toBe('4 subagents, 1 running')
+    expect(subagentSummary(TREE, en)).toBe('5 subagents, 1 running')
     expect(subagentSummary({ nodes: [node({ status: 'done' })] }, en)).toBe(
       '1 subagent',
     )
@@ -114,6 +116,7 @@ describe('SubagentTree', () => {
       'running',
       'error',
       'done',
+      'stopped',
     ])
     expect(items[0]).toHaveTextContent(
       'code-reviewer· done · 3 min · ↓ 30k tokens',
@@ -125,6 +128,8 @@ describe('SubagentTree', () => {
     expect(items[2]).toHaveTextContent('failed')
     expect(items[2].style.marginLeft).toBe('12px')
     expect(items[3]).toHaveTextContent('done (guessed)')
+    expect(items[4]).toHaveTextContent('stopped')
+    expect(items[4]).not.toHaveTextContent('failed')
     // Only a running subagent's icon glows, and only with motion allowed
     const pulsing = document.querySelectorAll('[class*="animate-pulse"]')
     expect(pulsing).toHaveLength(1)

@@ -1,4 +1,4 @@
-import { CircleAlert, CircleCheck, CircleDot } from 'lucide-react'
+import { CircleAlert, CircleCheck, CircleDot, CircleStop } from 'lucide-react'
 import type { SubagentNode, Subagents } from '../hooks/use-mux-api'
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
@@ -22,6 +22,11 @@ const NODE_STYLE = {
     Icon: CircleCheck,
     className: 'text-success',
     word: 'chat.subagent.done',
+  },
+  stopped: {
+    Icon: CircleStop,
+    className: 'text-fg-muted',
+    word: 'chat.subagent.stopped',
   },
   error: {
     Icon: CircleAlert,
