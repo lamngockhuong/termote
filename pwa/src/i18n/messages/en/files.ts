@@ -270,7 +270,7 @@ export default {
   'files.openWindows.runsProgram':
     'Windows may run {name} as a program; not opened',
   'files.openWindows.folderReaches':
-    '{name} holds shortcuts (.url, .lnk, desktop.ini) Windows may follow to another computer while it shows the folder; not opened',
+    '{name}, or a folder on the way to it, holds or sits beside entries (shortcuts, desktop.ini, shell folders, broken links) Windows may follow to another computer while it shows them; not opened',
   'files.openWindows.askRun': 'Run this file as a program?',
   'files.openWindows.askRunBody':
     "Windows may run <name></name> as a program on the computer the server runs on, with your Windows account's access, not just show it: it is not a type Windows is known only to show. Run it only if you trust it.",

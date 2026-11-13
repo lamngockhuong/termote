@@ -250,7 +250,7 @@ export default {
   'files.openWindows.runsProgram':
     'Windows có thể chạy {name} như một chương trình nên không mở',
   'files.openWindows.folderReaches':
-    '{name} chứa shortcut (.url, .lnk, desktop.ini) mà Windows có thể đi theo tới máy khác khi hiển thị thư mục nên không mở',
+    '{name}, hoặc một thư mục trên đường tới nó, chứa hoặc nằm cạnh mục (shortcut, desktop.ini, thư mục shell, link hỏng) mà Windows có thể đi theo tới máy khác khi hiển thị nên không mở',
   'files.openWindows.askRun': 'Chạy file này như một chương trình?',
   'files.openWindows.askRunBody':
     'Windows có thể chạy <name></name> như một chương trình trên máy chạy server, với quyền của tài khoản Windows của bạn, chứ không chỉ hiển thị nó: đây không phải loại file Windows chỉ hiển thị. Chỉ chạy khi bạn tin file này.',

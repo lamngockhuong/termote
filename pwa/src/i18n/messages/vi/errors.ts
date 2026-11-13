@@ -26,7 +26,7 @@ export default {
   'errors.file_changed': 'File đã đổi từ lúc đọc',
   'errors.filtered': 'File đi qua một bộ lọc git. Hãy dùng terminal',
   'errors.folder_reaches':
-    'Thư mục chứa shortcut mà Windows có thể đi theo tới máy khác. Hãy tự mở nó từ Windows',
+    'Thư mục chứa hoặc nằm cạnh mục mà Windows có thể đi theo tới máy khác. Hãy tự mở nó từ Windows',
   'errors.full_needs_password':
     'Chỉ phiên đăng nhập bằng mật khẩu hoặc CLI mới được làm thế',
   'errors.hardlink': 'File có nhiều liên kết cứng',

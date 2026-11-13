@@ -37,7 +37,7 @@ describe('openInWindowsError', () => {
     ],
     [
       err(403, 'folder_reaches'),
-      'a.html holds shortcuts (.url, .lnk, desktop.ini) Windows may follow to another computer while it shows the folder; not opened',
+      'a.html, or a folder on the way to it, holds or sits beside entries (shortcuts, desktop.ini, shell folders, broken links) Windows may follow to another computer while it shows them; not opened',
     ],
     [err(400, 'not_file'), 'Windows could not open a.html'],
     [new Error('offline'), 'Windows could not open a.html'],
