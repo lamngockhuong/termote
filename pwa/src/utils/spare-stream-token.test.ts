@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  REFILL_TIMEOUT_MS,
   refill,
   resetSpareForTest,
   SPARE_MAX_AGE_MS,
@@ -70,12 +71,12 @@ describe('takeToken', () => {
     expect(fetchTerminalToken).toHaveBeenCalledTimes(2)
   })
 
-  it('drops the spare when asked for a fresh token', async () => {
+  it('keeps the spare for later when asked for a fresh token', async () => {
     fetchMock.mockReturnValueOnce(reply(200, { token: 'kept' }))
     refill()
     await settle()
     expect(await takeToken(false)).toEqual({ token: 'fresh', spare: false })
-    expect(await takeToken()).toEqual({ token: 'fresh', spare: false })
+    expect(await takeToken()).toEqual({ token: 'kept', spare: true })
   })
 
   it('never gives one spare to two streams', async () => {
@@ -97,7 +98,9 @@ describe('refill', () => {
     refill()
     refill()
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(fetchMock).toHaveBeenCalledWith('/api/mux/stream-token')
+    expect(fetchMock).toHaveBeenCalledWith('/api/mux/stream-token', {
+      signal: expect.any(AbortSignal),
+    })
     answer(await reply(200, { token: 'kept' }))
     await settle()
     refill()
@@ -125,4 +128,23 @@ describe('refill', () => {
       expect(fetchMock).toHaveBeenCalledTimes(2)
     },
   )
+
+  it(`gives up a request unanswered after ${REFILL_TIMEOUT_MS} ms`, async () => {
+    vi.useFakeTimers()
+    fetchMock.mockImplementationOnce(
+      (_url: string, init: { signal: AbortSignal }) =>
+        new Promise((_r, reject) =>
+          init.signal.addEventListener('abort', () =>
+            reject(new DOMException('aborted', 'AbortError')),
+          ),
+        ),
+    )
+    refill()
+    refill()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(REFILL_TIMEOUT_MS)
+    fetchMock.mockReturnValueOnce(reply(200, { token: 'kept' }))
+    refill()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
 })

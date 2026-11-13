@@ -78,17 +78,25 @@ export function loadWebgl(
     inUse++
     slot = true
     lost = false
+    let a: WebglAddonLike | null = null
     try {
-      const a = new Addon()
-      a.onContextLoss(() => {
-        if (addon !== a) return
+      const made = new Addon()
+      a = made
+      made.onContextLoss(() => {
+        if (addon !== made) return
         lost = true
         unload()
       })
-      term.loadAddon(a)
-      addon = a
+      term.loadAddon(made)
+      addon = made
     } catch {
-      // No WebGL2 here, or the terminal is gone
+      // No WebGL2 here, or the terminal is gone: an addon half started may
+      // hold a canvas and a context
+      try {
+        a?.dispose()
+      } catch {
+        // Nothing more to free
+      }
       give()
     }
   }

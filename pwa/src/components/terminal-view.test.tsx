@@ -708,6 +708,17 @@ describe('TerminalView', () => {
       expect(calls(term)).toEqual(['reset'])
     })
 
+    it('clears at once on the stream opened after an exit, the ids of a restarted tmux being reused', () => {
+      const { term } = renderView({ paneId: '%0', streamKey: '$0' })
+      act(() => socketOpts.onOpen())
+      socketOpts.onOutput(out)
+      act(() => socketOpts.onControl({ type: 'exit', code: 0 }))
+      term.reset.mockClear()
+      term.write.mockClear()
+      act(() => socketOpts.onOpen())
+      expect(calls(term)).toEqual(['reset'])
+    })
+
     it('a stream with no key is told apart by its pane', () => {
       const { term } = renderView({ paneId: 'w1:p2', followPane: true })
       act(() => socketOpts.onOpen())

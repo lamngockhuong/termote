@@ -11,8 +11,11 @@ const { FakeAddon } = vi.hoisted(() => {
   class FakeAddon {
     static made: FakeAddon[] = []
     static throwOnNew = false
+    static throwOnDispose = false
     lossCb: () => void = () => {}
-    dispose = vi.fn()
+    dispose = vi.fn(() => {
+      if (FakeAddon.throwOnDispose) throw new Error('gone')
+    })
     onContextLoss = vi.fn((cb: () => void) => {
       this.lossCb = cb
       return { dispose: vi.fn() }
@@ -56,6 +59,7 @@ beforeEach(() => {
   resetWebglForTest()
   FakeAddon.made = []
   FakeAddon.throwOnNew = false
+  FakeAddon.throwOnDispose = false
   setVisibility('visible')
 })
 afterEach(() => {
@@ -116,6 +120,18 @@ describe('loadWebgl', () => {
     await settle()
     expect(handle2.active()).toBe(false)
     expect(webglInUse()).toBe(0)
+    // The addon half started is freed, even when that throws too
+    expect(FakeAddon.made[0].dispose).toHaveBeenCalledTimes(1)
+    const term3 = fakeTerm()
+    term3.loadAddon.mockImplementation(() => {
+      throw new Error('disposed')
+    })
+    FakeAddon.throwOnDispose = true
+    const handle3 = load(term3)
+    await settle()
+    expect(handle3.active()).toBe(false)
+    expect(webglInUse()).toBe(0)
+    handle3.dispose()
     handle.dispose()
     handle2.dispose()
   })

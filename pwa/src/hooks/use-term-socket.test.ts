@@ -784,7 +784,9 @@ describe('useTermSocket spare token', () => {
     act(() => last().open())
     await flush()
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(fetchMock).toHaveBeenCalledWith('/api/mux/stream-token')
+    expect(fetchMock).toHaveBeenCalledWith('/api/mux/stream-token', {
+      signal: expect.any(AbortSignal),
+    })
     // Another tmux session: no token request before its socket
     rerender({ paneId: 'p1', streamKey: 'b', spareToken: true })
     await flush()

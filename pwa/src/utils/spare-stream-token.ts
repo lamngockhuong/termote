@@ -29,20 +29,28 @@ export function resetSpareForTest(): void {
 export async function takeToken(
   allowSpare = true,
 ): Promise<{ token: string; spare: boolean }> {
-  const kept = spare
-  spare = null
-  if (allowSpare && kept && Date.now() - kept.at < SPARE_MAX_AGE_MS) {
-    return { token: kept.token, spare: true }
+  if (allowSpare) {
+    const kept = spare
+    spare = null
+    if (kept && Date.now() - kept.at < SPARE_MAX_AGE_MS) {
+      return { token: kept.token, spare: true }
+    }
   }
   return { token: await fetchTerminalToken(), spare: false }
 }
+
+// A spare request still unanswered after this is dropped (a connection left
+// half-open by a network switch), as fetchTerminalToken drops its own
+export const REFILL_TIMEOUT_MS = 5000
 
 // Fetches a spare when there is none and none is on its way. One request,
 // no retries: a failure leaves the next stream to fetch its own.
 export function refill(): void {
   if (spare || inflight) return
   inflight = true
-  fetch(`${apiBase()}/stream-token`)
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), REFILL_TIMEOUT_MS)
+  fetch(`${apiBase()}/stream-token`, { signal: ctrl.signal })
     .then((res) => (res.ok ? res.json() : null))
     .then((data: { token?: unknown } | null) => {
       if (typeof data?.token === 'string' && data.token) {
@@ -53,6 +61,7 @@ export function refill(): void {
       // Offline or refused: nothing kept
     })
     .finally(() => {
+      clearTimeout(timer)
       inflight = false
     })
 }

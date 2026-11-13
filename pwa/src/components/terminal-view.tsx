@@ -584,6 +584,10 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
           // Not on the screen kept from before the stream opened again
           flushReset(term)
           term.write(`\r\n[${tRef.current('shell.terminal.exited')}]\r\n`)
+          // What reconnects after an exit is never the same stream: tmux,
+          // restarted after its last session ended, numbers its sessions
+          // and panes from 0 again
+          drawnStreamRef.current = null
         } else if (msg.type === 'error') {
           flushReset(term)
           term.write(
