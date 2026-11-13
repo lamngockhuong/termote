@@ -400,6 +400,86 @@ func TestFilesOpenWindowsOnTheWayLinks(t *testing.T) {
 	}
 }
 
+// Explorer draws a subfolder's thumbnail from the pictures in it: a link in
+// a subfolder of the folder opened that cannot be followed inside the pane
+// root, one to nothing, or an entry neither a file nor a folder refuses it;
+// a link inside the root does not, and the navigation pane does not look
+// into the folders beside the way.
+func TestFilesOpenWindowsSubfolderLinks(t *testing.T) {
+	fx, _ := newOpenFixture(t)
+	full := &authInfo{Kind: authSession, Role: roleFull}
+	fx.write(t, "repo/pics/b.png", "x")
+	pics := filepath.Join(fx.root, "repo", "pics")
+	if err := os.Symlink("b.png", filepath.Join(pics, "a.png")); err != nil {
+		t.Fatal(err)
+	}
+	if res := fx.open(openWindowsRequest{Path: "repo"}, full); res.StatusCode != 200 {
+		t.Errorf("a subfolder holding a link inside the root = %d %s", res.StatusCode, errorCode(t, res))
+	}
+	out := filepath.Join(t.TempDir(), "c.png")
+	if err := os.WriteFile(out, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p := filepath.Join(pics, "c.png")
+	for name, mk := range map[string]func(p string) error{
+		"out of the root": func(p string) error { return os.Symlink(out, p) },
+		"to nothing":      func(p string) error { return os.Symlink("nowhere.png", p) },
+		"a named pipe":    func(p string) error { return syscall.Mkfifo(p, 0o600) },
+	} {
+		if err := mk(p); err != nil {
+			t.Fatal(err)
+		}
+		if res := fx.open(openWindowsRequest{Path: "repo"}, full); res.StatusCode != 403 || errorCode(t, res) != "folder_reaches" {
+			t.Errorf("a subfolder holding %s = %d", name, res.StatusCode)
+		}
+		// the pane root itself, its subfolder repo holding the entry
+		q := filepath.Join(fx.root, "repo", "c.png")
+		if err := mk(q); err != nil {
+			t.Fatal(err)
+		}
+		if res := fx.open(openWindowsRequest{Path: "."}, full); res.StatusCode != 403 || errorCode(t, res) != "folder_reaches" {
+			t.Errorf("the root, a subfolder holding %s = %d", name, res.StatusCode)
+		}
+		if err := os.Remove(q); err != nil {
+			t.Fatal(err)
+		}
+		if res := fx.open(openWindowsRequest{Path: "repo/pics/b.png"}, full); res.StatusCode != 200 {
+			t.Errorf("a file beside %s = %d %s", name, res.StatusCode, errorCode(t, res))
+		}
+		if err := os.Remove(p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	fx.write(t, "top/src/a.txt", "x")
+	fx.write(t, "top/side/x.txt", "x")
+	if err := os.Symlink("nowhere", filepath.Join(fx.root, "top", "side", "l")); err != nil {
+		t.Fatal(err)
+	}
+	if res := fx.open(openWindowsRequest{Path: "top/src"}, full); res.StatusCode != 200 {
+		t.Errorf("a link in a folder beside the way = %d %s", res.StatusCode, errorCode(t, res))
+	}
+}
+
+// On a Windows drive, Windows answers for the links in a subfolder: drvfs
+// shows a junction there (pnpm's node_modules) as an absolute link, which
+// the Linux side would refuse even pointing inside the root.
+func TestFilesOpenWindowsDriveSubfolderLinks(t *testing.T) {
+	full := &authInfo{Kind: authSession, Role: roleFull}
+	for answer, want := range map[string]int{"none": 200, "link": 403} {
+		fx, calls := newDriveOpenFixture(t, answer, false)
+		fx.write(t, "node_modules/.pnpm/pkg/index.js", "x")
+		if err := os.Symlink(filepath.Join(fx.root, "node_modules", ".pnpm", "pkg"), filepath.Join(fx.root, "node_modules", "pkg")); err != nil {
+			t.Fatal(err)
+		}
+		if res := fx.open(openWindowsRequest{Path: "."}, full); res.StatusCode != want {
+			t.Errorf("Windows answers %s = %d %s", answer, res.StatusCode, errorCode(t, res))
+		}
+		if len(*calls) == 0 || (*calls)[0] != `ps C:\repo` {
+			t.Errorf("Windows answers %s: calls %q", answer, *calls)
+		}
+	}
+}
+
 // Explorer's navigation pane shows the folders on the way to the one
 // opened and the folders beside each: their desktop.ini refuses it too.
 func TestFilesOpenWindowsNavigationPane(t *testing.T) {

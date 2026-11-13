@@ -1911,7 +1911,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   it, without trailing dots or spaces (`x.{CLSID}.`, `a.lnk`, which Linux can write under `/mnt/c`),
   or holds a subfolder,
   or a link to a folder inside the pane root (Windows may follow it), that holds a `desktop.ini`, which
-  Explorer reads to show that subfolder (or a link out of the pane root, a link to nothing, which may be an
+  Explorer reads to show that subfolder, or, on the distribution's share, a link out of the pane root,
+  a link to nothing or an entry neither a file nor a folder (Explorer draws the subfolder's thumbnail
+  from the pictures in it; on a Windows drive Windows answers for those, below, since drvfs shows a
+  junction there, as pnpm and npm make in `node_modules`, as an absolute link) (or,
+  in the folder itself, a link out of the pane root, a link to nothing, which may be an
   NT link to another computer's share under `/mnt/c` that Linux cannot follow, an entry neither a
   file nor a folder, more than 10000 entries across
   both levels, or one that cannot be read; a shortcut deeper down is not shown, so not looked for)
@@ -1930,7 +1934,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   double quote in it), the path in `TERMOTE_OPEN_PATH` passed through `WSLENV` (no character of the
   path is read as PowerShell), answers whether the file or folder, a folder on the way to it up to the
   drive's root, or, only once those are known not to be links, an entry of the folder is a symbolic
-  link or a junction (so no link is followed to list it); a link, any other answer, a failure, a
+  link or a junction, or, only once every entry is known not to be one, an entry of one of its
+  subfolders is a symbolic link (a junction there, as pnpm and npm make in `node_modules`, only
+  reaches a local volume) (so no link is followed to list it; a subfolder that cannot be listed, as
+  a drive's `System Volume Information`, fails); a link, any other answer, a failure, a
   timeout (10 s) or no PowerShell refuses it, 403 `folder_reaches`. Other reparse points (OneDrive's placeholders) are not links. The
   distribution's share shows Linux's own view and is not asked. The check is of the folder as it is when opened: a file a later `git pull` adds
   to the open Explorer window is not looked at, nor is a folder above the root but for a shell

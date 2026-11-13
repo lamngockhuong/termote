@@ -383,39 +383,44 @@ func TestCheckOpenWindowsOddShare(t *testing.T) {
 // or an entry is a link, since drvfs may show an NT link as a plain file:
 // refused when it says so, when it answers anything else or fails, and when
 // there is no PowerShell to ask. The distribution's share is not asked.
-func TestFilesOpenWindowsAsksWindowsForLinks(t *testing.T) {
-	full := &authInfo{Kind: authSession, Role: roleFull}
-	setup := func(t *testing.T, answer string, fail bool) (*downloadFixture, *[]string) {
-		mounts := plainDir(t) + "/"
-		root := filepath.Join(mounts, "c", "repo")
-		if err := os.MkdirAll(root, 0o755); err != nil {
-			t.Fatal(err)
+// newDriveOpenFixture: a pane root on a Windows drive (C:\repo), where
+// PowerShell answers answer, or fails.
+func newDriveOpenFixture(t *testing.T, answer string, fail bool) (*downloadFixture, *[]string) {
+	t.Helper()
+	mounts := plainDir(t) + "/"
+	root := filepath.Join(mounts, "c", "repo")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	f := registerFilesRoutes(mux, &filesFakeMux{dir: root, files: true}, hostAllowlist{}, nil)
+	f.wsl = wslWindows{distro: `\\wsl.localhost\Ubuntu`, mounts: mounts, explorer: "/x/explorer.exe", powershell: "/x/powershell.exe"}
+	fx := &downloadFixture{root: root, f: f, mux: mux}
+	var calls []string
+	old, oldPS := wslRun, wslRunPowershell
+	wslRun = func(_ context.Context, name string, args ...string) (string, error) {
+		calls = append(calls, name+" "+strings.Join(args, " "))
+		return "", &exec.ExitError{}
+	}
+	wslRunPowershell = func(_ context.Context, exe, winPath string) (string, error) {
+		if exe != "/x/powershell.exe" {
+			t.Errorf("powershell %q", exe)
 		}
-		mux := http.NewServeMux()
-		f := registerFilesRoutes(mux, &filesFakeMux{dir: root, files: true}, hostAllowlist{}, nil)
-		f.wsl = wslWindows{distro: `\\wsl.localhost\Ubuntu`, mounts: mounts, explorer: "/x/explorer.exe", powershell: "/x/powershell.exe"}
-		fx := &downloadFixture{root: root, f: f, mux: mux}
-		var calls []string
-		old, oldPS := wslRun, wslRunPowershell
-		wslRun = func(_ context.Context, name string, args ...string) (string, error) {
-			calls = append(calls, name+" "+strings.Join(args, " "))
+		calls = append(calls, "ps "+winPath)
+		if fail {
 			return "", &exec.ExitError{}
 		}
-		wslRunPowershell = func(_ context.Context, exe, winPath string) (string, error) {
-			if exe != "/x/powershell.exe" {
-				t.Errorf("powershell %q", exe)
-			}
-			calls = append(calls, "ps "+winPath)
-			if fail {
-				return "", &exec.ExitError{}
-			}
-			return answer, nil
-		}
-		t.Cleanup(func() { wslRun, wslRunPowershell = old, oldPS })
-		fx.write(t, "a.txt", "x")
-		fx.write(t, "d/b.txt", "x")
-		return fx, &calls
+		return answer, nil
 	}
+	t.Cleanup(func() { wslRun, wslRunPowershell = old, oldPS })
+	fx.write(t, "a.txt", "x")
+	fx.write(t, "d/b.txt", "x")
+	return fx, &calls
+}
+
+func TestFilesOpenWindowsAsksWindowsForLinks(t *testing.T) {
+	full := &authInfo{Kind: authSession, Role: roleFull}
+	setup := newDriveOpenFixture
 	for _, path := range []string{"a.txt", "d"} {
 		want := `C:\repo\` + path
 		fx, calls := setup(t, "none\r\n", false)
@@ -483,5 +488,9 @@ func TestWindowsLinksScript(t *testing.T) {
 	}
 	if i, j := strings.Index(s, "if (L $i)"), strings.Index(s, "Get-ChildItem"); i < 0 || j < 0 || i > j || strings.Index(s, "GetDirectoryName") > j || strings.Contains(s, "Split-Path") {
 		t.Errorf("the folder is listed before its links are looked at: %q", s)
+	}
+	// a subfolder is listed only after every entry was looked at
+	if i, j := strings.Index(s, "foreach ($x in $c) { if (L $x)"), strings.Index(s, "Get-ChildItem -LiteralPath $x.FullName"); i < 0 || j < 0 || i > j {
+		t.Errorf("a subfolder is listed before the folder's links are looked at: %q", s)
 	}
 }
