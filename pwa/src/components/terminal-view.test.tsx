@@ -40,7 +40,14 @@ const { FakeTerminal, FakeFit } = vi.hoisted(() => {
     wheelCb: (ev: Pick<WheelEvent, 'deltaY' | 'deltaMode'>) => boolean = () =>
       true
     modes = { mouseTrackingMode: 'none' }
-    buffer = { active: { type: 'normal' } }
+    buffer = {
+      active: {
+        type: 'normal',
+        viewportY: 0,
+        getLine: (y: number) =>
+          y === 0 ? { translateToString: () => 'top row' } : undefined,
+      },
+    }
     attachCustomWheelEventHandler = vi.fn(
       (cb: (ev: Pick<WheelEvent, 'deltaY' | 'deltaMode'>) => boolean) => {
         this.wheelCb = cb
@@ -1556,5 +1563,37 @@ describe('TerminalView', () => {
     expect(term.write).not.toHaveBeenCalled()
     handle.paste('x')
     expect(term.paste).not.toHaveBeenCalled()
+  })
+
+  it('offers a probe to E2E tests only with the test flag', async () => {
+    type W = {
+      __termoteE2E?: boolean
+      __termoteTerms?: Array<{
+        paneId: () => string | undefined
+        lines: () => string[]
+        webgl: () => boolean
+        write: (d: string) => Promise<void>
+      }>
+    }
+    const w = window as unknown as W
+    renderView().unmount()
+    expect(w.__termoteTerms).toBeUndefined()
+    w.__termoteE2E = true
+    try {
+      const { unmount, term } = renderView({ paneId: '%7' })
+      const probe = w.__termoteTerms?.[0]
+      expect(probe?.paneId()).toBe('%7')
+      expect(probe?.webgl()).toBe(false)
+      expect(probe?.lines()[0]).toBe('top row')
+      expect(probe?.lines()).toHaveLength(term.rows)
+      term.write.mockImplementation((_d: string, done?: () => void) => done?.())
+      await probe?.write('hi')
+      expect(term.write).toHaveBeenCalledWith('hi', expect.any(Function))
+      unmount()
+      expect(w.__termoteTerms).toEqual([])
+    } finally {
+      delete w.__termoteE2E
+      delete w.__termoteTerms
+    }
   })
 })

@@ -30,6 +30,7 @@ import {
   unblockContextMenu,
 } from '../utils/terminal-bridge'
 import { terminalFontFamily } from '../utils/terminal-font'
+import { registerTerminalProbe, visibleLines } from '../utils/terminal-probe'
 import { imageFromClipboard } from '../utils/upload-image'
 import { type ConnectionState, isDown } from './connection-indicator'
 import { FOCUS_RING } from './ui/button'
@@ -658,6 +659,12 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       termRef.current = term
       fitRef.current = fit
       layout()
+      const unprobe = registerTerminalProbe({
+        paneId: () => paneIdRef.current,
+        lines: () => visibleLines(term),
+        webgl: () => false,
+        write: (data) => new Promise((done) => term.write(data, done)),
+      })
 
       // With serverScroll the wheel scrolls the backend's history, unless the
       // program in the pane asked for mouse reports.
@@ -717,6 +724,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       })
       observer.observe(container)
       return () => {
+        unprobe()
         clearTimeout(settle)
         observer.disconnect()
         for (const s of subs) s.dispose()
