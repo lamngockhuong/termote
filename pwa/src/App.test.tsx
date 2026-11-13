@@ -5243,12 +5243,14 @@ describe('App views, view-only and deep links', () => {
         role: 'view',
         viewStream: true,
         scroll: true,
+        altScroll: true,
         devices: true,
         signins: true,
       })
       render(<App />)
       await screen.findByTestId('terminal-view')
       expect(terminalProps().serverScroll).toBe(false)
+      expect(terminalProps().altScroll).toBe(false)
       fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
       expect(screen.getByTestId('settings-modal')).toHaveAttribute(
         'data-devices',
@@ -5270,12 +5272,14 @@ describe('App views, view-only and deep links', () => {
         copyMode: true,
         role: 'full',
         scroll: true,
+        altScroll: true,
         devices: true,
         signins: true,
       })
       render(<App />)
       await screen.findByTestId('terminal-view')
       expect(terminalProps().serverScroll).toBe(true)
+      expect(terminalProps().altScroll).toBe(true)
       expect(terminalProps().readOnly).toBe(false)
       fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
       expect(screen.getByTestId('settings-modal')).toHaveAttribute(

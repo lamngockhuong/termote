@@ -330,7 +330,7 @@ POST   /api/mux/worktrees          body: {groupId, branch, base, label}  → {ok
 POST   /api/mux/worktrees/open     body: {groupId, branch}      → {ok, id, alreadyOpen} | {error, code}
 DELETE /api/mux/worktrees/{id}     body: {force, path, branch}  → {ok} | {error, code}
 POST   /api/mux/panes/{id}/keys    body: {keys}                 → {ok}
-POST   /api/mux/panes/{id}/scroll  body: {lines}                → {ok}   (caps.scroll only, else 501)
+POST   /api/mux/panes/{id}/scroll  body: {lines}                → {ok}   (caps.scroll or caps.altScroll, else 501)
 GET    /api/mux/panes/{id}/text?lines=N                         → {text, lines, truncated, more} | {error, code}   (caps.paneText; full only)
 GET    /api/mux/health             → {status, apiVersion, backend, version, pid, install}
 POST   /api/mux/logout             body: {}                      → 204   (sign-in on only, else 404)
@@ -513,6 +513,14 @@ Herdr desktop scrolls with it; typing in the PWA returns it to the live screen f
 An agent that leaves no history in Herdr (Claude Code in fullscreen mode draws on the alternate
 screen) gets SGR wheel reports instead, one per row and at most 50 per call; returning to the
 live screen sends Claude Code's Ctrl+End. A pane without an agent is never sent wheel reports.
+
+`caps.altScroll` (herdr-core): the stream carries the program's own bytes, so a plain shell
+scrolls the xterm.js scrollback. A program on the alternate screen (Claude Code in fullscreen
+mode) keeps its history itself, and the PWA has nothing to scroll there: while its xterm.js
+shows the alternate screen and the program asked for mouse reports, a drag or the scroll buttons
+go to `/scroll`, which types the same SGR wheel reports (one per row, at most 50) and Claude
+Code's Ctrl+End to return to the live screen. The mouse wheel stays xterm.js's own: it reports
+the wheel to such a program itself.
 
 Zellij has no `caps.scroll`: a Zellij pane's viewport is shared by every client, so the mouse
 wheel in the full stream scrolls through Zellij itself, for every client viewing that pane.

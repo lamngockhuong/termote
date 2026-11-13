@@ -234,6 +234,12 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
     never resizes the desktop's pane; only drive does); a view-only device attaches with
     `observe` (the core lets it neither type nor resize). Input waiting for an attach is held up
     to 1 MiB. Pane layout routes other than split and close answer `unsupported`.
+  - Scroll (`Caps.AltScroll`, `server/mux_hc_ops.go`): `/scroll` (write guard, `requireWriteRole`,
+    `lines` within ±10000) types only SGR wheel reports, at most 50 per call (`wheelReports`), at the
+    middle of the pane's own size, or Claude Code's Ctrl+End for a full scroll down when the
+    terminal reports Claude; never the client's bytes. It goes through the pane's input attach, as
+    keys do. The PWA calls it only while its xterm.js shows the alternate screen of a program that
+    asked for mouse reports, so a plain shell never gets them at its prompt.
   - `herdr.seen` (`server/mux_hc_seen.go`): the stream's `visible` frame, from a full client
     only (a view stream drops it, and the stream ignores it for an observer), counts a viewer per
     terminal. The label is written only for an agent terminal with a local id, only to raise it

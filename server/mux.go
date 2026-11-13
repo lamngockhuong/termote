@@ -100,6 +100,11 @@ type Caps struct {
 	// Scroll: the stream only carries screen renders, so history is scrolled
 	// by the backend through /api/mux/panes/{id}/scroll (herdr).
 	Scroll bool `json:"scroll"`
+	// AltScroll: the stream carries the program's own bytes, so a program
+	// on the alternate screen that asked for mouse reports keeps its history
+	// itself; the client sends its scrolls to /api/mux/panes/{id}/scroll,
+	// which types them as wheel reports (herdr-core).
+	AltScroll bool `json:"altScroll"`
 	// PaneText: a pane's history and screen can be read as plain text
 	// (/api/mux/panes/{id}/text).
 	PaneText bool `json:"paneText"`

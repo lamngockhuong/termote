@@ -1695,16 +1695,21 @@ func (m *herdrMux) ReadText(ctx context.Context, paneID string, lines int, w io.
 	return info.Pane.Scroll.Max > uint64(lines), nil
 }
 
-// sendWheel types SGR wheel reports (button 64 up, 65 down) at the middle of
-// the pane, through the pane's input queue so they keep their place among
-// keystrokes.
+// sendWheel types wheel reports through the pane's input queue so they keep
+// their place among keystrokes.
 func (m *herdrMux) sendWheel(ctx context.Context, paneID string, size Size, lines int) error {
+	return m.typeInput(ctx, paneID, wheelReports(size, lines))
+}
+
+// wheelReports is one SGR wheel report (button 64 up, 65 down) per row at the
+// middle of a pane of size, at most maxWheelEvents.
+func wheelReports(size Size, lines int) string {
 	button := 64
 	if lines < 0 {
 		button, lines = 65, -lines
 	}
 	report := fmt.Sprintf("\x1b[<%d;%d;%dM", button, max(1, size.Cols/2), max(1, size.Rows/2))
-	return m.typeInput(ctx, paneID, strings.Repeat(report, min(lines, maxWheelEvents)))
+	return strings.Repeat(report, min(lines, maxWheelEvents))
 }
 
 // typeInput queues input for the pane and waits until herdr has accepted it.
