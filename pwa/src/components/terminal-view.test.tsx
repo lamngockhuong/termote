@@ -8,6 +8,7 @@ import {
   bracketPaste,
   fitFontSize,
   MIN_FONT_SIZE,
+  REDRAW_HOLD_MS,
   RESIZE_SETTLE_MS,
   stripTerminalReplies,
   type TerminalHandle,
@@ -150,6 +151,7 @@ interface SocketOpts {
   getSize: () => TermSize | null
   drive?: () => boolean
   visible?: boolean
+  spareToken?: boolean
   onOutput: (d: Uint8Array) => void
   onControl: (m: StreamControl) => void
   onOpen: () => void
@@ -473,6 +475,13 @@ describe('TerminalView', () => {
     expect(socketOpts.getSize()).toBeNull()
   })
 
+  it('keeps a spare stream token only when told the role is full', () => {
+    const { rerender, ref } = renderView()
+    expect(socketOpts.spareToken).toBe(false)
+    rerender(<TerminalView ref={ref} paneId="0" spareToken />)
+    expect(socketOpts.spareToken).toBe(true)
+  })
+
   it('writes stream output to the terminal', () => {
     const { term } = renderView()
     const bytes = new Uint8Array([104, 105])
@@ -609,21 +618,69 @@ describe('TerminalView', () => {
       expect(calls(term)).toEqual(['reset'])
     })
 
-    it('keeps the screen of the same stream until its first output, reset in the write stream', () => {
-      const { term } = renderView({ paneId: '%1', streamKey: 's1' })
-      act(() => socketOpts.onOpen())
-      socketOpts.onOutput(out)
-      term.reset.mockClear()
-      term.write.mockClear()
-      act(() => socketOpts.onOpen())
-      expect(term.reset).not.toHaveBeenCalled()
-      expect(term.write).not.toHaveBeenCalled()
-      // Opened once more before any output: still kept
-      act(() => socketOpts.onOpen())
-      expect(calls(term)).toEqual([])
-      socketOpts.onOutput(out)
-      socketOpts.onOutput(out)
-      expect(calls(term)).toEqual(['\x1bc', out, out])
+    it('keeps the screen of the same stream until its redraw, written with a reset in one go', () => {
+      vi.useFakeTimers()
+      try {
+        const { term } = renderView({ paneId: '%1', streamKey: 's1' })
+        act(() => socketOpts.onOpen())
+        socketOpts.onOutput(out)
+        term.reset.mockClear()
+        term.write.mockClear()
+        act(() => socketOpts.onOpen())
+        expect(term.reset).not.toHaveBeenCalled()
+        expect(term.write).not.toHaveBeenCalled()
+        // Opened once more before any output: still kept
+        act(() => socketOpts.onOpen())
+        expect(calls(term)).toEqual([])
+        // The redraw's pieces are held a moment, then written together
+        const clear = new Uint8Array([27, 91, 50, 74])
+        socketOpts.onOutput(clear)
+        socketOpts.onOutput(out)
+        vi.advanceTimersByTime(REDRAW_HOLD_MS - 1)
+        expect(calls(term)).toEqual([])
+        vi.advanceTimersByTime(1)
+        expect(calls(term)).toEqual(['\x1bc', clear, out])
+        // Later output is written as it comes
+        socketOpts.onOutput(out)
+        expect(calls(term)).toEqual(['\x1bc', clear, out, out])
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('drops output held for a stream that closed again before writing it', () => {
+      vi.useFakeTimers()
+      try {
+        const { term } = renderView({ paneId: '%1', streamKey: 's1' })
+        act(() => socketOpts.onOpen())
+        term.reset.mockClear()
+        act(() => socketOpts.onOpen())
+        const stale = new Uint8Array([1])
+        socketOpts.onOutput(stale)
+        act(() => socketOpts.onOpen())
+        vi.advanceTimersByTime(REDRAW_HOLD_MS)
+        expect(calls(term)).toEqual([])
+        socketOpts.onOutput(out)
+        vi.advanceTimersByTime(REDRAW_HOLD_MS)
+        expect(calls(term)).toEqual(['\x1bc', out])
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('writes nothing held after the terminal is gone', () => {
+      vi.useFakeTimers()
+      try {
+        const { term, unmount } = renderView({ paneId: '%1', streamKey: 's1' })
+        act(() => socketOpts.onOpen())
+        act(() => socketOpts.onOpen())
+        socketOpts.onOutput(out)
+        unmount()
+        vi.advanceTimersByTime(REDRAW_HOLD_MS)
+        expect(term.write).not.toHaveBeenCalled()
+      } finally {
+        vi.useRealTimers()
+      }
     })
 
     it.each([
@@ -661,16 +718,17 @@ describe('TerminalView', () => {
     it.each([
       ['exit', { type: 'exit' as const, code: 0 }, '\r\n[process exited]\r\n'],
       ['error', { type: 'error' as const, message: 'gone' }, '\r\n[gone]\r\n'],
-    ])('resets before the %s line when no output came', (_name, msg, line) => {
+    ])('resets, with what is held, before the %s line', (_name, msg, line) => {
       const { term } = renderView({ paneId: '%1', streamKey: 's1' })
       act(() => socketOpts.onOpen())
       term.reset.mockClear()
       act(() => socketOpts.onOpen())
+      socketOpts.onOutput(out)
       act(() => socketOpts.onControl(msg))
-      expect(calls(term)).toEqual(['\x1bc', line])
+      expect(calls(term)).toEqual(['\x1bc', out, line])
       // Once only
       act(() => socketOpts.onControl(msg))
-      expect(calls(term)).toEqual(['\x1bc', line, line])
+      expect(calls(term)).toEqual(['\x1bc', out, line, line])
     })
 
     it('returns a scrolled view on input typed before the first output', async () => {

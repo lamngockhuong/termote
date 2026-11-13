@@ -92,6 +92,9 @@ interface Props {
   disableContextMenu?: boolean
   // View-only role: the terminal shows the pane but sends nothing typed.
   readOnly?: boolean
+  // The role is known to be full: keep a stream token for the next stream
+  // (useTermSocket's spareToken).
+  spareToken?: boolean
   // herdr: size the pane to this terminal while the page is shown
   // (Caps.driveSize and the setting both on).
   driveSize?: boolean
@@ -201,6 +204,12 @@ export function terminalTheme(theme: 'light' | 'dark') {
 // Smallest font a server-sized pane is shrunk to; beyond that it scrolls.
 export const MIN_FONT_SIZE = 6
 
+// How long the first output of a stream opened again is held before it is
+// written. The backend's redraw comes in pieces a moment apart, the first
+// only clearing the screen (tmux's attach); written together, the old screen
+// stays until the new one is drawn instead of a blank frame between.
+export const REDRAW_HOLD_MS = 50
+
 // Quiet time before a resized container is fitted again. An animated resize
 // (the sidebar opening) changes the size at every frame; fitting each one
 // would redraw the terminal and resize the pane on the server every frame.
@@ -302,6 +311,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       uiStyle,
       disableContextMenu = true,
       readOnly = false,
+      spareToken = false,
       driveSize = false,
       onDriveLost,
       covered = false,
@@ -364,6 +374,11 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
     const drawnStreamRef = useRef<string | null>(null)
     // That first output starts with a reset of the screen
     const pendingResetRef = useRef(false)
+    // The output held meanwhile (REDRAW_HOLD_MS), and its timer
+    const heldRef = useRef<Uint8Array[]>([])
+    const heldTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
+      undefined,
+    )
     const { t } = useT()
     // For the handlers set once: the language at the time they run
     const tRef = useRef(t)
@@ -508,14 +523,27 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       })
     }, [])
 
-    // The reset a stream opened again put off, done now: in the write
-    // stream (RIS, which xterm.js runs as term.reset()), so it is parsed in
-    // the same pass as what follows it and no blank screen is drawn between.
-    const flushReset = useCallback((term: Terminal) => {
-      if (!pendingResetRef.current) return
-      pendingResetRef.current = false
-      term.write('\x1bc')
+    // Drops what is held for the stream that showed last
+    const dropHeld = useCallback(() => {
+      clearTimeout(heldTimerRef.current)
+      heldRef.current = []
     }, [])
+
+    // The reset a stream opened again put off, done now with the output
+    // held: in the write stream (RIS, which xterm.js runs as term.reset()),
+    // so it is parsed in the same pass as what follows it and no blank
+    // screen is drawn between.
+    const flushReset = useCallback(
+      (term: Terminal) => {
+        if (!pendingResetRef.current) return
+        pendingResetRef.current = false
+        const held = heldRef.current
+        dropHeld()
+        term.write('\x1bc')
+        for (const data of held) term.write(data)
+      },
+      [dropHeld],
+    )
 
     const onControl = useCallback(
       (msg: StreamControl) => {
@@ -572,6 +600,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       streamKey,
       paneSeen,
       visible: watched && !readOnly,
+      spareToken,
       // The size the client would take, so measured at the chosen font,
       // not the zoomed one a fixed grid shows.
       getSize: () => {
@@ -591,7 +620,16 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       onOutput: (data) => {
         const term = termRef.current
         if (!term) return
-        flushReset(term)
+        if (pendingResetRef.current) {
+          if (!heldRef.current.length) {
+            heldTimerRef.current = setTimeout(
+              () => flushReset(termRef.current!),
+              REDRAW_HOLD_MS,
+            )
+          }
+          heldRef.current.push(data)
+          return
+        }
         term.write(data)
       },
       onControl,
@@ -606,6 +644,8 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
         // once: its keys must never go out under the old one's screen, nor
         // with the old program's modes (mouse, keypad, bracketed paste).
         const stream = `${paneIdRef.current}\n${streamKeyRef.current ?? ''}`
+        // Output held for a stream that closed again: the new one redraws
+        dropHeld()
         if (drawnStreamRef.current === stream) {
           pendingResetRef.current = true
         } else {
@@ -771,6 +811,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       observer.observe(container)
       return () => {
         unprobe()
+        dropHeld()
         clearTimeout(settle)
         observer.disconnect()
         for (const s of subs) s.dispose()

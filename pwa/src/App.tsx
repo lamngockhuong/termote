@@ -2427,6 +2427,9 @@ export default function App({
                           onCopy: onTerminalCopy,
                           onDragReported: onTerminalDragReported,
                           readOnly: readOnly,
+                          // Only once caps say full: until they come, a
+                          // view-only device must not hold a spare token
+                          spareToken: mux.caps.role === 'full' && !readOnly,
                           // Only while the terminal shows: under another view the
                           // pane keeps the desktop's size, so a Claude Code dialog
                           // taller than this device's screen is not cut by

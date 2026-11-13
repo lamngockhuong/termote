@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ConnectionState } from '../components/connection-indicator'
 import { apiBase } from '../utils/api-base'
 import { reportLargePacketLoss } from '../utils/large-packet-loss'
-import { fetchTerminalToken } from './use-mux-api'
+import { refill, takeToken } from '../utils/spare-stream-token'
 
 // Server → client text frame on /api/mux/stream.
 export type StreamControl =
@@ -52,6 +52,9 @@ interface Options {
   onControl?: (msg: StreamControl) => void
   // Called on every successful open, after the state becomes 'connected'.
   onOpen?: () => void
+  // Fetch a token for the next stream once this one opens: only where the
+  // role is known to be full (utils/spare-stream-token.ts).
+  spareToken?: boolean
 }
 
 // Close code the server sends to a stream pushed out by a newer one. Not
@@ -102,6 +105,7 @@ export function useTermSocket({
   onOutput,
   onControl,
   onOpen,
+  spareToken = false,
 }: Options) {
   const [state, setState] = useState<ConnectionState>('connecting')
   const wsRef = useRef<WebSocket | null>(null)
@@ -121,6 +125,8 @@ export function useTermSocket({
   paneRef.current = paneId
   const visibleRef = useRef(visible)
   visibleRef.current = visible
+  const spareTokenRef = useRef(spareToken)
+  spareTokenRef.current = spareToken
   // What the current socket was last told; a new socket starts unseen.
   const sentVisibleRef = useRef(false)
 
@@ -160,7 +166,8 @@ export function useTermSocket({
     }
   }, [clearStartTimer])
 
-  const connect = useCallback(async () => {
+  // fresh: a token fetched now, not the spare (a spare was just refused)
+  const connect = useCallback(async (fresh = false) => {
     teardown()
     if (!paneRef.current) return
     stopRef.current = null
@@ -178,8 +185,9 @@ export function useTermSocket({
     }
 
     let token: string
+    let usedSpare: boolean
     try {
-      token = await fetchTerminalToken()
+      ;({ token, spare: usedSpare } = await takeToken(fresh !== true))
     } catch {
       if (gen === genRef.current) scheduleRetry('error')
       return
@@ -204,6 +212,7 @@ export function useTermSocket({
     sentVisibleRef.current = false
     // Set by an exit frame so the following close does not reconnect.
     let exited = false
+    let opened = false
     // teardown clears this timer, so it only fires for the current socket.
     startTimerRef.current = setTimeout(() => {
       startTimerRef.current = null
@@ -214,10 +223,12 @@ export function useTermSocket({
     }, STREAM_START_TIMEOUT_MS)
 
     ws.onopen = () => {
+      opened = true
       attemptRef.current = 0
       setState('connected')
       syncVisible()
       cbRef.current.onOpen?.()
+      if (spareTokenRef.current) refill()
     }
     ws.onmessage = (ev: MessageEvent) => {
       if (typeof ev.data !== 'string') {
@@ -238,6 +249,14 @@ export function useTermSocket({
     ws.onclose = (ev: CloseEvent) => {
       wsRef.current = null
       clearStartTimer()
+      // A spare refused (expired, or the server restarted and forgot it)
+      // looks like any failed handshake: try once at once with a fresh
+      // token. Only an open fetches a spare, so a server that stays down
+      // costs one request more than before, not one per retry.
+      if (!opened && usedSpare) {
+        connect(true)
+        return
+      }
       if (ev.code === CLOSE_EVICTED || exited) {
         stopRef.current = 'stopped'
         exitedRef.current = exited

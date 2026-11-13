@@ -1,0 +1,58 @@
+import { fetchTerminalToken } from '../hooks/use-mux-api'
+import { apiBase } from './api-base'
+
+// One stream token fetched ahead, so the next stream opens with only its
+// WebSocket handshake (a tmux session switch, the first stream of a layout
+// view, a short network drop). Only a full-role client keeps one: a
+// view-only device holds at most 4 unused tokens on the server and 4 token
+// requests per 30 seconds through a machine. Fetched once after a stream
+// opens, never on a timer; the server gives no way to give one back, so one
+// dropped stays valid there until its 30 second TTL. apiBase() is fixed for
+// the page's life (switching machines and signing in again both load the
+// page), so a single slot does.
+
+// Older than this, a spare is dropped for a fresh one: the server's TTL is
+// 30 seconds from when it made it, and the page's clock keeps running in
+// the background where timers stand still.
+export const SPARE_MAX_AGE_MS = 20_000
+
+let spare: { token: string; at: number } | null = null
+let inflight = false
+
+export function resetSpareForTest(): void {
+  spare = null
+  inflight = false
+}
+
+// A token for a new stream: the spare when one is fresh (and allowed), else
+// one fetched now. spare says which, so a refused spare is retried at once.
+export async function takeToken(
+  allowSpare = true,
+): Promise<{ token: string; spare: boolean }> {
+  const kept = spare
+  spare = null
+  if (allowSpare && kept && Date.now() - kept.at < SPARE_MAX_AGE_MS) {
+    return { token: kept.token, spare: true }
+  }
+  return { token: await fetchTerminalToken(), spare: false }
+}
+
+// Fetches a spare when there is none and none is on its way. One request,
+// no retries: a failure leaves the next stream to fetch its own.
+export function refill(): void {
+  if (spare || inflight) return
+  inflight = true
+  fetch(`${apiBase()}/stream-token`)
+    .then((res) => (res.ok ? res.json() : null))
+    .then((data: { token?: unknown } | null) => {
+      if (typeof data?.token === 'string' && data.token) {
+        spare = { token: data.token, at: Date.now() }
+      }
+    })
+    .catch(() => {
+      // Offline or refused: nothing kept
+    })
+    .finally(() => {
+      inflight = false
+    })
+}

@@ -69,7 +69,14 @@ async function open(
       localStorage.setItem('termote-theme', colorTheme)
       localStorage.setItem(
         'termote-settings',
-        JSON.stringify({ uiStyle, welcomeSeenVersion: version, language: lang, languageNoticeSeen: true }),
+        // The DOM renderer: the steps read the screen from .xterm-rows
+        JSON.stringify({
+          uiStyle,
+          welcomeSeenVersion: version,
+          language: lang,
+          languageNoticeSeen: true,
+          gpuRenderer: false,
+        }),
       )
     },
     [style, theme, WELCOME_VERSION, language] as const,

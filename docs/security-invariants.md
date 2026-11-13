@@ -57,7 +57,14 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   machine (`/api/machines/{id}/mux/stream`) is registered in a hub of its own (32, never evicting this
   server's), linked to the main one: a device revoke, a sign-out and shutdown close it, and a 15 s
   recheck closes it once its device or session is gone from the store or expired; its token is the
-  machine's, consumed there
+  machine's, consumed there. The PWA (`pwa/src/utils/spare-stream-token.ts`, the server unchanged)
+  of a client whose snapshot says `caps.role` `full` (never a view-only device, never before the
+  caps are in, never without sign-in, where there is no role) keeps at most one unused token,
+  fetched with a single request (no retry) after a stream opens, never on a timer, and used for the
+  next stream only while younger than 20 s; there is no route to give one back, so a page has at
+  most that one spare plus what is left of the 30 s TTL of one it dropped as too old. A stream
+  refused before it opened with a spare is retried once at once with a token fetched then, not
+  again: a server that stays down costs one request more than before, not one per retry
 - **Herdr guard**: `--mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also
   given, since Herdr exposes every workspace on the host
 - **Herdr autostart** (`server/herdr_autostart*.go`; the only place serve starts `herdr`): `GET

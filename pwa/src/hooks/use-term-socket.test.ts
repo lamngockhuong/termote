@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setCurrentMachineForTest } from '../utils/api-base'
+import { resetSpareForTest, SPARE_MAX_AGE_MS } from '../utils/spare-stream-token'
 import {
   BACKOFF_MAX_MS,
   backoffDelay,
@@ -67,6 +68,7 @@ interface Opts {
   paneSeen?: unknown
   drive?: () => boolean
   visible?: boolean
+  spareToken?: boolean
 }
 
 function setup(initial: Opts = { paneId: 'p1' }) {
@@ -84,6 +86,7 @@ function setup(initial: Opts = { paneId: 'p1' }) {
         getSize,
         drive: props.drive,
         visible: props.visible,
+        spareToken: props.spareToken,
         onOutput,
         onControl,
         onOpen,
@@ -162,6 +165,7 @@ describe('useTermSocket', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0)
     mockFetchTerminalToken.mockReset().mockResolvedValue('tok')
     mockReportLargePacketLoss.mockReset()
+    resetSpareForTest()
     setVisibility('visible')
   })
 
@@ -734,5 +738,145 @@ describe('useTermSocket', () => {
     expect(FakeWS.instances).toHaveLength(1)
     expect(result.current.state).toBe('evicted')
     expect(mockReportLargePacketLoss).not.toHaveBeenCalled()
+  })
+})
+
+describe('useTermSocket spare token', () => {
+  // The spare's own request goes through fetch; tokens a stream fetches
+  // itself through fetchTerminalToken (mocked above)
+  const fetchMock = vi.fn()
+  let spares = 0
+  beforeEach(() => {
+    FakeWS.instances = []
+    vi.stubGlobal('WebSocket', FakeWS)
+    vi.useFakeTimers()
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+    spares = 0
+    fetchMock.mockReset().mockImplementation(async () => {
+      spares++
+      return new Response(JSON.stringify({ token: `spare${spares}` }), {
+        status: 200,
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    mockFetchTerminalToken.mockReset().mockResolvedValue('tok')
+    resetSpareForTest()
+    setVisibility('visible')
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+  const token = (ws: FakeWS) => new URL(ws.url).searchParams.get('token')
+
+  it('opens the next stream with the token fetched after the last one opened', async () => {
+    const { rerender } = setup({ paneId: 'p1', streamKey: 'a', spareToken: true })
+    await flush()
+    expect(token(last())).toBe('tok')
+    act(() => last().open())
+    await flush()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledWith('/api/mux/stream-token')
+    // Another tmux session: no token request before its socket
+    rerender({ paneId: 'p1', streamKey: 'b', spareToken: true })
+    await flush()
+    expect(mockFetchTerminalToken).toHaveBeenCalledTimes(1)
+    expect(token(last())).toBe('spare1')
+    act(() => last().open())
+    await flush()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('fetches a token itself when the spare is too old', async () => {
+    const { rerender } = setup({ paneId: 'p1', streamKey: 'a', spareToken: true })
+    await flush()
+    act(() => last().open())
+    await flush()
+    vi.setSystemTime(Date.now() + SPARE_MAX_AGE_MS)
+    rerender({ paneId: 'p1', streamKey: 'b', spareToken: true })
+    await flush()
+    expect(token(last())).toBe('tok')
+    expect(mockFetchTerminalToken).toHaveBeenCalledTimes(2)
+  })
+
+  it('retries a refused spare at once with a fresh token, once', async () => {
+    const { rerender, result } = setup({
+      paneId: 'p1',
+      streamKey: 'a',
+      spareToken: true,
+    })
+    await flush()
+    act(() => last().open())
+    await flush()
+    rerender({ paneId: 'p1', streamKey: 'b', spareToken: true })
+    await flush()
+    const refused = last()
+    expect(token(refused)).toBe('spare1')
+    act(() => refused.closeWith(1006))
+    await flush()
+    // No backoff wait: a new socket with a fetched token already
+    const retry = last()
+    expect(retry).not.toBe(refused)
+    expect(token(retry)).toBe('tok')
+    expect(result.current.state).toBe('connecting')
+    // That one failing too takes the usual way
+    act(() => retry.closeWith(1006))
+    await flush()
+    expect(last()).toBe(retry)
+    expect(result.current.state).toBe('disconnected')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('a stream that opened with a spare and closed later takes the usual way', async () => {
+    const { rerender, result } = setup({
+      paneId: 'p1',
+      streamKey: 'a',
+      spareToken: true,
+    })
+    await flush()
+    act(() => last().open())
+    await flush()
+    rerender({ paneId: 'p1', streamKey: 'b', spareToken: true })
+    await flush()
+    const ws = last()
+    act(() => ws.open())
+    act(() => ws.closeWith(1006))
+    await flush()
+    expect(last()).toBe(ws)
+    expect(result.current.state).toBe('disconnected')
+  })
+
+  it('never fetches a spare without spareToken (view role, or caps not in yet)', async () => {
+    const { rerender } = setup({ paneId: 'p1', streamKey: 'a' })
+    await flush()
+    act(() => last().open())
+    await flush()
+    rerender({ paneId: 'p1', streamKey: 'b' })
+    await flush()
+    act(() => last().open())
+    await flush()
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(mockFetchTerminalToken).toHaveBeenCalledTimes(2)
+  })
+
+  it('a long outage asks for no more tokens than its retries plus one', async () => {
+    setup({ paneId: 'p1', spareToken: true })
+    await flush()
+    act(() => last().open())
+    await flush()
+    act(() => last().closeWith(1006))
+    // Retries that never open
+    for (let i = 0; i < 6; i++) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(BACKOFF_MAX_MS)
+      })
+      act(() => last().closeWith(1006))
+    }
+    const sockets = FakeWS.instances.length
+    const requests =
+      mockFetchTerminalToken.mock.calls.length + fetchMock.mock.calls.length
+    // The first open's token, its spare, and one per retry
+    expect(requests).toBeLessThanOrEqual(sockets + 1)
   })
 })

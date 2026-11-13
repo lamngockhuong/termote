@@ -387,7 +387,8 @@ jobs:
           exit 1
 
       # TERMOTE_E2E_AUTH=1: the spec fails (never skips) when the server
-      # cannot pair devices.
+      # cannot pair devices. terminal-reconnect: a signed-in client has the
+      # full role, the one that keeps a spare stream token.
       - name: Run Playwright (devices and sign-ins, with sign-in)
         if: ${{ matrix.extra }}
         working-directory: pwa
@@ -397,7 +398,7 @@ jobs:
           TERMOTE_PORT: "7681"
           TERMOTE_PASS: ${{ env.E2E_AUTH_PASS }}
           TMUX_SESSION: e2e-auth
-        run: TMUX_SOCKET="$RUNNER_TEMP/tmux-auth.sock" pnpm exec playwright test devices signins login-link prompt-templates tasks e2e/review files-upload --workers=1
+        run: TMUX_SOCKET="$RUNNER_TEMP/tmux-auth.sock" pnpm exec playwright test devices signins login-link prompt-templates tasks e2e/review files-upload terminal-reconnect --workers=1
 
       # Places (--allow-path): a third server, configured from the
       # environment like the others, offers one folder (TERMOTE_PLACES) on

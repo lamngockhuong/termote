@@ -18,16 +18,27 @@ const tmux = (...args: string[]) =>
 // A TCP proxy to the server that holds every chunk DELAY_MS in each
 // direction, in order. Only this spec's connections are slowed.
 function delayProxy(): Promise<{ port: number; close: () => void }> {
+  // One queue per direction, drained by a single timer: chunks leave in the
+  // order they came (timers of different lengths may fire out of order).
   const relay = (from: net.Socket, to: net.Socket) => {
-    let last = 0
-    from.on('data', (chunk) => {
-      const due = Math.max(Date.now() + DELAY_MS, last)
-      last = due
-      setTimeout(() => {
-        if (!to.destroyed) to.write(chunk)
-      }, due - Date.now())
-    })
-    from.on('end', () => setTimeout(() => to.end(), Math.max(0, last - Date.now()) + 1))
+    const queue: { due: number; chunk?: Buffer }[] = []
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const drain = () => {
+      timer = null
+      while (queue.length && queue[0].due <= Date.now()) {
+        const { chunk } = queue.shift()!
+        if (to.destroyed) continue
+        if (chunk) to.write(chunk)
+        else to.end()
+      }
+      if (queue.length) timer = setTimeout(drain, queue[0].due - Date.now())
+    }
+    const push = (chunk?: Buffer) => {
+      queue.push({ due: Date.now() + DELAY_MS, chunk })
+      if (!timer) timer = setTimeout(drain, DELAY_MS)
+    }
+    from.on('data', (chunk) => push(chunk))
+    from.on('end', () => push())
     from.on('error', () => to.destroy())
   }
   const sockets = new Set<net.Socket>()
@@ -57,8 +68,14 @@ function delayProxy(): Promise<{ port: number; close: () => void }> {
 }
 
 type Probe = { lines: () => string[] }
-type Wrapped = { ws: WebSocket; openedAt?: number; output?: boolean }
-type W = { __termoteE2E: boolean; __termoteTerms?: Probe[]; __streams: Wrapped[] }
+type Wrapped = { ws: WebSocket; madeAt: number; openedAt?: number; output?: boolean }
+type W = {
+  __termoteE2E: boolean
+  __termoteTerms?: Probe[]
+  __streams: Wrapped[]
+  // When each stream-token request was sent, and when its reply came
+  __tokens: { sentAt: number; doneAt?: number }[]
+}
 
 // The test flag, and a record of every stream socket: when it opened and
 // whether output came.
@@ -67,12 +84,23 @@ async function watchStreams(page: Page) {
     const w = window as unknown as W
     w.__termoteE2E = true
     w.__streams = []
+    w.__tokens = []
+    const realFetch = window.fetch
+    window.fetch = (input, init) => {
+      const url = input instanceof Request ? input.url : String(input)
+      if (!url.includes('/stream-token')) return realFetch(input, init)
+      const entry: W['__tokens'][number] = { sentAt: performance.now() }
+      w.__tokens.push(entry)
+      return realFetch(input, init).finally(() => {
+        entry.doneAt = performance.now()
+      })
+    }
     const Real = window.WebSocket
     class Watched extends Real {
       constructor(url: string | URL, protocols?: string | string[]) {
         super(url, protocols)
         if (!String(url).includes('/stream?')) return
-        const entry: Wrapped = { ws: this }
+        const entry: Wrapped = { ws: this, madeAt: performance.now() }
         w.__streams.push(entry)
         // Registered before the app's onopen, so it runs first
         this.addEventListener('open', () => {
@@ -85,6 +113,25 @@ async function watchStreams(page: Page) {
     }
     window.WebSocket = Watched as typeof WebSocket
   })
+}
+
+// Opens the app at origin with a fresh local state. With sign-in on (the
+// sign-in job), through the server's form: Basic credentials reach the API,
+// not the page.
+async function openApp(page: Page, origin: string) {
+  await watchStreams(page)
+  const secret = process.env.TERMOTE_PASS
+  if (secret && process.env.TERMOTE_NO_AUTH !== 'true') {
+    await page.goto(`${origin}/login`)
+    await page.getByLabel('Username').fill(process.env.TERMOTE_USER || 'admin')
+    await page.getByLabel('Password').fill(secret)
+    await page.getByRole('button', { name: 'Sign in' }).click()
+    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 15000 })
+  } else {
+    await page.goto(`${origin}/`)
+  }
+  await page.evaluate(() => localStorage.clear())
+  await page.reload()
 }
 
 const screenText = (page: Page) =>
@@ -122,10 +169,7 @@ test.describe('a stream opened again', () => {
     page.locator(`aside section[aria-label="${name}"]`).getByText(`${name}-win`).click()
 
   test('the same stream keeps its screen until the redraw', async ({ page }) => {
-    await watchStreams(page)
-    await page.goto(`http://127.0.0.1:${proxy.port}/`)
-    await page.evaluate(() => localStorage.clear())
-    await page.reload()
+    await openApp(page, `http://127.0.0.1:${proxy.port}`)
     await pick(page, one)
     await expect.poll(() => screenText(page), { timeout: 15000 }).toContain(`${one}-30`)
 
@@ -160,10 +204,7 @@ test.describe('a stream opened again', () => {
   })
 
   test("another session never shows the old session's screen once its stream is open", async ({ page }) => {
-    await watchStreams(page)
-    await page.goto(`http://127.0.0.1:${proxy.port}/`)
-    await page.evaluate(() => localStorage.clear())
-    await page.reload()
+    await openApp(page, `http://127.0.0.1:${proxy.port}`)
     await pick(page, one)
     await expect.poll(() => screenText(page), { timeout: 15000 }).toContain(`${one}-30`)
 
@@ -201,5 +242,41 @@ test.describe('a stream opened again', () => {
       expect(result.shown, `${to} is shown`).toBe(true)
       expect(result.stale, `frames showing ${from} after ${to}'s stream opened`).toBe(0)
     }
+  })
+
+  // A full client keeps one token fetched after a stream opens: the next
+  // session's stream needs none first. Only a signed-in client has a role
+  // (caps.role): CI runs this in the sign-in job (TERMOTE_E2E_AUTH=1).
+  test('a session switch right after a stream opened sends no token request before its socket', async ({ page }) => {
+    test.skip(!process.env.TERMOTE_E2E_AUTH, 'needs a server with sign-in, where the client has the full role')
+    await openApp(page, `http://127.0.0.1:${port}`)
+    await pick(page, one)
+    await expect.poll(() => screenText(page), { timeout: 15000 }).toContain(`${one}-30`)
+    // The spare asked for after that stream opened has come back
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const w = window as unknown as W
+            const opened = w.__streams[w.__streams.length - 1].openedAt ?? Infinity
+            return w.__tokens.some((t) => t.sentAt > opened && t.doneAt !== undefined)
+          }),
+        { timeout: 10000 },
+      )
+      .toBe(true)
+
+    const clickAt = await page.evaluate(() => performance.now())
+    const before = await page.evaluate(() => (window as unknown as W).__streams.length)
+    await pick(page, two)
+    await expect.poll(() => screenText(page), { timeout: 15000 }).toContain(`${two}-30`)
+    const between = await page.evaluate(
+      ({ clickAt, before }) => {
+        const w = window as unknown as W
+        const made = w.__streams[before].madeAt
+        return w.__tokens.filter((t) => t.sentAt >= clickAt && t.sentAt <= made).length
+      },
+      { clickAt, before },
+    )
+    expect(between, 'stream-token requests between the click and the new socket').toBe(0)
   })
 })
