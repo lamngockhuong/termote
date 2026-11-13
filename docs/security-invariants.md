@@ -1907,7 +1907,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   .themepack .deskthemepack`, whose thumbnail has loaded a remote wallpaper), a `.pif`, a name whose
   extension holds a byte beyond ASCII (`x.ſcf` is a `.scf` to Windows), a name like a shell object
   (`x.{CLSID}`, file or folder: a Folder Shortcut resolves its `target.lnk` to show it) or a `desktop.ini`
-  (any case, a letter beyond ASCII standing for any letter: `desktop.ıni`), or holds a subfolder,
+  (any case, a letter beyond ASCII standing for any letter: `desktop.ıni`), each name read as Win32 reads
+  it, without trailing dots or spaces (`x.{CLSID}.`, `a.lnk`, which Linux can write under `/mnt/c`),
+  or holds a subfolder,
   or a link to a folder inside the pane root (Windows may follow it), that holds a `desktop.ini`, which
   Explorer reads to show that subfolder (or a link out of the pane root, a link to nothing, which may be an
   NT link to another computer's share under `/mnt/c` that Linux cannot follow, an entry neither a
@@ -1922,7 +1924,15 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   way, at any depth, the root's included, is refused even with `run`).
   Explorer reads their icon or the folder's settings from a location they name, a
   share on another computer among them, while it only shows the folder, sending the Windows user's
-  NTLM hash there. The check is of the folder as it is when opened: a file a later `git pull` adds
+  NTLM hash there. On a Windows drive (`/mnt/<letter>`), where drvfs may show an NT link to another
+  computer's share as a plain file, Windows itself is asked before `explorer.exe` runs: Windows
+  PowerShell, found at startup beside `explorer.exe`, run with `-Command` and a fixed script (no
+  double quote in it), the path in `TERMOTE_OPEN_PATH` passed through `WSLENV` (no character of the
+  path is read as PowerShell), answers whether the file or folder, a folder on the way to it up to the
+  drive's root, or, only once those are known not to be links, an entry of the folder is a symbolic
+  link or a junction (so no link is followed to list it); a link, any other answer, a failure, a
+  timeout (10 s) or no PowerShell refuses it, 403 `folder_reaches`. Other reparse points (OneDrive's placeholders) are not links. The
+  distribution's share shows Linux's own view and is not asked. The check is of the folder as it is when opened: a file a later `git pull` adds
   to the open Explorer window is not looked at, nor is a folder above the root but for a shell
   object on the way. Windows
   asks before running a file only when its zone says so (on the machine checked, a `.cmd` under
