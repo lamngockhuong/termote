@@ -175,7 +175,9 @@ func TestFilesOpenWindowsFoldersOddNames(t *testing.T) {
 	fx, _ := newOpenFixture(t)
 	full := &authInfo{Kind: authSession, Role: roleFull}
 	for i, name := range []string{"x.\u017fcf", "x.library-m\u017f", "x.l\u0131brary-ms", "x.theme", "x.themepack",
-		"x.deskthemepack", "x.pif", "desktop.\u0131ni", "DESKTOP.\u0130NI"} {
+		"x.deskthemepack", "x.pif", "desktop.\u0131ni", "DESKTOP.\u0130NI",
+		// Win32 drops a trailing dot or space from a name Linux wrote.
+		"a.lnk.", "a.url ", "desktop.ini.", "desktop.ini . "} {
 		dir := fmt.Sprintf("d%d", i)
 		fx.write(t, dir+"/"+name, "x")
 		if res := fx.open(openWindowsRequest{Path: dir, Run: true}, full); res.StatusCode != 403 || errorCode(t, res) != "folder_reaches" {
@@ -288,6 +290,30 @@ func TestFilesOpenWindowsShellObjectFolders(t *testing.T) {
 		if res := fx.open(openWindowsRequest{Path: p, Run: true}, full); res.StatusCode != 403 || errorCode(t, res) != "folder_reaches" {
 			t.Errorf("%s through a shell object holding a shortcut (run) = %d", p, res.StatusCode)
 		}
+	}
+}
+
+// A shell object Linux named with a trailing dot or space, which Win32
+// drops, is one too: in the folder opened and beside a folder on the way.
+func TestFilesOpenWindowsShellObjectTrailingDot(t *testing.T) {
+	full := &authInfo{Kind: authSession, Role: roleFull}
+	for _, suffix := range []string{".", " ", ". ."} {
+		fx, calls := newOpenFixture(t)
+		shell := "docs.{0AFACED1-E828-11D1-9187-B532F1E9575D}" + suffix
+		fx.write(t, "in/"+shell+"/target.lnk", "x")
+		fx.write(t, "beside/"+shell+"/target.lnk", "x")
+		fx.write(t, "beside/src/a.txt", "x")
+		for _, p := range []string{"in", "beside/src"} {
+			if res := fx.open(openWindowsRequest{Path: p, Run: true}, full); res.StatusCode != 403 || errorCode(t, res) != "folder_reaches" {
+				t.Errorf("%q: %s = %d", suffix, p, res.StatusCode)
+			}
+		}
+		if len(*calls) != 0 {
+			t.Errorf("%q: ran %q", suffix, *calls)
+		}
+	}
+	if !windowsFolderMayRun("x.{0AFACED1-E828-11D1-9187-B532F1E9575D}. ") || windowsFolderMayRun("x.txt.") {
+		t.Error("windowsFolderMayRun with a trailing dot or space")
 	}
 }
 

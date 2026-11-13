@@ -73,9 +73,15 @@ func windowsMayRun(name string) bool {
 }
 
 // windowsFolderMayRun: a folder named like x.{CLSID} is a shell object to
-// Explorer, not a folder.
+// Explorer, not a folder, a trailing dot or space included (windowsTrim).
 func windowsFolderMayRun(name string) bool {
-	return strings.HasPrefix(filepath.Ext(name), ".{")
+	return strings.HasPrefix(filepath.Ext(windowsTrim(name)), ".{")
+}
+
+// windowsTrim is name as Win32 reads it: a name ending in dots or spaces,
+// which Linux can write under /mnt/c, loses them (`x.{CLSID}.`, `a.lnk `).
+func windowsTrim(name string) string {
+	return strings.TrimRight(name, ". ")
 }
 
 // shellFoldersOnWay lists, as absolute paths from the top down, the folders
@@ -129,7 +135,9 @@ func shellsOnWayReach(rt *os.Root, root, rel string) (bool, error) {
 // holding them: their icon, their thumbnail (a theme's wallpaper) or the
 // folder's settings come from there. An extension holding a byte beyond
 // ASCII counts as one, as for windowsMayRun: `.ſcf` is a .scf to Windows.
+// A trailing dot or space is read as Win32 reads it (windowsTrim).
 func windowsReaches(name string) bool {
+	name = windowsTrim(name)
 	ext := filepath.Ext(name)
 	for i := 0; i < len(ext); i++ {
 		if ext[i] >= 0x80 {
@@ -146,11 +154,12 @@ func windowsReaches(name string) bool {
 
 // windowsNamesDesktopINI: Windows may read name as desktop.ini, in any case;
 // a letter beyond ASCII stands for any letter, since Windows folds case its
-// own way (`desktop.ıni` with a dotless i).
+// own way (`desktop.ıni` with a dotless i), and a trailing dot or space is
+// dropped (windowsTrim).
 func windowsNamesDesktopINI(name string) bool {
 	const want = "desktop.ini"
 	i := 0
-	for _, r := range name {
+	for _, r := range windowsTrim(name) {
 		if i == len(want) {
 			return false
 		}
@@ -306,6 +315,9 @@ type wslWindows struct {
 	// explorer is explorer.exe as Linux reaches it, "" when Windows
 	// programs cannot run here (interop off).
 	explorer string
+	// powershell is Windows PowerShell as Linux reaches it, which answers
+	// for a drive path what Linux cannot see (windowsLinks); "" when missing.
+	powershell string
 }
 
 // Test hooks: wslRun runs wslpath (and explorer.exe, without output);
@@ -349,8 +361,64 @@ func detectWSLWindows(scope string) wslWindows {
 		if fi, err := os.Stat(exe); err == nil && fi.Mode().IsRegular() {
 			out.explorer = exe
 		}
+		ps := out.mounts + "c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
+		if fi, err := os.Stat(ps); err == nil && fi.Mode().IsRegular() {
+			out.powershell = ps
+		}
 	}
 	return out
+}
+
+// windowsLinksScript answers, for the drive path in $env:TERMOTE_OPEN_PATH,
+// "link" when the item, a folder on the way to it or, for a folder, one of
+// its entries is a symbolic link or a junction to Windows (an NT link to
+// another computer's share that drvfs may show to Linux as a plain file),
+// "none" otherwise. The item and the folders on the way are looked at
+// before the folder is listed, so a link is never followed to list it.
+// Other reparse points (OneDrive's placeholders) are not links. Written for
+// Windows PowerShell 5.1, the one every Windows has (Split-Path's
+// -LiteralPath with -Parent needs 6). A fixed
+// script, no double quote in it, with the path as data: nothing of the path
+// is read as PowerShell.
+const windowsLinksScript = `$ErrorActionPreference = 'Stop'; ` +
+	`$p = $env:TERMOTE_OPEN_PATH; ` +
+	`function L($x) { $x.LinkType -eq 'SymbolicLink' -or $x.LinkType -eq 'Junction' }; ` +
+	`$i = Get-Item -LiteralPath $p -Force; if (L $i) { 'link'; exit }; ` +
+	`for ($d = [IO.Path]::GetDirectoryName($p); $d; $d = [IO.Path]::GetDirectoryName($d)) { if (L (Get-Item -LiteralPath $d -Force)) { 'link'; exit } }; ` +
+	`if ($i.PSIsContainer) { foreach ($x in Get-ChildItem -LiteralPath $p -Force) { if (L $x) { 'link'; exit } } }; ` +
+	`'none'`
+
+// wslRunPowershell runs Windows PowerShell with windowsLinksScript and the
+// path in TERMOTE_OPEN_PATH, passed to Windows through WSLENV as is.
+var wslRunPowershell = func(ctx context.Context, exe, winPath string) (string, error) {
+	cmd := exec.CommandContext(ctx, exe, "-NoProfile", "-NonInteractive", "-Command", windowsLinksScript)
+	cmd.Dir = "/"
+	wslenv := "TERMOTE_OPEN_PATH"
+	if v := os.Getenv("WSLENV"); v != "" {
+		wslenv = v + ":" + wslenv
+	}
+	cmd.Env = append(os.Environ(), "TERMOTE_OPEN_PATH="+winPath, "WSLENV="+wslenv)
+	out, err := cmd.Output()
+	return string(out), err
+}
+
+// windowsLinks asks Windows whether the drive path winPath, a folder on the
+// way to it or, for a folder, an entry in it is a link (windowsLinksScript).
+func (w wslWindows) windowsLinks(ctx context.Context, winPath string) (bool, error) {
+	if w.powershell == "" {
+		return false, errors.New("no powershell.exe to check the path's links")
+	}
+	out, err := wslRunPowershell(ctx, w.powershell, winPath)
+	if err != nil {
+		return false, err
+	}
+	switch strings.TrimSpace(out) {
+	case "none":
+		return false, nil
+	case "link":
+		return true, nil
+	}
+	return false, errors.New("powershell.exe answered neither link nor none")
 }
 
 // wslInteropOn: a binfmt entry for Windows programs is registered and on.
@@ -520,6 +588,15 @@ func (f *filesAPI) checkOpenWindows(root filesRoot, in openWindowsRequest) (stri
 	// Never a switch of explorer.exe, nor a line break in its command line
 	if winPath == "" || strings.HasPrefix(winPath, "/") || strings.ContainsAny(winPath, "\x00\r\n\"") {
 		return "", "", errWSLNotFile
+	}
+	// On a Windows drive, an NT link may show to Linux as a plain file:
+	// Windows answers for it (the distribution's share shows Linux's view).
+	if !strings.HasPrefix(winPath, `\\`) {
+		ctx, cancel := context.WithTimeout(context.Background(), wslTimeout)
+		defer cancel()
+		if err := checkReaches(f.wsl.windowsLinks(ctx, winPath)); err != nil {
+			return "", "", err
+		}
 	}
 	return rel, winPath, nil
 }

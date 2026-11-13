@@ -24,10 +24,12 @@
 //   (RAW); a meta refresh may only stay on the site.
 //
 // Prose is not held to the tag: a sentence outside code that pipes a
-// download into a shell (a fetch word and |, iex, $( or <() is refused only
-// when it names no address, or one other than INSTALL, RAW or this computer's, a
-// host without a scheme, a backslash, a proxy or a curl option that
-// redirects the download. A file that is not UTF-8 text (a UTF-16 byte
+// download into a shell (a fetch word and |, iex, $( or <()), or runs it as a
+// file after it (&& sh /tmp/i, ; chmod +x), is refused only when it names no
+// address, or one other than INSTALL, RAW or this computer's, a host without
+// a scheme, a backslash, a proxy, a curl option that redirects the download,
+// or what hides an address (a variable, base64, a concatenated string, a host
+// as one number); a package run (npx, uvx...) is refused outright. A file that is not UTF-8 text (a UTF-16 byte
 // order mark, a NUL byte) or of a type it does not read is refused. Scripts
 // and style sheets do not count as shown: a script or a CSS rule a
 // dependency injected can still change what a page shows.
@@ -49,9 +51,9 @@ const LOCAL_RE = /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\//;
 // files are not read; any other type is refused, not guessed at (.xsl,
 // .rss: a browser may render them).
 const MARKUP = new Set([".html", ".htm", ".xhtml", ".xht", ".shtml", ".svg", ".xml", ".mathml"]);
-// A file with no extension (CNAME, a LICENSE) is served as a download, not
-// shown: not read.
-const TEXT = new Set([".md", ".txt", ".vtt", ".json", ".webmanifest"]);
+// A file with no extension (CNAME, a LICENSE) is served as a download, but a
+// page can point an agent at one: read as text.
+const TEXT = new Set(["", ".md", ".txt", ".vtt", ".json", ".webmanifest"]);
 // Parsed as XML by a browser: no raw text, a tag may close itself.
 const XML = new Set([".xhtml", ".xht", ".svg", ".xml", ".mathml"]);
 const SKIPPED = new Set([
@@ -85,11 +87,16 @@ const LINK_ATTRS = new Set([
 ]);
 const URL_RE = /(?:https?:)?\/\/(?:\[[0-9a-f:.]+\]|[a-z0-9%])[^\s"'<>`()[\]{}|]*/gi;
 const FETCH_RE =
-  /\b(?:curl|wget2?|irm|iwr|Invoke-RestMethod|Invoke-WebRequest|DownloadString|DownloadFile|DownloadData|WebClient|Start-BitsTransfer|bitsadmin|certutil)\b/gi;
+  /\b(?:curl|wget2?|fetch|aria2c|lwp-download|irm|iwr|Invoke-RestMethod|Invoke-WebRequest|DownloadString|DownloadFile|DownloadData|WebClient|Start-BitsTransfer|bitsadmin|certutil|urlopen|urllib|requests\.get|httpx|git\s+clone|Get-Content)\b/gi;
+// A command that downloads a package and runs it, with no URL to hold to the
+// allow list: refused in prose wherever it is not a line of the sources.
+const RUNNER_RE =
+  /\b(?:(?:npx|pnpx|bunx|uvx|uv\s+tool\s+run|bun\s+x|(?:pnpm|yarn)\s+dlx|npm\s+(?:exec|x)|(?:npm|pnpm|yarn|bun)\s+(?:create|init)|pipx\s+run|deno\s+run|(?:docker|podman)\s+run)\s+\S|go\s+(?:run|install)\s+\S+@\S|pip3?\s+install\s+\S*(?:git\+|https?:)|mshta\s+\S*(?:https?:|\\\\)|msiexec\s+\/\w+\s+\S*(?:https?:|\\\\))/i;
 // A pipe into a shell or an interpreter (after sudo, env or a variable set
-// for it), or a download evaluated; a table's | is not one.
+// for it), a download evaluated, or a file run after it (`&& sh /tmp/i`,
+// `; chmod +x i`, `&& ./i`, `; . ~/i`, `exec(`); a table's | is not one.
 const SINK_RE =
-  /\|&?\s*(?:(?:sudo|doas|env|command|exec|nohup|\S*\/env)\b[^|\n]{0,80}?\s|\w+=\S*\s+){0,6}\S*?(?:sh|bash|zsh|dash|ksh|fish|pwsh|powershell|python[\d.]*|perl|ruby|node|iex|Invoke-Expression)\b|\biex\b|Invoke-Expression|\$\(|<\(|`\s*(?:curl|wget2?|irm|iwr|Invoke-WebRequest|Invoke-RestMethod)\b[^`]*\/\//i;
+  /\|&?\s*(?:(?:sudo|doas|env|command|exec|nohup|\S*\/env)\b[^|\n]{0,80}?\s|\w+=\S*\s+){0,6}\S*?(?:sh|bash|zsh|dash|ksh|fish|pwsh|powershell|python[\d.]*|perl|ruby|node|iex|Invoke-Expression)\b|\biex\b|Invoke-Expression|\$\(|<\(|`\s*(?:curl|wget2?|irm|iwr|Invoke-WebRequest|Invoke-RestMethod)\b[^`]*\/\/|(?:&&|\|\||;)\s*(?:(?:sudo|doas)\s+)?(?:(?:sh|bash|zsh|dash|ksh|fish|pwsh|powershell|python[\d.]*|perl|ruby|node|source)\s+[^\s|&;]|\.\s+[~./]|\.{0,2}\/[^\s/]|chmod\b)|\b(?:exec|eval)\s*\(|&\s*(?:\(\s*)?\$|Start-Process\b/i;
 // What leads a download elsewhere beside an allowed URL: a host with no
 // scheme, a backslash, a curl option that redirects or configures it.
 const ELSEWHERE_RE = new RegExp(
@@ -99,6 +106,19 @@ const ELSEWHERE_RE = new RegExp(
     "\\d{1,3}(?:\\.\\d{1,3}){3}|\\[[0-9a-f:.]+\\]", // an IP address, a letter before it or not (-x192.0.2.1)
     "\\s(?:--resolve|--connect-to|--proxy\\S*|--socks\\S*|--preproxy|--dns-\\S*|--doh-url|--config)\\b|\\s-[a-zA-Z]*[xK]", // curl options, in a cluster too
     "\\b(?:https?|all|ftp|no)_proxy=", // a proxy set for the command
+    // what hides an address or a command from the check: a variable (but
+    // the installer's own $env:TERMOTE_…, taken out before, but the one
+    // that skips its signature check) or a
+    // substitution other than a download's, base64, a string built by
+    // concatenation, a format, a join or a replace, a host as one number
+    "\\$[{A-Za-z_]|\\$\\((?!\\s*(?:curl|wget2?|irm|iwr)\\b)",
+    "['\")]\\s*-(?:f|join|replace)\\b|\\s-join\\b|\\.replace\\(|\\[char\\]",
+    "\\bbase64\\b|FromBase64|-EncodedCommand\\b|\\s-enc\\b",
+    "['\"]\\s*\\+\\s*['\"]",
+    "(?:^|[\\s\"'=(@])(?:0x[0-9a-f]+|\\d{5,})(?=[/:\\s\"')]|$)",
+    // the installer told to skip its signature check (a downgrade to a
+    // release the project no longer signs for)
+    "TERMOTE_SKIP_SIGNATURE_CHECK",
   ].join("|"),
   "i",
 );
@@ -657,6 +677,9 @@ function problems(rel, raw, sources) {
     view = readMarkup(raw, out, docURL, XML.has(ext));
   } else if (!TEXT.has(ext)) {
     return [`a file type the check does not read (${ext})`];
+  } else if (ext === "") {
+    // served as a download: plain text to whoever reads it, no markdown
+    view = { text: raw, code: [], attrs: [], links: [], refreshes: [], base: docURL };
   } else {
     // Markdown. A fence after an indent or quote marks is a fence to one
     // reader and not to another: both readings' code is held to the sources.
@@ -738,13 +761,19 @@ function problems(rel, raw, sources) {
         }
         if (!SINK_RE.test(window)) continue;
         const urls = [...window.matchAll(URL_RE)].map((u) => u[0].replace(/[.,;:!?]+$/, ""));
-        let rest = window;
+        let rest = window.replace(/\$env:TERMOTE_(?!SKIP_SIGNATURE_CHECK\b)\w+/gi, " ");
         for (const u of urls) rest = rest.replace(u, " ");
         const named =
           urls.length > 0 && urls.every((u) => installLink(u) || LOCAL_RE.test(u)) && !ELSEWHERE_RE.test(rest);
         if (!named && !sources.has(collapse(line))) {
           out.push(`download into a shell: ${collapse(window).slice(0, 160)}`);
         }
+      }
+    }
+    // a line as written (a copy button's lines apart), before any joining
+    for (const line of lines(t.replace(/\u007f/g, "\n"))) {
+      if (RUNNER_RE.test(line) && !sources.has(collapse(line))) {
+        out.push(`a package run from prose: ${collapse(RUNNER_RE.exec(line)[0]).slice(0, 160)}`);
       }
     }
   }
@@ -775,7 +804,7 @@ let files;
 try {
   sources = sourceSet(root);
   files = [
-    ...walk(site, (f) => extname(f) !== "" && !SKIPPED.has(extname(f).toLowerCase()) && !FROM_TAG.has(relative(site, f))),
+    ...walk(site, (f) => !SKIPPED.has(extname(f).toLowerCase()) && !FROM_TAG.has(relative(site, f))),
   ];
 } catch (err) {
   console.error(`check-site-installs: ${safe(err.message)}`);

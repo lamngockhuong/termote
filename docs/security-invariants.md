@@ -1907,7 +1907,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   .themepack .deskthemepack`, whose thumbnail has loaded a remote wallpaper), a `.pif`, a name whose
   extension holds a byte beyond ASCII (`x.ſcf` is a `.scf` to Windows), a name like a shell object
   (`x.{CLSID}`, file or folder: a Folder Shortcut resolves its `target.lnk` to show it) or a `desktop.ini`
-  (any case, a letter beyond ASCII standing for any letter: `desktop.ıni`), or holds a subfolder,
+  (any case, a letter beyond ASCII standing for any letter: `desktop.ıni`), each name read as Win32 reads
+  it, without trailing dots or spaces (`x.{CLSID}.`, `a.lnk`, which Linux can write under `/mnt/c`),
+  or holds a subfolder,
   or a link to a folder inside the pane root (Windows may follow it), that holds a `desktop.ini`, which
   Explorer reads to show that subfolder (or a link out of the pane root, a link to nothing, which may be an
   NT link to another computer's share under `/mnt/c` that Linux cannot follow, an entry neither a
@@ -1922,7 +1924,15 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   way, at any depth, the root's included, is refused even with `run`).
   Explorer reads their icon or the folder's settings from a location they name, a
   share on another computer among them, while it only shows the folder, sending the Windows user's
-  NTLM hash there. The check is of the folder as it is when opened: a file a later `git pull` adds
+  NTLM hash there. On a Windows drive (`/mnt/<letter>`), where drvfs may show an NT link to another
+  computer's share as a plain file, Windows itself is asked before `explorer.exe` runs: Windows
+  PowerShell, found at startup beside `explorer.exe`, run with `-Command` and a fixed script (no
+  double quote in it), the path in `TERMOTE_OPEN_PATH` passed through `WSLENV` (no character of the
+  path is read as PowerShell), answers whether the file or folder, a folder on the way to it up to the
+  drive's root, or, only once those are known not to be links, an entry of the folder is a symbolic
+  link or a junction (so no link is followed to list it); a link, any other answer, a failure, a
+  timeout (10 s) or no PowerShell refuses it, 403 `folder_reaches`. Other reparse points (OneDrive's placeholders) are not links. The
+  distribution's share shows Linux's own view and is not asked. The check is of the folder as it is when opened: a file a later `git pull` adds
   to the open Explorer window is not looked at, nor is a folder above the root but for a shell
   object on the way. Windows
   asks before running a file only when its zone says so (on the machine checked, a `.cmd` under
@@ -2723,7 +2733,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   tag's `scripts/check-site-installs.mjs` on every other file but scripts, style sheets and binary
   types (pages, sitemaps and SVG files as markup, `llms-full.txt`, `llms-small.txt`, captions and
   other `.md .txt .vtt .json .webmanifest` files as text, line by line; a file with no extension,
-  served as a download, and the PDF viewer's character maps and fonts are not read; any other type,
+  served as a download that a page can point an agent at, as plain text; the PDF viewer's character
+  maps and fonts are not read; any other type,
   a link in the artifact, an `xml-stylesheet` instruction, a `<foreignObject>` or `xml:base` in an
   XML file is an error; an XML file's element is read by its local name, `h:base` as `base`, an HTML
   page's by its whole name; a text file's prose, its code taken out, is read as HTML too, its
@@ -2775,11 +2786,26 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   site downloaded as an artifact by id (the demo included, as deploy builds it), and compares the four
   files deploy takes from the tag with the ones the build copied from the checkout. Prose is not held to the tag: a line
   outside code that pipes a download into a shell or an interpreter (`curl … | sh`, `| /bin/sh`,
-  `| doas sh`, `irm … | iex`, `iex (…)`, `$(curl …)`, `<(curl …)`, a backtick around one) fails only
+  `| doas sh`, `irm … | iex`, `iex (…)`, `$(curl …)`, `<(curl …)`, a backtick around one), or runs it as a
+  file after it (`&& sh /tmp/i`, `; chmod +x i`, `&& ./i`, `; . ~/i`, `exec(`, `Start-Process`), with a
+  fetch word among `curl wget fetch aria2c lwp-download irm iwr`, the PowerShell and BITS ones,
+  `certutil`, `urlopen`, `urllib`, `requests.get`, `httpx`, `git clone` and `Get-Content`, fails only
   when it names no address, or an address other than those above or this computer's (`localhost`, `127.0.0.1`), a
   host with no scheme or an IP address, a backslash, a proxy (`*_proxy=`) or a curl option that
   leads the download elsewhere (`--resolve`, `--connect-to`, `-x` and `-K` in a cluster too,
-  `--proxy…`, `--socks…`, `--dns-…`), and is not a line of the sources; in a line over 500
+  `--proxy…`, `--socks…`, `--dns-…`), what hides an address or a command beside an allowed one (a
+  variable or `${…}` but the installer's own `$env:TERMOTE_…`, a `$(…)` that is not a download's,
+  `base64`, `-EncodedCommand`, a string built with `'…'+'…'`, `-f`, `-join`, `-replace`, `.Replace(` or
+  `[char]`, a host written as one number, `3405803776` or `0xcb007100`), or
+  `TERMOTE_SKIP_SIGNATURE_CHECK` (a downgrade to a release no longer signed), and is not a line of the
+  sources; a package run with no URL to hold (`npx`, `pnpx`, `bunx`, `bun x`, `uvx`, `uv tool run`,
+  `pnpm dlx`, `yarn dlx`, `npm exec`, `npm`/`pnpm`/`yarn`/`bun` `create` or `init`, `pipx run`,
+  `deno run`, `docker run`, `podman run`, `go run …@`, `go install …@`, `pip install` of a URL or
+  `git+`, `mshta` or `msiexec` of a URL or a share) fails wherever it is not a line of the sources, a
+  copy button's lines taken one by one; a pipe into a shell from a command with no fetch word
+  (`ssh host cat i | sh`, `nc … | sh`) passes; an
+  indented markdown block and text styled as code outside `<pre>`/`<code>` are prose to these rules;
+  in a line over 500
   characters it reads from an unclosed `$(`, `<(` or `iex (` before the fetch word, or 300
   characters before it, to the first sink after it; prose naming another download in a form it does
   not know passes, and so do several inline code elements side by side, each a source line, that

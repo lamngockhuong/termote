@@ -89,6 +89,12 @@ func TestDetectWSLWindows(t *testing.T) {
 	if got != want {
 		t.Errorf("detect = %+v, want %+v", got, want)
 	}
+	ps := filepath.Join(mounts, "c", "Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+	writeFile(t, ps, "MZ")
+	want.powershell = ps
+	if got := detectWSLWindows(scopeWSL); got != want {
+		t.Errorf("detect with powershell = %+v, want %+v", got, want)
+	}
 	for _, scope := range []string{scopeHost, scopeContainer} {
 		if got := detectWSLWindows(scope); got != (wslWindows{}) {
 			t.Errorf("%s: %+v", scope, got)
@@ -370,5 +376,112 @@ func TestCheckOpenWindowsOddShare(t *testing.T) {
 		if err != errWSLNotFile {
 			t.Errorf("distro %q: %v", distro, err)
 		}
+	}
+}
+
+// On a Windows drive, Windows is asked whether the path, a folder on the way
+// or an entry is a link, since drvfs may show an NT link as a plain file:
+// refused when it says so, when it answers anything else or fails, and when
+// there is no PowerShell to ask. The distribution's share is not asked.
+func TestFilesOpenWindowsAsksWindowsForLinks(t *testing.T) {
+	full := &authInfo{Kind: authSession, Role: roleFull}
+	setup := func(t *testing.T, answer string, fail bool) (*downloadFixture, *[]string) {
+		mounts := plainDir(t) + "/"
+		root := filepath.Join(mounts, "c", "repo")
+		if err := os.MkdirAll(root, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		mux := http.NewServeMux()
+		f := registerFilesRoutes(mux, &filesFakeMux{dir: root, files: true}, hostAllowlist{}, nil)
+		f.wsl = wslWindows{distro: `\\wsl.localhost\Ubuntu`, mounts: mounts, explorer: "/x/explorer.exe", powershell: "/x/powershell.exe"}
+		fx := &downloadFixture{root: root, f: f, mux: mux}
+		var calls []string
+		old, oldPS := wslRun, wslRunPowershell
+		wslRun = func(_ context.Context, name string, args ...string) (string, error) {
+			calls = append(calls, name+" "+strings.Join(args, " "))
+			return "", &exec.ExitError{}
+		}
+		wslRunPowershell = func(_ context.Context, exe, winPath string) (string, error) {
+			if exe != "/x/powershell.exe" {
+				t.Errorf("powershell %q", exe)
+			}
+			calls = append(calls, "ps "+winPath)
+			if fail {
+				return "", &exec.ExitError{}
+			}
+			return answer, nil
+		}
+		t.Cleanup(func() { wslRun, wslRunPowershell = old, oldPS })
+		fx.write(t, "a.txt", "x")
+		fx.write(t, "d/b.txt", "x")
+		return fx, &calls
+	}
+	for _, path := range []string{"a.txt", "d"} {
+		want := `C:\repo\` + path
+		fx, calls := setup(t, "none\r\n", false)
+		if res := fx.open(openWindowsRequest{Path: path}, full); res.StatusCode != 200 {
+			t.Errorf("%s, no link = %d %s", path, res.StatusCode, errorCode(t, res))
+		}
+		if len(*calls) != 2 || (*calls)[0] != "ps "+want || (*calls)[1] != "/x/explorer.exe "+want {
+			t.Errorf("%s calls %q", path, *calls)
+		}
+		for _, tc := range []struct {
+			answer string
+			fail   bool
+		}{{"link\r\n", false}, {"", false}, {"none link", false}, {"", true}} {
+			fx, calls := setup(t, tc.answer, tc.fail)
+			if res := fx.open(openWindowsRequest{Path: path}, full); res.StatusCode != 403 || errorCode(t, res) != "folder_reaches" {
+				t.Errorf("%s, answer %q fail %v = %d", path, tc.answer, tc.fail, res.StatusCode)
+			}
+			if len(*calls) != 1 {
+				t.Errorf("%s, answer %q: explorer ran: %q", path, tc.answer, *calls)
+			}
+		}
+	}
+	// No PowerShell to ask: refused, nothing run.
+	fx, calls := setup(t, "none", false)
+	fx.f.wsl.powershell = ""
+	if res := fx.open(openWindowsRequest{Path: "a.txt"}, full); res.StatusCode != 403 || len(*calls) != 0 {
+		t.Errorf("no powershell = %d, %q", res.StatusCode, *calls)
+	}
+	// The path reaches PowerShell as data: quotes and $ in a name included.
+	fx, calls = setup(t, "none", false)
+	fx.write(t, "it's $(x).txt", "x")
+	if res := fx.open(openWindowsRequest{Path: "it's $(x).txt"}, full); res.StatusCode != 200 || (*calls)[0] != `ps C:\repo\it's $(x).txt` {
+		t.Errorf("quoted name = %d, %q", res.StatusCode, *calls)
+	}
+}
+
+// The distribution's share shows Linux's own view: PowerShell is not asked.
+func TestFilesOpenWindowsShareNotAsked(t *testing.T) {
+	fx, calls := newOpenFixture(t)
+	fx.f.wsl.powershell = "/x/powershell.exe"
+	old := wslRunPowershell
+	wslRunPowershell = func(context.Context, string, string) (string, error) {
+		*calls = append(*calls, "powershell")
+		return "none", nil
+	}
+	t.Cleanup(func() { wslRunPowershell = old })
+	fx.write(t, "a.txt", "x")
+	if res := fx.open(openWindowsRequest{Path: "a.txt"}, &authInfo{Kind: authSession, Role: roleFull}); res.StatusCode != 200 {
+		t.Errorf("share = %d", res.StatusCode)
+	}
+	for _, c := range *calls {
+		if strings.Contains(c, "powershell") {
+			t.Errorf("asked %q", c)
+		}
+	}
+}
+
+// The script is fixed: no double quote (WSL quotes argv for Windows), the
+// path read only from the environment, and the item and the folders on the
+// way looked at before the folder is listed.
+func TestWindowsLinksScript(t *testing.T) {
+	s := windowsLinksScript
+	if strings.Contains(s, `"`) || !strings.Contains(s, "$env:TERMOTE_OPEN_PATH") {
+		t.Errorf("script %q", s)
+	}
+	if i, j := strings.Index(s, "if (L $i)"), strings.Index(s, "Get-ChildItem"); i < 0 || j < 0 || i > j || strings.Index(s, "GetDirectoryName") > j || strings.Contains(s, "Split-Path") {
+		t.Errorf("the folder is listed before its links are looked at: %q", s)
 	}
 }
