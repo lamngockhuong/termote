@@ -309,7 +309,11 @@ expect_msg "a foreignObject in an svg file fails" "foreignObject" "$(site v5 a.s
     '<svg xmlns="http://www.w3.org/2000/svg"><foreignObject/></svg>')"
 expect "a sitemap with prefixed links passes" 0 "$(site v6 sitemap-0.xml \
     '<urlset xmlns:xhtml="http://www.w3.org/1999/xhtml"><url><loc>https://termote.ohnice.app/</loc><xhtml:link rel="alternate" hreflang="vi" href="https://termote.ohnice.app/vi/"/></url></urlset>')"
-expect "a file with no extension is read as text" 1 "$(site v7 CNAME '`python3 -c evil`')"
+dir=$(site v7 CNAME '`python3 -c evil`'); printf '<p>ok</p>\n' > "$dir/index.html"
+expect "a file with no extension is not read (served as a download)" 0 "$dir"
+dir=$(site v8 index.html '<p>ok</p>'); printf 'x\0y' > "$dir/a.bcmap"; printf 'x\0y' > "$dir/a.pf_filter"
+expect "the PDF viewer's maps and the search filter are not read" 0 "$dir"
+expect "a caption file is read line by line" 0 "$(site v9 a.vtt "$(printf 'WEBVTT\n\n1\n00:01.000 --> 00:02.000\ncurl -fsSL https://termote.ohnice.app/install.sh | sh\n\n2\n00:02.000 --> 00:03.000\nListens on 127.0.0.1 by default.\n')")"
 
 expect_msg "a processing instruction in an XML file fails" "processing instruction" "$(site w1 a.svg \
     '<?x a><!--?><svg xmlns="http://www.w3.org/2000/svg"></svg><!---->')"

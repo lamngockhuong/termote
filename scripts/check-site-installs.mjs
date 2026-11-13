@@ -49,14 +49,17 @@ const LOCAL_RE = /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\//;
 // files are not read; any other type is refused, not guessed at (.xsl,
 // .rss: a browser may render them).
 const MARKUP = new Set([".html", ".htm", ".xhtml", ".xht", ".shtml", ".svg", ".xml", ".mathml"]);
-const TEXT = new Set([".md", ".txt", ".vtt", ".json", ".webmanifest", ""]);
+// A file with no extension (CNAME, a LICENSE) is served as a download, not
+// shown: not read.
+const TEXT = new Set([".md", ".txt", ".vtt", ".json", ".webmanifest"]);
 // Parsed as XML by a browser: no raw text, a tag may close itself.
 const XML = new Set([".xhtml", ".xht", ".svg", ".xml", ".mathml"]);
 const SKIPPED = new Set([
   ...[".js", ".mjs", ".cjs", ".css", ".map", ".wasm", ".zip", ".gz", ".br", ".zst"],
   ...[".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".ico", ".bmp", ".tif", ".tiff"],
   ...[".mp4", ".webm", ".mp3", ".ogg", ".wav", ".woff", ".woff2", ".ttf", ".otf", ".eot"],
-  ...[".pf_fragment", ".pf_index", ".pf_meta", ".pagefind"],
+  ...[".pf_fragment", ".pf_index", ".pf_meta", ".pf_filter", ".pagefind"],
+  ...[".bcmap", ".pfb", ".icc"], // the PDF viewer's character maps, fonts, colour profiles
 ]);
 // The files deploy copies from the tag over the build's and compares byte
 // for byte (CI compares them with the checkout): not read here, an
@@ -453,7 +456,7 @@ function refreshTarget(content) {
 // address (docURL) or its first <base>. Inside <svg> or <math> nothing is
 // taken for raw text, as there (a <style> there is markup, and a <pre> in
 // it shows).
-function readMarkup(html, out, docURL, xml) {
+function readMarkup(html, out, docURL, xml, keepLines) {
   const view = { text: "", code: [], attrs: [], links: [], refreshes: [], base: docURL };
   const open = {};
   let pre = 0;
@@ -466,7 +469,12 @@ function readMarkup(html, out, docURL, xml) {
     if (!raw && (pre > 0 || code > 0) && /[\v\f\u007f\u0085\u2028\u2029]/.test(s)) {
       out.push("code holding a line break the check does not split at");
     }
-    const t = raw || pre > 0 ? s : s.replace(/[\t\n\f\r ]+/g, " ").replace(/\u007f/g, "");
+    const t =
+      raw || pre > 0
+        ? s
+        : keepLines // a text file's lines stay lines (a caption per line)
+          ? s.replace(/[\t\f ]+/g, " ").replace(/\u007f/g, "")
+          : s.replace(/[\t\n\f\r ]+/g, " ").replace(/\u007f/g, "");
     view.text += t;
     if (pre > 0 || code > 0) codeBuf += t;
   };
@@ -660,7 +668,7 @@ function problems(rel, raw, sources) {
     // An HTML block that starts with <pre>, <script>, <style> or <textarea>
     // runs to its end tag, blank lines and backticks included: read whole.
     const blocks = [...raw.matchAll(/^(?:[ \t]*>)*[ ]{0,3}<(pre|script|style|textarea)\b[\s\S]*?(?:<\/\1\s*>|$(?![\s\S]))/gim)].map((m) => m[0]);
-    const inHtml = [loose.prose, strict.prose, ...blocks].map((t) => readMarkup(t, found, docURL, false));
+    const inHtml = [loose.prose, strict.prose, ...blocks].map((t) => readMarkup(t, found, docURL, false, true));
     // markdown decodes a reference only with its ; (Q&A is text)
     out.push(...found.filter((p) => !/does not decode: &[A-Za-z][A-Za-z0-9]*$/.test(p)));
     view = {
@@ -766,7 +774,9 @@ let sources;
 let files;
 try {
   sources = sourceSet(root);
-  files = [...walk(site, (f) => !SKIPPED.has(extname(f).toLowerCase()) && !FROM_TAG.has(relative(site, f)))];
+  files = [
+    ...walk(site, (f) => extname(f) !== "" && !SKIPPED.has(extname(f).toLowerCase()) && !FROM_TAG.has(relative(site, f))),
+  ];
 } catch (err) {
   console.error(`check-site-installs: ${safe(err.message)}`);
   process.exit(2);

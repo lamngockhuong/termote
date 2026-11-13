@@ -2712,7 +2712,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   files from the tag over whatever the build left and compares them byte for byte, then runs the
   tag's `scripts/check-site-installs.mjs` on every other file but scripts, style sheets and binary
   types (pages, sitemaps and SVG files as markup, `llms-full.txt`, `llms-small.txt`, captions and
-  other `.md .txt .vtt .json .webmanifest` files or files with no extension as text; any other type,
+  other `.md .txt .vtt .json .webmanifest` files as text, line by line; a file with no extension,
+  served as a download, and the PDF viewer's character maps and fonts are not read; any other type,
   a link in the artifact, an `xml-stylesheet` instruction, a `<foreignObject>` or `xml:base` in an
   XML file is an error; an XML file's element is read by its local name, `h:base` as `base`, an HTML
   page's by its whole name; a text file's prose, its code taken out, is read as HTML too, its
