@@ -586,6 +586,108 @@ describe('TerminalView', () => {
     expect(muxApi.scrollPane).toHaveBeenCalledWith('w1:p2', -10000)
   })
 
+  describe('a stream opening again', () => {
+    // What reached the terminal, in order: resets and writes
+    const calls = (term: InstanceType<typeof FakeTerminal>) =>
+      [
+        ...term.reset.mock.invocationCallOrder.map((at) => ({
+          at,
+          call: 'reset' as unknown,
+        })),
+        ...term.write.mock.calls.map((args, i) => ({
+          at: term.write.mock.invocationCallOrder[i],
+          call: args[0] as unknown,
+        })),
+      ]
+        .sort((a, b) => a.at - b.at)
+        .map((c) => c.call)
+    const out = new Uint8Array([104, 105])
+
+    it('clears the screen at the first open', () => {
+      const { term } = renderView({ paneId: '%1', streamKey: 's1' })
+      act(() => socketOpts.onOpen())
+      expect(calls(term)).toEqual(['reset'])
+    })
+
+    it('keeps the screen of the same stream until its first output, reset in the write stream', () => {
+      const { term } = renderView({ paneId: '%1', streamKey: 's1' })
+      act(() => socketOpts.onOpen())
+      socketOpts.onOutput(out)
+      term.reset.mockClear()
+      term.write.mockClear()
+      act(() => socketOpts.onOpen())
+      expect(term.reset).not.toHaveBeenCalled()
+      expect(term.write).not.toHaveBeenCalled()
+      // Opened once more before any output: still kept
+      act(() => socketOpts.onOpen())
+      expect(calls(term)).toEqual([])
+      socketOpts.onOutput(out)
+      socketOpts.onOutput(out)
+      expect(calls(term)).toEqual(['\x1bc', out, out])
+    })
+
+    it.each([
+      ['another stream key (tmux session)', { paneId: '%1', streamKey: 's2' }],
+      ['another pane', { paneId: '%2', streamKey: 's1' }],
+    ])('clears at once on %s', (_name, next) => {
+      const { term, rerender, ref } = renderView({
+        paneId: '%1',
+        streamKey: 's1',
+      })
+      act(() => socketOpts.onOpen())
+      socketOpts.onOutput(out)
+      term.reset.mockClear()
+      term.write.mockClear()
+      rerender(<TerminalView ref={ref} {...next} />)
+      act(() => socketOpts.onOpen())
+      expect(calls(term)).toEqual(['reset'])
+      socketOpts.onOutput(out)
+      expect(calls(term)).toEqual(['reset', out])
+      // And back to the first: cleared again, not kept
+      term.reset.mockClear()
+      term.write.mockClear()
+      rerender(<TerminalView ref={ref} paneId="%1" streamKey="s1" />)
+      act(() => socketOpts.onOpen())
+      expect(calls(term)).toEqual(['reset'])
+    })
+
+    it('a stream with no key is told apart by its pane', () => {
+      const { term } = renderView({ paneId: 'w1:p2', followPane: true })
+      act(() => socketOpts.onOpen())
+      act(() => socketOpts.onOpen())
+      expect(term.reset).toHaveBeenCalledTimes(1)
+    })
+
+    it.each([
+      ['exit', { type: 'exit' as const, code: 0 }, '\r\n[process exited]\r\n'],
+      ['error', { type: 'error' as const, message: 'gone' }, '\r\n[gone]\r\n'],
+    ])('resets before the %s line when no output came', (_name, msg, line) => {
+      const { term } = renderView({ paneId: '%1', streamKey: 's1' })
+      act(() => socketOpts.onOpen())
+      term.reset.mockClear()
+      act(() => socketOpts.onOpen())
+      act(() => socketOpts.onControl(msg))
+      expect(calls(term)).toEqual(['\x1bc', line])
+      // Once only
+      act(() => socketOpts.onControl(msg))
+      expect(calls(term)).toEqual(['\x1bc', line, line])
+    })
+
+    it('returns a scrolled view on input typed before the first output', async () => {
+      const { term } = renderView({ paneId: 'w1:p2', serverScroll: true })
+      act(() => socketOpts.onOpen())
+      socketOpts.onOutput(out)
+      term.dataCb('a')
+      await act(async () => {})
+      muxApi.scrollPane.mockClear()
+      act(() => socketOpts.onOpen())
+      term.dataCb('x')
+      await act(async () => {})
+      expect(muxApi.scrollPane).toHaveBeenCalledWith('w1:p2', -10000)
+      expect(socket.send).toHaveBeenLastCalledWith('x')
+    })
+  })
+
   it('serverScroll: rows pending for a pane are not sent to the next one', async () => {
     let finish: () => void = () => {}
     muxApi.scrollPane.mockImplementationOnce(

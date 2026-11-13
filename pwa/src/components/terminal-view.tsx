@@ -357,6 +357,13 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
     altScrollRef.current = altScroll
     const paneIdRef = useRef(paneId)
     paneIdRef.current = paneId
+    const streamKeyRef = useRef(streamKey)
+    streamKeyRef.current = streamKey
+    // The stream the screen shows (pane and stream key at its open): the
+    // same one opening again keeps the screen until its first output.
+    const drawnStreamRef = useRef<string | null>(null)
+    // That first output starts with a reset of the screen
+    const pendingResetRef = useRef(false)
     const { t } = useT()
     // For the handlers set once: the language at the time they run
     const tRef = useRef(t)
@@ -501,6 +508,15 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       })
     }, [])
 
+    // The reset a stream opened again put off, done now: in the write
+    // stream (RIS, which xterm.js runs as term.reset()), so it is parsed in
+    // the same pass as what follows it and no blank screen is drawn between.
+    const flushReset = useCallback((term: Terminal) => {
+      if (!pendingResetRef.current) return
+      pendingResetRef.current = false
+      term.write('\x1bc')
+    }, [])
+
     const onControl = useCallback(
       (msg: StreamControl) => {
         const term = termRef.current
@@ -537,14 +553,17 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
           serverSizeRef.current = { cols: msg.cols, rows: msg.rows }
           layout()
         } else if (msg.type === 'exit') {
+          // Not on the screen kept from before the stream opened again
+          flushReset(term)
           term.write(`\r\n[${tRef.current('shell.terminal.exited')}]\r\n`)
         } else if (msg.type === 'error') {
+          flushReset(term)
           term.write(
             `\r\n[${msg.message ?? tRef.current('shell.terminal.streamError')}]\r\n`,
           )
         }
       },
-      [layout, wantsDrive],
+      [layout, wantsDrive, flushReset],
     )
 
     const socket = useTermSocket({
@@ -569,14 +588,31 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
         return dims?.cols && dims.rows ? dims : null
       },
       drive: () => wantsDrive(),
-      onOutput: (data) => termRef.current?.write(data),
+      onOutput: (data) => {
+        const term = termRef.current
+        if (!term) return
+        flushReset(term)
+        term.write(data)
+      },
       onControl,
       onOpen: () => {
         const term = termRef.current
         /* v8 ignore next */
         if (!term) return
-        // Every stream starts with a full redraw from the backend.
-        term.reset()
+        // Every stream starts with a full redraw from the backend. The same
+        // stream opening again (the page shown again, the network back)
+        // keeps its screen until that redraw comes, reset just before it.
+        // Another stream (another tmux session, another pane) clears it at
+        // once: its keys must never go out under the old one's screen, nor
+        // with the old program's modes (mouse, keypad, bracketed paste).
+        const stream = `${paneIdRef.current}\n${streamKeyRef.current ?? ''}`
+        if (drawnStreamRef.current === stream) {
+          pendingResetRef.current = true
+        } else {
+          drawnStreamRef.current = stream
+          pendingResetRef.current = false
+          term.reset()
+        }
         scrolledRef.current = true
         serverSizeRef.current = null
         // The old stream's mode does not carry over; wait for a size frame.
