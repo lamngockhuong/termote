@@ -164,6 +164,7 @@ import {
   type SettingChange,
 } from './utils/settings-registry'
 import { formatChord } from './utils/shortcuts'
+import { spareAllowed } from './utils/spare-stream-token'
 import {
   attachImageToTerminal,
   blurTerminal,
@@ -412,6 +413,7 @@ export default function App({
     isServerReachable,
     refreshSessions,
     mux,
+    capsLoaded,
     clockOffset,
     settingsProposal,
   } = useLocalSessions(settings.pollInterval)
@@ -2427,9 +2429,11 @@ export default function App({
                           onCopy: onTerminalCopy,
                           onDragReported: onTerminalDragReported,
                           readOnly: readOnly,
-                          // Only once caps say full: until they come, a
-                          // view-only device must not hold a spare token
-                          spareToken: mux.caps.role === 'full' && !readOnly,
+                          spareToken: spareAllowed(
+                            mux.caps.role,
+                            capsLoaded,
+                            readOnly,
+                          ),
                           // Only while the terminal shows: under another view the
                           // pane keeps the desktop's size, so a Claude Code dialog
                           // taller than this device's screen is not cut by

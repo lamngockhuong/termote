@@ -244,11 +244,10 @@ test.describe('a stream opened again', () => {
     }
   })
 
-  // A full client keeps one token fetched after a stream opens: the next
-  // session's stream needs none first. Only a signed-in client has a role
-  // (caps.role): CI runs this in the sign-in job (TERMOTE_E2E_AUTH=1).
+  // A full client (signed in with the password in the sign-in job, any
+  // client of a server without sign-in in the main job) keeps one token
+  // fetched after a stream opens: the next session's stream needs none first.
   test('a session switch right after a stream opened sends no token request before its socket', async ({ page }) => {
-    test.skip(!process.env.TERMOTE_E2E_AUTH, 'needs a server with sign-in, where the client has the full role')
     await openApp(page, `http://127.0.0.1:${port}`)
     await pick(page, one)
     await expect.poll(() => screenText(page), { timeout: 15000 }).toContain(`${one}-30`)

@@ -4,6 +4,7 @@ import {
   refill,
   resetSpareForTest,
   SPARE_MAX_AGE_MS,
+  spareAllowed,
   takeToken,
 } from './spare-stream-token'
 
@@ -146,5 +147,23 @@ describe('refill', () => {
     fetchMock.mockReturnValueOnce(reply(200, { token: 'kept' }))
     refill()
     expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('spareAllowed', () => {
+  it('keeps one for the full role, never read-only', () => {
+    expect(spareAllowed('full', true, false)).toBe(true)
+    expect(spareAllowed('full', false, false)).toBe(true)
+    expect(spareAllowed('full', true, true)).toBe(false)
+  })
+
+  it('never for a view-only device', () => {
+    expect(spareAllowed('view', true, false)).toBe(false)
+  })
+
+  it('for a server without sign-in once its caps are in', () => {
+    expect(spareAllowed(undefined, true, false)).toBe(true)
+    expect(spareAllowed(undefined, false, false)).toBe(false)
+    expect(spareAllowed(undefined, true, true)).toBe(false)
   })
 })

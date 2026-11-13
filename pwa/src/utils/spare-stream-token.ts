@@ -11,6 +11,20 @@ import { apiBase } from './api-base'
 // the page's life (switching machines and signing in again both load the
 // page), so a single slot does.
 
+// Whether a client keeps a spare: one with the full role, or one of a server
+// without sign-in (caps.role is absent only there: a server with sign-in
+// names every client's role, and a machine is always given one), never a
+// read-only one. Until a snapshot's caps are in, none: a view-only device
+// must not hold one.
+export function spareAllowed(
+  role: 'full' | 'view' | undefined,
+  capsLoaded: boolean,
+  readOnly: boolean,
+): boolean {
+  if (readOnly) return false
+  return role === 'full' || (capsLoaded && role === undefined)
+}
+
 // Older than this, a spare is dropped for a fresh one: the server's TTL is
 // 30 seconds from when it made it, and the page's clock keeps running in
 // the background where timers stand still.
