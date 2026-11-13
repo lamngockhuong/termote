@@ -51,6 +51,9 @@ export default {
   'settings.copyOnSelect': 'Copy on select',
   'settings.copyOnSelectDesc':
     'Copy the text you select with the mouse as soon as you release the button. Where the program in the pane takes the mouse (vim with mouse=a, htop), hold Shift while dragging (Option on a Mac)',
+  'settings.gpuRenderer': 'Draw the terminal with the GPU',
+  'settings.gpuRendererDesc':
+    'Faster on large output. Turn it off if text looks blurry, flickers or has the wrong colours on this device',
   'settings.fitPane': 'Fit herdr pane to this device',
   'settings.fitPaneDesc':
     "The pane on the computer takes this screen's size while you watch it",

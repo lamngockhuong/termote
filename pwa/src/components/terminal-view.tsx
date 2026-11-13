@@ -31,6 +31,7 @@ import {
 } from '../utils/terminal-bridge'
 import { terminalFontFamily } from '../utils/terminal-font'
 import { registerTerminalProbe, visibleLines } from '../utils/terminal-probe'
+import { loadWebgl, type WebglHandle } from '../utils/terminal-webgl'
 import { imageFromClipboard } from '../utils/upload-image'
 import { type ConnectionState, isDown } from './connection-indicator'
 import { FOCUS_RING } from './ui/button'
@@ -82,6 +83,9 @@ interface Props {
   fontSize?: number
   // Font installed on this device, tried before the default monospace fonts.
   fontFamily?: string
+  // Draw with WebGL2 where the browser has it (the setting); else, and
+  // whenever WebGL cannot run, xterm.js's DOM renderer draws.
+  gpuRenderer?: boolean
   theme?: 'light' | 'dark'
   // Current UI style: a change re-reads the background token.
   uiStyle?: UiStyle
@@ -293,6 +297,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       bracketedPaste = false,
       fontSize = 14,
       fontFamily = '',
+      gpuRenderer = false,
       theme = 'dark',
       uiStyle,
       disableContextMenu = true,
@@ -333,6 +338,10 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
     fontSizeRef.current = fontSize
     const fontFamilyRef = useRef(fontFamily)
     fontFamilyRef.current = fontFamily
+    const gpuRendererRef = useRef(gpuRenderer)
+    gpuRendererRef.current = gpuRenderer
+    // The WebGL renderer while it is wanted (it may still be loading)
+    const webglRef = useRef<WebglHandle | null>(null)
     // herdr (and herdr-core) fixes the pane size and answers terminal
     // queries itself.
     const isHerdr = backendIsPaneStream(backend)
@@ -658,11 +667,12 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       term.open(container)
       termRef.current = term
       fitRef.current = fit
+      if (gpuRendererRef.current) webglRef.current = loadWebgl(term)
       layout()
       const unprobe = registerTerminalProbe({
         paneId: () => paneIdRef.current,
         lines: () => visibleLines(term),
-        webgl: () => false,
+        webgl: () => !!webglRef.current?.active(),
         write: (data) => new Promise((done) => term.write(data, done)),
       })
 
@@ -728,6 +738,8 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
         clearTimeout(settle)
         observer.disconnect()
         for (const s of subs) s.dispose()
+        webglRef.current?.dispose()
+        webglRef.current = null
         term.dispose()
         termRef.current = null
         fitRef.current = null
@@ -754,11 +766,39 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       if (!covered) layout()
     }, [covered, layout])
 
-    // Another font changes the cell size, so the grid is fitted again.
+    // The setting turned on or off while the terminal is open
+    useEffect(() => {
+      const term = termRef.current
+      /* v8 ignore next */
+      if (!term) return
+      if (gpuRenderer && !webglRef.current) {
+        webglRef.current = loadWebgl(term)
+      } else if (!gpuRenderer && webglRef.current) {
+        webglRef.current.dispose()
+        webglRef.current = null
+      }
+    }, [gpuRenderer])
+
+    // Another font changes the cell size, so the grid is fitted again. The
+    // WebGL renderer keeps the glyphs it drew in an atlas: drawn again in
+    // the new font.
     useEffect(() => {
       setTerminalFontFamily(handleRef.current, terminalFontFamily(fontFamily))
+      termRef.current?.clearTextureAtlas()
       layout()
     }, [fontFamily, layout])
+
+    // A font that finished loading after glyphs were drawn in a fallback:
+    // the web fonts at start, and the Nerd Font symbols, which load only when
+    // the first icon shows (their unicode-range, index.css).
+    useEffect(() => {
+      const fonts = (document as { fonts?: FontFaceSet }).fonts
+      if (!fonts) return
+      const clear = () => termRef.current?.clearTextureAtlas()
+      void fonts.ready.then(clear)
+      fonts.addEventListener('loadingdone', clear)
+      return () => fonts.removeEventListener('loadingdone', clear)
+    }, [])
 
     // Drive the pane size while the setting is on and the page is shown;
     // give it back as soon as the page is hidden, so the desktop is not left

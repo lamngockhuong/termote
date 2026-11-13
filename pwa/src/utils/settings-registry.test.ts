@@ -331,7 +331,11 @@ describe('export and import', () => {
     localStorage.clear()
     resetAllShortcuts()
     setShortcut('tab.next', { key: 'Mod+Shift+N' })
-    writeSettingsPatch({ notifyAgents: false, appBadge: false })
+    writeSettingsPatch({
+      notifyAgents: false,
+      appBadge: false,
+      gpuRenderer: false,
+    })
     const parsed = parseImport(text)
     if (!('values' in parsed)) throw new Error('not read')
     expect(applySettings(diffSettings(parsed.values))).toBeGreaterThan(0)
@@ -339,6 +343,7 @@ describe('export and import', () => {
     expect(readSettings().terminalFont).toBe('Fira Code')
     expect(readSettings().welcomeSeenVersion).toBe(0)
     expect(readSettings().appBadge).toBe(false)
+    expect(readSettings().gpuRenderer).toBe(false)
     expect(readStoredTheme()).toBe('light')
     expect(readStoredFontSize()).toBe(20)
     expect(readSavedShortcuts()).toEqual({ 'tab.new': { key: null } })

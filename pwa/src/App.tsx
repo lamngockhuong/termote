@@ -2419,6 +2419,7 @@ export default function App({
                             !!activeSession.hasAgent,
                           fontSize: fontSize,
                           fontFamily: settings.terminalFont,
+                          gpuRenderer: settings.gpuRenderer,
                           theme: resolvedTheme,
                           uiStyle: settings.uiStyle,
                           disableContextMenu: settings.disableContextMenu,

@@ -76,6 +76,7 @@ const { FakeTerminal, FakeFit } = vi.hoisted(() => {
     dispose = vi.fn()
     open = vi.fn()
     loadAddon = vi.fn()
+    clearTextureAtlas = vi.fn()
     constructor(opts: {
       fontSize: number
       fontFamily?: string
@@ -191,6 +192,12 @@ const bridge = vi.hoisted(() => ({
   ),
 }))
 vi.mock('../utils/terminal-bridge', () => bridge)
+
+const webgl = vi.hoisted(() => {
+  const handle = { active: vi.fn(() => true), dispose: vi.fn() }
+  return { handle, loadWebgl: vi.fn(() => handle) }
+})
+vi.mock('../utils/terminal-webgl', () => ({ loadWebgl: webgl.loadWebgl }))
 
 // The palette's chord stands for a shortcut marked to run in the terminal
 const shortcuts = vi.hoisted(() => ({
@@ -1595,5 +1602,105 @@ describe('TerminalView', () => {
       delete w.__termoteE2E
       delete w.__termoteTerms
     }
+  })
+
+  describe('WebGL renderer', () => {
+    it('loads it after the terminal opens when the setting is on', () => {
+      const { term, unmount } = renderView({ gpuRenderer: true })
+      expect(webgl.loadWebgl).toHaveBeenCalledTimes(1)
+      expect(webgl.loadWebgl).toHaveBeenCalledWith(term)
+      expect(term.open.mock.invocationCallOrder[0]).toBeLessThan(
+        webgl.loadWebgl.mock.invocationCallOrder[0],
+      )
+      unmount()
+      // Unloaded before the terminal goes
+      expect(webgl.handle.dispose).toHaveBeenCalledTimes(1)
+      expect(webgl.handle.dispose.mock.invocationCallOrder[0]).toBeLessThan(
+        term.dispose.mock.invocationCallOrder[0],
+      )
+    })
+
+    it('never loads it with the setting off', () => {
+      const { unmount } = renderView()
+      expect(webgl.loadWebgl).not.toHaveBeenCalled()
+      unmount()
+      expect(webgl.handle.dispose).not.toHaveBeenCalled()
+    })
+
+    it('loads or unloads it when the setting changes while open', () => {
+      const { term, rerender, ref } = renderView({ gpuRenderer: false })
+      const at = (gpuRenderer: boolean) =>
+        rerender(
+          <TerminalView ref={ref} paneId="0" gpuRenderer={gpuRenderer} />,
+        )
+      at(true)
+      expect(webgl.loadWebgl).toHaveBeenCalledWith(term)
+      // Rendered again with the same value: nothing more
+      at(true)
+      expect(webgl.loadWebgl).toHaveBeenCalledTimes(1)
+      at(false)
+      expect(webgl.handle.dispose).toHaveBeenCalledTimes(1)
+      at(false)
+      expect(webgl.handle.dispose).toHaveBeenCalledTimes(1)
+    })
+
+    it('tells the probe whether WebGL draws', () => {
+      const w = window as unknown as {
+        __termoteE2E?: boolean
+        __termoteTerms?: Array<{ webgl: () => boolean }>
+      }
+      w.__termoteE2E = true
+      try {
+        const { rerender, ref } = renderView({ gpuRenderer: true })
+        expect(w.__termoteTerms?.[0].webgl()).toBe(true)
+        webgl.handle.active.mockReturnValueOnce(false)
+        expect(w.__termoteTerms?.[0].webgl()).toBe(false)
+        rerender(<TerminalView ref={ref} paneId="0" gpuRenderer={false} />)
+        expect(w.__termoteTerms?.[0].webgl()).toBe(false)
+      } finally {
+        delete w.__termoteE2E
+        delete w.__termoteTerms
+      }
+    })
+
+    it('draws the glyphs again when the font changes or a font finishes loading', async () => {
+      const listeners = new Map<string, () => void>()
+      let ready: () => void = () => {}
+      const fonts = {
+        ready: new Promise<void>((r) => (ready = r)),
+        addEventListener: vi.fn((type: string, cb: () => void) =>
+          listeners.set(type, cb),
+        ),
+        removeEventListener: vi.fn(),
+      }
+      Object.defineProperty(document, 'fonts', {
+        configurable: true,
+        value: fonts,
+      })
+      try {
+        const { term, rerender, ref, unmount } = renderView({
+          fontFamily: 'A',
+        })
+        term.clearTextureAtlas.mockClear()
+        rerender(<TerminalView ref={ref} paneId="0" fontFamily="B" />)
+        expect(term.clearTextureAtlas).toHaveBeenCalledTimes(1)
+        ready()
+        await waitFor(() =>
+          expect(term.clearTextureAtlas).toHaveBeenCalledTimes(2),
+        )
+        listeners.get('loadingdone')?.()
+        expect(term.clearTextureAtlas).toHaveBeenCalledTimes(3)
+        unmount()
+        expect(fonts.removeEventListener).toHaveBeenCalledWith(
+          'loadingdone',
+          listeners.get('loadingdone'),
+        )
+        // After unmount there is no terminal to clear
+        listeners.get('loadingdone')?.()
+        expect(term.clearTextureAtlas).toHaveBeenCalledTimes(3)
+      } finally {
+        delete (document as { fonts?: unknown }).fonts
+      }
+    })
   })
 })

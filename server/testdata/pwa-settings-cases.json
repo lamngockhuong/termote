@@ -88,10 +88,12 @@
    "values": {
     "notifyAgents": true,
     "appBadge": false,
+    "gpuRenderer": false,
     "welcomeSeenVersion": 3
    },
    "bad": [
     "appBadge",
+    "gpuRenderer",
     "notifyAgents",
     "welcomeSeenVersion"
    ]
