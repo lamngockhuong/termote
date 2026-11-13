@@ -143,7 +143,7 @@ export default {
   'errors.starting': 'An agent is already starting in this pane',
   'errors.step_not_confirmed': 'The tab did not change',
   'errors.storage_full': 'The storage on the host is full',
-  'errors.symlink': 'A directory on that path is a symbolic link',
+  'errors.symlink': 'That path, or a folder on it, is a symbolic link',
   'errors.tab_gone': 'The tab was closed',
   'errors.target_changed': 'The agent is no longer in this pane',
   'errors.task_not_found': 'This task no longer exists',

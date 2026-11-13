@@ -138,7 +138,8 @@ export default {
   'errors.starting': 'Đã có một agent đang khởi động trong pane này',
   'errors.step_not_confirmed': 'Tab không chuyển sang',
   'errors.storage_full': 'Bộ nhớ trên máy host đã đầy',
-  'errors.symlink': 'Một thư mục trên đường dẫn đó là liên kết tượng trưng',
+  'errors.symlink':
+    'Đường dẫn đó, hoặc một thư mục trên nó, là liên kết tượng trưng',
   'errors.tab_gone': 'Tab đã đóng',
   'errors.target_changed': 'Agent không còn ở pane này',
   'errors.task_not_found': 'Tác vụ này không còn nữa',
