@@ -25,7 +25,7 @@ const (
 var (
 	errCreateExists      = &codedError{"exists", "a file or directory of that name already exists", http.StatusConflict}
 	errCreateNotDir      = &codedError{"not_directory", "a parent on that path is not a directory", http.StatusConflict}
-	errCreateSymlink     = &codedError{"symlink", "a directory on that path is a symbolic link", http.StatusForbidden}
+	errCreateSymlink     = &codedError{"symlink", "the path, or a directory on it, is a symbolic link", http.StatusForbidden}
 	errCreateNotAllowed  = &codedError{"not_allowed", "path not allowed", http.StatusForbidden}
 	errCreateInvalidName = &codedError{"invalid_name", "invalid file name", http.StatusBadRequest}
 )
