@@ -1,7 +1,7 @@
 # Termote Makefile
 # Usage: make <target>
 
-.PHONY: help build build-pwa build-api test test-go test-hc test-cli test-install test-homebrew-formula test-entrypoints test-herdr-plugin test-git-hooks test-site-installs start container-up container-down uninstall health clean release release-dry fmt fmt-check brand-assets claude-chat-tags codex-chat-items
+.PHONY: help build build-pwa build-api test test-go test-hc test-cli test-install test-homebrew-formula test-entrypoints test-herdr-plugin test-git-hooks test-site-installs start container-up container-down uninstall health clean release release-dry fmt fmt-check brand-assets llms claude-chat-tags codex-chat-items
 
 # Default target
 help:
@@ -37,6 +37,7 @@ help:
 	@echo ""
 	@echo "Brand:"
 	@echo "  make brand-assets   Regenerate icons and social images from assets/branding"
+	@echo "  make llms           Regenerate website/llms-full.txt and llms-small.txt (after a docs change)"
 	@echo ""
 	@echo "Other:"
 	@echo "  make health         Check service health"
@@ -122,6 +123,12 @@ fmt-check:
 # Brand assets (needs rsvg-convert and ImageMagick)
 brand-assets:
 	@./scripts/build-brand-assets.sh
+
+# The website's llms-full.txt and llms-small.txt, which deploy serves from the
+# tag: regenerate them after a docs change (CI fails while they differ).
+llms:
+	cd website && pnpm build
+	cp website/dist/llms-full.txt website/dist/llms-small.txt website/
 
 # Claude Code tags the Chat view would show raw (after a Claude Code update)
 claude-chat-tags:

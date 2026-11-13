@@ -2722,17 +2722,22 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   key, so they are the root of this trust, `/agents.md` (`server/agent-guide.md`), which
   `llms.txt` and the install docs tell a coding agent to follow, with the install commands in it,
   and `/llms.txt` (`website/llms.txt`, which CI's `check-website` compares with the one the build
-  makes of `astro.config.mjs`), which sends a coding agent there.
+  makes of `astro.config.mjs`), which sends a coding agent there, and `/llms-full.txt` and
+  `/llms-small.txt` (`website/llms-full.txt`, `website/llms-small.txt`, the docs as text a coding
+  agent reads, committed with `make llms`, which runs the build's dependencies on the machine of
+  whoever regenerates them, the result reviewed in the pull request; `check-website` compares them
+  with the build, so a docs change carries them).
   Its `build` job runs the site's and the PWA's dependencies and uploads the built site as a plain
   artifact, naming its id as a job output. The Pages artifact is made and deployed by `deploy`, one
   job that runs no dependency code, after the `github-pages` approval and with no wait between the
   upload and the deploy (a sparse checkout of the tag's `scripts/`, `server/agent-guide.md`, `website/llms.txt`,
-  `website/astro.config.mjs`, `website/src/` and `website/public/`
-  without credentials, a download of the built site by id, upload, deploy): it copies those four
-  files from the tag over whatever the build left and compares them byte for byte, then runs the
+  `website/llms-full.txt`, `website/llms-small.txt`, `website/astro.config.mjs`, `website/src/` and
+  `website/public/` without credentials, a download of the built site by id, upload, deploy): it fails
+  when the build's `llms-full.txt` or `llms-small.txt` differs from the tag's (committed ones gone
+  stale are not served), then copies those six files from the tag over whatever the build left and compares them byte for byte, then runs the
   tag's `scripts/check-site-installs.mjs` on every other file but scripts, style sheets and binary
-  types (pages, sitemaps and SVG files as markup, `llms-full.txt`, `llms-small.txt`, captions and
-  other `.md .txt .vtt .json .webmanifest` files as text, line by line; a file with no extension,
+  types (pages, sitemaps and SVG files as markup, captions and
+  `.md .txt .vtt .json .webmanifest` files as text, line by line; a file with no extension,
   served as a download that a page can point an agent at, as plain text; the PDF viewer's character
   maps and fonts are not read; any other type,
   a link in the artifact, an `xml-stylesheet` instruction, a `<foreignObject>` or `xml:base` in an
@@ -2783,12 +2788,12 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   to the same link rule; links resolve against the page's own address or its first `<base>`. A file with a UTF-16
   byte order mark or a NUL byte is refused. Else the deploy fails. CI runs the same check on every
   website build, in a job of its own (`check-website`) that runs no dependency code, on the built
-  site downloaded as an artifact by id (the demo included, as deploy builds it), and compares the four
+  site downloaded as an artifact by id (the demo included, as deploy builds it), and compares the six
   files deploy takes from the tag with the ones the build copied from the checkout. Prose is not held to the tag: a line
   outside code that pipes a download into a shell or an interpreter (`curl … | sh`, `| /bin/sh`,
   `| doas sh`, `irm … | iex`, `iex (…)`, `$(curl …)`, `<(curl …)`, a backtick around one), or runs it as a
   file after it (`&& sh /tmp/i`, `; chmod +x i`, `&& ./i`, `; . ~/i`, `exec(`, `Start-Process`), with a
-  fetch word among `curl wget fetch aria2c lwp-download irm iwr`, the PowerShell and BITS ones,
+  fetch word among `curl wget fetch aria2c lwp-download scp irm iwr`, the PowerShell and BITS ones,
   `certutil`, `urlopen`, `urllib`, `requests.get`, `httpx`, `git clone` and `Get-Content`, fails only
   when it names no address, or an address other than those above or this computer's (`localhost`, `127.0.0.1`), a
   host with no scheme or an IP address, a backslash, a proxy (`*_proxy=`) or a curl option that
@@ -2800,9 +2805,15 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `TERMOTE_SKIP_SIGNATURE_CHECK` (a downgrade to a release no longer signed), and is not a line of the
   sources; a package run with no URL to hold (`npx`, `pnpx`, `bunx`, `bun x`, `uvx`, `uv tool run`,
   `pnpm dlx`, `yarn dlx`, `npm exec`, `npm`/`pnpm`/`yarn`/`bun` `create` or `init`, `pipx run`,
-  `deno run`, `docker run`, `podman run`, `go run …@`, `go install …@`, `pip install` of a URL or
-  `git+`, `mshta` or `msiexec` of a URL or a share) fails wherever it is not a line of the sources, a
-  copy button's lines taken one by one; a pipe into a shell from a command with no fetch word
+  `deno run`, `docker run`, `podman run`, `go run …@`, `go install …@`, `mshta` or `msiexec` of a URL
+  or a share), or a package install by name, after any options (`npm`/`pnpm`/`yarn`/`bun` `install`,
+  `i` or `add`, `pip install`, `pipx install`, `uv tool install`, `uv pip install`, `brew install`,
+  `cargo install`, `gem install`, `Install-Module`, `Install-Script`, `Install-Package`,
+  `Install-PSResource`, `winget`/`scoop`/`choco` `install`: its install scripts run), fails wherever
+  it is not a line of the sources, a copy button's lines taken one by one, or does not lie whole in
+  a code line or code span of the file that is one of the sources' and ends where a package name
+  cannot go on (`brew install tmux` in a sentence passes, followed by `-x` it fails); a pipe into a
+  shell from a command with no fetch word
   (`ssh host cat i | sh`, `nc … | sh`) passes; an
   indented markdown block and text styled as code outside `<pre>`/`<code>` are prose to these rules;
   in a line over 500
@@ -2813,11 +2824,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   build's: a script or a style sheet (CSS `content:`, a hidden block) a dependency injected into it
   can change what it shows once it loads, and the search index (pagefind fragments, shown by its
   script) is not read. An install link is told by its path's ending (`.sh`, `/agents.md`…): a
-  link to another host's `…/agents` without one passes. Only the four files and the code are held to the tag. A background
+  link to another host's `…/agents` without one passes. Only the six files and the code are held to the tag. A background
   process a build dependency left running cannot reach that job, since the runner ends a job's
   processes with it; an artifact deleted and uploaded again under the same name, with a runtime
   token such a process took, has another id and is not the one downloaded. `verify` compares the
-  four served files with the tag after the deploy.
+  six served files with the tag after the deploy.
   The release workflow does the same for the binaries the `release` job signs: each `build` leg
   names its artifact's id as an output of its own (`linux_amd64`, ...), and `docker` and
   `release` download by those ids, never by name or all of the run's artifacts. No `build` leg runs

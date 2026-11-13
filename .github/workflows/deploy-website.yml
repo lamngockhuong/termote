@@ -135,6 +135,8 @@ jobs:
             scripts
             server/agent-guide.md
             website/llms.txt
+            website/llms-full.txt
+            website/llms-small.txt
             website/astro.config.mjs
             website/src
             website/public
@@ -146,12 +148,23 @@ jobs:
           artifact-ids: ${{ needs.build.outputs.site }}
           path: site
 
+      # llms-full.txt and llms-small.txt are committed as the tag's docs
+      # build to: a tag whose committed ones are stale fails here rather than
+      # serving them (the copy below would only compare them with themselves).
+      - name: Check the tag's llms files are what its docs build to
+        run: |
+          for f in llms-full.txt llms-small.txt; do
+            cmp "src/website/$f" "site/$f" || {
+              echo "::error::website/$f is not what the tag's docs build to: run make llms"; exit 1; }
+          done
+
       # The agent guide is what llms.txt and the install docs tell a coding
       # agent to follow, with the install commands in it; llms.txt is what
-      # sends a coding agent there.
-      - name: Put the tag's installers, agent guide and llms.txt in
+      # sends a coding agent there, and llms-full.txt and llms-small.txt are
+      # the docs it reads as text (committed with `make llms`).
+      - name: Put the tag's installers, agent guide and llms files in
         run: |
-          for pair in scripts/install.sh:install.sh scripts/install.ps1:install.ps1 server/agent-guide.md:agents.md website/llms.txt:llms.txt; do
+          for pair in scripts/install.sh:install.sh scripts/install.ps1:install.ps1 server/agent-guide.md:agents.md website/llms.txt:llms.txt website/llms-full.txt:llms-full.txt website/llms-small.txt:llms-small.txt; do
             from="src/${pair%%:*}" to="site/${pair#*:}"
             cp "$from" "$to"
             cmp "$from" "$to"
@@ -186,9 +199,9 @@ jobs:
         with:
           ref: ${{ inputs.tag || github.ref }}
 
-      - name: Check the served installers, agent guide and llms.txt
+      - name: Check the served installers, agent guide and llms files
         run: |
-          for pair in scripts/install.sh:install.sh scripts/install.ps1:install.ps1 server/agent-guide.md:agents.md website/llms.txt:llms.txt; do
+          for pair in scripts/install.sh:install.sh scripts/install.ps1:install.ps1 server/agent-guide.md:agents.md website/llms.txt:llms.txt website/llms-full.txt:llms-full.txt website/llms-small.txt:llms-small.txt; do
             src=${pair%%:*} url="https://termote.ohnice.app/${pair#*:}"
             # The Pages CDN may keep the old file for up to 10 minutes.
             for i in $(seq 1 24); do

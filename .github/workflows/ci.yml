@@ -1343,13 +1343,15 @@ jobs:
           artifact-ids: ${{ needs.build-website.outputs.site }}
           path: site
 
-      # The four files deploy takes from the tag must be what the build
-      # copied from the checkout, and the check reads every other one.
+      # The files deploy takes from the tag must be what the build made of
+      # the checkout, and the check reads every other one. llms-full.txt and
+      # llms-small.txt are committed: a docs change regenerates them.
       - name: Check the site's install commands and the files from the tag
         run: |
           node scripts/check-site-installs.mjs site .
-          for pair in scripts/install.sh:install.sh scripts/install.ps1:install.ps1 server/agent-guide.md:agents.md website/llms.txt:llms.txt; do
-            cmp "${pair%%:*}" "site/${pair#*:}"
+          for pair in scripts/install.sh:install.sh scripts/install.ps1:install.ps1 server/agent-guide.md:agents.md website/llms.txt:llms.txt website/llms-full.txt:llms-full.txt website/llms-small.txt:llms-small.txt; do
+            cmp "${pair%%:*}" "site/${pair#*:}" || {
+              echo "::error::${pair%%:*} differs from the build: run make llms and commit it"; exit 1; }
           done
 
   format-check:

@@ -66,7 +66,7 @@ const SKIPPED = new Set([
 // The files deploy copies from the tag over the build's and compares byte
 // for byte (CI compares them with the checkout): not read here, an
 // installer is not a page.
-const FROM_TAG = new Set(["install.sh", "install.ps1", "agents.md", "llms.txt"]);
+const FROM_TAG = new Set(["install.sh", "install.ps1", "agents.md", "llms.txt", "llms-full.txt", "llms-small.txt"]);
 // The paths the deploy job's sparse checkout of the tag holds
 // (.github/workflows/deploy-website.yml): keep the two lists alike.
 const SOURCES = ["website/src", "website/public", "website/llms.txt", "website/astro.config.mjs", "server/agent-guide.md"];
@@ -87,11 +87,30 @@ const LINK_ATTRS = new Set([
 ]);
 const URL_RE = /(?:https?:)?\/\/(?:\[[0-9a-f:.]+\]|[a-z0-9%])[^\s"'<>`()[\]{}|]*/gi;
 const FETCH_RE =
-  /\b(?:curl|wget2?|fetch|aria2c|lwp-download|irm|iwr|Invoke-RestMethod|Invoke-WebRequest|DownloadString|DownloadFile|DownloadData|WebClient|Start-BitsTransfer|bitsadmin|certutil|urlopen|urllib|requests\.get|httpx|git\s+clone|Get-Content)\b/gi;
-// A command that downloads a package and runs it, with no URL to hold to the
-// allow list: refused in prose wherever it is not a line of the sources.
+  /\b(?:curl|wget2?|fetch|aria2c|lwp-download|scp|irm|iwr|Invoke-RestMethod|Invoke-WebRequest|DownloadString|DownloadFile|DownloadData|WebClient|Start-BitsTransfer|bitsadmin|certutil|urlopen|urllib|requests\.get|httpx|git\s+clone|Get-Content)\b/gi;
+// A command that downloads a package and runs it, or installs one by name
+// (its install scripts run, and so does the program the next line starts),
+// with no URL to hold to the allow list: refused in prose wherever it is not
+// a line of the sources. An install names a package after its options.
 const RUNNER_RE =
-  /\b(?:(?:npx|pnpx|bunx|uvx|uv\s+tool\s+run|bun\s+x|(?:pnpm|yarn)\s+dlx|npm\s+(?:exec|x)|(?:npm|pnpm|yarn|bun)\s+(?:create|init)|pipx\s+run|deno\s+run|(?:docker|podman)\s+run)\s+\S|go\s+(?:run|install)\s+\S+@\S|pip3?\s+install\s+\S*(?:git\+|https?:)|mshta\s+\S*(?:https?:|\\\\)|msiexec\s+\/\w+\s+\S*(?:https?:|\\\\))/i;
+  /\b(?:(?:npx|pnpx|bunx|uvx|uv\s+tool\s+run|bun\s+x|(?:pnpm|yarn)\s+dlx|npm\s+(?:exec|x)|(?:npm|pnpm|yarn|bun)\s+(?:create|init)|pipx\s+run|deno\s+run|(?:docker|podman)\s+run)\s+\S|go\s+(?:run|install)\s+\S+@\S|(?:(?:npm|pnpm|yarn|bun)(?:\s+-\S+|\s+global)*\s+(?:install|i|add)|pip[\d.]*\s+install|pipx\s+install|uv\s+(?:tool|pip)\s+install|brew\s+install|cargo\s+install|gem\s+install|(?:winget|scoop|choco)\s+install|Install-(?:Module|Script|Package|PSResource))(?:\s+-\S+)*\s+[\w@~./:\\"']|mshta\s+\S*(?:https?:|\\\\)|msiexec\s+\/\w+\s+\S*(?:https?:|\\\\))/gi;
+// what goes on with a package name, or names another after a space
+const NAME_GOES_ON = /^(?:[\w@~./:\\"'-]|\s+[\w@~./:\\"'])/;
+
+// inSourceCode: the run or install m of the line n lies whole inside one of
+// code, this file's code lines of the sources, where it appears in n and
+// ends where no name goes on (`brew install tmux`, not `… tmux-x` nor
+// `… tmux x`, which installs x as well).
+function inSourceCode(n, m, code) {
+  for (const c of code) {
+    for (let at = n.indexOf(c); at >= 0; at = n.indexOf(c, at + 1)) {
+      const end = at + c.length;
+      if (at <= m.index && m.index + m[0].length <= end && !NAME_GOES_ON.test(n.slice(end))) return true;
+    }
+  }
+  return false;
+}
+
 // A pipe into a shell or an interpreter (after sudo, env or a variable set
 // for it), a download evaluated, or a file run after it (`&& sh /tmp/i`,
 // `; chmod +x i`, `&& ./i`, `; . ~/i`, `exec(`); a table's | is not one.
@@ -704,11 +723,14 @@ function problems(rel, raw, sources) {
       base: docURL,
     };
   }
+  // this file's code lines that are the sources' own
+  const sourceCode = new Set();
   for (const c of view.code) {
     if (/[\v\f\u0085\u2028\u2029\u007f]/.test(c)) out.push("code holding a line break the check does not split at");
     for (const line of lines(c)) {
       const n = collapse(line);
       if (n && !sources.has(n)) out.push(`code not in the tag's sources: ${n.slice(0, 160)}`);
+      else if (n) sourceCode.add(n);
     }
   }
   for (const to of view.refreshes) {
@@ -770,10 +792,16 @@ function problems(rel, raw, sources) {
         }
       }
     }
-    // a line as written (a copy button's lines apart), before any joining
+    // a line as written (a copy button's lines apart), before any joining;
+    // a run or an install inside a code span of the sources (`brew install
+    // tmux` in a sentence) is that code's, held to the tag above
     for (const line of lines(t.replace(/\u007f/g, "\n"))) {
-      if (RUNNER_RE.test(line) && !sources.has(collapse(line))) {
-        out.push(`a package run from prose: ${collapse(RUNNER_RE.exec(line)[0]).slice(0, 160)}`);
+      const n = collapse(line);
+      if (sources.has(n)) continue;
+      for (const m of n.matchAll(RUNNER_RE)) {
+        if (!inSourceCode(n, m, sourceCode)) {
+          out.push(`a package run or install from prose: ${m[0].slice(0, 160)}`);
+        }
       }
     }
   }

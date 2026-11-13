@@ -131,7 +131,8 @@ read the password: off a terminal, `start` prints the username alone. The websit
 [Install with an agent](https://termote.ohnice.app/installation/agent/) gives users the prompt to
 paste. The site also serves `/llms.txt`, `/llms-full.txt` and `/llms-small.txt`
 (`starlight-llms-txt`); the archived 0.x pages are left out of `llms-small.txt` and come last in
-`llms-full.txt`.
+`llms-full.txt`. All three are served from the files committed under `website/` (`make llms` regenerates
+the last two), never from the build.
 
 ## Deployment Modes
 
