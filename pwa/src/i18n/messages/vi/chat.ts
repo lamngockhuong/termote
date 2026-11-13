@@ -74,6 +74,7 @@ export default {
 
   'chat.subagent.running': 'đang chạy',
   'chat.subagent.done': 'xong',
+  'chat.subagent.stopped': 'đã dừng',
   'chat.subagent.failed': 'lỗi',
   'chat.subagent.guessed': '(phỏng đoán)',
   'chat.subagent.count_one': '{count} subagent',

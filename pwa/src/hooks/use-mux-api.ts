@@ -481,13 +481,13 @@ export async function fetchHostStats(): Promise<HostStats> {
 }
 
 // One subagent of a Claude session. status is running until the transcript
-// reports its end; statusGuessed: done is a guess from how long its file
+// reports its end; stopped: killed, or stopped by the user; statusGuessed: done is a guess from how long its file
 // has been quiet. depth is 1 for a subagent of the session itself.
 export interface SubagentNode {
   id: string
   type: string
   description?: string
-  status: 'running' | 'done' | 'error'
+  status: 'running' | 'done' | 'stopped' | 'error'
   statusGuessed?: boolean
   startTs?: string
   endTs?: string

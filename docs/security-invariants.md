@@ -348,7 +348,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `agentForwardMax` behind), so the whole file is never read again; only the first 64 KiB of a line is
   kept, matched by pattern, never decoded. A subagent's own file is read for its first line (1 MiB at
   most) and its last 256 KiB, and a meta file is read, again only when its size or mtime changed;
-  every file is opened nonblocking. The overview reads only the new transcript rows and the listing.
+  every file is opened nonblocking. The overview reads only the new transcript rows, the listing and
+  the meta files of subagents with no end (the same checks and cache). A meta file's
+  `stoppedByUser: true` (Claude Code's stop of background agents, which writes no end row) ends the
+  subagent at the meta file's mtime unless an end row comes later or its file is written more than
+  30 s after it.
   Memory: per session asked for in the last 10 minutes, the ends, meta and file facts of the subagents
   listed. Limits: 200 nodes (the newest), 4 levels, a parent loop dropped, `truncated` set. It
   returns agent ids, the type, the description (200 runes), status, times, the last tool's name and

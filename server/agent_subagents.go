@@ -31,7 +31,10 @@ import (
 // `queue-operation` row of the session's transcript (at any depth) whose
 // content is a <task-notification> naming the agentId and a <status>.
 // Background shell commands write the same rows with their own task ids,
-// which match no file here and are dropped.
+// which match no file here and are dropped. Stopping background agents
+// from the prompt (ctrl+x ctrl+k) writes no task-notification for them (one
+// row quotes their descriptions); Claude Code (2.1.323) rewrites each one's
+// meta file with "stoppedByUser": true instead.
 
 const (
 	// subagentsTTL: every client polling a tree shares one read.
@@ -56,6 +59,9 @@ const (
 	subagentTailRead = 256 * 1024
 	// subagentLineHead bytes of a transcript line are read for an end.
 	subagentLineHead = 64 * 1024
+	// subagentStopSettle: a subagent whose file is written this long after
+	// its meta file says the user stopped it has been resumed since.
+	subagentStopSettle = 30 * time.Second
 	// subagentsKeep: what is known of a session not asked for in this long
 	// is dropped.
 	subagentsKeep = 10 * time.Minute
@@ -69,7 +75,9 @@ var (
 )
 
 // subagentNode is one subagent. Status is running until the transcript
-// reports its end: done when that status is completed, error otherwise.
+// reports its end: done when that status is completed, stopped when it is
+// killed or stopped (or the user stopped it, see userStopped), error
+// otherwise.
 // StatusGuessed: done is a guess from the file's age (subagentGuessIdle).
 // Tokens is the size of its last request: the prompt and the reply, as
 // Claude Code counts a subagent's tokens. Depth is 1 for a subagent of the
@@ -218,8 +226,9 @@ func (st *subagentStore) read(key string, s AgentSession) (subagentsResponse, er
 
 // lastWrite is when a subagent of s that has not ended last wrote, zero when
 // none runs. It is what the overview asks of every Claude pane, so it reads
-// only what is new in the transcript and the listing of the directory: no
-// meta file and no subagent file.
+// only what is new in the transcript, the listing of the directory and the
+// meta files of the subagents still running (read again only when changed):
+// no subagent file.
 func (st *subagentStore) lastWrite(key string, s AgentSession) (time.Time, error) {
 	var last time.Time
 	err := st.visit(key, s, func(ss *subagentSession, dir *os.Root) { last = ss.runningWrite(dir, st.now()) })
@@ -267,25 +276,37 @@ func (st *subagentStore) visit(key string, s AgentSession, fn func(*subagentSess
 }
 
 // runningWrite is the newest mtime, as listed, of the subagent files whose
-// subagent has not ended (and is not guessed to have).
+// subagent has not ended (and is not guessed to have, nor stopped by the
+// user).
 func (ss *subagentSession) runningWrite(dir *os.Root, now time.Time) time.Time {
 	var last time.Time
 	listed := map[string]bool{}
+	logs := map[string]fs.DirEntry{}
+	metas := map[string]fs.DirEntry{}
 	for _, e := range listSubagentDir(dir) {
 		m := subagentFileRe.FindStringSubmatch(e.Name())
 		if m == nil || !e.Type().IsRegular() {
 			continue
 		}
 		listed[m[1]] = true
-		if m[2] != "jsonl" {
-			continue
+		if m[2] == "jsonl" {
+			logs[m[1]] = e
+		} else {
+			metas[m[1]] = e
 		}
-		if _, ended := ss.ends[m[1]]; ended {
+	}
+	for id, e := range logs {
+		if _, ended := ss.ends[id]; ended {
 			continue
 		}
 		fi, err := e.Info()
 		if err != nil || ss.guessDone(fi.ModTime(), now) {
 			continue
+		}
+		if me := metas[id]; me != nil {
+			if m, at, ok := ss.readMeta(dir, id, me); ok && userStopped(m, at, subagentEnd{}, false, fi.ModTime()) {
+				continue
+			}
 		}
 		if fi.ModTime().After(last) {
 			last = fi.ModTime()
@@ -297,6 +318,11 @@ func (ss *subagentSession) runningWrite(dir *os.Root, now time.Time) time.Time {
 			delete(ss.ends, id)
 		}
 	}
+	for id := range ss.metas {
+		if metas[id] == nil {
+			delete(ss.metas, id)
+		}
+	}
 	return last
 }
 
@@ -305,6 +331,20 @@ func (ss *subagentSession) runningWrite(dir *os.Root, now time.Time) time.Time {
 // file last changed at changed has been quiet for subagentGuessIdle.
 func (ss *subagentSession) guessDone(changed, now time.Time) bool {
 	return (!ss.covered || !ss.sawQueue) && !changed.IsZero() && now.Sub(changed) >= subagentGuessIdle
+}
+
+// userStopped: the meta file, last written at stoppedAt, says the user
+// stopped the subagent, and nothing says it went on since: no end reported
+// after the stop (end, when ended) and no write to its file (at changed) more
+// than subagentStopSettle after it.
+func userStopped(m subagentMeta, stoppedAt time.Time, end subagentEnd, ended bool, changed time.Time) bool {
+	if !m.StoppedByUser || stoppedAt.IsZero() {
+		return false
+	}
+	if ended && end.ts > stoppedAt.UTC().Format(activityTimeFormat) {
+		return false
+	}
+	return changed.Sub(stoppedAt) <= subagentStopSettle
 }
 
 // listSubagentDir is dir's entries, none when it cannot be read.
@@ -460,6 +500,7 @@ type subagentMeta struct {
 	AgentType     string `json:"agentType"`
 	Description   string `json:"description"`
 	ParentAgentID string `json:"parentAgentId"`
+	StoppedByUser bool   `json:"stoppedByUser"`
 }
 
 // tree lists dir and builds the tree from the meta files, the subagent
@@ -550,12 +591,12 @@ func (ss *subagentSession) tree(dir *os.Root, now time.Time) subagentsResponse {
 		if !n.start.IsZero() {
 			n.StartTS = n.start.UTC().Format(activityTimeFormat)
 		}
-		switch end, ok := ss.ends[id]; {
+		end, ok := ss.ends[id]
+		switch {
+		case f.metaOK && userStopped(f.m, f.metaTime, end, ok, changed):
+			n.Status, n.EndTS = "stopped", f.metaTime.UTC().Format(activityTimeFormat)
 		case ok:
-			n.Status, n.EndTS = "done", end.ts
-			if end.status != "completed" {
-				n.Status = "error"
-			}
+			n.Status, n.EndTS = endStatus(end.status), end.ts
 		case ss.guessDone(changed, now):
 			n.Status, n.StatusGuessed = "done", true
 		}
@@ -605,6 +646,17 @@ func (ss *subagentSession) tree(dir *os.Root, now time.Time) subagentsResponse {
 		res.Truncated = true // a parent loop, never reached from the session
 	}
 	return res
+}
+
+// endStatus is the node status of a task-notification's status.
+func endStatus(s string) string {
+	switch s {
+	case "completed":
+		return "done"
+	case "killed", "stopped":
+		return "stopped"
+	}
+	return "error"
 }
 
 // subagentMetaFile is a meta file as read at size and mtime.

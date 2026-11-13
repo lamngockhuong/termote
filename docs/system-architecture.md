@@ -313,7 +313,7 @@ existing pane from the last snapshot.
 GET    /api/mux/snapshot          → {apiVersion, backend, caps, serverNow, groups:[{id,name,worktree?:{linked,branch?},meta?,tabs:[{id,key,name,active,processes?,panes:[{id,active,title,name?,agent?:{name,status,since?,sinceFirstSeen?},process?,meta?:[{key,value}]}]}]}]}   (meta: Herdr, not to a view-only client)
 GET    /api/mux/overview[?pane=]  → {serverNow, panes:[{paneId,key,lastText?,lastTs?,branch?,changed?,changedTruncated?,usage?:{contextTokens,model?,contextWindow?,contextPercent?,exact},accountKey?,unavailable?:["transcript"|"changes"]}], accounts?:[{key,agent:"codex",plan?,windows:[{usedPercent,windowMinutes,resetsAt?}],updatedAt}]}
 GET    /api/mux/activity?after=   → {events:[{seq,ts,key,groupId,tabId,paneId,agent,from,to}], latest, oldest, reset?, serverNow} | 400 invalid_after
-GET    /api/mux/panes/{id}/agent/subagents → {nodes:[{id,type,description?,status:running|done|error,statusGuessed?,startTs?,endTs?,lastTool?,tokens?,depth,children}], truncated?} | 404
+GET    /api/mux/panes/{id}/agent/subagents → {nodes:[{id,type,description?,status:running|done|stopped|error,statusGuessed?,startTs?,endTs?,lastTool?,tokens?,depth,children}], truncated?} | 404
 POST   /api/mux/tabs               body: {groupId, name}       → {ok, id}
 PATCH  /api/mux/tabs/{id}          body: {name, key?}          → {ok} | 409 changed
 DELETE /api/mux/tabs/{id}?key=                                  → {ok} | 409 changed
@@ -1489,9 +1489,12 @@ description and `parentAgentId` (nesting), and each `agent-<id>.jsonl` its start
 tool and tokens (its tail: input, cache read, cache write and output of the last assistant row that
 is not `<synthetic>`, as Claude Code counts a subagent's tokens). Subagents run in the background, so the Agent call's tool result says
 nothing about the end; the end is a `queue-operation` row of the session's transcript whose
-`<task-notification>` names the agent id and a `<status>` (`completed` is `done`, anything else
-`error`). Background shell commands write the same rows with ids that match no file and are
-dropped. The first read takes the transcript's last `agentTailMax` bytes, later ones go on from
+`<task-notification>` names the agent id and a `<status>` (`completed` is `done`, `killed` and
+`stopped` are `stopped`, anything else `error`). Background shell commands write the same rows with ids that match no file and are
+dropped. Stopping background agents from the prompt (ctrl+x ctrl+k) writes no such row for them;
+Claude Code rewrites each one's meta file with `stoppedByUser: true`, which ends it as `stopped` at the
+meta file's mtime, unless an end row comes later or its file is written more than 30 s after that
+(resumed). The first read takes the transcript's last `agentTailMax` bytes, later ones go on from
 the offset kept per session, so it is never read whole again. When that read found no
 `queue-operation` row or did not start at the beginning of the file, a subagent whose file has
 been quiet for 10 minutes is taken as done (`statusGuessed`). One read is shared for 2 s; at most

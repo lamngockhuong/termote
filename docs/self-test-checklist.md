@@ -555,6 +555,8 @@ Run on tmux (Linux/macOS), psmux (Windows) and Herdr (`herdr integration install
       `3 subagents running` and lists each with its type, description, last tool, time (counting up
       each second) and `↓ 30k tokens` close to the terminal's count; one folds the strip on a tap and
       the strip goes once the last one ends
+- [ ] Stop those subagents with ctrl+x ctrl+k (twice) in Claude Code: within 3 s the strip goes,
+      History marks each `stopped` and the card is no longer kept busy by them
 
 ### Sending
 

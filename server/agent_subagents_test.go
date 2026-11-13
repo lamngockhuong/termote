@@ -243,7 +243,7 @@ func TestSubagentEndsReadOnward(t *testing.T) {
 	fmt.Fprint(f, `{"type":"queue-operation","operation":"enqueue","content":"<task-notification><task-id>aaa4</task-id><status>completed</status>`)
 	f.Close()
 	res, _ := getSubagents(t, mux)
-	if n := nodeByID(res.Nodes, "aaa2"); n.Status != "error" || n.EndTS != "2026-10-13T10:09:00.000Z" {
+	if n := nodeByID(res.Nodes, "aaa2"); n.Status != "stopped" || n.EndTS != "2026-10-13T10:09:00.000Z" {
 		t.Errorf("aaa2 = %+v", n)
 	}
 	if n := nodeByID(res.Nodes, "aaa4"); n.Status != "running" {
@@ -691,5 +691,94 @@ func TestSubagentFileGone(t *testing.T) {
 	ss.addEnd([]byte(`{"type":"queue-operation","operation":"enqueue","timestamp":"soon","content":"<task-notification><task-id>x1</task-id><status>completed</status></task-notification>"}`))
 	if e := ss.ends["x1"]; e.status != "completed" || e.ts != "" {
 		t.Errorf("x1 = %+v", e)
+	}
+}
+
+// stopMeta rewrites id's meta file as Claude Code (2.1.323) does when the
+// user stops background agents from the prompt, at stopped, and its
+// subagent file last written at changed.
+func stopMeta(t *testing.T, subs, id, desc string, stopped, changed time.Time) {
+	t.Helper()
+	meta := filepath.Join(subs, "agent-"+id+".meta.json")
+	b := `{"agentType":"general-purpose","description":"` + desc + `","spawnDepth":1,"requestShape":"background","stoppedByUser":true}`
+	if err := os.WriteFile(meta, []byte(b), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(meta, stopped, stopped); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(filepath.Join(subs, "agent-"+id+".jsonl"), changed, changed); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSubagentStoppedByUser(t *testing.T) {
+	dir, subs := subagentsFixture(t)
+	mux, a := subagentsServer(t, claudeSession(dir))
+	key := testSessionID + "\x00" + dir
+	stop := time.Now().Add(-time.Hour).Truncate(time.Millisecond)
+	// aaa2 stopped while running (its last write is the interruption, just
+	// after); aaa4 stopped, then resumed and still writing; aaa1 stopped
+	// after its end.
+	stopMeta(t, subs, "aaa2", "Trace the lexer", stop, stop.Add(200*time.Millisecond))
+	stopMeta(t, subs, "aaa4", "Nested look", stop, stop.Add(2*time.Minute))
+	stopMeta(t, subs, "aaa1", "Review parser", stop, stop)
+	res, _ := getSubagents(t, mux)
+	ts := stop.UTC().Format(activityTimeFormat)
+	for _, id := range []string{"aaa1", "aaa2"} {
+		if n := nodeByID(res.Nodes, id); n.Status != "stopped" || n.EndTS != ts || n.StatusGuessed {
+			t.Errorf("%s = %+v", id, n)
+		}
+	}
+	if n := nodeByID(res.Nodes, "aaa4"); n.Status != "running" || n.EndTS != "" {
+		t.Errorf("resumed aaa4 = %+v", n)
+	}
+	if last, err := a.subagentState.lastWrite(key, claudeSession(dir)); err != nil || !last.Equal(stop.Add(2*time.Minute)) {
+		t.Errorf("lastWrite = %v, %v", last, err)
+	}
+
+	// An end reported after the stop wins: aaa2 was resumed and finished.
+	appendTranscript(t, subs, `{"type":"queue-operation","operation":"enqueue","timestamp":"`+
+		stop.Add(time.Minute).UTC().Format(time.RFC3339Nano)+`","content":"<task-notification><task-id>aaa2</task-id><status>completed</status></task-notification>"}`+"\n")
+	res, _ = getSubagents(t, mux)
+	if n := nodeByID(res.Nodes, "aaa2"); n.Status != "done" {
+		t.Errorf("aaa2 ended after its stop = %+v", n)
+	}
+
+	// Once aaa4 is quiet too, nothing runs.
+	os.Chtimes(filepath.Join(subs, "agent-aaa4.jsonl"), stop, stop)
+	if last, err := a.subagentState.lastWrite(key, claudeSession(dir)); err != nil || !last.IsZero() {
+		t.Errorf("lastWrite with every subagent stopped = %v, %v", last, err)
+	}
+	// A meta file gone is forgotten by the overview's read too.
+	os.Remove(filepath.Join(subs, "agent-aaa4.meta.json"))
+	a.subagentState.lastWrite(key, claudeSession(dir))
+	if _, ok := a.subagentState.session(key).metas["aaa4"]; ok {
+		t.Error("a removed meta file was kept")
+	}
+	if userStopped(subagentMeta{StoppedByUser: true}, time.Time{}, subagentEnd{}, false, stop) {
+		t.Error("a stop without a time counted")
+	}
+}
+
+func appendTranscript(t *testing.T, subs, text string) {
+	t.Helper()
+	f, err := os.OpenFile(filepath.Join(filepath.Dir(filepath.Dir(subs)), testSessionID+".jsonl"), os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if _, err := f.WriteString(text); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSubagentEndStatus(t *testing.T) {
+	for in, want := range map[string]string{
+		"completed": "done", "killed": "stopped", "stopped": "stopped", "failed": "error", "odd": "error",
+	} {
+		if got := endStatus(in); got != want {
+			t.Errorf("endStatus(%q) = %q, want %q", in, got, want)
+		}
 	}
 }
