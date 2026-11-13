@@ -70,6 +70,11 @@ interface Props {
   // The backend scrolls the pane's history (Caps.scroll): the stream only
   // carries screen renders, so the xterm.js scrollback stays empty.
   serverScroll?: boolean
+  // The stream carries the program's own bytes (Caps.altScroll): a program
+  // on the alternate screen that asked for mouse reports keeps its history
+  // itself, so scrolls go to the backend, which types them as wheel reports
+  // (herdr-core, Claude Code's fullscreen mode).
+  altScroll?: boolean
   // Wrap pastes in bracketed-paste markers (herdr pane running an agent).
   bracketedPaste?: boolean
   fontSize?: number
@@ -276,6 +281,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       paneSeen,
       copyModeSupported = true,
       serverScroll = false,
+      altScroll = false,
       bracketedPaste = false,
       fontSize = 14,
       fontFamily = '',
@@ -329,6 +335,8 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
     bracketedRef.current = bracketedPaste
     const serverScrollRef = useRef(serverScroll)
     serverScrollRef.current = serverScroll
+    const altScrollRef = useRef(altScroll)
+    altScrollRef.current = altScroll
     const paneIdRef = useRef(paneId)
     paneIdRef.current = paneId
     const { t } = useT()
@@ -389,9 +397,22 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       }
     }, [])
 
+    // Scrolls go to the backend: it scrolls the pane, or the program on the
+    // alternate screen takes them as the wheel.
+    const backendScrolls = useCallback(() => {
+      if (serverScrollRef.current) return true
+      const term = termRef.current
+      return (
+        altScrollRef.current &&
+        !!term &&
+        term.buffer.active.type === 'alternate' &&
+        term.modes.mouseTrackingMode !== 'none'
+      )
+    }, [])
+
     const scrollHistory = useCallback(
       (lines: number) => {
-        if (!serverScrollRef.current) return false
+        if (!backendScrolls()) return false
         if (lines > 0) scrolledRef.current = true
         if (lines !== 0) {
           // Rows still pending for another pane are dropped, not moved.
@@ -404,16 +425,16 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
         }
         return true
       },
-      [flushScroll],
+      [backendScrolls, flushScroll],
     )
 
     // Input goes to the live screen, so show it again before sending any.
     const toLiveScreen = useCallback(() => {
-      if (scrolledRef.current && serverScrollRef.current) {
+      if (scrolledRef.current && backendScrolls()) {
         scrolledRef.current = false
         scrollHistory(-MAX_SCROLL_LINES)
       }
-    }, [scrollHistory])
+    }, [backendScrolls, scrollHistory])
 
     const layout = useCallback(() => {
       const term = termRef.current

@@ -2397,6 +2397,7 @@ export default function App({
                           // A view-only device never moves the backend's view of
                           // the pane (Herdr scrolls it for every client)
                           serverScroll: !!mux.caps.scroll && !readOnly,
+                          altScroll: !!mux.caps.altScroll && !readOnly,
                           bracketedPaste:
                             (paneStream || isZellij) &&
                             !!activeSession.hasAgent,

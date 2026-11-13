@@ -88,6 +88,10 @@ export interface MuxSnapshot {
     clientSideSelect: boolean
     copyMode: boolean
     scroll?: boolean
+    // A program on the alternate screen that asked for mouse reports takes
+    // scrollPane as wheel reports; the stream carries its own bytes, so
+    // anything else scrolls the xterm.js scrollback (herdr-core).
+    altScroll?: boolean
     // A pane's history and screen can be read as plain text (/panes/{id}/text);
     // not for a view-only client.
     paneText?: boolean

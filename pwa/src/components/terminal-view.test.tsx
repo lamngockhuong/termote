@@ -39,6 +39,7 @@ const { FakeTerminal, FakeFit } = vi.hoisted(() => {
     wheelCb: (ev: Pick<WheelEvent, 'deltaY' | 'deltaMode'>) => boolean = () =>
       true
     modes = { mouseTrackingMode: 'none' }
+    buffer = { active: { type: 'normal' } }
     attachCustomWheelEventHandler = vi.fn(
       (cb: (ev: Pick<WheelEvent, 'deltaY' | 'deltaMode'>) => boolean) => {
         this.wheelCb = cb
@@ -526,6 +527,33 @@ describe('TerminalView', () => {
     term.modes.mouseTrackingMode = 'vt200'
     expect(term.wheelCb({ deltaY: -30, deltaMode: 0 })).toBe(true)
     expect(ref.current!.scrollHistory(5)).toBe(true)
+  })
+
+  it('altScroll: scrolls go to the backend only while a program on the alternate screen takes mouse reports', async () => {
+    const { term, ref } = renderView({ paneId: 't2', altScroll: true })
+    // A shell on the normal screen: the xterm.js scrollback.
+    expect(ref.current!.scrollHistory(3)).toBe(false)
+    term.buffer.active.type = 'alternate'
+    expect(ref.current!.scrollHistory(3)).toBe(false)
+    term.modes.mouseTrackingMode = 'vt200'
+    expect(ref.current!.scrollHistory(3)).toBe(true)
+    await act(async () => {})
+    expect(muxApi.scrollPane).toHaveBeenLastCalledWith('t2', 3)
+    // Typing returns the program to its live screen first.
+    muxApi.scrollPane.mockClear()
+    term.dataCb('x')
+    await act(async () => {})
+    expect(muxApi.scrollPane).toHaveBeenCalledWith('t2', -10000)
+    expect(socket.send).toHaveBeenCalledWith('x')
+    // The wheel stays xterm.js's own: it reports it to the program itself.
+    expect(term.wheelCb({ deltaY: -30, deltaMode: 0 })).toBe(true)
+    // Back on the normal screen nothing is sent.
+    muxApi.scrollPane.mockClear()
+    term.buffer.active.type = 'normal'
+    expect(ref.current!.scrollHistory(3)).toBe(false)
+    term.dataCb('y')
+    await act(async () => {})
+    expect(muxApi.scrollPane).not.toHaveBeenCalled()
   })
 
   it('serverScroll: a new stream may show a view scrolled earlier, so input returns it', async () => {

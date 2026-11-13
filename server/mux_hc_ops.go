@@ -45,7 +45,7 @@ func hcError(err error) error {
 func (m *hcMux) Caps() Caps {
 	doc := m.state.hasDoc()
 	return Caps{
-		ClientSideSelect: true, PaneText: true, DriveSize: true, PaneStream: true, PaneLayout: true,
+		ClientSideSelect: true, PaneText: true, DriveSize: true, PaneStream: true, PaneLayout: true, AltScroll: true,
 		Files: true, AgentChat: agentProcSupported, Groups: true,
 		// Names and order are written to herdr-app's document (mux_hc_doc.go),
 		// once herdr-app has written one.
@@ -342,8 +342,23 @@ func (m *hcMux) ResizePane(context.Context, string, ResizeDir, int) error {
 }
 
 // Scroll: the stream carries the program's own bytes, which xterm.js
-// scrolls itself (Caps.Scroll is off).
-func (m *hcMux) Scroll(context.Context, string, int) error { return errUnsupported }
+// scrolls itself (Caps.Scroll is off). A program on the alternate screen
+// (Claude Code's fullscreen mode) keeps its history itself, and the client
+// sends its scrolls here (Caps.AltScroll) only while the program asked for
+// mouse reports: one wheel report per row, the way a terminal passes the
+// wheel on, and the agent's jump key for a scroll back to the live screen.
+func (m *hcMux) Scroll(ctx context.Context, paneID string, lines int) error {
+	t, err := m.requirePane(ctx, paneID)
+	if err != nil || lines == 0 {
+		return err
+	}
+	if a := hcAgent(&t); a != nil && lines <= -maxScrollLines {
+		if key, ok := herdrJumpToBottom[a.Name]; ok {
+			return m.typeInput(ctx, paneID, []byte(key))
+		}
+	}
+	return m.typeInput(ctx, paneID, []byte(wheelReports(Size{Cols: t.Cols, Rows: t.Rows}, lines)))
+}
 
 // ReadText writes up to lines rows of history and the screen. more: what was
 // read filled the rows asked for, so the pane may hold more.

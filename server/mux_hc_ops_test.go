@@ -326,7 +326,7 @@ func TestHcRequirePaneAndErrors(t *testing.T) {
 		t.Error("mapping")
 	}
 	caps := s.m.Caps()
-	if !caps.ClientSideSelect || !caps.PaneStream || !caps.PaneLayout || !caps.Groups || !caps.Files || caps.Scroll ||
+	if !caps.ClientSideSelect || !caps.PaneStream || !caps.PaneLayout || !caps.Groups || !caps.Files || caps.Scroll || !caps.AltScroll ||
 		caps.RenamePane || caps.RenameTab || caps.ReorderTabs || caps.Worktrees != (runtime.GOOS != "windows") || s.m.Name() != "hc" {
 		t.Fatalf("caps %+v", caps)
 	}
@@ -445,7 +445,7 @@ func TestHcUnsupportedAndSelect(t *testing.T) {
 	m := &hcMux{}
 	ctx := context.Background()
 	for _, err := range []error{
-		m.RenamePane(ctx, "", ""), m.Scroll(ctx, "", 1),
+		m.RenamePane(ctx, "", ""),
 	} {
 		if err != errUnsupported {
 			t.Errorf("%v", err)
@@ -483,6 +483,52 @@ func TestHcReadText(t *testing.T) {
 	}
 	if text, err := s.m.ReadTaskText(ctx, "t2", 5); err != nil || text != "short" {
 		t.Fatalf("%q %v", text, err)
+	}
+}
+
+// A program on the alternate screen (Claude Code's fullscreen mode) keeps its
+// history itself: Scroll types one SGR wheel report per row at the middle of
+// the pane, capped, and Claude's jump key for a scroll back to the live screen.
+func TestHcScrollWheelReports(t *testing.T) {
+	s := newHcSim(t)
+	ctx := ctx5s(t)
+	if err := s.m.Scroll(ctx, "t2", 0); err != nil {
+		t.Fatal(err)
+	}
+	editHcTerm(t, s, "t2", func(h *hcTerminal) { h.Status = &hcStatus{App: "claude-code", State: "idle"} })
+	for _, n := range []int{2, -1000, -maxScrollLines} {
+		if err := s.m.Scroll(ctx, "t2", n); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// No known jump key: wheel reports, capped.
+	editHcTerm(t, s, "t2", func(h *hcTerminal) { h.Status = &hcStatus{App: "codex", State: "idle"} })
+	if err := s.m.Scroll(ctx, "t2", -maxScrollLines); err != nil {
+		t.Fatal(err)
+	}
+	editHcTerm(t, s, "t2", func(h *hcTerminal) { h.Status = nil })
+	if err := s.m.Scroll(ctx, "t2", 1); err != nil {
+		t.Fatal(err)
+	}
+	at := s.attachList()
+	if len(at) != 1 || at[0].Observe || at[0].Terminal != "t2" {
+		t.Fatalf("attach %+v", at)
+	}
+	const pos = ";40;12M" // the middle of 80x24
+	down := strings.Repeat("[<65"+pos, maxWheelEvents)
+	want := strings.Repeat("[<64"+pos, 2) + down + "[1;5F" + down + "[<64" + pos
+	var got string
+	for i := 1; len(got) < len(want); i++ {
+		got = ""
+		for _, f := range s.core.waitFrames(at[0].Channel, i) {
+			got += string(f.payload)
+		}
+	}
+	if got != want {
+		t.Fatalf("typed %q, want %q", got, want)
+	}
+	if err := s.m.Scroll(ctx, "t5", 1); err != errUnknownPane {
+		t.Fatalf("hidden terminal: %v", err)
 	}
 }
 
