@@ -342,6 +342,10 @@ an agent only in a pane you know is at its prompt.
 - Herdr before 0.9.3: the transcript is read from `~/.claude` of the user running Termote. A
   Claude Code started with another `CLAUDE_CONFIG_DIR` shows no history. From Herdr 0.9.3 the
   config dir of the Claude Code running in the pane is used, as on tmux.
+- Herdr: Claude Code reports its session to Herdr through hooks in its own config dir. A Claude
+  Code started with another `CLAUDE_CONFIG_DIR` (a per-account shell function, for example)
+  needs the integration installed there too, or the Chat view says no session was found:
+  `CLAUDE_CONFIG_DIR=~/.claude-work herdr integration install claude`, then restart Claude Code.
 - Container mode is not supported.
 - Only Claude Code and Codex for now.
 
