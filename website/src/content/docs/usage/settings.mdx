@@ -89,7 +89,8 @@ text anyway; the first such drag on a page shows a toast that says so.
 ## Draw the Terminal with the GPU
 
 Draws the terminal with WebGL2 on this device's GPU, which keeps large output smooth. Where the browser has no
-WebGL2, or loses it, the terminal draws as before, without the GPU; after the app has been in the background,
+WebGL2, or its WebGL2 runs on the processor instead of a GPU (a virtual machine, a browser with GPU
+acceleration off), or loses it, the terminal draws as before, without the GPU; after the app has been in the background,
 it tries the GPU again. On a computer, up to 8 terminals of a page use the GPU, the others draw without it.
 Turn it off if text looks blurry, flickers or has the wrong colours on this device. The setting stays with this
 device: Export and Import do not carry it.

@@ -91,7 +91,8 @@ kéo đầu tiên như vậy trên trang sẽ hiện thông báo nhắc điều 
 
 Nhãn trong ứng dụng: **Draw the terminal with the GPU**.
 Terminal được vẽ bằng WebGL2 trên GPU của thiết bị, nên output dài vẫn mượt. Trình duyệt không có WebGL2,
-hoặc mất nó giữa chừng, thì terminal vẽ như trước, không dùng GPU; app quay lại từ nền thì thử lại GPU. Trên
+hoặc WebGL2 của nó chạy bằng CPU chứ không có GPU (máy ảo, trình duyệt tắt tăng tốc phần cứng), hoặc mất nó
+giữa chừng, thì terminal vẽ như trước, không dùng GPU; app quay lại từ nền thì thử lại GPU. Trên
 máy tính, mỗi trang có tối đa 8 terminal dùng GPU, các terminal còn lại vẽ không dùng GPU. Tắt đi nếu chữ bị
 mờ, nháy hoặc sai màu trên thiết bị này. Cài đặt này ở riêng từng thiết bị: Xuất và nhập không mang nó theo.
 

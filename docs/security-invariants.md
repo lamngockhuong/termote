@@ -58,8 +58,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   server's), linked to the main one: a device revoke, a sign-out and shutdown close it, and a 15 s
   recheck closes it once its device or session is gone from the store or expired; its token is the
   machine's, consumed there. The PWA (`pwa/src/utils/spare-stream-token.ts`, the server unchanged)
-  of a client whose snapshot says `caps.role` `full` (never a view-only device, never before the
-  caps are in, never without sign-in, where there is no role) keeps at most one unused token,
+  of a client whose snapshot says `caps.role` `full`, or has no `caps.role` (a server without
+  sign-in: one with sign-in names every client's role, and a machine is always given one; never a
+  view-only device, never before a snapshot's caps are in), keeps at most one unused token,
   fetched with a single request (no retry, given up after 5 s) after a stream opens, never on a timer, and used for the
   next stream only while younger than 20 s; there is no route to give one back, so a page has at
   most that one spare plus what is left of the 30 s TTL of one it dropped as too old. A stream
