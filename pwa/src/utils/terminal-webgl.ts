@@ -20,6 +20,54 @@ export function webglInUse(): number {
   return inUse
 }
 
+// A renderer that draws on the CPU (Chromium's SwiftShader, Mesa's llvmpipe
+// and softpipe, Windows's Basic Render Driver): there WebGL is many times
+// slower than the DOM renderer (20 MB of text: ~14 s against ~1 s), so the
+// DOM renderer draws.
+const SOFTWARE_RENDERER =
+  /swiftshader|llvmpipe|softpipe|software|basic render driver/i
+
+let software: boolean | undefined
+
+// Sets what the probe found (undefined: probe again)
+export function resetSoftwareForTest(value?: boolean): void {
+  software = value
+}
+
+// Whether this browser's WebGL2 draws on the CPU, read once from a context
+// of its own (given back at once). No WebGL2 counts as not software: the
+// addon then fails to load and the DOM renderer stays anyway.
+export function softwareRenderer(): boolean {
+  if (software !== undefined) return software
+  software = false
+  try {
+    const gl = document.createElement('canvas').getContext('webgl2')
+    if (!gl) return software
+    // Chromium gives the real name through RENDERER too; Firefox only
+    // through the extension
+    const info = gl.getExtension('WEBGL_debug_renderer_info')
+    const name = String(
+      gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER) ?? '',
+    )
+    software = SOFTWARE_RENDERER.test(name)
+    gl.getExtension('WEBGL_lose_context')?.loseContext()
+  } catch {
+    // A browser that refuses the probe: leave it to the addon
+  }
+  return software
+}
+
+// The E2E suite runs Chromium headless, whose WebGL is SwiftShader: a page
+// loaded with the test flag and __termoteSoftwareWebgl still uses WebGL there.
+function softwareRefused(): boolean {
+  const w = window as unknown as {
+    __termoteE2E?: boolean
+    __termoteSoftwareWebgl?: boolean
+  }
+  if (w.__termoteE2E === true && w.__termoteSoftwareWebgl === true) return false
+  return softwareRenderer()
+}
+
 interface WebglAddonLike {
   onContextLoss: (listener: () => void) => { dispose: () => void }
   dispose: () => void
@@ -47,6 +95,7 @@ export function loadWebgl(
   term: Terminal,
   importAddon: () => Promise<AddonModule> = () =>
     import('@xterm/addon-webgl') as Promise<AddonModule>,
+  isSoftware: () => boolean = softwareRefused,
 ): WebglHandle {
   let disposed = false
   let addon: WebglAddonLike | null = null
@@ -118,15 +167,17 @@ export function loadWebgl(
   }
   document.addEventListener('visibilitychange', onVisibility)
 
-  importAddon().then(
-    (mod) => {
-      Addon = mod.WebglAddon
-      attach()
-    },
-    () => {
-      // Offline, or a chunk of an older build: the DOM renderer stays
-    },
-  )
+  // Not even the chunk is fetched for a renderer on the CPU
+  if (!isSoftware())
+    importAddon().then(
+      (mod) => {
+        Addon = mod.WebglAddon
+        attach()
+      },
+      () => {
+        // Offline, or a chunk of an older build: the DOM renderer stays
+      },
+    )
 
   return {
     active: () => addon !== null,

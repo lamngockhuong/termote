@@ -4,12 +4,14 @@ import { expect, type Page, test } from './fixtures'
 // other spec turns it off in fixtures.ts). The canvas has no text, so the
 // screen is read from xterm's buffer through the test probe
 // (utils/terminal-probe.ts), never from the DOM. Chromium headless draws
-// WebGL2 with SwiftShader, which Playwright enables.
+// WebGL2 with SwiftShader, which Playwright enables: the app keeps the DOM
+// renderer on a renderer drawing on the CPU unless the page asks
+// (__termoteSoftwareWebgl, honoured only with the test flag).
 test.skip(({ browserName }) => browserName !== 'chromium', 'reads the clipboard through Chromium permissions')
 test.use({ gpuRenderer: true })
 
 type Probe = { lines: () => string[]; webgl: () => boolean }
-type ProbeWindow = { __termoteE2E?: boolean; __termoteTerms?: Probe[] }
+type ProbeWindow = { __termoteE2E?: boolean; __termoteSoftwareWebgl?: boolean; __termoteTerms?: Probe[] }
 
 const marker = () => `gl-${Math.random().toString(36).slice(2, 8)}`
 const textarea = (page: Page) => page.locator('[data-testid="terminal-view"] .xterm-helper-textarea')
@@ -20,7 +22,9 @@ const drawnByWebgl = (page: Page) =>
 
 async function openTerminal(page: Page) {
   await page.addInitScript(() => {
-    ;(window as unknown as ProbeWindow).__termoteE2E = true
+    const w = window as unknown as ProbeWindow
+    w.__termoteE2E = true
+    w.__termoteSoftwareWebgl = true
   })
   await page.goto('/')
   await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
@@ -124,4 +128,23 @@ test('a theme picked while open keeps the WebGL renderer and redraws in its colo
   // The canvas is drawn again in the dark colours
   await expect.poll(shot, { timeout: 5000 }).not.toBe(before)
   expect(await drawnByWebgl(page)).toBe(true)
+})
+
+test('keeps the DOM renderer where WebGL draws on the CPU', async ({ page }) => {
+  await page.addInitScript(() => {
+    ;(window as unknown as ProbeWindow).__termoteE2E = true
+  })
+  await page.goto('/')
+  const renderer = await page.evaluate(() => {
+    const gl = document.createElement('canvas').getContext('webgl2')
+    const info = gl?.getExtension('WEBGL_debug_renderer_info')
+    return gl && info ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) : ''
+  })
+  test.skip(!/swiftshader|llvmpipe|softpipe|software/i.test(renderer), `WebGL here runs on a GPU (${renderer})`)
+  await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
+  await expect.poll(() => lines(page), { timeout: 15000 }).toMatch(/\S/)
+  // Long enough for the addon's chunk, had it been fetched
+  await page.waitForTimeout(1000)
+  expect(await drawnByWebgl(page)).toBe(false)
+  await expect(page.locator('[data-testid="terminal-view"] .xterm-rows')).toHaveCount(1)
 })

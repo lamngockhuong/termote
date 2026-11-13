@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   loadWebgl,
   MAX_WEBGL_TERMINALS,
+  resetSoftwareForTest,
   resetWebglForTest,
+  softwareRenderer,
   webglInUse,
 } from './terminal-webgl'
 
@@ -57,6 +59,7 @@ function setVisibility(state: 'visible' | 'hidden') {
 
 beforeEach(() => {
   resetWebglForTest()
+  resetSoftwareForTest(false)
   FakeAddon.made = []
   FakeAddon.throwOnNew = false
   FakeAddon.throwOnDispose = false
@@ -252,6 +255,116 @@ describe('loadWebgl', () => {
     )
     await settle()
     expect(handle.active()).toBe(true)
+    handle.dispose()
+  })
+})
+
+describe('a software renderer', () => {
+  type W = { __termoteE2E?: boolean; __termoteSoftwareWebgl?: boolean }
+  const w = window as unknown as W
+  afterEach(() => {
+    delete w.__termoteE2E
+    delete w.__termoteSoftwareWebgl
+  })
+
+  // A WebGL2 context naming renderer, with or without the debug extension
+  function fakeGl(renderer: unknown, debugInfo = true) {
+    const lose = vi.fn()
+    const gl = {
+      RENDERER: 0x1f01,
+      getParameter: vi.fn((p: number) =>
+        p === 0x9246 || p === 0x1f01 ? renderer : null,
+      ),
+      getExtension: vi.fn((name: string) => {
+        if (name === 'WEBGL_debug_renderer_info')
+          return debugInfo ? { UNMASKED_RENDERER_WEBGL: 0x9246 } : null
+        if (name === 'WEBGL_lose_context') return { loseContext: lose }
+        return null
+      }),
+    }
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
+      gl as unknown as RenderingContext,
+    )
+    return { gl, lose }
+  }
+
+  it.each([
+    ['ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device), SwiftShader driver)'],
+    ['llvmpipe (LLVM 15.0.7, 256 bits)'],
+    ['softpipe'],
+    ['ANGLE (Microsoft, Microsoft Basic Render Driver Direct3D11)'],
+    ['Google SwiftShader'],
+  ])('finds %s drawn on the CPU', (name) => {
+    resetSoftwareForTest()
+    const { lose } = fakeGl(name)
+    expect(softwareRenderer()).toBe(true)
+    // The probe's context is given back
+    expect(lose).toHaveBeenCalled()
+  })
+
+  it('finds a GPU, and probes only once', () => {
+    resetSoftwareForTest()
+    const { gl } = fakeGl('ANGLE (Intel, Intel(R) UHD Graphics, D3D12)')
+    expect(softwareRenderer()).toBe(false)
+    expect(softwareRenderer()).toBe(false)
+    expect(gl.getExtension).toHaveBeenCalledTimes(2)
+  })
+
+  it('reads RENDERER without the debug extension', () => {
+    resetSoftwareForTest()
+    const { gl } = fakeGl('llvmpipe', false)
+    expect(softwareRenderer()).toBe(true)
+    expect(gl.getParameter).toHaveBeenCalledWith(gl.RENDERER)
+  })
+
+  it('counts no WebGL2, no name, or a refused probe as not software', () => {
+    resetSoftwareForTest()
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+    expect(softwareRenderer()).toBe(false)
+
+    vi.restoreAllMocks()
+    resetSoftwareForTest()
+    fakeGl(null)
+    expect(softwareRenderer()).toBe(false)
+
+    vi.restoreAllMocks()
+    resetSoftwareForTest()
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(
+      () => {
+        throw new Error('refused')
+      },
+    )
+    expect(softwareRenderer()).toBe(false)
+  })
+
+  it('keeps the DOM renderer and never fetches the chunk', async () => {
+    resetSoftwareForTest(true)
+    const term = fakeTerm()
+    const imp = vi.fn(mod)
+    const handle = load(term, imp)
+    await settle()
+    expect(imp).not.toHaveBeenCalled()
+    expect(handle.active()).toBe(false)
+    expect(webglInUse()).toBe(0)
+    handle.dispose()
+  })
+
+  it('uses WebGL there anyway for an E2E page that asks', async () => {
+    resetSoftwareForTest(true)
+    w.__termoteE2E = true
+    w.__termoteSoftwareWebgl = true
+    const handle = load(fakeTerm())
+    await settle()
+    expect(handle.active()).toBe(true)
+    handle.dispose()
+  })
+
+  it('ignores that ask without the test flag', async () => {
+    resetSoftwareForTest(true)
+    w.__termoteSoftwareWebgl = true
+    const handle = load(fakeTerm())
+    await settle()
+    expect(handle.active()).toBe(false)
     handle.dispose()
   })
 })
