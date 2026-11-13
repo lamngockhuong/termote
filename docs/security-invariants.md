@@ -2728,6 +2728,14 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   Immutable releases are on for the repo, so assets and tags cannot change after publishing.
   `release-please.yml` starts `release.yml` with `workflow_dispatch` on the tag, never as a
   called workflow: a `workflow_call` job does not get the environment's secret (actions/runner#1490).
+  Dependencies: `pnpm-workspace.yaml`'s `allowBuilds` keeps install scripts to `esbuild` and
+  `sharp`, the Build PWA job runs `pnpm audit --prod --audit-level high` (known vulnerabilities),
+  and `malware-scan.yml` (pull requests, pushes to `main` and daily, `contents: read`, osv-scanner
+  pinned by sha256 with a Renovate `customManagers` entry) fails when any package in
+  `pnpm-lock.yaml`, dev ones included, matches a malicious-package advisory (an OSV `MAL-` ID or
+  an alias of one); it ignores every other advisory, leaving those to `pnpm audit`. It only knows
+  versions already reported. A false positive goes in a root `osv-scanner.toml` `[[IgnoredVulns]]`
+  entry with its reason.
   The website (`deploy-website.yml`) serves `install.sh` and `install.ps1`, which pin the release
   key, so they are the root of this trust, `/agents.md` (`server/agent-guide.md`), which
   `llms.txt` and the install docs tell a coding agent to follow, with the install commands in it,

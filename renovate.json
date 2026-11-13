@@ -15,6 +15,16 @@
       "datasourceTemplate": "github-release-attachments"
     },
     {
+      "description": "The osv-scanner release the Malicious Package Scan job downloads, with the sha256 of its binary (read from the release's checksums file)",
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/workflows/malware-scan\\.yml$/"],
+      "matchStrings": [
+        "OSV_SCANNER_VERSION: (?<currentValue>v\\d+\\.\\d+\\.\\d+)\\s+OSV_SCANNER_SHA256: (?<currentDigest>[0-9a-f]{64})"
+      ],
+      "depNameTemplate": "google/osv-scanner",
+      "datasourceTemplate": "github-release-attachments"
+    },
+    {
       "description": "The binfmt (QEMU) and BuildKit images the release workflow's docker job builds with, pinned by digest",
       "customType": "regex",
       "managerFilePatterns": ["/^\\.github/workflows/release\\.yml$/"],
