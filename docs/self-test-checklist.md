@@ -709,6 +709,8 @@ Run on tmux (Linux/macOS), psmux (Windows) and Herdr.
 - [ ] Desktop: the "Files" and "Changes" header toggles open the view in the side panel, pressed
       again they close it; phone: both are in the view menu
 - [ ] The tree shows the pane's root (its git toplevel, else its directory); Refresh reads it again
+- [ ] A file changed outside Termote: Refresh shows the new text in the tab shown, without a flash of
+      Loading; another tab shows it when picked; a file being edited keeps its draft
 - [ ] Folders open and close by click and by arrow keys; Enter or a click opens a file
 - [ ] A file shows with line numbers and its size; "Copy path" and "Wrap lines" work; Back returns
       to the tree

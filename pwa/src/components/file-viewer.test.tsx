@@ -705,6 +705,66 @@ async function startEdit(over: Partial<Parameters<typeof FileViewer>[0]> = {}) {
   return p
 }
 
+describe('FileViewer: Refresh', () => {
+  // The same viewer given the tree's next Refresh
+  const refreshed = (p: ReturnType<typeof show>, refresh: number) => {
+    const { rerender, container: _, baseElement: __, ...props } = p
+    rerender(
+      <ThemeProvider>
+        <FileViewer
+          {...(props as Parameters<typeof FileViewer>[0])}
+          refresh={refresh}
+        />
+      </ThemeProvider>,
+    )
+  }
+
+  it('reads the file again, keeping the text shown until it answers', async () => {
+    mockContent.mockResolvedValueOnce(editable('x\ny'))
+    const p = show({ refresh: 0 })
+    expect(await screen.findByTestId('code-block')).toHaveTextContent('1x2y')
+    let answer = (_: unknown) => {}
+    mockContent.mockReturnValueOnce(new Promise((r) => (answer = r)))
+    refreshed(p, 1)
+    expect(mockContent).toHaveBeenCalledTimes(2)
+    expect(screen.queryByText('Loading…')).toBeNull()
+    expect(screen.getByTestId('code-block')).toHaveTextContent('1x2y')
+    await act(async () => answer(editable('x\nz')))
+    expect(screen.getByTestId('code-block')).toHaveTextContent('1x2z')
+  })
+
+  it('tells a file gone since it was read', async () => {
+    mockContent.mockResolvedValueOnce(editable('x'))
+    const onMissingChange = vi.fn()
+    const p = show({ refresh: 0, onMissingChange })
+    await screen.findByTestId('code-block')
+    mockContent.mockRejectedValueOnce(new RequestError(404, 'not-found', ''))
+    refreshed(p, 1)
+    await waitFor(() => expect(onMissingChange).toHaveBeenLastCalledWith(true))
+  })
+
+  it('never reads it again while it is edited', async () => {
+    mockContent.mockResolvedValue(editable('x'))
+    const p = await startEdit({ refresh: 0 })
+    type('x2')
+    refreshed(p, 1)
+    expect(mockContent).toHaveBeenCalledTimes(1)
+    expect(textarea()).toHaveValue('x2')
+  })
+
+  it('reads an image again', async () => {
+    mockImage.mockReset()
+    mockImage.mockResolvedValue(new Blob(['12345']))
+    URL.createObjectURL = vi.fn(() => 'blob:u')
+    URL.revokeObjectURL = vi.fn()
+    const p = show({ path: 'a.png', refresh: 0 })
+    await screen.findByRole('img')
+    refreshed(p, 1)
+    await waitFor(() => expect(mockImage).toHaveBeenCalledTimes(2))
+    expect(mockContent).not.toHaveBeenCalled()
+  })
+})
+
 describe('FileViewer editing', () => {
   it.each([
     ['a view-only client', editable('x'), { canEdit: false }],

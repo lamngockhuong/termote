@@ -1803,6 +1803,39 @@ describe('FilesView tabs', () => {
   const menuItems = () =>
     screen.getAllByRole('menuitem').map((m) => m.textContent?.trim())
 
+  it('Refresh reads the file of the tab shown again, not the other tabs', async () => {
+    await show()
+    fireEvent.click(item('README.md'))
+    await screen.findByTestId('markdown-preview')
+    fireEvent.contextMenu(tab(/^README\.md/).parentElement as Element, {
+      clientX: 20,
+      clientY: 10,
+    })
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Keep open' }))
+    fireEvent.click(tab('Files'))
+    await openA()
+    expect(tabs()).toEqual(['Files', 'README.md', 'a.ts (preview)'])
+    mockContent.mockClear()
+    const read = mockContent.getMockImplementation()!
+    mockContent.mockImplementation(async (p: string, path: string) => ({
+      ...(await read(p, path)),
+      text: `new ${path}`,
+      hash: `h2:${path}`,
+    }))
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+    await waitFor(() =>
+      expect(screen.getByTestId('code-block')).toHaveTextContent(
+        'new src/a.ts',
+      ),
+    )
+    expect(mockContent).toHaveBeenCalledTimes(1)
+    expect(mockContent.mock.calls[0][1]).toBe('src/a.ts')
+    // Another tab reads its file when it is shown
+    fireEvent.click(tab(/^README\.md/))
+    await waitFor(() => expect(mockContent).toHaveBeenCalledTimes(2))
+    expect(mockContent.mock.calls[1][1]).toBe('README.md')
+  })
+
   it("a file tab's menu keeps, closes, and offers the row's actions", async () => {
     mockDownload.mockReset()
     mockTrash.mockResolvedValue({ entries: [] })
