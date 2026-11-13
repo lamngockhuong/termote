@@ -115,11 +115,11 @@ func shellsOnWayReach(rt *os.Root, root, rel string) (bool, error) {
 		var reaches bool
 		var err error
 		if under, rerr := filepath.Rel(root, dir); rerr == nil && under != ".." && !strings.HasPrefix(under, ".."+string(filepath.Separator)) {
-			reaches, err = folderReaches(rt, under)
+			reaches, err = folderReaches(rt, under, false)
 		} else {
 			var above *os.Root
 			if above, err = os.OpenRoot(dir); err == nil {
-				reaches, err = folderReaches(above, ".")
+				reaches, err = folderReaches(above, ".", false)
 				above.Close()
 			}
 		}
@@ -178,11 +178,13 @@ const windowsFolderEntriesMost = 10000
 
 // folderReaches reports whether the folder dir (under rt) directly holds an
 // entry windowsReaches names, or a subfolder holding a desktop.ini (Explorer
-// reads a subfolder's own settings and icon to show it), or more entries
-// than can be looked at. A shortcut deeper down is not shown, so not read.
-func folderReaches(rt *os.Root, dir string) (bool, error) {
+// reads a subfolder's own settings and icon to show it) or an entry
+// entryReaches names (its thumbnail is drawn from the pictures in it) when
+// thumbs is set, or more entries than can be looked at. A shortcut deeper
+// down is not shown, so not read.
+func folderReaches(rt *os.Root, dir string, thumbs bool) (bool, error) {
 	seen := 0
-	return folderShows(rt, dir, "", &seen, windowsReaches)
+	return folderShows(rt, dir, "", &seen, windowsReaches, thumbs)
 }
 
 // ancestorsReach reports whether a folder Explorer's navigation pane shows
@@ -193,7 +195,7 @@ func folderReaches(rt *os.Root, dir string) (bool, error) {
 func ancestorsReach(rt *os.Root, rel string) (bool, error) {
 	seen := 0
 	for way, dir := rel, filepath.Dir(rel); ; way, dir = dir, filepath.Dir(dir) {
-		if reaches, err := folderShows(rt, dir, filepath.Base(way), &seen, windowsNamesDesktopINI); reaches || err != nil {
+		if reaches, err := folderShows(rt, dir, filepath.Base(way), &seen, windowsNamesDesktopINI, false); reaches || err != nil {
 			return reaches, err
 		}
 		if dir == "." {
@@ -207,46 +209,62 @@ func ancestorsReach(rt *os.Root, rel string) (bool, error) {
 // subfolder holding a desktop.ini, or more entries than can be looked at.
 // A shell object named way, the one on the way to the folder opened, is
 // left to the question checkOpenWindows asks (run).
-// A link to a folder counts as a subfolder, since Windows may follow it. A
-// link that cannot be followed inside the root refuses dir, one to nothing
-// included (an NT link to another computer's share under /mnt/c may show
-// so to Linux), and so does an entry neither a file nor a folder.
-func folderShows(rt *os.Root, dir, way string, seen *int, match func(string) bool) (bool, error) {
+// A link to a folder counts as a subfolder, since Windows may follow it. An
+// entry entryReaches names refuses dir; with thumbs, so does one in a
+// subfolder: Explorer draws a subfolder's thumbnail from the pictures in it.
+func folderShows(rt *os.Root, dir, way string, seen *int, match func(string) bool, thumbs bool) (bool, error) {
 	var subdirs []string
 	reaches, err := readFolderNames(rt, dir, seen, func(e fs.DirEntry) bool {
 		if match(e.Name()) || e.Name() != way && windowsFolderMayRun(e.Name()) {
 			return true
 		}
-		switch {
-		case e.IsDir():
+		folder, reaches := entryReaches(rt, dir, e)
+		if folder {
 			subdirs = append(subdirs, e.Name())
-		case e.Type()&fs.ModeSymlink != 0:
-			fi, err := rt.Stat(filepath.Join(dir, e.Name()))
-			if err != nil {
-				return true
-			}
-			if fi.IsDir() {
-				subdirs = append(subdirs, e.Name())
-			} else if !fi.Mode().IsRegular() {
-				return true
-			}
-		case !e.Type().IsRegular():
-			return true
 		}
-		return false
+		return reaches
 	})
 	if reaches || err != nil {
 		return reaches, err
 	}
 	for _, sub := range subdirs {
-		reaches, err := readFolderNames(rt, filepath.Join(dir, sub), seen, func(e fs.DirEntry) bool {
-			return windowsNamesDesktopINI(e.Name())
+		sd := filepath.Join(dir, sub)
+		reaches, err := readFolderNames(rt, sd, seen, func(e fs.DirEntry) bool {
+			if windowsNamesDesktopINI(e.Name()) {
+				return true
+			}
+			if !thumbs {
+				return false
+			}
+			_, reaches := entryReaches(rt, sd, e)
+			return reaches
 		})
 		if reaches || err != nil {
 			return reaches, err
 		}
 	}
 	return false, nil
+}
+
+// entryReaches reads the entry e of dir (under rt) as Windows may: folder
+// for a folder or a link to one (Windows may follow it), reaches for a link
+// that cannot be followed inside the root, one to nothing included (an NT
+// link to another computer's share under /mnt/c may show so to Linux), or
+// an entry neither a file nor a folder.
+func entryReaches(rt *os.Root, dir string, e fs.DirEntry) (folder, reaches bool) {
+	switch {
+	case e.IsDir():
+		return true, false
+	case e.Type()&fs.ModeSymlink != 0:
+		fi, err := rt.Stat(filepath.Join(dir, e.Name()))
+		if err != nil {
+			return false, true
+		}
+		return fi.IsDir(), !fi.IsDir() && !fi.Mode().IsRegular()
+	case !e.Type().IsRegular():
+		return false, true
+	}
+	return false, false
 }
 
 // readFolderNames calls match on each entry of dir until it answers true,
@@ -373,8 +391,12 @@ func detectWSLWindows(scope string) wslWindows {
 // "link" when the item, a folder on the way to it or, for a folder, one of
 // its entries is a symbolic link or a junction to Windows (an NT link to
 // another computer's share that drvfs may show to Linux as a plain file),
-// "none" otherwise. The item and the folders on the way are looked at
-// before the folder is listed, so a link is never followed to list it.
+// or an entry of one of its subfolders is a symbolic link (Explorer draws a
+// subfolder's thumbnail from the pictures in it; a junction there, as pnpm
+// and npm make in node_modules, only reaches a local volume), "none"
+// otherwise. The item and the
+// folders on the way are looked at before the folder is listed, and its
+// entries before a subfolder is, so a link is never followed to list it.
 // Other reparse points (OneDrive's placeholders) are not links. Written for
 // Windows PowerShell 5.1, the one every Windows has (Split-Path's
 // -LiteralPath with -Parent needs 6). A fixed
@@ -385,7 +407,9 @@ const windowsLinksScript = `$ErrorActionPreference = 'Stop'; ` +
 	`function L($x) { $x.LinkType -eq 'SymbolicLink' -or $x.LinkType -eq 'Junction' }; ` +
 	`$i = Get-Item -LiteralPath $p -Force; if (L $i) { 'link'; exit }; ` +
 	`for ($d = [IO.Path]::GetDirectoryName($p); $d; $d = [IO.Path]::GetDirectoryName($d)) { if (L (Get-Item -LiteralPath $d -Force)) { 'link'; exit } }; ` +
-	`if ($i.PSIsContainer) { foreach ($x in Get-ChildItem -LiteralPath $p -Force) { if (L $x) { 'link'; exit } } }; ` +
+	`if ($i.PSIsContainer) { $c = @(Get-ChildItem -LiteralPath $p -Force); ` +
+	`foreach ($x in $c) { if (L $x) { 'link'; exit } }; ` +
+	`foreach ($x in $c) { if ($x.PSIsContainer) { foreach ($y in Get-ChildItem -LiteralPath $x.FullName -Force) { if ($y.LinkType -eq 'SymbolicLink') { 'link'; exit } } } } }; ` +
 	`'none'`
 
 // wslRunPowershell runs Windows PowerShell with windowsLinksScript and the
@@ -403,7 +427,8 @@ var wslRunPowershell = func(ctx context.Context, exe, winPath string) (string, e
 }
 
 // windowsLinks asks Windows whether the drive path winPath, a folder on the
-// way to it or, for a folder, an entry in it is a link (windowsLinksScript).
+// way to it or, for a folder, an entry in it or in a subfolder of it is a
+// link (windowsLinksScript).
 func (w wslWindows) windowsLinks(ctx context.Context, winPath string) (bool, error) {
 	if w.powershell == "" {
 		return false, errors.New("no powershell.exe to check the path's links")
@@ -520,6 +545,10 @@ func (f *filesAPI) checkOpenWindows(root filesRoot, in openWindowsRequest) (stri
 	if !windowsReadsAsIs(abs) {
 		return "", "", errWSLName
 	}
+	// On a Windows drive, Windows answers for the links in a subfolder
+	// (windowsLinks): drvfs shows a junction there, as pnpm and npm make in
+	// node_modules, as an absolute link the root never follows.
+	thumbs := strings.HasPrefix(f.wsl.windowsPath(abs), `\\`)
 	if f.createDenied(root, rel) {
 		return "", "", errCreateNotAllowed
 	}
@@ -561,7 +590,7 @@ func (f *filesAPI) checkOpenWindows(root filesRoot, in openWindowsRequest) (stri
 			return "", "", err
 		}
 		if fi.IsDir() {
-			if err := checkReaches(folderReaches(up, rel)); err != nil {
+			if err := checkReaches(folderReaches(up, rel, thumbs)); err != nil {
 				return "", "", err
 			}
 			if err := checkReaches(ancestorsReach(up, rel)); err != nil {
@@ -580,7 +609,7 @@ func (f *filesAPI) checkOpenWindows(root filesRoot, in openWindowsRequest) (stri
 		if err := checkReaches(shellsOnWayReach(rt, root.Root, ".")); err != nil {
 			return "", "", err
 		}
-		if err := checkReaches(folderReaches(rt, ".")); err != nil {
+		if err := checkReaches(folderReaches(rt, ".", thumbs)); err != nil {
 			return "", "", err
 		}
 	}

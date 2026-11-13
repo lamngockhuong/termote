@@ -11,8 +11,12 @@ import (
 )
 
 // windowsLinksScript runs in the Windows PowerShell every Windows has (5.1
-// on the CI runner): "none" for a plain file, folder or drive root, "link"
-// for a junction, a folder holding one, or a path through one.
+// on the CI runner): "none" for a plain file or folder (its way up to the
+// drive's root looked at) or a folder whose subfolder holds a junction,
+// "link" for a junction, a folder holding one, a path through one, or a
+// folder whose subfolder holds a symbolic link. A drive's root is
+// not asked: a subfolder of it may not be listed (System Volume
+// Information).
 func TestWindowsLinksScriptInPowerShell(t *testing.T) {
 	ps, err := exec.LookPath("powershell.exe")
 	if err != nil {
@@ -22,7 +26,8 @@ func TestWindowsLinksScriptInPowerShell(t *testing.T) {
 	plain := filepath.Join(d, "plain")
 	target := filepath.Join(d, "target")
 	holder := filepath.Join(d, "holder")
-	for _, dir := range []string{plain, target, holder} {
+	deep := filepath.Join(d, "deep")
+	for _, dir := range []string{plain, target, holder, deep, filepath.Join(deep, "inner")} {
 		if err := os.Mkdir(dir, 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -34,6 +39,18 @@ func TestWindowsLinksScriptInPowerShell(t *testing.T) {
 		t.Fatal(err)
 	}
 	mklinkJ(t, filepath.Join(holder, "j"), target)
+	// a junction in a subfolder only reaches a local volume (node_modules)
+	repo := filepath.Join(d, "repo")
+	mklinkJ(t, filepath.Join(repo, "node_modules", "pkg"), target)
+	// a symbolic link in a subfolder may reach another computer's share:
+	// Explorer draws that subfolder's thumbnail from what is in it
+	outer := filepath.Join(d, "outer")
+	if err := os.MkdirAll(filepath.Join(outer, "pics"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(target, "b.txt"), filepath.Join(outer, "pics", "s.png")); err != nil {
+		t.Fatalf("symlink (the runner may create them): %v", err)
+	}
 	run := func(p string) string {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
@@ -48,10 +65,12 @@ func TestWindowsLinksScriptInPowerShell(t *testing.T) {
 	for p, want := range map[string]string{
 		plain:                               "none",
 		filepath.Join(plain, "a.txt"):       "none",
-		filepath.VolumeName(d) + `\`:        "none",
 		filepath.Join(holder, "j"):          "link",
 		holder:                              "link",
 		filepath.Join(holder, "j", "b.txt"): "link",
+		outer:                               "link",
+		deep:                                "none",
+		repo:                                "none",
 	} {
 		if got := run(p); got != want {
 			t.Errorf("%s = %q, want %q", p, got, want)
