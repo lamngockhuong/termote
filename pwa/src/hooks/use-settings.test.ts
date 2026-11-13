@@ -436,6 +436,19 @@ describe('useSettings', () => {
     expect(again.result.current.settings.showUsageChip).toBe(true)
   })
 
+  it('draws with the GPU unless turned off; a value of another type is the default', () => {
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.gpuRenderer).toBe(true)
+    act(() => result.current.updateSetting('gpuRenderer', false))
+    expect(result.current.settings.gpuRenderer).toBe(false)
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ gpuRenderer: 'no' }),
+    )
+    const again = renderHook(() => useSettings())
+    expect(again.result.current.settings.gpuRenderer).toBe(true)
+  })
+
   it('copies on select only once turned on', () => {
     localStorage.setItem(
       'termote-settings',

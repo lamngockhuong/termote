@@ -8,6 +8,7 @@ import {
   bracketPaste,
   fitFontSize,
   MIN_FONT_SIZE,
+  REDRAW_HOLD_MS,
   RESIZE_SETTLE_MS,
   stripTerminalReplies,
   type TerminalHandle,
@@ -40,7 +41,14 @@ const { FakeTerminal, FakeFit } = vi.hoisted(() => {
     wheelCb: (ev: Pick<WheelEvent, 'deltaY' | 'deltaMode'>) => boolean = () =>
       true
     modes = { mouseTrackingMode: 'none' }
-    buffer = { active: { type: 'normal' } }
+    buffer = {
+      active: {
+        type: 'normal',
+        viewportY: 0,
+        getLine: (y: number) =>
+          y === 0 ? { translateToString: () => 'top row' } : undefined,
+      },
+    }
     attachCustomWheelEventHandler = vi.fn(
       (cb: (ev: Pick<WheelEvent, 'deltaY' | 'deltaMode'>) => boolean) => {
         this.wheelCb = cb
@@ -69,6 +77,7 @@ const { FakeTerminal, FakeFit } = vi.hoisted(() => {
     dispose = vi.fn()
     open = vi.fn()
     loadAddon = vi.fn()
+    clearTextureAtlas = vi.fn()
     constructor(opts: {
       fontSize: number
       fontFamily?: string
@@ -142,6 +151,7 @@ interface SocketOpts {
   getSize: () => TermSize | null
   drive?: () => boolean
   visible?: boolean
+  spareToken?: boolean
   onOutput: (d: Uint8Array) => void
   onControl: (m: StreamControl) => void
   onOpen: () => void
@@ -184,6 +194,12 @@ const bridge = vi.hoisted(() => ({
   ),
 }))
 vi.mock('../utils/terminal-bridge', () => bridge)
+
+const webgl = vi.hoisted(() => {
+  const handle = { active: vi.fn(() => true), dispose: vi.fn() }
+  return { handle, loadWebgl: vi.fn(() => handle) }
+})
+vi.mock('../utils/terminal-webgl', () => ({ loadWebgl: webgl.loadWebgl }))
 
 // The palette's chord stands for a shortcut marked to run in the terminal
 const shortcuts = vi.hoisted(() => ({
@@ -459,6 +475,13 @@ describe('TerminalView', () => {
     expect(socketOpts.getSize()).toBeNull()
   })
 
+  it('keeps a spare stream token only when told the role is full', () => {
+    const { rerender, ref } = renderView()
+    expect(socketOpts.spareToken).toBe(false)
+    rerender(<TerminalView ref={ref} paneId="0" spareToken />)
+    expect(socketOpts.spareToken).toBe(true)
+  })
+
   it('writes stream output to the terminal', () => {
     const { term } = renderView()
     const bytes = new Uint8Array([104, 105])
@@ -570,6 +593,168 @@ describe('TerminalView', () => {
     term.dataCb('x')
     await act(async () => {})
     expect(muxApi.scrollPane).toHaveBeenCalledWith('w1:p2', -10000)
+  })
+
+  describe('a stream opening again', () => {
+    // What reached the terminal, in order: resets and writes
+    const calls = (term: InstanceType<typeof FakeTerminal>) =>
+      [
+        ...term.reset.mock.invocationCallOrder.map((at) => ({
+          at,
+          call: 'reset' as unknown,
+        })),
+        ...term.write.mock.calls.map((args, i) => ({
+          at: term.write.mock.invocationCallOrder[i],
+          call: args[0] as unknown,
+        })),
+      ]
+        .sort((a, b) => a.at - b.at)
+        .map((c) => c.call)
+    const out = new Uint8Array([104, 105])
+
+    it('clears the screen at the first open', () => {
+      const { term } = renderView({ paneId: '%1', streamKey: 's1' })
+      act(() => socketOpts.onOpen())
+      expect(calls(term)).toEqual(['reset'])
+    })
+
+    it('keeps the screen of the same stream until its redraw, written with a reset in one go', () => {
+      vi.useFakeTimers()
+      try {
+        const { term } = renderView({ paneId: '%1', streamKey: 's1' })
+        act(() => socketOpts.onOpen())
+        socketOpts.onOutput(out)
+        term.reset.mockClear()
+        term.write.mockClear()
+        act(() => socketOpts.onOpen())
+        expect(term.reset).not.toHaveBeenCalled()
+        expect(term.write).not.toHaveBeenCalled()
+        // Opened once more before any output: still kept
+        act(() => socketOpts.onOpen())
+        expect(calls(term)).toEqual([])
+        // The redraw's pieces are held a moment, then written together
+        const clear = new Uint8Array([27, 91, 50, 74])
+        socketOpts.onOutput(clear)
+        socketOpts.onOutput(out)
+        vi.advanceTimersByTime(REDRAW_HOLD_MS - 1)
+        expect(calls(term)).toEqual([])
+        vi.advanceTimersByTime(1)
+        expect(calls(term)).toEqual(['\x1bc', clear, out])
+        // Later output is written as it comes
+        socketOpts.onOutput(out)
+        expect(calls(term)).toEqual(['\x1bc', clear, out, out])
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('drops output held for a stream that closed again before writing it', () => {
+      vi.useFakeTimers()
+      try {
+        const { term } = renderView({ paneId: '%1', streamKey: 's1' })
+        act(() => socketOpts.onOpen())
+        term.reset.mockClear()
+        act(() => socketOpts.onOpen())
+        const stale = new Uint8Array([1])
+        socketOpts.onOutput(stale)
+        act(() => socketOpts.onOpen())
+        vi.advanceTimersByTime(REDRAW_HOLD_MS)
+        expect(calls(term)).toEqual([])
+        socketOpts.onOutput(out)
+        vi.advanceTimersByTime(REDRAW_HOLD_MS)
+        expect(calls(term)).toEqual(['\x1bc', out])
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('writes nothing held after the terminal is gone', () => {
+      vi.useFakeTimers()
+      try {
+        const { term, unmount } = renderView({ paneId: '%1', streamKey: 's1' })
+        act(() => socketOpts.onOpen())
+        act(() => socketOpts.onOpen())
+        socketOpts.onOutput(out)
+        unmount()
+        vi.advanceTimersByTime(REDRAW_HOLD_MS)
+        expect(term.write).not.toHaveBeenCalled()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it.each([
+      ['another stream key (tmux session)', { paneId: '%1', streamKey: 's2' }],
+      ['another pane', { paneId: '%2', streamKey: 's1' }],
+    ])('clears at once on %s', (_name, next) => {
+      const { term, rerender, ref } = renderView({
+        paneId: '%1',
+        streamKey: 's1',
+      })
+      act(() => socketOpts.onOpen())
+      socketOpts.onOutput(out)
+      term.reset.mockClear()
+      term.write.mockClear()
+      rerender(<TerminalView ref={ref} {...next} />)
+      act(() => socketOpts.onOpen())
+      expect(calls(term)).toEqual(['reset'])
+      socketOpts.onOutput(out)
+      expect(calls(term)).toEqual(['reset', out])
+      // And back to the first: cleared again, not kept
+      term.reset.mockClear()
+      term.write.mockClear()
+      rerender(<TerminalView ref={ref} paneId="%1" streamKey="s1" />)
+      act(() => socketOpts.onOpen())
+      expect(calls(term)).toEqual(['reset'])
+    })
+
+    it('clears at once on the stream opened after an exit, the ids of a restarted tmux being reused', () => {
+      const { term } = renderView({ paneId: '%0', streamKey: '$0' })
+      act(() => socketOpts.onOpen())
+      socketOpts.onOutput(out)
+      act(() => socketOpts.onControl({ type: 'exit', code: 0 }))
+      term.reset.mockClear()
+      term.write.mockClear()
+      act(() => socketOpts.onOpen())
+      expect(calls(term)).toEqual(['reset'])
+    })
+
+    it('a stream with no key is told apart by its pane', () => {
+      const { term } = renderView({ paneId: 'w1:p2', followPane: true })
+      act(() => socketOpts.onOpen())
+      act(() => socketOpts.onOpen())
+      expect(term.reset).toHaveBeenCalledTimes(1)
+    })
+
+    it.each([
+      ['exit', { type: 'exit' as const, code: 0 }, '\r\n[process exited]\r\n'],
+      ['error', { type: 'error' as const, message: 'gone' }, '\r\n[gone]\r\n'],
+    ])('resets, with what is held, before the %s line', (_name, msg, line) => {
+      const { term } = renderView({ paneId: '%1', streamKey: 's1' })
+      act(() => socketOpts.onOpen())
+      term.reset.mockClear()
+      act(() => socketOpts.onOpen())
+      socketOpts.onOutput(out)
+      act(() => socketOpts.onControl(msg))
+      expect(calls(term)).toEqual(['\x1bc', out, line])
+      // Once only
+      act(() => socketOpts.onControl(msg))
+      expect(calls(term)).toEqual(['\x1bc', out, line, line])
+    })
+
+    it('returns a scrolled view on input typed before the first output', async () => {
+      const { term } = renderView({ paneId: 'w1:p2', serverScroll: true })
+      act(() => socketOpts.onOpen())
+      socketOpts.onOutput(out)
+      term.dataCb('a')
+      await act(async () => {})
+      muxApi.scrollPane.mockClear()
+      act(() => socketOpts.onOpen())
+      term.dataCb('x')
+      await act(async () => {})
+      expect(muxApi.scrollPane).toHaveBeenCalledWith('w1:p2', -10000)
+      expect(socket.send).toHaveBeenLastCalledWith('x')
+    })
   })
 
   it('serverScroll: rows pending for a pane are not sent to the next one', async () => {
@@ -1556,5 +1741,137 @@ describe('TerminalView', () => {
     expect(term.write).not.toHaveBeenCalled()
     handle.paste('x')
     expect(term.paste).not.toHaveBeenCalled()
+  })
+
+  it('offers a probe to E2E tests only with the test flag', async () => {
+    type W = {
+      __termoteE2E?: boolean
+      __termoteTerms?: Array<{
+        paneId: () => string | undefined
+        lines: () => string[]
+        webgl: () => boolean
+        write: (d: string) => Promise<void>
+      }>
+    }
+    const w = window as unknown as W
+    renderView().unmount()
+    expect(w.__termoteTerms).toBeUndefined()
+    w.__termoteE2E = true
+    try {
+      const { unmount, term } = renderView({ paneId: '%7' })
+      const probe = w.__termoteTerms?.[0]
+      expect(probe?.paneId()).toBe('%7')
+      expect(probe?.webgl()).toBe(false)
+      expect(probe?.lines()[0]).toBe('top row')
+      expect(probe?.lines()).toHaveLength(term.rows)
+      term.write.mockImplementation((_d: string, done?: () => void) => done?.())
+      await probe?.write('hi')
+      expect(term.write).toHaveBeenCalledWith('hi', expect.any(Function))
+      unmount()
+      expect(w.__termoteTerms).toEqual([])
+    } finally {
+      delete w.__termoteE2E
+      delete w.__termoteTerms
+    }
+  })
+
+  describe('WebGL renderer', () => {
+    it('loads it after the terminal opens when the setting is on', () => {
+      const { term, unmount } = renderView({ gpuRenderer: true })
+      expect(webgl.loadWebgl).toHaveBeenCalledTimes(1)
+      expect(webgl.loadWebgl).toHaveBeenCalledWith(term)
+      expect(term.open.mock.invocationCallOrder[0]).toBeLessThan(
+        webgl.loadWebgl.mock.invocationCallOrder[0],
+      )
+      unmount()
+      // Unloaded before the terminal goes
+      expect(webgl.handle.dispose).toHaveBeenCalledTimes(1)
+      expect(webgl.handle.dispose.mock.invocationCallOrder[0]).toBeLessThan(
+        term.dispose.mock.invocationCallOrder[0],
+      )
+    })
+
+    it('never loads it with the setting off', () => {
+      const { unmount } = renderView()
+      expect(webgl.loadWebgl).not.toHaveBeenCalled()
+      unmount()
+      expect(webgl.handle.dispose).not.toHaveBeenCalled()
+    })
+
+    it('loads or unloads it when the setting changes while open', () => {
+      const { term, rerender, ref } = renderView({ gpuRenderer: false })
+      const at = (gpuRenderer: boolean) =>
+        rerender(
+          <TerminalView ref={ref} paneId="0" gpuRenderer={gpuRenderer} />,
+        )
+      at(true)
+      expect(webgl.loadWebgl).toHaveBeenCalledWith(term)
+      // Rendered again with the same value: nothing more
+      at(true)
+      expect(webgl.loadWebgl).toHaveBeenCalledTimes(1)
+      at(false)
+      expect(webgl.handle.dispose).toHaveBeenCalledTimes(1)
+      at(false)
+      expect(webgl.handle.dispose).toHaveBeenCalledTimes(1)
+    })
+
+    it('tells the probe whether WebGL draws', () => {
+      const w = window as unknown as {
+        __termoteE2E?: boolean
+        __termoteTerms?: Array<{ webgl: () => boolean }>
+      }
+      w.__termoteE2E = true
+      try {
+        const { rerender, ref } = renderView({ gpuRenderer: true })
+        expect(w.__termoteTerms?.[0].webgl()).toBe(true)
+        webgl.handle.active.mockReturnValueOnce(false)
+        expect(w.__termoteTerms?.[0].webgl()).toBe(false)
+        rerender(<TerminalView ref={ref} paneId="0" gpuRenderer={false} />)
+        expect(w.__termoteTerms?.[0].webgl()).toBe(false)
+      } finally {
+        delete w.__termoteE2E
+        delete w.__termoteTerms
+      }
+    })
+
+    it('draws the glyphs again when the font changes or a font finishes loading', async () => {
+      const listeners = new Map<string, () => void>()
+      let ready: () => void = () => {}
+      const fonts = {
+        ready: new Promise<void>((r) => (ready = r)),
+        addEventListener: vi.fn((type: string, cb: () => void) =>
+          listeners.set(type, cb),
+        ),
+        removeEventListener: vi.fn(),
+      }
+      Object.defineProperty(document, 'fonts', {
+        configurable: true,
+        value: fonts,
+      })
+      try {
+        const { term, rerender, ref, unmount } = renderView({
+          fontFamily: 'A',
+        })
+        term.clearTextureAtlas.mockClear()
+        rerender(<TerminalView ref={ref} paneId="0" fontFamily="B" />)
+        expect(term.clearTextureAtlas).toHaveBeenCalledTimes(1)
+        ready()
+        await waitFor(() =>
+          expect(term.clearTextureAtlas).toHaveBeenCalledTimes(2),
+        )
+        listeners.get('loadingdone')?.()
+        expect(term.clearTextureAtlas).toHaveBeenCalledTimes(3)
+        unmount()
+        expect(fonts.removeEventListener).toHaveBeenCalledWith(
+          'loadingdone',
+          listeners.get('loadingdone'),
+        )
+        // After unmount there is no terminal to clear
+        listeners.get('loadingdone')?.()
+        expect(term.clearTextureAtlas).toHaveBeenCalledTimes(3)
+      } finally {
+        delete (document as { fonts?: unknown }).fonts
+      }
+    })
   })
 })

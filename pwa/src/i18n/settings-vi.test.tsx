@@ -76,6 +76,7 @@ const SETTINGS: Settings = {
   searchRegex: false,
   notifyAgents: false,
   appBadge: true,
+  gpuRenderer: true,
   stuckMinutes: 10,
   showUsageChip: true,
   showHostChip: true,
@@ -136,6 +137,9 @@ describe('Settings in Vietnamese', () => {
     expect(screen.getByRole('radio', { name: 'Buffer của phiên' })).toBeTruthy()
     expect(
       screen.getByRole('switch', { name: 'Phiên đang chờ lên đầu' }),
+    ).toBeTruthy()
+    expect(
+      screen.getByRole('switch', { name: 'Vẽ terminal bằng GPU' }),
     ).toBeTruthy()
     expect(
       screen.getByText(

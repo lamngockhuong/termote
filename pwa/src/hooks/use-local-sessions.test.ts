@@ -145,6 +145,7 @@ describe('useLocalSessions', () => {
     await act(async () => {})
     expect(result.current.sessions).toHaveLength(1)
     expect(result.current.sessions[0].name).toBe('shell')
+    expect(result.current.capsLoaded).toBe(true)
   })
 
   it("copies each pane agent's since and keeps the server clock offset", async () => {
@@ -308,6 +309,8 @@ describe('useLocalSessions', () => {
     await act(async () => {})
     expect(result.current.isServerReachable).toBe(false)
     expect(result.current.isReady).toBe(true)
+    // The fallback has no caps from the server
+    expect(result.current.capsLoaded).toBe(false)
     expect(result.current.sessions[0].name).toBe('shell')
     expect(result.current.activeSession.name).toBe('shell')
   })

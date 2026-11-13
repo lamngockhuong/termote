@@ -115,6 +115,49 @@ test.describe('paired devices and the view-only role', () => {
     await page.context().close()
   })
 
+  // A spare stream token is a full client's alone: a view-only device holds
+  // at most 4 unused tokens and may ask for 4 per 30 seconds through a
+  // machine, so it asks for one per stream, as before.
+  test('a view-only device asks for one stream token per stream, never one ahead', async ({
+    browser,
+    baseURL,
+    request,
+  }) => {
+    const name = `e2e-tokens-${Math.random().toString(36).slice(2, 8)}`
+    made.push(name)
+    const { code } = await makeCode(request, 'view', name)
+    const page = await pairStranger(browser, baseURL, code, (p) =>
+      p.addInitScript(() => {
+        const w = window as unknown as { __tokenRequests: number; __streams: number }
+        w.__tokenRequests = 0
+        w.__streams = 0
+        const realFetch = window.fetch
+        window.fetch = (input, init) => {
+          const url = input instanceof Request ? input.url : String(input)
+          if (url.includes('/stream-token')) w.__tokenRequests++
+          return realFetch(input, init)
+        }
+        const Real = window.WebSocket
+        window.WebSocket = class extends Real {
+          constructor(url: string | URL, protocols?: string | string[]) {
+            super(url, protocols)
+            if (String(url).includes('/stream?')) w.__streams++
+          }
+        } as typeof WebSocket
+      }),
+    )
+    await page.waitForSelector('[aria-label="Connected"]', { timeout: 15000 })
+    // Long enough for a token asked for after the open to have gone out
+    await page.waitForTimeout(2000)
+    const counts = await page.evaluate(() => {
+      const w = window as unknown as { __tokenRequests: number; __streams: number }
+      return { tokens: w.__tokenRequests, streams: w.__streams }
+    })
+    expect(counts.streams).toBeGreaterThan(0)
+    expect(counts.tokens).toBe(counts.streams)
+    await page.context().close()
+  })
+
   test('a view-only device is welcomed as one: no session to start, nothing to type', async ({
     browser,
     baseURL,

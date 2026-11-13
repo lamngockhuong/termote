@@ -195,6 +195,7 @@ export interface Settings {
   toolbarDefaultExpanded: boolean
   disableContextMenu: boolean
   copyOnSelect: boolean // copy the terminal selection when a mouse drag ends
+  gpuRenderer: boolean // terminal drawn by WebGL2 where it runs (this device's GPU)
   pollInterval: number // seconds between session list refreshes
   // The welcome screen's version this device has seen (WELCOME_VERSION)
   welcomeSeenVersion: number
@@ -245,6 +246,7 @@ export const DEFAULTS: Settings = {
   toolbarDefaultExpanded: false,
   disableContextMenu: true,
   copyOnSelect: false,
+  gpuRenderer: true,
   pollInterval: 5,
   welcomeSeenVersion: 0,
   language: 'auto',
@@ -294,6 +296,7 @@ export const DEVICE_ONLY_KEYS = [
   'hasSeenLocalhostNotice',
   'notifyAgents',
   'appBadge',
+  'gpuRenderer',
 ] as const satisfies readonly (keyof Settings)[]
 
 type BooleanKey = {
@@ -315,6 +318,7 @@ export const SETTING_RESOLVERS: {
   toolbarDefaultExpanded: (v) => resolveBoolean('toolbarDefaultExpanded', v),
   disableContextMenu: (v) => resolveBoolean('disableContextMenu', v),
   copyOnSelect: (v) => resolveBoolean('copyOnSelect', v),
+  gpuRenderer: (v) => resolveBoolean('gpuRenderer', v),
   pollInterval: resolvePollInterval,
   welcomeSeenVersion: resolveSeenVersion,
   language: resolveLanguage,

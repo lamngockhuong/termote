@@ -929,6 +929,16 @@ export function SettingsModal({
               onChange={(v) => onUpdateSetting('copyOnSelect', v)}
             />
           </SettingsRow>
+          <SettingsRow
+            title={t('settings.gpuRenderer')}
+            desc={t('settings.gpuRendererDesc')}
+          >
+            <Switch
+              label={t('settings.gpuRenderer')}
+              checked={settings.gpuRenderer}
+              onChange={(v) => onUpdateSetting('gpuRenderer', v)}
+            />
+          </SettingsRow>
           {layoutViewSupported && (
             <SettingsRow
               title={t('settings.layoutView')}

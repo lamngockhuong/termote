@@ -47,6 +47,7 @@ export const test = base.extend<{
   cspViolations: string[]
   noReleaseCheck: void
   firstRunSeen: boolean
+  gpuRenderer: boolean
   welcomeSeen: void
 }>({
   cspViolations: [
@@ -81,17 +82,26 @@ export const test = base.extend<{
   // every write of the settings, since many specs write their own settings
   // whole. welcome.spec.ts turns it off with test.use({ firstRunSeen: false }).
   firstRunSeen: [true, { option: true }],
+  // The WebGL renderer draws on a canvas, where .xterm-rows (which most specs
+  // read the screen through) is gone: specs run with the DOM renderer unless
+  // they ask for it (terminal-webgl.spec.ts: test.use({ gpuRenderer: true })).
+  gpuRenderer: [false, { option: true }],
   welcomeSeen: [
-    async ({ page, firstRunSeen }, use) => {
-      if (firstRunSeen) {
-        await page.addInitScript((version) => {
+    async ({ page, firstRunSeen, gpuRenderer }, use) => {
+      const defaults: Record<string, unknown> = {}
+      if (firstRunSeen) defaults.welcomeSeenVersion = WELCOME_VERSION
+      if (!gpuRenderer) defaults.gpuRenderer = false
+      if (Object.keys(defaults).length) {
+        await page.addInitScript((defaults) => {
           const KEY = 'termote-settings'
           const setItem = Storage.prototype.setItem
           const seen = (value: string) => {
             try {
               const settings = JSON.parse(value)
-              if (settings && typeof settings === 'object' && !('welcomeSeenVersion' in settings)) {
-                settings.welcomeSeenVersion = version
+              if (settings && typeof settings === 'object') {
+                for (const [k, v] of Object.entries(defaults)) {
+                  if (!(k in settings)) settings[k] = v
+                }
               }
               return JSON.stringify(settings)
             } catch {
@@ -113,7 +123,7 @@ export const test = base.extend<{
               // No storage here (about:blank)
             }
           })
-        }, WELCOME_VERSION)
+        }, defaults)
       }
       await use()
     },

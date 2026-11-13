@@ -349,6 +349,9 @@ export function useLocalSessions(pollInterval = 5) {
   const [isReady, setIsReady] = useState(false)
   const [isServerReachable, setIsServerReachable] = useState(true)
   const [mux, setMux] = useState<MuxInfo>(DEFAULT_MUX)
+  // mux holds a snapshot's caps, not DEFAULT_MUX's: caps.role missing
+  // then means a server without sign-in, not caps still on their way
+  const [capsLoaded, setCapsLoaded] = useState(false)
   // Server time minus this device's (ms): add it to Date.now() to compare
   // with the server's times (an agent's since).
   const [clockOffset, setClockOffset] = useState(0)
@@ -541,6 +544,7 @@ export function useLocalSessions(pollInterval = 5) {
       const next: MuxInfo = { backend: snap.backend, caps: snap.caps }
       muxRef.current = next
       setMux((prev) => (sameMux(prev, next) ? prev : next))
+      setCapsLoaded(true)
       const now = Date.now()
       setClockOffset((prev) => nextClockOffset(prev, snap.serverNow, now))
       // Only this server's own: a machine's proposal is for its browsers
@@ -1116,6 +1120,7 @@ export function useLocalSessions(pollInterval = 5) {
     isServerReachable,
     refreshSessions,
     mux,
+    capsLoaded,
     clockOffset,
     settingsProposal,
   }

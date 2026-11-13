@@ -35,13 +35,18 @@ export async function stranger(
   firstRun = false,
 ): Promise<Page> {
   const context = await browser.newContext({ baseURL })
-  // The first-visit welcome screen would cover the page (a context of its
-  // own: the fixture's firstRunSeen does not reach it)
-  if (!firstRun) {
-    await context.addInitScript((version) => {
-      localStorage.setItem('termote-settings', JSON.stringify({ welcomeSeenVersion: version }))
-    }, WELCOME_VERSION)
-  }
+  // A context of its own, which the fixture's settings do not reach: the
+  // first-visit welcome screen would cover the page, and the specs read the
+  // screen from .xterm-rows, which only the DOM renderer has
+  await context.addInitScript(
+    ({ version, firstRun }) => {
+      localStorage.setItem(
+        'termote-settings',
+        JSON.stringify(firstRun ? { gpuRenderer: false } : { welcomeSeenVersion: version, gpuRenderer: false }),
+      )
+    },
+    { version: WELCOME_VERSION, firstRun },
+  )
   const page = await context.newPage()
   await setup?.(page)
   return page

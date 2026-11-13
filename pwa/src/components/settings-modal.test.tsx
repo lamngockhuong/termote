@@ -94,6 +94,7 @@ const DEFAULT_SETTINGS: Settings = {
   searchRegex: false,
   notifyAgents: false,
   appBadge: true,
+  gpuRenderer: true,
   stuckMinutes: 10,
   showUsageChip: true,
   showHostChip: true,
@@ -325,6 +326,16 @@ describe('SettingsModal', () => {
     const { onUpdateSetting } = renderModal()
     fireEvent.click(screen.getByRole('switch', { name: 'Copy on select' }))
     expect(onUpdateSetting).toHaveBeenCalledWith('copyOnSelect', true)
+  })
+
+  it('toggles the GPU renderer', () => {
+    const { onUpdateSetting } = renderModal()
+    const sw = screen.getByRole('switch', {
+      name: 'Draw the terminal with the GPU',
+    })
+    expect(sw).toHaveAttribute('aria-checked', 'true')
+    fireEvent.click(sw)
+    expect(onUpdateSetting).toHaveBeenCalledWith('gpuRenderer', false)
   })
 
   it('offers the herdr drive switch only when the backend supports it', () => {

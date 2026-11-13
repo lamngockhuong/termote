@@ -53,7 +53,7 @@ streams its bytes straight to xterm.js. ttyd was removed in 1.0.0.
 
 React SPA with:
 
-- **Terminal View**: xterm.js terminal fed directly by the `/api/mux/stream` WebSocket, in-place theme switching (no reload)
+- **Terminal View**: xterm.js terminal fed directly by the `/api/mux/stream` WebSocket, in-place theme switching (no reload). Drawn by WebGL2 (`@xterm/addon-webgl`, its own chunk loaded with `import()`, `utils/terminal-webgl.ts`) while the device setting `gpuRenderer` is on (default; `deviceOnly`, never exported nor proposed by an agent): no WebGL2, a WebGL renderer drawing on the CPU (SwiftShader, llvmpipe, softpipe, Basic Render Driver, read once from `WEBGL_debug_renderer_info`; the chunk is then not fetched), a failed load or a lost context keeps or gives back xterm.js's DOM renderer, a context lost is replaced by a new addon when the page is shown again, and at most 8 terminals of a page use WebGL (`MAX_WEBGL_TERMINALS`; a Herdr layout view past it draws the rest with the DOM). The glyph atlas is cleared when the font changes and when a font finishes loading (the Nerd Font symbols load with the first icon). The same stream opening again (pane and stream key as before: the page shown again, the network back) keeps its screen: the backend's redraw is held `REDRAW_HOLD_MS` (50 ms; tmux's attach clears the screen in a frame of its own) and written after a RIS (`ESC c`, xterm.js's `reset()`), so no blank frame shows; another stream (another tmux session, another pane) is reset at once, so keys never go out under the old screen or with the old program's modes
 - **Hammer.js**: Touch gesture recognition (mobile only)
 - **Session Sidebar**: Switch between groups (tmux sessions, Herdr workspaces or Zellij sessions), add/edit/remove (collapsible on desktop)
 - **Session Tabs**: Browser-like tabs in the header row for tab switching (hidden/shown via setting), add/remove via UI
@@ -305,7 +305,12 @@ other than a stream's first. Clients that do not know the frame ignore it.
 
 The connection requires a same-origin/allowed Origin, a single-use token minted by
 `GET /api/mux/stream-token` (30s TTL, consumed on upgrade), and `?pane=<id>` naming an
-existing pane from the last snapshot.
+existing pane from the last snapshot. A client whose snapshot says `caps.role` `full`, or no role
+(a server without sign-in), fetches one
+token ahead after each stream opens (`utils/spare-stream-token.ts`): the next stream within 20 s
+(a tmux session switch, the first stream of a layout view) opens with only its WebSocket
+handshake. A stream refused before it opened with that token is retried once at once with a token
+fetched then. A view-only device and a page whose caps are not in yet never keep one.
 
 ### Mux API (REST, JSON)
 

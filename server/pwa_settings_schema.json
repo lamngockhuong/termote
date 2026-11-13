@@ -5,7 +5,8 @@
     "languageNoticeSeen",
     "hasSeenLocalhostNotice",
     "notifyAgents",
-    "appBadge"
+    "appBadge",
+    "gpuRenderer"
   ],
   "keys": [
     {

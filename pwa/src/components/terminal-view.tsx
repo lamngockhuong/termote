@@ -30,6 +30,8 @@ import {
   unblockContextMenu,
 } from '../utils/terminal-bridge'
 import { terminalFontFamily } from '../utils/terminal-font'
+import { registerTerminalProbe, visibleLines } from '../utils/terminal-probe'
+import { loadWebgl, type WebglHandle } from '../utils/terminal-webgl'
 import { imageFromClipboard } from '../utils/upload-image'
 import { type ConnectionState, isDown } from './connection-indicator'
 import { FOCUS_RING } from './ui/button'
@@ -81,12 +83,18 @@ interface Props {
   fontSize?: number
   // Font installed on this device, tried before the default monospace fonts.
   fontFamily?: string
+  // Draw with WebGL2 where the browser has it (the setting); else, and
+  // whenever WebGL cannot run, xterm.js's DOM renderer draws.
+  gpuRenderer?: boolean
   theme?: 'light' | 'dark'
   // Current UI style: a change re-reads the background token.
   uiStyle?: UiStyle
   disableContextMenu?: boolean
   // View-only role: the terminal shows the pane but sends nothing typed.
   readOnly?: boolean
+  // The role is known to be full: keep a stream token for the next stream
+  // (useTermSocket's spareToken).
+  spareToken?: boolean
   // herdr: size the pane to this terminal while the page is shown
   // (Caps.driveSize and the setting both on).
   driveSize?: boolean
@@ -196,6 +204,12 @@ export function terminalTheme(theme: 'light' | 'dark') {
 // Smallest font a server-sized pane is shrunk to; beyond that it scrolls.
 export const MIN_FONT_SIZE = 6
 
+// How long the first output of a stream opened again is held before it is
+// written. The backend's redraw comes in pieces a moment apart, the first
+// only clearing the screen (tmux's attach); written together, the old screen
+// stays until the new one is drawn instead of a blank frame between.
+export const REDRAW_HOLD_MS = 50
+
 // Quiet time before a resized container is fitted again. An animated resize
 // (the sidebar opening) changes the size at every frame; fitting each one
 // would redraw the terminal and resize the pane on the server every frame.
@@ -292,10 +306,12 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       bracketedPaste = false,
       fontSize = 14,
       fontFamily = '',
+      gpuRenderer = false,
       theme = 'dark',
       uiStyle,
       disableContextMenu = true,
       readOnly = false,
+      spareToken = false,
       driveSize = false,
       onDriveLost,
       covered = false,
@@ -332,6 +348,10 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
     fontSizeRef.current = fontSize
     const fontFamilyRef = useRef(fontFamily)
     fontFamilyRef.current = fontFamily
+    const gpuRendererRef = useRef(gpuRenderer)
+    gpuRendererRef.current = gpuRenderer
+    // The WebGL renderer while it is wanted (it may still be loading)
+    const webglRef = useRef<WebglHandle | null>(null)
     // herdr (and herdr-core) fixes the pane size and answers terminal
     // queries itself.
     const isHerdr = backendIsPaneStream(backend)
@@ -347,6 +367,18 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
     altScrollRef.current = altScroll
     const paneIdRef = useRef(paneId)
     paneIdRef.current = paneId
+    const streamKeyRef = useRef(streamKey)
+    streamKeyRef.current = streamKey
+    // The stream the screen shows (pane and stream key at its open): the
+    // same one opening again keeps the screen until its first output.
+    const drawnStreamRef = useRef<string | null>(null)
+    // That first output starts with a reset of the screen
+    const pendingResetRef = useRef(false)
+    // The output held meanwhile (REDRAW_HOLD_MS), and its timer
+    const heldRef = useRef<Uint8Array[]>([])
+    const heldTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
+      undefined,
+    )
     const { t } = useT()
     // For the handlers set once: the language at the time they run
     const tRef = useRef(t)
@@ -491,6 +523,28 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       })
     }, [])
 
+    // Drops what is held for the stream that showed last
+    const dropHeld = useCallback(() => {
+      clearTimeout(heldTimerRef.current)
+      heldRef.current = []
+    }, [])
+
+    // The reset a stream opened again put off, done now with the output
+    // held: in the write stream (RIS, which xterm.js runs as term.reset()),
+    // so it is parsed in the same pass as what follows it and no blank
+    // screen is drawn between.
+    const flushReset = useCallback(
+      (term: Terminal) => {
+        if (!pendingResetRef.current) return
+        pendingResetRef.current = false
+        const held = heldRef.current
+        dropHeld()
+        term.write('\x1bc')
+        for (const data of held) term.write(data)
+      },
+      [dropHeld],
+    )
+
     const onControl = useCallback(
       (msg: StreamControl) => {
         const term = termRef.current
@@ -527,14 +581,21 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
           serverSizeRef.current = { cols: msg.cols, rows: msg.rows }
           layout()
         } else if (msg.type === 'exit') {
+          // Not on the screen kept from before the stream opened again
+          flushReset(term)
           term.write(`\r\n[${tRef.current('shell.terminal.exited')}]\r\n`)
+          // What reconnects after an exit is never the same stream: tmux,
+          // restarted after its last session ended, numbers its sessions
+          // and panes from 0 again
+          drawnStreamRef.current = null
         } else if (msg.type === 'error') {
+          flushReset(term)
           term.write(
             `\r\n[${msg.message ?? tRef.current('shell.terminal.streamError')}]\r\n`,
           )
         }
       },
-      [layout, wantsDrive],
+      [layout, wantsDrive, flushReset],
     )
 
     const socket = useTermSocket({
@@ -543,6 +604,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       streamKey,
       paneSeen,
       visible: watched && !readOnly,
+      spareToken,
       // The size the client would take, so measured at the chosen font,
       // not the zoomed one a fixed grid shows.
       getSize: () => {
@@ -559,14 +621,42 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
         return dims?.cols && dims.rows ? dims : null
       },
       drive: () => wantsDrive(),
-      onOutput: (data) => termRef.current?.write(data),
+      onOutput: (data) => {
+        const term = termRef.current
+        if (!term) return
+        if (pendingResetRef.current) {
+          if (!heldRef.current.length) {
+            heldTimerRef.current = setTimeout(
+              () => flushReset(termRef.current!),
+              REDRAW_HOLD_MS,
+            )
+          }
+          heldRef.current.push(data)
+          return
+        }
+        term.write(data)
+      },
       onControl,
       onOpen: () => {
         const term = termRef.current
         /* v8 ignore next */
         if (!term) return
-        // Every stream starts with a full redraw from the backend.
-        term.reset()
+        // Every stream starts with a full redraw from the backend. The same
+        // stream opening again (the page shown again, the network back)
+        // keeps its screen until that redraw comes, reset just before it.
+        // Another stream (another tmux session, another pane) clears it at
+        // once: its keys must never go out under the old one's screen, nor
+        // with the old program's modes (mouse, keypad, bracketed paste).
+        const stream = `${paneIdRef.current}\n${streamKeyRef.current ?? ''}`
+        // Output held for a stream that closed again: the new one redraws
+        dropHeld()
+        if (drawnStreamRef.current === stream) {
+          pendingResetRef.current = true
+        } else {
+          drawnStreamRef.current = stream
+          pendingResetRef.current = false
+          term.reset()
+        }
         scrolledRef.current = true
         serverSizeRef.current = null
         // The old stream's mode does not carry over; wait for a size frame.
@@ -657,7 +747,14 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       term.open(container)
       termRef.current = term
       fitRef.current = fit
+      if (gpuRendererRef.current) webglRef.current = loadWebgl(term)
       layout()
+      const unprobe = registerTerminalProbe({
+        paneId: () => paneIdRef.current,
+        lines: () => visibleLines(term),
+        webgl: () => !!webglRef.current?.active(),
+        write: (data) => new Promise((done) => term.write(data, done)),
+      })
 
       // With serverScroll the wheel scrolls the backend's history, unless the
       // program in the pane asked for mouse reports.
@@ -717,9 +814,13 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       })
       observer.observe(container)
       return () => {
+        unprobe()
+        dropHeld()
         clearTimeout(settle)
         observer.disconnect()
         for (const s of subs) s.dispose()
+        webglRef.current?.dispose()
+        webglRef.current = null
         term.dispose()
         termRef.current = null
         fitRef.current = null
@@ -746,11 +847,39 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       if (!covered) layout()
     }, [covered, layout])
 
-    // Another font changes the cell size, so the grid is fitted again.
+    // The setting turned on or off while the terminal is open
+    useEffect(() => {
+      const term = termRef.current
+      /* v8 ignore next */
+      if (!term) return
+      if (gpuRenderer && !webglRef.current) {
+        webglRef.current = loadWebgl(term)
+      } else if (!gpuRenderer && webglRef.current) {
+        webglRef.current.dispose()
+        webglRef.current = null
+      }
+    }, [gpuRenderer])
+
+    // Another font changes the cell size, so the grid is fitted again. The
+    // WebGL renderer keeps the glyphs it drew in an atlas: drawn again in
+    // the new font.
     useEffect(() => {
       setTerminalFontFamily(handleRef.current, terminalFontFamily(fontFamily))
+      termRef.current?.clearTextureAtlas()
       layout()
     }, [fontFamily, layout])
+
+    // A font that finished loading after glyphs were drawn in a fallback:
+    // the web fonts at start, and the Nerd Font symbols, which load only when
+    // the first icon shows (their unicode-range, index.css).
+    useEffect(() => {
+      const fonts = (document as { fonts?: FontFaceSet }).fonts
+      if (!fonts) return
+      const clear = () => termRef.current?.clearTextureAtlas()
+      void fonts.ready.then(clear)
+      fonts.addEventListener('loadingdone', clear)
+      return () => fonts.removeEventListener('loadingdone', clear)
+    }, [])
 
     // Drive the pane size while the setting is on and the page is shown;
     // give it back as soon as the page is hidden, so the desktop is not left
