@@ -31,7 +31,7 @@ export default {
   'errors.file_changed': 'The file changed since it was read',
   'errors.filtered': 'The file goes through a git filter. Use a terminal',
   'errors.folder_reaches':
-    'The folder holds shortcuts Windows may follow to another computer. Open it from Windows',
+    'The folder holds or sits beside entries Windows may follow to another computer. Open it from Windows',
   'errors.full_needs_password':
     'Only a password sign-in or the CLI can do this',
   'errors.hardlink': 'The file has several hard links',

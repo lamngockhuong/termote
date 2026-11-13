@@ -4,6 +4,7 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -181,6 +182,13 @@ func TestFilesOpenWindowsFoldersOddNames(t *testing.T) {
 			t.Errorf("%q = %d", name, res.StatusCode)
 		}
 	}
+	// A settings shortcut names its icon in its XML: one of its own fixture,
+	// so nothing else in the root refuses the folder first.
+	sc, _ := newOpenFixture(t)
+	sc.write(t, "s/x.settingcontent-ms", "x")
+	if res := sc.open(openWindowsRequest{Path: "s", Run: true}, full); res.StatusCode != 403 || errorCode(t, res) != "folder_reaches" {
+		t.Errorf("settings shortcut = %d", res.StatusCode)
+	}
 	plain, _ := newOpenFixture(t)
 	plain.write(t, "ok/desktop.in", "x")
 	plain.write(t, "ok/a.txt", "x")
@@ -197,9 +205,6 @@ func TestFilesOpenWindowsSubfolders(t *testing.T) {
 	full := &authInfo{Kind: authSession, Role: roleFull}
 	fx.write(t, "n/a/b/desktop.ini", "x")
 	fx.write(t, "n/a/icon.url", "x")
-	if err := os.Symlink("nowhere", filepath.Join(fx.root, "n", "dangling")); err != nil {
-		t.Fatal(err)
-	}
 	if res := fx.open(openWindowsRequest{Path: "n"}, full); res.StatusCode != 200 {
 		t.Errorf("folder over nested shortcuts = %d %s", res.StatusCode, errorCode(t, res))
 	}
@@ -222,6 +227,150 @@ func TestFilesOpenWindowsSubfolders(t *testing.T) {
 	}
 	if res := fx.open(openWindowsRequest{Path: "out"}, full); res.StatusCode != 403 || errorCode(t, res) != "folder_reaches" {
 		t.Errorf("folder over a link out of the root = %d", res.StatusCode)
+	}
+	// A link Linux sees as pointing at nothing may still lead somewhere for
+	// Windows (an NT link to a share under /mnt/c), and an entry neither a
+	// file, a folder nor a link is not one Explorer shows plainly.
+	fx.write(t, "dl/a.txt", "x")
+	if err := os.Symlink("nowhere", filepath.Join(fx.root, "dl", "pic.png")); err != nil {
+		t.Fatal(err)
+	}
+	if res := fx.open(openWindowsRequest{Path: "dl"}, full); res.StatusCode != 403 || errorCode(t, res) != "folder_reaches" {
+		t.Errorf("folder over a link to nothing = %d", res.StatusCode)
+	}
+	fx.write(t, "ff/a.txt", "x")
+	if err := syscall.Mkfifo(filepath.Join(fx.root, "ff", "pipe"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if res := fx.open(openWindowsRequest{Path: "ff"}, full); res.StatusCode != 403 || errorCode(t, res) != "folder_reaches" {
+		t.Errorf("folder over a named pipe = %d", res.StatusCode)
+	}
+}
+
+// A folder named like a shell object (x.{CLSID}) is not shown as a folder:
+// Explorer runs its handler (a Folder Shortcut resolves its target.lnk).
+// One in the folder opened, beside a folder the navigation pane shows, or
+// on the way to the folder opened refuses it.
+func TestFilesOpenWindowsShellObjectFolders(t *testing.T) {
+	fx, calls := newOpenFixture(t)
+	full := &authInfo{Kind: authSession, Role: roleFull}
+	const shell = "docs.{0AFACED1-E828-11D1-9187-B532F1E9575D}"
+	fx.write(t, "in/"+shell+"/target.lnk", "x")
+	fx.write(t, "beside/"+shell+"/target.lnk", "x")
+	fx.write(t, "beside/src/a.txt", "x")
+	fx.write(t, "on/"+shell+"/sub/a.txt", "x")
+	for _, tc := range []struct {
+		path string
+		run  bool
+		code string
+	}{
+		{"in", true, "folder_reaches"},
+		{"beside/src", true, "folder_reaches"},
+		{"on/" + shell + "/sub", false, "runs_program"},
+		{"on/" + shell + "/sub/a.txt", false, "runs_program"},
+	} {
+		if res := fx.open(openWindowsRequest{Path: tc.path, Run: tc.run}, full); res.StatusCode != 403 || errorCode(t, res) != tc.code {
+			t.Errorf("%s (run %v) = %d, want 403 %s", tc.path, tc.run, res.StatusCode, tc.code)
+		}
+	}
+	if len(*calls) != 0 {
+		t.Errorf("ran %q", *calls)
+	}
+	// Run, the shell object on the way is the one the user said to run...
+	if res := fx.open(openWindowsRequest{Path: "on/" + shell + "/sub", Run: true}, full); res.StatusCode != 200 {
+		t.Errorf("run through the shell object = %d %s", res.StatusCode, errorCode(t, res))
+	}
+	// ...unless it holds what its handler follows (a Folder Shortcut's
+	// target.lnk): refused, run or not.
+	fx.write(t, "via/"+shell+"/target.lnk", "x")
+	fx.write(t, "via/"+shell+"/sub/a.txt", "x")
+	for _, p := range []string{"via/" + shell + "/sub", "via/" + shell + "/sub/a.txt"} {
+		if res := fx.open(openWindowsRequest{Path: p, Run: true}, full); res.StatusCode != 403 || errorCode(t, res) != "folder_reaches" {
+			t.Errorf("%s through a shell object holding a shortcut (run) = %d", p, res.StatusCode)
+		}
+	}
+}
+
+// The root and the folders above it count on the way too: a pane root or a
+// Place named like a shell object, or one inside such a folder (an unpacked
+// archive), asks for what is below it, not only for itself.
+func TestShellFoldersOnWay(t *testing.T) {
+	const shell = "x.{20D04FE0-3AEA-1069-A2D8-08002B30309D}"
+	for _, tc := range []struct {
+		root, rel string
+		want      []string
+	}{
+		{"/home/u/repo", "a/b.txt", nil},
+		{"/home/u/" + shell, "a/b.txt", []string{"/home/u/" + shell}},
+		{"/home/u/" + shell, ".", []string{"/home/u/" + shell}},
+		{"/home/u/" + shell + "/repo", "a", []string{"/home/u/" + shell}},
+		{"/home/u/repo", "a/" + shell + "/c/d", []string{"/home/u/repo/a/" + shell}},
+		{"/home/u/repo", shell, nil}, // the item itself is asked about on its own
+	} {
+		if got := shellFoldersOnWay(tc.root, tc.rel); fmt.Sprint(got) != fmt.Sprint(tc.want) {
+			t.Errorf("shellFoldersOnWay(%q, %q) = %q, want %q", tc.root, tc.rel, got, tc.want)
+		}
+	}
+}
+
+// What refuses a folder refuses it as a folder on the way too, where the
+// navigation pane shows it: a link to nothing beside the way. A link to a
+// file inside the root does not, nor does a link to a folder inside the
+// pane root that leaves the opened folder's parent.
+func TestFilesOpenWindowsOnTheWayLinks(t *testing.T) {
+	fx, _ := newOpenFixture(t)
+	full := &authInfo{Kind: authSession, Role: roleFull}
+	fx.write(t, "repo/src/a.txt", "x")
+	fx.write(t, "repo/readme.txt", "x")
+	if err := os.Symlink("readme.txt", filepath.Join(fx.root, "repo", "README")); err != nil {
+		t.Fatal(err)
+	}
+	if res := fx.open(openWindowsRequest{Path: "repo/src"}, full); res.StatusCode != 200 {
+		t.Errorf("beside a link to a file = %d %s", res.StatusCode, errorCode(t, res))
+	}
+	if res := fx.open(openWindowsRequest{Path: "repo"}, full); res.StatusCode != 200 {
+		t.Errorf("over a link to a file = %d %s", res.StatusCode, errorCode(t, res))
+	}
+	fx.write(t, "x/deep/a.txt", "x")
+	fx.write(t, "a/l/a.txt", "x")
+	if err := os.Symlink("../../x/deep", filepath.Join(fx.root, "a", "l", "sub")); err != nil {
+		t.Fatal(err)
+	}
+	if res := fx.open(openWindowsRequest{Path: "a/l"}, full); res.StatusCode != 200 {
+		t.Errorf("over a link inside the pane root, out of the parent = %d %s", res.StatusCode, errorCode(t, res))
+	}
+	if err := os.Symlink("nowhere", filepath.Join(fx.root, "repo", "dangling")); err != nil {
+		t.Fatal(err)
+	}
+	if res := fx.open(openWindowsRequest{Path: "repo/src"}, full); res.StatusCode != 403 || errorCode(t, res) != "folder_reaches" {
+		t.Errorf("beside a link to nothing on the way = %d", res.StatusCode)
+	}
+	// A named pipe beside the way, a link to one, and a file named like a
+	// shell object refuse too.
+	for i, mk := range []func(dir string) error{
+		func(dir string) error { return syscall.Mkfifo(filepath.Join(dir, "pipe"), 0o600) },
+		func(dir string) error {
+			// the pipe in a folder of its own, so only the link is beside the way
+			if err := os.MkdirAll(filepath.Join(fx.root, "pipes"), 0o755); err != nil {
+				return err
+			}
+			if err := syscall.Mkfifo(filepath.Join(fx.root, "pipes", filepath.Base(dir)), 0o600); err != nil {
+				return err
+			}
+			return os.Symlink(filepath.Join("..", "pipes", filepath.Base(dir)), filepath.Join(dir, "to-pipe"))
+		},
+		func(dir string) error {
+			return os.WriteFile(filepath.Join(dir, "x.{20D04FE0-3AEA-1069-A2D8-08002B30309D}"), []byte("x"), 0o644)
+		},
+	} {
+		top := fmt.Sprintf("w%d", i)
+		fx.write(t, top+"/src/a.txt", "x")
+		if err := mk(filepath.Join(fx.root, top)); err != nil {
+			t.Fatal(err)
+		}
+		if res := fx.open(openWindowsRequest{Path: top + "/src"}, full); res.StatusCode != 403 || errorCode(t, res) != "folder_reaches" {
+			t.Errorf("case %d beside the way = %d", i, res.StatusCode)
+		}
 	}
 }
 
@@ -253,10 +402,80 @@ func TestWindowsMayRun(t *testing.T) {
 		".bashrc": true, "a.": true,
 		"a.docx": true, "a.rtf": true, "a.xml": true, "a.html": true, "a.svg": true, "a.lua": true,
 		"a.jl": true, "a.csv": true, "a.epub": true, "a.zip": true,
-		"a.jsx": true, "a.hs": true, "a.mp4": true, "a.mp3": true, "a.mkv": true, "a.png": false, "a.ts": false,
+		"a.jsx": true, "a.hs": true, "a.mp4": true, "a.mp3": true, "a.mkv": true, "a.png": false, "a.ts": true, "a.mts": true, "a.tsx": false, "a.cts": false,
 	} {
 		if got := windowsMayRun(name); got != want {
 			t.Errorf("windowsMayRun(%q) = %v", name, got)
 		}
+	}
+}
+
+// A shell object above the pane root that holds a shortcut refuses what is
+// below it, read as a root of its own; one holding nothing it follows does
+// not.
+func TestShellsOnWayReachAboveRoot(t *testing.T) {
+	shell := filepath.Join(t.TempDir(), "x.{0AFACED1-E828-11D1-9187-B532F1E9575D}")
+	repo := filepath.Join(shell, "repo")
+	if err := os.MkdirAll(filepath.Join(repo, "a"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	rt, err := os.OpenRoot(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rt.Close()
+	if reaches, err := shellsOnWayReach(rt, repo, "a"); reaches || err != nil {
+		t.Errorf("empty shell object above = %v, %v", reaches, err)
+	}
+	if err := os.WriteFile(filepath.Join(shell, "target.lnk"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if reaches, err := shellsOnWayReach(rt, repo, "a"); !reaches || err != nil {
+		t.Errorf("shell object above holding a shortcut = %v, %v", reaches, err)
+	}
+}
+
+// A pane root inside a shell object: opening it, or anything below it,
+// asks first; with a shortcut in that shell object, it is refused even run.
+func TestFilesOpenWindowsRootInShellObject(t *testing.T) {
+	fx, calls := newOpenFixture(t)
+	shell := filepath.Join(plainDir(t), "x.{0AFACED1-E828-11D1-9187-B532F1E9575D}")
+	fx.root = filepath.Join(shell, "root")
+	if err := os.MkdirAll(fx.root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	wsl := fx.f.wsl
+	fx.mux = http.NewServeMux()
+	fx.f = registerFilesRoutes(fx.mux, &filesFakeMux{dir: fx.root, files: true}, hostAllowlist{}, nil)
+	fx.f.wsl = wsl
+	full := &authInfo{Kind: authSession, Role: roleFull}
+	fx.write(t, "sub/a.txt", "x")
+	for _, p := range []string{".", "sub", "sub/a.txt"} {
+		if res := fx.open(openWindowsRequest{Path: p}, full); res.StatusCode != 403 || errorCode(t, res) != "runs_program" {
+			t.Errorf("%s under a shell object = %d", p, res.StatusCode)
+		}
+		if res := fx.open(openWindowsRequest{Path: p, Run: true}, full); res.StatusCode != 200 {
+			t.Errorf("%s under a shell object (run) = %d %s", p, res.StatusCode, errorCode(t, res))
+		}
+	}
+	// A second shell object on the way, a folder between or not, is refused even run.
+	fx.write(t, "e.{20D04FE0-3AEA-1069-A2D8-08002B30309D}/m/f.{20D04FE0-3AEA-1069-A2D8-08002B30309D}/c/d.txt", "x")
+	if res := fx.open(openWindowsRequest{Path: "e.{20D04FE0-3AEA-1069-A2D8-08002B30309D}/m/f.{20D04FE0-3AEA-1069-A2D8-08002B30309D}/c", Run: true}, full); res.StatusCode != 403 || errorCode(t, res) != "folder_reaches" {
+		t.Errorf("through two shell objects a folder apart (run) = %d", res.StatusCode)
+	}
+	// A second shell object on the way is refused even run.
+	fx.write(t, "a.{20D04FE0-3AEA-1069-A2D8-08002B30309D}/b.{20D04FE0-3AEA-1069-A2D8-08002B30309D}/c/d.txt", "x")
+	if res := fx.open(openWindowsRequest{Path: "a.{20D04FE0-3AEA-1069-A2D8-08002B30309D}/b.{20D04FE0-3AEA-1069-A2D8-08002B30309D}/c", Run: true}, full); res.StatusCode != 403 || errorCode(t, res) != "folder_reaches" {
+		t.Errorf("through two shell objects (run) = %d", res.StatusCode)
+	}
+	writeFile(t, filepath.Join(shell, "target.lnk"), "x")
+	*calls = nil
+	for _, p := range []string{".", "sub", "sub/a.txt"} {
+		if res := fx.open(openWindowsRequest{Path: p, Run: true}, full); res.StatusCode != 403 || errorCode(t, res) != "folder_reaches" {
+			t.Errorf("%s under a shell object holding a shortcut (run) = %d", p, res.StatusCode)
+		}
+	}
+	if len(*calls) != 0 {
+		t.Errorf("ran %q", *calls)
 	}
 }

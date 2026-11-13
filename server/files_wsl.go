@@ -24,7 +24,7 @@ var (
 	errWSLBusy        = &codedError{"busy", "too many files at once; try again", http.StatusTooManyRequests}
 	errWSLName        = &codedError{"windows_name", "Windows would read this path as another; not opened", http.StatusBadRequest}
 	errWSLRuns        = &codedError{"runs_program", "Windows runs this file as a program; run to open it", http.StatusForbidden}
-	errWSLReaches     = &codedError{"folder_reaches", "the folder holds shortcuts Windows may follow to another computer; not opened", http.StatusForbidden}
+	errWSLReaches     = &codedError{"folder_reaches", "the folder holds or sits beside entries Windows may follow to another computer; not opened", http.StatusForbidden}
 )
 
 // windowsViews: the extensions, lowercase, of a file Windows opens to show
@@ -37,7 +37,8 @@ var (
 // it with, a browser opens .html, .svg and .epub, an interpreter may be the
 // default program for .lua or .jl, Photoshop and ExtendScript run a .jsx,
 // WinGHCi a .hs, and a media player such as VLC reads a sound or a video
-// by its content, a playlist naming another computer's share among them),
+// by its content, a playlist naming another computer's share among them;
+// .ts and .mts are MPEG transport streams as well as TypeScript),
 // and .zip, which Explorer shows as a folder without the folder check.
 var windowsViews = map[string]bool{}
 
@@ -46,7 +47,7 @@ func init() {
 		.txt .text .md .markdown .rst .adoc .log .json .jsonc .json5 .ndjson .yaml .yml .toml
 		.css .scss .less .diff .patch .sql .graphql .proto .tex .bib
 		.c .h .cc .cpp .cxx .hpp .hh .cs .go .rs .java .kt .kts .scala .swift .m .mm .dart .zig .nim
-		.ts .tsx .mts .cts .mjs .cjs .vue .svelte .astro .ex .exs .erl .ml .clj .r
+		.tsx .cts .mjs .cjs .vue .svelte .astro .ex .exs .erl .ml .clj .r
 		.png .jpg .jpeg .gif .webp .bmp .ico .tif .tiff .heic .heif .avif
 		.pdf`) {
 		windowsViews[ext] = true
@@ -77,6 +78,52 @@ func windowsFolderMayRun(name string) bool {
 	return strings.HasPrefix(filepath.Ext(name), ".{")
 }
 
+// shellFoldersOnWay lists, as absolute paths from the top down, the folders
+// on the way to rel under root that are shell objects, whose handler
+// Explorer runs to reach what is below them: the root and the folders above
+// it included (a pane root can sit in an unpacked archive), rel itself not.
+func shellFoldersOnWay(root, rel string) []string {
+	var shells []string
+	for dir := filepath.Join(root, filepath.Dir(rel)); ; dir = filepath.Dir(dir) {
+		if windowsFolderMayRun(filepath.Base(dir)) {
+			shells = append([]string{dir}, shells...)
+		}
+		if filepath.Dir(dir) == dir {
+			return shells
+		}
+	}
+}
+
+// shellsOnWayReach reports whether a shell object on the way to rel holds
+// an entry windowsReaches names (a Folder Shortcut's target.lnk), or whether
+// there are two: run or not, the handler follows it. One under root is read through rt; one above
+// it, which only the server's own path names, is opened as a root of its own.
+func shellsOnWayReach(rt *os.Root, root, rel string) (bool, error) {
+	shells := shellFoldersOnWay(root, rel)
+	// Two shell objects on the way, nested at any depth: the inner one's
+	// handler runs through the outer one's, which run did not name.
+	if len(shells) > 1 {
+		return true, nil
+	}
+	for _, dir := range shells {
+		var reaches bool
+		var err error
+		if under, rerr := filepath.Rel(root, dir); rerr == nil && under != ".." && !strings.HasPrefix(under, ".."+string(filepath.Separator)) {
+			reaches, err = folderReaches(rt, under)
+		} else {
+			var above *os.Root
+			if above, err = os.OpenRoot(dir); err == nil {
+				reaches, err = folderReaches(above, ".")
+				above.Close()
+			}
+		}
+		if reaches || err != nil {
+			return reaches, err
+		}
+	}
+	return false, nil
+}
+
 // windowsReaches: names of files that make Explorer reach a location they
 // name (another computer's share among them) while it only shows the folder
 // holding them: their icon, their thumbnail (a theme's wallpaper) or the
@@ -91,7 +138,7 @@ func windowsReaches(name string) bool {
 	}
 	switch strings.ToLower(ext) {
 	case ".url", ".lnk", ".scf", ".library-ms", ".searchconnector-ms", ".search-ms", ".website",
-		".theme", ".themepack", ".deskthemepack", ".pif":
+		".theme", ".themepack", ".deskthemepack", ".pif", ".settingcontent-ms":
 		return true
 	}
 	return windowsNamesDesktopINI(name)
@@ -126,7 +173,7 @@ const windowsFolderEntriesMost = 10000
 // than can be looked at. A shortcut deeper down is not shown, so not read.
 func folderReaches(rt *os.Root, dir string) (bool, error) {
 	seen := 0
-	return folderShows(rt, dir, &seen, windowsReaches)
+	return folderShows(rt, dir, "", &seen, windowsReaches)
 }
 
 // ancestorsReach reports whether a folder Explorer's navigation pane shows
@@ -136,8 +183,8 @@ func folderReaches(rt *os.Root, dir string) (bool, error) {
 // user's own, not a repository's.
 func ancestorsReach(rt *os.Root, rel string) (bool, error) {
 	seen := 0
-	for dir := filepath.Dir(rel); ; dir = filepath.Dir(dir) {
-		if reaches, err := folderShows(rt, dir, &seen, windowsNamesDesktopINI); reaches || err != nil {
+	for way, dir := rel, filepath.Dir(rel); ; way, dir = dir, filepath.Dir(dir) {
+		if reaches, err := folderShows(rt, dir, filepath.Base(way), &seen, windowsNamesDesktopINI); reaches || err != nil {
 			return reaches, err
 		}
 		if dir == "." {
@@ -146,15 +193,19 @@ func ancestorsReach(rt *os.Root, rel string) (bool, error) {
 	}
 }
 
-// folderShows reports whether dir directly holds an entry match names, or
-// a subfolder holding a desktop.ini, or more entries than can be looked at.
-// A link to a folder counts as a subfolder, since Windows may follow it; a
-// link it cannot follow inside the root (out of it) refuses dir, one to
-// nothing does not.
-func folderShows(rt *os.Root, dir string, seen *int, match func(string) bool) (bool, error) {
+// folderShows reports whether dir directly holds an entry match names, a
+// shell object (x.{CLSID}, whose handler Explorer runs to show it), or a
+// subfolder holding a desktop.ini, or more entries than can be looked at.
+// A shell object named way, the one on the way to the folder opened, is
+// left to the question checkOpenWindows asks (run).
+// A link to a folder counts as a subfolder, since Windows may follow it. A
+// link that cannot be followed inside the root refuses dir, one to nothing
+// included (an NT link to another computer's share under /mnt/c may show
+// so to Linux), and so does an entry neither a file nor a folder.
+func folderShows(rt *os.Root, dir, way string, seen *int, match func(string) bool) (bool, error) {
 	var subdirs []string
 	reaches, err := readFolderNames(rt, dir, seen, func(e fs.DirEntry) bool {
-		if match(e.Name()) {
+		if match(e.Name()) || e.Name() != way && windowsFolderMayRun(e.Name()) {
 			return true
 		}
 		switch {
@@ -163,11 +214,15 @@ func folderShows(rt *os.Root, dir string, seen *int, match func(string) bool) (b
 		case e.Type()&fs.ModeSymlink != 0:
 			fi, err := rt.Stat(filepath.Join(dir, e.Name()))
 			if err != nil {
-				return !errors.Is(err, fs.ErrNotExist)
+				return true
 			}
 			if fi.IsDir() {
 				subdirs = append(subdirs, e.Name())
+			} else if !fi.Mode().IsRegular() {
+				return true
 			}
+		case !e.Type().IsRegular():
+			return true
 		}
 		return false
 	})
@@ -424,19 +479,23 @@ func (f *filesAPI) checkOpenWindows(root filesRoot, in openWindowsRequest) (stri
 		if sensitivePath(root.Root, rel) && !in.Reveal {
 			return "", "", errWSLSensitive
 		}
-		if !in.Run && (fi.Mode().IsRegular() && windowsMayRun(rel) || fi.IsDir() && windowsFolderMayRun(rel)) {
+		shells := shellFoldersOnWay(root.Root, rel)
+		if !in.Run && (len(shells) > 0 || fi.Mode().IsRegular() && windowsMayRun(rel) || fi.IsDir() && windowsFolderMayRun(rel)) {
 			return "", "", errWSLRuns
 		}
+		// walkParents closed rt; links are followed within the pane root.
+		up, err := os.OpenRoot(root.Root)
+		if err != nil {
+			return "", "", err
+		}
+		defer up.Close()
+		if err := checkReaches(shellsOnWayReach(up, root.Root, rel)); err != nil {
+			return "", "", err
+		}
 		if fi.IsDir() {
-			if err := checkReaches(folderReaches(parent, filepath.Base(rel))); err != nil {
+			if err := checkReaches(folderReaches(up, rel)); err != nil {
 				return "", "", err
 			}
-			// walkParents closed rt
-			up, err := os.OpenRoot(root.Root)
-			if err != nil {
-				return "", "", err
-			}
-			defer up.Close()
 			if err := checkReaches(ancestorsReach(up, rel)); err != nil {
 				return "", "", err
 			}
@@ -447,8 +506,11 @@ func (f *filesAPI) checkOpenWindows(root filesRoot, in openWindowsRequest) (stri
 			return "", "", err
 		}
 		defer rt.Close()
-		if !in.Run && windowsFolderMayRun(root.Root) {
+		if !in.Run && len(shellFoldersOnWay(root.Root, ".")) > 0 {
 			return "", "", errWSLRuns
+		}
+		if err := checkReaches(shellsOnWayReach(rt, root.Root, ".")); err != nil {
+			return "", "", err
 		}
 		if err := checkReaches(folderReaches(rt, ".")); err != nil {
 			return "", "", err

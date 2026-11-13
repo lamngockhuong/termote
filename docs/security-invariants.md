@@ -1884,25 +1884,37 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `.rtf` fetch a remote template, Excel opens `.csv`/`.tsv`, an `.xml` names the Office program, a
   browser opens `.html .htm .svg .epub`, an interpreter may own `.lua` or `.jl`, Photoshop and
   ExtendScript run a `.jsx`, WinGHCi a `.hs`, and a media player such as VLC reads a sound or a
-  video by its content, a playlist naming another computer's share among them), and `.zip`, which
+  video by its content, a playlist naming another computer's share among them; `.ts` and `.mts` are
+  transport streams as well as TypeScript), and `.zip`, which
   Explorer shows as a folder without the folder check below, and so does a name with no extension (Windows asks which program);
   any other, a dotfile's whole name included, asks, and so does any extension holding a byte beyond
   ASCII (Windows folds case its own way: U+017F is an S to it). A directory named like a shell object
-  (an extension starting `.{`, `x.{CLSID}`) asks too. A directory, the root included, that directly
-  holds a `.url .lnk .scf .library-ms .searchconnector-ms .search-ms .website`, a theme (`.theme
+  (an extension starting `.{`, `x.{CLSID}`) asks too, and so does any path through one (a folder of
+  the path named so, the pane root or the Place and the folders above it included: Explorer runs its
+  handler to reach what is below it); a path through one that the folder check below refuses (a
+  Folder Shortcut's `target.lnk`) is refused, run or not, 403 `folder_reaches`. A directory, the root included, that directly
+  holds a `.url .lnk .scf .library-ms .searchconnector-ms .search-ms .website .settingcontent-ms`, a theme (`.theme
   .themepack .deskthemepack`, whose thumbnail has loaded a remote wallpaper), a `.pif`, a name whose
-  extension holds a byte beyond ASCII (`x.ſcf` is a `.scf` to Windows) or a `desktop.ini`
+  extension holds a byte beyond ASCII (`x.ſcf` is a `.scf` to Windows), a name like a shell object
+  (`x.{CLSID}`, file or folder: a Folder Shortcut resolves its `target.lnk` to show it) or a `desktop.ini`
   (any case, a letter beyond ASCII standing for any letter: `desktop.ıni`), or holds a subfolder,
-  or a link to a folder inside the root (Windows may follow it), that holds a `desktop.ini`, which
-  Explorer reads to show that subfolder (or a link out of the root, more than 10000 entries across
+  or a link to a folder inside the pane root (Windows may follow it), that holds a `desktop.ini`, which
+  Explorer reads to show that subfolder (or a link out of the pane root, a link to nothing, which may be an
+  NT link to another computer's share under `/mnt/c` that Linux cannot follow, an entry neither a
+  file nor a folder, more than 10000 entries across
   both levels, or one that cannot be read; a shortcut deeper down is not shown, so not looked for)
-  is refused, run or not, 403 `folder_reaches`. So is a folder below the root when a `desktop.ini`
-  sits in a folder Explorer's navigation pane shows on the way to it, expanded to it: each folder
-  from the root down to its parent, and the folders beside each (their own count of 10000 entries).
+  is refused, run or not, 403 `folder_reaches`. So is a folder below the root when a folder
+  Explorer's navigation pane shows on the way to it, expanded to it, holds a `desktop.ini`, a name
+  like a shell object, a link that cannot be followed inside the pane root or an entry neither a file
+  nor a folder (a dangling link at a repository's root refuses each folder below it): each folder
+  from the root down to its parent, and the folders beside each (their own count of 10000 entries;
+  the shell object on the way itself is the one `run` was asked about; a second shell object on the
+  way, at any depth, the root's included, is refused even with `run`).
   Explorer reads their icon or the folder's settings from a location they name, a
   share on another computer among them, while it only shows the folder, sending the Windows user's
   NTLM hash there. The check is of the folder as it is when opened: a file a later `git pull` adds
-  to the open Explorer window is not looked at, nor is a folder above the root. Windows
+  to the open Explorer window is not looked at, nor is a folder above the root but for a shell
+  object on the way. Windows
   asks before running a file only when its zone says so (on the machine checked, a `.cmd` under
   `\\wsl.localhost` was asked about, one under `/mnt/c` ran at once), so termote asks itself. The Windows path is built from the absolute
   path (`/mnt/<x>/…` → `X:\…`, else the distribution's share from `wslpath -w /`) and refused (400
