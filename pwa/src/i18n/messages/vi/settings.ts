@@ -51,7 +51,7 @@ export default {
   'settings.contextMenuDesc': 'Không mở menu ngữ cảnh trên vùng terminal',
   'settings.copyOnSelect': 'Chọn là sao chép',
   'settings.copyOnSelectDesc':
-    'Chữ bôi đen bằng chuột được sao chép ngay khi nhả nút',
+    'Chữ bôi đen bằng chuột được sao chép ngay khi nhả nút. Nếu chương trình trong pane đang nhận chuột (vim với mouse=a, htop), giữ Shift khi kéo (Option trên macOS)',
   'settings.fitPane': 'Chỉnh pane herdr vừa thiết bị này',
   'settings.fitPaneDesc':
     'Cỡ pane trên máy tính đổi theo màn hình này khi đang xem',

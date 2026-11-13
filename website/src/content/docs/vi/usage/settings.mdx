@@ -78,6 +78,10 @@ Nhãn trong ứng dụng: **Copy on select**.
 Chữ bôi đen bằng chuột trong terminal được chép ngay khi nhả nút, kèm thông báo ngắn "Copied". Khi tắt,
 bôi đen xong thì nhấn Ctrl+Shift+C (Cmd+C trên macOS); xem [Sao chép chữ](/vi/usage/keyboard/#sao-chép-chữ).
 
+Chương trình nhận chuột (tmux với `set -g mouse on`, vim với `mouse=a`, htop) tự nhận thao tác kéo thường,
+nên không có chữ nào được bôi đen. Giữ Shift khi kéo (Option trên macOS) để vẫn bôi đen và chép được; lần
+kéo đầu tiên như vậy trên trang sẽ hiện thông báo nhắc điều này.
+
 | Tùy chọn | Hành vi                                           | Mặc định |
 | -------- | ------------------------------------------------- | -------- |
 | Tắt      | Vùng chọn được chép bằng Ctrl+Shift+C hoặc Cmd+C | ✓        |

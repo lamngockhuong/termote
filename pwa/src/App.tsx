@@ -1297,6 +1297,22 @@ export default function App({
     [showToast, t],
   )
 
+  // Once per page load: a drag in a pane that takes the mouse copies nothing
+  // with Copy on select, and the key that selects anyway is easy to miss.
+  const dragHintShownRef = useRef(false)
+  const onTerminalDragReported = useCallback(() => {
+    if (dragHintShownRef.current) return
+    dragHintShownRef.current = true
+    showToast(
+      t('shell.dragReported', {
+        key: isApplePlatform() ? 'Option' : 'Shift',
+      }),
+      'info',
+      undefined,
+      6000,
+    )
+  }, [showToast, t])
+
   const handleCtrlShiftKey = useCallback(
     async (key: string) => {
       if (key === 'v') {
@@ -2408,6 +2424,7 @@ export default function App({
                           disableContextMenu: settings.disableContextMenu,
                           copyOnSelect: settings.copyOnSelect,
                           onCopy: onTerminalCopy,
+                          onDragReported: onTerminalDragReported,
                           readOnly: readOnly,
                           // Only while the terminal shows: under another view the
                           // pane keeps the desktop's size, so a Claude Code dialog

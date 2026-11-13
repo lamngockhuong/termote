@@ -50,6 +50,58 @@ test.describe('desktop copy', () => {
     await page.keyboard.press('Enter')
     await expect(rows(page)).toContainText('kept-5', { timeout: 10000 })
   })
+
+  // With Copy on select, a drag copies. tmux with the mouse on takes a plain
+  // drag as mouse reports: nothing is selected, a hint names Shift, and a
+  // Shift+drag selects and copies.
+  test('Copy on select copies a drag, and Shift+drag where tmux takes the mouse', async ({
+    page,
+    context,
+  }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    await page.addInitScript(() => {
+      const saved = JSON.parse(localStorage.getItem('termote-settings') || '{}')
+      localStorage.setItem('termote-settings', JSON.stringify({ ...saved, copyOnSelect: true }))
+    })
+    await openTerminal(page)
+    const clipboard = () => page.evaluate(() => navigator.clipboard.readText())
+    // Drags across the line that holds only word, from its first cell. The
+    // word is printed below the top rows, where the toasts show.
+    const dragOver = async (word: string, shift = false) => {
+      const line = rows(page).locator('div', { hasText: new RegExp(`^${word}\\s*$`) })
+      await expect(line).toHaveCount(1, { timeout: 10000 })
+      const box = (await line.boundingBox())!
+      const y = box.y + box.height / 2
+      if (shift) await page.keyboard.down('Shift')
+      await page.mouse.move(box.x + 2, y)
+      await page.mouse.down()
+      await page.mouse.move(box.x + 200, y, { steps: 8 })
+      await page.mouse.up()
+      if (shift) await page.keyboard.up('Shift')
+    }
+
+    const first = marker()
+    await run(page, `clear; printf '\\n%.0s' 1 2 3 4 5 6 7 8; echo ${first.replace('-', '""-')}`)
+    await dragOver(first)
+    await expect.poll(async () => (await clipboard()).trim()).toBe(first)
+    await expect(page.getByText('Copied')).toBeVisible()
+
+    const second = marker()
+    await run(
+      page,
+      `tmux set mouse on; clear; printf '\\n%.0s' 1 2 3 4 5 6 7 8; echo ${second.replace('-', '""-')}`,
+    )
+    try {
+      await dragOver(second)
+      await expect(page.getByText(/Hold Shift while dragging/)).toBeVisible()
+      expect((await clipboard()).trim()).toBe(first)
+
+      await dragOver(second, true)
+      await expect.poll(async () => (await clipboard()).trim()).toBe(second)
+    } finally {
+      await run(page, 'tmux set mouse off')
+    }
+  })
 })
 
 test.describe('Select text on a phone', () => {

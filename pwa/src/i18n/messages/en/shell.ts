@@ -358,6 +358,8 @@ export default {
   'shell.image.insert': 'Insert',
   'shell.copied': 'Copied',
   'shell.copyFailed': 'Could not copy',
+  'shell.dragReported':
+    'The program in this pane takes the mouse, so the drag selected nothing. Hold {key} while dragging to select and copy.',
   'shell.group.hasWorktrees':
     'This workspace has worktrees; remove them first, or close it in Herdr',
   'shell.group.closeFailed': 'Could not close the {noun}',

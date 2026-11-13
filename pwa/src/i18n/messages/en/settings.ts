@@ -50,7 +50,7 @@ export default {
   'settings.contextMenuDesc': 'Block context menu on terminal area',
   'settings.copyOnSelect': 'Copy on select',
   'settings.copyOnSelectDesc':
-    'Copy the text you select with the mouse as soon as you release the button',
+    'Copy the text you select with the mouse as soon as you release the button. Where the program in the pane takes the mouse (vim with mouse=a, htop), hold Shift while dragging (Option on a Mac)',
   'settings.fitPane': 'Fit herdr pane to this device',
   'settings.fitPaneDesc':
     "The pane on the computer takes this screen's size while you watch it",
