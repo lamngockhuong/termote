@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ChatImageViewer } from './chat-image-viewer'
 import { ChatMessage } from './chat-message'
@@ -42,6 +42,17 @@ describe('ChatImageViewer', () => {
     ).toHaveAttribute('href', url)
     expect(screen.getByRole('link', { name: 'Download' })).toHaveAttribute(
       'download',
+    )
+  })
+
+  it('closes on its close button', async () => {
+    render(
+      <ChatImageViewer paneId="p1">{withImage('ref.sig')}</ChatImageViewer>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: '[image]' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    await waitFor(() =>
+      expect(screen.queryByRole('img', { name: 'Image' })).toBeNull(),
     )
   })
 
