@@ -997,6 +997,9 @@ export interface TranscriptPart {
   clipped?: boolean
   // What a tool call's card shows beyond the one-line input
   detail?: ToolDetail
+  // An image part's signed reference for agentImageUrl; absent when the
+  // server cannot serve the image (another agent, an older server)
+  image?: string
 }
 
 export interface ToolDetail {
@@ -1136,6 +1139,10 @@ async function requestError(
 
 const agentPath = (paneId: string, op: string) =>
   `${apiBase()}/panes/${encodeURIComponent(paneId)}/agent/${op}`
+
+// An image of the pane's agent transcript, by the reference its part carries
+export const agentImageUrl = (paneId: string, src: string) =>
+  `${agentPath(paneId, 'image')}?src=${encodeURIComponent(src)}`
 
 export async function fetchTranscript(
   paneId: string,

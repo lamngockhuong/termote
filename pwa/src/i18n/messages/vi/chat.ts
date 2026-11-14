@@ -32,6 +32,12 @@ export default {
   'chat.message.image': 'ảnh: {where}',
   'chat.message.imageUnavailable': 'không có',
   'chat.message.imageChip': '[ảnh]',
+  'chat.message.imageOpen': 'Xem ảnh',
+  'chat.image.title': 'Ảnh',
+  'chat.image.openTab': 'Mở trong tab mới',
+  'chat.image.download': 'Tải về',
+  'chat.image.failed':
+    'Không tải được ảnh: có thể nó không còn trong transcript, hoặc phiên agent đã đổi.',
   'chat.message.copyCode': 'Sao chép code',
   'chat.message.copyAnswer': 'Sao chép câu trả lời',
   'chat.message.shortened': '(đã rút gọn)',

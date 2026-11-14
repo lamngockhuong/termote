@@ -346,6 +346,7 @@ GET    /api/mux/push/key                                        → {publicKey} 
 POST   /api/mux/push/subscribe     body: {endpoint, keys:{p256dh, auth}}  → {ok} | {error, code}
 DELETE /api/mux/push/subscribe     body: {endpoint}             → {ok}   (unknown endpoint too)
 GET    /api/mux/panes/{id}/agent/transcript?cursor=&before=     → {agent, sessionId, status, entries, cursor, before, reset}
+GET    /api/mux/panes/{id}/agent/image?src=<part.image>          → the image bytes (PNG/JPEG/GIF/WebP) | 404 not_found | 429 busy
 POST   /api/mux/panes/{id}/agent/message  body: {text, cursor, images?, at?}  → 204
 GET    /api/mux/panes/{id}/agent/prompt                          → {prompt: null | {promptId, kind, title, body, options, steps, freeText}}
 POST   /api/mux/panes/{id}/agent/answer   body: {promptId, choice} → 204

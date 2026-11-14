@@ -137,6 +137,11 @@ type TranscriptPart struct {
 	// Detail: what the Chat view's card of a tool call shows beyond the
 	// one-line Input; absent when the call has nothing more.
 	Detail *ToolDetail `json:"detail,omitempty"`
+	// Image: an image part's signed reference for agent/image; absent when
+	// the agent's transcript keeps no image the server can serve.
+	Image string `json:"image,omitempty"`
+	// imageN: an image part's place among the images of its row
+	imageN int
 	// sensitive: the call or its result names a file isSensitive names, so a
 	// view-only client gets no Result (hideSensitiveResults)
 	sensitive bool
@@ -450,6 +455,7 @@ func registerAgentRoutes(mux *http.ServeMux, m Mux, uploads *uploadStore) *agent
 	a.uploads = uploads
 	mux.HandleFunc("/api/mux/panes/{id}/agent/transcript", a.handleTranscript)
 	mux.HandleFunc("/api/mux/panes/{id}/agent/subagents", a.handleSubagents)
+	mux.HandleFunc("/api/mux/panes/{id}/agent/image", a.handleImage)
 	mux.HandleFunc("/api/mux/overview", a.handleOverview)
 	a.registerInputRoutes(mux)
 	return a
@@ -658,30 +664,11 @@ func readTranscript(s AgentSession, cursor, before string) (transcriptResponse, 
 	if err != nil {
 		return transcriptResponse{}, err
 	}
-	f, err := os.OpenFile(path, os.O_RDONLY|openNonblock, 0)
+	f, size, id, err := openJournal(s, path)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return transcriptResponse{}, errNoTranscript
-		}
 		return transcriptResponse{}, err
 	}
 	defer f.Close()
-	fi, err := f.Stat()
-	if err != nil {
-		return transcriptResponse{}, err
-	}
-	size, id := fi.Size(), fileIdentity(fi)
-	if s.RolloutID != "" {
-		// A Codex rollout's identity, read from the open file on Windows.
-		if id = rolloutIdentity(path, f, fi); id != s.RolloutID {
-			return transcriptResponse{}, errNoTranscript // replaced since the locator found it
-		}
-	}
-	if id == "" {
-		// No device and inode (Windows): the file name still tells a new
-		// rollout of the same session from the old one.
-		id = filepath.Base(path)
-	}
 	res := transcriptResponse{Agent: s.Agent, SessionID: s.ID, Status: s.Status}
 	sameFile := func(c agentCursor) bool { return c.Session == s.ID && c.File == id && c.Offset <= size }
 
@@ -717,6 +704,9 @@ func readTranscript(s AgentSession, cursor, before string) (transcriptResponse, 
 		return transcriptResponse{}, err
 	}
 	res.Entries, res.calls = page.entries, page.calls
+	if _, ok := adapter.(journalImageReader); ok {
+		addImageRefs(res.Entries, s.ID, id)
+	}
 	if res.Entries == nil {
 		res.Entries = []TranscriptEntry{}
 	}
@@ -724,6 +714,38 @@ func readTranscript(s AgentSession, cursor, before string) (transcriptResponse, 
 		res.Before = encodeCursor(agentCursor{s.ID, page.start, id})
 	}
 	return res, nil
+}
+
+// openJournal opens the transcript at path (found by the adapter's Locate)
+// and returns it with its size and identity: device and inode where known,
+// a Codex rollout's own id, else the file name.
+func openJournal(s AgentSession, path string) (*os.File, int64, string, error) {
+	f, err := os.OpenFile(path, os.O_RDONLY|openNonblock, 0)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, 0, "", errNoTranscript
+		}
+		return nil, 0, "", err
+	}
+	fi, err := f.Stat()
+	if err != nil {
+		f.Close()
+		return nil, 0, "", err
+	}
+	size, id := fi.Size(), fileIdentity(fi)
+	if s.RolloutID != "" {
+		// A Codex rollout's identity, read from the open file on Windows.
+		if id = rolloutIdentity(path, f, fi); id != s.RolloutID {
+			f.Close()
+			return nil, 0, "", errNoTranscript // replaced since the locator found it
+		}
+	}
+	if id == "" {
+		// No device and inode (Windows): the file name still tells a new
+		// rollout of the same session from the old one.
+		id = filepath.Base(path)
+	}
+	return f, size, id, nil
 }
 
 // transcriptPage is the entries parsed from the byte range [start, end).

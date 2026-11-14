@@ -17,6 +17,7 @@ import { htmlAsText, safeUrl } from '../utils/markdown-safety'
 import { exportName } from '../utils/mermaid-export'
 import { CopyButton } from './chat-copy-button'
 import { FileRef } from './chat-file-link'
+import { ChatImageContext } from './chat-image-viewer'
 import { ToolCard, toolDot } from './chat-tool-card'
 import { CodeFence } from './fenced-code'
 
@@ -163,13 +164,27 @@ function Disclosure({
   )
 }
 
-function ImageChip() {
+function ImageChip({ src }: { src?: string }) {
   const { t } = useT()
+  const open = useContext(ChatImageContext)
+  if (!src || !open) {
+    return (
+      <span className="inline-flex items-center gap-1 text-fg-muted">
+        <ImageIcon size={13} aria-hidden="true" />
+        {t('chat.message.imageChip')}
+      </span>
+    )
+  }
   return (
-    <span className="inline-flex items-center gap-1 text-fg-muted">
+    <button
+      type="button"
+      title={t('chat.message.imageOpen')}
+      onClick={() => open(src)}
+      className="inline-flex cursor-pointer items-center gap-1 text-accent underline decoration-dotted underline-offset-2 hover:decoration-solid"
+    >
       <ImageIcon size={13} aria-hidden="true" />
       {t('chat.message.imageChip')}
-    </span>
+    </button>
   )
 }
 
@@ -179,7 +194,7 @@ function Part({ part }: { part: TranscriptPart }) {
     case 'tool':
       return <ToolCard part={part} />
     case 'image':
-      return <ImageChip />
+      return <ImageChip src={part.image} />
     case 'thinking':
       return (
         <Disclosure summary={t('chat.message.thinking')}>
@@ -311,7 +326,7 @@ export const ChatMessage = memo(function ChatMessage({
           {entry.parts.map((part, i) =>
             part.kind === 'image' ? (
               // biome-ignore lint/suspicious/noArrayIndexKey: parts never reorder
-              <ImageChip key={i} />
+              <ImageChip key={i} src={part.image} />
             ) : part.kind === 'tool' ? (
               // biome-ignore lint/suspicious/noArrayIndexKey: parts never reorder
               <ToolCard key={i} part={part} />
