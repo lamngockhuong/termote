@@ -898,8 +898,16 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   cached read; the same for a Codex
   `FileChange` part (its diff) whose path or move path is such a file, an `ImageView` of one, and
   a Codex `McpToolCall`, `FunctionCallOutput` or `DynamicToolCall` whose arguments name one
-  (`file_path`/`notebook_path`/`path`, as a Claude Code call). A Grep over a directory,
-  Bash and a Codex command's output that prints one is not keyed (accepted).
+  (`file_path`/`notebook_path`/`path`, as a Claude Code call). A Claude Code Grep over a
+  directory whose output shows lines (`output_mode: content`) is keyed too when that directory is a
+  sensitive one or inside one, when its `glob` names a sensitive file, read as the name it spells
+  out with each `*` matching nothing (`.env*`, `*.pem`, `secrets.{json,yml}`, `.ssh/**`; a glob led
+  by `!` selects nothing, one that cannot be read counts), or when its `type` is a ripgrep type
+  with such a glob (`tf`; `sensitiveGrepTypes`, checked against the `rg` on PATH). Read as every
+  name it could match, `*.go` would be keyed too (`.env.go`, `secrets.go`), while a Grep with no
+  glob searches them all. So a Grep over a directory with no such glob or type, a glob naming a
+  sensitive name only in part (`id_*`, `*.local`), Bash and a Codex command's output that prints
+  one are not keyed (accepted).
   `agent/commands` (the composer's `/` suggestions; Codex: its skills, see Codex chat) returns
   only names, descriptions, sources and kinds of `.claude/commands`/`.claude/skills` under the
   pane root and `commands`/`skills`
