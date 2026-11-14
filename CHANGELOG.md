@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.27.0](https://github.com/lamngockhuong/termote/compare/v2.26.4...v2.27.0) (2026-11-14)
+
+
+### Features
+
+* draw the terminal with WebGL2 and reconnect streams faster ([#815](https://github.com/lamngockhuong/termote/issues/815)) ([b1f80fb](https://github.com/lamngockhuong/termote/commit/b1f80fbe7eac7dfe1f8d8cda6c3c353590694e69))
+* manage git worktrees on Windows with psmux and herdr-core ([#819](https://github.com/lamngockhuong/termote/issues/819)) ([c3b44f4](https://github.com/lamngockhuong/termote/commit/c3b44f4c0f5bce4b280c77a3a128ba7761ffb63d))
+
+
+### Bug Fixes
+
+* harden transcript views, release dispatch, Windows links and session limits ([#818](https://github.com/lamngockhuong/termote/issues/818)) ([4075775](https://github.com/lamngockhuong/termote/commit/4075775f539d3820b192d701de7094ecd32b459b))
+
 ## [2.26.4](https://github.com/lamngockhuong/termote/compare/v2.26.3...v2.26.4) (2026-11-13)
 
 
