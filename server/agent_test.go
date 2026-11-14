@@ -496,22 +496,67 @@ func TestReadTranscriptNamesSensitiveCallsCutOffThePage(t *testing.T) {
 	if err != nil || len(r.Entries) != agentMaxEntries {
 		t.Fatalf("read = %d entries, %v", len(r.Entries), err)
 	}
-	if p := r.Entries[0].Parts[0]; !p.Orphan || p.ToolID != "t1" || !slices.Equal(r.sensitiveCalls, []string{"t1"}) {
-		t.Errorf("first part = %+v, sensitiveCalls = %v", p, r.sensitiveCalls)
+	if p := r.Entries[0].Parts[0]; !p.Orphan || p.ToolID != "t1" || !slices.Contains(r.calls, toolCall{"t1", true}) {
+		t.Errorf("first part = %+v, calls = %v", p, r.calls)
 	}
-	if h := hideSensitiveResults(r, func(id string) bool { return id == "t1" }); h.Entries[0].Parts[0].Result != "" {
+	known := &knownCalls{ids: map[string]bool{}}
+	known.add(r.calls)
+	if h := hideSensitiveResults(r, known.safe); h.Entries[0].Parts[0].Result != "" {
 		t.Errorf("hidden = %+v", h.Entries[0].Parts[0])
 	}
 }
 
-func TestSensitiveCallsDropsTheOldest(t *testing.T) {
-	c := &sensitiveCalls{ids: map[string]struct{}{}}
-	c.add([]string{"t0", "t0"})
-	for i := 1; i <= sensitiveCallsMax; i++ {
-		c.add([]string{fmt.Sprint("t", i)})
+func TestTranscriptRouteHidesAnOrphanResultOfAnUnreadCallFromView(t *testing.T) {
+	// The tail read stops at the failed edit's result: its call lies before
+	// every byte read, so the server cannot tell which file it named.
+	dir := t.TempDir()
+	call := `{"type":"assistant","uuid":"c","message":{"content":[{"type":"tool_use","id":"t1","name":"Edit","input":{"file_path":"/r/.env","old_string":"SECRET=1","new_string":"X"}}]}}` + "\n"
+	result := `{"type":"user","uuid":"r","message":{"content":[{"type":"tool_result","tool_use_id":"t1","is_error":true,"content":"String to replace not found in file.\nString: SECRET=1"}]},"toolUseResult":"Error: String to replace not found in file.\nString: SECRET=1"}` + "\n"
+	writeTranscript(t, dir, testSessionID, call+strings.Repeat("x", agentTailMax)+"\n"+result+line(0, "a"))
+	loc := &fakeLocator{s: AgentSession{Agent: "claude", ID: testSessionID, ClaudeDir: dir}, found: true}
+	mux := http.NewServeMux()
+	registerMuxRoutes(mux, loc, newStreamTokenStore(), nil, nil)
+	h := asRole(mux, false)
+	get := func(view bool) transcriptResponse {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/api/mux/panes/1/agent/transcript", nil)
+		if view {
+			req.Header.Set(viewDeviceHeader, "d1")
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		var res transcriptResponse
+		if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &res) != nil || len(res.Entries) == 0 {
+			t.Fatalf("GET = %d %s", rec.Code, rec.Body)
+		}
+		return res
 	}
-	if c.has("t0") || !c.has("t1") || !c.has(fmt.Sprint("t", sensitiveCallsMax)) || len(c.order) != sensitiveCallsMax {
-		t.Errorf("kept %d ids, t0 %v, t1 %v", len(c.order), c.has("t0"), c.has("t1"))
+	if p := get(false).Entries[0].Parts[0]; !p.Orphan || !strings.Contains(p.Result, "SECRET=1") {
+		t.Fatalf("full read = %+v, want the orphan result of a call not read", p)
+	}
+	view := get(true)
+	if p := view.Entries[0].Parts[0]; !p.Orphan || p.Result != "" || p.Detail == nil || !p.Detail.Hidden || strings.Contains(fmt.Sprint(view), "SECRET") {
+		t.Errorf("view orphan result of a call not read = %+v", p)
+	}
+}
+
+func TestKnownCallsDropsTheOldest(t *testing.T) {
+	c := &knownCalls{ids: map[string]bool{}}
+	c.add([]toolCall{{"t0", false}, {"t0", false}})
+	for i := 1; i <= knownCallsMax; i++ {
+		c.add([]toolCall{{fmt.Sprint("t", i), false}})
+	}
+	if c.safe("t0") || !c.safe("t1") || !c.safe(fmt.Sprint("t", knownCallsMax)) || len(c.order) != knownCallsMax {
+		t.Errorf("kept %d ids, t0 %v, t1 %v", len(c.order), c.safe("t0"), c.safe("t1"))
+	}
+}
+
+func TestKnownCallsKeepsACallSensitive(t *testing.T) {
+	c := &knownCalls{ids: map[string]bool{}}
+	c.add([]toolCall{{"t1", true}})
+	c.add([]toolCall{{"t1", false}})
+	if c.safe("t1") || c.safe("unknown") {
+		t.Errorf("safe(t1) = %v, safe(unknown) = %v", c.safe("t1"), c.safe("unknown"))
 	}
 }
 

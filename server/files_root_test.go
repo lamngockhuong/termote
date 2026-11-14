@@ -458,8 +458,17 @@ esac`, dir))
 	g := newGitRunner()
 	g.bin = fake
 	rr := newRootResolver(g)
-	trusted := false
-	rr.ownedByServer = func(p string) bool { return trusted && p == dir }
+	trusted, gitDirOwned, entryOwned := false, true, true
+	entry := filepath.Join(dir, "."+"git")
+	rr.ownedByServer = func(p string) bool {
+		switch {
+		case p == entry:
+			return trusted && entryOwned
+		case p == dir:
+			return trusted
+		}
+		return trusted && gitDirOwned && underDir(dir, p)
+	}
 	rr.inContainer = func() bool { return false }
 
 	if r, err := rr.resolve(ctx, dir); err != nil || r != (filesRoot{Root: dir}) {
@@ -469,6 +478,20 @@ esac`, dir))
 	rr.resolved = newTTLCache[filesRoot](0)
 	if r, err := rr.resolve(ctx, dir); err != nil || r != (filesRoot{Root: dir, IsRepo: true, SafeDir: dir, GitDir: filepath.Join(dir, "meta")}) {
 		t.Errorf("trusted = %+v, %v", r, err)
+	}
+	// The worktree is the server user's, but its git dir and gitfile are
+	// another user's: git would read their config, so it is not trusted.
+	gitDirOwned = false
+	rr.resolved = newTTLCache[filesRoot](0)
+	if r, err := rr.resolve(ctx, dir); err != nil || r != (filesRoot{Root: dir}) {
+		t.Errorf("git dir of another user = %+v, %v, want a plain directory", r, err)
+	}
+	// Only the gitfile is another user's: refused before git runs with
+	// safe.directory.
+	gitDirOwned, entryOwned = true, false
+	rr.resolved = newTTLCache[filesRoot](0)
+	if r, err := rr.resolve(ctx, dir); err != nil || r != (filesRoot{Root: dir}) {
+		t.Errorf("gitfile of another user = %+v, %v, want a plain directory", r, err)
 	}
 }
 
@@ -647,6 +670,15 @@ func TestPaneRootAnnouncedDirOnlyOnDriveOrPlace(t *testing.T) {
 		d.dir = a
 		if r, err := rr.paneRoot(ctx, d, "0"); err != nil || r.Root != a {
 			t.Fatalf("on a drive letter: %+v %v", r, err)
+		}
+		// Herdr reports its own process's directory, which may come from
+		// what the pane printed: every backend is checked on Windows.
+		if _, err := rr.paneRoot(ctx, &fakePaneDirer{dir: off, key: "%3"}, "2"); !errors.Is(err, errDirNotAvailable) {
+			t.Fatalf("a UNC directory from any backend: err = %v", err)
+		}
+		// The \\?\ form of a drive path is a drive path.
+		if _, err := rr.paneRoot(ctx, &fakePaneDirer{dir: `\\?\` + a, key: "%4"}, "3"); err != nil {
+			t.Fatalf(`a drive path in the \\?\ form: %v`, err)
 		}
 		return
 	}

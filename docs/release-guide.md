@@ -14,8 +14,7 @@ publishes the release.
 | --------------- | --------------------------------------- | ------------------------------- |
 | Release Please  | Push to `main` (or run manually)        | Batch commits into a release PR |
 | Manual (local)  | `make release VERSION=x.y.z`            | Quick release                   |
-| Manual (remote) | GitHub Actions → Release → Run workflow | Remote trigger                  |
-| Tag push        | `git tag -a vx.y.z && git push --tags`  | Direct tag                      |
+| Manual (remote) | GitHub Actions → Release → Run workflow | Remote trigger (on `main`)      |
 
 ## Version Strategy
 
@@ -74,29 +73,34 @@ chore: update deps             # No bump
 
 1. Push conventional commits to `main`
 2. `release-please.yml` opens or updates the `chore: release x.y.z` PR (CHANGELOG, version bump)
-3. Merging the PR creates the tag; `release-please.yml` then starts `release.yml` on that tag
-   (`workflow_dispatch`, not `workflow_call`: a called workflow does not get the `release`
-   environment's signing key, actions/runner#1490)
+3. Merging the PR creates the tag; `release-please.yml` then starts `release.yml` on `main`
+   with that version (`workflow_dispatch`, not `workflow_call`: a called workflow does not get the
+   `release` environment's signing key, actions/runner#1490)
 4. Approve the run's `release` deployment in GitHub Actions: only then is `checksums.txt` signed
    and the release published
 
 ### Manual Release
 
+`release.yml` runs only on `main`, for a tag whose commit is on `main` and already names that
+version in `server/cli_version.go` (bump it, `pwa/package.json` and the Herdr plugin first): a
+pushed tag starts nothing by itself. `make release` tags `HEAD` (which must be on `origin/main`), pushes the tag and
+starts the workflow on `main` with `gh`:
+
 ```bash
 # Preview unreleased commits
 make release-dry
 
-# Create and push tag
+# Tag, push the tag, and run release.yml on main for it
 make release VERSION=1.0.0
 ```
 
 ### Release Pipeline
 
 ```
-Tag created
+Tag on main, release.yml run on main for its version
     ↓
 ┌──────────────────────────────────────────────────────────────────────┐
-│ prepare: extract version, image tags                                 │
+│ prepare: check the version, the tag's commit on main, image tags     │
 ├──────────────────────────────────────────────────────────────────────┤
 │ build-pwa ──────┐                                                    │
 │ build (5 OS/arch) ──→ docker ──→ release ──→ docker-tags ──→ publish │
@@ -108,8 +112,10 @@ docker-tags: x.y.z, x.y, latest (GHCR + Docker Hub) moved to the signed digest
 publish:     the draft goes public, then the website deploys
 ```
 
-A `v*` tag pushed without the approval moves no tag anyone pulls through this workflow. A writer is
-not stopped by it: any workflow run from a ref a writer pushes (a branch or a tag, any workflow
+Every job checks out the tag's commit by hash. The `release` and `github-pages` environments take
+`main` only (Settings → Environments → Deployment branches and tags), so a `v*` tag pushed to an
+unreviewed commit, or a run started on another branch, never gets the signing key or deploys the
+site, whoever approves; keep no tag rule there. A writer is still not stopped from the following: any workflow run from a ref a writer pushes (a branch or a tag, any workflow
 file) gets the repository's `DOCKERHUB_*` secrets and can ask for `packages: write`. That residual
 risk is accepted (Lam Ngoc Khuong, 2026-10-23).
 
@@ -175,7 +181,8 @@ Each release produces, per platform (`linux`/`darwin` × `amd64`/`arm64`, plus
 
 `deploy-website.yml` does not run on pushes to `main`. `release.yml` calls it after a
 stable release (not a pre-release) has been published, and it can be run by hand from GitHub
-Actions for a docs-only fix. This keeps the site's root docs — and the installer scripts it
+Actions for a docs-only fix: Run workflow on `main`, naming the release tag (its commit must be on
+`main`). This keeps the site's root docs — and the installer scripts it
 serves at `https://termote.ohnice.app/install.sh`/`install.ps1` — on the version
 `releases/latest` installs, while `main` runs ahead of it. Test a pre-release installer from
 the raw GitHub tag URL instead (see [`deployment-guide.md`](deployment-guide.md#pre-releases)).
@@ -234,5 +241,5 @@ compare against it, so a 0.x patch marked latest would downgrade every 1.x insta
 
 - `pwa/package.json`, `server/cli_version.go` and `herdr-plugin/herdr-plugin.toml` (the
   `# x-release-please-version` line) are synced by `release-please-config.json`'s `extra-files`;
-  the release workflow's `sync-version` job also syncs `pwa/package.json` on a tag push
+  a manual release must have them bumped on `main` before it is tagged
 - `.release-please-manifest.json` tracks the Release Please version

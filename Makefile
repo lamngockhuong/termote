@@ -171,9 +171,12 @@ release:
 		echo "Usage: make release VERSION=1.2.3"; \
 		exit 1; \
 	fi
+	@git fetch -q origin main && git merge-base --is-ancestor HEAD origin/main || \
+		{ echo "HEAD is not on origin/main: release.yml only releases a commit on main"; exit 1; }
 	@echo "Creating release v$(VERSION)..."
 	git tag -a "v$(VERSION)" -m "Release v$(VERSION)"
 	git push origin "v$(VERSION)"
+	gh workflow run release.yml --ref main -f version="$(VERSION)"
 	@echo ""
 	@echo "Release v$(VERSION) triggered!"
 	@echo "Monitor: https://github.com/lamngockhuong/termote/actions"

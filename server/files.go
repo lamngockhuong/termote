@@ -122,7 +122,7 @@ func filesDenyDirs(dirs ...string) []string {
 			continue
 		}
 		out = append(out, filepath.Clean(d))
-		if r, err := filepath.EvalSymlinks(d); err == nil && r != filepath.Clean(d) {
+		if r, err := evalSymlinks(d); err == nil && r != filepath.Clean(d) {
 			out = append(out, r)
 		}
 	}
@@ -313,11 +313,11 @@ func (f *filesAPI) holdsHome(dir string) bool {
 		}
 		home = u.HomeDir
 	}
-	if real, err := filepath.EvalSymlinks(dir); err == nil {
+	if real, err := evalSymlinks(dir); err == nil {
 		dir = real
 	}
 	for _, h := range append([]string{home}, f.homeDirs...) {
-		if real, err := filepath.EvalSymlinks(h); err == nil {
+		if real, err := evalSymlinks(h); err == nil {
 			h = real
 		}
 		if underDir(dir, h) {
@@ -364,7 +364,7 @@ func realRel(root, rel string) (string, bool) {
 // resolvedPath is where abs leads through its symlinks; abs itself when it
 // does not resolve (gone).
 func resolvedPath(abs string) string {
-	if real, err := filepath.EvalSymlinks(abs); err == nil {
+	if real, err := evalSymlinks(abs); err == nil {
 		return real
 	}
 	return abs

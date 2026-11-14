@@ -162,7 +162,7 @@ func (f *filesAPI) blame(ctx context.Context, root filesRoot, p, hash string, re
 // rel itself when it does not resolve inside root (it changed since it was
 // read): git then follows the history of that name, or finds none.
 func blameRelPath(root, rel string) string {
-	real, err := filepath.EvalSymlinks(filepath.Join(root, rel))
+	real, err := evalSymlinks(filepath.Join(root, rel))
 	if err != nil {
 		return filepath.ToSlash(rel)
 	}

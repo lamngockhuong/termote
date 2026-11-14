@@ -497,8 +497,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   just added shows once the index or a directory above it changes, at the latest 30 s later; a file git does not track, ignored or not, is never in it: a
   repo under a dotfile dir or a secret nobody added stays hidden) and the directories above them,
   by the path and by where its symlinks lead (a diff or a version from git status: where it leads
-  only, so a deleted file's diff shows, but never the entry of an untracked file: `diff` and
-  `serveImageVersion` refuse it, `trackedOnly`, from the entry they read); `files/changes` leaves out, for a view-only client, every untracked entry and
+  only, so a file deleted from the worktree but still in the index shows its diff, but never the
+  entry of an untracked file: `diff` and `serveImageVersion` refuse it, `trackedOnly`, from the
+  entry they read; nor what only `HEAD` still holds, as with the last commit: the staged diff of a
+  file deleted or removed from the index (`git rm --cached`) or of a rename, and the staged old
+  side of such an image, are 404 as if missing, `leftIndex`); `files/changes` leaves out, for a view-only client, every untracked entry and
   every entry `viewHides` would refuse; names match
   exactly as git lists them (never folded: a case-sensitive volume on macOS keeps an ignored
   `notes.md` beside a tracked `Notes.md` hidden); anything else is 404 as if missing, a list cut
@@ -869,9 +872,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   (8 KiB) and an Edit/MultiEdit/Write's old and new text (16 KiB per call); the edits of a file
   `isSensitive` names are left out (`hidden`), as its diff is in Changes. A view-only client also
   gets no result of a Claude Code tool call on such a file (the call's `file_path`/`notebook_path`/
-  `path`, or the result row's `toolUseResult` file path; a result read after its call, whose id the
-  server keeps, last 4096, since a failed edit's row names no file but quotes its `old_string`):
-  `Result` emptied and `hidden` set, on a copy of the cached read; the same for a Codex
+  `path`, or the result row's `toolUseResult` file path), nor of a result read apart from its call
+  unless the server parsed that call and it named no such file (the server keeps the ids of the
+  calls it parsed, last 16384; a failed edit's row names no file but quotes its `old_string`, and
+  its call may lie before every byte read): `Result` emptied and `hidden` set, on a copy of the
+  cached read; the same for a Codex
   `FileChange` part (its diff) whose path or move path is such a file. A Grep over a directory,
   Bash and a Codex command's output that prints one is not keyed (accepted).
   `agent/commands` (the composer's `/` suggestions; Codex: its skills, see Codex chat) returns
@@ -1108,13 +1113,32 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   per pane for as long as it lives: on tmux by its pane id and the server's pid, since a restarted
   server numbers its panes from `%0` again and a new pane must not start from an old one's root;
   on psmux, which numbers panes per session (two sessions both have `%1`) and hands out session ids
-  out of order, by the session id, the pane id and the pane's pid (`PaneDir`). psmux reports the
+  out of order, by the session id, the pane id and the pane's pid (`PaneDir`). psmux finds a
+  session's server through `<session>.port` in its data dir (`PSMUX_DATA_DIR`, else `.psmux` in the
+  user's profile) and sends that port its key without checking who listens: while a server is gone
+  and its file stays, another user could listen there and get the keys typed. So no psmux command or
+  attach starts (`psmuxPorts`, `server/psmux_owner.go`, checked at most every 2 s; the log names
+  the `.port` file to remove, the client gets 503 `psmux_port_taken`) while a recorded port is
+  listened on by a process of another user than the server's, SYSTEM, LOCAL SERVICE or NETWORK
+  SERVICE (`listenerOwnedLocallyOr`; a process whose token cannot be read counts as another
+  user's); a free port or no data dir passes. Not covered: a process that takes the port within
+  those 2 s, and a TCP table that cannot be read (nothing seen, so it passes). psmux reports the
   foreground process's directory verbatim (`#`, `%`, non-ASCII and a UNC path are not expanded or
   changed) and refuses `:` in a session name, so the path, read last, stays whole. From psmux 3.4
   that path can be what the pane printed (OSC 7 / OSC 9;9 while `ssh.exe` or `wsl.exe` runs in it),
-  so a remote host can name `\\host\share`: a psmux pane's directory not on a drive letter is
-  refused (`paneOutputDirer`, 400 `directory not available`, as a directory that is gone) before anything stats it, unless it is inside
-  a Place (`--allow-path`). Herdr's goes through the same checks as before.
+  so a remote host can name `\\host\share`: on Windows a pane's directory not on a drive letter is
+  refused, whatever the backend (`mayBeFromPaneOutput`: Herdr reports its process's directory, which
+  may also have come from what the pane printed; 400 `directory not available`, as a directory that
+  is gone) before anything stats it, unless it is inside a Place (`--allow-path`). A symbolic link
+  in a tree (a repository or an archive can hold one to `\\host\share`) is never followed off a
+  drive letter: on Windows every path the Files routes resolve goes through `evalSymlinks`
+  (`server/files_links_windows.go`), which reads each link on the way with `Lstat`/`Readlink`
+  (the link itself, never its target) and refuses (`errRemoteLink`, the path kept as it is, as one
+  that does not resolve) a link whose target, or a link that target leads through, is a UNC,
+  `\\?\UNC\` or device path on another volume than the path started on (a Place the user named on
+  a share keeps working, a link out of it to another share does not), before
+  `filepath.EvalSymlinks` runs; `os.Root` refuses a link whose
+  target starts with a separator, as every UNC one does.
   `GET files/content` takes an `encoding` of a fixed set (`utf-8`, `utf-16le`, `utf-16be`,
   `shift_jis`, `euc-jp`; another → 400, ignored by `?hash=1`) or detects one
   (`server/files_encoding.go`: a BOM, then valid UTF-8, then Shift-JIS/EUC-JP only when the
@@ -1135,7 +1159,12 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   no session (`SameSite=Strict` cookies) or is refused by `Sec-Fetch-Site`/`Origin`, and the PWA
   reads a file again only when the user asks, so nothing makes the many requests a compression
   oracle (guessing a file's secret by the answer's length) needs.
-  Content search and git diffs stay UTF-8 only. git runs
+  Content search and git diffs stay UTF-8 only. A repository git refuses for its owner ("dubious
+  ownership") is read as a git repository (`safe.directory` set to its work tree) only when
+  `trustRepo` trusts the work tree, its git dir and the work tree's `.git` entry alike: each owned by
+  the server user (Unix), or inside the container's `/workspace` or a Place; the `.git` entry is
+  checked before git runs with `safe.directory` (`trustGitEntry`), the git dir git names right
+  after; anything else is browsed as a plain directory. git runs
   without a shell, with `GIT_*`/`TERMOTE_*` stripped, hooks (`core.hooksPath` to an empty
   directory termote owns, `<user cache dir>/termote/no-hooks` (`noHooksDir`: absolute, a real directory,
   empty, and on Unix 0700 and owned by the server user (`checkPrivateDir`), else no git runs at all,
@@ -2395,8 +2424,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
 - **Server hardening**: ReadHeaderTimeout (Slowloris protection), a 60s read deadline on every
   request, the terminal stream's handshake included (a body sent a byte at a time; hijacking the
   connection for the WebSocket clears it); an authenticated image upload
-  extends it to 5 minutes (a slow mobile link), at most 256 sessions (the
-  least recently used is dropped), request
+  extends it to 5 minutes (a slow mobile link), at most 256 sessions (a sign-in by the form or a
+  link drops the least recently used; one by Basic auth only takes a free place, else the browser
+  stays signed in by Basic auth without a cookie: a page of another site can load the server in
+  frames that send the saved Basic credentials, and must not push the user's sessions out), request
   body size limits (8KB on `/api/mux/*`, 64KB on `agent/message`)
 - **Connections from other local users** (`server/peer_user_*.go`, native only: `CheckLocalUsers`
   is set from the saved config, never for the container or an env-configured `serve`): a
@@ -2562,7 +2593,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   deny list kept missing could act on this origin (`Set-Cookie`, `Service-Worker-Allowed`,
   `Clear-Site-Data`, `NEL`/`Report-To` sending later requests' URLs to the machine's collector,
   `WWW-Authenticate` asking for a password in this origin's name) or navigate the tab (`Refresh`,
-  `Location`: termote redirects on no route a machine serves); no interim answer (a 1xx but 101, such as 103 Early
+  `Location`: termote redirects on no route a machine serves); no trailer either (`resp.Trailer`
+  emptied before `ReverseProxy` announces it and again when the body closes,
+  `machineTrailerDrop`: a proxy in front may pass a trailer on as a header); no interim answer (a 1xx but 101, such as 103 Early
   Hints) is passed on (`machineInterimDrop`: `httputil.ReverseProxy` would send one with every header
   the machine gave it, before `ModifyResponse`, and clear this server's own headers, which are put
   back in front of the final answer's); every
@@ -2687,7 +2720,16 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   nothing, `unlink` still removes only its own links, `uninstall` removes the service and leaves
   the binary to `brew uninstall`, and health reports `install: "homebrew"`. Any other layout, or
   an `opt` link to another version, runs as an unknown binary (its own path), as before
-- **Release integrity**: `release.yml`'s release job runs in the `release` environment (the
+- **Release integrity**: `release.yml` runs on `workflow_dispatch` only, on `main`, with the
+  version to release: its `prepare` job refuses another ref, resolves tag `v<version>` to its
+  commit and refuses one not on `main` (`git merge-base --is-ancestor` against the run's commit)
+  or whose `server/cli_version.go` names another version (an old commit tagged as a newer version
+  would be offered to every unpinned `update`),
+  and every later job, and `deploy-website.yml` when it calls it, checks out that commit by hash,
+  so the tag moved during the run changes nothing. The `release` and `github-pages` environments
+  take `main` only (deployment branch policy, no tag): a `v*` tag pushed to an unreviewed commit,
+  or a run of the workflow file of another branch, never reaches the signing key, the tap's deploy
+  key or the Pages deploy, whoever approves. The release job runs in the `release` environment (the
   maintainer approves each release; it holds `RELEASE_SIGNING_KEY`), writes `image-digest.txt`
   (the pushed image by digest) into `checksums.txt`, signs it with `openssl pkeyutl` and checks
   the signature with the key `install.sh` pins. It also signs it as `checksums.txt.sshsig`
@@ -2713,7 +2755,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   Whoever can publish a release picks the unpinned target, so neither lets it skip the signature:
   without `--version`, `update` refuses a release before 1.10.0 on an install already on a signed
   one (`releaseSigned`, `server/cli_update.go`), and without `TERMOTE_VERSION`, `install.sh` and
-  `install.ps1` refuse a release before 1.10.0. The `docker` job pins the binfmt (QEMU) and
+  `install.ps1` refuse a release before 1.10.0. Nor older than the install: marking the newer
+  releases as pre-releases or drafts would pick one with a fixed flaw, so without `--version`
+  `update` refuses any release older than the running one, except from a pre-release (going back to
+  the newest stable is how its user leaves it); named, it warns and goes back. The `docker` job pins the binfmt (QEMU) and
   BuildKit images it builds with by digest, like the actions; a Renovate `customManagers` entry
   updates both tags and digests. `docker-tags`, which holds the registry tokens, runs buildx with
   the `docker` driver, so it starts no BuildKit container at all (`imagetools` only talks to the
@@ -2727,15 +2772,15 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `homebrew-verify` installs the pushed formula on macOS and Linux with no secret.
   The `docker` job pushes the image to GHCR by digest only, with no tag; `docker-tags`, which needs
   the release job, moves `x.y.z`, `x.y` and `latest` on GHCR and Docker Hub to that digest and fails
-  when a tag names another one, and `publish` makes the draft public only after it. So a `v*` tag
-  pushed without the approval moves no tag users pull through this workflow. It does not stop a
+  when a tag names another one, and `publish` makes the draft public only after it. So a run of
+  another ref moves no tag users pull through this workflow. It does not stop a
   writer: any workflow run from a ref a writer pushes (a branch or a tag, any workflow file; the
   `protect` ruleset covers `main` and `release/*` only) gets the repository's `DOCKERHUB_*` secrets
   and can ask for `packages: write`, so it can move image tags on both registries (residual risk
   accepted by the Tech Lead, 2026-10-23).
   Immutable releases are on for the repo, so assets and tags cannot change after publishing.
-  `release-please.yml` starts `release.yml` with `workflow_dispatch` on the tag, never as a
-  called workflow: a `workflow_call` job does not get the environment's secret (actions/runner#1490).
+  `release-please.yml` starts `release.yml` with `workflow_dispatch` on `main`, naming the
+  version of the tag it made, never as a called workflow: a `workflow_call` job does not get the environment's secret (actions/runner#1490).
   Dependencies: `pnpm-workspace.yaml`'s `allowBuilds` keeps install scripts to `esbuild` and
   `sharp`, the Build PWA job runs `pnpm audit --prod --audit-level high` (known vulnerabilities),
   and `malware-scan.yml` (pull requests, pushes to `main` and daily, `contents: read`, osv-scanner

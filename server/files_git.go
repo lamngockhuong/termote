@@ -330,6 +330,13 @@ func (f *filesAPI) handleChanges(w http.ResponseWriter, r *http.Request) {
 // untracked reports whether e is a file git does not track.
 func (e changeEntry) untracked() bool { return e.Unstaged == "?" }
 
+// leftIndex reports whether e's staged side holds a path the index no longer
+// has (a deletion, or a rename's source): only HEAD has its contents, which a
+// view-only client does not read, as with a commit's (headOnly).
+func (e changeEntry) leftIndex(staged bool) bool {
+	return staged && (e.Staged == "D" || e.Staged == "R")
+}
+
 func (f *filesAPI) handleDiff(w http.ResponseWriter, r *http.Request) {
 	req, cancel, ok := f.begin(w, r)
 	if !ok {
@@ -353,7 +360,8 @@ func (f *filesAPI) handleDiff(w http.ResponseWriter, r *http.Request) {
 }
 
 // diff is the diff of the git status entry path names; trackedOnly (a
-// view-only client) refuses an untracked file's as if it were not changed.
+// view-only client) refuses an untracked file's as if it were not changed,
+// and a staged deletion's or rename's as if it were missing (leftIndex).
 func (f *filesAPI) diff(ctx context.Context, root filesRoot, path, orig string, staged, reveal, trackedOnly bool) (diffResponse, error) {
 	if !root.IsRepo {
 		return diffResponse{}, errNotChanged
@@ -365,6 +373,9 @@ func (f *filesAPI) diff(ctx context.Context, root filesRoot, path, orig string, 
 	entry := findChange(st, path, orig, staged)
 	if entry == nil || trackedOnly && entry.untracked() {
 		return diffResponse{}, errNotChanged
+	}
+	if trackedOnly && entry.leftIndex(staged) {
+		return diffResponse{}, fs.ErrNotExist
 	}
 	rel, err := cleanRelPath(path)
 	if err != nil {

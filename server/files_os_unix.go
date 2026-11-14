@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"syscall"
 )
 
@@ -62,3 +63,7 @@ func isLinkUnsupported(err error) bool {
 func interruptProcess(cmd *exec.Cmd) func() error {
 	return func() error { return cmd.Process.Signal(os.Interrupt) }
 }
+
+// evalSymlinks is filepath.EvalSymlinks: only Windows reaches another host
+// through a link (files_links_windows.go).
+func evalSymlinks(p string) (string, error) { return filepath.EvalSymlinks(p) }

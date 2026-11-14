@@ -247,10 +247,28 @@ func tmuxArgv(args ...string) []string {
 	return append(argv, args...)
 }
 
-// tmuxCmd creates a tmux command with optional socket flag
+// tmuxCmd creates a tmux command with optional socket flag. On psmux it
+// fails to start while a port psmux recorded is another user's (psmuxPorts).
 func tmuxCmd(ctx context.Context, args ...string) *exec.Cmd {
 	argv := tmuxArgv(args...)
-	return exec.CommandContext(ctx, argv[0], argv[1:]...)
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	if tmuxIsPsmux {
+		if err := psmuxPorts.check(); err != nil {
+			cmd.Err = err
+		}
+	}
+	return cmd
+}
+
+// startTmuxTerminal is startTerminal for a tmux client, after psmux's ports
+// are checked as tmuxCmd checks them.
+func startTmuxTerminal(argv []string, size Size) (TermStream, error) {
+	if tmuxIsPsmux {
+		if err := psmuxPorts.check(); err != nil {
+			return nil, err
+		}
+	}
+	return startTerminal(argv, size)
 }
 
 // tmuxAttachArgv is the command a terminal stream runs for one session
@@ -1706,7 +1724,7 @@ func (m tmuxMux) Attach(ctx context.Context, paneID string, size Size) (TermStre
 	if err != nil {
 		return nil, err
 	}
-	return startTerminal(tmuxAttachArgv(session), size)
+	return startTmuxTerminal(tmuxAttachArgv(session), size)
 }
 
 // tmuxPaneSession is the exact target of the session paneID is in: a pane
@@ -1738,7 +1756,7 @@ func (tmuxMux) AttachView(ctx context.Context, paneID string, size Size) (TermSt
 	if err != nil {
 		return nil, err
 	}
-	return startTerminal(tmuxViewAttachArgv(session), size)
+	return startTmuxTerminal(tmuxViewAttachArgv(session), size)
 }
 
 // agentLookupWait bounds how long a snapshot waits for agent lookups, which

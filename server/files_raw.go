@@ -282,7 +282,8 @@ func (f *filesAPI) serveWorktreeImage(ctx context.Context, w http.ResponseWriter
 // serveImageVersion serves the old or new version of an image git status
 // lists, on the side (staged or not) it lists it. The client never names a
 // revision: imageVersion picks it from the entry. trackedOnly (a view-only
-// client) refuses an untracked file's as if it were not changed.
+// client) refuses an untracked file's as if it were not changed, and the old
+// side of a staged deletion or rename as if it were missing (leftIndex).
 func (f *filesAPI) serveImageVersion(w http.ResponseWriter, ctx context.Context, root filesRoot, path, orig string, staged bool, side string, reveal, trackedOnly bool) error {
 	rel, err := cleanRelPath(path)
 	if err != nil {
@@ -298,6 +299,9 @@ func (f *filesAPI) serveImageVersion(w http.ResponseWriter, ctx context.Context,
 	entry := findChange(st, path, orig, staged)
 	if entry == nil || trackedOnly && entry.untracked() {
 		return errNotChanged
+	}
+	if trackedOnly && side == "old" && entry.leftIndex(staged) {
+		return fs.ErrNotExist
 	}
 	if f.denied(root.Root, rel, root.GitDir) || orig != "" && f.deniedPath(root.Root, orig, root.GitDir) {
 		return errPathNotAllowed

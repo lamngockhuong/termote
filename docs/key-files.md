@@ -226,6 +226,8 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/serve.go`                                 | Server (PWA static files, auth, guards)                        |
 | `server/mux.go`                                   | `Mux` interface + `/api/mux/*` routes                          |
 | `server/mux_tmux.go`                              | tmux/psmux backend                                             |
+| `server/psmux_owner*.go`                          | No psmux command while another user holds a psmux port         |
+| `server/files_links_windows.go`                   | Files never follows a Windows link off a drive letter          |
 | `server/mux_groups.go`                            | `/api/mux/groups*`: create, rename, close a group; cwd check   |
 | `server/mux_reorder.go`                           | `tabs/{id}/move`, `groups/{id}/move`: one slot, coded errors   |
 | `server/mux_pane_layout.go`                       | `panes/{id}/split\|zoom\|swap\|resize`: checks, codes          |

@@ -1,12 +1,17 @@
 name: Release
 
+# Started on main only, by release-please (or by hand: Run workflow on main),
+# with the version of a tag already on main. The workflow file is main's, and
+# the `release` environment, which holds the signing key, takes main only: a
+# tag pushed to an unreviewed commit, or a run started on another branch,
+# never reaches the key, approval or not. Every job builds the commit the
+# prepare job checked, by hash, so moving the tag during the run changes
+# nothing.
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to release (e.g., 1.0.0)"
+        description: "Version to release (e.g., 1.0.0); its tag vX.Y.Z must be on main"
         required: true
         type: string
       dry_run:
@@ -20,7 +25,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.version }}
   cancel-in-progress: false
 
 env:
@@ -30,7 +35,7 @@ env:
 
 jobs:
   # ─────────────────────────────────────────────────────────────
-  # Prepare: Extract version and create tag if manual trigger
+  # Prepare: check the version and resolve its tag to a commit on main
   # ─────────────────────────────────────────────────────────────
 
   prepare:
@@ -39,40 +44,50 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       dry_run: ${{ steps.version.outputs.dry_run }}
+      # The commit of tag v<version>, on main: every later job checks it out
+      # by this hash.
+      sha: ${{ steps.version.outputs.sha }}
       # Image tags and labels, made in a job that uses no secret: a job output
       # holding a masked secret's value is dropped, and both name the repo
       # owner. docker and docker-tags fail when one arrives empty.
       image_tags: ${{ steps.meta.outputs.tags }}
       image_labels: ${{ steps.meta.outputs.labels }}
     steps:
+      # main's whole history and its tags, to find the tag's commit on it.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
-      # Inputs reach the script through env, never pasted into it: a tag or
-      # an input holding $(...) must not run. Every later job gets a version
-      # checked here.
-      - name: Extract version
+      # Inputs reach the script through env, never pasted into it: an input
+      # holding $(...) must not run. Every later job gets a version and a
+      # commit checked here.
+      - name: Check the version and its commit
         id: version
         env:
-          INPUT_VERSION: ${{ inputs.version }}
+          VERSION: ${{ inputs.version }}
           INPUT_DRY_RUN: ${{ inputs.dry_run || 'false' }}
         run: |
-          # inputs.version is set by workflow_dispatch (release-please starts it so)
-          if [ -n "$INPUT_VERSION" ]; then
-            VERSION="$INPUT_VERSION"
-            DRY_RUN="$INPUT_DRY_RUN"
-          else
-            # Tag push trigger (refs/tags/v1.2.3)
-            VERSION="${GITHUB_REF#refs/tags/v}"
-            DRY_RUN="false"
-          fi
+          [ "$GITHUB_REF" = refs/heads/main ] || { echo "::error::run this workflow on main, not '$GITHUB_REF'"; exit 1; }
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "::error::version '$VERSION' is not X.Y.Z[-pre]"
             exit 1
           fi
+          DRY_RUN="$INPUT_DRY_RUN"
           [ "$DRY_RUN" = true ] || DRY_RUN=false
+          sha=$(git rev-parse --verify --quiet "refs/tags/v$VERSION^{commit}") ||
+            { echo "::error::no tag v$VERSION"; exit 1; }
+          git merge-base --is-ancestor "$sha" "$GITHUB_SHA" ||
+            { echo "::error::tag v$VERSION names $sha, which is not on main"; exit 1; }
+          # The commit must already be that version (release-please bumps it
+          # in the release commit): an older commit of main tagged as a newer
+          # version would be offered to every unpinned update.
+          git show "$sha:server/cli_version.go" | grep -qF "var cliVersion = \"$VERSION\"" ||
+            { echo "::error::server/cli_version.go at $sha is not version $VERSION"; exit 1; }
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "dry_run=$DRY_RUN" >> $GITHUB_OUTPUT
-          echo "Release version: $VERSION (dry_run: $DRY_RUN)"
+          echo "sha=$sha" >> $GITHUB_OUTPUT
+          echo "Release version: $VERSION at $sha (dry_run: $DRY_RUN)"
 
       - name: Docker meta (all-in-one)
         id: meta
@@ -81,6 +96,9 @@ jobs:
           images: |
             ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}
             ${{ env.REGISTRY_DOCKER }}/${{ env.IMAGE_NAME }}
+          # The commit built, not main's head when the run started.
+          labels: |
+            org.opencontainers.image.revision=${{ steps.version.outputs.sha }}
           tags: |
             type=semver,pattern={{version}},value=v${{ steps.version.outputs.version }}
             type=semver,pattern={{major}}.{{minor}},value=v${{ steps.version.outputs.version }}
@@ -97,6 +115,8 @@ jobs:
     needs: [prepare]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
 
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
         with:
@@ -151,6 +171,8 @@ jobs:
           - { goos: windows, goarch: amd64 }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -256,6 +278,8 @@ jobs:
       digest: ${{ steps.push.outputs.digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
 
       # By id (see the build job): both, so each lands in its own folder.
       - name: Download the Linux builds
@@ -313,14 +337,16 @@ jobs:
     name: Create GitHub Release
     runs-on: ubuntu-latest
     needs: [prepare, docker, build, check-version]
-    # The signing key lives in this environment, which waits for the
-    # maintainer's approval: a release started from a pushed tag gets no
-    # signature, and `termote update` refuses it.
+    # The signing key lives in this environment, which takes main only and
+    # waits for the maintainer's approval: a run of another ref never gets
+    # the key, and `termote update` refuses a release with no signature.
     environment: release
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
 
       # By id (see the build job): an id no longer found is only a warning
       # to the action, so the count of archives below is what fails it.
@@ -381,8 +407,8 @@ jobs:
             -s release/checksums.txt.sshsig <release/checksums.txt ||
             { echo "::error::checksums.txt.sshsig does not verify with the allowed signer install.sh pins"; exit 1; }
 
-      # The assets go onto a draft: release-please creates it; a tag push or a
-      # manual run creates it here. The publish job makes it public once the
+      # The assets go onto a draft: release-please creates it; a manual run
+      # creates it here. The publish job makes it public once the
       # Docker tags have moved. A dry run stops before this step, after the
       # asset checks above.
       - name: Upload the assets to the draft release
@@ -390,12 +416,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.prepare.outputs.version }}
+          SHA: ${{ needs.prepare.outputs.sha }}
         run: |
           tag="v$VERSION"
           pre=false
           case "$VERSION" in *-*) pre=true ;; esac
           if ! gh release view "$tag" >/dev/null 2>&1; then
-            gh release create "$tag" --draft --title "$tag" --generate-notes --target "$GITHUB_SHA" --prerelease="$pre"
+            gh release create "$tag" --draft --title "$tag" --generate-notes --target "$SHA" --prerelease="$pre"
           fi
           gh release upload "$tag" release/termote-*.tar.gz release/termote-*.zip release/*.sha256 release/checksums.txt \
             release/checksums.txt.sig release/checksums.txt.sshsig release/image-digest.txt --clobber
@@ -407,7 +434,7 @@ jobs:
   # ─────────────────────────────────────────────────────────────
 
   # x.y.z, x.y and latest move only after the release job, which waits for the
-  # maintainer's approval: a pushed v* tag alone never moves a tag users pull.
+  # maintainer's approval: a run of another ref never moves a tag users pull.
   docker-tags:
     name: Tag the Docker image
     runs-on: ubuntu-latest
@@ -490,52 +517,17 @@ jobs:
           gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease="$pre" --latest="$latest"
 
   # ─────────────────────────────────────────────────────────────
-  # Sync Version to package.json (skip if release-please handles it)
-  # ─────────────────────────────────────────────────────────────
-
-  sync-version:
-    name: Sync package.json version
-    runs-on: ubuntu-latest
-    needs: [prepare, publish]
-    # Only for a tag push: release-please (which dispatches this with
-    # inputs.version) syncs the version itself through extra-files.
-    # Skip pre-releases too: they must not bump the version on main.
-    if: inputs.version == '' && !contains(needs.prepare.outputs.version, '-')
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: main
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Update package.json
-        working-directory: pwa
-        env:
-          VERSION: ${{ needs.prepare.outputs.version }}
-        run: |
-          npm version "$VERSION" --no-git-tag-version
-
-      - name: Commit and push
-        env:
-          VERSION: ${{ needs.prepare.outputs.version }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add pwa/package.json
-          git commit -m "chore: bump version to $VERSION"
-          git push origin main
-
-  # ─────────────────────────────────────────────────────────────
   # Sync README to Docker Hub
   # ─────────────────────────────────────────────────────────────
 
   dockerhub-readme:
     name: Update Docker Hub README
     runs-on: ubuntu-latest
-    needs: [docker]
+    needs: [prepare, docker]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
 
       - name: Update Docker Hub description
         uses: peter-evans/dockerhub-description@1b9a80c056b620d92cedb9d9b5a223409c68ddfa # v5.0.0
@@ -561,6 +553,7 @@ jobs:
     uses: ./.github/workflows/deploy-website.yml
     with:
       tag: v${{ needs.prepare.outputs.version }}
+      sha: ${{ needs.prepare.outputs.sha }}
 
   # ─────────────────────────────────────────────────────────────
   # Homebrew tap (stable releases), once the release is public
@@ -586,7 +579,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: v${{ needs.prepare.outputs.version }}
+          ref: ${{ needs.prepare.outputs.sha }}
           persist-credentials: false
 
       - name: Verify the signed checksums

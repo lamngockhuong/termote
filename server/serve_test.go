@@ -913,22 +913,27 @@ func TestBasicAuthLogsFailures(t *testing.T) {
 }
 
 // Browser logins without a cookie cannot grow the session store past its
-// cap: the oldest session is dropped, the newest still works.
+// cap. A session Basic auth makes only takes a free place: past the cap the
+// browser is still signed in by Basic auth, with no cookie, and every session
+// stays, so a page of another site loading this server in frames with the
+// saved credentials pushes nobody out. A form sign-in drops the least
+// recently used session.
 func TestBasicAuthSessionsBounded(t *testing.T) {
 	h := basicAuth("admin", "secret", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
-	login := func() *http.Cookie {
+	basicLogin := func() (*http.Cookie, int) {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		req.SetBasicAuth("admin", "secret")
 		req.Header.Set("Sec-Fetch-Mode", "navigate")
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
-		for _, c := range rec.Result().Cookies() {
-			if c.Name == sessionCookieName {
-				return c
-			}
+		return sessionCookieOf(rec), rec.Code
+	}
+	formLogin := func() *http.Cookie {
+		c := sessionCookieOf(postLogin(h, url.Values{"username": {"admin"}, "password": {"secret"}}, nil))
+		if c == nil {
+			t.Fatal("no session cookie from the form")
 		}
-		t.Fatal("no session cookie")
-		return nil
+		return c
 	}
 	withCookie := func(c *http.Cookie) int {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -937,32 +942,34 @@ func TestBasicAuthSessionsBounded(t *testing.T) {
 		h.ServeHTTP(rec, req)
 		return rec.Code
 	}
-	first := login()
-	var last *http.Cookie
+	first, _ := basicLogin()
+	if first == nil {
+		t.Fatal("no session cookie from Basic auth")
+	}
+	phone := formLogin()
+	for range maxSessions - 2 {
+		if c, _ := basicLogin(); c == nil {
+			t.Fatal("no session cookie below the cap")
+		}
+	}
 	for range maxSessions {
-		last = login()
+		if c, code := basicLogin(); c != nil || code != http.StatusOK {
+			t.Fatalf("Basic auth past the cap = %d, cookie %v; want 200 without one", code, c)
+		}
+	}
+	if withCookie(first) != http.StatusOK || withCookie(phone) != http.StatusOK {
+		t.Fatal("Basic auth past the cap pushed a session out")
+	}
+	// The phone keeps using its session; a form sign-in drops the least
+	// recently used one, never it.
+	for range maxSessions {
+		if withCookie(phone) != http.StatusOK {
+			t.Fatal("session in use dropped past the cap")
+		}
+		formLogin()
 	}
 	if code := withCookie(first); code != http.StatusUnauthorized {
-		t.Errorf("oldest session past the cap = %d, want 401", code)
-	}
-	if code := withCookie(last); code != http.StatusOK {
-		t.Errorf("newest session = %d", code)
-	}
-
-	// A session in use survives logins without a cookie: the least recently
-	// used one goes first.
-	phone := login()
-	for range maxSessions - 1 {
-		login()
-	}
-	if code := withCookie(phone); code != http.StatusOK {
-		t.Fatalf("phone session before the cap = %d", code)
-	}
-	for range maxSessions - 1 {
-		login()
-	}
-	if code := withCookie(phone); code != http.StatusOK {
-		t.Errorf("session in use dropped past the cap = %d", code)
+		t.Errorf("least recently used session past the cap = %d, want 401", code)
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httptrace"
@@ -348,5 +349,35 @@ func TestMachineRemovedClosesConns(t *testing.T) {
 	}
 	if len(l.conns) != 0 {
 		t.Error("closed connections still tracked")
+	}
+}
+
+// A machine's trailers, announced or not, never reach the client: a proxy in
+// front could pass them on as headers.
+func TestMachineTrailersDropped(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Trailer", "Set-Cookie")
+		w.Header().Set("Content-Type", "text/plain")
+		fmt.Fprint(w, "ok")
+		w.(http.Flusher).Flush()
+		w.Header().Set("Set-Cookie", "x=1; Path=/")
+		w.Header().Set(http.TrailerPrefix+"Refresh", "0; url=https://example.com/")
+	}))
+	defer backend.Close()
+	u, _ := url.Parse(backend.URL)
+	proxy := &httputil.ReverseProxy{
+		Rewrite:        func(pr *httputil.ProxyRequest) { pr.SetURL(u) },
+		ModifyResponse: func(resp *http.Response) error { confineMachineResponse(resp); return nil },
+	}
+	front := httptest.NewServer(proxy)
+	defer front.Close()
+	resp, err := http.Get(front.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if string(body) != "ok" || len(resp.Trailer) != 0 || resp.Header.Get("Trailer") != "" || resp.Header.Get("Set-Cookie") != "" {
+		t.Errorf("body %q trailer %v header %v", body, resp.Trailer, resp.Header)
 	}
 }

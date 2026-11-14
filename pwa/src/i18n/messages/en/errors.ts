@@ -125,6 +125,8 @@ export default {
   'errors.place_not_supported': 'Not available in a place',
   'errors.prompt_changed': 'The screen changed. Check the dialog again',
   'errors.prompt_expired': 'This dialog was already answered or has expired',
+  'errors.psmux_port_taken':
+    "Another user's program holds a psmux session's port. See the server log",
   'errors.push_unavailable':
     'Push notifications are not available on this server',
   'errors.read_only': 'The file system is read-only',
