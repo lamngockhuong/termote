@@ -8,6 +8,7 @@ import {
   FolderOpen,
   FolderPlus,
   GitBranch,
+  History,
   LayoutDashboard,
   MoreHorizontal,
   PanelLeftClose,
@@ -246,6 +247,8 @@ export interface GroupActions {
   onNewWorktree?: (id: string) => void
   onOpenWorktree?: (id: string) => void
   onRemoveWorktree?: (id: string) => void
+  // The session history of the group's folder (caps.files)
+  onOpenHistory?: (id: string) => void
 }
 
 // Why a rename was refused, by the server's code
@@ -886,6 +889,14 @@ export function SessionSidebar({
         {reorderPaused && (groupMovable(group) || tabsMovable(group.id)) && (
           <MenuItem icon={<ArrowUpDown size={16} />} disabled>
             {pausedHint}
+          </MenuItem>
+        )}
+        {groupActions.onOpenHistory && (
+          <MenuItem
+            icon={<History size={16} />}
+            onSelect={() => groupActions.onOpenHistory?.(group.id)}
+          >
+            {t('chat.history.title')}
           </MenuItem>
         )}
         {groupActions.onNewWorktree && !group.worktree?.linked && (

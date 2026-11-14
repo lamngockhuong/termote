@@ -12,7 +12,8 @@ import type {
 } from '../hooks/use-mux-api'
 import type { MessageKey } from '../i18n/messages/en'
 import { paneSelection, resetPaneSelections } from '../utils/pane-selection'
-import ChatView, { chatLayout, RENDER_WINDOW } from './chat-view'
+import { chatLayout } from './chat-transcript-list'
+import ChatView, { RENDER_WINDOW } from './chat-view'
 import { OpenTerminalButton } from './open-terminal-button'
 
 const transcript = {

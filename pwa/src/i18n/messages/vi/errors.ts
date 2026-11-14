@@ -132,6 +132,8 @@ export default {
     'Windows có thể chạy file này như một chương trình. Hãy xác nhận để chạy',
   'errors.sensitive': 'File này có thể chứa bí mật. Hãy hiện nó trước',
   'errors.session_changed': 'Pane giờ đang chạy một phiên khác',
+  'errors.session_live': 'Phiên này đang chạy ở một tab khác',
+  'errors.session_not_found': 'Phiên này không còn trong thư mục này',
   'errors.shell_busy': 'Shell của tab đang bận',
   'errors.signed_out': 'Lần đăng nhập này đã kết thúc. Hãy đăng nhập lại',
   'errors.stale_hunk': 'Thay đổi không còn khớp với file',

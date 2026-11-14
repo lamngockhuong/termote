@@ -339,6 +339,37 @@ export default {
   'chat.queue.reading': 'Reading the dialog…',
   'chat.queue.viewOnly': 'View only: answer from a device with full access',
 
+  // The session history of a pane and resuming an old session
+  // (components/agent-history-sheet.tsx, components/recent-sessions.tsx)
+  'chat.history.title': 'Session history',
+  'chat.history.search': 'Search sessions',
+  'chat.history.all': 'All',
+  'chat.history.loading': 'Loading sessions…',
+  'chat.history.empty': 'No session ran in this folder yet.',
+  'chat.history.noMatch': 'No session matches.',
+  'chat.history.failed': 'Could not read the session history.',
+  'chat.history.viewOnly':
+    'A view-only device reads the history only in a git repository.',
+  'chat.history.retry': 'Try again',
+  'chat.history.loadMore': 'Load more',
+  'chat.history.truncated':
+    'Only sessions among the latest 2000 Codex runs are shown.',
+  'chat.history.running': 'Running',
+  'chat.history.untitled': 'Untitled session',
+  'chat.history.back': 'Back to the list',
+  'chat.history.gone': 'This session is no longer there.',
+  'chat.history.resumeTab': 'Resume in a new tab',
+  'chat.history.resumeHere': 'Resume here',
+  'chat.history.openLive': 'Open the running tab',
+  'chat.history.fork': 'Fork',
+  'chat.history.forkHint':
+    'A fork is a new session with its own id; this one stays as it is.',
+  'chat.history.resuming': 'Resuming…',
+  'chat.history.readOnly': 'View only: sessions can be read, not resumed.',
+  'chat.history.recent': 'Resume a recent session',
+  'chat.history.seeAll': 'See all',
+  'chat.history.resume': 'Resume',
+  'chat.history.days': '{n} d ago',
   // Which agent receives a message (components/agent-pane-picker.tsx)
   'chat.agentPicker.title': 'Send to which agent?',
   'chat.agentPicker.none':

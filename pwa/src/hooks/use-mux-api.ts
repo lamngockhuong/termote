@@ -1060,6 +1060,8 @@ export interface RequestErrorDetails {
   // tasks/run 409 task_running: the run still running, and its tab
   runId?: string
   tabId?: string
+  // agent/resume 409 session_live: the pane running the session
+  paneId?: string
   // files/content 422 unencodable: the line (1-based) and the character the
   // file's encoding cannot hold
   line?: number
@@ -1083,6 +1085,7 @@ export class RequestError extends Error implements RequestErrorDetails {
   readonly task?: UserTask
   readonly runId?: string
   readonly tabId?: string
+  readonly paneId?: string
   readonly line?: number
   readonly char?: string
   readonly reason?: string
@@ -1130,6 +1133,7 @@ async function requestError(
       task: body.task,
       runId: body.runId,
       tabId: body.tabId,
+      paneId: typeof body.paneId === 'string' ? body.paneId : undefined,
       line: typeof body.line === 'number' ? body.line : undefined,
       char: typeof body.char === 'string' ? body.char : undefined,
       reason: typeof body.reason === 'string' ? body.reason : undefined,
@@ -1155,6 +1159,96 @@ export async function fetchTranscript(
   const res = await fetch(
     agentPath(paneId, 'transcript') + (qs ? `?${qs}` : ''),
   )
+  if (!res.ok) throw await requestError(res)
+  return res.json()
+}
+
+// A Claude Code or Codex session that ran in the pane's root or under it, as
+// the history lists it.
+export type HistoryAgent = 'claude' | 'codex'
+
+export interface HistorySession {
+  agent: HistoryAgent
+  id: string
+  title: string
+  // custom: the user named it; ai: the agent did; prompt: its first prompt
+  titleSource: 'custom' | 'ai' | 'prompt'
+  // The session's directory under the pane's root, '' at the root
+  cwd: string
+  branch?: string
+  updatedAt: string
+  // The pane running it now
+  live?: { tabId: string; paneId: string }
+}
+
+export interface HistoryPage {
+  sessions: HistorySession[]
+  // Continues the listing; absent at its end
+  next?: string
+  // Codex's rollouts past the newest 2000 were not read
+  truncated: boolean
+}
+
+// A page of the pane's session history, newest first.
+export async function fetchAgentHistory(
+  paneId: string,
+  query: { agent?: HistoryAgent; cursor?: string } = {},
+): Promise<HistoryPage> {
+  const params = new URLSearchParams()
+  if (query.agent) params.set('agent', query.agent)
+  if (query.cursor) params.set('cursor', query.cursor)
+  const qs = params.toString()
+  const res = await fetch(agentPath(paneId, 'history') + (qs ? `?${qs}` : ''), {
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res, true)
+  return res.json()
+}
+
+// The transcript of a session of the history: its end, or the entries older
+// than before.
+export async function fetchHistoryTranscript(
+  paneId: string,
+  agent: HistoryAgent,
+  sessionId: string,
+  before?: string,
+): Promise<TranscriptPage> {
+  const params = new URLSearchParams({ agent })
+  if (before) params.set('before', before)
+  const res = await fetch(
+    `${agentPath(paneId, `history/${encodeURIComponent(sessionId)}/transcript`)}?${params}`,
+    { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) },
+  )
+  if (!res.ok) throw await requestError(res, true)
+  return res.json()
+}
+
+// Where a session resumes: a new tab of the pane's group, or the pane's own
+// idle shell.
+export type ResumeWhere = 'tab' | 'here'
+
+// A resume waits for a new tab's shell (up to 15 s), then types: above the
+// server's own bound for that work.
+export const RESUME_REQUEST_TIMEOUT_MS = 45_000
+
+// Resumes a session of the history (fork: as a new Claude Code session).
+// Resolves to the tab and pane it runs in. Throws RequestError: code
+// session_live with tabId and paneId when it runs in a pane already.
+export async function resumeAgentSession(
+  paneId: string,
+  body: {
+    agent: HistoryAgent
+    session: string
+    where: ResumeWhere
+    fork?: boolean
+  },
+): Promise<{ tabId: string; paneId: string }> {
+  const res = await fetch(agentPath(paneId, 'resume'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(RESUME_REQUEST_TIMEOUT_MS),
+  })
   if (!res.ok) throw await requestError(res)
   return res.json()
 }

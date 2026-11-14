@@ -50,6 +50,9 @@ export interface AppCommandContext {
   sidePanelId: string | null
   // The pane's agent can be started from its Chat view
   startOffered: boolean
+  // The session history of the pane on screen can be opened
+  historyOffered: boolean
+  openHistory: () => void
   hasAgent: boolean
   devices: boolean
   // The machines to switch between, this one ('') first, and the one open;
@@ -325,6 +328,14 @@ function allCommands(ctx: AppCommandContext): AppCommand[] {
       category: 'tasks.category.agent',
       disabledReason: agentReason,
       run: () => ctx.changeView(CHAT_VIEW_ID),
+    },
+    {
+      id: 'agent.history',
+      title: 'tasks.command.agentHistory',
+      category: 'tasks.category.agent',
+      disabledReason: ctx.historyOffered ? undefined : NO_FILES,
+      restoreFocus: true,
+      run: ctx.openHistory,
     },
     {
       id: 'settings.open',

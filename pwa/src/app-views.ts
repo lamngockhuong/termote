@@ -11,6 +11,7 @@ import { ChatInput } from './components/chat-input'
 import type { ToastAction, ToastVariant } from './components/toast'
 import type { ViewOption } from './components/ui/view-switcher'
 import type { MuxInfo } from './hooks/use-local-sessions'
+import type { HistorySession, ResumeWhere } from './hooks/use-mux-api'
 import type { AgentStartControl } from './hooks/use-start-agent'
 import type { MessageKey } from './i18n/messages/en'
 import type { Translate } from './i18n/translate'
@@ -67,6 +68,14 @@ export interface ViewProps extends ViewContext {
   // file's @path), then shows the terminal; false when it could not (the
   // stream not open). Absent for view-only.
   insertText?: (text: string) => boolean
+  // Opens the session history of a pane, at one session when given; absent
+  // where the server has none (no pane folders)
+  openHistory?: (paneId: string, open?: HistorySession) => void
+  // A session of the history was resumed from a view: shows where it runs
+  onSessionResumed?: (
+    result: { tabId: string; paneId: string },
+    where: ResumeWhere,
+  ) => void
 }
 
 // A file under the pane's root in the Files view, or its diff in Changes

@@ -138,6 +138,8 @@ export default {
     'Windows may run this file as a program. Confirm to run it',
   'errors.sensitive': 'This file may hold secrets. Reveal it first',
   'errors.session_changed': 'The pane runs another session now',
+  'errors.session_live': 'This session is running in another tab',
+  'errors.session_not_found': 'This session is no longer in this folder',
   'errors.shell_busy': "The tab's shell is busy",
   'errors.signed_out': 'This sign-in has ended. Sign in again',
   'errors.stale_hunk': 'The change no longer matches the file',

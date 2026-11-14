@@ -192,6 +192,7 @@ export default {
   'tasks.command.splitDown': 'Split pane down',
   'tasks.command.zoom': 'Zoom pane',
   'tasks.command.swapNext': 'Swap pane with the next one',
+  'tasks.command.agentHistory': 'Session history',
   'tasks.command.agentStart': 'Start an agent',
   'tasks.command.settings': 'Open Settings',
   'tasks.command.settingsDevices': 'Open Settings: Devices',
