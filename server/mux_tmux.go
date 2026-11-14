@@ -252,8 +252,10 @@ func tmuxArgv(args ...string) []string {
 func tmuxCmd(ctx context.Context, args ...string) *exec.Cmd {
 	argv := tmuxArgv(args...)
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
-	if tmuxIsPsmux && cmd.Err == nil {
-		cmd.Err = psmuxPorts.check()
+	if tmuxIsPsmux {
+		if err := psmuxPorts.check(); err != nil {
+			cmd.Err = err
+		}
 	}
 	return cmd
 }

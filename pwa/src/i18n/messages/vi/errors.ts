@@ -120,6 +120,8 @@ export default {
   'errors.place_not_supported': 'Không dùng được trong place',
   'errors.prompt_changed': 'Màn hình đã đổi. Hãy xem lại hộp thoại',
   'errors.prompt_expired': 'Hộp thoại này đã được trả lời hoặc đã hết hạn',
+  'errors.psmux_port_taken':
+    'Chương trình của user khác đang giữ port của một session psmux. Xem log của server',
   'errors.push_unavailable': 'Server này không gửi được thông báo đẩy',
   'errors.read_only': 'Hệ thống file chỉ cho đọc',
   'errors.recent_unavailable': 'Server này không có danh sách nhóm gần đây',
