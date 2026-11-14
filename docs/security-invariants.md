@@ -1157,7 +1157,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   cannot make it give up and be taken for nothing listening. Not covered: a process that takes the
   port within those 2 s. psmux reports the
   foreground process's directory verbatim (`#`, `%`, non-ASCII and a UNC path are not expanded or
-  changed) and refuses `:` in a session name, so the path, read last, stays whole. From psmux 3.4
+  changed) and refuses `:` in a session name, so the path, read last, stays whole (the line is
+  split into at most 6 fields, so a `|` in a path the pane announced stays in it and the windows
+  after it are kept). From psmux 3.4
   that path can be what the pane printed (OSC 7 / OSC 9;9 while `ssh.exe` or `wsl.exe` runs in it),
   so a remote host can name `\\host\share`: on Windows a pane's directory not on a drive letter (a
   drive path in the `\\?\` form is one; `\\?\UNC\` and `\\.\` are not) is refused, whatever the

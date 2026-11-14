@@ -210,6 +210,13 @@ func TestParsePsmuxPanes(t *testing.T) {
 	if names(got[w("$0", "2")]) != "claude@"+processCwd(`D:\`) || names(got[w("$3", "0")]) != "codex@"+processCwd(`C:\y`) {
 		t.Errorf("windows = %+v", got)
 	}
+	// A '|' in a path the pane announced (OSC 7 from a remote host) stays in
+	// the path, the last field, and the windows after it are kept.
+	piped := `\\host\a|b|c`
+	got = parsePsmuxPanes([]byte(psmuxPaneLine("$0", "0", "0", "1", "ssh", piped) + psmuxPaneLine("$0", "1", "0", "1", "pwsh", `C:\z`)))
+	if names(got[w("$0", "0")]) != "ssh@"+processCwd(piped) || names(got[w("$0", "1")]) != "pwsh@"+processCwd(`C:\z`) {
+		t.Errorf("'|' in a path: %+v", got)
+	}
 	// "\n" ends are read too.
 	got = parsePsmuxPanes([]byte("$1|0|0|1|vim|/a\n$1|0|1|0|sh|/b\n"))
 	if names(got[w("$1", "0")]) != "vim@/a,sh@/b" {
@@ -224,7 +231,6 @@ func TestParsePsmuxPanes(t *testing.T) {
 		want []tmuxWindowKey
 	}{
 		"fewer fields":      {"$0|1|1|0|bash\r\n", []tmuxWindowKey{w("$0", "0")}},
-		"more fields":       {"$0|1|1|0|bash|C:\\a|b\r\n", []tmuxWindowKey{w("$0", "0")}},
 		"control character": {"$0|1|1|0|ba\x1bsh|C:\\a\r\n$0|2|0|1|vim|C:\\b\r\n", []tmuxWindowKey{w("$0", "0")}},
 		"bad pane index":    {"$0|1|x|0|bash|C:\\a\r\n", []tmuxWindowKey{w("$0", "0")}},
 		"bad active":        {"$0|1|1|2|bash|C:\\a\r\n", []tmuxWindowKey{w("$0", "0")}},
