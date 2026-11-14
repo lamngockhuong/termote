@@ -857,6 +857,38 @@ func TestHerdrSnapshotCache(t *testing.T) {
 	}
 }
 
+// An agent found in a pane, or its status changing there, tells the streams
+// of that pane (a layout frame): the client reads the snapshot at once and
+// offers or drops the Chat view without waiting for its poll.
+func TestHerdrAgentEventsSignalThePaneStreams(t *testing.T) {
+	f := newFakeHerdr(t)
+	m := newTestHerdrMux(t, f)
+	m.Snapshot(context.Background())
+	waitUntil(t, "subscription", func() bool {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		return m.connected
+	})
+	mine, other := newHerdrWatch(), newHerdrWatch()
+	m.watchSize("wR:p1V", mine)
+	m.watchSize("w13:p1", other)
+	defer m.unwatchSize("wR:p1V", mine)
+	defer m.unwatchSize("w13:p1", other)
+	for _, ev := range []string{"pane_agent_detected", "pane_agent_status_changed"} {
+		f.emit(ev, map[string]any{"pane_id": "wR:p1V"})
+		select {
+		case <-mine.layout:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%s: no signal to the pane's stream", ev)
+		}
+	}
+	select {
+	case <-other.layout:
+		t.Fatal("another pane's stream was signalled")
+	default:
+	}
+}
+
 func TestHerdrSubscribesAgentStatusPerPane(t *testing.T) {
 	f := newFakeHerdr(t)
 	m := newTestHerdrMux(t, f)

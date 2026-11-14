@@ -282,7 +282,7 @@ Client → Server:
 Server → Client:
   - binary frame                      (output bytes)
   - {"type":"size","cols":N,"rows":N,"driving":B,"reason":R}   (Herdr)
-  - {"type":"layout"}                 (Herdr: the layout of the pane's tab changed)
+  - {"type":"layout"}                 (Herdr, herdr-core: the layout or an agent of the pane's tab changed)
   - {"type":"exit","code":N}
   - {"type":"error","message":"..."}
 ```
@@ -300,8 +300,12 @@ would otherwise shrink the pane until the dialog no longer fits, and the card wo
 
 A Herdr stream sends `{"type":"layout"}` to every stream of a tab whose layout changed (a split,
 a close, a zoom, a resize, a swap of two panes of one size, which changes no size), once the
-changes have held for 150 ms. The layout view reads the snapshot again on it, or on a size frame
-other than a stream's first. Clients that do not know the frame ignore it.
+changes have held for 150 ms. It is sent too when an agent starts or ends in the pane (Herdr:
+`pane_agent_detected` or `pane_agent_status_changed` for that pane; herdr-core: an agent appears
+in or leaves a terminal of the tab, its turns excepted), so the Chat view comes and goes without
+waiting for the snapshot poll. The PWA reads the snapshot again on it, or on a size frame
+other than a stream's first. Clients that do not know the frame ignore it. tmux and Zellij learn
+an agent only from the next snapshot.
 
 The connection requires a same-origin/allowed Origin, a single-use token minted by
 `GET /api/mux/stream-token` (30s TTL, consumed on upgrade), and `?pane=<id>` naming an
