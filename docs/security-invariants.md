@@ -263,9 +263,15 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   leave the server. tmux: one `list-panes -a`, read by `#{n:}` byte lengths keyed by session id and
   window index (a path can hold `\n` or `:`; psmux numbers panes per session), with `-u` on
   tmux. psmux expands no `#{n:}`: it gets `psmuxPaneFormat`, one pane a line,
-  `#{session_id}|#{window_index}|#{pane_index}|#{pane_active}|#{pane_current_command}|#{pane_current_path}`
-  (a Windows file name never holds `|`; a line without 6 fields or with a control character stops
-  the read, as a bad length does on tmux). Herdr: `pane.process_info`, decoding only pids and names (never `argv`, `argv0`,
+  `<nonce>|#{session_id}|#{window_index}|#{pane_index}|#{pane_active}|#{pane_current_command}|#{pane_current_path}`,
+  the nonce 16 hex digits from `crypto/rand`, new for each call (psmux copies text outside `#{}` as
+  it is; hex holds no `%`, which would make psmux run strftime over the line). A line runs from the
+  nonce to the next line break followed by the nonce, or to the end of the reply, so a line break in
+  a path the pane announced (psmux percent-decodes OSC 7, `%0A` included) stays in that path and can
+  never start a pane of its own: the pane could not know the nonce when it printed. A path holding a
+  control character is dropped (the pane keeps its process name); a line not led by the nonce, of
+  fewer than 6 fields or with a control character before the path stops the read, as a bad length
+  does on tmux. Herdr: `pane.process_info`, decoding only pids and names (never `argv`, `argv0`,
   `cmdline`), through a 5 s cache with one refresher, 4 calls at once within 1.5 s, never under
   `fetchMu` and never into the cached view; a name whose reads failed for 15 s, or any while an
   `invalid_request` turned the calls off for 5 minutes, is not served. macOS names are the kernel's short name. The

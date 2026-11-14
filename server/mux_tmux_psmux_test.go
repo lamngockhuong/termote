@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -179,9 +180,18 @@ func TestPsmuxTabKeys(t *testing.T) {
 	}
 }
 
-// psmuxPaneLine is one psmuxPaneFormat line as psmux prints it.
+// testPsmuxNonce stands for the nonce of one list-panes call.
+const testPsmuxNonce = "0123456789abcdef"
+
+// psmuxPaneLine is one psmuxPaneFormat(testPsmuxNonce) line as psmux prints
+// it.
 func psmuxPaneLine(sid, win, pane, active, cmd, path string) string {
-	return strings.Join([]string{sid, win, pane, active, cmd, path}, "|") + "\r\n"
+	return strings.Join([]string{testPsmuxNonce, sid, win, pane, active, cmd, path}, "|") + "\r\n"
+}
+
+// psmuxParse is parsePsmuxPanes for lines led by testPsmuxNonce.
+func psmuxParse(out string) map[tmuxWindowKey][]tmuxPaneProc {
+	return parsePsmuxPanes([]byte(out), testPsmuxNonce)
 }
 
 // psmux expands #{n:} to nothing, so its panes are read one a line.
@@ -198,9 +208,9 @@ func TestParsePsmuxPanes(t *testing.T) {
 
 	// Two sessions with the same window and pane index, out of pane order,
 	// a path with spaces; "\r\n" ends and a last line without one.
-	got := parsePsmuxPanes([]byte(psmuxPaneLine("$0", "0", "1", "1", "pwsh", spaced) +
+	got := psmuxParse(psmuxPaneLine("$0", "0", "1", "1", "pwsh", spaced) +
 		psmuxPaneLine("$0", "0", "0", "0", "node", `C:\x`) + psmuxPaneLine("$0", "2", "0", "1", "claude", `D:\`) +
-		strings.TrimSuffix(psmuxPaneLine("$3", "0", "1", "1", "codex", `C:\y`), "\r\n")))
+		strings.TrimSuffix(psmuxPaneLine("$3", "0", "1", "1", "codex", `C:\y`), "\r\n"))
 	if len(got) != 3 {
 		t.Fatalf("windows = %+v", got)
 	}
@@ -213,12 +223,13 @@ func TestParsePsmuxPanes(t *testing.T) {
 	// A '|' in a path the pane announced (OSC 7 from a remote host) stays in
 	// the path, the last field, and the windows after it are kept.
 	piped := `\\host\a|b|c`
-	got = parsePsmuxPanes([]byte(psmuxPaneLine("$0", "0", "0", "1", "ssh", piped) + psmuxPaneLine("$0", "1", "0", "1", "pwsh", `C:\z`)))
+	got = psmuxParse(psmuxPaneLine("$0", "0", "0", "1", "ssh", piped) + psmuxPaneLine("$0", "1", "0", "1", "pwsh", `C:\z`))
 	if names(got[w("$0", "0")]) != "ssh@"+processCwd(piped) || names(got[w("$0", "1")]) != "pwsh@"+processCwd(`C:\z`) {
 		t.Errorf("'|' in a path: %+v", got)
 	}
 	// "\n" ends are read too.
-	got = parsePsmuxPanes([]byte("$1|0|0|1|vim|/a\n$1|0|1|0|sh|/b\n"))
+	n := testPsmuxNonce + "|"
+	got = psmuxParse(n + "$1|0|0|1|vim|/a\n" + n + "$1|0|1|0|sh|/b\n")
 	if names(got[w("$1", "0")]) != "vim@/a,sh@/b" {
 		t.Errorf("LF ends: %+v", got)
 	}
@@ -230,15 +241,14 @@ func TestParsePsmuxPanes(t *testing.T) {
 		tail string
 		want []tmuxWindowKey
 	}{
-		"fewer fields":      {"$0|1|1|0|bash\r\n", []tmuxWindowKey{w("$0", "0")}},
-		"control character": {"$0|1|1|0|ba\x1bsh|C:\\a\r\n$0|2|0|1|vim|C:\\b\r\n", []tmuxWindowKey{w("$0", "0")}},
-		"bad pane index":    {"$0|1|x|0|bash|C:\\a\r\n", []tmuxWindowKey{w("$0", "0")}},
-		"bad active":        {"$0|1|1|2|bash|C:\\a\r\n", []tmuxWindowKey{w("$0", "0")}},
-		"another window":    {"$0|2|0|9|bash|C:\\a\r\n", []tmuxWindowKey{w("$0", "0"), w("$0", "1")}},
-		"blank line":        {"\r\n$0|2|0|1|vim|C:\\b\r\n", []tmuxWindowKey{w("$0", "0")}},
-		"not expanded":      {psmuxPaneFormat + "\r\n", []tmuxWindowKey{w("$0", "0")}},
+		"fewer fields":      {n + "$0|1|1|0|bash\r\n", []tmuxWindowKey{w("$0", "0")}},
+		"control character": {n + "$0|1|1|0|ba\x1bsh|C:\\a\r\n" + n + "$0|2|0|1|vim|C:\\b\r\n", []tmuxWindowKey{w("$0", "0")}},
+		"bad pane index":    {n + "$0|1|x|0|bash|C:\\a\r\n", []tmuxWindowKey{w("$0", "0")}},
+		"bad active":        {n + "$0|1|1|2|bash|C:\\a\r\n", []tmuxWindowKey{w("$0", "0")}},
+		"another window":    {n + "$0|2|0|9|bash|C:\\a\r\n", []tmuxWindowKey{w("$0", "0"), w("$0", "1")}},
+		"not expanded":      {psmuxPaneFormat(testPsmuxNonce) + "\r\n", []tmuxWindowKey{w("$0", "0")}},
 	} {
-		got := parsePsmuxPanes([]byte(head + c.tail))
+		got := psmuxParse(head + c.tail)
 		if len(got) != len(c.want) {
 			t.Errorf("%s: %+v", name, got)
 		}
@@ -249,11 +259,39 @@ func TestParsePsmuxPanes(t *testing.T) {
 		}
 	}
 
+	// A line break in a path the pane announced (OSC 7 %0A or %0D%0A) stays
+	// in that path, which is dropped, the pane kept: what follows it, a
+	// valid-looking line included, is not a pane of its own unless it is led
+	// by this call's nonce, which the pane could not know.
+	for name, c := range map[string]struct {
+		path string
+		// alsoLast: tried last in the reply too, where a path's own trailing
+		// line break reads as the line's end, so only a forged line is.
+		alsoLast bool
+	}{
+		"LF":            {"/home/a\n$0|5|0|1|pwsh|C:\\x", true},
+		"CRLF":          {"/home/a\r\n$0|5|0|1|pwsh|C:\\x", true},
+		"another nonce": {"/home/a\r\nffffffffffffffff|$0|5|0|1|pwsh|C:\\x", true},
+		"blank line":    {"/home/a\r\n", false},
+	} {
+		path := c.path
+		for _, last := range []bool{false, c.alsoLast} {
+			out := psmuxPaneLine("$0", "0", "0", "1", "ssh", path) + psmuxPaneLine("$0", "1", "0", "1", "pwsh", `C:\z`)
+			if last {
+				out = psmuxPaneLine("$0", "1", "0", "1", "pwsh", `C:\z`) + strings.TrimSuffix(psmuxPaneLine("$0", "0", "0", "1", "ssh", path), "\r\n")
+			}
+			got := psmuxParse(out)
+			if len(got) != 2 || names(got[w("$0", "0")]) != "ssh@" || names(got[w("$0", "1")]) != "pwsh@"+processCwd(`C:\z`) {
+				t.Errorf("%s (last %v): %+v", name, last, got)
+			}
+		}
+	}
+
 	// A pane listed twice is dropped, its window's other panes kept; no
 	// command, no entry.
-	got = parsePsmuxPanes([]byte(psmuxPaneLine("$0", "0", "0", "1", "pwsh", "/a") +
+	got = psmuxParse(psmuxPaneLine("$0", "0", "0", "1", "pwsh", "/a") +
 		psmuxPaneLine("$0", "0", "0", "1", "vim", "/a") + psmuxPaneLine("$0", "0", "1", "0", "top", "/a") +
-		psmuxPaneLine("$0", "0", "2", "0", "", "/a")))
+		psmuxPaneLine("$0", "0", "2", "0", "", "/a"))
 	if s := names(got[w("$0", "0")]); s != "top@/a" {
 		t.Errorf("duplicate or empty command kept: %q", s)
 	}
@@ -267,8 +305,15 @@ func TestParsePsmuxPanes(t *testing.T) {
 func TestTmuxPaneListing(t *testing.T) {
 	usePsmux(t, true)
 	args, parse := tmuxPaneListing()
-	if strings.Join(args, " ") != "list-panes -a -F "+psmuxPaneFormat || len(parse([]byte("$0|0|0|1|pwsh|/a\n"))) != 1 {
+	nonce, fields, _ := strings.Cut(args[len(args)-1], "|")
+	if strings.Join(args[:len(args)-1], " ") != "list-panes -a -F" || fields != psmuxPaneFields ||
+		!regexp.MustCompile(`^[0-9a-f]{16}$`).MatchString(nonce) || len(parse([]byte(nonce+"|$0|0|0|1|pwsh|/a\n"))) != 1 ||
+		len(parse([]byte("$0|0|0|1|pwsh|/a\n"))) != 0 {
 		t.Errorf("psmux: %q", args)
+	}
+	// Each call has a nonce of its own.
+	if again, _ := tmuxPaneListing(); again[len(again)-1] == args[len(args)-1] {
+		t.Errorf("the nonce was reused: %q", again)
 	}
 	usePsmux(t, false)
 	args, parse = tmuxPaneListing()

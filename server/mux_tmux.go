@@ -800,13 +800,32 @@ type tmuxPaneProc struct {
 	proc   ProcessInfo
 }
 
-// psmuxPaneFormat is tmuxPaneFormat for psmux, which expands #{n:} to
+// psmuxPaneFields is tmuxPaneFormat for psmux, which expands #{n:} to
 // nothing: one pane a line, its fields split by '|'. A local Windows file
 // name and an image name never hold '|', a line break or a control
-// character, but a path the pane announced (OSC 7 from a remote host) can
-// hold '|', so the path comes last and keeps every '|' after the fifth.
-const psmuxPaneFormat = "#{session_id}|#{window_index}|#{pane_index}|#{pane_active}|" +
+// character, but a path the pane announced (OSC 7 from a remote host, which
+// psmux percent-decodes, %0A included) can hold any of them, so the path
+// comes last and keeps every '|' after the fifth, and each line starts with
+// a nonce of the call (psmuxPaneFormat): a line break in a path cannot start
+// a line of its own.
+const psmuxPaneFields = "#{session_id}|#{window_index}|#{pane_index}|#{pane_active}|" +
 	"#{pane_current_command}|#{pane_current_path}"
+
+// psmuxPaneFormat is psmuxPaneFields led by nonce, which psmux copies as
+// it is (text outside #{} is literal). nonce is hex, so it holds no '#',
+// '%' (which would make psmux run strftime over the line) or '|'.
+func psmuxPaneFormat(nonce string) string { return nonce + "|" + psmuxPaneFields }
+
+// newPsmuxNonce returns 16 random hex digits; on the unlikely failure of the
+// system's random source, the time, which the pane cannot know either when it
+// printed its path.
+func newPsmuxNonce() string {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return strconv.FormatInt(time.Now().UnixNano(), 16)
+	}
+	return hex.EncodeToString(b)
+}
 
 // tmuxPaneEntry is one pane of a list-panes reply, its fields unchecked
 // beyond what reading them needed. w is set once its window was read.
@@ -866,27 +885,45 @@ func readTmuxPaneSized(b []byte) (e tmuxPaneEntry, rest []byte, ok bool) {
 	return e, b, true
 }
 
-// readPsmuxPaneLine reads one psmuxPaneFormat line (its "\r\n" or "\n" end,
-// or the end of the reply). A line of fewer than 6 fields, or one holding a
-// control character, cannot be read.
-func readPsmuxPaneLine(b []byte) (e tmuxPaneEntry, rest []byte, ok bool) {
-	line := b
-	if i := bytes.IndexByte(b, '\n'); i >= 0 {
-		line, rest = b[:i], b[i+1:]
-	}
-	line = bytes.TrimSuffix(line, []byte("\r"))
-	f := strings.SplitN(string(line), "|", 6)
-	if len(f) != 6 || !tmuxSessionIDRe.MatchString(f[0]) || !tmuxIndexRe.MatchString(f[1]) {
-		return e, nil, false
-	}
-	e.w = tmuxWindowKey{f[0], f[1]}
-	for _, c := range line {
-		if c < 0x20 || c == 0x7f {
+// readPsmuxPaneLine returns the reader of psmuxPaneFormat(nonce) lines. A
+// line starts with nonce and runs to the next line break followed by nonce,
+// or to the end of the reply, so a line break in a path cannot start a pane
+// of its own: it stays in that path, and a path holding a control character
+// is dropped (the pane keeps its process). A line not led by nonce, of fewer
+// than 6 fields, or with a control character before its path cannot be read.
+func readPsmuxPaneLine(nonce string) tmuxPaneReader {
+	lead := []byte(nonce + "|")
+	next := append([]byte("\n"), lead...)
+	return func(b []byte) (e tmuxPaneEntry, rest []byte, ok bool) {
+		if !bytes.HasPrefix(b, lead) {
 			return e, nil, false
 		}
+		line := b[len(lead):]
+		if i := bytes.Index(line, next); i >= 0 {
+			line, rest = line[:i], line[i+1:]
+		} else {
+			line = bytes.TrimSuffix(line, []byte("\n"))
+		}
+		line = bytes.TrimSuffix(line, []byte("\r"))
+		f := strings.SplitN(string(line), "|", 6)
+		if len(f) != 6 || !tmuxSessionIDRe.MatchString(f[0]) || !tmuxIndexRe.MatchString(f[1]) {
+			return e, nil, false
+		}
+		e.w = tmuxWindowKey{f[0], f[1]}
+		if slices.ContainsFunc(f[:5], hasControl) {
+			return e, nil, false
+		}
+		e.idx, e.active, e.cmd, e.path = f[2], f[3], f[4], f[5]
+		if hasControl(e.path) {
+			e.path = ""
+		}
+		return e, rest, true
 	}
-	e.idx, e.active, e.cmd, e.path = f[2], f[3], f[4], f[5]
-	return e, rest, true
+}
+
+// hasControl reports whether s holds a C0 control character or DEL.
+func hasControl(s string) bool {
+	return strings.ContainsFunc(s, func(c rune) bool { return c < 0x20 || c == 0x7f })
 }
 
 // parseTmuxPanes reads tmuxPaneFormat output into each window's panes, in
@@ -895,9 +932,10 @@ func parseTmuxPanes(out []byte) map[tmuxWindowKey][]tmuxPaneProc {
 	return collectTmuxPanes(out, readTmuxPaneSized)
 }
 
-// parsePsmuxPanes reads psmuxPaneFormat output, as parseTmuxPanes does.
-func parsePsmuxPanes(out []byte) map[tmuxWindowKey][]tmuxPaneProc {
-	return collectTmuxPanes(out, readPsmuxPaneLine)
+// parsePsmuxPanes reads psmuxPaneFormat(nonce) output, as parseTmuxPanes
+// does.
+func parsePsmuxPanes(out []byte, nonce string) map[tmuxWindowKey][]tmuxPaneProc {
+	return collectTmuxPanes(out, readPsmuxPaneLine(nonce))
 }
 
 // collectTmuxPanes reads every entry with read into each window's panes, in
@@ -975,11 +1013,14 @@ type tmuxProcWindow struct {
 }
 
 // tmuxPaneListing is the list-panes command of this server and the parser of
-// its reply: psmux expands #{n:} to nothing, so it gets psmuxPaneFormat.
+// its reply: psmux expands #{n:} to nothing, so it gets psmuxPaneFormat with
+// a nonce of this call.
 func tmuxPaneListing() ([]string, func([]byte) map[tmuxWindowKey][]tmuxPaneProc) {
 	if tmuxIsPsmux {
 		// psmux (Windows) is not known to take -u.
-		return []string{"list-panes", "-a", "-F", psmuxPaneFormat}, parsePsmuxPanes
+		nonce := newPsmuxNonce()
+		return []string{"list-panes", "-a", "-F", psmuxPaneFormat(nonce)},
+			func(out []byte) map[tmuxWindowKey][]tmuxPaneProc { return parsePsmuxPanes(out, nonce) }
 	}
 	// Without a UTF-8 locale (a service, env -i) tmux prints each multibyte
 	// character as '_', and the lengths no longer match; -u makes it send

@@ -253,9 +253,12 @@ with `-u` on tmux so the lengths match without a UTF-8 locale), read as a stream
 id and window index, never split into lines; a parse that stops drops the window it stopped in,
 a window missing from a reply keeps its last names for 10 s (psmux sometimes prints nothing),
 and a failure never fails the snapshot. psmux expands no `#{n:}`, so it gets a one-line-per-pane
-format of its own (`psmuxPaneFormat`), `#{session_id}|#{window_index}|#{pane_index}|#{pane_active}|#{pane_current_command}|#{pane_current_path}`,
-split on `|` (a Windows file name never holds one); a line without 6 fields or with a control
-character stops the parse like a bad length. Herdr fills it from
+format of its own (`psmuxPaneFormat`), `<nonce>|#{session_id}|#{window_index}|#{pane_index}|#{pane_active}|#{pane_current_command}|#{pane_current_path}`
+with a random nonce per call: a line runs to the next line break followed by the nonce, so a line
+break in a path the pane announced (OSC 7) cannot start a pane of its own, and the path, last, keeps
+any `|`. A path with a control character is dropped (the pane keeps its process); a line not led by
+the nonce, without 6 fields, or with a control character before the path stops the parse like a
+bad length. Herdr fills it from
 `pane.process_info` (the foreground group leader's `name`; `argv`/`cmdline` are not decoded)
 through a cache apart from the snapshot cache: a name is fresh for 5 s, one refresh runs at a
 time, 4 calls at once within 1.5 s (not cut short when the request that started it leaves), a
