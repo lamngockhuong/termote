@@ -1039,8 +1039,12 @@ its config defines (git 2.54 and later run those whatever `core.hooksPath` says)
 `diff.autoRefreshIndex=false`, every `filter.<driver>` it configures emptied, `--no-ext-diff`, `--no-textconv`,
 `--ignore-submodules=all`, no lazy fetch and no transport at all (an empty
 `GIT_ALLOW_PROTOCOL`, which a repository's `protocol.<name>.allow` cannot re-enable). Each
-command has a 10 s timeout (503 `git timed out`) and takes one of two server-wide slots; nothing
-a client sends becomes a git option.
+command has a 10 s timeout (503 `git timed out`) and takes one of two server-wide slots, a root
+at most one of them (a write aside; the overview's status and blame answer busy meanwhile); nothing a client sends
+becomes a git option. On Linux and macOS a repository whose ignore or attributes file (`.gitignore`,
+`.gitattributes`, `info/exclude`, `info/attributes`, what `core.excludesFile` and
+`core.attributesFile` name) is a FIFO or a socket is browsed as a plain directory
+(`blockingGitFile`), since git would wait on opening it until the timeout.
 
 **Images (`raw`).** The bytes of one image, for the PWA to show through a `blob:` URL (an SVG
 through a `data:` URL, see below). Without

@@ -1210,7 +1210,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `core.attributesFile` to one (`:(optional)` read past). Its parser (`parseGitConfig`) takes
   git's syntax strictly, and a file it cannot parse or read, includes too deep, or a link on the way
   off a drive (`evalSymlinks`) refuses the repository rather than passing it. `mailmap.file` is
-  left to `--no-mailmap`. Elsewhere than Windows nothing is read.
+  left to `--no-mailmap`. Elsewhere than Windows `repoConfigRefused` reads nothing.
   `GET files/content` takes an `encoding` of a fixed set (`utf-8`, `utf-16le`, `utf-16be`,
   `shift_jis`, `euc-jp`; another → 400, ignored by `?hash=1`) or detects one
   (`server/files_encoding.go`: a BOM, then valid UTF-8, then Shift-JIS/EUC-JP only when the
@@ -1256,8 +1256,27 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   either wherever the repository's config points it; empty means no file, so the user's global
   ignore and attributes files no longer apply there, the repository's `.gitignore`,
   `.gitattributes` and `info/exclude` still do),
-  submodules ignored, 10s timeout, 2 at a time (a command that writes the index runs under the
-  same `-c` overrides but another timeout and cancellation: Staging and discarding a change).
+  submodules ignored, 10s timeout, 2 at a time, and 1 at a time per root except a write; a
+  `tryOnly` call (the overview's status, blame) answers busy while its root runs another, as when it
+  would take the last slot (a command that writes the index runs under the
+  same `-c` overrides but another timeout and cancellation: Staging and discarding a change); a call
+  that waited for its root's slot checks the root's backoff again before it runs. git waits on
+  opening a FIFO it reads as an ignore or attributes file until the timeout (git 2.34: every one
+  below, and a `.gitignore` in any directory it walks), so on Linux and macOS a root is browsed as a
+  plain directory, its git dir still denied, before any status, when one of these is a FIFO or a
+  socket (`blockingGitFile`; `/dev/null`, a directory or a missing file pass, as git reads or skips
+  them at once): the work tree's `.gitignore` and `.gitattributes`, not followed (git opens them
+  without following a link), the shared git dir's `info/exclude` and `info/attributes` (a linked
+  worktree reads those of its repository), and what `core.excludesFile` and `core.attributesFile`
+  name, followed (read with `git config --type=path`, relative to the root); the user's global files
+  still apply. Not looked for (not covered): a `.gitignore` or `.gitattributes` deeper in the tree
+  (that is a walk of the tree), another file git opens that is a FIFO (`config` and its includes,
+  `HEAD`, `index`, `packed-refs`, `shallow`, `info/sparse-checkout`, `objects/info/alternates`,
+  `.gitmodules`, `.mailmap` for blame), and a root reached without `resolve` (Find and blame through
+  a link into another worktree of the repository, a worktree's dirty check). Such a root's heavy git
+  waits out the timeout holding one of the two slots, so other roots keep the other; a status then
+  backs it off 30 s, while Find and a worktree's branch list (`noBackoff`) try again on the next
+  request; two such roots can hold both slots.
   `files/raw` serves an image's bytes (Files: the worktree file, streamed from the open handle;
   Changes: `side=old|new` of an entry git status lists, picked like `diff`, never a client rev):
   the index is always `:0:<path>` (git reads `:1:a.png` as stage 1), `HEAD:<orig‖path>` for the
