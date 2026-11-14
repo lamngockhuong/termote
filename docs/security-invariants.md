@@ -2757,7 +2757,16 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   or whose `server/cli_version.go` names another version (an old commit tagged as a newer version
   would be offered to every unpinned `update`),
   and every later job, and `deploy-website.yml` when it calls it, checks out that commit by hash,
-  so the tag moved during the run changes nothing. The `release` and `github-pages` environments
+  so the tag moved during the run changes nothing. `deploy-website.yml` started by hand (Run
+  workflow on `main`, naming a tag; no `sha` input) deploys only the latest published stable
+  release: before checkout it refuses a tag that is not `vX.Y.Z`, is no published release
+  (`gh api releases/tags/<tag>` with the job's `GITHUB_TOKEN`, `contents: read`), is a draft or a
+  pre-release, or is not the one `releases/latest` names; on either path the checked-out commit
+  must be on `main` and its `server/cli_version.go` must name that version, before any dependency
+  runs. A version-like tag that is no release, or an older release, so never deploys by hand. A
+  write-role account can still publish a release for its own tag or mark an older one latest: then
+  the `cli_version.go` check (a commit of `main` that is not that version) and the maintainer's
+  `github-pages` approval are what stand in the way. The `release` and `github-pages` environments
   take `main` only (deployment branch policy, no tag): a `v*` tag pushed to an unreviewed commit,
   or a run of the workflow file of another branch, never reaches the signing key, the tap's deploy
   key or the Pages deploy, whoever approves. The `protect-release-tags` ruleset keeps a `v*` tag from

@@ -181,8 +181,13 @@ Each release produces, per platform (`linux`/`darwin` × `amd64`/`arm64`, plus
 
 `deploy-website.yml` does not run on pushes to `main`. `release.yml` calls it after a
 stable release (not a pre-release) has been published, and it can be run by hand from GitHub
-Actions for a docs-only fix: Run workflow on `main`, naming the release tag (its commit must be on
-`main`). This keeps the site's root docs — and the installer scripts it
+Actions for a docs-only fix: Run workflow on `main`, naming the release tag. By hand the tag must
+be the latest published release (neither a draft nor a pre-release, the one `releases/latest`
+names, read with the job's `GITHUB_TOKEN`), so an older release or a version-like tag that is no
+release is refused. Whether started by hand or by `release.yml`, the tag's commit must be on `main`
+and its `server/cli_version.go` must name that version, as `release.yml` checks. Someone who can
+write to the repo can publish a release or mark an older one latest; that version check and the
+`github-pages` approval are what stop them. This keeps the site's root docs — and the installer scripts it
 serves at `https://termote.ohnice.app/install.sh`/`install.ps1` — on the version
 `releases/latest` installs, while `main` runs ahead of it. Test a pre-release installer from
 the raw GitHub tag URL instead (see [`deployment-guide.md`](deployment-guide.md#pre-releases)).

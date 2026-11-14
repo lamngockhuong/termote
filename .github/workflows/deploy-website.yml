@@ -6,8 +6,12 @@ name: Deploy Website
 # the ones of the version people install. By hand it runs on main (Run
 # workflow on main, naming the tag): the `github-pages` environment takes
 # main only, so a tag pushed to an unreviewed commit, or a run started on
-# another branch, never deploys. The site is built from the tag's commit,
-# checked to be on main, by its hash.
+# another branch, never deploys. By hand the tag must also be the latest
+# published stable release, as releases/latest names it: a version-like tag
+# that is no release, or an older release, never deploys (someone who can
+# publish releases is held by the version check and the approval). The site is built
+# from the tag's commit, checked to be on main and to be that version
+# (server/cli_version.go, as release.yml checks it), by its hash.
 on:
   workflow_call:
     inputs:
@@ -40,17 +44,33 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      # Called from release.yml or started by hand, the run is main's.
+      # Called from release.yml or started by hand, the run is main's. Started
+      # by hand (no sha: workflow_dispatch has no such input), the tag must be
+      # a published release, neither a draft nor a pre-release, and the one
+      # releases/latest names. release.yml calls it right after publishing.
       - name: Check the tag
         env:
           TAG: ${{ inputs.tag }}
+          SHA: ${{ inputs.sha }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           [ "$GITHUB_REF" = refs/heads/main ] || { echo "::error::run this workflow on main, not '$GITHUB_REF'"; exit 1; }
           case "$TAG" in
             *-*) echo "::error::'$TAG' is a pre-release; the site follows stable releases only"; exit 1 ;;
-            v[0-9]*.[0-9]*.[0-9]*) echo "Deploying $TAG" ;;
-            *) echo "::error::deploy only a release tag (vX.Y.Z), not '$TAG'"; exit 1 ;;
           esac
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
+            { echo "::error::deploy only a release tag (vX.Y.Z), not '$TAG'"; exit 1; }
+          if [ -z "$SHA" ]; then
+            release=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '"\(.draft) \(.prerelease)"') ||
+              { echo "::error::$TAG is not a published release"; exit 1; }
+            [ "$release" = "false false" ] ||
+              { echo "::error::$TAG is a draft or a pre-release (draft, prerelease: $release)"; exit 1; }
+            latest=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name) ||
+              { echo "::error::cannot read the latest release"; exit 1; }
+            [ "$latest" = "$TAG" ] ||
+              { echo "::error::$TAG is not the latest release ($latest); the site follows the version people install"; exit 1; }
+          fi
+          echo "Deploying $TAG"
 
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -61,7 +81,8 @@ jobs:
           fetch-depth: 0
 
       # Before any dependency runs: the commit is the tag's (as release.yml
-      # passed it, or as checked out) and on main.
+      # passed it, or as checked out), on main, and already that version
+      # (release-please bumps it in the release commit).
       - name: Check the commit is on main
         id: commit
         env:
@@ -70,6 +91,8 @@ jobs:
           sha=$(git rev-parse HEAD)
           git merge-base --is-ancestor "$sha" "$GITHUB_SHA" ||
             { echo "::error::$TAG names $sha, which is not on main"; exit 1; }
+          git show "$sha:server/cli_version.go" | grep -qF "var cliVersion = \"${TAG#v}\"" ||
+            { echo "::error::server/cli_version.go at $sha is not version ${TAG#v}"; exit 1; }
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
       - name: Setup pnpm
