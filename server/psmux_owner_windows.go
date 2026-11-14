@@ -7,11 +7,11 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// psmuxPortOwner is listenerOwnedLocally that also trusts LOCAL SERVICE and
+// psmuxPortOwner is listenerOwnersOn, also trusting LOCAL SERVICE and
 // NETWORK SERVICE, which no local user runs as: a service of either may hold
 // the port a psmux session left behind, and must not stop psmux.
-func psmuxPortOwner(port int) listenerOwner {
-	return listenerOwnedLocallyOr(port, "S-1-5-19", "S-1-5-20")
+func psmuxPortOwner(port int) (listenerOwner, error) {
+	return listenerOwnersOn(port, "S-1-5-19", "S-1-5-20")
 }
 
 // psmuxDataDir is where psmux keeps its .port files, found as psmux finds it

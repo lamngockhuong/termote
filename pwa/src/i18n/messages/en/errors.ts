@@ -127,6 +127,8 @@ export default {
   'errors.prompt_expired': 'This dialog was already answered or has expired',
   'errors.psmux_port_taken':
     "Another user's program holds a psmux session's port. See the server log",
+  'errors.psmux_ports_unverified':
+    "Cannot tell who holds a psmux session's port. See the server log",
   'errors.push_unavailable':
     'Push notifications are not available on this server',
   'errors.read_only': 'The file system is read-only',

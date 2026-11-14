@@ -1139,9 +1139,13 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   attach starts (`psmuxPorts`, `server/psmux_owner.go`, checked at most every 2 s; the log names
   the `.port` file to remove, the client gets 503 `psmux_port_taken`) while a recorded port is
   listened on by a process of another user than the server's, SYSTEM, LOCAL SERVICE or NETWORK
-  SERVICE (`listenerOwnedLocallyOr`; a process whose token cannot be read counts as another
-  user's); a free port or no data dir passes. Not covered: a process that takes the port within
-  those 2 s, and a TCP table that cannot be read (nothing seen, so it passes). psmux reports the
+  SERVICE (`listenerOwnersOn`; a process whose token cannot be read counts as another
+  user's); a free port or a missing data dir passes. What cannot be read refuses too (503
+  `psmux_ports_unverified`, the reason in the log): a data dir that exists but cannot be listed, a
+  `.port` file, the TCP table, or the server's own account while something listens on the port; `tcpTable` reads again with a buffer of what
+  the table last needed plus half and 64 rows more, up to 5 times, so sockets opened between reads
+  cannot make it give up and be taken for nothing listening. Not covered: a process that takes the
+  port within those 2 s. psmux reports the
   foreground process's directory verbatim (`#`, `%`, non-ASCII and a UNC path are not expanded or
   changed) and refuses `:` in a session name, so the path, read last, stays whole. From psmux 3.4
   that path can be what the pane printed (OSC 7 / OSC 9;9 while `ssh.exe` or `wsl.exe` runs in it),
