@@ -141,6 +141,9 @@ type gitRunner struct {
 	writeTimeout time.Duration
 	sem          chan struct{}
 	overrides    *ttlCache[repoOverrides]
+	// windows: argv empties core.excludesFile and core.attributesFile;
+	// runtime.GOOS == "windows", which tests replace.
+	windows bool
 
 	mu       sync.Mutex
 	failedAt map[string]time.Time // root → last timeout
@@ -154,6 +157,7 @@ func newGitRunner() *gitRunner {
 		sem:          make(chan struct{}, gitMaxRunning),
 		overrides:    newTTLCache[repoOverrides](filesRootTTL),
 		failedAt:     map[string]time.Time{},
+		windows:      runtime.GOOS == "windows",
 	}
 }
 
@@ -245,6 +249,15 @@ func (g *gitRunner) argv(c gitCall, o repoOverrides, hooksDir string, args []str
 	argv := []string{"-C", c.root, "--no-pager",
 		"-c", "core.fsmonitor=false", "-c", "core.untrackedCache=false", "-c", "protocol.allow=never",
 		"-c", "core.hooksPath=" + hooksDir, "-c", "diff.autoRefreshIndex=false"}
+	// On Windows core.excludesFile and core.attributesFile are emptied, a
+	// second layer behind repoConfigRefused: git status opens either file
+	// wherever the repository's config points it, and a share sends that
+	// host the user's NTLM hash. Empty means no file at all, not the default
+	// one, so the user's global ignore and attributes files do not apply
+	// there either; the repository's own files still do.
+	if g.windows {
+		argv = append(argv, "-c", "core.excludesFile=", "-c", "core.attributesFile=")
+	}
 	if c.safeDir != "" {
 		argv = append(argv, "-c", "safe.directory="+c.safeDir)
 	}
@@ -621,6 +634,12 @@ func (rr *rootResolver) resolve(ctx context.Context, dir string) (filesRoot, err
 		}
 		if fi, err := os.Stat(abs); err != nil || !fi.IsDir() {
 			return filesRoot{}, errDirNotAvailable
+		}
+		if rr.windows {
+			if err := rr.repoConfigRefused(abs); err != nil {
+				log.Printf("files: the repository of %s is not handed to git: %v", abs, err)
+				return filesRoot{}, errDirNotAvailable
+			}
 		}
 		top, gitDir, err := rr.toplevel(ctx, abs, "")
 		var ge *gitError

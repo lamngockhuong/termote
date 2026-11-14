@@ -1170,6 +1170,20 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   a share keeps working, a link out of it to another share does not), before
   `filepath.EvalSymlinks` runs; `os.Root` refuses a link whose
   target starts with a separator, as every UNC one does.
+  A repository's own files can make git open a share too, in every command it runs (`rev-parse`,
+  `config`, `status`, `log`), and git cannot be asked first (`git config --no-includes` reads the
+  repository's config, includes and all, as it starts). So on Windows `resolve`, before the first
+  git command at a directory, reads the repository git would find there (walking up, stopping only
+  at a git dir git takes too) as text (`repoConfigRefused`, `server/git_repo_config.go`) and refuses
+  it (400 `directory not available`, as a refused pane directory, the reason in the log only) when
+  a `.git` file's `gitdir:`, its `commondir`, a line of `objects/info/alternates` (followed 5 deep)
+  or a linked worktree's `gitdir` names a path off a drive letter outside the Places (the test
+  `refusesDir` uses), or when `config`, `config.worktree` or any local file they include (followed
+  10 deep) sets `include.path`, `includeIf.*.path`, `core.worktree`, `core.excludesFile` or
+  `core.attributesFile` to one (`:(optional)` read past). Its parser (`parseGitConfig`) takes
+  git's syntax strictly, and a file it cannot parse or read, includes too deep, or a link on the way
+  off a drive (`evalSymlinks`) refuses the repository rather than passing it. `mailmap.file` is
+  left to `--no-mailmap`. Elsewhere than Windows nothing is read.
   `GET files/content` takes an `encoding` of a fixed set (`utf-8`, `utf-16le`, `utf-16be`,
   `shift_jis`, `euc-jp`; another → 400, ignored by `?hash=1`) or detects one
   (`server/files_encoding.go`: a BOM, then valid UTF-8, then Shift-JIS/EUC-JP only when the
@@ -1210,7 +1224,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   read before it would leave that file's filter on. A name `-c` cannot carry (`=`, a line break)
   fails the command, `errUnsafeRepoConfig`, and a config git cannot read fails it with git's own
   error), index refresh on diff,
-  fsmonitor, filter drivers, external diff and textconv off,
+  fsmonitor, filter drivers, external diff and textconv off, on Windows
+  `core.excludesFile` and `core.attributesFile` emptied behind `repoConfigRefused` (`status` opens
+  either wherever the repository's config points it; empty means no file, so the user's global
+  ignore and attributes files no longer apply there, the repository's `.gitignore`,
+  `.gitattributes` and `info/exclude` still do),
   submodules ignored, 10s timeout, 2 at a time (a command that writes the index runs under the
   same `-c` overrides but another timeout and cancellation: Staging and discarding a change).
   `files/raw` serves an image's bytes (Files: the worktree file, streamed from the open handle;
