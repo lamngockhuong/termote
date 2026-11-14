@@ -87,11 +87,13 @@ func TestParseRepoOverrides(t *testing.T) {
 
 func TestGitArgvOverrides(t *testing.T) {
 	g := newGitRunner()
+	g.windows = true
 	hooks := filepath.Join(t.TempDir(), "no-hooks")
 	argv := g.argv(gitCall{root: "/r", safeDir: "/r"}, repoOverrides{filters: []string{"Evil.x"}, hooks: []string{"My.Hook"}}, hooks, []string{"status"})
 	joined := strings.Join(argv, " ")
 	for _, want := range []string{"-C /r --no-pager", "core.fsmonitor=false", "protocol.allow=never", "safe.directory=/r",
-		"core.hooksPath=" + hooks, "diff.autoRefreshIndex=false", "hook.My.Hook.enabled=false",
+		"core.hooksPath=" + hooks, "diff.autoRefreshIndex=false", "core.excludesFile= ", "core.attributesFile= ",
+		"hook.My.Hook.enabled=false",
 		"filter.Evil.x.clean=", "filter.Evil.x.smudge=", "filter.Evil.x.process=", "filter.Evil.x.required=false"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("argv %q lacks %q", joined, want)
@@ -99,6 +101,10 @@ func TestGitArgvOverrides(t *testing.T) {
 	}
 	if argv[len(argv)-1] != "status" {
 		t.Errorf("args must come last: %q", argv)
+	}
+	g.windows = false
+	if joined := strings.Join(g.argv(gitCall{root: "/r"}, repoOverrides{}, hooks, nil), " "); strings.Contains(joined, "excludesFile") {
+		t.Errorf("off Windows the user's global excludes are kept: %q", joined)
 	}
 }
 

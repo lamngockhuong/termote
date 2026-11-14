@@ -801,8 +801,10 @@ type tmuxPaneProc struct {
 }
 
 // psmuxPaneFormat is tmuxPaneFormat for psmux, which expands #{n:} to
-// nothing: one pane a line, its fields split by '|'. A Windows file name
-// and an image name never hold '|', a line break or a control character.
+// nothing: one pane a line, its fields split by '|'. A local Windows file
+// name and an image name never hold '|', a line break or a control
+// character, but a path the pane announced (OSC 7 from a remote host) can
+// hold '|', so the path comes last and keeps every '|' after the fifth.
 const psmuxPaneFormat = "#{session_id}|#{window_index}|#{pane_index}|#{pane_active}|" +
 	"#{pane_current_command}|#{pane_current_path}"
 
@@ -865,15 +867,15 @@ func readTmuxPaneSized(b []byte) (e tmuxPaneEntry, rest []byte, ok bool) {
 }
 
 // readPsmuxPaneLine reads one psmuxPaneFormat line (its "\r\n" or "\n" end,
-// or the end of the reply). A line of more or fewer than 6 fields, or one
-// holding a control character, cannot be read.
+// or the end of the reply). A line of fewer than 6 fields, or one holding a
+// control character, cannot be read.
 func readPsmuxPaneLine(b []byte) (e tmuxPaneEntry, rest []byte, ok bool) {
 	line := b
 	if i := bytes.IndexByte(b, '\n'); i >= 0 {
 		line, rest = b[:i], b[i+1:]
 	}
 	line = bytes.TrimSuffix(line, []byte("\r"))
-	f := strings.Split(string(line), "|")
+	f := strings.SplitN(string(line), "|", 6)
 	if len(f) != 6 || !tmuxSessionIDRe.MatchString(f[0]) || !tmuxIndexRe.MatchString(f[1]) {
 		return e, nil, false
 	}

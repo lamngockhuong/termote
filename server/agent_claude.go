@@ -367,7 +367,8 @@ func parseClaudeRow(line []byte, off int64) (TranscriptEntry, bool) {
 				in, _ := b["input"].(map[string]any)
 				e.Parts = append(e.Parts, TranscriptPart{
 					Kind: "tool", Tool: name, ToolID: jsonStr(b["id"]), Input: summarizeToolInput(in),
-					Detail: claudeToolDetail(name, in), sensitive: claudeInputSensitive(in),
+					Detail:    claudeToolDetail(name, in),
+					sensitive: claudeInputSensitive(in) || name == "Grep" && grepShowsSensitive(in),
 				})
 			case "tool_result":
 				result, clipped := clampText(stripANSI(toolResultText(b["content"])), claudeMaxResult)
