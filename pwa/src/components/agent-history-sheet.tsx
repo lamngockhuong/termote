@@ -39,7 +39,7 @@ export interface LiveTab {
   paneId: string
 }
 
-interface Props {
+export interface AgentHistorySheetProps {
   target: HistoryTarget | null
   readOnly: boolean
   // The server can resume a session (it runs tasks)
@@ -57,7 +57,11 @@ interface Props {
 // The sessions of Claude Code and Codex that ran in a pane's folder: a
 // list to search, each read as the Chat view reads one, then resumed in a
 // new tab, in the pane itself, or (running elsewhere) opened or forked.
-export function AgentHistorySheet({ target, onClose, ...rest }: Props) {
+export function AgentHistorySheet({
+  target,
+  onClose,
+  ...rest
+}: AgentHistorySheetProps) {
   const { t } = useT()
   return (
     <Sheet
@@ -87,7 +91,7 @@ function HistoryContent({
   onResumed,
   onOpenLive,
   openFile,
-}: Omit<Props, 'target'> & { target: HistoryTarget }) {
+}: Omit<AgentHistorySheetProps, 'target'> & { target: HistoryTarget }) {
   const { t } = useT()
   const history = useAgentHistory(target.paneId)
   const [query, setQuery] = useState('')
@@ -125,8 +129,7 @@ function HistoryContent({
   const onListKey = (e: KeyboardEvent) => {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
     const rows = [
-      ...(listRef.current?.querySelectorAll<HTMLElement>('[data-history-id]') ??
-        []),
+      ...e.currentTarget.querySelectorAll<HTMLElement>('[data-history-id]'),
     ]
     const at = rows.indexOf(document.activeElement as HTMLElement)
     const next = rows[at + (e.key === 'ArrowDown' ? 1 : -1)] ?? rows[0]
@@ -134,13 +137,6 @@ function HistoryContent({
     e.preventDefault()
   }
 
-  const onLive = useCallback(
-    (id: string, live: LiveTab) => {
-      history.setLive(id, live)
-      setSelected((s) => (s?.id === id ? { ...s, live } : s))
-    },
-    [history.setLive],
-  )
   const done = useCallback(
     (result: LiveTab, where: ResumeWhere) => {
       onClose()
@@ -151,7 +147,8 @@ function HistoryContent({
   const { pending, resume } = useResumeSession({
     notify,
     onResumed: done,
-    onLive,
+    // The list's row is what the open session reads from
+    onLive: history.setLive,
   })
 
   if (selected) {
@@ -297,7 +294,7 @@ function SessionScreen({
   paneId: string
   onBack: () => void
   notify: (message: string) => void
-  openFile?: Props['openFile']
+  openFile?: AgentHistorySheetProps['openFile']
   actions?: ReactNode
 }) {
   const { t } = useT()

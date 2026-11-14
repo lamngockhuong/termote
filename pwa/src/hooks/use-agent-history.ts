@@ -47,6 +47,7 @@ export function useAgentHistory(paneId: string | undefined): AgentHistory {
     const gen = ++generation.current
     setSessions([])
     setLoaded(false)
+    setLoadingMore(false)
     setError(undefined)
     setNext(undefined)
     setTruncated(false)
@@ -77,6 +78,7 @@ export function useAgentHistory(paneId: string | undefined): AgentHistory {
           if (gen !== generation.current) return
           setSessions((s) => [...s, ...page.sessions])
           setNext(page.next)
+          setTruncated(page.truncated)
         },
         (err) => {
           if (gen === generation.current) setError(errorOf(err))

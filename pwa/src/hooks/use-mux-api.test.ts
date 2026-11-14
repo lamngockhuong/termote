@@ -22,6 +22,7 @@ import {
   emptyTrash,
   fetchActivity,
   fetchAgentCommands,
+  fetchAgentHistory,
   fetchAgentPrompt,
   fetchCommitDiff,
   fetchDevices,
@@ -35,6 +36,7 @@ import {
   fetchFilesTree,
   fetchGitChanges,
   fetchHealth,
+  fetchHistoryTranscript,
   fetchHostStats,
   fetchLastCommit,
   fetchMachines,
@@ -64,6 +66,7 @@ import {
   openWorktree,
   previewTemplateImport,
   REQUEST_TIMEOUT_MS,
+  RESUME_REQUEST_TIMEOUT_MS,
   RequestError,
   removeRecentGroup,
   removeWorktree,
@@ -73,6 +76,7 @@ import {
   renameTab,
   resizePane,
   restoreFile,
+  resumeAgentSession,
   revokeDevice,
   revokeOtherSignins,
   revokeSignin,
@@ -865,6 +869,66 @@ describe('agent API client', () => {
       '/api/mux/panes/%253/agent/transcript?cursor=a+b',
       '/api/mux/panes/%253/agent/transcript?before=x',
     ])
+  })
+
+  it('reads the session history and an old transcript', async () => {
+    const { calls } = mockFetch({ body: { sessions: [], truncated: false } })
+    expect(await fetchAgentHistory('%3')).toEqual({
+      sessions: [],
+      truncated: false,
+    })
+    await fetchAgentHistory('%3', { agent: 'codex', cursor: 'a b' })
+    await fetchHistoryTranscript('%3', 'claude', 'id-1')
+    await fetchHistoryTranscript('%3', 'codex', 'id/2', 'x')
+    expect(calls.map((c) => c.url)).toEqual([
+      '/api/mux/panes/%253/agent/history',
+      '/api/mux/panes/%253/agent/history?agent=codex&cursor=a+b',
+      '/api/mux/panes/%253/agent/history/id-1/transcript?agent=claude',
+      '/api/mux/panes/%253/agent/history/id%2F2/transcript?agent=codex&before=x',
+    ])
+    // A refused read raises no view-only notice: the sheet says it in place
+    mockFetch({ body: { code: 'view_only' }, status: 403 })
+    await expect(fetchAgentHistory('1')).rejects.toMatchObject({
+      code: 'view_only',
+    })
+    await expect(
+      fetchHistoryTranscript('1', 'claude', 'x'),
+    ).rejects.toMatchObject({ status: 403 })
+  })
+
+  it('resumes a session and reports where it already runs', async () => {
+    const { calls } = mockFetch({ body: { ok: true, tabId: 't', paneId: 'p' } })
+    expect(
+      await resumeAgentSession('%3', {
+        agent: 'claude',
+        session: 'id',
+        where: 'tab',
+        fork: true,
+      }),
+    ).toMatchObject({ tabId: 't', paneId: 'p' })
+    expect(calls[0].url).toBe('/api/mux/panes/%253/agent/resume')
+    expect(calls[0].init?.method).toBe('POST')
+    expect(JSON.parse(calls[0].init?.body as string)).toEqual({
+      agent: 'claude',
+      session: 'id',
+      where: 'tab',
+      fork: true,
+    })
+    mockFetch({
+      body: { code: 'session_live', tabId: 't9', paneId: 'p9' },
+      status: 409,
+    })
+    await expect(
+      resumeAgentSession('1', { agent: 'codex', session: 'id', where: 'here' }),
+    ).rejects.toMatchObject({ code: 'session_live', tabId: 't9', paneId: 'p9' })
+    mockFetch({ body: { code: 'x', paneId: 3 }, status: 409 })
+    const err = await resumeAgentSession('1', {
+      agent: 'codex',
+      session: 'id',
+      where: 'here',
+    }).catch((e) => e)
+    expect(err.paneId).toBeUndefined()
+    expect(RESUME_REQUEST_TIMEOUT_MS).toBe(45_000)
   })
 
   it('turns a refusal into an AgentRequestError with its code', async () => {

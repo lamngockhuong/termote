@@ -1,3 +1,4 @@
+import { type RefObject, useMemo } from 'react'
 import type { TranscriptEntry } from '../hooks/use-mux-api'
 import { ENTER_FROM } from '../hooks/use-new-keys'
 import { useT } from '../i18n/i18n-context'
@@ -29,6 +30,19 @@ export function chatLayout(entries: TranscriptEntry[]) {
       joinsNext: side === 'agent' && !!next && chatSide(next) === 'agent',
     }
   })
+}
+
+// What the messages of a list read from it: the element they scroll in (a
+// diagram draws once near it) and the toast. Stable, so the memoized
+// messages do not draw again.
+export function useChatMarkdown(
+  listRef: RefObject<HTMLElement | null>,
+  notify: (message: string) => void,
+) {
+  return useMemo(
+    () => ({ scrollRoot: () => listRef.current, notify }),
+    [listRef, notify],
+  )
 }
 
 // How a message that just came in enters

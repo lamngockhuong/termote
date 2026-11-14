@@ -29,7 +29,7 @@ import { ChatImageViewer } from './chat-image-viewer'
 import { ChatMarkdownContext } from './chat-message'
 import { ChatSubagents } from './chat-subagents'
 import type { RunMode, RunState } from './chat-tool-run'
-import { ChatTranscriptList } from './chat-transcript-list'
+import { ChatTranscriptList, useChatMarkdown } from './chat-transcript-list'
 import { OpenTerminalButton } from './open-terminal-button'
 import { PromptCard } from './prompt-card'
 import { RecentSessions } from './recent-sessions'
@@ -189,11 +189,7 @@ function AgentChat({
   // The first entry on screen while reading above the bottom, and how far
   // below the list's top it was
   const readingRef = useRef<{ entry: Element; top: number } | null>(null)
-  // Stable, so the memoized messages do not draw again
-  const markdown = useMemo(
-    () => ({ scrollRoot: () => listRef.current, notify }),
-    [notify],
-  )
+  const markdown = useChatMarkdown(listRef, notify)
   // A path the agent wrote, opened in the Files view; none without one
   const paneId = session.paneId ?? ''
   const openFile = useMemo(

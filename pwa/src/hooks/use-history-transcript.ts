@@ -39,6 +39,7 @@ export function useHistoryTranscript(
     const gen = ++generation.current
     setEntries([])
     setLoaded(false)
+    setLoadingOlder(false)
     setError(undefined)
     setBefore(undefined)
     fetchHistoryTranscript(paneId, agent, sessionId).then(

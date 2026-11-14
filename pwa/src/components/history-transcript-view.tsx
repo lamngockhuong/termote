@@ -1,11 +1,11 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { useHistoryTranscript } from '../hooks/use-history-transcript'
 import type { HistoryAgent } from '../hooks/use-mux-api'
 import { useT } from '../i18n/i18n-context'
 import { ChatFileLinkContext } from './chat-file-link'
 import { ChatMarkdownContext } from './chat-message'
 import type { RunMode, RunState } from './chat-tool-run'
-import { ChatTranscriptList } from './chat-transcript-list'
+import { ChatTranscriptList, useChatMarkdown } from './chat-transcript-list'
 import { Button } from './ui/button'
 
 interface Props {
@@ -35,10 +35,7 @@ export function HistoryTranscriptView({
   const tails = useRef(new Map<string, string>())
   // The height before older entries went above, to keep the place
   const before = useRef<number | null>(null)
-  const markdown = useMemo(
-    () => ({ scrollRoot: () => listRef.current, notify }),
-    [notify],
-  )
+  const markdown = useChatMarkdown(listRef, notify)
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs as entries arrive
   useLayoutEffect(() => {
@@ -75,7 +72,7 @@ export function HistoryTranscriptView({
       })),
   }
   const showEarlier = () => {
-    before.current = listRef.current?.scrollHeight ?? null
+    before.current = (listRef.current as HTMLElement).scrollHeight
     h.loadOlder()
   }
   return (

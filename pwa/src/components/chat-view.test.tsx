@@ -1174,6 +1174,127 @@ describe('ChatView without an agent', () => {
   })
 })
 
+describe('ChatView session history', () => {
+  const history = vi.fn()
+  const resumed = vi.fn()
+  const sessions = [
+    {
+      agent: 'claude',
+      id: 'aaaaaaaa-0000-4000-8000-000000000001',
+      title: 'Old work',
+      titleSource: 'ai',
+      cwd: '',
+      updatedAt: new Date().toISOString(),
+    },
+  ]
+  const posts: unknown[] = []
+  beforeEach(() => {
+    history.mockReset()
+    resumed.mockReset()
+    posts.length = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url.includes('/resume')) {
+          posts.push(JSON.parse(init?.body as string))
+          return new Response(JSON.stringify({ tabId: 't', paneId: 'p' }))
+        }
+        return new Response(JSON.stringify({ sessions, truncated: false }))
+      }),
+    )
+    return () => vi.unstubAllGlobals()
+  })
+  const caps = {
+    clientSideSelect: true,
+    copyMode: false,
+    agentChat: true,
+    files: true,
+    tasks: true,
+  }
+  const pane = (command: string): ViewProps => ({
+    ...props,
+    mux: { backend: 'tmux', caps },
+    session: {
+      id: 't1',
+      name: 'tab',
+      icon: '',
+      description: '',
+      paneId: 'p1',
+      hasAgent: false,
+      panes: [{ id: 'p1', label: 'Pane 1', hasAgent: false, command }],
+    },
+    openHistory: history,
+    onSessionResumed: resumed,
+  })
+
+  it('opens the history from the header of a conversation', () => {
+    set({ entries: entries(1) })
+    const { rerender } = render(
+      <ChatView
+        {...props}
+        mux={{ ...props.mux, caps: { ...props.mux.caps, files: true } }}
+        openHistory={history}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Session history' }))
+    expect(history).toHaveBeenCalledWith('0')
+    // Not without pane folders
+    rerender(<ChatView {...props} openHistory={history} />)
+    expect(screen.queryByRole('button', { name: 'Session history' })).toBeNull()
+  })
+
+  it('offers the recent sessions of an idle pane, resumed in it', async () => {
+    render(<ChatView {...pane('bash')} />)
+    fireEvent.click(await screen.findByText('Old work'))
+    expect(history).toHaveBeenCalledWith('p1', sessions[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Resume' }))
+    await vi.waitFor(() => expect(resumed).toHaveBeenCalled())
+    expect(posts[0]).toMatchObject({ where: 'here' })
+    expect(resumed.mock.calls[0][1]).toBe('here')
+  })
+
+  it('resumes in a new tab from a busy pane, and also next to a start', async () => {
+    render(<ChatView {...pane('vim')} />)
+    expect(screen.getByText('No agent runs in this pane.')).toBeTruthy()
+    fireEvent.click(await screen.findByRole('button', { name: 'Resume' }))
+    await vi.waitFor(() => expect(posts).toHaveLength(1))
+    expect(posts[0]).toMatchObject({ where: 'tab' })
+  })
+
+  it('beside a start, and without a handler for the result', async () => {
+    const p = pane('bash')
+    render(
+      <ChatView
+        {...p}
+        mux={{ backend: 'herdr', caps: { ...caps, agentStart: true } }}
+        agentStart={{ starts: {}, start: vi.fn() }}
+        onSessionResumed={undefined}
+      />,
+    )
+    expect(screen.getByText('Start an agent in this pane')).toBeTruthy()
+    fireEvent.click(await screen.findByRole('button', { name: 'Resume' }))
+    await vi.waitFor(() => expect(posts).toHaveLength(1))
+  })
+
+  it('only reads for view-only or without tasks, and shows nothing without a way in', async () => {
+    const { unmount } = render(<ChatView {...pane('bash')} readOnly />)
+    await screen.findByText('Old work')
+    expect(screen.queryByRole('button', { name: 'Resume' })).toBeNull()
+    unmount()
+    const noTasks = render(
+      <ChatView
+        {...pane('bash')}
+        mux={{ backend: 'tmux', caps: { ...caps, tasks: false } }}
+      />,
+    )
+    await screen.findByText('Old work')
+    expect(screen.queryByRole('button', { name: 'Resume' })).toBeNull()
+    noTasks.unmount()
+    render(<ChatView {...pane('bash')} openHistory={undefined} />)
+    expect(screen.queryByText('Resume a recent session')).toBeNull()
+  })
+})
+
 describe('chatLayout', () => {
   const e = (
     id: string,
