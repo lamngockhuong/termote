@@ -1189,7 +1189,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   a `.git` file's `gitdir:`, its `commondir`, a line of `objects/info/alternates` (followed 5 deep)
   or a linked worktree's `gitdir` names a path off a drive letter outside the Places (the test
   `refusesDir` uses), or when `config`, `config.worktree` or any local file they include (followed
-  10 deep) sets `include.path`, `includeIf.*.path`, `core.worktree`, `core.excludesFile` or
+  10 deep; read only from a git dir holding a `HEAD`, as git reads them only from one) sets `include.path`, `includeIf.*.path`, `core.worktree`, `core.excludesFile` or
   `core.attributesFile` to one (`:(optional)` read past). Its parser (`parseGitConfig`) takes
   git's syntax strictly, and a file it cannot parse or read, includes too deep, or a link on the way
   off a drive (`evalSymlinks`) refuses the repository rather than passing it. `mailmap.file` is

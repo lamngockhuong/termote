@@ -363,7 +363,10 @@ func realRepoDir(p string) (string, error) {
 // checkGitDir checks the git directory g and its common directory; valid
 // reports whether git takes g as a repository (is_git_directory: a HEAD
 // naming a ref or an object, objects and refs directories in the common
-// directory), so that the walk up stops there.
+// directory), so that the walk up stops there. git reads commondir and
+// looks at what it names before anything else, so that is checked
+// always; the config, alternates and linked worktrees only when g holds a
+// HEAD, since git reads them only from a directory it takes as a repository.
 func (rr *rootResolver) checkGitDir(g string) (valid bool, err error) {
 	if g, err = realRepoDir(g); g == "" || err != nil {
 		return false, err
@@ -383,6 +386,9 @@ func (rr *rootResolver) checkGitDir(g string) (valid bool, err error) {
 				return false, err
 			}
 		}
+	}
+	if _, err := os.Lstat(filepath.Join(g, "HEAD")); err != nil {
+		return false, nil
 	}
 	for _, f := range []string{filepath.Join(common, "config"), filepath.Join(g, "config.worktree")} {
 		if err := rr.checkConfigFile(f, 0); err != nil {

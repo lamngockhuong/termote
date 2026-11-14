@@ -171,6 +171,8 @@ func TestRepoConfigRefused(t *testing.T) {
 		{"gitfile to a local git dir", withFiles(gitDirFiles("store/", "[include]\n\tpath = //h/s\n"), ".git", "gitdir: store\n"), "", true},
 		{"gitfile to a clean git dir", withFiles(gitDirFiles("store/", ""), ".git", "gitdir: store\n"), "", false},
 		{"commondir off a drive", withFiles(cfg(""), g+"commondir", "//h/s/common\n"), "", true},
+		{"no HEAD: config never read", map[string]string{g + "config": "junk\n", g + "objects/": ""}, "", false},
+		{"no HEAD: commondir still checked", map[string]string{g + "config": "junk\n", g + "commondir": "//h/s/c\n"}, "", true},
 		{"commondir config", withFiles(gitDirFiles("main/", "[include]\n\tpath = //h/s\n"),
 			".git", "gitdir: main/worktrees/w\n", "main/worktrees/w/HEAD", "ref: refs/heads/w\n",
 			"main/worktrees/w/commondir", "../..\n"), "", true},
