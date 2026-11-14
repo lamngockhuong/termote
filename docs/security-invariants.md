@@ -2427,7 +2427,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   extends it to 5 minutes (a slow mobile link), at most 256 sessions (a sign-in by the form or a
   link drops the least recently used; one by Basic auth only takes a free place, else the browser
   stays signed in by Basic auth without a cookie: a page of another site can load the server in
-  frames that send the saved Basic credentials, and must not push the user's sessions out), request
+  frames that send the saved Basic credentials, and must not push the user's sessions out; such a
+  page can still fill the free places until they expire after 24 h, residual risk accepted by the
+  maintainer, 2026-11-14), request
   body size limits (8KB on `/api/mux/*`, 64KB on `agent/message`)
 - **Connections from other local users** (`server/peer_user_*.go`, native only: `CheckLocalUsers`
   is set from the saved config, never for the container or an env-configured `serve`): a
@@ -2729,7 +2731,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   so the tag moved during the run changes nothing. The `release` and `github-pages` environments
   take `main` only (deployment branch policy, no tag): a `v*` tag pushed to an unreviewed commit,
   or a run of the workflow file of another branch, never reaches the signing key, the tap's deploy
-  key or the Pages deploy, whoever approves. The release job runs in the `release` environment (the
+  key or the Pages deploy, whoever approves. The `protect-release-tags` ruleset keeps a `v*` tag from
+  being moved, deleted or force-pushed by anyone but an admin; it does not block creating one,
+  since release-please makes its tags with `GITHUB_TOKEN` and GitHub lets no app bypass a ruleset
+  on a personal repository, so a writer's new tag still meets the `prepare` checks above. The release job runs in the `release` environment (the
   maintainer approves each release; it holds `RELEASE_SIGNING_KEY`), writes `image-digest.txt`
   (the pushed image by digest) into `checksums.txt`, signs it with `openssl pkeyutl` and checks
   the signature with the key `install.sh` pins. It also signs it as `checksums.txt.sshsig`
