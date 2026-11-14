@@ -50,6 +50,8 @@ export default {
   'dialogs.worktree.unknown':
     'The change is still running; check the list in a moment',
   'dialogs.worktree.unsupported': 'This backend cannot manage worktrees',
+  'dialogs.worktree.inUse':
+    'A program still has a file open in the worktree. Its workspaces were closed and nothing was deleted; close that program and remove again',
   // An image that could not be attached (utils/upload-image.ts), where
   // errors.* says it otherwise
   'dialogs.upload.tooLarge': 'Image is larger than 10 MB',

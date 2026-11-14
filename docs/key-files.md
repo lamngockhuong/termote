@@ -255,6 +255,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/mux_worktrees.go`                         | `/api/mux/worktrees*`: list, create, open, remove; name check  |
 | `server/herdr_worktree_branches.go`               | Each worktree workspace's branch, read in the background       |
 | `server/git_worktrees.go`                         | tmux, Zellij, hc: repo info, worktree list/add/remove, slug    |
+| `server/git_worktree_acl_unlock_windows.go`       | Windows: worktree folder ACL, wait for a held folder on remove |
 | `server/git_worktree_mux.go`                      | tmux, Zellij, hc: worktree routes' backend over git and groups |
 | `server/git_worktree_nest.go`                     | tmux, Zellij, hc: nesting linked worktrees, cached, background |
 | `server/stream.go`                                | Terminal WebSocket (`/api/mux/stream`)                         |

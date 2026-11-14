@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"regexp"
-	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -327,7 +326,7 @@ func TestHcRequirePaneAndErrors(t *testing.T) {
 	}
 	caps := s.m.Caps()
 	if !caps.ClientSideSelect || !caps.PaneStream || !caps.PaneLayout || !caps.Groups || !caps.Files || caps.Scroll || !caps.AltScroll ||
-		caps.RenamePane || caps.RenameTab || caps.ReorderTabs || caps.Worktrees != (runtime.GOOS != "windows") || s.m.Name() != "hc" {
+		caps.RenamePane || caps.RenameTab || caps.ReorderTabs || !caps.Worktrees || s.m.Name() != "hc" {
 		t.Fatalf("caps %+v", caps)
 	}
 }

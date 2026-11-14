@@ -370,8 +370,11 @@ Run against a Herdr of its own (`HERDR_SOCKET_PATH`, `HOME` and XDG dirs under a
 Windows also `USERPROFILE` and `APPDATA`), or on a repo you can throw away. Last checked on
 Windows 11 (26200) with Herdr 0.9.4 (#395).
 
-- [ ] A workspace's ⋯ menu has New worktree and Open worktree, Windows included; psmux, herdr-core
-      on Windows and Herdr 0.9.1 have neither (`caps.worktrees` false)
+- [ ] A workspace's ⋯ menu has New worktree and Open worktree, Windows included (Herdr, psmux,
+      herdr-core); Herdr 0.9.1 has neither (`caps.worktrees` false)
+- [ ] Windows, psmux or herdr-core: Remove worktree while an editor outside termote holds a file
+      in it says a program still has a file open, deletes nothing (`git worktree list` still has
+      it); closing the editor and removing again deletes the folder
 - [ ] New worktree from Current HEAD and from another base: the workspace appears, is selected and
       its header shows the branch, on a phone (390×844) and on desktop
 - [ ] Typing an existing branch hides the base ("Checks out the existing branch") and checks it

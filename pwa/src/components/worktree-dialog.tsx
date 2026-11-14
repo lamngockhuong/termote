@@ -44,6 +44,7 @@ const WORKTREE_PROBLEMS: Record<string, MessageKey> = {
   not_found: 'dialogs.worktree.gone',
   unknown_group: 'dialogs.worktree.gone',
   busy: 'dialogs.worktree.busy',
+  in_use: 'dialogs.worktree.inUse',
   unknown: 'dialogs.worktree.unknown',
   unsupported: 'dialogs.worktree.unsupported',
 }

@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"unicode"
 )
@@ -132,13 +133,14 @@ func listWorktrees(ctx context.Context, git *gitRunner, repo gitRepoInfo) ([]wor
 
 // parseWorktreeEntries reads `git worktree list --porcelain -z`: NUL-ended
 // lines, a record per work tree ended by an empty one, the main one first.
-// Paths are as git gives them (absolute; a relative one is dropped).
+// Paths are as git gives them (absolute; a relative one is dropped, and so
+// is one off a drive letter on Windows: see worktreeListPath).
 func parseWorktreeEntries(out []byte) []worktreeEntry {
 	var list []worktreeEntry
 	var cur *worktreeEntry
 	n := 0
 	flush := func() {
-		if cur != nil && filepath.IsAbs(cur.Path) {
+		if cur != nil && worktreeListPath(cur.Path, runtime.GOOS == "windows") {
 			cur.Linked = n > 0
 			list = append(list, *cur)
 		}
@@ -174,18 +176,39 @@ func parseWorktreeEntries(out []byte) []worktreeEntry {
 	return list
 }
 
+// worktreeListPath accepts a path git lists: absolute and, on Windows, on
+// a drive letter (C:\...). A UNC path (\\host\share, \\?\, \\.\) is refused
+// as validCwdForm refuses it: resolving it would open an SMB connection to
+// that host with the user's NTLM hash.
+func worktreeListPath(p string, windows bool) bool {
+	if windows {
+		return validCwdForm(p, true)
+	}
+	return filepath.IsAbs(p)
+}
+
 // branchSlugRe is what herdr-app turns into a "-" in a branch's folder name.
 var branchSlugRe = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
 
 // branchSlug is a branch's folder name, herdr-app's rule: every run of
 // characters other than ASCII letters, digits, '.', '_' and '-' becomes one
 // '-', leading and trailing '-' trimmed. A name with nothing left, only
-// dots, or a git directory's name is refused.
+// dots, or a git directory's name is refused, and on Windows one that ends
+// in '.' or names a device (con, nul, com1).
 func branchSlug(branch string) (string, error) {
+	return branchSlugFor(branch, runtime.GOOS == "windows")
+}
+
+func branchSlugFor(branch string, windows bool) (string, error) {
 	s := strings.Trim(branchSlugRe.ReplaceAllString(branch, "-"), "-")
 	// A folder named like a git directory would make its parent look like
 	// a repository.
 	if strings.Trim(s, ".") == "" || isGitDirName(s) {
+		return "", errWorktreeName
+	}
+	// Windows drops a trailing dot (git would then list another path than
+	// the one built here) and opens a device name as the device.
+	if windows && (strings.HasSuffix(s, ".") || deviceName(s)) {
 		return "", errWorktreeName
 	}
 	return s, nil
@@ -249,12 +272,13 @@ func newWorktreePath(base, repoName, branch string, deny []string) (string, erro
 	return path, nil
 }
 
-// resolveExisting resolves the deepest part of p that exists and joins the
-// rest back on.
+// resolveExisting resolves the deepest folder of p that exists and joins the
+// rest back on. On Windows a junction is resolved too (resolveLinkedDir):
+// filepath.EvalSymlinks leaves one as it is.
 func resolveExisting(p string) (string, bool) {
 	rest := ""
 	for dir := p; ; {
-		if real, err := filepath.EvalSymlinks(dir); err == nil {
+		if real, err := resolveLinkedDir(dir); err == nil {
 			return filepath.Join(real, rest), true
 		}
 		parent := filepath.Dir(dir)
@@ -278,7 +302,7 @@ func resolveExisting(p string) (string, bool) {
 // (an includeIf on gitdir:worktrees/, a config.worktree) is listed only
 // there. worktree add would check out in a child git of its own.
 func addWorktree(ctx context.Context, git *gitRunner, repo gitRepoInfo, path, branch, base string, exists bool) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	if err := makeWorktreeParent(filepath.Dir(path)); err != nil {
 		log.Printf("worktree add: %v", err)
 		return errWorktreeCreateFailed
 	}
@@ -301,6 +325,26 @@ func addWorktree(ctx context.Context, git *gitRunner, repo gitRepoInfo, path, br
 			log.Printf("worktree add: %s left after a failed checkout", path)
 		}
 		return errWorktreeCreateFailed
+	}
+	return nil
+}
+
+// makeWorktreeParent makes dir (a repository's folder under the worktree
+// base) for the current user only: mode 0700, on Windows an owner-only ACL
+// its checkouts inherit, set when dir is made (a folder that exists keeps
+// its own, as with mkdir -p).
+func makeWorktreeParent(dir string) error {
+	if _, err := os.Lstat(dir); err == nil {
+		return nil
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	if err := restrictWorktreeDir(dir); err != nil {
+		// Not left behind with the inherited ACL: the next create would
+		// take the folder as it is.
+		os.Remove(dir)
+		return err
 	}
 	return nil
 }

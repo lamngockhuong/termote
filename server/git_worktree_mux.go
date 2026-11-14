@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"os/exec"
-	"runtime"
 	"slices"
 	"strings"
 	"unicode"
@@ -32,15 +31,11 @@ type gitWorktreeMux struct {
 }
 
 // gitWorktreeBackend reports whether m gets its worktrees from
-// gitWorktreeMux: tmux (not psmux), Zellij, and herdr-core off Windows.
+// gitWorktreeMux: tmux and psmux, Zellij, and herdr-core.
 func gitWorktreeBackend(m Mux) bool {
 	switch m.(type) {
-	case tmuxMux, *tmuxMux:
-		return !tmuxIsPsmux
-	case *zellijMux:
+	case tmuxMux, *tmuxMux, *zellijMux, *hcMux:
 		return true
-	case *hcMux:
-		return runtime.GOOS != "windows"
 	}
 	return false
 }
@@ -281,7 +276,9 @@ func (g *gitWorktreeMux) OpenWorktree(ctx context.Context, sourceID, branch stri
 // one named first), then deletes the checkout: the path is git's,
 // re-derived from the group, never the client's, so nothing is left running
 // in a deleted folder. Without force a dirty worktree changes nothing; a
-// locked one is refused before anything closes. A remove that fails after
+// locked one is refused before anything closes. On Windows the delete waits
+// for the closed groups' processes to let go of the folder (a file still
+// open there answers in_use, nothing deleted). A remove that fails after
 // the close leaves the checkout and the groups closed.
 func (g *gitWorktreeMux) RemoveWorktree(ctx context.Context, groupID string, force bool) error {
 	repo, snap, err := g.source(ctx, groupID)
@@ -330,6 +327,13 @@ func (g *gitWorktreeMux) RemoveWorktree(ctx context.Context, groupID string, for
 		if err := g.m.CloseGroup(ctx, id); err != nil {
 			return err
 		}
+	}
+	if err := waitWorktreeFree(ctx, entries[i].Path); err != nil {
+		if err != errWorktreeInUse {
+			log.Printf("worktree remove %s: %v", entries[i].Path, err)
+			err = errWorktreeFailed
+		}
+		return err
 	}
 	return removeWorktree(ctx, g.git, repo, entries[i].Path)
 }
