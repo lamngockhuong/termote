@@ -651,6 +651,36 @@ func TestHcStreamLayoutKeyOfAGoneTerminal(t *testing.T) {
 	}
 }
 
+// An agent starting or ending in a pane of the tab changes the key, so the
+// client reads the snapshot (its Chat view) at once; its turns do not.
+func TestHcStreamLayoutKeyFollowsTheAgent(t *testing.T) {
+	s := newHcSim(t)
+	st := &hcStream{m: s.m, pane: "t2"}
+	status := func(term, data string) {
+		s.m.state.mu.Lock()
+		seq := s.m.state.seq + 1
+		s.m.state.mu.Unlock()
+		s.m.state.apply(hcEvent{Seq: seq, Type: "status", Terminal: term, Data: json.RawMessage(data)})
+	}
+	none := st.layoutKey()
+	// Another pane of the tab, then this one
+	for _, term := range []string{"t1", "t2"} {
+		status(term, `{"status":{"app":"claude-code","state":"idle"}}`)
+		started := st.layoutKey()
+		if started == none {
+			t.Fatalf("%s: an agent started, key %q unchanged", term, started)
+		}
+		status(term, `{"status":{"app":"claude-code","state":"working"}}`)
+		if k := st.layoutKey(); k != started {
+			t.Fatalf("%s: a turn changed the key: %q, was %q", term, k, started)
+		}
+		status(term, `{"status":null}`)
+		if k := st.layoutKey(); k != none {
+			t.Fatalf("%s: the agent ended, key %q, want %q", term, k, none)
+		}
+	}
+}
+
 // A sleep ends at once when its stream ends.
 func TestHcStreamSleepEndsAtClose(t *testing.T) {
 	st := &hcStream{m: &hcMux{chg: make(chan struct{})}, stop: make(chan struct{})}

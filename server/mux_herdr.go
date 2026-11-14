@@ -735,6 +735,7 @@ type herdrEvent struct {
 	Data  struct {
 		Layout *herdrLayout `json:"layout"`
 		TabID  string       `json:"tab_id"`
+		PaneID string       `json:"pane_id"`
 	} `json:"data"`
 }
 
@@ -852,6 +853,11 @@ func (m *herdrMux) subscribeOnce(ctx context.Context) (live bool, err error) {
 			if ev.Data.Layout != nil {
 				m.notifySizes(*ev.Data.Layout)
 			}
+			// The pane's agent started, ended or changed status: its
+			// streams' clients read the snapshot (the Chat view) at once.
+			if (ev.Event == "pane_agent_detected" || ev.Event == "pane_agent_status_changed") && ev.Data.PaneID != "" {
+				m.notifyPane(ev.Data.PaneID)
+			}
 			// Focusing another pane of a zoomed tab zooms that pane instead,
 			// and Herdr sends only pane_focused and tab_focused for it.
 			if ev.Event == "tab_focused" {
@@ -927,13 +933,27 @@ func (m *herdrMux) notifyLayoutLocked(l herdrLayout) {
 		}
 	}
 	for _, p := range l.Panes {
-		for w := range m.watchers[p.ID] {
-			select {
-			case w.layout <- struct{}{}:
-			default: // a signal is pending already
-			}
+		m.signalPaneLocked(p.ID)
+	}
+}
+
+// signalPaneLocked sends a layout signal to the streams following pane;
+// watchMu held.
+func (m *herdrMux) signalPaneLocked(pane string) {
+	for w := range m.watchers[pane] {
+		select {
+		case w.layout <- struct{}{}:
+		default: // a signal is pending already
 		}
 	}
+}
+
+// notifyPane tells the streams following pane that its snapshot changed, as
+// a layout change does.
+func (m *herdrMux) notifyPane(pane string) {
+	m.watchMu.Lock()
+	defer m.watchMu.Unlock()
+	m.signalPaneLocked(pane)
 }
 
 // setZoomed replaces the zoomed tabs with those of a fresh snapshot.

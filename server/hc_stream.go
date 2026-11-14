@@ -475,7 +475,10 @@ func (s *hcStream) resize(ch *hcChannel, size Size) {
 }
 
 // layoutKey changes when what the tab's layout is built from does: the
-// sizes of the terminals of the pane's tab, and herdr-app's document.
+// sizes of the terminals of the pane's tab, and herdr-app's document. The
+// agent of each one too (not its turns): a client polling the snapshot
+// slowly offers the Chat view of an agent that just started, and drops that
+// of one that ended, at once.
 func (s *hcStream) layoutKey() string {
 	in := s.m.state.input()
 	t := in.terminals[s.pane]
@@ -486,7 +489,11 @@ func (s *hcStream) layoutKey() string {
 	var parts []string
 	for a, o := range in.terminals {
 		if hcTabOf(o) == tab && hcShown(o) {
-			parts = append(parts, fmt.Sprintf("%s=%dx%d", a, o.Cols, o.Rows))
+			agent := ""
+			if ag := hcAgent(o); ag != nil {
+				agent = ag.Name
+			}
+			parts = append(parts, fmt.Sprintf("%s=%dx%d:%s", a, o.Cols, o.Rows, agent))
 		}
 	}
 	slices.Sort(parts)
