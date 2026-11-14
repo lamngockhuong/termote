@@ -879,6 +879,18 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   image. If a step fails after the first paste, the box is cleared with one `C-c` only when
   the same idle agent shows nothing but one of the states this request pasted; otherwise 409
   `partial_paste` and nothing is touched.
+  `GET agent/image?src=` (`server/agent_image.go`) serves an image the user pasted into a Claude
+  Code message, shown again from its `[image]` chip in the Chat view. `src` is a reference the
+  transcript read gave the part, HMAC-signed with the cursor key under its own `image\x00` domain
+  (a cursor never passes for one): session id, file identity, row offset and the image's place in
+  the row; nothing else is taken from the client. The server re-locates the pane's own session
+  (`Locate`, as `transcript`), needs the same file identity, an offset at a line start and a whole
+  row within 32 MiB, and serves only a `source.type: base64` block whose bytes sniff
+  (`http.DetectContentType`) as PNG, JPEG, GIF or WebP and as its `media_type` when given (never
+  SVG, a URL source, or a tool result's image); anything else is 404 `not_found`. At most 2 reads
+  at once (else 429 `busy`). Same-site only (`crossSiteRejection`), GET only, both roles (the
+  view-only client already reads the conversation's text); the reply has `nosniff`, a `sandbox;
+  default-src 'none'` CSP and `Cache-Control: private`. Codex images keep a plain chip.
   Markdown images in the Chat view never load (shown as links), and raw HTML is not rendered;
   its code blocks and Mermaid diagrams use the preview's (see Mermaid diagrams). A file path in
   it (a file tool card's input, inline code naming a file, a relative link) opens on a click

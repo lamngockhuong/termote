@@ -24,6 +24,7 @@ import { FILES_VIEW_ID } from '../view-ids'
 import { AgentStatusBadge } from './agent-status-badge'
 import { ChatActivity, ChatBackground } from './chat-activity-row'
 import { ChatFileLinkContext } from './chat-file-link'
+import { ChatImageViewer } from './chat-image-viewer'
 import { ChatMarkdownContext, ChatMessage, chatSide } from './chat-message'
 import { ChatSubagents } from './chat-subagents'
 import {
@@ -392,77 +393,79 @@ function AgentChat({
         data-native-menu
       >
         <ChatFileLinkContext.Provider value={openFile}>
-          <ChatMarkdownContext.Provider value={markdown}>
-            <div ref={contentRef} className="space-y-3">
-              {(hidden > 0 || t.before) && (
-                <div className="flex justify-center">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={t.loadingOlder}
-                    onClick={showEarlier}
-                  >
-                    {t.loadingOlder
-                      ? translate('chat.view.loadingOlder')
-                      : translate('chat.view.showEarlier')}
-                  </Button>
-                </div>
-              )}
-              {visible.length === 0 && (
-                <p className="text-center text-fg-muted">
-                  {translate('chat.view.empty')}
-                </p>
-              )}
-              {items.flatMap((item, k) => {
-                if (item.kind === 'entry') {
-                  if (item.index < hidden) return []
-                  const e = t.entries[item.index]
-                  const l = layout[item.index - hidden]
-                  const enters = isNew(e.id) && item.index > firstKnown
-                  return [
-                    <ChatMessage
-                      key={e.id}
-                      entry={e}
-                      showTime={l.showTime}
-                      joinsNext={l.joinsNext}
-                      className={enters ? ENTER_MESSAGE : undefined}
-                    />,
-                  ]
-                }
-                if (item.end <= hidden) return []
-                const start = Math.max(item.start, hidden)
-                const run = t.entries.slice(start, item.end)
-                // The run the agent is in: open on its newest steps
-                const live =
-                  k === items.length - 1 &&
-                  (status === 'working' || (!settled && hasPending(run)))
-                return toolRunRows(
-                  run,
-                  layout.slice(start - hidden, item.end - hidden),
-                  live,
-                  runs,
-                  translate,
-                  t.entries[item.start].id,
-                )
-              })}
-              {status === 'working' ? (
-                <ChatActivity
-                  paneId={
-                    chatInputAgent(session.agentName)
-                      ? session.paneId
-                      : undefined
+          <ChatImageViewer paneId={paneId}>
+            <ChatMarkdownContext.Provider value={markdown}>
+              <div ref={contentRef} className="space-y-3">
+                {(hidden > 0 || t.before) && (
+                  <div className="flex justify-center">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={t.loadingOlder}
+                      onClick={showEarlier}
+                    >
+                      {t.loadingOlder
+                        ? translate('chat.view.loadingOlder')
+                        : translate('chat.view.showEarlier')}
+                    </Button>
+                  </div>
+                )}
+                {visible.length === 0 && (
+                  <p className="text-center text-fg-muted">
+                    {translate('chat.view.empty')}
+                  </p>
+                )}
+                {items.flatMap((item, k) => {
+                  if (item.kind === 'entry') {
+                    if (item.index < hidden) return []
+                    const e = t.entries[item.index]
+                    const l = layout[item.index - hidden]
+                    const enters = isNew(e.id) && item.index > firstKnown
+                    return [
+                      <ChatMessage
+                        key={e.id}
+                        entry={e}
+                        showTime={l.showTime}
+                        joinsNext={l.joinsNext}
+                        className={enters ? ENTER_MESSAGE : undefined}
+                      />,
+                    ]
                   }
-                  status={status}
-                  agent={agent}
-                />
-              ) : (
-                chatInputAgent(session.agentName) &&
-                session.paneId && (
-                  <ChatBackground paneId={session.paneId} status={status} />
-                )
-              )}
-            </div>
-          </ChatMarkdownContext.Provider>
+                  if (item.end <= hidden) return []
+                  const start = Math.max(item.start, hidden)
+                  const run = t.entries.slice(start, item.end)
+                  // The run the agent is in: open on its newest steps
+                  const live =
+                    k === items.length - 1 &&
+                    (status === 'working' || (!settled && hasPending(run)))
+                  return toolRunRows(
+                    run,
+                    layout.slice(start - hidden, item.end - hidden),
+                    live,
+                    runs,
+                    translate,
+                    t.entries[item.start].id,
+                  )
+                })}
+                {status === 'working' ? (
+                  <ChatActivity
+                    paneId={
+                      chatInputAgent(session.agentName)
+                        ? session.paneId
+                        : undefined
+                    }
+                    status={status}
+                    agent={agent}
+                  />
+                ) : (
+                  chatInputAgent(session.agentName) &&
+                  session.paneId && (
+                    <ChatBackground paneId={session.paneId} status={status} />
+                  )
+                )}
+              </div>
+            </ChatMarkdownContext.Provider>
+          </ChatImageViewer>
         </ChatFileLinkContext.Provider>
       </section>
       {/* Only Claude Code's sessions have a subagent tree to read */}

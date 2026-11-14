@@ -40,6 +40,12 @@ export default {
   'chat.message.image': 'image: {where}',
   'chat.message.imageUnavailable': 'unavailable',
   'chat.message.imageChip': '[image]',
+  'chat.message.imageOpen': 'Show the image',
+  'chat.image.title': 'Image',
+  'chat.image.openTab': 'Open in new tab',
+  'chat.image.download': 'Download',
+  'chat.image.failed':
+    'The image could not be loaded: it may be gone from the transcript, or the agent session changed.',
   'chat.message.copyCode': 'Copy code',
   'chat.message.copyAnswer': 'Copy answer',
   'chat.message.shortened': '(shortened)',

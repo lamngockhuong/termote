@@ -89,6 +89,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/chat-tool-card.tsx`           | Chat view tool call: `$` command, folded output, edit diff     |
 | `pwa/src/components/chat-tool-run.tsx`            | Chat view: steps in a row folded into one summary line         |
 | `pwa/src/components/chat-file-link.tsx`           | A file path in the Chat view, opened in Files on a click       |
+| `pwa/src/components/chat-image-viewer.tsx`        | A transcript image, shown from its chip in the Chat view       |
 | `pwa/src/utils/chat-file-links.ts`                | Which inline code is a path, its line, the path under the root |
 | `pwa/src/utils/line-diff.ts`                      | Line diff of an edit's old and new text, its summary           |
 | `pwa/src/components/chat-attachments.tsx`         | Images attached to the next Chat message, above the box        |
@@ -270,6 +271,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/agent_context_window.go`                  | Window of a model id, context share, Codex account key         |
 | `server/agent_claude_model.go`                    | Last model a Claude Code transcript names                      |
 | `server/agent_subagents.go`                       | `agent/subagents`: a Claude session's subagent tree            |
+| `server/agent_image.go`                           | `agent/image`: a pasted image of a Claude transcript, by ref   |
 | `server/agent_claude.go`                          | Claude Code transcript (JSONL) and session file                |
 | `scripts/claude-chat-tags.sh`                     | Tags Claude Code writes that the Chat view would show raw      |
 | `scripts/codex-chat-items.sh`                     | Codex items and events the Chat view would not show            |

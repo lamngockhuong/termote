@@ -333,11 +333,13 @@ func parseClaudeRow(line []byte, off int64) (TranscriptEntry, bool) {
 	}
 	if c, ok := content.([]any); ok {
 		var blockRole string
+		images := 0
 		for _, item := range c {
 			b, _ := item.(map[string]any)
 			switch jsonStr(b["type"]) {
 			case "image":
-				e.Parts = append(e.Parts, TranscriptPart{Kind: "image"})
+				e.Parts = append(e.Parts, TranscriptPart{Kind: "image", imageN: images})
+				images++
 			case "text":
 				t := jsonStr(b["text"])
 				if row.Type == "user" {

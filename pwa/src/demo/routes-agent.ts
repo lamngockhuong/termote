@@ -192,6 +192,9 @@ export const AGENT_ROUTES: Record<string, Handler> = {
   'GET /panes/{id}/agent/prompt': prompt,
   'POST /panes/{id}/agent/answer': answer,
   'GET /panes/{id}/agent/commands': commands,
+  // The demo's transcripts hold no image, so no part carries a reference
+  'GET /panes/{id}/agent/image': () =>
+    fail(404, 'not_found', 'image not found'),
   'GET /panes/{id}/agent/start': () =>
     fail(404, 'no_start', 'no start in this pane'),
   'POST /panes/{id}/agent/start': unsupported,
