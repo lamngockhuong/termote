@@ -88,7 +88,14 @@ func (c *cli) cmdUpdate(args []string) error {
 	if pin == "" && releaseSigned(current) && !releaseSigned(target) {
 		return fmt.Errorf("the newest release on GitHub, v%s, predates signed releases and this install is on v%s; refusing to go back without a pin. If you mean it: termote update --version %s", target, current, target)
 	}
+	// Nor back to an older release: whoever can mark the newer ones as
+	// pre-releases or drafts would pick one with a fixed flaw. A pre-release
+	// install still goes back to the newest stable, as the docs tell its
+	// user to (a pre-release sorts above the release before it).
 	if compareVersions(target, current) < 0 {
+		if pin == "" && !strings.Contains(current, "-") {
+			return fmt.Errorf("the newest release on GitHub, v%s, is older than this install's v%s; refusing to go back without a pin. If you mean it: termote update --version %s", target, current, target)
+		}
 		c.warnf("Downgrading from v%s to v%s", current, target)
 	}
 	c.infof("Updating v%s -> v%s", current, target)

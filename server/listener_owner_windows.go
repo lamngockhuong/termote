@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/binary"
 	"net/netip"
+	"slices"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -31,6 +32,12 @@ const localSystemSID = "S-1-5-18"
 // was not created before the socket was bound (its PID maybe another
 // process's now) counts as another user's.
 func listenerOwnedLocally(port int) listenerOwner {
+	return listenerOwnedLocallyOr(port)
+}
+
+// listenerOwnedLocallyOr is listenerOwnedLocally that also trusts the
+// accounts named by SID in also.
+func listenerOwnedLocallyOr(port int, also ...string) listenerOwner {
 	var owners []tcpConnOwner
 	for _, family := range []uint32{windows.AF_INET, windows.AF_INET6} {
 		table, ok := tcpTable(family, tcpTableOwnerModuleListener)
@@ -39,7 +46,7 @@ func listenerOwnedLocally(port int) listenerOwner {
 		}
 		owners = append(owners, tcpListenerOwners(table, family, port)...)
 	}
-	return listenerOwnersTrusted(owners)
+	return listenerOwnersTrusted(owners, also...)
 }
 
 // tcpListenerOwners returns the owner of each row of a listener table that
@@ -57,7 +64,7 @@ func tcpListenerOwners(table []byte, family uint32, port int) []tcpConnOwner {
 // listenerOwnersTrusted judges the owners of the sockets listening on a
 // port: each must run as the current user or SYSTEM. A service whose token
 // cannot be read (serviceProcessID) is not trusted with the password.
-func listenerOwnersTrusted(owners []tcpConnOwner) listenerOwner {
+func listenerOwnersTrusted(owners []tcpConnOwner, also ...string) listenerOwner {
 	if len(owners) == 0 {
 		return listenerNoneSeen
 	}
@@ -66,7 +73,7 @@ func listenerOwnersTrusted(owners []tcpConnOwner) listenerOwner {
 		return listenerNoneSeen
 	}
 	for _, o := range owners {
-		if sid, err := connProcessUser(o); err != nil || sid != self && sid != localSystemSID {
+		if sid, err := connProcessUser(o); err != nil || sid != self && sid != localSystemSID && !slices.Contains(also, sid) {
 			return listenerOtherOwner
 		}
 	}

@@ -149,6 +149,48 @@ func TestUpdateWillNotLeaveSignedReleasesUnpinned(t *testing.T) {
 	}
 }
 
+// Nor back to an older signed release: whoever marks the newer ones as
+// pre-releases would pick one with a fixed flaw. Without --version the
+// update refuses and downloads nothing; named, it installs.
+func TestUpdateWillNotGoBackUnpinned(t *testing.T) {
+	tc, gh, svc := setupUpdate(t)
+	tc.version = "2.1.0"
+	writeFile(t, tc.versionBinary("2.1.0"), "ELF 2.1.0")
+	if err := tc.setPointer("current", "2.1.0"); err != nil {
+		t.Fatal(err)
+	}
+	tc.exe = tc.versionBinary("2.1.0")
+	gh.tags = []string{"v2.1.0:pre", "v2.0.0"}
+	gh.publishSigned(t, "2.0.0", useTestReleaseKey(t), "good")
+	if code := tc.main([]string{"update"}); code != 1 || !strings.Contains(tc.stderr.String(), "termote update --version 2.0.0") {
+		t.Fatalf("code %d\n%s%s", code, tc.stdout.String(), tc.stderr.String())
+	}
+	if fileExists(filepath.Join(tc.versionsDir(), "2.0.0")) || tc.currentVersion() != "2.1.0" || len(svc.calls) != 0 {
+		t.Fatalf("an unpinned update went back (calls %v)", svc.calls)
+	}
+	if code := tc.main([]string{"update", "--version", "2.0.0"}); code != 0 || tc.currentVersion() != "2.0.0" ||
+		!strings.Contains(tc.stdout.String()+tc.stderr.String(), "Downgrading from v2.1.0 to v2.0.0") {
+		t.Fatalf("code %d current %s\n%s%s", code, tc.currentVersion(), tc.stdout.String(), tc.stderr.String())
+	}
+}
+
+// A pre-release install goes back to the newest stable without a pin, as
+// the docs tell its user to.
+func TestUpdateFromAPreReleaseToStable(t *testing.T) {
+	tc, gh, _ := setupUpdate(t)
+	tc.version = "2.1.0-rc.1"
+	writeFile(t, tc.versionBinary("2.1.0-rc.1"), "ELF 2.1.0-rc.1")
+	if err := tc.setPointer("current", "2.1.0-rc.1"); err != nil {
+		t.Fatal(err)
+	}
+	tc.exe = tc.versionBinary("2.1.0-rc.1")
+	gh.tags = []string{"v2.1.0-rc.1:pre", "v2.0.0"}
+	gh.publishSigned(t, "2.0.0", useTestReleaseKey(t), "good")
+	if code := tc.main([]string{"update"}); code != 0 || tc.currentVersion() != "2.0.0" {
+		t.Fatalf("code %d current %s\n%s%s", code, tc.currentVersion(), tc.stdout.String(), tc.stderr.String())
+	}
+}
+
 func TestVerifyChecksums(t *testing.T) {
 	priv := useTestReleaseKey(t)
 	msg := []byte("abc  termote.tar.gz\n")

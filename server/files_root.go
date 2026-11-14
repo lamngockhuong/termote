@@ -33,6 +33,17 @@ type paneOutputDirer interface {
 	dirFromPaneOutput() bool
 }
 
+// mayBeFromPaneOutput reports whether d's directories are checked as ones
+// a pane could announce: every backend's on Windows, where only such a path
+// (a UNC one) reaches another host, and elsewhere a paneOutputDirer's.
+func mayBeFromPaneOutput(d PaneDirer) bool {
+	if runtime.GOOS == "windows" {
+		return true
+	}
+	od, ok := d.(paneOutputDirer)
+	return ok && od.dirFromPaneOutput()
+}
+
 const (
 	// gitTimeout bounds one git command. Longer than muxTimeout: git status
 	// on a large repo is slow, and the reply is cached for every client.
@@ -531,8 +542,12 @@ func (rr *rootResolver) paneRootAt(ctx context.Context, d PaneDirer, paneID stri
 		return filesRoot{}, err
 	}
 	// Before anything stats it: a UNC path would make Windows send the
-	// user's NTLM hash to that host. A Place is the user's own choice.
-	if od, ok := d.(paneOutputDirer); ok && od.dirFromPaneOutput() && !validCwdForm(dir, true) && !rr.inPlace(dir) {
+	// user's NTLM hash to that host. A Place is the user's own choice. On
+	// Windows every backend is checked: Herdr reports a pane's directory as
+	// its own process, which may have taken it from what the pane printed.
+	// A drive path in the \\?\ form (Rust's canonicalize writes it) is one
+	// too; \\?\UNC\ is not.
+	if mayBeFromPaneOutput(d) && !validCwdForm(strings.TrimPrefix(dir, `\\?\`), true) && !rr.inPlace(dir) {
 		return filesRoot{}, errDirNotAvailable
 	}
 	root, err := rr.resolve(ctx, dir)
@@ -541,7 +556,7 @@ func (rr *rootResolver) paneRootAt(ctx context.Context, d PaneDirer, paneID stri
 	}
 	real := ""
 	if abs, err := filepath.Abs(dir); err == nil {
-		real, _ = filepath.EvalSymlinks(abs)
+		real, _ = evalSymlinks(abs)
 	}
 	return rr.settle(key, root, real, take), nil
 }
@@ -581,7 +596,7 @@ func (rr *rootResolver) resolve(ctx context.Context, dir string) (filesRoot, err
 	return rr.resolved.do(dir, func() (filesRoot, error) {
 		abs, err := filepath.Abs(dir)
 		if err == nil {
-			abs, err = filepath.EvalSymlinks(abs)
+			abs, err = evalSymlinks(abs)
 		}
 		if err != nil {
 			return filesRoot{}, errDirNotAvailable
@@ -593,11 +608,15 @@ func (rr *rootResolver) resolve(ctx context.Context, dir string) (filesRoot, err
 		var ge *gitError
 		if errors.As(err, &ge) {
 			if owned, ok := dubiousRepo(ge.stderr); ok {
-				if !rr.trustRepo(owned) {
+				if !rr.trustRepo(owned) || !rr.trustGitEntry(owned) {
 					log.Printf("files: %s not trusted by git (owner differs), browsing it as a plain directory", owned)
 					return filesRoot{Root: abs}, nil
 				}
 				top, gitDir, err = rr.toplevel(ctx, abs, owned)
+				if err == nil && (!rr.trustRepo(gitDir) || !rr.trustGitEntry(top)) {
+					log.Printf("files: the git dir of %s is not trusted (owner differs), browsing it as a plain directory", owned)
+					return filesRoot{Root: abs}, nil
+				}
 				if err == nil {
 					return rootFromToplevel(abs, top, gitDir, owned), nil
 				}
@@ -637,7 +656,7 @@ func rootFromToplevel(dir, top, gitDir, safeDir string) filesRoot {
 			return ""
 		}
 		p = filepath.Clean(filepath.FromSlash(p))
-		if r, err := filepath.EvalSymlinks(p); err == nil {
+		if r, err := evalSymlinks(p); err == nil {
 			p = r
 		}
 		return p
@@ -688,7 +707,7 @@ func gitEntryTarget(top string) (string, bool) {
 			target = filepath.Join(top, target)
 		}
 	}
-	if r, err := filepath.EvalSymlinks(target); err == nil {
+	if r, err := evalSymlinks(target); err == nil {
 		target = r
 	}
 	return filepath.Clean(target), true
@@ -711,6 +730,21 @@ func (rr *rootResolver) trustRepo(path string) bool {
 	}
 	// A Place is mounted from the host like the workspace.
 	return rr.inPlace(path)
+}
+
+// trustGitEntry decides whether the .git entry of the work tree dir (a
+// dir, or a file naming the git dir) is trusted as trustRepo trusts dir, when
+// there is one. safe.directory names only the work tree: another user who
+// could write a .git into the server user's directory, or point its git dir
+// elsewhere, would otherwise have git read their config, index and objects.
+// It is checked before git runs with safe.directory, and the git dir git then
+// names right after.
+func (rr *rootResolver) trustGitEntry(dir string) bool {
+	entry := filepath.Join(dir, ".git")
+	if _, err := os.Lstat(entry); err != nil {
+		return errors.Is(err, os.ErrNotExist)
+	}
+	return rr.trustRepo(entry)
 }
 
 // inPlace reports whether path is inside one of the Places.

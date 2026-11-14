@@ -170,9 +170,9 @@ type transcriptResponse struct {
 	Before string `json:"before,omitempty"`
 	// Reset: the entries replace everything the client holds.
 	Reset bool `json:"reset"`
-	// sensitiveCalls: the tool ids of every call on a sensitive file the
-	// read parsed, the ones cut off the page included
-	sensitiveCalls []string
+	// calls: every tool call the read parsed, the ones cut off the page
+	// included
+	calls []toolCall
 }
 
 // agentCursor is a position in one transcript file. Tokens are signed with a
@@ -359,11 +359,11 @@ type agentAPI struct {
 	loc         agentSessionLocator // nil when the backend has none
 	sessions    *ttlCache[agentLookup]
 	reads       *ttlCache[transcriptResponse]
-	// sensitive remembers which calls named a sensitive file, for their
-	// results read after them
-	sensitive *sensitiveCalls
-	input     *agentInput
-	starts    *agentStarts
+	// calls remembers the calls reads parsed and which named a sensitive
+	// file, for their results read after them
+	calls  *knownCalls
+	input  *agentInput
+	starts *agentStarts
 	// Set by registerCommandsRoute: the files routes' pane roots, the host
 	// allowlist, the custom command listings and the server user's home
 	// (for ~/.agents/skills).
@@ -427,16 +427,16 @@ func newAgentAPI(m Mux) *agentAPI {
 		backend = m.Name()
 	}
 	return &agentAPI{
-		m:         m,
-		loc:       loc,
-		sessions:  newTTLCache[agentLookup](agentCacheTTL),
-		reads:     newTTLCache[transcriptResponse](agentCacheTTL),
-		sensitive: &sensitiveCalls{ids: map[string]struct{}{}},
-		input:     newAgentInput(),
-		starts:    newAgentStarts(),
-		activity:  newActivityTracker(time.Now, overlayBackend(backend), backend == "tmux"),
-		overview:  newTTLCache[overviewRead](overviewTTL),
-		changes:   newOverviewChanges(),
+		m:        m,
+		loc:      loc,
+		sessions: newTTLCache[agentLookup](agentCacheTTL),
+		reads:    newTTLCache[transcriptResponse](agentCacheTTL),
+		calls:    &knownCalls{ids: map[string]bool{}},
+		input:    newAgentInput(),
+		starts:   newAgentStarts(),
+		activity: newActivityTracker(time.Now, overlayBackend(backend), backend == "tmux"),
+		overview: newTTLCache[overviewRead](overviewTTL),
+		changes:  newOverviewChanges(),
 
 		subagents:      newTTLCache[subagentsResponse](subagentsTTL),
 		subagentState:  newSubagentStore(time.Now),
@@ -512,7 +512,7 @@ func (a *agentAPI) handleTranscript(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if isViewOnly(r) {
-		res = hideSensitiveResults(res, a.sensitive.has)
+		res = hideSensitiveResults(res, a.calls.safe)
 	}
 	jsonOK(w, res)
 }
@@ -524,19 +524,20 @@ func (a *agentAPI) readCached(s AgentSession, cursor, before string) (transcript
 	key := strings.Join([]string{s.Agent, s.ID, s.ClaudeDir, s.CodexHome, s.Rollout, s.RolloutID, cursor, before}, "\x00")
 	return a.reads.do(key, func() (transcriptResponse, error) {
 		res, err := readTranscript(s, cursor, before)
-		a.sensitive.add(res.sensitiveCalls)
+		a.calls.add(res.calls)
 		return res, err
 	})
 }
 
 // hideSensitiveResults returns res without the result of any tool call on a
 // sensitive file, each such part marked hidden, as the Files view hides the
-// file from a view-only client. An orphan result is one when knownCall
-// reports its call was: a failed edit's row names no file, yet its error
-// quotes the text it looked for. res is shared by every client through the
-// read cache, so the entries changed are copies.
-func hideSensitiveResults(res transcriptResponse, knownCall func(id string) bool) transcriptResponse {
-	hide := func(p TranscriptPart) bool { return p.sensitive || p.Orphan && knownCall(p.ToolID) }
+// file from a view-only client. An orphan result is hidden unless safeCall
+// reports its call was parsed and named no sensitive file: a failed edit's
+// row names no file, yet its error quotes the text it looked for, and the
+// call may lie before every byte the server read. res is shared by every
+// client through the read cache, so the entries changed are copies.
+func hideSensitiveResults(res transcriptResponse, safeCall func(id string) bool) transcriptResponse {
+	hide := func(p TranscriptPart) bool { return p.sensitive || p.Orphan && !safeCall(p.ToolID) }
 	cloned := false
 	for i, e := range res.Entries {
 		if !slices.ContainsFunc(e.Parts, hide) {
@@ -563,33 +564,40 @@ func hideSensitiveResults(res transcriptResponse, knownCall func(id string) bool
 	return res
 }
 
-// sensitiveCallsMax bounds the tool ids sensitiveCalls keeps: far more than
-// the calls between a result and its own call.
-const sensitiveCallsMax = 4096
+// knownCallsMax bounds the tool ids knownCalls keeps: far more than the
+// calls between a result and its own call.
+const knownCallsMax = 16384
 
-// sensitiveCalls is a set of tool ids of calls on a sensitive file, the
-// oldest dropped first past sensitiveCallsMax. Tool ids are unique across
-// sessions, so one set serves every pane.
-type sensitiveCalls struct {
+// toolCall is a tool call a read parsed, and whether it names a sensitive
+// file.
+type toolCall struct {
+	id        string
+	sensitive bool
+}
+
+// knownCalls holds the tool ids of the calls reads parsed, each with whether
+// it names a sensitive file, the oldest dropped first past knownCallsMax. Tool
+// ids are unique across sessions, so one set serves every pane.
+type knownCalls struct {
 	mu    sync.Mutex
-	ids   map[string]struct{}
+	ids   map[string]bool
 	order []string
 }
 
-func (c *sensitiveCalls) add(ids []string) {
-	if len(ids) == 0 {
+func (c *knownCalls) add(calls []toolCall) {
+	if len(calls) == 0 {
 		return
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	for _, id := range ids {
-		if _, ok := c.ids[id]; ok {
-			continue
+	for _, call := range calls {
+		sensitive, ok := c.ids[call.id]
+		c.ids[call.id] = sensitive || call.sensitive
+		if !ok {
+			c.order = append(c.order, call.id)
 		}
-		c.ids[id] = struct{}{}
-		c.order = append(c.order, id)
 	}
-	if n := len(c.order) - sensitiveCallsMax; n > 0 {
+	if n := len(c.order) - knownCallsMax; n > 0 {
 		for _, id := range c.order[:n] {
 			delete(c.ids, id)
 		}
@@ -597,24 +605,24 @@ func (c *sensitiveCalls) add(ids []string) {
 	}
 }
 
-func (c *sensitiveCalls) has(id string) bool {
+// safe reports whether the call id was parsed and names no sensitive file.
+func (c *knownCalls) safe(id string) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	_, ok := c.ids[id]
-	return ok
+	sensitive, ok := c.ids[id]
+	return ok && !sensitive
 }
 
-// sensitiveCallIDs appends to ids the tool id of each call in entries that
-// names a sensitive file.
-func sensitiveCallIDs(ids []string, entries []TranscriptEntry) []string {
+// toolCalls appends to calls each tool call in entries.
+func toolCalls(calls []toolCall, entries []TranscriptEntry) []toolCall {
 	for _, e := range entries {
 		for _, p := range e.Parts {
-			if p.Kind == "tool" && p.ToolID != "" && !p.Orphan && p.sensitive {
-				ids = append(ids, p.ToolID)
+			if p.Kind == "tool" && p.ToolID != "" && !p.Orphan {
+				calls = append(calls, toolCall{p.ToolID, p.sensitive})
 			}
 		}
 	}
-	return ids
+	return calls
 }
 
 // agentError answers like muxError, plus 404 for a pane without an agent.
@@ -696,7 +704,7 @@ func readTranscript(s AgentSession, cursor, before string) (transcriptResponse, 
 		c, ok := decodeCursor(cursor)
 		if cursor != "" && ok && sameFile(c) && size-c.Offset <= agentForwardMax && atLineStart(f, c.Offset) {
 			page, err = parseRange(adapter, f, c.Offset, size)
-			page.calls = sensitiveCallIDs(nil, page.entries)
+			page.calls = toolCalls(nil, page.entries)
 			page.entries = foldToolResults(page.entries)
 			res.Cursor = encodeCursor(agentCursor{s.ID, page.end, id})
 			break
@@ -708,7 +716,7 @@ func readTranscript(s AgentSession, cursor, before string) (transcriptResponse, 
 	if err != nil {
 		return transcriptResponse{}, err
 	}
-	res.Entries, res.sensitiveCalls = page.entries, page.calls
+	res.Entries, res.calls = page.entries, page.calls
 	if res.Entries == nil {
 		res.Entries = []TranscriptEntry{}
 	}
@@ -722,8 +730,8 @@ func readTranscript(s AgentSession, cursor, before string) (transcriptResponse, 
 type transcriptPage struct {
 	entries    []TranscriptEntry
 	start, end int64
-	// calls: sensitiveCallIDs of every row parsed, cut off or not
-	calls []string
+	// calls: toolCalls of every row parsed, cut off or not
+	calls []toolCall
 }
 
 // readTail returns the last agentMaxEntries entries that end at or before
@@ -734,7 +742,7 @@ func readTail(a journalAdapter, f *os.File, end int64) (transcriptPage, error) {
 	var chunks [][]TranscriptEntry // newest first
 	hi, lo, pageEnd := end, end, int64(-1)
 	var folded []TranscriptEntry
-	var calls []string
+	var calls []toolCall
 	for window := int64(agentTailChunk); lo > 0 && end-lo < agentTailMax; window *= 2 {
 		lo = max(0, hi-window, end-agentTailMax)
 		page, err := parseRange(a, f, lo, hi)
@@ -748,7 +756,7 @@ func readTail(a journalAdapter, f *os.File, end int64) (transcriptPage, error) {
 			pageEnd = page.end
 		}
 		chunks = append(chunks, page.entries)
-		calls = sensitiveCallIDs(calls, page.entries)
+		calls = toolCalls(calls, page.entries)
 		hi = page.start
 		folded = foldToolResults(oldestFirst(chunks))
 		if len(folded) >= agentMaxEntries {

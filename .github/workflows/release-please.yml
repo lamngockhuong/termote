@@ -28,11 +28,12 @@ jobs:
           manifest-file: .release-please-manifest.json
           config-file: release-please-config.json
 
-  # Start release.yml as a workflow of its own, on the release tag. Called
-  # as a reusable workflow (workflow_call) its release job never got the
-  # `release` environment's signing key (actions/runner#1490): 1.10.0 failed
-  # that way. A workflow_dispatch made with GITHUB_TOKEN still starts a run;
-  # release.yml then publishes the website too.
+  # Start release.yml as a workflow of its own, on main, naming the version
+  # whose tag release-please just made there. Called as a reusable workflow
+  # (workflow_call) its release job never got the `release` environment's
+  # signing key (actions/runner#1490): 1.10.0 failed that way. A
+  # workflow_dispatch made with GITHUB_TOKEN still starts a run; release.yml
+  # checks the tag's commit is on main, and publishes the website too.
   dispatch-release:
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true'
@@ -43,6 +44,5 @@ jobs:
       - name: Start the release workflow
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ needs.release-please.outputs.tag_name }}
           VERSION: ${{ needs.release-please.outputs.version }}
-        run: gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "$TAG" -f version="$VERSION"
+        run: gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref main -f version="$VERSION"

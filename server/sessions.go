@@ -76,7 +76,8 @@ func newSessionAuth(tokens *tokenStore, hub *streamHub) *sessionAuth {
 
 // start makes a session for r and returns its token. The sessions the new
 // one pushed out, and the expired ones it swept, end as a revoke ends them;
-// a session nobody pushes out ends at its expiry.
+// a session nobody pushes out ends at its expiry. A session via Basic auth
+// is errTokensBusy instead of pushing one out.
 func (s *sessionAuth) start(r *http.Request, via string) (string, error) {
 	token, err := newRandomToken()
 	if err != nil {
@@ -93,7 +94,6 @@ func (s *sessionAuth) start(r *http.Request, via string) (string, error) {
 	dropped, err := s.store.put(token, tokenInfo{exp: exp, role: roleFull, session: meta})
 	if err != nil {
 		meta.expiry.Stop()
-		return "", err
 	}
 	var expired, pushed []string
 	for _, d := range dropped {
@@ -110,6 +110,9 @@ func (s *sessionAuth) start(r *http.Request, via string) (string, error) {
 	slices.Sort(expired)
 	s.endAs("expired", expired)
 	s.endAs("pushed-out", pushed)
+	if err != nil {
+		return "", err
+	}
 	return token, nil
 }
 

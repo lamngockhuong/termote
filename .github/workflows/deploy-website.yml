@@ -1,9 +1,13 @@
 name: Deploy Website
 
 # Deploys only with a stable release (called from release.yml) or by
-# hand from a release tag, not on every push to main: main runs ahead of the
+# hand for a release tag, not on every push to main: main runs ahead of the
 # latest release, and the site's docs and its install.sh/install.ps1 must be
-# the ones of the version people install.
+# the ones of the version people install. By hand it runs on main (Run
+# workflow on main, naming the tag): the `github-pages` environment takes
+# main only, so a tag pushed to an unreviewed commit, or a run started on
+# another branch, never deploys. The site is built from the tag's commit,
+# checked to be on main, by its hash.
 on:
   workflow_call:
     inputs:
@@ -11,7 +15,16 @@ on:
         description: "Release tag to build the site from (vX.Y.Z)"
         required: true
         type: string
+      sha:
+        description: "The commit of the tag, which release.yml checked"
+        required: true
+        type: string
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build the site from (vX.Y.Z), on main"
+        required: true
+        type: string
 
 # Only the deploy job may publish: build runs the site's dependencies, and
 # deploy, which runs none, makes the Pages artifact with the tag's installers
@@ -27,25 +40,37 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      # By hand, the run must be started on a release tag (Use workflow
-      # from: tags/vX.Y.Z), never a branch.
-      - name: Check the ref is a release tag
+      # Called from release.yml or started by hand, the run is main's.
+      - name: Check the tag
         env:
-          TAG: ${{ inputs.tag || github.ref }}
+          TAG: ${{ inputs.tag }}
         run: |
-          case "${TAG#refs/tags/}" in
+          [ "$GITHUB_REF" = refs/heads/main ] || { echo "::error::run this workflow on main, not '$GITHUB_REF'"; exit 1; }
+          case "$TAG" in
             *-*) echo "::error::'$TAG' is a pre-release; the site follows stable releases only"; exit 1 ;;
-            v[0-9]*.[0-9]*.[0-9]*) echo "Deploying ${TAG#refs/tags/}" ;;
-            *) echo "::error::deploy only from a release tag (vX.Y.Z), not '$TAG'"; exit 1 ;;
+            v[0-9]*.[0-9]*.[0-9]*) echo "Deploying $TAG" ;;
+            *) echo "::error::deploy only a release tag (vX.Y.Z), not '$TAG'"; exit 1 ;;
           esac
 
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ inputs.sha || format('refs/tags/{0}', inputs.tag) }}
           # The whole history: each page's "last updated" date and its sitemap
           # lastmod come from the last commit to its source
           fetch-depth: 0
+
+      # Before any dependency runs: the commit is the tag's (as release.yml
+      # passed it, or as checked out) and on main.
+      - name: Check the commit is on main
+        id: commit
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          sha=$(git rev-parse HEAD)
+          git merge-base --is-ancestor "$sha" "$GITHUB_SHA" ||
+            { echo "::error::$TAG names $sha, which is not on main"; exit 1; }
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
@@ -105,6 +130,7 @@ jobs:
           echo "site=$ID" >> "$GITHUB_OUTPUT"
     outputs:
       site: ${{ steps.artifact.outputs.site }}
+      sha: ${{ steps.commit.outputs.sha }}
 
   # The Pages artifact is made and deployed in this one job, after the
   # environment's approval and with no wait between the two: the files people
@@ -127,7 +153,7 @@ jobs:
       - name: Checkout the files taken from the tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ needs.build.outputs.sha }}
           persist-credentials: false
           # The sources check-site-installs.mjs reads (its SOURCES): keep
           # the two lists alike.
@@ -192,12 +218,12 @@ jobs:
   # follows and the llms.txt that sends it there must be byte for byte the
   # ones in the tag, served as text (not an HTML error page).
   verify:
-    needs: deploy
+    needs: [build, deploy]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ needs.build.outputs.sha }}
 
       - name: Check the served installers, agent guide and llms files
         run: |

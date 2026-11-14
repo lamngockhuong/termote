@@ -190,7 +190,8 @@ Manual testing checklist for Termote features before release.
 - [ ] A health check on the new version passing keeps it; a failing one switches `current` back
       to the previous version and restarts it
 - [ ] Refuses to run from a git checkout, and for a binary not installed by the installer
-- [ ] Warns on downgrade, skips reinstall if already on target version
+- [ ] Without `--version`, refuses a release older than the running one (except from a
+      pre-release); with `--version`, warns on downgrade; skips reinstall if already on target version
 - [ ] Only the current and previous version are kept under `versions/`
 - [ ] `termote update` typed inside a Termote pane still completes (it does not kill its own pane)
 

@@ -67,7 +67,7 @@ func parseWorktreeList(out []byte) []string {
 	cur, bare := "", false
 	flush := func() {
 		if cur != "" && !bare && filepath.IsAbs(cur) {
-			if real, err := filepath.EvalSymlinks(cur); err == nil {
+			if real, err := evalSymlinks(cur); err == nil {
 				trees = append(trees, filepath.Clean(real))
 			}
 		}
@@ -134,7 +134,7 @@ func commonGitDir(gitDir string) string {
 // root, or leads anywhere else. The check runs before the open, as denied's.
 func (f *filesAPI) linkedTarget(root filesRoot, rel string, trees []string) (linkedFile, bool) {
 	abs := filepath.Join(root.Root, rel)
-	real, err := filepath.EvalSymlinks(abs)
+	real, err := evalSymlinks(abs)
 	if err != nil {
 		return linkedFile{}, false
 	}

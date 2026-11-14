@@ -404,8 +404,29 @@ func confineMachineResponse(resp *http.Response) {
 	if resp.StatusCode == http.StatusSwitchingProtocols {
 		return
 	}
+	// Trailers too: a proxy in front (tailscale serve, cloudflared) may pass
+	// them on as headers. The transport fills resp.Trailer as the body ends,
+	// so they are dropped again once it is closed, before ReverseProxy copies
+	// them.
+	resp.Trailer = nil
+	if resp.Body != nil {
+		resp.Body = &machineTrailerDrop{ReadCloser: resp.Body, resp: resp}
+	}
 	resp.Header.Add("Content-Security-Policy", svgPolicy)
 	resp.Header.Set("X-Content-Type-Options", "nosniff")
+}
+
+// machineTrailerDrop is a machine's response body that empties the
+// response's trailers when closed.
+type machineTrailerDrop struct {
+	io.ReadCloser
+	resp *http.Response
+}
+
+func (b *machineTrailerDrop) Close() error {
+	err := b.ReadCloser.Close()
+	b.resp.Trailer = nil
+	return err
 }
 
 // originAuth names how a request signed in here, for the machine's audit.

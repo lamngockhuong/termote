@@ -224,7 +224,10 @@ The `update` command:
   (it names `brew upgrade termote && termote restart`; the service runs `<prefix>/opt/termote/bin/termote`),
   or for a binary not installed by the installer, and when the registered service (systemd `ExecStart`, launchd
   `ProgramArguments`) runs another binary than this install's `current` one (a checkout's dev
-  shim registered it); warns on downgrade, skips reinstall if already on target version
+  shim registered it); skips reinstall if already on target version
+- Without `--version`, never goes back to an older release (whoever can mark the newer ones as
+  pre-releases picks the newest), except from a pre-release to the newest stable; a named older
+  version installs with a warning
 - Without `--version`, never goes from a signed release (1.10.0+) back to an unsigned one: whoever
   can publish a release picks the newest, so that version has to be named (`install.sh` likewise
   refuses an unpinned release before 1.10.0)

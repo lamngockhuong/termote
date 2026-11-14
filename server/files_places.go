@@ -103,7 +103,7 @@ func buildPlaces(specs []placeSpec, env allowPathEnv) []place {
 			log.Printf("files: place %s skipped: %v", p, err)
 			continue
 		}
-		real, err := filepath.EvalSymlinks(p)
+		real, err := evalSymlinks(p)
 		if err != nil {
 			log.Printf("files: place %s skipped: %v", p, err)
 			continue
@@ -147,7 +147,7 @@ func (f *filesAPI) placeRoot(ctx context.Context, id string) (filesRoot, error) 
 		return filesRoot{}, errUnknownPlace
 	}
 	p := f.places[i]
-	now, err := f.placeNow.do(p.Path, func() (string, error) { return filepath.EvalSymlinks(p.Path) })
+	now, err := f.placeNow.do(p.Path, func() (string, error) { return evalSymlinks(p.Path) })
 	if err != nil || now != p.Resolved {
 		log.Printf("files: place %s no longer leads to %s, refused", p.Path, p.Resolved)
 		return filesRoot{}, errPlaceMoved

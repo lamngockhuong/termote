@@ -391,6 +391,51 @@ func TestViewOnlyCommitDiffHeadTree(t *testing.T) {
 	}
 }
 
+// A view-only client does not read, in Changes, what only HEAD still holds:
+// the staged diff or old image of a file deleted or untracked from the index,
+// or of a rename's source, as with a commit's. A full client reads them all.
+func TestViewOnlyChangesLeftIndex(t *testing.T) {
+	gx := newGitFixture(t)
+	r := gx.repo
+	writeFile(t, filepath.Join(r, "del.txt"), "deleted secret\n")
+	writeFile(t, filepath.Join(r, "untrack.txt"), "untracked secret\n")
+	writeFile(t, filepath.Join(r, "old.txt"), "same secret for rename\n")
+	writeFile(t, filepath.Join(r, "old.png"), string(pngHeader(1, 1)))
+	gitT(t, r, "add", ".")
+	gitT(t, r, "commit", "-q", "-m", "more")
+	gitT(t, r, "rm", "-q", "del.txt")
+	gitT(t, r, "rm", "-q", "--cached", "untrack.txt", "old.png")
+	gitT(t, r, "mv", "old.txt", "new.txt")
+	writeFile(t, filepath.Join(r, "a.txt"), "one\ntwo\n")
+	gitT(t, r, "add", "a.txt")
+	_, vh := viewFilesFixture(t, r)
+	base := "/api/mux/panes/0/files/"
+	for _, q := range []url.Values{
+		{"path": {"del.txt"}},
+		{"path": {"untrack.txt"}},
+		{"path": {"new.txt"}, "orig": {"old.txt"}},
+	} {
+		q.Set("staged", "1")
+		if rec := serve(vh, viewRequest("GET", base+"diff?"+q.Encode(), "")); rec.Code != http.StatusNotFound || strings.Contains(rec.Body.String(), "secret") {
+			t.Errorf("view diff %v = %d %s", q, rec.Code, rec.Body)
+		}
+		if rec := serve(vh, fullRequest(base+"diff?"+q.Encode())); rec.Code != http.StatusOK {
+			t.Errorf("full diff %v = %d %s", q, rec.Code, rec.Body)
+		}
+	}
+	q := url.Values{"path": {"old.png"}, "staged": {"1"}, "side": {"old"}}
+	if rec := serve(vh, viewRequest("GET", base+"raw?"+q.Encode(), "")); rec.Code != http.StatusNotFound {
+		t.Errorf("view raw old.png = %d %s", rec.Code, rec.Body)
+	}
+	if rec := serve(vh, fullRequest(base+"raw?"+q.Encode())); rec.Code != http.StatusOK {
+		t.Errorf("full raw old.png = %d %s", rec.Code, rec.Body)
+	}
+	q = url.Values{"path": {"a.txt"}, "staged": {"1"}}
+	if rec := serve(vh, viewRequest("GET", base+"diff?"+q.Encode(), "")); rec.Code != http.StatusOK {
+		t.Errorf("view a.txt = %d %s", rec.Code, rec.Body)
+	}
+}
+
 // The files of a commit are listed once for every diff opened in it, and a
 // file of a cached list is still checked for a sensitive name.
 func TestFilesCommitFilesCached(t *testing.T) {

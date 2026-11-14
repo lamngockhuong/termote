@@ -326,7 +326,15 @@ func (s *tokenStore) put(token string, ti tokenInfo) ([]droppedToken, error) {
 				drop(mine[0])
 			}
 		}
+		// A session Basic auth made pushes nobody out: a page of another
+		// site can load this server in frames, each sent the saved Basic
+		// credentials, and a browser keeps no cookie set in such a frame.
+		basic := ti.session != nil && ti.session.via == sessionViaBasic
 		for len(live) >= s.max {
+			if basic {
+				s.order = live
+				return dropped, errTokensBusy
+			}
 			i := slices.IndexFunc(live, func(k string) bool { return s.tokens[k].role == roleView })
 			if i < 0 {
 				if ti.role == roleView {
@@ -1293,6 +1301,9 @@ func newBasicAuth(user, pass string, dev *deviceAuth, sessions *sessionAuth, opt
 	// Set session cookie to avoid re-prompting on mobile reloads
 	startSession := func(w http.ResponseWriter, r *http.Request, via string) {
 		sessionToken, err := sessions.start(r, via)
+		if errors.Is(err, errTokensBusy) {
+			return // Basic auth keeps signing this browser in
+		}
 		if err != nil {
 			log.Printf("session token generation failed: %v", err)
 			return
