@@ -663,8 +663,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   /api/mux/worktrees/open` `{groupId, branch}` → `{ok, id, alreadyOpen}`, `DELETE
   /api/mux/worktrees/{id}` `{force, path, branch}`; `server/mux_worktrees.go`, two
   implementations behind `worktreeMux`, picked by `worktreeMuxFor`). `caps.worktrees`: Herdr ≥
-  0.9.2 from the `ping` version, on every OS; tmux (not psmux), Zellij and hc off Windows through
-  termote's own git (`gitWorktreeBackend`); psmux and hc on Windows have none, 501 `unsupported`.
+  0.9.2 from the `ping` version, on every OS; tmux and psmux, Zellij and hc through termote's own
+  git (`gitWorktreeBackend`), on every OS they run on; any other backend 501 `unsupported`.
   Shared route rules: writes go through `writeGuard` (same-site JSON), `requireWriteRole` first (a
   view-only client gets 403 `view_only`), the 8 KB body; the GET through `crossSiteRejection` (so
   `Sec-Fetch-Site: none` too). Everything is checked before the slot: `branch` by
@@ -683,7 +683,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   whose group is the id is linked with that path and branch → 409 `changed` (`not_linked` for the
   repo's own). Codes: `unknown_group`, `not_found`, `not_git`, `linked_source`, `not_linked`,
   `ambiguous`, `create_failed`, `open_failed`, `dirty` (the PWA asks again, then sends `force`),
-  `busy`, `unsupported`, else 500 `worktree_failed`; the backend's or git's message (git's stderr,
+  `in_use` (409, git backend on Windows, below), `busy`, `unsupported`, else 500 `worktree_failed`; the backend's or git's message (git's stderr,
   with paths) is logged, never returned. The GET's `branches` come from the files routes'
   `gitRunner` (`for-each-ref --count=500`, heavy, no backoff, 160 KiB, the last line dropped when
   cut, names failing `validBranchName` dropped, `[]` when git refuses). A remove deletes ignored
@@ -701,21 +701,28 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
     `snapshot?peek=1`). The `worktree.*` event types are subscribed only when the gate holds (an
     older Herdr would refuse the subscription); an event or a change makes the branches stale.
     Closing a workspace with worktrees stays 409 `has_worktrees`.
-  - _git, for tmux, Zellij and hc_ (`server/git_worktrees.go`, `server/git_worktree_mux.go`): a
+  - _git, for tmux/psmux, Zellij and hc_ (`server/git_worktrees.go`, `server/git_worktree_mux.go`): a
     group's repository is the one its first pane (first tab) works in, resolved through the files
     routes' `rootResolver`. A new checkout's path is built by the server only:
     `<base>/<main checkout's base name>/<branchSlug(branch)>`, base fixed per backend
     (`worktreeBase`: hc `~/.herdr/worktrees`, tmux and Zellij `~/.termote/worktrees`, in the
     container under `/workspace`); refused (`create_failed`) when the repository name is not one
     clean path element, the target exists, or it (as given, or resolved for the part that exists)
-    is under a files deny dir; the slug refuses a name left empty, dots only or a git directory's name
+    is under a files deny dir (on Windows a junction on the way is resolved too, `resolveLinkedDir`
+    through an open handle: `filepath.EvalSymlinks` leaves one as it is); the folder made for the
+    repository is the user's only (`makeWorktreeParent`: mode 0700, on Windows a protected
+    owner-only DACL its checkouts inherit, `D:P(A;OICI;FA;;;<user SID>)`, since traverse checking
+    is off there; no ACE for SYSTEM or Administrators; a folder whose ACL could not be set is
+    removed again, never reused); the slug refuses, on Windows, one ending in `.` or naming a
+    device (`deviceName`), and everywhere a name left empty, dots only or a git directory's name
     (`invalid_name`). On tmux and Zellij the new group's name (the label, else the slug) is checked
     with the backend's own name rule before `git worktree add` (`invalid_name`); hc ignores the label.
     The group opens through `resolveGroupCwd` with the same deny list. A create or open from a
     linked worktree is 409 `linked_source`. git runs only through the files routes' `gitRunner`
     (hooks, fsmonitor off; `GIT_*`/`TERMOTE_*` stripped; `safe.directory` from the resolver):
     `worktree list --porcelain -z` (newline form on a git without `-z`; output capped, a cut list
-    is an error; an entry whose `.git` does not lead back to the repository is dropped),
+    is an error; an entry whose `.git` does not lead back to the repository is dropped, and on
+    Windows one off a drive letter, so a UNC path is never resolved, as `validCwdForm`),
     `worktree add --no-checkout [-b]`, then `reset --hard --no-recurse-submodules` run in the new
     worktree, and `worktree remove --force` (`write`, `--` before the path, filters off, so Git LFS
     gives pointer files). The checkout runs in the worktree, never inside `worktree add`, and the
@@ -735,12 +742,23 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
     locked one is refused (500) before anything closes, and one `--force` still refuses a lock. Every group
     whose first pane works in that worktree (the remove may name any of them) is closed, its
     processes ended, before `git worktree remove`, so nothing runs in a deleted folder; a remove
-    git refuses after that leaves the checkout and the groups closed. The route's branch list and
+    git refuses after that leaves the checkout and the groups closed. On Windows (psmux, hc) git
+    deletes file by file and stops at the first one a process holds, the `.git` file usually gone
+    by then, which leaves a checkout git no longer removes: so after the close termote waits up to
+    10 s for the folder to be free (`waitWorktreeFree`: renaming it to a random sibling and back,
+    which Windows refuses while a file in it is open or a process works there; the move back is
+    retried for 30 s, past a scanner's look, and failing that the log names where the whole
+    checkout was left), and answers 409 `in_use` with nothing deleted when it does not get free,
+    with or without `force` (a permission error on the rename reads the same as a held file, and so
+    does a request cancelled during the wait). The
+    `dirty` check still runs before anything closes. Accepted gap: a program (a scanner, an
+    editor) opening a file between the probe and git's delete still makes git stop halfway. The route's branch list and
     existing-branch check pass the resolver's `safe.directory` too. On tmux and Zellij a group name taken already is
     `open_failed` with the checkout kept. Nesting (`server/git_worktree_nest.go`): the snapshot
     route nests by a cache only; lookups run in the background (at most 4 at once, `muxTimeout`
     each, 10 s fresh, 30 s after a failure, 512 folders, cleared after every worktree change),
     started only by a full client's non-peek read; a view-only or peek read uses what is cached.
+    A repository's key (its shared git dir) ignores case on Windows and macOS, as `underDir` does.
     hc's `MoveGroup` reads the same nested view: a linked worktree alone is 409
     `linked_worktree`. Closing a repository's group with linked worktrees open is not refused.
 - **tmux sessions**: every session on the tmux server is a group, the user's own ones made

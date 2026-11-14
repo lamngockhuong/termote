@@ -131,6 +131,9 @@ describe('refusals in Vietnamese', () => {
       'Workspace này không nằm trong repository git',
     )
     expect(worktreeProblem('', tVi)).toBe('Không thay đổi được worktree')
+    expect(worktreeProblem('in_use', tVi)).toBe(
+      'Một chương trình vẫn đang mở file trong worktree. Các workspace của nó đã đóng và chưa có gì bị xoá; hãy đóng chương trình đó rồi xoá lại',
+    )
   })
 
   it('an image that could not be attached', () => {

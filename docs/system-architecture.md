@@ -437,8 +437,8 @@ call timed out; the start is followed as if typed) and 500 `start_failed`. The C
 offered on such a pane and holds the start buttons; Codex writes its rollout only with its first
 message, so after a Codex start the Chat view asks for that message in the terminal.
 
-`/worktrees` (`caps.worktrees`: Herdr 0.9.2 or later; tmux, not psmux; Zellij; hc, not on
-Windows) is driven from a group's menu. On Herdr it calls Herdr's `worktree.*`; on tmux, Zellij
+`/worktrees` (`caps.worktrees`: Herdr 0.9.2 or later; tmux and psmux; Zellij; hc) is driven
+from a group's menu. On Herdr it calls Herdr's `worktree.*`; on tmux, Zellij
 and hc termote runs git itself (`gitWorktreeMux`, `server/git_worktree_mux.go`) and opens or
 closes the group through the backend's own `NewGroup`/`CloseGroup`: a group's worktree is the one
 its first pane works in, a new checkout goes to `~/.herdr/worktrees/<repo>/<slug>` (hc, where
@@ -453,7 +453,7 @@ worktree (by its branch), never a branch without one. The DELETE carries the pat
 user confirmed and removes nothing unless the workspace still shows that linked checkout (409
 `changed`); without `force` a worktree with changes answers 409 `dirty`, which the PWA asks
 about a second time. Removing deletes the checkout (ignored files too; the panes end first with
-`force`, and on Windows always, where Herdr also checks for changes itself) and closes the workspace; the branch is kept. Changes run one at a time (503
+`force`, and on Windows always, where Herdr also checks for changes itself) and closes the workspace; the branch is kept. With termote's own git on Windows the delete waits for the closed groups' programs to let go of the folder and answers 409 `in_use`, nothing deleted, when one still holds a file there. Changes run one at a time (503
 `busy` after a 5 s wait) and outlive the client for up to 60 s; past that the answer is 504
 `unknown` (the change may still finish). On tmux, Zellij and hc the group closes before `git
 worktree remove`, so a remove git refuses then leaves the checkout and the group closed. The

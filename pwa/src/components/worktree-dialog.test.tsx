@@ -479,6 +479,10 @@ describe('worktreeProblem', () => {
     ['unknown_group', 'It no longer exists; the list was refreshed'],
     ['busy', 'Another worktree change is still running; try again'],
     ['unsupported', 'This backend cannot manage worktrees'],
+    [
+      'in_use',
+      'A program still has a file open in the worktree. Its workspaces were closed and nothing was deleted; close that program and remove again',
+    ],
     ['', 'Could not change the worktree'],
   ])('%s', (code, message) => {
     expect(worktreeProblem(code, tFor('en'))).toBe(message)

@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"runtime"
+	"strings"
 	"sync"
 	"time"
 )
@@ -149,7 +151,7 @@ func (n *gitNester) nest(snap Snapshot, start bool) Snapshot {
 		}
 		infos[i], known[i] = n.info(dir, start)
 		if known[i] && infos[i].Linked {
-			withLinked[infos[i].Common] = true
+			withLinked[repoKey(infos[i].Common)] = true
 		}
 	}
 	if len(withLinked) == 0 {
@@ -160,15 +162,25 @@ func (n *gitNester) nest(snap Snapshot, start bool) Snapshot {
 	refs := map[string]worktreeRef{}
 	for i := range groups {
 		info := infos[i]
-		if !known[i] || !withLinked[info.Common] {
+		if !known[i] || !withLinked[repoKey(info.Common)] {
 			continue
 		}
-		refs[groups[i].ID] = worktreeRef{repoKey: info.Common, linked: info.Linked}
+		refs[groups[i].ID] = worktreeRef{repoKey: repoKey(info.Common), linked: info.Linked}
 		groups[i].Worktree = &GroupWorktree{Linked: info.Linked, Branch: info.Branch}
 	}
 	nestWorktrees(groups, refs)
 	snap.Groups = groups
 	return snap
+}
+
+// repoKey is what groups of one repository share: its shared git directory,
+// in lower case where file names ignore case (as underDir compares them), so
+// C:\Repo\.git and c:\repo\.git are one repository.
+func repoKey(common string) string {
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		return strings.ToLower(common)
+	}
+	return common
 }
 
 // nestWorktrees puts each repository's linked worktrees right after its own

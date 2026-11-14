@@ -110,6 +110,7 @@ var (
 	errWorktreeCreateFailed = &codedError{"create_failed", "git could not create the worktree", http.StatusConflict}
 	errWorktreeOpenFailed   = &codedError{"open_failed", "the worktree exists but its workspace did not open", http.StatusConflict}
 	errWorktreeDirty        = &codedError{"dirty", "the worktree has uncommitted or untracked changes", http.StatusConflict}
+	errWorktreeInUse        = &codedError{"in_use", "a file in the worktree is still in use", http.StatusConflict}
 	errWorktreeBusy         = &codedError{"busy", "another worktree change is still running; try again", http.StatusServiceUnavailable}
 	errWorktreeUnknown      = &codedError{"unknown", "the worktree change did not finish in time; check the list", http.StatusGatewayTimeout}
 	errWorktreeFailed       = &codedError{"worktree_failed", "could not change the worktree", http.StatusInternalServerError}

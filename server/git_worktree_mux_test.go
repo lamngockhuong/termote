@@ -302,14 +302,13 @@ func TestGitWorktreeBackend(t *testing.T) {
 	if !gitWorktreeBackend(&zellijMux{}) || gitWorktreeBackend(&herdrMux{}) || gitWorktreeBackend(&fakeMux{}) {
 		t.Error("backends")
 	}
-	if gitWorktreeBackend(tmuxMux{}) != !tmuxIsPsmux {
-		t.Error("tmux")
-	}
 	orig := tmuxIsPsmux
-	tmuxIsPsmux = true
 	defer func() { tmuxIsPsmux = orig }()
-	if gitWorktreeBackend(tmuxMux{}) {
-		t.Error("psmux has no worktrees")
+	for _, psmux := range []bool{false, true} {
+		tmuxIsPsmux = psmux
+		if !gitWorktreeBackend(tmuxMux{}) || !gitWorktreeBackend(&hcMux{}) || !(tmuxMux{}).Caps().Worktrees {
+			t.Errorf("psmux=%v: no worktrees", psmux)
+		}
 	}
 	f := &filesAPI{}
 	if worktreeMuxFor(&fakeMux{}, f, nil) != nil {

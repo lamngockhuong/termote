@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -115,6 +116,21 @@ func TestGitNesterOrders(t *testing.T) {
 	calls := f.count()
 	n.nest(snap, true)
 	waitFor(t, func() bool { return f.count() > calls })
+}
+
+// Where file names ignore case (Windows, macOS), a git dir that differs only
+// in case is the same repository: its worktree nests under its checkout.
+func TestGitNesterIgnoresCase(t *testing.T) {
+	f := &fakeRepos{repos: map[string]gitRepoInfo{
+		`C:\R\wt`: linkedOf(`C:\R\.git`, "feat/x"), `c:\r`: mainOf(`c:\r\.git`),
+	}}
+	n := newTestNester(f.lookup)
+	snap := Snapshot{Groups: []Group{groupIn("g1", `C:\R\wt`), groupIn("g2", `c:\r`)}}
+	want := "g1(Lfeat/x),g2"
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		want = "g2(Mmain),g1(Lfeat/x<g2)"
+	}
+	nestedSoon(t, n, snap, want)
 }
 
 func TestGitNesterCache(t *testing.T) {

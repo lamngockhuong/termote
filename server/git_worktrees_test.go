@@ -84,20 +84,29 @@ func TestGitWorktreeRepoInfo(t *testing.T) {
 }
 
 func TestGitWorktreeParseEntries(t *testing.T) {
+	// git on Windows lists C:/r: a drive letter, forward slashes.
+	root := "/r"
 	if runtime.GOOS == "windows" {
-		t.Skip("Unix paths; no worktrees from git on Windows")
+		root = "C:/r"
 	}
-	out := "worktree /r\x00HEAD 1\x00branch refs/heads/main\x00\x00" +
-		"worktree /r/a\x00HEAD 2\x00detached\x00\x00" +
-		"worktree /r/b\x00HEAD 3\x00branch refs/heads/a​b\x00prunable gitdir file points to non-existent location\x00\x00" +
+	out := "worktree " + root + "\x00HEAD 1\x00branch refs/heads/main\x00\x00" +
+		"worktree " + root + "/a\x00HEAD 2\x00detached\x00\x00" +
+		"worktree " + root + "/b\x00HEAD 3\x00branch refs/heads/a​b\x00prunable gitdir file points to non-existent location\x00\x00" +
 		"worktree rel\x00bare\x00\x00" +
-		"worktree /r/c\x00branch refs/heads/feat/x\x00locked\x00\x00"
+		"worktree " + root + "/c\x00branch refs/heads/feat/x\x00locked\x00\x00"
+	if runtime.GOOS == "windows" {
+		// UNC paths are dropped, never resolved (an SMB connection).
+		out += "worktree //host/share/w\x00branch refs/heads/u\x00\x00" +
+			"worktree " + `\\?\C:\r\d` + "\x00branch refs/heads/d\x00\x00" +
+			"worktree /r/e\x00branch refs/heads/e\x00\x00"
+	}
 	got := parseWorktreeEntries([]byte(out))
+	r := filepath.FromSlash(root)
 	want := []worktreeEntry{
-		{Path: "/r", Branch: "main"},
-		{Path: "/r/a", Detached: true, Linked: true},
-		{Path: "/r/b", Prunable: true, Linked: true},
-		{Path: "/r/c", Branch: "feat/x", Locked: true, Linked: true},
+		{Path: r, Branch: "main"},
+		{Path: filepath.Join(r, "a"), Detached: true, Linked: true},
+		{Path: filepath.Join(r, "b"), Prunable: true, Linked: true},
+		{Path: filepath.Join(r, "c"), Branch: "feat/x", Locked: true, Linked: true},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("entries = %+v", got)
@@ -143,6 +152,15 @@ func TestBranchSlug(t *testing.T) {
 	for _, in := range []string{"日本", "", "...", "-", "+.git", "+.GIT"} {
 		if got, err := branchSlug(in); !errors.Is(err, errWorktreeName) {
 			t.Errorf("branchSlug(%q) = %q %v", in, got, err)
+		}
+	}
+	// Windows drops a trailing dot and opens a device name as the device.
+	for _, in := range []string{"feat.", "con", "NUL", "com1", "aux.x/y"} {
+		if got, err := branchSlugFor(in, true); !errors.Is(err, errWorktreeName) {
+			t.Errorf("Windows branchSlug(%q) = %q %v", in, got, err)
+		}
+		if _, err := branchSlugFor(in, false); err != nil {
+			t.Errorf("branchSlug(%q) off Windows: %v", in, err)
 		}
 	}
 	if validBranchName("a..b") {
@@ -216,10 +234,11 @@ func TestGitWorktreeAddRemove(t *testing.T) {
 	if err := addWorktree(ctx, rr.git, src, newPath, "feat/new", "e2e-base", false); err != nil {
 		t.Fatal(err)
 	}
-	// Windows has no Unix modes (and no worktrees from git).
+	// Windows has no Unix modes: an owner-only ACL instead.
 	if fi, err := os.Stat(filepath.Dir(newPath)); err != nil || runtime.GOOS != "windows" && fi.Mode().Perm() != 0o700 {
 		t.Errorf("parent folder: %v %v", fi, err)
 	}
+	checkOwnerOnly(t, filepath.Dir(newPath))
 	nw := mustRepoInfo(t, newTestRoots(), newPath)
 	if !nw.Linked || nw.Branch != "feat/new" {
 		t.Errorf("new = %+v", nw)
@@ -321,9 +340,6 @@ func TestGitWorktreeDirtySubmoduleFilter(t *testing.T) {
 // gitdir:worktrees/) is not listed from the main checkout: neither creating
 // the worktree nor removing it may run it.
 func TestGitWorktreeIncludeIfFilter(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("no worktrees from git on Windows")
-	}
 	repo := worktreeRepo(t)
 	marks := tempDirReal(t)
 	user := []string{"-c", "user.name=t", "-c", "user.email=t@t"}
@@ -381,9 +397,6 @@ func TestGitWorktreeIncludeIfFilter(t *testing.T) {
 // status right after the create must read the list afresh, not the one
 // cached while the worktree was still empty.
 func TestGitWorktreeIncludedFilterAfterCheckout(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("no worktrees from git on Windows")
-	}
 	repo := worktreeRepo(t)
 	mark := filepath.Join(tempDirReal(t), "clean")
 	path := filepath.Join(tempDirReal(t), "w", "repo", "feat-x")

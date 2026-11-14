@@ -45,6 +45,8 @@ export default {
   'dialogs.worktree.unknown':
     'Thay đổi vẫn đang chạy; lát nữa hãy xem lại danh sách',
   'dialogs.worktree.unsupported': 'Backend này không quản lý được worktree',
+  'dialogs.worktree.inUse':
+    'Một chương trình vẫn đang mở file trong worktree. Các workspace của nó đã đóng và chưa có gì bị xoá; hãy đóng chương trình đó rồi xoá lại',
   'dialogs.upload.tooLarge': 'Ảnh lớn hơn 10 MB',
   'dialogs.upload.heic':
     'Không hỗ trợ ảnh HEIC. Hãy chia sẻ ảnh dưới dạng JPEG',
