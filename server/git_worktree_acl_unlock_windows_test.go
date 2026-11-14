@@ -34,6 +34,14 @@ func eventually(t *testing.T, cond func() bool) {
 // the current user alone, inherited by what is made in it.
 func checkOwnerOnly(t *testing.T, dir string) {
 	t.Helper()
+	checkDACL(t, dir, "D:PAI(A;OICI;FA;;;%s)")
+}
+
+// checkDACL fails unless dir's DACL reads as sddl with %s the current
+// user's SID, in the form Windows writes it (a well-known SID such as the
+// built-in Administrator's reads as LA, not S-1-5-...-500).
+func checkDACL(t *testing.T, dir, sddl string) {
+	t.Helper()
 	sd, err := windows.GetNamedSecurityInfo(dir, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION)
 	if err != nil {
 		t.Fatal(err)
@@ -42,8 +50,12 @@ func checkOwnerOnly(t *testing.T, dir string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := sd.String(), "D:PAI(A;OICI;FA;;;"+tu.User.Sid.String()+")"; got != want {
-		t.Errorf("%s DACL = %s, want %s", dir, got, want)
+	want, err := windows.SecurityDescriptorFromString(fmt.Sprintf(sddl, tu.User.Sid.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := sd.String(); got != want.String() {
+		t.Errorf("%s DACL = %s, want %s", dir, got, want.String())
 	}
 }
 
@@ -59,14 +71,7 @@ func TestGitWorktreeParentOwnerOnly(t *testing.T) {
 	if err := os.Mkdir(child, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	sd, err := windows.GetNamedSecurityInfo(child, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tu, _ := windows.GetCurrentProcessToken().GetTokenUser()
-	if s := sd.String(); strings.Count(s, "(") != 1 || !strings.Contains(s, ";"+tu.User.Sid.String()+")") {
-		t.Errorf("child DACL = %s", s)
-	}
+	checkDACL(t, child, "D:AI(A;OICIID;FA;;;%s)")
 }
 
 // A deny dir reached through a junction is refused: filepath.EvalSymlinks
