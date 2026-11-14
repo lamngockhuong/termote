@@ -515,7 +515,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   hub with no view stream to evict → "too many viewers"). The PWA hides every write control and
   shows "View only" (`caps.role`); tmux follows each session's active window, Herdr selects tabs
   client-side but cannot scroll history. No Web Push. A view client reads whatever the agent
-  printed (accepted), except a sensitive file's tool results in the transcript (see Agent chat)
+  printed in the terminal (accepted); its Chat view gets the user's and the agent's words only, no
+  tool call, input or result and no command output, while an open dialog's card shows what the
+  terminal shows (see Agent chat)
 - **Pane layout** (`POST /api/mux/panes/{id}/split` `{direction, cwd?}` → `{ok, id}`, `zoom`
   `{mode}`, `swap` `{direction}`, `resize` `{direction, amount}` → `{ok}`;
   `server/mux_pane_layout.go`, `caps.paneLayout`: Herdr 0.9.3 or later and not on Windows, tmux
@@ -901,25 +903,22 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   its tracked list holds that directory.
   A tool call carries `detail` for its card: the model's description, a Bash/Codex command whole
   (8 KiB) and an Edit/MultiEdit/Write's old and new text (16 KiB per call); the edits of a file
-  `isSensitive` names are left out (`hidden`), as its diff is in Changes. A view-only client also
-  gets no result of a Claude Code tool call on such a file (the call's `file_path`/`notebook_path`/
-  `path`, or the result row's `toolUseResult` file path), nor of a result read apart from its call
-  unless the server parsed that call and it named no such file (the server keeps the ids of the
-  calls it parsed, last 16384; a failed edit's row names no file but quotes its `old_string`, and
-  its call may lie before every byte read): `Result` emptied and `hidden` set, on a copy of the
-  cached read; the same for a Codex
-  `FileChange` part (its diff) whose path or move path is such a file, an `ImageView` of one, and
-  a Codex `McpToolCall`, `FunctionCallOutput` or `DynamicToolCall` whose arguments name one
-  (`file_path`/`notebook_path`/`path`, as a Claude Code call). A Claude Code Grep over a
-  directory whose output shows lines (`output_mode: content`) is keyed too when that directory is a
-  sensitive one or inside one, when its `glob` names a sensitive file, read as the name it spells
-  out with each `*` matching nothing (`.env*`, `*.pem`, `secrets.{json,yml}`, `.ssh/**`; a glob led
-  by `!` selects nothing, one that cannot be read counts), or when its `type` is a ripgrep type
-  with such a glob (`tf`; `sensitiveGrepTypes`, checked against the `rg` on PATH). Read as every
-  name it could match, `*.go` would be keyed too (`.env.go`, `secrets.go`), while a Grep with no
-  glob searches them all. So a Grep over a directory with no such glob or type, a glob naming a
-  sensitive name only in part (`id_*`, `*.local`), Bash and a Codex command's output that prints
-  one are not keyed (accepted).
+  `isSensitive` names are left out (`hidden`), as its diff is in Changes. A view-only client reads
+  the transcript as text only (`viewTranscript`, `server/agent.go`, on a copy of the cached read
+  every client shares): the user's and the agent's `text` and `thinking` parts, a compaction
+  summary, and the `image` parts of images the user pasted, never a `tool` part, so no tool's name,
+  input, result or `detail`, whatever file, command or argument shape (an object, a JSON string, an
+  array of paths, a symlink under an innocent name) it involves, and no result read apart from its
+  call; no `note` entry either (the output of a command the user ran with `!`, of a slash command,
+  a hook's text; the command line the user typed is their words and stays); an entry left with no
+  part is dropped. Nothing is decided per file, so a new tool of an agent is covered as it appears.
+  What the agent itself writes in its reply or its thinking about a file it read is its words, and
+  a view client reads it (accepted, as the terminal), as it reads an open dialog's card
+  (`agent/prompt`, read off the screen) and a running subagent's description and last tool name.
+  A full client's transcript is unchanged. Over a machine (`/api/machines/<id>/mux/*`) the role
+  goes with the request and the machine applies its own rule: a machine running a release from
+  before this rule still gives a view client the tool results it did not mark sensitive (not
+  covered).
   `agent/commands` (the composer's `/` suggestions; Codex: its skills, see Codex chat) returns
   only names, descriptions, sources and kinds of `.claude/commands`/`.claude/skills` under the
   pane root and `commands`/`skills`

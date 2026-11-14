@@ -142,9 +142,6 @@ type TranscriptPart struct {
 	Image string `json:"image,omitempty"`
 	// imageN: an image part's place among the images of its row
 	imageN int
-	// sensitive: the call or its result names a file isSensitive names, so a
-	// view-only client gets no Result (hideSensitiveResults)
-	sensitive bool
 }
 
 // ToolDetail is a tool call's own description, its whole command and the
@@ -175,9 +172,6 @@ type transcriptResponse struct {
 	Before string `json:"before,omitempty"`
 	// Reset: the entries replace everything the client holds.
 	Reset bool `json:"reset"`
-	// calls: every tool call the read parsed, the ones cut off the page
-	// included
-	calls []toolCall
 }
 
 // agentCursor is a position in one transcript file. Tokens are signed with a
@@ -364,11 +358,8 @@ type agentAPI struct {
 	loc         agentSessionLocator // nil when the backend has none
 	sessions    *ttlCache[agentLookup]
 	reads       *ttlCache[transcriptResponse]
-	// calls remembers the calls reads parsed and which named a sensitive
-	// file, for their results read after them
-	calls  *knownCalls
-	input  *agentInput
-	starts *agentStarts
+	input       *agentInput
+	starts      *agentStarts
 	// Set by registerCommandsRoute: the files routes' pane roots, the host
 	// allowlist, the custom command listings and the server user's home
 	// (for ~/.agents/skills).
@@ -436,7 +427,6 @@ func newAgentAPI(m Mux) *agentAPI {
 		loc:      loc,
 		sessions: newTTLCache[agentLookup](agentCacheTTL),
 		reads:    newTTLCache[transcriptResponse](agentCacheTTL),
-		calls:    &knownCalls{ids: map[string]bool{}},
 		input:    newAgentInput(),
 		starts:   newAgentStarts(),
 		activity: newActivityTracker(time.Now, overlayBackend(backend), backend == "tmux"),
@@ -518,7 +508,7 @@ func (a *agentAPI) handleTranscript(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if isViewOnly(r) {
-		res = hideSensitiveResults(res, a.calls.safe)
+		res = viewTranscript(res)
 	}
 	jsonOK(w, res)
 }
@@ -529,106 +519,33 @@ func (a *agentAPI) handleTranscript(w http.ResponseWriter, r *http.Request) {
 func (a *agentAPI) readCached(s AgentSession, cursor, before string) (transcriptResponse, error) {
 	key := strings.Join([]string{s.Agent, s.ID, s.ClaudeDir, s.CodexHome, s.Rollout, s.RolloutID, cursor, before}, "\x00")
 	return a.reads.do(key, func() (transcriptResponse, error) {
-		res, err := readTranscript(s, cursor, before)
-		a.calls.add(res.calls)
-		return res, err
+		return readTranscript(s, cursor, before)
 	})
 }
 
-// hideSensitiveResults returns res without the result of any tool call on a
-// sensitive file, each such part marked hidden, as the Files view hides the
-// file from a view-only client. An orphan result is hidden unless safeCall
-// reports its call was parsed and named no sensitive file: a failed edit's
-// row names no file, yet its error quotes the text it looked for, and the
-// call may lie before every byte the server read. res is shared by every
-// client through the read cache, so the entries changed are copies.
-func hideSensitiveResults(res transcriptResponse, safeCall func(id string) bool) transcriptResponse {
-	hide := func(p TranscriptPart) bool { return p.sensitive || p.Orphan && !safeCall(p.ToolID) }
-	cloned := false
-	for i, e := range res.Entries {
-		if !slices.ContainsFunc(e.Parts, hide) {
+// viewTranscript is res as a view-only client reads it: the user's and the
+// agent's words (text, thinking, a summary) and the images the user pasted.
+// No tool part at all, so no tool's input, result or detail whatever file or
+// command it names, and no note (a shell command's output the user ran with
+// `!`, a slash command's, a hook's); an entry left with no part is dropped.
+// res is shared by every client through the read cache, so an entry changed
+// is a copy.
+func viewTranscript(res transcriptResponse) transcriptResponse {
+	entries := make([]TranscriptEntry, 0, len(res.Entries))
+	isTool := func(p TranscriptPart) bool { return p.Kind == "tool" }
+	for _, e := range res.Entries {
+		if e.Role == "note" {
 			continue
 		}
-		if !cloned {
-			res.Entries, cloned = slices.Clone(res.Entries), true
+		if slices.ContainsFunc(e.Parts, isTool) {
+			e.Parts = slices.DeleteFunc(slices.Clone(e.Parts), isTool)
 		}
-		parts := slices.Clone(e.Parts)
-		for j := range parts {
-			p := &parts[j]
-			if !hide(*p) {
-				continue
-			}
-			d := ToolDetail{Hidden: true}
-			if p.Detail != nil {
-				d = *p.Detail
-				d.Hidden = true
-			}
-			p.Result, p.Clipped, p.Detail = "", false, &d
+		if len(e.Parts) > 0 {
+			entries = append(entries, e)
 		}
-		res.Entries[i].Parts = parts
 	}
+	res.Entries = entries
 	return res
-}
-
-// knownCallsMax bounds the tool ids knownCalls keeps: far more than the
-// calls between a result and its own call.
-const knownCallsMax = 16384
-
-// toolCall is a tool call a read parsed, and whether it names a sensitive
-// file.
-type toolCall struct {
-	id        string
-	sensitive bool
-}
-
-// knownCalls holds the tool ids of the calls reads parsed, each with whether
-// it names a sensitive file, the oldest dropped first past knownCallsMax. Tool
-// ids are unique across sessions, so one set serves every pane.
-type knownCalls struct {
-	mu    sync.Mutex
-	ids   map[string]bool
-	order []string
-}
-
-func (c *knownCalls) add(calls []toolCall) {
-	if len(calls) == 0 {
-		return
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	for _, call := range calls {
-		sensitive, ok := c.ids[call.id]
-		c.ids[call.id] = sensitive || call.sensitive
-		if !ok {
-			c.order = append(c.order, call.id)
-		}
-	}
-	if n := len(c.order) - knownCallsMax; n > 0 {
-		for _, id := range c.order[:n] {
-			delete(c.ids, id)
-		}
-		c.order = slices.Clone(c.order[n:])
-	}
-}
-
-// safe reports whether the call id was parsed and names no sensitive file.
-func (c *knownCalls) safe(id string) bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	sensitive, ok := c.ids[id]
-	return ok && !sensitive
-}
-
-// toolCalls appends to calls each tool call in entries.
-func toolCalls(calls []toolCall, entries []TranscriptEntry) []toolCall {
-	for _, e := range entries {
-		for _, p := range e.Parts {
-			if p.Kind == "tool" && p.ToolID != "" && !p.Orphan {
-				calls = append(calls, toolCall{p.ToolID, p.sensitive})
-			}
-		}
-	}
-	return calls
 }
 
 // agentError answers like muxError, plus 404 for a pane without an agent.
@@ -691,7 +608,6 @@ func readTranscript(s AgentSession, cursor, before string) (transcriptResponse, 
 		c, ok := decodeCursor(cursor)
 		if cursor != "" && ok && sameFile(c) && size-c.Offset <= agentForwardMax && atLineStart(f, c.Offset) {
 			page, err = parseRange(adapter, f, c.Offset, size)
-			page.calls = toolCalls(nil, page.entries)
 			page.entries = foldToolResults(page.entries)
 			res.Cursor = encodeCursor(agentCursor{s.ID, page.end, id})
 			break
@@ -703,7 +619,7 @@ func readTranscript(s AgentSession, cursor, before string) (transcriptResponse, 
 	if err != nil {
 		return transcriptResponse{}, err
 	}
-	res.Entries, res.calls = page.entries, page.calls
+	res.Entries = page.entries
 	if _, ok := adapter.(journalImageReader); ok {
 		addImageRefs(res.Entries, s.ID, id)
 	}
@@ -752,8 +668,6 @@ func openJournal(s AgentSession, path string) (*os.File, int64, string, error) {
 type transcriptPage struct {
 	entries    []TranscriptEntry
 	start, end int64
-	// calls: toolCalls of every row parsed, cut off or not
-	calls []toolCall
 }
 
 // readTail returns the last agentMaxEntries entries that end at or before
@@ -764,7 +678,6 @@ func readTail(a journalAdapter, f *os.File, end int64) (transcriptPage, error) {
 	var chunks [][]TranscriptEntry // newest first
 	hi, lo, pageEnd := end, end, int64(-1)
 	var folded []TranscriptEntry
-	var calls []toolCall
 	for window := int64(agentTailChunk); lo > 0 && end-lo < agentTailMax; window *= 2 {
 		lo = max(0, hi-window, end-agentTailMax)
 		page, err := parseRange(a, f, lo, hi)
@@ -778,7 +691,6 @@ func readTail(a journalAdapter, f *os.File, end int64) (transcriptPage, error) {
 			pageEnd = page.end
 		}
 		chunks = append(chunks, page.entries)
-		calls = toolCalls(calls, page.entries)
 		hi = page.start
 		folded = foldToolResults(oldestFirst(chunks))
 		if len(folded) >= agentMaxEntries {
@@ -789,7 +701,7 @@ func readTail(a journalAdapter, f *os.File, end int64) (transcriptPage, error) {
 		return transcriptPage{start: lo, end: lo}, nil // no complete line
 	}
 	if len(folded) <= agentMaxEntries {
-		return transcriptPage{entries: folded, start: hi, end: pageEnd, calls: calls}, nil
+		return transcriptPage{entries: folded, start: hi, end: pageEnd}, nil
 	}
 	// Keep the rows from the first kept entry on and fold them again, so a
 	// result whose call is cut off stays an orphan instead of being lost with
@@ -808,7 +720,7 @@ func readTail(a journalAdapter, f *os.File, end int64) (transcriptPage, error) {
 		entries = entries[n:]
 		boundary = entries[0].off
 	}
-	return transcriptPage{entries: entries, start: boundary, end: pageEnd, calls: calls}, nil
+	return transcriptPage{entries: entries, start: boundary, end: pageEnd}, nil
 }
 
 func oldestFirst(chunks [][]TranscriptEntry) []TranscriptEntry {
@@ -850,7 +762,6 @@ func foldToolResults(entries []TranscriptEntry) []TranscriptEntry {
 			}
 			call := &parts[r.part]
 			call.Result, call.IsError, call.Clipped = p.Result, p.IsError, call.Clipped || p.Clipped
-			call.sensitive = call.sensitive || p.sensitive
 		}
 		if len(kept) > 0 {
 			e.Parts = kept
