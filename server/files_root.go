@@ -480,6 +480,9 @@ type rootResolver struct {
 	ownedByServer func(path string) bool
 	// placeDirs are the Places, resolved: trusted in the container.
 	placeDirs []string
+	// windows: resolve refuses a directory off a drive letter (refusesDir);
+	// runtime.GOOS == "windows", which tests replace.
+	windows bool
 
 	mu    sync.Mutex
 	panes map[string]*paneRootState // stableKey → settle state
@@ -518,6 +521,7 @@ func newRootResolver(git *gitRunner) *rootResolver {
 		resolved:      newTTLCache[filesRoot](filesRootTTL),
 		inContainer:   runningInContainer,
 		ownedByServer: ownedByServer,
+		windows:       runtime.GOOS == "windows",
 		panes:         map[string]*paneRootState{},
 		now:           time.Now,
 	}
@@ -541,13 +545,10 @@ func (rr *rootResolver) paneRootAt(ctx context.Context, d PaneDirer, paneID stri
 	if err != nil {
 		return filesRoot{}, err
 	}
-	// Before anything stats it: a UNC path would make Windows send the
-	// user's NTLM hash to that host. A Place is the user's own choice. On
-	// Windows every backend is checked: Herdr reports a pane's directory as
-	// its own process, which may have taken it from what the pane printed.
-	// A drive path in the \\?\ form (Rust's canonicalize writes it) is one
-	// too; \\?\UNC\ is not.
-	if mayBeFromPaneOutput(d) && !validCwdForm(strings.TrimPrefix(dir, `\\?\`), true) && !rr.inPlace(dir) {
+	// On Windows every backend is checked (resolve does it again): Herdr
+	// reports a pane's directory as its own process, which may have taken it
+	// from what the pane printed.
+	if rr.refusesDir(dir, mayBeFromPaneOutput(d)) {
 		return filesRoot{}, errDirNotAvailable
 	}
 	root, err := rr.resolve(ctx, dir)
@@ -588,8 +589,25 @@ func (rr *rootResolver) settle(key string, root filesRoot, dir string, take bool
 	return out
 }
 
-// resolve returns the git toplevel of dir, or dir itself outside a repo.
+// refusesDir reports whether dir, which a pane may have announced, is
+// refused before anything stats it: with checked, a directory off a drive
+// letter (\\host\share, \\?\UNC\, \\.\) outside the Places. Opening one would
+// make Windows connect to that host and send it the user's NTLM hash; a
+// Place is the user's own choice. A drive path in the \\?\ form (Rust's
+// canonicalize writes it) is one too.
+func (rr *rootResolver) refusesDir(dir string, checked bool) bool {
+	return checked && !validCwdForm(strings.TrimPrefix(dir, `\\?\`), true) && !rr.inPlace(dir)
+}
+
+// resolve returns the git toplevel of dir, or dir itself outside a repo. On
+// Windows a directory refusesDir refuses is not available: the callers but
+// placeRoot (Files, the worktree routes, the snapshot's nesting by git,
+// herdr-core's repository tops) pass a pane's directory, which psmux may
+// have taken from what the pane printed; a Place passes as one.
 func (rr *rootResolver) resolve(ctx context.Context, dir string) (filesRoot, error) {
+	if rr.refusesDir(dir, rr.windows) {
+		return filesRoot{}, errDirNotAvailable
+	}
 	// Shared by every client asking for dir: a client that leaves must not
 	// turn the repo into a plain directory for the others.
 	ctx = context.WithoutCancel(ctx)

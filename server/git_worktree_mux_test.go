@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -419,5 +420,47 @@ func TestGitWorktreeMuxRemoveClosesEveryGroup(t *testing.T) {
 	}
 	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("checkout left: %v", err)
+	}
+}
+
+// On Windows a group's folder off a drive letter (one a psmux pane may have
+// announced) is never looked up: not by the worktree routes, nor by the
+// snapshot's nesting by git. Elsewhere than Windows the repository's temp
+// dir is on no drive letter, so it stands in for a UNC path that exists.
+func TestGitWorktreeMuxRefusesDirOffDrive(t *testing.T) {
+	x := newGitWorktreeFixture(t, true)
+	ctx := context.Background()
+	rr := x.gm.roots
+	repo := mustRepoInfo(t, rr, x.repo)
+	rr.resolved = newTTLCache[filesRoot](filesRootTTL)
+	rr.windows = true
+	off := x.repo
+	if runtime.GOOS == "windows" {
+		off = `\\termote-test.invalid\share`
+	}
+	x.f.mu.Lock()
+	x.f.groups = []Group{groupIn("$off", off)}
+	x.f.mu.Unlock()
+
+	if _, _, err := x.gm.source(ctx, "$off"); !errors.Is(err, errWorktreeNotGit) {
+		t.Errorf("source: err = %v", err)
+	}
+	snap, _ := x.f.Snapshot(ctx)
+	list, err := x.gm.list(ctx, repo, snap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, w := range list {
+		if w.GroupID != "" {
+			t.Errorf("worktree %s tied to group %s", w.Path, w.GroupID)
+		}
+	}
+	n := x.gm.nest
+	n.resolve(off, 0)
+	if _, ok := n.info(off, false); ok {
+		t.Error("the nester took a repository for the folder")
+	}
+	if resolveTried(rr, off) {
+		t.Errorf("%s was looked up before being refused", off)
 	}
 }

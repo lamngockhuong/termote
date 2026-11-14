@@ -1044,3 +1044,97 @@ func TestPaneRootSettlesAcrossSubdirs(t *testing.T) {
 		t.Errorf("root still %q after moving within the new repo", r.Root)
 	}
 }
+
+// resolveTried reports whether resolve looked dir up (stat, git) rather than
+// refusing it first.
+func resolveTried(rr *rootResolver, dir string) bool {
+	rr.resolved.mu.Lock()
+	defer rr.resolved.mu.Unlock()
+	_, ok := rr.resolved.entries[dir]
+	return ok
+}
+
+// On Windows a directory off a drive letter is refused before anything
+// opens it, wherever it comes from, unless it is in a Place.
+func TestRefusesDirOffDrive(t *testing.T) {
+	rr := newTestRoots()
+	rr.placeDirs = []string{"//nas/share"}
+	for _, c := range []struct {
+		dir     string
+		refused bool
+	}{
+		{`\\host\share`, true},
+		{`\\host\share\repo`, true},
+		{`\\?\UNC\host\share\repo`, true},
+		{`\\.\pipe\x`, true},
+		{`\\?\GLOBALROOT\Device\Mup\host\share`, true},
+		{`C:relative`, true},
+		{`C:\Users\me\repo`, false},
+		{`c:/Users/me/repo`, false},
+		{`\\?\C:\Users\me\repo`, false},
+		{"//nas/share", false},
+		{"//nas/share/repo", false},
+		{"//other/share/repo", true},
+	} {
+		if got := rr.refusesDir(c.dir, true); got != c.refused {
+			t.Errorf("refusesDir(%q, windows) = %v, want %v", c.dir, got, c.refused)
+		}
+		if rr.refusesDir(c.dir, false) {
+			t.Errorf("refusesDir(%q) refused off Windows", c.dir)
+		}
+	}
+}
+
+// resolve refuses such a directory itself, so a caller other than the Files
+// routes (worktrees, nesting by git, herdr-core) never opens it. Elsewhere
+// than Windows the temp dir is on no drive letter, so it stands in for a UNC
+// path that exists.
+func TestResolveRefusesDirOffDrive(t *testing.T) {
+	ctx := context.Background()
+	a := tempDirReal(t)
+	rr := newTestRoots()
+	rr.windows = true
+	off := a
+	if runtime.GOOS == "windows" {
+		off = `\\termote-test.invalid\share`
+	}
+	if _, err := rr.resolve(ctx, off); !errors.Is(err, errDirNotAvailable) {
+		t.Fatalf("resolve(%s) err = %v", off, err)
+	}
+	if resolveTried(rr, off) {
+		t.Fatalf("%s was looked up before being refused", off)
+	}
+	if _, ok, err := repoInfo(ctx, rr, off); ok || err != nil {
+		t.Fatalf("repoInfo(%s) = %v %v", off, ok, err)
+	}
+	if runtime.GOOS == "windows" {
+		return
+	}
+	rr.placeDirs = []string{filepath.Dir(a)}
+	if r, err := rr.resolve(ctx, a); err != nil || r.Root != a {
+		t.Fatalf("inside a Place: %+v %v", r, err)
+	}
+	rr.placeDirs, rr.windows = nil, false
+	if r, err := rr.resolve(ctx, a); err != nil || r.Root != a {
+		t.Fatalf("off Windows: %+v %v", r, err)
+	}
+}
+
+// herdr-core's repository tops go through the same refusal.
+func TestHcTopRefusesDirOffDrive(t *testing.T) {
+	a := tempDirReal(t)
+	rr := newTestRoots()
+	rr.windows = true
+	off := a
+	if runtime.GOOS == "windows" {
+		off = `\\termote-test.invalid\share`
+	}
+	m := &hcMux{roots: rr, tops: map[string]string{}, topBusy: map[string]bool{off: true}}
+	m.resolveTop(off)
+	if top, ok := m.tops[off]; !ok || top != "" {
+		t.Fatalf("top of %s = %q %v", off, top, ok)
+	}
+	if resolveTried(rr, off) {
+		t.Fatalf("%s was looked up before being refused", off)
+	}
+}

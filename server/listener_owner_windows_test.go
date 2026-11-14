@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"net"
 	"net/netip"
 	"testing"
@@ -89,9 +90,9 @@ func TestListenerOwnedLocallyWindows(t *testing.T) {
 	}
 	defer ln.Close()
 	port := ln.Addr().(*net.TCPAddr).Port
-	table, ok := tcpTable(windows.AF_INET, tcpTableOwnerModuleListener)
-	if !ok {
-		t.Fatal("no TCP table")
+	table, err := tcpTable(windows.AF_INET, tcpTableOwnerModuleListener)
+	if err != nil {
+		t.Fatal(err)
 	}
 	if owners := tcpListenerOwners(table, windows.AF_INET, port); len(owners) != 1 ||
 		owners[0].pid != windows.GetCurrentProcessId() || owners[0].bound == 0 {
@@ -99,5 +100,80 @@ func TestListenerOwnedLocallyWindows(t *testing.T) {
 	}
 	if got := listenerOwnedLocally(port); got != listenerTrustedOwner {
 		t.Errorf("own listener = %v", got)
+	}
+}
+
+// fakeTCPTable answers GetExtendedTcpTable for a table of size bytes: each
+// read the table first grows by grow bytes, as when sockets open between the
+// size asked and the read; with never it always needs a byte more than the
+// buffer. It records the buffer sizes it was given.
+type fakeTCPTable struct {
+	size, grow int
+	never      bool
+	errno      windows.Errno
+	bufs       []int
+}
+
+func (f *fakeTCPTable) read(buf []byte, size *uint32, _, _ uint32) windows.Errno {
+	f.bufs = append(f.bufs, len(buf))
+	if f.errno != 0 {
+		return f.errno
+	}
+	if f.never {
+		*size = uint32(len(buf) + 1)
+		return windows.ERROR_INSUFFICIENT_BUFFER
+	}
+	f.size += f.grow
+	if int(*size) < f.size {
+		*size = uint32(f.size)
+		return windows.ERROR_INSUFFICIENT_BUFFER
+	}
+	*size = uint32(f.size)
+	return 0
+}
+
+// A table that grew past the buffer is read again with room for what it
+// needed and more; one that cannot be read gives its reason, and a caller
+// that must not take that for nothing listening (psmux) sees the error.
+func TestTCPTableRetriesAndFails(t *testing.T) {
+	orig := getExtendedTCPTable
+	t.Cleanup(func() { getExtendedTCPTable = orig })
+
+	f := &fakeTCPTable{size: 3 * tcpTableHeadroom}
+	getExtendedTCPTable = f.read
+	if table, err := tcpTable(windows.AF_INET, tcpTableOwnerModuleListener); err != nil || len(table) != f.size {
+		t.Fatalf("a table larger than the first buffer: %d bytes, %v", len(table), err)
+	}
+	if len(f.bufs) != 2 || f.bufs[1] < 3*tcpTableHeadroom+tcpTableHeadroom {
+		t.Errorf("buffers %v: the second must hold what was needed with headroom", f.bufs)
+	}
+
+	// Growing by less than the headroom each time still fits on the next read.
+	f = &fakeTCPTable{size: tcpTableHeadroom, grow: tcpTableHeadroom / 2}
+	getExtendedTCPTable = f.read
+	if _, err := tcpTable(windows.AF_INET, tcpTableOwnerModuleListener); err != nil {
+		t.Fatalf("a table growing between reads: %v (buffers %v)", err, f.bufs)
+	}
+
+	// Growing faster than every buffer: an error after tcpTableTries reads.
+	f = &fakeTCPTable{never: true}
+	getExtendedTCPTable = f.read
+	if _, err := tcpTable(windows.AF_INET, tcpTableOwnerModuleListener); err == nil || len(f.bufs) != tcpTableTries {
+		t.Fatalf("a table outgrowing every buffer: %v after %d reads", err, len(f.bufs))
+	}
+	if _, err := psmuxPortOwner(7690); err == nil {
+		t.Error("psmux took an unreadable table for a free port")
+	}
+	if got := listenerOwnedLocally(7690); got != listenerNoneSeen {
+		t.Errorf("listenerOwnedLocally = %v", got)
+	}
+
+	f = &fakeTCPTable{errno: windows.ERROR_NOT_SUPPORTED}
+	getExtendedTCPTable = f.read
+	if _, err := tcpTable(windows.AF_INET6, tcpTableOwnerModuleListener); !errors.Is(err, windows.ERROR_NOT_SUPPORTED) {
+		t.Fatalf("a failed read: %v", err)
+	}
+	if _, err := psmuxPortOwner(7690); !errors.Is(err, windows.ERROR_NOT_SUPPORTED) {
+		t.Errorf("psmux port owner on a failed read: %v", err)
 	}
 }

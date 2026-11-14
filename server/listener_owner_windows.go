@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"net/netip"
 	"slices"
 	"unsafe"
@@ -32,21 +34,30 @@ const localSystemSID = "S-1-5-18"
 // was not created before the socket was bound (its PID maybe another
 // process's now) counts as another user's.
 func listenerOwnedLocally(port int) listenerOwner {
-	return listenerOwnedLocallyOr(port)
+	owner, err := listenerOwnersOn(port)
+	if err != nil {
+		return listenerNoneSeen
+	}
+	return owner
 }
 
-// listenerOwnedLocallyOr is listenerOwnedLocally that also trusts the
-// accounts named by SID in also.
-func listenerOwnedLocallyOr(port int, also ...string) listenerOwner {
+// listenerOwnersOn is listenerOwnedLocally that also trusts the accounts
+// named by SID in also, with the reason the owners could not be read (the
+// TCP tables, or the server's own account while something listens), for a
+// caller that must refuse then rather than see nothing listening.
+func listenerOwnersOn(port int, also ...string) (listenerOwner, error) {
 	var owners []tcpConnOwner
 	for _, family := range []uint32{windows.AF_INET, windows.AF_INET6} {
-		table, ok := tcpTable(family, tcpTableOwnerModuleListener)
-		if !ok {
-			return listenerNoneSeen
+		table, err := tcpTable(family, tcpTableOwnerModuleListener)
+		if err != nil {
+			return listenerNoneSeen, err
 		}
 		owners = append(owners, tcpListenerOwners(table, family, port)...)
 	}
-	return listenerOwnersTrusted(owners, also...)
+	if len(owners) > 0 && selfPeerID() == "" {
+		return listenerNoneSeen, errors.New("cannot read the server's own account to compare the listeners with")
+	}
+	return listenerOwnersTrusted(owners, also...), nil
 }
 
 // tcpListenerOwners returns the owner of each row of a listener table that
@@ -80,24 +91,40 @@ func listenerOwnersTrusted(owners []tcpConnOwner, also ...string) listenerOwner 
 	return listenerTrustedOwner
 }
 
-// tcpTable returns the TCP table of family of the given class.
-func tcpTable(family, class uint32) ([]byte, bool) {
-	var size uint32
-	for range 3 {
-		buf := make([]byte, max(size, 4))
-		size = uint32(len(buf))
-		r, _, _ := procGetExtendedTcpTable.Call(uintptr(unsafe.Pointer(&buf[0])), uintptr(unsafe.Pointer(&size)),
-			0, uintptr(family), uintptr(class), 0)
-		switch windows.Errno(r) {
+// getExtendedTCPTable is GetExtendedTcpTable into buf; on
+// ERROR_INSUFFICIENT_BUFFER size holds what the table needs. Tests replace it.
+var getExtendedTCPTable = func(buf []byte, size *uint32, family, class uint32) windows.Errno {
+	r, _, _ := procGetExtendedTcpTable.Call(uintptr(unsafe.Pointer(&buf[0])), uintptr(unsafe.Pointer(size)),
+		0, uintptr(family), uintptr(class), 0)
+	return windows.Errno(r)
+}
+
+const (
+	// tcpTableTries bounds the reads of a table that keeps outgrowing the
+	// buffer between the size asked and the read.
+	tcpTableTries = 5
+	// tcpTableHeadroom is room for this many more rows than the table last
+	// needed, so sockets opened meanwhile still fit.
+	tcpTableHeadroom = 64 * tcp6RowOwnerModuleSize
+)
+
+// tcpTable returns the TCP table of family of the given class, or why it
+// could not be read.
+func tcpTable(family, class uint32) ([]byte, error) {
+	var need uint32
+	for range tcpTableTries {
+		buf := make([]byte, int(need)+int(need)/2+tcpTableHeadroom)
+		size := uint32(len(buf))
+		switch errno := getExtendedTCPTable(buf, &size, family, class); errno {
 		case 0:
-			return buf[:size], true
+			return buf[:min(int(size), len(buf))], nil
 		case windows.ERROR_INSUFFICIENT_BUFFER:
-			continue // size now holds what the table needs
+			need = size
 		default:
-			return nil, false
+			return nil, fmt.Errorf("reading the TCP table: %w", errno)
 		}
 	}
-	return nil, false
+	return nil, fmt.Errorf("the TCP table outgrew the buffer %d times", tcpTableTries)
 }
 
 // tcpModuleRows calls fn with each row of table (MIB_TCPROW_OWNER_MODULE, 160

@@ -706,7 +706,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
     Closing a workspace with worktrees stays 409 `has_worktrees`.
   - _git, for tmux/psmux, Zellij and hc_ (`server/git_worktrees.go`, `server/git_worktree_mux.go`): a
     group's repository is the one its first pane (first tab) works in, resolved through the files
-    routes' `rootResolver`. A new checkout's path is built by the server only:
+    routes' `rootResolver`; on Windows a folder off a drive letter outside a Place is never looked up
+    (409 `not_git`), as the psmux paragraph below says. A new checkout's path is built by the server only:
     `<base>/<main checkout's base name>/<branchSlug(branch)>`, base fixed per backend
     (`worktreeBase`: hc `~/.herdr/worktrees`, tmux and Zellij `~/.termote/worktrees`, in the
     container under `/workspace`); refused (`create_failed`) when the repository name is not one
@@ -1138,16 +1139,26 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   attach starts (`psmuxPorts`, `server/psmux_owner.go`, checked at most every 2 s; the log names
   the `.port` file to remove, the client gets 503 `psmux_port_taken`) while a recorded port is
   listened on by a process of another user than the server's, SYSTEM, LOCAL SERVICE or NETWORK
-  SERVICE (`listenerOwnedLocallyOr`; a process whose token cannot be read counts as another
-  user's); a free port or no data dir passes. Not covered: a process that takes the port within
-  those 2 s, and a TCP table that cannot be read (nothing seen, so it passes). psmux reports the
+  SERVICE (`listenerOwnersOn`; a process whose token cannot be read counts as another
+  user's); a free port or a missing data dir passes. What cannot be read refuses too (503
+  `psmux_ports_unverified`, the reason in the log): a data dir that exists but cannot be listed, a
+  `.port` file, the TCP table, or the server's own account while something listens on the port; `tcpTable` reads again with a buffer of what
+  the table last needed plus half and 64 rows more, up to 5 times, so sockets opened between reads
+  cannot make it give up and be taken for nothing listening. Not covered: a process that takes the
+  port within those 2 s. psmux reports the
   foreground process's directory verbatim (`#`, `%`, non-ASCII and a UNC path are not expanded or
   changed) and refuses `:` in a session name, so the path, read last, stays whole. From psmux 3.4
   that path can be what the pane printed (OSC 7 / OSC 9;9 while `ssh.exe` or `wsl.exe` runs in it),
-  so a remote host can name `\\host\share`: on Windows a pane's directory not on a drive letter is
-  refused, whatever the backend (`mayBeFromPaneOutput`: Herdr reports its process's directory, which
-  may also have come from what the pane printed; 400 `directory not available`, as a directory that
-  is gone) before anything stats it, unless it is inside a Place (`--allow-path`). A symbolic link
+  so a remote host can name `\\host\share`: on Windows a pane's directory not on a drive letter (a
+  drive path in the `\\?\` form is one; `\\?\UNC\` and `\\.\` are not) is refused, whatever the
+  backend (`mayBeFromPaneOutput`: Herdr reports its process's directory, which may also have come
+  from what the pane printed; 400 `directory not available`, as a directory that is gone) before
+  anything stats it, unless it is inside a Place (`--allow-path`). The refusal (`refusesDir`) is in
+  `rootResolver.resolve` itself on Windows, not only in the Files routes' `paneRootAt`, so every
+  caller handing it a pane's directory goes through it before any `Lstat`, `Stat` or git: the
+  worktree routes (`source`, `list` in `server/git_worktree_mux.go`), the snapshot's nesting by git
+  (`gitNester` through `repoInfo`) and herdr-core's repository tops (`resolveTop`); a refused folder
+  is outside any repository there. A symbolic link
   in a tree (a repository or an archive can hold one to `\\host\share`) is never followed off a
   drive letter: on Windows every path the Files routes resolve goes through `evalSymlinks`
   (`server/files_links_windows.go`), which reads each link on the way with `Lstat`/`Readlink`
@@ -2746,7 +2757,16 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   or whose `server/cli_version.go` names another version (an old commit tagged as a newer version
   would be offered to every unpinned `update`),
   and every later job, and `deploy-website.yml` when it calls it, checks out that commit by hash,
-  so the tag moved during the run changes nothing. The `release` and `github-pages` environments
+  so the tag moved during the run changes nothing. `deploy-website.yml` started by hand (Run
+  workflow on `main`, naming a tag; no `sha` input) deploys only the latest published stable
+  release: before checkout it refuses a tag that is not `vX.Y.Z`, is no published release
+  (`gh api releases/tags/<tag>` with the job's `GITHUB_TOKEN`, `contents: read`), is a draft or a
+  pre-release, or is not the one `releases/latest` names; on either path the checked-out commit
+  must be on `main` and its `server/cli_version.go` must name that version, before any dependency
+  runs. A version-like tag that is no release, or an older release, so never deploys by hand. A
+  write-role account can still publish a release for its own tag or mark an older one latest: then
+  the `cli_version.go` check (a commit of `main` that is not that version) and the maintainer's
+  `github-pages` approval are what stand in the way. The `release` and `github-pages` environments
   take `main` only (deployment branch policy, no tag): a `v*` tag pushed to an unreviewed commit,
   or a run of the workflow file of another branch, never reaches the signing key, the tap's deploy
   key or the Pages deploy, whoever approves. The `protect-release-tags` ruleset keeps a `v*` tag from
@@ -2808,8 +2828,13 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `sharp`, the Build PWA job runs `pnpm audit --prod --audit-level high` (known vulnerabilities),
   and `malware-scan.yml` (pull requests, pushes to `main` and daily, `contents: read`, osv-scanner
   pinned by sha256 with a Renovate `customManagers` entry) fails when any package in
-  `pnpm-lock.yaml`, dev ones included, matches a malicious-package advisory (an OSV `MAL-` ID or
-  an alias of one); it ignores every other advisory, leaving those to `pnpm audit`. It only knows
+  `pnpm-lock.yaml`, dev ones included, matches a malicious-package advisory: an OSV `MAL-` ID or
+  an alias of one (GitHub's recent malware advisories, `chalk@5.6.1`, arrive so), or an older
+  GitHub-reviewed malware advisory, which reaches OSV as a `GHSA-` ID with no `MAL-` alias
+  (`coa@2.0.3`, `ua-parser-js@0.7.29`, read from the OSV API on 2026-11-14) and is recognised by
+  `CWE-506` (Embedded Malicious Code) in its `database_specific.cwe_ids`; it ignores every other
+  advisory, leaving those to `pnpm audit`. The step sets `pipefail`, so a jq error fails it rather
+  than leaving the list empty. It only knows
   versions already reported. A false positive goes in a root `osv-scanner.toml` `[[IgnoredVulns]]`
   entry with its reason.
   The website (`deploy-website.yml`) serves `install.sh` and `install.ps1`, which pin the release

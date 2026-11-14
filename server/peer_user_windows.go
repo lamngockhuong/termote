@@ -55,7 +55,7 @@ var peerOwner = func(client, server netip.AddrPort) (string, error) {
 var tcpConnTables = newTableSnapshots(func() tcpConnIndex {
 	x := tcpConnIndex{}
 	for _, family := range []uint32{windows.AF_INET, windows.AF_INET6} {
-		if table, ok := tcpTable(family, tcpTableOwnerModuleConnections); ok {
+		if table, err := tcpTable(family, tcpTableOwnerModuleConnections); err == nil {
 			x.add(table, family)
 		}
 	}
