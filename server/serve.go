@@ -625,6 +625,12 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 	files.writeDeny = filesDenyDirs(append(cfg.FilesWriteDenyDirs, cfg.UploadDir, cfg.TrashDir)...)
 	files.homeDirs = cfg.ViewHomeDirs
 	files.setPlaces(buildPlaces(cfg.Places, cfg.PlaceEnv))
+	if h, ok := m.(*hcMux); ok {
+		// herdr-core's repository tops resolve as Files does, with the same
+		// Places (a Place on a share is refused otherwise on Windows). No
+		// snapshot runs before the routes serve, so nothing reads it yet.
+		h.roots = files.roots
+	}
 	files.wsl = detectWSLWindows(systemScope())
 	if cfg.TrashDir != "" {
 		var err error

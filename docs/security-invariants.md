@@ -706,7 +706,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
     Closing a workspace with worktrees stays 409 `has_worktrees`.
   - _git, for tmux/psmux, Zellij and hc_ (`server/git_worktrees.go`, `server/git_worktree_mux.go`): a
     group's repository is the one its first pane (first tab) works in, resolved through the files
-    routes' `rootResolver`. A new checkout's path is built by the server only:
+    routes' `rootResolver`; on Windows a folder off a drive letter outside a Place is never looked up
+    (409 `not_git`), as the psmux paragraph below says. A new checkout's path is built by the server only:
     `<base>/<main checkout's base name>/<branchSlug(branch)>`, base fixed per backend
     (`worktreeBase`: hc `~/.herdr/worktrees`, tmux and Zellij `~/.termote/worktrees`, in the
     container under `/workspace`); refused (`create_failed`) when the repository name is not one
@@ -1144,10 +1145,16 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   foreground process's directory verbatim (`#`, `%`, non-ASCII and a UNC path are not expanded or
   changed) and refuses `:` in a session name, so the path, read last, stays whole. From psmux 3.4
   that path can be what the pane printed (OSC 7 / OSC 9;9 while `ssh.exe` or `wsl.exe` runs in it),
-  so a remote host can name `\\host\share`: on Windows a pane's directory not on a drive letter is
-  refused, whatever the backend (`mayBeFromPaneOutput`: Herdr reports its process's directory, which
-  may also have come from what the pane printed; 400 `directory not available`, as a directory that
-  is gone) before anything stats it, unless it is inside a Place (`--allow-path`). A symbolic link
+  so a remote host can name `\\host\share`: on Windows a pane's directory not on a drive letter (a
+  drive path in the `\\?\` form is one; `\\?\UNC\` and `\\.\` are not) is refused, whatever the
+  backend (`mayBeFromPaneOutput`: Herdr reports its process's directory, which may also have come
+  from what the pane printed; 400 `directory not available`, as a directory that is gone) before
+  anything stats it, unless it is inside a Place (`--allow-path`). The refusal (`refusesDir`) is in
+  `rootResolver.resolve` itself on Windows, not only in the Files routes' `paneRootAt`, so every
+  caller handing it a pane's directory goes through it before any `Lstat`, `Stat` or git: the
+  worktree routes (`source`, `list` in `server/git_worktree_mux.go`), the snapshot's nesting by git
+  (`gitNester` through `repoInfo`) and herdr-core's repository tops (`resolveTop`); a refused folder
+  is outside any repository there. A symbolic link
   in a tree (a repository or an archive can hold one to `\\host\share`) is never followed off a
   drive letter: on Windows every path the Files routes resolve goes through `evalSymlinks`
   (`server/files_links_windows.go`), which reads each link on the way with `Lstat`/`Readlink`
