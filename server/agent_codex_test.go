@@ -746,3 +746,40 @@ func TestCodexFileChangeOnSensitiveFileHidden(t *testing.T) {
 		t.Error("the cached entries were changed")
 	}
 }
+
+// A Codex MCP, function or dynamic tool call whose arguments name a sensitive
+// file shows its result to no view-only client, as a Claude Code call that
+// names the same file does not.
+func TestCodexToolCallOnSensitiveFileHidden(t *testing.T) {
+	rows := []string{
+		codexItemRow(map[string]any{"type": "McpToolCall", "id": "m1", "server": "fs", "tool": "read_text_file", "status": "completed",
+			"arguments": map[string]any{"path": "/p/.env"}, "result": map[string]any{"content": "KEY=secret"}}),
+		codexItemRow(map[string]any{"type": "McpToolCall", "id": "m2", "server": "fs", "tool": "read_text_file", "status": "completed",
+			"arguments": map[string]any{"path": "/p/a.txt"}, "result": map[string]any{"content": "plain"}}),
+		codexItemRow(map[string]any{"type": "FunctionCallOutput", "id": "f1", "name": "read", "status": "completed",
+			"arguments": map[string]any{"file_path": "/p/.ssh/id_ed25519"}, "output": "PRIVATE"}),
+		codexItemRow(map[string]any{"type": "DynamicToolCall", "id": "d1", "tool": "nb", "status": "completed",
+			"arguments": map[string]any{"notebook_path": "/p/.env.local"}, "output": "TOKEN=x"}),
+		codexItemRow(map[string]any{"type": "DynamicToolCall", "id": "d2", "tool": "nb", "status": "completed",
+			"arguments": map[string]any{"notebook_path": "/p/n.ipynb"}, "output": "cells"}),
+	}
+	entries, _ := parseCodex(strings.Join(rows, ""))
+	res := hideSensitiveResults(transcriptResponse{Entries: entries}, func(string) bool { return false })
+	want := map[string]bool{"m1": true, "m2": false, "f1": true, "d1": true, "d2": false}
+	seen := 0
+	for _, e := range res.Entries {
+		for _, p := range e.Parts {
+			hidden, ok := want[p.ToolID]
+			if !ok {
+				continue
+			}
+			seen++
+			if hidden != (p.Result == "" && p.Detail != nil && p.Detail.Hidden) {
+				t.Errorf("%s: result %q, detail %+v; want hidden %v", p.ToolID, p.Result, p.Detail, hidden)
+			}
+		}
+	}
+	if seen != len(want) {
+		t.Fatalf("saw %d of %d parts in %+v", seen, len(want), entries)
+	}
+}

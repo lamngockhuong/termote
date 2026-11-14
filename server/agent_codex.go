@@ -472,7 +472,10 @@ func parseCodexRow(line []byte, off int64) (e TranscriptEntry, recognised, ok bo
 		}
 		in, _ := it.Arguments.(map[string]any)
 		errText := codexErrorText(it.Error)
-		p := TranscriptPart{Kind: "tool", Tool: tool, ToolID: it.ID, Input: summarizeToolInput(in), IsError: it.Status == "failed" || errText != ""}
+		p := TranscriptPart{
+			Kind: "tool", Tool: tool, ToolID: it.ID, Input: summarizeToolInput(in), IsError: it.Status == "failed" || errText != "",
+			sensitive: claudeInputSensitive(in),
+		}
 		if res, ok := it.Result.(map[string]any); ok {
 			p.Result, p.Clipped = clampText(stripANSI(toolResultText(res["content"])), claudeMaxResult)
 			isErr, _ := res["isError"].(bool)
@@ -524,7 +527,8 @@ func parseCodexRow(line []byte, off int64) (e TranscriptEntry, recognised, ok bo
 		result, clipped := clampText(stripANSI(out), claudeMaxResult)
 		e.Parts = append(e.Parts, TranscriptPart{
 			Kind: "tool", Tool: tool, ToolID: it.ID, Input: summarizeToolInput(in), Result: result, Clipped: clipped,
-			IsError: it.Status == "failed" || errText != "" || (it.Success != nil && !*it.Success),
+			IsError:   it.Status == "failed" || errText != "" || (it.Success != nil && !*it.Success),
+			sensitive: claudeInputSensitive(in),
 		})
 	case "CollabAgentToolCall":
 		input := oneLine(it.Prompt)

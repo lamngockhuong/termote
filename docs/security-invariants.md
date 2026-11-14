@@ -896,7 +896,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   calls it parsed, last 16384; a failed edit's row names no file but quotes its `old_string`, and
   its call may lie before every byte read): `Result` emptied and `hidden` set, on a copy of the
   cached read; the same for a Codex
-  `FileChange` part (its diff) whose path or move path is such a file. A Grep over a directory,
+  `FileChange` part (its diff) whose path or move path is such a file, an `ImageView` of one, and
+  a Codex `McpToolCall`, `FunctionCallOutput` or `DynamicToolCall` whose arguments name one
+  (`file_path`/`notebook_path`/`path`, as a Claude Code call). A Grep over a directory,
   Bash and a Codex command's output that prints one is not keyed (accepted).
   `agent/commands` (the composer's `/` suggestions; Codex: its skills, see Codex chat) returns
   only names, descriptions, sources and kinds of `.claude/commands`/`.claude/skills` under the
