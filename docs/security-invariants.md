@@ -2819,8 +2819,13 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `sharp`, the Build PWA job runs `pnpm audit --prod --audit-level high` (known vulnerabilities),
   and `malware-scan.yml` (pull requests, pushes to `main` and daily, `contents: read`, osv-scanner
   pinned by sha256 with a Renovate `customManagers` entry) fails when any package in
-  `pnpm-lock.yaml`, dev ones included, matches a malicious-package advisory (an OSV `MAL-` ID or
-  an alias of one); it ignores every other advisory, leaving those to `pnpm audit`. It only knows
+  `pnpm-lock.yaml`, dev ones included, matches a malicious-package advisory: an OSV `MAL-` ID or
+  an alias of one (GitHub's recent malware advisories, `chalk@5.6.1`, arrive so), or an older
+  GitHub-reviewed malware advisory, which reaches OSV as a `GHSA-` ID with no `MAL-` alias
+  (`coa@2.0.3`, `ua-parser-js@0.7.29`, read from the OSV API on 2026-11-14) and is recognised by
+  `CWE-506` (Embedded Malicious Code) in its `database_specific.cwe_ids`; it ignores every other
+  advisory, leaving those to `pnpm audit`. The step sets `pipefail`, so a jq error fails it rather
+  than leaving the list empty. It only knows
   versions already reported. A false positive goes in a root `osv-scanner.toml` `[[IgnoredVulns]]`
   entry with its reason.
   The website (`deploy-website.yml`) serves `install.sh` and `install.ps1`, which pin the release
