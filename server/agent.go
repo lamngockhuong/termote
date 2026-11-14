@@ -367,6 +367,8 @@ type agentAPI struct {
 	allowed  hostAllowlist
 	commands *ttlCache[commandsResponse]
 	home     string
+	// history lists and reads the sessions of a pane's root.
+	history *historyAPI
 	// uploads resolves image ids in a message; nil when the server has none.
 	uploads *uploadStore
 	// activity records each agent's status changes from the snapshots read.
