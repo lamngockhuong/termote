@@ -1273,10 +1273,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   the hash the client saw only to compare: another one than the current `HEAD` is 409
   `head_moved`, before any path reaches git. The path (and a rename's source) must be one that
   commit's `diff-tree` lists, under the same deny lists and `reveal=1` for a sensitive name, then
-  goes in as `:(literal)` after `--`; a view-only client goes through `viewHides`, and reads the
-  diff only of a path still in `HEAD`'s tree: a file the commit deleted (or stopped tracking) and a
-  rename's source stay listed by name, but their diff is 404 as if missing (history is not what it
-  may read); a full client reads them all. A commit's
+  goes in as `:(literal)` after `--`; a view-only client goes through `viewHides` with the path
+  checked against the root's tracked list, as in Changes, and reads the diff only of a path in it:
+  a file the commit deleted (or stopped tracking), a rename's source and a file removed from the
+  index since the commit (`git rm --cached`, which only `HEAD` still holds) stay listed by name, but
+  their diff is 404 as if missing (history is not what it may read); a full client reads them all. A commit's
   file list is kept 30 s per root and hash (a hash never changes what it names); a sensitive name
   is checked again when its diff is read. Message and author are shown with `visibleUnsafe`.
   Blame (`files/blame`, `server/files_git_blame.go`) is a read route (`begin`: `crossSiteRejection`,

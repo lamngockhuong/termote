@@ -391,6 +391,34 @@ func TestViewOnlyCommitDiffHeadTree(t *testing.T) {
 	}
 }
 
+// A file the last commit added, then removed from the index (git rm
+// --cached) without a commit, is in HEAD's tree but not in the tracked list:
+// a view-only client does not read its diff, as Changes does not; a full
+// client does.
+func TestViewOnlyCommitDiffUntrackedSinceHead(t *testing.T) {
+	gx := newGitFixture(t)
+	r := gx.repo
+	writeFile(t, filepath.Join(r, "later.txt"), "untracked secret\n")
+	writeFile(t, filepath.Join(r, "kept.txt"), "kept\n")
+	gitT(t, r, "add", "later.txt", "kept.txt")
+	gitT(t, r, "commit", "-q", "-m", "add")
+	gitT(t, r, "rm", "-q", "--cached", "later.txt")
+	head := strings.TrimSpace(gitT(t, r, "rev-parse", "HEAD"))
+	_, vh := viewFilesFixture(t, r)
+	base := "/api/mux/panes/0/files/"
+	q := url.Values{"path": {"later.txt"}, "commit": {head}}
+	if rec := serve(vh, viewRequest("GET", base+"commit/diff?"+q.Encode(), "")); rec.Code != http.StatusNotFound || strings.Contains(rec.Body.String(), "secret") {
+		t.Errorf("view later.txt = %d %s", rec.Code, rec.Body)
+	}
+	if rec := serve(vh, fullRequest(base+"commit/diff?"+q.Encode())); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "untracked secret") {
+		t.Errorf("full later.txt = %d %s", rec.Code, rec.Body)
+	}
+	q = url.Values{"path": {"kept.txt"}, "commit": {head}}
+	if rec := serve(vh, viewRequest("GET", base+"commit/diff?"+q.Encode(), "")); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "kept") {
+		t.Errorf("view kept.txt = %d %s", rec.Code, rec.Body)
+	}
+}
+
 // A view-only client does not read, in Changes, what only HEAD still holds:
 // the staged diff or old image of a file deleted or untracked from the index,
 // or of a rename's source, as with a commit's. A full client reads them all.
