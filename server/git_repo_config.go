@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 )
 
@@ -456,12 +457,14 @@ func (rr *rootResolver) checkGitDir(g, top string) (valid bool, err error) {
 		return false, nil
 	}
 	// A relative path a key names starts from the git dir (core.worktree)
-	// or the work tree git runs in: top, or a core.worktree either file,
-	// or a file it includes, sets (git reads both files as one).
+	// or the work tree git runs in: top, or the core.worktree either file
+	// sets (git reads both files as one).
 	files := []string{filepath.Join(common, "config"), filepath.Join(g, "config.worktree")}
 	bases := []string{g, top}
 	for _, f := range files {
-		bases = rr.worktreeBases(f, g, 0, bases)
+		if w := rr.worktreeOf(f, g); w != "" && !slices.Contains(bases, w) {
+			bases = append(bases, w)
+		}
 	}
 	for _, f := range files {
 		if err := rr.checkConfigFile(f, 0, bases); err != nil {
@@ -499,31 +502,34 @@ func lstatIsDir(p string) bool {
 	return err == nil && fi.IsDir()
 }
 
-// worktreeBases appends to bases each core.worktree f and the local files it
-// includes set, resolved literally against the git dir g as git resolves
-// it. A file it cannot read or parse adds nothing: checkConfigFile refuses it.
-func (rr *rootResolver) worktreeBases(f, g string, depth int, bases []string) []string {
+// worktreeOf is the core.worktree the config file f sets, resolved literally
+// against the git dir g as git resolves it: the last one, which is the one
+// git uses, and never from a file f includes, which git does not read for
+// it. "" when f sets none; a file it cannot read or parse sets none here,
+// and checkConfigFile refuses it.
+func (rr *rootResolver) worktreeOf(f, g string) string {
 	b, missing, err := readRepoFile(f)
-	if err != nil || missing || depth > repoConfigMaxDepth {
-		return bases
+	if err != nil || missing {
+		return ""
 	}
 	entries, err := parseGitConfig(b)
 	if err != nil {
-		return bases
+		return ""
 	}
+	w := ""
 	for _, e := range entries {
-		switch {
-		case e.section == "core" && e.subsection == "" && e.key == "worktree":
-			if w, err := rr.repoPath(e.value, g); err == nil {
-				bases = append(bases, w)
-			}
-		case e.key == "path" && (e.section == "include" && e.subsection == "" || e.section == "includeif"):
-			if p, err := rr.configPath(e.value, filepath.Dir(f)); err == nil && p != "" {
-				bases = rr.worktreeBases(p, g, depth+1, bases)
-			}
+		if e.section == "core" && e.subsection == "" && e.key == "worktree" {
+			w = e.value
 		}
 	}
-	return bases
+	if w == "" {
+		return ""
+	}
+	p, err := rr.repoPath(w, g)
+	if err != nil {
+		return ""
+	}
+	return p
 }
 
 // checkConfigFile checks one config file and, depth deep, the local files

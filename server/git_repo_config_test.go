@@ -234,6 +234,25 @@ func TestRepoConfigRefusedHomeInclude(t *testing.T) {
 	}
 }
 
+// worktreeOf takes the last core.worktree of the file, the one git uses,
+// and none from a file it includes, which git does not read for it: a
+// config repeating the key or its includes adds one base at most.
+func TestWorktreeOf(t *testing.T) {
+	dir := fakeRepo(t, withFiles(gitDirFiles(".git/", strings.Repeat("[core]\n\tworktree = ../a\n", 1000)+
+		"[core]\n\tworktree = ../b\n"+strings.Repeat("[include]\n\tpath = ../inc.cfg\n", 1000)),
+		"inc.cfg", "[core]\n\tworktree = ../c\n"))
+	g := filepath.Join(dir, ".git")
+	rr := newTestRoots()
+	if got, want := rr.worktreeOf(filepath.Join(g, "config"), g), filepath.Join(dir, "b"); got != want {
+		t.Errorf("worktreeOf = %q, want %q", got, want)
+	}
+	only := fakeRepo(t, withFiles(gitDirFiles(".git/", "[include]\n\tpath = ../inc.cfg\n"), "inc.cfg", "[core]\n\tworktree = ../c\n"))
+	og := filepath.Join(only, ".git")
+	if got := rr.worktreeOf(filepath.Join(og, "config"), og); got != "" {
+		t.Errorf("core.worktree from an include = %q, want none", got)
+	}
+}
+
 // A gitfile in a directory on a drive naming a git dir off one is refused
 // before anything resolves it; on a share (a Place) its own share passes.
 func TestGitfileOffDrive(t *testing.T) {

@@ -1219,8 +1219,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   (`parseGitConfig`) takes git's syntax strictly, and a file it cannot parse or read, includes too
   deep, or a link on the way off a drive (`evalSymlinks`) refuses the repository rather than passing
   it. The path a key that opens a file names is followed for such a link from every place a relative
-  one starts (the config file's folder, the git dir, the directory git runs in, and every
-  `core.worktree` that `config`, `config.worktree` or a file they include sets); only a link off a drive refuses there, another error does not. Elsewhere than
+  one starts (the config file's folder, the git dir, the directory git runs in, and the
+  `core.worktree` that `config` or `config.worktree` sets: the last of each, the one git uses, and
+  never one from an include, which git does not read for it); only a link off a drive refuses there, another error does not. Elsewhere than
   Windows `repoConfigRefused` reads nothing. Behind it, on Windows, `gitEntryTarget` refuses a `.git`
   file in a directory on a drive that names a git dir off one outside the Places
   (`gitfileOffDrive`, which reads the Places from `gitEntryPlaces`) before resolving it (a linked
