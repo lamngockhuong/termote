@@ -1,0 +1,101 @@
+{
+  "location": {
+    "directory": "/home/user"
+  },
+  "data": [
+    {
+      "id": "m1",
+      "modelID": "m1",
+      "providerID": "fake",
+      "name": "Fake M1",
+      "package": "@opencode/ai/providers/openai-compatible",
+      "settings": {
+        "apiKey": "<redacted>",
+        "baseURL": "http://127.0.0.1:49392/v1",
+        "provider": "fake"
+      },
+      "capabilities": {
+        "tools": true,
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "variants": [
+        {
+          "id": "low",
+          "settings": {
+            "reasoningEffort": "low"
+          }
+        },
+        {
+          "id": "medium",
+          "settings": {
+            "reasoningEffort": "medium"
+          }
+        },
+        {
+          "id": "high",
+          "settings": {
+            "reasoningEffort": "high"
+          }
+        }
+      ],
+      "time": {
+        "released": 0
+      },
+      "cost": [],
+      "status": "active",
+      "enabled": true,
+      "limit": {
+        "context": 200000,
+        "output": 8000
+      }
+    },
+    {
+      "id": "iceman-free",
+      "modelID": "iceman-free",
+      "providerID": "opencode",
+      "type": "chat",
+      "name": "Iceman Free",
+      "package": "@opencode/ai/providers/openai-compatible",
+      "settings": {
+        "apiKey": "<redacted>",
+        "baseURL": "https://opencode.ai/inference/openai/v1",
+        "provider": "opencode"
+      },
+      "capabilities": {
+        "tools": true,
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "variants": [],
+      "time": {
+        "released": 1793923200000
+      },
+      "cost": [
+        {
+          "input": 0,
+          "output": 0,
+          "cache": {
+            "read": 0,
+            "write": 0
+          }
+        }
+      ],
+      "status": "active",
+      "enabled": true,
+      "limit": {
+        "context": 262144,
+        "output": 131072
+      }
+    }
+  ]
+}

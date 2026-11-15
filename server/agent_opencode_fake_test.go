@@ -56,6 +56,10 @@ type fakeOpencode struct {
 	// cursor; forks counts the sessions POST .../fork made.
 	list  []json.RawMessage
 	forks int
+	// modelList answers GET /api/model (recorded from 2.3.0 unless a test
+	// sets it); modelLocations are the directories it was asked for.
+	modelList      json.RawMessage
+	modelLocations []string
 }
 
 // testOpencodeSession is a session as session.list gives it (OpenCode
@@ -184,6 +188,16 @@ func (f *fakeOpencode) serve(w http.ResponseWriter, r *http.Request) {
 		w.Write(data)
 		return
 	}
+	if path == "/api/model" {
+		f.modelLocations = append(f.modelLocations, r.URL.Query().Get("location[directory]"))
+		data := f.modelList
+		if data == nil {
+			data = testOpencodeFixture(f.t, "model-list.json")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(data)
+		return
+	}
 	if path == "/api/session/active" {
 		data := map[string]any{}
 		for _, id := range f.active {
@@ -206,7 +220,7 @@ func (f *fakeOpencode) serve(w http.ResponseWriter, r *http.Request) {
 		f.write(w, r, id, sub)
 		return
 	}
-	switch sub {
+	switch head, _, _ := strings.Cut(sub, "/"); head {
 	case "":
 		if v, ok := f.sessions[id]; ok {
 			w.Header().Set("Content-Type", "application/json")
@@ -227,6 +241,20 @@ func (f *fakeOpencode) serve(w http.ResponseWriter, r *http.Request) {
 		reply(map[string]any{"data": []any{}})
 	case "message":
 		msgs, ok := f.messages[id]
+		if msgID, one := strings.CutPrefix(r.URL.Path, "/api/session/"+id+"/message/"); one {
+			// session.message.get: a message of this session only.
+			for _, m := range msgs {
+				var head struct{ ID string }
+				json.Unmarshal(m, &head)
+				if head.ID == msgID {
+					reply(map[string]any{"data": m})
+					return
+				}
+			}
+			w.WriteHeader(http.StatusNotFound)
+			w.Write(testOpencodeFixture(f.t, "message-not-found.json"))
+			return
+		}
 		if !ok {
 			notFound()
 			return
@@ -273,7 +301,9 @@ func (f *fakeOpencode) serveList(w http.ResponseWriter, r *http.Request) {
 			Location struct{ Directory string }
 		}
 		json.Unmarshal(raw, &s)
-		if q.Get("parentID") == "null" && s.ParentID != "" || q.Has("directory") && s.Location.Directory != q.Get("directory") {
+		parent := q.Get("parentID")
+		if parent == "null" && s.ParentID != "" || parent != "" && parent != "null" && s.ParentID != parent ||
+			q.Has("directory") && s.Location.Directory != q.Get("directory") {
 			continue
 		}
 		all = append(all, raw)

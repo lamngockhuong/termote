@@ -19,7 +19,8 @@ import (
 )
 
 // The subagent tree (/api/mux/panes/{id}/agent/subagents) lists the
-// subagents a pane's Claude Code session started. Claude Code (checked
+// subagents a pane's Claude Code session started (an OpenCode session's:
+// agent_opencode_subagents.go). Claude Code (checked
 // against 2.1.28x) keeps each one under
 // <claudeDir>/projects/<proj>/<sessionId>/subagents as
 //
@@ -133,6 +134,11 @@ func (a *agentAPI) handleSubagents(w http.ResponseWriter, r *http.Request) {
 // subagentTree is readSubagents shared by every client asking within
 // subagentsTTL.
 func (a *agentAPI) subagentTree(s AgentSession) (subagentsResponse, error) {
+	if s.Agent == "opencode" {
+		return a.subagents.do("opencode\x00"+s.ID, func() (subagentsResponse, error) {
+			return readOpencodeSubagents(s.ID)
+		})
+	}
 	if s.Agent != "claude" {
 		return emptySubagents(), nil
 	}

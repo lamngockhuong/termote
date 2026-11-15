@@ -731,6 +731,15 @@ describe('ChatView agent state', () => {
       screen.getByRole('button', { name: '1 subagent running' }),
     ).toBeInTheDocument()
     expect(screen.getByText('seo-technical')).toBeInTheDocument()
+    // OpenCode's subagents are read as well
+    subagents.panes = []
+    rerender(
+      <ChatView
+        {...props}
+        session={{ ...props.session, agentName: 'opencode' }}
+      />,
+    )
+    expect(subagents.panes).toContain('0')
     // Another agent has no tree to read
     subagents.panes = []
     rerender(

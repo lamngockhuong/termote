@@ -201,7 +201,7 @@ func readOpencodeTranscript(s AgentSession, cursor, before string) (transcriptRe
 				return transcriptResponse{}, opencodeReadError(err)
 			}
 			// Older than a message the client has: all settled.
-			if e := opencodeEntries(oldestFirstMessages(page.messages)); e != nil {
+			if e := opencodeEntries(oldestFirstMessages(page.messages), s.ID); e != nil {
 				res.Entries = e
 			}
 			res.Before = beforeOf(page.older)
@@ -215,7 +215,7 @@ func readOpencodeTranscript(s AgentSession, cursor, before string) (transcriptRe
 			}
 			if found {
 				kept, lastID := opencodeSettled(newer, last)
-				if e := opencodeEntries(kept); e != nil {
+				if e := opencodeEntries(kept, s.ID); e != nil {
 					res.Entries = e
 				}
 				res.Cursor = encodeCursor(agentCursor{Session: s.ID, File: opencodeCursorAfter + lastID})
@@ -233,7 +233,7 @@ func readOpencodeTranscript(s AgentSession, cursor, before string) (transcriptRe
 	}
 	kept, lastID := opencodeSettled(oldestFirstMessages(page.messages), "")
 	res.Reset = true
-	if e := opencodeEntries(kept); e != nil {
+	if e := opencodeEntries(kept, s.ID); e != nil {
 		res.Entries = e
 	}
 	res.Cursor = encodeCursor(agentCursor{Session: s.ID, File: opencodeCursorAfter + lastID})
@@ -329,14 +329,22 @@ func opencodeSettled(msgs []opencodeMessage, last string) ([]opencodeMessage, st
 	return msgs, last
 }
 
-// opencodeEntries turns messages (oldest first) into Chat view rows; a kind
-// the Chat view has no row for is skipped.
-func opencodeEntries(msgs []opencodeMessage) []TranscriptEntry {
+// opencodeEntries turns messages (oldest first) of session into Chat view
+// rows; a kind the Chat view has no row for is skipped. Every image pasted
+// inline gets its reference for agent/image.
+func opencodeEntries(msgs []opencodeMessage, session string) []TranscriptEntry {
 	var out []TranscriptEntry
 	for _, m := range msgs {
-		if e, ok := opencodeEntry(m); ok {
-			out = append(out, e)
+		e, ok := opencodeEntry(m)
+		if !ok {
+			continue
 		}
+		for j := range e.Parts {
+			if p := &e.Parts[j]; p.Kind == "image" && p.imageN >= 0 {
+				p.Image = encodeImageRef(agentImageRef{Session: session, File: opencodeImageRefFile + m.ID, N: p.imageN})
+			}
+		}
+		out = append(out, e)
 	}
 	return out
 }
@@ -352,15 +360,22 @@ func opencodeEntry(m opencodeMessage) (TranscriptEntry, bool) {
 		if strings.TrimSpace(m.Text) != "" {
 			e.Parts = append(e.Parts, textPart("text", m.Text, claudeMaxText))
 		}
-		images := 0
-		for _, f := range m.Files {
+		// imageN is the file's place in the message, -1 (no reference,
+		// the chip alone) for an image kept elsewhere than in the message.
+		for i, f := range m.Files {
 			if strings.HasPrefix(f.Mime, "image/") {
-				e.Parts = append(e.Parts, TranscriptPart{Kind: "image", imageN: images})
-				images++
+				n := i
+				if f.Source.Type != "inline" {
+					n = -1
+				}
+				e.Parts = append(e.Parts, TranscriptPart{Kind: "image", imageN: n})
 			}
 		}
 	case "assistant":
 		e.Role = "assistant"
+		if m.Tokens != nil && m.Tokens.total() > 0 {
+			e.usage = &entryUsage{contextTokens: m.Tokens.total(), model: m.Model.ID, provider: m.Model.ProviderID}
+		}
 		for _, c := range m.Content {
 			switch c.Type {
 			case "text":
@@ -483,4 +498,49 @@ func opencodeEditInput(in map[string]any) map[string]any {
 		}
 	}
 	return out
+}
+
+// opencodeWindowTTL: the models of a directory, and the directory of a
+// session, are read again after this.
+const opencodeWindowTTL = time.Minute
+
+var (
+	opencodeDirs    = newTTLCache[string](opencodeWindowTTL)
+	opencodeWindows = newTTLCache[map[string]int64](opencodeWindowTTL)
+)
+
+// opencodeWindow is the context window of model of provider, which session
+// id ran on, as the service's list of models for the session's directory
+// gives it (its limit.context); 0 when the service does not list it or
+// cannot be asked.
+func opencodeWindow(id, provider, model string) int64 {
+	if provider == "" || model == "" {
+		return 0
+	}
+	c, err := opencodeConnect()
+	if err != nil {
+		return 0
+	}
+	dir, err := opencodeDirs.do(id, func() (string, error) {
+		ctx, cancel := context.WithTimeout(context.Background(), opencodeTimeout)
+		defer cancel()
+		return c.directory(ctx, id)
+	})
+	if err != nil {
+		opencodeDirs.forgetPrefix(id)
+		dir = "" // the service's own list
+	}
+	windows, err := opencodeWindows.do(dir, func() (map[string]int64, error) {
+		ctx, cancel := context.WithTimeout(context.Background(), opencodeTimeout)
+		defer cancel()
+		return c.modelWindows(ctx, dir)
+	})
+	if err != nil {
+		opencodeWindows.forgetPrefix(dir)
+		if !errors.Is(err, errOpencodeUnavailable) {
+			log.Printf("opencode models: %v", err)
+		}
+		return 0
+	}
+	return windows[provider+"\x00"+model]
 }

@@ -415,11 +415,40 @@ type opencodeMessage struct {
 			Message string `json:"message"`
 		} `json:"error"`
 	} `json:"retry"`
+	// Assistant: the model it ran on and the tokens of its request.
+	Model struct {
+		ID         string `json:"id"`
+		ProviderID string `json:"providerID"`
+	} `json:"model"`
+	Tokens *opencodeTokens `json:"tokens"`
 }
 
+// opencodeTokens is a request's tokens, as OpenCode records them.
+type opencodeTokens struct {
+	Input     int64 `json:"input"`
+	Output    int64 `json:"output"`
+	Reasoning int64 `json:"reasoning"`
+	Cache     struct {
+		Read  int64 `json:"read"`
+		Write int64 `json:"write"`
+	} `json:"cache"`
+}
+
+// total is every token of the request, the context it filled as OpenCode
+// counts it (TokenUsage's sum in 2.3.0).
+func (t opencodeTokens) total() int64 {
+	return t.Input + t.Output + t.Reasoning + t.Cache.Read + t.Cache.Write
+}
+
+// opencodeFile is a file of a user message without its bytes: a list of
+// messages is never asked for them. An image pasted into OpenCode is
+// "inline", its base64 in the message itself.
 type opencodeFile struct {
-	Mime string `json:"mime"`
-	Name string `json:"name"`
+	Mime   string `json:"mime"`
+	Name   string `json:"name"`
+	Source struct {
+		Type string `json:"type"`
+	} `json:"source"`
 }
 
 type opencodeContent struct {
@@ -480,4 +509,122 @@ func (c *opencodeClient) messages(ctx context.Context, id, cursor string, limit 
 		page.older = *res.Cursor.Next
 	}
 	return page, nil
+}
+
+// opencodeImageFile is a file of one user message with its bytes.
+type opencodeImageFile struct {
+	Mime   string `json:"mime"`
+	Data   string `json:"data"`
+	Source struct {
+		Type string `json:"type"`
+	} `json:"source"`
+}
+
+// messageFiles reads the files of message msg of session id (session.message.get),
+// with their bytes: only the ones an image reference names are ever asked
+// for. The service answers 404 for a message of another session.
+func (c *opencodeClient) messageFiles(ctx context.Context, id, msg string) ([]opencodeImageFile, error) {
+	if !isOpencodeSessionID(id) || !opencodeMessageIDRe.MatchString(msg) {
+		return nil, errOpencodeNotFound
+	}
+	var res struct {
+		Data struct {
+			ID    string              `json:"id"`
+			Type  string              `json:"type"`
+			Files []opencodeImageFile `json:"files"`
+		} `json:"data"`
+	}
+	if err := c.get(ctx, "/api/session/"+id+"/message/"+msg, nil, opencodeMessagesMax, &res); err != nil {
+		return nil, err
+	}
+	if res.Data.ID != msg || res.Data.Type != "user" {
+		return nil, errOpencodeNotFound
+	}
+	return res.Data.Files, nil
+}
+
+// opencodeChild is the part of a subagent's session the tree reads.
+type opencodeChild struct {
+	ID       string `json:"id"`
+	ParentID string `json:"parentID"`
+	Agent    string `json:"agent"`
+	Title    string `json:"title"`
+	Outcome  string `json:"outcome"`
+	Time     struct {
+		Created float64 `json:"created"`
+		Updated float64 `json:"updated"`
+		Idle    float64 `json:"idle"`
+	} `json:"time"`
+}
+
+// children lists the sessions whose parent is session id (the subagents it
+// started), newest first, at most limit: the service lists only direct
+// children (checked on OpenCode 2.3.0); more is true when it holds more.
+func (c *opencodeClient) children(ctx context.Context, id string, limit int) (kids []opencodeChild, more bool, err error) {
+	if !isOpencodeSessionID(id) {
+		return nil, false, errOpencodeNotFound
+	}
+	q := url.Values{"parentID": {id}, "limit": {strconv.Itoa(limit + 1)}}
+	var res struct {
+		Data []opencodeChild `json:"data"`
+	}
+	if err := c.get(ctx, "/api/session", q, opencodeSmallMax, &res); err != nil {
+		return nil, false, err
+	}
+	more = len(res.Data) > limit
+	for _, s := range res.Data[:min(len(res.Data), limit)] {
+		if s.ParentID == id && s.ID != id && isOpencodeSessionID(s.ID) {
+			kids = append(kids, s)
+		}
+	}
+	return kids, more, nil
+}
+
+// directory is the directory session id runs in, as the service records it.
+func (c *opencodeClient) directory(ctx context.Context, id string) (string, error) {
+	if !isOpencodeSessionID(id) {
+		return "", errOpencodeNotFound
+	}
+	var res struct {
+		Data opencodeSessionInfo `json:"data"`
+	}
+	if err := c.get(ctx, "/api/session/"+id, nil, opencodeSmallMax, &res); err != nil {
+		return "", err
+	}
+	return res.Data.Location.Directory, nil
+}
+
+// opencodeModelsMax bounds the list of models: every model of every
+// provider the user set up.
+const opencodeModelsMax = 8 << 20
+
+// modelWindows is the context window of each model the service offers in
+// dir, keyed by provider and model id ("provider\x00id"). The list also
+// holds every provider's settings, its API key among them: only the
+// provider, the id and the window are decoded, and the body is never kept,
+// logged or returned.
+func (c *opencodeClient) modelWindows(ctx context.Context, dir string) (map[string]int64, error) {
+	var q url.Values
+	if dir != "" {
+		q = url.Values{"location[directory]": {dir}}
+	}
+	var res struct {
+		Data []struct {
+			ID         string `json:"id"`
+			ProviderID string `json:"providerID"`
+			Limit      struct {
+				Context int64 `json:"context"`
+			} `json:"limit"`
+		} `json:"data"`
+	}
+	if err := c.get(ctx, "/api/model", q, opencodeModelsMax, &res); err != nil {
+		return nil, err
+	}
+	out := make(map[string]int64, len(res.Data))
+	for _, m := range res.Data {
+		if m.ID != "" && m.ProviderID != "" && m.Limit.Context > 0 {
+			out[m.ProviderID+"\x00"+m.ID] = m.Limit.Context
+		}
+	}
+	return out, nil
 }

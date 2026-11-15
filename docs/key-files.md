@@ -294,6 +294,8 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/agent_opencode_client.go`                 | OpenCode service: service.json, auth, bounded API reads        |
 | `server/agent_opencode_input.go`                  | OpenCode writes: message, permission and form cards, answers   |
 | `server/agent_opencode_commands.go`               | OpenCode `/` commands and `@` skills: lists, command, skills   |
+| `server/agent_opencode_subagents.go`              | OpenCode subagent tree: child sessions from its service        |
+| `server/agent_opencode_image.go`                  | OpenCode pasted images served again through its service        |
 | `scripts/claude-chat-tags.sh`                     | Tags Claude Code writes that the Chat view would show raw      |
 | `scripts/codex-chat-items.sh`                     | Codex items and events the Chat view would not show            |
 | `server/agent_claude_prompt.go`                   | Reads a Claude Code screen: input box, dialogs                 |

@@ -222,8 +222,12 @@ func planOpencodeMessage(lead, text string, cmds []opencodeCommandInfo, skills [
 	if m := opencodeCommandRe.FindStringSubmatch(strings.TrimLeftFunc(lead, unicode.IsSpace)); m != nil {
 		for _, c := range cmds {
 			if c.Name == m[1] {
+				t := strings.TrimLeftFunc(text, unicode.IsSpace)
+				if !strings.HasPrefix(t, strings.TrimRightFunc(m[0], func(r rune) bool { return unicode.IsSpace(r) || unicode.Is(unicode.Z, r) })) {
+					break // lead is not the start of text: sent as text
+				}
 				p.command = c.Name
-				p.text = strings.TrimSpace(strings.TrimLeftFunc(text, unicode.IsSpace)[len(m[0]):])
+				p.text = strings.TrimSpace(t[min(len(m[0]), len(t)):])
 				break
 			}
 		}

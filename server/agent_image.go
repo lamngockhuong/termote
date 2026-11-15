@@ -113,6 +113,10 @@ func (a *agentAPI) handleImage(w http.ResponseWriter, r *http.Request) {
 		writeCoded(w, errAgentImageNotFound)
 		return
 	}
+	if msg, ok := opencodeImageRef(ref); ok {
+		a.handleOpencodeImage(w, r, ref, msg)
+		return
+	}
 	s, err := a.session(r.PathValue("id"))
 	if err != nil {
 		a.agentError(w, "agent session", err)
@@ -141,12 +145,18 @@ func (a *agentAPI) handleImage(w http.ResponseWriter, r *http.Request) {
 		a.agentError(w, "agent image", err)
 		return
 	}
+	serveAgentImage(w, mt, data, ref.N)
+}
+
+// serveAgentImage answers with image n of a message: its bytes, never
+// sniffed by the browser as anything else, never run as a page.
+func serveAgentImage(w http.ResponseWriter, mt string, data []byte, n int) {
 	h := w.Header()
 	h.Set("Content-Type", mt)
 	h.Set("Content-Length", strconv.Itoa(len(data)))
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("Content-Security-Policy", "sandbox; default-src 'none'")
-	h.Set("Content-Disposition", `inline; filename="image-`+strconv.Itoa(ref.N+1)+"."+uploadExts[mt]+`"`)
+	h.Set("Content-Disposition", `inline; filename="image-`+strconv.Itoa(n+1)+"."+uploadExts[mt]+`"`)
 	// A row of a transcript never changes once written, but the reference
 	// lives only as long as the process: kept for an hour, never shared.
 	h.Set("Cache-Control", "private, max-age=3600")

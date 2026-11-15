@@ -57,6 +57,11 @@ func TestContextShare(t *testing.T) {
 		{"codex over window", "codex", "", 300_000, 0, 258_400, 258_400, 100, true},
 		{"codex tiny window", "codex", "", 5_000, 0, codexBaselineTokens, codexBaselineTokens, 100, true},
 		{"codex no window", "codex", "", 50_000, 0, 0, 0, 0, false},
+		// OpenCode: the window its list of models gives, else none (never
+		// Claude's 200k assumed).
+		{"opencode", "opencode", "m1", 50_000, 0, 200_000, 200_000, 25, true},
+		{"opencode unknown model", "opencode", "claude-sonnet-4-6", 50_000, 0, 0, 0, 0, false},
+		{"opencode over window", "opencode", "m1", 300_000, 0, 200_000, 200_000, 100, true},
 	} {
 		w, pct, exact := contextShare(c.agent, c.tokens, c.model, c.sessionWin, c.entryWin)
 		if w != c.window || pct != c.pct || exact != c.exact {

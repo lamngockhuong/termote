@@ -317,6 +317,12 @@ func (a *agentAPI) summarizePane(paneID string) (transcriptSummary, error) {
 		s.ClaudeWindow = a.claudeWindow(s)
 	}
 	sum := summarizeTranscript(res.Entries, s)
+	if s.Agent == "opencode" && sum.usage != nil {
+		if w := opencodeWindow(s.ID, sum.provider, sum.usage.Model); w > 0 {
+			window, pct, exact := contextShare(s.Agent, sum.usage.ContextTokens, sum.usage.Model, 0, w)
+			sum.usage.ContextWindow, sum.usage.ContextPercent, sum.usage.Exact = window, &pct, exact
+		}
+	}
 	if sum.limits != nil {
 		sum.codexHome = codexAccountHome(s, os.Getenv, a.home)
 	}
@@ -353,9 +359,11 @@ func (a *agentAPI) claudeWindow(s AgentSession) int64 {
 // transcriptSummary is what a card shows of a transcript, and the rate
 // limits it recorded for the account of codexHome.
 type transcriptSummary struct {
-	lastText  string
-	lastTS    string
-	usage     *overviewUsage
+	lastText string
+	lastTS   string
+	usage    *overviewUsage
+	// provider: the provider of an OpenCode answer's model
+	provider  string
 	limits    *codexLimits
 	codexHome string
 }
@@ -379,6 +387,7 @@ func summarizeTranscript(entries []TranscriptEntry, s AgentSession) transcriptSu
 		if u := e.usage; u != nil {
 			if sum.usage == nil && !u.noContext {
 				sum.usage = &overviewUsage{ContextTokens: u.contextTokens, Model: u.model}
+				sum.provider = u.provider
 				window, pct, exact := contextShare(s.Agent, u.contextTokens, u.model, s.ClaudeWindow, u.window)
 				if window > 0 {
 					sum.usage.ContextWindow, sum.usage.ContextPercent, sum.usage.Exact = window, &pct, exact

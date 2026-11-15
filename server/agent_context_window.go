@@ -16,7 +16,9 @@ import (
 // window: claudeWindowOfModel tells it from the model id. The id comes from
 // the transcript's last model row (agent_claude_model.go), which carries the
 // [1m] of a 1M opt-in, else from --model in argv, else from the request's
-// own row. Codex records both in its token_count rows.
+// own row. Codex records both in its token_count rows. OpenCode records the
+// tokens and the model of each answer; the window is the one its service's
+// list of models gives that model (opencodeWindow).
 
 const (
 	claudeWindowDefault int64 = 200_000
@@ -90,6 +92,14 @@ func claudeWindowOfModel(model string) (int64, bool) {
 // the model the request went to, entryWindow what a Codex row names. window
 // 0 means no share can be told.
 func contextShare(agent string, tokens int64, model string, sessionWindow, entryWindow int64) (window int64, pct float64, exact bool) {
+	if agent == "opencode" {
+		// The window OpenCode's own list of models gives the model
+		// (opencodeWindow); a model it does not list has none.
+		if entryWindow <= 0 {
+			return 0, 0, false
+		}
+		return entryWindow, sharePercent(tokens, entryWindow), true
+	}
 	if agent == "codex" {
 		if entryWindow <= 0 {
 			return 0, 0, false

@@ -468,11 +468,21 @@ func TestOpencodeEntries(t *testing.T) {
 			}
 			msgs = append(msgs, m)
 		}
-		return opencodeEntries(msgs)
+		return opencodeEntries(msgs, "sesFixT1")
 	}
 	img := read("message-list-image.json")
 	if len(img) != 2 || len(img[0].Parts) != 2 || img[0].Parts[1].Kind != "image" || img[0].TS == "" {
 		t.Errorf("image message = %+v", img)
+	}
+	// The image pasted inline gets its reference: the session, the message
+	// and the file's place in it.
+	if ref, ok := decodeImageRef(img[0].Parts[1].Image); !ok || ref.Session != "sesFixT1" ||
+		ref.File != opencodeImageRefFile+img[0].ID || ref.N != 0 {
+		t.Errorf("image reference = %+v %v", ref, ok)
+	}
+	// The answer carries its tokens and model, for the overview.
+	if u := img[1].usage; u == nil || u.contextTokens != 1230 || u.model != "m1" || u.provider != "fake" {
+		t.Errorf("answer usage = %+v", u)
 	}
 	sub := read("message-list-subagent.json")
 	var subTool *TranscriptPart

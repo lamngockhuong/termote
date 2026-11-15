@@ -55,7 +55,9 @@ Với Claude Code, cửa sổ theo model đang chạy, đúng như transcript gh
 `/model`: 1M với các model vốn có sẵn 1M (mọi model từ Claude 5 trở đi, Opus từ 4.7) và với model
 `[1m]`, 200k với mọi model khác. Khi không đọc được model, Termote đoán cửa sổ là 200k và ghi thêm `~`
 trước phần trăm, cho tới khi context vượt quá 200k. Với Codex, phần
-trăm lấy đúng con số Codex tự báo ("% context left", đổi sang phần đã dùng).
+trăm lấy đúng con số Codex tự báo ("% context left", đổi sang phần đã dùng). Với OpenCode, context là
+số token của câu trả lời gần nhất, còn cửa sổ lấy theo danh sách model của chính OpenCode cho model
+đó; model không có trong danh sách thì chỉ hiện số token, không có phần trăm.
 
 Khi có pane Codex đăng nhập bằng gói ChatGPT, phía trên các thẻ có dải **Accounts** cho biết hạn mức của
 tài khoản đó: một thanh cho cửa sổ 5 giờ và một thanh cho cửa sổ tuần, giờ mỗi cửa sổ reset, và lần cuối
@@ -106,7 +108,8 @@ dấu riêng: blocked có sọc chéo, idle chỉ có viền. Bên dưới dải
 phút. Khoảng trước lần đổi trạng thái đầu tiên mà server ghi được để trống, vì không biết lúc đó agent
 làm gì, chứ không phải agent đang idle.
 
-Với Claude Code, phần này còn liệt kê các agent con của phiên. Mỗi agent con có loại, mô tả, trạng thái,
+Với Claude Code và OpenCode (agent con của OpenCode là một session riêng), phần này còn liệt kê các
+agent con của phiên. Mỗi agent con có loại, mô tả, trạng thái,
 tool gọi gần nhất, thời gian đã chạy và số token của lần gọi model gần nhất. Agent con do một agent con khác tạo ra thì thụt vào dưới agent
 đó. Khi transcript không cho biết agent con đã xong hay chưa, Termote coi nó là xong nếu file của nó
 không đổi trong 10 phút và ghi thêm `(guessed)`. Thu gọn lại, nút vẫn ghi số lượng, ví dụ

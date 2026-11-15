@@ -164,6 +164,12 @@ func TestOpencodeMessageImages(t *testing.T) {
 	if f0 := files[0].(map[string]any); f0["uri"] != want || f0["name"] != "image.png" {
 		t.Errorf("file = %.80v", f0)
 	}
+	// The space after an image's token goes with it: OpenCode gets the
+	// image as a file, the text without a leading space.
+	code, body = postJSON(t, mux, "/api/mux/panes/0/agent/message", map[string]any{"text": " test, bạn", "images": ids[:1], "at": []int{0}, "cursor": opencodeCursor("sesFixP1")})
+	if b := oc.lastBody(t); code != http.StatusNoContent || b["text"] != "test, bạn" {
+		t.Errorf("leading space = %d %v %q", code, body, b["text"])
+	}
 	n := len(oc.writes())
 	code, body = postJSON(t, mux, "/api/mux/panes/0/agent/message", map[string]any{"text": "x", "images": []string{"../../etc/passwd"}, "cursor": opencodeCursor("sesFixP1")})
 	if code != http.StatusBadRequest || body["code"] != "invalid_request" || len(oc.writes()) != n {

@@ -46,7 +46,7 @@ Setting it up from scratch? Follow [Control Claude Code from your phone](/guides
   then. When the line cannot be read, the row still says the agent is working and for how long.
   Once Claude Code ends a turn with background commands still running, the row says what is left
   (`Turn done · 2 shells still running`) until they finish and the agent carries on.
-- While a Claude Code session has subagents running, a strip above the composer says how many
+- While a Claude Code or OpenCode session has subagents running, a strip above the composer says how many
   (`2 subagents running`) and lists them as the terminal does: each one's type, description, the
   last tool it called, how long it has run and the tokens of its last request. A subagent started by
   another is indented under it. Tap the strip to fold it; it goes away once none runs. The
@@ -314,6 +314,11 @@ From the view you send messages (with pasted images), as Tasks and Review do too
 while OpenCode works waits in its queue for the turn to end, as with Claude Code. While a turn
 runs, the working row shows how long it has run, and when the provider refuses a request (a rate
 limit) the attempt OpenCode retries and the provider's error.
+
+An image you pasted opens again from its chip, here and in an old session you read from
+History. A subagent OpenCode starts runs in a session of its own: the strip above the composer and
+the [overview](/usage/overview/) list them as for Claude Code, with the ones a subagent starts in
+turn under it.
 
 A permission request shows as a card with **Yes, once**, **Yes, always** (with the patterns it
 saves) and **No**. A question, or a form a tool asks you to fill in, shows its fields (text, a
