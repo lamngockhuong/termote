@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -85,3 +86,6 @@ func TestHcCoreRunningProbeWindows(t *testing.T) {
 		t.Fatal("pipe found under another USERNAME")
 	}
 }
+
+// hcTestListenPipe listens on the named pipe name, as a core would.
+func hcTestListenPipe(t *testing.T, name string) net.Listener { return listenHerdrTest(t, name) }

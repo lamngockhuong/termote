@@ -99,10 +99,10 @@ func hcSession(env []string) string {
 // hcCoreRunning reports whether a core answers for env, without starting
 // one: HC_SOCKET when set, else the endpoint the core recorded in its
 // core.lock (herdr-core server.rs writes it there; client.rs reads it back
-// the same way), else the one hc dials by default (hcDefaultEndpoint: on
-// Windows a running core's lock keeps core.lock from being read). Dialing
-// the socket or pipe starts nothing; hc connect would (client.rs
-// connect_or_start).
+// the same way), else the one hc dials: `socket` in herdr-core's config.toml
+// (hcConfigSocket), else its default (hcDefaultEndpoint). On Windows a
+// running core's lock keeps core.lock from being read. Dialing the socket or
+// pipe starts nothing; hc connect would (client.rs connect_or_start).
 var hcCoreRunning = hcCoreRunningDefault
 
 func hcCoreRunningDefault(ctx context.Context, env []string) bool {
@@ -111,6 +111,9 @@ func hcCoreRunningDefault(ctx context.Context, env []string) bool {
 		if b, err := os.ReadFile(filepath.Join(hcStateDir(env), "core.lock")); err == nil {
 			endpoint = strings.TrimSpace(string(b))
 		}
+	}
+	if endpoint == "" {
+		endpoint = hcConfigSocket(env)
 	}
 	if endpoint == "" {
 		endpoint = hcDefaultEndpoint(env)

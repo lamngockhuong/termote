@@ -230,7 +230,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
     page snapshot (`startingSnapshot`), never for a peek, a view-only device, the stream,
     `/health` or the push watcher. "Runs" is `HC_SOCKET`, else the endpoint the core wrote in
     `<state>/herdr-core/<session>/core.lock`, else (Windows, where a running core's lock on byte 0
-    keeps `core.lock` from being read) the pipe hc itself dials,
+    keeps `core.lock` from being read) what hc itself dials: `socket` in herdr-core's
+    `config.toml` (`hcConfigSocket`: a regular file of at most 64 KiB, opened without blocking, the key
+    matched exactly, a file that does not decode ignored), else
     `\\.\pipe\herdr-core-<USERNAME's ASCII letters and digits>-<session>.sock` (`hcDefaultEndpoint`),
     accepting a connection; a Windows pipe counts only when its server runs as this user
     (`dialHerdr`), and a probe starts nothing. A
