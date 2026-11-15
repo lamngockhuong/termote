@@ -169,13 +169,11 @@ function Disclosure({
 // names one per image (Claude Code keeps counting across a session), else
 // the order in the entry when there is more than one image.
 export function imageNumbers(parts: TranscriptPart[]): (number | undefined)[] {
-  const tokens = parts
-    .filter((p) => p.kind === 'text' && p.text)
-    .flatMap((p) =>
-      [...(p.text ?? '').matchAll(/\[Image #(\d+)\]/g)].map((m) =>
-        Number(m[1]),
-      ),
-    )
+  const tokens = parts.flatMap((p) =>
+    p.kind === 'text' && p.text
+      ? [...p.text.matchAll(/\[Image #(\d+)\]/g)].map((m) => Number(m[1]))
+      : [],
+  )
   const count = parts.filter((p) => p.kind === 'image').length
   let i = 0
   return parts.map((p) => {
