@@ -18,3 +18,15 @@ export function canStartAgent(mux: MuxInfo, session: Session): boolean {
     isShell(paneCommand(session))
   )
 }
+
+// A session of the history can be resumed in the pane itself: the server
+// runs tasks (it types the command line as it types a task's) and the pane
+// shows only its shell, no agent.
+export function canResumeHere(mux: MuxInfo, session: Session): boolean {
+  return (
+    !!mux.caps.tasks &&
+    !!session.paneId &&
+    !session.hasAgent &&
+    isShell(paneCommand(session))
+  )
+}

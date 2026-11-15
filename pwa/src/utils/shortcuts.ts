@@ -35,6 +35,7 @@ export const COMMAND_IDS = {
   'pane.resizeUp': true,
   'pane.resizeDown': true,
   'agent.start': true,
+  'agent.history': true,
   'settings.open': true,
   'settings.devices': true,
   'settings.shortcuts': true,

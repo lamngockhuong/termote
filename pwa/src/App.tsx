@@ -25,6 +25,10 @@ import {
 } from './app-views'
 import { chatAgent, chatInputAgent } from './chat-agents'
 import { AboutModal } from './components/about-modal'
+import {
+  AgentHistorySheet,
+  type HistoryTarget,
+} from './components/agent-history-sheet'
 import { AppHeader } from './components/app-header'
 import { CommandHistoryDropdown } from './components/command-history-dropdown'
 import type { CommandPaletteProps } from './components/command-palette'
@@ -85,7 +89,13 @@ import { useAgentNotifications } from './hooks/use-agent-notifications'
 import { useAppBadge } from './hooks/use-app-badge'
 import { useCommandHistory } from './hooks/use-command-history'
 import { useExitTransition } from './hooks/use-exit-transition'
-import { followInFiles, requestFilesFocus, usePlaces } from './hooks/use-files'
+import {
+  FOLLOW_NOTICES,
+  followInFiles,
+  followPathInFiles,
+  requestFilesFocus,
+  usePlaces,
+} from './hooks/use-files'
 import { useFontSize } from './hooks/use-font-size'
 import { useFullscreen } from './hooks/use-fullscreen'
 import { useGestures } from './hooks/use-gestures'
@@ -100,9 +110,11 @@ import { useLocalSessions } from './hooks/use-local-sessions'
 import { useMachines } from './hooks/use-machines'
 import { useIsMobile, useMediaQuery } from './hooks/use-media-query'
 import {
+  type HistorySession,
   logout,
   onViewOnlyRefusal,
   RequestError,
+  type ResumeWhere,
   selectTab,
 } from './hooks/use-mux-api'
 import { usePushSubscription } from './hooks/use-push-subscription'
@@ -118,6 +130,7 @@ import { Trans } from './i18n/trans'
 import type { Translate } from './i18n/translate'
 import type { Session, SessionPane } from './types/session'
 import { applyUiStyle, syncThemeColor } from './ui-style'
+import { canResumeHere } from './utils/agent-start'
 import { currentMachine, switchMachine } from './utils/api-base'
 import { buildAppCommands, type PaletteMode } from './utils/app-commands'
 import { APP_INFO } from './utils/app-info'
@@ -288,6 +301,8 @@ export default function App({
   const { isCollapsed: sidebarCollapsed, toggle: toggleSidebarCollapsed } =
     useSidebarCollapsed()
   const [aboutOpen, setAboutOpen] = useState(false)
+  // The session history open, on a pane
+  const [historyTarget, setHistoryTarget] = useState<HistoryTarget | null>(null)
   const [helpOpen, setHelpOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   // Group Settings opens at; About's "Check for updates" asks for Updates
@@ -683,6 +698,21 @@ export default function App({
           onClose: setPendingGroupCloseId,
           canRename: (id) => namedGroups && !isDefaultGroup(id),
           ...worktreeActions,
+          // On the pane of the tab the group opens on; no resume there, the
+          // page stands on no pane of it
+          onOpenHistory: mux.caps.files
+            ? (groupId: string) => {
+                const id = pickGroupTab(
+                  sessions
+                    .filter((s) => s.groupId === groupId)
+                    .map((s) => s.id),
+                  lastTabByGroup.current.get(groupId),
+                  activeTabByGroup.get(groupId),
+                )
+                const paneId = sessions.find((s) => s.id === id)?.paneId
+                if (paneId) setHistoryTarget({ paneId, here: false })
+              }
+            : undefined,
         }
       : undefined
   // Tab bars show the current group only; the sidebar shows every group.
@@ -938,6 +968,55 @@ export default function App({
     },
     [getTerminal, isTerminalView, showView, isMobile],
   )
+  // The session history of a pane: Resume here only on the pane on screen
+  // when it shows its idle shell
+  const openHistory = useCallback(
+    (paneId: string, open?: HistorySession) =>
+      setHistoryTarget({
+        paneId,
+        here:
+          !readOnly &&
+          paneId === activeSession.paneId &&
+          canResumeHere(mux, activeSession),
+        open,
+      }),
+    [readOnly, activeSession, mux],
+  )
+  // A resumed session: its new tab's Chat view, once the tabs read again
+  // hold that tab (selecting it before would find no such tab), or this
+  // pane's
+  const [resumedTab, setResumedTab] = useState<{
+    tabId: string
+    paneId: string
+  } | null>(null)
+  const onSessionResumed = useCallback(
+    (result: { tabId: string; paneId: string }, where: ResumeWhere) => {
+      if (where === 'here') {
+        showView(CHAT_VIEW_ID)
+        return
+      }
+      setResumedTab(result)
+      void refreshSessions()
+    },
+    [showView, refreshSessions],
+  )
+  useEffect(() => {
+    if (!resumedTab || !sessions.some((s) => s.id === resumedTab.tabId)) return
+    setResumedTab(null)
+    openTab(resumedTab.tabId, resumedTab.paneId, CHAT_VIEW_ID)
+  }, [resumedTab, sessions, openTab])
+  // A path in an old transcript, opened in Files of the pane on screen
+  const historyOpenFile = useCallback(
+    async (paneId: string, path: string, line?: number) => {
+      const result = await followPathInFiles(paneId, path, line)
+      if (result === 'opened') {
+        setHistoryTarget(null)
+        showView(FILES_VIEW_ID)
+      } else if (result === 'outside') notify(t('chat.view.outside'))
+      else if (FOLLOW_NOTICES[result]) notify(t(FOLLOW_NOTICES[result]))
+    },
+    [showView, notify, t],
+  )
   const viewProps = {
     ...viewContext,
     isMobile,
@@ -950,6 +1029,8 @@ export default function App({
     openTab,
     refreshSessions,
     insertText: readOnly ? undefined : insertText,
+    openHistory: mux.caps.files ? openHistory : undefined,
+    onSessionResumed,
   }
   // A view fading out keeps what it showed: another pane picked meanwhile
   // (on the terminal) must not draw, or load, that pane's view under it
@@ -1933,6 +2014,8 @@ export default function App({
         panelIds: searchPaneId ? panelViews.map((v) => v.id) : [],
         sidePanelId: sidePanelView ? sidePanelId : null,
         startOffered: startOffered(viewContext),
+        historyOffered: !!mux.caps.files && !!searchPaneId,
+        openHistory: () => searchPaneId && openHistory(searchPaneId),
         hasAgent: !!activeSession.hasAgent,
         devices: !!mux.caps.devices && !readOnly,
         machines: ['', ...machines.map((m) => m.id)],
@@ -2028,6 +2111,8 @@ export default function App({
       decrease,
       setTheme,
       openSettings,
+      mux.caps.files,
+      openHistory,
     ],
   )
   useShortcutDispatcher(commands, desktop)
@@ -2757,6 +2842,20 @@ export default function App({
           names={pendingPane?.command ? [pendingPane.command] : []}
         />
       </ConfirmDialog>
+      <AgentHistorySheet
+        target={historyTarget}
+        readOnly={readOnly}
+        canResume={!!mux.caps.tasks}
+        onClose={() => setHistoryTarget(null)}
+        notify={notify}
+        onResumed={onSessionResumed}
+        onOpenLive={(live) => openTab(live.tabId, live.paneId, CHAT_VIEW_ID)}
+        openFile={
+          historyTarget?.paneId === activeSession.paneId && mux.caps.files
+            ? historyOpenFile
+            : undefined
+        }
+      />
       <AboutModal
         isOpen={aboutOpen}
         onClose={() => setAboutOpen(false)}

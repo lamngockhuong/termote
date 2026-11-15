@@ -103,10 +103,33 @@ vi.mock('./hooks/use-push-subscription', async (orig) => {
 })
 // A link's file and diff: what the App asks the Files and Changes stores
 const mockFollowInFiles = vi.fn(async (..._a: unknown[]) => 'opened')
+const mockFollowPathInFiles = vi.fn(async (..._a: unknown[]) => 'opened')
+// The history sheet's props, for its actions; drawn as a stand-in
+const historySheet = vi.hoisted(() => ({
+  props: null as
+    | null
+    | import('./components/agent-history-sheet').AgentHistorySheetProps,
+}))
+vi.mock('./components/agent-history-sheet', () => ({
+  AgentHistorySheet: (
+    p: import('./components/agent-history-sheet').AgentHistorySheetProps,
+  ) => {
+    historySheet.props = p
+    return p.target ? (
+      <div data-testid="history-sheet">
+        {`${p.target.paneId} here=${p.target.here} open=${p.target.open?.id ?? ''} file=${!!p.openFile}`}
+        <button type="button" onClick={p.onClose}>
+          HistoryClose
+        </button>
+      </div>
+    ) : null
+  },
+}))
 const mockOpenChangeFromLink = vi.fn(async (..._a: unknown[]) => true)
 vi.mock('./hooks/use-files', async (orig) => ({
   ...(await orig<typeof import('./hooks/use-files')>()),
   followInFiles: (...a: unknown[]) => mockFollowInFiles(...a),
+  followPathInFiles: (...a: unknown[]) => mockFollowPathInFiles(...a),
 }))
 vi.mock('./hooks/use-git-changes', async (orig) => ({
   ...(await orig<typeof import('./hooks/use-git-changes')>()),
@@ -562,6 +585,7 @@ vi.mock('./components/session-sidebar', () => ({
       onNewWorktree?: (id: string) => void
       onOpenWorktree?: (id: string) => void
       onRemoveWorktree?: (id: string) => void
+      onOpenHistory?: (id: string) => void
     }
     onAdd?: (name: string, icon?: string) => void
     onSelect?: (id: string) => void
@@ -671,6 +695,16 @@ vi.mock('./components/session-sidebar', () => ({
             <button onClick={() => groupActions.onRemoveWorktree?.('$3')}>
               WorktreeRemove
             </button>
+          )}
+          {groupActions.onOpenHistory && (
+            <>
+              <button onClick={() => groupActions.onOpenHistory?.('$3')}>
+                GroupHistory
+              </button>
+              <button onClick={() => groupActions.onOpenHistory?.('none')}>
+                GroupHistoryNone
+              </button>
+            </>
           )}
         </>
       )}
@@ -7673,5 +7707,140 @@ describe('App settings proposals', () => {
     render(<App />)
     await act(async () => {})
     expect(mockFetchSettingsProposal).not.toHaveBeenCalled()
+  })
+})
+
+describe('session history', () => {
+  const refreshSessions = vi.fn(async () => {})
+  const tab = (
+    id: string,
+    groupId: string,
+    paneId: string,
+    command = 'bash',
+  ) => ({
+    id,
+    name: id,
+    icon: '',
+    description: '',
+    groupId,
+    paneId,
+    hasAgent: false,
+    panes: [{ id: paneId, label: '', hasAgent: false, command }],
+  })
+  const setup = (caps: Record<string, unknown> = {}, command = 'bash') => {
+    const base = mockUseLocalSessions()
+    const tabs = [tab('0', 'main', 'p0', command), tab('$3:0', '$3', 'p3')]
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      activeSession: tabs[0],
+      sessions: tabs,
+      groups: [
+        { id: 'main', name: 'main' },
+        { id: '$3', name: 'work' },
+      ],
+      refreshSessions,
+      activeTabByGroup: new Map([['$3', '$3:0']]),
+      mux: {
+        backend: 'tmux',
+        caps: {
+          clientSideSelect: false,
+          copyMode: true,
+          groups: true,
+          files: true,
+          tasks: true,
+          agentChat: true,
+          ...caps,
+        },
+      },
+    } as any)
+  }
+  const openFromPalette = async () => {
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Command palette' }),
+    )
+    await screen.findByTestId('command-palette')
+    fireEvent.click(screen.getByRole('button', { name: 'Session history' }))
+    return screen.findByTestId('history-sheet')
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockIsMobile.mockReturnValue(false)
+    mockFinePointer.mockReturnValue(true)
+    historySheet.props = null
+  })
+
+  it('opens on the pane on screen from the palette, resumable there', async () => {
+    setup()
+    render(<App />)
+    expect((await openFromPalette()).textContent).toContain(
+      'p0 here=true open= file=true',
+    )
+    fireEvent.click(screen.getByText('HistoryClose'))
+    expect(screen.queryByTestId('history-sheet')).toBeNull()
+  })
+
+  it('offers no resume here on a busy pane, nor read-only', async () => {
+    setup({}, 'vim')
+    render(<App />)
+    expect((await openFromPalette()).textContent).toContain('here=false')
+  })
+
+  it('is off in the palette without pane folders, and off a group menu', async () => {
+    setup({ files: false })
+    render(<App />)
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Command palette' }),
+    )
+    await screen.findByTestId('command-palette')
+    expect(
+      (
+        screen.getByRole('button', {
+          name: 'Session history',
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true)
+    expect(screen.queryByText('GroupHistory')).toBeNull()
+  })
+
+  it("opens a group's history on its tab's pane, without resume here", async () => {
+    setup()
+    render(<App />)
+    fireEvent.click(await screen.findByText('GroupHistoryNone'))
+    expect(screen.queryByTestId('history-sheet')).toBeNull()
+    fireEvent.click(screen.getByText('GroupHistory'))
+    // Another pane than the one on screen: its links have no Files to open in
+    expect(screen.getByTestId('history-sheet').textContent).toContain(
+      'p3 here=false open= file=false',
+    )
+  })
+
+  it('shows where a session resumed or runs, and opens its files', async () => {
+    setup()
+    render(<App />)
+    await openFromPalette()
+    const p = historySheet.props as NonNullable<typeof historySheet.props>
+    // A tab the tabs read so far do not hold yet is opened once they do
+    await act(async () =>
+      p.onResumed({ tabId: 'not-yet', paneId: 'px' }, 'tab'),
+    )
+    expect(refreshSessions).toHaveBeenCalled()
+    expect(mockSelectTab).not.toHaveBeenCalledWith('not-yet')
+    await act(async () => p.onResumed({ tabId: '$3:0', paneId: 'p3' }, 'tab'))
+    await act(async () => p.onResumed({ tabId: '0', paneId: 'p0' }, 'here'))
+    act(() => p.onOpenLive({ tabId: '$3:0', paneId: 'p3' }))
+    const open = p.openFile as NonNullable<typeof p.openFile>
+    mockFollowPathInFiles.mockResolvedValueOnce('outside')
+    await act(() => open('p0', 'x.ts'))
+    expect(
+      screen.getByText("This file is outside the pane's folder"),
+    ).toBeTruthy()
+    mockFollowPathInFiles.mockResolvedValueOnce('missing')
+    await act(() => open('p0', 'y.ts'))
+    mockFollowPathInFiles.mockResolvedValueOnce('unknown-result')
+    await act(() => open('p0', 'z.ts'))
+    await act(() => open('p0', 'a.ts', 3))
+    expect(mockFollowPathInFiles).toHaveBeenLastCalledWith('p0', 'a.ts', 3)
+    expect(screen.queryByTestId('history-sheet')).toBeNull()
   })
 })

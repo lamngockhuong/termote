@@ -98,6 +98,15 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/start-agent-panel.tsx`        | Chat view of an idle pane: start Claude Code or Codex          |
 | `pwa/src/hooks/use-start-agent.ts`                | Sends a start, follows it (`GET agent/start`), toasts          |
 | `pwa/src/utils/agent-start.ts`                    | Whether an agent can be started in the pane on screen          |
+| `pwa/src/components/agent-history-sheet.tsx`      | Session history of a pane: list, read, resume, open or fork    |
+| `pwa/src/components/agent-history-row.tsx`        | One session of the history: agent, title, age, branch, folder  |
+| `pwa/src/components/history-transcript-view.tsx`  | An old session's conversation, read only                       |
+| `pwa/src/components/chat-transcript-list.tsx`     | Messages and tool runs, shared by the Chat view and history    |
+| `pwa/src/components/recent-sessions.tsx`          | Latest sessions of an idle pane's folder, to resume            |
+| `pwa/src/hooks/use-agent-history.ts`              | Reads the history of a pane, page by page (no polling)         |
+| `pwa/src/hooks/use-history-transcript.ts`         | Reads an old session's transcript, older pages on request      |
+| `pwa/src/hooks/use-resume-session.ts`             | Sends a resume, tells a refusal, marks a running session       |
+| `pwa/src/utils/session-age.ts`                    | How long ago a session was active (minutes, hours, days)       |
 | `pwa/src/components/read-only-bar.tsx`            | Bottom bar without input (View only, a read-only chat)         |
 | `pwa/src/components/prompt-card.tsx`              | Claude Code dialog as a card (answer buttons or read-only)     |
 | `pwa/src/components/overview-screen.tsx`          | Agent overview: every agent's card, own filter, by status      |
@@ -280,6 +289,10 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/agent_input.go`                           | Sends a message, answers a dialog (checks before each write)   |
 | `server/agent_commands*.go`                       | `agent/commands`: custom commands, skills (Codex: `$` skills)  |
 | `server/agent_start.go`                           | `agent/start`: starts Claude Code/Codex in an idle Herdr pane  |
+| `server/agent_history.go`                         | `agent/history`: sessions of a pane's root, index, pages       |
+| `server/agent_history_claude.go`                  | History: Claude Code project dirs, titles, cwd, branch         |
+| `server/agent_history_codex.go`                   | History: Codex rollouts by day, `session_index.jsonl` names    |
+| `server/agent_resume.go`                          | Old session transcript, `agent/resume` (new tab or idle pane)  |
 | `server/agent_codex.go`                           | Codex rollout (JSONL): locate, parse, turn status              |
 | `server/agent_codex_prompt.go`                    | Reads a Codex screen: composer, approval dialogs               |
 | `server/agent_proc_codex.go`                      | Finds the Codex process holding a rollout (tmux, Herdr)        |

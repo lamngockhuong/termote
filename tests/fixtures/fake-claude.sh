@@ -35,6 +35,10 @@
 #
 # Environment: CLAUDE_CONFIG_DIR (required), FAKE_CLAUDE_SESSION (session id,
 # default a fixed UUID).
+#
+# Arguments, as Claude Code takes them: --resume <id> continues that session
+# (its transcript is appended to, nothing seeded); with --fork-session the
+# conversation so far is copied to a new session id, appended to from then.
 set -u
 export LC_ALL=C.UTF-8
 
@@ -42,6 +46,16 @@ dir=${CLAUDE_CONFIG_DIR:?CLAUDE_CONFIG_DIR must be set}
 here=$(cd "$(dirname "$0")" && pwd)
 screens="$here/../../server/testdata/claude/screens"
 sid=${FAKE_CLAUDE_SESSION:-6f1c2a4e-8b3d-4c5e-9f70-1a2b3c4d5e6f}
+resume=""
+fork=""
+while [ $# -gt 0 ]; do
+  case $1 in
+    --resume) resume=${2:?--resume needs a session id}; shift ;;
+    --fork-session) fork=1 ;;
+  esac
+  shift
+done
+[ -n "$resume" ] && sid=$resume
 pid=$$
 
 # Field 22 of /proc/<pid>/stat, counted after the command name.
@@ -56,6 +70,12 @@ fi
 project="$dir/projects/$(printf '%s' "$PWD" | tr -c 'A-Za-z0-9' '-')"
 journal="$project/$sid.jsonl"
 mkdir -p "$dir/sessions" "$project"
+if [ -n "$fork" ] && [ -n "$resume" ]; then
+  # A new session that starts with the old one's conversation
+  sid=$(cat /proc/sys/kernel/random/uuid)
+  [ -f "$journal" ] && cp "$journal" "$project/$sid.jsonl"
+  journal="$project/$sid.jsonl"
+fi
 
 json_str() {
   local s=$1
@@ -74,11 +94,13 @@ set_status() {
   mv "$f.tmp" "$f"
 }
 
+# Row ids go on after the rows a resumed transcript has
 seq_n=0
+[ -f "$journal" ] && seq_n=$(wc -l <"$journal")
 entry() { # type, content JSON
   seq_n=$((seq_n + 1))
-  printf '{"type":"%s","uuid":"%s-%04d","timestamp":"%s","message":{"role":"%s","content":%s}}\n' \
-    "$1" "${sid:0:31}" "$seq_n" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" >>"$journal"
+  printf '{"type":"%s","uuid":"%s-%04d","timestamp":"%s","cwd":%s,"message":{"role":"%s","content":%s}}\n' \
+    "$1" "${sid:0:31}" "$seq_n" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(json_str "$PWD")" "$1" "$2" >>"$journal"
 }
 say() { entry assistant "[{\"type\":\"text\",\"text\":$(json_str "$1")}]"; }
 
@@ -101,8 +123,8 @@ subagents() {
     "$now" "$sid" >>"$journal"
 }
 
-# A conversation to show before anything is sent.
-if [ ! -s "$journal" ]; then
+# A conversation to show before anything is sent; a resumed one has its own.
+if [ -z "$resume" ] && [ ! -s "$journal" ]; then
   entry user "$(json_str 'Fix the build please')"
   entry assistant '[{"type":"text","text":"Running the tests."},{"type":"tool_use","id":"toolu_seed","name":"Bash","input":{"command":"npm test","description":"run tests"}}]'
   entry user '[{"type":"tool_result","tool_use_id":"toolu_seed","content":"1 passed"}]'

@@ -324,6 +324,38 @@ export default {
   'chat.queue.reading': 'Đang đọc hộp thoại…',
   'chat.queue.viewOnly': 'Chỉ xem: hãy trả lời từ thiết bị có toàn quyền',
 
+  // The session history of a pane and resuming an old session
+  // (components/agent-history-sheet.tsx, components/recent-sessions.tsx)
+  'chat.history.title': 'Lịch sử phiên',
+  'chat.history.search': 'Tìm phiên',
+  'chat.history.all': 'Tất cả',
+  'chat.history.loading': 'Đang tải các phiên…',
+  'chat.history.empty': 'Chưa có phiên nào chạy trong thư mục này.',
+  'chat.history.noMatch': 'Không có phiên nào khớp.',
+  'chat.history.failed': 'Không đọc được lịch sử phiên.',
+  'chat.history.viewOnly':
+    'Thiết bị chỉ xem chỉ đọc được lịch sử trong một git repository.',
+  'chat.history.retry': 'Thử lại',
+  'chat.history.loadMore': 'Tải thêm',
+  'chat.history.truncated':
+    'Chỉ hiện các phiên trong 2000 lần chạy Codex gần nhất.',
+  'chat.history.running': 'Đang chạy',
+  'chat.history.untitled': 'Phiên chưa có tên',
+  'chat.history.back': 'Quay lại danh sách',
+  'chat.history.gone': 'Phiên này không còn nữa.',
+  'chat.history.resumeTab': 'Tiếp tục trong tab mới',
+  'chat.history.resumeHere': 'Tiếp tục ở đây',
+  'chat.history.openLive': 'Mở tab đang chạy',
+  'chat.history.fork': 'Tách nhánh',
+  'chat.history.forkHint':
+    'Nhánh mới là một phiên riêng với id riêng; phiên này giữ nguyên.',
+  'chat.history.resuming': 'Đang tiếp tục…',
+  'chat.history.readOnly':
+    'Chỉ xem: đọc được các phiên nhưng không tiếp tục được.',
+  'chat.history.recent': 'Tiếp tục một phiên gần đây',
+  'chat.history.seeAll': 'Xem tất cả',
+  'chat.history.resume': 'Tiếp tục',
+  'chat.history.days': '{n} ngày trước',
   'chat.agentPicker.title': 'Gửi cho agent nào?',
   'chat.agentPicker.none':
     'Không pane nào chạy agent nhận được tin nhắn (Claude Code, Codex).',

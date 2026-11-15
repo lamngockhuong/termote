@@ -345,6 +345,7 @@
         "pane.resizeUp",
         "pane.resizeDown",
         "agent.start",
+        "agent.history",
         "settings.open",
         "settings.devices",
         "settings.shortcuts",

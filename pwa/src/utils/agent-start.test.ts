@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildSessions, type MuxInfo } from '../hooks/use-local-sessions'
 import type { MuxPane, MuxSnapshot } from '../hooks/use-mux-api'
 import { tFor } from '../i18n/i18n-context'
-import { canStartAgent, paneCommand } from './agent-start'
+import { canResumeHere, canStartAgent, paneCommand } from './agent-start'
 
 const caps = (agentStart?: boolean): MuxSnapshot['caps'] => ({
   clientSideSelect: true,
@@ -79,5 +79,31 @@ describe('canStartAgent', () => {
         paneId: 'w1:p2',
       }),
     ).toBe(true)
+  })
+})
+
+describe('canResumeHere', () => {
+  const withTasks = (mux: MuxInfo): MuxInfo => ({
+    ...mux,
+    caps: { ...mux.caps, tasks: true },
+  })
+
+  it('offers it on an idle shell where the server runs tasks', () => {
+    const { mux, session } = tabOf([shellPane('bash')], false)
+    expect(canResumeHere(withTasks(mux), session)).toBe(true)
+    expect(canResumeHere(mux, session)).toBe(false)
+  })
+
+  it('is hidden on a pane that runs an agent or something else', () => {
+    const agent = tabOf([
+      { ...shellPane('bash'), agent: { name: 'claude', status: 'idle' } },
+    ])
+    expect(canResumeHere(withTasks(agent.mux), agent.session)).toBe(false)
+    const vim = tabOf([shellPane('vim')])
+    expect(canResumeHere(withTasks(vim.mux), vim.session)).toBe(false)
+    const { mux, session } = tabOf([shellPane('bash')])
+    expect(
+      canResumeHere(withTasks(mux), { ...session, paneId: undefined }),
+    ).toBe(false)
   })
 })

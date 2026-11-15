@@ -57,6 +57,7 @@ func (a *agentAPI) registerCommandsRoute(mux *http.ServeMux, files *filesAPI, al
 	a.home, _ = os.UserHomeDir()
 	a.commands = newTTLCache[commandsResponse](commandsCacheTTL)
 	mux.HandleFunc("/api/mux/panes/{id}/agent/commands", a.handleCommands)
+	a.registerHistoryRoutes(mux)
 }
 
 func (a *agentAPI) handleCommands(w http.ResponseWriter, r *http.Request) {

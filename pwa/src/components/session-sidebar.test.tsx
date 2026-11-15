@@ -2111,6 +2111,22 @@ describe('SessionSidebar — worktree actions', () => {
     expect(w.onOpenWorktree).toHaveBeenCalledWith('w1')
   })
 
+  it("opens a group's session history from its menu", () => {
+    const onOpenHistory = vi.fn()
+    renderWith(actions({ onOpenHistory }))
+    openMenu('feature')
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Session history' }))
+    expect(onOpenHistory).toHaveBeenCalledWith('w2')
+  })
+
+  it('offers no history without the files routes', () => {
+    renderWith(actions())
+    openMenu('repo')
+    expect(
+      screen.queryByRole('menuitem', { name: 'Session history' }),
+    ).toBeNull()
+  })
+
   it('shows the branch under the name, in its own case, with a title', () => {
     renderWith(actions())
     const branch = screen.getByTitle('feat/Very-Long-Name')

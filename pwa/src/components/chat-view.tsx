@@ -1,4 +1,4 @@
-import { ArrowDown } from 'lucide-react'
+import { ArrowDown, History } from 'lucide-react'
 import {
   type ReactNode,
   useEffect,
@@ -13,58 +13,33 @@ import { useAgentPrompt } from '../hooks/use-agent-prompt'
 import { useAgentTranscript } from '../hooks/use-agent-transcript'
 import { useDomSelection } from '../hooks/use-dom-selection'
 import { FOLLOW_NOTICES, followPathInFiles } from '../hooks/use-files'
-import type { TranscriptEntry } from '../hooks/use-mux-api'
-import { ENTER_FROM, useNewKeys } from '../hooks/use-new-keys'
+import type { ResumeWhere } from '../hooks/use-mux-api'
+import { useNewKeys } from '../hooks/use-new-keys'
+import { useResumeSession } from '../hooks/use-resume-session'
 import type { StartRecord } from '../hooks/use-start-agent'
 import { useT } from '../i18n/i18n-context'
 import { toAgentStatus } from '../types/session'
-import { canStartAgent } from '../utils/agent-start'
+import { canResumeHere, canStartAgent } from '../utils/agent-start'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { FILES_VIEW_ID } from '../view-ids'
 import { AgentStatusBadge } from './agent-status-badge'
 import { ChatActivity, ChatBackground } from './chat-activity-row'
 import { ChatFileLinkContext } from './chat-file-link'
 import { ChatImageViewer } from './chat-image-viewer'
-import { ChatMarkdownContext, ChatMessage, chatSide } from './chat-message'
+import { ChatMarkdownContext } from './chat-message'
 import { ChatSubagents } from './chat-subagents'
-import {
-  chatItems,
-  hasPending,
-  type RunMode,
-  type RunState,
-  toolRunRows,
-} from './chat-tool-run'
+import type { RunMode, RunState } from './chat-tool-run'
+import { ChatTranscriptList, useChatMarkdown } from './chat-transcript-list'
 import { OpenTerminalButton } from './open-terminal-button'
 import { PromptCard } from './prompt-card'
+import { RecentSessions } from './recent-sessions'
 import { StartAgentPanel } from './start-agent-panel'
-import { Button } from './ui/button'
+import { Button, IconButton } from './ui/button'
 
 // Entries rendered at once; scrolling to the top shows more.
 export const RENDER_WINDOW = 150
 // Within this many pixels of the bottom, the list follows new entries.
 const STICK_DISTANCE = 48
-// An entry this long after the one before shows its time again.
-const TIME_GAP_MS = 5 * 60_000
-
-// Where each entry sits among its neighbours: the time over the first entry
-// of each side's run (and after a long pause), and the agent's timeline
-// line carried on to its next entry.
-export function chatLayout(entries: TranscriptEntry[]) {
-  return entries.map((e, i) => {
-    const side = chatSide(e)
-    const prev = entries[i - 1]
-    const next = entries[i + 1]
-    const gap =
-      prev?.ts && e.ts ? Date.parse(e.ts) - Date.parse(prev.ts) : Number.NaN
-    return {
-      showTime:
-        side !== 'other' &&
-        (!prev || chatSide(prev) !== side || gap > TIME_GAP_MS),
-      joinsNext: side === 'agent' && !!next && chatSide(next) === 'agent',
-    }
-  })
-}
-
 // How far below the top of the list an element is
 function offsetIn(list: Element, el: Element) {
   return el.getBoundingClientRect().top - list.getBoundingClientRect().top
@@ -87,7 +62,8 @@ export function ChatView(props: ViewProps) {
 
 // A pane with no agent (yet): start one, follow the start, or say there is
 // none.
-function NoAgentChat({ mux, session, showView, agentStart }: ViewProps) {
+function NoAgentChat(props: ViewProps) {
+  const { mux, session, showView, agentStart } = props
   const { t } = useT()
   const paneId = session.paneId ?? ''
   const record = agentStart?.starts[paneId]
@@ -105,6 +81,7 @@ function NoAgentChat({ mux, session, showView, agentStart }: ViewProps) {
           record={record}
           onStart={(kind) => agentStart.start(paneId, kind)}
         />
+        <Recent {...props} />
       </Centered>
     )
   }
@@ -112,7 +89,41 @@ function NoAgentChat({ mux, session, showView, agentStart }: ViewProps) {
     <Centered>
       <p>{t('chat.view.noAgent')}</p>
       <OpenTerminalButton showView={showView} />
+      <Recent {...props} />
     </Centered>
+  )
+}
+
+// The latest sessions of the pane's folder, to resume: in the pane itself
+// when it is an idle shell, else in a new tab.
+function Recent({
+  mux,
+  session,
+  readOnly,
+  notify,
+  openHistory,
+  onSessionResumed,
+}: ViewProps) {
+  const paneId = session.paneId
+  const { pending, resume } = useResumeSession({
+    notify,
+    onResumed: (result, where) => onSessionResumed?.(result, where),
+  })
+  if (!paneId || !openHistory || !mux.caps.files) return null
+  const where: ResumeWhere | undefined =
+    readOnly || !mux.caps.tasks
+      ? undefined
+      : canResumeHere(mux, session)
+        ? 'here'
+        : 'tab'
+  return (
+    <RecentSessions
+      paneId={paneId}
+      where={where}
+      pending={pending}
+      onResume={(s, w) => resume(paneId, s, w)}
+      onOpen={(s) => openHistory(paneId, s)}
+    />
   )
 }
 
@@ -152,6 +163,7 @@ function AgentChat({
   notify,
   isMobile,
   clockOffset,
+  openHistory,
 }: ViewProps) {
   const t = useAgentTranscript(session.paneId)
   const { t: translate } = useT()
@@ -177,11 +189,7 @@ function AgentChat({
   // The first entry on screen while reading above the bottom, and how far
   // below the list's top it was
   const readingRef = useRef<{ entry: Element; top: number } | null>(null)
-  // Stable, so the memoized messages do not draw again
-  const markdown = useMemo(
-    () => ({ scrollRoot: () => listRef.current, notify }),
-    [notify],
-  )
+  const markdown = useChatMarkdown(listRef, notify)
   // A path the agent wrote, opened in the Files view; none without one
   const paneId = session.paneId ?? ''
   const openFile = useMemo(
@@ -343,10 +351,6 @@ function AgentChat({
   }
 
   const visible = t.entries.slice(hidden)
-  const layout = chatLayout(visible)
-  // Runs are found over every entry held, so the one at the top keeps its
-  // place as earlier entries are shown
-  const items = chatItems(t.entries)
   const runs: RunState = {
     modes: runModes,
     held: heldRef.current,
@@ -384,6 +388,16 @@ function AgentChat({
             {translate('chat.view.reconnecting')}
           </span>
         )}
+        {openHistory && mux.caps.files && paneId && (
+          <IconButton
+            size="sm"
+            aria-label={translate('chat.history.title')}
+            title={translate('chat.history.title')}
+            onClick={() => openHistory(paneId)}
+          >
+            <History size={14} aria-hidden="true" />
+          </IconButton>
+        )}
       </header>
       <section
         ref={listRef}
@@ -415,38 +429,14 @@ function AgentChat({
                     {translate('chat.view.empty')}
                   </p>
                 )}
-                {items.flatMap((item, k) => {
-                  if (item.kind === 'entry') {
-                    if (item.index < hidden) return []
-                    const e = t.entries[item.index]
-                    const l = layout[item.index - hidden]
-                    const enters = isNew(e.id) && item.index > firstKnown
-                    return [
-                      <ChatMessage
-                        key={e.id}
-                        entry={e}
-                        showTime={l.showTime}
-                        joinsNext={l.joinsNext}
-                        className={enters ? ENTER_MESSAGE : undefined}
-                      />,
-                    ]
-                  }
-                  if (item.end <= hidden) return []
-                  const start = Math.max(item.start, hidden)
-                  const run = t.entries.slice(start, item.end)
-                  // The run the agent is in: open on its newest steps
-                  const live =
-                    k === items.length - 1 &&
-                    (status === 'working' || (!settled && hasPending(run)))
-                  return toolRunRows(
-                    run,
-                    layout.slice(start - hidden, item.end - hidden),
-                    live,
-                    runs,
-                    translate,
-                    t.entries[item.start].id,
-                  )
-                })}
+                <ChatTranscriptList
+                  entries={t.entries}
+                  hidden={hidden}
+                  runs={runs}
+                  working={status === 'working'}
+                  settled={settled}
+                  enters={(id, index) => isNew(id) && index > firstKnown}
+                />
                 {status === 'working' ? (
                   <ChatActivity
                     paneId={
@@ -509,6 +499,3 @@ function Centered({ children }: { children: ReactNode }) {
 }
 
 export default ChatView
-
-// How a message that just came in enters
-const ENTER_MESSAGE = `transition-[opacity,translate] duration-(--duration-base) ease-standard ${ENTER_FROM}`

@@ -20,6 +20,8 @@ function context(over: Partial<AppCommandContext> = {}): AppCommandContext {
     panelIds: ['files', 'changes'],
     sidePanelId: null,
     startOffered: true,
+    historyOffered: true,
+    openHistory: vi.fn(),
     hasAgent: false,
     devices: true,
     machines: [''],

@@ -198,4 +198,11 @@ export const AGENT_ROUTES: Record<string, Handler> = {
   'GET /panes/{id}/agent/start': () =>
     fail(404, 'no_start', 'no start in this pane'),
   'POST /panes/{id}/agent/start': unsupported,
+  // The demo has no transcripts on disk: an empty history, nothing to read
+  // or resume
+  'GET /panes/{id}/agent/history': () =>
+    json({ sessions: [], truncated: false }),
+  'GET /panes/{id}/agent/history/{session}/transcript': () =>
+    fail(404, 'session_not_found', 'no such session'),
+  'POST /panes/{id}/agent/resume': unsupported,
 }

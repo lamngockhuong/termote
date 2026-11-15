@@ -1002,6 +1002,50 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   409 `pane_busy` (fail-closed); a `wsl.exe` pane is never idle. The PWA offers it in the Chat view of an idle pane and polls the `GET`
   every 2 s; Codex writes no rollout before its first message, so after a Codex start the Chat
   view asks for that message in the terminal
+- **Agent session history and resume** (`GET /api/mux/panes/{id}/agent/history`,
+  `GET /api/mux/panes/{id}/agent/history/{session}/transcript?agent=`, `POST
+  /api/mux/panes/{id}/agent/resume` `{agent, session, where, fork}`; `server/agent_history*.go`,
+  `server/agent_resume.go`): the client names only a pane, an agent (`claude`|`codex`) and a
+  session id (`isSessionID`, a lowercase UUID); never a path. The server reads its own user's dirs
+  (`CLAUDE_CONFIG_DIR` or `~/.claude`; `CODEX_HOME` or `~/.codex`), both resolved: Claude Code
+  `projects/<dir>/<id>.jsonl` (only dirs named like the pane root's encoding, a subdir of it, or of
+  200+ characters; never `<id>/subagents/`), Codex `sessions/<Y>/<M>/<D>/rollout-*-<id>.jsonl`
+  newest day first, at most 2000 files per agent (`truncated`), plus `session_index.jsonl` (first
+  4 MB) for thread names. Each file must resolve (`EvalSymlinks`) inside that dir and be a regular
+  file, opened nonblocking; a rollout's resolved name must still carry its id and its first line
+  (at most 256 KB) be the `session_meta` of that id, a thread whose `thread_source` is not `user`
+  is skipped. A session counts only when the `cwd` the file records (resolved when it still
+  exists) is the pane's root (`paneRootForRead`, as Files) or under it, compared without case on
+  Windows and macOS; the dir name only narrows the scan. Only 64 KB at each end of a transcript
+  (Codex: after the meta line) is read for the title (`custom-title`, then `ai-title` or the Codex
+  thread name, then the first prompt), branch and cwd; titles are one line of at most 200 bytes
+  without control or invisible characters. The reply holds the cwd relative to the root, never an
+  absolute path; pages of 30 continue through a MAC'd cursor (`historyCursor`, the transcript
+  cursors' key, a prefix of its own), a forged one is 400. Reads (list and transcript):
+  `crossSiteRejection`, `requireAgentRead`; a view-only client is refused (403 `view_only`) where
+  Files refuses it the root (no git repo, a home dir) and gets transcripts through
+  `viewTranscript`, as the Chat view's (text only: no tool part, no note). A transcript is read only for a session the listing finds in that root
+  (another root's, another agent's or an unknown id: 404 `session_not_found`, no reason given),
+  through the journal adapters' own `Locate` checks. One scan per root is shared for 10 s; parsed
+  files are kept by path, size and mtime (at most 5000). `live` marks a session some pane runs now
+  (its agent lookup, cached). Resume: `writeGuard`, `requireWriteRole` (view-only 403 for both
+  `where`), 8 KB body, only the four fields; `fork` only with `claude` (else 400
+  `invalid_request`); a backend that cannot run tasks (`runsTasks`: not psmux) → 501
+  `unsupported`; a session running in a pane and no `fork` → 409 `session_live` with that tab and
+  pane (two processes appending to one transcript break it). The command line is the server's:
+  `claude --resume <id>` (`--fork-session` with `fork`) or `codex resume --no-daemon <id>`, typed as
+  keys (`TypeLine`, never a paste) only into a shell `taskShellKind` knows (else 409
+  `unsupported_shell`). `tab`: a new tab of the pane's group at the session's dir when it is still a
+  dir inside the root (resolved), else the root (`validTaskDir`, else 400 `invalid_root`), named
+  from the title only when `validPaneName`; its shell must settle at its prompt (`waitTaskShell`,
+  409 `shell_busy`), an unsupported one has its tab closed again. `here`: under the pane's input
+  lock (409 `input_busy` past the wait), the pane's shell must be idle (409 `pane_busy`, nothing
+  sent), then `C-c`, 200 ms, idle again, then the line, after `cd '<dir>' &&` (fish `; and`, pwsh
+  `Set-Location -LiteralPath ...;`, `shellQuote`d) when the session's dir is not the pane's. The
+  typing runs without the request's cancellation once begun. Each resume logs `audit:
+  agent-resume` with the agent, the id's first 8 characters, `where`, `fork` and who; never a title
+  or a path. Accepted gaps, as Tasks: stream input from another client can land between `C-c` and
+  the line; a session the 10 s cache does not hold yet is 404 until the next scan
 - **Codex chat**: a rollout is read only when a process whose executable is named
   `codex`, without `app-server` in its argv, holds it open for writing as a regular
   `rollout-*-<uuid>.jsonl` inside its own `CODEX_HOME/sessions` (resolved), of a user thread;

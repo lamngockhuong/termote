@@ -75,6 +75,7 @@ export const COMMAND_LABEL: Record<CommandId, MessageKey> = {
   'pane.resizeUp': 'tasks.command.resizeUp',
   'pane.resizeDown': 'tasks.command.resizeDown',
   'agent.start': 'tasks.command.agentStart',
+  'agent.history': 'tasks.command.agentHistory',
   'settings.open': 'tasks.command.settings',
   'settings.devices': 'tasks.command.settingsDevices',
   'settings.shortcuts': 'tasks.command.settingsShortcuts',

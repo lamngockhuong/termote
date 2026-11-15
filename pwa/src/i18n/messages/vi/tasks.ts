@@ -172,6 +172,7 @@ export default {
   'tasks.command.splitDown': 'Chia pane xuống dưới',
   'tasks.command.zoom': 'Phóng to pane',
   'tasks.command.swapNext': 'Đổi chỗ pane với pane kế tiếp',
+  'tasks.command.agentHistory': 'Lịch sử phiên',
   'tasks.command.agentStart': 'Khởi động một agent',
   'tasks.command.settings': 'Mở Cài đặt',
   'tasks.command.settingsDevices': 'Mở Cài đặt: Thiết bị',
