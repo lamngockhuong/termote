@@ -196,7 +196,11 @@ type AgentPrompt struct {
 	// moveThenEnter: a question whose options have previews. A digit only
 	// moves the pointer there; Enter picks the option under it.
 	// Fields: an OpenCode form's, answered all at once (kind form).
-	Fields        []PromptField `json:"fields,omitempty"`
+	Fields []PromptField `json:"fields,omitempty"`
+	// Action: an OpenCode permission's action (shell, edit...), so the
+	// client words the title and options in its own language; Title and
+	// the labels stay in English for a client that does not.
+	Action        string `json:"action,omitempty"`
 	moveThenEnter bool
 	pointer       int // the option the ❯ is on, 0 when none
 	free          freeField

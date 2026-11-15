@@ -113,6 +113,7 @@ export default {
   'chat.slash.source.user': 'người dùng',
   'chat.slash.source.plugin': 'plugin',
   'chat.slash.source.system': 'hệ thống',
+  'chat.slash.source.custom': 'tùy chỉnh',
   'chat.slash.claude.exit': 'Thoát Claude Code',
   'chat.slash.claude.addDir': 'Thêm thư mục làm việc cho phiên này',
   'chat.slash.claude.agents': 'Tạo hoặc quản lý subagent',
@@ -214,6 +215,11 @@ export default {
   'chat.slash.codex.warnings': 'Xem các cảnh báo đã lưu và chi tiết chẩn đoán',
   'chat.slash.codex.worktree':
     'Bắt đầu hoặc tiếp tục một cuộc trò chuyện trong worktree mới',
+  'chat.slash.opencode.goal':
+    'Làm tiếp cho tới khi đạt mục tiêu (tạm dừng, tiếp tục hoặc xoá mục tiêu)',
+  'chat.slash.opencode.init': 'Hướng dẫn tạo AGENTS.md cho dự án này',
+  'chat.slash.opencode.review':
+    'Rà soát thay đổi (một commit, nhánh hoặc PR; mặc định là phần chưa commit)',
 
   'chat.picker.title': 'Chèn mẫu',
   'chat.picker.search': 'Tìm mẫu',
@@ -315,6 +321,10 @@ export default {
   'chat.prompt.send': 'Gửi',
   'chat.prompt.answered': '(đã trả lời)',
   'chat.prompt.waitingTerminal': '{agent} đang chờ bạn trong terminal.',
+  'chat.prompt.opencode.allow': 'Cho phép {action}?',
+  'chat.prompt.opencode.once': 'Có, lần này',
+  'chat.prompt.opencode.always': 'Có, luôn cho phép',
+  'chat.prompt.opencode.reject': 'Không',
   'chat.prompt.invalidAnswer':
     '{agent} không nhận câu trả lời này; hãy xem lại rồi gửi lại.',
   'chat.form.requiredMark': 'bắt buộc',

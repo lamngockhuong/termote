@@ -1,0 +1,27 @@
+{
+  "location": {
+    "directory": "/work/proj"
+  },
+  "data": [
+    {
+      "name": "init",
+      "description": "guided AGENTS.md setup"
+    },
+    {
+      "name": "review",
+      "description": "review changes [commit|branch|pr], defaults to uncommitted"
+    },
+    {
+      "name": "goal",
+      "description": "keep working until an objective is met [pause|resume|clear]"
+    },
+    {
+      "name": "spike-cmd",
+      "description": "A spike command"
+    },
+    {
+      "name": "proj-cmd",
+      "description": "A project command"
+    }
+  ]
+}

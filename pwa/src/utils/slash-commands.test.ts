@@ -11,9 +11,13 @@ import {
   closeTrailingSkill,
   commandOf,
   commandQuery,
+  customTrigger,
   filterSlashCommands,
   mergeSlashCommands,
+  OPENCODE_BUILTIN_COMMANDS,
+  SKILL_TRIGGER,
   type SlashCommand,
+  withTriggers,
 } from './slash-commands'
 
 const en = tFor('en')
@@ -72,7 +76,7 @@ describe('slash commands', () => {
   })
 
   it('types custom commands after "/" for Claude Code, "$" for Codex', () => {
-    expect(CUSTOM_TRIGGER).toEqual({ claude: '/', codex: '$' })
+    expect(CUSTOM_TRIGGER).toEqual({ claude: '/', codex: '$', opencode: '/' })
   })
 
   it('merges keeping the first of a name', () => {
@@ -124,18 +128,18 @@ describe('slash commands', () => {
   })
 
   it('reads "/" only while the message is a bare command name', () => {
-    const slash = (text: string) => commandQuery(text, text.length, true)
+    const slash = (text: string) => commandQuery(text, text.length, '$')
     expect(slash('/')).toEqual({ trigger: '/', query: '', start: 0, end: 1 })
     expect(slash('/rev')?.query).toBe('rev')
     expect(slash('/a:b')?.query).toBe('a:b')
     // The caret does not matter for "/"
-    expect(commandQuery('/rev', 1, false)).toEqual({
+    expect(commandQuery('/rev', 1, undefined)).toEqual({
       trigger: '/',
       query: 'rev',
       start: 0,
       end: 4,
     })
-    expect(commandQuery('/rev', null, false)?.query).toBe('rev')
+    expect(commandQuery('/rev', null, undefined)?.query).toBe('rev')
     expect(slash('/review ')).toBeNull()
     expect(slash('/review\n')).toBeNull()
     expect(slash(' /review')).toBeNull()
@@ -144,34 +148,34 @@ describe('slash commands', () => {
   })
 
   it('reads the "$" word the caret ends, anywhere in the message', () => {
-    expect(commandQuery('$', 1, true)).toEqual({
+    expect(commandQuery('$', 1, '$')).toEqual({
       trigger: '$',
       query: '',
       start: 0,
       end: 1,
     })
-    expect(commandQuery('use $sk', 7, true)).toEqual({
+    expect(commandQuery('use $sk', 7, '$')).toEqual({
       trigger: '$',
       query: 'sk',
       start: 4,
       end: 7,
     })
     // The caret inside the word: the whole word is replaced
-    expect(commandQuery('use $skill now', 7, true)).toEqual({
+    expect(commandQuery('use $skill now', 7, '$')).toEqual({
       trigger: '$',
       query: 'sk',
       start: 4,
       end: 10,
     })
-    expect(commandQuery('a\n$x:y', 6, true)?.query).toBe('x:y')
+    expect(commandQuery('a\n$x:y', 6, '$')?.query).toBe('x:y')
     // Not the start of a word, a second "$", after a space, no caret
-    expect(commandQuery('a$b', 3, true)).toBeNull()
-    expect(commandQuery('$$', 2, true)).toBeNull()
-    expect(commandQuery('$a$', 3, true)).toBeNull()
-    expect(commandQuery('$skill ', 7, true)).toBeNull()
-    expect(commandQuery('$skill', null, true)).toBeNull()
-    expect(commandQuery('$skill', 6, false)).toBeNull()
-    expect(commandQuery('hello', 5, true)).toBeNull()
+    expect(commandQuery('a$b', 3, '$')).toBeNull()
+    expect(commandQuery('$$', 2, '$')).toBeNull()
+    expect(commandQuery('$a$', 3, '$')).toBeNull()
+    expect(commandQuery('$skill ', 7, '$')).toBeNull()
+    expect(commandQuery('$skill', null, '$')).toBeNull()
+    expect(commandQuery('$skill', 6, undefined)).toBeNull()
+    expect(commandQuery('hello', 5, '$')).toBeNull()
   })
 
   it('puts a pick in place of the word typed, a space and the caret after it', () => {
@@ -181,7 +185,7 @@ describe('slash commands', () => {
       trigger: '$',
     }
     const at = (text: string, caret: number) =>
-      applyPick(text, commandQuery(text, caret, true) as CommandQuery, skill)
+      applyPick(text, commandQuery(text, caret, '$') as CommandQuery, skill)
     expect(at('$sk', 3)).toEqual({ text: '$skill-a ', caret: 9 })
     expect(at('xem $sk', 7)).toEqual({ text: 'xem $skill-a ', caret: 13 })
     // A space after the word is kept, not doubled
@@ -194,7 +198,7 @@ describe('slash commands', () => {
     expect(
       applyPick(
         '/rev',
-        commandQuery('/rev', 4, false) as CommandQuery,
+        commandQuery('/rev', 4, undefined) as CommandQuery,
         cmd('review', '', 'builtin'),
       ),
     ).toEqual({ text: '/review ', caret: 8 })
@@ -243,5 +247,53 @@ describe('slash commands', () => {
     expect(
       commandOf('/exit', [{ ...cmd('exit'), trigger: '$', confirm: true }]),
     ).toBeUndefined()
+  })
+
+  it('lists OpenCode\'s own commands, and its skills after "@"', () => {
+    expect(BUILTIN_COMMANDS.opencode).toBe(OPENCODE_BUILTIN_COMMANDS)
+    expect(OPENCODE_BUILTIN_COMMANDS.map((c) => c.name)).toEqual([
+      'goal',
+      'init',
+      'review',
+    ])
+    expect(CUSTOM_TRIGGER.opencode).toBe('/')
+    expect(SKILL_TRIGGER.opencode).toBe('@')
+    expect(customTrigger('opencode', 'command')).toBe('/')
+    expect(customTrigger('opencode', 'skill')).toBe('@')
+    expect(customTrigger('codex', 'skill')).toBe('$')
+    expect(customTrigger('claude', 'skill')).toBe('/')
+    expect(customTrigger('other')).toBe('/')
+    const listed = withTriggers('opencode', [
+      { ...cmd('spike-cmd', '', 'custom'), kind: 'command' },
+      { ...cmd('proj-skill'), kind: 'skill' },
+    ])
+    expect(listed.map((c) => `${c.trigger}${c.name}`)).toEqual([
+      '/spike-cmd',
+      '@proj-skill',
+    ])
+    // A server command named as a built-in is the built-in's row
+    const merged = mergeSlashCommands(
+      OPENCODE_BUILTIN_COMMANDS,
+      withTriggers('opencode', [{ ...cmd('review', '', 'custom') }]),
+    )
+    expect(merged.filter((c) => c.name === 'review')).toHaveLength(1)
+    expect(merged.find((c) => c.name === 'review')?.source).toBe('builtin')
+  })
+
+  it('reads the "@" word the caret ends, for OpenCode skills', () => {
+    expect(commandQuery('use @sk', 7, '@')).toEqual({
+      trigger: '@',
+      query: 'sk',
+      start: 4,
+      end: 7,
+    })
+    expect(commandQuery('@', 1, '@')?.query).toBe('')
+    // "$" in the name is text for OpenCode; a second "@" is not a skill
+    expect(commandQuery('@a$b', 4, '@')?.query).toBe('a$b')
+    expect(commandQuery('@a@b', 4, '@')).toBeNull()
+    expect(commandQuery('mail a@b', 8, '@')).toBeNull()
+    expect(commandQuery('use $sk', 7, '@')).toBeNull()
+    // "/" is never a word trigger
+    expect(commandQuery('use /sk', 7, '/')).toBeNull()
   })
 })

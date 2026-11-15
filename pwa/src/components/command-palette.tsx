@@ -49,10 +49,10 @@ import {
 import {
   applyPick,
   BUILTIN_COMMANDS,
-  CUSTOM_TRIGGER,
   commandDescription,
   mergeSlashCommands,
   type SlashCommand,
+  withTriggers,
 } from '../utils/slash-commands'
 import { requestTemplateFill } from '../utils/template-fill-request'
 import { visibleUnsafe } from '../utils/unsafe-chars'
@@ -357,7 +357,6 @@ export function CommandPalette({
   // Commands
 
   const agentName = (session.hasAgent && session.agentName) || ''
-  const trigger = CUSTOM_TRIGGER[agentName] ?? '/'
   const custom = useAgentCommands(
     paneId,
     current === 'commands' && !!agentName && !!paneId,
@@ -367,10 +366,10 @@ export function CommandPalette({
       agentName
         ? mergeSlashCommands(
             BUILTIN_COMMANDS[agentName] ?? [],
-            custom.map((c) => ({ ...c, trigger })),
+            withTriggers(agentName, custom),
           )
         : [],
-    [agentName, custom, trigger],
+    [agentName, custom],
   )
   const inTerminal = !readOnly && paneCommand(session) === agentName
   const agentReason = composer

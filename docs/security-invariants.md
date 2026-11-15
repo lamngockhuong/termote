@@ -959,7 +959,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   goes with the request and the machine applies its own rule: a machine running a release from
   before this rule still gives a view client the tool results it did not mark sensitive (not
   covered).
-  `agent/commands` (the composer's `/` suggestions; Codex: its skills, see Codex chat) returns
+  `agent/commands` (the composer's `/` suggestions; Codex: its skills, see Codex chat; OpenCode:
+  its service's lists, see OpenCode chat) returns
   only names, descriptions, sources and kinds of `.claude/commands`/`.claude/skills` under the
   pane root and `commands`/`skills`
   in that config dir, read through `os.Root` (first 8 KB per file; a file that is a symlink, under
@@ -1270,7 +1271,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   is read; a failed check is repeated at most every 2 s). Every reply is read up to a limit (1 MB, a page of
   messages 24 MB) and decoded into the fields used; the service's own text (its error bodies,
   `/api/info`'s hostname, `/api/model`'s provider settings with their API keys) never reaches a
-  client or a log. Writes (a message, a permission or form reply, a form's cancel) go the same way,
+  client or a log. Writes (a message, a command, a permission or form reply, a form's cancel) go the same way,
   with the same header and checks, a JSON body termote builds itself and at most 15 s; their reply
   is drained up to 64 KB, never decoded or logged. Errors reach the client as `transcript not
   found`, `no agent session`, or for a write a code only (`agent_unavailable` 502,
@@ -1300,9 +1301,28 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   client's signed cursor (else 409 `session_changed`); a session not yet made (a `--session` id
   before the TUI's first message) is 409 `input_not_ready`. Its images are only the server's own
   uploads (`imagePaths`, an id, never a path), read up to 10 MB each and sent inline as `data:`
-  URIs of the type their extension names. The `prompt` card is the first pending permission
+  URIs of the type their extension names (a message of images only, with empty text, is taken by
+  OpenCode 2.3.0). A message whose text before any image starts with `/name` reads the session's
+  directory (`GET /api/session/{id}`) and `command.list` for it again right before the write (no
+  cache), and is `POST /api/session/{id}/command` (`name`, the rest of the message as `text`,
+  `delivery: "queue"`, its images) only when that list holds the name; any other `/name`, and a
+  listed one the service then answers 404 for, is a prompt with the message as its text. Each
+  `@name` word (at the start or after a space) whose id is in `skill.list`, read the same way,
+  attaches that skill by id (`skills: [{id, mention}]`, each once, at most 16); OpenCode reads the
+  skill's file itself. A command list that cannot be read (a 404 included) is 502
+  `agent_unavailable` with nothing sent; a skill list that cannot be read attaches no skill and the
+  message still goes (`@` also names people, files and addresses). Spaces around `/name` and
+  `@name` include Unicode ones, as the PWA reads them.
+  `agent/commands` for an OpenCode pane is those two lists for the session's directory (500 each at
+  most, 5 s cache per session, no file opened): names checked as Claude Code's, descriptions on one
+  line cut to 200 runes, and for a skill a source from its `path` (`system` for `skill://`,
+  `project` under the session's directory, else `user`). `skill.list` carries each skill's whole
+  file (`content`, up to 16 MB in all): it is not a decoded field, and neither it nor a `path`
+  reaches a client or a log. A view-only client gets an empty list without the service being asked;
+  a session not made yet, or a list that fails, is an empty list too. The `prompt` card is the first pending permission
   (title `Allow <action>?`, its resources as the body, cut to 4 KB, the options once, always (with
-  the patterns it saves) and reject) or else the first form; a view-only client gets it without a
+  the patterns it saves) and reject; `action`, the permission's action cut to 1 KB, lets the PWA
+  word the title and options in its language and is shown with `visibleUnsafe`) or else the first form; a view-only client gets it without a
   `promptId`. A form's card carries its fields (string, number, integer, boolean, multiselect; a
   hidden one is left out, OpenCode fills it); one with a link to open (`external`), a field of
   another kind, a key with a control character or `__proto__`, an option value no answer could

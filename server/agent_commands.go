@@ -41,7 +41,7 @@ const (
 type agentCommand struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
-	Source      string `json:"source"` // project | user | plugin | system
+	Source      string `json:"source"` // project | user | plugin | system | custom
 	Kind        string `json:"kind"`   // command | skill
 }
 
@@ -93,6 +93,9 @@ func (a *agentAPI) handleCommands(w http.ResponseWriter, r *http.Request) {
 		res, _ = a.commands.do("codex\x00"+pr.Root+"\x00"+pr.Dir+"\x00"+s.CodexHome, func() (commandsResponse, error) {
 			return listCodexSkills(pr, s.CodexHome, a.home, a.commandSkip), nil
 		})
+	case "opencode":
+		// The service's own lists; no file is opened here.
+		res = a.opencodeCommands(r, s)
 	default:
 		// Only the dirs of an agent read here are ever opened.
 		res = commandsResponse{Commands: []agentCommand{}}

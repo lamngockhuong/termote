@@ -1,7 +1,8 @@
 // Commands offered by the Chat composer: the agent's built-ins after "/",
 // plus the custom commands and skills of the project, the user, the enabled
 // plugins and the agent itself (read by the server), after the agent's own
-// trigger: "/" for Claude Code, "$" for Codex skills.
+// trigger: "/" for Claude Code, "$" for Codex skills, "/" for OpenCode
+// commands and "@" for its skills.
 
 import { en, type MessageKey } from '../i18n/messages/en'
 import type { Translate } from '../i18n/translate'
@@ -12,8 +13,10 @@ export type SlashCommandSource =
   | 'user'
   | 'plugin'
   | 'system'
+  // An agent's command whose origin it does not tell (OpenCode's)
+  | 'custom'
 
-export type CommandTrigger = '/' | '$'
+export type CommandTrigger = '/' | '$' | '@'
 
 export interface SlashCommand {
   // Without the leading "/"
@@ -160,10 +163,20 @@ export const CODEX_BUILTIN_COMMANDS: SlashCommand[] = [
   builtin('worktree', 'chat.slash.codex.worktree', T),
 ]
 
+// OpenCode 2.3.0's own commands, as its service lists them (command.list):
+// the ones it runs through its API. Its TUI's other "/" commands (models,
+// sessions, themes...) act on the TUI only, so none is offered here.
+export const OPENCODE_BUILTIN_COMMANDS: SlashCommand[] = [
+  builtin('goal', 'chat.slash.opencode.goal'),
+  builtin('init', 'chat.slash.opencode.init'),
+  builtin('review', 'chat.slash.opencode.review'),
+]
+
 // Built-ins per agent, by the name the server reports (session.agentName).
 export const BUILTIN_COMMANDS: Record<string, SlashCommand[]> = {
   claude: CLAUDE_BUILTIN_COMMANDS,
   codex: CODEX_BUILTIN_COMMANDS,
+  opencode: OPENCODE_BUILTIN_COMMANDS,
 }
 
 // Another name an agent runs a built-in by, per agent: alias → command.
@@ -178,6 +191,32 @@ export const COMMAND_ALIASES: Record<string, Record<string, string>> = {
 export const CUSTOM_TRIGGER: Record<string, CommandTrigger> = {
   claude: '/',
   codex: '$',
+  opencode: '/',
+}
+
+// The character an agent's skills are named after, anywhere in a message,
+// when it is not its commands' one: "$name" for Codex, "@name" for OpenCode.
+export const SKILL_TRIGGER: Record<string, CommandTrigger> = {
+  codex: '$',
+  opencode: '@',
+}
+
+// The trigger of a custom command or skill the server listed for agent
+export function customTrigger(
+  agent: string,
+  kind?: SlashCommand['kind'],
+): CommandTrigger {
+  return (
+    (kind === 'skill' && SKILL_TRIGGER[agent]) || CUSTOM_TRIGGER[agent] || '/'
+  )
+}
+
+// The server's commands and skills of agent, each with its trigger
+export function withTriggers(
+  agent: string,
+  list: SlashCommand[],
+): SlashCommand[] {
+  return list.map((c) => ({ ...c, trigger: customTrigger(agent, c.kind) }))
 }
 
 const triggerOf = (c: SlashCommand): CommandTrigger => c.trigger ?? '/'
@@ -239,26 +278,28 @@ export interface CommandQuery {
 
 // What is being typed: "/name" while the whole message is still only a
 // command name (a command is recognized only at the start, and a space ends
-// it); with dollar, also the "$name" word the caret ends, anywhere in the
-// message. caret is null while text is selected, which opens no "$" list.
-// A "$" word runs to the next space, so a pick in its middle replaces it all.
+// it); with a word trigger ("$" or "@"), also the "$name" or "@name" word the
+// caret ends, anywhere in the message. caret is null while text is selected,
+// which opens no word list. A word runs to the next space, so a pick in its
+// middle replaces it all.
 export function commandQuery(
   text: string,
   caret: number | null,
-  dollar: boolean,
+  word: CommandTrigger | undefined,
 ): CommandQuery | null {
   const slash = /^\/(\S*)$/.exec(text)
   if (slash) {
     return { trigger: '/', query: slash[1], start: 0, end: text.length }
   }
-  if (!dollar || caret === null) return null
+  if (!word || word === '/' || caret === null) return null
   const before = text.slice(0, caret)
   const start = before.search(/\S*$/)
   const head = before.slice(start)
-  if (!/^\$[^\s$]*$/.test(head)) return null
+  const name = head.slice(1)
+  if (head[0] !== word || name.includes(word)) return null
   return {
-    trigger: '$',
-    query: head.slice(1),
+    trigger: word,
+    query: name,
     start,
     end: caret + text.slice(caret).search(/\s|$/),
   }

@@ -435,6 +435,61 @@ describe('a dialog the agent asks, in Vietnamese', () => {
       screen.getByText('Claude Code đang chờ bạn trong terminal.'),
     ).toBeInTheDocument()
   })
+
+  it("words an OpenCode permission in Vietnamese, the agent's patterns kept", async () => {
+    const permission: AgentPrompt = {
+      kind: 'permission',
+      promptId: 'p2',
+      title: 'Allow shell?',
+      action: 'shell',
+      body: 'touch spike-file.txt',
+      options: [
+        { index: 1, label: 'Yes, once' },
+        { index: 2, label: 'Yes, always', detail: 'touch *' },
+        { index: 3, label: 'No' },
+      ],
+    }
+    const { unmount } = renderWithLocale(
+      <PromptCard
+        paneId="%3"
+        agentName="opencode"
+        prompt={permission}
+        showView={showView}
+        onAnswered={vi.fn()}
+        onChanged={vi.fn()}
+      />,
+      'vi',
+    )
+    expect(screen.getByRole('alertdialog')).toHaveAccessibleName(
+      'Cho phép shell?',
+    )
+    expect(screen.getByRole('button', { name: /Có, lần này/ })).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Có, luôn cho phép.*touch \*/ }),
+    ).toBeVisible()
+    const no = screen.getByRole('button', { name: /Không/ })
+    expect(no.className).toContain('danger')
+    await act(async () => {
+      fireEvent.click(no)
+    })
+    expect(mockAnswer).toHaveBeenCalledWith('%3', 'p2', 3)
+    unmount()
+    // An older server names no action: its title stays as it wrote it
+    renderWithLocale(
+      <PromptCard
+        paneId="%3"
+        agentName="opencode"
+        prompt={{ ...permission, action: undefined, title: 'Allow a tool?' }}
+        showView={showView}
+        onAnswered={vi.fn()}
+        onChanged={vi.fn()}
+      />,
+      'vi',
+    )
+    expect(screen.getByRole('alertdialog')).toHaveAccessibleName(
+      'Allow a tool?',
+    )
+  })
 })
 
 describe('the needs-me queue in Vietnamese', () => {

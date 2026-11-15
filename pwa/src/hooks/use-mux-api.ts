@@ -1479,6 +1479,9 @@ export interface AgentPrompt {
   autoBlock?: boolean
   // An OpenCode form's fields
   fields?: PromptField[]
+  // An OpenCode permission's action (shell, edit...): its title and options
+  // are worded here, in the app's language
+  action?: string
 }
 
 // One field of an OpenCode form. A string with options takes one of them,
@@ -1547,7 +1550,8 @@ export async function fetchAgentPrompt(
 export interface AgentCommand {
   name: string
   description?: string
-  source: 'project' | 'user' | 'plugin' | 'system'
+  // custom: an agent's command whose origin it does not tell (OpenCode's)
+  source: 'project' | 'user' | 'plugin' | 'system' | 'custom'
   kind: 'command' | 'skill'
 }
 

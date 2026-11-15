@@ -17,6 +17,7 @@ import {
   MAX_FREE_TEXT_BYTES,
 } from '../hooks/use-mux-api'
 import { useT } from '../i18n/i18n-context'
+import type { MessageKey } from '../i18n/messages/en'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { OpenTerminalButton } from './open-terminal-button'
 import { PromptForm } from './prompt-form'
@@ -31,6 +32,14 @@ import { Button } from './ui/button'
 const REFUSING = /^(no|cancel|deny|reject)\b/i
 
 const encoder = new TextEncoder()
+
+// An OpenCode permission's options, by number: the server words them in
+// English for a client that cannot
+const OPENCODE_OPTION: Record<number, MessageKey> = {
+  1: 'chat.prompt.opencode.once',
+  2: 'chat.prompt.opencode.always',
+  3: 'chat.prompt.opencode.reject',
+}
 
 interface Props {
   paneId: string
@@ -180,6 +189,16 @@ export function PromptCard({
     }
   }
 
+  // An OpenCode permission is worded in the app's language
+  const opencode = agentName === 'opencode' && prompt.kind === 'permission'
+  const labelOf = (o: NonNullable<AgentPrompt['options']>[number]) => {
+    const key = opencode ? OPENCODE_OPTION[o.index] : undefined
+    return key ? t(key) : o.label
+  }
+  const title =
+    opencode && prompt.action
+      ? t('chat.prompt.opencode.allow', { action: prompt.action })
+      : prompt.title
   const free = prompt.freeText
   const option = (o: NonNullable<AgentPrompt['options']>[number]) => (
     <Button
@@ -203,7 +222,7 @@ export function PromptCard({
         </span>
       )}
       <span className="min-w-0 break-words">
-        {visibleUnsafe(o.label)}
+        {visibleUnsafe(labelOf(o))}
         {o.detail && (
           <span className="block break-words text-[12px] font-normal text-fg-muted">
             {visibleUnsafe(o.detail)}
@@ -282,7 +301,7 @@ export function PromptCard({
           </ol>
         )}
         <p id={titleId} className="font-medium text-fg">
-          {visibleUnsafe(prompt.title) ||
+          {visibleUnsafe(title) ||
             t('chat.prompt.asking', { agent: agentLabel(agentName) })}
         </p>
         {prompt.body && (

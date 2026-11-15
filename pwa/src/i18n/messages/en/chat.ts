@@ -126,6 +126,7 @@ export default {
   'chat.slash.source.user': 'user',
   'chat.slash.source.plugin': 'plugin',
   'chat.slash.source.system': 'system',
+  'chat.slash.source.custom': 'custom',
   // What each agent's built-in commands do (utils/slash-commands.ts)
   'chat.slash.claude.exit': 'Exit Claude Code',
   'chat.slash.claude.addDir': 'Add a working directory for this session',
@@ -227,6 +228,11 @@ export default {
   'chat.slash.codex.warnings': 'View retained warnings and diagnostic details',
   'chat.slash.codex.worktree':
     'Start or continue a conversation in a new worktree',
+  'chat.slash.opencode.goal':
+    'Keep working until an objective is met (pause, resume or clear it)',
+  'chat.slash.opencode.init': 'Set up AGENTS.md for this project',
+  'chat.slash.opencode.review':
+    'Review changes (a commit, branch or PR; uncommitted ones by default)',
 
   // Picking a template (components/template-picker.tsx)
   'chat.picker.title': 'Insert a template',
@@ -329,6 +335,10 @@ export default {
   'chat.prompt.send': 'Send',
   'chat.prompt.answered': '(answered)',
   'chat.prompt.waitingTerminal': '{agent} is waiting for you in the terminal.',
+  'chat.prompt.opencode.allow': 'Allow {action}?',
+  'chat.prompt.opencode.once': 'Yes, once',
+  'chat.prompt.opencode.always': 'Yes, always',
+  'chat.prompt.opencode.reject': 'No',
   'chat.prompt.invalidAnswer':
     '{agent} did not take this answer; check it and send again.',
   'chat.form.requiredMark': 'required',

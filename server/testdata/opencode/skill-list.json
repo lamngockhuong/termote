@@ -1,0 +1,42 @@
+{
+  "location": {
+    "directory": "/work/proj"
+  },
+  "data": [
+    {
+      "id": "opencode",
+      "name": "OpenCode",
+      "description": "Use this skill for any question about OpenCode itself, including how OpenCode works, using or configuring it, migrating from V1 to V2, troubleshooting it, developing plugins or integrations, using the OpenCode SDK, clients, server, or API, and contributing to the OpenCode codebase. Also use it for OpenCode agents, commands, skills, tools, permissions, MCP servers, providers, models, themes, keybinds, formatters, the CLI, TUI, desktop app, and web app.",
+      "path": "skill://opencode/SKILL.md",
+      "content": "# OpenCode\n\nUse this guide as the starting point for work involving OpenCode itself. It\ncovers the core concepts needed "
+    },
+    {
+      "id": "report",
+      "name": "Report",
+      "description": "Use when the user wants to report an opencode issue or bug. Collect standard diagnostics, add user-specific reproduction context, and publish the issue with GitHub CLI.",
+      "path": "skill://report/SKILL.md",
+      "content": "<!--\n  Built-in skill. Name and description are registered in code at\n  packages/core/src/plugin/skill.ts. The body belo"
+    },
+    {
+      "id": "browser",
+      "name": "Browser",
+      "description": "Use the in-app browser: open and read pages, click and fill forms, take screenshots, check console and network logs, and profile performance and memory. Load it before your first browser tool call.",
+      "path": "skill://browser/SKILL.md",
+      "content": "# In-app browser\n\nThe browser tools drive a Chromium browser inside the user's OpenCode desktop app. Its tabs show in th"
+    },
+    {
+      "id": "user-skill",
+      "name": "user-skill",
+      "description": "A user skill",
+      "path": "/home/user/.config/opencode/skills/user-skill/SKILL.md",
+      "content": "USER-BODY\n"
+    },
+    {
+      "id": "proj-skill",
+      "name": "proj-skill",
+      "description": "A project skill for the test",
+      "path": "/work/proj/.opencode/skills/proj-skill/SKILL.md",
+      "content": "# Proj skill\nSECRET-BODY-LINE\n"
+    }
+  ]
+}

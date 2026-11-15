@@ -1325,6 +1325,83 @@ describe('ChatComposer', () => {
       expect(box()).toHaveValue('')
     })
 
+    describe('OpenCode', () => {
+      const opencode = () => {
+        const p = props()
+        return render(
+          <ChatComposer
+            {...p}
+            session={{ ...p.session, agentName: 'opencode' }}
+          />,
+        )
+      }
+
+      beforeEach(() => {
+        commandsStore.list = [
+          { name: 'review', source: 'custom', kind: 'command' },
+          {
+            name: 'spike-cmd',
+            description: 'A spike command',
+            source: 'custom',
+            kind: 'command',
+          },
+          { name: 'proj-skill', source: 'project', kind: 'skill' },
+          { name: 'opencode', source: 'system', kind: 'skill' },
+        ]
+      })
+
+      it('"/" lists its own and the service\'s commands', () => {
+        opencode()
+        type('/')
+        expect(commandsStore.enabled).toBe(true)
+        expect(names()).toEqual(['/goal', '/init', '/review', '/spike-cmd'])
+        expect(options()[2].textContent).toContain('built-in')
+        expect(options()[3].textContent).toContain('custom')
+        type('/spi')
+        key('Tab')
+        expect(box()).toHaveValue('/spike-cmd ')
+      })
+
+      it('"@" lists the skills anywhere, and none when none matches', () => {
+        opencode()
+        type('use @pr')
+        expect(commandsStore.enabled).toBe(true)
+        expect(screen.getByRole('listbox')).toHaveAttribute(
+          'aria-label',
+          'Skills',
+        )
+        expect(names()).toEqual(['@proj-skill'])
+        key('Enter')
+        expect(box()).toHaveValue('use @proj-skill ')
+        // A file or an address: no list, and Escape is not taken
+        type('see @src/main.go')
+        expect(screen.queryByRole('listbox')).toBeNull()
+        const esc = new KeyboardEvent('keydown', {
+          key: 'Escape',
+          bubbles: true,
+          cancelable: true,
+        })
+        box().dispatchEvent(esc)
+        expect(esc.defaultPrevented).toBe(false)
+        type('$pr')
+        expect(screen.queryByRole('listbox')).toBeNull()
+      })
+
+      it('sends "/" and "@" as typed: the server runs them', async () => {
+        opencode()
+        type('/spike-cmd use @proj-skill')
+        await send()
+        expect(mockSend).toHaveBeenCalledWith(
+          '%3',
+          '/spike-cmd use @proj-skill',
+          'cur1',
+          [],
+          [],
+          false,
+        )
+      })
+    })
+
     describe('Codex', () => {
       const codex = (over: Partial<ViewProps> = {}) => {
         const p = props(over)
