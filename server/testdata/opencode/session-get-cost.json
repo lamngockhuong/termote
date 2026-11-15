@@ -1,0 +1,31 @@
+{
+  "data": {
+    "id": "ses_c1",
+    "model": {
+      "id": "m2",
+      "providerID": "fake",
+      "variant": "default"
+    },
+    "cost": 0.00405,
+    "tokens": {
+      "input": 2400,
+      "output": 60,
+      "reasoning": 0,
+      "cache": {
+        "read": 0,
+        "write": 0
+      }
+    },
+    "outcome": "succeeded",
+    "time": {
+      "created": 1794754595231,
+      "updated": 1794754595373,
+      "busy": 1794754595300,
+      "idle": 1794754595364
+    },
+    "title": "Spike title",
+    "location": {
+      "directory": "/work/proj"
+    }
+  }
+}

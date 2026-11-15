@@ -12,7 +12,8 @@ import (
 	"time"
 )
 
-// Token and cost estimates, read from the agents' journals:
+// Token and cost estimates, read from the agents' journals (OpenCode: its
+// service's API, with the cost OpenCode itself recorded):
 //
 //	GET /api/mux/panes/{id}/agent/usage[?agent=&session=]  one session, its subagents apart
 //	GET /api/mux/panes/{id}/agent/usage/summary            the pane root's sessions, by 15 minutes
@@ -102,10 +103,11 @@ func usagePartOf(models map[string]tokenCounts) usagePart {
 	priced := false
 	for m, c := range models {
 		p.Tokens += c.total()
-		if _, ok := priceOf(m); ok {
+		switch ok, unpriced := pricing(m, c); {
+		case ok:
 			cost += c.cost
 			priced = true
-		} else {
+		case unpriced:
 			p.UnpricedTokens += c.total()
 		}
 	}
@@ -136,9 +138,10 @@ func summaryOf(t *usageTotals) usageSummary {
 	for m, c := range all {
 		sum.plus(c)
 		um := usageModel{ID: m, Tokens: c.total()}
-		if _, ok := priceOf(m); ok {
+		switch ok, unpriced := pricing(m, c); {
+		case ok:
 			um.CostUSD = usd(c.cost)
-		} else {
+		case unpriced:
 			res.UnpricedModels = append(res.UnpricedModels, m)
 		}
 		res.Models = append(res.Models, um)
@@ -242,6 +245,9 @@ func (a *agentAPI) handleSessionUsage(w http.ResponseWriter, r *http.Request) {
 func (a *agentAPI) sessionUsage(s AgentSession) (usageSummary, error) {
 	key := strings.Join([]string{s.Agent, s.ID, s.ClaudeDir, s.CodexHome, s.Rollout, s.RolloutID}, "\x00")
 	return a.usage.sessions.do(key, func() (usageSummary, error) {
+		if s.Agent == "opencode" {
+			return opencodeSessionUsage(s.ID)
+		}
 		t := newUsageTotals()
 		files, err := a.history.sessionFiles(s)
 		if errors.Is(err, errTranscriptNotWritten) {
@@ -296,8 +302,13 @@ func (a *agentAPI) handleRootUsage(w http.ResponseWriter, r *http.Request) {
 		scan := a.history.scan(root.Root)
 		since := a.usage.usageSince()
 		d := usageDedup{t: newUsageTotals(), seen: map[string]bool{}, since: since}
+		var opencode []historySession
 		for _, s := range scan.sessions {
 			if s.updated.Before(since) {
+				continue
+			}
+			if s.Agent == "opencode" {
+				opencode = append(opencode, s)
 				continue
 			}
 			as := a.historyAgentSession(s)
@@ -312,7 +323,8 @@ func (a *agentAPI) handleRootUsage(w http.ResponseWriter, r *http.Request) {
 			}
 			closeSessionFiles(files)
 		}
-		return bucketsOf(d.t, since, scan.truncated), nil
+		ot := opencodeRootUsage(opencode, &d)
+		return bucketsOf(d.t, since, scan.truncated || ot), nil
 	})
 	jsonOK(w, res)
 }
@@ -327,7 +339,8 @@ func (a *agentAPI) handleMachineUsage(w http.ResponseWriter, r *http.Request) {
 		d := usageDedup{t: newUsageTotals(), seen: map[string]bool{}, since: since}
 		ct := a.machineClaudeUsage(dirs.claude, &d)
 		xt := a.machineCodexUsage(dirs.codex, &d)
-		return bucketsOf(d.t, since, ct || xt), nil
+		ot := opencodeMachineUsage(&d)
+		return bucketsOf(d.t, since, ct || xt || ot), nil
 	})
 	jsonOK(w, res)
 }

@@ -70,7 +70,7 @@ vào **Settings > Sessions > Agent usage in the header**.
 
 ## Token và chi phí
 
-Mỗi thẻ của một phiên Claude Code hoặc Codex cho biết phiên đó đã dùng bao nhiêu token và số token ấy
+Mỗi thẻ của một phiên Claude Code, Codex hoặc OpenCode cho biết phiên đó đã dùng bao nhiêu token và số token ấy
 tốn bao nhiêu nếu tính theo giá API niêm yết, ví dụ `1,2M token · ~3,40 US$`; phần của subagent nằm
 trên một dòng riêng. Phía trên các thẻ có một dải cộng mọi phiên của user chạy server, trong hôm nay
 và trong 7 ngày qua, mỗi agent một dòng; ngày được tính theo giờ trên thiết bị của bạn. Dải này cũng
@@ -85,9 +85,17 @@ không được tính. Model Termote chưa có giá chỉ hiện số token (`ch
 được đánh dấu `+`. Muốn tắt chi phí, tắt công tắc **Chi phí ước tính** trong nhóm **Phiên** của Settings; số
 token vẫn hiện.
 
-Giới hạn: dải chỉ tính các file được ghi trong 8 ngày gần đây, tối đa 5000 file mỗi agent, và ghi
-chú khi có file bị bỏ qua. Phiên tách nhánh từ phiên khác (`--fork-session`) tính cả các tin nhắn
-chép từ phiên gốc vào tổng của nó.
+Số liệu của OpenCode lấy từ dịch vụ nền của nó. Chi phí là số OpenCode tự ghi theo giá của provider
+bạn dùng (kể cả provider tự cấu hình), không theo bảng giá niêm yết của Termote, nên hai bên tính theo
+hai cách khác nhau. Model mà OpenCode ghi chi phí bằng 0 (model chạy cục bộ hay miễn phí) chỉ hiện số
+token. Tổng của một phiên là số OpenCode tự cộng, gồm cả request đặt tên cho phiên; dải tổng thì cộng
+các câu trả lời theo thời điểm chúng đến, nên không có request đó. Phiên OpenCode tách nhánh bắt đầu
+từ 0. Khi dịch vụ không chạy, OpenCode không góp gì vào tổng, các agent khác vẫn hiện bình thường.
+
+Giới hạn: dải chỉ tính các file được ghi trong 8 ngày gần đây, tối đa 5000 file mỗi agent (với
+OpenCode là các phiên được cập nhật trong khoảng đó, tối đa 5000), và ghi chú khi có file bị bỏ qua.
+Phiên tách nhánh từ phiên khác (`--fork-session`) tính cả các tin nhắn chép từ phiên gốc vào tổng
+của nó.
 
 ## Cần bạn xử lý
 

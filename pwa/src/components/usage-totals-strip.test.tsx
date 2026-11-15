@@ -46,7 +46,7 @@ describe('UsageTotalsStrip', () => {
       'Estimated at API list prices of Nov 15, 2026; a subscription is not billed by the token\nSome models have no price: their tokens are not in the cost',
     )
     expect(strip).toHaveTextContent(
-      'Only the newest 5000 files of each agent are counted',
+      'Only the newest 5000 files (OpenCode: sessions) of each agent are counted',
     )
 
     writeSettingsPatch({ showCost: false })
@@ -85,6 +85,48 @@ describe('UsageTotalsStrip', () => {
     )
   })
 
+  it("shows OpenCode's own cost, its tokens alone when it recorded none", () => {
+    const { rerender } = render(
+      <UsageTotalsStrip
+        summary={{
+          ...SUMMARY,
+          truncated: false,
+          buckets: [
+            { t: at(0), agent: 'opencode', tokens: 2000, costUsd: 0.5 },
+            { t: at(2 * 86_400_000), agent: 'opencode', tokens: 300 },
+          ],
+        }}
+        now={NOW}
+      />,
+    )
+    const strip = screen.getByTestId('usage-totals')
+    expect(strip.querySelector('[data-agent="opencode"]')).toHaveTextContent(
+      'OpenCodeToday 2.0k tokens · ~$0.507 days 2.3k tokens · ~$0.50',
+    )
+    expect(strip).toHaveAttribute(
+      'title',
+      "OpenCode's cost as it recorded it, at your provider's prices; a model without a price shows its tokens only",
+    )
+    rerender(
+      <UsageTotalsStrip
+        summary={{
+          ...SUMMARY,
+          truncated: false,
+          buckets: [
+            { t: at(0), agent: 'opencode', tokens: 300 },
+            { t: at(0), agent: 'claude', tokens: 10, costUsd: 1 },
+          ],
+        }}
+        now={NOW}
+      />,
+    )
+    expect(strip.querySelector('[data-agent="opencode"]')).toHaveTextContent(
+      'OpenCodeToday 300 tokens7 days 300 tokens',
+    )
+    expect(strip.title).toContain('Estimated at API list prices')
+    expect(strip.title).toContain("OpenCode's cost as it recorded it")
+  })
+
   it('shows nothing before a read or without tokens in the 7 days', () => {
     const { container, rerender } = render(<UsageTotalsStrip now={NOW} />)
     expect(container).toBeEmptyDOMElement()
@@ -102,6 +144,33 @@ describe('UsageTotalsStrip', () => {
 })
 
 describe('SessionUsageLine', () => {
+  it("shows OpenCode's own cost, and its tokens alone without one", () => {
+    const { rerender } = render(
+      <SessionUsageLine
+        tokens={2000}
+        costUsd={0.25}
+        subTokens={500}
+        pricesUpdated="2026-11-15"
+        history
+        reported
+      />,
+    )
+    const line = screen.getByTestId('session-usage')
+    expect(line).toHaveTextContent(
+      'Tokens used by this session: 2.0k tokens · ~$0.25incl. subagents 500 tokens',
+    )
+    // No price table, and an OpenCode fork counts nothing it copied.
+    expect(line).toHaveAttribute(
+      'title',
+      "OpenCode's cost as it recorded it, at your provider's prices; a model without a price shows its tokens only",
+    )
+    rerender(
+      <SessionUsageLine tokens={2000} pricesUpdated="2026-11-15" reported />,
+    )
+    expect(line).toHaveTextContent('2.0k tokens')
+    expect(line).not.toHaveTextContent('price')
+  })
+
   it("shows the session's tokens, cost and subagents' share", () => {
     const { rerender } = render(
       <SessionUsageLine

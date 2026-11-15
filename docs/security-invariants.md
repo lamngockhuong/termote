@@ -1163,8 +1163,26 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `<synthetic>` and other threads' rows are skipped. Replies hold only numbers, model ids, the price
   table's date and 15-minute UTC bucket times: no path, cwd, title, session id or
   text. Shared reads: a session 5 s, a summary 30 s. Costs are estimates from the price table built
-  into the binary, nothing configurable. Accepted: the machine summary tells a view-only client how
-  many tokens each agent used across every directory, by 15 minutes
+  into the binary, nothing configurable. OpenCode (`server/agent_usage_opencode.go`) is read only
+  through the OpenCode service client (no file opened, nothing of `opencode.db`, the service never
+  started), with a session id checked by `isOpencodeSessionID` before it goes into a URL path: the
+  pane's session, or one the root's history lists (`sessionTarget`, as above). One session is its
+  `session.get` (`tokens` and `cost` only, no model listed), and its subagents' sessions
+  (`session.list` with `parentID`, two levels, at most 200); a session the service does not hold
+  yet has used nothing.
+  The summaries read `GET /api/session/{id}/message?type=assistant`, 100 a page, newest first, until
+  one older than the summary, at most 5000 per session, kept by session id and `time.updated` for
+  an hour (30 s for the OpenCode share of one summary, the sessions read before that kept); of a message only its id, time, model, tokens and cost are decoded, and a fork's copies
+  of its parent's (`msg_…_<n>`) are skipped. Root summary: the history's OpenCode sessions of the
+  root (the same filter as its list) updated in the last 8 days and their subagents (two levels);
+  machine summary: every session `session.list` gives (subagents' and archived ones too) updated in
+  the last 8 days, at most 5000 (`truncated`). The cost is the one OpenCode recorded at the prices of
+  the user's provider, never the price table: 0 shows the tokens alone and counts nothing as
+  unpriced, and the PWA tells the two apart by agent. A service that does not run adds nothing and
+  fails no route (one session: 404 `transcript not found`); one that fails is logged without its
+  body and marks the summary `truncated`, the other agents' share still sent. Model ids are the
+  service's `provider/id`. Accepted: the machine summary tells a view-only client how many tokens
+  each agent used across every directory, by 15 minutes
 - **Files a session touched** (`GET /api/mux/panes/{id}/agent/touched[?agent=&session=]`;
   `server/agent_touched*.go`): `requireMethod(GET)`, `crossSiteRejection`, `requireAgentRead`,
   `Cache-Control: no-store`; internal errors are logged only. The client names a pane and, for an
@@ -1326,7 +1344,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   messages or one message 24 MB, the list of models 8 MB) and decoded into the fields used (of
   `/api/model` only `providerID`, `id` and `limit.context`); the service's own text (its error bodies,
   `/api/info`'s hostname, `/api/model`'s provider settings with their API keys) never reaches a
-  client or a log. Writes (a message, a command, a permission or form reply, a form's cancel, a fork) go the same
+  client or a log. The usage reads (see Agent usage and cost) go the same way. Writes (a message, a command, a permission or form reply, a form's cancel, a fork) go the same
   way, with the same header and checks, a JSON body termote builds itself and at most 15 s; their
   reply is drained up to 64 KB, never decoded or logged, except a fork's, read up to 1 MB for the
   new session's `id` only. Errors reach the client as `transcript not

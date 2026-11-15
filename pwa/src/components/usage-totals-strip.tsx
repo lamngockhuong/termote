@@ -1,4 +1,4 @@
-import { agentLabel } from '../chat-agents'
+import { agentLabel, reportedCostAgent } from '../chat-agents'
 import type { HistoryAgent, UsageSummary } from '../hooks/use-mux-api'
 import { useSettings } from '../hooks/use-settings'
 import { useT } from '../i18n/i18n-context'
@@ -17,11 +17,13 @@ interface Props {
   className?: string
 }
 
-const AGENTS: HistoryAgent[] = ['claude', 'codex']
+const AGENTS: HistoryAgent[] = ['claude', 'codex', 'opencode']
 
 // Today's tokens and the last 7 days', one line per agent (Claude Code,
-// Codex), with their estimated cost unless Settings turns it off. Nothing
-// before the first read, nor without tokens in the 7 days.
+// Codex, OpenCode), with their cost unless Settings turns it off: estimated
+// from termote's price table, or as OpenCode recorded it (a cost of 0 shows
+// the tokens alone). Nothing before the first read, nor without tokens in
+// the 7 days.
 export function UsageTotalsStrip({ summary, now, className = '' }: Props) {
   const { t, locale } = useT()
   const { settings } = useSettings()
@@ -29,20 +31,24 @@ export function UsageTotalsStrip({ summary, now, className = '' }: Props) {
   const days = foldBuckets(summary.buckets, now)
   const agents = AGENTS.filter((a) => days[a])
   if (agents.length === 0) return null
-  const value = (v: UsageTotal) => {
+  const value = (v: UsageTotal, reported: boolean) => {
     const tokens = t('tasks.card.tokens', {
       tokens: formatTokenCount(v.tokens, locale),
     })
-    if (!settings.showCost || v.tokens === 0) return tokens
+    if (!settings.showCost || v.tokens === 0 || (reported && !v.priced))
+      return tokens
     if (!v.priced) return `${tokens} · ${t('usage.noPrice')}`
     return `${tokens} · ${formatCost(v.cost, locale, v.unpriced > 0)}`
   }
   const unpriced = agents.some((a) => days[a]?.week.unpriced)
+  const estimated = agents.some((a) => !reportedCostAgent(a))
   const title = settings.showCost
     ? [
-        t('usage.estimate', {
-          date: formatPriceDate(summary.pricesUpdated, locale),
-        }),
+        estimated &&
+          t('usage.estimate', {
+            date: formatPriceDate(summary.pricesUpdated, locale),
+          }),
+        agents.some(reportedCostAgent) && t('usage.reported'),
         unpriced && t('usage.unpricedSome'),
       ]
         .filter(Boolean)
@@ -68,11 +74,15 @@ export function UsageTotalsStrip({ summary, now, className = '' }: Props) {
             </span>
             <span className="tabular-nums">
               <span className="text-fg-muted">{t('usage.today')} </span>
-              <span className="text-fg">{value(d.today)}</span>
+              <span className="text-fg">
+                {value(d.today, reportedCostAgent(a))}
+              </span>
             </span>
             <span className="tabular-nums">
               <span className="text-fg-muted">{t('usage.week')} </span>
-              <span className="text-fg">{value(d.week)}</span>
+              <span className="text-fg">
+                {value(d.week, reportedCostAgent(a))}
+              </span>
             </span>
           </div>
         )

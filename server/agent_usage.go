@@ -24,6 +24,8 @@ const usageBucket = 15 * time.Minute
 
 // usageRecord is one request's tokens. input leaves cached input out,
 // output counts reasoning in (reasoning is shown, never priced apart).
+// reported: cost is what the agent itself recorded (OpenCode, at the prices
+// of the user's provider), not priced from termote's table.
 type usageRecord struct {
 	at                         time.Time
 	model                      string
@@ -31,16 +33,32 @@ type usageRecord struct {
 	cacheWrite5m, cacheWrite1h int64
 	output, reasoning          int64
 	key                        string
+	cost                       float64
+	reported                   bool
 }
 
 // tokenCounts adds records up; cost is in USD, 0 for a model without a
-// price.
+// price. reported: the agent recorded the cost (see usageRecord).
 type tokenCounts struct {
 	input, cacheRead, cacheWrite5m, cacheWrite1h, output, reasoning int64
 	cost                                                            float64
+	reported                                                        bool
+}
+
+// pricing tells whether c's cost is shown and whether its tokens are a
+// model's without a price. A cost the agent recorded is shown when above
+// 0; 0 is a free model or one the agent has no price for, never told apart,
+// so its tokens are not counted as unpriced.
+func pricing(model string, c tokenCounts) (priced, unpriced bool) {
+	if c.reported {
+		return c.cost > 0, false
+	}
+	_, ok := priceOf(model)
+	return ok, !ok
 }
 
 func (t *tokenCounts) add(r usageRecord) {
+	t.reported = t.reported || r.reported
 	t.input += r.input
 	t.cacheRead += r.cacheRead
 	t.cacheWrite5m += r.cacheWrite5m
@@ -51,7 +69,7 @@ func (t *tokenCounts) add(r usageRecord) {
 
 func (t *tokenCounts) plus(o tokenCounts) {
 	t.add(usageRecord{input: o.input, cacheRead: o.cacheRead, cacheWrite5m: o.cacheWrite5m,
-		cacheWrite1h: o.cacheWrite1h, output: o.output, reasoning: o.reasoning})
+		cacheWrite1h: o.cacheWrite1h, output: o.output, reasoning: o.reasoning, reported: o.reported})
 	t.cost += o.cost
 }
 
@@ -79,10 +97,12 @@ func newUsageTotals() *usageTotals {
 }
 
 // add counts r, priced at its own size (a long request may cost more per
-// token).
+// token), or at the cost the agent recorded.
 func (u *usageTotals) add(agent string, sub bool, r usageRecord) {
 	var cost float64
-	if p, ok := priceOf(r.model); ok {
+	if r.reported {
+		cost = r.cost
+	} else if p, ok := priceOf(r.model); ok {
 		cost = costOf(p, r)
 	}
 	by := u.main

@@ -248,5 +248,8 @@ export default {
     'Some models have no price: their tokens are not in the cost',
   'usage.forked':
     'A forked session counts the messages it copied from the one it was forked from',
-  'usage.truncated': 'Only the newest 5000 files of each agent are counted',
+  'usage.reported':
+    "OpenCode's cost as it recorded it, at your provider's prices; a model without a price shows its tokens only",
+  'usage.truncated':
+    'Only the newest 5000 files (OpenCode: sessions) of each agent are counted',
 } as const

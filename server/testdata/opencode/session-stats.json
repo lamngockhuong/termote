@@ -1,0 +1,76 @@
+{
+  "data": {
+    "range": {
+      "from": 1794754531837,
+      "to": 1794754751616
+    },
+    "sessions": 4,
+    "subagents": 1,
+    "prompts": 6,
+    "steps": 9,
+    "tokens": {
+      "input": 11100,
+      "output": 260,
+      "reasoning": 0,
+      "cache": {
+        "read": 0,
+        "write": 0
+      }
+    },
+    "cost": 0.00405,
+    "tools": {
+      "mode": "summary",
+      "totals": {
+        "calls": 1,
+        "succeeded": 1,
+        "failed": 0,
+        "unfinished": 0
+      }
+    },
+    "activeDays": 1,
+    "streak": 1,
+    "activity": [
+      {
+        "date": "2026-11-15",
+        "steps": 9
+      }
+    ],
+    "models": [
+      {
+        "model": {
+          "id": "m1",
+          "providerID": "fake"
+        },
+        "steps": 8,
+        "tokens": {
+          "input": 9900,
+          "output": 230,
+          "reasoning": 0,
+          "cache": {
+            "read": 0,
+            "write": 0
+          }
+        },
+        "cost": 0
+      },
+      {
+        "model": {
+          "id": "m2",
+          "providerID": "fake",
+          "variant": "default"
+        },
+        "steps": 1,
+        "tokens": {
+          "input": 1200,
+          "output": 30,
+          "reasoning": 0,
+          "cache": {
+            "read": 0,
+            "write": 0
+          }
+        },
+        "cost": 0.00405
+      }
+    ]
+  }
+}

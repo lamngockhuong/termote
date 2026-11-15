@@ -28,7 +28,9 @@ const (
 	opencodeHistoryTimeout = 5 * time.Second
 )
 
-// opencodeSessionInfo is the part of a session the history reads.
+// opencodeSessionInfo is the part of a session the history and the usage
+// read. Tokens and Cost are the session's own requests (its subagents' are
+// in their sessions), Cost in USD at the prices of the user's provider.
 type opencodeSessionInfo struct {
 	ID       string `json:"id"`
 	ParentID string `json:"parentID"`
@@ -39,6 +41,8 @@ type opencodeSessionInfo struct {
 	Location struct {
 		Directory string `json:"directory"`
 	} `json:"location"`
+	Tokens opencodeTokens `json:"tokens"`
+	Cost   float64        `json:"cost"`
 }
 
 // opencodeHistoryList is every root session the service lists, newest
@@ -49,9 +53,16 @@ type opencodeHistoryList struct {
 }
 
 // rootSessions reads the service's root sessions, newest first, at most
-// max of them. The page cursor is the service's own, only ever passed back
-// to it.
+// max of them.
 func (c *opencodeClient) rootSessions(ctx context.Context, max int) (opencodeHistoryList, error) {
+	return c.listSessions(ctx, url.Values{"parentID": {"null"}}, max, nil)
+}
+
+// listSessions reads the sessions session.list gives for q, newest
+// (last updated) first, at most max of them, and stops at the first one
+// stop is true for. The page cursor is the service's own, only ever passed
+// back to it.
+func (c *opencodeClient) listSessions(ctx context.Context, q url.Values, max int, stop func(opencodeSessionInfo) bool) (opencodeHistoryList, error) {
 	var list opencodeHistoryList
 	cursor := ""
 	for {
@@ -60,7 +71,7 @@ func (c *opencodeClient) rootSessions(ctx context.Context, max int) (opencodeHis
 			list.truncated = true
 			return list, nil
 		}
-		q := url.Values{"parentID": {"null"}, "limit": {strconv.Itoa(limit)}}
+		q.Set("limit", strconv.Itoa(limit))
 		if cursor != "" {
 			q.Set("cursor", cursor)
 		}
@@ -74,7 +85,10 @@ func (c *opencodeClient) rootSessions(ctx context.Context, max int) (opencodeHis
 			return list, err
 		}
 		for _, s := range res.Data {
-			if s.ParentID == "" && isOpencodeSessionID(s.ID) {
+			if stop != nil && stop(s) {
+				return list, nil
+			}
+			if (q.Get("parentID") != "null" || s.ParentID == "") && isOpencodeSessionID(s.ID) {
 				list.sessions = append(list.sessions, s)
 			}
 		}

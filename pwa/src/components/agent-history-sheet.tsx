@@ -9,7 +9,11 @@ import {
   useState,
 } from 'react'
 import type { NotifyOptions } from '../app-views'
-import { agentLabel, sessionFilesAgent } from '../chat-agents'
+import {
+  agentLabel,
+  reportedCostAgent,
+  sessionFilesAgent,
+} from '../chat-agents'
 import { useAgentHistory } from '../hooks/use-agent-history'
 import { useHistoryClose } from '../hooks/use-history-close'
 import type {
@@ -355,6 +359,7 @@ function SessionScreen({
               subCostUsd={usage.sub?.costUsd}
               pricesUpdated={usage.pricesUpdated}
               history
+              reported={reportedCostAgent(session.agent)}
               className="text-[12px] text-fg-muted"
             />
           )}
