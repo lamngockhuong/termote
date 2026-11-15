@@ -1462,15 +1462,18 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   target starts with a separator, as every UNC one does.
   A repository's own files can make git open a share too, in every command it runs (`rev-parse`,
   `config`, `status`, `log`), and git cannot be asked first (`git config --no-includes` reads the
-  repository's config, includes and all, as it starts). So on Windows `resolve`, before the first
-  git command at a directory, reads the repository git would find there (walking up, stopping only
+  repository's config, includes and all, as it starts). So on Windows, before any git command, in
+  every directory git runs in and not only one `resolve` returned (`gitRunner.output` calls
+  `checkRepoRoot`: blame through a link into another work tree, `worktree add` in the git dir, Find
+  in a linked folder), termote reads the repository git would find there (walking up, stopping only
   at a git dir git takes too, and trying a directory itself as a bare repository when its `.git`
   is no repository git takes, as git does) as text (`repoConfigRefused`, `server/git_repo_config.go`) and refuses
   it (400 `directory not available`, as a refused pane directory, the reason in the log only) when
   a `.git` file's `gitdir:`, its `commondir`, a line of `objects/info/alternates` (followed 5 deep),
   a linked worktree's `gitdir` or the `gitdir:` of the `.git` file that one names names a path off a
   drive letter outside the Places (the test `refusesDir` uses; a share, `\\?\UNC\`, `\\.\`, and an
-  NT path `\??\UNC\` alike), or when `config`, `config.worktree` or any local file they include (followed
+  NT path `\??\UNC\` alike), or when `config`, `config.worktree` (the git dir's, and the common
+  dir's too, which git run there reads) or any local file they include (followed
   10 deep; read only from a git dir holding a `HEAD`, as git reads them only from one) sets `include.path`, `includeIf.*.path`, `core.worktree`, `core.excludesFile`,
   `core.attributesFile`, `mailmap.file` or `diff.orderFile` to one (`:(optional)` read past). In a
   config value but `core.worktree` (`configPath`), one after git's `%(prefix)/` is checked as git uses it (an absolute

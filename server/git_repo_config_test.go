@@ -40,6 +40,29 @@ func TestResolveRefusesRepoConfigOffDrive(t *testing.T) {
 	}
 }
 
+// Every root git runs in is checked, not only one resolve returned: blame
+// runs in the work tree a link leads to, worktree add in the git dir.
+func TestGitRefusesRepoConfigOffDriveAtAnyRoot(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the temp dir stands in for a drive only off Windows")
+	}
+	ctx := context.Background()
+	repo := tempDirReal(t)
+	gitInit(t, repo)
+	appendFile(t, filepath.Join(repo, ".git", "config"), "[include]\n\tpath = //termote-test.invalid/s/x\n")
+	for _, windows := range []bool{true, false} {
+		rr := newTestRoots()
+		rr.windows = windows
+		rr.placeDirs = []string{filepath.Dir(repo)}
+		for _, root := range []string{repo, filepath.Join(repo, ".git")} {
+			_, _, err := rr.git.output(ctx, gitCall{root: root}, "rev-parse", "--git-dir")
+			if refused := errors.Is(err, errDirNotAvailable); refused != windows {
+				t.Errorf("windows %v, git in %s: err = %v", windows, root, err)
+			}
+		}
+	}
+}
+
 func TestParseGitConfig(t *testing.T) {
 	e := func(section, sub, key, value string) gitConfigEntry { return gitConfigEntry{section, sub, key, value} }
 	for _, c := range []struct {
@@ -200,6 +223,10 @@ func TestRepoConfigRefused(t *testing.T) {
 		{"commondir with ~ is literal", withFiles(cfg(""), g+"commondir", "~/c\n", g+"~/c/config", "[include]\n\tpath = //h/s\n"), "", true},
 		{"linked worktree's own gitfile off a drive", withFiles(cfg(""), g+"worktrees/w/gitdir", "../../../wt/.git\n",
 			"wt/.git", "gitdir: //h/s/x\n"), "", true},
+		{"the common dir's config.worktree, from a linked worktree", withFiles(gitDirFiles("main/", ""),
+			"main/config.worktree", "[include]\n\tpath = //h/s\n",
+			".git", "gitdir: main/worktrees/w\n", "main/worktrees/w/HEAD", "ref: refs/heads/w\n",
+			"main/worktrees/w/commondir", "../..\n"), "", true},
 		{"linked worktree's own gitfile, clean", withFiles(cfg(""), g+"worktrees/w/gitdir", "../../../wt/.git\n",
 			"wt/.git", "gitdir: ../.git/worktrees/w\n"), "", false},
 	} {
