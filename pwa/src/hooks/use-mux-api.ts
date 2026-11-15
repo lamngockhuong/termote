@@ -404,8 +404,24 @@ export interface OverviewPane {
   changed?: number
   changedTruncated?: boolean
   usage?: OverviewUsage
+  // The session's tokens so far and their estimated cost, once the server
+  // read them (in the background)
+  sessionUsage?: SessionUsageTotals
   accountKey?: string
   unavailable?: string[]
+}
+
+// A session's tokens and estimated cost (USD, absent when no model of it
+// has a price), and its subagents' share. unpricedTokens: tokens of models
+// without a price, left out of the cost. pricesUpdated: the price table's
+// date (YYYY-MM-DD).
+export interface SessionUsageTotals {
+  tokens: number
+  costUsd?: number
+  unpricedTokens?: number
+  subTokens?: number
+  subCostUsd?: number
+  pricesUpdated: string
 }
 
 export interface Overview {
@@ -1219,6 +1235,76 @@ export async function fetchHistoryTranscript(
     `${agentPath(paneId, `history/${encodeURIComponent(sessionId)}/transcript`)}?${params}`,
     { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) },
   )
+  if (!res.ok) throw await requestError(res, true)
+  return res.json()
+}
+
+// A total and its estimated cost (USD; absent when none of its tokens has a
+// price), with the tokens of models without one.
+export interface UsagePart {
+  tokens: number
+  costUsd?: number
+  unpricedTokens?: number
+}
+
+// One session's usage (GET .../agent/usage): every token by kind, by model,
+// and its subagents' share.
+export interface SessionUsage extends Omit<UsagePart, 'tokens'> {
+  tokens: {
+    input: number
+    cacheRead: number
+    cacheWrite: number
+    output: number
+    reasoning: number
+    total: number
+  }
+  unpricedModels?: string[]
+  models: { id: string; tokens: number; costUsd?: number }[]
+  sub?: UsagePart
+  pricesUpdated: string
+}
+
+// One agent's 15 minutes (t: its start, UTC)
+export interface UsageBucket extends UsagePart {
+  t: string
+  agent: HistoryAgent
+}
+
+// The usage of the last 8 days by 15 minutes, oldest first, for a device to
+// fold into its own days. truncated: not every file was read.
+export interface UsageSummary {
+  buckets: UsageBucket[]
+  since: string
+  truncated: boolean
+  pricesUpdated: string
+}
+
+// The tokens of a session of the pane's history. (The session the pane runs
+// has its totals on its overview card.)
+export async function fetchSessionUsage(
+  paneId: string,
+  session: { agent: HistoryAgent; id: string },
+): Promise<SessionUsage> {
+  const qs = new URLSearchParams({ agent: session.agent, session: session.id })
+  const res = await fetch(`${agentPath(paneId, 'usage')}?${qs}`, {
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res, true)
+  return res.json()
+}
+
+// The usage of every session of the pane's folder, or of every session of
+// the server's user (no pane).
+export async function fetchUsageSummary(
+  paneId?: string,
+): Promise<UsageSummary> {
+  const url =
+    paneId === undefined
+      ? `${apiBase()}/usage`
+      : agentPath(paneId, 'usage/summary')
+  const res = await fetch(url, {
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
   if (!res.ok) throw await requestError(res, true)
   return res.json()
 }

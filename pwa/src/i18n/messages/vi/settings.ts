@@ -98,6 +98,9 @@ export default {
   'settings.usage': 'Mức dùng của agent trên thanh tiêu đề',
   'settings.usageDesc':
     'Cho biết context của agent trong pane đang mở đã đầy bao nhiêu, và hạn mức Codex của nó',
+  'settings.cost': 'Chi phí ước tính',
+  'settings.costDesc':
+    'Hiện chi phí token của agent theo giá API niêm yết cạnh số token; gói thuê bao không tính tiền theo token',
   'settings.hostChip': 'Số liệu máy chủ trên thanh tiêu đề',
   'settings.hostChipDesc': 'Hiện CPU, bộ nhớ và pin của máy đang chạy Termote',
   'settings.poll': 'Chu kỳ cập nhật danh sách phiên',

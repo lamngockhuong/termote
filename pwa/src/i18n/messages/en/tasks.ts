@@ -88,6 +88,8 @@ export default {
   'tasks.card.windowAssumed':
     'Window assumed: the agent was not started with --model',
   'tasks.card.tokens': '{tokens} tokens',
+  'tasks.card.sub': 'incl. subagents {usage}',
+  'tasks.card.usageLabel': 'Tokens used by this session',
   'tasks.card.openChat': 'Open chat',
   'tasks.card.openTerminal': 'Open terminal',
   // "Open chat: Claude Code, Needs you, api / tab"
@@ -233,4 +235,18 @@ export default {
     'No other machine is added (termote machine add)',
   'tasks.commandOff.noFullscreen': 'Not supported by this browser',
   'tasks.commandOff.noLink': 'No link names this pane',
+  // Token totals and estimated costs (components/usage-totals-strip.tsx,
+  // session-usage-line.tsx)
+  'usage.title': 'Agent tokens',
+  'usage.today': 'Today',
+  'usage.week': '7 days',
+  'usage.noPrice': 'no price',
+  'usage.estimate':
+    'Estimated at API list prices of {date}; a subscription is not billed by the token',
+  'usage.unpriced': 'No price for {models}',
+  'usage.unpricedSome':
+    'Some models have no price: their tokens are not in the cost',
+  'usage.forked':
+    'A forked session counts the messages it copied from the one it was forked from',
+  'usage.truncated': 'Only the newest 5000 files of each agent are counted',
 } as const

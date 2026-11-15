@@ -79,6 +79,7 @@ const SETTINGS: Settings = {
   gpuRenderer: true,
   stuckMinutes: 10,
   showUsageChip: true,
+  showCost: true,
   showHostChip: true,
   editorFontSize: 13,
   editorTabSize: 4,

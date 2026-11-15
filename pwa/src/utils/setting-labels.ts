@@ -21,6 +21,7 @@ export const SETTING_LABEL: Record<string, MessageKey> = {
   toolbarPosition: 'settings.toolbarPosition',
   showSessionTabs: 'settings.tabs',
   showUsageChip: 'settings.usage',
+  showCost: 'settings.cost',
   showHostChip: 'settings.hostChip',
   pollInterval: 'settings.poll',
   sidebarFilter: 'settings.key.sidebarFilter',

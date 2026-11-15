@@ -51,6 +51,8 @@ const json = (status: number, body: unknown) =>
 let lists: Array<() => Response | Promise<Response>>
 let resumes: Array<() => Response>
 let posts: unknown[]
+// The usage reads, by URL: a folder's summary, a session's totals
+let usages: Record<string, () => Response>
 
 beforeEach(() => {
   HTMLDialogElement.prototype.showModal = vi.fn().mockImplementation(function (
@@ -62,9 +64,14 @@ beforeEach(() => {
   lists = []
   resumes = []
   posts = []
+  usages = {}
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.includes('/agent/usage')) {
+        const key = url.includes('/usage/summary') ? 'summary' : 'session'
+        return (usages[key] ?? (() => json(500, {})))()
+      }
       if (url.includes('/agent/resume')) {
         posts.push(JSON.parse(init?.body as string))
         return (
@@ -304,6 +311,48 @@ describe('AgentHistorySheet', () => {
       await new Promise((r) => setTimeout(r, 20))
     })
     await screen.findByRole('searchbox')
+  })
+
+  it("shows the folder's totals and an old session's, hidden when refused", async () => {
+    const now = new Date().toISOString()
+    usages.summary = () =>
+      json(200, {
+        buckets: [{ t: now, agent: 'claude', tokens: 1500, costUsd: 0.25 }],
+        since: now,
+        truncated: false,
+        pricesUpdated: '2026-11-15',
+      })
+    usages.session = () =>
+      json(200, {
+        tokens: { total: 2_500_000 },
+        costUsd: 4,
+        models: [],
+        sub: { tokens: 1000, costUsd: 0.01 },
+        pricesUpdated: '2026-11-15',
+      })
+    lists.push(listOf([session('a')]))
+    setup()
+    await screen.findByText('Title a')
+    expect(
+      await screen.findByRole('region', { name: 'Agent tokens' }),
+    ).toHaveTextContent('Claude CodeToday 1.5k tokens · ~$0.25')
+    fireEvent.click(screen.getByText('Title a'))
+    expect(await screen.findByTestId('session-usage')).toHaveTextContent(
+      'Tokens used by this session: 2.5M tokens · ~$4.00incl. subagents 1.0k tokens · ~$0.01',
+    )
+    cleanup()
+
+    // View-only where Files refuses the folder: no totals, no error.
+    usages.summary = () => json(403, { code: 'view_only', error: 'x' })
+    usages.session = () => json(500, {})
+    lists.push(listOf([session('a')]))
+    setup()
+    await screen.findByText('Title a')
+    await act(async () => {})
+    expect(screen.queryByRole('region', { name: 'Agent tokens' })).toBeNull()
+    fireEvent.click(screen.getByText('Title a'))
+    await act(async () => {})
+    expect(screen.queryByTestId('session-usage')).toBeNull()
   })
 
   it('opens no links without a way to the files', async () => {

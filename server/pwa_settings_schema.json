@@ -118,6 +118,13 @@
       "description": "Header: the open pane's agent context and limits"
     },
     {
+      "key": "showCost",
+      "store": "settings",
+      "type": "boolean",
+      "default": true,
+      "description": "Overview and history: the estimated cost (API list prices) beside token counts"
+    },
+    {
       "key": "showHostChip",
       "store": "settings",
       "type": "boolean",

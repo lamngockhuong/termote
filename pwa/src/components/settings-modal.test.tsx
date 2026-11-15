@@ -97,6 +97,7 @@ const DEFAULT_SETTINGS: Settings = {
   gpuRenderer: true,
   stuckMinutes: 10,
   showUsageChip: true,
+  showCost: true,
   showHostChip: true,
   editorFontSize: 13,
   editorTabSize: 4,
@@ -873,6 +874,14 @@ describe('SettingsModal', () => {
     expect(
       screen.getByText('List sessions waiting on you at the top of each group'),
     ).toBeInTheDocument()
+  })
+
+  it('toggles the estimated cost, on by default', () => {
+    const { onUpdateSetting } = renderModal()
+    const sw = screen.getByRole('switch', { name: 'Estimated cost' })
+    expect(sw).toHaveAttribute('aria-checked', 'true')
+    fireEvent.click(sw)
+    expect(onUpdateSetting).toHaveBeenCalledWith('showCost', false)
   })
 
   it('toggles the usage chip, on by default', () => {

@@ -232,6 +232,7 @@ export interface Settings {
   appBadge: boolean // the installed app's icon counts the agents waiting on you
   stuckMinutes: number // overview: a working agent quiet this long may be stuck
   showUsageChip: boolean // header: the open pane's agent's context and limits
+  showCost: boolean // overview, history: the estimated cost beside tokens
   showHostChip: boolean // header: CPU, memory and battery of termote's machine
   editorFontSize: number // desktop editor (CodeMirror): px, EDITOR_FONT_SIZES
   editorTabSize: EditorTabSize // desktop editor: columns of a tab, one indent
@@ -277,6 +278,7 @@ export const DEFAULTS: Settings = {
   appBadge: true,
   stuckMinutes: DEFAULT_STUCK_MINUTES,
   showUsageChip: true,
+  showCost: true,
   showHostChip: true,
   editorFontSize: 13,
   editorTabSize: 4,
@@ -349,6 +351,7 @@ export const SETTING_RESOLVERS: {
   appBadge: (v) => resolveBoolean('appBadge', v),
   stuckMinutes: resolveStuckMinutes,
   showUsageChip: (v) => resolveBoolean('showUsageChip', v),
+  showCost: (v) => resolveBoolean('showCost', v),
   showHostChip: (v) => resolveBoolean('showHostChip', v),
   editorFontSize: resolveEditorFontSize,
   editorTabSize: resolveEditorTabSize,
