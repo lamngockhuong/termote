@@ -1465,7 +1465,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   repository's config, includes and all, as it starts). So on Windows, before any git command, in
   every directory git runs in and not only one `resolve` returned (`gitRunner.output` calls
   `checkRepoRoot`: blame through a link into another work tree, `worktree add` in the git dir, Find
-  in a linked folder), termote reads the repository git would find there (walking up, stopping only
+  in a linked folder; the answer kept 2 s per directory, and forgotten as soon as termote writes
+  under it, so a config include a discard restores is read by the next git), termote reads the
+  repository git would find there (walking up, stopping only
   at a git dir git takes too, and trying a directory itself as a bare repository when its `.git`
   is no repository git takes, as git does) as text (`repoConfigRefused`, `server/git_repo_config.go`) and refuses
   it (400 `directory not available`, as a refused pane directory, the reason in the log only) when

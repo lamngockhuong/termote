@@ -489,6 +489,11 @@ func (f *filesAPI) forgetRoot(root string) {
 	}
 	f.statuses.forgetFunc(overlaps)
 	f.finds.forgetFunc(overlaps)
+	// What termote wrote (a file a discard restored) may be a config
+	// include the last check found missing: the next git there checks again.
+	if f.roots != nil {
+		f.roots.repoChecks.forgetFunc(overlaps)
+	}
 }
 
 // handleFind serves GET files/find: the paths under the pane's root that

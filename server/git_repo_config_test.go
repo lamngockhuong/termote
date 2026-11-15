@@ -63,6 +63,35 @@ func TestGitRefusesRepoConfigOffDriveAtAnyRoot(t *testing.T) {
 	}
 }
 
+// A config include missing when the repository was checked, then written
+// by termote (a discard restores it from the index), is read by the next
+// git there: the check is not kept across termote's own write.
+func TestRepoCheckForgottenAfterWrite(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the temp dir stands in for a drive only off Windows")
+	}
+	ctx := context.Background()
+	repo := tempDirReal(t)
+	gitInit(t, repo)
+	appendFile(t, filepath.Join(repo, ".git", "config"), "[include]\n\tpath = ../inc.cfg\n")
+	rr := newTestRoots()
+	rr.windows = true
+	rr.placeDirs = []string{filepath.Dir(repo)}
+	f := &filesAPI{git: rr.git, roots: rr, finds: newTTLCache[findList](findListTTL), statuses: newTTLCache[gitStatus](findListTTL)}
+	git := func() error {
+		_, _, err := rr.git.output(ctx, gitCall{root: repo}, "rev-parse", "--git-dir")
+		return err
+	}
+	if err := git(); err != nil {
+		t.Fatalf("missing include: %v", err)
+	}
+	writeFile(t, filepath.Join(repo, "inc.cfg"), "[include]\n\tpath = //termote-test.invalid/s/x\n")
+	f.forgetRoot(repo)
+	if err := git(); !errors.Is(err, errDirNotAvailable) {
+		t.Fatalf("include written by termote: err = %v", err)
+	}
+}
+
 func TestParseGitConfig(t *testing.T) {
 	e := func(section, sub, key, value string) gitConfigEntry { return gitConfigEntry{section, sub, key, value} }
 	for _, c := range []struct {
