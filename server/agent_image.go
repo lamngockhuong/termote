@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/hmac"
 	"encoding/base64"
 	"encoding/json"
@@ -12,13 +13,13 @@ import (
 	"strings"
 )
 
-// An image an agent's transcript holds (one the user pasted into Claude Code)
-// is sent as a part with only a signed reference; GET agent/image?src=<ref>
-// serves its bytes, so the Chat view can show it again.
+// An image an agent's transcript holds (one the user pasted into Claude Code
+// or Codex) is sent as a part with only a signed reference; GET
+// agent/image?src=<ref> serves its bytes, so the Chat view can show it again.
 
 // agentImageLineMax is the longest transcript line agent/image reads: a
-// Claude Code row with several pasted images, each at most about 5 MB of
-// base64. A longer line is not served.
+// Claude Code row (or the Codex input row) with several pasted images, each
+// at most about 5 MB of base64. A longer line is not served.
 const agentImageLineMax = 32 << 20
 
 // agentImageConcurrency image reads run at once (each may hold a line of
@@ -32,11 +33,12 @@ var (
 	errAgentImageBusy     = &codedError{"busy", "too many image reads at once; try again", http.StatusTooManyRequests}
 )
 
-// journalImageReader is a journal adapter whose rows carry their images: the
-// media type and bytes of the nth image of a row, ok false when the row has
-// no such image or it is not one of the accepted types.
+// journalImageReader is a journal adapter whose transcript keeps the images
+// of its entries: the media type and bytes of the nth image of the entry
+// whose row starts at off in f (size bytes long), ok false when it has no
+// such image or it is not one of the accepted types.
 type journalImageReader interface {
-	Image(line []byte, n int) (mediaType string, data []byte, ok bool)
+	Image(f io.ReaderAt, off, size int64, n int) (mediaType string, data []byte, ok bool)
 }
 
 // agentImageRef names one image: the session and file it was read from, the
@@ -146,8 +148,8 @@ func (a *agentAPI) handleImage(w http.ResponseWriter, r *http.Request) {
 var errAgentImageMissing = errors.New("agent image missing")
 
 // readAgentImage reads the image ref names from s's transcript: the same file
-// (by identity), a row that starts at the offset, at most agentImageLineMax
-// long, and an image of an accepted type whose bytes are what it claims.
+// (by identity), an entry whose row starts at the offset, and an image of an
+// accepted type whose bytes are what it claims.
 func readAgentImage(s AgentSession, ref agentImageRef) (string, []byte, error) {
 	adapter, ok := journalAdapters[s.Agent]
 	if !ok {
@@ -175,29 +177,90 @@ func readAgentImage(s AgentSession, ref agentImageRef) (string, []byte, error) {
 	if id != ref.File || ref.Offset >= size || !atLineStart(f, ref.Offset) {
 		return "", nil, errAgentImageMissing
 	}
-	br := bufio.NewReaderSize(io.NewSectionReader(f, ref.Offset, min(size-ref.Offset, agentImageLineMax)), 64<<10)
-	var line []byte
-	for {
-		chunk, err := br.ReadSlice('\n')
-		line = append(line, chunk...)
-		if err == nil {
-			break
-		}
-		if !errors.Is(err, bufio.ErrBufferFull) {
-			return "", nil, errAgentImageMissing // no complete row within the limit
-		}
-	}
-	mt, data, ok := images.Image(line, ref.N)
+	mt, data, ok := images.Image(f, ref.Offset, size, ref.N)
 	if !ok {
 		return "", nil, errAgentImageMissing
 	}
 	return mt, data, nil
 }
 
-// Image returns the nth image block of a Claude Code row's message: base64
-// data of an accepted type (PNG, JPEG, GIF, WebP) whose bytes sniff as that
-// type, so nothing else is served under an image's name.
-func (claudeJournal) Image(line []byte, n int) (string, []byte, bool) {
+// rowAt is the whole row that starts at off ('\n' included), at most
+// agentImageLineMax long; ok false when no complete row ends within that.
+func rowAt(f io.ReaderAt, off, size int64) ([]byte, bool) {
+	if off < 0 || off >= size {
+		return nil, false
+	}
+	br := bufio.NewReaderSize(io.NewSectionReader(f, off, min(size-off, agentImageLineMax)), 64<<10)
+	var line []byte
+	for {
+		chunk, err := br.ReadSlice('\n')
+		line = append(line, chunk...)
+		if err == nil {
+			return line, true
+		}
+		if !errors.Is(err, bufio.ErrBufferFull) {
+			return nil, false
+		}
+	}
+}
+
+// rowBefore is the whole row that ends right before off, which starts a line
+// ('\n' included), at most agentImageLineMax long; ok false at the start of
+// the file or for a longer row.
+func rowBefore(f io.ReaderAt, off int64) ([]byte, bool) {
+	if off <= 0 {
+		return nil, false
+	}
+	start := off - 1 // the '\n' that ends the row
+	buf := make([]byte, 64<<10)
+	for start > 0 {
+		if off-start > agentImageLineMax {
+			return nil, false
+		}
+		n := min(int64(len(buf)), start)
+		if _, err := f.ReadAt(buf[:n], start-n); err != nil {
+			return nil, false
+		}
+		if i := bytes.LastIndexByte(buf[:n], '\n'); i >= 0 {
+			start -= n - int64(i) - 1
+			break
+		}
+		start -= n
+	}
+	if off-start > agentImageLineMax {
+		return nil, false
+	}
+	line := make([]byte, off-start)
+	if _, err := f.ReadAt(line, start); err != nil {
+		return nil, false
+	}
+	return line, true
+}
+
+// sniffImage is the type data sniffs as (http.DetectContentType) when it is
+// an accepted one (PNG, JPEG, GIF, WebP) and the declared type, when given,
+// is the same, so nothing else is served under an image's name.
+func sniffImage(data []byte, declared string) (string, bool) {
+	mt := http.DetectContentType(data)
+	if len(data) == 0 || !isUploadType(mt) || (declared != "" && declared != mt) {
+		return "", false
+	}
+	return mt, true
+}
+
+// Image returns the nth image block of a Claude Code row's message.
+func (claudeJournal) Image(f io.ReaderAt, off, size int64, n int) (string, []byte, bool) {
+	line, ok := rowAt(f, off, size)
+	if !ok {
+		return "", nil, false
+	}
+	return claudeImage(line, n)
+}
+
+// claudeImage returns the nth image block of a Claude Code row's message:
+// base64 data whose bytes sniff as an accepted type, and as its media_type
+// when given.
+func claudeImage(line []byte, n int) (string, []byte, bool) {
 	var row struct {
 		Message *struct {
 			Content json.RawMessage `json:"content"`
@@ -232,14 +295,95 @@ func (claudeJournal) Image(line []byte, n int) (string, []byte, bool) {
 			return "", nil, false
 		}
 		data, err := base64.StdEncoding.DecodeString(b.Source.Data)
-		if err != nil || len(data) == 0 {
+		if err != nil {
 			return "", nil, false
 		}
-		mt := http.DetectContentType(data)
-		if !isUploadType(mt) || (b.Source.MediaType != "" && b.Source.MediaType != mt) {
-			return "", nil, false
-		}
-		return mt, data, true
+		mt, ok := sniffImage(data, b.Source.MediaType)
+		return mt, data, ok
 	}
 	return "", nil, false
+}
+
+// isCodexImage reports a Codex user input item that is an image: a URL
+// (image) or a file the user attached by path (local_image).
+func isCodexImage(itemType string) bool {
+	return strings.EqualFold(itemType, "image") || strings.EqualFold(itemType, "local_image")
+}
+
+// codexInputRow is the row Codex writes just before a UserMessage item: the
+// user message of the model's input (response_item), where every image of
+// the item is an input_image with its bytes in a data: URL.
+type codexInputRow struct {
+	Type    string `json:"type"`
+	Payload struct {
+		Type    string `json:"type"`
+		Role    string `json:"role"`
+		Content []struct {
+			Type     string `json:"type"`
+			ImageURL string `json:"image_url"`
+		} `json:"content"`
+	} `json:"payload"`
+}
+
+// Image returns the nth image of a Codex UserMessage item. The item keeps
+// only a pasted file's path (local_image) or the URL it was given (image);
+// the bytes Codex sent are in the row it wrote just before, the model's
+// input, which must be a user message with as many images as the item, so
+// a file Codex could not read shifts no image onto another's chip. The file
+// a path names is never read: only the rollout's own copy is served.
+func (codexJournal) Image(f io.ReaderAt, off, size int64, n int) (string, []byte, bool) {
+	line, ok := rowAt(f, off, size)
+	if !ok {
+		return "", nil, false
+	}
+	var row codexRow
+	if json.Unmarshal(line, &row) != nil || row.Type != "event_msg" || row.Payload.Type != "item_completed" ||
+		row.Payload.Item == nil || row.Payload.Item.Type != "UserMessage" {
+		return "", nil, false
+	}
+	images := 0
+	for _, c := range row.Payload.Item.Content {
+		if isCodexImage(c.Type) {
+			images++
+		}
+	}
+	if n >= images {
+		return "", nil, false
+	}
+	prev, ok := rowBefore(f, off)
+	if !ok {
+		return "", nil, false
+	}
+	var input codexInputRow
+	if json.Unmarshal(prev, &input) != nil || input.Type != "response_item" ||
+		input.Payload.Type != "message" || input.Payload.Role != "user" {
+		return "", nil, false
+	}
+	var urls []string
+	for _, c := range input.Payload.Content {
+		if c.Type == "input_image" {
+			urls = append(urls, c.ImageURL)
+		}
+	}
+	if len(urls) != images {
+		return "", nil, false
+	}
+	return dataURLImage(urls[n])
+}
+
+// dataURLImage decodes a base64 data: URL whose bytes sniff as an accepted
+// image type and as the type it declares; any other URL is refused.
+func dataURLImage(u string) (string, []byte, bool) {
+	rest, ok1 := strings.CutPrefix(u, "data:")
+	head, b64, ok2 := strings.Cut(rest, ",")
+	declared, ok3 := strings.CutSuffix(head, ";base64")
+	if !ok1 || !ok2 || !ok3 || declared == "" {
+		return "", nil, false
+	}
+	data, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil {
+		return "", nil, false
+	}
+	mt, ok := sniffImage(data, strings.ToLower(declared))
+	return mt, data, ok
 }

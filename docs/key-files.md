@@ -280,7 +280,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/agent_context_window.go`                  | Window of a model id, context share, Codex account key         |
 | `server/agent_claude_model.go`                    | Last model a Claude Code transcript names                      |
 | `server/agent_subagents.go`                       | `agent/subagents`: a Claude session's subagent tree            |
-| `server/agent_image.go`                           | `agent/image`: a pasted image of a Claude transcript, by ref   |
+| `server/agent_image.go`                           | `agent/image`: a pasted image of a Claude/Codex chat, by ref   |
 | `server/agent_claude.go`                          | Claude Code transcript (JSONL) and session file                |
 | `scripts/claude-chat-tags.sh`                     | Tags Claude Code writes that the Chat view would show raw      |
 | `scripts/codex-chat-items.sh`                     | Codex items and events the Chat view would not show            |
