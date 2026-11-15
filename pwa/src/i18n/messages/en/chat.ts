@@ -40,6 +40,7 @@ export default {
   'chat.message.image': 'image: {where}',
   'chat.message.imageUnavailable': 'unavailable',
   'chat.message.imageChip': '[image]',
+  'chat.message.imageChipNumbered': '[image #{n}]',
   'chat.message.imageOpen': 'Show the image',
   'chat.image.title': 'Image',
   'chat.image.openTab': 'Open in new tab',

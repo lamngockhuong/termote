@@ -31,7 +31,7 @@ describe('ChatImageViewer', () => {
     render(
       <ChatImageViewer paneId="%3">{withImage('ref.sig')}</ChatImageViewer>,
     )
-    fireEvent.click(screen.getByRole('button', { name: '[image]' }))
+    fireEvent.click(screen.getByRole('button', { name: '[image #1]' }))
     const url = '/api/mux/panes/%253/agent/image?src=ref.sig'
     expect(screen.getByRole('img', { name: 'Image' })).toHaveAttribute(
       'src',
@@ -49,7 +49,7 @@ describe('ChatImageViewer', () => {
     render(
       <ChatImageViewer paneId="p1">{withImage('ref.sig')}</ChatImageViewer>,
     )
-    fireEvent.click(screen.getByRole('button', { name: '[image]' }))
+    fireEvent.click(screen.getByRole('button', { name: '[image #1]' }))
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
     await waitFor(() =>
       expect(screen.queryByRole('img', { name: 'Image' })).toBeNull(),
@@ -60,7 +60,7 @@ describe('ChatImageViewer', () => {
     render(
       <ChatImageViewer paneId="p1">{withImage('ref.sig')}</ChatImageViewer>,
     )
-    fireEvent.click(screen.getByRole('button', { name: '[image]' }))
+    fireEvent.click(screen.getByRole('button', { name: '[image #1]' }))
     fireEvent.error(screen.getByRole('img', { name: 'Image' }))
     expect(screen.getByText(/could not be loaded/)).toBeInTheDocument()
     expect(screen.queryByRole('img', { name: 'Image' })).toBeNull()
@@ -70,10 +70,10 @@ describe('ChatImageViewer', () => {
     const { unmount } = render(
       <ChatImageViewer paneId="p1">{withImage()}</ChatImageViewer>,
     )
-    expect(screen.queryByRole('button', { name: '[image]' })).toBeNull()
-    expect(screen.getByText('[image]')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '[image #1]' })).toBeNull()
+    expect(screen.getByText('[image #1]')).toBeInTheDocument()
     unmount()
     render(<ChatImageViewer paneId="">{withImage('ref.sig')}</ChatImageViewer>)
-    expect(screen.queryByRole('button', { name: '[image]' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '[image #1]' })).toBeNull()
   })
 })

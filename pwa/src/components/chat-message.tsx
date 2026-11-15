@@ -164,14 +164,40 @@ function Disclosure({
   )
 }
 
-function ImageChip({ src }: { src?: string }) {
+// The number each image part of an entry shows, so a reader can tell which
+// image the text's "[Image #N]" means. The agent's own numbers when the text
+// names one per image (Claude Code keeps counting across a session), else
+// the order in the entry when there is more than one image.
+export function imageNumbers(parts: TranscriptPart[]): (number | undefined)[] {
+  const tokens = parts
+    .filter((p) => p.kind === 'text' && p.text)
+    .flatMap((p) =>
+      [...(p.text ?? '').matchAll(/\[Image #(\d+)\]/g)].map((m) =>
+        Number(m[1]),
+      ),
+    )
+  const count = parts.filter((p) => p.kind === 'image').length
+  let i = 0
+  return parts.map((p) => {
+    if (p.kind !== 'image') return undefined
+    const n = i++
+    if (tokens.length === count) return tokens[n]
+    return count > 1 ? n + 1 : undefined
+  })
+}
+
+function ImageChip({ src, n }: { src?: string; n?: number }) {
   const { t } = useT()
   const open = useContext(ChatImageContext)
+  const label =
+    n === undefined
+      ? t('chat.message.imageChip')
+      : t('chat.message.imageChipNumbered', { n: String(n) })
   if (!src || !open) {
     return (
       <span className="inline-flex items-center gap-1 text-fg-muted">
         <ImageIcon size={13} aria-hidden="true" />
-        {t('chat.message.imageChip')}
+        {label}
       </span>
     )
   }
@@ -183,18 +209,18 @@ function ImageChip({ src }: { src?: string }) {
       className="inline-flex cursor-pointer items-center gap-1 text-accent underline decoration-dotted underline-offset-2 hover:decoration-solid"
     >
       <ImageIcon size={13} aria-hidden="true" />
-      {t('chat.message.imageChip')}
+      {label}
     </button>
   )
 }
 
-function Part({ part }: { part: TranscriptPart }) {
+function Part({ part, n }: { part: TranscriptPart; n?: number }) {
   const { t } = useT()
   switch (part.kind) {
     case 'tool':
       return <ToolCard part={part} />
     case 'image':
-      return <ImageChip src={part.image} />
+      return <ImageChip src={part.image} n={n} />
     case 'thinking':
       return (
         <Disclosure summary={t('chat.message.thinking')}>
@@ -312,6 +338,7 @@ export const ChatMessage = memo(function ChatMessage({
     )
   }
   const user = chatSide(entry) === 'user'
+  const numbers = imageNumbers(entry.parts)
   const time = showTime && <Time ts={entry.ts} />
   if (user) {
     return (
@@ -326,7 +353,7 @@ export const ChatMessage = memo(function ChatMessage({
           {entry.parts.map((part, i) =>
             part.kind === 'image' ? (
               // biome-ignore lint/suspicious/noArrayIndexKey: parts never reorder
-              <ImageChip key={i} src={part.image} />
+              <ImageChip key={i} src={part.image} n={numbers[i]} />
             ) : part.kind === 'tool' ? (
               // biome-ignore lint/suspicious/noArrayIndexKey: parts never reorder
               <ToolCard key={i} part={part} />
@@ -359,7 +386,7 @@ export const ChatMessage = memo(function ChatMessage({
           dot={part.kind === 'tool' ? toolDot(part) : 'bg-fg-subtle'}
           line={i < last || !!joinsNext}
         >
-          <Part part={part} />
+          <Part part={part} n={numbers[i]} />
         </Step>
       ))}
       {!joinsNext && answer && (

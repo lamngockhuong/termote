@@ -11,7 +11,12 @@ import { ThemeProvider } from '../contexts/theme-context'
 import type { TranscriptEntry } from '../hooks/use-mux-api'
 import { tFor } from '../i18n/i18n-context'
 import type { MermaidResult } from '../utils/mermaid-render'
-import { ChatMarkdownContext, ChatMessage, chatSide } from './chat-message'
+import {
+  ChatMarkdownContext,
+  ChatMessage,
+  chatSide,
+  imageNumbers,
+} from './chat-message'
 import { MERMAID_REASONS } from './mermaid-block'
 
 const mockRender = vi.fn()
@@ -126,6 +131,65 @@ describe('ChatMessage', () => {
     expect(screen.queryByRole('link', { name: 'bad' })).toBeNull()
     expect(screen.queryByRole('link', { name: 'mail' })).toBeNull()
     expect(screen.getByText('bad')).toBeInTheDocument()
+  })
+
+  it("numbers the image chips by the text's [Image #N] tokens", () => {
+    render(
+      <ChatMessage
+        entry={{
+          id: 'u',
+          role: 'user',
+          parts: [
+            { kind: 'text', text: '[Image #3] [Image #4]\n\ncompare them' },
+            { kind: 'image' },
+            { kind: 'image' },
+          ],
+        }}
+      />,
+    )
+    expect(screen.getByText('[image #3]')).toBeInTheDocument()
+    expect(screen.getByText('[image #4]')).toBeInTheDocument()
+    expect(screen.queryByText('[image]')).toBeNull()
+  })
+
+  it("numbers images by their order when the text names none, and in the agent's turn", () => {
+    render(
+      <ChatMessage
+        entry={{
+          id: 'a',
+          role: 'assistant',
+          parts: [
+            { kind: 'image' },
+            { kind: 'text', text: 'and' },
+            { kind: 'image' },
+          ],
+        }}
+      />,
+    )
+    expect(screen.getByText('[image #1]')).toBeInTheDocument()
+    expect(screen.getByText('[image #2]')).toBeInTheDocument()
+  })
+
+  it('imageNumbers: tokens when one per image, else order for several, else none', () => {
+    const text = (t: string) => ({ kind: 'text' as const, text: t })
+    const img = { kind: 'image' as const }
+    expect(imageNumbers([text('[Image #2] [Image #5]'), img, img])).toEqual([
+      undefined,
+      2,
+      5,
+    ])
+    // A token count that does not match the images falls back to the order
+    expect(imageNumbers([text('[Image #7]'), img, img])).toEqual([
+      undefined,
+      1,
+      2,
+    ])
+    expect(imageNumbers([text('look'), img])).toEqual([undefined, undefined])
+    expect(imageNumbers([text('[Image #1] look'), img])).toEqual([undefined, 1])
+    expect(imageNumbers([{ kind: 'text' }, img])).toEqual([
+      undefined,
+      undefined,
+    ])
   })
 
   it('user text is plain, in a framed box, with an image chip and its time', () => {

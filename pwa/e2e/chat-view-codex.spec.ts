@@ -225,7 +225,7 @@ test.describe('chat view of a Codex pane', () => {
     await expect(page.getByRole('img', { name: 'Attachment 1, ready' })).toBeVisible()
     await send.click()
     await expect(conversation).toContainText('what is in it? [Image #1] (images: 1)')
-    await expect(conversation).toContainText('[image]')
+    await expect(conversation).toContainText('[image #1]')
     await expect(page.getByRole('list', { name: 'Attached images' })).toBeHidden()
 
     // On tmux the rollout records no approval request: the dialog is shown

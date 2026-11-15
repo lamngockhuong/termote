@@ -163,7 +163,7 @@ test.describe('chat view', () => {
     await expect(composer).toHaveValue('what is in it? [Image #1]')
     await send.click()
     await expect(conversation).toContainText('You said: what is in it? [Image #1] (images: 1)')
-    await expect(conversation).toContainText('[image]')
+    await expect(conversation).toContainText('[image #1]')
     await expect(page.getByRole('list', { name: 'Attached images' })).toBeHidden()
 
     // A permission dialog becomes a card whose buttons answer it
