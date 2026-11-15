@@ -13,12 +13,19 @@ const AGENT_LABELS: Record<string, string> = {
   opencode: 'OpenCode',
 }
 
-// The server reads these agents' session files: their tokens and the files
-// a session changed are shown.
+// The server reads these agents' session files: the files a session
+// changed are shown.
 const SESSION_FILES_AGENTS = ['claude', 'codex']
 
 export const sessionFilesAgent = (name?: string) =>
   !!name && SESSION_FILES_AGENTS.includes(name)
+
+// These agents record a session's cost themselves, at the prices of the
+// user's provider; termote's price table prices the others.
+const REPORTED_COST_AGENTS = ['opencode']
+
+export const reportedCostAgent = (name?: string) =>
+  !!name && REPORTED_COST_AGENTS.includes(name)
 
 // The server reads these agents' subagents: a card and the Chat view show
 // the tree.

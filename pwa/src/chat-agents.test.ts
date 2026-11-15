@@ -4,6 +4,7 @@ import {
   chatAgent,
   chatInputAgent,
   historyImageAgent,
+  reportedCostAgent,
   sessionFilesAgent,
   subagentAgent,
 } from './chat-agents'
@@ -20,6 +21,12 @@ describe('chat agents', () => {
     expect(sessionFilesAgent('codex')).toBe(true)
     expect(sessionFilesAgent('opencode')).toBe(false)
     expect(sessionFilesAgent(undefined)).toBe(false)
+  })
+
+  it('knows OpenCode records its own cost', () => {
+    expect(reportedCostAgent('opencode')).toBe(true)
+    expect(reportedCostAgent('claude')).toBe(false)
+    expect(reportedCostAgent(undefined)).toBe(false)
   })
 
   it('reads the subagents of Claude Code and OpenCode', () => {

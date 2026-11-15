@@ -20,6 +20,9 @@ interface Props {
   pricesUpdated: string
   // An old session (a fork counts what it copied)
   history?: boolean
+  // The agent recorded the cost itself (OpenCode): no price table, and a
+  // cost of 0 (a local or free model) shows the tokens alone
+  reported?: boolean
   className?: string
 }
 
@@ -35,6 +38,7 @@ export function SessionUsageLine({
   subCostUsd,
   pricesUpdated,
   history,
+  reported,
   className = '',
 }: Props) {
   const { t, locale } = useT()
@@ -43,13 +47,17 @@ export function SessionUsageLine({
   const partial = !!unpricedTokens
   const value = (n: number, cost: number | undefined, some: boolean) => {
     const text = t('tasks.card.tokens', { tokens: formatTokenCount(n, locale) })
-    if (!showCost || n === 0) return text
+    if (!showCost || n === 0 || (reported && cost === undefined)) return text
     if (cost === undefined) return `${text} · ${t('usage.noPrice')}`
     return `${text} · ${formatCost(cost, locale, some)}`
   }
   const notes = showCost
     ? [
-        t('usage.estimate', { date: formatPriceDate(pricesUpdated, locale) }),
+        reported
+          ? t('usage.reported')
+          : t('usage.estimate', {
+              date: formatPriceDate(pricesUpdated, locale),
+            }),
         partial &&
           (unpricedModels?.length
             ? t('usage.unpriced', {
@@ -58,7 +66,8 @@ export function SessionUsageLine({
             : t('usage.unpricedSome')),
       ]
     : []
-  if (history) notes.push(t('usage.forked'))
+  // An OpenCode fork starts from 0: it counts nothing it copied.
+  if (history && !reported) notes.push(t('usage.forked'))
   const title = notes.filter(Boolean).join('\n') || undefined
   return (
     <span

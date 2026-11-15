@@ -70,7 +70,7 @@ off in **Settings > Sessions > Agent usage in the header**.
 
 ## Tokens and cost
 
-Each card of a Claude Code or Codex session shows how many tokens the session has used so far and
+Each card of a Claude Code, Codex or OpenCode session shows how many tokens the session has used so far and
 what they would cost at API list prices, such as `1.2M tokens · ~$3.40`, with its subagents' share
 on a line of its own. Above the cards, a strip adds up every session of the server's user, today and
 over the last 7 days, one line per agent; the days are your device's own. The same strip at the top
@@ -84,9 +84,17 @@ is not billed by the token, and fast, batch or regional pricing is not counted. 
 no price for shows its tokens only (`no price`), and a total that leaves some out is marked `+`.
 Turn the cost off in **Settings > Sessions > Estimated cost**; the tokens stay.
 
-Limits: the strip counts the files written in the last 8 days, at most 5000 per agent, and says so
-when it left some out. A session forked from another (`--fork-session`) counts the messages it
-copied in its own total.
+OpenCode's numbers come from its background service, and its cost is the one OpenCode recorded at
+the prices of the provider you use (your own providers included), not Termote's list prices, so the
+two are worked out differently. A model OpenCode records no cost for (a local or free one) shows its
+tokens only. A session's total is OpenCode's own, the request that names the session included; the
+strip adds up the answers by when they came, so it leaves that request out. A forked OpenCode
+session starts from 0. When the service is not running, OpenCode adds nothing and the other agents
+still show.
+
+Limits: the strip counts the files written in the last 8 days, at most 5000 per agent (for OpenCode,
+the sessions updated in that time, at most 5000), and says so when it left some out. A session
+forked from another (`--fork-session`) counts the messages it copied in its own total.
 
 ## Needs you
 

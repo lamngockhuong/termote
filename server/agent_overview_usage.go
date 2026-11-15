@@ -140,7 +140,7 @@ func (a *agentAPI) paneSessionUsage(paneID string) (u *overviewSessionUsage, fai
 		return nil, false
 	}
 	s, err := a.session(paneID)
-	if err != nil || (s.Agent != "claude" && s.Agent != "codex") {
+	if err != nil || (s.Agent != "claude" && s.Agent != "codex" && s.Agent != "opencode") {
 		return nil, false
 	}
 	v, ok := a.usageJobs.lookup(s, a.sessionUsage)

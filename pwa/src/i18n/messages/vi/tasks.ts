@@ -225,5 +225,8 @@ export default {
   'usage.unpricedSome':
     'Một số model chưa có giá: token của chúng không tính vào chi phí',
   'usage.forked': 'Session được fork tính cả các tin nhắn chép từ session gốc',
-  'usage.truncated': 'Chỉ tính 5000 file gần nhất của mỗi agent',
+  'usage.reported':
+    'Chi phí OpenCode tự ghi lại, theo giá của provider bạn dùng; model không có giá chỉ hiện số token',
+  'usage.truncated':
+    'Chỉ tính 5000 file (OpenCode: session) gần nhất của mỗi agent',
 } satisfies Translation<typeof en>

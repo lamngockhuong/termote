@@ -165,6 +165,21 @@ describe('AgentCard', () => {
     )
   })
 
+  it("shows an OpenCode session's own cost, its tokens alone at 0", () => {
+    renderCard({
+      pane: pane({ agentName: 'opencode', label: 'opencode' }),
+      overview: {
+        paneId: 'w1:p1',
+        key: 'w1:p1',
+        sessionUsage: { tokens: 1200, pricesUpdated: '2026-11-15' },
+      },
+    })
+    const line = screen.getByTestId('session-usage')
+    expect(line).toHaveTextContent('Tokens used by this session: 1.2k tokens')
+    expect(line).not.toHaveTextContent('price')
+    expect(line.title).toContain("OpenCode's cost as it recorded it")
+  })
+
   it('shows the hidden characters of the group and tab names', () => {
     renderCard({
       where: 'a\u202epi / bu\u202eild',

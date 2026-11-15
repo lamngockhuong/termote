@@ -370,8 +370,9 @@ func TestOpencodeSessionTarget(t *testing.T) {
 		{"?agent=opencode&session=..%2Fx", 400},
 		{"?agent=opencode&session=" + histID1, 400},
 		{"?agent=opencode&session=sesOut", 404},
-		// Found; OpenCode's usage is not read yet.
-		{"?agent=opencode&session=sesRoot", 404},
+		// Found: the service holds no such session yet, which has used
+		// nothing.
+		{"?agent=opencode&session=sesRoot", 200},
 	} {
 		code, body := getAPI(t, fx.h, "/api/mux/panes/0/agent/usage"+tc.q)
 		if code != tc.status {

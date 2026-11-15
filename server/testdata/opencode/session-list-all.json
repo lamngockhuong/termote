@@ -1,0 +1,169 @@
+{
+  "data": [
+    {
+      "id": "ses_e20499019ffe3bWNtJ5GFaudfy",
+      "fork": {
+        "sessionID": "ses_c1",
+        "boundary": {
+          "type": "through",
+          "messageID": "msg_1dfb5ca24001b7g0A6JSuvIGYe"
+        }
+      },
+      "model": {
+        "id": "m2",
+        "providerID": "fake",
+        "variant": "default"
+      },
+      "cost": 0,
+      "tokens": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      },
+      "time": {
+        "created": 1794754637799,
+        "updated": 1794754637807
+      },
+      "title": "Spike title (fork #1)",
+      "location": {
+        "directory": "/work/proj"
+      }
+    },
+    {
+      "id": "ses_a1",
+      "cost": 0,
+      "tokens": {
+        "input": 2400,
+        "output": 60,
+        "reasoning": 0,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      },
+      "outcome": "succeeded",
+      "time": {
+        "created": 1794754625580,
+        "updated": 1794754628159,
+        "busy": 1794754626063,
+        "idle": 1794754626137,
+        "archived": 1794754628159
+      },
+      "title": "Spike title",
+      "location": {
+        "directory": "/tmp"
+      }
+    },
+    {
+      "id": "ses_u1",
+      "cost": 0,
+      "tokens": {
+        "input": 4800,
+        "output": 120,
+        "reasoning": 0,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      },
+      "outcome": "succeeded",
+      "time": {
+        "created": 1794754530540,
+        "updated": 1794754616884,
+        "busy": 1794754616842,
+        "idle": 1794754616891
+      },
+      "title": "Spike title",
+      "location": {
+        "directory": "/work/proj"
+      }
+    },
+    {
+      "id": "ses_c1",
+      "model": {
+        "id": "m2",
+        "providerID": "fake",
+        "variant": "default"
+      },
+      "cost": 0.00405,
+      "tokens": {
+        "input": 2400,
+        "output": 60,
+        "reasoning": 0,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      },
+      "outcome": "succeeded",
+      "time": {
+        "created": 1794754595231,
+        "updated": 1794754595373,
+        "busy": 1794754595300,
+        "idle": 1794754595364
+      },
+      "title": "Spike title",
+      "location": {
+        "directory": "/work/proj"
+      }
+    },
+    {
+      "id": "ses_t1",
+      "cost": 0,
+      "tokens": {
+        "input": 5100,
+        "output": 110,
+        "reasoning": 0,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      },
+      "outcome": "succeeded",
+      "time": {
+        "created": 1794754576624,
+        "updated": 1794754577082,
+        "busy": 1794754577033,
+        "idle": 1794754577100
+      },
+      "title": "Spike title",
+      "location": {
+        "directory": "/work/proj"
+      }
+    },
+    {
+      "id": "ses_e204a7df5ffepOiGApY3uAqVhQ",
+      "parentID": "ses_t1",
+      "agent": "explore",
+      "cost": 0,
+      "tokens": {
+        "input": 1200,
+        "output": 30,
+        "reasoning": 0,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      },
+      "outcome": "succeeded",
+      "time": {
+        "created": 1794754576911,
+        "updated": 1794754577023,
+        "busy": 1794754576947,
+        "idle": 1794754577027
+      },
+      "title": "Explore files",
+      "location": {
+        "directory": "/work/proj"
+      }
+    }
+  ],
+  "cursor": {
+    "previous": "eyJhbmNob3IiOnsiaWQiOiJzZXNfZTIwNDk5MDE5ZmZlM2JXTnRKNUdGYXVkZnkiLCJ0aW1lIjoxNzk0NzU0NjM3ODA3LCJkaXJlY3Rpb24iOiJwcmV2aW91cyJ9fQ",
+    "next": "eyJhbmNob3IiOnsiaWQiOiJzZXNfZTIwNGE3ZGY1ZmZlcE9pR0FwWTN1QXFWaFEiLCJ0aW1lIjoxNzk0NzU0NTc3MDIzLCJkaXJlY3Rpb24iOiJuZXh0In19"
+  }
+}

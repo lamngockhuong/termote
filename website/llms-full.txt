@@ -1515,7 +1515,7 @@ A pane running OpenCode 2.0 or later gets the Chat view with its conversation: y
 
 From the view you send messages (with pasted images), as Tasks and Review do too. A message sent while OpenCode works waits in its queue for the turn to end, as with Claude Code. While a turn runs, the working row shows how long it has run, and when the provider refuses a request (a rate limit) the attempt OpenCode retries and the provider’s error.
 
-An image you pasted opens again from its chip, here and in an old session you read from History. A subagent OpenCode starts runs in a session of its own: the strip above the composer and the [overview](/usage/overview/) list them as for Claude Code, with the ones a subagent starts in turn under it.
+An image you pasted opens again from its chip, here and in an old session you read from History. A subagent OpenCode starts runs in a session of its own: the strip above the composer and the [overview](/usage/overview/) list them as for Claude Code, with the ones a subagent starts in turn under it. A session’s tokens and cost show on its card, in History and in the daily totals, with the cost OpenCode recorded at your provider’s prices (see [Tokens and cost](/usage/overview/#tokens-and-cost)).
 
 A permission request shows as a card with **Yes, once**, **Yes, always** (with the patterns it saves) and **No**. A question, or a form a tool asks you to fill in, shows its fields (text, a number, a checkbox, options to pick one or several, other text where the question takes it) with **Send**; what is missing or out of range is marked before anything is sent. **Cancel** refuses a permission or dismisses a form. A form that asks you to open a link is answered in the terminal. The card is worded in the app’s language.
 
@@ -3057,11 +3057,13 @@ The header also shows a small chip for the pane you have open, such as `ctx 72% 
 
 [Section titled “Tokens and cost”](#tokens-and-cost)
 
-Each card of a Claude Code or Codex session shows how many tokens the session has used so far and what they would cost at API list prices, such as `1.2M tokens · ~$3.40`, with its subagents’ share on a line of its own. Above the cards, a strip adds up every session of the server’s user, today and over the last 7 days, one line per agent; the days are your device’s own. The same strip at the top of [Session history](/usage/agent-chat/#resuming-an-old-session) covers the sessions of the pane’s folder, and an old session shows its own total under its title.
+Each card of a Claude Code, Codex or OpenCode session shows how many tokens the session has used so far and what they would cost at API list prices, such as `1.2M tokens · ~$3.40`, with its subagents’ share on a line of its own. Above the cards, a strip adds up every session of the server’s user, today and over the last 7 days, one line per agent; the days are your device’s own. The same strip at the top of [Session history](/usage/agent-chat/#resuming-an-old-session) covers the sessions of the pane’s folder, and an old session shows its own total under its title.
 
 The numbers come from the agents’ own files (Claude Code transcripts, Codex rollouts), never from the terminal. Each request counts once, subagents included. The cost is an estimate from the list prices built into Termote, dated in the tooltip: a subscription (Claude Pro or Max, a ChatGPT plan) is not billed by the token, and fast, batch or regional pricing is not counted. A model Termote has no price for shows its tokens only (`no price`), and a total that leaves some out is marked `+`. Turn the cost off in **Settings > Sessions > Estimated cost**; the tokens stay.
 
-Limits: the strip counts the files written in the last 8 days, at most 5000 per agent, and says so when it left some out. A session forked from another (`--fork-session`) counts the messages it copied in its own total.
+OpenCode’s numbers come from its background service, and its cost is the one OpenCode recorded at the prices of the provider you use (your own providers included), not Termote’s list prices, so the two are worked out differently. A model OpenCode records no cost for (a local or free one) shows its tokens only. A session’s total is OpenCode’s own, the request that names the session included; the strip adds up the answers by when they came, so it leaves that request out. A forked OpenCode session starts from 0. When the service is not running, OpenCode adds nothing and the other agents still show.
+
+Limits: the strip counts the files written in the last 8 days, at most 5000 per agent (for OpenCode, the sessions updated in that time, at most 5000), and says so when it left some out. A session forked from another (`--fork-session`) counts the messages it copied in its own total.
 
 ## Needs you
 
@@ -3834,7 +3836,7 @@ The compact [sidebar layout](#sidebar-layout-desktop-only) lists no sessions to 
 
 [Section titled “Estimated Cost”](#estimated-cost)
 
-Shows what an agent’s tokens would cost at API list prices beside the token counts: on the [overview](/usage/overview/#tokens-and-cost)’s cards and strip, and in the session history. A subscription is not billed by the token, so the cost is only an estimate. Off, every place shows the tokens alone.
+Shows what an agent’s tokens would cost at API list prices beside the token counts: on the [overview](/usage/overview/#tokens-and-cost)’s cards and strip, and in the session history. A subscription is not billed by the token, so the cost is only an estimate. For OpenCode it is the cost OpenCode recorded at your provider’s prices. Off, every place shows the tokens alone.
 
 | Option | Behavior                  | Default |
 | ------ | ------------------------- | ------- |

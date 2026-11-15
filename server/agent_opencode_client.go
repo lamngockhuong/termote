@@ -555,6 +555,15 @@ type opencodeChild struct {
 		Updated float64 `json:"updated"`
 		Idle    float64 `json:"idle"`
 	} `json:"time"`
+	// The usage reads its own requests' tokens and cost.
+	Tokens opencodeTokens `json:"tokens"`
+	Cost   float64        `json:"cost"`
+}
+
+// opencodeModelRef names a model as OpenCode does: its provider and its id.
+type opencodeModelRef struct {
+	ID         string `json:"id"`
+	ProviderID string `json:"providerID"`
 }
 
 // children lists the sessions whose parent is session id (the subagents it
@@ -580,18 +589,27 @@ func (c *opencodeClient) children(ctx context.Context, id string, limit int) (ki
 	return kids, more, nil
 }
 
-// directory is the directory session id runs in, as the service records it.
-func (c *opencodeClient) directory(ctx context.Context, id string) (string, error) {
+// session reads session id (session.get).
+func (c *opencodeClient) session(ctx context.Context, id string) (opencodeSessionInfo, error) {
 	if !isOpencodeSessionID(id) {
-		return "", errOpencodeNotFound
+		return opencodeSessionInfo{}, errOpencodeNotFound
 	}
 	var res struct {
 		Data opencodeSessionInfo `json:"data"`
 	}
 	if err := c.get(ctx, "/api/session/"+id, nil, opencodeSmallMax, &res); err != nil {
-		return "", err
+		return opencodeSessionInfo{}, err
 	}
-	return res.Data.Location.Directory, nil
+	if res.Data.ID != id {
+		return opencodeSessionInfo{}, errOpencodeNotFound
+	}
+	return res.Data, nil
+}
+
+// directory is the directory session id runs in, as the service records it.
+func (c *opencodeClient) directory(ctx context.Context, id string) (string, error) {
+	s, err := c.session(ctx, id)
+	return s.Location.Directory, err
 }
 
 // opencodeModelsMax bounds the list of models: every model of every

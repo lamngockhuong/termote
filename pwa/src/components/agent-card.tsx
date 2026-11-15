@@ -1,6 +1,6 @@
 import { ChevronDown, GitBranch, Hourglass, SquareTerminal } from 'lucide-react'
 import { memo, type Ref, useId, useState } from 'react'
-import { agentLabel, subagentAgent } from '../chat-agents'
+import { agentLabel, reportedCostAgent, subagentAgent } from '../chat-agents'
 import type {
   ActivityEvent,
   OverviewPane,
@@ -278,6 +278,7 @@ export const AgentCard = memo(function AgentCard({
           {!!overview?.sessionUsage?.tokens && (
             <SessionUsageLine
               {...overview.sessionUsage}
+              reported={reportedCostAgent(pane.agentName)}
               className="text-[12px] text-fg-muted"
             />
           )}

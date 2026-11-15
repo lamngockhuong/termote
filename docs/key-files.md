@@ -311,6 +311,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/agent_session_files.go`                   | A session's files: transcript, subagents, Codex children       |
 | `server/agent_usage.go`                           | Token records of Claude and Codex journals, totals             |
 | `server/agent_usage_routes.go`                    | `agent/usage`, `agent/usage/summary`, `/usage` routes          |
+| `server/agent_usage_opencode.go`                  | OpenCode tokens and recorded cost, from its service            |
 | `server/agent_touched.go`                         | Files a session changed, from its Edit/Write/FileChange calls  |
 | `server/agent_touched_route.go`                   | `agent/touched`: those files under the pane root, role view    |
 | `server/agent_pricing.go`                         | API list prices of Claude and OpenAI models, per request       |

@@ -1,0 +1,42 @@
+{
+  "data": [
+    {
+      "id": "msg_1dfb66fe7001SbJmt0SnBlIv89_5",
+      "time": {
+        "created": 1794754595336,
+        "firstToken": 1794754595346,
+        "streamed": 1794754595357,
+        "completed": 1794754595360
+      },
+      "type": "assistant",
+      "agent": "build",
+      "model": {
+        "id": "m2",
+        "providerID": "fake",
+        "variant": "default"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Hello from the fake model. **bold** text."
+        }
+      ],
+      "finish": "stop",
+      "rawFinish": "stop",
+      "cost": 0.00405,
+      "tokens": {
+        "input": 1200,
+        "output": 30,
+        "reasoning": 0,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      }
+    }
+  ],
+  "cursor": {
+    "previous": "eyJpZCI6Im1zZ18xZGZiNjZmZTcwMDFTYkptdDBTbkJsSXY4OV81Iiwib3JkZXIiOiJkZXNjIiwiZGlyZWN0aW9uIjoicHJldmlvdXMifQ",
+    "next": "eyJpZCI6Im1zZ18xZGZiNjZmZTcwMDFTYkptdDBTbkJsSXY4OV81Iiwib3JkZXIiOiJkZXNjIiwiZGlyZWN0aW9uIjoibmV4dCJ9"
+  }
+}

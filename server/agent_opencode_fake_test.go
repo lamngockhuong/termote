@@ -111,6 +111,7 @@ func resetOpencodeCaches() {
 	opencodeActive.forgetPrefix("")
 	opencodeBlocked.forgetPrefix("")
 	opencodeReads.forgetPrefix("")
+	opencodeUsageRecs.forgetPrefix("")
 }
 
 func (f *fakeOpencode) writeServiceFile(state string, v any) {
@@ -258,6 +259,18 @@ func (f *fakeOpencode) serve(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			notFound()
 			return
+		}
+		// type keeps the messages of one kind, as OpenCode 2.3.0 does.
+		if kind := r.URL.Query().Get("type"); kind != "" {
+			var kept []json.RawMessage
+			for _, m := range msgs {
+				var head struct{ Type string }
+				json.Unmarshal(m, &head)
+				if head.Type == kind {
+					kept = append(kept, m)
+				}
+			}
+			msgs = kept
 		}
 		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 		if f.big > 0 && limit >= f.big {
