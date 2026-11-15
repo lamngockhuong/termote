@@ -52,6 +52,7 @@ const mockApply = vi.fn()
 const mockRestore = vi.fn()
 const mockHash = vi.fn()
 const mockLastCommit = vi.fn()
+const mockTouched = vi.fn()
 // The desktop editor: shows where it opens and whether lines wrap
 vi.mock('./code-editor', () => ({
   default: (p: {
@@ -77,6 +78,7 @@ vi.mock('../hooks/use-mux-api', async (orig) => ({
   restoreFile: (...a: unknown[]) => mockRestore(...a),
   fetchFileHash: (...a: unknown[]) => mockHash(...a),
   fetchLastCommit: (...a: unknown[]) => mockLastCommit(...a),
+  fetchTouchedFiles: (...a: unknown[]) => mockTouched(...a),
 }))
 
 const c = (
@@ -1824,5 +1826,122 @@ describe('ChangesView row menu', () => {
     expect(row('Staged', 'both.ts')).not.toHaveAttribute('data-menu-open')
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
     expect(row('Changes', 'both.ts')).not.toHaveAttribute('data-menu-open')
+  })
+})
+
+describe('ChangesView: files the session changed', () => {
+  const agentSession = (agentName?: string) => ({
+    id: '1',
+    name: 'Agent',
+    icon: '',
+    description: '',
+    paneId: '%1',
+    panes: [{ id: '%1', label: 'a', hasAgent: !!agentName, agentName }],
+  })
+  const mode = () =>
+    screen.queryByRole('radiogroup', { name: 'Changes to show' })
+
+  beforeEach(() => {
+    mockTree.mockResolvedValue({ root: '/r', isRepo: true, entries: [] })
+    mockTouched.mockReset()
+    mockTouched.mockResolvedValue({
+      files: [
+        { path: 'src/both.ts', ops: ['edit'], count: 2, sensitive: false },
+        { path: 'done.ts', ops: ['write'], count: 1, sensitive: false },
+      ],
+      skipped: 0,
+      truncated: false,
+    })
+  })
+
+  it('is offered only for a pane running Claude Code or Codex', async () => {
+    const plain = await show()
+    expect(mode()).toBeNull()
+    plain.unmount()
+    const other = await show({ session: agentSession('aider') })
+    expect(mode()).toBeNull()
+    other.unmount()
+    // The tab's own agent when its panes are not listed
+    await show({
+      session: {
+        id: '1',
+        name: 'x',
+        icon: '',
+        description: '',
+        paneId: '%1',
+        agentName: 'codex',
+      },
+    })
+    expect(mode()).toBeTruthy()
+  })
+
+  it('lists them with their status, opening a diff or the file', async () => {
+    const p = await show({ session: agentSession('claude') })
+    expect(mockTouched).not.toHaveBeenCalled()
+    fireEvent.click(
+      screen.getByRole('radio', { name: 'Changed by this session' }),
+    )
+    await settle()
+    expect(mockTouched).toHaveBeenCalledWith('%1', undefined)
+    expect(screen.queryByRole('region', { name: 'Staged' })).toBeNull()
+    const both = screen.getByRole('button', { name: /both\.ts/ })
+    expect(both).toHaveTextContent('×2')
+    fireEvent.click(both)
+    await settle()
+    // The worktree side's diff opens, the list leaves; the choice stays
+    expect(mockDiff).toHaveBeenCalled()
+    expect(mockDiff).toHaveBeenLastCalledWith(
+      '%1',
+      { path: 'src/both.ts', orig: undefined },
+      { staged: false, root: '/r', reveal: false },
+    )
+    expect(mode()).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Back to changes' }))
+    p.unmount()
+    // Shown again: the choice is kept for the pane
+    await show({ session: agentSession('claude') })
+    await settle()
+    expect(
+      screen.getByRole('radio', { name: 'Changed by this session' }),
+    ).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('button', { name: /done\.ts/ })).toHaveTextContent(
+      'no longer changed',
+    )
+  })
+
+  it('opens a file without a change in Files', async () => {
+    const p = await show({ session: agentSession('codex') })
+    fireEvent.click(
+      screen.getByRole('radio', { name: 'Changed by this session' }),
+    )
+    await settle()
+    fireEvent.click(screen.getByRole('button', { name: /done\.ts/ }))
+    expect(p.showView).toHaveBeenCalledWith(FILES_VIEW_ID)
+    // Back to every change
+    fireEvent.click(screen.getByRole('radio', { name: 'All changes' }))
+    expect(screen.getByRole('region', { name: 'Staged' })).toBeTruthy()
+  })
+
+  it('opens no file before git status is read: the root is not known', async () => {
+    mockChanges.mockReturnValue(new Promise(() => {}))
+    const p = await show({ session: agentSession('claude') })
+    fireEvent.click(
+      screen.getByRole('radio', { name: 'Changed by this session' }),
+    )
+    await settle()
+    fireEvent.click(screen.getByRole('button', { name: /done\.ts/ }))
+    expect(p.showView).not.toHaveBeenCalled()
+  })
+
+  it('outside a repository shows no status', async () => {
+    mockChanges.mockResolvedValue(changes({ isRepo: false, entries: [] }))
+    await show({ session: agentSession('claude') })
+    fireEvent.click(
+      screen.getByRole('radio', { name: 'Changed by this session' }),
+    )
+    await settle()
+    expect(
+      screen.getByRole('button', { name: /done\.ts/ }),
+    ).not.toHaveTextContent('no longer changed')
   })
 })

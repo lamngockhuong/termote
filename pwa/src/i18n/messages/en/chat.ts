@@ -358,6 +358,7 @@ export default {
   'chat.history.running': 'Running',
   'chat.history.untitled': 'Untitled session',
   'chat.history.back': 'Back to the list',
+  'chat.history.touched': 'Files changed',
   'chat.history.gone': 'This session is no longer there.',
   'chat.history.resumeTab': 'Resume in a new tab',
   'chat.history.resumeHere': 'Resume here',

@@ -68,6 +68,20 @@ beforeEach(() => {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.includes('/agent/touched'))
+        return json(200, {
+          files: [{ path: 'src/a.ts', sensitive: false }],
+          skipped: 0,
+          truncated: false,
+        })
+      if (url.includes('/files/changes'))
+        return json(200, {
+          root: '/r',
+          isRepo: true,
+          branch: 'main',
+          entries: [],
+          truncated: false,
+        })
       if (url.includes('/agent/usage')) {
         const key = url.includes('/usage/summary') ? 'summary' : 'session'
         return (usages[key] ?? (() => json(500, {})))()
@@ -359,5 +373,21 @@ describe('AgentHistorySheet', () => {
     lists.push(listOf([session('a')]))
     setup({ open: session('a') })
     expect(screen.queryByRole('button', { name: 'open file' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Files changed' })).toBeNull()
+  })
+
+  it('lists the files an old session changed, opened through the pane', async () => {
+    lists.push(listOf([session('a', { agent: 'codex' })]))
+    const openTouched = vi.fn()
+    setup({ open: session('a', { agent: 'codex' }) }, { openTouched })
+    fireEvent.click(screen.getByRole('button', { name: 'Files changed' }))
+    const row = await screen.findByRole('button', { name: /a\.ts/ })
+    await waitFor(() => expect(row).toHaveTextContent('no longer changed'))
+    fireEvent.click(row)
+    expect(openTouched).toHaveBeenCalledWith(
+      'p1',
+      { kind: 'file', path: 'src/a.ts' },
+      '/r',
+    )
   })
 })

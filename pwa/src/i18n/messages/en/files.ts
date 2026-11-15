@@ -791,6 +791,30 @@ export default {
   'files.changes.filter': 'Filter changes',
   'files.changes.filterPlaceholder': 'Filter changes…',
   'files.changes.noMatch': 'No changes match',
+  // What a session changed (components/touched-files-list.tsx), a mode
+  // of the Changes list
+  'files.changes.mode': 'Changes to show',
+  'files.changes.mode.all': 'All changes',
+  'files.changes.mode.session': 'Changed by this session',
+  'files.touched.list': 'Files this session changed',
+  'files.touched.shellNote':
+    'Files changed by shell commands (sed, mv, scripts) are not listed.',
+  'files.touched.skipped_one': '{count} file outside this folder is not shown.',
+  'files.touched.skipped_other':
+    '{count} files outside this folder are not shown.',
+  'files.touched.truncated': 'Only the 2000 latest files are shown.',
+  'files.touched.empty': 'This session has not changed any file yet.',
+  'files.touched.clean': 'no longer changed',
+  'files.touched.gone': 'deleted',
+  'files.touched.sub': 'subagent',
+  'files.touched.running': 'editing',
+  'files.touched.count': '×{count}',
+  'files.touched.countTitle_one': 'Changed {count} time',
+  'files.touched.countTitle_other': 'Changed {count} times',
+  'files.touched.none': 'This pane runs no Claude Code or Codex session.',
+  'files.touched.failed': "The files this session changed can't be read.",
+  'files.touched.viewOnly':
+    'A view-only device sees them only in a git repository.',
   // Why the server would not stage, unstage or discard a change
   // (components/discard-change-dialog.tsx)
   'files.apply.staleHunk':

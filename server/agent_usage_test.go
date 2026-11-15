@@ -96,6 +96,38 @@ func TestCodexUsageSubagentRollout(t *testing.T) {
 	}
 }
 
+func TestCodexUsageUserFork(t *testing.T) {
+	// A rollout Codex 0.169 wrote for `codex exec fork`: nothing of the
+	// parent is copied, but token_count's total goes on from the parent's.
+	b, err := os.ReadFile("testdata/usage/codex-user-fork-rollout.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	recs := readUsage(t, "codex", string(b))
+	if len(recs) != 2 || recs[0].key != "743a908f" || recs[1].key != "99035dc2" {
+		t.Fatalf("records = %+v", recs)
+	}
+	var in int64
+	for _, r := range recs {
+		in += r.input + r.cacheRead + r.cacheWrite5m
+	}
+	if in != 22166+22266 {
+		t.Errorf("input = %d, want the fork's own two responses", in)
+	}
+	// The same fork from before token_usage_record: its first total holds
+	// the parent's, so it is only the base.
+	var legacy []string
+	for _, l := range strings.Split(strings.TrimSpace(string(b)), "\n") {
+		if !strings.Contains(l, `"token_usage_record"`) {
+			legacy = append(legacy, l)
+		}
+	}
+	recs = readUsage(t, "codex", strings.Join(legacy, "\n")+"\n")
+	if len(recs) != 1 || recs[0].input+recs[0].cacheRead != 88581-66315 {
+		t.Errorf("legacy fork = %+v", recs)
+	}
+}
+
 func TestCodexUsageLegacyRollout(t *testing.T) {
 	b, err := os.ReadFile("testdata/usage/codex-legacy-rollout.jsonl")
 	if err != nil {

@@ -50,6 +50,7 @@ import {
   fetchTasks,
   fetchTemplates,
   fetchTerminalToken,
+  fetchTouchedFiles,
   fetchTranscript,
   fetchTrash,
   fetchUserTasks,
@@ -771,6 +772,38 @@ describe('fetchSubagents', () => {
     const err = await fetchSubagents('p').catch((e) => e)
     expect(err).toBeInstanceOf(RequestError)
     expect(err.status).toBe(404)
+  })
+})
+
+describe('fetchTouchedFiles', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it("reads the files of the pane's session, or of one of its history", async () => {
+    const body = {
+      files: [{ path: 'a.ts', sensitive: false }],
+      skipped: 1,
+      truncated: false,
+    }
+    const { calls } = mockFetch({ body })
+    expect(await fetchTouchedFiles('%3')).toEqual(body)
+    expect(calls[0].url).toBe('/api/mux/panes/%253/agent/touched')
+    await fetchTouchedFiles('p', { agent: 'codex', id: 's1' })
+    expect(calls[1].url).toBe(
+      '/api/mux/panes/p/agent/touched?agent=codex&session=s1',
+    )
+  })
+
+  it('throws what the server refused, without the view-only notice', async () => {
+    mockFetch({
+      body: { code: 'view_only', error: 'view-only device' },
+      status: 403,
+    })
+    const err = await fetchTouchedFiles('p').catch((e) => e)
+    expect(err).toBeInstanceOf(RequestError)
+    expect(err.code).toBe('view_only')
   })
 })
 

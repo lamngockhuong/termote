@@ -125,11 +125,15 @@ vi.mock('./components/agent-history-sheet', () => ({
     ) : null
   },
 }))
-const mockOpenChangeFromLink = vi.fn(async (..._a: unknown[]) => true)
+const mockOpenChangeFromLink = vi.fn(
+  async (..._a: unknown[]): Promise<boolean | null> => true,
+)
+const mockOpenInFiles = vi.fn()
 vi.mock('./hooks/use-files', async (orig) => ({
   ...(await orig<typeof import('./hooks/use-files')>()),
   followInFiles: (...a: unknown[]) => mockFollowInFiles(...a),
   followPathInFiles: (...a: unknown[]) => mockFollowPathInFiles(...a),
+  openInFiles: (...a: unknown[]) => mockOpenInFiles(...a),
 }))
 vi.mock('./hooks/use-git-changes', async (orig) => ({
   ...(await orig<typeof import('./hooks/use-git-changes')>()),
@@ -7842,5 +7846,23 @@ describe('session history', () => {
     await act(() => open('p0', 'a.ts', 3))
     expect(mockFollowPathInFiles).toHaveBeenLastCalledWith('p0', 'a.ts', 3)
     expect(screen.queryByTestId('history-sheet')).toBeNull()
+  })
+
+  it('opens a file an old session changed: its diff, or the file', async () => {
+    setup()
+    render(<App />)
+    await openFromPalette()
+    const p = historySheet.props as NonNullable<typeof historySheet.props>
+    const open = p.openTouched as NonNullable<typeof p.openTouched>
+    act(() => open('p0', { kind: 'file', path: 'src/a.ts' }, '/r'))
+    expect(mockOpenInFiles).toHaveBeenCalledWith('p0', '/r', 'src/a.ts')
+    expect(screen.queryByTestId('history-sheet')).toBeNull()
+    const side = { path: 'src/b.ts', staged: false }
+    await act(async () => open('p0', { kind: 'diff', side }, '/r'))
+    expect(mockOpenChangeFromLink).toHaveBeenLastCalledWith('p0', side)
+    // git no longer lists it by the time Changes reads the list
+    mockOpenChangeFromLink.mockResolvedValueOnce(false)
+    await act(async () => open('p0', { kind: 'diff', side }, '/r'))
+    expect(await screen.findByText('No changes for this file')).toBeTruthy()
   })
 })

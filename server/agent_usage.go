@@ -190,6 +190,9 @@ type codexUsageState struct {
 	thread string
 	start  int64
 	model  string
+	// forked: a fork (a user's or a subagent's), whose token_count total
+	// goes on from its parent's
+	forked bool
 	// records: token_usage_record rows; legacy: token_count differences
 	// from before the first of them.
 	records, legacy usageRecords
@@ -217,6 +220,7 @@ type codexUsageRow struct {
 		ID           string `json:"id"`
 		ThreadSource string `json:"thread_source"`
 		StartOrdinal int64  `json:"subagent_history_start_ordinal"`
+		ForkedFrom   string `json:"forked_from_id"`
 		// turn_context
 		Model string `json:"model"`
 		// token_usage_record
@@ -245,6 +249,7 @@ func stepCodexUsage(st *codexUsageState, line []byte) {
 	case row.Type == "session_meta":
 		if st.thread == "" && isSessionID(p.ID) {
 			st.thread = p.ID
+			st.forked = p.ForkedFrom != ""
 			if p.ThreadSource == "subagent" {
 				st.start = p.StartOrdinal
 			}
@@ -273,8 +278,10 @@ func stepCodexUsage(st *codexUsageState, line []byte) {
 		st.total = &cur
 		if prev == nil || st.sawRecord || copied {
 			// The first total is a baseline only when it is not the
-			// thread's first: a rollout read from its start counts it.
-			if prev == nil && !st.sawRecord && !copied {
+			// thread's first: a rollout read from its start counts it,
+			// unless it is a fork's (Codex 0.169 goes on from the
+			// parent's total there).
+			if prev == nil && !st.sawRecord && !copied && !st.forked {
 				st.legacy.put(codexRecord(at, st.model, cur, "count:"+st.thread+row.Timestamp))
 			}
 			return
@@ -285,7 +292,10 @@ func stepCodexUsage(st *codexUsageState, line []byte) {
 			ReasoningOutput: cur.ReasoningOutput - prev.ReasoningOutput,
 		}
 		if d.InputTokens < 0 || d.CachedInputTokens < 0 || d.CacheWriteInput < 0 || d.OutputTokens < 0 || d.ReasoningOutput < 0 {
-			return // counted again from zero: this total is the new base
+			// Smaller than the last: taken as a new base, never counted, so
+			// nothing is counted twice. Not seen in real rollouts, where a
+			// thread resumed days later goes on from its total.
+			return
 		}
 		if d.InputTokens+d.OutputTokens == 0 {
 			return // the same total again (a rate limit update)

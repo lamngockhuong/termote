@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -198,6 +199,12 @@ func TestMachineUsageRoute(t *testing.T) {
 	writeCodexFile(t, fx.codex, codexParent, codexMetaLine(codexParent, other, nil)+"\n"+codexRecordLine(codexParent, "r1", now, 300, 30)+"\n", now)
 	// A rollout in a day dir from before the summary starts.
 	writeCodexFile(t, fx.codex, codexOther, codexMetaLine(codexOther, other, nil)+"\n"+codexRecordLine(codexOther, "r9", now, 1, 1)+"\n", now.Add(-12*24*time.Hour))
+	// A rollout started 20 days ago and resumed today: its mtime counts,
+	// not its day dir.
+	resumed := writeCodexFile(t, fx.codex, codexChild, codexMetaLine(codexChild, other, nil)+"\n"+codexRecordLine(codexChild, "r5", now, 2000, 0)+"\n", now.Add(-20*24*time.Hour))
+	if err := os.Chtimes(resumed, now, now); err != nil {
+		t.Fatal(err)
+	}
 	h := historyServer(t, fx, newHistoryMux(t, fx.root))
 
 	var res usageBuckets
@@ -208,7 +215,7 @@ func TestMachineUsageRoute(t *testing.T) {
 	if tok, cost := bucketTotal(res, "claude"); tok != 1_000_010 || cost < 4 || cost > 4.0001 {
 		t.Errorf("claude = %d $%v", tok, cost)
 	}
-	if tok, _ := bucketTotal(res, "codex"); tok != 330 {
+	if tok, _ := bucketTotal(res, "codex"); tok != 2330 {
 		t.Errorf("codex = %d", tok)
 	}
 	if body := serve(h, apiRequest("GET", "/api/mux/usage", "")).Body.String(); strings.Contains(body, other) || strings.Contains(body, fx.claude) {
@@ -225,6 +232,17 @@ func TestMachineUsageRoute(t *testing.T) {
 	d := usageDedup{t: newUsageTotals(), seen: map[string]bool{}, since: a.usage.usageSince()}
 	if !a.machineClaudeUsage(fx.claude, &d) {
 		t.Error("not truncated")
+	}
+	// Past usageCodexDayDirs day dirs: the newest only, the resumed
+	// rollout's day left out.
+	oldDays := usageCodexDayDirs
+	usageCodexDayDirs = 1
+	t.Cleanup(func() { usageCodexDayDirs = oldDays })
+	usageMaxFiles = old
+	days := usageDedup{t: newUsageTotals(), seen: map[string]bool{}, since: a.usage.usageSince()}
+	a.machineCodexUsage(fx.codex, &days)
+	if b := bucketsOf(days.t, days.since, false); len(b.Buckets) != 1 || b.Buckets[0].Tokens != 330 {
+		t.Errorf("one day dir = %+v", b.Buckets)
 	}
 	// Dirs that are not there.
 	for _, dir := range []string{"", "rel", filepath.Join(fx.root, "none")} {
@@ -286,6 +304,17 @@ func TestOverviewSessionUsage(t *testing.T) {
 	})
 	if u := p.SessionUsage; u.Tokens != 1_000_000 || u.CostUSD == nil || *u.CostUSD != 4 || u.SubTokens != nil || u.PricesUpdated == "" {
 		t.Errorf("session usage = %+v", u)
+	}
+	// A read that failed: the last totals, marked pending.
+	agent.usageJobs.mu.Lock()
+	for k, v := range agent.usageJobs.byKey {
+		v.failed = true
+		agent.usageJobs.byKey[k] = v
+	}
+	agent.usageJobs.mu.Unlock()
+	p = getOverview(t, mux, false).Panes[0]
+	if p.SessionUsage == nil || !slices.Contains(p.Unavailable, "sessionUsage") {
+		t.Errorf("failed read: usage %+v, unavailable %v", p.SessionUsage, p.Unavailable)
 	}
 }
 

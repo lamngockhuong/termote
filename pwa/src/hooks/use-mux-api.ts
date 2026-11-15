@@ -394,7 +394,7 @@ export interface OverviewAccount {
 // One overview card's data beyond the snapshot. lastTs: when the agent last
 // wrote (server time). usage: how full its context is. accountKey: the
 // Codex account it uses. unavailable: what could not be read this time
-// ('transcript', 'changes'), shown as pending.
+// ('transcript', 'changes', 'sessionUsage'), shown as pending.
 export interface OverviewPane {
   paneId: string
   key: string
@@ -1288,6 +1288,48 @@ export async function fetchSessionUsage(
   const qs = new URLSearchParams({ agent: session.agent, session: session.id })
   const res = await fetch(`${agentPath(paneId, 'usage')}?${qs}`, {
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res, true)
+  return res.json()
+}
+
+// A file a session changed through its tool calls, relative to the pane's
+// root. For a view-only device only path and sensitive: when, how often and
+// by whom are not sent. ops: what was done (a set); running: a call is
+// waiting for its result; sub: only subagents changed it; deleted: its
+// latest change deleted it (or moved it away).
+export type TouchedOp = 'edit' | 'write' | 'delete' | 'move'
+export interface TouchedFile {
+  path: string
+  ops?: TouchedOp[]
+  count?: number
+  lastAt?: string
+  sub?: boolean
+  running?: boolean
+  deleted?: boolean
+  sensitive: boolean
+}
+
+// skipped: files outside the folder or never shown, only counted;
+// truncated: only the latest 2000 were read.
+export interface TouchedFiles {
+  files: TouchedFile[]
+  skipped: number
+  truncated: boolean
+}
+
+// The files the pane's running session changed, or with session one of its
+// history's.
+export async function fetchTouchedFiles(
+  paneId: string,
+  session?: { agent: HistoryAgent; id: string },
+  signal?: AbortSignal,
+): Promise<TouchedFiles> {
+  const qs = session
+    ? `?${new URLSearchParams({ agent: session.agent, session: session.id })}`
+    : ''
+  const res = await fetch(`${agentPath(paneId, 'touched')}${qs}`, {
+    signal: signal ?? AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   })
   if (!res.ok) throw await requestError(res, true)
   return res.json()

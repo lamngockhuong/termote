@@ -28,6 +28,10 @@
 #               queue-operation notification, the other keeps running,
 #               "slow" works for a few seconds under the recorded working
 #               line before it answers (keys wait until then),
+#               "touch files" changes two files in its directory as tool
+#               calls: an Edit of touched-edit.txt (a line added) and a Write
+#               of touched-new.txt, each with its result, plus an Edit of
+#               touched-failed.txt whose result is an error (nothing changed),
 #               "usage" answers with a message of two blocks (two rows of
 #               one message.id, as Claude Code writes them) carrying a fixed
 #               model and usage: 1000 input, 200000 cache read, 5000 cache
@@ -120,6 +124,30 @@ say_usage() {
     printf '{"type":"assistant","uuid":"%s-%04d","timestamp":"%s","cwd":%s,"message":{"id":"%s","model":"claude-sonnet-5-5","role":"assistant","content":[{"type":"text","text":%s}],"usage":%s}}\n' \
       "${sid:0:31}" "$seq_n" "$now" "$(json_str "$PWD")" "$id" "$(json_str "$block")" "$usage" >>"$journal"
   done
+}
+
+# A tool call on a file of the directory and its result; err makes the
+# result an error.
+tool_call() { # id, tool, file, err
+  local path
+  path=$(json_str "$PWD/$3")
+  entry assistant "[{\"type\":\"tool_use\",\"id\":\"$1\",\"name\":\"$2\",\"input\":{\"file_path\":$path}}]"
+  if [ -n "${4:-}" ]; then
+    entry user "[{\"type\":\"tool_result\",\"tool_use_id\":\"$1\",\"content\":\"String to replace not found\",\"is_error\":true}]"
+  else
+    entry user "[{\"type\":\"tool_result\",\"tool_use_id\":\"$1\",\"content\":\"ok\"}]"
+  fi
+}
+
+# What "touch files" does: the files really change, as the calls say.
+touch_files() {
+  # Unique in the transcript on any date(1): the row count goes on
+  local n="${seq_n}_$$"
+  echo "edited by the agent" >>touched-edit.txt
+  tool_call "toolu_edit_$n" Edit touched-edit.txt
+  echo "written by the agent" >touched-new.txt
+  tool_call "toolu_write_$n" Write touched-new.txt
+  tool_call "toolu_fail_$n" Edit touched-failed.txt err
 }
 
 # Two background subagents as Claude Code keeps them, beside the transcript:
@@ -293,6 +321,11 @@ submit() {
       dialog 2.1.312-working-thinking.txt
       sleep "${FAKE_CLAUDE_SLOW:-5}"
       say 'Done thinking.'
+      set_status idle
+      ;;
+    *touch\ files*)
+      touch_files
+      say 'Changed two files.'
       set_status idle
       ;;
     *usage*)

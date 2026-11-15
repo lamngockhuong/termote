@@ -1532,7 +1532,8 @@ minute and 1 hour cache writes are priced apart. Codex 0.165 writes a `token_usa
 response (`response_id`, `thread_id`): a subagent's rollout repeats its parent's rows, so only the
 rollout's own thread counts; an older rollout only has `token_count` events, whose
 `total_token_usage` adds up the thread, and the difference between two is what the responses
-between cost. `input_tokens` counts the cached input in, so it is taken out.
+between cost. A fork's total goes on from its parent's (seen with Codex 0.169, which copies
+none of the parent's rows into the fork's rollout), so a fork's first total is only a base. `input_tokens` counts the cached input in, so it is taken out.
 
 `journalScanner` (`server/agent_journal_scan.go`) reads each file once: by resolved path, the next
 read starts where the last ended while the file is the same (`os.SameFile`) and not shorter, only
@@ -1550,6 +1551,27 @@ the API list prices built into `server/agent_pricing.go` (exact id, else the lon
 followed by a date or a word; a long request may pay a long context price); a model without a
 price only counts tokens. The overview's `sessionUsage` is read in the background, one session
 at a time, as the changes are.
+
+### Files a session changed (`/api/mux/panes/{id}/agent/touched`)
+
+`server/agent_touched.go` reads, with its own `journalScanner` per agent, the paths of the tool calls
+that changed a file: Claude Code's `Edit`, `MultiEdit`, `Write` and `NotebookEdit` whose result is
+not an error (a call still waiting for its result counts as running), Codex's completed
+`FileChange` items and a legacy rollout's successful `patch_apply_end` events. A relative path is
+made absolute against the cwd the journal records. The session's own rows and its subagents'
+files (`sessionFiles`) are added up, a file changed only by subagents marked so; a sidechain row
+of the main transcript and the history a subagent's rollout copies from its parent are skipped.
+A file changed by a shell command is never seen.
+
+`server/agent_touched_route.go` compares each path with the pane root as a string first (without
+case on Windows and macOS), so a path outside it is never looked up on disk, then resolves the ones
+inside and drops, only counting them, those that lead outside or that Files never serves (a deny
+dir, the git dir); the 2000 latest of the root are kept. The reply holds only paths relative to the root: the PWA joins them with
+the git status Changes already read and opens a diff or a file through the Files routes, so no
+content goes through this route. A view-only device gets only the root's tracked files it may read,
+by name. In the PWA, Changes offers "Changed by this session" for a pane running Claude Code or
+Codex (polled every 5 s while shown), and an old session of the history lists its files under
+"Files changed".
 
 ### Agent subagents (`/api/mux/panes/{id}/agent/subagents`)
 

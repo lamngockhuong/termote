@@ -1,4 +1,5 @@
 import { Lock } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
 import { splitPath } from '../utils/files-format'
@@ -26,7 +27,8 @@ export const TONE: Record<string, string> = {
 
 // One changed file of a list (Changes, or a commit's files): its status
 // letter, name, directory (a rename's source first) and a lock on a name
-// that may hold secrets. className adds to the button's own.
+// that may hold secrets. className adds to the button's own; extra goes
+// after the name; disabled: nothing to open (dimmed).
 export function ChangeRowButton({
   code,
   path,
@@ -34,6 +36,8 @@ export function ChangeRowButton({
   sensitive,
   onOpen,
   className = '',
+  extra,
+  disabled,
 }: {
   code: string
   path: string
@@ -41,6 +45,8 @@ export function ChangeRowButton({
   sensitive: boolean
   onOpen: () => void
   className?: string
+  extra?: ReactNode
+  disabled?: boolean
 }) {
   const [dir, name] = splitPath(path)
   const { t } = useT()
@@ -48,7 +54,8 @@ export function ChangeRowButton({
     <button
       type="button"
       onClick={onOpen}
-      className={`flex min-h-9 min-w-0 items-center gap-2 px-3 text-left text-[13px] pointer-coarse:min-h-touch ${FOCUS_RING} focus-visible:-outline-offset-2 ${className}`}
+      disabled={disabled}
+      className={`flex min-h-9 disabled:opacity-60 min-w-0 items-center gap-2 px-3 text-left text-[13px] pointer-coarse:min-h-touch ${FOCUS_RING} focus-visible:-outline-offset-2 ${className}`}
     >
       <span
         aria-hidden="true"
@@ -56,7 +63,11 @@ export function ChangeRowButton({
       >
         {code}
       </span>
-      <span className="sr-only">{STATUS[code] ? t(STATUS[code]) : code}: </span>
+      {code && (
+        <span className="sr-only">
+          {STATUS[code] ? t(STATUS[code]) : code}:{' '}
+        </span>
+      )}
       <span className="flex min-w-0 flex-1 items-baseline gap-1.5 truncate">
         <span className="shrink-0 font-medium text-fg">{name}</span>
         <span className="truncate text-[12px] text-fg-subtle">
@@ -64,6 +75,7 @@ export function ChangeRowButton({
           {dir}
         </span>
       </span>
+      {extra}
       {sensitive && (
         <span
           className="flex shrink-0 items-center text-warning"
