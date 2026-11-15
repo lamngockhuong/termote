@@ -1081,8 +1081,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   where Files refuses the root) written in the last 8 days, with their subagents' files. Machine
   summary: the server user's whole `projects/<dir>/<uuid>.jsonl` and
   `projects/<dir>/<uuid>/subagents/agent-*.jsonl` (no deeper, links skipped by the listing and refused
-  by `openHistoryFile`) and Codex day dirs from the day before the window, files written in the last
-  8 days, at most 5000 per agent (newest kept, `truncated`); a view-only client reads it. Files are
+  by `openHistoryFile`) and the 400 newest Codex day dirs (a rollout resumed long after the day it
+  started on still counts), files written in the last 8 days by their mtime, at most 5000 per agent (newest kept, `truncated`); a view-only client reads it. Files are
   read incrementally (`journalScanner`): by resolved path, the next read starts where the last one
   ended when the file is the same (`os.SameFile`) and not shorter, else from the start; only complete
   lines, a line over 2 MiB skipped undecoded, only lines naming `"usage"` (Claude) or

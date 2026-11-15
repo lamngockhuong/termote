@@ -285,7 +285,10 @@ func stepCodexUsage(st *codexUsageState, line []byte) {
 			ReasoningOutput: cur.ReasoningOutput - prev.ReasoningOutput,
 		}
 		if d.InputTokens < 0 || d.CachedInputTokens < 0 || d.CacheWriteInput < 0 || d.OutputTokens < 0 || d.ReasoningOutput < 0 {
-			return // counted again from zero: this total is the new base
+			// Smaller than the last: taken as a new base, never counted, so
+			// nothing is counted twice. Not seen in real rollouts, where a
+			// thread resumed days later goes on from its total.
+			return
 		}
 		if d.InputTokens+d.OutputTokens == 0 {
 			return // the same total again (a rate limit update)

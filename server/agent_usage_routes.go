@@ -441,9 +441,15 @@ func (a *agentAPI) claudeSubagentUsage(root, proj, id string, names []string, d 
 	}
 }
 
+// usageCodexDayDirs is how many Codex day dirs the machine summary lists,
+// the newest first; a variable so tests can lower it.
+var usageCodexDayDirs = 400
+
 // machineCodexUsage reads every rollout under codexHome's sessions written
-// since d.since, in the day dirs from the day before since on (a day dir is
-// the local day the rollout started).
+// since d.since, whatever day it started on (a day dir is the local day a
+// rollout started, and a resumed one is written to long after): the
+// usageCodexDayDirs newest day dirs are listed, each rollout kept by its
+// own mtime.
 func (a *agentAPI) machineCodexUsage(codexHome string, d *usageDedup) bool {
 	if codexHome == "" || !filepath.IsAbs(codexHome) {
 		return false
@@ -452,17 +458,16 @@ func (a *agentAPI) machineCodexUsage(codexHome string, d *usageDedup) bool {
 	if err != nil {
 		return false
 	}
-	// A rollout started before since may still be written to: its day is
-	// read too while it is within a day of it, and older ones are left.
-	first := d.since.Add(-24 * time.Hour)
-	from := []string{first.Format("2006"), first.Format("01"), first.Format("02")}
 	var cands []usageCandidate
+	days := 0
+walk:
 	for _, y := range numberedDirs(sessions) {
 		for _, m := range numberedDirs(filepath.Join(sessions, y)) {
 			for _, dd := range numberedDirs(filepath.Join(sessions, y, m)) {
-				if dayBefore([]string{y, m, dd}, from) {
-					continue
+				if days == usageCodexDayDirs {
+					break walk
 				}
+				days++
 				day := filepath.Join(sessions, y, m, dd)
 				entries, err := os.ReadDir(day)
 				if err != nil {
