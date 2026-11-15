@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"unicode"
@@ -61,8 +60,9 @@ func (c *opencodeClient) sessionDir(ctx context.Context, id string) (string, err
 	if err := c.get(ctx, "/api/session/"+id, nil, opencodeSmallMax, &res); err != nil {
 		return "", err
 	}
+	// The service's own path, only ever passed back to it.
 	dir := res.Data.Location.Directory
-	if !filepath.IsAbs(dir) {
+	if dir == "" {
 		return "", errors.New("opencode session: no directory")
 	}
 	return dir, nil
@@ -147,7 +147,7 @@ func opencodeAgentCommands(dir string, cmds []opencodeCommandInfo, skills []open
 		switch {
 		case strings.HasPrefix(s.Path, "skill://"):
 			source = "system"
-		case filepath.IsAbs(s.Path) && pathWithin(dir, s.Path):
+		case pathWithin(dir, s.Path):
 			source = "project"
 		}
 		out = append(out, agentCommand{Name: s.ID, Description: desc(s.Description), Source: source, Kind: "skill"})

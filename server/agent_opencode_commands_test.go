@@ -141,9 +141,9 @@ func TestOpencodeCommandsRouteEmpty(t *testing.T) {
 		t.Errorf("not made = %v", cmds)
 	}
 	reset()
-	oc.sessions["sesFixP1"] = json.RawMessage(`{"data":{"id":"sesFixP1","location":{"directory":"relative"}}}`)
+	oc.sessions["sesFixP1"] = json.RawMessage(`{"data":{"id":"sesFixP1","location":{}}}`)
 	if cmds := get(false); len(cmds) != 0 {
-		t.Errorf("relative dir = %v", cmds)
+		t.Errorf("no dir = %v", cmds)
 	}
 	reset()
 	oc.sessions["sesFixP1"] = json.RawMessage(`{"data":{"id":"sesFixP1","location":{"directory":"/work/proj"}}}`)
