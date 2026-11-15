@@ -402,15 +402,13 @@ function ResumeBar({
         )}
         {live ? (
           <>
-            {session.agent === 'claude' && (
-              <Button
-                size="sm"
-                disabled={pending}
-                onClick={() => onResume('tab', true)}
-              >
-                {t('chat.history.fork')}
-              </Button>
-            )}
+            <Button
+              size="sm"
+              disabled={pending}
+              onClick={() => onResume('tab', true)}
+            >
+              {t('chat.history.fork')}
+            </Button>
             <Button
               size="sm"
               variant="primary"
@@ -442,7 +440,7 @@ function ResumeBar({
           </>
         )}
       </div>
-      {live && session.agent === 'claude' && (
+      {live && (
         <p className="text-right text-[12px] text-fg-muted">
           {t('chat.history.forkHint')}
         </p>

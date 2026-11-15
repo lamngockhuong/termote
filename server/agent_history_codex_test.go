@@ -180,3 +180,46 @@ func TestNumberedDirs(t *testing.T) {
 		t.Error("missing dir")
 	}
 }
+
+func TestScanCodexForkTitles(t *testing.T) {
+	fx := newHistoryFixture(t)
+	day := time.Date(2026, 10, 2, 10, 0, 0, 0, time.Local)
+	fork := func(id, from string, at time.Time) {
+		writeCodexFile(t, fx.codex, id, codexMetaLine(id, fx.root, map[string]any{"thread_source": "user", "forked_from_id": from})+"\n", at)
+	}
+	const (
+		named  = "aaaaaaaa-0000-4000-8000-000000000091"
+		gone   = "aaaaaaaa-0000-4000-8000-000000000092"
+		fork1  = "aaaaaaaa-0000-4000-8000-000000000011"
+		fork2  = "aaaaaaaa-0000-4000-8000-000000000012"
+		fork3  = "aaaaaaaa-0000-4000-8000-000000000013"
+		fork4  = "aaaaaaaa-0000-4000-8000-000000000014"
+		itself = "aaaaaaaa-0000-4000-8000-000000000015"
+	)
+	writeHistoryRollout(t, fx.codex, histID1, fx.root, "the ask", day)
+	fork(fork1, histID1, day.Add(time.Minute))
+	// A fork of a fork, listed before its parent.
+	fork(fork2, fork1, day.Add(2*time.Minute))
+	// A parent the index names but the scan does not list.
+	writeFile(t, filepath.Join(fx.codex, "session_index.jsonl"), `{"id":"`+named+`","thread_name":"Named"}`+"\n")
+	fork(fork3, named, day.Add(3*time.Minute))
+	// A parent nowhere, and a fork naming itself: no title.
+	fork(fork4, gone, day.Add(4*time.Minute))
+	fork(itself, itself, day.Add(5*time.Minute))
+	// A fork with a prompt of its own keeps it.
+	writeCodexFile(t, fx.codex, histID2, codexMetaLine(histID2, fx.root, map[string]any{"thread_source": "user", "forked_from_id": histID1})+"\n"+codexUserLine("own ask")+"\n", day.Add(6*time.Minute))
+	got, _ := fx.h.scanCodex(fx.codex, fx.root)
+	titles := map[string]string{}
+	for _, s := range got {
+		titles[s.ID] = s.Title + "/" + s.TitleSource
+	}
+	want := map[string]string{
+		histID1: "the ask/prompt", fork1: "the ask/prompt", fork2: "the ask/prompt", fork3: "Named/custom",
+		fork4: "/prompt", itself: "/prompt", histID2: "own ask/prompt",
+	}
+	for id, w := range want {
+		if titles[id] != w {
+			t.Errorf("%s = %q, want %q", id, titles[id], w)
+		}
+	}
+}

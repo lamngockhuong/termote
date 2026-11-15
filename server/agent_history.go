@@ -78,9 +78,11 @@ type historySession struct {
 	Live      *historyLive `json:"live,omitempty"`
 
 	updated time.Time
-	// path is the file found, absCwd the cwd it records: never sent.
+	// path is the file found, absCwd the cwd it records, forkOf the Codex
+	// thread a user's fork was forked from: never sent.
 	path   string
 	absCwd string
+	forkOf string
 }
 
 // historyLive is the pane a session runs in now.
@@ -108,9 +110,11 @@ type historyFile struct {
 	title, src  string
 	cwd, branch string
 	// child: a Codex thread a subagent or a tool started, not the user;
-	// parent: the thread a subagent's was started from
+	// parent: the thread a subagent's was started from; forkOf: the thread
+	// a user's fork was forked from
 	child  bool
 	parent string
+	forkOf string
 }
 
 // historyIndex keeps each parsed file by its size and mtime, so a scan only
@@ -472,6 +476,6 @@ func historyEntry(root, path string, fi os.FileInfo, file historyFile) (historyS
 	return historySession{
 		Agent: file.agent, ID: file.id, Title: file.title, TitleSource: file.src,
 		Cwd: rel, Branch: file.branch, UpdatedAt: fi.ModTime().UTC().Format(time.RFC3339),
-		updated: fi.ModTime(), path: path, absCwd: file.cwd,
+		updated: fi.ModTime(), path: path, absCwd: file.cwd, forkOf: file.forkOf,
 	}, true
 }

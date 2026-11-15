@@ -284,7 +284,7 @@ describe('AgentHistorySheet', () => {
     expect(await screen.findByText('Running')).toBeTruthy()
   })
 
-  it('offers no fork for Codex, nothing read-only or where it cannot resume', async () => {
+  it('forks a running Codex session too, nothing read-only or where it cannot resume', async () => {
     const live = { tabId: 't', paneId: 'p' }
     lists.push(listOf([session('x', { agent: 'codex', live })]))
     const first = setup()
@@ -292,8 +292,16 @@ describe('AgentHistorySheet', () => {
     expect(
       screen.getByRole('button', { name: 'Open the running tab' }),
     ).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Fork' })).toBeNull()
-    expect(screen.queryByText(/A fork is/)).toBeNull()
+    expect(screen.getByText(/A fork is/)).toBeTruthy()
+    resumes.push(() => json(200, { tabId: 't3', paneId: 'p3' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Fork' }))
+    await waitFor(() => expect(posts).toHaveLength(1))
+    expect(posts[0]).toEqual({
+      agent: 'codex',
+      session: 'x',
+      where: 'tab',
+      fork: true,
+    })
     first.unmount()
 
     lists.push(listOf([session('a')]))

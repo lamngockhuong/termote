@@ -64,7 +64,7 @@ func (h *historyAPI) scanCodex(codexHome, root string) ([]historySession, bool) 
 						continue
 					}
 					if scanned == historyMaxScan {
-						return out, true
+						return forkTitles(out, names), true
 					}
 					scanned++
 					if s, ok := h.codexSession(sessions, filepath.Join(day, e.Name()), match[1], root, names); ok {
@@ -74,7 +74,36 @@ func (h *historyAPI) scanCodex(codexHome, root string) ([]historySession, bool) 
 			}
 		}
 	}
-	return out, false
+	return forkTitles(out, names), false
+}
+
+// forkTitles gives a fork that has no prompt of its own yet the title of
+// the thread it was forked from (named, or listed with one), as Codex shows
+// it that conversation.
+func forkTitles(sessions []historySession, names map[string]string) []historySession {
+	byID := make(map[string]int, len(sessions))
+	for i, s := range sessions {
+		byID[s.ID] = i
+	}
+	for i := range sessions {
+		from := sessions[i].forkOf
+		for range codexForkDepth {
+			if sessions[i].Title != "" || from == "" {
+				break
+			}
+			if name := names[from]; name != "" {
+				sessions[i].Title, sessions[i].TitleSource = name, titleCustom
+				break
+			}
+			j, ok := byID[from]
+			if !ok {
+				break
+			}
+			sessions[i].Title, sessions[i].TitleSource = sessions[j].Title, sessions[j].TitleSource
+			from = sessions[j].forkOf
+		}
+	}
+	return sessions
 }
 
 // numberedDirs lists dir's subdirectories named by a number, highest
@@ -140,6 +169,9 @@ func parseCodexHistory(f *os.File, size int64, id string) (historyFile, bool) {
 	}
 	file := historyFile{agent: "codex", id: id, cwd: meta.Payload.Cwd, src: titlePrompt}
 	file.child = meta.Payload.ThreadSource != "" && meta.Payload.ThreadSource != "user"
+	if meta.Payload.ThreadSource == "user" && isSessionID(meta.Payload.ForkedFrom) && meta.Payload.ForkedFrom != id {
+		file.forkOf = meta.Payload.ForkedFrom
+	}
 	if meta.Payload.ThreadSource == "subagent" {
 		file.parent = meta.Payload.Parent
 		if file.parent == "" {

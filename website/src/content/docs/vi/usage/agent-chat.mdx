@@ -366,9 +366,10 @@ các file phiên đó đã sửa, chạm vào thì mở diff hoặc chính file 
 - **Tiếp tục ở đây**: gõ dòng lệnh đó ngay trong pane này, chỉ có khi pane đang ở shell và không
   chạy gì khác. Giống Tasks, Termote bấm Ctrl+C trước, và không gõ gì nếu pane đang bận.
 - Phiên đang chạy ở một pane được gắn nhãn **Đang chạy** và không bao giờ được mở lần hai (hai
-  tiến trình cùng ghi một transcript sẽ làm hỏng nó). **Mở tab đang chạy** đưa bạn tới tab đó; với
-  Claude Code còn có **Tách nhánh**, tạo một phiên mới có id riêng từ hội thoại ấy
-  (`--fork-session`), phiên cũ giữ nguyên.
+  tiến trình cùng ghi một transcript sẽ làm hỏng nó). **Mở tab đang chạy** đưa bạn tới tab đó, còn
+  **Tách nhánh** tạo một phiên mới có id riêng từ hội thoại ấy
+  (`claude --resume <id> --fork-session`, hoặc `codex fork --no-daemon <id>`), phiên cũ giữ
+  nguyên. View Chat của phiên tách nhánh hiện hội thoại gốc, rồi tới những gì nói sau khi tách.
 
 Giới hạn:
 
@@ -376,7 +377,7 @@ Giới hạn:
   `CODEX_HOME` hoặc `~/.codex`); phiên của thư mục khác hay của một Place thì không.
 - Codex không lưu chỉ mục theo thư mục: chỉ các phiên nằm trong 2000 lần chạy gần nhất được liệt
   kê, và danh sách có ghi chú khi phiên cũ hơn bị bỏ qua.
-- Tách nhánh chỉ có cho Claude Code. Muốn tiếp tục phiên, backend phải chạy được
+- Muốn tiếp tục phiên, backend phải chạy được
   [Tasks](/vi/usage/tasks/) (tmux, Herdr, Zellij, `herdr-core`; psmux thì không) và shell phải là loại
   Tasks hỗ trợ (`bash`, `zsh`, `sh`, `fish`, `pwsh`).
 - Thiết bị chỉ xem đọc được danh sách và hội thoại cũ ở những nơi được đọc [Files](/vi/usage/files/) (một

@@ -368,9 +368,11 @@ files the session changed, each opening its diff or the file (see
 - **Resume here** types the same line in this pane, offered only when the pane shows its shell and
   nothing else. As with Tasks, Termote presses Ctrl+C first and types nothing if the pane is busy.
 - A session that runs in a pane now is marked **Running**: it is never opened a second time (two
-  processes writing one transcript would break it). **Open the running tab** goes there, and for
-  Claude Code **Fork** starts a new session with its own id from that conversation
-  (`--fork-session`), leaving the old one as it is.
+  processes writing one transcript would break it). **Open the running tab** goes there, and
+  **Fork** starts a new session with its own id from that conversation
+  (`claude --resume <id> --fork-session`, or `codex fork --no-daemon <id>`), leaving the old one as
+  it is. The fork's Chat view shows the conversation it was forked from, then what is said in the
+  fork.
 
 Limits:
 
@@ -378,7 +380,7 @@ Limits:
   `CODEX_HOME` or `~/.codex`); sessions of another folder or a Place are not.
 - Codex keeps no index by folder: only threads among its latest 2000 runs are listed, and the list
   says so when older ones were left out.
-- Fork is Claude Code only. Resuming needs a backend that runs [Tasks](/usage/tasks/) (tmux, Herdr,
+- Resuming needs a backend that runs [Tasks](/usage/tasks/) (tmux, Herdr,
   Zellij, `herdr-core`; not psmux) and a shell Tasks knows (`bash`, `zsh`, `sh`, `fish`, `pwsh`).
 - View-only devices can read the list and the old conversations, where they may read
   [Files](/usage/files/) (a git repository, not a home folder), but cannot resume.
