@@ -1455,12 +1455,13 @@ export async function agentStartState(
   return res.json()
 }
 
-// A dialog Claude Code has open. permission and select carry options and a
-// single-use promptId; unsupported is shown only (answered in the terminal),
-// as is a dialog whose id was just used.
+// A dialog the agent has open. permission and select carry options and a
+// single-use promptId; form (OpenCode) carries fields answered all at once;
+// unsupported is shown only (answered in the terminal), as is a dialog whose
+// id was just used.
 export interface AgentPrompt {
   promptId?: string
-  kind: 'permission' | 'select' | 'multiselect' | 'unsupported'
+  kind: 'permission' | 'select' | 'multiselect' | 'form' | 'unsupported'
   title: string
   body?: string
   // checked: a multiSelect option ticked; its digit toggles it
@@ -1476,7 +1477,34 @@ export interface AgentPrompt {
   freeText?: { index: number; label: string }
   // Claude Code refuses the dialog by itself when nobody answers in time
   autoBlock?: boolean
+  // An OpenCode form's fields
+  fields?: PromptField[]
 }
+
+// One field of an OpenCode form. A string with options takes one of them,
+// or other text when custom; multiselect takes several. It shows only while
+// every condition of when holds.
+export interface PromptField {
+  key: string
+  type: 'string' | 'number' | 'integer' | 'boolean' | 'multiselect'
+  title?: string
+  description?: string
+  required?: boolean
+  format?: 'email' | 'uri' | 'date' | 'date-time'
+  placeholder?: string
+  options?: { value: string; label: string; detail?: string }[]
+  custom?: boolean
+  minLength?: number
+  maxLength?: number
+  minimum?: number
+  maximum?: number
+  minItems?: number
+  maxItems?: number
+  default?: FormValue
+  when?: { key: string; op: 'eq' | 'neq'; value: unknown }[]
+}
+
+export type FormValue = string | number | boolean | string[]
 
 // The working line the agent draws while a turn runs, read off its screen:
 // what the terminal shows between two transcript writes.
@@ -1493,6 +1521,9 @@ export interface AgentActivity {
   // Set once the turn is done, what it left running as the line writes it:
   // "2 shells", "1 shell, 1 monitor". label is then the turn's past word.
   background?: string
+  // The provider refused and the agent tries again (OpenCode): the attempt
+  // it is on and the provider's error
+  retry?: { attempt: number; error?: string }
 }
 
 // One read of the agent's screen: its open dialog and its working line
@@ -1529,14 +1560,15 @@ export async function fetchAgentCommands(
 }
 
 // An answer to the dialog promptId names: an option's number, Escape, Right
-// on a multiSelect tab, another tab of a question in several parts, or text
-// typed into the question's free-text option
+// on a multiSelect tab, another tab of a question in several parts, text
+// typed into the question's free-text option, or a form's fields
 export type AgentChoice =
   | number
   | 'cancel'
   | 'next'
   | { step: number }
   | { text: string }
+  | { answer: Record<string, FormValue> }
 
 // The server's limit on a typed answer, in UTF-8 bytes
 export const MAX_FREE_TEXT_BYTES = 1024

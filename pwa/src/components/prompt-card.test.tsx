@@ -852,6 +852,85 @@ describe('PromptCard long body', () => {
   })
 })
 
+describe('PromptCard for OpenCode', () => {
+  const form: AgentPrompt = {
+    promptId: 'f1',
+    kind: 'form',
+    title: 'Questions',
+    fields: [
+      {
+        key: 'q0',
+        type: 'string',
+        title: 'Color',
+        options: [
+          { value: 'Red', label: 'Red' },
+          { value: 'Blue', label: 'Blue' },
+        ],
+      },
+    ],
+  }
+  const renderOpencode = (prompt: AgentPrompt, readOnly = false) =>
+    render(
+      <PromptCard
+        paneId="%3"
+        agentName="opencode"
+        prompt={prompt}
+        readOnly={readOnly}
+        showView={showView}
+        onAnswered={onAnswered}
+        onChanged={onChanged}
+      />,
+    )
+
+  it('a form is answered with all its fields at once', async () => {
+    renderOpencode(form)
+    fireEvent.click(screen.getByRole('radio', { name: 'Blue' }))
+    await click('Send')
+    expect(mockAnswer).toHaveBeenCalledWith('%3', 'f1', {
+      answer: { q0: 'Blue' },
+    })
+    expect(onAnswered).toHaveBeenCalled()
+  })
+
+  it('an answer the agent refused keeps the form to fix it', async () => {
+    mockAnswer.mockRejectedValueOnce(
+      new AgentRequestError(400, 'invalid_choice', 'refused'),
+    )
+    renderOpencode(form)
+    fireEvent.click(screen.getByRole('radio', { name: 'Red' }))
+    await click('Send')
+    expect(
+      screen.getByText(
+        'OpenCode did not take this answer; check it and send again.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Red' })).toBeChecked()
+    expect(onAnswered).not.toHaveBeenCalled()
+  })
+
+  it('Cancel is no key: the dialog is answered through the service', async () => {
+    renderOpencode({ ...permission, promptId: 'p1' })
+    expect(
+      screen.queryByRole('button', { name: 'Cancel (Esc)' }),
+    ).not.toBeInTheDocument()
+    await click('Cancel')
+    expect(mockAnswer).toHaveBeenCalledWith('%3', 'p1', 'cancel')
+  })
+
+  it('a form only to look at lists what it asks, with no input', () => {
+    renderOpencode(
+      {
+        ...form,
+        promptId: undefined,
+        fields: [...(form.fields ?? []), { key: 'n', type: 'integer' }],
+      },
+      true,
+    )
+    expect(screen.getByRole('list')).toHaveTextContent(/Color\s*n/)
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument()
+  })
+})
+
 describe('WaitingCard', () => {
   it('points to the terminal', () => {
     render(<WaitingCard agentName="claude" showView={showView} />)

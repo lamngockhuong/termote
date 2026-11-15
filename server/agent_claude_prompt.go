@@ -181,7 +181,7 @@ type agentScreen struct {
 // AgentPrompt is a dialog the PWA shows as a card.
 type AgentPrompt struct {
 	PromptID string         `json:"promptId,omitempty"`
-	Kind     string         `json:"kind"` // permission | select | multiselect | unsupported
+	Kind     string         `json:"kind"` // permission | select | multiselect | form | unsupported
 	Title    string         `json:"title"`
 	Body     string         `json:"body,omitempty"`
 	Options  []PromptOption `json:"options,omitempty"`
@@ -195,9 +195,15 @@ type AgentPrompt struct {
 	AutoBlock bool `json:"autoBlock,omitempty"`
 	// moveThenEnter: a question whose options have previews. A digit only
 	// moves the pointer there; Enter picks the option under it.
+	// Fields: an OpenCode form's, answered all at once (kind form).
+	Fields        []PromptField `json:"fields,omitempty"`
 	moveThenEnter bool
 	pointer       int // the option the ❯ is on, 0 when none
 	free          freeField
+	// opencodeID: the OpenCode permission or form the card answers, and
+	// which of the two it is.
+	opencodeID   string
+	opencodeForm bool
 }
 
 // PromptFreeText is the option of a question that takes typed text.

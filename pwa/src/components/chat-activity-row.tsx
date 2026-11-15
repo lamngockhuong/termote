@@ -100,11 +100,19 @@ export function ChatActivityRow({ activity, agent }: Props) {
     anchor.current.elapsed +
     Math.max(0, Math.floor((now - anchor.current.at) / 1000))
 
-  const what = activity
+  // A line without a word of its own (OpenCode draws none) reads as working
+  const what = activity?.label
     ? `${visibleUnsafe(activity.label)}…`
     : t('chat.activity.working', { agent })
-  const phase =
-    activity?.phase === 'thinking'
+  const retry = activity?.retry
+  const phase = retry
+    ? retry.error
+      ? t('chat.activity.retryError', {
+          attempt: retry.attempt,
+          error: visibleUnsafe(retry.error),
+        })
+      : t('chat.activity.retry', { attempt: retry.attempt })
+    : activity?.phase === 'thinking'
       ? t('chat.activity.thinking')
       : activity?.detail && visibleUnsafe(activity.detail)
   const parts = [

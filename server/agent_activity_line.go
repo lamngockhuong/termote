@@ -31,6 +31,15 @@ type AgentActivity struct {
 	// the line writes it ("2 shells", "1 shell, 1 monitor"); Label is then
 	// the turn's past-tense word and Elapsed its length
 	Background string `json:"background,omitempty"`
+	// Retry: the provider refused and the agent tries again (OpenCode)
+	Retry *ActivityRetry `json:"retry,omitempty"`
+}
+
+// ActivityRetry is the attempt the agent is on, and the provider's error
+// message it retries after.
+type ActivityRetry struct {
+	Attempt int    `json:"attempt"`
+	Error   string `json:"error,omitempty"`
 }
 
 // activityMaxText bounds every text field of an AgentActivity.

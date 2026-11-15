@@ -304,12 +304,24 @@ Những điều cần biết:
 
 ## OpenCode
 
-Pane chạy OpenCode 2.0 trở lên có view Chat với hội thoại của phiên, hiện chỉ để đọc: tin nhắn của
-bạn, câu trả lời dạng markdown, phần suy luận, và từng lệnh gọi công cụ kèm kết quả. Trạng thái của
-nó (đang chạy, đang chờ duyệt quyền hay chờ trả lời câu hỏi, rảnh) hiện ở sidebar, Overview, nhật ký
-hoạt động và thông báo. Gửi tin và trả lời hộp thoại từ view sẽ có ở bản sau; trong lúc chờ, hãy trả
-lời trong terminal. Lượt nào thất bại (hết hạn mức, nhà cung cấp mô hình báo lỗi) hay bị bạn ngắt sẽ
-hiện thành một ghi chú kèm thông báo lỗi của OpenCode.
+Pane chạy OpenCode 2.0 trở lên có view Chat với hội thoại của phiên: tin nhắn của bạn, câu trả lời
+dạng markdown, phần suy luận, và từng lệnh gọi công cụ kèm kết quả. Trạng thái của nó (đang chạy,
+đang chờ duyệt quyền hay chờ trả lời câu hỏi, rảnh) hiện ở sidebar, Overview, nhật ký hoạt động và
+thông báo. Lượt nào thất bại (hết hạn mức, nhà cung cấp mô hình báo lỗi) hay bị bạn ngắt sẽ hiện
+thành một ghi chú kèm thông báo lỗi của OpenCode.
+
+Từ view này bạn gửi được tin nhắn (kèm ảnh dán vào), Tasks và Review cũng gửi được. Tin gửi lúc
+OpenCode đang chạy sẽ nằm trong hàng đợi của nó cho tới hết lượt, giống Claude Code. Trong lúc một
+lượt chạy, dòng "đang làm việc" cho biết lượt đã chạy bao lâu; khi nhà cung cấp mô hình từ chối yêu
+cầu (hết hạn mức), dòng này hiện lần thử lại của OpenCode và thông báo lỗi của nhà cung cấp.
+
+Yêu cầu cấp quyền hiện thành một card có ba lựa chọn: cho phép một lần, luôn cho phép (kèm các mẫu
+sẽ được lưu) và từ chối. Câu hỏi, hoặc form mà một công
+cụ yêu cầu điền, hiện các trường của nó (chữ, số, ô đánh dấu, lựa chọn một hay nhiều mục, câu trả
+lời khác khi câu hỏi cho phép) cùng nút **Gửi**; trường còn thiếu hoặc vượt giới hạn được đánh dấu
+trước khi gửi. **Hủy** từ chối yêu cầu cấp quyền hoặc bỏ qua form. Form yêu cầu mở một liên kết thì
+phải trả lời trong terminal. Lệnh `/` sẽ có ở bản sau: tin nhắn bắt đầu bằng `/` được gửi tới mô
+hình như văn bản thường.
 
 OpenCode 2 cài từ trang GitHub releases của nó hoặc Homebrew; gói `opencode-ai` trên npm vẫn là
 OpenCode 1, Termote không đọc được bản này.

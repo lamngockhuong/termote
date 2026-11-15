@@ -336,10 +336,10 @@ func TestDialogStatusByAgent(t *testing.T) {
 	}
 }
 
-// An agent without a screen reader gets nothing typed into it.
+// An agent with neither a screen reader nor an API gets nothing typed into it.
 func TestWriteRoutesRefuseAnAgentWithoutAReader(t *testing.T) {
 	f := newFakeWriter()
-	f.session = AgentSession{Agent: "opencode", ID: testCodexID, Target: "%1", Status: "idle"}
+	f.session = AgentSession{Agent: "aider", ID: testCodexID, Target: "%1", Status: "idle"}
 	mux := agentMux(f)
 	for _, path := range []string{"message", "answer"} {
 		code, body := postJSON(t, mux, "/api/mux/panes/0/agent/"+path, map[string]string{"text": "hi", "cursor": codexCursor(), "promptId": "p"})
@@ -352,7 +352,7 @@ func TestWriteRoutesRefuseAnAgentWithoutAReader(t *testing.T) {
 	}
 	// Claude Code when the request came, another agent right before the write.
 	f = newFakeWriter()
-	f.sessions = []AgentSession{{Agent: "opencode", ID: f.session.ID, Target: f.session.Target}}
+	f.sessions = []AgentSession{{Agent: "aider", ID: f.session.ID, Target: f.session.Target}}
 	code, body := postJSON(t, agentMux(f), "/api/mux/panes/0/agent/message", map[string]string{"text": "hi", "cursor": cursorFor(f.session.ID)})
 	if code != http.StatusNotFound || body["error"] != errAgentUnsupported.Error() || len(f.pasted) != 0 || len(f.keys) != 0 {
 		t.Errorf("message = %d %v, pasted %v", code, body, f.pasted)

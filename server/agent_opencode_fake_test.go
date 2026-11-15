@@ -3,10 +3,12 @@ package main
 import (
 	"encoding/base64"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -35,6 +37,12 @@ type fakeOpencode struct {
 	big      int
 	requests []string
 	auths    []string
+	// bodies of the write requests, in order.
+	bodies []string
+	// sessions answer GET /api/session/{id}; writeStatus forces an answer
+	// for every write.
+	sessions    map[string]json.RawMessage
+	writeStatus int
 }
 
 const testOpencodePassword = "s3cret-opencode-password"
@@ -45,7 +53,7 @@ func newFakeOpencode(t *testing.T) *fakeOpencode {
 	t.Helper()
 	f := &fakeOpencode{t: t, password: testOpencodePassword, version: "2.3.0", pid: 4242,
 		messages: map[string][]json.RawMessage{}, permissions: map[string]json.RawMessage{},
-		forms: map[string]json.RawMessage{}}
+		forms: map[string]json.RawMessage{}, sessions: map[string]json.RawMessage{}}
 	f.srv = httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(f.srv.Close)
 	state := t.TempDir()
@@ -72,6 +80,7 @@ func resetOpencodeCaches() {
 	opencodeDown.forgetPrefix("")
 	opencodeActive.forgetPrefix("")
 	opencodeBlocked.forgetPrefix("")
+	opencodeReads.forgetPrefix("")
 }
 
 func (f *fakeOpencode) writeServiceFile(state string, v any) {
@@ -93,6 +102,7 @@ func (f *fakeOpencode) set(fn func()) {
 	f.mu.Unlock()
 	opencodeActive.forgetPrefix("")
 	opencodeBlocked.forgetPrefix("")
+	opencodeReads.forgetPrefix("")
 }
 
 func (f *fakeOpencode) reqs() []string {
@@ -144,7 +154,18 @@ func (f *fakeOpencode) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, sub, _ := strings.Cut(rest, "/")
+	if r.Method != http.MethodGet {
+		f.write(w, r, id, sub)
+		return
+	}
 	switch sub {
+	case "":
+		if v, ok := f.sessions[id]; ok {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write(v)
+			return
+		}
+		notFound()
 	case "permission", "form":
 		src := f.permissions
 		if sub == "form" {
@@ -225,4 +246,58 @@ func testOpencodeFixture(t *testing.T, name string) json.RawMessage {
 		t.Fatal(err)
 	}
 	return data
+}
+
+// write answers a write as OpenCode 2.3.0 does: a prompt to a session with
+// messages; a reply to (or the cancel of) a request the session still holds,
+// which drops it. A form answer holding "refuse" is refused (400), as one
+// OpenCode finds invalid.
+func (f *fakeOpencode) write(w http.ResponseWriter, r *http.Request, id, sub string) {
+	body, _ := io.ReadAll(r.Body)
+	f.bodies = append(f.bodies, string(body))
+	if f.writeStatus != 0 {
+		w.WriteHeader(f.writeStatus)
+		w.Write([]byte(`{"_tag":"InternalError","message":"write words /home/user"}`))
+		return
+	}
+	parts := strings.Split(sub, "/")
+	switch {
+	case r.Method == http.MethodPost && sub == "prompt":
+		if _, ok := f.messages[id]; !ok {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(testOpencodeFixture(f.t, "prompt-response.json"))
+	case len(parts) >= 2 && (parts[0] == "permission" || parts[0] == "form"):
+		src := f.permissions
+		if parts[0] == "form" {
+			src = f.forms
+		}
+		reply := len(parts) == 3 && parts[2] == "reply" && r.Method == http.MethodPost
+		cancel := len(parts) == 2 && parts[0] == "form" && r.Method == http.MethodDelete
+		if !reply && !cancel {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		var list struct {
+			Data []map[string]any `json:"data"`
+		}
+		json.Unmarshal(src[id], &list)
+		i := slices.IndexFunc(list.Data, func(p map[string]any) bool { return p["id"] == parts[1] })
+		if i < 0 {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if parts[0] == "form" && strings.Contains(string(body), "refuse") {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(`{"_tag":"FormInvalidAnswerError","message":"secret refusal words"}`))
+			return
+		}
+		list.Data = slices.Delete(list.Data, i, i+1)
+		src[id], _ = json.Marshal(list)
+		w.WriteHeader(http.StatusNoContent)
+	default:
+		w.WriteHeader(http.StatusNotFound)
+	}
 }

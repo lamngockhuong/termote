@@ -19,9 +19,10 @@ import {
 import { useT } from '../i18n/i18n-context'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { OpenTerminalButton } from './open-terminal-button'
+import { PromptForm } from './prompt-form'
 import { Button } from './ui/button'
 
-// A dialog Claude Code has open, as a card in place of the composer. Only
+// A dialog the agent has open, as a card in place of the composer. Only
 // one answer per dialog reaches the pane: the server consumes the promptId,
 // so locking the buttons here is for the user, not for safety.
 
@@ -112,7 +113,15 @@ export function PromptCard({
       onAnswered()
       onSent?.()
     } catch (err) {
-      if (err instanceof AgentRequestError && err.code === 'invalid_text') {
+      if (err instanceof AgentRequestError && err.code === 'invalid_choice') {
+        // Refused before or by the agent; nothing was taken: fix the answer
+        setNotice(
+          t('chat.prompt.invalidAnswer', { agent: agentLabel(agentName) }),
+        )
+      } else if (
+        err instanceof AgentRequestError &&
+        err.code === 'invalid_text'
+      ) {
         // Nothing was sent and the dialog is the same: fix the text
         setNotice(t('chat.prompt.invalidText'))
       } else if (
@@ -301,7 +310,24 @@ export function PromptCard({
               ? t('chat.prompt.inTerminal')
               : '')}
         </p>
-        {answerable && (
+        {prompt.fields && !answerable && (
+          // A form shown only: what it asks
+          <ul className="list-inside list-disc text-[13px] text-fg-muted">
+            {prompt.fields.map((f) => (
+              <li key={f.key}>{visibleUnsafe(f.title || f.key)}</li>
+            ))}
+          </ul>
+        )}
+        {answerable && prompt.fields && (
+          <PromptForm
+            // Another form, or the same asked again, starts afresh
+            key={prompt.promptId}
+            fields={prompt.fields}
+            busy={busy}
+            onSend={(a) => answer({ answer: a })}
+          />
+        )}
+        {answerable && !prompt.fields && (
           <div className="flex flex-col gap-1.5">
             {/* "Type something" sits where the terminal draws it, above
               "Chat about this" */}
@@ -330,7 +356,10 @@ export function PromptCard({
             disabled={busy}
             onClick={() => answer('cancel')}
           >
-            {t('chat.prompt.cancelEsc')}
+            {/* OpenCode's dialogs are answered through its API, not keys */}
+            {agentName === 'opencode'
+              ? t('common.cancel')
+              : t('chat.prompt.cancelEsc')}
           </Button>
           <span className="flex-1" />
           <OpenTerminalButton showView={showView} />

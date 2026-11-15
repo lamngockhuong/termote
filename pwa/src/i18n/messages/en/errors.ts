@@ -6,6 +6,7 @@ export default {
   // A code this version does not know. The server's own unknown (Herdr did
   // not answer in time) is told by the worktree dialog, which owns it.
   'errors.unknown': 'The server could not finish this. Try again',
+  'errors.agent_unavailable': "The agent's service did not answer. Try again",
   'errors.ambiguous': 'More than one worktree uses this branch',
   'errors.answer_not_confirmed':
     'The answer was sent, but the dialog is still open',

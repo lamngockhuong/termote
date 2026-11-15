@@ -1,0 +1,61 @@
+{
+  "data": [
+    {
+      "id": "frm_1de7bcaca001nsDaOCNnq50Fqh",
+      "sessionID": "ses_in2",
+      "title": "Questions",
+      "metadata": {
+        "kind": "question",
+        "tool": {
+          "messageID": "msg_1de7bca4d001LTBfOS78P3d0P2",
+          "id": "call_2"
+        }
+      },
+      "fields": [
+        {
+          "key": "q0",
+          "title": "Color",
+          "description": "Which color?",
+          "type": "string",
+          "options": [
+            {
+              "value": "Red",
+              "label": "Red",
+              "description": "warm"
+            },
+            {
+              "value": "Blue",
+              "label": "Blue",
+              "description": "cool"
+            }
+          ],
+          "custom": true
+        },
+        {
+          "key": "q1",
+          "title": "Sizes",
+          "description": "Which sizes?",
+          "type": "multiselect",
+          "options": [
+            {
+              "value": "S",
+              "label": "S",
+              "description": "small"
+            },
+            {
+              "value": "M",
+              "label": "M",
+              "description": "medium"
+            },
+            {
+              "value": "L",
+              "label": "L",
+              "description": "large"
+            }
+          ],
+          "custom": true
+        }
+      ]
+    }
+  ]
+}

@@ -75,7 +75,9 @@ var (
 
 // opencodeStateDir is where OpenCode keeps its state, as OpenCode itself
 // finds it; tests replace it.
-var opencodeStateDir = func() string {
+var opencodeStateDir = opencodeDefaultStateDir
+
+func opencodeDefaultStateDir() string {
 	if d := os.Getenv("XDG_STATE_HOME"); filepath.IsAbs(d) {
 		return d
 	}
@@ -296,9 +298,54 @@ func (c *opencodeClient) active(ctx context.Context) (map[string]bool, error) {
 }
 
 // opencodePending is one permission request or form a session waits on.
+// A permission names the action asked for (shell, edit, read...), the
+// resources it is asked on (a command, a file) and the patterns "always"
+// saves; a form its title and fields. The rest of either is not read.
 type opencodePending struct {
 	ID        string `json:"id"`
 	SessionID string `json:"sessionID"`
+	// Permission
+	Action    string   `json:"action"`
+	Resources []string `json:"resources"`
+	Save      []string `json:"save"`
+	// Form
+	Title  string              `json:"title"`
+	Fields []opencodeFormField `json:"fields"`
+}
+
+// opencodeFormField is one field of a form, every kind OpenCode 2.3.0 has:
+// string, number, integer, boolean, multiselect and external (a link to
+// open). Bounds and defaults are raw: OpenCode writes an unbounded one as
+// "Infinity".
+type opencodeFormField struct {
+	Key         string               `json:"key"`
+	Type        string               `json:"type"`
+	Title       string               `json:"title"`
+	Description string               `json:"description"`
+	Required    bool                 `json:"required"`
+	Hidden      bool                 `json:"hidden"`
+	Format      string               `json:"format"`
+	Placeholder string               `json:"placeholder"`
+	Options     []opencodeFormOption `json:"options"`
+	Custom      bool                 `json:"custom"`
+	MinLength   *int                 `json:"minLength"`
+	MaxLength   *int                 `json:"maxLength"`
+	Minimum     json.RawMessage      `json:"minimum"`
+	Maximum     json.RawMessage      `json:"maximum"`
+	MinItems    *int                 `json:"minItems"`
+	MaxItems    *int                 `json:"maxItems"`
+	Default     json.RawMessage      `json:"default"`
+	When        []struct {
+		Key   string          `json:"key"`
+		Op    string          `json:"op"`
+		Value json.RawMessage `json:"value"`
+	} `json:"when"`
+}
+
+type opencodeFormOption struct {
+	Value       string `json:"value"`
+	Label       string `json:"label"`
+	Description string `json:"description"`
 }
 
 // pending lists what session id waits on: its permission requests, then its
@@ -359,6 +406,14 @@ type opencodeMessage struct {
 	Error   *struct {
 		Message string `json:"message"`
 	} `json:"error"`
+	// Assistant, still open: the provider refused and OpenCode tries
+	// again (a rate limit); the same: only the error's message is read.
+	Retry *struct {
+		Attempt int `json:"attempt"`
+		Error   *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	} `json:"retry"`
 }
 
 type opencodeFile struct {

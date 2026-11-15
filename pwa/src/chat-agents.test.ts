@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { agentLabel, chatAgent, chatInputAgent } from './chat-agents'
 
 describe('chat agents', () => {
-  it('offers the Chat view of OpenCode, read only', () => {
+  it('offers the Chat view of OpenCode, with input', () => {
     expect(chatAgent('opencode')).toBe(true)
-    expect(chatInputAgent('opencode')).toBe(false)
+    expect(chatInputAgent('opencode')).toBe(true)
     expect(agentLabel('opencode')).toBe('OpenCode')
   })
 
