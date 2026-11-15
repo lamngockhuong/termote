@@ -25,6 +25,8 @@ type codexHistoryMeta struct {
 		ID           string `json:"id"`
 		Cwd          string `json:"cwd"`
 		ThreadSource string `json:"thread_source"`
+		Parent       string `json:"parent_thread_id"`
+		ForkedFrom   string `json:"forked_from_id"`
 		Git          *struct {
 			Branch string `json:"branch"`
 		} `json:"git"`
@@ -138,6 +140,15 @@ func parseCodexHistory(f *os.File, size int64, id string) (historyFile, bool) {
 	}
 	file := historyFile{agent: "codex", id: id, cwd: meta.Payload.Cwd, src: titlePrompt}
 	file.child = meta.Payload.ThreadSource != "" && meta.Payload.ThreadSource != "user"
+	if meta.Payload.ThreadSource == "subagent" {
+		file.parent = meta.Payload.Parent
+		if file.parent == "" {
+			file.parent = meta.Payload.ForkedFrom
+		}
+		if !isSessionID(file.parent) {
+			file.parent = ""
+		}
+	}
 	if g := meta.Payload.Git; g != nil {
 		file.branch = historyBranch(g.Branch)
 	}

@@ -369,6 +369,10 @@ type agentAPI struct {
 	home     string
 	// history lists and reads the sessions of a pane's root.
 	history *historyAPI
+	// usage reads token usage from the journals; usageJobs fills the
+	// overview's session totals in the background.
+	usage     *usageAPI
+	usageJobs *overviewUsageJobs
 	// uploads resolves image ids in a message; nil when the server has none.
 	uploads *uploadStore
 	// activity records each agent's status changes from the snapshots read.
@@ -434,6 +438,8 @@ func newAgentAPI(m Mux) *agentAPI {
 		activity: newActivityTracker(time.Now, overlayBackend(backend), backend == "tmux"),
 		overview: newTTLCache[overviewRead](overviewTTL),
 		changes:  newOverviewChanges(),
+
+		usageJobs: newOverviewUsageJobs(),
 
 		subagents:      newTTLCache[subagentsResponse](subagentsTTL),
 		subagentState:  newSubagentStore(time.Now),

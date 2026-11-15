@@ -81,8 +81,11 @@ type overviewPane struct {
 	Changed          *int           `json:"changed,omitempty"`
 	ChangedTruncated bool           `json:"changedTruncated,omitempty"`
 	Usage            *overviewUsage `json:"usage,omitempty"`
-	AccountKey       string         `json:"accountKey,omitempty"`
-	Unavailable      []string       `json:"unavailable,omitempty"`
+	// SessionUsage: the session's tokens and cost so far, once read in the
+	// background (agent_overview_usage.go).
+	SessionUsage *overviewSessionUsage `json:"sessionUsage,omitempty"`
+	AccountKey   string                `json:"accountKey,omitempty"`
+	Unavailable  []string              `json:"unavailable,omitempty"`
 	// change: the pane's directory as last read, for the role check of
 	// each request (a view-only client never sees a home dir's changes).
 	change *overviewChange
@@ -202,9 +205,11 @@ func (a *agentAPI) readOverview(only string) overviewRead {
 	}
 
 	type result struct {
-		i   int
-		sum transcriptSummary
-		err error
+		i           int
+		sum         transcriptSummary
+		err         error
+		usage       *overviewSessionUsage
+		usageFailed bool
 	}
 	results := make(chan result, len(panes))
 	sem := make(chan struct{}, overviewParallel)
@@ -213,7 +218,11 @@ func (a *agentAPI) readOverview(only string) overviewRead {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			sum, err := a.summarizePane(panes[i].PaneID)
-			results <- result{i, sum, err}
+			res := result{i: i, sum: sum, err: err}
+			if err == nil {
+				res.usage, res.usageFailed = a.paneSessionUsage(panes[i].PaneID)
+			}
+			results <- res
 		}()
 	}
 	deadline := time.NewTimer(overviewBudget)
@@ -229,6 +238,10 @@ func (a *agentAPI) readOverview(only string) overviewRead {
 			switch {
 			case r.err == nil:
 				p.LastText, p.LastTS, p.Usage = r.sum.lastText, r.sum.lastTS, r.sum.usage
+				p.SessionUsage = r.usage
+				if r.usageFailed {
+					p.Unavailable = append(p.Unavailable, "usage")
+				}
 				if r.sum.limits != nil {
 					p.AccountKey = accountKey(r.sum.codexHome)
 					limits[r.i] = r.sum.limits
