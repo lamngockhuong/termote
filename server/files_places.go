@@ -132,6 +132,7 @@ func (f *filesAPI) setPlaces(places []place) {
 	for _, p := range places {
 		f.roots.placeDirs = append(f.roots.placeDirs, p.Resolved)
 	}
+	gitEntryPlaces.Store(slices.Clone(f.roots.placeDirs))
 }
 
 // placeRoot is the root of the Place id. The folder is resolved again (for

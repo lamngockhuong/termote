@@ -66,4 +66,8 @@ func interruptProcess(cmd *exec.Cmd) func() error {
 
 // evalSymlinks is filepath.EvalSymlinks: only Windows reaches another host
 // through a link (files_links_windows.go).
+// errRemoteLink is never returned off Windows, where no link leads to another
+// computer's share by itself.
+var errRemoteLink = errors.New("a link leads off a local drive")
+
 func evalSymlinks(p string) (string, error) { return filepath.EvalSymlinks(p) }

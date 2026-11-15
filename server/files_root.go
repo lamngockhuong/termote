@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -301,7 +302,11 @@ func (g *gitRunner) argv(c gitCall, o repoOverrides, hooksDir string, args []str
 	// without such hooks ignores the setting.
 	argv := []string{"-C", c.root, "--no-pager",
 		"-c", "core.fsmonitor=false", "-c", "core.untrackedCache=false", "-c", "protocol.allow=never",
-		"-c", "core.hooksPath=" + hooksDir, "-c", "diff.autoRefreshIndex=false"}
+		"-c", "core.hooksPath=" + hooksDir, "-c", "diff.autoRefreshIndex=false",
+		// blame opens mailmap.file wherever the repository's config points
+		// it (a share, a FIFO); empty means none. diff.orderFile cannot be
+		// emptied (git refuses an empty one), so repoConfigRefused checks it.
+		"-c", "mailmap.file=", "-c", "mailmap.blob="}
 	// On Windows core.excludesFile and core.attributesFile are emptied, a
 	// second layer behind repoConfigRefused: git status opens either file
 	// wherever the repository's config points it, and a share sends that
@@ -851,6 +856,36 @@ func gitEntryLeadsTo(top, gitDir string) bool {
 	return ok && underDir(target, gitDir) && underDir(gitDir, target)
 }
 
+// gitEntryWindows: gitEntryTarget refuses a gitfile naming a git dir off a
+// drive letter (gitfileOffDrive).
+var gitEntryWindows = runtime.GOOS == "windows"
+
+// gitfileOffDrive reports whether a gitfile in top, a directory on a drive
+// letter, names a git dir off one (\\host\share, \\?\UNC\, \??\UNC\): a
+// repository can hold such a file in a linked worktree's directory, and
+// resolving it would make Windows connect to that host and send it the
+// user's NTLM hash. A top on a share (a Place) may name its own share, and
+// any top a git dir inside a Place (gitEntryPlaces).
+func gitfileOffDrive(top, target string) bool {
+	onDrive := func(p string) bool {
+		p = strings.ReplaceAll(p, "/", `\`)
+		if nt, ok := strings.CutPrefix(p, `\??\`); ok {
+			p = nt
+		}
+		return validCwdForm(strings.TrimPrefix(p, `\\?\`), true)
+	}
+	if !onDrive(top) || onDrive(target) {
+		return false
+	}
+	places, _ := gitEntryPlaces.Load().([]string)
+	return !slices.ContainsFunc(places, func(d string) bool { return underDir(d, target) })
+}
+
+// gitEntryPlaces holds the Places' directories ([]string), set with the
+// Files Places (setPlaces): gitEntryTarget runs where no rootResolver is
+// at hand (a worktree list), and a Place is the user's own choice.
+var gitEntryPlaces atomic.Value
+
 // gitEntryTarget is the git directory top's .git leads to, resolved: that
 // directory, or the one a gitfile names. ok false when top has no .git or a
 // file there names none.
@@ -875,6 +910,9 @@ func gitEntryTarget(top string) (string, bool) {
 		target = filepath.FromSlash(strings.TrimSpace(p))
 		if !filepath.IsAbs(target) {
 			target = filepath.Join(top, target)
+		}
+		if gitEntryWindows && gitfileOffDrive(top, target) {
+			return "", false
 		}
 	}
 	if r, err := evalSymlinks(target); err == nil {

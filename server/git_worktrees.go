@@ -123,7 +123,7 @@ func listWorktrees(ctx context.Context, git *gitRunner, repo gitRepoInfo) ([]wor
 	}
 	var own []worktreeEntry
 	for _, e := range parseWorktreeEntries(out) {
-		if real, err := filepath.EvalSymlinks(e.Path); err == nil && ownWorktree(real, repo.Common) {
+		if real, err := evalSymlinks(e.Path); err == nil && ownWorktree(real, repo.Common) {
 			e.Path = filepath.Clean(real)
 			own = append(own, e)
 		}
