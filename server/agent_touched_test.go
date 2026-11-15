@@ -113,6 +113,22 @@ func TestTouchedCodexSubagentRollout(t *testing.T) {
 	}
 }
 
+func TestTouchedCodexUserFork(t *testing.T) {
+	// A user's fork copies nothing of its parent: only its own change.
+	root := t.TempDir()
+	b, err := os.ReadFile(filepath.Join("testdata", "usage", "codex-user-fork-rollout.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	q, _ := json.Marshal(root)
+	p := filepath.Join(t.TempDir(), "rollout.jsonl")
+	writeFile(t, p, strings.ReplaceAll(string(b), "@ROOT@", string(q[1:len(q)-1])))
+	got := touchedByRel(t, root, readTouched(t, newTouchedReader(), "codex", p, false))
+	if len(got) != 1 || got["b.txt"].ops != touchedWrite || got["b.txt"].count != 1 {
+		t.Errorf("files = %+v", got)
+	}
+}
+
 func TestTouchedCodexCwdWithoutMeta(t *testing.T) {
 	// A relative path before any cwd is known cannot be placed.
 	p := filepath.Join(t.TempDir(), "rollout.jsonl")

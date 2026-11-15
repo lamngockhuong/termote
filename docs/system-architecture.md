@@ -1532,7 +1532,8 @@ minute and 1 hour cache writes are priced apart. Codex 0.165 writes a `token_usa
 response (`response_id`, `thread_id`): a subagent's rollout repeats its parent's rows, so only the
 rollout's own thread counts; an older rollout only has `token_count` events, whose
 `total_token_usage` adds up the thread, and the difference between two is what the responses
-between cost. `input_tokens` counts the cached input in, so it is taken out.
+between cost. A fork's total goes on from its parent's (seen with Codex 0.169, which copies
+none of the parent's rows into the fork's rollout), so a fork's first total is only a base. `input_tokens` counts the cached input in, so it is taken out.
 
 `journalScanner` (`server/agent_journal_scan.go`) reads each file once: by resolved path, the next
 read starts where the last ended while the file is the same (`os.SameFile`) and not shorter, only
