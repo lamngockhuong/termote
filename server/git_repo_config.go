@@ -459,7 +459,12 @@ func (rr *rootResolver) checkGitDir(g, top string) (valid bool, err error) {
 	// A relative path a key names starts from the git dir (core.worktree)
 	// or the work tree git runs in: top, or the core.worktree either file
 	// sets (git reads both files as one).
+	// The common dir's config.worktree too: git run there (worktree add)
+	// reads it as its own.
 	files := []string{filepath.Join(common, "config"), filepath.Join(g, "config.worktree")}
+	if common != g {
+		files = append(files, filepath.Join(common, "config.worktree"))
+	}
 	bases := []string{g, top}
 	for _, f := range files {
 		if w := rr.worktreeOf(f, g); w != "" && !slices.Contains(bases, w) {

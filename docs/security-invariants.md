@@ -920,7 +920,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   place in the row; nothing else is taken from the client. The server re-locates the pane's own
   session (`Locate`, as `transcript`), needs the same file identity, an offset at a line start and
   a whole row within 32 MiB. Claude Code: only a `source.type: base64` block of that row (never a
-  URL source or a tool result's image). A slash command's images are in the `isMeta` row that
+  URL source or a tool result's image), and only of a user row holding text the user typed (not a
+  notice): the read lists no image of another row, so a tool's image set at the top of a row (beside
+  its result, a notice or nothing) never gets a reference; an image pasted with no words at all is
+  not listed either. A slash command's images are in the `isMeta` row that
   expands it: the read lists them on the command only from the row right after it whose
   `parentUuid` is the command's, and the reference names that row's offset. Codex: the row must be a `UserMessage` item, and the bytes
   come only from the row right before it, which must be the model's user input (`response_item`
@@ -928,7 +931,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   Codex could not read moves no image onto another's chip), each a base64 `data:` URL; the file a
   `local_image` names by path is never opened, nor any other URL. Either way the bytes must sniff
   (`http.DetectContentType`) as PNG, JPEG, GIF or WebP and as the declared type (never SVG);
-  anything else is 404 `not_found`. At most 2 reads at once (else 429 `busy`). Same-site only
+  anything else is 404 `not_found`. At most 2 reads at once (else 429 `busy`); a slot covers the
+  read and decode only and is given back before the answer is written, under a 2-minute write
+  deadline, so a client that stops reading holds none. Same-site only
   (`crossSiteRejection`), GET only, both roles (the view-only client already reads the
   conversation's text); the reply has `nosniff`, a `sandbox; default-src 'none'` CSP and
   `Cache-Control: private`.
@@ -949,8 +954,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   read, which the terminal never shows) only `Context compacted`, as Codex writes it; never a `tool` part, so no tool's name,
   input, result or `detail`, whatever file, command or argument shape (an object, a JSON string, an
   array of paths, a symlink under an innocent name) it involves, and no result read apart from its
-  call; no `note` entry either (the output of a command the user ran with `!`, of a slash command,
-  a hook's text; the command line the user typed is their words and stays); an entry left with no
+  call; no note either (the output of a command the user ran with `!`, of a slash command,
+  a hook's text; the command line the user typed is their words and stays), neither a `note` entry
+  nor a text part classified as one beside the user's words in a row of several blocks (the part's
+  `note` flag, never sent); an entry left with no
   part is dropped. Nothing is decided per file, so a new tool of an agent is covered as it appears.
   What the agent itself writes in its reply or its thinking about a file it read is its words, and
   a view client reads it (accepted, as the terminal), as it reads an open dialog's card
@@ -1460,15 +1467,20 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   target starts with a separator, as every UNC one does.
   A repository's own files can make git open a share too, in every command it runs (`rev-parse`,
   `config`, `status`, `log`), and git cannot be asked first (`git config --no-includes` reads the
-  repository's config, includes and all, as it starts). So on Windows `resolve`, before the first
-  git command at a directory, reads the repository git would find there (walking up, stopping only
+  repository's config, includes and all, as it starts). So on Windows, before any git command, in
+  every directory git runs in and not only one `resolve` returned (`gitRunner.output` calls
+  `checkRepoRoot`: blame through a link into another work tree, `worktree add` in the git dir, Find
+  in a linked folder; the answer kept 2 s per directory, and forgotten as soon as termote writes
+  under it, so a config include a discard restores is read by the next git), termote reads the
+  repository git would find there (walking up, stopping only
   at a git dir git takes too, and trying a directory itself as a bare repository when its `.git`
   is no repository git takes, as git does) as text (`repoConfigRefused`, `server/git_repo_config.go`) and refuses
   it (400 `directory not available`, as a refused pane directory, the reason in the log only) when
   a `.git` file's `gitdir:`, its `commondir`, a line of `objects/info/alternates` (followed 5 deep),
   a linked worktree's `gitdir` or the `gitdir:` of the `.git` file that one names names a path off a
   drive letter outside the Places (the test `refusesDir` uses; a share, `\\?\UNC\`, `\\.\`, and an
-  NT path `\??\UNC\` alike), or when `config`, `config.worktree` or any local file they include (followed
+  NT path `\??\UNC\` alike), or when `config`, `config.worktree` (the git dir's, and the common
+  dir's too, which git run there reads) or any local file they include (followed
   10 deep; read only from a git dir holding a `HEAD`, as git reads them only from one) sets `include.path`, `includeIf.*.path`, `core.worktree`, `core.excludesFile`,
   `core.attributesFile`, `mailmap.file` or `diff.orderFile` to one (`:(optional)` read past). In a
   config value but `core.worktree` (`configPath`), one after git's `%(prefix)/` is checked as git uses it (an absolute

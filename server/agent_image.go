@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // An image an agent's transcript holds (one the user pasted into Claude Code
@@ -123,12 +124,15 @@ func (a *agentAPI) handleImage(w http.ResponseWriter, r *http.Request) {
 	}
 	select {
 	case agentImageSlots <- struct{}{}:
-		defer func() { <-agentImageSlots }()
 	default:
 		writeCoded(w, errAgentImageBusy)
 		return
 	}
+	// The slot bounds the reading and decoding only: it is given back before
+	// the answer is written, so a client that stops reading holds none, and
+	// the write deadline frees the handler (and the image) from it.
 	mt, data, err := readAgentImage(s, ref)
+	<-agentImageSlots
 	if err != nil {
 		if errors.Is(err, errAgentImageMissing) {
 			writeCoded(w, errAgentImageNotFound)
@@ -146,6 +150,7 @@ func (a *agentAPI) handleImage(w http.ResponseWriter, r *http.Request) {
 	// A row of a transcript never changes once written, but the reference
 	// lives only as long as the process: kept for an hour, never shared.
 	h.Set("Cache-Control", "private, max-age=3600")
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(rawWriteTimeout))
 	_, _ = w.Write(data)
 }
 

@@ -122,6 +122,83 @@ func TestAgentImageServesTranscriptImages(t *testing.T) {
 	}
 }
 
+// Only an image beside words the user typed is listed: one set at the top
+// of a row holding a tool's result, a notice or nothing else gets no part,
+// so no reference agent/image would serve.
+func TestClaudeImageListedOnlyBesideTypedText(t *testing.T) {
+	red := testPNG(t, color.RGBA{255, 0, 0, 255})
+	img := imageBlock("image/png", red)
+	row := func(uuid string, blocks ...string) string {
+		return fmt.Sprintf(`{"type":"user","uuid":%q,"message":{"role":"user","content":[%s]}}`+"\n", uuid, strings.Join(blocks, ","))
+	}
+	dir := t.TempDir()
+	writeTranscript(t, dir, testSessionID,
+		row("tool", `{"type":"tool_result","tool_use_id":"t1","content":"shot"}`, img)+
+			row("alone", img)+
+			row("notice", `{"type":"text","text":"<bash-stdout>x</bash-stdout>"}`, img)+
+			imageRow("typed", img))
+	mux, _ := subagentsServer(t, claudeSession(dir))
+	res := getTranscriptRes(t, mux)
+	for _, e := range res.Entries {
+		for _, p := range e.Parts {
+			if p.Kind == "image" && e.ID != "typed" {
+				t.Errorf("entry %s lists an image", e.ID)
+			}
+		}
+	}
+	if refs := imageRefs(res); len(refs) != 1 || getImage(mux, refs[0], nil).Code != http.StatusOK {
+		t.Errorf("typed row refs = %q", refs)
+	}
+}
+
+// stalledWriter is a client that stopped reading: Write blocks until
+// release is closed.
+type stalledWriter struct {
+	*httptest.ResponseRecorder
+	writing chan struct{}
+	release chan struct{}
+}
+
+func (w *stalledWriter) Write(b []byte) (int, error) {
+	w.writing <- struct{}{}
+	<-w.release
+	return w.ResponseRecorder.Write(b)
+}
+
+// Clients that stopped reading hold no image slot: the slot bounds the read
+// only, so another client's image is still served.
+func TestAgentImageSlotNotHeldWhileWriting(t *testing.T) {
+	red := testPNG(t, color.RGBA{255, 0, 0, 255})
+	dir := t.TempDir()
+	writeTranscript(t, dir, testSessionID, imageRow("u1", imageBlock("image/png", red)))
+	mux, _ := subagentsServer(t, claudeSession(dir))
+	refs := imageRefs(getTranscriptRes(t, mux))
+	if len(refs) != 1 {
+		t.Fatalf("refs = %q", refs)
+	}
+	release := make(chan struct{})
+	writing := make(chan struct{})
+	done := make(chan struct{})
+	for range agentImageConcurrency {
+		go func() {
+			defer func() { done <- struct{}{} }()
+			w := &stalledWriter{httptest.NewRecorder(), writing, release}
+			mux.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/mux/panes/p1/agent/image?src="+url.QueryEscape(refs[0]), nil))
+		}()
+	}
+	for range agentImageConcurrency {
+		<-writing
+	}
+	rec := getImage(mux, refs[0], nil)
+	close(release)
+	for range agentImageConcurrency {
+		<-done
+	}
+	if rec.Code != http.StatusOK || !bytes.Equal(rec.Body.Bytes(), red) {
+		t.Fatalf("image while others stall = %d %s", rec.Code, rec.Body)
+	}
+}
+
 // A slash command's row holds only the command; its images are in the
 // isMeta row that expands it, right after. They show on the command, and
 // the route serves them from that row. Another meta row's images, and a

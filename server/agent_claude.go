@@ -293,7 +293,7 @@ func parseClaudeRow(line []byte, off int64) (TranscriptEntry, bool) {
 	}
 	if c, ok := content.([]any); ok {
 		var blockRole string
-		images := 0
+		images, typed := 0, false
 		for _, item := range c {
 			b, _ := item.(map[string]any)
 			switch jsonStr(b["type"]) {
@@ -301,7 +301,7 @@ func parseClaudeRow(line []byte, off int64) (TranscriptEntry, bool) {
 				e.Parts = append(e.Parts, TranscriptPart{Kind: "image", imageN: images})
 				images++
 			case "text":
-				t := jsonStr(b["text"])
+				t, note := jsonStr(b["text"]), false
 				if row.Type == "user" {
 					// Only the user role carries Claude Code's envelopes;
 					// the model's own words are shown as written.
@@ -315,10 +315,13 @@ func parseClaudeRow(line []byte, off int64) (TranscriptEntry, bool) {
 					if role != "user" {
 						blockRole = role
 					}
-					t = s
+					t, note = s, role == "note"
 				}
 				if strings.TrimSpace(t) != "" {
-					e.Parts = append(e.Parts, textPart("text", t, claudeMaxText))
+					p := textPart("text", t, claudeMaxText)
+					p.note = note
+					e.Parts = append(e.Parts, p)
+					typed = typed || row.Type == "user" && !note
 				}
 			case "thinking":
 				if t := jsonStr(b["thinking"]); strings.TrimSpace(t) != "" {
@@ -342,6 +345,13 @@ func parseClaudeRow(line []byte, off int64) (TranscriptEntry, bool) {
 					IsError: isErr, Orphan: true, Clipped: clipped,
 				})
 			}
+		}
+		// An image is one the user pasted only beside words they typed: a
+		// tool's image (a screenshot, an image file read) set at the top of a
+		// row with none is never listed, so agent/image never gets a
+		// reference to it.
+		if !typed {
+			e.Parts = slices.DeleteFunc(e.Parts, func(p TranscriptPart) bool { return p.Kind == "image" })
 		}
 		// A lone notice (a command's output, an interruption) is a note,
 		// not the user's speech.

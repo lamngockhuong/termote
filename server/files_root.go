@@ -145,6 +145,10 @@ type gitRunner struct {
 	// windows: argv empties core.excludesFile and core.attributesFile;
 	// runtime.GOOS == "windows", which tests replace.
 	windows bool
+	// checkRoot, set by the rootResolver that owns the runner, refuses a
+	// root before any git runs there (repoConfigRefused on Windows); nil
+	// checks nothing.
+	checkRoot func(root string) error
 
 	mu       sync.Mutex
 	failedAt map[string]time.Time // root → last timeout
@@ -400,6 +404,13 @@ func parseRepoOverrides(out []byte) (repoOverrides, error) {
 
 // output runs git in c.root and returns its stdout, cut at c.limit.
 func (g *gitRunner) output(ctx context.Context, c gitCall, args ...string) ([]byte, bool, error) {
+	// Every root git runs in, not only one a pane resolved to: blame runs
+	// in another work tree a link leads to, worktree add in the git dir.
+	if g.checkRoot != nil {
+		if err := g.checkRoot(c.root); err != nil {
+			return nil, false, err
+		}
+	}
 	if c.heavy && g.backingOff(c.root) {
 		return nil, false, errGitTimeout
 	}
@@ -566,6 +577,9 @@ func (l *limitedWriter) Write(p []byte) (int, error) {
 type rootResolver struct {
 	git      *gitRunner
 	resolved *ttlCache[filesRoot] // directory → root
+	// repoChecks: what checkRepoRoot found for a root, forgotten when
+	// termote writes under it (forgetRepoChecks).
+	repoChecks *ttlCache[struct{}]
 	// inContainer and ownedByServer are replaced by tests.
 	inContainer   func() bool
 	ownedByServer func(path string) bool
@@ -607,15 +621,43 @@ func (s *settling[T]) see(v T, now time.Time) T {
 }
 
 func newRootResolver(git *gitRunner) *rootResolver {
-	return &rootResolver{
+	rr := &rootResolver{
 		git:           git,
 		resolved:      newTTLCache[filesRoot](filesRootTTL),
+		repoChecks:    newTTLCache[struct{}](filesRootTTL),
 		inContainer:   runningInContainer,
 		ownedByServer: ownedByServer,
 		windows:       runtime.GOOS == "windows",
 		panes:         map[string]*paneRootState{},
 		now:           time.Now,
 	}
+	git.checkRoot = rr.checkRepoRoot
+	return rr
+}
+
+// checkRepoRoot is errDirNotAvailable when, on Windows, the repository of
+// root must not be handed to git (repoConfigRefused); root is resolved
+// first, as resolve does. The answer is kept filesRootTTL, or until termote
+// writes under root.
+func (rr *rootResolver) checkRepoRoot(root string) error {
+	if !rr.windows {
+		return nil
+	}
+	_, err := rr.repoChecks.do(root, func() (struct{}, error) {
+		abs, err := filepath.Abs(root)
+		if err == nil {
+			abs, err = evalSymlinks(abs)
+		}
+		if err == nil {
+			err = rr.repoConfigRefused(abs)
+		}
+		if err != nil {
+			log.Printf("files: the repository of %s is not handed to git: %v", root, err)
+			return struct{}{}, errDirNotAvailable
+		}
+		return struct{}{}, nil
+	})
+	return err
 }
 
 // paneRoot resolves the root of a pane and keeps it stable while the pane's
@@ -713,11 +755,8 @@ func (rr *rootResolver) resolve(ctx context.Context, dir string) (filesRoot, err
 		if fi, err := os.Stat(abs); err != nil || !fi.IsDir() {
 			return filesRoot{}, errDirNotAvailable
 		}
-		if rr.windows {
-			if err := rr.repoConfigRefused(abs); err != nil {
-				log.Printf("files: the repository of %s is not handed to git: %v", abs, err)
-				return filesRoot{}, errDirNotAvailable
-			}
+		if err := rr.checkRepoRoot(abs); err != nil {
+			return filesRoot{}, err
 		}
 		top, gitDir, err := rr.toplevel(ctx, abs, "")
 		var ge *gitError
