@@ -39,6 +39,7 @@ import {
 } from '../hooks/use-mux-api'
 import { useReviewComposer } from '../hooks/use-review-composer'
 import { useSettings } from '../hooks/use-settings'
+import { useTouchedFiles } from '../hooks/use-touched-files'
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
 import { Trans } from '../i18n/trans'
@@ -71,10 +72,12 @@ import { PaneDirHeader, ViewMessage } from './pane-dir-header'
 import { ReviewCommentSheet } from './review-comment-sheet'
 import { ReviewControl } from './review-panel'
 import { DiscardTabDialog, RootCloseDialog } from './tab-close-dialogs'
+import { TouchedFilesList, type TouchedTarget } from './touched-files-list'
 import { Banner } from './ui/banner'
 import { Button, IconButton } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
 import { Menu, MenuItem, MenuSeparator } from './ui/menu'
+import { SegmentedControl } from './ui/segmented-control'
 import { SkeletonLines } from './ui/skeleton'
 
 const ERRORS: Record<ChangesError, MessageKey> = {
@@ -311,6 +314,20 @@ export function openCommentInChanges(
   pendingDiffLines.set(paneId, openCommentDiff(paneId, c, notify, t))
 }
 
+// What the list shows, per pane: every change git lists, or the files the
+// pane's agent session changed. Kept while the app runs, so leaving the view
+// keeps it.
+type ListMode = 'all' | 'session'
+const listModes = new Map<string, ListMode>()
+
+// The agent the tab's pane runs, when it is one whose session files are
+// read (the tab's own when its panes are not listed)
+function paneAgent(session: Session, paneId: string) {
+  const name =
+    session.panes?.find((p) => p.id === paneId)?.agentName ?? session.agentName
+  return name === 'claude' || name === 'codex' ? name : undefined
+}
+
 export function ChangesView({
   session,
   isMobile,
@@ -376,6 +393,24 @@ function PaneChanges({
   | 'insertText'
 >) {
   const c = useGitChanges(paneId)
+  const agent = paneAgent(session, paneId)
+  const [mode, setModeState] = useState<ListMode>(
+    () => listModes.get(paneId) ?? 'all',
+  )
+  const setMode = (m: ListMode) => {
+    listModes.set(paneId, m)
+    setModeState(m)
+  }
+  const touchedShown = !!agent && mode === 'session'
+  const touched = useTouchedFiles(paneId, touchedShown && !c.active)
+  const openTouched = (target: TouchedTarget) => {
+    if (target.kind === 'diff') {
+      openFromList(target.side)
+      return
+    }
+    openInFiles(paneId, c.root as string, target.path)
+    showView(FILES_VIEW_ID)
+  }
   const { settings } = useSettings()
   const { t } = useT()
   const isDirty = useDirtyCheck(paneId)
@@ -838,6 +873,16 @@ function PaneChanges({
         line={diffLine?.key === tabKey ? diffLine?.at : undefined}
       />
     )
+  } else if (touchedShown) {
+    body = (
+      <div className="min-h-0 flex-1 overflow-y-auto pb-2">
+        <TouchedFilesList
+          state={touched}
+          entries={c.loaded && c.isRepo ? c.entries : undefined}
+          onOpen={openTouched}
+        />
+      </div>
+    )
   } else if (!c.loaded) {
     body = <SkeletonLines label={t('files.loading')} icon className="flex-1" />
   } else if (c.error && c.entries.length === 0) {
@@ -974,6 +1019,20 @@ function PaneChanges({
         {!tab && openFiles}
       </PaneDirHeader>
       {tabBar && <FileTabBar {...tabList} />}
+      {agent && !tab && (
+        <div className="shrink-0 border-b border-border px-2 py-1.5">
+          <SegmentedControl
+            label={t('files.changes.mode')}
+            value={mode}
+            onChange={setMode}
+            options={[
+              { value: 'all', content: t('files.changes.mode.all') },
+              { value: 'session', content: t('files.changes.mode.session') },
+            ]}
+            className="w-full [&>button]:flex-1"
+          />
+        </div>
+      )}
       <OpenFilesSheet
         {...tabList}
         isOpen={isMobile && listing}

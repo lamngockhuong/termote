@@ -343,6 +343,7 @@ export default {
   'chat.history.running': 'Đang chạy',
   'chat.history.untitled': 'Phiên chưa có tên',
   'chat.history.back': 'Quay lại danh sách',
+  'chat.history.touched': 'File đã sửa',
   'chat.history.gone': 'Phiên này không còn nữa.',
   'chat.history.resumeTab': 'Tiếp tục trong tab mới',
   'chat.history.resumeHere': 'Tiếp tục ở đây',

@@ -74,6 +74,7 @@ import { TerminalStack } from './components/terminal-stack'
 import type { TerminalHandle } from './components/terminal-view'
 import { Toast, type ToastAction, type ToastVariant } from './components/toast'
 import { ToolbarRail } from './components/toolbar-rail'
+import type { TouchedTarget } from './components/touched-files-list'
 import { Banner } from './components/ui/banner'
 import { Button } from './components/ui/button'
 import { ConfirmDialog } from './components/ui/confirm-dialog'
@@ -93,6 +94,7 @@ import {
   FOLLOW_NOTICES,
   followInFiles,
   followPathInFiles,
+  openInFiles,
   requestFilesFocus,
   usePlaces,
 } from './hooks/use-files'
@@ -1014,6 +1016,24 @@ export default function App({
         showView(FILES_VIEW_ID)
       } else if (result === 'outside') notify(t('chat.view.outside'))
       else if (FOLLOW_NOTICES[result]) notify(t(FOLLOW_NOTICES[result]))
+    },
+    [showView, notify, t],
+  )
+  // A file an old session changed: its diff in Changes while git lists it,
+  // else the file in Files, of the pane on screen
+  const historyOpenTouched = useCallback(
+    (paneId: string, target: TouchedTarget, root: string) => {
+      setHistoryTarget(null)
+      if (target.kind === 'file') {
+        openInFiles(paneId, root, target.path)
+        showView(FILES_VIEW_ID)
+        return
+      }
+      void openChangeFromLink(paneId, target.side).then((shown) => {
+        if (shown === false)
+          notify(t('files.changes.noChangesFor'), { variant: 'warning' })
+      })
+      showView(CHANGES_VIEW_ID)
     },
     [showView, notify, t],
   )
@@ -2853,6 +2873,11 @@ export default function App({
         openFile={
           historyTarget?.paneId === activeSession.paneId && mux.caps.files
             ? historyOpenFile
+            : undefined
+        }
+        openTouched={
+          historyTarget?.paneId === activeSession.paneId && mux.caps.files
+            ? historyOpenTouched
             : undefined
         }
       />

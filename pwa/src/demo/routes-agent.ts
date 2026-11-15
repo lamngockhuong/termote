@@ -209,4 +209,8 @@ export const AGENT_ROUTES: Record<string, Handler> = {
   // running sessions' totals
   'GET /panes/{id}/agent/usage': () =>
     fail(404, 'session_not_found', 'no such session'),
+  // The demo's agents write no transcript: they changed no file through a
+  // tool call
+  'GET /panes/{id}/agent/touched': () =>
+    json({ files: [], skipped: 0, truncated: false }),
 }

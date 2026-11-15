@@ -713,6 +713,29 @@ export default {
   'files.changes.filter': 'Lọc thay đổi',
   'files.changes.filterPlaceholder': 'Lọc thay đổi…',
   'files.changes.noMatch': 'Không có thay đổi nào khớp',
+  // Những gì một session đã sửa (components/touched-files-list.tsx), một
+  // chế độ của danh sách Changes
+  'files.changes.mode': 'Thay đổi cần hiện',
+  'files.changes.mode.all': 'Tất cả thay đổi',
+  'files.changes.mode.session': 'Session này đã sửa',
+  'files.touched.list': 'File session này đã sửa',
+  'files.touched.shellNote':
+    'Không gồm file sửa bằng lệnh shell (sed, mv, script).',
+  'files.touched.skipped_other':
+    '{count} file ngoài thư mục này không được hiện.',
+  'files.touched.truncated': 'Chỉ hiện 2000 file gần nhất.',
+  'files.touched.empty': 'Session này chưa sửa file nào.',
+  'files.touched.clean': 'không còn thay đổi',
+  'files.touched.gone': 'đã xoá',
+  'files.touched.sub': 'subagent',
+  'files.touched.running': 'đang sửa',
+  'files.touched.count': '×{count}',
+  'files.touched.countTitle_other': 'Đã sửa {count} lần',
+  'files.touched.none':
+    'Pane này không chạy session Claude Code hay Codex nào.',
+  'files.touched.failed': 'Không đọc được các file session này đã sửa.',
+  'files.touched.viewOnly':
+    'Thiết bị chỉ xem chỉ thấy chúng trong một git repository.',
   'files.apply.staleHunk': 'File đã đổi từ lúc đọc diff; diff vừa được đọc lại',
   'files.apply.changed': 'File đã đổi từ lúc được đọc',
   'files.apply.notChanged': 'Không còn thay đổi',

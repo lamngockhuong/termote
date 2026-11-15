@@ -26,6 +26,7 @@ import { HistoryTranscriptView } from './history-transcript-view'
 import { ReadOnlyBar } from './read-only-bar'
 import { SessionSearchField } from './session-search-field'
 import { SessionUsageLine } from './session-usage-line'
+import { TouchedFilesSection, type TouchedTarget } from './touched-files-list'
 import { Button, IconButton } from './ui/button'
 import { Sheet } from './ui/sheet'
 import { UsageTotalsStrip } from './usage-totals-strip'
@@ -56,6 +57,9 @@ export interface AgentHistorySheetProps {
   onOpenLive: (live: LiveTab) => void
   // Opens a path of a transcript in the Files view of the pane
   openFile?: (paneId: string, path: string, line?: number) => Promise<void>
+  // Opens a file a session changed: its diff in Changes, or the file in
+  // Files, of the pane's root
+  openTouched?: (paneId: string, target: TouchedTarget, root: string) => void
 }
 
 // The sessions of Claude Code and Codex that ran in a pane's folder: a
@@ -95,6 +99,7 @@ function HistoryContent({
   onResumed,
   onOpenLive,
   openFile,
+  openTouched,
 }: Omit<AgentHistorySheetProps, 'target'> & { target: HistoryTarget }) {
   const { t } = useT()
   const history = useAgentHistory(target.paneId)
@@ -167,6 +172,7 @@ function HistoryContent({
         onBack={() => setSelected(undefined)}
         notify={notify}
         openFile={openFile}
+        openTouched={openTouched}
         actions={
           readOnly ? (
             <ReadOnlyBar label={t('chat.history.readOnly')} />
@@ -299,6 +305,7 @@ function SessionScreen({
   onBack,
   notify,
   openFile,
+  openTouched,
   actions,
 }: {
   session: HistorySession
@@ -306,6 +313,7 @@ function SessionScreen({
   onBack: () => void
   notify: (message: string) => void
   openFile?: AgentHistorySheetProps['openFile']
+  openTouched?: AgentHistorySheetProps['openTouched']
   actions?: ReactNode
 }) {
   const { t } = useT()
@@ -347,6 +355,14 @@ function SessionScreen({
           )}
         </span>
       </div>
+      {openTouched && (
+        <TouchedFilesSection
+          paneId={paneId}
+          agent={session.agent}
+          sessionId={session.id}
+          onOpen={(target, root) => openTouched(paneId, target, root)}
+        />
+      )}
       <HistoryTranscriptView
         paneId={paneId}
         agent={session.agent}
