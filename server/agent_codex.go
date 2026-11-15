@@ -493,7 +493,7 @@ func parseCodexRow(line []byte, off int64) (e TranscriptEntry, recognised, ok bo
 		e.Parts = append(e.Parts, TranscriptPart{Kind: "tool", Tool: tool, ToolID: it.ID, Input: oneLine(it.Query)})
 	case "ContextCompaction":
 		e.Role = "summary"
-		e.Parts = append(e.Parts, TranscriptPart{Kind: "text", Text: "Context compacted"})
+		e.Parts = append(e.Parts, TranscriptPart{Kind: "text", Text: compactedText})
 	case "Plan":
 		if strings.TrimSpace(it.Text) != "" {
 			e.Parts = append(e.Parts, textPart("text", it.Text, claudeMaxText))

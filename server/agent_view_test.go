@@ -85,8 +85,9 @@ func fullUnchanged(t *testing.T, s AgentSession, full transcriptResponse) {
 // A view-only client reads a Claude Code transcript as text only: no call,
 // result or detail of any tool, whichever file it names (a symlink to .env
 // under an innocent name, a Grep over the repository, an edit, a result whose
-// call lies before the read), and no output of a command the user ran with
-// `!`. A full client's reply is unchanged.
+// call lies before the read), no output of a command the user ran with `!`,
+// and of a compaction summary (which quotes what tools read) only that it
+// happened. A full client's reply is unchanged.
 func TestTranscriptRouteGivesViewTextOnlyClaude(t *testing.T) {
 	repo := t.TempDir()
 	if err := os.WriteFile(filepath.Join(repo, ".env"), []byte("SECRET=1\n"), 0o600); err != nil {
@@ -112,6 +113,7 @@ func TestTranscriptRouteGivesViewTextOnlyClaude(t *testing.T) {
 {"type":"user","uuid":"d","message":{"content":"thanks"}}
 {"type":"user","uuid":"f","message":{"content":"<bash-input>cat .env</bash-input>"}}
 {"type":"user","uuid":"g","message":{"content":"<bash-stdout>SECRET_BASH=1</bash-stdout><bash-stderr></bash-stderr>"}}
+{"type":"user","uuid":"h","isCompactSummary":true,"message":{"content":"This session is being continued. The agent read .env: SECRET_SUMMARY=1"}}
 {"type":"assistant","uuid":"e","message":{"content":[{"type":"text","text":"Done."}]}}
 `
 	writeTranscript(t, dir, testSessionID, string(call)+"\n"+results)
@@ -123,15 +125,18 @@ func TestTranscriptRouteGivesViewTextOnlyClaude(t *testing.T) {
 
 	view, body := getTranscriptAs(t, h, true)
 	checkTextOnly(t, view, body, "SECRET", notes, "*.txt")
-	if got := strings.Join(textParts(view.Entries), ","); got != "Reading the notes.,thanks,! cat .env,Done." {
+	if got := strings.Join(textParts(view.Entries), ","); got != "Reading the notes.,thanks,! cat .env,"+compactedText+",Done." {
 		t.Errorf("view texts = %q", got)
 	}
 	if p := view.Entries[0].Parts[0]; p.Kind != "thinking" || p.Text != "Let me look." {
 		t.Errorf("view thinking = %+v", p)
 	}
+	if e := view.Entries[len(view.Entries)-2]; e.Role != "summary" || len(e.Parts) != 1 || e.Parts[0].Text != compactedText {
+		t.Errorf("view summary = %+v", e)
+	}
 	full, fullBody := getTranscriptAs(t, h, false)
 	if !bytes.Contains(fullBody, []byte("SECRET_ORPHAN")) || !bytes.Contains(fullBody, []byte("SECRET_NEW")) ||
-		!bytes.Contains(fullBody, []byte("SECRET_BASH")) {
+		!bytes.Contains(fullBody, []byte("SECRET_BASH")) || !bytes.Contains(fullBody, []byte("SECRET_SUMMARY")) {
 		t.Errorf("full reply lost a tool result or an edit: %s", fullBody)
 	}
 	fullUnchanged(t, s, full)

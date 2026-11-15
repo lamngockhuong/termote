@@ -523,19 +523,27 @@ func (a *agentAPI) readCached(s AgentSession, cursor, before string) (transcript
 	})
 }
 
+// compactedText is what a compaction summary reads as where its text is not
+// shown: Codex's in every transcript, Claude Code's for a view-only client.
+const compactedText = "Context compacted"
+
 // viewTranscript is res as a view-only client reads it: the user's and the
-// agent's words (text, thinking, a summary) and the images the user pasted.
-// No tool part at all, so no tool's input, result or detail whatever file or
-// command it names, and no note (a shell command's output the user ran with
-// `!`, a slash command's, a hook's); an entry left with no part is dropped.
-// res is shared by every client through the read cache, so an entry changed
-// is a copy.
+// agent's words (text, thinking) and the images the user pasted. No tool
+// part at all, so no tool's input, result or detail whatever file or command
+// it names; no note (a shell command's output the user ran with `!`, a slash
+// command's, a hook's); and of a compaction summary, which quotes what tools
+// read, only compactedText. An entry left with no part is dropped. res is
+// shared by every client through the read cache, so an entry changed is a
+// copy.
 func viewTranscript(res transcriptResponse) transcriptResponse {
 	entries := make([]TranscriptEntry, 0, len(res.Entries))
 	isTool := func(p TranscriptPart) bool { return p.Kind == "tool" }
 	for _, e := range res.Entries {
-		if e.Role == "note" {
+		switch e.Role {
+		case "note":
 			continue
+		case "summary":
+			e.Parts = []TranscriptPart{{Kind: "text", Text: compactedText}}
 		}
 		if slices.ContainsFunc(e.Parts, isTool) {
 			e.Parts = slices.DeleteFunc(slices.Clone(e.Parts), isTool)
