@@ -890,18 +890,22 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `[Image #N]` tokens (11s wait each) before the next; `at` (byte offsets, checked: one per
   image, in order, on a character boundary) puts parts of the text between them, each pasted
   and confirmed on its own, then Enter, with the process and session re-checked between
-  pastes and before text pasted first. Text starting with `/` or `!` always goes after every
-  image. If a step fails after the first paste, the box is cleared with one `C-c` only when
+  pastes and before text pasted first. Text starting with `!` always goes after every image,
+  so it is never a shell escape; a `/` command keeps its images in its arguments, and is refused
+  while Codex works as a command without images is (an image before it makes it text, queued). If a step fails after the first paste, the box is cleared with one `C-c` only when
   the same idle agent shows nothing but one of the states this request pasted; otherwise 409
   `partial_paste` and nothing is touched.
   `GET agent/image?src=` (`server/agent_image.go`) serves an image the user pasted into a Claude
-  Code or Codex message, shown again from its `[image]` chip in the Chat view. `src` is a reference
+  Code or Codex message, shown again from its `[image]` chip in the Chat view (numbered by the
+  message's `[Image #N]` tokens when there is one per image, else by order when there are several). `src` is a reference
   the transcript read gave the part, HMAC-signed with the cursor key under its own `image\x00`
   domain (a cursor never passes for one): session id, file identity, row offset and the image's
   place in the row; nothing else is taken from the client. The server re-locates the pane's own
   session (`Locate`, as `transcript`), needs the same file identity, an offset at a line start and
   a whole row within 32 MiB. Claude Code: only a `source.type: base64` block of that row (never a
-  URL source or a tool result's image). Codex: the row must be a `UserMessage` item, and the bytes
+  URL source or a tool result's image). A slash command's images are in the `isMeta` row that
+  expands it: the read lists them on the command only from the row right after it whose
+  `parentUuid` is the command's, and the reference names that row's offset. Codex: the row must be a `UserMessage` item, and the bytes
   come only from the row right before it, which must be the model's user input (`response_item`
   `message`, role `user`) holding exactly as many `input_image`s as the item has images (so a file
   Codex could not read moves no image onto another's chip), each a base64 `data:` URL; the file a

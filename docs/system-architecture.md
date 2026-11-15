@@ -406,8 +406,9 @@ Each image puts an `[Image #n]` token in the box where the caret is; deleting th
 the image, removing the image removes its token. On send the tokens are cut out of `text` and
 `at` gives each image's place, a UTF-8 byte offset into `text` in image order (none: every
 image before the text; offsets not one per image, in order, on a character boundary → 400
-`invalid_request`). Text starting with `/` or `!` still goes after every image, so it is never
-a command or a shell escape.
+`invalid_request`). Text starting with `!` still goes after every image, so it is never a shell
+escape; a `/` command keeps its images in its arguments, as Claude Code runs it (its images are in
+the `isMeta` row that expands it, which the transcript read lists on the command).
 The server resolves each id in the store (an unknown one → 400 `invalid_request` with the bad
 ids in `images`; no store → 503 `uploads_unavailable`), pastes each path on its own and waits
 until the draft shows that many `[Image #N]` tokens (Claude Code and Codex both draw this for a

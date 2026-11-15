@@ -85,7 +85,11 @@ func addImageRefs(entries []TranscriptEntry, session, file string) {
 		for j := range entries[i].Parts {
 			p := &entries[i].Parts[j]
 			if p.Kind == "image" {
-				p.Image = encodeImageRef(agentImageRef{Session: session, File: file, Offset: entries[i].off, N: p.imageN})
+				off := entries[i].off
+				if p.imageOff != 0 {
+					off = p.imageOff
+				}
+				p.Image = encodeImageRef(agentImageRef{Session: session, File: file, Offset: off, N: p.imageN})
 			}
 		}
 	}

@@ -32,6 +32,7 @@ export default {
   'chat.message.image': 'ảnh: {where}',
   'chat.message.imageUnavailable': 'không có',
   'chat.message.imageChip': '[ảnh]',
+  'chat.message.imageChipNumbered': '[ảnh #{n}]',
   'chat.message.imageOpen': 'Xem ảnh',
   'chat.image.title': 'Ảnh',
   'chat.image.openTab': 'Mở trong tab mới',
