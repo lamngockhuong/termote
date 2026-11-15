@@ -512,8 +512,9 @@ func (a *agentAPI) handleMessage(w http.ResponseWriter, r *http.Request) {
 
 // messageParts splits a message's text at the offsets its n images go to:
 // parts[i] goes before image i, the last part after the last image. Without
-// offsets every image goes first, as for text that starts with "/" or "!":
-// after an image token it is text, never a command or a shell escape. Each
+// offsets every image goes first, as for text that starts with "!": after an
+// image token it is text, never a shell escape. A "/" command keeps its
+// images where they are, in its arguments, as the agent takes them. Each
 // part is cleaned (cleanText). ok is false for offsets that are not one per
 // image, in order, on a character boundary of text.
 func messageParts(text string, at []int, n int) (parts []string, ok bool) {
@@ -533,7 +534,7 @@ func messageParts(text string, at []int, n int) (parts []string, ok bool) {
 		prev = i
 	}
 	parts = append(parts, cleanText(text[prev:]))
-	if lead := strings.TrimSpace(parts[0]); n > 0 && (strings.HasPrefix(lead, "/") || strings.HasPrefix(lead, "!")) {
+	if n > 0 && strings.HasPrefix(strings.TrimSpace(parts[0]), "!") {
 		return append(make([]string, n), strings.Join(parts, "")), true
 	}
 	return parts, true
@@ -621,7 +622,8 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 			return err
 		}
 	}
-	if agentWorking(s, sc) && !agentQueueing[s.Agent].commands && len(paths) == 0 && strings.HasPrefix(strings.TrimSpace(text), "/") {
+	// A command is a "/" before any image; one after an image is text
+	if agentWorking(s, sc) && !agentQueueing[s.Agent].commands && strings.HasPrefix(strings.TrimSpace(parts[0]), "/") {
 		return fail(http.StatusConflict, "input_not_ready", "the agent is working; send a command once it is done")
 	}
 	// resend: the box already holds this very message, as text, not a

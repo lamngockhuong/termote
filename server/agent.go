@@ -101,6 +101,11 @@ type TranscriptEntry struct {
 	Role  string           `json:"role"` // user | assistant | summary | note
 	Parts []TranscriptPart `json:"parts"`
 	off   int64            // offset of the line the entry came from
+	// command: a Claude Code slash command as typed, whose images are in
+	// the row that expands it (claudeJournal.Parse); parent: the uuid of
+	// the row a Claude Code row follows. Neither is sent.
+	command bool
+	parent  string
 	// usage: the context the row's request filled (Claude assistant rows,
 	// the last Codex assistant entry before a token_count row), for the
 	// overview; never sent with the transcript.
@@ -144,8 +149,11 @@ type TranscriptPart struct {
 	// Image: an image part's signed reference for agent/image; absent when
 	// the agent's transcript keeps no image the server can serve.
 	Image string `json:"image,omitempty"`
-	// imageN: an image part's place among the images of its row
-	imageN int
+	// imageN: an image part's place among the images of its row;
+	// imageOff: that row's offset when it is not the entry's own (a
+	// command's images, in the row that expands it), else 0
+	imageN   int
+	imageOff int64
 }
 
 // ToolDetail is a tool call's own description, its whole command and the

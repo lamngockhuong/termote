@@ -1053,7 +1053,8 @@ func imageAgent(f *fakeWriter, delay time.Duration) {
 	f.onPaste = func(f *fakeWriter, text string) {
 		mu.Lock()
 		defer mu.Unlock()
-		if filepath.IsAbs(strings.Trim(text, `"`)) { // C:\... on Windows
+		// An image's path names a file; a "/command" does not
+		if p := strings.Trim(text, `"`); filepath.IsAbs(p) && fileExists(p) { // C:\... on Windows
 			count++
 			if draft != "" {
 				draft += " "
@@ -1322,6 +1323,23 @@ func postMessageAt(t *testing.T, mux http.Handler, text string, ids []string, at
 	return postJSON(t, mux, "/api/mux/panes/0/agent/message", map[string]any{"text": text, "cursor": cursorFor(testSessionID), "images": ids, "at": at})
 }
 
+// A slash command keeps its images where they were put, in its arguments:
+// Claude Code runs the command with them.
+func TestMessageImagesInCommand(t *testing.T) {
+	shortImageWait(t)
+	f := newFakeWriter()
+	imageAgent(f, 0)
+	mux, ids, paths := imageMux(t, f, 1)
+	text := "/fix look at  please"
+	if code, body := postMessageAt(t, mux, text, ids, []int{len("/fix look at ")}); code != http.StatusNoContent {
+		t.Fatalf("POST = %d %v pasted %q keys %v", code, body, f.pasted, f.keys)
+	}
+	want := []string{"/fix look at ", paths[0], " please"}
+	if strings.Join(f.pasted, "|") != strings.Join(want, "|") {
+		t.Errorf("pasted %q, want %q", f.pasted, want)
+	}
+}
+
 // Images go where the user put them: the text around each is pasted in
 // turn, as is.
 func TestMessageImagesBetweenText(t *testing.T) {
@@ -1377,8 +1395,12 @@ func TestMessageParts(t *testing.T) {
 		{"ab\r\ncd", []int{2}, 1, []string{"ab", "\ncd"}, true},
 		{"a\x00b", []int{3}, 1, []string{"ab", ""}, true},
 		{"abc", []int{0, 3}, 2, []string{"", "abc", ""}, true},
-		{" /model x", []int{7}, 1, []string{"", " /model x"}, true},
+		// A command keeps its images in its arguments; a shell escape
+		// goes after them, as text
+		{" /model x", []int{7}, 1, []string{" /model", " x"}, true},
+		{"/cmd a", nil, 1, []string{"", "/cmd a"}, true},
 		{"!ls ", []int{4}, 1, []string{"", "!ls "}, true},
+		{" !ls a", []int{5, 6}, 2, []string{"", "", " !ls a"}, true},
 		{"/model", nil, 0, []string{"/model"}, true},
 		{"ab\r\ncd", []int{3}, 1, nil, false},
 		{"abc", []int{1}, 2, nil, false},

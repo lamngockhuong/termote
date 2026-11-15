@@ -122,6 +122,44 @@ func TestAgentImageServesTranscriptImages(t *testing.T) {
 	}
 }
 
+// A slash command's row holds only the command; its images are in the
+// isMeta row that expands it, right after. They show on the command, and
+// the route serves them from that row. Another meta row's images, and a
+// meta row after anything but its command, stay hidden.
+func TestAgentImageOfSlashCommand(t *testing.T) {
+	red, blue := testPNG(t, color.RGBA{255, 0, 0, 255}), testPNG(t, color.RGBA{0, 0, 255, 255})
+	dir := t.TempDir()
+	command := func(uuid string) string {
+		return fmt.Sprintf(`{"type":"user","uuid":%q,"message":{"role":"user","content":"<command-message>fix</command-message>\n<command-name>/fix</command-name>\n<command-args>look [Image #1] here</command-args>"}}`+"\n", uuid)
+	}
+	meta := func(uuid, parent, block string) string {
+		return fmt.Sprintf(`{"type":"user","uuid":%q,"parentUuid":%q,"isMeta":true,"message":{"role":"user","content":[%s,{"type":"text","text":"Fix this: look [Image #1] here"}]}}`+"\n", uuid, parent, block)
+	}
+	writeTranscript(t, dir, testSessionID,
+		command("c1")+meta("m1", "c1", imageBlock("image/png", red))+
+			// A second meta row of the same command adds nothing
+			meta("m2", "m1", imageBlock("image/png", blue))+
+			// After a plain message, and after another command
+			imageRow("u1")+meta("m3", "u1", imageBlock("image/png", blue))+
+			command("c2")+meta("m4", "other", imageBlock("image/png", blue)))
+	mux, _ := subagentsServer(t, claudeSession(dir))
+	res := getTranscriptRes(t, mux)
+	if len(res.Entries) != 3 {
+		t.Fatalf("entries = %+v", res.Entries)
+	}
+	cmd := res.Entries[0]
+	if cmd.Role != "user" || len(cmd.Parts) != 2 || cmd.Parts[0].Text != "/fix look [Image #1] here" || cmd.Parts[1].Kind != "image" {
+		t.Fatalf("command = %+v", cmd)
+	}
+	refs := imageRefs(res)
+	if len(refs) != 1 {
+		t.Fatalf("refs = %q", refs)
+	}
+	if rec := getImage(mux, refs[0], nil); rec.Code != http.StatusOK || !bytes.Equal(rec.Body.Bytes(), red) {
+		t.Fatalf("image = %d (%d bytes)", rec.Code, rec.Body.Len())
+	}
+}
+
 func TestAgentImageRefusesForgedOrStaleRefs(t *testing.T) {
 	png := testPNG(t, color.Black)
 	dir := t.TempDir()

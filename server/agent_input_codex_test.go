@@ -134,6 +134,29 @@ func TestCodexCommandWhileWorking(t *testing.T) {
 	}
 }
 
+// A command with an image is still a command: it waits too. Its images
+// first make it text, which is queued.
+func TestCodexCommandWithImageWhileWorking(t *testing.T) {
+	shortConfirm(t)
+	working := codexSession
+	working.Status = "working"
+	f := newCodexWriter()
+	f.session = working
+	mux, ids, _ := imageMux(t, f, 1)
+	code, body := postJSON(t, mux, "/api/mux/panes/0/agent/message", map[string]any{
+		"text": "/review look", "cursor": codexCursor(), "images": ids, "at": []int{len("/review ")},
+	})
+	if code != http.StatusConflict || body["code"] != "input_not_ready" || len(f.pasted) != 0 || len(f.keys) != 0 {
+		t.Fatalf("POST = %d %v pasted %q keys %v", code, body, f.pasted, f.keys)
+	}
+	postJSON(t, mux, "/api/mux/panes/0/agent/message", map[string]any{
+		"text": "/review look", "cursor": codexCursor(), "images": ids, "at": []int{0},
+	})
+	if len(f.pasted) == 0 || !strings.Contains(f.pasted[0], ids[0]) {
+		t.Fatalf("images first: pasted %q", f.pasted)
+	}
+}
+
 func TestCodexMessageRefusals(t *testing.T) {
 	shortConfirm(t)
 	with := func(change func(*AgentSession)) AgentSession {

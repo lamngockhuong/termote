@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -123,6 +124,7 @@ func pathWithin(dir, p string) bool {
 type claudeRow struct {
 	Type             string `json:"type"`
 	UUID             string `json:"uuid"`
+	ParentUUID       string `json:"parentUuid"`
 	Timestamp        string `json:"timestamp"`
 	IsSidechain      bool   `json:"isSidechain"`
 	IsMeta           bool   `json:"isMeta"`
@@ -186,7 +188,7 @@ func (claudeJournal) Parse(r io.Reader, start int64) ([]TranscriptEntry, int64) 
 			off = lineStart + n
 			if !clip.overflow {
 				if e, ok := parseClaudeRow(clip.out, lineStart); ok {
-					entries = append(entries, e)
+					entries = addClaudeEntry(entries, e)
 				}
 				continue
 			}
@@ -206,7 +208,7 @@ func (claudeJournal) Parse(r io.Reader, start int64) ([]TranscriptEntry, int64) 
 			continue
 		}
 		if e, ok := parseClaudeRow(line, lineStart); ok {
-			entries = append(entries, e)
+			entries = addClaudeEntry(entries, e)
 		}
 	}
 }
@@ -274,10 +276,13 @@ func parseClaudeRow(line []byte, off int64) (TranscriptEntry, bool) {
 	if json.Unmarshal(line, &row) != nil || row.Message == nil {
 		return TranscriptEntry{}, false
 	}
-	if (row.Type != "user" && row.Type != "assistant") || row.IsSidechain || row.IsMeta {
+	if (row.Type != "user" && row.Type != "assistant") || row.IsSidechain {
 		return TranscriptEntry{}, false
 	}
-	e := TranscriptEntry{ID: row.UUID, TS: row.Timestamp, Role: row.Type, off: off}
+	if row.IsMeta {
+		return claudeMetaImages(row.Type, row.ParentUUID, row.Message.Content, off)
+	}
+	e := TranscriptEntry{ID: row.UUID, TS: row.Timestamp, Role: row.Type, off: off, parent: row.ParentUUID}
 	if e.ID == "" {
 		e.ID = fmt.Sprintf("line-%d", off)
 	}
@@ -300,6 +305,9 @@ func parseClaudeRow(line []byte, off int64) (TranscriptEntry, bool) {
 				if row.Type == "user" {
 					// Only the user role carries Claude Code's envelopes;
 					// the model's own words are shown as written.
+					if tag := claudeEnvelope(strings.TrimLeft(t, " \t\r\n")); tag == "command-name" || tag == "command-message" {
+						e.command = true
+					}
 					role, s, ok := classifyClaudeUserText(t)
 					if !ok {
 						continue
@@ -357,6 +365,41 @@ func parseClaudeRow(line []byte, off int64) (TranscriptEntry, bool) {
 		}
 	}
 	return e, true
+}
+
+// claudeMetaImages reads an isMeta row, injected for the model and never
+// shown, for the images it carries: a slash command's row holds only the
+// command as typed, and the row that expands it for the model, following
+// it, holds the images pasted into its arguments. The images come back as a
+// "meta" entry, which claudeJournal.Parse attaches to the command.
+func claudeMetaImages(typ, parent string, content any, off int64) (TranscriptEntry, bool) {
+	blocks, _ := content.([]any)
+	if typ != "user" || parent == "" {
+		return TranscriptEntry{}, false
+	}
+	e := TranscriptEntry{Role: "meta", off: off, parent: parent}
+	for _, item := range blocks {
+		if b, _ := item.(map[string]any); jsonStr(b["type"]) == "image" {
+			e.Parts = append(e.Parts, TranscriptPart{Kind: "image", imageN: len(e.Parts), imageOff: off})
+		}
+	}
+	return e, len(e.Parts) > 0
+}
+
+// addClaudeEntry adds a parsed row to entries. A meta entry's images go to
+// the command it expands, the entry right before it, when that command has
+// none yet; otherwise they are dropped, as every meta row is.
+func addClaudeEntry(entries []TranscriptEntry, e TranscriptEntry) []TranscriptEntry {
+	if e.Role != "meta" {
+		return append(entries, e)
+	}
+	if n := len(entries); n > 0 {
+		cmd := &entries[n-1]
+		if cmd.command && cmd.ID == e.parent && !slices.ContainsFunc(cmd.Parts, func(p TranscriptPart) bool { return p.Kind == "image" }) {
+			cmd.Parts = append(cmd.Parts, e.Parts...)
+		}
+	}
+	return entries
 }
 
 func jsonStr(v any) string {
