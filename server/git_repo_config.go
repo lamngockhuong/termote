@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -281,9 +282,20 @@ func (rr *rootResolver) repoConfigRefused(dir string) error {
 			return err
 		}
 		if gitDir != "" {
-			valid, err := rr.checkGitDir(gitDir)
+			valid, err := rr.checkGitDir(gitDir, d)
 			if err != nil || valid {
 				return err
+			}
+		}
+		// Where d's own entry is no repository git takes (an empty folder,
+		// one without a HEAD), git tries d itself as a bare repository
+		// before it walks up, so d is checked too.
+		if gitDir != d {
+			if _, err := os.Lstat(filepath.Join(d, "HEAD")); err == nil {
+				valid, err := rr.checkGitDir(d, d)
+				if err != nil || valid {
+					return err
+				}
 			}
 		}
 		parent := filepath.Dir(d)
@@ -297,6 +309,7 @@ func (rr *rootResolver) repoConfigRefused(dir string) error {
 // gitDirAt returns the git directory git tries at d: d/.git (a directory,
 // or the one a "gitdir: <path>" file names), else d itself when it holds a
 // HEAD (a bare repository, or inside a git directory); "" for neither.
+// repoConfigRefused tries d too when the first is no repository.
 func (rr *rootResolver) gitDirAt(d string) (string, error) {
 	entry := filepath.Join(d, ".git")
 	fi, err := os.Lstat(entry)
@@ -322,22 +335,73 @@ func (rr *rootResolver) gitDirAt(d string) (string, error) {
 	return "", nil
 }
 
-// repoPath resolves a path a repository file names against base, refusing
-// one off a drive letter; "~" (the user's own home) and git's %(prefix)
-// install directory count as local and resolve to "". A value led by
+// configPath resolves a path a config value names (an include, or a file git
+// opens) as git expands it before repoPath: git drops %(prefix)/ before an
+// absolute path and uses it as written, and ~/ is the user's home (git's
+// HOME), read like any local file (a home on a share is the user's own and
+// passes). %(prefix)/ before a relative path (git's own install directory)
+// and ~user (another user's home) resolve to "". A value led by
 // ":(optional)" names the path after it.
-func (rr *rootResolver) repoPath(v, base string) (string, error) {
+func (rr *rootResolver) configPath(v, base string) (string, error) {
 	v = strings.TrimPrefix(v, ":(optional)")
-	if w := strings.ReplaceAll(v, "/", `\`); strings.HasPrefix(w, `\\`) {
+	if rest, ok := strings.CutPrefix(v, "%(prefix)/"); ok {
+		if !strings.HasPrefix(rest, "/") && !strings.HasPrefix(rest, `\`) && (len(rest) < 2 || rest[1] != ':') {
+			return "", nil
+		}
+		v = rest
+	}
+	rest, ok := strings.CutPrefix(v, "~")
+	if !ok {
+		return rr.offDrivePath(v, base, "")
+	}
+	user, tail, _ := strings.Cut(strings.ReplaceAll(rest, `\`, "/"), "/")
+	if user != "" {
+		return "", nil
+	}
+	home, err := gitHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return rr.offDrivePath(filepath.Join(home, filepath.FromSlash(tail)), base, home)
+}
+
+// gitHomeDir is the home directory git expands ~ to: HOME, else (Git for
+// Windows) HOMEDRIVE and HOMEPATH, else the user profile.
+func gitHomeDir() (string, error) {
+	if h := os.Getenv("HOME"); h != "" {
+		return h, nil
+	}
+	if d, p := os.Getenv("HOMEDRIVE"), os.Getenv("HOMEPATH"); runtime.GOOS == "windows" && d != "" && p != "" {
+		if fi, err := os.Stat(d + p); err == nil && fi.IsDir() {
+			return d + p, nil
+		}
+	}
+	return os.UserHomeDir()
+}
+
+// repoPath resolves a path a repository file names literally (a gitfile's
+// gitdir:, commondir, alternates, a linked worktree's gitdir: git expands
+// neither ~ nor %(prefix) there) against base; see offDrivePath.
+func (rr *rootResolver) repoPath(v, base string) (string, error) {
+	return rr.offDrivePath(v, base, "")
+}
+
+// offDrivePath resolves v against base, refusing a path off a drive letter
+// outside the Places and home (the user's own home, when v came from ~): a
+// share (\\host\share, //host/share), a device or long-form path (\\.\,
+// \\?\UNC\) or an NT path (\??\UNC\).
+func (rr *rootResolver) offDrivePath(v, base, home string) (string, error) {
+	if w := strings.ReplaceAll(v, "/", `\`); strings.HasPrefix(w, `\\`) || strings.HasPrefix(w, `\??\`) {
+		if nt, ok := strings.CutPrefix(w, `\??\`); ok {
+			w = `\\?\` + nt // the same path in the form refusesDir reads
+		}
 		// The Place is looked up with v's own separators too: the same as
 		// w on Windows, and what a test's slash Place matches elsewhere.
-		if rr.refusesDir(w, true) && !rr.inPlace(filepath.FromSlash(v)) {
+		p := filepath.FromSlash(v)
+		if rr.refusesDir(w, true) && !rr.inPlace(p) && (home == "" || !underDir(home, p)) {
 			return "", errRepoOffDrive
 		}
-		return filepath.FromSlash(v), nil
-	}
-	if strings.HasPrefix(v, "~") || strings.HasPrefix(v, "%(prefix)") {
-		return "", nil
+		return p, nil
 	}
 	v = filepath.FromSlash(v)
 	switch {
@@ -367,7 +431,8 @@ func realRepoDir(p string) (string, error) {
 // looks at what it names before anything else, so that is checked
 // always; the config, alternates and linked worktrees only when g holds a
 // HEAD, since git reads them only from a directory it takes as a repository.
-func (rr *rootResolver) checkGitDir(g string) (valid bool, err error) {
+// top is the directory git found g from, where it runs.
+func (rr *rootResolver) checkGitDir(g, top string) (valid bool, err error) {
 	if g, err = realRepoDir(g); g == "" || err != nil {
 		return false, err
 	}
@@ -390,8 +455,16 @@ func (rr *rootResolver) checkGitDir(g string) (valid bool, err error) {
 	if _, err := os.Lstat(filepath.Join(g, "HEAD")); err != nil {
 		return false, nil
 	}
-	for _, f := range []string{filepath.Join(common, "config"), filepath.Join(g, "config.worktree")} {
-		if err := rr.checkConfigFile(f, 0); err != nil {
+	// A relative path a key names starts from the git dir (core.worktree)
+	// or the work tree git runs in: top, or a core.worktree either file,
+	// or a file it includes, sets (git reads both files as one).
+	files := []string{filepath.Join(common, "config"), filepath.Join(g, "config.worktree")}
+	bases := []string{g, top}
+	for _, f := range files {
+		bases = rr.worktreeBases(f, g, 0, bases)
+	}
+	for _, f := range files {
+		if err := rr.checkConfigFile(f, 0, bases); err != nil {
 			return false, err
 		}
 	}
@@ -426,9 +499,38 @@ func lstatIsDir(p string) bool {
 	return err == nil && fi.IsDir()
 }
 
+// worktreeBases appends to bases each core.worktree f and the local files it
+// includes set, resolved literally against the git dir g as git resolves
+// it. A file it cannot read or parse adds nothing: checkConfigFile refuses it.
+func (rr *rootResolver) worktreeBases(f, g string, depth int, bases []string) []string {
+	b, missing, err := readRepoFile(f)
+	if err != nil || missing || depth > repoConfigMaxDepth {
+		return bases
+	}
+	entries, err := parseGitConfig(b)
+	if err != nil {
+		return bases
+	}
+	for _, e := range entries {
+		switch {
+		case e.section == "core" && e.subsection == "" && e.key == "worktree":
+			if w, err := rr.repoPath(e.value, g); err == nil {
+				bases = append(bases, w)
+			}
+		case e.key == "path" && (e.section == "include" && e.subsection == "" || e.section == "includeif"):
+			if p, err := rr.configPath(e.value, filepath.Dir(f)); err == nil && p != "" {
+				bases = rr.worktreeBases(p, g, depth+1, bases)
+			}
+		}
+	}
+	return bases
+}
+
 // checkConfigFile checks one config file and, depth deep, the local files
-// it includes; a missing one is skipped, as git skips it.
-func (rr *rootResolver) checkConfigFile(f string, depth int) error {
+// it includes; a missing one is skipped, as git skips it. bases are the git
+// dir first, then the work tree git runs in: what a relative path a key
+// names starts from.
+func (rr *rootResolver) checkConfigFile(f string, depth int, bases []string) error {
 	if depth > repoConfigMaxDepth {
 		return errors.New("repository config includes too deep")
 	}
@@ -442,17 +544,40 @@ func (rr *rootResolver) checkConfigFile(f string, depth int) error {
 	}
 	for _, e := range entries {
 		include := e.key == "path" && (e.section == "include" && e.subsection == "" || e.section == "includeif")
-		opened := e.section == "core" && e.subsection == "" &&
-			(e.key == "worktree" || e.key == "excludesfile" || e.key == "attributesfile")
+		opened := e.subsection == "" && (e.section == "core" &&
+			(e.key == "worktree" || e.key == "excludesfile" || e.key == "attributesfile") ||
+			e.section == "mailmap" && e.key == "file" || e.section == "diff" && e.key == "orderfile")
 		if !include && !opened {
 			continue
 		}
-		p, err := rr.repoPath(e.value, filepath.Dir(f))
-		if err != nil {
-			return err
+		if include {
+			p, err := rr.configPath(e.value, filepath.Dir(f))
+			if err != nil {
+				return err
+			}
+			if p != "" {
+				if err := rr.checkConfigFile(p, depth+1, bases); err != nil {
+					return err
+				}
+			}
+			continue
 		}
-		if include && p != "" {
-			if err := rr.checkConfigFile(p, depth+1); err != nil {
+		// git opens the path, which may still lead off a drive through a
+		// link, from wherever a relative one starts: each base is checked.
+		// git reads core.worktree literally (no ~ or %(prefix)/).
+		resolve := rr.configPath
+		if e.key == "worktree" {
+			resolve = rr.repoPath
+		}
+		for _, base := range append([]string{filepath.Dir(f)}, bases...) {
+			p, err := resolve(e.value, base)
+			if err != nil {
+				return err
+			}
+			if p == "" {
+				break
+			}
+			if _, err := realRepoDir(p); errors.Is(err, errRemoteLink) {
 				return err
 			}
 		}
@@ -523,13 +648,48 @@ func (rr *rootResolver) checkWorktrees(common string) error {
 		if err != nil {
 			return err
 		}
-		if !missing {
-			if _, err := rr.repoPath(strings.TrimRight(string(b), "\r\n"), filepath.Join(dir, n)); err != nil {
+		if missing {
+			continue
+		}
+		p, err := rr.repoPath(strings.TrimRight(string(b), "\r\n"), filepath.Join(dir, n))
+		if err != nil {
+			return err
+		}
+		if p != "" {
+			if err := rr.checkWorktreeGitfile(p); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+// checkWorktreeGitfile checks the gitfile entry of a linked worktree (the
+// path its gitdir names): git worktree list, and ownWorktree after it, read
+// the git dir that file names, refused off a drive as a pane's own gitfile
+// is. A link on the way is checked by realRepoDir.
+func (rr *rootResolver) checkWorktreeGitfile(entry string) error {
+	// Another error (a drive with no media, access denied) leaves nothing
+	// git could open there either: a stale worktree does not refuse the
+	// repository.
+	real, err := realRepoDir(entry)
+	if errors.Is(err, errRemoteLink) {
+		return err
+	}
+	if real == "" || err != nil {
+		return nil
+	}
+	if fi, err := os.Lstat(real); err != nil || !fi.Mode().IsRegular() {
+		return nil
+	}
+	b, _, err := readRepoFile(real)
+	if err != nil {
+		return err
+	}
+	if target, ok := strings.CutPrefix(strings.TrimRight(string(b), "\r\n"), "gitdir:"); ok {
+		_, err = rr.repoPath(strings.TrimSpace(target), filepath.Dir(entry))
+	}
+	return err
 }
 
 // readRepoFile reads a small file of a repository once evalSymlinks has

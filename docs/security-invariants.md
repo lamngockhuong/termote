@@ -1202,16 +1202,30 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `config`, `status`, `log`), and git cannot be asked first (`git config --no-includes` reads the
   repository's config, includes and all, as it starts). So on Windows `resolve`, before the first
   git command at a directory, reads the repository git would find there (walking up, stopping only
-  at a git dir git takes too) as text (`repoConfigRefused`, `server/git_repo_config.go`) and refuses
+  at a git dir git takes too, and trying a directory itself as a bare repository when its `.git`
+  is no repository git takes, as git does) as text (`repoConfigRefused`, `server/git_repo_config.go`) and refuses
   it (400 `directory not available`, as a refused pane directory, the reason in the log only) when
-  a `.git` file's `gitdir:`, its `commondir`, a line of `objects/info/alternates` (followed 5 deep)
-  or a linked worktree's `gitdir` names a path off a drive letter outside the Places (the test
-  `refusesDir` uses), or when `config`, `config.worktree` or any local file they include (followed
-  10 deep; read only from a git dir holding a `HEAD`, as git reads them only from one) sets `include.path`, `includeIf.*.path`, `core.worktree`, `core.excludesFile` or
-  `core.attributesFile` to one (`:(optional)` read past). Its parser (`parseGitConfig`) takes
-  git's syntax strictly, and a file it cannot parse or read, includes too deep, or a link on the way
-  off a drive (`evalSymlinks`) refuses the repository rather than passing it. `mailmap.file` is
-  left to `--no-mailmap`. Elsewhere than Windows `repoConfigRefused` reads nothing.
+  a `.git` file's `gitdir:`, its `commondir`, a line of `objects/info/alternates` (followed 5 deep),
+  a linked worktree's `gitdir` or the `gitdir:` of the `.git` file that one names names a path off a
+  drive letter outside the Places (the test `refusesDir` uses; a share, `\\?\UNC\`, `\\.\`, and an
+  NT path `\??\UNC\` alike), or when `config`, `config.worktree` or any local file they include (followed
+  10 deep; read only from a git dir holding a `HEAD`, as git reads them only from one) sets `include.path`, `includeIf.*.path`, `core.worktree`, `core.excludesFile`,
+  `core.attributesFile`, `mailmap.file` or `diff.orderFile` to one (`:(optional)` read past). In a
+  config value but `core.worktree` (`configPath`), one after git's `%(prefix)/` is checked as git uses it (an absolute
+  path as written; a relative one is git's own install directory, not read), and one under `~/` is
+  the user's home as git finds it (`HOME`, else `HOMEDRIVE` and `HOMEPATH`, else the profile), read
+  like any local include (`~user/`, another user's home, is not read); a `gitdir:`, `commondir`,
+  alternates line, worktree `gitdir` or `core.worktree` is read literally, as git reads it (`repoPath`). Its parser
+  (`parseGitConfig`) takes git's syntax strictly, and a file it cannot parse or read, includes too
+  deep, or a link on the way off a drive (`evalSymlinks`) refuses the repository rather than passing
+  it. The path a key that opens a file names is followed for such a link from every place a relative
+  one starts (the config file's folder, the git dir, the directory git runs in, and every
+  `core.worktree` that `config`, `config.worktree` or a file they include sets); only a link off a drive refuses there, another error does not. Elsewhere than
+  Windows `repoConfigRefused` reads nothing. Behind it, on Windows, `gitEntryTarget` refuses a `.git`
+  file in a directory on a drive that names a git dir off one outside the Places
+  (`gitfileOffDrive`, which reads the Places from `gitEntryPlaces`) before resolving it (a linked
+  worktree's own `.git` file, read by `ownWorktree`), and the worktree list resolves each path with
+  `evalSymlinks`.
   `GET files/content` takes an `encoding` of a fixed set (`utf-8`, `utf-16le`, `utf-16be`,
   `shift_jis`, `euc-jp`; another → 400, ignored by `?hash=1`) or detects one
   (`server/files_encoding.go`: a BOM, then valid UTF-8, then Shift-JIS/EUC-JP only when the
@@ -1252,7 +1266,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   read before it would leave that file's filter on. A name `-c` cannot carry (`=`, a line break)
   fails the command, `errUnsafeRepoConfig`, and a config git cannot read fails it with git's own
   error), index refresh on diff,
-  fsmonitor, filter drivers, external diff and textconv off, on Windows
+  fsmonitor, filter drivers, external diff and textconv off, `mailmap.file` and `mailmap.blob`
+  emptied (blame opens the file wherever the repository's config points it; `log` also passes
+  `--no-mailmap`; `diff.orderFile` cannot be emptied, git refuses an empty one, so only
+  `repoConfigRefused` checks it), on Windows
   `core.excludesFile` and `core.attributesFile` emptied behind `repoConfigRefused` (`status` opens
   either wherever the repository's config points it; empty means no file, so the user's global
   ignore and attributes files no longer apply there, the repository's `.gitignore`,
@@ -1273,7 +1290,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   still apply. Not looked for (not covered): a `.gitignore` or `.gitattributes` deeper in the tree
   (that is a walk of the tree), another file git opens that is a FIFO (`config` and its includes,
   `HEAD`, `index`, `packed-refs`, `shallow`, `info/sparse-checkout`, `objects/info/alternates`,
-  `.gitmodules`, `.mailmap` for blame), and a root reached without `resolve` (Find and blame through
+  `.gitmodules`, `.mailmap` for blame, what `diff.orderFile` names off Windows), and a root reached without `resolve` (Find and blame through
   a link into another worktree of the repository, a worktree's dirty check). Such a root's heavy git
   waits out the timeout holding one of the two slots, so other roots keep the other; a status then
   backs it off 30 s, while Find and a worktree's branch list (`noBackoff`) try again on the next

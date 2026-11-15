@@ -92,7 +92,7 @@ func TestGitArgvOverrides(t *testing.T) {
 	argv := g.argv(gitCall{root: "/r", safeDir: "/r"}, repoOverrides{filters: []string{"Evil.x"}, hooks: []string{"My.Hook"}}, hooks, []string{"status"})
 	joined := strings.Join(argv, " ")
 	for _, want := range []string{"-C /r --no-pager", "core.fsmonitor=false", "protocol.allow=never", "safe.directory=/r",
-		"core.hooksPath=" + hooks, "diff.autoRefreshIndex=false", "core.excludesFile= ", "core.attributesFile= ",
+		"core.hooksPath=" + hooks, "diff.autoRefreshIndex=false", "mailmap.file= ", "mailmap.blob= ", "core.excludesFile= ", "core.attributesFile= ",
 		"hook.My.Hook.enabled=false",
 		"filter.Evil.x.clean=", "filter.Evil.x.smudge=", "filter.Evil.x.process=", "filter.Evil.x.required=false"} {
 		if !strings.Contains(joined, want) {

@@ -183,6 +183,25 @@ func TestRepoConfigRefused(t *testing.T) {
 		{"linked worktree gitdir", withFiles(cfg(""), g+"worktrees/w/gitdir", "//h/s/w/.git\n"), "", true},
 		{"linked worktree clean", withFiles(cfg(""), g+"worktrees/w/gitdir", "C:/w/.git\n"), "", false},
 		{"inside a Place", cfg("[include]\n\tpath = //nas/share/x.cfg\n"), "", false},
+		{"bare beside an empty .git", map[string]string{g: "", "HEAD": "ref: refs/heads/main\n", "objects/": "", "refs/": "",
+			"config": "[include]\n\tpath = //h/s\n"}, "", true},
+		{"bare beside a .git without HEAD", map[string]string{g + "objects/": "", "HEAD": "ref: refs/heads/main\n", "objects/": "",
+			"refs/": "", "config": "[core]\n\tworktree = //h/s\n"}, "", true},
+		{"include %(prefix) then a share", cfg("[include]\n\tpath = %(prefix)///h/s/x\n"), "", true},
+		{"include %(prefix) then a share, backslashes", cfg("[include]\n\tpath = \"%(prefix)/\\\\\\\\h\\\\s\"\n"), "", true},
+		{"mailmap.file", cfg("[mailmap]\n\tfile = //h/s/m\n"), "", true},
+		{"diff.orderFile", cfg("[diff]\n\torderFile = //h/s/o\n"), "", true},
+		{"NT path, backslashes", cfg("[core]\n\tworktree = \"\\\\??\\\\UNC\\\\h\\\\s\"\n"), "", true},
+		{"NT path, slashes", cfg("[core]\n\tworktree = /??/UNC/h/s\n"), "", true},
+		{"NT path to a drive", cfg("[core]\n\tworktree = /??/C:/r\n"), "", false},
+		{"gitfile to an NT path", map[string]string{".git": "gitdir: /??/UNC/h/s/r\n"}, "", true},
+		{"gitfile with ~ is literal", withFiles(gitDirFiles("~/g/", "[include]\n\tpath = //h/s\n"), ".git", "gitdir: ~/g\n"), "", true},
+		{"gitfile with %(prefix) is literal", withFiles(gitDirFiles("%(prefix)/g/", "[include]\n\tpath = //h/s\n"), ".git", "gitdir: %(prefix)/g\n"), "", true},
+		{"commondir with ~ is literal", withFiles(cfg(""), g+"commondir", "~/c\n", g+"~/c/config", "[include]\n\tpath = //h/s\n"), "", true},
+		{"linked worktree's own gitfile off a drive", withFiles(cfg(""), g+"worktrees/w/gitdir", "../../../wt/.git\n",
+			"wt/.git", "gitdir: //h/s/x\n"), "", true},
+		{"linked worktree's own gitfile, clean", withFiles(cfg(""), g+"worktrees/w/gitdir", "../../../wt/.git\n",
+			"wt/.git", "gitdir: ../.git/worktrees/w\n"), "", false},
 	} {
 		dir := fakeRepo(t, c.files)
 		rr := newTestRoots()
@@ -191,6 +210,57 @@ func TestRepoConfigRefused(t *testing.T) {
 		if (err != nil) != c.refused {
 			t.Errorf("%s: err = %v, want refused %v", c.name, err, c.refused)
 		}
+	}
+}
+
+// A file included through ~/ is the user's home, read like any local
+// include: one there that names a share refuses the repository.
+func TestRepoConfigRefusedHomeInclude(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	writeFile(t, filepath.Join(home, "inc.cfg"), "[include]\n\tpath = //h/s/x\n")
+	dir := fakeRepo(t, gitDirFiles(".git/", "[include]\n\tpath = ~/inc.cfg\n"))
+	if err := newTestRoots().repoConfigRefused(dir); err == nil {
+		t.Error("an include under ~ naming a share passed")
+	}
+	writeFile(t, filepath.Join(home, "inc.cfg"), "[a]\n\tk = v\n")
+	if err := newTestRoots().repoConfigRefused(dir); err != nil {
+		t.Errorf("a clean include under ~: %v", err)
+	}
+	other := fakeRepo(t, gitDirFiles(".git/", "[include]\n\tpath = ~someone/x.cfg\n"))
+	if err := newTestRoots().repoConfigRefused(other); err != nil {
+		t.Errorf("another user's home is not read: %v", err)
+	}
+}
+
+// A gitfile in a directory on a drive naming a git dir off one is refused
+// before anything resolves it; on a share (a Place) its own share passes.
+func TestGitfileOffDrive(t *testing.T) {
+	gitEntryPlaces.Store([]string{"//nas/place"})
+	t.Cleanup(func() { gitEntryPlaces.Store([]string(nil)) })
+	for _, c := range []struct {
+		top, target string
+		off         bool
+	}{
+		{`C:\r\wt`, `C:\r\.git\worktrees\w`, false},
+		{`C:\r\wt`, `\\h\s\x`, true},
+		{`C:\r\wt`, `//h/s/x`, true},
+		{`C:\r\wt`, `\\?\UNC\h\s\x`, true},
+		{`C:\r\wt`, `\??\UNC\h\s\x`, true},
+		{`C:\r\wt`, `\\.\pipe\x`, true},
+		{`C:\r\wt`, `\\?\C:\r\.git`, false},
+		{`C:\r\wt`, `\??\C:\r\.git`, false},
+		{`\\nas\s\wt`, `\\nas\s\r\.git`, false},
+		{`C:\r\wt`, `//nas/place/r/.git`, false},
+	} {
+		if got := gitfileOffDrive(c.top, c.target); got != c.off {
+			t.Errorf("gitfileOffDrive(%q, %q) = %v, want %v", c.top, c.target, got, c.off)
+		}
+	}
+	gitEntryPlaces.Store([]string(nil))
+	if !gitfileOffDrive(`C:\r\wt`, `//nas/place/r/.git`) {
+		t.Error("a share that is no Place passed")
 	}
 }
 
