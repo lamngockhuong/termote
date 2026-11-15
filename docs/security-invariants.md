@@ -1060,7 +1060,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   lookup of that process, then the previous pick; no previous lookup, several new opens or a pick
   no longer held are refused until Codex writes again, never guessed, since a message sent from
   the view goes to the file picked). Herdr's session id is trusted only when such a process holds that rollout, and
-  the rollout shown is then that same process's pick (the reported id when it refuses). So only
+  the rollout shown is then that same process's pick (the reported id when it refuses). A pane
+  Herdr says runs Codex with no such id (none before the first message after `codex resume`) is
+  looked up only through the process tree under that pane's own `shell_pid`, with the same checks,
+  never among all processes (`paneCodexSession`). So only
   `codex --no-daemon` has a Chat view (the shared daemon writes every pane's rollout; on Windows
   0.162.0 runs it as a child of the first TUI, refused by its `app-server` argv). On Windows (#295; psmux, Herdr) the holder comes from the system handle table
   (`NtQuerySystemInformation`, one query cached 1 s, `server/agent_proc_handles_windows.go`):

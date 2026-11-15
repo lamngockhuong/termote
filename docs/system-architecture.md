@@ -633,7 +633,10 @@ host's passes the same checks holding that very rollout, and takes `CODEX_HOME` 
 process. Herdr's hook reports a thread reached with `/new` or `/resume` only at its first
 message, so the pane shows the rollout that process is on now by the same rule, and the id as
 Herdr reports it only when the process's rollouts cannot be told apart; a pane whose hook once
-ran in a daemon can name another pane's session. On Windows (psmux, Herdr) the files a
+ran in a daemon can name another pane's session. A Codex started with `codex resume` gets no
+session id from the hook until its first message (Herdr 0.9.5, Codex 0.169.0), so when Herdr
+says a pane runs Codex but names no session a process holds, the pane is looked up as on tmux:
+the Codex under its `shell_pid` (`pane.process_info`, `paneCodexSession`), with the same checks. On Windows (psmux, Herdr) the files a
 process holds come from the system handle table (`NtQuerySystemInformation`
 `SystemExtendedHandleInformation`, cached 1 s): File handles with write or append access of a
 `codex` process the server's user can open are duplicated with `FILE_READ_ATTRIBUTES` only and

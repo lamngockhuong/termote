@@ -156,6 +156,9 @@ func (m *herdrMux) wake() {
 // herdrCodexSession is findCodexSession; tests replace it.
 var herdrCodexSession = findCodexSession
 
+// herdrPaneCodexSession is findCodexUnder; tests replace it.
+var herdrPaneCodexSession = findCodexUnder
+
 func (m *herdrMux) Caps() Caps {
 	v, _ := m.version.Load().(string)
 	start := herdrCanStartAgents(v)
@@ -212,7 +215,8 @@ func herdrCanStartAgents(v string) bool {
 // A Claude Code transcript is looked up in the config dir of the Claude Code
 // process found under the pane's shell (paneClaudeDir), and a Codex session
 // counts only while a Codex process holds its rollout (findCodexSession, which
-// reads that process's own CODEX_HOME).
+// reads that process's own CODEX_HOME), else the one the Codex under the
+// pane's shell holds (paneCodexSession).
 func (m *herdrMux) AgentSession(ctx context.Context, paneID string) (AgentSession, bool, error) {
 	if !herdrPaneIDRe.MatchString(paneID) {
 		return AgentSession{}, false, inputError("invalid pane id")
@@ -233,25 +237,52 @@ func (m *herdrMux) AgentSession(ctx context.Context, paneID string) (AgentSessio
 	}
 	p := res.Pane
 	ref := p.AgentSession
-	if (p.Agent != "claude" && p.Agent != "codex") || ref == nil || ref.Agent != p.Agent || ref.Kind != "id" || !isSessionID(ref.Value) {
-		return AgentSession{}, false, nil
-	}
+	hasRef := ref != nil && ref.Agent == p.Agent && ref.Kind == "id" && isSessionID(ref.Value)
 	status := p.AgentStatus
 	if !herdrAgentStatuses[status] {
 		status = "unknown"
 	}
 	if p.Agent == "codex" {
-		s, ok := herdrCodexSession(ref.Value)
+		s, ok := AgentSession{}, false
+		if hasRef {
+			s, ok = herdrCodexSession(ref.Value)
+		}
+		if !ok {
+			s, ok = m.paneCodexSession(ctx, paneID)
+		}
 		if !ok {
 			return AgentSession{}, false, nil
 		}
 		s.Status, s.Target = status, paneID
 		return s, true, nil
 	}
+	if p.Agent != "claude" || !hasRef {
+		return AgentSession{}, false, nil
+	}
 	return AgentSession{
 		Agent: "claude", ID: ref.Value, Status: status,
 		ClaudeDir: m.paneClaudeDir(ctx, paneID, ref.Value), Target: paneID,
 	}, true, nil
+}
+
+// paneCodexSession is the session of the Codex process under the pane's
+// shell. herdr's Codex hook reports no session id for a Codex started with
+// `codex resume` until its first message (Herdr 0.9.5, Codex 0.169.0), and
+// none or another pane's when an app-server daemon runs the hook, so a
+// pane herdr says runs Codex is also looked up through its own process,
+// as on tmux: only a rollout that process holds counts.
+func (m *herdrMux) paneCodexSession(ctx context.Context, paneID string) (AgentSession, bool) {
+	if m.procs.off() {
+		return AgentSession{}, false
+	}
+	ctx, cancel := context.WithTimeout(ctx, herdrProcBudget)
+	defer cancel()
+	info, err := m.paneProcess(ctx, paneID)
+	m.procs.noteErr(err)
+	if err != nil || info.ShellPID <= 0 {
+		return AgentSession{}, false
+	}
+	return herdrPaneCodexSession(paneID, info.ShellPID)
 }
 
 // herdrClaudeSession is findClaudeSession; tests replace it.
