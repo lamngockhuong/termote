@@ -1067,8 +1067,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   subagent tree's checks (`openSubagentsDir`: each step a plain directory by `Lstat`, then
   `openPlainFile`: still the regular file listed), and the rollouts of the Codex threads whose
   `session_meta` names it (or a thread of it) as `parent_thread_id` (`forked_from_id` for a
-  `subagent` thread), found through the history's index from the parent rollout's day dir on, at
-  most 2000. Root summary: the sessions the history lists for the root (the same view-only refusal
+  `subagent` thread), found through the history's index in the day dirs from the parent rollout's
+  on, the newest 2000 rollouts, the list shared for 60 s. Root summary: the sessions the history lists for the root (the same view-only refusal
   where Files refuses the root) written in the last 8 days, with their subagents' files. Machine
   summary: the server user's whole `projects/<dir>/<uuid>.jsonl` and
   `projects/<dir>/<uuid>/subagents/agent-*.jsonl` (no deeper, links skipped by the listing and refused

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 )
 
 // The files of one agent session, for the reads that add up what a session
@@ -114,44 +115,60 @@ func (h *historyAPI) codexSessionFiles(s AgentSession) ([]sessionFile, error) {
 
 // codexChildRollouts lists the rollouts of the threads id started, and of
 // theirs, by the parent their session_meta names (through the history's
-// index). A thread starts after its parent, so the day dirs are walked from
-// the parent rollout's own, oldest first, at most historyMaxScan rollouts.
+// index), shared for codexChildTTL. A thread starts after its parent: the
+// day dirs from the parent rollout's own on are walked newest first, the
+// historyMaxScan newest rollouts kept, then read oldest first so a parent
+// is known before its children.
 func (h *historyAPI) codexChildRollouts(sessions, parent, id string) []string {
+	out, _ := h.children.do(sessions+"\x00"+parent+"\x00"+id, func() ([]string, error) {
+		return h.findCodexChildren(sessions, parent, id), nil
+	})
+	return out
+}
+
+// codexChildTTL: every read of a Codex session within it shares one walk
+// for its children.
+const codexChildTTL = time.Minute
+
+func (h *historyAPI) findCodexChildren(sessions, parent, id string) []string {
 	rel, err := filepath.Rel(sessions, filepath.Dir(parent))
 	from := strings.Split(filepath.ToSlash(rel), "/")
 	if err != nil || len(from) != 3 {
 		return nil
 	}
-	ids := map[string]bool{id: true}
-	var out []string
-	scanned := 0
-	for _, y := range slices.Backward(numberedDirs(sessions)) {
-		for _, m := range slices.Backward(numberedDirs(filepath.Join(sessions, y))) {
-			for _, d := range slices.Backward(numberedDirs(filepath.Join(sessions, y, m))) {
+	type rollout struct{ path, id string }
+	var cands []rollout // newest first
+walk:
+	for _, y := range numberedDirs(sessions) {
+		for _, m := range numberedDirs(filepath.Join(sessions, y)) {
+			for _, d := range numberedDirs(filepath.Join(sessions, y, m)) {
 				if dayBefore([]string{y, m, d}, from) {
-					continue
+					break walk
 				}
 				day := filepath.Join(sessions, y, m, d)
 				entries, err := os.ReadDir(day)
 				if err != nil {
 					continue
 				}
-				for _, e := range entries {
+				for _, e := range slices.Backward(entries) {
 					match := codexRolloutRe.FindStringSubmatch(e.Name())
-					if match == nil || e.IsDir() || ids[match[1]] {
+					if match == nil || e.IsDir() || match[1] == id {
 						continue
 					}
-					if scanned == historyMaxScan {
-						return out
+					if len(cands) == historyMaxScan {
+						break walk
 					}
-					scanned++
-					p := filepath.Join(day, e.Name())
-					if file, ok := h.codexIndexed(sessions, p, match[1]); ok && file.child && ids[file.parent] {
-						ids[match[1]] = true
-						out = append(out, p)
-					}
+					cands = append(cands, rollout{filepath.Join(day, e.Name()), match[1]})
 				}
 			}
+		}
+	}
+	ids := map[string]bool{id: true}
+	var out []string
+	for _, c := range slices.Backward(cands) {
+		if file, ok := h.codexIndexed(sessions, c.path, c.id); ok && file.child && ids[file.parent] {
+			ids[c.id] = true
+			out = append(out, c.path)
 		}
 	}
 	return out

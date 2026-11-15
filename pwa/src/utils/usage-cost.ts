@@ -91,9 +91,11 @@ export function formatTokenCount(n: number, locale: Locale): string {
       minimumFractionDigits: digits,
       maximumFractionDigits: digits,
     }).format(v)
+  // The bounds are where rounding would reach the next unit ("10.0k",
+  // "1000k").
   if (n < 1000) return short(n, 0)
-  if (n < 10_000) return `${short(n / 1000, 1)}k`
-  if (n < 1_000_000) return `${short(Math.round(n / 1000), 0)}k`
+  if (n < 9950) return `${short(n / 1000, 1)}k`
+  if (n < 999_500) return `${short(Math.round(n / 1000), 0)}k`
   return `${short(n / 1_000_000, 1)}M`
 }
 

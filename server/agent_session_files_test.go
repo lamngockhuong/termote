@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -137,11 +138,22 @@ func TestCodexSessionFiles(t *testing.T) {
 		t.Errorf("files = %v, want %v", got, want)
 	}
 
-	// The scan stops after historyMaxScan rollouts.
+	// One walk is shared: a thread started since is found after the TTL.
+	sub("01a00000-0000-7000-8000-0000000000e1", codexParent, day.Add(26*time.Hour))
+	if got, _ := sessionFileNames(t, fx.h, s); len(got) != 4 {
+		t.Errorf("within the TTL = %v", got)
+	}
+	fx.h.children = newTTLCache[[]string](0)
+	if got, _ := sessionFileNames(t, fx.h, s); len(got) != 5 {
+		t.Errorf("after the TTL = %v", got)
+	}
+
+	// The newest historyMaxScan rollouts are read: the newest thread is
+	// found, an older one left out.
 	old := historyMaxScan
 	historyMaxScan = 1
 	t.Cleanup(func() { historyMaxScan = old })
-	if got, _ := sessionFileNames(t, fx.h, s); len(got) != 2 {
+	if got, _ := sessionFileNames(t, fx.h, s); len(got) != 2 || !strings.Contains(got[1], "0000000000e1") {
 		t.Errorf("limited = %v", got)
 	}
 	historyMaxScan = old

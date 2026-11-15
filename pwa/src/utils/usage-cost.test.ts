@@ -84,6 +84,8 @@ describe('formatTokenCount', () => {
     expect(formatTokenCount(35_400, 'en')).toBe('35k')
     expect(formatTokenCount(1_234_567, 'en')).toBe('1.2M')
     expect(formatTokenCount(1_234_567, 'vi')).toBe('1,2M')
+    expect(formatTokenCount(9960, 'en')).toBe('10k')
+    expect(formatTokenCount(999_600, 'en')).toBe('1.0M')
   })
 })
 

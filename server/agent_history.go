@@ -184,10 +184,13 @@ type historyAPI struct {
 	index *historyIndex
 	scans *ttlCache[historyScan]
 	dirs  func() historyDirs
+	// children: the rollouts of a Codex session's threads
+	children *ttlCache[[]string]
 }
 
 func newHistoryAPI() *historyAPI {
-	return &historyAPI{index: newHistoryIndex(), scans: newTTLCache[historyScan](historyTTL), dirs: serverHistoryDirs}
+	return &historyAPI{index: newHistoryIndex(), scans: newTTLCache[historyScan](historyTTL), dirs: serverHistoryDirs,
+		children: newTTLCache[[]string](codexChildTTL)}
 }
 
 // registerHistoryRoutes adds the history routes. They need the files

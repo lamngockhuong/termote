@@ -22,6 +22,7 @@ func TestPriceOf(t *testing.T) {
 		"gpt-5.5-pro":                                30,
 		"gpt-5.5-pro-2026-01-01":                     30,
 		"gpt-5":                                      1.25,
+		"claude-opus-5@20260301":                     5,
 	} {
 		p, ok := priceOf(model)
 		if !ok || p.input != want {
@@ -29,7 +30,7 @@ func TestPriceOf(t *testing.T) {
 		}
 	}
 	// Another version or a model none lists: no price.
-	for _, model := range []string{"claude-opus-5-6", "claude-opus-5-55", "gpt-5.6", "gpt-5-codex", "gpt-6", "sonnet", "", "claude-opus-5x"} {
+	for _, model := range []string{"claude-opus-5-6", "claude-opus-5-55", "gpt-5.6", "gpt-5-codex", "gpt-5.1-codex-mini", "claude-opus-5-beta", "gpt-6", "sonnet", "", "claude-opus-5x"} {
 		if p, ok := priceOf(model); ok {
 			t.Errorf("priceOf(%q) = %+v, want none", model, p)
 		}

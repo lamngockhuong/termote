@@ -22,7 +22,9 @@ import (
 // line that holds none of the match strings is never passed to step, so a
 // scan decodes only the few rows it needs.
 
-const journalScanMax = 5000 // files remembered; past it the least used tenth goes
+// journalScanMax files are remembered, past it the least used tenth goes:
+// above the machine summary's 5000 files of each agent.
+const journalScanMax = 12000
 
 // journalScanner keeps one state per file path.
 type journalScanner[S any] struct {
@@ -76,6 +78,11 @@ func (js *journalScanner[S]) scan(path string, f *os.File, fi os.FileInfo, read 
 
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	// The caller's Stat may be older than the last scan's (another caller
+	// opened the file later and scanned first): the size is read now.
+	if cur, err := f.Stat(); err == nil {
+		fi = cur
+	}
 	size := fi.Size()
 	if e.fi == nil || !os.SameFile(e.fi, fi) || size < e.size {
 		// A new file, another one under the name, or this one cut short.

@@ -109,3 +109,25 @@ func TestJournalScanEvicts(t *testing.T) {
 		t.Error("the newest file was evicted")
 	}
 }
+
+func TestJournalScanStaleStat(t *testing.T) {
+	inits := 0
+	js := newLineScanner(&inits)
+	p := filepath.Join(t.TempDir(), "j.jsonl")
+	writeFile(t, p, "keep 1\n")
+	// One caller opened the file and took its size; another, later, scans
+	// it longer first.
+	f, err := os.Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	stale, _ := f.Stat()
+	appendFile(t, p, "keep 2\n")
+	scanFile(t, js, p)
+	var got []string
+	js.scan(p, f, stale, func(st *lineLog) { got = st.lines })
+	if inits != 1 || strings.Join(got, ",") != "keep 1,keep 2" {
+		t.Errorf("a stale size read the file again: %d inits, %v", inits, got)
+	}
+}

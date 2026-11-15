@@ -128,25 +128,29 @@ func priceOf(model string) (modelPrice, bool) {
 	return *best, true
 }
 
-// priceSuffixOK: m is match followed by a date or a provider's suffix, not
-// another version ("claude-opus-5-5" never takes "claude-opus-5"'s price; a
-// variant such as "gpt-5.5-pro" is listed by its own id, the longer prefix).
+// priceSuffixOK: m is match followed by a date ("-20250805",
+// "-2026-01-01", then anything, as a provider's "-v1:0") or a provider's
+// "@"/":" suffix: the same model. Anything else is another one: a version
+// ("claude-opus-5-5" never takes "claude-opus-5"'s price) or a variant
+// ("gpt-5.1-codex-mini" not "gpt-5.1"'s); a variant priced is listed by its
+// own id, the longer prefix.
 func priceSuffixOK(m, match string) bool {
 	rest, ok := strings.CutPrefix(m, match)
 	if !ok || rest == "" {
 		return ok
 	}
-	if rest[0] != '-' && rest[0] != '@' && rest[0] != ':' {
+	if rest[0] == '@' || rest[0] == ':' {
+		return true
+	}
+	if rest[0] != '-' {
 		return false
 	}
-	// "-5" after "claude-opus-5" is a minor version: another model. A date
-	// ("-20250805", "-2026-01-01") or a word ("-v1") is the same one.
 	d := rest[1:]
 	n := 0
 	for n < len(d) && d[n] >= '0' && d[n] <= '9' {
 		n++
 	}
-	return n == 0 || n > 2
+	return n >= 4
 }
 
 // costOf is r's cost in USD at p.
