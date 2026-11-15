@@ -928,7 +928,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   Codex could not read moves no image onto another's chip), each a base64 `data:` URL; the file a
   `local_image` names by path is never opened, nor any other URL. Either way the bytes must sniff
   (`http.DetectContentType`) as PNG, JPEG, GIF or WebP and as the declared type (never SVG);
-  anything else is 404 `not_found`. At most 2 reads at once (else 429 `busy`). Same-site only
+  anything else is 404 `not_found`. At most 2 reads at once (else 429 `busy`); a slot covers the
+  read and decode only and is given back before the answer is written, under a 2-minute write
+  deadline, so a client that stops reading holds none. Same-site only
   (`crossSiteRejection`), GET only, both roles (the view-only client already reads the
   conversation's text); the reply has `nosniff`, a `sandbox; default-src 'none'` CSP and
   `Cache-Control: private`.

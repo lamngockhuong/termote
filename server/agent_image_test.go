@@ -122,6 +122,54 @@ func TestAgentImageServesTranscriptImages(t *testing.T) {
 	}
 }
 
+// stalledWriter is a client that stopped reading: Write blocks until
+// release is closed.
+type stalledWriter struct {
+	*httptest.ResponseRecorder
+	writing chan struct{}
+	release chan struct{}
+}
+
+func (w *stalledWriter) Write(b []byte) (int, error) {
+	w.writing <- struct{}{}
+	<-w.release
+	return w.ResponseRecorder.Write(b)
+}
+
+// Clients that stopped reading hold no image slot: the slot bounds the read
+// only, so another client's image is still served.
+func TestAgentImageSlotNotHeldWhileWriting(t *testing.T) {
+	red := testPNG(t, color.RGBA{255, 0, 0, 255})
+	dir := t.TempDir()
+	writeTranscript(t, dir, testSessionID, imageRow("u1", imageBlock("image/png", red)))
+	mux, _ := subagentsServer(t, claudeSession(dir))
+	refs := imageRefs(getTranscriptRes(t, mux))
+	if len(refs) != 1 {
+		t.Fatalf("refs = %q", refs)
+	}
+	release := make(chan struct{})
+	writing := make(chan struct{})
+	done := make(chan struct{})
+	for range agentImageConcurrency {
+		go func() {
+			defer func() { done <- struct{}{} }()
+			w := &stalledWriter{httptest.NewRecorder(), writing, release}
+			mux.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/mux/panes/p1/agent/image?src="+url.QueryEscape(refs[0]), nil))
+		}()
+	}
+	for range agentImageConcurrency {
+		<-writing
+	}
+	rec := getImage(mux, refs[0], nil)
+	close(release)
+	for range agentImageConcurrency {
+		<-done
+	}
+	if rec.Code != http.StatusOK || !bytes.Equal(rec.Body.Bytes(), red) {
+		t.Fatalf("image while others stall = %d %s", rec.Code, rec.Body)
+	}
+}
+
 // A slash command's row holds only the command; its images are in the
 // isMeta row that expands it, right after. They show on the command, and
 // the route serves them from that row. Another meta row's images, and a
