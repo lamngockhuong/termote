@@ -14,7 +14,7 @@ func (c *cli) cmdMenu() error {
 		c.printHelp()
 		return usageError("the menu needs a terminal; pass a command instead")
 	}
-	fmt.Fprintf(c.out, "\n%s\n%s\n\n", c.paint(ansiBold, "  TERMOTE - Terminal + Remote"), c.paint(ansiDim, "  v"+c.version))
+	c.printMenuHeader()
 	switch c.choose("Select action:", []string{
 		"Start (set options)", "Stop", "Restart", "Status", "Update", "View logs", "Clean logs",
 		"Show password", "Container up", "Container down", "Uninstall", "Exit",
@@ -46,6 +46,46 @@ func (c *cli) cmdMenu() error {
 		return c.cmdUninstall(nil)
 	}
 	return nil
+}
+
+// menuOwl is the Prompt Owl filled, in Code Page 437 blocks, scaled down
+// from a drawing of the mark: half blocks keep the silhouette sharp and the
+// shades (░▒▓) keep the `> <` eyes and the beak readable at this size. The
+// left half is mirrored to keep it symmetric, and every line is the same
+// width, so the text beside it lines up.
+var menuOwl = []string{
+	"█▓▄▄▄▄                  ▄▄▄▄▓█",
+	" ███████▓▄▄▄▄    ▄▄▄▄▓███████ ",
+	" ▒██████████████████████████▒ ",
+	" ████████████████████████████ ",
+	" ███▓████████████████████▓███ ",
+	" ███▄ ▀▓██████████████▓▀ ▄███ ",
+	" ████▀ ░▓████████████▓░ ▀████ ",
+	" ███▒▄██████████████████▄▒███ ",
+	" ████████████▀▀▀▀████████████ ",
+	" █████████████░░█████████████ ",
+	" ░██████████████████████████░ ",
+	"   ▀██████████████████████▀   ",
+	"      ▀▀▓████████████▓▀▀      ",
+	"          ░▀▀▓██▓▀▀░          ",
+}
+
+// printMenuHeader prints the owl with the name beside its eyes and the
+// version below that. Only the interactive menu shows it: help, status and
+// version stay plain for scripts and agents.
+func (c *cli) printMenuHeader() {
+	beside := map[int]string{
+		5: c.paint(ansiBold, "TERMOTE - Terminal + Remote"),
+		6: c.paint(ansiDim, "v"+c.version),
+	}
+	fmt.Fprintln(c.out)
+	for i, line := range menuOwl {
+		if s, ok := beside[i]; ok {
+			line += "  " + s
+		}
+		fmt.Fprintln(c.out, strings.TrimRight("  "+line, " "))
+	}
+	fmt.Fprintln(c.out)
 }
 
 // choose prints numbered options and returns the chosen one ("" on EOF).

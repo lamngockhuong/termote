@@ -15,6 +15,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 func TestLogsTailAndClean(t *testing.T) {
@@ -275,6 +276,41 @@ func TestMenu(t *testing.T) {
 	tc.stdout.Reset()
 	if code := tc.main([]string{"menu"}); code != 0 || !strings.Contains(tc.stdout.String(), "Password: From-Menu") {
 		t.Fatalf("code %d\n%s", code, tc.stdout.String())
+	}
+}
+
+func TestMenuOwl(t *testing.T) {
+	width := utf8.RuneCountInString(menuOwl[0])
+	for i, line := range menuOwl {
+		if n := utf8.RuneCountInString(line); n != width {
+			t.Fatalf("line %d is %d wide, not %d", i, n, width)
+		}
+		// Symmetric about the face's centre.
+		core := strings.Trim(line, " ")
+		lead := len(line) - len(strings.TrimLeft(line, " "))
+		r := []rune(core)
+		for a, b := 0, len(r)-1; a < b; a, b = a+1, b-1 {
+			r[a], r[b] = r[b], r[a]
+		}
+		if string(r) != core || 2*lead+utf8.RuneCountInString(core) != width {
+			t.Fatalf("line %d is not symmetric: %q", i, line)
+		}
+	}
+
+	tc := newTestCLI(t, "linux")
+	tc.interactive = true
+	tc.in = bufio.NewReader(strings.NewReader("12\n"))
+	tc.main([]string{"menu"})
+	out := tc.stdout.String()
+	if !strings.Contains(out, "███▄ ▀▓██████████████▓▀ ▄███   TERMOTE - Terminal + Remote\n") ||
+		!strings.Contains(out, "████▀ ░▓████████████▓░ ▀████   v"+tc.version+"\n") {
+		t.Fatalf("menu header:\n%s", out)
+	}
+	header, _, _ := strings.Cut(out, "Select action:")
+	for _, line := range strings.Split(header, "\n") {
+		if strings.HasSuffix(line, " ") {
+			t.Fatalf("trailing space in %q", line)
+		}
 	}
 }
 
