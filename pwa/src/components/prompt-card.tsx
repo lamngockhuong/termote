@@ -234,7 +234,7 @@ export function PromptCard({
     'aria-describedby': prompt.body ? bodyId : undefined,
     // At most most of the screen: the rest scrolls, the actions stay
     className:
-      'flex max-h-[70dvh] flex-col gap-2 border-t border-border bg-surface p-3 pb-safe ui-terminal:bg-bg',
+      'flex max-h-[70dvh] flex-col gap-2 border-t border-border bg-surface p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] ui-terminal:bg-bg',
   }
   const content = (
     <>
@@ -547,7 +547,7 @@ export function WaitingCard({
 }: Pick<ViewProps, 'showView'> & { agentName?: string }) {
   const { t } = useT()
   return (
-    <div className="flex items-center gap-2 border-t border-border bg-surface p-3 pb-safe ui-terminal:bg-bg">
+    <div className="flex items-center gap-2 border-t border-border bg-surface p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] ui-terminal:bg-bg">
       <p className="flex-1 text-[13px] text-fg">
         {t('chat.prompt.waitingTerminal', { agent: agentLabel(agentName) })}
       </p>

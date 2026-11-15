@@ -350,7 +350,7 @@ function ResumeBar({
   const { t } = useT()
   const live = session.live
   return (
-    <div className="shrink-0 space-y-2 border-t border-border bg-surface px-3 py-2 pb-safe ui-terminal:bg-bg">
+    <div className="shrink-0 space-y-2 border-t border-border bg-surface px-3 py-2 ui-terminal:bg-bg">
       <div className="flex flex-wrap items-center justify-end gap-2">
         {pending && (
           <span role="status" className="mr-auto text-[13px] text-fg-muted">
