@@ -353,6 +353,12 @@ type opencodeMessage struct {
 	Output  *struct {
 		Output string `json:"output"`
 	} `json:"output"`
+	// Idle: how the turn ended, and the error a failed one ended on (its
+	// message only: the provider's raw response body is never read).
+	Outcome string `json:"outcome"`
+	Error   *struct {
+		Message string `json:"message"`
+	} `json:"error"`
 }
 
 type opencodeFile struct {

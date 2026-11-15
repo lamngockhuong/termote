@@ -308,7 +308,11 @@ A pane running OpenCode 2.0 or later gets the Chat view with its conversation, r
 your messages, replies rendered as markdown, its reasoning, and each tool call with its result.
 Its status (working, blocked on a permission or a question, idle) shows in the sidebar, Overview,
 the activity log and notifications. Sending messages and answering dialogs from the view come in a
-later release; answer in the terminal meanwhile.
+later release; answer in the terminal meanwhile. A turn that fails (a rate limit, a provider error)
+or that you interrupt shows as a note with OpenCode's error message.
+
+OpenCode 2 comes from its GitHub releases or Homebrew; the `opencode-ai` package on npm is still
+OpenCode 1, which Termote does not read.
 
 Termote reads OpenCode through its background service (the one `opencode` starts on its own), on
 this machine and for your own user. It never starts that service: when it does not run, the pane
@@ -323,6 +327,10 @@ shows only OpenCode's logo. Which session a pane shows is known:
 
 OpenCode run with `--standalone` or `--server` is not read. If you set `XDG_STATE_HOME` in your
 shell, set it for Termote's service too, or Termote looks for OpenCode in `~/.local/state`.
+
+On Windows the background service runs under the OpenCode window that started it: closing that
+pane while OpenCode still runs in it stops the service for every other OpenCode too. The next
+`opencode` you open starts a new one, and Termote finds it again within a few seconds.
 
 ## Starting an Agent (Herdr)
 

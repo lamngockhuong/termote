@@ -1275,7 +1275,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   from one shared `/api/session/active` read and the session's pending permissions and forms
   (500 ms caches). Only settled messages are sent (an open answer, compaction or `!` command is
   held until an `idle` message follows it), since the client appends rows; a page over 24 MB is
-  asked again with fewer messages. Cursors are the signed `agentCursor`: a forward one names the last message sent
+  asked again with fewer messages. A turn that did not succeed is a note (`Interrupted`, or `Turn
+  failed` with the error's `message` on one line, at most 200 bytes); the provider's raw response
+  body in that error is never read. Cursors are the signed `agentCursor`: a forward one names the last message sent
   (`oc:`), a before one carries the service's own page cursor (`ocb:`, at most 1 KB), so a client
   never makes the server pass its own words to the service; a cursor of another session starts
   over. A view-only client gets `viewTranscript` as for Claude Code (no tool call, no note,

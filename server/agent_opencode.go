@@ -404,6 +404,21 @@ func opencodeEntry(m opencodeMessage) (TranscriptEntry, bool) {
 			e.Role = "note"
 			e.Parts = []TranscriptPart{{Kind: "text", Text: "Skill: " + oneLine(m.Name)}}
 		}
+	case "idle":
+		// The end of a turn: a note when it did not succeed, since a failed
+		// one (a rate limit, a provider error) often leaves no answer at all.
+		switch m.Outcome {
+		case "failed":
+			text := "Turn failed"
+			if m.Error != nil && strings.TrimSpace(m.Error.Message) != "" {
+				text += ": " + oneLine(m.Error.Message)
+			}
+			e.Role = "note"
+			e.Parts = []TranscriptPart{textPart("text", text, claudeMaxResult)}
+		case "interrupted":
+			e.Role = "note"
+			e.Parts = []TranscriptPart{{Kind: "text", Text: "Interrupted"}}
+		}
 	}
 	if len(e.Parts) == 0 {
 		return TranscriptEntry{}, false

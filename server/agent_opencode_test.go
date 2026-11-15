@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -90,18 +91,23 @@ func TestOpencodeLoopbackURL(t *testing.T) {
 }
 
 func TestOpencodeStateDirDefault(t *testing.T) {
-	t.Setenv("XDG_STATE_HOME", "/xdg/state")
-	if d := opencodeStateDir(); d != "/xdg/state" {
+	xdg := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", xdg)
+	if d := opencodeStateDir(); d != xdg {
 		t.Errorf("XDG_STATE_HOME: %q", d)
 	}
+	// os.UserHomeDir reads HOME, or USERPROFILE on Windows.
+	home := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", "relative")
-	t.Setenv("HOME", "/home/u")
-	if d := opencodeStateDir(); d != "/home/u/.local/state" {
-		t.Errorf("HOME: %q", d)
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	if d, want := opencodeStateDir(), filepath.Join(home, ".local", "state"); d != want {
+		t.Errorf("home: %q, want %q", d, want)
 	}
 	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "")
 	if d := opencodeStateDir(); d != "" {
-		t.Errorf("no HOME: %q", d)
+		t.Errorf("no home: %q", d)
 	}
 }
 
@@ -489,6 +495,24 @@ func TestOpencodeEntries(t *testing.T) {
 	if last.Role != "note" || last.Parts[0].Text != "Context compaction failed" {
 		t.Errorf("failed compaction = %+v", last)
 	}
+	// A turn that failed (a rate limit, its assistant message empty) and one
+	// interrupted: a note each; the provider's raw response body stays out.
+	failed := read("message-list-failed.json")
+	var notes []string
+	for _, e := range failed {
+		if e.Role == "note" {
+			notes = append(notes, e.Parts[0].Text)
+		}
+		for _, p := range e.Parts {
+			if strings.Contains(p.Text, "free-limit") {
+				t.Errorf("response body shown: %+v", e)
+			}
+		}
+	}
+	want := []string{"Turn failed: Rate limited: you've used today's free messages", "Interrupted"}
+	if strings.Join(notes, "|") != strings.Join(want, "|") || len(failed) != 5 {
+		t.Errorf("failed turns = %q (%d entries)", notes, len(failed))
+	}
 
 	for name, tc := range map[string]struct {
 		msg  string
@@ -503,6 +527,9 @@ func TestOpencodeEntries(t *testing.T) {
 		"skill":        {`{"id":"msg_a","type":"skill","name":"review","text":"x"}`, "note", "Skill: review"},
 		"reasoning":    {`{"id":"msg_a","type":"assistant","content":[{"type":"reasoning","text":"hmm"},{"type":"text","text":" "}]}`, "assistant", "hmm"},
 		"idle":         {`{"id":"msg_a","type":"idle","outcome":"succeeded"}`, "", ""},
+		"failed":       {`{"id":"msg_a","type":"idle","outcome":"failed","error":null}`, "note", "Turn failed"},
+		"failed blank": {`{"id":"msg_a","type":"idle","outcome":"failed","error":{"message":" \n"}}`, "note", "Turn failed"},
+		"failed lines": {`{"id":"msg_a","type":"idle","outcome":"failed","error":{"message":"bad\n  gateway"}}`, "note", "Turn failed: bad gateway"},
 		"synthetic":    {`{"id":"msg_a","type":"synthetic","text":"<subagent>"}`, "", ""},
 		"blank user":   {`{"id":"msg_a","type":"user","text":" ","files":[{"mime":"text/plain"}]}`, "", ""},
 	} {
