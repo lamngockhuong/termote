@@ -357,7 +357,14 @@ func inHistoryRoot(root, cwd string) (string, bool) {
 	if real, err := evalSymlinks(cwd); err == nil {
 		cwd = real
 	}
-	r, c := root, cwd
+	return relUnder(root, cwd)
+}
+
+// relUnder is p (clean, absolute) relative to root, slash separated, when
+// it is root ("") or inside it, compared without case where the OS ignores
+// it. Only the strings are compared: nothing is looked up on disk.
+func relUnder(root, p string) (string, bool) {
+	r, c := root, p
 	if pathsFold {
 		r, c = strings.ToLower(r), strings.ToLower(c)
 	}
@@ -368,8 +375,8 @@ func inHistoryRoot(root, cwd string) (string, bool) {
 	if rel == "." {
 		return "", true
 	}
-	// The last components of cwd as written, rel's case being folded.
-	parts := strings.Split(cwd, string(filepath.Separator))
+	// The last components of p as written, rel's case being folded.
+	parts := strings.Split(p, string(filepath.Separator))
 	n := strings.Count(rel, string(filepath.Separator)) + 1
 	return strings.Join(parts[len(parts)-n:], "/"), true
 }

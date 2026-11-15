@@ -1922,6 +1922,17 @@ describe('ChangesView: files the session changed', () => {
     expect(screen.getByRole('region', { name: 'Staged' })).toBeTruthy()
   })
 
+  it('opens no file before git status is read: the root is not known', async () => {
+    mockChanges.mockReturnValue(new Promise(() => {}))
+    const p = await show({ session: agentSession('claude') })
+    fireEvent.click(
+      screen.getByRole('radio', { name: 'Changed by this session' }),
+    )
+    await settle()
+    fireEvent.click(screen.getByRole('button', { name: /done\.ts/ }))
+    expect(p.showView).not.toHaveBeenCalled()
+  })
+
   it('outside a repository shows no status', async () => {
     mockChanges.mockResolvedValue(changes({ isRepo: false, entries: [] }))
     await show({ session: agentSession('claude') })

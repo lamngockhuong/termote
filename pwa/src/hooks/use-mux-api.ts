@@ -1296,7 +1296,8 @@ export async function fetchSessionUsage(
 // A file a session changed through its tool calls, relative to the pane's
 // root. For a view-only device only path and sensitive: when, how often and
 // by whom are not sent. ops: what was done (a set); running: a call is
-// waiting for its result; sub: only subagents changed it.
+// waiting for its result; sub: only subagents changed it; deleted: its
+// latest change deleted it (or moved it away).
 export type TouchedOp = 'edit' | 'write' | 'delete' | 'move'
 export interface TouchedFile {
   path: string
@@ -1305,6 +1306,7 @@ export interface TouchedFile {
   lastAt?: string
   sub?: boolean
   running?: boolean
+  deleted?: boolean
   sensitive: boolean
 }
 

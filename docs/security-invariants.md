@@ -1106,22 +1106,25 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   found through the history's index), incrementally (`journalScanner`, only lines naming
   `"tool_use"`/`"tool_result"` or `FileChange`/`patch_apply_end`/`session_meta`/`turn_context`
   decoded). Of them only the paths of Claude Code's `Edit`, `MultiEdit`, `Write` and `NotebookEdit`
-  calls whose result is not `is_error` (or not come yet: running), of Codex's `FileChange` items
+  calls whose result is not `is_error` (or not come yet: running, kept only for the pane's own live
+  session), of Codex's `FileChange` items
   with `status: completed` and of legacy `patch_apply_end` events that succeeded, their kind and
   times are kept; a sidechain row of the main transcript and the rows a subagent's rollout copies
   from its parent (ordinal below `subagent_history_start_ordinal`) are skipped. A relative path is
-  joined to the cwd the journal records, then cleaned. A path is never opened: it is resolved
-  (`EvalSymlinks`, through its directory when the file is gone), placed under the root with
-  `inHistoryRoot` (without case on Windows and macOS) and dropped when outside it, the root itself,
-  or `denied` (a deny dir, the repo's `.git`, a separate git dir); dropped paths are only counted
-  (`skipped`). The reply holds paths relative to the root, `sensitive` (`sensitivePath`), and for a
-  full client the kinds of change, a count, the last time, `sub` and `running`; at most 2000 files,
-  the latest (`truncated`). Contents and diffs are never in it: the PWA reads them through
+  joined to the cwd the journal records, then cleaned. A path is never opened, and one outside the
+  root as written (`relUnder`, without case on Windows and macOS) is dropped before anything is
+  looked up, so a journal's `\\host\share` or `/net/<host>` path never reaches the network or a
+  mount; one inside is resolved once (`EvalSymlinks`, through its directory when the file is gone)
+  and dropped when it then leads outside the root, is the root itself, or is `denied` (a deny dir,
+  the repo's `.git`, a separate git dir); dropped paths are only counted (`skipped`). The reply holds paths relative to the root, `sensitive` (`sensitivePath`), and for a
+  full client the kinds of change, a count, the last time, `sub`, `running` and `deleted`; at most
+  2000 files of the root, the latest, counted after the dropped ones (`truncated`). Contents and diffs are never in it: the PWA reads them through
   `files/diff` and `files/content`, with their own checks and `reveal`. A view-only client gets only
   the paths of the root's tracked list (`findLists` `committed`) that `viewHides` lets it read, in
-  name order, with `sensitive` only (no kind, count, time, `sub`, `running`, `skipped` or
+  name order, with `sensitive` only (no kind, count, time, `sub`, `running`, `deleted`, `skipped` or
   `truncated`); a list that cannot be read refuses the request as Files does. One read per root,
-  session and role is shared for 2 s. Accepted: a file changed by a shell command is not listed
+  session and role is shared for 4 s. Accepted: a file changed by a shell command is not listed, nor
+  one the journal names through a path that is outside the root as written (a symlink to it)
 - **Codex chat**: a rollout is read only when a process whose executable is named
   `codex`, without `app-server` in its argv, holds it open for writing as a regular
   `rollout-*-<uuid>.jsonl` inside its own `CODEX_HOME/sessions` (resolved), of a user thread;

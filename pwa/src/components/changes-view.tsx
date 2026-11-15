@@ -72,7 +72,11 @@ import { PaneDirHeader, ViewMessage } from './pane-dir-header'
 import { ReviewCommentSheet } from './review-comment-sheet'
 import { ReviewControl } from './review-panel'
 import { DiscardTabDialog, RootCloseDialog } from './tab-close-dialogs'
-import { TouchedFilesList, type TouchedTarget } from './touched-files-list'
+import {
+  gitStatusOf,
+  TouchedFilesList,
+  type TouchedTarget,
+} from './touched-files-list'
 import { Banner } from './ui/banner'
 import { Button, IconButton } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
@@ -408,6 +412,8 @@ function PaneChanges({
       openFromList(target.side)
       return
     }
+    // The root is known once git status is read
+    if (!c.loaded) return
     openInFiles(paneId, c.root as string, target.path)
     showView(FILES_VIEW_ID)
   }
@@ -878,7 +884,7 @@ function PaneChanges({
       <div className="min-h-0 flex-1 overflow-y-auto pb-2">
         <TouchedFilesList
           state={touched}
-          entries={c.loaded && c.isRepo ? c.entries : undefined}
+          entries={c.loaded ? gitStatusOf(c) : undefined}
           onOpen={openTouched}
         />
       </div>

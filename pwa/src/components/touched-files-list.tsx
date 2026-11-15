@@ -32,14 +32,18 @@ export interface TouchedRow {
   target?: TouchedTarget
 }
 
-// A touched file with its git status from entries (undefined: not read, or
-// no repository). A change on the worktree side opens that side's diff, one
-// only staged the staged side's.
+// A touched file with its git status from entries (undefined: not read, cut
+// short, or no repository). A change on the worktree side opens that side's
+// diff, one only staged the staged side's. A path git names in another case
+// only (a journal's spelling on macOS or Windows) is the same file.
 export function touchedRow(
   file: TouchedFile,
   entries: ChangeEntry[] | undefined,
 ): TouchedRow {
-  const entry = entries?.find((e) => e.path === file.path)
+  const lower = file.path.toLowerCase()
+  const entry =
+    entries?.find((e) => e.path === file.path) ??
+    entries?.find((e) => e.path.toLowerCase() === lower)
   if (entry) {
     const staged = !entry.conflict && !entry.unstaged
     const code = entry.conflict
@@ -55,14 +59,24 @@ export function touchedRow(
       },
     }
   }
-  const ops = file.ops ?? []
-  const gone = ops.includes('delete') && !ops.includes('write')
   return {
     file,
     code: '',
     clean: !!entries,
-    target: gone ? undefined : { kind: 'file', path: file.path },
+    target: file.deleted ? undefined : { kind: 'file', path: file.path },
   }
+}
+
+// git status entries that say which files are changed: none when the list
+// was cut short or its last read failed (a file missing from it may still be
+// changed), or outside a repository
+export function gitStatusOf(c: {
+  isRepo: boolean
+  truncated: boolean
+  error?: unknown
+  entries: ChangeEntry[]
+}) {
+  return c.isRepo && !c.truncated && !c.error ? c.entries : undefined
 }
 
 const ERRORS: Record<TouchedError, MessageKey> = {
@@ -227,7 +241,7 @@ function SessionTouched({
   return (
     <TouchedFilesList
       state={state}
-      entries={root && c.isRepo ? c.entries : undefined}
+      entries={root ? gitStatusOf(c) : undefined}
       onOpen={(target) => root && onOpen(target, root)}
     />
   )

@@ -1562,9 +1562,10 @@ files (`sessionFiles`) are added up, a file changed only by subagents marked so;
 of the main transcript and the history a subagent's rollout copies from its parent are skipped.
 A file changed by a shell command is never seen.
 
-`server/agent_touched_route.go` places each path under the pane root (resolved, without case on
-Windows and macOS) and drops, only counting them, those outside it or that Files never serves (a
-deny dir, the git dir). The reply holds only paths relative to the root: the PWA joins them with
+`server/agent_touched_route.go` compares each path with the pane root as a string first (without
+case on Windows and macOS), so a path outside it is never looked up on disk, then resolves the ones
+inside and drops, only counting them, those that lead outside or that Files never serves (a deny
+dir, the git dir); the 2000 latest of the root are kept. The reply holds only paths relative to the root: the PWA joins them with
 the git status Changes already read and opens a diff or a file through the Files routes, so no
 content goes through this route. A view-only device gets only the root's tracked files it may read,
 by name. In the PWA, Changes offers "Changed by this session" for a pane running Claude Code or

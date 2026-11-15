@@ -17,14 +17,16 @@ import (
 // against the session's cwd, and never opened here: the route places them
 // under the pane root.
 //
-// A call still waiting for its result counts as running. A tool_result
-// line too long to read leaves its call running, a tool_use line too long
+// A call still waiting for its result counts as running (the route keeps
+// it only for the pane's live session). A tool_result line too long to read
+// leaves its call running, a tool_use line too long
 // to read is not seen.
 
-// touchedMax is how many files a session's list holds, the latest first.
+// touchedMax is how many files of the pane root a session's list holds, the
+// latest first.
 const touchedMax = 2000
 
-// touchedPendingMax bounds the calls of one file waiting for a result; past
+// touchedPendingMax bounds the calls of one journal waiting for a result; past
 // it the oldest is dropped.
 const touchedPendingMax = 512
 
@@ -54,7 +56,8 @@ func (o touchedOp) names() []string {
 
 // touchedFile is one file a session changed: abs is clean and absolute,
 // count the completed changes, running that a call is waiting for its
-// result, sub that only subagents changed it.
+// result, sub that only subagents changed it, deleted that the latest
+// change deleted it (or moved it away).
 type touchedFile struct {
 	abs     string
 	ops     touchedOp
@@ -62,6 +65,7 @@ type touchedFile struct {
 	last    time.Time
 	sub     bool
 	running bool
+	deleted bool
 }
 
 // touchKey: a Claude Code transcript's sidechain rows are a subagent's,
@@ -116,8 +120,8 @@ func (st *touchedState) done(k touchKey, op touchedOp, at time.Time) {
 	}
 	f.ops |= op
 	f.count++
-	if at.After(f.last) {
-		f.last = at
+	if !at.Before(f.last) {
+		f.last, f.deleted = at, op == touchedDelete
 	}
 }
 
@@ -167,7 +171,7 @@ func (st *touchedState) list(sub bool) []touchedFile {
 		t.ops |= f.ops
 		t.count += f.count
 		if f.last.After(t.last) {
-			t.last = f.last
+			t.last, t.deleted = f.last, f.deleted
 		}
 	}
 	for _, id := range st.order {
@@ -179,7 +183,7 @@ func (st *touchedState) list(sub bool) []touchedFile {
 		t.ops |= p.op
 		t.running = true
 		if p.at.After(t.last) {
-			t.last = p.at
+			t.last, t.deleted = p.at, false
 		}
 	}
 	res := make([]touchedFile, len(out))
@@ -340,10 +344,13 @@ func stepCodexTouched(st *touchedState, line []byte) {
 		if !ok || abs == "" {
 			continue
 		}
-		st.done(touchKey{abs: abs}, op, at)
-		if dst := touchedPath(c.MovePath, st.cwd); dst != "" {
+		dst := touchedPath(c.MovePath, st.cwd)
+		if dst != "" {
+			// Moved away: the old path is gone
+			op = touchedDelete
 			st.done(touchKey{abs: dst}, touchedMove, at)
 		}
+		st.done(touchKey{abs: abs}, op, at)
 	}
 }
 
@@ -374,9 +381,8 @@ func (t *touchedReader) files(agent string, f sessionFile) []touchedFile {
 }
 
 // touchedOf adds up the files of a session's journals: a file changed by
-// the session itself and its subagents is the session's. The latest first,
-// at most touchedMax; truncated when some were left out.
-func touchedOf(lists [][]touchedFile) ([]touchedFile, bool) {
+// the session itself and its subagents is the session's. The latest first.
+func touchedOf(lists [][]touchedFile) []touchedFile {
 	by := map[string]*touchedFile{}
 	for _, l := range lists {
 		for _, f := range l {
@@ -395,7 +401,7 @@ func touchedOf(lists [][]touchedFile) ([]touchedFile, bool) {
 			t.sub = t.sub && f.sub
 			t.running = t.running || f.running
 			if f.last.After(t.last) {
-				t.last = f.last
+				t.last, t.deleted = f.last, f.deleted
 			}
 		}
 	}
@@ -409,8 +415,5 @@ func touchedOf(lists [][]touchedFile) ([]touchedFile, bool) {
 		}
 		return strings.Compare(a.abs, b.abs)
 	})
-	if len(out) > touchedMax {
-		return out[:touchedMax], true
-	}
-	return out, false
+	return out
 }

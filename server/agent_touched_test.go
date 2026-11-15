@@ -99,7 +99,7 @@ func TestTouchedCodexSubagentRollout(t *testing.T) {
 	writeFile(t, p, touchedFixture(t, "codex-subagent-rollout.jsonl", root))
 	got := touchedByRel(t, root, readTouched(t, newTouchedReader(), "codex", p, true))
 	want := map[string]touchedOp{
-		"new.txt": touchedWrite, "rel/r.txt": touchedEdit, "old.txt": touchedEdit, "moved.txt": touchedMove,
+		"new.txt": touchedWrite, "rel/r.txt": touchedEdit, "old.txt": touchedDelete, "moved.txt": touchedMove,
 		"gone.txt": touchedDelete, "legacy.txt": touchedEdit, "sub/x.txt": touchedWrite,
 	}
 	for name, op := range want {
@@ -235,9 +235,9 @@ func TestTouchedOfMerges(t *testing.T) {
 		{abs: "/r/a", ops: touchedWrite, count: 1, last: t0.Add(2 * time.Minute), sub: true, running: true},
 		{abs: "/r/c", ops: touchedEdit, count: 1, last: t0, sub: true},
 	}
-	got, truncated := touchedOf([][]touchedFile{main, sub})
-	if truncated || len(got) != 3 {
-		t.Fatalf("got %+v, %v", got, truncated)
+	got := touchedOf([][]touchedFile{main, sub})
+	if len(got) != 3 {
+		t.Fatalf("got %+v", got)
 	}
 	if a := got[0]; a.abs != "/r/a" || a.count != 3 || a.ops != touchedEdit|touchedWrite || a.sub || !a.running {
 		t.Errorf("a (by the session and a subagent) = %+v", a)
@@ -252,24 +252,48 @@ func TestTouchedOfFoldsCase(t *testing.T) {
 	t.Cleanup(func() { pathsFold = old })
 	files := [][]touchedFile{{{abs: "/R/A.go", count: 1}}, {{abs: "/r/a.go", count: 1, sub: true}}}
 	pathsFold = true
-	if got, _ := touchedOf(files); len(got) != 1 || got[0].count != 2 {
+	if got := touchedOf(files); len(got) != 1 || got[0].count != 2 {
 		t.Errorf("folded = %+v", got)
 	}
 	pathsFold = false
-	if got, _ := touchedOf(files); len(got) != 2 {
+	if got := touchedOf(files); len(got) != 2 {
 		t.Errorf("not folded = %+v", got)
 	}
 }
 
-func TestTouchedOfLimit(t *testing.T) {
+func TestTouchedDeletedIsTheLatest(t *testing.T) {
 	t0 := time.Date(2026, 11, 10, 10, 0, 0, 0, time.UTC)
-	var files []touchedFile
-	for i := range touchedMax + 1 {
-		files = append(files, touchedFile{abs: fmt.Sprintf("/r/%05d", i), count: 1, last: t0.Add(time.Duration(i) * time.Second)})
+	st := newTouchedState()
+	k := touchKey{abs: "/r/a"}
+	st.done(k, touchedWrite, t0)
+	st.done(k, touchedDelete, t0.Add(time.Second))
+	if f := st.list(false)[0]; !f.deleted {
+		t.Errorf("written then deleted = %+v", f)
 	}
-	got, truncated := touchedOf([][]touchedFile{files})
-	if !truncated || len(got) != touchedMax || got[0].abs != fmt.Sprintf("/r/%05d", touchedMax) {
-		t.Errorf("len %d, truncated %v, first %s", len(got), truncated, got[0].abs)
+	st.done(k, touchedWrite, t0.Add(2*time.Second))
+	if f := st.list(false)[0]; f.deleted {
+		t.Errorf("written again = %+v", f)
+	}
+	// An older row read later does not undo it
+	st.done(k, touchedDelete, t0)
+	if f := st.list(false)[0]; f.deleted {
+		t.Errorf("an older delete = %+v", f)
+	}
+	// Being edited again: not gone
+	st.done(k, touchedDelete, t0.Add(3*time.Second))
+	st.wait("x", touchedPending{key: k, op: touchedEdit, at: t0.Add(4 * time.Second)})
+	if f := st.list(false)[0]; f.deleted || !f.running {
+		t.Errorf("deleted then edited = %+v", f)
+	}
+	// Across journals, the latest decides
+	got := touchedOf([][]touchedFile{
+		{{abs: "/r/b", deleted: true, last: t0.Add(time.Second)}},
+		{{abs: "/r/b", last: t0}},
+		{{abs: "/r/c", last: t0}},
+		{{abs: "/r/c", deleted: true, last: t0.Add(time.Second)}},
+	})
+	if !got[0].deleted || !got[1].deleted {
+		t.Errorf("merged = %+v", got)
 	}
 }
 

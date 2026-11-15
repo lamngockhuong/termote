@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -233,13 +234,13 @@ func TestTouchedPlaceFoldsCase(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		upper = strings.ToUpper(root)
 	}
-	res := a.placeTouched(filesRoot{Root: root}, []touchedFile{{abs: filepath.Join(upper, "Dir", "A.go"), count: 1}})
+	res := a.placeTouched(filesRoot{Root: root}, []touchedFile{{abs: filepath.Join(upper, "Dir", "A.go"), count: 1}}, true)
 	if len(res.Files) != 1 || res.Files[0].Path != "Dir/A.go" {
 		t.Errorf("folded = %+v", res)
 	}
 	setPathsFold(t, false)
 	if runtime.GOOS == "linux" {
-		if res := a.placeTouched(filesRoot{Root: root}, []touchedFile{{abs: filepath.Join(upper, "a.go")}}); res.Skipped != 1 {
+		if res := a.placeTouched(filesRoot{Root: root}, []touchedFile{{abs: filepath.Join(upper, "a.go")}}, true); res.Skipped != 1 {
 			t.Errorf("not folded = %+v", res)
 		}
 	}
@@ -251,7 +252,7 @@ func TestTouchedPlaceGitDir(t *testing.T) {
 	a := &agentAPI{files: &filesAPI{}}
 	res := a.placeTouched(filesRoot{Root: root, GitDir: gitDir}, []touchedFile{
 		{abs: filepath.Join(gitDir, "config")}, {abs: filepath.Join(root, "ok.go")},
-	})
+	}, true)
 	if res.Skipped != 1 || len(res.Files) != 1 || res.Files[0].Path != "ok.go" || res.Files[0].LastAt != "" {
 		t.Errorf("separate git dir = %+v", res)
 	}
@@ -275,5 +276,38 @@ func TestTouchedResolved(t *testing.T) {
 	nowhere := filepath.Join(base, "no", "such", "x.go")
 	if got := touchedResolved(nowhere); got != nowhere {
 		t.Errorf("no dir = %s", got)
+	}
+}
+
+func TestTouchedPlaceLimitAndRunning(t *testing.T) {
+	root := realTemp(t)
+	other := realTemp(t)
+	a := &agentAPI{files: &filesAPI{}}
+	t0 := time.Date(2026, 11, 10, 10, 0, 0, 0, time.UTC)
+	// The latest files are outside the root: the root's own still fill the list
+	var files []touchedFile
+	for i := range 5 {
+		files = append(files, touchedFile{abs: filepath.Join(other, fmt.Sprint(i)), last: t0.Add(time.Hour)})
+	}
+	for i := range touchedMax + 1 {
+		files = append(files, touchedFile{abs: filepath.Join(root, fmt.Sprintf("%05d", i)), count: 1, last: t0})
+	}
+	res := a.placeTouched(filesRoot{Root: root}, files, true)
+	if len(res.Files) != touchedMax || !res.Truncated || res.Skipped != 5 {
+		t.Errorf("len %d, truncated %v, skipped %d", len(res.Files), res.Truncated, res.Skipped)
+	}
+	// A call that never got its result: running for the live session only
+	calls := []touchedFile{
+		{abs: filepath.Join(root, "never.go"), running: true},
+		{abs: filepath.Join(root, "again.go"), running: true, count: 1},
+		{abs: filepath.Join(root, "gone.go"), count: 1, deleted: true},
+	}
+	live := a.placeTouched(filesRoot{Root: root}, calls, true)
+	if len(live.Files) != 3 || !live.Files[0].Running || !live.Files[2].Deleted {
+		t.Errorf("live = %+v", live.Files)
+	}
+	old := a.placeTouched(filesRoot{Root: root}, calls, false)
+	if len(old.Files) != 2 || old.Files[0].Path != "again.go" || old.Files[0].Running || old.Skipped != 0 {
+		t.Errorf("old session = %+v", old)
 	}
 }

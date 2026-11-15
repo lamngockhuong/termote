@@ -18,12 +18,15 @@ import (
 // relative to the pane's root are returned, never a file's contents (a
 // client reads those through the files routes): a path outside the root,
 // under a deny dir or in the repo's git dir is left out and only counted.
-// A view-only client gets the files the Changes view would show it, the
-// root's tracked files it may read, by name, without what the tool calls
-// say (when, how often, by whom); a root it may not read is refused.
+// A path the journal names is compared as a string first: only one inside
+// the root is ever looked up on disk (a path on a network share or another
+// mount is never touched). A view-only client gets, of the files the
+// session touched, the root's tracked files it may read, by name, without
+// what the tool calls say (when, how often, by whom); a root it may not
+// read is refused.
 
 // touchedTTL: every client polling one session shares a read.
-const touchedTTL = 2 * time.Second
+const touchedTTL = 4 * time.Second
 
 // touchedJSON is one file as the client sees it. Path is relative to the
 // root, slash separated.
@@ -34,11 +37,12 @@ type touchedJSON struct {
 	LastAt    string   `json:"lastAt,omitempty"`
 	Sub       bool     `json:"sub,omitempty"`
 	Running   bool     `json:"running,omitempty"`
+	Deleted   bool     `json:"deleted,omitempty"`
 	Sensitive bool     `json:"sensitive"`
 }
 
 // touchedResponse: Skipped files were outside the root or never served;
-// Truncated: only the touchedMax latest were read.
+// Truncated: only the touchedMax latest of the root are listed.
 type touchedResponse struct {
 	Files     []touchedJSON `json:"files"`
 	Skipped   int           `json:"skipped"`
@@ -71,17 +75,19 @@ func (a *agentAPI) handleTouched(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	view := isViewOnly(r)
+	// The pane's own session: a call waiting for its result is running.
+	// Another's never got its result.
+	live := r.URL.Query().Get("session") == ""
 	key := strings.Join([]string{root.Root, s.Agent, s.ID, s.ClaudeDir, s.CodexHome, s.Rollout, s.RolloutID,
-		map[bool]string{true: "view"}[view]}, "\x00")
+		map[bool]string{true: "view"}[view], map[bool]string{true: "live"}[live]}, "\x00")
 	res, err := a.touched.reads.do(key, func() (touchedResponse, error) {
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), filesTimeout)
 		defer cancel()
-		files, truncated, err := a.sessionTouched(s)
+		files, err := a.sessionTouched(s)
 		if err != nil {
 			return touchedResponse{}, err
 		}
-		res := a.placeTouched(root, files)
-		res.Truncated = truncated
+		res := a.placeTouched(root, files, live)
 		if view {
 			return a.viewTouched(ctx, root, res)
 		}
@@ -101,41 +107,57 @@ func (a *agentAPI) handleTouched(w http.ResponseWriter, r *http.Request) {
 
 // sessionTouched reads every file of s. A session whose transcript is not
 // written yet changed nothing.
-func (a *agentAPI) sessionTouched(s AgentSession) ([]touchedFile, bool, error) {
+func (a *agentAPI) sessionTouched(s AgentSession) ([]touchedFile, error) {
 	files, err := a.history.sessionFiles(s)
 	if errors.Is(err, errTranscriptNotWritten) {
-		return nil, false, nil
+		return nil, nil
 	}
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	defer closeSessionFiles(files)
 	lists := make([][]touchedFile, 0, len(files))
 	for _, f := range files {
 		lists = append(lists, a.touched.reader.files(s.Agent, f))
 	}
-	out, truncated := touchedOf(lists)
-	return out, truncated, nil
+	return touchedOf(lists), nil
 }
 
 // placeTouched keeps the files inside root that the files routes would
-// serve, relative to it. A file that still exists is placed where its
-// symlinks lead; one that is gone, where its directory's lead.
-func (a *agentAPI) placeTouched(root filesRoot, files []touchedFile) touchedResponse {
+// serve, relative to it, the touchedMax latest. A path outside root as
+// written is dropped without a look at the disk; one inside is placed where
+// its symlinks lead (a gone file: where its directory's lead), resolved
+// once. Without live, a call that never got its result is left out.
+func (a *agentAPI) placeTouched(root filesRoot, files []touchedFile, live bool) touchedResponse {
 	res := touchedResponse{Files: []touchedJSON{}}
 	for _, f := range files {
-		rel, ok := inHistoryRoot(root.Root, touchedResolved(f.abs))
+		if !live && f.running {
+			if f.count == 0 {
+				continue
+			}
+			f.running = false
+		}
+		if len(res.Files) == touchedMax {
+			res.Truncated = true
+			break
+		}
+		if _, ok := relUnder(root.Root, f.abs); !ok {
+			res.Skipped++
+			continue
+		}
+		real := touchedResolved(f.abs)
+		rel, ok := relUnder(root.Root, real)
 		if !ok || rel == "" {
 			res.Skipped++
 			continue
 		}
-		local := filepath.FromSlash(rel)
-		if a.files.denied(root.Root, local, root.GitDir) {
+		abs := filepath.Join(root.Root, filepath.FromSlash(rel))
+		if a.files.deniedPaths(root.Root, abs, real, root.GitDir) {
 			res.Skipped++
 			continue
 		}
 		j := touchedJSON{Path: rel, Ops: f.ops.names(), Count: f.count, Sub: f.sub, Running: f.running,
-			Sensitive: sensitivePath(root.Root, local)}
+			Deleted: f.deleted, Sensitive: isSensitive(abs) || isSensitive(real)}
 		if !f.last.IsZero() {
 			j.LastAt = f.last.UTC().Format(time.RFC3339)
 		}

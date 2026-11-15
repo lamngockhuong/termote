@@ -141,8 +141,8 @@ tool_call() { # id, tool, file, err
 
 # What "touch files" does: the files really change, as the calls say.
 touch_files() {
-  local n
-  n=$(date +%s%N)
+  # Unique in the transcript on any date(1): the row count goes on
+  local n="${seq_n}_$$"
   echo "edited by the agent" >>touched-edit.txt
   tool_call "toolu_edit_$n" Edit touched-edit.txt
   echo "written by the agent" >touched-new.txt

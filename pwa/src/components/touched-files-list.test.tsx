@@ -8,6 +8,7 @@ import type {
   TouchedFiles,
 } from '../hooks/use-mux-api'
 import {
+  gitStatusOf,
   TouchedFilesList,
   TouchedFilesSection,
   touchedRow,
@@ -80,15 +81,29 @@ describe('touchedRow', () => {
       clean: true,
       target: { kind: 'file', path: 'done.ts' },
     })
-    expect(touchedRow(f('x.ts', { ops: ['delete'] }), entries).target).toBe(
+    expect(touchedRow(f('x.ts', { deleted: true }), entries).target).toBe(
       undefined,
     )
-    // Written again after: there
+    // Deleted, then changed in git still: its diff
     expect(
-      touchedRow(f('x.ts', { ops: ['write', 'delete'] }), entries).target,
-    ).toEqual({ kind: 'file', path: 'x.ts' })
+      touchedRow(f('both.ts', { deleted: true }), entries).target?.kind,
+    ).toBe('diff')
+    // git's spelling of the same file in another case
+    expect(touchedRow(f('Both.TS'), entries).target).toMatchObject({
+      side: { path: 'both.ts' },
+    })
     // git status not read: no status to tell
     expect(touchedRow(f('done.ts'), undefined).clean).toBe(false)
+  })
+})
+
+describe('gitStatusOf', () => {
+  it('tells nothing from a list cut short, failed or outside a repository', () => {
+    const c = { isRepo: true, truncated: false, entries: [e('a', '', 'M')] }
+    expect(gitStatusOf(c)).toBe(c.entries)
+    expect(gitStatusOf({ ...c, truncated: true })).toBeUndefined()
+    expect(gitStatusOf({ ...c, error: 'timeout' })).toBeUndefined()
+    expect(gitStatusOf({ ...c, isRepo: false })).toBeUndefined()
   })
 })
 
@@ -150,7 +165,7 @@ describe('TouchedFilesList', () => {
             f('src/a.ts', { ops: ['edit'], count: 3, sub: true }),
             f('src/b.ts', { ops: ['edit'], count: 1, running: true }),
             f('.env', { sensitive: true }),
-            f('old.ts', { ops: ['delete'] }),
+            f('old.ts', { ops: ['delete'], deleted: true }),
           ]),
         }}
         entries={[e('src/a.ts', '', 'M')]}
