@@ -32,6 +32,20 @@ func hcDefaultStateHome(env []string) string {
 	return filepath.Join(profile, "AppData", "Local")
 }
 
+// hcDefaultConfigHome is herdr-core's config home without XDG_CONFIG_HOME:
+// %APPDATA%, else %USERPROFILE%\AppData\Roaming (platform/windows.rs
+// data_dirs).
+func hcDefaultConfigHome(env []string) string {
+	if roaming := hcEnvValue(env, "APPDATA"); roaming != "" {
+		return roaming
+	}
+	profile := hcEnvValue(env, "USERPROFILE")
+	if profile == "" {
+		profile = `C:\`
+	}
+	return filepath.Join(profile, "AppData", "Roaming")
+}
+
 // hcDefaultEndpoint is the pipe hc dials without HC_SOCKET (herdr-core
 // paths.rs, platform/windows.rs endpoints): \\.\pipe\herdr-core-<USERNAME's
 // ASCII letters and digits>-<session>.sock. A running core holds byte 0 of
