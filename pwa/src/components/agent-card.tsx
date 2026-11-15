@@ -279,6 +279,9 @@ export const AgentCard = memo(function AgentCard({
               className="text-[12px] text-fg-muted"
             />
           )}
+          {!overview?.sessionUsage?.tokens && pending('sessionUsage') && (
+            <Skeleton className="h-4 w-1/3" />
+          )}
         </span>
       </button>
       <div className="border-t border-border px-3 py-1">

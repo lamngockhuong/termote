@@ -394,7 +394,7 @@ export interface OverviewAccount {
 // One overview card's data beyond the snapshot. lastTs: when the agent last
 // wrote (server time). usage: how full its context is. accountKey: the
 // Codex account it uses. unavailable: what could not be read this time
-// ('transcript', 'changes'), shown as pending.
+// ('transcript', 'changes', 'sessionUsage'), shown as pending.
 export interface OverviewPane {
   paneId: string
   key: string

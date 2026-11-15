@@ -240,7 +240,7 @@ func (a *agentAPI) readOverview(only string) overviewRead {
 				p.LastText, p.LastTS, p.Usage = r.sum.lastText, r.sum.lastTS, r.sum.usage
 				p.SessionUsage = r.usage
 				if r.usageFailed {
-					p.Unavailable = append(p.Unavailable, "usage")
+					p.Unavailable = append(p.Unavailable, "sessionUsage")
 				}
 				if r.sum.limits != nil {
 					p.AccountKey = accountKey(r.sum.codexHome)

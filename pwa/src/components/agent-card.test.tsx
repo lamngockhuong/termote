@@ -266,6 +266,29 @@ describe('AgentCard', () => {
     expect(open).not.toHaveTextContent('tokens')
   })
 
+  it('shows the session totals as pending when their read failed', () => {
+    const overview = {
+      paneId: 'w1:p1',
+      key: 'w1:p1',
+      lastText: 'done',
+      unavailable: ['sessionUsage'],
+    }
+    const pending = renderCard({ overview })
+    expect(
+      pending.container.querySelector('[class*="animate-pulse"]'),
+    ).not.toBeNull()
+    pending.unmount()
+    // The last totals read still show, without a placeholder.
+    const { container } = renderCard({
+      overview: {
+        ...overview,
+        sessionUsage: { tokens: 1200, pricesUpdated: '2026-11-15' },
+      },
+    })
+    expect(container.querySelector('[class*="animate-pulse"]')).toBeNull()
+    expect(container).toHaveTextContent('tokens')
+  })
+
   it('a card read without text shows no placeholder', () => {
     const { container } = renderCard({
       pane: pane({ agentName: undefined, agentSinceFirstSeen: true }),
