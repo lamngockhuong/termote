@@ -1212,8 +1212,28 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   the paths of the root's tracked list (`findLists` `committed`) that `viewHides` lets it read, in
   name order, with `sensitive` only (no kind, count, time, `sub`, `running`, `deleted`, `skipped` or
   `truncated`); a list that cannot be read refuses the request as Files does. One read per root,
-  session and role is shared for 4 s. Accepted: a file changed by a shell command is not listed, nor
-  one the journal names through a path that is outside the root as written (a symlink to it)
+  session and role is shared for 4 s. An OpenCode session (`server/agent_touched_opencode.go`) is
+  read only through the OpenCode service client (no file opened, nothing of `opencode.db`,
+  `session.diff` not used, the service never started), its id checked by `isOpencodeSessionID`
+  before it goes into a URL path: its `session.get` (directory, update and turn times), its
+  `GET /api/session/{id}/message?type=assistant`, 100 a page, newest first, at most 5000 (older ones
+  not listed), and its
+  subagents' sessions (`session.list` with `parentID`, two levels, at most 200, each with its own
+  messages). Of a message only its id, time and the name, status, input and times of its tool calls
+  are decoded, and only the calls of `edit`, `write` (their `path`, else `filePath`) and
+  `patch`/`apply_patch` (the `*** Add File:`, `*** Update File:`, `*** Move to:` and
+  `*** Delete File:` lines of `patchText`) with `status` `completed` (or `running`, kept only for the
+  pane's own live session) are kept; a call that failed or that the user declined (`error`), another
+  tool, and a fork's copies of its parent's messages (`msg_…_<n>`) are skipped. A relative path is
+  joined to the directory the service records for that session (a subagent's, else its parent's),
+  then placed as above. An idle session's files (its `time.idle` after its `time.busy`) are kept by
+  session id, `time.updated` and `time.idle` for an hour; any other is read every time (a tool call
+  does not change those times). A session the
+  service does not hold yet changed nothing; a service that does not run gives 404 `transcript not
+  found`; one that fails is logged without its body and answered as an internal error; a subagent
+  that cannot be read is left out. Accepted: a file changed by a shell command is not listed, nor
+  one the journal names through a path that is outside the root as written (a symlink to it), nor
+  one changed by an OpenCode tool of another name
 - **Codex chat**: a rollout is read only when a process whose executable is named
   `codex`, without `app-server` in its argv, holds it open for writing as a regular
   `rollout-*-<uuid>.jsonl` inside its own `CODEX_HOME/sessions` (resolved), of a user thread;
@@ -1344,7 +1364,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   messages or one message 24 MB, the list of models 8 MB) and decoded into the fields used (of
   `/api/model` only `providerID`, `id` and `limit.context`); the service's own text (its error bodies,
   `/api/info`'s hostname, `/api/model`'s provider settings with their API keys) never reaches a
-  client or a log. The usage reads (see Agent usage and cost) go the same way. Writes (a message, a command, a permission or form reply, a form's cancel, a fork) go the same
+  client or a log. The usage reads (see Agent usage and cost) and the files a session touched (see
+  Files a session touched) go the same way. Writes (a message, a command, a permission or form reply, a form's cancel, a fork) go the same
   way, with the same header and checks, a JSON body termote builds itself and at most 15 s; their
   reply is drained up to 64 KB, never decoded or logged, except a fork's, read up to 1 MB for the
   new session's `id` only. Errors reach the client as `transcript not

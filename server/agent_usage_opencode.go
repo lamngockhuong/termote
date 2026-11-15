@@ -109,11 +109,26 @@ func opencodeUsageRecord(m opencodeUsageMessage) (usageRecord, bool) {
 
 // usageMessages reads the records of session id's assistant messages made
 // since since, newest first, at most max; truncated: older ones in the
-// range were left out. The page cursor is the service's own, only ever
-// passed back to it.
+// range were left out.
 func (c *opencodeClient) usageMessages(ctx context.Context, id string, since time.Time, max int) (recs []usageRecord, truncated bool, err error) {
+	older := func(m opencodeUsageMessage) bool {
+		return m.Time.Created > 0 && time.UnixMilli(int64(m.Time.Created)).Before(since)
+	}
+	truncated, err = opencodeAssistantMessages(ctx, c, id, max, older, func(m opencodeUsageMessage) {
+		if r, ok := opencodeUsageRecord(m); ok {
+			recs = append(recs, r)
+		}
+	})
+	return recs, truncated, err
+}
+
+// opencodeAssistantMessages hands session id's assistant messages, newest
+// first, decoded as M, to visit: at most max of them, up to the first one
+// stop (nil: none) names. truncated: older ones were left out. The page cursor is the
+// service's own, only ever passed back to it.
+func opencodeAssistantMessages[M any](ctx context.Context, c *opencodeClient, id string, max int, stop func(M) bool, visit func(M)) (truncated bool, err error) {
 	if !isOpencodeSessionID(id) {
-		return nil, false, errOpencodeNotFound
+		return false, errOpencodeNotFound
 	}
 	cursor := ""
 	read := 0
@@ -125,31 +140,29 @@ func (c *opencodeClient) usageMessages(ctx context.Context, id string, since tim
 			q.Set("order", "desc")
 		}
 		var res struct {
-			Data   []opencodeUsageMessage `json:"data"`
+			Data   []M `json:"data"`
 			Cursor struct {
 				Next *string `json:"next"`
 			} `json:"cursor"`
 		}
 		if err := c.get(ctx, "/api/session/"+id+"/message", q, opencodeMessagesMax, &res); err != nil {
-			return recs, false, err
+			return false, err
 		}
 		for _, m := range res.Data {
-			if m.Time.Created > 0 && time.UnixMilli(int64(m.Time.Created)).Before(since) {
-				return recs, false, nil
+			if stop != nil && stop(m) {
+				return false, nil
 			}
 			if read == max {
-				return recs, true, nil
+				return true, nil
 			}
 			read++
-			if r, ok := opencodeUsageRecord(m); ok {
-				recs = append(recs, r)
-			}
+			visit(m)
 		}
 		// The service gives a cursor even after the last page; a page
 		// shorter than asked is the last.
 		if len(res.Data) < opencodeUsagePage || res.Cursor.Next == nil || *res.Cursor.Next == "" ||
 			len(*res.Cursor.Next) > 1024 {
-			return recs, false, nil
+			return false, nil
 		}
 		cursor = *res.Cursor.Next
 	}

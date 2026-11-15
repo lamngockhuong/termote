@@ -1,0 +1,783 @@
+{
+ "data": [
+  {
+   "id": "msg_1dff97f9a001Ila66w0dk2NvTD_4",
+   "time": {
+    "created": 1794758796302
+   },
+   "text": "hello",
+   "type": "user"
+  },
+  {
+   "id": "msg_1dff97f9a001Ila66w0dk2NvTD_7",
+   "time": {
+    "created": 1794758796366,
+    "firstToken": 1794758796480,
+    "streamed": 1794758796496,
+    "completed": 1794758796519
+   },
+   "type": "assistant",
+   "agent": "build",
+   "model": {
+    "id": "m1",
+    "providerID": "fake"
+   },
+   "content": [
+    {
+     "type": "text",
+     "text": "Hello from the fake model. **bold** text."
+    }
+   ],
+   "snapshot": {
+    "start": "fd63f238e060de2f14f5d2720fb966e1832c7e18",
+    "end": "fd63f238e060de2f14f5d2720fb966e1832c7e18",
+    "files": []
+   },
+   "finish": "stop",
+   "rawFinish": "stop",
+   "cost": 0,
+   "tokens": {
+    "input": 1200,
+    "output": 30,
+    "reasoning": 0,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   }
+  },
+  {
+   "id": "msg_1dff97f9a001Ila66w0dk2NvTD_13",
+   "time": {
+    "created": 1794758796527
+   },
+   "type": "idle",
+   "outcome": "succeeded"
+  },
+  {
+   "id": "msg_1dff97f9a001Ila66w0dk2NvTD_16",
+   "time": {
+    "created": 1794758899359
+   },
+   "text": "CALL edit {\"path\":\"a.txt\",\"oldString\":\"hello\",\"newString\":\"bye\"}",
+   "type": "user"
+  },
+  {
+   "id": "msg_1dff97f9a001Ila66w0dk2NvTD_17",
+   "time": {
+    "created": 1794758899387,
+    "firstToken": 1794758899416,
+    "streamed": 1794758899431,
+    "completed": 1794758899448
+   },
+   "type": "assistant",
+   "agent": "build",
+   "model": {
+    "id": "m1",
+    "providerID": "fake"
+   },
+   "content": [
+    {
+     "type": "text",
+     "text": "Hello from the fake model. **bold** text."
+    }
+   ],
+   "snapshot": {
+    "start": "fd63f238e060de2f14f5d2720fb966e1832c7e18",
+    "end": "fd63f238e060de2f14f5d2720fb966e1832c7e18",
+    "files": []
+   },
+   "finish": "stop",
+   "rawFinish": "stop",
+   "cost": 0,
+   "tokens": {
+    "input": 1200,
+    "output": 30,
+    "reasoning": 0,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   }
+  },
+  {
+   "id": "msg_1dff97f9a001Ila66w0dk2NvTD_23",
+   "time": {
+    "created": 1794758899460
+   },
+   "type": "idle",
+   "outcome": "succeeded"
+  },
+  {
+   "id": "msg_1dff97f9a001Ila66w0dk2NvTD_26",
+   "time": {
+    "created": 1794758903529
+   },
+   "text": "CALL write {\"path\":\"@ROOT@/new.txt\",\"content\":\"n\"}",
+   "type": "user"
+  },
+  {
+   "id": "msg_1dff97f9a001Ila66w0dk2NvTD_27",
+   "time": {
+    "created": 1794758903568,
+    "firstToken": 1794758903604,
+    "streamed": 1794758903639,
+    "completed": 1794758903662
+   },
+   "type": "assistant",
+   "agent": "build",
+   "model": {
+    "id": "m1",
+    "providerID": "fake"
+   },
+   "content": [
+    {
+     "type": "text",
+     "text": "Hello from the fake model. **bold** text."
+    }
+   ],
+   "snapshot": {
+    "start": "fd63f238e060de2f14f5d2720fb966e1832c7e18",
+    "end": "fd63f238e060de2f14f5d2720fb966e1832c7e18",
+    "files": []
+   },
+   "finish": "stop",
+   "rawFinish": "stop",
+   "cost": 0,
+   "tokens": {
+    "input": 1200,
+    "output": 30,
+    "reasoning": 0,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   }
+  },
+  {
+   "id": "msg_1dff97f9a001Ila66w0dk2NvTD_33",
+   "time": {
+    "created": 1794758903668
+   },
+   "type": "idle",
+   "outcome": "succeeded"
+  },
+  {
+   "id": "msg_1dff97f9a001Ila66w0dk2NvTD_36",
+   "time": {
+    "created": 1794758907707
+   },
+   "text": "CALL edit {\"path\":\"sub/b.txt\",\"oldString\":\"nomatch\",\"newString\":\"y\"}",
+   "type": "user"
+  },
+  {
+   "id": "msg_1dff97f9a001Ila66w0dk2NvTD_37",
+   "time": {
+    "created": 1794758907744,
+    "firstToken": 1794758907778,
+    "streamed": 1794758907790,
+    "completed": 1794758907815
+   },
+   "type": "assistant",
+   "agent": "build",
+   "model": {
+    "id": "m1",
+    "providerID": "fake"
+   },
+   "content": [
+    {
+     "type": "text",
+     "text": "Hello from the fake model. **bold** text."
+    }
+   ],
+   "snapshot": {
+    "start": "fd63f238e060de2f14f5d2720fb966e1832c7e18",
+    "end": "fd63f238e060de2f14f5d2720fb966e1832c7e18",
+    "files": []
+   },
+   "finish": "stop",
+   "rawFinish": "stop",
+   "cost": 0,
+   "tokens": {
+    "input": 1200,
+    "output": 30,
+    "reasoning": 0,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   }
+  },
+  {
+   "id": "msg_1dff97f9a001Ila66w0dk2NvTD_43",
+   "time": {
+    "created": 1794758907822
+   },
+   "type": "idle",
+   "outcome": "succeeded"
+  },
+  {
+   "id": "msg_1dff97f9a001Ila66w0dk2NvTD_46",
+   "time": {
+    "created": 1794758957222
+   },
+   "text": "CALL edit {\"path\":\"a.txt\",\"oldString\":\"hello\",\"newString\":\"bye\"}",
+   "type": "user"
+  },
+  {
+   "id": "msg_1dff97f9a001Ila66w0dk2NvTD_47",
+   "time": {
+    "created": 1794758957273,
+    "firstToken": 1794758957399,
+    "streamed": 1794758957419,
+    "completed": 1794758957534
+   },
+   "type": "assistant",
+   "agent": "build",
+   "model": {
+    "id": "m1",
+    "providerID": "fake"
+   },
+   "content": [
+    {
+     "type": "tool",
+     "id": "call_1",
+     "name": "edit",
+     "executed": false,
+     "state": {
+      "status": "completed",
+      "input": {
+       "path": "a.txt",
+       "oldString": "hello",
+       "newString": "bye"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Edited a.txt (1 replacement)"
+       }
+      ],
+      "metadata": {
+       "files": [
+        {
+         "file": "a.txt",
+         "patch": "Index: a.txt\n===================================================================\n--- a.txt\n+++ a.txt\n@@ -1,1 +1,1 @@\n-hello\n+bye\n",
+         "status": "modified",
+         "additions": 1,
+         "deletions": 1
+        }
+       ],
+       "truncated": false
+      }
+     },
+     "time": {
+      "created": 1794758957403,
+      "ran": 1794758957412,
+      "completed": 1794758957433
+     }
+    }
+   ],
+   "snapshot": {
+    "start": "fd63f238e060de2f14f5d2720fb966e1832c7e18",
+    "end": "9ad32e555a6135f0bfb5c552b8c7731689852ff9",
+    "files": [
+     "a.txt"
+    ]
+   },
+   "finish": "tool-calls",
+   "rawFinish": "tool_calls",
+   "cost": 0,
+   "tokens": {
+    "input": 1500,
+    "output": 20,
+    "reasoning": 0,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   }
+  },
+  {
+   "id": "msg_1dff97f9a001Ila66w0dk2NvTD_55",
+   "time": {
+    "created": 1794758957586,
+    "firstToken": 1794758957626,
+    "streamed": 1794758957637,
+    "completed": 1794758957653
+   },
+   "type": "assistant",
+   "agent": "build",
+   "model": {
+    "id": "m1",
+    "providerID": "fake"
+   },
+   "content": [
+    {
+     "type": "text",
+     "text": "Done after tool."
+    }
+   ],
+   "snapshot": {
+    "start": "9ad32e555a6135f0bfb5c552b8c7731689852ff9",
+    "end": "9ad32e555a6135f0bfb5c552b8c7731689852ff9",
+    "files": []
+   },
+   "finish": "stop",
+   "rawFinish": "stop",
+   "cost": 0,
+   "tokens": {
+    "input": 1200,
+    "output": 30,
+    "reasoning": 0,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   }
+  },
+  {
+   "id": "msg_1dff97f9a001Ila66w0dk2NvTD_61",
+   "time": {
+    "created": 1794758957665
+   },
+   "type": "idle",
+   "outcome": "succeeded"
+  },
+  {
+   "id": "msg_1dff97f9a001Ila66w0dk2NvTD_64",
+   "time": {
+    "created": 1794758957855
+   },
+   "text": "CALL write {\"path\":\"@ROOT@/new.txt\",\"content\":\"n\"}",
+   "type": "user"
+  },
+  {
+   "id": "msg_1dff97f9a001Ila66w0dk2NvTD_65",
+   "time": {
+    "created": 1794758957878,
+    "firstToken": 1794758957909,
+    "streamed": 1794758957926,
+    "completed": 1794758958036
+   },
+   "type": "assistant",
+   "agent": "build",
+   "model": {
+    "id": "m1",
+    "providerID": "fake"
+   },
+   "content": [
+    {
+     "type": "tool",
+     "id": "call_3",
+     "name": "write",
+     "executed": false,
+     "state": {
+      "status": "completed",
+      "input": {
+       "path": "@ROOT@/new.txt",
+       "content": "n"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Created file successfully: new.txt"
+       }
+      ],
+      "metadata": {
+       "truncated": false
+      }
+     },
+     "time": {
+      "created": 1794758957914,
+      "ran": 1794758957922,
+      "completed": 1794758957939
+     }
+    }
+   ],
+   "snapshot": {
+    "start": "9ad32e555a6135f0bfb5c552b8c7731689852ff9",
+    "end": "dc98142294199e3cd1c7bc1ce5b50035967562c4",
+    "files": [
+     "new.txt"
+    ]
+   },
+   "finish": "tool-calls",
+   "rawFinish": "tool_calls",
+   "cost": 0,
+   "tokens": {
+    "input": 1500,
+    "output": 20,
+    "reasoning": 0,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   }
+  },
+  {
+   "id": "msg_1dff97f9a001Ila66w0dk2NvTD_73",
+   "time": {
+    "created": 1794758958108,
+    "firstToken": 1794758958141,
+    "streamed": 1794758958152,
+    "completed": 1794758958169
+   },
+   "type": "assistant",
+   "agent": "build",
+   "model": {
+    "id": "m1",
+    "providerID": "fake"
+   },
+   "content": [
+    {
+     "type": "text",
+     "text": "Done after tool."
+    }
+   ],
+   "snapshot": {
+    "start": "dc98142294199e3cd1c7bc1ce5b50035967562c4",
+    "end": "dc98142294199e3cd1c7bc1ce5b50035967562c4",
+    "files": []
+   },
+   "finish": "stop",
+   "rawFinish": "stop",
+   "cost": 0,
+   "tokens": {
+    "input": 1200,
+    "output": 30,
+    "reasoning": 0,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   }
+  },
+  {
+   "id": "msg_1dff97f9a001Ila66w0dk2NvTD_79",
+   "time": {
+    "created": 1794758958178
+   },
+   "type": "idle",
+   "outcome": "succeeded"
+  },
+  {
+   "id": "msg_1dff97f9a001Ila66w0dk2NvTD_82",
+   "time": {
+    "created": 1794758958508
+   },
+   "text": "CALL edit {\"path\":\"sub/b.txt\",\"oldString\":\"nomatch\",\"newString\":\"y\"}",
+   "type": "user"
+  },
+  {
+   "id": "msg_1dff97f9a001Ila66w0dk2NvTD_83",
+   "time": {
+    "created": 1794758958532,
+    "firstToken": 1794758958560,
+    "streamed": 1794758958579,
+    "completed": 1794758958614
+   },
+   "type": "assistant",
+   "agent": "build",
+   "model": {
+    "id": "m1",
+    "providerID": "fake"
+   },
+   "content": [
+    {
+     "type": "tool",
+     "id": "call_5",
+     "name": "edit",
+     "executed": false,
+     "state": {
+      "status": "error",
+      "input": {
+       "path": "sub/b.txt",
+       "oldString": "nomatch",
+       "newString": "y"
+      },
+      "error": {
+       "type": "tool.execution",
+       "message": "Could not find oldString in sub/b.txt. It must match exactly, including whitespace and indentation."
+      }
+     },
+     "time": {
+      "created": 1794758958564,
+      "ran": 1794758958573,
+      "completed": 1794758958591
+     }
+    }
+   ],
+   "snapshot": {
+    "start": "dc98142294199e3cd1c7bc1ce5b50035967562c4",
+    "end": "dc98142294199e3cd1c7bc1ce5b50035967562c4",
+    "files": []
+   },
+   "finish": "tool-calls",
+   "rawFinish": "tool_calls",
+   "cost": 0,
+   "tokens": {
+    "input": 1500,
+    "output": 20,
+    "reasoning": 0,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   }
+  },
+  {
+   "id": "msg_1dff97f9a001Ila66w0dk2NvTD_91",
+   "time": {
+    "created": 1794758958666,
+    "firstToken": 1794758958698,
+    "streamed": 1794758958709,
+    "completed": 1794758958727
+   },
+   "type": "assistant",
+   "agent": "build",
+   "model": {
+    "id": "m1",
+    "providerID": "fake"
+   },
+   "content": [
+    {
+     "type": "text",
+     "text": "Done after tool."
+    }
+   ],
+   "snapshot": {
+    "start": "dc98142294199e3cd1c7bc1ce5b50035967562c4",
+    "end": "dc98142294199e3cd1c7bc1ce5b50035967562c4",
+    "files": []
+   },
+   "finish": "stop",
+   "rawFinish": "stop",
+   "cost": 0,
+   "tokens": {
+    "input": 1200,
+    "output": 30,
+    "reasoning": 0,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   }
+  },
+  {
+   "id": "msg_1dff97f9a001Ila66w0dk2NvTD_97",
+   "time": {
+    "created": 1794758958732
+   },
+   "type": "idle",
+   "outcome": "succeeded"
+  },
+  {
+   "id": "msg_1dff97f9a001Ila66w0dk2NvTD_100",
+   "time": {
+    "created": 1794758975969
+   },
+   "text": "CALL write {\"path\":\"deny.txt\",\"content\":\"z\"}",
+   "type": "user"
+  },
+  {
+   "id": "msg_1dff97f9a001Ila66w0dk2NvTD_101",
+   "time": {
+    "created": 1794758976024,
+    "firstToken": 1794758976063,
+    "streamed": 1794758976088,
+    "completed": 1794758982379
+   },
+   "type": "assistant",
+   "agent": "build",
+   "model": {
+    "id": "m1",
+    "providerID": "fake"
+   },
+   "content": [
+    {
+     "type": "tool",
+     "id": "call_7",
+     "name": "write",
+     "executed": false,
+     "state": {
+      "status": "error",
+      "input": {
+       "path": "deny.txt",
+       "content": "z"
+      },
+      "error": {
+       "type": "aborted",
+       "message": "The user declined this tool call"
+      }
+     },
+     "time": {
+      "created": 1794758976069,
+      "ran": 1794758976082,
+      "completed": 1794758982335
+     }
+    }
+   ],
+   "snapshot": {
+    "start": "dc98142294199e3cd1c7bc1ce5b50035967562c4",
+    "end": "dc98142294199e3cd1c7bc1ce5b50035967562c4",
+    "files": []
+   },
+   "finish": "error",
+   "rawFinish": "tool_calls",
+   "cost": 0,
+   "tokens": {
+    "input": 1500,
+    "output": 20,
+    "reasoning": 0,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   },
+   "error": {
+    "type": "aborted",
+    "message": "Step interrupted"
+   }
+  },
+  {
+   "id": "msg_fork_notice_ses_e20068067ffeMfTJXFIkDu7C42",
+   "time": {
+    "created": 1794759037189
+   },
+   "text": "<fork-notice>\nThis conversation is a fork of another conversation, copied up to the previous message. The original conversation keeps going on its own and may be active right now, as may other forks of it.\n- Work started before the fork belongs to the original: background subagents, background shells, schedules, and follow-ups promised there. Their results and notifications go to the original, never here, and you can't continue those subagents. Don't wait for them, redo them, or report their results as yours; if it matters, check what already happened (files, git, PRs, CI).\n- Files, repositories, branches and external services are shared with the original. Before changing something the original was working on (its uncommitted changes, branches, worktrees, PRs, deploys, messages), check its current state, and put work that diverges from it on a new branch or worktree.\n- Otherwise work normally: new tasks need no extra checks, branches or questions.\n- If it's unclear whether this fork or the original should do something, ask.\n</fork-notice>",
+   "description": "Fork notice",
+   "type": "synthetic"
+  },
+  {
+   "id": "msg_1dff990fa0015c1ZtuIBx0JLej",
+   "time": {
+    "created": 1794759037191
+   },
+   "text": "CALL edit {\"path\":\"a.txt\",\"oldString\":\"bye\",\"newString\":\"forked\"}",
+   "type": "user"
+  },
+  {
+   "id": "msg_1dff9910f001fH91MlqvsnaNak",
+   "time": {
+    "created": 1794759037211,
+    "firstToken": 1794759037235,
+    "streamed": 1794759037247,
+    "completed": 1794759037298
+   },
+   "type": "assistant",
+   "agent": "build",
+   "model": {
+    "id": "m1",
+    "providerID": "fake"
+   },
+   "content": [
+    {
+     "type": "tool",
+     "id": "call_14",
+     "name": "edit",
+     "executed": false,
+     "state": {
+      "status": "completed",
+      "input": {
+       "path": "a.txt",
+       "oldString": "bye",
+       "newString": "forked"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Edited a.txt (1 replacement)"
+       }
+      ],
+      "metadata": {
+       "files": [
+        {
+         "file": "a.txt",
+         "patch": "Index: a.txt\n===================================================================\n--- a.txt\n+++ a.txt\n@@ -1,1 +1,1 @@\n-bye\n+forked\n",
+         "status": "modified",
+         "additions": 1,
+         "deletions": 1
+        }
+       ],
+       "truncated": false
+      }
+     },
+     "time": {
+      "created": 1794759037237,
+      "ran": 1794759037243,
+      "completed": 1794759037256
+     }
+    }
+   ],
+   "snapshot": {
+    "start": "dc98142294199e3cd1c7bc1ce5b50035967562c4",
+    "end": "08e7825eb0df73b583f7fb4ef8518c67323f4f14",
+    "files": [
+     "a.txt"
+    ]
+   },
+   "finish": "tool-calls",
+   "rawFinish": "tool_calls",
+   "cost": 0,
+   "tokens": {
+    "input": 1500,
+    "output": 20,
+    "reasoning": 0,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   }
+  },
+  {
+   "id": "msg_1dff9917f001Q1VGZNeknGpk7F",
+   "time": {
+    "created": 1794759037317,
+    "firstToken": 1794759037347,
+    "streamed": 1794759037369,
+    "completed": 1794759037428
+   },
+   "type": "assistant",
+   "agent": "build",
+   "model": {
+    "id": "m1",
+    "providerID": "fake"
+   },
+   "content": [
+    {
+     "type": "text",
+     "text": "Done after tool."
+    }
+   ],
+   "snapshot": {
+    "start": "08e7825eb0df73b583f7fb4ef8518c67323f4f14",
+    "end": "08e7825eb0df73b583f7fb4ef8518c67323f4f14",
+    "files": []
+   },
+   "finish": "stop",
+   "rawFinish": "stop",
+   "cost": 0,
+   "tokens": {
+    "input": 1200,
+    "output": 30,
+    "reasoning": 0,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   }
+  },
+  {
+   "id": "msg_1dff991fc001nWa2S7ELdpasFq",
+   "time": {
+    "created": 1794759037436
+   },
+   "type": "idle",
+   "outcome": "succeeded"
+  }
+ ],
+ "cursor": {
+  "previous": "eyJpZCI6Im1zZ18xZGZmOTdmOWEwMDFJbGE2NncwZGsyTnZURF80Iiwib3JkZXIiOiJhc2MiLCJkaXJlY3Rpb24iOiJwcmV2aW91cyJ9",
+  "next": "eyJpZCI6Im1zZ18xZGZmOTkxZmMwMDFuV2EyUzdFTGRwYXNGcSIsIm9yZGVyIjoiYXNjIiwiZGlyZWN0aW9uIjoibmV4dCJ9"
+ }
+}

@@ -1,0 +1,212 @@
+{
+ "data": [
+  {
+   "id": "msg_1dff918ed0015R9wIVtsIbSh01",
+   "time": {
+    "created": 1794759007045
+   },
+   "text": "hello",
+   "type": "user"
+  },
+  {
+   "id": "msg_1dff91b5b001ooMIkooccq6fBd",
+   "time": {
+    "created": 1794759007080,
+    "firstToken": 1794759007166,
+    "streamed": 1794759007177,
+    "completed": 1794759007197
+   },
+   "type": "assistant",
+   "agent": "build",
+   "model": {
+    "id": "gpt-5-fake",
+    "providerID": "fake"
+   },
+   "content": [
+    {
+     "type": "text",
+     "text": "Hello from the fake model. **bold** text."
+    }
+   ],
+   "snapshot": {
+    "start": "b9fe01792442e29a346989bd9eee5ac02d459da7",
+    "end": "b9fe01792442e29a346989bd9eee5ac02d459da7",
+    "files": []
+   },
+   "finish": "stop",
+   "rawFinish": "stop",
+   "cost": 0,
+   "tokens": {
+    "input": 1200,
+    "output": 30,
+    "reasoning": 0,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   }
+  },
+  {
+   "id": "msg_1dff91be5001uG5K5HFPo7EQQJ",
+   "time": {
+    "created": 1794759007205
+   },
+   "type": "idle",
+   "outcome": "succeeded"
+  },
+  {
+   "id": "msg_1dff944890012z3IMQ0x3hiftO",
+   "time": {
+    "created": 1794759017639
+   },
+   "text": "CALL patch {\"patchText\": \"*** Begin Patch\\n*** Add File: src/added.txt\\n+hi\\n*** Update File: src/x.txt\\n@@\\n one\\n-two\\n+three\\n*** Update File: src/mv.txt\\n*** Move to: src/moved.txt\\n@@\\n-m\\n+mm\\n*** Delete File: src/gone.txt\\n*** End Patch\"}",
+   "type": "user"
+  },
+  {
+   "id": "msg_1dff944b6001gM6ARWQwzcX1Tq",
+   "time": {
+    "created": 1794759017662,
+    "firstToken": 1794759017682,
+    "streamed": 1794759017706,
+    "completed": 1794759017800
+   },
+   "type": "assistant",
+   "agent": "build",
+   "model": {
+    "id": "gpt-5-fake",
+    "providerID": "fake"
+   },
+   "content": [
+    {
+     "type": "tool",
+     "id": "call_12",
+     "name": "patch",
+     "executed": false,
+     "state": {
+      "status": "completed",
+      "input": {
+       "patchText": "*** Begin Patch\n*** Add File: src/added.txt\n+hi\n*** Update File: src/x.txt\n@@\n one\n-two\n+three\n*** Update File: src/mv.txt\n*** Move to: src/moved.txt\n@@\n-m\n+mm\n*** Delete File: src/gone.txt\n*** End Patch"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Success. Updated the following files:\nA src/added.txt\nM src/x.txt\nM src/moved.txt\nD src/gone.txt"
+       }
+      ],
+      "metadata": {
+       "files": [
+        {
+         "file": "src/added.txt",
+         "patch": "Index: @ROOT@/src/added.txt\n===================================================================\n--- @ROOT@/src/added.txt\n+++ @ROOT@/src/added.txt\n@@ -0,0 +1,1 @@\n+hi\n",
+         "status": "added",
+         "additions": 1,
+         "deletions": 0
+        },
+        {
+         "file": "src/x.txt",
+         "patch": "Index: @ROOT@/src/x.txt\n===================================================================\n--- @ROOT@/src/x.txt\n+++ @ROOT@/src/x.txt\n@@ -1,2 +1,2 @@\n one\n-two\n+three\n",
+         "status": "modified",
+         "additions": 1,
+         "deletions": 1
+        },
+        {
+         "file": "src/moved.txt",
+         "patch": "Index: @ROOT@/src/mv.txt\n===================================================================\n--- @ROOT@/src/mv.txt\n+++ @ROOT@/src/mv.txt\n@@ -1,1 +1,1 @@\n-m\n+mm\n",
+         "status": "modified",
+         "additions": 1,
+         "deletions": 1
+        },
+        {
+         "file": "src/gone.txt",
+         "patch": "Index: @ROOT@/src/gone.txt\n===================================================================\n--- @ROOT@/src/gone.txt\n+++ @ROOT@/src/gone.txt\n@@ -1,1 +0,0 @@\n-old\n",
+         "status": "deleted",
+         "additions": 0,
+         "deletions": 1
+        }
+       ],
+       "truncated": false
+      }
+     },
+     "time": {
+      "created": 1794759017686,
+      "ran": 1794759017697,
+      "completed": 1794759017730
+     }
+    }
+   ],
+   "snapshot": {
+    "start": "b9fe01792442e29a346989bd9eee5ac02d459da7",
+    "end": "bdc50f9a8073e448d47153e782d1fa69770fbccc",
+    "files": [
+     "src/added.txt",
+     "src/gone.txt",
+     "src/moved.txt",
+     "src/mv.txt",
+     "src/x.txt"
+    ]
+   },
+   "finish": "tool-calls",
+   "rawFinish": "tool_calls",
+   "cost": 0,
+   "tokens": {
+    "input": 1500,
+    "output": 20,
+    "reasoning": 0,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   }
+  },
+  {
+   "id": "msg_1dff9455b001H5v7LXh4IVGWbj",
+   "time": {
+    "created": 1794759017839,
+    "firstToken": 1794759017882,
+    "streamed": 1794759017897,
+    "completed": 1794759017920
+   },
+   "type": "assistant",
+   "agent": "build",
+   "model": {
+    "id": "gpt-5-fake",
+    "providerID": "fake"
+   },
+   "content": [
+    {
+     "type": "text",
+     "text": "Done after tool."
+    }
+   ],
+   "snapshot": {
+    "start": "bdc50f9a8073e448d47153e782d1fa69770fbccc",
+    "end": "bdc50f9a8073e448d47153e782d1fa69770fbccc",
+    "files": []
+   },
+   "finish": "stop",
+   "rawFinish": "stop",
+   "cost": 0,
+   "tokens": {
+    "input": 1200,
+    "output": 30,
+    "reasoning": 0,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   }
+  },
+  {
+   "id": "msg_1dff945c8001yE3leTI3mcpySQ",
+   "time": {
+    "created": 1794759017929
+   },
+   "type": "idle",
+   "outcome": "succeeded"
+  }
+ ],
+ "cursor": {
+  "previous": "eyJpZCI6Im1zZ18xZGZmOTE4ZWQwMDE1Ujl3SVZ0c0liU2gwMSIsIm9yZGVyIjoiYXNjIiwiZGlyZWN0aW9uIjoicHJldmlvdXMifQ",
+  "next": "eyJpZCI6Im1zZ18xZGZmOTQ1YzgwMDF5RTNsZVRJM21jcHlTUSIsIm9yZGVyIjoiYXNjIiwiZGlyZWN0aW9uIjoibmV4dCJ9"
+ }
+}

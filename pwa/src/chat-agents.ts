@@ -13,9 +13,9 @@ const AGENT_LABELS: Record<string, string> = {
   opencode: 'OpenCode',
 }
 
-// The server reads these agents' session files: the files a session
-// changed are shown.
-const SESSION_FILES_AGENTS = ['claude', 'codex']
+// The server reads these agents' session files (OpenCode: its service's
+// messages): the files a session changed are shown.
+const SESSION_FILES_AGENTS = ['claude', 'codex', 'opencode']
 
 export const sessionFilesAgent = (name?: string) =>
   !!name && SESSION_FILES_AGENTS.includes(name)

@@ -1566,14 +1566,23 @@ files (`sessionFiles`) are added up, a file changed only by subagents marked so;
 of the main transcript and the history a subagent's rollout copies from its parent are skipped.
 A file changed by a shell command is never seen.
 
+An OpenCode session has no journal: `server/agent_touched_opencode.go` reads its assistant messages
+through its service (`type=assistant`, newest first, at most 5000) and keeps its `edit` and `write`
+calls by their `path` and its `patch` calls by the file lines of their patch text, completed or
+still running; a failed or declined call (`error`), a fork's copies of its parent's messages
+(`msg_…_<n>`) and other tools are skipped. Paths are made absolute against the directory the
+service records for the session; its subagents' sessions (`parentID`, two levels) are read the same
+way. `session.diff` is not used: it compares snapshots, so it holds shell commands and the user's own
+changes too. An idle session's list is kept until its `time.updated` or `time.idle` changes.
+
 `server/agent_touched_route.go` compares each path with the pane root as a string first (without
 case on Windows and macOS), so a path outside it is never looked up on disk, then resolves the ones
 inside and drops, only counting them, those that lead outside or that Files never serves (a deny
 dir, the git dir); the 2000 latest of the root are kept. The reply holds only paths relative to the root: the PWA joins them with
 the git status Changes already read and opens a diff or a file through the Files routes, so no
 content goes through this route. A view-only device gets only the root's tracked files it may read,
-by name. In the PWA, Changes offers "Changed by this session" for a pane running Claude Code or
-Codex (polled every 5 s while shown), and an old session of the history lists its files under
+by name. In the PWA, Changes offers "Changed by this session" for a pane running Claude Code,
+Codex or OpenCode (polled every 5 s while shown), and an old session of the history lists its files under
 "Files changed".
 
 ### Agent subagents (`/api/mux/panes/{id}/agent/subagents`)

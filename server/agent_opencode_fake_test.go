@@ -112,6 +112,7 @@ func resetOpencodeCaches() {
 	opencodeBlocked.forgetPrefix("")
 	opencodeReads.forgetPrefix("")
 	opencodeUsageRecs.forgetPrefix("")
+	opencodeTouchedReads.forgetPrefix("")
 }
 
 func (f *fakeOpencode) writeServiceFile(state string, v any) {
@@ -134,6 +135,7 @@ func (f *fakeOpencode) set(fn func()) {
 	opencodeActive.forgetPrefix("")
 	opencodeBlocked.forgetPrefix("")
 	opencodeReads.forgetPrefix("")
+	opencodeTouchedReads.forgetPrefix("")
 }
 
 func (f *fakeOpencode) reqs() []string {
@@ -386,6 +388,12 @@ func testOpencodeMessages(t *testing.T, name string) []json.RawMessage {
 	if err != nil {
 		t.Fatal(err)
 	}
+	return testOpencodeMessagesOf(t, data)
+}
+
+// testOpencodeMessagesOf is testOpencodeMessages of a page already read.
+func testOpencodeMessagesOf(t *testing.T, data []byte) []json.RawMessage {
+	t.Helper()
 	var page struct {
 		Data []json.RawMessage `json:"data"`
 	}

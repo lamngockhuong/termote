@@ -69,10 +69,11 @@ page only: it is cleared when you leave the view or when the root moves.
 
 ### Files a Session Changed
 
-In a pane that runs Claude Code or Codex, a switch above the list picks between **All changes**
-and **Changed by this session**. The second lists the files the agent's session changed through
-its own tool calls (Claude Code's Edit, MultiEdit, Write and NotebookEdit, Codex's file changes),
-its subagents' included, the latest first. It is read again every 5 seconds while shown, and the
+In a pane that runs Claude Code, Codex or OpenCode, a switch above the list picks between
+**All changes** and **Changed by this session**. The second lists the files the agent's session
+changed through its own tool calls (Claude Code's Edit, MultiEdit, Write and NotebookEdit, Codex's
+file changes, OpenCode's edit, write and patch), its subagents' included, the latest first.
+OpenCode's list comes from its background service, so it is empty while the service does not run. It is read again every 5 seconds while shown, and the
 choice is kept for the pane.
 
 - Each file shows its status in git now, with the same letters as the list, or

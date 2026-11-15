@@ -553,8 +553,13 @@ type opencodeChild struct {
 	Time     struct {
 		Created float64 `json:"created"`
 		Updated float64 `json:"updated"`
+		Busy    float64 `json:"busy"`
 		Idle    float64 `json:"idle"`
 	} `json:"time"`
+	// The files it touched name paths relative to its directory.
+	Location struct {
+		Directory string `json:"directory"`
+	} `json:"location"`
 	// The usage reads its own requests' tokens and cost.
 	Tokens opencodeTokens `json:"tokens"`
 	Cost   float64        `json:"cost"`

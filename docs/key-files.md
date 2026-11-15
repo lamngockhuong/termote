@@ -314,6 +314,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/agent_usage_opencode.go`                  | OpenCode tokens and recorded cost, from its service            |
 | `server/agent_touched.go`                         | Files a session changed, from its Edit/Write/FileChange calls  |
 | `server/agent_touched_route.go`                   | `agent/touched`: those files under the pane root, role view    |
+| `server/agent_touched_opencode.go`                | Files an OpenCode session changed: its edit/write/patch calls  |
 | `server/agent_pricing.go`                         | API list prices of Claude and OpenAI models, per request       |
 | `server/agent_overview_usage.go`                  | Overview: a session's totals, read in the background           |
 | `server/agent_resume.go`                          | Old session transcript, `agent/resume` (new tab or idle pane)  |

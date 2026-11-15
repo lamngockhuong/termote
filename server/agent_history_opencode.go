@@ -37,6 +37,10 @@ type opencodeSessionInfo struct {
 	Title    string `json:"title"`
 	Time     struct {
 		Updated int64 `json:"updated"`
+		// Busy: when its running turn started, Idle when its last one
+		// ended (the files it touched read it).
+		Busy int64 `json:"busy"`
+		Idle int64 `json:"idle"`
 	} `json:"time"`
 	Location struct {
 		Directory string `json:"directory"`

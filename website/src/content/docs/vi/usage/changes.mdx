@@ -68,10 +68,12 @@ khi gốc đổi.
 
 ### File mà một session đã sửa
 
-Ở pane đang chạy Claude Code hoặc Codex, phía trên danh sách có công tắc chọn giữa **All changes**
-và **Changed by this session**. Lựa chọn thứ hai liệt kê các file mà session của agent đã sửa qua
-chính các lệnh gọi công cụ của nó (Edit, MultiEdit, Write và NotebookEdit của Claude Code, các thay
-đổi file của Codex), gồm cả những file do subagent sửa, mới nhất ở trên. Danh sách được đọc lại mỗi 5 giây khi
+Ở pane đang chạy Claude Code, Codex hoặc OpenCode, phía trên danh sách có công tắc chọn giữa
+**All changes** và **Changed by this session**. Lựa chọn thứ hai liệt kê các file mà session của
+agent đã sửa qua chính các lệnh gọi công cụ của nó (Edit, MultiEdit, Write và NotebookEdit của
+Claude Code, các thay đổi file của Codex, edit, write và patch của OpenCode), gồm cả những file do
+subagent sửa, mới nhất ở trên. Danh sách của OpenCode lấy từ dịch vụ nền của nó, nên trống khi dịch
+vụ không chạy. Danh sách được đọc lại mỗi 5 giây khi
 đang hiện, và lựa chọn được giữ cho từng pane.
 
 - Mỗi file hiện trạng thái hiện tại trong git, cùng các chữ cái như danh sách thay đổi, hoặc

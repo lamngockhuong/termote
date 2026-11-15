@@ -106,8 +106,12 @@ func (a *agentAPI) handleTouched(w http.ResponseWriter, r *http.Request) {
 }
 
 // sessionTouched reads every file of s. A session whose transcript is not
-// written yet changed nothing.
+// written yet changed nothing. An OpenCode session is read through its
+// service.
 func (a *agentAPI) sessionTouched(s AgentSession) ([]touchedFile, error) {
+	if s.Agent == "opencode" {
+		return opencodeSessionTouched(s)
+	}
 	files, err := a.history.sessionFiles(s)
 	if errors.Is(err, errTranscriptNotWritten) {
 		return nil, nil
