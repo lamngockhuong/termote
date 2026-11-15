@@ -7820,8 +7820,13 @@ describe('session history', () => {
     render(<App />)
     await openFromPalette()
     const p = historySheet.props as NonNullable<typeof historySheet.props>
-    await act(async () => p.onResumed({ tabId: '$3:0', paneId: 'p3' }, 'tab'))
+    // A tab the tabs read so far do not hold yet is opened once they do
+    await act(async () =>
+      p.onResumed({ tabId: 'not-yet', paneId: 'px' }, 'tab'),
+    )
     expect(refreshSessions).toHaveBeenCalled()
+    expect(mockSelectTab).not.toHaveBeenCalledWith('not-yet')
+    await act(async () => p.onResumed({ tabId: '$3:0', paneId: 'p3' }, 'tab'))
     await act(async () => p.onResumed({ tabId: '0', paneId: 'p0' }, 'here'))
     act(() => p.onOpenLive({ tabId: '$3:0', paneId: 'p3' }))
     const open = p.openFile as NonNullable<typeof p.openFile>

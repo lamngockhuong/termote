@@ -982,18 +982,29 @@ export default function App({
       }),
     [readOnly, activeSession, mux],
   )
-  // A resumed session: its new tab's Chat view, or this pane's
+  // A resumed session: its new tab's Chat view, once the tabs read again
+  // hold that tab (selecting it before would find no such tab), or this
+  // pane's
+  const [resumedTab, setResumedTab] = useState<{
+    tabId: string
+    paneId: string
+  } | null>(null)
   const onSessionResumed = useCallback(
-    async (result: { tabId: string; paneId: string }, where: ResumeWhere) => {
+    (result: { tabId: string; paneId: string }, where: ResumeWhere) => {
       if (where === 'here') {
         showView(CHAT_VIEW_ID)
         return
       }
-      await refreshSessions()
-      openTab(result.tabId, result.paneId, CHAT_VIEW_ID)
+      setResumedTab(result)
+      void refreshSessions()
     },
-    [showView, refreshSessions, openTab],
+    [showView, refreshSessions],
   )
+  useEffect(() => {
+    if (!resumedTab || !sessions.some((s) => s.id === resumedTab.tabId)) return
+    setResumedTab(null)
+    openTab(resumedTab.tabId, resumedTab.paneId, CHAT_VIEW_ID)
+  }, [resumedTab, sessions, openTab])
   // A path in an old transcript, opened in Files of the pane on screen
   const historyOpenFile = useCallback(
     async (paneId: string, path: string, line?: number) => {
@@ -2837,7 +2848,7 @@ export default function App({
         canResume={!!mux.caps.tasks}
         onClose={() => setHistoryTarget(null)}
         notify={notify}
-        onResumed={(result, where) => void onSessionResumed(result, where)}
+        onResumed={onSessionResumed}
         onOpenLive={(live) => openTab(live.tabId, live.paneId, CHAT_VIEW_ID)}
         openFile={
           historyTarget?.paneId === activeSession.paneId && mux.caps.files

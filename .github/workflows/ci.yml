@@ -335,11 +335,15 @@ jobs:
       # environment; XDG_CONFIG_HOME keeps it that way on any runner.
       # XDG_CACHE_HOME keeps the image uploads in the run's own dir, and
       # XDG_STATE_HOME the recent groups (groups.spec.ts empties them).
+      # CLAUDE_CONFIG_DIR is where the session history reads Claude Code's
+      # transcripts (session-history.spec.ts lays its own there).
       - name: Start server
         if: ${{ !matrix.extra }}
         run: |
           echo "TMUX_SOCKET=$RUNNER_TEMP/tmux.sock" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/claude"
           XDG_CONFIG_HOME="$RUNNER_TEMP/xdg" XDG_CACHE_HOME="$RUNNER_TEMP/cache" XDG_STATE_HOME="$RUNNER_TEMP/state" \
+            CLAUDE_CONFIG_DIR="$RUNNER_TEMP/claude" \
             TMUX_SOCKET="$RUNNER_TEMP/tmux.sock" nohup ./server/termote-dev serve > "$RUNNER_TEMP/serve.log" 2>&1 &
           for _ in $(seq 1 30); do
             # The first snapshot also creates the server's tmux session
@@ -359,6 +363,7 @@ jobs:
         working-directory: pwa
         env:
           TERMOTE_E2E_CACHE: ${{ runner.temp }}/cache
+          TERMOTE_E2E_CLAUDE_DIR: ${{ runner.temp }}/claude
           SHARD: ${{ matrix.shard }}
         run: pnpm exec playwright test --workers=1 --shard="$SHARD" --grep-invert "Capture screenshots"
 
