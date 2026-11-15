@@ -66,6 +66,31 @@ có đường dẫn chứa chuỗi bạn gõ, không phân biệt hoa thường 
 `No changes match`. Escape xoá ô. Bộ lọc chỉ nằm trong trang: nó được xoá khi bạn rời view hoặc
 khi gốc đổi.
 
+### File mà một session đã sửa
+
+Ở pane đang chạy Claude Code hoặc Codex, phía trên danh sách có công tắc chọn giữa **All changes**
+và **Changed by this session**. Lựa chọn thứ hai liệt kê các file mà session của agent đã sửa qua
+chính các lệnh gọi công cụ của nó (Edit, MultiEdit, Write và NotebookEdit của Claude Code, các thay
+đổi file của Codex), gồm cả những file do subagent sửa, mới nhất ở trên. Danh sách được đọc lại mỗi 5 giây khi
+đang hiện, và lựa chọn được giữ cho từng pane.
+
+- Mỗi file hiện trạng thái hiện tại trong git, cùng các chữ cái như danh sách thay đổi, hoặc
+  `no longer changed` khi nó đã được commit hay hoàn lại. Chạm vào file sẽ mở diff của nó (phía
+  chưa stage, hoặc phía đã stage nếu chỉ có phía đó), còn khi git không liệt kê thay đổi nào của
+  file thì mở file trong Files. File mà session đã xoá và git không còn giữ thì hiện `deleted` và
+  không mở được.
+- `×3` cho biết session đã sửa file bao nhiêu lần, `subagent` là chỉ subagent sửa nó, `editing` là
+  một lần sửa còn đang chờ kết quả. Lần sửa thất bại (không tìm thấy đoạn cần thay, hoặc bạn từ
+  chối) thì không được tính.
+- File sửa bằng lệnh shell (`sed -i`, `mv`, một script) không bao giờ có trong danh sách này, và
+  đầu danh sách luôn ghi rõ điều đó; danh sách tất cả thay đổi thì vẫn có. File nằm ngoài gốc của
+  pane, hoặc file Files không bao giờ hiện (`~/.ssh`, thư mục `.git`), bị bỏ ra và chỉ được đếm.
+- Thiết bị chỉ xem chỉ thấy những file git đang theo dõi mà nó được đọc, chỉ có tên, không có số
+  lần hay nhãn, và không thấy gì ngoài một git repository hay trong thư mục home.
+
+Một session cũ trong [lịch sử phiên](/vi/usage/agent-chat/#tiếp-tục-phiên-cũ) cũng liệt kê các
+file của nó như vậy, dưới mục **Files changed**.
+
 ### Commit cuối
 
 Khi không còn gì để liệt kê, Changes báo `No changes since the last commit` kèm nút

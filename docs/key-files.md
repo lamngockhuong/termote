@@ -121,6 +121,8 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/session-usage-line.tsx`       | A session's tokens, cost and subagents' share                  |
 | `pwa/src/hooks/use-usage-summary.ts`              | Polls the machine's or a folder's usage by 15 minutes          |
 | `pwa/src/hooks/use-session-usage.ts`              | Reads an old session's tokens once                             |
+| `pwa/src/hooks/use-touched-files.ts`              | Files a session changed: polls the running one, reads old once |
+| `pwa/src/components/touched-files-list.tsx`       | Changes, history: files a session changed, with git status     |
 | `pwa/src/utils/usage-cost.ts`                     | Folds buckets into local days; token and cost formats          |
 | `pwa/src/components/usage-meter.tsx`              | Thin usage bar (`role="meter"`), coloured by level             |
 | `pwa/src/components/usage-chip.tsx`               | Header chip: the open pane's context share and Codex limit     |
@@ -301,6 +303,8 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/agent_session_files.go`                   | A session's files: transcript, subagents, Codex children       |
 | `server/agent_usage.go`                           | Token records of Claude and Codex journals, totals             |
 | `server/agent_usage_routes.go`                    | `agent/usage`, `agent/usage/summary`, `/usage` routes          |
+| `server/agent_touched.go`                         | Files a session changed, from its Edit/Write/FileChange calls  |
+| `server/agent_touched_route.go`                   | `agent/touched`: those files under the pane root, role view    |
 | `server/agent_pricing.go`                         | API list prices of Claude and OpenAI models, per request       |
 | `server/agent_overview_usage.go`                  | Overview: a session's totals, read in the background           |
 | `server/agent_resume.go`                          | Old session transcript, `agent/resume` (new tab or idle pane)  |
