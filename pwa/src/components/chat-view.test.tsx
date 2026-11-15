@@ -1067,10 +1067,12 @@ describe('ChatView without an agent', () => {
     },
   })
 
-  it('offers both agents on an idle pane and starts the one picked', () => {
+  it('offers every agent on an idle pane and starts the one picked', () => {
     render(<ChatView {...idle} />)
     fireEvent.click(screen.getByRole('button', { name: 'Codex' }))
     expect(start).toHaveBeenCalledWith('w1:p1', 'codex')
+    fireEvent.click(screen.getByRole('button', { name: 'OpenCode' }))
+    expect(start).toHaveBeenCalledWith('w1:p1', 'opencode')
     expect(screen.getByRole('button', { name: 'Claude Code' })).toBeTruthy()
   })
 
@@ -1081,6 +1083,7 @@ describe('ChatView without an agent', () => {
     }
     render(<ChatView {...idle} mux={mux} />)
     expect(screen.getByRole('button', { name: 'Claude Code' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'OpenCode' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Codex' })).toBeNull()
   })
 

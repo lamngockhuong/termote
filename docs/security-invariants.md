@@ -999,7 +999,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   every OS; `caps.agentStartCodex`: also Codex has a Chat view on this OS, `codexProcSupported`):
   `writeGuard` (same-site JSON), `requireWriteRole`
   (a view-only client gets 403 `view_only`, also on `GET`), 8 KB body. Only `kind` is decoded (`claude` → no arguments, `codex` →
-  `--no-daemon`, else 400 `invalid_kind`; `codex` where Codex has no Chat view
+  `--no-daemon`, `opencode` → `--session ses_<26 random base32>`, a new id the server makes for
+  each start (`rand.Text`), so the pane has a session to show from the start; else 400 `invalid_kind`; `codex` where Codex has no Chat view
   (`codexProcSupported` false) → 501 `unsupported`, checked before the pane is resolved, nothing
   sent to Herdr; the PWA then offers only Claude Code); arguments and the Herdr alias
   (`termote-<kind>-<8 hex>`, one retry on `agent_name_taken`) are the server's. The pane is
@@ -1021,7 +1022,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   cancellation once begun. Herdr answers at once (`launch_pending`): 200 `{ok, state:
   "starting"}`; `agent.start` timing out → 504 `start_unknown`, followed as if typed. Herdr's
   `agent_pane_busy` → 409 `pane_busy`, `agent_pane_not_found`/`agent_pane_unavailable` → 404,
-  `unsupported_agent_kind` and an older Herdr's `invalid_request` naming `agent.start` → 501
+  `unsupported_agent_kind` (Herdr 0.9.5 takes `opencode`; an older one may not) and an older Herdr's `invalid_request` naming `agent.start` → 501
   `unsupported`, anything else 500 `start_failed` (logged, never Herdr's text). `GET` (same-site
   read) reads `agent.get` by the alias: `ready` (`interactive_ready`), `blocked`, `exited` (alias
   gone, another agent, `launch_pending` false, or no agent seen and the pane an idle shell again
@@ -1039,8 +1040,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
 - **Agent session history and resume** (`GET /api/mux/panes/{id}/agent/history`,
   `GET /api/mux/panes/{id}/agent/history/{session}/transcript?agent=`, `POST
   /api/mux/panes/{id}/agent/resume` `{agent, session, where, fork}`; `server/agent_history*.go`,
-  `server/agent_resume.go`): the client names only a pane, an agent (`claude`|`codex`) and a
-  session id (`isSessionID`, a lowercase UUID); never a path. The server reads its own user's dirs
+  `server/agent_resume.go`): the client names only a pane, an agent (`claude`|`codex`|`opencode`)
+  and a session id (`historySessionID`: a lowercase UUID, `isOpencodeSessionID` for OpenCode);
+  never a path. The server reads its own user's dirs
   (`CLAUDE_CONFIG_DIR` or `~/.claude`; `CODEX_HOME` or `~/.codex`), both resolved: Claude Code
   `projects/<dir>/<id>.jsonl` (only dirs named like the pane root's encoding, a subdir of it, or of
   200+ characters; never `<id>/subagents/`), Codex `sessions/<Y>/<M>/<D>/rollout-*-<id>.jsonl`
@@ -1062,12 +1064,24 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   (another root's, another agent's or an unknown id: 404 `session_not_found`, no reason given),
   through the journal adapters' own `Locate` checks. One scan per root is shared for 10 s; parsed
   files are kept by path, size and mtime (at most 5000). `live` marks a session some pane runs now
-  (its agent lookup, cached). Resume: `writeGuard`, `requireWriteRole` (view-only 403 for both
+  (its agent lookup, cached). OpenCode's sessions come only from the server user's own service
+  (see OpenCode service client; never `opencode.db`): `GET /api/session?parentID=null&limit=100`,
+  page after page through the service's own cursor (passed back to it only, at most 1 KB), at most
+  2000 sessions (`truncated`), one read shared for 10 s by every root; the service's
+  `directory` filter matches one directory exactly, so it is not used. A session counts only with
+  no `parentID` (a subagent's is never listed), an id `isOpencodeSessionID` takes, and a
+  `location.directory` that, cleaned and resolved when it still exists, is the root or under it
+  (`relUnder`, as above; not required to be absolute by Go's rules, since the path is the
+  service's); title through the same cleaning, `titleSource: ai`, the time its `time.updated`. A
+  service that does not run or fails lists no OpenCode session and fails nothing else (logged
+  without its body). Its transcript is read as the Chat view reads a running one, only for a
+  session the listing finds in that root. Resume: `writeGuard`, `requireWriteRole` (view-only 403 for both
   `where`), 8 KB body, only the four fields; a backend that cannot run tasks (`runsTasks`: not psmux) → 501
   `unsupported`; a session running in a pane and no `fork` → 409 `session_live` with that tab and
   pane (two processes appending to one transcript break it). The command line is the server's:
-  `claude --resume <id>` (`--fork-session` with `fork`) or `codex resume --no-daemon <id>`
-  (`codex fork --no-daemon <id>` with `fork`), typed as
+  `claude --resume <id>` (`--fork-session` with `fork`), `codex resume --no-daemon <id>`
+  (`codex fork --no-daemon <id>` with `fork`) or `opencode --session <id>` (its id holds only
+  `[A-Za-z0-9_]`), typed as
   keys (`TypeLine`, never a paste) only into a shell `taskShellKind` knows (else 409
   `unsupported_shell`). `tab`: a new tab of the pane's group at the session's dir when it is still a
   dir inside the root (resolved), else the root (`validTaskDir`, else 400 `invalid_root`), named
@@ -1075,11 +1089,20 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   409 `shell_busy`), an unsupported one has its tab closed again. `here`: under the pane's input
   lock (409 `input_busy` past the wait), the pane's shell must be idle (409 `pane_busy`, nothing
   sent), then `C-c`, 200 ms, idle again, then the line, after `cd '<dir>' &&` (fish `; and`, pwsh
-  `Set-Location -LiteralPath ...;`, `shellQuote`d) when the session's dir is not the pane's. The
+  `Set-Location -LiteralPath ...;`, `shellQuote`d) when the session's dir is not the pane's. An
+  OpenCode `fork` (allowed for a running session too) is `POST /api/session/{id}/fork` `{}` to the
+  service for the session the listing found, made after the shell checks and right before the line
+  (a new tab is closed again when it fails); the reply is decoded up to 1 MB for its `id` only,
+  which must pass `isOpencodeSessionID`, and that new session is the one the line opens. The
+  service's 404 → 404 `session_not_found`, any other failure or no service → 502
+  `agent_unavailable`, logged without its body; nothing is typed. The TUI that line opens starts
+  the service itself when none runs (OpenCode's own behaviour, documented; termote never does). The
   typing runs without the request's cancellation once begun. Each resume logs `audit:
-  agent-resume` with the agent, the id's first 8 characters, `where`, `fork` and who; never a title
+  agent-resume` with the agent, the id's first 8 characters (`shortSessionID`: a shorter
+  OpenCode id whole; for a fork, the session forked), `where`, `fork` and who; never a title
   or a path. Accepted gaps, as Tasks: stream input from another client can land between `C-c` and
-  the line; a session the 10 s cache does not hold yet is 404 until the next scan
+  the line; a session the 10 s cache does not hold yet is 404 until the next scan; an OpenCode
+  fork whose line then fails to type stays in OpenCode's list
 - **Agent usage and cost** (`GET /api/mux/panes/{id}/agent/usage[?agent=&session=]`,
   `GET /api/mux/panes/{id}/agent/usage/summary`, `GET /api/mux/usage`; `server/agent_usage*.go`,
   `server/agent_journal_scan.go`, `server/agent_session_files.go`, `server/agent_pricing.go`):
@@ -1271,18 +1294,20 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   is read; a failed check is repeated at most every 2 s). Every reply is read up to a limit (1 MB, a page of
   messages 24 MB) and decoded into the fields used; the service's own text (its error bodies,
   `/api/info`'s hostname, `/api/model`'s provider settings with their API keys) never reaches a
-  client or a log. Writes (a message, a command, a permission or form reply, a form's cancel) go the same way,
-  with the same header and checks, a JSON body termote builds itself and at most 15 s; their reply
-  is drained up to 64 KB, never decoded or logged. Errors reach the client as `transcript not
+  client or a log. Writes (a message, a command, a permission or form reply, a form's cancel, a fork) go the same
+  way, with the same header and checks, a JSON body termote builds itself and at most 15 s; their
+  reply is drained up to 64 KB, never decoded or logged, except a fork's, read up to 1 MB for the
+  new session's `id` only. Errors reach the client as `transcript not
   found`, `no agent session`, or for a write a code only (`agent_unavailable` 502,
   `input_not_ready`, `prompt_expired`, `invalid_choice`); the service's error is logged without
   its body.
 - **OpenCode chat**: the session of a pane is the `--session`/`-s` id of the OpenCode TUI process
   found under the pane's shell (executable named `opencode`, argv not a subcommand, not
   `--standalone` or `--server`), or on Herdr the id Herdr's OpenCode integration reported for the
-  pane; never one a client names. The id must match `^ses[A-Za-z0-9_]{1,64}$` and goes into a
+  pane, else that TUI's `--session` found under the pane's shell through `pane.process_info` (as
+  for Codex; a TUI termote starts or resumes always has one); never one a client names. The id must match `^ses[A-Za-z0-9_]{1,64}$` and goes into a
   service URL path only after that check; message, permission and form ids are kept only when
-  they match `msg_`/`per_`/`frm_` plus up to 64 alphanumerics, and a pending request only when its
+  they match `msg_`/`per_`/`frm_` plus up to 64 alphanumerics (a message id `_` too: a fork's copies end in `_<n>`), and a pending request only when its
   `sessionID` is the pane's session. A TUI without such an id, or with no usable service, is
   shown as OpenCode with status `unknown` and every `agent/*` route answers 404. The status comes
   from one shared `/api/session/active` read and the session's pending permissions and forms

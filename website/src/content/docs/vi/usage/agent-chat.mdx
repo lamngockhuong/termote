@@ -342,13 +342,18 @@ pane chỉ hiện logo OpenCode. Termote biết pane đang xem session nào:
 
 - **Herdr**: qua tích hợp OpenCode của Herdr (`herdr integration install opencode`), kể cả khi bạn
   chuyển sang session khác ngay trong OpenCode. Sau `/new`, pane giữ session cũ cho tới khi bạn gửi
-  tin đầu tiên của session mới.
+  tin đầu tiên của session mới. Không có tích hợp thì giống tmux: lấy từ `--session <id>`, mà
+  OpenCode do Termote khởi động hay mở lại thì luôn có.
 - **tmux, psmux, Zellij, herdr-core**: chỉ khi OpenCode được mở bằng `--session <id>` (hoặc
   `-s <id>`). Chạy `opencode` trần thì chỉ có logo, và session bạn chuyển sang từ bên trong OpenCode
   không được theo: view giữ session ghi trên dòng lệnh.
 
 OpenCode chạy với `--standalone` hoặc `--server` không được đọc. Nếu bạn đặt `XDG_STATE_HOME` trong
 shell, hãy đặt cả cho dịch vụ của Termote, nếu không Termote sẽ tìm OpenCode ở `~/.local/state`.
+
+Mở `opencode` khi dịch vụ không chạy thì chính OpenCode đó khởi động dịch vụ, dưới dạng tiến trình
+con của nó; OpenCode mà Termote khởi động hay mở lại giúp bạn cũng vậy. Termote không chặn được
+hành vi này của OpenCode.
 
 Trên Windows, dịch vụ nền chạy dưới cửa sổ OpenCode đã khởi động nó: đóng pane đó khi OpenCode còn
 chạy bên trong sẽ dừng luôn dịch vụ, mọi OpenCode khác cũng mất kết nối. Lần mở `opencode` kế tiếp sẽ
@@ -357,11 +362,12 @@ khởi động dịch vụ mới, và Termote tìm lại được nó sau vài g
 ## Khởi động agent (Herdr)
 
 Trên Herdr, pane chỉ hiện shell của nó (không chạy gì, kể cả chương trình chạy bằng `exec`) cũng
-có view Chat. Thay vì hội thoại, view hiện hai nút **Claude Code** và **Codex**: chạm một nút là
-Termote nhờ Herdr khởi động agent đó trong pane.
+có view Chat. Thay vì hội thoại, view hiện các nút **Claude Code**, **Codex** và **OpenCode**: chạm
+một nút là Termote nhờ Herdr khởi động agent đó trong pane.
 
-- Claude Code chạy bằng `claude`, Codex bằng `codex --no-daemon`. Không thể thêm tham số, chọn
-  model hay đặt tên.
+- Claude Code chạy bằng `claude`, Codex bằng `codex --no-daemon`, OpenCode bằng
+  `opencode --session <id>` với id session mới do Termote tạo, để view Chat biết session ngay từ
+  đầu. Không thể thêm tham số, chọn model hay đặt tên.
 - Trước khi gõ lệnh, Termote nhấn Ctrl+C trong pane, để dòng đang gõ dở, dấu nhắc tiếp dòng hay
   heredoc không nuốt mất lệnh. Pane đang chạy thứ khác thì bị từ chối và không nhận gì.
 - Trong lúc agent khởi động, các nút chờ và view ghi "Starting Claude Code…". Khi Claude Code sẵn
@@ -372,11 +378,13 @@ Termote nhờ Herdr khởi động agent đó trong pane.
   **Open terminal** để xem lý do. Sau đó Herdr còn giữ lần khởi động ấy tới 30 giây: khởi động lại
   sớm hơn sẽ được báo như vậy, và pane không nhận gì.
 - Codex chỉ tạo file phiên khi có tin đầu tiên, mà view Chat không gửi được khi chưa có phiên: hãy
-  gõ tin đầu tiên trong terminal, từ tin sau view Chat sẽ theo kịp.
+  gõ tin đầu tiên trong terminal, từ tin sau view Chat sẽ theo kịp. OpenCode cũng chỉ tạo session
+  khi có tin đầu tiên, gõ trong terminal.
 - Bạn có thể chuyển sang pane khác trong lúc chờ: một thông báo sẽ cho biết kết quả.
 
-Yêu cầu: Herdr 0.8.2 trở lên trên Linux, macOS hoặc Windows. tmux và psmux không có tính năng
-này, chế độ chỉ xem cũng ẩn nó.
+Yêu cầu: Herdr 0.8.2 trở lên trên Linux, macOS hoặc Windows (OpenCode: đã kiểm tra với Herdr 0.9.5;
+Herdr nào không khởi động được OpenCode sẽ báo như vậy). tmux và psmux không có tính năng này, chế
+độ chỉ xem cũng ẩn nó.
 
 Trên Windows, pane chỉ được coi là
 rảnh khi shell của nó không có tiến trình con, nên pane đang chạy `ping`, `nvim` hay một `cmd`
@@ -389,7 +397,7 @@ Ctrl+C. Chỉ khởi động agent ở pane mà bạn biết chắc đang ở d�
 
 ## Tiếp tục phiên cũ
 
-Mỗi pane liệt kê được các phiên Claude Code và Codex đã chạy trong thư mục của nó: thư mục gốc
+Mỗi pane liệt kê được các phiên Claude Code, Codex và OpenCode đã chạy trong thư mục của nó: thư mục gốc
 của pane (git repository của nó, như [Files](/vi/usage/files/) tìm thấy) hoặc một thư mục con, mới nhất
 trước. Mở danh sách từ một trong các chỗ sau:
 
@@ -401,9 +409,9 @@ trước. Mở danh sách từ một trong các chỗ sau:
 - pane chưa có agent: view Chat của nó hiện ba phiên gần nhất, mỗi phiên có nút **Tiếp tục**.
 
 Mỗi dòng có agent, tiêu đề, lần hoạt động cuối, nhánh git và thư mục con dưới gốc. Tiêu đề là tên
-bạn đặt bằng `/rename`, không có thì là tiêu đề agent tự đặt (Codex: tên đặt cho cuộc hội thoại), không có nữa thì
-là lời nhắn đầu tiên, in nghiêng. Ô tìm lọc theo tiêu đề và nhánh; khi danh sách có cả hai agent
-thì có thêm nút lọc từng agent.
+bạn đặt bằng `/rename`, không có thì là tiêu đề agent tự đặt (Codex: tên đặt cho cuộc hội thoại;
+OpenCode: tiêu đề nó tự đặt), không có nữa thì là lời nhắn đầu tiên, in nghiêng. Ô tìm lọc theo
+tiêu đề và nhánh; khi danh sách có từ hai agent trở lên thì có thêm nút lọc từng agent.
 
 Chạm vào một phiên để đọc lại, hiển thị như view Chat của một phiên đang chạy; **Show earlier
 messages** tải thêm phần cũ hơn. Dưới tiêu đề là số token phiên đã dùng cùng chi phí ước tính, và
@@ -413,7 +421,7 @@ các file phiên đó đã sửa, chạm vào thì mở diff hoặc chính file 
 [File mà một session đã sửa](/vi/usage/changes/#file-mà-một-session-đã-sửa)). Bên dưới có:
 
 - **Tiếp tục trong tab mới**: mở một tab trong group của pane, ở đúng thư mục phiên đã chạy, rồi
-  gõ `claude --resume <id>` hoặc `codex resume --no-daemon <id>` vào đó. View Chat của tab mới hiện
+  gõ `claude --resume <id>`, `codex resume --no-daemon <id>` hoặc `opencode --session <id>` vào đó. View Chat của tab mới hiện
   lại hội thoại cũ, tin bạn gửi tiếp được ghi vào cùng phiên.
 - **Tiếp tục ở đây**: gõ dòng lệnh đó ngay trong pane này, chỉ có khi pane đang ở shell và không
   chạy gì khác. Giống Tasks, Termote bấm Ctrl+C trước, và không gõ gì nếu pane đang bận.
@@ -422,6 +430,8 @@ các file phiên đó đã sửa, chạm vào thì mở diff hoặc chính file 
   **Tách nhánh** tạo một phiên mới có id riêng từ hội thoại ấy
   (`claude --resume <id> --fork-session`, hoặc `codex fork --no-daemon <id>`), phiên cũ giữ
   nguyên. View Chat của phiên tách nhánh hiện hội thoại gốc, rồi tới những gì nói sau khi tách.
+  Với OpenCode, dịch vụ của nó tạo phiên tách nhánh (một bản sao hội thoại, tiêu đề "… (fork #1)"),
+  rồi phiên đó được mở bằng `opencode --session <id của phiên mới>`.
 
 Giới hạn:
 
@@ -429,6 +439,8 @@ Giới hạn:
   `CODEX_HOME` hoặc `~/.codex`); phiên của thư mục khác hay của một Place thì không.
 - Codex không lưu chỉ mục theo thư mục: chỉ các phiên nằm trong 2000 lần chạy gần nhất được liệt
   kê, và danh sách có ghi chú khi phiên cũ hơn bị bỏ qua.
+- Phiên OpenCode lấy từ dịch vụ nền của nó, chỉ khi dịch vụ đang chạy: 2000 phiên gần nhất, không
+  gồm phiên của subagent. Số token và các file phiên đó đã sửa chưa được hiện.
 - Muốn tiếp tục phiên, backend phải chạy được
   [Tasks](/vi/usage/tasks/) (tmux, Herdr, Zellij, `herdr-core`; psmux thì không) và shell phải là loại
   Tasks hỗ trợ (`bash`, `zsh`, `sh`, `fish`, `pwsh`).
@@ -447,7 +459,7 @@ Giới hạn:
   cũng phải cài tích hợp vào thư mục đó, nếu không view Chat sẽ báo không tìm thấy phiên:
   `CLAUDE_CONFIG_DIR=~/.claude-work herdr integration install claude`, rồi khởi động lại Claude Code.
 - Chưa hỗ trợ chế độ container.
-- Hiện chỉ có Claude Code và Codex.
+- Hiện chỉ có Claude Code, Codex và OpenCode.
 
 <Aside>
   Nút **Open terminal** luôn ở ngay đó. Stream terminal vẫn giữ kết nối khi bạn ở view Chat, nên

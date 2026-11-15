@@ -13,8 +13,8 @@ interface StartAgentPanelProps {
   onStart: (kind: StartAgentKind) => void
 }
 
-// The Chat view of a pane that shows only its shell: starts Claude Code or
-// Codex there, says why a start was refused.
+// The Chat view of a pane that shows only its shell: starts Claude Code,
+// Codex or OpenCode there, says why a start was refused.
 export function StartAgentPanel({
   kinds,
   record,

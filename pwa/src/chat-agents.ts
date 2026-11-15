@@ -13,6 +13,13 @@ const AGENT_LABELS: Record<string, string> = {
   opencode: 'OpenCode',
 }
 
+// The server reads these agents' session files: their tokens and the files
+// a session changed are shown.
+const SESSION_FILES_AGENTS = ['claude', 'codex']
+
+export const sessionFilesAgent = (name?: string) =>
+  !!name && SESSION_FILES_AGENTS.includes(name)
+
 export const chatAgent = (name?: string) => !!name && CHAT_AGENTS.includes(name)
 
 export const chatInputAgent = (name?: string) =>

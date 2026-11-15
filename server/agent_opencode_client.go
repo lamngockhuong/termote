@@ -53,8 +53,9 @@ const (
 var (
 	// OpenCode makes ses_ + 26 base62 characters; an id given with
 	// --session only has to start with "ses" (its OpenAPI pattern).
-	opencodeSessionIDRe    = regexp.MustCompile(`^ses[A-Za-z0-9_]{1,64}$`)
-	opencodeMessageIDRe    = regexp.MustCompile(`^msg_[A-Za-z0-9]{1,64}$`)
+	opencodeSessionIDRe = regexp.MustCompile(`^ses[A-Za-z0-9_]{1,64}$`)
+	// A fork's copies of its parent's messages add _<n> to their ids.
+	opencodeMessageIDRe    = regexp.MustCompile(`^msg_[A-Za-z0-9_]{1,64}$`)
 	opencodePermissionIDRe = regexp.MustCompile(`^per_[A-Za-z0-9]{1,64}$`)
 	opencodeFormIDRe       = regexp.MustCompile(`^frm_[A-Za-z0-9]{1,64}$`)
 )

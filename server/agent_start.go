@@ -19,10 +19,14 @@ import (
 // for the agent and the PWA polls the GET.
 
 // agentStartArgs are the kinds a client may start and the arguments each one
-// gets. Nothing in a request adds to them.
-var agentStartArgs = map[string][]string{
-	"claude": nil,
-	"codex":  {"--no-daemon"},
+// gets. Nothing in a request adds to them. OpenCode gets a new session id
+// of the server's (--session): the service makes that session at the first
+// message, and the pane has a session to show from the start, whether or
+// not Herdr's OpenCode integration reports it.
+var agentStartArgs = map[string]func() []string{
+	"claude":   func() []string { return nil },
+	"codex":    func() []string { return []string{"--no-daemon"} },
+	"opencode": func() []string { return []string{"--session", newOpencodeSessionID()} },
 }
 
 // agentStartKind: kind can be started on this server. Codex only where it
@@ -206,11 +210,12 @@ func (a *agentAPI) startAgent(w http.ResponseWriter, r *http.Request) {
 		jsonErrorCode(w, "invalid_request", "invalid JSON body", http.StatusBadRequest)
 		return
 	}
-	args, ok := agentStartArgs[body.Kind]
+	argsOf, ok := agentStartArgs[body.Kind]
 	if !ok {
-		jsonErrorCode(w, "invalid_kind", "kind must be claude or codex", http.StatusBadRequest)
+		jsonErrorCode(w, "invalid_kind", "kind must be claude, codex or opencode", http.StatusBadRequest)
 		return
 	}
+	args := argsOf()
 	st, ok := a.starter(w)
 	if !ok {
 		return

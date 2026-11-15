@@ -1,0 +1,85 @@
+{
+  "data": [
+    {
+      "id": "sesFixT1",
+      "projectID": "global",
+      "cost": 0,
+      "tokens": {
+        "input": 5100,
+        "output": 110,
+        "reasoning": 0,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      },
+      "outcome": "succeeded",
+      "time": {
+        "created": 1794712613258,
+        "updated": 1794712614497,
+        "busy": 1794712613382,
+        "idle": 1794712614515
+      },
+      "title": "Spike title",
+      "location": {
+        "directory": "/work/proj"
+      }
+    },
+    {
+      "id": "ses_e22caccceffe0hL76lTTiemGdN",
+      "parentID": "sesFixT1",
+      "projectID": "global",
+      "agent": "explore",
+      "cost": 0,
+      "tokens": {
+        "input": 1200,
+        "output": 30,
+        "reasoning": 0,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      },
+      "outcome": "succeeded",
+      "time": {
+        "created": 1794712613715,
+        "updated": 1794712614090,
+        "busy": 1794712613739,
+        "idle": 1794712614127
+      },
+      "title": "Explore files",
+      "location": {
+        "directory": "/work/proj"
+      }
+    },
+    {
+      "id": "sesFixP2",
+      "projectID": "global",
+      "cost": 0,
+      "tokens": {
+        "input": 3900,
+        "output": 80,
+        "reasoning": 0,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      },
+      "outcome": "succeeded",
+      "time": {
+        "created": 1794712601367,
+        "updated": 1794712613538,
+        "busy": 1794712601442,
+        "idle": 1794712613553
+      },
+      "title": "Spike title",
+      "location": {
+        "directory": "/work/proj"
+      }
+    }
+  ],
+  "cursor": {
+    "previous": "eyJhbmNob3IiOnsiaWQiOiJzZXNGaXhUMSIsInRpbWUiOjE3OTQ3MTI2MTQ0OTcsImRpcmVjdGlvbiI6InByZXZpb3VzIn19",
+    "next": "eyJhbmNob3IiOnsiaWQiOiJzZXNGaXhQMiIsInRpbWUiOjE3OTQ3MTI2MTM1MzgsImRpcmVjdGlvbiI6Im5leHQifX0"
+  }
+}

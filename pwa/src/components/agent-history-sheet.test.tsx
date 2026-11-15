@@ -177,6 +177,34 @@ describe('AgentHistorySheet', () => {
     expect(screen.getByText('transcript of a')).toBeTruthy()
   })
 
+  it('filters by the agents listed, OpenCode among them', async () => {
+    lists.push(
+      listOf([
+        session('a'),
+        session('o', { agent: 'opencode', title: 'OpenCode work' }),
+      ]),
+    )
+    setup()
+    await screen.findByText('OpenCode work')
+    // No Codex session: no Codex filter
+    expect(screen.queryByRole('button', { name: 'Codex' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'OpenCode' }))
+    expect(screen.queryByText('Title a')).toBeNull()
+    expect(screen.getByText('OpenCode work')).toBeTruthy()
+  })
+
+  it('reads no tokens or changed files of an OpenCode session', async () => {
+    lists.push(listOf([session('o', { agent: 'opencode' })]))
+    setup({}, { openTouched: vi.fn() })
+    fireEvent.click(await screen.findByText('Title o'))
+    expect(screen.getByText('transcript of o')).toBeTruthy()
+    const urls = vi
+      .mocked(fetch)
+      .mock.calls.map(([u]) => String(u))
+      .filter((u) => u.includes('/agent/touched') || u.includes('session=o'))
+    expect(urls).toEqual([])
+  })
+
   it('moves between rows with the arrow keys and comes back to the row', async () => {
     lists.push(listOf([session('a'), session('b')]))
     setup()

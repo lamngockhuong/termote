@@ -12,12 +12,13 @@ import (
 
 // Reading an old session of the history and resuming it. The transcript of
 // a session found by the history is read as the Chat view reads a running
-// one. Resuming types a command line the server builds (claude --resume, or
-// codex resume) into a shell, as Tasks does: the shell of a new tab in the
-// pane's group, or the pane's own when it waits at its prompt. A session
-// already running in a pane is never opened a second time, since two
-// processes appending to one transcript break it; it can be forked into a
-// new session instead (claude --resume --fork-session, codex fork).
+// one. Resuming types a command line the server builds (claude --resume,
+// codex resume, opencode --session) into a shell, as Tasks does: the shell
+// of a new tab in the pane's group, or the pane's own when it waits at its
+// prompt. A session already running in a pane is never opened a second
+// time, since two processes appending to one transcript break it; it can be
+// forked into a new session instead (claude --resume --fork-session, codex
+// fork; OpenCode's service forks it, and the fork is opened).
 
 var (
 	errSessionNotFound = &codedError{"session_not_found", "no such session in this pane's directory", http.StatusNotFound}
@@ -53,6 +54,9 @@ func (a *agentAPI) findHistorySession(root, agent, id string) (historySession, b
 // found, through the journal adapter's own checks.
 func (a *agentAPI) historyAgentSession(s historySession) AgentSession {
 	dirs := a.history.dirs()
+	if s.Agent == "opencode" {
+		return AgentSession{Agent: "opencode", ID: s.ID}
+	}
 	if s.Agent == "codex" {
 		return AgentSession{Agent: "codex", ID: s.ID, CodexHome: dirs.codex, Rollout: s.path}
 	}
@@ -72,7 +76,7 @@ func (a *agentAPI) handleHistoryTranscript(w http.ResponseWriter, r *http.Reques
 	}
 	q := r.URL.Query()
 	agent, id := q.Get("agent"), r.PathValue("session")
-	if (agent != "claude" && agent != "codex") || !isSessionID(id) {
+	if !historySessionID(agent, id) {
 		jsonErrorCode(w, "invalid_request", "invalid agent or session", http.StatusBadRequest)
 		return
 	}
@@ -124,11 +128,11 @@ func (a *agentAPI) liveSessions(ctx context.Context) map[string]historyLive {
 	for _, g := range snap.Groups {
 		for _, t := range g.Tabs {
 			for _, p := range t.Panes {
-				if p.Agent == nil || (p.Agent.Name != "claude" && p.Agent.Name != "codex") {
+				if p.Agent == nil || !historyAgent(p.Agent.Name) {
 					continue
 				}
 				s, err := a.session(p.ID)
-				if err != nil || !isSessionID(s.ID) {
+				if err != nil || !historySessionID(s.Agent, s.ID) {
 					continue
 				}
 				live[s.Agent+"\x00"+s.ID] = historyLive{TabID: t.ID, PaneID: p.ID}
@@ -152,10 +156,13 @@ func (a *agentAPI) markLive(ctx context.Context, sessions []historySession) {
 }
 
 // resumeCommand is the line that resumes s in kind's shell, after a cd to
-// dir when it is not "".
+// dir when it is not "". An OpenCode fork is made by its service before
+// (resumeSession), so its line opens the fork as any session.
 func resumeCommand(kind, agent, id string, fork bool, dir string) string {
 	cmd := "claude --resume " + id
 	switch {
+	case agent == "opencode":
+		cmd = "opencode --session " + id
 	case agent == "codex" && fork:
 		cmd = "codex fork --no-daemon " + id
 	case agent == "codex":
@@ -204,7 +211,7 @@ func (a *agentAPI) handleResume(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	if (body.Agent != "claude" && body.Agent != "codex") || !isSessionID(body.Session) ||
+	if !historySessionID(body.Agent, body.Session) ||
 		(body.Where != "tab" && body.Where != "here") {
 		jsonErrorCode(w, "invalid_request", "invalid agent, session or where", http.StatusBadRequest)
 		return
@@ -273,7 +280,7 @@ func (a *agentAPI) handleResume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	by, via := auditWho(r)
-	auditf("agent-resume", "agent", s.Agent, "session", s.ID[:8], "where", body.Where, "fork", body.Fork, "by", by, "via", via)
+	auditf("agent-resume", "agent", s.Agent, "session", shortSessionID(s.ID), "where", body.Where, "fork", body.Fork, "by", by, "via", via)
 	jsonOK(w, map[string]any{"ok": true, "tabId": tab.TabID, "paneId": tab.PaneID})
 }
 
@@ -285,9 +292,26 @@ func resumeTabName(s historySession) string {
 		name = string(r[:32])
 	}
 	if name == "" || !validPaneName(name) {
-		return s.Agent + ":" + s.ID[:8]
+		return s.Agent + ":" + shortSessionID(s.ID)
 	}
 	return name
+}
+
+// shortSessionID is the first 8 characters of a session id, as an audit
+// line and a tab's name show it.
+func shortSessionID(id string) string {
+	return id[:min(8, len(id))]
+}
+
+// resumeSession is the session a resume line opens, made right before the
+// line is typed: s itself, or for an OpenCode fork the new session its
+// service forks from s (in s's directory). fork then no longer applies.
+func resumeSession(ctx context.Context, s historySession, fork bool) (historySession, bool, error) {
+	if s.Agent != "opencode" || !fork {
+		return s, fork, nil
+	}
+	f, err := opencodeForkSession(ctx, s)
+	return f, false, err
 }
 
 // resumeInTab opens a tab in groupID at dir, waits for its shell and types
@@ -308,6 +332,12 @@ func (a *agentAPI) resumeInTab(ctx context.Context, tm taskMux, groupID string, 
 			if cerr := a.m.CloseTab(ctx, tab.TabID, ""); cerr != nil {
 				log.Printf("resume: close tab %s: %v", tab.TabID, cerr)
 			}
+		}
+		return taskTab{}, err
+	}
+	if s, fork, err = resumeSession(ctx, s, fork); err != nil {
+		if cerr := a.m.CloseTab(ctx, tab.TabID, ""); cerr != nil {
+			log.Printf("resume: close tab %s: %v", tab.TabID, cerr)
 		}
 		return taskTab{}, err
 	}
@@ -348,6 +378,10 @@ func (a *agentAPI) resumeHere(ctx context.Context, tm taskMux, target, paneDir s
 	cd := dir
 	if samePath(dir, paneDir) {
 		cd = ""
+	}
+	s, fork, err = resumeSession(ctx, s, fork)
+	if err != nil {
+		return err
 	}
 	return tm.TypeLine(ctx, target, resumeCommand(kind, s.Agent, s.ID, fork, cd))
 }

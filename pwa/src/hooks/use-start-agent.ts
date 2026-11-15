@@ -12,7 +12,7 @@ import {
   startAgent,
 } from './use-mux-api'
 
-// Starting Claude Code or Codex in an idle pane from the Chat view, then
+// Starting Claude Code, Codex or OpenCode in an idle pane from the Chat view, then
 // following the start through the server (GET agent/start) until the agent
 // is ready, asks something, or never comes up. One instance lives in App,
 // so a start goes on being followed when the user moves to another pane.
@@ -84,6 +84,7 @@ export function startErrorKey(
     case 'pane_busy':
       return 'dialogs.startAgent.paneBusy'
     case 'unsupported':
+      if (kind === 'opencode') return 'dialogs.startAgent.opencodeUnsupported'
       return kind === 'codex'
         ? 'dialogs.startAgent.codexUnsupported'
         : 'dialogs.startAgent.herdrUnsupported'

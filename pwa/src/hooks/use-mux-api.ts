@@ -1179,9 +1179,9 @@ export async function fetchTranscript(
   return res.json()
 }
 
-// A Claude Code or Codex session that ran in the pane's root or under it, as
-// the history lists it.
-export type HistoryAgent = 'claude' | 'codex'
+// A Claude Code, Codex or OpenCode session that ran in the pane's root or
+// under it, as the history lists it.
+export type HistoryAgent = 'claude' | 'codex' | 'opencode'
 
 export interface HistorySession {
   agent: HistoryAgent
@@ -1412,7 +1412,7 @@ export async function sendAgentMessage(
 }
 
 // The agents a pane can start, with the arguments the server picks.
-export type StartAgentKind = 'claude' | 'codex'
+export type StartAgentKind = 'claude' | 'codex' | 'opencode'
 
 // How a start goes: starting until the agent is ready for a message, asks
 // something first (blocked), ends (exited) or never gets ready (timeout).

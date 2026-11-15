@@ -1523,10 +1523,12 @@ OpenCode 2 comes from its GitHub releases or Homebrew; the `opencode-ai` package
 
 Termote reads OpenCode through its background service (the one `opencode` starts on its own), on this machine and for your own user. It never starts that service: when it does not run, the pane shows only OpenCode’s logo. Which session a pane shows is known:
 
-* **Herdr**: from Herdr’s OpenCode integration (`herdr integration install opencode`), including a session you switch to inside OpenCode. After `/new` the pane keeps the previous session until you send the first message of the new one.
+* **Herdr**: from Herdr’s OpenCode integration (`herdr integration install opencode`), including a session you switch to inside OpenCode. After `/new` the pane keeps the previous session until you send the first message of the new one. Without the integration, as on tmux: from `--session <id>`, which an OpenCode started or resumed from Termote always has.
 * **tmux, psmux, Zellij, herdr-core**: only when OpenCode was started with `--session <id>` (or `-s <id>`). A plain `opencode` shows the logo only, and a session you switch to from inside OpenCode is not followed: the view keeps the one named on the command line.
 
 OpenCode run with `--standalone` or `--server` is not read. If you set `XDG_STATE_HOME` in your shell, set it for Termote’s service too, or Termote looks for OpenCode in `~/.local/state`.
+
+An `opencode` opened while the service does not run starts one itself, as a child of that OpenCode; this includes an OpenCode that Termote starts or resumes for you. Termote cannot keep OpenCode from doing so.
 
 On Windows the background service runs under the OpenCode window that started it: closing that pane while OpenCode still runs in it stops the service for every other OpenCode too. The next `opencode` you open starts a new one, and Termote finds it again within a few seconds.
 
@@ -1534,16 +1536,16 @@ On Windows the background service runs under the OpenCode window that started it
 
 [Section titled “Starting an Agent (Herdr)”](#starting-an-agent-herdr)
 
-On Herdr, a pane that shows only its shell (nothing running, not even a program started with `exec`) also offers the Chat view. Instead of a conversation it shows **Claude Code** and **Codex**: tap one and Termote asks Herdr to start it in that pane.
+On Herdr, a pane that shows only its shell (nothing running, not even a program started with `exec`) also offers the Chat view. Instead of a conversation it shows **Claude Code**, **Codex** and **OpenCode**: tap one and Termote asks Herdr to start it in that pane.
 
-* Claude Code starts as `claude`, Codex as `codex --no-daemon`. No other arguments, model or name can be given.
+* Claude Code starts as `claude`, Codex as `codex --no-daemon`, OpenCode as `opencode --session <id>` with a new session id Termote makes, so the Chat view knows the session from the start. No other arguments, model or name can be given.
 * Before typing the command, Termote presses Ctrl+C in the pane, so a half-typed line, a continuation prompt or a heredoc does not take the command. A pane running anything else is refused with nothing typed.
 * While the agent starts, the buttons wait and the view says “Starting Claude Code…”. Once Claude Code is ready the conversation shows here; until Herdr reports its session (a few seconds) the view says it is starting.
 * If the agent first asks something in the terminal (trusting a new folder, signing in), the PWA opens the Terminal view and tells you so. If it does not start (not installed, it exited), a warning offers **Open terminal** to see why. Herdr then holds that start for up to 30 seconds: starting again sooner says so, with nothing typed.
-* Codex writes its session only with its first message, which the Chat view cannot send without one: type the first message in the terminal, and the Chat view follows from the next one.
+* Codex writes its session only with its first message, which the Chat view cannot send without one: type the first message in the terminal, and the Chat view follows from the next one. OpenCode likewise makes the session only with its first message, typed in the terminal.
 * You can move to another pane meanwhile: a toast tells you how the start went.
 
-Requirements: Herdr 0.8.2 or later on Linux, macOS or Windows. tmux and psmux do not offer it, and view-only mode hides it.
+Requirements: Herdr 0.8.2 or later on Linux, macOS or Windows (OpenCode: checked with Herdr 0.9.5; a Herdr that cannot start OpenCode says so). tmux and psmux do not offer it, and view-only mode hides it.
 
 On Windows a pane counts as idle only when its shell has no child process, so a pane running `ping`, `nvim` or a nested `cmd` is refused with nothing typed. A shell that keeps a long-lived child (`Start-Job`, a GUI program started from it, something its profile launched) is refused the same way, and so is a `wsl.exe` pane. Work that runs inside PowerShell itself has no child process, so the pane looks idle: the start’s Ctrl+C clears a wait (`Start-Sleep`, `Read-Host`), but it also stops a `.ps1` script or a command such as `Copy-Item -Recurse` halfway, as pressing Ctrl+C there would. Start an agent only in a pane you know is at its prompt.
 
@@ -1551,25 +1553,26 @@ On Windows a pane counts as idle only when its shell has no child process, so a 
 
 [Section titled “Resuming an Old Session”](#resuming-an-old-session)
 
-Every pane can list the Claude Code and Codex sessions that ran in its folder: the pane’s root (its git repository, as [Files](/usage/files/) finds it) or a folder under it, newest first. Open the list from any of these:
+Every pane can list the Claude Code, Codex and OpenCode sessions that ran in its folder: the pane’s root (its git repository, as [Files](/usage/files/) finds it) or a folder under it, newest first. Open the list from any of these:
 
 * the history button in the header of the Chat view;
 * **Session history** in the command palette (`>` commands; no default shortcut, set one under Settings > Shortcuts);
 * **Session history** in a group’s menu in the sidebar (it lists the folder of the tab the group opens on);
 * a pane without an agent, whose Chat view shows its three latest sessions with a **Resume** button each.
 
-Each row shows the agent, a title, when it was last active, its git branch and its folder under the root. The title is the one you gave it with `/rename`, else the one the agent made (Codex: the thread name), else its first prompt, shown in italics. Search filters by title and branch; with both agents in the list, a filter picks one.
+Each row shows the agent, a title, when it was last active, its git branch and its folder under the root. The title is the one you gave it with `/rename`, else the one the agent made (Codex: the thread name; OpenCode: the title it made), else its first prompt, shown in italics. Search filters by title and branch; with more than one agent in the list, a filter picks one.
 
 Tap a session to read it, drawn as the Chat view draws a running one; **Show earlier messages** loads older parts. Its title shows the tokens the session used and their estimated cost, and the top of the list adds up the folder’s sessions today and over the last 7 days (see [Tokens and cost](/usage/overview/#tokens-and-cost)). **Files changed**, under the title, lists the files the session changed, each opening its diff or the file (see [Files a Session Changed](/usage/changes/#files-a-session-changed)). Under it:
 
-* **Resume in a new tab** opens a tab in the pane’s group, in the folder the session ran in, and types `claude --resume <id>` or `codex resume --no-daemon <id>` there. The new tab’s Chat view shows the old conversation, and what you send goes on in the same session.
+* **Resume in a new tab** opens a tab in the pane’s group, in the folder the session ran in, and types `claude --resume <id>`, `codex resume --no-daemon <id>` or `opencode --session <id>` there. The new tab’s Chat view shows the old conversation, and what you send goes on in the same session.
 * **Resume here** types the same line in this pane, offered only when the pane shows its shell and nothing else. As with Tasks, Termote presses Ctrl+C first and types nothing if the pane is busy.
-* A session that runs in a pane now is marked **Running**: it is never opened a second time (two processes writing one transcript would break it). **Open the running tab** goes there, and **Fork** starts a new session with its own id from that conversation (`claude --resume <id> --fork-session`, or `codex fork --no-daemon <id>`), leaving the old one as it is. The fork’s Chat view shows the conversation it was forked from, then what is said in the fork.
+* A session that runs in a pane now is marked **Running**: it is never opened a second time (two processes writing one transcript would break it). **Open the running tab** goes there, and **Fork** starts a new session with its own id from that conversation (`claude --resume <id> --fork-session`, or `codex fork --no-daemon <id>`), leaving the old one as it is. The fork’s Chat view shows the conversation it was forked from, then what is said in the fork. OpenCode’s service makes the fork (a copy of the conversation, titled “… (fork #1)”), which then opens as `opencode --session <fork id>`.
 
 Limits:
 
 * Only sessions of the server’s own user are listed (its `CLAUDE_CONFIG_DIR` or `~/.claude`, and `CODEX_HOME` or `~/.codex`); sessions of another folder or a Place are not.
 * Codex keeps no index by folder: only threads among its latest 2000 runs are listed, and the list says so when older ones were left out.
+* OpenCode’s sessions come from its background service, only while it runs: its latest 2000 sessions, without a subagent’s. Their tokens and the files they changed are not shown yet.
 * Resuming needs a backend that runs [Tasks](/usage/tasks/) (tmux, Herdr, Zellij, `herdr-core`; not psmux) and a shell Tasks knows (`bash`, `zsh`, `sh`, `fish`, `pwsh`).
 * View-only devices can read the list and the old conversations, where they may read [Files](/usage/files/) (a git repository, not a home folder), but cannot resume.
 
@@ -1581,7 +1584,7 @@ Limits:
 * Herdr before 0.9.3: the transcript is read from `~/.claude` of the user running Termote. A Claude Code started with another `CLAUDE_CONFIG_DIR` shows no history. From Herdr 0.9.3 the config dir of the Claude Code running in the pane is used, as on tmux.
 * Herdr: Claude Code reports its session to Herdr through hooks in its own config dir. A Claude Code started with another `CLAUDE_CONFIG_DIR` (a per-account shell function, for example) needs the integration installed there too, or the Chat view says no session was found: `CLAUDE_CONFIG_DIR=~/.claude-work herdr integration install claude`, then restart Claude Code.
 * Container mode is not supported.
-* Only Claude Code and Codex for now.
+* Only Claude Code, Codex and OpenCode for now.
 
 Note
 
