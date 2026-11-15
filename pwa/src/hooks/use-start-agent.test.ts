@@ -254,6 +254,16 @@ describe('useStartAgent', () => {
     )
   })
 
+  it('says a refused OpenCode start asks for a newer Herdr', async () => {
+    postReply = { status: 501, body: { code: 'unsupported', error: 'x' } }
+    const { result } = setup()
+    act(() => result.current.start(PANE, 'opencode'))
+    await settle()
+    expect(english(result.current.starts[PANE].error)).toBe(
+      'This Herdr cannot start OpenCode. Update Herdr.',
+    )
+  })
+
   it('keeps a ready start while its agent runs, forgets it once gone', async () => {
     const { result, snapshot } = setup()
     act(() => result.current.start(PANE, 'claude'))

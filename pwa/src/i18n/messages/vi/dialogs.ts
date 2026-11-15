@@ -62,6 +62,8 @@ export default {
     'Pane này đang chạy một chương trình. Hãy khởi động agent trong pane chỉ hiện shell.',
   'dialogs.startAgent.codexUnsupported':
     'Server này không khởi động được Codex.',
+  'dialogs.startAgent.opencodeUnsupported':
+    'Herdr này không khởi động được OpenCode. Hãy cập nhật Herdr.',
   'dialogs.startAgent.herdrUnsupported':
     'Herdr này không khởi động được agent. Hãy cập nhật Herdr lên 0.8.2 trở lên.',
   'dialogs.startAgent.gone': 'Pane này không còn nữa.',

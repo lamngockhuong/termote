@@ -253,7 +253,15 @@ func (m *herdrMux) AgentSession(ctx context.Context, paneID string) (AgentSessio
 		return s, true, nil
 	}
 	if p.Agent == "opencode" {
-		return herdrOpencodeSession(p.Agent, ref, status, paneID)
+		s, ok, err := herdrOpencodeSession(p.Agent, ref, status, paneID)
+		if ok && s.ID == "" {
+			if id := m.paneOpencodeSession(ctx, paneID); id != "" {
+				if _, err := opencodeConnect(); err == nil {
+					s.ID = id
+				}
+			}
+		}
+		return s, ok, err
 	}
 	if p.Agent != "claude" || !hasRef {
 		return AgentSession{}, false, nil
@@ -287,6 +295,27 @@ func herdrOpencodeSession(agent string, ref *herdrSessionRef, status, paneID str
 	s.ID = ref.Value
 	return s, true, nil
 }
+
+// paneOpencodeSession is the --session id of the OpenCode TUI under the
+// pane's shell: the session of a TUI termote
+// started or resumed (always with --session) when no integration of Herdr
+// reported one.
+func (m *herdrMux) paneOpencodeSession(ctx context.Context, paneID string) string {
+	if m.procs.off() {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(ctx, herdrProcBudget)
+	defer cancel()
+	info, err := m.paneProcess(ctx, paneID)
+	m.procs.noteErr(err)
+	if err != nil || info.ShellPID <= 0 {
+		return ""
+	}
+	return herdrPaneOpencodeSession(paneID, info.ShellPID)
+}
+
+// herdrPaneOpencodeSession is findOpencodeUnder; tests replace it.
+var herdrPaneOpencodeSession = findOpencodeUnder
 
 // paneCodexSession is the session of the Codex process under the pane's
 // shell. herdr's Codex hook reports no session id for a Codex started with

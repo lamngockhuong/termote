@@ -34,7 +34,7 @@ termote/
 │   ├── herdr_*.go              # Herdr JSON-RPC client, socket/pipe, observer lifetime
 │   ├── zellij_*.go             # Termote's Zellij clients (input, full stream), view-only stream, a pane's shell
 │   ├── hc_*.go                 # herdr-core: framed `hc connect`, typed RPC, autostart, attach stream
-│   ├── agent*.go               # Chat view: Claude Code and Codex sessions, transcripts, dialogs, input
+│   ├── agent*.go               # Chat view: Claude Code, Codex and OpenCode sessions, transcripts, dialogs, input
 │   ├── files*.go               # Files/Changes views: pane root, tree, contents, git status/diff, images, saves
 │   ├── uploads*.go             # `/api/mux/uploads` image store
 │   ├── cli*.go                 # CLI subcommands (start/stop, service, container, update, url, panel, ...)

@@ -1,0 +1,106 @@
+{
+  "data": [
+    {
+      "id": "msg_1df169f36001x66IkmhspH7oBn_4",
+      "time": {
+        "created": 1794744114896
+      },
+      "text": "hello one",
+      "type": "user"
+    },
+    {
+      "id": "msg_1df169f36001x66IkmhspH7oBn_5",
+      "time": {
+        "created": 1794744114959,
+        "firstToken": 1794744115039,
+        "streamed": 1794744115089,
+        "completed": 1794744115099
+      },
+      "type": "assistant",
+      "agent": "build",
+      "model": {
+        "id": "m1",
+        "providerID": "fake"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Hello from the fake model. **bold** text."
+        }
+      ],
+      "finish": "stop",
+      "rawFinish": "stop",
+      "cost": 0,
+      "tokens": {
+        "input": 1200,
+        "output": 30,
+        "reasoning": 0,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_1df169f36001x66IkmhspH7oBn_11",
+      "time": {
+        "created": 1794744115117
+      },
+      "type": "idle",
+      "outcome": "succeeded"
+    },
+    {
+      "id": "msg_1df169f36001x66IkmhspH7oBn_16",
+      "time": {
+        "created": 1794744160044
+      },
+      "text": "second msg",
+      "type": "user"
+    },
+    {
+      "id": "msg_1df169f36001x66IkmhspH7oBn_17",
+      "time": {
+        "created": 1794744160084,
+        "firstToken": 1794744160105,
+        "streamed": 1794744160114,
+        "completed": 1794744160120
+      },
+      "type": "assistant",
+      "agent": "build",
+      "model": {
+        "id": "m1",
+        "providerID": "fake"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Hello from the fake model. **bold** text."
+        }
+      ],
+      "finish": "stop",
+      "rawFinish": "stop",
+      "cost": 0,
+      "tokens": {
+        "input": 1200,
+        "output": 30,
+        "reasoning": 0,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_1df169f36001x66IkmhspH7oBn_23",
+      "time": {
+        "created": 1794744160131
+      },
+      "type": "idle",
+      "outcome": "succeeded"
+    }
+  ],
+  "cursor": {
+    "previous": "eyJpZCI6Im1zZ18xZGYxNjlmMzYwMDF4NjZJa21oc3BIN29Cbl80Iiwib3JkZXIiOiJhc2MiLCJkaXJlY3Rpb24iOiJwcmV2aW91cyJ9",
+    "next": "eyJpZCI6Im1zZ18xZGYxNjlmMzYwMDF4NjZJa21oc3BIN29Cbl8yMyIsIm9yZGVyIjoiYXNjIiwiZGlyZWN0aW9uIjoibmV4dCJ9"
+  }
+}

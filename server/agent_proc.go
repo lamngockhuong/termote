@@ -72,6 +72,16 @@ func findCodexUnder(key string, rootPID int) (AgentSession, bool) {
 	return codexSessionOf(p, "", false)
 }
 
+// findOpencodeUnder is the --session id of the OpenCode TUI running under
+// rootPID ("" without one). key names the pane, as for findClaudeSession.
+func findOpencodeUnder(key string, rootPID int) string {
+	p, ok := agentProcUnder(key, rootPID)
+	if !ok || p.agent != "opencode" {
+		return ""
+	}
+	return p.opencodeSession
+}
+
 // agentProcUnder is the agent process walkForClaude finds under rootPID,
 // cached per pane and root pid.
 func agentProcUnder(key string, rootPID int) (claudeProc, bool) {

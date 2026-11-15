@@ -52,6 +52,23 @@ type fakeOpencode struct {
 	locations   []string
 	// goneCommand is listed but answers 404 when run.
 	goneCommand string
+	// list answers GET /api/session, newest first, paged by an opaque
+	// cursor; forks counts the sessions POST .../fork made.
+	list  []json.RawMessage
+	forks int
+}
+
+// testOpencodeSession is a session as session.list gives it (OpenCode
+// 2.3.0, testdata/opencode/session-list.json), parent "" for a root one.
+func testOpencodeSession(id, parent, title, dir string, updated int64) json.RawMessage {
+	s := map[string]any{"id": id, "projectID": "global", "cost": 0, "title": title,
+		"time":     map[string]any{"created": updated - 1000, "updated": updated},
+		"location": map[string]any{"directory": dir}}
+	if parent != "" {
+		s["parentID"] = parent
+	}
+	data, _ := json.Marshal(s)
+	return data
 }
 
 const testOpencodePassword = "s3cret-opencode-password"
@@ -175,6 +192,10 @@ func (f *fakeOpencode) serve(w http.ResponseWriter, r *http.Request) {
 		reply(map[string]any{"data": data})
 		return
 	}
+	if path == "/api/session" && r.Method == http.MethodGet {
+		f.serveList(w, r)
+		return
+	}
 	rest, ok := strings.CutPrefix(path, "/api/session/")
 	if !ok {
 		notFound()
@@ -240,6 +261,80 @@ func (f *fakeOpencode) serve(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// serveList answers session.list as OpenCode 2.3.0 does: parentID=null
+// keeps root sessions, directory one directory exactly; a cursor to the
+// next page comes with every page that holds a session.
+func (f *fakeOpencode) serveList(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	var all []json.RawMessage
+	for _, raw := range f.list {
+		var s struct {
+			ParentID string `json:"parentID"`
+			Location struct{ Directory string }
+		}
+		json.Unmarshal(raw, &s)
+		if q.Get("parentID") == "null" && s.ParentID != "" || q.Has("directory") && s.Location.Directory != q.Get("directory") {
+			continue
+		}
+		all = append(all, raw)
+	}
+	start := 0
+	if c := q.Get("cursor"); c != "" {
+		n, err := strconv.Atoi(strings.TrimPrefix(c, "next-"))
+		if err != nil || n < 0 || n > len(all) {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(`{"_tag":"InvalidCursorError","message":"Invalid cursor"}`))
+			return
+		}
+		start = n
+	}
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	if limit <= 0 {
+		limit = 50
+	}
+	end := min(len(all), start+limit)
+	page := all[start:end]
+	cursor := map[string]any{"previous": nil, "next": nil}
+	if len(page) > 0 {
+		cursor = map[string]any{"previous": "prev-" + strconv.Itoa(start), "next": "next-" + strconv.Itoa(end)}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"data": append([]json.RawMessage{}, page...), "cursor": cursor})
+}
+
+// fork makes a session of id's messages, as OpenCode 2.3.0 does: copies
+// with new ids, the fork first in the list, its title "… (fork #1)".
+func (f *fakeOpencode) fork(w http.ResponseWriter, id string) {
+	i := slices.IndexFunc(f.list, func(raw json.RawMessage) bool {
+		var s struct{ ID string }
+		json.Unmarshal(raw, &s)
+		return s.ID == id
+	})
+	if i < 0 {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(`{"_tag":"SessionNotFoundError","message":"Session not found: secret words"}`))
+		return
+	}
+	f.forks++
+	var parent map[string]any
+	json.Unmarshal(f.list[i], &parent)
+	newID := "ses_fork" + strconv.Itoa(f.forks)
+	fork := map[string]any{"id": newID, "projectID": "global", "cost": 0,
+		"title": parent["title"].(string) + " (fork #1)", "time": parent["time"], "location": parent["location"],
+		"fork": map[string]any{"sessionID": id, "boundary": map[string]any{"type": "through"}}}
+	data, _ := json.Marshal(fork)
+	f.list = append([]json.RawMessage{data}, f.list...)
+	for n, m := range f.messages[id] {
+		var msg map[string]any
+		json.Unmarshal(m, &msg)
+		msg["id"] = msg["id"].(string) + "_" + strconv.Itoa(n)
+		copied, _ := json.Marshal(msg)
+		f.messages[newID] = append(f.messages[newID], copied)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"data": json.RawMessage(data)})
+}
+
 // testOpencodeMessages reads a recorded page (newest first) as the session's
 // messages, oldest first.
 func testOpencodeMessages(t *testing.T, name string) []json.RawMessage {
@@ -254,11 +349,15 @@ func testOpencodeMessages(t *testing.T, name string) []json.RawMessage {
 	if err := json.Unmarshal(data, &page); err != nil {
 		t.Fatal(err)
 	}
-	// Recorded with order=asc unless the first is newer than the last.
-	var first, last struct{ ID string }
+	// Recorded with order=asc unless the first is newer than the last (by
+	// time: a fork's copied ids end in _<n>, which does not sort).
+	type stamped struct {
+		Time struct{ Created int64 }
+	}
+	var first, last stamped
 	json.Unmarshal(page.Data[0], &first)
 	json.Unmarshal(page.Data[len(page.Data)-1], &last)
-	if first.ID > last.ID {
+	if first.Time.Created > last.Time.Created {
 		for i, j := 0, len(page.Data)-1; i < j; i, j = i+1, j-1 {
 			page.Data[i], page.Data[j] = page.Data[j], page.Data[i]
 		}
@@ -289,6 +388,8 @@ func (f *fakeOpencode) write(w http.ResponseWriter, r *http.Request, id, sub str
 	}
 	parts := strings.Split(sub, "/")
 	switch {
+	case r.Method == http.MethodPost && sub == "fork":
+		f.fork(w, id)
 	case r.Method == http.MethodPost && sub == "prompt":
 		if _, ok := f.messages[id]; !ok {
 			w.WriteHeader(http.StatusNotFound)

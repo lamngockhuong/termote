@@ -223,7 +223,7 @@ func (a *agentAPI) sessionTarget(w http.ResponseWriter, r *http.Request) (AgentS
 		}
 		return s, true
 	}
-	if (agent != "claude" && agent != "codex") || !isSessionID(id) {
+	if !historySessionID(agent, id) {
 		jsonErrorCode(w, "invalid_request", "invalid agent or session", http.StatusBadRequest)
 		return AgentSession{}, false
 	}

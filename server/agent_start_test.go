@@ -100,6 +100,38 @@ func TestAgentStartClaude(t *testing.T) {
 	}
 }
 
+// OpenCode starts with a new session id of the server's, a fresh one each
+// time, whatever the body holds.
+func TestAgentStartOpencode(t *testing.T) {
+	f := newFakeHerdr(t)
+	h, a := startAPI(t, f)
+	var ids []string
+	for range 2 {
+		status, code, body := postStart(t, h, `{"kind":"opencode","args":["--standalone"]}`)
+		if status != http.StatusOK || body["state"] != "starting" {
+			t.Fatalf("POST = %d %q %v", status, code, body)
+		}
+		p := f.lastParams(t, "agent.start")
+		args, _ := p["args"].([]any)
+		if p["kind"] != "opencode" || len(args) != 2 || args[0] != "--session" {
+			t.Fatalf("agent.start params = %v", p)
+		}
+		id, _ := args[1].(string)
+		if !isOpencodeSessionID(id) || !strings.HasPrefix(id, "ses_") {
+			t.Errorf("session id = %q", id)
+		}
+		ids = append(ids, id)
+		if name, _ := p["name"].(string); !regexp.MustCompile(`^termote-opencode-[0-9a-f]{8}$`).MatchString(name) {
+			t.Errorf("name = %q", name)
+		}
+		// The next start follows this one to its end first.
+		a.starts.drop(startPane)
+	}
+	if ids[0] == ids[1] {
+		t.Errorf("both starts got session %q", ids[0])
+	}
+}
+
 // args and name in the body are never read: the kind's table and the
 // server's alias go to Herdr.
 func TestAgentStartIgnoresClientArgsAndName(t *testing.T) {
@@ -114,8 +146,8 @@ func TestAgentStartIgnoresClientArgsAndName(t *testing.T) {
 		t.Fatalf("POST = %d %v", status, body)
 	}
 	p := f.lastParams(t, "agent.start")
-	if args, _ := p["args"].([]any); fmt.Sprint(args) != fmt.Sprint(agentStartArgs[kind]) {
-		t.Errorf("args = %v, want %v", p["args"], agentStartArgs[kind])
+	if args, _ := p["args"].([]any); fmt.Sprint(args) != fmt.Sprint(agentStartArgs[kind]()) {
+		t.Errorf("args = %v, want %v", p["args"], agentStartArgs[kind]())
 	}
 	if name, _ := p["name"].(string); !strings.HasPrefix(name, "termote-"+kind+"-") {
 		t.Errorf("name = %q", name)

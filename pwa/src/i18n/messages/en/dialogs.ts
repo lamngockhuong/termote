@@ -70,6 +70,8 @@ export default {
   'dialogs.startAgent.paneBusy':
     'This pane is running something. Start the agent in a pane that shows only its shell.',
   'dialogs.startAgent.codexUnsupported': 'This server cannot start Codex.',
+  'dialogs.startAgent.opencodeUnsupported':
+    'This Herdr cannot start OpenCode. Update Herdr.',
   'dialogs.startAgent.herdrUnsupported':
     'This Herdr cannot start agents. Update Herdr to 0.8.2 or later.',
   'dialogs.startAgent.gone': 'This pane is gone.',

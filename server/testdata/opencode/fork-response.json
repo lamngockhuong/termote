@@ -1,0 +1,31 @@
+{
+  "data": {
+    "id": "ses_e22c9c8f2ffe5hHEaxMQ288jF9",
+    "fork": {
+      "sessionID": "sesFixA1",
+      "boundary": {
+        "type": "through",
+        "messageID": "msg_1dd34354f001NFb1cNB5iX4QoO"
+      }
+    },
+    "projectID": "global",
+    "cost": 0,
+    "tokens": {
+      "input": 0,
+      "output": 0,
+      "reasoning": 0,
+      "cache": {
+        "read": 0,
+        "write": 0
+      }
+    },
+    "time": {
+      "created": 1794712680209,
+      "updated": 1794712680209
+    },
+    "title": "Spike title (fork #1)",
+    "location": {
+      "directory": "/work/proj"
+    }
+  }
+}

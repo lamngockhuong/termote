@@ -19,14 +19,15 @@ import (
 	"unicode"
 )
 
-// Session history (GET /api/mux/panes/{id}/agent/history): the Claude Code
-// and Codex sessions that ran in the pane's root (its git toplevel, as the
-// files routes find it) or a directory under it, newest first. The server
-// finds the files itself under the agents' own dirs (the server user's
-// CLAUDE_CONFIG_DIR or ~/.claude, CODEX_HOME or ~/.codex); a client only
-// names a pane, an agent and a session id. A file counts only when the cwd
-// it records is inside the root, whatever directory it was found in, and no
-// absolute path is ever returned.
+// Session history (GET /api/mux/panes/{id}/agent/history): the Claude Code,
+// Codex and OpenCode sessions that ran in the pane's root (its git
+// toplevel, as the files routes find it) or a directory under it, newest
+// first. The server finds the files itself under the agents' own dirs (the
+// server user's CLAUDE_CONFIG_DIR or ~/.claude, CODEX_HOME or ~/.codex),
+// and OpenCode's sessions through its service (agent_history_opencode.go);
+// a client only names a pane, an agent and a session id. A session counts
+// only when the cwd it records is inside the root, whatever directory it
+// was found in, and no absolute path is ever returned.
 
 const (
 	// historyTTL lets every client opening the history of one root share
@@ -190,11 +191,13 @@ type historyAPI struct {
 	dirs  func() historyDirs
 	// children: the rollouts of a Codex session's threads
 	children *ttlCache[[]string]
+	// opencode: the OpenCode service's root sessions, for every root
+	opencode *ttlCache[opencodeHistoryList]
 }
 
 func newHistoryAPI() *historyAPI {
 	return &historyAPI{index: newHistoryIndex(), scans: newTTLCache[historyScan](historyTTL), dirs: serverHistoryDirs,
-		children: newTTLCache[[]string](codexChildTTL)}
+		children: newTTLCache[[]string](codexChildTTL), opencode: newTTLCache[opencodeHistoryList](historyTTL)}
 }
 
 // registerHistoryRoutes adds the history routes. They need the files
@@ -242,8 +245,8 @@ func (a *agentAPI) handleHistory(w http.ResponseWriter, r *http.Request) {
 	}
 	q := r.URL.Query()
 	agent := q.Get("agent")
-	if agent != "" && agent != "claude" && agent != "codex" {
-		jsonErrorCode(w, "invalid_request", "agent must be claude or codex", http.StatusBadRequest)
+	if agent != "" && !historyAgent(agent) {
+		jsonErrorCode(w, "invalid_request", "agent must be claude, codex or opencode", http.StatusBadRequest)
 		return
 	}
 	var after *historyCursor
@@ -263,6 +266,20 @@ func (a *agentAPI) handleHistory(w http.ResponseWriter, r *http.Request) {
 	a.markLive(r.Context(), res.Sessions)
 	w.Header().Set("Cache-Control", "no-store")
 	jsonOK(w, res)
+}
+
+// historyAgent: the history lists agent's sessions.
+func historyAgent(agent string) bool {
+	return agent == "claude" || agent == "codex" || agent == "opencode"
+}
+
+// historySessionID: id has the form of agent's session ids (a lowercase
+// UUID; OpenCode's own, isOpencodeSessionID).
+func historySessionID(agent, id string) bool {
+	if agent == "opencode" {
+		return isOpencodeSessionID(id)
+	}
+	return historyAgent(agent) && isSessionID(id)
 }
 
 // historyCursor continues a listing after the session it names (its
@@ -342,9 +359,10 @@ func (h *historyAPI) scan(root string) historyScan {
 	scan, _ := h.scans.do(root+"\x00"+dirs.claude+"\x00"+dirs.codex, func() (historyScan, error) {
 		claude, ct := h.scanClaude(dirs.claude, root)
 		codex, xt := h.scanCodex(dirs.codex, root)
-		all := append(claude, codex...)
+		opencode, ot := h.scanOpencode(root)
+		all := slices.Concat(claude, codex, opencode)
 		slices.SortFunc(all, historyOrder)
-		return historyScan{sessions: all, truncated: ct || xt}, nil
+		return historyScan{sessions: all, truncated: ct || xt || ot}, nil
 	})
 	return scan
 }

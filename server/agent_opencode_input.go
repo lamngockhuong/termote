@@ -56,6 +56,12 @@ var (
 // send makes a write request with body as JSON (none when nil); the reply's
 // body is never read into an error.
 func (c *opencodeClient) send(ctx context.Context, method, path string, body any) error {
+	return c.write(ctx, method, path, body, nil)
+}
+
+// write makes a write request as send does and, when out is not nil,
+// decodes a successful reply into it (read up to opencodeSmallMax).
+func (c *opencodeClient) write(ctx context.Context, method, path string, body, out any) error {
 	var rd io.Reader
 	if body != nil {
 		data, err := json.Marshal(body)
@@ -80,6 +86,13 @@ func (c *opencodeClient) send(ctx context.Context, method, path string, body any
 		return fmt.Errorf("opencode %s %s: %w", method, path, errors.Join(errOpencodeUnavailable, err))
 	}
 	defer resp.Body.Close()
+	if out != nil && resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		data, err := io.ReadAll(io.LimitReader(resp.Body, opencodeSmallMax+1))
+		if err != nil || len(data) > opencodeSmallMax || json.Unmarshal(data, out) != nil {
+			return fmt.Errorf("opencode %s %s: decode reply", method, path)
+		}
+		return nil
+	}
 	// A message's reply repeats its images: drained only a little, so the
 	// connection may be reused for a small one.
 	io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))

@@ -9,7 +9,7 @@ import {
   useState,
 } from 'react'
 import type { NotifyOptions } from '../app-views'
-import { agentLabel } from '../chat-agents'
+import { agentLabel, sessionFilesAgent } from '../chat-agents'
 import { useAgentHistory } from '../hooks/use-agent-history'
 import { useHistoryClose } from '../hooks/use-history-close'
 import type {
@@ -30,6 +30,9 @@ import { TouchedFilesSection, type TouchedTarget } from './touched-files-list'
 import { Button, IconButton } from './ui/button'
 import { Sheet } from './ui/sheet'
 import { UsageTotalsStrip } from './usage-totals-strip'
+
+// The agents the history can list, in the order its filter shows them
+const HISTORY_AGENTS: HistoryAgent[] = ['claude', 'codex', 'opencode']
 
 // What the history is opened on: a pane, and a session to show at once
 export interface HistoryTarget {
@@ -241,17 +244,19 @@ function HistoryContent({
         {agents.size > 1 && (
           <fieldset className="flex gap-2">
             <legend className="sr-only">{t('chat.history.title')}</legend>
-            {([undefined, 'claude', 'codex'] as const).map((a) => (
-              <Button
-                key={a ?? 'all'}
-                size="sm"
-                variant={agent === a ? 'primary' : 'secondary'}
-                aria-pressed={agent === a}
-                onClick={() => setAgent(a)}
-              >
-                {a ? agentLabel(a) : t('chat.history.all')}
-              </Button>
-            ))}
+            {[undefined, ...HISTORY_AGENTS.filter((a) => agents.has(a))].map(
+              (a) => (
+                <Button
+                  key={a ?? 'all'}
+                  size="sm"
+                  variant={agent === a ? 'primary' : 'secondary'}
+                  aria-pressed={agent === a}
+                  onClick={() => setAgent(a)}
+                >
+                  {a ? agentLabel(a) : t('chat.history.all')}
+                </Button>
+              ),
+            )}
           </fieldset>
         )}
       </div>
@@ -355,7 +360,7 @@ function SessionScreen({
           )}
         </span>
       </div>
-      {openTouched && (
+      {openTouched && sessionFilesAgent(session.agent) && (
         <TouchedFilesSection
           paneId={paneId}
           agent={session.agent}

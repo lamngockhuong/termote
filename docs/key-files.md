@@ -95,7 +95,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/chat-attachments.tsx`         | Images attached to the next Chat message, above the box        |
 | `pwa/src/utils/chat-image-tokens.ts`              | `[Image #n]` tokens that place a message's images in its text  |
 | `pwa/src/chat-agents.ts`                          | Agents with a Chat view (claude, codex, opencode), with input  |
-| `pwa/src/components/start-agent-panel.tsx`        | Chat view of an idle pane: start Claude Code or Codex          |
+| `pwa/src/components/start-agent-panel.tsx`        | Chat view of an idle pane: start Claude Code, Codex, OpenCode  |
 | `pwa/src/hooks/use-start-agent.ts`                | Sends a start, follows it (`GET agent/start`), toasts          |
 | `pwa/src/utils/agent-start.ts`                    | Whether an agent can be started in the pane on screen          |
 | `pwa/src/components/agent-history-sheet.tsx`      | Session history of a pane: list, read, resume, open or fork    |
@@ -300,10 +300,11 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/agent_activity_line.go`                   | Claude Code/Codex working line on screen (`agent/prompt`)      |
 | `server/agent_input.go`                           | Sends a message, answers a dialog (checks before each write)   |
 | `server/agent_commands*.go`                       | `agent/commands`: custom commands, skills (Codex: `$` skills)  |
-| `server/agent_start.go`                           | `agent/start`: starts Claude Code/Codex in an idle Herdr pane  |
+| `server/agent_start.go`                           | `agent/start`: starts an agent in an idle Herdr pane           |
 | `server/agent_history.go`                         | `agent/history`: sessions of a pane's root, index, pages       |
 | `server/agent_history_claude.go`                  | History: Claude Code project dirs, titles, cwd, branch         |
 | `server/agent_history_codex.go`                   | History: Codex rollouts by day, `session_index.jsonl` names    |
+| `server/agent_history_opencode.go`                | History: OpenCode root sessions from its service, fork         |
 | `server/agent_journal_scan.go`                    | Reads agent journals incrementally, by file identity           |
 | `server/agent_session_files.go`                   | A session's files: transcript, subagents, Codex children       |
 | `server/agent_usage.go`                           | Token records of Claude and Codex journals, totals             |
