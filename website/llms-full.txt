@@ -1537,7 +1537,7 @@ Every pane can list the Claude Code and Codex sessions that ran in its folder: t
 
 Each row shows the agent, a title, when it was last active, its git branch and its folder under the root. The title is the one you gave it with `/rename`, else the one the agent made (Codex: the thread name), else its first prompt, shown in italics. Search filters by title and branch; with both agents in the list, a filter picks one.
 
-Tap a session to read it, drawn as the Chat view draws a running one; **Show earlier messages** loads older parts. Under it:
+Tap a session to read it, drawn as the Chat view draws a running one; **Show earlier messages** loads older parts. Its title shows the tokens the session used and their estimated cost, and the top of the list adds up the folder’s sessions today and over the last 7 days (see [Tokens and cost](/usage/overview/#tokens-and-cost)). Under it:
 
 * **Resume in a new tab** opens a tab in the pane’s group, in the folder the session ran in, and types `claude --resume <id>` or `codex resume --no-daemon <id>` there. The new tab’s Chat view shows the old conversation, and what you send goes on in the same session.
 * **Resume here** types the same line in this pane, offered only when the pane shows its shell and nothing else. As with Tasks, Termote presses Ctrl+C first and types nothing if the pane is busy.
@@ -3012,6 +3012,16 @@ With a Codex pane signed in to a ChatGPT plan, an **Accounts** strip above the c
 
 The header also shows a small chip for the pane you have open, such as `ctx 72% · 7d 95%` (the limit only for Codex). On a phone it shows only the higher of the two. Tap it to open the overview on that pane’s card. Turn it off in **Settings > Sessions > Agent usage in the header**.
 
+## Tokens and cost
+
+[Section titled “Tokens and cost”](#tokens-and-cost)
+
+Each card of a Claude Code or Codex session shows how many tokens the session has used so far and what they would cost at API list prices, such as `1.2M tokens · ~$3.40`, with its subagents’ share on a line of its own. Above the cards, a strip adds up every session of the server’s user, today and over the last 7 days, one line per agent; the days are your device’s own. The same strip at the top of [Session history](/usage/agent-chat/#resuming-an-old-session) covers the sessions of the pane’s folder, and an old session shows its own total under its title.
+
+The numbers come from the agents’ own files (Claude Code transcripts, Codex rollouts), never from the terminal. Each request counts once, subagents included. The cost is an estimate from the list prices built into Termote, dated in the tooltip: a subscription (Claude Pro or Max, a ChatGPT plan) is not billed by the token, and fast, batch or regional pricing is not counted. A model Termote has no price for shows its tokens only (`no price`), and a total that leaves some out is marked `+`. Turn the cost off in **Settings > Sessions > Estimated cost**; the tokens stay.
+
+Limits: the strip counts the files written in the last 8 days, at most 5000 per agent, and says so when it left some out. A session forked from another (`--fork-session`) counts the messages it copied in its own total.
+
 ## Needs you
 
 [Section titled “Needs you”](#needs-you)
@@ -3778,6 +3788,17 @@ Lists sessions with an agent waiting on you at the top of each group in the side
 | On     | Blocked sessions first in each group |         |
 
 The compact [sidebar layout](#sidebar-layout-desktop-only) lists no sessions to sort, so the switch is locked there and the setting has no effect; the value you saved comes back with the detailed layout.
+
+## Estimated Cost
+
+[Section titled “Estimated Cost”](#estimated-cost)
+
+Shows what an agent’s tokens would cost at API list prices beside the token counts: on the [overview](/usage/overview/#tokens-and-cost)’s cards and strip, and in the session history. A subscription is not billed by the token, so the cost is only an estimate. Off, every place shows the tokens alone.
+
+| Option | Behavior                  | Default |
+| ------ | ------------------------- | ------- |
+| On     | Tokens and estimated cost | ✓       |
+| Off    | Tokens only               |         |
 
 ## Notify When an Agent Needs Me
 
