@@ -35,6 +35,9 @@ const (
 	// option: it wraps under the option, and must fit on the screen to be
 	// checked before Enter.
 	agentMaxFreeText = 1024
+	// agentAnswerBody bounds an answer's body: an OpenCode form's holds
+	// every field, each up to agentMaxFreeText.
+	agentAnswerBody = 64 * 1024
 	// agentPromptTTL is how long a promptId can be used.
 	agentPromptTTL  = 60 * time.Second
 	agentMaxPrompts = 256
@@ -341,6 +344,24 @@ func (in *agentInput) consumePrompt(pane, id string, accept func(*promptRecord) 
 	return r, nil
 }
 
+// restorePrompt makes a consumed promptId usable again: an answer the agent
+// refused without taking it (an OpenCode form it found invalid), so the
+// card keeps its id and what the user typed.
+// A poll during the refused write may have issued another id for the same
+// dialog already: that one stays, so clients never hold two.
+func (in *agentInput) restorePrompt(r *promptRecord) {
+	in.promptsMu.Lock()
+	defer in.promptsMu.Unlock()
+	now := time.Now()
+	for _, o := range in.prompts {
+		if o.pane == r.pane && o.sig == r.sig && sameAgent(o.session, r.session) && now.Before(o.expires) {
+			return
+		}
+	}
+	r.expires = now.Add(agentPromptTTL)
+	in.prompts[r.id] = r
+}
+
 // sameAgent: the same process (where known) running the same session in the
 // same pane address, and for Codex writing the same rollout.
 func sameAgent(a, b AgentSession) bool {
@@ -375,7 +396,7 @@ func (a *agentAPI) lockPane(ctx context.Context, paneID string, work time.Durati
 		}
 		return nil, err
 	}
-	if agentScreenReaders[s.Agent] == nil {
+	if !agentTakesInput(s.Agent) {
 		return nil, errAgentUnsupported
 	}
 	// By the pane alone: two agents in turn on one pane share its lock.
@@ -394,10 +415,16 @@ func sessionNow(ctx context.Context, wr agentWriter, paneID string) (AgentSessio
 	if !ok {
 		return AgentSession{}, errTargetChanged
 	}
-	if agentScreenReaders[s.Agent] == nil {
+	if !agentTakesInput(s.Agent) {
 		return AgentSession{}, errAgentUnsupported // another agent took the pane
 	}
 	return s, nil
+}
+
+// agentTakesInput: a message can be sent to agent and its dialogs answered,
+// through its screen (Claude Code, Codex) or its service's API (OpenCode).
+func agentTakesInput(agent string) bool {
+	return agentScreenReaders[agent] != nil || agent == "opencode"
 }
 
 // cleanText drops control characters other than newline and tab: C0, DEL and
@@ -592,6 +619,9 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 	}
 	if s.ID != session {
 		return errSessionChanged
+	}
+	if s.Agent == "opencode" {
+		return a.sendOpencode(ctx, s, parts, paths)
 	}
 	// A message sent while the agent works goes into its own queue, which
 	// it reads when it is ready; one waiting on a dialog is not sent.
@@ -997,11 +1027,19 @@ func (a *agentAPI) handlePrompt(w http.ResponseWriter, r *http.Request) {
 	}
 	paneID := r.PathValue("id")
 	s, err := a.session(paneID)
-	if err == nil && agentScreenReaders[s.Agent] == nil {
+	if err == nil && !agentTakesInput(s.Agent) {
 		err = errAgentUnsupported
 	}
 	if err != nil {
 		a.agentError(w, "agent session", err)
+		return
+	}
+	if s.Agent == "opencode" {
+		read, err := readOpencodePrompt(s)
+		if err != nil {
+			log.Printf("opencode prompt: %v", err)
+		}
+		jsonOK(w, promptResponse{Prompt: a.opencodePromptOf(paneID, s, read, isViewOnly(r)), Activity: read.activity})
 		return
 	}
 	screen, err := a.input.captures.do(paneID+"\x00"+s.Target, func() (string, error) {
@@ -1062,7 +1100,8 @@ func (a *agentAPI) handleAnswer(w http.ResponseWriter, r *http.Request) {
 		PromptID string          `json:"promptId"`
 		Choice   json.RawMessage `json:"choice"`
 	}
-	if !decodeJSON(w, r, &body) {
+	// An OpenCode form's answer holds every field at once.
+	if !decodeJSONMax(w, r, &body, agentAnswerBody) {
 		return
 	}
 	paneID := r.PathValue("id")
@@ -1086,10 +1125,16 @@ func (a *agentAPI) handleAnswer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *agentAPI) answer(ctx context.Context, wr agentWriter, paneID, promptID string, choice json.RawMessage) error {
-	var key, text string
+	var key, text, decision string
+	var answer map[string]any
 	step := -1
 	typed := false
 	rec, err := a.input.consumePrompt(paneID, promptID, func(r *promptRecord) error {
+		if r.session.Agent == "opencode" {
+			var err error
+			decision, answer, err = opencodeChoice(r.prompt, choice)
+			return err
+		}
 		key = choiceKey(r.prompt, choice)
 		if key == "" {
 			step = choiceStep(r.prompt, choice)
@@ -1112,6 +1157,9 @@ func (a *agentAPI) answer(ctx context.Context, wr agentWriter, paneID, promptID 
 	}
 	if !sameAgent(s, rec.session) {
 		return errTargetChanged
+	}
+	if s.Agent == "opencode" {
+		return a.answerOpencode(ctx, paneID, s, rec, decision, answer)
 	}
 	if s.InMode {
 		return fail(http.StatusConflict, "input_not_ready", "the pane is in copy mode")

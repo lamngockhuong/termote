@@ -46,6 +46,9 @@ func TestMain(m *testing.M) {
 		return nil, errors.New("tests never start hc")
 	}
 	hcCoreRunning = func(context.Context, []string) bool { return false }
+	// Nor reach the user's own OpenCode service: the OpenCode tests point
+	// the client at a fake one.
+	opencodeStateDir = func() string { return "" }
 	// Nor probe a real Cloudflare hostname: the probe tests set their own.
 	cloudflareProbe = func(context.Context, string) accessResult {
 		return accessResult{accessUnknown, "tests never probe"}

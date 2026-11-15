@@ -72,6 +72,29 @@ describe('ChatActivityRow', () => {
     expect(line()).toBe('Working… · 3s')
   })
 
+  it('a line without a word (OpenCode) says the agent works, and its retry', () => {
+    const { rerender } = render(
+      <ChatActivityRow
+        agent="OpenCode"
+        activity={{
+          label: '',
+          elapsed: 75,
+          retry: { attempt: 2, error: 'Rate limited' },
+        }}
+      />,
+    )
+    expect(line()).toBe(
+      'OpenCode is working… · Retrying (attempt 2): Rate limited · 1m 15s',
+    )
+    rerender(
+      <ChatActivityRow
+        agent="OpenCode"
+        activity={{ label: '', elapsed: 75, retry: { attempt: 3 } }}
+      />,
+    )
+    expect(line()).toBe('OpenCode is working… · Retrying (attempt 3) · 1m 15s')
+  })
+
   it('without a line read, says the agent works and counts from now', () => {
     render(<ChatActivityRow agent="Claude Code" activity={null} />)
     expect(line()).toBe('Claude Code is working… · 0s')

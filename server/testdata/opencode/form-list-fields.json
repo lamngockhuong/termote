@@ -1,0 +1,102 @@
+{
+  "data": [
+    {
+      "id": "frm_1de7c1d17001eRPMLFY0inhy06",
+      "sessionID": "ses_in3",
+      "title": "Deploy settings",
+      "metadata": {
+        "kind": "elicitation"
+      },
+      "fields": [
+        {
+          "key": "name",
+          "title": "Name",
+          "description": "Service name",
+          "required": true,
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 20,
+          "placeholder": "my-svc",
+          "default": "svc"
+        },
+        {
+          "key": "email",
+          "title": "Email",
+          "type": "string",
+          "format": "email"
+        },
+        {
+          "key": "replicas",
+          "title": "Replicas",
+          "required": true,
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5,
+          "default": 2
+        },
+        {
+          "key": "ratio",
+          "title": "Ratio",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        {
+          "key": "public",
+          "title": "Public",
+          "description": "Expose it",
+          "type": "boolean",
+          "default": false
+        },
+        {
+          "key": "regions",
+          "title": "Regions",
+          "type": "multiselect",
+          "options": [
+            {
+              "value": "eu",
+              "label": "Europe"
+            },
+            {
+              "value": "us",
+              "label": "United States"
+            },
+            {
+              "value": "ap",
+              "label": "Asia"
+            }
+          ],
+          "minItems": 1,
+          "maxItems": 2,
+          "default": [
+            "eu"
+          ]
+        },
+        {
+          "key": "domain",
+          "title": "Domain",
+          "when": [
+            {
+              "key": "public",
+              "op": "eq",
+              "value": true
+            }
+          ],
+          "type": "string"
+        },
+        {
+          "key": "secret",
+          "hidden": true,
+          "type": "string",
+          "default": "x"
+        },
+        {
+          "key": "login",
+          "type": "external",
+          "url": "https://example.com/login",
+          "title": "Sign in"
+        }
+      ]
+    }
+  ]
+}

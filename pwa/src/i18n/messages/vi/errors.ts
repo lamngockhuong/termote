@@ -3,6 +3,7 @@ import type { Translation } from '../types'
 
 export default {
   'errors.unknown': 'Server không hoàn tất được yêu cầu. Hãy thử lại',
+  'errors.agent_unavailable': 'Dịch vụ của agent không trả lời. Hãy thử lại',
   'errors.ambiguous': 'Có hơn một worktree dùng nhánh này',
   'errors.answer_not_confirmed': 'Đã gửi câu trả lời nhưng hộp thoại vẫn mở',
   'errors.branch_exists': 'Nhánh đã có, nên được mở ra mà không cần nhánh gốc',

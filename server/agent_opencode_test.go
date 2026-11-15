@@ -93,7 +93,7 @@ func TestOpencodeLoopbackURL(t *testing.T) {
 func TestOpencodeStateDirDefault(t *testing.T) {
 	xdg := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", xdg)
-	if d := opencodeStateDir(); d != xdg {
+	if d := opencodeDefaultStateDir(); d != xdg {
 		t.Errorf("XDG_STATE_HOME: %q", d)
 	}
 	// os.UserHomeDir reads HOME, or USERPROFILE on Windows.
@@ -101,12 +101,12 @@ func TestOpencodeStateDirDefault(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", "relative")
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	if d, want := opencodeStateDir(), filepath.Join(home, ".local", "state"); d != want {
+	if d, want := opencodeDefaultStateDir(), filepath.Join(home, ".local", "state"); d != want {
 		t.Errorf("home: %q, want %q", d, want)
 	}
 	t.Setenv("HOME", "")
 	t.Setenv("USERPROFILE", "")
-	if d := opencodeStateDir(); d != "" {
+	if d := opencodeDefaultStateDir(); d != "" {
 		t.Errorf("no home: %q", d)
 	}
 }

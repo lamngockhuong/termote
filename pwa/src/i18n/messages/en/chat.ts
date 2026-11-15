@@ -4,6 +4,8 @@ export default {
   // The Chat view's live row while the agent works
   'chat.activity.working': '{agent} is working…',
   'chat.activity.thinking': 'Thinking',
+  'chat.activity.retry': 'Retrying (attempt {attempt})',
+  'chat.activity.retryError': 'Retrying (attempt {attempt}): {error}',
   'chat.activity.tokens': '↓ {tokens} tokens',
   // The turn is over but what it started still runs; {what} is the agent's
   // own words ("2 shells")
@@ -327,6 +329,22 @@ export default {
   'chat.prompt.send': 'Send',
   'chat.prompt.answered': '(answered)',
   'chat.prompt.waitingTerminal': '{agent} is waiting for you in the terminal.',
+  'chat.prompt.invalidAnswer':
+    '{agent} did not take this answer; check it and send again.',
+  'chat.form.requiredMark': 'required',
+  'chat.form.required': 'This field needs an answer.',
+  'chat.form.integer': 'Enter a whole number.',
+  'chat.form.betweenRange': 'Enter a number from {min} to {max}.',
+  'chat.form.atLeastRange': 'Enter a number of at least {min}.',
+  'chat.form.atMostRange': 'Enter a number of at most {max}.',
+  'chat.form.betweenItems': 'Choose {min} to {max}.',
+  'chat.form.atLeastItems': 'Choose at least {min}.',
+  'chat.form.atMostItems': 'Choose at most {max}.',
+  'chat.form.betweenChars': 'Enter {min} to {max} characters.',
+  'chat.form.atLeastChars': 'Enter at least {min} characters.',
+  'chat.form.atMostChars': 'Enter at most {max} characters.',
+  'chat.form.otherAnswer': 'Other answer',
+  'chat.form.add': 'Add',
 
   // The agents waiting on the user, one at a time (components/needs-me-queue.tsx)
   'chat.queue.skipped_one': '{count} skipped dialog is still waiting.',

@@ -1511,7 +1511,11 @@ What to expect:
 
 [Section titled “OpenCode”](#opencode)
 
-A pane running OpenCode 2.0 or later gets the Chat view with its conversation, read only for now: your messages, replies rendered as markdown, its reasoning, and each tool call with its result. Its status (working, blocked on a permission or a question, idle) shows in the sidebar, Overview, the activity log and notifications. Sending messages and answering dialogs from the view come in a later release; answer in the terminal meanwhile. A turn that fails (a rate limit, a provider error) or that you interrupt shows as a note with OpenCode’s error message.
+A pane running OpenCode 2.0 or later gets the Chat view with its conversation: your messages, replies rendered as markdown, its reasoning, and each tool call with its result. Its status (working, blocked on a permission or a question, idle) shows in the sidebar, Overview, the activity log and notifications. A turn that fails (a rate limit, a provider error) or that you interrupt shows as a note with OpenCode’s error message.
+
+From the view you send messages (with pasted images), as Tasks and Review do too. A message sent while OpenCode works waits in its queue for the turn to end, as with Claude Code. While a turn runs, the working row shows how long it has run, and when the provider refuses a request (a rate limit) the attempt OpenCode retries and the provider’s error.
+
+A permission request shows as a card with **Yes, once**, **Yes, always** (with the patterns it saves) and **No**. A question, or a form a tool asks you to fill in, shows its fields (text, a number, a checkbox, options to pick one or several, other text where the question takes it) with **Send**; what is missing or out of range is marked before anything is sent. **Cancel** refuses a permission or dismisses a form. A form that asks you to open a link is answered in the terminal. Slash commands come in a later release: a message starting with `/` reaches the model as text.
 
 OpenCode 2 comes from its GitHub releases or Homebrew; the `opencode-ai` package on npm is still OpenCode 1, which Termote does not read.
 

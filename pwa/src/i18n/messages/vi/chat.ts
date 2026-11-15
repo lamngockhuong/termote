@@ -4,6 +4,8 @@ import type { Translation } from '../types'
 export default {
   'chat.activity.working': '{agent} đang làm việc…',
   'chat.activity.thinking': 'Đang suy nghĩ',
+  'chat.activity.retry': 'Đang thử lại (lần {attempt})',
+  'chat.activity.retryError': 'Đang thử lại (lần {attempt}): {error}',
   'chat.activity.tokens': '↓ {tokens} token',
   'chat.activity.background': 'Đã xong lượt · {what} vẫn đang chạy',
 
@@ -313,6 +315,22 @@ export default {
   'chat.prompt.send': 'Gửi',
   'chat.prompt.answered': '(đã trả lời)',
   'chat.prompt.waitingTerminal': '{agent} đang chờ bạn trong terminal.',
+  'chat.prompt.invalidAnswer':
+    '{agent} không nhận câu trả lời này; hãy xem lại rồi gửi lại.',
+  'chat.form.requiredMark': 'bắt buộc',
+  'chat.form.required': 'Trường này cần có câu trả lời.',
+  'chat.form.integer': 'Hãy nhập một số nguyên.',
+  'chat.form.betweenRange': 'Hãy nhập một số từ {min} đến {max}.',
+  'chat.form.atLeastRange': 'Hãy nhập một số không nhỏ hơn {min}.',
+  'chat.form.atMostRange': 'Hãy nhập một số không lớn hơn {max}.',
+  'chat.form.betweenItems': 'Hãy chọn từ {min} đến {max} mục.',
+  'chat.form.atLeastItems': 'Hãy chọn ít nhất {min} mục.',
+  'chat.form.atMostItems': 'Hãy chọn nhiều nhất {max} mục.',
+  'chat.form.betweenChars': 'Hãy nhập từ {min} đến {max} ký tự.',
+  'chat.form.atLeastChars': 'Hãy nhập ít nhất {min} ký tự.',
+  'chat.form.atMostChars': 'Hãy nhập nhiều nhất {max} ký tự.',
+  'chat.form.otherAnswer': 'Câu trả lời khác',
+  'chat.form.add': 'Thêm',
 
   'chat.queue.skipped_one': '{count} hộp thoại đã bỏ qua vẫn đang chờ.',
   'chat.queue.skipped_other': '{count} hộp thoại đã bỏ qua vẫn đang chờ.',

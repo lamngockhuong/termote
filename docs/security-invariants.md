@@ -849,7 +849,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   config dir of the Claude Code found under the pane's `shell_pid` (`pane.process_info`, Herdr
   0.9.3+, same checks, `paneClaude`) only when its session file names that id, else the server
   user's config dir (`defaultClaudeDir`; also while a Herdr without `pane.process_info` is left
-  alone, `herdrProcRetry`). The session id must be a UUID (OpenCode: see OpenCode chat). Every write (Claude Code or Codex)
+  alone, `herdrProcRetry`). The session id must be a UUID (OpenCode: see OpenCode chat). Every write (Claude Code, Codex
+  or OpenCode, whose writes go through its service: see OpenCode chat)
   takes a lock on the pane, waiting for it at most `agentRequestMost` (7.5 min) less the write's own
   bound and only while the client is there, else 409 `input_busy` with nothing sent (so a write
   over a machine ends before its hub's `machineResponseHeaderWait` and is never delivered after
@@ -1269,7 +1270,12 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   is read; a failed check is repeated at most every 2 s). Every reply is read up to a limit (1 MB, a page of
   messages 24 MB) and decoded into the fields used; the service's own text (its error bodies,
   `/api/info`'s hostname, `/api/model`'s provider settings with their API keys) never reaches a
-  client or a log. Errors reach the client as `transcript not found` or `no agent session`.
+  client or a log. Writes (a message, a permission or form reply, a form's cancel) go the same way,
+  with the same header and checks, a JSON body termote builds itself and at most 15 s; their reply
+  is drained up to 64 KB, never decoded or logged. Errors reach the client as `transcript not
+  found`, `no agent session`, or for a write a code only (`agent_unavailable` 502,
+  `input_not_ready`, `prompt_expired`, `invalid_choice`); the service's error is logged without
+  its body.
 - **OpenCode chat**: the session of a pane is the `--session`/`-s` id of the OpenCode TUI process
   found under the pane's shell (executable named `opencode`, argv not a subcommand, not
   `--standalone` or `--server`), or on Herdr the id Herdr's OpenCode integration reported for the
@@ -1287,8 +1293,38 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   (`oc:`), a before one carries the service's own page cursor (`ocb:`, at most 1 KB), so a client
   never makes the server pass its own words to the service; a cursor of another session starts
   over. A view-only client gets `viewTranscript` as for Claude Code (no tool call, no note,
-  compaction summaries as `Context compacted`). Messages, answers and the composer stay closed:
-  `opencode` has no screen reader, so every write route refuses it.
+  compaction summaries as `Context compacted`). Writes never send a key to the pane: `message` is
+  `POST /api/session/{id}/prompt` with `delivery: "queue"` (OpenCode's default `steer` would put it
+  into the running turn; 202 while the session works or waits on a dialog), to the session read
+  again right before the write (`sessionNow`, no cache), and only when it is the session of the
+  client's signed cursor (else 409 `session_changed`); a session not yet made (a `--session` id
+  before the TUI's first message) is 409 `input_not_ready`. Its images are only the server's own
+  uploads (`imagePaths`, an id, never a path), read up to 10 MB each and sent inline as `data:`
+  URIs of the type their extension names. The `prompt` card is the first pending permission
+  (title `Allow <action>?`, its resources as the body, cut to 4 KB, the options once, always (with
+  the patterns it saves) and reject) or else the first form; a view-only client gets it without a
+  `promptId`. A form's card carries its fields (string, number, integer, boolean, multiselect; a
+  hidden one is left out, OpenCode fills it); one with a link to open (`external`), a field of
+  another kind, a key with a control character or `__proto__`, an option value no answer could
+  send back (over 1 KB or with a control character), a condition (`when`) on a field the card
+  leaves out, over 32 fields or 64 options is `unsupported` (answered in the terminal); a default
+  no answer could send back is dropped. Every title, label and description on the card is cut to
+  1 KB and shown with `visibleUnsafe`. `answer` takes the single-use `promptId` as for Claude Code, re-reads the pane's
+  session (another one: 409 `target_changed`), then the session's own pending list: a request no
+  longer in it (answered in the terminal, or of another session) is 409 `prompt_expired` with no
+  reply sent. A permission takes an option's number (`"cancel"` rejects it); a form takes
+  `{"answer": {...}}` (`"cancel"` deletes it), each value checked against its field before
+  anything is sent: a field of the card (none other, no hidden one), of its type (never `null`; an integer
+  whole, numbers finite and within the field's bounds, a multiselect a list within its item
+  bounds), an option unless the field takes other text, and every string at most 1 KB with no
+  control character (`invalid_text`, `text_too_long`); a required field without its conditions
+  (`when`) must be there. The answer's body is at most 64 KB. An answer OpenCode refuses (400) is 400
+  `invalid_choice`, and its `promptId` is made usable again (nothing was taken) unless a poll
+  meanwhile issued another id for the same request; OpenCode's 404 or 409 is `prompt_expired`. A
+  message OpenCode refuses (400) is 400 `invalid_request`. While a turn runs the working line is the time since the session's
+  `time.busy`, `thinking` when the open answer ends in reasoning, and the provider error OpenCode
+  retries after: the attempt and the error's `message` on one line, at most 80 bytes, never its
+  response body.
 - **Files/Changes** (`/api/mux/panes/{id}/files/*`): GETs that also check
   `Sec-Fetch-Site`/`Origin` (and the writes below; none is read-only any more, Changes included: `POST files/changes/apply` writes the index); every path is opened through `os.Root` under the pane's root (its
   git toplevel when a `.git` sits at it, else its directory) or a Place's (see Places); the server

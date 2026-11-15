@@ -108,7 +108,8 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/hooks/use-resume-session.ts`             | Sends a resume, tells a refusal, marks a running session       |
 | `pwa/src/utils/session-age.ts`                    | How long ago a session was active (minutes, hours, days)       |
 | `pwa/src/components/read-only-bar.tsx`            | Bottom bar without input (View only, a read-only chat)         |
-| `pwa/src/components/prompt-card.tsx`              | Claude Code dialog as a card (answer buttons or read-only)     |
+| `pwa/src/components/prompt-card.tsx`              | Agent dialog as a card (answer buttons or read-only)           |
+| `pwa/src/components/prompt-form.tsx`              | OpenCode form on that card: its fields, checked, sent at once  |
 | `pwa/src/components/overview-screen.tsx`          | Agent overview: every agent's card, own filter, by status      |
 | `pwa/src/components/agent-card.tsx`               | One agent: status age, last text, branch, changes, tokens      |
 | `pwa/src/components/needs-me-queue.tsx`           | Overview: dialogs waiting on the user, answered one at a time  |
@@ -291,6 +292,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/agent_claude.go`                          | Claude Code transcript (JSONL) and session file                |
 | `server/agent_opencode.go`                        | OpenCode TUI in a pane, status, messages as Chat view rows     |
 | `server/agent_opencode_client.go`                 | OpenCode service: service.json, auth, bounded API reads        |
+| `server/agent_opencode_input.go`                  | OpenCode writes: message, permission and form cards, answers   |
 | `scripts/claude-chat-tags.sh`                     | Tags Claude Code writes that the Chat view would show raw      |
 | `scripts/codex-chat-items.sh`                     | Codex items and events the Chat view would not show            |
 | `server/agent_claude_prompt.go`                   | Reads a Claude Code screen: input box, dialogs                 |
