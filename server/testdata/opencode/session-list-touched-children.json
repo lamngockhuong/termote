@@ -1,0 +1,35 @@
+{
+ "data": [
+  {
+   "id": "ses_e20064f4dffeUwnxcB4L7CS4BE",
+   "parentID": "ses_t1",
+   "projectID": "global",
+   "agent": "general",
+   "cost": 0,
+   "tokens": {
+    "input": 2700,
+    "output": 50,
+    "reasoning": 0,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   },
+   "outcome": "succeeded",
+   "time": {
+    "created": 1794759045307,
+    "updated": 1794759045673,
+    "busy": 1794759045320,
+    "idle": 1794759045680
+   },
+   "title": "Edit b",
+   "location": {
+    "directory": "@ROOT@"
+   }
+  }
+ ],
+ "cursor": {
+  "previous": "eyJwYXJlbnRJRCI6InNlc190MSIsImFuY2hvciI6eyJpZCI6InNlc19lMjAwNjRmNGRmZmVVd254Y0I0TDdDUzRCRSIsInRpbWUiOjE3OTQ3NTkwNDU2NzMsImRpcmVjdGlvbiI6InByZXZpb3VzIn19",
+  "next": "eyJwYXJlbnRJRCI6InNlc190MSIsImFuY2hvciI6eyJpZCI6InNlc19lMjAwNjRmNGRmZmVVd254Y0I0TDdDUzRCRSIsInRpbWUiOjE3OTQ3NTkwNDU2NzMsImRpcmVjdGlvbiI6Im5leHQifX0"
+ }
+}

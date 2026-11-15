@@ -10,6 +10,7 @@ import {
   useState,
 } from 'react'
 import type { ViewProps } from '../app-views'
+import { sessionFilesAgent } from '../chat-agents'
 import {
   FOLLOW_NOTICES,
   followInFiles,
@@ -329,7 +330,7 @@ const listModes = new Map<string, ListMode>()
 function paneAgent(session: Session, paneId: string) {
   const name =
     session.panes?.find((p) => p.id === paneId)?.agentName ?? session.agentName
-  return name === 'claude' || name === 'codex' ? name : undefined
+  return sessionFilesAgent(name) ? name : undefined
 }
 
 export function ChangesView({

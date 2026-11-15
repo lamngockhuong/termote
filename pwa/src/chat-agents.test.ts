@@ -16,10 +16,11 @@ describe('chat agents', () => {
     expect(agentLabel('opencode')).toBe('OpenCode')
   })
 
-  it('reads the session files of Claude Code and Codex only', () => {
+  it('reads the session files of Claude Code, Codex and OpenCode', () => {
     expect(sessionFilesAgent('claude')).toBe(true)
     expect(sessionFilesAgent('codex')).toBe(true)
-    expect(sessionFilesAgent('opencode')).toBe(false)
+    expect(sessionFilesAgent('opencode')).toBe(true)
+    expect(sessionFilesAgent('aider')).toBe(false)
     expect(sessionFilesAgent(undefined)).toBe(false)
   })
 

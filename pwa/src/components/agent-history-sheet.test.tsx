@@ -193,7 +193,7 @@ describe('AgentHistorySheet', () => {
     expect(screen.getByText('OpenCode work')).toBeTruthy()
   })
 
-  it("reads an OpenCode session's tokens, not its changed files", async () => {
+  it("reads an OpenCode session's tokens, its changed files when asked", async () => {
     lists.push(listOf([session('o', { agent: 'opencode' })]))
     setup({}, { openTouched: vi.fn() })
     fireEvent.click(await screen.findByText('Title o'))
@@ -407,7 +407,7 @@ describe('AgentHistorySheet', () => {
     expect(screen.queryByTestId('session-usage')).toBeNull()
   })
 
-  it("shows an old OpenCode session's tokens, without its changed files", async () => {
+  it("shows an old OpenCode session's tokens and its changed files", async () => {
     usages.session = () =>
       json(200, {
         tokens: { total: 3000 },
@@ -421,7 +421,16 @@ describe('AgentHistorySheet', () => {
     const line = await screen.findByTestId('session-usage')
     expect(line).toHaveTextContent('3.0k tokens · ~$0.05')
     expect(line.title).not.toContain('forked')
-    expect(screen.queryByRole('button', { name: 'Files changed' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Files changed' }))
+    expect(await screen.findByRole('button', { name: /a\.ts/ })).toBeTruthy()
+    expect(
+      vi
+        .mocked(fetch)
+        .mock.calls.map(([u]) => String(u))
+        .filter((u) => u.includes('/agent/touched')),
+    ).toEqual([
+      expect.stringContaining('/agent/touched?agent=opencode&session=o'),
+    ])
   })
 
   it('opens no links without a way to the files', async () => {

@@ -1854,13 +1854,16 @@ describe('ChangesView: files the session changed', () => {
     })
   })
 
-  it('is offered only for a pane running Claude Code or Codex', async () => {
+  it('is offered only for a pane running Claude Code, Codex or OpenCode', async () => {
     const plain = await show()
     expect(mode()).toBeNull()
     plain.unmount()
     const other = await show({ session: agentSession('aider') })
     expect(mode()).toBeNull()
     other.unmount()
+    const opencode = await show({ session: agentSession('opencode') })
+    expect(mode()).toBeTruthy()
+    opencode.unmount()
     // The tab's own agent when its panes are not listed
     await show({
       session: {

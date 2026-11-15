@@ -1,0 +1,135 @@
+{
+ "data": [
+  {
+   "id": "msg_1dff9b0c00020FKoVRZ7SjNP8L",
+   "time": {
+    "created": 1794759045329
+   },
+   "text": "You are a subagent spawned by another session.\nCALL edit {\"path\": \"sub/b.txt\", \"oldString\": \"x\", \"newString\": \"by-sub\"}",
+   "type": "user"
+  },
+  {
+   "id": "msg_1dff9b0da001lCeL5lXIVvdXO4",
+   "time": {
+    "created": 1794759045348,
+    "firstToken": 1794759045465,
+    "streamed": 1794759045481,
+    "completed": 1794759045548
+   },
+   "type": "assistant",
+   "agent": "general",
+   "model": {
+    "id": "m1",
+    "providerID": "fake"
+   },
+   "content": [
+    {
+     "type": "tool",
+     "id": "call_17",
+     "name": "edit",
+     "executed": false,
+     "state": {
+      "status": "completed",
+      "input": {
+       "path": "sub/b.txt",
+       "oldString": "x",
+       "newString": "by-sub"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "Edited sub/b.txt (1 replacement)"
+       }
+      ],
+      "metadata": {
+       "files": [
+        {
+         "file": "sub/b.txt",
+         "patch": "Index: sub/b.txt\n===================================================================\n--- sub/b.txt\n+++ sub/b.txt\n@@ -1,1 +1,1 @@\n-x\n+by-sub\n",
+         "status": "modified",
+         "additions": 1,
+         "deletions": 1
+        }
+       ],
+       "truncated": false
+      }
+     },
+     "time": {
+      "created": 1794759045468,
+      "ran": 1794759045476,
+      "completed": 1794759045489
+     }
+    }
+   ],
+   "snapshot": {
+    "start": "08e7825eb0df73b583f7fb4ef8518c67323f4f14",
+    "end": "104df1a29a67c120e966215b684bbb232f52b44b",
+    "files": [
+     "sub/b.txt"
+    ]
+   },
+   "finish": "tool-calls",
+   "rawFinish": "tool_calls",
+   "cost": 0,
+   "tokens": {
+    "input": 1500,
+    "output": 20,
+    "reasoning": 0,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   }
+  },
+  {
+   "id": "msg_1dff9b1b7001K72TWuauAwDFpv",
+   "time": {
+    "created": 1794759045567,
+    "firstToken": 1794759045644,
+    "streamed": 1794759045663,
+    "completed": 1794759045673
+   },
+   "type": "assistant",
+   "agent": "general",
+   "model": {
+    "id": "m1",
+    "providerID": "fake"
+   },
+   "content": [
+    {
+     "type": "text",
+     "text": "Done after tool."
+    }
+   ],
+   "snapshot": {
+    "start": "104df1a29a67c120e966215b684bbb232f52b44b",
+    "end": "104df1a29a67c120e966215b684bbb232f52b44b",
+    "files": []
+   },
+   "finish": "stop",
+   "rawFinish": "stop",
+   "cost": 0,
+   "tokens": {
+    "input": 1200,
+    "output": 30,
+    "reasoning": 0,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   }
+  },
+  {
+   "id": "msg_1dff9b230001y1LzJEhNueYEO3",
+   "time": {
+    "created": 1794759045680
+   },
+   "type": "idle",
+   "outcome": "succeeded"
+  }
+ ],
+ "cursor": {
+  "previous": "eyJpZCI6Im1zZ18xZGZmOWIwYzAwMDIwRktvVlJaN1NqTlA4TCIsIm9yZGVyIjoiYXNjIiwiZGlyZWN0aW9uIjoicHJldmlvdXMifQ",
+  "next": "eyJpZCI6Im1zZ18xZGZmOWIyMzAwMDF5MUx6SkVoTnVlWUVPMyIsIm9yZGVyIjoiYXNjIiwiZGlyZWN0aW9uIjoibmV4dCJ9"
+ }
+}
