@@ -254,8 +254,8 @@ func TestCodexParseItems(t *testing.T) {
 			}
 		}
 	}
-	check(0, "user", func(p TranscriptPart) bool { return p.Kind == "image" })
-	check(1, "user", func(p TranscriptPart) bool { return p.Kind == "image" })
+	check(0, "user", func(p TranscriptPart) bool { return p.Kind == "image" && p.imageN == 0 })
+	check(1, "user", func(p TranscriptPart) bool { return p.Kind == "image" && p.imageN == 1 })
 	check(2, "assistant", func(p TranscriptPart) bool { return p.Kind == "thinking" && p.Text == "one\n\ntwo" })
 	check(3, "assistant", func(p TranscriptPart) bool {
 		return p.Input == "git status" && p.Result == "x" && p.IsError && p.Detail.Command == "git status"

@@ -421,14 +421,16 @@ func parseCodexRow(line []byte, off int64) (e TranscriptEntry, recognised, ok bo
 		if it.Type == "UserMessage" {
 			e.Role = "user"
 		}
+		images := 0
 		for _, c := range it.Content {
-			switch strings.ToLower(c.Type) {
-			case "text":
+			switch {
+			case strings.EqualFold(c.Type, "text"):
 				if strings.TrimSpace(c.Text) != "" {
 					e.Parts = append(e.Parts, textPart("text", c.Text, claudeMaxText))
 				}
-			case "image", "local_image":
-				e.Parts = append(e.Parts, TranscriptPart{Kind: "image"})
+			case isCodexImage(c.Type):
+				e.Parts = append(e.Parts, TranscriptPart{Kind: "image", imageN: images})
+				images++
 			}
 		}
 	case "Reasoning":

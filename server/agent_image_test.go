@@ -12,6 +12,8 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -193,9 +195,197 @@ func TestClaudeImageAcceptsOnlyRealImages(t *testing.T) {
 		"not json":              {"{", 0, false},
 		"image after non-image": {imageRow("u", `{"type":"text","text":"x"}`, imageBlock("image/png", png)), 0, true},
 	} {
-		mt, data, ok := claudeJournal{}.Image([]byte(tc.line), tc.n)
+		mt, data, ok := claudeImage([]byte(tc.line), tc.n)
 		if ok != tc.ok || (ok && (mt != "image/png" || !bytes.Equal(data, png))) {
 			t.Errorf("%s = %q %d bytes %v", name, mt, len(data), ok)
 		}
+	}
+}
+
+// codexInput is the response_item row Codex writes before a UserMessage
+// item: the model's input, a user message whose images are data: URLs, each
+// wrapped like a pasted file.
+func codexInput(urls ...string) string {
+	content := []any{}
+	for i, u := range urls {
+		content = append(content,
+			map[string]any{"type": "input_text", "text": fmt.Sprintf(`<image name=[Image #%d] path="/tmp/p%d.png">`, i+1, i)},
+			map[string]any{"type": "input_image", "image_url": u, "detail": "high"},
+			map[string]any{"type": "input_text", "text": "</image>"})
+	}
+	content = append(content, map[string]any{"type": "input_text", "text": "look"})
+	b, _ := json.Marshal(map[string]any{"timestamp": "2026-11-14T00:00:00Z", "type": "response_item",
+		"payload": map[string]any{"type": "message", "role": "user", "content": content}})
+	return string(b) + "\n"
+}
+
+func dataURL(mediaType string, data []byte) string {
+	return "data:" + mediaType + ";base64," + base64.StdEncoding.EncodeToString(data)
+}
+
+// codexImageMessage is a UserMessage item with the given image items and text.
+func codexImageMessage(id string, images ...map[string]any) string {
+	content := []any{}
+	for _, im := range images {
+		content = append(content, im)
+	}
+	content = append(content, map[string]any{"type": "text", "text": "[Image #1] look"})
+	return codexItemRow(map[string]any{"type": "UserMessage", "id": id, "content": content})
+}
+
+func codexLocalImage(path string) map[string]any {
+	return map[string]any{"type": "local_image", "path": path}
+}
+
+func codexImageServer(t *testing.T, rows string) (http.Handler, []string) {
+	t.Helper()
+	home := t.TempDir()
+	p := writeRollout(t, home, testCodexID, rows)
+	s := AgentSession{Agent: "codex", ID: testCodexID, CodexHome: home, Rollout: p, RolloutID: rolloutIdentity(p, nil, mustStat(t, p))}
+	mux, _ := subagentsServer(t, s)
+	return mux, imageRefs(getTranscriptRes(t, mux))
+}
+
+func TestAgentImageServesCodexImages(t *testing.T) {
+	red, blue := testPNG(t, color.RGBA{255, 0, 0, 255}), testPNG(t, color.RGBA{0, 0, 255, 255})
+	// An input row longer than a tail chunk and the line buffer: the row
+	// before the item is read back over many reads.
+	big := append(append([]byte{}, red...), bytes.Repeat([]byte{0}, agentMaxLine)...)
+	// A file on the host the item names: never read, only the rollout's copy.
+	secret := filepath.Join(t.TempDir(), "secret.png")
+	if err := os.WriteFile(secret, blue, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rows := codexEvent(map[string]any{"type": "task_started"}) +
+		codexInput(dataURL("image/png", red), dataURL("image/png", blue)) +
+		codexImageMessage("m1", codexLocalImage(secret), map[string]any{"type": "image", "image_url": dataURL("image/png", blue)}) +
+		codexInput(dataURL("image/png", big)) +
+		codexImageMessage("m2", codexLocalImage("/tmp/big.png"))
+	mux, refs := codexImageServer(t, rows)
+	if len(refs) != 3 || slices.Contains(refs, "") {
+		t.Fatalf("refs = %q", refs)
+	}
+	for i, want := range [][]byte{red, blue, big} {
+		rec := getImage(mux, refs[i], nil)
+		if rec.Code != http.StatusOK || !bytes.Equal(rec.Body.Bytes(), want) {
+			t.Fatalf("image %d = %d (%d bytes)", i, rec.Code, rec.Body.Len())
+		}
+		if h := rec.Header(); h.Get("Content-Type") != "image/png" || h.Get("X-Content-Type-Options") != "nosniff" {
+			t.Errorf("image %d headers = %v", i, h)
+		}
+	}
+	ref, _ := decodeImageRef(refs[0])
+	if rec := getImage(mux, encodeImageRef(agentImageRef{Session: ref.Session, File: ref.File, Offset: ref.Offset, N: 2}), nil); rec.Code != http.StatusNotFound {
+		t.Errorf("third of two = %d", rec.Code)
+	}
+}
+
+func TestAgentImageRefusesUnmatchedCodexInput(t *testing.T) {
+	png := testPNG(t, color.Black)
+	other := codexEvent(map[string]any{"type": "agent_message", "message": "x"})
+	for name, rows := range map[string]string{
+		// Codex could not read one file: the input has fewer images than
+		// the item, so no image is served under another's chip.
+		"fewer input images": codexInput(dataURL("image/png", png)) + codexImageMessage("m", codexLocalImage("/a.png"), codexLocalImage("/b.png")),
+		"row in between":     codexInput(dataURL("image/png", png)) + other + codexImageMessage("m", codexLocalImage("/a.png")),
+		"no row before":      codexImageMessage("m", codexLocalImage("/a.png")),
+		"assistant input": strings.Replace(codexInput(dataURL("image/png", png)), `"role":"user"`, `"role":"assistant"`, 1) +
+			codexImageMessage("m", codexLocalImage("/a.png")),
+		"http url":    codexInput("https://example.com/a.png") + codexImageMessage("m", map[string]any{"type": "image", "image_url": "https://example.com/a.png"}),
+		"html as png": codexInput(dataURL("image/png", []byte("<html><script>alert(1)</script></html>"))) + codexImageMessage("m", codexLocalImage("/a.png")),
+		"svg": codexInput(dataURL("image/svg+xml", []byte(`<svg xmlns="http://www.w3.org/2000/svg"/>`))) +
+			codexImageMessage("m", codexLocalImage("/a.svg")),
+		"png named jpeg": codexInput(dataURL("image/jpeg", png)) + codexImageMessage("m", codexLocalImage("/a.jpg")),
+		"not base64":     codexInput("data:image/png,"+string(png[:8])) + codexImageMessage("m", codexLocalImage("/a.png")),
+		"bad base64":     codexInput("data:image/png;base64,!!") + codexImageMessage("m", codexLocalImage("/a.png")),
+	} {
+		mux, refs := codexImageServer(t, rows)
+		if len(refs) == 0 {
+			t.Fatalf("%s: no image part", name)
+		}
+		for _, ref := range refs {
+			if rec := getImage(mux, ref, nil); rec.Code != http.StatusNotFound {
+				t.Errorf("%s = %d", name, rec.Code)
+			}
+		}
+	}
+}
+
+func TestCodexImageReadsOnlyUserMessages(t *testing.T) {
+	png := testPNG(t, color.White)
+	input := codexInput(dataURL("image/png", png))
+	for name, tc := range map[string]struct {
+		rows string
+		ok   bool
+	}{
+		"user message":  {input + codexImageMessage("m", codexLocalImage("/a.png")), true},
+		"agent message": {input + codexItemRow(map[string]any{"type": "AgentMessage", "content": []any{codexLocalImage("/a.png")}}), false},
+		"not json":      {input + "{\n", false},
+		"no newline":    {input + strings.TrimSuffix(codexImageMessage("m", codexLocalImage("/a.png")), "\n"), false},
+	} {
+		f := strings.NewReader(tc.rows)
+		off := int64(len(input))
+		mt, data, ok := codexJournal{}.Image(f, off, int64(len(tc.rows)), 0)
+		if ok != tc.ok || (ok && (mt != "image/png" || !bytes.Equal(data, png))) {
+			t.Errorf("%s = %q %d bytes %v", name, mt, len(data), ok)
+		}
+	}
+	if _, _, ok := (codexJournal{}).Image(strings.NewReader(input), 0, int64(len(input)), 0); ok {
+		t.Error("input row read as an item")
+	}
+}
+
+func TestRowBefore(t *testing.T) {
+	long := strings.Repeat("x", 200<<10)
+	rows := "a\n" + long + "\n" + "\n" + "c\n"
+	f := strings.NewReader(rows)
+	for _, tc := range []struct {
+		off  int64
+		want string
+		ok   bool
+	}{
+		{0, "", false},
+		{2, "a\n", true},
+		{int64(2 + len(long) + 1), long + "\n", true},
+		{int64(2 + len(long) + 2), "\n", true},
+	} {
+		got, ok := rowBefore(f, tc.off)
+		if ok != tc.ok || string(got) != tc.want {
+			t.Errorf("rowBefore(%d) = %d bytes %v", tc.off, len(got), ok)
+		}
+	}
+	// A row longer than the limit is not read back, whether the limit is
+	// passed while looking for its start or the file starts it.
+	for _, n := range []int{agentImageLineMax, agentImageLineMax + 1} {
+		huge := strings.Repeat("y", n) + "\n"
+		if _, ok := rowBefore(strings.NewReader(huge), int64(len(huge))); ok {
+			t.Errorf("row of %d bytes read", n+1)
+		}
+	}
+}
+
+type failingReaderAt struct{}
+
+func (failingReaderAt) ReadAt([]byte, int64) (int, error) { return 0, os.ErrClosed }
+
+func TestRowReadsRefuseBadRanges(t *testing.T) {
+	r := strings.NewReader("a\nb")
+	if _, ok := rowAt(r, 3, 3); ok {
+		t.Error("rowAt past the end")
+	}
+	if _, ok := rowAt(r, -1, 3); ok {
+		t.Error("rowAt before the start")
+	}
+	if _, ok := rowAt(r, 2, 3); ok {
+		t.Error("rowAt a row without '\\n'")
+	}
+	if _, _, ok := (claudeJournal{}).Image(r, 2, 3, 0); ok {
+		t.Error("claude image of a partial row")
+	}
+	if _, ok := rowBefore(failingReaderAt{}, 5); ok {
+		t.Error("rowBefore on a failing read")
+	}
+	if _, ok := rowBefore(failingReaderAt{}, 1); ok {
+		t.Error("rowBefore of an empty first row on a failing read")
 	}
 }

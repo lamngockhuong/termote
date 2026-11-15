@@ -888,17 +888,22 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   the same idle agent shows nothing but one of the states this request pasted; otherwise 409
   `partial_paste` and nothing is touched.
   `GET agent/image?src=` (`server/agent_image.go`) serves an image the user pasted into a Claude
-  Code message, shown again from its `[image]` chip in the Chat view. `src` is a reference the
-  transcript read gave the part, HMAC-signed with the cursor key under its own `image\x00` domain
-  (a cursor never passes for one): session id, file identity, row offset and the image's place in
-  the row; nothing else is taken from the client. The server re-locates the pane's own session
-  (`Locate`, as `transcript`), needs the same file identity, an offset at a line start and a whole
-  row within 32 MiB, and serves only a `source.type: base64` block whose bytes sniff
-  (`http.DetectContentType`) as PNG, JPEG, GIF or WebP and as its `media_type` when given (never
-  SVG, a URL source, or a tool result's image); anything else is 404 `not_found`. At most 2 reads
-  at once (else 429 `busy`). Same-site only (`crossSiteRejection`), GET only, both roles (the
-  view-only client already reads the conversation's text); the reply has `nosniff`, a `sandbox;
-  default-src 'none'` CSP and `Cache-Control: private`. Codex images keep a plain chip.
+  Code or Codex message, shown again from its `[image]` chip in the Chat view. `src` is a reference
+  the transcript read gave the part, HMAC-signed with the cursor key under its own `image\x00`
+  domain (a cursor never passes for one): session id, file identity, row offset and the image's
+  place in the row; nothing else is taken from the client. The server re-locates the pane's own
+  session (`Locate`, as `transcript`), needs the same file identity, an offset at a line start and
+  a whole row within 32 MiB. Claude Code: only a `source.type: base64` block of that row (never a
+  URL source or a tool result's image). Codex: the row must be a `UserMessage` item, and the bytes
+  come only from the row right before it, which must be the model's user input (`response_item`
+  `message`, role `user`) holding exactly as many `input_image`s as the item has images (so a file
+  Codex could not read moves no image onto another's chip), each a base64 `data:` URL; the file a
+  `local_image` names by path is never opened, nor any other URL. Either way the bytes must sniff
+  (`http.DetectContentType`) as PNG, JPEG, GIF or WebP and as the declared type (never SVG);
+  anything else is 404 `not_found`. At most 2 reads at once (else 429 `busy`). Same-site only
+  (`crossSiteRejection`), GET only, both roles (the view-only client already reads the
+  conversation's text); the reply has `nosniff`, a `sandbox; default-src 'none'` CSP and
+  `Cache-Control: private`.
   Markdown images in the Chat view never load (shown as links), and raw HTML is not rendered;
   its code blocks and Mermaid diagrams use the preview's (see Mermaid diagrams). A file path in
   it (a file tool card's input, inline code naming a file, a relative link) opens on a click
