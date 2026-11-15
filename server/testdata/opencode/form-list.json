@@ -1,0 +1,37 @@
+{
+  "data": [
+    {
+      "id": "frm_1dd34cba6001GUfZ5XM4tpRMaz",
+      "sessionID": "sesFixQ1",
+      "title": "Questions",
+      "metadata": {
+        "kind": "question",
+        "tool": {
+          "messageID": "msg_1dd34cb53001zA6TIuhI3zmxFR",
+          "id": "call_4"
+        }
+      },
+      "fields": [
+        {
+          "key": "q0",
+          "title": "Color",
+          "description": "Which color?",
+          "type": "string",
+          "options": [
+            {
+              "value": "Red",
+              "label": "Red",
+              "description": "warm"
+            },
+            {
+              "value": "Blue",
+              "label": "Blue",
+              "description": "cool"
+            }
+          ],
+          "custom": true
+        }
+      ]
+    }
+  ]
+}

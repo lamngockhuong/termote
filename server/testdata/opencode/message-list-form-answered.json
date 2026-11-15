@@ -1,0 +1,142 @@
+{
+  "data": [
+    {
+      "id": "msg_1dd34cb06001uS7Wr5m9olipgX",
+      "time": {
+        "created": 1794712587064
+      },
+      "text": "FORM please",
+      "type": "user"
+    },
+    {
+      "id": "msg_1dd34cb53001zA6TIuhI3zmxFR",
+      "time": {
+        "created": 1794712587100,
+        "firstToken": 1794712587155,
+        "streamed": 1794712587175,
+        "completed": 1794712598179
+      },
+      "type": "assistant",
+      "agent": "build",
+      "model": {
+        "id": "m1",
+        "providerID": "fake"
+      },
+      "content": [
+        {
+          "type": "tool",
+          "id": "call_4",
+          "name": "question",
+          "executed": false,
+          "state": {
+            "status": "completed",
+            "input": {
+              "questions": [
+                {
+                  "question": "Which color?",
+                  "header": "Color",
+                  "options": [
+                    {
+                      "label": "Red",
+                      "description": "warm"
+                    },
+                    {
+                      "label": "Blue",
+                      "description": "cool"
+                    }
+                  ]
+                }
+              ]
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "User has answered your questions: \"Which color?\"=\"Blue\". You can now continue with the user's answers in mind."
+              }
+            ],
+            "metadata": {
+              "answers": [
+                [
+                  "Blue"
+                ]
+              ],
+              "truncated": false
+            }
+          },
+          "time": {
+            "created": 1794712587160,
+            "ran": 1794712587167,
+            "completed": 1794712598143
+          }
+        }
+      ],
+      "snapshot": {
+        "start": "88b3be89254985e5227ab1711bbc46706a912770",
+        "end": "88b3be89254985e5227ab1711bbc46706a912770",
+        "files": []
+      },
+      "finish": "tool-calls",
+      "rawFinish": "tool_calls",
+      "cost": 0,
+      "tokens": {
+        "input": 1500,
+        "output": 20,
+        "reasoning": 0,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_1dd34f6bd001xKioibiLGsEKiL",
+      "time": {
+        "created": 1794712598215,
+        "firstToken": 1794712598254,
+        "streamed": 1794712598264,
+        "completed": 1794712598276
+      },
+      "type": "assistant",
+      "agent": "build",
+      "model": {
+        "id": "m1",
+        "providerID": "fake"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Done after tool."
+        }
+      ],
+      "snapshot": {
+        "start": "88b3be89254985e5227ab1711bbc46706a912770",
+        "end": "88b3be89254985e5227ab1711bbc46706a912770",
+        "files": []
+      },
+      "finish": "stop",
+      "rawFinish": "stop",
+      "cost": 0,
+      "tokens": {
+        "input": 1200,
+        "output": 30,
+        "reasoning": 0,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_1dd34f7100011wWdUrMHl51ToB",
+      "time": {
+        "created": 1794712598288
+      },
+      "type": "idle",
+      "outcome": "succeeded"
+    }
+  ],
+  "cursor": {
+    "previous": "eyJpZCI6Im1zZ18xZGQzNGNiMDYwMDF1UzdXcjVtOW9saXBnWCIsIm9yZGVyIjoiYXNjIiwiZGlyZWN0aW9uIjoicHJldmlvdXMifQ",
+    "next": "eyJpZCI6Im1zZ18xZGQzNGY3MTAwMDExd1dkVXJNSGw1MVRvQiIsIm9yZGVyIjoiYXNjIiwiZGlyZWN0aW9uIjoibmV4dCJ9"
+  }
+}

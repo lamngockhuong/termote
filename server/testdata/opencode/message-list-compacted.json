@@ -1,0 +1,201 @@
+{
+  "data": [
+    {
+      "id": "msg_1dd34026a001X92w1AM7X9EZ1y",
+      "time": {
+        "created": 1794712535708
+      },
+      "text": "hello there",
+      "type": "user"
+    },
+    {
+      "id": "msg_1dd3402cf0016K0eltLM2jBciK",
+      "time": {
+        "created": 1794712535777,
+        "firstToken": 1794712535906,
+        "streamed": 1794712535928,
+        "completed": 1794712535945
+      },
+      "type": "assistant",
+      "agent": "build",
+      "model": {
+        "id": "m1",
+        "providerID": "fake"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Hello from the fake model. **bold** text."
+        }
+      ],
+      "snapshot": {
+        "start": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        "end": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        "files": []
+      },
+      "finish": "stop",
+      "rawFinish": "stop",
+      "cost": 0,
+      "tokens": {
+        "input": 1200,
+        "output": 30,
+        "reasoning": 0,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_1dd340390001Cuayu8yk68uImV",
+      "time": {
+        "created": 1794712535952
+      },
+      "type": "idle",
+      "outcome": "succeeded"
+    },
+    {
+      "id": "msg_1dd3434b90011o58UJThvfwXAG",
+      "time": {
+        "created": 1794712548561
+      },
+      "text": "again",
+      "type": "user"
+    },
+    {
+      "id": "msg_1dd3434ff001o7Sownlwh3cFpV",
+      "time": {
+        "created": 1794712548617,
+        "firstToken": 1794712548652,
+        "streamed": 1794712548664,
+        "completed": 1794712548678
+      },
+      "type": "assistant",
+      "agent": "build",
+      "model": {
+        "id": "m1",
+        "providerID": "fake"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Hello from the fake model. **bold** text."
+        }
+      ],
+      "snapshot": {
+        "start": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        "end": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        "files": []
+      },
+      "finish": "stop",
+      "rawFinish": "stop",
+      "cost": 0,
+      "tokens": {
+        "input": 1200,
+        "output": 30,
+        "reasoning": 0,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_1dd34354f001NFb1cNB5iX4QoO",
+      "time": {
+        "created": 1794712548687
+      },
+      "type": "idle",
+      "outcome": "succeeded"
+    },
+    {
+      "id": "msg_1dd3637910014OL7JVOv24VHz0",
+      "time": {
+        "created": 1794712680360
+      },
+      "text": "Say hello world",
+      "type": "user"
+    },
+    {
+      "id": "msg_1dd3637c2001qeV9Es3hItrgUm",
+      "time": {
+        "created": 1794712680413,
+        "firstToken": 1794712680471,
+        "streamed": 1794712680486,
+        "completed": 1794712680500
+      },
+      "type": "assistant",
+      "agent": "build",
+      "model": {
+        "id": "m1",
+        "providerID": "fake"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Hello from the fake model. **bold** text."
+        }
+      ],
+      "snapshot": {
+        "start": "88b3be89254985e5227ab1711bbc46706a912770",
+        "end": "88b3be89254985e5227ab1711bbc46706a912770",
+        "files": []
+      },
+      "finish": "stop",
+      "rawFinish": "stop",
+      "cost": 0,
+      "tokens": {
+        "input": 1200,
+        "output": 30,
+        "reasoning": 0,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_1dd363839001inOuQl7raUX18m",
+      "time": {
+        "created": 1794712680505
+      },
+      "type": "idle",
+      "outcome": "succeeded"
+    },
+    {
+      "type": "compaction",
+      "id": "msg_1dd3643f6001kaRR2ThptHirov",
+      "time": {
+        "created": 1794712683518
+      },
+      "status": "failed",
+      "reason": "manual",
+      "error": {
+        "type": "compaction.failed",
+        "message": "Compaction summary did not match the required template"
+      },
+      "cost": 0,
+      "tokens": {
+        "input": 2400,
+        "output": 60,
+        "reasoning": 0,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_1dd3644360014ksWeRrLeU1m3t",
+      "time": {
+        "created": 1794712683575
+      },
+      "type": "idle",
+      "outcome": "succeeded"
+    }
+  ],
+  "cursor": {
+    "previous": "eyJpZCI6Im1zZ18xZGQzNDAyNmEwMDFYOTJ3MUFNN1g5RVoxeSIsIm9yZGVyIjoiYXNjIiwiZGlyZWN0aW9uIjoicHJldmlvdXMifQ",
+    "next": "eyJpZCI6Im1zZ18xZGQzNjQ0MzYwMDE0a3NXZVJyTGVVMW0zdCIsIm9yZGVyIjoiYXNjIiwiZGlyZWN0aW9uIjoibmV4dCJ9"
+  }
+}

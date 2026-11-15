@@ -1,0 +1,107 @@
+{
+    "data": [
+        {
+            "id": "msg_1de5f157d001Zl2WLFKI1xJ4dM",
+            "time": {
+                "created": 1794732137927
+            },
+            "text": "FAIL please",
+            "type": "user"
+        },
+        {
+            "id": "msg_1de5f1ddd001liRw3Ss0Fjtg7w",
+            "time": {
+                "created": 1794732224647,
+                "completed": 1794732224704
+            },
+            "type": "assistant",
+            "agent": "build",
+            "model": {
+                "id": "m1",
+                "providerID": "fake"
+            },
+            "content": [],
+            "snapshot": {
+                "start": "88b3be89254985e5227ab1711bbc46706a912770",
+                "end": "88b3be89254985e5227ab1711bbc46706a912770",
+                "files": []
+            },
+            "finish": "error",
+            "error": {
+                "type": "provider.rate-limit",
+                "message": "Rate limited: you've used today's free messages",
+                "status": 429,
+                "response": {
+                    "body": "{\"error\":{\"message\":\"Rate limited: you've used today's free messages\",\"type\":\"rate_limit\",\"code\":\"free-limit\"}}"
+                }
+            }
+        },
+        {
+            "id": "msg_1de6070c6001nc4UCtGu1fW3VP",
+            "time": {
+                "created": 1794732224710
+            },
+            "type": "idle",
+            "outcome": "failed",
+            "error": {
+                "type": "provider.rate-limit",
+                "message": "Rate limited: you've used today's free messages",
+                "status": 429,
+                "response": {
+                    "body": "{\"error\":{\"message\":\"Rate limited: you've used today's free messages\",\"type\":\"rate_limit\",\"code\":\"free-limit\"}}"
+                }
+            }
+        },
+        {
+            "id": "msg_1de608ec0001CDrOUYZOhgvbN9",
+            "time": {
+                "created": 1794732232403
+            },
+            "text": "SLOW please",
+            "type": "user"
+        },
+        {
+            "id": "msg_1de608ee20012exUTD6mFf0dY1",
+            "time": {
+                "created": 1794732232425,
+                "firstToken": 1794732232456,
+                "streamed": 1794732236423,
+                "completed": 1794732236442
+            },
+            "type": "assistant",
+            "agent": "build",
+            "model": {
+                "id": "m1",
+                "providerID": "fake"
+            },
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Working slowly"
+                }
+            ],
+            "snapshot": {
+                "start": "88b3be89254985e5227ab1711bbc46706a912770",
+                "end": "88b3be89254985e5227ab1711bbc46706a912770",
+                "files": []
+            },
+            "finish": "error",
+            "error": {
+                "type": "aborted",
+                "message": "Step interrupted"
+            }
+        },
+        {
+            "id": "msg_1de609ea1001C7cxdCB8nieETe",
+            "time": {
+                "created": 1794732236449
+            },
+            "type": "idle",
+            "outcome": "interrupted"
+        }
+    ],
+    "cursor": {
+        "previous": "eyJpZCI6Im1zZ18xZGU1ZjE1N2QwMDFabDJXTEZLSTF4SjRkTSIsIm9yZGVyIjoiYXNjIiwiZGlyZWN0aW9uIjoicHJldmlvdXMifQ",
+        "next": "eyJpZCI6Im1zZ18xZGU2MDllYTEwMDFDN2N4ZENCOG5pZUVUZSIsIm9yZGVyIjoiYXNjIiwiZGlyZWN0aW9uIjoibmV4dCJ9"
+    }
+}

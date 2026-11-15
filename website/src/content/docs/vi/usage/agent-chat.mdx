@@ -302,6 +302,36 @@ Những điều cần biết:
 - Chỉ tiến trình Codex đang ghi phiên mới được tính: chương trình khác đọc cùng file phiên (như
   `tail -f`) không có view Chat.
 
+## OpenCode
+
+Pane chạy OpenCode 2.0 trở lên có view Chat với hội thoại của phiên, hiện chỉ để đọc: tin nhắn của
+bạn, câu trả lời dạng markdown, phần suy luận, và từng lệnh gọi công cụ kèm kết quả. Trạng thái của
+nó (đang chạy, đang chờ duyệt quyền hay chờ trả lời câu hỏi, rảnh) hiện ở sidebar, Overview, nhật ký
+hoạt động và thông báo. Gửi tin và trả lời hộp thoại từ view sẽ có ở bản sau; trong lúc chờ, hãy trả
+lời trong terminal. Lượt nào thất bại (hết hạn mức, nhà cung cấp mô hình báo lỗi) hay bị bạn ngắt sẽ
+hiện thành một ghi chú kèm thông báo lỗi của OpenCode.
+
+OpenCode 2 cài từ trang GitHub releases của nó hoặc Homebrew; gói `opencode-ai` trên npm vẫn là
+OpenCode 1, Termote không đọc được bản này.
+
+Termote đọc OpenCode qua dịch vụ nền của nó (dịch vụ mà `opencode` tự khởi động), trên chính máy này
+và của chính tài khoản bạn. Termote không bao giờ tự khởi động dịch vụ đó: khi dịch vụ không chạy,
+pane chỉ hiện logo OpenCode. Termote biết pane đang xem session nào:
+
+- **Herdr**: qua tích hợp OpenCode của Herdr (`herdr integration install opencode`), kể cả khi bạn
+  chuyển sang session khác ngay trong OpenCode. Sau `/new`, pane giữ session cũ cho tới khi bạn gửi
+  tin đầu tiên của session mới.
+- **tmux, psmux, Zellij, herdr-core**: chỉ khi OpenCode được mở bằng `--session <id>` (hoặc
+  `-s <id>`). Chạy `opencode` trần thì chỉ có logo, và session bạn chuyển sang từ bên trong OpenCode
+  không được theo: view giữ session ghi trên dòng lệnh.
+
+OpenCode chạy với `--standalone` hoặc `--server` không được đọc. Nếu bạn đặt `XDG_STATE_HOME` trong
+shell, hãy đặt cả cho dịch vụ của Termote, nếu không Termote sẽ tìm OpenCode ở `~/.local/state`.
+
+Trên Windows, dịch vụ nền chạy dưới cửa sổ OpenCode đã khởi động nó: đóng pane đó khi OpenCode còn
+chạy bên trong sẽ dừng luôn dịch vụ, mọi OpenCode khác cũng mất kết nối. Lần mở `opencode` kế tiếp sẽ
+khởi động dịch vụ mới, và Termote tìm lại được nó sau vài giây.
+
 ## Khởi động agent (Herdr)
 
 Trên Herdr, pane chỉ hiện shell của nó (không chạy gì, kể cả chương trình chạy bằng `exec`) cũng

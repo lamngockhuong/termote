@@ -22,6 +22,11 @@
       ]
     },
     {
+      "name": "OpenCode: a permission asked mid-turn, answered, then the turn ends",
+      "steps": [{ "p1": "working" }, { "p1": "blocked" }, { "p1": "working" }, { "p1": "idle" }],
+      "events": [[], [{ "paneId": "p1", "kind": "blocked" }], [], [{ "paneId": "p1", "kind": "done" }]]
+    },
+    {
       "name": "blocked staying blocked raises nothing",
       "steps": [{ "p1": "working" }, { "p1": "blocked" }, { "p1": "blocked" }],
       "events": [[], [{ "paneId": "p1", "kind": "blocked" }], []]

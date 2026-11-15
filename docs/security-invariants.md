@@ -843,7 +843,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   config dir of the Claude Code found under the pane's `shell_pid` (`pane.process_info`, Herdr
   0.9.3+, same checks, `paneClaude`) only when its session file names that id, else the server
   user's config dir (`defaultClaudeDir`; also while a Herdr without `pane.process_info` is left
-  alone, `herdrProcRetry`). The session id must be a UUID. Every write (Claude Code or Codex)
+  alone, `herdrProcRetry`). The session id must be a UUID (OpenCode: see OpenCode chat). Every write (Claude Code or Codex)
   takes a lock on the pane, waiting for it at most `agentRequestMost` (7.5 min) less the write's own
   bound and only while the client is there, else 409 `input_busy` with nothing sent (so a write
   over a machine ends before its hub's `machineResponseHeaderWait` and is never delivered after
@@ -1245,6 +1245,44 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   and their errors are not returned. Custom prompts (gone from Codex), the project's
   `.codex/config.toml`, profiles, `-c`, `project_root_markers` and `agents/openai.yaml` are not
   read
+- **OpenCode service client** (`server/agent_opencode_client.go`): termote reads OpenCode 2.x
+  only through the user's own background service, never `opencode.db`, the TUI's screen or the
+  `opencode` CLI (`opencode api` and the TUI start the service when none runs; termote never
+  starts one). Where it listens is read from `$XDG_STATE_HOME/opencode/service.json` of the server
+  user (else `~/.local/state/opencode/service.json`), at most 64 KB; its `url` must be
+  `http://<loopback IP>:<port>` with no user, path, query or fragment (a name such as `localhost`
+  is refused, never resolved), else no request is made. The password goes only into the
+  `Authorization: Basic opencode:<password>` header of requests to that address: never into argv,
+  a log, an `audit:` line, an error or a reply. Before a byte is sent on a new connection, the
+  socket at the other end must belong to the server's own user (`peerOwner`, the tables the
+  local-user check reads; waits up to 100 ms for the service to accept), so a port another user
+  took after the service died never gets the password; macOS cannot tell a socket's owner and
+  skips this (accepted gap). The HTTP client follows no redirect and uses no proxy. The service
+  counts only when `/api/info` answers with the pid and version the file names and a version of
+  at least 2.0.0 (kept 30 s; a 401 or 403 drops it at once so a restarted service's new password
+  is read; a failed check is repeated at most every 2 s). Every reply is read up to a limit (1 MB, a page of
+  messages 24 MB) and decoded into the fields used; the service's own text (its error bodies,
+  `/api/info`'s hostname, `/api/model`'s provider settings with their API keys) never reaches a
+  client or a log. Errors reach the client as `transcript not found` or `no agent session`.
+- **OpenCode chat**: the session of a pane is the `--session`/`-s` id of the OpenCode TUI process
+  found under the pane's shell (executable named `opencode`, argv not a subcommand, not
+  `--standalone` or `--server`), or on Herdr the id Herdr's OpenCode integration reported for the
+  pane; never one a client names. The id must match `^ses[A-Za-z0-9_]{1,64}$` and goes into a
+  service URL path only after that check; message, permission and form ids are kept only when
+  they match `msg_`/`per_`/`frm_` plus up to 64 alphanumerics, and a pending request only when its
+  `sessionID` is the pane's session. A TUI without such an id, or with no usable service, is
+  shown as OpenCode with status `unknown` and every `agent/*` route answers 404. The status comes
+  from one shared `/api/session/active` read and the session's pending permissions and forms
+  (500 ms caches). Only settled messages are sent (an open answer, compaction or `!` command is
+  held until an `idle` message follows it), since the client appends rows; a page over 24 MB is
+  asked again with fewer messages. A turn that did not succeed is a note (`Interrupted`, or `Turn
+  failed` with the error's `message` on one line, at most 200 bytes); the provider's raw response
+  body in that error is never read. Cursors are the signed `agentCursor`: a forward one names the last message sent
+  (`oc:`), a before one carries the service's own page cursor (`ocb:`, at most 1 KB), so a client
+  never makes the server pass its own words to the service; a cursor of another session starts
+  over. A view-only client gets `viewTranscript` as for Claude Code (no tool call, no note,
+  compaction summaries as `Context compacted`). Messages, answers and the composer stay closed:
+  `opencode` has no screen reader, so every write route refuses it.
 - **Files/Changes** (`/api/mux/panes/{id}/files/*`): GETs that also check
   `Sec-Fetch-Site`/`Origin` (and the writes below; none is read-only any more, Changes included: `POST files/changes/apply` writes the index); every path is opened through `os.Root` under the pane's root (its
   git toplevel when a `.git` sits at it, else its directory) or a Place's (see Places); the server
