@@ -50,6 +50,12 @@ const activityMaxText = 80
 // effort row (Claude Code 2.1.312).
 const claudeActivityRows = 4
 
+// claudeRecapRows: the recap Claude Code (2.1.325) writes under the line
+// that ends a turn ("※ recap: …", its wrapped rows indented) is looked for
+// this far above the input box's top border; the working line is then looked
+// for above it.
+const claudeRecapRows = 8
+
 var (
 	// claudeActivityRe: "✻ Incubating… (5s · thinking)", or the word alone
 	// before the first count. The line that ends a turn ("✻ Sautéed for
@@ -72,6 +78,7 @@ var (
 // claudeActivity reads the working line in the rows above the input box's
 // top border, nearest first.
 func claudeActivity(above []screenLine) *AgentActivity {
+	above = aboveRecap(above)
 	for i := len(above) - 1; i >= 0 && i >= len(above)-claudeActivityRows; i-- {
 		if !atColumnZero(above[i]) {
 			continue // blank, or the right-aligned effort row
@@ -90,6 +97,22 @@ func claudeActivity(above []screenLine) *AgentActivity {
 		return a
 	}
 	return nil
+}
+
+// aboveRecap drops a recap at the bottom of the rows above the input box,
+// with the rows under it: the nearest row at column 0, when it starts the
+// recap.
+func aboveRecap(above []screenLine) []screenLine {
+	for i := len(above) - 1; i >= 0 && i >= len(above)-claudeRecapRows; i-- {
+		if !atColumnZero(above[i]) {
+			continue
+		}
+		if strings.HasPrefix(above[i].text, "※ recap") {
+			return above[:i]
+		}
+		break
+	}
+	return above
 }
 
 // claudeDone reads the line that ends a turn, but only while it says what
