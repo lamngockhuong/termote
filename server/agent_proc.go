@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -31,6 +32,8 @@ type claudeProc struct {
 	codexHome string
 	// window: the context window Claude Code's argv chose (0: unknown).
 	window int64
+	// forkOf: the session Claude Code's argv forks (claudeForkOfArgs).
+	forkOf string
 }
 
 // agentTrees caches walks keyed by pane and root pid.
@@ -114,7 +117,7 @@ func sessionOfProc(p claudeProc) (AgentSession, bool) {
 	}
 	return AgentSession{
 		Agent: "claude", ID: f.SessionID, Status: claudeStatus(f.Status),
-		ClaudeDir: p.claudeDir, ClaudeWindow: p.window, PID: p.pid, ProcStart: p.procStart,
+		ClaudeDir: p.claudeDir, ForkOf: p.forkOf, ClaudeWindow: p.window, PID: p.pid, ProcStart: p.procStart,
 	}, true
 }
 
@@ -166,10 +169,33 @@ func claudeProcOf(pid int, domain string) (claudeProc, bool) {
 	if !ok || start != f.procStart() {
 		return claudeProc{}, false
 	}
-	// argv is read with the process, once per walk; only the window it
-	// names is kept.
+	// argv is read with the process, once per walk; only the window and
+	// the forked session it names are kept.
+	args := procArgs(pid)
 	return claudeProc{agent: "claude", pid: pid, procStart: start, claudeDir: dir,
-		window: claudeWindowFromArgs(procArgs(pid))}, true
+		window: claudeWindowFromArgs(args), forkOf: claudeForkOfArgs(args)}, true
+}
+
+// claudeForkOfArgs is the session id Claude Code's argv resumes with
+// --fork-session (`--resume <id>`, `-r <id>` or `--resume=<id>`), "" when it
+// forks none or names no session id (a search term). Nothing after "--" is an
+// option.
+func claudeForkOfArgs(args []string) string {
+	id, fork := "", false
+	for i := 0; i < len(args) && args[i] != "--"; i++ {
+		switch a := args[i]; {
+		case a == "--fork-session":
+			fork = true
+		case (a == "--resume" || a == "-r") && i+1 < len(args):
+			id = args[i+1]
+		case strings.HasPrefix(a, "--resume="):
+			id = strings.TrimPrefix(a, "--resume=")
+		}
+	}
+	if !fork || !isSessionID(id) {
+		return ""
+	}
+	return id
 }
 
 // claudeProcAlive reports whether pid still runs with the start time the

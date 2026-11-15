@@ -1728,6 +1728,18 @@ func TestHerdrAgentSessionClaudeDir(t *testing.T) {
 	if d := dir("own config dir"); d != "/home/u/.claude-work" {
 		t.Errorf("own config dir = %q", d)
 	}
+	// A fork's process names the session it forks; another session's
+	// process names nothing.
+	const parent = "00000000-0000-4000-8000-000000000001"
+	found.ForkOf = parent
+	if s, _, _ := m.AgentSession(ctx, "wR:p3"); s.ForkOf != parent {
+		t.Errorf("fork: ForkOf = %q, want %q", s.ForkOf, parent)
+	}
+	found = AgentSession{Agent: "claude", ID: "00000000-0000-4000-8000-000000000002", ClaudeDir: "/x", ForkOf: parent}
+	if s, _, _ := m.AgentSession(ctx, "wR:p3"); s.ForkOf != "" {
+		t.Errorf("another session's fork: ForkOf = %q", s.ForkOf)
+	}
+	found = AgentSession{Agent: "claude", ID: testSessionID, ClaudeDir: "/home/u/.claude-work"}
 	if gotKey != "wR:p3" || gotPID != 4242 {
 		t.Errorf("walk under %q pid %d, want the pane's shell 4242", gotKey, gotPID)
 	}

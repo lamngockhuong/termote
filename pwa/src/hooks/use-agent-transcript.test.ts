@@ -331,6 +331,46 @@ describe('useAgentTranscript', () => {
     expect(result.current.error).toBe('no-session')
   })
 
+  it('a 404 drops the conversation of the session that ended', async () => {
+    mockFetchTranscript.mockResolvedValueOnce(
+      page({ reset: true, entries: [text('a')], before: 'b0' }),
+    )
+    const { result } = renderHook(() => useAgentTranscript('p1'))
+    await tick()
+    expect(result.current.entries).toHaveLength(1)
+    // The agent exited and another one started with no session yet
+    mockFetchTranscript.mockRejectedValueOnce(
+      new AgentRequestError(404, '', 'no agent session'),
+    )
+    await tick(POLL_INTERVAL)
+    expect(result.current.error).toBe('no-session')
+    expect(result.current.entries).toEqual([])
+    expect(result.current.sessionId).toBeUndefined()
+    expect(result.current.before).toBeUndefined()
+    // The next session is read from its start, not from the old cursor
+    mockFetchTranscript.mockResolvedValueOnce(
+      page({ reset: true, entries: [text('b')], sessionId: 's2' }),
+    )
+    await tick(POLL_INTERVAL)
+    expect(mockFetchTranscript).toHaveBeenLastCalledWith('p1', {
+      cursor: undefined,
+    })
+    expect(result.current.entries.map((e) => e.id)).toEqual(['b'])
+    expect(result.current.error).toBeUndefined()
+  })
+
+  it('a failed read keeps the conversation', async () => {
+    mockFetchTranscript.mockResolvedValueOnce(
+      page({ reset: true, entries: [text('a')] }),
+    )
+    const { result } = renderHook(() => useAgentTranscript('p1'))
+    await tick()
+    mockFetchTranscript.mockRejectedValueOnce(new Error('offline'))
+    await tick(POLL_INTERVAL)
+    expect(result.current.error).toBe('unavailable')
+    expect(result.current.entries).toHaveLength(1)
+  })
+
   it('refresh polls now', async () => {
     mockFetchTranscript.mockResolvedValue(page({ reset: true }))
     const { result } = renderHook(() => useAgentTranscript('p1'))
