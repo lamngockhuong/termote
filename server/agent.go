@@ -45,6 +45,10 @@ type AgentSession struct {
 	ID        string // the agent's session id (a UUID)
 	Status    string // working | idle | blocked | done | unknown
 	ClaudeDir string // Claude Code: its config dir, where its transcripts live
+	// ForkOf: the session a Claude Code started with `--resume <id>
+	// --fork-session` was forked from (its argv), whose transcript is the
+	// fork's until the fork writes its own with its first message.
+	ForkOf string
 	// ClaudeWindow: the context window Claude Code's argv chose (--model),
 	// 0 when unknown (no --model, or no process to read: Herdr). The
 	// overview prefers the model its transcript names (claudeModels).

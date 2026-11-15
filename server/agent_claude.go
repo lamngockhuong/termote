@@ -67,7 +67,9 @@ var lineReaders = sync.Pool{New: func() any { return bufio.NewReaderSize(nil, ag
 func (claudeJournal) Agent() string { return "claude" }
 
 // Locate finds <claudeDir>/projects/*/<id>.jsonl. The result must resolve to
-// a file inside claudeDir, so a symlink cannot point the read elsewhere.
+// a file inside claudeDir, so a symlink cannot point the read elsewhere. A
+// session forked from another (ForkOf) has no file of its own until its first
+// message, and until then is the conversation it was forked from.
 func (claudeJournal) Locate(s AgentSession) (string, error) {
 	if !isSessionID(s.ID) || s.ClaudeDir == "" || !filepath.IsAbs(s.ClaudeDir) {
 		return "", errNoTranscript
@@ -76,7 +78,18 @@ func (claudeJournal) Locate(s AgentSession) (string, error) {
 	if err != nil {
 		return "", errNoTranscript
 	}
-	matches, err := filepath.Glob(filepath.Join(root, "projects", "*", s.ID+".jsonl"))
+	path, err := locateClaudeTranscript(root, s.ID)
+	if errors.Is(err, errTranscriptNotWritten) && isSessionID(s.ForkOf) && s.ForkOf != s.ID {
+		if parent, perr := locateClaudeTranscript(root, s.ForkOf); perr == nil {
+			return parent, nil
+		}
+	}
+	return path, err
+}
+
+// locateClaudeTranscript finds <root>/projects/*/<id>.jsonl, root resolved.
+func locateClaudeTranscript(root, id string) (string, error) {
+	matches, err := filepath.Glob(filepath.Join(root, "projects", "*", id+".jsonl"))
 	if err != nil {
 		return "", err
 	}

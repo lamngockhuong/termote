@@ -204,3 +204,26 @@ func TestAddCodexTokenCount(t *testing.T) {
 		t.Errorf("bad time = %+v", u)
 	}
 }
+
+func TestClaudeForkOfArgs(t *testing.T) {
+	const id = "11111111-2222-4333-8444-555555555555"
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"claude", "--resume", id, "--fork-session"}, id},
+		{[]string{"claude", "--fork-session", "-r", id}, id},
+		{[]string{"claude", "--resume=" + id, "--fork-session"}, id},
+		{[]string{"claude", "--resume", id}, ""},
+		{[]string{"claude", "--fork-session"}, ""},
+		{[]string{"claude", "--resume", "some search", "--fork-session"}, ""},
+		{[]string{"claude", "--fork-session", "--resume"}, ""},
+		{[]string{"claude", "--", "--resume", id, "--fork-session"}, ""},
+		{[]string{"claude", "--resume", id, "--", "--fork-session"}, ""},
+		{nil, ""},
+	} {
+		if got := claudeForkOfArgs(tc.args); got != tc.want {
+			t.Errorf("claudeForkOfArgs(%q) = %q, want %q", tc.args, got, tc.want)
+		}
+	}
+}

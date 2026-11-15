@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"syscall"
 	"testing"
@@ -121,6 +122,29 @@ func TestFindClaudeSessionReadsWindowFromArgv(t *testing.T) {
 				t.Errorf("session = %+v, %v; want window %d", s, ok, c.want)
 			}
 		})
+	}
+}
+
+func TestFindClaudeSessionReadsForkFromArgv(t *testing.T) {
+	domain := claudePIDDomain()
+	if domain == "" {
+		t.Skip("no machine-id")
+	}
+	const parent = "00000000-2222-4333-8444-555555555555"
+	dir := t.TempDir()
+	root, leaf := startFakeClaudeScript(t, `sh -c 'sleep 30; :' claude --resume `+parent+` --fork-session & wait`, "CLAUDE_CONFIG_DIR="+dir)
+	// The child shows the outer shell's argv until it execs.
+	for deadline := time.Now().Add(2 * time.Second); !slices.Contains(procArgs(leaf), "--fork-session"); {
+		if time.Now().After(deadline) {
+			t.Fatalf("argv = %q", procArgs(leaf))
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	start, _ := procStartTime(leaf)
+	writeSessionFile(t, dir, leaf, start, domain, "idle")
+	s, ok := findClaudeSession("argv-fork", root)
+	if !ok || s.PID != leaf || s.ForkOf != parent {
+		t.Errorf("session = %+v, %v; want ForkOf %s", s, ok, parent)
 	}
 }
 

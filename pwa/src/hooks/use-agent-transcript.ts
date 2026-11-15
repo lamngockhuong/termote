@@ -181,7 +181,24 @@ function createStore(paneId: string): Store {
     } catch (err) {
       failures++
       const noSession = err instanceof AgentRequestError && err.status === 404
-      set({ loaded: true, error: noSession ? 'no-session' : 'unavailable' })
+      if (noSession) {
+        // The pane's agent is gone (exited, or another agent started there
+        // with no session yet): its conversation is no longer the pane's,
+        // and the next session read starts over.
+        generation++
+        set({
+          entries: [],
+          sessionId: undefined,
+          status: undefined,
+          cursor: undefined,
+          before: undefined,
+          loaded: true,
+          error: 'no-session',
+        })
+      } else {
+        // A failed read keeps what was read: the session is still there.
+        set({ loaded: true, error: 'unavailable' })
+      }
     } finally {
       inFlight = false
     }

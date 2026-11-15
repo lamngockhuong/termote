@@ -318,6 +318,33 @@ func TestClaudeLocate(t *testing.T) {
 	}
 }
 
+func TestClaudeLocateFork(t *testing.T) {
+	dir := t.TempDir()
+	const fork = "99999999-2222-4333-8444-555555555555"
+	parent := writeTranscript(t, dir, testSessionID, "")
+	want, _ := filepath.EvalSymlinks(parent)
+	s := AgentSession{ID: fork, ClaudeDir: dir, ForkOf: testSessionID}
+	// Before its first message a fork is the conversation it forked.
+	if got, err := (claudeJournal{}).Locate(s); err != nil || got != want {
+		t.Fatalf("unwritten fork: Locate = %q, %v; want %q", got, err, want)
+	}
+	for name, forkOf := range map[string]string{
+		"parent not written": "88888888-2222-4333-8444-555555555555",
+		"not a uuid":         "../x",
+		"itself":             fork,
+	} {
+		s := AgentSession{ID: fork, ClaudeDir: dir, ForkOf: forkOf}
+		if _, err := (claudeJournal{}).Locate(s); err != errTranscriptNotWritten {
+			t.Errorf("%s: err = %v, want errTranscriptNotWritten", name, err)
+		}
+	}
+	// Once the fork wrote its own file, that file is its transcript.
+	own, _ := filepath.EvalSymlinks(writeTranscript(t, dir, fork, ""))
+	if got, err := (claudeJournal{}).Locate(s); err != nil || got != own {
+		t.Errorf("written fork: Locate = %q, %v; want %q", got, err, own)
+	}
+}
+
 func TestClaudeLocateRejectsSymlinkOutside(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlinks need privileges on Windows")

@@ -840,7 +840,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   read), and only for a process whose start time
   matches its session file's `procStart`; Herdr reports the session id itself, read from the
   config dir of the Claude Code found under the pane's `shell_pid` (`pane.process_info`, Herdr
-  0.9.3+, same checks, `paneClaudeDir`) only when its session file names that id, else the server
+  0.9.3+, same checks, `paneClaude`) only when its session file names that id, else the server
   user's config dir (`defaultClaudeDir`; also while a Herdr without `pane.process_info` is left
   alone, `herdrProcRetry`). The session id must be a UUID. Every write (Claude Code or Codex)
   takes a lock on the pane, waiting for it at most `agentRequestMost` (7.5 min) less the write's own
@@ -871,7 +871,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   Codex (Tab would take the popup's pick). Clearing a failed paste (C-c) still needs the agent
   idle, since C-c interrupts a working one: a working agent's box is left as `partial_paste`. Claude Code writes its transcript only with the first message: until
   then `transcript` answers an empty conversation whose cursor names the session, so the Chat
-  view can send it.
+  view can send it. A Claude Code started with `--resume <id> --fork-session` (read from its own argv
+  with the process, `claudeForkOfArgs`; on Herdr only from the process whose session file names
+  Herdr's id) is until then the conversation of `<id>`: `Locate` looks it up in the same config dir
+  with the same checks, never from a name the client gives, and the fork's own file replaces it
+  (another file identity, so the read starts over).
   `GET agent/prompt` also returns `activity`, the agent's working line read off the same capture
   (`server/agent_activity_line.go`: Claude Code's spinner row just over the input box, Codex's
   `esc to interrupt)` row over the composer; once a Claude Code turn is done, its end line only
