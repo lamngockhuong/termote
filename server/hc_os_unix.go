@@ -23,6 +23,10 @@ func hcDefaultStateHome(env []string) string {
 	return filepath.Join(home, ".local", "state")
 }
 
+// hcDefaultEndpoint: none, core.lock is read (its flock does not stop a
+// read) and names the socket.
+func hcDefaultEndpoint([]string) string { return "" }
+
 // hcDialProbe connects to the core's Unix socket, only to see it answer.
 func hcDialProbe(ctx context.Context, path string) (net.Conn, error) {
 	var d net.Dialer

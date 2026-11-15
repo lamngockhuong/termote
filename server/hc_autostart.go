@@ -85,28 +85,35 @@ func hcStateDir(env []string) string {
 	if base == "" {
 		base = hcDefaultStateHome(env)
 	}
-	session := strings.TrimSpace(hcEnvValue(env, "HC_SESSION"))
-	if session == "" {
-		session = "default"
+	return filepath.Join(base, "herdr-core", hcSession(env))
+}
+
+// hcSession is HC_SESSION, trimmed, else "default" (herdr-core paths.rs).
+func hcSession(env []string) string {
+	if session := strings.TrimSpace(hcEnvValue(env, "HC_SESSION")); session != "" {
+		return session
 	}
-	return filepath.Join(base, "herdr-core", session)
+	return "default"
 }
 
 // hcCoreRunning reports whether a core answers for env, without starting
 // one: HC_SOCKET when set, else the endpoint the core recorded in its
 // core.lock (herdr-core server.rs writes it there; client.rs reads it back
-// the same way). Dialing the socket or pipe starts nothing; hc connect would
-// (client.rs connect_or_start).
+// the same way), else the one hc dials by default (hcDefaultEndpoint: on
+// Windows a running core's lock keeps core.lock from being read). Dialing
+// the socket or pipe starts nothing; hc connect would (client.rs
+// connect_or_start).
 var hcCoreRunning = hcCoreRunningDefault
 
 func hcCoreRunningDefault(ctx context.Context, env []string) bool {
 	endpoint := hcEnvValue(env, "HC_SOCKET")
 	if endpoint == "" {
-		b, err := os.ReadFile(filepath.Join(hcStateDir(env), "core.lock"))
-		if err != nil {
-			return false
+		if b, err := os.ReadFile(filepath.Join(hcStateDir(env), "core.lock")); err == nil {
+			endpoint = strings.TrimSpace(string(b))
 		}
-		endpoint = strings.TrimSpace(string(b))
+	}
+	if endpoint == "" {
+		endpoint = hcDefaultEndpoint(env)
 	}
 	if endpoint == "" {
 		return false
