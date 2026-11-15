@@ -951,8 +951,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   read, which the terminal never shows) only `Context compacted`, as Codex writes it; never a `tool` part, so no tool's name,
   input, result or `detail`, whatever file, command or argument shape (an object, a JSON string, an
   array of paths, a symlink under an innocent name) it involves, and no result read apart from its
-  call; no `note` entry either (the output of a command the user ran with `!`, of a slash command,
-  a hook's text; the command line the user typed is their words and stays); an entry left with no
+  call; no note either (the output of a command the user ran with `!`, of a slash command,
+  a hook's text; the command line the user typed is their words and stays), neither a `note` entry
+  nor a text part classified as one beside the user's words in a row of several blocks (the part's
+  `note` flag, never sent); an entry left with no
   part is dropped. Nothing is decided per file, so a new tool of an agent is covered as it appears.
   What the agent itself writes in its reply or its thinking about a file it read is its words, and
   a view client reads it (accepted, as the terminal), as it reads an open dialog's card

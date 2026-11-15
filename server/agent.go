@@ -156,6 +156,10 @@ type TranscriptPart struct {
 	// command's images, in the row that expands it), else 0
 	imageN   int
 	imageOff int64
+	// note: a text part that is one of Claude Code's notices (a command's
+	// output, a hook's text) rather than the user's words, wherever it
+	// sits in its row; never sent.
+	note bool
 }
 
 // ToolDetail is a tool call's own description, its whole command and the
@@ -555,13 +559,13 @@ const compactedText = "Context compacted"
 // agent's words (text, thinking) and the images the user pasted. No tool
 // part at all, so no tool's input, result or detail whatever file or command
 // it names; no note (a shell command's output the user ran with `!`, a slash
-// command's, a hook's); and of a compaction summary, which quotes what tools
-// read, only compactedText. An entry left with no part is dropped. res is
-// shared by every client through the read cache, so an entry changed is a
-// copy.
+// command's, a hook's), neither an entry nor a part of one beside the user's
+// words; and of a compaction summary, which quotes what tools read, only
+// compactedText. An entry left with no part is dropped. res is shared by
+// every client through the read cache, so an entry changed is a copy.
 func viewTranscript(res transcriptResponse) transcriptResponse {
 	entries := make([]TranscriptEntry, 0, len(res.Entries))
-	isTool := func(p TranscriptPart) bool { return p.Kind == "tool" }
+	isTool := func(p TranscriptPart) bool { return p.Kind == "tool" || p.note }
 	for _, e := range res.Entries {
 		switch e.Role {
 		case "note":

@@ -301,7 +301,7 @@ func parseClaudeRow(line []byte, off int64) (TranscriptEntry, bool) {
 				e.Parts = append(e.Parts, TranscriptPart{Kind: "image", imageN: images})
 				images++
 			case "text":
-				t := jsonStr(b["text"])
+				t, note := jsonStr(b["text"]), false
 				if row.Type == "user" {
 					// Only the user role carries Claude Code's envelopes;
 					// the model's own words are shown as written.
@@ -315,10 +315,12 @@ func parseClaudeRow(line []byte, off int64) (TranscriptEntry, bool) {
 					if role != "user" {
 						blockRole = role
 					}
-					t = s
+					t, note = s, role == "note"
 				}
 				if strings.TrimSpace(t) != "" {
-					e.Parts = append(e.Parts, textPart("text", t, claudeMaxText))
+					p := textPart("text", t, claudeMaxText)
+					p.note = note
+					e.Parts = append(e.Parts, p)
 				}
 			case "thinking":
 				if t := jsonStr(b["thinking"]); strings.TrimSpace(t) != "" {
