@@ -117,6 +117,11 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/hooks/use-agent-overview.ts`             | Polls `/api/mux/overview` while the overview shows             |
 | `pwa/src/hooks/use-pane-overview.ts`              | Header chip: polls `/api/mux/overview?pane=` for one pane      |
 | `pwa/src/components/account-usage-strip.tsx`      | Overview: each Codex account's rate limit windows              |
+| `pwa/src/components/usage-totals-strip.tsx`       | Overview, history: tokens and cost today and in 7 days         |
+| `pwa/src/components/session-usage-line.tsx`       | A session's tokens, cost and subagents' share                  |
+| `pwa/src/hooks/use-usage-summary.ts`              | Polls the machine's or a folder's usage by 15 minutes          |
+| `pwa/src/hooks/use-session-usage.ts`              | Reads an old session's tokens once                             |
+| `pwa/src/utils/usage-cost.ts`                     | Folds buckets into local days; token and cost formats          |
 | `pwa/src/components/usage-meter.tsx`              | Thin usage bar (`role="meter"`), coloured by level             |
 | `pwa/src/components/usage-chip.tsx`               | Header chip: the open pane's context share and Codex limit     |
 | `pwa/src/components/host-chip.tsx`                | Header chip: CPU, RAM, battery of termote's machine            |
@@ -292,6 +297,12 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/agent_history.go`                         | `agent/history`: sessions of a pane's root, index, pages       |
 | `server/agent_history_claude.go`                  | History: Claude Code project dirs, titles, cwd, branch         |
 | `server/agent_history_codex.go`                   | History: Codex rollouts by day, `session_index.jsonl` names    |
+| `server/agent_journal_scan.go`                    | Reads agent journals incrementally, by file identity           |
+| `server/agent_session_files.go`                   | A session's files: transcript, subagents, Codex children       |
+| `server/agent_usage.go`                           | Token records of Claude and Codex journals, totals             |
+| `server/agent_usage_routes.go`                    | `agent/usage`, `agent/usage/summary`, `/usage` routes          |
+| `server/agent_pricing.go`                         | API list prices of Claude and OpenAI models, per request       |
+| `server/agent_overview_usage.go`                  | Overview: a session's totals, read in the background           |
 | `server/agent_resume.go`                          | Old session transcript, `agent/resume` (new tab or idle pane)  |
 | `server/agent_codex.go`                           | Codex rollout (JSONL): locate, parse, turn status              |
 | `server/agent_codex_prompt.go`                    | Reads a Codex screen: composer, approval dialogs               |

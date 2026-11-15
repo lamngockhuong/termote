@@ -66,6 +66,27 @@ Header cũng có một chip nhỏ cho pane đang mở, ví dụ `ctx 72% · 7d 9
 Codex). Trên điện thoại chip chỉ hiện số lớn hơn. Bấm vào chip để mở màn hình tổng quan, đúng ở thẻ của pane đó. Muốn tắt chip,
 vào **Settings > Sessions > Agent usage in the header**.
 
+## Token và chi phí
+
+Mỗi thẻ của một phiên Claude Code hoặc Codex cho biết phiên đó đã dùng bao nhiêu token và số token ấy
+tốn bao nhiêu nếu tính theo giá API niêm yết, ví dụ `1,2M token · ~3,40 US$`; phần của subagent nằm
+trên một dòng riêng. Phía trên các thẻ có một dải cộng mọi phiên của user chạy server, trong hôm nay
+và trong 7 ngày qua, mỗi agent một dòng; ngày được tính theo giờ trên thiết bị của bạn. Dải này cũng
+nằm ở đầu [Lịch sử phiên](/vi/usage/agent-chat/#tiếp-tục-phiên-cũ), chỉ tính các phiên trong thư
+mục của pane, và một phiên cũ hiện tổng của chính nó dưới tiêu đề.
+
+Các con số lấy từ file của chính agent (transcript của Claude Code, rollout của Codex), không bao giờ
+đọc từ terminal. Mỗi request chỉ được tính một lần, kể cả của subagent. Chi phí là ước tính theo
+bảng giá niêm yết có sẵn trong Termote, ngày tra giá ghi trong chú thích hiện ra khi rê chuột: gói thuê bao (Claude Pro hay
+Max, gói ChatGPT) không tính tiền theo token, và giá riêng của chế độ nhanh, xử lý theo lô hay theo vùng
+không được tính. Model Termote chưa có giá chỉ hiện số token (`chưa có giá`), còn tổng bỏ sót một phần vì vậy
+được đánh dấu `+`. Muốn tắt chi phí, tắt công tắc **Chi phí ước tính** trong nhóm **Phiên** của Settings; số
+token vẫn hiện.
+
+Giới hạn: dải chỉ tính các file được ghi trong 8 ngày gần đây, tối đa 5000 file mỗi agent, và ghi
+chú khi có file bị bỏ qua. Phiên tách nhánh từ phiên khác (`--fork-session`) tính cả các tin nhắn
+chép từ phiên gốc vào tổng của nó.
+
 ## Cần bạn xử lý
 
 Khi agent dừng lại chờ một hộp thoại (xin quyền, đặt câu hỏi), màn hình hiện hộp thoại đó ở trên cùng,

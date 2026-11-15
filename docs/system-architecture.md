@@ -1519,6 +1519,34 @@ and those subagents' files, so an agent waiting on its subagents is not taken as
 only takes the transcript's new rows and the directory listing (shared for 2 s), never a meta or
 subagent file.
 
+### Agent tokens and estimated cost (`/agent/usage`, `/agent/usage/summary`, `/usage`)
+
+`server/agent_usage*.go` adds up the tokens of Claude Code transcripts and Codex rollouts, never a
+terminal's output. Claude Code writes a row per content block, every row of one message repeating
+its `usage`, so a request counts once by `message.id`; `<synthetic>` rows are skipped, and the 5
+minute and 1 hour cache writes are priced apart. Codex 0.165 writes a `token_usage_record` per
+response (`response_id`, `thread_id`): a subagent's rollout repeats its parent's rows, so only the
+rollout's own thread counts; an older rollout only has `token_count` events, whose
+`total_token_usage` adds up the thread, and the difference between two is what the responses
+between cost. `input_tokens` counts the cached input in, so it is taken out.
+
+`journalScanner` (`server/agent_journal_scan.go`) reads each file once: by resolved path, the next
+read starts where the last ended while the file is the same (`os.SameFile`) and not shorter, only
+complete lines, only those naming the rows it needs. Usage keeps one per agent; the files a
+session touched can keep another. `sessionFiles` (`server/agent_session_files.go`) lists a session's
+journal, then its Claude Code subagents' files or the rollouts of the Codex threads it started
+(by `parent_thread_id`, through the history's index), with the checks of the routes that read
+them elsewhere.
+
+A session's totals go by model, its subagents apart; the summaries (the pane root's sessions, or
+every file of the server's user written in the last 8 days, at most 5000 per agent) go by agent
+and 15 minutes in UTC, a request counted once across files (a forked session copies messages),
+and the PWA folds them into its own today and last 7 days. Costs are estimates per request from
+the API list prices built into `server/agent_pricing.go` (exact id, else the longest prefix
+followed by a date or a word; a long request may pay a long context price); a model without a
+price only counts tokens. The overview's `sessionUsage` is read in the background, one session
+at a time, as the changes are.
+
 ### Agent subagents (`/api/mux/panes/{id}/agent/subagents`)
 
 `server/agent_subagents.go` lists the subagents of a pane's Claude session from
