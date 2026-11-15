@@ -920,7 +920,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   place in the row; nothing else is taken from the client. The server re-locates the pane's own
   session (`Locate`, as `transcript`), needs the same file identity, an offset at a line start and
   a whole row within 32 MiB. Claude Code: only a `source.type: base64` block of that row (never a
-  URL source or a tool result's image). A slash command's images are in the `isMeta` row that
+  URL source or a tool result's image), and only of a user row holding text the user typed (not a
+  notice): the read lists no image of another row, so a tool's image set at the top of a row (beside
+  its result, a notice or nothing) never gets a reference; an image pasted with no words at all is
+  not listed either. A slash command's images are in the `isMeta` row that
   expands it: the read lists them on the command only from the row right after it whose
   `parentUuid` is the command's, and the reference names that row's offset. Codex: the row must be a `UserMessage` item, and the bytes
   come only from the row right before it, which must be the model's user input (`response_item`

@@ -122,6 +122,35 @@ func TestAgentImageServesTranscriptImages(t *testing.T) {
 	}
 }
 
+// Only an image beside words the user typed is listed: one set at the top
+// of a row holding a tool's result, a notice or nothing else gets no part,
+// so no reference agent/image would serve.
+func TestClaudeImageListedOnlyBesideTypedText(t *testing.T) {
+	red := testPNG(t, color.RGBA{255, 0, 0, 255})
+	img := imageBlock("image/png", red)
+	row := func(uuid string, blocks ...string) string {
+		return fmt.Sprintf(`{"type":"user","uuid":%q,"message":{"role":"user","content":[%s]}}`+"\n", uuid, strings.Join(blocks, ","))
+	}
+	dir := t.TempDir()
+	writeTranscript(t, dir, testSessionID,
+		row("tool", `{"type":"tool_result","tool_use_id":"t1","content":"shot"}`, img)+
+			row("alone", img)+
+			row("notice", `{"type":"text","text":"<bash-stdout>x</bash-stdout>"}`, img)+
+			imageRow("typed", img))
+	mux, _ := subagentsServer(t, claudeSession(dir))
+	res := getTranscriptRes(t, mux)
+	for _, e := range res.Entries {
+		for _, p := range e.Parts {
+			if p.Kind == "image" && e.ID != "typed" {
+				t.Errorf("entry %s lists an image", e.ID)
+			}
+		}
+	}
+	if refs := imageRefs(res); len(refs) != 1 || getImage(mux, refs[0], nil).Code != http.StatusOK {
+		t.Errorf("typed row refs = %q", refs)
+	}
+}
+
 // stalledWriter is a client that stopped reading: Write blocks until
 // release is closed.
 type stalledWriter struct {
