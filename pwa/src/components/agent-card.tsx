@@ -15,6 +15,7 @@ import { formatAgo } from '../utils/format-ago'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { percentLabel, usageLevel } from '../utils/usage-format'
 import { AgentStatusBadge } from './agent-status-badge'
+import { SessionUsageLine } from './session-usage-line'
 import { StatusTimeline } from './status-timeline'
 import { formatTokens, SubagentTree, subagentSummary } from './subagent-tree'
 import { FOCUS_RING, IconButton } from './ui/button'
@@ -271,6 +272,12 @@ export const AgentCard = memo(function AgentCard({
               )}
               {overview?.usage && <ContextUsage usage={overview.usage} />}
             </span>
+          )}
+          {!!overview?.sessionUsage?.tokens && (
+            <SessionUsageLine
+              {...overview.sessionUsage}
+              className="text-[12px] text-fg-muted"
+            />
           )}
         </span>
       </button>

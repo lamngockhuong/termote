@@ -83,9 +83,43 @@ const overview: Handler = ({ state, query }) => {
             contextPercent: inRepo ? 26 : 9,
             exact: true,
           },
+          sessionUsage: inRepo
+            ? {
+                tokens: 1_240_000,
+                costUsd: 1.62,
+                subTokens: 310_000,
+                subCostUsd: 0.41,
+                pricesUpdated: DEMO_PRICES_UPDATED,
+              }
+            : {
+                tokens: 280_000,
+                costUsd: 0.37,
+                pricesUpdated: DEMO_PRICES_UPDATED,
+              },
         })
       }
   return json({ serverNow: iso(state), panes })
+}
+
+// The demo's price table date and token usage: today's 15 minutes and two
+// earlier days', every session of the machine (or of a pane's folder)
+const DEMO_PRICES_UPDATED = '2026-11-15'
+const usageSummary: Handler = ({ state }) => {
+  const bucket = (daysAgo: number) =>
+    new Date(
+      Math.floor((Date.parse(iso(state)) - daysAgo * 86_400_000) / 900_000) *
+        900_000,
+    ).toISOString()
+  return json({
+    buckets: [
+      { t: bucket(3), agent: 'claude', tokens: 4_100_000, costUsd: 5.35 },
+      { t: bucket(1), agent: 'codex', tokens: 900_000, costUsd: 0.64 },
+      { t: bucket(0), agent: 'claude', tokens: 1_520_000, costUsd: 1.99 },
+    ],
+    since: bucket(8),
+    truncated: false,
+    pricesUpdated: DEMO_PRICES_UPDATED,
+  })
 }
 
 const selectTab: Handler = ({ state, params }) => {
@@ -272,6 +306,8 @@ export const MUX_ROUTES: Record<string, Handler> = {
   'GET /snapshot': snapshot,
   'GET /activity': activity,
   'GET /overview': overview,
+  'GET /usage': usageSummary,
+  'GET /panes/{id}/agent/usage/summary': usageSummary,
   'GET /system': ({ state }) => json(demoHostStats(state.now())),
   // The demo reaches no other machine
   'GET /machines': () => json({ machines: [] }),

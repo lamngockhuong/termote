@@ -332,7 +332,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   keyed by an HMAC of the `CODEX_HOME` with the process-lifetime cursor key (`accountKey`, 12 hex),
   never the path; `limit_id`, `credits` and the rest are not sent. No file beyond the transcript is
   read for any of it, and nothing is written. `?pane=<id>` (the header's usage chip) reads
-  that pane alone and queues no changes for it; only an id the last snapshot shows with an agent
+  that pane alone and queues no changes for it; `sessionUsage` (a session's token total, its
+  subagents' share and the estimated cost) comes only from a background worker that reads one
+  session at a time as `GET .../agent/usage` does (see Agent usage and cost), every 15 s at most,
+  kept 5 minutes after last asked; the request never waits for it; only an id the last snapshot shows with an agent
   gets a read and a cache entry, any other answers `panes: []`, so an arbitrary id costs nothing. Changes never run git in the request: a background worker reads one pane at a time
   through `paneRootForRead` (the Files gate: `Caps().Files`, `f.dirs`, `paneRoot`), uses a status
   the Changes view just read, else runs `gitStatusArgs` as a `tryOnly`, `noBackoff` heavy call,
@@ -1051,6 +1054,37 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   agent-resume` with the agent, the id's first 8 characters, `where`, `fork` and who; never a title
   or a path. Accepted gaps, as Tasks: stream input from another client can land between `C-c` and
   the line; a session the 10 s cache does not hold yet is 404 until the next scan
+- **Agent usage and cost** (`GET /api/mux/panes/{id}/agent/usage[?agent=&session=]`,
+  `GET /api/mux/panes/{id}/agent/usage/summary`, `GET /api/mux/usage`; `server/agent_usage*.go`,
+  `server/agent_journal_scan.go`, `server/agent_session_files.go`, `server/agent_pricing.go`):
+  `requireMethod(GET)`, `crossSiteRejection`, `requireAgentRead`, `Cache-Control: no-store`; internal
+  errors are logged only. The client names a pane and, for an old session, an agent and a session id
+  (`isSessionID`), never a path. One session: without parameters the pane's running one (its agent
+  lookup), with them a session the pane root's history lists (`historyRoot`, `findHistorySession`,
+  as the history transcript: 400 `invalid_request`, 404 `session_not_found`); its transcript through
+  the journal adapter's `Locate`, then `openHistoryFile` (resolved inside the agent's dir, regular,
+  nonblocking), plus Claude Code's `projects/<proj>/<id>/subagents/agent-*.jsonl` opened with the
+  subagent tree's checks (`openSubagentsDir`: each step a plain directory by `Lstat`, then
+  `openPlainFile`: still the regular file listed), and the rollouts of the Codex threads whose
+  `session_meta` names it (or a thread of it) as `parent_thread_id` (`forked_from_id` for a
+  `subagent` thread), found through the history's index in the day dirs from the parent rollout's
+  on, the newest 2000 rollouts, the list shared for 60 s. Root summary: the sessions the history lists for the root (the same view-only refusal
+  where Files refuses the root) written in the last 8 days, with their subagents' files. Machine
+  summary: the server user's whole `projects/<dir>/<uuid>.jsonl` and
+  `projects/<dir>/<uuid>/subagents/agent-*.jsonl` (no deeper, links skipped by the listing and refused
+  by `openHistoryFile`) and Codex day dirs from the day before the window, files written in the last
+  8 days, at most 5000 per agent (newest kept, `truncated`); a view-only client reads it. Files are
+  read incrementally (`journalScanner`): by resolved path, the next read starts where the last one
+  ended when the file is the same (`os.SameFile`) and not shorter, else from the start; only complete
+  lines, a line over 2 MiB skipped undecoded, only lines naming `"usage"` (Claude) or
+  `session_meta`/`turn_context`/`token_usage_record`/`token_count` (Codex) decoded, and of them only
+  token counts, model ids, message or response ids and times are kept (5000 files at most, the least
+  used tenth dropped). Requests count once by `message.id`/`response_id` (across files in a summary),
+  `<synthetic>` and other threads' rows are skipped. Replies hold only numbers, model ids, the price
+  table's date and 15-minute UTC bucket times: no path, cwd, title, session id or
+  text. Shared reads: a session 5 s, a summary 30 s. Costs are estimates from the price table built
+  into the binary, nothing configurable. Accepted: the machine summary tells a view-only client how
+  many tokens each agent used across every directory, by 15 minutes
 - **Codex chat**: a rollout is read only when a process whose executable is named
   `codex`, without `app-server` in its argv, holds it open for writing as a regular
   `rollout-*-<uuid>.jsonl` inside its own `CODEX_HOME/sessions` (resolved), of a user thread;

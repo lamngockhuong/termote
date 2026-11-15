@@ -1084,6 +1084,13 @@ export function SettingsModal({
               onChange={(v) => onUpdateSetting('showUsageChip', v)}
             />
           </SettingsRow>
+          <SettingsRow title={t('settings.cost')} desc={t('settings.costDesc')}>
+            <Switch
+              label={t('settings.cost')}
+              checked={settings.showCost}
+              onChange={(v) => onUpdateSetting('showCost', v)}
+            />
+          </SettingsRow>
           <SettingsRow
             title={t('settings.hostChip')}
             desc={t('settings.hostChipDesc')}

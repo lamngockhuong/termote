@@ -18,13 +18,17 @@ import type {
   ResumeWhere,
 } from '../hooks/use-mux-api'
 import { useResumeSession } from '../hooks/use-resume-session'
+import { useSessionUsage } from '../hooks/use-session-usage'
+import { useUsageSummary } from '../hooks/use-usage-summary'
 import { useT } from '../i18n/i18n-context'
 import { AgentHistoryRow, HistoryTitle } from './agent-history-row'
 import { HistoryTranscriptView } from './history-transcript-view'
 import { ReadOnlyBar } from './read-only-bar'
 import { SessionSearchField } from './session-search-field'
+import { SessionUsageLine } from './session-usage-line'
 import { Button, IconButton } from './ui/button'
 import { Sheet } from './ui/sheet'
+import { UsageTotalsStrip } from './usage-totals-strip'
 
 // What the history is opened on: a pane, and a session to show at once
 export interface HistoryTarget {
@@ -94,6 +98,8 @@ function HistoryContent({
 }: Omit<AgentHistorySheetProps, 'target'> & { target: HistoryTarget }) {
   const { t } = useT()
   const history = useAgentHistory(target.paneId)
+  // The folder's totals; hidden when this device may not read them
+  const usage = useUsageSummary(target.paneId)
   const [query, setQuery] = useState('')
   const [agent, setAgent] = useState<HistoryAgent>()
   const [selected, setSelected] = useState<HistorySession | undefined>(
@@ -243,6 +249,11 @@ function HistoryContent({
           </fieldset>
         )}
       </div>
+      <UsageTotalsStrip
+        summary={usage.summary}
+        now={now}
+        className="mx-4 mt-3"
+      />
       {/* Arrow keys move between the row buttons */}
       <div
         ref={listRef}
@@ -299,6 +310,7 @@ function SessionScreen({
 }) {
   const { t } = useT()
   const back = useHistoryClose(onBack)
+  const usage = useSessionUsage(paneId, session.agent, session.id)
   const open = useMemo(
     () =>
       openFile
@@ -316,8 +328,23 @@ function SessionScreen({
         >
           <ArrowLeft size={16} aria-hidden="true" />
         </IconButton>
-        <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
-          <HistoryTitle session={session} />
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate text-[13px] font-medium">
+            <HistoryTitle session={session} />
+          </span>
+          {usage && (
+            <SessionUsageLine
+              tokens={usage.tokens.total}
+              costUsd={usage.costUsd}
+              unpricedTokens={usage.unpricedTokens}
+              unpricedModels={usage.unpricedModels}
+              subTokens={usage.sub?.tokens}
+              subCostUsd={usage.sub?.costUsd}
+              pricesUpdated={usage.pricesUpdated}
+              history
+              className="text-[12px] text-fg-muted"
+            />
+          )}
         </span>
       </div>
       <HistoryTranscriptView

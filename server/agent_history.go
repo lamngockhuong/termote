@@ -107,8 +107,10 @@ type historyFile struct {
 	agent, id   string
 	title, src  string
 	cwd, branch string
-	// child: a Codex thread a subagent or a tool started, not the user
-	child bool
+	// child: a Codex thread a subagent or a tool started, not the user;
+	// parent: the thread a subagent's was started from
+	child  bool
+	parent string
 }
 
 // historyIndex keeps each parsed file by its size and mtime, so a scan only
@@ -182,10 +184,13 @@ type historyAPI struct {
 	index *historyIndex
 	scans *ttlCache[historyScan]
 	dirs  func() historyDirs
+	// children: the rollouts of a Codex session's threads
+	children *ttlCache[[]string]
 }
 
 func newHistoryAPI() *historyAPI {
-	return &historyAPI{index: newHistoryIndex(), scans: newTTLCache[historyScan](historyTTL), dirs: serverHistoryDirs}
+	return &historyAPI{index: newHistoryIndex(), scans: newTTLCache[historyScan](historyTTL), dirs: serverHistoryDirs,
+		children: newTTLCache[[]string](codexChildTTL)}
 }
 
 // registerHistoryRoutes adds the history routes. They need the files
@@ -194,6 +199,7 @@ func (a *agentAPI) registerHistoryRoutes(mux *http.ServeMux) {
 	a.history = newHistoryAPI()
 	mux.HandleFunc("/api/mux/panes/{id}/agent/history", a.handleHistory)
 	a.registerResumeRoutes(mux)
+	a.registerUsageRoutes(mux)
 }
 
 // historyRoot resolves the pane's root for a history read, answering the

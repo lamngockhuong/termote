@@ -97,6 +97,9 @@ export default {
   'settings.usage': 'Agent usage in the header',
   'settings.usageDesc':
     "Show how full the open pane's agent context is, and its Codex limits",
+  'settings.cost': 'Estimated cost',
+  'settings.costDesc':
+    'Show the cost of agent tokens at API list prices beside the counts; a subscription is not billed by the token',
   'settings.hostChip': 'Host stats in the header',
   'settings.hostChipDesc':
     'Show the CPU, memory and battery of the machine running Termote',

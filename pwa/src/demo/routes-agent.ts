@@ -205,4 +205,8 @@ export const AGENT_ROUTES: Record<string, Handler> = {
   'GET /panes/{id}/agent/history/{session}/transcript': () =>
     fail(404, 'session_not_found', 'no such session'),
   'POST /panes/{id}/agent/resume': unsupported,
+  // No session of the history to total either; the overview carries the
+  // running sessions' totals
+  'GET /panes/{id}/agent/usage': () =>
+    fail(404, 'session_not_found', 'no such session'),
 }

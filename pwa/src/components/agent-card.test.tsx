@@ -132,6 +132,39 @@ describe('AgentCard', () => {
     ).toBeInTheDocument()
   })
 
+  it("shows the session's tokens and cost once read, nothing before", () => {
+    const { rerender } = renderCard({
+      overview: { paneId: 'w1:p1', key: 'w1:p1' },
+    })
+    expect(screen.queryByTestId('session-usage')).toBeNull()
+    rerender(
+      <AgentCard
+        session={SESSION}
+        pane={pane()}
+        where="api / build"
+        now={NOW}
+        paneKey="w1:p1"
+        events={[]}
+        opensChat
+        onOpen={vi.fn()}
+        overview={{
+          paneId: 'w1:p1',
+          key: 'w1:p1',
+          sessionUsage: {
+            tokens: 1_200_000,
+            costUsd: 3.4,
+            subTokens: 300_000,
+            subCostUsd: 0.8,
+            pricesUpdated: '2026-11-15',
+          },
+        }}
+      />,
+    )
+    expect(screen.getByTestId('session-usage')).toHaveTextContent(
+      'Tokens used by this session: 1.2M tokens · ~$3.40incl. subagents 300k tokens · ~$0.80',
+    )
+  })
+
   it('shows the hidden characters of the group and tab names', () => {
     renderCard({
       where: 'a\u202epi / bu\u202eild',

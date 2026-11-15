@@ -6,6 +6,7 @@ import { useMediaQuery } from '../hooks/use-media-query'
 import { ENTER_FROM, useNewKeys } from '../hooks/use-new-keys'
 import { NOW_TICK, useNow } from '../hooks/use-now'
 import { LEAVE_TO, usePresenceList } from '../hooks/use-presence-list'
+import { useUsageSummary } from '../hooks/use-usage-summary'
 import { useT } from '../i18n/i18n-context'
 import type { Session, SessionGroup, SessionPane } from '../types/session'
 import { agentCards, type OverviewCard } from '../utils/agent-cards'
@@ -26,6 +27,7 @@ import { NeedsMeQueue } from './needs-me-queue'
 import { SearchToggle, SessionSearchField } from './session-search-field'
 import { Button, IconButton } from './ui/button'
 import { Sheet } from './ui/sheet'
+import { UsageTotalsStrip } from './usage-totals-strip'
 
 // The card's time is a coarse "3 min ago", read again this often
 export const OVERVIEW_TICK = NOW_TICK
@@ -87,6 +89,8 @@ export function OverviewScreen({
   const { t } = useT()
   const overview = useAgentOverview(pollInterval)
   const activity = useActivityLog(pollInterval)
+  // Every session's tokens, today and in the last 7 days
+  const usage = useUsageSummary()
   // The activity log: a column beside the cards on a wide screen, a sheet
   // anywhere else.
   const [logOpen, setLogOpen] = useState(false)
@@ -246,6 +250,10 @@ export function OverviewScreen({
           ) : (
             <>
               <AccountUsageStrip accounts={overview.accounts} now={now} />
+              <UsageTotalsStrip
+                summary={usage.summary}
+                now={now - clockOffset}
+              />
               <NeedsMeQueue
                 cards={queueCards}
                 readOnly={readOnly}

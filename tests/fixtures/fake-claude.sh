@@ -28,6 +28,10 @@
 #               queue-operation notification, the other keeps running,
 #               "slow" works for a few seconds under the recorded working
 #               line before it answers (keys wait until then),
+#               "usage" answers with a message of two blocks (two rows of
+#               one message.id, as Claude Code writes them) carrying a fixed
+#               model and usage: 1000 input, 200000 cache read, 5000 cache
+#               write, 2000 output tokens,
 #               anything else gets an echo reply
 #   1/2/3, Esc  answer or cancel an open dialog (on a wizard, a digit answers
 #               the tab open and moves to the next one)
@@ -103,6 +107,20 @@ entry() { # type, content JSON
     "$1" "${sid:0:31}" "$seq_n" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(json_str "$PWD")" "$1" "$2" >>"$journal"
 }
 say() { entry assistant "[{\"type\":\"text\",\"text\":$(json_str "$1")}]"; }
+
+# A reply whose two blocks repeat one message's id, model and usage, as
+# Claude Code writes every block of a message.
+say_usage() {
+  local id now usage block
+  id="msg_e2e_$(date +%s%N)"
+  now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  usage='{"input_tokens":1000,"cache_read_input_tokens":200000,"cache_creation_input_tokens":5000,"cache_creation":{"ephemeral_5m_input_tokens":5000,"ephemeral_1h_input_tokens":0},"output_tokens":2000}'
+  for block in 'Counting tokens.' 'Counted.'; do
+    seq_n=$((seq_n + 1))
+    printf '{"type":"assistant","uuid":"%s-%04d","timestamp":"%s","cwd":%s,"message":{"id":"%s","model":"claude-sonnet-5-5","role":"assistant","content":[{"type":"text","text":%s}],"usage":%s}}\n' \
+      "${sid:0:31}" "$seq_n" "$now" "$(json_str "$PWD")" "$id" "$(json_str "$block")" "$usage" >>"$journal"
+  done
+}
 
 # Two background subagents as Claude Code keeps them, beside the transcript:
 # e2esub1 ends (the queue-operation row Claude Code writes when one does),
@@ -275,6 +293,10 @@ submit() {
       dialog 2.1.312-working-thinking.txt
       sleep "${FAKE_CLAUDE_SLOW:-5}"
       say 'Done thinking.'
+      set_status idle
+      ;;
+    *usage*)
+      say_usage
       set_status idle
       ;;
     *subagents*)

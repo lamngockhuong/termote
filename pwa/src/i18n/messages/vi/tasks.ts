@@ -81,6 +81,8 @@ export default {
   'tasks.card.windowAssumed':
     'Cỡ context là giả định: agent không được khởi động với --model',
   'tasks.card.tokens': '{tokens} token',
+  'tasks.card.sub': 'gồm subagent {usage}',
+  'tasks.card.usageLabel': 'Token session này đã dùng',
   'tasks.card.openChat': 'Mở chat',
   'tasks.card.openTerminal': 'Mở terminal',
   'tasks.card.label': '{open}: {name}, {status}, {place}',
@@ -211,4 +213,17 @@ export default {
   'tasks.commandOff.noMachines': 'Chưa thêm máy nào khác (termote machine add)',
   'tasks.commandOff.noFullscreen': 'Trình duyệt này không hỗ trợ',
   'tasks.commandOff.noLink': 'Không có liên kết nào trỏ tới pane này',
+  // Token totals and estimated costs (components/usage-totals-strip.tsx,
+  // session-usage-line.tsx)
+  'usage.title': 'Token của agent',
+  'usage.today': 'Hôm nay',
+  'usage.week': '7 ngày',
+  'usage.noPrice': 'chưa có giá',
+  'usage.estimate':
+    'Ước tính theo giá API niêm yết ngày {date}; gói thuê bao không tính tiền theo token',
+  'usage.unpriced': 'Chưa có giá cho {models}',
+  'usage.unpricedSome':
+    'Một số model chưa có giá: token của chúng không tính vào chi phí',
+  'usage.forked': 'Session được fork tính cả các tin nhắn chép từ session gốc',
+  'usage.truncated': 'Chỉ tính 5000 file gần nhất của mỗi agent',
 } satisfies Translation<typeof en>

@@ -2,14 +2,18 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Session, SessionGroup, SessionPane } from '../types/session'
 
-const { mockFetchOverview, mockFetchActivity } = vi.hoisted(() => ({
-  mockFetchOverview: vi.fn(),
-  mockFetchActivity: vi.fn(),
-}))
+const { mockFetchOverview, mockFetchActivity, mockFetchUsage } = vi.hoisted(
+  () => ({
+    mockFetchOverview: vi.fn(),
+    mockFetchActivity: vi.fn(),
+    mockFetchUsage: vi.fn(),
+  }),
+)
 vi.mock('../hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-mux-api')>()),
   fetchOverview: () => mockFetchOverview(),
   fetchActivity: (after?: number) => mockFetchActivity(after),
+  fetchUsageSummary: (pane?: string) => mockFetchUsage(pane),
 }))
 
 import { resetActivityLog } from '../hooks/use-activity-log'
@@ -111,6 +115,7 @@ const cardNames = () =>
 
 describe('OverviewScreen', () => {
   beforeEach(() => {
+    mockFetchUsage.mockRejectedValue(new Error('no usage'))
     vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.setSystemTime(NOW)
     resetAgentOverview()
@@ -485,6 +490,29 @@ describe('OverviewScreen, loading and failing', () => {
   beforeEach(() => {
     resetAgentOverview()
     mockFetchOverview.mockResolvedValue({ serverNow: 'x', panes: [] })
+    mockFetchUsage.mockRejectedValue(new Error('no usage'))
+  })
+
+  it("shows every session's tokens today and in 7 days", async () => {
+    mockFetchUsage.mockResolvedValue({
+      buckets: [
+        {
+          t: new Date().toISOString(),
+          agent: 'codex',
+          tokens: 2000,
+          costUsd: 1.5,
+        },
+      ],
+      since: 'x',
+      truncated: false,
+      pricesUpdated: '2026-11-15',
+    })
+    renderScreen()
+    await act(async () => {})
+    expect(mockFetchUsage).toHaveBeenCalledWith(undefined)
+    expect(
+      screen.getByRole('region', { name: 'Agent tokens' }),
+    ).toHaveTextContent('CodexToday 2.0k tokens · ~$1.507 days 2.0k tokens')
   })
 
   it('shows the Codex accounts above the cards', async () => {

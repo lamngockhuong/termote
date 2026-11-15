@@ -66,6 +66,26 @@ The header also shows a small chip for the pane you have open, such as `ctx 72% 
 only for Codex). On a phone it shows only the higher of the two. Tap it to open the overview on that pane's card. Turn it
 off in **Settings > Sessions > Agent usage in the header**.
 
+## Tokens and cost
+
+Each card of a Claude Code or Codex session shows how many tokens the session has used so far and
+what they would cost at API list prices, such as `1.2M tokens · ~$3.40`, with its subagents' share
+on a line of its own. Above the cards, a strip adds up every session of the server's user, today and
+over the last 7 days, one line per agent; the days are your device's own. The same strip at the top
+of [Session history](/usage/agent-chat/#resuming-an-old-session) covers the sessions of the pane's
+folder, and an old session shows its own total under its title.
+
+The numbers come from the agents' own files (Claude Code transcripts, Codex rollouts), never from
+the terminal. Each request counts once, subagents included. The cost is an estimate from the list
+prices built into Termote, dated in the tooltip: a subscription (Claude Pro or Max, a ChatGPT plan)
+is not billed by the token, and fast, batch or regional pricing is not counted. A model Termote has
+no price for shows its tokens only (`no price`), and a total that leaves some out is marked `+`.
+Turn the cost off in **Settings > Sessions > Estimated cost**; the tokens stay.
+
+Limits: the strip counts the files written in the last 8 days, at most 5000 per agent, and says so
+when it left some out. A session forked from another (`--fork-session`) counts the messages it
+copied in its own total.
+
 ## Needs you
 
 When an agent waits on a dialog (a permission, a question), the overview shows it at the top, one at
