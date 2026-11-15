@@ -229,7 +229,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
     run (`connect_or_start`), so it is spawned only when the core answers, or for a full client's
     page snapshot (`startingSnapshot`), never for a peek, a view-only device, the stream,
     `/health` or the push watcher. "Runs" is `HC_SOCKET`, else the endpoint the core wrote in
-    `<state>/herdr-core/<session>/core.lock`, accepting a connection; a probe starts nothing. A
+    `<state>/herdr-core/<session>/core.lock`, else (Windows, where a running core's lock on byte 0
+    keeps `core.lock` from being read) the pipe hc itself dials,
+    `\\.\pipe\herdr-core-<USERNAME's ASCII letters and digits>-<session>.sock` (`hcDefaultEndpoint`),
+    accepting a connection; a Windows pipe counts only when its server runs as this user
+    (`dialHerdr`), and a probe starts nothing. A
     core that stops between the probe and the spawn is started by `hc connect`: an accepted gap.
     A failed start backs off like Herdr's. A core termote starts inherits the service's
     environment, and the terminals herdr-app opens later inherit it from the core;
