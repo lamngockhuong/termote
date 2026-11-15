@@ -99,6 +99,7 @@ func TestResumeCommand(t *testing.T) {
 		{shellPOSIX, "claude", "", "claude --resume " + id, false},
 		{shellPOSIX, "claude", "", "claude --resume " + id + " --fork-session", true},
 		{shellPOSIX, "codex", "", "codex resume --no-daemon " + id, false},
+		{shellPOSIX, "codex", "", "codex fork --no-daemon " + id, true},
 		{shellPOSIX, "claude", "/r/it's", `cd '/r/it'\''s' && claude --resume ` + id, false},
 		{shellFish, "codex", `/r/a\b'c`, `cd '/r/a\\b\'c'; and codex resume --no-daemon ` + id, false},
 		{shellPwsh, "claude", `C:\r\it's`, `Set-Location -LiteralPath 'C:\r\it''s'; claude --resume ` + id, false},
@@ -371,6 +372,19 @@ func TestResumeLiveSession(t *testing.T) {
 	}
 }
 
+func TestResumeForkLiveCodex(t *testing.T) {
+	fx := newResumeFixture(t)
+	fx.setLive("codex", histID2)
+	code, body := fx.resume(t, map[string]any{"agent": "codex", "session": histID2, "where": "tab"})
+	if code != 409 || body["code"] != "session_live" {
+		t.Errorf("live = %d %v", code, body)
+	}
+	code, _ = fx.resume(t, map[string]any{"agent": "codex", "session": histID2, "where": "tab", "fork": true})
+	if code != 200 || len(fx.m.typedLines()) != 1 || fx.m.typedLines()[0] != "%1 codex fork --no-daemon "+histID2 {
+		t.Errorf("fork = %d %q", code, fx.m.typedLines())
+	}
+}
+
 func TestResumeGuards(t *testing.T) {
 	fx := newResumeFixture(t)
 	path := "/api/mux/panes/0/agent/resume"
@@ -394,7 +408,6 @@ func TestResumeGuards(t *testing.T) {
 		{"agent", apiRequest("POST", path, strings.Replace(good, "claude", "gemini", 1)), 400},
 		{"id", apiRequest("POST", path, strings.Replace(good, histID1, "x", 1)), 400},
 		{"where", apiRequest("POST", path, strings.Replace(good, "tab", "window", 1)), 400},
-		{"codex fork", apiRequest("POST", path, templateJSON(t, map[string]any{"agent": "codex", "session": histID2, "where": "tab", "fork": true})), 400},
 		{"unknown session", apiRequest("POST", path, strings.Replace(good, histID1, histID3, 1)), 404},
 		{"unknown pane", apiRequest("POST", "/api/mux/panes/zz/agent/resume", good), 404},
 	} {

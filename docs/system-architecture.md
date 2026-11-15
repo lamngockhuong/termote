@@ -423,8 +423,11 @@ The session history (`/agent/history`, `server/agent_history*.go`) lists the Cla
 sessions whose recorded cwd is the pane's root (as Files finds it) or under it, read from the
 server user's own Claude Code dir and `CODEX_HOME` (at most 2000 files per agent, 64 KB at each
 end of a transcript), newest first, 30 a page; `live` names the pane that runs one now. An old
-session's transcript is read through the same reader as the Chat view's. `/agent/resume` types
-`claude --resume <id>` (`--fork-session` with `fork`) or `codex resume --no-daemon <id>` into a
+session's transcript is read through the same reader as the Chat view's. A Codex fork's rollout
+holds only what is said after the fork, so its transcript is the parent's rollout up to the fork,
+then its own (`server/agent_codex_fork.go`). `/agent/resume` types
+`claude --resume <id>` (`--fork-session` with `fork`) or `codex resume --no-daemon <id>`
+(`codex fork --no-daemon <id>` with `fork`) into a
 new tab of the pane's group, or into the pane's own idle shell, as Tasks types a task
 (`taskMux`; not on psmux); a session running in a pane is never opened twice (409
 `session_live`). The rules are in `docs/security-invariants.md`.

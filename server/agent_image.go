@@ -170,7 +170,7 @@ func readAgentImage(s AgentSession, ref agentImageRef) (string, []byte, error) {
 	if err != nil {
 		return "", nil, err
 	}
-	f, size, id, err := openJournal(s, path)
+	f, size, id, err := openTranscript(s, path)
 	if errors.Is(err, errNoTranscript) {
 		return "", nil, errAgentImageMissing
 	}

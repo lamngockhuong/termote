@@ -611,7 +611,7 @@ func readTranscript(s AgentSession, cursor, before string) (transcriptResponse, 
 	if err != nil {
 		return transcriptResponse{}, err
 	}
-	f, size, id, err := openJournal(s, path)
+	f, size, id, err := openTranscript(s, path)
 	if err != nil {
 		return transcriptResponse{}, err
 	}
@@ -694,6 +694,27 @@ func openJournal(s AgentSession, path string) (*os.File, int64, string, error) {
 	return f, size, id, nil
 }
 
+// journalReader is a transcript as read: one file, or a Codex fork's
+// rollout after the part of its parent's it was forked from.
+type journalReader interface {
+	io.ReaderAt
+	io.Closer
+}
+
+// openTranscript is openJournal plus, for a Codex thread forked from
+// another, the conversation before the fork (codexForkView).
+func openTranscript(s AgentSession, path string) (journalReader, int64, string, error) {
+	f, size, id, err := openJournal(s, path)
+	if err != nil {
+		return nil, 0, "", err
+	}
+	if s.Agent != "codex" {
+		return f, size, id, nil
+	}
+	r, size, id := codexForkView(s.CodexHome, path, f, size, id)
+	return r, size, id, nil
+}
+
 // transcriptPage is the entries parsed from the byte range [start, end).
 type transcriptPage struct {
 	entries    []TranscriptEntry
@@ -704,7 +725,7 @@ type transcriptPage struct {
 // end (a line boundary, or the file size). It reads back in windows that
 // double from agentTailChunk, parsing each byte once, until it has enough
 // entries or has read agentTailMax.
-func readTail(a journalAdapter, f *os.File, end int64) (transcriptPage, error) {
+func readTail(a journalAdapter, f io.ReaderAt, end int64) (transcriptPage, error) {
 	var chunks [][]TranscriptEntry // newest first
 	hi, lo, pageEnd := end, end, int64(-1)
 	var folded []TranscriptEntry
@@ -804,7 +825,7 @@ func foldToolResults(entries []TranscriptEntry) []TranscriptEntry {
 // parseRange parses the complete lines in [start, end), with tool results not
 // yet folded. A start inside a line skips to the next one; a range in which no
 // line starts returns start = end.
-func parseRange(a journalAdapter, f *os.File, start, end int64) (transcriptPage, error) {
+func parseRange(a journalAdapter, f io.ReaderAt, start, end int64) (transcriptPage, error) {
 	if start > 0 && !atLineStart(f, start) {
 		br := bufio.NewReader(io.NewSectionReader(f, start, end-start))
 		for {
@@ -824,7 +845,7 @@ func parseRange(a journalAdapter, f *os.File, start, end int64) (transcriptPage,
 
 // atLineStart reports whether off begins a line: the start of the file, or
 // right after a '\n'.
-func atLineStart(f *os.File, off int64) bool {
+func atLineStart(f io.ReaderAt, off int64) bool {
 	if off == 0 {
 		return true
 	}

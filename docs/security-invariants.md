@@ -876,7 +876,16 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   with the process, `claudeForkOfArgs`; on Herdr only from the process whose session file names
   Herdr's id) is until then the conversation of `<id>`: `Locate` looks it up in the same config dir
   with the same checks, never from a name the client gives, and the fork's own file replaces it
-  (another file identity, so the read starts over).
+  (another file identity, so the read starts over). A Codex thread a user forked (session_meta
+  `thread_source` `user` with `forked_from_id`; `server/agent_codex_fork.go`) holds only what is
+  said after the fork: its transcript (and its images) read the parent's rollout up to the fork,
+  then its own, as one stream. The parent's id comes from the fork's own rollout, never from the
+  client; it is looked up only in the same `CODEX_HOME/sessions` (day dirs from the fork's back, at
+  most 2000 rollouts), opened as the history opens a file (resolved inside it, regular), and taken
+  only when its name and its session_meta name that id; it is cut at its first row written after
+  the fork's session_meta, so what the parent says later is not shown. Up to 8 ancestors, no id
+  twice. The cursor's file identity names every part with its cut: a part replaced since (another
+  identity, or shorter than its cut) reads the fork as itself and starts over.
   `GET agent/prompt` also returns `activity`, the agent's working line read off the same capture
   (`server/agent_activity_line.go`: Claude Code's spinner row just over the input box, Codex's
   `esc to interrupt)` row over the composer; once a Claude Code turn is done, its end line only
@@ -1046,11 +1055,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   through the journal adapters' own `Locate` checks. One scan per root is shared for 10 s; parsed
   files are kept by path, size and mtime (at most 5000). `live` marks a session some pane runs now
   (its agent lookup, cached). Resume: `writeGuard`, `requireWriteRole` (view-only 403 for both
-  `where`), 8 KB body, only the four fields; `fork` only with `claude` (else 400
-  `invalid_request`); a backend that cannot run tasks (`runsTasks`: not psmux) → 501
+  `where`), 8 KB body, only the four fields; a backend that cannot run tasks (`runsTasks`: not psmux) → 501
   `unsupported`; a session running in a pane and no `fork` → 409 `session_live` with that tab and
   pane (two processes appending to one transcript break it). The command line is the server's:
-  `claude --resume <id>` (`--fork-session` with `fork`) or `codex resume --no-daemon <id>`, typed as
+  `claude --resume <id>` (`--fork-session` with `fork`) or `codex resume --no-daemon <id>`
+  (`codex fork --no-daemon <id>` with `fork`), typed as
   keys (`TypeLine`, never a paste) only into a shell `taskShellKind` knows (else 409
   `unsupported_shell`). `tab`: a new tab of the pane's group at the session's dir when it is still a
   dir inside the root (resolved), else the root (`validTaskDir`, else 400 `invalid_root`), named

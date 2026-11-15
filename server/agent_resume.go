@@ -16,8 +16,8 @@ import (
 // codex resume) into a shell, as Tasks does: the shell of a new tab in the
 // pane's group, or the pane's own when it waits at its prompt. A session
 // already running in a pane is never opened a second time, since two
-// processes appending to one transcript break it; Claude Code can fork it
-// into a new session instead.
+// processes appending to one transcript break it; it can be forked into a
+// new session instead (claude --resume --fork-session, codex fork).
 
 var (
 	errSessionNotFound = &codedError{"session_not_found", "no such session in this pane's directory", http.StatusNotFound}
@@ -155,9 +155,12 @@ func (a *agentAPI) markLive(ctx context.Context, sessions []historySession) {
 // dir when it is not "".
 func resumeCommand(kind, agent, id string, fork bool, dir string) string {
 	cmd := "claude --resume " + id
-	if agent == "codex" {
+	switch {
+	case agent == "codex" && fork:
+		cmd = "codex fork --no-daemon " + id
+	case agent == "codex":
 		cmd = "codex resume --no-daemon " + id
-	} else if fork {
+	case fork:
 		cmd += " --fork-session"
 	}
 	if dir == "" {
@@ -202,8 +205,8 @@ func (a *agentAPI) handleResume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if (body.Agent != "claude" && body.Agent != "codex") || !isSessionID(body.Session) ||
-		(body.Where != "tab" && body.Where != "here") || (body.Fork && body.Agent != "claude") {
-		jsonErrorCode(w, "invalid_request", "invalid agent, session, where or fork", http.StatusBadRequest)
+		(body.Where != "tab" && body.Where != "here") {
+		jsonErrorCode(w, "invalid_request", "invalid agent, session or where", http.StatusBadRequest)
 		return
 	}
 	tm, ok := a.m.(taskMux)
