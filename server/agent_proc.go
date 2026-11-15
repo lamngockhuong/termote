@@ -22,8 +22,9 @@ const (
 	agentTreeTTL = 3 * time.Second
 )
 
-// claudeProc is a process proven to be an agent: Claude Code, or Codex
-// (agent "codex", with codexHome instead of claudeDir).
+// claudeProc is a process proven to be an agent: Claude Code, Codex (agent
+// "codex", with codexHome instead of claudeDir) or an OpenCode TUI (agent
+// "opencode", with the session its argv names).
 type claudeProc struct {
 	agent     string
 	pid       int
@@ -34,6 +35,8 @@ type claudeProc struct {
 	window int64
 	// forkOf: the session Claude Code's argv forks (claudeForkOfArgs).
 	forkOf string
+	// opencodeSession: the session an OpenCode TUI's --session names.
+	opencodeSession string
 }
 
 // agentTrees caches walks keyed by pane and root pid.
@@ -108,8 +111,11 @@ func findClaudeSessionNow(rootPID int) (AgentSession, bool) {
 // sessionOfProc reads the session file of a proven Claude Code process, or
 // the rollout a Codex process holds.
 func sessionOfProc(p claudeProc) (AgentSession, bool) {
-	if p.agent == "codex" {
+	switch p.agent {
+	case "codex":
 		return codexSessionOf(p, "", true)
+	case "opencode":
+		return opencodeSessionOf(p)
 	}
 	f, ok := readClaudeSessionFile(p.claudeDir, p.pid)
 	if !ok || f.procStart() != p.procStart || !isSessionID(f.SessionID) {
@@ -122,7 +128,7 @@ func sessionOfProc(p claudeProc) (AgentSession, bool) {
 }
 
 // walkForClaude searches rootPID and its descendants breadth-first for Claude
-// Code or Codex; the first one met wins.
+// Code, Codex or OpenCode; the first one met wins.
 func walkForClaude(rootPID int, children func(int) []int) (claudeProc, bool) {
 	domain := claudePIDDomain()
 	type node struct{ pid, depth int }
@@ -135,6 +141,9 @@ func walkForClaude(rootPID int, children func(int) []int) (claudeProc, bool) {
 			return p, true
 		}
 		if p, ok := codexProcOf(n.pid); ok {
+			return p, true
+		}
+		if p, ok := opencodeProcOf(n.pid); ok {
 			return p, true
 		}
 		if n.depth == agentProcMaxDepth {

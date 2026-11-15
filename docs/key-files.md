@@ -94,7 +94,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/utils/line-diff.ts`                      | Line diff of an edit's old and new text, its summary           |
 | `pwa/src/components/chat-attachments.tsx`         | Images attached to the next Chat message, above the box        |
 | `pwa/src/utils/chat-image-tokens.ts`              | `[Image #n]` tokens that place a message's images in its text  |
-| `pwa/src/chat-agents.ts`                          | Agents with a Chat view (claude, codex) and with input         |
+| `pwa/src/chat-agents.ts`                          | Agents with a Chat view (claude, codex, opencode), with input  |
 | `pwa/src/components/start-agent-panel.tsx`        | Chat view of an idle pane: start Claude Code or Codex          |
 | `pwa/src/hooks/use-start-agent.ts`                | Sends a start, follows it (`GET agent/start`), toasts          |
 | `pwa/src/utils/agent-start.ts`                    | Whether an agent can be started in the pane on screen          |
@@ -289,6 +289,8 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/agent_subagents.go`                       | `agent/subagents`: a Claude session's subagent tree            |
 | `server/agent_image.go`                           | `agent/image`: a pasted image of a Claude/Codex chat, by ref   |
 | `server/agent_claude.go`                          | Claude Code transcript (JSONL) and session file                |
+| `server/agent_opencode.go`                        | OpenCode TUI in a pane, status, messages as Chat view rows     |
+| `server/agent_opencode_client.go`                 | OpenCode service: service.json, auth, bounded API reads        |
 | `scripts/claude-chat-tags.sh`                     | Tags Claude Code writes that the Chat view would show raw      |
 | `scripts/codex-chat-items.sh`                     | Codex items and events the Chat view would not show            |
 | `server/agent_claude_prompt.go`                   | Reads a Claude Code screen: input box, dialogs                 |

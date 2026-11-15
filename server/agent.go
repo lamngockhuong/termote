@@ -41,8 +41,10 @@ const (
 
 // AgentSession is the agent session a pane is running, as its backend found it.
 type AgentSession struct {
-	Agent     string // "claude" | "codex"
-	ID        string // the agent's session id (a UUID)
+	Agent string // "claude" | "codex" | "opencode"
+	// ID: the agent's session id (a UUID; OpenCode's ses…), empty for an
+	// OpenCode pane whose session is not known (its logo only).
+	ID        string
 	Status    string // working | idle | blocked | done | unknown
 	ClaudeDir string // Claude Code: its config dir, where its transcripts live
 	// ForkOf: the session a Claude Code started with `--resume <id>
@@ -488,7 +490,7 @@ func (a *agentAPI) session(paneID string) (AgentSession, error) {
 	if err != nil {
 		return AgentSession{}, err
 	}
-	if !r.found {
+	if !r.found || r.s.ID == "" {
 		return AgentSession{}, errNoAgentSession
 	}
 	return r.s, nil
@@ -593,6 +595,9 @@ func (a *agentAPI) agentError(w http.ResponseWriter, op string, err error) {
 // readTranscript reads s's transcript: from the end when cursor is empty or no
 // longer valid, after cursor when it is, or the entries older than before.
 func readTranscript(s AgentSession, cursor, before string) (transcriptResponse, error) {
+	if s.Agent == "opencode" {
+		return readOpencodeTranscript(s, cursor, before)
+	}
 	adapter, ok := journalAdapters[s.Agent]
 	if !ok {
 		return transcriptResponse{}, errAgentUnsupported

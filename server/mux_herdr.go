@@ -223,13 +223,9 @@ func (m *herdrMux) AgentSession(ctx context.Context, paneID string) (AgentSessio
 	}
 	var res struct {
 		Pane struct {
-			Agent        string `json:"agent"`
-			AgentStatus  string `json:"agent_status"`
-			AgentSession *struct {
-				Agent string `json:"agent"`
-				Kind  string `json:"kind"`
-				Value string `json:"value"`
-			} `json:"agent_session"`
+			Agent        string           `json:"agent"`
+			AgentStatus  string           `json:"agent_status"`
+			AgentSession *herdrSessionRef `json:"agent_session"`
 		} `json:"pane"`
 	}
 	if err := m.rpc.call(ctx, "pane.get", map[string]string{"pane_id": paneID}, &res); err != nil {
@@ -256,6 +252,9 @@ func (m *herdrMux) AgentSession(ctx context.Context, paneID string) (AgentSessio
 		s.Status, s.Target = status, paneID
 		return s, true, nil
 	}
+	if p.Agent == "opencode" {
+		return herdrOpencodeSession(p.Agent, ref, status, paneID)
+	}
 	if p.Agent != "claude" || !hasRef {
 		return AgentSession{}, false, nil
 	}
@@ -264,6 +263,29 @@ func (m *herdrMux) AgentSession(ctx context.Context, paneID string) (AgentSessio
 		Agent: "claude", ID: ref.Value, Status: status,
 		ClaudeDir: dir, ForkOf: forkOf, Target: paneID,
 	}, true, nil
+}
+
+// herdrSessionRef is the agent session Herdr's integration reported.
+type herdrSessionRef = struct {
+	Agent string `json:"agent"`
+	Kind  string `json:"kind"`
+	Value string `json:"value"`
+}
+
+// herdrOpencodeSession is the OpenCode session Herdr's OpenCode integration
+// reported for the pane (it reports every session the TUI switches to),
+// while the user's OpenCode service runs; Herdr's own status is kept.
+// Without them the pane is still OpenCode's, with no session.
+func herdrOpencodeSession(agent string, ref *herdrSessionRef, status, paneID string) (AgentSession, bool, error) {
+	s := AgentSession{Agent: "opencode", Status: status, Target: paneID}
+	if ref == nil || ref.Agent != agent || ref.Kind != "id" || !isOpencodeSessionID(ref.Value) {
+		return s, true, nil
+	}
+	if _, err := opencodeConnect(); err != nil {
+		return s, true, nil
+	}
+	s.ID = ref.Value
+	return s, true, nil
 }
 
 // paneCodexSession is the session of the Codex process under the pane's

@@ -302,6 +302,28 @@ Những điều cần biết:
 - Chỉ tiến trình Codex đang ghi phiên mới được tính: chương trình khác đọc cùng file phiên (như
   `tail -f`) không có view Chat.
 
+## OpenCode
+
+Pane chạy OpenCode 2.0 trở lên có view Chat với hội thoại của phiên, hiện chỉ để đọc: tin nhắn của
+bạn, câu trả lời dạng markdown, phần suy luận, và từng lệnh gọi công cụ kèm kết quả. Trạng thái của
+nó (đang chạy, đang chờ duyệt quyền hay chờ trả lời câu hỏi, rảnh) hiện ở sidebar, Overview, nhật ký
+hoạt động và thông báo. Gửi tin và trả lời hộp thoại từ view sẽ có ở bản sau; trong lúc chờ, hãy trả
+lời trong terminal.
+
+Termote đọc OpenCode qua dịch vụ nền của nó (dịch vụ mà `opencode` tự khởi động), trên chính máy này
+và của chính tài khoản bạn. Termote không bao giờ tự khởi động dịch vụ đó: khi dịch vụ không chạy,
+pane chỉ hiện logo OpenCode. Termote biết pane đang xem session nào:
+
+- **Herdr**: qua tích hợp OpenCode của Herdr (`herdr integration install opencode`), kể cả khi bạn
+  chuyển sang session khác ngay trong OpenCode. Sau `/new`, pane giữ session cũ cho tới khi bạn gửi
+  tin đầu tiên của session mới.
+- **tmux, psmux, Zellij, herdr-core**: chỉ khi OpenCode được mở bằng `--session <id>` (hoặc
+  `-s <id>`). Chạy `opencode` trần thì chỉ có logo, và session bạn chuyển sang từ bên trong OpenCode
+  không được theo: view giữ session ghi trên dòng lệnh.
+
+OpenCode chạy với `--standalone` hoặc `--server` không được đọc. Nếu bạn đặt `XDG_STATE_HOME` trong
+shell, hãy đặt cả cho dịch vụ của Termote, nếu không Termote sẽ tìm OpenCode ở `~/.local/state`.
+
 ## Khởi động agent (Herdr)
 
 Trên Herdr, pane chỉ hiện shell của nó (không chạy gì, kể cả chương trình chạy bằng `exec`) cũng

@@ -1,0 +1,20 @@
+{
+  "data": [
+    {
+      "id": "per_1dd3466580014YB1n047mbwyWk",
+      "sessionID": "sesFixP1",
+      "action": "shell",
+      "resources": [
+        "touch spike-file.txt"
+      ],
+      "save": [
+        "touch *"
+      ],
+      "source": {
+        "type": "tool",
+        "messageID": "msg_1dd3465d4001RgSXN1K4wWfm5a",
+        "id": "call_1"
+      }
+    }
+  ]
+}

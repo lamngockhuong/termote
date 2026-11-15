@@ -1,0 +1,72 @@
+{
+  "data": [
+    {
+      "id": "msg_1dd35c7880015t2ym5G9tXT7bo",
+      "time": {
+        "created": 1794712651733
+      },
+      "text": "look at this",
+      "files": [
+        {
+          "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC",
+          "mime": "image/png",
+          "source": {
+            "type": "inline"
+          },
+          "name": "dot.png"
+        }
+      ],
+      "type": "user"
+    },
+    {
+      "id": "msg_1dd35c7ef001yg7Cvd6OIFpZhn",
+      "time": {
+        "created": 1794712651770,
+        "firstToken": 1794712651813,
+        "streamed": 1794712651824,
+        "completed": 1794712651841
+      },
+      "type": "assistant",
+      "agent": "build",
+      "model": {
+        "id": "m1",
+        "providerID": "fake"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Hello from the fake model. **bold** text."
+        }
+      ],
+      "snapshot": {
+        "start": "88b3be89254985e5227ab1711bbc46706a912770",
+        "end": "88b3be89254985e5227ab1711bbc46706a912770",
+        "files": []
+      },
+      "finish": "stop",
+      "rawFinish": "stop",
+      "cost": 0,
+      "tokens": {
+        "input": 1200,
+        "output": 30,
+        "reasoning": 0,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_1dd35c846001btC1VkA7Ecz0yp",
+      "time": {
+        "created": 1794712651846
+      },
+      "type": "idle",
+      "outcome": "succeeded"
+    }
+  ],
+  "cursor": {
+    "previous": "eyJpZCI6Im1zZ18xZGQzNWM3ODgwMDE1dDJ5bTVHOXRYVDdibyIsIm9yZGVyIjoiYXNjIiwiZGlyZWN0aW9uIjoicHJldmlvdXMifQ",
+    "next": "eyJpZCI6Im1zZ18xZGQzNWM4NDYwMDFidEMxVmtBN0VjejB5cCIsIm9yZGVyIjoiYXNjIiwiZGlyZWN0aW9uIjoibmV4dCJ9"
+  }
+}

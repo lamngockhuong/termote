@@ -1,0 +1,27 @@
+{
+  "data": {
+    "id": "sesFixA1",
+    "projectID": "global",
+    "cost": 0,
+    "tokens": {
+      "input": 3600,
+      "output": 90,
+      "reasoning": 0,
+      "cache": {
+        "read": 0,
+        "write": 0
+      }
+    },
+    "outcome": "succeeded",
+    "time": {
+      "created": 1794712535640,
+      "updated": 1794712548678,
+      "busy": 1794712548547,
+      "idle": 1794712548687
+    },
+    "title": "Spike title",
+    "location": {
+      "directory": "/work/proj"
+    }
+  }
+}

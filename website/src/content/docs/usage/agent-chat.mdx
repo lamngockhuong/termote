@@ -302,6 +302,28 @@ What to expect:
 - Only the Codex process writing the session counts: another program reading the same session
   file (`tail -f`) gets no Chat view.
 
+## OpenCode
+
+A pane running OpenCode 2.0 or later gets the Chat view with its conversation, read only for now:
+your messages, replies rendered as markdown, its reasoning, and each tool call with its result.
+Its status (working, blocked on a permission or a question, idle) shows in the sidebar, Overview,
+the activity log and notifications. Sending messages and answering dialogs from the view come in a
+later release; answer in the terminal meanwhile.
+
+Termote reads OpenCode through its background service (the one `opencode` starts on its own), on
+this machine and for your own user. It never starts that service: when it does not run, the pane
+shows only OpenCode's logo. Which session a pane shows is known:
+
+- **Herdr**: from Herdr's OpenCode integration (`herdr integration install opencode`), including
+  a session you switch to inside OpenCode. After `/new` the pane keeps the previous session until
+  you send the first message of the new one.
+- **tmux, psmux, Zellij, herdr-core**: only when OpenCode was started with `--session <id>` (or
+  `-s <id>`). A plain `opencode` shows the logo only, and a session you switch to from inside
+  OpenCode is not followed: the view keeps the one named on the command line.
+
+OpenCode run with `--standalone` or `--server` is not read. If you set `XDG_STATE_HOME` in your
+shell, set it for Termote's service too, or Termote looks for OpenCode in `~/.local/state`.
+
 ## Starting an Agent (Herdr)
 
 On Herdr, a pane that shows only its shell (nothing running, not even a program started with

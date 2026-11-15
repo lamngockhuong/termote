@@ -1,0 +1,53 @@
+{
+  "data": [
+    {
+      "id": "msg_1dd3465d4001RgSXN1K4wWfm5a",
+      "time": {
+        "created": 1794712561121,
+        "firstToken": 1794712561178,
+        "streamed": 1794712561211
+      },
+      "type": "assistant",
+      "agent": "build",
+      "model": {
+        "id": "m1",
+        "providerID": "fake"
+      },
+      "content": [
+        {
+          "type": "tool",
+          "id": "call_1",
+          "name": "shell",
+          "executed": false,
+          "state": {
+            "status": "running",
+            "input": {
+              "command": "touch spike-file.txt",
+              "description": "Create a file"
+            },
+            "metadata": {}
+          },
+          "time": {
+            "created": 1794712561183,
+            "ran": 1794712561199
+          }
+        }
+      ],
+      "snapshot": {
+        "start": "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+      }
+    },
+    {
+      "id": "msg_1dd346584001RgmpgI7hzu80KJ",
+      "time": {
+        "created": 1794712561080
+      },
+      "text": "PERM please",
+      "type": "user"
+    }
+  ],
+  "cursor": {
+    "previous": "eyJpZCI6Im1zZ18xZGQzNDY1ZDQwMDFSZ1NYTjFLNHdXZm01YSIsIm9yZGVyIjoiZGVzYyIsImRpcmVjdGlvbiI6InByZXZpb3VzIn0",
+    "next": "eyJpZCI6Im1zZ18xZGQzNDY1ODQwMDFSZ21wZ0k3aHp1ODBLSiIsIm9yZGVyIjoiZGVzYyIsImRpcmVjdGlvbiI6Im5leHQifQ"
+  }
+}

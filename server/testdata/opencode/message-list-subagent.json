@@ -1,0 +1,179 @@
+{
+  "data": [
+    {
+      "id": "msg_1dd3531ec001uQSNzLZORUYNBQ",
+      "time": {
+        "created": 1794712613406
+      },
+      "text": "TASK go",
+      "type": "user"
+    },
+    {
+      "id": "msg_1dd35326d001PM5iAQ0Um8vg30",
+      "time": {
+        "created": 1794712613498,
+        "firstToken": 1794712613628,
+        "streamed": 1794712613684,
+        "completed": 1794712613804
+      },
+      "type": "assistant",
+      "agent": "build",
+      "model": {
+        "id": "m1",
+        "providerID": "fake"
+      },
+      "content": [
+        {
+          "type": "tool",
+          "id": "call_10",
+          "name": "subagent",
+          "executed": false,
+          "state": {
+            "status": "completed",
+            "input": {
+              "agent": "explore",
+              "description": "Explore files",
+              "prompt": "List files"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "The subagent is working in the background (sessionID: ses_e22caccceffe0hL76lTTiemGdN). You will receive a <subagent> message when it goes idle, and again after each later round of work.\nDO NOT sleep, poll, proactively check on its progress, or duplicate this subagent's work.\nWork on non-overlapping tasks, or briefly tell the user what you launched and end your response.\nTo send it follow-ups or change its instructions while it runs, call subagent again with this sessionID."
+              }
+            ],
+            "metadata": {
+              "sessionID": "ses_e22caccceffe0hL76lTTiemGdN",
+              "status": "running",
+              "truncated": false
+            }
+          },
+          "time": {
+            "created": 1794712613632,
+            "ran": 1794712613649,
+            "completed": 1794712613732
+          }
+        }
+      ],
+      "snapshot": {
+        "start": "88b3be89254985e5227ab1711bbc46706a912770",
+        "end": "88b3be89254985e5227ab1711bbc46706a912770",
+        "files": []
+      },
+      "finish": "tool-calls",
+      "rawFinish": "tool_calls",
+      "cost": 0,
+      "tokens": {
+        "input": 1500,
+        "output": 20,
+        "reasoning": 0,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_1dd3533c90014SZaUKrTsrHlL3",
+      "time": {
+        "created": 1794712613854,
+        "firstToken": 1794712613981,
+        "streamed": 1794712614002,
+        "completed": 1794712614249
+      },
+      "type": "assistant",
+      "agent": "build",
+      "model": {
+        "id": "m1",
+        "providerID": "fake"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Done after tool."
+        }
+      ],
+      "snapshot": {
+        "start": "88b3be89254985e5227ab1711bbc46706a912770",
+        "end": "88b3be89254985e5227ab1711bbc46706a912770",
+        "files": []
+      },
+      "finish": "stop",
+      "rawFinish": "stop",
+      "cost": 0,
+      "tokens": {
+        "input": 1200,
+        "output": 30,
+        "reasoning": 0,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_1dd353362001mTc5aGkYGFNhLm",
+      "metadata": {
+        "source": "subagent",
+        "childID": "ses_e22caccceffe0hL76lTTiemGdN",
+        "agent": "Explore",
+        "state": "completed"
+      },
+      "time": {
+        "created": 1794712614273
+      },
+      "text": "<subagent sessionID=\"ses_e22caccceffe0hL76lTTiemGdN\" state=\"completed\" description=\"Explore files\">\nHello from the fake model. **bold** text.\n</subagent>",
+      "description": "Explore files",
+      "type": "synthetic"
+    },
+    {
+      "id": "msg_1dd3535aa0012h1yyreGHIy5sY",
+      "time": {
+        "created": 1794712614369,
+        "firstToken": 1794712614439,
+        "streamed": 1794712614466,
+        "completed": 1794712614497
+      },
+      "type": "assistant",
+      "agent": "build",
+      "model": {
+        "id": "m1",
+        "providerID": "fake"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Hello from the fake model. **bold** text."
+        }
+      ],
+      "snapshot": {
+        "start": "88b3be89254985e5227ab1711bbc46706a912770",
+        "end": "88b3be89254985e5227ab1711bbc46706a912770",
+        "files": []
+      },
+      "finish": "stop",
+      "rawFinish": "stop",
+      "cost": 0,
+      "tokens": {
+        "input": 1200,
+        "output": 30,
+        "reasoning": 0,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_1dd353673001kpTp15a1KFsmF0",
+      "time": {
+        "created": 1794712614515
+      },
+      "type": "idle",
+      "outcome": "succeeded"
+    }
+  ],
+  "cursor": {
+    "previous": "eyJpZCI6Im1zZ18xZGQzNTMxZWMwMDF1UVNOekxaT1JVWU5CUSIsIm9yZGVyIjoiYXNjIiwiZGlyZWN0aW9uIjoicHJldmlvdXMifQ",
+    "next": "eyJpZCI6Im1zZ18xZGQzNTM2NzMwMDFrcFRwMTVhMUtGc21GMCIsIm9yZGVyIjoiYXNjIiwiZGlyZWN0aW9uIjoibmV4dCJ9"
+  }
+}
