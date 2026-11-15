@@ -1537,7 +1537,7 @@ Every pane can list the Claude Code and Codex sessions that ran in its folder: t
 
 Each row shows the agent, a title, when it was last active, its git branch and its folder under the root. The title is the one you gave it with `/rename`, else the one the agent made (Codex: the thread name), else its first prompt, shown in italics. Search filters by title and branch; with both agents in the list, a filter picks one.
 
-Tap a session to read it, drawn as the Chat view draws a running one; **Show earlier messages** loads older parts. Its title shows the tokens the session used and their estimated cost, and the top of the list adds up the folder’s sessions today and over the last 7 days (see [Tokens and cost](/usage/overview/#tokens-and-cost)). Under it:
+Tap a session to read it, drawn as the Chat view draws a running one; **Show earlier messages** loads older parts. Its title shows the tokens the session used and their estimated cost, and the top of the list adds up the folder’s sessions today and over the last 7 days (see [Tokens and cost](/usage/overview/#tokens-and-cost)). **Files changed**, under the title, lists the files the session changed, each opening its diff or the file (see [Files a Session Changed](/usage/changes/#files-a-session-changed)). Under it:
 
 * **Resume in a new tab** opens a tab in the pane’s group, in the folder the session ran in, and types `claude --resume <id>` or `codex resume --no-daemon <id>` there. The new tab’s Chat view shows the old conversation, and what you send goes on in the same session.
 * **Resume here** types the same line in this pane, offered only when the pane shows its shell and nothing else. As with Tasks, Termote presses Ctrl+C first and types nothing if the pane is busy.
@@ -1607,6 +1607,19 @@ Diffs open as tabs, the same way files do in Files (see [Open Files as Tabs](/us
 * A right click on a row of the list (a long press on a phone, Shift+F10 or the menu key) opens its menu: **Open file** in Files (not for a deleted file), the copies and **Insert @path in terminal** as in Files, then **Stage file**, **Unstage file** or **Discard file** for that side.
 
 When the list has more than 15 entries, a **Filter changes…** box appears above it. It keeps the files whose path contains what you typed, ignoring case (for a rename, the old path counts too). Groups with nothing left are hidden, the counts show the filtered numbers, and `No changes match` shows when nothing is left. Escape clears the box. The filter lives in the page only: it is cleared when you leave the view or when the root moves.
+
+### Files a Session Changed
+
+[Section titled “Files a Session Changed”](#files-a-session-changed)
+
+In a pane that runs Claude Code or Codex, a switch above the list picks between **All changes** and **Changed by this session**. The second lists the files the agent’s session changed through its own tool calls (Claude Code’s Edit, MultiEdit, Write and NotebookEdit, Codex’s file changes), its subagents’ included, the latest first. It is read again every 5 seconds while shown, and the choice is kept for the pane.
+
+* Each file shows its status in git now, with the same letters as the list, or `no longer changed` once it was committed or reverted. Tapping it opens its diff (the unstaged side, or the staged one when that is all there is), or the file in Files when git lists no change of it. A file the session deleted that is gone from git shows `deleted` and opens nothing.
+* `×3` says how many times the session changed a file, `subagent` that only its subagents did, `editing` that a change is still waiting for its result. An edit that failed (its text was not found, or you declined it) is not listed.
+* Files changed by shell commands (`sed -i`, `mv`, a script) are never in this list, which says so at its top; the list of all changes still has them. Files outside the pane’s root or that Files never shows (`~/.ssh`, the `.git` dir) are left out and only counted.
+* A view-only device sees only the files git tracks that it may read, by name, without the counts or labels, and nothing outside a git repository or in a home folder.
+
+An old session in the [session history](/usage/agent-chat/#resuming-an-old-session) lists its files the same way under **Files changed**.
 
 ### Last Commit
 
