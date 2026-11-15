@@ -911,8 +911,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   (8 KiB) and an Edit/MultiEdit/Write's old and new text (16 KiB per call); the edits of a file
   `isSensitive` names are left out (`hidden`), as its diff is in Changes. A view-only client reads
   the transcript as text only (`viewTranscript`, `server/agent.go`, on a copy of the cached read
-  every client shares): the user's and the agent's `text` and `thinking` parts, a compaction
-  summary, and the `image` parts of images the user pasted, never a `tool` part, so no tool's name,
+  every client shares): the user's and the agent's `text` and `thinking` parts and the `image`
+  parts of images the user pasted, and of a compaction summary (Claude Code's quotes what tools
+  read, which the terminal never shows) only `Context compacted`, as Codex writes it; never a `tool` part, so no tool's name,
   input, result or `detail`, whatever file, command or argument shape (an object, a JSON string, an
   array of paths, a symlink under an innocent name) it involves, and no result read apart from its
   call; no `note` entry either (the output of a command the user ran with `!`, of a slash command,
