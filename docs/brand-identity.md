@@ -43,6 +43,12 @@ and `/pair` pages and their favicon, served before sign-in while every icon file
 The website header draws the owl inline too, read from `symbol-light.svg` at build time by
 `website/src/components/SiteTitle.astro`.
 
+The interactive menu (`termote` with no command) draws the filled owl in Code Page 437 blocks
+(`menuOwl` in `server/cli_menu.go`), scaled down to 30 columns and 14 rows: half blocks keep the
+silhouette sharp and the shades `░▒▓` keep the `> <` eyes and the beak readable at that size. A
+test holds it symmetric. Only the menu shows it;
+`help`, `status`, `version` and `panel` stay plain for scripts, agents and the QR code.
+
 Wherever the owl blinks (About, `/login`, `/pair` and the website hero on their own; the sidebar,
 the app header and the website header when pointed at), the path is cut at each `Z` into the face,
 the two eyes and the beak; the eyes are cut out through a mask and squash on their centre line, and
