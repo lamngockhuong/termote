@@ -255,10 +255,10 @@ func (m *herdrMux) AgentSession(ctx context.Context, paneID string) (AgentSessio
 	if p.Agent == "opencode" {
 		s, ok, err := herdrOpencodeSession(p.Agent, ref, status, paneID)
 		if ok && s.ID == "" {
-			if id := m.paneOpencodeSession(ctx, paneID); id != "" {
-				if _, err := opencodeConnect(); err == nil {
-					s.ID = id
-				}
+			// The service first: without it no session is shown, so the
+			// pane's process is not read for nothing.
+			if _, err := opencodeConnect(); err == nil {
+				s.ID = m.paneOpencodeSession(ctx, paneID)
 			}
 		}
 		return s, ok, err

@@ -173,8 +173,12 @@ func TestOpencodeRootSessionsRecorded(t *testing.T) {
 			t.Errorf("placed under %s", root)
 		}
 	}
-	if _, ok := opencodeHistoryEntry("/work", opencodeSessionInfo{ID: "sesA"}); ok {
-		t.Error("a session without a directory placed")
+	for _, dir := range []string{"", "proj", "work/proj"} {
+		s := opencodeSessionInfo{ID: "sesA"}
+		s.Location.Directory = dir
+		if _, ok := opencodeHistoryEntry("/work", s); ok {
+			t.Errorf("directory %q placed", dir)
+		}
 	}
 }
 

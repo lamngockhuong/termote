@@ -357,9 +357,18 @@ func (h *historyAPI) scan(root string) historyScan {
 	dirs := h.dirs()
 	// A scan never fails: a dir it cannot read holds no session.
 	scan, _ := h.scans.do(root+"\x00"+dirs.claude+"\x00"+dirs.codex, func() (historyScan, error) {
+		// OpenCode's service is asked meanwhile: a slow one does not add
+		// its wait to the file scans'.
+		var opencode []historySession
+		var ot bool
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			opencode, ot = h.scanOpencode(root)
+		}()
 		claude, ct := h.scanClaude(dirs.claude, root)
 		codex, xt := h.scanCodex(dirs.codex, root)
-		opencode, ot := h.scanOpencode(root)
+		<-done
 		all := slices.Concat(claude, codex, opencode)
 		slices.SortFunc(all, historyOrder)
 		return historyScan{sessions: all, truncated: ct || xt || ot}, nil

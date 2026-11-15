@@ -21,8 +21,8 @@ import (
 // agentStartArgs are the kinds a client may start and the arguments each one
 // gets. Nothing in a request adds to them. OpenCode gets a new session id
 // of the server's (--session): the service makes that session at the first
-// message, and the pane has a session to show from the start, on every
-// backend.
+// message, and the pane has a session to show from the start, whether or
+// not Herdr's OpenCode integration reports it.
 var agentStartArgs = map[string]func() []string{
 	"claude":   func() []string { return nil },
 	"codex":    func() []string { return []string{"--no-daemon"} },

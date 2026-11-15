@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -121,8 +122,11 @@ func (h *historyAPI) scanOpencode(root string) ([]historySession, bool) {
 // is the service's path for the server user's own files: resolved when it
 // still exists, as a Claude Code cwd is.
 func opencodeHistoryEntry(root string, s opencodeSessionInfo) (historySession, bool) {
+	// An absolute path; one starting with "/" is taken on Windows too (the
+	// tests' recorded paths have no drive letter). A relative one would be
+	// resolved against termote's own directory.
 	dir := s.Location.Directory
-	if dir == "" {
+	if !filepath.IsAbs(dir) && !strings.HasPrefix(dir, "/") {
 		return historySession{}, false
 	}
 	dir = filepath.Clean(dir)
