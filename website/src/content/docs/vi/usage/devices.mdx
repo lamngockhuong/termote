@@ -77,8 +77,9 @@ tác ghi, còn giao diện ẩn các nút ghi và hiện biểu ngữ **View onl
   nó), chỉ những file git đang theo dõi (không bao giờ file chưa ai `git add`, cũng không file git bỏ qua,
   như `.env.local` hay log; file vừa thêm hiện chậm tối đa 30 giây), và không bao giờ mở file thuộc loại
   nhạy cảm (`.env`, khóa, v.v.). Changes chỉ liệt kê thay đổi của file đang được theo dõi.
-- **Chat:** đọc được hội thoại và hộp thoại đang mở, nhưng không trả lời được. Kết quả của một tool
-  Claude Code bị bỏ đi khi tool đó nêu một file nhạy cảm (`.env`, khóa, v.v.).
+- **Chat:** đọc được những gì bạn và agent viết, cùng hộp thoại đang mở, nhưng không trả lời được. Mọi
+  lần gọi tool và output của lệnh đều bị bỏ đi: không có lệnh, file, đầu vào hay kết quả của tool nào,
+  cũng không có output của lệnh `!`. Thẻ hộp thoại đang mở vẫn hiện đúng những gì terminal hiện.
 - **Mọi thứ agent đã in ra đều đọc được.** Chỉ ghép thiết bị chỉ xem cho người bạn chấp nhận để họ nhìn
   qua vai.
 - Không nhận thông báo đẩy, và mỗi thiết bị chỉ xem mở tối đa 2 terminal.

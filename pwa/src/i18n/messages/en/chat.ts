@@ -64,7 +64,6 @@ export default {
   'chat.tool.showLast': 'Show last {count} lines',
   'chat.tool.orphan': 'The call is in an earlier part of the conversation.',
   'chat.tool.hiddenEdit': 'The edit of a sensitive file is not shown.',
-  'chat.tool.hiddenContents': 'The contents of a sensitive file are not shown.',
   'chat.diff.none': 'No changes',
   'chat.diff.added_one': 'Added {count} line',
   'chat.diff.added_other': 'Added {count} lines',

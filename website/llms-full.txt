@@ -511,7 +511,7 @@ The agent follows [`/agents.md`](/agents.md), a guide written for agents. Once T
 
 An agent’s output goes into its transcript, which may be sent to the model provider. So the agent does not read the password: when `termote start` or `termote container up` runs outside a terminal, it prints the username and no password. See it yourself:
 
-* run `termote show-password` in a terminal of your own, not through the agent: a command you run through it (`!` in Claude Code) goes into its transcript too, which a view-only device reads in Termote’s Chat view;
+* run `termote show-password` in a terminal of your own, not through the agent: a command you run through it (`!` in Claude Code) goes into its transcript too, and a view-only device watching the terminal sees it;
 * or run `termote panel`, which shows the links and a QR code to open on your phone.
 
 Note
@@ -1706,7 +1706,7 @@ A view-only device can watch the terminal, the Chat view and Files/Changes, and 
 * **Terminal:** it cannot type, resize or scroll the shared view. With tmux it follows each session’s active window; with Herdr it picks tabs on its own device but cannot scroll the history.
 * **Needs tmux 3.2 or later:** with an older tmux, or psmux, the terminal is not available to a view-only device and the banner says so. Chat and Files still work.
 * **Files:** only for a pane inside a git repository that is not your home dir (or above it), only the files git tracks (never one nobody has `git add`ed yet, nor one git ignores, such as a `.env.local` or a log; a file just added shows up to 30 seconds late), and never a file marked as sensitive (`.env`, keys, and so on). Changes lists only the changes of tracked files.
-* **Chat:** it reads the conversation and any open dialog, but cannot answer it. A Claude Code tool’s result is left out when the tool named a sensitive file (`.env`, keys, and so on).
+* **Chat:** it reads what you and the agent wrote and any open dialog, but cannot answer it. Tool calls and command output are left out altogether: no command, file, input or result of any tool, and no output of a `!` command. An open dialog’s card still shows what the terminal shows.
 * **Everything the agent printed is readable.** Pair a view-only device only with someone you would let look over your shoulder.
 * No push notifications, and at most 2 open terminals per view-only device.
 
@@ -3093,12 +3093,12 @@ No setting turns a full-access client into something less. The real boundary is 
 
 [Section titled “Who can do what”](#who-can-do-what)
 
-| Signed in as             | Can                                                                                                                                                                                                                                                                         |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The password             | Everything (full).                                                                                                                                                                                                                                                          |
-| A full device            | Everything the password can, except pairing another full device (it pairs view-only devices only) and signing a password browser out (it only lists them).                                                                                                                  |
-| A view-only device       | Watch the terminal, read the Chat view and Files/Changes inside a git repository (not the home dir, only the files git tracks). It types nothing and changes nothing, but reads everything printed, except the Chat view’s tool results of a sensitive file (`.env`, keys). |
-| Anyone, with `--no-auth` | Everything, as soon as they reach the port.                                                                                                                                                                                                                                 |
+| Signed in as             | Can                                                                                                                                                                                                                                                                                              |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| The password             | Everything (full).                                                                                                                                                                                                                                                                               |
+| A full device            | Everything the password can, except pairing another full device (it pairs view-only devices only) and signing a password browser out (it only lists them).                                                                                                                                       |
+| A view-only device       | Watch the terminal, read the Chat view and Files/Changes inside a git repository (not the home dir, only the files git tracks). It types nothing and changes nothing, but reads everything printed in the terminal; its Chat view shows the conversation’s text, no tool call or command output. |
+| Anyone, with `--no-auth` | Everything, as soon as they reach the port.                                                                                                                                                                                                                                                      |
 
 ## What the server enforces
 
@@ -3126,7 +3126,7 @@ No setting turns a full-access client into something less. The real boundary is 
 [Section titled “What it cannot prevent”](#what-it-cannot-prevent)
 
 * **A full device used on purpose.** It has a shell: it can read the password, pair devices from a terminal, edit the devices file or turn sign-in off. The limits above stop mistakes and clicks in the interface, not someone who means it.
-* **Secrets printed in a terminal.** A view-only device reads whatever an agent or a command printed. The Chat view leaves out a Claude Code tool’s result and a Codex edit’s diff when they name a sensitive file, but not a Grep over a directory, a shell command or a Codex command that prints one.
+* **Secrets printed in a terminal.** A view-only device reads whatever an agent or a command printed in the terminal. Its Chat view shows the conversation’s words only, no tool call and no command output, but what the agent writes in its reply, and an open dialog’s card, which shows what the terminal shows. A machine running an older Termote still shows it the tool results of that machine.
 * **Other services on the same host name.** A cookie is not bound to a port: every service on that name receives Termote’s cookies. Give Termote a host name of its own.
 * **Programs of the same OS user.** Anything else running as that user reads the same files Termote does.
 * **Plain HTTP.** Without HTTPS (Tailscale, a Cloudflare Tunnel, or a proxy with a certificate), the password and cookies cross the network in clear text.

@@ -55,7 +55,6 @@ export default {
   'chat.tool.showLast': 'Chỉ hiện {count} dòng cuối',
   'chat.tool.orphan': 'Lệnh gọi nằm ở phần trước của cuộc trò chuyện.',
   'chat.tool.hiddenEdit': 'Không hiện nội dung sửa của file nhạy cảm.',
-  'chat.tool.hiddenContents': 'Không hiện nội dung của file nhạy cảm.',
   'chat.diff.none': 'Không thay đổi',
   'chat.diff.added_one': 'Thêm {count} dòng',
   'chat.diff.added_other': 'Thêm {count} dòng',

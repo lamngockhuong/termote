@@ -462,7 +462,7 @@ func parseCodexRow(line []byte, off int64) (e TranscriptEntry, recognised, ok bo
 			result, clipped := clampText(stripANSI(codexChangeDiff(c)), claudeMaxResult)
 			e.Parts = append(e.Parts, TranscriptPart{
 				Kind: "tool", Tool: codexToolNames["FileChange"], ToolID: it.ID, Input: oneLine(input),
-				Result: result, IsError: it.Status != "completed", Clipped: clipped, sensitive: anySensitive(p, c.MovePath),
+				Result: result, IsError: it.Status != "completed", Clipped: clipped,
 			})
 		}
 	case "McpToolCall":
@@ -474,7 +474,6 @@ func parseCodexRow(line []byte, off int64) (e TranscriptEntry, recognised, ok bo
 		errText := codexErrorText(it.Error)
 		p := TranscriptPart{
 			Kind: "tool", Tool: tool, ToolID: it.ID, Input: summarizeToolInput(in), IsError: it.Status == "failed" || errText != "",
-			sensitive: claudeInputSensitive(in),
 		}
 		if res, ok := it.Result.(map[string]any); ok {
 			p.Result, p.Clipped = clampText(stripANSI(toolResultText(res["content"])), claudeMaxResult)
@@ -502,7 +501,7 @@ func parseCodexRow(line []byte, off int64) (e TranscriptEntry, recognised, ok bo
 	case "ImageView":
 		path := strings.TrimPrefix(it.Path, "file://")
 		e.Parts = append(e.Parts, TranscriptPart{
-			Kind: "tool", Tool: codexToolNames[it.Type], ToolID: it.ID, Input: oneLine(path), sensitive: anySensitive(path),
+			Kind: "tool", Tool: codexToolNames[it.Type], ToolID: it.ID, Input: oneLine(path),
 		})
 	case "WebSearch":
 		e.Parts = append(e.Parts, TranscriptPart{Kind: "tool", Tool: it.Type, ToolID: it.ID, Input: oneLine(it.Query)})
@@ -527,8 +526,7 @@ func parseCodexRow(line []byte, off int64) (e TranscriptEntry, recognised, ok bo
 		result, clipped := clampText(stripANSI(out), claudeMaxResult)
 		e.Parts = append(e.Parts, TranscriptPart{
 			Kind: "tool", Tool: tool, ToolID: it.ID, Input: summarizeToolInput(in), Result: result, Clipped: clipped,
-			IsError:   it.Status == "failed" || errText != "" || (it.Success != nil && !*it.Success),
-			sensitive: claudeInputSensitive(in),
+			IsError: it.Status == "failed" || errText != "" || (it.Success != nil && !*it.Success),
 		})
 	case "CollabAgentToolCall":
 		input := oneLine(it.Prompt)

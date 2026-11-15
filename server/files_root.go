@@ -147,6 +147,59 @@ type gitRunner struct {
 
 	mu       sync.Mutex
 	failedAt map[string]time.Time // root → last timeout
+	// rootSlots: the heavy command each root runs, at most one at a time
+	// (a write aside), so a root whose git waits on something (a FIFO deep
+	// in its tree) holds one slot of sem and never all of them.
+	rootSlots map[string]*rootSlot
+}
+
+// rootSlot is the one heavy command a root may run, and how many calls hold
+// or wait for it.
+type rootSlot struct {
+	ch    chan struct{}
+	users int
+}
+
+// takeRootSlot waits until no other heavy command runs in root, at most
+// until wait is done, or with a nil wait only takes the slot when it is
+// free; release gives the slot back.
+func (g *gitRunner) takeRootSlot(wait context.Context, root string) (release func(), ok bool) {
+	g.mu.Lock()
+	if g.rootSlots == nil {
+		g.rootSlots = map[string]*rootSlot{}
+	}
+	s := g.rootSlots[root]
+	if s == nil {
+		s = &rootSlot{ch: make(chan struct{}, 1)}
+		g.rootSlots[root] = s
+	}
+	s.users++
+	g.mu.Unlock()
+	done := func() {
+		g.mu.Lock()
+		if s.users--; s.users == 0 {
+			delete(g.rootSlots, root)
+		}
+		g.mu.Unlock()
+	}
+	var waited <-chan struct{} // nil: never ready
+	if wait != nil {
+		waited = wait.Done()
+	}
+	select {
+	case s.ch <- struct{}{}:
+		return func() { <-s.ch; done() }, true
+	default:
+	}
+	if wait != nil {
+		select {
+		case s.ch <- struct{}{}:
+			return func() { <-s.ch; done() }, true
+		case <-waited:
+		}
+	}
+	done()
+	return nil, false
 }
 
 func newGitRunner() *gitRunner {
@@ -381,6 +434,13 @@ func (g *gitRunner) exec(ctx context.Context, c gitCall, o repoOverrides, args .
 		if len(g.sem) >= cap(g.sem)-1 {
 			return nil, false, errGitBusy
 		}
+		// Nor while its root runs another: a root whose git waits on a
+		// FIFO would otherwise hold both slots.
+		release, ok := g.takeRootSlot(nil, c.root)
+		if !ok {
+			return nil, false, errGitBusy
+		}
+		defer release()
 		select {
 		case g.sem <- struct{}{}:
 		default:
@@ -390,6 +450,19 @@ func (g *gitRunner) exec(ctx context.Context, c gitCall, o repoOverrides, args .
 	} else if c.heavy {
 		wait, cancelWait := context.WithTimeout(ctx, g.timeout)
 		defer cancelWait()
+		// A write (the user's own click) is not held behind the root's
+		// reads, as git's index.lock already orders it.
+		if !c.write {
+			release, ok := g.takeRootSlot(wait, c.root)
+			if !ok {
+				return nil, false, errGitTimeout
+			}
+			defer release()
+			// The command it waited for may have timed out meanwhile.
+			if !c.noBackoff && g.backingOff(c.root) {
+				return nil, false, errGitTimeout
+			}
+		}
 		select {
 		case g.sem <- struct{}{}:
 		case <-wait.Done():
@@ -655,13 +728,13 @@ func (rr *rootResolver) resolve(ctx context.Context, dir string) (filesRoot, err
 					return filesRoot{Root: abs}, nil
 				}
 				if err == nil {
-					return rootFromToplevel(abs, top, gitDir, owned), nil
+					return rr.repoRoot(ctx, abs, top, gitDir, owned), nil
 				}
 			}
 		}
 		switch {
 		case err == nil:
-			return rootFromToplevel(abs, top, gitDir, ""), nil
+			return rr.repoRoot(ctx, abs, top, gitDir, ""), nil
 		case errors.As(err, &ge), errors.Is(err, exec.ErrNotFound), errors.Is(err, errNoHooksDir):
 			// Not a repo, no git, or no hooks dir to run git with: the
 			// directory itself.
@@ -670,6 +743,66 @@ func (rr *rootResolver) resolve(ctx context.Context, dir string) (filesRoot, err
 			return filesRoot{}, err
 		}
 	})
+}
+
+// repoRoot is rootFromToplevel, except that a repository naming a file git
+// would block on opening is browsed as the plain directory abs, its git dir
+// still denied as a repository's is.
+func (rr *rootResolver) repoRoot(ctx context.Context, abs, top, gitDir, safeDir string) filesRoot {
+	root := rootFromToplevel(abs, top, gitDir, safeDir)
+	if p := rr.blockingGitFile(ctx, root); p != "" {
+		log.Printf("files: %s names %q, a FIFO or socket: browsing it as a plain directory", root.Root, p)
+		return filesRoot{Root: abs, GitDir: root.GitDir}
+	}
+	return root
+}
+
+// blockingGitFile returns a file git reads in root's status or diff that is
+// a FIFO (git waits on opening it until the timeout) or a socket, or "": the
+// work tree's .gitignore and .gitattributes (not followed: git opens them
+// without following a link), the shared git dir's info/exclude and
+// info/attributes, and what core.excludesFile and core.attributesFile name
+// (followed, as git follows them). Anything else, /dev/null and a missing
+// file included, is passed: git reads it without waiting, or skips it. A
+// .gitignore deeper in the tree is not looked for (that is a walk of the
+// tree): such a root holds one of git's slots at most (gitRunner.exec). Not
+// on Windows, which has no FIFO and empties both settings.
+func (rr *rootResolver) blockingGitFile(ctx context.Context, root filesRoot) string {
+	if rr.windows || !root.IsRepo {
+		return ""
+	}
+	blocks := func(fi os.FileInfo, err error) bool {
+		return err == nil && fi.Mode()&(os.ModeNamedPipe|os.ModeSocket) != 0
+	}
+	for _, name := range []string{".gitignore", ".gitattributes"} {
+		if p := filepath.Join(root.Root, name); blocks(os.Lstat(p)) {
+			return p
+		}
+	}
+	var paths []string
+	if common := commonGitDir(root.GitDir); common != "" {
+		paths = append(paths, filepath.Join(common, "info", "exclude"), filepath.Join(common, "info", "attributes"))
+	}
+	// Exit 1 is no match. Any other failure leaves the settings unchecked;
+	// the status that would read them meets the same failure.
+	out, _, _ := rr.git.output(ctx, gitCall{root: root.Root, safeDir: root.SafeDir, limit: 64 << 10},
+		"config", "-z", "--type=path", "--get-regexp", `^core\.(excludesfile|attributesfile)$`)
+	for _, kv := range strings.Split(string(out), "\x00") {
+		_, v, _ := strings.Cut(kv, "\n")
+		if v == "" {
+			continue
+		}
+		if !filepath.IsAbs(v) {
+			v = filepath.Join(root.Root, v)
+		}
+		paths = append(paths, v)
+	}
+	for _, p := range paths {
+		if blocks(os.Stat(p)) {
+			return p
+		}
+	}
+	return ""
 }
 
 // toplevel returns the work tree and the git directory of the repo dir is in.

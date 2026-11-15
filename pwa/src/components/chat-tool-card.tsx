@@ -304,7 +304,7 @@ export function ToolCard({ part }: { part: TranscriptPart }) {
       )}
       {d?.hidden && (
         <p className="text-[12px] text-fg-subtle">
-          {edit ? t('chat.tool.hiddenEdit') : t('chat.tool.hiddenContents')}
+          {t('chat.tool.hiddenEdit')}
         </p>
       )}
       {(command || out) && (

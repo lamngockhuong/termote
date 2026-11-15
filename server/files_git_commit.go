@@ -196,9 +196,11 @@ func (f *filesAPI) handleCommitDiff(w http.ResponseWriter, r *http.Request) {
 	}
 	defer cancel()
 	q := r.URL.Query()
-	// The path is checked against the commit's files by commitDiff; where a
-	// symlink in the worktree leads is not.
-	if f.viewHides(req, q.Get("path"), false, true) {
+	// A view-only client reads only a path of the tracked list, as in
+	// Changes: what only HEAD still holds (a file removed from the index
+	// since) is not its to read. commitDiff checks the path against the
+	// commit's files.
+	if f.viewHides(req, q.Get("path"), false, false) {
 		f.error(w, "git commit diff", fs.ErrNotExist)
 		return
 	}
@@ -211,8 +213,9 @@ func (f *filesAPI) handleCommitDiff(w http.ResponseWriter, r *http.Request) {
 }
 
 // commitDiff is the diff of one file of HEAD, which must still be the commit
-// the client saw. headOnly (a view-only client): only a path still in HEAD's
-// tree, never one the commit deleted or a rename's source, as if missing.
+// the client saw. headOnly (a view-only client, whose path handleCommitDiff
+// already found in the tracked list): never one the commit deleted or a
+// rename's source, as if missing.
 func (f *filesAPI) commitDiff(ctx context.Context, root filesRoot, commit, path, orig string, reveal, headOnly bool) (diffResponse, error) {
 	if !root.IsRepo {
 		return diffResponse{}, errNotChanged

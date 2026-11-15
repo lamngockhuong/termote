@@ -29,7 +29,7 @@ what Termote can reach, run it as another user with less access.
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | The password                | Everything (full).                                                                                                                                   |
 | A full device               | Everything the password can, except pairing another full device (it pairs view-only devices only) and signing a password browser out (it only lists them). |
-| A view-only device          | Watch the terminal, read the Chat view and Files/Changes inside a git repository (not the home dir, only the files git tracks). It types nothing and changes nothing, but reads everything printed, except the Chat view's tool results of a sensitive file (`.env`, keys). |
+| A view-only device          | Watch the terminal, read the Chat view and Files/Changes inside a git repository (not the home dir, only the files git tracks). It types nothing and changes nothing, but reads everything printed in the terminal; its Chat view shows the conversation's text, no tool call or command output. |
 | Anyone, with `--no-auth`    | Everything, as soon as they reach the port.                                                                                                         |
 
 ## What the server enforces
@@ -84,9 +84,10 @@ what Termote can reach, run it as another user with less access.
 - **A full device used on purpose.** It has a shell: it can read the password, pair devices from a
   terminal, edit the devices file or turn sign-in off. The limits above stop mistakes and clicks in the
   interface, not someone who means it.
-- **Secrets printed in a terminal.** A view-only device reads whatever an agent or a command printed.
-  The Chat view leaves out a Claude Code tool's result and a Codex edit's diff when they name a
-  sensitive file, but not a Grep over a directory, a shell command or a Codex command that prints one.
+- **Secrets printed in a terminal.** A view-only device reads whatever an agent or a command printed
+  in the terminal. Its Chat view shows the conversation's words only, no tool call and no command
+  output, but what the agent writes in its reply, and an open dialog's card, which shows what the
+  terminal shows. A machine running an older Termote still shows it the tool results of that machine.
 - **Other services on the same host name.** A cookie is not bound to a port: every service on that name
   receives Termote's cookies. Give Termote a host name of its own.
 - **Programs of the same OS user.** Anything else running as that user reads the same files Termote does.

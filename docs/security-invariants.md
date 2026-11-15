@@ -263,9 +263,15 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   leave the server. tmux: one `list-panes -a`, read by `#{n:}` byte lengths keyed by session id and
   window index (a path can hold `\n` or `:`; psmux numbers panes per session), with `-u` on
   tmux. psmux expands no `#{n:}`: it gets `psmuxPaneFormat`, one pane a line,
-  `#{session_id}|#{window_index}|#{pane_index}|#{pane_active}|#{pane_current_command}|#{pane_current_path}`
-  (a Windows file name never holds `|`; a line without 6 fields or with a control character stops
-  the read, as a bad length does on tmux). Herdr: `pane.process_info`, decoding only pids and names (never `argv`, `argv0`,
+  `<nonce>|#{session_id}|#{window_index}|#{pane_index}|#{pane_active}|#{pane_current_command}|#{pane_current_path}`,
+  the nonce 16 hex digits from `crypto/rand`, new for each call (psmux copies text outside `#{}` as
+  it is; hex holds no `%`, which would make psmux run strftime over the line). A line runs from the
+  nonce to the next line break followed by the nonce, or to the end of the reply, so a line break in
+  a path the pane announced (psmux percent-decodes OSC 7, `%0A` included) stays in that path and can
+  never start a pane of its own: the pane could not know the nonce when it printed. A path holding a
+  control character is dropped (the pane keeps its process name); a line not led by the nonce, of
+  fewer than 6 fields or with a control character before the path stops the read, as a bad length
+  does on tmux. Herdr: `pane.process_info`, decoding only pids and names (never `argv`, `argv0`,
   `cmdline`), through a 5 s cache with one refresher, 4 calls at once within 1.5 s, never under
   `fetchMu` and never into the cached view; a name whose reads failed for 15 s, or any while an
   `invalid_request` turned the calls off for 5 minutes, is not served. macOS names are the kernel's short name. The
@@ -515,7 +521,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   hub with no view stream to evict → "too many viewers"). The PWA hides every write control and
   shows "View only" (`caps.role`); tmux follows each session's active window, Herdr selects tabs
   client-side but cannot scroll history. No Web Push. A view client reads whatever the agent
-  printed (accepted), except a sensitive file's tool results in the transcript (see Agent chat)
+  printed in the terminal (accepted); its Chat view gets the user's and the agent's words only, no
+  tool call, input or result and no command output, while an open dialog's card shows what the
+  terminal shows (see Agent chat)
 - **Pane layout** (`POST /api/mux/panes/{id}/split` `{direction, cwd?}` → `{ok, id}`, `zoom`
   `{mode}`, `swap` `{direction}`, `resize` `{direction, amount}` → `{ok}`;
   `server/mux_pane_layout.go`, `caps.paneLayout`: Herdr 0.9.3 or later and not on Windows, tmux
@@ -901,25 +909,22 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   its tracked list holds that directory.
   A tool call carries `detail` for its card: the model's description, a Bash/Codex command whole
   (8 KiB) and an Edit/MultiEdit/Write's old and new text (16 KiB per call); the edits of a file
-  `isSensitive` names are left out (`hidden`), as its diff is in Changes. A view-only client also
-  gets no result of a Claude Code tool call on such a file (the call's `file_path`/`notebook_path`/
-  `path`, or the result row's `toolUseResult` file path), nor of a result read apart from its call
-  unless the server parsed that call and it named no such file (the server keeps the ids of the
-  calls it parsed, last 16384; a failed edit's row names no file but quotes its `old_string`, and
-  its call may lie before every byte read): `Result` emptied and `hidden` set, on a copy of the
-  cached read; the same for a Codex
-  `FileChange` part (its diff) whose path or move path is such a file, an `ImageView` of one, and
-  a Codex `McpToolCall`, `FunctionCallOutput` or `DynamicToolCall` whose arguments name one
-  (`file_path`/`notebook_path`/`path`, as a Claude Code call). A Claude Code Grep over a
-  directory whose output shows lines (`output_mode: content`) is keyed too when that directory is a
-  sensitive one or inside one, when its `glob` names a sensitive file, read as the name it spells
-  out with each `*` matching nothing (`.env*`, `*.pem`, `secrets.{json,yml}`, `.ssh/**`; a glob led
-  by `!` selects nothing, one that cannot be read counts), or when its `type` is a ripgrep type
-  with such a glob (`tf`; `sensitiveGrepTypes`, checked against the `rg` on PATH). Read as every
-  name it could match, `*.go` would be keyed too (`.env.go`, `secrets.go`), while a Grep with no
-  glob searches them all. So a Grep over a directory with no such glob or type, a glob naming a
-  sensitive name only in part (`id_*`, `*.local`), Bash and a Codex command's output that prints
-  one are not keyed (accepted).
+  `isSensitive` names are left out (`hidden`), as its diff is in Changes. A view-only client reads
+  the transcript as text only (`viewTranscript`, `server/agent.go`, on a copy of the cached read
+  every client shares): the user's and the agent's `text` and `thinking` parts, a compaction
+  summary, and the `image` parts of images the user pasted, never a `tool` part, so no tool's name,
+  input, result or `detail`, whatever file, command or argument shape (an object, a JSON string, an
+  array of paths, a symlink under an innocent name) it involves, and no result read apart from its
+  call; no `note` entry either (the output of a command the user ran with `!`, of a slash command,
+  a hook's text; the command line the user typed is their words and stays); an entry left with no
+  part is dropped. Nothing is decided per file, so a new tool of an agent is covered as it appears.
+  What the agent itself writes in its reply or its thinking about a file it read is its words, and
+  a view client reads it (accepted, as the terminal), as it reads an open dialog's card
+  (`agent/prompt`, read off the screen) and a running subagent's description and last tool name.
+  A full client's transcript is unchanged. Over a machine (`/api/machines/<id>/mux/*`) the role
+  goes with the request and the machine applies its own rule: a machine running a release from
+  before this rule still gives a view client the tool results it did not mark sensitive (not
+  covered).
   `agent/commands` (the composer's `/` suggestions; Codex: its skills, see Codex chat) returns
   only names, descriptions, sources and kinds of `.claude/commands`/`.claude/skills` under the
   pane root and `commands`/`skills`
@@ -1205,7 +1210,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `core.attributesFile` to one (`:(optional)` read past). Its parser (`parseGitConfig`) takes
   git's syntax strictly, and a file it cannot parse or read, includes too deep, or a link on the way
   off a drive (`evalSymlinks`) refuses the repository rather than passing it. `mailmap.file` is
-  left to `--no-mailmap`. Elsewhere than Windows nothing is read.
+  left to `--no-mailmap`. Elsewhere than Windows `repoConfigRefused` reads nothing.
   `GET files/content` takes an `encoding` of a fixed set (`utf-8`, `utf-16le`, `utf-16be`,
   `shift_jis`, `euc-jp`; another → 400, ignored by `?hash=1`) or detects one
   (`server/files_encoding.go`: a BOM, then valid UTF-8, then Shift-JIS/EUC-JP only when the
@@ -1251,8 +1256,27 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   either wherever the repository's config points it; empty means no file, so the user's global
   ignore and attributes files no longer apply there, the repository's `.gitignore`,
   `.gitattributes` and `info/exclude` still do),
-  submodules ignored, 10s timeout, 2 at a time (a command that writes the index runs under the
-  same `-c` overrides but another timeout and cancellation: Staging and discarding a change).
+  submodules ignored, 10s timeout, 2 at a time, and 1 at a time per root except a write; a
+  `tryOnly` call (the overview's status, blame) answers busy while its root runs another, as when it
+  would take the last slot (a command that writes the index runs under the
+  same `-c` overrides but another timeout and cancellation: Staging and discarding a change); a call
+  that waited for its root's slot checks the root's backoff again before it runs. git waits on
+  opening a FIFO it reads as an ignore or attributes file until the timeout (git 2.34: every one
+  below, and a `.gitignore` in any directory it walks), so on Linux and macOS a root is browsed as a
+  plain directory, its git dir still denied, before any status, when one of these is a FIFO or a
+  socket (`blockingGitFile`; `/dev/null`, a directory or a missing file pass, as git reads or skips
+  them at once): the work tree's `.gitignore` and `.gitattributes`, not followed (git opens them
+  without following a link), the shared git dir's `info/exclude` and `info/attributes` (a linked
+  worktree reads those of its repository), and what `core.excludesFile` and `core.attributesFile`
+  name, followed (read with `git config --type=path`, relative to the root); the user's global files
+  still apply. Not looked for (not covered): a `.gitignore` or `.gitattributes` deeper in the tree
+  (that is a walk of the tree), another file git opens that is a FIFO (`config` and its includes,
+  `HEAD`, `index`, `packed-refs`, `shallow`, `info/sparse-checkout`, `objects/info/alternates`,
+  `.gitmodules`, `.mailmap` for blame), and a root reached without `resolve` (Find and blame through
+  a link into another worktree of the repository, a worktree's dirty check). Such a root's heavy git
+  waits out the timeout holding one of the two slots, so other roots keep the other; a status then
+  backs it off 30 s, while Find and a worktree's branch list (`noBackoff`) try again on the next
+  request; two such roots can hold both slots.
   `files/raw` serves an image's bytes (Files: the worktree file, streamed from the open handle;
   Changes: `side=old|new` of an entry git status lists, picked like `diff`, never a client rev):
   the index is always `:0:<path>` (git reads `:1:a.png` as stage 1), `HEAD:<orig‖path>` for the
@@ -1274,10 +1298,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   the hash the client saw only to compare: another one than the current `HEAD` is 409
   `head_moved`, before any path reaches git. The path (and a rename's source) must be one that
   commit's `diff-tree` lists, under the same deny lists and `reveal=1` for a sensitive name, then
-  goes in as `:(literal)` after `--`; a view-only client goes through `viewHides`, and reads the
-  diff only of a path still in `HEAD`'s tree: a file the commit deleted (or stopped tracking) and a
-  rename's source stay listed by name, but their diff is 404 as if missing (history is not what it
-  may read); a full client reads them all. A commit's
+  goes in as `:(literal)` after `--`; a view-only client goes through `viewHides` with the path
+  checked against the root's tracked list, as in Changes, and reads the diff only of a path in it:
+  a file the commit deleted (or stopped tracking), a rename's source and a file removed from the
+  index since the commit (`git rm --cached`, which only `HEAD` still holds) stay listed by name, but
+  their diff is 404 as if missing (history is not what it may read); a full client reads them all. A commit's
   file list is kept 30 s per root and hash (a hash never changes what it names); a sensitive name
   is checked again when its diff is read. Message and author are shown with `visibleUnsafe`.
   Blame (`files/blame`, `server/files_git_blame.go`) is a read route (`begin`: `crossSiteRejection`,

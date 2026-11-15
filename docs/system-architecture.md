@@ -253,9 +253,12 @@ with `-u` on tmux so the lengths match without a UTF-8 locale), read as a stream
 id and window index, never split into lines; a parse that stops drops the window it stopped in,
 a window missing from a reply keeps its last names for 10 s (psmux sometimes prints nothing),
 and a failure never fails the snapshot. psmux expands no `#{n:}`, so it gets a one-line-per-pane
-format of its own (`psmuxPaneFormat`), `#{session_id}|#{window_index}|#{pane_index}|#{pane_active}|#{pane_current_command}|#{pane_current_path}`,
-split on `|` (a Windows file name never holds one); a line without 6 fields or with a control
-character stops the parse like a bad length. Herdr fills it from
+format of its own (`psmuxPaneFormat`), `<nonce>|#{session_id}|#{window_index}|#{pane_index}|#{pane_active}|#{pane_current_command}|#{pane_current_path}`
+with a random nonce per call: a line runs to the next line break followed by the nonce, so a line
+break in a path the pane announced (OSC 7) cannot start a pane of its own, and the path, last, keeps
+any `|`. A path with a control character is dropped (the pane keeps its process); a line not led by
+the nonce, without 6 fields, or with a control character before the path stops the parse like a
+bad length. Herdr fills it from
 `pane.process_info` (the foreground group leader's `name`; `argv`/`cmdline` are not decoded)
 through a cache apart from the snapshot cache: a name is fresh for 5 s, one refresh runs at a
 time, 4 calls at once within 1.5 s (not cut short when the request that started it leaves), a
@@ -1036,8 +1039,12 @@ its config defines (git 2.54 and later run those whatever `core.hooksPath` says)
 `diff.autoRefreshIndex=false`, every `filter.<driver>` it configures emptied, `--no-ext-diff`, `--no-textconv`,
 `--ignore-submodules=all`, no lazy fetch and no transport at all (an empty
 `GIT_ALLOW_PROTOCOL`, which a repository's `protocol.<name>.allow` cannot re-enable). Each
-command has a 10 s timeout (503 `git timed out`) and takes one of two server-wide slots; nothing
-a client sends becomes a git option.
+command has a 10 s timeout (503 `git timed out`) and takes one of two server-wide slots, a root
+at most one of them (a write aside; the overview's status and blame answer busy meanwhile); nothing a client sends
+becomes a git option. On Linux and macOS a repository whose ignore or attributes file (`.gitignore`,
+`.gitattributes`, `info/exclude`, `info/attributes`, what `core.excludesFile` and
+`core.attributesFile` name) is a FIFO or a socket is browsed as a plain directory
+(`blockingGitFile`), since git would wait on opening it until the timeout.
 
 **Images (`raw`).** The bytes of one image, for the PWA to show through a `blob:` URL (an SVG
 through a `data:` URL, see below). Without
@@ -1647,8 +1654,8 @@ The code is `server/auth_role.go` (roles, the default refusal), `server/device_s
   `termote_device_<store id>`, then Basic. Session and Basic are always `full`; a device carries its
   role, and a role other than `full` (empty, unknown) reads as `view`; `--no-auth` has no identity and
   is `full`. The snapshot reports `caps.role`, `caps.devices` and `caps.viewStream`. A view-only
-  client's Chat transcript leaves out the result of a Claude Code tool call that names a sensitive
-  file (marked `hidden`).
+  client's Chat transcript is the conversation's words only: no tool part and no note
+  (`viewTranscript`).
 - **Store**: `<stateDir>/devices/` (`key.json`, `devices.json`, 0700/0600), only the SHA-256 of each
   token; at most 50 devices. Records of another password are ignored, not deleted; `start --fresh`
   deletes them. The container keeps the directory in the volume `termote-state-<uid>`.

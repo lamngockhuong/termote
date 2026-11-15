@@ -97,11 +97,10 @@ func requireWriteRole(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
-// requireAgentRead lets every role read a pane's agent: the transcript shows
-// what the screen showed (commands, tool output), which a view-only client
-// watches in the terminal anyway, except the results of tool calls that name a
-// sensitive file, which handleTranscript leaves out for that role as the
-// Files view does (a command printing one is not caught).
+// requireAgentRead lets every role read a pane's agent: a view-only client
+// gets the conversation's words only, no tool call and no command output
+// (handleTranscript, viewTranscript); the open dialog's card shows what the
+// terminal it watches shows.
 func requireAgentRead(http.ResponseWriter, *http.Request) bool { return true }
 
 // requireFilesRead refuses a view-only client reveal=1 (content, diff and raw
