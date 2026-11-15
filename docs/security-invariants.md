@@ -511,7 +511,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   entry they read; nor what only `HEAD` still holds, as with the last commit: the staged diff of a
   file deleted or removed from the index (`git rm --cached`) or of a rename, and the staged old
   side of such an image, are 404 as if missing, `leftIndex`); `files/changes` leaves out, for a view-only client, every untracked entry and
-  every entry `viewHides` would refuse; names match
+  every entry `viewHides` would refuse; `agent/touched` gives it only the files of that list it may read, by name
+  (see Files a session touched); names match
   exactly as git lists them (never folded: a case-sensitive volume on macOS keeps an ignored
   `notes.md` beside a tracked `Notes.md` hidden); anything else is 404 as if missing, a list cut
   short (`findMaxPaths`, git's output cap) refuses what it lacks, and a list that cannot be read
@@ -1093,6 +1094,34 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   text. Shared reads: a session 5 s, a summary 30 s. Costs are estimates from the price table built
   into the binary, nothing configurable. Accepted: the machine summary tells a view-only client how
   many tokens each agent used across every directory, by 15 minutes
+- **Files a session touched** (`GET /api/mux/panes/{id}/agent/touched[?agent=&session=]`;
+  `server/agent_touched*.go`): `requireMethod(GET)`, `crossSiteRejection`, `requireAgentRead`,
+  `Cache-Control: no-store`; internal errors are logged only. The client names a pane and, for an
+  old session, an agent and a session id, never a path; the root is the pane's (`historyRoot`, the
+  view-only refusal where Files refuses the root: no git repo, a home dir → 403 `view_only`) and the
+  session is the pane's running one or one its root's history lists (`sessionTarget`, as Agent
+  usage: 400 `invalid_request`, 404 `session_not_found`). The files read are the session's, opened as
+  Agent usage opens them (`sessionFiles`: the transcript through `Locate` and `openHistoryFile`,
+  Claude Code's subagent files through `openSubagentsDir`/`openPlainFile`, the Codex child rollouts
+  found through the history's index), incrementally (`journalScanner`, only lines naming
+  `"tool_use"`/`"tool_result"` or `FileChange`/`patch_apply_end`/`session_meta`/`turn_context`
+  decoded). Of them only the paths of Claude Code's `Edit`, `MultiEdit`, `Write` and `NotebookEdit`
+  calls whose result is not `is_error` (or not come yet: running), of Codex's `FileChange` items
+  with `status: completed` and of legacy `patch_apply_end` events that succeeded, their kind and
+  times are kept; a sidechain row of the main transcript and the rows a subagent's rollout copies
+  from its parent (ordinal below `subagent_history_start_ordinal`) are skipped. A relative path is
+  joined to the cwd the journal records, then cleaned. A path is never opened: it is resolved
+  (`EvalSymlinks`, through its directory when the file is gone), placed under the root with
+  `inHistoryRoot` (without case on Windows and macOS) and dropped when outside it, the root itself,
+  or `denied` (a deny dir, the repo's `.git`, a separate git dir); dropped paths are only counted
+  (`skipped`). The reply holds paths relative to the root, `sensitive` (`sensitivePath`), and for a
+  full client the kinds of change, a count, the last time, `sub` and `running`; at most 2000 files,
+  the latest (`truncated`). Contents and diffs are never in it: the PWA reads them through
+  `files/diff` and `files/content`, with their own checks and `reveal`. A view-only client gets only
+  the paths of the root's tracked list (`findLists` `committed`) that `viewHides` lets it read, in
+  name order, with `sensitive` only (no kind, count, time, `sub`, `running`, `skipped` or
+  `truncated`); a list that cannot be read refuses the request as Files does. One read per root,
+  session and role is shared for 2 s. Accepted: a file changed by a shell command is not listed
 - **Codex chat**: a rollout is read only when a process whose executable is named
   `codex`, without `app-server` in its argv, holds it open for writing as a regular
   `rollout-*-<uuid>.jsonl` inside its own `CODEX_HOME/sessions` (resolved), of a user thread;

@@ -200,6 +200,7 @@ func (a *agentAPI) registerHistoryRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/mux/panes/{id}/agent/history", a.handleHistory)
 	a.registerResumeRoutes(mux)
 	a.registerUsageRoutes(mux)
+	a.registerTouchedRoutes(mux)
 }
 
 // historyRoot resolves the pane's root for a history read, answering the
