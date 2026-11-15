@@ -3,7 +3,9 @@ import {
   agentLabel,
   chatAgent,
   chatInputAgent,
+  historyImageAgent,
   sessionFilesAgent,
+  subagentAgent,
 } from './chat-agents'
 
 describe('chat agents', () => {
@@ -18,6 +20,19 @@ describe('chat agents', () => {
     expect(sessionFilesAgent('codex')).toBe(true)
     expect(sessionFilesAgent('opencode')).toBe(false)
     expect(sessionFilesAgent(undefined)).toBe(false)
+  })
+
+  it('reads the subagents of Claude Code and OpenCode', () => {
+    expect(subagentAgent('claude')).toBe(true)
+    expect(subagentAgent('opencode')).toBe(true)
+    expect(subagentAgent('codex')).toBe(false)
+    expect(subagentAgent(undefined)).toBe(false)
+  })
+
+  it("serves an old OpenCode session's images only", () => {
+    expect(historyImageAgent('opencode')).toBe(true)
+    expect(historyImageAgent('claude')).toBe(false)
+    expect(historyImageAgent(undefined)).toBe(false)
   })
 
   it('knows Claude Code and Codex, not other agents', () => {

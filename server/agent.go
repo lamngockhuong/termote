@@ -120,9 +120,11 @@ type TranscriptEntry struct {
 type entryUsage struct {
 	contextTokens int64
 	model         string
-	window        int64
-	noContext     bool
-	limits        *codexLimits
+	// provider: an OpenCode model's provider, which its window is read by
+	provider  string
+	window    int64
+	noContext bool
+	limits    *codexLimits
 }
 
 // codexLimits is an account's rate limits as a token_count row recorded

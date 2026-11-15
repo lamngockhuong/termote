@@ -46,7 +46,7 @@ Cài từ đầu? Làm theo bài [Điều khiển Claude Code từ điện tho�
   thay đổi. Khi không đọc được dòng trạng thái, nó vẫn báo agent đang làm việc và đã bao lâu.
   Khi Claude Code kết thúc lượt mà các lệnh chạy nền vẫn chưa xong, dòng này cho biết còn lại những
   gì (`Đã xong lượt · 2 shells vẫn đang chạy`) cho tới khi chúng xong và agent tự làm tiếp.
-- Khi phiên Claude Code có agent con đang chạy, một dải phía trên ô soạn tin cho biết số lượng
+- Khi phiên Claude Code hay OpenCode có agent con đang chạy, một dải phía trên ô soạn tin cho biết số lượng
   (`2 subagent đang chạy`) và liệt kê chúng như terminal: loại, mô tả, tool gọi gần nhất, thời gian
   đã chạy và số token của lần gọi model gần nhất. Agent con do agent con khác tạo ra thì thụt vào
   dưới agent đó. Chạm vào dải để thu gọn; dải tự ẩn khi không còn agent con nào chạy. Trang
@@ -314,6 +314,11 @@ Từ view này bạn gửi được tin nhắn (kèm ảnh dán vào), Tasks và
 OpenCode đang chạy sẽ nằm trong hàng đợi của nó cho tới hết lượt, giống Claude Code. Trong lúc một
 lượt chạy, dòng "đang làm việc" cho biết lượt đã chạy bao lâu; khi nhà cung cấp mô hình từ chối yêu
 cầu (hết hạn mức), dòng này hiện lần thử lại của OpenCode và thông báo lỗi của nhà cung cấp.
+
+Ảnh bạn đã dán mở lại được từ chip của nó, ở đây và cả trong một session cũ bạn đọc từ Lịch sử.
+Agent con mà OpenCode tạo ra chạy trong một session riêng: dải phía trên ô soạn tin và trang
+[tổng quan](/vi/usage/overview/) liệt kê chúng như với Claude Code, agent con do agent con khác tạo
+ra thì nằm dưới agent đó.
 
 Yêu cầu cấp quyền hiện thành một card có ba lựa chọn: cho phép một lần, luôn cho phép (kèm các mẫu
 sẽ được lưu) và từ chối. Câu hỏi, hoặc form mà một công

@@ -1,0 +1,28 @@
+{
+  "data": {
+    "id": "msg_1df6030e10015Vu1XVPs9g6JeF_4",
+    "time": {
+      "created": 1794748975038
+    },
+    "text": "look",
+    "files": [
+      {
+        "data": "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAEElEQVR4nGP4z8AARwzEcQCukw/x0F8jngAAAABJRU5ErkJggg==",
+        "mime": "image/png",
+        "source": {
+          "type": "inline"
+        },
+        "name": "red.png"
+      },
+      {
+        "data": "aGVsbG8=",
+        "mime": "text/plain",
+        "source": {
+          "type": "inline"
+        },
+        "name": "a.txt"
+      }
+    ],
+    "type": "user"
+  }
+}

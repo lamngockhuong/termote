@@ -238,6 +238,34 @@ func TestOpencodeCommandImages(t *testing.T) {
 	if w := oc.writes(); w[len(w)-1] != "POST /api/session/sesFixP1/prompt" {
 		t.Errorf("after image went to %v", w)
 	}
+	// An image after the command's name, the space the composer kept beside
+	// it gone: the command runs with the words after the image.
+	for _, tc := range []struct {
+		text, args string
+		at         int
+	}{
+		{"/spike-cmd ", "", 11},
+		{"/spike-cmd   x", "x", 12},
+		{"/spike-cmd fix", "fix", 11},
+		{"/spike-cmd\n\nfix", "fix", 11},
+	} {
+		code, body := postJSON(t, mux, "/api/mux/panes/0/agent/message", map[string]any{"text": tc.text, "images": ids, "at": []int{tc.at}, "cursor": opencodeCursor("sesFixP1")})
+		if b := oc.lastBody(t); code != http.StatusNoContent || b["name"] != "spike-cmd" || b["text"] != tc.args {
+			t.Errorf("%q = %d %v %.200v", tc.text, code, body, b)
+		}
+	}
+}
+
+// A lead that is not the start of the text (never from the message route)
+// sends it as text rather than cutting it in the wrong place.
+func TestPlanOpencodeMessageLead(t *testing.T) {
+	cmds := []opencodeCommandInfo{{Name: "review"}}
+	if p := planOpencodeMessage("/review ", "/rev", cmds, nil); p.command != "" || p.text != "/rev" {
+		t.Errorf("plan = %+v", p)
+	}
+	if p := planOpencodeMessage("/review", "/review", cmds, nil); p.command != "review" || p.text != "" {
+		t.Errorf("plan = %+v", p)
+	}
 }
 
 // "@name" words the session's skill list holds attach those skills, each

@@ -20,6 +20,20 @@ const SESSION_FILES_AGENTS = ['claude', 'codex']
 export const sessionFilesAgent = (name?: string) =>
   !!name && SESSION_FILES_AGENTS.includes(name)
 
+// The server reads these agents' subagents: a card and the Chat view show
+// the tree.
+const SUBAGENT_AGENTS = ['claude', 'opencode']
+
+export const subagentAgent = (name?: string) =>
+  !!name && SUBAGENT_AGENTS.includes(name)
+
+// The server serves the images of these agents' old sessions too (OpenCode:
+// through its service), so the history's reader opens them.
+const HISTORY_IMAGE_AGENTS = ['opencode']
+
+export const historyImageAgent = (name?: string) =>
+  !!name && HISTORY_IMAGE_AGENTS.includes(name)
+
 export const chatAgent = (name?: string) => !!name && CHAT_AGENTS.includes(name)
 
 export const chatInputAgent = (name?: string) =>

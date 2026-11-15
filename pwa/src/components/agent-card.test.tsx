@@ -359,6 +359,16 @@ describe('AgentCard history', () => {
     expect(screen.queryByRole('list', { name: 'Subagents' })).toBeNull()
   })
 
+  it("reads an OpenCode session's subagent tree", async () => {
+    mockFetchSubagents.mockClear()
+    mockFetchSubagents.mockResolvedValue({ nodes: [] })
+    renderCard({ pane: pane({ id: 'w1:p8', agentName: 'opencode' }) })
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'History' })),
+    )
+    expect(mockFetchSubagents).toHaveBeenCalledWith('w1:p8')
+  })
+
   it('has no subagent tree for another agent', async () => {
     mockFetchSubagents.mockClear()
     renderCard({ pane: pane({ id: 'w1:p9', agentName: 'codex' }) })

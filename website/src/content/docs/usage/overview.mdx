@@ -55,6 +55,8 @@ each `/model` switch: 1M for the models that have it of their own (every model f
 from 4.7) and for a `[1m]` model, 200k for any other. When no model can be read, the window is assumed
 to be 200k and the share is marked `~`, until the context grows past 200k. For
 Codex the share is the one Codex reports itself ("% context left", turned into the share used).
+For OpenCode the context is the tokens of its last answer, and the window the one OpenCode's own
+list of models gives that model; a model the list does not have shows its tokens without a share.
 
 With a Codex pane signed in to a ChatGPT plan, an **Accounts** strip above the cards shows that
 account's limits: a bar for the 5-hour and the weekly window, when each resets, and when Codex last
@@ -104,7 +106,8 @@ that moment, the card says so and you can try again.
 (blocked is striped, idle hollow), with the minutes of each underneath. The part before the first
 change the server recorded stays blank: it is unknown, not idle. For Claude Code it also lists the
 session's subagents: each one's type, description, state, the last tool it called, how long it ran
-or has been running and the tokens of its last request. One started by another is indented under it. "(guessed)" marks a subagent taken as
+or has been running and the tokens of its last request (for OpenCode too, its subagents being
+sessions of their own). One started by another is indented under it. "(guessed)" marks a subagent taken as
 done because its file has not changed for 10 minutes, when the transcript cannot tell. Closed, the
 button still says "2 subagents, 1 running".
 

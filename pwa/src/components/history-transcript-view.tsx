@@ -1,8 +1,10 @@
 import { useLayoutEffect, useRef, useState } from 'react'
+import { historyImageAgent } from '../chat-agents'
 import { useHistoryTranscript } from '../hooks/use-history-transcript'
 import type { HistoryAgent } from '../hooks/use-mux-api'
 import { useT } from '../i18n/i18n-context'
 import { ChatFileLinkContext } from './chat-file-link'
+import { ChatImageViewer } from './chat-image-viewer'
 import { ChatMarkdownContext } from './chat-message'
 import type { RunMode, RunState } from './chat-tool-run'
 import { ChatTranscriptList, useChatMarkdown } from './chat-transcript-list'
@@ -75,6 +77,9 @@ export function HistoryTranscriptView({
     before.current = (listRef.current as HTMLElement).scrollHeight
     h.loadOlder()
   }
+  // An image chip opens the image where the server serves an old session's
+  // images; elsewhere it stays plain text.
+  const imagePane = historyImageAgent(agent) ? paneId : ''
   return (
     <section
       ref={listRef}
@@ -84,36 +89,38 @@ export function HistoryTranscriptView({
       data-native-menu
     >
       <ChatFileLinkContext.Provider value={openFile}>
-        <ChatMarkdownContext.Provider value={markdown}>
-          <div className="space-y-3">
-            {h.hasOlder && (
-              <div className="flex justify-center">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={h.loadingOlder}
-                  onClick={showEarlier}
-                >
-                  {h.loadingOlder
-                    ? t('chat.view.loadingOlder')
-                    : t('chat.view.showEarlier')}
-                </Button>
-              </div>
-            )}
-            {h.entries.length === 0 && (
-              <p className="text-center text-fg-muted">
-                {t('chat.view.empty')}
-              </p>
-            )}
-            <ChatTranscriptList
-              entries={h.entries}
-              hidden={0}
-              runs={runs}
-              working={false}
-              settled
-            />
-          </div>
-        </ChatMarkdownContext.Provider>
+        <ChatImageViewer paneId={imagePane}>
+          <ChatMarkdownContext.Provider value={markdown}>
+            <div className="space-y-3">
+              {h.hasOlder && (
+                <div className="flex justify-center">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={h.loadingOlder}
+                    onClick={showEarlier}
+                  >
+                    {h.loadingOlder
+                      ? t('chat.view.loadingOlder')
+                      : t('chat.view.showEarlier')}
+                  </Button>
+                </div>
+              )}
+              {h.entries.length === 0 && (
+                <p className="text-center text-fg-muted">
+                  {t('chat.view.empty')}
+                </p>
+              )}
+              <ChatTranscriptList
+                entries={h.entries}
+                hidden={0}
+                runs={runs}
+                working={false}
+                settled
+              />
+            </div>
+          </ChatMarkdownContext.Provider>
+        </ChatImageViewer>
       </ChatFileLinkContext.Provider>
     </section>
   )

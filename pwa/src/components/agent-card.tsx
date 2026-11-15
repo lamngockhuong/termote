@@ -1,6 +1,6 @@
 import { ChevronDown, GitBranch, Hourglass, SquareTerminal } from 'lucide-react'
 import { memo, type Ref, useId, useState } from 'react'
-import { agentLabel } from '../chat-agents'
+import { agentLabel, subagentAgent } from '../chat-agents'
 import type {
   ActivityEvent,
   OverviewPane,
@@ -151,10 +151,12 @@ export const AgentCard = memo(function AgentCard({
   const detailsId = useId()
   const moreId = useId()
   const [expanded, setExpanded] = useState(false)
-  // Only Claude Code's sessions have a subagent tree to read.
-  const claude = pane.agentName === 'claude'
-  const subagents = useSubagents(pane.id, expanded && claude)
-  const subagentCount = claude ? subagentSummary(subagents.tree, t) : undefined
+  // Only Claude Code's and OpenCode's sessions have a subagent tree to read.
+  const hasSubagents = subagentAgent(pane.agentName)
+  const subagents = useSubagents(pane.id, expanded && hasSubagents)
+  const subagentCount = hasSubagents
+    ? subagentSummary(subagents.tree, t)
+    : undefined
   const label = agentLabel(pane.agentName)
   const name =
     label === 'agent'
@@ -305,7 +307,7 @@ export const AgentCard = memo(function AgentCard({
         {expanded && (
           <div id={moreId} className="flex flex-col gap-3 pb-2 pt-1">
             <StatusTimeline events={events} paneKey={paneKey} now={now} />
-            {claude && (
+            {hasSubagents && (
               <SubagentTree
                 tree={subagents.tree}
                 error={subagents.error}

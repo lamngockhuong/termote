@@ -1,0 +1,6 @@
+{
+  "_tag": "MessageNotFoundError",
+  "sessionID": "sesImg1",
+  "messageID": "msg_nope",
+  "message": "Message not found: msg_nope"
+}

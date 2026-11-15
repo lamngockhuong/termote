@@ -327,7 +327,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   read cache (`readCached`), 4 at a time within 3 s (late ones answer `unavailable:
   ["transcript"]`); the whole read is shared for 2 s. It returns ids, the last assistant text
   (280 runes, never a tool result, never a sidechain row), the last row's time, the context size,
-  window and share (Claude: tokens and model; Codex: its `token_count` rows), and a branch and
+  window and share (Claude: tokens and model; Codex: its `token_count` rows; OpenCode: the tokens
+  and model id of the last settled answer, the window only when the service's `/api/model` lists
+  that provider and model, for the session's directory or, when the session cannot be read, the
+  service's own list; else no share), and a branch and
   changed-file count; never a cwd, a root, a transcript path or a file name. The Claude window comes
   from the transcript's last model row (`claudeModels`: the same file `Locate` found, opened
   nonblocking, scanned forward from where the last scan ended, lines over 64 KiB skipped
@@ -364,8 +367,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   group headers), and a branch name in a worktree group's header and the Changes header
 - **Agent subagents** (`server/agent_subagents.go`, `GET /api/mux/panes/{id}/agent/subagents`):
   `requireMethod(GET)`, `crossSiteRejection`, `requireAgentRead`; internal errors are logged only.
-  Only the pane's own Claude session (`AgentSession`, as the transcript): another agent, no
-  transcript or no subagents directory answers `{nodes: []}`. Nothing comes from the client but the
+  Only the pane's own Claude Code or OpenCode session (`AgentSession`, as the transcript): another
+  agent, no transcript or no subagents directory answers `{nodes: []}`. Nothing comes from the client but the
   pane id. The directory is `projects/<proj>/<sessionId>/subagents` under the resolved `claudeDir`,
   only when `Locate` resolved the transcript to `projects/<proj>/<sessionId>.jsonl` there; it is opened
   through `os.Root` with every step checked by `Lstat` to be a plain directory (a symlink or a junction
@@ -382,6 +385,17 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `stoppedByUser: true` (Claude Code's stop of background agents, which writes no end row) ends the
   subagent at the meta file's mtime unless an end row comes later or its file is written more than
   30 s after it.
+  OpenCode (`server/agent_opencode_subagents.go`): only through the service (see OpenCode service
+  client), never a file: the children of the pane's own session (`GET /api/session?parentID=<id>`,
+  the id checked as the pane's session is, at most 200 in all) and their children, no deeper; a
+  session is kept only when its `parentID` is the session it was listed for and its id matches
+  `^ses[A-Za-z0-9_]{1,64}$`. Running is the shared `session/active` read; else `outcome`. Its last
+  tool name and the tokens of its last answer come from its last 10 messages (a page over 24 MB
+  is asked again for 1); the type and title are cut as Claude's. What was read of a subagent that
+  does not run is kept 10 minutes by its id and its `time.updated` (and the list's limit), so a
+  finished one is not read again; a running one is read on every tree read (shared for 2 s).
+  Grandchildren that cannot be read are left out and the tree marked truncated. No service found
+  answers `{nodes: []}`; a service that refuses or fails, 404 with nothing of its words.
   Memory: per session asked for in the last 10 minutes, the ends, meta and file facts of the subagents
   listed. Limits: 200 nodes (the newest), 4 levels, a parent loop dropped, `truncated` set. It
   returns agent ids, the type, the description (200 runes), status, times, the last tool's name and
@@ -931,7 +945,17 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   anything else is 404 `not_found`. At most 2 reads at once (else 429 `busy`). Same-site only
   (`crossSiteRejection`), GET only, both roles (the view-only client already reads the
   conversation's text); the reply has `nosniff`, a `sandbox; default-src 'none'` CSP and
-  `Cache-Control: private`.
+  `Cache-Control: private`. OpenCode (`server/agent_opencode_image.go`): the reference names the
+  session, the message (`ocm:<id>`, the id checked as `msg_…`) and the file's place in it, and is
+  given only to a file whose `source.type` is `inline` (another kind keeps its chip, no
+  reference). The image is read again through the service (`GET
+  /api/session/{id}/message/{msg}`, 24 MB at most; the service answers 404 for a message of
+  another session), never from a file, and only for the pane's own session or a session the
+  history of the pane's directory lists (`findHistorySession`, after `historyRoot`, so a
+  view-only client is refused a root Files refuses it); any other session is never asked for.
+  The file must be that message's, `inline`, of an `image/*` type, its base64 at most 10 MB
+  decoded, and its bytes sniff as an accepted type and as that type; anything else, and every
+  service error, is 404 `not_found`.
   Markdown images in the Chat view never load (shown as links), and raw HTML is not rendered;
   its code blocks and Mermaid diagrams use the preview's (see Mermaid diagrams). A file path in
   it (a file tool card's input, inline code naming a file, a relative link) opens on a click
@@ -1292,7 +1316,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   counts only when `/api/info` answers with the pid and version the file names and a version of
   at least 2.0.0 (kept 30 s; a 401 or 403 drops it at once so a restarted service's new password
   is read; a failed check is repeated at most every 2 s). Every reply is read up to a limit (1 MB, a page of
-  messages 24 MB) and decoded into the fields used; the service's own text (its error bodies,
+  messages or one message 24 MB, the list of models 8 MB) and decoded into the fields used (of
+  `/api/model` only `providerID`, `id` and `limit.context`); the service's own text (its error bodies,
   `/api/info`'s hostname, `/api/model`'s provider settings with their API keys) never reaches a
   client or a log. Writes (a message, a command, a permission or form reply, a form's cancel, a fork) go the same
   way, with the same header and checks, a JSON body termote builds itself and at most 15 s; their
@@ -1326,7 +1351,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   client's signed cursor (else 409 `session_changed`); a session not yet made (a `--session` id
   before the TUI's first message) is 409 `input_not_ready`. Its images are only the server's own
   uploads (`imagePaths`, an id, never a path), read up to 10 MB each and sent inline as `data:`
-  URIs of the type their extension names (a message of images only, with empty text, is taken by
+  URIs of the type their extension names; the text goes without them, the white space where each
+  was made one space (a line break or a blank line when it held them), and a `/name` before the
+  first image is read from that same text (a message of images only, with empty text, is taken by
   OpenCode 2.3.0). A message whose text before any image starts with `/name` reads the session's
   directory (`GET /api/session/{id}`) and `command.list` for it again right before the write (no
   cache), and is `POST /api/session/{id}/command` (`name`, the rest of the message as `text`,

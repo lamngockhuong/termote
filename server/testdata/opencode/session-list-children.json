@@ -1,0 +1,35 @@
+{
+  "data": [
+    {
+      "id": "ses_e22caccceffe0hL76lTTiemGdN",
+      "parentID": "sesFixT1",
+      "projectID": "global",
+      "agent": "explore",
+      "cost": 0,
+      "tokens": {
+        "input": 1200,
+        "output": 30,
+        "reasoning": 0,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      },
+      "outcome": "succeeded",
+      "time": {
+        "created": 1794712613715,
+        "updated": 1794712614090,
+        "busy": 1794712613739,
+        "idle": 1794712614127
+      },
+      "title": "Explore files",
+      "location": {
+        "directory": "/work/proj"
+      }
+    }
+  ],
+  "cursor": {
+    "previous": "eyJwYXJlbnRJRCI6InNlc0ZpeFQxIiwiYW5jaG9yIjp7ImlkIjoic2VzX2UyMmNhY2NjZWZmZTBoTDc2bFRUaWVtR2ROIiwidGltZSI6MTc5NDcxMjYxNDA5MCwiZGlyZWN0aW9uIjoicHJldmlvdXMifX0",
+    "next": "eyJwYXJlbnRJRCI6InNlc0ZpeFQxIiwiYW5jaG9yIjp7ImlkIjoic2VzX2UyMmNhY2NjZWZmZTBoTDc2bFRUaWVtR2ROIiwidGltZSI6MTc5NDcxMjYxNDA5MCwiZGlyZWN0aW9uIjoibmV4dCJ9fQ"
+  }
+}

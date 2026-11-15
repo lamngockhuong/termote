@@ -46,18 +46,50 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals())
 
-const view = () =>
+const view = (agent: 'claude' | 'opencode' = 'claude', sessionId = ID) =>
   render(
     <HistoryTranscriptView
       paneId="p1"
-      agent="claude"
-      sessionId={ID}
+      agent={agent}
+      sessionId={sessionId}
       notify={vi.fn()}
       openFile={vi.fn()}
     />,
   )
 
+const withImage = (): TranscriptEntry => ({
+  id: 'img',
+  role: 'user',
+  ts: '2026-11-14T10:00:00Z',
+  parts: [
+    { kind: 'text', text: 'look' },
+    { kind: 'image', image: 'ref.sig' },
+  ],
+})
+
 describe('HistoryTranscriptView', () => {
+  it("opens an OpenCode session's images, not another agent's", async () => {
+    // An open dialog is what makes its content reachable by role
+    HTMLDialogElement.prototype.showModal = vi.fn(function (
+      this: HTMLDialogElement,
+    ) {
+      this.setAttribute('open', '')
+    })
+    HTMLDialogElement.prototype.close = vi.fn()
+    replies.push(() => json(200, { entries: [withImage()], reset: true }))
+    const { unmount } = view('opencode', 'ses_old')
+    fireEvent.click(await screen.findByRole('button', { name: '[image]' }))
+    expect(
+      screen.getByRole('img', { name: 'Image' }).getAttribute('src'),
+    ).toContain('/agent/image?src=ref.sig')
+    unmount()
+    replies.push(() => json(200, { entries: [withImage()], reset: true }))
+    view('claude')
+    await screen.findByText('look')
+    expect(screen.queryByRole('button', { name: '[image]' })).toBeNull()
+    expect(screen.getByText('[image]')).toBeTruthy()
+  })
+
   it('opens at the end and keeps the place as older entries come', async () => {
     replies.push(() =>
       json(200, {

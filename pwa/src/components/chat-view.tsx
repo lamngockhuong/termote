@@ -8,7 +8,7 @@ import {
   useState,
 } from 'react'
 import type { ViewProps } from '../app-views'
-import { agentLabel, chatInputAgent } from '../chat-agents'
+import { agentLabel, chatInputAgent, subagentAgent } from '../chat-agents'
 import { useAgentPrompt } from '../hooks/use-agent-prompt'
 import { useAgentTranscript } from '../hooks/use-agent-transcript'
 import { useDomSelection } from '../hooks/use-dom-selection'
@@ -462,8 +462,8 @@ function AgentChat({
           </ChatImageViewer>
         </ChatFileLinkContext.Provider>
       </section>
-      {/* Only Claude Code's sessions have a subagent tree to read */}
-      {session.agentName === 'claude' && paneId && (
+      {/* Only Claude Code's and OpenCode's sessions have a subagent tree */}
+      {subagentAgent(session.agentName) && paneId && (
         <ChatSubagents paneId={paneId} clockOffset={clockOffset} />
       )}
       {readOnly && p.prompt && (

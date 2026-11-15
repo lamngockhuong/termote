@@ -186,8 +186,13 @@ func (c *opencodeClient) busySince(ctx context.Context, id string) (time.Time, e
 // when the session's lists, read now, hold them. A message to a session
 // running a turn waits in OpenCode's queue: errQueued.
 func (a *agentAPI) sendOpencode(ctx context.Context, s AgentSession, parts, paths []string) error {
-	text := strings.Join(parts, "")
+	text := opencodeJoinParts(parts)
+	// The text before the first image, as the join left it (its white
+	// space at the image gone), so it still starts text exactly.
 	lead := parts[0]
+	if len(parts) > 1 {
+		lead = strings.TrimRightFunc(lead, unicode.IsSpace)
+	}
 	var files []opencodeAttachment
 	for _, p := range paths {
 		f, err := opencodeImage(p)
@@ -226,6 +231,48 @@ func (a *agentAPI) sendOpencode(ctx context.Context, s AgentSession, parts, path
 		return errQueued
 	}
 	return nil
+}
+
+// opencodeJoinParts is a message's text without its images: OpenCode takes
+// them as files, not in the text. The composer keeps a space beside each
+// image's place (its "[Image #n] " token, which Claude Code and Codex paste
+// the image at); where an image was, the white space on both sides is one
+// space between words (a line break when it held one, a blank line when
+// it held two), and none at the start or the end of the text.
+func opencodeJoinParts(parts []string) string {
+	var b strings.Builder
+	// breaks: the most line breaks one run of white space between the
+	// last word and the next held.
+	breaks := 0
+	for i, p := range parts {
+		if i > 0 {
+			trimmed := strings.TrimLeftFunc(p, unicode.IsSpace)
+			breaks = max(breaks, strings.Count(p[:len(p)-len(trimmed)], "\n"))
+			p = trimmed
+		}
+		trail := 0
+		if i < len(parts)-1 {
+			trimmed := strings.TrimRightFunc(p, unicode.IsSpace)
+			trail = strings.Count(p[len(trimmed):], "\n")
+			p = trimmed
+		}
+		if p != "" {
+			if b.Len() > 0 {
+				switch {
+				case breaks > 1:
+					b.WriteString("\n\n")
+				case breaks == 1:
+					b.WriteByte('\n')
+				default:
+					b.WriteByte(' ')
+				}
+			}
+			b.WriteString(p)
+			breaks = 0
+		}
+		breaks = max(breaks, trail)
+	}
+	return b.String()
 }
 
 // opencodeImage reads an upload as a data: URI. path comes from the upload
