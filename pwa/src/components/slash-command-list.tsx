@@ -12,7 +12,7 @@ import { visibleUnsafe } from '../utils/unsafe-chars'
 
 interface Props {
   id: string
-  // What the rows are typed after: "/" commands or "$" skills
+  // What the rows are typed after: "/" commands, "$" or "@" skills
   trigger: CommandTrigger
   commands: SlashCommand[]
   // Prompt templates, after the commands: their rows are numbered on from
@@ -34,6 +34,7 @@ const SOURCE_LABEL: Record<SlashCommand['source'], MessageKey> = {
   user: 'chat.slash.source.user',
   plugin: 'chat.slash.source.plugin',
   system: 'chat.slash.source.system',
+  custom: 'chat.slash.source.custom',
 }
 
 function Tag({ children }: { children: string }) {
@@ -45,7 +46,7 @@ function Tag({ children }: { children: string }) {
 }
 
 // The suggestions shown while a message is only "/name", or while a "$name"
-// word is typed for a Codex skill: a listbox the
+// or "@name" word is typed for a Codex or OpenCode skill: a listbox the
 // textarea drives (aria-activedescendant), so focus stays in the composer.
 // Rows keep a 44px touch target; the list scrolls past a few rows so it fits
 // above a phone's keyboard.
@@ -73,7 +74,7 @@ export function SlashCommandList({
   if (commands.length === 0 && templates.length === 0) {
     return (
       <p className="border-b border-border px-3 py-2 text-[13px] text-fg-muted">
-        {t(trigger === '$' ? 'chat.slash.noSkill' : 'chat.slash.noCommand')}
+        {t(trigger === '/' ? 'chat.slash.noCommand' : 'chat.slash.noSkill')}
       </p>
     )
   }
@@ -83,7 +84,7 @@ export function SlashCommandList({
       id={id}
       role="listbox"
       aria-label={t(
-        trigger === '$'
+        trigger !== '/'
           ? 'chat.slash.skills'
           : commands.length
             ? 'chat.slash.commands'

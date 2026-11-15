@@ -109,13 +109,16 @@ type opencodeAttachment struct {
 // prompt sends a message to session id. "queue" is asked for, as Claude Code
 // on termote does: OpenCode's own default ("steer") would put it into the
 // turn running now.
-func (c *opencodeClient) prompt(ctx context.Context, id, text string, files []opencodeAttachment) error {
+func (c *opencodeClient) prompt(ctx context.Context, id, text string, files []opencodeAttachment, skills []opencodeSkillAttachment) error {
 	if !isOpencodeSessionID(id) {
 		return errOpencodeNotFound
 	}
 	body := map[string]any{"text": text, "delivery": "queue"}
 	if len(files) > 0 {
 		body["files"] = files
+	}
+	if len(skills) > 0 {
+		body["skills"] = skills
 	}
 	return c.send(ctx, http.MethodPost, "/api/session/"+id+"/prompt", body)
 }
@@ -165,10 +168,13 @@ func (c *opencodeClient) busySince(ctx context.Context, id string) (time.Time, e
 }
 
 // sendOpencode sends a message to s, the pane's session read right before:
-// its text and the images at paths (the server's own uploads). A message to
-// a session running a turn waits in OpenCode's queue: errQueued.
+// its text and the images at paths (the server's own uploads). A "/name"
+// before any image runs that command and an "@name" attaches that skill,
+// when the session's lists, read now, hold them. A message to a session
+// running a turn waits in OpenCode's queue: errQueued.
 func (a *agentAPI) sendOpencode(ctx context.Context, s AgentSession, parts, paths []string) error {
 	text := strings.Join(parts, "")
+	lead := parts[0]
 	var files []opencodeAttachment
 	for _, p := range paths {
 		f, err := opencodeImage(p)
@@ -184,7 +190,13 @@ func (a *agentAPI) sendOpencode(ctx context.Context, s AgentSession, parts, path
 	}
 	ctx, cancel := context.WithTimeout(ctx, opencodeWriteTimeout)
 	defer cancel()
-	switch err := c.prompt(ctx, s.ID, text, files); {
+	plan, err := planOpencodeSend(ctx, c, s.ID, lead, text)
+	if err == nil {
+		err = sendOpencodePlan(ctx, c, s.ID, plan, files)
+	}
+	switch {
+	case err == errOpencodeNoReply:
+		return err // logged already
 	case errors.Is(err, errOpencodeNotFound):
 		// A session named with --session is made with the TUI's first
 		// message: none to send to yet.
@@ -328,17 +340,19 @@ var opencodeDecisions = map[int]string{1: "once", 2: "always", 3: "reject"}
 
 func opencodePermissionCard(p opencodePending) AgentPrompt {
 	action := opencodeLabel(p.Action)
+	title := "Allow " + action + "?"
 	if action == "" {
-		action = "a tool"
+		title = "Allow a tool?"
 	}
 	always := PromptOption{Index: 2, Label: "Yes, always"}
 	if len(p.Save) > 0 {
 		always.Detail = opencodeLabel(strings.Join(p.Save, ", "))
 	}
 	return AgentPrompt{
-		Kind:  "permission",
-		Title: "Allow " + action + "?",
-		Body:  opencodeText(strings.Join(p.Resources, "\n"), opencodeMaxCardText),
+		Kind:   "permission",
+		Title:  title,
+		Action: action,
+		Body:   opencodeText(strings.Join(p.Resources, "\n"), opencodeMaxCardText),
 		Options: []PromptOption{
 			{Index: 1, Label: "Yes, once"},
 			always,

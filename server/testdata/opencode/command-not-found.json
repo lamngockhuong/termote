@@ -1,0 +1,5 @@
+{
+  "_tag": "CommandNotFoundError",
+  "command": "nope",
+  "message": "Command not found: nope"
+}

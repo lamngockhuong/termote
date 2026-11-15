@@ -55,7 +55,9 @@ import {
   commandQuery,
   filterSlashCommands,
   mergeSlashCommands,
+  SKILL_TRIGGER,
   type SlashCommand,
+  withTriggers,
 } from '../utils/slash-commands'
 import { requestTemplateFill } from '../utils/template-fill-request'
 import { imageFromClipboard, pickImageFile } from '../utils/upload-image'
@@ -188,29 +190,30 @@ export function ChatComposer({
   latest.current = { paneId, images }
 
   // Command suggestions: open while the message is only "/name" or, for an
-  // agent whose skills follow "$", while the caret ends a "$name" word; until
-  // Escape. The highlighted row resets as the list changes.
+  // agent whose skills follow "$" or "@", while the caret ends such a word;
+  // until Escape. The highlighted row resets as the list changes.
   const agentName = session.agentName ?? ''
+  // The server's list is read for the agent's own triggers
   const trigger = CUSTOM_TRIGGER[agentName] ?? '/'
-  const dollar = trigger === '$'
+  const word = SKILL_TRIGGER[agentName]
+  const dollar = word === '$'
   // The caret, null while text is selected: followed for every agent, so it
   // is current when the pane's agent changes to one using "$"
   const [caret, setCaret] = useState<number | null>(() => text.length)
-  const q = commandQuery(text, caret, dollar)
+  const q = commandQuery(text, caret, word)
   const query = q?.query ?? null
   // The word being typed: another one opens the list again after Escape
-  const word = q ? `${q.trigger}${q.start}` : null
+  const typing = q ? `${q.trigger}${q.start}` : null
   const [dismissed, setDismissed] = useState(false)
   const listOpen = q !== null && !dismissed
-  const custom = useAgentCommands(paneId, listOpen && q?.trigger === trigger)
+  const custom = useAgentCommands(
+    paneId,
+    listOpen && (q?.trigger === trigger || q?.trigger === word),
+  )
   const builtins = BUILTIN_COMMANDS[agentName] ?? NO_COMMANDS
   const commands = useMemo(
-    () =>
-      mergeSlashCommands(
-        builtins,
-        custom.map((c) => ({ ...c, trigger })),
-      ),
-    [builtins, custom, trigger],
+    () => mergeSlashCommands(builtins, withTriggers(agentName, custom)),
+    [builtins, custom, agentName],
   )
   const listTrigger = q?.trigger ?? '/'
   // Prompt templates, after the commands in the "/" list (never highlighted
@@ -254,6 +257,9 @@ export function ChatComposer({
   )
   // Every row of the list: the commands, then the templates
   const listRows = matches.length + templateMatches.length
+  // "@" also names files and agents in OpenCode: no list (and Escape left
+  // alone) for a word no skill matches
+  const listShown = listOpen && (listTrigger !== '@' || listRows > 0)
   // The highlighted row (-1: none): the one the arrows or the pointer chose
   // in this very list, else the first command. With no command nothing is,
   // so Enter does what it did; a new query or list starts again.
@@ -267,7 +273,7 @@ export function ChatComposer({
         : -1
   const setActive = (i: number) => setChosen({ key: listKey, i })
   // biome-ignore lint/correctness/useExhaustiveDependencies: Escape holds for one word
-  useEffect(() => setDismissed(false), [word])
+  useEffect(() => setDismissed(false), [typing])
 
   // The draft as the effects below see it: the pane's own right after a
   // move to another pane, before that render
@@ -549,7 +555,7 @@ export function ChatComposer({
           return
       }
     }
-    if (listOpen && e.key === 'Escape') {
+    if (listShown && e.key === 'Escape') {
       e.preventDefault()
       setDismissed(true)
       return
@@ -733,7 +739,7 @@ export function ChatComposer({
       >
         {translate('chat.composer.exitBody')}
       </ConfirmDialog>
-      {listOpen && (
+      {listShown && (
         <SlashCommandList
           id={listId}
           trigger={listTrigger}

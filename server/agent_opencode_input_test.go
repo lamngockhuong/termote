@@ -647,7 +647,7 @@ func TestOpencodeClientWriteIDs(t *testing.T) {
 	}
 	ctx := context.Background()
 	for _, err := range []error{
-		c.prompt(ctx, "x/../y", "hi", nil),
+		c.prompt(ctx, "x/../y", "hi", nil, nil),
 		c.permissionReply(ctx, "sesA1", "../per", "once"),
 		c.formReply(ctx, "sesA1", "frm_1/../x", nil),
 		func() error { _, err := c.busySince(ctx, "nope"); return err }(),
@@ -662,7 +662,7 @@ func TestOpencodeClientWriteIDs(t *testing.T) {
 	// A refused password drops the service, as a read does.
 	oc.set(func() { oc.writeStatus = http.StatusUnauthorized })
 	oc.messages["sesA1"] = nil
-	if err := c.prompt(ctx, "sesA1", "hi", nil); err == nil || !strings.Contains(err.Error(), "unavailable") {
+	if err := c.prompt(ctx, "sesA1", "hi", nil, nil); err == nil || !strings.Contains(err.Error(), "unavailable") {
 		t.Errorf("401 = %v", err)
 	}
 	if _, cached := opencodeServices.peek(""); cached {

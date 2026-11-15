@@ -320,8 +320,18 @@ sẽ được lưu) và từ chối. Câu hỏi, hoặc form mà một công
 cụ yêu cầu điền, hiện các trường của nó (chữ, số, ô đánh dấu, lựa chọn một hay nhiều mục, câu trả
 lời khác khi câu hỏi cho phép) cùng nút **Gửi**; trường còn thiếu hoặc vượt giới hạn được đánh dấu
 trước khi gửi. **Hủy** từ chối yêu cầu cấp quyền hoặc bỏ qua form. Form yêu cầu mở một liên kết thì
-phải trả lời trong terminal. Lệnh `/` sẽ có ở bản sau: tin nhắn bắt đầu bằng `/` được gửi tới mô
-hình như văn bản thường.
+phải trả lời trong terminal. Card hiện theo ngôn ngữ của ứng dụng.
+
+Gõ `/` ở đầu tin nhắn để xem các lệnh của OpenCode, theo danh sách dịch vụ của nó trả về cho thư mục
+của session: lệnh có sẵn của OpenCode (`/goal`, `/init`, `/review`, nhãn `có sẵn`) và lệnh trong cấu
+hình OpenCode của bạn hay trong dự án (nhãn `tùy chỉnh`). Skill đứng sau `@` như trong OpenCode, ở
+bất kỳ đâu trong tin nhắn; mỗi dòng cho biết skill là của OpenCode (`hệ thống`), của dự án hay của
+bạn (`người dùng`). Khi gửi, Termote đọc lại cả hai danh sách: `/tên` chỉ chạy lệnh đó khi lệnh có
+trong danh sách, phần còn lại của tin nhắn là tham số; mỗi `@tên` có trong danh sách sẽ kèm skill
+đó. `/tên` khác được gửi tới mô hình như văn bản thường, `@` đứng trước một tên không phải skill
+(một file hay một địa chỉ) cũng vậy. Các lệnh `/` còn lại của OpenCode (đổi model, giao diện hay
+session) chỉ tác động lên màn hình terminal của nó nên không có trong danh sách: hãy dùng chúng
+trong terminal. Thiết bị chỉ xem không thấy danh sách lệnh.
 
 OpenCode 2 cài từ trang GitHub releases của nó hoặc Homebrew; gói `opencode-ai` trên npm vẫn là
 OpenCode 1, Termote không đọc được bản này.

@@ -43,6 +43,15 @@ type fakeOpencode struct {
 	// for every write.
 	sessions    map[string]json.RawMessage
 	writeStatus int
+	// commandList and skillList answer GET /api/command and /api/skill
+	// (recorded from 2.3.0 unless a test sets them); listStatus forces an
+	// answer for both; locations are the directories they were asked for.
+	commandList json.RawMessage
+	skillList   json.RawMessage
+	listStatus  int
+	locations   []string
+	// goneCommand is listed but answers 404 when run.
+	goneCommand string
 }
 
 const testOpencodePassword = "s3cret-opencode-password"
@@ -138,6 +147,24 @@ func (f *fakeOpencode) serve(w http.ResponseWriter, r *http.Request) {
 	if f.status != 0 {
 		w.WriteHeader(f.status)
 		w.Write([]byte(`{"_tag":"InternalError","message":"internal words /home/user"}`))
+		return
+	}
+	if path == "/api/command" || path == "/api/skill" {
+		f.locations = append(f.locations, r.URL.Query().Get("location[directory]"))
+		if f.listStatus != 0 {
+			w.WriteHeader(f.listStatus)
+			w.Write([]byte(`{"_tag":"LocationNotFoundError","message":"list words /home/user"}`))
+			return
+		}
+		data := f.commandList
+		if path == "/api/skill" {
+			data = f.skillList
+		}
+		if data == nil {
+			data = testOpencodeFixture(f.t, strings.TrimPrefix(path, "/api/")+"-list.json")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(data)
 		return
 	}
 	if path == "/api/session/active" {
@@ -269,6 +296,22 @@ func (f *fakeOpencode) write(w http.ResponseWriter, r *http.Request, id, sub str
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(testOpencodeFixture(f.t, "prompt-response.json"))
+	case r.Method == http.MethodPost && sub == "command":
+		var cmd struct{ Name string }
+		json.Unmarshal(body, &cmd)
+		list := f.commandList
+		if list == nil {
+			list = testOpencodeFixture(f.t, "command-list.json")
+		}
+		var known struct{ Data []struct{ Name string } }
+		json.Unmarshal(list, &known)
+		_, made := f.messages[id]
+		if !made || cmd.Name == f.goneCommand || !slices.ContainsFunc(known.Data, func(c struct{ Name string }) bool { return c.Name == cmd.Name }) {
+			w.WriteHeader(http.StatusNotFound)
+			w.Write(testOpencodeFixture(f.t, "command-not-found.json"))
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	case len(parts) >= 2 && (parts[0] == "permission" || parts[0] == "form"):
 		src := f.permissions
 		if parts[0] == "form" {
