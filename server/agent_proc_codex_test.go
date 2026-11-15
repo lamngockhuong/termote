@@ -133,6 +133,19 @@ func TestHerdrCodexSession(t *testing.T) {
 		return held, holder
 	}
 	t.Cleanup(func() { herdrCodexSession = orig })
+	// The Codex under the pane's shell, looked up when herdr names no
+	// session it holds.
+	var underPID []int
+	under, underOK := AgentSession{}, false
+	origUnder := herdrPaneCodexSession
+	herdrPaneCodexSession = func(key string, pid int) (AgentSession, bool) {
+		if key != "wR:p3" {
+			t.Errorf("walk keyed %q", key)
+		}
+		underPID = append(underPID, pid)
+		return under, underOK
+	}
+	t.Cleanup(func() { herdrPaneCodexSession = origUnder })
 
 	set("codex", "codex")
 	s, ok, err := m.AgentSession(ctx, "wR:p3")
@@ -155,6 +168,65 @@ func TestHerdrCodexSession(t *testing.T) {
 		if _, ok, err := m.AgentSession(ctx, "wR:p3"); ok || err != nil {
 			t.Errorf("%s: ok=%v err=%v", name, ok, err)
 		}
+	}
+	if len(underPID) != 2 {
+		t.Errorf("pane walks = %v, want the unheld ref and the claude ref only (never for pi)", underPID)
+	}
+
+	// `codex resume`: herdr reports the agent but no session until the first
+	// message; the Codex under the pane's shell holds the rollout.
+	resumed := AgentSession{Agent: "codex", ID: testCodexID, CodexHome: "/h/.codex", Rollout: "/h/.codex/sessions/r2", PID: 11}
+	under, underOK = resumed, true
+	underPID = nil
+	asked = nil
+	f.mu.Lock()
+	f.agent, f.paneExtra = "codex", map[string]any{"agent_status": "idle"}
+	f.procs = map[string]any{"wR:p3": fakeProcessInfo("wR:p3", 4242, 4300, fakeProc(4300, "codex", "codex"))}
+	f.mu.Unlock()
+	s, ok, err = m.AgentSession(ctx, "wR:p3")
+	if err != nil || !ok || s.Rollout != resumed.Rollout || s.PID != 11 || s.Status != "idle" || s.Target != "wR:p3" ||
+		len(asked) != 0 || len(underPID) != 1 || underPID[0] != 4242 {
+		t.Fatalf("resumed = %+v, %v, %v (asked %v, walked %v)", s, ok, err, asked, underPID)
+	}
+	// A ref no process holds falls back to the pane's own Codex too.
+	set("codex", "codex")
+	holder = false
+	if s, ok, _ := m.AgentSession(ctx, "wR:p3"); !ok || s.Rollout != resumed.Rollout {
+		t.Errorf("unheld ref = %+v, %v", s, ok)
+	}
+	// Nothing under the pane: no session.
+	underOK = false
+	f.mu.Lock()
+	f.paneExtra = map[string]any{"agent_status": "idle"}
+	f.mu.Unlock()
+	if _, ok, err := m.AgentSession(ctx, "wR:p3"); ok || err != nil {
+		t.Errorf("no process: ok=%v err=%v", ok, err)
+	}
+	// A pane without a shell pid is never walked.
+	underOK = true
+	f.mu.Lock()
+	f.procs["wR:p3"] = fakeProcessInfo("wR:p3", 0, 0)
+	f.mu.Unlock()
+	underPID = nil
+	if _, ok, _ := m.AgentSession(ctx, "wR:p3"); ok || len(underPID) != 0 {
+		t.Errorf("no shell pid: ok=%v walked %v", ok, underPID)
+	}
+}
+
+func TestFindCodexUnderSkipsClaude(t *testing.T) {
+	if !agentProcSupported {
+		t.Skip("no process walk on this OS")
+	}
+	if _, ok := findCodexUnder("k", 0); ok {
+		t.Error("pid 0 walked")
+	}
+	// A Claude Code found under the pane is not a Codex session.
+	agentTrees.do("codex-under-test|5", func() (claudeProcResult, error) {
+		return claudeProcResult{claudeProc{agent: "claude", pid: 5, claudeDir: "/x"}, true}, nil
+	})
+	t.Cleanup(func() { agentTrees.forgetFunc(func(k string) bool { return k == "codex-under-test|5" }) })
+	if _, ok := findCodexUnder("codex-under-test", 5); ok {
+		t.Error("claude process taken for codex")
 	}
 }
 

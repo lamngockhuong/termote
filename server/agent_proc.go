@@ -48,8 +48,29 @@ type claudeProcResult struct {
 // findClaudeSession returns the Claude Code session running under rootPID.
 // key names the pane, so a pane whose shell changed gets a new walk.
 func findClaudeSession(key string, rootPID int) (AgentSession, bool) {
-	if rootPID <= 0 || !agentProcSupported {
+	p, ok := agentProcUnder(key, rootPID)
+	if !ok {
 		return AgentSession{}, false
+	}
+	return sessionOfProc(p)
+}
+
+// findCodexUnder returns the session of the Codex process running under
+// rootPID, without reading its turn status (herdr reports its own). key
+// names the pane, as for findClaudeSession.
+func findCodexUnder(key string, rootPID int) (AgentSession, bool) {
+	p, ok := agentProcUnder(key, rootPID)
+	if !ok || p.agent != "codex" {
+		return AgentSession{}, false
+	}
+	return codexSessionOf(p, "", false)
+}
+
+// agentProcUnder is the agent process walkForClaude finds under rootPID,
+// cached per pane and root pid.
+func agentProcUnder(key string, rootPID int) (claudeProc, bool) {
+	if rootPID <= 0 || !agentProcSupported {
+		return claudeProc{}, false
 	}
 	r, _ := agentTrees.do(fmt.Sprintf("%s|%d", key, rootPID), func() (claudeProcResult, error) {
 		children, err := procTables.do("", procChildrenFunc)
@@ -59,10 +80,7 @@ func findClaudeSession(key string, rootPID int) (AgentSession, bool) {
 		p, ok := walkForClaude(rootPID, children)
 		return claudeProcResult{p, ok}, nil
 	})
-	if !r.found {
-		return AgentSession{}, false
-	}
-	return sessionOfProc(r.p)
+	return r.p, r.found
 }
 
 // findClaudeSessionNow is findClaudeSession without caches, for the checks
