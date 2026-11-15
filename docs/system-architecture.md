@@ -360,6 +360,9 @@ POST   /api/mux/panes/{id}/agent/answer   body: {promptId, choice} → 204
 GET    /api/mux/panes/{id}/agent/commands                        → {commands: [{name, description, source, kind}]}
 POST   /api/mux/panes/{id}/agent/start    body: {kind}          → {ok, state: "starting"} | {error, code}   (caps.agentStart; codex: caps.agentStartCodex)
 GET    /api/mux/panes/{id}/agent/start                           → {kind, state} | 404 no_start
+GET    /api/mux/panes/{id}/agent/history?agent=&cursor=          → {sessions: [{agent, id, title, titleSource, cwd, branch?, updatedAt, live?}], next?, truncated}
+GET    /api/mux/panes/{id}/agent/history/{session}/transcript?agent=&before= → as agent/transcript | 404 session_not_found
+POST   /api/mux/panes/{id}/agent/resume   body: {agent, session, where: tab|here, fork?} → {ok, tabId, paneId} | 409 session_live {tabId, paneId} (caps.tasks)
 GET    /api/mux/panes/{id}/files/tree?path=&root=               → {root, isRepo, dir?, path, entries, truncated}
 GET    /api/mux/panes/{id}/files/content?path=&root=&reveal=&encoding= → {root, path, size, text, hash, encoding, bom?, editable, notEditable?} | {…, previewable: false, reason} | {…, sensitive: true}
 GET    /api/mux/panes/{id}/files/content?path=&root=&hash=1     → {root, path, size, hash} (never the contents, sensitive or not)
@@ -414,6 +417,16 @@ the whole draft is confirmed before and after Enter. The request's time budget g
 number of images. When a step after the first paste fails, the box is cleared with one `C-c`
 only if the same idle agent shows nothing but this request's paste (the code is then the step's
 own, e.g. `paste_not_confirmed`); anything else answers 409 `partial_paste` and leaves the box.
+
+The session history (`/agent/history`, `server/agent_history*.go`) lists the Claude Code and Codex
+sessions whose recorded cwd is the pane's root (as Files finds it) or under it, read from the
+server user's own Claude Code dir and `CODEX_HOME` (at most 2000 files per agent, 64 KB at each
+end of a transcript), newest first, 30 a page; `live` names the pane that runs one now. An old
+session's transcript is read through the same reader as the Chat view's. `/agent/resume` types
+`claude --resume <id>` (`--fork-session` with `fork`) or `codex resume --no-daemon <id>` into a
+new tab of the pane's group, or into the pane's own idle shell, as Tasks types a task
+(`taskMux`; not on psmux); a session running in a pane is never opened twice (409
+`session_live`). The rules are in `docs/security-invariants.md`.
 
 `/agent/start` (`caps.agentStart`: Herdr 0.8.2 or later, on Linux, macOS and Windows) starts
 Claude Code (`kind: "claude"`) or Codex (`"codex"`, run as `codex --no-daemon`; only where Codex

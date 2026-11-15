@@ -334,6 +334,49 @@ rảnh: Ctrl+C của lệnh khởi động xóa được lệnh đang chờ (`St
 dừng giữa chừng một script `.ps1` hay lệnh như `Copy-Item -Recurse`, giống hệt khi bạn tự bấm
 Ctrl+C. Chỉ khởi động agent ở pane mà bạn biết chắc đang ở dấu nhắc.
 
+## Tiếp tục phiên cũ
+
+Mỗi pane liệt kê được các phiên Claude Code và Codex đã chạy trong thư mục của nó: thư mục gốc
+của pane (git repository của nó, như [Files](/vi/usage/files/) tìm thấy) hoặc một thư mục con, mới nhất
+trước. Mở danh sách từ một trong các chỗ sau:
+
+- nút lịch sử trên header của view Chat;
+- **Lịch sử phiên** trong command palette (lệnh `>`; không có phím tắt mặc định, tự gán trong
+  Settings > Shortcuts);
+- **Lịch sử phiên** trong menu của một group ở sidebar (danh sách theo thư mục của tab mà group
+  mở ra);
+- pane chưa có agent: view Chat của nó hiện ba phiên gần nhất, mỗi phiên có nút **Tiếp tục**.
+
+Mỗi dòng có agent, tiêu đề, lần hoạt động cuối, nhánh git và thư mục con dưới gốc. Tiêu đề là tên
+bạn đặt bằng `/rename`, không có thì là tiêu đề agent tự đặt (Codex: tên đặt cho cuộc hội thoại), không có nữa thì
+là lời nhắn đầu tiên, in nghiêng. Ô tìm lọc theo tiêu đề và nhánh; khi danh sách có cả hai agent
+thì có thêm nút lọc từng agent.
+
+Chạm vào một phiên để đọc lại, hiển thị như view Chat của một phiên đang chạy; **Show earlier
+messages** tải thêm phần cũ hơn. Bên dưới có:
+
+- **Tiếp tục trong tab mới**: mở một tab trong group của pane, ở đúng thư mục phiên đã chạy, rồi
+  gõ `claude --resume <id>` hoặc `codex resume --no-daemon <id>` vào đó. View Chat của tab mới hiện
+  lại hội thoại cũ, tin bạn gửi tiếp được ghi vào cùng phiên.
+- **Tiếp tục ở đây**: gõ dòng lệnh đó ngay trong pane này, chỉ có khi pane đang ở shell và không
+  chạy gì khác. Giống Tasks, Termote bấm Ctrl+C trước, và không gõ gì nếu pane đang bận.
+- Phiên đang chạy ở một pane được gắn nhãn **Đang chạy** và không bao giờ được mở lần hai (hai
+  tiến trình cùng ghi một transcript sẽ làm hỏng nó). **Mở tab đang chạy** đưa bạn tới tab đó; với
+  Claude Code còn có **Tách nhánh**, tạo một phiên mới có id riêng từ hội thoại ấy
+  (`--fork-session`), phiên cũ giữ nguyên.
+
+Giới hạn:
+
+- Chỉ liệt kê phiên của chính user chạy server (`CLAUDE_CONFIG_DIR` hoặc `~/.claude`, và
+  `CODEX_HOME` hoặc `~/.codex`); phiên của thư mục khác hay của một Place thì không.
+- Codex không lưu chỉ mục theo thư mục: chỉ các phiên nằm trong 2000 lần chạy gần nhất được liệt
+  kê, và danh sách có ghi chú khi phiên cũ hơn bị bỏ qua.
+- Tách nhánh chỉ có cho Claude Code. Muốn tiếp tục phiên, backend phải chạy được
+  [Tasks](/vi/usage/tasks/) (tmux, Herdr, Zellij, `herdr-core`; psmux thì không) và shell phải là loại
+  Tasks hỗ trợ (`bash`, `zsh`, `sh`, `fish`, `pwsh`).
+- Thiết bị chỉ xem đọc được danh sách và hội thoại cũ ở những nơi được đọc [Files](/vi/usage/files/) (một
+  git repository, không phải thư mục home), nhưng không tiếp tục được.
+
 ## Giới hạn
 
 - tmux: chat đi theo pane đang được focus trong cửa sổ tmux. Ở cửa sổ chia đôi, chat nói chuyện với pane
