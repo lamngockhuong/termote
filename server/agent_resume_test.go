@@ -164,9 +164,10 @@ func TestHistoryTranscriptRoute(t *testing.T) {
 // words only, no tool call and no output.
 func TestHistoryTranscriptViewOnlyText(t *testing.T) {
 	fx := newResumeFixture(t)
+	cwd, _ := json.Marshal(fx.root)
 	writeClaudeSession(t, fx.claude, fx.root, histID3, claudeRows(fx.root, "main", "run it",
-		`{"type":"assistant","cwd":"`+fx.root+`","uuid":"t1","message":{"role":"assistant","content":[{"type":"tool_use","id":"x1","name":"Bash","input":{"command":"cat secret"}}]}}`,
-		`{"type":"user","cwd":"`+fx.root+`","uuid":"t2","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x1","content":"s3cret"}]}}`,
+		`{"type":"assistant","cwd":`+string(cwd)+`,"uuid":"t1","message":{"role":"assistant","content":[{"type":"tool_use","id":"x1","name":"Bash","input":{"command":"cat secret"}}]}}`,
+		`{"type":"user","cwd":`+string(cwd)+`,"uuid":"t2","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x1","content":"s3cret"}]}}`,
 	), time.Now().Add(time.Minute))
 	path := "/api/mux/panes/0/agent/history/" + histID3 + "/transcript?agent=claude"
 	full := serve(fx.h, apiRequest("GET", path, ""))

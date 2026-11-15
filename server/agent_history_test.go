@@ -248,7 +248,9 @@ func TestScanClaude(t *testing.T) {
 	// A subagent's transcript and non-session files are not listed.
 	writeFile(t, filepath.Join(fx.claude, "projects", claudeProjectName(fx.root), histID1, "subagents", "agent-x.jsonl"), claudeRows(fx.root, "", "sub"))
 	writeFile(t, filepath.Join(fx.claude, "projects", claudeProjectName(fx.root), "notes.jsonl"), claudeRows(fx.root, "", "x"))
-	writeFile(t, filepath.Join(fx.claude, "projects", claudeProjectName(fx.root), strings.ToUpper(histID3)+".jsonl"), claudeRows(fx.root, "", "x"))
+	// An id in capitals is no session id (a new one: on a file system that
+	// ignores case, the capitals of histID3 would name histID3's own file).
+	writeFile(t, filepath.Join(fx.claude, "projects", claudeProjectName(fx.root), "AAAAAAAA-0000-4000-8000-000000000008.jsonl"), claudeRows(fx.root, "", "x"))
 
 	writeFile(t, filepath.Join(fx.claude, "projects", claudeProjectName(fx.root)+"-file"), "not a dir")
 	writeFile(t, filepath.Join(fx.claude, "projects", claudeProjectName(fx.root), "aaaaaaaa-0000-4000-8000-000000000005.jsonl"), `{"type":"user","message":{"content":"no cwd"}}`+"\n")
