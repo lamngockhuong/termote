@@ -160,6 +160,25 @@ func TestHistoryTranscriptRoute(t *testing.T) {
 	assertViewOnly(t, "no repo", serve(ph, viewRequest("GET", path(histID1, "?agent=claude"), "")))
 }
 
+// A view-only client reads an old session as it reads the Chat view: the
+// words only, no tool call and no output.
+func TestHistoryTranscriptViewOnlyText(t *testing.T) {
+	fx := newResumeFixture(t)
+	writeClaudeSession(t, fx.claude, fx.root, histID3, claudeRows(fx.root, "main", "run it",
+		`{"type":"assistant","cwd":"`+fx.root+`","uuid":"t1","message":{"role":"assistant","content":[{"type":"tool_use","id":"x1","name":"Bash","input":{"command":"cat secret"}}]}}`,
+		`{"type":"user","cwd":"`+fx.root+`","uuid":"t2","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x1","content":"s3cret"}]}}`,
+	), time.Now().Add(time.Minute))
+	path := "/api/mux/panes/0/agent/history/" + histID3 + "/transcript?agent=claude"
+	full := serve(fx.h, apiRequest("GET", path, ""))
+	view := serve(fx.h, viewRequest("GET", path, ""))
+	if !strings.Contains(full.Body.String(), "s3cret") || view.Code != 200 {
+		t.Fatalf("full = %s, view = %d", full.Body, view.Code)
+	}
+	if strings.Contains(view.Body.String(), "s3cret") || strings.Contains(view.Body.String(), "cat secret") || !strings.Contains(view.Body.String(), "run it") {
+		t.Errorf("view-only = %s", view.Body)
+	}
+}
+
 func TestHistoryTranscriptFileGone(t *testing.T) {
 	fx := newResumeFixture(t)
 	// Listed, then removed before it is read.

@@ -103,7 +103,7 @@ func (a *agentAPI) handleHistoryTranscript(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if isViewOnly(r) {
-		res = hideSensitiveResults(res, a.calls.safe)
+		res = viewTranscript(res)
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	jsonOK(w, res)

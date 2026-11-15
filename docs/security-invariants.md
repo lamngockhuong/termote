@@ -1024,7 +1024,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   cursors' key, a prefix of its own), a forged one is 400. Reads (list and transcript):
   `crossSiteRejection`, `requireAgentRead`; a view-only client is refused (403 `view_only`) where
   Files refuses it the root (no git repo, a home dir) and gets transcripts through
-  `hideSensitiveResults`. A transcript is read only for a session the listing finds in that root
+  `viewTranscript`, as the Chat view's (text only: no tool part, no note). A transcript is read only for a session the listing finds in that root
   (another root's, another agent's or an unknown id: 404 `session_not_found`, no reason given),
   through the journal adapters' own `Locate` checks. One scan per root is shared for 10 s; parsed
   files are kept by path, size and mtime (at most 5000). `live` marks a session some pane runs now
