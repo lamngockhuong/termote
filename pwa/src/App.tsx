@@ -153,7 +153,6 @@ import {
   parseDeepLink,
   parseScreenLink,
 } from './utils/deep-link'
-import { fatherTabNewName } from './utils/father-tab'
 import { signOutPage } from './utils/files-persist'
 import { isFocusWindow } from './utils/focus-mode'
 import {
@@ -182,6 +181,7 @@ import {
 } from './utils/settings-registry'
 import { formatChord } from './utils/shortcuts'
 import { spareAllowed } from './utils/spare-stream-token'
+import { tabGroupNewName } from './utils/tab-group'
 import {
   attachImageToTerminal,
   blurTerminal,
@@ -2313,10 +2313,10 @@ export default function App({
               readOnly || focus
                 ? undefined
                 : (name?: string, icon?: string) =>
-                    // Without a name: into the FatherTab of the tab on
-                    // screen (the form says the FatherTab itself)
+                    // Without a name: into the tab group of the tab on
+                    // screen (the form says the group itself)
                     addTab(
-                      name ?? fatherTabNewName(activeSession.name, 'New'),
+                      name ?? tabGroupNewName(activeSession.name, 'New'),
                       icon,
                     )
             }

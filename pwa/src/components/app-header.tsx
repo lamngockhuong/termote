@@ -1,22 +1,8 @@
 import { AppWindow } from 'lucide-react'
-import {
-  type ComponentProps,
-  type ReactNode,
-  useEffect,
-  useMemo,
-  useRef,
-} from 'react'
+import type { ComponentProps, ReactNode } from 'react'
 import { useCompactLabels } from '../hooks/use-compact-labels'
 import { useT } from '../i18n/i18n-context'
 import type { Session } from '../types/session'
-import {
-  type FatherTab,
-  fatherTabMoveIndex,
-  fatherTabsOf,
-  joinFatherTab,
-  pickFatherTabSession,
-  splitFatherTab,
-} from '../utils/father-tab'
 import type { ToolbarPosition } from '../utils/toolbar-position'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { BrandMark } from './brand-mark'
@@ -25,7 +11,6 @@ import {
   type ConnectionState,
   isDown,
 } from './connection-indicator'
-import { FATHER_TAB_DROP, FatherTabs } from './father-tabs'
 import { PanelToggles } from './panel-toggles'
 import { SessionSwitcherChip } from './session-switcher-chip'
 import { SessionTabs } from './session-tabs'
@@ -55,11 +40,12 @@ interface Props {
   onAddTab?: (name?: string, icon?: string) => void
   // The Add button asks for a name and icon first (compact sidebar)
   addTabAsksName?: boolean
-  // Unset (view-only role): a tab's menu offers no rename and no icon
+  // Unset (view-only role): a tab's menu offers no rename and no icon.
+  // Settles once done (a tab group's tabs are renamed one by one)
   onUpdateTab?: (
     id: string,
     updates: { name?: string; icon?: string; customIcon?: boolean },
-  ) => void
+  ) => unknown
   // The backend can rename tabs (caps.renameTab)
   renameTab?: boolean
   onRemoveTab: (id: string) => void
@@ -118,8 +104,8 @@ interface Props {
 // The top bar. Mobile: the session chip, the view menu and the overflow
 // menu (which also holds the font size). Desktop: one row with the session
 // tabs, the view switcher, the side panel toggles, font size, connection and
-// the menu (which also holds the command palette and fullscreen); a row of
-// FatherTabs above the tabs once a tab of the workspace is in one.
+// the menu (which also holds the command palette and fullscreen). The tabs
+// show their tab groups ("review/PR 1"), each after its coloured name.
 export function AppHeader(props: Props) {
   return props.isMobile ? (
     <MobileHeader {...props} />
@@ -195,61 +181,13 @@ function DesktopHeader(p: Props) {
   const labels = useCompactLabels()
   const compact = p.showSessionTabs && labels.compact
   const inHeader = p.toolbar !== 'right'
-  // FatherTabs ("review/PR 1": the tab "PR 1" of "review"): the tab bar
-  // shows those of the FatherTab the tab on screen is in
-  const fathers = useMemo(
-    () => (p.showSessionTabs ? fatherTabsOf(p.groupSessions) : []),
-    [p.showSessionTabs, p.groupSessions],
-  )
-  const fatherName = splitFatherTab(session.name).father
-  const father = fathers.find((f) => f.name === fatherName)
-  // A focus window's tab may be of another workspace than the tabs given
-  const tabs = father?.sessions ?? p.groupSessions
-  // The tab last shown in each FatherTab, which picking it opens again
-  const keyOf = (name?: string) => `${session.groupId ?? ''}\n${name ?? ''}`
-  const fatherKey = keyOf(fatherName)
-  const lastShown = useRef(new Map<string, string>())
-  useEffect(() => {
-    lastShown.current.set(fatherKey, session.id)
-  }, [fatherKey, session.id])
-  const selectFather = (to: FatherTab) =>
-    p.onSelectTab(
-      pickFatherTabSession(to, lastShown.current.get(keyOf(to.name))),
-    )
-  const { onMoveTab, onUpdateTab } = p
-  const fatherNames = useMemo(
-    () => fathers.flatMap((f) => f.name ?? []),
-    [fathers],
-  )
-  // A tab dropped on a FatherTab of the row is renamed into it ("": out of
-  // any), where the backend renames tabs
-  const dropOnFather =
-    fathers.length > 0 && onUpdateTab && p.renameTab !== false
-      ? (id: string, target: HTMLElement) => {
-          const dropped = p.groupSessions.find((s) => s.id === id)!
-          const to = target.dataset.father || undefined
-          const { father: from, label } = splitFatherTab(dropped.name)
-          if (to !== from) onUpdateTab(id, { name: joinFatherTab(to, label) })
-        }
-      : undefined
   return (
     // At least 44px, padded below the status bar of an installed iPad app;
     // it grows when touch-sized controls are taller than the row, instead of
     // cutting off their top. A container: below 60rem the view and panel
     // buttons drop their labels too, so the session tabs keep room (an iPad
-    // beside the sidebar). The FatherTabs take a line of their own above the
-    // row, the header's whole width: the tabs may have little of it left
-    <header
-      className={`@container relative z-10 flex min-h-11 shrink-0 items-end gap-x-2 border-b border-border bg-surface px-2 pt-[env(safe-area-inset-top)] ui-terminal:bg-bg ${fathers.length > 0 ? 'flex-wrap' : ''}`}
-    >
-      {fathers.length > 0 && (
-        <FatherTabs
-          fathers={fathers}
-          active={fatherName}
-          onSelect={selectFather}
-          onAdd={p.onAddTab}
-        />
-      )}
+    // beside the sidebar)
+    <header className="@container relative z-10 flex min-h-11 shrink-0 items-end gap-2 border-b border-border bg-surface px-2 pt-[env(safe-area-inset-top)] ui-terminal:bg-bg">
       {/* The expanded sidebar carries the brand; the phone header has no
           room to spare */}
       {p.showBrand && (
@@ -260,32 +198,23 @@ function DesktopHeader(p: Props) {
       )}
       {p.showSessionTabs ? (
         <SessionTabs
-          // Another group's tabs, or another FatherTab's, are another
-          // list: none of them fades in, and the last one's do not fade
-          // out among them
-          key={fatherKey}
-          sessions={tabs}
+          // Another group's tabs are another list: none of them fades in,
+          // and the last group's do not fade out among them
+          key={session.groupId ?? ''}
+          sessions={p.groupSessions}
           activeId={session.id}
           onSelect={p.onSelectTab}
           onAdd={p.onAddTab}
           askName={p.addTabAsksName}
           onRemove={p.onRemoveTab}
           canRemove={p.canRemoveTab}
-          // A place among the tabs shown is not one among the workspace's
-          onMove={
-            onMoveTab &&
-            ((id, index) =>
-              onMoveTab(id, fatherTabMoveIndex(p.groupSessions, tabs, index)))
-          }
+          onMove={p.onMoveTab}
           moving={p.movingTab}
           onUpdate={p.onUpdateTab}
           renameTab={p.renameTab}
           onSpareChange={labels.onSpareChange}
-          label={tabLabel}
-          dropTargets={dropOnFather && FATHER_TAB_DROP}
-          onDropOn={dropOnFather}
-          fathers={fatherNames}
-          father={fatherName}
+          tabGroups
+          workspace={session.groupId}
         />
       ) : (
         <SessionName session={session} className="mb-2" />
@@ -366,10 +295,6 @@ function DesktopHeader(p: Props) {
     </header>
   )
 }
-
-// A tab's name in the tab bar: without its FatherTab, which the row above
-// shows
-const tabLabel = (s: Session) => splitFatherTab(s.name).label
 
 // The tab's icon, name and description, where its tabs are not shown
 function SessionName({

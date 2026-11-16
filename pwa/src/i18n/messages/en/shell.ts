@@ -40,19 +40,25 @@ export default {
   'shell.tabs.renameField': 'New name for {name}',
   // The form a new tab is named in, under the tab bar
   'shell.tabs.newForm': 'New session',
-  // The FatherTabs above the tab bar (components/father-tabs.tsx); Other:
-  // the tabs in none
-  'shell.fatherTabs.label': 'FatherTabs',
-  'shell.fatherTabs.other': 'Other',
-  // A tab's menu: the group of FatherTabs it can move to, out of any, and
-  // to a new one, whose name the field on the tab asks for
-  'shell.fatherTabs.moveTo': 'Move to FatherTab',
-  'shell.fatherTabs.none': 'No FatherTab',
-  'shell.fatherTabs.moveNew': 'New FatherTab…',
-  'shell.fatherTabs.nameField': 'New FatherTab for {name}',
-  'shell.fatherTabs.add': 'New FatherTab',
+  // Tab groups in the tab bar (components/session-tabs.tsx): a group's
+  // coloured name, which folds and unfolds it, and its menu
+  'shell.tabGroups.chip_one': '{name}, tab group of {count} tab',
+  'shell.tabGroups.chip_other': '{name}, tab group of {count} tabs',
+  'shell.tabGroups.menu': 'Tab group {name}',
+  'shell.tabGroups.newTab': 'New tab in this group',
+  'shell.tabGroups.rename': 'Rename tab group',
+  'shell.tabGroups.renameField': 'New name for tab group {name}',
+  'shell.tabGroups.collapse': 'Collapse',
+  'shell.tabGroups.expand': 'Expand',
+  'shell.tabGroups.ungroup': 'Ungroup',
+  // A tab's menu: the groups it can be added to, a new one (named in a
+  // field on the tab) and out of its own
+  'shell.tabGroups.addTo': 'Add to tab group',
+  'shell.tabGroups.new': 'New tab group…',
+  'shell.tabGroups.nameField': 'New tab group for {name}',
+  'shell.tabGroups.remove': 'Remove from tab group',
   // The new tab form's field for it
-  'shell.fatherTabs.field': 'FatherTab (optional)',
+  'shell.tabGroups.field': 'Tab group (optional)',
   // The pane strip (components/pane-strip.tsx)
   'shell.panes.close': 'Close pane {name}',
   // The layout view (components/terminal-stack.tsx): one pane of it
