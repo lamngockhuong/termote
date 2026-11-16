@@ -14,10 +14,9 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/utils/tour-steps.ts`                     | Tour steps (phone, desktop), which show, where the bubble goes |
 | `pwa/src/i18n/`                                   | `t()`, `<Trans>`, locales, messages per area (EN, VI)          |
 | `pwa/src/components/language-notice.tsx`          | Once, to a device that picked VI before: the app speaks it now |
-| `pwa/src/components/session-tabs.tsx`             | Header tab bar; a tab's menu: rename (F2), icon, move, close   |
+| `pwa/src/components/session-tabs.tsx`             | Header tab bar, tab groups; menus: rename, icon, group, move   |
 | `pwa/src/components/new-tab-form.tsx`             | A new tab's name and icon, under the header's tab bar          |
-| `pwa/src/components/father-tabs.tsx`              | FatherTabs: a row above the tab bar, tabs gathered by name     |
-| `pwa/src/utils/father-tab.ts`                     | FatherTab of a tab (`review/PR 1`), new names, move indexes    |
+| `pwa/src/utils/tab-group.ts`                      | Tab groups (`review/PR 1`): the bar's order, drops, moves      |
 | `pwa/src/components/tab-icon.tsx`                 | A tab's icon: the picked one, else its agent's logo or default |
 | `pwa/src/components/agent-logo.tsx`               | Coding agents' logos (lobe-icons, MIT) keyed by agent name     |
 | `pwa/src/utils/sidebar-layout.ts`                 | Sidebar layout setting: detailed (tabs listed) or compact      |

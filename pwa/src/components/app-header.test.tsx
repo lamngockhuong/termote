@@ -1,4 +1,11 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react'
 import { MessageSquare, SquareTerminal } from 'lucide-react'
 import type { ComponentProps } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -280,75 +287,62 @@ describe('AppHeader — desktop', () => {
   })
 })
 
-describe('AppHeader — FatherTabs', () => {
+describe('AppHeader — tab groups', () => {
   const TABS: Session[] = [
     { id: '1', name: 'review/PR 1', icon: '', description: '', groupId: 'g' },
     { id: '2', name: 'Shell', icon: '', description: '', groupId: 'g' },
     { id: '3', name: 'review/PR 2', icon: '', description: '', groupId: 'g' },
     { id: '4', name: 'coding/api', icon: '', description: '', groupId: 'g' },
   ]
-  const header = (p: Props) => (
-    <ThemeProvider>
-      <AppHeader {...p} />
-    </ThemeProvider>
-  )
-  const tabNames = () =>
+  // What the tab bar shows, left to right: a group's name as [name]
+  const bar = () =>
     [
       ...screen
         .getByRole('tablist', { name: 'Sessions' })
-        .querySelectorAll('[role="tab"]'),
-    ].map((t) => t.textContent)
+        .querySelectorAll<HTMLElement>('[role="tab"], [data-group-chip]'),
+    ].map((el) =>
+      el.dataset.groupChip === undefined
+        ? el.textContent
+        : `[${el.dataset.groupChip}]`,
+    )
 
   beforeEach(() => {
     Element.prototype.scrollIntoView = vi.fn()
+    localStorage.clear()
   })
 
-  it('has no FatherTabs row while no tab is in one', () => {
+  it('shows no group while no tab is in one', () => {
     renderHeader()
-    expect(screen.queryByRole('tablist', { name: 'FatherTabs' })).toBeNull()
-    expect(tabNames()).toEqual(['💻Shell', '🤖Code'])
+    expect(bar()).toEqual(['💻Shell', '🤖Code'])
   })
 
-  it('shows the tabs of the FatherTab on screen, without its name', () => {
-    renderHeader({ session: TABS[0], groupSessions: TABS })
-    expect(screen.getByRole('tablist', { name: 'FatherTabs' })).toBeVisible()
-    expect(tabNames().map((n) => n?.replace(/^\D*?(?=PR)/, ''))).toEqual([
+  it("shows every tab of the workspace in one bar, each group's after its name", () => {
+    renderHeader({ session: TABS[1], groupSessions: TABS })
+    expect(bar()).toEqual([
+      '[review]',
       'PR 1',
       'PR 2',
+      'Shell',
+      '[coding]',
+      'api',
     ])
-    expect(screen.getByRole('tab', { name: /PR 1/ })).not.toHaveTextContent(
-      'review',
-    )
+    expect(screen.getAllByRole('tablist')).toHaveLength(1)
   })
 
-  it('shows the tabs in no FatherTab under Other', () => {
+  it('keeps which groups are collapsed per workspace', () => {
     renderHeader({ session: TABS[1], groupSessions: TABS })
-    expect(screen.getByRole('tab', { name: /Other/ })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    )
-    expect(tabNames()).toHaveLength(1)
-  })
-
-  it('has no FatherTabs row where the tabs are not shown', () => {
+    fireEvent.click(screen.getByRole('button', { name: /^review,/ }))
+    expect(bar()).toEqual(['[review]', 'Shell', '[coding]', 'api'])
+    cleanup()
+    renderHeader({ session: TABS[1], groupSessions: TABS })
+    expect(bar()).toEqual(['[review]', 'Shell', '[coding]', 'api'])
+    // Another workspace with a group of the same name
+    cleanup()
     renderHeader({
-      session: TABS[0],
-      groupSessions: TABS,
-      showSessionTabs: false,
+      session: { ...TABS[1], groupId: 'h' },
+      groupSessions: TABS.map((t) => ({ ...t, groupId: 'h' })),
     })
-    expect(screen.queryByRole('tablist')).toBeNull()
-  })
-
-  it('opens a FatherTab on its first tab, then on the one last shown in it', () => {
-    const props = headerProps({ session: TABS[0], groupSessions: TABS })
-    const { rerender } = render(header(props))
-    fireEvent.click(screen.getByRole('tab', { name: /coding/ }))
-    expect(props.onSelectTab).toHaveBeenLastCalledWith('4')
-    // PR 2 shown, then coding: review opens on PR 2 again
-    rerender(header({ ...props, session: TABS[2] }))
-    rerender(header({ ...props, session: TABS[3] }))
-    fireEvent.click(screen.getByRole('tab', { name: /review/ }))
-    expect(props.onSelectTab).toHaveBeenLastCalledWith('3')
+    expect(bar()).toHaveLength(6)
   })
 
   it("moves a tab to its place among all of the workspace's tabs", () => {
@@ -357,71 +351,11 @@ describe('AppHeader — FatherTabs', () => {
     const tab = screen.getByRole('tab', { name: /PR 1/ })
     tab.focus()
     fireEvent.keyDown(tab, { key: 'ArrowRight', altKey: true })
-    // After PR 2, the third of the workspace's tabs
-    expect(onMoveTab).toHaveBeenCalledWith('1', 2)
+    // PR 2 before PR 1: the group stays before Shell
+    expect(onMoveTab).toHaveBeenCalledWith('3', 0)
   })
 
-  describe('a tab dropped on a FatherTab', () => {
-    let under: Element | null = null
-    beforeEach(() => {
-      under = null
-      document.elementFromPoint = () => under
-    })
-    afterEach(async () => {
-      // @ts-expect-error jsdom has none of its own
-      delete document.elementFromPoint
-      // A drag's swallowed click is let go after its task
-      await new Promise((r) => setTimeout(r))
-    })
-    const dropOn = (tab: RegExp, father: RegExp) => {
-      const box = screen.getByRole('tab', { name: tab }).parentElement!
-      fireEvent.pointerDown(box, {
-        button: 0,
-        pointerType: 'mouse',
-        clientX: 10,
-      })
-      under = screen.getByRole('tab', { name: father })
-      fireEvent.pointerMove(window, { clientX: 30 })
-      fireEvent.pointerUp(window)
-    }
-
-    it('is renamed into it, or out of any on Other', () => {
-      const onUpdateTab = vi.fn()
-      renderHeader({ session: TABS[0], groupSessions: TABS, onUpdateTab })
-      dropOn(/PR 1/, /coding/)
-      expect(onUpdateTab).toHaveBeenLastCalledWith('1', { name: 'coding/PR 1' })
-      dropOn(/PR 2/, /Other/)
-      expect(onUpdateTab).toHaveBeenLastCalledWith('3', { name: 'PR 2' })
-    })
-
-    it('keeps its name on its own FatherTab', () => {
-      const onUpdateTab = vi.fn()
-      renderHeader({ session: TABS[0], groupSessions: TABS, onUpdateTab })
-      dropOn(/PR 1/, /review/)
-      expect(onUpdateTab).not.toHaveBeenCalled()
-    })
-
-    it('is not offered where tabs cannot be renamed', () => {
-      const { unmount } = render(
-        header(headerProps({ session: TABS[0], groupSessions: TABS })),
-      )
-      expect(
-        screen.getByRole('tab', { name: /PR 1/ }).parentElement,
-      ).not.toHaveAttribute('data-movable')
-      unmount()
-      renderHeader({
-        session: TABS[0],
-        groupSessions: TABS,
-        onUpdateTab: vi.fn(),
-        renameTab: false,
-      })
-      expect(
-        screen.getByRole('tab', { name: /PR 1/ }).parentElement,
-      ).not.toHaveAttribute('data-movable')
-    })
-  })
-
-  it('asks a new tab its FatherTab, starting with the one on screen', () => {
+  it('asks a new tab its group, starting with the one on screen', () => {
     const props = renderHeader({
       session: TABS[0],
       groupSessions: TABS,
@@ -431,14 +365,14 @@ describe('AppHeader — FatherTabs', () => {
     const form = screen.getByRole('form', { name: 'New session' })
     const name = within(form).getByRole('textbox', { name: 'Session name' })
     expect(name).toHaveFocus()
-    const father = within(form).getByRole('combobox', {
-      name: 'FatherTab (optional)',
+    const group = within(form).getByRole('combobox', {
+      name: 'Tab group (optional)',
     })
-    expect(father).toHaveValue('review')
+    expect(group).toHaveValue('review')
     fireEvent.change(name, { target: { value: 'PR 3' } })
     fireEvent.submit(form)
     expect(props.onAddTab).toHaveBeenLastCalledWith('review/PR 3', undefined)
-    // Cleared: a tab in no FatherTab
+    // Cleared: a tab in no group
     fireEvent.click(screen.getByRole('button', { name: 'Add session' }))
     const again = screen.getByRole('form', { name: 'New session' })
     fireEvent.change(within(again).getByRole('combobox'), {
@@ -451,101 +385,12 @@ describe('AppHeader — FatherTabs', () => {
     expect(props.onAddTab).toHaveBeenLastCalledWith('notes', undefined)
   })
 
-  describe("a tab's menu", () => {
-    const openMenu = (onUpdateTab = vi.fn(), over: Partial<Props> = {}) => {
-      renderHeader({
-        session: TABS[0],
-        groupSessions: TABS,
-        onUpdateTab,
-        ...over,
-      })
-      fireEvent.contextMenu(screen.getByRole('tab', { name: /PR 1/ }))
-      return onUpdateTab
-    }
-    const group = () => screen.getByRole('group', { name: 'Move to FatherTab' })
-
-    it('moves the tab to another FatherTab, not offering its own', () => {
-      const onUpdateTab = openMenu()
-      expect(
-        within(group())
-          .getAllByRole('menuitem')
-          .map((i) => i.textContent),
-      ).toEqual(['coding', 'No FatherTab', 'New FatherTab…'])
-      fireEvent.click(screen.getByRole('menuitem', { name: 'coding' }))
-      expect(onUpdateTab).toHaveBeenCalledWith('1', { name: 'coding/PR 1' })
-    })
-
-    it('moves the tab out of any FatherTab', () => {
-      const onUpdateTab = openMenu()
-      fireEvent.click(screen.getByRole('menuitem', { name: 'No FatherTab' }))
-      expect(onUpdateTab).toHaveBeenCalledWith('1', { name: 'PR 1' })
-    })
-
-    it('offers a tab in none every FatherTab, and no way out', () => {
-      renderHeader({
-        session: TABS[1],
-        groupSessions: TABS,
-        onUpdateTab: vi.fn(),
-      })
-      fireEvent.contextMenu(screen.getByRole('tab', { name: /Shell/ }))
-      expect(
-        within(group())
-          .getAllByRole('menuitem')
-          .map((i) => i.textContent),
-      ).toEqual(['review', 'coding', 'New FatherTab…'])
-    })
-
-    it('names a new FatherTab on the tab: Enter moves it, an empty name and Escape do not', () => {
-      const onUpdateTab = openMenu()
-      const ask = () => {
-        fireEvent.click(
-          screen.getByRole('menuitem', { name: 'New FatherTab…' }),
-        )
-        return screen.getByRole('textbox', {
-          name: 'New FatherTab for review/PR 1',
-        })
-      }
-      let field = ask()
-      expect(field).toHaveValue('')
-      fireEvent.keyDown(field, { key: 'Enter' })
-      expect(onUpdateTab).not.toHaveBeenCalled()
-      fireEvent.contextMenu(screen.getByRole('tab', { name: /PR 1/ }))
-      field = ask()
-      fireEvent.change(field, { target: { value: 'specs' } })
-      fireEvent.keyDown(field, { key: 'Escape' })
-      expect(onUpdateTab).not.toHaveBeenCalled()
-      fireEvent.contextMenu(screen.getByRole('tab', { name: /PR 1/ }))
-      field = ask()
-      fireEvent.change(field, { target: { value: ' specs ' } })
-      fireEvent.keyDown(field, { key: 'Enter' })
-      expect(onUpdateTab).toHaveBeenCalledWith('1', { name: 'specs/PR 1' })
-      // A rename after it asks for the name again
-      fireEvent.keyDown(screen.getByRole('tab', { name: /PR 1/ }), {
-        key: 'F2',
-      })
-      expect(
-        screen.getByRole('textbox', { name: 'New name for review/PR 1' }),
-      ).toHaveValue('review/PR 1')
-    })
-
-    it('has no FatherTab items where tabs cannot be renamed', () => {
-      openMenu(vi.fn(), { renameTab: false })
-      expect(screen.queryByRole('group')).toBeNull()
-    })
-  })
-
-  it('adds a new FatherTab from the row', () => {
-    const props = renderHeader({ session: TABS[0], groupSessions: TABS })
-    fireEvent.click(screen.getByRole('button', { name: 'New FatherTab' }))
-    const form = screen.getByRole('form', { name: 'New session' })
-    fireEvent.change(within(form).getByRole('combobox'), {
-      target: { value: 'specs' },
-    })
-    fireEvent.change(within(form).getByRole('textbox'), {
-      target: { value: 'auth' },
-    })
-    fireEvent.submit(form)
-    expect(props.onAddTab).toHaveBeenLastCalledWith('specs/auth', undefined)
+  it('moves a tab into a group from its menu', () => {
+    const onUpdateTab = vi.fn()
+    renderHeader({ session: TABS[1], groupSessions: TABS, onUpdateTab })
+    fireEvent.contextMenu(screen.getByRole('tab', { name: /Shell/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'coding' }))
+    expect(onUpdateTab).toHaveBeenCalledWith('2', { name: 'coding/Shell' })
   })
 
   it('shows the tabs given when the session is not among them', () => {
@@ -557,7 +402,7 @@ describe('AppHeader — FatherTabs', () => {
       groupId: 'g2',
     }
     renderHeader({ session: away, groupSessions: TABS })
-    expect(tabNames()).toHaveLength(4)
+    expect(bar().filter((n) => !n?.startsWith('['))).toHaveLength(4)
   })
 })
 

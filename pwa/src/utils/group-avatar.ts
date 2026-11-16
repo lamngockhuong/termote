@@ -41,7 +41,12 @@ function hash(name: string): number {
   return h >>> 0
 }
 
+// Which of the avatar colours (0 to 7, --tm-avatar-N+1) is name's
+export function avatarToneIndex(name: string): number {
+  return hash(name) % AVATAR_TONES.length
+}
+
 // The background class of name's avatar
 export function avatarTone(name: string): (typeof AVATAR_TONES)[number] {
-  return AVATAR_TONES[hash(name) % AVATAR_TONES.length]
+  return AVATAR_TONES[avatarToneIndex(name)]
 }

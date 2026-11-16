@@ -1,8 +1,8 @@
 import { type Ref, useEffect, useId, useRef, useState } from 'react'
 import { useT } from '../i18n/i18n-context'
 import { DEFAULT_TAB_ICON } from '../types/session'
-import { joinFatherTab } from '../utils/father-tab'
 import { imeComposing } from '../utils/ime-composing'
+import { joinTabGroup } from '../utils/tab-group'
 import { IconPicker } from './icon-picker'
 import { Button } from './ui/button'
 
@@ -18,15 +18,11 @@ interface Props {
   nameRef?: Ref<HTMLInputElement>
   // Presses on these do not close it (+ toggles it itself)
   toggleSelector?: string
-  // Set: the form asks for a FatherTab too (optional), offering these; the
+  // Set: the form asks for a tab group too (optional), offering these; the
   // name it adds then starts with the one typed ("review/PR 1")
-  fathers?: readonly string[]
-  // The FatherTab the field starts with
-  father?: string
-  // The FatherTab field takes the focus, not the name (a new FatherTab)
-  focusFather?: boolean
-  // The edge of what it hangs under that it lines up with (default: end)
-  align?: 'start' | 'end'
+  groups?: readonly string[]
+  // The tab group the field starts with
+  group?: string
 }
 
 // A new tab's name and icon, in a panel under the header's tab bar (the
@@ -37,14 +33,12 @@ export function NewTabForm({
   onClose,
   nameRef,
   toggleSelector,
-  fathers,
-  father: firstFather = '',
-  focusFather = false,
-  align = 'end',
+  groups,
+  group: firstGroup = '',
 }: Props) {
   const { t } = useT()
   const [name, setName] = useState('')
-  const [father, setFather] = useState(firstFather)
+  const [group, setGroup] = useState(firstGroup)
   const listId = useId()
   const [icon, setIcon] = useState<string>()
   const ref = useRef<HTMLFormElement>(null)
@@ -72,7 +66,7 @@ export function NewTabForm({
       onSubmit={(e) => {
         e.preventDefault()
         if (!name.trim()) return
-        onAdd(joinFatherTab(father.trim() || undefined, name.trim()), icon)
+        onAdd(joinTabGroup(group.trim() || undefined, name.trim()), icon)
         onClose()
       }}
       onKeyDown={(e) => {
@@ -87,7 +81,7 @@ export function NewTabForm({
         e.preventDefault()
         onClose()
       }}
-      className={`absolute top-full z-40 mt-1 flex w-72 flex-col gap-2 rounded-panel border border-border bg-surface-raised p-2 shadow-xl ui-native:border-0 ${align === 'start' ? 'left-0' : 'right-0'}`}
+      className="absolute right-0 top-full z-40 mt-1 flex w-72 flex-col gap-2 rounded-panel border border-border bg-surface-raised p-2 shadow-xl ui-native:border-0"
     >
       <div className="flex min-w-0 items-center gap-2">
         <IconPicker
@@ -104,23 +98,22 @@ export function NewTabForm({
           value={name}
           onChange={(e) => setName(e.target.value)}
           className={INPUT_CLASSES}
-          autoFocus={!focusFather}
+          autoFocus
         />
       </div>
-      {fathers && (
+      {groups && (
         <>
           <input
             type="text"
-            aria-label={t('shell.fatherTabs.field')}
-            placeholder={t('shell.fatherTabs.field')}
+            aria-label={t('shell.tabGroups.field')}
+            placeholder={t('shell.tabGroups.field')}
             list={listId}
-            value={father}
-            onChange={(e) => setFather(e.target.value)}
+            value={group}
+            onChange={(e) => setGroup(e.target.value)}
             className={INPUT_CLASSES}
-            autoFocus={focusFather}
           />
           <datalist id={listId}>
-            {fathers.map((f) => (
+            {groups.map((f) => (
               <option key={f} value={f} />
             ))}
           </datalist>
