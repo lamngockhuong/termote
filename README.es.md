@@ -27,12 +27,12 @@
   <a href="https://unikorn.vn/p/termote?ref=embed-termote" target="_blank"><img src="https://unikorn.vn/api/widgets/badge/termote?theme=dark" alt="Termote trên Unikorn.vn" width="170" height="42" /></a>
 </p>
 
-Controla remotamente herramientas CLI (Claude Code, Codex, OpenCode, cualquier terminal) desde movil/escritorio via PWA.
+Controla remotamente herramientas CLI (Claude Code, Codex, OpenCode, cualquier terminal) desde móvil/escritorio vía PWA.
 
 > [!NOTE]
-> Termote 1.0 no actualiza una instalacion 0.x. Desinstala 0.x como se describe en la
-> [documentacion archivada de 0.x](https://termote.ohnice.app/0.x/) y luego instala 1.0
-> con los comandos de [Inicio Rapido](#inicio-rapido).
+> Termote 1.0 no actualiza una instalación 0.x. Desinstala 0.x como se describe en la
+> [documentación archivada de 0.x](https://termote.ohnice.app/0.x/) y luego instala 1.0
+> con los comandos de [Inicio Rápido](#inicio-rápido).
 
 > **Termote** = Terminal + Remote
 >
@@ -42,45 +42,45 @@ Controla remotamente herramientas CLI (Claude Code, Codex, OpenCode, cualquier t
   <a href="https://termote.ohnice.app/#see-it-in-a-minute"><img src="website/public/video/termote-intro.jpg" alt="Mira Termote en un minuto (vídeo)" width="720" /></a>
 </p>
 
-## Caracteristicas
+## Características
 
-- **Cambio de sesiones**: Multiples sesiones tmux con crear/editar/eliminar
-- **Pestanas de sesiones**: Barra de pestanas horizontal para cambiar rapidamente entre ventanas
-- **Backend Herdr** (nativo o en el contenedor): controla workspaces de Herdr en lugar de tmux, con insignias de estado del agente de codigo en cada panel — ver [Instalacion nativa](https://termote.ohnice.app/installation/native/)
+- **Cambio de sesiones**: Múltiples sesiones tmux con crear/editar/eliminar
+- **Pestañas de sesiones**: Barra de pestañas horizontal para cambiar rápidamente entre ventanas
+- **Backend Herdr** (nativo o en el contenedor): controla workspaces de Herdr en lugar de tmux, con insignias de estado del agente de código en cada panel — ver [Instalación nativa](https://termote.ohnice.app/installation/native/)
 - **Vista Chat**: lee y responde como un chat a un panel que ejecuta Claude Code, Codex (iniciado con `--no-daemon`) u OpenCode 2, con sugerencias de comandos slash, respuestas a diálogos y los subagentes en ejecución — ver [Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
 - **Historial de sesiones**: lista las sesiones de Claude Code, Codex y OpenCode que se ejecutaron en la carpeta de un panel, lee una, reanúdala en una pestaña nueva o bifurca una que esté en ejecución — ver [Resuming an Old Session](https://termote.ohnice.app/usage/agent-chat/#resuming-an-old-session)
 - **Tokens y coste**: los tokens y el coste estimado de cada sesión de agente, con totales diarios — ver [Tokens and cost](https://termote.ohnice.app/usage/overview/#tokens-and-cost)
 - **Archivos que cambió una sesión**: los archivos que editó una sesión de agente, listados en Changes y en el historial de sesiones; cada uno abre su diff — ver [Changes](https://termote.ohnice.app/usage/changes/#files-a-session-changed)
 - **Vistas Files y Changes**: explora el directorio de un panel y sus cambios de git, con vista previa de Markdown, en todos los backends, incluido psmux en Windows — ver [Files and Changes](https://termote.ohnice.app/usage/files/)
-- **Cola de mensajes y enlaces a archivos en Chat**: deja un mensaje en cola mientras el agente trabaja; toca una ruta de archivo que escribio el agente para abrirlo en Files, en su linea
-- **Revision y staging**: comenta lineas en Changes y Files y envia la revision a un agente; haz stage, unstage o descarta un cambio por archivo o por hunk
-- **Vista previa y edicion en Files**: PDF, .xlsx y .docx en solo lectura; abre y guarda archivos Shift-JIS, EUC-JP y UTF-16; edita Markdown junto a una vista previa en vivo
+- **Cola de mensajes y enlaces a archivos en Chat**: deja un mensaje en cola mientras el agente trabaja; toca una ruta de archivo que escribió el agente para abrirlo en Files, en su línea
+- **Revisión y staging**: comenta líneas en Changes y Files y envía la revisión a un agente; haz stage, unstage o descarta un cambio por archivo o por hunk
+- **Vista previa y edición en Files**: PDF, .xlsx y .docx en solo lectura; abre y guarda archivos Shift-JIS, EUC-JP y UTF-16; edita Markdown junto a una vista previa en vivo
 - **Open in Windows** (WSL): copia la ruta de Windows de un archivo, o abre un archivo o una carpeta con su programa de Windows, cuando el servidor se ejecuta en WSL
 - **Places**: ofrece en Files una carpeta fuera del panel con `termote start --allow-path <dir>` — ver [Places](https://termote.ohnice.app/usage/files/#places)
-- **Tasks**: ejecuta los scripts de `package.json` y los targets del Makefile de un panel, y envia una ejecucion fallida a un agente — ver [Tasks](https://termote.ohnice.app/usage/tasks/)
+- **Tasks**: ejecuta los scripts de `package.json` y los targets del Makefile de un panel, y envía una ejecución fallida a un agente — ver [Tasks](https://termote.ohnice.app/usage/tasks/)
 - **Worktrees**: abre un worktree de git como un grupo propio, desde una rama nueva o existente (Herdr, tmux, Zellij, herdr-core, psmux) — ver [Worktrees](https://termote.ohnice.app/usage/sessions/#worktrees)
-- **Ventanas propias** (escritorio): abre un archivo, un diff, una pestana, un panel o la vista general en su propia ventana
-- **Imagenes adjuntas**: envia una imagen desde el movil a la terminal o a un mensaje de la vista Chat, para que el agente la lea por su ruta; una imagen pegada en Claude Code, Codex u OpenCode se vuelve a abrir desde la vista Chat
-- **Backend Zellij** (Linux, macOS o en el contenedor): controla tus sesiones, pestanas y paneles de Zellij en lugar de tmux (Zellij 0.45.0 o posterior), elegido con `--mux zellij` — ver [Instalacion nativa](https://termote.ohnice.app/installation/native/)
-- **Backend herdr-core** (nativo, cualquier SO): muestra los espacios, pestanas y paneles que muestra la app herdr, como un cliente mas de herdr-core (`hc` 0.1.16 o posterior), elegido con `--mux hc` — ver [Backend herdr-core](https://termote.ohnice.app/installation/native/#herdr-core-backend)
+- **Ventanas propias** (escritorio): abre un archivo, un diff, una pestaña, un panel o la vista general en su propia ventana
+- **Imágenes adjuntas**: envía una imagen desde el móvil a la terminal o a un mensaje de la vista Chat, para que el agente la lea por su ruta; una imagen pegada en Claude Code, Codex u OpenCode se vuelve a abrir desde la vista Chat
+- **Backend Zellij** (Linux, macOS o en el contenedor): controla tus sesiones, pestañas y paneles de Zellij en lugar de tmux (Zellij 0.45.0 o posterior), elegido con `--mux zellij` — ver [Instalación nativa](https://termote.ohnice.app/installation/native/)
+- **Backend herdr-core** (nativo, cualquier SO): muestra los espacios, pestañas y paneles que muestra la app herdr, como un cliente más de herdr-core (`hc` 0.1.16 o posterior), elegido con `--mux hc` — ver [Backend herdr-core](https://termote.ohnice.app/installation/native/#herdr-core-backend)
 - **Machines**: observa y controla los agentes de tus otros equipos desde un solo Termote, por SSH con una clave que allí solo puede llegar a Termote (`termote machine add <alias>`) — ver [Machines](https://termote.ohnice.app/usage/machines/)
-- **Plugin de Herdr**: abre en Termote el panel de Herdr enfocado, muestra su enlace como codigo QR para el movil e inicia o detiene el servidor, sin salir de Herdr — ver [Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/)
-- **Optimizado para movil**: Teclado virtual (Tab/Ctrl/Shift/flechas, expandible)
+- **Plugin de Herdr**: abre en Termote el panel de Herdr enfocado, muestra su enlace como código QR para el móvil e inicia o detiene el servidor, sin salir de Herdr — ver [Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/)
+- **Optimizado para móvil**: Teclado virtual (Tab/Ctrl/Shift/flechas, expandible)
 - **Soporte de gestos**: Deslizar para Ctrl+C, Tab, desplazamiento
-- **Historial de comandos**: Recuperar comandos enviados previamente con busqueda
-- **Acciones rapidas**: La tecla ⋯ fijada al final de la barra movil muestra una fila Actions con operaciones comunes (clear, cancel, exit)
+- **Historial de comandos**: Recuperar comandos enviados previamente con búsqueda
+- **Acciones rápidas**: La tecla ⋯ fijada al final de la barra móvil muestra una fila Actions con operaciones comunes (clear, cancel, exit)
 - **Estilos de interfaz**: Neutral, Terminal o Native, elegidos en Ajustes, independientes del tema claro/oscuro
 - **Idioma de la interfaz**: inglés o vietnamita, elegido en Ajustes; Auto sigue al navegador
 - **Ajustes para llevar**: exporta los ajustes de este navegador a un archivo e impórtalos en otro, o revisa los ajustes que propone un agente de programación con `termote settings propose` — ver [Settings](https://termote.ohnice.app/usage/settings/#export-and-import)
 - **Terminal con GPU**: el terminal se dibuja con WebGL2 cuando el dispositivo tiene GPU, lo que mantiene fluidas las salidas grandes
-- **Indicador de conexion**: Estado del servidor en tiempo real con deteccion automatica de desconexion
-- **Verificador de actualizaciones**: Notificacion automatica de nuevas versiones desde GitHub releases
-- **PWA**: Instalable en la pantalla de inicio, funciona sin conexion
+- **Indicador de conexión**: Estado del servidor en tiempo real con detección automática de desconexión
+- **Verificador de actualizaciones**: Notificación automática de nuevas versiones desde GitHub releases
+- **PWA**: Instalable en la pantalla de inicio, funciona sin conexión
 - **Sesiones persistentes**: tmux mantiene las sesiones activas
 - **Barra lateral plegable**: Interfaz de escritorio con barra lateral de sesiones activable
 - **Modo pantalla completa**: Experiencia de terminal inmersiva
-- **Se ejecuta como servicio**: `termote start` registra un servicio de usuario (systemd, launchd, tarea programada) que arranca al iniciar sesion
-- **Persistencia de configuracion**: `termote start` guarda sus opciones, con la contrasena almacenada cifrada
+- **Se ejecuta como servicio**: `termote start` registra un servicio de usuario (systemd, launchd, tarea programada) que arranca al iniciar sesión
+- **Persistencia de configuración**: `termote start` guarda sus opciones, con la contraseña almacenada cifrada
 
 ## Capturas de Pantalla
 
@@ -102,7 +102,7 @@ Controla remotamente herramientas CLI (Claude Code, Codex, OpenCode, cualquier t
 
 ```mermaid
 flowchart TB
-    subgraph Client["Cliente (Movil/Escritorio)"]
+    subgraph Client["Cliente (Móvil/Escritorio)"]
         PWA["PWA - React + xterm.js"]
         Gestures["Controles por Gestos"]
         Keyboard["Teclado Virtual"]
@@ -112,7 +112,7 @@ flowchart TB
         Static["Static Files"]
         Stream["WebSocket de terminal /api/mux/stream"]
         API["REST API /api/mux/*"]
-        Guard["Lista de hosts permitidos + proteccion Origin/CSRF"]
+        Guard["Lista de hosts permitidos + protección Origin/CSRF"]
         Auth["Basic Auth"]
     end
 
@@ -139,11 +139,11 @@ flowchart TB
     tmux --> Shell --> Tools
 ```
 
-termote transmite el terminal por si mismo (PTY en Unix, ConPTY en Windows) a xterm.js dentro de la PWA; ya no hay un proceso de terminal aparte al que hacer proxy. El modelo completo de proteccion de peticiones esta en [`docs/system-architecture.md`](docs/system-architecture.md).
+termote transmite el terminal por sí mismo (PTY en Unix, ConPTY en Windows) a xterm.js dentro de la PWA; ya no hay un proceso de terminal aparte al que hacer proxy. El modelo completo de protección de peticiones está en [`docs/system-architecture.md`](docs/system-architecture.md).
 
-## Inicio Rapido
+## Inicio Rápido
 
-> 📖 **Nuevo en Termote?** Consulta la [Guia de Inicio](docs/getting-started.md) para un recorrido completo con ejemplos.
+> 📖 **¿Nuevo en Termote?** Consulta la [Guía de Inicio](docs/getting-started.md) para un recorrido completo con ejemplos.
 
 **Linux / macOS:**
 
@@ -170,9 +170,9 @@ termote start
 
 **Con un agente de programación:** pega el prompt de [Install with an agent](https://termote.ohnice.app/installation/agent/) en Claude Code, Codex u otro agente. Sigue [`agents.md`](https://termote.ohnice.app/agents.md), comprueba que el servidor responde y te deja a ti la contraseña.
 
-El instalador solo necesita `curl`, `tar` y `sha256sum`/`shasum` (PowerShell en Windows), sin sudo ni permisos de administrador. Verifica el checksum del archivo, instala el comando `termote` y no inicia nada. `termote start` guarda las opciones, crea una contrasena la primera vez (se muestra una sola vez, y solo en una terminal; `termote show-password` la vuelve a mostrar), registra el servicio y lo inicia. Abre `http://127.0.0.1:7680` (Windows: `http://127.0.0.1:7690`).
+El instalador solo necesita `curl`, `tar` y `sha256sum`/`shasum` (PowerShell en Windows), sin sudo ni permisos de administrador. Verifica el checksum del archivo, instala el comando `termote` y no inicia nada. `termote start` guarda las opciones, crea una contraseña la primera vez (se muestra una sola vez, y solo en una terminal; `termote show-password` la vuelve a mostrar), registra el servicio y lo inicia. Abre `http://127.0.0.1:7680` (Windows: `http://127.0.0.1:7690`).
 
-Antes hay que instalar un backend de terminal: tmux (`sudo apt install tmux`, `brew install tmux`), psmux en Windows (`winget install psmux`) o [Herdr](https://termote.ohnice.app/installation/native/). El primer `start` detecta cual usar. [Zellij](https://zellij.dev/documentation/installation) 0.45.0 o posterior (Linux, macOS) nunca se detecta: eligelo con `--mux zellij`. [herdr-core](https://herdr.dev/core/) (`hc` 0.1.16 o posterior, cualquier SO, solo nativo) tampoco se detecta: eligelo con `--mux hc`.
+Antes hay que instalar un backend de terminal: tmux (`sudo apt install tmux`, `brew install tmux`), psmux en Windows (`winget install psmux`) o [Herdr](https://termote.ohnice.app/installation/native/). El primer `start` detecta cuál usar. [Zellij](https://zellij.dev/documentation/installation) 0.45.0 o posterior (Linux, macOS) nunca se detecta: elígelo con `--mux zellij`. [herdr-core](https://herdr.dev/core/) (`hc` 0.1.16 o posterior, cualquier SO, solo nativo) tampoco se detecta: elígelo con `--mux hc`.
 
 ### Opciones comunes
 
@@ -203,11 +203,11 @@ termote update                       # Update to the latest release
 termote uninstall                    # Remove the service, the command, the install and uploads
 ```
 
-`update` cambia a la nueva version, reinicia el servicio y vuelve a la anterior si la nueva no arranca. `uninstall` conserva la configuracion (`~/.config/termote`) y los logs (`~/.local/state/termote`) y muestra ambas rutas; `uninstall --purge` también los elimina.
+`update` cambia a la nueva versión, reinicia el servicio y vuelve a la anterior si la nueva no arranca. `uninstall` conserva la configuración (`~/.config/termote`) y los logs (`~/.local/state/termote`) y muestra ambas rutas; `uninstall --purge` también los elimina.
 
-## Instalacion
+## Instalación
 
-### Fijar una version
+### Fijar una versión
 
 ```bash
 curl -fsSL https://termote.ohnice.app/install.sh | TERMOTE_VERSION=1.0.0 sh
@@ -218,7 +218,7 @@ termote update --version 1.0.0
 $env:TERMOTE_VERSION='1.0.0'; irm https://termote.ohnice.app/install.ps1 | iex
 ```
 
-Sin `TERMOTE_VERSION`, el instalador toma la release estable mas reciente (1.0 o posterior) y no toca una instalacion existente. Con ella, esa version se instala junto a la actual y pasa a ser la version activa, lo que tambien repara una instalacion rota. Una pre-release (`X.Y.Z-rc.N`) solo se instala cuando se nombra asi (o con `termote update --version`), y solo una vez publicada; ver la [Deployment Guide](docs/deployment-guide.md#pre-releases).
+Sin `TERMOTE_VERSION`, el instalador toma la release estable más reciente (1.0 o posterior) y no toca una instalación existente. Con ella, esa versión se instala junto a la actual y pasa a ser la versión activa, lo que también repara una instalación rota. Una pre-release (`X.Y.Z-rc.N`) solo se instala cuando se nombra así (o con `termote update --version`), y solo una vez publicada; ver la [Deployment Guide](docs/deployment-guide.md#pre-releases).
 
 ### Modo container
 
@@ -230,9 +230,9 @@ termote container logs -f
 termote container down
 ```
 
-`container up` ejecuta `ghcr.io/lamngockhuong/termote` en la version del `termote` instalado, con podman (preferido) o docker, en el puerto 7680 y con `~/termote-workspace` montado en `/workspace`. Acepta `--port`, `--lan`, `--tailscale`, `--cloudflare`, `--no-auth`, `--mux`, `--allow-host`, `--allow-path`, `--user`, `--fresh`, `--workspace` y `--build` (solo en un checkout), que se guardan aparte de las opciones de `start`; el usuario y la contrasena se comparten con el servidor nativo. Docker reinicia el container tras un reinicio del sistema; Podman sin root no tiene un daemon que lo haga, asi que ejecutalo como unidad Quadlet.
+`container up` ejecuta `ghcr.io/lamngockhuong/termote` en la versión del `termote` instalado, con podman (preferido) o docker, en el puerto 7680 y con `~/termote-workspace` montado en `/workspace`. Acepta `--port`, `--lan`, `--tailscale`, `--cloudflare`, `--no-auth`, `--mux`, `--allow-host`, `--allow-path`, `--user`, `--fresh`, `--workspace` y `--build` (solo en un checkout), que se guardan aparte de las opciones de `start`; el usuario y la contraseña se comparten con el servidor nativo. Docker reinicia el container tras un reinicio del sistema; Podman sin root no tiene un daemon que lo haga, así que ejecútalo como unidad Quadlet.
 
-> **Nota de seguridad**: Evita montar `$HOME` directamente — directorios sensibles como `.ssh`, `.gnupg` serian accesibles en el container. Monta directorios de proyecto especificos.
+> **Nota de seguridad**: Evita montar `$HOME` directamente — directorios sensibles como `.ssh`, `.gnupg` serían accesibles en el container. Monta directorios de proyecto específicos.
 
 ### Docker sin la CLI
 
@@ -248,13 +248,13 @@ docker run -d --name termote -p 7680:7680 \
   ghcr.io/lamngockhuong/termote:latest
 ```
 
-| Variable de Entorno | Descripcion                                                                                                           |
+| Variable de Entorno | Descripción                                                                                                           |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `TERMOTE_USER`      | Usuario de autenticacion basica (por defecto: `admin`)                                                                |
-| `TERMOTE_PASS`      | Contrasena de autenticacion basica (por defecto: auto-generada, guardada en `/home/termote/.config/termote/password`) |
-| `NO_AUTH`           | Establecer a `true` para deshabilitar la autenticacion                                                                |
+| `TERMOTE_USER`      | Usuario de autenticación básica (por defecto: `admin`)                                                                |
+| `TERMOTE_PASS`      | Contraseña de autenticación básica (por defecto: auto-generada, guardada en `/home/termote/.config/termote/password`) |
+| `NO_AUTH`           | Establecer a `true` para deshabilitar la autenticación                                                                |
 
-### Compilar desde el codigo fuente
+### Compilar desde el código fuente
 
 ```bash
 git clone https://github.com/lamngockhuong/termote.git
@@ -263,11 +263,11 @@ make build
 ./scripts/termote.sh start
 ```
 
-`make build` compila la PWA y la incrusta en `server/termote`; necesita Go, Node.js y pnpm. `scripts/termote.sh` (Windows: `scripts\termote.ps1`) solo ejecuta un checkout: recompila el binario de desarrollo cuando alguna fuente es mas reciente y luego lo ejecuta con los mismos argumentos. `termote update` se niega a ejecutarse en un checkout; usa `git pull && make build`.
+`make build` compila la PWA y la incrusta en `server/termote`; necesita Go, Node.js y pnpm. `scripts/termote.sh` (Windows: `scripts\termote.ps1`) solo ejecuta un checkout: recompila el binario de desarrollo cuando alguna fuente es más reciente y luego lo ejecuta con los mismos argumentos. `termote update` se niega a ejecutarse en un checkout; usa `git pull && make build`.
 
 ### Actualizar desde 0.x
 
-No hay actualizacion desde 0.x: 1.0 se instala en otro lugar y no lee la configuracion de 0.x. Desinstala 0.x como se describe en la [documentacion archivada de 0.x](https://termote.ohnice.app/0.x/) y luego instala 1.0 con los comandos anteriores.
+No hay actualización desde 0.x: 1.0 se instala en otro lugar y no lee la configuración de 0.x. Desinstala 0.x como se describe en la [documentación archivada de 0.x](https://termote.ohnice.app/0.x/) y luego instala 1.0 con los comandos anteriores.
 
 ## Modos de Despliegue
 
@@ -275,12 +275,12 @@ No hay actualizacion desde 0.x: 1.0 se instala en otro lugar y no lee la configu
 flowchart LR
     subgraph Container["Modo Container"]
         direction TB
-        C1["Docker/Podman"] --> C2["termote :7680 (transmite el terminal por si mismo)"] --> C3["tmux / Herdr / Zellij"]
+        C1["Docker/Podman"] --> C2["termote :7680 (transmite el terminal por sí mismo)"] --> C3["tmux / Herdr / Zellij"]
     end
 
     subgraph Native["Modo Nativo"]
         direction TB
-        N1["Sistema Host"] --> N2["termote :7680 (transmite el terminal por si mismo)"] --> N3["tmux/psmux, Herdr, Zellij o herdr-core + Herramientas Host"]
+        N1["Sistema Host"] --> N2["termote :7680 (transmite el terminal por sí mismo)"] --> N3["tmux/psmux, Herdr, Zellij o herdr-core + Herramientas Host"]
     end
 
     User["Usuario"] --> Container & Native
@@ -291,11 +291,11 @@ flowchart LR
 | Nativo    | `termote start`        | Acceso a herramientas host (claude, gh) | macOS, Linux, Windows |
 | Container | `termote container up` | Entorno aislado                         | macOS, Linux, Windows |
 
-El servidor nativo se ejecuta como servicio de usuario: una unidad de usuario de systemd en Linux (un proceso separado donde no hay systemd de usuario, como WSL2 sin systemd), un agente de launchd en macOS y una tarea programada al iniciar sesion en Windows.
+El servidor nativo se ejecuta como servicio de usuario: una unidad de usuario de systemd en Linux (un proceso separado donde no hay systemd de usuario, como WSL2 sin systemd), un agente de launchd en macOS y una tarea programada al iniciar sesión en Windows.
 
 ### Opciones de `start`
 
-| Flag                              | Descripcion                                                                                                         |
+| Flag                              | Descripción                                                                                                         |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `--port <port>`                   | Puerto (por defecto: 7680, Windows: 7690)                                                                           |
 | `--lan[=false]`                   | Escuchar en todas las interfaces (por defecto: solo localhost)                                                      |
@@ -305,22 +305,22 @@ El servidor nativo se ejecuta como servicio de usuario: una unidad de usuario de
 | `--no-cloudflare`                 | Olvidar el nombre de host de Cloudflare                                                                             |
 | `--proxy-client-header <name>`    | Cabecera en la que un proxy pone la dirección del cliente (por defecto con `--cloudflare`: `CF-Connecting-IP`)      |
 | `--no-proxy-client-header`        | Dejar de leerla                                                                                                     |
-| `--no-auth[=false]`               | Deshabilitar autenticacion basica                                                                                   |
-| `--mux <tmux\|herdr\|zellij\|hc>` | Backend de terminal (por defecto: herdr si esta en ejecucion, si no tmux; zellij: Linux, macOS; hc: herdr-core)     |
+| `--no-auth[=false]`               | Deshabilitar autenticación básica                                                                                   |
+| `--mux <tmux\|herdr\|zellij\|hc>` | Backend de terminal (por defecto: herdr si está en ejecución, si no tmux; zellij: Linux, macOS; hc: herdr-core)     |
 | `--allow-host <name>`             | Permitir un valor adicional de la cabecera Host (repetible; sin comodines, ver notas de seguridad)                  |
 | `--remove-host <name>`            | Quitar un nombre de Host permitido (repetible)                                                                      |
-| `--allow-local-user <name>`       | Permitir conectarse a otro usuario del sistema de esta maquina, p. ej. un proxy inverso (repetible; Linux, Windows) |
+| `--allow-local-user <name>`       | Permitir conectarse a otro usuario del sistema de esta máquina, p. ej. un proxy inverso (repetible; Linux, Windows) |
 | `--remove-local-user <name>`      | Dejar de permitir que ese usuario se conecte (repetible)                                                            |
 | `--allow-path <dir>`              | Ofrecer una carpeta en Files, en Places (repetible)                                                                 |
 | `--remove-path <dir>`             | Quitar una carpeta permitida (repetible)                                                                            |
 | `--allow-herdr-no-auth`           | Obligatorio junto con `--mux herdr --no-auth`                                                                       |
 | `--allow-hc-no-auth`              | Obligatorio junto con `--mux hc --no-auth`                                                                          |
 | `--user <name>`                   | Nombre de usuario de acceso (por defecto: `admin`; compartido con el container)                                     |
-| `--fresh`                         | Establecer una nueva contrasena                                                                                     |
+| `--fresh`                         | Establecer una nueva contraseña                                                                                     |
 
 ### Con Tailscale HTTPS
 
-Usa `tailscale serve` para HTTPS automatico (sin gestion manual de certificados):
+Usa `tailscale serve` para HTTPS automático (sin gestión manual de certificados):
 
 ```bash
 termote start --tailscale myhost.ts.net                # Default port 443
@@ -329,7 +329,7 @@ termote container up --tailscale myhost.ts.net         # Container mode
 sudo tailscale set --operator=$USER                    # Linux, once: let termote run tailscale serve
 ```
 
-La asignacion se aplica cada vez que arranca el servidor. `stop`, `start --no-tailscale` y `uninstall` solo eliminan la asignacion propia de Termote.
+La asignación se aplica cada vez que arranca el servidor. `stop`, `start --no-tailscale` y `uninstall` solo eliminan la asignación propia de Termote.
 
 ## Soporte de Plataformas
 
@@ -339,18 +339,18 @@ La asignacion se aplica cada vez que arranca el servidor. `stop`, `start --no-ta
 | macOS      | ✓         | ✓      | `install.sh`  |
 | Windows    | ✓         | ✓      | `install.ps1` |
 
-> **Soporte de Windows**: El modo container requiere Docker Desktop o Podman Desktop; el modo nativo requiere [psmux](https://github.com/psmux/psmux) (multiplexor de terminal compatible con tmux para Windows), que se instala con `winget install psmux`, o un servidor [Herdr](https://herdr.dev/#install) en ejecucion.
+> **Soporte de Windows**: El modo container requiere Docker Desktop o Podman Desktop; el modo nativo requiere [psmux](https://github.com/psmux/psmux) (multiplexor de terminal compatible con tmux para Windows), que se instala con `winget install psmux`, o un servidor [Herdr](https://herdr.dev/#install) en ejecución.
 
-## Uso en Movil
+## Uso en Móvil
 
-| Accion               | Gesto                       |
+| Acción               | Gesto                       |
 | -------------------- | --------------------------- |
 | Cancelar/interrumpir | Deslizar izquierda (Ctrl+C) |
 | Tab completion       | Deslizar derecha            |
 | Desplazar abajo      | Deslizar arriba             |
 | Desplazar arriba     | Deslizar abajo              |
 | Pegar                | Mantener presionado         |
-| Tamano de fuente     | Pellizcar                   |
+| Tamaño de fuente     | Pellizcar                   |
 
 La barra de herramientas virtual proporciona: Tab, Esc, Ctrl, Shift, teclas de flechas y combinaciones de teclas comunes. Soporta combinaciones Ctrl+Shift (pegar, copiar). Alterna entre modo minimal y expandido para teclas adicionales (Home, End, Delete, etc.).
 
@@ -415,11 +415,11 @@ pnpm --filter termote test:e2e       # Run Playwright tests
 pnpm --filter termote test:e2e:ui    # Run with UI debugger
 ```
 
-**Pruebas Manuales:** Ver [Lista de Verificacion](docs/self-test-checklist.md)
+**Pruebas Manuales:** Ver [Lista de Verificación](docs/self-test-checklist.md)
 
-## Solucion de Problemas
+## Solución de Problemas
 
-### La sesion no persiste
+### La sesión no persiste
 
 - Verificar tmux: `tmux ls`
 - termote se conecta con `tmux new-session -A` (attach-or-create)
@@ -429,9 +429,9 @@ pnpm --filter termote test:e2e:ui    # Run with UI debugger
 - Verificar logs de termote: `termote container logs` (container) o `termote logs server` (nativo)
 - El WebSocket del terminal es `/api/mux/stream` y lo sirve el propio termote; no hay un proceso de terminal aparte que revisar
 
-### Problemas con el teclado en movil
+### Problemas con el teclado en móvil
 
-- Asegurar que la meta tag de viewport esta presente
+- Asegurar que la meta tag de viewport está presente
 - Probar en un dispositivo real, no en un emulador
 
 ### Modo nativo: el servidor no inicia
@@ -446,25 +446,25 @@ termote start --fresh      # If the saved password can no longer be read
 ## Notas de Seguridad
 
 - **Por defecto: solo localhost** - no se expone a LAN a menos que se use el flag `--lan`
-- **Autenticacion basica habilitada por defecto** - usa `--no-auth` para deshabilitar en desarrollo local; la contrasena la crea el primer `termote start` y se guarda cifrada
-- **Lista de hosts permitidos** - se rechazan las peticiones con una cabecera `Host` desconocida (proteccion contra DNS rebinding); agrega nombres de confianza con `--allow-host`, no existe comodin para desactivar la comprobacion
+- **Autenticación básica habilitada por defecto** - usa `--no-auth` para deshabilitar en desarrollo local; la contraseña la crea el primer `termote start` y se guarda cifrada
+- **Lista de hosts permitidos** - se rechazan las peticiones con una cabecera `Host` desconocida (protección contra DNS rebinding); agrega nombres de confianza con `--allow-host`, no existe comodín para desactivar la comprobación
 - **Protecciones Origin/CSRF** - las peticiones `/api/mux/*` que cambian estado y el WebSocket `/api/mux/stream` rechazan `Sec-Fetch-Site`/`Origin` de otros sitios y exigen un token de stream de un solo uso y del mismo origen
-- **Proteccion contra fuerza bruta integrada** - limitacion de tasa (5 intentos fallidos/min por IP, 20/min por IPv6 /64)
-- **Backend Herdr** - expone todos los workspaces de Herdr del host, por eso `--mux herdr --no-auth` se rechaza salvo que tambien se pase `--allow-herdr-no-auth`
-- **Backend Zellij** - expone todas las sesiones de Zellij en ejecucion del usuario, como tmux (sin proteccion `--no-auth` adicional); las teclas y los mensajes del Chat llegan a un panel solo a traves del terminal de un cliente Zellij de Termote, nunca por argumentos de proceso que otros usuarios locales podrian leer
-- **Backend herdr-core** - herdr-core no tiene login propio, por eso `--mux hc --no-auth` se rechaza salvo que tambien se pase `--allow-hc-no-auth`, y `container up --mux hc` se rechaza
-- **Sin secretos en los archivos de servicio** - la unidad de systemd, el agente de launchd y la tarea programada nunca contienen la contrasena
-- Usar HTTPS (Tailscale) para produccion
+- **Protección contra fuerza bruta integrada** - limitación de tasa (5 intentos fallidos/min por IP, 20/min por IPv6 /64)
+- **Backend Herdr** - expone todos los workspaces de Herdr del host, por eso `--mux herdr --no-auth` se rechaza salvo que también se pase `--allow-herdr-no-auth`
+- **Backend Zellij** - expone todas las sesiones de Zellij en ejecución del usuario, como tmux (sin protección `--no-auth` adicional); las teclas y los mensajes del Chat llegan a un panel solo a través del terminal de un cliente Zellij de Termote, nunca por argumentos de proceso que otros usuarios locales podrían leer
+- **Backend herdr-core** - herdr-core no tiene login propio, por eso `--mux hc --no-auth` se rechaza salvo que también se pase `--allow-hc-no-auth`, y `container up --mux hc` se rechaza
+- **Sin secretos en los archivos de servicio** - la unidad de systemd, el agente de launchd y la tarea programada nunca contienen la contraseña
+- Usar HTTPS (Tailscale) para producción
 - Restringir a redes de confianza/VPN
-- Que puede hacer un dispositivo con sesion iniciada o emparejado, y que hacer si se pierde uno: [Modelo de seguridad](docs/security-model.md)
+- Qué puede hacer un dispositivo con sesión iniciada o emparejado, y qué hacer si se pierde uno: [Modelo de seguridad](docs/security-model.md)
 
 ## Otros Proyectos
 
-| Proyecto                                                    | Descripcion                                                                                                                                         |
+| Proyecto                                                    | Descripción                                                                                                                                         |
 | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [GitHub Flex](https://github.com/lamngockhuong/github-flex) | Extension multi-navegador (Chrome y Firefox) que mejora la interfaz de GitHub con funciones de productividad                                        |
-| [TabRest](https://github.com/lamngockhuong/tabrest)         | Extension de Chrome que descarga automaticamente las pestañas inactivas para liberar memoria                                                        |
-| [Specpin](https://github.com/lamngockhuong/specpin)         | Fija especificaciones de negocio vivas y versionadas con Git en los elementos de tu interfaz web en ejecucion (extension de navegador + sidecar Go) |
+| [GitHub Flex](https://github.com/lamngockhuong/github-flex) | Extensión multi-navegador (Chrome y Firefox) que mejora la interfaz de GitHub con funciones de productividad                                        |
+| [TabRest](https://github.com/lamngockhuong/tabrest)         | Extensión de Chrome que descarga automáticamente las pestañas inactivas para liberar memoria                                                        |
+| [Specpin](https://github.com/lamngockhuong/specpin)         | Fija especificaciones de negocio vivas y versionadas con Git en los elementos de tu interfaz web en ejecución (extensión de navegador + sidecar Go) |
 
 ## Licencia
 
