@@ -30,7 +30,9 @@ effects, kept low enough for a voice-over later.
 
 `audio/make-audio.mjs` synthesizes every sound from oscillators and noise
 into `public/audio/*.wav` (not committed; `dev` and `render` make them first):
-the music (120 BPM, so a beat is 15 frames), key typing, a tap, the push's
+the music (124 BPM, A minor, in sections: an intro, a groove,
+choruses with a lead hook, a breakdown and build into a drop, a half-time
+bridge and an outro, about 132 s, as long as the intro needs), key typing, a tap, the push's
 ping, the owl's chime and the whoosh of a cut. Nothing is sampled or
 downloaded, so the sound is the project's own, under its license.
 `src/components/sfx.tsx` places them (`<Sfx>`) and sets their levels; the
