@@ -3,10 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { type APIRequestContext, expect, type Page, test } from './fixtures'
 
-// FatherTabs: tabs of a workspace gathered by the part of their name before
-// the first "/" ("review/PR 1"), in a row above the tab bar. On any backend
-// that makes groups and renames tabs, in a group of its own made and closed
-// through the API, at the sizes of a desktop, a laptop, a tablet and a phone.
+// Tab groups: tabs of a workspace gathered by the part of their name before
+// the first "/" ("review/PR 1"), after the group's coloured name in the one
+// tab bar, like a browser's. On any backend that makes groups and renames
+// tabs, in a group of its own made and closed through the API, at the sizes
+// of a desktop, a laptop, a tablet and a phone.
 const JSON_HEADERS = { 'Content-Type': 'application/json' }
 
 interface Tab {
@@ -64,13 +65,22 @@ async function open(page: Page, request: APIRequestContext, settings: Record<str
   await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
 }
 
-const fatherRow = (page: Page) => page.getByRole('tablist', { name: 'FatherTabs' })
-const father = (page: Page, name: string) => fatherRow(page).getByRole('tab', { name: new RegExp(`^${name}`) })
 const tabBar = (page: Page) => page.getByRole('tablist', { name: 'Sessions' })
 const tab = (page: Page, name: string) => tabBar(page).getByRole('tab', { name: new RegExp(name) })
-// The names the tab bar shows, left to right
-const shown = async (page: Page) =>
-  (await tabBar(page).getByRole('tab').locator('span.truncate').allInnerTexts()).map((n) => n.trim())
+const groupName = (page: Page, name: string) => tabBar(page).locator(`[data-group-chip="${name}"]`)
+// What the tab bar shows, left to right: a group's name as [name]
+const shown = (page: Page) =>
+  tabBar(page)
+    .locator('[role="tab"], [data-group-chip]')
+    .evaluateAll((els) =>
+      els
+        .filter((el) => !el.closest('[data-leaving]'))
+        .map((el) =>
+          el instanceof HTMLElement && el.dataset.groupChip !== undefined
+            ? `[${el.dataset.groupChip}]`
+            : (el.querySelector('.truncate')?.textContent ?? '').trim(),
+        ),
+    )
 
 // Nothing of the page is wider than the window, and the terminal is on it
 async function expectFits(page: Page) {
@@ -86,7 +96,7 @@ test.beforeEach(async ({ request }) => {
   const snap = await (await request.get('/api/mux/snapshot')).json()
   test.skip(!snap.caps.groups || snap.caps.renameTab === false, 'the server makes no groups or renames no tabs')
   run = Math.random().toString(36).slice(2, 8)
-  dir = mkdtempSync(join(tmpdir(), 'e2e-father-'))
+  dir = mkdtempSync(join(tmpdir(), 'e2e-tab-groups-'))
   const res = await request.post('/api/mux/groups', { headers: JSON_HEADERS, data: { name: `ft-${run}`, cwd: dir } })
   expect(res.ok()).toBe(true)
   groupId = (await res.json()).id
@@ -102,8 +112,8 @@ test.afterEach(async ({ request }) => {
   dir = ''
 })
 
-// An upright tablet leaves the tab bar next to nothing beside the sidebar,
-// FatherTabs or not: its sidebar is collapsed, as a user there has it.
+// An upright tablet leaves the tab bar next to nothing beside the sidebar:
+// its sidebar is collapsed, as a user there has it.
 const WIDE = [
   { size: 'desktop', viewport: { width: 1920, height: 1080 }, hasTouch: false, sidebarCollapsed: false },
   { size: 'laptop', viewport: { width: 1366, height: 768 }, hasTouch: false, sidebarCollapsed: false },
@@ -112,127 +122,137 @@ const WIDE = [
 ]
 
 for (const { size, viewport, hasTouch, sidebarCollapsed } of WIDE) {
-  test.describe(`FatherTabs on a ${size}`, () => {
+  test.describe(`Tab groups on a ${size}`, () => {
     test.use({ viewport, hasTouch })
 
-    test('a tab moves into a new FatherTab from its menu, and new tabs join it', async ({ page, request }) => {
+    test('a tab moves into a new group from its menu, and new tabs join it', async ({ page, request }) => {
       await open(page, request, { sidebarCollapsed })
-      await expect(tab(page, 'main')).toBeVisible()
-      await expect(fatherRow(page)).toHaveCount(0)
+      await expect.poll(() => shown(page)).toEqual(['main'])
 
-      // New FatherTab…: named on the tab, which is renamed into it
+      // New tab group…: named on the tab, which is renamed into it
       await tab(page, 'main').click({ button: 'right' })
-      await page.getByRole('menuitem', { name: 'New FatherTab…' }).click()
-      const field = page.getByRole('textbox', { name: 'New FatherTab for main' })
+      await page.getByRole('menuitem', { name: 'New tab group…' }).click()
+      const field = page.getByRole('textbox', { name: 'New tab group for main' })
       await field.fill('review')
       await field.press('Enter')
-      await expect(father(page, 'review')).toHaveAttribute('aria-selected', 'true')
       await expect.poll(() => namesOf(request)).toEqual(['review/main'])
-      // The tab bar shows the name without its FatherTab
-      await expect.poll(() => shown(page)).toEqual(['main'])
+      // One bar: the group's name, then its tab without the group's
+      await expect.poll(() => shown(page)).toEqual(['[review]', 'main'])
       await expectFits(page)
 
-      // + adds a tab at once, into the FatherTab on screen
+      // + adds a tab at once, into the group on screen
       await page.getByRole('button', { name: 'Add session' }).click()
       await expect.poll(() => namesOf(request)).toEqual(['review/main', 'review/New'])
-      await expect.poll(() => shown(page)).toEqual(['main', 'New'])
-      await expect(father(page, 'review')).toContainText('2')
+      await expect.poll(() => shown(page)).toEqual(['[review]', 'main', 'New'])
 
-      // The row's + asks for a new FatherTab and its first tab
-      await page.getByRole('button', { name: 'New FatherTab' }).click()
+      // The group's menu adds a tab in it, named in the form
+      await groupName(page, 'review').click({ button: 'right' })
+      await page.getByRole('menuitem', { name: /New tab in this group/ }).click()
       const form = page.getByRole('form', { name: 'New session' })
-      await expect(form.getByRole('combobox', { name: 'FatherTab (optional)' })).toBeFocused()
+      await expect(form.getByRole('combobox', { name: 'Tab group (optional)' })).toHaveValue('review')
       await form.getByRole('combobox').fill('coding')
       await form.getByRole('textbox', { name: 'Session name' }).fill('api')
       await form.getByRole('button', { name: 'Add' }).click()
       await expect.poll(() => namesOf(request)).toEqual(['review/main', 'review/New', 'coding/api'])
-      await expect(father(page, 'coding')).toHaveAttribute('aria-selected', 'true')
-      await expect.poll(() => shown(page)).toEqual(['api'])
+      await expect.poll(() => shown(page)).toEqual(['[review]', 'main', 'New', '[coding]', 'api'])
       await expectFits(page)
-
-      // The row is above the tab bar, both inside the window, and it has the
-      // header's width: every FatherTab is in view
-      const rowBox = (await fatherRow(page).boundingBox())!
-      const barBox = (await tabBar(page).boundingBox())!
-      expect(rowBox.y + rowBox.height).toBeLessThanOrEqual(barBox.y + 1)
-      expect(rowBox.x + rowBox.width).toBeLessThanOrEqual(viewport.width)
-      expect(barBox.x + barBox.width).toBeLessThanOrEqual(viewport.width)
-      await expect(father(page, 'review')).toBeInViewport({ ratio: 1 })
-      await expect(father(page, 'coding')).toBeInViewport({ ratio: 1 })
     })
 
-    test('a FatherTab opens on the tab last shown in it, and the menu moves a tab between them', async ({
-      page,
-      request,
-    }) => {
+    test('a group collapses and expands, keeping the tab on screen', async ({ page, request }) => {
+      await nameFirstTab(request, 'notes')
+      await addTab(request, 'review/one')
+      await addTab(request, 'review/two')
+      await open(page, request, { sidebarCollapsed })
+      await expect.poll(() => shown(page)).toEqual(['notes', '[review]', 'one', 'two'])
+
+      await groupName(page, 'review').click()
+      await expect.poll(() => shown(page)).toEqual(['notes', '[review]'])
+      await expect(groupName(page, 'review')).toHaveAttribute('aria-expanded', 'false')
+      await expect(groupName(page, 'review')).toContainText('2')
+      // Kept across a reload in this browser
+      await page.reload()
+      await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
+      await expect.poll(() => shown(page)).toEqual(['notes', '[review]'])
+      await expectFits(page)
+
+      // From its menu: expanded again
+      await groupName(page, 'review').click({ button: 'right' })
+      await page.getByRole('menuitem', { name: 'Expand' }).click()
+      await expect.poll(() => shown(page)).toEqual(['notes', '[review]', 'one', 'two'])
+
+      // The tab on screen stays when its group collapses
+      await tab(page, 'two').click()
+      await expect(tab(page, 'two')).toHaveAttribute('aria-selected', 'true')
+      await groupName(page, 'review').click()
+      await expect.poll(() => shown(page)).toEqual(['notes', '[review]', 'two'])
+    })
+
+    test("menus move a tab between groups, rename a group and ungroup its tabs", async ({ page, request }) => {
       await nameFirstTab(request, 'review/one')
       await addTab(request, 'review/two')
       await addTab(request, 'coding/api')
       await addTab(request, 'notes')
       await open(page, request, { sidebarCollapsed })
-      await expect(father(page, 'review')).toHaveAttribute('aria-selected', 'true')
-      await expect(fatherRow(page).getByRole('tab')).toHaveText([/^review/, /^coding/, /^Other/])
-      await expect.poll(() => shown(page)).toEqual(['one', 'two'])
+      await expect.poll(() => shown(page)).toEqual(['[review]', 'one', 'two', '[coding]', 'api', 'notes'])
 
-      // two shown, then coding: review opens on two again
-      await tab(page, 'two').click()
-      await expect(tab(page, 'two')).toHaveAttribute('aria-selected', 'true')
-      await father(page, 'coding').click()
-      await expect.poll(() => shown(page)).toEqual(['api'])
-      await father(page, 'review').click()
-      await expect(tab(page, 'two')).toHaveAttribute('aria-selected', 'true')
-      // Other: the tabs in none
-      await father(page, 'Other').click()
-      await expect.poll(() => shown(page)).toEqual(['notes'])
-      await expectFits(page)
-
-      // Its menu offers the other FatherTabs: into coding
+      // A tab's menu offers the other groups: notes into coding
       await tab(page, 'notes').click({ button: 'right' })
-      const group = page.getByRole('group', { name: 'Move to FatherTab' })
-      await expect(group.getByRole('menuitem')).toHaveText(['review', 'coding', 'New FatherTab…'])
+      const group = page.getByRole('group', { name: 'Add to tab group' })
+      await expect(group.getByRole('menuitem')).toHaveText(['review', 'coding', 'New tab group…'])
       await group.getByRole('menuitem', { name: 'coding' }).click()
       await expect.poll(() => namesOf(request)).toEqual(['review/one', 'review/two', 'coding/api', 'coding/notes'])
-      // The tab on screen went there, and the row follows it; Other is gone
-      await expect(father(page, 'coding')).toHaveAttribute('aria-selected', 'true')
-      await expect(father(page, 'Other')).toHaveCount(0)
-      await expect.poll(() => shown(page)).toEqual(['api', 'notes'])
+      await expect.poll(() => shown(page)).toEqual(['[review]', 'one', 'two', '[coding]', 'api', 'notes'])
 
-      // And out of any
+      // And out of its group
       await tab(page, 'api').click({ button: 'right' })
-      await page.getByRole('menuitem', { name: 'No FatherTab' }).click()
+      await page.getByRole('menuitem', { name: 'Remove from tab group' }).click()
       await expect.poll(() => namesOf(request)).toEqual(['review/one', 'review/two', 'api', 'coding/notes'])
-      await expect(father(page, 'Other')).toBeVisible()
+      await expect.poll(() => shown(page)).toEqual(['[review]', 'one', 'two', 'api', '[coding]', 'notes'])
+
+      // A group's rename renames each of its tabs
+      await groupName(page, 'review').click({ button: 'right' })
+      await page.getByRole('menuitem', { name: /Rename tab group/ }).click()
+      const field = page.getByRole('textbox', { name: 'New name for tab group review' })
+      await field.fill('specs')
+      await field.press('Enter')
+      await expect.poll(() => namesOf(request)).toEqual(['specs/one', 'specs/two', 'api', 'coding/notes'])
+      await expect.poll(() => shown(page)).toEqual(['[specs]', 'one', 'two', 'api', '[coding]', 'notes'])
+
+      // Ungroup: its tabs keep their names without the group's
+      await groupName(page, 'specs').click({ button: 'right' })
+      await page.getByRole('menuitem', { name: 'Ungroup' }).click()
+      await expect.poll(() => namesOf(request)).toEqual(['one', 'two', 'api', 'coding/notes'])
+      await expect.poll(() => shown(page)).toEqual(['one', 'two', 'api', '[coding]', 'notes'])
       await expectFits(page)
     })
 
-    test('a rename with F2 edits the whole name', async ({ page, request }) => {
+    test("a rename with F2 edits the tab's name without its group's", async ({ page, request }) => {
       await nameFirstTab(request, 'review/one')
       await open(page, request, { sidebarCollapsed })
       await tab(page, 'one').focus()
       await page.keyboard.press('F2')
       const field = page.getByRole('textbox', { name: 'New name for review/one' })
-      await expect(field).toHaveValue('review/one')
-      await field.fill('specs/auth')
+      await expect(field).toHaveValue('one')
+      await field.fill('auth')
       await field.press('Enter')
-      await expect.poll(() => namesOf(request)).toEqual(['specs/auth'])
-      await expect(father(page, 'specs')).toHaveAttribute('aria-selected', 'true')
-      await expect.poll(() => shown(page)).toEqual(['auth'])
+      await expect.poll(() => namesOf(request)).toEqual(['review/auth'])
+      await expect.poll(() => shown(page)).toEqual(['[review]', 'auth'])
     })
 
-    test('the new session form of the compact sidebar starts with the FatherTab on screen', async ({
+    test('the new session form of the compact sidebar starts with the group on screen', async ({
       page,
       request,
     }) => {
       await nameFirstTab(request, 'review/one')
       await open(page, request, { sidebarLayout: 'compact', sidebarCollapsed })
-      await expect(father(page, 'review')).toBeVisible()
+      await expect(groupName(page, 'review')).toBeVisible()
       await page.getByRole('button', { name: 'Add session' }).click()
       const form = page.getByRole('form', { name: 'New session' })
       await expect(form.getByRole('combobox')).toHaveValue('review')
       await form.getByRole('textbox', { name: 'Session name' }).fill('two')
       await form.getByRole('textbox', { name: 'Session name' }).press('Enter')
       await expect.poll(() => namesOf(request)).toEqual(['review/one', 'review/two'])
-      // Cleared: a tab in no FatherTab
+      // Cleared: a tab in no group
       await page.getByRole('button', { name: 'Add session' }).click()
       await form.getByRole('combobox').fill('')
       await form.getByRole('textbox', { name: 'Session name' }).fill('notes')
@@ -241,51 +261,49 @@ for (const { size, viewport, hasTouch, sidebarCollapsed } of WIDE) {
       await expectFits(page)
     })
 
-    test('a tab dragged onto a FatherTab is renamed into it', async ({ page, request }) => {
+    test('a tab dragged into a group joins it, and dragged away leaves it', async ({ page, request }) => {
       test.skip(hasTouch, 'tabs drag with a mouse or a pen')
       await nameFirstTab(request, 'review/one')
-      await addTab(request, 'coding/api')
+      await addTab(request, 'review/two')
       await addTab(request, 'notes')
       await open(page, request, { sidebarCollapsed })
-      await expect(father(page, 'coding')).toBeVisible()
+      await expect.poll(() => shown(page)).toEqual(['[review]', 'one', 'two', 'notes'])
 
-      const dragOnto = async (name: string, to: string) => {
+      // The pointer taken from the middle of a tab to x: the tab lands where
+      // its left edge passes the middle of the ones before it
+      const drag = async (name: string, to: () => Promise<number>) => {
         const from = (await tab(page, name).boundingBox())!
-        const target = (await father(page, to).boundingBox())!
-        await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
+        const y = from.y + from.height / 2
+        await page.mouse.move(from.x + from.width / 2, y)
         await page.mouse.down()
-        await page.mouse.move(from.x + from.width / 2 + 12, from.y + from.height / 2, { steps: 3 })
-        await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 6 })
-        // The FatherTab under the pointer is marked
-        await expect(father(page, to)).toHaveAttribute('data-drop-target', 'true')
+        await page.mouse.move(from.x + from.width / 2 - 12, y, { steps: 3 })
+        await page.mouse.move(await to(), y, { steps: 8 })
         await page.mouse.up()
-        await expect(father(page, to)).not.toHaveAttribute('data-drop-target')
       }
+      // notes between one and two: into review, in that place
+      await drag('notes', async () => {
+        const notes = (await tab(page, 'notes').boundingBox())!
+        return (await tab(page, 'two').boundingBox())!.x + notes.width / 2 + 2
+      })
+      await expect.poll(() => namesOf(request)).toEqual(['review/one', 'review/notes', 'review/two'])
+      await expect.poll(() => shown(page)).toEqual(['[review]', 'one', 'notes', 'two'])
 
-      // review's only tab: review goes with it
-      await dragOnto('one', 'coding')
-      await expect.poll(() => namesOf(request)).toEqual(['coding/one', 'coding/api', 'notes'])
-      await expect(father(page, 'review')).toHaveCount(0)
-      await expect.poll(() => shown(page)).toEqual(['one', 'api'])
-      // Onto Other: out of any
-      await dragOnto('api', 'Other')
-      await expect.poll(() => namesOf(request)).toEqual(['coding/one', 'api', 'notes'])
-      // Onto its own FatherTab: nothing changes
-      await dragOnto('one', 'coding')
-      await expect.poll(() => namesOf(request)).toEqual(['coding/one', 'api', 'notes'])
+      // one before the group's name: out of it
+      await drag('one', async () => (await groupName(page, 'review').boundingBox())!.x - 20)
+      await expect.poll(() => namesOf(request)).toEqual(['one', 'review/notes', 'review/two'])
+      await expect.poll(() => shown(page)).toEqual(['one', '[review]', 'notes', 'two'])
       await expectFits(page)
     })
   })
 }
 
-test.describe('FatherTabs on a phone', () => {
+test.describe('Tab groups on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
 
-  test('the header has no row, and the sessions sheet shows the whole names', async ({ page, request }) => {
+  test('the header has no tab bar, and the sessions sheet shows the whole names', async ({ page, request }) => {
     await nameFirstTab(request, 'review/one')
     await addTab(request, 'coding/api')
     await open(page, request)
-    await expect(fatherRow(page)).toHaveCount(0)
     await expect(tabBar(page)).toHaveCount(0)
     await expectFits(page)
     await page.getByRole('button', { name: 'Open sessions menu' }).click()
