@@ -1,8 +1,20 @@
 import { AppWindow } from 'lucide-react'
-import type { ComponentProps, ReactNode } from 'react'
+import {
+  type ComponentProps,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+} from 'react'
 import { useCompactLabels } from '../hooks/use-compact-labels'
 import { useT } from '../i18n/i18n-context'
 import type { Session } from '../types/session'
+import {
+  splitTabGroup,
+  type TabGroupRow,
+  tabGroupRows,
+} from '../utils/tab-group'
+import type { TabGroupsLayout } from '../utils/tab-groups-layout'
 import type { ToolbarPosition } from '../utils/toolbar-position'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { BrandMark } from './brand-mark'
@@ -15,6 +27,7 @@ import { PanelToggles } from './panel-toggles'
 import { SessionSwitcherChip } from './session-switcher-chip'
 import { SessionTabs } from './session-tabs'
 import { SettingsMenu } from './settings-menu'
+import { TabGroupRows } from './tab-group-row'
 import { TabIcon } from './tab-icon'
 import { FOCUS_RING, IconButton } from './ui/button'
 import { ViewMenu } from './ui/view-menu'
@@ -37,6 +50,9 @@ interface Props {
   // The setting tabGroups; off, a tab named "review/PR 1" is a tab like any
   // other. Unset: on
   tabGroups?: boolean
+  // The setting tabGroupsLayout: the groups' names in the tab bar (inline,
+  // the default), or in a row above it that picks whose tabs the bar shows
+  tabGroupsLayout?: TabGroupsLayout
   canRemoveTab: boolean
   onSelectTab: (id: string) => void
   // Unset (view-only role): no Add button
@@ -185,6 +201,33 @@ function DesktopHeader(p: Props) {
   const labels = useCompactLabels()
   const compact = p.showSessionTabs && labels.compact
   const inHeader = p.toolbar !== 'right'
+  // The row layout: the groups in a row above the tab bar, which shows the
+  // tabs of the group of the tab on screen. No row while no tab is in a
+  // group, nor for a tab that is not among these (a focus window's)
+  const wantsRow =
+    p.showSessionTabs &&
+    p.tabGroups !== false &&
+    p.tabGroupsLayout === 'row' &&
+    p.groupSessions.some((s) => s.id === session.id)
+  const rows = useMemo(
+    () => (wantsRow ? tabGroupRows(p.groupSessions) : []),
+    [wantsRow, p.groupSessions],
+  )
+  const inRow = rows.length > 0
+  const rowGroup = inRow ? splitTabGroup(session.name).group : undefined
+  // The tab last shown in each group, which picking the group opens again
+  const rowKey = (name?: string) => `${session.groupId ?? ''}\n${name ?? ''}`
+  const shownKey = rowKey(rowGroup)
+  const lastShown = useRef(new Map<string, string>())
+  useEffect(() => {
+    lastShown.current.set(shownKey, session.id)
+  }, [shownKey, session.id])
+  const selectRow = (row: TabGroupRow) => {
+    const last = lastShown.current.get(rowKey(row.name))
+    p.onSelectTab(
+      row.sessions.find((s) => s.id === last)?.id ?? row.sessions[0].id,
+    )
+  }
   return (
     // At least 44px, padded below the status bar of an installed iPad app;
     // it grows when touch-sized controls are taller than the row, instead of
@@ -192,7 +235,19 @@ function DesktopHeader(p: Props) {
     // buttons drop their labels too, so the session tabs keep room (an iPad
     // beside the sidebar). Its bottom line is drawn over the row, not as a
     // border, so the active tab covers it and joins the terminal below
-    <header className="@container relative z-10 flex min-h-11 shrink-0 items-end gap-2 bg-surface px-2 after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-border pt-[env(safe-area-inset-top)] ui-terminal:bg-bg">
+    <header
+      className={`@container relative z-10 flex min-h-11 shrink-0 items-end gap-x-2 bg-surface px-2 after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-border pt-[env(safe-area-inset-top)] ui-terminal:bg-bg ${inRow ? 'flex-wrap' : ''}`}
+    >
+      {/* The row layout: the groups on a line of their own, the header's
+          whole width (the tabs may have little of it left) */}
+      {inRow && (
+        <TabGroupRows
+          rows={rows}
+          active={rowGroup}
+          onSelect={selectRow}
+          onAdd={p.onAddTab}
+        />
+      )}
       {/* The expanded sidebar carries the brand; the phone header has no
           room to spare */}
       {p.showBrand && (
@@ -204,8 +259,9 @@ function DesktopHeader(p: Props) {
       {p.showSessionTabs ? (
         <SessionTabs
           // Another group's tabs are another list: none of them fades in,
-          // and the last group's do not fade out among them
-          key={session.groupId ?? ''}
+          // and the last group's do not fade out among them. So are those
+          // of another tab group in the row layout
+          key={inRow ? shownKey : (session.groupId ?? '')}
           sessions={p.groupSessions}
           activeId={session.id}
           onSelect={p.onSelectTab}
@@ -219,6 +275,7 @@ function DesktopHeader(p: Props) {
           renameTab={p.renameTab}
           onSpareChange={labels.onSpareChange}
           tabGroups={p.tabGroups !== false}
+          onlyGroup={inRow ? { name: rowGroup } : undefined}
           workspace={session.groupId}
         />
       ) : (

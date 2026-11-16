@@ -239,6 +239,67 @@ for (const { size, viewport, hasTouch, sidebarCollapsed } of WIDE) {
       await expect.poll(() => shown(page)).toEqual(['[review]', 'auth'])
     })
 
+    test('the row layout lists the groups above the bar, which shows the tabs of the picked one', async ({
+      page,
+      request,
+    }) => {
+      await nameFirstTab(request, 'review/one')
+      await addTab(request, 'review/two')
+      await addTab(request, 'coding/api')
+      await addTab(request, 'notes')
+      await open(page, request, { sidebarCollapsed, tabGroupsLayout: 'row' })
+      const rows = page.getByRole('tablist', { name: 'Tab groups' })
+      const row = (name: string) => rows.getByRole('tab', { name: new RegExp(`^${name}`) })
+      await expect(rows.getByRole('tab')).toHaveText([/^review/, /^coding/, /^No group/])
+      await expect(row('review')).toHaveAttribute('aria-selected', 'true')
+      await expect.poll(() => shown(page)).toEqual(['one', 'two'])
+
+      // two shown, then coding: review opens on two again
+      await tab(page, 'two').click()
+      await expect(tab(page, 'two')).toHaveAttribute('aria-selected', 'true')
+      await row('coding').click()
+      await expect.poll(() => shown(page)).toEqual(['api'])
+      await row('review').click()
+      await expect(tab(page, 'two')).toHaveAttribute('aria-selected', 'true')
+      await row('No group').click()
+      await expect.poll(() => shown(page)).toEqual(['notes'])
+      await expectFits(page)
+
+      // A tab's menu moves it into another group, and the row follows it
+      await tab(page, 'notes').click({ button: 'right' })
+      const menu = page.getByRole('group', { name: 'Add to tab group' })
+      await expect(menu.getByRole('menuitem')).toHaveText(['review', 'coding', 'New tab group…'])
+      await menu.getByRole('menuitem', { name: 'coding' }).click()
+      await expect.poll(() => namesOf(request)).toEqual(['review/one', 'review/two', 'coding/api', 'coding/notes'])
+      await expect(row('coding')).toHaveAttribute('aria-selected', 'true')
+      await expect(row('No group')).toHaveCount(0)
+      await expect.poll(() => shown(page)).toEqual(['api', 'notes'])
+
+      // The row's + asks for a new group and its first tab; + on the bar
+      // then adds into it
+      await page.getByRole('button', { name: 'New tab group' }).click()
+      const form = page.getByRole('form', { name: 'New session' })
+      await expect(form.getByRole('combobox', { name: 'Tab group (optional)' })).toBeFocused()
+      await form.getByRole('combobox').fill('specs')
+      await form.getByRole('textbox', { name: 'Session name' }).fill('auth')
+      await form.getByRole('button', { name: 'Add' }).click()
+      await expect(row('specs')).toHaveAttribute('aria-selected', 'true')
+      await expect.poll(() => shown(page)).toEqual(['auth'])
+      await page.getByRole('button', { name: 'Add session' }).click()
+      await expect
+        .poll(() => namesOf(request))
+        .toEqual(['review/one', 'review/two', 'coding/api', 'coding/notes', 'specs/auth', 'specs/New'])
+      await expect.poll(() => shown(page)).toEqual(['auth', 'New'])
+
+      // The row is above the tab bar and has the header's width: every
+      // group is in view
+      const rowBox = (await rows.boundingBox())!
+      const barBox = (await tabBar(page).boundingBox())!
+      expect(rowBox.y + rowBox.height).toBeLessThanOrEqual(barBox.y + 1)
+      for (const name of ['review', 'coding', 'specs']) await expect(row(name)).toBeInViewport({ ratio: 1 })
+      await expectFits(page)
+    })
+
     test('the setting off shows every tab by its whole name', async ({ page, request }) => {
       await nameFirstTab(request, 'review/one')
       await addTab(request, 'coding/api')

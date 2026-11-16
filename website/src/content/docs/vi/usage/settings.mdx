@@ -177,6 +177,21 @@ thanh tab. Xem [Nhóm tab](/vi/usage/sessions/#nhóm-tab).
 Tắt đi không đổi tên tab nào: các tab giữ nguyên tên, và các nhóm hiện lại khi bật. Ở dạng JSON,
 khóa là `tabGroups` (`true` hoặc `false`).
 
+## Bố cục nhóm tab (Chỉ desktop)
+
+Tên các nhóm nằm ở đâu. Tùy chọn này hiện khi **Tab groups** đang bật.
+
+| Tùy chọn  | Hành vi                                                                       | Mặc định |
+| --------- | ----------------------------------------------------------------------------- | -------- |
+| Inline    | Một thanh tab: tên có màu của từng nhóm, rồi tới các tab của nhóm             | ✓        |
+| Row above | Các nhóm nằm ở một hàng phía trên thanh tab; thanh tab hiện tab của nhóm chọn |          |
+
+Với **Row above**, các tab không thuộc nhóm nào nằm dưới **No group**, một nhóm mở lại tab bạn xem
+gần nhất trong đó, và nút **+** cuối hàng hỏi tên nhóm mới cùng tab đầu tiên của nó. Vẫn chuyển
+được tab giữa các nhóm từ menu của tab (**Add to tab group**). Thu gọn nhóm, đổi tên hay bỏ cả nhóm
+và kéo tab vào nhóm chỉ có ở bố cục inline. Ở dạng JSON, khóa là `tabGroupsLayout` (`"inline"` hoặc
+`"row"`). Xem [Nhóm tab](/vi/usage/sessions/#nhóm-tab).
+
 Khi tab không còn đủ chỗ, các nút chuyển kiểu xem và mở panel bên cạnh sẽ ẩn chữ, chỉ còn icon (rê
 chuột lên để xem tên); có lại chỗ thì chữ hiện trở lại.
 

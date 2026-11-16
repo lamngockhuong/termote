@@ -84,6 +84,10 @@ interface Props {
   // keeps collapsed.
   tabGroups?: boolean
   workspace?: string
+  // Set (with tabGroups): the groups' names are shown elsewhere, in a row of
+  // their own (components/tab-group-row.tsx), and the bar shows the tabs of
+  // this group only (name unset: those in none), without a group's name
+  onlyGroup?: { name?: string }
 }
 
 // Shift+F10 or the context menu key: the menu of the focused tab
@@ -155,6 +159,7 @@ export function SessionTabs({
   onSpareChange,
   tabGroups = false,
   workspace,
+  onlyGroup,
 }: Props) {
   const { t } = useT()
   // The groups this browser keeps collapsed (collapsedKey)
@@ -171,18 +176,23 @@ export function SessionTabs({
   // What the bar shows, in its order: with tab groups, each group's name
   // before its tabs; else the tabs. The same objects while nothing changes:
   // the presence list compares them.
+  // With onlyGroup, that group's tabs as plain tabs: no name, no folding.
+  const inline = tabGroups && !onlyGroup
+  const only = tabGroups ? onlyGroup : undefined
   const layOut = (list: readonly Session[]): StripItem[] =>
-    tabGroups
+    inline
       ? stripItems(
           list,
           (g) => collapsed.has(collapsedKey(workspace, g)),
           activeId,
         )
-      : list.map((s) => ({ kind: 'tab', key: lastingKey(s), session: s }))
+      : list
+          .filter((s) => !only || splitTabGroup(s.name).group === only.name)
+          .map((s) => ({ kind: 'tab', key: lastingKey(s), session: s }))
   // biome-ignore lint/correctness/useExhaustiveDependencies: layOut reads these
   const items = useMemo(
     () => layOut(sessions),
-    [tabGroups, sessions, collapsed, workspace, activeId],
+    [inline, only?.name, !only, sessions, collapsed, workspace, activeId],
   )
   // How the server's order is to change for the bar to show want, the tab
   // id renamed to name first: undefined when no single move does it
@@ -203,9 +213,12 @@ export function SessionTabs({
     () => items.flatMap((it) => (it.kind === 'tab' ? [it.session] : [])),
     [items],
   )
+  // Every group of the workspace, whether or not the bar shows its name
   const groupNames = useMemo(
-    () => items.flatMap((it) => (it.kind === 'group' ? [it.group.name] : [])),
-    [items],
+    () => [
+      ...new Set(sessions.flatMap((s) => splitTabGroup(s.name).group ?? [])),
+    ],
+    [sessions],
   )
   const rowRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -501,7 +514,7 @@ export function SessionTabs({
     const at = items.findIndex(
       (it) => it.kind === 'tab' && it.session.id === id,
     )
-    const want = tabGroups
+    const want = inline
       ? stepWant(items, at, delta)
       : (() => {
           const index = targetIndex(ids, id, delta)

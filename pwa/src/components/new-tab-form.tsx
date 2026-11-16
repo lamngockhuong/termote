@@ -23,6 +23,10 @@ interface Props {
   groups?: readonly string[]
   // The tab group the field starts with
   group?: string
+  // The tab group field takes the focus, not the name (a new group)
+  focusGroup?: boolean
+  // The edge of what it hangs under that it lines up with (default: end)
+  align?: 'start' | 'end'
 }
 
 // A new tab's name and icon, in a panel under the header's tab bar (the
@@ -35,6 +39,8 @@ export function NewTabForm({
   toggleSelector,
   groups,
   group: firstGroup = '',
+  focusGroup = false,
+  align = 'end',
 }: Props) {
   const { t } = useT()
   const [name, setName] = useState('')
@@ -81,7 +87,7 @@ export function NewTabForm({
         e.preventDefault()
         onClose()
       }}
-      className="absolute right-0 top-full z-40 mt-1 flex w-72 flex-col gap-2 rounded-panel border border-border bg-surface-raised p-2 shadow-xl ui-native:border-0"
+      className={`absolute top-full z-40 mt-1 flex w-72 flex-col gap-2 rounded-panel border border-border bg-surface-raised p-2 shadow-xl ui-native:border-0 ${align === 'start' ? 'left-0' : 'right-0'}`}
     >
       <div className="flex min-w-0 items-center gap-2">
         <IconPicker
@@ -98,7 +104,7 @@ export function NewTabForm({
           value={name}
           onChange={(e) => setName(e.target.value)}
           className={INPUT_CLASSES}
-          autoFocus
+          autoFocus={!focusGroup}
         />
       </div>
       {groups && (
@@ -111,6 +117,7 @@ export function NewTabForm({
             value={group}
             onChange={(e) => setGroup(e.target.value)}
             className={INPUT_CLASSES}
+            autoFocus={focusGroup}
           />
           <datalist id={listId}>
             {groups.map((f) => (

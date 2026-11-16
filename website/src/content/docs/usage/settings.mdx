@@ -163,6 +163,21 @@ in the tab bar. See [Tab groups](/usage/sessions/#tab-groups).
 Turning it off renames nothing: the tabs keep their names, and the groups are back when it is on
 again. As JSON the key is `tabGroups` (`true` or `false`).
 
+## Tab Groups Layout (Desktop Only)
+
+Where the groups' names go. Shown while **Tab groups** is on.
+
+| Option    | Behavior                                                                          | Default |
+| --------- | --------------------------------------------------------------------------------- | ------- |
+| Inline    | One tab bar: each group's coloured name, then its tabs                            | ✓       |
+| Row above | The groups on a line above the tab bar, which shows the tabs of the picked group |         |
+
+With **Row above**, the tabs in no group are under **No group**, a group opens on the tab last shown
+in it, and **+** at the end of the row asks for a new group and its first tab. A tab still moves
+between groups from its menu (**Add to tab group**). Collapsing a group, renaming or ungrouping a
+whole group and dragging a tab into a group belong to the inline layout. As JSON the key is
+`tabGroupsLayout` (`"inline"` or `"row"`). See [Tab groups](/usage/sessions/#tab-groups).
+
 When the tabs no longer fit, the view and panel buttons beside them drop their labels and show
 their icons only (hover one for its name); the labels come back once the tabs have room again.
 

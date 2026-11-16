@@ -18,6 +18,7 @@ import {
   tabGroupFill,
   tabGroupLine,
   tabGroupNewName,
+  tabGroupRows,
   validGroupName,
   writeCollapsed,
 } from './tab-group'
@@ -387,6 +388,43 @@ describe('validGroupName', () => {
     expect(validGroupName('a/b')).toBe(false)
     expect(validGroupName('~')).toBe(false)
     expect(validGroupName('..')).toBe(false)
+  })
+})
+
+describe('tabGroupRows', () => {
+  it('is empty when no tab is in a group', () => {
+    expect(tabGroupRows([])).toEqual([])
+    expect(tabGroupRows([tab('1', 'Shell'), tab('2', 'Code')])).toEqual([])
+  })
+
+  it('gathers tabs where the first of each is, those in none as one more', () => {
+    const rows = tabGroupRows([
+      tab('1', 'review/PR 1'),
+      tab('2', 'Shell'),
+      tab('3', 'coding/api'),
+      tab('4', 'review/PR 2'),
+    ])
+    expect(rows.map((r) => r.name)).toEqual(['review', undefined, 'coding'])
+    expect(rows.map((r) => r.sessions.map((s) => s.id))).toEqual([
+      ['1', '4'],
+      ['2'],
+      ['3'],
+    ])
+  })
+
+  it('has no line for tabs in none when every tab is in a group', () => {
+    expect(tabGroupRows([tab('1', 'review/PR 1')]).map((r) => r.name)).toEqual([
+      'review',
+    ])
+  })
+
+  it('shows the heaviest agent status of its tabs', () => {
+    const rows = tabGroupRows([
+      tab('1', 'review/PR 1', { agentStatus: 'working' }),
+      tab('2', 'review/PR 2', { agentStatus: 'blocked' }),
+      tab('3', 'coding/api'),
+    ])
+    expect(rows.map((r) => r.agentStatus)).toEqual(['blocked', undefined])
   })
 })
 

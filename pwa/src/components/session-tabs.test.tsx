@@ -942,6 +942,91 @@ describe('SessionTabs tab groups', () => {
     expect(bar()).toEqual(['review/PR 1', 'Shell', 'coding/api', 'review/PR 2'])
   })
 
+  describe('with the groups in a row of their own (onlyGroup)', () => {
+    it("shows that group's tabs only, without its name or its colour", () => {
+      render(
+        <SessionTabs
+          {...props()}
+          activeId="pr1"
+          onlyGroup={{ name: 'review' }}
+        />,
+      )
+      expect(bar()).toEqual(['PR 1', 'PR 2'])
+      expect(
+        screen.getByRole('tab', { name: /PR 1/ }).parentElement!.className,
+      ).not.toMatch(/after:bg-avatar/)
+    })
+
+    it('shows the tabs in no group for a group without a name', () => {
+      render(<SessionTabs {...props()} onlyGroup={{}} />)
+      expect(bar()).toEqual(['Shell'])
+    })
+
+    it('shows a folded group whole: folding is the tab bar own names', () => {
+      localStorage.setItem(
+        'termote-tab-groups-collapsed',
+        JSON.stringify(['w\nreview']),
+      )
+      render(
+        <SessionTabs
+          {...props()}
+          activeId="pr1"
+          onlyGroup={{ name: 'review' }}
+        />,
+      )
+      expect(bar()).toEqual(['PR 1', 'PR 2'])
+    })
+
+    it('shows every tab whole without tab groups', () => {
+      render(
+        <SessionTabs
+          {...props()}
+          tabGroups={false}
+          onlyGroup={{ name: 'review' }}
+        />,
+      )
+      expect(bar()).toEqual([
+        'review/PR 1',
+        'Shell',
+        'coding/api',
+        'review/PR 2',
+      ])
+    })
+
+    it("offers every other group in a tab's menu, shown or not", () => {
+      const p = props()
+      render(
+        <SessionTabs {...p} activeId="pr1" onlyGroup={{ name: 'review' }} />,
+      )
+      fireEvent.contextMenu(screen.getByRole('tab', { name: /PR 1/ }))
+      const group = screen.getByRole('group', { name: 'Add to tab group' })
+      expect(
+        within(group)
+          .getAllByRole('menuitem')
+          .map((i) => i.textContent),
+      ).toEqual(['coding', 'New tab group…', 'Remove from tab group'])
+      fireEvent.click(within(group).getByRole('menuitem', { name: 'coding' }))
+      expect(p.onUpdate).toHaveBeenCalledWith('pr1', { name: 'coding/PR 1' })
+    })
+
+    it('moves a tab past its neighbour to its place among all the tabs', () => {
+      const onMove = vi.fn()
+      render(
+        <SessionTabs
+          {...props()}
+          activeId="pr1"
+          onMove={onMove}
+          onlyGroup={{ name: 'review' }}
+        />,
+      )
+      const pr1 = screen.getByRole('tab', { name: /PR 1/ })
+      pr1.focus()
+      fireEvent.keyDown(pr1, { key: 'ArrowRight', altKey: true })
+      // After PR 2, the last of the workspace's tabs
+      expect(onMove).toHaveBeenCalledWith('pr1', 3)
+    })
+  })
+
   it('collapses and expands a group, which this browser keeps', () => {
     const { unmount } = render(<SessionTabs {...props()} />)
     fireEvent.click(chip('review'))

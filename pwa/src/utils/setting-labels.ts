@@ -21,6 +21,7 @@ export const SETTING_LABEL: Record<string, MessageKey> = {
   toolbarPosition: 'settings.toolbarPosition',
   showSessionTabs: 'settings.tabs',
   tabGroups: 'settings.tabGroups',
+  tabGroupsLayout: 'settings.tabGroupsLayout',
   showUsageChip: 'settings.usage',
   showCost: 'settings.cost',
   showHostChip: 'settings.hostChip',
@@ -115,6 +116,10 @@ export const VALUE_LABEL: Record<string, Record<string, MessageKey>> = {
   sidebarLayout: {
     detailed: 'settings.sidebarLayout.detailed',
     compact: 'settings.sidebarLayout.compact',
+  },
+  tabGroupsLayout: {
+    inline: 'settings.tabGroupsLayout.inline',
+    row: 'settings.tabGroupsLayout.row',
   },
   toolbarPosition: {
     header: 'settings.toolbarPosition.header',

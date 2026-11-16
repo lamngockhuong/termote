@@ -45,6 +45,10 @@ import {
 } from '../utils/notify-permission'
 import { SIDEBAR_LAYOUTS, type SidebarLayout } from '../utils/sidebar-layout'
 import {
+  TAB_GROUPS_LAYOUTS,
+  type TabGroupsLayout,
+} from '../utils/tab-groups-layout'
+import {
   TOOLBAR_POSITIONS,
   type ToolbarPosition,
 } from '../utils/toolbar-position'
@@ -575,6 +579,11 @@ const SIDEBAR_LAYOUT_LABEL: Record<SidebarLayout, MessageKey> = {
   compact: 'settings.sidebarLayout.compact',
 }
 
+const TAB_GROUPS_LAYOUT_LABEL: Record<TabGroupsLayout, MessageKey> = {
+  inline: 'settings.tabGroupsLayout.inline',
+  row: 'settings.tabGroupsLayout.row',
+}
+
 const TOOLBAR_POSITION_LABEL: Record<ToolbarPosition, MessageKey> = {
   header: 'settings.toolbarPosition.header',
   right: 'settings.toolbarPosition.right',
@@ -1011,6 +1020,22 @@ export function SettingsModal({
               onChange={(v) => onUpdateSetting('tabGroups', v)}
             />
           </SettingsRow>
+          {settings.tabGroups && (
+            <SettingsRow
+              title={t('settings.tabGroupsLayout')}
+              desc={t('settings.tabGroupsLayoutDesc')}
+            >
+              <SegmentedControl
+                label={t('settings.tabGroupsLayout')}
+                options={TAB_GROUPS_LAYOUTS.map((l) => ({
+                  value: l,
+                  content: t(TAB_GROUPS_LAYOUT_LABEL[l]),
+                }))}
+                value={settings.tabGroupsLayout}
+                onChange={(v) => onUpdateSetting('tabGroupsLayout', v)}
+              />
+            </SettingsRow>
+          )}
           {/* The phone header keeps its own controls */}
           {!isMobile && (
             <SettingsRow

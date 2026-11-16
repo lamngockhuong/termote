@@ -71,6 +71,7 @@ const DEFAULT_SETTINGS: Settings = {
   copyOnSelect: false,
   showSessionTabs: false,
   tabGroups: true,
+  tabGroupsLayout: 'inline',
   toolbarPosition: 'header',
   pollInterval: 5,
   welcomeSeenVersion: 0,
@@ -380,6 +381,23 @@ describe('SettingsModal', () => {
     const { onUpdateSetting } = renderModal()
     fireEvent.click(screen.getByRole('switch', { name: 'Tab groups' }))
     expect(onUpdateSetting).toHaveBeenCalledWith('tabGroups', false)
+  })
+
+  it('picks the tab groups layout', () => {
+    const { onUpdateSetting } = renderModal()
+    const layout = screen.getByRole('radiogroup', { name: 'Tab groups layout' })
+    expect(
+      within(layout).getByRole('radio', { name: 'Inline' }),
+    ).toHaveAttribute('aria-checked', 'true')
+    fireEvent.click(within(layout).getByRole('radio', { name: 'Row above' }))
+    expect(onUpdateSetting).toHaveBeenCalledWith('tabGroupsLayout', 'row')
+  })
+
+  it('has no tab groups layout while tab groups are off', () => {
+    renderModal({ settings: { ...DEFAULT_SETTINGS, tabGroups: false } })
+    expect(
+      screen.queryByRole('radiogroup', { name: 'Tab groups layout' }),
+    ).toBeNull()
   })
 
   it('picks the sidebar layout', () => {

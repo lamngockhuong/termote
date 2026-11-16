@@ -53,6 +53,7 @@ const SETTINGS: Settings = {
   copyOnSelect: false,
   showSessionTabs: false,
   tabGroups: true,
+  tabGroupsLayout: 'inline',
   toolbarPosition: 'header',
   pollInterval: 5,
   welcomeSeenVersion: 0,

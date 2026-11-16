@@ -73,6 +73,11 @@ export default {
   'settings.tabGroups': 'Nhóm tab',
   'settings.tabGroupsDesc':
     'Gom các tab đặt tên kiểu review/PR 1 dưới một tên có màu trên thanh tab (máy tính)',
+  'settings.tabGroupsLayout': 'Bố cục nhóm tab',
+  'settings.tabGroupsLayoutDesc':
+    'Cùng hàng: tên nhóm nằm trước các tab của nó trên thanh tab. Hàng phía trên: các nhóm nằm ở một hàng riêng phía trên, thanh tab chỉ hiện tab của nhóm đang chọn (máy tính)',
+  'settings.tabGroupsLayout.inline': 'Cùng hàng',
+  'settings.tabGroupsLayout.row': 'Hàng phía trên',
   'settings.toolbarPosition': 'Vị trí thanh công cụ',
   'settings.toolbarPositionDesc':
     'Thanh bên phải: các nút chuyển kiểu xem, panel, pane, toàn màn hình và bảng lệnh chuyển sang một thanh dọc ở mép phải, header chỉ còn tab (máy tính)',

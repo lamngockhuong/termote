@@ -3377,7 +3377,7 @@ A tab group gathers tabs of one workspace under a coloured name in the tab bar, 
 * **Move a tab in or out**: drag it after a group’s name or between two of its tabs to add it to that group, or away from its group to take it out. Or use **Add to tab group** in the tab’s menu: another group, **New tab group…** or **Remove from tab group**.
 * **Rename a tab**: **F2** edits its name without the group’s.
 
-Every move in or out renames the tab, so a backend that cannot rename tabs offers none. A group belongs to one workspace and exists while a tab is named with it, so every device shows the same groups, in the same colours; the sidebar, the mobile sessions sheet and the backend’s own tab bar show the whole name (`review/PR 1`). A name that starts with `/`, `~/`, `./` or `../` is a plain name. Settings → Sessions → **Tab groups** turns the groups off: every tab then shows by its whole name.
+Every move in or out renames the tab, so a backend that cannot rename tabs offers none. A group belongs to one workspace and exists while a tab is named with it, so every device shows the same groups, in the same colours; the sidebar, the mobile sessions sheet and the backend’s own tab bar show the whole name (`review/PR 1`). A name that starts with `/`, `~/`, `./` or `../` is a plain name. Settings → Sessions → **Tab groups** turns the groups off: every tab then shows by its whole name. **Tab groups layout** → **Row above** puts the groups on a line above the tab bar instead, which then shows the tabs of the picked group only (see [Settings](/usage/settings/#tab-groups-layout-desktop-only)).
 
 ### What runs in a session
 
@@ -3845,6 +3845,19 @@ Gathers the session tabs named with a group first (`review/PR 1`) under that gro
 | Off    | Every tab by its whole name; no tab group in a menu or the new tab form |         |
 
 Turning it off renames nothing: the tabs keep their names, and the groups are back when it is on again. As JSON the key is `tabGroups` (`true` or `false`).
+
+## Tab Groups Layout (Desktop Only)
+
+[Section titled “Tab Groups Layout (Desktop Only)”](#tab-groups-layout-desktop-only)
+
+Where the groups’ names go. Shown while **Tab groups** is on.
+
+| Option    | Behavior                                                                         | Default |
+| --------- | -------------------------------------------------------------------------------- | ------- |
+| Inline    | One tab bar: each group’s coloured name, then its tabs                           | ✓       |
+| Row above | The groups on a line above the tab bar, which shows the tabs of the picked group |         |
+
+With **Row above**, the tabs in no group are under **No group**, a group opens on the tab last shown in it, and **+** at the end of the row asks for a new group and its first tab. A tab still moves between groups from its menu (**Add to tab group**). Collapsing a group, renaming or ungrouping a whole group and dragging a tab into a group belong to the inline layout. As JSON the key is `tabGroupsLayout` (`"inline"` or `"row"`). See [Tab groups](/usage/sessions/#tab-groups).
 
 When the tabs no longer fit, the view and panel buttons beside them drop their labels and show their icons only (hover one for its name); the labels come back once the tabs have room again.
 

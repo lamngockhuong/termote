@@ -138,6 +138,35 @@ export function stripItems(
   return items
 }
 
+// A line of the row of groups above the tab bar (the row layout): a group,
+// or the tabs in none (name unset).
+export interface TabGroupRow {
+  name?: string
+  sessions: Session[]
+  // Heaviest agent status among its tabs
+  agentStatus?: AgentStatus
+}
+
+// The row of a workspace's groups, each where its first tab is, with the
+// tabs in none as one more. Empty when no tab is in a group: there is no row
+// then.
+export function tabGroupRows(sessions: readonly Session[]): TabGroupRow[] {
+  const byName = new Map<string | undefined, Session[]>()
+  for (const s of sessions) {
+    const { group } = splitTabGroup(s.name)
+    const list = byName.get(group)
+    if (list) list.push(s)
+    else byName.set(group, [s])
+  }
+  if (!sessions.some((s) => splitTabGroup(s.name).group !== undefined))
+    return []
+  return [...byName].map(([name, list]) => ({
+    name,
+    sessions: list,
+    agentStatus: worstAgentStatus(list.map((s) => s.agentStatus)),
+  }))
+}
+
 const groupOf = (item?: StripItem) =>
   item?.kind === 'group' ? item.group.name : item?.group
 
