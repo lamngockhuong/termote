@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"testing/iotest"
@@ -254,7 +255,9 @@ func TestMentionedPath(t *testing.T) {
 			t.Errorf("%q accepted", p)
 		}
 	}
-	if p, err := mentionedPath("/tmp//a.md"); err != nil || p != filepath.Clean("/tmp/a.md") {
+	dir := t.TempDir()
+	sep := string(filepath.Separator)
+	if p, err := mentionedPath(dir + sep + sep + "a.md"); err != nil || p != filepath.Join(dir, "a.md") {
 		t.Fatalf("got %q %v", p, err)
 	}
 }
@@ -285,8 +288,10 @@ func TestTranscriptMentionsWithoutTranscript(t *testing.T) {
 func TestMentionedRoutesWithoutAgent(t *testing.T) {
 	mux := http.NewServeMux()
 	f := registerFilesRoutes(mux, &filesFakeMux{dir: t.TempDir(), files: true}, parseAllowedHosts("", false), nil)
+	// An absolute path on this OS, of a file that does not exist
+	body, _ := json.Marshal(map[string]string{"path": filepath.Join(t.TempDir(), "a.md")})
 	post := func() (int, string) {
-		rec := serve(mux, apiRequest("POST", "/api/mux/panes/0/files/mentioned", `{"path":"/tmp/a.md"}`))
+		rec := serve(mux, apiRequest("POST", "/api/mux/panes/0/files/mentioned", string(body)))
 		return rec.Code, rec.Body.String()
 	}
 	if code, body := post(); code != http.StatusNotImplemented {
@@ -374,8 +379,8 @@ func TestMentionsInAtChunkEnd(t *testing.T) {
 }
 
 func TestTranscriptMentionsUnreadable(t *testing.T) {
-	if os.Geteuid() == 0 {
-		t.Skip("root reads any file")
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("no mode bit keeps the file from this user")
 	}
 	dir := t.TempDir()
 	p := writeTranscript(t, dir, testSessionID, transcriptLine("/tmp/a"))

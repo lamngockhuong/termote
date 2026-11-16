@@ -458,10 +458,6 @@ function createStore(id: string): Store {
       isDirty,
       now,
     )
-    // Tabs closed to make room never had changes; an untouched draft of
-    // theirs goes with them, so the file is read again when it reopens
-    for (const t of r.closed) dropDraft(paneId, t.root, t.path)
-    const gone = new Set(r.closed.map((t) => t.id))
     // A file already open goes to the heading or the line asked for
     const at: Partial<FileTab> | undefined = opts.line
       ? {
@@ -474,11 +470,22 @@ function createStore(id: string): Store {
       : opts.anchor
         ? { anchor: opts.anchor, scrollTop: undefined }
         : undefined
-    const tabs = at
-      ? r.tabs.map((t) => (t.id === r.activeId ? { ...t, ...at } : t))
-      : r.tabs
+    opened(r, at)
+  }
+
+  // What openTab returned, made the state: the tab shown gets patch
+  function opened(
+    r: { tabs: FileTab[]; activeId: string; closed: FileTab[] },
+    patch?: Partial<FileTab>,
+  ) {
+    // Tabs closed to make room never had changes; an untouched draft of
+    // theirs goes with them, so the file is read again when it reopens
+    for (const t of r.closed) dropDraft(paneId, t.root, t.path)
+    const gone = new Set(r.closed.map((t) => t.id))
     set({
-      tabs,
+      tabs: patch
+        ? r.tabs.map((t) => (t.id === r.activeId ? { ...t, ...patch } : t))
+        : r.tabs,
       activeId: r.activeId,
       pendingRootClose: pendingOf(
         state.pendingRootClose?.filter((id) => !gone.has(id)),
@@ -510,18 +517,8 @@ function createStore(id: string): Store {
       isDirty,
       now,
     )
-    for (const t of r.closed) dropDraft(paneId, t.root, t.path)
-    const gone = new Set(r.closed.map((t) => t.id))
-    set({
-      // The id the server gave now: an earlier one may have expired
-      tabs: r.tabs.map((t) =>
-        t.id === r.activeId ? { ...t, mentioned: file.place } : t,
-      ),
-      activeId: r.activeId,
-      pendingRootClose: pendingOf(
-        state.pendingRootClose?.filter((id) => !gone.has(id)),
-      ),
-    })
+    // The id the server gave now: an earlier one may have expired
+    opened(r, { mentioned: file.place })
   }
 
   // No list at all once nothing waits for the user

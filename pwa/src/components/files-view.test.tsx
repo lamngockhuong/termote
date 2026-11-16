@@ -303,6 +303,24 @@ describe('FilesView', () => {
         expect.objectContaining({ root: '/home/kim/app' }),
       ),
     )
+    // A 409 on the named file never moves the tree: its folder is its own
+    mockContent.mockRejectedValueOnce(
+      new RequestError(409, '', 'root changed', { root: '/elsewhere' }),
+    )
+    fireEvent.click(screen.getByRole('tab', { name: /n\.md/ }))
+    await waitFor(() =>
+      expect(mockContent).toHaveBeenLastCalledWith(
+        { paneId: '%1', place: 'm-1' },
+        'n.md',
+        expect.anything(),
+      ),
+    )
+    await act(async () => {})
+    expect(mockTree).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      '/elsewhere',
+    )
   })
 
   it('comes back from a file to the tree scrolled as it was left', async () => {
