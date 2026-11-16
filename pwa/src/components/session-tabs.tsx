@@ -12,6 +12,7 @@ import { LEAVE_TO, usePresenceList } from '../hooks/use-presence-list'
 import { useWheelScrollX } from '../hooks/use-wheel-scroll-x'
 import { useT } from '../i18n/i18n-context'
 import type { Session } from '../types/session'
+import { joinFatherTab, splitFatherTab } from '../utils/father-tab'
 import { imeComposing } from '../utils/ime-composing'
 import { slidePlace, slideShift, targetIndex } from '../utils/reorder'
 import { visibleUnsafe } from '../utils/unsafe-chars'
@@ -21,7 +22,7 @@ import { onlyPaneOf } from './meta-chips'
 import { NewTabForm } from './new-tab-form'
 import { TabIcon } from './tab-icon'
 import { FOCUS_RING, IconButton } from './ui/button'
-import { Menu, MenuItem, MenuSeparator } from './ui/menu'
+import { Menu, MenuGroup, MenuItem, MenuSeparator } from './ui/menu'
 
 interface Props {
   sessions: Session[]
@@ -52,6 +53,19 @@ interface Props {
   // The room left after the last tab (and Add) in px, negative while the
   // tabs overflow; called when it changes. Not called without ResizeObserver.
   onSpareChange?: (spare: number) => void
+  // The name a tab shows, when not its whole name (a tab of a FatherTab
+  // shows it without the FatherTab's); a rename still edits the whole name
+  label?: (session: Session) => string
+  // Elements a dragged tab can be dropped on (a selector, anywhere on the
+  // page) and what a drop there does; the one under the pointer has
+  // data-drop-target meanwhile. With these a single tab drags too.
+  dropTargets?: string
+  onDropOn?: (id: string, target: HTMLElement) => void
+  // The new tab form asks for a FatherTab too: those there are, and the one
+  // it starts with. A tab's menu then moves it to one of them, out of any,
+  // or to a new one, named in place like a rename (where tabs are renamed)
+  fathers?: readonly string[]
+  father?: string
 }
 
 // Shift+F10 or the context menu key: the menu of the focused tab
@@ -108,6 +122,11 @@ export function SessionTabs({
   onUpdate,
   renameTab = true,
   onSpareChange,
+  label = sessionName,
+  dropTargets,
+  onDropOn,
+  fathers,
+  father,
 }: Props) {
   const { t } = useT()
   const rowRef = useRef<HTMLDivElement>(null)
@@ -147,8 +166,8 @@ export function SessionTabs({
   // Ends a drag in progress (its window listeners), also on unmount
   const endDrag = useRef<(() => void) | null>(null)
   // What a drag reads when it moves and lands: the tabs can change meanwhile
-  const latest = useRef({ sessions, onMove })
-  latest.current = { sessions, onMove }
+  const latest = useRef({ sessions, onMove, onDropOn })
+  latest.current = { sessions, onMove, onDropOn }
   useEffect(() => () => endDrag.current?.(), [])
   // A dropped tab and the ones that made room stay where they were drawn
   // until the server's new order arrives; then they are let go
@@ -222,16 +241,26 @@ export function SessionTabs({
   // was started from the keyboard: the Enter that saves it is a key, so a
   // rename started with a pointer would ring the tab too
   const renameByKey = useRef(false)
-  const startRename = (session: Session, byKey: boolean) => {
+  // The field asks for a new FatherTab of the tab, not for its name
+  const [namingFather, setNamingFather] = useState(false)
+  const startRename = (session: Session, byKey: boolean, father = false) => {
     renameByKey.current = byKey
-    setDraft(session.name)
+    setNamingFather(father)
+    setDraft(father ? '' : session.name)
     setRenaming(session.id)
   }
+  // Into the FatherTab father (unset: out of any), by its name
+  const moveToFather = (session: Session, to?: string) =>
+    onUpdate!(session.id, {
+      name: joinFatherTab(to, splitFatherTab(session.name).label),
+    })
   const endRename = (save: boolean) => {
     // The field is drawn only for a tab still here (a leaving one is inert)
     const session = sessions.find((s) => s.id === renaming)!
     const name = draft.trim()
-    if (save && name && name !== session.name) onUpdate!(session.id, { name })
+    if (save && name && namingFather) moveToFather(session, name)
+    else if (save && name && name !== session.name)
+      onUpdate!(session.id, { name })
     refocus.current = lastingKey(session)
     refocusRing.current = renameByKey.current
     setRenaming(null)
@@ -342,13 +371,14 @@ export function SessionTabs({
   const menuAt = menu ? ids.indexOf(menu.id) : -1
   // A tab closed while its menu is open takes the menu with it
   const menuSession = menuAt === -1 ? undefined : sessions[menuAt]
+  const menuFather = menuSession && splitFatherTab(menuSession.name).father
   const iconSession = sessions.find((s) => s.id === iconFor)
 
   // Dragging (desktop, a mouse or a pen), like a browser's tabs: the tab
   // slides along the row only, held inside the strip, never over the page,
   // and the others slide aside to make room where it would land. A press
   // that moves less than DRAG_SLOP is still a click.
-  const movable = !!onMove && sessions.length > 1
+  const movable = (!!onMove && sessions.length > 1) || !!dropTargets
   const dragProps = (id: string) => {
     if (!movable) return {}
     return {
@@ -379,6 +409,14 @@ export function SessionTabs({
     let from = -1
     let to = -1
     let room = 0
+    // The drop target under the pointer, marked while it is
+    let target: HTMLElement | null = null
+    const aim = (at: HTMLElement | null) => {
+      if (at === target) return
+      target?.removeAttribute('data-drop-target')
+      at?.setAttribute('data-drop-target', 'true')
+      target = at
+    }
     const begin = () => {
       tabs = [...list.children].filter(
         (c): c is HTMLElement =>
@@ -414,6 +452,12 @@ export function SessionTabs({
         const shift = slideShift(i, from, to, room)
         tab.style.translate = shift ? `${shift}px 0` : ''
       })
+      if (dropTargets)
+        aim(
+          document
+            .elementFromPoint(ev.clientX, ev.clientY)
+            ?.closest<HTMLElement>(dropTargets) ?? null,
+        )
     }
     const finish = (drop: boolean) => {
       window.removeEventListener('pointermove', onMoveEvent)
@@ -427,7 +471,15 @@ export function SessionTabs({
       // when it is over the tab) does not select the tab
       window.addEventListener('click', swallow, { capture: true, once: true })
       setTimeout(() => window.removeEventListener('click', swallow, true))
-      const { sessions: now, onMove: move } = latest.current
+      const { sessions: now, onMove: move, onDropOn: dropOn } = latest.current
+      const onto = target
+      aim(null)
+      // Dropped on a target: back in its place, the drop is the target's
+      if (drop && onto && now.some((s) => s.id === id)) {
+        for (const tab of tabs) tab.style.translate = ''
+        dropOn!(id, onto)
+        return
+      }
       // The tabs changed under the drag: their places no longer hold
       const same = now.length === tabs.length && now[from]?.id === id && !!move
       if (!drop || to === from || !same) {
@@ -520,9 +572,15 @@ export function SessionTabs({
                   </span>
                   <input
                     type="text"
-                    aria-label={t('shell.tabs.renameField', {
-                      name: session.name,
-                    })}
+                    aria-label={t(
+                      namingFather
+                        ? 'shell.fatherTabs.nameField'
+                        : 'shell.tabs.renameField',
+                      { name: session.name },
+                    )}
+                    placeholder={
+                      namingFather ? t('shell.fatherTabs.moveNew') : undefined
+                    }
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
                     onKeyDown={(e) => {
@@ -559,7 +617,7 @@ export function SessionTabs({
                     <TabIcon session={session} />
                   </span>
                   <span className="max-w-[140px] truncate ui-terminal:font-label">
-                    {visibleUnsafe(session.name)}
+                    {visibleUnsafe(label(session))}
                   </span>
                   <AgentStatusBadge status={session.agentStatus} size={12} />
                 </button>
@@ -604,6 +662,8 @@ export function SessionTabs({
           onClose={closeForm}
           nameRef={formName}
           toggleSelector={askName ? '[data-new-tab-toggle]' : undefined}
+          fathers={fathers}
+          father={father}
         />
       )}
       {menuSession && (
@@ -631,6 +691,30 @@ export function SessionTabs({
                 {t('shell.tabs.editIcon')}
               </MenuItem>
             </>
+          )}
+          {fathers && canRename && (
+            <MenuGroup label={t('shell.fatherTabs.moveTo')}>
+              {fathers
+                .filter((f) => f !== menuFather)
+                .map((f) => (
+                  <MenuItem
+                    key={f}
+                    onSelect={() => moveToFather(menuSession, f)}
+                  >
+                    {visibleUnsafe(f)}
+                  </MenuItem>
+                ))}
+              {menuFather !== undefined && (
+                <MenuItem onSelect={() => moveToFather(menuSession)}>
+                  {t('shell.fatherTabs.none')}
+                </MenuItem>
+              )}
+              <MenuItem
+                onSelect={(e) => startRename(menuSession, e.byKey, true)}
+              >
+                {t('shell.fatherTabs.moveNew')}
+              </MenuItem>
+            </MenuGroup>
           )}
           {onMove && (
             <>
@@ -697,3 +781,4 @@ export function SessionTabs({
 }
 
 const lastingKey = (s: Session) => s.key ?? s.id
+const sessionName = (s: Session) => s.name

@@ -94,6 +94,34 @@ dòng và đưa tab của nó lên header. Bật trong Settings → Sessions →
   **End**; nhấp đúp để về mặc định), và nhấp tiêu đề để thu gọn. Thiết bị này nhớ cả hai. Ô tìm
   kiếm không thu hẹp phần này, và phần này ẩn khi không có agent nào chạy.
 
+### FatherTab
+
+FatherTab gom các tab của một workspace dưới một tên chung, ví dụ **review**, **coding** và
+**specs**. Đặt tên tab bắt đầu bằng tên FatherTab rồi dấu `/`: `review/PR 1` là tab **PR 1** thuộc
+FatherTab **review**. Trên desktop, khi workspace đang mở có một tab đặt tên như vậy, một hàng
+FatherTab hiện phía trên các session tab, và các session tab chỉ còn hiện tab của FatherTab đang
+chọn, không kèm tên FatherTab.
+
+- **Tạo**: đổi tên một tab (**F2**) thành `review/PR 1`, hoặc điền ô **FatherTab** trong form tạo
+  phiên mới (menu của tab → **New session…**, hoặc phím **N**). Khi hàng FatherTab đã hiện, nút
+  **+** (**New FatherTab**) của hàng hỏi tên FatherTab và tab đầu tiên của nó.
+- **Chuyển**: nhấp vào một FatherTab. Nó mở tab bạn xem gần nhất trong đó, nếu chưa có thì mở tab
+  đầu tiên. Mỗi FatherTab ghi số tab và trạng thái agent nặng nhất trong các tab của nó.
+- **Thêm tab**: tab mới tạo từ thanh tab sẽ thuộc FatherTab đang mở. Form tạo phiên mới điền sẵn
+  FatherTab đó; đổi sang tên khác, hoặc xóa trống để tab không thuộc FatherTab nào.
+- **Chuyển tab sang FatherTab khác, hoặc bỏ khỏi FatherTab**: kéo tab từ thanh tab thả vào một
+  FatherTab trên hàng (thả vào **Other** để bỏ khỏi FatherTab), hoặc chọn trong nhóm **Move to
+  FatherTab** ở menu của tab (nhấp chuột phải): một FatherTab đang có, **No FatherTab**, hoặc **New
+  FatherTab…**, khi đó ô nhập tên FatherTab hiện ngay trên tab (Enter để chuyển, Escape để hủy). Cả
+  hai cách đều đổi tên tab, nên backend không đổi được tên tab thì không có; bạn cũng có thể tự đổi
+  tên tab, ô đổi tên hiện tên đầy đủ.
+- **Other**: các tab không thuộc FatherTab nào.
+
+Một FatherTab thuộc về một workspace và tồn tại khi còn tab mang tên nó. Mọi thứ nằm trong tên tab,
+nên thiết bị nào cũng thấy cùng các FatherTab; sidebar, danh sách phiên trên mobile và thanh tab của
+chính backend hiện tên đầy đủ (`review/PR 1`). Tên bắt đầu bằng `/`, `~/`, `./` hoặc `../` là tên
+thường.
+
 ### Phiên đang chạy gì
 
 Mỗi phiên trong sidebar và trong bảng trên mobile hiện các lệnh đang chạy trong các pane của nó,

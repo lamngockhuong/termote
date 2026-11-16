@@ -16,6 +16,8 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/language-notice.tsx`          | Once, to a device that picked VI before: the app speaks it now |
 | `pwa/src/components/session-tabs.tsx`             | Header tab bar; a tab's menu: rename (F2), icon, move, close   |
 | `pwa/src/components/new-tab-form.tsx`             | A new tab's name and icon, under the header's tab bar          |
+| `pwa/src/components/father-tabs.tsx`              | FatherTabs: a row above the tab bar, tabs gathered by name     |
+| `pwa/src/utils/father-tab.ts`                     | FatherTab of a tab (`review/PR 1`), new names, move indexes    |
 | `pwa/src/components/tab-icon.tsx`                 | A tab's icon: the picked one, else its agent's logo or default |
 | `pwa/src/components/agent-logo.tsx`               | Coding agents' logos (lobe-icons, MIT) keyed by agent name     |
 | `pwa/src/utils/sidebar-layout.ts`                 | Sidebar layout setting: detailed (tabs listed) or compact      |

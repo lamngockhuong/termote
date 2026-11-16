@@ -40,6 +40,19 @@ export default {
   'shell.tabs.renameField': 'New name for {name}',
   // The form a new tab is named in, under the tab bar
   'shell.tabs.newForm': 'New session',
+  // The FatherTabs above the tab bar (components/father-tabs.tsx); Other:
+  // the tabs in none
+  'shell.fatherTabs.label': 'FatherTabs',
+  'shell.fatherTabs.other': 'Other',
+  // A tab's menu: the group of FatherTabs it can move to, out of any, and
+  // to a new one, whose name the field on the tab asks for
+  'shell.fatherTabs.moveTo': 'Move to FatherTab',
+  'shell.fatherTabs.none': 'No FatherTab',
+  'shell.fatherTabs.moveNew': 'New FatherTab…',
+  'shell.fatherTabs.nameField': 'New FatherTab for {name}',
+  'shell.fatherTabs.add': 'New FatherTab',
+  // The new tab form's field for it
+  'shell.fatherTabs.field': 'FatherTab (optional)',
   // The pane strip (components/pane-strip.tsx)
   'shell.panes.close': 'Close pane {name}',
   // The layout view (components/terminal-stack.tsx): one pane of it
