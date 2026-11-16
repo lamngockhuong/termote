@@ -1,0 +1,39 @@
+# Tên người: tác giả Termote (Lam Ngoc Khuong, tên miền khuong.dev), viết không dấu như trên GitHub
+Khuong
+Ngoc
+
+# Tên sản phẩm và công cụ nhắc trong văn xuôi
+Mac
+gum
+Poet
+htop
+
+# Khoá YAML, giá trị component và kiểu Aside của Starlight trong frontmatter và JSX (không phải văn xuôi)
+splash
+tagline
+alt
+primary
+secondary
+minimal
+external
+# right-arrow (tên icon): checker xét từng phần của từ có gạch nối
+right
+arrow
+laptop
+tip
+
+# Tên biến import trong MDX (import screenshot from "...webp")
+screenshot
+
+# Lệnh shell trong chú thích của khối code thụt lề trong <TabItem>, checker đọc như văn xuôi
+snap
+rehash
+
+# Mảnh chữ khi tách tên Termote: **Term**inal + Re**mote**
+inal
+mote
+
+# Thuật ngữ kỹ thuật dùng rộng trong tài liệu tiếng Việt, không có từ Việt tự nhiên thay được
+checksum
+symlink
+heredoc

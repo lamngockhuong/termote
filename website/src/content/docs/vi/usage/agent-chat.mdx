@@ -175,7 +175,7 @@ dòng hoặc ký tự điều khiển bị từ chối nguyên vẹn chứ khôn
 
 Câu hỏi gồm nhiều phần (một hàng tab như `Size · Drink · Submit`) được trả lời lần lượt từng tab.
 Thẻ hiện các tab thành từng bước và đánh dấu tab đang mở; mỗi câu trả lời đưa Claude Code sang tab
-kế tiếp, tab đó có thẻ riêng, cho tới tab Submit với hai nút **Submit answers** và **Cancel**. Nếu
+kế tiếp, tab đó có thẻ riêng, cho tới tab Submit với hai nút `Submit answers` và `Cancel`. Nếu
 Muốn bỏ qua một câu hay quay lại câu trước, bấm vào bước tương ứng để sang tab đó. Nếu bạn chuyển tab
 trong terminal trước khi bấm, sẽ không có gì được gửi và thẻ hiện tab đang mở lúc đó.
 
@@ -403,7 +403,7 @@ Herdr nào không khởi động được OpenCode sẽ báo như vậy). tmux v
 Trên Windows, pane chỉ được coi là
 rảnh khi shell của nó không có tiến trình con, nên pane đang chạy `ping`, `nvim` hay một `cmd`
 lồng nhau bị từ chối và không nhận gì. Shell còn giữ một tiến trình con sống lâu (`Start-Job`,
-chương trình giao diện mở từ nó, thứ mà profile đã chạy) cũng bị từ chối như vậy, pane `wsl.exe`
+chương trình giao diện mở từ nó, hay thứ gì đó profile đã chạy) cũng bị từ chối như vậy, pane `wsl.exe`
 cũng thế. Việc chạy ngay trong PowerShell thì không có tiến trình con, nên pane trông như đang
 rảnh: Ctrl+C của lệnh khởi động xóa được lệnh đang chờ (`Start-Sleep`, `Read-Host`), nhưng cũng
 dừng giữa chừng một script `.ps1` hay lệnh như `Copy-Item -Recurse`, giống hệt khi bạn tự bấm

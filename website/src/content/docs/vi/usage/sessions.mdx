@@ -404,11 +404,11 @@ pane terminal (pane plugin không hiện). Mọi phiên đang chạy của bạn
   Tab có nhiều pane sẽ hiện **dải pane**. Tab đổi tên, đóng và sắp xếp lại được; phiên thì không sắp xếp lại
   được.
 - **Tab mới**: Zellij chỉ dựng bố cục tab khi có một client đang gắn vào phiên, nên thêm tab vào một phiên không
-  ai mở (không có terminal và không có Termote nào đang xem) sẽ báo "open this Zellij session in a terminal (or
-  in Termote) before adding a tab".
+  ai mở (không có terminal và không có Termote nào đang xem) sẽ báo "Hãy mở phiên Zellij này trong một terminal
+  (hoặc trong Termote) trước khi thêm tab".
 - **Terminal**: terminal của Termote là một client Zellij thật, nên thanh tab và thanh trạng thái của Zellij
-  vẫn hiện, và một tab lấy kích thước của client nhỏ nhất đang xem nó. Client này ở chế độ locked của Zellij,
-  nên các phím Ctrl trên thanh công cụ tới được pane; các phím tắt chế độ locked của riêng bạn vẫn có tác dụng
+  vẫn hiện, và một tab lấy kích thước của client nhỏ nhất đang xem nó. Client này ở chế độ `locked` của Zellij,
+  nên các phím Ctrl trên thanh công cụ tới được pane; các phím tắt chế độ `locked` của riêng bạn vẫn có tác dụng
   (Ctrl g của cấu hình mặc định mở khóa). Bấm vào một pane hay tab khác ngay trong terminal sẽ đóng luồng, và
   Termote mở lại nó trên đúng pane.
 - **Cuộn**: không có cuộn phía server. Con lăn chuột cuộn qua chính Zellij, cho mọi client đang xem pane đó;
@@ -472,7 +472,7 @@ Tính năng chạy với Herdr 0.9.2 trở lên, tmux, Zellij và herdr-core, tr
     `%USERPROFILE%\.termote\worktrees\<repo>\<slug>`, thư mục chỉ user của bạn mở được); trong container là
     `/workspace/.termote/worktrees/<repo>/<slug>`, nên vẫn còn sau `container down`. git ghi
     đường dẫn trong container đó vào file `.git` của checkout và vào danh sách worktree của repo,
-    nên git trên host coi worktree ấy là prunable: chạy `git worktree prune` trên host thì git
+    nên git trên host coi worktree ấy là `prunable`: chạy `git worktree prune` trên host thì git
     quên nó (thư mục vẫn còn; `git worktree repair <path>` từ host sẽ nối lại). Nếu `--workspace`
     trỏ thẳng vào repo, `.termote/worktrees` là một thư mục nằm trong chính checkout đó: thêm
     `.termote/` vào `.gitignore` hoặc `.git/info/exclude` của repo.

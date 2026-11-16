@@ -15,7 +15,7 @@ Không cần Docker. Truy cập binary host như `claude`, `git`, `gh`, v.v.
 
 <Aside type="tip" title="Chế độ Native trên Windows">
   Chế độ Native được hỗ trợ đầy đủ trên Windows. Script cài đặt mặc định tự động
-  tải bản ttyd fork build bằng MSVC, khắc phục lỗi crash ConPTY trước đây trên
+  tải bản ttyd fork build bằng MSVC, khắc phục lỗi sập ConPTY trước đây trên
   Windows 11 (build 26200+). Dùng `-Ttyd official` để chuyển sang bản upstream
   `tsl0922/ttyd`.
 </Aside>
@@ -73,14 +73,14 @@ Cho phép: **Icon Copy** → di chuyển → **Space** → chọn → **Enter** 
 :::tip[Copy ra System Clipboard]
 Khi mouse BẬT, tmux bắt sự kiện chuột. Để copy ra system clipboard:
 
-* **Giữ Shift** khi chọn text (bypass tmux, dùng selection của terminal)
+* **Giữ Shift** khi chọn text (bỏ qua tmux, dùng vùng chọn của terminal)
 * Hoặc nhấn **Ctrl+b m** để tạm tắt mouse
 :::
 
 ## Cài đặt
 
 <Steps>
-  1. Cài đặt dependencies (xem ở trên)
+  1. Cài các gói phụ thuộc (xem ở trên)
 
   2. Chạy lệnh deploy
 

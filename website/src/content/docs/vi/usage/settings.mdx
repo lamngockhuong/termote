@@ -22,7 +22,7 @@ ngay và được lưu trong trình duyệt này.
 | Kiểu     | Diện mạo                                             | Mặc định |
 | -------- | ---------------------------------------------------- | -------- |
 | Neutral  | Cân bằng, màu nhấn chàm                              | ✓        |
-| Terminal | Nhãn monospace, góc bo nhỏ, màu nhấn xanh lá         |          |
+| Terminal | Nhãn chữ đơn cách, góc bo nhỏ, màu nhấn xanh lá      |          |
 | Native   | Góc bo lớn, cảm giác như ứng dụng hệ thống, màu nhấn xanh dương |   |
 
 Kiểu giao diện không phụ thuộc vào **theme** (Light, Dark, System). Theme chọn ngay bên dưới, ở
@@ -225,7 +225,7 @@ Thông báo đến theo cách khác nhau tùy thiết bị:
 - **Khi app đã đóng** (Chrome trên Android, Chrome, Edge và Firefox trên desktop): server gửi Web
   Push, nên thông báo vẫn đến dù không có trang Termote nào đang mở.
 - **iPhone và iPad**: chỉ hoạt động trong app đã thêm vào Màn hình chính, từ iOS 16.4. Trong
-  Safari, dòng này ghi "iPhone/iPad: works only from the Home Screen app (iOS 16.4+)".
+  Safari, dòng này ghi "iPhone/iPad: chỉ chạy khi mở từ app trên màn hình chính (iOS 16.4 trở lên)".
 - **Không có Web Push** (server cũ, hoặc trình duyệt không hỗ trợ): chỉ trang đang mở mới báo,
   thực tế là một tab trên desktop, vì điện thoại tạm dừng trang không hiển thị.
 
@@ -281,13 +281,13 @@ Giới hạn:
 
 ## Font terminal
 
-Font mà terminal dùng, nhập theo tên (ví dụ `JetBrainsMono Nerd Font`). Font phải được cài trên thiết bị đang chạy trình duyệt; nếu chưa cài, terminal quay về font monospace của hệ thống. Có thể nhập nhiều tên, cách nhau bằng dấu phẩy. Giá trị được lưu khi rời khỏi ô nhập hoặc khi nhấn Enter.
+Font mà terminal dùng, nhập theo tên (ví dụ `JetBrainsMono Nerd Font`). Font phải được cài trên thiết bị đang chạy trình duyệt; nếu chưa cài, terminal quay về font chữ đơn cách của hệ thống. Có thể nhập nhiều tên, cách nhau bằng dấu phẩy. Giá trị được lưu khi rời khỏi ô nhập hoặc khi nhấn Enter.
 
 Biểu tượng Nerd Font (prompt theme như Starship hay Powerlevel10k, icon file trong `eza` hoặc `lsd`) hiển thị được mà không cần cấu hình gì: Termote đóng gói sẵn Symbols Nerd Font và dùng nó cho mọi biểu tượng mà font đã chọn không có, kể cả trên điện thoại vốn không cài được Nerd Font.
 
 | Tùy chọn     | Hành vi                                                         | Mặc định |
 | ------------ | --------------------------------------------------------------- | -------- |
-| Để trống     | Font monospace của hệ thống, biểu tượng lấy từ font đóng gói    | ✓        |
+| Để trống     | Font chữ đơn cách của hệ thống, biểu tượng lấy từ font đóng gói | ✓        |
 | Tên một font | Dùng font đó trước, sau đó đến font hệ thống và font biểu tượng |          |
 
 ## Chu kỳ đồng bộ session
@@ -374,9 +374,9 @@ Trang của các bản đó chưa biết banner này. Sau lần cập nhật đ�
 tab Termote (trên điện thoại: tắt hẳn app đã cài) một lần; bản mới sẽ tải khi mở lại.
 :::
 
-Khi trình duyệt này chạy một bản ổn định mới hơn bản nó chạy lần trước, mục **Updates** hỏi một
-lần xem bạn có muốn gắn sao cho Termote trên GitHub không, kèm link **Star on GitHub** và nút
-**No thanks**. Bấm nút nào thì lời mời cũng không hiện lại nữa. Không chức năng nào của Termote phụ
+Khi trình duyệt này chạy một bản ổn định mới hơn bản nó chạy lần trước, mục **Cập nhật** hỏi một
+lần xem bạn có muốn gắn sao cho Termote trên GitHub không, kèm link **Gắn sao trên GitHub** và nút
+**Không, cảm ơn**. Bấm nút nào thì lời mời cũng không hiện lại nữa. Không chức năng nào của Termote phụ
 thuộc vào việc gắn sao; trình duyệt chỉ lưu bản nó chạy lần trước và đã hỏi hay chưa.
 
 ## Xóa lịch sử lệnh

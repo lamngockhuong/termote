@@ -16,8 +16,8 @@ thiết bị nằm ở trang [Ghép thiết bị](/vi/usage/devices/).
 Ai đăng nhập với toàn quyền thì có mọi quyền của tài khoản hệ điều hành đang chạy server: chạy lệnh, đọc và
 sửa file, đọc mật khẩu đã lưu (`termote show-password`), đổi cấu hình (`termote start --no-auth`) và ghép
 thêm thiết bị, từ giao diện hoặc bằng cách gõ `termote pair` trong terminal. Thiết bị ghép từ terminal
-hiện là **Paired with the password, kept when a browser signs out**, giống thiết bị ghép bằng mật khẩu qua CLI. Thiết bị ghép từ một trình
-duyệt đăng nhập bằng mật khẩu hiện là **Paired from a signed-in browser** (`termote devices`: `a signed-in browser (<id>)`
+hiện là **Ghép bằng mật khẩu, vẫn giữ khi một trình duyệt đăng xuất**, giống thiết bị ghép bằng mật khẩu qua CLI. Thiết bị ghép từ một trình
+duyệt đăng nhập bằng mật khẩu hiện là **Ghép từ một trình duyệt đã đăng nhập** (`termote devices`: `a signed-in browser (<id>)`
 ).
 
 Không có cài đặt nào hạ một client toàn quyền xuống thấp hơn. Ranh giới thật là tài khoản hệ điều hành: muốn
@@ -63,7 +63,7 @@ giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tà
 - Đăng nhập sai và mã ghép sai bị giới hạn tần suất.
 - Thiết bị chỉ xem bị server từ chối mọi thao tác ghi, chứ không chỉ bị ẩn nút trong giao diện.
 - Với Zellij (`--mux zellij`), phím bạn gõ và tin nhắn Chat chỉ tới pane qua terminal của một client Zellij
-  của Termote, không bao giờ qua tham số tiến trình, thứ mà người dùng cục bộ khác có thể đọc. Thiết bị chỉ
+  của Termote, không bao giờ qua tham số tiến trình, nơi người dùng cục bộ khác đọc được. Thiết bị chỉ
   xem theo dõi pane Zellij qua `zellij subscribe`, vốn không gõ được.
 - herdr-core (`--mux hc`) không có đăng nhập riêng, nên Termote chỉ chạy nó ở chế độ native, không bao giờ
   trong container, và `--no-auth` phải kèm `--allow-hc-no-auth`. Termote chỉ dùng một danh sách cố định các
@@ -96,7 +96,7 @@ giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tà
   khẩu và cookie đi qua mạng ở dạng đọc được.
 - **Dòng audit không phải bằng chứng.** `termote logs clean`, hay bất kỳ thiết bị toàn quyền nào, xoá được
   chúng. Sau proxy (`tailscale serve`), địa chỉ ghi trong đó là của proxy, tức một địa chỉ nội bộ như `127.0.0.1`.
-- **Extension của trình duyệt.** Extension được phép chạy trên trang thì đọc được trang và gõ vào đó thay
+- **Tiện ích mở rộng của trình duyệt.** Tiện ích được phép chạy trên trang thì đọc được trang và gõ vào đó thay
   bạn. Termote không phân biệt được thao tác của nó với của bạn.
 - **Công cụ chuyển tiếp cổng.** VS Code Remote và Dev Tunnels, `ngrok` hay Cloudflare Tunnel chuyển tiếp cổng
   từ một tiến trình của chính tài khoản bạn: ai tới được địa chỉ mà công cụ đó mở ra là tới được Termote, chỉ còn mật khẩu chặn.
@@ -217,7 +217,7 @@ Mỗi lúc chạy tối đa hai lệnh git, mỗi lệnh giới hạn 10 giây (
 ## Khi mất một thiết bị
 
 - **Trình duyệt đăng nhập bằng mật khẩu:** đăng xuất nó trong Settings > Signed-in browsers, hoặc chạy
-  `termote signins` rồi `termote signins revoke <id>`. Việc này thu hồi luôn mọi thiết bị nó đã ghép. Nếu
+  `termote signins` rồi `termote signins revoke <id>`. Làm vậy sẽ thu hồi luôn mọi thiết bị nó đã ghép. Nếu
   trình duyệt không còn trong danh sách (server đã khởi động lại, nó đã log out), hãy tìm id của nó trong
   `termote devices` (`a signed-in browser (<id>)`) hoặc Settings > Devices: `termote signins revoke <id>`
   vẫn thu hồi các thiết bị đó; nếu có cái toàn quyền, hãy kiểm tra những gì nó có thể để lại như bên dưới.
