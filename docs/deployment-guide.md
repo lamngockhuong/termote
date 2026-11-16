@@ -813,8 +813,8 @@ zellij list-sessions
    curl -v http://127.0.0.1:7680/  # Should return HTML
    ```
 
-3. A rejected Host header answers 403 with the exact `--allow-host <name>` to add; check the
-   server log for `rejected request for host`
+3. A rejected Host header answers 403; the server log (`termote logs`) has a
+   `rejected request for host` line naming the exact `--allow-host <name>` to add
 
 #### Authentication issues
 

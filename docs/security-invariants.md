@@ -32,7 +32,12 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
 - **Host allowlist** (`hostGuard`): requests with an unrecognised `Host` header get a 403; the
   allowed set is loopback + (with `--lan`) the address the request arrived on, so it keeps
   working as the LAN IP changes + the Tailscale name + the Cloudflare hostname (`--cloudflare`) +
-  `--allow-host` entries, with no wildcard to disable the check
+  `--allow-host` entries, with no wildcard to disable the check. The 403 never names the
+  `--allow-host` command: a DNS-rebinding page receives it in the victim's own browser, from loopback
+  or the LAN like the user, and would get termote to vouch for the command that lets it in. The
+  command goes to the server log only (`rejected request for host`, at most one line per 10 s),
+  and only for a name of letters, digits, `-`, `.` and `:` that does not start with `-`, so a
+  Host header cannot put shell syntax into a line the user may paste
 - **Write/CSRF guard** (`writeGuard`): state-changing `/api/mux/*` requests must be
   same-site (`Sec-Fetch-Site`/`Origin` on the allowlist) with `Content-Type: application/json`;
   only the paths `/api/mux/uploads` and `.../files/image` (`isFilesImagePath`, anchored, on the
@@ -3011,7 +3016,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   then copies bytes both ways until the server's side closes (stdin closing only half-closes the way to
   the server, where the connection can, so its last answer still goes out); it never reads `SSH_ORIGINAL_COMMAND` or
   runs anything else. A process of the same user can open the bridge: it already has the CLI's
-  socket (accepted)
+  socket (accepted). Every other route stays open on the bridge, the machine proxy
+  (`/api/machines/<id>/mux/*`) included: a termote that reaches this one over the bridge also reaches
+  the machines this one added, with the role it was signed in with here, so a view role stays view
+  (`server/machine_proxy.go`). A full role here can already run commands as this user and use this
+  server's SSH key, so it gains no access it did not have (accepted)
 - **Machines CLI** (`server/cli_machine.go`, `server/machine_store.go`, `server/machine_ssh_args.go`):
   only `termote machine add|remove|import --herdr` change `machines.json` (config dir, 0600, temp file
   renamed, at most 32, id 16 random hex); a record failing a check (alias

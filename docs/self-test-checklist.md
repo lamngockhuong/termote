@@ -142,7 +142,8 @@ Manual testing checklist for Termote features before release.
 - [ ] An HTTPS port already serving something else (e.g. the other mode) is refused
 - [ ] `--fresh` forces a new password (ignores the saved one)
 - [ ] `--allow-host <name>` adds a name to the Host allowlist (persisted); a request with an
-      unlisted `Host` header gets 403 with that exact flag suggested
+      unlisted `Host` header gets 403 pointing to `termote logs`, and the server log names that exact
+      flag (the 403 itself never does)
 - [ ] `--remove-host <name>` removes a previously allowed name
 - [ ] A request from an unrecognised LAN hostname/IP is rejected (403) until added with
       `--allow-host`
