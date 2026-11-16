@@ -183,7 +183,7 @@ export default {
   'errors.unsupported_image':
     'Only PNG, JPEG, GIF and WebP images can be attached',
   'errors.unsupported_shell':
-    'This shell is not supported (bash, zsh, sh, fish, pwsh)',
+    'This shell is not supported (bash, zsh, sh, fish, PowerShell)',
   'errors.unsupported_type': 'This kind of file cannot be sent',
   'errors.upload_busy': 'Another upload is running. Try again in a moment',
   'errors.upload_failed': 'Upload failed',

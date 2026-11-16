@@ -456,7 +456,8 @@ Limits:
   sessions, without a subagent's. The model is read only for the sessions on screen, and is left
   out when the service cannot give it.
 - Resuming needs a backend that runs [Tasks](/usage/tasks/) (tmux, Herdr,
-  Zellij, `herdr-core`; not psmux) and a shell Tasks knows (`bash`, `zsh`, `sh`, `fish`, `pwsh`).
+  Zellij, `herdr-core`; not psmux) and a shell Tasks knows (`bash`, `zsh`, `sh`, `fish`, `pwsh`), or Windows PowerShell 5.1
+  (`powershell.exe`, Herdr's default on Windows), which Tasks refuse but a resume line takes.
 - View-only devices can read the list and the old conversations, where they may read
   [Files](/usage/files/) (a git repository, not a home folder), but cannot resume.
 

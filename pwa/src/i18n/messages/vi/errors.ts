@@ -178,7 +178,7 @@ export default {
   'errors.unsupported': 'Không được hỗ trợ ở đây',
   'errors.unsupported_image': 'Chỉ đính kèm được ảnh PNG, JPEG, GIF và WebP',
   'errors.unsupported_shell':
-    'Không hỗ trợ shell này (bash, zsh, sh, fish, pwsh)',
+    'Không hỗ trợ shell này (bash, zsh, sh, fish, PowerShell)',
   'errors.unsupported_type': 'Không gửi được loại file này',
   'errors.upload_busy':
     'Một lượt tải lên khác đang chạy. Hãy thử lại sau giây lát',

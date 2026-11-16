@@ -68,6 +68,18 @@ func taskShellKind(name string) string {
 	return ""
 }
 
+// resumeShellKind is taskShellKind for a resume line, which also takes
+// Windows PowerShell 5.1 (Herdr's default shell on Windows) in pwsh's
+// syntax: the line is a program with plain arguments, after a
+// Set-Location with a single-quoted path, whose quoting 5.1 shares with
+// pwsh; it needs neither an exit status nor markers, which a task does.
+func resumeShellKind(name string) string {
+	if strings.TrimSuffix(strings.ToLower(processName(name)), ".exe") == "powershell" {
+		return shellPwsh
+	}
+	return taskShellKind(name)
+}
+
 // shellQuote quotes s as one word of kind's syntax, with nothing in it
 // expanded.
 func shellQuote(kind, s string) string {

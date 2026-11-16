@@ -1118,8 +1118,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `claude --resume <id>` (`--fork-session` with `fork`), `codex resume --no-daemon <id>`
   (`codex fork --no-daemon <id>` with `fork`) or `opencode --session <id>` (its id holds only
   `[A-Za-z0-9_]`), typed as
-  keys (`TypeLine`, never a paste) only into a shell `taskShellKind` knows (else 409
-  `unsupported_shell`). `tab`: a new tab of the pane's group at the session's dir when it is still a
+  keys (`TypeLine`, never a paste) only into a shell `resumeShellKind` knows (else 409
+  `unsupported_shell`): `taskShellKind`'s, plus Windows PowerShell 5.1 (`powershell.exe`) for resume
+  only, in pwsh's syntax (the line needs no exit status or markers, and 5.1 quotes `'...'` as pwsh
+  does); Tasks still refuse 5.1. `tab`: a new tab of the pane's group at the session's dir when it is still a
   dir inside the root (resolved), else the root (`validTaskDir`, else 400 `invalid_root`), named
   from the title only when `validPaneName`; its shell must settle at its prompt (`waitTaskShell`,
   409 `shell_busy`), an unsupported one has its tab closed again. `here`: under the pane's input
