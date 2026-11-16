@@ -77,6 +77,9 @@ type historySession struct {
 	Branch    string       `json:"branch,omitempty"`
 	UpdatedAt string       `json:"updatedAt"`
 	Live      *historyLive `json:"live,omitempty"`
+	// Model is the one an OpenCode session's last answer used, read only
+	// for the sessions of the page sent (opencodeHistoryModels).
+	Model string `json:"model,omitempty"`
 
 	updated time.Time
 	// path is the file found, absCwd the cwd it records, forkOf the Codex
@@ -191,13 +194,17 @@ type historyAPI struct {
 	dirs  func() historyDirs
 	// children: the rollouts of a Codex session's threads
 	children *ttlCache[[]string]
-	// opencode: the OpenCode service's root sessions, for every root
-	opencode *ttlCache[opencodeHistoryList]
+	// opencode: the OpenCode service's root sessions, for every root;
+	// opencodeModels: the model of a session's last answer, by its id and
+	// time.updated
+	opencode       *ttlCache[opencodeHistoryList]
+	opencodeModels *ttlCache[string]
 }
 
 func newHistoryAPI() *historyAPI {
 	return &historyAPI{index: newHistoryIndex(), scans: newTTLCache[historyScan](historyTTL), dirs: serverHistoryDirs,
-		children: newTTLCache[[]string](codexChildTTL), opencode: newTTLCache[opencodeHistoryList](historyTTL)}
+		children: newTTLCache[[]string](codexChildTTL), opencode: newTTLCache[opencodeHistoryList](historyTTL),
+		opencodeModels: newTTLCache[string](opencodeModelTTL)}
 }
 
 // registerHistoryRoutes adds the history routes. They need the files
@@ -263,6 +270,7 @@ func (a *agentAPI) handleHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	res := historyPageOf(a.history.scan(root.Root), agent, after)
+	a.history.opencodeHistoryModels(r.Context(), res.Sessions)
 	a.markLive(r.Context(), res.Sessions)
 	w.Header().Set("Cache-Control", "no-store")
 	jsonOK(w, res)

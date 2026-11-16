@@ -41,6 +41,22 @@ describe('AgentHistoryRow', () => {
     )
     expect(screen.queryByText('Running')).toBeNull()
     expect(screen.queryByText('pkg/web/')).toBeNull()
+    expect(screen.queryByText('anthropic/claude-sonnet-4')).toBeNull()
+  })
+
+  it('shows the model of an OpenCode session', () => {
+    render(
+      <AgentHistoryRow
+        session={{
+          ...S,
+          agent: 'opencode',
+          model: 'anthropic/claude-sonnet-4',
+        }}
+        now={now}
+        onOpen={vi.fn()}
+      />,
+    )
+    expect(screen.getByText('anthropic/claude-sonnet-4')).toBeTruthy()
   })
 })
 

@@ -229,6 +229,9 @@ test.describe('sessions of an OpenCode pane', () => {
     await expect(rows.nth(0)).toContainText('Touch the files')
     await expect(rows.nth(0)).toContainText('Running')
     await expect(rows.nth(1)).toContainText('Patch the sources')
+    // The model of each one's last answer
+    await expect(rows.nth(0)).toContainText('fake/m1')
+    await expect(rows.nth(1)).toContainText('fake/gpt-5-fake')
     // The folder's totals: the old session alone is 42k tokens
     await expect(sheet.getByRole('region', { name: 'Agent tokens' }).locator('[data-agent="opencode"]')).toContainText(
       /7 days \d+(\.\d)?k tokens/,

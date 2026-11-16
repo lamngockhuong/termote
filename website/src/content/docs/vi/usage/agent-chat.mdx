@@ -422,7 +422,8 @@ trước. Mở danh sách từ một trong các chỗ sau:
   mở ra);
 - pane chưa có agent: view Chat của nó hiện ba phiên gần nhất, mỗi phiên có nút **Tiếp tục**.
 
-Mỗi dòng có agent, tiêu đề, lần hoạt động cuối, nhánh git và thư mục con dưới gốc. Tiêu đề là tên
+Mỗi dòng có agent, tiêu đề, lần hoạt động cuối, nhánh git và thư mục con dưới gốc; dòng của phiên
+OpenCode còn có model đã trả lời lần cuối (`provider/model`). Tiêu đề là tên
 bạn đặt bằng `/rename`, không có thì là tiêu đề agent tự đặt (Codex: tên đặt cho cuộc hội thoại;
 OpenCode: tiêu đề nó tự đặt), không có nữa thì là lời nhắn đầu tiên, in nghiêng. Ô tìm lọc theo
 tiêu đề và nhánh; khi danh sách có từ hai agent trở lên thì có thêm nút lọc từng agent.
@@ -454,7 +455,8 @@ Giới hạn:
 - Codex không lưu chỉ mục theo thư mục: chỉ các phiên nằm trong 2000 lần chạy gần nhất được liệt
   kê, và danh sách có ghi chú khi phiên cũ hơn bị bỏ qua.
 - Phiên OpenCode lấy từ dịch vụ nền của nó, chỉ khi dịch vụ đang chạy: 2000 phiên gần nhất, không
-  gồm phiên của subagent. Số token và các file phiên đó đã sửa chưa được hiện.
+  gồm phiên của subagent. Model chỉ được đọc cho các phiên đang hiện trên màn hình, và để trống khi
+  dịch vụ không trả được.
 - Muốn tiếp tục phiên, backend phải chạy được
   [Tasks](/vi/usage/tasks/) (tmux, Herdr, Zellij, `herdr-core`; psmux thì không) và shell phải là loại
   Tasks hỗ trợ (`bash`, `zsh`, `sh`, `fish`, `pwsh`).

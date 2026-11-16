@@ -1105,7 +1105,12 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   (`relUnder`, as above; not required to be absolute by Go's rules, since the path is the
   service's); title through the same cleaning, `titleSource: ai`, the time its `time.updated`. A
   service that does not run or fails lists no OpenCode session and fails nothing else (logged
-  without its body). Its transcript is read as the Chat view reads a running one, only for a
+  without its body). `model` is read only for the OpenCode sessions of the page sent (at most 30):
+  `GET /api/session/{id}/message?type=assistant&limit=1&order=desc` (24 MB), six at once, 2 s in
+  all, kept 10 min by id and `time.updated`; only the newest message's `model.providerID` and
+  `model.id` are decoded, and `provider/id` is sent only when it matches
+  `^[A-Za-z0-9][A-Za-z0-9._:@+/-]{0,127}$`. A read that fails leaves `model` out, is not kept and
+  is logged without its body; the page is sent all the same. Its transcript is read as the Chat view reads a running one, only for a
   session the listing finds in that root. Resume: `writeGuard`, `requireWriteRole` (view-only 403 for both
   `where`), 8 KB body, only the four fields; a backend that cannot run tasks (`runsTasks`: not psmux) → 501
   `unsupported`; a session running in a pane and no `fork` → 409 `session_live` with that tab and

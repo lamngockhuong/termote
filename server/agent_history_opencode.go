@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -161,6 +163,90 @@ func opencodeHistoryEntry(root string, s opencodeSessionInfo) (historySession, b
 		Agent: "opencode", ID: s.ID, Title: historyTitle(s.Title), TitleSource: titleAI,
 		Cwd: rel, UpdatedAt: updated.UTC().Format(time.RFC3339), updated: updated, absCwd: dir,
 	}, true
+}
+
+const (
+	// opencodeModelTTL bounds how long the model of a session is kept; a
+	// session that changed has another key (its time.updated) long before.
+	opencodeModelTTL = 10 * time.Minute
+	// opencodeModelReads is how many sessions' models are read at once.
+	opencodeModelReads = 6
+)
+
+// opencodeModelRe is a model name the history sends: provider/id as
+// OpenCode names them, nothing else of the service's.
+var opencodeModelRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:@+/-]{0,127}$`)
+
+// lastModel is the model of session id's last answer (its newest assistant
+// message, as session.message.list gives them), "" when it has none.
+// OpenCode 2.3.0 keeps no model in the session itself (Session.Info.model
+// is null).
+func (c *opencodeClient) lastModel(ctx context.Context, id string) (string, error) {
+	if !isOpencodeSessionID(id) {
+		return "", errOpencodeNotFound
+	}
+	q := url.Values{"type": {"assistant"}, "limit": {"1"}, "order": {"desc"}}
+	var res struct {
+		Data []struct {
+			Type  string           `json:"type"`
+			Model opencodeModelRef `json:"model"`
+		} `json:"data"`
+	}
+	if err := c.get(ctx, "/api/session/"+id+"/message", q, opencodeMessagesMax, &res); err != nil {
+		return "", err
+	}
+	if len(res.Data) == 0 || res.Data[0].Type != "assistant" || res.Data[0].Model.ID == "" {
+		return "", nil
+	}
+	if name := opencodeModelName(res.Data[0].Model); opencodeModelRe.MatchString(name) {
+		return name, nil
+	}
+	return "", nil
+}
+
+// opencodeHistoryModels sets the model of each OpenCode session of a page
+// of the history, read through the service (opencodeModelReads at once,
+// kept by session and time.updated). A model that cannot be read is left
+// out; the page is sent all the same.
+func (h *historyAPI) opencodeHistoryModels(ctx context.Context, sessions []historySession) {
+	var todo []int
+	for i, s := range sessions {
+		if s.Agent == "opencode" {
+			todo = append(todo, i)
+		}
+	}
+	if len(todo) == 0 {
+		return
+	}
+	c, err := opencodeConnect()
+	if err != nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, opencodeTimeout)
+	defer cancel()
+	slots := make(chan struct{}, opencodeModelReads)
+	var wg sync.WaitGroup
+	for _, i := range todo {
+		s := &sessions[i]
+		key := s.ID + "\x00" + strconv.FormatInt(s.updated.UnixMilli(), 10)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			slots <- struct{}{}
+			defer func() { <-slots }()
+			model, err := h.opencodeModels.do(key, func() (string, error) { return c.lastModel(ctx, s.ID) })
+			if err != nil {
+				// Not kept: the next page asks again.
+				h.opencodeModels.forgetFunc(func(k string) bool { return k == key })
+				if !errors.Is(err, errOpencodeNotFound) && !errors.Is(err, errOpencodeUnavailable) {
+					log.Printf("opencode history model: %v", err)
+				}
+				return
+			}
+			s.Model = model
+		}()
+	}
+	wg.Wait()
 }
 
 // fork makes a new session of session id's messages (all of them, copied

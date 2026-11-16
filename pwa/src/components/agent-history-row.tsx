@@ -1,4 +1,4 @@
-import { GitBranch } from 'lucide-react'
+import { Cpu, GitBranch } from 'lucide-react'
 import { agentLabel } from '../chat-agents'
 import type { HistorySession } from '../hooks/use-mux-api'
 import { useT } from '../i18n/i18n-context'
@@ -26,7 +26,8 @@ export function HistoryTitle({ session }: { session: HistorySession }) {
 }
 
 // One session in the history: its agent, title, when it was last active,
-// its branch and folder under the pane's root, and whether it runs now.
+// its branch and folder under the pane's root, the model of its last answer
+// (OpenCode), and whether it runs now.
 export function AgentHistoryRow({
   session,
   now,
@@ -61,6 +62,12 @@ export function AgentHistoryRow({
           )}
           {session.cwd && (
             <span className="truncate font-mono">{session.cwd}/</span>
+          )}
+          {session.model && (
+            <span className="flex min-w-0 items-center gap-1">
+              <Cpu size={12} aria-hidden="true" />
+              <span className="truncate">{session.model}</span>
+            </span>
           )}
         </span>
       </span>
