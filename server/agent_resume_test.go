@@ -182,6 +182,23 @@ func TestHistoryTranscriptViewOnlyText(t *testing.T) {
 	}
 }
 
+// Two project dirs can hold a transcript of the same id (one copied when a
+// repo moved): the route reads the one the scan matched to this root, never
+// another directory's, whichever sorts first.
+func TestHistoryTranscriptReadsTheScannedFile(t *testing.T) {
+	fx := newResumeFixture(t)
+	writeClaudeSession(t, fx.claude, fx.root, histID3, claudeRows(fx.root, "main", "mine"), time.Now().Add(time.Minute))
+	other := t.TempDir()
+	writeFile(t, filepath.Join(fx.claude, "projects", "-0", histID3+".jsonl"), claudeRows(other, "main", "theirs"))
+	path := "/api/mux/panes/0/agent/history/" + histID3 + "/transcript?agent=claude"
+	for _, req := range []*http.Request{apiRequest("GET", path, ""), viewRequest("GET", path, "")} {
+		rec := serve(fx.h, req)
+		if rec.Code != 200 || !strings.Contains(rec.Body.String(), "mine") || strings.Contains(rec.Body.String(), "theirs") {
+			t.Errorf("transcript = %d %s", rec.Code, rec.Body)
+		}
+	}
+}
+
 func TestHistoryTranscriptFileGone(t *testing.T) {
 	fx := newResumeFixture(t)
 	// Listed, then removed before it is read.

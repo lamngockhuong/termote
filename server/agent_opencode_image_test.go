@@ -244,3 +244,35 @@ func TestOpencodeImageRef(t *testing.T) {
 		}
 	}
 }
+
+// An OpenCode image read gives its slot back before the answer is written,
+// as the Claude Code and Codex one does: clients that stop reading hold none.
+func TestOpencodeImageSlotNotHeldWhileWriting(t *testing.T) {
+	_, mux, res := opencodeImagePane(t)
+	src := res.Entries[0].Parts[1].Image
+	if src == "" {
+		t.Fatalf("parts = %+v", res.Entries[0].Parts)
+	}
+	path := "/api/mux/panes/0/agent/image?src=" + url.QueryEscape(src)
+	release := make(chan struct{})
+	writing := make(chan struct{})
+	done := make(chan struct{})
+	for range agentImageConcurrency {
+		go func() {
+			defer func() { done <- struct{}{} }()
+			w := &stalledWriter{httptest.NewRecorder(), writing, release}
+			mux.ServeHTTP(w, apiRequest("GET", path, ""))
+		}()
+	}
+	for range agentImageConcurrency {
+		<-writing
+	}
+	rec := getOpencodeImage(mux, src, false)
+	close(release)
+	for range agentImageConcurrency {
+		<-done
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("image while others stall = %d %s", rec.Code, rec.Body)
+	}
+}

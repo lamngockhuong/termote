@@ -47,12 +47,14 @@ func (a *agentAPI) handleOpencodeImage(w http.ResponseWriter, r *http.Request, r
 	}
 	select {
 	case agentImageSlots <- struct{}{}:
-		defer func() { <-agentImageSlots }()
 	default:
 		writeCoded(w, errAgentImageBusy)
 		return
 	}
+	// As handleImage: the slot bounds the read only and is given back before
+	// the answer is written, so a client that stops reading holds none.
 	mt, data, err := readOpencodeImage(r.Context(), ref.Session, msg, ref.N)
+	<-agentImageSlots
 	if err != nil {
 		if !errors.Is(err, errAgentImageMissing) {
 			log.Printf("agent image: %v", err)

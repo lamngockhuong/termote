@@ -60,7 +60,7 @@ func (a *agentAPI) historyAgentSession(s historySession) AgentSession {
 	if s.Agent == "codex" {
 		return AgentSession{Agent: "codex", ID: s.ID, CodexHome: dirs.codex, Rollout: s.path}
 	}
-	return AgentSession{Agent: "claude", ID: s.ID, ClaudeDir: dirs.claude}
+	return AgentSession{Agent: "claude", ID: s.ID, ClaudeDir: dirs.claude, Transcript: s.path}
 }
 
 func (a *agentAPI) handleHistoryTranscript(w http.ResponseWriter, r *http.Request) {
