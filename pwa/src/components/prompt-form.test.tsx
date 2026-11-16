@@ -165,6 +165,40 @@ describe('PromptForm', () => {
     })
   })
 
+  it('a required checkbox is marked as other fields are', () => {
+    renderForm([
+      { key: 'ok', type: 'boolean', title: 'Agree', required: true },
+      { key: 'opt', type: 'boolean', title: 'Optional' },
+    ])
+    expect(screen.getByLabelText(/Agree/)).toHaveAccessibleName(
+      /^Agree\s*\(required\)$/,
+    )
+    expect(screen.getByLabelText('Optional')).toHaveAccessibleName('Optional')
+    expect(screen.getByLabelText(/Agree/)).not.toHaveAttribute('aria-invalid')
+  })
+
+  it('sums up the fields to fix in a live region once a send fails', async () => {
+    renderForm([
+      { key: 'name', type: 'string', title: 'Name', required: true },
+      { key: 'n', type: 'integer', title: 'N', maximum: 5 },
+    ])
+    const summary = screen.getByText(
+      (_, el) => el?.getAttribute('aria-live') === 'polite',
+    )
+    expect(summary).toBeEmptyDOMElement()
+    type('N', '9')
+    await send()
+    expect(summary).toHaveTextContent('2 fields need a fix before sending.')
+    // Focus still goes to the first field to fix
+    expect(screen.getByLabelText(/Name/)).toHaveFocus()
+    type(/Name/, 'svc')
+    expect(summary).toHaveTextContent('1 field needs a fix before sending.')
+    type('N', '3')
+    expect(summary).toBeEmptyDOMElement()
+    await send()
+    expect(onSend).toHaveBeenCalledWith({ name: 'svc', n: 3 })
+  })
+
   it('date fields use the date inputs', () => {
     renderForm([
       { key: 'd', type: 'string', format: 'date' },

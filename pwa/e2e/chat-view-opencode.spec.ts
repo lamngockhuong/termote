@@ -156,7 +156,7 @@ test.describe('chat view of an OpenCode pane', () => {
     await expect(viewer).toBeHidden()
 
     // The subagent still running shows under the conversation
-    await expect(page.getByRole('status').filter({ hasText: '1 subagent running' })).toBeVisible({
+    await expect(page.getByRole('button', { name: '1 subagent running' })).toBeVisible({
       timeout: 15000,
     })
     const subagents = page.getByRole('list', { name: 'Subagents' })

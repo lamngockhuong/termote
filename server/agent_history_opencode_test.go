@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"slices"
 	"strconv"
@@ -466,5 +468,148 @@ func TestHerdrOpencodeSessionFromProcess(t *testing.T) {
 func TestFindOpencodeUnder(t *testing.T) {
 	if id := findOpencodeUnder("k", 0); id != "" {
 		t.Errorf("no pid = %q", id)
+	}
+}
+
+// countModelReads counts the reads of a session's last answer.
+func countModelReads(oc *fakeOpencode) map[string]int {
+	n := map[string]int{}
+	for _, r := range oc.reqs() {
+		if strings.Contains(r, "/message?") && strings.Contains(r, "type=assistant") && strings.Contains(r, "limit=1&") {
+			id := strings.TrimPrefix(r, "GET /api/session/")
+			n[id[:strings.Index(id, "/")]]++
+		}
+	}
+	return n
+}
+
+// The model of an OpenCode session is its last answer's: read only for the
+// sessions of the page sent, kept until the session changes, and left out
+// when it cannot be read.
+func TestOpencodeHistoryModel(t *testing.T) {
+	fx := newOpencodeHistoryFixture(t)
+	models := func(q string) map[string]string {
+		t.Helper()
+		code, res, raw := listHistory(t, fx.h, q)
+		if code != 200 {
+			t.Fatalf("list = %d %v", code, raw)
+		}
+		out := map[string]string{}
+		for _, s := range res.Sessions {
+			out[s.ID] = s.Model
+		}
+		return out
+	}
+	if got := models(""); got["sesRoot"] != "fake/m1" || got["sesSub"] != "fake/m1" || len(got) != 4 {
+		t.Errorf("models = %v", got)
+	}
+	// Claude Code and Codex rows have none; sessions outside the root are
+	// never asked.
+	if reads := countModelReads(fx.oc); len(reads) != 2 || reads["sesRoot"] != 1 || reads["sesSub"] != 1 {
+		t.Errorf("reads = %v", reads)
+	}
+	_, _, raw := listHistory(t, fx.h, "")
+	for _, s := range raw["sessions"].([]any) {
+		row := s.(map[string]any)
+		if _, has := row["model"]; has != (row["agent"] == "opencode") {
+			t.Errorf("row %v", row)
+		}
+	}
+	if reads := countModelReads(fx.oc); reads["sesRoot"] != 1 {
+		t.Errorf("read again within the cache: %v", reads)
+	}
+
+	// A session that changed is read again; one whose last answer names no
+	// usable model, or none at all, has none.
+	h := newHistoryAPI()
+	now := time.Now()
+	page := func() []historySession {
+		t.Helper()
+		rows := []historySession{
+			{Agent: "opencode", ID: "sesRoot", updated: now},
+			{Agent: "claude", ID: "sesRoot", updated: now},
+			{Agent: "opencode", ID: "sesSub", updated: now},
+		}
+		h.opencodeHistoryModels(context.Background(), rows)
+		if rows[1].Model != "" {
+			t.Errorf("claude row = %+v", rows[1])
+		}
+		return rows
+	}
+	if rows := page(); rows[0].Model != "fake/m1" || rows[2].Model != "fake/m1" {
+		t.Errorf("rows = %+v", rows)
+	}
+	odd, _ := json.Marshal(map[string]any{"data": []any{
+		map[string]any{"id": "msg_x", "type": "assistant", "time": map[string]any{"created": now.UnixMilli()},
+			"model": map[string]any{"id": "m<script>", "providerID": "fake"}},
+	}})
+	fx.oc.set(func() {
+		fx.oc.messages["sesRoot"] = testOpencodeMessagesOf(t, odd)
+		fx.oc.messages["sesSub"] = fx.oc.messages["sesSub"][:1] // its question only
+	})
+	if rows := page(); rows[0].Model != "fake/m1" {
+		t.Errorf("unchanged session read again: %+v", rows)
+	}
+	now = now.Add(time.Second)
+	if rows := page(); rows[0].Model != "" || rows[2].Model != "" {
+		t.Errorf("changed = %+v", rows)
+	}
+
+	// A read that fails leaves the model out and is not kept.
+	var logs strings.Builder
+	log.SetOutput(&logs)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	now = now.Add(time.Second)
+	fx.oc.set(func() {
+		fx.oc.big = 1
+		delete(fx.oc.messages, "sesSub")
+	})
+	if rows := page(); rows[0].Model != "" || rows[2].Model != "" {
+		t.Errorf("failing reads = %+v", rows)
+	}
+	if !strings.Contains(logs.String(), "opencode history model") || strings.Contains(logs.String(), "sesSub") {
+		t.Errorf("logs = %q", logs.String())
+	}
+	fx.oc.set(func() {
+		fx.oc.big = 0
+		fx.oc.messages["sesRoot"] = fx.oc.messages["sesOut"]
+	})
+	if rows := page(); rows[0].Model != "fake/m1" {
+		t.Errorf("after the failure = %+v", rows)
+	}
+	// No service: no model, nothing asked.
+	stubOpencodeStateDir(t, t.TempDir())
+	now = now.Add(time.Second)
+	if rows := page(); rows[0].Model != "" {
+		t.Errorf("no service = %+v", rows)
+	}
+	if _, err := (&opencodeClient{}).lastModel(context.Background(), "../x"); err == nil {
+		t.Error("bad id: no error")
+	}
+}
+
+// Only the sessions of the page sent have their model read.
+func TestOpencodeHistoryModelPage(t *testing.T) {
+	fx := newOpencodeHistoryFixture(t)
+	now := time.Now().UnixMilli()
+	msgs := testOpencodeMessages(t, "message-list-after-tool.json")
+	fx.oc.set(func() {
+		fx.oc.list = nil
+		for i := range historyPage + 5 {
+			id := "sesP" + strconv.Itoa(i)
+			fx.oc.list = append(fx.oc.list, testOpencodeSession(id, "", "t", fx.root, now-int64(i)))
+			fx.oc.messages[id] = msgs
+		}
+	})
+	_, res, _ := listHistory(t, fx.h, "?agent=opencode")
+	if len(res.Sessions) != historyPage || res.Next == "" || res.Sessions[historyPage-1].Model != "fake/m1" {
+		t.Fatalf("page = %d %q", len(res.Sessions), res.Next)
+	}
+	if n := len(countModelReads(fx.oc)); n != historyPage {
+		t.Errorf("models read = %d, want %d", n, historyPage)
+	}
+	_, res, _ = listHistory(t, fx.h, "?agent=opencode&cursor="+url.QueryEscape(res.Next))
+	if len(res.Sessions) != 5 || res.Sessions[4].Model != "fake/m1" || len(countModelReads(fx.oc)) != historyPage+5 {
+		t.Errorf("next page = %d, reads %d", len(res.Sessions), len(countModelReads(fx.oc)))
 	}
 }

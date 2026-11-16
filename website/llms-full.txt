@@ -1562,7 +1562,7 @@ Every pane can list the Claude Code, Codex and OpenCode sessions that ran in its
 * **Session history** in a group’s menu in the sidebar (it lists the folder of the tab the group opens on);
 * a pane without an agent, whose Chat view shows its three latest sessions with a **Resume** button each.
 
-Each row shows the agent, a title, when it was last active, its git branch and its folder under the root. The title is the one you gave it with `/rename`, else the one the agent made (Codex: the thread name; OpenCode: the title it made), else its first prompt, shown in italics. Search filters by title and branch; with more than one agent in the list, a filter picks one.
+Each row shows the agent, a title, when it was last active, its git branch and its folder under the root; an OpenCode session also shows the model of its last answer (`provider/model`). The title is the one you gave it with `/rename`, else the one the agent made (Codex: the thread name; OpenCode: the title it made), else its first prompt, shown in italics. Search filters by title and branch; with more than one agent in the list, a filter picks one.
 
 Tap a session to read it, drawn as the Chat view draws a running one; **Show earlier messages** loads older parts. Its title shows the tokens the session used and their estimated cost, and the top of the list adds up the folder’s sessions today and over the last 7 days (see [Tokens and cost](/usage/overview/#tokens-and-cost)). **Files changed**, under the title, lists the files the session changed, each opening its diff or the file (see [Files a Session Changed](/usage/changes/#files-a-session-changed)). Under it:
 
@@ -1574,7 +1574,7 @@ Limits:
 
 * Only sessions of the server’s own user are listed (its `CLAUDE_CONFIG_DIR` or `~/.claude`, and `CODEX_HOME` or `~/.codex`); sessions of another folder or a Place are not.
 * Codex keeps no index by folder: only threads among its latest 2000 runs are listed, and the list says so when older ones were left out.
-* OpenCode’s sessions come from its background service, only while it runs: its latest 2000 sessions, without a subagent’s. Their tokens and the files they changed are not shown yet.
+* OpenCode’s sessions come from its background service, only while it runs: its latest 2000 sessions, without a subagent’s. The model is read only for the sessions on screen, and is left out when the service cannot give it.
 * Resuming needs a backend that runs [Tasks](/usage/tasks/) (tmux, Herdr, Zellij, `herdr-core`; not psmux) and a shell Tasks knows (`bash`, `zsh`, `sh`, `fish`, `pwsh`).
 * View-only devices can read the list and the old conversations, where they may read [Files](/usage/files/) (a git repository, not a home folder), but cannot resume.
 

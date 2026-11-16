@@ -153,7 +153,8 @@ func opencodeStatus(c *opencodeClient, id string) string {
 const (
 	// opencodeTailMessages is how many messages a first read asks for, and
 	// a read of older ones; a page over opencodeMessagesMax (pasted images)
-	// is asked again with fewer (opencodeShrink).
+	// is asked again with fewer (opencodeShrink), down to one message, read
+	// up to opencodeOneMessageMax.
 	opencodeTailMessages = 100
 	// opencodeForwardPages are the pages a cursor read asks for, newest
 	// first, until it meets the last message the client has: the first is
@@ -165,9 +166,26 @@ const (
 	opencodeCursorBefore = "ocb:"
 )
 
+// opencodeReadTimeout bounds one read of a transcript or an image (a
+// variable for the tests that move tens of MB).
+var opencodeReadTimeout = 2 * opencodeTimeout
+
+const (
+	// opencodeForwardMax and opencodeForwardReads bound a cursor read: the
+	// messages it reads back, and its requests (pages of one message after a
+	// page over its limit).
+	opencodeForwardMax   = 175
+	opencodeForwardReads = 16
+)
+
+// opencodeTopBig: the newest page of a session was over its limit at its
+// first size, so the next cursor reads of it start with one message (no
+// read of a page over the limit on each poll).
+var opencodeTopBig = newTTLCache[struct{}](30 * time.Second)
+
 var (
 	opencodeForwardPages = []int{5, 20, 50, 100}
-	opencodeShrink       = []int{opencodeTailMessages, 20, 5}
+	opencodeShrink       = []int{opencodeTailMessages, 20, 5, 1}
 )
 
 // readOpencodeTranscript reads s's messages through the service, as
@@ -180,7 +198,7 @@ func readOpencodeTranscript(s AgentSession, cursor, before string) (transcriptRe
 	if err != nil {
 		return transcriptResponse{}, errNoTranscript
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*opencodeTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), opencodeReadTimeout)
 	defer cancel()
 	res := transcriptResponse{Agent: s.Agent, SessionID: s.ID, Status: s.Status, Entries: []TranscriptEntry{}}
 	beforeOf := func(older string) string {
@@ -244,14 +262,32 @@ func readOpencodeTranscript(s AgentSession, cursor, before string) (transcriptRe
 // opencodePageShrinking reads the page cursor names ("" for the newest),
 // asking for fewer messages while a page is over opencodeMessagesMax.
 func opencodePageShrinking(ctx context.Context, c *opencodeClient, id, cursor string) (opencodePage, error) {
-	var err error
-	for _, n := range opencodeShrink {
-		var page opencodePage
-		if page, err = c.messages(ctx, id, cursor, n); !errors.Is(err, errOpencodeTooLarge) {
-			return page, err
+	page, _, err := opencodePageFitting(ctx, c, id, cursor, opencodeTailMessages)
+	return page, err
+}
+
+// opencodePageFitting reads up to n messages of the page cursor names, and
+// while that page is over its limit, the fewer of each opencodeShrink step
+// below n, the last one message alone (oneMessage). It returns the number
+// it asked for last.
+func opencodePageFitting(ctx context.Context, c *opencodeClient, id, cursor string, n int) (opencodePage, int, error) {
+	read := func(n int) (opencodePage, error) {
+		if n == 1 {
+			return c.oneMessage(ctx, id, cursor)
+		}
+		return c.messages(ctx, id, cursor, n)
+	}
+	page, err := read(n)
+	for _, fewer := range opencodeShrink {
+		if !errors.Is(err, errOpencodeTooLarge) {
+			break
+		}
+		if fewer < n {
+			n = fewer
+			page, err = read(n)
 		}
 	}
-	return opencodePage{}, err
+	return page, n, err
 }
 
 // opencodeReadError logs err and answers the client without the service's
@@ -265,12 +301,29 @@ func opencodeReadError(err error) error {
 
 // opencodeAfter returns the messages of session id newer than message last
 // (all of them when last is empty), oldest first, reading back through
-// opencodeForwardPages; found is false when last was not met.
+// opencodeForwardPages, at most opencodeForwardMax messages in
+// opencodeForwardReads requests; found is false when last was not met. Once
+// a page shrank to fewer messages, the older pages are asked with as few.
 func opencodeAfter(ctx context.Context, c *opencodeClient, id, last string) ([]opencodeMessage, bool, error) {
 	var newest []opencodeMessage // newest first
 	cursor := ""
-	for _, n := range opencodeForwardPages {
-		page, err := c.messages(ctx, id, cursor, n)
+	size := 0 // the pages' own sizes until one shrinks
+	if _, big := opencodeTopBig.peek(id); big {
+		size = 1
+	}
+	for i := 0; i < opencodeForwardReads && len(newest) < opencodeForwardMax; i++ {
+		n := opencodeForwardPages[min(i, len(opencodeForwardPages)-1)]
+		if size > 0 {
+			n = min(n, size)
+		}
+		page, asked, err := opencodePageFitting(ctx, c, id, cursor, n)
+		if asked < n {
+			size = asked
+			if cursor == "" {
+				opencodeTopBig.forgetFunc(func(k string) bool { return k == id })
+				opencodeTopBig.do(id, func() (struct{}, error) { return struct{}{}, nil })
+			}
+		}
 		if errors.Is(err, errOpencodeNotFound) && last == "" && cursor == "" {
 			return nil, true, nil // still no message: the session is made with the first
 		}

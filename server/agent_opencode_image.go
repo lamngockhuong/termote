@@ -72,7 +72,7 @@ func readOpencodeImage(ctx context.Context, id, msg string, n int) (string, []by
 	if err != nil {
 		return "", nil, errAgentImageMissing
 	}
-	ctx, cancel := context.WithTimeout(ctx, 2*opencodeTimeout)
+	ctx, cancel := context.WithTimeout(ctx, opencodeReadTimeout)
 	defer cancel()
 	files, err := c.messageFiles(ctx, id, msg)
 	if errors.Is(err, errOpencodeNotFound) || errors.Is(err, errOpencodeUnavailable) {

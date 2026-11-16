@@ -1195,6 +1195,8 @@ export interface HistorySession {
   updatedAt: string
   // The pane running it now
   live?: { tabId: string; paneId: string }
+  // The model of its last answer (OpenCode's sessions only)
+  model?: string
 }
 
 export interface HistoryPage {

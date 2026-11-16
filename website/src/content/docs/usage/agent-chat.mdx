@@ -422,7 +422,7 @@ list from any of these:
   button each.
 
 Each row shows the agent, a title, when it was last active, its git branch and its folder under
-the root. The title is the one you gave it with `/rename`, else the one the agent made (Codex: the
+the root; an OpenCode session also shows the model of its last answer (`provider/model`). The title is the one you gave it with `/rename`, else the one the agent made (Codex: the
 thread name; OpenCode: the title it made), else its first prompt, shown in italics. Search filters
 by title and branch; with more than one agent in the list, a filter picks one.
 
@@ -453,7 +453,8 @@ Limits:
 - Codex keeps no index by folder: only threads among its latest 2000 runs are listed, and the list
   says so when older ones were left out.
 - OpenCode's sessions come from its background service, only while it runs: its latest 2000
-  sessions, without a subagent's. Their tokens and the files they changed are not shown yet.
+  sessions, without a subagent's. The model is read only for the sessions on screen, and is left
+  out when the service cannot give it.
 - Resuming needs a backend that runs [Tasks](/usage/tasks/) (tmux, Herdr,
   Zellij, `herdr-core`; not psmux) and a shell Tasks knows (`bash`, `zsh`, `sh`, `fish`, `pwsh`).
 - View-only devices can read the list and the old conversations, where they may read

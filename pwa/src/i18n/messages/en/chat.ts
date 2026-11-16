@@ -355,6 +355,8 @@ export default {
   'chat.form.atMostChars': 'Enter at most {max} characters.',
   'chat.form.otherAnswer': 'Other answer',
   'chat.form.add': 'Add',
+  'chat.form.problems_one': '{count} field needs a fix before sending.',
+  'chat.form.problems_other': '{count} fields need a fix before sending.',
 
   // The agents waiting on the user, one at a time (components/needs-me-queue.tsx)
   'chat.queue.skipped_one': '{count} skipped dialog is still waiting.',

@@ -175,7 +175,7 @@ dòng hoặc ký tự điều khiển bị từ chối nguyên vẹn chứ khôn
 
 Câu hỏi gồm nhiều phần (một hàng tab như `Size · Drink · Submit`) được trả lời lần lượt từng tab.
 Thẻ hiện các tab thành từng bước và đánh dấu tab đang mở; mỗi câu trả lời đưa Claude Code sang tab
-kế tiếp, tab đó có thẻ riêng, cho tới tab Submit với hai nút **Submit answers** và **Cancel**. Nếu
+kế tiếp, tab đó có thẻ riêng, cho tới tab Submit với hai nút `Submit answers` và `Cancel`. Nếu
 Muốn bỏ qua một câu hay quay lại câu trước, bấm vào bước tương ứng để sang tab đó. Nếu bạn chuyển tab
 trong terminal trước khi bấm, sẽ không có gì được gửi và thẻ hiện tab đang mở lúc đó.
 
@@ -403,7 +403,7 @@ Herdr nào không khởi động được OpenCode sẽ báo như vậy). tmux v
 Trên Windows, pane chỉ được coi là
 rảnh khi shell của nó không có tiến trình con, nên pane đang chạy `ping`, `nvim` hay một `cmd`
 lồng nhau bị từ chối và không nhận gì. Shell còn giữ một tiến trình con sống lâu (`Start-Job`,
-chương trình giao diện mở từ nó, thứ mà profile đã chạy) cũng bị từ chối như vậy, pane `wsl.exe`
+chương trình giao diện mở từ nó, hay thứ gì đó profile đã chạy) cũng bị từ chối như vậy, pane `wsl.exe`
 cũng thế. Việc chạy ngay trong PowerShell thì không có tiến trình con, nên pane trông như đang
 rảnh: Ctrl+C của lệnh khởi động xóa được lệnh đang chờ (`Start-Sleep`, `Read-Host`), nhưng cũng
 dừng giữa chừng một script `.ps1` hay lệnh như `Copy-Item -Recurse`, giống hệt khi bạn tự bấm
@@ -422,7 +422,8 @@ trước. Mở danh sách từ một trong các chỗ sau:
   mở ra);
 - pane chưa có agent: view Chat của nó hiện ba phiên gần nhất, mỗi phiên có nút **Tiếp tục**.
 
-Mỗi dòng có agent, tiêu đề, lần hoạt động cuối, nhánh git và thư mục con dưới gốc. Tiêu đề là tên
+Mỗi dòng có agent, tiêu đề, lần hoạt động cuối, nhánh git và thư mục con dưới gốc; dòng của phiên
+OpenCode còn có model đã trả lời lần cuối (`provider/model`). Tiêu đề là tên
 bạn đặt bằng `/rename`, không có thì là tiêu đề agent tự đặt (Codex: tên đặt cho cuộc hội thoại;
 OpenCode: tiêu đề nó tự đặt), không có nữa thì là lời nhắn đầu tiên, in nghiêng. Ô tìm lọc theo
 tiêu đề và nhánh; khi danh sách có từ hai agent trở lên thì có thêm nút lọc từng agent.
@@ -454,7 +455,8 @@ Giới hạn:
 - Codex không lưu chỉ mục theo thư mục: chỉ các phiên nằm trong 2000 lần chạy gần nhất được liệt
   kê, và danh sách có ghi chú khi phiên cũ hơn bị bỏ qua.
 - Phiên OpenCode lấy từ dịch vụ nền của nó, chỉ khi dịch vụ đang chạy: 2000 phiên gần nhất, không
-  gồm phiên của subagent. Số token và các file phiên đó đã sửa chưa được hiện.
+  gồm phiên của subagent. Model chỉ được đọc cho các phiên đang hiện trên màn hình, và để trống khi
+  dịch vụ không trả được.
 - Muốn tiếp tục phiên, backend phải chạy được
   [Tasks](/vi/usage/tasks/) (tmux, Herdr, Zellij, `herdr-core`; psmux thì không) và shell phải là loại
   Tasks hỗ trợ (`bash`, `zsh`, `sh`, `fish`, `pwsh`).

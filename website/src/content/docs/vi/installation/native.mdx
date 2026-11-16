@@ -201,7 +201,7 @@ Trên Linux và Windows, server từ chối mọi kết nối xuất phát từ 
 đứng trước Termote mà chạy dưới user riêng (`nginx` dưới `www-data`, `caddy` dưới `caddy`) cần được cho phép; khi từ chối, log của
 server ghi sẵn lệnh cần chạy. Trên Windows, proxy chạy như một service được vào khi chính nó là tiến trình
 của service và user của bạn không đọc được token của nó (nếu đọc được, nó được tính là account của nó, cần
-cho phép như mọi user khác); proxy do một wrapper như NSSM hay WinSW khởi động thì bị từ chối: hãy đăng ký chính proxy làm
+cho phép như mọi user khác); proxy do một công cụ chạy dịch vụ như NSSM hay WinSW khởi động thì bị từ chối: hãy đăng ký chính proxy làm
 service, hoặc chạy nó dưới user của bạn. Service mà user của bạn không mở được tiến trình cũng bị từ chối: với
 tài khoản thường, `tailscaled` là một trong số đó, nên [`--tailscale`](/vi/installation/tailscale/) không chạy
 được trên Windows native.
@@ -275,12 +275,12 @@ và, trên macOS, `TMPDIR` từ shell của bạn sang service, để service th
   - Terminal là một client Zellij thật: Zellij vẽ thanh tab và thanh trạng thái của nó, và một tab lấy kích
   thước của client nhỏ nhất đang xem nó.
   - Chọn tab trên PWA **không** làm client Zellij của bạn di chuyển; mỗi thiết bị tự chọn tab của mình.
-  - Client của Termote ở chế độ locked của Zellij, nên các phím Ctrl trên thanh công cụ (Ctrl B, P, N, T, O, Q...)
-  tới được pane. Các phím tắt chế độ locked của riêng bạn vẫn có tác dụng (Ctrl g của cấu hình mặc định mở khóa).
+  - Client của Termote ở chế độ `locked` của Zellij, nên các phím Ctrl trên thanh công cụ (Ctrl B, P, N, T, O, Q...)
+  tới được pane. Các phím tắt chế độ `locked` của riêng bạn vẫn có tác dụng (Ctrl g của cấu hình mặc định mở khóa).
   - Không có cuộn phía server: con lăn chuột cuộn qua chính Zellij, cho mọi client đang xem pane đó. Select
   text vẫn hiện lịch sử của pane.
   - Tab mới cần một client đang gắn vào phiên (một terminal, hoặc Termote đang hiện nó); nếu không bạn sẽ thấy
-  "open this Zellij session in a terminal (or in Termote) before adding a tab".
+  "Hãy mở phiên Zellij này trong một terminal (hoặc trong Termote) trước khi thêm tab".
   - Đóng một phiên từ Termote sẽ xóa nó: Zellij không thể khôi phục lại.
   - Trên Windows, `--mux zellij` ở chế độ native bị từ chối; hãy dùng `termote container up --mux zellij`, xem
   [Cài đặt Container](/vi/installation/docker/#backend-terminal).
@@ -427,7 +427,7 @@ termote logs server     # last server log lines
 | Dừng khi bạn đăng xuất (Linux)           | `loginctl enable-linger $USER`                                                               |
 | Không chạy sau khi khởi động lại (WSL2)  | Ở đó không có user systemd: chạy lại `termote start`, hoặc bật systemd trong WSL             |
 | Không có phiên nào, `mux command failed` (Windows) | `psmux list-windows -t main` không in gì dù `psmux ls` vẫn liệt kê phiên: có phần mềm đang lọc lưu lượng localhost. Với AdGuard, tắt "Filter localhost" |
-| PWA cache cũ                             | menu More (⋯) → `Clear cache & reload` để làm mới (việc này cũng đăng xuất và bỏ chữ chưa lưu của file)                                                |
+| PWA cache cũ                             | menu More (⋯) → `Clear cache & reload` để làm mới (thao tác này cũng đăng xuất và bỏ chữ chưa lưu của file)                                                |
 
 ### Phiên tmux / psmux
 

@@ -1,9 +1,9 @@
 ---
 title: "View Changes"
-description: "Đọc những gì git báo là đã đổi trong repo của pane ngay trên điện thoại: diff của từng file, commit cuối, stage từng hunk, bình luận review và blame."
+description: "Đọc những gì git báo là đã đổi trong repo của pane ngay trên điện thoại: diff của từng file, commit cuối, đưa từng hunk vào index, bình luận review và blame."
 head:
   - tag: title
-    content: "Đọc và stage git diff từ điện thoại | Termote"
+    content: "Đọc git diff và đưa thay đổi vào index từ điện thoại | Termote"
 ---
 
 import { Image } from "astro:assets";
@@ -78,7 +78,7 @@ vụ không chạy. Danh sách được đọc lại mỗi 5 giây khi
 
 - Mỗi file hiện trạng thái hiện tại trong git, cùng các chữ cái như danh sách thay đổi, hoặc
   `no longer changed` khi nó đã được commit hay hoàn lại. Chạm vào file sẽ mở diff của nó (phía
-  chưa stage, hoặc phía đã stage nếu chỉ có phía đó), còn khi git không liệt kê thay đổi nào của
+  chưa vào index, hoặc phía đã vào index nếu chỉ có phía đó), còn khi git không liệt kê thay đổi nào của
   file thì mở file trong Files. File mà session đã xoá và git không còn giữ thì hiện `deleted` và
   không mở được.
 - `×3` cho biết session đã sửa file bao nhiêu lần, `subagent` là chỉ subagent sửa nó, `editing` là
