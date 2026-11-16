@@ -93,6 +93,33 @@ layout** → **Compact** (desktop only; a phone keeps its sessions sheet).
   it focused, a double-click resets it), and click its title to fold it. Both stay on this
   device. The section is not narrowed by the search and is hidden while no agent runs.
 
+### FatherTabs
+
+A FatherTab gathers tabs of one workspace under a name, such as **review**, **coding** and
+**specs**. Name a tab with the FatherTab first and a `/`: `review/PR 1` is the tab **PR 1** of the
+FatherTab **review**. On desktop, once a tab of the workspace on screen is named this way, a row of
+FatherTabs shows above the session tabs, and the session tabs show the picked FatherTab's tabs
+only, without its name.
+
+- **Make one**: rename a tab (**F2**) to `review/PR 1`, or fill the **FatherTab** field of the new
+  session form (a tab's menu → **New session…**, or **N**). Once the row shows, its **+** (**New
+  FatherTab**) asks for the FatherTab and its first tab.
+- **Switch**: click a FatherTab. It opens on the tab last shown in it, else on its first. Each one
+  shows how many tabs it has and the heaviest agent status among them.
+- **Add a tab**: a new tab from the tab bar joins the FatherTab on screen. The new session form
+  starts with that FatherTab; change it, or clear it for a tab in none.
+- **Move a tab to another FatherTab, or out of one**: drag it from the tab bar onto a FatherTab of
+  the row (onto **Other**: out of any), or pick one under **Move to FatherTab** in the tab's menu
+  (right click): a FatherTab there is, **No FatherTab**, or **New FatherTab…**, which asks for its
+  name on the tab (Enter moves the tab, Escape cancels). Each renames the tab, so a backend that
+  cannot rename tabs offers none; you can also rename it yourself, the field shows the whole name.
+- **Other**: the tabs with no FatherTab.
+
+A FatherTab belongs to one workspace and exists while a tab is named with it. The name is all there
+is to it, so every device shows the same FatherTabs; the sidebar, the mobile sessions sheet and the
+backend's own tab bar show the whole name (`review/PR 1`). A name that starts with `/`, `~/`, `./`
+or `../` is a plain name.
+
 ### What runs in a session
 
 Each session in the sidebar and in the mobile sheet shows the commands running in its panes under

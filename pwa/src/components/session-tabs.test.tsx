@@ -538,6 +538,95 @@ describe('SessionTabs', () => {
       expect(onMove).not.toHaveBeenCalled()
     })
 
+    describe('onto a drop target', () => {
+      // What is under the pointer, which jsdom cannot tell
+      let under: Element | null = null
+      let chip: HTMLElement
+      beforeEach(() => {
+        under = null
+        document.elementFromPoint = () => under
+        chip = document.createElement('button')
+        chip.setAttribute('data-drop', '')
+        chip.append(document.createElement('span'))
+        document.body.append(chip)
+      })
+      afterEach(() => {
+        chip.remove()
+        // @ts-expect-error jsdom has none of its own
+        delete document.elementFromPoint
+      })
+      const renderDrop = (over = {}) => {
+        const props = {
+          ...defaultProps,
+          sessions: THREE,
+          onMove: vi.fn(),
+          onDropOn: vi.fn(),
+          dropTargets: '[data-drop]',
+          ...over,
+        }
+        const view = render(<SessionTabs {...props} />)
+        return { props, ...view }
+      }
+
+      it('marks the target under the pointer and drops the tab on it', () => {
+        const { props } = renderDrop()
+        layOut()
+        press(tab('Logs'), 250)
+        moveTo(240)
+        expect(chip).not.toHaveAttribute('data-drop-target')
+        // Over something inside the target, twice, then off it and back
+        under = chip.firstElementChild
+        moveTo(230)
+        moveTo(220)
+        expect(chip).toHaveAttribute('data-drop-target', 'true')
+        under = document.body
+        moveTo(210)
+        expect(chip).not.toHaveAttribute('data-drop-target')
+        under = chip
+        moveTo(30)
+        release()
+        expect(props.onDropOn).toHaveBeenCalledWith('logs', chip)
+        // Not a move, and every tab is back in its place
+        expect(props.onMove).not.toHaveBeenCalled()
+        expect(chip).not.toHaveAttribute('data-drop-target')
+        expect(slide('Logs')).toBe('')
+        expect(slide('Shell')).toBe('')
+      })
+
+      it('drops nothing on Escape, nor a tab closed meanwhile', () => {
+        const { props, rerender } = renderDrop()
+        layOut()
+        under = chip
+        press(tab('Logs'), 250)
+        moveTo(200)
+        fireEvent.keyDown(window, { key: 'Escape' })
+        expect(chip).not.toHaveAttribute('data-drop-target')
+        press(tab('Logs'), 250)
+        moveTo(200)
+        rerender(<SessionTabs {...props} sessions={SESSIONS} />)
+        release()
+        expect(props.onDropOn).not.toHaveBeenCalled()
+      })
+
+      it('drags a single tab too, which has nowhere to move', () => {
+        const { props } = renderDrop({
+          sessions: ONE_SESSION,
+          onMove: undefined,
+        })
+        layOut(['Shell'])
+        expect(tab('Shell')).toHaveAttribute('data-movable')
+        press(tab('Shell'), 50)
+        moveTo(60)
+        release()
+        expect(props.onDropOn).not.toHaveBeenCalled()
+        under = chip
+        press(tab('Shell'), 50)
+        moveTo(60)
+        release()
+        expect(props.onDropOn).toHaveBeenCalledWith('shell', chip)
+      })
+    })
+
     it('does not drag without onMove, nor a single tab', () => {
       const { unmount } = render(<SessionTabs {...defaultProps} />)
       expect(tab('Shell')).not.toHaveAttribute('data-movable')

@@ -153,6 +153,7 @@ import {
   parseDeepLink,
   parseScreenLink,
 } from './utils/deep-link'
+import { fatherTabNewName } from './utils/father-tab'
 import { signOutPage } from './utils/files-persist'
 import { isFocusWindow } from './utils/focus-mode'
 import {
@@ -2311,7 +2312,13 @@ export default function App({
             onAddTab={
               readOnly || focus
                 ? undefined
-                : (name = 'New', icon?: string) => addTab(name, icon)
+                : (name?: string, icon?: string) =>
+                    // Without a name: into the FatherTab of the tab on
+                    // screen (the form says the FatherTab itself)
+                    addTab(
+                      name ?? fatherTabNewName(activeSession.name, 'New'),
+                      icon,
+                    )
             }
             addTabAsksName={compactSidebar}
             onUpdateTab={readOnly ? undefined : updateSession}
