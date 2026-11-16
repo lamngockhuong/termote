@@ -737,3 +737,34 @@ func TestHerdrOpencodeSession(t *testing.T) {
 		t.Errorf("service down: %+v", s)
 	}
 }
+
+// Large replies are read a few at a time whatever asks for them: with every
+// slot taken, a page read waits for one, and gives up with its context
+// without sending the request. Small reads never wait.
+func TestOpencodeLargeReadsBounded(t *testing.T) {
+	f := newFakeOpencode(t)
+	c, err := opencodeConnect()
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	for range cap(opencodeLargeReads) {
+		opencodeLargeReads <- struct{}{}
+	}
+	t.Cleanup(func() {
+		for range cap(opencodeLargeReads) {
+			<-opencodeLargeReads
+		}
+	})
+	before := len(f.reqs())
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	if _, err := c.messages(ctx, "sesPane", "", 10); !errors.Is(err, errOpencodeUnavailable) {
+		t.Errorf("page read with every slot taken = %v", err)
+	}
+	if n := len(f.reqs()); n != before {
+		t.Errorf("requests sent while waiting = %d", n-before)
+	}
+	if _, err := c.active(context.Background()); err != nil {
+		t.Errorf("small read waited: %v", err)
+	}
+}

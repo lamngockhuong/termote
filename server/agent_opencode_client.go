@@ -255,10 +255,25 @@ func opencodeForgetIfDial(err error) {
 	}
 }
 
+// opencodeLargeReads bounds the replies over opencodeSmallMax read at once,
+// whatever asks for them (transcript pages by cursor, history, usage,
+// skills, models): each is held in memory twice, as bytes and decoded, so N
+// clients asking for different pages must not hold N of them. The slot
+// covers the read and the decode only, never the answer to the client.
+var opencodeLargeReads = make(chan struct{}, 4)
+
 // get reads path into out, answering errOpencodeNotFound for a 404 and
 // errOpencodeUnavailable for a refused password. The body is read up to
 // limit bytes; its text never goes into an error.
 func (c *opencodeClient) get(ctx context.Context, path string, q url.Values, limit int64, out any) error {
+	if limit > opencodeSmallMax {
+		select {
+		case opencodeLargeReads <- struct{}{}:
+			defer func() { <-opencodeLargeReads }()
+		case <-ctx.Done():
+			return fmt.Errorf("opencode %s: %w", path, errors.Join(errOpencodeUnavailable, ctx.Err()))
+		}
+	}
 	u := *c.base
 	u.Path = path
 	u.RawQuery = q.Encode()

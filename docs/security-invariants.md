@@ -77,8 +77,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   in the background, one at a time. argv is `[herdr|herdr.exe resolved through PATH, "server"]`,
   never a shell; Windows runs only an `.exe`, and a match through `.` in `PATH` (`exec.ErrDot`) is
   refused. Env is `terminalEnv()` (no `TERMOTE_*`) without any `HERDR_*` variable, plus
-  `HERDR_SOCKET_PATH` = the socket serve dials. A Windows pipe served by another user is never
-  treated as missing: it writes an `audit: herdr pipe refused` line (once per reason) and never
+  `HERDR_SOCKET_PATH` = the socket serve dials. A Windows pipe served by another user, or on Linux
+  and macOS a Unix socket whose peer (`SO_PEERCRED`, `LOCAL_PEERCRED`) is neither this user nor
+  root (`dialHerdr`, as `HERDR_SOCKET_PATH` in a shared directory could let another user make it
+  first), is never treated as missing: it writes an `audit: herdr pipe refused` line (once per reason) and never
   starts Herdr. Not
   within `herdrStartGrace` (15 s) after serve starts; a failed start (not started, no ping within
   `herdrStartWait` (10 s), exited before answering, exited within `herdrStableAfter` (1 min) after
@@ -954,7 +956,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   session, the message (`ocm:<id>`, the id checked as `msg_…`) and the file's place in it, and is
   given only to a file whose `source.type` is `inline` (another kind keeps its chip, no
   reference). The image is read again through the service (`GET
-  /api/session/{id}/message/{msg}`, 72 MB at most, two such reads at once; the service answers 404 for a message of
+  /api/session/{id}/message/{msg}`, 72 MB at most, two such reads at once, the slot given back
+  before the answer is written as above; the service answers 404 for a message of
   another session), never from a file, and only for the pane's own session or a session the
   history of the pane's directory lists (`findHistorySession`, after `historyRoot`, so a
   view-only client is refused a root Files refuses it); any other session is never asked for.
@@ -1093,7 +1096,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   Files refuses it the root (no git repo, a home dir) and gets transcripts through
   `viewTranscript`, as the Chat view's (text only: no tool part, no note). A transcript is read only for a session the listing finds in that root
   (another root's, another agent's or an unknown id: 404 `session_not_found`, no reason given),
-  through the journal adapters' own `Locate` checks. One scan per root is shared for 10 s; parsed
+  and from the file that listing matched to the root (Claude Code: `Transcript`, never another
+  project dir's file of the same id; Codex: its rollout), through the journal adapters' own `Locate`
+  checks. One scan per root is shared for 10 s; parsed
   files are kept by path, size and mtime (at most 5000). `live` marks a session some pane runs now
   (its agent lookup, cached). OpenCode's sessions come only from the server user's own service
   (see OpenCode service client; never `opencode.db`): `GET /api/session?parentID=null&limit=100`,
@@ -1165,8 +1170,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   ended when the file is the same (`os.SameFile`) and not shorter, else from the start; only complete
   lines, a line over 2 MiB skipped undecoded, only lines naming `"usage"` (Claude) or
   `session_meta`/`turn_context`/`token_usage_record`/`token_count` (Codex) decoded, and of them only
-  token counts, model ids, message or response ids and times are kept (5000 files at most, the least
-  used tenth dropped). Requests count once by `message.id`/`response_id` (across files in a summary),
+  token counts, model ids, message or response ids and times are kept (12000 files at most, above the
+  summary's 5000 per agent, the least used tenth dropped). Requests count once by `message.id`/`response_id` (across files in a summary),
   `<synthetic>` and other threads' rows are skipped. Replies hold only numbers, model ids, the price
   table's date and 15-minute UTC bucket times: no path, cwd, title, session id or
   text. Shared reads: a session 5 s, a summary 30 s. Costs are estimates from the price table built
@@ -1372,7 +1377,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   check is repeated at most every 2 s). Every reply is read up to a limit (1 MB, a page of
   messages 24 MB, one message read alone for its images, or the Chat view's page of one message
   after a larger page was over 24 MB, 72 MB (five images of 10 MB as base64; at most two such
-  page reads at once), the list of models 8 MB) and decoded into the fields used (of
+  page reads at once), the list of models 8 MB; every reply allowed over 1 MB, whatever asks for it,
+  is read and decoded at most four at once, `opencodeLargeReads`, a read waiting for a slot giving up
+  with its context before it sends anything) and decoded into the fields used (of
   `/api/model` only `providerID`, `id` and `limit.context`); the service's own text (its error bodies,
   `/api/info`'s hostname, `/api/model`'s provider settings with their API keys) never reaches a
   client or a log. The usage reads (see Agent usage and cost) and the files a session touched (see
@@ -1550,7 +1557,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   every directory git runs in and not only one `resolve` returned (`gitRunner.output` calls
   `checkRepoRoot`: blame through a link into another work tree, `worktree add` in the git dir, Find
   in a linked folder; the answer kept 2 s per directory, and forgotten as soon as termote writes
-  under it, so a config include a discard restores is read by the next git), termote reads the
+  under it, so a config include a discard restores is read by the next git, and every answer
+  forgotten after a new worktree's checkout, which may write a file a repository's config includes),
+  termote reads the
   repository git would find there (walking up, stopping only
   at a git dir git takes too, and trying a directory itself as a bare repository when its `.git`
   is no repository git takes, as git does) as text (`repoConfigRefused`, `server/git_repo_config.go`) and refuses
@@ -1625,7 +1634,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `core.excludesFile` and `core.attributesFile` emptied behind `repoConfigRefused` (`status` opens
   either wherever the repository's config points it; empty means no file, so the user's global
   ignore and attributes files no longer apply there, the repository's `.gitignore`,
-  `.gitattributes` and `info/exclude` still do),
+  `.gitattributes` and `info/exclude` still do), and `core.symlinks=false` and
+  `core.protectNTFS=true` whatever the repository sets (a new worktree's checkout writes a committed
+  link as a file holding its target, so Git for Windows never looks a `\\host\share` target up),
   submodules ignored, 10s timeout, 2 at a time, and 1 at a time per root except a write; a
   `tryOnly` call (the overview's status, blame) answers busy while its root runs another, as when it
   would take the last slot (a command that writes the index runs under the
@@ -1713,8 +1724,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   or `~/.local/state/herdr-core`; the folders of `$HERDR_SOCKET_PATH` and `$HC_SOCKET`;
   `$ZELLIJ_SOCKET_DIR`; `$TMUX_TMPDIR`; an absolute value only) (so `~/.config`,
   `~/.cache` and `~/.local` are refused, `~/.config/fish` is not); a
-  component matching `isGitDirName`, or a dir git (through `gitRunner`) calls a git dir or a bare
-  repo (a config whose hooks or filter drivers cannot be turned off counts as one); a quote, line
+  component matching `isGitDirName`, or a dir git (through a `gitRunner` that checks the repository
+  first as the server's does, `checkedGitRunner`) calls a git dir or a bare repo (a config whose
+  hooks or filter drivers cannot be turned off, or a repository that check refuses, counts as one); a quote, line
   break or NUL; an unknown home (fails closed). `start` refuses a new path that
   fails (exit 2, nothing saved or stopped) and re-checks every saved one, printing a failing one as
   skipped with the `--remove-path` that drops it; `serve` checks each again against its own user and

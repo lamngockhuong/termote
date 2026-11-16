@@ -132,7 +132,7 @@ func TestGitDirProbe(t *testing.T) {
 			t.Fatalf("git %v: %v\n%s", args, err, out)
 		}
 	}
-	probe := gitDirProbe(newGitRunner())
+	probe := gitDirProbe(checkedGitRunner())
 	plain := mkdir(t, filepath.Join(dir, "plain"))
 	for d, want := range map[string]bool{
 		bare: true, filepath.Join(bare, "objects"): true, filepath.Join(work, ".git"): true,
@@ -356,5 +356,21 @@ func TestAllowPathRefusesTermoteCache(t *testing.T) {
 		if err := validateAllowPath(p, env); err == nil || !strings.Contains(err.Error(), "never serves") {
 			t.Errorf("%s: %v", p, err)
 		}
+	}
+}
+
+// The probe runs git only through the repository check the server runs
+// (on Windows, a repository naming a network path), and a directory that
+// check refuses is refused as a Place, never probed.
+func TestGitDirProbeChecksTheRepositoryFirst(t *testing.T) {
+	if checkedGitRunner().checkRoot == nil {
+		t.Fatal("the CLI's git runner checks no repository")
+	}
+	g := checkedGitRunner()
+	var checked string
+	g.checkRoot = func(root string) error { checked = root; return errDirNotAvailable }
+	dir := t.TempDir()
+	if !gitDirProbe(g)(dir) || checked != dir {
+		t.Errorf("refused repository: probed as no git dir (checked %q)", checked)
 	}
 }

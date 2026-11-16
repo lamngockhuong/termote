@@ -317,8 +317,14 @@ func (g *gitRunner) argv(c gitCall, o repoOverrides, hooksDir string, args []str
 	// host the user's NTLM hash. Empty means no file at all, not the default
 	// one, so the user's global ignore and attributes files do not apply
 	// there either; the repository's own files still do.
+	// core.symlinks=false: a checkout (a new worktree's reset --hard)
+	// writes a committed link as a plain file holding its target, so Git
+	// for Windows never looks the target up (a link to \\host\share would
+	// send that host the hash); core.protectNTFS=true keeps git refusing
+	// paths NTFS reads as another file, whatever the repository sets.
 	if g.windows {
-		argv = append(argv, "-c", "core.excludesFile=", "-c", "core.attributesFile=")
+		argv = append(argv, "-c", "core.excludesFile=", "-c", "core.attributesFile=",
+			"-c", "core.symlinks=false", "-c", "core.protectNTFS=true")
 	}
 	if c.safeDir != "" {
 		argv = append(argv, "-c", "safe.directory="+c.safeDir)

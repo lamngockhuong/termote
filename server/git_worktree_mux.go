@@ -227,6 +227,10 @@ func (g *gitWorktreeMux) CreateWorktree(ctx context.Context, sourceID, branch, b
 		return "", err
 	}
 	defer g.nest.drop()
+	// The checkout writes files a repository's config may include (a
+	// missing include passes the check): every check made before it is
+	// forgotten, so the next git anywhere checks the repository again.
+	defer g.roots.repoChecks.forgetFunc(func(string) bool { return true })
 	if err := addWorktree(ctx, g.git, repo, path, branch, base, exists); err != nil {
 		return "", err
 	}

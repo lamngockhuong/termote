@@ -93,6 +93,7 @@ func TestGitArgvOverrides(t *testing.T) {
 	joined := strings.Join(argv, " ")
 	for _, want := range []string{"-C /r --no-pager", "core.fsmonitor=false", "protocol.allow=never", "safe.directory=/r",
 		"core.hooksPath=" + hooks, "diff.autoRefreshIndex=false", "mailmap.file= ", "mailmap.blob= ", "core.excludesFile= ", "core.attributesFile= ",
+		"core.symlinks=false", "core.protectNTFS=true",
 		"hook.My.Hook.enabled=false",
 		"filter.Evil.x.clean=", "filter.Evil.x.smudge=", "filter.Evil.x.process=", "filter.Evil.x.required=false"} {
 		if !strings.Contains(joined, want) {
@@ -103,7 +104,7 @@ func TestGitArgvOverrides(t *testing.T) {
 		t.Errorf("args must come last: %q", argv)
 	}
 	g.windows = false
-	if joined := strings.Join(g.argv(gitCall{root: "/r"}, repoOverrides{}, hooks, nil), " "); strings.Contains(joined, "excludesFile") {
+	if joined := strings.Join(g.argv(gitCall{root: "/r"}, repoOverrides{}, hooks, nil), " "); strings.Contains(joined, "excludesFile") || strings.Contains(joined, "core.symlinks") {
 		t.Errorf("off Windows the user's global excludes are kept: %q", joined)
 	}
 }

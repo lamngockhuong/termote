@@ -79,6 +79,9 @@ func (claudeJournal) Locate(s AgentSession) (string, error) {
 	if err != nil {
 		return "", errNoTranscript
 	}
+	if s.Transcript != "" {
+		return claudeTranscriptAt(root, s.ID, s.Transcript)
+	}
 	path, err := locateClaudeTranscript(root, s.ID)
 	if errors.Is(err, errTranscriptNotWritten) && isSessionID(s.ForkOf) && s.ForkOf != s.ID {
 		if parent, perr := locateClaudeTranscript(root, s.ForkOf); perr == nil {
@@ -86,6 +89,21 @@ func (claudeJournal) Locate(s AgentSession) (string, error) {
 		}
 	}
 	return path, err
+}
+
+// claudeTranscriptAt is path when it resolves to <root>/projects/<dir>/<id>.jsonl,
+// a regular file: the transcript the history scan matched to a root, never
+// another project's file of the same id.
+func claudeTranscriptAt(root, id, path string) (string, error) {
+	real, err := filepath.EvalSymlinks(path)
+	if err != nil || filepath.Base(real) != id+".jsonl" ||
+		filepath.Dir(filepath.Dir(real)) != filepath.Join(root, "projects") {
+		return "", errNoTranscript
+	}
+	if fi, err := os.Stat(real); err != nil || !fi.Mode().IsRegular() {
+		return "", errNoTranscript
+	}
+	return real, nil
 }
 
 // locateClaudeTranscript finds <root>/projects/*/<id>.jsonl, root resolved.

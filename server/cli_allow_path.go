@@ -33,7 +33,7 @@ func newAllowPathEnv(home string, getenv func(string) string, termoteDirs ...str
 	dirs = append(dirs, systemDenyDirs...)
 	dirs = append(dirs, allowPathSocketDirs(getenv)...)
 	dirs = append(dirs, muxControlDirs(home, getenv)...)
-	return allowPathEnv{home: home, deny: filesDenyDirs(dirs...), isGitDir: gitDirProbe(newGitRunner())}
+	return allowPathEnv{home: home, deny: filesDenyDirs(dirs...), isGitDir: gitDirProbe(checkedGitRunner())}
 }
 
 // allowPathEnv is the env of the CLI's user: termote's config, state, data
@@ -111,18 +111,28 @@ func muxControlDirs(home string, getenv func(string) string) []string {
 	return dirs
 }
 
+// checkedGitRunner is a gitRunner that checks a repository before git runs
+// in it, as the server's does (checkRepoRoot: on Windows, a repository
+// naming a network path is never handed to git).
+func checkedGitRunner() *gitRunner {
+	g := newGitRunner()
+	newRootResolver(g)
+	return g
+}
+
 // gitDirProbe asks git whether dir is a git directory or a bare repository,
 // through the gitRunner (no hook, filter or fsmonitor runs). A dir git does
 // not know as a repo, or no git at all, is not one; a config whose hooks or
-// filter drivers cannot be turned off, or no empty hooks directory to run
-// git with, counts as one, so it is refused.
+// filter drivers cannot be turned off, no empty hooks directory to run git
+// with, or a repository the runner's check refuses, counts as one, so it is
+// refused.
 func gitDirProbe(g *gitRunner) func(string) bool {
 	return func(dir string) bool {
 		ctx, cancel := context.WithTimeout(context.Background(), gitTimeout)
 		defer cancel()
 		out, _, err := g.output(ctx, gitCall{root: dir, safeDir: dir, limit: 4096},
 			"rev-parse", "--is-inside-git-dir", "--is-bare-repository")
-		if errors.Is(err, errUnsafeRepoConfig) || errors.Is(err, errNoHooksDir) {
+		if errors.Is(err, errUnsafeRepoConfig) || errors.Is(err, errNoHooksDir) || errors.Is(err, errDirNotAvailable) {
 			return true
 		}
 		return err == nil && slices.Contains(strings.Fields(string(out)), "true")

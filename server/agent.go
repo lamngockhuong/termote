@@ -51,6 +51,10 @@ type AgentSession struct {
 	// --fork-session` was forked from (its argv), whose transcript is the
 	// fork's until the fork writes its own with its first message.
 	ForkOf string
+	// Transcript: for a Claude Code session the history scan found, the
+	// transcript it matched to the root, read instead of any other file of
+	// the same id (Locate still checks it).
+	Transcript string
 	// ClaudeWindow: the context window Claude Code's argv chose (--model),
 	// 0 when unknown (no --model, or no process to read: Herdr). The
 	// overview prefers the model its transcript names (claudeModels).
@@ -547,7 +551,7 @@ func (a *agentAPI) handleTranscript(w http.ResponseWriter, r *http.Request) {
 // read within agentCacheTTL (the overview reads the tail, as the Chat view's
 // first read does).
 func (a *agentAPI) readCached(s AgentSession, cursor, before string) (transcriptResponse, error) {
-	key := strings.Join([]string{s.Agent, s.ID, s.ClaudeDir, s.CodexHome, s.Rollout, s.RolloutID, cursor, before}, "\x00")
+	key := strings.Join([]string{s.Agent, s.ID, s.ClaudeDir, s.Transcript, s.CodexHome, s.Rollout, s.RolloutID, cursor, before}, "\x00")
 	return a.reads.do(key, func() (transcriptResponse, error) {
 		return readTranscript(s, cursor, before)
 	})

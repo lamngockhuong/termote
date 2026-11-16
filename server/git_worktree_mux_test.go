@@ -342,9 +342,15 @@ func worktreeRoundTrip(t *testing.T, m Mux, repo string, named bool, wait func(w
 		i := groupIndex(snap.Groups, src)
 		return err == nil && i >= 0 && groupFolder(snap.Groups[i]) == repo
 	})
+	// A check made before the checkout is not kept past it: the checkout
+	// may write a file the repository's config includes.
+	rr.repoChecks.do(repo, func() (struct{}, error) { return struct{}{}, nil })
 	id, err := gm.CreateWorktree(ctx, src, "feat/rt", "", "")
 	if err != nil {
 		t.Fatalf("CreateWorktree: %v", err)
+	}
+	if _, ok := rr.repoChecks.peek(repo); ok {
+		t.Error("the repository check made before the checkout is still cached")
 	}
 	path := filepath.Join(gm.base, filepath.Base(repo), "feat-rt")
 	if info := mustRepoInfo(t, newTestRoots(), path); !info.Linked || info.Branch != "feat/rt" {
