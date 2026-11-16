@@ -1,5 +1,50 @@
 # Changelog
 
+## [2.27.0](https://github.com/lamngockhuong/termote/compare/v2.26.4...v2.27.0) (2026-11-16)
+
+
+### Features
+
+* draw the terminal with WebGL2 and reconnect streams faster ([#815](https://github.com/lamngockhuong/termote/issues/815)) ([b1f80fb](https://github.com/lamngockhuong/termote/commit/b1f80fbe7eac7dfe1f8d8cda6c3c353590694e69))
+* fork a running Codex session from the session history ([#840](https://github.com/lamngockhuong/termote/issues/840)) ([de17eda](https://github.com/lamngockhuong/termote/commit/de17eda457f0b1b1644a13c27cdc4d9da064fbc5))
+* list a pane's past Claude Code and Codex sessions and resume one ([#828](https://github.com/lamngockhuong/termote/issues/828)) ([5e8fa42](https://github.com/lamngockhuong/termote/commit/5e8fa42e462cf9f31b6fca5c0adf82cb704cbe89))
+* list the files an OpenCode session changed ([#851](https://github.com/lamngockhuong/termote/issues/851)) ([4f76ae4](https://github.com/lamngockhuong/termote/commit/4f76ae41f9048f74bf12528377b23ec80768abbc))
+* list, read, resume, fork and start OpenCode sessions ([#847](https://github.com/lamngockhuong/termote/issues/847)) ([ffda29c](https://github.com/lamngockhuong/termote/commit/ffda29c5dc0345cd0627858c3e73a12faea2a902))
+* manage git worktrees on Windows with psmux and herdr-core ([#819](https://github.com/lamngockhuong/termote/issues/819)) ([c3b44f4](https://github.com/lamngockhuong/termote/commit/c3b44f4c0f5bce4b280c77a3a128ba7761ffb63d))
+* run / commands and @ skills in an OpenCode pane ([#846](https://github.com/lamngockhuong/termote/issues/846)) ([03dfb49](https://github.com/lamngockhuong/termote/commit/03dfb49c5311a17de11bd28fa4574aff481bf0ea))
+* send messages and answer permissions and forms in an OpenCode pane ([#843](https://github.com/lamngockhuong/termote/issues/843)) ([4e6db53](https://github.com/lamngockhuong/termote/commit/4e6db537bf7dd82b16e1a36fcfd6a7328815d874))
+* show agent session tokens and estimated cost ([#833](https://github.com/lamngockhuong/termote/issues/833)) ([76c6897](https://github.com/lamngockhuong/termote/commit/76c689748444e70b1014ffb447d2d1f0fb7921be))
+* show an OpenCode pane's status and a read-only Chat view ([#838](https://github.com/lamngockhuong/termote/issues/838)) ([2e45ec5](https://github.com/lamngockhuong/termote/commit/2e45ec59cfebf9825771e7f319fdca320471d310))
+* show images pasted into Claude Code again from the Chat view ([#823](https://github.com/lamngockhuong/termote/issues/823)) ([f32b3e0](https://github.com/lamngockhuong/termote/commit/f32b3e0b1b6b0613c2c9f450558ebe3ae8a20ae0))
+* show images pasted into Codex again from the Chat view ([#822](https://github.com/lamngockhuong/termote/issues/822)) ([dc8ecdb](https://github.com/lamngockhuong/termote/commit/dc8ecdb61fc4aa525269581153ff8b46bbf6e064))
+* show images pasted into Codex again from the Chat view ([#830](https://github.com/lamngockhuong/termote/issues/830)) ([dc8ecdb](https://github.com/lamngockhuong/termote/commit/dc8ecdb61fc4aa525269581153ff8b46bbf6e064))
+* show OpenCode subagents, pasted images and context use ([#849](https://github.com/lamngockhuong/termote/issues/849)) ([e40014f](https://github.com/lamngockhuong/termote/commit/e40014f8f5078a74543cb65d213aa8ba5a6517b9))
+* show the files an agent session changed in Changes and the session history ([#839](https://github.com/lamngockhuong/termote/issues/839)) ([215d098](https://github.com/lamngockhuong/termote/commit/215d0984041839a7ee0b148435fae1e8787b042b))
+* show the owl beside the name in the interactive menu ([#844](https://github.com/lamngockhuong/termote/issues/844)) ([c7806d5](https://github.com/lamngockhuong/termote/commit/c7806d5ee45ac81227031b725704969ff0eaa70e))
+* show tokens and cost of OpenCode sessions ([#850](https://github.com/lamngockhuong/termote/issues/850)) ([b54b97f](https://github.com/lamngockhuong/termote/commit/b54b97f14e91580d75be11e16e0ab74266e48223))
+
+
+### Bug Fixes
+
+* close small gaps in OpenCode reads, session history, the repository check and the Herdr socket ([#858](https://github.com/lamngockhuong/termote/issues/858)) ([e41b17a](https://github.com/lamngockhuong/termote/commit/e41b17a28bcac2607d55863e56f983afb33b257f))
+* close the image slot, repository check and view-only Chat gaps left by the last security review ([#848](https://github.com/lamngockhuong/termote/issues/848)) ([684e516](https://github.com/lamngockhuong/termote/commit/684e51625461066789531215fea19da96f6938cf))
+* close the ways a repository still names a network share past the Windows repository check ([#835](https://github.com/lamngockhuong/termote/issues/835)) ([df318da](https://github.com/lamngockhuong/termote/commit/df318da3241121d575fdd73cc94eddd7237c41b4))
+* find a herdr-core listening on the socket set in its config.toml ([#842](https://github.com/lamngockhuong/termote/issues/842)) ([5f75b9d](https://github.com/lamngockhuong/termote/commit/5f75b9db8fae2c64c5014fbcc9cc8faa685af1be))
+* find a running herdr-core on Windows when core.lock is locked ([#841](https://github.com/lamngockhuong/termote/issues/841)) ([87c3dea](https://github.com/lamngockhuong/termote/commit/87c3deae0b6dd51579035f15b31b2ea151724061))
+* harden the view-only Chat and commit diff, the psmux pane list and repositories naming a FIFO ([#826](https://github.com/lamngockhuong/termote/issues/826)) ([a767a58](https://github.com/lamngockhuong/termote/commit/a767a58ff838b0597325fe404ae7785d40a1d244))
+* harden transcript views, release dispatch, Windows links and session limits ([#818](https://github.com/lamngockhuong/termote/issues/818)) ([4075775](https://github.com/lamngockhuong/termote/commit/4075775f539d3820b192d701de7094ecd32b459b))
+* harden view-only transcripts, Windows repository config reads and psmux pane parsing ([#824](https://github.com/lamngockhuong/termote/issues/824)) ([18dfa18](https://github.com/lamngockhuong/termote/commit/18dfa1875b27a00dbba040207fc83090154f7350))
+* harden Windows repository lookups, the psmux port check, the malware scan and hand-started website deploys ([#821](https://github.com/lamngockhuong/termote/issues/821)) ([9c422f8](https://github.com/lamngockhuong/termote/commit/9c422f821aa491019487c3f5a2105aefb5bd1714))
+* keep the bottom padding of the session history and prompt card action bars ([#829](https://github.com/lamngockhuong/termote/issues/829)) ([320e3b4](https://github.com/lamngockhuong/termote/commit/320e3b48fc03febd1afb0ed5c4d2c25acd579bc4))
+* number Chat image chips and keep a slash command's images in place ([#837](https://github.com/lamngockhuong/termote/issues/837)) ([d6dc1d1](https://github.com/lamngockhuong/termote/commit/d6dc1d13668607e86f122e2438b220a97cf41408))
+* offer and drop the Chat view as soon as an agent starts or ends ([#825](https://github.com/lamngockhuong/termote/issues/825)) ([8b7169f](https://github.com/lamngockhuong/termote/commit/8b7169f7e813d9c4ffc47a44ac3648955ed79e14))
+* OpenCode follow-ups: restarted service, large messages, a11y, model in History, Vietnamese docs ([#853](https://github.com/lamngockhuong/termote/issues/853)) ([9fce543](https://github.com/lamngockhuong/termote/commit/9fce5430f79067e842b2aa65d3ca64f50d39d5bb))
+* resume and fork sessions in a Windows PowerShell 5.1 pane ([#855](https://github.com/lamngockhuong/termote/issues/855)) ([993188c](https://github.com/lamngockhuong/termote/commit/993188c2818bbd96847ccdb89567a263f2975730))
+* show a view-only client only that the context was compacted ([#827](https://github.com/lamngockhuong/termote/issues/827)) ([fc088f3](https://github.com/lamngockhuong/termote/commit/fc088f303f64b94b82a087966f58d691faf79fdf))
+* show the Chat view of a Codex resumed in a Herdr pane ([#834](https://github.com/lamngockhuong/termote/issues/834)) ([84e5e36](https://github.com/lamngockhuong/termote/commit/84e5e36bcd44f9f7ac02896414711e91750034b2))
+* show the right conversation in the Chat view after an agent switch or a fork ([#836](https://github.com/lamngockhuong/termote/issues/836)) ([2ee3997](https://github.com/lamngockhuong/termote/commit/2ee39973d427402c86732683d56385727540c9ca))
+* show what a Claude Code turn left running when a recap sits under it ([#845](https://github.com/lamngockhuong/termote/issues/845)) ([23f0b4f](https://github.com/lamngockhuong/termote/commit/23f0b4f8779621078f4533a87fe345050f61c770))
+
 ## [2.26.4](https://github.com/lamngockhuong/termote/compare/v2.26.3...v2.26.4) (2026-11-13)
 
 
