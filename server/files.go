@@ -75,7 +75,7 @@ type filesAPI struct {
 	deny    []string // absolute directories never served
 	// mentions reports whether the agent of a pane named a path in its live
 	// transcript, or in a past session's (agent, session: the History's)
-	// (files/mentioned); nil: no agent reads (set by serve)., or in a past session's (agent, session: the History's)
+	// (files/mentioned); nil: no agent reads (set by serve).
 	mentions func(ctx context.Context, paneID, agent, session, path string) (bool, error)
 	// mentioned holds the ids files/mentioned handed out
 	mentioned *mentionedFiles
