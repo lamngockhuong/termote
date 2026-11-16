@@ -30,7 +30,45 @@ const (
 	repoFileMax = 1 << 20
 	// repoWorktreesMax bounds the linked worktrees whose gitdir is read.
 	repoWorktreesMax = 1024
+	// repoFollowMax bounds the config and alternates files one git
+	// directory's check reads, so a repository whose files list each other
+	// many times over is refused rather than read for good: an alternates
+	// directory is read once (as git takes it once), but names spelled
+	// apart (case, links) still read it again, and git reads an include as
+	// often as it is named.
+	repoFollowMax = 256
 )
+
+// errRepoTooManyFiles: a repository's includes or alternates name more files
+// than repoFollowMax.
+var errRepoTooManyFiles = errors.New("repository includes or alternates name too many files")
+
+// repoFollow is what one git directory's check has followed: the files
+// read, and each alternates objects directory with the shallowest depth it
+// was checked at (one checked no deeper is skipped: its check went as far).
+type repoFollow struct {
+	reads   int
+	objects map[string]int
+}
+
+// read counts one more file read; errRepoTooManyFiles past repoFollowMax.
+func (f *repoFollow) read() error {
+	if f.reads++; f.reads > repoFollowMax {
+		return errRepoTooManyFiles
+	}
+	return nil
+}
+
+// alternates reports whether the objects directory p, at depth, still
+// needs checking, counting the read.
+func (f *repoFollow) alternates(p string, depth int) (bool, error) {
+	p = filepath.Clean(p)
+	if d, ok := f.objects[p]; ok && d <= depth {
+		return false, nil
+	}
+	f.objects[p] = depth
+	return true, f.read()
+}
 
 // errRepoOffDrive: a repository file names a path off a drive letter.
 var errRepoOffDrive = errors.New("repository names a path off a drive letter")
@@ -471,12 +509,13 @@ func (rr *rootResolver) checkGitDir(g, top string) (valid bool, err error) {
 			bases = append(bases, w)
 		}
 	}
+	follow := &repoFollow{objects: map[string]int{}}
 	for _, f := range files {
-		if err := rr.checkConfigFile(f, 0, bases); err != nil {
+		if err := rr.checkConfigFile(f, 0, bases, follow); err != nil {
 			return false, err
 		}
 	}
-	if err := rr.checkAlternates(filepath.Join(common, "objects"), 0); err != nil {
+	if err := rr.checkAlternates(filepath.Join(common, "objects"), 0, follow); err != nil {
 		return false, err
 	}
 	if err := rr.checkWorktrees(common); err != nil {
@@ -541,9 +580,12 @@ func (rr *rootResolver) worktreeOf(f, g string) string {
 // it includes; a missing one is skipped, as git skips it. bases are the git
 // dir first, then the work tree git runs in: what a relative path a key
 // names starts from.
-func (rr *rootResolver) checkConfigFile(f string, depth int, bases []string) error {
+func (rr *rootResolver) checkConfigFile(f string, depth int, bases []string, follow *repoFollow) error {
 	if depth > repoConfigMaxDepth {
 		return errors.New("repository config includes too deep")
+	}
+	if err := follow.read(); err != nil {
+		return err
 	}
 	b, missing, err := readRepoFile(f)
 	if err != nil || missing {
@@ -567,7 +609,7 @@ func (rr *rootResolver) checkConfigFile(f string, depth int, bases []string) err
 				return err
 			}
 			if p != "" {
-				if err := rr.checkConfigFile(p, depth+1, bases); err != nil {
+				if err := rr.checkConfigFile(p, depth+1, bases, follow); err != nil {
 					return err
 				}
 			}
@@ -598,10 +640,18 @@ func (rr *rootResolver) checkConfigFile(f string, depth int, bases []string) err
 
 // checkAlternates checks objects/info/alternates under the objects
 // directory objects: one path a line (relative to objects, or C-quoted),
-// each followed depth deep as git follows them.
-func (rr *rootResolver) checkAlternates(objects string, depth int) error {
+// each followed depth deep as git follows them. git looks at the paths of
+// every file up to depth repoAlternatesMaxDepth (the top one is 0), and
+// refuses only those of a deeper one.
+func (rr *rootResolver) checkAlternates(objects string, depth int, follow *repoFollow) error {
+	if depth > repoAlternatesMaxDepth {
+		return nil
+	}
+	if next, err := follow.alternates(objects, depth); !next || err != nil {
+		return err
+	}
 	b, missing, err := readRepoFile(filepath.Join(objects, "info", "alternates"))
-	if err != nil || missing || depth >= repoAlternatesMaxDepth {
+	if err != nil || missing {
 		return err
 	}
 	for _, line := range strings.Split(string(b), "\n") {
@@ -627,7 +677,7 @@ func (rr *rootResolver) checkAlternates(objects string, depth int) error {
 			return err
 		}
 		if p != "" {
-			if err := rr.checkAlternates(p, depth+1); err != nil {
+			if err := rr.checkAlternates(p, depth+1, follow); err != nil {
 				return err
 			}
 		}

@@ -1566,7 +1566,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   at a git dir git takes too, and trying a directory itself as a bare repository when its `.git`
   is no repository git takes, as git does) as text (`repoConfigRefused`, `server/git_repo_config.go`) and refuses
   it (400 `directory not available`, as a refused pane directory, the reason in the log only) when
-  a `.git` file's `gitdir:`, its `commondir`, a line of `objects/info/alternates` (followed 5 deep),
+  a `.git` file's `gitdir:`, its `commondir`, a line of `objects/info/alternates` (the lines of every file to depth 5, the repository's own
+  at 0, as git looks at them; each objects directory read once, as git takes it once),
   a linked worktree's `gitdir` or the `gitdir:` of the `.git` file that one names names a path off a
   drive letter outside the Places (the test `refusesDir` uses; a share, `\\?\UNC\`, `\\.\`, and an
   NT path `\??\UNC\` alike), or when `config`, `config.worktree` (the git dir's, and the common
@@ -1579,8 +1580,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   like any local include (`~user/`, another user's home, is not read); a `gitdir:`, `commondir`,
   alternates line, worktree `gitdir` or `core.worktree` is read literally, as git reads it (`repoPath`). Its parser
   (`parseGitConfig`) takes git's syntax strictly, and a file it cannot parse or read, includes too
-  deep, or a link on the way off a drive (`evalSymlinks`) refuses the repository rather than passing
-  it. The path a key that opens a file names is followed for such a link from every place a relative
+  deep, more than 256 config and alternates files read for one git dir (`repoFollowMax`: files that
+  name each other many times over), or a link on the way off a drive (`evalSymlinks`) refuses the
+  repository rather than passing it. The path a key that opens a file names is followed for such a link from every place a relative
   one starts (the config file's folder, the git dir, the directory git runs in, and the
   `core.worktree` that `config` or `config.worktree` sets: the last of each, the one git uses, and
   never one from an include, which git does not read for it); only a link off a drive refuses there, another error does not. Elsewhere than
