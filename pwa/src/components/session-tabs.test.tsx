@@ -1,5 +1,6 @@
 import {
   act,
+  cleanup,
   fireEvent,
   render,
   screen,
@@ -677,6 +678,23 @@ describe('SessionTabs', () => {
         // One move is enough: PR 1, which leads the group, after Logs
         expect(props.onMove).toHaveBeenCalledWith('pr1', 2)
         expect(props.onUpdate).not.toHaveBeenCalled()
+      })
+
+      it('ends a group drag when the pointer is cancelled, or the bar goes', () => {
+        const props = renderGrouped()
+        const chipBox = screen.getByRole('button', { name: /^review,/ })
+          .parentElement as HTMLElement
+        press(chipBox, 150)
+        moveTo(400)
+        fireEvent.pointerCancel(window)
+        expect(chipBox.style.translate).toBe('')
+        expect(chipBox).not.toHaveAttribute('data-dragging')
+        press(chipBox, 150)
+        moveTo(400)
+        cleanup()
+        // Its listeners went with it: nothing moves on a release
+        release()
+        expect(props.onMove).not.toHaveBeenCalled()
       })
 
       it('drags a group to the left too', async () => {

@@ -238,16 +238,6 @@ export function SessionTabs({
   const activeRef = useRef<HTMLButtonElement>(null)
   // Ends a drag in progress (its window listeners), also on unmount
   const endDrag = useRef<(() => void) | null>(null)
-  // What a drag reads when it moves and lands: the tabs can change meanwhile
-  const latest = useRef({
-    items,
-    sessions,
-    onMove,
-    onUpdate,
-    plan,
-    // Set once it is defined, below
-    moveGroup: (_name: string, _to: number) => {},
-  })
   // A tab renamed into or out of a group by a drag or its keys, its move
   // still to be asked: no other drag starts meanwhile
   const regrouping = useRef(false)
@@ -303,7 +293,10 @@ export function SessionTabs({
       moveSteps(sessions, groupMoveOrder(sessions, name, order[to + 1]?.[0])),
     )
   }
-  latest.current = { items, sessions, onMove, onUpdate, plan, moveGroup }
+  // What a drag reads when it moves and lands: the tabs can change meanwhile
+  const fresh = { items, sessions, onMove, onUpdate, plan, moveGroup }
+  const latest = useRef(fresh)
+  latest.current = fresh
   useEffect(() => () => endDrag.current?.(), [])
   // A dropped tab and the ones that made room stay where they were drawn
   // until the server's new order arrives; then they are let go
