@@ -112,6 +112,10 @@ type TranscriptEntry struct {
 	// the row a Claude Code row follows. Neither is sent.
 	command bool
 	parent  string
+	// viewHidesText: a view-only client gets none of the entry's text (an
+	// OpenCode user message, whose text may be a command template expanded
+	// with the output of the shell commands it ran). Never sent.
+	viewHidesText bool
 	// usage: the context the row's request filled (Claude assistant rows,
 	// the last Codex assistant entry before a token_count row), for the
 	// overview; never sent with the transcript.
@@ -572,6 +576,7 @@ const compactedText = "Context compacted"
 func viewTranscript(res transcriptResponse) transcriptResponse {
 	entries := make([]TranscriptEntry, 0, len(res.Entries))
 	isTool := func(p TranscriptPart) bool { return p.Kind == "tool" || p.note }
+	isText := func(p TranscriptPart) bool { return p.Kind == "text" }
 	for _, e := range res.Entries {
 		switch e.Role {
 		case "note":
@@ -581,6 +586,9 @@ func viewTranscript(res transcriptResponse) transcriptResponse {
 		}
 		if slices.ContainsFunc(e.Parts, isTool) {
 			e.Parts = slices.DeleteFunc(slices.Clone(e.Parts), isTool)
+		}
+		if e.viewHidesText && slices.ContainsFunc(e.Parts, isText) {
+			e.Parts = slices.DeleteFunc(slices.Clone(e.Parts), isText)
 		}
 		if len(e.Parts) > 0 {
 			entries = append(entries, e)

@@ -1410,7 +1410,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   (`oc:`), a before one carries the service's own page cursor (`ocb:`, at most 1 KB), so a client
   never makes the server pass its own words to the service; a cursor of another session starts
   over. A view-only client gets `viewTranscript` as for Claude Code (no tool call, no note,
-  compaction summaries as `Context compacted`). Writes never send a key to the pane: `message` is
+  compaction summaries as `Context compacted`, and no text of a user message: OpenCode stores a
+  custom command's expanded template, with the output of every ``!`cmd` `` it ran, as the user's
+  text and marks nothing, so a view-only client sees only a user message's image chips). Writes never send a key to the pane: `message` is
   `POST /api/session/{id}/prompt` with `delivery: "queue"` (OpenCode's default `steer` would put it
   into the running turn; 202 while the session works or waits on a dialog), to the session read
   again right before the write (`sessionNow`, no cache), and only when it is the session of the
