@@ -50,7 +50,8 @@ interface Props {
   renameTab?: boolean
   onRemoveTab: (id: string) => void
   // Unset (view-only role, or the server cannot move tabs): tabs do not drag
-  onMoveTab?: (id: string, index: number) => void
+  // Settles once done: a tab group's tabs move one after the other
+  onMoveTab?: (id: string, index: number) => unknown
   // A move is on its way to the server
   movingTab?: boolean
   connectionState: ConnectionState
