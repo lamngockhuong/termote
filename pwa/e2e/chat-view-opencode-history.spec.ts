@@ -66,6 +66,8 @@ test.describe('sessions of an OpenCode pane', () => {
   let windowName = ''
   let link = ''
   let oldCommand = ''
+  // The pane's session ran today on this machine's clock
+  let sameDay = true
   const windows: string[] = []
 
   test.beforeAll(async ({ playwright }, testInfo) => {
@@ -98,6 +100,7 @@ test.describe('sessions of an OpenCode pane', () => {
 
     await oc.start(stateDir as string)
     const now = Date.now()
+    sameDay = new Date(now - 180_000).toDateString() === new Date(now).toDateString()
     // The pane's session: the recorded edits and writes, a write still
     // waiting for its permission, then a request with a cost
     const live = movedTo(fixtureMessages('message-list-touched.json', repo), now - 120_000)
@@ -194,7 +197,7 @@ test.describe('sessions of an OpenCode pane', () => {
     await expect(changes.locator('[data-kind="add"]')).toContainText('hello world')
   })
 
-  test('shows the tokens and cost of the session and of the folder', async ({ page }) => {
+  test("shows the tokens and cost of the session and the machine's totals", async ({ page }) => {
     await page.goto('/#/overview')
     const card = page.locator('[data-status]', {
       has: page.getByRole('button', { name: new RegExp(`, (.* / )?${windowName}$`) }),
@@ -206,11 +209,12 @@ test.describe('sessions of an OpenCode pane', () => {
       { timeout: 20_000 },
     )
     await expect(card.getByTestId('session-usage')).toContainText('incl. subagents 2.8k tokens')
-    // The folder's requests, today and in 7 days
+    // The requests of every OpenCode session, in 7 days and today (unless
+    // they ran before this device's midnight)
     const strip = page.getByRole('region', { name: 'Agent tokens' })
     const row = strip.locator('[data-agent="opencode"]')
-    await expect(row).toContainText('Today', { timeout: 30_000 })
-    await expect(row).toContainText(/7 days \d+(\.\d)?k tokens · <\$0\.01/)
+    await expect(row).toContainText(/7 days \d+(\.\d)?k tokens · <\$0\.01/, { timeout: 30_000 })
+    if (sameDay) await expect(row).toContainText(/Today \d+(\.\d)?k tokens · <\$0\.01/)
   })
 
   test('lists the folder sessions and resumes an old one in a new tab', async ({ page }) => {
@@ -225,7 +229,10 @@ test.describe('sessions of an OpenCode pane', () => {
     await expect(rows.nth(0)).toContainText('Touch the files')
     await expect(rows.nth(0)).toContainText('Running')
     await expect(rows.nth(1)).toContainText('Patch the sources')
-    await expect(sheet.getByRole('region', { name: 'Agent tokens' })).toContainText('OpenCode')
+    // The folder's totals: the old session alone is 42k tokens
+    await expect(sheet.getByRole('region', { name: 'Agent tokens' }).locator('[data-agent="opencode"]')).toContainText(
+      /7 days \d+(\.\d)?k tokens/,
+    )
 
     // The old session: its conversation, tokens and cost, and the files it
     // changed

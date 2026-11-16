@@ -422,8 +422,8 @@ own, e.g. `paste_not_confirmed`); anything else answers 409 `partial_paste` and 
 The session history (`/agent/history`, `server/agent_history*.go`) lists the Claude Code and Codex
 sessions whose recorded cwd is the pane's root (as Files finds it) or under it, read from the
 server user's own Claude Code dir and `CODEX_HOME` (at most 2000 files per agent, 64 KB at each
-end of a transcript), and OpenCode's root sessions of that folder from its service (see OpenCode
-below), newest first, 30 a page; `live` names the pane that runs one now. An old
+end of a transcript), and OpenCode's root sessions in that folder or under it, from its service
+(see OpenCode below), newest first, 30 a page; `live` names the pane that runs one now. An old
 session's transcript is read through the same reader as the Chat view's. A Codex fork's rollout
 holds only what is said after the fork, so its transcript is the parent's rollout up to the fork,
 then its own (`server/agent_codex_fork.go`). `/agent/resume` types
@@ -973,15 +973,15 @@ is read and written only through the user's own background service (`opencode se
 which an `opencode` started while none runs starts itself): never `opencode.db`, the TUI's screen
 or the `opencode` CLI, and no key is ever sent to the pane. `server/agent_opencode_client.go` reads
 `service.json` under `$XDG_STATE_HOME/opencode` (else `~/.local/state/opencode`), connects only to
-the loopback address it names on a port the server's own user holds, checks that `/api/info`
+the loopback address it names on a port the server's own user (or root) holds, checks that `/api/info`
 names the same pid and a version of at least 2.0.0, and sends the password as HTTP Basic auth; a
-checked service is kept 30 s (a 401 drops it at once). The session is the one the TUI's argv
+checked service is kept 30 s (a 401 or 403 drops it at once). The session is the one the TUI's argv
 names (`--session <id>`) on tmux, psmux, Zellij and hc, and the one Herdr's OpenCode integration
 reports on Herdr: the service tells no client which session it shows, so a plain `opencode` has
 none. Its messages come from the service's list with its own cursor (only settled ones: an open
 answer is held until it completes), its status from `session.active` and the session's pending
 permissions and forms (blocked while one waits). A message is `session.prompt` with
-`delivery: "queue"` (202 while a turn runs), a listed `/name` `session.command`, a permission
+`delivery: "queue"` (202 while a turn runs or waits on a dialog), a listed `/name` `session.command`, a permission
 answer `.../permission/{id}/reply` (`once`, `always` or `reject`), a form answer
 `.../form/{id}/reply` or its cancel `DELETE .../form/{id}`. History, resume and fork, the
 subagent tree, pasted images, the context chip, tokens and cost and the files a session changed

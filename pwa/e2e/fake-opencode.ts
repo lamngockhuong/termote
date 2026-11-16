@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import path from 'node:path'
 
@@ -126,9 +126,18 @@ export class FakeOpencode {
         }
       })
     })
-    await new Promise<void>((resolve) => this.server?.listen(PORT, '127.0.0.1', resolve))
-    this.url = `http://127.0.0.1:${PORT}`
     this.stateDir = path.join(state, 'opencode')
+    // Never replaces the service.json of a real service: the state dir must
+    // be the throwaway one of the server under test
+    const file = path.join(this.stateDir, 'service.json')
+    if (existsSync(file) && (JSON.parse(readFileSync(file, 'utf-8')) as Json).id !== 'e2e') {
+      throw new Error(`${file} belongs to a real OpenCode service: give the server its own XDG_STATE_HOME`)
+    }
+    await new Promise<void>((resolve, reject) => {
+      this.server?.once('error', reject)
+      this.server?.listen(PORT, '127.0.0.1', resolve)
+    })
+    this.url = `http://127.0.0.1:${PORT}`
     mkdirSync(this.stateDir, { recursive: true, mode: 0o700 })
     writeFileSync(
       path.join(this.stateDir, 'service.json'),
@@ -275,9 +284,6 @@ export class FakeOpencode {
       msgs.push(this.answer(`Ran /${cmd.name}`))
       return this.reply(res, 204)
     }
-    if (method === 'POST' && sub.length === 1 && sub[0] === 'fork') {
-      return this.fork(res, id)
-    }
     const kind = sub[0]
     if (kind === 'permission' || kind === 'form') {
       const src = kind === 'form' ? this.forms : this.permissions
@@ -331,25 +337,5 @@ export class FakeOpencode {
       cost: 0,
       tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
     }
-  }
-
-  // session.fork: a new session of id's messages, ids with _<n> added
-  private fork(res: ServerResponse, id: string) {
-    const parent = this.list.find((s) => s.id === id)
-    if (!parent) return this.notFound(res)
-    const newID = `ses_e2efork${this.nextId('f').slice(2)}`
-    const fork: Json = {
-      ...parent,
-      id: newID,
-      title: `${parent.title} (fork #1)`,
-      fork: { sessionID: id, boundary: { type: 'through' } },
-    }
-    this.list.unshift(fork)
-    this.sessions.set(newID, fork)
-    this.messages.set(
-      newID,
-      (this.messages.get(id) ?? []).map((m, n) => ({ ...m, id: `${m.id}_${n}` })),
-    )
-    this.reply(res, 200, { data: fork })
   }
 }
