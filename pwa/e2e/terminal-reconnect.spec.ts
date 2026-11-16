@@ -68,13 +68,13 @@ function delayProxy(): Promise<{ port: number; close: () => void }> {
 }
 
 type Probe = { lines: () => string[] }
-type Wrapped = { ws: WebSocket; madeAt: number; openedAt?: number; output?: boolean }
+type Wrapped = { ws: WebSocket; madeAt: number; openedAt?: number; output?: boolean; token: string | null }
 type W = {
   __termoteE2E: boolean
   __termoteTerms?: Probe[]
   __streams: Wrapped[]
-  // When each stream-token request was sent, and when its reply came
-  __tokens: { sentAt: number; doneAt?: number }[]
+  // When each stream-token request was sent, and the token its reply gave
+  __tokens: { sentAt: number; token?: string }[]
 }
 
 // The test flag, and a record of every stream socket: when it opened and
@@ -91,8 +91,17 @@ async function watchStreams(page: Page) {
       if (!url.includes('/stream-token')) return realFetch(input, init)
       const entry: W['__tokens'][number] = { sentAt: performance.now() }
       w.__tokens.push(entry)
-      return realFetch(input, init).finally(() => {
-        entry.doneAt = performance.now()
+      return realFetch(input, init).then((res) => {
+        if (res.ok) {
+          res
+            .clone()
+            .json()
+            .then((data: { token?: unknown }) => {
+              if (typeof data?.token === 'string') entry.token = data.token
+            })
+            .catch(() => {})
+        }
+        return res
       })
     }
     const Real = window.WebSocket
@@ -100,7 +109,11 @@ async function watchStreams(page: Page) {
       constructor(url: string | URL, protocols?: string | string[]) {
         super(url, protocols)
         if (!String(url).includes('/stream?')) return
-        const entry: Wrapped = { ws: this, madeAt: performance.now() }
+        const entry: Wrapped = {
+          ws: this,
+          madeAt: performance.now(),
+          token: new URL(String(url), location.href).searchParams.get('token'),
+        }
         w.__streams.push(entry)
         // Registered before the app's onopen, so it runs first
         this.addEventListener('open', () => {
@@ -251,14 +264,19 @@ test.describe('a stream opened again', () => {
     await openApp(page, `http://127.0.0.1:${port}`)
     await pick(page, one)
     await expect.poll(() => screenText(page), { timeout: 15000 }).toContain(`${one}-30`)
-    // The spare asked for after that stream opened has come back
+    // A spare is kept: the newest stream is open and a token came back that
+    // no stream opened with. Usually it was asked for once that stream
+    // opened; one asked for when the stream before it opened can still be on
+    // its way while this stream fetches its own, and then this open asks for
+    // none (the spare is already kept).
     await expect
       .poll(
         () =>
           page.evaluate(() => {
             const w = window as unknown as W
-            const opened = w.__streams[w.__streams.length - 1].openedAt ?? Infinity
-            return w.__tokens.some((t) => t.sentAt > opened && t.doneAt !== undefined)
+            if (w.__streams[w.__streams.length - 1].openedAt === undefined) return false
+            const used = new Set(w.__streams.map((s) => s.token))
+            return w.__tokens.some((t) => t.token !== undefined && !used.has(t.token))
           }),
         { timeout: 10000 },
       )

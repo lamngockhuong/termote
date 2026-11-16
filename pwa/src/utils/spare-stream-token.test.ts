@@ -112,6 +112,25 @@ describe('refill', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
+  // A stream that starts while the spare is on its way fetches its own token;
+  // the spare that lands meanwhile is the one kept after that stream opens.
+  it('keeps a spare that came back while a stream fetched its own token', async () => {
+    let answer: (r: Response) => void = () => {}
+    fetchMock.mockReturnValueOnce(new Promise((r) => (answer = r)))
+    refill()
+    let own: (t: string) => void = () => {}
+    fetchTerminalToken.mockReturnValueOnce(new Promise((r) => (own = r)))
+    const taking = takeToken()
+    answer(await reply(200, { token: 'kept' }))
+    await settle()
+    own('own')
+    expect(await taking).toEqual({ token: 'own', spare: false })
+    // The new stream opens: no request, the spare is already kept
+    refill()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(await takeToken()).toEqual({ token: 'kept', spare: true })
+  })
+
   it.each([
     ['a refusal', () => reply(429, { error: 'rate_limited' })],
     ['a network error', () => Promise.reject(new TypeError('offline'))],
