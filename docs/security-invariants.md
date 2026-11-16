@@ -1411,7 +1411,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   never makes the server pass its own words to the service; a cursor of another session starts
   over. A view-only client gets `viewTranscript` as for Claude Code (no tool call, no note,
   compaction summaries as `Context compacted`, and no text of a user message: OpenCode stores a
-  custom command's expanded template, with the output of every ``!`cmd` `` it ran, as the user's
+  custom command's expanded template, with the output of every `` !`cmd` `` it ran, as the user's
   text and marks nothing, so a view-only client sees only a user message's image chips). Writes never send a key to the pane: `message` is
   `POST /api/session/{id}/prompt` with `delivery: "queue"` (OpenCode's default `steer` would put it
   into the running turn; 202 while the session works or waits on a dialog), to the session read
@@ -1585,8 +1585,15 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   repository rather than passing it. The path a key that opens a file names is followed for such a link from every place a relative
   one starts (the config file's folder, the git dir, the directory git runs in, and the
   `core.worktree` that `config` or `config.worktree` sets: the last of each, the one git uses, and
-  never one from an include, which git does not read for it); only a link off a drive refuses there, another error does not. Elsewhere than
-  Windows `repoConfigRefused` reads nothing. Behind it, on Windows, `gitEntryTarget` refuses a `.git`
+  never one from an include, which git does not read for it); only a link off a drive refuses there, another error does not. Before a
+  heavy git command (`gitCall.heavy`: status, `ls-files -o`, diff, find; git looks into every
+  untracked folder for a nested repository, reading its `.git` file and the git dir it names, and
+  nothing turns that off), `checkRepoTree` (`server/git_nested_repo.go`, kept and forgotten with
+  the root's check) walks the whole work tree from its top, ignored folders too, never following a
+  link to a folder nor looking inside a `.git` entry, and checks each nested repository as
+  `checkGitDir` checks the repository; a work tree of more than 20000 folders (`repoTreeMaxDirs`)
+  is refused as one off a drive. Elsewhere than Windows `repoConfigRefused` and `checkRepoTree`
+  read nothing. Behind it, on Windows, `gitEntryTarget` refuses a `.git`
   file in a directory on a drive that names a git dir off one outside the Places
   (`gitfileOffDrive`, which reads the Places from `gitEntryPlaces`) before resolving it (a linked
   worktree's own `.git` file, read by `ownWorktree`), and the worktree list resolves each path with
