@@ -106,5 +106,9 @@ describe('ChatSubagents', () => {
     expect(
       screen.getByRole('button', { name: '1 subagent running' }),
     ).toBeInTheDocument()
+    // The count is read out from a live region outside the button
+    const status = screen.getByRole('status')
+    expect(status).toHaveTextContent('1 subagent running')
+    expect(status.closest('button')).toBeNull()
   })
 })

@@ -341,6 +341,8 @@ export default {
   'chat.form.atMostChars': 'Hãy nhập nhiều nhất {max} ký tự.',
   'chat.form.otherAnswer': 'Câu trả lời khác',
   'chat.form.add': 'Thêm',
+  'chat.form.problems_one': '{count} trường cần sửa trước khi gửi.',
+  'chat.form.problems_other': '{count} trường cần sửa trước khi gửi.',
 
   'chat.queue.skipped_one': '{count} hộp thoại đã bỏ qua vẫn đang chờ.',
   'chat.queue.skipped_other': '{count} hộp thoại đã bỏ qua vẫn đang chờ.',

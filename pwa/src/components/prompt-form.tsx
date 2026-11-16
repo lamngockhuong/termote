@@ -202,6 +202,14 @@ export function PromptForm({ fields, busy, onSend }: Props) {
           </FieldBox>
         )
       })}
+      {/* Read out when a send finds fields to fix; focus goes to the first */}
+      {/* Kept in the tree while empty (sr-only, not hidden), so the first
+          summary is read out too */}
+      <p aria-live="polite" className="text-[12px] text-danger empty:sr-only">
+        {tried && problems.size > 0
+          ? t('chat.form.problems', { count: problems.size })
+          : ''}
+      </p>
       <Button type="submit" variant="primary" disabled={busy}>
         {t('chat.prompt.send')}
       </Button>
@@ -261,11 +269,14 @@ function FieldBox(props: FieldProps) {
             type="checkbox"
             checked={props.held === true}
             disabled={props.busy}
+            aria-invalid={props.invalid || undefined}
+            aria-describedby={props.describedBy}
             onChange={(e) => props.onChange(e.target.checked)}
             className="mt-1 accent-accent"
           />
           <span>
             <span className="font-medium">{title}</span>
+            {required}
             {description}
           </span>
         </label>

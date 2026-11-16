@@ -50,8 +50,14 @@ export function ChatSubagents({
   ).length
   const now = useServerSeconds(count > 0 && open, clockOffset)
   if (!count) return null
+  const label = t('chat.subagent.runningCount', { count })
   return (
     <div className="shrink-0 border-t border-border px-3 py-1.5">
+      {/* The count is read out as it changes; a live region inside the
+          button would leave the button without a name */}
+      <span role="status" className="sr-only">
+        {label}
+      </span>
       <button
         type="button"
         aria-expanded={open}
@@ -64,9 +70,7 @@ export function ChatSubagents({
           aria-hidden="true"
           className="shrink-0 text-warning motion-safe:animate-pulse"
         />
-        <span role="status" className="min-w-0 flex-1 truncate">
-          {t('chat.subagent.runningCount', { count })}
-        </span>
+        <span className="min-w-0 flex-1 truncate">{label}</span>
         <ChevronDown
           size={14}
           aria-hidden="true"
