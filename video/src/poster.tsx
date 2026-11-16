@@ -41,7 +41,7 @@ export const Poster: React.FC = () => (
           fontWeight: 700,
         }}
       >
-        Termote in a minute
+        Termote in two minutes
       </div>
     </AbsoluteFill>
   </AbsoluteFill>

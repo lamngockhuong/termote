@@ -30,15 +30,22 @@ esac
 # A socket path must fit in 108 bytes, which a work dir may not leave room for
 sock="/tmp/termote-demo-$(id -u)-$port.sock"
 h() { HERDR_SOCKET_PATH="$sock" herdr "$@"; }
+# The second machine (Machines in the sidebar): another Termote on this
+# computer, whose bridge socket the demo's server joins as SSH would
+mport=$((port + 10))
+machine="$work/machine"
 
 if [ "$cmd" = stop ]; then
-  [ -f "$work/serve.pid" ] && kill "$(cat "$work/serve.pid")" 2>/dev/null || true
+  for pid in serve machine; do
+    [ -f "$work/$pid.pid" ] && kill "$(cat "$work/$pid.pid")" 2>/dev/null || true
+  done
+  tmux -S "$machine/tmux/tmux-$(id -u)/default" kill-server 2>/dev/null || true
   if [ "$mux" = herdr ]; then
     h server stop >/dev/null 2>&1 || true
   else
     tmux -S "$sock" kill-server 2>/dev/null || true
   fi
-  rm -f "$work/serve.pid" "$work/mux"
+  rm -f "$work/serve.pid" "$work/machine.pid" "$work/mux"
   exit 0
 fi
 [ "$cmd" = start ] || { echo "unknown command: $cmd" >&2; exit 2; }
@@ -53,7 +60,8 @@ fi
 # (/tmp/dev gives /tmp/dev/acme-api).
 home="$work"
 repo="$home/acme-api"
-rm -rf "$repo" "$home/web" "$home/.claude" "$work/kit"
+# .herdr/worktrees: the worktree a capture made (Herdr puts them there)
+rm -rf "$repo" "$home/web" "$home/mobile" "$home/.claude" "$home/.herdr/worktrees" "$work/kit" "$work/opencode"
 mkdir -p "$work/bin"
 
 # A prompt that names no real user or host
@@ -178,8 +186,17 @@ EOF
 # Make targets beside the Go tasks of go.mod, for the Tasks view
 printf 'run:\n\tgo run .\n\nlint:\n\tgo vet ./...\n\nmigrate:\n\t@echo "migrations: up to date"\n' >Makefile
 git init -q -b main
-git -c user.name=Dev -c user.email=dev@example.com add -A
-git -c user.name=Dev -c user.email=dev@example.com commit -qm "feat: sign-in endpoint"
+# Two authors, so the file viewer's blame has more than one name
+commit() {
+  GIT_AUTHOR_DATE="$3" GIT_COMMITTER_DATE="$3" \
+    git -c user.name="$1" -c user.email="$2" commit -qm "$4"
+}
+git add -A
+ago() { date -u -d "$1 ago" +%Y-%m-%dT%H:%M:%SZ; }
+commit Dev dev@example.com "$(ago '3 weeks')" "feat: sign-in endpoint"
+perl -pi -e 's|"bad request"|"invalid JSON body"|' auth/login.go
+git add -A
+commit "Alex Kim" alex@example.com "$(ago '5 days')" "fix(auth): say what was wrong with a bad sign-in request"
 
 # The agent's edits, left uncommitted for the Changes view
 cat >auth/ratelimit.go <<'EOF'
@@ -246,16 +263,27 @@ sid=6f1c2a4e-8b3d-4c5e-9f70-1a2b3c4d5e6f
 project="$claude/projects/$(printf '%s' "$repo" | tr -c 'A-Za-z0-9' '-')"
 mkdir -p "$project" "$claude/sessions"
 python3 - "$project/$sid.jsonl" "$repo" <<'EOF'
-import json, sys
+import json, sys, time
 path, repo = sys.argv[1], sys.argv[2]
+# Minutes ago, so the tokens count as today's
+start = time.time() - 20 * 60
 login = open(f"{repo}/auth/login.go").read()
 lines, n = [], 0
+# Each reply carries its model and usage, as Claude Code writes them: the
+# session's tokens and estimated cost in the Chat view and the history
+usage = {"input_tokens": 2400, "cache_read_input_tokens": 41000,
+    "cache_creation_input_tokens": 6200,
+    "cache_creation": {"ephemeral_5m_input_tokens": 6200, "ephemeral_1h_input_tokens": 0},
+    "output_tokens": 900}
 def entry(role, content):
     global n
     n += 1
+    message = {"role": role, "content": content}
+    if role == "assistant":
+        message.update(id=f"msg_demo_{n:04d}", model="claude-sonnet-5-5", usage=usage)
     lines.append(json.dumps({"type": role, "uuid": f"demo-seed-{n:04d}",
-        "timestamp": "2026-10-11T09:00:%02dZ" % n,
-        "message": {"role": role, "content": content}}))
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(start + 20 * n)),
+        "cwd": repo, "message": message}))
 entry("user", "Add rate limiting to the login endpoint: 5 tries a minute per IP")
 entry("assistant", [{"type": "text", "text": "I'll read the login handler first."},
     {"type": "tool_use", "id": "t1", "name": "Read", "input": {"file_path": f"{repo}/auth/login.go"}}])
@@ -270,6 +298,35 @@ entry("assistant", [{"type": "tool_use", "id": "t3", "name": "Edit", "input": {"
 entry("user", [{"type": "tool_result", "tool_use_id": "t3", "content": "File updated"}])
 entry("assistant", [{"type": "text", "text": "Login is now **rate limited**:\n\n- 5 attempts a minute per client address (`auth/ratelimit.go`)\n- the 6th gets `429 Too Many Requests`\n- a test covers it in `auth/login_test.go`\n\nWant me to run the tests?"}])
 open(path, "w").write("\n".join(lines) + "\n")
+EOF
+# Two earlier sessions in the repo, for the pane's session history: each a
+# finished exchange, two and four days back (within the week's tokens)
+python3 - "$project" "$repo" <<'EOF'
+import json, os, sys, time
+project, repo = sys.argv[1], sys.argv[2]
+past = [
+    ("2b7d0e91-4f3a-4c1e-8d52-7a9e0c1b2d3f", 2,
+     "Add a /health endpoint that reports the build version",
+     "Added `GET /health`: it answers `200` with the build version and uptime."),
+    ("9c4e1a07-6b2d-4f8e-a315-0d7c9b8e6f1a", 4,
+     "The login test is flaky on CI, find out why",
+     "The test shared the limiter between runs. It now gets its own, and passes 50 runs in a row."),
+]
+for i, (sid, days, ask, answer) in enumerate(past):
+    t = time.time() - days * 86400 - 3 * 3600
+    ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t))
+    rows = [
+        {"type": "user", "uuid": f"demo-past-{i}-1", "timestamp": ts, "cwd": repo,
+         "message": {"role": "user", "content": ask}},
+        {"type": "assistant", "uuid": f"demo-past-{i}-2", "timestamp": ts, "cwd": repo,
+         "message": {"role": "assistant", "id": f"msg_demo_past_{i}", "model": "claude-sonnet-5-5",
+             "content": [{"type": "text", "text": answer}],
+             "usage": {"input_tokens": 1800 + 700 * i, "cache_read_input_tokens": 22000 + 9000 * i,
+                 "cache_creation_input_tokens": 3000, "output_tokens": 600 + 200 * i}}},
+    ]
+    f = os.path.join(project, sid + ".jsonl")
+    open(f, "w").write("".join(json.dumps(r) + "\n" for r in rows))
+    os.utime(f, (t, t))
 EOF
 
 # --- The stand-in, its screens rewritten to name the demo repo ---
@@ -355,7 +412,42 @@ if [ "$mux" = herdr ]; then
 else
   mux_env=(TMUX_SOCKET="$sock" TMUX_SESSION=acme-api)
 fi
-env "${demo_env[@]}" "${mux_env[@]}" \
+
+# The second machine: a native Termote on tmux with a saved config (which
+# opens its bridge socket), its own HOME, XDG dirs and tmux, no sign-in of
+# its own (it is reached only through the demo's server), a model training
+# run and a nightly backup in its sessions
+rm -rf "$machine"
+mkdir -p "$machine/home" "$machine/config/termote" "$machine/state" "$machine/cache" "$machine/data"
+mkdir -m 700 "$machine/tmux"
+cat >"$machine/home/.bashrc" <<'EOF'
+PS1='\[\e[32m\]dev@build-server\[\e[0m\]:\[\e[34m\]\w\[\e[0m\]$ '
+EOF
+echo '. ~/.bashrc' >"$machine/home/.bash_profile"
+# No status line: it shows the host name
+echo 'set -g status off' >"$machine/home/.tmux.conf"
+printf 'TERMOTE_PORT="%s"\nTERMOTE_NO_AUTH="true"\nTERMOTE_MUX="tmux"\nTERMOTE_BIND="127.0.0.1"\n' "$mport" \
+  >"$machine/config/termote/config"
+chmod 600 "$machine/config/termote/config"
+machine_env=(HOME="$machine/home" SHELL=/bin/bash TMUX_TMPDIR="$machine/tmux"
+  XDG_CONFIG_HOME="$machine/config" XDG_CACHE_HOME="$machine/cache"
+  XDG_STATE_HOME="$machine/state" XDG_DATA_HOME="$machine/data")
+mt() { env "${machine_env[@]}" tmux "$@"; }
+# main is the session Termote opens first there
+mt new-session -d -s main -n train -c "$machine/home"
+mt send-keys -t '=main:=0' "clear && printf 'epoch 14/20  loss 0.412  acc 0.887  eta 38m\n'" Enter
+mt new-session -d -s backup -n nightly -c "$machine/home"
+mt send-keys -t '=backup:=0' "clear && printf 'backup: 128 GB to s3, done in 11m\n'" Enter
+env "${machine_env[@]}" nohup "$root/server/termote" serve >"$machine/serve.log" 2>&1 &
+echo $! >"$work/machine.pid"
+bridge="$machine/state/termote/run"
+for _ in $(seq 1 30); do [ -S "$bridge/$mport.bridge.sock" ] && break; sleep 0.5; done
+[ -S "$bridge/$mport.bridge.sock" ] || { cat "$machine/serve.log" >&2; exit 1; }
+
+# TERMOTE_PWA_DIR serves a PWA built elsewhere (a checkout whose
+# server/webui/dist is empty)
+env "${demo_env[@]}" "${mux_env[@]}" ${TERMOTE_PWA_DIR:+TERMOTE_PWA_DIR="$TERMOTE_PWA_DIR"} \
+  TERMOTE_E2E_MACHINE_BRIDGE="build-server=$mport@$bridge" \
   TERMOTE_BIND=127.0.0.1 TERMOTE_PORT="$port" TERMOTE_PASS="$pass" \
   nohup "$root/server/termote" serve >"$work/serve.log" 2>&1 &
 echo $! >"$work/serve.pid"
@@ -395,8 +487,21 @@ if [ "$mux" = herdr ]; then
   infra_pane=$(h pane list | jq -r --arg w "$infra" '.result.panes[] | select(.workspace_id == $w) | .pane_id')
   h tab rename "$infra:t1" deploy >/dev/null
   run "$infra_pane" "clear && printf 'staging: 3/3 healthy\nproduction: 6/6 healthy\n'"
+  # Workspace mobile: OpenCode on session ses_demo_mobile. The stand-in TUI
+  # runs under a copy of bash named opencode, which is how termote and Herdr
+  # take the process for OpenCode; its conversation comes from the stand-in
+  # service the capture spec starts (pwa/e2e/fake-opencode.ts), which writes
+  # its service.json into the demo's XDG_STATE_HOME
+  mkdir -p "$home/mobile" "$work/opencode"
+  cp "$(command -v bash)" "$work/opencode/opencode"
+  mobile=$(h workspace create --cwd "$home/mobile" --label mobile --no-focus | jq -r .result.workspace.workspace_id)
+  mobile_pane=$(h pane list | jq -r --arg w "$mobile" '.result.panes[] | select(.workspace_id == $w) | .pane_id')
+  h tab rename "$mobile:t1" opencode >/dev/null
+  run "$mobile_pane" "clear; $work/opencode/opencode $root/tests/fixtures/fake-opencode-tui.sh --session ses_demo_mobile"
+  h pane report-agent --source termote-demo --seq "$(date +%s%N)" --agent opencode --state idle \
+    "$mobile_pane" >/dev/null 2>&1 || true
   # The welcome workspace Herdr opens on start, if any, goes
-  for w in $(h workspace list | jq -r '.result.workspaces[] | select(.label != "acme-api" and .label != "web" and .label != "infra") | .workspace_id'); do
+  for w in $(h workspace list | jq -r '.result.workspaces[] | select(.label != "acme-api" and .label != "web" and .label != "infra" and .label != "mobile") | .workspace_id'); do
     h workspace close "$w" >/dev/null 2>&1 || true
   done
   echo "panes: claude $claude_pane, api $api_pane, shell $shell_pane, web $web_pane" >"$work/panes"

@@ -30,7 +30,7 @@ export const ChatScene: React.FC = () => {
         ]}
         taps={[
           { at: 132, x: 92, y: 96.4 },
-          { at: 226, x: 50, y: 79.4 },
+          { at: 226, x: 50, y: 78 },
         ]}
         marks={[{ from: 146, to: 172, x: 1.5, y: 83.2, w: 97, h: 3.8 }]}
       />

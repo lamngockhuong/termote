@@ -91,6 +91,10 @@ CLI-Tools (Claude Code, Codex, OpenCode, jedes Terminal) per PWA von Mobilgerät
 </p>
 
 <p align="center">
+  <img src="docs/images/screenshots/agents.png" alt="Sitzungsverlauf, OpenCode und Machines auf dem Handy" width="720" />
+</p>
+
+<p align="center">
   <img src="docs/images/screenshots/desktop.png" alt="Desktop: Chat and Changes on Herdr" width="720" />
 </p>
 

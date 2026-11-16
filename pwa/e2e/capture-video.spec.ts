@@ -1,9 +1,12 @@
 import { execFileSync } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
+import { hostname } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { type Browser, expect, type Page, type TestInfo, test } from './fixtures'
+import { demoHostStats } from '../src/demo/fixtures/system'
 import { WELCOME_VERSION } from '../src/utils/welcome'
+import { FakeOpencode, type Json } from './fake-opencode'
 
 // Screens of the intro video (video/), taken against the demo server that
 // video/capture/demo-env.sh starts; see video/README.md for the commands.
@@ -50,6 +53,10 @@ const link = (tab: Tab, view?: string) => {
 type UiStyle = 'neutral' | 'terminal' | 'native'
 type Theme = 'light' | 'dark'
 
+// The video alternates the light and the dark theme scene by scene: dark is
+// open()'s default, these screens are taken light
+const LIGHT = { theme: 'light' } as const
+
 // The page opens signed in, past the welcome screen, in the given interface
 // style, theme and language. Reduced motion makes every transition end at once, so a
 // screen is taken in its final state rather than halfway through one.
@@ -61,11 +68,18 @@ async function open(
     style = 'neutral',
     theme = 'dark',
     language = 'en',
-  }: { style?: UiStyle; theme?: Theme; language?: 'en' | 'vi' } = {},
+    settings = {},
+  }: {
+    style?: UiStyle
+    theme?: Theme
+    language?: 'en' | 'vi'
+    // More of termote-settings: sidebarLayout, toolbarPosition, showCost
+    settings?: Record<string, unknown>
+  } = {},
 ): Promise<Page> {
   const ctx = await browser.newContext({ ...context, colorScheme: theme, reducedMotion: 'reduce' })
   await ctx.addInitScript(
-    ([uiStyle, colorTheme, version, lang]) => {
+    ([uiStyle, colorTheme, version, lang, more]) => {
       localStorage.setItem('termote-theme', colorTheme)
       localStorage.setItem(
         'termote-settings',
@@ -76,11 +90,15 @@ async function open(
           language: lang,
           languageNoticeSeen: true,
           gpuRenderer: false,
+          ...more,
         }),
       )
     },
-    [style, theme, WELCOME_VERSION, language] as const,
+    [style, theme, WELCOME_VERSION, language, settings] as const,
   )
+  // The host's numbers are the demo page's laptop (pwa/src/demo), never
+  // those of the computer taking the captures
+  await ctx.route('**/api/mux/system**', (route) => route.fulfill({ json: demoHostStats(Date.now()) }))
   const page = await ctx.newPage()
   // A browser page gets the sign-in form, never a Basic challenge
   await page.goto('/login')
@@ -139,6 +157,10 @@ async function settled(page: Page) {
 
 async function shot(page: Page, name: string) {
   await settled(page)
+  // Nothing of the computer taking them: a tmux status line, a prompt or a
+  // path naming this host fails the capture
+  const text = await page.evaluate(() => document.body.innerText)
+  expect(text.toLowerCase(), `${name} shows this host's name`).not.toContain(hostname().toLowerCase())
   await page.screenshot({ path: join(outDir, `${name}.png`) })
 }
 
@@ -173,7 +195,7 @@ test.describe('Capture screenshots for the intro video', () => {
   // tmux, since the turn changes the conversation desktop-tmux shows.
   test('phone chat working on tmux', async ({ browser }, testInfo) => {
     test.skip(mux !== 'tmux', 'tmux reads the working status from the session file')
-    const page = await open(browser, phone(testInfo), link('claude', 'chat'))
+    const page = await open(browser, phone(testInfo), link('claude', 'chat'), LIGHT)
     await expect(page.getByRole('region', { name: 'Conversation' })).toContainText('rate limited', {
       timeout: 15000,
     })
@@ -222,7 +244,7 @@ test.describe('Capture screenshots for the intro video', () => {
     })
 
     test('phone chat', async ({ browser }, testInfo) => {
-      const page = await open(browser, phone(testInfo), link('claude', 'chat'))
+      const page = await open(browser, phone(testInfo), link('claude', 'chat'), LIGHT)
       const conversation = page.getByRole('region', { name: 'Conversation' })
       await expect(conversation).toContainText('rate limited', { timeout: 15000 })
       await shot(page, 'phone-chat')
@@ -246,7 +268,7 @@ test.describe('Capture screenshots for the intro video', () => {
     })
 
     test('phone files and changes', async ({ browser }, testInfo) => {
-      const page = await open(browser, phone(testInfo), link('claude', 'files'))
+      const page = await open(browser, phone(testInfo), link('claude', 'files'), LIGHT)
       await page.getByRole('treeitem', { name: 'README.md' }).click({ timeout: 15000 })
       await expect(page.getByTestId('mermaid-block').locator('img').first()).toBeVisible({ timeout: 20000 })
       await shot(page, 'phone-files')
@@ -297,7 +319,7 @@ test.describe('Capture screenshots for the intro video', () => {
     })
 
     test('desktop files', async ({ browser }, testInfo) => {
-      const page = await open(browser, desktop(testInfo), link('claude', 'files'))
+      const page = await open(browser, desktop(testInfo), link('claude', 'files'), LIGHT)
       await page.getByRole('treeitem', { name: 'README.md' }).click({ timeout: 15000 })
       await expect(page.getByTestId('mermaid-block').locator('img').first()).toBeVisible({ timeout: 20000 })
       await shot(page, 'desktop-files')
@@ -326,7 +348,7 @@ test.describe('Capture screenshots for the intro video', () => {
 
     // The repo's Go tasks (from go.mod) and its make targets
     test('phone tasks', async ({ browser }, testInfo) => {
-      const page = await open(browser, phone(testInfo), link('claude', 'tasks'))
+      const page = await open(browser, phone(testInfo), link('claude', 'tasks'), LIGHT)
       const view = page.getByTestId('tasks-view')
       await expect(view.getByText('migrate', { exact: true })).toBeVisible({ timeout: 15000 })
       await shot(page, 'phone-tasks')
@@ -345,10 +367,227 @@ test.describe('Capture screenshots for the intro video', () => {
       await page.context().close()
     })
 
+    // The pane's session history: the folder's earlier Claude Code sessions
+    // (video/capture/demo-env.sh dates two of them days back), the tokens
+    // each used and their estimated cost, then an earlier one picked
+    test('phone session history', async ({ browser }, testInfo) => {
+      const page = await open(browser, phone(testInfo), link('claude', 'chat'), {
+        ...LIGHT,
+        settings: { showCost: true },
+      })
+      await expect(page.getByRole('region', { name: 'Conversation' })).toContainText('rate limited', {
+        timeout: 15000,
+      })
+      await page.getByRole('button', { name: 'Session history' }).click()
+      const sheet = page.getByRole('dialog', { name: 'Session history' })
+      await expect(sheet.getByText('The login test is flaky on CI', { exact: false })).toBeVisible({
+        timeout: 15000,
+      })
+      await expect(sheet.getByRole('region', { name: 'Agent tokens' })).toContainText('tokens', {
+        timeout: 15000,
+      })
+      await shot(page, 'phone-history')
+      await sheet.getByText('Add a /health endpoint', { exact: false }).click()
+      await expect(sheet.getByTestId('session-usage')).toContainText('~$', { timeout: 15000 })
+      await shot(page, 'phone-history-session')
+      await page.context().close()
+    })
+
+    // The second machine (build-server, another Termote reached through its
+    // bridge socket) in the sidebar, then its own sessions
+    test('desktop machine', async ({ browser }, testInfo) => {
+      const page = await open(browser, desktop(testInfo), link('claude'))
+      await waitTerminal(page)
+      const machines = page.getByRole('region', { name: 'Machines' })
+      await expect(machines.getByRole('img', { name: 'Online' })).toBeVisible({ timeout: 30000 })
+      await machines.getByRole('button', { name: /^build-server/ }).click()
+      await expect(page).toHaveURL(/\?machine=[0-9a-f]{16}/)
+      await waitTerminal(page)
+      await expect(page.locator('.xterm-rows')).toContainText('epoch 14/20', { timeout: 15000 })
+      await shot(page, 'desktop-machine')
+      await page.context().close()
+    })
+
+    // The host's CPU, load, memory and disks, from the header's chip
+    test('desktop host', async ({ browser }, testInfo) => {
+      const page = await open(browser, desktop(testInfo), link('claude'))
+      await waitTerminal(page)
+      await page.getByRole('button', { name: /^Host: .*Open the host details$/ }).click()
+      const sheet = page.getByRole('dialog', { name: 'Host' })
+      await expect(sheet.getByRole('img', { name: /^Memory/ })).toBeVisible({ timeout: 15000 })
+      await shot(page, 'desktop-host')
+      await page.context().close()
+    })
+
+    // Who last changed each line of auth/login.go (two authors, and the
+    // agent's lines not committed yet), then one commit's details
+    test('desktop blame', async ({ browser }, testInfo) => {
+      const page = await open(browser, desktop(testInfo), link('claude', 'files'))
+      const panel = page.getByRole('complementary', { name: 'Files' })
+      await panel.getByRole('treeitem', { name: 'auth' }).click({ timeout: 15000 })
+      await panel.getByRole('treeitem', { name: 'login.go' }).click()
+      await expect(panel.getByTestId('code-block')).toContainText('invalid JSON body', { timeout: 15000 })
+      await panel.getByRole('button', { name: 'Blame' }).click()
+      await expect(panel.getByText('Alex Kim').first()).toBeVisible({ timeout: 15000 })
+      await shot(page, 'desktop-blame')
+      // The blame cell of the line Alex Kim changed
+      const line = panel.locator('[data-testid="code-block"] [data-line]').filter({ hasText: 'invalid JSON body' })
+      await line.locator('> div > :first-child').click()
+      const details = page.getByRole('dialog', { name: 'Commit details' })
+      await expect(details).toContainText('bad sign-in request')
+      await shot(page, 'desktop-blame-commit')
+      await page.context().close()
+    })
+
+    // A right click on a file in Files
+    test('desktop context menu', async ({ browser }, testInfo) => {
+      const page = await open(browser, desktop(testInfo), link('claude', 'files'), LIGHT)
+      const panel = page.getByRole('complementary', { name: 'Files' })
+      // On the tree: opening a file would hide it
+      const row = panel.getByRole('treeitem', { name: 'main.go' })
+      await row.click({ button: 'right', timeout: 15000 })
+      await expect(page.getByRole('menuitem', { name: 'Copy relative path' })).toBeVisible()
+      await shot(page, 'desktop-context-menu')
+      await page.context().close()
+    })
+
+    // The compact sidebar (a line per workspace, the running agents on top)
+    // with the toolbar on a bar at the right
+    test('desktop compact', async ({ browser }, testInfo) => {
+      const page = await open(browser, desktop(testInfo), link('claude', 'chat'), {
+        ...LIGHT,
+        settings: { sidebarLayout: 'compact', toolbarPosition: 'right' },
+      })
+      await expect(page.getByRole('region', { name: 'Conversation' })).toContainText('rate limited', {
+        timeout: 15000,
+      })
+      await expect(page.getByRole('region', { name: 'Running agents' })).toBeVisible()
+      await shot(page, 'desktop-compact')
+      await page.context().close()
+    })
+
+    // Settings carried to another browser: saved to a file or copied
+    test('phone settings export', async ({ browser }, testInfo) => {
+      const page = await open(browser, phone(testInfo), link('shell'))
+      await waitTerminal(page)
+      await page.getByRole('button', { name: 'More' }).click()
+      await page.getByRole('menuitem', { name: 'Settings' }).click()
+      await page.getByRole('button', { name: 'Export & import' }).click()
+      await expect(page.getByRole('button', { name: 'Save to a file' })).toBeVisible()
+      await shot(page, 'phone-settings-export')
+      await page.context().close()
+    })
+
+    // OpenCode in workspace mobile (w4), against the stand-in service
+    // (fake-opencode.ts) holding a demo conversation: the Chat view, its slash
+    // commands, and a shell command waiting for permission. The service writes
+    // its service.json into the demo server's XDG_STATE_HOME (TERMOTE_E2E_STATE).
+    test.describe('OpenCode', () => {
+      const oc = new FakeOpencode()
+      const SESSION = 'ses_demo_mobile'
+      const dir = process.env.TERMOTE_E2E_STATE ? join(dirname(process.env.TERMOTE_E2E_STATE), 'mobile') : ''
+      const herdr = (...args: string[]) =>
+        execFileSync('herdr', args, {
+          env: {
+            ...process.env,
+            HERDR_SOCKET_PATH: `/tmp/termote-demo-${process.getuid?.()}-${process.env.TERMOTE_PORT}.sock`,
+          },
+        })
+      const report = (state: string) =>
+        herdr('pane', 'report-agent', '--source', 'termote-demo', '--seq', `${Date.now()}000000`,
+          '--agent', 'opencode', '--state', state, 'w4:p1')
+
+      test.beforeAll(async () => {
+        test.skip(!process.env.TERMOTE_E2E_STATE, 'needs TERMOTE_E2E_STATE, the demo server\'s XDG_STATE_HOME')
+        await oc.start(process.env.TERMOTE_E2E_STATE as string)
+        const t0 = Date.now() - 6 * 60_000
+        const model = { id: 'claude-sonnet-5-5', providerID: 'anthropic' }
+        const tokens = (input: number, output: number) => ({
+          input, output, reasoning: 0, cache: { read: input * 6, write: 0 },
+        })
+        let at = t0
+        const next = (s: number) => (at += s * 1000)
+        const user = (text: string): Json => ({ id: oc.nextId(), time: { created: next(20) }, text, type: 'user' })
+        const reply = (content: Json[], cost: number, done = true): Json => {
+          const created = next(4)
+          return {
+            id: oc.nextId(), type: 'assistant', agent: 'build', model,
+            time: done ? { created, completed: next(30) } : { created },
+            content, ...(done ? { finish: 'stop', cost, tokens: tokens(9000, 700) } : {}),
+          }
+        }
+        const tool = (id: string, name: string, input: Json, output: string, status = 'completed'): Json => ({
+          type: 'tool', id, name, executed: false,
+          state: status === 'completed'
+            ? { status, input, content: [{ type: 'text', text: output }], metadata: { status, truncated: false } }
+            : { status, input, metadata: {} },
+          time: { created: at, ran: at + 200, ...(status === 'completed' ? { completed: at + 900 } : {}) },
+        })
+        const msgs: Json[] = [
+          user('Cache the feed so the app works offline'),
+          reply([
+            { type: 'text', text: "I'll look at how the feed is fetched first." },
+            tool('call_1', 'read', { filePath: `${dir}/src/feed.ts` }, '42 lines'),
+          ], 0.021),
+          reply([
+            { type: 'text', text: 'The feed is now **cached offline**:\n\n- the last 50 posts are kept in IndexedDB (`src/feed-cache.ts`)\n- the app shows them at once, then refreshes\n- a banner says when you are offline' },
+          ], 0.034),
+          user('Great, run the tests'),
+          reply([tool('call_2', 'shell', { command: 'npm test', description: 'Run the test suite' }, '', 'running')], 0, false),
+        ]
+        oc.messages.set(SESSION, msgs)
+        const session: Json = {
+          id: SESSION, projectID: 'global', model, title: 'Offline feed', outcome: undefined,
+          cost: 0.055, tokens: tokens(18000, 1400),
+          time: { created: t0, updated: at, busy: at },
+          location: { directory: dir },
+        }
+        oc.sessions.set(SESSION, session)
+        oc.list = [session]
+        oc.permissions.set(SESSION, [{
+          id: 'per_demo1', sessionID: SESSION, action: 'shell', resources: ['npm test'], save: ['npm *'],
+          source: { type: 'tool', messageID: msgs[msgs.length - 1].id, id: 'call_2' },
+        }])
+        oc.active.add(SESSION)
+        report('blocked')
+      })
+
+      test.afterAll(async () => {
+        report('idle')
+        await oc.stop()
+      })
+
+      test('phone opencode chat', async ({ browser }, testInfo) => {
+        const page = await open(browser, phone(testInfo), '/#/s/w4/w4:t1/w4:p1?view=chat')
+        const conversation = page.getByRole('region', { name: 'Conversation' })
+        await expect(conversation).toContainText('cached offline', { timeout: 20000 })
+        const card = page.getByRole('alertdialog', { name: 'Allow shell?' })
+        await expect(card).toBeVisible({ timeout: 20000 })
+        await shot(page, 'phone-opencode-permission')
+        await page.context().close()
+      })
+    })
+
+    // A worktree of acme-api on a new branch: the dialog, then its workspace
+    test('desktop worktree', async ({ browser }, testInfo) => {
+      const page = await open(browser, desktop(testInfo), link('claude'), LIGHT)
+      await waitTerminal(page)
+      await page.getByRole('button', { name: /^Actions for .+ acme-api$/ }).click()
+      await page.getByRole('menuitem', { name: 'New worktree' }).click()
+      await page.getByLabel('Branch (new, or one to check out)').fill('feat/oauth-login')
+      await shot(page, 'desktop-worktree-new')
+      await page.getByRole('button', { name: 'Create' }).click()
+      await expect(page.locator('aside section').filter({ has: page.getByTitle('feat/oauth-login', { exact: true }) }))
+        .toBeVisible({ timeout: 30000 })
+      await waitTerminal(page)
+      await shot(page, 'desktop-worktree')
+      await page.context().close()
+    })
+
     // A file sent from the phone, then deleted and found in the trash. Last,
     // since the upload would show in every later capture's Changes
     test('phone upload and trash', async ({ browser }, testInfo) => {
-      const page = await open(browser, phone(testInfo), link('claude', 'files'))
+      const page = await open(browser, phone(testInfo), link('claude', 'files'), LIGHT)
       await expect(page.getByRole('treeitem', { name: 'README.md' })).toBeVisible({ timeout: 15000 })
       await page.getByTestId('upload-input').setInputFiles({
         name: 'api-spec.pdf',

@@ -91,6 +91,10 @@ Remote control CLI tools (Claude Code, Codex, OpenCode, any terminal) from mobil
 </p>
 
 <p align="center">
+  <img src="docs/images/screenshots/agents.png" alt="Session history, OpenCode and Machines on a phone" width="720" />
+</p>
+
+<p align="center">
   <img src="docs/images/screenshots/desktop.png" alt="Desktop: Chat and Changes on Herdr" width="720" />
 </p>
 

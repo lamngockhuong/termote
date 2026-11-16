@@ -26,57 +26,112 @@ Chat with Claude Code and Codex.
 Send the next message, see that it works, answer its questions with one tap.
 
 6
-00:32.700 --> 00:39.667
+00:32.700 --> 00:38.667
+OpenCode, too.
+Its status, its chat, slash commands and permission answers, the same way from your phone.
+
+7
+00:38.867 --> 00:42.667
+Pick up any session again.
+Every Claude Code and Codex session of the folder: resume it, fork it, see the files it changed.
+
+8
+00:42.667 --> 00:46.833
+Know what it costs.
+Tokens and an estimated cost for each session, today and this week.
+
+9
+00:47.033 --> 00:49.833
+Who changed each line.
+Blame in the file viewer, beside the agent's own edits.
+
+10
+00:49.833 --> 00:52.667
+One click to the commit.
+Its message, author and hash, ready to copy.
+
+11
+00:52.867 --> 01:00.500
 See exactly what changed.
 Browse the files, preview Markdown and diagrams, review the agent's diff.
 
-7
-00:39.867 --> 00:42.167
-Send files from your phone.
-Upload with a button, a drop or a paste.
-
-8
-00:42.167 --> 00:44.167
-Deleted by mistake?
-It waits in the trash: restore it, or delete it for good.
-
-9
-00:44.367 --> 00:49.333
+12
+01:00.700 --> 01:06.667
 Herdr or tmux. Every agent, one place.
 Herdr workspaces with each agent's status, or your tmux sessions: the same Chat, Files and Changes.
 
-10
-00:49.533 --> 00:54.333
+13
+01:06.867 --> 01:12.833
+A worktree for each task.
+Branch off into a new worktree and workspace, so agents never step on each other.
+
+14
+01:13.033 --> 01:16.833
+All your machines, one sidebar.
+Reach the Termote of another computer over SSH: its sessions, Files and Changes.
+
+15
+01:16.833 --> 01:20.667
+Keep an eye on the host.
+CPU, memory, disks and battery, a tap away in the header.
+
+16
+01:20.867 --> 01:23.167
+Send files from your phone.
+Upload with a button, a drop or a paste.
+
+17
+01:23.167 --> 01:25.833
+Deleted by mistake?
+It waits in the trash: restore it, or delete it for good.
+
+18
+01:26.033 --> 01:30.833
 Panes side by side.
 Split, zoom, swap and resize them from the Pane menu, on tmux, Herdr and Zellij.
 
-11
-00:54.533 --> 00:56.667
+19
+01:31.033 --> 01:34.833
+A desktop layout your way.
+A compact or detailed sidebar you can resize, the toolbar in the header or on the right.
+
+20
+01:34.833 --> 01:38.667
+Right-click for more.
+Copy a path, rename, download, or open a file in Windows.
+
+21
+01:38.867 --> 01:45.833
+Light or dark, three styles.
+Neutral, Terminal or Native. Export your settings, import them in another browser.
+
+22
+01:46.033 --> 01:48.167
 Run the project's tasks.
 npm, make, Go, Gradle, Maven, Cargo and more: one tap, in a tab of its own.
 
-12
-00:56.667 --> 00:58.833
+23
+01:48.167 --> 01:50.333
 Tiếng Việt, too.
 The whole app in English or Vietnamese, picked in Settings.
 
-13
-00:59.033 --> 01:01.833
+24
+01:50.533 --> 01:53.333
 Get pinged when it's done.
 A push when an agent finishes or needs you.
 
-14
-01:01.833 --> 01:04.667
+25
+01:53.333 --> 01:56.167
 Share a view-only device.
 A one-time code pairs a tablet or a teammate's phone, without the password.
 
-15
-01:04.867 --> 01:09.167
+26
+01:56.367 --> 02:00.667
 Private by default.
 Listens on 127.0.0.1 by default · Password or paired devices · View-only role · Tailscale HTTPS · Signed releases
 
-16
-01:09.433 --> 01:14.667
+27
+02:00.933 --> 02:06.167
 Your Terminal, Anywhere.
 curl -fsSL https://termote.ohnice.app/install.sh | sh
 termote.ohnice.app · Open source, MIT

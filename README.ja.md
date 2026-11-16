@@ -89,6 +89,10 @@
 </p>
 
 <p align="center">
+  <img src="docs/images/screenshots/agents.png" alt="スマートフォンでのセッション履歴、OpenCode、Machines" width="720" />
+</p>
+
+<p align="center">
   <img src="docs/images/screenshots/desktop.png" alt="Desktop: Chat and Changes on Herdr" width="720" />
 </p>
 

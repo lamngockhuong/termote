@@ -91,6 +91,10 @@
 </p>
 
 <p align="center">
+  <img src="docs/images/screenshots/agents.png" alt="История сеансов, OpenCode и Machines на телефоне" width="720" />
+</p>
+
+<p align="center">
   <img src="docs/images/screenshots/desktop.png" alt="Desktop: Chat and Changes on Herdr" width="720" />
 </p>
 
