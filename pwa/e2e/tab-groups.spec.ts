@@ -294,6 +294,38 @@ for (const { size, viewport, hasTouch, sidebarCollapsed } of WIDE) {
       await expect.poll(() => shown(page)).toEqual(['one', '[review]', 'notes', 'two'])
       await expectFits(page)
     })
+
+    test('a group dragged by its name moves with its tabs, and keys take a tab out of it', async ({ page, request }) => {
+      // review's tabs apart on the server: one move cannot carry the group
+      await nameFirstTab(request, 'review/one')
+      await addTab(request, 'notes')
+      await addTab(request, 'review/two')
+      await addTab(request, 'coding/api')
+      await open(page, request, { sidebarCollapsed })
+      await expect.poll(() => shown(page)).toEqual(['[review]', 'one', 'two', 'notes', '[coding]', 'api'])
+
+      if (!hasTouch) {
+        // review's name dragged past the end of the bar
+        const from = (await groupName(page, 'review').boundingBox())!
+        const end = (await tab(page, 'api').boundingBox())!
+        const y = from.y + from.height / 2
+        await page.mouse.move(from.x + from.width / 2, y)
+        await page.mouse.down()
+        await page.mouse.move(from.x + from.width / 2 + 12, y, { steps: 3 })
+        await page.mouse.move(end.x + end.width + 200, y, { steps: 10 })
+        await page.mouse.up()
+        await expect.poll(() => shown(page)).toEqual(['notes', '[coding]', 'api', '[review]', 'one', 'two'])
+        await expect.poll(() => namesOf(request)).toEqual(['notes', 'coding/api', 'review/one', 'review/two'])
+      }
+
+      // Alt+Left on a group's first tab takes it out of the group
+      await tab(page, 'one').click()
+      await tab(page, 'one').focus()
+      await page.keyboard.press('Alt+ArrowLeft')
+      await expect.poll(() => namesOf(request)).toContain('one')
+      await expect.poll(async () => (await shown(page)).join(' ')).toMatch(/one \[review\] two/)
+      await expectFits(page)
+    })
   })
 }
 
