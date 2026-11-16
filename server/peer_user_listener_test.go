@@ -162,6 +162,17 @@ func TestPeerCheckOnlyLocalConnections(t *testing.T) {
 	if !check.fromThisMachine(netip.MustParseAddr("192.168.1.20")) {
 		t.Error("failed read dropped the known address")
 	}
+	// ... and counts no address as another machine's until a read succeeds.
+	if !check.fromThisMachine(netip.MustParseAddr("192.168.1.30")) {
+		t.Error("a failed read made an address another machine's")
+	}
+	check.interfaceAddrs = func() ([]net.Addr, error) {
+		return []net.Addr{&net.IPNet{IP: net.ParseIP("192.168.1.20"), Mask: net.CIDRMask(24, 32)}}, nil
+	}
+	check.addrsRead = time.Time{}
+	if check.fromThisMachine(netip.MustParseAddr("192.168.1.30")) {
+		t.Error("another machine counted as local after a read succeeded again")
+	}
 	// Real connections: a fake one from another machine passes unchecked.
 	c := &peerCheckedConn{Conn: fakeAddrConn{remote: "192.168.1.30:5000", local: "192.168.1.20:7680"}, check: check}
 	if err := c.verify(); err != nil || lookups.Load() != 0 {
@@ -460,8 +471,9 @@ func TestPeerCheckKeepsAddrsOnReadFailure(t *testing.T) {
 
 	fresh := newTestPeerCheck(nil)
 	fresh.interfaceAddrs = failing
-	if fresh.fromThisMachine(ip) {
-		t.Error("address counted as local with no list")
+	// No list read: the address is unknown, so its owner is looked up.
+	if !fresh.fromThisMachine(ip) {
+		t.Error("address counted as another machine's with no list")
 	}
 	if !strings.Contains(buf.String(), "cannot list this machine's addresses") {
 		t.Errorf("read failure not logged:\n%s", buf.String())
@@ -490,5 +502,32 @@ func TestPeerCheckAddressThatBecameLocal(t *testing.T) {
 	own = append(own, &net.IPNet{IP: net.ParseIP("192.168.1.31"), Mask: net.CIDRMask(24, 32)})
 	if !check.fromThisMachine(y) {
 		t.Error("an address added right after a list was read counted as another machine's")
+	}
+}
+
+// With no list of this machine's addresses ever read, a connection to the
+// server's own LAN address is still looked up, as is one whose client and
+// server addresses are the same whatever the list says.
+func TestPeerCheckAddressListUnreadable(t *testing.T) {
+	var lookups atomic.Int32
+	check := newTestPeerCheck(func(netip.AddrPort, netip.AddrPort) (string, error) {
+		lookups.Add(1)
+		return "1001", nil
+	})
+	check.interfaceAddrs = func() ([]net.Addr, error) { return nil, errors.New("no netlink") }
+	c := &peerCheckedConn{Conn: fakeAddrConn{remote: "192.168.1.10:51000", local: "192.168.1.10:7680"}, check: check}
+	if err := c.verify(); !errors.Is(err, errPeerRefused) || lookups.Load() != 1 {
+		t.Errorf("own LAN address, list unreadable: %v, %d lookups", err, lookups.Load())
+	}
+	// A list that does not name the address (read before it was added).
+	check = newTestPeerCheck(func(netip.AddrPort, netip.AddrPort) (string, error) {
+		lookups.Add(1)
+		return "1001", nil
+	})
+	reads := 0
+	check.interfaceAddrs = func() ([]net.Addr, error) { reads++; return nil, nil }
+	c = &peerCheckedConn{Conn: fakeAddrConn{remote: "[fd00::5]:51000", local: "[fd00::5]:7680"}, check: check}
+	if err := c.verify(); !errors.Is(err, errPeerRefused) || lookups.Load() != 2 || reads != 0 {
+		t.Errorf("client at the server's address: %v, %d lookups, %d reads", err, lookups.Load(), reads)
 	}
 }

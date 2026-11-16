@@ -91,6 +91,9 @@ type localPeerCheck struct {
 	addrMu    sync.Mutex
 	addrs     map[netip.Addr]bool
 	addrsRead time.Time
+	// addrsFailed: the last read of the list failed, so a miss in addrs
+	// says nothing about the address.
+	addrsFailed bool
 
 	logMu sync.Mutex
 	logs  map[string]*peerLog
@@ -226,7 +229,9 @@ func (p *localPeerCheck) allows(conn net.Conn) bool {
 		p.refused("", "no address", conn.RemoteAddr())
 		return false
 	}
-	if !p.fromThisMachine(client.Addr()) {
+	// A client at the server's own address is on this machine whatever the
+	// list says.
+	if client.Addr() != server.Addr() && !p.fromThisMachine(client.Addr()) {
 		return true
 	}
 	id, err := p.lookup(client, server)
@@ -292,7 +297,7 @@ func (p *localPeerCheck) fromForeignStack(client, server netip.AddrPort) bool {
 // machine's own: a connection from another local user to the LAN address
 // is as local as one to 127.0.0.1. An address that just became this
 // machine's is never taken for another's: a miss holds only on a list whose
-// read started after the call did.
+// read started after the call did, and succeeded.
 func (p *localPeerCheck) fromThisMachine(ip netip.Addr) bool {
 	if ip.IsLoopback() {
 		return true
@@ -318,16 +323,18 @@ func (p *localPeerCheck) fromThisMachine(ip netip.Addr) bool {
 		p.readAddrsLocked()
 		read = true
 	}
-	return p.addrs[ip]
+	// A failed read leaves the address unknown: checked as this machine's.
+	return p.addrs[ip] || p.addrsFailed
 }
 
 // readAddrsLocked lists this machine's addresses.
 func (p *localPeerCheck) readAddrsLocked() {
 	p.addrsRead = time.Now()
 	list, err := p.interfaceAddrs()
+	p.addrsFailed = err != nil
 	if err != nil {
-		// Keep the last list: a failed read must not make this machine's
-		// own address count as another machine's.
+		// Keep the last list, and count no address as another machine's
+		// until a read succeeds (addrsFailed).
 		if p.addrs == nil {
 			p.addrs = map[netip.Addr]bool{}
 		}

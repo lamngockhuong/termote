@@ -2945,7 +2945,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   the connection arrived, so one added a moment ago is checked; lists are read at most once per
   100 ms, a miss waits for the next one and every miss waiting by then shares it, so a client
   cycling source addresses lists them at most that often; no address is remembered as
-  remote) is checked on its first read/write, never in `Accept` (64 lookups at once, at most 4
+  remote; while the last read failed, or none succeeded yet, no address counts as another
+  machine's; a client at the server's own address is local whatever the list says) is checked on its first read/write, never in `Accept` (64 lookups at once, at most 4
   `sock_diag` queries of them, 2 s, else refused). Linux: `sock_diag` exact lookup, `/proc/net/tcp*` fallback, only ESTABLISHED with an
   inode (a TIME_WAIT row reads uid 0). Windows: `GetExtendedTcpTable`
   (`TCP_TABLE_OWNER_MODULE_CONNECTIONS`) owner PID and bind time; the process opened at that PID
