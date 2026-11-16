@@ -1575,7 +1575,7 @@ Limits:
 * Only sessions of the server’s own user are listed (its `CLAUDE_CONFIG_DIR` or `~/.claude`, and `CODEX_HOME` or `~/.codex`); sessions of another folder or a Place are not.
 * Codex keeps no index by folder: only threads among its latest 2000 runs are listed, and the list says so when older ones were left out.
 * OpenCode’s sessions come from its background service, only while it runs: its latest 2000 sessions, without a subagent’s. The model is read only for the sessions on screen, and is left out when the service cannot give it.
-* Resuming needs a backend that runs [Tasks](/usage/tasks/) (tmux, Herdr, Zellij, `herdr-core`; not psmux) and a shell Tasks knows (`bash`, `zsh`, `sh`, `fish`, `pwsh`).
+* Resuming needs a backend that runs [Tasks](/usage/tasks/) (tmux, Herdr, Zellij, `herdr-core`; not psmux) and a shell Tasks knows (`bash`, `zsh`, `sh`, `fish`, `pwsh`), or Windows PowerShell 5.1 (`powershell.exe`, Herdr’s default on Windows), which Tasks refuse but a resume line takes.
 * View-only devices can read the list and the old conversations, where they may read [Files](/usage/files/) (a git repository, not a home folder), but cannot resume.
 
 ## Limitations

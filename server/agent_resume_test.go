@@ -103,6 +103,7 @@ func TestResumeCommand(t *testing.T) {
 		{shellPOSIX, "claude", "/r/it's", `cd '/r/it'\''s' && claude --resume ` + id, false},
 		{shellFish, "codex", `/r/a\b'c`, `cd '/r/a\\b\'c'; and codex resume --no-daemon ` + id, false},
 		{shellPwsh, "claude", `C:\r\it's`, `Set-Location -LiteralPath 'C:\r\it''s'; claude --resume ` + id, false},
+		{shellPwsh, "codex", "", "codex fork --no-daemon " + id, true},
 	} {
 		if got := resumeCommand(tc.kind, tc.agent, id, tc.fork, tc.dir); got != tc.want {
 			t.Errorf("resumeCommand(%s, %s, %q) = %q, want %q", tc.kind, tc.agent, tc.dir, got, tc.want)
@@ -232,6 +233,37 @@ func TestResumeInTab(t *testing.T) {
 	}
 	if got := fx.m.typedLines(); got[1] != "%2 codex resume --no-daemon "+histID2 {
 		t.Errorf("typed %q", got)
+	}
+}
+
+// Windows PowerShell 5.1 (Herdr's default shell on Windows) takes a resume
+// line in pwsh's syntax, in a new tab and in the pane's own shell; tasks
+// still refuse it (TestTaskShellKind).
+func TestResumeWindowsPowerShell(t *testing.T) {
+	fx := newResumeFixture(t)
+	fx.m.shell = "powershell.exe"
+	code, body := fx.resume(t, map[string]any{"agent": "claude", "session": histID1, "where": "tab", "fork": true})
+	if code != 200 || slices.Contains(fx.m.calls, "close t1") {
+		t.Fatalf("tab = %d %v %v", code, body, fx.m.calls)
+	}
+	if code, body := fx.resume(t, map[string]any{"agent": "codex", "session": histID2, "where": "here"}); code != 200 {
+		t.Fatalf("here = %d %v", code, body)
+	}
+	want := []string{"%1 claude --resume " + histID1 + " --fork-session",
+		"0 Set-Location -LiteralPath " + shellQuote(shellPwsh, fx.sub) + "; codex resume --no-daemon " + histID2}
+	if got := fx.m.typedLines(); !slices.Equal(got, want) {
+		t.Errorf("typed %q, want %q", got, want)
+	}
+}
+
+func TestResumeShellKind(t *testing.T) {
+	for name, want := range map[string]string{
+		"powershell.exe": shellPwsh, "POWERSHELL.EXE": shellPwsh, "powershell": shellPwsh, "pwsh.exe": shellPwsh,
+		"bash": shellPOSIX, "fish": shellFish, "cmd.exe": "", "nu": "", "": "",
+	} {
+		if got := resumeShellKind(name); got != want {
+			t.Errorf("resumeShellKind(%q) = %q, want %q", name, got, want)
+		}
 	}
 }
 

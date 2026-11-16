@@ -324,7 +324,7 @@ func (a *agentAPI) resumeInTab(ctx context.Context, tm taskMux, groupID string, 
 	unlock := a.input.lock(tab.Target)
 	defer unlock()
 	shell, _, err := waitTaskShell(ctx, tm, tab.Target, true)
-	if err == nil && taskShellKind(shell) == "" {
+	if err == nil && resumeShellKind(shell) == "" {
 		err = errTaskShell
 	}
 	if err != nil {
@@ -341,7 +341,7 @@ func (a *agentAPI) resumeInTab(ctx context.Context, tm taskMux, groupID string, 
 		}
 		return taskTab{}, err
 	}
-	return tab, tm.TypeLine(ctx, tab.Target, resumeCommand(taskShellKind(shell), s.Agent, s.ID, fork, ""))
+	return tab, tm.TypeLine(ctx, tab.Target, resumeCommand(resumeShellKind(shell), s.Agent, s.ID, fork, ""))
 }
 
 // resumeHere types the resume line into target's own shell, when it waits
@@ -371,7 +371,7 @@ func (a *agentAPI) resumeHere(ctx context.Context, tm taskMux, target, paneDir s
 	if !idle {
 		return errStartPaneBusy
 	}
-	kind := taskShellKind(shell)
+	kind := resumeShellKind(shell)
 	if kind == "" {
 		return errTaskShell
 	}
