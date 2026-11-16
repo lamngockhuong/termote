@@ -349,6 +349,9 @@ listed, with the rest of the message as its arguments, and each listed `@name` a
 Any other `/name` reaches the model as text, and so does an `@` before a name no skill has (a file
 or an address). OpenCode's other `/` commands (switching the model, theme or session) act on its
 terminal screen and are not offered: use them in the terminal. A view-only device gets no list.
+It also sees none of your messages' text, only the replies and the images you sent: OpenCode keeps
+a custom command as the text its template expands to, with the output of every shell command the
+template runs.
 
 OpenCode 2 comes from its GitHub releases or Homebrew; the `opencode-ai` package on npm is still
 OpenCode 1, which Termote does not read.
