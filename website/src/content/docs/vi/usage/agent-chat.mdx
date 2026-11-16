@@ -60,9 +60,17 @@ Cài từ đầu? Làm theo bài [Điều khiển Claude Code từ điện tho�
 - Đường dẫn file thành link tới [view Files](/vi/usage/files/) của pane: đường dẫn trên thẻ
   tool, inline code chỉ tới một file (`src/app.ts`, `./run.sh`, `src/app.ts:42`, `src/app.ts#L42`) và
   link Markdown tương đối. Chạm vào một link sẽ mở file đó trong Files, nhảy tới dòng nếu có ghi số
-  dòng. Đường dẫn tương đối được tính từ thư mục của pane, rồi mới tới thư mục gốc; đường dẫn nằm ngoài
-  thư mục gốc không bao giờ được gửi lên server và chỉ hiện thành chữ thường, giống mọi đường dẫn trong
-  một pane không có view Files. Trên desktop, file mở ở panel bên cạnh và Chat vẫn giữ nguyên chỗ cũ.
+  dòng. Đường dẫn tương đối được tính từ thư mục của pane, rồi mới tới thư mục gốc. Đường dẫn tuyệt
+  đối nằm ngoài thư mục gốc, như một ghi chú agent viết trong thư mục nháp dưới `/tmp`, sẽ mở ở chế độ
+  chỉ đọc trong một tab riêng của Files, cạnh các file của pane, nếu chính cuộc trò chuyện của agent
+  có nhắc tới nó: server kiểm tra đường dẫn có trong transcript của pane đó, rồi chỉ phục vụ đúng file
+  ấy (không liệt kê thư mục, không mở file khác bên cạnh, không sửa, không đi theo link trong file).
+  Tab được giữ mở (đã ghim), nên file thứ hai như vậy sẽ mở thành tab bên cạnh; tiêu đề tab là đường
+  dẫn đầy đủ, cây thư mục vẫn ở thư mục của pane, và tab vẫn mở khi pane chuyển thư mục, cho tới khi
+  bạn đóng nó hoặc tải lại trang. Từ một phiên cũ trong Lịch sử cũng mở được như vậy: đường dẫn được
+  tìm trong transcript của chính phiên đó. Đường dẫn agent chưa từng viết ra thì báo là nằm ngoài thư
+  mục của pane. Thiết bị chỉ xem và pane không có view Files chỉ thấy chữ
+  thường. Trên desktop, file mở ở panel bên cạnh và Chat vẫn giữ nguyên chỗ cũ.
   Một tên đơn lẻ ngay sau `/`, như `/clear`, là lệnh slash chứ không phải file.
 - Ảnh trong câu trả lời hiện thành link chữ. Ảnh không bao giờ được tải, nên một câu trả lời không
   thể khiến trình duyệt gửi yêu cầu tới trang khác.

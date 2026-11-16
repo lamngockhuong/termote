@@ -1750,6 +1750,35 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   one failing on the host is not mounted; `TERMOTE_PLACES` (JSON id, name, container path) goes by
   name with `-e`, is in `termoteEnvKeys`, and `trustRepo` trusts these mounts like `/workspace`.
   A Place on another file system than the trash gets permanent delete only (`cross_device`).
+- **A file the agent named** (`POST /api/mux/panes/{id}/files/mentioned` `{path}`,
+  `server/files_mentioned.go`; the Chat view's link to a path outside the pane's root): the one
+  route that takes a host path from the client, and only to compare it, never to look anything up
+  by it first. `requireMethod` POST, `crossSiteRejection`, `requireWriteRole` (a view-only client
+  never sees a tool's input, where most paths are; the PWA does not ask from one), `decodeJSON`
+  (`maxJSONBody`). With `agent` and `session` (the History's session read), the transcript is that
+  past session's, found as `history/{session}/transcript` finds it (`historySessionID`, then
+  `findHistorySession` among the sessions of the pane's root, `historyAgentSession`); an unknown or
+  invalid one answers `not_mentioned`. The path must be absolute, at most 4096 bytes, without NUL or a `.`/`..` part,
+  and not a volume root. The server then reads the pane's own agent transcript, found as the
+  transcript route finds it (`agentAPI.session`, the adapter's `Locate`: Claude Code and Codex;
+  OpenCode and a pane without an agent answer `not_mentioned`), a chunk at a time, and answers
+  404 `not_mentioned` unless the path is there as written or in its JSON-escaped form, as a whole
+  path (`wholePath`: not the tail of a longer path nor the head of one; a `\n`/`\r`/`\t` escape
+  before it is a line break). A path with a git dir component (as named or where it leads,
+  `gitDirOnPath`) or under a deny dir (`denied`) is 403; a folder or a missing file is 404. It
+  answers an opaque id (`m-` + 32 random hex, never a Place id's 16 hex), kept in memory per pane
+  for an hour after its last use (at most 128, the oldest dropped), with the folder as `root` and
+  the base name as `path`. The Files routes take the id as `place=`: `startAt` refuses it from a
+  view-only client like a Place, then `mentionedRoot` serves it only to the pane it was opened
+  for (another pane: 404 `unknown_place`), only on `GET` `content`, `raw` (no `side`) and
+  `document` (anything else, `tree`, `find`, `search` and every write included: 400
+  `place_not_supported`), only for the base name it was opened for (403 otherwise), and checks
+  `gitDirOnPath` again at each read. The root is the file's folder with no repo (`IsRepo` false,
+  so no git runs and no linked work tree is looked up), so `content` applies its own checks
+  unchanged: `os.Root` (a symlink leaving the folder is refused), the deny lists, the
+  sensitive-name `reveal`, the size limits. In the PWA such a file is a Files tab of its own
+  (`FileTab.mentioned` holds the id), pinned: read only (no edit, rename, delete, download, blame, review
+  comment or link followed), kept when the pane's root moves, and never kept on the device.
 - **`<details>` in a previewed Markdown file** (`detailsBlocks` in
   `pwa/src/utils/markdown-safety.ts`, Files/Changes only): raw HTML is never parsed or passed to
   React. A remark plugin, run before `htmlAsText`, folds an html node that is exactly a

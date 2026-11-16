@@ -43,6 +43,7 @@ import {
   restoredCounters,
   restoreFilesState,
 } from '../utils/persisted-tabs'
+import { errorKey } from '../utils/server-error'
 import type { TableLayout } from '../utils/table-columns'
 import {
   type FileEncoding,
@@ -52,6 +53,8 @@ import {
   type FilesTree,
   fetchFilesTree,
   fetchPlaces,
+  type MentionedFile,
+  openMentionedFile,
   RequestError,
 } from './use-mux-api'
 
@@ -118,6 +121,11 @@ export interface FileTab extends TabBase {
   // Its file was not found the last time the tab showed (deleted or renamed
   // outside Termote): the tab bar marks it. Never kept on the device.
   missing?: boolean
+  // A file the pane's agent named outside its folder and every Place: the
+  // id files/mentioned gave for it, read as a Place whose root is the
+  // file's folder (root) and whose only file is path. Read only; kept
+  // when the root moves, never kept on the device.
+  mentioned?: string
 }
 
 export interface FilesState {
@@ -264,6 +272,9 @@ interface Store {
   // Shows the Place id (undefined: the pane's folder), whose root is root
   // when known; otherwise the server says (409) and the tree starts again
   switchTo: (place: string | undefined, root?: string) => void
+  // A file the pane's agent named outside its folder, opened read only in
+  // a tab of its own (files/mentioned answered file)
+  openMentioned: (file: MentionedFile) => void
   // What a files request of this view reads
   target: () => FilesTarget
   // A file found by a search of root (the command palette): the store
@@ -313,9 +324,11 @@ function createStore(id: string): Store {
   let { clock, ids } = restoredCounters(state.tabs)
   const isDirty = (t: FileTab) => isDraftDirty(paneId, t.root, t.path)
   const target = (): FilesTarget => ({ paneId, place: state.place })
-  // A tab is one file: its root and its path
-  const tabKey = (t: FileTab) => `${t.root}\u0000${t.path}`
-  const here = (t: FileTab) => t.root === state.root
+  // A tab is one file: its root and its path (a file the agent named is
+  // another tab than the same file in the tree)
+  const tabKey = (t: FileTab) =>
+    `${t.mentioned ? 'm\u0000' : ''}${t.root}\u0000${t.path}`
+  const here = (t: FileTab) => t.root === state.root && !t.mentioned
 
   // Kept on the device after every change of the tabs (and of where they
   // are scrolled to, which renders nothing)
@@ -466,6 +479,44 @@ function createStore(id: string): Store {
       : r.tabs
     set({
       tabs,
+      activeId: r.activeId,
+      pendingRootClose: pendingOf(
+        state.pendingRootClose?.filter((id) => !gone.has(id)),
+      ),
+    })
+  }
+
+  // A file the agent named, in a tab of its own source beside the others:
+  // the tree stays where it is
+  function openMentioned(file: MentionedFile) {
+    const now = ++clock
+    const r = openTab(
+      state.tabs,
+      state.activeId,
+      tabKey,
+      `m\u0000${file.root}\u0000${file.path}`,
+      () => ({
+        id: `t${++ids}`,
+        pinned: false,
+        lastUsed: 0,
+        root: file.root,
+        path: file.path,
+        history: [],
+        reveal: false,
+        mentioned: file.place,
+      }),
+      // Kept open: a second file named opens beside it
+      { pin: true },
+      isDirty,
+      now,
+    )
+    for (const t of r.closed) dropDraft(paneId, t.root, t.path)
+    const gone = new Set(r.closed.map((t) => t.id))
+    set({
+      // The id the server gave now: an earlier one may have expired
+      tabs: r.tabs.map((t) =>
+        t.id === r.activeId ? { ...t, mentioned: file.place } : t,
+      ),
       activeId: r.activeId,
       pendingRootClose: pendingOf(
         state.pendingRootClose?.filter((id) => !gone.has(id)),
@@ -740,11 +791,14 @@ function createStore(id: string): Store {
     generation++
     const picked = switching
     switching = false
-    const moved = state.tabs.filter((t) => t.root !== root)
+    // A file the agent named has a root of its own: it stays
+    const moved = state.tabs.filter((t) => t.root !== root && !t.mentioned)
     for (const t of moved) if (!isDirty(t)) close(t.id)
     // Every tab still of another root: one asked about before that is of
     // this root again (the pane came back) is no longer asked about
-    const asked = state.tabs.filter((t) => t.root !== root).map((t) => t.id)
+    const asked = state.tabs
+      .filter((t) => t.root !== root && !t.mentioned)
+      .map((t) => t.id)
     treeScroll = 0
     set({
       root,
@@ -895,6 +949,7 @@ function createStore(id: string): Store {
     },
     rootChanged,
     switchTo,
+    openMentioned,
     target,
     created,
     reveal,
@@ -1167,6 +1222,42 @@ export async function followPathInFiles(
   const result = fromDir === null ? 'outside' : await open(fromDir)
   if (result !== 'missing' && result !== 'outside') return result
   return fromRoot === null ? result : open(fromRoot)
+}
+
+// Opens a file the agent of paneId named outside the pane's folder (path,
+// absolute, as the agent wrote it) in paneId's Files view, read only, in a
+// tab of its own; session: the past session (History) that named it.
+// Throws the server's refusal: not_mentioned when the agent's transcript
+// does not hold the path.
+export async function openMentionedInFiles(
+  paneId: string,
+  path: string,
+  session?: { agent: string; id: string },
+) {
+  storeFor(paneId).openMentioned(await openMentionedFile(paneId, path, session))
+}
+
+// A path the agent wrote that followPathInFiles found outside the pane's
+// folder: opened in Files when the agent named it (null), else what to tell
+// the user. A view-only client is refused by the server, and a relative
+// path that left the folder is not one the agent named: both are outside.
+export async function openOutsideInFiles(
+  paneId: string,
+  path: string,
+  opts: { readOnly: boolean; session?: { agent: string; id: string } },
+): Promise<MessageKey | null> {
+  if (opts.readOnly || !isAbsolutePath(path)) return 'chat.view.outside'
+  try {
+    await openMentionedInFiles(paneId, path, opts.session)
+    return null
+  } catch (err) {
+    if (!(err instanceof RequestError)) return 'files.follow.failed'
+    if (err.code === 'not_mentioned') return 'chat.view.outside'
+    if (err.code) return errorKey(err.code)
+    if (err.status === 404) return 'files.follow.missing'
+    if (err.status === 403) return 'files.viewer.notAllowed'
+    return 'files.follow.failed'
+  }
 }
 
 // Opens path (under root, which the store moves to when it is elsewhere) in

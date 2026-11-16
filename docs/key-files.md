@@ -325,6 +325,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/files.go`                                 | `/api/mux/panes/{id}/files/*` routes, tree and file contents   |
 | `server/files_root.go`                            | Pane root (git toplevel), safe git runner                      |
 | `server/files_places.go`                          | Places: folders allowed with `--allow-path`, served as roots   |
+| `server/files_mentioned.go`                       | One file the pane's agent named, checked in its transcript     |
 | `server/files_git.go`                             | git status and diff for the Changes view                       |
 | `server/files_git_commit.go`                      | `files/commit`, `files/commit/diff`: HEAD and its file diffs   |
 | `server/files_git_blame.go`                       | `files/blame`: who last changed each line of a file            |

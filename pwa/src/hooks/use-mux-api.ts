@@ -1840,6 +1840,36 @@ export interface CreatedFile {
   path: string
 }
 
+// A file the pane's agent named outside its folder and every Place, opened
+// read only: place is the id the Files read routes (content, raw, document)
+// take for it, path its name under root (its folder). A refusal is a
+// RequestError with the server's code: not_mentioned (the agent's
+// transcript does not hold the path), not_allowed, not_found.
+export interface MentionedFile {
+  place: string
+  root: string
+  path: string
+}
+
+// session: a past session of the pane's folder (the History), whose
+// transcript is read instead of the live one.
+export async function openMentionedFile(
+  paneId: string,
+  path: string,
+  session?: { agent: string; id: string },
+): Promise<MentionedFile> {
+  const res = await fetch(filesUrl({ paneId }, 'mentioned', {}), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(
+      session ? { path, agent: session.agent, session: session.id } : { path },
+    ),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res)
+  return res.json()
+}
+
 // Creates path under root as an empty file, with the directories missing
 // above it; never replaces anything. The text then goes through
 // saveFileContent. A refusal is a RequestError with the server's code

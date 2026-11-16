@@ -62,8 +62,14 @@ export interface AgentHistorySheetProps {
   onResumed: (result: LiveTab, where: ResumeWhere) => void
   // Shows the tab a session runs in
   onOpenLive: (live: LiveTab) => void
-  // Opens a path of a transcript in the Files view of the pane
-  openFile?: (paneId: string, path: string, line?: number) => Promise<void>
+  // Opens a path of a transcript in the Files view of the pane; session:
+  // the one read, whose transcript may name a file outside the folder
+  openFile?: (
+    paneId: string,
+    path: string,
+    line: number | undefined,
+    session: { agent: string; id: string },
+  ) => Promise<void>
   // Opens a file a session changed: its diff in Changes, or the file in
   // Files, of the pane's root
   openTouched?: (paneId: string, target: TouchedTarget, root: string) => void
@@ -331,9 +337,13 @@ function SessionScreen({
   const open = useMemo(
     () =>
       openFile
-        ? (path: string, line?: number) => openFile(paneId, path, line)
+        ? (path: string, line?: number) =>
+            openFile(paneId, path, line, {
+              agent: session.agent,
+              id: session.id,
+            })
         : undefined,
-    [openFile, paneId],
+    [openFile, paneId, session.agent, session.id],
   )
   return (
     <div className="flex h-[min(75vh,48rem)] flex-col">

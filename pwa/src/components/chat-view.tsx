@@ -12,7 +12,11 @@ import { agentLabel, chatInputAgent, subagentAgent } from '../chat-agents'
 import { useAgentPrompt } from '../hooks/use-agent-prompt'
 import { useAgentTranscript } from '../hooks/use-agent-transcript'
 import { useDomSelection } from '../hooks/use-dom-selection'
-import { FOLLOW_NOTICES, followPathInFiles } from '../hooks/use-files'
+import {
+  FOLLOW_NOTICES,
+  followPathInFiles,
+  openOutsideInFiles,
+} from '../hooks/use-files'
 import type { ResumeWhere } from '../hooks/use-mux-api'
 import { useNewKeys } from '../hooks/use-new-keys'
 import { useResumeSession } from '../hooks/use-resume-session'
@@ -202,13 +206,17 @@ function AgentChat({
         ? async (path: string, line?: number) => {
             const result = await followPathInFiles(paneId, path, line)
             if (result === 'opened') showView(FILES_VIEW_ID)
-            else if (result === 'outside')
-              notify(translate('chat.view.outside'))
-            else if (FOLLOW_NOTICES[result])
+            else if (result === 'outside') {
+              const notice = await openOutsideInFiles(paneId, path, {
+                readOnly,
+              })
+              if (notice) notify(translate(notice))
+              else showView(FILES_VIEW_ID)
+            } else if (FOLLOW_NOTICES[result])
               notify(translate(FOLLOW_NOTICES[result]))
           }
         : undefined,
-    [mux.caps.files, paneId, showView, notify, translate],
+    [mux.caps.files, paneId, showView, notify, translate, readOnly],
   )
   const [shown, setShown] = useState(RENDER_WINDOW)
   const [atBottom, setAtBottom] = useState(true)

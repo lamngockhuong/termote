@@ -653,6 +653,7 @@ export default {
   'files.cell.addBelow': 'Thêm hàng phía dưới',
   'files.cell.apply': 'Áp dụng',
   'files.cell.openSheet': 'Mở khung sửa ô',
+  'files.mentioned.noLinks': 'Không mở được liên kết của file này ở đây',
   'files.follow.missing': 'Không tìm thấy',
   'files.follow.failed': 'Không mở được liên kết này',
   'files.status.modified': 'Đã sửa',

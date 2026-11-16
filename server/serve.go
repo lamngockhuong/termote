@@ -624,6 +624,7 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 	files := registerFilesRoutes(mux, m, allowed, append(slices.Clone(cfg.FilesDenyDirs), cfg.UploadDir, cfg.TrashDir))
 	files.writeDeny = filesDenyDirs(append(cfg.FilesWriteDenyDirs, cfg.UploadDir, cfg.TrashDir)...)
 	files.homeDirs = cfg.ViewHomeDirs
+	files.mentions = agent.transcriptMentions
 	files.setPlaces(buildPlaces(cfg.Places, cfg.PlaceEnv))
 	if h, ok := m.(*hcMux); ok {
 		// herdr-core's repository tops resolve as Files does, with the same

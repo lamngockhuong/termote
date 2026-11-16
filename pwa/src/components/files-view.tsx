@@ -72,6 +72,7 @@ import { Trans } from '../i18n/trans'
 import type { Session } from '../types/session'
 import { downloadFile } from '../utils/download-file'
 import { fileNameProblem } from '../utils/file-name'
+import { absolutePath } from '../utils/file-paths'
 import { splitPath } from '../utils/files-format'
 import { isFocusWindow } from '../utils/focus-mode'
 import type { LinkPath } from '../utils/markdown-links'
@@ -355,9 +356,15 @@ function PaneFiles({
   const commenting = !readOnly && !isFocusWindow()
   const review = useReviewComposer(paneId, f.root, notify)
   const commented = useMemo(
-    () => tab && commentedFileLines(review.comments, f.root, tab.path),
+    () =>
+      tab &&
+      !tab.mentioned &&
+      commentedFileLines(review.comments, f.root, tab.path),
     [review.comments, f.root, tab],
   )
+  // The tab shown is a file the agent named outside the folder: read only,
+  // from its own source, beside the tree
+  const named = tab?.mentioned
   // A comment of the review opened: its file here, its diff in Changes
   const openComment = (cm: ReviewComment) => {
     // A file comment of a Place opens it there
@@ -503,8 +510,9 @@ function PaneFiles({
       return {
         id: t.id,
         name,
-        title: t.path,
-        detail: dir,
+        // A file the agent named: its whole path, and its folder
+        title: t.mentioned ? absolutePath(t.root, t.path) : t.path,
+        detail: t.mentioned ? t.root : dir,
         pinned: t.pinned,
         dirty: isDirty(t.root, t.path),
         missing: t.missing,
@@ -1174,10 +1182,10 @@ function PaneFiles({
           <FileViewer
             // A new tab, root or path starts unrevealed unless the tab was
             // shown: a Show never carries over to another file
-            key={`${tab.id}\u0000${f.root}\u0000${tab.path}\u0000${rewritten[tab.path] ?? 0}`}
+            key={`${tab.id}\u0000${named ? tab.root : f.root}\u0000${tab.path}\u0000${rewritten[tab.path] ?? 0}`}
             paneId={paneId}
-            place={f.place}
-            root={f.root}
+            place={named ?? f.place}
+            root={named ? tab.root : f.root}
             draftRoot={tab.root}
             path={tab.path}
             wrapByDefault={isMobile || settings.editorWrap}
@@ -1192,11 +1200,15 @@ function PaneFiles({
             onTableLayout={(l) => f.setTableLayout(tab.id, l)}
             backTo={tab.history[tab.history.length - 1]?.path}
             onClose={f.back}
-            onFollow={onFollow}
-            onRootChanged={f.rootChanged}
+            // The server serves a named file alone: no link of it is
+            // followed
+            onFollow={
+              named ? () => notify(t('files.mentioned.noLinks')) : onFollow
+            }
+            onRootChanged={named ? noRootChange : f.rootChanged}
             notify={notify}
             // The server refuses a view-only client both as well
-            canEdit={!readOnly}
+            canEdit={!readOnly && !named}
             canReveal={!readOnly}
             // The file this view just created opens into editing
             startEditing={!!tab.intent && tab.root === f.root}
@@ -1211,7 +1223,7 @@ function PaneFiles({
             onCloseTab={() => requestClose(tab.id)}
             headerExtra={openFiles}
             onRename={
-              canRename
+              canRename && !named
                 ? ({ revealed }) => askRename(tab.path, revealed)
                 : undefined
             }
@@ -1219,22 +1231,24 @@ function PaneFiles({
             // the viewer offers this only while not editing: the path is
             // under the root a link names
             onOpenWindow={
-              openWindow &&
-              ((e) =>
-                openWindow(
-                  { view: 'files', file: tab.path, place: f.place },
-                  e,
-                ))
+              named
+                ? undefined
+                : openWindow &&
+                  ((e) =>
+                    openWindow(
+                      { view: 'files', file: tab.path, place: f.place },
+                      e,
+                    ))
             }
             // A sensitive file offers it only once shown. Never through a
             // link the tree knows of: the server refuses it
             onDownload={
-              canDownload && !throughLink(f, tab.path)
+              canDownload && !named && !throughLink(f, tab.path)
                 ? ({ revealed }) => askDownload(tab.path, false, revealed)
                 : undefined
             }
             onDelete={
-              canDelete
+              canDelete && !named
                 ? ({ hash, sensitive }) =>
                     setDeleting({
                       // A file opens once the root is read
@@ -1248,10 +1262,12 @@ function PaneFiles({
                 : undefined
             }
             onLineComment={
-              commenting ? (r) => review.open(tab.path, 'file', r) : undefined
+              commenting && !named
+                ? (r) => review.open(tab.path, 'file', r)
+                : undefined
             }
-            commentedLines={commented}
-            canBlame={f.isRepo}
+            commentedLines={commented || undefined}
+            canBlame={f.isRepo && !named}
             blameOn={blameOn}
             onBlameChange={setBlameOn}
           />
@@ -1412,6 +1428,9 @@ function UploadStatusRow() {
 
 // Whether a component of path is a symbolic link, as far as the tree has read
 // the directories on it
+// A named file's source never moves: its root is the file's folder
+const noRootChange = () => {}
+
 function throughLink(f: FilesState, path: string): boolean {
   const parts = path.split('/')
   return parts.some((name, i) => {

@@ -129,11 +129,15 @@ const mockOpenChangeFromLink = vi.fn(
   async (..._a: unknown[]): Promise<boolean | null> => true,
 )
 const mockOpenInFiles = vi.fn()
+const mockOpenOutside = vi.fn(
+  async (..._a: unknown[]): Promise<string | null> => 'chat.view.outside',
+)
 vi.mock('./hooks/use-files', async (orig) => ({
   ...(await orig<typeof import('./hooks/use-files')>()),
   followInFiles: (...a: unknown[]) => mockFollowInFiles(...a),
   followPathInFiles: (...a: unknown[]) => mockFollowPathInFiles(...a),
   openInFiles: (...a: unknown[]) => mockOpenInFiles(...a),
+  openOutsideInFiles: (...a: unknown[]) => mockOpenOutside(...a),
 }))
 vi.mock('./hooks/use-git-changes', async (orig) => ({
   ...(await orig<typeof import('./hooks/use-git-changes')>()),
@@ -7834,17 +7838,37 @@ describe('session history', () => {
     await act(async () => p.onResumed({ tabId: '0', paneId: 'p0' }, 'here'))
     act(() => p.onOpenLive({ tabId: '$3:0', paneId: 'p3' }))
     const open = p.openFile as NonNullable<typeof p.openFile>
+    const session = { agent: 'claude', id: 's1' }
     mockFollowPathInFiles.mockResolvedValueOnce('outside')
-    await act(() => open('p0', 'x.ts'))
+    await act(() => open('p0', 'x.ts', undefined, session))
+    expect(mockOpenOutside).toHaveBeenLastCalledWith('p0', 'x.ts', {
+      readOnly: false,
+      session,
+    })
     expect(
       screen.getByText("This file is outside the pane's folder"),
     ).toBeTruthy()
     mockFollowPathInFiles.mockResolvedValueOnce('missing')
-    await act(() => open('p0', 'y.ts'))
+    await act(() => open('p0', 'y.ts', undefined, session))
     mockFollowPathInFiles.mockResolvedValueOnce('unknown-result')
-    await act(() => open('p0', 'z.ts'))
-    await act(() => open('p0', 'a.ts', 3))
+    await act(() => open('p0', 'z.ts', undefined, session))
+    expect(screen.getByTestId('history-sheet')).toBeTruthy()
+    await act(() => open('p0', 'a.ts', 3, session))
     expect(mockFollowPathInFiles).toHaveBeenLastCalledWith('p0', 'a.ts', 3)
+    expect(screen.queryByTestId('history-sheet')).toBeNull()
+  })
+
+  it('opens a file outside the folder an old session named in Files', async () => {
+    setup()
+    render(<App />)
+    await openFromPalette()
+    const p = historySheet.props as NonNullable<typeof historySheet.props>
+    const open = p.openFile as NonNullable<typeof p.openFile>
+    mockFollowPathInFiles.mockResolvedValueOnce('outside')
+    mockOpenOutside.mockResolvedValueOnce(null)
+    await act(() =>
+      open('p0', '/tmp/s/n.md', undefined, { agent: 'claude', id: 's1' }),
+    )
     expect(screen.queryByTestId('history-sheet')).toBeNull()
   })
 

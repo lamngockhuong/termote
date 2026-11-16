@@ -112,6 +112,7 @@ export default {
   'errors.not_git': 'This workspace is not in a git repository',
   'errors.not_image': 'Not a PNG, JPEG, GIF, WebP or SVG image',
   'errors.not_in_trash': 'It is no longer in the trash',
+  'errors.not_mentioned': 'The agent has not named this file',
   'errors.not_linked': 'Herdr does not manage this worktree',
   'errors.not_repo': 'Not in a git repository',
   'errors.not_text': 'The text is not valid UTF-8',

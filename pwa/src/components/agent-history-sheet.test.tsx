@@ -356,7 +356,10 @@ describe('AgentHistorySheet', () => {
     expect(screen.getByText('transcript of a')).toBeTruthy()
     await screen.findByText('New title')
     fireEvent.click(screen.getByRole('button', { name: 'open file' }))
-    expect(openFile).toHaveBeenCalledWith('p1', 'a.ts', 3)
+    expect(openFile).toHaveBeenCalledWith('p1', 'a.ts', 3, {
+      agent: 'claude',
+      id: 'a',
+    })
     // Back (the browser's) goes to the list
     await act(async () => {
       window.history.back()

@@ -231,6 +231,16 @@ describe('router', () => {
     expect(body).toMatchObject({ code: 'unavailable' })
   })
 
+  it('opens no file outside a folder: its agents name none', async () => {
+    const { status, body } = await call(
+      'POST',
+      '/panes/%25w1%3Ap1/files/mentioned',
+      { path: '/tmp/x.md' },
+    )
+    expect(status).toBe(404)
+    expect(body).toMatchObject({ code: 'not_mentioned' })
+  })
+
   it('renames a pane and lists the new name', async () => {
     expect(
       (await call('PATCH', pane('w1:p2'), { name: 'dev server' })).status,

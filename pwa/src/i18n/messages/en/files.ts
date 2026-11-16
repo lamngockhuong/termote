@@ -725,6 +725,9 @@ export default {
   'files.uploadError.failed': 'Upload failed',
   'files.encoding.withBom': '{name} with BOM',
   // What following a link tells when it went nowhere (hooks/use-files.ts)
+  // A file the agent named outside the pane's folder, open read only in
+  // its own tab: the server serves it alone
+  'files.mentioned.noLinks': "Links in this file can't be opened here",
   'files.follow.missing': 'Not found',
   'files.follow.failed': "This link can't be opened",
   // A git status letter, as a screen reader says it (components/change-status.tsx)

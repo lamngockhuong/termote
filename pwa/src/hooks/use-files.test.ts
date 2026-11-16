@@ -18,6 +18,8 @@ import {
   hydrateDrafts,
   isDraftDirty,
   isOpenable,
+  openMentionedInFiles,
+  openOutsideInFiles,
   paneDirNow,
   peekFilesState,
   requestFilesFocus,
@@ -30,9 +32,11 @@ import {
 import { type FileEntry, type MuxSnapshot, RequestError } from './use-mux-api'
 
 const mockTree = vi.fn()
+const mockMentioned = vi.fn()
 vi.mock('./use-mux-api', async (orig) => ({
   ...(await orig<typeof import('./use-mux-api')>()),
   fetchFilesTree: (...a: unknown[]) => mockTree(...a),
+  openMentionedFile: (...a: unknown[]) => mockMentioned(...a),
 }))
 
 const file = (name: string): FileEntry => ({
@@ -53,6 +57,7 @@ const tree = (path: string, entries: FileEntry[], root = '/r') => ({
 beforeEach(() => {
   resetFilesStores()
   mockTree.mockReset()
+  mockMentioned.mockReset()
 })
 
 describe('filesError', () => {
@@ -1541,6 +1546,106 @@ describe('tabs kept on the device', () => {
   }
 
   beforeEach(() => snapshot())
+
+  it('a file the agent named opens in a tab of its own, kept when the root moves, never on the device', async () => {
+    mockTree.mockResolvedValue(tree('', [file('a.md')]))
+    const first = renderHook(() => useFiles('%1'))
+    act(() => first.result.current.load())
+    await waitFor(() => expect(first.result.current.root).toBe('/r'))
+    act(() => first.result.current.open('a.md', { pin: true }))
+    mockMentioned.mockResolvedValueOnce({
+      place: 'm-1',
+      root: '/tmp/s',
+      path: 'n.md',
+    })
+    await act(() => openMentionedInFiles('%1', '/tmp/s/n.md'))
+    expect(mockMentioned).toHaveBeenCalledWith('%1', '/tmp/s/n.md', undefined)
+    const named = first.result.current.active
+    expect(named).toMatchObject({
+      root: '/tmp/s',
+      path: 'n.md',
+      mentioned: 'm-1',
+    })
+    expect(first.result.current.tabs).toHaveLength(2)
+    // The tree is still the pane's
+    expect(first.result.current.root).toBe('/r')
+    // The same file again: its tab, with the id the server gives now
+    mockMentioned.mockResolvedValueOnce({
+      place: 'm-2',
+      root: '/tmp/s',
+      path: 'n.md',
+    })
+    await act(() => openMentionedInFiles('%1', '/tmp/s/n.md'))
+    expect(first.result.current.tabs).toHaveLength(2)
+    expect(first.result.current.active).toMatchObject({
+      id: named?.id,
+      mentioned: 'm-2',
+    })
+    // The pane moves: its own clean tab closes, the named file stays
+    act(() => first.result.current.rootChanged('/n'))
+    expect(first.result.current.tabs.map((t) => t.path)).toEqual(['n.md'])
+    expect(first.result.current.pendingRootClose).toBeUndefined()
+    first.unmount()
+    reopen()
+    const again = renderHook(() => useFiles('%1'))
+    expect(again.result.current.tabs).toEqual([])
+  })
+
+  it.each([
+    [new RequestError(404, 'not_mentioned', 'x'), 'chat.view.outside'],
+    [new RequestError(404, '', 'not found'), 'files.follow.missing'],
+    [new RequestError(403, '', 'path not allowed'), 'files.viewer.notAllowed'],
+    [
+      new RequestError(400, 'place_not_supported', 'x'),
+      'errors.place_not_supported',
+    ],
+    [new RequestError(500, '', 'failed'), 'files.follow.failed'],
+    [new TypeError('offline'), 'files.follow.failed'],
+  ])('outside, refused (%s): %s', async (err, notice) => {
+    mockMentioned.mockRejectedValueOnce(err)
+    expect(await openOutsideInFiles('%1', '/tmp/x', { readOnly: false })).toBe(
+      notice,
+    )
+  })
+
+  it('outside: a view-only client or a relative path asks nothing; one named opens, of a past session too', async () => {
+    expect(await openOutsideInFiles('%1', '/tmp/x', { readOnly: true })).toBe(
+      'chat.view.outside',
+    )
+    expect(await openOutsideInFiles('%1', '../x', { readOnly: false })).toBe(
+      'chat.view.outside',
+    )
+    expect(mockMentioned).not.toHaveBeenCalled()
+    mockMentioned.mockResolvedValueOnce({
+      place: 'm-1',
+      root: '/tmp',
+      path: 'x',
+    })
+    const { result } = renderHook(() => useFiles('%1'))
+    const session = { agent: 'claude', id: 's1' }
+    expect(
+      await act(() =>
+        openOutsideInFiles('%1', '/tmp/x', { readOnly: false, session }),
+      ),
+    ).toBeNull()
+    expect(mockMentioned).toHaveBeenCalledWith('%1', '/tmp/x', session)
+    // Kept open: pinned
+    expect(result.current.active).toMatchObject({
+      mentioned: 'm-1',
+      pinned: true,
+    })
+  })
+
+  it('a refusal to open a named file opens nothing', async () => {
+    mockMentioned.mockRejectedValueOnce(
+      new RequestError(404, 'not_mentioned', 'x'),
+    )
+    const { result } = renderHook(() => useFiles('%1'))
+    await expect(openMentionedInFiles('%1', '/tmp/x')).rejects.toMatchObject({
+      code: 'not_mentioned',
+    })
+    expect(result.current.tabs).toEqual([])
+  })
 
   it('a missing mark is not kept', async () => {
     mockTree.mockResolvedValue(tree('', [file('a.md')]))

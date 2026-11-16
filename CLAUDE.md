@@ -252,7 +252,8 @@ that entry in the same change. A new feature with a security surface gets an ent
   body limit, errors as `codedError` codes; same-site reads
   use `crossSiteRejection`
 - Never take a filesystem path from the client: open through `os.Root` under the pane root, with the files
-  deny lists and the sensitive-name `reveal` check
+  deny lists and the sensitive-name `reveal` check (`files/mentioned` only compares one with the pane's own
+  agent transcript, then serves that one file read only)
 - tmux/psmux/Herdr/herdr-core: argv or RPC only, never a shell (hc: the typed allowlist, local
   terminal ids only; `doc.set` only for space/tab names and order, over the version read); exact targets (`$N:=i`, `=name`); names and paths into
   tmux formats go through `tmuxLiteral` (a pane name set with `set-option`, no `-F`, is stored verbatim and does

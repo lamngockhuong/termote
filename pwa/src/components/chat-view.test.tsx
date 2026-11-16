@@ -12,6 +12,7 @@ import type {
 } from '../hooks/use-mux-api'
 import type { MessageKey } from '../i18n/messages/en'
 import { paneSelection, resetPaneSelections } from '../utils/pane-selection'
+import { FILES_VIEW_ID } from '../view-ids'
 import { chatLayout } from './chat-transcript-list'
 import ChatView, { RENDER_WINDOW } from './chat-view'
 import { OpenTerminalButton } from './open-terminal-button'
@@ -63,9 +64,11 @@ vi.mock('../hooks/use-subagents', () => ({
 }))
 
 const mockFollowPath = vi.fn()
+const mockOpenOutside = vi.fn()
 vi.mock('../hooks/use-files', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-files')>()),
   followPathInFiles: (...a: unknown[]) => mockFollowPath(...a),
+  openOutsideInFiles: (...a: unknown[]) => mockOpenOutside(...a),
 }))
 
 vi.mock('../utils/highlight', async (orig) => ({
@@ -418,10 +421,41 @@ describe('ChatView file paths', () => {
     expect(showView).not.toHaveBeenCalled()
   })
 
+  it('a file outside the folder the agent named opens in Files', async () => {
+    mockFollowPath.mockResolvedValue('outside')
+    mockOpenOutside.mockResolvedValue(null)
+    set({ entries: [say('`/tmp/s/n.md`')] })
+    render(<ChatView {...withFiles} />)
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: '/tmp/s/n.md' })),
+    )
+    expect(mockOpenOutside).toHaveBeenCalledWith('0', '/tmp/s/n.md', {
+      readOnly: false,
+    })
+    expect(showView).toHaveBeenCalledWith(FILES_VIEW_ID)
+    expect(props.notify).not.toHaveBeenCalled()
+  })
+
+  it('outside, not opened: says why and stays', async () => {
+    mockFollowPath.mockResolvedValue('outside')
+    mockOpenOutside.mockResolvedValue('chat.view.outside')
+    set({ entries: [say('`/tmp/s/n.md`')] })
+    render(<ChatView {...withFiles} readOnly />)
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: '/tmp/s/n.md' })),
+    )
+    expect(mockOpenOutside).toHaveBeenCalledWith('0', '/tmp/s/n.md', {
+      readOnly: true,
+    })
+    expect(props.notify).toHaveBeenCalledWith(
+      "This file is outside the pane's folder",
+    )
+    expect(showView).not.toHaveBeenCalled()
+  })
+
   it.each([
     ['missing', 'Not found'],
     ['failed', "This link can't be opened"],
-    ['outside', "This file is outside the pane's folder"],
   ])('%s: says so and stays', async (result, notice) => {
     mockFollowPath.mockResolvedValue(result)
     set({ entries: [say('`src/a.ts`')] })
