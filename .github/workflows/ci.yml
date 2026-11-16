@@ -357,12 +357,15 @@ jobs:
       # active window would move the others' tabs.
       # The server's XDG_CACHE_HOME: files-trash.spec.ts makes its repo on
       # the trash's file system, next to it. Not as XDG_CACHE_HOME, which
-      # would move where Playwright looks for its browsers.
+      # would move where Playwright looks for its browsers. Its
+      # XDG_STATE_HOME: the OpenCode specs write the service.json of their
+      # stand-in service there (pwa/e2e/fake-opencode.ts).
       - name: Run Playwright
         if: ${{ !matrix.extra }}
         working-directory: pwa
         env:
           TERMOTE_E2E_CACHE: ${{ runner.temp }}/cache
+          TERMOTE_E2E_STATE: ${{ runner.temp }}/state
           TERMOTE_E2E_CLAUDE_DIR: ${{ runner.temp }}/claude
           SHARD: ${{ matrix.shard }}
         run: pnpm exec playwright test --workers=1 --shard="$SHARD" --grep-invert "Capture screenshots"

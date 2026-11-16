@@ -1,9 +1,9 @@
 ---
 title: Chat với agent
-description: "Đọc và trả lời Claude Code, Codex trong view chat trên điện thoại thay cho terminal: tin nhắn, ảnh, lệnh slash và các hộp thoại xin quyền."
+description: "Đọc và trả lời Claude Code, Codex, OpenCode trong view chat trên điện thoại thay cho terminal: tin nhắn, ảnh, lệnh slash và các hộp thoại xin quyền."
 head:
   - tag: title
-    content: "Trả lời Claude Code và Codex từ điện thoại | Termote"
+    content: "Trả lời Claude Code, Codex và OpenCode từ điện thoại | Termote"
 ---
 
 import { Aside } from "@astrojs/starlight/components";
@@ -11,10 +11,12 @@ import { Image } from "astro:assets";
 import screenshot from "../../../../assets/screenshots/phone-chat.vi.webp";
 
 Trên điện thoại, câu trả lời dài trong terminal rất khó đọc, gõ lệnh vào đó cũng vậy. Khi một
-pane chạy **Claude Code** hoặc **Codex**, header hiện nút chuyển **Terminal / Chat** (trên điện thoại là một nút
+pane chạy **Claude Code**, **Codex** hoặc **OpenCode**, header hiện nút chuyển **Terminal / Chat** (trên điện thoại là một nút
 view, chạm vào sẽ mở danh sách các view). View Chat là cách nhìn thứ hai vào cùng một phiên:
 tin bạn gửi ở đây được gõ vào pane, còn agent viết gì thì cả hai view đều thấy. Không có gì tự chạy ngầm.
 Codex dùng được theo cách tương tự, có yêu cầu riêng và một điểm khác ở hộp thoại (xem [Codex](#codex)).
+Riêng OpenCode thì Termote đọc và trả lời qua dịch vụ nền của nó, không gõ gì vào pane (xem
+[OpenCode](#opencode)).
 
 <Image src={screenshot} alt="View Chat trên điện thoại: thay đổi của Claude Code trên login.go dạng diff, câu trả lời của nó và ô nhập tin nhắn" width={293} densities={[1, 2]} class="phone-shot" />
 
@@ -25,7 +27,7 @@ Codex dùng được theo cách tương tự, có yêu cầu riêng và một đ
   - **psmux** trên Windows
   - **Herdr** trên mọi hệ điều hành, sau khi đã chạy `herdr integration install claude` một lần
 - Cài native (`termote start`). Container của Termote không cài sẵn Claude Code.
-- Với Codex: xem [Codex](#codex).
+- Với Codex: xem [Codex](#codex). Với OpenCode: xem [OpenCode](#opencode).
 
 
 Cài từ đầu? Làm theo bài [Điều khiển Claude Code từ điện thoại](/vi/guides/claude-code-from-phone/).
@@ -316,6 +318,8 @@ lượt chạy, dòng "đang làm việc" cho biết lượt đã chạy bao lâ
 cầu (hết hạn mức), dòng này hiện lần thử lại của OpenCode và thông báo lỗi của nhà cung cấp.
 
 Ảnh bạn đã dán mở lại được từ chip của nó, ở đây và cả trong một session cũ bạn đọc từ Lịch sử.
+Model không đọc được ảnh (chẳng hạn Big Pickle) vẫn nhận ảnh bạn gửi, nhưng trả lời như thể không
+thấy ảnh nào.
 Agent con mà OpenCode tạo ra chạy trong một session riêng: dải phía trên ô soạn tin và trang
 [tổng quan](/vi/usage/overview/) liệt kê chúng như với Claude Code, agent con do agent con khác tạo
 ra thì nằm dưới agent đó. Token và chi phí của session hiện trên thẻ của nó, trong Lịch sử và trong
@@ -357,7 +361,8 @@ pane chỉ hiện logo OpenCode. Termote biết pane đang xem session nào:
   `-s <id>`). Chạy `opencode` trần thì chỉ có logo, và session bạn chuyển sang từ bên trong OpenCode
   không được theo: view giữ session ghi trên dòng lệnh.
 
-OpenCode chạy với `--standalone` hoặc `--server` không được đọc. Nếu bạn đặt `XDG_STATE_HOME` trong
+OpenCode chạy với `--standalone` hoặc `--server` không được đọc, OpenCode trong
+[chế độ container](/vi/installation/docker/) cũng vậy: cả hai đều đã có kế hoạch hỗ trợ. Nếu bạn đặt `XDG_STATE_HOME` trong
 shell, hãy đặt cả cho dịch vụ của Termote, nếu không Termote sẽ tìm OpenCode ở `~/.local/state`.
 
 Mở `opencode` khi dịch vụ không chạy thì chính OpenCode đó khởi động dịch vụ, dưới dạng tiến trình

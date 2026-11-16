@@ -288,6 +288,7 @@ the desktop sidebar and in the mobile sessions sheet):
 | Feature             | Description                                      |
 | -------------------- | -------------------------------------------------- |
 | Custom icons        | Choose emoji icon for each session; until you choose one, a session running a coding agent shows that agent's logo (Claude Code, Codex, Gemini CLI, Copilot, Cursor, OpenCode and others; 🤖 for an agent without one); **Automatic** in the icons goes back to that |
+| Agent chat          | A pane running Claude Code, Codex or OpenCode gets a [Chat view](/usage/agent-chat/) to read and answer it; OpenCode 2 only through its background service (not with `--standalone` or `--server`, and not in container mode yet) |
 | Rename              | Change session name anytime; on herdr-core once the herdr app has run on this machine (until then Edit changes only the icon) |
 | Auto-sync           | Groups/tabs/panes sync from the server (configurable interval) |
 | Persistence         | Sessions backed by tmux windows, Herdr tabs or Zellij tabs |
@@ -415,7 +416,7 @@ for resurrection (EXITED) are not. When no session runs, Termote starts `main`.
 - **Scrolling**: there is no server-side scrolling. The mouse wheel scrolls through Zellij itself, for every
   client viewing that pane; Select text still shows the pane's history.
 - **View-only devices** see the pane's screen, without history scrolling or input.
-- **Chat view** (Claude Code, Codex) and **Files/Changes** work on Linux and macOS. On macOS a session
+- **Chat view** (Claude Code, Codex, and OpenCode in a native install) and **Files/Changes** work on Linux and macOS. On macOS a session
   renamed after it started has no Chat view until it is restarted.
 
 <Aside type="caution">

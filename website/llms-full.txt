@@ -1341,9 +1341,9 @@ With an MTU below 1280, Linux removes the IPv6 address from `tailscale0`: this m
 
 # Agent Chat
 
-> Read and answer Claude Code and Codex from a chat view on your phone instead of the terminal: messages, images, slash commands and permission dialogs.
+> Read and answer Claude Code, Codex and OpenCode from a chat view on your phone instead of the terminal: messages, images, slash commands and permission dialogs.
 
-Long replies are hard to read in a terminal on a phone, and so is typing a prompt into one. When a pane runs **Claude Code** or **Codex**, the header shows a **Terminal / Chat** switcher (on a phone, one view button that opens a menu of views). The Chat view is a second way to look at the same session: what you send there is typed into the pane, and what the agent writes shows up in both views. Nothing runs in the background on its own. Codex works the same way, with its own requirements and one difference for dialogs (see [Codex](#codex)).
+Long replies are hard to read in a terminal on a phone, and so is typing a prompt into one. When a pane runs **Claude Code**, **Codex** or **OpenCode**, the header shows a **Terminal / Chat** switcher (on a phone, one view button that opens a menu of views). The Chat view is a second way to look at the same session: what you send there is typed into the pane, and what the agent writes shows up in both views. Nothing runs in the background on its own. Codex works the same way, with its own requirements and one difference for dialogs (see [Codex](#codex)). OpenCode is read and answered through its background service instead, with nothing typed into the pane (see [OpenCode](#opencode)).
 
 ![The Chat view on a phone: Claude Code's edit of login.go as a diff, its answer, and the message box](/_astro/phone-chat.CIbSQ2eN_1b0R4Q.webp)
 
@@ -1359,7 +1359,7 @@ Long replies are hard to read in a terminal on a phone, and so is typing a promp
 
 * A native install (`termote start`). The container image does not include Claude Code.
 
-* For Codex: see [Codex](#codex).
+* For Codex: see [Codex](#codex). For OpenCode: see [OpenCode](#opencode).
 
 Setting it up from scratch? Follow [Control Claude Code from your phone](/guides/claude-code-from-phone/).
 
@@ -1515,7 +1515,7 @@ A pane running OpenCode 2.0 or later gets the Chat view with its conversation: y
 
 From the view you send messages (with pasted images), as Tasks and Review do too. A message sent while OpenCode works waits in its queue for the turn to end, as with Claude Code. While a turn runs, the working row shows how long it has run, and when the provider refuses a request (a rate limit) the attempt OpenCode retries and the provider’s error.
 
-An image you pasted opens again from its chip, here and in an old session you read from History. A subagent OpenCode starts runs in a session of its own: the strip above the composer and the [overview](/usage/overview/) list them as for Claude Code, with the ones a subagent starts in turn under it. A session’s tokens and cost show on its card, in History and in the daily totals, with the cost OpenCode recorded at your provider’s prices (see [Tokens and cost](/usage/overview/#tokens-and-cost)). The files a session changed with its edit, write and patch tools are in [Changes](/usage/changes/#files-a-session-changed) and, for an old session, under **Files changed** in History.
+An image you pasted opens again from its chip, here and in an old session you read from History. A model that cannot read images (Big Pickle, for one) still takes the images you send, but answers as if it saw none. A subagent OpenCode starts runs in a session of its own: the strip above the composer and the [overview](/usage/overview/) list them as for Claude Code, with the ones a subagent starts in turn under it. A session’s tokens and cost show on its card, in History and in the daily totals, with the cost OpenCode recorded at your provider’s prices (see [Tokens and cost](/usage/overview/#tokens-and-cost)). The files a session changed with its edit, write and patch tools are in [Changes](/usage/changes/#files-a-session-changed) and, for an old session, under **Files changed** in History.
 
 A permission request shows as a card with **Yes, once**, **Yes, always** (with the patterns it saves) and **No**. A question, or a form a tool asks you to fill in, shows its fields (text, a number, a checkbox, options to pick one or several, other text where the question takes it) with **Send**; what is missing or out of range is marked before anything is sent. **Cancel** refuses a permission or dismisses a form. A form that asks you to open a link is answered in the terminal. The card is worded in the app’s language.
 
@@ -1528,7 +1528,7 @@ Termote reads OpenCode through its background service (the one `opencode` starts
 * **Herdr**: from Herdr’s OpenCode integration (`herdr integration install opencode`), including a session you switch to inside OpenCode. After `/new` the pane keeps the previous session until you send the first message of the new one. Without the integration, as on tmux: from `--session <id>`, which an OpenCode started or resumed from Termote always has.
 * **tmux, psmux, Zellij, herdr-core**: only when OpenCode was started with `--session <id>` (or `-s <id>`). A plain `opencode` shows the logo only, and a session you switch to from inside OpenCode is not followed: the view keeps the one named on the command line.
 
-OpenCode run with `--standalone` or `--server` is not read. If you set `XDG_STATE_HOME` in your shell, set it for Termote’s service too, or Termote looks for OpenCode in `~/.local/state`.
+OpenCode run with `--standalone` or `--server` is not read, and neither is OpenCode in [container mode](/installation/docker/): both are planned. If you set `XDG_STATE_HOME` in your shell, set it for Termote’s service too, or Termote looks for OpenCode in `~/.local/state`.
 
 An `opencode` opened while the service does not run starts one itself, as a child of that OpenCode; this includes an OpenCode that Termote starts or resumes for you. Termote cannot keep OpenCode from doing so.
 
@@ -3468,6 +3468,7 @@ When at least one session runs a coding agent, a filter bar appears above the se
 | Feature           | Description                                                                                                                                                                                                                                                          |
 | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Custom icons      | Choose emoji icon for each session; until you choose one, a session running a coding agent shows that agent’s logo (Claude Code, Codex, Gemini CLI, Copilot, Cursor, OpenCode and others; 🤖 for an agent without one); **Automatic** in the icons goes back to that |
+| Agent chat        | A pane running Claude Code, Codex or OpenCode gets a [Chat view](/usage/agent-chat/) to read and answer it; OpenCode 2 only through its background service (not with `--standalone` or `--server`, and not in container mode yet)                                    |
 | Rename            | Change session name anytime; on herdr-core once the herdr app has run on this machine (until then Edit changes only the icon)                                                                                                                                        |
 | Auto-sync         | Groups/tabs/panes sync from the server (configurable interval)                                                                                                                                                                                                       |
 | Persistence       | Sessions backed by tmux windows, Herdr tabs or Zellij tabs                                                                                                                                                                                                           |
@@ -3540,7 +3541,7 @@ Native installs on Linux and macOS ([`termote start --mux zellij`](/installation
 * **Terminal**: Termote’s terminal is a real Zellij client, so Zellij’s tab bar and status bar show, and a tab takes the size of the smallest client viewing it. It is in Zellij’s locked mode, so the toolbar’s Ctrl keys reach the pane; your own locked-mode bindings still act (the default config’s Ctrl g unlocks). A click on another pane or tab inside the terminal closes the stream, and Termote reopens it on its pane.
 * **Scrolling**: there is no server-side scrolling. The mouse wheel scrolls through Zellij itself, for every client viewing that pane; Select text still shows the pane’s history.
 * **View-only devices** see the pane’s screen, without history scrolling or input.
-* **Chat view** (Claude Code, Codex) and **Files/Changes** work on Linux and macOS. On macOS a session renamed after it started has no Chat view until it is restarted.
+* **Chat view** (Claude Code, Codex, and OpenCode in a native install) and **Files/Changes** work on Linux and macOS. On macOS a session renamed after it started has no Chat view until it is restarted.
 
 Caution
 

@@ -284,6 +284,7 @@ phiên trên mobile) có thêm thanh lọc:
 | Tính năng         | Mô tả                                         |
 | ----------------- | --------------------------------------------- |
 | Icon tùy chỉnh    | Chọn biểu tượng cảm xúc làm icon cho mỗi phiên; khi bạn chưa chọn, phiên đang chạy agent lập trình hiện logo của agent đó (Claude Code, Codex, Gemini CLI, Copilot, Cursor, OpenCode và các agent khác; agent chưa có logo thì hiện 🤖); chọn **Tự động** trong bảng biểu tượng để quay lại cách này |
+| Chat với agent    | Pane chạy Claude Code, Codex hoặc OpenCode có [view Chat](/vi/usage/agent-chat/) để đọc và trả lời agent; OpenCode 2 chỉ đọc được qua dịch vụ nền của nó (không dùng được với `--standalone` hay `--server`, và chế độ container chưa hỗ trợ) |
 | Đổi tên           | Đổi tên phiên bất cứ lúc nào; với herdr-core, khi ứng dụng herdr đã chạy trên máy này (trước đó Edit chỉ đổi biểu tượng) |
 | Tự động đồng bộ   | Group/tab/pane được đồng bộ từ server (chu kỳ tùy chỉnh được) |
 | Lưu trữ           | Phiên được lưu bởi tmux windows, tab của Herdr hoặc tab của Zellij |
@@ -413,7 +414,7 @@ pane terminal (pane plugin không hiện). Mọi phiên đang chạy của bạn
 - **Cuộn**: không có cuộn phía server. Con lăn chuột cuộn qua chính Zellij, cho mọi client đang xem pane đó;
   Select text vẫn hiện lịch sử của pane.
 - **Thiết bị chỉ xem** thấy màn hình của pane, không cuộn lịch sử và không gõ được.
-- **Chat view** (Claude Code, Codex) và **Files/Changes** chạy trên Linux và macOS. Trên macOS, một phiên bị đổi
+- **Chat view** (Claude Code, Codex, và OpenCode khi cài native) và **Files/Changes** chạy trên Linux và macOS. Trên macOS, một phiên bị đổi
   tên sau khi đã chạy sẽ không có Chat view cho tới khi được khởi động lại.
 
 <Aside type="caution">

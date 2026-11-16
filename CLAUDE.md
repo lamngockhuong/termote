@@ -316,6 +316,10 @@ point it at your own Herdr.
 `e2e-machines` job starts a native server with a saved config in its own HOME and XDG dirs (the machine,
 no sign-in, port 7681) and this server with `TERMOTE_E2E_MACHINE_BRIDGE` joining its bridge socket (no sshd).
 
+`pwa/e2e/chat-view-opencode*.spec.ts` skip unless `TERMOTE_E2E_STATE` names the server's own (throwaway)
+`XDG_STATE_HOME`: they write the service.json of a stand-in OpenCode service there (`pwa/e2e/fake-opencode.ts`,
+127.0.0.1:7689) and refuse a real one's. CI's main E2E job sets it.
+
 `pwa/e2e/hc.spec.ts` skips unless `TERMOTE_E2E_HC=1` (with `HC_SOCKET`, `HC_SESSION`,
 `TERMOTE_E2E_HC_DIR` and `TERMOTE_PASS`): CI's `e2e-hc` job runs it against hc 0.1.16 (sha256 pinned)
 on its own socket, `HOME` and XDG dirs, `headless = "80x24"` in that core's config, and the server

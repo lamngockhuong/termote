@@ -1,6 +1,6 @@
 # Termote: a guide for coding agents
 
-You are a coding agent (Claude Code, Codex or another) asked to install, start or check Termote
+You are a coding agent (Claude Code, Codex, OpenCode or another) asked to install, start or check Termote
 for the person you work with. Follow this guide; every command in it runs as written.
 
 Once Termote is installed, `termote help agent` prints this guide for the installed version.
@@ -25,7 +25,8 @@ Ask the user, unless they already said:
    - anywhere, over a Cloudflare Tunnel the user already runs: `--cloudflare <host>`.
 2. Native or container? Native (`termote start`) runs on the host and sees its tools (claude,
    git, node). A container (`termote container up`, podman or docker) keeps sessions apart from
-   the host. Pick native when unsure.
+   the host. Pick native when unsure. OpenCode's Chat view works only natively, and only while
+   OpenCode 2's background service runs (not with `opencode --standalone` or `--server`).
 
 Check what is already there:
 

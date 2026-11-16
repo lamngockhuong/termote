@@ -1,9 +1,9 @@
 ---
 title: Agent Chat
-description: "Read and answer Claude Code and Codex from a chat view on your phone instead of the terminal: messages, images, slash commands and permission dialogs."
+description: "Read and answer Claude Code, Codex and OpenCode from a chat view on your phone instead of the terminal: messages, images, slash commands and permission dialogs."
 head:
   - tag: title
-    content: "Agent Chat: Answer Claude Code and Codex from Your Phone"
+    content: "Agent Chat: Answer Claude Code, Codex and OpenCode from Your Phone"
 ---
 
 import { Aside } from "@astrojs/starlight/components";
@@ -11,11 +11,12 @@ import { Image } from "astro:assets";
 import screenshot from "../../../assets/screenshots/phone-chat.webp";
 
 Long replies are hard to read in a terminal on a phone, and so is typing a prompt into one. When
-a pane runs **Claude Code** or **Codex**, the header shows a **Terminal / Chat** switcher (on a phone, one
+a pane runs **Claude Code**, **Codex** or **OpenCode**, the header shows a **Terminal / Chat** switcher (on a phone, one
 view button that opens a menu of views). The Chat view is a second way to look at the same
 session: what you send there is typed into the pane, and what the agent writes shows up in both
 views. Nothing runs in the background on its own. Codex works the same way, with its own requirements
-and one difference for dialogs (see [Codex](#codex)).
+and one difference for dialogs (see [Codex](#codex)). OpenCode is read and answered through its
+background service instead, with nothing typed into the pane (see [OpenCode](#opencode)).
 
 <Image src={screenshot} alt="The Chat view on a phone: Claude Code's edit of login.go as a diff, its answer, and the message box" width={293} densities={[1, 2]} class="phone-shot" />
 
@@ -26,7 +27,7 @@ and one difference for dialogs (see [Codex](#codex)).
   - **psmux** on Windows
   - **Herdr** on any OS, after running `herdr integration install claude` once
 - A native install (`termote start`). The container image does not include Claude Code.
-- For Codex: see [Codex](#codex).
+- For Codex: see [Codex](#codex). For OpenCode: see [OpenCode](#opencode).
 
 Setting it up from scratch? Follow [Control Claude Code from your phone](/guides/claude-code-from-phone/).
 
@@ -316,7 +317,8 @@ runs, the working row shows how long it has run, and when the provider refuses a
 limit) the attempt OpenCode retries and the provider's error.
 
 An image you pasted opens again from its chip, here and in an old session you read from
-History. A subagent OpenCode starts runs in a session of its own: the strip above the composer and
+History. A model that cannot read images (Big Pickle, for one) still takes the images you send,
+but answers as if it saw none. A subagent OpenCode starts runs in a session of its own: the strip above the composer and
 the [overview](/usage/overview/) list them as for Claude Code, with the ones a subagent starts in
 turn under it. A session's tokens and cost show on its card, in History and in the daily totals,
 with the cost OpenCode recorded at your provider's prices (see
@@ -356,7 +358,8 @@ shows only OpenCode's logo. Which session a pane shows is known:
   `-s <id>`). A plain `opencode` shows the logo only, and a session you switch to from inside
   OpenCode is not followed: the view keeps the one named on the command line.
 
-OpenCode run with `--standalone` or `--server` is not read. If you set `XDG_STATE_HOME` in your
+OpenCode run with `--standalone` or `--server` is not read, and neither is OpenCode in
+[container mode](/installation/docker/): both are planned. If you set `XDG_STATE_HOME` in your
 shell, set it for Termote's service too, or Termote looks for OpenCode in `~/.local/state`.
 
 An `opencode` opened while the service does not run starts one itself, as a child of that
