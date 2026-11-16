@@ -28,7 +28,7 @@ export const TasksScene: React.FC = () => {
           { at: SWITCH, src: "phone-sessions" },
           { at: SWITCH + 35, src: "phone-sessions-vi" },
         ]}
-        marks={[{ from: SWITCH + 12, x: 0, y: 24.8, w: 100, h: 5.6 }]}
+        marks={[{ from: SWITCH + 12, x: 3.2, y: 22.6, w: 93.6, h: 6.5 }]}
       />
     </SceneLayout>
   );

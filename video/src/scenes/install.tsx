@@ -4,15 +4,19 @@ import { Caption } from "../components/caption";
 import { SceneLayout } from "../components/scene-layout";
 import { type TermLine, TerminalWindow, typedBy } from "../components/terminal-window";
 import { appear, color } from "../theme";
+// The version release-please last released, so a new render shows the current one
+import release from "../../../.release-please-manifest.json";
+
+const VERSION = release["."];
 
 // What install.sh and `termote start` print (scripts/install.sh, cli_start.go)
 const INSTALL = "curl -fsSL https://termote.ohnice.app/install.sh | sh";
 const lines: TermLine[] = [{ cmd: INSTALL, at: 10 }];
 const afterInstall = typedBy(INSTALL, 10) + 6;
 lines.push(
-  { out: "Downloading Termote 1.20.0 for linux-amd64...", at: afterInstall, tone: "dim" },
+  { out: `Downloading Termote ${VERSION} for linux-amd64...`, at: afterInstall, tone: "dim" },
   { out: "Signature verified.", at: afterInstall + 10, tone: "dim" },
-  { out: "Termote 1.20.0 is installed at ~/.local/share/termote, and nothing is running yet.", at: afterInstall + 18, tone: "dim" },
+  { out: `Termote ${VERSION} is installed at ~/.local/share/termote, and nothing is running yet.`, at: afterInstall + 18, tone: "dim" },
   { cmd: "termote start --lan", at: afterInstall + 30 },
 );
 const afterStart = typedBy("termote start --lan", afterInstall + 30) + 8;
