@@ -84,8 +84,22 @@ describe('SessionTabs', () => {
     expect(shell).toHaveAttribute('tabindex', '0')
     expect(code).toHaveAttribute('aria-selected', 'false')
     expect(code).toHaveAttribute('tabindex', '-1')
-    expect(shell.parentElement).toHaveClass('shadow-sm')
-    expect(code.parentElement).not.toHaveClass('shadow-sm')
+    expect(shell.parentElement).toHaveClass('bg-term', 'rounded-t-[10px]')
+    expect(code.parentElement).not.toHaveClass('bg-term')
+  })
+
+  it('joins the active tab to the terminal with curves at its feet', () => {
+    render(<SessionTabs {...defaultProps} />)
+    const shell = screen.getByRole('tab', { name: /Shell/ }).parentElement!
+    const code = screen.getByRole('tab', { name: /Code/ }).parentElement!
+    expect(shell).toHaveAttribute('data-active')
+    expect(
+      shell.querySelectorAll('span[aria-hidden="true"].absolute'),
+    ).toHaveLength(2)
+    expect(code).not.toHaveAttribute('data-active')
+    expect(
+      code.querySelectorAll('span[aria-hidden="true"].absolute'),
+    ).toHaveLength(0)
   })
 
   it('grows the tabs to touch size on a touch screen', () => {

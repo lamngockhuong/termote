@@ -135,6 +135,11 @@ const STEP_WAIT_MS = 5000
 // renames it, or ungroups its tabs; the arrow keys reach it like a tab. A
 // tab dragged after a group's name or between two of its tabs joins that
 // group, and one dragged away from its own group leaves it.
+// A thin line between two tabs, like a browser's: none beside the active tab,
+// a hovered one, a group's name or at the start
+const TAB_DIVIDER =
+  'before:pointer-events-none before:absolute before:top-1/2 before:-left-[2.5px] before:h-4 before:w-px before:-translate-y-1/2 before:bg-fg-subtle/40 before:transition-opacity first:before:opacity-0 hover:before:opacity-0 data-active:before:opacity-0 [[data-active]+&]:before:opacity-0 [&:hover+*]:before:opacity-0 [[data-tab-group-name]+&]:before:opacity-0'
+
 export function SessionTabs({
   sessions,
   activeId,
@@ -1037,7 +1042,7 @@ export function SessionTabs({
         role="tablist"
         aria-label={t('shell.tabs.label')}
         onKeyDown={onKeyDown}
-        className="flex min-w-0 items-end gap-1 overflow-x-auto scrollbar-hide"
+        className="flex min-w-0 items-end gap-1 overflow-x-auto px-2 scrollbar-hide"
       >
         {entries.map(({ item, key, leaving }) => {
           if (item.kind === 'group')
@@ -1106,14 +1111,29 @@ export function SessionTabs({
                 e.preventDefault()
                 openMenu(session.id, false)
               }}
-              className={`group relative flex h-9 shrink-0 items-center pr-1.5 text-[13px] ${group === undefined ? '' : `after:pointer-events-none after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full ${tabGroupLine(group)}`} transition-[color,background-color,border-color,opacity,translate,scale] duration-(--duration-fast) ease-standard motion-safe:active:scale-[0.98] data-dragging:z-20 data-dragging:transition-none ${isNew(key) || (group !== undefined && folded.current) ? ENTER_FROM : ''} ${leaving ? LEAVE_TO : ''} ${
+              data-active={looksActive || undefined}
+              className={`group relative flex h-9 min-w-[120px] max-w-[240px] shrink-0 items-center pr-1.5 text-[13px] ${TAB_DIVIDER} ${group === undefined ? '' : `after:pointer-events-none after:absolute after:-inset-x-0.5 after:bottom-0 after:h-0.5 ${tabGroupLine(group)}`} transition-[color,background-color,border-color,opacity,translate,scale] duration-(--duration-fast) ease-standard motion-safe:active:scale-[0.98] data-dragging:z-20 data-dragging:transition-none ${isNew(key) || (group !== undefined && folded.current) ? ENTER_FROM : ''} ${leaving ? LEAVE_TO : ''} ${
                 looksActive
-                  ? 'pointer-coarse:h-11 rounded-t-control border border-b-0 border-border bg-term text-fg shadow-sm ui-terminal:shadow-[inset_0_2px_0_var(--color-accent)] ui-native:rounded-t-panel ui-native:border-0'
-                  : 'mb-0.5 h-8 pointer-coarse:h-10 rounded-control text-fg-muted hover:bg-surface-raised hover:text-fg data-dragging:bg-surface-raised data-dragging:text-fg'
+                  ? 'z-[1] pointer-coarse:h-11 rounded-t-[10px] bg-term text-fg ui-terminal:shadow-[inset_0_2px_0_var(--color-accent)]'
+                  : 'mb-0.5 h-8 pointer-coarse:h-10 rounded-lg text-fg-muted hover:bg-surface-raised hover:text-fg data-dragging:bg-surface-raised data-dragging:text-fg'
               }`}
             >
+              {looksActive && (
+                <>
+                  {/* The curves joining the tab to the terminal below, like
+                      a browser's */}
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute bottom-0 -left-2 size-2 bg-[radial-gradient(circle_at_0_0,transparent_7.5px,var(--color-term)_8px)]"
+                  />
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute bottom-0 -right-2 size-2 bg-[radial-gradient(circle_at_100%_0,transparent_7.5px,var(--color-term)_8px)]"
+                  />
+                </>
+              )}
               {renaming === session.id ? (
-                <span className="flex h-full items-center gap-2 pl-3 pr-1">
+                <span className="flex h-full min-w-0 flex-1 items-center gap-2 pl-3 pr-1">
                   <span className="text-base leading-none">
                     <TabIcon session={session} />
                   </span>
@@ -1158,12 +1178,12 @@ export function SessionTabs({
                   onClick={() => onSelect(session.id)}
                   aria-keyshortcuts={keys.join(' ') || undefined}
                   title={tabTitle(session)}
-                  className={`flex h-full select-none items-center gap-2 whitespace-nowrap rounded-control pl-3 pr-1 ${FOCUS_RING} focus-visible:-outline-offset-2`}
+                  className={`flex h-full min-w-0 flex-1 select-none items-center gap-2 whitespace-nowrap rounded-control pl-3 pr-1 ${FOCUS_RING} focus-visible:-outline-offset-2`}
                 >
                   <span className="text-base leading-none">
                     <TabIcon session={session} />
                   </span>
-                  <span className="max-w-[140px] truncate ui-terminal:font-label">
+                  <span className="min-w-0 flex-1 truncate text-left ui-terminal:font-label">
                     {visibleUnsafe(editedName(session))}
                   </span>
                   <AgentStatusBadge status={session.agentStatus} size={12} />
@@ -1174,7 +1194,7 @@ export function SessionTabs({
                   type="button"
                   tabIndex={-1}
                   onClick={() => onRemove(session.id)}
-                  className={`flex size-5 items-center justify-center rounded-[calc(var(--radius-control)-2px)] text-fg-subtle hover:bg-surface hover:text-fg ${
+                  className={`flex size-5 shrink-0 items-center justify-center rounded-full text-fg-subtle hover:bg-fg/10 hover:text-fg ${
                     active ? '' : 'invisible group-hover:visible'
                   }`}
                   aria-label={t('shell.tabs.close', { name: session.name })}
@@ -1440,6 +1460,7 @@ function GroupName({
         e.preventDefault()
         onMenu()
       }}
+      data-tab-group-name
       className={`mb-0.5 flex h-8 shrink-0 items-center px-0.5 transition-[opacity,translate,scale] duration-(--duration-fast) ease-standard data-dragging:z-20 data-dragging:transition-none pointer-coarse:h-10 ${entering ? ENTER_FROM : ''} ${leaving ? LEAVE_TO : ''}`}
     >
       {renaming ? (
@@ -1458,7 +1479,7 @@ function GroupName({
           }}
           onBlur={renaming.onCancel}
           autoFocus
-          className="h-6 w-[120px] min-w-0 rounded-full border border-accent bg-bg px-2 text-[12px] text-fg outline-none"
+          className="h-6 w-[120px] min-w-0 rounded-md border border-accent bg-bg px-2 text-[12px] text-fg outline-none"
         />
       ) : (
         <button
@@ -1471,7 +1492,7 @@ function GroupName({
           aria-keyshortcuts={keys}
           title={label}
           onClick={onToggle}
-          className={`flex h-6 max-w-[180px] select-none items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[12px] font-medium text-white ${tabGroupFill(group.name)} ${FOCUS_RING}`}
+          className={`flex h-6 max-w-[180px] select-none items-center gap-1.5 whitespace-nowrap rounded-md px-2 text-[12px] font-medium text-white ${tabGroupFill(group.name)} ${FOCUS_RING}`}
         >
           <span className="truncate ui-terminal:font-label">{name}</span>
           {group.collapsed && (

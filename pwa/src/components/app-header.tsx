@@ -187,8 +187,9 @@ function DesktopHeader(p: Props) {
     // it grows when touch-sized controls are taller than the row, instead of
     // cutting off their top. A container: below 60rem the view and panel
     // buttons drop their labels too, so the session tabs keep room (an iPad
-    // beside the sidebar)
-    <header className="@container relative z-10 flex min-h-11 shrink-0 items-end gap-2 border-b border-border bg-surface px-2 pt-[env(safe-area-inset-top)] ui-terminal:bg-bg">
+    // beside the sidebar). Its bottom line is drawn over the row, not as a
+    // border, so the active tab covers it and joins the terminal below
+    <header className="@container relative z-10 flex min-h-11 shrink-0 items-end gap-2 bg-surface px-2 after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-border pt-[env(safe-area-inset-top)] ui-terminal:bg-bg">
       {/* The expanded sidebar carries the brand; the phone header has no
           room to spare */}
       {p.showBrand && (
