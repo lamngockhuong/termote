@@ -111,15 +111,22 @@ func (l *rateLimitedLog) printf(format string, a ...any) {
 }
 
 // hostGuard rejects requests whose Host header is not in the allowlist, which
-// blocks DNS rebinding from a malicious page.
+// blocks DNS rebinding from a malicious page. The command that allows a host
+// goes to the server log only: a rebinding page reaches this answer from the
+// victim's own browser, and must not get termote to show the victim the
+// command that lets it in.
 func hostGuard(allowed hostAllowlist, next http.Handler) http.Handler {
 	rejects := &rateLimitedLog{every: rejectLogEvery}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !allowed.allows(r, r.Host) {
 			host := normalizeHost(r.Host)
-			rejects.printf("rejected request for host %q from %s", host, r.RemoteAddr)
-			msg := "Host \"" + host + "\" is not allowed. Add it with: " +
-				"termote start --allow-host " + host
+			if plainHostName(host) {
+				rejects.printf("rejected request for host %q from %s; to allow it: termote start --allow-host %s",
+					host, r.RemoteAddr, host)
+			} else {
+				rejects.printf("rejected request for host %q from %s", host, r.RemoteAddr)
+			}
+			msg := "Host \"" + host + "\" is not allowed. The server log (termote logs) names the command that allows it."
 			if strings.HasPrefix(r.URL.Path, "/api/") {
 				jsonError(w, msg, http.StatusForbidden)
 			} else {
@@ -129,6 +136,21 @@ func hostGuard(allowed hostAllowlist, next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// plainHostName reports whether host is safe to paste into a shell as a
+// --allow-host value: letters, digits, '-', '.' and ':' (an IPv6 address)
+// only, never starting with '-'. A Host header may hold other characters.
+func plainHostName(host string) bool {
+	if host == "" || host[0] == '-' {
+		return false
+	}
+	for _, c := range host {
+		if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-' || c == '.' || c == ':') {
+			return false
+		}
+	}
+	return true
 }
 
 func isWriteMethod(method string) bool {

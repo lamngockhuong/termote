@@ -86,8 +86,10 @@ func TestHostGuardThroughServer(t *testing.T) {
 	if rec.Code != http.StatusForbidden || rec.Header().Get("Content-Type") != "application/json" {
 		t.Fatalf("foreign Host on /api = %d %q, want JSON 403", rec.Code, rec.Header().Get("Content-Type"))
 	}
-	if !strings.Contains(rec.Body.String(), "--allow-host evil.com") {
-		t.Errorf("rejection must name the fix, got %q", rec.Body.String())
+	// A rebinding page reads this answer in the victim's browser: the
+	// command that allows the host goes to the server log only.
+	if body := rec.Body.String(); strings.Contains(body, "--allow-host") || !strings.Contains(body, "termote logs") {
+		t.Errorf("rejection must point to the log, not name the command, got %q", body)
 	}
 
 	// Host check applies to static files too, before auth.
@@ -95,6 +97,39 @@ func TestHostGuardThroughServer(t *testing.T) {
 	req.Host = "attacker.example"
 	if rec := serve(h, req); rec.Code != http.StatusForbidden {
 		t.Errorf("foreign Host on / status = %d, want 403", rec.Code)
+	}
+}
+
+func TestHostGuardLogsAllowCommand(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	ok := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
+	for _, tc := range []struct{ host, want, not string }{
+		{"box.lan:7680", "to allow it: termote start --allow-host box.lan", ""},
+		{"a;b", `"a;b"`, "--allow-host"},
+	} {
+		buf.Reset()
+		h := hostGuard(parseAllowedHosts("", false), ok)
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Host = tc.host
+		if rec := serve(h, req); rec.Code != http.StatusForbidden {
+			t.Fatalf("Host %q status = %d, want 403", tc.host, rec.Code)
+		}
+		if out := buf.String(); !strings.Contains(out, tc.want) || tc.not != "" && strings.Contains(out, tc.not) {
+			t.Errorf("Host %q log = %q", tc.host, out)
+		}
+	}
+}
+
+func TestPlainHostName(t *testing.T) {
+	for host, want := range map[string]bool{
+		"box.lan": true, "192.168.1.5": true, "fe80::1": true,
+		"": false, "-x": false, "a;b": false, "a b": false, "a$(id)": false, "A": false,
+	} {
+		if got := plainHostName(host); got != want {
+			t.Errorf("plainHostName(%q) = %v, want %v", host, got, want)
+		}
 	}
 }
 
