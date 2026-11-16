@@ -2314,12 +2314,17 @@ export default function App({
                 ? undefined
                 : (name?: string, icon?: string) =>
                     // Without a name: into the tab group of the tab on
-                    // screen (the form says the group itself)
+                    // screen (the form says the group itself), where tabs
+                    // are grouped
                     addTab(
-                      name ?? tabGroupNewName(activeSession.name, 'New'),
+                      name ??
+                        (settings.tabGroups
+                          ? tabGroupNewName(activeSession.name, 'New')
+                          : 'New'),
                       icon,
                     )
             }
+            tabGroups={settings.tabGroups}
             addTabAsksName={compactSidebar}
             onUpdateTab={readOnly ? undefined : updateSession}
             renameTab={mux.caps.renameTab !== false}

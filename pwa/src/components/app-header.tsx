@@ -34,6 +34,9 @@ interface Props {
   showBrand?: boolean
   // Desktop: tabs in the header row; off, the row names the session only
   showSessionTabs: boolean
+  // The setting tabGroups; off, a tab named "review/PR 1" is a tab like any
+  // other. Unset: on
+  tabGroups?: boolean
   canRemoveTab: boolean
   onSelectTab: (id: string) => void
   // Unset (view-only role): no Add button
@@ -215,7 +218,7 @@ function DesktopHeader(p: Props) {
           onUpdate={p.onUpdateTab}
           renameTab={p.renameTab}
           onSpareChange={labels.onSpareChange}
-          tabGroups
+          tabGroups={p.tabGroups !== false}
           workspace={session.groupId}
         />
       ) : (

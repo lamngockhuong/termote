@@ -207,6 +207,8 @@ export interface Settings {
   hasSeenLocalhostNotice: boolean // dismissed the notice of a page opened through localhost
   pasteSource: PasteSource // paste button source: system clipboard or tmux buffer
   showSessionTabs: boolean // show session tabs bar on desktop
+  // Desktop: tabs named "review/PR 1" gathered in tab groups (utils/tab-group.ts)
+  tabGroups: boolean
   toolbarPosition: ToolbarPosition // desktop: the controls in the header or on a right bar
   terminalFont: string // font installed on this device, tried before the defaults
   uiStyle: UiStyle // visual style of the app chrome (tokens in index.css)
@@ -255,6 +257,7 @@ export const DEFAULTS: Settings = {
   hasSeenLocalhostNotice: false,
   pasteSource: 'clipboard',
   showSessionTabs: true,
+  tabGroups: true,
   toolbarPosition: DEFAULT_TOOLBAR_POSITION,
   terminalFont: '',
   uiStyle: DEFAULT_UI_STYLE,
@@ -328,6 +331,7 @@ export const SETTING_RESOLVERS: {
   hasSeenLocalhostNotice: (v) => resolveBoolean('hasSeenLocalhostNotice', v),
   pasteSource: resolvePasteSource,
   showSessionTabs: (v) => resolveBoolean('showSessionTabs', v),
+  tabGroups: (v) => resolveBoolean('tabGroups', v),
   toolbarPosition: resolveToolbarPosition,
   terminalFont: resolveTerminalFont,
   uiStyle: resolveUiStyle,

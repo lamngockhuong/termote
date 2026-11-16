@@ -164,6 +164,19 @@ Bật/tắt hiển thị các tab phiên kiểu trình duyệt trên header ở 
 Tùy chọn này chỉ hiện trên thiết bị desktop. Khi [bố cục sidebar](#bố-cục-sidebar-chỉ-desktop)
 là Compact, thanh tab luôn hiện và công tắc này bị khóa.
 
+## Nhóm tab (Chỉ desktop)
+
+Gom các tab phiên đặt tên bắt đầu bằng tên nhóm (`review/PR 1`) dưới tên có màu của nhóm đó trên
+thanh tab. Xem [Nhóm tab](/vi/usage/sessions/#nhóm-tab).
+
+| Tùy chọn | Hành vi                                                              | Mặc định |
+| -------- | -------------------------------------------------------------------- | -------- |
+| Bật      | Tab của nhóm nằm sau tên có màu của nhóm, hiện không kèm tên nhóm    | ✓        |
+| Tắt      | Mọi tab hiện tên đầy đủ; menu và form tạo tab không còn mục nhóm tab |          |
+
+Tắt đi không đổi tên tab nào: các tab giữ nguyên tên, và các nhóm hiện lại khi bật. Ở dạng JSON,
+khóa là `tabGroups` (`true` hoặc `false`).
+
 Khi tab không còn đủ chỗ, các nút chuyển kiểu xem và mở panel bên cạnh sẽ ẩn chữ, chỉ còn icon (rê
 chuột lên để xem tên); có lại chỗ thì chữ hiện trở lại.
 

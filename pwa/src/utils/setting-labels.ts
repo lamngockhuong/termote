@@ -20,6 +20,7 @@ export const SETTING_LABEL: Record<string, MessageKey> = {
   toolbarDefaultExpanded: 'settings.toolbarExpanded',
   toolbarPosition: 'settings.toolbarPosition',
   showSessionTabs: 'settings.tabs',
+  tabGroups: 'settings.tabGroups',
   showUsageChip: 'settings.usage',
   showCost: 'settings.cost',
   showHostChip: 'settings.hostChip',

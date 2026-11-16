@@ -239,6 +239,22 @@ for (const { size, viewport, hasTouch, sidebarCollapsed } of WIDE) {
       await expect.poll(() => shown(page)).toEqual(['[review]', 'auth'])
     })
 
+    test('the setting off shows every tab by its whole name', async ({ page, request }) => {
+      await nameFirstTab(request, 'review/one')
+      await addTab(request, 'coding/api')
+      await open(page, request, { sidebarCollapsed, tabGroups: false })
+      await expect(tab(page, 'review/one')).toBeVisible()
+      await expect.poll(() => shown(page)).toEqual(['review/one', 'coding/api'])
+      // Its menu says nothing of tab groups, and + adds a plain tab
+      await tab(page, 'review/one').click({ button: 'right' })
+      await expect(page.getByRole('menuitem', { name: 'Rename' })).toBeVisible()
+      await expect(page.getByRole('group', { name: 'Add to tab group' })).toHaveCount(0)
+      await page.keyboard.press('Escape')
+      await page.getByRole('button', { name: 'Add session' }).click()
+      await expect.poll(() => namesOf(request)).toEqual(['review/one', 'coding/api', 'New'])
+      await expectFits(page)
+    })
+
     test('the new session form of the compact sidebar starts with the group on screen', async ({
       page,
       request,

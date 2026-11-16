@@ -111,6 +111,13 @@
       "description": "Desktop: the tabs bar above the terminal"
     },
     {
+      "key": "tabGroups",
+      "store": "settings",
+      "type": "boolean",
+      "default": true,
+      "description": "Desktop: tabs named like review/PR 1 gathered in tab groups in the tabs bar"
+    },
+    {
       "key": "showUsageChip",
       "store": "settings",
       "type": "boolean",

@@ -150,6 +150,19 @@ Displays browser-like session tabs in the header row for quick session switching
 This setting only appears on desktop devices. With the compact
 [sidebar layout](#sidebar-layout-desktop-only) the tabs are always shown and the switch is locked.
 
+## Tab Groups (Desktop Only)
+
+Gathers the session tabs named with a group first (`review/PR 1`) under that group's coloured name
+in the tab bar. See [Tab groups](/usage/sessions/#tab-groups).
+
+| Option | Behavior                                                                | Default |
+| ------ | ----------------------------------------------------------------------- | ------- |
+| On     | A group's tabs follow its coloured name, shown without the group's part | ✓       |
+| Off    | Every tab by its whole name; no tab group in a menu or the new tab form |         |
+
+Turning it off renames nothing: the tabs keep their names, and the groups are back when it is on
+again. As JSON the key is `tabGroups` (`true` or `false`).
+
 When the tabs no longer fit, the view and panel buttons beside them drop their labels and show
 their icons only (hover one for its name); the labels come back once the tabs have room again.
 

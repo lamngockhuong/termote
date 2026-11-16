@@ -69,6 +69,9 @@ export default {
   'settings.tabsDesc': 'Display tab bar for quick session switching (desktop)',
   'settings.tabsForcedByCompact':
     'Always shown with the compact sidebar, which keeps the tabs there',
+  'settings.tabGroups': 'Tab groups',
+  'settings.tabGroupsDesc':
+    'Group tabs named like review/PR 1 under a coloured name in the tab bar (desktop)',
   'settings.toolbarPosition': 'Toolbar position',
   'settings.toolbarPositionDesc':
     'Right bar moves the view, panel and pane buttons, fullscreen and the command palette to a bar down the right edge, leaving the header to the tabs (desktop)',

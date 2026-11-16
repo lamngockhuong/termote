@@ -2311,6 +2311,42 @@ describe('App', () => {
     expect(screen.queryByRole('button', { name: 'STMove' })).toBeNull()
   })
 
+  it('SessionTabs onAdd adds into the tab group on screen with tabGroups on', async () => {
+    const mockAddSession = vi.fn()
+    const base = mockUseSettings()
+    mockUseSettings.mockReturnValue({
+      ...base,
+      settings: { ...base.settings, showSessionTabs: true, tabGroups: true },
+    } as ReturnType<typeof mockUseSettings>)
+    const tab = {
+      id: '1',
+      name: 'review/PR 1',
+      icon: '💻',
+      description: 'Terminal',
+      paneId: 'pane1',
+      hasAgent: false,
+    }
+    mockUseLocalSessions.mockReturnValue({
+      activeSession: tab,
+      sessions: [tab],
+      switchSession: vi.fn(),
+      addSession: mockAddSession,
+      removeSession: vi.fn(async () => {}),
+      updateSession: vi.fn(),
+      isReady: true,
+      isServerReachable: true,
+      refreshSessions: vi.fn(),
+      mux: {
+        backend: 'tmux',
+        caps: { clientSideSelect: false, copyMode: true },
+      },
+    })
+    render(<App />)
+    await waitFor(() => screen.getByRole('button', { name: 'STAdd' }))
+    fireEvent.click(screen.getByRole('button', { name: 'STAdd' }))
+    expect(mockAddSession).toHaveBeenCalledWith('review/New', undefined)
+  })
+
   it('hidden ctrl input blurs ctrl on blur', async () => {
     render(<App />)
     await waitFor(() => {

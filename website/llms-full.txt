@@ -3377,7 +3377,7 @@ A tab group gathers tabs of one workspace under a coloured name in the tab bar, 
 * **Move a tab in or out**: drag it after a group’s name or between two of its tabs to add it to that group, or away from its group to take it out. Or use **Add to tab group** in the tab’s menu: another group, **New tab group…** or **Remove from tab group**.
 * **Rename a tab**: **F2** edits its name without the group’s.
 
-Every move in or out renames the tab, so a backend that cannot rename tabs offers none. A group belongs to one workspace and exists while a tab is named with it, so every device shows the same groups, in the same colours; the sidebar, the mobile sessions sheet and the backend’s own tab bar show the whole name (`review/PR 1`). A name that starts with `/`, `~/`, `./` or `../` is a plain name.
+Every move in or out renames the tab, so a backend that cannot rename tabs offers none. A group belongs to one workspace and exists while a tab is named with it, so every device shows the same groups, in the same colours; the sidebar, the mobile sessions sheet and the backend’s own tab bar show the whole name (`review/PR 1`). A name that starts with `/`, `~/`, `./` or `../` is a plain name. Settings → Sessions → **Tab groups** turns the groups off: every tab then shows by its whole name.
 
 ### What runs in a session
 
@@ -3832,6 +3832,19 @@ Displays browser-like session tabs in the header row for quick session switching
 | Off    | Hide tabs, use sidebar only |         |
 
 This setting only appears on desktop devices. With the compact [sidebar layout](#sidebar-layout-desktop-only) the tabs are always shown and the switch is locked.
+
+## Tab Groups (Desktop Only)
+
+[Section titled “Tab Groups (Desktop Only)”](#tab-groups-desktop-only)
+
+Gathers the session tabs named with a group first (`review/PR 1`) under that group’s coloured name in the tab bar. See [Tab groups](/usage/sessions/#tab-groups).
+
+| Option | Behavior                                                                | Default |
+| ------ | ----------------------------------------------------------------------- | ------- |
+| On     | A group’s tabs follow its coloured name, shown without the group’s part | ✓       |
+| Off    | Every tab by its whole name; no tab group in a menu or the new tab form |         |
+
+Turning it off renames nothing: the tabs keep their names, and the groups are back when it is on again. As JSON the key is `tabGroups` (`true` or `false`).
 
 When the tabs no longer fit, the view and panel buttons beside them drop their labels and show their icons only (hover one for its name); the labels come back once the tabs have room again.
 

@@ -70,6 +70,9 @@ export default {
   'settings.tabsDesc': 'Thanh tab để chuyển phiên nhanh (máy tính)',
   'settings.tabsForcedByCompact':
     'Luôn hiện khi sidebar ở bố cục gọn, vì tab nằm ở đó',
+  'settings.tabGroups': 'Nhóm tab',
+  'settings.tabGroupsDesc':
+    'Gom các tab đặt tên kiểu review/PR 1 dưới một tên có màu trên thanh tab (máy tính)',
   'settings.toolbarPosition': 'Vị trí thanh công cụ',
   'settings.toolbarPositionDesc':
     'Thanh bên phải: các nút chuyển kiểu xem, panel, pane, toàn màn hình và bảng lệnh chuyển sang một thanh dọc ở mép phải, header chỉ còn tab (máy tính)',

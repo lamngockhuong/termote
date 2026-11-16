@@ -70,6 +70,7 @@ const DEFAULT_SETTINGS: Settings = {
   disableContextMenu: true,
   copyOnSelect: false,
   showSessionTabs: false,
+  tabGroups: true,
   toolbarPosition: 'header',
   pollInterval: 5,
   welcomeSeenVersion: 0,
@@ -373,6 +374,12 @@ describe('SettingsModal', () => {
     const { onUpdateSetting } = renderModal()
     fireEvent.click(screen.getByRole('switch', { name: 'Show session tabs' }))
     expect(onUpdateSetting).toHaveBeenCalledWith('showSessionTabs', true)
+  })
+
+  it('toggles tabGroups', () => {
+    const { onUpdateSetting } = renderModal()
+    fireEvent.click(screen.getByRole('switch', { name: 'Tab groups' }))
+    expect(onUpdateSetting).toHaveBeenCalledWith('tabGroups', false)
   })
 
   it('picks the sidebar layout', () => {

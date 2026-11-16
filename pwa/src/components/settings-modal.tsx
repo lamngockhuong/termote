@@ -1001,6 +1001,16 @@ export function SettingsModal({
               onChange={(v) => onUpdateSetting('showSessionTabs', v)}
             />
           </SettingsRow>
+          <SettingsRow
+            title={t('settings.tabGroups')}
+            desc={t('settings.tabGroupsDesc')}
+          >
+            <Switch
+              label={t('settings.tabGroups')}
+              checked={settings.tabGroups}
+              onChange={(v) => onUpdateSetting('tabGroups', v)}
+            />
+          </SettingsRow>
           {/* The phone header keeps its own controls */}
           {!isMobile && (
             <SettingsRow

@@ -316,6 +316,23 @@ describe('AppHeader — tab groups', () => {
     expect(bar()).toEqual(['💻Shell', '🤖Code'])
   })
 
+  it('shows every tab by its whole name with the setting off', () => {
+    renderHeader({
+      session: TABS[1],
+      groupSessions: TABS,
+      tabGroups: false,
+      onUpdateTab: vi.fn(),
+      addTabAsksName: true,
+    })
+    expect(bar()).toEqual(['review/PR 1', 'Shell', 'review/PR 2', 'coding/api'])
+    // A tab's menu and the new session form say nothing of tab groups
+    fireEvent.contextMenu(screen.getByRole('tab', { name: /PR 1/ }))
+    expect(screen.getByRole('menuitem', { name: 'Rename' })).toBeVisible()
+    expect(screen.queryByRole('group', { name: 'Add to tab group' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Add session' }))
+    expect(screen.queryByRole('combobox')).toBeNull()
+  })
+
   it("shows every tab of the workspace in one bar, each group's after its name", () => {
     renderHeader({ session: TABS[1], groupSessions: TABS })
     expect(bar()).toEqual([
