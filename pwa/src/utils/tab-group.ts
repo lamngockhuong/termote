@@ -166,51 +166,190 @@ export function dropGroup(
   return beside(left) || beside(right) ? own : undefined
 }
 
-// The place among the tabs shown that a tab dragged from items[from] lands
-// at, landing at place to of the items without it
-export function dropTabIndex(
+// A name a group may take: one the tab names split back into ("a/b" would
+// be the group "a", "~" a path)
+export const validGroupName = (name: string) =>
+  name !== '' &&
+  !name.includes(TAB_GROUP_SEPARATOR) &&
+  !PATH_STARTS.includes(name)
+
+// What a bar shows, to compare two: each tab shown with its group, and the
+// name of a group (of those in groups) none of whose tabs shows
+function barShape(items: readonly StripItem[], groups: ReadonlySet<string>) {
+  const shown = new Set(
+    items.flatMap((it) =>
+      it.kind === 'tab' && it.group !== undefined ? [it.group] : [],
+    ),
+  )
+  return items
+    .flatMap((it) =>
+      it.kind === 'tab'
+        ? [`t\0${it.group ?? ''}\0${it.session.id}`]
+        : groups.has(it.group.name) && !shown.has(it.group.name)
+          ? [`g\0${it.group.name}`]
+          : [],
+    )
+    .join('\n')
+}
+
+// One tab moved in the server's order
+export interface TabMove {
+  id: string
+  index: number
+}
+
+// The move in the server's order that makes the bar show want: all is the
+// workspace's tabs in that order (with any rename already in their names),
+// layOut the bar of a list. null: none is needed; undefined: no single move
+// does it. The bar gathers each group where its first tab is, so moving the
+// tab asked for (prefer) is not always the way: when it leads its group,
+// another may have to move instead. Tried in order: none, prefer, the rest.
+export function solveTabMove(
+  all: readonly Session[],
+  want: readonly StripItem[],
+  layOut: (list: readonly Session[]) => StripItem[],
+  prefer: string,
+): TabMove | null | undefined {
+  const groups = new Set(all.flatMap((s) => splitTabGroup(s.name).group ?? []))
+  const target = barShape(want, groups)
+  const shows = (list: readonly Session[]) =>
+    barShape(layOut(list), groups) === target
+  if (shows(all)) return null
+  const tabs = [
+    ...all.filter((s) => s.id === prefer),
+    ...all.filter((s) => s.id !== prefer),
+  ]
+  for (const { id } of tabs) {
+    const from = all.findIndex((s) => s.id === id)
+    const rest = all.filter((_, i) => i !== from)
+    for (let index = 0; index < all.length; index++) {
+      if (index === from) continue
+      const list = [...rest]
+      list.splice(index, 0, all[from])
+      if (shows(list)) return { id, index }
+    }
+  }
+  return undefined
+}
+
+// Where no single move shows want: the tab id moved just before the tab
+// that follows it there, else just after the one before it. null: already
+// so placed.
+export function nearestMove(
+  all: readonly Session[],
+  want: readonly StripItem[],
+  id: string,
+): TabMove | null {
+  const tabs = want.flatMap((it) => (it.kind === 'tab' ? [it.session.id] : []))
+  const at = tabs.indexOf(id)
+  const from = all.findIndex((s) => s.id === id)
+  const where = (other: string) => all.findIndex((s) => s.id === other)
+  let index = from
+  if (at < tabs.length - 1) {
+    const next = where(tabs[at + 1])
+    index = from < next ? next - 1 : next
+  } else if (at > 0) {
+    const prev = where(tabs[at - 1])
+    index = from > prev ? prev + 1 : prev
+  }
+  return index === from ? null : { id, index }
+}
+
+// The bar a tab dragged from items[from] is meant to leave, landing at
+// place to of the items without it, in group
+export function dropWant(
   items: readonly StripItem[],
   from: number,
   to: number,
-): number {
-  return items
-    .filter((_, i) => i !== from)
-    .slice(0, to)
-    .filter((it) => it.kind === 'tab').length
+  group: string | undefined,
+): StripItem[] {
+  const dragged = items[from] as Extract<StripItem, { kind: 'tab' }>
+  const rest = items.filter((_, i) => i !== from)
+  rest.splice(to, 0, { ...dragged, group })
+  return rest
 }
 
-// Where in the server's order the tab id goes to land at place index among
-// the tabs shown, ending in group: before the tab that will follow it, else
-// after the one that will precede it, one of group's first. The bar gathers
-// a group's tabs, so only their order among themselves, and that of the
-// tabs in no group, shows. Its own place when nothing changes.
-export function tabGroupMoveIndex(
+// The bar a tab (items[at]) is meant to leave after one step left (-1) or
+// right (1), as a browser moves a tab: past its neighbour within its group,
+// out of its group at the group's edge, and past a whole group (or the next
+// tab) outside of one. Undefined at either end of the bar.
+export function stepWant(
+  items: readonly StripItem[],
+  at: number,
+  delta: -1 | 1,
+): StripItem[] | undefined {
+  const tab = items[at] as Extract<StripItem, { kind: 'tab' }>
+  const next = items[at + delta]
+  const without = items.filter((_, i) => i !== at)
+  const put = (index: number, group: string | undefined) => {
+    const list = [...without]
+    list.splice(index, 0, { ...tab, group })
+    return list
+  }
+  if (tab.group !== undefined) {
+    // Past a tab of its group
+    if (next?.kind === 'tab' && next.group === tab.group)
+      return put(at + delta, tab.group)
+    // Out of it: before its name, or after its last tab
+    return delta === -1 ? put(at - 1, undefined) : put(at, undefined)
+  }
+  if (!next) return undefined
+  const unit = groupOf(next)
+  if (unit === undefined) return put(at + delta, undefined)
+  // Past the whole group: its name and the tabs it shows
+  let edge = at + delta
+  while (groupOf(items[edge + delta]) === unit) edge += delta
+  return put(edge, undefined)
+}
+
+// The bar's items as the units that move along it: a tab in no group, or a
+// group's name with the tabs it shows
+export function stripUnits(items: readonly StripItem[]): StripItem[][] {
+  const units: StripItem[][] = []
+  for (const it of items) {
+    const last = units.at(-1)
+    if (it.kind === 'tab' && it.group !== undefined && last) last.push(it)
+    else units.push([it])
+  }
+  return units
+}
+
+// The server's order with the tabs of group taken out and put back together,
+// in their order, just before before: the first item of the unit that will
+// follow the group on the bar (a group's name: its first tab on the server).
+// None: at the end.
+export function groupMoveOrder(
   all: readonly Session[],
-  shown: readonly Session[],
-  id: string,
-  index: number,
-  group: string | undefined,
-): number {
-  const at = (s: Session) => all.findIndex((a) => a.id === s.id)
-  const from = all.findIndex((s) => s.id === id)
-  const rest = shown.filter((s) => s.id !== id)
-  let right: Session | undefined = rest[index]
-  let left: Session | undefined = rest[index - 1]
-  const mine = (s?: Session) =>
-    s !== undefined && splitTabGroup(s.name).group === group
-  if (group !== undefined && (mine(right) || mine(left))) {
-    if (!mine(right)) right = undefined
-    if (!mine(left)) left = undefined
-  }
-  if (right) {
-    const r = at(right)
-    return from < r ? r - 1 : r
-  }
-  if (left) {
-    const l = at(left)
-    return from > l ? l + 1 : l
-  }
-  return from
+  group: string,
+  before?: StripItem,
+): Session[] {
+  const mine = (s: Session) => splitTabGroup(s.name).group === group
+  const members = all.filter(mine)
+  const rest = all.filter((s) => !mine(s))
+  const at = !before
+    ? rest.length
+    : before.kind === 'tab'
+      ? rest.findIndex((s) => s.id === before.session.id)
+      : rest.findIndex((s) => splitTabGroup(s.name).group === before.group.name)
+  rest.splice(at, 0, ...members)
+  return rest
+}
+
+// The moves, one tab at a time, each by the tab's lasting key and its place
+// once moved, that turn the order from into the order to
+export function moveSteps(
+  from: readonly Session[],
+  to: readonly Session[],
+): { key: string; index: number }[] {
+  const cur = [...from]
+  const steps: { key: string; index: number }[] = []
+  to.forEach((want, index) => {
+    if (cur[index].id === want.id) return
+    const at = cur.findIndex((s) => s.id === want.id)
+    cur.splice(index, 0, ...cur.splice(at, 1))
+    steps.push({ key: lastingKey(want), index })
+  })
+  return steps
 }
 
 // The groups this browser shows collapsed, by workspace and name; a

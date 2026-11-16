@@ -859,9 +859,13 @@ export function useLocalSessions(pollInterval = 5) {
   )
 
   const updateSession = useCallback(
-    async (sessionId: string, updates: Partial<Omit<Session, 'id'>>) => {
+    // false: the tab is gone, or the backend refused its new name
+    async (
+      sessionId: string,
+      updates: Partial<Omit<Session, 'id'>>,
+    ): Promise<boolean> => {
       const session = sessions.find((s) => s.id === sessionId)
-      if (!session) return
+      if (!session) return false
 
       const { backend } = muxRef.current
       const oldKey = metaKey(
@@ -888,7 +892,7 @@ export function useLocalSessions(pollInterval = 5) {
           updates.name,
           session.key,
         ).catch(() => false)
-        if (!renamed) return
+        if (!renamed) return false
         if (oldKey !== newKey) delete metaRef.current[oldKey]
       }
 
@@ -918,6 +922,7 @@ export function useLocalSessions(pollInterval = 5) {
         /* v8 ignore next */
         setActiveSession((prev) => (prev ? { ...prev, ...changes } : prev))
       }
+      return true
     },
     [sessions, activeSession?.id],
   )

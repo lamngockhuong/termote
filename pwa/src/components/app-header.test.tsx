@@ -351,8 +351,8 @@ describe('AppHeader — tab groups', () => {
     const tab = screen.getByRole('tab', { name: /PR 1/ })
     tab.focus()
     fireEvent.keyDown(tab, { key: 'ArrowRight', altKey: true })
-    // After PR 2, the third of the workspace's tabs
-    expect(onMoveTab).toHaveBeenCalledWith('1', 2)
+    // PR 2 before PR 1: the group stays before Shell
+    expect(onMoveTab).toHaveBeenCalledWith('3', 0)
   })
 
   it('asks a new tab its group, starting with the one on screen', () => {

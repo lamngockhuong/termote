@@ -1,4 +1,11 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Session } from '../types/session'
 import { SessionTabs } from './session-tabs'
@@ -590,8 +597,8 @@ describe('SessionTabs', () => {
         expect(props.onUpdate).toHaveBeenCalledWith('shell', {
           name: 'review/Shell',
         })
-        // Just before PR 2 among all of the tabs
-        expect(props.onMove).toHaveBeenCalledWith('shell', 2)
+        // After PR 1, which leads the group, among all of the tabs
+        expect(props.onMove).toHaveBeenCalledWith('shell', 1)
         expect(props.onUpdate.mock.invocationCallOrder[0]).toBeLessThan(
           props.onMove.mock.invocationCallOrder[0],
         )
@@ -637,8 +644,9 @@ describe('SessionTabs', () => {
         const props = renderGrouped()
         await drag('PR 1', 250, 350)
         expect(props.onUpdate).not.toHaveBeenCalled()
-        // After PR 2 among all of the tabs
-        expect(props.onMove).toHaveBeenCalledWith('pr1', 3)
+        // PR 2 moved before it: PR 1 leads the group, which would go
+        // after Logs if PR 1 moved past it
+        expect(props.onMove).toHaveBeenCalledWith('pr2', 1)
       })
 
       it('only moves where tabs are not renamed', async () => {
@@ -649,6 +657,78 @@ describe('SessionTabs', () => {
         await drag('Logs', 450, 50)
         expect(props.onUpdate).not.toHaveBeenCalled()
         expect(props.onMove).toHaveBeenCalledWith('logs', 0)
+      })
+
+      it('drags a whole group by its name, the others making room', async () => {
+        const props = renderGrouped()
+        const chipBox = screen.getByRole('button', { name: /^review,/ })
+          .parentElement as HTMLElement
+        expect(chipBox).toHaveAttribute('data-movable', 'true')
+        press(chipBox, 150)
+        moveTo(400)
+        // Its name and its tabs slide as one, held at the strip's end; Logs
+        // makes room
+        expect(chipBox).toHaveAttribute('data-dragging', 'true')
+        expect(chipBox.style.translate).toBe('100px 0')
+        expect(slide('PR 1')).toBe('100px 0')
+        expect(slide('Logs')).toBe('-300px 0')
+        release()
+        await act(async () => {})
+        // One move is enough: PR 1, which leads the group, after Logs
+        expect(props.onMove).toHaveBeenCalledWith('pr1', 2)
+        expect(props.onUpdate).not.toHaveBeenCalled()
+      })
+
+      it('drags a group to the left too', async () => {
+        const props = renderGrouped()
+        const chipBox = screen.getByRole('button', { name: /^review,/ })
+          .parentElement as HTMLElement
+        press(chipBox, 150)
+        // Under the slop first: not yet a drag
+        moveTo(152)
+        expect(chipBox).not.toHaveAttribute('data-dragging')
+        moveTo(10)
+        moveTo(0)
+        // Another key does not end it
+        fireEvent.keyDown(window, { key: 'a' })
+        release()
+        await act(async () => {})
+        // PR 1, which leads the group, first: the group goes with it
+        expect(props.onMove).toHaveBeenCalledWith('pr1', 0)
+      })
+
+      it('puts a dragged group back on Escape, or where it was', async () => {
+        const props = renderGrouped()
+        const name = screen.getByRole('button', { name: /^review,/ })
+        const chipBox = name.parentElement as HTMLElement
+        // Not with another button, nor a finger
+        press(chipBox, 150, { button: 2 })
+        press(chipBox, 150, { pointerType: 'touch' })
+        moveTo(400)
+        expect(chipBox).not.toHaveAttribute('data-dragging')
+        // Its focus ring does not follow it
+        name.focus()
+        press(chipBox, 150)
+        moveTo(400)
+        expect(name).not.toHaveFocus()
+        fireEvent.keyDown(window, { key: 'Escape' })
+        expect(chipBox.style.translate).toBe('')
+        // Escape before it drags: nothing to put back
+        press(chipBox, 150)
+        fireEvent.keyDown(window, { key: 'Escape' })
+        release()
+        expect(slide('Logs')).toBe('')
+        press(chipBox, 150)
+        moveTo(160)
+        release()
+        // The click ending a drag does not fold it
+        fireEvent.click(name)
+        expect(name).toHaveAttribute('aria-expanded', 'true')
+        // A press that hardly moved is still a click: nothing moved
+        press(chipBox, 150)
+        release()
+        await act(async () => {})
+        expect(props.onMove).not.toHaveBeenCalled()
       })
 
       it('only renames where tabs do not move', async () => {
@@ -836,7 +916,9 @@ describe('SessionTabs tab groups', () => {
     expect(bar()).toEqual(['[review]', 'Shell', '[coding]', 'api'])
     expect(chip('review')).toHaveAttribute('aria-expanded', 'false')
     // Its count and the heaviest agent status of its tabs
-    expect(chip('review')).toHaveTextContent('2')
+    expect(
+      chip('review').querySelector('[data-group-count]'),
+    ).toHaveTextContent('2')
     expect(within(chip('review')).getByRole('img')).toBeInTheDocument()
     unmount()
     render(<SessionTabs {...props()} />)
@@ -945,6 +1027,23 @@ describe('SessionTabs tab groups', () => {
       expect(
         JSON.parse(localStorage.getItem('termote-tab-groups-collapsed')!),
       ).toEqual(['w\nspecs'])
+    })
+
+    it('joins a group there is, keeping how that one is folded', async () => {
+      render(<SessionTabs {...props()} />)
+      fireEvent.click(chip('coding'))
+      fireEvent.contextMenu(chip('review'))
+      fireEvent.click(
+        screen.getByRole('menuitem', { name: /Rename tab group/ }),
+      )
+      const field = screen.getByRole('textbox')
+      fireEvent.change(field, { target: { value: 'coding' } })
+      await act(async () => {
+        fireEvent.keyDown(field, { key: 'Enter' })
+      })
+      expect(
+        JSON.parse(localStorage.getItem('termote-tab-groups-collapsed')!),
+      ).toEqual(['w\ncoding'])
     })
 
     it('keeps the name on Escape, a blur, an empty or the same name', () => {
@@ -1181,19 +1280,226 @@ describe('SessionTabs tab groups', () => {
       expect(screen.queryByRole('group')).toBeNull()
     })
 
-    it('moves a tab among its group with the keys, never out of it', () => {
+    it('moves a tab among its group with the keys, and out of it at its edge', async () => {
       const onMove = vi.fn()
-      render(<SessionTabs {...props()} onMove={onMove} />)
+      const p = props()
+      render(<SessionTabs {...p} onMove={onMove} />)
       const pr1 = screen.getByRole('tab', { name: /PR 1/ })
       pr1.focus()
       fireEvent.keyDown(pr1, { key: 'ArrowRight', altKey: true })
-      // After PR 2, the last of all of the tabs
-      expect(onMove).toHaveBeenLastCalledWith('pr1', 3)
+      // PR 2 before PR 1, so that the group stays where it is
+      expect(onMove).toHaveBeenLastCalledWith('pr2', 0)
       const pr2 = screen.getByRole('tab', { name: /PR 2/ })
       pr2.focus()
-      fireEvent.keyDown(pr2, { key: 'ArrowRight', altKey: true })
-      expect(onMove).toHaveBeenCalledTimes(1)
+      await act(async () => {
+        fireEvent.keyDown(pr2, { key: 'ArrowRight', altKey: true })
+      })
+      // The group's last tab: out of it, where it shows already
+      expect(p.onUpdate).toHaveBeenCalledWith('pr2', { name: 'PR 2' })
+      expect(onMove).toHaveBeenCalledTimes(2)
     })
+
+    it('disables a step that cannot be made, and moves nothing for it', () => {
+      const onMove = vi.fn()
+      render(<SessionTabs {...props()} onMove={onMove} renameTab={false} />)
+      fireEvent.contextMenu(screen.getByRole('tab', { name: /PR 1/ }))
+      // Left would take it out of its group, which needs a rename
+      expect(screen.getByRole('menuitem', { name: /Move left/ })).toBeDisabled()
+      expect(screen.getByRole('menuitem', { name: /Move right/ })).toBeEnabled()
+      expect(onMove).not.toHaveBeenCalled()
+    })
+
+    it('does not step where it needs a move the backend cannot make', () => {
+      const p = props()
+      render(<SessionTabs {...p} />)
+      const pr1 = screen.getByRole('tab', { name: /PR 1/ })
+      pr1.focus()
+      fireEvent.keyDown(pr1, { key: 'ArrowRight', altKey: true })
+      expect(p.onUpdate).not.toHaveBeenCalled()
+    })
+
+    it('does not move after a rename the backend refused', async () => {
+      const onMove = vi.fn()
+      const onUpdate = vi.fn(async () => false)
+      render(<SessionTabs {...props()} onMove={onMove} onUpdate={onUpdate} />)
+      const pr2 = screen.getByRole('tab', { name: /PR 2/ })
+      pr2.focus()
+      // Out of review: a rename, then a move
+      await act(async () => {
+        fireEvent.keyDown(pr2, {
+          key: 'ArrowRight',
+          altKey: true,
+        })
+      })
+      expect(onMove).not.toHaveBeenCalled()
+    })
+  })
+})
+
+describe('SessionTabs moving and folding tab groups', () => {
+  // The bar: [review] PR 1 PR 2, Shell, [coding] api
+  const TABS: Session[] = [
+    { id: 'pr1', key: 'k1', name: 'review/PR 1', icon: '', description: '' },
+    { id: 'shell', key: 'ks', name: 'Shell', icon: '', description: '' },
+    { id: 'api', key: 'ka', name: 'coding/api', icon: '', description: '' },
+    { id: 'pr2', key: 'k2', name: 'review/PR 2', icon: '', description: '' },
+  ]
+  const base = {
+    activeId: 'shell',
+    onSelect: vi.fn(),
+    onAdd: vi.fn(),
+    onRemove: vi.fn(),
+    onUpdate: vi.fn(async () => {}),
+    tabGroups: true,
+    workspace: 'w',
+  }
+  const chip = (name: string) =>
+    screen.getByRole('button', { name: new RegExp(`^${name},`) })
+
+  beforeEach(() => {
+    localStorage.clear()
+    Element.prototype.scrollIntoView = vi.fn()
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('moves a group past the next unit with Alt+Arrow keys', () => {
+    const onMove = vi.fn()
+    render(<SessionTabs {...base} sessions={TABS} onMove={onMove} />)
+    expect(chip('review')).toHaveAttribute(
+      'aria-keyshortcuts',
+      'Shift+F10 Alt+ArrowLeft Alt+ArrowRight F2 N',
+    )
+    chip('review').focus()
+    // Not past the start
+    fireEvent.keyDown(chip('review'), { key: 'ArrowLeft', altKey: true })
+    expect(onMove).not.toHaveBeenCalled()
+    // Past Shell: PR 1, which leads the group, after Shell
+    fireEvent.keyDown(chip('review'), { key: 'ArrowRight', altKey: true })
+    expect(onMove).toHaveBeenCalledWith('pr1', 1)
+  })
+
+  // review's tabs apart on the server: [review] PR 1 PR 2, Shell, [coding]
+  // api, each 100 px; review dragged to the end of the bar
+  const START = [TABS[0], TABS[1], TABS[3], TABS[2]]
+  const dragReviewToEnd = () => {
+    const rect = (left: number, width: number) =>
+      ({ left, right: left + width, width, top: 0, bottom: 36 }) as DOMRect
+    vi.spyOn(
+      screen.getByRole('tablist'),
+      'getBoundingClientRect',
+    ).mockReturnValue(rect(0, 600))
+    const boxes = [
+      chip('review').parentElement!,
+      ...['PR 1', 'PR 2', 'Shell'].map(
+        (n) => screen.getByRole('tab', { name: new RegExp(n) }).parentElement!,
+      ),
+      chip('coding').parentElement!,
+      screen.getByRole('tab', { name: /api/ }).parentElement!,
+    ]
+    boxes.forEach((el, i) => {
+      vi.spyOn(el, 'getBoundingClientRect').mockReturnValue(rect(i * 100, 100))
+    })
+    fireEvent.pointerDown(boxes[0], {
+      button: 0,
+      pointerType: 'mouse',
+      clientX: 50,
+    })
+    fireEvent.pointerMove(window, { clientX: 350 })
+    fireEvent.pointerUp(window)
+  }
+
+  it("moves a group's tabs one at a time where one move is not enough", async () => {
+    let tabs = START
+    // A tmux move renumbers the tabs: each gets a new id
+    let renumbered = 0
+    const onMove = vi.fn(async (id: string, index: number) => {
+      const list = tabs.filter((t) => t.id !== id)
+      list.splice(index, 0, tabs.find((t) => t.id === id)!)
+      tabs = list.map((t) => ({ ...t, id: `${t.key}-${++renumbered}` }))
+      view.rerender(<SessionTabs {...base} sessions={tabs} onMove={onMove} />)
+    })
+    const view = render(
+      <SessionTabs {...base} sessions={tabs} onMove={onMove} />,
+    )
+    await act(async () => dragReviewToEnd())
+    await waitFor(() => expect(onMove).toHaveBeenCalledTimes(2))
+    // Shell first, then api, found again by its key after a renumbering
+    expect(onMove.mock.calls[0]).toEqual(['shell', 0])
+    expect(onMove.mock.calls[1][0]).toMatch(/^ka-/)
+    expect(tabs.map((t) => t.key)).toEqual(['ks', 'ka', 'k1', 'k2'])
+    await new Promise((r) => setTimeout(r))
+  })
+
+  it('stops moving a group once its next tab is gone', async () => {
+    let tabs = START
+    const onMove = vi.fn(async (id: string, index: number) => {
+      const list = tabs.filter((t) => t.id !== id)
+      list.splice(index, 0, tabs.find((t) => t.id === id)!)
+      // api closed meanwhile
+      tabs = list.filter((t) => t.key !== 'ka')
+      view.rerender(<SessionTabs {...base} sessions={tabs} onMove={onMove} />)
+    })
+    const view = render(
+      <SessionTabs {...base} sessions={tabs} onMove={onMove} />,
+    )
+    await act(async () => dragReviewToEnd())
+    await waitFor(() => expect(onMove).toHaveBeenCalledTimes(1))
+    await new Promise((r) => setTimeout(r, 50))
+    expect(onMove).toHaveBeenCalledTimes(1)
+  })
+
+  it('stops moving a group once a move does not show', async () => {
+    vi.useFakeTimers()
+    const onMove = vi.fn(async () => {})
+    render(<SessionTabs {...base} sessions={START} onMove={onMove} />)
+    await act(async () => dragReviewToEnd())
+    expect(onMove).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6000)
+    })
+    expect(onMove).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
+  })
+
+  it('slides the bar over when a group folds, and fades its tabs in again', () => {
+    render(<SessionTabs {...base} sessions={TABS} />)
+    const shellBox = screen.getByRole('tab', { name: /Shell/ })
+      .parentElement as HTMLElement
+    // Where Shell is before the fold, then after it
+    vi.spyOn(shellBox, 'getBoundingClientRect')
+      .mockReturnValueOnce({ left: 300 } as DOMRect)
+      .mockReturnValue({ left: 100 } as DOMRect)
+    const seen: string[] = []
+    const watch = new MutationObserver((records) => {
+      for (const r of records)
+        seen.push((r.target as HTMLElement).style.translate)
+    })
+    watch.observe(shellBox, { attributes: true, attributeFilter: ['style'] })
+    fireEvent.click(chip('review'))
+    for (const r of watch.takeRecords())
+      seen.push((r.target as HTMLElement).style.translate)
+    watch.disconnect()
+    // Drawn where it was, then let go to slide
+    expect(seen.length).toBeGreaterThan(0)
+    expect(shellBox.style.translate).toBe('')
+    fireEvent.click(chip('review'))
+    expect(screen.getByRole('tab', { name: /PR 1/ }).parentElement).toHaveClass(
+      'motion-safe:starting:opacity-0',
+    )
+  })
+
+  it('folds without sliding where motion is reduced', () => {
+    window.matchMedia = vi.fn(() => ({ matches: true }) as MediaQueryList)
+    render(<SessionTabs {...base} sessions={TABS} />)
+    const shellBox = screen.getByRole('tab', { name: /Shell/ })
+      .parentElement as HTMLElement
+    const rect = vi.spyOn(shellBox, 'getBoundingClientRect')
+    fireEvent.click(chip('review'))
+    expect(rect).not.toHaveBeenCalled()
+    // @ts-expect-error jsdom has none of its own
+    delete window.matchMedia
   })
 })
 

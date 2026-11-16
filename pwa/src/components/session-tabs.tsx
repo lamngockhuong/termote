@@ -19,16 +19,23 @@ import { slidePlace, slideShift, targetIndex } from '../utils/reorder'
 import {
   collapsedKey,
   dropGroup,
-  dropTabIndex,
+  dropWant,
+  groupMoveOrder,
   joinTabGroup,
+  moveSteps,
+  nearestMove,
   readCollapsed,
   type StripItem,
+  solveTabMove,
   splitTabGroup,
+  stepWant,
   stripItems,
+  stripUnits,
   type TabGroup,
+  type TabMove,
   tabGroupFill,
   tabGroupLine,
-  tabGroupMoveIndex,
+  validGroupName,
   writeCollapsed,
 } from '../utils/tab-group'
 import { visibleUnsafe } from '../utils/unsafe-chars'
@@ -55,7 +62,8 @@ interface Props {
   canRemove?: boolean
   // Moving a tab within these (caps.reorderTabs); unset, tabs do not drag.
   // index: the final position, in the server's order
-  onMove?: (id: string, index: number) => void
+  // Settles once done: a group's tabs move one after the other
+  onMove?: (id: string, index: number) => unknown
   // A move is on its way to the server: the tab is not in its new place yet
   moving?: boolean
   // Unset (view-only role): no rename and no icon in the tab's menu
@@ -108,6 +116,8 @@ function tabTitle(session: Session): string {
 const DRAG_SLOP = 4
 // How long (ms) a dropped tab waits in its new place for the new order
 const HOLD_MS = 5000
+// How long (ms) a group's move waits for each of its tabs to show moved
+const STEP_WAIT_MS = 5000
 
 // Browser-style tabs in the desktop header row. A tab is a role="tab"
 // button; its close button is a sibling, never nested in it, and Add sits
@@ -169,13 +179,19 @@ export function SessionTabs({
     () => layOut(sessions),
     [tabGroups, sessions, collapsed, workspace, activeId],
   )
-  // Whether the tab id moved to place to in the server's order changes what
-  // the bar shows: a group's tabs are gathered, so many places show the same
-  const showsMove = (id: string, to: number) => {
-    const list = sessions.filter((s) => s.id !== id)
-    list.splice(to, 0, sessions.find((s) => s.id === id)!)
-    return layOut(list).map(stripKey).join('\n') !== order
-  }
+  // How the server's order is to change for the bar to show want, the tab
+  // id renamed to name first: undefined when no single move does it
+  const plan = (
+    id: string,
+    name: string,
+    want: readonly StripItem[],
+  ): TabMove | null | undefined =>
+    solveTabMove(
+      sessions.map((s) => (s.id === id ? { ...s, name } : s)),
+      want,
+      layOut,
+      id,
+    )
   // The tabs shown, in the bar's order, which places, the menu and the
   // keys count in
   const shown = useMemo(
@@ -223,8 +239,71 @@ export function SessionTabs({
   // Ends a drag in progress (its window listeners), also on unmount
   const endDrag = useRef<(() => void) | null>(null)
   // What a drag reads when it moves and lands: the tabs can change meanwhile
-  const latest = useRef({ items, shown, sessions, onMove, onUpdate, showsMove })
-  latest.current = { items, shown, sessions, onMove, onUpdate, showsMove }
+  const latest = useRef({
+    items,
+    sessions,
+    onMove,
+    onUpdate,
+    plan,
+    // Set once it is defined, below
+    moveGroup: (_name: string, _to: number) => {},
+  })
+  // A tab renamed into or out of a group by a drag or its keys, its move
+  // still to be asked: no other drag starts meanwhile
+  const regrouping = useRef(false)
+  // The tabs as last drawn, and what waits for them to change: a group moved
+  // one tab at a time finds each next tab by its lasting key, since a tmux
+  // move renumbers the windows
+  const drawn = useRef(sessions)
+  drawn.current = sessions
+  const redrawn = useRef<(() => void)[]>([])
+  // biome-ignore lint/correctness/useExhaustiveDependencies: new tabs wake the waiters
+  useEffect(() => {
+    for (const wake of redrawn.current.splice(0)) wake()
+  }, [sessions])
+  const runSteps = async (steps: { key: string; index: number }[]) => {
+    regrouping.current = true
+    try {
+      for (const { key, index } of steps) {
+        const tab = drawn.current.find((s) => lastingKey(s) === key)
+        if (!tab) return
+        await onMove!(tab.id, index)
+        // Until the tabs drawn show it there (a refused move: never)
+        const there = () =>
+          drawn.current.findIndex((s) => lastingKey(s) === key) === index
+        const until = Date.now() + STEP_WAIT_MS
+        while (!there() && Date.now() < until)
+          await new Promise<void>((wake) => {
+            redrawn.current.push(wake)
+            setTimeout(wake, 100)
+          })
+        if (!there()) return
+      }
+    } finally {
+      regrouping.current = false
+    }
+  }
+  // A group moved to place to among the bar's units (stripUnits): one move
+  // where one is enough, else its tabs one after the other
+  const moveGroup = (name: string, to: number) => {
+    const units = stripUnits(items)
+    const from = units.findIndex(
+      (u) => u[0].kind === 'group' && u[0].group.name === name,
+    )
+    const order = [...units]
+    const [unit] = order.splice(from, 1)
+    order.splice(to, 0, unit)
+    const first = sessions.find((s) => splitTabGroup(s.name).group === name)!
+    const one = solveTabMove(sessions, order.flat(), layOut, first.id)
+    if (one) {
+      onMove!(one.id, one.index)
+      return
+    }
+    void runSteps(
+      moveSteps(sessions, groupMoveOrder(sessions, name, order[to + 1]?.[0])),
+    )
+  }
+  latest.current = { items, sessions, onMove, onUpdate, plan, moveGroup }
   useEffect(() => () => endDrag.current?.(), [])
   // A dropped tab and the ones that made room stay where they were drawn
   // until the server's new order arrives; then they are let go
@@ -255,7 +334,50 @@ export function SessionTabs({
   useEffect(() => () => letGo.current(false), [])
   // By a tab's lasting key: a tmux move renumbers the windows, and a tab
   // keyed by its id would fade out and in again
-  const { entries, ref } = usePresenceList(items, stripKey)
+  // A tab hidden by its group's folding goes at once (the others slide over
+  // its place, toggleFold); a tab closed, or a group gone, fades out
+  const { entries, ref } = usePresenceList(
+    items,
+    stripKey,
+    (key) => !sessions.some((s) => lastingKey(s) === key),
+  )
+  // Folding a group, like a browser's: where each tab and group's name was
+  // just before, by key, which they slide from to their new place (FLIP);
+  // the tabs it shows again fade in
+  const slideFrom = useRef<Map<string, number> | null>(null)
+  const folded = useRef(false)
+  const toggleFold = (group: string, fold: boolean) => {
+    folded.current = true
+    if (!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
+      slideFrom.current = new Map(
+        [...scrollRef.current!.querySelectorAll<HTMLElement>('[data-key]')].map(
+          (el) => [el.dataset.key!, el.getBoundingClientRect().left],
+        ),
+      )
+    setFolded(group, fold)
+  }
+  useLayoutEffect(() => {
+    const from = slideFrom.current
+    if (!from) return
+    slideFrom.current = null
+    const moved = [
+      ...scrollRef.current!.querySelectorAll<HTMLElement>('[data-key]'),
+    ].flatMap((el) => {
+      const was = from.get(el.dataset.key!)
+      const dx = was === undefined ? 0 : was - el.getBoundingClientRect().left
+      if (!dx) return []
+      el.style.transition = 'none'
+      el.style.translate = `${dx}px 0`
+      return [el]
+    })
+    if (!moved.length) return
+    // Drawn where they were, then let go to slide to where they are
+    void scrollRef.current!.offsetWidth
+    for (const el of moved) {
+      el.style.transition = ''
+      el.style.translate = ''
+    }
+  })
   const isNew = useNewKeys(items.map(stripKey))
   // By a tab's lasting key: a tmux tab's id is its window number, which a
   // move renumbers
@@ -281,23 +403,38 @@ export function SessionTabs({
   // drawn in its place: moving the focused node in the DOM drops its focus
   const refocus = useRef<string | null>(null)
   const refocusRing = useRef(true)
+  // Set: the bar's order the focus waits to change from (a group renamed or
+  // ungrouped one tab after the other: its name, or its first tab, only
+  // shows once the first is renamed)
+  const refocusAfter = useRef<string | null>(null)
   // Only when the focus was lost: one taken elsewhere meanwhile (a click in
   // the terminal during a slow move) stays there
   useEffect(() => {
     const key = refocus.current
-    if (!key || renaming || moving) return
+    if (!key || renaming || moving || refocusAfter.current === order) return
+    const el = key.startsWith('\0')
+      ? groupButtons.current.get(key.slice(1))
+      : tabButtons.current.get(key)
+    // A group's name not drawn yet: until the next order
+    if (!el && refocusAfter.current !== null) {
+      refocusAfter.current = order
+      return
+    }
     refocus.current = null
+    refocusAfter.current = null
     const ring = refocusRing.current
     refocusRing.current = true
     const now = document.activeElement
     if (now !== document.body && !scrollRef.current!.contains(now)) return
-    const el = key.startsWith('\0')
-      ? groupButtons.current.get(key.slice(1))
-      : tabButtons.current.get(key)
     el?.focus({ focusVisible: ring })
   })
 
   const canRename = !!onUpdate && renameTab
+  // The group of the tab id (unset: none, or tab groups off)
+  const groupOfTab = (id: string) => {
+    const s = sessions.find((x) => x.id === id)
+    return tabGroups && s ? splitTabGroup(s.name).group : undefined
+  }
   const ids = shown.map((s) => s.id)
   const hasMenu = !!onUpdate || !!onAdd || !!onMove || canRemove
   const openMenu = (id: string, byKey: boolean) => {
@@ -340,22 +477,61 @@ export function SessionTabs({
       tabGroups && typed
         ? joinTabGroup(splitTabGroup(session.name).group, typed)
         : typed
-    if (save && typed && namingGroup) moveToGroup(session, typed)
-    else if (save && name && name !== session.name)
+    if (save && namingGroup && validGroupName(typed))
+      moveToGroup(session, typed)
+    else if (save && !namingGroup && name && name !== session.name)
       onUpdate!(session.id, { name })
     refocus.current = lastingKey(session)
     refocusRing.current = renameByKey.current
     setRenaming(null)
   }
+  // A tab's rename (to name, into or out of a group) and then its move,
+  // the move asked only once the rename is done and went through
+  const regroupThenMove = (id: string, name: string, move?: TabMove | null) => {
+    regrouping.current = true
+    void Promise.resolve(onUpdate!(id, { name }))
+      .then((ok) => {
+        if (ok !== false && move) onMove!(move.id, move.index)
+      })
+      .finally(() => {
+        regrouping.current = false
+      })
+  }
+  // What a step of the tab id left or right asks, as a browser moves a tab
+  // (utils/tab-group.ts stepWant); undefined: it cannot move that way
+  const stepPlan = (id: string, delta: -1 | 1) => {
+    const at = items.findIndex(
+      (it) => it.kind === 'tab' && it.session.id === id,
+    )
+    const want = tabGroups
+      ? stepWant(items, at, delta)
+      : (() => {
+          const index = targetIndex(ids, id, delta)
+          if (index === null) return undefined
+          const list = items.filter((_, i) => i !== at)
+          list.splice(index, 0, items[at])
+          return list
+        })()
+    if (!want) return undefined
+    const tab = items[at] as Extract<StripItem, { kind: 'tab' }>
+    const group = (
+      want.find((it) => it.kind === 'tab' && it.session.id === id) as typeof tab
+    ).group
+    const regroup = group !== tab.group
+    if (regroup && !regroups) return undefined
+    const name = regroup
+      ? joinTabGroup(group, splitTabGroup(tab.session.name).label)
+      : tab.session.name
+    const move = plan(id, name, want)
+    if (move === undefined || (move && !onMove)) return undefined
+    return { name: regroup ? name : undefined, move }
+  }
   const step = (id: string, delta: -1 | 1) => {
-    const index = targetIndex(ids, id, delta)
-    if (index === null) return
-    const session = shown[ids.indexOf(id)]
-    const group = tabGroups ? splitTabGroup(session.name).group : undefined
-    const to = tabGroupMoveIndex(sessions, shown, id, index, group)
-    if (!showsMove(id, to)) return
-    refocus.current = lastingKey(session)
-    onMove!(id, to)
+    const todo = stepPlan(id, delta)
+    if (!todo) return
+    refocus.current = lastingKey(sessions.find((s) => s.id === id)!)
+    if (todo.name !== undefined) regroupThenMove(id, todo.name, todo.move)
+    else onMove!(todo.move!.id, todo.move!.index)
   }
   // A group's tabs renamed one after the other, each by name(tab)
   const renameAll = async (list: Session[], name: (s: Session) => string) => {
@@ -373,15 +549,22 @@ export function SessionTabs({
     const group = items.find(
       (it) => it.kind === 'group' && it.group.name === from,
     )
-    if (!save || !to || to === from || group?.kind !== 'group') return
-    // Its folding goes with it
-    setFolded(to, group.group.collapsed)
+    if (!save || !validGroupName(to) || to === from || group?.kind !== 'group')
+      return
+    // The new name takes the focus once it shows
+    refocus.current = `\0${to}`
+    refocusAfter.current = order
+    // Its folding goes with it, unless it joins a group there is
+    if (!groupNames.includes(to)) setFolded(to, group.group.collapsed)
     setFolded(from, false)
     void renameAll(group.group.sessions, (s) =>
       joinTabGroup(to, splitTabGroup(s.name).label),
     )
   }
   const ungroup = (group: TabGroup) => {
+    // Its first tab takes the focus once out of it
+    refocus.current = lastingKey(group.sessions[0])
+    refocusAfter.current = order
     setFolded(group.name, false)
     void renameAll(group.sessions, (s) => splitTabGroup(s.name).label)
   }
@@ -389,8 +572,8 @@ export function SessionTabs({
   // from + to +
   const formFrom = useRef<HTMLElement | null>(null)
   const formName = useRef<HTMLInputElement>(null)
-  // group: the one the form starts with (default: the tab on screen's)
-  const openForm = (from: HTMLElement | null, group?: string) => {
+  // group: the one the form starts with (unset: none)
+  const openForm = (from: HTMLElement | null, group: string | undefined) => {
     formFrom.current = from
     setFormGroup(group)
     // Already open: its name field takes the focus again
@@ -402,7 +585,11 @@ export function SessionTabs({
     if (!byPress) formFrom.current?.focus()
   }
   const addTab = () =>
-    askName ? (formOpen ? closeForm() : openForm(addRef.current)) : onAdd!()
+    askName
+      ? formOpen
+        ? closeForm()
+        : openForm(addRef.current, groupOfTab(activeId))
+      : onAdd!()
 
   // Scroll active tab into view only if not visible
   // biome-ignore lint/correctness/useExhaustiveDependencies: activeId triggers scroll when tab changes
@@ -428,6 +615,19 @@ export function SessionTabs({
 
   // The keys of a group's name: its menu, a rename, a new tab in it
   const onGroupKey = (e: KeyboardEvent, name: string, el: HTMLElement) => {
+    if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      e.preventDefault()
+      const units = stripUnits(items)
+      const at = units.findIndex(
+        (u) => u[0].kind === 'group' && u[0].group.name === name,
+      )
+      const to = at + (e.key === 'ArrowLeft' ? -1 : 1)
+      if (onMove && to >= 0 && to < units.length) {
+        refocus.current = `\0${name}`
+        moveGroup(name, to)
+      }
+      return true
+    }
     if (menuKey(e)) {
       e.preventDefault()
       openGroupMenu(name, true)
@@ -438,7 +638,14 @@ export function SessionTabs({
       startGroupRename(name)
       return true
     }
-    if (e.code === 'KeyN' && !e.ctrlKey && !e.metaKey && !e.altKey && onAdd) {
+    if (
+      e.code === 'KeyN' &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      !e.altKey &&
+      !e.shiftKey &&
+      onAdd
+    ) {
       e.preventDefault()
       openForm(el, name)
       return true
@@ -473,13 +680,13 @@ export function SessionTabs({
     ) {
       if (!onAdd) return true
       e.preventDefault()
-      openForm(el)
+      openForm(el, groupOfTab(id))
       return true
     }
     if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
       // Alt+Left would also go back a page, where tabs cannot move too
       e.preventDefault()
-      if (onMove) step(id, e.key === 'ArrowLeft' ? -1 : 1)
+      step(id, e.key === 'ArrowLeft' ? -1 : 1)
       return true
     }
     if (e.key === 'Delete') {
@@ -554,6 +761,7 @@ export function SessionTabs({
           e.pointerType === 'touch' ||
           endDrag.current ||
           held.current ||
+          regrouping.current ||
           moving
         )
           return
@@ -624,11 +832,9 @@ export function SessionTabs({
       setTimeout(() => window.removeEventListener('click', swallow, true))
       const {
         items: now,
-        shown: nowShown,
         sessions: all,
         onMove: move,
-        onUpdate: update,
-        showsMove: shows,
+        plan: planOf,
       } = latest.current
       const dragged = now[from]
       // The tabs changed under the drag: their places no longer hold
@@ -640,24 +846,22 @@ export function SessionTabs({
         for (const tab of tabs) tab.style.translate = ''
       }
       if (!drop || to === from || !same) return putBack()
-      // Its group where it lands, and its place among the tabs
+      // Its group where it lands, and the move that shows it where it was
+      // dropped, in the server's order, asked before a rename changes the
+      // bar's (none when no single move does it: the rename alone then)
       const group = regroups ? dropGroup(now, from, to) : dragged.group
       const regroup = group !== dragged.group
-      // In the server's order, asked before a rename changes the bar's
-      const target = tabGroupMoveIndex(
-        all,
-        nowShown,
-        id,
-        dropTabIndex(now, from, to),
-        group,
-      )
-      // A move that changes nothing on the bar is not asked; with a new
-      // group, one to the tab's place among its group's
-      const shifts =
-        !!move &&
-        target !== all.findIndex((s) => s.id === id) &&
-        (regroup || shows(id, target))
-      if (!regroup && !shifts) return putBack()
+      const name = regroup
+        ? joinTabGroup(group, splitTabGroup(dragged.session.name).label)
+        : dragged.session.name
+      const want = dropWant(now, from, to, group)
+      const solved = planOf(id, name, want)
+      const target = !move
+        ? undefined
+        : solved === undefined
+          ? nearestMove(all, want, id)
+          : solved
+      if (!regroup && !target) return putBack()
       // Into its slot, the others still aside, until the new order
       const slot =
         to > from
@@ -670,15 +874,11 @@ export function SessionTabs({
         timer: window.setTimeout(() => letGo.current(true), HOLD_MS),
       }
       if (!regroup) {
-        move!(id, target)
+        move!(target!.id, target!.index)
         return
       }
       // Renamed first: a move renumbers a tmux tab, a rename keeps its id
-      void Promise.resolve(
-        update!(id, {
-          name: joinTabGroup(group, splitTabGroup(dragged.session.name).label),
-        }),
-      ).then(() => shifts && move!(id, target))
+      regroupThenMove(id, name, target)
     }
     const swallow = (c: MouseEvent) => {
       c.stopPropagation()
@@ -687,6 +887,139 @@ export function SessionTabs({
     const onUp = () => finish(true)
     const onCancel = () => finish(false)
     // Escape puts the tab back
+    const onKey = (k: globalThis.KeyboardEvent) => {
+      if (k.key !== 'Escape' || from === -1) return
+      k.preventDefault()
+      k.stopPropagation()
+      finish(false)
+    }
+    window.addEventListener('pointermove', onMoveEvent)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onCancel)
+    window.addEventListener('keydown', onKey, true)
+    endDrag.current = () => finish(false)
+  }
+
+  // A group dragged by its name, as a browser's: its name and the tabs it
+  // shows slide along the bar as one, the tabs in no group and the other
+  // groups making room, and it lands between them, never inside a group
+  const groupDragProps = (name: string) => {
+    if (!onMove || stripUnits(items).length < 2) return {}
+    return {
+      'data-movable': true,
+      onPointerDown: (e: PointerEvent<HTMLElement>) => {
+        if (
+          e.button !== 0 ||
+          e.pointerType === 'touch' ||
+          endDrag.current ||
+          held.current ||
+          regrouping.current ||
+          moving
+        )
+          return
+        startGroupDrag(name, e.clientX)
+      },
+    }
+  }
+  const startGroupDrag = (name: string, startX: number) => {
+    const list = scrollRef.current!
+    // Set when the drag starts: the units' elements and boxes (the first
+    // element's left to the last one's right), the dragged one, and the
+    // room it takes
+    let els: HTMLElement[][] = []
+    let boxes: Pick<DOMRect, 'left' | 'right' | 'width'>[] = []
+    let from = -1
+    let to = -1
+    let room = 0
+    const begin = () => {
+      const shown = [...list.children].filter(
+        (c): c is HTMLElement =>
+          c instanceof HTMLElement && !c.hasAttribute('data-leaving'),
+      )
+      // The same units as the items: shown follows their order
+      let i = 0
+      const units = stripUnits(latest.current.items)
+      els = units.map((u) => u.map(() => shown[i++]))
+      boxes = els.map((u) => {
+        const left = u[0].getBoundingClientRect().left
+        const right = u.at(-1)!.getBoundingClientRect().right
+        return { left, right, width: right - left }
+      })
+      from = units.findIndex(
+        (u) => u[0].kind === 'group' && u[0].group.name === name,
+      )
+      to = from
+      room =
+        boxes[from].width +
+        (Number.parseFloat(getComputedStyle(list).columnGap) || 0)
+      for (const el of els[from]) el.setAttribute('data-dragging', 'true')
+      if (list.contains(document.activeElement))
+        (document.activeElement as HTMLElement).blur()
+    }
+    const slide = (unit: HTMLElement[], x: number) => {
+      for (const el of unit) el.style.translate = x ? `${x}px 0` : ''
+    }
+    const onMoveEvent = (ev: globalThis.PointerEvent) => {
+      const dx = ev.clientX - startX
+      if (from === -1) {
+        if (Math.abs(dx) < DRAG_SLOP) return
+        begin()
+      }
+      const box = list.getBoundingClientRect()
+      const self = boxes[from]
+      const x = Math.min(
+        Math.max(dx, box.left - self.left),
+        box.right - self.right,
+      )
+      slide(els[from], x)
+      to = slidePlace(boxes, from, x)
+      els.forEach((unit, i) => {
+        if (i !== from) slide(unit, slideShift(i, from, to, room))
+      })
+    }
+    const finish = (drop: boolean) => {
+      window.removeEventListener('pointermove', onMoveEvent)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onCancel)
+      window.removeEventListener('keydown', onKey, true)
+      endDrag.current = null
+      if (from === -1) return
+      for (const el of els[from]) el.removeAttribute('data-dragging')
+      // The click that ends the drag does not fold the group
+      window.addEventListener('click', swallow, { capture: true, once: true })
+      setTimeout(() => window.removeEventListener('click', swallow, true))
+      const all = els.flat()
+      const putBack = () => {
+        for (const el of all) el.style.translate = ''
+      }
+      // The bar changed under the drag: its places no longer hold
+      const now = stripUnits(latest.current.items)
+      const lead = now[from]?.[0]
+      const same =
+        now.length === els.length &&
+        lead?.kind === 'group' &&
+        lead.group.name === name
+      if (!drop || to === from || !same) return putBack()
+      // Into its slot, the others still aside, until the new order
+      slide(
+        els[from],
+        to > from
+          ? boxes[to].right - boxes[from].right
+          : boxes[to].left - boxes[from].left,
+      )
+      held.current = {
+        tabs: all,
+        timer: window.setTimeout(() => letGo.current(true), HOLD_MS),
+      }
+      latest.current.moveGroup(name, to)
+    }
+    const swallow = (c: MouseEvent) => {
+      c.stopPropagation()
+      c.preventDefault()
+    }
+    const onUp = () => finish(true)
+    const onCancel = () => finish(false)
+    // Escape puts the group back
     const onKey = (k: globalThis.KeyboardEvent) => {
       if (k.key !== 'Escape' || from === -1) return
       k.preventDefault()
@@ -719,6 +1052,7 @@ export function SessionTabs({
               <GroupName
                 key={key}
                 ref={ref(key)}
+                drag={leaving ? {} : groupDragProps(item.group.name)}
                 group={item.group}
                 leaving={leaving}
                 entering={isNew(key)}
@@ -728,10 +1062,15 @@ export function SessionTabs({
                   else groupButtons.current.delete(item.group.name)
                 }}
                 onToggle={() =>
-                  setFolded(item.group.name, !item.group.collapsed)
+                  toggleFold(item.group.name, !item.group.collapsed)
                 }
                 onMenu={() => openGroupMenu(item.group.name, false)}
-                keys={['Shift+F10', canRename && 'F2', onAdd && 'N']
+                keys={[
+                  'Shift+F10',
+                  onMove && 'Alt+ArrowLeft Alt+ArrowRight',
+                  canRename && 'F2',
+                  onAdd && 'N',
+                ]
                   .filter(Boolean)
                   .join(' ')}
                 renaming={
@@ -762,6 +1101,7 @@ export function SessionTabs({
             <div
               key={key}
               ref={ref(key)}
+              data-key={key}
               inert={leaving}
               aria-hidden={leaving || undefined}
               data-leaving={leaving || undefined}
@@ -773,7 +1113,7 @@ export function SessionTabs({
                 e.preventDefault()
                 openMenu(session.id, false)
               }}
-              className={`group relative flex h-9 shrink-0 items-center pr-1.5 text-[13px] ${group === undefined ? '' : `after:pointer-events-none after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full ${tabGroupLine(group)}`} transition-[color,background-color,border-color,opacity,translate,scale] duration-(--duration-fast) ease-standard motion-safe:active:scale-[0.98] data-dragging:z-20 data-dragging:transition-none ${isNew(key) ? ENTER_FROM : ''} ${leaving ? LEAVE_TO : ''} ${
+              className={`group relative flex h-9 shrink-0 items-center pr-1.5 text-[13px] ${group === undefined ? '' : `after:pointer-events-none after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full ${tabGroupLine(group)}`} transition-[color,background-color,border-color,opacity,translate,scale] duration-(--duration-fast) ease-standard motion-safe:active:scale-[0.98] data-dragging:z-20 data-dragging:transition-none ${isNew(key) || (group !== undefined && folded.current) ? ENTER_FROM : ''} ${leaving ? LEAVE_TO : ''} ${
                 looksActive
                   ? 'pointer-coarse:h-11 rounded-t-control border border-b-0 border-border bg-term text-fg shadow-sm ui-terminal:shadow-[inset_0_2px_0_var(--color-accent)] ui-native:rounded-t-panel ui-native:border-0'
                   : 'mb-0.5 h-8 pointer-coarse:h-10 rounded-control text-fg-muted hover:bg-surface-raised hover:text-fg data-dragging:bg-surface-raised data-dragging:text-fg'
@@ -877,11 +1217,9 @@ export function SessionTabs({
           nameRef={formName}
           toggleSelector={askName ? '[data-new-tab-toggle]' : undefined}
           groups={tabGroups ? groupNames : undefined}
-          group={
-            formGroup ??
-            splitTabGroup(sessions.find((s) => s.id === activeId)?.name ?? '')
-              .group
-          }
+          // Another group asked for while open starts it again
+          key={formGroup ?? '\0'}
+          group={tabGroups ? formGroup : undefined}
         />
       )}
       {menuSession && (
@@ -934,10 +1272,10 @@ export function SessionTabs({
               )}
             </MenuGroup>
           )}
-          {onMove && (
+          {(onMove || regroups) && (
             <>
               <MenuItem
-                disabled={menuAt === 0}
+                disabled={!stepPlan(menuSession.id, -1)}
                 // i18n-ignore: a key's name
                 shortcut={{ label: 'Alt+←', aria: 'Alt+ArrowLeft' }}
                 onSelect={() => step(menuSession.id, -1)}
@@ -945,7 +1283,7 @@ export function SessionTabs({
                 {t('shell.tabs.moveLeft')}
               </MenuItem>
               <MenuItem
-                disabled={menuAt === shown.length - 1}
+                disabled={!stepPlan(menuSession.id, 1)}
                 // i18n-ignore: a key's name
                 shortcut={{ label: 'Alt+→', aria: 'Alt+ArrowRight' }}
                 onSelect={() => step(menuSession.id, 1)}
@@ -958,7 +1296,9 @@ export function SessionTabs({
             <MenuItem
               // i18n-ignore: a key's name
               shortcut={{ label: 'N', aria: 'N' }}
-              onSelect={() => openForm(menuAnchor.current)}
+              onSelect={() =>
+                openForm(menuAnchor.current, groupOfTab(menuSession.id))
+              }
             >
               {t('shell.tabs.new')}
             </MenuItem>
@@ -1007,7 +1347,9 @@ export function SessionTabs({
             </MenuItem>
           )}
           <MenuItem
-            onSelect={() => setFolded(menuOfGroup.name, !menuOfGroup.collapsed)}
+            onSelect={() =>
+              toggleFold(menuOfGroup.name, !menuOfGroup.collapsed)
+            }
           >
             {t(
               menuOfGroup.collapsed
@@ -1059,6 +1401,8 @@ interface GroupNameProps {
   onMenu: () => void
   // Its keys, for aria-keyshortcuts
   keys: string
+  // Its dragging (pointer down and data-movable), where groups move
+  drag: object
   // Set: its name is edited in place
   renaming?: {
     draft: string
@@ -1080,6 +1424,7 @@ function GroupName({
   onToggle,
   onMenu,
   keys,
+  drag,
   renaming,
   ref,
 }: GroupNameProps) {
@@ -1092,15 +1437,17 @@ function GroupName({
   return (
     <div
       ref={ref}
+      data-key={`\0${group.name}`}
       inert={leaving}
       aria-hidden={leaving || undefined}
       data-leaving={leaving || undefined}
+      {...(renaming ? {} : drag)}
       onContextMenu={(e) => {
         if (leaving || renaming) return
         e.preventDefault()
         onMenu()
       }}
-      className={`mb-0.5 flex h-8 shrink-0 items-center px-0.5 transition-[opacity,translate,scale] duration-(--duration-fast) ease-standard pointer-coarse:h-10 ${entering ? ENTER_FROM : ''} ${leaving ? LEAVE_TO : ''}`}
+      className={`mb-0.5 flex h-8 shrink-0 items-center px-0.5 transition-[opacity,translate,scale] duration-(--duration-fast) ease-standard data-dragging:z-20 data-dragging:transition-none pointer-coarse:h-10 ${entering ? ENTER_FROM : ''} ${leaving ? LEAVE_TO : ''}`}
     >
       {renaming ? (
         <input
@@ -1136,7 +1483,11 @@ function GroupName({
           <span className="truncate ui-terminal:font-label">{name}</span>
           {group.collapsed && (
             <>
-              <span className="text-[11px] opacity-80">
+              {/* A counter, apart from the name: a small pill */}
+              <span
+                data-group-count
+                className="-mr-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-white/25 px-1 text-[10px] font-semibold leading-none tabular-nums"
+              >
                 {group.sessions.length}
               </span>
               <AgentStatusBadge status={group.agentStatus} size={11} />
