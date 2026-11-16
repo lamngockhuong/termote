@@ -4,6 +4,7 @@ import { hostname } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { type Browser, expect, type Page, type TestInfo, test } from './fixtures'
+import { demoHostStats } from '../src/demo/fixtures/system'
 import { WELCOME_VERSION } from '../src/utils/welcome'
 import { FakeOpencode, type Json } from './fake-opencode'
 
@@ -95,6 +96,9 @@ async function open(
     },
     [style, theme, WELCOME_VERSION, language, settings] as const,
   )
+  // The host's numbers are the demo page's laptop (pwa/src/demo), never
+  // those of the computer taking the captures
+  await ctx.route('**/api/mux/system**', (route) => route.fulfill({ json: demoHostStats(Date.now()) }))
   const page = await ctx.newPage()
   // A browser page gets the sign-in form, never a Basic challenge
   await page.goto('/login')
