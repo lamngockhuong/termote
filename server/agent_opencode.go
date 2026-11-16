@@ -410,6 +410,9 @@ func opencodeEntry(m opencodeMessage) (TranscriptEntry, bool) {
 	switch m.Type {
 	case "user":
 		e.Role = "user"
+		// OpenCode stores a command's expanded template, the output of its
+		// !`cmd` included, as the user's text, unmarked.
+		e.viewHidesText = true
 		if strings.TrimSpace(m.Text) != "" {
 			e.Parts = append(e.Parts, textPart("text", m.Text, claudeMaxText))
 		}

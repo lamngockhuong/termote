@@ -149,6 +149,10 @@ type gitRunner struct {
 	// root before any git runs there (repoConfigRefused on Windows); nil
 	// checks nothing.
 	checkRoot func(root string) error
+	// checkTree, set with checkRoot, refuses a root before a heavy command
+	// (status, ls-files -o: git looks into every untracked folder) runs
+	// there (nestedRepoRefused on Windows); nil checks nothing.
+	checkTree func(root string) error
 
 	mu       sync.Mutex
 	failedAt map[string]time.Time // root → last timeout
@@ -417,6 +421,11 @@ func (g *gitRunner) output(ctx context.Context, c gitCall, args ...string) ([]by
 			return nil, false, err
 		}
 	}
+	if c.heavy && g.checkTree != nil {
+		if err := g.checkTree(c.root); err != nil {
+			return nil, false, err
+		}
+	}
 	if c.heavy && g.backingOff(c.root) {
 		return nil, false, errGitTimeout
 	}
@@ -638,6 +647,7 @@ func newRootResolver(git *gitRunner) *rootResolver {
 		now:           time.Now,
 	}
 	git.checkRoot = rr.checkRepoRoot
+	git.checkTree = rr.checkRepoTree
 	return rr
 }
 

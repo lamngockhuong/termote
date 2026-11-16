@@ -673,7 +673,8 @@ func TestOpencodeViewOnlyHidesTools(t *testing.T) {
 			}
 		}
 	}
-	if len(res.Entries) != 2 {
+	// The user's prompt is text only, so the assistant's reply is left.
+	if len(res.Entries) != 1 || res.Entries[0].Role != "assistant" {
 		t.Errorf("entries = %+v", res.Entries)
 	}
 }
@@ -766,5 +767,34 @@ func TestOpencodeLargeReadsBounded(t *testing.T) {
 	}
 	if _, err := c.active(context.Background()); err != nil {
 		t.Errorf("small read waited: %v", err)
+	}
+}
+
+// A view-only client gets no text of an OpenCode user message: OpenCode
+// stores a custom command's expanded template, with the output of the shell
+// commands it ran, as the user's text. Image chips stay; the full view keeps
+// the text.
+func TestOpencodeViewOnlyHidesUserText(t *testing.T) {
+	var m opencodeMessage
+	if err := json.Unmarshal([]byte(`{"id":"msg_1","time":{"created":1794843543536},"type":"user",
+		"text":"Here is the output: SECRET-TOKEN-1234\n","files":[{"mime":"image/png","source":{"type":"inline"}}]}`), &m); err != nil {
+		t.Fatal(err)
+	}
+	e, ok := opencodeEntry(m)
+	if !ok {
+		t.Fatal("user message dropped")
+	}
+	full := transcriptResponse{Entries: []TranscriptEntry{e}}
+	view := viewTranscript(full)
+	if len(view.Entries) != 1 || len(view.Entries[0].Parts) != 1 || view.Entries[0].Parts[0].Kind != "image" {
+		t.Errorf("view-only entry = %+v", view.Entries)
+	}
+	if len(full.Entries[0].Parts) != 2 || full.Entries[0].Parts[0].Text != "Here is the output: SECRET-TOKEN-1234\n" {
+		t.Errorf("the shared response was changed: %+v", full.Entries[0].Parts)
+	}
+	m.Files = nil
+	e, _ = opencodeEntry(m)
+	if view = viewTranscript(transcriptResponse{Entries: []TranscriptEntry{e}}); len(view.Entries) != 0 {
+		t.Errorf("a text-only user message reached a view-only client: %+v", view.Entries)
 	}
 }
