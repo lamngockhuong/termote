@@ -89,7 +89,7 @@ Go HTTP server providing:
 - **Paired devices**: `/pair` and `/api/mux/devices*` — a one-time code signs a device in with its own cookie and a role (`full` or `view`) (see [Paired devices and the view-only role](#paired-devices-and-the-view-only-role))
 - **Mux API endpoints**: `/api/mux/*` — snapshot (groups→tabs→panes), tab create/rename/close/select, pane close/rename/split/zoom/swap/resize, send-keys, health
 - **Web Push**: `/api/mux/push/*` — the server's key and this device's subscription; a watcher sends a push when an agent needs the user (see [Agent notifications](#agent-notifications-apimuxpush))
-- **Agent chat endpoints**: `/api/mux/panes/{id}/agent/*` — the transcript of the Claude Code or Codex session in a pane, sending it a message, reading and answering its dialogs (see [Agent chat](#agent-chat-apimuxpanesidagent))
+- **Agent chat endpoints**: `/api/mux/panes/{id}/agent/*` — the transcript of the Claude Code, Codex or OpenCode session in a pane, sending it a message, reading and answering its dialogs (see [Agent chat](#agent-chat-apimuxpanesidagent))
 
 Configuration: when `termote serve` finds a saved config (`~/.config/termote/config`), it reads
 that and ignores every `TERMOTE_*` variable, then strips them from its own environment so
@@ -422,19 +422,22 @@ own, e.g. `paste_not_confirmed`); anything else answers 409 `partial_paste` and 
 The session history (`/agent/history`, `server/agent_history*.go`) lists the Claude Code and Codex
 sessions whose recorded cwd is the pane's root (as Files finds it) or under it, read from the
 server user's own Claude Code dir and `CODEX_HOME` (at most 2000 files per agent, 64 KB at each
-end of a transcript), newest first, 30 a page; `live` names the pane that runs one now. An old
+end of a transcript), and OpenCode's root sessions of that folder from its service (see OpenCode
+below), newest first, 30 a page; `live` names the pane that runs one now. An old
 session's transcript is read through the same reader as the Chat view's. A Codex fork's rollout
 holds only what is said after the fork, so its transcript is the parent's rollout up to the fork,
 then its own (`server/agent_codex_fork.go`). `/agent/resume` types
-`claude --resume <id>` (`--fork-session` with `fork`) or `codex resume --no-daemon <id>`
-(`codex fork --no-daemon <id>` with `fork`) into a
+`claude --resume <id>` (`--fork-session` with `fork`), `codex resume --no-daemon <id>`
+(`codex fork --no-daemon <id>` with `fork`) or `opencode --session <id>` (a fork's new id, made
+by the service, with `fork`) into a
 new tab of the pane's group, or into the pane's own idle shell, as Tasks types a task
 (`taskMux`; not on psmux); a session running in a pane is never opened twice (409
 `session_live`). The rules are in `docs/security-invariants.md`.
 
 `/agent/start` (`caps.agentStart`: Herdr 0.8.2 or later, on Linux, macOS and Windows) starts
-Claude Code (`kind: "claude"`) or Codex (`"codex"`, run as `codex --no-daemon`; only where Codex
-has a Chat view, `caps.agentStartCodex`, else 501 `unsupported`)
+Claude Code (`kind: "claude"`), Codex (`"codex"`, run as `codex --no-daemon`; only where Codex
+has a Chat view, `caps.agentStartCodex`, else 501 `unsupported`) or OpenCode (`"opencode"`, run
+as `opencode --session <id>` with a new id the server makes)
 in a pane that shows only its shell, through Herdr's `agent.start`. Only `kind` is read: the arguments come from a fixed
 table and the alias Herdr tracks the agent by is the server's (`termote-<kind>-<8 hex>`, one
 retry on `agent_name_taken`). The pane is resolved before the pane lock (the one `message` and
@@ -578,9 +581,9 @@ error instead of a broken page.
 
 ### Agent chat (`/api/mux/panes/{id}/agent/*`)
 
-The PWA's Chat view is a second way to look at a pane running Claude Code or Codex, offered
-when the snapshot reports `caps.agentChat` and the pane's `agent.name` is `claude` or `codex`
-(`pwa/src/chat-agents.ts`). It is the same session as the terminal, not a session of its own:
+The PWA's Chat view is a second way to look at a pane running Claude Code, Codex or OpenCode,
+offered when the snapshot reports `caps.agentChat` and the pane's `agent.name` is `claude`,
+`codex` or `opencode` (`pwa/src/chat-agents.ts`; OpenCode: see OpenCode below). It is the same session as the terminal, not a session of its own:
 nothing runs headless. Both agents take a message and a dialog answer under the rules in
 "Writes" below, each with its own screen reader
 (`agentScreenReaders`: `agent_claude_prompt.go`, `agent_codex_prompt.go`); `commands` lists
@@ -964,6 +967,29 @@ and the dialog's signature on screen, then sends the option's digit, Escape for 
 the arrows above. The keys a route may send are Enter, Tab (a Codex message queued while it
 works), Escape, C-c, Left, Right, Up, Down and the digits 1–9 (`agentKeys`).
 A screen the detector does not recognise is never written to.
+
+**OpenCode.** An OpenCode 2.x TUI (an executable named `opencode`, `server/agent_opencode.go`)
+is read and written only through the user's own background service (`opencode serve --service`,
+which an `opencode` started while none runs starts itself): never `opencode.db`, the TUI's screen
+or the `opencode` CLI, and no key is ever sent to the pane. `server/agent_opencode_client.go` reads
+`service.json` under `$XDG_STATE_HOME/opencode` (else `~/.local/state/opencode`), connects only to
+the loopback address it names on a port the server's own user holds, checks that `/api/info`
+names the same pid and a version of at least 2.0.0, and sends the password as HTTP Basic auth; a
+checked service is kept 30 s (a 401 drops it at once). The session is the one the TUI's argv
+names (`--session <id>`) on tmux, psmux, Zellij and hc, and the one Herdr's OpenCode integration
+reports on Herdr: the service tells no client which session it shows, so a plain `opencode` has
+none. Its messages come from the service's list with its own cursor (only settled ones: an open
+answer is held until it completes), its status from `session.active` and the session's pending
+permissions and forms (blocked while one waits). A message is `session.prompt` with
+`delivery: "queue"` (202 while a turn runs), a listed `/name` `session.command`, a permission
+answer `.../permission/{id}/reply` (`once`, `always` or `reject`), a form answer
+`.../form/{id}/reply` or its cancel `DELETE .../form/{id}`. History, resume and fork, the
+subagent tree, pasted images, the context chip, tokens and cost and the files a session changed
+read the same service. Without a running service (OpenCode run with `--standalone` or `--server`,
+#831; container mode, #832) the pane shows only OpenCode's logo. The rules are in
+`docs/security-invariants.md` (OpenCode service client, OpenCode chat); the E2E specs
+`pwa/e2e/chat-view-opencode*.spec.ts` run against a stand-in service
+(`pwa/e2e/fake-opencode.ts`, recordings of 2.3.0) that passes the same checks.
 
 The Chat view renders the agent's markdown without raw HTML and never loads images: an image
 becomes a text link, so a transcript cannot make the browser fetch another origin. The routes
