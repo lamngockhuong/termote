@@ -391,7 +391,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   session is kept only when its `parentID` is the session it was listed for and its id matches
   `^ses[A-Za-z0-9_]{1,64}$`. Running is the shared `session/active` read; else `outcome`. Its last
   tool name and the tokens of its last answer come from its last 10 messages (a page over 24 MB
-  is asked again for 1); the type and title are cut as Claude's. What was read of a subagent that
+  is asked again for 1, still up to 24 MB); the type and title are cut as Claude's. What was read of a subagent that
   does not run is kept 10 minutes by its id and its `time.updated` (and the list's limit), so a
   finished one is not read again; a running one is read on every tree read (shared for 2 s).
   Grandchildren that cannot be read are left out and the tree marked truncated. No service found
@@ -954,7 +954,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   session, the message (`ocm:<id>`, the id checked as `msg_…`) and the file's place in it, and is
   given only to a file whose `source.type` is `inline` (another kind keeps its chip, no
   reference). The image is read again through the service (`GET
-  /api/session/{id}/message/{msg}`, 24 MB at most; the service answers 404 for a message of
+  /api/session/{id}/message/{msg}`, 72 MB at most, two such reads at once; the service answers 404 for a message of
   another session), never from a file, and only for the pane's own session or a session the
   history of the pane's directory lists (`findHistorySession`, after `historyRoot`, so a
   view-only client is refused a root Files refuses it); any other session is never asked for.
@@ -1363,7 +1363,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   dialing, or its port now another user's), drops it at once so a restarted service's new port and
   password are read; another HTTP error (a 404, a 5xx, a reply over its limit) keeps it; a failed
   check is repeated at most every 2 s). Every reply is read up to a limit (1 MB, a page of
-  messages or one message 24 MB, the list of models 8 MB) and decoded into the fields used (of
+  messages 24 MB, one message read alone for its images, or the Chat view's page of one message
+  after a larger page was over 24 MB, 72 MB (five images of 10 MB as base64; at most two such
+  page reads at once), the list of models 8 MB) and decoded into the fields used (of
   `/api/model` only `providerID`, `id` and `limit.context`); the service's own text (its error bodies,
   `/api/info`'s hostname, `/api/model`'s provider settings with their API keys) never reaches a
   client or a log. The usage reads (see Agent usage and cost) and the files a session touched (see
@@ -1386,7 +1388,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   from one shared `/api/session/active` read and the session's pending permissions and forms
   (500 ms caches). Only settled messages are sent (an open answer, compaction or `!` command is
   held until an `idle` message follows it), since the client appends rows; a page over 24 MB is
-  asked again with fewer messages. A turn that did not succeed is a note (`Interrupted`, or `Turn
+  asked again with fewer messages, down to one message, read up to 72 MB; a cursor read then asks
+  the older pages with as few, at most 175 messages in 16 requests, and for 30 s starts that
+  session's next cursor reads with one message. A read has 4 s in all. A turn that did not succeed is a note (`Interrupted`, or `Turn
   failed` with the error's `message` on one line, at most 200 bytes); the provider's raw response
   body in that error is never read. Cursors are the signed `agentCursor`: a forward one names the last message sent
   (`oc:`), a before one carries the service's own page cursor (`ocb:`, at most 1 KB), so a client

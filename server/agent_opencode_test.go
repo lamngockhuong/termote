@@ -518,6 +518,7 @@ func TestOpencodeTranscriptEmptyAndErrors(t *testing.T) {
 		t.Errorf("service error = %v", err)
 	}
 	// A page over the limit is asked again with fewer messages.
+	slowOpencodeReads(t)
 	f.set(func() { f.status, f.big = 0, 6 })
 	if r, err := readTranscript(AgentSession{Agent: "opencode", ID: "sesNew1"}, "", ""); err != nil || len(r.Entries) != 2 {
 		t.Errorf("page too big, then smaller = %+v, %v", r, err)

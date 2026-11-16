@@ -48,6 +48,10 @@ const (
 	// opencodeMessagesMax bounds a page of messages: a user message carries
 	// the base64 of every image pasted with it.
 	opencodeMessagesMax = 24 << 20
+	// opencodeOneMessageMax bounds one message read alone (an image's, or
+	// the Chat view's page of one message, oneMessage): the base64 of five
+	// images of opencodeImageMax, and its other fields.
+	opencodeOneMessageMax = 72 << 20
 )
 
 var (
@@ -487,7 +491,8 @@ type opencodePage struct {
 	older    string
 }
 
-// messages reads up to limit messages of session id, newest first: the
+// messages reads up to limit messages of session id, newest first, up to
+// opencodeMessagesMax: the
 // newest page when cursor is empty, else the page cursor names (a cursor
 // the service gave, only ever passed back to it).
 func (c *opencodeClient) messages(ctx context.Context, id, cursor string, limit int) (opencodePage, error) {
@@ -500,13 +505,45 @@ func (c *opencodeClient) messages(ctx context.Context, id, cursor string, limit 
 	} else {
 		q.Set("order", "desc")
 	}
+	return c.messagePage(ctx, id, q, limit, opencodeMessagesMax)
+}
+
+// opencodeBigReads bounds the reads of one message up to
+// opencodeOneMessageMax that run at once (each holds its reply in memory).
+var opencodeBigReads = make(chan struct{}, 2)
+
+// oneMessage reads the one message of the page cursor names ("" for the
+// newest), up to opencodeOneMessageMax: what a page of messages over
+// opencodeMessagesMax shrinks to.
+func (c *opencodeClient) oneMessage(ctx context.Context, id, cursor string) (opencodePage, error) {
+	if !isOpencodeSessionID(id) {
+		return opencodePage{}, errOpencodeNotFound
+	}
+	q := url.Values{"limit": {"1"}}
+	if cursor != "" {
+		q.Set("cursor", cursor)
+	} else {
+		q.Set("order", "desc")
+	}
+	select {
+	case opencodeBigReads <- struct{}{}:
+		defer func() { <-opencodeBigReads }()
+	case <-ctx.Done():
+		return opencodePage{}, fmt.Errorf("opencode message: %w", errors.Join(errOpencodeUnavailable, ctx.Err()))
+	}
+	return c.messagePage(ctx, id, q, 1, opencodeOneMessageMax)
+}
+
+// messagePage reads the page of session id's messages q asks for, up to
+// max bytes.
+func (c *opencodeClient) messagePage(ctx context.Context, id string, q url.Values, limit int, max int64) (opencodePage, error) {
 	var res struct {
 		Data   []opencodeMessage `json:"data"`
 		Cursor struct {
 			Next *string `json:"next"`
 		} `json:"cursor"`
 	}
-	if err := c.get(ctx, "/api/session/"+id+"/message", q, opencodeMessagesMax, &res); err != nil {
+	if err := c.get(ctx, "/api/session/"+id+"/message", q, max, &res); err != nil {
 		return opencodePage{}, err
 	}
 	page := opencodePage{}
@@ -546,7 +583,7 @@ func (c *opencodeClient) messageFiles(ctx context.Context, id, msg string) ([]op
 			Files []opencodeImageFile `json:"files"`
 		} `json:"data"`
 	}
-	if err := c.get(ctx, "/api/session/"+id+"/message/"+msg, nil, opencodeMessagesMax, &res); err != nil {
+	if err := c.get(ctx, "/api/session/"+id+"/message/"+msg, nil, opencodeOneMessageMax, &res); err != nil {
 		return nil, err
 	}
 	if res.Data.ID != msg || res.Data.Type != "user" {

@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 )
 
 // opencodeImageMessage is a user message with files as OpenCode 2.3.0 keeps
@@ -122,6 +123,77 @@ func TestOpencodeImage(t *testing.T) {
 	if rec := getOpencodeImage(mux, parts[1].Image, false); rec.Code != http.StatusNotFound {
 		t.Errorf("service down = %d", rec.Code)
 	}
+}
+
+// A message holding two images near opencodeImageMax is over the limit of a
+// page of messages, yet the Chat view reads it and each image of it is
+// served: a page shrinks down to that one message, and one message is read
+// with its own, larger limit.
+func TestOpencodeImageLargeMessage(t *testing.T) {
+	slowOpencodeReads(t)
+	oc, mux, first := opencodeImagePane(t)
+	images := make([][]byte, 2)
+	files := make([]map[string]any, 2)
+	for i := range images {
+		images[i] = bytes.Repeat([]byte{byte(i + 1)}, opencodeImageMax-1024)
+		copy(images[i], testImage(t, "image/png"))
+		files[i] = opencodeInline("image/png", images[i])
+	}
+	msg := opencodeImageMessage("msg_big", files...)
+	if len(msg) <= opencodeMessagesMax {
+		t.Fatalf("message of %d bytes is not over a page's limit", len(msg))
+	}
+	oc.set(func() { oc.messages["sesPane"] = append(oc.messages["sesPane"], msg) })
+	// A client that had the message before it: the new one, no reset.
+	res := testOpencodeRead(t, "sesPane", "idle", first.Cursor, "")
+	if res.Reset || len(res.Entries) != 1 || len(res.Entries[0].Parts) != 3 {
+		t.Fatalf("after = reset %v, %+v", res.Reset, res.Entries)
+	}
+	for i, want := range images {
+		ref := res.Entries[0].Parts[i+1].Image
+		if rec := getOpencodeImage(mux, ref, false); rec.Code != 200 || !bytes.Equal(rec.Body.Bytes(), want) {
+			t.Errorf("image %d = %d (%d bytes)", i, rec.Code, rec.Body.Len())
+		}
+	}
+	// A poll finds nothing new; a first read gets that message alone and a
+	// cursor to the one before.
+	if again := testOpencodeRead(t, "sesPane", "idle", res.Cursor, ""); again.Reset || len(again.Entries) != 0 {
+		t.Errorf("poll = reset %v, %d entries", again.Reset, len(again.Entries))
+	}
+	tail := testOpencodeRead(t, "sesPane", "idle", "", "")
+	if !tail.Reset || len(tail.Entries) != 1 || tail.Before == "" {
+		t.Errorf("tail = reset %v, %d entries, before %q", tail.Reset, len(tail.Entries), tail.Before)
+	}
+
+	// Six messages after it: read back one at a time past the large one,
+	// no reset; a poll after that starts with one message, never asking
+	// again for a page over the limit.
+	oc.set(func() {
+		for i := range 6 {
+			oc.messages["sesPane"] = append(oc.messages["sesPane"], opencodeImageMessage(fmt.Sprintf("msg_n%d", i)))
+		}
+	})
+	newer := testOpencodeRead(t, "sesPane", "idle", res.Cursor, "")
+	if newer.Reset || len(newer.Entries) != 6 {
+		t.Fatalf("six after it = reset %v, %d entries", newer.Reset, len(newer.Entries))
+	}
+	before := len(oc.reqs())
+	if again := testOpencodeRead(t, "sesPane", "idle", newer.Cursor, ""); again.Reset || len(again.Entries) != 0 {
+		t.Errorf("poll = reset %v, %d entries", again.Reset, len(again.Entries))
+	}
+	for _, r := range oc.reqs()[before:] {
+		if !strings.Contains(r, "limit=1&") {
+			t.Errorf("poll asked %s", r)
+		}
+	}
+}
+
+// slowOpencodeReads gives a test that moves tens of MB through the fake
+// service a read timeout a loaded machine meets.
+func slowOpencodeReads(t *testing.T) {
+	prev := opencodeReadTimeout
+	opencodeReadTimeout = time.Minute
+	t.Cleanup(func() { opencodeReadTimeout = prev })
 }
 
 // A session of the history (an old one read in the history sheet) has its

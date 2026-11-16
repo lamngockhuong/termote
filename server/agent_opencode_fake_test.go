@@ -113,6 +113,7 @@ func resetOpencodeCaches() {
 	opencodeReads.forgetPrefix("")
 	opencodeUsageRecs.forgetPrefix("")
 	opencodeTouchedReads.forgetPrefix("")
+	opencodeTopBig.forgetPrefix("")
 }
 
 func (f *fakeOpencode) writeServiceFile(state string, v any) {
@@ -277,7 +278,11 @@ func (f *fakeOpencode) serve(w http.ResponseWriter, r *http.Request) {
 		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 		if f.big > 0 && limit >= f.big {
 			w.Write([]byte(`{"data":[{"id":"msg_a","type":"user","text":"`))
-			w.Write([]byte(strings.Repeat("x", opencodeMessagesMax)))
+			size := opencodeMessagesMax
+			if limit == 1 {
+				size = opencodeOneMessageMax
+			}
+			w.Write([]byte(strings.Repeat("x", size)))
 			w.Write([]byte(`"}]}`))
 			return
 		}
