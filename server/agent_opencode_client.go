@@ -182,7 +182,8 @@ func opencodeDial(ctx context.Context, network, addr string) (net.Conn, error) {
 }
 
 // opencodeServices shares one check of the service between every lookup
-// for opencodeServiceTTL; a refused password drops it (opencodeForget). A
+// for opencodeServiceTTL; a refused password or a failed connection drops it
+// (opencodeForget), so a service restarted on another port is found again. A
 // failed check is not kept: opencodeDown only spaces the next one by
 // opencodeRetry, so a service just started is found within it.
 var (
@@ -240,6 +241,16 @@ func opencodeCheck() (*opencodeClient, error) {
 // service.json again (a restarted service has a new password and pid).
 func opencodeForget() { opencodeServices.forgetPrefix("") }
 
+// opencodeForgetIfDial drops the cached service when err is a failed
+// connection to it (refused, timed out, or its port held by another user):
+// the service it names is gone. Any other error keeps it.
+func opencodeForgetIfDial(err error) {
+	var op *net.OpError
+	if errors.Is(err, errOpencodeForeign) || (errors.As(err, &op) && op.Op == "dial") {
+		opencodeForget()
+	}
+}
+
 // get reads path into out, answering errOpencodeNotFound for a 404 and
 // errOpencodeUnavailable for a refused password. The body is read up to
 // limit bytes; its text never goes into an error.
@@ -255,6 +266,7 @@ func (c *opencodeClient) get(ctx context.Context, path string, q url.Values, lim
 	req.Header.Set("Accept", "application/json")
 	resp, err := c.http.Do(req)
 	if err != nil {
+		opencodeForgetIfDial(err)
 		return fmt.Errorf("opencode %s: %w", path, errors.Join(errOpencodeUnavailable, err))
 	}
 	defer resp.Body.Close()

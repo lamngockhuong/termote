@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestOpencodeTUIArgs(t *testing.T) {
@@ -207,6 +208,88 @@ func TestOpencodeServiceGone(t *testing.T) {
 	f.srv.Close()
 	if _, err := opencodeConnect(); !errors.Is(err, errOpencodeUnavailable) {
 		t.Errorf("closed service: %v", err)
+	}
+}
+
+// A service restarted on another port is found at the next lookup: a failed
+// connection to the cached one drops it, and the failed check after it is
+// only repeated once opencodeRetry has passed.
+func TestOpencodeServiceMoved(t *testing.T) {
+	moved := newFakeOpencode(t)
+	f := newFakeOpencode(t)
+	c, err := opencodeConnect()
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	// Another HTTP error keeps the service.
+	f.set(func() { f.status = http.StatusInternalServerError })
+	if _, err := c.active(context.Background()); err == nil {
+		t.Fatal("500: no error")
+	}
+	if _, ok := opencodeServices.peek(""); !ok {
+		t.Error("a 500 dropped the service")
+	}
+	f.set(func() { f.status = http.StatusNotFound })
+	if _, err := c.active(context.Background()); err == nil {
+		t.Fatal("404: no error")
+	}
+	if _, ok := opencodeServices.peek(""); !ok {
+		t.Error("a 404 dropped the service")
+	}
+
+	f.srv.Close()
+	if _, err := c.active(context.Background()); !errors.Is(err, errOpencodeUnavailable) {
+		t.Fatalf("closed: %v", err)
+	}
+	if _, ok := opencodeServices.peek(""); ok {
+		t.Error("service still cached after a refused connection")
+	}
+	// Not started yet: the check fails and is not repeated within opencodeRetry.
+	if _, err := opencodeConnect(); !errors.Is(err, errOpencodeUnavailable) {
+		t.Fatalf("not restarted: %v", err)
+	}
+	data, _ := json.Marshal(map[string]any{"url": moved.srv.URL, "pid": moved.pid, "version": "2.3.0",
+		"password": moved.password})
+	if err := os.WriteFile(filepath.Join(opencodeStateDir(), "opencode", "service.json"), data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := opencodeConnect(); !errors.Is(err, errOpencodeUnavailable) {
+		t.Errorf("within the retry delay: %v", err)
+	}
+	time.Sleep(opencodeRetry)
+	c, err = opencodeConnect()
+	if err != nil || c.base.String() != moved.srv.URL {
+		t.Fatalf("after the retry delay: %v", err)
+	}
+	if _, err := c.active(context.Background()); err != nil {
+		t.Errorf("moved service: %v", err)
+	}
+
+	// A port now held by another user drops it too.
+	opencodeHTTP.CloseIdleConnections()
+	prevCheck := opencodeConnCheck
+	opencodeConnCheck = func(int, net.Conn) int { return healthUntrusted }
+	if _, err := c.active(context.Background()); !errors.Is(err, errOpencodeUnavailable) {
+		t.Fatalf("foreign port: %v", err)
+	}
+	opencodeConnCheck = prevCheck
+	if _, ok := opencodeServices.peek(""); ok {
+		t.Error("service still cached after its port went to another user")
+	}
+	c, err = opencodeConnect()
+	if err != nil {
+		t.Fatalf("again: %v", err)
+	}
+
+	// A failed write drops it too (a dead service's kept connections are
+	// gone, so the write dials).
+	moved.srv.Close()
+	opencodeHTTP.CloseIdleConnections()
+	if err := c.send(context.Background(), http.MethodPost, "/api/session/ses_x/abort", nil); !errors.Is(err, errOpencodeUnavailable) {
+		t.Fatalf("write to a closed service: %v", err)
+	}
+	if _, ok := opencodeServices.peek(""); ok {
+		t.Error("service still cached after a refused write")
 	}
 }
 

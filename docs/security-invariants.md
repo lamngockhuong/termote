@@ -1359,8 +1359,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   took after the service died never gets the password; macOS cannot tell a socket's owner and
   skips this (accepted gap). The HTTP client follows no redirect and uses no proxy. The service
   counts only when `/api/info` answers with the pid and version the file names and a version of
-  at least 2.0.0 (kept 30 s; a 401 or 403 drops it at once so a restarted service's new password
-  is read; a failed check is repeated at most every 2 s). Every reply is read up to a limit (1 MB, a page of
+  at least 2.0.0 (kept 30 s; a 401 or 403, or a connection to it that fails (refused, timed out
+  dialing, or its port now another user's), drops it at once so a restarted service's new port and
+  password are read; another HTTP error (a 404, a 5xx, a reply over its limit) keeps it; a failed
+  check is repeated at most every 2 s). Every reply is read up to a limit (1 MB, a page of
   messages or one message 24 MB, the list of models 8 MB) and decoded into the fields used (of
   `/api/model` only `providerID`, `id` and `limit.context`); the service's own text (its error bodies,
   `/api/info`'s hostname, `/api/model`'s provider settings with their API keys) never reaches a

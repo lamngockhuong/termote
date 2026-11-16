@@ -83,6 +83,7 @@ func (c *opencodeClient) write(ctx context.Context, method, path string, body, o
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
+		opencodeForgetIfDial(err)
 		return fmt.Errorf("opencode %s %s: %w", method, path, errors.Join(errOpencodeUnavailable, err))
 	}
 	defer resp.Body.Close()
