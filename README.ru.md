@@ -27,7 +27,7 @@
   <a href="https://unikorn.vn/p/termote?ref=embed-termote" target="_blank"><img src="https://unikorn.vn/api/widgets/badge/termote?theme=dark" alt="Termote trên Unikorn.vn" width="170" height="42" /></a>
 </p>
 
-Удалённое управление CLI-инструментами (Claude Code, Codex, любой терминал) с мобильных устройств и десктопа через PWA.
+Удалённое управление CLI-инструментами (Claude Code, Codex, OpenCode, любой терминал) с мобильных устройств и десктопа через PWA.
 
 > [!NOTE]
 > Termote 1.0 не обновляет установку 0.x. Удалите 0.x, как описано в
@@ -47,17 +47,23 @@
 - **Переключение сессий**: Множество tmux-сессий с созданием/редактированием/удалением
 - **Вкладки сессий**: Горизонтальная панель вкладок для быстрого переключения окон
 - **Бэкенд Herdr** (нативно или в контейнере): управление рабочими пространствами Herdr вместо tmux, со значками состояния ИИ-агента в каждой панели — см. [Нативная установка](https://termote.ohnice.app/installation/native/)
-- **Вид Chat**: читайте панель с Claude Code (или Codex, запущенным с `--no-daemon`) как чат и отвечайте в ней, с подсказками slash-команд и ответами на диалоги — см. [Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
-- **Виды Files и Changes**: просмотр каталога панели и её изменений в git с предпросмотром Markdown — см. [Files and Changes](https://termote.ohnice.app/usage/files/)
+- **Вид Chat**: читайте панель с Claude Code, Codex (запущенным с `--no-daemon`) или OpenCode 2 как чат и отвечайте в ней, с подсказками slash-команд, ответами на диалоги и запущенными субагентами — см. [Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
+- **История сессий**: список сессий Claude Code, Codex и OpenCode, которые работали в папке панели; любую из них можно прочитать, продолжить в новой вкладке, а работающую — форкнуть — см. [Resuming an Old Session](https://termote.ohnice.app/usage/agent-chat/#resuming-an-old-session)
+- **Токены и стоимость**: токены и примерная стоимость каждой сессии агента, с итогами по дням — см. [Tokens and cost](https://termote.ohnice.app/usage/overview/#tokens-and-cost)
+- **Файлы, изменённые сессией**: файлы, которые отредактировала сессия агента, перечислены в Changes и в истории сессий, и каждый открывает свой diff — см. [Changes](https://termote.ohnice.app/usage/changes/#files-a-session-changed)
+- **Виды Files и Changes**: просмотр каталога панели и её изменений в git с предпросмотром Markdown на любом бэкенде, включая psmux в Windows — см. [Files and Changes](https://termote.ohnice.app/usage/files/)
 - **Очередь сообщений и ссылки на файлы в Chat**: ставьте сообщение в очередь, пока агент работает; нажмите на путь к файлу, написанный агентом, чтобы открыть файл в Files на нужной строке
 - **Ревью и staging**: комментируйте строки в Changes и Files и отправляйте ревью агенту; добавляйте в индекс, убирайте из индекса или отменяйте изменение по файлу или по hunk
 - **Предпросмотр и редактирование в Files**: PDF, .xlsx и .docx только для чтения; открытие и сохранение файлов в Shift-JIS, EUC-JP и UTF-16; редактирование Markdown рядом с живым предпросмотром
+- **Открыть в Windows** (WSL): скопировать Windows-путь файла или открыть файл либо папку программой Windows, когда сервер работает в WSL
 - **Places**: папка вне панели в Files через `termote start --allow-path <dir>` — см. [Places](https://termote.ohnice.app/usage/files/#places)
 - **Tasks**: запуск скриптов `package.json` и целей Makefile панели, отправка неудачного запуска агенту — см. [Tasks](https://termote.ohnice.app/usage/tasks/)
+- **Worktrees**: открыть git worktree отдельной группой из новой или существующей ветки (Herdr, tmux, Zellij, herdr-core, psmux) — см. [Worktrees](https://termote.ohnice.app/usage/sessions/#worktrees)
 - **Отдельные окна** (десктоп): файл, diff, вкладка, панель или обзор в собственном окне
-- **Вложения изображений**: отправка изображения с телефона в терминал или в сообщение вида Chat, чтобы агент прочитал его по пути
+- **Вложения изображений**: отправка изображения с телефона в терминал или в сообщение вида Chat, чтобы агент прочитал его по пути; изображение, вставленное в Claude Code, Codex или OpenCode, снова открывается из вида Chat
 - **Бэкенд Zellij** (Linux, macOS или в контейнере): управление сессиями, вкладками и панелями Zellij вместо tmux (Zellij 0.45.0 или новее), выбирается через `--mux zellij` — см. [Нативная установка](https://termote.ohnice.app/installation/native/)
 - **Бэкенд herdr-core** (нативно, любая ОС): показывает пространства, вкладки и панели, которые показывает приложение herdr, как ещё один клиент herdr-core (`hc` 0.1.16 или новее), выбирается через `--mux hc` — см. [Бэкенд herdr-core](https://termote.ohnice.app/installation/native/#herdr-core-backend)
+- **Machines**: следите за агентами других ваших компьютеров и управляйте ими из одного Termote по SSH с ключом, который даёт доступ только к Termote на той машине (`termote machine add <alias>`) — см. [Machines](https://termote.ohnice.app/usage/machines/)
 - **Плагин Herdr**: открыть активную панель Herdr в Termote, показать её ссылку QR-кодом для телефона, запустить или остановить сервер, не выходя из Herdr — см. [Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/)
 - **Мобильная адаптация**: Виртуальная клавиатура (Tab/Ctrl/Shift/стрелки, расширяемая)
 - **Поддержка жестов**: Свайп для Ctrl+C, Tab, прокрутки
@@ -65,6 +71,8 @@
 - **Быстрые действия**: Клавиша ⋯, закреплённая в конце мобильной панели, показывает строку Actions с частыми операциями (clear, cancel, exit)
 - **Стили интерфейса**: Neutral, Terminal или Native, выбираются в настройках независимо от светлой/тёмной темы
 - **Язык интерфейса**: английский или вьетнамский, выбирается в настройках; Auto следует языку браузера
+- **Настройки с собой**: экспорт настроек этого браузера в файл и импорт в другом браузере, а также просмотр настроек, которые предлагает ИИ-агент через `termote settings propose` — см. [Settings](https://termote.ohnice.app/usage/settings/#export-and-import)
+- **Терминал на GPU**: терминал отрисовывается через WebGL2, если у устройства есть GPU, поэтому большой вывод остаётся плавным
 - **Индикатор соединения**: Статус сервера в реальном времени с автоопределением разрыва
 - **Проверка обновлений**: Автоматическое уведомление о новой версии из GitHub releases
 - **PWA**: Устанавливается на домашний экран, работает офлайн
@@ -75,6 +83,8 @@
 - **Сохранение конфигурации**: `termote start` сохраняет свои параметры, пароль хранится в зашифрованном виде
 
 ## Скриншоты
+
+**[Попробуйте демо](https://termote.ohnice.app/demo/)**: настоящее приложение в браузере, на телефоне или десктопе, с вымышленными данными и без установки.
 
 <p align="center">
   <img src="docs/images/screenshots/phones.png" alt="Терминал, Chat и Changes на телефоне" width="720" />
@@ -184,12 +194,16 @@ termote status                       # What the running server reports
 termote stop                         # Stop (it starts again at the next login)
 termote restart                      # Restart with the saved options
 termote logs follow                  # Tail the logs
-termote show-password                # Print the saved admin password
+termote show-password                # Print the saved username and password
+termote url --qr                     # The link to open, as a QR code for a phone
+termote pair                         # A one-time code that signs a new device in
+termote devices                      # List the paired devices (devices revoke <id>)
+termote machine add <ssh alias>      # Reach another computer's Termote (Machines in the sidebar)
 termote update                       # Update to the latest release
-termote uninstall                    # Remove the service, the command and the install
+termote uninstall                    # Remove the service, the command, the install and uploads
 ```
 
-`update` переключается на новую версию, перезапускает службу и возвращается к прежней, если новая версия не поднялась. `uninstall` оставляет конфигурацию (`~/.config/termote`) и логи (`~/.local/state/termote`) и выводит оба пути.
+`update` переключается на новую версию, перезапускает службу и возвращается к прежней, если новая версия не поднялась. `uninstall` оставляет конфигурацию (`~/.config/termote`) и логи (`~/.local/state/termote`) и выводит оба пути; `uninstall --purge` удаляет и их.
 
 ## Установка
 
@@ -216,14 +230,14 @@ termote container logs -f
 termote container down
 ```
 
-`container up` запускает `ghcr.io/lamngockhuong/termote` той же версии, что и установленный `termote`, через podman (предпочтительно) или docker, на порту 7680 с `~/termote-workspace`, смонтированным в `/workspace`. Команда принимает `--port`, `--lan`, `--tailscale`, `--no-auth`, `--allow-host`, `--user` и `--fresh`; они сохраняются отдельно от параметров `start`, а имя пользователя и пароль общие с нативным сервером. Docker перезапускает контейнер после перезагрузки; у rootless Podman нет демона для этого, поэтому запускайте его как юнит Quadlet.
+`container up` запускает `ghcr.io/lamngockhuong/termote` той же версии, что и установленный `termote`, через podman (предпочтительно) или docker, на порту 7680 с `~/termote-workspace`, смонтированным в `/workspace`. Команда принимает `--port`, `--lan`, `--tailscale`, `--cloudflare`, `--no-auth`, `--mux`, `--allow-host`, `--allow-path`, `--user`, `--fresh`, `--workspace` и `--build` (только в рабочей копии); они сохраняются отдельно от параметров `start`, а имя пользователя и пароль общие с нативным сервером. Docker перезапускает контейнер после перезагрузки; у rootless Podman нет демона для этого, поэтому запускайте его как юнит Quadlet.
 
 > **Примечание по безопасности**: Не монтируйте `$HOME` напрямую — чувствительные каталоги, такие как `.ssh`, `.gnupg`, станут доступны в контейнере. Монтируйте только конкретные каталоги проектов.
 
 ### Docker без CLI
 
 ```bash
-# Generates a password, printed in: docker logs termote
+# Generates a password: docker exec termote cat /home/termote/.config/termote/password
 docker run -d --name termote -p 7680:7680 \
   -v ~/projects:/workspace \
   ghcr.io/lamngockhuong/termote:latest
@@ -234,11 +248,11 @@ docker run -d --name termote -p 7680:7680 \
   ghcr.io/lamngockhuong/termote:latest
 ```
 
-| Переменная окружения | Описание                                                                     |
-| -------------------- | ---------------------------------------------------------------------------- |
-| `TERMOTE_USER`       | Имя пользователя для базовой аутентификации (по умолчанию: `admin`)          |
-| `TERMOTE_PASS`       | Пароль для базовой аутентификации (по умолчанию: генерируется автоматически) |
-| `NO_AUTH`            | Установите `true`, чтобы отключить аутентификацию                            |
+| Переменная окружения | Описание                                                                                                                              |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `TERMOTE_USER`       | Имя пользователя для базовой аутентификации (по умолчанию: `admin`)                                                                   |
+| `TERMOTE_PASS`       | Пароль для базовой аутентификации (по умолчанию: генерируется автоматически и сохраняется в `/home/termote/.config/termote/password`) |
+| `NO_AUTH`            | Установите `true`, чтобы отключить аутентификацию                                                                                     |
 
 ### Сборка из исходного кода
 
@@ -287,6 +301,10 @@ flowchart LR
 | `--lan[=false]`                   | Слушать на всех интерфейсах (по умолчанию: только localhost)                                                                  |
 | `--tailscale <host[:port]>`       | Публиковать через Tailscale HTTPS (порт по умолчанию 443)                                                                     |
 | `--no-tailscale`                  | Прекратить публикацию через Tailscale                                                                                         |
+| `--cloudflare <host>`             | Имя хоста Cloudflare Tunnel, который вы запускаете; предупреждает, если перед ним нет Cloudflare Access                       |
+| `--no-cloudflare`                 | Забыть имя хоста Cloudflare                                                                                                   |
+| `--proxy-client-header <name>`    | Заголовок, в который прокси записывает адрес клиента (по умолчанию с `--cloudflare`: `CF-Connecting-IP`)                      |
+| `--no-proxy-client-header`        | Перестать его читать                                                                                                          |
 | `--no-auth[=false]`               | Отключить базовую аутентификацию                                                                                              |
 | `--mux <tmux\|herdr\|zellij\|hc>` | Терминальный бэкенд (по умолчанию: herdr, если он запущен, иначе tmux; zellij: Linux, macOS; hc: herdr-core)                  |
 | `--allow-host <name>`             | Разрешить дополнительное значение заголовка Host (можно повторять; без подстановочных знаков, см. примечания по безопасности) |
@@ -321,7 +339,7 @@ sudo tailscale set --operator=$USER                    # Linux, once: let termot
 | macOS     | ✓         | ✓        | `install.sh`  |
 | Windows   | ✓         | ✓        | `install.ps1` |
 
-> **Поддержка Windows**: Контейнерному режиму нужен Docker Desktop или Podman Desktop; нативному режиму — [psmux](https://github.com/psmux/psmux) (tmux-совместимый терминальный мультиплексор для Windows), который устанавливается командой `winget install psmux`, либо запущенный сервер [Herdr](https://herdr.dev/#install). Работа службы в Windows ещё не проверена на реальной машине; сообщайте о любых проблемах на GitHub.
+> **Поддержка Windows**: Контейнерному режиму нужен Docker Desktop или Podman Desktop; нативному режиму — [psmux](https://github.com/psmux/psmux) (tmux-совместимый терминальный мультиплексор для Windows), который устанавливается командой `winget install psmux`, либо запущенный сервер [Herdr](https://herdr.dev/#install).
 
 ## Мобильное использование
 
@@ -363,6 +381,7 @@ termote/
 │   ├── zellij_*.go         # Termote's Zellij clients, view-only stream, a pane's shell
 │   ├── mux_hc*.go, hc_*.go # herdr-core backend (hc connect client, herdr-app document)
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
+│   ├── agent_*.go          # Chat view, session history, tokens and cost (Claude Code, Codex, OpenCode)
 │   ├── cli*.go             # start/stop/update/container/logs/menu subcommands
 │   └── webui/              # PWA embedded in the binary (filled by make build)
 ├── scripts/
@@ -376,6 +395,8 @@ termote/
 │   ├── test-install.sh     # Unix installer tests
 │   ├── test-install.ps1    # Windows installer tests
 │   └── test-entrypoints.sh # Container entrypoint tests
+├── herdr-plugin/           # Herdr plugin (open a pane in Termote, QR code, start/stop)
+├── video/                  # Remotion intro video
 └── website/                # Astro Starlight docs site
     └── src/content/docs/   # MDX documentation
 ```

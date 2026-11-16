@@ -27,7 +27,7 @@
   <a href="https://unikorn.vn/p/termote?ref=embed-termote" target="_blank"><img src="https://unikorn.vn/api/widgets/badge/termote?theme=dark" alt="Termote trên Unikorn.vn" width="170" height="42" /></a>
 </p>
 
-Điều khiển từ xa các công cụ CLI (Claude Code, Codex, terminal bất kỳ) từ mobile/desktop qua PWA.
+Điều khiển từ xa các công cụ CLI (Claude Code, Codex, OpenCode, terminal bất kỳ) từ mobile/desktop qua PWA.
 
 > [!NOTE]
 > Termote 1.0 không nâng cấp được bản cài 0.x. Hãy gỡ 0.x theo
@@ -47,17 +47,23 @@
 - **Chuyển đổi session**: Nhiều tmux sessions với tạo/sửa/xóa
 - **Tab sessions**: Thanh tab ngang để chuyển nhanh giữa các cửa sổ
 - **Backend Herdr** (native hoặc trong container): điều khiển workspace của Herdr thay cho tmux, kèm huy hiệu trạng thái của agent lập trình trên từng pane — xem [Cài đặt Native](https://termote.ohnice.app/vi/installation/native/)
-- **View Chat**: đọc và trả lời một pane đang chạy Claude Code (hoặc Codex khởi động với `--no-daemon`) như một cuộc trò chuyện, có gợi ý slash command và nút trả lời hộp thoại — xem [Chat với agent](https://termote.ohnice.app/vi/usage/agent-chat/)
-- **View Files và Changes**: duyệt thư mục của pane và các thay đổi git trong đó, xem trước file Markdown — xem [Files và Changes](https://termote.ohnice.app/vi/usage/files/)
+- **View Chat**: đọc và trả lời một pane đang chạy Claude Code, Codex (khởi động với `--no-daemon`) hoặc OpenCode 2 như một cuộc trò chuyện, có gợi ý slash command, nút trả lời hộp thoại và danh sách subagent đang chạy — xem [Chat với agent](https://termote.ohnice.app/vi/usage/agent-chat/)
+- **Lịch sử phiên**: liệt kê các phiên Claude Code, Codex và OpenCode đã chạy trong thư mục của pane, đọc lại một phiên, tiếp tục nó trong tab mới hoặc fork một phiên đang chạy — xem [Tiếp tục phiên cũ](https://termote.ohnice.app/vi/usage/agent-chat/#tiếp-tục-phiên-cũ)
+- **Token và chi phí**: số token và chi phí ước tính của từng phiên agent, kèm tổng theo ngày — xem [Token và chi phí](https://termote.ohnice.app/vi/usage/overview/#token-và-chi-phí)
+- **File mà một phiên đã sửa**: danh sách file một phiên agent đã sửa, có trong Changes và trong lịch sử phiên, chạm vào file nào thì mở diff của file đó — xem [Changes](https://termote.ohnice.app/vi/usage/changes/#file-mà-một-session-đã-sửa)
+- **View Files và Changes**: duyệt thư mục của pane và các thay đổi git trong đó, xem trước file Markdown, trên mọi backend kể cả psmux trên Windows — xem [Files và Changes](https://termote.ohnice.app/vi/usage/files/)
 - **Hàng đợi tin nhắn và link file trong Chat**: viết sẵn tin nhắn khi agent còn đang làm, tin nhắn được gửi khi agent xong; chạm vào đường dẫn file agent đã viết để mở file đó trong Files, đúng dòng
-- **Review và stage**: comment trên từng dòng trong Changes và Files rồi gửi bản review cho agent; stage, bỏ stage hoặc hủy thay đổi theo từng file hay từng hunk
+- **Review và đưa vào stage**: comment trên từng dòng trong Changes và Files rồi gửi bản review cho agent; đưa vào stage, bỏ khỏi stage hoặc hủy thay đổi theo từng file hay từng hunk
 - **Xem và sửa trong Files**: xem PDF, .xlsx, .docx ở chế độ chỉ đọc; mở và lưu file Shift-JIS, EUC-JP, UTF-16; sửa Markdown cạnh bản xem trước cập nhật ngay khi gõ
+- **Mở trong Windows** (WSL): khi server chạy trong WSL, sao chép đường dẫn Windows của một file, hoặc mở file hay thư mục bằng chương trình tương ứng của Windows
 - **Places**: đưa một thư mục nằm ngoài pane vào Files bằng `termote start --allow-path <dir>` — xem [Places](https://termote.ohnice.app/vi/usage/files/#places)
 - **Task**: chạy script trong `package.json` và target trong Makefile của pane, gửi lần chạy lỗi cho agent — xem [Task](https://termote.ohnice.app/vi/usage/tasks/)
+- **Worktree**: mở một git worktree thành nhóm riêng, từ nhánh mới hoặc nhánh có sẵn (Herdr, tmux, Zellij, herdr-core, psmux) — xem [Worktree](https://termote.ohnice.app/vi/usage/sessions/#worktree)
 - **Cửa sổ riêng** (desktop): mở một file, diff, tab, pane hoặc trang tổng quan trong cửa sổ riêng
-- **Đính kèm ảnh**: gửi ảnh từ điện thoại vào terminal hoặc vào tin nhắn trong view Chat, agent đọc ảnh qua đường dẫn
+- **Đính kèm ảnh**: gửi ảnh từ điện thoại vào terminal hoặc vào tin nhắn trong view Chat, agent đọc ảnh qua đường dẫn; ảnh đã dán vào Claude Code, Codex hay OpenCode mở lại được từ view Chat
 - **Backend Zellij** (Linux, macOS hoặc trong container): điều khiển các phiên, tab và pane Zellij của bạn thay cho tmux (Zellij 0.45.0 trở lên), chọn bằng `--mux zellij` — xem [Cài đặt Native](https://termote.ohnice.app/vi/installation/native/)
-- **Backend herdr-core** (native, mọi hệ điều hành): hiện đúng các space, tab và pane mà ứng dụng herdr đang hiện, với Termote là thêm một client của herdr-core (`hc` 0.1.16 trở lên), chọn bằng `--mux hc` — xem [Backend herdr-core](https://termote.ohnice.app/vi/installation/native/#backend-herdr-core)
+- **Backend herdr-core** (native, mọi hệ điều hành): hiện đúng các không gian làm việc, tab và pane mà ứng dụng herdr đang hiện, với Termote là thêm một client của herdr-core (`hc` 0.1.16 trở lên), chọn bằng `--mux hc` — xem [Backend herdr-core](https://termote.ohnice.app/vi/installation/native/#backend-herdr-core)
+- **Máy**: theo dõi và điều khiển agent trên các máy khác của bạn từ một Termote, qua SSH bằng một khóa chỉ dùng được để vào Termote ở máy đó (`termote machine add <alias>`) — xem [Máy](https://termote.ohnice.app/vi/usage/machines/)
 - **Plugin Herdr**: mở pane Herdr đang dùng trong Termote, hiện liên kết thành mã QR để quét bằng điện thoại, bật hoặc tắt server mà không rời Herdr — xem [Plugin Herdr](https://termote.ohnice.app/vi/usage/herdr-plugin/)
 - **Thân thiện mobile**: Bàn phím ảo (Tab/Ctrl/Shift/mũi tên, mở rộng được)
 - **Hỗ trợ cử chỉ**: Vuốt cho Ctrl+C, Tab, cuộn màn hình
@@ -65,9 +71,11 @@
 - **Thao tác nhanh**: Phím ⋯ ghim ở cuối thanh công cụ mobile mở hàng Actions gồm các thao tác phổ biến (clear, cancel, exit)
 - **Kiểu giao diện**: Neutral, Terminal hoặc Native, chọn trong Settings, độc lập với theme sáng/tối
 - **Ngôn ngữ giao diện**: tiếng Anh hoặc tiếng Việt, chọn trong Settings; Auto theo ngôn ngữ trình duyệt
+- **Mang cài đặt theo**: xuất cài đặt của trình duyệt này ra file rồi nhập vào trình duyệt khác, hoặc xem lại các cài đặt mà agent lập trình đề xuất bằng `termote settings propose` — xem [Settings](https://termote.ohnice.app/vi/usage/settings/#xuất-và-nhập)
+- **Vẽ terminal bằng GPU**: terminal được vẽ bằng WebGL2 khi thiết bị có GPU, nhờ vậy output dài vẫn cuộn mượt
 - **Chỉ báo kết nối**: Trạng thái server real-time, tự phát hiện mất kết nối
-- **Kiểm tra cập nhật**: Tự động thông báo phiên bản mới từ GitHub releases
-- **PWA**: Cài được vào homescreen, hoạt động offline
+- **Kiểm tra cập nhật**: Tự động thông báo khi GitHub có bản phát hành mới
+- **PWA**: Cài được ra màn hình chính, hoạt động offline
 - **Sessions bền vững**: tmux giữ sessions sống
 - **Sidebar thu gọn**: Giao diện desktop với thanh sidebar bật/tắt
 - **Chế độ toàn màn hình**: Trải nghiệm terminal toàn màn hình
@@ -75,6 +83,8 @@
 - **Lưu cấu hình**: `termote start` lưu các tùy chọn của nó, mật khẩu được lưu ở dạng mã hóa
 
 ## Ảnh Chụp Màn Hình
+
+**[Dùng thử bản demo](https://termote.ohnice.app/demo/)**: chính ứng dụng chạy ngay trong trình duyệt, trên điện thoại hay máy tính, với dữ liệu giả và không cần cài đặt.
 
 <p align="center">
   <img src="docs/images/screenshots/phones.png" alt="Terminal, Chat và Changes trên điện thoại" width="720" />
@@ -184,12 +194,16 @@ termote status                       # What the running server reports
 termote stop                         # Stop (it starts again at the next login)
 termote restart                      # Restart with the saved options
 termote logs follow                  # Tail the logs
-termote show-password                # Print the saved admin password
+termote show-password                # Print the saved username and password
+termote url --qr                     # The link to open, as a QR code for a phone
+termote pair                         # A one-time code that signs a new device in
+termote devices                      # List the paired devices (devices revoke <id>)
+termote machine add <ssh alias>      # Reach another computer's Termote (Machines in the sidebar)
 termote update                       # Update to the latest release
-termote uninstall                    # Remove the service, the command and the install
+termote uninstall                    # Remove the service, the command, the install and uploads
 ```
 
-`update` chuyển sang phiên bản mới, khởi động lại service và quay về phiên bản cũ nếu bản mới không chạy lên được. `uninstall` giữ lại cấu hình (`~/.config/termote`) và logs (`~/.local/state/termote`), đồng thời in ra cả hai đường dẫn.
+`update` chuyển sang phiên bản mới, khởi động lại service và quay về phiên bản cũ nếu bản mới không chạy lên được. `uninstall` giữ lại cấu hình (`~/.config/termote`) và logs (`~/.local/state/termote`), đồng thời in ra cả hai đường dẫn; `uninstall --purge` xoá luôn cả hai.
 
 ## Cài Đặt
 
@@ -216,14 +230,14 @@ termote container logs -f
 termote container down
 ```
 
-`container up` chạy image `ghcr.io/lamngockhuong/termote` đúng với phiên bản của `termote` đã cài, bằng podman (ưu tiên) hoặc docker, trên port 7680, gắn thư mục `~/termote-workspace` vào `/workspace`. Lệnh nhận `--port`, `--lan`, `--tailscale`, `--no-auth`, `--allow-host`, `--user` và `--fresh`; các giá trị này được lưu riêng với tùy chọn của `start`, còn tên đăng nhập và mật khẩu thì dùng chung với server native. Docker tự khởi động lại container sau khi máy khởi động lại; Podman chạy không cần quyền root thì không có tiến trình nền nào khởi động lại container, nên hãy chạy nó dưới dạng Quadlet unit.
+`container up` chạy image `ghcr.io/lamngockhuong/termote` đúng với phiên bản của `termote` đã cài, bằng podman (ưu tiên) hoặc docker, trên port 7680, gắn thư mục `~/termote-workspace` vào `/workspace`. Lệnh nhận `--port`, `--lan`, `--tailscale`, `--cloudflare`, `--no-auth`, `--mux`, `--allow-host`, `--allow-path`, `--user`, `--fresh`, `--workspace` và `--build` (chỉ trong bản checkout); các giá trị này được lưu riêng với tùy chọn của `start`, còn tên đăng nhập và mật khẩu thì dùng chung với server native. Docker tự khởi động lại container sau khi máy khởi động lại; Podman chạy không cần quyền root thì không có tiến trình nền nào khởi động lại container, nên hãy chạy nó dưới dạng Quadlet unit.
 
 > **Lưu ý bảo mật**: Tránh mount trực tiếp `$HOME` — các thư mục nhạy cảm như `.ssh`, `.gnupg` sẽ truy cập được từ trong container. Hãy mount các thư mục dự án cụ thể.
 
 ### Docker không qua CLI
 
 ```bash
-# Generates a password, printed in: docker logs termote
+# Generates a password: docker exec termote cat /home/termote/.config/termote/password
 docker run -d --name termote -p 7680:7680 \
   -v ~/projects:/workspace \
   ghcr.io/lamngockhuong/termote:latest
@@ -234,11 +248,11 @@ docker run -d --name termote -p 7680:7680 \
   ghcr.io/lamngockhuong/termote:latest
 ```
 
-| Biến Môi Trường | Mô Tả                                        |
-| --------------- | -------------------------------------------- |
-| `TERMOTE_USER`  | Tên đăng nhập basic auth (mặc định: `admin`) |
-| `TERMOTE_PASS`  | Mật khẩu basic auth (mặc định: tự sinh)      |
-| `NO_AUTH`       | Đặt `true` để tắt xác thực                   |
+| Biến Môi Trường | Mô Tả                                                                                   |
+| --------------- | --------------------------------------------------------------------------------------- |
+| `TERMOTE_USER`  | Tên đăng nhập basic auth (mặc định: `admin`)                                            |
+| `TERMOTE_PASS`  | Mật khẩu basic auth (mặc định: tự sinh, lưu ở `/home/termote/.config/termote/password`) |
+| `NO_AUTH`       | Đặt `true` để tắt xác thực                                                              |
 
 ### Biên dịch từ mã nguồn
 
@@ -281,24 +295,28 @@ Server native chạy dưới dạng service của người dùng: systemd user u
 
 ### Tùy chọn của `start`
 
-| Flag                              | Mô Tả                                                                                                         |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `--port <port>`                   | Port (mặc định: 7680, Windows: 7690)                                                                          |
-| `--lan[=false]`                   | Lắng nghe trên mọi interface (mặc định: chỉ localhost)                                                        |
-| `--tailscale <host[:port]>`       | Công bố qua Tailscale HTTPS (port mặc định 443)                                                               |
-| `--no-tailscale`                  | Ngừng công bố qua Tailscale                                                                                   |
-| `--no-auth[=false]`               | Tắt xác thực (basic auth)                                                                                     |
-| `--mux <tmux\|herdr\|zellij\|hc>` | Backend terminal (mặc định: herdr nếu đang chạy, nếu không thì tmux; zellij: Linux, macOS; hc: herdr-core)    |
-| `--allow-host <name>`             | Cho phép thêm một giá trị header Host (lặp lại được; không có ký tự đại diện, xem ghi chú bảo mật)            |
-| `--remove-host <name>`            | Bỏ một tên Host đã cho phép (lặp lại được)                                                                    |
-| `--allow-local-user <name>`       | Cho một người dùng hệ điều hành khác trên máy này kết nối, ví dụ reverse proxy (lặp lại được; Linux, Windows) |
-| `--remove-local-user <name>`      | Thôi cho người dùng đó kết nối (lặp lại được)                                                                 |
-| `--allow-path <dir>`              | Đưa một thư mục vào Files, trong mục Places (lặp lại được)                                                    |
-| `--remove-path <dir>`             | Bỏ một thư mục đã cho phép (lặp lại được)                                                                     |
-| `--allow-herdr-no-auth`           | Bắt buộc khi dùng cùng `--mux herdr --no-auth`                                                                |
-| `--allow-hc-no-auth`              | Bắt buộc khi dùng cùng `--mux hc --no-auth`                                                                   |
-| `--user <name>`                   | Tên đăng nhập (mặc định: `admin`; dùng chung với container)                                                   |
-| `--fresh`                         | Đặt mật khẩu mới                                                                                              |
+| Flag                              | Mô Tả                                                                                                           |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `--port <port>`                   | Port (mặc định: 7680, Windows: 7690)                                                                            |
+| `--lan[=false]`                   | Lắng nghe trên mọi interface (mặc định: chỉ localhost)                                                          |
+| `--tailscale <host[:port]>`       | Công bố qua Tailscale HTTPS (port mặc định 443)                                                                 |
+| `--no-tailscale`                  | Ngừng công bố qua Tailscale                                                                                     |
+| `--cloudflare <host>`             | Tên máy của một Cloudflare Tunnel do bạn chạy; cảnh báo khi phía trước nó không có Cloudflare Access            |
+| `--no-cloudflare`                 | Bỏ tên máy Cloudflare đã lưu                                                                                    |
+| `--proxy-client-header <name>`    | Header mà proxy đặt địa chỉ của client vào (mặc định khi có `--cloudflare`: `CF-Connecting-IP`)                 |
+| `--no-proxy-client-header`        | Ngừng đọc header đó                                                                                             |
+| `--no-auth[=false]`               | Tắt xác thực (basic auth)                                                                                       |
+| `--mux <tmux\|herdr\|zellij\|hc>` | Backend terminal (mặc định: herdr nếu đang chạy, nếu không thì tmux; zellij: Linux, macOS; hc: herdr-core)      |
+| `--allow-host <name>`             | Cho phép thêm một giá trị header Host (lặp lại được; không có ký tự đại diện, xem ghi chú bảo mật)              |
+| `--remove-host <name>`            | Bỏ một tên Host đã cho phép (lặp lại được)                                                                      |
+| `--allow-local-user <name>`       | Cho một người dùng hệ điều hành khác trên máy này kết nối, ví dụ một proxy ngược (lặp lại được; Linux, Windows) |
+| `--remove-local-user <name>`      | Thôi cho người dùng đó kết nối (lặp lại được)                                                                   |
+| `--allow-path <dir>`              | Đưa một thư mục vào Files, trong mục Places (lặp lại được)                                                      |
+| `--remove-path <dir>`             | Bỏ một thư mục đã cho phép (lặp lại được)                                                                       |
+| `--allow-herdr-no-auth`           | Bắt buộc khi dùng cùng `--mux herdr --no-auth`                                                                  |
+| `--allow-hc-no-auth`              | Bắt buộc khi dùng cùng `--mux hc --no-auth`                                                                     |
+| `--user <name>`                   | Tên đăng nhập (mặc định: `admin`; dùng chung với container)                                                     |
+| `--fresh`                         | Đặt mật khẩu mới                                                                                                |
 
 ### Với Tailscale HTTPS
 
@@ -321,20 +339,20 @@ sudo tailscale set --operator=$USER                    # Linux, once: let termot
 | macOS    | ✓         | ✓      | `install.sh`  |
 | Windows  | ✓         | ✓      | `install.ps1` |
 
-> **Hỗ trợ Windows**: Chế độ container yêu cầu Docker Desktop hoặc Podman Desktop; chế độ native yêu cầu [psmux](https://github.com/psmux/psmux) (bộ ghép kênh terminal tương thích tmux cho Windows), cài bằng `winget install psmux`, hoặc một server [Herdr](https://herdr.dev/#install) đang chạy. Service trên Windows chưa được kiểm chứng trên máy thật; vui lòng báo lỗi trên GitHub nếu gặp sự cố.
+> **Hỗ trợ Windows**: Chế độ container yêu cầu Docker Desktop hoặc Podman Desktop; chế độ native yêu cầu [psmux](https://github.com/psmux/psmux) (bộ ghép kênh terminal tương thích tmux cho Windows), cài bằng `winget install psmux`, hoặc một server [Herdr](https://herdr.dev/#install) đang chạy.
 
 ## Sử Dụng Mobile
 
-| Hành Động      | Cử Chỉ             |
-| -------------- | ------------------ |
-| Hủy/ngắt       | Vuốt trái (Ctrl+C) |
-| Tab completion | Vuốt phải          |
-| Cuộn xuống     | Vuốt lên           |
-| Cuộn lên       | Vuốt xuống         |
-| Dán            | Nhấn giữ           |
-| Cỡ chữ         | Chụm vào/ra        |
+| Hành Động              | Cử Chỉ             |
+| ---------------------- | ------------------ |
+| Hủy/ngắt               | Vuốt trái (Ctrl+C) |
+| Tự hoàn thành bằng Tab | Vuốt phải          |
+| Cuộn xuống             | Vuốt lên           |
+| Cuộn lên               | Vuốt xuống         |
+| Dán                    | Nhấn giữ           |
+| Cỡ chữ                 | Chụm vào/ra        |
 
-Thanh công cụ ảo cung cấp: Tab, Esc, Ctrl, Shift, phím mũi tên, và các tổ hợp phím thường dùng. Hỗ trợ tổ hợp Ctrl+Shift (dán, sao chép). Chuyển đổi giữa chế độ minimal và expanded để có thêm phím (Home, End, Delete, v.v.).
+Thanh công cụ ảo cung cấp: Tab, Esc, Ctrl, Shift, phím mũi tên, và các tổ hợp phím thường dùng. Hỗ trợ tổ hợp Ctrl+Shift (dán, sao chép). Chuyển đổi giữa chế độ thu gọn và mở rộng để có thêm phím (Home, End, Delete, v.v.).
 
 ## Cấu Trúc Dự Án
 
@@ -363,6 +381,7 @@ termote/
 │   ├── zellij_*.go         # Termote's Zellij clients, view-only stream, a pane's shell
 │   ├── mux_hc*.go, hc_*.go # herdr-core backend (hc connect client, herdr-app document)
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
+│   ├── agent_*.go          # Chat view, session history, tokens and cost (Claude Code, Codex, OpenCode)
 │   ├── cli*.go             # start/stop/update/container/logs/menu subcommands
 │   └── webui/              # PWA embedded in the binary (filled by make build)
 ├── scripts/
@@ -376,6 +395,8 @@ termote/
 │   ├── test-install.sh     # Unix installer tests
 │   ├── test-install.ps1    # Windows installer tests
 │   └── test-entrypoints.sh # Container entrypoint tests
+├── herdr-plugin/           # Herdr plugin (open a pane in Termote, QR code, start/stop)
+├── video/                  # Remotion intro video
 └── website/                # Astro Starlight docs site
     └── src/content/docs/   # MDX documentation
 ```
@@ -411,7 +432,7 @@ pnpm --filter termote test:e2e:ui    # Run with UI debugger
 ### Vấn đề bàn phím mobile
 
 - Đảm bảo có viewport meta tag
-- Test trên thiết bị thật, không dùng emulator
+- Test trên thiết bị thật, không dùng trình giả lập
 
 ### Chế độ native: server không khởi động
 
@@ -424,11 +445,11 @@ termote start --fresh      # If the saved password can no longer be read
 
 ## Ghi Chú Bảo Mật
 
-- **Mặc định: chỉ localhost** - không mở LAN trừ khi dùng flag `--lan`
+- **Mặc định: chỉ localhost** - không mở LAN trừ khi dùng tham số `--lan`
 - **Basic auth bật mặc định** - dùng `--no-auth` để tắt khi phát triển trên máy; mật khẩu được tạo ở lần `termote start` đầu tiên và lưu ở dạng mã hóa
 - **Danh sách Host được phép**: request có header `Host` lạ bị từ chối (chống tấn công đổi địa chỉ DNS); thêm các tên tin cậy bằng `--allow-host`, không có ký tự đại diện nào tắt được lớp kiểm tra này
 - **Chặn Origin/CSRF**: các request thay đổi trạng thái tới `/api/mux/*` và WebSocket `/api/mux/stream` từ chối request có `Sec-Fetch-Site`/`Origin` đến từ site khác, đồng thời yêu cầu stream token cùng origin và chỉ dùng một lần
-- **Chống brute-force tích hợp** - rate limiting (5 lần thử sai/phút mỗi IP, 20/phút mỗi dải IPv6 /64)
+- **Chống dò mật khẩu tích hợp** - giới hạn số lần thử (5 lần thử sai/phút mỗi IP, 20/phút mỗi dải IPv6 /64)
 - **Backend Herdr**: để lộ mọi workspace Herdr trên máy host, nên `--mux herdr --no-auth` bị từ chối nếu không kèm `--allow-herdr-no-auth`
 - **Backend Zellij**: để lộ mọi phiên Zellij đang chạy của người dùng, giống tmux (không có thêm chốt chặn cho `--no-auth`); phím và tin nhắn Chat chỉ đến pane qua terminal của một client Zellij do Termote mở, không bao giờ qua tham số tiến trình mà người dùng cục bộ khác đọc được
 - **Backend herdr-core**: herdr-core không có đăng nhập riêng, nên `--mux hc --no-auth` bị từ chối nếu không kèm `--allow-hc-no-auth`, và `container up --mux hc` luôn bị từ chối
@@ -439,11 +460,11 @@ termote start --fresh      # If the saved password can no longer be read
 
 ## Dự Án Khác
 
-| Dự án                                                       | Mô tả                                                                                                                                   |
-| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| [GitHub Flex](https://github.com/lamngockhuong/github-flex) | Extension đa trình duyệt (Chrome & Firefox) nâng cao giao diện GitHub với các tính năng tăng năng suất                                  |
-| [TabRest](https://github.com/lamngockhuong/tabrest)         | Extension Chrome tự động unload các tab không hoạt động để giải phóng bộ nhớ                                                            |
-| [Specpin](https://github.com/lamngockhuong/specpin)         | Ghim các đặc tả nghiệp vụ sống, phiên bản hóa bằng Git lên các phần tử của giao diện web đang chạy (extension trình duyệt + Go sidecar) |
+| Dự án                                                       | Mô tả                                                                                                                                                          |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [GitHub Flex](https://github.com/lamngockhuong/github-flex) | Tiện ích mở rộng đa trình duyệt (Chrome & Firefox) nâng cao giao diện GitHub với các tính năng tăng năng suất                                                  |
+| [TabRest](https://github.com/lamngockhuong/tabrest)         | Tiện ích mở rộng Chrome tự động giải phóng các tab không hoạt động để giải phóng bộ nhớ                                                                        |
+| [Specpin](https://github.com/lamngockhuong/specpin)         | Ghim các đặc tả nghiệp vụ sống, phiên bản hóa bằng Git lên các phần tử của giao diện web đang chạy (tiện ích mở rộng trình duyệt + một tiến trình Go chạy kèm) |
 
 ## Giấy Phép
 

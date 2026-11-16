@@ -27,7 +27,7 @@
   <a href="https://unikorn.vn/p/termote?ref=embed-termote" target="_blank"><img src="https://unikorn.vn/api/widgets/badge/termote?theme=dark" alt="Termote trên Unikorn.vn" width="170" height="42" /></a>
 </p>
 
-Kendalikan alat CLI (Claude Code, Codex, terminal apa pun) dari jarak jauh melalui mobile/desktop via PWA.
+Kendalikan alat CLI (Claude Code, Codex, OpenCode, terminal apa pun) dari jarak jauh melalui mobile/desktop via PWA.
 
 > [!NOTE]
 > Termote 1.0 tidak meng-upgrade instalasi 0.x. Hapus instalasi 0.x sesuai
@@ -47,17 +47,23 @@ Kendalikan alat CLI (Claude Code, Codex, terminal apa pun) dari jarak jauh melal
 - **Pergantian session**: Banyak tmux sessions dengan buat/edit/hapus
 - **Tab session**: Bilah tab horizontal untuk berpindah jendela dengan cepat
 - **Backend Herdr** (native atau di dalam container): kendalikan workspace Herdr sebagai pengganti tmux, dengan lencana status coding agent di setiap pane — lihat [Instalasi Native](https://termote.ohnice.app/installation/native/)
-- **Tampilan Chat**: baca dan balas pane yang menjalankan Claude Code (atau Codex yang dijalankan dengan `--no-daemon`) sebagai obrolan, dengan saran slash command dan jawaban dialog — lihat [Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
-- **Tampilan Files dan Changes**: jelajahi direktori pane dan perubahan git-nya, dengan pratinjau Markdown — lihat [Files and Changes](https://termote.ohnice.app/usage/files/)
+- **Tampilan Chat**: baca dan balas pane yang menjalankan Claude Code, Codex (dijalankan dengan `--no-daemon`) atau OpenCode 2 sebagai obrolan, dengan saran slash command, jawaban dialog, dan subagent yang sedang berjalan — lihat [Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
+- **Riwayat session**: tampilkan daftar session Claude Code, Codex, dan OpenCode yang pernah berjalan di folder sebuah pane, baca salah satunya, lanjutkan di tab baru, atau fork session yang sedang berjalan — lihat [Resuming an Old Session](https://termote.ohnice.app/usage/agent-chat/#resuming-an-old-session)
+- **Token dan biaya**: token dan perkiraan biaya setiap session agent, dengan total harian — lihat [Tokens and cost](https://termote.ohnice.app/usage/overview/#tokens-and-cost)
+- **File yang diubah session**: file yang diedit oleh session agent, tercantum di Changes dan di riwayat session, masing-masing membuka diff-nya — lihat [Changes](https://termote.ohnice.app/usage/changes/#files-a-session-changed)
+- **Tampilan Files dan Changes**: jelajahi direktori pane dan perubahan git-nya, dengan pratinjau Markdown, di semua backend termasuk psmux di Windows — lihat [Files and Changes](https://termote.ohnice.app/usage/files/)
 - **Antrean pesan dan tautan file di Chat**: antrekan pesan saat agent masih bekerja; ketuk path file yang ditulis agent untuk membukanya di Files, tepat di barisnya
 - **Review dan staging**: beri komentar pada baris di Changes dan Files lalu kirim review ke agent; stage, unstage, atau buang perubahan per file atau per hunk
 - **Pratinjau dan pengeditan di Files**: PDF, .xlsx, dan .docx hanya-baca; buka dan simpan file Shift-JIS, EUC-JP, dan UTF-16; edit Markdown di samping pratinjau langsung
+- **Buka di Windows** (WSL): salin path Windows sebuah file, atau buka file atau folder dengan program Windows-nya, saat server berjalan di WSL
 - **Places**: tawarkan folder di luar pane di Files dengan `termote start --allow-path <dir>` — lihat [Places](https://termote.ohnice.app/usage/files/#places)
 - **Tasks**: jalankan script `package.json` dan target Makefile milik pane, kirim run yang gagal ke agent — lihat [Tasks](https://termote.ohnice.app/usage/tasks/)
+- **Worktree**: buka git worktree sebagai grup tersendiri, dari branch baru atau yang sudah ada (Herdr, tmux, Zellij, herdr-core, psmux) — lihat [Worktrees](https://termote.ohnice.app/usage/sessions/#worktrees)
 - **Jendela terpisah** (desktop): buka file, diff, tab, pane, atau ringkasan di jendelanya sendiri
-- **Lampiran gambar**: kirim gambar dari ponsel ke terminal atau ke pesan di tampilan Chat, agar agent dapat membacanya lewat path
+- **Lampiran gambar**: kirim gambar dari ponsel ke terminal atau ke pesan di tampilan Chat, agar agent dapat membacanya lewat path; gambar yang ditempel ke Claude Code, Codex, atau OpenCode dapat dibuka lagi dari tampilan Chat
 - **Backend Zellij** (Linux, macOS, atau di dalam container): kendalikan sesi, tab, dan pane Zellij Anda alih-alih tmux (Zellij 0.45.0 atau lebih baru), dipilih dengan `--mux zellij` — lihat [Instalasi Native](https://termote.ohnice.app/installation/native/)
 - **Backend herdr-core** (native, semua OS): tampilkan space, tab, dan pane yang ditampilkan aplikasi herdr, sebagai satu klien lagi dari herdr-core (`hc` 0.1.16 atau lebih baru), dipilih dengan `--mux hc` — lihat [Backend herdr-core](https://termote.ohnice.app/installation/native/#herdr-core-backend)
+- **Machines**: pantau dan kendalikan agent di komputer Anda yang lain dari satu Termote, lewat SSH dengan kunci yang hanya bisa menjangkau Termote di sana (`termote machine add <alias>`) — lihat [Machines](https://termote.ohnice.app/usage/machines/)
 - **Plugin Herdr**: buka pane Herdr yang sedang aktif di Termote, tampilkan link-nya sebagai kode QR untuk ponsel, mulai atau hentikan server, tanpa meninggalkan Herdr — lihat [Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/)
 - **Ramah mobile**: Toolbar keyboard virtual (Tab/Ctrl/Shift/panah, dapat diperluas)
 - **Dukungan gestur**: Geser untuk Ctrl+C, Tab, menggulir
@@ -65,6 +71,8 @@ Kendalikan alat CLI (Claude Code, Codex, terminal apa pun) dari jarak jauh melal
 - **Aksi cepat**: Tombol ⋯ yang tersemat di ujung toolbar mobile menampilkan baris Actions berisi operasi umum (clear, cancel, exit)
 - **Gaya antarmuka**: Neutral, Terminal, atau Native, dipilih di Pengaturan, terpisah dari tema terang/gelap
 - **Bahasa antarmuka**: Inggris atau Vietnam, dipilih di Pengaturan; Auto mengikuti browser
+- **Pengaturan yang bisa dibawa**: ekspor pengaturan browser ini ke file lalu impor di browser lain, atau tinjau pengaturan yang diusulkan coding agent dengan `termote settings propose` — lihat [Settings](https://termote.ohnice.app/usage/settings/#export-and-import)
+- **Terminal GPU**: terminal digambar dengan WebGL2 jika perangkat memiliki GPU, sehingga output yang besar tetap lancar
 - **Indikator koneksi**: Status server real-time, deteksi otomatis koneksi terputus
 - **Pemeriksa pembaruan**: Notifikasi otomatis versi baru dari GitHub releases
 - **PWA**: Dapat dipasang di homescreen, tersedia offline
@@ -75,6 +83,8 @@ Kendalikan alat CLI (Claude Code, Codex, terminal apa pun) dari jarak jauh melal
 - **Penyimpanan konfigurasi**: `termote start` menyimpan opsinya, dengan password tersimpan terenkripsi
 
 ## Tangkapan Layar
+
+**[Coba demonya](https://termote.ohnice.app/demo/)**: aplikasi sungguhan di browser Anda, di ponsel atau desktop, dengan data palsu dan tanpa instalasi.
 
 <p align="center">
   <img src="docs/images/screenshots/phones.png" alt="Terminal, Chat, dan Changes di ponsel" width="720" />
@@ -184,12 +194,16 @@ termote status                       # What the running server reports
 termote stop                         # Stop (it starts again at the next login)
 termote restart                      # Restart with the saved options
 termote logs follow                  # Tail the logs
-termote show-password                # Print the saved admin password
+termote show-password                # Print the saved username and password
+termote url --qr                     # The link to open, as a QR code for a phone
+termote pair                         # A one-time code that signs a new device in
+termote devices                      # List the paired devices (devices revoke <id>)
+termote machine add <ssh alias>      # Reach another computer's Termote (Machines in the sidebar)
 termote update                       # Update to the latest release
-termote uninstall                    # Remove the service, the command and the install
+termote uninstall                    # Remove the service, the command, the install and uploads
 ```
 
-`update` beralih ke versi baru, me-restart service, dan kembali ke versi sebelumnya jika versi baru tidak berjalan. `uninstall` tetap menyimpan konfigurasi (`~/.config/termote`) dan log (`~/.local/state/termote`) serta menampilkan kedua path tersebut.
+`update` beralih ke versi baru, me-restart service, dan kembali ke versi sebelumnya jika versi baru tidak berjalan. `uninstall` tetap menyimpan konfigurasi (`~/.config/termote`) dan log (`~/.local/state/termote`) serta menampilkan kedua path tersebut; `uninstall --purge` juga menghapus keduanya.
 
 ## Instalasi
 
@@ -216,14 +230,14 @@ termote container logs -f
 termote container down
 ```
 
-`container up` menjalankan `ghcr.io/lamngockhuong/termote` pada versi `termote` yang terpasang, dengan podman (diutamakan) atau docker, di port 7680 dengan `~/termote-workspace` di-mount ke `/workspace`. Perintah ini menerima `--port`, `--lan`, `--tailscale`, `--no-auth`, `--allow-host`, `--user` dan `--fresh`, yang disimpan terpisah dari opsi `start`; username dan password-nya sama dengan server native. Docker menjalankan ulang container setelah reboot; Podman rootless tidak punya daemon untuk itu, jadi jalankan sebagai unit Quadlet.
+`container up` menjalankan `ghcr.io/lamngockhuong/termote` pada versi `termote` yang terpasang, dengan podman (diutamakan) atau docker, di port 7680 dengan `~/termote-workspace` di-mount ke `/workspace`. Perintah ini menerima `--port`, `--lan`, `--tailscale`, `--cloudflare`, `--no-auth`, `--mux`, `--allow-host`, `--allow-path`, `--user`, `--fresh`, `--workspace` dan `--build` (hanya di checkout), yang disimpan terpisah dari opsi `start`; username dan password-nya sama dengan server native. Docker menjalankan ulang container setelah reboot; Podman rootless tidak punya daemon untuk itu, jadi jalankan sebagai unit Quadlet.
 
 > **Catatan keamanan**: Hindari mount `$HOME` secara langsung — direktori sensitif seperti `.ssh`, `.gnupg` akan dapat diakses di dalam container. Mount direktori proyek tertentu saja.
 
 ### Docker tanpa CLI
 
 ```bash
-# Generates a password, printed in: docker logs termote
+# Generates a password: docker exec termote cat /home/termote/.config/termote/password
 docker run -d --name termote -p 7680:7680 \
   -v ~/projects:/workspace \
   ghcr.io/lamngockhuong/termote:latest
@@ -234,11 +248,11 @@ docker run -d --name termote -p 7680:7680 \
   ghcr.io/lamngockhuong/termote:latest
 ```
 
-| Variabel Lingkungan | Deskripsi                                         |
-| ------------------- | ------------------------------------------------- |
-| `TERMOTE_USER`      | Username basic auth (default: `admin`)            |
-| `TERMOTE_PASS`      | Password basic auth (default: dibuat otomatis)    |
-| `NO_AUTH`           | Isi dengan `true` untuk menonaktifkan autentikasi |
+| Variabel Lingkungan | Deskripsi                                                                                            |
+| ------------------- | ---------------------------------------------------------------------------------------------------- |
+| `TERMOTE_USER`      | Username basic auth (default: `admin`)                                                               |
+| `TERMOTE_PASS`      | Password basic auth (default: dibuat otomatis, disimpan di `/home/termote/.config/termote/password`) |
+| `NO_AUTH`           | Isi dengan `true` untuk menonaktifkan autentikasi                                                    |
 
 ### Build dari source
 
@@ -281,24 +295,28 @@ Server native berjalan sebagai service pengguna: unit systemd user di Linux (pro
 
 ### Opsi `start`
 
-| Flag                              | Deskripsi                                                                                                     |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `--port <port>`                   | Port (default: 7680, Windows: 7690)                                                                           |
-| `--lan[=false]`                   | Mendengarkan di semua interface (default: hanya localhost)                                                    |
-| `--tailscale <host[:port]>`       | Publikasikan melalui Tailscale HTTPS (port default 443)                                                       |
-| `--no-tailscale`                  | Berhenti memublikasikan melalui Tailscale                                                                     |
-| `--no-auth[=false]`               | Nonaktifkan basic authentication                                                                              |
-| `--mux <tmux\|herdr\|zellij\|hc>` | Backend terminal (default: herdr jika sedang berjalan, selain itu tmux; zellij: Linux, macOS; hc: herdr-core) |
-| `--allow-host <name>`             | Izinkan nilai header Host tambahan (dapat diulang; tanpa wildcard, lihat catatan keamanan)                    |
-| `--remove-host <name>`            | Hapus nama Host yang diizinkan (dapat diulang)                                                                |
-| `--allow-local-user <name>`       | Izinkan pengguna OS lain di mesin ini terhubung, mis. reverse proxy (dapat diulang; Linux, Windows)           |
-| `--remove-local-user <name>`      | Berhenti mengizinkan pengguna itu terhubung (dapat diulang)                                                   |
-| `--allow-path <dir>`              | Tawarkan folder di Files, di bawah Places (dapat diulang)                                                     |
-| `--remove-path <dir>`             | Hapus folder yang diizinkan (dapat diulang)                                                                   |
-| `--allow-herdr-no-auth`           | Wajib bersama `--mux herdr --no-auth`                                                                         |
-| `--allow-hc-no-auth`              | Wajib bersama `--mux hc --no-auth`                                                                            |
-| `--user <name>`                   | Username login (default: `admin`; sama dengan container)                                                      |
-| `--fresh`                         | Buat password baru                                                                                            |
+| Flag                              | Deskripsi                                                                                                         |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `--port <port>`                   | Port (default: 7680, Windows: 7690)                                                                               |
+| `--lan[=false]`                   | Mendengarkan di semua interface (default: hanya localhost)                                                        |
+| `--tailscale <host[:port]>`       | Publikasikan melalui Tailscale HTTPS (port default 443)                                                           |
+| `--no-tailscale`                  | Berhenti memublikasikan melalui Tailscale                                                                         |
+| `--cloudflare <host>`             | Hostname Cloudflare Tunnel yang Anda jalankan; memberi peringatan bila Cloudflare Access tidak berada di depannya |
+| `--no-cloudflare`                 | Lupakan hostname Cloudflare                                                                                       |
+| `--proxy-client-header <name>`    | Header yang diisi proxy dengan alamat klien (default dengan `--cloudflare`: `CF-Connecting-IP`)                   |
+| `--no-proxy-client-header`        | Berhenti membacanya                                                                                               |
+| `--no-auth[=false]`               | Nonaktifkan basic authentication                                                                                  |
+| `--mux <tmux\|herdr\|zellij\|hc>` | Backend terminal (default: herdr jika sedang berjalan, selain itu tmux; zellij: Linux, macOS; hc: herdr-core)     |
+| `--allow-host <name>`             | Izinkan nilai header Host tambahan (dapat diulang; tanpa wildcard, lihat catatan keamanan)                        |
+| `--remove-host <name>`            | Hapus nama Host yang diizinkan (dapat diulang)                                                                    |
+| `--allow-local-user <name>`       | Izinkan pengguna OS lain di mesin ini terhubung, mis. reverse proxy (dapat diulang; Linux, Windows)               |
+| `--remove-local-user <name>`      | Berhenti mengizinkan pengguna itu terhubung (dapat diulang)                                                       |
+| `--allow-path <dir>`              | Tawarkan folder di Files, di bawah Places (dapat diulang)                                                         |
+| `--remove-path <dir>`             | Hapus folder yang diizinkan (dapat diulang)                                                                       |
+| `--allow-herdr-no-auth`           | Wajib bersama `--mux herdr --no-auth`                                                                             |
+| `--allow-hc-no-auth`              | Wajib bersama `--mux hc --no-auth`                                                                                |
+| `--user <name>`                   | Username login (default: `admin`; sama dengan container)                                                          |
+| `--fresh`                         | Buat password baru                                                                                                |
 
 ### Dengan Tailscale HTTPS
 
@@ -321,7 +339,7 @@ Pemetaan diterapkan setiap kali server dijalankan. `stop`, `start --no-tailscale
 | macOS    | ✓         | ✓      | `install.sh`  |
 | Windows  | ✓         | ✓      | `install.ps1` |
 
-> **Dukungan Windows**: Mode container membutuhkan Docker Desktop atau Podman Desktop; mode native membutuhkan [psmux](https://github.com/psmux/psmux) (terminal multiplexer yang kompatibel dengan tmux untuk Windows), dipasang dengan `winget install psmux`, atau server [Herdr](https://herdr.dev/#install) yang sedang berjalan. Service di Windows belum diverifikasi di mesin sungguhan; laporkan masalah apa pun di GitHub.
+> **Dukungan Windows**: Mode container membutuhkan Docker Desktop atau Podman Desktop; mode native membutuhkan [psmux](https://github.com/psmux/psmux) (terminal multiplexer yang kompatibel dengan tmux untuk Windows), dipasang dengan `winget install psmux`, atau server [Herdr](https://herdr.dev/#install) yang sedang berjalan.
 
 ## Penggunaan Mobile
 
@@ -363,6 +381,7 @@ termote/
 │   ├── zellij_*.go         # Termote's Zellij clients, view-only stream, a pane's shell
 │   ├── mux_hc*.go, hc_*.go # herdr-core backend (hc connect client, herdr-app document)
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
+│   ├── agent_*.go          # Chat view, session history, tokens and cost (Claude Code, Codex, OpenCode)
 │   ├── cli*.go             # start/stop/update/container/logs/menu subcommands
 │   └── webui/              # PWA embedded in the binary (filled by make build)
 ├── scripts/
@@ -376,6 +395,8 @@ termote/
 │   ├── test-install.sh     # Unix installer tests
 │   ├── test-install.ps1    # Windows installer tests
 │   └── test-entrypoints.sh # Container entrypoint tests
+├── herdr-plugin/           # Herdr plugin (open a pane in Termote, QR code, start/stop)
+├── video/                  # Remotion intro video
 └── website/                # Astro Starlight docs site
     └── src/content/docs/   # MDX documentation
 ```

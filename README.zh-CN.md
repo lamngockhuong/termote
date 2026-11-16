@@ -27,7 +27,7 @@
   <a href="https://unikorn.vn/p/termote?ref=embed-termote" target="_blank"><img src="https://unikorn.vn/api/widgets/badge/termote?theme=dark" alt="Termote trên Unikorn.vn" width="170" height="42" /></a>
 </p>
 
-通过 PWA 从移动端/桌面端远程控制 CLI 工具（Claude Code、Codex 及任何终端）。
+通过 PWA 从移动端/桌面端远程控制 CLI 工具（Claude Code、Codex、OpenCode 及任何终端）。
 
 > [!NOTE]
 > Termote 1.0 不会升级 0.x 的安装。请按照[归档的 0.x 文档](https://termote.ohnice.app/0.x/)卸载 0.x，然后使用[快速开始](#快速开始)中的命令安装 1.0。
@@ -45,17 +45,23 @@
 - **会话切换**：多个 tmux 会话，支持创建/编辑/删除
 - **会话标签**：水平标签栏，快速切换窗口
 - **Herdr 后端**（原生或容器内）：用 Herdr 工作区代替 tmux，每个窗格都显示编码代理的状态徽标——参见[原生安装](https://termote.ohnice.app/installation/native/)
-- **Chat 视图**：以对话形式阅读并回复运行 Claude Code（或以 `--no-daemon` 启动的 Codex）的窗格，支持斜杠命令提示和对话框应答——参见[Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
-- **Files 和 Changes 视图**：浏览窗格所在目录及其 git 变更，支持 Markdown 预览——参见[Files and Changes](https://termote.ohnice.app/usage/files/)
+- **Chat 视图**：以对话形式阅读并回复运行 Claude Code、Codex（以 `--no-daemon` 启动）或 OpenCode 2 的窗格，支持斜杠命令提示、对话框应答，并显示运行中的子代理——参见[Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
+- **会话历史**：列出在窗格所在文件夹中运行过的 Claude Code、Codex 和 OpenCode 会话，可以阅读某个会话、在新标签页中恢复它，或分叉一个正在运行的会话——参见[Resuming an Old Session](https://termote.ohnice.app/usage/agent-chat/#resuming-an-old-session)
+- **Token 与费用**：每个代理会话的 token 用量和估算费用，以及每日合计——参见[Tokens and cost](https://termote.ohnice.app/usage/overview/#tokens-and-cost)
+- **会话改动的文件**：在 Changes 和会话历史中列出代理会话编辑过的文件，每个文件都可打开其 diff——参见[Changes](https://termote.ohnice.app/usage/changes/#files-a-session-changed)
+- **Files 和 Changes 视图**：浏览窗格所在目录及其 git 变更，支持 Markdown 预览，适用于所有后端，包括 Windows 上的 psmux——参见[Files and Changes](https://termote.ohnice.app/usage/files/)
 - **Chat 消息队列和文件链接**：代理工作时可把消息排入队列；点击代理写出的文件路径，即可在 Files 中打开该文件并定位到对应行
 - **评审与暂存**：在 Changes 和 Files 中对代码行添加评论，并把评审发送给代理；按文件或按 hunk 暂存、取消暂存或丢弃变更
 - **Files 中的预览与编辑**：只读预览 PDF、.xlsx 和 .docx；打开并保存 Shift-JIS、EUC-JP 和 UTF-16 文件；在实时预览旁编辑 Markdown
+- **在 Windows 中打开**（WSL）：服务器在 WSL 下运行时，可以复制文件的 Windows 路径，或用对应的 Windows 程序打开文件或文件夹
 - **Places**：通过 `termote start --allow-path <dir>` 在 Files 中提供窗格之外的文件夹——参见[Places](https://termote.ohnice.app/usage/files/#places)
 - **Tasks**：运行窗格的 `package.json` 脚本和 Makefile 目标，并把失败的运行发送给代理——参见[Tasks](https://termote.ohnice.app/usage/tasks/)
+- **Worktrees**：从新分支或已有分支把 git worktree 作为独立的分组打开（Herdr、tmux、Zellij、herdr-core、psmux）——参见[Worktrees](https://termote.ohnice.app/usage/sessions/#worktrees)
 - **独立窗口**（桌面端）：在独立窗口中打开文件、diff、标签页、窗格或概览
-- **图片附件**：从手机向终端或 Chat 视图消息发送图片，代理可通过路径读取
+- **图片附件**：从手机向终端或 Chat 视图消息发送图片，代理可通过路径读取；粘贴到 Claude Code、Codex 或 OpenCode 中的图片可以从 Chat 视图再次打开
 - **Zellij 后端**（Linux、macOS 或容器内）：用 Zellij 会话、标签页和窗格代替 tmux（Zellij 0.45.0 或更高版本），通过 `--mux zellij` 选择——参见[原生安装](https://termote.ohnice.app/installation/native/)
 - **herdr-core 后端**（原生，所有操作系统）：作为 herdr-core 的又一个客户端，显示 herdr 应用所显示的空间、标签页和窗格（`hc` 0.1.16 或更高版本），通过 `--mux hc` 选择——参见[herdr-core 后端](https://termote.ohnice.app/installation/native/#herdr-core-backend)
+- **Machines**：在一个 Termote 中通过 SSH 查看并操控其他电脑上的代理，所用密钥在那台电脑上只能访问 Termote（`termote machine add <alias>`）——参见[Machines](https://termote.ohnice.app/usage/machines/)
 - **Herdr 插件**：无需离开 Herdr，即可在 Termote 中打开当前聚焦的 Herdr 窗格、将其链接显示为二维码供手机扫描、启动或停止服务器——参见[Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/)
 - **移动端友好**：虚拟键盘工具栏（Tab/Ctrl/Shift/方向键，可展开）
 - **手势支持**：滑动执行 Ctrl+C、Tab、滚动
@@ -63,6 +69,8 @@
 - **快捷操作**：固定在移动端工具栏末端的 ⋯ 键展开常用操作的 Actions 行（clear、cancel、exit）
 - **界面风格**：Neutral、Terminal 或 Native，在设置中选择，与浅色/深色主题无关
 - **界面语言**：英语或越南语，在设置中选择；Auto 跟随浏览器语言
+- **设置导出与导入**：将此浏览器的设置导出为文件并在另一个浏览器中导入，或审阅编码代理通过 `termote settings propose` 提出的设置——参见[Settings](https://termote.ohnice.app/usage/settings/#export-and-import)
+- **GPU 终端**：设备有 GPU 时用 WebGL2 绘制终端，大量输出也能保持流畅
 - **连接指示器**：实时服务器状态，自动检测断开连接
 - **更新检查**：自动从 GitHub releases 通知新版本
 - **PWA**：可安装到主屏幕，支持离线使用
@@ -73,6 +81,8 @@
 - **配置持久化**：`termote start` 会保存其选项，密码加密存储
 
 ## 截图
+
+**[试用演示](https://termote.ohnice.app/demo/)**：无需安装，在手机或桌面浏览器中用虚构数据体验真实的应用。
 
 <p align="center">
   <img src="docs/images/screenshots/phones.png" alt="手机上的终端、Chat 和 Changes" width="720" />
@@ -182,12 +192,16 @@ termote status                       # What the running server reports
 termote stop                         # Stop (it starts again at the next login)
 termote restart                      # Restart with the saved options
 termote logs follow                  # Tail the logs
-termote show-password                # Print the saved admin password
+termote show-password                # Print the saved username and password
+termote url --qr                     # The link to open, as a QR code for a phone
+termote pair                         # A one-time code that signs a new device in
+termote devices                      # List the paired devices (devices revoke <id>)
+termote machine add <ssh alias>      # Reach another computer's Termote (Machines in the sidebar)
 termote update                       # Update to the latest release
-termote uninstall                    # Remove the service, the command and the install
+termote uninstall                    # Remove the service, the command, the install and uploads
 ```
 
-`update` 会切换到新版本并重启服务，如果新版本没有正常运行，则切换回原版本。`uninstall` 会保留配置（`~/.config/termote`）和日志（`~/.local/state/termote`），并打印这两个路径。
+`update` 会切换到新版本并重启服务，如果新版本没有正常运行，则切换回原版本。`uninstall` 会保留配置（`~/.config/termote`）和日志（`~/.local/state/termote`），并打印这两个路径；`uninstall --purge` 会将它们一并删除。
 
 ## 安装
 
@@ -214,14 +228,14 @@ termote container logs -f
 termote container down
 ```
 
-`container up` 使用 podman（优先）或 docker 运行与已安装 `termote` 同版本的 `ghcr.io/lamngockhuong/termote`，端口为 7680，并将 `~/termote-workspace` 挂载到 `/workspace`。它接受 `--port`、`--lan`、`--tailscale`、`--no-auth`、`--allow-host`、`--user` 和 `--fresh`，这些设置与 `start` 的选项分开保存；用户名和密码与原生服务器共用。Docker 会在重启后重新启动容器；rootless Podman 没有守护进程来做这件事，因此请将其作为 Quadlet 单元运行。
+`container up` 使用 podman（优先）或 docker 运行与已安装 `termote` 同版本的 `ghcr.io/lamngockhuong/termote`，端口为 7680，并将 `~/termote-workspace` 挂载到 `/workspace`。它接受 `--port`、`--lan`、`--tailscale`、`--cloudflare`、`--no-auth`、`--mux`、`--allow-host`、`--allow-path`、`--user`、`--fresh`、`--workspace` 和 `--build`（仅限源码检出），这些设置与 `start` 的选项分开保存；用户名和密码与原生服务器共用。Docker 会在重启后重新启动容器；rootless Podman 没有守护进程来做这件事，因此请将其作为 Quadlet 单元运行。
 
 > **安全提示**：避免直接挂载 `$HOME` —— 容器将能访问 `.ssh`、`.gnupg` 等敏感目录。请改为挂载特定的项目目录。
 
 ### 不使用 CLI 直接运行 Docker
 
 ```bash
-# Generates a password, printed in: docker logs termote
+# Generates a password: docker exec termote cat /home/termote/.config/termote/password
 docker run -d --name termote -p 7680:7680 \
   -v ~/projects:/workspace \
   ghcr.io/lamngockhuong/termote:latest
@@ -232,11 +246,11 @@ docker run -d --name termote -p 7680:7680 \
   ghcr.io/lamngockhuong/termote:latest
 ```
 
-| 环境变量       | 说明                            |
-| -------------- | ------------------------------- |
-| `TERMOTE_USER` | 基本认证用户名（默认：`admin`） |
-| `TERMOTE_PASS` | 基本认证密码（默认：自动生成）  |
-| `NO_AUTH`      | 设为 `true` 以禁用认证          |
+| 环境变量       | 说明                                                                            |
+| -------------- | ------------------------------------------------------------------------------- |
+| `TERMOTE_USER` | 基本认证用户名（默认：`admin`）                                                 |
+| `TERMOTE_PASS` | 基本认证密码（默认：自动生成，保存在 `/home/termote/.config/termote/password`） |
+| `NO_AUTH`      | 设为 `true` 以禁用认证                                                          |
 
 ### 从源码构建
 
@@ -285,6 +299,10 @@ flowchart LR
 | `--lan[=false]`                   | 在所有网络接口上监听（默认：仅 localhost）                                                    |
 | `--tailscale <host[:port]>`       | 通过 Tailscale HTTPS 发布（默认端口 443）                                                     |
 | `--no-tailscale`                  | 停止通过 Tailscale 发布                                                                       |
+| `--cloudflare <host>`             | 你自己运行的 Cloudflare Tunnel 的主机名；前面没有 Cloudflare Access 时发出警告                |
+| `--no-cloudflare`                 | 清除 Cloudflare 主机名                                                                        |
+| `--proxy-client-header <name>`    | 代理用来传递客户端地址的请求头（使用 `--cloudflare` 时默认：`CF-Connecting-IP`）              |
+| `--no-proxy-client-header`        | 不再读取该请求头                                                                              |
 | `--no-auth[=false]`               | 禁用基本认证                                                                                  |
 | `--mux <tmux\|herdr\|zellij\|hc>` | 终端后端（默认：herdr 正在运行时用 herdr，否则用 tmux；zellij：Linux、macOS；hc：herdr-core） |
 | `--allow-host <name>`             | 允许额外的 Host 头值（可重复；无通配符，参见安全说明）                                        |
@@ -319,7 +337,7 @@ sudo tailscale set --operator=$USER                    # Linux, once: let termot
 | macOS   | ✓        | ✓        | `install.sh`  |
 | Windows | ✓        | ✓        | `install.ps1` |
 
-> **Windows 支持**：容器模式需要 Docker Desktop 或 Podman Desktop；原生模式需要 [psmux](https://github.com/psmux/psmux)（Windows 上兼容 tmux 的终端复用器），可通过 `winget install psmux` 安装，也可以改用正在运行的 [Herdr](https://herdr.dev/#install) 服务器。Windows 服务尚未在真机上验证，如遇问题请在 GitHub 上反馈。
+> **Windows 支持**：容器模式需要 Docker Desktop 或 Podman Desktop；原生模式需要 [psmux](https://github.com/psmux/psmux)（Windows 上兼容 tmux 的终端复用器），可通过 `winget install psmux` 安装，也可以改用正在运行的 [Herdr](https://herdr.dev/#install) 服务器。
 
 ## 移动端使用
 
@@ -361,6 +379,7 @@ termote/
 │   ├── zellij_*.go         # Termote's Zellij clients, view-only stream, a pane's shell
 │   ├── mux_hc*.go, hc_*.go # herdr-core backend (hc connect client, herdr-app document)
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
+│   ├── agent_*.go          # Chat view, session history, tokens and cost (Claude Code, Codex, OpenCode)
 │   ├── cli*.go             # start/stop/update/container/logs/menu subcommands
 │   └── webui/              # PWA embedded in the binary (filled by make build)
 ├── scripts/
@@ -374,6 +393,8 @@ termote/
 │   ├── test-install.sh     # Unix installer tests
 │   ├── test-install.ps1    # Windows installer tests
 │   └── test-entrypoints.sh # Container entrypoint tests
+├── herdr-plugin/           # Herdr plugin (open a pane in Termote, QR code, start/stop)
+├── video/                  # Remotion intro video
 └── website/                # Astro Starlight docs site
     └── src/content/docs/   # MDX documentation
 ```

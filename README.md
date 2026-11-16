@@ -27,7 +27,7 @@
   <a href="https://unikorn.vn/p/termote?ref=embed-termote" target="_blank"><img src="https://unikorn.vn/api/widgets/badge/termote?theme=dark" alt="Termote trên Unikorn.vn" width="170" height="42" /></a>
 </p>
 
-Remote control CLI tools (Claude Code, Codex, any terminal) from mobile/desktop via PWA.
+Remote control CLI tools (Claude Code, Codex, OpenCode, any terminal) from mobile/desktop via PWA.
 
 > [!NOTE]
 > Termote 1.0 does not upgrade a 0.x install. Uninstall 0.x as described in the
@@ -47,15 +47,20 @@ Remote control CLI tools (Claude Code, Codex, any terminal) from mobile/desktop 
 - **Session switching**: Multiple tmux sessions with create/edit/delete
 - **Session tabs**: Horizontal tab bar for quick window switching
 - **Herdr backend** (native or in the container): drive Herdr workspaces instead of tmux, with per-pane coding-agent status badges — see [Native Installation](https://termote.ohnice.app/installation/native/)
-- **Chat view**: read and answer a pane running Claude Code (or Codex started with `--no-daemon`) as a chat, with slash command suggestions and dialog answers — see [Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
-- **Files and Changes views**: browse a pane's directory and its git changes, with a Markdown preview — see [Files and Changes](https://termote.ohnice.app/usage/files/)
+- **Chat view**: read and answer a pane running Claude Code, Codex (started with `--no-daemon`) or OpenCode 2 as a chat, with slash command suggestions, dialog answers and running subagents — see [Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
+- **Session history**: list the Claude Code, Codex and OpenCode sessions that ran in a pane's folder, read one, resume it in a new tab or fork a running one — see [Resuming an Old Session](https://termote.ohnice.app/usage/agent-chat/#resuming-an-old-session)
+- **Tokens and cost**: each agent session's tokens and estimated cost, with daily totals — see [Tokens and cost](https://termote.ohnice.app/usage/overview/#tokens-and-cost)
+- **Files a session changed**: the files an agent session edited, listed in Changes and in the session history, each opening its diff — see [Changes](https://termote.ohnice.app/usage/changes/#files-a-session-changed)
+- **Files and Changes views**: browse a pane's directory and its git changes, with a Markdown preview, on every backend including psmux on Windows — see [Files and Changes](https://termote.ohnice.app/usage/files/)
 - **Chat queue and file links**: queue a message while the agent works; tap a file path the agent wrote to open it in Files, at its line
 - **Review and staging**: comment on lines in Changes and Files and send the review to an agent; stage, unstage or discard a change by file or by hunk
 - **Previews and editing in Files**: PDF, .xlsx and .docx previewed read-only; Shift-JIS, EUC-JP and UTF-16 files opened and saved; Markdown edited beside a live preview
+- **Open in Windows** (WSL): copy a file's Windows path, or open a file or folder with its Windows program, when the server runs under WSL
 - **Places**: offer a folder outside the pane in Files with `termote start --allow-path <dir>` — see [Places](https://termote.ohnice.app/usage/files/#places)
 - **Tasks**: run a pane's `package.json` scripts and Makefile targets, send a failed run to an agent — see [Tasks](https://termote.ohnice.app/usage/tasks/)
+- **Worktrees**: open a git worktree as a group of its own, from a new or existing branch (Herdr, tmux, Zellij, herdr-core, psmux) — see [Worktrees](https://termote.ohnice.app/usage/sessions/#worktrees)
 - **Separate windows** (desktop): open a file, diff, tab, pane or the overview in its own window
-- **Image attachments**: send an image from the phone to the terminal or to a Chat view message, so the agent can read it by path
+- **Image attachments**: send an image from the phone to the terminal or to a Chat view message, so the agent can read it by path; an image pasted into Claude Code, Codex or OpenCode opens again from the Chat view
 - **Zellij backend** (Linux, macOS, or the container): drive your Zellij sessions, tabs and panes instead of tmux (Zellij 0.45.0 or later), chosen with `--mux zellij` — see [Native Installation](https://termote.ohnice.app/installation/native/)
 - **herdr-core backend** (native, every OS): show the spaces, tabs and panes the herdr app shows, as one more client of herdr-core (`hc` 0.1.16 or later), chosen with `--mux hc` — see [herdr-core Backend](https://termote.ohnice.app/installation/native/#herdr-core-backend)
 - **Machines**: watch and drive the agents of your other computers from one Termote, over SSH with a key that can only reach Termote there (`termote machine add <alias>`) — see [Machines](https://termote.ohnice.app/usage/machines/)
@@ -66,6 +71,8 @@ Remote control CLI tools (Claude Code, Codex, any terminal) from mobile/desktop 
 - **Quick actions**: The ⋯ key pinned at the end of the mobile toolbar shows an Actions row for common operations (clear, cancel, exit)
 - **Interface styles**: Neutral, Terminal or Native, chosen in Settings, independent of light/dark theme
 - **Interface language**: English or Vietnamese, chosen in Settings; Auto follows the browser
+- **Settings to go**: export this browser's settings to a file and import them in another, or review the settings a coding agent proposes with `termote settings propose` — see [Settings](https://termote.ohnice.app/usage/settings/#export-and-import)
+- **GPU terminal**: the terminal is drawn with WebGL2 where the device has a GPU, which keeps large output smooth
 - **Connection indicator**: Real-time server status with auto-detect disconnect
 - **Update checker**: Automatic new version notification from GitHub releases
 - **PWA**: Installable to homescreen, offline-capable
@@ -188,9 +195,12 @@ termote stop                         # Stop (it starts again at the next login)
 termote restart                      # Restart with the saved options
 termote logs follow                  # Tail the logs
 termote show-password                # Print the saved username and password
+termote url --qr                     # The link to open, as a QR code for a phone
+termote pair                         # A one-time code that signs a new device in
+termote devices                      # List the paired devices (devices revoke <id>)
 termote machine add <ssh alias>      # Reach another computer's Termote (Machines in the sidebar)
 termote update                       # Update to the latest release
-termote uninstall                    # Remove the service, the command and the install
+termote uninstall                    # Remove the service, the command, the install and uploads
 ```
 
 `update` switches to the new version, restarts the service and switches back if the new version does not come up. `uninstall` keeps the configuration (`~/.config/termote`) and the logs (`~/.local/state/termote`) and prints both paths; `uninstall --purge` removes them too.
@@ -220,7 +230,7 @@ termote container logs -f
 termote container down
 ```
 
-`container up` runs `ghcr.io/lamngockhuong/termote` at the version of the installed `termote`, with podman (preferred) or docker, on port 7680 with `~/termote-workspace` mounted at `/workspace`. It accepts `--port`, `--lan`, `--tailscale`, `--no-auth`, `--allow-host`, `--user` and `--fresh`, saved apart from the options of `start`; the username and password are shared with the native server. Docker restarts the container after a reboot; rootless Podman has no daemon to do that, so run it as a Quadlet unit.
+`container up` runs `ghcr.io/lamngockhuong/termote` at the version of the installed `termote`, with podman (preferred) or docker, on port 7680 with `~/termote-workspace` mounted at `/workspace`. It accepts `--port`, `--lan`, `--tailscale`, `--cloudflare`, `--no-auth`, `--mux`, `--allow-host`, `--allow-path`, `--user`, `--fresh`, `--workspace` and `--build` (a checkout only), saved apart from the options of `start`; the username and password are shared with the native server. Docker restarts the container after a reboot; rootless Podman has no daemon to do that, so run it as a Quadlet unit.
 
 > **Security note**: Avoid mounting `$HOME` directly — sensitive directories like `.ssh`, `.gnupg` will be accessible in container. Mount specific project directories instead.
 
@@ -329,7 +339,7 @@ The mapping is applied each time the server starts. `stop`, `start --no-tailscal
 | macOS    | ✓         | ✓      | `install.sh`  |
 | Windows  | ✓         | ✓      | `install.ps1` |
 
-> **Windows Support**: Container mode requires Docker Desktop or Podman Desktop; native mode requires [psmux](https://github.com/psmux/psmux) (tmux-compatible terminal multiplexer for Windows), installed with `winget install psmux`, or a running [Herdr](https://herdr.dev/#install) server. The Windows service has not yet been verified on a real machine; report any issues on GitHub.
+> **Windows Support**: Container mode requires Docker Desktop or Podman Desktop; native mode requires [psmux](https://github.com/psmux/psmux) (tmux-compatible terminal multiplexer for Windows), installed with `winget install psmux`, or a running [Herdr](https://herdr.dev/#install) server.
 
 ## Mobile Usage
 
@@ -371,6 +381,7 @@ termote/
 │   ├── zellij_*.go         # Termote's Zellij clients, view-only stream, a pane's shell
 │   ├── mux_hc*.go, hc_*.go # herdr-core backend (hc connect client, herdr-app document)
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
+│   ├── agent_*.go          # Chat view, session history, tokens and cost (Claude Code, Codex, OpenCode)
 │   ├── cli*.go             # start/stop/update/container/logs/menu subcommands
 │   └── webui/              # PWA embedded in the binary (filled by make build)
 ├── scripts/
@@ -384,6 +395,8 @@ termote/
 │   ├── test-install.sh     # Unix installer tests
 │   ├── test-install.ps1    # Windows installer tests
 │   └── test-entrypoints.sh # Container entrypoint tests
+├── herdr-plugin/           # Herdr plugin (open a pane in Termote, QR code, start/stop)
+├── video/                  # Remotion intro video
 └── website/                # Astro Starlight docs site
     └── src/content/docs/   # MDX documentation
 ```
