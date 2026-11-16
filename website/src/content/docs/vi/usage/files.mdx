@@ -152,6 +152,25 @@ gõ đường dẫn tuyệt đối và đóng.
 Thiết bị chỉ xem chỉ thấy các mục chép, **Refresh** và **Collapse all** (trên tab thì có thêm
 **Keep open** và **Close**).
 
+### Khi server chạy trong WSL
+
+Khi server chạy trong WSL (chạy native, không phải trong container), menu có thêm:
+
+- **Copy Windows path**, trên mọi dòng và mọi tab: đường dẫn theo cách Windows gọi tên, là đường
+  dẫn ổ đĩa với file nằm dưới `/mnt/<letter>` (`C:\Users\me\notes.md`), còn lại là thư mục chia sẻ
+  của bản phân phối (`\\wsl.localhost\<distro>\…`). Thiết bị chỉ xem cũng có mục này.
+- **Open in Windows**, trên dòng của một file hay thư mục và trên tab của gốc hiện tại: Windows
+  mở nó bằng chương trình dành cho loại file đó, trên máy đang chạy server, như khi bạn mở trong
+  Explorer. Mục này cần thiết bị có toàn quyền và WSL interop đang bật, và không bao giờ có với
+  một [máy](/vi/usage/machines/) kết nối qua SSH.
+
+Văn bản, mã nguồn, PDF và ảnh được mở ngay. File loại khác có thể bị Windows chạy như một chương
+trình (một script, một file Office tải template về, một trang mà trình duyệt mở), nên Termote hỏi
+trước **Chạy file này như một chương trình?**, với **Chạy** và **Hủy**. File nhạy cảm đang bị ẩn,
+đường dẫn đi qua một link, tên mà Windows đọc khác đi (có `\` hoặc dấu phẩy) và thư mục chứa
+shortcut hay file `desktop.ini` mà Windows có thể lần theo sang máy khác thì không bao giờ được
+mở; một toast báo lý do.
+
 ## Mở nhiều file theo tab
 
 Mở thêm file thì các file đang mở vẫn còn: mỗi file một tab, quay lại tab nào thì file đó vẫn ở

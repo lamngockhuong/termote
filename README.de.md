@@ -27,7 +27,7 @@
   <a href="https://unikorn.vn/p/termote?ref=embed-termote" target="_blank"><img src="https://unikorn.vn/api/widgets/badge/termote?theme=dark" alt="Termote trên Unikorn.vn" width="170" height="42" /></a>
 </p>
 
-CLI-Tools (Claude Code, Codex, jedes Terminal) per PWA von Mobilgeräten/Desktop fernsteuern.
+CLI-Tools (Claude Code, Codex, OpenCode, jedes Terminal) per PWA von Mobilgeräten/Desktop fernsteuern.
 
 > [!NOTE]
 > Termote 1.0 aktualisiert keine 0.x-Installation. 0.x wie in der
@@ -47,17 +47,23 @@ CLI-Tools (Claude Code, Codex, jedes Terminal) per PWA von Mobilgeräten/Desktop
 - **Session-Wechsel**: Mehrere tmux-Sessions mit Erstellen/Bearbeiten/Löschen
 - **Session-Tabs**: Horizontale Tab-Leiste zum schnellen Fensterwechsel
 - **Herdr-Backend** (nativ oder im Container): Herdr-Workspaces statt tmux steuern, mit Statusabzeichen des Coding-Agents in jedem Pane — siehe [Native Installation](https://termote.ohnice.app/installation/native/)
-- **Chat-Ansicht**: Ein Pane, in dem Claude Code (oder mit `--no-daemon` gestartetes Codex) läuft, als Chat lesen und beantworten, mit Vorschlägen für Slash-Befehle und Antworten auf Dialoge — siehe [Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
-- **Files- und Changes-Ansicht**: Das Verzeichnis eines Panes und seine Git-Änderungen durchsuchen, mit Markdown-Vorschau — siehe [Files and Changes](https://termote.ohnice.app/usage/files/)
+- **Chat-Ansicht**: Ein Pane, in dem Claude Code, Codex (mit `--no-daemon` gestartet) oder OpenCode 2 läuft, als Chat lesen und beantworten, mit Vorschlägen für Slash-Befehle, Antworten auf Dialoge und laufenden Subagents — siehe [Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
+- **Session-Verlauf**: Die Sessions von Claude Code, Codex und OpenCode auflisten, die im Ordner eines Panes liefen, eine davon lesen, sie in einem neuen Tab fortsetzen oder eine laufende forken — siehe [Resuming an Old Session](https://termote.ohnice.app/usage/agent-chat/#resuming-an-old-session)
+- **Tokens und Kosten**: Die Tokens und die geschätzten Kosten jeder Agent-Session, mit Tagessummen — siehe [Tokens and cost](https://termote.ohnice.app/usage/overview/#tokens-and-cost)
+- **Von einer Session geänderte Dateien**: Die Dateien, die eine Agent-Session bearbeitet hat, aufgelistet in Changes und im Session-Verlauf; jede öffnet ihren Diff — siehe [Changes](https://termote.ohnice.app/usage/changes/#files-a-session-changed)
+- **Files- und Changes-Ansicht**: Das Verzeichnis eines Panes und seine Git-Änderungen durchsuchen, mit Markdown-Vorschau, auf jedem Backend einschließlich psmux unter Windows — siehe [Files and Changes](https://termote.ohnice.app/usage/files/)
 - **Warteschlange und Dateilinks im Chat**: eine Nachricht vormerken, während der Agent arbeitet; einen Dateipfad des Agenten antippen, um die Datei in Files an ihrer Zeile zu öffnen
 - **Review und Staging**: Zeilen in Changes und Files kommentieren und das Review an einen Agenten senden; eine Änderung pro Datei oder pro Hunk stagen, unstagen oder verwerfen
 - **Vorschau und Bearbeitung in Files**: PDF, .xlsx und .docx schreibgeschützt ansehen; Dateien in Shift-JIS, EUC-JP und UTF-16 öffnen und speichern; Markdown neben einer Live-Vorschau bearbeiten
+- **Open in Windows** (WSL): Den Windows-Pfad einer Datei kopieren oder eine Datei bzw. einen Ordner mit dem zugehörigen Windows-Programm öffnen, wenn der Server unter WSL läuft
 - **Places**: einen Ordner außerhalb des Panes mit `termote start --allow-path <dir>` in Files anbieten — siehe [Places](https://termote.ohnice.app/usage/files/#places)
 - **Tasks**: die `package.json`-Skripte und Makefile-Targets eines Panes ausführen, einen fehlgeschlagenen Lauf an einen Agenten senden — siehe [Tasks](https://termote.ohnice.app/usage/tasks/)
+- **Worktrees**: Einen Git-Worktree als eigene Gruppe öffnen, aus einem neuen oder vorhandenen Branch (Herdr, tmux, Zellij, herdr-core, psmux) — siehe [Worktrees](https://termote.ohnice.app/usage/sessions/#worktrees)
 - **Eigene Fenster** (Desktop): eine Datei, einen Diff, einen Tab, ein Pane oder die Übersicht in einem eigenen Fenster öffnen
-- **Bildanhänge**: Ein Bild vom Handy an das Terminal oder an eine Nachricht in der Chat-Ansicht senden, damit der Agent es über seinen Pfad lesen kann
+- **Bildanhänge**: Ein Bild vom Handy an das Terminal oder an eine Nachricht in der Chat-Ansicht senden, damit der Agent es über seinen Pfad lesen kann; ein in Claude Code, Codex oder OpenCode eingefügtes Bild lässt sich aus der Chat-Ansicht wieder öffnen
 - **Zellij-Backend** (Linux, macOS oder im Container): Zellij-Sitzungen, -Tabs und -Panes statt tmux steuern (Zellij 0.45.0 oder neuer), gewählt mit `--mux zellij` — siehe [Native Installation](https://termote.ohnice.app/installation/native/)
 - **herdr-core-Backend** (nativ, jedes Betriebssystem): die Spaces, Tabs und Panes anzeigen, die die herdr-App zeigt, als weiterer Client von herdr-core (`hc` 0.1.16 oder neuer), gewählt mit `--mux hc` — siehe [herdr-core-Backend](https://termote.ohnice.app/installation/native/#herdr-core-backend)
+- **Machines**: Die Agents der anderen Rechner von einem einzigen Termote aus beobachten und steuern, über SSH mit einem Schlüssel, der dort nur Termote erreichen kann (`termote machine add <alias>`) — siehe [Machines](https://termote.ohnice.app/usage/machines/)
 - **Herdr-Plugin**: Das fokussierte Herdr-Pane in Termote öffnen, seinen Link als QR-Code fürs Handy anzeigen, den Server starten oder stoppen, ohne Herdr zu verlassen — siehe [Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/)
 - **Mobilfreundlich**: Virtuelle Tastatur-Toolbar (Tab/Ctrl/Shift/Pfeiltasten, erweiterbar)
 - **Gestenunterstützung**: Wischen für Ctrl+C, Tab, Scrollen
@@ -65,6 +71,8 @@ CLI-Tools (Claude Code, Codex, jedes Terminal) per PWA von Mobilgeräten/Desktop
 - **Schnellaktionen**: Die am Ende der mobilen Leiste fixierte ⋯-Taste zeigt eine Actions-Zeile mit häufigen Operationen (clear, cancel, exit)
 - **Oberflächenstile**: Neutral, Terminal oder Native, in den Einstellungen gewählt, unabhängig vom hellen/dunklen Theme
 - **Sprache der Oberfläche**: Englisch oder Vietnamesisch, in den Einstellungen gewählt; Auto folgt dem Browser
+- **Einstellungen zum Mitnehmen**: Die Einstellungen dieses Browsers in eine Datei exportieren und in einem anderen importieren oder die Einstellungen prüfen, die ein Coding-Agent mit `termote settings propose` vorschlägt — siehe [Settings](https://termote.ohnice.app/usage/settings/#export-and-import)
+- **GPU-Terminal**: Das Terminal wird mit WebGL2 gezeichnet, wenn das Gerät eine GPU hat; so bleiben auch große Ausgaben flüssig
 - **Verbindungsanzeige**: Echtzeit-Serverstatus mit automatischer Trennungserkennung
 - **Update-Prüfung**: Automatische Benachrichtigung über neue Versionen von GitHub Releases
 - **PWA**: Auf dem Homescreen installierbar, offline-fähig
@@ -75,6 +83,8 @@ CLI-Tools (Claude Code, Codex, jedes Terminal) per PWA von Mobilgeräten/Desktop
 - **Konfigurationsspeicherung**: `termote start` speichert seine Optionen, das Passwort wird verschlüsselt abgelegt
 
 ## Screenshots
+
+**[Demo ausprobieren](https://termote.ohnice.app/demo/)**: die echte App im Browser, auf dem Handy oder am Desktop, mit erfundenen Daten und ohne Installation.
 
 <p align="center">
   <img src="docs/images/screenshots/phones.png" alt="Terminal, Chat und Changes auf dem Handy" width="720" />
@@ -184,12 +194,16 @@ termote status                       # What the running server reports
 termote stop                         # Stop (it starts again at the next login)
 termote restart                      # Restart with the saved options
 termote logs follow                  # Tail the logs
-termote show-password                # Print the saved admin password
+termote show-password                # Print the saved username and password
+termote url --qr                     # The link to open, as a QR code for a phone
+termote pair                         # A one-time code that signs a new device in
+termote devices                      # List the paired devices (devices revoke <id>)
+termote machine add <ssh alias>      # Reach another computer's Termote (Machines in the sidebar)
 termote update                       # Update to the latest release
-termote uninstall                    # Remove the service, the command and the install
+termote uninstall                    # Remove the service, the command, the install and uploads
 ```
 
-`update` wechselt zur neuen Version, startet den Dienst neu und wechselt zurück, falls die neue Version nicht hochkommt. `uninstall` behält die Konfiguration (`~/.config/termote`) und die Logs (`~/.local/state/termote`) und gibt beide Pfade aus.
+`update` wechselt zur neuen Version, startet den Dienst neu und wechselt zurück, falls die neue Version nicht hochkommt. `uninstall` behält die Konfiguration (`~/.config/termote`) und die Logs (`~/.local/state/termote`) und gibt beide Pfade aus; `uninstall --purge` entfernt sie ebenfalls.
 
 ## Installation
 
@@ -216,14 +230,14 @@ termote container logs -f
 termote container down
 ```
 
-`container up` startet `ghcr.io/lamngockhuong/termote` in der Version des installierten `termote`, mit podman (bevorzugt) oder docker, auf Port 7680, wobei `~/termote-workspace` unter `/workspace` eingebunden wird. Es akzeptiert `--port`, `--lan`, `--tailscale`, `--no-auth`, `--allow-host`, `--user` und `--fresh`; diese werden getrennt von den Optionen von `start` gespeichert, Benutzername und Passwort teilt es mit dem nativen Server. Docker startet den Container nach einem Neustart wieder; rootless Podman hat dafür keinen Daemon, deshalb dort als Quadlet-Unit ausführen.
+`container up` startet `ghcr.io/lamngockhuong/termote` in der Version des installierten `termote`, mit podman (bevorzugt) oder docker, auf Port 7680, wobei `~/termote-workspace` unter `/workspace` eingebunden wird. Es akzeptiert `--port`, `--lan`, `--tailscale`, `--cloudflare`, `--no-auth`, `--mux`, `--allow-host`, `--allow-path`, `--user`, `--fresh`, `--workspace` und `--build` (nur in einem Checkout); diese werden getrennt von den Optionen von `start` gespeichert, Benutzername und Passwort teilt es mit dem nativen Server. Docker startet den Container nach einem Neustart wieder; rootless Podman hat dafür keinen Daemon, deshalb dort als Quadlet-Unit ausführen.
 
 > **Sicherheitshinweis**: `$HOME` nicht direkt einbinden — sensible Verzeichnisse wie `.ssh`, `.gnupg` wären im Container zugänglich. Stattdessen gezielt Projektverzeichnisse einbinden.
 
 ### Docker ohne die CLI
 
 ```bash
-# Generates a password, printed in: docker logs termote
+# Generates a password: docker exec termote cat /home/termote/.config/termote/password
 docker run -d --name termote -p 7680:7680 \
   -v ~/projects:/workspace \
   ghcr.io/lamngockhuong/termote:latest
@@ -234,11 +248,11 @@ docker run -d --name termote -p 7680:7680 \
   ghcr.io/lamngockhuong/termote:latest
 ```
 
-| Umgebungsvariable | Beschreibung                                             |
-| ----------------- | -------------------------------------------------------- |
-| `TERMOTE_USER`    | Benutzername für Basic Auth (Standard: `admin`)          |
-| `TERMOTE_PASS`    | Passwort für Basic Auth (Standard: automatisch erzeugt)  |
-| `NO_AUTH`         | Auf `true` setzen, um die Authentifizierung abzuschalten |
+| Umgebungsvariable | Beschreibung                                                                                                     |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `TERMOTE_USER`    | Benutzername für Basic Auth (Standard: `admin`)                                                                  |
+| `TERMOTE_PASS`    | Passwort für Basic Auth (Standard: automatisch erzeugt, gespeichert in `/home/termote/.config/termote/password`) |
+| `NO_AUTH`         | Auf `true` setzen, um die Authentifizierung abzuschalten                                                         |
 
 ### Aus dem Quellcode bauen
 
@@ -287,6 +301,10 @@ Der native Server läuft als Benutzerdienst: unter Linux als systemd-User-Unit (
 | `--lan[=false]`                   | Auf allen Schnittstellen lauschen (Standard: nur localhost)                                                                                  |
 | `--tailscale <host[:port]>`       | Über Tailscale HTTPS veröffentlichen (Standardport 443)                                                                                      |
 | `--no-tailscale`                  | Veröffentlichung über Tailscale beenden                                                                                                      |
+| `--cloudflare <host>`             | Hostname eines Cloudflare Tunnels, den Sie selbst betreiben; warnt, wenn Cloudflare Access nicht davorgeschaltet ist                         |
+| `--no-cloudflare`                 | Den Cloudflare-Hostnamen vergessen                                                                                                           |
+| `--proxy-client-header <name>`    | Header, in den ein Proxy die Adresse des Clients schreibt (Standard mit `--cloudflare`: `CF-Connecting-IP`)                                  |
+| `--no-proxy-client-header`        | Diesen Header nicht mehr auswerten                                                                                                           |
 | `--no-auth[=false]`               | Basis-Authentifizierung deaktivieren                                                                                                         |
 | `--mux <tmux\|herdr\|zellij\|hc>` | Terminal-Backend (Standard: herdr, wenn es läuft, sonst tmux; zellij: Linux, macOS; hc: herdr-core)                                          |
 | `--allow-host <name>`             | Zusätzlichen Wert für den Host-Header erlauben (mehrfach angebbar; keine Wildcards, siehe Sicherheitshinweise)                               |
@@ -321,7 +339,7 @@ Die Zuordnung wird bei jedem Start des Servers angewendet. `stop`, `start --no-t
 | macOS     | ✓         | ✓      | `install.sh`  |
 | Windows   | ✓         | ✓      | `install.ps1` |
 
-> **Windows-Unterstützung**: Der Container-Modus erfordert Docker Desktop oder Podman Desktop, der Native-Modus erfordert [psmux](https://github.com/psmux/psmux) (tmux-kompatibler Terminal-Multiplexer für Windows), installiert mit `winget install psmux`, oder einen laufenden [Herdr](https://herdr.dev/#install)-Server. Der Windows-Dienst wurde noch nicht auf einem echten Rechner geprüft; bitte melden Sie Probleme auf GitHub.
+> **Windows-Unterstützung**: Der Container-Modus erfordert Docker Desktop oder Podman Desktop, der Native-Modus erfordert [psmux](https://github.com/psmux/psmux) (tmux-kompatibler Terminal-Multiplexer für Windows), installiert mit `winget install psmux`, oder einen laufenden [Herdr](https://herdr.dev/#install)-Server.
 
 ## Mobile Nutzung
 
@@ -363,6 +381,7 @@ termote/
 │   ├── zellij_*.go         # Termote's Zellij clients, view-only stream, a pane's shell
 │   ├── mux_hc*.go, hc_*.go # herdr-core backend (hc connect client, herdr-app document)
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
+│   ├── agent_*.go          # Chat view, session history, tokens and cost (Claude Code, Codex, OpenCode)
 │   ├── cli*.go             # start/stop/update/container/logs/menu subcommands
 │   └── webui/              # PWA embedded in the binary (filled by make build)
 ├── scripts/
@@ -376,6 +395,8 @@ termote/
 │   ├── test-install.sh     # Unix installer tests
 │   ├── test-install.ps1    # Windows installer tests
 │   └── test-entrypoints.sh # Container entrypoint tests
+├── herdr-plugin/           # Herdr plugin (open a pane in Termote, QR code, start/stop)
+├── video/                  # Remotion intro video
 └── website/                # Astro Starlight docs site
     └── src/content/docs/   # MDX documentation
 ```

@@ -1,6 +1,6 @@
 # Getting Started with Termote
 
-Control Claude Code, GitHub Copilot, or any terminal tool from your phone — in under 5 minutes.
+Control Claude Code, Codex, OpenCode, GitHub Copilot, or any terminal tool from your phone — in under 5 minutes.
 
 ## What is Termote?
 
@@ -164,6 +164,21 @@ The toolbar at the bottom provides modifier keys:
 2. Type `claude` to start Claude Code
 3. Use touch gestures: swipe down/up to scroll the output, swipe right for tab completion
 4. Use the virtual keyboard for special keys (Ctrl+C to interrupt)
+
+### Answering an Agent from the Chat View
+
+When a pane runs Claude Code, Codex (started with `codex --no-daemon`) or OpenCode 2, the header
+offers a **Chat** view: the conversation as messages, a box to send the next one (with images),
+`/` commands, and cards that answer the agent's permission dialogs. A message sent while the agent
+works waits for the turn to end. See [Agent Chat](https://termote.ohnice.app/usage/agent-chat/).
+
+### Picking Up an Old Session
+
+**Session history** (the history button in the Chat view, or the command palette) lists the
+Claude Code, Codex and OpenCode sessions that ran in the pane's folder, with their tokens,
+estimated cost and the files they changed. Read one, resume it in a new tab, or fork one that is
+still running. See
+[Resuming an Old Session](https://termote.ohnice.app/usage/agent-chat/#resuming-an-old-session).
 
 ### Monitoring Long-Running Processes
 

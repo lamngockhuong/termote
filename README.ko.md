@@ -27,7 +27,7 @@
   <a href="https://unikorn.vn/p/termote?ref=embed-termote" target="_blank"><img src="https://unikorn.vn/api/widgets/badge/termote?theme=dark" alt="Termote trên Unikorn.vn" width="170" height="42" /></a>
 </p>
 
-모바일/데스크톱에서 PWA를 통해 CLI 도구(Claude Code, Codex, 모든 터미널)를 원격 제어.
+모바일/데스크톱에서 PWA를 통해 CLI 도구(Claude Code, Codex, OpenCode, 모든 터미널)를 원격 제어.
 
 > [!NOTE]
 > Termote 1.0은 0.x 설치를 업그레이드하지 않습니다. [보관된 0.x 문서](https://termote.ohnice.app/0.x/)에 따라 0.x를 제거한 다음, [빠른 시작](#빠른-시작)의 명령으로 1.0을 설치하세요.
@@ -45,17 +45,23 @@
 - **세션 전환**: 생성/편집/삭제가 가능한 여러 tmux 세션
 - **세션 탭**: 빠른 창 전환을 위한 가로 탭 바
 - **Herdr 백엔드** (네이티브 또는 컨테이너 안): tmux 대신 Herdr 워크스페이스를 제어하고, 패널마다 코딩 에이전트 상태 배지를 표시 — [네이티브 설치](https://termote.ohnice.app/installation/native/) 참고
-- **Chat 뷰**: Claude Code(또는 `--no-daemon`으로 시작한 Codex)를 실행 중인 pane을 채팅처럼 읽고 답할 수 있으며, 슬래시 명령 제안과 대화상자 응답을 지원 — [Agent Chat](https://termote.ohnice.app/usage/agent-chat/) 참고
-- **Files 및 Changes 뷰**: pane의 디렉터리와 git 변경 사항을 탐색하고 Markdown을 미리보기 — [Files and Changes](https://termote.ohnice.app/usage/files/) 참고
+- **Chat 뷰**: Claude Code, Codex(`--no-daemon`으로 시작) 또는 OpenCode 2를 실행 중인 pane을 채팅처럼 읽고 답할 수 있으며, 슬래시 명령 제안, 대화상자 응답, 실행 중인 서브에이전트 표시를 지원 — [Agent Chat](https://termote.ohnice.app/usage/agent-chat/) 참고
+- **세션 기록**: pane의 폴더에서 실행된 Claude Code, Codex, OpenCode 세션을 나열하고, 세션을 읽거나 새 탭에서 재개하거나 실행 중인 세션을 포크 — [Resuming an Old Session](https://termote.ohnice.app/usage/agent-chat/#resuming-an-old-session) 참고
+- **토큰과 비용**: 에이전트 세션별 토큰 수와 예상 비용, 일별 합계 — [Tokens and cost](https://termote.ohnice.app/usage/overview/#tokens-and-cost) 참고
+- **세션이 변경한 파일**: 에이전트 세션이 편집한 파일을 Changes와 세션 기록에 나열하고, 각 파일에서 diff를 엶 — [Changes](https://termote.ohnice.app/usage/changes/#files-a-session-changed) 참고
+- **Files 및 Changes 뷰**: pane의 디렉터리와 git 변경 사항을 탐색하고 Markdown을 미리보기. Windows의 psmux를 포함한 모든 백엔드에서 동작 — [Files and Changes](https://termote.ohnice.app/usage/files/) 참고
 - **Chat 메시지 대기열과 파일 링크**: 에이전트가 작업하는 동안 메시지를 대기열에 넣고, 에이전트가 쓴 파일 경로를 탭하면 Files에서 해당 줄로 파일을 엶
 - **리뷰와 스테이징**: Changes와 Files에서 줄에 댓글을 달고 리뷰를 에이전트에게 보냄. 변경 사항을 파일 또는 hunk 단위로 stage, unstage, 폐기
 - **Files의 미리보기와 편집**: PDF, .xlsx, .docx를 읽기 전용으로 미리보기. Shift-JIS, EUC-JP, UTF-16 파일 열기와 저장. 실시간 미리보기 옆에서 Markdown 편집
+- **Windows에서 열기** (WSL): 서버가 WSL에서 실행될 때 파일의 Windows 경로를 복사하거나, 파일이나 폴더를 해당 Windows 프로그램으로 엶
 - **Places**: `termote start --allow-path <dir>`로 pane 밖의 폴더를 Files에 표시 — [Places](https://termote.ohnice.app/usage/files/#places) 참고
 - **Tasks**: pane의 `package.json` 스크립트와 Makefile 타깃을 실행하고, 실패한 실행을 에이전트에게 보냄 — [Tasks](https://termote.ohnice.app/usage/tasks/) 참고
+- **Worktrees**: git worktree를 새 브랜치나 기존 브랜치에서 별도의 그룹으로 열기 (Herdr, tmux, Zellij, herdr-core, psmux) — [Worktrees](https://termote.ohnice.app/usage/sessions/#worktrees) 참고
 - **별도 창** (데스크톱): 파일, diff, 탭, pane 또는 개요를 별도 창에서 열기
-- **이미지 첨부**: 휴대폰의 이미지를 터미널이나 Chat 뷰 메시지로 보내 에이전트가 경로로 읽을 수 있게 함
+- **이미지 첨부**: 휴대폰의 이미지를 터미널이나 Chat 뷰 메시지로 보내 에이전트가 경로로 읽을 수 있게 함. Claude Code, Codex, OpenCode에 붙여 넣은 이미지는 Chat 뷰에서 다시 열 수 있음
 - **Zellij 백엔드** (Linux, macOS 또는 컨테이너 안): tmux 대신 Zellij 세션, 탭, 패널을 제어 (Zellij 0.45.0 이상), `--mux zellij`로 선택 — [네이티브 설치](https://termote.ohnice.app/installation/native/) 참고
 - **herdr-core 백엔드** (네이티브, 모든 OS): herdr-core의 클라이언트 하나로서 herdr 앱이 보여 주는 스페이스, 탭, 패널을 그대로 표시 (`hc` 0.1.16 이상), `--mux hc`로 선택 — [herdr-core 백엔드](https://termote.ohnice.app/installation/native/#herdr-core-backend) 참고
+- **Machines**: 다른 컴퓨터의 에이전트를 하나의 Termote에서 SSH로 지켜보고 제어. 사용하는 키는 그 컴퓨터의 Termote에만 닿을 수 있음 (`termote machine add <alias>`) — [Machines](https://termote.ohnice.app/usage/machines/) 참고
 - **Herdr 플러그인**: Herdr를 벗어나지 않고 포커스된 Herdr pane을 Termote에서 열고, 링크를 휴대폰용 QR 코드로 표시하고, 서버를 시작하거나 중지 — [Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/) 참고
 - **모바일 친화적**: 가상 키보드 툴바 (Tab/Ctrl/Shift/방향키, 확장 가능)
 - **제스처 지원**: 스와이프로 Ctrl+C, Tab, 스크롤
@@ -63,6 +69,8 @@
 - **빠른 작업**: 모바일 툴바 끝에 고정된 ⋯ 키가 자주 쓰는 작업(clear, cancel, exit)의 Actions 줄을 보여 줍니다
 - **인터페이스 스타일**: Neutral, Terminal, Native 중 설정에서 선택하며 라이트/다크 테마와 별개입니다
 - **인터페이스 언어**: 영어 또는 베트남어를 설정에서 선택하며, Auto는 브라우저 언어를 따릅니다
+- **설정 내보내기와 가져오기**: 이 브라우저의 설정을 파일로 내보내 다른 브라우저에서 가져오거나, 코딩 에이전트가 `termote settings propose`로 제안한 설정을 검토합니다 — [Settings](https://termote.ohnice.app/usage/settings/#export-and-import) 참고
+- **GPU 터미널**: 기기에 GPU가 있으면 터미널을 WebGL2로 그려, 출력이 많아도 부드럽게 표시합니다
 - **연결 표시기**: 실시간 서버 상태 및 연결 끊김 자동 감지
 - **업데이트 확인**: GitHub releases에서 새 버전 자동 알림
 - **PWA**: 홈 화면에 설치 가능, 오프라인 지원
@@ -73,6 +81,8 @@
 - **설정 저장**: `termote start`가 옵션을 저장하고, 비밀번호는 암호화해 저장
 
 ## 스크린샷
+
+**[데모 체험하기](https://termote.ohnice.app/demo/)**: 설치 없이 휴대폰이나 데스크톱 브라우저에서 가짜 데이터로 실제 앱을 사용해 볼 수 있습니다.
 
 <p align="center">
   <img src="docs/images/screenshots/phones.png" alt="휴대폰의 터미널, Chat, Changes" width="720" />
@@ -182,12 +192,16 @@ termote status                       # What the running server reports
 termote stop                         # Stop (it starts again at the next login)
 termote restart                      # Restart with the saved options
 termote logs follow                  # Tail the logs
-termote show-password                # Print the saved admin password
+termote show-password                # Print the saved username and password
+termote url --qr                     # The link to open, as a QR code for a phone
+termote pair                         # A one-time code that signs a new device in
+termote devices                      # List the paired devices (devices revoke <id>)
+termote machine add <ssh alias>      # Reach another computer's Termote (Machines in the sidebar)
 termote update                       # Update to the latest release
-termote uninstall                    # Remove the service, the command and the install
+termote uninstall                    # Remove the service, the command, the install and uploads
 ```
 
-`update`는 새 버전으로 전환하고 서비스를 재시작하며, 새 버전이 올라오지 않으면 이전 버전으로 되돌립니다. `uninstall`은 설정(`~/.config/termote`)과 로그(`~/.local/state/termote`)를 남기고 두 경로를 출력합니다.
+`update`는 새 버전으로 전환하고 서비스를 재시작하며, 새 버전이 올라오지 않으면 이전 버전으로 되돌립니다. `uninstall`은 설정(`~/.config/termote`)과 로그(`~/.local/state/termote`)를 남기고 두 경로를 출력합니다. `uninstall --purge`는 이 둘도 함께 제거합니다.
 
 ## 설치
 
@@ -214,14 +228,14 @@ termote container logs -f
 termote container down
 ```
 
-`container up`은 설치된 `termote`와 같은 버전의 `ghcr.io/lamngockhuong/termote`를 podman(우선) 또는 docker로 실행하며, 포트 7680을 쓰고 `~/termote-workspace`를 `/workspace`에 마운트합니다. `--port`, `--lan`, `--tailscale`, `--no-auth`, `--allow-host`, `--user`, `--fresh`를 받으며, 이 값들은 `start`의 옵션과 따로 저장됩니다. 사용자 이름과 비밀번호는 네이티브 서버와 공유합니다. Docker는 재부팅 후 컨테이너를 다시 시작하지만, rootless Podman에는 이를 담당할 데몬이 없으므로 Quadlet 유닛으로 실행하세요.
+`container up`은 설치된 `termote`와 같은 버전의 `ghcr.io/lamngockhuong/termote`를 podman(우선) 또는 docker로 실행하며, 포트 7680을 쓰고 `~/termote-workspace`를 `/workspace`에 마운트합니다. `--port`, `--lan`, `--tailscale`, `--cloudflare`, `--no-auth`, `--mux`, `--allow-host`, `--allow-path`, `--user`, `--fresh`, `--workspace`, `--build`(체크아웃 전용)를 받으며, 이 값들은 `start`의 옵션과 따로 저장됩니다. 사용자 이름과 비밀번호는 네이티브 서버와 공유합니다. Docker는 재부팅 후 컨테이너를 다시 시작하지만, rootless Podman에는 이를 담당할 데몬이 없으므로 Quadlet 유닛으로 실행하세요.
 
 > **보안 참고**: `$HOME`을 직접 마운트하지 마세요 — `.ssh`, `.gnupg` 같은 민감한 디렉토리가 컨테이너에서 접근 가능해집니다. 대신 특정 프로젝트 디렉토리를 마운트하세요.
 
 ### CLI 없이 Docker로 실행
 
 ```bash
-# Generates a password, printed in: docker logs termote
+# Generates a password: docker exec termote cat /home/termote/.config/termote/password
 docker run -d --name termote -p 7680:7680 \
   -v ~/projects:/workspace \
   ghcr.io/lamngockhuong/termote:latest
@@ -232,11 +246,11 @@ docker run -d --name termote -p 7680:7680 \
   ghcr.io/lamngockhuong/termote:latest
 ```
 
-| 환경 변수      | 설명                                    |
-| -------------- | --------------------------------------- |
-| `TERMOTE_USER` | 기본 인증 사용자 이름 (기본값: `admin`) |
-| `TERMOTE_PASS` | 기본 인증 비밀번호 (기본값: 자동 생성)  |
-| `NO_AUTH`      | `true`로 설정하면 인증 비활성화         |
+| 환경 변수      | 설명                                                                                    |
+| -------------- | --------------------------------------------------------------------------------------- |
+| `TERMOTE_USER` | 기본 인증 사용자 이름 (기본값: `admin`)                                                 |
+| `TERMOTE_PASS` | 기본 인증 비밀번호 (기본값: 자동 생성, `/home/termote/.config/termote/password`에 저장) |
+| `NO_AUTH`      | `true`로 설정하면 인증 비활성화                                                         |
 
 ### 소스에서 빌드
 
@@ -285,6 +299,10 @@ flowchart LR
 | `--lan[=false]`                   | 모든 인터페이스에서 수신 (기본값: localhost만)                                                       |
 | `--tailscale <host[:port]>`       | Tailscale HTTPS로 공개 (기본 포트 443)                                                               |
 | `--no-tailscale`                  | Tailscale 공개 중지                                                                                  |
+| `--cloudflare <host>`             | 직접 운영하는 Cloudflare Tunnel의 호스트 이름. 앞단에 Cloudflare Access가 없으면 경고                |
+| `--no-cloudflare`                 | Cloudflare 호스트 이름 삭제                                                                          |
+| `--proxy-client-header <name>`    | 프록시가 클라이언트 주소를 담는 헤더 (`--cloudflare` 사용 시 기본값: `CF-Connecting-IP`)             |
+| `--no-proxy-client-header`        | 이 헤더를 더 이상 읽지 않음                                                                          |
 | `--no-auth[=false]`               | 기본 인증 비활성화                                                                                   |
 | `--mux <tmux\|herdr\|zellij\|hc>` | 터미널 백엔드 (기본값: herdr가 실행 중이면 herdr, 아니면 tmux; zellij: Linux, macOS; hc: herdr-core) |
 | `--allow-host <name>`             | 추가 Host 헤더 값 허용 (반복 가능, 와일드카드 없음, 보안 참고 참조)                                  |
@@ -319,7 +337,7 @@ sudo tailscale set --operator=$USER                    # Linux, once: let termot
 | macOS   | ✓        | ✓        | `install.sh`  |
 | Windows | ✓        | ✓        | `install.ps1` |
 
-> **Windows 지원**: 컨테이너 모드에는 Docker Desktop 또는 Podman Desktop이 필요하고, 네이티브 모드에는 [psmux](https://github.com/psmux/psmux)(Windows용 tmux 호환 터미널 멀티플렉서)가 필요하며 `winget install psmux`로 설치합니다. 대신 실행 중인 [Herdr](https://herdr.dev/#install) 서버를 사용할 수도 있습니다. Windows 서비스는 아직 실제 기기에서 검증되지 않았습니다. 문제가 있으면 GitHub에 보고해 주세요.
+> **Windows 지원**: 컨테이너 모드에는 Docker Desktop 또는 Podman Desktop이 필요하고, 네이티브 모드에는 [psmux](https://github.com/psmux/psmux)(Windows용 tmux 호환 터미널 멀티플렉서)가 필요하며 `winget install psmux`로 설치합니다. 대신 실행 중인 [Herdr](https://herdr.dev/#install) 서버를 사용할 수도 있습니다.
 
 ## 모바일 사용법
 
@@ -361,6 +379,7 @@ termote/
 │   ├── zellij_*.go         # Termote's Zellij clients, view-only stream, a pane's shell
 │   ├── mux_hc*.go, hc_*.go # herdr-core backend (hc connect client, herdr-app document)
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
+│   ├── agent_*.go          # Chat view, session history, tokens and cost (Claude Code, Codex, OpenCode)
 │   ├── cli*.go             # start/stop/update/container/logs/menu subcommands
 │   └── webui/              # PWA embedded in the binary (filled by make build)
 ├── scripts/
@@ -374,6 +393,8 @@ termote/
 │   ├── test-install.sh     # Unix installer tests
 │   ├── test-install.ps1    # Windows installer tests
 │   └── test-entrypoints.sh # Container entrypoint tests
+├── herdr-plugin/           # Herdr plugin (open a pane in Termote, QR code, start/stop)
+├── video/                  # Remotion intro video
 └── website/                # Astro Starlight docs site
     └── src/content/docs/   # MDX documentation
 ```

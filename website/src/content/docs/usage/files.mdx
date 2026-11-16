@@ -154,6 +154,25 @@ absolute path and closes.
 A view-only device sees the copies, **Refresh** and **Collapse all** only (and, on a tab,
 **Keep open** and **Close**).
 
+### Under WSL
+
+When the server runs under WSL (natively, not in the container), the menus add:
+
+- **Copy Windows path**, on every row and tab: the path as Windows names it, a drive path for a
+  file under `/mnt/<letter>` (`C:\Users\me\notes.md`), else the distribution's share
+  (`\\wsl.localhost\<distro>\…`). A view-only device gets it too.
+- **Open in Windows**, on a file's or folder's row and on a tab of the current root: Windows opens
+  it with the program it uses for that type, on the computer the server runs on, as if you opened
+  it in Explorer. It needs a full device and WSL interop turned on, and is never offered for a
+  [machine](/usage/machines/) reached over SSH.
+
+Text, code, PDF files and pictures open at once. A file of any other type may be run by Windows
+as a program (a script, an Office file that fetches a template, a page a browser opens), so
+Termote first asks **Run this file as a program?**, with **Run** and **Cancel**. A sensitive file
+that is not shown, a path through a link, a name Windows reads differently (with `\` or a comma)
+and a folder holding shortcuts or `desktop.ini` files Windows could follow to another computer are
+never opened; a toast says why.
+
 ## Open Files as Tabs
 
 Opening a file keeps the ones already open: each has a tab, and going back to a tab brings back
