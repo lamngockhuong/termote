@@ -461,6 +461,9 @@ export const FILES_ROUTES: Record<string, Handler> = {
   'GET /panes/{id}/files/document': () =>
     fail(415, 'not_document', 'not a document'),
   'GET /panes/{id}/files/download': unsupported,
+  // The demo's agents name no file outside their folders
+  'POST /panes/{id}/files/mentioned': () =>
+    fail(404, 'not_mentioned', 'the agent did not name this file'),
   'POST /panes/{id}/files/image': unsupported,
   'POST /panes/{id}/files/upload': unsupported,
   // The demo is not under WSL: its tree names no Windows root either

@@ -22,6 +22,7 @@ import type { ViewProps } from '../app-views'
 import { ThemeProvider } from '../contexts/theme-context'
 import { resetFileUploads, startUploads } from '../hooks/use-file-uploads'
 import {
+  openMentionedInFiles,
   requestFilesFocus,
   resetFilesStores,
   useFileDraft,
@@ -60,6 +61,11 @@ vi.mock('../hooks/use-mux-api', async (orig) => ({
   renameFile: (...a: unknown[]) => mockRename(...a),
   searchFiles: (...a: unknown[]) => mockSearch(...a),
   fetchTrash: (...a: unknown[]) => mockTrash(...a),
+  openMentionedFile: async () => ({
+    place: 'm-1',
+    root: '/tmp/s',
+    path: 'n.md',
+  }),
 }))
 const mockCheckUpload = vi.fn()
 const mockUploadFile = vi.fn()
@@ -244,6 +250,77 @@ describe('FilesView', () => {
     // An entry that is neither file nor directory does not open
     fireEvent.click(item('fifo'))
     expect(screen.getByRole('tree')).toBeInTheDocument()
+  })
+
+  it('a file the agent named shows read only in a tab of its own', async () => {
+    mockContent.mockImplementation(async (_t, path: string) =>
+      path === 'n.md'
+        ? {
+            root: '/tmp/s',
+            path,
+            size: 3,
+            text: '[x](o.md)',
+            hash: 'h',
+            editable: true,
+          }
+        : {
+            root: '/home/kim/app',
+            path,
+            size: 3,
+            text: 'hi',
+            hash: 'h',
+            editable: true,
+          },
+    )
+    const { notify } = await show()
+    fireEvent.click(item('README.md'))
+    await screen.findByTestId('markdown-preview')
+    // Kept open: the named file is another tab, not the preview one
+    fireEvent.doubleClick(screen.getByRole('tab', { name: /README\.md/ }))
+    await act(() => openMentionedInFiles('%1', '/tmp/s/n.md'))
+    expect(await screen.findByRole('button', { name: 'x' })).toBeInTheDocument()
+    expect(mockContent).toHaveBeenLastCalledWith(
+      { paneId: '%1', place: 'm-1' },
+      'n.md',
+      expect.objectContaining({ root: '/tmp/s' }),
+    )
+    // Both tabs, the named one titled with its whole path
+    const tabs = screen.getAllByRole('tab')
+    expect(tabs.map((x) => x.getAttribute('title'))).toContain('/tmp/s/n.md')
+    // Nothing that writes
+    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull()
+    // A link of it is not followed
+    fireEvent.click(screen.getByRole('button', { name: 'x' }))
+    expect(notify).toHaveBeenCalledWith(
+      "Links in this file can't be opened here",
+    )
+    // The pane's own file reads from the pane's folder again
+    fireEvent.click(screen.getByRole('tab', { name: /README\.md/ }))
+    await waitFor(() =>
+      expect(mockContent).toHaveBeenLastCalledWith(
+        { paneId: '%1', place: undefined },
+        'README.md',
+        expect.objectContaining({ root: '/home/kim/app' }),
+      ),
+    )
+    // A 409 on the named file never moves the tree: its folder is its own
+    mockContent.mockRejectedValueOnce(
+      new RequestError(409, '', 'root changed', { root: '/elsewhere' }),
+    )
+    fireEvent.click(screen.getByRole('tab', { name: /n\.md/ }))
+    await waitFor(() =>
+      expect(mockContent).toHaveBeenLastCalledWith(
+        { paneId: '%1', place: 'm-1' },
+        'n.md',
+        expect.anything(),
+      ),
+    )
+    await act(async () => {})
+    expect(mockTree).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      '/elsewhere',
+    )
   })
 
   it('comes back from a file to the tree scrolled as it was left', async () => {

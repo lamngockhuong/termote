@@ -167,11 +167,13 @@ export function persistedFilesState<
   T extends Omit<PersistedFileTab, 'history'> & {
     reveal: boolean
     history: { path: string; scrollTop: number; reveal?: boolean }[]
+    // A file the agent named: its id does not outlive the server's memory
+    mentioned?: string
   },
 >(state: TabsState<T>): PersistedTabs<PersistedFileTab> | null {
   return persisted(
     state,
-    (t) => t.reveal,
+    (t) => t.reveal || !!t.mentioned,
     (t) => ({
       id: t.id,
       pinned: t.pinned,

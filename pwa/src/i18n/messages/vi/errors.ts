@@ -107,6 +107,7 @@ export default {
   'errors.not_git': 'Workspace này không nằm trong repository git',
   'errors.not_image': 'Không phải ảnh PNG, JPEG, GIF, WebP hay SVG',
   'errors.not_in_trash': 'Không còn trong thùng rác',
+  'errors.not_mentioned': 'Agent chưa nhắc tới file này',
   'errors.not_linked': 'Herdr không quản lý worktree này',
   'errors.not_repo': 'Không nằm trong repository git',
   'errors.not_text': 'Chữ không phải UTF-8 hợp lệ',

@@ -69,15 +69,21 @@ func (e *rootChangedError) Error() string { return "root changed" }
 // stages, unstages or discards of a change (POST files/changes/apply) and
 // the bytes of a document to preview (GET files/document).
 type filesAPI struct {
-	m        Mux
-	dirs     PaneDirer // nil when the backend has none
-	allowed  hostAllowlist
-	deny     []string // absolute directories never served
-	git      *gitRunner
-	roots    *rootResolver
-	statuses *ttlCache[gitStatus]  // root → git status
-	commits  *ttlCache[commitList] // root and commit hash → its files
-	finds    *ttlCache[findList]   // root + list kind → file list (files/find)
+	m       Mux
+	dirs    PaneDirer // nil when the backend has none
+	allowed hostAllowlist
+	deny    []string // absolute directories never served
+	// mentions reports whether the agent of a pane named a path in its live
+	// transcript, or in a past session's (agent, session: the History's)
+	// (files/mentioned); nil: no agent reads (set by serve)., or in a past session's (agent, session: the History's)
+	mentions func(ctx context.Context, paneID, agent, session, path string) (bool, error)
+	// mentioned holds the ids files/mentioned handed out
+	mentioned *mentionedFiles
+	git       *gitRunner
+	roots     *rootResolver
+	statuses  *ttlCache[gitStatus]  // root → git status
+	commits   *ttlCache[commitList] // root and commit hash → its files
+	finds     *ttlCache[findList]   // root + list kind → file list (files/find)
 	// worktrees: root → its repository's work trees (worktreeRoots)
 	worktrees *ttlCache[[]string]
 	rawSlots  chan struct{} // raw requests running, server-wide
@@ -146,6 +152,7 @@ func registerFilesRoutes(mux *http.ServeMux, m Mux, allowed hostAllowlist, denyD
 		largeReadSlots: make(chan struct{}, largeReadMaxRunning),
 		deny:           slices.Concat(filesDenyDirs(systemDenyDirs...), filesDenyDirs(keyDirs()...), filesDenyDirs(denyDirs...)),
 		placeNow:       newTTLCache[string](placeCheckTTL),
+		mentioned:      newMentionedFiles(),
 		writeSlots:     make(chan struct{}, writeMaxRunning),
 		uploadSlots:    make(chan struct{}, uploadMaxRunning),
 		writeLocks:     &writeLocks{locks: map[string]*sync.Mutex{}},
@@ -177,6 +184,7 @@ func registerFilesRoutes(mux *http.ServeMux, m Mux, allowed hostAllowlist, denyD
 	mux.HandleFunc("/api/mux/panes/{id}/files/document", f.handleDocument)
 	mux.HandleFunc("/api/mux/panes/{id}/files/open-windows", f.handleOpenWindows)
 	mux.HandleFunc("/api/mux/files/places", f.handlePlaces)
+	mux.HandleFunc("/api/mux/panes/{id}/files/mentioned", f.handleMentioned)
 	return f
 }
 
@@ -238,6 +246,9 @@ func (f *filesAPI) startAt(w http.ResponseWriter, r *http.Request, allow func(ht
 		return nil, nil, false
 	case placeRefused(r):
 		err = errPlaceNotSupported
+	case isMentionedID(id):
+		// One file the pane's agent named, read only (files/mentioned)
+		root, err = f.mentionedRoot(r, id)
 	default:
 		root, err = f.placeRoot(ctx, id)
 	}

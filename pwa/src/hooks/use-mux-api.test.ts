@@ -64,6 +64,7 @@ import {
   moveTab,
   onViewOnlyRefusal,
   openInWindows,
+  openMentionedFile,
   openWorktree,
   previewTemplateImport,
   REQUEST_TIMEOUT_MS,
@@ -1305,6 +1306,32 @@ describe('files API client', () => {
     })
     expect(timeout).toHaveBeenCalledWith(REQUEST_TIMEOUT_MS)
     timeout.mockRestore()
+  })
+
+  it('opens a file the agent named by its path, and throws a refusal', async () => {
+    const opened = { place: 'm-1', root: '/tmp/s', path: 'n.md' }
+    const { calls } = mockFetch(
+      { body: opened },
+      { body: opened },
+      { body: { error: 'x', code: 'not_mentioned' }, status: 404 },
+    )
+    expect(await openMentionedFile('%1', '/tmp/s/n.md')).toEqual(opened)
+    expect(calls[0].url).toBe('/api/mux/panes/%251/files/mentioned')
+    expect(calls[0].init?.method).toBe('POST')
+    expect(JSON.parse(calls[0].init?.body as string)).toEqual({
+      path: '/tmp/s/n.md',
+    })
+    // Named by a past session: its transcript is read
+    await openMentionedFile('1', '/tmp/x', { agent: 'claude', id: 's1' })
+    expect(JSON.parse(calls[1].init?.body as string)).toEqual({
+      path: '/tmp/x',
+      agent: 'claude',
+      session: 's1',
+    })
+    await expect(openMentionedFile('1', '/tmp/x')).rejects.toMatchObject({
+      status: 404,
+      code: 'not_mentioned',
+    })
   })
 
   it('a refused create throws its code, or the root it moved to', async () => {
