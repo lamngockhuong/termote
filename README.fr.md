@@ -91,6 +91,10 @@ Contrôlez à distance des outils CLI (Claude Code, Codex, OpenCode, n'importe q
 </p>
 
 <p align="center">
+  <img src="docs/images/screenshots/agents.png" alt="Historique des sessions, OpenCode et Machines sur un téléphone" width="720" />
+</p>
+
+<p align="center">
   <img src="docs/images/screenshots/desktop.png" alt="Desktop: Chat and Changes on Herdr" width="720" />
 </p>
 

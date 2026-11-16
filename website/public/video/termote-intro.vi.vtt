@@ -26,57 +26,112 @@ Chat với Claude Code và Codex.
 Gửi tin nhắn tiếp theo, xem agent đang làm, trả lời câu hỏi của nó bằng một lần chạm.
 
 6
-00:32.700 --> 00:39.667
+00:32.700 --> 00:38.667
+Cả OpenCode nữa.
+Xem trạng thái, chat, gõ lệnh / và trả lời yêu cầu cấp quyền, ngay trên điện thoại.
+
+7
+00:38.867 --> 00:42.667
+Mở lại bất kỳ phiên nào.
+Mọi phiên Claude Code và Codex trong thư mục: tiếp tục, tách nhánh, xem các file phiên đó đã sửa.
+
+8
+00:42.667 --> 00:46.833
+Biết rõ chi phí.
+Số token và chi phí ước tính của từng phiên, trong hôm nay và tuần này.
+
+9
+00:47.033 --> 00:49.833
+Ai đã sửa từng dòng.
+Blame ngay trong trình xem file, cạnh những chỗ agent vừa sửa.
+
+10
+00:49.833 --> 00:52.667
+Một cú nhấp là tới commit.
+Thông điệp, tác giả và mã hash, sẵn để sao chép.
+
+11
+00:52.867 --> 01:00.500
 Thấy rõ những gì đã đổi.
 Duyệt file, xem trước Markdown và sơ đồ, review diff của agent.
 
-7
-00:39.867 --> 00:42.167
-Gửi file từ điện thoại.
-Tải lên bằng nút bấm, kéo thả hoặc dán.
-
-8
-00:42.167 --> 00:44.167
-Lỡ tay xoá?
-File nằm trong thùng rác: khôi phục, hoặc xoá hẳn.
-
-9
-00:44.367 --> 00:49.333
+12
+01:00.700 --> 01:06.667
 Herdr hay tmux. Mọi agent ở một chỗ.
 Workspace Herdr kèm trạng thái từng agent, hoặc các phiên tmux của bạn: vẫn Chat, Files và Changes như nhau.
 
-10
-00:49.533 --> 00:54.333
+13
+01:06.867 --> 01:12.833
+Mỗi việc một worktree.
+Tách sang worktree và workspace mới, để các agent không đụng vào việc của nhau.
+
+14
+01:13.033 --> 01:16.833
+Mọi máy của bạn, chung một sidebar.
+Kết nối tới Termote trên máy khác qua SSH: phiên, Files và Changes của máy đó.
+
+15
+01:16.833 --> 01:20.667
+Theo dõi máy chủ.
+CPU, bộ nhớ, ổ đĩa và pin, chạm một lần trên header là thấy.
+
+16
+01:20.867 --> 01:23.167
+Gửi file từ điện thoại.
+Tải lên bằng nút bấm, kéo thả hoặc dán.
+
+17
+01:23.167 --> 01:25.833
+Lỡ tay xoá?
+File nằm trong thùng rác: khôi phục, hoặc xoá hẳn.
+
+18
+01:26.033 --> 01:30.833
 Các pane cạnh nhau.
 Chia, phóng to, đổi chỗ và đổi cỡ từ menu Pane, trên tmux, Herdr và Zellij.
 
-11
-00:54.533 --> 00:56.667
+19
+01:31.033 --> 01:34.833
+Bố cục desktop theo ý bạn.
+Sidebar gọn hoặc chi tiết, kéo đổi độ rộng được; thanh công cụ trên header hoặc bên phải.
+
+20
+01:34.833 --> 01:38.667
+Chuột phải để làm thêm.
+Sao chép đường dẫn, đổi tên, tải xuống, hoặc mở file trong Windows.
+
+21
+01:38.867 --> 01:45.833
+Sáng hoặc tối, ba kiểu giao diện.
+Neutral, Terminal hoặc Native. Xuất cài đặt rồi nhập vào trình duyệt khác.
+
+22
+01:46.033 --> 01:48.167
 Chạy các task của dự án.
 npm, make, Go, Gradle, Maven, Cargo và nhiều nữa: một lần chạm, chạy trong tab riêng.
 
-12
-00:56.667 --> 00:58.833
+23
+01:48.167 --> 01:50.333
 Có cả tiếng Việt.
 Cả ứng dụng bằng tiếng Anh hoặc tiếng Việt, chọn trong Settings.
 
-13
-00:59.033 --> 01:01.833
+24
+01:50.533 --> 01:53.333
 Được báo khi xong việc.
 Thông báo đẩy khi agent làm xong hoặc cần bạn.
 
-14
-01:01.833 --> 01:04.667
+25
+01:53.333 --> 01:56.167
 Chia sẻ một thiết bị chỉ xem.
 Mã dùng một lần ghép máy tính bảng hay điện thoại của đồng đội, không cần mật khẩu.
 
-15
-01:04.867 --> 01:09.167
+26
+01:56.367 --> 02:00.667
 Riêng tư ngay từ đầu.
 Mặc định chỉ nghe trên 127.0.0.1 · Mật khẩu hoặc thiết bị đã ghép · Vai trò chỉ xem · Tailscale HTTPS · Bản phát hành có chữ ký
 
-16
-01:09.433 --> 01:14.667
+27
+02:00.933 --> 02:06.167
 Your Terminal, Anywhere.
 curl -fsSL https://termote.ohnice.app/install.sh | sh
 termote.ohnice.app · Mã nguồn mở, MIT

@@ -91,6 +91,10 @@ Kendalikan alat CLI (Claude Code, Codex, OpenCode, terminal apa pun) dari jarak 
 </p>
 
 <p align="center">
+  <img src="docs/images/screenshots/agents.png" alt="Riwayat sesi, OpenCode, dan Machines di ponsel" width="720" />
+</p>
+
+<p align="center">
   <img src="docs/images/screenshots/desktop.png" alt="Desktop: Chat and Changes on Herdr" width="720" />
 </p>
 

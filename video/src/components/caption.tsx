@@ -55,16 +55,17 @@ export const CaptionSwitch: React.FC<{
   readonly first: CaptionText;
   readonly second: CaptionText;
   readonly at: number;
-}> = ({ first, second, at }) => {
+  readonly align?: "left" | "center";
+}> = ({ first, second, at, align }) => {
   const frame = useCurrentFrame();
   const p = progress(frame, at - 8, 10);
   return (
     <div style={{ display: "grid" }}>
       <div style={{ gridArea: "1 / 1", opacity: 1 - p }}>
-        <Caption {...first} />
+        <Caption align={align} {...first} />
       </div>
       <div style={{ gridArea: "1 / 1", opacity: p }}>
-        {frame >= at - 8 ? <Caption at={at - 8} {...second} /> : null}
+        {frame >= at - 8 ? <Caption at={at - 8} align={align} {...second} /> : null}
       </div>
     </div>
   );

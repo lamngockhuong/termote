@@ -5,11 +5,12 @@ compositions share the same scenes (`src/scenes/`):
 
 | Composition            | Size      | Length | For                                        |
 | ---------------------- | --------- | ------ | ------------------------------------------ |
-| `TermoteIntro`         | 1920×1080 | ~75 s  | README, website                            |
+| `TermoteIntro`         | 1920×1080 | ~126 s | README, website                            |
 | `TermoteHero`          | 1920×1080 | 15 s   | Website hero: its first frame, as an image |
-| `TermoteIntroVertical` | 1080×1920 | ~32 s  | Social: the phone scenes with big captions |
+| `TermoteIntroVertical` | 1080×1920 | ~44 s  | Social: the phone scenes with big captions |
 | `TermotePoster`        | 1920×1080 | still  | README and website: the intro's picture    |
 | `ReadmePhones`         | 1800×1260 | still  | README screenshot: phones                  |
+| `ReadmeAgents`         | 1800×1260 | still  | README screenshot: history, OpenCode, more |
 | `ReadmeDesktop`        | 1800×1120 | still  | README screenshot: desktop                 |
 | `ReadmeStyles`         | 1800×2200 | still  | README screenshot: interface styles        |
 
@@ -53,9 +54,18 @@ pnpm --filter @termote/video lint     # eslint + tsc
 ## The screens
 
 `public/ui/*.png` are captures of the real PWA, taken against a throwaway
-server with demo content: a git repo `acme-api` with uncommitted edits, three
-workspaces (or tmux sessions), and the Claude Code stand-in
-(`tests/fixtures/fake-claude.sh`) holding a finished conversation. Most
+server with demo content: a git repo `acme-api` with uncommitted edits and
+commits by two authors (for blame), workspaces `acme-api`, `web`, `infra` and
+`mobile` (or tmux sessions), the Claude Code stand-in
+(`tests/fixtures/fake-claude.sh`) holding a finished conversation with its
+tokens and two earlier sessions (for the session history), OpenCode in
+`mobile` (the stand-in TUI, with the conversation served by
+`pwa/e2e/fake-opencode.ts` from the spec), and a second machine
+`build-server`: another Termote on tmux whose bridge socket the server joins
+as SSH would (`TERMOTE_E2E_MACHINE_BRIDGE`). The host's numbers (CPU, memory,
+disks, battery) are the demo page's laptop (`pwa/src/demo/fixtures/system.ts`),
+served to the page in place of `/api/mux/system`, so no capture shows the
+computer that took it; a capture whose page names this host fails. Most
 screens are taken on Herdr; tmux takes `desktop-tmux.png`, shown beside
 Herdr's to say both backends work, and the phone's terminal
 (`phone-terminal.png`), since tmux sizes the window to the phone while a
@@ -64,21 +74,22 @@ also takes the Chat view's working row (`phone-chat-working.png`): it reads
 the stand-in's status from its session file, where a headless Herdr never
 sees it work. Each
 interface style is taken in the light and the dark theme on the sessions sheet
-(`phone-style-<style>-<theme>.png`), where the styles differ the most. Every
+(`phone-style-<style>-<theme>.png`), where the styles differ the most; the
+other screens are taken light or dark scene by scene, so the video shows both. Every
 capture runs with reduced motion and waits for the page to settle, so none is
 taken mid-transition. The README's screenshots are stills of these captures
 (`src/readme-shots.tsx`, `pnpm screenshots`). Under Herdr the stand-in reports its state and session id to
 Herdr (`herdr pane report-agent`), which is what gives its pane a Chat view.
-Nothing in them is mocked up, and no real user, host or project name appears.
+Nothing else in them is mocked up, and no real user, host or project name appears.
 Linux only; needs `herdr`, `tmux` and `jq`. To take them again after the UI
 changed:
 
 ```sh
 make build
 cd pwa
-# Most screens, on Herdr (port 7686)
+# Most screens, on Herdr (port 7686; the second machine on 7696)
 ../video/capture/demo-env.sh start /tmp/dev herdr   # the path shows in Files/Changes
-DEMO_MUX=herdr TERMOTE_PORT=7686 TERMOTE_PASS="$(cat /tmp/dev/pass)" \
+DEMO_MUX=herdr TERMOTE_PORT=7686 TERMOTE_E2E_STATE=/tmp/dev/state TERMOTE_PASS="$(cat /tmp/dev/pass)" \
   pnpm exec playwright test capture-video --workers=1
 ../video/capture/demo-env.sh stop /tmp/dev
 # desktop-tmux.png and the phone's terminals, on tmux (port 7685)
@@ -90,7 +101,10 @@ DEMO_MUX=tmux TMUX_SOCKET=/tmp/termote-demo-$(id -u)-7685.sock TERMOTE_PORT=7685
 
 The spec is `pwa/e2e/capture-video.spec.ts`; CI leaves it out with the other
 "Capture screenshots" specs. The demo runs its own Herdr server (socket,
-HOME and XDG dirs under `/tmp`), never the one you use.
+HOME and XDG dirs under `/tmp`), never the one you use. `demo-env.sh` passes
+`TERMOTE_PWA_DIR` on to the server, to serve a PWA built somewhere other than
+`server/webui`. A worktree Herdr made in a capture (under
+`<work-dir>/.herdr/worktrees`) is removed at the next start.
 
 ## Brand
 

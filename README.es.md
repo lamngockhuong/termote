@@ -91,6 +91,10 @@ Controla remotamente herramientas CLI (Claude Code, Codex, OpenCode, cualquier t
 </p>
 
 <p align="center">
+  <img src="docs/images/screenshots/agents.png" alt="Historial de sesiones, OpenCode y Machines en el móvil" width="720" />
+</p>
+
+<p align="center">
   <img src="docs/images/screenshots/desktop.png" alt="Desktop: Chat and Changes on Herdr" width="720" />
 </p>
 

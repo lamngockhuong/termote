@@ -53,6 +53,19 @@ export const ReadmePhones: React.FC = () => (
   />
 );
 
+// What the agents get beyond the chat: an earlier session with its cost, an
+// OpenCode pane asking for permission, and another machine in the sessions
+// sheet
+export const ReadmeAgents: React.FC = () => (
+  <PhoneRow
+    phones={[
+      { src: "phone-history", label: "Session history" },
+      { src: "phone-opencode-permission", label: "OpenCode" },
+      { src: "phone-sessions", label: "Machines" },
+    ]}
+  />
+);
+
 const STYLES = [
   { key: "neutral", label: "Neutral" },
   { key: "terminal", label: "Terminal" },
