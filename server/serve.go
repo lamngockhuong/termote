@@ -1325,13 +1325,17 @@ func newBasicAuth(user, pass string, dev *deviceAuth, sessions *sessionAuth, opt
 			Secure:   requestIsHTTPS(r),
 		})
 	}
-	// session returns the id of the request's session, or ok false.
+	// session returns the id of the request's session, or ok false. Every
+	// cookie of the name is tried, not only the first: a sibling subdomain
+	// can set one for the parent domain with a longer path, which the
+	// browser sends first, and must not hide this host's own.
 	session := func(r *http.Request) (string, bool) {
-		cookie, err := r.Cookie(sessionCookieName)
-		if err != nil {
-			return "", false
+		for _, c := range r.CookiesNamed(sessionCookieName) {
+			if id, ok := sessions.lookup(c.Value); ok {
+				return id, true
+			}
 		}
-		return sessions.lookup(cookie.Value)
+		return "", false
 	}
 	hasSession := func(r *http.Request) bool {
 		_, ok := session(r)
@@ -1558,8 +1562,8 @@ func newBasicAuth(user, pass string, dev *deviceAuth, sessions *sessionAuth, opt
 			return
 		}
 		// The session's streams close with it.
-		if cookie, err := r.Cookie(sessionCookieName); err == nil {
-			sessions.revokeToken(cookie.Value)
+		for _, c := range r.CookiesNamed(sessionCookieName) {
+			sessions.revokeToken(c.Value)
 		}
 		if dev != nil {
 			if dev.hasDeviceCookie(r) {

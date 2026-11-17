@@ -115,3 +115,35 @@ func TestSnapshotCapsAuth(t *testing.T) {
 		t.Errorf("--no-auth logout = %d", rec.Code)
 	}
 }
+
+// A sibling subdomain can set a session cookie of the same name for the
+// parent domain with a longer path, which the browser sends first: the
+// browser's own cookie still signs it in, and logging out still ends it.
+func TestSessionCookieBehindAPlantedOne(t *testing.T) {
+	h := newTestHandler(t, &fakeMux{})
+	cookie := sessionCookieOf(postLogin(h, url.Values{"username": {"admin"}, "password": {"secret"}}, func(r *http.Request) {
+		r.Host = "localhost:7680"
+	}))
+	if cookie == nil {
+		t.Fatal("no session after sign-in")
+	}
+	planted := &http.Cookie{Name: sessionCookieName, Value: "planted"}
+	snapshot := func() int {
+		req := apiRequest("GET", "/api/mux/snapshot", "")
+		req.Header.Del("Authorization")
+		req.AddCookie(planted)
+		req.AddCookie(cookie)
+		return serve(h, req).Code
+	}
+	if code := snapshot(); code != http.StatusOK {
+		t.Fatalf("own cookie after a planted one: snapshot = %d, want 200", code)
+	}
+	req := logoutRequest(planted)
+	req.AddCookie(cookie)
+	if rec := serve(h, req); rec.Code != http.StatusNoContent {
+		t.Fatalf("logout = %d %s", rec.Code, rec.Body.String())
+	}
+	if code := snapshot(); code != http.StatusUnauthorized {
+		t.Errorf("after logout: snapshot = %d, want 401", code)
+	}
+}
