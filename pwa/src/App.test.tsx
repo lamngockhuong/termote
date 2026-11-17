@@ -1184,6 +1184,39 @@ describe('App', () => {
     }
   })
 
+  it('opens another machine in a new window on a desktop only', async () => {
+    const id = '0123456789abcdef'
+    mockMachines = [{ id, label: 'Box', status: 'online' }]
+    const open = vi
+      .spyOn(window, 'open')
+      .mockReturnValueOnce({} as Window)
+      .mockReturnValueOnce(null)
+    try {
+      // A phone or a touch screen: no menu, the browser's own stays
+      const { unmount } = render(<App />)
+      const row = await screen.findByRole('button', { name: /^Box/ })
+      expect(row).not.toHaveAttribute('aria-haspopup')
+      unmount()
+      mockFinePointer.mockReturnValue(true)
+      render(<App />)
+      const box = await screen.findByRole('button', { name: /^Box/ })
+      fireEvent.click(box, { ctrlKey: true, shiftKey: true })
+      expect(open).toHaveBeenLastCalledWith(
+        `${window.location.origin}/?machine=${id}`,
+        '_blank',
+        'popup,width=1100,height=800',
+      )
+      // A blocked window says so
+      fireEvent.click(box, { ctrlKey: true })
+      expect(await screen.findByTestId('toast')).toHaveTextContent(
+        'Pop-up blocked',
+      )
+    } finally {
+      open.mockRestore()
+      mockMachines = []
+    }
+  })
+
   it('renders desktop sidebar (not mobile)', async () => {
     render(<App />)
     await waitFor(() => {
