@@ -3,6 +3,8 @@ package main
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -82,5 +84,32 @@ func TestRepoFollowBounded(t *testing.T) {
 	}
 	if err := newTestRoots().repoConfigRefused(fakeRepo(t, many)); !errors.Is(err, errRepoTooManyFiles) {
 		t.Errorf("more files than the limit: %v", err)
+	}
+}
+
+// A worktrees folder that is a link to a local folder is still read, as
+// git reads it: a gitdir there off a drive refuses the repository, and a
+// link to nothing is no linked worktree.
+func TestRepoWorktreesThroughLocalLink(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		gitdir  string
+		refused bool
+	}{
+		{"off a drive", "//h/s/w/.git\n", true},
+		{"clean", "C:/w/.git\n", false},
+		{"dangling", "", false},
+	} {
+		files := gitDirFiles(".git/", "")
+		if c.gitdir != "" {
+			files = withFiles(files, "elsewhere/w/gitdir", c.gitdir)
+		}
+		dir := fakeRepo(t, files)
+		if err := os.Symlink(filepath.Join(dir, "elsewhere"), filepath.Join(dir, ".git", "worktrees")); err != nil {
+			t.Skipf("no symbolic links here: %v", err)
+		}
+		if err := newTestRoots().repoConfigRefused(dir); (err != nil) != c.refused {
+			t.Errorf("%s: err = %v, want refused %v", c.name, err, c.refused)
+		}
 	}
 }

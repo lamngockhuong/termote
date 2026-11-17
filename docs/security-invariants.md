@@ -17,7 +17,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   credentials and counts as no failed login. The snapshot's `caps.auth` (set from the request
   `basicAuth` let through) tells the PWA to offer Log out. A cookie is never bound to a port:
   every service on the same host name receives it, so the docs tell users to give Termote a
-  host name of its own (accepted risk; no `__Host-` prefix, which would not change that)
+  host name of its own (accepted risk; no `__Host-` prefix, which would not change that). A
+  sibling subdomain can set a `termote_session` for the parent domain with a longer path, which
+  the browser sends first: every cookie of that name is tried, not only the first, so it cannot
+  hide this host's own and keep the user at the sign-in form, and Log out ends each one it carries
 - Basic auth over HTTPS required for production
 - **Sign-in form** (`/login`, `server/login.go`): a browser page load without a session gets
   a 401 with a plain HTML form (no script) and no `WWW-Authenticate`, since an iOS home-screen
@@ -1573,7 +1576,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   it (400 `directory not available`, as a refused pane directory, the reason in the log only) when
   a `.git` file's `gitdir:`, its `commondir`, a line of `objects/info/alternates` (the lines of every file to depth 5, the repository's own
   at 0, as git looks at them; each objects directory read once, as git takes it once),
-  a linked worktree's `gitdir` or the `gitdir:` of the `.git` file that one names names a path off a
+  a linked worktree's `gitdir` (the `worktrees` folder itself opened only once `realRepoDir` has
+  checked the links on its way, as every other file it reads) or the `gitdir:` of the `.git` file that one names names a path off a
   drive letter outside the Places (the test `refusesDir` uses; a share, `\\?\UNC\`, `\\.\`, and an
   NT path `\??\UNC\` alike), or when `config`, `config.worktree` (the git dir's, and the common
   dir's too, which git run there reads) or any local file they include (followed
