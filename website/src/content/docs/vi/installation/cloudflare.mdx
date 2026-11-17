@@ -28,7 +28,7 @@ làm được.
 ## Thiết lập
 
 <Steps>
-1. Trong dashboard Cloudflare, mở **Zero Trust → Networks → Tunnels** rồi tạo một đường hầm (loại
+1. Trong dashboard Cloudflare, mở **Networking → Tunnels** rồi chọn **Create a tunnel** (loại
    **Cloudflared**).
 
 2. Cài nó thành service bằng lệnh dashboard đưa ra. Service giữ token nên chạy dưới root trên Linux và macOS,
@@ -38,11 +38,13 @@ làm được.
    sudo cloudflared service install <token>
    ```
 
-3. Thêm một **public hostname**, ví dụ `term.example.com`, trỏ tới service `http://127.0.0.1:7680` (Windows:
-   `http://127.0.0.1:7690`; container: cổng `--port` của nó).
+3. Trong tab **Routes** của đường hầm, chọn **Add route → Published application**, ví dụ `term.example.com`,
+   trỏ tới service URL `http://127.0.0.1:7680` (Windows: `http://127.0.0.1:7690`; container: cổng `--port` của
+   nó).
 
-4. Bật Cloudflare Access cho hostname đó: **Zero Trust → Access → Applications → Add an application →
-   Self-hosted**, cùng hostname, với một policy chỉ cho bạn vào (ví dụ theo email của bạn).
+4. Bật Cloudflare Access cho hostname đó: **Zero Trust → Access controls → Applications → Create new
+   application → Self-hosted and private**, cùng hostname, với một policy chỉ cho bạn vào (ví dụ theo email
+   của bạn).
 
 5. Báo hostname cho Termote
 
