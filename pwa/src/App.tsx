@@ -167,7 +167,11 @@ import {
   zoomedPane,
 } from './utils/layout-view'
 import { lazyRetry } from './utils/lazy-retry'
-import { type OpenWindowEvent, openInWindow } from './utils/open-window'
+import {
+  type OpenWindowEvent,
+  openInWindow,
+  openMachineInWindow,
+} from './utils/open-window'
 import { loadPaneView, savePaneView } from './utils/pane-view'
 import { pickGroupTab } from './utils/pick-group-tab'
 import { isApplePlatform } from './utils/platform'
@@ -372,16 +376,6 @@ export default function App({
   // The machines this server reaches; the sidebar lists them above the tabs
   const machines = useMachines()
   const openMachine = machines.find((m) => m.id === currentMachine())
-  const machinesSection = (
-    <>
-      <SidebarMachines
-        machines={machines}
-        current={currentMachine()}
-        onSelect={switchMachine}
-      />
-      <MachineListHeading machines={machines} current={currentMachine()} />
-    </>
-  )
   // The tab's title names the machine open, when it is not this one
   useEffect(() => {
     if (!openMachine) return
@@ -396,6 +390,26 @@ export default function App({
   // Desktop only: the command palette, app shortcuts and other windows
   const finePointer = useMediaQuery('(pointer: fine)')
   const desktop = finePointer && !isMobile
+  // Desktop: a machine also opens in a window of its own, so the one open
+  // here stays on screen; a phone has no second window to open
+  const openMachineWindow = useCallback(
+    (id: string, e: OpenWindowEvent) => {
+      if (!openMachineInWindow(id, e.shiftKey))
+        showToast(t('shell.popupBlocked'), 'warning')
+    },
+    [showToast, t],
+  )
+  const machinesSection = (
+    <>
+      <SidebarMachines
+        machines={machines}
+        current={currentMachine()}
+        onSelect={switchMachine}
+        onOpenWindow={desktop ? openMachineWindow : undefined}
+      />
+      <MachineListHeading machines={machines} current={currentMachine()} />
+    </>
+  )
   const {
     isVisible: keyboardVisible,
     keyboardHeight,

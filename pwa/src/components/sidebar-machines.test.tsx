@@ -106,6 +106,83 @@ describe('SidebarMachines', () => {
     ).not.toBeInTheDocument()
   })
 
+  it('opens another machine in a new window, never the one open', () => {
+    const onSelect = vi.fn()
+    const onOpenWindow = vi.fn()
+    render(
+      <SidebarMachines
+        machines={[BOX]}
+        current={BOX.id}
+        onSelect={onSelect}
+        onOpenWindow={onOpenWindow}
+      />,
+    )
+    // The open machine has no menu: it is already on screen
+    const box = screen.getByRole('button', { name: /^Box/ })
+    expect(box).not.toHaveAttribute('aria-haspopup')
+    expect(fireEvent.contextMenu(box)).toBe(true)
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    // A right click opens the menu of another
+    const local = screen.getByRole('button', { name: 'This machine' })
+    expect(local).toHaveAttribute('aria-haspopup', 'menu')
+    expect(fireEvent.contextMenu(local, { clientX: 20, clientY: 30 })).toBe(
+      false,
+    )
+    expect(
+      screen.getByRole('menu', { name: 'Actions for This machine' }),
+    ).toBeInTheDocument()
+    const item = screen.getByRole('menuitem', { name: 'Open in new window' })
+    expect(item).toHaveAttribute('title', 'Shift: a popup')
+    fireEvent.click(item, { shiftKey: true })
+    expect(onOpenWindow).toHaveBeenLastCalledWith('', { shiftKey: true })
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    // Shift+F10 and the menu key open it too, its item focused
+    fireEvent.keyDown(local, { key: 'F10', shiftKey: true })
+    expect(
+      screen.getByRole('menuitem', { name: 'Open in new window' }),
+    ).toHaveFocus()
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Open in new window' }),
+    )
+    expect(onOpenWindow).toHaveBeenLastCalledWith('', { shiftKey: false })
+    fireEvent.keyDown(local, { key: 'ContextMenu' })
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    // F10 alone, or another key, opens nothing
+    fireEvent.keyDown(local, { key: 'F10' })
+    fireEvent.keyDown(local, { key: 'a' })
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    // Ctrl/Cmd+Click and a middle click on the row open a window too
+    fireEvent.click(local, { ctrlKey: true })
+    fireEvent.click(local, { metaKey: true, shiftKey: true })
+    expect(onOpenWindow).toHaveBeenLastCalledWith('', { shiftKey: true })
+    expect(fireEvent.mouseDown(local, { button: 1 })).toBe(false)
+    fireEvent(local, new MouseEvent('auxclick', { bubbles: true, button: 1 }))
+    expect(onOpenWindow).toHaveBeenCalledTimes(5)
+    // A right click is not a middle click
+    fireEvent(local, new MouseEvent('auxclick', { bubbles: true, button: 2 }))
+    expect(onOpenWindow).toHaveBeenCalledTimes(5)
+    expect(onSelect).not.toHaveBeenCalled()
+    fireEvent.click(local)
+    expect(onSelect).toHaveBeenCalledWith('')
+  })
+
+  it('keeps the browser menu, and switches, without new windows', () => {
+    const onSelect = vi.fn()
+    render(<SidebarMachines machines={[BOX]} current="" onSelect={onSelect} />)
+    const box = screen.getByRole('button', { name: /^Box/ })
+    expect(box).not.toHaveAttribute('aria-haspopup')
+    expect(fireEvent.contextMenu(box)).toBe(true)
+    fireEvent.keyDown(box, { key: 'F10', shiftKey: true })
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    expect(fireEvent.mouseDown(box, { button: 1 })).toBe(true)
+    fireEvent(box, new MouseEvent('auxclick', { bubbles: true, button: 1 }))
+    expect(onSelect).not.toHaveBeenCalled()
+    fireEvent.click(box, { ctrlKey: true })
+    expect(onSelect).toHaveBeenCalledWith(BOX.id)
+  })
+
   it('counts the agents that need the user or work', () => {
     expect(busyCount(BOX)).toBe(2)
     expect(busyCount({ ...BOX, groups: undefined })).toBe(0)

@@ -1,8 +1,21 @@
-import { ChevronDown, ChevronRight, Monitor, Server } from 'lucide-react'
-import { useState } from 'react'
+import {
+  AppWindow,
+  ChevronDown,
+  ChevronRight,
+  Monitor,
+  Server,
+} from 'lucide-react'
+import {
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
+  useRef,
+  useState,
+} from 'react'
 import type { MachineInfo, MachineStatus } from '../hooks/use-mux-api'
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
+import type { OpenWindowEvent } from '../utils/open-window'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import {
   ACTIVE_ROW_CLASSES,
@@ -10,6 +23,7 @@ import {
   ROW_PRESS,
 } from './sidebar-row-classes'
 import { FOCUS_RING } from './ui/button'
+import { Menu, MenuItem } from './ui/menu'
 
 const STATUS_LABEL: Record<MachineStatus, MessageKey> = {
   online: 'shell.machines.status.online',
@@ -53,6 +67,8 @@ interface Props {
   // The machine open, '' for this one
   current: string
   onSelect: (id: string) => void
+  // Opens a machine in a new window (desktop), keeping this one on screen
+  onOpenWindow?: (id: string, e: OpenWindowEvent) => void
 }
 
 // The sidebar's Machines: this machine first, then each machine this server
@@ -60,15 +76,88 @@ interface Props {
 // work. The open machine's agents are in the Agents list, so none are listed
 // here. A machine is picked by id only: it is added, removed and fixed with
 // the CLI, which a broken one names under its row.
+// A machine other than the one open also opens in a new window (desktop):
+// from its menu (a right click, Shift+F10 or the menu key), Ctrl/Cmd+Click
+// or a middle click; Shift asks for a popup.
 // Nothing at all while there is no machine.
-export function SidebarMachines({ machines, current, onSelect }: Props) {
+export function SidebarMachines({
+  machines,
+  current,
+  onSelect,
+  onOpenWindow,
+}: Props) {
   const { t } = useT()
   const [collapsed, setCollapsed] = useState(false)
+  // The row whose menu is open, and the point it was right clicked at
+  const [menu, setMenu] = useState<{
+    id: string
+    label: string
+    point: { x: number; y: number } | null
+    byKey: boolean
+  } | null>(null)
+  const menuAnchor = useRef<HTMLElement | null>(null)
   if (machines.length === 0 && current === '') return null
   const row = (active: boolean) =>
     `flex h-8 w-full min-w-0 items-center gap-2 rounded-control px-2 text-left text-[13px] ${ROW_PRESS} ${
       active ? ACTIVE_ROW_CLASSES : ROW_CLASSES
     } ${FOCUS_RING} focus-visible:-outline-offset-2`
+  // A row's button: switches, or opens a window from its menu or a modified click
+  const machineRow = (
+    id: string,
+    label: string,
+    title: string | undefined,
+    children: ReactNode,
+  ) => {
+    const active = current === id
+    const openWindow = active ? undefined : onOpenWindow
+    const openMenu = (
+      el: HTMLElement,
+      point: { x: number; y: number } | null,
+    ) => {
+      menuAnchor.current = el
+      setMenu({ id, label, point, byKey: point === null })
+    }
+    return (
+      <button
+        type="button"
+        aria-current={active ? 'true' : undefined}
+        aria-haspopup={openWindow ? 'menu' : undefined}
+        title={title}
+        onClick={(e: MouseEvent) => {
+          if (openWindow && (e.ctrlKey || e.metaKey)) {
+            openWindow(id, { shiftKey: e.shiftKey })
+            return
+          }
+          onSelect(id)
+        }}
+        onMouseDown={(e) => {
+          // No autoscroll: a middle click opens a window
+          if (openWindow && e.button === 1) e.preventDefault()
+        }}
+        onAuxClick={(e) => {
+          if (!openWindow || e.button !== 1) return
+          e.preventDefault()
+          openWindow(id, { shiftKey: e.shiftKey })
+        }}
+        onContextMenu={(e) => {
+          if (!openWindow) return
+          e.preventDefault()
+          openMenu(e.currentTarget, { x: e.clientX, y: e.clientY })
+        }}
+        onKeyDown={(e: KeyboardEvent<HTMLButtonElement>) => {
+          // Shift+F10 or the context menu key
+          if (!openWindow) return
+          if (e.key !== 'ContextMenu' && !(e.key === 'F10' && e.shiftKey))
+            return
+          e.preventDefault()
+          openMenu(e.currentTarget, null)
+        }}
+        className={row(active)}
+      >
+        {children}
+      </button>
+    )
+  }
   return (
     <section
       aria-label={t('shell.machines.title')}
@@ -93,18 +182,18 @@ export function SidebarMachines({ machines, current, onSelect }: Props) {
       </button>
       {!collapsed && (
         <ul className="m-0 flex list-none flex-col gap-px px-2 pb-2">
-          <li className="flex">
-            <button
-              type="button"
-              aria-current={current === '' ? 'true' : undefined}
-              onClick={() => onSelect('')}
-              className={row(current === '')}
-            >
-              <Monitor size={14} aria-hidden="true" className="shrink-0" />
-              <span className="min-w-0 flex-1 truncate">
-                {t('shell.machines.local')}
-              </span>
-            </button>
+          <li className="flex flex-col">
+            {machineRow(
+              '',
+              t('shell.machines.local'),
+              undefined,
+              <>
+                <Monitor size={14} aria-hidden="true" className="shrink-0" />
+                <span className="min-w-0 flex-1 truncate">
+                  {t('shell.machines.local')}
+                </span>
+              </>,
+            )}
           </li>
           {machines.map((m) => {
             const status = knownStatus(m.status)
@@ -117,31 +206,30 @@ export function SidebarMachines({ machines, current, onSelect }: Props) {
             const label = visibleUnsafe(m.label)
             return (
               <li key={m.id} className="flex flex-col">
-                <button
-                  type="button"
-                  aria-current={current === m.id ? 'true' : undefined}
-                  onClick={() => onSelect(m.id)}
-                  title={t('shell.machines.open', { label })}
-                  className={row(current === m.id)}
-                >
-                  <Server size={14} aria-hidden="true" className="shrink-0" />
-                  <span className="min-w-0 flex-1 truncate">{label}</span>
-                  {busy > 0 && (
+                {machineRow(
+                  m.id,
+                  label,
+                  t('shell.machines.open', { label }),
+                  <>
+                    <Server size={14} aria-hidden="true" className="shrink-0" />
+                    <span className="min-w-0 flex-1 truncate">{label}</span>
+                    {busy > 0 && (
+                      <span
+                        className="shrink-0 text-[11px] tabular-nums text-warning"
+                        title={t('shell.machines.busy', { count: busy })}
+                      >
+                        {busy}
+                      </span>
+                    )}
                     <span
-                      className="shrink-0 text-[11px] tabular-nums text-warning"
-                      title={t('shell.machines.busy', { count: busy })}
-                    >
-                      {busy}
-                    </span>
-                  )}
-                  <span
-                    role="img"
-                    data-status={status}
-                    aria-label={t(STATUS_LABEL[status])}
-                    title={t(STATUS_LABEL[status])}
-                    className={`size-2 shrink-0 rounded-full ${STATUS_DOT[status]}`}
-                  />
-                </button>
+                      role="img"
+                      data-status={status}
+                      aria-label={t(STATUS_LABEL[status])}
+                      title={t(STATUS_LABEL[status])}
+                      className={`size-2 shrink-0 rounded-full ${STATUS_DOT[status]}`}
+                    />
+                  </>,
+                )}
                 {failed && (
                   <p className="m-0 pb-1 pl-8 pr-2 text-[12px] text-fg-muted">
                     {t(STATUS_LABEL[status])}. {t('shell.machines.hint')}
@@ -151,6 +239,26 @@ export function SidebarMachines({ machines, current, onSelect }: Props) {
             )
           })}
         </ul>
+      )}
+      {menu && onOpenWindow && (
+        <Menu
+          label={t('shell.tabs.menu', { name: menu.label })}
+          trigger={null}
+          anchorRef={menuAnchor}
+          point={menu.point}
+          focusFirst={menu.byKey}
+          align="start"
+          open
+          onOpenChange={(open) => !open && setMenu(null)}
+        >
+          <MenuItem
+            icon={<AppWindow size={17} />}
+            title={t('shell.menu.popupHint')}
+            onSelect={(e) => onOpenWindow(menu.id, { shiftKey: e.shiftKey })}
+          >
+            {t('shell.menu.newWindow')}
+          </MenuItem>
+        </Menu>
       )}
     </section>
   )
