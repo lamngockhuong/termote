@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { detailsBlocks, htmlAsText, safeUrl } from './markdown-safety'
+import {
+  detailsBlocks,
+  htmlAsText,
+  safeUrl,
+  tableCellTags,
+} from './markdown-safety'
 
 describe('safeUrl', () => {
   it('accepts http(s) URLs only', () => {
@@ -203,5 +208,156 @@ describe('detailsBlocks', () => {
     expect(performance.now() - t).toBeLessThan(1000)
     expect(tree.children).toHaveLength(25_000)
     expect(tree.children.every((c) => c.type === 'html')).toBe(true)
+  })
+})
+
+describe('tableCellTags', () => {
+  const html = (value: string) => ({ type: 'html', value })
+  const text = (value: string) => ({ type: 'text', value })
+  const cell = (...children: { type: string }[]) => {
+    const node = { type: 'tableCell', children }
+    tableCellTags()({
+      type: 'root',
+      children: [
+        { type: 'table', children: [{ type: 'tableRow', children: [node] }] },
+      ],
+    })
+    return node.children as {
+      type: string
+      value?: string
+      data?: object
+      children?: unknown[]
+    }[]
+  }
+
+  it('turns each spelling of <br> into a line break', () => {
+    const out = cell(
+      text('a'),
+      html('<br>'),
+      text('b'),
+      html('<BR/>'),
+      html('<br />'),
+    )
+    expect(out.map((n) => n.type)).toEqual([
+      'text',
+      'break',
+      'text',
+      'break',
+      'break',
+    ])
+  })
+
+  it('keeps a <br> with attributes, and any other tag, as html', () => {
+    const out = cell(
+      html('<br class="x">'),
+      html('<b>'),
+      text('a'),
+      html('</b>'),
+    )
+    expect(out.map((n) => n.type)).toEqual(['html', 'html', 'text', 'html'])
+  })
+
+  it('rebuilds a list with the markdown of its items, dropping attributes', () => {
+    const strong = { type: 'strong', children: [text('two')] }
+    const out = cell(
+      html('<ul class="x" onclick="alert(1)">'),
+      html('<li>'),
+      text('one'),
+      html('<br>'),
+      text('more'),
+      html('</li>'),
+      text(' '),
+      html('<li>'),
+      strong,
+      html('</li>'),
+      html('</ul>'),
+    )
+    expect(out).toEqual([
+      {
+        type: 'cellList',
+        data: { hName: 'ul' },
+        children: [
+          {
+            type: 'cellListItem',
+            data: { hName: 'li' },
+            children: [text('one'), { type: 'break' }, text('more')],
+          },
+          { type: 'cellListItem', data: { hName: 'li' }, children: [strong] },
+        ],
+      },
+    ])
+  })
+
+  it('rebuilds a disclosure, its summary first, keeping only open', () => {
+    const out = cell(
+      html('<details open class="x">'),
+      text(' '),
+      html('<summary>'),
+      text('More'),
+      html('</summary>'),
+      html('<ol>'),
+      html('<li>'),
+      text('a'),
+      html('</li>'),
+      html('</ol>'),
+      html('</details>'),
+    )
+    expect(out).toMatchObject([
+      {
+        type: 'details',
+        data: { hName: 'details', hProperties: { open: true } },
+        children: [
+          { data: { hName: 'summary' }, children: [text('More')] },
+          { data: { hName: 'ol' }, children: [{ data: { hName: 'li' } }] },
+        ],
+      },
+    ])
+  })
+
+  it.each([
+    [
+      'an unclosed list',
+      [html('<ul>'), html('<li>'), text('a'), html('</li>')],
+    ],
+    [
+      'a closing tag out of order',
+      [html('<ul>'), html('<li>'), html('</ul>'), html('</li>')],
+    ],
+    ['an item outside a list', [html('<li>'), text('a'), html('</li>')]],
+    ['text between items', [html('<ul>'), text('a'), html('</ul>')]],
+    [
+      'a summary after the body',
+      [
+        html('<details>'),
+        text('a'),
+        html('<summary>'),
+        html('</summary>'),
+        html('</details>'),
+      ],
+    ],
+    [
+      'a list in a summary',
+      [
+        html('<details>'),
+        html('<summary>'),
+        html('<ul>'),
+        html('</ul>'),
+        html('</summary>'),
+        html('</details>'),
+      ],
+    ],
+  ])('keeps the tags as html, breaking its lines still, for %s', (_, nodes) => {
+    const out = cell(...nodes, html('<br>'))
+    expect(out.slice(0, -1)).toEqual(nodes)
+    expect(out.at(-1)?.type).toBe('break')
+  })
+
+  it('keeps lists nested deeper than the limit as html', () => {
+    const deep = (n: number) => [
+      ...Array.from({ length: n }, () => [html('<ul>'), html('<li>')]).flat(),
+      ...Array.from({ length: n }, () => [html('</li>'), html('</ul>')]).flat(),
+    ]
+    expect(cell(...deep(15))[0].type).toBe('cellList')
+    expect(cell(...deep(17))[0].type).toBe('html')
   })
 })

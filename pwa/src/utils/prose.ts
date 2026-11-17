@@ -16,5 +16,6 @@ export const PROSE = [
   '[&_summary]:cursor-pointer [&_summary]:font-medium [&_details[open]>summary]:mb-2',
   '[&_:not(pre)>code]:rounded [&_:not(pre)>code]:bg-surface-raised [&_:not(pre)>code]:px-1 [&_:not(pre)>code]:font-term [&_:not(pre)>code]:text-[0.9em]',
   '[&_table]:border-collapse [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-border [&_th]:bg-surface [&_th]:px-2 [&_th]:py-1 [&_th]:text-left',
+  '[&_td_ul]:my-1 [&_td_ol]:my-1 [&_td_details]:my-1 [&_th_ul]:my-1 [&_th_ol]:my-1 [&_th_details]:my-1',
   '[&_.footnotes]:mt-8 [&_.footnotes]:border-t [&_.footnotes]:border-border [&_.footnotes]:pt-2 [&_.footnotes]:text-[13px] [&_sup]:text-[0.75em]',
 ].join(' ')

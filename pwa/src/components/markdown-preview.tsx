@@ -28,7 +28,11 @@ import {
   resolveLink,
   splitFrontMatter,
 } from '../utils/markdown-links'
-import { detailsBlocks, htmlAsText } from '../utils/markdown-safety'
+import {
+  detailsBlocks,
+  htmlAsText,
+  tableCellTags,
+} from '../utils/markdown-safety'
 import { exportName } from '../utils/mermaid-export'
 import { LINK, PROSE } from '../utils/prose'
 import { CodeFence, FencedCode } from './fenced-code'
@@ -37,7 +41,8 @@ import { MdTable, MdTd, MdTh } from './markdown-table'
 
 // A Markdown file of the Files (or Changes) view, rendered. The file is
 // untrusted like an agent's text: raw HTML and MDX JSX show as text (only a
-// <details> block folds, rebuilt from markdown nodes), no image
+// <details> block folds, and a table cell's <br>, lists and disclosures
+// show, rebuilt from markdown nodes), no image
 // ever loads, only http(s) links leave the app. Relative links stay inside
 // the pane's root and open in the Files view.
 
@@ -361,7 +366,12 @@ export default function MarkdownPreview({
             />
           )}
           <Markdown
-            remarkPlugins={[remarkGfm, detailsBlocks, htmlAsText]}
+            remarkPlugins={[
+              remarkGfm,
+              detailsBlocks,
+              tableCellTags,
+              htmlAsText,
+            ]}
             rehypePlugins={
               editing
                 ? [

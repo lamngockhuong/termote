@@ -53,10 +53,15 @@ over 256 KiB opens as its source, with a note that it is too large to preview.
   SVG goes through the share sheet (Save to Files). An SVG pasted into a note app usually shows as text: use the PNG
   there.
 - **Front matter** (the `---` block at the top of docs and MDX pages) is shown as a code block.
-- **Raw HTML and MDX components** are shown as the text they are, never run. The one exception
-  is a `<details>` block with its `<summary>`: it shows as a section you tap to expand, and the
-  Markdown inside it renders as usual. Only its `open` attribute is kept, and a `<details>`
-  without its `</details>` stays text.
+- **Raw HTML and MDX components** are shown as the text they are, never run. There are two
+  exceptions:
+  - A `<details>` block with its `<summary>` shows as a section you tap to expand, and the
+    Markdown inside it renders as usual. Only its `open` attribute is kept, and a `<details>`
+    without its `</details>` stays text.
+  - In a table cell, where Markdown has no line breaks or lists, `<br>` breaks the line, and
+    `<ul>`, `<ol>`, `<li>`, `<details>` and `<summary>` show a list or a section to expand.
+    Their attributes are dropped (except `open`), and when their tags do not pair up they stay
+    text.
 - **Images are never loaded.** An image inside the root shows as a link that opens the file in
   Files; an image on the web shows as a link to its site.
 

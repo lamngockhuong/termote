@@ -1,7 +1,8 @@
 // What makes untrusted markdown safe to render (agent text in the Chat view,
 // files in the Files view): raw HTML is shown as the text it is, and only
 // http(s) URLs may leave the app. The Files view also folds <details> blocks
-// into disclosures built from markdown nodes, never from the HTML itself.
+// into disclosures, and a table cell's <br>, lists and disclosures into
+// nodes, all built from markdown nodes, never from the HTML itself.
 
 interface Point {
   line: number
@@ -203,4 +204,96 @@ function fold(parent: MdNode, depth: number) {
 // and is shown as text.
 export function detailsBlocks() {
   return (tree: MdNode) => fold(tree, 0)
+}
+
+// A table cell is one line of the file, so a line break, a list or a
+// disclosure in it can only be written as HTML: <br>, <ul>/<ol>/<li>,
+// <details>/<summary>. Each tag is its own html node there; they are rebuilt
+// from markdown nodes, never parsed, and no attribute is kept but a
+// <details>' `open`.
+const CELL_BREAK = /^<br\s*\/?>$/i
+const CELL_OPEN = /^<(ul|ol|li|details|summary)(\s[^>]*)?>$/i
+const CELL_CLOSE = /^<\/(ul|ol|li|details|summary)\s*>$/i
+const CELL_LISTS = new Set(['ul', 'ol'])
+// What each tag may be opened in ('cell': the cell itself). Nothing opens in
+// a <summary>; it is first in its <details> (checked when it opens).
+const CELL_PARENTS: Record<string, string[]> = {
+  ul: ['cell', 'li', 'details'],
+  ol: ['cell', 'li', 'details'],
+  li: ['ul', 'ol'],
+  details: ['cell', 'li', 'details'],
+  summary: ['details'],
+}
+
+const lineBreak = (n: MdNode): MdNode =>
+  CELL_BREAK.test(htmlValue(n)) ? { type: 'break', position: n.position } : n
+
+const blank = (n: MdNode) => n.type === 'text' && !n.value?.trim()
+
+function cellElement(tag: string, attrs: string | undefined): MdNode {
+  if (tag === 'details') return disclosure(attrs, undefined, [])
+  if (tag === 'summary')
+    return { type: 'detailsSummary', data: { hName: 'summary' }, children: [] }
+  // Not mdast's list nodes: those carry spread and checked marks of their own
+  return {
+    type: tag === 'li' ? 'cellListItem' : 'cellList',
+    data: { hName: tag },
+    children: [],
+  }
+}
+
+// The cell's nodes with its tags rebuilt, or null when they do not pair up,
+// open where they may not, nest past MAX_DEPTH, or a list holds anything but
+// its items
+function cellTree(nodes: MdNode[]): MdNode[] | null {
+  const cell: MdNode = { type: 'cell', children: [] }
+  const stack = [{ tag: 'cell', node: cell }]
+  for (const n of nodes) {
+    const top = stack[stack.length - 1]
+    const kids = top.node.children as MdNode[]
+    const v = htmlValue(n)
+    const open = CELL_OPEN.exec(v)
+    if (open) {
+      const tag = open[1].toLowerCase()
+      if (!CELL_PARENTS[tag].includes(top.tag) || stack.length > MAX_DEPTH)
+        return null
+      if (tag === 'summary') {
+        if (!kids.every(blank)) return null
+        kids.length = 0
+      }
+      const node = cellElement(tag, open[2])
+      kids.push(node)
+      stack.push({ tag, node })
+      continue
+    }
+    const close = CELL_CLOSE.exec(v)
+    if (close) {
+      if (close[1].toLowerCase() !== top.tag) return null
+      stack.pop()
+      continue
+    }
+    if (CELL_LISTS.has(top.tag)) {
+      if (blank(n)) continue
+      return null
+    }
+    kids.push(lineBreak(n))
+  }
+  return stack.length === 1 ? (cell.children as MdNode[]) : null
+}
+
+// A remark plugin, run before htmlAsText: in every table cell, <br> becomes a
+// line break, and lists and disclosures whose tags pair up are rebuilt with
+// the cell's markdown inside. A cell whose tags do not pair up keeps them as
+// text, its <br> still breaking the line; any other HTML stays text.
+export function tableCellTags() {
+  const walk = (node: MdNode) => {
+    if (node.type === 'tableCell') {
+      // A table cell always has its children
+      const nodes = node.children as MdNode[]
+      node.children = cellTree(nodes) ?? nodes.map(lineBreak)
+      return
+    }
+    node.children?.forEach(walk)
+  }
+  return walk
 }
