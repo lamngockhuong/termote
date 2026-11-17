@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -53,5 +54,18 @@ func TestGitEntryTargetRefusesShare(t *testing.T) {
 	}
 	if target, ok := gitEntryTarget(top); ok {
 		t.Errorf("gitEntryTarget = %q, want refused", target)
+	}
+}
+
+// A worktrees folder in the git dir that is a link to a share refuses the
+// repository before anything lists it: the link itself is read, no
+// connection is made.
+func TestRepoConfigRefusedWorktreesLink(t *testing.T) {
+	dir := fakeRepo(t, gitDirFiles(".git/", ""))
+	if err := os.Symlink(`\\192.0.2.1\s\worktrees`, filepath.Join(dir, ".git", "worktrees")); err != nil {
+		t.Skipf("no symbolic links here: %v", err)
+	}
+	if err := newTestRoots().repoConfigRefused(dir); !errors.Is(err, errRemoteLink) {
+		t.Errorf("worktrees link to a share: err = %v, want errRemoteLink", err)
 	}
 }

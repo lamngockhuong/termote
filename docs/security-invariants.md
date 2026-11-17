@@ -1573,7 +1573,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   it (400 `directory not available`, as a refused pane directory, the reason in the log only) when
   a `.git` file's `gitdir:`, its `commondir`, a line of `objects/info/alternates` (the lines of every file to depth 5, the repository's own
   at 0, as git looks at them; each objects directory read once, as git takes it once),
-  a linked worktree's `gitdir` or the `gitdir:` of the `.git` file that one names names a path off a
+  a linked worktree's `gitdir` (the `worktrees` folder itself opened only once `realRepoDir` has
+  checked the links on its way, as every other file it reads) or the `gitdir:` of the `.git` file that one names names a path off a
   drive letter outside the Places (the test `refusesDir` uses; a share, `\\?\UNC\`, `\\.\`, and an
   NT path `\??\UNC\` alike), or when `config`, `config.worktree` (the git dir's, and the common
   dir's too, which git run there reads) or any local file they include (followed

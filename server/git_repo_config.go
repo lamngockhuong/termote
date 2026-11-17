@@ -688,8 +688,16 @@ func (rr *rootResolver) checkAlternates(objects string, depth int, follow *repoF
 // checkWorktrees checks the gitdir file of each linked worktree under
 // common/worktrees: `git worktree list` looks at the path each one names.
 func (rr *rootResolver) checkWorktrees(common string) error {
+	// The folder is opened once realRepoDir has checked the links on its
+	// way, as every other file of the repository is: a worktrees link to a
+	// share would otherwise be followed here. Its entries are still named
+	// under dir, as git names them.
 	dir := filepath.Join(common, "worktrees")
-	f, err := os.Open(dir)
+	real, err := realRepoDir(dir)
+	if real == "" || err != nil {
+		return err
+	}
+	f, err := os.Open(real)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}
