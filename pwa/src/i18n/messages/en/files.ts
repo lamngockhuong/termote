@@ -502,6 +502,17 @@ export default {
   'files.markdown.unavailable': 'unavailable',
   'files.markdown.frontMatter': 'front matter',
   'files.markdown.headingMissing': 'Heading not found',
+  // A table of a Markdown preview (components/markdown-table.tsx); {name}
+  // is a column's header text, or the file's name in .title
+  'files.markdown.table.tools': 'Table tools',
+  'files.markdown.table.expand': 'Expand table',
+  'files.markdown.table.fullScreen': 'Open table full screen',
+  'files.markdown.table.fullCells': 'Show cells in full',
+  'files.markdown.table.showColumns_one': 'Show {count} hidden column',
+  'files.markdown.table.showColumns_other': 'Show {count} hidden columns',
+  'files.markdown.table.hideColumn': 'Hide column {name}',
+  'files.markdown.table.resizeColumn': 'Resize column {name}',
+  'files.markdown.table.title': 'Table in {name}',
   // Editing a file (components/file-editor.tsx, code-editor.tsx)
   'files.editor.text': 'Text of {path}',
   'files.editor.vimFailed': 'Could not load Vim mode',

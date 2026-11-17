@@ -111,7 +111,7 @@ export function slugger() {
 // from a file never clashes with one of the app.
 export const ID_PREFIX = 'user-content-'
 
-interface HastNode {
+export interface HastNode {
   type: string
   tagName?: string
   value?: string
