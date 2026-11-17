@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.28.0](https://github.com/lamngockhuong/termote/compare/v2.27.0...v2.28.0) (2026-11-17)
+
+
+### Features
+
+* browser-like tab groups in the tab bar in place of FatherTabs ([#866](https://github.com/lamngockhuong/termote/issues/866)) ([d9fe0bc](https://github.com/lamngockhuong/termote/commit/d9fe0bc82c76e93b63bea79118356ba5d85ff1bc))
+* group a workspace's tabs under FatherTabs ([#863](https://github.com/lamngockhuong/termote/issues/863)) ([604427b](https://github.com/lamngockhuong/termote/commit/604427b5b1f45437199e7f5abd3f0b5155c89409))
+* open a file the agent named outside the pane's folder, read only in Files ([#864](https://github.com/lamngockhuong/termote/issues/864)) ([e01ab35](https://github.com/lamngockhuong/termote/commit/e01ab35f79f5ea6989abc895954329a57f3a0a85))
+* style the tab bar like a browser's ([#867](https://github.com/lamngockhuong/termote/issues/867)) ([eac9ca3](https://github.com/lamngockhuong/termote/commit/eac9ca301229c5499d21235f074410d409cd9894))
+
+
+### Bug Fixes
+
+* check the worktrees link on Windows and try every session cookie ([#873](https://github.com/lamngockhuong/termote/issues/873)) ([a2e05d3](https://github.com/lamngockhuong/termote/commit/a2e05d306697711a7f5a74209d5b7ab38ea5758c))
+* close the LAN peer check, OpenCode view-only Chat and Windows repository check gaps of the last security reviews ([#868](https://github.com/lamngockhuong/termote/issues/868)) ([ad29195](https://github.com/lamngockhuong/termote/commit/ad291954054e153a846d840b295dbf5eca40e13b))
+* keep the --allow-host command out of the host refusal page ([#869](https://github.com/lamngockhuong/termote/issues/869)) ([737194c](https://github.com/lamngockhuong/termote/commit/737194cb3a459831d94d5f7edd8831856b7d7979))
+
 ## [2.27.0](https://github.com/lamngockhuong/termote/compare/v2.26.4...v2.27.0) (2026-11-16)
 
 
