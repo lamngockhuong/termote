@@ -2959,6 +2959,8 @@ Import the machines Herdr knows with `termote machine import --herdr`: it asks a
 
 In the sidebar, **Machines** lists **This machine** first, then each machine with a coloured dot and the number of its agents that need you or are working; under a machine that cannot be reached, its status and the command to check it. The open machine’s agents are in **Agents**. Click a machine to open it: the page reloads on it (its address gets `?machine=<id>`), the title shows its name, and everything you do happens there. Under **Machines**, a heading such as **On This machine** names the machine the list below belongs to. Click **This machine** to come back. In the command palette, **Switch to the next machine** cycles through them.
 
+On a desktop, a machine also opens in a new window, so the one open stays on screen: right click it (or focus it and press Shift+F10) and choose **Open in new window**, or Ctrl+Click (Cmd+Click on macOS) or middle click it. Hold Shift for a popup window instead of a tab.
+
 What stays on this computer whatever machine is open: signing out, Web Push, [paired devices](/usage/devices/) and signed-in browsers, and the app’s version check. A notification from an agent on another machine opens the app on that machine.
 
 ## Status
