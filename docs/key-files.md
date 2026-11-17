@@ -176,6 +176,8 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/utils/file-name.ts`                      | Name checks of New file and Rename, the base name selected     |
 | `pwa/src/utils/download-file.ts`                  | Download: preflight, refusal messages, iOS share sheet         |
 | `pwa/src/components/markdown-preview.tsx`         | Markdown file rendered in Files/Changes (links, code blocks)   |
+| `pwa/src/components/markdown-table.tsx`           | Markdown table tools: expand, full screen, columns, tall cells |
+| `pwa/src/utils/table-prefs.ts`                    | Each Markdown table's set-up, kept per file and header row     |
 | `pwa/src/components/markdown-edit-layout.tsx`     | Markdown being edited: source, side by side, or preview alone  |
 | `pwa/src/hooks/use-scroll-sync.ts`                | Markdown editor and preview scrolled together, by source line  |
 | `pwa/src/hooks/use-debounced-value.ts`            | A value once it stops changing (the draft's preview)           |

@@ -20,6 +20,14 @@ over 256 KiB opens as its source, with a note that it is too large to preview.
 - **Code blocks** are highlighted in the language named after the opening fence (` ```ts `,
   ` ```bash `, ` ```go `...), with a button to copy the block. A block in a language not covered
   is shown as plain text. The wrap button wraps code blocks too.
+- **Tables** have tools above them (shown on hover with a mouse, always on a touch screen):
+  **Expand** stops the table wrapping to the preview's width, **Show cells in full** turns off
+  cutting tall cells to a few lines (with it on, click a cut cell to open its whole row, again to
+  close it), and **Open table full screen** shows it over the whole app (Back, Escape or X closes
+  it). The × beside a header hides that column, and the eye button with a count brings the hidden
+  ones back; drag the right edge of a header (or focus it and press the arrow keys) to resize the
+  column. Expanded and collapsed keep widths of their own. All of it is remembered on this device
+  per file and header row.
 - **Mermaid diagrams** (` ```mermaid `) are drawn as images once you scroll to them: flowcharts,
   sequence, class, state, Gantt and the other kinds. The code button in the block's bar switches
   between the diagram and its source; Copy always copies the source. A wide diagram scrolls
