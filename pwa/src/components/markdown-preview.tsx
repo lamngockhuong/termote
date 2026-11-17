@@ -1,7 +1,6 @@
 import { ImageIcon } from 'lucide-react'
 import {
   type ComponentProps,
-  createContext,
   type ReactNode,
   useContext,
   useEffect,
@@ -33,6 +32,8 @@ import { detailsBlocks, htmlAsText } from '../utils/markdown-safety'
 import { exportName } from '../utils/mermaid-export'
 import { LINK, PROSE } from '../utils/prose'
 import { CodeFence, FencedCode } from './fenced-code'
+import { PreviewContext, type PreviewCtx } from './markdown-preview-context'
+import { MdTable, MdTd, MdTh } from './markdown-table'
 
 // A Markdown file of the Files (or Changes) view, rendered. The file is
 // untrusted like an agent's text: raw HTML and MDX JSX show as text (only a
@@ -67,19 +68,6 @@ interface Props {
   // start on (a draft being edited); null once it is gone
   onSyncSide?: (side: SyncSide | null) => void
 }
-
-interface Ctx {
-  path: string
-  wrap: boolean
-  editing: boolean
-  // The scroll box, once mounted
-  scroller: () => Element | null
-  go: (target: LinkPath, newTab?: boolean) => void
-  notify: (message: string) => void
-}
-
-// Always provided by MarkdownPreview
-const PreviewContext = createContext({} as Ctx)
 
 // How long a diagram drawn late may still move the start back into place
 const RESTORE_FOR = 10_000
@@ -226,24 +214,13 @@ function MdPre({
   )
 }
 
-// The line a table starts on goes on the box that scrolls it, which is
-// where it is laid out
-function MdTable({
-  'data-line': dataLine,
-  ...props
-}: ComponentProps<'table'> & { 'data-line'?: number }) {
-  return (
-    <div className="my-3 overflow-x-auto" data-line={dataLine}>
-      <table {...props} />
-    </div>
-  )
-}
-
 const COMPONENTS = {
   a: MdLink,
   img: MdImage,
   pre: MdPre,
   table: MdTable,
+  th: MdTh,
+  td: MdTd,
 }
 
 export default function MarkdownPreview({
@@ -345,7 +322,7 @@ export default function MarkdownPreview({
     return () => onSyncSide(null)
   }, [])
 
-  const ctx: Ctx = {
+  const ctx: PreviewCtx = {
     path,
     wrap,
     editing,

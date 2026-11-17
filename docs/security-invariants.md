@@ -1808,6 +1808,18 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   same link and image rules. Tags are paired in one pass per level and nesting past 32 levels
   stays text, so a crafted file cannot stall the page. Anything else, an unclosed `<details>`
   included, stays text.
+- **Tables in a previewed Markdown file** (`pwa/src/components/markdown-table.tsx`,
+  `pwa/src/utils/table-prefs.ts`, Files/Changes only): the tools (expand, full screen, column
+  resize and hide, tall cells cut) are React elements and plain CSS (`.md-table`, `.md-cell`,
+  `data-cell`, `data-clamped`, `tr[data-open]` in `index.css`); no `innerHTML`. A file cannot
+  give those classes or marks to its own content: raw HTML stays text (`htmlAsText`). A cell's
+  content keeps the preview's link and image rules, in full screen too, where a link is followed
+  only once the full screen's history entry is gone. The set-up is kept in this browser's
+  `localStorage` (`termote-md-tables`), keyed by the file's path and its header texts (the header
+  part cut at 512 characters, so a file cannot make a key of any size): read into a
+  prototype-less object, every value checked for its shape (booleans, column indexes, finite
+  widths) before use, at most 300 tables, the oldest written dropped first. A failed write (full,
+  or no storage) keeps the set-up for the view only. Nothing of it reaches the server.
 - **Mermaid diagrams** (`pwa/src/utils/mermaid-render.ts`, `mermaid-sandbox.ts`, `mermaid-worker.ts`,
   `mermaid-block.tsx`, through `fenced-code.tsx`): a `mermaid` fenced block of a previewed Markdown
   file or of a Chat view message (agent text, as untrusted as a file) is drawn in the PWA

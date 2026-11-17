@@ -494,3 +494,48 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* The tables of a Markdown preview (components/markdown-table.tsx). A body
+   cell's content is cut to 7.5 lines, fading out into the page, until its
+   row is opened (tr[data-open]) or the table shows every cell in full
+   (.md-unclamped). break-word, not anywhere: anywhere would let a column of
+   many shrink to one letter. */
+.md-table th,
+.md-cell {
+  overflow-wrap: break-word;
+}
+.md-table:not(.md-expanded) td {
+  max-width: 40em;
+}
+.md-table.md-expanded {
+  width: max-content;
+  max-width: none;
+}
+.md-cell {
+  position: relative;
+  max-height: 7.5em;
+  overflow: hidden;
+}
+tr[data-open] .md-cell,
+.md-unclamped .md-cell {
+  max-height: none;
+}
+.md-cell[data-clamped],
+tr[data-open] .md-cell {
+  cursor: pointer;
+}
+.md-unclamped .md-cell[data-clamped] {
+  cursor: auto;
+}
+.md-cell[data-clamped]::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 2em;
+  background: linear-gradient(to bottom, transparent, var(--color-bg));
+  pointer-events: none;
+}
+tr[data-open] .md-cell[data-clamped]::after,
+.md-unclamped .md-cell[data-clamped]::after {
+  content: none;
+}

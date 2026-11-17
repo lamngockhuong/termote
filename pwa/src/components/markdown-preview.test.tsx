@@ -568,11 +568,14 @@ describe('MarkdownPreview: lines of a draft', () => {
     expect(blocks[0]).toHaveAttribute('data-line', '1')
     expect(at('h1')).toBe('4')
     expect(at('ul')).toBe('6')
-    // On the box that scrolls the table
+    // On the block of the table, its tools and the box that scrolls it
     expect(screen.getByRole('table')).not.toHaveAttribute('data-line')
-    expect(screen.getByRole('table').parentElement).toHaveAttribute(
+    expect(screen.getByRole('table').closest('[data-line]')).toHaveAttribute(
       'data-line',
       '9',
+    )
+    expect(screen.getByRole('table').closest('[data-line]')).toContainElement(
+      screen.getByRole('toolbar'),
     )
     expect(blocks[1]).toHaveAttribute('data-line', '13')
     expect(screen.getByTestId('mermaid-block')).toHaveAttribute(
