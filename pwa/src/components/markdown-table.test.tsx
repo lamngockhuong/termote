@@ -1,8 +1,8 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider } from '../contexts/theme-context'
 import { viewerClosing } from '../hooks/use-history-close'
-import { readTablePrefs, tableKey } from '../utils/table-prefs'
+import { readTablePrefs, tableKey, writeTablePrefs } from '../utils/table-prefs'
 import MarkdownPreview from './markdown-preview'
 
 const PATH = 'docs/specs.md'
@@ -196,5 +196,175 @@ describe('MarkdownPreview: table tools', () => {
       expect.any(Number),
       { newTab: false },
     )
+  })
+
+  it('shows every column when the stored hidden ones would leave none', () => {
+    writeTablePrefs(KEY, { hidden: [0, 1, 2] })
+    show()
+    for (const col of [0, 1, 2]) {
+      expect(cells(col)[0].style.display).toBe('')
+    }
+    expect(screen.queryByRole('button', { name: /hidden column/ })).toBeNull()
+  })
+
+  it('sizes a hidden column at a default width, left out of the table width', () => {
+    writeTablePrefs(KEY, { hidden: [2] })
+    show()
+    const table = screen.getByRole('table')
+    const edge = screen.getByRole('separator', { name: 'Resize column Name' })
+    // Not the main button: no resize
+    fireEvent.pointerDown(edge, { button: 2, clientX: 0, pointerId: 1 })
+    expect(table.style.tableLayout).toBe('')
+    // Not an arrow key: nothing either
+    fireEvent.keyDown(edge, { key: 'Enter' })
+    expect(table.style.tableLayout).toBe('')
+    fireEvent.keyDown(edge, { key: 'ArrowRight' })
+    expect(readTablePrefs(KEY).widths?.collapsed).toEqual([66, 50, 150])
+    expect(table.style.width).toBe('116px')
+  })
+
+  it('keeps an open row open while its cells are measured again', () => {
+    vi.useFakeTimers()
+    try {
+      show()
+      const table = screen.getByRole('table')
+      const cell = table.querySelector('tbody [data-cell]') as HTMLElement
+      const row = cell.closest('tr') as HTMLElement
+      cell.setAttribute('data-clamped', '')
+      fireEvent.click(cell)
+      expect(row).toHaveAttribute('data-open')
+      // Something in a cell loaded: measured again a moment later
+      act(() => {
+        cell.dispatchEvent(new Event('load'))
+        vi.advanceTimersByTime(100)
+      })
+      expect(row).toHaveAttribute('data-open')
+      // A click outside every cell (a header) opens and closes nothing
+      fireEvent.click(screen.getByRole('columnheader', { name: /Name/ }))
+      expect(row).toHaveAttribute('data-open')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('measures its cells again once its width changes, not its height', () => {
+    vi.useFakeTimers()
+    let notify = () => {}
+    let width = 100
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(cb: () => void) {
+          notify = cb
+        }
+        observe() {}
+        disconnect() {}
+      },
+    )
+    const widthOf = vi
+      .spyOn(HTMLElement.prototype, 'clientWidth', 'get')
+      .mockImplementation(() => width)
+    const heights = vi
+      .spyOn(HTMLElement.prototype, 'scrollHeight', 'get')
+      .mockImplementation(() => 0)
+    try {
+      show()
+      // The measure a render asks for
+      act(() => {
+        vi.advanceTimersByTime(100)
+      })
+      const cell = document.querySelector('tbody [data-cell]') as HTMLElement
+      heights.mockImplementation(() => 300)
+      // The height changed only (a row opened): not measured
+      act(() => {
+        notify()
+        vi.advanceTimersByTime(100)
+      })
+      expect(cell).not.toHaveAttribute('data-clamped')
+      width = 60
+      act(() => {
+        notify()
+        vi.advanceTimersByTime(100)
+      })
+      expect(cell).toHaveAttribute('data-clamped')
+    } finally {
+      vi.useRealTimers()
+      vi.unstubAllGlobals()
+      widthOf.mockRestore()
+      heights.mockRestore()
+    }
+  })
+
+  it('leaves the row as it is when a click ends selecting text in the cell', () => {
+    show()
+    const cell = document.querySelector('tbody [data-cell]') as HTMLElement
+    const row = cell.closest('tr') as HTMLElement
+    cell.setAttribute('data-clamped', '')
+    const selection = vi.spyOn(window, 'getSelection')
+    selection.mockReturnValue({
+      isCollapsed: false,
+      anchorNode: cell.firstChild,
+    } as unknown as Selection)
+    fireEvent.click(cell)
+    expect(row).not.toHaveAttribute('data-open')
+    // Text selected somewhere else: the click opens the row
+    selection.mockReturnValue({
+      isCollapsed: false,
+      anchorNode: document.body,
+    } as unknown as Selection)
+    fireEvent.click(cell)
+    expect(row).toHaveAttribute('data-open')
+    selection.mockRestore()
+  })
+
+  it('reads the set-up of the table shown once its file or headers change', () => {
+    writeTablePrefs(tableKey('other.md', ['Name', 'Note', 'Link']), {
+      expanded: true,
+    })
+    const { rerender, onFollow, notify } = show()
+    expect(screen.getByRole('table')).not.toHaveClass('md-expanded')
+    rerender(
+      <ThemeProvider>
+        <MarkdownPreview
+          text={TABLE}
+          path="other.md"
+          wrap={false}
+          onFollow={onFollow}
+          notify={notify}
+        />
+      </ThemeProvider>,
+    )
+    expect(screen.getByRole('table')).toHaveClass('md-expanded')
+  })
+
+  it('fades its full screen out once closed, giving focus back at once', async () => {
+    const real = window.getComputedStyle
+    vi.spyOn(window, 'getComputedStyle').mockImplementation((el) =>
+      el instanceof HTMLDialogElement
+        ? ({
+            transitionDuration: '0.2s',
+            transitionDelay: '0s',
+          } as CSSStyleDeclaration)
+        : real(el),
+    )
+    try {
+      show()
+      const opener = tool('Open table full screen')
+      opener.focus()
+      fireEvent.click(opener)
+      const dialog = screen.getByRole('dialog')
+      const pop = popped()
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+      await pop
+      expect(dialog).toHaveAttribute('data-closing', 'true')
+      expect(dialog).toHaveClass('pointer-events-none', 'opacity-0')
+      expect(document.activeElement).toBe(opener)
+      act(() => {
+        dialog.dispatchEvent(new Event('transitionend'))
+      })
+      expect(dialog).not.toBeInTheDocument()
+    } finally {
+      vi.mocked(window.getComputedStyle).mockRestore()
+    }
   })
 })

@@ -63,7 +63,7 @@ type Update = (change: (prefs: TablePrefs) => TablePrefs) => void
 
 // What a header cell of a table does with its column
 interface TableView {
-  // A header cell's column (-1: not one of this table's)
+  // A header cell's column
   columnOf: (node: unknown) => number
   // Its width as set, when it has one
   widthOf: (col: number) => number | undefined
@@ -75,8 +75,9 @@ interface TableView {
 
 const TableViewContext = createContext<TableView | null>(null)
 
+// A GFM table always has its header row
 function headerCells(table: HTMLTableElement): HTMLTableCellElement[] {
-  return [...(table.tHead?.rows[0]?.cells ?? [])]
+  return [...(table.tHead as HTMLTableSectionElement).rows[0].cells]
 }
 
 // The hidden columns, unless they would leave none
@@ -149,7 +150,7 @@ function useTableView(
     if (stored?.length === ths.length) return [...stored]
     const widths = ths.map((th, i) =>
       hidden.has(i)
-        ? (stored?.[i] ?? DEFAULT_COL)
+        ? DEFAULT_COL
         : Math.max(MIN_COL, th.getBoundingClientRect().width),
     )
     setWidths(table, ths, widths, hidden)
@@ -263,8 +264,8 @@ function toggleRow(e: MouseEvent<HTMLTableElement>, clamping: boolean) {
   const target = e.target as Element
   if (target.closest(INTERACTIVE)) return
   const cell = target.closest('[data-cell]')
-  const row = cell?.closest('tr')
-  if (!cell || !row) return
+  if (!cell) return
+  const row = cell.closest('tr') as HTMLTableRowElement
   const open = row.hasAttribute('data-open')
   if (!open && !cell.hasAttribute('data-clamped')) return
   // A click that ends selecting text in the cell leaves it as it is
@@ -570,9 +571,9 @@ export function MdTh({
   ...props
 }: ComponentProps<'th'> & { node?: unknown }) {
   const { t } = useT()
-  const view = useContext(TableViewContext)
-  const col = view?.columnOf(node) ?? -1
-  if (!view || col < 0) return <th {...props}>{children}</th>
+  // Only rendered by a table's (MdTable's) rows, its own header cells
+  const view = useContext(TableViewContext) as TableView
+  const col = view.columnOf(node)
   const name = textOf(node as HastNode).trim()
   return (
     <th {...props} className="group/th relative">
@@ -616,8 +617,6 @@ export function MdTd({
   children,
   ...props
 }: ComponentProps<'td'> & { node?: unknown }) {
-  const view = useContext(TableViewContext)
-  if (!view) return <td {...props}>{children}</td>
   return (
     <td {...props}>
       <div className="md-cell" data-cell>

@@ -99,6 +99,9 @@ describe('table prefs', () => {
     // A header named like a property of every object is a key like any other
     expect(readTablePrefs('__proto__')).toEqual({})
     expect(readTablePrefs(null)).toEqual({})
+    // A table without a header row is not stored
+    writeTablePrefs(null, { expanded: true })
+    expect(localStorage.getItem(STORE)).toBe('{')
   })
 
   it('forgets the tables not touched for longest past 300', () => {
