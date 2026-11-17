@@ -288,7 +288,8 @@ function cellTree(nodes: MdNode[]): MdNode[] | null {
 export function tableCellTags() {
   const walk = (node: MdNode) => {
     if (node.type === 'tableCell') {
-      const nodes = node.children ?? []
+      // A table cell always has its children
+      const nodes = node.children as MdNode[]
       node.children = cellTree(nodes) ?? nodes.map(lineBreak)
       return
     }
