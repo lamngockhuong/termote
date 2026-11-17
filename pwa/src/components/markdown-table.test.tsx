@@ -75,6 +75,37 @@ describe('MarkdownPreview: table tools', () => {
     expect(container).toHaveTextContent('<div class="md-cell"')
   })
 
+  it('shows line breaks, lists and disclosures written in its cells', () => {
+    const { container } = show(
+      [
+        '| Steps | More |',
+        '|---|---|',
+        '| one<br>two | <ul><li>**a**</li><li>b<br/>c</li></ul> |',
+        '| <details><summary>Why</summary>Because<ol><li>x</li></ol></details> | <ul onclick="alert(1)"><li>open</li> |',
+      ].join('\n'),
+    )
+    const [steps, more] = [cells(0), cells(1)]
+    expect(steps[1].querySelectorAll('br')).toHaveLength(1)
+    expect(steps[1]).toHaveTextContent('one two')
+    const items = more[1].querySelectorAll('ul > li')
+    expect(items).toHaveLength(2)
+    expect(items[0].querySelector('strong')).toHaveTextContent('a')
+    expect(items[1].querySelector('br')).not.toBeNull()
+    const details = steps[2].querySelector('details') as HTMLDetailsElement
+    expect(details.open).toBe(false)
+    expect(details.querySelector('summary')).toHaveTextContent('Why')
+    expect(details.querySelector('ol > li')).toHaveTextContent('x')
+    // Tags that do not pair up stay text, with nothing of theirs kept
+    expect(more[2].querySelector('ul')).toBeNull()
+    expect(more[2]).toHaveTextContent('<ul onclick="alert(1)"><li>open</li>')
+    expect(container.querySelector('[onclick]')).toBeNull()
+    // Opening a disclosure leaves a cut cell's row as it is
+    const cell = details.closest('[data-cell]') as HTMLElement
+    cell.setAttribute('data-clamped', '')
+    fireEvent.click(details.querySelector('summary') as HTMLElement)
+    expect(cell.closest('tr')).not.toHaveAttribute('data-open')
+  })
+
   it('expands a table, and keeps it expanded for the next time', () => {
     const { unmount } = show()
     const table = screen.getByRole('table')

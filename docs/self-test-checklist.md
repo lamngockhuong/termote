@@ -823,6 +823,9 @@ Run on tmux (Linux/macOS), psmux (Windows) and Herdr.
       nothing
 - [ ] A `<details><summary>...</summary>` ... `</details>` block expands on tap and renders the
       Markdown inside; a `<details>` without `</details>` shows as text
+- [ ] In a table cell, `<br>` breaks the line, `<ul><li>a</li><li>b</li></ul>` shows a list and
+      `<details><summary>Why</summary>...</details>` expands on tap without opening a cut row; a
+      `<ul>` without `</ul>` shows as text
 - [ ] A Markdown file over 256 KiB shows "Too large to preview: shown as source"
 - [ ] Changes: a changed `.md` file's "Preview" shows the current version rendered
 

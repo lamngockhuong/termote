@@ -50,10 +50,14 @@ chọn đó. File Markdown lớn hơn 256 KiB mở ở dạng mã nguồn, kèm 
   LAN thì chỉ còn Download SVG. Trong app đã thêm vào Màn hình chính trên iOS, Download SVG đi
   qua bảng chia sẻ (Lưu vào Tệp). File SVG dán vào app ghi chú thường hiện ra chữ, nên ở đó hãy dùng ảnh PNG.
 - **Khối `---` ở đầu file** (thường gặp ở trang tài liệu và trang MDX) hiện thành một khối code.
-- **HTML thô và component MDX** hiện nguyên văn bản, không bao giờ được chạy. Ngoại lệ duy nhất
-  là khối `<details>` cùng `<summary>` của nó: khối hiện thành một mục chạm vào để mở ra, phần
-  Markdown bên trong vẫn hiển thị như thường. Trong các thuộc tính của thẻ, chỉ `open` được giữ;
-  `<details>` không có `</details>` đi kèm vẫn hiện dạng văn bản.
+- **HTML thô và component MDX** hiện nguyên văn bản, không bao giờ được chạy. Có hai ngoại lệ:
+  - Khối `<details>` cùng `<summary>` của nó hiện thành một mục chạm vào để mở ra, phần Markdown
+    bên trong vẫn hiển thị như thường. Trong các thuộc tính của thẻ, chỉ `open` được giữ;
+    `<details>` không có `</details>` đi kèm vẫn hiện dạng văn bản.
+  - Trong ô của bảng, nơi Markdown không có cách xuống dòng hay viết danh sách, `<br>` xuống
+    dòng, còn `<ul>`, `<ol>`, `<li>`, `<details>` và `<summary>` hiện thành danh sách hoặc mục
+    mở ra được. Thuộc tính của các thẻ này bị bỏ (trừ `open`), và thẻ không đóng mở khớp nhau
+    thì vẫn hiện dạng văn bản.
 - **Ảnh không bao giờ được tải.** Ảnh nằm trong thư mục gốc hiện thành link mở file đó trong
   Files; ảnh trên web hiện thành link tới trang chứa nó.
 

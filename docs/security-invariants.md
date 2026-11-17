@@ -1808,6 +1808,17 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   same link and image rules. Tags are paired in one pass per level and nesting past 32 levels
   stays text, so a crafted file cannot stall the page. Anything else, an unclosed `<details>`
   included, stays text.
+- **Tags in a table cell of a previewed Markdown file** (`tableCellTags` in
+  `pwa/src/utils/markdown-safety.ts`, Files/Changes only): raw HTML is never parsed or passed to
+  React. A remark plugin, run after `detailsBlocks` and before `htmlAsText`, looks only at the
+  html nodes of a table cell (each one tag there) that are exactly `<br>` (`<br/>`, `<br />`, no
+  attribute) or an opening or closing `ul`, `ol`, `li`, `details` or `summary`. `<br>` becomes a
+  markdown `break`; the others are rebuilt as nodes with no attribute but a `<details>`' `open`,
+  holding the cell's own markdown nodes (same link and image rules). They are rebuilt only when
+  every one of them pairs up in one pass: a `li` only in a list, a list holding nothing but its
+  items, a `summary` only first in a `details` and holding no tag, nesting at most 32 deep;
+  otherwise the cell keeps them as text (its `<br>` still breaks the line). Any other tag stays
+  text.
 - **Tables in a previewed Markdown file** (`pwa/src/components/markdown-table.tsx`,
   `pwa/src/utils/table-prefs.ts`, Files/Changes only): the tools (expand, full screen, column
   resize and hide, tall cells cut) are React elements and plain CSS (`.md-table`, `.md-cell`,
