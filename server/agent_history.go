@@ -270,10 +270,26 @@ func (a *agentAPI) handleHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	res := historyPageOf(a.history.scan(root.Root), agent, after)
+	if isViewOnly(r) {
+		viewHistoryTitles(res.Sessions)
+	}
 	a.history.opencodeHistoryModels(r.Context(), res.Sessions)
 	a.markLive(r.Context(), res.Sessions)
 	w.Header().Set("Cache-Control", "no-store")
 	jsonOK(w, res)
+}
+
+// viewHistoryTitles blanks, for a view-only client, the titles OpenCode's
+// model wrote: it reads the session's first message, which a command
+// template fills with the output of the shell commands it runs, and a
+// view-only client reads no OpenCode user text. The client shows it as an
+// untitled session. sessions is the page's own copy.
+func viewHistoryTitles(sessions []historySession) {
+	for i := range sessions {
+		if sessions[i].Agent == "opencode" {
+			sessions[i].Title = ""
+		}
+	}
 }
 
 // historyAgent: the history lists agent's sessions.

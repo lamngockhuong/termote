@@ -19,6 +19,6 @@
     "website/**/*.mdx"
   ],
   "plugins": [
-    "https://plugins.dprint.dev/markdown-0.17.8.wasm"
+    "https://plugins.dprint.dev/markdown-0.17.8.wasm@3c810df549d80bc7682697734bb33a4041d0350b63ed6c17020bdec0fb138eab"
   ]
 }

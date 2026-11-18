@@ -227,6 +227,8 @@ func TestConfineMachineResponse(t *testing.T) {
 		resp.Header.Set(k, "x")
 	}
 	resp.Header["nel"] = []string{"x"} // not canonical
+	// The machine's own policy, whose report-uri would collect this origin's reports
+	resp.Header.Add("Content-Security-Policy", "default-src *; report-uri https://collector.example/r")
 	resp.Header.Set("Content-Type", "text/html")
 	resp.Header.Set("Content-Disposition", "attachment")
 	resp.Header.Set("ETag", `"1"`)
@@ -241,7 +243,7 @@ func TestConfineMachineResponse(t *testing.T) {
 			t.Errorf("%s dropped", k)
 		}
 	}
-	if !strings.HasPrefix(resp.Header.Get("Content-Security-Policy"), "sandbox") || resp.Header.Get("X-Content-Type-Options") != "nosniff" {
+	if csp := resp.Header.Values("Content-Security-Policy"); len(csp) != 1 || csp[0] != svgPolicy || resp.Header.Get("X-Content-Type-Options") != "nosniff" {
 		t.Errorf("not confined: %v", resp.Header)
 	}
 	up := &http.Response{StatusCode: http.StatusSwitchingProtocols, Header: http.Header{

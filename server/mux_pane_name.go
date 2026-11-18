@@ -42,6 +42,15 @@ func cleanPaneName(name string) string {
 	return capBytes(strings.TrimSpace(stripUnsafeRunes(name)), maxPaneName)
 }
 
+// cleanLabel is a tab or group name as a backend reports it, fit to show:
+// a pane's output can set one (a terminal title tmux's automatic-rename or
+// Herdr picks up), so it is stripped of unsafe runes (a line break, a bidi
+// control) and capped like a name termote sets. Unlike a pane name it is
+// not trimmed: a name typed with spaces stays as typed.
+func cleanLabel(name string) string {
+	return capBytes(stripUnsafeRunes(name), maxPaneName)
+}
+
 const (
 	// maxMetaTokens caps the metadata tokens shown for one pane or group.
 	maxMetaTokens = 8

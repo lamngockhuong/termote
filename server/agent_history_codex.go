@@ -199,7 +199,7 @@ func parseCodexHistory(f *os.File, size int64, id string) (historyFile, bool) {
 			continue
 		}
 		for _, p := range e.Parts {
-			if p.Kind == "text" && strings.TrimSpace(p.Text) != "" {
+			if p.Kind == "text" && !p.note && strings.TrimSpace(p.Text) != "" {
 				file.title = historyTitle(p.Text)
 				break
 			}

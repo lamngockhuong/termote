@@ -144,6 +144,14 @@ func TestParseClaudeHistoryTitles(t *testing.T) {
 	if got.title != "real one" {
 		t.Errorf("prompt after plumbing = %+v", got)
 	}
+	// A command's output in the same row as the user's words is a note, never
+	// the title a view-only client reads.
+	got, _ = parseClaudeFile(t, `{"type":"user","cwd":"/r","message":{"content":[`+
+		`{"type":"text","text":"<bash-stdout>TOKEN=s3cr3t-value</bash-stdout><bash-stderr></bash-stderr>"},`+
+		`{"type":"text","text":"why did it print that"}]}}`+"\n")
+	if got.title != "why did it print that" {
+		t.Errorf("prompt beside a command's output = %+v", got)
+	}
 	// A branch is kept from the latest row; HEAD (detached) is not one.
 	got, _ = parseClaudeFile(t, claudeRows("/r", "main", "p", `{"type":"assistant","cwd":"/r","gitBranch":"HEAD"}`, `{"type":"user","cwd":"/r","gitBranch":"feat"}`))
 	if got.branch != "feat" {

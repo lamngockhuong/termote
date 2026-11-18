@@ -225,6 +225,11 @@ type tokenInfo struct {
 	// session: what a session token's sign-in list shows (session store
 	// only).
 	session *sessionMeta
+	// noPush: a stream token asked for with Basic credentials alone, which
+	// a browser attaches to a page of any site's request where it sends no
+	// Sec-Fetch-Site (plain HTTP to a LAN address): it never pushes another
+	// token out of a full store.
+	noPush bool
 }
 
 // errTokensBusy: the store is full of tokens a view-only client may not push
@@ -247,20 +252,21 @@ func (s *tokenStore) generate() (string, error) {
 // generateFor creates a token for a client of role r (deviceID: its paired
 // device, if any).
 func (s *tokenStore) generateFor(r role, deviceID string) (string, error) {
-	return s.generateGrant(r, deviceID, "")
+	return s.generateGrant(tokenInfo{role: r, deviceID: deviceID})
 }
 
-// generateGrant is generateFor that also names the password session the
-// token is issued to (sessionID, "" for none). Sweeps expired tokens to
-// prevent unbounded map growth. In a capped store a view-only client's token
-// never pushes out a full client's: it takes the oldest view-only one, or
-// errTokensBusy; a full client's takes the oldest view-only one first.
-func (s *tokenStore) generateGrant(r role, deviceID, sessionID string) (string, error) {
+// generateGrant is generateFor for ti: its role, its paired device, the
+// password session it is issued to (sessionID, "" for none) and noPush.
+// Sweeps expired tokens to prevent unbounded map growth. In a capped store a
+// view-only client's token never pushes out a full client's: it takes the
+// oldest view-only one, or errTokensBusy; a full client's takes the oldest
+// view-only one first; a noPush one takes none and gets errTokensBusy.
+func (s *tokenStore) generateGrant(ti tokenInfo) (string, error) {
 	token, err := newRandomToken()
 	if err != nil {
 		return "", err
 	}
-	_, err = s.put(token, tokenInfo{role: r, deviceID: deviceID, sessionID: sessionID})
+	_, err = s.put(token, tokenInfo{role: ti.role, deviceID: ti.deviceID, sessionID: ti.sessionID, noPush: ti.noPush})
 	return token, err
 }
 
@@ -329,7 +335,7 @@ func (s *tokenStore) put(token string, ti tokenInfo) ([]droppedToken, error) {
 		// A session Basic auth made pushes nobody out: a page of another
 		// site can load this server in frames, each sent the saved Basic
 		// credentials, and a browser keeps no cookie set in such a frame.
-		basic := ti.session != nil && ti.session.via == sessionViaBasic
+		basic := ti.noPush || ti.session != nil && ti.session.via == sessionViaBasic
 		for len(live) >= s.max {
 			if basic {
 				s.order = live
@@ -1750,7 +1756,10 @@ func handleTerminalToken(tokens *tokenStore) http.HandlerFunc {
 			return
 		}
 		a, _ := authFrom(r.Context())
-		token, err := tokens.generateGrant(requestRole(r.Context()), a.DeviceID, a.SessionID)
+		// Basic credentials alone may come from another site's page (see
+		// tokenInfo.noPush); a session or a device cookie never does.
+		token, err := tokens.generateGrant(tokenInfo{role: requestRole(r.Context()), deviceID: a.DeviceID,
+			sessionID: a.SessionID, noPush: a.Kind == authBasic})
 		if errors.Is(err, errTokensBusy) {
 			jsonErrorCode(w, errTokensBusy.code, errTokensBusy.msg, errTokensBusy.status)
 			return

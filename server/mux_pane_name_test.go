@@ -607,3 +607,19 @@ func TestZellijPaneNameFromTitle(t *testing.T) {
 		t.Errorf("names after prune = %v", m.names)
 	}
 }
+
+// A tab or group name a pane's output set reaches the client without a line
+// break or a bidi control, capped, and with its own spaces kept.
+func TestCleanLabel(t *testing.T) {
+	for in, want := range map[string]string{
+		"build":                 "build",
+		" spaced ":              " spaced ",
+		"evil\nline\x1b[2J":     "evilline[2J",
+		"rtl‮gnp.exe":           "rtlgnp.exe",
+		strings.Repeat("é", 40): strings.Repeat("é", 32),
+	} {
+		if got := cleanLabel(in); got != want {
+			t.Errorf("cleanLabel(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

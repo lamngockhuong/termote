@@ -374,6 +374,17 @@ func TestStreamTokenRoute(t *testing.T) {
 	if rec := serve(newTestHandler(t, &fakeMux{}), req); rec.Code != http.StatusOK {
 		t.Errorf("same-origin status = %d, want 200", rec.Code)
 	}
+	// Basic credentials alone fill the store but push nothing out
+	h := newTestHandler(t, &fakeMux{})
+	for i := range maxStreamTokens {
+		if rec := serve(h, apiRequest("GET", "/api/mux/stream-token", "")); rec.Code != http.StatusOK {
+			t.Fatalf("Basic token %d = %d", i, rec.Code)
+		}
+	}
+	rec = serve(h, apiRequest("GET", "/api/mux/stream-token", ""))
+	if body := decodeBody(t, rec); rec.Code != http.StatusTooManyRequests || body["code"] != "busy" {
+		t.Errorf("Basic token in a full store = %d %v, want 429 busy", rec.Code, body)
+	}
 }
 
 func TestNewMux(t *testing.T) {

@@ -735,7 +735,7 @@ func mapHerdrSnapshot(s herdrSnapshot) herdrView {
 		if panes == nil {
 			panes = []Pane{}
 		}
-		tab := Tab{ID: t.ID, Key: t.ID, Name: t.Label, Panes: panes}
+		tab := Tab{ID: t.ID, Key: t.ID, Name: cleanLabel(t.Label), Panes: panes}
 		if l, ok := layouts[t.ID]; ok {
 			tab.Layout = herdrTabLayout(l, panes)
 		}
@@ -757,7 +757,7 @@ func mapHerdrSnapshot(s herdrSnapshot) herdrView {
 		for i := range tabs {
 			tabs[i].Active = tabs[i].ID == w.ActiveTabID
 		}
-		groups = append(groups, Group{ID: w.ID, Name: w.Label, Tabs: tabs, Meta: cleanMeta(w.Tokens)})
+		groups = append(groups, Group{ID: w.ID, Name: cleanLabel(w.Label), Tabs: tabs, Meta: cleanMeta(w.Tokens)})
 	}
 	return herdrView{snap: Snapshot{Groups: groups}, sizes: sizes, zoomed: zoomed, cwds: cwds, worktrees: worktrees}
 }

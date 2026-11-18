@@ -50,7 +50,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   there (a form's `multipart/form-data`, `text/plain` or urlencoded, which need no preflight) → 415
   `unsupported_type`
 - **Terminal stream** (`/api/mux/stream`): same Origin check plus a single-use, 30s-TTL token
-  fetched via `/api/mux/stream-token`, consumed on WebSocket upgrade. Every paste into the
+  fetched via `/api/mux/stream-token`, consumed on WebSocket upgrade. The token store holds 32
+  (`maxStreamTokens`); a new full-role token pushes out the oldest, but one asked for with Basic
+  credentials alone never does (`tokenInfo.noPush`, 429 `busy` instead): over plain HTTP a browser
+  sends no `Sec-Fetch-Site`, so the route's cross-site check cannot see another site's page, and it
+  attaches saved Basic credentials to that page's `no-cors` request. Every paste into the
   terminal (native paste events are taken in capture phase, ahead of xterm) goes through
   `cleanPaste` in `terminal-view.tsx`: end-of-paste markers and control characters other than
   tab and line breaks removed, since xterm brackets a paste without removing a marker inside it.
@@ -615,7 +619,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   title read more than 2 s after the rename, a session rename or a restart of the server forgets
   it). Every name a backend reports (another process
   can set Herdr's label over its socket, or the tmux option) is `stripUnsafeRunes` and capped
-  at 64 bytes (`cleanPaneName`). Metadata is read only, never written by termote: Herdr's
+  at 64 bytes (`cleanPaneName`). So is every tab and group name (tmux window and session, Herdr tab
+  and workspace label, Zellij tab), which a pane's output can set through a terminal title, but
+  not trimmed (`cleanLabel`). Metadata is read only, never written by termote: Herdr's
   `panes[].tokens` and `workspaces[].tokens`, which any process that reaches Herdr's socket
   can report, go through `cleanMeta`: keys outside `^[A-Za-z0-9_-]{1,32}$` dropped, values
   `stripUnsafeRunes`, trimmed, cut to 64 runes, empty ones dropped, at most 8 per pane or
@@ -901,7 +907,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   running turn), and the route answers 202 instead of 204; an agent waiting on a dialog
   (`blocked`) or of unknown status still gets nothing, and so does a `/` command to a working
   Codex (Tab would take the popup's pick). Clearing a failed paste (C-c) still needs the agent
-  idle, since C-c interrupts a working one: a working agent's box is left as `partial_paste`. Claude Code writes its transcript only with the first message: until
+  idle, since C-c interrupts a working one: a working agent's box is left as `partial_paste`. A
+  transcript read the read cache (`readCached`) does not answer waits for one of 4 slots
+  (`transcriptReads`): each holds a file's tail, and every signed cursor a client paged through is a
+  read of its own, from any role. Claude Code writes its transcript only with the first message: until
   then `transcript` answers an empty conversation whose cursor names the session, so the Chat
   view can send it. A Claude Code started with `--resume <id> --fork-session` (read from its own argv
   with the process, `claudeForkOfArgs`; on Herdr only from the process whose session file names
@@ -990,7 +999,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   input, result or `detail`, whatever file, command or argument shape (an object, a JSON string, an
   array of paths, a symlink under an innocent name) it involves, and no result read apart from its
   call; no note either (the output of a command the user ran with `!`, of a slash command,
-  a hook's text; the command line the user typed is their words and stays), neither a `note` entry
+  a hook's text, an envelope Claude Code wraps whole in a tag termote does not know yet, and a
+  Codex user message or block wrapped whole in a tag, as Codex writes a `!` command's output:
+  `wholeEnvelope`; the command line the user typed is their words and stays), neither a `note` entry
   nor a text part classified as one beside the user's words in a row of several blocks (the part's
   `note` flag, never sent); an entry left with no
   part is dropped. Nothing is decided per file, so a new tool of an agent is covered as it appears.
@@ -1096,7 +1107,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   exists) is the pane's root (`paneRootForRead`, as Files) or under it, compared without case on
   Windows and macOS; the dir name only narrows the scan. Only 64 KB at each end of a transcript
   (Codex: after the meta line) is read for the title (`custom-title`, then `ai-title` or the Codex
-  thread name, then the first prompt), branch and cwd; titles are one line of at most 200 bytes
+  thread name, then the first prompt, never a note beside it such as a `!` command's output; a view-only
+  client gets no OpenCode title, which its model writes from the first message, a command template's
+  shell output included: `viewHistoryTitles`), branch and cwd; titles are one line of at most 200 bytes
   without control or invisible characters. The reply holds the cwd relative to the root, never an
   absolute path; pages of 30 continue through a MAC'd cursor (`historyCursor`, the transcript
   cursors' key, a prefix of its own), a forged one is 400. Reads (list and transcript):
@@ -1532,7 +1545,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   listened on by a process of another user than the server's, SYSTEM, LOCAL SERVICE or NETWORK
   SERVICE (`listenerOwnersOn`; a process whose token cannot be read counts as another
   user's); a free port or a missing data dir passes. What cannot be read refuses too (503
-  `psmux_ports_unverified`, the reason in the log): a data dir that exists but cannot be listed, a
+  `psmux_ports_unverified`, the reason in the log): a profile directory that cannot be read (with no
+  `PSMUX_DATA_DIR`; psmux may still find one), a data dir that exists but cannot be listed, a
   `.port` file, the TCP table, or the server's own account while something listens on the port; `tcpTable` reads again with a buffer of what
   the table last needed plus half and 64 rows more, up to 5 times, so sockets opened between reads
   cannot make it give up and be taken for nothing listening. Not covered: a process that takes the
@@ -3149,8 +3163,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `X-Real-IP` and the configured proxy client header, sets `X-Termote-Role` from `requestRole` and
   `X-Termote-Origin-Auth`, sends the escaped path to `termote.local-socket`, and passes on only the
   answer headers in `machineResponseKeep` (content type, length, disposition, encoding and range,
-  caching and validators, `Vary`, `Allow`, `Retry-After`, `Date`, the machine's own CSP and
-  `nosniff`; on a 101 only the WebSocket upgrade headers): an allow list, since every header a
+  caching and validators, `Vary`, `Allow`, `Retry-After`, `Date` and `nosniff`; never the machine's
+  own CSP, whose `report-uri`/`report-to` would send this origin's violation reports to a host it names,
+  replaced by the sandbox policy; on a 101 only the WebSocket upgrade headers): an allow list, since every header a
   deny list kept missing could act on this origin (`Set-Cookie`, `Service-Worker-Allowed`,
   `Clear-Site-Data`, `NEL`/`Report-To` sending later requests' URLs to the machine's collector,
   `WWW-Authenticate` asking for a password in this origin's name) or navigate the tab (`Refresh`,
@@ -3497,8 +3512,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   system npm reads a `.NPMRC` as `.npmrc`) finds no change against `origin/HEAD`, else `main`, to a
   name git quotes (`core.quotePath=true`: a non-ASCII byte, a `"`, a `\` or a control character;
   case folds only in ASCII, and such a file system can fold a Kelvin sign onto a `k`) or to any `lefthook*`, `.lefthook*`, `.config/lefthook*`, `scripts/check-gofmt.sh`,
-  `scripts/staged-files.sh`, any
-  `dprint.json*`/`.dprint.json*` (dprint plugins can be programs), any `.npmrc`, any
+  `scripts/staged-files.sh`, `pwa/scripts/check-i18n.mjs`, any
+  `dprint.json*`/`.dprint.json*` (dprint plugins can be programs), any `biome.json*`/`.biome.json*`
+  (the config `biome check` runs with, its plugins and `extends` included), any `.npmrc`, any
   `pnpm-workspace.yaml`, any `.pnpmfile.*`, `package.json`, `pwa/package.json` (what `pnpm exec` and
   `npx` read) or any tracked `node_modules` (a symlink too) or file under one (git replaces an
   ignored file with a branch's tracked one, so a branch could bring its own

@@ -384,6 +384,11 @@ func parseCodexRow(line []byte, off int64) (e TranscriptEntry, recognised, ok bo
 		if strings.TrimSpace(row.Payload.Message) == "" {
 			return e, true, false
 		}
+		// A user message wrapped whole in a tag is one Codex wrote (the
+		// output of a ! command among them), not the user's words
+		if e.Role == "user" && wholeEnvelope(row.Payload.Message) {
+			e.Role = "note"
+		}
 		e.Parts = []TranscriptPart{textPart("text", row.Payload.Message, claudeMaxText)}
 		return e, true, true
 	case "turn_aborted", "thread_rolled_back":
@@ -426,7 +431,11 @@ func parseCodexRow(line []byte, off int64) (e TranscriptEntry, recognised, ok bo
 			switch {
 			case strings.EqualFold(c.Type, "text"):
 				if strings.TrimSpace(c.Text) != "" {
-					e.Parts = append(e.Parts, textPart("text", c.Text, claudeMaxText))
+					p := textPart("text", c.Text, claudeMaxText)
+					// As a legacy user_message: a block wrapped whole in a
+					// tag is Codex's, which a view-only client never reads
+					p.note = e.Role == "user" && wholeEnvelope(c.Text)
+					e.Parts = append(e.Parts, p)
 				}
 			case isCodexImage(c.Type):
 				e.Parts = append(e.Parts, TranscriptPart{Kind: "image", imageN: images})

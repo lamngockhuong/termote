@@ -313,7 +313,7 @@ func (m *zellijMux) buildGroup(session string, r zellijRead) Group {
 		panes := byTab[t.TabID]
 		sort.Slice(panes, func(i, j int) bool { return panes[i].ID < panes[j].ID })
 		tab := Tab{ID: zellijTabID(session, t.TabID), Key: m.tabKey(session, t.TabID, panes),
-			Name: t.Name, Active: t.Active, Panes: []Pane{}}
+			Name: cleanLabel(t.Name), Active: t.Active, Panes: []Pane{}}
 		for _, p := range panes {
 			pane := Pane{ID: zellijPaneID(session, p.ID), Active: p.IsFocused,
 				Title: stripUnsafeRunes(p.Title), key: zellijPaneKey(session, p.ID)}

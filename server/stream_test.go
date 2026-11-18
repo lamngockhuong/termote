@@ -456,6 +456,28 @@ func TestTerminalTokenStoreCap(t *testing.T) {
 	}
 }
 
+// A token asked for with Basic credentials alone pushes no other out of a
+// full store: a page of another site gets the browser's saved Basic
+// credentials sent with its requests over plain HTTP, and would otherwise
+// push out the PWA's spare token. Once a slot is free it gets one.
+func TestTerminalTokenNoPush(t *testing.T) {
+	st := newStreamTokenStore()
+	first, _ := st.generateGrant(tokenInfo{role: roleFull, sessionID: "s1"})
+	for i := 1; i < maxStreamTokens; i++ {
+		st.generate()
+	}
+	if _, err := st.generateGrant(tokenInfo{role: roleFull, noPush: true}); !errors.Is(err, errTokensBusy) {
+		t.Errorf("Basic-only token in a full store = %v, want busy", err)
+	}
+	if !st.validate(first) {
+		t.Fatal("a Basic-only request pushed the oldest token out")
+	}
+	st.consume(first)
+	if tok, err := st.generateGrant(tokenInfo{role: roleFull, noPush: true}); err != nil || !st.validate(tok) {
+		t.Errorf("Basic-only token with a free slot = %v", err)
+	}
+}
+
 func TestStreamClampsSize(t *testing.T) {
 	s := newStreamServer(t)
 	mustDial(t, s, "pane=0&cols=65535&rows=0")

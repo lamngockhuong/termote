@@ -493,6 +493,12 @@ func classifyClaudeUserText(text string) (role, out string, ok bool) {
 		}
 		return "note", s, true
 	}
+	// An envelope this list does not know yet (a newer Claude Code's), whole
+	// from its tag to its end tag, is plumbing too, not the user's words: a
+	// note, kept as written, so a view-only client never reads what it holds.
+	if wholeEnvelope(t) {
+		return "note", strings.TrimSpace(t), true
+	}
 	text = stripPastedTags(text)
 	return "user", text, strings.TrimSpace(text) != ""
 }
@@ -537,6 +543,15 @@ var claudeNotices = map[string]struct {
 // claudeEnvelopeRe matches the opening tag a plumbing text starts with; a
 // tag may carry attributes (<teammate-message teammate_id="…">).
 var claudeEnvelopeRe = regexp.MustCompile(`^<([a-z][a-z0-9_-]*)(?:[ \t][^>\r\n]*)?>`)
+
+// wholeEnvelope reports whether t, past leading space, is one tag from its
+// start to its own end tag: how an agent wraps what it puts in the user's
+// role that the user did not type (a command's output, context).
+func wholeEnvelope(t string) bool {
+	t = strings.TrimSpace(t)
+	tag := claudeEnvelope(t)
+	return tag != "" && strings.HasSuffix(t, "</"+tag+">")
+}
 
 // claudeEnvelope returns the name of the tag t starts with, or "".
 func claudeEnvelope(t string) string {

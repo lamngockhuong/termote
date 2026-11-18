@@ -133,7 +133,9 @@ func parseClaudeHistory(f *os.File, size int64, id string) (historyFile, bool) {
 			if first && prompt == "" && bytes.Contains(line, []byte(`"user"`)) {
 				if e, ok := parseClaudeRow(line, 0); ok && e.Role == "user" {
 					for _, p := range e.Parts {
-						if p.Kind == "text" && strings.TrimSpace(p.Text) != "" {
+						// A note beside the user's words (a command's output) is
+						// no title: a view-only client never reads it
+						if p.Kind == "text" && !p.note && strings.TrimSpace(p.Text) != "" {
 							prompt = p.Text
 							break
 						}

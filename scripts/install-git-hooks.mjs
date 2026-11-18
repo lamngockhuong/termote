@@ -5,7 +5,8 @@
 // The hooks are written here rather than by `lefthook install`: each runs lefthook only while
 // the files that decide what it runs match the trusted branch, origin/HEAD or else main: the
 // lefthook config, scripts/check-gofmt.sh, scripts/staged-files.sh and pwa/scripts/check-i18n.mjs,
-// the dprint config (its plugins can be programs), the npm and pnpm config and package.json files `pnpm exec` and `npx`
+// the dprint config (its plugins can be programs), the Biome config (`biome check` reads it, plugins
+// and `extends` included), the npm and pnpm config and package.json files `pnpm exec` and `npx`
 // read, and any tracked file under node_modules (git replaces an ignored file with a branch's
 // tracked one, so a branch could bring its own node_modules/.bin/lefthook). Names match in any
 // case (on a case-insensitive file system npm reads a tracked .NPMRC as .npmrc), and any changed
@@ -58,7 +59,7 @@ if [ -z "$ref" ]; then
 fi
 changed=$(git --icase-pathspecs -C "$top" -c core.quotePath=true diff --name-only "$ref" -- ':(glob)lefthook*' ':(glob).lefthook*' \\
   ':(glob).config/lefthook*' scripts/check-gofmt.sh scripts/staged-files.sh ':(glob)**/dprint.json*' \\
-  ':(glob)**/.dprint.json*' ':(glob)**/.npmrc' ':(glob)**/pnpm-workspace.yaml' ':(glob)**/.pnpmfile.*' package.json \\
+  ':(glob)**/.dprint.json*' ':(glob)**/biome.json*' ':(glob)**/.biome.json*' ':(glob)**/.npmrc' ':(glob)**/pnpm-workspace.yaml' ':(glob)**/.pnpmfile.*' package.json \\
   pwa/package.json pwa/scripts/check-i18n.mjs ':(glob)**/node_modules' ':(glob)**/node_modules/**') &&
   # Case matches only in ASCII: a name git quotes (a non-ASCII byte, a '"', a '\' or a control
   # character) counts as a hook file, since a case-insensitive file system can fold a non-ASCII

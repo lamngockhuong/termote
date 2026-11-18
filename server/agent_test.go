@@ -523,3 +523,30 @@ func TestAgentReadRoutesRejectCrossSite(t *testing.T) {
 		t.Errorf("same-origin transcript = %d %s", rec.Code, rec.Body.String())
 	}
 }
+
+// Transcript reads beyond transcriptReads wait for a slot: many signed
+// cursors fired at once cannot each hold a file's tail in memory.
+func TestTranscriptReadsAreBounded(t *testing.T) {
+	for range cap(transcriptReads) {
+		transcriptReads <- struct{}{}
+	}
+	a := &agentAPI{reads: newTTLCache[transcriptResponse](agentCacheTTL)}
+	done := make(chan struct{})
+	go func() {
+		a.readCached(AgentSession{Agent: "claude", ID: "x"}, "", "")
+		close(done)
+	}()
+	select {
+	case <-done:
+		t.Fatal("a read ran with every slot taken")
+	case <-time.After(100 * time.Millisecond):
+	}
+	for range cap(transcriptReads) {
+		<-transcriptReads
+	}
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the read never ran once a slot was free")
+	}
+}

@@ -470,8 +470,10 @@ func TestClassifyClaudeUserTextEnvelopes(t *testing.T) {
 		{"<artifact-file-content path=\"a.html\"><html></html></artifact-file-content>", "note", "Artifact file"},
 		{"[Request interrupted by user]", "note", "Interrupted"},
 		{"[Request interrupted by user for tool use]\n", "note", "Tool interrupted"},
-		{"<unknown-tag>hi</unknown-tag>", "user", "<unknown-tag>hi</unknown-tag>"},
-		{"<command-names>x</command-names>", "user", "<command-names>x</command-names>"},
+		// An envelope not in the list, closed by its own end tag, is a note
+		{"<unknown-tag>hi</unknown-tag>", "note", "<unknown-tag>hi</unknown-tag>"},
+		{"<command-names>x</command-names>\n", "note", "<command-names>x</command-names>"},
+		{"<b>bold</b> and more", "user", "<b>bold</b> and more"},
 		{"<3 you", "user", "<3 you"},
 	} {
 		if role, s, ok := classifyClaudeUserText(c.in); !ok || role != c.role || s != c.out {
