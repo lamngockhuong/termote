@@ -46,7 +46,7 @@ func newHcMuxFake(t *testing.T) *hcMuxFake {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	f.m = newHcMux(ctx, "/usr/bin/hc", nil)
-	f.m.client.running = func(context.Context, []string) bool { return f.running.Load() }
+	f.m.client.running = func(context.Context, []string) (bool, error) { return f.running.Load(), nil }
 	f.m.docRetry = 30 * time.Millisecond
 	f.m.client.connect = func(context.Context, string, []string) (*hcConn, error) {
 		core, c := startFakeHc(t, func(core *fakeHcCore) {

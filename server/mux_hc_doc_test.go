@@ -484,7 +484,7 @@ func TestHcDocCoreDown(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	m := newHcMux(ctx, "/usr/bin/hc", nil)
-	m.client.running = func(context.Context, []string) bool { return false }
+	m.client.running = func(context.Context, []string) (bool, error) { return false, nil }
 	if err := m.RenameTab(ctx5s(t), "tb1", "x", ""); err != errHcUnavailable {
 		t.Errorf("rename: %v", err)
 	}

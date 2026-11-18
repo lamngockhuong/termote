@@ -103,9 +103,16 @@ func hcSession(env []string) string {
 // (hcConfigSocket), else its default (hcDefaultEndpoint). On Windows a
 // running core's lock keeps core.lock from being read. Dialing the socket or
 // pipe starts nothing; hc connect would (client.rs connect_or_start).
+//
+// The socket or pipe counts only when this user (or root, on Linux and
+// macOS) serves it, as Herdr's does (dialHerdr): one another OS user made
+// first, the Windows pipe name every user shares or HC_SOCKET in a shared
+// directory, would get every key typed in the PWA and answer with a screen of
+// its own. It is returned as a *herdrPipeUserError, never as "not running",
+// so termote never starts hc connect for it.
 var hcCoreRunning = hcCoreRunningDefault
 
-func hcCoreRunningDefault(ctx context.Context, env []string) bool {
+func hcCoreRunningDefault(ctx context.Context, env []string) (bool, error) {
 	endpoint := hcEnvValue(env, "HC_SOCKET")
 	if endpoint == "" {
 		if b, err := os.ReadFile(filepath.Join(hcStateDir(env), "core.lock")); err == nil {
@@ -119,16 +126,20 @@ func hcCoreRunningDefault(ctx context.Context, env []string) bool {
 		endpoint = hcDefaultEndpoint(env)
 	}
 	if endpoint == "" {
-		return false
+		return false, nil
 	}
 	cctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	conn, err := hcDialProbe(cctx, endpoint)
+	conn, err := dialHerdr(cctx, endpoint)
+	var pe *herdrPipeUserError
+	if errors.As(err, &pe) {
+		return false, err
+	}
 	if err != nil {
-		return false
+		return false, nil
 	}
 	conn.Close()
-	return true
+	return true, nil
 }
 
 // hcClient owns the server's one connection to the core.
@@ -138,7 +149,7 @@ type hcClient struct {
 	// connect starts hc connect (hcConnectStart; tests replace it).
 	connect func(ctx context.Context, bin string, env []string) (*hcConn, error)
 	// running is hcCoreRunning, read once (tests replace it).
-	running func(ctx context.Context, env []string) bool
+	running func(ctx context.Context, env []string) (bool, error)
 
 	mu         sync.Mutex
 	conn       *hcConn
@@ -148,6 +159,8 @@ type hcClient struct {
 	dialFailed time.Time // when the last dial failed
 	// dialBackoff is hcDialBackoff, read once.
 	dialBackoff time.Duration
+	// lastRefusal is the reason last audited for a refused socket.
+	lastRefusal string
 
 	starter hcStarter
 }
@@ -191,7 +204,12 @@ func (c *hcClient) get(ctx context.Context, mayStart bool) (*hcConn, error) {
 	if c.starter.starting() {
 		return nil, errHcStarting
 	}
-	if !c.running(ctx, c.env) {
+	running, err := c.running(ctx, c.env)
+	if err != nil {
+		c.refuse(err)
+		return nil, errHcRefused
+	}
+	if !running {
 		if !mayStart {
 			return nil, errHcNotRunning
 		}
@@ -225,6 +243,16 @@ func (c *hcClient) dial(ctx context.Context, wait time.Duration) (*hcConn, error
 			conn, err := c.connect(dctx, c.bin, c.env)
 			cancel()
 			if err == nil {
+				// hc connect dials the endpoint itself, after the probe
+				// that let it run: a socket another user made meanwhile
+				// is caught here, before anything is sent through it.
+				if _, rerr := c.running(context.Background(), c.env); rerr != nil {
+					conn.close()
+					c.refuse(rerr)
+					conn, err = nil, errHcRefused
+				}
+			}
+			if err == nil {
 				c.set(conn)
 			}
 			c.mu.Lock()
@@ -252,6 +280,22 @@ func (c *hcClient) dial(ctx context.Context, wait time.Duration) (*hcConn, error
 		return nil, c.dialErr
 	}
 	return nil, errHcLost
+}
+
+// refuse audits a socket or pipe served by another user, once per reason.
+func (c *hcClient) refuse(err error) {
+	reason := err.Error()
+	var pe *herdrPipeUserError
+	if errors.As(err, &pe) {
+		reason = pe.Err.Error()
+	}
+	c.mu.Lock()
+	repeated := reason == c.lastRefusal
+	c.lastRefusal = reason
+	c.mu.Unlock()
+	if !repeated {
+		auditf("hc socket refused", "reason", reason)
+	}
 }
 
 // close ends the connection (serve stops).

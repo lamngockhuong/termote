@@ -75,7 +75,7 @@ func newHcSim(t *testing.T) *hcSim {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	s.m = newHcMux(ctx, "/usr/bin/hc", nil)
-	s.m.client.running = func(context.Context, []string) bool { return true }
+	s.m.client.running = func(context.Context, []string) (bool, error) { return true, nil }
 	s.m.retryWait = 20 * time.Millisecond
 	s.m.client.connect = func(context.Context, string, []string) (*hcConn, error) {
 		core, c := startFakeHc(t, s.handlers)
@@ -763,7 +763,7 @@ func newHcMuxDown(t *testing.T) *hcMux {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	m := newHcMux(ctx, "/usr/bin/hc", nil)
-	m.client.running = func(context.Context, []string) bool { return false }
+	m.client.running = func(context.Context, []string) (bool, error) { return false, nil }
 	return m
 }
 
@@ -771,7 +771,7 @@ func newHcMuxDown(t *testing.T) *hcMux {
 // longer holds one (the moment between a loss and the follower noticing it),
 // and the core does not run: a call that needs a connection now fails.
 func dropHcClient(s *hcSim) {
-	s.m.client.running = func(context.Context, []string) bool { return false }
+	s.m.client.running = func(context.Context, []string) (bool, error) { return false, nil }
 	s.m.client.set(nil)
 }
 

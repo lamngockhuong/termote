@@ -3,8 +3,6 @@
 package main
 
 import (
-	"context"
-	"net"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -59,10 +57,4 @@ func hcDefaultEndpoint(env []string) string {
 		}
 	}
 	return `\\.\pipe\herdr-core-` + user.String() + "-" + hcSession(env) + ".sock"
-}
-
-// hcDialProbe connects to the core's named pipe, only to see it answer. Like
-// Herdr's pipe, it is kept only when its server runs as this user.
-func hcDialProbe(ctx context.Context, path string) (net.Conn, error) {
-	return dialHerdr(ctx, path)
 }

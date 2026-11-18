@@ -705,7 +705,7 @@ func TestHcStreamNeedsAConnectionToAttachAgain(t *testing.T) {
 	s.lastAttach(t, 1)
 	waitFor(t, func() bool { return hcAttached(st) })
 	var probes atomic.Int32
-	s.m.client.running = func(context.Context, []string) bool { probes.Add(1); return false }
+	s.m.client.running = func(context.Context, []string) (bool, error) { probes.Add(1); return false, nil }
 	s.m.client.set(nil)
 	s.closeAttachs("t2", "server_stop", nil)
 	waitFor(t, func() bool { return probes.Load() > 0 })

@@ -97,15 +97,15 @@ func TestHcCoreRunningProbeConfigSocket(t *testing.T) {
 			c.Close()
 		}
 	}()
-	if hcCoreRunningDefault(context.Background(), env) {
+	if hcProbeRunning(t, context.Background(), env) {
 		t.Fatal("running with no config socket")
 	}
 	writeHcConfig(t, config, "socket = '"+sock+"'\n")
-	if !hcCoreRunningDefault(context.Background(), env) {
+	if !hcProbeRunning(t, context.Background(), env) {
 		t.Fatal("core on the config.toml socket not found")
 	}
 	// HC_SOCKET wins over config.toml, as in hc.
-	if hcCoreRunningDefault(context.Background(), append(env, "HC_SOCKET="+sock+".other")) {
+	if hcProbeRunning(t, context.Background(), append(env, "HC_SOCKET="+sock+".other")) {
 		t.Fatal("config.toml used despite HC_SOCKET")
 	}
 }

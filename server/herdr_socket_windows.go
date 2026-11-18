@@ -111,7 +111,7 @@ func checkPipeServerUser(conn net.Conn) error {
 		return fmt.Errorf("herdr pipe: current user: %w", err)
 	}
 	if !windows.EqualSid(server, want) {
-		return fmt.Errorf("herdr pipe is served by another user (%s)", server)
+		return fmt.Errorf("the pipe is served by another user (%s)", server)
 	}
 	return nil
 }
