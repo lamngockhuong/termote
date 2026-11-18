@@ -3497,8 +3497,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   system npm reads a `.NPMRC` as `.npmrc`) finds no change against `origin/HEAD`, else `main`, to a
   name git quotes (`core.quotePath=true`: a non-ASCII byte, a `"`, a `\` or a control character;
   case folds only in ASCII, and such a file system can fold a Kelvin sign onto a `k`) or to any `lefthook*`, `.lefthook*`, `.config/lefthook*`, `scripts/check-gofmt.sh`,
-  `scripts/staged-files.sh`, any
-  `dprint.json*`/`.dprint.json*` (dprint plugins can be programs), any `.npmrc`, any
+  `scripts/staged-files.sh`, `pwa/scripts/check-i18n.mjs`, any
+  `dprint.json*`/`.dprint.json*` (dprint plugins can be programs), any `biome.json*`/`.biome.json*`
+  (the config `biome check` runs with, its plugins and `extends` included), any `.npmrc`, any
   `pnpm-workspace.yaml`, any `.pnpmfile.*`, `package.json`, `pwa/package.json` (what `pnpm exec` and
   `npx` read) or any tracked `node_modules` (a symlink too) or file under one (git replaces an
   ignored file with a branch's tracked one, so a branch could bring its own

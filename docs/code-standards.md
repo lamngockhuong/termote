@@ -206,7 +206,7 @@ with `LEFTHOOK=0`, outside a git worktree, or with `core.hooksPath` set (it warn
 `pre-commit` and `pre-push` hooks itself (never over a hook that is not lefthook's) instead of
 `lefthook install`, and each runs lefthook only while the files that decide what it runs (any
 `lefthook*`, `.lefthook*` or `.config/lefthook*`, `scripts/check-gofmt.sh`, `scripts/staged-files.sh`, `pwa/scripts/check-i18n.mjs`, any `dprint.json*` or
-`.dprint.json*`, any `.npmrc`, any `pnpm-workspace.yaml`, any `.pnpmfile.*`, `package.json` and
+`.dprint.json*`, any `biome.json*` or `.biome.json*`, any `.npmrc`, any `pnpm-workspace.yaml`, any `.pnpmfile.*`, `package.json` and
 `pwa/package.json`, and any tracked `node_modules` or file under one, in any case: `.NPMRC` counts; and any name git quotes: a non-ASCII byte, a `"`, a `\` or a control character)
 match `origin/HEAD`, else `main`; otherwise it names the files, skips without failing the commit or push, and says how to run
 the checks by hand. A branch changing `package.json` therefore runs no hooks.
