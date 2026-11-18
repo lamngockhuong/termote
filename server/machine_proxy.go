@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"mime"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -415,8 +416,27 @@ func confineMachineResponse(resp *http.Response) {
 	if resp.Body != nil {
 		resp.Body = &machineTrailerDrop{ReadCloser: resp.Body, resp: resp}
 	}
+	confineMachineImageType(resp)
 	resp.Header.Set("Content-Security-Policy", svgPolicy)
 	resp.Header.Set("X-Content-Type-Options", "nosniff")
+}
+
+// confineMachineImageType sets the type of an image a machine serves
+// (files/raw) to one this server's own files/raw sends, without parameters,
+// else to application/octet-stream: the PWA picks how to show an image by
+// its type, and a type with parameters or in another case could make an SVG
+// it should show as a data: URL a blob: one, a document of this origin. A
+// refusal (JSON) keeps its type.
+func confineMachineImageType(resp *http.Response) {
+	if resp.Request == nil || resp.Request.URL == nil || resp.StatusCode/100 != 2 ||
+		!strings.HasSuffix(resp.Request.URL.Path, "/files/raw") {
+		return
+	}
+	mt, _, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+	if err != nil || (mt != svgType && !isUploadType(mt)) {
+		mt = "application/octet-stream"
+	}
+	resp.Header.Set("Content-Type", mt)
 }
 
 // machineTrailerDrop is a machine's response body that empties the

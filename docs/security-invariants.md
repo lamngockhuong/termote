@@ -1628,12 +1628,12 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   counting as kana only next to another; UTF-16 without a BOM is never guessed); its `hash` is
   the sha256 of the bytes read, never of the decoded text. A sensitive name without `reveal=1` is
   answered before anything is decoded; a read as another encoding than UTF-8, or one that
-  detects the encoding of bytes not valid UTF-8, takes one of 2 server-wide slots (429 `busy`);
-  a UTF-8 read none. It reads at most 4 MiB (`maxViewSize`, past it `previewable: false`,
+  detects the encoding of bytes not valid UTF-8, takes one of 2 server-wide slots (429 `busy`), of
+  which a view-only client never takes the last free one (`takeSlot`); a UTF-8 read none. It reads at most 4 MiB (`maxViewSize`, past it `previewable: false`,
   `too-large`); a save, a discard, content search and a whole-file diff stay at 1 MiB
   (`maxPreviewSize`), so a file shown past that is `editable: false`, `notEditable: too-large`.
   A read past 1 MiB (by its size before the read, or the bytes read) takes one of 2 server-wide
-  `largeReadSlots` (429 `busy`), held until the answer is written under a 2-minute write deadline
+  `largeReadSlots` (429 `busy`; a view-only client never takes the last free one, `takeSlot`), held until the answer is written under a 2-minute write deadline
   (its JSON escapes `<`, `>`, `&` and control bytes to six bytes each); a sensitive name not
   revealed takes none.
   The answer is gzipped when `Accept-Encoding` takes gzip (`jsonOKGzip`, `Vary: Accept-Encoding`):
@@ -1671,7 +1671,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `.gitattributes` and `info/exclude` still do), and `core.symlinks=false` and
   `core.protectNTFS=true` whatever the repository sets (a new worktree's checkout writes a committed
   link as a file holding its target, so Git for Windows never looks a `\\host\share` target up),
-  submodules ignored, 10s timeout, 2 at a time, and 1 at a time per root except a write; a
+  submodules ignored, 10s timeout, 2 at a time (a heavy command of a view-only client waits rather
+  than take the last free slot, `waitSlot`, so view-only devices cannot hold both), and 1 at a
+  time per root except a write; a
   `tryOnly` call (the overview's status, blame) answers busy while its root runs another, as when it
   would take the last slot (a command that writes the index runs under the
   same `-c` overrides but another timeout and cancellation: Staging and discarding a change); a call
@@ -1702,7 +1704,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   (PNG/JPEG header, a GIF's largest frame with its offset, a WebP's first chunk; 413
   `too_many_pixels`), else 415 `not_image`, a Git LFS pointer 415
   `lfs_pointer`, a sensitive name without `reveal=1` 403 `sensitive`. 4 at a time server-wide
-  (429 `busy`), of which a view-only client never takes the last free one (`takeRawSlot`;
+  (429 `busy`), of which a view-only client never takes the last free one (`takeRawSlot`, through `takeSlot`;
   downloads and hashes, full only, share them), 2-minute write deadline, `Cross-Origin-Resource-Policy: same-origin`,
   `Cache-Control: no-store`; an SVG also gets a second CSP
   (`sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:`) and
@@ -2251,7 +2253,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   (`skipped.binary`), not UTF-8 → `skipped.binary`. Caps: 2000 matching lines (`truncated`), 100
   per file (`more`), 256 MiB read and 5 s from the scan's start, kept 500 ms short of the
   request deadline (`incomplete`: answered with what was found, never an empty body), 2 scans
-  server-wide without waiting (429 `busy`), 4 workers at most 8 files ahead of the merge.
+  server-wide without waiting (429 `busy`; a view-only client never takes the last free one,
+  `takeSlot`), 4 workers at most 8 files ahead of the merge.
   A client that leaves gets nothing written; the response ends once every worker has (each
   stops at its next line, or when a read returns), and the slot is freed after that. No git runs beyond Find's `ls-files`. Matches are sent as a window
   of 240 runes of the line with UTF-16 ranges; Go's `\b` is ASCII only
@@ -3165,7 +3168,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   answer headers in `machineResponseKeep` (content type, length, disposition, encoding and range,
   caching and validators, `Vary`, `Allow`, `Retry-After`, `Date` and `nosniff`; never the machine's
   own CSP, whose `report-uri`/`report-to` would send this origin's violation reports to a host it names,
-  replaced by the sandbox policy; on a 101 only the WebSocket upgrade headers): an allow list, since every header a
+  replaced by the sandbox policy; on a 101 only the WebSocket upgrade headers; a 2xx of `files/raw` gets the
+  type this server's own `files/raw` would send, parameters dropped, else `application/octet-stream`,
+  `confineMachineImageType`): an allow list, since every header a
   deny list kept missing could act on this origin (`Set-Cookie`, `Service-Worker-Allowed`,
   `Clear-Site-Data`, `NEL`/`Report-To` sending later requests' URLs to the machine's collector,
   `WWW-Authenticate` asking for a password in this origin's name) or navigate the tab (`Refresh`,
@@ -3271,7 +3276,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
 - **Content-Security-Policy** (`server/security_headers.go`): on every response, `script-src 'self'`
   plus the `sha256` of the inline theme script in the served `index.html` (hashed at startup,
   so a changed `TERMOTE_PWA_DIR` page needs a restart), `style-src 'self' 'unsafe-inline'`,
-  `img-src 'self' data: blob:` (`blob:`: images the PWA read from `files/raw`; an SVG is shown as a `data:` URL, never a `blob:` one, which opened in a tab would be a document of this origin), `connect-src 'self'` + `ws://`/`wss://` of the request's `Host` (a
+  `img-src 'self' data: blob:` (`blob:`: images the PWA read from `files/raw`; an SVG is shown as a `data:` URL, never a `blob:` one, which opened in a tab would be a document of this origin: `imageSource` in `pwa/src/hooks/use-image-blob.ts` never takes the response's type for a `blob:` URL, which gets the raster type the first bytes show, else `application/octet-stream`, and treats as SVG what has no raster signature and is typed SVG (MIME essence), named `.svg` or starts with `<`), `connect-src 'self'` + `ws://`/`wss://` of the request's `Host` (a
   name or IPv4) + `https://api.github.com`, `worker-src`/`manifest-src 'self'`,
   `object-src 'none'`, `base-uri`/`form-action 'self'`, `frame-ancestors 'none'`; plus
   `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`.

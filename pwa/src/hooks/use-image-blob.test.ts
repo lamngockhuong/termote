@@ -25,7 +25,11 @@ function pending() {
   return { p, resolve, reject }
 }
 
-const blob = (s = 'png') => new Blob([s], { type: 'image/png' })
+// A PNG's signature, then s
+const PNG_SIGNATURE = new Uint8Array([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+])
+const blob = (s = 'png') => new Blob([PNG_SIGNATURE, s], { type: 'image/png' })
 const signalOf = (call: number) => mockImage.mock.calls[call][3] as AbortSignal
 
 let made = 0
@@ -66,6 +70,57 @@ describe('useImageBlob', () => {
     expect(URL.createObjectURL).not.toHaveBeenCalled()
     unmount()
     expect(URL.revokeObjectURL).not.toHaveBeenCalled()
+  })
+
+  // The response's type comes from the server, or a machine in Machines:
+  // no type it sends makes an SVG a blob: URL
+  it.each([
+    ['a parameter', 'image/svg+xml; charset=utf-8', 'a.svg'],
+    ['upper case', 'IMAGE/SVG+XML', 'a.svg'],
+    ['a raster type, by its name', 'image/png', 'a.SVG'],
+    ['a raster type, by its bytes', 'image/png', 'a.png'],
+    ['no type', '', 'a.png'],
+  ])('reads an SVG typed with %s into a data: URL', async (_, type, path) => {
+    const svg =
+      '\n<svg xmlns="http://www.w3.org/2000/svg"><script>x()</script></svg>'
+    mockImage.mockResolvedValue(new Blob([svg], { type }))
+    const { result } = hook({ req: { path }, reloadKey: '' })
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    const state = result.current as Extract<ImageState, { status: 'ready' }>
+    expect(state.url).toMatch(/^data:image\/svg\+xml;base64,/)
+    expect(state.type).toBe('image/svg+xml')
+    expect(URL.createObjectURL).not.toHaveBeenCalled()
+  })
+
+  it('reads untyped SVG bytes after a byte order mark into a data: URL', async () => {
+    const bom = new Uint8Array([0xef, 0xbb, 0xbf])
+    mockImage.mockResolvedValue(new Blob([bom, '<svg/>']))
+    const { result } = hook({ req: { path: 'a.png' }, reloadKey: '' })
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    expect(result.current).toMatchObject({ type: 'image/svg+xml' })
+    expect(URL.createObjectURL).not.toHaveBeenCalled()
+  })
+
+  // A blob: URL is a document of this origin when opened in a tab: its
+  // type is the raster type the bytes show, else none a browser renders
+  it.each([
+    [
+      'a raster typed as SVG',
+      new Blob([PNG_SIGNATURE, 'x'], { type: 'image/svg+xml; charset=utf-8' }),
+      'image/png',
+    ],
+    [
+      'no image',
+      new Blob(['hi'], { type: 'text/html' }),
+      'application/octet-stream',
+    ],
+  ])('gives the blob: URL of %s a fixed type', async (_, made, want) => {
+    mockImage.mockResolvedValue(made)
+    const { result } = hook({ req: { path: 'a.png' }, reloadKey: '' })
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    const created = vi.mocked(URL.createObjectURL).mock.calls[0][0] as Blob
+    expect(created.type).toBe(want)
+    expect(result.current).toMatchObject({ url: 'blob:u1', type: want })
   })
 
   it('reports an SVG that cannot be read into a data: URL', async () => {
@@ -125,7 +180,7 @@ describe('useImageBlob', () => {
     expect(result.current).toEqual({
       status: 'ready',
       url: 'blob:u1',
-      size: 5,
+      size: 13,
       type: 'image/png',
       stale: false,
     })
@@ -156,18 +211,21 @@ describe('useImageBlob', () => {
       req: { path: 'a.png' },
       reloadKey: '1',
     })
-    await act(async () => first.resolve(blob()))
+    first.resolve(blob())
+    await waitFor(() => expect(result.current.status).toBe('ready'))
     rerender({ req: { path: 'a.png' }, reloadKey: '2' })
     expect(result.current).toEqual({
       status: 'ready',
       url: 'blob:u1',
-      size: 3,
+      size: 11,
       type: 'image/png',
       stale: true,
     })
     expect(URL.revokeObjectURL).not.toHaveBeenCalled()
-    await act(async () => second.resolve(blob()))
-    expect(result.current).toMatchObject({ url: 'blob:u2', stale: false })
+    second.resolve(blob())
+    await waitFor(() =>
+      expect(result.current).toMatchObject({ url: 'blob:u2', stale: false }),
+    )
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:u1')
     expect(URL.revokeObjectURL).not.toHaveBeenCalledWith('blob:u2')
   })

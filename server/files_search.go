@@ -256,13 +256,12 @@ func (f *filesAPI) handleSearch(w http.ResponseWriter, r *http.Request) {
 		}
 		list = lists[0]
 	}
-	select {
-	case f.searchSlots <- struct{}{}:
-		defer func() { <-f.searchSlots }()
-	default:
+	// A view-only client never holds the last slot (takeSlot).
+	if !takeSlot(f.searchSlots, isViewOnly(r)) {
 		f.error(w, "files search", errSearchBusy)
 		return
 	}
+	defer func() { <-f.searchSlots }()
 	res, wait, err := f.searchList(r.Context(), searchDeadline(req.ctx, time.Now()), req, list, in)
 	// The response ends once every worker has: each stops at its next line
 	// (one search of at most searchMaxLine bytes) or once its read returns.

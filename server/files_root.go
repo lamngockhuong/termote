@@ -494,9 +494,9 @@ func (g *gitRunner) exec(ctx context.Context, c gitCall, o repoOverrides, args .
 				return nil, false, errGitTimeout
 			}
 		}
-		select {
-		case g.sem <- struct{}{}:
-		case <-wait.Done():
+		// A view-only client's command never takes the last free slot
+		// (waitSlot): it waits for another.
+		if !waitSlot(wait, g.sem, requestRole(ctx) == roleView) {
 			return nil, false, errGitTimeout
 		}
 		defer func() { <-g.sem }()

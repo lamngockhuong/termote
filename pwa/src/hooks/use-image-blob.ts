@@ -16,6 +16,70 @@ export type ImageState =
   | { status: 'error'; error: unknown }
 
 const SVG_TYPE = 'image/svg+xml'
+// The type of a blob: URL whose bytes are no image this page knows: an
+// <img> still draws it, a tab opened on it downloads it
+const OPAQUE_TYPE = 'application/octet-stream'
+
+// Leading bytes of the raster types files/raw serves
+const RASTER_MAGIC: { type: string; at: number; bytes: number[] }[] = [
+  {
+    type: 'image/png',
+    at: 0,
+    bytes: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+  },
+  { type: 'image/jpeg', at: 0, bytes: [0xff, 0xd8, 0xff] },
+  { type: 'image/gif', at: 0, bytes: [0x47, 0x49, 0x46, 0x38] }, // GIF8
+  { type: 'image/webp', at: 8, bytes: [0x57, 0x45, 0x42, 0x50] }, // RIFF....WEBP
+]
+const HEAD_SIZE = 512
+
+// The MIME essence of a Content-Type: lower case, parameters dropped
+export function mimeEssence(type: string): string {
+  return type.split(';', 1)[0].trim().toLowerCase()
+}
+
+async function readHead(blob: Blob): Promise<Uint8Array> {
+  return new Uint8Array(await blob.slice(0, HEAD_SIZE).arrayBuffer())
+}
+
+function rasterTypeOf(head: Uint8Array): string | undefined {
+  return RASTER_MAGIC.find(({ at, bytes }) =>
+    bytes.every((b, i) => head[at + i] === b),
+  )?.type
+}
+
+// Whether head starts like markup: a BOM and white space, then "<"
+function looksLikeMarkup(head: Uint8Array): boolean {
+  let i = head[0] === 0xef && head[1] === 0xbb && head[2] === 0xbf ? 3 : 0
+  while (i < head.length && [0x20, 0x09, 0x0a, 0x0d].includes(head[i])) i++
+  return head[i] === 0x3c
+}
+
+// How an image read is shown. The response's type is a hint and never
+// the type of a blob: URL: a machine in Machines sets it, and a blob: URL
+// of a document type (SVG, HTML, XML), opened in a tab of its own, is a
+// document of this origin whose scripts run there. An SVG (by its type,
+// its name or its bytes) becomes a data: URL; any other image a blob: URL
+// of the raster type its bytes show, else of no document type at all.
+export async function imageSource(
+  blob: Blob,
+  path: string,
+): Promise<{ url: string; type: string } | { blob: Blob; type: string }> {
+  const head = await readHead(blob)
+  const raster = rasterTypeOf(head)
+  if (
+    !raster &&
+    (mimeEssence(blob.type) === SVG_TYPE ||
+      path.toLowerCase().endsWith('.svg') ||
+      looksLikeMarkup(head))
+  )
+    return {
+      url: await readDataUrl(new Blob([blob], { type: SVG_TYPE })),
+      type: SVG_TYPE,
+    }
+  const type = raster ?? OPAQUE_TYPE
+  return { blob: new Blob([blob], { type }), type }
+}
 
 // A data: URL of blob, for an SVG: opened in a tab of its own, a blob: SVG
 // is a document of this origin whose scripts run there (the server's
@@ -32,7 +96,7 @@ function readDataUrl(blob: Blob): Promise<string> {
 
 // The image as a blob: URL (the page's CSP allows img-src blob:, and only
 // this page can make one of its own), an SVG as a data: URL (img-src
-// data:). req null reads nothing. The request is
+// data:), as imageSource decides. req null reads nothing. The request is
 // compared by value, so a new object with the same fields reads nothing
 // again; reloadKey changing does. A read again keeps the earlier image until
 // the new one is ready, and every URL made is revoked once replaced or
@@ -66,19 +130,19 @@ export function useImageBlob(
       { root, reveal, side, staged, orig },
       ctl.signal,
     )
-      .then(async (blob) => {
-        const url = blob.type === SVG_TYPE ? await readDataUrl(blob) : undefined
-        return { blob, url }
-      })
+      .then(async (blob) => ({
+        size: blob.size,
+        src: await imageSource(blob, path),
+      }))
       .then(
-        ({ blob, url }) => {
+        ({ size, src }) => {
           // A blob that arrives after cleanup makes no URL
           if (ctl.signal.aborted) return
           setState({
             status: 'ready',
-            url: url ?? URL.createObjectURL(blob),
-            size: blob.size,
-            type: blob.type,
+            url: 'url' in src ? src.url : URL.createObjectURL(src.blob),
+            size,
+            type: src.type,
             stale: false,
           })
         },

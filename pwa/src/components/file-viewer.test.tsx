@@ -600,6 +600,7 @@ describe('FileViewer: images', () => {
       size: 6,
       text: '<svg/>',
     })
+    mockImage.mockResolvedValue(new Blob(['<svg/>'], { type: 'image/svg+xml' }))
     const p = show({ path: 'logo.svg' })
     expect(await screen.findByTestId('code-block')).toHaveTextContent('<svg/>')
     expect(mockImage).not.toHaveBeenCalled()
@@ -607,7 +608,11 @@ describe('FileViewer: images', () => {
     expect(toggle).toHaveAttribute('aria-pressed', 'false')
 
     fireEvent.click(toggle)
-    expect(await screen.findByRole('img')).toHaveAttribute('src', 'blob:u1')
+    // A data: URL, never a blob: one (a document of this origin in a tab)
+    expect(await screen.findByRole('img')).toHaveAttribute(
+      'src',
+      `data:image/svg+xml;base64,${btoa('<svg/>')}`,
+    )
     expect(toggle).toHaveAttribute('aria-pressed', 'true')
     expect(
       JSON.parse(localStorage.getItem('termote-settings') ?? '{}'),
@@ -619,7 +624,7 @@ describe('FileViewer: images', () => {
     expect(await screen.findByRole('img')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Image' }))
     expect(await screen.findByTestId('code-block')).toBeInTheDocument()
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:u2')
+    expect(URL.createObjectURL).not.toHaveBeenCalled()
   })
 })
 
