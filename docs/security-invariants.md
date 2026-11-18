@@ -3168,7 +3168,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   answer headers in `machineResponseKeep` (content type, length, disposition, encoding and range,
   caching and validators, `Vary`, `Allow`, `Retry-After`, `Date` and `nosniff`; never the machine's
   own CSP, whose `report-uri`/`report-to` would send this origin's violation reports to a host it names,
-  replaced by the sandbox policy; on a 101 only the WebSocket upgrade headers): an allow list, since every header a
+  replaced by the sandbox policy; on a 101 only the WebSocket upgrade headers; a 2xx of `files/raw` gets the
+  type this server's own `files/raw` would send, parameters dropped, else `application/octet-stream`,
+  `confineMachineImageType`): an allow list, since every header a
   deny list kept missing could act on this origin (`Set-Cookie`, `Service-Worker-Allowed`,
   `Clear-Site-Data`, `NEL`/`Report-To` sending later requests' URLs to the machine's collector,
   `WWW-Authenticate` asking for a password in this origin's name) or navigate the tab (`Refresh`,
@@ -3274,7 +3276,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
 - **Content-Security-Policy** (`server/security_headers.go`): on every response, `script-src 'self'`
   plus the `sha256` of the inline theme script in the served `index.html` (hashed at startup,
   so a changed `TERMOTE_PWA_DIR` page needs a restart), `style-src 'self' 'unsafe-inline'`,
-  `img-src 'self' data: blob:` (`blob:`: images the PWA read from `files/raw`; an SVG is shown as a `data:` URL, never a `blob:` one, which opened in a tab would be a document of this origin), `connect-src 'self'` + `ws://`/`wss://` of the request's `Host` (a
+  `img-src 'self' data: blob:` (`blob:`: images the PWA read from `files/raw`; an SVG is shown as a `data:` URL, never a `blob:` one, which opened in a tab would be a document of this origin: `imageSource` in `pwa/src/hooks/use-image-blob.ts` never takes the response's type for a `blob:` URL, which gets the raster type the first bytes show, else `application/octet-stream`, and treats as SVG what has no raster signature and is typed SVG (MIME essence), named `.svg` or starts with `<`), `connect-src 'self'` + `ws://`/`wss://` of the request's `Host` (a
   name or IPv4) + `https://api.github.com`, `worker-src`/`manifest-src 'self'`,
   `object-src 'none'`, `base-uri`/`form-action 'self'`, `frame-ancestors 'none'`; plus
   `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`.

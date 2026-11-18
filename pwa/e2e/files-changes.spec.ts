@@ -215,6 +215,30 @@ test.describe('files and changes views', () => {
     await expect.poll(async () => (await img.boundingBox())?.width ?? 0).toBeGreaterThan(100)
   })
 
+  // A machine in Machines sets the type of the answer: a parameter on it
+  // never makes the SVG a blob: URL, a document of this origin when opened
+  // in a tab of its own
+  test('an SVG typed with a parameter still shows as a data: URL', async ({ page }) => {
+    writeFileSync(path.join(repo, 'typed.svg'), SVG)
+    await page.route(/\/files\/raw\?/, async (route) => {
+      const response = await route.fetch()
+      await route.fulfill({
+        response,
+        headers: { ...response.headers(), 'content-type': 'image/svg+xml; charset=utf-8' },
+      })
+    })
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.goto(`${link}?view=files`)
+
+    const panel = page.getByRole('complementary', { name: 'Files' })
+    await panel.getByRole('treeitem', { name: 'typed.svg' }).click()
+    await panel.getByRole('button', { name: 'Image', exact: true }).click()
+    const img = panel.locator('img[src^="data:image/svg+xml;base64,"]')
+    await expect(img).toHaveCount(1)
+    await expect(panel.locator('img[src^="blob:"]')).toHaveCount(0)
+    await expect.poll(() => decodedWidth(img)).toBeGreaterThan(0)
+  })
+
   test('edits a CRLF Markdown file, keeping every other byte', async ({ page }) => {
     mkdirSync(path.join(repo, 'docs'), { recursive: true })
     const rec = path.join(repo, 'docs/rec.md')

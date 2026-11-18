@@ -383,3 +383,36 @@ func TestMachineTrailersDropped(t *testing.T) {
 		t.Errorf("body %q trailer %v header %v", body, resp.Trailer, resp.Header)
 	}
 }
+
+// An image a machine serves keeps one of the types files/raw serves,
+// without parameters, else none a browser renders: a page shows it only as
+// what this server would have sent.
+func TestConfineMachineImageType(t *testing.T) {
+	for _, c := range []struct {
+		path, in, want string
+		status         int
+	}{
+		{"/api/mux/panes/%1/files/raw", "image/svg+xml; charset=utf-8", "image/svg+xml", 200},
+		{"/api/mux/panes/%1/files/raw", "IMAGE/PNG", "image/png", 200},
+		{"/api/mux/panes/%1/files/raw", "text/html", "application/octet-stream", 200},
+		{"/api/mux/panes/%1/files/raw", "", "application/octet-stream", 200},
+		{"/api/mux/panes/%1/files/raw", "application/json; charset=utf-8", "application/json; charset=utf-8", 429},
+		{"/api/mux/panes/%1/files/content", "application/json; charset=utf-8", "application/json; charset=utf-8", 200},
+	} {
+		req := &http.Request{URL: &url.URL{Path: c.path}}
+		resp := &http.Response{StatusCode: c.status, Header: http.Header{}, Request: req}
+		if c.in != "" {
+			resp.Header.Set("Content-Type", c.in)
+		}
+		confineMachineResponse(resp)
+		if got := resp.Header.Get("Content-Type"); got != c.want {
+			t.Errorf("%s %d %q = %q, want %q", c.path, c.status, c.in, got, c.want)
+		}
+	}
+	// A response without its request (none in tests elsewhere) is left alone
+	resp := &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": {"text/html"}}}
+	confineMachineResponse(resp)
+	if resp.Header.Get("Content-Type") != "text/html" {
+		t.Errorf("no request = %q", resp.Header.Get("Content-Type"))
+	}
+}
