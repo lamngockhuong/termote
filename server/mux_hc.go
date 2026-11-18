@@ -336,3 +336,7 @@ func (m *hcMux) conn(ctx context.Context) (*hcConn, error) {
 
 // errHcUnavailable: the core does not answer (stopped, or restarting).
 var errHcUnavailable = &codedError{"unavailable", "herdr-core is not running", 503}
+
+// errHcRefused: herdr-core's socket or pipe is served by another OS user, so
+// termote neither uses it nor starts the core (hcCoreRunning).
+var errHcRefused = &codedError{"unavailable", "herdr-core's socket is served by another user", 503}

@@ -45,7 +45,7 @@ func TestMain(m *testing.M) {
 	hcConnectStart = func(context.Context, string, []string) (*hcConn, error) {
 		return nil, errors.New("tests never start hc")
 	}
-	hcCoreRunning = func(context.Context, []string) bool { return false }
+	hcCoreRunning = func(context.Context, []string) (bool, error) { return false, nil }
 	// Nor reach the user's own OpenCode service: the OpenCode tests point
 	// the client at a fake one.
 	opencodeStateDir = func() string { return "" }

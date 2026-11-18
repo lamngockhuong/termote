@@ -248,8 +248,19 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
     `config.toml` (`hcConfigSocket`: a regular file of at most 64 KiB, opened without blocking, the key
     matched exactly, a file that does not decode ignored), else
     `\\.\pipe\herdr-core-<USERNAME's ASCII letters and digits>-<session>.sock` (`hcDefaultEndpoint`),
-    accepting a connection; a Windows pipe counts only when its server runs as this user
-    (`dialHerdr`), and a probe starts nothing. A
+    accepting a connection, and a probe starts nothing. The endpoint counts only when this user
+    serves it (`dialHerdr`, as for Herdr): a Windows pipe whose server runs as another user, or on
+    Linux and macOS a Unix socket whose peer (`SO_PEERCRED`, `LOCAL_PEERCRED`) is neither this user
+    nor root (`HC_SOCKET` or `socket` in `config.toml` in a shared directory, or the pipe name every
+    user shares, made first by another user), is never treated as missing: `hcCoreRunning` returns
+    the refusal, and `hc connect` is neither spawned nor started for it; the client gets 503
+    `unavailable` (`errHcRefused`, no OS text) and serve writes an `audit: hc socket refused` line
+    (once per reason). hc connect dials the endpoint itself, so once it answers its hello the probe
+    runs again before the connection is used; a refusal then closes it (ending `hc connect`)
+    before termote sends anything through it. Left open: an endpoint swapped between hc's own dial
+    and that second probe so that the two land on different servers (a pipe instance of another
+    user under the same name, or a socket file replaced in a directory both users write), since
+    termote cannot see whom hc connect reached. A
     core that stops between the probe and the spawn is started by `hc connect`: an accepted gap.
     A failed start backs off like Herdr's. A core termote starts inherits the service's
     environment, and the terminals herdr-app opens later inherit it from the core;

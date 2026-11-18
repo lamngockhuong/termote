@@ -75,7 +75,7 @@ func TestHcCoreRunningProbe(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("named pipes: the probe uses dialHerdr, tested with herdr")
 	}
-	probe := hcCoreRunningDefault
+	probe := func(ctx context.Context, env []string) bool { return hcProbeRunning(t, ctx, env) }
 	state := t.TempDir()
 	env := []string{"XDG_STATE_HOME=" + state, "HC_SESSION=s"}
 	if probe(context.Background(), env) {
@@ -133,7 +133,7 @@ func shortTempDir(t *testing.T) string {
 func fakeHcStarts(t *testing.T, running *atomic.Bool, fail *atomic.Bool) (*hcClient, *atomic.Int32) {
 	var starts atomic.Int32
 	c := newHcClient("/usr/bin/hc", nil)
-	c.running = func(context.Context, []string) bool { return running.Load() }
+	c.running = func(context.Context, []string) (bool, error) { return running.Load(), nil }
 	c.dialBackoff = 0
 	c.connect = func(ctx context.Context, bin string, env []string) (*hcConn, error) {
 		starts.Add(1)
@@ -346,4 +346,49 @@ func (s *hcStarter) setGrace(d time.Duration) {
 	s.mu.Lock()
 	s.grace = d
 	s.mu.Unlock()
+}
+
+// hcProbeRunning is hcCoreRunningDefault for an endpoint this user serves,
+// or none: a refusal fails the test.
+func hcProbeRunning(t *testing.T, ctx context.Context, env []string) bool {
+	t.Helper()
+	running, err := hcCoreRunningDefault(ctx, env)
+	if err != nil {
+		t.Fatalf("probe refused: %v", err)
+	}
+	return running
+}
+
+// hc connect dials the core itself after the probe let it run: a socket
+// another user made in between is refused once it answers, and its
+// connection closed before anything is sent through it.
+func TestHcClientRefusesASocketTakenDuringConnect(t *testing.T) {
+	logs := captureSyncLog(t)
+	var refused atomic.Bool
+	c := newHcClient("/usr/bin/hc", nil)
+	c.running = func(context.Context, []string) (bool, error) {
+		if refused.Load() {
+			return false, &herdrPipeUserError{Err: errors.New("the socket is served by uid 4242")}
+		}
+		return true, nil
+	}
+	c.dialBackoff = 0
+	var conn *hcConn
+	c.connect = func(context.Context, string, []string) (*hcConn, error) {
+		_, conn = startFakeHc(t, nil)
+		refused.Store(true)
+		return conn, nil
+	}
+	if _, err := c.get(context.Background(), true); !errors.Is(err, errHcRefused) {
+		t.Fatalf("err = %v", err)
+	}
+	if conn == nil || conn.alive() {
+		t.Fatal("the refused connection stays open")
+	}
+	if cur, _ := c.current(); cur != nil {
+		t.Fatal("the refused connection is in use")
+	}
+	if !strings.Contains(logs.String(), "audit: hc socket refused reason=") {
+		t.Fatalf("no audit line:\n%s", logs.String())
+	}
 }

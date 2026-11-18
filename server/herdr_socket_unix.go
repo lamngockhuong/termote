@@ -53,7 +53,7 @@ func dialHerdr(ctx context.Context, path string) (net.Conn, error) {
 	}
 	if uid != os.Getuid() && uid != 0 {
 		conn.Close()
-		return nil, &herdrPipeUserError{fmt.Errorf("the herdr socket is served by uid %d", uid)}
+		return nil, &herdrPipeUserError{fmt.Errorf("the socket is served by uid %d", uid)}
 	}
 	return conn, nil
 }

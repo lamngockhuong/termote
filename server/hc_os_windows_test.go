@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -41,7 +42,7 @@ func TestHcCoreRunningProbeWindows(t *testing.T) {
 	env := []string{"XDG_STATE_HOME=" + state, "HC_SESSION=" + session, "USERNAME=te.st_User-1"}
 	pipe := `\\.\pipe\herdr-core-testUser1-` + session + ".sock"
 
-	if hcCoreRunningDefault(context.Background(), env) {
+	if hcProbeRunning(t, context.Background(), env) {
 		t.Fatal("running with no pipe and no core.lock")
 	}
 	dir := filepath.Join(state, "herdr-core", session)
@@ -59,7 +60,7 @@ func TestHcCoreRunningProbeWindows(t *testing.T) {
 	if _, err := os.ReadFile(filepath.Join(dir, "core.lock")); err == nil {
 		t.Fatal("core.lock readable while locked: the test does not hold the core's lock")
 	}
-	if hcCoreRunningDefault(context.Background(), env) {
+	if hcProbeRunning(t, context.Background(), env) {
 		t.Fatal("running with a locked core.lock and no pipe")
 	}
 
@@ -74,18 +75,50 @@ func TestHcCoreRunningProbeWindows(t *testing.T) {
 			c.Close()
 		}
 	}()
-	if !hcCoreRunningDefault(context.Background(), env) {
+	if !hcProbeRunning(t, context.Background(), env) {
 		t.Fatal("core on the default pipe not found while core.lock is locked")
 	}
 	// HC_SOCKET still wins over the default pipe.
-	if hcCoreRunningDefault(context.Background(), append(env, `HC_SOCKET=\\.\pipe\`+session+".other")) {
+	if hcProbeRunning(t, context.Background(), append(env, `HC_SOCKET=\\.\pipe\`+session+".other")) {
 		t.Fatal("default pipe used despite HC_SOCKET")
 	}
 	// Another user's USERNAME names another pipe.
-	if hcCoreRunningDefault(context.Background(), append(env, "USERNAME=someoneelse")) {
+	if hcProbeRunning(t, context.Background(), append(env, "USERNAME=someoneelse")) {
 		t.Fatal("pipe found under another USERNAME")
 	}
 }
 
 // hcTestListenPipe listens on the named pipe name, as a core would.
 func hcTestListenPipe(t *testing.T, name string) net.Listener { return listenHerdrTest(t, name) }
+
+// The core's pipe is refused when another user serves it (a stubbed
+// expected user: the test machine has one user), never taken as a core that
+// is not running, which would start hc connect on it.
+func TestHcCoreRunningRefusesAnotherUsersPipe(t *testing.T) {
+	pipe := fmt.Sprintf(`\\.\pipe\termote-test-hc-%d-%d.sock`, os.Getpid(), time.Now().UnixNano())
+	ln := hcTestListenPipe(t, pipe)
+	defer ln.Close()
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			c.Close()
+		}
+	}()
+	env := []string{"HC_SOCKET=" + pipe}
+	if !hcProbeRunning(t, context.Background(), env) {
+		t.Fatal("own pipe not found")
+	}
+	old := herdrExpectedUser
+	t.Cleanup(func() { herdrExpectedUser = old })
+	herdrExpectedUser = func() (*windows.SID, error) {
+		return windows.CreateWellKnownSid(windows.WinLocalSystemSid)
+	}
+	running, err := hcCoreRunningDefault(context.Background(), env)
+	var pe *herdrPipeUserError
+	if running || !errors.As(err, &pe) {
+		t.Fatalf("another user's pipe: running=%v err=%v", running, err)
+	}
+}
