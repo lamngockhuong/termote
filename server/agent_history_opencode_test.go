@@ -95,6 +95,23 @@ func TestOpencodeHistoryList(t *testing.T) {
 	if code, _, raw := listHistory(t, fx.h, "?agent=gemini"); code != 400 {
 		t.Errorf("gemini = %d %v", code, raw)
 	}
+	// A view-only client gets no title OpenCode's model wrote from the first
+	// message (a command template's shell output among it); the Claude Code
+	// and Codex titles stay.
+	rec := serve(fx.h, viewRequest("GET", "/api/mux/panes/0/agent/history", ""))
+	var view historyResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &view); rec.Code != 200 || err != nil {
+		t.Fatalf("view list = %d %s", rec.Code, rec.Body)
+	}
+	titled := map[string]int{}
+	for _, s := range view.Sessions {
+		if s.Title != "" {
+			titled[s.Agent]++
+		}
+	}
+	if titled["opencode"] != 0 || titled["claude"] != 1 || titled["codex"] != 1 {
+		t.Errorf("view titles = %v (%+v)", titled, view.Sessions)
+	}
 }
 
 // A service that does not run, or fails, lists no OpenCode session and

@@ -1098,7 +1098,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   exists) is the pane's root (`paneRootForRead`, as Files) or under it, compared without case on
   Windows and macOS; the dir name only narrows the scan. Only 64 KB at each end of a transcript
   (Codex: after the meta line) is read for the title (`custom-title`, then `ai-title` or the Codex
-  thread name, then the first prompt, never a note beside it such as a `!` command's output), branch and cwd; titles are one line of at most 200 bytes
+  thread name, then the first prompt, never a note beside it such as a `!` command's output; a view-only
+  client gets no OpenCode title, which its model writes from the first message, a command template's
+  shell output included: `viewHistoryTitles`), branch and cwd; titles are one line of at most 200 bytes
   without control or invisible characters. The reply holds the cwd relative to the root, never an
   absolute path; pages of 30 continue through a MAC'd cursor (`historyCursor`, the transcript
   cursors' key, a prefix of its own), a forged one is 400. Reads (list and transcript):
