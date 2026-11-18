@@ -586,7 +586,7 @@ func parseTmuxWindows(out string) []tmuxGroup {
 		isDefault := l.sessionName == tmuxSession
 		i, seen := at[l.sessionID]
 		if !seen {
-			g := tmuxGroup{Group: Group{ID: l.sessionID, Name: l.sessionName, Tabs: []Tab{}}, sessionID: l.sessionID}
+			g := tmuxGroup{Group: Group{ID: l.sessionID, Name: cleanLabel(l.sessionName), Tabs: []Tab{}}, sessionID: l.sessionID}
 			if isDefault {
 				g.ID = tmuxSession
 			}
@@ -608,7 +608,7 @@ func parseTmuxWindows(out string) []tmuxGroup {
 			pid = l.paneID
 		}
 		g := &groups[i]
-		g.Tabs = append(g.Tabs, Tab{ID: id, Key: key, Name: l.windowName, Active: l.active,
+		g.Tabs = append(g.Tabs, Tab{ID: id, Key: key, Name: cleanLabel(l.windowName), Active: l.active,
 			Panes: []Pane{{ID: pid, Active: true}}})
 		g.panes = append(g.panes, []tmuxPaneInfo{{index: -1, active: true, id: l.paneID, pid: l.panePID}})
 		g.windowIdx = append(g.windowIdx, l.index)

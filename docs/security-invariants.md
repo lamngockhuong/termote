@@ -615,7 +615,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   title read more than 2 s after the rename, a session rename or a restart of the server forgets
   it). Every name a backend reports (another process
   can set Herdr's label over its socket, or the tmux option) is `stripUnsafeRunes` and capped
-  at 64 bytes (`cleanPaneName`). Metadata is read only, never written by termote: Herdr's
+  at 64 bytes (`cleanPaneName`). So is every tab and group name (tmux window and session, Herdr tab
+  and workspace label, Zellij tab), which a pane's output can set through a terminal title, but
+  not trimmed (`cleanLabel`). Metadata is read only, never written by termote: Herdr's
   `panes[].tokens` and `workspaces[].tokens`, which any process that reaches Herdr's socket
   can report, go through `cleanMeta`: keys outside `^[A-Za-z0-9_-]{1,32}$` dropped, values
   `stripUnsafeRunes`, trimmed, cut to 64 runes, empty ones dropped, at most 8 per pane or
