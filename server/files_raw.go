@@ -212,16 +212,7 @@ func (f *filesAPI) handleRaw(w http.ResponseWriter, r *http.Request) {
 // one: the downloads and hashes of a full one share them. The caller gives
 // the slot back.
 func (f *filesAPI) takeRawSlot(r *http.Request) bool {
-	select {
-	case f.rawSlots <- struct{}{}:
-	default:
-		return false
-	}
-	if isViewOnly(r) && len(f.rawSlots) == cap(f.rawSlots) {
-		<-f.rawSlots
-		return false
-	}
-	return true
+	return takeSlot(f.rawSlots, isViewOnly(r))
 }
 
 // raw serves one image: the worktree file (Files), or with side one version

@@ -786,17 +786,18 @@ func (f *filesAPI) content(ctx context.Context, root filesRoot, p string, reveal
 		return nil, nil, err
 	}
 	hidden := sensitivePath(root.Root, rel) && !reveal
+	// A view-only client never holds the last large-read or decode slot
+	// (takeSlot).
+	viewOnly := requestRole(ctx) == roleView
 	large := func() error {
 		if hidden || release != nil {
 			return nil
 		}
-		select {
-		case f.largeReadSlots <- struct{}{}:
-			release = func() { <-f.largeReadSlots }
-			return nil
-		default:
+		if !takeSlot(f.largeReadSlots, viewOnly) {
 			return errLargeReadBusy
 		}
+		release = func() { <-f.largeReadSlots }
+		return nil
 	}
 	// Taken before the read by its size, and again after it for a file
 	// that grew in between
@@ -827,12 +828,10 @@ func (f *filesAPI) content(ctx context.Context, root filesRoot, p string, reveal
 	// A UTF-8 file is read as it was before encodings: no decode slot. Anything
 	// else is detected or decoded, a few at once.
 	if enc != encUTF8 && (enc != "" || !utf8.Valid(b)) {
-		select {
-		case f.decodeSlots <- struct{}{}:
-			defer func() { <-f.decodeSlots }()
-		default:
+		if !takeSlot(f.decodeSlots, viewOnly) {
 			return nil, release, errDecodeBusy
 		}
+		defer func() { <-f.decodeSlots }()
 	}
 	if enc == "" {
 		var ok bool
