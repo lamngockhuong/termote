@@ -992,7 +992,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   input, result or `detail`, whatever file, command or argument shape (an object, a JSON string, an
   array of paths, a symlink under an innocent name) it involves, and no result read apart from its
   call; no note either (the output of a command the user ran with `!`, of a slash command,
-  a hook's text; the command line the user typed is their words and stays), neither a `note` entry
+  a hook's text, an envelope Claude Code wraps whole in a tag termote does not know yet; the command line the user typed is their words and stays), neither a `note` entry
   nor a text part classified as one beside the user's words in a row of several blocks (the part's
   `note` flag, never sent); an entry left with no
   part is dropped. Nothing is decided per file, so a new tool of an agent is covered as it appears.
@@ -1098,7 +1098,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   exists) is the pane's root (`paneRootForRead`, as Files) or under it, compared without case on
   Windows and macOS; the dir name only narrows the scan. Only 64 KB at each end of a transcript
   (Codex: after the meta line) is read for the title (`custom-title`, then `ai-title` or the Codex
-  thread name, then the first prompt), branch and cwd; titles are one line of at most 200 bytes
+  thread name, then the first prompt, never a note beside it such as a `!` command's output), branch and cwd; titles are one line of at most 200 bytes
   without control or invisible characters. The reply holds the cwd relative to the root, never an
   absolute path; pages of 30 continue through a MAC'd cursor (`historyCursor`, the transcript
   cursors' key, a prefix of its own), a forged one is 400. Reads (list and transcript):

@@ -493,6 +493,12 @@ func classifyClaudeUserText(text string) (role, out string, ok bool) {
 		}
 		return "note", s, true
 	}
+	// An envelope this list does not know yet (a newer Claude Code's), whole
+	// from its tag to its end tag, is plumbing too, not the user's words: a
+	// note, kept as written, so a view-only client never reads what it holds.
+	if tag != "" && strings.HasSuffix(strings.TrimRight(t, " \t\r\n"), "</"+tag+">") {
+		return "note", strings.TrimSpace(t), true
+	}
 	text = stripPastedTags(text)
 	return "user", text, strings.TrimSpace(text) != ""
 }
