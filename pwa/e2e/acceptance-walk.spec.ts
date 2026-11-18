@@ -246,8 +246,9 @@ test.describe('acceptance: a working day without another editor', () => {
     await typeInEditor(md, '# Calc\n\n## Release plan\n\nShip on Friday.\n')
     await expect(files(page).getByTestId('markdown-preview').getByRole('heading', { name: 'Release plan' })).toBeVisible()
     await files(page).getByRole('button', { name: 'Save', exact: true }).click()
-    await expect(page.getByText('Saved', { exact: true })).toBeVisible()
-    expect(readFileSync(path.join(repo, 'README.md'), 'utf-8')).toContain('## Release plan')
+    // The file on disk, not the "Saved" toast: the save of format.js above
+    // shows one too, which may still be up when this save starts
+    await expect.poll(() => readFileSync(path.join(repo, 'README.md'), 'utf-8')).toContain('## Release plan')
   })
 
   test('3. review the agent diff: keep one hunk, drop one, comment and send', async ({ page }) => {
