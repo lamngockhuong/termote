@@ -86,6 +86,18 @@ func TestPsmuxPortsUnreadableDirOrFile(t *testing.T) {
 	}
 }
 
+// A data dir that cannot be found is unverified, never "no server": psmux
+// may find one, and its ports would go unchecked.
+func TestPsmuxGuardRefusesAnUnknownDataDir(t *testing.T) {
+	g := &psmuxGuard{
+		dir:   func() (string, error) { return "", errors.New("no profile") },
+		owner: func(int) (listenerOwner, error) { return listenerOwnerOf(0), nil },
+	}
+	if err := g.check(); !errors.Is(err, errPsmuxPortsUnverified) {
+		t.Errorf("unknown data dir = %v", err)
+	}
+}
+
 // On psmux, a tmux command and a terminal attach do not start while a
 // recorded port is another user's; tmux is not checked.
 func TestPsmuxCommandsRefusedOnATakenPort(t *testing.T) {
@@ -95,7 +107,7 @@ func TestPsmuxCommandsRefusedOnATakenPort(t *testing.T) {
 	}
 	orig, origPsmux := psmuxPorts, tmuxIsPsmux
 	t.Cleanup(func() { psmuxPorts, tmuxIsPsmux = orig, origPsmux })
-	psmuxPorts = &psmuxGuard{dir: func() string { return dir }, owner: func(int) (listenerOwner, error) { return listenerOtherOwner, nil }}
+	psmuxPorts = &psmuxGuard{dir: func() (string, error) { return dir, nil }, owner: func(int) (listenerOwner, error) { return listenerOtherOwner, nil }}
 	tmuxIsPsmux = true
 	if err := tmuxCmd(context.Background(), "list-sessions").Run(); !errors.Is(err, errPsmuxPortTaken) {
 		t.Errorf("psmux command = %v", err)

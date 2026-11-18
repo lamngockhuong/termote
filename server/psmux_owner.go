@@ -49,7 +49,7 @@ const psmuxPortFileMax = 32
 
 // psmuxGuard caches the last check. dir and owner are replaced by tests.
 type psmuxGuard struct {
-	dir   func() string
+	dir   func() (string, error)
 	owner func(port int) (listenerOwner, error)
 	mu    sync.Mutex
 	at    time.Time
@@ -67,7 +67,12 @@ func (g *psmuxGuard) check() error {
 	if !g.at.IsZero() && time.Since(g.at) < psmuxCheckEvery {
 		return g.err
 	}
-	err := psmuxPortsOwned(g.dir(), g.owner)
+	dir, err := g.dir()
+	if err != nil {
+		err = &psmuxPortError{file: "(the user's profile directory)", unread: err}
+	} else {
+		err = psmuxPortsOwned(dir, g.owner)
+	}
 	if err != nil && (g.err == nil || g.err.Error() != err.Error()) {
 		log.Printf("psmux: %v; not running psmux meanwhile", err)
 	}

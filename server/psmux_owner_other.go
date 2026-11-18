@@ -6,4 +6,4 @@ package main
 func psmuxPortOwner(port int) (listenerOwner, error) { return listenerOwnerOf(port), nil }
 
 // psmuxDataDir: psmux runs on Windows only.
-func psmuxDataDir() string { return "" }
+func psmuxDataDir() (string, error) { return "", nil }

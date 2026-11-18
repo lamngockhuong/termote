@@ -1532,7 +1532,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   listened on by a process of another user than the server's, SYSTEM, LOCAL SERVICE or NETWORK
   SERVICE (`listenerOwnersOn`; a process whose token cannot be read counts as another
   user's); a free port or a missing data dir passes. What cannot be read refuses too (503
-  `psmux_ports_unverified`, the reason in the log): a data dir that exists but cannot be listed, a
+  `psmux_ports_unverified`, the reason in the log): a profile directory that cannot be read (with no
+  `PSMUX_DATA_DIR`; psmux may still find one), a data dir that exists but cannot be listed, a
   `.port` file, the TCP table, or the server's own account while something listens on the port; `tcpTable` reads again with a buffer of what
   the table last needed plus half and 64 rows more, up to 5 times, so sockets opened between reads
   cannot make it give up and be taken for nothing listening. Not covered: a process that takes the
