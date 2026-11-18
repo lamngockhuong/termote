@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.29.1](https://github.com/lamngockhuong/termote/compare/v2.29.0...v2.29.1) (2026-11-18)
+
+
+### Bug Fixes
+
+* keep SVG images off blob: URLs and the last Files slots from view-only devices ([#883](https://github.com/lamngockhuong/termote/issues/883)) ([7518862](https://github.com/lamngockhuong/termote/commit/7518862e2b8c81fea9bf527f4c590eab8389eb2f))
+* refuse a herdr-core socket another user serves ([#885](https://github.com/lamngockhuong/termote/issues/885)) ([5bb83cf](https://github.com/lamngockhuong/termote/commit/5bb83cfdbf87882111e371a14b99673cf22ac81d))
+* **server:** refuse a herdr-core socket another user serves ([5bb83cf](https://github.com/lamngockhuong/termote/commit/5bb83cfdbf87882111e371a14b99673cf22ac81d))
+
 ## [2.29.0](https://github.com/lamngockhuong/termote/compare/v2.28.0...v2.29.0) (2026-11-18)
 
 
