@@ -20,3 +20,11 @@ overrides:
   glob@>=9.0.0 <14.0.2: ^14.0.2
   minimatch@>=7.0.0 <11.0.1: ^11.0.1
   postcss-selector-parser@<6.1.5: ^6.1.5
+
+# picomatch has no patched release for this ReDoS. In production dependencies it
+# is reached only through the website's static build (Astro, unstorage), with
+# patterns from this repository, never from a user. Remove once picomatch ships
+# a fix.
+auditConfig:
+  ignoreGhsas:
+    - GHSA-fc5q-39xc-vjpf
