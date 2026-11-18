@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { PERSIST_TTL, signedOut, sweepExpired } from './files-persist'
 import {
   headerTexts,
   readTablePrefs,
@@ -39,12 +40,13 @@ describe('table prefs', () => {
   })
 
   it('reads a key named like an Object property as its own entry only', () => {
+    const at = Date.now()
     expect(readTablePrefs('constructor')).toEqual({})
     expect(readTablePrefs('toString')).toEqual({})
     // JSON.parse makes "__proto__" an own key: it stays data, never a prototype
     localStorage.setItem(
       STORE,
-      '{"__proto__":{"expanded":true},"constructor":{"unclamped":true}}',
+      `{"__proto__":{"at":${at},"expanded":true},"constructor":{"at":${at},"unclamped":true}}`,
     )
     expect(readTablePrefs('__proto__')).toEqual({ expanded: true })
     expect(readTablePrefs('constructor')).toEqual({ unclamped: true })
@@ -87,6 +89,7 @@ describe('table prefs', () => {
       STORE,
       JSON.stringify({
         k: {
+          at: Date.now(),
           expanded: 'yes',
           hidden: [1, -1],
           widths: { collapsed: [10, 'x'], expanded: [Infinity] },
@@ -113,5 +116,40 @@ describe('table prefs', () => {
     expect(stored).not.toContain('t1')
     expect(stored).toContain('t3')
     expect(stored.at(-1)).toBe('t2')
+  })
+
+  it('forgets a table not written for 14 days', () => {
+    const now = Date.now()
+    localStorage.setItem(
+      STORE,
+      JSON.stringify({
+        old: { at: now - PERSIST_TTL - 1, expanded: true },
+        none: { expanded: true },
+        recent: { at: now, expanded: true },
+      }),
+    )
+    expect(readTablePrefs('old')).toEqual({})
+    expect(readTablePrefs('none')).toEqual({})
+    expect(readTablePrefs('recent')).toEqual({ expanded: true })
+    // Swept when the PWA loads, even if the table is never opened again
+    sweepExpired(now)
+    expect(Object.keys(JSON.parse(localStorage.getItem(STORE) ?? ''))).toEqual([
+      'recent',
+    ])
+  })
+
+  it('removes every table at sign-out, and writes none after it', () => {
+    writeTablePrefs('a', { expanded: true })
+    expect(localStorage.getItem(STORE)).not.toBeNull()
+    signedOut()
+    expect(localStorage.getItem(STORE)).toBeNull()
+    writeTablePrefs('b', { expanded: true })
+    expect(localStorage.getItem(STORE)).toBeNull()
+  })
+
+  it('writes none once another tab signed out', () => {
+    localStorage.setItem('termote-signed-out', String(Date.now()))
+    writeTablePrefs('a', { expanded: true })
+    expect(localStorage.getItem(STORE)).toBeNull()
   })
 })

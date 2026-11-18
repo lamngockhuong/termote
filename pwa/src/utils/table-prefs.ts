@@ -1,3 +1,4 @@
+import { loadTables, saveTables } from './files-persist'
 import { type HastNode, textOf } from './markdown-links'
 
 // How the reader set up a table of a Markdown file, kept in this browser:
@@ -5,7 +6,8 @@ import { type HastNode, textOf } from './markdown-links'
 // the widths dragged. A table is known by its file and its header row, so
 // the same table keeps its set-up when the file is opened again, and two
 // tables of one file with the same headers share it. Only what differs from
-// the default is stored.
+// the default is stored, with the Files records (files-persist.ts): gone 14
+// days after it was last written, and at sign-out.
 
 // Collapsed and expanded have very different widths to fill, so each keeps
 // widths of its own; full screen counts as expanded.
@@ -19,7 +21,6 @@ export interface TablePrefs {
   widths?: Partial<Record<TableMode, number[]>>
 }
 
-const STORAGE_KEY = 'termote-md-tables'
 // The oldest set-ups go past this many
 const MAX_TABLES = 300
 
@@ -74,43 +75,23 @@ function clean(value: unknown): TablePrefs {
   return out
 }
 
-// Prototype-less: a header named __proto__ is an own key like any other
-function loadAll(): Record<string, unknown> {
-  const all = Object.create(null) as Record<string, unknown>
-  try {
-    const parsed: unknown = JSON.parse(
-      localStorage.getItem(STORAGE_KEY) ?? 'null',
-    )
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      Object.assign(all, parsed)
-    }
-  } catch {
-    // Unreadable, or no storage (a private window): nothing stored
-  }
-  return all
-}
-
 export function readTablePrefs(key: string | null): TablePrefs {
-  return key ? clean(loadAll()[key]) : {}
+  return key ? clean(loadTables()[key]) : {}
 }
 
 // Read again before writing: other tables share the store. The table written
 // goes last, so the ones not touched for longest go first past MAX_TABLES.
+// A failed write (full, no storage, signed out) keeps it for this view only.
 export function writeTablePrefs(key: string | null, prefs: TablePrefs) {
   if (!key) return
-  const all = loadAll()
+  const now = Date.now()
+  const all = loadTables(now)
   delete all[key]
   const value = clean(prefs)
-  if (Object.keys(value).length) all[key] = value
+  if (Object.keys(value).length) all[key] = { ...value, at: now }
   const keys = Object.keys(all)
   for (const old of keys.slice(0, Math.max(0, keys.length - MAX_TABLES))) {
     delete all[old]
   }
-  try {
-    if (Object.keys(all).length) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(all))
-    } else localStorage.removeItem(STORAGE_KEY)
-  } catch {
-    // Full or no storage: kept for this view only
-  }
+  saveTables(all)
 }

@@ -1826,11 +1826,15 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   give those classes or marks to its own content: raw HTML stays text (`htmlAsText`). A cell's
   content keeps the preview's link and image rules, in full screen too, where a link is followed
   only once the full screen's history entry is gone. The set-up is kept in this browser's
-  `localStorage` (`termote-md-tables`), keyed by the file's path and its header texts (the header
-  part cut at 512 characters, so a file cannot make a key of any size): read into a
-  prototype-less object, every value checked for its shape (booleans, column indexes, finite
-  widths) before use, at most 300 tables, the oldest written dropped first. A failed write (full,
-  or no storage) keeps the set-up for the view only. Nothing of it reaches the server.
+  `localStorage` (`termote-md-tables`, `loadTables`/`saveTables` in `files-persist.ts`), keyed by
+  the file's path and its header texts (the header part cut at 512 characters, so a file cannot
+  make a key of any size): read into a prototype-less object, every value checked for its shape
+  (booleans, column indexes, finite widths) before use, at most 300 tables, the oldest written
+  dropped first. Since a key names a file of the pane root, it goes with the Files records: each
+  table expires 14 days after it was last written (dropped on read, swept when the PWA loads),
+  every sign-out that removes the Files records removes it, and nothing is written once this tab
+  or another one signed out. A failed write (full, no storage, signed out) keeps the set-up for
+  the view only. Nothing of it reaches the server.
 - **Mermaid diagrams** (`pwa/src/utils/mermaid-render.ts`, `mermaid-sandbox.ts`, `mermaid-worker.ts`,
   `mermaid-block.tsx`, through `fenced-code.tsx`): a `mermaid` fenced block of a previewed Markdown
   file or of a Chat view message (agent text, as untrusted as a file) is drawn in the PWA

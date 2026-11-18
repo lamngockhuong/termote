@@ -546,6 +546,7 @@ function disable() {
 
 function clearAll() {
   for (const key of keysOf(ALL_KINDS)) remove(key)
+  remove(TABLES_KEY)
 }
 
 // Another tab signed out: this one stops too and forgets what it holds
@@ -607,6 +608,51 @@ export function sweepExpired(now: number) {
     // As written: the record is stored as JSON.stringify made it
     if (draft) draftSizes.set(key, JSON.stringify(r).length)
   }
+  // The table set-ups, each by when it was written
+  let tables: string | null = null
+  try {
+    tables = storage()?.getItem(TABLES_KEY) ?? null
+  } catch {
+    // Unreadable: nothing to sweep
+  }
+  if (tables !== null) saveTables(loadTables(now))
+}
+
+// Markdown tables
+
+// How the reader set up the Markdown tables they changed (table-prefs.ts),
+// one record for the origin, by table key. A key names a file of a pane
+// root and its header row, so the record expires and goes at sign-out like
+// the pane records: each table carries when it was last written (`at`).
+export const TABLES_KEY = 'termote-md-tables'
+
+// The table set-ups written in the last PERSIST_TTL, by key, as stored (each
+// an object with its `at`), in a prototype-less object: a header named
+// __proto__ is an own key like any other
+export function loadTables(now = Date.now()): Record<string, unknown> {
+  const all = Object.create(null) as Record<string, unknown>
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(storage()?.getItem(TABLES_KEY) ?? 'null')
+  } catch {
+    // Unreadable, or no storage: nothing stored
+    return all
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return all
+  for (const [key, value] of Object.entries(parsed)) {
+    const at = (value as { at?: unknown } | null)?.at
+    if (typeof at === 'number' && now - at <= PERSIST_TTL) all[key] = value
+  }
+  return all
+}
+
+// Writes the table set-ups, removing the record when there is none: false
+// once signed out (here or in another tab), without storage or out of room
+export function saveTables(all: Record<string, unknown>): boolean {
+  if (disabled) return false
+  if (Object.keys(all).length) return write(TABLES_KEY, JSON.stringify(all))
+  remove(TABLES_KEY)
+  return true
 }
 
 // For tests: as if the page had just loaded, with nothing kept.
