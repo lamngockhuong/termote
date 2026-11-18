@@ -903,7 +903,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   running turn), and the route answers 202 instead of 204; an agent waiting on a dialog
   (`blocked`) or of unknown status still gets nothing, and so does a `/` command to a working
   Codex (Tab would take the popup's pick). Clearing a failed paste (C-c) still needs the agent
-  idle, since C-c interrupts a working one: a working agent's box is left as `partial_paste`. Claude Code writes its transcript only with the first message: until
+  idle, since C-c interrupts a working one: a working agent's box is left as `partial_paste`. A
+  transcript read the read cache (`readCached`) does not answer waits for one of 4 slots
+  (`transcriptReads`): each holds a file's tail, and every signed cursor a client paged through is a
+  read of its own, from any role. Claude Code writes its transcript only with the first message: until
   then `transcript` answers an empty conversation whose cursor names the session, so the Chat
   view can send it. A Claude Code started with `--resume <id> --fork-session` (read from its own argv
   with the process, `claudeForkOfArgs`; on Herdr only from the process whose session file names

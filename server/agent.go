@@ -551,12 +551,21 @@ func (a *agentAPI) handleTranscript(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, res)
 }
 
+// transcriptReads bounds the transcript reads that run at once: each may
+// hold agentTailMax of a file and a line buffer, and every signed cursor a
+// client paged through is a read of its own, so many at once from one
+// device, of any role, would grow the server's memory without bound. The
+// next read waits for a slot.
+var transcriptReads = make(chan struct{}, 4)
+
 // readCached is readTranscript shared by every client asking for the same
 // read within agentCacheTTL (the overview reads the tail, as the Chat view's
 // first read does).
 func (a *agentAPI) readCached(s AgentSession, cursor, before string) (transcriptResponse, error) {
 	key := strings.Join([]string{s.Agent, s.ID, s.ClaudeDir, s.Transcript, s.CodexHome, s.Rollout, s.RolloutID, cursor, before}, "\x00")
 	return a.reads.do(key, func() (transcriptResponse, error) {
+		transcriptReads <- struct{}{}
+		defer func() { <-transcriptReads }()
 		return readTranscript(s, cursor, before)
 	})
 }
