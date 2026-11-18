@@ -16,7 +16,9 @@
 # at it. GH_TOKEN (or GITHUB_TOKEN) only raises the GitHub API rate limit.
 # TERMOTE_SKIP_SIGNATURE_CHECK=1, with TERMOTE_VERSION, installs a 2.14.0 or
 # later release on a machine with no tool to check its signature (the sha256
-# is still checked); without it such a machine is refused.
+# is still checked); without it such a machine is refused. An older signed
+# release that no tool here can check is installed only when TERMOTE_VERSION
+# names it.
 set -eu
 
 REPO="lamngockhuong/termote"
@@ -201,8 +203,11 @@ grep -q "[[:space:]]\*\{0,1\}$NAME.tar.gz\$" "$TMP/$NAME.tar.gz.sha256" ||
 # FIRST_SSHSIG_VERSION on is refused, since whoever can publish a release
 # also writes its sha256: only a pinned version with
 # TERMOTE_SKIP_SIGNATURE_CHECK=1 goes on, relying on HTTPS and the sha256
-# above. An older release, which no installed tool can check here, gets a
-# note. `termote update` checks the signature from then on.
+# above. An older release that no tool here can check is refused too unless
+# its version was named (then it gets a note): otherwise whoever can publish
+# a release could put a fresh tag below FIRST_SSHSIG_VERSION, such as
+# 2.13.99, at the top of the list with their own sha256. `termote update`
+# checks the signature from then on.
 # BEGIN RELEASE KEY
 RELEASE_KEY='-----BEGIN PUBLIC KEY-----
 MCowBQYDK2VwAyEAOr7k5razFbKPXHHupRqpC3u1QUJ1U6ESJghM9us9PaA=
@@ -266,6 +271,8 @@ if release_signed "$VERSION"; then
       die "${NO_TOOL}. To install it with only its sha256 checked, name the version and say so: TERMOTE_VERSION=${VERSION} TERMOTE_SKIP_SIGNATURE_CHECK=1"
     echo "note: the release signature was not checked (TERMOTE_SKIP_SIGNATURE_CHECK=1; the sha256 was). 'termote update' checks it from now on."
   else
+    [ -n "$PIN" ] ||
+      die "OpenSSL 3 is not here to check the signature of release ${VERSION}, the newest one, which carries no checksums.txt.sshsig, so it was not installed. Install OpenSSL 3 and run this again, or name the version: TERMOTE_VERSION=${VERSION}"
     echo "note: the release signature was not checked (the sha256 was): this needs OpenSSL 3, or ssh-keygen -Y verify (OpenSSH 8.1 or later) for ${FIRST_SSHSIG_VERSION} and later. 'termote update' checks it from now on."
   fi
 fi

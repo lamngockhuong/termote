@@ -3319,7 +3319,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `TERMOTE_SKIP_SIGNATURE_CHECK=1` (that value exactly) installs, with the sha256 alone and a note;
   an unpinned one is refused even with it. `install.sh` takes at most 9 digits a version part, pinned or picked as the newest, so
   the shell arithmetic that tells a signed release cannot fail and read as unsigned. Before that version, which no tool there could check,
-  they print that the signature was not checked. Both check the archive's line in the verified `checksums.txt`; `install.ps1` writes it
+  they refuse it unless `TERMOTE_VERSION` names it, then print that the signature was not checked:
+  unpinned, a fresh tag below `FIRST_SSHSIG_VERSION` (`v2.13.99`) made the newest stable would go in
+  with only its publisher's sha256. Both check the archive's line in the verified `checksums.txt`; `install.ps1` writes it
   to `ssh-keygen`'s stdin byte for byte (`Invoke-Native`: `Start-Process` rewrites its lines).
   `container up` runs the image by that digest,
   and only from a signed list that names the version's own archives (`listsVersion`:
