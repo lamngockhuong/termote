@@ -3149,8 +3149,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `X-Real-IP` and the configured proxy client header, sets `X-Termote-Role` from `requestRole` and
   `X-Termote-Origin-Auth`, sends the escaped path to `termote.local-socket`, and passes on only the
   answer headers in `machineResponseKeep` (content type, length, disposition, encoding and range,
-  caching and validators, `Vary`, `Allow`, `Retry-After`, `Date`, the machine's own CSP and
-  `nosniff`; on a 101 only the WebSocket upgrade headers): an allow list, since every header a
+  caching and validators, `Vary`, `Allow`, `Retry-After`, `Date` and `nosniff`; never the machine's
+  own CSP, whose `report-uri`/`report-to` would send this origin's violation reports to a host it names,
+  replaced by the sandbox policy; on a 101 only the WebSocket upgrade headers): an allow list, since every header a
   deny list kept missing could act on this origin (`Set-Cookie`, `Service-Worker-Allowed`,
   `Clear-Site-Data`, `NEL`/`Report-To` sending later requests' URLs to the machine's collector,
   `WWW-Authenticate` asking for a password in this origin's name) or navigate the tab (`Refresh`,

@@ -371,10 +371,13 @@ func (d *machineInterimDrop) Unwrap() http.ResponseWriter { return d.ResponseWri
 // URLs elsewhere, WWW-Authenticate asking for a password in this origin's
 // name) or send the browser elsewhere (Refresh, Location), and a list of
 // those kept missing some. termote answers no route a machine serves with
-// a redirect or a challenge.
+// a redirect or a challenge. The machine's own Content-Security-Policy is
+// dropped too: its report-uri or report-to would send this origin's
+// violation reports, with their URLs, to a host the machine names, and the
+// sandbox policy set in its place is stricter than any a route needs.
 var machineResponseKeep = map[string]bool{
 	"Content-Type": true, "Content-Length": true, "Content-Disposition": true, "Content-Encoding": true,
-	"Content-Range": true, "Accept-Ranges": true, "Content-Security-Policy": true,
+	"Content-Range": true, "Accept-Ranges": true,
 	"Cache-Control": true, "Pragma": true, "Etag": true, "Last-Modified": true, "Vary": true,
 	"Allow": true, "Retry-After": true, "Date": true, "X-Content-Type-Options": true,
 }
@@ -412,7 +415,7 @@ func confineMachineResponse(resp *http.Response) {
 	if resp.Body != nil {
 		resp.Body = &machineTrailerDrop{ReadCloser: resp.Body, resp: resp}
 	}
-	resp.Header.Add("Content-Security-Policy", svgPolicy)
+	resp.Header.Set("Content-Security-Policy", svgPolicy)
 	resp.Header.Set("X-Content-Type-Options", "nosniff")
 }
 
