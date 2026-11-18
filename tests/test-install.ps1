@@ -223,11 +223,15 @@ try {
         -not ($global:TermoteDownloads -match 'releases/download')) $script:Out
 
     # Before the first release with an .sshsig the signature goes unchecked,
-    # with a note, whether or not ssh-keygen is here.
+    # whether or not ssh-keygen is here: the newest one is refused unless it
+    # is named, then installs with a note.
     New-SignedRelease '1.10.1' 'none'
     New-SignedRelease '1.10.10' 'none'
     $global:TermoteFakeTags = @('v1.10.11:draft', 'v1.10.12:pre', 'v0.1.0', 'v1.0.10', 'v1.10.1', 'v1.10.10', 'v1.11.0-rc.1', 'latest')
     $ok = Invoke-Installer
+    Write-TestResult "Unchecked signature: the newest stable 1.10.10 refused unless named" ((-not $ok) -and
+        $script:Out -match "TERMOTE_VERSION='1\.10\.10'" -and -not (Test-Path (Join-Path $Dir 'current.txt'))) $script:Out
+    $ok = Invoke-Installer '1.10.10'
     Write-TestResult "Fresh install succeeds" $ok $script:Out
     Write-TestResult "Says the signature was not checked" ($script:Out -match 'signature was not checked') $script:Out
     Write-TestResult "current.txt names the newest stable 1.x" ((Get-Current) -eq '1.10.10')
@@ -351,6 +355,15 @@ try {
         $ok = Invoke-Installer '1.11.0' $signed
         Write-TestResult "Old ssh-keygen: a release before $first installs with the note" ($ok -and
             $script:Out -match 'signature was not checked' -and (Get-Current) -eq '1.11.0') $script:Out
+
+        # Unpinned, that older release is refused: a fresh tag below
+        # FirstSshsigVersion must not go in with only its publisher's sha256.
+        $env:LOCALAPPDATA = Join-Path $Tmp 'local-oldssh-older-unpinned'
+        $Dir = Join-Path $env:LOCALAPPDATA 'termote'
+        $global:TermoteFakeTags = @('v1.11.0')
+        $ok = Invoke-Installer '' $signed
+        Write-TestResult "Old ssh-keygen: an unpinned release before $first refused" ((-not $ok) -and
+            $script:Out -match "TERMOTE_VERSION='1\.11\.0'" -and -not (Test-Path (Join-Path $Dir 'current.txt'))) $script:Out
     } finally {
         $env:PATH = $savedPath
         Remove-Item Env:TERMOTE_SKIP_SIGNATURE_CHECK -ErrorAction SilentlyContinue

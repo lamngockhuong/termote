@@ -10,3 +10,21 @@ allowBuilds:
   # postinstall would be skipped once its result sits in pnpm's side-effects cache.
   lefthook: false
   sharp: true
+
+# Lift vulnerable transitive dependencies to their patched releases.
+overrides:
+  baseline-browser-mapping@>=2.0.0 <2.11.0: ^2.11.0
+  brace-expansion@>=2.0.0 <2.1.7: ^2.1.7
+  brace-expansion@>=4.0.0 <5.0.12: ^5.0.12
+  browserslist@<4.28.7: ^4.28.7
+  glob@>=9.0.0 <14.0.2: ^14.0.2
+  minimatch@>=7.0.0 <11.0.1: ^11.0.1
+  postcss-selector-parser@<6.1.5: ^6.1.5
+
+# picomatch has no patched release for this ReDoS. In production dependencies it
+# is reached only through the website's static build (Astro, unstorage), with
+# patterns from this repository, never from a user. Remove once picomatch ships
+# a fix.
+auditConfig:
+  ignoreGhsas:
+    - GHSA-fc5q-39xc-vjpf

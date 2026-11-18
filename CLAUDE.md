@@ -143,7 +143,8 @@ stream-token checks: [`docs/system-architecture.md`](docs/system-architecture.md
 the current OS/arch, verify its `.sha256` (mandatory; from 1.10.0 `install.sh` also checks the
 release signature with OpenSSL 3, and both installers check `checksums.txt.sshsig` with
 `ssh-keygen -Y verify` from 2.14.0 where there is no OpenSSL 3, refusing 2.14.0+ when neither can
-unless `TERMOTE_VERSION` pins it and `TERMOTE_SKIP_SIGNATURE_CHECK=1` is set), lay it
+unless `TERMOTE_VERSION` pins it and `TERMOTE_SKIP_SIGNATURE_CHECK=1` is set, and a signed release
+before 2.14.0 that no tool can check unless `TERMOTE_VERSION` names it), lay it
 out under the versioned install root and print `termote start` — they never start anything and hold
 no CLI logic themselves. `scripts/release-sshsig.sh` makes that SSHSIG signature with openssl
 alone, for the release workflow and the installer tests.

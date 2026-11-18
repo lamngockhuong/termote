@@ -145,7 +145,7 @@ test_fresh_install() {
     if grep -q "releases/download" "$TMP/curl.log"; then fail "unsigned latest" "no download" "downloaded"; else pass "unsigned latest not downloaded"; fi
 
     # The signature itself is tested in test_signed_releases: here a LibreSSL
-    # that cannot check it lets the fake releases through.
+    # cannot check it, so the newest release is refused unless it is named.
     new_home fresh
     local v
     for v in 1.10.1 1.10.10; do
@@ -154,8 +154,14 @@ test_fresh_install() {
         : >"$RELEASES/v$v/checksums.txt.sig"
     done
     fake_libressl
+    fake_old_ssh_keygen
     FAKE_TAGS="v1.10.11:draft v1.10.12:pre v0.1.0 v1.0.10 v1.10.1 v1.10.10 v1.10.2 v1.11.0-rc.1 latest" run_install
-    rm -f "$FAKE_PATH/openssl"
+    [[ $CODE -ne 0 && ! -e "$DATA/current" ]] && echo "$OUT" | grep -q "TERMOTE_VERSION=1.10.10" &&
+        pass "unchecked signature: the newest stable 1.10.10 refused unless named" || fail "unpinned unchecked" "refused, 1.10.10 named" "$OUT"
+    rm -rf "$DATA"
+    : >"$TMP/curl.log"
+    run_install TERMOTE_VERSION=1.10.10
+    rm -f "$FAKE_PATH/openssl" "$FAKE_PATH/ssh-keygen"
     check "exit status" "0" "$CODE"
     check "current points at 1.10.10" "versions/1.10.10" "$(readlink "$DATA/current")"
     [[ -x "$DATA/versions/1.10.10/bin/termote" && -f "$DATA/versions/1.10.10/LICENSE" ]] &&
@@ -477,6 +483,13 @@ test_no_signature_tool() {
     run_install TERMOTE_VERSION=1.11.0
     check "no signature tool: a release before $first still installs" "0" "$CODE"
     echo "$OUT" | grep -q "signature was not checked" && pass "no signature tool: older release gets the note" || fail "no tool, older" "note" "$OUT"
+
+    # Unpinned, that older release is refused: a fresh tag below
+    # FIRST_SSHSIG_VERSION must not go in with only its publisher's sha256.
+    new_home no-tool-older-unpinned
+    FAKE_TAGS="v1.11.0" run_install TERMOTE_SKIP_SIGNATURE_CHECK=1
+    [[ $CODE -ne 0 && ! -e "$DATA/current" ]] && echo "$OUT" | grep -q "TERMOTE_VERSION=1.11.0" &&
+        pass "no signature tool: unpinned older release refused" || fail "no tool, older unpinned" "refused" "$OUT"
     rm -f "$FAKE_PATH/ssh-keygen" "$FAKE_PATH/openssl"
 }
 
