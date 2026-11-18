@@ -50,7 +50,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   there (a form's `multipart/form-data`, `text/plain` or urlencoded, which need no preflight) → 415
   `unsupported_type`
 - **Terminal stream** (`/api/mux/stream`): same Origin check plus a single-use, 30s-TTL token
-  fetched via `/api/mux/stream-token`, consumed on WebSocket upgrade. Every paste into the
+  fetched via `/api/mux/stream-token`, consumed on WebSocket upgrade. The token store holds 32
+  (`maxStreamTokens`); a new full-role token pushes out the oldest, but one asked for with Basic
+  credentials alone never does (`tokenInfo.noPush`, 429 `busy` instead): over plain HTTP a browser
+  sends no `Sec-Fetch-Site`, so the route's cross-site check cannot see another site's page, and it
+  attaches saved Basic credentials to that page's `no-cors` request. Every paste into the
   terminal (native paste events are taken in capture phase, ahead of xterm) goes through
   `cleanPaste` in `terminal-view.tsx`: end-of-paste markers and control characters other than
   tab and line breaks removed, since xterm brackets a paste without removing a marker inside it.

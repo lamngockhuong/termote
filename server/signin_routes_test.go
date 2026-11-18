@@ -478,8 +478,8 @@ func TestHubSessionRevoked(t *testing.T) {
 // revokeSession drops only that session's stream tokens.
 func TestTokenStoreRevokeSession(t *testing.T) {
 	s := newStreamTokenStore()
-	a, _ := s.generateGrant(roleFull, "", "s1")
-	b, _ := s.generateGrant(roleFull, "", "s2")
+	a, _ := s.generateGrant(tokenInfo{role: roleFull, sessionID: "s1"})
+	b, _ := s.generateGrant(tokenInfo{role: roleFull, sessionID: "s2"})
 	c, _ := s.generateFor(roleFull, "")
 	s.revokeSession("s1")
 	s.revokeSession("")
