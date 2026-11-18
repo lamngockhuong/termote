@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.29.0](https://github.com/lamngockhuong/termote/compare/v2.28.0...v2.29.0) (2026-11-18)
+
+
+### Features
+
+* expand, full screen, resize, hide columns and clamp tall cells in Markdown tables ([#876](https://github.com/lamngockhuong/termote/issues/876)) ([b5dbf43](https://github.com/lamngockhuong/termote/commit/b5dbf4315b646a491966f8192478e626ba086141))
+* open a machine in a new window from its sidebar menu ([#874](https://github.com/lamngockhuong/termote/issues/874)) ([b493a8b](https://github.com/lamngockhuong/termote/commit/b493a8b4820023bfc37065260926f1150b8ecac9))
+* show line breaks, lists and disclosures in Markdown table cells ([#877](https://github.com/lamngockhuong/termote/issues/877)) ([6f9faf4](https://github.com/lamngockhuong/termote/commit/6f9faf47ab4f338ae70d5d3f303367d65c035433))
+
+
+### Bug Fixes
+
+* close eleven Low findings of the 12a9c92 security review ([#882](https://github.com/lamngockhuong/termote/issues/882)) ([ec7b525](https://github.com/lamngockhuong/termote/commit/ec7b525f3d5803a311134c21ba1be27c07526b55))
+* forget Markdown table set-ups at sign-out and after 14 days ([#879](https://github.com/lamngockhuong/termote/issues/879)) ([12a9c92](https://github.com/lamngockhuong/termote/commit/12a9c9239f2c760f334526f77463e25661620305))
+* refuse unchecked unpinned installs and patch vulnerable dependencies ([#880](https://github.com/lamngockhuong/termote/issues/880)) ([0d0357d](https://github.com/lamngockhuong/termote/commit/0d0357de20dd803af0b8a9c42e91a4f41359bdae))
+
 ## [2.28.0](https://github.com/lamngockhuong/termote/compare/v2.27.0...v2.28.0) (2026-11-17)
 
 
