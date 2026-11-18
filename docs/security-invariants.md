@@ -992,7 +992,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   input, result or `detail`, whatever file, command or argument shape (an object, a JSON string, an
   array of paths, a symlink under an innocent name) it involves, and no result read apart from its
   call; no note either (the output of a command the user ran with `!`, of a slash command,
-  a hook's text, an envelope Claude Code wraps whole in a tag termote does not know yet; the command line the user typed is their words and stays), neither a `note` entry
+  a hook's text, an envelope Claude Code wraps whole in a tag termote does not know yet, and a
+  Codex user message or block wrapped whole in a tag, as Codex writes a `!` command's output:
+  `wholeEnvelope`; the command line the user typed is their words and stays), neither a `note` entry
   nor a text part classified as one beside the user's words in a row of several blocks (the part's
   `note` flag, never sent); an entry left with no
   part is dropped. Nothing is decided per file, so a new tool of an agent is covered as it appears.

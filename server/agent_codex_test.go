@@ -719,3 +719,37 @@ func TestReadTranscriptCodex(t *testing.T) {
 		t.Errorf("replaced rollout = %v", err)
 	}
 }
+
+// What Codex puts in the user's role wrapped whole in a tag (a ! command's
+// output) is a note a view-only client never reads; the user's own words
+// stay, the tag inside prose included.
+func TestCodexEnvelopedUserTextIsANote(t *testing.T) {
+	shell := "<user_shell_command>\n<command>env</command>\n<result>TOKEN=s3cr3t</result>\n</user_shell_command>"
+	var entries []TranscriptEntry
+	for _, row := range []string{
+		codexEvent(map[string]any{"type": "user_message", "message": shell}),
+		codexItemRow(map[string]any{"type": "UserMessage", "id": "u1", "content": []map[string]any{
+			{"type": "text", "text": shell}, {"type": "text", "text": "what is <b>this</b> variable"},
+		}}),
+	} {
+		e, _, ok := parseCodexRow([]byte(row), 0)
+		if !ok {
+			t.Fatalf("row not parsed: %s", row)
+		}
+		entries = append(entries, e)
+	}
+	if entries[0].Role != "note" {
+		t.Errorf("legacy user_message role = %q, want note", entries[0].Role)
+	}
+	view := viewTranscript(transcriptResponse{Entries: entries})
+	for _, e := range view.Entries {
+		for _, p := range e.Parts {
+			if strings.Contains(p.Text, "s3cr3t") {
+				t.Errorf("view-only client reads the command's output: %+v", e)
+			}
+		}
+	}
+	if len(view.Entries) != 1 || len(view.Entries[0].Parts) != 1 || view.Entries[0].Parts[0].Text != "what is <b>this</b> variable" {
+		t.Errorf("view entries = %+v", view.Entries)
+	}
+}
