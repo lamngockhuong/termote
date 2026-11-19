@@ -699,14 +699,17 @@ func opencodeFieldText(s string) error {
 }
 
 // opencodePromptOf turns s's read into the card a client gets, as promptOf
-// does for a screen: a view-only one without a promptId.
+// does for a screen: a view-only one as viewCard makes it.
 func (a *agentAPI) opencodePromptOf(paneID string, s AgentSession, read opencodeRead, viewOnly bool) *AgentPrompt {
 	if read.prompt == nil {
 		a.input.answered(paneID, "")
 		return nil
 	}
 	p := *read.prompt
-	if !viewOnly && p.Kind != "unsupported" && !a.input.answered(paneID, read.sig) {
+	if viewOnly {
+		return viewCard(p)
+	}
+	if p.Kind != "unsupported" && !a.input.answered(paneID, read.sig) {
 		p.PromptID = a.input.issuePrompt(paneID, s, read.sig, p)
 	}
 	return &p

@@ -226,6 +226,10 @@ func TestOpencodeWritesRefusedToViewAndCrossSite(t *testing.T) {
 	if rec.Code != http.StatusOK || res.Prompt == nil || res.Prompt["promptId"] != nil || res.Prompt["kind"] != "permission" {
 		t.Errorf("view prompt = %d %s", rec.Code, rec.Body)
 	}
+	// Nor the resources the tool would touch.
+	if res.Prompt != nil && (res.Prompt["body"] != nil || res.Prompt["options"] != nil) {
+		t.Errorf("view prompt body = %v, options = %v", res.Prompt["body"], res.Prompt["options"])
+	}
 }
 
 func TestOpencodePermissionCard(t *testing.T) {

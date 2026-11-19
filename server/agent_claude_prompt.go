@@ -208,6 +208,9 @@ type AgentPrompt struct {
 	// which of the two it is.
 	opencodeID   string
 	opencodeForm bool
+	// textTitle: Title is the first row of the dialog's text, not a header
+	// (a dialog read without its title), so it can be part of the command.
+	textTitle bool
 }
 
 // PromptFreeText is the option of a question that takes typed text.
