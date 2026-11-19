@@ -85,6 +85,7 @@ export function foldToolResults(entries: TranscriptEntry[]): TranscriptEntry[] {
         result: p.result,
         isError: p.isError,
         clipped: call.clipped || p.clipped,
+        ...(p.artifact && { artifact: p.artifact }),
         // A result the server hid (a sensitive file, view only) hides it
         // on its call too
         ...(p.detail?.hidden && {

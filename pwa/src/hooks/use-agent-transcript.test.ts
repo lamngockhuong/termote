@@ -112,6 +112,43 @@ describe('foldToolResults', () => {
     expect(entries[0].parts[0].result).toBeUndefined()
   })
 
+  it('carries the Artifact a result names onto its call', () => {
+    const artifact = {
+      url: 'https://claude.ai/artifact/X1',
+      action: 'updated' as const,
+      version: 3,
+    }
+    const out = foldToolResults([
+      {
+        id: 'a',
+        role: 'assistant',
+        parts: [{ kind: 'tool', tool: 'Artifact', toolId: 't1' }],
+      },
+      {
+        id: 'b',
+        role: 'user',
+        parts: [
+          {
+            kind: 'tool',
+            tool: 'result',
+            toolId: 't1',
+            result: 'Updated',
+            orphan: true,
+            artifact,
+          },
+        ],
+      },
+    ])
+    expect(out).toHaveLength(1)
+    expect(out[0].parts[0]).toEqual({
+      kind: 'tool',
+      tool: 'Artifact',
+      toolId: 't1',
+      result: 'Updated',
+      artifact,
+    })
+  })
+
   it('a result in the same entry as its call folds too; one without a call stays', () => {
     const out = foldToolResults([
       {

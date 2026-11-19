@@ -293,6 +293,79 @@ describe('ChatMessage', () => {
     expect(screen.getByText('a.ts')).toBeInTheDocument()
   })
 
+  it('an Artifact call links the page it published, its file from the scratchpad on', () => {
+    const path =
+      '/tmp/claude-1000/-home-u-p/806c/scratchpad/design/project/C-board.html'
+    render(
+      <ChatMessage
+        entry={{
+          id: 'a',
+          role: 'assistant',
+          parts: [
+            {
+              kind: 'tool',
+              tool: 'Artifact',
+              toolId: '1',
+              input: path,
+              result: 'Updated the Artifact at https://claude.ai/artifact/Hr7',
+              artifact: {
+                url: 'https://claude.ai/artifact/Hr7',
+                action: 'updated',
+                version: 7,
+              },
+            },
+            {
+              kind: 'tool',
+              tool: 'Artifact',
+              toolId: '2',
+              input: 'publish',
+              result: 'Created a new Artifact',
+              artifact: {
+                url: 'https://claude.ai/artifact/N1',
+                action: 'created',
+              },
+            },
+            // Not a link to draw: another host, or another tool's record
+            {
+              kind: 'tool',
+              tool: 'Artifact',
+              toolId: '3',
+              input: 'x',
+              artifact: {
+                url: 'https://evil.example/artifact/E',
+                action: 'updated',
+              },
+            },
+            {
+              kind: 'tool',
+              tool: 'WebFetch',
+              toolId: '4',
+              input: 'y',
+              artifact: {
+                url: 'https://claude.ai/artifact/W',
+                action: 'updated',
+              },
+            },
+          ],
+        }}
+      />,
+    )
+    const file = screen.getByText('design/project/C-board.html')
+    expect(file).toHaveAttribute('title', path)
+    expect(screen.getByText('Updated · Version 7')).toBeInTheDocument()
+    const link = screen.getByRole('link', { name: 'claude.ai/artifact/Hr7' })
+    expect(link).toHaveAttribute('href', 'https://claude.ai/artifact/Hr7')
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+    expect(screen.getByText('Created')).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'claude.ai/artifact/N1' }),
+    ).toBeInTheDocument()
+    expect(screen.getAllByRole('link')).toHaveLength(2)
+    // The whole result still waits behind its row
+    expect(screen.queryByText(/Updated the Artifact/)).toBeNull()
+  })
+
   it('an opened long result shows its last lines, then all of them', () => {
     const result = Array.from({ length: 14 }, (_, i) => `line ${i}`).join('\n')
     render(
