@@ -359,6 +359,35 @@ func hcProbeRunning(t *testing.T, ctx context.Context, env []string) bool {
 	return running
 }
 
+// An endpoint that answered hc connect's hello and then stopped listening
+// is not one this user serves: the probe after hello finds no core, and the
+// connection is closed before anything is sent through it.
+func TestHcClientRefusesAnEndpointGoneAfterConnect(t *testing.T) {
+	logs := captureSyncLog(t)
+	var connected atomic.Bool
+	c := newHcClient("/usr/bin/hc", nil)
+	c.running = func(context.Context, []string) (bool, error) { return !connected.Load(), nil }
+	c.dialBackoff = 0
+	var conn *hcConn
+	c.connect = func(context.Context, string, []string) (*hcConn, error) {
+		_, conn = startFakeHc(t, nil)
+		connected.Store(true)
+		return conn, nil
+	}
+	if _, err := c.get(context.Background(), true); !errors.Is(err, errHcRefused) {
+		t.Fatalf("err = %v", err)
+	}
+	if conn == nil || conn.alive() {
+		t.Fatal("the connection to a vanished endpoint stays open")
+	}
+	if cur, _ := c.current(); cur != nil {
+		t.Fatal("the connection to a vanished endpoint is in use")
+	}
+	if !strings.Contains(logs.String(), "audit: hc socket refused reason=") {
+		t.Fatalf("no audit line:\n%s", logs.String())
+	}
+}
+
 // hc connect dials the core itself after the probe let it run: a socket
 // another user made in between is refused once it answers, and its
 // connection closed before anything is sent through it.

@@ -424,6 +424,33 @@ func TestUnknownAndStaleDeviceCookies(t *testing.T) {
 	}
 }
 
+// A sibling subdomain can set a cookie of the device's name for the parent
+// domain with a longer path, which the browser sends first: every copy is
+// tried, so it neither hides this host's own nor gets it cleared, and log
+// out ends each device the copies name.
+func TestDeviceCookieBehindAnotherCopy(t *testing.T) {
+	h, _, _, _ := newDeviceServer(t)
+	c := pairDevice(t, h, "view")
+	bogus := &http.Cookie{Name: c.Name, Value: deviceTokenTag + "nope"}
+	req := asDevice("GET", "/api/mux/snapshot", "", bogus)
+	req.AddCookie(c)
+	rec := serve(h, req)
+	if rec.Code != http.StatusOK || deviceCookieOf(rec) != nil {
+		t.Fatalf("a bad copy first: %d, cleared %v", rec.Code, deviceCookieOf(rec))
+	}
+	other := pairDevice(t, h, "view")
+	out := asDevice("POST", logoutPath, "{}", &http.Cookie{Name: c.Name, Value: other.Value})
+	out.AddCookie(c)
+	if rec := serve(h, out); rec.Code != http.StatusNoContent {
+		t.Fatalf("logout: %d %s", rec.Code, rec.Body)
+	}
+	for name, dc := range map[string]*http.Cookie{"first": other, "second": c} {
+		if code, _ := snapshotRole(t, h, dc); code != http.StatusUnauthorized {
+			t.Errorf("%s copy's device after logout: %d", name, code)
+		}
+	}
+}
+
 // The device list is a same-site read.
 func TestDeviceListCrossSite(t *testing.T) {
 	h, _, _, _ := newDeviceServer(t)

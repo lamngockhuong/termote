@@ -112,6 +112,10 @@ func hcSession(env []string) string {
 // so termote never starts hc connect for it.
 var hcCoreRunning = hcCoreRunningDefault
 
+// errHcGoneAfterConnect: no core answers the probe once hc connect said
+// hello, so the endpoint hc connect reached is not one this user serves.
+var errHcGoneAfterConnect = errors.New("no core answers once hc connect said hello")
+
 func hcCoreRunningDefault(ctx context.Context, env []string) (bool, error) {
 	endpoint := hcEnvValue(env, "HC_SOCKET")
 	if endpoint == "" {
@@ -245,8 +249,15 @@ func (c *hcClient) dial(ctx context.Context, wait time.Duration) (*hcConn, error
 			if err == nil {
 				// hc connect dials the endpoint itself, after the probe
 				// that let it run: a socket another user made meanwhile
-				// is caught here, before anything is sent through it.
-				if _, rerr := c.running(context.Background(), c.env); rerr != nil {
+				// is caught here, before anything is sent through it. So
+				// is one that answered hc connect and then stopped
+				// listening: the core hc connect reached must still
+				// answer here, or it was not this user's.
+				running, rerr := c.running(context.Background(), c.env)
+				if rerr == nil && !running {
+					rerr = errHcGoneAfterConnect
+				}
+				if rerr != nil {
 					conn.close()
 					c.refuse(rerr)
 					conn, err = nil, errHcRefused
