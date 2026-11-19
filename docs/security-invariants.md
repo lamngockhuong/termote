@@ -260,7 +260,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
     before termote sends anything through it. Left open: an endpoint swapped between hc's own dial
     and that second probe so that the two land on different servers (a pipe instance of another
     user under the same name, or a socket file replaced in a directory both users write), since
-    termote cannot see whom hc connect reached. A
+    termote cannot see whom hc connect reached. The second probe finding no core at all (an
+    endpoint that answered hc connect's hello, then stopped listening) is a refusal too
+    (`errHcGoneAfterConnect`): the core hc connect reached must still answer there. A
     core that stops between the probe and the spawn is started by `hc connect`: an accepted gap.
     A failed start backs off like Herdr's. A core termote starts inherits the service's
     environment, and the terminals herdr-app opens later inherit it from the core;
