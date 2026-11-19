@@ -46,6 +46,7 @@ printf '#!/bin/sh\n' >"$REPO/scripts/staged-files.sh"
 printf '{}\n' >"$REPO/dprint.json"
 printf 'node_modules/\n' >"$REPO/.gitignore"
 g add -A && g commit --no-verify -qm base
+g update-ref refs/remotes/origin/main main
 HOOKS="$REPO/.git/hooks"
 BIN="$REPO/node_modules/.bin"
 mkdir -p "$BIN"
@@ -129,7 +130,7 @@ check "a failed install still exits 0" "0" "$?"
 has "a failed install warns" "$TMP/stderr" '\[WARN\] git hooks not installed'
 rm "$HOOKS" && mv "$TMP/hooks.kept" "$HOOKS"
 
-# While the hook files match main, a hook runs lefthook with the checked config
+# While the hook files match origin/main, a hook runs lefthook with the checked config
 hook pre-commit
 check "pre-commit runs lefthook on main" "$REPO/lefthook.yml run --no-auto-install pre-commit" "$CALLS"
 hook pre-push
@@ -193,24 +194,26 @@ hook pre-push
 check "an uncommitted lefthook.yml runs no lefthook" "" "$CALLS"
 g checkout -q -- lefthook.yml
 
-# origin/HEAD is trusted over main
-g update-ref refs/remotes/origin/main main
+# The trusted ref is remote-tracking: origin/HEAD, else origin/main, never the local main a
+# pull of a contributor's branch can move
 g symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
 printf 'changed\n' >>"$REPO/dprint.json"
 g commit --no-verify -qam "local only"
 hook pre-commit
 check "a change on main not on origin/HEAD runs no lefthook" "" "$CALLS"
 has "the skip names origin/HEAD" "$TMP/hook-stderr" "differ from origin/HEAD"
+g symbolic-ref -d refs/remotes/origin/HEAD
+hook pre-commit
+check "a change on main not on origin/main runs no lefthook" "" "$CALLS"
+has "the skip names origin/main" "$TMP/hook-stderr" "differ from origin/main"
 g reset -q --hard origin/main
 
-# No branch to trust, or no lefthook
-g symbolic-ref -d refs/remotes/origin/HEAD
+# No remote-tracking ref to trust, or no lefthook
 g update-ref -d refs/remotes/origin/main
-g checkout -q -b other && g branch -qD main
 hook pre-commit
-check "no main runs no lefthook" "" "$CALLS"
-has "no main says why" "$TMP/hook-stderr" "no origin/HEAD or main"
-g branch -q main
+check "a local main alone runs no lefthook" "" "$CALLS"
+has "no origin/HEAD or origin/main says why" "$TMP/hook-stderr" "no origin/HEAD or origin/main"
+g update-ref refs/remotes/origin/main main
 rm "$BIN/lefthook"
 hook pre-commit
 has "no lefthook says so" "$TMP/hook-stderr" "lefthook is not installed"

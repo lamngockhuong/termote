@@ -3532,7 +3532,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   carries the flag too, since a branch's `lefthook.yml` may drop the key; a hook that is not lefthook's is left; with
   `core.hooksPath` set nothing is written). A hook runs lefthook, with `LEFTHOOK_CONFIG` set to the
   checked-out `lefthook.yml`, only when `git diff` (`--icase-pathspecs`: on a case-insensitive file
-  system npm reads a `.NPMRC` as `.npmrc`) finds no change against `origin/HEAD`, else `main`, to a
+  system npm reads a `.NPMRC` as `.npmrc`) finds no change against `origin/HEAD`, else `origin/main` (remote-tracking only: a local `main` is
+  moved by a pull of a contributor's branch, so with neither the hook skips), to a
   name git quotes (`core.quotePath=true`: a non-ASCII byte, a `"`, a `\` or a control character;
   case folds only in ASCII, and such a file system can fold a Kelvin sign onto a `k`) or to any `lefthook*`, `.lefthook*`, `.config/lefthook*`, `scripts/check-gofmt.sh`,
   `scripts/staged-files.sh`, `pwa/scripts/check-i18n.mjs`, any

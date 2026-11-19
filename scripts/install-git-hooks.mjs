@@ -3,7 +3,8 @@
 // worktree (a tarball, an extracted archive), and it never makes `pnpm install` fail.
 //
 // The hooks are written here rather than by `lefthook install`: each runs lefthook only while
-// the files that decide what it runs match the trusted branch, origin/HEAD or else main: the
+// the files that decide what it runs match the trusted branch, origin/HEAD or else origin/main (a
+// remote-tracking ref, never a local branch, which a pull of a contributor's branch can move): the
 // lefthook config, scripts/check-gofmt.sh, scripts/staged-files.sh and pwa/scripts/check-i18n.mjs,
 // the dprint config (its plugins can be programs), the Biome config (`biome check` reads it, plugins
 // and `extends` included), the npm and pnpm config, every package.json and the lockfile (`pnpm exec`
@@ -48,14 +49,14 @@ if [ "$LEFTHOOK" = "0" ] || [ "$LEFTHOOK" = "false" ]; then
 fi
 top=$(git rev-parse --show-toplevel) || exit 0
 ref=
-for r in refs/remotes/origin/HEAD refs/heads/main; do
+for r in refs/remotes/origin/HEAD refs/remotes/origin/main; do
   if git rev-parse -q --verify "$r^{commit}" >/dev/null; then
     ref=$r
     break
   fi
 done
 if [ -z "$ref" ]; then
-  echo "git hooks: ${hook} skipped: no origin/HEAD or main to compare the hook files with" >&2
+  echo "git hooks: ${hook} skipped: no origin/HEAD or origin/main to compare the hook files with (git fetch origin, then git remote set-head origin --auto)" >&2
   exit 0
 fi
 changed=$(git --icase-pathspecs -C "$top" -c core.quotePath=true diff --name-only "$ref" -- ':(glob)lefthook*' ':(glob).lefthook*' \\
