@@ -41,14 +41,17 @@ func bridgeTestServer(t *testing.T) (string, int) {
 		<-done
 	})
 	port := ln.Addr().(*net.TCPAddr).Port
-	sock := filepath.Join(dir, bridgeSocketName(strconv.Itoa(port))+".sock")
+	// Both sockets are ready once chmod 0600, which openLocalSocket runs
+	// right after the socket exists: a socket seen before that still has
+	// the umask's mode.
+	ready := func(name string) bool {
+		fi, err := os.Lstat(filepath.Join(dir, name+".sock"))
+		return err == nil && fi.Mode().Type() == os.ModeSocket && fi.Mode().Perm() == 0o600
+	}
 	deadline := time.Now().Add(5 * time.Second)
-	for {
-		if fi, err := os.Lstat(sock); err == nil && fi.Mode().Type() == os.ModeSocket {
-			break
-		}
+	for !ready(strconv.Itoa(port)) || !ready(bridgeSocketName(strconv.Itoa(port))) {
 		if time.Now().After(deadline) {
-			t.Fatalf("the bridge socket %s never appeared", sock)
+			t.Fatalf("the sockets in %s never became 0600", dir)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
