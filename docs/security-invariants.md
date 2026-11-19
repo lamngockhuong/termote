@@ -535,7 +535,13 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   "view_only"}`) before a handler runs, except `POST /api/mux/logout`; handlers repeat it with
   `requireWriteRole`, so a route added later is closed without remembering to. Reads: transcript,
   commands, snapshot (`viewSnapshot`: no tmux default session, and Herdr is not started), push key and `worktrees` GET are allowed; `agent/prompt` carries no
-  `promptId` (its `activity` is the same as for `full`); `GET agent/start` and `files/content?hash=1` are 403; a Place never (`place=` → 403
+  `promptId`, body, options or free-text option, a form's fields by key, type and title only, and no
+  title taken from the dialog's text rather than its header (`viewCard`: these can hold the tool's
+  input, the command or the file and its new content, and the card is read for any pane, not only
+  one the view stream can show; its `activity` is the same as for `full`). Through the machine proxy
+  the remote machine builds the card, so a machine on 2.29.1 or older still sends the whole card to
+  a view-only device signed in here (accepted, Tech Lead 2026-11-19: it closes when the machine
+  updates); `GET agent/start` and `files/content?hash=1` are 403; a Place never (`place=` → 403
   `view_only` before the root is resolved, `files/places` lists none, `caps.places` false); Files/Changes routes only when
   the pane root is a git toplevel that is neither the server user's home dir nor above it (through
   symlinks; `$HOME`, else the user database, else every root counts as one; in the container also
@@ -571,8 +577,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   shows "View only" (`caps.role`); tmux follows each session's active window, Herdr selects tabs
   client-side but cannot scroll history. No Web Push. A view client reads whatever the agent
   printed in the terminal (accepted); its Chat view gets the user's and the agent's words only, no
-  tool call, input or result and no command output, while an open dialog's card shows what the
-  terminal shows (see Agent chat)
+  tool call, input or result and no command output, while an open dialog's card, read for any pane,
+  shows its kind and header title, without the body, the options or anything else that can hold the
+  tool's input (`viewCard`, above; see Agent chat)
 - **Pane layout** (`POST /api/mux/panes/{id}/split` `{direction, cwd?}` → `{ok, id}`, `zoom`
   `{mode}`, `swap` `{direction}`, `resize` `{direction, amount}` → `{ok}`;
   `server/mux_pane_layout.go`, `caps.paneLayout`: Herdr 0.9.3 or later and not on Windows, tmux
@@ -943,8 +950,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   while it names what still runs, read into `background`), `null` when there is none. It adds no capture and
   no write, takes nothing from the client, and holds only that line's own words (each field
   stripped of control characters and cut to 80 runes): a status line, no file content or
-  command output, and less than the transcript and dialog card a view-only client already reads
-  for every pane, so both roles get it.
+  command output, and less than the transcript and dialog card title a view-only client already
+  reads for every pane, so both roles get it.
   `agent/message` may carry `images`: at most 5 upload ids, each resolved through the upload
   store (a path is never taken from the client; unknown ids → 400 with the bad ids, no store →
   503 `uploads_unavailable`). Each path is pasted alone and the draft must show that many
@@ -1474,8 +1481,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   a session not made yet, or a list that fails, is an empty list too. The `prompt` card is the first pending permission
   (title `Allow <action>?`, its resources as the body, cut to 4 KB, the options once, always (with
   the patterns it saves) and reject; `action`, the permission's action cut to 1 KB, lets the PWA
-  word the title and options in its language and is shown with `visibleUnsafe`) or else the first form; a view-only client gets it without a
-  `promptId`. A form's card carries its fields (string, number, integer, boolean, multiselect; a
+  word the title and options in its language and is shown with `visibleUnsafe`) or else the first form; a view-only client gets it as `viewCard`
+  makes it (no `promptId`, body or options; a form's fields by title only). A form's card carries its fields (string, number, integer, boolean, multiselect; a
   hidden one is left out, OpenCode fills it); one with a link to open (`external`), a field of
   another kind, a key with a control character or `__proto__`, an option value no answer could
   send back (over 1 KB or with a control character), a condition (`when`) on a field the card

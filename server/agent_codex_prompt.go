@@ -409,7 +409,7 @@ func findCodexDialog(lines []screenLine) agentScreen {
 		for start > 0 && start > head-codexMaxDialogRows && strings.TrimSpace(lines[start-1].text) != "" && !atColumnZero(lines[start-1]) {
 			start--
 		}
-		p := &AgentPrompt{Kind: "unsupported"}
+		p := &AgentPrompt{Kind: "unsupported", textTitle: true}
 		var rows []string
 		for _, l := range lines[start : head+1] {
 			rows = append(rows, strings.TrimSpace(l.text))

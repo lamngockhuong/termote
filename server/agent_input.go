@@ -1059,14 +1059,37 @@ func (a *agentAPI) handlePrompt(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, promptResponse{Prompt: a.promptOf(paneID, s, sc), Activity: sc.activity})
 }
 
-// viewPrompt is the card a view-only client gets: the dialog without a
-// promptId, and nothing recorded about it.
+// viewPrompt is the card a view-only client gets for a screen's dialog.
 func viewPrompt(sc agentScreen) *AgentPrompt {
 	if sc.prompt == nil {
 		return nil
 	}
-	p := *sc.prompt
+	return viewCard(*sc.prompt)
+}
+
+// viewCard is p as a view-only client gets it: no promptId, nothing recorded
+// about it, and none of the text that can hold the tool's input (the command,
+// the file and its new content): no body, no options (their labels and details
+// can name a command, and the view-only client shows none), a form's fields by
+// title only, and no title read off the dialog's text rather than its header.
+// The client reads that input nowhere else, and the card is read for any pane,
+// not only those its stream can show. It still sees that the agent waits and
+// on what kind of question.
+func viewCard(p AgentPrompt) *AgentPrompt {
 	p.PromptID = ""
+	p.Body = ""
+	p.Options = nil
+	p.FreeText = nil
+	if p.textTitle {
+		p.Title = ""
+	}
+	if len(p.Fields) > 0 {
+		fields := make([]PromptField, len(p.Fields))
+		for i, f := range p.Fields {
+			fields[i] = PromptField{Key: f.Key, Type: f.Type, Title: f.Title}
+		}
+		p.Fields = fields
+	}
 	return &p
 }
 

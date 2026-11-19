@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -342,15 +343,38 @@ func TestViewFilesRules(t *testing.T) {
 }
 
 func TestViewPromptHasNoPromptID(t *testing.T) {
-	p := &AgentPrompt{Kind: "choice", PromptID: "set-by-someone"}
-	if got := viewPrompt(agentScreen{prompt: p}); got == nil || got.PromptID != "" || got.Kind != "choice" {
+	p := &AgentPrompt{Kind: "permission", PromptID: "set-by-someone", Title: "Create file", Body: "SECRET=1",
+		Options:  []PromptOption{{Index: 1, Label: "Yes, and don't ask again for SECRET", Detail: "SECRET detail"}},
+		FreeText: &PromptFreeText{Index: 2, Label: "Type something"}}
+	got := viewPrompt(agentScreen{prompt: p})
+	if got == nil || got.PromptID != "" || got.Kind != "permission" || got.Title != "Create file" {
 		t.Errorf("viewPrompt = %+v", got)
 	}
-	if p.PromptID != "set-by-someone" {
+	// The dialog's body and options carry the tool's input (a command, a
+	// file's new content), which a view-only client reads nowhere else.
+	if got != nil && (got.Body != "" || got.Options != nil || got.FreeText != nil) {
+		t.Errorf("viewPrompt kept the tool input: %+v", got)
+	}
+	if p.PromptID != "set-by-someone" || p.Body == "" || p.Options[0].Detail == "" {
 		t.Error("viewPrompt changed the screen's prompt")
 	}
 	if viewPrompt(agentScreen{}) != nil {
 		t.Error("no dialog must give no card")
+	}
+	// A title read off the dialog's text (no header found) can be a line of
+	// the command: blank for view-only.
+	if got := viewCard(AgentPrompt{Kind: "unsupported", Title: "rm -rf SECRET", textTitle: true}); got.Title != "" {
+		t.Errorf("text title kept: %q", got.Title)
+	}
+	// A form's fields go by title only.
+	form := AgentPrompt{Kind: "form", Fields: []PromptField{{Key: "k", Type: "string", Title: "Name",
+		Description: "SECRET", Placeholder: "SECRET", Default: "SECRET",
+		Options: []FieldOption{{Value: "v", Label: "SECRET", Detail: "SECRET"}}}}}
+	if got := viewCard(form); len(got.Fields) != 1 || !reflect.DeepEqual(got.Fields[0], PromptField{Key: "k", Type: "string", Title: "Name"}) {
+		t.Errorf("view form fields = %+v", got.Fields)
+	}
+	if form.Fields[0].Description != "SECRET" {
+		t.Error("viewCard changed the form's fields")
 	}
 }
 
