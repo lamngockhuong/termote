@@ -385,6 +385,22 @@ func fixtureText(t *testing.T, name string) string {
 	return string(b)
 }
 
+// A charset designation is dropped whole: an hc capture ends with ESC ( B
+// after the cursor, on the last row, which in a wizard's Submit tab is the
+// "Cancel" option.
+func TestParseScreenCharsetEscape(t *testing.T) {
+	for in, want := range map[string]string{
+		"  2. Cancel\x1b[3;65H\x1b[0m\x1b(B": "  2. Cancel",
+		"a\x1b(0q\x1b(Bb\x1b)0c":             "aqbc",
+		"x\x1b=y\x1b7z":                      "xyz",
+		"end\x1b(":                           "end",
+	} {
+		if l := parseScreen(in); len(l) != 1 || l[0].text != want {
+			t.Errorf("parseScreen(%q) = %+v, want %q", in, l, want)
+		}
+	}
+}
+
 func TestParseScreenFaint(t *testing.T) {
 	lines := parseScreen("❯ \x1b[2mTry this\x1b[0m\r\nplain \x1b[38;5;2mgreen\x1b[0m\n\x1b]0;title\x07x\n\n")
 	if len(lines) != 3 {
