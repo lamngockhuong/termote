@@ -115,7 +115,14 @@ func skipEscape(s string, i int, st *sgrStyle) int {
 		}
 		return len(s)
 	}
-	return i + 2
+	// An escape with intermediates (ESC ( B, a charset designation the hc
+	// capture ends with) runs to its final byte; stopping after two bytes
+	// would leave the "B" on the last row.
+	j := i + 1
+	for j < len(s) && s[j] >= 0x20 && s[j] <= 0x2f {
+		j++
+	}
+	return min(j+1, len(s))
 }
 
 func applySGR(params string, st *sgrStyle) {
