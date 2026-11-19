@@ -144,7 +144,8 @@ has "lefthook.yml turns off lefthook's auto-install" "$PROJECT_DIR/lefthook.yml"
 n=0
 for f in lefthook.yml scripts/check-gofmt.sh scripts/staged-files.sh pwa/scripts/check-i18n.mjs dprint.json docs/dprint.json pwa/biome.json biome.jsonc .lefthook.toml lefthook-local.yml \
     .config/lefthook.yaml .npmrc pwa/.npmrc docs/.npmrc pnpm-workspace.yaml pwa/pnpm-workspace.yaml \
-    .pnpmfile.cjs package.json pwa/package.json node_modules/x/evil pwa/node_modules/.bin/biome \
+    .pnpmfile.cjs package.json pwa/package.json website/package.json video/package.json pnpm-lock.yaml \
+    node_modules/x/evil pwa/node_modules/.bin/biome Website/Package.json Pnpm-Lock.yaml \
     .NPMRC Package.json PWA/Package.json LEFTHOOK-local.yml .Lefthook.toml .Config/Lefthook.yaml Docs/DPrint.json \
     Pnpm-Workspace.yaml .PnpmFile.cjs pwa/Node_Modules/x/evil web/NODE_MODULES/.bin/biome; do
     n=$((n + 1))

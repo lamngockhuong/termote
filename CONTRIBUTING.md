@@ -81,8 +81,8 @@ The git hooks check formatting, lint and types before a commit or a push (see
 `--no-verify`.
 
 The hooks run only while the branch checked out has the hook files of `origin/HEAD`, else `main`
-(the lefthook config, `scripts/check-gofmt.sh`, `scripts/staged-files.sh`, the dprint, npm and pnpm config, the root and `pwa/`
-`package.json`, anything tracked under `node_modules`; the full list is in
+(the lefthook config, `scripts/check-gofmt.sh`, `scripts/staged-files.sh`, the dprint, npm and pnpm config, every
+`package.json` and `pnpm-lock.yaml`, anything tracked under `node_modules`; the full list is in
 [docs/code-standards.md](docs/code-standards.md#git-hooks)): on a branch that changed one, they name it and
 skip, so a contributor's branch does not run its own hook code at your next commit or push. Read
 that diff before running the checks by hand (`pnpm exec lefthook run --no-auto-install pre-commit`;
@@ -91,8 +91,9 @@ before 2.2.0 still has the hooks `lefthook install` wrote, which run any branch'
 `pnpm install` once, with `main` checked out (on another branch it runs that branch's scripts), to
 replace them (`.git/hooks/pre-commit` then has a line naming
 `scripts/install-git-hooks.mjs`). `pnpm install`
-on a branch still runs that branch's `package.json` scripts: on a branch you do not trust, read its
-diff of `package.json` and `scripts/` first.
+on a branch still runs that branch's scripts, of every workspace package and of what its lockfile
+fetches: on a branch you do not trust, read its diff of every `package.json`, `pnpm-lock.yaml`, the npm
+and pnpm config and `scripts/` first.
 
 **MDX Caveat:** When editing MDX files with Astro components (`<Steps>`, `<Tabs>`), ensure closing tags are NOT indented:
 
