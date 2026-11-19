@@ -442,7 +442,7 @@ func TestHcRealTabsSplitAndClose(t *testing.T) {
 		t.Fatalf("labels of the new terminal %v", term.Labels)
 	}
 
-	tab, err := m.NewTab(ctx, g.ID, "ignored")
+	tab, err := m.NewTab(ctx, g.ID, "")
 	if err != nil {
 		t.Fatalf("NewTab: %v", err)
 	}

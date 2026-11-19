@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // hcSimDoc is herdr-app's document on the sim's core: doc.get reads it,
@@ -435,6 +436,96 @@ func TestHcDocLabelOnlyTab(t *testing.T) {
 	n := d.setCount()
 	if _, err := s.m.MoveTab(ctx, "tb1", 2); err != nil || d.setCount() != n {
 		t.Errorf("no-op move: %v, %d writes", err, d.setCount()-n)
+	}
+}
+
+// hcSimAdopt does what herdr-app does with a tab termote started by its
+// labels: it takes the tab into its document, unnamed.
+func (s *hcSim) hcSimAdopt(t *testing.T, d *hcSimDoc, space, tab string) {
+	t.Helper()
+	snap, _ := s.m.Snapshot(ctx5s(t))
+	addr := ""
+	for _, g := range snap.Groups {
+		for _, tb := range g.Tabs {
+			if tb.ID == tab && len(tb.Panes) > 0 {
+				addr = tb.Panes[0].ID
+			}
+		}
+	}
+	if addr == "" {
+		t.Fatalf("tab %s not shown", tab)
+	}
+	d.mu.Lock()
+	var v map[string]any
+	json.Unmarshal(d.value, &v)
+	sp := hcDocFind(hcDocList(v, "spaces"), space)
+	sp["tabs"] = append(hcDocList(sp, "tabs"), map[string]any{"id": tab, "name": "",
+		"root": map[string]any{"id": "b" + addr, "type": "block", "content": map[string]any{"terminal": addr}}})
+	d.value, d.version = mustJSON(v), d.version+1
+	version := d.version
+	d.mu.Unlock()
+	s.emit("", "doc", map[string]any{"name": hcAppDoc, "version": version})
+}
+
+// A tab made with a name takes it once herdr-app has taken the tab in.
+func TestHcNewTabNamedOnceAdopted(t *testing.T) {
+	s := newHcSim(t)
+	d := s.withDoc(t)
+	ctx := ctx5s(t)
+	tab, err := s.m.NewTab(ctx, "sp1", "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.setCount() != 0 {
+		t.Fatalf("written before herdr-app took the tab in: %d", d.setCount())
+	}
+	s.hcSimAdopt(t, d, "sp1", tab)
+	waitFor(t, func() bool {
+		tb := hcDocFind(hcDocList(hcDocFind(hcDocList(d.doc(t), "spaces"), "sp1"), "tabs"), tab)
+		return tb != nil && tb["name"] == "test"
+	})
+	waitFor(t, func() bool {
+		snap, _ := s.m.Snapshot(ctx)
+		for _, g := range snap.Groups {
+			for _, tb := range g.Tabs {
+				if tb.ID == tab {
+					return tb.Name == "test"
+				}
+			}
+		}
+		return false
+	})
+
+	// Without a name nothing is written.
+	n := d.setCount()
+	tab2, err := s.m.NewTab(ctx, "sp1", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.hcSimAdopt(t, d, "sp1", tab2)
+	waitFor(t, func() bool { return s.m.state.docVersion() == d.version })
+	if d.setCount() != n {
+		t.Errorf("unnamed tab written: %d", d.setCount()-n)
+	}
+
+	// A name the rename would refuse fails before any terminal starts.
+	runs := len(s.runCalls())
+	if _, err := s.m.NewTab(ctx, "sp1", "a\x1bb"); err == nil || len(s.runCalls()) != runs {
+		t.Errorf("bad name: %v, %d runs", err, len(s.runCalls())-runs)
+	}
+}
+
+// herdr-app never takes the tab in: the wait ends, nothing is written.
+func TestHcNewTabNameGivesUp(t *testing.T) {
+	s := newHcSim(t)
+	d := s.withDoc(t)
+	s.m.nameWait = 50 * time.Millisecond
+	if _, err := s.m.NewTab(ctx5s(t), "sp1", "test"); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(150 * time.Millisecond)
+	if d.setCount() != 0 {
+		t.Errorf("written: %d", d.setCount())
 	}
 }
 

@@ -33,6 +33,8 @@ type hcMux struct {
 	retryWait time.Duration
 	// layoutSettle is hcLayoutSettle, read once.
 	layoutSettle time.Duration
+	// nameWait is hcNameWait, read once.
+	nameWait time.Duration
 
 	// live is the connection whose events the state follows, nil while
 	// none does; synced is closed when it changes.
@@ -75,6 +77,7 @@ func newHcMux(ctx context.Context, bin string, env []string) *hcMux {
 		docRetry:     hcDocRetry,
 		retryWait:    hcRetryWait,
 		layoutSettle: hcLayoutSettle,
+		nameWait:     hcNameWait,
 		synced:       make(chan struct{}),
 		tops:         map[string]string{},
 		topBusy:      map[string]bool{},
