@@ -336,7 +336,7 @@ var hcIDRe = regexp.MustCompile(`^(sp|tb)[0-9a-f]{32}$`)
 func TestHcNewTabGroupAndSplit(t *testing.T) {
 	s := newHcSim(t)
 	ctx := ctx5s(t)
-	tab, err := s.m.NewTab(ctx, "sp1", "ignored name")
+	tab, err := s.m.NewTab(ctx, "sp1", "")
 	if err != nil || !hcIDRe.MatchString(tab) || !strings.HasPrefix(tab, "tb") {
 		t.Fatalf("new tab %q %v", tab, err)
 	}

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -135,9 +136,17 @@ func (m *hcMux) run(ctx context.Context, space, tab, cwd string) (string, error)
 	return t.Address, nil
 }
 
-// NewTab starts a terminal in a new tab of groupID. The name is herdr-app's
-// to give (a tab is named after its place): it is not used.
-func (m *hcMux) NewTab(ctx context.Context, groupID, _ string) (string, error) {
+// hcNameWait bounds how long a new tab's name waits for herdr-app to take
+// the tab into its document, the only place a tab is named.
+const hcNameWait = 15 * time.Second
+
+// NewTab starts a terminal in a new tab of groupID. A tab is named in
+// herdr-app's document, which holds it only once herdr-app has taken it in:
+// name is written then (nameOnceAdopted).
+func (m *hcMux) NewTab(ctx context.Context, groupID, name string) (string, error) {
+	if name != "" && !validHcName(name) {
+		return "", inputError("invalid tab name")
+	}
 	g, err := m.group(ctx, groupID)
 	if err != nil {
 		return "", err
@@ -146,7 +155,34 @@ func (m *hcMux) NewTab(ctx context.Context, groupID, _ string) (string, error) {
 	if _, err := m.run(ctx, g.ID, tab, m.folderFor(g)); err != nil {
 		return "", err
 	}
+	if name != "" {
+		go m.nameOnceAdopted(tab, name)
+	}
 	return tab, nil
+}
+
+// nameOnceAdopted names tab when herdr-app's document first holds it, giving
+// up after nameWait (herdr-app is not running, or never takes it in).
+func (m *hcMux) nameOnceAdopted(tab, name string) {
+	ctx, cancel := context.WithTimeout(m.ctx, m.nameWait)
+	defer cancel()
+	for {
+		changed := m.changes()
+		if m.state.docHasTab(tab) {
+			if err := m.RenameTab(ctx, tab, name, ""); err != nil && m.ctx.Err() == nil {
+				log.Printf("hc: naming new tab %s: %v", tab, err)
+			}
+			return
+		}
+		select {
+		case <-changed:
+		case <-ctx.Done():
+			if m.ctx.Err() == nil {
+				log.Printf("hc: new tab %s not in herdr-app's layout after %v; not named", tab, m.nameWait)
+			}
+			return
+		}
+	}
 }
 
 // NewGroup starts a terminal in a new space, in cwd. herdr-app names it after

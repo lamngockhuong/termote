@@ -44,6 +44,21 @@ func (s *hcState) hasDoc() bool {
 	return s.doc != nil
 }
 
+// docHasTab: the document kept holds tab id.
+func (s *hcState) docHasTab(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.doc == nil {
+		return false
+	}
+	for _, sp := range s.doc.Spaces {
+		if slices.ContainsFunc(sp.Tabs, func(t hcDocTab) bool { return t.ID == id }) {
+			return true
+		}
+	}
+	return false
+}
+
 // editDoc reads the document, lets edit change it, and writes it over the
 // version read. The state takes the written document at once, so the next
 // snapshot shows the change.
