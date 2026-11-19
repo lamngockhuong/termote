@@ -1573,7 +1573,7 @@ func newBasicAuth(user, pass string, dev *deviceAuth, sessions *sessionAuth, opt
 		}
 		if dev != nil {
 			if dev.hasDeviceCookie(r) {
-				if rec, ok, _ := dev.deviceCookie(r); ok {
+				for _, rec := range dev.liveDevices(r) {
 					// Revoked meanwhile: logged out all the same.
 					err := dev.revoke(rec.ID)
 					if err != nil && !errors.Is(err, errUnknownDevice) {

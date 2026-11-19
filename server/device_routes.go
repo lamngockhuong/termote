@@ -207,30 +207,47 @@ func (d *deviceAuth) pairValidity(a authInfo, secs *int64) (time.Duration, error
 	return min(validFor, left), nil
 }
 
-// deviceCookie returns the request's device, or ok false. unknown reports a
-// cookie of this store that names no device that can sign in (revoked,
-// expired, made up): only such a cookie is cleared. One of a device of
-// another password is kept, so a server run once with another password does
-// not end the device.
+// deviceCookie returns the request's device, or ok false. Every cookie of
+// the name is tried, not only the first, as for the session cookie: a sibling
+// subdomain can set one for the parent domain with a longer path, which the
+// browser sends first, and must neither hide this host's own nor get it
+// cleared. unknown reports cookies of this store none of which names a device
+// that can sign in (revoked, expired, made up): only then is the cookie
+// cleared. One of a device of another password is kept, so a server run once
+// with another password does not end the device.
 func (d *deviceAuth) deviceCookie(r *http.Request) (rec deviceRecord, ok, unknown bool) {
-	c, err := r.Cookie(d.store.cookie)
-	if err != nil {
-		return deviceRecord{}, false, false
-	}
-	rec, ok, stale := d.store.lookup(c.Value)
-	if !ok {
-		if rec.ID != "" {
-			d.expire(rec.ID)
+	cookies := r.CookiesNamed(d.store.cookie)
+	unknown = len(cookies) > 0
+	for _, c := range cookies {
+		got, live, stale := d.store.lookup(c.Value)
+		if live {
+			return got, true, false
 		}
-		return deviceRecord{}, false, !stale
+		if got.ID != "" {
+			d.expire(got.ID)
+		}
+		if stale {
+			unknown = false
+		}
 	}
-	return rec, true, false
+	return deviceRecord{}, false, unknown
 }
 
 // hasDeviceCookie reports a cookie of this store on the request.
 func (d *deviceAuth) hasDeviceCookie(r *http.Request) bool {
-	_, err := r.Cookie(d.store.cookie)
-	return err == nil
+	return len(r.CookiesNamed(d.store.cookie)) > 0
+}
+
+// liveDevices is every device the request's cookies of this store name and
+// that can still sign in: log out ends each one, as it does every session.
+func (d *deviceAuth) liveDevices(r *http.Request) []deviceRecord {
+	var recs []deviceRecord
+	for _, c := range r.CookiesNamed(d.store.cookie) {
+		if rec, ok, _ := d.store.lookup(c.Value); ok {
+			recs = append(recs, rec)
+		}
+	}
+	return recs
 }
 
 func (d *deviceAuth) setCookie(w http.ResponseWriter, r *http.Request, token string) {

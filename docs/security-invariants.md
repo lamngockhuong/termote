@@ -20,7 +20,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   host name of its own (accepted risk; no `__Host-` prefix, which would not change that). A
   sibling subdomain can set a `termote_session` for the parent domain with a longer path, which
   the browser sends first: every cookie of that name is tried, not only the first, so it cannot
-  hide this host's own and keep the user at the sign-in form, and Log out ends each one it carries
+  hide this host's own and keep the user at the sign-in form, and Log out ends each one it carries;
+  the device cookie the same: every copy is tried, it is cleared only when none names a device that
+  can sign in, and Log out revokes each device its copies name
 - Basic auth over HTTPS required for production
 - **Sign-in form** (`/login`, `server/login.go`): a browser page load without a session gets
   a 401 with a plain HTML form (no script) and no `WWW-Authenticate`, since an iOS home-screen
@@ -465,7 +467,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   goroutine: the hub's lock comes before the store's); `lastUsedAt` reaches disk each 5 minutes. `--no-auth`
   or an unusable dir: the store is not loaded, the routes answer 501 `unsupported`, `caps.devices`
   false. `basicAuth` order: public → `/login` → `/pair` → `/logout` → session cookie → device
-  cookie → Basic; a session wins over a device cookie, and a cookie naming no record is cleared.
+  cookie (every copy of the name, as for the session cookie) → Basic; a session wins over a device
+  cookie, and cookies none of which names a record that can sign in are cleared.
   Codes (`POST /api/mux/devices/pair` `{role, name?}`, full only, `writeGuard`) are 10 Crockford
   base32 characters shown `XXXXX-XXXXX` (typed `O`/`I`/`L` read as `0`/`1`), 5 minutes, once, in
   memory only, at most 5 waiting (409 `too_many_codes`); a revoked device's waiting codes go with
