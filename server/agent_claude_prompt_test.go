@@ -904,6 +904,10 @@ func TestReadClaudeScreenCutPermission(t *testing.T) {
 	if !strings.HasPrefix(p.Body, "…\n160 - finding 0 stays open\n") || !strings.HasSuffix(p.Body, "197 - finding 37 stays open") {
 		t.Errorf("body = %q", p.Body)
 	}
+	// The question names the file, which a view-only card does not show.
+	if v := viewPrompt(sc); v == nil || v.Title != "" || v.Kind != "permission" {
+		t.Errorf("view card of a cut dialog = %+v", v)
+	}
 	// Scrolled on, it is another dialog for a promptId.
 	if other := readClaudeScreen("\r\n" + cutWriteScreen(38)); other.sig == sc.sig {
 		t.Error("same signature for another screen")
