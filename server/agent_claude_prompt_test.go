@@ -422,6 +422,42 @@ func TestParseScreenFaint(t *testing.T) {
 	}
 }
 
+// Recorded from Claude Code 2.1.328 in tmux (capture-pane -p -e): "/name "
+// shows the command's argument hint in grey after it, which is not typed.
+func TestReadClaudeScreenArgumentHint(t *testing.T) {
+	cmd := "\x1b[39m❯\u00a0\x1b[38;5;153m/ak-fix\x1b[39m"
+	hint := " \x1b[38;5;246m[issue] --auto|--review|--quick|--parallel [--ultra]\x1b[39m"
+	tests := []struct{ row, draft string }{
+		{cmd + hint, "/ak-fix"},
+		{"\x1b[39m❯\u00a0\x1b[38;5;153m/compact\x1b[39m \x1b[38;5;246m<optional custom summarization instructions>\x1b[39m", "/compact"},
+		// Typed text and an image token are in the default colour: kept.
+		{cmd + " abc", "/ak-fix abc"},
+		{cmd + " [Image #1] hello", "/ak-fix [Image #1] hello"},
+		{cmd, "/ak-fix"},
+		// Not a command: a coloured draft is kept whole.
+		{"\x1b[39m❯\u00a0\x1b[38;5;246mgrey words\x1b[39m", "grey words"},
+	}
+	rule := strings.Repeat("─", 40)
+	for _, tt := range tests {
+		sc := readClaudeScreen(rule + "\n" + tt.row + "\n" + rule + "\n  status\n")
+		if sc.input != inputDraft || sc.draft != tt.draft {
+			t.Errorf("%q: input=%q draft=%q, want %q", tt.row, sc.input, sc.draft, tt.draft)
+		}
+	}
+	// The hint wrapped onto a row of its own on a narrow pane.
+	wrapped := rule + "\n" + cmd + " \x1b[38;5;246m[issue] --auto|--review\x1b[39m\n  \x1b[38;5;246m[--ultra] [--advice]\x1b[39m\n" + rule + "\n  status\n"
+	if sc := readClaudeScreen(wrapped); sc.input != inputDraft || sc.draft != "/ak-fix" {
+		t.Errorf("wrapped: input=%q draft=%q", sc.input, sc.draft)
+	}
+}
+
+func TestParseScreenForeground(t *testing.T) {
+	l := parseScreen("a \x1b[38;5;153mB\x1b[39m c \x1b[38;2;1;2;3mD\x1b[0m e \x1b[31mF\x1b[m g \x1b[94mH\x1b[39m \x1b[48;5;1mi\x1b[0m\n")
+	if l[0].plain != "a   c   e   g   i" {
+		t.Errorf("plain = %q", l[0].plain)
+	}
+}
+
 func TestDraftShows(t *testing.T) {
 	tests := []struct {
 		draft, text string
