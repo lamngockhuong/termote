@@ -262,7 +262,10 @@ func (f *filesAPI) deleteRegular(parent *os.Root, base string, in deleteRequest,
 // unlinkChecked deletes base for good, once it is still the file checked:
 // the trash is on another file system and the client confirmed. Accepted
 // risk: nothing unlinks by inode, so a file swapped in between the check and
-// the unlink is the one removed; a local writer of the root has a shell anyway.
+// the unlink is the one removed; a writer of the root who is the server's own
+// user has a shell anyway, and a root another OS account can write is not
+// supported (on Windows the unlink goes by path, so a junction swapped in can
+// redirect it).
 func unlinkChecked(parent *os.Root, base string, fi fs.FileInfo, res deleteResponse) (deleteResponse, error) {
 	if now, err := parent.Lstat(base); err != nil || !os.SameFile(now, fi) {
 		return deleteResponse{}, errEditChanged

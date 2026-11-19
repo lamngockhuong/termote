@@ -12,9 +12,10 @@ import (
 // renameNoReplace moves fromName in from to toName in to. os.Root exposes
 // no handle on Windows, so the move goes by absolute path once every
 // directory on it was checked; MoveFileEx without MOVEFILE_REPLACE_EXISTING
-// never replaces. Accepted risk: a local process able to write the root
-// could swap a directory in between, but it has a shell anyway, and a
-// delete checks what landed in the trash afterwards.
+// never replaces. Accepted risk: a process able to write the root could
+// swap a junction in between and redirect the move. One of the server's own
+// user has a shell anyway; a root another Windows account can write is not
+// supported. A delete checks what landed in the trash afterwards.
 func renameNoReplace(from *os.Root, fromName string, to *os.Root, toName string) error {
 	src, dst := filepath.Join(from.Name(), fromName), filepath.Join(to.Name(), toName)
 	s, err := windows.UTF16PtrFromString(src)

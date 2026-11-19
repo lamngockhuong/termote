@@ -2294,7 +2294,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   503 `trash_unavailable`, `Caps.trash` false) by directory descriptors (`renameat2`
   `RENAME_NOREPLACE`, `renameatx_np` `RENAME_EXCL`, else `linkat` + `unlinkat`; Windows
   `MoveFileEx` without `MOVEFILE_REPLACE_EXISTING` on paths checked first, an accepted gap: a
-  local writer of the root has a shell anyway); what landed must be the file checked, or it
+  writer of the root who is the server's own user has a shell anyway, and a root another Windows
+  account can write is not supported, since that account can swap a junction in between the check
+  and the move and redirect it, or a permanent delete's `DeleteFile`, to a folder of its choice); what landed must be the file checked, or it
   goes back (never replacing) and 409 `changed` (with `trashId` when its name was taken again
   meanwhile). `EXDEV`/`ERROR_NOT_SAME_DEVICE` (WSL `/mnt/c`, a volume, the container's
   `/workspace` bind mount): 409 `cross_device`, nothing deleted, unless `permanent: true` (the
@@ -3532,7 +3534,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   carries the flag too, since a branch's `lefthook.yml` may drop the key; a hook that is not lefthook's is left; with
   `core.hooksPath` set nothing is written). A hook runs lefthook, with `LEFTHOOK_CONFIG` set to the
   checked-out `lefthook.yml`, only when `git diff` (`--icase-pathspecs`: on a case-insensitive file
-  system npm reads a `.NPMRC` as `.npmrc`) finds no change against `origin/HEAD`, else `main`, to a
+  system npm reads a `.NPMRC` as `.npmrc`) finds no change against `origin/HEAD`, else `origin/main` (remote-tracking only: a local `main` is
+  moved by a pull of a contributor's branch, so with neither the hook skips), to a
   name git quotes (`core.quotePath=true`: a non-ASCII byte, a `"`, a `\` or a control character;
   case folds only in ASCII, and such a file system can fold a Kelvin sign onto a `k`) or to any `lefthook*`, `.lefthook*`, `.config/lefthook*`, `scripts/check-gofmt.sh`,
   `scripts/staged-files.sh`, `pwa/scripts/check-i18n.mjs`, any

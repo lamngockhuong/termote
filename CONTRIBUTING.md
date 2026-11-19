@@ -80,7 +80,7 @@ The git hooks check formatting, lint and types before a commit or a push (see
 [docs/code-standards.md](docs/code-standards.md#git-hooks)). Skip them once with `LEFTHOOK=0` or
 `--no-verify`.
 
-The hooks run only while the branch checked out has the hook files of `origin/HEAD`, else `main`
+The hooks run only while the branch checked out has the hook files of `origin/HEAD`, else `origin/main`
 (the lefthook config, `scripts/check-gofmt.sh`, `scripts/staged-files.sh`, the dprint, npm and pnpm config, every
 `package.json` and `pnpm-lock.yaml`, anything tracked under `node_modules`; the full list is in
 [docs/code-standards.md](docs/code-standards.md#git-hooks)): on a branch that changed one, they name it and

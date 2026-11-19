@@ -208,7 +208,8 @@ with `LEFTHOOK=0`, outside a git worktree, or with `core.hooksPath` set (it warn
 `lefthook*`, `.lefthook*` or `.config/lefthook*`, `scripts/check-gofmt.sh`, `scripts/staged-files.sh`, `pwa/scripts/check-i18n.mjs`, any `dprint.json*` or
 `.dprint.json*`, any `biome.json*` or `.biome.json*`, any `.npmrc`, any `pnpm-workspace.yaml`, any `.pnpmfile.*`, any `package.json` or
 `pnpm-lock.yaml`, and any tracked `node_modules` or file under one, in any case: `.NPMRC` counts; and any name git quotes: a non-ASCII byte, a `"`, a `\` or a control character)
-match `origin/HEAD`, else `main`; otherwise it names the files, skips without failing the commit or push, and says how to run
+match `origin/HEAD`, else `origin/main` (never the local `main`, which a pull of a contributor's branch moves; with
+neither, the hooks skip); otherwise it names the files, skips without failing the commit or push, and says how to run
 the checks by hand. A branch changing any `package.json` or the lockfile therefore runs no hooks: `pnpm exec`
 installs first when a workspace package's dependencies changed, running that package's own scripts.
 [`lefthook.yml`](../lefthook.yml) holds the commands:

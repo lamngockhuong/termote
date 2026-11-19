@@ -208,8 +208,9 @@ type AgentPrompt struct {
 	// which of the two it is.
 	opencodeID   string
 	opencodeForm bool
-	// textTitle: Title is the first row of the dialog's text, not a header
-	// (a dialog read without its title), so it can be part of the command.
+	// textTitle: Title is a row of the dialog's text, not a header (a dialog
+	// read without its title), so it can be part of the command or name the
+	// file to write.
 	textTitle bool
 }
 
@@ -435,6 +436,8 @@ func findCutDialog(lines []screenLine, footer int) agentScreen {
 	head := append([]string{p.Title}, strings.Split(p.Body, "\n")...)
 	p.Title = head[len(head)-1]
 	p.Body = strings.Join(append([]string{"…"}, head[:len(head)-1]...), "\n")
+	// The question names the file to create or edit: dialog text, not a header.
+	p.textTitle = true
 	return agentScreen{sig: dialogSig(lines), prompt: p}
 }
 
