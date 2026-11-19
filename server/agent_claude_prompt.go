@@ -23,12 +23,16 @@ import (
 // background colour blanked, so the tab AskUserQuestion has open is known,
 // and the same text with everything not in reverse video blanked: Codex
 // draws the option under its pointer in reverse video, and in some terminals
-// its composer on a background, so only the former tells them apart.
+// its composer on a background, so only the former tells them apart; and
+// the same text with everything drawn in a colour of its own blanked: Claude
+// Code draws typed text in the default colour and a command's argument hint
+// ("/compact <optional custom summarization instructions>") in grey.
 type screenLine struct {
 	text  string
 	solid string
 	hl    string
 	rv    string
+	plain string
 }
 
 // sgrStyle is the part of the SGR state the screen reader keeps.
@@ -36,6 +40,7 @@ type sgrStyle struct {
 	faint bool
 	bg    bool // a background colour (or reverse video) is set
 	rev   bool // reverse video is set
+	fg    bool // a foreground colour is set
 }
 
 // parseScreen splits a capture into rows, keeping only text, the faint
@@ -46,7 +51,7 @@ func parseScreen(s string) []screenLine {
 	var st sgrStyle
 	for _, row := range strings.Split(s, "\n") {
 		row = strings.TrimSuffix(row, "\r")
-		var text, solid, hl, rv strings.Builder
+		var text, solid, hl, rv, plain strings.Builder
 		for i := 0; i < len(row); {
 			c := row[i]
 			if c == 0x1b {
@@ -74,12 +79,18 @@ func parseScreen(s string) []screenLine {
 			} else {
 				rv.WriteByte(' ')
 			}
+			if st.fg && r != ' ' {
+				plain.WriteByte(' ')
+			} else {
+				plain.WriteRune(r)
+			}
 		}
 		out = append(out, screenLine{
 			strings.TrimRight(text.String(), " "),
 			strings.TrimRight(solid.String(), " "),
 			strings.TrimRight(hl.String(), " "),
 			strings.TrimRight(rv.String(), " "),
+			strings.TrimRight(plain.String(), " "),
 		})
 	}
 	for len(out) > 0 && strings.TrimSpace(out[len(out)-1].text) == "" {
@@ -142,9 +153,16 @@ func applySGR(params string, st *sgrStyle) {
 			st.bg, st.rev = false, false
 		case n == 49:
 			st.bg = false
+		case n >= 30 && n <= 37, n >= 90 && n <= 97:
+			st.fg = true
+		case n == 39:
+			st.fg = false
 		}
 		if n == 38 || n == 48 || n == 58 { // extended colour: skip its arguments
-			if n == 48 {
+			switch n {
+			case 38:
+				st.fg = true
+			case 48:
 				st.bg = true
 			}
 			if colon {
@@ -321,10 +339,14 @@ func findInputBox(lines []screenLine) (agentScreen, bool) {
 func readInputBox(rows []screenLine) agentScreen {
 	head := strings.TrimSpace(rows[0].text)
 	shell := strings.HasPrefix(head, "!")
-	var text, solid []string
+	var text, solid, plain []string
 	for i, r := range rows {
-		t, s := r.text, r.solid
+		t, s, pl := r.text, r.solid, r.plain
 		if i == 0 {
+			// The marker and the spaces before it, by runes: plain has a
+			// blank byte where the text has a coloured rune.
+			skip := utf8.RuneCountInString(t) - utf8.RuneCountInString(strings.TrimLeft(t, " ")) + 1
+			pl = string([]rune(pl)[min(skip, utf8.RuneCountInString(pl)):])
 			t = strings.TrimSpace(t)
 			s = strings.TrimSpace(s)
 			_, size := utf8.DecodeRuneInString(t)
@@ -332,6 +354,7 @@ func readInputBox(rows []screenLine) agentScreen {
 		}
 		text = append(text, strings.TrimSpace(t))
 		solid = append(solid, strings.TrimSpace(s))
+		plain = append(plain, strings.TrimSpace(pl))
 	}
 	draft := strings.TrimSpace(strings.Join(nonEmpty(text), " "))
 	if shell {
@@ -341,6 +364,12 @@ func readInputBox(rows []screenLine) agentScreen {
 	ghost := strings.TrimSpace(strings.Join(solid, "")) == ""
 	if draft == "" || ghost || claudeInputPlaceholders[draft] {
 		return agentScreen{input: inputEmpty}
+	}
+	// "/name " shows the command's argument hint after it, which is not
+	// typed: the command is drawn in its colour and the hint in grey, so
+	// nothing in the box is in the default colour of typed text.
+	if strings.HasPrefix(draft, "/") && strings.Join(plain, "") == "" {
+		draft = strings.Fields(draft)[0]
 	}
 	return agentScreen{input: inputDraft, draft: draft}
 }

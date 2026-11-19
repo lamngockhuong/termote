@@ -1340,6 +1340,31 @@ func TestMessageImagesInCommand(t *testing.T) {
 	}
 }
 
+// A command alone before the images shows its argument hint in grey after
+// it ("/ak-fix [issue] --auto"), which the box does not hold: the paste
+// still shows, and the images follow.
+func TestMessageImagesAfterCommandHint(t *testing.T) {
+	shortImageWait(t)
+	f := newFakeWriter()
+	imageAgent(f, 0)
+	paste := f.onPaste
+	f.onPaste = func(f *fakeWriter, text string) {
+		paste(f, text)
+		if text == "/ak-fix " {
+			f.setScreen(boxScreen("\x1b[38;5;153m/ak-fix\x1b[39m \x1b[38;5;246m[issue] --auto|--review [--ultra]\x1b[39m"))
+		}
+	}
+	mux, ids, paths := imageMux(t, f, 2)
+	text := "/ak-fix  what is this?"
+	if code, body := postMessageAt(t, mux, text, ids, []int{len("/ak-fix "), len("/ak-fix ")}); code != http.StatusNoContent {
+		t.Fatalf("POST = %d %v pasted %q keys %v", code, body, f.pasted, f.keys)
+	}
+	want := []string{"/ak-fix ", paths[0], paths[1], " what is this?"}
+	if strings.Join(f.pasted, "|") != strings.Join(want, "|") {
+		t.Errorf("pasted %q, want %q", f.pasted, want)
+	}
+}
+
 // Images go where the user put them: the text around each is pasted in
 // turn, as is.
 func TestMessageImagesBetweenText(t *testing.T) {
