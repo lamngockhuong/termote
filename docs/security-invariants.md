@@ -2294,7 +2294,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   503 `trash_unavailable`, `Caps.trash` false) by directory descriptors (`renameat2`
   `RENAME_NOREPLACE`, `renameatx_np` `RENAME_EXCL`, else `linkat` + `unlinkat`; Windows
   `MoveFileEx` without `MOVEFILE_REPLACE_EXISTING` on paths checked first, an accepted gap: a
-  local writer of the root has a shell anyway); what landed must be the file checked, or it
+  writer of the root who is the server's own user has a shell anyway, and a root another Windows
+  account can write is not supported, since that account can swap a junction in between the check
+  and the move and redirect it, or a permanent delete's `DeleteFile`, to a folder of its choice); what landed must be the file checked, or it
   goes back (never replacing) and 409 `changed` (with `trashId` when its name was taken again
   meanwhile). `EXDEV`/`ERROR_NOT_SAME_DEVICE` (WSL `/mnt/c`, a volume, the container's
   `/workspace` bind mount): 409 `cross_device`, nothing deleted, unless `permanent: true` (the
