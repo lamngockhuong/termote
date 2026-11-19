@@ -158,6 +158,9 @@ type TranscriptPart struct {
 	// Detail: what the Chat view's card of a tool call shows beyond the
 	// one-line Input; absent when the call has nothing more.
 	Detail *ToolDetail `json:"detail,omitempty"`
+	// Artifact: the claude.ai Artifact a call published, from the result's
+	// structured record; the card links to it without opening the output.
+	Artifact *ArtifactRef `json:"artifact,omitempty"`
 	// Image: an image part's signed reference for agent/image; absent when
 	// the agent's transcript keeps no image the server can serve.
 	Image string `json:"image,omitempty"`
@@ -181,6 +184,14 @@ type ToolDetail struct {
 	// Some of the above was cut, or edits of a sensitive file were left out
 	Clipped bool `json:"clipped,omitempty"`
 	Hidden  bool `json:"hidden,omitempty"`
+}
+
+// ArtifactRef is a published claude.ai Artifact: its link, whether the call
+// created or updated it, and the version it is now at (0 when not given).
+type ArtifactRef struct {
+	URL     string `json:"url"`
+	Action  string `json:"action"` // created | updated
+	Version int    `json:"version,omitempty"`
 }
 
 // ToolEdit is one replacement of an edit; a new file has only New.
@@ -845,6 +856,7 @@ func foldToolResults(entries []TranscriptEntry) []TranscriptEntry {
 			}
 			call := &parts[r.part]
 			call.Result, call.IsError, call.Clipped = p.Result, p.IsError, call.Clipped || p.Clipped
+			call.Artifact = p.Artifact
 		}
 		if len(kept) > 0 {
 			e.Parts = kept

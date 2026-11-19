@@ -137,6 +137,62 @@ func TestClaudeParseResultInLaterRead(t *testing.T) {
 	}
 }
 
+func TestClaudeParseArtifactRef(t *testing.T) {
+	use := `{"type":"assistant","uuid":"a","message":{"content":[{"type":"tool_use","id":"t1","name":"Artifact","input":{"file_path":"/tmp/s/scratchpad/design/a.html"}}]}}` + "\n"
+	row := func(tur string) string {
+		return `{"type":"user","uuid":"b","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"Updated the Artifact"}]},"toolUseResult":` + tur + `}` + "\n"
+	}
+	cases := []struct {
+		name, tur string
+		want      *ArtifactRef
+	}{
+		{"updated", `{"url":"https://claude.ai/artifact/Hrrhu_d-7","updated":true,"seq":7}`,
+			&ArtifactRef{URL: "https://claude.ai/artifact/Hrrhu_d-7", Action: "updated", Version: 7}},
+		{"first publish", `{"url":"https://claude.ai/code/artifact/0b1c-2d","updated":false,"seq":1}`,
+			&ArtifactRef{URL: "https://claude.ai/code/artifact/0b1c-2d", Action: "created", Version: 1}},
+		{"from a type", `{"created_from_type":true,"url":"https://claude.ai/artifact/X1","version":"1795-c89a"}`,
+			&ArtifactRef{URL: "https://claude.ai/artifact/X1", Action: "created"}},
+		// A read or a quickstart has no publish record
+		{"quickstart", `{"quickstart":{"intent":"design"}}`, nil},
+		{"no action", `{"url":"https://claude.ai/artifact/X1"}`, nil},
+		// Only a claude.ai Artifact page is linked
+		{"other host", `{"url":"https://evil.example/artifact/X1","updated":true}`, nil},
+		{"lookalike host", `{"url":"https://claude.ai.evil.example/artifact/X1","updated":true}`, nil},
+		{"extra path", `{"url":"https://claude.ai/artifact/X1/../../x","updated":true}`, nil},
+		{"javascript", `{"url":"javascript:alert(1)","updated":true}`, nil},
+		{"string record", `"Error: refused"`, nil},
+	}
+	for _, c := range cases {
+		entries, _ := claudeJournal{}.Parse(strings.NewReader(use+row(c.tur)), 0)
+		f := foldToolResults(entries)
+		if len(f) != 1 {
+			t.Fatalf("%s: folded = %+v", c.name, f)
+		}
+		if got := f[0].Parts[0].Artifact; !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%s: artifact = %+v, want %+v", c.name, got, c.want)
+		}
+	}
+	// A failed call links nothing, nor a row of several results, whose
+	// record names only one of them
+	failed := `{"type":"user","uuid":"b","message":{"content":[{"type":"tool_result","tool_use_id":"t1","is_error":true,"content":"x"}]},"toolUseResult":{"url":"https://claude.ai/artifact/X1","updated":true}}` + "\n"
+	two := `{"type":"user","uuid":"b","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"x"},{"type":"tool_result","tool_use_id":"t2","content":"y"}]},"toolUseResult":{"url":"https://claude.ai/artifact/X1","updated":true}}` + "\n"
+	for name, res := range map[string]string{"failed": failed, "two results": two} {
+		entries, _ := claudeJournal{}.Parse(strings.NewReader(use+res), 0)
+		for _, e := range entries {
+			for _, p := range e.Parts {
+				if p.Artifact != nil {
+					t.Errorf("%s: artifact = %+v, want none", name, p.Artifact)
+				}
+			}
+		}
+	}
+	// A result read alone keeps it, for the client to attach by id
+	alone, _ := claudeJournal{}.Parse(strings.NewReader(row(`{"url":"https://claude.ai/artifact/X1","updated":true,"seq":2}`)), 0)
+	if len(alone) != 1 || !alone[0].Parts[0].Orphan || alone[0].Parts[0].Artifact == nil {
+		t.Fatalf("orphan = %+v", alone)
+	}
+}
+
 func TestClaudeParseKeepsImagesOfALongLine(t *testing.T) {
 	// Claude Code writes each image's base64 into the message's row, so four
 	// photos make a line far past agentMaxLine.

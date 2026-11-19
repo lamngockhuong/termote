@@ -147,7 +147,10 @@ type claudeRow struct {
 	IsSidechain      bool   `json:"isSidechain"`
 	IsMeta           bool   `json:"isMeta"`
 	IsCompactSummary bool   `json:"isCompactSummary"`
-	Message          *struct {
+	// ToolUseResult: Claude Code's structured record of the row's tool
+	// result; read only for an Artifact publish (claudeArtifactRef)
+	ToolUseResult json.RawMessage `json:"toolUseResult"`
+	Message       *struct {
 		Content any `json:"content"`
 		// Model and Usage are on assistant rows; every row of one
 		// message repeats the same usage.
@@ -312,6 +315,12 @@ func parseClaudeRow(line []byte, off int64) (TranscriptEntry, bool) {
 	if c, ok := content.([]any); ok {
 		var blockRole string
 		images, typed := 0, false
+		toolResults := 0
+		for _, item := range c {
+			if b, _ := item.(map[string]any); jsonStr(b["type"]) == "tool_result" {
+				toolResults++
+			}
+		}
 		for _, item := range c {
 			b, _ := item.(map[string]any)
 			switch jsonStr(b["type"]) {
@@ -358,10 +367,16 @@ func parseClaudeRow(line []byte, off int64) (TranscriptEntry, bool) {
 			case "tool_result":
 				result, clipped := clampText(stripANSI(toolResultText(b["content"])), claudeMaxResult)
 				isErr, _ := b["is_error"].(bool)
-				e.Parts = append(e.Parts, TranscriptPart{
+				p := TranscriptPart{
 					Kind: "tool", Tool: "result", ToolID: jsonStr(b["tool_use_id"]), Result: result,
 					IsError: isErr, Orphan: true, Clipped: clipped,
-				})
+				}
+				// The record describes the row's result: only read when the
+				// row holds one
+				if !isErr && toolResults == 1 {
+					p.Artifact = claudeArtifactRef(row.ToolUseResult)
+				}
+				e.Parts = append(e.Parts, p)
 			}
 		}
 		// An image is one the user pasted only beside words they typed: a
@@ -612,6 +627,38 @@ func xmlInner(s, tag string) string {
 	}
 	inner, _, _ := strings.Cut(rest, "</"+tag+">")
 	return strings.TrimSpace(inner)
+}
+
+// claudeArtifactRe is a claude.ai Artifact's page, the only link a card
+// takes from a tool result.
+var claudeArtifactRe = regexp.MustCompile(`^https://claude\.ai/(?:code/)?artifact/[A-Za-z0-9_-]{1,64}$`)
+
+// claudeArtifactRef reads the Artifact tool's record of a publish: its url,
+// with `updated` (false the first time) or `created_from_type` (an Artifact
+// made from a type). Any other record (another tool's, an Artifact read or
+// listing) or another link gives nil. The card shows it only on an Artifact
+// call.
+func claudeArtifactRef(raw json.RawMessage) *ArtifactRef {
+	if len(raw) == 0 || raw[0] != '{' {
+		return nil
+	}
+	var r struct {
+		URL             string `json:"url"`
+		Updated         *bool  `json:"updated"`
+		CreatedFromType bool   `json:"created_from_type"`
+		Seq             int    `json:"seq"`
+	}
+	if json.Unmarshal(raw, &r) != nil || !claudeArtifactRe.MatchString(r.URL) {
+		return nil
+	}
+	if r.Updated == nil && !r.CreatedFromType {
+		return nil
+	}
+	ref := &ArtifactRef{URL: r.URL, Action: "created", Version: max(r.Seq, 0)}
+	if r.Updated != nil && *r.Updated {
+		ref.Action = "updated"
+	}
+	return ref
 }
 
 // toolResultText flattens a tool output: a string, or a list of blocks of

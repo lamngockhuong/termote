@@ -1014,7 +1014,12 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   its tracked list holds that directory.
   A tool call carries `detail` for its card: the model's description, a Bash/Codex command whole
   (8 KiB) and an Edit/MultiEdit/Write's old and new text (16 KiB per call); the edits of a file
-  `isSensitive` names are left out (`hidden`), as its diff is in Changes. A view-only client reads
+  `isSensitive` names are left out (`hidden`), as its diff is in Changes. A Claude Code tool result
+  carries `artifact` (`claudeArtifactRef`, `server/agent_claude.go`) only from its row's
+  `toolUseResult` publish record (`updated` or `created_from_type`), in a row of one successful
+  result, and only for a `url` matching `https://claude.ai/[code/]artifact/<id>` whole; the card
+  draws it as a link (new tab, `noopener noreferrer`) only on an `Artifact` call and only for
+  `https:` host `claude.ai`, so a forged record links nowhere else. A view-only client reads
   the transcript as text only (`viewTranscript`, `server/agent.go`, on a copy of the cached read
   every client shares): the user's and the agent's `text` and `thinking` parts and the `image`
   parts of images the user pasted, and of a compaction summary (Claude Code's quotes what tools

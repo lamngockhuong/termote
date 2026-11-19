@@ -1013,9 +1013,18 @@ export interface TranscriptPart {
   clipped?: boolean
   // What a tool call's card shows beyond the one-line input
   detail?: ToolDetail
+  // The claude.ai Artifact a call published, from its result
+  artifact?: ArtifactRef
   // An image part's signed reference for agentImageUrl; absent when the
   // server cannot serve the image (another agent, an older server)
   image?: string
+}
+
+export interface ArtifactRef {
+  url: string
+  action: 'created' | 'updated'
+  // The version it is now at; absent when the result gave none
+  version?: number
 }
 
 export interface ToolDetail {

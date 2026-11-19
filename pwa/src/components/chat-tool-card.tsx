@@ -9,6 +9,7 @@ import {
   diffSummary,
   parseUnifiedDiff,
 } from '../utils/line-diff'
+import { safeUrl } from '../utils/markdown-safety'
 import { FileRef } from './chat-file-link'
 
 // A tool call of the Chat view, as a card: its name and what it is about,
@@ -52,6 +53,50 @@ function toolFile(part: TranscriptPart) {
 function basename(path: string) {
   const name = path.split(/[\\/]/).pop()
   return name || path
+}
+
+// A path in the session's scratchpad, from the scratchpad on, as Claude
+// Code's terminal names an Artifact's file
+function scratchpadPath(path: string) {
+  const m = /[\\/]scratchpad[\\/](.+)$/.exec(path)
+  return m ? m[1] : path
+}
+
+// The Artifact a call published, as Claude Code's terminal says it:
+// created or updated, the version, and its page. A link the server would
+// not send (another host) is not drawn.
+function ArtifactLine({ part }: { part: TranscriptPart }) {
+  const { t } = useT()
+  const a = part.artifact
+  const u = a && safeUrl(a.url)
+  if (!a || !u || u.protocol !== 'https:' || u.host !== 'claude.ai') return null
+  const label = [
+    t(
+      a.action === 'updated'
+        ? 'chat.tool.artifactUpdated'
+        : 'chat.tool.artifactCreated',
+    ),
+    a.version ? t('chat.tool.artifactVersion', { version: a.version }) : '',
+  ]
+    .filter(Boolean)
+    .join(' · ')
+  return (
+    <p
+      className="flex min-w-0 items-baseline gap-1.5 text-[12px] text-fg-subtle"
+      data-artifact={a.action}
+    >
+      <span className="shrink-0">{label}</span>
+      <a
+        href={u.href}
+        title={u.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="min-w-0 truncate font-mono text-accent underline underline-offset-2"
+      >
+        {u.host + u.pathname}
+      </a>
+    </p>
+  )
 }
 
 // A block cut to maxClass's height until opened: when it holds more than
@@ -247,7 +292,10 @@ export function ToolCard({ part }: { part: TranscriptPart }) {
   const edit = !part.orphan && EDIT_TOOLS.has(part.tool ?? '')
   const hunks = edit ? editHunks(part) : null
   const command = d?.command
-  const about = d?.description || part.input
+  const artifact = !part.orphan && part.tool === 'Artifact'
+  const about =
+    d?.description ||
+    (artifact && part.input ? scratchpadPath(part.input) : part.input)
   const file = toolFile(part)
   const clipped = part.clipped || d?.clipped
   // An edit's result only repeats the file; shown when the edit failed
@@ -284,7 +332,7 @@ export function ToolCard({ part }: { part: TranscriptPart }) {
           about && (
             <span
               className={`min-w-0 flex-1 truncate text-fg-muted ${d?.description ? '' : 'font-mono text-[12px]'}`}
-              title={about}
+              title={d?.description ? about : part.input}
             >
               {about}
             </span>
@@ -294,6 +342,7 @@ export function ToolCard({ part }: { part: TranscriptPart }) {
       {part.orphan && (
         <p className="text-[12px] text-fg-subtle">{t('chat.tool.orphan')}</p>
       )}
+      {artifact && <ArtifactLine part={part} />}
       {hunks && (
         <>
           <p className="text-[12px] text-fg-subtle">
