@@ -6,8 +6,9 @@
 // the files that decide what it runs match the trusted branch, origin/HEAD or else main: the
 // lefthook config, scripts/check-gofmt.sh, scripts/staged-files.sh and pwa/scripts/check-i18n.mjs,
 // the dprint config (its plugins can be programs), the Biome config (`biome check` reads it, plugins
-// and `extends` included), the npm and pnpm config and package.json files `pnpm exec` and `npx`
-// read, and any tracked file under node_modules (git replaces an ignored file with a branch's
+// and `extends` included), the npm and pnpm config, every package.json and the lockfile (`pnpm exec`
+// installs first when any workspace package's dependencies changed, running that package's own
+// lifecycle scripts), and any tracked file under node_modules (git replaces an ignored file with a branch's
 // tracked one, so a branch could bring its own node_modules/.bin/lefthook). Names match in any
 // case (on a case-insensitive file system npm reads a tracked .NPMRC as .npmrc), and any changed
 // name git has to quote (a non-ASCII byte, a '"', a '\' or a control character) counts as one of
@@ -59,8 +60,8 @@ if [ -z "$ref" ]; then
 fi
 changed=$(git --icase-pathspecs -C "$top" -c core.quotePath=true diff --name-only "$ref" -- ':(glob)lefthook*' ':(glob).lefthook*' \\
   ':(glob).config/lefthook*' scripts/check-gofmt.sh scripts/staged-files.sh ':(glob)**/dprint.json*' \\
-  ':(glob)**/.dprint.json*' ':(glob)**/biome.json*' ':(glob)**/.biome.json*' ':(glob)**/.npmrc' ':(glob)**/pnpm-workspace.yaml' ':(glob)**/.pnpmfile.*' package.json \\
-  pwa/package.json pwa/scripts/check-i18n.mjs ':(glob)**/node_modules' ':(glob)**/node_modules/**') &&
+  ':(glob)**/.dprint.json*' ':(glob)**/biome.json*' ':(glob)**/.biome.json*' ':(glob)**/.npmrc' ':(glob)**/pnpm-workspace.yaml' ':(glob)**/.pnpmfile.*' ':(glob)**/package.json' \\
+  ':(glob)**/pnpm-lock.yaml' pwa/scripts/check-i18n.mjs ':(glob)**/node_modules' ':(glob)**/node_modules/**') &&
   # Case matches only in ASCII: a name git quotes (a non-ASCII byte, a '"', a '\' or a control
   # character) counts as a hook file, since a case-insensitive file system can fold a non-ASCII
   # one (a Kelvin sign for a k) onto a hook file's name. Quoted in both lists, so it shows once

@@ -3531,8 +3531,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `scripts/staged-files.sh`, `pwa/scripts/check-i18n.mjs`, any
   `dprint.json*`/`.dprint.json*` (dprint plugins can be programs), any `biome.json*`/`.biome.json*`
   (the config `biome check` runs with, its plugins and `extends` included), any `.npmrc`, any
-  `pnpm-workspace.yaml`, any `.pnpmfile.*`, `package.json`, `pwa/package.json` (what `pnpm exec` and
-  `npx` read) or any tracked `node_modules` (a symlink too) or file under one (git replaces an
+  `pnpm-workspace.yaml`, any `.pnpmfile.*`, any `package.json` or `pnpm-lock.yaml` (what `pnpm exec` and
+  `npx` read: `pnpm exec` installs first when a workspace package's dependencies changed, and runs
+  that package's own lifecycle scripts, from any package's directory) or any tracked `node_modules` (a symlink too) or file under one (git replaces an
   ignored file with a branch's tracked one, so a branch could bring its own
   `node_modules/.bin/lefthook`); otherwise, or with no such branch, it names the files on stderr and
   exits 0 without running anything. A pre-commit command gets its files from
@@ -3550,8 +3551,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `CGO_ENABLED=0` (as releases build; `server/` has no cgo), so it compiles no C code from
   `server/*.go`, which are not hook files (a test refuses a `go` command without it). A clone whose
   hooks `lefthook install` wrote before 2.2.0 runs them unchecked until `pnpm install` runs once
-  (`CONTRIBUTING.md` says so). `pnpm install` itself runs the branch's `package.json` scripts
-  (accepted: a maintainer reads that diff first, `CONTRIBUTING.md`)
+  (`CONTRIBUTING.md` says so). `pnpm install` itself runs the branch's scripts: every workspace
+  package's, and the install scripts of what its `pnpm-lock.yaml` fetches for the dependencies allowed
+  to build (accepted: a maintainer reads the diff of every `package.json`, the lockfile and the npm and
+  pnpm config first, `CONTRIBUTING.md`)
 - **Interactive demo** (`pwa/src/demo/`, `pnpm --filter termote build:demo`, published at `/demo/`
   of the website by `deploy-website.yml`): the PWA built with `--mode demo` answers its own
   requests in the browser from fixtures. It talks to no termote server and holds no credential.
