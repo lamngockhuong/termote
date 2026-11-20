@@ -704,16 +704,18 @@ func mapHerdrSnapshot(s herdrSnapshot) herdrView {
 		if dir = processCwd(dir); dir != "" {
 			cwds[p.ID] = dir
 		}
-		pane := Pane{ID: p.ID, Title: p.Title, Active: layouts[p.TabID].FocusedPaneID == p.ID, Meta: cleanMeta(p.Tokens)}
+		// A pane's output sets its title (OSC 0/2), and any process on the
+		// socket its agent name: both cleaned like a name.
+		pane := Pane{ID: p.ID, Title: cleanPaneName(p.Title), Active: layouts[p.TabID].FocusedPaneID == p.ID, Meta: cleanMeta(p.Tokens)}
 		if p.Label != nil {
 			pane.Name = cleanPaneName(*p.Label)
 		}
-		if p.Agent != nil && *p.Agent != "" {
+		if p.Agent != nil && cleanPaneName(*p.Agent) != "" {
 			status := p.AgentStatus
 			if !herdrAgentStatuses[status] {
 				status = "unknown"
 			}
-			pane.Agent = &AgentInfo{Name: *p.Agent, Status: status}
+			pane.Agent = &AgentInfo{Name: cleanPaneName(*p.Agent), Status: status}
 		}
 		panesByTab[p.TabID] = append(panesByTab[p.TabID], pane)
 	}

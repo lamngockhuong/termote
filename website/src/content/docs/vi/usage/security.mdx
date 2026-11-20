@@ -92,6 +92,10 @@ giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tà
 - **Dịch vụ khác cùng tên máy.** Cookie không gắn với cổng: mọi dịch vụ dưới tên máy đó đều nhận cookie của
   Termote. Hãy cho Termote một tên máy riêng.
 - **Chương trình khác của cùng tài khoản hệ điều hành.** Chúng đọc được đúng những file Termote đọc.
+- **Network namespace khác trên cùng máy, khi dùng `--lan`.** Bước kiểm kết nối từ chính máy này chỉ biết
+  các địa chỉ của network namespace của server. Một process ở namespace khác có địa chỉ riêng trên mạng
+  bridge (chẳng hạn container LXC dùng `lxc-user-nic`) bị coi như một máy khác trong LAN và chỉ phải qua
+  mật khẩu. Podman rootless kết nối từ namespace của máy chủ nên vẫn bị kiểm.
 - **HTTP không mã hoá.** Không có HTTPS (Tailscale, Cloudflare Tunnel, hoặc proxy có chứng chỉ) thì mật
   khẩu và cookie đi qua mạng ở dạng đọc được.
 - **Dòng audit không phải bằng chứng.** `termote logs clean`, hay bất kỳ thiết bị toàn quyền nào, xoá được

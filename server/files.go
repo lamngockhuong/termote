@@ -785,12 +785,22 @@ func (f *filesAPI) content(ctx context.Context, root filesRoot, p string, reveal
 	if err != nil {
 		return nil, nil, err
 	}
-	hidden := sensitivePath(root.Root, rel) && !reveal
+	slash := filepath.ToSlash(rel)
+	// A file with a sensitive name is answered as such before it is
+	// revealed: never read, decoded, nor holding a slot.
+	if sensitivePath(root.Root, rel) && !reveal {
+		_, _, err := statPreview(fh, maxViewSize)
+		fh.Close()
+		if err != nil {
+			return nil, nil, err
+		}
+		return sensitiveResponse{Root: root.Root, Path: slash, Sensitive: true}, nil, nil
+	}
 	// A view-only client never holds the last large-read or decode slot
 	// (takeSlot).
 	viewOnly := requestRole(ctx) == roleView
 	large := func() error {
-		if hidden || release != nil {
+		if release != nil {
 			return nil
 		}
 		if !takeSlot(f.largeReadSlots, viewOnly) {
@@ -816,11 +826,6 @@ func (f *filesAPI) content(ctx context.Context, root filesRoot, p string, reveal
 		if err := large(); err != nil {
 			return nil, release, err
 		}
-	}
-	slash := filepath.ToSlash(rel)
-	// Never decoded, nor holding a slot, before it is revealed.
-	if hidden {
-		return sensitiveResponse{Root: root.Root, Path: slash, Sensitive: true}, release, nil
 	}
 	if reason != "" {
 		return unpreviewableResponse{Root: root.Root, Path: slash, Size: size, Reason: reason}, release, nil

@@ -822,6 +822,28 @@ func TestMapHerdrSnapshotUnknownStatus(t *testing.T) {
 	}
 }
 
+// A pane title its output set and an agent name from the socket are
+// cleaned like a name: no line break, bidi or other control rune reaches a
+// client.
+func TestMapHerdrSnapshotCleansTitleAndAgent(t *testing.T) {
+	var s herdrSnapshot
+	if err := json.Unmarshal([]byte(`{
+		"workspaces":[{"workspace_id":"w1","number":1,"label":"a","active_tab_id":"w1:t1"}],
+		"tabs":[{"tab_id":"w1:t1","workspace_id":"w1","number":1,"label":"t"}],
+		"panes":[{"pane_id":"w1:p1","tab_id":"w1:t1","terminal_title_stripped":" vim\nok\u202e\u0007 ","agent":"claude\r\u200f","agent_status":"idle"},
+		         {"pane_id":"w1:p2","tab_id":"w1:t1","agent":"\u0007"}],
+		"layouts":[]}`), &s); err != nil {
+		t.Fatal(err)
+	}
+	panes := mapHerdrSnapshot(s).snap.Groups[0].Tabs[0].Panes
+	if p := panes[0]; p.Title != "vimok" || p.Agent == nil || p.Agent.Name != "claude" {
+		t.Errorf("pane = title %q agent %+v", p.Title, p.Agent)
+	}
+	if panes[1].Agent != nil {
+		t.Errorf("an agent name of control runes only: %+v", panes[1].Agent)
+	}
+}
+
 func TestHerdrSnapshotCache(t *testing.T) {
 	f := newFakeHerdr(t)
 	m := newTestHerdrMux(t, f)

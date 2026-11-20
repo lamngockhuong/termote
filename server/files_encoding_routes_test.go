@@ -160,6 +160,15 @@ func TestFilesContentDecodeSlots(t *testing.T) {
 	if code, body := fx.get(t, url.Values{"path": {".env"}}); code != 200 || body["sensitive"] != true {
 		t.Errorf("sensitive while busy = %d %v", code, body)
 	}
+	// One as large as a view reads is answered before any of it is read,
+	// whatever it holds.
+	whole := filepath.Join(fx.root, "id_rsa")
+	if err := os.WriteFile(whole, bytes.Repeat([]byte{0xff}, maxViewSize), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if code, body := fx.get(t, url.Values{"path": {"id_rsa"}}); code != 200 || body["sensitive"] != true || body["text"] != nil {
+		t.Errorf("large sensitive while busy = %d %v", code, body)
+	}
 	for range decodeMaxRunning {
 		<-fx.f.decodeSlots
 	}
@@ -227,6 +236,15 @@ func TestFilesContentLargeReadSlots(t *testing.T) {
 	}
 	if code, body := fx.get(t, url.Values{"path": {".env"}}); code != 200 || body["sensitive"] != true {
 		t.Errorf("sensitive while busy = %d %v", code, body)
+	}
+	// One as large as a view reads is answered before any of it is read,
+	// whatever it holds.
+	whole := filepath.Join(fx.root, "id_rsa")
+	if err := os.WriteFile(whole, bytes.Repeat([]byte{0xff}, maxViewSize), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if code, body := fx.get(t, url.Values{"path": {"id_rsa"}}); code != 200 || body["sensitive"] != true || body["text"] != nil {
+		t.Errorf("large sensitive while busy = %d %v", code, body)
 	}
 	for range largeReadMaxRunning {
 		<-fx.f.largeReadSlots

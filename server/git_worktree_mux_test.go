@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -468,5 +469,67 @@ func TestGitWorktreeMuxRefusesDirOffDrive(t *testing.T) {
 	}
 	if resolveTried(rr, off) {
 		t.Errorf("%s was looked up before being refused", off)
+	}
+}
+
+// commitIn commits every change in repo.
+func commitIn(t *testing.T, repo string) {
+	t.Helper()
+	for _, args := range [][]string{{"add", "-A"}, {"-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "link"}} {
+		if out, err := exec.Command("git", append([]string{"-C", repo}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+	}
+}
+
+// With the worktree base inside the repository (a container's workspace), a
+// folder on the way to a new checkout that the repository committed as a
+// link is refused, and nothing is written where the link leads.
+func TestGitWorktreeBaseLinkInRepoRefused(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("a committed symlink needs core.symlinks")
+	}
+	x := newGitWorktreeFixture(t, true)
+	dest := tempDirReal(t)
+	base := filepath.Join(x.repo, ".termote", "worktrees")
+	if err := os.MkdirAll(base, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(dest, filepath.Join(base, filepath.Base(x.repo))); err != nil {
+		t.Fatal(err)
+	}
+	commitIn(t, x.repo)
+	x.gm.base, x.gm.trust = base, x.repo
+	if _, code, _ := x.do(t, "POST", "/api/mux/worktrees", `{"groupId":"$main","branch":"feat/link"}`); code != "create_failed" {
+		t.Errorf("create through a committed link: %s", code)
+	}
+	if entries, _ := os.ReadDir(dest); len(entries) != 0 || len(x.f.took()) != 0 {
+		t.Errorf("written where the link leads: %v", entries)
+	}
+	// The base itself a link: refused too, below the workspace.
+	if err := os.RemoveAll(base); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(dest, base); err != nil {
+		t.Fatal(err)
+	}
+	if _, code, _ := x.do(t, "POST", "/api/mux/worktrees", `{"groupId":"$main","branch":"feat/link"}`); code != "create_failed" {
+		t.Errorf("create under a linked base: %s", code)
+	}
+	if entries, _ := os.ReadDir(dest); len(entries) != 0 {
+		t.Errorf("written where the base leads: %v", entries)
+	}
+}
+
+// A new checkout is never made in the repository's own git directory.
+func TestGitWorktreeInGitDirRefused(t *testing.T) {
+	x := newGitWorktreeFixture(t, true)
+	gitDir := filepath.Join(x.repo, ".git")
+	x.gm.base, x.gm.trust = filepath.Join(gitDir, "wt"), x.repo
+	if _, code, _ := x.do(t, "POST", "/api/mux/worktrees", `{"groupId":"$main","branch":"feat/git"}`); code != "create_failed" {
+		t.Errorf("create in the git dir: %s", code)
+	}
+	if _, err := os.Lstat(filepath.Join(gitDir, "wt")); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("folder made in the git dir: %v", err)
 	}
 }

@@ -22,8 +22,10 @@ type gitWorktreeMux struct {
 	roots *rootResolver
 	nest  *gitNester
 	deny  []string
-	// base is where new checkouts go (worktreeBase).
-	base string
+	// base is where new checkouts go (worktreeBase); trust the folder
+	// below which a checkout's path holds no link (worktreeTrust; base
+	// when empty).
+	base, trust string
 	// validName checks a new group's name the backend's way (tmux,
 	// Zellij); nil: the backend takes none (hc names a space after its
 	// folder, so a label is not used there).
@@ -51,6 +53,7 @@ func worktreeMuxFor(m Mux, files *filesAPI, nest *gitNester) worktreeMux {
 		return nil
 	}
 	gm := &gitWorktreeMux{m: m, git: files.git, roots: files.roots, nest: nest, deny: files.deny, base: worktreeBase(m.Name())}
+	gm.trust = worktreeTrust(gm.base)
 	switch m.(type) {
 	case *zellijMux:
 		gm.validName = validZellijName
@@ -218,6 +221,13 @@ func (g *gitWorktreeMux) CreateWorktree(ctx context.Context, sourceID, branch, b
 		return "", err
 	}
 	path, err := newWorktreePath(g.base, repo.Name, branch, g.deny)
+	if err == nil {
+		trust := g.trust
+		if trust == "" {
+			trust = g.base
+		}
+		err = checkWorktreeTarget(trust, path, repo.GitDir, repo.Common)
+	}
 	if err != nil {
 		var ce *codedError
 		if !errors.As(err, &ce) || ce != errWorktreeName {

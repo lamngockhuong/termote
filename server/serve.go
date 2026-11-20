@@ -1504,8 +1504,11 @@ func newBasicAuth(user, pass string, dev *deviceAuth, sessions *sessionAuth, opt
 		}
 		code, name := r.PostForm.Get("code"), r.PostForm.Get("name")
 		form := pairForm{Code: pairPrefill(code), Name: cleanDeviceName(name)}
+		// A browser whose cookies name a full device, or more than one live
+		// device (a sibling subdomain may have planted one), is signed in:
+		// pairing it again would replace its own cookie.
 		prev, prevOK, _ := dev.deviceCookie(r)
-		if hasSession(r) || prevOK && prev.Role == roleFull {
+		if hasSession(r) || prevOK && prev.Role == roleFull || !prevOK && len(dev.liveDevices(r)) > 0 {
 			writePairPage(w, http.StatusConflict, pairForm{Error: "This browser is already signed in. Log out first to pair it as another device.", Closed: true})
 			return
 		}

@@ -22,7 +22,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   the browser sends first: every cookie of that name is tried, not only the first, so it cannot
   hide this host's own and keep the user at the sign-in form, and Log out ends each one it carries;
   the device cookie the same: every copy is tried, it is cleared only when none names a device that
-  can sign in, and Log out revokes each device its copies name
+  can sign in, and Log out revokes each device its copies name. Copies that name more than one live
+  device sign the request in as none of them (nothing is cleared): the request cannot tell this
+  host's own copy from one a sibling planted with the token of a device of its own, which would
+  otherwise run a full browser's requests as that (perhaps view-only) device
 - Basic auth over HTTPS required for production
 - **Sign-in form** (`/login`, `server/login.go`): a browser page load without a session gets
   a 401 with a plain HTML form (no script) and no `WWW-Authenticate`, since an iOS home-screen
@@ -479,7 +482,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   (`isCrossSiteLogin`, `writeGuard`'s `loginPath || pairPath`), with no code waiting → 401 at once
   and not counted, wrong codes counted by a limiter of its own (5/min per IP, 20/min per /64, so a
   typo never locks the password login; behind a proxy every client shares one address). A browser
-  already signed in as a session or full device → 409, never downgraded; a view-only device paired
+  already signed in as a session or full device, or whose cookies name more than one live device,
+  → 409, never downgraded and its cookie never replaced; a view-only device paired
   again has its old record revoked. `safeNext` never returns `/pair…` and the service worker's
   `navigateFallbackDenylist` has `/pair`, so a code never reaches `next` or the history;
   `/login?next=/pair?code=…` (where an app page an older service worker served at `/pair` sends
@@ -539,9 +543,13 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   non-GET/HEAD/OPTIONS method of a view-only client on any path (403 `{"error", "code":
   "view_only"}`) before a handler runs, except `POST /api/mux/logout`; handlers repeat it with
   `requireWriteRole`, so a route added later is closed without remembering to. Reads: transcript,
-  commands, snapshot (`viewSnapshot`: no tmux default session, and Herdr is not started), push key and `worktrees` GET are allowed; `agent/prompt` carries no
+  commands (the pane's project commands and skills only where Files would show them: none under a
+  root Files hides from view-only, else only files git tracks, `projectView`; the user's and the
+  plugins' stay), snapshot (`viewSnapshot`: no tmux default session, and Herdr is not started), push key and `worktrees` GET are allowed; `agent/prompt` carries no
   `promptId`, body, options or free-text option, a form's fields by key, type and title only, and no
-  title taken from the dialog's text rather than its header (`viewCard`: these can hold the tool's
+  title taken from the dialog's text rather than its header (a Claude dialog's title is kept only
+  when it is a question's or one of `claudeDialogHeaders`, since a rule the text draws at column 0
+  can pass for the top edge; `viewCard`: these can hold the tool's
   input, the command or the file and its new content, and the card is read for any pane, not only
   one the view stream can show; its `activity` is the same as for `full`). Through the machine proxy
   the remote machine builds the card, so a machine on 2.29.1 or older still sends the whole card to
@@ -784,7 +792,12 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
     container under `/workspace`); refused (`create_failed`) when the repository name is not one
     clean path element, the target exists, or it (as given, or resolved for the part that exists)
     is under a files deny dir (on Windows a junction on the way is resolved too, `resolveLinkedDir`
-    through an open handle: `filepath.EvalSymlinks` leaves one as it is); the folder made for the
+    through an open handle: `filepath.EvalSymlinks` leaves one as it is), when a folder between the
+    trust root and it is a symlink, a junction or not a plain directory (`checkWorktreeTarget`; the
+    trust root is `/workspace` in the container, where the base is inside a repository the user did
+    not write and one committed as a link would send the checkout to its target, and natively the
+    base itself, which may be the user's own link), or when it leads into the repository's git
+    directory or common dir (a checkout among its config and hooks); the folder made for the
     repository is the user's only (`makeWorktreeParent`: mode 0700, on Windows a protected
     owner-only DACL its checkouts inherit, `D:P(A;OICI;FA;;;<user SID>)`, since traverse checking
     is off there; no ACE for SYSTEM or Administrators; a folder whose ACL could not be set is
@@ -1044,7 +1057,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   its service's lists, see OpenCode chat) returns
   only names, descriptions, sources and kinds of `.claude/commands`/`.claude/skills` under the
   pane root and `commands`/`skills`
-  in that config dir, read through `os.Root` (first 8 KB per file; a file that is a symlink, under
+  in that config dir (for a view-only client the pane root's as Files shows them: nothing under a
+  root with no repo or holding home, else only what git tracks; the narrowed list is cached apart),
+  read through `os.Root` (first 8 KB per file; a file that is a symlink, under
   a denied dir or with a sensitive name is never read; every file and every dir listed is opened
   nonblocking, so a FIFO in its place never holds the cached walk), with the same
   `Sec-Fetch-Site`/`Origin` check as the files routes. A symlinked skill dir is followed only
@@ -3071,7 +3086,12 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   10 ms) is Windows, let through; NAT goes through root's relay (accepted: every Windows user).
   Not found, closed or timed out → refused, `audit: local-user-refused` (10 s per user, 64 users),
   the first naming `--allow-local-user`. macOS: no check (accepted). On by default (breaking for
-  a reverse proxy under another user); a rollback's `start` drops the saved names
+  a reverse proxy under another user); a rollback's `start` drops the saved names. An address is
+  this machine's only by this network namespace's interfaces: with `--lan`, a process in another
+  namespace on the same machine that has an address of its own on the bridged network (an LXC
+  container with `lxc-user-nic`, for one) connects as another machine would, with no owner lookup,
+  and meets only the password (accepted, written in `docs/security-model.md`). Rootless podman
+  connects from the host's namespace and is checked
 - **CLI local socket** (`server/local_socket*.go`): the native server also serves on
   `<stateDir>/run/<port>.sock` (dir 0700 owned, not a symlink; socket 0600) or the pipe
   `\\.\pipe\termote-<SID>-<port>` (owner the user, named in its SDDL; ACL user + SYSTEM, remote
