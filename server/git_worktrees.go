@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"os/exec"
@@ -270,6 +271,61 @@ func newWorktreePath(base, repoName, branch string, deny []string) (string, erro
 		}
 	}
 	return path, nil
+}
+
+// worktreeTrust is the folder below which a new checkout's path holds no
+// link: in a container the workspace, since the base is inside a repository
+// the user did not write (one committed as a link sends the checkout to its
+// target); natively the base itself, which may be the user's own link.
+func worktreeTrust(base string) string {
+	if runningInContainer() {
+		return containerWorkspace
+	}
+	return base
+}
+
+// checkWorktreeTarget refuses path, a new checkout's, when a folder between
+// trust and it is a symlink, a junction or anything but a plain directory
+// (makeWorktreeParent and git would follow it), and when it leads into one of
+// gitDirs (the repository's own git directories): a checkout there would put
+// the branch's files among the repository's config and hooks.
+func checkWorktreeTarget(trust, path string, gitDirs ...string) error {
+	rel, err := filepath.Rel(trust, path)
+	if trust == "" || err != nil || !filepath.IsLocal(rel) {
+		return fmt.Errorf("worktree target %s is not under %s: %w", path, trust, errWorktreeCreateFailed)
+	}
+	dir := trust
+	for _, part := range strings.Split(rel, string(filepath.Separator)) {
+		dir = filepath.Join(dir, part)
+		fi, err := os.Lstat(dir)
+		if errors.Is(err, os.ErrNotExist) {
+			break // made below as a plain folder
+		}
+		if err != nil || fi.Mode().Type() != fs.ModeDir || isJunction(dir) {
+			return fmt.Errorf("worktree target %s: %s is not a plain folder: %w", path, dir, errWorktreeCreateFailed)
+		}
+	}
+	paths := []string{path}
+	if real, ok := resolveExisting(path); ok {
+		paths = append(paths, real)
+	}
+	for _, d := range gitDirs {
+		if d == "" {
+			continue
+		}
+		dirs := []string{d}
+		if real, err := resolveLinkedDir(d); err == nil {
+			dirs = append(dirs, real)
+		}
+		for _, g := range dirs {
+			for _, p := range paths {
+				if underDir(g, p) {
+					return fmt.Errorf("worktree target %s is in the git directory %s: %w", path, d, errWorktreeCreateFailed)
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // resolveExisting resolves the deepest folder of p that exists and joins the

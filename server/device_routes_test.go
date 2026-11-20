@@ -451,6 +451,41 @@ func TestDeviceCookieBehindAnotherCopy(t *testing.T) {
 	}
 }
 
+// A sibling subdomain that plants the token of a live device of its own, under
+// the name of this host's cookie, does not get a full browser's requests run
+// as its device: two live copies choose none, the real copy is not cleared,
+// and the browser cannot be paired again over its own cookie.
+func TestDeviceCookieBehindAnotherLiveDevice(t *testing.T) {
+	h, _, _, _ := newDeviceServer(t)
+	full := pairDevice(t, h, "full")
+	planted := &http.Cookie{Name: full.Name, Value: pairDevice(t, h, "view").Value}
+	req := asDevice("GET", "/api/mux/snapshot", "", planted)
+	req.AddCookie(full)
+	rec := serve(h, req)
+	var snap Snapshot
+	json.Unmarshal(rec.Body.Bytes(), &snap)
+	if rec.Code == http.StatusOK || snap.Caps.Role == "view" {
+		t.Errorf("planted live copy first: %d role %q, want not signed in", rec.Code, snap.Caps.Role)
+	}
+	if c := deviceCookieOf(rec); c != nil {
+		t.Errorf("a copy was cleared: %+v", c)
+	}
+	if code, role := snapshotRole(t, h, full); code != http.StatusOK || role != "full" {
+		t.Errorf("the real copy alone: %d %q", code, role)
+	}
+	code := makePairCode(t, h, `{"role":"view"}`)["code"].(string)
+	pair := postPair(h, url.Values{"code": {code}}, func(r *http.Request) {
+		r.AddCookie(planted)
+		r.AddCookie(full)
+	})
+	if pair.Code != http.StatusConflict || deviceCookieOf(pair) != nil {
+		t.Errorf("pair with two live copies: %d, cookie %v", pair.Code, deviceCookieOf(pair))
+	}
+	if code, role := snapshotRole(t, h, full); code != http.StatusOK || role != "full" {
+		t.Errorf("the real copy after the refused pairing: %d %q", code, role)
+	}
+}
+
 // The device list is a same-site read.
 func TestDeviceListCrossSite(t *testing.T) {
 	h, _, _, _ := newDeviceServer(t)

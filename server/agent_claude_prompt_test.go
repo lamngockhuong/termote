@@ -1062,3 +1062,33 @@ func TestBlockCountdownIsNotPartOfTheDialog(t *testing.T) {
 		}
 	})
 }
+
+// A rule of '─' at column 0 inside a cut dialog's text is taken for its top
+// edge: the row under it, part of the file to write, is never the title a
+// view-only card keeps.
+func TestCutDialogColumnZeroRuleTitleHiddenFromView(t *testing.T) {
+	rows := strings.SplitAfter(cutWriteScreen(20), "\r\n")
+	inject := strings.Repeat("─", 12) + "\r\n SECRET-ROW-FROM-THE-FILE\r\n"
+	sc := readClaudeScreen(strings.Join(rows[:5], "") + inject + strings.Join(rows[5:], ""))
+	if sc.prompt == nil {
+		t.Fatal("no prompt read")
+	}
+	v := viewPrompt(sc)
+	if v == nil || v.Kind != "permission" {
+		t.Fatalf("view card = %+v", v)
+	}
+	if strings.Contains(v.Title, "SECRET-ROW") {
+		t.Errorf("view card title = %q", v.Title)
+	}
+}
+
+// A known header under the top edge stays the view card's title.
+func TestDialogHeaderKeptForView(t *testing.T) {
+	b, err := os.ReadFile("testdata/claude/screens/2.1.286-permission-bash.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v := viewPrompt(readClaudeScreen(string(b))); v == nil || v.Title != "Bash command" {
+		t.Errorf("view card = %+v", v)
+	}
+}

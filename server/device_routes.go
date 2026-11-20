@@ -211,17 +211,25 @@ func (d *deviceAuth) pairValidity(a authInfo, secs *int64) (time.Duration, error
 // the name is tried, not only the first, as for the session cookie: a sibling
 // subdomain can set one for the parent domain with a longer path, which the
 // browser sends first, and must neither hide this host's own nor get it
-// cleared. unknown reports cookies of this store none of which names a device
-// that can sign in (revoked, expired, made up): only then is the cookie
-// cleared. One of a device of another password is kept, so a server run once
-// with another password does not end the device.
+// cleared. Nor may it replace this host's own with a device of its own: the
+// request cannot tell the host-only copy from the parent domain's, so when
+// copies name more than one live device none is chosen and the request is not
+// signed in by its cookie (none is cleared either). unknown reports cookies of
+// this store none of which names a device that can sign in (revoked,
+// expired, made up): only then is the cookie cleared. One of a device of
+// another password is kept, so a server run once with another password does
+// not end the device.
 func (d *deviceAuth) deviceCookie(r *http.Request) (rec deviceRecord, ok, unknown bool) {
 	cookies := r.CookiesNamed(d.store.cookie)
 	unknown = len(cookies) > 0
 	for _, c := range cookies {
 		got, live, stale := d.store.lookup(c.Value)
 		if live {
-			return got, true, false
+			if ok && got.ID != rec.ID {
+				return deviceRecord{}, false, false
+			}
+			rec, ok, unknown = got, true, false
+			continue
 		}
 		if got.ID != "" {
 			d.expire(got.ID)
@@ -230,7 +238,7 @@ func (d *deviceAuth) deviceCookie(r *http.Request) (rec deviceRecord, ok, unknow
 			unknown = false
 		}
 	}
-	return deviceRecord{}, false, unknown
+	return rec, ok, unknown
 }
 
 // hasDeviceCookie reports a cookie of this store on the request.

@@ -81,17 +81,18 @@ func (a *agentAPI) handleCommands(w http.ResponseWriter, r *http.Request) {
 	var res commandsResponse
 	switch s.Agent {
 	case "claude":
-		root := a.paneRoot(r, paneID).Root
+		pr, skip, key := a.projectView(r, a.paneRoot(r, paneID))
+		root := pr.Root
 		if root != "" && a.files.denied(root, ".claude") {
 			root = ""
 		}
-		res, _ = a.commands.do(root+"\x00"+s.ClaudeDir, func() (commandsResponse, error) {
-			return listAgentCommands(root, s.ClaudeDir, a.home, a.commandSkip), nil
+		res, _ = a.commands.do(key+root+"\x00"+s.ClaudeDir, func() (commandsResponse, error) {
+			return listAgentCommands(root, s.ClaudeDir, a.home, skip), nil
 		})
 	case "codex":
-		pr := a.paneRoot(r, paneID)
-		res, _ = a.commands.do("codex\x00"+pr.Root+"\x00"+pr.Dir+"\x00"+s.CodexHome, func() (commandsResponse, error) {
-			return listCodexSkills(pr, s.CodexHome, a.home, a.commandSkip), nil
+		pr, skip, key := a.projectView(r, a.paneRoot(r, paneID))
+		res, _ = a.commands.do(key+"codex\x00"+pr.Root+"\x00"+pr.Dir+"\x00"+s.CodexHome, func() (commandsResponse, error) {
+			return listCodexSkills(pr, s.CodexHome, a.home, skip), nil
 		})
 	case "opencode":
 		// The service's own lists; no file is opened here.
@@ -119,6 +120,46 @@ func (a *agentAPI) paneRoot(r *http.Request, paneID string) filesRoot {
 		return filesRoot{}
 	}
 	return pr
+}
+
+// projectView narrows the pane's project dirs for a view-only client as the
+// files routes do, since a command's description is a file's first line: no
+// root at all where Files hides the root from it (no git repo, a home dir),
+// else only what git tracks under the root (an untracked note in
+// .claude/commands is not listed). The user's and the plugins' commands are
+// not the pane's files and stay. key sets the narrowed list apart in the
+// cache.
+func (a *agentAPI) projectView(r *http.Request, pr filesRoot) (filesRoot, func(dir, rel string) bool, string) {
+	if pr.Root == "" || !isViewOnly(r) {
+		return pr, a.commandSkip, ""
+	}
+	if a.files.viewHidesRoot(pr) {
+		return filesRoot{}, a.commandSkip, ""
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), filesTimeout)
+	defer cancel()
+	lists, err := a.files.findLists(ctx, pr, findQuery{committed: true})
+	if err != nil {
+		return filesRoot{}, a.commandSkip, ""
+	}
+	tracked := lists[0]
+	bases := []string{pr.Root}
+	if real := resolvedDir(pr.Root); real != "" && real != pr.Root {
+		bases = append(bases, real)
+	}
+	return pr, func(dir, rel string) bool {
+		if a.commandSkip(dir, rel) {
+			return true
+		}
+		full := filepath.Join(dir, rel)
+		for _, b := range bases {
+			if pathWithin(b, full) {
+				in, err := filepath.Rel(b, full)
+				return err != nil || !tracked.listed(filepath.ToSlash(in), true)
+			}
+		}
+		return false
+	}, "view\x00"
 }
 
 // commandSkip refuses a file the files routes would not show either: under

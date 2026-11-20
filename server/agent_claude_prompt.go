@@ -448,7 +448,29 @@ func findDialog(lines []screenLine) agentScreen {
 	}
 	// Only a question whose options have previews offers notes.
 	preview := strings.Contains(strings.Join(hints, " "), "n to add notes")
-	return agentScreen{sig: dialogSig(lines[top:]), prompt: parseDialog(lines[top+1:footer], preview)}
+	p := parseDialog(lines[top+1:footer], preview)
+	// The edge may be a rule the dialog's text draws at column 0 (a command
+	// or a file that wraps), and the row under it then a row of that text:
+	// only a question's title or a known header is kept for a view-only card.
+	if p.Kind != "select" && p.Kind != "multiselect" && !claudeDialogHeaders[p.Title] {
+		p.textTitle = true
+	}
+	return agentScreen{sig: dialogSig(lines[top:]), prompt: p}
+}
+
+// claudeDialogHeaders are the headers Claude Code (2.1.329) puts under a
+// permission dialog's top edge. A header not listed only leaves the
+// view-only card without a title.
+var claudeDialogHeaders = map[string]bool{
+	"Bash command":   true,
+	"Run command":    true,
+	"Create file":    true,
+	"Overwrite file": true,
+	"Write file":     true,
+	"Edit file":      true,
+	"Edit notebook":  true,
+	"Fetch":          true,
+	"Tool use":       true,
 }
 
 // findCutDialog reads a permission dialog taller than the pane: Claude Code
