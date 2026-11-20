@@ -3289,7 +3289,7 @@ Termote runs `git status` and `git diff` itself to fill Changes, `git rev-parse`
 
 [Section titled “Recommendations”](#recommendations)
 
-* Use Termote from the installed PWA, or a browser profile without extensions.
+* Use Termote from a browser profile without extensions. Installing the PWA does not keep them out: on desktop Chrome and Edge, the extensions of the profile it was installed from run in its window too.
 * A reverse proxy running as another OS user needs `termote start --allow-local-user <name>`; until then its connections are refused and the log says so.
 * Look at Settings > Signed-in browsers (or `termote signins`) from time to time.
 * Use HTTPS: `termote start --tailscale <host>` (see [Tailscale](/installation/tailscale/)), or a proxy with a certificate.
