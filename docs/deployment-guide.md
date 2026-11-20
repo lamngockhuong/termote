@@ -737,7 +737,7 @@ does). It does not start it earlier than 15 s after the server starts, and after
 Herdr that dies within a minute) waits 30 s, doubling to 10 minutes. Herdr outlives `termote
 stop`, `restart` and `update` (as tmux does), so `termote stop` does not stop it; a Herdr stopped with
 `herdr server stop` comes back while a full PWA tab is open. View-only devices never start it. There is
-no opt-out flag. Rules: [`security-invariants.md`](security-invariants.md), Herdr autostart.
+no opt-out flag. Rules: [`security-invariants/mux.md`](security-invariants/mux.md), Herdr autostart.
 
 Panes of a Herdr started this way get the service's environment, as the tmux and psmux sessions serve
 creates do: variables a login session or terminal sets (`SSH_AUTH_SOCK`, `DISPLAY`/`WAYLAND_DISPLAY`,
@@ -767,7 +767,7 @@ never stop it. herdr-core has no login of its own, so `container up --mux hc` is
 `--mux hc --no-auth` needs `--allow-hc-no-auth`. User-facing details:
 [herdr-core Backend](https://termote.ohnice.app/installation/native/#herdr-core-backend); design:
 [`system-architecture.md`](system-architecture.md); rules:
-[`security-invariants.md`](security-invariants.md).
+[`security-invariants/mux.md`](security-invariants/mux.md), herdr-core.
 
 ```bash
 # hc 0.1.16 or later must be on PATH before `termote start --mux hc`

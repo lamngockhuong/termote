@@ -9,7 +9,7 @@
 // references), and what the check does not model is refused rather than
 // guessed at (an element whose raw text a page can end elsewhere, a frame or
 // an object, a DOCTYPE or a charset it does not read, a reference it does
-// not decode...; docs/security-invariants.md, Website, lists them). Then,
+// not decode...; docs/security-invariants/release.md, Release integrity, lists them). Then,
 // each an allow list:
 //
 // - Every line of code a file shows (a <pre> or <code>, a copy button's

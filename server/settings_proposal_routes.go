@@ -11,7 +11,7 @@ import (
 
 // registerSettingsProposalRoutes: the CLI posts a proposal over the local
 // socket; every device reads it. See the settings proposal entry of
-// docs/security-invariants.md.
+// docs/security-invariants/pwa.md.
 func registerSettingsProposalRoutes(mux *http.ServeMux, store *settingsProposals, allowed hostAllowlist) {
 	mux.HandleFunc(settingsProposalRoute, func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {

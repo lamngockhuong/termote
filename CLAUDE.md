@@ -245,8 +245,9 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
 ## Security Rules
 
 Before changing a route, guard, CLI command or file operation, read its entry in
-[`docs/security-invariants.md`](docs/security-invariants.md), keep every invariant listed there, and update
-that entry in the same change. A new feature with a security surface gets an entry there, not here.
+[`docs/security-invariants/`](docs/security-invariants/README.md) (the README lists each area file's entries),
+keep every invariant listed there, and update that entry in the same change. A new feature with a security surface
+gets an entry in the file of its area, and its name in the README's list, not here.
 
 - Every state-changing `/api/mux/*` route: `writeGuard` (same-site JSON; only `uploads` and `files/image` take a
   raw image body instead, and `files/upload` a raw `application/octet-stream` one), `requireWriteRole` first, a

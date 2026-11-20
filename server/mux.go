@@ -756,7 +756,7 @@ func jsonOK(w http.ResponseWriter, data any) {
 // jsonOKGzip is jsonOK, gzipped when the client takes gzip: a file's text
 // shrinks five to twenty times, which a phone on a VPN feels. Only for an
 // answer with no session token in it (see the files/content entry of
-// docs/security-invariants.md).
+// docs/security-invariants/files-read.md).
 func jsonOKGzip(w http.ResponseWriter, r *http.Request, data any) {
 	w.Header().Add("Vary", "Accept-Encoding")
 	if !acceptsGzip(r.Header.Get("Accept-Encoding")) {
