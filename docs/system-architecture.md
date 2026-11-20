@@ -138,7 +138,7 @@ attach a terminal, health) with three implementations:
   socket. A Herdr workspace is a group, a Herdr tab is a tab, a Herdr pane is a pane. Selecting
   a tab in the PWA only changes which pane the client streams (`Caps.ClientSideSelect`); it
   never changes what is shown on the Herdr desktop. When nothing listens on Herdr's socket, a full client's `GET /api/mux/snapshot` makes serve start `herdr server` detached in the
-  background (`herdr_autostart*.go`; rules and limits in `security-invariants.md`, Herdr autostart): the request answers its old
+  background (`herdr_autostart*.go`; rules and limits in `security-invariants/mux.md`, Herdr autostart): the request answers its old
   error, the PWA's 5 s poll finds Herdr. Peek, view-only snapshots, the stream and the event subscription never start it. It outlives
   `termote stop`, like a tmux server, and a full PWA tab starts one stopped with `herdr server stop` again, as tmux recreates its default
   session. By default the stream follows the pane's
@@ -433,7 +433,7 @@ then its own (`server/agent_codex_fork.go`). `/agent/resume` types
 by the service, with `fork`) into a
 new tab of the pane's group, or into the pane's own idle shell, as Tasks types a task
 (`taskMux`; not on psmux); a session running in a pane is never opened twice (409
-`session_live`). The rules are in `docs/security-invariants.md`.
+`session_live`). The rules are in `docs/security-invariants/agents.md` (Tasks).
 
 `/agent/start` (`caps.agentStart`: Herdr 0.8.2 or later, on Linux, macOS and Windows) starts
 Claude Code (`kind: "claude"`), Codex (`"codex"`, run as `codex --no-daemon`; only where Codex
@@ -988,7 +988,7 @@ answer `.../permission/{id}/reply` (`once`, `always` or `reject`), a form answer
 subagent tree, pasted images, the context chip, tokens and cost and the files a session changed
 read the same service. Without a running service (OpenCode run with `--standalone` or `--server`,
 #831; container mode, #832) the pane shows only OpenCode's logo. The rules are in
-`docs/security-invariants.md` (OpenCode service client, OpenCode chat); the E2E specs
+`docs/security-invariants/agent-chat.md` (OpenCode service client, OpenCode chat); the E2E specs
 `pwa/e2e/chat-view-opencode*.spec.ts` run against a stand-in service
 (`pwa/e2e/fake-opencode.ts`, recordings of 2.3.0) that passes the same checks.
 
@@ -1027,7 +1027,7 @@ config natively, `TERMOTE_PLACES` in the container, where each is mounted at
 says there is one. Changes never takes a Place. In the PWA a pane's Files store holds the Place it
 shows; switching works as the root moving (`rootChanged`), drafts and tabs are keyed by root and
 path, and the Place is kept with the pane's tabs. Rules: Places in
-[`security-invariants.md`](security-invariants.md).
+[`security-invariants/files-read.md`](security-invariants/files-read.md).
 
 **Kept on the device.** The open Files and Changes tabs, each pane's last view and the unsaved
 drafts of files not shown as sensitive are kept in the browser's `localStorage`
@@ -1035,7 +1035,7 @@ drafts of files not shown as sensitive are kept in the browser's `localStorage`
 `<stateDir>/instance-id`) and the pane's key, so they come back when the app opens again on the same
 server. Drafts come back in `applySnapshot`, before any view reads a file; restored tabs send their
 saved root, so a pane that moved answers 409 as usual. Log out clears them in every tab; the rules
-are in [`security-invariants.md`](security-invariants.md) (Files/Changes state kept on the device).
+are in [`security-invariants/files-read.md`](security-invariants/files-read.md) (Files/Changes state kept on the device).
 
 **Root.** The pane's directory, raised to `git rev-parse --show-toplevel` when it is in a
 repository and a `.git` sits at that toplevel (a `core.worktree` naming another directory, even
@@ -1167,7 +1167,7 @@ raw bytes, written by `server/files_image.go` as `pasted-YYYYMMDD-HHMMSS.<ext>` 
 directory, or its `assets/` directory when that is a real one; opened `O_EXCL`, never replacing
 anything, and checked (type, 40 MP) as it streams to disk. `writeGuard` takes an image body on
 this path as on uploads. The guards, their order and the accepted risks are in
-[`security-invariants.md`](security-invariants.md) ("Pasting an image into Markdown").
+[`security-invariants/files-write.md`](security-invariants/files-write.md) ("Pasting an image into Markdown").
 
 **Creating a file (`POST create`).** Creates an empty file, and the directories missing above
 it, in `server/files_create.go`; the text then goes through `PUT content`. As for a save, the
@@ -1328,7 +1328,7 @@ slot. The upload itself is a raw `application/octet-stream` body of at most 100 
 2-minute idle and 30-minute total deadline into a hidden `.termote-upload-<16 hex>` file, then
 hard-linked to the first free name (`name`, `name (2)` … `name (99)`) under the root's lock, so
 nothing is ever replaced and a visible name only holds a whole file. The guards, their order and
-the accepted risks are in [`security-invariants.md`](security-invariants.md) ("Uploading a
+the accepted risks are in [`security-invariants/files-write.md`](security-invariants/files-write.md) ("Uploading a
 file").
 
 **Downloading a file (`GET download`).** `server/files_download.go`. Any regular file under the
@@ -1747,7 +1747,7 @@ PWA ──► main termote ── /api/machines/{id}/mux/* ──► ssh -S <mas
   sends pane, files and stream requests to it, while health, sign-out, Web Push, devices and sign-ins stay
   local (`LOCAL_API`).
 
-Every invariant: [`security-invariants.md`](security-invariants.md) (Machine bridge, Machines CLI,
+Every invariant: [`security-invariants/machines.md`](security-invariants/machines.md) (Machine bridge, Machines CLI,
 Machine transport, Machine proxy, Machines list).
 
 ## Paired devices and the view-only role
