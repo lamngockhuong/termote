@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.30.0](https://github.com/lamngockhuong/termote/compare/v2.29.1...v2.30.0) (2026-11-20)
+
+
+### Features
+
+* **chat:** link the Artifact a call published on its card ([#892](https://github.com/lamngockhuong/termote/issues/892)) ([3610b2b](https://github.com/lamngockhuong/termote/commit/3610b2ba19f2c3a58ef6a49e57e7f28be2c19d30))
+
+
+### Bug Fixes
+
+* drop a charset designation whole when reading an agent's screen ([#891](https://github.com/lamngockhuong/termote/issues/891)) ([0c8402e](https://github.com/lamngockhuong/termote/commit/0c8402e25bef7c5866a31f65949bc6ebe948420f))
+* **hooks:** skip the hooks on a branch that changes any workspace manifest or the lockfile ([#886](https://github.com/lamngockhuong/termote/issues/886)) ([5ca3174](https://github.com/lamngockhuong/termote/commit/5ca31742b0b4e70dbb130e57f46cccdf8fa2a7c9))
+* keep a cut write dialog's file name from view-only devices and trust only remote-tracking refs in the hooks ([#889](https://github.com/lamngockhuong/termote/issues/889)) ([e96b6d4](https://github.com/lamngockhuong/termote/commit/e96b6d460ca7f23b101e6fc34a048c23d296d466))
+* keep a dialog's command and file content from view-only devices ([#888](https://github.com/lamngockhuong/termote/issues/888)) ([b1e811a](https://github.com/lamngockhuong/termote/commit/b1e811a84afae9edf54b57fba9318f703000db34))
+* name a new hc tab once herdr-app takes it into its layout ([#896](https://github.com/lamngockhuong/termote/issues/896)) ([b999125](https://github.com/lamngockhuong/termote/commit/b99912529716078329f01b0eb29f6edf619eb31a))
+* read a command's argument hint as not typed, so images after a bare command send ([#893](https://github.com/lamngockhuong/termote/issues/893)) ([5f10557](https://github.com/lamngockhuong/termote/commit/5f1055709f02ef4fb9c0006fbb0e62cc6b1d7f96))
+* refuse an hc connection when no core answers after hello, and try every device cookie copy ([#890](https://github.com/lamngockhuong/termote/issues/890)) ([11fc36a](https://github.com/lamngockhuong/termote/commit/11fc36abcd8f8e818f9f41caec9d40ef0cbb8b14))
+* **security:** close seven gaps from a whole-repo review ([5169569](https://github.com/lamngockhuong/termote/commit/5169569f583f2321ee01230dc7f9ce13bf668af4))
+* **security:** close seven gaps from a whole-repo review ([#897](https://github.com/lamngockhuong/termote/issues/897)) ([5169569](https://github.com/lamngockhuong/termote/commit/5169569f583f2321ee01230dc7f9ce13bf668af4))
+
 ## [2.29.1](https://github.com/lamngockhuong/termote/compare/v2.29.0...v2.29.1) (2026-11-18)
 
 
