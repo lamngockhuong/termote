@@ -149,7 +149,7 @@ for (const { size, viewport, hasTouch, sidebarCollapsed } of WIDE) {
       await groupName(page, 'review').click({ button: 'right' })
       await page.getByRole('menuitem', { name: /New tab in this group/ }).click()
       const form = page.getByRole('form', { name: 'New session' })
-      await expect(form.getByRole('combobox', { name: 'Tab group (optional)' })).toHaveValue('review')
+      await expect(form.getByRole('combobox', { name: 'Tab group' })).toHaveValue('review')
       await form.getByRole('combobox').fill('coding')
       await form.getByRole('textbox', { name: 'Session name' }).fill('api')
       await form.getByRole('button', { name: 'Add' }).click()

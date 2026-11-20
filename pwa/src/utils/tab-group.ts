@@ -45,6 +45,38 @@ export function tabGroupNewName(current: string, name: string): string {
   return joinTabGroup(splitTabGroup(current).group, name)
 }
 
+// The name a new tab is created with when asked for with no name of its
+// own: nothing, or only a group ("review/", from the form's group field or
+// tabGroupNewName with an empty name). Without a group it stays empty and the
+// backend names the tab, as Herdr does, unless needsName: tmux renames an
+// unnamed window after whatever runs in it, and keeps a tab's icon by its
+// name. In a group, which only the name holds, or for tmux: the lowest number
+// no tab of that group (among names) is called yet, "review/2". A name with a
+// label of its own is kept as asked.
+export function newTabName(
+  asked: string,
+  names: readonly string[],
+  needsName: boolean,
+): string {
+  const name = asked.trim()
+  let group: string | undefined
+  if (name) {
+    if (!name.endsWith(TAB_GROUP_SEPARATOR)) return name
+    group = name.slice(0, -TAB_GROUP_SEPARATOR.length).trim()
+    // "/" or "~/": a plain name, not a group
+    if (!group || PATH_STARTS.includes(group)) return name
+  } else if (!needsName) return ''
+  const taken = new Set(
+    names
+      .map(splitTabGroup)
+      .filter((n) => n.group === group)
+      .map((n) => n.label),
+  )
+  let n = 1
+  while (taken.has(String(n))) n++
+  return joinTabGroup(group, String(n))
+}
+
 // A group's colour, the same for the same name on every device. Written out
 // whole so Tailwind finds each class (index.css, --tm-avatar-N).
 const GROUP_FILLS = [

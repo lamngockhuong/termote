@@ -2101,7 +2101,7 @@ export default function App({
           // Offered only with a pane (panelIds is empty without one)
           requestFilesFocus(searchPaneId as string, 'search')
         },
-        newTab: () => void addTab('New'),
+        newTab: () => void addTab(''),
         selectTab: (id) => void selectFromList(id),
         openSettings,
         openHelp: () => setHelpOpen(true),
@@ -2328,9 +2328,10 @@ export default function App({
                 ? undefined
                 : (name?: string, icon?: string) =>
                     // Without a name: into the tab group of the tab on
-                    // screen (the form says the group itself)
+                    // screen (the form says the group itself), named by
+                    // the backend or numbered (newTabName)
                     addTab(
-                      name ?? tabGroupNewName(activeSession.name, 'New'),
+                      name ?? tabGroupNewName(activeSession.name, ''),
                       icon,
                     )
             }
@@ -3028,7 +3029,7 @@ export default function App({
           // Once the closed dialog has given the focus back
           requestAnimationFrame(() => focusTerminal(getTerminal()))
         }}
-        onStartSession={() => void addTab('New')}
+        onStartSession={() => void addTab('')}
         onOpenSettings={openSettings}
         onTour={focus ? undefined : startTour}
       />

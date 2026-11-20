@@ -8,6 +8,7 @@ import {
   joinTabGroup,
   moveSteps,
   nearestMove,
+  newTabName,
   readCollapsed,
   type StripItem,
   solveTabMove,
@@ -68,6 +69,35 @@ describe('joinTabGroup', () => {
 
   it('keeps the name without one', () => {
     expect(joinTabGroup(undefined, 'PR 1')).toBe('PR 1')
+  })
+})
+
+describe('newTabName', () => {
+  const names = ['shell', '1', 'review/PR 1', 'review/1', 'review/2']
+
+  it('keeps a name the user typed', () => {
+    expect(newTabName(' vim ', names, true)).toBe('vim')
+    expect(newTabName('review/PR 3', names, false)).toBe('review/PR 3')
+  })
+
+  it('leaves it to the backend without a group', () => {
+    expect(newTabName('', names, false)).toBe('')
+    expect(newTabName('  ', names, false)).toBe('')
+  })
+
+  it('numbers it for tmux, after the numbers taken outside any group', () => {
+    expect(newTabName('', names, true)).toBe('2')
+    expect(newTabName('', [], true)).toBe('1')
+  })
+
+  it('numbers it in a group, from that group only', () => {
+    expect(newTabName('review/', names, false)).toBe('review/3')
+    expect(newTabName(' logs / ', names, true)).toBe('logs/1')
+  })
+
+  it('keeps a path-like or bare separator as a plain name', () => {
+    expect(newTabName('~/', names, false)).toBe('~/')
+    expect(newTabName('/', names, true)).toBe('/')
   })
 })
 

@@ -485,9 +485,6 @@ describe('SessionTabs: a tab’s menu', () => {
       const form = screen.getByRole('form', { name: 'New session' })
       const name = within(form).getByRole('textbox', { name: 'Session name' })
       expect(name).toHaveFocus()
-      // No name, nothing added
-      fireEvent.submit(form)
-      expect(p.onAdd).not.toHaveBeenCalled()
       fireEvent.click(within(form).getByTitle('Change icon'))
       // Escape in the icons leaves the form open
       fireEvent.keyDown(screen.getByRole('button', { name: '🚀' }), {
@@ -501,6 +498,18 @@ describe('SessionTabs: a tab’s menu', () => {
       expect(screen.queryByRole('form')).toBeNull()
       // Back on the tab it was asked from
       expect(tabOf('Alpha')).toHaveFocus()
+    })
+
+    it('a new session with no name is left for the tab to be named', () => {
+      const p = props()
+      render(<SessionTabs {...p} />)
+      fireEvent.contextMenu(tabOf('Alpha'))
+      fireEvent.click(item('New session…'))
+      const form = screen.getByRole('form', { name: 'New session' })
+      expect(within(form).getByPlaceholderText('Session name')).toHaveValue('')
+      fireEvent.submit(form)
+      expect(p.onAdd).toHaveBeenCalledWith('', undefined)
+      expect(screen.queryByRole('form')).toBeNull()
     })
 
     it('a new session with no icon picked leaves the icon to its agent', () => {

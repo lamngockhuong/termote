@@ -398,11 +398,14 @@ describe('SessionSidebar — desktop expanded (default)', () => {
     expect(onAdd).toHaveBeenCalledWith('NewSess', undefined)
   })
 
-  it('add form: does not call onAdd if name is empty', () => {
+  it('add form: adds a session without a name, for it to be named', () => {
     renderDesktop()
     fireEvent.click(screen.getByTitle('Add new session'))
+    fireEvent.change(screen.getByPlaceholderText('Session name'), {
+      target: { value: '   ' },
+    })
     fireEvent.click(screen.getByRole('button', { name: 'Add' }))
-    expect(onAdd).not.toHaveBeenCalled()
+    expect(onAdd).toHaveBeenCalledWith('', undefined)
   })
 
   it('add form: clicking Cancel hides the form', () => {

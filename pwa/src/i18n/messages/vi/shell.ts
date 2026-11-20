@@ -46,7 +46,7 @@ export default {
   'shell.tabGroups.new': 'Nhóm tab mới…',
   'shell.tabGroups.nameField': 'Nhóm tab mới cho {name}',
   'shell.tabGroups.remove': 'Bỏ khỏi nhóm tab',
-  'shell.tabGroups.field': 'Nhóm tab (không bắt buộc)',
+  'shell.tabGroups.field': 'Nhóm tab',
   'shell.panes.close': 'Đóng pane {name}',
   'shell.layout.pane': 'Pane {name}',
   'shell.layout.overLimit':
