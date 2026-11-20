@@ -203,7 +203,8 @@ commands run at a time, each limited to 10 seconds (30 seconds for one that writ
 
 ## Recommendations
 
-- Use Termote from the installed PWA, or a browser profile without extensions.
+- Use Termote from a browser profile without extensions. Installing the PWA does not keep them out: on
+  desktop Chrome and Edge, the extensions of the profile it was installed from run in its window too.
 - A reverse proxy running as another OS user needs `termote start --allow-local-user <name>`; until then
   its connections are refused and the log says so.
 - Look at Settings > Signed-in browsers (or `termote signins`) from time to time.
