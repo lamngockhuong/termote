@@ -44,6 +44,33 @@ import { Button, IconButton } from './ui/button'
 export const RENDER_WINDOW = 150
 // Within this many pixels of the bottom, the list follows new entries.
 const STICK_DISTANCE = 48
+
+// Where the reader was in each conversation left on screen, by pane and
+// session: switching tabs or views and coming back finds it there again.
+interface ChatPlace {
+  shown: number
+  atBottom: boolean
+  unseen: boolean
+  top: number
+  lastId?: string
+  runModes: Record<string, RunMode>
+  held: Set<string>
+  tails: Map<string, string>
+}
+const MAX_PLACES = 100
+const places = new Map<string, ChatPlace>()
+
+export function resetChatPlaces() {
+  places.clear()
+}
+
+function keepPlace(key: string, place: ChatPlace) {
+  places.delete(key) // re-inserted last: the oldest goes first
+  places.set(key, place)
+  if (places.size > MAX_PLACES) {
+    places.delete(places.keys().next().value as string)
+  }
+}
 // How far below the top of the list an element is
 function offsetIn(list: Element, el: Element) {
   return el.getBoundingClientRect().top - list.getBoundingClientRect().top
@@ -239,27 +266,77 @@ function AgentChat({
     fromServer: boolean
   } | null>(null)
 
-  // A new session starts at its end again. Runs before the effect below, so
-  // that one already follows the new session's last entry.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset on session change only
-  useLayoutEffect(() => {
-    setShown(RENDER_WINDOW)
-    setAtBottom(true)
-    setUnseen(false)
-    setRunModes({})
-    heldRef.current = new Set()
-    tailsRef.current = new Map()
-    atBottomRef.current = true
-    anchorRef.current = null
-  }, [t.sessionId])
+  // The reader's place as of the last commit, and the scroll position the
+  // list last reported: kept when the conversation is left
+  const placeRef = useRef<ChatPlace | null>(null)
+  const topRef = useRef(0)
+  // A place to scroll back to once the list shows the window it was in
+  const [restore, setRestore] = useState<{ top: number } | null>(null)
+  const placeKey = t.sessionId ? `${paneId}\n${t.sessionId}` : undefined
 
-  // New entries: follow them at the bottom, else offer a jump.
+  // Another conversation (another tab, or this one shown again) opens where
+  // it was left, a new one at its end. Runs before the effect below, so that
+  // one already follows the last entry of a conversation left at its end.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset on conversation change only
+  useLayoutEffect(() => {
+    const p = placeKey ? places.get(placeKey) : undefined
+    setShown(p?.shown ?? RENDER_WINDOW)
+    setAtBottom(p?.atBottom ?? true)
+    // Entries that came in while away are news to a reader above them
+    setUnseen(!!p && !p.atBottom && (p.unseen || p.lastId !== lastId))
+    setRunModes(p?.runModes ?? {})
+    heldRef.current = p?.held ?? new Set()
+    tailsRef.current = p?.tails ?? new Map()
+    atBottomRef.current = p?.atBottom ?? true
+    anchorRef.current = null
+    readingRef.current = null
+    topRef.current = p?.top ?? 0
+    setRestore(p && !p.atBottom ? { top: p.top } : null)
+    return () => {
+      if (placeKey && placeRef.current) {
+        keepPlace(placeKey, { ...placeRef.current, top: topRef.current })
+      }
+    }
+  }, [placeKey])
+
+  // Declared after the effect above: its cleanup still reads the place of
+  // the conversation being left.
+  useLayoutEffect(() => {
+    placeRef.current = {
+      shown,
+      atBottom,
+      unseen,
+      top: 0,
+      lastId,
+      runModes,
+      held: heldRef.current,
+      tails: tailsRef.current,
+    }
+  })
+
+  // Back where the reader was, once the restored window is drawn (and the
+  // list is, for a conversation still loading)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the list mounts once loaded
   useLayoutEffect(() => {
     const el = listRef.current
+    if (!restore || !el) return
+    el.scrollTop = restore.top
+    readingRef.current = firstOnScreen(el)
+    setRestore(null)
+  }, [restore, t.loaded])
+
+  // New entries: follow them at the bottom, else offer a jump (one that came
+  // in while away is the effect above's).
+  // null: none followed yet, so a restored place offers no jump on mount
+  const followedRef = useRef<string | undefined | null>(null)
+  useLayoutEffect(() => {
+    const el = listRef.current
+    const same = followedRef.current === placeKey
+    followedRef.current = placeKey
     if (!el || !lastId) return
     if (atBottomRef.current) el.scrollTop = el.scrollHeight
-    else setUnseen(true)
-  }, [lastId])
+    else if (same) setUnseen(true)
+  }, [lastId, placeKey])
 
   // Older entries above: show the ones loadOlder brought, then put the
   // scroll position back by the height they added.
@@ -308,6 +385,7 @@ function AgentChat({
     if (!el) return
     const bottom =
       el.scrollHeight - el.scrollTop - el.clientHeight < STICK_DISTANCE
+    topRef.current = el.scrollTop
     setAtBottom(bottom)
     if (bottom) setUnseen(false)
     readingRef.current = bottom ? null : firstOnScreen(el)

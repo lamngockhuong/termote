@@ -14,7 +14,7 @@ import type { MessageKey } from '../i18n/messages/en'
 import { paneSelection, resetPaneSelections } from '../utils/pane-selection'
 import { FILES_VIEW_ID } from '../view-ids'
 import { chatLayout } from './chat-transcript-list'
-import ChatView, { RENDER_WINDOW } from './chat-view'
+import ChatView, { RENDER_WINDOW, resetChatPlaces } from './chat-view'
 import { OpenTerminalButton } from './open-terminal-button'
 
 const transcript = {
@@ -126,6 +126,7 @@ function layout(
 
 beforeEach(() => {
   resetChatAttachments()
+  resetChatPlaces()
   vi.clearAllMocks()
   set({})
   promptStore.prompt = null
@@ -310,6 +311,97 @@ describe('ChatView', () => {
     set({ entries: entries(RENDER_WINDOW + 5), sessionId: 's2' })
     rerender(<ChatView {...props} />)
     expect(screen.queryByText('message 0')).toBeNull()
+  })
+
+  it('another tab and back finds the place it was read at', () => {
+    const tab2 = { ...props, session: { ...props.session, paneId: '1' } }
+    set({ entries: entries(RENDER_WINDOW + 5), sessionId: 's1' })
+    const { rerender } = render(<ChatView {...props} />)
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Show earlier messages' }),
+    )
+    const list = screen.getByRole('region', { name: 'Conversation' })
+    layout(list, { scrollTop: 300 })
+    fireEvent.scroll(list)
+    // The other tab starts at its end
+    set({ entries: entries(3), sessionId: 's2' })
+    rerender(<ChatView {...tab2} />)
+    expect(list.scrollTop).toBe(1000)
+    expect(screen.queryByText('message 0')).toBeInTheDocument()
+    // Back: the window shown and the scroll position, no jump offered
+    set({ entries: entries(RENDER_WINDOW + 5), sessionId: 's1' })
+    rerender(<ChatView {...props} />)
+    expect(screen.getByText('message 0')).toBeInTheDocument()
+    expect(list.scrollTop).toBe(300)
+    expect(screen.queryByRole('button', { name: 'New messages' })).toBeNull()
+  })
+
+  it('another view and back finds the place, with a jump to what came in meanwhile', () => {
+    set({ entries: entries(5), sessionId: 's1' })
+    const first = render(<ChatView {...props} />)
+    const list = screen.getByRole('region', { name: 'Conversation' })
+    layout(list, { scrollTop: 100 })
+    fireEvent.scroll(list)
+    first.unmount()
+    set({ entries: entries(6), sessionId: 's1' })
+    render(<ChatView {...props} />)
+    const again = screen.getByRole('region', { name: 'Conversation' })
+    expect(again.scrollTop).toBe(100)
+    expect(
+      screen.getByRole('button', { name: 'New messages' }),
+    ).toBeInTheDocument()
+  })
+
+  it('a conversation left at its end opens at its end', () => {
+    set({ entries: entries(5), sessionId: 's1' })
+    const first = render(<ChatView {...props} />)
+    first.unmount()
+    set({ entries: entries(6), sessionId: 's1' })
+    const { rerender } = render(<ChatView {...props} />)
+    const list = screen.getByRole('region', { name: 'Conversation' })
+    layout(list, { scrollTop: 0 })
+    set({ entries: entries(7), sessionId: 's1' })
+    rerender(<ChatView {...props} />)
+    expect(list.scrollTop).toBe(1000)
+    expect(screen.queryByRole('button', { name: 'New messages' })).toBeNull()
+  })
+
+  it('only the latest hundred places are kept', () => {
+    const leaveAt = (sessionId: string, scrollTop: number) => {
+      set({ entries: entries(2), sessionId })
+      const r = render(<ChatView {...props} />)
+      const list = screen.getByRole('region', { name: 'Conversation' })
+      layout(list, { scrollTop })
+      fireEvent.scroll(list)
+      r.unmount()
+    }
+    for (let i = 0; i <= 100; i++) leaveAt(`s${i}`, 100)
+    const openAgain = (sessionId: string) => {
+      set({ entries: entries(2), sessionId })
+      const r = render(<ChatView {...props} />)
+      const top = screen.getByRole('region', { name: 'Conversation' }).scrollTop
+      r.unmount()
+      return top
+    }
+    expect(openAgain('s100')).toBe(100)
+    expect(openAgain('s0')).toBe(0)
+  })
+
+  it('a conversation still loading goes back to its place once it shows', () => {
+    set({ entries: entries(5), sessionId: 's1' })
+    const first = render(<ChatView {...props} />)
+    layout(screen.getByRole('region', { name: 'Conversation' }), {
+      scrollTop: 100,
+    })
+    fireEvent.scroll(screen.getByRole('region', { name: 'Conversation' }))
+    first.unmount()
+    set({ entries: entries(5), sessionId: 's1', loaded: false })
+    const { rerender } = render(<ChatView {...props} />)
+    set({ entries: entries(5), sessionId: 's1' })
+    rerender(<ChatView {...props} />)
+    expect(screen.getByRole('region', { name: 'Conversation' }).scrollTop).toBe(
+      100,
+    )
   })
 })
 
