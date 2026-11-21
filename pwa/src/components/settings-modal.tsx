@@ -78,6 +78,7 @@ interface Props {
     stale: boolean
     reloading: boolean
     onReload: () => void
+    onRunUpdate?: () => Promise<string | undefined>
   }
   onClearHistory?: () => void
   historyCount?: number

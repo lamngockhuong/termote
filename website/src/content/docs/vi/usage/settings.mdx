@@ -360,6 +360,14 @@ checkout):
 Bản chạy từ git checkout chỉ có gợi ý thay cho lệnh (pull, build lại rồi khởi động lại; lệnh khác
 nhau theo hệ điều hành).
 
+Với bản cài bằng `install.sh`/`install.ps1` hoặc Homebrew, nút **Run in a new tab** gõ lệnh đó vào
+một tab mới (mở ở thư mục home) trong nhóm tab của pane đang mở, giống cách [Tasks](/vi/usage/tasks/) chạy một script,
+rồi chuyển sang tab ấy (chỉ trên server này, từ thiết bị có quyền đầy đủ, với backend chạy được
+tác vụ). Server tự dựng dòng lệnh theo cách đã cài, gọi từng chương trình bằng đường dẫn đầy đủ;
+trang chỉ xin chạy bản cập nhật. Kết nối ngắt trong lúc server khởi động lại rồi nối lại trên phiên
+bản mới; output vẫn còn trong tab. Bấm lại khi bản cập nhật đang chạy thì Termote chuyển tới tab
+đó thay vì mở thêm tab.
+
 ### Tải lại sau khi cập nhật
 
 Giao diện do server phục vụ, nên khi server chạy bản mới, một banner **Termote vX.Y.Z is ready**

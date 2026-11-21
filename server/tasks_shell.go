@@ -113,6 +113,8 @@ func taskCommand(kind string, t resolvedTask) string {
 			return "Invoke-Expression " + shellQuote(kind, t.Command)
 		}
 		return "eval " + shellQuote(kind, t.Command)
+	case taskKindTermote:
+		return stepsCommand(kind, t.Steps)
 	}
 	if !isToolKind(t.Kind) || t.Head == "" {
 		return ""
@@ -125,6 +127,27 @@ func taskCommand(kind string, t resolvedTask) string {
 		line += " " + shellQuote(kind, a)
 	}
 	return line
+}
+
+// stepsCommand joins steps by &&, each word quoted for the shell (pwsh
+// calls a quoted program with &): nothing for an empty step.
+func stepsCommand(kind string, steps [][]string) string {
+	lines := make([]string, 0, len(steps))
+	for _, argv := range steps {
+		if len(argv) == 0 {
+			return ""
+		}
+		words := make([]string, len(argv))
+		for i, a := range argv {
+			words[i] = shellQuote(kind, a)
+		}
+		line := strings.Join(words, " ")
+		if kind == shellPwsh {
+			line = "& " + line
+		}
+		lines = append(lines, line)
+	}
+	return strings.Join(lines, " && ")
 }
 
 // buildTaskLine wraps cmd between a start and an end marker naming nonce;

@@ -26,7 +26,7 @@ import type { QuickActionHandlers } from './components/quick-actions-menu'
 import { PanelMaximizeButton } from './components/side-panel'
 import { TerminalView } from './components/terminal-view'
 import { useHistoryClose } from './hooks/use-history-close'
-import type { MuxSnapshot } from './hooks/use-mux-api'
+import { type MuxSnapshot, RequestError } from './hooks/use-mux-api'
 import { usePushSubscription } from './hooks/use-push-subscription'
 import { resetAllShortcuts, setShortcut } from './hooks/use-shortcuts'
 import { setCurrentMachineForTest } from './utils/api-base'
@@ -85,8 +85,20 @@ const mockFetchSettingsProposal = vi.fn(
   async (): Promise<import('./hooks/use-mux-api').SettingsProposal | null> =>
     null,
 )
+const mockRunTermoteUpdate = vi.fn(
+  async (
+    _paneId: string,
+  ): Promise<import('./hooks/use-mux-api').TaskRunStart> => ({
+    runId: 'r',
+    tabId: 'upd',
+    paneId: '',
+    nonce: 'n',
+    reused: false,
+  }),
+)
 vi.mock('./hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('./hooks/use-mux-api')>()),
+  runTermoteUpdate: (paneId: string) => mockRunTermoteUpdate(paneId),
   fetchSettingsProposal: () => mockFetchSettingsProposal(),
   selectTab: (id: string) => mockSelectTab(id),
   fetchOverview: () => mockFetchOverview(),
@@ -751,7 +763,10 @@ vi.mock('./components/settings-modal', () => ({
     initialGroup?: string
     pasteBufferLabel?: string
     onClose: () => void
-    updates?: { onReload: () => void }
+    updates?: {
+      onReload: () => void
+      onRunUpdate?: () => Promise<string | undefined>
+    }
     onShowWelcome?: () => void
     onStartTour?: () => void
     devices?: boolean
@@ -773,6 +788,17 @@ vi.mock('./components/settings-modal', () => ({
         <button onClick={onClose}>CloseSettings</button>
         {updates && (
           <button onClick={() => updates.onReload()}>ReloadUpdate</button>
+        )}
+        {updates?.onRunUpdate && (
+          <button
+            onClick={async (e) => {
+              const button = e.currentTarget
+              const why = await updates.onRunUpdate?.()
+              button.dataset.refused = why ?? ''
+            }}
+          >
+            RunUpdate
+          </button>
         )}
         {onShowWelcome && <button onClick={onShowWelcome}>ShowWelcome</button>}
         {onStartTour && <button onClick={onStartTour}>StartTour</button>}
@@ -3068,6 +3094,182 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
     fireEvent.click(await screen.findByRole('button', { name: 'ReloadUpdate' }))
     expect(mockReloadToNewVersion).toHaveBeenCalled()
+  })
+
+  describe('run the update in a new tab', () => {
+    const withTasks = (extra: Record<string, unknown> = {}) => {
+      const base = mockUseLocalSessions()
+      const switchSession = vi.fn()
+      const value = {
+        ...base,
+        switchSession,
+        mux: { ...base.mux, caps: { ...base.mux.caps, tasks: true } },
+        ...extra,
+      }
+      mockUseLocalSessions.mockReturnValue(value as any)
+      return { base, value, switchSession }
+    }
+    const openSettings = async () => {
+      await waitFor(() => screen.getByRole('button', { name: 'Settings' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+      return screen.findByTestId('settings-modal')
+    }
+    beforeEach(() => {
+      mockAppUpdate = {
+        server: { version: '1.0.0', install: 'release' },
+        stale: false,
+        reloading: false,
+      }
+      mockRunTermoteUpdate.mockClear()
+    })
+    afterEach(() => {
+      mockAppUpdate = { server: null, stale: false, reloading: false }
+      setCurrentMachineForTest('')
+    })
+
+    it('is offered only where this server can update itself', async () => {
+      const cases: [string, () => void][] = [
+        [
+          'a checkout',
+          () => {
+            mockAppUpdate = {
+              ...mockAppUpdate,
+              server: { version: '1', install: 'checkout' },
+            }
+            withTasks()
+          },
+        ],
+        [
+          'no tasks',
+          () => {
+            mockUseLocalSessions.mockReturnValue(mockUseLocalSessions())
+          },
+        ],
+        [
+          'view only',
+          () => {
+            const { base } = withTasks()
+            mockUseLocalSessions.mockReturnValue({
+              ...base,
+              mux: {
+                ...base.mux,
+                caps: { ...base.mux.caps, tasks: true, role: 'view' },
+              },
+            } as any)
+          },
+        ],
+        [
+          'another machine',
+          () => {
+            withTasks()
+            setCurrentMachineForTest('0123456789abcdef')
+          },
+        ],
+      ]
+      for (const [name, set] of cases) {
+        set()
+        const { unmount } = render(<App />)
+        await openSettings()
+        expect(
+          screen.queryByRole('button', { name: 'RunUpdate' }),
+          name,
+        ).toBeNull()
+        unmount()
+        setCurrentMachineForTest('')
+      }
+    })
+
+    it('shows the new tab once the tabs read again hold it', async () => {
+      const { value, switchSession } = withTasks()
+      mockAppUpdate = {
+        ...mockAppUpdate,
+        server: { version: '1', install: 'homebrew' },
+      }
+      const { rerender } = render(<App />)
+      await openSettings()
+      fireEvent.click(screen.getByRole('button', { name: 'RunUpdate' }))
+      await waitFor(() =>
+        expect(screen.queryByTestId('settings-modal')).toBeNull(),
+      )
+      expect(mockRunTermoteUpdate).toHaveBeenCalledWith('pane1')
+      expect(value.refreshSessions).toHaveBeenCalled()
+      expect(screen.getByTestId('toast')).toHaveTextContent(
+        'Updating in tab task:termote:update',
+      )
+      expect(switchSession).not.toHaveBeenCalledWith('upd', undefined)
+      mockUseLocalSessions.mockReturnValue({
+        ...value,
+        sessions: [
+          ...value.sessions,
+          { ...value.sessions[0], id: 'upd', paneId: 'updp' },
+        ],
+      } as any)
+      rerender(<App />)
+      await waitFor(() =>
+        expect(switchSession).toHaveBeenCalledWith('upd', undefined),
+      )
+    })
+
+    it('shows the running update instead of a second one', async () => {
+      const { value, switchSession } = withTasks()
+      mockRunTermoteUpdate.mockRejectedValueOnce(
+        new RequestError(409, 'task_running', 'the task is running', {
+          runId: 'r',
+          tabId: '1',
+        }),
+      )
+      render(<App />)
+      await openSettings()
+      fireEvent.click(screen.getByRole('button', { name: 'RunUpdate' }))
+      await waitFor(() =>
+        expect(screen.getByTestId('toast')).toHaveTextContent(
+          'An update is already running',
+        ),
+      )
+      expect(screen.queryByTestId('settings-modal')).toBeNull()
+      await waitFor(() =>
+        expect(switchSession).toHaveBeenCalledWith('1', undefined),
+      )
+      expect(value.refreshSessions).toHaveBeenCalled()
+
+      // Without its tab: closes and says so only
+      switchSession.mockClear()
+      mockRunTermoteUpdate.mockRejectedValueOnce(
+        new RequestError(409, 'task_running', 'the task is running'),
+      )
+      await openSettings()
+      fireEvent.click(screen.getByRole('button', { name: 'RunUpdate' }))
+      await waitFor(() =>
+        expect(screen.queryByTestId('settings-modal')).toBeNull(),
+      )
+      expect(switchSession).not.toHaveBeenCalled()
+    })
+
+    it('says in Settings why the run was refused', async () => {
+      withTasks()
+      mockRunTermoteUpdate
+        .mockRejectedValueOnce(
+          new RequestError(409, 'update_unsupported', 'cannot'),
+        )
+        .mockRejectedValueOnce(new Error('offline'))
+      render(<App />)
+      await openSettings()
+      const button = screen.getByRole('button', { name: 'RunUpdate' })
+      fireEvent.click(button)
+      await waitFor(() =>
+        expect(button.dataset.refused).toBe(
+          'Could not start the update: This install cannot update itself from here',
+        ),
+      )
+      fireEvent.click(button)
+      await waitFor(() =>
+        expect(button.dataset.refused).toBe(
+          'Could not start the update: Could not run the task',
+        ),
+      )
+      expect(screen.getByTestId('settings-modal')).toBeInTheDocument()
+      expect(screen.queryByTestId('toast')).toBeNull()
+    })
   })
 
   describe('attach image', () => {

@@ -83,6 +83,7 @@ import {
   revokeOtherSignins,
   revokeSignin,
   runTask,
+  runTermoteUpdate,
   SAVE_TIMEOUT_MS,
   saveFileContent,
   scrollPane,
@@ -2426,6 +2427,24 @@ describe('tasks API', () => {
     }
     await runTask('p', user)
     expect(JSON.parse(calls[1].init?.body as string)).toEqual(user)
+  })
+
+  it("runs Termote's update by its name only, at any root", async () => {
+    const start = {
+      runId: 'r',
+      tabId: 't',
+      paneId: 'p',
+      nonce: 'n',
+      reused: false,
+    }
+    const { calls } = mockFetch({ body: start })
+    expect(await runTermoteUpdate('%1')).toEqual(start)
+    expect(calls[0].url).toBe('/api/mux/panes/%251/tasks/run')
+    expect(JSON.parse(calls[0].init?.body as string)).toEqual({
+      kind: 'termote',
+      name: 'update',
+      root: '',
+    })
   })
 
   it('waits longer for a run than for a read', async () => {

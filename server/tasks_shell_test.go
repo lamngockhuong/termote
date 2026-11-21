@@ -43,6 +43,8 @@ func TestTaskCommandAndLine(t *testing.T) {
 	user := resolvedTask{Kind: taskKindUser, ID: "0123456789abcdef", Command: "go test ./... &"}
 	gradle := resolvedTask{Kind: "gradle", Name: "build", Head: "./gradlew", PwshHead: `.\gradlew.bat`, Args: []string{"build"}}
 	hatch := resolvedTask{Kind: "hatch", Name: "test", Head: "hatch run", PwshHead: "hatch run", Args: []string{"default:test"}}
+	update := resolvedTask{Kind: taskKindTermote, Steps: [][]string{{"/home/a b/termote", "update"}}}
+	brew := resolvedTask{Kind: taskKindTermote, Steps: [][]string{{"/opt/brew", "upgrade", "termote"}, {"/opt/it's", "restart"}}}
 	goTest := resolvedTask{Kind: "go", Name: "test", Head: "go", PwshHead: "go", Args: []string{"test", "./..."}}
 	for _, tc := range []struct {
 		kind string
@@ -61,6 +63,13 @@ func TestTaskCommandAndLine(t *testing.T) {
 		{shellPwsh, goTest, "go 'test' './...'"},
 		{shellPOSIX, resolvedTask{Kind: "nope", Head: "x"}, ""},
 		{shellPOSIX, resolvedTask{Kind: "go"}, ""},
+		{shellPOSIX, update, `'/home/a b/termote' 'update'`},
+		{shellPOSIX, brew, `'/opt/brew' 'upgrade' 'termote' && '/opt/it'\''s' 'restart'`},
+		{shellFish, brew, `'/opt/brew' 'upgrade' 'termote' && '/opt/it\'s' 'restart'`},
+		{shellPwsh, update, `& '/home/a b/termote' 'update'`},
+		{shellPwsh, brew, `& '/opt/brew' 'upgrade' 'termote' && & '/opt/it''s' 'restart'`},
+		{shellPOSIX, resolvedTask{Kind: taskKindTermote}, ""},
+		{shellPOSIX, resolvedTask{Kind: taskKindTermote, Steps: [][]string{{"x"}, {}}}, ""},
 	} {
 		if got := taskCommand(tc.kind, tc.task); got != tc.want {
 			t.Errorf("%s %v = %q, want %q", tc.kind, tc.task, got, tc.want)

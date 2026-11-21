@@ -181,6 +181,7 @@ export default {
   'errors.unsupported_shell':
     'Không hỗ trợ shell này (bash, zsh, sh, fish, PowerShell)',
   'errors.unsupported_type': 'Không gửi được loại file này',
+  'errors.update_unsupported': 'Bản cài này không tự cập nhật từ đây được',
   'errors.upload_busy':
     'Một lượt tải lên khác đang chạy. Hãy thử lại sau giây lát',
   'errors.upload_failed': 'Tải lên không thành công',

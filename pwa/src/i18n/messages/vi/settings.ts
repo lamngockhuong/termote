@@ -258,6 +258,12 @@ export default {
   'settings.updates.reload': 'Tải lại',
   'settings.updates.copy': 'Sao chép',
   'settings.updates.commandCopied': 'Đã sao chép lệnh',
+  'settings.updates.runInTab': 'Chạy trong tab mới',
+  'settings.updates.startingRun': 'Đang mở tab…',
+  'settings.updates.runStarted':
+    'Đang cập nhật trong tab {name}. Kết nối sẽ ngắt trong lúc server khởi động lại.',
+  'settings.updates.runAlready': 'Đã có một lượt cập nhật đang chạy',
+  'settings.updates.runFailed': 'Không bắt đầu cập nhật được: {message}',
   'settings.updates.notes': 'Ghi chú phát hành v{version}',
   'settings.star.prompt':
     'Đã cập nhật lên v{version}. Nếu Termote có ích với bạn, một ngôi sao trên GitHub giúp người khác tìm thấy nó.',

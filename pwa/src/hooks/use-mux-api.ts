@@ -2922,6 +2922,14 @@ export async function runTask(
   return res.json()
 }
 
+// Runs this server's own update in a new tab of the pane's group: the server
+// builds the line from how it was installed, the client only names it, and
+// any root will do. Throws RequestError (update_unsupported, task_running
+// with runId and tabId, unsupported_shell, shell_busy, no_client).
+export function runTermoteUpdate(paneId: string): Promise<TaskRunStart> {
+  return runTask(paneId, { kind: 'termote', name: 'update', root: '' })
+}
+
 // A run's state now. Throws RequestError run_not_found once the server
 // forgot it (it restarted).
 export async function fetchTaskRun(

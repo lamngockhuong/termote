@@ -475,7 +475,19 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   Run never piles tabs up. A user task's command is checked again before it is typed (400
   `invalid_task`: the file can be edited by hand). Zellij without a client is 409 `no_client`; a
   tab closed meanwhile 409 `tab_gone`. pwsh resets `$LASTEXITCODE` before the command and reports
-  it first (`Invoke-Expression` leaves `$?` true after a failed native command). An `audit: task-run` line names the
+  it first (`Invoke-Expression` leaves `$?` true after a failed native command). **Update** (kind
+  `termote`, name `update` only, else 404 `task_not_found`; Settings' Run in a new tab): listed in
+  no root and the root is not compared (any pane of the server can ask, its group gets the tab), but
+  `start` and `requireWriteRole` hold as above. The tab opens at home (`updateTabDir`), never at the
+  pane's root, whose shell hooks (direnv, mise) could change the HOME or XDG dirs the update finds
+  its install by. Its line is `serverUpdateSteps`, set once at `serve` start from
+  the install (`updateSteps`): the installer's `current` binary with `update`, or Homebrew's
+  `<prefix>/bin/brew upgrade termote && <prefix>/bin/termote restart`, every word quoted, each
+  program by its absolute path (pwsh calls it with `&`); a container, a checkout or a binary
+  copied by hand has none, and a step word holding a control character is refused: both 409
+  `update_unsupported`, nothing opened or typed. Its lock is one per server (key root `""`) and
+  `newTab` is ignored, so a running update is 409 `task_running` and two never race on `current`
+  and the service; its run is in no root's list; its tab is `task:termote:update`. An `audit: task-run` line names the
   kind and the name (or the user task's id), never a command. **State** (`GET
   /api/mux/tasks/runs/{runId}`, same-site, `no-store`): runs live in memory only (at most 200, 24
   h; a restart forgets them: 404 `run_not_found`), checked at most every 2 s whoever asks; a

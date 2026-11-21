@@ -23,6 +23,10 @@ const apiVersion = 2
 // health so the PWA can name the update command; serve sets it at start.
 var serverInstall = "unknown"
 
+// serverUpdateSteps is the command that updates this install in place, run
+// by the termote update task (updateSteps); nil when it cannot.
+var serverUpdateSteps [][]string
+
 // muxTimeout bounds every backend call made on behalf of one HTTP request.
 const muxTimeout = 5 * time.Second
 

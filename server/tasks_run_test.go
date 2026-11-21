@@ -882,3 +882,80 @@ func TestTaskRunTargetTakenByAnotherShell(t *testing.T) {
 		t.Errorf("typed %q", typed)
 	}
 }
+
+// The update is a fixed task of no root: the line comes from the install,
+// never from the client, in a tab of its own, one at a time server-wide.
+func TestTaskRunTermoteUpdate(t *testing.T) {
+	fx := newTaskFixture(t)
+	saved, savedDir := serverUpdateSteps, updateTabDir
+	t.Cleanup(func() { serverUpdateSteps, updateTabDir = saved, savedDir })
+	// The fake opens tabs at its own dir only: home stands for it here.
+	updateTabDir = func() (string, error) { return fx.root, nil }
+
+	serverUpdateSteps = nil
+	if code, body := fx.run(t, map[string]any{"kind": "termote", "name": "update"}); code != http.StatusConflict || body["code"] != "update_unsupported" {
+		t.Fatalf("no update = %d %v", code, body)
+	}
+	serverUpdateSteps = [][]string{{"/data/a\nb/termote", "update"}}
+	if code, body := fx.run(t, map[string]any{"kind": "termote", "name": "update"}); code != http.StatusConflict || body["code"] != "update_unsupported" {
+		t.Fatalf("a control in a step = %d %v", code, body)
+	}
+	serverUpdateSteps = [][]string{{"/data/current/bin/termote", "update"}}
+	for _, name := range []string{"restart", "update; id", ""} {
+		if code, body := fx.run(t, map[string]any{"kind": "termote", "name": name}); code != http.StatusNotFound || body["code"] != "task_not_found" {
+			t.Errorf("termote %q = %d %v", name, code, body)
+		}
+	}
+	if len(fx.m.typedLines()) != 0 || fx.m.tabs != 0 {
+		t.Fatalf("typed %q, %d tabs", fx.m.typedLines(), fx.m.tabs)
+	}
+
+	// Any root (none, a stale one) will do.
+	code, body := fx.run(t, map[string]any{"kind": "termote", "name": "update", "root": ""})
+	if code != 200 || body["tabId"] != "t1" {
+		t.Fatalf("run = %d %v", code, body)
+	}
+	nonce, runID := body["nonce"].(string), body["runId"].(string)
+	if typed := fx.m.typedLines(); len(typed) != 1 || typed[0] != "%1 "+buildTaskLine(shellPOSIX, "'/data/current/bin/termote' 'update'", nonce) {
+		t.Fatalf("typed %q", typed)
+	}
+	if fx.m.tabNames[0] != "task:termote:update" {
+		t.Errorf("tab name = %q", fx.m.tabNames[0])
+	}
+	for _, newTab := range []bool{false, true} {
+		code, body = fx.run(t, map[string]any{"kind": "termote", "name": "update", "root": "/elsewhere", "newTab": newTab})
+		if code != http.StatusConflict || body["code"] != "task_running" || body["runId"] != runID {
+			t.Fatalf("second run (newTab %v) = %d %v", newTab, code, body)
+		}
+	}
+	if fx.m.tabs != 1 {
+		t.Fatalf("%d tabs", fx.m.tabs)
+	}
+	// Not in the root's runs.
+	if _, list := listPaneTasks(t, fx.h, nil); len(list["runs"].(map[string]any)) != 0 {
+		t.Errorf("runs = %v", list["runs"])
+	}
+	if code, body = fx.state(t, runID); code != 200 || body["state"] != "running" {
+		t.Fatalf("state = %d %v", code, body)
+	}
+}
+
+// The update's tab opens at home, whatever the pane's root.
+func TestTaskRunTermoteUpdateDir(t *testing.T) {
+	fx := newTaskFixture(t)
+	saved, savedDir := serverUpdateSteps, updateTabDir
+	t.Cleanup(func() { serverUpdateSteps, updateTabDir = saved, savedDir })
+	serverUpdateSteps = [][]string{{"/data/current/bin/termote", "update"}}
+	updateTabDir = func() (string, error) { return "", errors.New("no home") }
+	if code, body := fx.run(t, map[string]any{"kind": "termote", "name": "update"}); code < 400 {
+		t.Fatalf("no home = %d %v", code, body)
+	}
+	other := t.TempDir()
+	updateTabDir = func() (string, error) { return other, nil }
+	if code, body := fx.run(t, map[string]any{"kind": "termote", "name": "update"}); code == 200 {
+		t.Fatalf("run = %d %v", code, body)
+	}
+	if fx.m.tabs != 0 || len(fx.m.typedLines()) != 0 {
+		t.Fatalf("%d tabs, typed %q", fx.m.tabs, fx.m.typedLines())
+	}
+}

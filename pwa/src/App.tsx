@@ -118,6 +118,7 @@ import {
   onViewOnlyRefusal,
   RequestError,
   type ResumeWhere,
+  runTermoteUpdate,
   selectTab,
 } from './hooks/use-mux-api'
 import { usePushSubscription } from './hooks/use-push-subscription'
@@ -176,7 +177,7 @@ import { loadPaneView, savePaneView } from './utils/pane-view'
 import { pickGroupTab } from './utils/pick-group-tab'
 import { isApplePlatform } from './utils/platform'
 import { formatRunning, uniqueNames } from './utils/running-commands'
-import { errorKey } from './utils/server-error'
+import { errorKey, serverErrorText } from './utils/server-error'
 import { matchesFilter } from './utils/session-filter'
 import {
   applySettings,
@@ -1023,6 +1024,16 @@ export default function App({
     setResumedTab(null)
     openTab(resumedTab.tabId, resumedTab.paneId, CHAT_VIEW_ID)
   }, [resumedTab, sessions, openTab])
+  // The tab Settings' update runs in, shown the same way once read
+  const [updateTab, setUpdateTab] = useState<{
+    tabId: string
+    paneId?: string
+  } | null>(null)
+  useEffect(() => {
+    if (!updateTab || !sessions.some((s) => s.id === updateTab.tabId)) return
+    setUpdateTab(null)
+    openTab(updateTab.tabId, updateTab.paneId)
+  }, [updateTab, sessions, openTab])
   // A path in an old transcript, opened in Files of the pane on screen
   const historyOpenFile = useCallback(
     async (
@@ -2234,6 +2245,48 @@ export default function App({
     />
   )
 
+  // Settings' Run in a new tab: this server's own update typed into a new
+  // tab of the open pane's group, then that tab shown. Only on this server
+  // (a machine's update is its own), for a full client, an install that
+  // updates itself and a backend that runs tasks.
+  const updatePaneId = activeSession.paneId
+  const install = appUpdate.server?.install
+  const runUpdate =
+    !readOnly &&
+    mux.caps.tasks &&
+    !currentMachine() &&
+    updatePaneId &&
+    (install === 'release' || install === 'homebrew')
+      ? async (): Promise<string | undefined> => {
+          let tabId: string | undefined
+          let paneId: string | undefined
+          let message: string
+          try {
+            ;({ tabId, paneId } = await runTermoteUpdate(updatePaneId))
+            message = t('settings.updates.runStarted', {
+              name: 'task:termote:update',
+            })
+          } catch (err) {
+            // The update already runs: its tab, as a new one would be
+            if (!(err instanceof RequestError && err.code === 'task_running'))
+              // Said in Settings, over which a toast would not show
+              return t('settings.updates.runFailed', {
+                message:
+                  err instanceof RequestError
+                    ? serverErrorText(err, t)
+                    : t('tasks.runFailed'),
+              })
+            tabId = err.tabId
+            message = t('settings.updates.runAlready')
+          }
+          setSettingsOpen(false)
+          if (tabId) setUpdateTab({ tabId, paneId: paneId || undefined })
+          void refreshSessions()
+          notify(message, { variant: 'success' })
+          return undefined
+        }
+      : undefined
+
   return (
     <div
       // A size container: the history list caps its height at a share of
@@ -2957,6 +3010,7 @@ export default function App({
           stale: appUpdate.stale,
           reloading: appUpdate.reloading,
           onReload: () => reloadToNewVersion(),
+          onRunUpdate: runUpdate,
         }}
         onClearHistory={clearHistory}
         historyCount={history.length}
