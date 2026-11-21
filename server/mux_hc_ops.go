@@ -44,7 +44,9 @@ func hcError(err error) error {
 
 func (m *hcMux) Caps() Caps {
 	doc := m.state.hasDoc()
+	start, codex := canShellStart()
 	return Caps{
+		AgentStart: start, AgentStartCodex: codex,
 		ClientSideSelect: true, PaneText: true, DriveSize: true, PaneStream: true, PaneLayout: true, AltScroll: true,
 		Files: true, AgentChat: agentProcSupported, Groups: true,
 		// Names and order are written to herdr-app's document (mux_hc_doc.go),

@@ -163,7 +163,27 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   child (`Start-Job`, a GUI app started from it, a process its profile started) is never idle,
   409 `pane_busy` (fail-closed); a `wsl.exe` pane is never idle. The PWA offers it in the Chat view of an idle pane and polls the `GET`
   every 2 s; Codex writes no rollout before its first message, so after a Codex start the Chat
-  view asks for that message in the terminal
+  view asks for that message in the terminal.
+  **tmux, Zellij and hc** (`server/agent_start_shell.go`, `shellStarter`; a backend that runs
+  tasks, `taskMux`, and finds an agent under a pane's shell, `agentWriter`; not psmux;
+  `caps.agentStart` where `agentProcSupported`, `caps.agentStartCodex` also with
+  `codexProcSupported`): the same route, guards, body, `kind` table, pane lock and 409 `starting`;
+  the pane is resolved through `IdleShell` (gone → 404 `not_found`). Under the lock: `IdleShell`
+  polled like Herdr's check (busy → 409 `pane_busy`; a shell `resumeShellKind` does not know →
+  409 `unsupported_shell`; nothing sent, not even `C-c`), `Interrupt` (`C-c`), 200 ms, `IdleShell`
+  again (409 `pane_busy`, nothing typed), then `TypeLine` with the program name and each server
+  argument through `shellQuote` for that shell, never a client's. Each backend call has its own
+  `muxTimeout` and a call cut short reports the context's error (a killed tmux included):
+  `TypeLine` cut short → 504 `start_unknown`, followed as if typed; any other error 500
+  `start_failed`. No alias exists: the start is
+  followed by pane id, its name only tells this server's starts apart. `GET` reads the pane
+  (`AgentSessionNow`, no cache, then a fresh process walk under the shell, `shellStartProc`, for an
+  agent with no session yet: Codex before its first message): an agent of the kind in the
+  foreground → `ready`, its status `blocked` (Claude Code's session file, Codex's rollout,
+  OpenCode's service) → `blocked`, another agent, a gone pane, or no agent and an idle shell 4 s
+  after the start → `exited`; `timeout` and
+  the 60 s keep as on Herdr. Accepted gap: what runs in the pane after the line is typed is the
+  shell's, so a `claude` alias or function in the user's shell runs instead of the program
 - **Agent session history and resume** (`GET /api/mux/panes/{id}/agent/history`,
   `GET /api/mux/panes/{id}/agent/history/{session}/transcript?agent=`, `POST
   /api/mux/panes/{id}/agent/resume` `{agent, session, where, fork}`; `server/agent_history*.go`,

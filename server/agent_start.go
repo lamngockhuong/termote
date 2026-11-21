@@ -16,7 +16,9 @@ import (
 // that shows only its shell, and following that start (GET of the same
 // path). Herdr types the agent's command line into the shell and answers at
 // once; readiness is read afterwards from agent.get, so the POST never waits
-// for the agent and the PWA polls the GET.
+// for the agent and the PWA polls the GET. tmux, Zellij and herdr-core have
+// no agent.start: termote types the line itself and reads readiness from the
+// pane (shellStarter, agent_start_shell.go).
 
 // agentStartArgs are the kinds a client may start and the arguments each one
 // gets. Nothing in a request adds to them. OpenCode gets a new session id
@@ -173,6 +175,9 @@ func startFinal(state string) bool {
 // now, else answers 501.
 func (a *agentAPI) starter(w http.ResponseWriter) (agentStarter, bool) {
 	st, ok := a.m.(agentStarter)
+	if !ok {
+		st, ok = shellStarterOf(a.m)
+	}
 	if !ok || !a.m.Caps().AgentStart {
 		jsonErrorCode(w, errStartUnsupported.code, errStartUnsupported.msg, errStartUnsupported.status)
 		return nil, false

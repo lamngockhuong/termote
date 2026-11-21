@@ -126,7 +126,10 @@ func (*zellijMux) Name() string { return "zellij" }
 func (*zellijMux) Caps() Caps {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
+	start, codex := canShellStart()
 	return Caps{
+		AgentStart:       start,
+		AgentStartCodex:  codex,
 		PaneLayout:       zellijCanPaneLayout(ctx),
 		RenamePane:       zellijCanPaneLayout(ctx),
 		ClientSideSelect: true,
