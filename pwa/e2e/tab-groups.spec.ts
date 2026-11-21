@@ -142,8 +142,8 @@ for (const { size, viewport, hasTouch, sidebarCollapsed } of WIDE) {
 
       // + adds a tab at once, into the group on screen
       await page.getByRole('button', { name: 'Add session' }).click()
-      await expect.poll(() => namesOf(request)).toEqual(['review/main', 'review/New'])
-      await expect.poll(() => shown(page)).toEqual(['[review]', 'main', 'New'])
+      await expect.poll(() => namesOf(request)).toEqual(['review/main', 'review/1'])
+      await expect.poll(() => shown(page)).toEqual(['[review]', 'main', '1'])
 
       // The group's menu adds a tab in it, named in the form
       await groupName(page, 'review').click({ button: 'right' })
@@ -153,8 +153,8 @@ for (const { size, viewport, hasTouch, sidebarCollapsed } of WIDE) {
       await form.getByRole('combobox').fill('coding')
       await form.getByRole('textbox', { name: 'Session name' }).fill('api')
       await form.getByRole('button', { name: 'Add' }).click()
-      await expect.poll(() => namesOf(request)).toEqual(['review/main', 'review/New', 'coding/api'])
-      await expect.poll(() => shown(page)).toEqual(['[review]', 'main', 'New', '[coding]', 'api'])
+      await expect.poll(() => namesOf(request)).toEqual(['review/main', 'review/1', 'coding/api'])
+      await expect.poll(() => shown(page)).toEqual(['[review]', 'main', '1', '[coding]', 'api'])
       await expectFits(page)
     })
 

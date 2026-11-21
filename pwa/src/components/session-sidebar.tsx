@@ -542,17 +542,15 @@ export function SessionSidebar({
   }, [isMobile, isOpen])
 
   const handleAdd = () => {
-    // No name: the tab is named for it (newTabName)
-    if (onAdd) {
-      // The new session has no agent yet: clear the filter so it shows,
-      // and the search, which it may not match.
-      if (filtering) onFilterChange?.('all')
-      setQuery('')
-      onAdd(newName.trim(), newIcon)
-      setNewName('')
-      setNewIcon(undefined)
-      setShowAddForm(false)
-    }
+    // The form shows only with onAdd. No name: the tab is named for it
+    // (newTabName). The new session has no agent yet: clear the filter so
+    // it shows, and the search, which it may not match.
+    if (filtering) onFilterChange?.('all')
+    setQuery('')
+    onAdd!(newName.trim(), newIcon)
+    setNewName('')
+    setNewIcon(undefined)
+    setShowAddForm(false)
   }
 
   // Mobile: a form the browser scrolls to on focus clears the pinned current
