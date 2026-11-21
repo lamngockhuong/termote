@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.31.0](https://github.com/lamngockhuong/termote/compare/v2.30.0...v2.31.0) (2026-11-21)
+
+
+### Features
+
+* **pwa:** add a tab without typing a name ([#900](https://github.com/lamngockhuong/termote/issues/900)) ([db33df2](https://github.com/lamngockhuong/termote/commit/db33df28599e60bf6c183198b1e03628d4e7409f))
+* **pwa:** close a bottom sheet by pulling it down ([#907](https://github.com/lamngockhuong/termote/issues/907)) ([6673395](https://github.com/lamngockhuong/termote/commit/6673395b22fcfa4f4eb56e5a39075094fad53221))
+* **pwa:** run the termote update in a new tab from Settings ([#903](https://github.com/lamngockhuong/termote/issues/903)) ([319a363](https://github.com/lamngockhuong/termote/commit/319a3636b01d2b623b73cfdbae219fc22e1ab6b0))
+
+
+### Bug Fixes
+
+* **pwa:** draw resize handles as a thin line ([#902](https://github.com/lamngockhuong/termote/issues/902)) ([8ac009b](https://github.com/lamngockhuong/termote/commit/8ac009ba0762c5a87c42aedb9b860910cdf94847))
+* **pwa:** keep the Chat view's place across tabs and views ([#904](https://github.com/lamngockhuong/termote/issues/904)) ([bd8bbc1](https://github.com/lamngockhuong/termote/commit/bd8bbc10c9140ea291d1983c27fc24d143921a1d))
+* **pwa:** make the Vietnamese wording read naturally ([#906](https://github.com/lamngockhuong/termote/issues/906)) ([737fd26](https://github.com/lamngockhuong/termote/commit/737fd26ce064dfdcc2c18505aa5b8646e3820c66))
+
 ## [2.30.0](https://github.com/lamngockhuong/termote/compare/v2.29.1...v2.30.0) (2026-11-20)
 
 
