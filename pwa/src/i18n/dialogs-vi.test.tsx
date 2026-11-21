@@ -90,13 +90,15 @@ describe('the Pane menu in Vietnamese', () => {
       'Chia xuống dưới',
       'Phóng to',
       'Đổi chỗ với pane kế tiếp',
-      'Đổi cỡ sang trái',
-      'Đổi cỡ sang phải',
-      'Đổi cỡ lên trên',
-      'Đổi cỡ xuống dưới',
+      'Đổi kích thước sang trái',
+      'Đổi kích thước sang phải',
+      'Đổi kích thước lên trên',
+      'Đổi kích thước xuống dưới',
       'Đóng pane',
     ])
-    expect(screen.getByRole('group', { name: 'Đổi cỡ' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('group', { name: 'Đổi kích thước' }),
+    ).toBeInTheDocument()
   })
 
   it('says why a layout action was refused', () => {
@@ -106,7 +108,7 @@ describe('the Pane menu in Vietnamese', () => {
     )
     expect(paneLayoutMessage(err('busy'), tVi)).toBe('Đang bận, hãy thử lại')
     expect(paneLayoutMessage(err('invalid_mode'), tVi)).toBe(
-      'Không đổi được các pane',
+      'Không thay đổi được bố cục pane',
     )
   })
 })
@@ -132,7 +134,7 @@ describe('refusals in Vietnamese', () => {
     )
     expect(worktreeProblem('', tVi)).toBe('Không thay đổi được worktree')
     expect(worktreeProblem('in_use', tVi)).toBe(
-      'Một chương trình vẫn đang mở file trong worktree. Các workspace của nó đã đóng và chưa có gì bị xoá; hãy đóng chương trình đó rồi xoá lại',
+      'Một chương trình vẫn đang mở file trong worktree. Các workspace của nó đã đóng và chưa có gì bị xóa; hãy đóng chương trình đó rồi xóa lại',
     )
   })
 
@@ -177,7 +179,7 @@ describe('refusals in Vietnamese', () => {
       'vi',
     )
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'Herdr vẫn giữ lần khởi động trước trong pane này tới 30 giây. Lát nữa hãy thử lại.',
+      'Herdr còn giữ lượt khởi động trước trong pane này (tối đa 30 giây). Hãy thử lại sau giây lát.',
     )
   })
 })

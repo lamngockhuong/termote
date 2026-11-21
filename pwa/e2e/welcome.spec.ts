@@ -45,7 +45,7 @@ test.describe('welcome screen', () => {
     await expect(welcome(page)).toBeVisible({ timeout: 10000 })
     await welcome(page).getByRole('radio', { name: 'VI' }).click()
     await expect(page.getByRole('dialog', { name: 'Terminal của bạn, trên mọi trình duyệt.' })).toBeVisible()
-    await expect(welcome(page)).toContainText('Bản cài của bạn')
+    await expect(welcome(page)).toContainText('Thiết lập hiện tại')
     // The whole app with it
     await expect(page.locator('html')).toHaveAttribute('lang', 'vi')
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('termote-settings') ?? '{}'))

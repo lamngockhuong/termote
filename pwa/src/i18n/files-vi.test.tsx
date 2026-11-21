@@ -102,7 +102,7 @@ describe('Files in Vietnamese', () => {
     )
     expect(screen.getByRole('dialog', { name: 'Xóa thư mục?' })).toBeTruthy()
     expect(
-      screen.getByText('Thư mục trống sẽ bị gỡ. Hoàn tác sẽ tạo lại nó.'),
+      screen.getByText('Thư mục trống sẽ bị xóa. Hoàn tác sẽ tạo lại thư mục.'),
     ).toBeTruthy()
     expect(screen.getByText('Đây là file nhạy cảm')).toBeTruthy()
   })
@@ -207,7 +207,9 @@ describe('Files in Vietnamese', () => {
     expect(fileImageErrorMessage('too_many_pixels', tVi)).toBe(
       'Ảnh lớn hơn 40 triệu điểm ảnh',
     )
-    expect(fileUploadErrorMessage('too_large', tVi)).toBe('File lớn hơn 100 MB')
+    expect(fileUploadErrorMessage('too_large', tVi)).toBe(
+      'File lớn hơn 100 MiB',
+    )
     expect(
       downloadErrorMessage(new RequestError(404, '', 'x'), 'a.bin', tVi),
     ).toBe('a.bin không còn nữa')

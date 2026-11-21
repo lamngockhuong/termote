@@ -200,9 +200,9 @@ describe('the conversation in Vietnamese', () => {
       'Bash',
     )
     expect(container).toHaveTextContent('$ pnpm test')
-    fireEvent.click(screen.getByRole('button', { name: 'Output · 3 dòng' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Đầu ra · 3 dòng' }))
     expect(container).toHaveTextContent('one two three')
-    expect(screen.getByRole('button', { name: 'Ẩn output' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Ẩn đầu ra' })).toBeVisible()
     expect(container.querySelector('strong')).toHaveTextContent('tests')
     expect(
       screen.getByRole('button', { name: 'Sao chép câu trả lời' }),
@@ -224,7 +224,9 @@ describe('the conversation in Vietnamese', () => {
       'Kết quả',
     )
     expect(
-      screen.getByText('Lệnh gọi nằm ở phần trước của cuộc trò chuyện.'),
+      screen.getByText(
+        'Lệnh gọi tool này nằm ở đoạn trước của cuộc trò chuyện.',
+      ),
     ).toBeInTheDocument()
   })
 
@@ -364,7 +366,9 @@ describe('the composer in Vietnamese', () => {
     })
     expect(
       screen.getByRole('dialog', { name: 'Thoát Claude Code?' }),
-    ).toHaveTextContent('Agent trong pane này sẽ dừng; app quay về terminal.')
+    ).toHaveTextContent(
+      'Agent trong pane này sẽ dừng; màn hình chuyển về terminal.',
+    )
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Thoát' }))
     })
@@ -514,7 +518,9 @@ describe('the needs-me queue in Vietnamese', () => {
       'vi',
     )
     expect(
-      screen.getByRole('heading', { name: 'Cần bạn: Claude Code, web / api' }),
+      screen.getByRole('heading', {
+        name: 'Claude Code đang chờ bạn · web / api',
+      }),
     ).toBeInTheDocument()
     expect(screen.getByText('cuối cùng')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Bỏ qua' }))

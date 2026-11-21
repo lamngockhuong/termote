@@ -1,9 +1,9 @@
 ---
 title: "View Changes"
-description: "Đọc những gì git báo là đã đổi trong repo của pane ngay trên điện thoại: diff của từng file, commit cuối, đưa từng hunk vào index, bình luận review và blame."
+description: "Đọc những gì git báo là đã đổi trong repo của pane ngay trên điện thoại: diff của từng file, commit cuối, stage từng hunk, bình luận review và blame."
 head:
   - tag: title
-    content: "Đọc git diff và đưa thay đổi vào index từ điện thoại | Termote"
+    content: "Đọc git diff và stage thay đổi từ điện thoại | Termote"
 ---
 
 import { Image } from "astro:assets";
@@ -19,13 +19,13 @@ Danh sách lấy theo `git status`, đọc lại mỗi 5 giây khi view đang m�
 Danh sách chia nhóm:
 
 - **Conflicts**: file còn xung đột khi merge, chưa giải quyết
-- **Staged**: thay đổi đã đưa vào index
-- **Changes**: thay đổi trong thư mục làm việc, chưa đưa vào index
+- **Staged**: thay đổi đã stage
+- **Changes**: thay đổi trong thư mục làm việc, chưa stage
 - **Untracked**: file mới git chưa theo dõi
 
 Mỗi file có một chữ cái: `M` sửa, `A` thêm, `D` xoá, `R` đổi tên (kèm đường dẫn cũ), `C` sao chép,
-`T` đổi loại, `U` xung đột, `?` chưa theo dõi. File vừa có thay đổi đã vào index vừa có thay đổi
-chưa vào index nằm ở cả hai nhóm, mở từ nhóm nào thì thấy diff của phía đó. File chưa theo dõi mở ra thành
+`T` đổi loại, `U` xung đột, `?` chưa theo dõi. File vừa có thay đổi đã stage vừa có thay đổi
+chưa stage nằm ở cả hai nhóm, mở từ nhóm nào thì thấy diff của phía đó. File chưa theo dõi mở ra thành
 toàn bộ là dòng thêm. Diff chỉ đọc các byte của file theo UTF-8: với bảng mã khác, các dòng sẽ lỗi
 chữ, còn file chưa theo dõi hay đang xung đột thì hiện như file nhị phân. Bản xem trước (phiên bản
 hiện tại của một file Markdown) thì được giải mã như trong Files.
@@ -47,12 +47,12 @@ Repo con (`submodule`) không được liệt kê, nội dung bên trong cũng k
 Diff cũng mở theo tab giống file trong Files (xem
 [Mở nhiều file theo tab](/vi/usage/files/#mở-nhiều-file-theo-tab)), nhưng Changes có dãy tab riêng:
 
-- Mỗi phía của một file là một tab: diff đã vào index và diff chưa vào index của cùng một file là
+- Mỗi phía của một file là một tab: diff đã stage và diff chưa stage của cùng một file là
   hai tab, tab phía index có thêm chữ `(staged)`. Tab đầu tiên, **Changes**, hiện danh sách.
 - Bấm một lần là mở ở tab xem trước; bấm đúp (trên danh sách hoặc trên tab) hay bấm **Edit** thì
   tab được giữ lại. **Edit** mở trình sửa ngay trong tab đó, chuyển sang tab khác rồi quay lại thì
   trình sửa vẫn còn, kèm phần sửa chưa lưu. Back từ diff về danh sách, tab vẫn mở.
-- Khi git không còn liệt kê một phía (đã commit, đã đưa vào index, đã hoàn lại), tab của phía đó
+- Khi git không còn liệt kê một phía (đã commit, đã stage, đã hoàn lại), tab của phía đó
   đóng lại và app báo `No changes left in <file>`. Tab đang sửa thì vẫn ở lại.
 - Đóng tab, giới hạn 10 tab, danh sách trên điện thoại, gốc đổi và file có thể chứa bí mật đều như
   trong Files.
@@ -78,7 +78,7 @@ vụ không chạy. Danh sách được đọc lại mỗi 5 giây khi
 
 - Mỗi file hiện trạng thái hiện tại trong git, cùng các chữ cái như danh sách thay đổi, hoặc
   `no longer changed` khi nó đã được commit hay hoàn lại. Chạm vào file sẽ mở diff của nó (phía
-  chưa vào index, hoặc phía đã vào index nếu chỉ có phía đó), còn khi git không liệt kê thay đổi nào của
+  chưa stage, hoặc phía đã stage nếu chỉ có phía đó), còn khi git không liệt kê thay đổi nào của
   file thì mở file trong Files. File mà session đã xoá và git không còn giữ thì hiện `deleted` và
   không mở được.
 - `×3` cho biết session đã sửa file bao nhiêu lần, `subagent` là chỉ subagent sửa nó, `editing` là
@@ -108,10 +108,12 @@ Chạm vào một file để xem diff của nó; Back quay về commit, rồi v�
 
 View chỉ hiện commit cuối, không có lịch sử để lùi lại các commit trước.
 
-### Đưa vào index, bỏ khỏi index và bỏ thay đổi
+<a id="đưa-vào-index-bỏ-khỏi-index-và-bỏ-thay-đổi"></a>
+
+### Stage, bỏ stage và bỏ thay đổi
 
 Mỗi dòng của danh sách có nút **Stage**, **Unstage** hoặc **Discard**, và đầu một diff đang mở
-cũng có các nút đó. Trong diff, mỗi hunk có nút riêng, nên có thể đưa một hunk vào index hoặc vứt
+cũng có các nút đó. Trong diff, mỗi hunk có nút riêng, nên có thể stage một hunk hoặc vứt
 riêng nó đi.
 
 - **Stage** đưa file (hoặc hunk) vào index, **Unstage** lấy nó ra lại. Chỉ index thay đổi; file
@@ -133,7 +135,7 @@ Một số thay đổi chỉ áp dụng được cho cả file, hoặc không á
 - File đang xung đột merge không dùng được **Stage**, **Unstage** hay **Discard** ở đây; link
   tượng trưng và repo con thì không dùng được **Discard**. Hãy dùng terminal.
 - File đi qua một filter của git (như Git LFS) cũng không đổi được ở đây: filter đang tắt, nên
-  đưa nó vào index sẽ lưu nhầm nội dung.
+  stage file đó sẽ lưu nhầm nội dung.
 - File đã sửa hoặc đã xóa mà lớn hơn 1 MiB thì không dùng được **Discard** ở đây. File chưa
   theo dõi thì vẫn được, vì nó bị xóa vào thùng rác.
 - Khi file đã đổi sau lúc đọc diff (hunk đã mất hoặc đã dời chỗ), app từ chối và danh sách được

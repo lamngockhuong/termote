@@ -147,9 +147,7 @@ describe('Settings in Vietnamese', () => {
         'Trang tổng quan đánh dấu agent đang chạy mà im lặng quá 10 phút',
       ),
     ).toBeTruthy()
-    expect(
-      screen.getByText('Bao lâu đồng bộ danh sách phiên một lần (5 giây)'),
-    ).toBeTruthy()
+    expect(screen.getByText('Đồng bộ danh sách phiên mỗi 5 giây')).toBeTruthy()
     expect(screen.getByRole('option', { name: '2 phút' })).toBeTruthy()
     expect(
       screen.getByRole('button', { name: 'Xóa lịch sử lệnh (3)' }),
@@ -184,7 +182,7 @@ describe('Settings in Vietnamese', () => {
     renderWithLocale(<DevicesSection />, 'vi')
     expect(screen.getByRole('list', { name: 'Thiết bị đã ghép' })).toBeTruthy()
     expect(screen.getByText('Thiết bị này')).toBeTruthy()
-    expect(screen.getByText(/^Chỉ xem · ghép /)).toBeTruthy()
+    expect(screen.getByText(/^Chỉ xem · đã ghép /)).toBeTruthy()
     expect(screen.getByText('· Còn hiệu lực đến 17 thg 10, 2026')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Thu hồi Phone' })).toBeTruthy()
   })
@@ -194,7 +192,7 @@ describe('Settings in Vietnamese', () => {
       'Đã hết hạn',
     )
     expect(originLabel(device(), tVi)).toBe(
-      'Ghép bằng mật khẩu, vẫn giữ khi một trình duyệt đăng xuất',
+      'Ghép bằng mật khẩu; không bị thu hồi khi trình duyệt đăng xuất',
     )
     expect(
       originLabel(device({ pairedBy: 'd2', pairedByName: 'Laptop' }), tVi),
@@ -202,7 +200,7 @@ describe('Settings in Vietnamese', () => {
     expect(validityNote(7 * 86400, tVi)).toBe('đăng nhập được 7 ngày')
     expect(validityNote(3600, tVi)).toBe('đăng nhập được 1 giờ')
     expect(validityOptionLabel(86400, tVi)).toBe('1 ngày')
-    expect(validityOptionLabel(null, tVi)).toBe('Không bao giờ hết')
+    expect(validityOptionLabel(null, tVi)).toBe('Không hết hạn')
     expect(pairProblem(new RequestError(429, 'too_many_codes', 'x'), tVi)).toBe(
       'Đang có quá nhiều mã chờ dùng. Hãy dùng một mã, hoặc đợi 5 phút',
     )
@@ -231,7 +229,7 @@ describe('Settings in Vietnamese', () => {
     ).toBe('Firefox trên Linux')
     expect(browserLabel('', tVi)).toBe('Trình duyệt không rõ')
     expect(tVi(isRefusedChord('Mod+S', false) ?? 'settings.edit')).toBe(
-      'Trình sửa đang dùng',
+      'Trình soạn thảo đang dùng',
     )
   })
 

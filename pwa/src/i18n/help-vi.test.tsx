@@ -56,7 +56,7 @@ describe('Usage Guide in Vietnamese', () => {
     expect(screen.getByText('Esc')).toBeInTheDocument()
     expect(screen.getByText('^⇧C')).toBeInTheDocument()
     expect(
-      screen.getByText('Sao chép phần đã chọn, không có thì gửi ^⇧C'),
+      screen.getByText('Sao chép phần đã chọn; nếu chưa chọn gì thì gửi ^⇧C'),
     ).toBeInTheDocument()
     expect(screen.getByText('Phím tiền tố của tmux')).toBeInTheDocument()
     for (const row of ['Thao tác', 'Chữ · Cuộn', 'Di chuyển', 'Chat']) {

@@ -149,23 +149,14 @@ describe('Changes in Vietnamese', () => {
       'vi',
     )
     await settle()
-    for (const name of [
-      'Xung đột',
-      'Đã vào index',
-      'Thay đổi',
-      'Chưa theo dõi',
-    ])
+    for (const name of ['Xung đột', 'Đã stage', 'Thay đổi', 'Chưa theo dõi'])
       expect(screen.getByRole('region', { name })).toBeTruthy()
-    const staged = within(screen.getByRole('region', { name: 'Đã vào index' }))
-    expect(
-      staged.getByRole('button', { name: 'Bỏ a.ts khỏi index' }),
-    ).toBeTruthy()
+    const staged = within(screen.getByRole('region', { name: 'Đã stage' }))
+    expect(staged.getByRole('button', { name: 'Bỏ stage a.ts' })).toBeTruthy()
     expect(staged.getAllByText('Đã sửa:', { exact: false }).length).toBe(1)
     expect(staged.getByTitle('Có thể chứa bí mật')).toBeTruthy()
     const changed = within(screen.getByRole('region', { name: 'Thay đổi' }))
-    expect(
-      changed.getByRole('button', { name: 'Đưa a.ts vào index' }),
-    ).toBeTruthy()
+    expect(changed.getByRole('button', { name: 'Stage a.ts' })).toBeTruthy()
     expect(
       changed.getByRole('button', { name: 'Bỏ thay đổi của a.ts' }),
     ).toBeTruthy()
@@ -173,13 +164,11 @@ describe('Changes in Vietnamese', () => {
     // The unstaged side's diff
     fireEvent.click(changed.getByText('a.ts'))
     await settle()
-    expect(screen.getByText('Chưa vào index')).toBeTruthy()
+    expect(screen.getByText('Chưa stage')).toBeTruthy()
     expect(
       screen.getAllByRole('button', { name: 'Quay lại Thay đổi' }).length,
     ).toBeGreaterThan(0)
-    expect(
-      screen.getByRole('button', { name: 'Đưa cả file vào index' }),
-    ).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Stage cả file' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Bỏ thay đổi 1' })).toBeTruthy()
     expect(
       screen.getByText('(cuối file không có ký tự xuống dòng)'),
@@ -201,7 +190,9 @@ describe('Changes in Vietnamese', () => {
     expect(screen.getByText('File nhị phân đã đổi')).toBeTruthy()
     expect(screen.getByText('Diff bị cắt ở 1 MiB')).toBeTruthy()
     expect(
-      screen.getByText('Xung đột chưa giải quyết: file như hiện tại'),
+      screen.getByText(
+        'Xung đột chưa giải quyết: đang hiện file ở trạng thái hiện tại',
+      ),
     ).toBeTruthy()
   })
 
@@ -231,7 +222,7 @@ describe('Changes in Vietnamese', () => {
     expect(screen.getByText('Bỏ thay đổi này?')).toBeTruthy()
     expect(
       screen.getByText(
-        'File hiện tại được chuyển vào thùng rác của Termote; Hoàn tác sẽ đưa nó về chỗ cũ.',
+        'File hiện tại sẽ vào thùng rác của Termote; bấm Hoàn tác để đưa về chỗ cũ.',
       ),
     ).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Hủy' })).toBeTruthy()
@@ -267,7 +258,7 @@ describe('Changes in Vietnamese', () => {
     expect(screen.getByText('(không có thông điệp)')).toBeTruthy()
     expect(screen.getByText('Không file nào thay đổi')).toBeTruthy()
     expect(
-      screen.getByText('Merge: thay đổi so với commit cha đầu tiên'),
+      screen.getByText('Commit merge: thay đổi so với commit cha thứ nhất'),
     ).toBeTruthy()
     expect(
       screen.getByText(formatDateTime(1_700_000_000_000, 'vi')),
@@ -350,7 +341,7 @@ describe('the git dialogs in Vietnamese', () => {
       'Nhánh feat/x',
     )
     expect(screen.getByText('/wt/repo/feat-x').parentElement).toHaveTextContent(
-      'Dừng các terminal của nó, xóa /wt/repo/feat-x rồi đóng workspace này.',
+      'Dừng terminal của worktree, xóa /wt/repo/feat-x rồi đóng workspace này.',
     )
   })
 
@@ -379,9 +370,7 @@ describe('review comments in Vietnamese', () => {
         tVi,
       ),
     ).toBe('dòng đã xóa 3-5')
-    expect(sourceText(comment({ source: 'staged' }), tVi)).toBe(
-      'diff đã vào index',
-    )
+    expect(sourceText(comment({ source: 'staged' }), tVi)).toBe('diff đã stage')
     expect(sourceText(comment({ source: 'file', unsaved: true }), tVi)).toBe(
       'file (có thay đổi chưa lưu)',
     )
@@ -462,8 +451,8 @@ describe('review comments in Vietnamese', () => {
     )
     fireEvent.click(screen.getByRole('button', { name: 'Review, 2 bình luận' }))
     expect(screen.getByText('Review (2)')).toBeTruthy()
-    expect(screen.getByText('· diff chưa vào index')).toBeTruthy()
-    expect(screen.getByText('· diff đã vào index')).toBeTruthy()
+    expect(screen.getByText('· diff chưa stage')).toBeTruthy()
+    expect(screen.getByText('· diff đã stage')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Gửi cho Claude Code' }))
     await waitFor(() => expect(mockSend).toHaveBeenCalledTimes(1))
     expect(mockSend).toHaveBeenCalledWith('%1', sent)
