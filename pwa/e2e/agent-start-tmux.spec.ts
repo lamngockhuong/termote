@@ -102,13 +102,9 @@ test.describe('agent start on tmux', () => {
       .click({ timeout: 15_000 })
     await page.getByRole('button', { name: 'Claude Code', exact: true }).click()
 
-    // The line was typed into the pane's shell, and once the agent runs
-    // there its conversation shows
-    await expect
-      .poll(() => tmux('capture-pane', '-p', '-t', windowId), {
-        timeout: 15_000,
-      })
-      .toContain('claude')
+    // The line was typed into the pane's shell: once the agent runs there
+    // its conversation shows (the stand-in clears the screen as it starts,
+    // so the typed line is not left to read)
     const conversation = page.getByRole('region', { name: 'Conversation' })
     await expect(conversation).toContainText('Fix the build please', {
       timeout: 20_000,
