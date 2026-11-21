@@ -63,6 +63,15 @@ describe('Sheet', () => {
     )
   })
 
+  it('scrolls its content without bouncing past the ends', () => {
+    // iOS would drag a sticky header down with the bounce
+    renderSheet()
+    expect(screen.getByText('Body').parentElement).toHaveClass(
+      'overflow-y-auto',
+      'overscroll-none',
+    )
+  })
+
   it('closes from the close button with its label', () => {
     const { onClose } = renderSheet({ closeLabel: 'Close sessions' })
     fireEvent.click(screen.getByRole('button', { name: 'Close sessions' }))

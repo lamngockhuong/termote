@@ -11,6 +11,7 @@ import { useDialogModal } from '../../hooks/use-dialog-modal'
 import { useExitTransition } from '../../hooks/use-exit-transition'
 import { useIsMobile } from '../../hooks/use-media-query'
 import { useRestoreFocus } from '../../hooks/use-restore-focus'
+import { useSwipeToClose } from '../../hooks/use-swipe-to-close'
 import { useT } from '../../i18n/i18n-context'
 import { IconButton } from './button'
 
@@ -38,8 +39,9 @@ interface Props {
 }
 
 // A modal <dialog>: a bottom sheet on phones, a centred dialog on desktop.
-// Escape, the close button and a tap on the scrim close it; focus returns to
-// whatever had it when the sheet opened, unless keepFocus says otherwise.
+// Escape, the close button, a tap on the scrim and (on phones) a pull down
+// close it; focus returns to whatever had it when the sheet opened, unless
+// keepFocus says otherwise.
 // Closing, it fades out (useExitTransition) while already inert.
 export function Sheet({ isOpen, onClose, ...rest }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null)
@@ -91,6 +93,8 @@ function OpenSheet({
     [],
   )
   useDialogModal(dialogRef, !closing, cancel)
+  // A bottom sheet also closes when pulled down, like its close button
+  useSwipeToClose(dialogRef, isMobile, close)
   // Closing, the dialog stops being modal at once (dialog.close), so focus
   // goes back now rather than after the fade: Tab meanwhile stays in the page.
   useEffect(() => {
@@ -170,8 +174,12 @@ function OpenSheet({
       {/* flex-auto, not flex-1: the dialog's height is fit-content, and WebKit
           (every iOS browser) sizes a 0% flex-basis item to nothing there,
           leaving only the header. min-h-0 still lets it shrink and scroll
-          once max-h caps the sheet. */}
-      <div className="min-h-0 flex-auto overflow-y-auto">{children}</div>
+          once max-h caps the sheet. overscroll-none: iOS otherwise bounces
+          the content past its top, dragging a sticky header (the history
+          search) down with a gap above it and a second scroll indicator. */}
+      <div className="min-h-0 flex-auto overflow-y-auto overscroll-none">
+        {children}
+      </div>
     </dialog>
   )
 }
