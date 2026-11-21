@@ -60,16 +60,22 @@ describe('ConnectionIndicator', () => {
     expect(screen.getByLabelText('Disconnected')).toBeInTheDocument()
   })
 
-  it('shows WifiOff icon for non-connected states', () => {
-    const { container } = render(<ConnectionIndicator state="disconnected" />)
-    // lucide icons render as svg
-    expect(container.querySelector('svg')).toBeInTheDocument()
-  })
+  it.each(['disconnected', 'error', 'evicted'] as const)(
+    'shows the WifiOff icon while %s',
+    (state) => {
+      const { container } = render(<ConnectionIndicator state={state} />)
+      expect(container.querySelector('svg.lucide-wifi-off')).toBeInTheDocument()
+    },
+  )
 
-  it('shows Wifi icon for connected state', () => {
-    const { container } = render(<ConnectionIndicator state="connected" />)
-    expect(container.querySelector('svg')).toBeInTheDocument()
-  })
+  it.each(['connected', 'connecting'] as const)(
+    'shows the Wifi icon while %s',
+    (state) => {
+      const { container } = render(<ConnectionIndicator state={state} />)
+      expect(container.querySelector('svg.lucide-wifi')).toBeInTheDocument()
+      expect(container.querySelector('svg.lucide-wifi-off')).toBeNull()
+    },
+  )
 
   it('ConnectionDot shows the state without a control', () => {
     const { container } = render(<ConnectionDot state="error" />)

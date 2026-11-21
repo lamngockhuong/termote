@@ -65,11 +65,14 @@ export function ConnectionIndicator({ state, onRetry }: Props) {
       disabled={!isClickable}
     >
       <ConnectionDot state={state} />
+      {/* Struck through only while the stream is down: a stream opening (a
+          tab or workspace switch attaches another one) is not a lost link,
+          the pulsing dot already says it is on its way. */}
       <span className="hidden sm:inline">
-        {state === 'connected' ? (
-          <Wifi size={14} aria-hidden="true" />
-        ) : (
+        {isDown(state) ? (
           <WifiOff size={14} aria-hidden="true" />
+        ) : (
+          <Wifi size={14} aria-hidden="true" />
         )}
       </span>
     </button>
