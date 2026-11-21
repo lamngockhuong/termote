@@ -177,8 +177,8 @@ export function SidePanel({
           onLostPointerCapture={endDrag}
           onDoubleClick={() => onWidthChange(SIDE_PANEL_DEFAULT)}
           onKeyDown={onHandleKeyDown}
-          className={`absolute inset-y-0 -left-1 z-20 w-2 cursor-col-resize touch-none outline-none hover:bg-accent/40 focus-visible:bg-accent ${
-            dragWidth !== null ? 'bg-accent/40' : ''
+          className={`absolute inset-y-0 -left-1 z-20 w-2 cursor-col-resize touch-none outline-none before:absolute before:inset-y-0 before:left-1/2 before:w-0.5 before:-translate-x-1/2 hover:before:bg-accent focus-visible:before:bg-accent ${
+            dragWidth !== null ? 'before:bg-accent' : ''
           }`}
         />
       )}

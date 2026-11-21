@@ -234,8 +234,8 @@ function AgentsSection({
           onLostPointerCapture={endDrag}
           onDoubleClick={() => commit(AGENTS_HEIGHT_DEFAULT)}
           onKeyDown={onHandleKeyDown}
-          className={`relative z-10 -mb-1 h-2 shrink-0 cursor-row-resize touch-none outline-none hover:bg-accent/40 focus-visible:bg-accent ${
-            dragHeight !== null ? 'bg-accent/40' : ''
+          className={`relative z-10 -mb-1 h-2 shrink-0 cursor-row-resize touch-none outline-none before:absolute before:inset-x-0 before:top-1/2 before:h-0.5 before:-translate-y-1/2 hover:before:bg-accent focus-visible:before:bg-accent ${
+            dragHeight !== null ? 'before:bg-accent' : ''
           }`}
         />
       )}
