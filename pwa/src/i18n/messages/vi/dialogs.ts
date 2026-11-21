@@ -9,11 +9,11 @@ export default {
   'dialogs.paneMenu.splitDown': 'Chia xuống dưới',
   'dialogs.paneMenu.zoom': 'Phóng to',
   'dialogs.paneMenu.swapNext': 'Đổi chỗ với pane kế tiếp',
-  'dialogs.paneMenu.resize': 'Đổi cỡ',
-  'dialogs.paneMenu.resizeLeft': 'Đổi cỡ sang trái',
-  'dialogs.paneMenu.resizeRight': 'Đổi cỡ sang phải',
-  'dialogs.paneMenu.resizeUp': 'Đổi cỡ lên trên',
-  'dialogs.paneMenu.resizeDown': 'Đổi cỡ xuống dưới',
+  'dialogs.paneMenu.resize': 'Đổi kích thước',
+  'dialogs.paneMenu.resizeLeft': 'Đổi kích thước sang trái',
+  'dialogs.paneMenu.resizeRight': 'Đổi kích thước sang phải',
+  'dialogs.paneMenu.resizeUp': 'Đổi kích thước lên trên',
+  'dialogs.paneMenu.resizeDown': 'Đổi kích thước xuống dưới',
   'dialogs.paneMenu.close': 'Đóng pane',
   'dialogs.paneMenu.rename': 'Đổi tên pane',
   'dialogs.paneRename.title': 'Đổi tên pane',
@@ -27,39 +27,39 @@ export default {
   'dialogs.paneRename.failed': 'Không đổi được tên pane',
   'dialogs.paneLayout.busy': 'Đang bận, hãy thử lại',
   'dialogs.paneLayout.unsupported': 'Không hỗ trợ cho pane này',
-  'dialogs.paneLayout.failed': 'Không đổi được các pane',
+  'dialogs.paneLayout.failed': 'Không thay đổi được bố cục pane',
   'dialogs.worktree.invalidName': 'Tên nhánh không hợp lệ',
   'dialogs.worktree.branchExists':
-    'Nhánh này đã có; nó được mở ra nguyên trạng, không có nhánh gốc',
+    'Nhánh này đã tồn tại nên được checkout nguyên trạng, không dựa trên nhánh gốc',
   'dialogs.worktree.createFailed':
-    'Git từ chối: nhánh có thể đang được mở ở nơi khác, hoặc thư mục đã có',
+    'Git từ chối: có thể nhánh đang được checkout ở nơi khác, hoặc thư mục đã tồn tại',
   'dialogs.worktree.openFailed':
-    'Đã tạo worktree nhưng không mở được; hãy dùng Mở worktree',
+    'Đã tạo worktree nhưng không mở được; hãy dùng “Mở worktree”',
   'dialogs.worktree.linkedSource':
     'Hãy mở nó từ workspace của chính repository',
   'dialogs.worktree.changed': 'Worktree này đã đổi; hãy xem lại',
   'dialogs.worktree.ambiguous': 'Có hơn một worktree dùng nhánh này',
-  'dialogs.worktree.gone': 'Nó không còn nữa; danh sách đã được làm mới',
+  'dialogs.worktree.gone': 'Worktree này không còn nữa; đã làm mới danh sách',
   'dialogs.worktree.busy':
     'Một thay đổi worktree khác vẫn đang chạy; hãy thử lại',
   'dialogs.worktree.unknown':
     'Thay đổi vẫn đang chạy; lát nữa hãy xem lại danh sách',
   'dialogs.worktree.unsupported': 'Backend này không quản lý được worktree',
   'dialogs.worktree.inUse':
-    'Một chương trình vẫn đang mở file trong worktree. Các workspace của nó đã đóng và chưa có gì bị xoá; hãy đóng chương trình đó rồi xoá lại',
+    'Một chương trình vẫn đang mở file trong worktree. Các workspace của nó đã đóng và chưa có gì bị xóa; hãy đóng chương trình đó rồi xóa lại',
   'dialogs.upload.tooLarge': 'Ảnh lớn hơn 10 MB',
   'dialogs.upload.heic':
     'Không hỗ trợ ảnh HEIC. Hãy chia sẻ ảnh dưới dạng JPEG',
   'dialogs.upload.storageFull':
-    'Chỗ chứa file tải lên trên máy host đã đầy. Hãy thử lại sau',
+    'Máy host đã hết chỗ lưu file tải lên. Hãy thử lại sau',
   'dialogs.upload.unavailable': 'Server này không nhận ảnh tải lên',
-  'dialogs.upload.network': 'Tải lên không thành công: lỗi mạng',
+  'dialogs.upload.network': 'Không tải lên được: lỗi mạng',
   'dialogs.upload.timeout':
-    'Tải lên quá lâu. Hãy thử ảnh nhỏ hơn hoặc kết nối tốt hơn',
-  'dialogs.upload.tooMany': 'Mỗi tin nhắn có tối đa {max} ảnh.',
+    'Tải lên mất quá lâu. Hãy thử ảnh nhỏ hơn hoặc kết nối tốt hơn',
+  'dialogs.upload.tooMany': 'Mỗi tin nhắn chỉ đính kèm được tối đa {max} ảnh.',
   'dialogs.upload.gone': 'Không còn trên máy host',
   'dialogs.startAgent.paneBusy':
-    'Pane này đang chạy một chương trình. Hãy khởi động agent trong pane chỉ hiện shell.',
+    'Pane này đang chạy một chương trình. Hãy khởi động agent trong một pane đang ở dấu nhắc shell.',
   'dialogs.startAgent.codexUnsupported':
     'Server này không khởi động được Codex.',
   'dialogs.startAgent.opencodeUnsupported':
@@ -68,14 +68,14 @@ export default {
     'Herdr này không khởi động được agent. Hãy cập nhật Herdr lên 0.8.2 trở lên.',
   'dialogs.startAgent.gone': 'Pane này không còn nữa.',
   'dialogs.startAgent.pending':
-    'Herdr vẫn giữ lần khởi động trước trong pane này tới 30 giây. Lát nữa hãy thử lại.',
+    'Herdr còn giữ lượt khởi động trước trong pane này (tối đa 30 giây). Hãy thử lại sau giây lát.',
   'dialogs.startAgent.failed': 'Không khởi động được agent.',
   'dialogs.startAgent.lost':
-    'Không theo dõi được lần khởi động. Hãy mở terminal để kiểm tra.',
+    'Mất dấu quá trình khởi động. Hãy mở terminal để kiểm tra.',
   'dialogs.startAgent.readyElsewhere': '{agent} đã sẵn sàng ở một pane khác.',
-  'dialogs.startAgent.askingHere': '{agent} đang hỏi gì đó trong terminal.',
+  'dialogs.startAgent.askingHere': '{agent} đang hỏi bạn trong terminal.',
   'dialogs.startAgent.askingElsewhere':
-    '{agent} đang hỏi gì đó trong terminal của một pane khác.',
+    '{agent} đang hỏi bạn trong terminal của một pane khác.',
   'dialogs.startAgent.notStartedHere':
     '{agent} không khởi động được. Hãy mở terminal để xem lý do.',
   'dialogs.startAgent.notStartedElsewhere':

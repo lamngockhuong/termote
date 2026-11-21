@@ -145,7 +145,7 @@ describe('TrashSheet', () => {
       'vi',
     )
     await act(async () => {})
-    const list = screen.getByRole('list', { name: 'Các mục đã xoá' })
+    const list = screen.getByRole('list', { name: 'Các mục đã xóa' })
     expect(within(list).getAllByRole('listitem')).toHaveLength(4)
     expect(list.textContent).toContain('Thư mục')
     expect(

@@ -329,7 +329,7 @@ describe('Tasks in Vietnamese', () => {
     expect(screen.getByText('chạy kèm predev')).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: 'Mở tab của dev' }),
-    ).toHaveAttribute('title', 'Mở tab của nó')
+    ).toHaveAttribute('title', 'Mở tab của tác vụ')
   })
 })
 
@@ -430,7 +430,7 @@ describe('agent overview in Vietnamese', () => {
     expect(screen.getByText(/Chờ bạn/)).toBeInTheDocument()
     expect(screen.getByText('· ≥ 5 phút trước')).toHaveAttribute(
       'title',
-      'Server thấy agent lần đầu thì đã ở trạng thái này',
+      'Agent đã ở trạng thái này từ lúc server thấy lần đầu',
     )
     expect(screen.getByText('Run the migration?')).toBeInTheDocument()
     expect(
@@ -470,13 +470,13 @@ describe('agent overview in Vietnamese', () => {
     const now = new Date(2026, 9, 14, 9, 0).getTime()
     expect(
       resetLabel(new Date(2026, 9, 14, 14, 30).toISOString(), now, tVi, 'vi'),
-    ).toBe('đặt lại lúc 14:30')
+    ).toBe('làm mới lúc 14:30')
     expect(resetLabel(new Date(2026, 9, 1).toISOString(), now, tVi, 'vi')).toBe(
-      'đặt lại ngay',
+      'làm mới ngay',
     )
     expect(
       resetLabel(new Date(2026, 9, 28, 9, 0).toISOString(), now, tVi, 'vi'),
-    ).toBe('đặt lại ngày 28/10')
+    ).toBe('làm mới ngày 28/10')
   })
 
   it('shows the activity log in Vietnamese, its time in the app language', () => {
@@ -506,7 +506,7 @@ describe('agent overview in Vietnamese', () => {
       'vi',
     )
     expect(
-      screen.getByRole('radiogroup', { name: 'Hiện các thay đổi sang' }),
+      screen.getByRole('radiogroup', { name: 'Chỉ hiện các lần chuyển sang' }),
     ).toBeVisible()
     expect(
       screen.getByText('Không đọc được hoạt động; đang thử lại.'),
@@ -545,6 +545,6 @@ describe('agent overview in Vietnamese', () => {
       'vi',
     )
     expect(screen.getByText('cập nhật 5 phút trước')).toBeInTheDocument()
-    expect(screen.getByText(/^đặt lại lúc /)).toBeInTheDocument()
+    expect(screen.getByText(/^làm mới lúc /)).toBeInTheDocument()
   })
 })

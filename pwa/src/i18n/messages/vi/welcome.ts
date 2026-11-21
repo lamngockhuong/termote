@@ -5,13 +5,13 @@ export default {
   'welcome.titleMobile': 'Terminal của bạn, ngay trên điện thoại.',
   'welcome.titleDesktop': 'Terminal của bạn, trên mọi trình duyệt.',
   'welcome.intro':
-    'Termote {version} trên <host>{host}</host>, chạy {backend}.',
+    'Termote {version} trên <host>{host}</host>, dùng {backend}.',
   'welcome.introType':
     'Những gì bạn gõ ở đây đi thẳng vào các phiên đang mở trên máy đó.',
   'welcome.introView':
     'Thiết bị này xem được mọi phiên trên máy đó nhưng không gõ được.',
   'welcome.language': 'Ngôn ngữ',
-  'welcome.setup': 'Bản cài của bạn',
+  'welcome.setup': 'Thiết lập hiện tại',
   'welcome.backend': 'Backend',
   'welcome.sessions': 'Phiên',
   'welcome.sessionsNone': 'Chưa có',
@@ -26,7 +26,7 @@ export default {
   'welcome.signIn': 'Đăng nhập',
   'welcome.on': 'Đang bật',
   'welcome.off': 'Đang tắt',
-  'welcome.next': 'Nên làm tiếp',
+  'welcome.next': 'Bước tiếp theo',
   'welcome.waitingTitle': '{agent} ở {tab} đang chờ bạn',
   'welcome.waitingDesc': 'Mở pane đó để trả lời.',
   'welcome.waitingAction': 'Mở',
@@ -37,7 +37,7 @@ export default {
   'welcome.notifyDesc': 'Nhận thông báo khi Claude Code đang chờ.',
   'welcome.notifyAction': 'Bật',
   'welcome.installTitle': 'Thêm vào màn hình chính',
-  'welcome.installDesc': 'Mở toàn màn hình, và app nhớ pane bạn đang xem.',
+  'welcome.installDesc': 'Mở toàn màn hình và nhớ pane bạn đang xem.',
   'welcome.installIos':
     'Trong Safari, chạm Chia sẻ rồi chọn “Thêm vào MH chính”.',
   'welcome.installAction': 'Thêm',
@@ -47,7 +47,7 @@ export default {
   'welcome.areas': 'Làm được gì ở đây',
   'welcome.areaTerminal':
     'Esc, Ctrl, phím mũi tên và Tab có sẵn trên thanh phím.',
-  'welcome.areaTerminalView': 'xem pane đang chạy, đủ cả màu sắc.',
+  'welcome.areaTerminalView': 'xem pane đang chạy với đầy đủ màu sắc.',
   'welcome.areaChat': 'đọc phiên làm việc của agent và trả lời câu nó hỏi.',
   'welcome.areaChatView': 'đọc toàn bộ phiên làm việc của agent.',
   'welcome.areaFiles': 'duyệt, sửa file, xem diff và commit.',

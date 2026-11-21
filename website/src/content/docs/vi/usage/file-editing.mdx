@@ -53,8 +53,8 @@ Edit trong Changes thì trình soạn thảo mở ở chỗ thay đổi đầu t
   chính file đó trong Files. Văn bản chỉ nằm trong bộ nhớ của trang, không bao giờ vào bộ nhớ của trình duyệt, nên đóng hoặc tải lại app là mất (điện thoại có
   thể tự đóng app để chạy nền).
 - Trong **Changes**, diff của file mà working tree vẫn còn ở dạng văn bản cũng có nút Edit này
-  (ở phía đã đưa vào index thì nút là **Edit working copy**: thứ được lưu là file trong working tree). Lưu xong
-  thì diff phần chưa đưa vào index hiện ra, đã đọc lại; nếu lúc đó file đã khớp index thì danh sách hiện
+  (ở phía đã stage thì nút là **Edit working copy**: thứ được lưu là file trong working tree). Lưu xong
+  thì diff phần chưa stage hiện ra, đã đọc lại; nếu lúc đó file đã khớp index thì danh sách hiện
   lại, kèm `No changes left in <file>`.
 
 Khi lưu không thành công, văn bản của bạn vẫn còn trong ô:
@@ -261,7 +261,7 @@ bị ẩn trong ứng dụng.
 Nút **Trash** trên đầu Files mở một bảng liệt kê những gì đã xoá trong thư mục đang hiện, mục mới
 nhất ở trên. Nút có khi phiên có toàn quyền và server có thùng rác, kể cả lúc đang mở file hay
 đang ở một Place. Mỗi mục ghi tên và thư mục chứa nó, loại (file, thư mục, hay thay đổi đã bỏ trong
-[Changes](/vi/usage/changes/#đưa-vào-index-bỏ-khỏi-index-và-bỏ-thay-đổi)), lúc xoá, kích thước và
+[Changes](/vi/usage/changes/#stage-bỏ-stage-và-bỏ-thay-đổi)), lúc xoá, kích thước và
 `Removed by <date> at the latest`. Mỗi lần mở bảng, danh sách được đọc lại.
 
 - **Restore** đặt mục về chỗ cũ, không bao giờ ghi đè thứ đang có ở đó. File nhạy cảm thì hỏi
@@ -300,7 +300,7 @@ chọn sẵn.
   lại tên cũ. Thư mục đã tạo cho lần chuyển vẫn còn. Nếu server không nhận tên cũ làm tên file mới
   (tên kết thúc bằng dấu chấm hay khoảng trắng) thì không có Undo.
 - Sau đó Changes hiện một file bị xoá và một file chưa được git theo dõi, giống như sau `mv`, cho
-  tới khi bạn đưa chúng vào index; Termote không chạy `git mv`.
+  tới khi bạn stage chúng; Termote không chạy `git mv`.
 - Chỉ đổi tên được file, không đổi tên thư mục hay link.
 - Tên cũ hoặc tên mới là tên thường dùng để chứa bí mật thì app hỏi thêm một lần trước khi đổi.
 

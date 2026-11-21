@@ -36,11 +36,11 @@ export default {
   'tour.panesTitle': 'Cửa sổ và pane',
   'tour.panesBody':
     'Các tab là cửa sổ của phiên này. Dải bên dưới liệt kê mọi pane trong cửa sổ: bấm vào một pane để chuyển sang nó, bấm <kbd>×</kbd> để đóng.',
-  'tour.paletteTitle': 'Mọi thao tác, gọi bằng tên',
+  'tour.paletteTitle': 'Gọi mọi thao tác bằng tên',
   'tour.paletteBody':
-    'Bảng lệnh nằm trong menu này. Bảng lệnh chạy được mọi thao tác: chuyển phiên, mở file, chạy tác vụ, đổi cài đặt.',
+    'Bảng lệnh nằm trong menu này và chạy được mọi thao tác: chuyển phiên, mở file, chạy tác vụ, đổi cài đặt.',
   'tour.paletteBodyRail':
-    'Bảng lệnh nằm ở cuối thanh này. Bảng lệnh chạy được mọi thao tác: chuyển phiên, mở file, chạy tác vụ, đổi cài đặt.',
+    'Bảng lệnh nằm ở cuối thanh này và chạy được mọi thao tác: chuyển phiên, mở file, chạy tác vụ, đổi cài đặt.',
   'tour.allCommands': 'Mọi lệnh',
   'tour.goToFile': 'Mở nhanh file',
   'tour.paletteFoot':

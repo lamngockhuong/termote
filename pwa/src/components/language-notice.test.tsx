@@ -12,7 +12,7 @@ describe('LanguageNotice', () => {
       'vi',
     )
     expect(screen.getByRole('status')).toHaveTextContent(
-      'Termote giờ có tiếng Việt cho toàn bộ giao diện.',
+      'Giao diện Termote giờ đã có đầy đủ tiếng Việt.',
     )
     fireEvent.click(screen.getByRole('button', { name: 'Chuyển về English' }))
     expect(onEnglish).toHaveBeenCalledOnce()

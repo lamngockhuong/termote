@@ -6,7 +6,7 @@ export default {
   'settings.languageDesc': 'Tự động theo ngôn ngữ trình duyệt',
   'settings.languageAuto': 'Tự động',
   'settings.takeTour': 'Xem hướng dẫn nhanh',
-  'settings.showWelcome': 'Hiện màn chào',
+  'settings.showWelcome': 'Hiện màn hình chào',
   'settings.groups': 'Các nhóm cài đặt',
   'settings.back': 'Quay lại Cài đặt',
   'settings.group.appearance': 'Giao diện',
@@ -23,9 +23,9 @@ export default {
   'settings.styleDesc': 'Đổi ngay khi chọn.',
   'settings.style.neutral': 'Trung tính',
   'settings.style.terminal': 'Terminal',
-  'settings.style.native': 'Gốc',
+  'settings.style.native': 'Theo hệ thống',
 
-  'settings.ime': 'Khi gửi chữ từ ô nhập',
+  'settings.ime': 'Cách gửi chữ từ ô nhập',
   'settings.ime.sendOnly': 'Chỉ gửi chữ',
   'settings.ime.sendOnlyDesc': 'Gửi chữ vào terminal, không nhấn Enter',
   'settings.ime.sendEnter': 'Gửi + Enter',
@@ -36,12 +36,12 @@ export default {
     'Enter xuống dòng; Ctrl+Enter (Cmd+Enter trên Mac) gửi',
   'settings.chatSend.enter': 'Enter',
   'settings.chatSend.enterDesc': 'Enter gửi; Shift+Enter xuống dòng',
-  'settings.paste': 'Nút dán lấy từ đâu',
+  'settings.paste': 'Nút Dán lấy nội dung từ',
   'settings.paste.clipboard': 'Clipboard hệ thống',
   'settings.paste.clipboardDesc':
     'Dán từ clipboard của thiết bị (Ctrl+Shift+V)',
   'settings.paste.bufferDesc': 'Dán từ buffer của chế độ sao chép',
-  'settings.toolbarExpanded': 'Mở sẵn toàn bộ thanh phím',
+  'settings.toolbarExpanded': 'Luôn mở rộng thanh phím',
   'settings.toolbarExpandedDesc':
     'Hiện đủ các phím ngay khi thanh phím hiện ra',
 
@@ -49,15 +49,15 @@ export default {
   'settings.fontDesc': 'Phông đã cài trên thiết bị này, ví dụ một Nerd Font',
   'settings.contextMenu': 'Tắt menu chuột phải',
   'settings.contextMenuDesc': 'Không mở menu ngữ cảnh trên vùng terminal',
-  'settings.copyOnSelect': 'Chọn là sao chép',
+  'settings.copyOnSelect': 'Bôi đen là sao chép',
   'settings.copyOnSelectDesc':
-    'Chữ bôi đen bằng chuột được sao chép ngay khi nhả nút. Nếu chương trình trong pane đang nhận chuột (vim với mouse=a, htop), giữ Shift khi kéo (Option trên macOS)',
+    'Bôi đen bằng chuột, nhả nút là chữ được sao chép. Nếu chương trình trong pane đang dùng chuột (vim với mouse=a, htop), giữ Shift khi kéo (Option trên macOS)',
   'settings.gpuRenderer': 'Vẽ terminal bằng GPU',
   'settings.gpuRendererDesc':
     'Nhanh hơn khi output dài. Tắt nếu chữ bị mờ, nháy hoặc sai màu trên thiết bị này',
-  'settings.fitPane': 'Chỉnh pane herdr vừa thiết bị này',
+  'settings.fitPane': 'Co giãn pane herdr theo thiết bị này',
   'settings.fitPaneDesc':
-    'Cỡ pane trên máy tính đổi theo màn hình này khi đang xem',
+    'Khi bạn đang xem, pane trên máy tính đổi cỡ theo màn hình này',
   'settings.layoutView': 'Hiện các pane herdr cạnh nhau',
   'settings.layoutViewDesc': 'Tab có 2–4 pane hiện đúng bố cục của herdr',
 
@@ -76,41 +76,40 @@ export default {
   'settings.toolbarPosition.header': 'Header',
   'settings.toolbarPosition.right': 'Thanh bên phải',
   'settings.blockedFirst': 'Phiên đang chờ lên đầu',
-  'settings.blockedFirstDesc':
-    'Phiên nào đang chờ bạn thì xếp lên đầu nhóm của nó',
+  'settings.blockedFirstDesc': 'Phiên đang chờ bạn được xếp lên đầu nhóm',
   'settings.blockedFirstOffByCompact':
-    'Sidebar ở bố cục gọn không liệt kê phiên nên không dùng tới',
-  'settings.notify': 'Báo khi agent cần tôi',
+    'Không áp dụng: sidebar gọn không liệt kê phiên',
+  'settings.notify': 'Thông báo khi agent cần bạn',
   'settings.notify.homeScreen':
-    'iPhone/iPad: chỉ chạy khi mở từ app trên màn hình chính (iOS 16.4 trở lên)',
+    'iPhone/iPad: chỉ hoạt động khi mở app từ màn hình chính (iOS 16.4 trở lên)',
   'settings.notify.denied': 'Đã bị chặn trong cài đặt trình duyệt',
   'settings.notify.reload': 'Tải lại trang để bật',
   'settings.notify.desc':
-    'Khi có hộp thoại đang chờ hoặc một lượt vừa xong. Trên điện thoại, cần app đã cài',
-  'settings.appBadge': 'Số trên icon của app',
+    'Khi có hộp thoại đang chờ hoặc agent vừa xong một lượt. Trên điện thoại, cần cài app trước',
+  'settings.appBadge': 'Số đếm trên biểu tượng app',
   'settings.appBadgeDesc':
     'App đã cài hiện số agent đang chờ bạn: đang bị chặn, hoặc đã xong một lượt mà chưa ai xem',
   'settings.stuck': 'Agent bị kẹt',
   'settings.stuckDesc':
     'Trang tổng quan đánh dấu agent đang chạy mà im lặng quá {minutes} phút',
-  'settings.stuckAfter': 'Agent bị coi là kẹt sau',
+  'settings.stuckAfter': 'Coi là bị kẹt sau',
   'settings.minutes': '{n} phút',
   'settings.usage': 'Mức dùng của agent trên thanh tiêu đề',
   'settings.usageDesc':
-    'Cho biết context của agent trong pane đang mở đã đầy bao nhiêu, và hạn mức Codex của nó',
+    'Mức đầy context của agent trong pane đang mở, kèm hạn mức Codex',
   'settings.cost': 'Chi phí ước tính',
   'settings.costDesc':
     'Hiện chi phí token của agent theo giá API niêm yết cạnh số token; gói thuê bao không tính tiền theo token',
-  'settings.hostChip': 'Số liệu máy chủ trên thanh tiêu đề',
+  'settings.hostChip': 'Số liệu server trên thanh tiêu đề',
   'settings.hostChipDesc': 'Hiện CPU, bộ nhớ và pin của máy đang chạy Termote',
   'settings.poll': 'Chu kỳ cập nhật danh sách phiên',
-  'settings.pollDesc': 'Bao lâu đồng bộ danh sách phiên một lần ({interval})',
+  'settings.pollDesc': 'Đồng bộ danh sách phiên mỗi {interval}',
   'settings.pollSeconds': '{n} giây',
   'settings.pollMinutes': '{n} phút',
 
   'settings.excluded': 'Thư mục bỏ qua',
   'settings.excludedDesc':
-    'Không bao giờ tìm file bị git bỏ qua trong các thư mục này, và không tìm trong chúng khi ở ngoài repository. File git theo dõi thì luôn được tìm.',
+    'Trong các thư mục này, không tìm file bị git bỏ qua, và ở ngoài repository thì không tìm gì cả. File git đang theo dõi vẫn luôn được tìm.',
   'settings.excluded.list': 'Các thư mục không bao giờ tìm',
   'settings.excluded.remove': 'Bỏ {name}',
   'settings.excluded.placeholder': 'Tên thư mục',
@@ -121,24 +120,24 @@ export default {
   'settings.excluded.empty': 'Hãy nhập tên thư mục',
   'settings.excluded.notName': 'Không phải tên thư mục',
   'settings.excluded.path': 'Chỉ một tên thư mục, không phải đường dẫn',
-  'settings.excluded.pattern': 'Một cái tên, không phải mẫu tìm kiếm',
+  'settings.excluded.pattern': 'Chỉ một tên, không phải mẫu tìm kiếm',
   'settings.excluded.tooLong': 'Tên quá dài',
   'settings.wrap': 'Xuống dòng tự động',
   'settings.wrapDesc':
-    'Mở file là dòng dài tự xuống dòng, trên máy tính cũng vậy',
-  'settings.fontSize': 'Cỡ chữ của trình sửa',
+    'Dòng dài tự xuống dòng khi mở file, kể cả trên máy tính',
+  'settings.fontSize': 'Cỡ chữ của trình soạn thảo',
   'settings.fontSizeDesc':
-    'Trình sửa trên máy tính (điện thoại sửa trong ô chữ thường)',
+    'Trình soạn thảo trên máy tính (điện thoại dùng ô nhập chữ thường)',
   'settings.px': '{n} px',
   'settings.tabSize': 'Độ rộng tab',
   'settings.tabSizeDesc':
-    'Trình sửa trên máy tính: số cột của một tab và của một mức thụt lề',
+    'Trình soạn thảo trên máy tính: số cột của một tab và của một mức thụt lề',
   'settings.vim': 'Chế độ Vim',
-  'settings.vimDesc': 'Trình sửa trên máy tính: phím Vim; :w để lưu',
+  'settings.vimDesc': 'Trình soạn thảo trên máy tính: phím Vim; :w để lưu',
 
-  'settings.taskHistory': 'Lịch sử đọc khi gửi cho agent',
+  'settings.taskHistory': 'Số dòng đọc lại khi gửi cho agent',
   'settings.taskHistoryDesc':
-    'Số dòng trong tab của tác vụ được dò để tìm output của lần chạy; chỉ phần output của chính lần chạy đó được gửi',
+    'Số dòng cuối trong tab tác vụ dùng để tìm output của lần chạy; chỉ gửi output của chính lần chạy đó',
   'settings.taskLines': '{n} dòng',
 
   'settings.clearHistory': 'Xóa lịch sử lệnh ({count})',
@@ -148,14 +147,15 @@ export default {
   'settings.delete': 'Xóa',
   'settings.deleteName': 'Xóa {name}',
   'settings.deleteTitle': 'Xóa {name}?',
-  'settings.deleteAgain': 'Đã bị đổi trên thiết bị khác: vẫn xóa?',
+  'settings.deleteAgain': 'Đã có thay đổi từ thiết bị khác: vẫn xóa?',
   'settings.deleted': 'Đã xóa {name}',
-  'settings.deleteBody': 'Mọi thiết bị của server này sẽ mất {name}.',
+  'settings.deleteBody':
+    '{name} sẽ biến mất trên mọi thiết bị dùng server này.',
   'settings.name': 'Tên',
   'settings.save': 'Lưu',
-  'settings.changedElsewhere': 'Đã bị đổi trên thiết bị khác',
-  'settings.deletedElsewhere': 'Đã bị xóa trên thiết bị khác',
-  'settings.loadTheirs': 'Lấy bản kia',
+  'settings.changedElsewhere': 'Đã có thay đổi từ thiết bị khác',
+  'settings.deletedElsewhere': 'Đã bị xóa từ thiết bị khác',
+  'settings.loadTheirs': 'Dùng bản trên server',
   'settings.keepMine': 'Giữ bản của tôi',
   'settings.saveAsNew': 'Lưu thành bản mới',
   'settings.nameTooLong': 'Tên dài quá {max} ký tự',
@@ -163,8 +163,8 @@ export default {
   'settings.notSaved': 'Chưa lưu: {message}',
   'settings.viewOnly': 'Thiết bị này chỉ được xem',
   'settings.tooLarge': 'Quá lớn, không lưu được',
-  'settings.used': 'dùng {ago}',
-  'settings.paired': 'ghép {ago}',
+  'settings.used': 'dùng lần cuối {ago}',
+  'settings.paired': 'đã ghép {ago}',
   'settings.copied': 'Đã sao chép',
   'settings.securityModel': 'Mô hình bảo mật',
   'settings.newTab': '(mở trong tab mới)',
@@ -174,11 +174,11 @@ export default {
   'settings.devices.full': 'Toàn quyền',
   'settings.devices.viewOnly': 'Chỉ xem',
   'settings.devices.byPassword':
-    'Ghép bằng mật khẩu, vẫn giữ khi một trình duyệt đăng xuất',
+    'Ghép bằng mật khẩu; không bị thu hồi khi trình duyệt đăng xuất',
   'settings.devices.unknownOrigin': 'Không rõ nguồn',
   'settings.devices.fromSignin': 'Ghép từ một trình duyệt đã đăng nhập ({id})',
   'settings.devices.pairedBy': 'Do {name} ghép',
-  'settings.devices.byRemoved': 'Thiết bị ghép nó đã bị xóa',
+  'settings.devices.byRemoved': 'Được ghép bởi một thiết bị đã bị xóa',
   'settings.devices.expired': 'Đã hết hạn',
   'settings.devices.validUntil': 'Còn hiệu lực đến {date}',
   'settings.devices.revoked': 'Đã thu hồi {name}',
@@ -193,13 +193,13 @@ export default {
   'settings.devices.pair': 'Ghép thiết bị',
   'settings.devices.confirmTitle': 'Thu hồi thiết bị này?',
   'settings.devices.confirmCurrent':
-    'Đây là thiết bị bạn đang dùng: nó bị đăng xuất ngay.',
+    'Đây là thiết bị bạn đang dùng, sẽ bị đăng xuất ngay.',
   'settings.devices.confirmOther':
-    '{name} bị đăng xuất ở lần gửi yêu cầu tiếp theo, và các terminal nó đang mở sẽ đóng.',
+    '{name} sẽ bị đăng xuất ở yêu cầu kế tiếp, và các terminal nó đang mở sẽ đóng.',
   'settings.devices.confirmPaired':
     'Các thiết bị nó đã ghép cũng bị thu hồi theo: {names}.',
   'settings.devices.confirmFull':
-    'Thiết bị toàn quyền có thể đã mở terminal trên máy này. Để chắc chắn không còn gì nó để lại, hãy chạy thêm <code>termote start --fresh</code>.',
+    'Thiết bị toàn quyền có thể đã mở terminal trên máy này. Để chắc chắn nó không để lại gì, hãy chạy thêm <code>termote start --fresh</code>.',
 
   'settings.signins.intro':
     'Đăng xuất sẽ hủy cookie của trình duyệt đó. Nếu mật khẩu có thể đã lộ, hãy chạy <code>termote start --fresh</code>.',
@@ -228,21 +228,21 @@ export default {
   'settings.signins.confirmOthersTitle': 'Đăng xuất mọi trình duyệt khác?',
   'settings.signins.confirmTitle': 'Đăng xuất trình duyệt này?',
   'settings.signins.confirmOthers_other':
-    '{count} trình duyệt bị đăng xuất ở lần gửi yêu cầu tiếp theo, và các terminal chúng đang mở sẽ đóng. Các thiết bị ghép từ chúng cũng bị thu hồi. Trình duyệt này vẫn đăng nhập.',
+    '{count} trình duyệt sẽ bị đăng xuất ở yêu cầu kế tiếp, và các terminal chúng đang mở sẽ đóng. Các thiết bị ghép từ chúng cũng bị thu hồi. Trình duyệt này vẫn đăng nhập.',
   'settings.signins.confirmCurrent':
-    'Đây là trình duyệt bạn đang dùng: nó bị đăng xuất ngay.',
+    'Đây là trình duyệt bạn đang dùng, sẽ bị đăng xuất ngay.',
   'settings.signins.confirmCurrentDevices':
-    'Đây là trình duyệt bạn đang dùng: nó bị đăng xuất ngay. Các thiết bị ghép từ nó cũng bị thu hồi.',
+    'Đây là trình duyệt bạn đang dùng, sẽ bị đăng xuất ngay. Các thiết bị ghép từ nó cũng bị thu hồi.',
   'settings.signins.confirmOther':
-    '{name} bị đăng xuất ở lần gửi yêu cầu tiếp theo, và các terminal nó đang mở sẽ đóng. Các thiết bị ghép từ nó cũng bị thu hồi.',
+    '{name} sẽ bị đăng xuất ở yêu cầu kế tiếp, và các terminal nó đang mở sẽ đóng. Các thiết bị ghép từ nó cũng bị thu hồi.',
 
   'settings.updates.howRelease':
-    'Chạy trong một terminal trên máy chủ (terminal của Termote cũng được):',
+    'Chạy trong một terminal trên server (terminal của Termote cũng được):',
   'settings.updates.howContainer':
-    'Chạy trên máy chủ, không chạy trong container này (container dựng từ một checkout thì: git pull, rồi termote container up --build):',
+    'Chạy trên server, không chạy trong container này (container dựng từ một checkout thì: git pull, rồi termote container up --build):',
   'settings.updates.howCheckout':
     'Server này chạy từ một git checkout: hãy pull, build lại và khởi động lại ở đó.',
-  'settings.updates.howUnknown': 'Hãy cập nhật theo cách đã dùng để cài nó.',
+  'settings.updates.howUnknown': 'Hãy cập nhật theo đúng cách bạn đã cài.',
   'settings.updates.failed':
     'Không kết nối được GitHub để kiểm tra bản cập nhật.',
   'settings.updates.checkingFor': 'Đang kiểm tra bản cập nhật…',
@@ -266,12 +266,12 @@ export default {
   'settings.updates.runFailed': 'Không bắt đầu cập nhật được: {message}',
   'settings.updates.notes': 'Ghi chú phát hành v{version}',
   'settings.star.prompt':
-    'Đã cập nhật lên v{version}. Nếu Termote có ích với bạn, một ngôi sao trên GitHub giúp người khác tìm thấy nó.',
+    'Đã cập nhật lên v{version}. Nếu Termote có ích với bạn, hãy tặng một sao trên GitHub để nhiều người biết đến hơn.',
   'settings.star.link': 'Gắn sao trên GitHub',
   'settings.star.decline': 'Không, cảm ơn',
 
   'settings.shortcuts.intro':
-    'Lưu trên thiết bị này. Phím mà trình duyệt xử lý trước (như {key}) sẽ không tới được app.',
+    'Lưu trên thiết bị này. Phím do trình duyệt xử lý trước (như {key}) sẽ không đến được app.',
   'settings.shortcuts.filter': 'Lọc phím tắt',
   'settings.shortcuts.filterPlaceholder': 'Lọc theo tên hoặc phím',
   'settings.shortcuts.resetAll': 'Đặt lại mọi phím tắt',
@@ -282,11 +282,11 @@ export default {
   'settings.shortcuts.useMod': 'Hãy dùng {mod} kèm một phím',
   'settings.shortcuts.unusable': 'Không dùng được phím này',
   'settings.shortcuts.browserKeeps': 'Trình duyệt giữ phím này',
-  'settings.shortcuts.usedByEditor': 'Trình sửa đang dùng',
+  'settings.shortcuts.usedByEditor': 'Trình soạn thảo đang dùng',
   'settings.shortcuts.usedByTerminal': 'Terminal đang dùng',
   'settings.shortcuts.usedForText': 'Dùng để sửa chữ',
   'settings.shortcuts.alsoUsedBy': '{name} cũng dùng phím này',
-  'settings.shortcuts.replacedBy': 'Đã nhường cho phím tắt bạn đặt cho {name}',
+  'settings.shortcuts.replacedBy': 'Đã thay bằng phím tắt bạn đặt cho {name}',
   'settings.shortcuts.noKey': 'Không có phím',
   'settings.shortcuts.change': 'Đổi',
   'settings.shortcuts.changeName': 'Đổi phím của {name}',
@@ -301,11 +301,11 @@ export default {
   'settings.shortcuts.recording': 'Nhấn phím mới cho {name}, hoặc Escape',
 
   'settings.templates.intro':
-    'Lưu trên server này, mọi thiết bị đăng nhập vào nó đều dùng chung. Chèn từ Chat bằng nút Mẫu, danh sách / hoặc Bảng lệnh.',
+    'Lưu trên server, dùng chung cho mọi thiết bị đăng nhập vào đây. Chèn từ Chat bằng nút Mẫu, danh sách / hoặc Bảng lệnh.',
   'settings.templates.viewOnly':
     'Thiết bị này chỉ được xem: có thể đọc và xuất các mẫu.',
   'settings.templates.newer':
-    'Một bản Termote mới hơn đã lưu chúng; hãy cập nhật để sửa mẫu.',
+    'Chúng được lưu bằng bản Termote mới hơn; hãy cập nhật để sửa mẫu.',
   'settings.templates.readFailed': 'Không đọc được các mẫu',
   'settings.templates.none': 'Chưa có mẫu nào.',
   'settings.templates.new': 'Mẫu mới',
@@ -323,7 +323,7 @@ export default {
   'settings.templates.importTitle': 'Nhập các mẫu?',
   'settings.templates.importConfirm': 'Nhập',
   'settings.templates.added': 'Mới',
-  'settings.templates.replaced': 'Thay mẫu đang có',
+  'settings.templates.replaced': 'Thay thế mẫu hiện có',
   'settings.templates.listCount': '{title} ({count})',
   'settings.templates.noUndo': 'Nhập rồi thì không hoàn tác được.',
   'settings.templates.newTitle': 'Mẫu prompt mới',
@@ -331,11 +331,11 @@ export default {
   'settings.templates.size': '{used} KB / {max} KB',
   'settings.templates.insertVariable': 'Chèn biến',
   'settings.templates.insert': 'Chèn {token}: {hint}',
-  'settings.templates.filledIn': 'Được điền khi chèn mẫu vào Chat: {list}.',
-  'settings.templates.varFile': 'file đang mở trong File',
+  'settings.templates.filledIn': 'Tự điền khi chèn mẫu vào Chat: {list}.',
+  'settings.templates.varFile': 'file đang mở trong Files',
   'settings.templates.varSelection': 'đoạn chữ chọn gần nhất',
   'settings.templates.varBranch': 'nhánh git',
-  'settings.templates.varInput': 'gõ vào lúc chèn',
+  'settings.templates.varInput': 'bạn gõ khi chèn',
   'settings.templates.nameIt': 'Hãy đặt tên cho mẫu',
   'settings.templates.empty': 'Mẫu đang trống',
   'settings.templates.tooLarge': 'Mẫu lớn hơn {max} KB',
@@ -353,9 +353,9 @@ export default {
   'settings.templates.tooMany': 'Tối đa {max} mẫu',
   'settings.templates.duplicateName': 'Hai mẫu trong file trùng tên nhau',
   'settings.templates.newerFormat':
-    'Một bản Termote mới hơn đã lưu chúng; hãy cập nhật để sửa mẫu',
+    'Chúng được lưu bằng bản Termote mới hơn; hãy cập nhật để sửa mẫu',
   'settings.templates.unavailable': 'Server này không có mẫu prompt',
-  'settings.templates.busy': 'Các mẫu đang được sửa ở nơi khác; hãy thử lại',
+  'settings.templates.busy': 'Mẫu đang được sửa ở nơi khác; hãy thử lại',
   'settings.templates.importChanged':
     'Các mẫu đã thay đổi từ lúc kiểm tra; hãy kiểm tra lại',
   'settings.templates.saveFailed': 'Không lưu được các mẫu',
@@ -363,7 +363,7 @@ export default {
   'settings.tasks.intro':
     'Lưu trên server này, mọi thiết bị dùng chung. Mỗi tác vụ chạy từ phần Tác vụ của một pane, trong một tab mở ở thư mục của pane đó.',
   'settings.tasks.newer':
-    'Một bản Termote mới hơn đã lưu chúng; hãy cập nhật để sửa tác vụ.',
+    'Chúng được lưu bằng bản Termote mới hơn; hãy cập nhật để sửa tác vụ.',
   'settings.tasks.readFailed': 'Không đọc được các tác vụ',
   'settings.tasks.none': 'Chưa có tác vụ nào.',
   'settings.tasks.new': 'Tác vụ mới',
@@ -378,17 +378,17 @@ export default {
   'settings.tasks.nameTaken': 'Đã có tác vụ mang tên này',
   'settings.tasks.tooMany': 'Tối đa {max} tác vụ',
   'settings.tasks.newerFormat':
-    'Một bản Termote mới hơn đã lưu chúng; hãy cập nhật để sửa tác vụ',
+    'Chúng được lưu bằng bản Termote mới hơn; hãy cập nhật để sửa tác vụ',
   'settings.tasks.unavailable': 'Server này không có tác vụ',
-  'settings.tasks.busy': 'Các tác vụ đang được sửa ở nơi khác; hãy thử lại',
+  'settings.tasks.busy': 'Tác vụ đang được sửa ở nơi khác; hãy thử lại',
   'settings.tasks.saveFailed': 'Không lưu được các tác vụ',
 
   'settings.pair.viewHint':
-    'Xem được terminal, Chat và File; không thay đổi được gì.',
+    'Xem được terminal, Chat và Files; không thay đổi được gì.',
   'settings.pair.fullHint':
-    'Làm được mọi thứ thiết bị này làm được: gõ phím, file, agent, thiết bị.',
+    'Làm được mọi việc như thiết bị này: gõ phím, quản lý file, agent và thiết bị.',
   'settings.pair.days_other': '{count} ngày',
-  'settings.pair.never': 'Không bao giờ hết',
+  'settings.pair.never': 'Không hết hạn',
   'settings.pair.noLimit': 'đăng nhập không giới hạn thời gian',
   'settings.pair.forDays_other': 'đăng nhập được {count} ngày',
   'settings.pair.forHours_other': 'đăng nhập được {count} giờ',
@@ -397,10 +397,10 @@ export default {
   'settings.pair.invalidName': 'Hãy dùng tên ngắn hơn, không có ký tự đặc biệt',
   'settings.pair.viewOnly': 'Thiết bị này chỉ được xem',
   'settings.pair.fullNeedsPassword':
-    'Thiết bị toàn quyền phải được ghép từ một lần đăng nhập bằng mật khẩu hoặc từ CLI',
+    'Thiết bị toàn quyền phải được ghép từ một phiên đăng nhập bằng mật khẩu hoặc từ CLI',
   'settings.pair.creatorGone': 'Thiết bị này không còn ghép được thiết bị khác',
   'settings.pair.invalidValidity':
-    'Hãy chọn thiết bị mới được đăng nhập trong bao lâu',
+    'Hãy chọn thời hạn đăng nhập cho thiết bị mới',
   'settings.pair.failed': 'Không tạo được mã ghép. Hãy thử lại',
   'settings.pair.nameTooLong': 'Tên tối đa {max} ký tự',
   'settings.pair.expired': 'Mã này đã hết hạn. Hãy tạo mã mới.',
@@ -414,11 +414,11 @@ export default {
   'settings.pair.newCode': 'Mã mới',
   'settings.pair.role': 'Quyền',
   'settings.pair.viewOnlyOnly':
-    'Chỉ xem. {hint} Thiết bị toàn quyền được ghép từ một lần đăng nhập bằng mật khẩu hoặc bằng <code>termote pair --role full</code>.',
+    'Chỉ xem. {hint} Thiết bị toàn quyền được ghép từ một phiên đăng nhập bằng mật khẩu hoặc bằng <code>termote pair --role full</code>.',
   'settings.pair.trust':
-    'Thiết bị toàn quyền làm được mọi thứ tài khoản người dùng của bạn làm được; thiết bị chỉ xem thấy mọi thứ hiện ra.',
-  'settings.pair.validity': 'Được đăng nhập trong',
-  'settings.pair.outlast': 'Không lâu hơn thời hạn của thiết bị này',
+    'Thiết bị toàn quyền làm được mọi thứ tài khoản người dùng của bạn làm được; thiết bị chỉ xem thấy được mọi thứ hiện trên màn hình.',
+  'settings.pair.validity': 'Thời hạn đăng nhập',
+  'settings.pair.outlast': 'Không thể dài hơn thời hạn của thiết bị này',
   'settings.pair.name': 'Tên (không bắt buộc; thiết bị mới tự đặt được)',
   'settings.pair.namePlaceholder': 'Điện thoại',
   'settings.pair.make': 'Tạo mã',
@@ -438,9 +438,9 @@ export default {
   'settings.transfer.intro':
     'Chuyển cài đặt của trình duyệt này sang trình duyệt khác: xuất ra, rồi nhập vào bên đó. Thông báo và huy hiệu ứng dụng vẫn đặt riêng trên từng thiết bị.',
   'settings.transfer.save': 'Lưu ra file',
-  'settings.transfer.copy': 'Chép',
-  'settings.transfer.copied': 'Đã chép cài đặt',
-  'settings.transfer.copyFailed': 'Không chép được cài đặt',
+  'settings.transfer.copy': 'Sao chép',
+  'settings.transfer.copied': 'Đã sao chép cài đặt',
+  'settings.transfer.copyFailed': 'Không sao chép được cài đặt',
   'settings.transfer.saveFailed': 'Không lưu được file',
   'settings.transfer.importFile': 'Nhập từ file…',
   'settings.transfer.fileLabel': 'File cài đặt để nhập',
@@ -458,7 +458,7 @@ export default {
   'settings.key.sidebarWidth': 'Độ rộng sidebar',
   'settings.key.sidePanelWidth': 'Độ rộng bảng Files',
   'settings.key.markdownPreview': 'Hiện Markdown đã dựng',
-  'settings.key.markdownEditLayout': 'Markdown khi đang sửa',
+  'settings.key.markdownEditLayout': 'Bố cục Markdown khi sửa',
   'settings.key.tablePreview': 'Hiện CSV và TSV dạng bảng',
   'settings.key.svgPreview': 'Hiện SVG dạng ảnh',
   'settings.key.findIncludeIgnored': 'Tìm file: gồm cả file bị bỏ qua',
@@ -486,7 +486,7 @@ export default {
   'settings.diff.on': 'bật',
   'settings.diff.off': 'tắt',
   'settings.diff.inTerminal': 'cả trong terminal',
-  'settings.diff.skip.unknown': 'Bỏ qua: bản này không biết cài đặt này',
+  'settings.diff.skip.unknown': 'Bỏ qua: phiên bản này chưa có cài đặt này',
   'settings.diff.skip.invalid': 'Bỏ qua: giá trị không hợp lệ',
   'settings.diff.skip.device': 'Bỏ qua: không dùng được trên thiết bị này',
   'settings.diff.skip.deviceOnly': 'Bỏ qua: chỉ đặt trên từng thiết bị',
