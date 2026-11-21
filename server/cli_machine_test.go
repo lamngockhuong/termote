@@ -700,7 +700,8 @@ func TestMachineWhereami(t *testing.T) {
 func TestMachineWhereamiAsksTheRegisteredBinary(t *testing.T) {
 	dev := filepath.Join(t.TempDir(), "termote-dev")
 	os.WriteFile(dev, nil, 0o755)
-	devAnswer := `{"exe":"` + dev + `","os":"linux","version":"9.0.0","apiVersion":2,"native":true,"noUpdate":true}`
+	b, _ := json.Marshal(whereami{Exe: dev, OS: "linux", Version: "9.0.0", APIVersion: apiVersion, Native: true, NoUpdate: true})
+	devAnswer := string(b)
 	for _, answers := range []bool{true, false} {
 		tc := newTestCLI(t, "linux")
 		tc.testSupervisors = []supervisor{&registeredService{fakeService: &fakeService{}, exe: dev}}
