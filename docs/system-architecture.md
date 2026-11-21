@@ -435,7 +435,8 @@ new tab of the pane's group, or into the pane's own idle shell, as Tasks types a
 (`taskMux`; not on psmux); a session running in a pane is never opened twice (409
 `session_live`). The rules are in `docs/security-invariants/agents.md` (Tasks).
 
-`/agent/start` (`caps.agentStart`: Herdr 0.8.2 or later, on Linux, macOS and Windows) starts
+`/agent/start` (`caps.agentStart`: Herdr 0.8.2 or later, on Linux, macOS and Windows; tmux,
+Zellij and hc where the agent is found under a pane's shell, not psmux) starts
 Claude Code (`kind: "claude"`), Codex (`"codex"`, run as `codex --no-daemon`; only where Codex
 has a Chat view, `caps.agentStartCodex`, else 501 `unsupported`) or OpenCode (`"opencode"`, run
 as `opencode --session <id>` with a new id the server makes)
@@ -465,6 +466,12 @@ older Herdr's `invalid_request` naming the method), 504 `start_unknown` (the `ag
 call timed out; the start is followed as if typed) and 500 `start_failed`. The Chat view is
 offered on such a pane and holds the start buttons; Codex writes its rollout only with its first
 message, so after a Codex start the Chat view asks for that message in the terminal.
+tmux, Zellij and hc have no `agent.start`: termote types the line itself (`shellStarter`,
+`server/agent_start_shell.go`), with the same checks as a resume in the pane (`IdleShell`, `C-c`,
+`IdleShell` again, a supported shell, `TypeLine` with the arguments quoted for it), and follows
+the start by pane id from what the Chat view reads: `ready` once the agent's process runs in the
+pane, `blocked` when its status says so, `exited` when another agent or only the shell shows
+again 4 s after the start.
 
 `/worktrees` (`caps.worktrees`: Herdr 0.9.2 or later; tmux and psmux; Zellij; hc) is driven
 from a group's menu. On Herdr it calls Herdr's `worktree.*`; on tmux, Zellij

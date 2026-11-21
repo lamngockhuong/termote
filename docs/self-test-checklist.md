@@ -658,7 +658,7 @@ On psmux, Chat messages work; a long one may take seconds to show (the paste is 
 Linux, Herdr 0.8.2 or later, `termote-dev serve --mux herdr` (or `termote start --mux herdr`).
 
 - [ ] An idle pane offers the Chat view with "Claude Code" and "Codex"; a pane running `vim`
-      does not; tmux offers neither and `POST …/agent/start` answers 501
+      does not; psmux offers neither and `POST …/agent/start` answers 501
 - [ ] Claude Code: `claude` runs, the state goes `starting` → `ready`, the conversation shows; a
       first message sent from the Chat view arrives (note how long until Herdr reports the
       session, meanwhile the view says "Claude Code is starting…")
@@ -690,6 +690,25 @@ Windows, Herdr 0.8.2 or later, pwsh as the pane shell, `termote start --mux herd
 - [ ] `Start-Job { Start-Sleep 300 }` running: 409 `pane_busy` (fail-closed); after `Remove-Job -Force`
       the pane is idle again
 - [ ] `curl` `{"kind":"codex"}` starts `codex --no-daemon`; the snapshot's `caps.agentStartCodex` is true
+
+### Starting an agent (tmux, Zellij, hc)
+
+Linux/macOS with tmux and with Zellij (`termote start --mux tmux|zellij`); Windows with hc
+(`termote start --mux hc`, pwsh as the pane shell).
+
+- [ ] An idle pane offers the Chat view with "Claude Code", "Codex" (where Codex has a Chat
+      view) and "OpenCode"; a pane running `vim` does not
+- [ ] Claude Code: the pane shows `claude` typed at its prompt, the state goes `starting` →
+      `ready`, the conversation shows; a first message from the Chat view arrives
+- [ ] Codex: `codex '--no-daemon'` is typed; the Chat view asks for the first message in the
+      terminal. OpenCode: `opencode '--session' 'ses_…'` is typed and its Chat view shows
+- [ ] `echo hi` half-typed, then a start: only the agent runs (also at a `PS2` prompt)
+- [ ] A folder where Claude Code asks to trust it: `blocked`, the PWA opens the Terminal
+- [ ] `PATH` without `claude`: `exited` about 4 s after the start, a warning toast; a new start
+      goes ahead at once (no `start_pending` outside Herdr)
+- [ ] `curl` POST to a pane running `vim` → 409 `pane_busy`, nothing typed, `vim` keeps running
+- [ ] Two devices start at once: one gets 200, the other 409 `starting`
+- [ ] tmux: a pane in copy mode → 409 `pane_busy`; psmux: `caps.agentStart` is false
 
 ---
 

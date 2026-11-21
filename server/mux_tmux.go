@@ -323,7 +323,9 @@ func (tmuxMux) Name() string { return "tmux" }
 func (tmuxMux) Caps() Caps {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	return Caps{CopyMode: true, AgentChat: agentProcSupported, Files: true, Groups: true,
+	// An agent is started by typing its line, as a task is (not on psmux).
+	start, codex := canShellStart()
+	return Caps{CopyMode: true, AgentChat: agentProcSupported, AgentStart: start && !tmuxIsPsmux, AgentStartCodex: codex && !tmuxIsPsmux, Files: true, Groups: true,
 		RenameGroup: true, RenameTab: true, ReorderTabs: tmuxCanReorder(ctx), PaneText: !tmuxIsPsmux, PaneLayout: !tmuxIsPsmux, RenamePane: tmuxCanNamePanes(ctx),
 		// Worktrees through git (gitWorktreeMux).
 		Worktrees: true}

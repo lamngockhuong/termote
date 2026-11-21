@@ -565,9 +565,6 @@ func TestAgentStartStateCommandEnded(t *testing.T) {
 }
 
 func TestAgentStartCaps(t *testing.T) {
-	if (tmuxMux{}).Caps().AgentStart {
-		t.Error("tmux AgentStart = true")
-	}
 	for _, c := range []struct {
 		version string
 		want    bool
