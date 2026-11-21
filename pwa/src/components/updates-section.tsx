@@ -98,12 +98,11 @@ export function UpdatesSection({
     }
   }
 
-  const runUpdate = async () => {
-    if (!onRunUpdate) return
+  const runUpdate = async (run: () => Promise<string | undefined>) => {
     setStarting(true)
     setRunError('')
     try {
-      setRunError((await onRunUpdate()) ?? '')
+      setRunError((await run()) ?? '')
     } finally {
       setStarting(false)
     }
@@ -206,7 +205,7 @@ export function UpdatesSection({
                   size="sm"
                   className="self-start"
                   disabled={starting}
-                  onClick={() => void runUpdate()}
+                  onClick={() => void runUpdate(onRunUpdate)}
                 >
                   <Play size={16} aria-hidden="true" />
                   {starting
