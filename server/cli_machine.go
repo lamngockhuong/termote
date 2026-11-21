@@ -263,7 +263,13 @@ func (c *cli) findRemoteTermote(alias string, rec machineRecord, paths sshPaths,
 	case err != nil:
 		return w, err
 	}
-	if pin != "" && versionRe.MatchString(w.Version) && compareVersions(w.Version, pin) < 0 &&
+	older := pin != "" && versionRe.MatchString(w.Version) && compareVersions(w.Version, pin) < 0
+	if older && w.NoUpdate {
+		// A checkout or a Homebrew install there: termote update refuses it.
+		c.infof("termote on %s is %s, this one %s (update it there)", alias, w.Version, pin)
+		return w, nil
+	}
+	if older &&
 		(yes || c.confirm(fmt.Sprintf("termote on %s is %s, this one %s. Update it there (its server restarts)?", alias, w.Version, pin))) {
 		c.stepf("ssh", "Updating termote on %s to %s", alias, pin)
 		if _, err := c.interact("", sshUserArgv(paths.KnownHosts, rec, remoteExeScript(w.Exe, "update", "--version", pin))); err != nil {
@@ -758,8 +764,25 @@ func parseHerdrMachines(out []byte) ([]string, error) {
 // update; on Windows termote.exe itself, since cmd.exe would mangle the
 // bridge's bytes) and the socket dir of the bridge.
 func (c *cli) machineWhereami() error {
+	// The service may run another binary than this one (a checkout's dev
+	// shim registered it while an install is on PATH): that binary serves,
+	// so it answers, with its own path and version. It finds itself
+	// registered, so it answers for itself; one too old to answer leaves
+	// the answer to this one.
+	if sup, ok := c.installedSupervisor().(exeRegistrar); ok {
+		if exe, ok := sup.RegisteredExe(); ok && !sameFile(exe, c.exe) && !sameFile(exe, c.stableExe()) && fileExists(exe) {
+			if out, err := c.run.Output("", nil, exe, "machine", "whereami"); err == nil {
+				var w whereami
+				if json.Unmarshal(out, &w) == nil && w.Exe != "" {
+					_, err := c.out.Write(out)
+					return err
+				}
+			}
+		}
+	}
 	saved, _ := c.loadConfig()
-	w := whereami{Exe: c.stableExe(), OS: c.goos, Version: c.version, APIVersion: apiVersion, Native: saved != nil}
+	w := whereami{Exe: c.stableExe(), OS: c.goos, Version: c.version, APIVersion: apiVersion, Native: saved != nil,
+		NoUpdate: !c.isInstalledRelease()}
 	if c.goos == "windows" {
 		if strings.HasSuffix(strings.ToLower(w.Exe), ".cmd") {
 			w.Exe = c.exe

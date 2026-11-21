@@ -165,6 +165,9 @@ type whereami struct {
 	Version    string `json:"version"`
 	APIVersion int    `json:"apiVersion"`
 	Native     bool   `json:"native"`
+	// NoUpdate: termote update refuses this binary (a checkout, Homebrew,
+	// a binary the installer did not lay out).
+	NoUpdate bool `json:"noUpdate,omitempty"`
 }
 
 var winAbsRe = regexp.MustCompile(`^[A-Za-z]:/`)

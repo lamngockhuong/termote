@@ -382,9 +382,23 @@ func TestMachineAddUpdatesOlderTermote(t *testing.T) {
 			}
 		})
 	}
-	// Same or newer there: nothing to update.
+	// Older, but a checkout or Homebrew there that termote update refuses:
+	// said, not offered.
 	tc := machineCLI(t, "", nil)
+	tc.version = "3.0.0"
 	var cmds []string
+	devOld := strings.Replace(testWhereami, `"native":true`, `"native":true,"noUpdate":true`, 1)
+	tc.run = &scriptedInteract{fakeRunner: tc.runner, whereamis: []string{devOld},
+		fn: func(c string) error { cmds = append(cmds, c); return nil }}
+	if err := tc.cmdMachine([]string{"add", "box", "--yes"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(cmds) != 1 || cmds[0] != installKeyScript || !strings.Contains(tc.stdout.String()+tc.stderr.String(), "termote on box is 2.0.0, this one 3.0.0 (update it there)") {
+		t.Errorf("commands: %q\n%s%s", cmds, tc.stdout, tc.stderr)
+	}
+	// Same or newer there: nothing to update.
+	tc = machineCLI(t, "", nil)
+	cmds = nil
 	tc.run = &scriptedInteract{fakeRunner: tc.runner, whereamis: []string{testWhereami},
 		fn: func(c string) error { cmds = append(cmds, c); return nil }}
 	if err := tc.cmdMachine([]string{"add", "box", "--yes"}); err != nil {
@@ -676,6 +690,48 @@ func TestMachineWhereami(t *testing.T) {
 	json.Unmarshal(win.stdout.Bytes(), &ww)
 	if strings.Contains(ww.Exe, `\`) || ww.SocketDir != "" || ww.OS != "windows" {
 		t.Errorf("windows whereami: %+v", ww)
+	}
+}
+
+// A service registered from a checkout while an install is on PATH runs the
+// checkout's binary: that one answers whereami, so another termote compares
+// against the server that runs and never offers to update the idle install.
+// One too old to answer leaves the answer to this binary.
+func TestMachineWhereamiAsksTheRegisteredBinary(t *testing.T) {
+	dev := filepath.Join(t.TempDir(), "termote-dev")
+	os.WriteFile(dev, nil, 0o755)
+	b, _ := json.Marshal(whereami{Exe: dev, OS: "linux", Version: "9.0.0", APIVersion: apiVersion, Native: true, NoUpdate: true})
+	devAnswer := string(b)
+	for _, answers := range []bool{true, false} {
+		tc := newTestCLI(t, "linux")
+		tc.testSupervisors = []supervisor{&registeredService{fakeService: &fakeService{}, exe: dev}}
+		tc.runner.onOutput = func(argv, _ []string) (string, bool) {
+			if argv[0] == dev && slices.Equal(argv[1:], []string{"machine", "whereami"}) && answers {
+				return devAnswer + "\n", true
+			}
+			return "", false
+		}
+		if err := tc.cmdMachine([]string{"whereami"}); err != nil {
+			t.Fatal(err)
+		}
+		var w whereami
+		json.Unmarshal(tc.stdout.Bytes(), &w)
+		if answers && (w.Exe != dev || w.Version != "9.0.0" || !w.NoUpdate) {
+			t.Errorf("registered binary's answer not passed on: %s", tc.stdout.String())
+		}
+		if !answers && (w.Exe != tc.exe || w.Version != tc.version || !w.NoUpdate) {
+			t.Errorf("own answer: %s", tc.stdout.String())
+		}
+	}
+	// Registered as itself: it answers without asking anyone.
+	tc := newTestCLI(t, "linux")
+	tc.testSupervisors = []supervisor{&registeredService{fakeService: &fakeService{}, exe: tc.exe}}
+	tc.runner.onOutput = func(argv, _ []string) (string, bool) {
+		t.Errorf("ran %q", argv)
+		return "", false
+	}
+	if err := tc.cmdMachine([]string{"whereami"}); err != nil {
+		t.Fatal(err)
 	}
 }
 

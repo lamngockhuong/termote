@@ -45,7 +45,11 @@ Part of the [security invariants](README.md): other termote servers reached over
   certificate never names `termote-<id>`) (`seedHostKeys`), so a host whose key the user already
   trusts is checked against that key and a changed one refused. `add` runs the user's ssh at the
   terminal (`StrictHostKeyChecking=ask`: the only TOFU, for a host none of those files knows), asks `termote machine whereami` there for its
-  stable path (Windows: `termote.exe`, never the `.cmd` shim) and socket dir. Where that Unix script says
+  stable path (Windows: `termote.exe`, never the `.cmd` shim) and socket dir; whereami from a binary the registered
+  service does not run (an install on PATH while a checkout's dev shim registered the service) runs the registered
+  one's `machine whereami` (no shell, fixed words) and passes on its JSON answer, its own only when that one gives
+  none, and says `noUpdate` for a binary `update` refuses (a checkout, Homebrew), which is told, never offered an
+  update. Where that Unix script says
   `TERMOTE-NOT-FOUND` (exit 3, reported as such, never as ssh failing), only after a yes (or `--yes`) it
   runs the online installer there over the same ssh, downloaded to a `mktemp` file first (a failed
   download fails the step) and pinned with `TERMOTE_VERSION` to this release when that matches
