@@ -125,7 +125,7 @@ describe('SessionSidebar — width', () => {
 
     fireEvent.pointerDown(handle(), { button: 0, clientX: 256 })
     expect(onResizing).toHaveBeenLastCalledWith(true)
-    expect(handle().className).toContain('bg-accent/40')
+    expect(handle().className).toContain('before:bg-accent')
     // No width animation while the edge follows the pointer
     expect(aside().style.transition).toBe('none')
     fireEvent.pointerMove(handle(), { clientX: 356 })

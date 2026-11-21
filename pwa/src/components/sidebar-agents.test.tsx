@@ -193,7 +193,7 @@ describe('SidebarAgents', () => {
     fireEvent.pointerMove(handle(), { clientY: 400 })
     expect(height()).toBe(px(AGENTS_HEIGHT_DEFAULT))
     fireEvent.pointerDown(handle(), { button: 0, clientY: 500 })
-    expect(handle().className).toContain('bg-accent/40')
+    expect(handle().className).toContain('before:bg-accent')
     fireEvent.pointerMove(handle(), { clientY: 400 })
     expect(height()).toBe(px(AGENTS_HEIGHT_DEFAULT + 100))
     expect(localStorage.getItem('sidebar-agents-height')).toBeNull()

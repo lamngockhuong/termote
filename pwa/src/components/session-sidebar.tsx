@@ -1584,8 +1584,8 @@ export function SessionSidebar({
           tabIndex={0}
           title={t('shell.panel.resizeHint')}
           {...resize.handleProps}
-          className={`absolute inset-y-0 right-0 z-20 w-2 cursor-col-resize touch-none outline-none hover:bg-accent/40 focus-visible:bg-accent ${
-            resize.dragging ? 'bg-accent/40' : ''
+          className={`absolute inset-y-0 right-0 z-20 w-2 cursor-col-resize touch-none outline-none before:absolute before:inset-y-0 before:right-0 before:w-0.5 hover:before:bg-accent focus-visible:before:bg-accent ${
+            resize.dragging ? 'before:bg-accent' : ''
           }`}
         />
       )}
