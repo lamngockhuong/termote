@@ -368,6 +368,13 @@ trang chỉ xin chạy bản cập nhật. Kết nối ngắt trong lúc server 
 bản mới; output vẫn còn trong tab. Bấm lại khi bản cập nhật đang chạy thì Termote chuyển tới tab
 đó thay vì mở thêm tab.
 
+Shell của tab mới phải là shell mà [Tasks](/vi/usage/tasks/) gõ lệnh vào được (`bash`, `zsh`, `sh`,
+`fish`, PowerShell 7 `pwsh`, ...). Trên Windows dùng Herdr, tab mới chạy Windows PowerShell 5.1
+(`powershell.exe`, shell mặc định của Herdr) nếu Herdr chưa được đặt để mở shell khác: khi đó nút
+vẫn mở tab nhưng không gõ gì, và báo **Không hỗ trợ shell này**. Bấm lại thì Termote dùng đúng tab đó
+và bị từ chối như cũ. Hãy sao chép lệnh rồi tự chạy trong một terminal, hoặc gõ `pwsh` trong tab đó
+rồi dán lệnh vào.
+
 ### Tải lại sau khi cập nhật
 
 Giao diện do server phục vụ, nên khi server chạy bản mới, một banner **Termote vX.Y.Z is ready**
