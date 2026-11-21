@@ -542,16 +542,15 @@ export function SessionSidebar({
   }, [isMobile, isOpen])
 
   const handleAdd = () => {
-    if (onAdd && newName.trim()) {
-      // The new session has no agent yet: clear the filter so it shows,
-      // and the search, which it may not match.
-      if (filtering) onFilterChange?.('all')
-      setQuery('')
-      onAdd(newName.trim(), newIcon)
-      setNewName('')
-      setNewIcon(undefined)
-      setShowAddForm(false)
-    }
+    // The form shows only with onAdd. No name: the tab is named for it
+    // (newTabName). The new session has no agent yet: clear the filter so
+    // it shows, and the search, which it may not match.
+    if (filtering) onFilterChange?.('all')
+    setQuery('')
+    onAdd!(newName.trim(), newIcon)
+    setNewName('')
+    setNewIcon(undefined)
+    setShowAddForm(false)
   }
 
   // Mobile: a form the browser scrolls to on focus clears the pinned current
@@ -1234,6 +1233,7 @@ export function SessionSidebar({
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+          aria-label={t('shell.sidebar.sessionName')}
           placeholder={t('shell.sidebar.sessionName')}
           className={INPUT_CLASSES}
           autoFocus

@@ -478,6 +478,20 @@ describe('useLocalSessions', () => {
     })
   })
 
+  it('addSession numbers a tmux tab asked for without a name', async () => {
+    mockFetchTabs
+      .mockResolvedValueOnce([WIN_SHELL])
+      .mockResolvedValueOnce([WIN_SHELL, WIN_VIM])
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    await act(async () => {
+      await result.current.addSession('', '🧪')
+    })
+    expect(mockCreateTab).toHaveBeenCalledWith('1', 'main')
+    const meta = JSON.parse(localStorage.getItem('termote-sessions')!)
+    expect(meta['tmux:name:1'].icon).toBe('🧪')
+  })
+
   it('addSession uses default icon when not specified', async () => {
     mockFetchTabs
       .mockResolvedValueOnce([WIN_SHELL])
@@ -1871,6 +1885,18 @@ describe('useLocalSessions with herdr', () => {
     expect(meta).toEqual({
       'herdr:w2:t9': { icon: '🚀', description: 'Fresh', picked: true },
     })
+  })
+
+  it('addSession leaves an unnamed tab to Herdr, numbering one in a tab group', async () => {
+    const { result } = await render()
+    await act(async () => {
+      await result.current.addSession('')
+    })
+    expect(mockCreateTab).toHaveBeenLastCalledWith('', 'w1')
+    await act(async () => {
+      await result.current.addSession('review/')
+    })
+    expect(mockCreateTab).toHaveBeenLastCalledWith('review/1', 'w1')
   })
 
   it('addSession keeps the current tab when the server refuses', async () => {

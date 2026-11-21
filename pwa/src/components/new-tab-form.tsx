@@ -65,7 +65,7 @@ export function NewTabForm({
       aria-label={t('shell.tabs.newForm')}
       onSubmit={(e) => {
         e.preventDefault()
-        if (!name.trim()) return
+        // No name: the tab is named for it (newTabName)
         onAdd(joinTabGroup(group.trim() || undefined, name.trim()), icon)
         onClose()
       }}

@@ -35,6 +35,7 @@ import {
 import { setSelectionServer } from '../utils/pane-selection'
 import { adoptReviewDrafts, remapReviewDrafts } from '../utils/review-draft'
 import { uniqueNames } from '../utils/running-commands'
+import { newTabName } from '../utils/tab-group'
 import { zellijGroupId } from '../utils/zellij-group'
 import { renameActivityGroup } from './use-activity-log'
 import { hydrateDrafts } from './use-files'
@@ -682,9 +683,17 @@ export function useLocalSessions(pollInterval = 5) {
   // client attached to the session) reaches the caller, after the refresh;
   // other failures show on the next snapshot.
   const addSession = useCallback(
-    async (name: string, icon?: string, description = '') => {
+    async (asked: string, icon?: string, description = '') => {
       const meta = newMeta(icon, description)
       const { backend, caps } = muxRef.current
+      // Asked for without a name: the backend names it (newTabName)
+      const name = newTabName(
+        asked,
+        sessions
+          .filter((s) => s.groupId === activeSession?.groupId)
+          .map((s) => s.name),
+        backend === 'tmux',
+      )
       // tmux keys metadata by name, so it can be saved before the tab exists
       if (backend === 'tmux') {
         metaRef.current[metaKey(backend, '', name, activeSession?.groupId)] =
@@ -732,7 +741,7 @@ export function useLocalSessions(pollInterval = 5) {
         setActiveSession((prev) => prev && withMeta(prev))
       }
     },
-    [refreshSessions, activeSession?.groupId, storeSelection],
+    [refreshSessions, sessions, activeSession?.groupId, storeSelection],
   )
 
   const removeSession = useCallback(

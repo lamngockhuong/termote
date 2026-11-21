@@ -58,7 +58,7 @@ export default {
   'shell.tabGroups.nameField': 'New tab group for {name}',
   'shell.tabGroups.remove': 'Remove from tab group',
   // The new tab form's field for it
-  'shell.tabGroups.field': 'Tab group (optional)',
+  'shell.tabGroups.field': 'Tab group',
   // The pane strip (components/pane-strip.tsx)
   'shell.panes.close': 'Close pane {name}',
   // The layout view (components/terminal-stack.tsx): one pane of it

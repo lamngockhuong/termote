@@ -366,7 +366,7 @@ describe('AppHeader — tab groups', () => {
     const name = within(form).getByRole('textbox', { name: 'Session name' })
     expect(name).toHaveFocus()
     const group = within(form).getByRole('combobox', {
-      name: 'Tab group (optional)',
+      name: 'Tab group',
     })
     expect(group).toHaveValue('review')
     fireEvent.change(name, { target: { value: 'PR 3' } })

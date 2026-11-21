@@ -2292,7 +2292,7 @@ describe('App', () => {
     expect(screen.queryByTestId('session-tabs')).toBeNull()
   })
 
-  it('SessionTabs onAdd calls addSession("New") on desktop with showSessionTabs=true', async () => {
+  it('SessionTabs onAdd calls addSession without a name on desktop with showSessionTabs=true', async () => {
     const mockAddSession = vi.fn()
     mockUseSettings.mockReturnValue({
       settings: {
@@ -2339,7 +2339,7 @@ describe('App', () => {
     render(<App />)
     await waitFor(() => screen.getByRole('button', { name: 'STAdd' }))
     fireEvent.click(screen.getByRole('button', { name: 'STAdd' }))
-    expect(mockAddSession).toHaveBeenCalledWith('New', undefined)
+    expect(mockAddSession).toHaveBeenCalledWith('', undefined)
     // The server cannot move tabs: they do not drag
     expect(screen.queryByRole('button', { name: 'STMove' })).toBeNull()
   })
@@ -3015,7 +3015,7 @@ describe('App', () => {
     render(<App />)
     await waitFor(() => screen.getByTestId('welcome-host'))
     act(() => welcomeProps.onStartSession())
-    await waitFor(() => expect(addSession).toHaveBeenCalledWith('New'))
+    await waitFor(() => expect(addSession).toHaveBeenCalledWith(''))
     act(() => welcomeProps.onOpenTerminal())
     // Desktop steps; their parts are mocked out, so it ends at once
     act(() => welcomeProps.onTour())
@@ -7370,7 +7370,7 @@ describe('App command palette and shortcuts', () => {
     await run('Show the terminal')
     expect(mockFocusTerminal).toHaveBeenCalled()
     await run('New tab')
-    expect(addSession).toHaveBeenCalledWith('New')
+    expect(addSession).toHaveBeenCalledWith('')
     await run('Previous tab')
     expect(switchSession).toHaveBeenLastCalledWith('a', undefined)
     await run('Next tab')

@@ -1016,13 +1016,22 @@ describe('SessionTabs tab groups', () => {
       )
       const form = screen.getByRole('form', { name: 'New session' })
       expect(
-        within(form).getByRole('combobox', { name: 'Tab group (optional)' }),
+        within(form).getByRole('combobox', { name: 'Tab group' }),
       ).toHaveValue('review')
       fireEvent.change(within(form).getByRole('textbox'), {
         target: { value: 'PR 3' },
       })
       fireEvent.submit(form)
       expect(p.onAdd).toHaveBeenCalledWith('review/PR 3', undefined)
+    })
+
+    it('adds a tab in the group without a name, for it to be numbered', () => {
+      const p = openMenu()
+      fireEvent.click(
+        screen.getByRole('menuitem', { name: /New tab in this group/ }),
+      )
+      fireEvent.submit(screen.getByRole('form', { name: 'New session' }))
+      expect(p.onAdd).toHaveBeenCalledWith('review/', undefined)
     })
 
     it('renames every tab of the group, one after the other', async () => {
@@ -1216,9 +1225,9 @@ describe('SessionTabs tab groups', () => {
       ).toHaveFocus()
       fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' })
       fireEvent.keyDown(chip('review'), { key: 'n', code: 'KeyN' })
-      expect(
-        screen.getByRole('combobox', { name: 'Tab group (optional)' }),
-      ).toHaveValue('review')
+      expect(screen.getByRole('combobox', { name: 'Tab group' })).toHaveValue(
+        'review',
+      )
       // Any other key does nothing to it
       fireEvent.keyDown(chip('review'), { key: 'Delete' })
     })
