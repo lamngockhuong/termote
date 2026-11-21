@@ -211,8 +211,8 @@ importers:
         specifier: 4.0.543
         version: 4.0.543(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@remotion/transitions':
-        specifier: 4.0.543
-        version: 4.0.543(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+        specifier: 4.0.545
+        version: 4.0.545(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@types/qrcode':
         specifier: 1.5.6
         version: 1.5.6
@@ -1978,11 +1978,20 @@ packages:
       react: '>=16.8.0'
       react-dom: '>=16.8.0'
 
+  '@remotion/motion-blur@4.0.545':
+    resolution: {integrity: sha512-J1XuaSPqMMbV+vgxVwrCNwTQDv5iwwhYfrkQ4wkoHOCEQ2Og/1apEhfaC7lfwOwzLoCM2RALx5oMtCScZvmPqA==}
+    peerDependencies:
+      react: '>=16.8.0'
+      react-dom: '>=16.8.0'
+
   '@remotion/openai-whisper@4.0.543':
     resolution: {integrity: sha512-xutdQsAl4NJw9+8QnsyhmncPauJNHWGMzGu4TNJp9OGPh+eVKJgtPDuVNSfTJgKLcKzCDDOShzpE8LatS8vsug==}
 
   '@remotion/paths@4.0.543':
     resolution: {integrity: sha512-+++2ZHZBv56e5bsDxoOGQgqky+l29pTEbHVfXt/N41M2wZ8Z8LX1DIJIeZiwyQODHEMJl3hh+weXZmAbH2uF4w==}
+
+  '@remotion/paths@4.0.545':
+    resolution: {integrity: sha512-DIobHU3y4PH4LHm/T70S35I8R4kT6iDDQIMpu2Yhnc/NbXJtrNQFco7Xwmcj8Mho/gPchBkEEm/rYaIOzloP7g==}
 
   '@remotion/player@4.0.543':
     resolution: {integrity: sha512-XokTrZDF/8L8nSLB7rWDmIXX/LFcnJcpP/7aSdl5mD6Epr1HuWsYlQlxbqZQC2ZkuZZA0b/mCUJGbam5npIhgA==}
@@ -2002,8 +2011,8 @@ packages:
       react: '>=16.8.0'
       react-dom: '>=16.8.0'
 
-  '@remotion/shapes@4.0.543':
-    resolution: {integrity: sha512-zYMA3M4gmnMcpbG6XF7Bx5cTEqXDTXwmmGLIa7VofzEHxVQBQn7cn42/6oXMjx5J3lOLkQXF7Lvg9COQA3q1Rw==}
+  '@remotion/shapes@4.0.545':
+    resolution: {integrity: sha512-Dwp1r/wUDyW+QAfwFROBKmKAH0xbwV9TjK6FjUxcyQXqZINOUHaSpLqlwT7WPj2uK00GeFB0aw2A2B0v+S72sA==}
     peerDependencies:
       react: '>=16.8.0'
       react-dom: '>=16.8.0'
@@ -2036,8 +2045,8 @@ packages:
   '@remotion/timeline-utils@4.0.543':
     resolution: {integrity: sha512-M0d72K18chlRRpftmke8Ll/xsFS69dOEOvRPfshYWvJ7Nk8IGmXiCHp+9ZYddkuolseOP5rwy11CxiZsabEZkQ==}
 
-  '@remotion/transitions@4.0.543':
-    resolution: {integrity: sha512-z5FK5W7x0etmJMPAc3tZIQA60m3OSzZlmt+P9HQgHmbU29QSCVO9QNQVT6LEMJ5pIWx480472M5J2ZmtI3Pkow==}
+  '@remotion/transitions@4.0.545':
+    resolution: {integrity: sha512-NsY+m8U9jt6+BEXhIcyu/fEMC8PWM1XVmQMop6GOlszloJHkAG9ofzQDlAQ5fnnX3SOfio5qtHh3dF2pYIUpPA==}
     peerDependencies:
       react: '>=16.8.0'
       react-dom: '>=16.8.0'
@@ -5403,6 +5412,12 @@ packages:
       react: '>=16.8.0'
       react-dom: '>=16.8.0'
 
+  remotion@4.0.545:
+    resolution: {integrity: sha512-8WHeKZWm4wHsji45eeDJbXdnvecljCP+YR9xv71On1xNrrJzk1Y2YvwqVPAdRXebff+CZw3555AABPw8lzV1Yw==}
+    peerDependencies:
+      react: '>=16.8.0'
+      react-dom: '>=16.8.0'
+
   require-directory@2.1.1:
     resolution: {integrity: sha512-fGxEI7+wsG9xrvdjsrlmL22OMTTiHRwAMroiEeMgq8gzoLC/PQr7RsRDSTLUg/bZAZtF+TVIkHc6/4RIKrui+Q==}
     engines: {node: '>=0.10.0'}
@@ -8291,6 +8306,12 @@ snapshots:
       remotion: 4.0.543(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       zod: 4.6.7
 
+  '@remotion/motion-blur@4.0.545(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
+    dependencies:
+      react: 19.3.1
+      react-dom: 19.3.1(react@19.3.1)
+      remotion: 4.0.545(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+
   '@remotion/openai-whisper@4.0.543':
     dependencies:
       '@remotion/captions': 4.0.543
@@ -8299,6 +8320,13 @@ snapshots:
   '@remotion/paths@4.0.543(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
     dependencies:
       remotion: 4.0.543(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+    transitivePeerDependencies:
+      - react
+      - react-dom
+
+  '@remotion/paths@4.0.545(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
+    dependencies:
+      remotion: 4.0.545(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
     transitivePeerDependencies:
       - react
       - react-dom
@@ -8339,12 +8367,12 @@ snapshots:
       react-dom: 19.3.1(react@19.3.1)
       remotion: 4.0.543(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
 
-  '@remotion/shapes@4.0.543(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
+  '@remotion/shapes@4.0.545(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
     dependencies:
-      '@remotion/paths': 4.0.543(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@remotion/paths': 4.0.545(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
-      remotion: 4.0.543(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      remotion: 4.0.545(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
 
   '@remotion/streaming@4.0.543': {}
 
@@ -8443,13 +8471,14 @@ snapshots:
       - react
       - react-dom
 
-  '@remotion/transitions@4.0.543(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
+  '@remotion/transitions@4.0.545(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
     dependencies:
-      '@remotion/paths': 4.0.543(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
-      '@remotion/shapes': 4.0.543(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@remotion/motion-blur': 4.0.545(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@remotion/paths': 4.0.545(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@remotion/shapes': 4.0.545(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
-      remotion: 4.0.543(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      remotion: 4.0.545(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
 
   '@remotion/web-renderer@4.0.543(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
     dependencies:
@@ -9416,8 +9445,8 @@ snapshots:
 
   acorn@8.17.0: {}
 
-  ajv-formats@3.0.1(ajv@8.20.0):
-    optionalDependencies:
+  ajv-formats@3.0.1:
+    dependencies:
       ajv: 8.20.0
 
   ajv-keywords@5.1.0(ajv@8.20.0):
@@ -12132,6 +12161,11 @@ snapshots:
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
 
+  remotion@4.0.545(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
+    dependencies:
+      react: 19.3.1
+      react-dom: 19.3.1(react@19.3.1)
+
   require-directory@2.1.1: {}
 
   require-from-string@2.0.2: {}
@@ -12298,7 +12332,7 @@ snapshots:
     dependencies:
       '@types/json-schema': 7.0.15
       ajv: 8.20.0
-      ajv-formats: 3.0.1(ajv@8.20.0)
+      ajv-formats: 3.0.1
       ajv-keywords: 5.1.0(ajv@8.20.0)
 
   semver@6.3.1: {}
