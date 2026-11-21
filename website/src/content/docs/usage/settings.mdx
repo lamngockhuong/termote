@@ -346,6 +346,14 @@ a view-only device or a git checkout):
 A git checkout gets a hint instead of a command (pull, rebuild and restart it; the commands differ
 by OS).
 
+For an `install.sh`/`install.ps1` or Homebrew install, **Run in a new tab** types that command into
+a new tab (in your home folder) of the open pane's tab group, the way [Tasks](/usage/tasks/) runs a script, and shows the
+tab (on this server only, from a full device, with a backend that runs tasks). The server builds
+the line from how it was installed, with each program's full path; the page only asks for the
+update. The connection drops while the server restarts and comes back on the new version; the tab
+keeps the output. Pressing it again while the update runs shows that tab instead of opening
+another.
+
 ### Reloading after an update
 
 The page comes from the server, so once the server runs a new version a banner reads

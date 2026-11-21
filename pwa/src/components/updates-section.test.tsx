@@ -170,6 +170,61 @@ describe('UpdatesSection', () => {
     vi.useRealTimers()
   })
 
+  it('runs the update in a new tab, disabled until it settles', async () => {
+    mockState.latest = LATEST
+    let settle = (_: string | undefined) => {}
+    const onRunUpdate = vi.fn(
+      () =>
+        new Promise<string | undefined>((resolve) => {
+          settle = resolve
+        }),
+    )
+    renderSection({ onRunUpdate })
+    fireEvent.click(screen.getByRole('button', { name: /Run in a new tab/ }))
+    expect(onRunUpdate).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('button', { name: /Opening a tab/ })).toBeDisabled()
+    await act(async () => settle(undefined))
+    expect(
+      screen.getByRole('button', { name: /Run in a new tab/ }),
+    ).toBeEnabled()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('says why the run was refused, until the next try', async () => {
+    mockState.latest = LATEST
+    const onRunUpdate = vi
+      .fn<() => Promise<string | undefined>>()
+      .mockResolvedValueOnce('Could not start the update: nope')
+      .mockResolvedValueOnce(undefined)
+    renderSection({ onRunUpdate })
+    const button = screen.getByRole('button', { name: /Run in a new tab/ })
+    await act(async () => fireEvent.click(button))
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not start the update: nope',
+    )
+    await act(async () => fireEvent.click(button))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('offers no run without a handler', () => {
+    mockState.latest = LATEST
+    renderSection()
+    expect(
+      screen.queryByRole('button', { name: /Run in a new tab/ }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('offers no run where there is no command', () => {
+    mockState.latest = LATEST
+    renderSection({
+      server: { version: '1.13.0', install: 'checkout' },
+      onRunUpdate: vi.fn(async () => undefined),
+    })
+    expect(
+      screen.queryByRole('button', { name: /Run in a new tab/ }),
+    ).not.toBeInTheDocument()
+  })
+
   it('keeps the command selectable when the clipboard is refused', async () => {
     Object.assign(navigator, {
       clipboard: { writeText: vi.fn().mockRejectedValue(new Error('no')) },

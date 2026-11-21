@@ -186,6 +186,7 @@ export default {
   'errors.unsupported_shell':
     'This shell is not supported (bash, zsh, sh, fish, PowerShell)',
   'errors.unsupported_type': 'This kind of file cannot be sent',
+  'errors.update_unsupported': 'This install cannot update itself from here',
   'errors.upload_busy': 'Another upload is running. Try again in a moment',
   'errors.upload_failed': 'Upload failed',
   'errors.uploads_unavailable': 'Uploads are not available on this server',

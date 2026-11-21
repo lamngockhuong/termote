@@ -7,15 +7,22 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
 	"slices"
+	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
 
 const (
 	taskKindScript = "script"
 	taskKindMake   = "make"
 	taskKindUser   = "user"
+	// taskKindTermote runs Termote's own update (name "update"), in no
+	// root's list: its line comes from serverUpdateSteps.
+	taskKindTermote = "termote"
+	taskNameUpdate  = "update"
 
 	// maxTaskRuns caps the runs remembered; taskRunTTL drops older ones.
 	maxTaskRuns = 200
@@ -36,7 +43,13 @@ var (
 	errTaskShell         = &codedError{"unsupported_shell", "this shell is not supported (bash, zsh, sh, fish, pwsh)", http.StatusConflict}
 	errTaskShellBusy     = &codedError{"shell_busy", "the tab's shell is busy", http.StatusConflict}
 	errTaskStoredInvalid = &codedError{"invalid_task", "this task cannot be run: edit it in Settings", http.StatusBadRequest}
+	errUpdateUnsupported = &codedError{"update_unsupported", "this install cannot update itself from here", http.StatusConflict}
 )
+
+// updateTabDir is the directory the update's tab opens in: home, not the
+// pane's root, whose shell hooks (direnv, mise) could change the HOME or
+// XDG dirs the update finds its install by. A variable so tests can set it.
+var updateTabDir = os.UserHomeDir
 
 // taskRunningError: the task's last run still runs in its tab, and the
 // client did not ask for a new one.
@@ -56,6 +69,8 @@ type resolvedTask struct {
 	// it, each quoted.
 	Head, PwshHead string
 	Args           []string
+	// Steps is the termote update's argvs, joined by &&.
+	Steps [][]string
 }
 
 // clientKey names the task in the list's runs: kind and name, or user and
@@ -264,6 +279,16 @@ func (t *tasksAPI) resolve(ctx context.Context, req taskRunRequest, root string)
 				return resolvedTask{Kind: req.Kind, Name: req.Name, Head: g.head, PwshHead: g.pwshHead, Args: g.Tasks[i].args}, nil
 			}
 		}
+	case req.Kind == taskKindTermote:
+		if req.Name != taskNameUpdate {
+			return resolvedTask{}, errNoSuchTask
+		}
+		if len(serverUpdateSteps) == 0 || slices.ContainsFunc(serverUpdateSteps, func(argv []string) bool {
+			return slices.ContainsFunc(argv, func(w string) bool { return strings.ContainsFunc(w, unicode.IsControl) })
+		}) {
+			return resolvedTask{}, errUpdateUnsupported
+		}
+		return resolvedTask{Kind: req.Kind, Name: req.Name, Steps: serverUpdateSteps}, nil
 	case req.Kind == taskKindUser:
 		if t.store != nil && validTemplateID(req.ID) {
 			if u, ok := t.store.task(req.ID); ok {
@@ -309,11 +334,18 @@ func (t *tasksAPI) handleRun(w http.ResponseWriter, r *http.Request) {
 	}
 	defer cancel()
 	root := req.root.Root
-	if body.Root != root {
+	// The update is no task of the root: any root it was asked from will do.
+	if body.Root != root && body.Kind != taskKindTermote {
 		t.files.error(w, "task run", &rootChangedError{root})
 		return
 	}
 	task, err := t.resolve(req.ctx, body, root)
+	if err == nil && task.Kind == taskKindTermote {
+		// Never a second update beside a running one: two would race on
+		// the install's current version and the service.
+		body.NewTab = false
+		root, err = updateTabDir()
+	}
 	if err == nil && !validTaskDir(root) {
 		err = errTaskInvalidRoot
 	}
@@ -350,7 +382,12 @@ func (t *tasksAPI) handleRun(w http.ResponseWriter, r *http.Request) {
 // run types task's line into the tab of its last run, or a new tab, under
 // the task's lock.
 func (t *tasksAPI) run(ctx context.Context, tm taskMux, paneID, root string, task resolvedTask, newTab bool) (taskRunInfo, bool, error) {
-	key := taskRunKey(root, task.clientKey())
+	// One update at a time whatever pane asked for it, and in no root's runs.
+	runRoot := root
+	if task.Kind == taskKindTermote {
+		runRoot = ""
+	}
+	key := taskRunKey(runRoot, task.clientKey())
 	unlock := t.runs.lockKey(key)
 	defer unlock()
 	var tab taskTab
@@ -372,8 +409,8 @@ func (t *tasksAPI) run(ctx context.Context, tm taskMux, paneID, root string, tas
 			return taskRunInfo{}, false, err
 		}
 		name := "task:" + task.Name
-		if isToolKind(task.Kind) {
-			// Two tools may both have a "test".
+		if isToolKind(task.Kind) || task.Kind == taskKindTermote {
+			// Two tools may both have a "test"; a script may be "update".
 			name = "task:" + task.Kind + ":" + task.Name
 		}
 		if tab, err = tm.NewTaskTab(ctx, groupID, name, root); err != nil {
@@ -381,7 +418,7 @@ func (t *tasksAPI) run(ctx context.Context, tm taskMux, paneID, root string, tas
 		}
 	}
 	nonce := newTaskNonce()
-	run := &taskRun{id: newTaskNonce(), key: key, clientKey: task.clientKey(), root: root,
+	run := &taskRun{id: newTaskNonce(), key: key, clientKey: task.clientKey(), root: runRoot,
 		tabID: tab.TabID, paneID: tab.PaneID, target: tab.Target, nonce: nonce,
 		started: t.runs.now(), state: taskStateRunning, typed: true}
 	pid, err := t.typeTask(ctx, tm, tab.Target, task, nonce, reused)

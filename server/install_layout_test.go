@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -31,9 +32,16 @@ func TestInstallKind(t *testing.T) {
 		t.Errorf("a checkout = %q, want checkout", got)
 	}
 
+	if got := tc.updateSteps(); got != nil {
+		t.Errorf("a checkout's update = %q, want none", got)
+	}
+
 	tc.exe = filepath.Join(tc.versionsDir(), "1.0.0", "bin", "termote")
 	if got := tc.installKind(); got != "release" {
 		t.Errorf("an installed release = %q, want release", got)
+	}
+	if got := tc.updateSteps(); !slices.EqualFunc(got, [][]string{{tc.currentExe(), "update"}}, slices.Equal) {
+		t.Errorf("a release's update = %q", got)
 	}
 }
 
@@ -69,6 +77,10 @@ func TestHomebrewInstall(t *testing.T) {
 	if got := tc.stableExe(); got != opt {
 		t.Errorf("stableExe = %s, want %s", got, opt)
 	}
+	want := [][]string{{filepath.Join(prefix, "bin", "brew"), "upgrade", "termote"}, {filepath.Join(prefix, "bin", "termote"), "restart"}}
+	if got := tc.updateSteps(); !slices.EqualFunc(got, want, slices.Equal) {
+		t.Errorf("updateSteps = %q, want %q", got, want)
+	}
 
 	// opt pointing at another version: not this keg's link.
 	other := filepath.Join(prefix, "Cellar", "termote", "9.9.8", "bin", "termote")
@@ -83,6 +95,9 @@ func TestHomebrewInstall(t *testing.T) {
 	os.Remove(filepath.Join(prefix, "opt", "termote"))
 	if got, kind := tc.stableExe(), tc.installKind(); got != tc.exe || kind != "unknown" {
 		t.Errorf("no opt link: stableExe %s, kind %s", got, kind)
+	}
+	if got := tc.updateSteps(); got != nil {
+		t.Errorf("no opt link: updateSteps = %q", got)
 	}
 }
 

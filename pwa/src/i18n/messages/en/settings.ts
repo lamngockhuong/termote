@@ -260,6 +260,12 @@ export default {
   'settings.updates.reload': 'Reload',
   'settings.updates.copy': 'Copy',
   'settings.updates.commandCopied': 'Command copied',
+  'settings.updates.runInTab': 'Run in a new tab',
+  'settings.updates.startingRun': 'Opening a tab…',
+  'settings.updates.runStarted':
+    'Updating in tab {name}. The connection drops while the server restarts.',
+  'settings.updates.runAlready': 'An update is already running',
+  'settings.updates.runFailed': 'Could not start the update: {message}',
   'settings.updates.notes': 'Release notes for v{version}',
   'settings.star.prompt':
     'Updated to v{version}. If Termote helps you, a star on GitHub helps others find it.',

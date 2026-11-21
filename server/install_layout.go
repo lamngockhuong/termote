@@ -112,8 +112,31 @@ func (c *cli) isHomebrew() bool {
 
 // homebrewBin is the `termote` command brew links: <prefix>/bin/termote.
 func homebrewBin(opt string) string {
-	prefix := filepath.Dir(filepath.Dir(filepath.Dir(filepath.Dir(opt))))
-	return filepath.Join(prefix, "bin", "termote")
+	return filepath.Join(homebrewPrefix(opt), "bin", "termote")
+}
+
+// homebrewPrefix is <prefix> of <prefix>/opt/termote/bin/termote.
+func homebrewPrefix(opt string) string {
+	return filepath.Dir(filepath.Dir(filepath.Dir(filepath.Dir(opt))))
+}
+
+// updateSteps is the command that updates this install in place, each step
+// an argv run once the one before it succeeded, by absolute path (the
+// service's PATH may lack ~/.local/bin or brew's): the installer's
+// `current` binary's update, or brew's upgrade then a restart. nil for a
+// container (its image comes from the host), a checkout or a binary copied
+// by hand.
+func (c *cli) updateSteps() [][]string {
+	if c.isInstalledRelease() {
+		return [][]string{{c.currentExe(), "update"}}
+	}
+	if opt, ok := c.homebrewOpt(); ok {
+		return [][]string{
+			{filepath.Join(homebrewPrefix(opt), "bin", "brew"), "upgrade", "termote"},
+			{homebrewBin(opt), "restart"},
+		}
+	}
+	return nil
 }
 
 // stableExe is what a service runs: a path that survives update, so update

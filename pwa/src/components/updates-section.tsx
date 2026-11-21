@@ -1,4 +1,4 @@
-import { Check, Copy, RefreshCw } from 'lucide-react'
+import { Check, Copy, Play, RefreshCw } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { InstallKind } from '../hooks/use-mux-api'
 import { availableUpdate, useUpdateCheck } from '../hooks/use-update-check'
@@ -45,6 +45,10 @@ interface Props {
   // The reload waits for the new service worker
   reloading?: boolean
   onReload: () => void
+  // Runs the update command in a new tab of this server (a full client, an
+  // install that updates itself, a backend that runs tasks); settles when
+  // the tab is open (Settings then closes) or with why it was refused
+  onRunUpdate?: () => Promise<string | undefined>
 }
 
 export function UpdatesSection({
@@ -52,10 +56,13 @@ export function UpdatesSection({
   stale,
   reloading = false,
   onReload,
+  onRunUpdate,
 }: Props) {
   const { t } = useT()
   const { latest, checking, failed, check } = useUpdateCheck()
   const [copied, setCopied] = useState(false)
+  const [starting, setStarting] = useState(false)
+  const [runError, setRunError] = useState('')
   const copiedTimer = useRef<ReturnType<typeof setTimeout>>(null)
 
   // The app checks when it opens or is shown again; a page left open past
@@ -88,6 +95,17 @@ export function UpdatesSection({
       copiedTimer.current = setTimeout(() => setCopied(false), 2000)
     } catch {
       // No clipboard (an http page): the command stays selectable.
+    }
+  }
+
+  const runUpdate = async () => {
+    if (!onRunUpdate) return
+    setStarting(true)
+    setRunError('')
+    try {
+      setRunError((await onRunUpdate()) ?? '')
+    } finally {
+      setStarting(false)
     }
   }
 
@@ -182,6 +200,25 @@ export function UpdatesSection({
               <span role="status" className="sr-only">
                 {copied ? t('settings.updates.commandCopied') : ''}
               </span>
+              {onRunUpdate && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="self-start"
+                  disabled={starting}
+                  onClick={() => void runUpdate()}
+                >
+                  <Play size={16} aria-hidden="true" />
+                  {starting
+                    ? t('settings.updates.startingRun')
+                    : t('settings.updates.runInTab')}
+                </Button>
+              )}
+              {runError && (
+                <p role="alert" className="m-0 text-[13px] text-danger">
+                  {runError}
+                </p>
+              )}
             </>
           )}
           <a
