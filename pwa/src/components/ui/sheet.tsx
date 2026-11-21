@@ -170,8 +170,12 @@ function OpenSheet({
       {/* flex-auto, not flex-1: the dialog's height is fit-content, and WebKit
           (every iOS browser) sizes a 0% flex-basis item to nothing there,
           leaving only the header. min-h-0 still lets it shrink and scroll
-          once max-h caps the sheet. */}
-      <div className="min-h-0 flex-auto overflow-y-auto">{children}</div>
+          once max-h caps the sheet. overscroll-none: iOS otherwise bounces
+          the content past its top, dragging a sticky header (the history
+          search) down with a gap above it and a second scroll indicator. */}
+      <div className="min-h-0 flex-auto overflow-y-auto overscroll-none">
+        {children}
+      </div>
     </dialog>
   )
 }
