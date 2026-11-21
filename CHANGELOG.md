@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.31.1](https://github.com/lamngockhuong/termote/compare/v2.31.0...v2.31.1) (2026-11-21)
+
+
+### Bug Fixes
+
+* **pwa:** keep the wifi icon whole while a stream opens ([#908](https://github.com/lamngockhuong/termote/issues/908)) ([6353783](https://github.com/lamngockhuong/termote/commit/63537837aacc7ca426daa8c783b091f41b7b8bbb))
+
 ## [2.31.0](https://github.com/lamngockhuong/termote/compare/v2.30.0...v2.31.0) (2026-11-21)
 
 
