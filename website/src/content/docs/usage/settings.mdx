@@ -354,6 +354,13 @@ update. The connection drops while the server restarts and comes back on the new
 keeps the output. Pressing it again while the update runs shows that tab instead of opening
 another.
 
+The new tab's shell must be one [Tasks](/usage/tasks/) can type into (`bash`, `zsh`, `sh`, `fish`,
+PowerShell 7 `pwsh`, ...). On Windows with Herdr, a new tab runs Windows PowerShell 5.1
+(`powershell.exe`, Herdr's default) unless Herdr is set to start another shell: the button then
+opens the tab, types nothing and says **This shell is not supported**. Pressing it again uses that
+same tab and is refused the same way. Copy the command and run it in a terminal instead, or start
+`pwsh` in that tab and paste it there.
+
 ### Reloading after an update
 
 The page comes from the server, so once the server runs a new version a banner reads
