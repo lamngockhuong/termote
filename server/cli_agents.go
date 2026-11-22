@@ -29,7 +29,8 @@ const agentsUsage = `usage: termote agents list [--json]
        termote agents answer <pane> [<option number> | cancel | next | --text <answer>]
        termote agents stop <pane> --cursor <cursor>
        termote agents diff <pane> [--stat] [--base <branch>]
-       termote agents start --workspace <id | name> --kind <claude | codex | opencode> [--name <tab name>] [<prompt> | -]`
+       termote agents start --workspace <id | name> --kind <claude | codex | opencode> [--name <tab name>]
+                            [--worktree <new branch> [--base <branch>]] [<prompt> | -]`
 
 // The exit statuses of agents wait besides 0 (a turn ended), 1 (an error)
 // and 2 (usage). With several panes ending at once, the gravest wins.
@@ -133,7 +134,7 @@ func (c *cli) agentsCall(port int, method, path string, body any, timeout time.D
 	case socketUnused:
 		return agentsReply{}, fmt.Errorf("termote did not answer on port %d over its local socket: it is not running natively (start it: termote start), or it did not answer in time (check: termote status)", port)
 	case socketMaybeSent:
-		return agentsReply{}, errors.New(socketNoAnswerMsg)
+		return agentsReply{}, errAgentsMaybeSent
 	}
 	defer resp.Body.Close()
 	b, err := io.ReadAll(io.LimitReader(resp.Body, int64(agentsReadMax)+1))
@@ -191,6 +192,18 @@ func agentsRefusal(r agentsReply) error {
 		hint = "; it waits on a dialog: termote agents answer <pane>"
 	case "interrupt_pending":
 		hint = "; it was just stopped: check it with termote agents list"
+	case "busy":
+		hint = "; another worktree change is still running: try again in a moment"
+	case "linked_source":
+		hint = "; run start from the main checkout's workspace, not from a worktree"
+	case "branch_exists":
+		hint = "; pick a new branch name"
+	case "invalid_name":
+		hint = "; it is not a valid branch name"
+	case "open_failed":
+		hint = "; the worktree was made: open it from the PWA, then start the agent there"
+	case "unknown":
+		hint = "; check the PWA's worktrees before trying again"
 	}
 	if e.Code == "input_not_ready" && strings.Contains(msg, "dialog") {
 		hint = "; answer it first: termote agents answer <pane>"
@@ -1103,16 +1116,18 @@ func (c *cli) printPrompt(p AgentPrompt, paneID string) {
 }
 
 func (c *cli) agentsStart(args []string) error {
-	var workspace, kind, name string
+	var workspace, kind, name, branch, base string
 	fs := c.newFlagSet("agents start")
 	fs.StringVar(&workspace, "workspace", "", "")
 	fs.StringVar(&kind, "kind", "", "")
 	fs.StringVar(&name, "name", "", "")
+	fs.StringVar(&branch, "worktree", "", "")
+	fs.StringVar(&base, "base", "", "")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return flagErr(err)
 	}
-	if workspace == "" || kind == "" || len(pos) > 1 {
+	if workspace == "" || kind == "" || len(pos) > 1 || base != "" && branch == "" {
 		return usageError(agentsUsage)
 	}
 	if _, ok := agentStartArgs[kind]; !ok {
@@ -1149,24 +1164,68 @@ func (c *cli) agentsStart(args []string) error {
 	if err != nil {
 		return err
 	}
-	// A new tab of the workspace, which opens where the backend opens a
-	// tab of it (tmux: the session's own directory), not necessarily where
-	// its panes are now.
-	r, err := c.agentsCall(port, http.MethodPost, "/api/mux/tabs", map[string]string{"groupId": g.ID, "name": name}, agentsReadTimeout)
+	var t startTarget
+	if branch != "" {
+		t, err = c.worktreeTarget(port, s, g, kind, branch, base, name)
+	} else {
+		t, err = c.tabTarget(port, g, name)
+	}
 	if err != nil {
 		return err
 	}
+	return c.startInPane(port, t, kind, prompt)
+}
+
+// startTarget is the fresh shell an agent starts in, and how to name it.
+type startTarget struct {
+	paneID string
+	dir    string
+	where  string // workspace, and branch for a worktree, as printed
+	// undo removes what the start made when it was refused for sure; nil
+	// keeps it (a worktree is never removed).
+	undo func()
+	// keep is said of what stays after a failure, nil when nothing does.
+	keep string
+}
+
+// fail is err of a start refused for sure, with what it made undone, or
+// named when it stays.
+func (t startTarget) fail(err error) error {
+	if t.undo != nil {
+		t.undo()
+		return err
+	}
+	return t.note(err)
+}
+
+// note is err with what the start made and keeps named.
+func (t startTarget) note(err error) error {
+	if t.keep != "" {
+		return fmt.Errorf("%w (%s)", err, t.keep)
+	}
+	return err
+}
+
+// tabTarget opens a new tab of g, which opens where the backend opens a tab
+// of it (tmux: the session's own directory), not necessarily where its
+// panes are now.
+func (c *cli) tabTarget(port int, g Group, name string) (startTarget, error) {
+	r, err := c.agentsCall(port, http.MethodPost, "/api/mux/tabs", map[string]string{"groupId": g.ID, "name": name}, agentsReadTimeout)
+	if err != nil {
+		return startTarget{}, err
+	}
 	if r.status != http.StatusOK {
-		return agentsRefusal(r)
+		return startTarget{}, agentsRefusal(r)
 	}
 	var tab struct {
 		ID string `json:"id"`
 	}
 	if json.Unmarshal(r.body, &tab) != nil || tab.ID == "" {
-		return errors.New("unexpected answer from the server to the new tab")
+		return startTarget{}, errors.New("unexpected answer from the server to the new tab")
 	}
-	if s, err = c.agentsSnapshot(port); err != nil {
-		return err
+	s, err := c.agentsSnapshot(port)
+	if err != nil {
+		return startTarget{}, err
 	}
 	var p snapPane
 	found := false
@@ -1177,50 +1236,56 @@ func (c *cli) agentsStart(args []string) error {
 		}
 	}
 	if !found {
-		return fmt.Errorf("the new tab %s is not in the snapshot", plainText(tab.ID))
+		return startTarget{}, fmt.Errorf("the new tab %s is not in the snapshot", plainText(tab.ID))
 	}
-	paneID := p.pane.ID
-	// closeTab removes the new tab when the start was refused for sure, so
-	// a refused start leaves no shell tab behind.
-	closeTab := func(why error) error {
+	// undo removes the new tab when the start was refused for sure, so a
+	// refused start leaves no shell tab behind.
+	t := startTarget{paneID: p.pane.ID, dir: p.cwd(), where: plainText(g.Name), undo: func() {
 		c.agentsCall(port, http.MethodDelete, "/api/mux/tabs/"+url.PathEscape(tab.ID)+"?key="+url.QueryEscape(p.tab.Key), nil, agentsReadTimeout)
-		return why
-	}
+	}}
 	// The folder list showed, and the user agreed to, is where the agent
 	// starts, or nothing starts.
 	if want, got := groupCwd(g), p.cwd(); want != "" && got != "" && want != got {
-		return closeTab(fmt.Errorf("a new tab of %s opens in %s, not in %s where its panes are; nothing was started (ask the user which workspace to use)",
+		return startTarget{}, t.fail(fmt.Errorf("a new tab of %s opens in %s, not in %s where its panes are; nothing was started (ask the user which workspace to use)",
 			plainText(g.Name), plainText(got), plainText(want)))
 	}
-	// newTab: the tab was made just now, so its shell gets no C-c (its rc
-	// files may still run, and the C-c would cut them short).
+	return t, nil
+}
+
+// startInPane starts kind in t's pane, a shell opened just now, and follows
+// the start until it is final.
+func (c *cli) startInPane(port int, t startTarget, kind, prompt string) error {
+	paneID := t.paneID
+	// newTab: the shell was opened just now (a new tab, or a new worktree's
+	// workspace), so it gets no C-c: its rc files may still run, and the
+	// C-c would cut them short.
 	start := map[string]any{"kind": kind, "newTab": true}
 	if prompt != "" {
 		start["prompt"] = prompt
 	}
 	hint := c.afterHint(port, paneID)
-	r, err = c.agentsCall(port, http.MethodPost, panePath(paneID, "/agent/start"), start, agentsStartTimeout)
+	r, err := c.agentsCall(port, http.MethodPost, panePath(paneID, "/agent/start"), start, agentsStartTimeout)
 	if err != nil {
-		return err
+		return t.note(err)
 	}
 	// start_unknown: the server could not tell whether the command was
 	// typed and follows the start as if it was; starting: one is already
 	// under way there. Both are followed, as the PWA does.
 	if code := r.failure().Code; r.status != http.StatusOK && code != "start_unknown" && code != "starting" {
-		return closeTab(agentsRefusal(r))
+		return t.fail(agentsRefusal(r))
 	}
 	// Only a 200 says whether the prompt was taken; start_unknown and
 	// starting are followed without claiming it.
 	took := r.status == http.StatusOK && startTookPrompt(r)
 	if r.status == http.StatusOK && prompt != "" && !took {
-		return fmt.Errorf("the running server is older than this command: %s runs in pane %s without the prompt; restart the server (termote restart), then give it the task there (Claude Code: termote agents send %s -)",
-			kind, plainText(paneID), plainText(paneID))
+		return t.note(fmt.Errorf("the running server is older than this command: %s runs in pane %s without the prompt; restart the server (termote restart), then give it the task there (Claude Code: termote agents send %s -)",
+			kind, plainText(paneID), plainText(paneID)))
 	}
 	state, err := c.followAgentStart(port, paneID)
 	if err != nil {
-		return err
+		return t.note(err)
 	}
-	dir := dash(plainText(p.cwd()))
+	dir := dash(plainText(t.dir))
 	withPrompt := ""
 	if took {
 		withPrompt = " with the prompt" + hint
@@ -1228,14 +1293,14 @@ func (c *cli) agentsStart(args []string) error {
 	switch state {
 	case startReady:
 	case startBlocked:
-		c.infof("Started %s in pane %s (%s, in %s)%s; it waits on a dialog: termote agents answer %s", kind, plainText(paneID), plainText(g.Name), dir, withPrompt, plainText(paneID))
+		c.infof("Started %s in pane %s (%s, in %s)%s; it waits on a dialog: termote agents answer %s", kind, plainText(paneID), t.where, dir, withPrompt, plainText(paneID))
 		return &exitError{code: agentsExitDialog}
 	case startExited:
-		return closeTab(fmt.Errorf("%s did not start in pane %s: its command ended (is it installed?)", kind, plainText(paneID)))
+		return t.fail(fmt.Errorf("%s did not start in pane %s: its command ended (is it installed?)", kind, plainText(paneID)))
 	default:
-		return fmt.Errorf("%s did not start in pane %s (%s); see: termote agents list", kind, plainText(paneID), plainText(state))
+		return t.note(fmt.Errorf("%s did not start in pane %s (%s); see: termote agents list", kind, plainText(paneID), plainText(state)))
 	}
-	c.infof("Started %s in pane %s (%s, in %s)%s", kind, plainText(paneID), plainText(g.Name), dir, withPrompt)
+	c.infof("Started %s in pane %s (%s, in %s)%s", kind, plainText(paneID), t.where, dir, withPrompt)
 	return nil
 }
 

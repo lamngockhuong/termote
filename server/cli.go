@@ -604,6 +604,10 @@ Options of agents (a <pane> is its id or a name only one pane has):
                              Open a tab in the workspace (refused when it would open in another
                              directory than list shows) and start the agent there, the prompt
                              as its first message (refused in a pwsh pane and on Windows)
+    --worktree <new branch> [--base <branch>]  Instead, make a git worktree of the workspace's
+                             repository on a new branch (from --base, default its HEAD) and start
+                             the agent in its new workspace (--name labels it); run again, it goes
+                             on in the worktree it made; a branch with no worktree is refused
 
 Options of update:
   --version <X.Y.Z>          Update to a specific version
