@@ -404,6 +404,20 @@ func TestAgentsStart(t *testing.T) {
 	if !strings.Contains(out, "Started claude in pane %t2 (web)") || !strings.Contains(out, "Sent the prompt to pane %t2") || f.pasted[len(f.pasted)-1] != "write tests" {
 		t.Errorf("out %s, pasted %q", out, f.pasted)
 	}
+	// The session shows a moment after the agent is ready: the prompt waits.
+	f.mu.Lock()
+	f.found = false
+	f.mu.Unlock()
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		f.mu.Lock()
+		f.found = true
+		f.mu.Unlock()
+	}()
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"start", "--workspace", "web", "--kind", "claude", "late session"}); err != nil || !strings.Contains(tc.stdout.String(), "Sent the prompt") {
+		t.Errorf("late session: %v %s", err, tc.stdout)
+	}
 	// A start that does not become ready.
 	f.state = startExited
 	if err := tc.dispatch("agents", []string{"start", "--workspace", "$2", "--kind", "codex"}); err == nil || !strings.Contains(err.Error(), "did not start") {

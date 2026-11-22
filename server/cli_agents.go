@@ -48,8 +48,10 @@ var (
 	// is given to start before wait reports it done.
 	agentsWaitEvery = 2 * time.Second
 	agentsWaitGrace = 10 * time.Second
-	// agentsStartEvery: how often start follows the agent's start.
-	agentsStartEvery = time.Second
+	// agentsStartEvery: how often start follows the agent's start;
+	// agentsSessionWait: how long its prompt waits for the session.
+	agentsStartEvery  = time.Second
+	agentsSessionWait = 15 * time.Second
 )
 
 // agentsReadMax bounds an answer the CLI reads (a transcript tail).
@@ -890,7 +892,14 @@ func (c *cli) agentsStart(args []string) error {
 	if prompt == "" {
 		return nil
 	}
+	// A started agent can show ready a moment before its session is found
+	// (Claude Code writes its session file as it starts): the prompt waits
+	// for it a little.
 	queued, err := c.sendToAgent(port, paneID, prompt)
+	for deadline := time.Now().Add(agentsSessionWait); err != nil && strings.Contains(err.Error(), errNoAgentSession.Error()) && time.Now().Before(deadline); {
+		time.Sleep(agentsStartEvery)
+		queued, err = c.sendToAgent(port, paneID, prompt)
+	}
 	if err != nil {
 		return fmt.Errorf("the agent started in pane %s, but the prompt was not sent: %w", plainText(paneID), err)
 	}
