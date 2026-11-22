@@ -192,6 +192,7 @@ export default defineConfig({
               translations: { vi: "Phím tắt và bảng lệnh" },
             },
             { label: "Machines", link: "/usage/machines/", translations: { vi: "Máy" } },
+            { label: "Orchestrator", link: "/usage/orchestrator/" },
             { label: "Pair a Device", link: "/usage/devices/" },
             { label: "Prompt Templates", link: "/usage/prompt-templates/", translations: { vi: "Mẫu prompt" } },
             { label: "Security Model", link: "/usage/security/", translations: { vi: "Mô hình bảo mật" } },

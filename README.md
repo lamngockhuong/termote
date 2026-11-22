@@ -64,6 +64,7 @@ Remote control CLI tools (Claude Code, Codex, OpenCode, any terminal) from mobil
 - **Zellij backend** (Linux, macOS, or the container): drive your Zellij sessions, tabs and panes instead of tmux (Zellij 0.45.0 or later), chosen with `--mux zellij` — see [Native Installation](https://termote.ohnice.app/installation/native/)
 - **herdr-core backend** (native, every OS): show the spaces, tabs and panes the herdr app shows, as one more client of herdr-core (`hc` 0.1.16 or later), chosen with `--mux hc` — see [herdr-core Backend](https://termote.ohnice.app/installation/native/#herdr-core-backend)
 - **Machines**: watch and drive the agents of your other computers from one Termote, over SSH with a key that can only reach Termote there (`termote machine add <alias>`) — see [Machines](https://termote.ohnice.app/usage/machines/)
+- **Orchestrator**: one Claude Code or Codex session that coordinates the agents in your other panes: their status, a task for one of them, its answer, its dialogs, a new agent (`termote skills install`, `termote agents`) — see [Orchestrator](https://termote.ohnice.app/usage/orchestrator/)
 - **Herdr plugin**: open the focused Herdr pane in Termote, show its link as a QR code for a phone, start or stop the server, without leaving Herdr — see [Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/)
 - **Mobile-friendly**: Virtual keyboard toolbar (Tab/Ctrl/Shift/arrows, expandable)
 - **Gesture support**: Swipe for Ctrl+C, Tab, scrolling
