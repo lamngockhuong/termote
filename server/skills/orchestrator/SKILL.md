@@ -31,8 +31,7 @@ termote agents send <pane> '<message>'        # or: ... | termote agents send <p
 termote agents wait <pane> [--timeout 20m]    # until its turn ends or it needs an answer
 termote agents answer <pane>                  # show the dialog it waits on
 termote agents answer <pane> <number>         # or: cancel | next | --text '<answer>'
-termote agents start --workspace <id> --kind claude [--name <tab name>] '<prompt>'
-termote agents start --workspace <id> --kind <codex|opencode> [--name <tab name>]
+termote agents start --workspace <id> --kind <claude|codex|opencode> [--name <tab name>] '<prompt>'
 ```
 
 `<pane>` is the pane id from `list` (for example `%12`), or a name only one
@@ -62,8 +61,10 @@ pane no longer runs an agent.
    the workspace and refuses, starting nothing, when that tab would open in another directory
    than the one `list` shows; it prints the directory the agent started in. When `list` shows no
    directory for the workspace (`-`), ask the user which workspace to use; do not guess one.
-   Only Claude Code takes a prompt with `start`: Codex and OpenCode take their first message in
-   the terminal, so start them without one and ask the user to type it; `send` works after that.
+   The prompt is the agent's first message, handed to it as it starts (Claude Code, Codex and
+   OpenCode alike); a long one can come from stdin (`-`). Give every new agent its task this way:
+   Codex and OpenCode cannot be sent a first message with `send`. Never put a secret in it: the
+   prompt is the agent's command-line argument, which other local users can see.
 6. **Report plainly.** Tell the user what each agent said, quoting `read` where it matters, and
    what is still open. Keep their decisions theirs.
 
@@ -74,6 +75,8 @@ pane no longer runs an agent.
 - `(input_busy)`: another message to that pane is still being typed; try again shortly.
 - `(session_changed)` or `(target_changed)`: the pane runs something else now; `list` again.
 - `(prompt_changed)`: the dialog changed; show the new one to the user before answering.
+- `(prompt_unsupported_shell)`: the new tab's shell is PowerShell, or termote runs on Windows,
+  where an agent cannot be handed a prompt at start; nothing was started. Tell the user.
 - `the server did not answer ... may have been made`: do not send again; `read` first to see
   whether it arrived.
 

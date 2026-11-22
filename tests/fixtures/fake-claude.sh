@@ -46,7 +46,9 @@
 #
 # Arguments, as Claude Code takes them: --resume <id> continues that session
 # (its transcript is appended to, nothing seeded); with --fork-session the
-# conversation so far is copied to a new session id, appended to from then.
+# conversation so far is copied to a new session id, appended to from then;
+# a prompt (after --, or the first argument that is no option) is sent as
+# the first message once the input box shows, as if typed and entered.
 set -u
 export LC_ALL=C.UTF-8
 
@@ -56,10 +58,14 @@ screens="$here/../../server/testdata/claude/screens"
 sid=${FAKE_CLAUDE_SESSION:-6f1c2a4e-8b3d-4c5e-9f70-1a2b3c4d5e6f}
 resume=""
 fork=""
+prompt=""
 while [ $# -gt 0 ]; do
   case $1 in
     --resume) resume=${2:?--resume needs a session id}; shift ;;
     --fork-session) fork=1 ;;
+    --) prompt=${2-}; break ;;
+    -*) ;;
+    *) prompt=$1; break ;;
   esac
   shift
 done
@@ -418,6 +424,10 @@ printf '\e[?2004h' # bracketed paste, so a paste is told from typing
 set_status idle
 size
 draw
+if [ -n "$prompt" ]; then
+  draft=$prompt
+  submit
+fi
 
 pasting=0
 while :; do

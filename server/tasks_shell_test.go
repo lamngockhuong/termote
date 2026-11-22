@@ -166,6 +166,7 @@ func TestTaskLineRunsInShells(t *testing.T) {
 			code int
 		}{
 			{resolvedTask{Kind: taskKindUser, Command: "echo one; (exit 7)"}, "one", 7},
+			{resolvedTask{Kind: taskKindUser, Command: "echo five; sh -c 'exit 6'"}, "five", 6},
 			{resolvedTask{Kind: taskKindUser, Command: "echo two;"}, "two", 0},
 			{resolvedTask{Kind: taskKindUser, Command: "echo three # comment; exit 9"}, "three", 0},
 			{resolvedTask{Kind: taskKindUser, Command: "sleep 0 & echo four"}, "four", 0},
@@ -173,8 +174,8 @@ func TestTaskLineRunsInShells(t *testing.T) {
 			{resolvedTask{Kind: taskKindMake, Name: "a;b$(echo x)`y`'z\\"}, "arg:a;b$(echo x)`y`'z\\", 4},
 			{resolvedTask{Kind: "go", Head: "make", Args: []string{"default:test", "./..."}}, "arg:default:test\narg:./...", 4},
 		} {
-			if kind == shellFish && strings.Contains(tc.task.Command, "$((") {
-				continue // fish has no arithmetic expansion
+			if kind == shellFish && (strings.Contains(tc.task.Command, "$((") || strings.Contains(tc.task.Command, "(exit")) {
+				continue // fish has no arithmetic expansion nor ( ) subshell
 			}
 			line := buildTaskLine(kind, taskCommand(kind, tc.task), nonce)
 			cmd := exec.Command(path, "-c", line)

@@ -525,6 +525,10 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 		sessions = newSessionAuth(tokenStore, hub)
 	}
 
+	// Prompts a stopped server left for its last starts.
+	if dir := startPromptDir(); dir != "" {
+		sweepStartPrompts(dir, time.Now())
+	}
 	var uploads *uploadStore
 	if cfg.UploadDir != "" {
 		var err error

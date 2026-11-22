@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -305,5 +306,160 @@ func TestShellAgentStartCaps(t *testing.T) {
 	}
 	if _, ok := shellStarterOf(&shellStartFake{taskFakeMux: newTaskFake(t, t.TempDir())}); !ok {
 		t.Error("shellStarterOf(taskMux + agentWriter) = false")
+	}
+}
+
+// postShellStartBody posts body and returns the status, the code and the
+// answer.
+func postShellStartBody(t *testing.T, h http.Handler, body string) (int, string, map[string]any) {
+	t.Helper()
+	rec := serve(h, apiRequest(http.MethodPost, shellStartPath, body))
+	out := decodeBody(t, rec)
+	code, _ := out["code"].(string)
+	return rec.Code, code, out
+}
+
+// A prompt is cleaned as a message's text, written to a file, and the line
+// reads it back: the prompt's text is never typed. Each kind gets it its
+// own way, in the shell's own syntax.
+func TestShellAgentStartPrompt(t *testing.T) {
+	for _, c := range []struct{ kind, shell, args, words string }{
+		{"claude", "bash", "", `-- "$(command cat -- `},
+		{"codex", "zsh", " '--no-daemon'", `-- "$(command cat -- `},
+		{"opencode", "sh", " '--session' 'ses_", `--prompt="$(command cat -- `},
+		{"claude", "fish", "", `-- (command cat -- `},
+		{"opencode", "-fish", " '--session' 'ses_", `--prompt=(command cat -- `},
+	} {
+		t.Run(c.kind+" "+c.shell, func(t *testing.T) {
+			dir := useStartPromptDir(t, "start-prompts")
+			h, _, f := shellStartAPI(t)
+			f.shell = c.shell
+			status, code, body := postShellStartBody(t, h, `{"kind":"`+c.kind+`","prompt":"fix 'it' $(now)\r\nthen\u0007 go é\t🚀"}`)
+			if status != http.StatusOK || body["prompt"] != true || body["state"] != "starting" {
+				t.Fatalf("POST = %d %q %v", status, code, body)
+			}
+			files := startPromptFiles(t, dir)
+			if len(files) != 1 {
+				t.Fatalf("files = %q", files)
+			}
+			if b, _ := os.ReadFile(files[0]); string(b) != "fix 'it' $(now)\nthen go é\t🚀" {
+				t.Errorf("file = %q", b)
+			}
+			sh := resumeShellKind(c.shell)
+			typed := f.typedLines()
+			want := shellStartPane + " " + c.kind + c.args
+			if len(typed) != 1 || !strings.HasPrefix(typed[0], want) ||
+				!strings.Contains(typed[0], " "+c.words+shellQuote(sh, files[0])) {
+				t.Fatalf("typed %q, want %q ... %s%s", typed, want, c.words, shellQuote(sh, files[0]))
+			}
+			if strings.Contains(typed[0], "fix") || strings.Contains(typed[0], "now") {
+				t.Errorf("the prompt was typed: %q", typed[0])
+			}
+		})
+	}
+}
+
+// The file is deleted startPromptKeep after the line is typed, at once when
+// the line is not typed.
+func TestShellAgentStartPromptFileRemoved(t *testing.T) {
+	keep := startPromptKeep
+	startPromptKeep = 20 * time.Millisecond
+	t.Cleanup(func() { startPromptKeep = keep })
+	dir := useStartPromptDir(t, "start-prompts")
+	h, a, f := shellStartAPI(t)
+	if status, code, _ := postShellStartBody(t, h, `{"kind":"claude","prompt":"hi"}`); status != http.StatusOK {
+		t.Fatalf("POST = %d %q", status, code)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for len(startPromptFiles(t, dir)) != 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if files := startPromptFiles(t, dir); len(files) != 0 {
+		t.Errorf("kept %q", files)
+	}
+	// Busy after the C-c: nothing typed, nothing kept.
+	a.starts.drop(shellStartPane)
+	f.mu.Lock()
+	f.busy[shellStartPane] = false
+	f.interrupt = func() error { f.busy[shellStartPane] = true; return nil }
+	f.mu.Unlock()
+	startPromptKeep = time.Hour
+	if status, code, _ := postShellStartBody(t, h, `{"kind":"claude","prompt":"hi"}`); status != http.StatusConflict || code != "pane_busy" {
+		t.Fatalf("POST = %d %q", status, code)
+	}
+	if files := startPromptFiles(t, dir); len(files) != 0 {
+		t.Errorf("kept %q after a refused start", files)
+	}
+}
+
+// pwsh (and Windows PowerShell) gets nothing for a prompt, not even the C-c,
+// and no file is left; a shell not known at all is refused as before.
+func TestShellAgentStartPromptShellRefused(t *testing.T) {
+	for _, c := range []struct{ shell, code string }{
+		{"pwsh", "prompt_unsupported_shell"},
+		{"powershell.exe", "prompt_unsupported_shell"},
+		{"cmd.exe", "unsupported_shell"},
+		{"nu", "unsupported_shell"},
+	} {
+		t.Run(c.shell, func(t *testing.T) {
+			dir := useStartPromptDir(t, "start-prompts")
+			h, _, f := shellStartAPI(t)
+			f.shell = c.shell
+			if status, code, _ := postShellStartBody(t, h, `{"kind":"claude","prompt":"hi"}`); status != http.StatusConflict || code != c.code {
+				t.Fatalf("POST = %d %q, want 409 %s", status, code, c.code)
+			}
+			if len(f.typedLines()) != 0 || len(f.interrupts) != 0 {
+				t.Errorf("typed %q, interrupts %q", f.typedLines(), f.interrupts)
+			}
+			if files := startPromptFiles(t, dir); len(files) != 0 {
+				t.Errorf("files = %q", files)
+			}
+		})
+	}
+	// On Windows even a POSIX shell (Git Bash) gets nothing for a prompt.
+	t.Run("bash on windows", func(t *testing.T) {
+		h, _, f := shellStartAPI(t)
+		startPromptGOOS = "windows" // shortStart puts it back
+		f.shell = "bash.exe"
+		if status, code, _ := postShellStartBody(t, h, `{"kind":"claude","prompt":"hi"}`); status != http.StatusConflict || code != "prompt_unsupported_shell" {
+			t.Fatalf("POST = %d %q", status, code)
+		}
+		if len(f.typedLines()) != 0 || len(f.interrupts) != 0 {
+			t.Errorf("typed %q, interrupts %q", f.typedLines(), f.interrupts)
+		}
+	})
+	// Without a prompt pwsh still starts the agent.
+	h, _, f := shellStartAPI(t)
+	f.shell = "pwsh"
+	if status, code, body := postShellStartBody(t, h, `{"kind":"claude"}`); status != http.StatusOK || body["prompt"] != false {
+		t.Fatalf("POST = %d %q %v", status, code, body)
+	}
+}
+
+// A prompt is bounded and cleaned as a message's text: too long → 413, empty
+// once cleaned → 400, with nothing sent.
+func TestShellAgentStartPromptLimits(t *testing.T) {
+	dir := useStartPromptDir(t, "start-prompts")
+	h, _, f := shellStartAPI(t)
+	for _, c := range []struct {
+		body   string
+		status int
+		code   string
+	}{
+		{`{"kind":"claude","prompt":"` + strings.Repeat("a", agentMaxText+1) + `"}`, http.StatusRequestEntityTooLarge, "text_too_long"},
+		{`{"kind":"claude","prompt":" \n\t "}`, http.StatusBadRequest, "invalid_request"},
+		{`{"kind":"claude","prompt":"\u0007\u001b"}`, http.StatusBadRequest, "invalid_request"},
+		{`{"kind":"claude","prompt":"` + strings.Repeat("a", agentMessageBody) + `"}`, http.StatusRequestEntityTooLarge, ""},
+	} {
+		if status, code, _ := postShellStartBody(t, h, c.body); status != c.status || code != c.code {
+			t.Errorf("%.40s: %d %q, want %d %q", c.body, status, code, c.status, c.code)
+		}
+	}
+	if len(f.typedLines()) != 0 || len(f.interrupts) != 0 || len(startPromptFiles(t, dir)) != 0 {
+		t.Errorf("typed %q, interrupts %q", f.typedLines(), f.interrupts)
+	}
+	// The longest prompt is taken.
+	if status, code, _ := postShellStartBody(t, h, `{"kind":"claude","prompt":"`+strings.Repeat("é", agentMaxText/2)+`"}`); status != http.StatusOK {
+		t.Errorf("longest prompt: %d %q", status, code)
 	}
 }

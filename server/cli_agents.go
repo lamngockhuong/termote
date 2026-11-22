@@ -50,10 +50,8 @@ var (
 	agentsWaitGrace = 10 * time.Second
 	// agentsWaitFailures snapshot reads in a row that fail end a wait.
 	agentsWaitFailures = 5
-	// agentsStartEvery: how often start follows the agent's start;
-	// agentsSessionWait: how long its prompt waits for the session.
-	agentsStartEvery  = time.Second
-	agentsSessionWait = 15 * time.Second
+	// agentsStartEvery: how often start follows the agent's start.
+	agentsStartEvery = time.Second
 )
 
 // agentsReadMax bounds an answer the CLI reads: a transcript tail is up to
@@ -855,16 +853,17 @@ func (c *cli) agentsStart(args []string) error {
 	if _, ok := agentStartArgs[kind]; !ok {
 		return usageError("--kind is claude, codex or opencode")
 	}
-	// Codex has no session before its first message, and an OpenCode
-	// session named at its start is made by that message: neither can be
-	// sent one through termote until it was typed in the terminal.
-	if len(pos) == 1 && kind != "claude" {
-		return usageError("%s takes its first message in the terminal: start it without a prompt, then ask the user to type the first message there", kind)
-	}
+	// The prompt is the agent's first message, handed to it at its start
+	// (the server reads it from a file, never typing it): Codex has no
+	// session to send one to before that, and an OpenCode session named at
+	// its start is made by it.
 	prompt := ""
 	if len(pos) == 1 {
 		if prompt, err = c.readText(pos[0]); err != nil {
 			return err
+		}
+		if strings.TrimSpace(prompt) == "" {
+			return usageError("the prompt is empty")
 		}
 		if len(prompt) > agentMaxText {
 			return fmt.Errorf("the prompt is longer than %d KB", agentMaxText/1024)
@@ -928,7 +927,11 @@ func (c *cli) agentsStart(args []string) error {
 		return closeTab(fmt.Errorf("a new tab of %s opens in %s, not in %s where its panes are; nothing was started (ask the user which workspace to use)",
 			plainText(g.Name), plainText(got), plainText(want)))
 	}
-	r, err = c.agentsCall(port, http.MethodPost, panePath(paneID, "/agent/start"), map[string]string{"kind": kind}, agentsStartTimeout)
+	start := map[string]string{"kind": kind}
+	if prompt != "" {
+		start["prompt"] = prompt
+	}
+	r, err = c.agentsCall(port, http.MethodPost, panePath(paneID, "/agent/start"), start, agentsStartTimeout)
 	if err != nil {
 		return err
 	}
@@ -938,42 +941,43 @@ func (c *cli) agentsStart(args []string) error {
 	if code := r.failure().Code; r.status != http.StatusOK && code != "start_unknown" && code != "starting" {
 		return closeTab(agentsRefusal(r))
 	}
+	// Only a 200 says whether the prompt was taken; start_unknown and
+	// starting are followed without claiming it.
+	took := r.status == http.StatusOK && startTookPrompt(r)
+	if r.status == http.StatusOK && prompt != "" && !took {
+		return fmt.Errorf("the running server is older than this command: %s runs in pane %s without the prompt; restart the server (termote restart), then give it the task there (Claude Code: termote agents send %s -)",
+			kind, plainText(paneID), plainText(paneID))
+	}
 	state, err := c.followAgentStart(port, paneID)
 	if err != nil {
 		return err
 	}
 	dir := dash(plainText(p.cwd()))
+	withPrompt := ""
+	if took {
+		withPrompt = " with the prompt"
+	}
 	switch state {
 	case startReady:
 	case startBlocked:
-		c.infof("Started %s in pane %s (%s, in %s); it waits on a dialog: termote agents answer %s", kind, plainText(paneID), plainText(g.Name), dir, plainText(paneID))
+		c.infof("Started %s in pane %s (%s, in %s)%s; it waits on a dialog: termote agents answer %s", kind, plainText(paneID), plainText(g.Name), dir, withPrompt, plainText(paneID))
 		return &exitError{code: agentsExitDialog}
 	case startExited:
 		return closeTab(fmt.Errorf("%s did not start in pane %s: its command ended (is it installed?)", kind, plainText(paneID)))
 	default:
 		return fmt.Errorf("%s did not start in pane %s (%s); see: termote agents list", kind, plainText(paneID), plainText(state))
 	}
-	c.infof("Started %s in pane %s (%s, in %s)", kind, plainText(paneID), plainText(g.Name), dir)
-	if prompt == "" {
-		return nil
-	}
-	// A started agent can show ready a moment before its session is found
-	// (Claude Code writes its session file as it starts): the prompt waits
-	// for it a little.
-	queued, err := c.sendToAgent(port, paneID, prompt)
-	for deadline := time.Now().Add(agentsSessionWait); err != nil && strings.Contains(err.Error(), errNoAgentSession.Error()) && time.Now().Before(deadline); {
-		time.Sleep(agentsStartEvery)
-		queued, err = c.sendToAgent(port, paneID, prompt)
-	}
-	if err != nil {
-		return fmt.Errorf("the agent started in pane %s, but the prompt was not sent: %w", plainText(paneID), err)
-	}
-	if queued {
-		c.infof("Queued the prompt for pane %s", plainText(paneID))
-	} else {
-		c.infof("Sent the prompt to pane %s", plainText(paneID))
-	}
+	c.infof("Started %s in pane %s (%s, in %s)%s", kind, plainText(paneID), plainText(g.Name), dir, withPrompt)
 	return nil
+}
+
+// startTookPrompt: the start's answer says the prompt was taken; a server
+// older than this command ignores it and starts the agent without it.
+func startTookPrompt(r agentsReply) bool {
+	var took struct {
+		Prompt bool `json:"prompt"`
+	}
+	return json.Unmarshal(r.body, &took) == nil && took.Prompt
 }
 
 // followAgentStart polls the start in paneID until it is final, a little

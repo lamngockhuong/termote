@@ -213,10 +213,11 @@ jobs:
           cache-dependency-path: server/go.mod
 
       # The tmux backend's tests run against a private real tmux server;
-      # without tmux they skip.
-      - name: Install tmux
+      # without tmux they skip. zsh and fish run an agent start's line
+      # (TestAgentStartLineRealShells), which skips a shell it does not find.
+      - name: Install tmux, zsh and fish
         if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get update && sudo apt-get install -y tmux && tmux -V
+        run: sudo apt-get update && sudo apt-get install -y tmux zsh fish && tmux -V && fish --version
 
       # The Zellij backend's tests run a real Zellij in an environment of
       # their own (mux_zellij_real_test.go); without it they skip. A failed

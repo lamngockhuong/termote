@@ -159,6 +159,12 @@ func TestFindCodexSessionRefusals(t *testing.T) {
 	if s, ok := findClaudeSession("with-subagent", root); !ok || s.ID != testCodexID {
 		t.Errorf("with a sub-agent thread = %+v, %v", s, ok)
 	}
+
+	// A start's prompt after -- is no subcommand, even "app-server".
+	root, _ = startFakeCodex(t, []string{"CODEX_HOME=" + home, "R=" + user}, `exec 3>>"$R"`, "--no-daemon", "--", "app-server")
+	if s, ok := findClaudeSession("prompt-app-server", root); !ok || s.ID != testCodexID {
+		t.Errorf("a prompt naming app-server = %+v, %v", s, ok)
+	}
 }
 
 func TestFindCodexSessionFollowsNew(t *testing.T) {

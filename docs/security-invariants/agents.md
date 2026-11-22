@@ -125,9 +125,12 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   `server/agent_start.go`, `caps.agentStart`: Herdr ≥ 0.8.2 from the subscription's `ping`, on
   every OS; `caps.agentStartCodex`: also Codex has a Chat view on this OS, `codexProcSupported`):
   `writeGuard` (same-site JSON), `requireWriteRole`
-  (a view-only client gets 403 `view_only`, also on `GET`), 8 KB body. Only `kind` is decoded (`claude` → no arguments, `codex` →
+  (a view-only client gets 403 `view_only`, also on `GET`), 64 KB body (`agentMessageBody`). Only `kind` and an optional `prompt`
+  are decoded (`claude` → no arguments, `codex` →
   `--no-daemon`, `opencode` → `--session ses_<26 random base32>`, a new id the server makes for
-  each start (`rand.Text`), so the pane has a session to show from the start; else 400 `invalid_kind`; `codex` where Codex has no Chat view
+  each start (`rand.Text`), so the pane has a session to show from the start; else 400 `invalid_kind`; the prompt goes through
+  `cleanText` and `agentMaxText` as a message's text (413 `text_too_long`; empty once cleaned →
+  400 `invalid_request`), and absent (the PWA) means none; `codex` where Codex has no Chat view
   (`codexProcSupported` false) → 501 `unsupported`, checked before the pane is resolved, nothing
   sent to Herdr; the PWA then offers only Claude Code); arguments and the Herdr alias
   (`termote-<kind>-<8 hex>`, one retry on `agent_name_taken`) are the server's. The pane is
@@ -176,7 +179,41 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   `muxTimeout` and a call cut short reports the context's error (a killed tmux included):
   `TypeLine` cut short → 504 `start_unknown`, followed as if typed; any other error 500
   `start_failed`. No alias exists: the start is
-  followed by pane id, its name only tells this server's starts apart. `GET` reads the pane
+  followed by pane id, its name only tells this server's starts apart (`pendingStart.shell` picks
+  this follower on Herdr). **A prompt** (`server/agent_start_prompt.go`) is never typed and never
+  handed to Herdr's `agent.start`, on any backend: Herdr types its arguments into the shell itself,
+  quoting them POSIX-style for fish too (a prompt with `\'` then runs commands there, verified with
+  fish 4.9.3) and only `'` for PowerShell (not `‘’‚‛`), and refuses a line break, so on Herdr a
+  start with a prompt takes this shellStarter path instead (Herdr's `IdleShell`, `Interrupt`,
+  `TypeLine`; no `agent.get`/`launch_pending` check, no alias). The prompt is written to a new
+  file (`os.CreateTemp`, 0600) in `<UserCacheDir>/termote/start-prompts` (0700, `Lstat` not a
+  symlink, `checkPrivateDir`), its path refused when `validTaskDir` would refuse it; the typed
+  line ends with words that read it back as one argument when the line runs, the path through
+  `shellQuote`: POSIX `-- "$(command cat -- '<path>')"`, fish
+  `-- (command cat -- '<path>' | string collect)`, OpenCode `--prompt=` with the same
+  substitution instead of `--` (`--` keeps a prompt starting with `-` or naming a subcommand,
+  `logout`, a prompt; checked on Claude Code 2.1.330, Codex 0.169.0, OpenCode 2.3.2). Nothing of
+  the prompt is on the line, so neither the shell nor its line editor (Tab, a line break, `!`)
+  acts on it; `TestAgentStartLineRealShells` runs bash, zsh, dash, sh and fish on prompts with
+  quotes, `$()`, backticks, `\'`, line breaks and Unicode. pwsh and Windows PowerShell (no
+  substitution that passes a native program one argument whatever it holds), and every shell on
+  Windows (`startPromptGOOS`: an agent installed by npm is a `.cmd` shim that cmd.exe reparses, from
+  Git Bash too; psmux has no shellStarter, 501 `unsupported` first) → 409 `prompt_unsupported_shell` with nothing sent, not even `C-c`, checked
+  before and after the `C-c`; a shell not known at all keeps 409 `unsupported_shell`. The file is
+  deleted at once when typing never began, else `startPromptKeep` (35 s) after (a failed or cut
+  short `TypeLine` included: part of the line may wait in the shell); `serve` at its start and each
+  write delete the dir's `prompt-<digits>.txt` regular files older than that, which a stopped
+  server left. Codex's TUI is told from its daemon by `app-server` only before `--`
+  (`codexProcOf`), so a prompt naming it is still a prompt. The answer carries `prompt: true`, and `termote agents start` reports a server that
+  answers without it (older, so it started the agent without the prompt) instead of claiming it
+  sent one (it says so only for a 200; a followed `start_unknown` or `starting` claims nothing).
+  Accepted gaps: the prompt is an argument of the agent for its whole life, so other local users
+  can read it (`/proc/<pid>/cmdline` without `hidepid`, `ps`), unlike a message; the guide and the
+  orchestrator skill say to keep secrets out of it. The agent starts with an empty prompt, while
+  the answer says `prompt: true`, when the file cannot be read when the line runs: a fish without
+  `string collect` (before 3.1), a pane whose shell runs as another user (`su`), or a line that runs
+  more than 35 s after it was typed (typeahead behind a job started after the idle check). The line
+  runs `cat` through `command`, so a `cat` earlier on the user's `PATH` reads the file. `GET` reads the pane
   (`AgentSessionNow`, no cache, then a fresh process walk under the shell, `shellStartProc`, for an
   agent with no session yet: Codex before its first message): an agent of the kind in the
   foreground → `ready`, its status `blocked` (Claude Code's session file, Codex's rollout,
@@ -573,6 +610,7 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   directory from the client: `tabs` takes none), refuses and closes it when its pane's directory is
   not the one every pane of the workspace is in (the directory `list` shows, which the user agreed
   to), and starts the agent in its pane; a definite refusal or a command that ended closes the tab
-  too. A prompt goes with `start` for Claude Code only (Codex and OpenCode have no session to send
-  to before their first message), through `agent/message` like any other. Text from the server
+  too. A prompt goes in `agent/start`'s body for every kind (the server hands it to the agent at its
+  start, see Starting an agent), never through `agent/message`; an answer without `prompt: true`
+  (an older server) is reported as a start without it. Text from the server
   is printed without control, hidden or bidi characters (`cleanOut`, `plainText`)

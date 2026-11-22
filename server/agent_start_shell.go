@@ -49,15 +49,33 @@ func (s shellStarter) requirePane(ctx context.Context, id string) (Size, error) 
 // C-c (half-typed text, a continuation prompt, a heredoc or a read would
 // otherwise take the command), checks the shell again and types the
 // command line, its arguments quoted for the shell. Nothing is typed into a
-// busy pane or a shell whose quoting is not known.
-func (s shellStarter) StartAgent(ctx context.Context, paneID, kind string, args []string) (string, error) {
+// busy pane or a shell whose quoting is not known, and nothing at all is
+// sent for a prompt to a shell that cannot read it from a file (pwsh). The
+// prompt itself is never typed: it goes to a file (writeStartPrompt) that
+// the line reads back, kept startPromptKeep once the line is typed.
+func (s shellStarter) StartAgent(ctx context.Context, paneID, kind string, args []string, prompt string) (name string, err error) {
 	// A shell whose quoting is not known gets nothing, not even the C-c.
 	shell, err := s.waitIdle(ctx, paneID)
 	if err != nil {
 		return "", err
 	}
-	if resumeShellKind(shell) == "" {
-		return "", errTaskShell
+	if err := startShellOK(shell, prompt); err != nil {
+		return "", err
+	}
+	promptFile, typing := "", false
+	if prompt != "" {
+		if promptFile, err = writeStartPrompt(prompt); err != nil {
+			return "", err
+		}
+		// Once typing began, part of the line may wait in the shell's input
+		// even when the call failed: the file is kept for it.
+		defer func() {
+			if typing {
+				time.AfterFunc(startPromptKeep, func() { removeStartPrompt(promptFile) })
+			} else {
+				removeStartPrompt(promptFile) // nothing of the line was typed
+			}
+		}()
 	}
 	if err := callStep(ctx, func(ctx context.Context) error { return s.tm.Interrupt(ctx, paneID) }); err != nil {
 		return "", startStepError(err)
@@ -68,12 +86,12 @@ func (s shellStarter) StartAgent(ctx context.Context, paneID, kind string, args 
 	if shell, err = s.waitIdle(ctx, paneID); err != nil {
 		return "", err
 	}
-	sh := resumeShellKind(shell)
-	if sh == "" {
-		return "", errTaskShell
+	if err := startShellOK(shell, prompt); err != nil {
+		return "", err
 	}
-	line := agentStartLine(sh, kind, args)
-	name := agentStartName(kind)
+	line := agentStartLine(resumeShellKind(shell), kind, args, promptFile)
+	name = agentStartName(kind)
+	typing = true
 	err = callStep(ctx, func(ctx context.Context) error { return s.tm.TypeLine(ctx, paneID, line) })
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 		return name, errStartUnknown // part of the line may have been typed
@@ -81,12 +99,31 @@ func (s shellStarter) StartAgent(ctx context.Context, paneID, kind string, args 
 	return name, startStepError(err)
 }
 
+// startShellOK refuses a shell whose quoting is not known, and for a prompt
+// pwsh and any shell on Windows: pwsh has no substitution that hands a
+// native program the file's text as one argument whatever it holds, and on
+// Windows an agent installed by npm is a .cmd shim that cmd.exe reparses,
+// from Git Bash too.
+func startShellOK(shell, prompt string) error {
+	switch sh := resumeShellKind(shell); {
+	case sh == "":
+		return errTaskShell
+	case prompt != "" && (startPromptGOOS == "windows" || sh != shellPOSIX && sh != shellFish):
+		return errStartPromptShell
+	}
+	return nil
+}
+
 // agentStartLine is the command line that starts kind: its program, then
-// each argument quoted for the shell (the server's own, never a client's).
-func agentStartLine(shell, kind string, args []string) string {
+// each argument quoted for the shell (the server's own, never a client's),
+// then, for a prompt, the words that read it from promptFile.
+func agentStartLine(shell, kind string, args []string, promptFile string) string {
 	words := []string{kind}
 	for _, a := range args {
 		words = append(words, shellQuote(shell, a))
+	}
+	if promptFile != "" {
+		words = append(words, agentPromptWords(shell, kind, promptFile)...)
 	}
 	return strings.Join(words, " ")
 }

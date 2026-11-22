@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,8 +27,16 @@ type agentsFake struct {
 	snapNow Snapshot
 	tabs    []string // NewTab calls
 	starts  []string // StartAgent calls, as pane/kind
-	state   string   // what AgentStartState reports
+	prompts []string // their prompts
+	// typed: lines typed by a start with a prompt (the shell path), as
+	// pane + " " + line; promptText: the prompt files' text then.
+	typed      []string
+	promptText []string
+	promptDir  string
+	state      string // what AgentStartState reports
 }
+
+var _ agentStarter = (*agentsFake)(nil)
 
 func (f *agentsFake) Caps() Caps   { return Caps{AgentStart: true, Files: true} }
 func (f *agentsFake) Name() string { return "tmux" }
@@ -83,10 +92,35 @@ func (f *agentsFake) requirePane(_ context.Context, id string) (Size, error) {
 	return Size{Cols: 80, Rows: 24}, nil
 }
 
-func (f *agentsFake) StartAgent(_ context.Context, paneID, kind string, _ []string) (string, error) {
+func (f *agentsFake) StartAgent(_ context.Context, paneID, kind string, _ []string, prompt string) (string, error) {
 	f.starts = append(f.starts, paneID+"/"+kind)
+	f.prompts = append(f.prompts, prompt)
 	f.setStatus(paneID, "idle")
 	return "termote-" + kind + "-1", nil
+}
+
+// A start with a prompt takes the shell path: every pane is an idle zsh,
+// and a typed line is recorded with the prompt files' text.
+func (f *agentsFake) NewTaskTab(context.Context, string, string, string) (taskTab, error) {
+	return taskTab{}, errors.New("no task tabs")
+}
+func (f *agentsFake) IdleShell(context.Context, string) (string, int, bool, error) {
+	return "zsh", 1, true, nil
+}
+func (f *agentsFake) Interrupt(context.Context, string) error                   { return nil }
+func (f *agentsFake) ReadTaskText(context.Context, string, int) (string, error) { return "", nil }
+func (f *agentsFake) TypeLine(_ context.Context, target, line string) error {
+	f.snapMu.Lock()
+	defer f.snapMu.Unlock()
+	f.typed = append(f.typed, target+" "+line)
+	entries, _ := os.ReadDir(f.promptDir)
+	for _, e := range entries {
+		if p := filepath.Join(f.promptDir, e.Name()); strings.Contains(line, p) {
+			b, _ := os.ReadFile(p)
+			f.promptText = append(f.promptText, string(b))
+		}
+	}
+	return nil
 }
 
 func (f *agentsFake) AgentStartState(context.Context, string, string, string, time.Duration) (string, error) {
@@ -391,32 +425,51 @@ func TestAgentsAnswer(t *testing.T) {
 
 func TestAgentsStart(t *testing.T) {
 	tc, f := agentsTest(t, "")
+	f.promptDir = useStartPromptDir(t, "start-prompts")
 	every := agentsStartEvery
 	agentsStartEvery = 10 * time.Millisecond
 	t.Cleanup(func() { agentsStartEvery = every })
-	if err := tc.dispatch("agents", []string{"start", "--workspace", "web", "--kind", "claude", "--name", "worker", "write tests"}); err != nil {
+	// A prompt is handed to the agent at its start, through the line the
+	// server types, never typed itself.
+	if err := tc.dispatch("agents", []string{"start", "--workspace", "web", "--kind", "claude", "--name", "worker", "write 'tests'"}); err != nil {
 		t.Fatalf("%v (%s)", err, tc.stderr)
 	}
-	if len(f.tabs) != 1 || f.tabs[0] != "$1/worker" || len(f.starts) != 1 || f.starts[0] != "%t2/claude" {
-		t.Errorf("tabs %v starts %v", f.tabs, f.starts)
+	if len(f.tabs) != 1 || f.tabs[0] != "$1/worker" || len(f.starts) != 0 || len(f.typed) != 1 ||
+		!strings.HasPrefix(f.typed[0], `%t2 claude -- "$(command cat -- `) || strings.Contains(f.typed[0], "tests") {
+		t.Errorf("tabs %v starts %v typed %q", f.tabs, f.starts, f.typed)
 	}
-	out := tc.stdout.String()
-	if !strings.Contains(out, "Started claude in pane %t2 (web, in -)") || !strings.Contains(out, "Sent the prompt to pane %t2") || f.pasted[len(f.pasted)-1] != "write tests" {
-		t.Errorf("out %s, pasted %q", out, f.pasted)
+	if !slices.Equal(f.promptText, []string{"write 'tests'"}) || len(f.pasted) != 0 {
+		t.Errorf("prompt %q, pasted %q", f.promptText, f.pasted)
 	}
-	// The session shows a moment after the agent is ready: the prompt waits.
+	if out := tc.stdout.String(); !strings.Contains(out, "Started claude in pane %t2 (web, in -) with the prompt") {
+		t.Errorf("out %s", out)
+	}
+	// Codex and OpenCode take one too, from stdin, line breaks and all;
+	// Codex is found by its process, before it has a session.
 	f.mu.Lock()
 	f.found = false
 	f.mu.Unlock()
-	go func() {
-		time.Sleep(300 * time.Millisecond)
-		f.mu.Lock()
-		f.found = true
-		f.mu.Unlock()
-	}()
+	setShellStartProc(t, "codex")
+	tc.in = bufio.NewReader(strings.NewReader("first line\nsecond 'line' $(x)\n"))
+	if err := tc.dispatch("agents", []string{"start", "--workspace", "web", "--kind", "codex", "-"}); err != nil {
+		t.Fatalf("codex: %v (%s)", err, tc.stderr)
+	}
+	if last := f.typed[len(f.typed)-1]; !strings.Contains(last, ` codex '--no-daemon' -- "$(command cat -- `) ||
+		f.promptText[len(f.promptText)-1] != "first line\nsecond 'line' $(x)" {
+		t.Errorf("codex typed %q, prompt %q", last, f.promptText)
+	}
+	setShellStartProc(t, "opencode")
+	if err := tc.dispatch("agents", []string{"start", "--workspace", "web", "--kind", "opencode", "plan it"}); err != nil {
+		t.Fatalf("opencode: %v (%s)", err, tc.stderr)
+	}
+	if last := f.typed[len(f.typed)-1]; !strings.Contains(last, ` --prompt="$(command cat -- `) {
+		t.Errorf("opencode typed %q", last)
+	}
+	// Without a prompt the backend's own start runs, as the PWA's does.
 	tc.stdout.Reset()
-	if err := tc.dispatch("agents", []string{"start", "--workspace", "web", "--kind", "claude", "late session"}); err != nil || !strings.Contains(tc.stdout.String(), "Sent the prompt") {
-		t.Errorf("late session: %v %s", err, tc.stdout)
+	if err := tc.dispatch("agents", []string{"start", "--workspace", "web", "--kind", "claude"}); err != nil ||
+		len(f.starts) != 1 || f.prompts[0] != "" || strings.Contains(tc.stdout.String(), "with the prompt") {
+		t.Errorf("no prompt: %v starts %v prompts %q %s", err, f.starts, f.prompts, tc.stdout)
 	}
 	// A start that does not become ready.
 	f.state = startExited
@@ -426,9 +479,28 @@ func TestAgentsStart(t *testing.T) {
 	if err := tc.dispatch("agents", []string{"start", "--workspace", "none", "--kind", "claude"}); err == nil || !strings.Contains(err.Error(), "no workspace is named") {
 		t.Errorf("unknown workspace: %v", err)
 	}
-	for _, args := range [][]string{{"start", "--kind", "claude"}, {"start", "--workspace", "web"}, {"start", "--workspace", "web", "--kind", "vim"}} {
+	for _, args := range [][]string{{"start", "--kind", "claude"}, {"start", "--workspace", "web"}, {"start", "--workspace", "web", "--kind", "vim"},
+		{"start", "--workspace", "web", "--kind", "codex", " \n "}} {
 		if err := tc.dispatch("agents", args); exitCode(err) != 2 {
 			t.Errorf("%v: %v", args, err)
+		}
+	}
+	if err := tc.dispatch("agents", []string{"start", "--workspace", "web", "--kind", "codex", strings.Repeat("a", agentMaxText+1)}); err == nil || !strings.Contains(err.Error(), "longer than") {
+		t.Errorf("long prompt: %v", err)
+	}
+}
+
+// An answer without prompt: true is a server older than the command, which
+// started the agent without the prompt.
+func TestStartTookPrompt(t *testing.T) {
+	for body, want := range map[string]bool{
+		`{"ok":true,"state":"starting","prompt":true}`:  true,
+		`{"ok":true,"state":"starting","prompt":false}`: false,
+		`{"ok":true,"state":"starting"}`:                false,
+		`not json`:                                      false,
+	} {
+		if got := startTookPrompt(agentsReply{status: http.StatusOK, body: []byte(body)}); got != want {
+			t.Errorf("%s: %v", body, got)
 		}
 	}
 }

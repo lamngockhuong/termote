@@ -359,7 +359,7 @@ POST   /api/mux/panes/{id}/agent/message  body: {text, cursor, images?, at?}  �
 GET    /api/mux/panes/{id}/agent/prompt                          → {prompt: null | {promptId, kind, title, body, options, steps, freeText}}
 POST   /api/mux/panes/{id}/agent/answer   body: {promptId, choice} → 204
 GET    /api/mux/panes/{id}/agent/commands                        → {commands: [{name, description, source, kind}]}
-POST   /api/mux/panes/{id}/agent/start    body: {kind}          → {ok, state: "starting"} | {error, code}   (caps.agentStart; codex: caps.agentStartCodex)
+POST   /api/mux/panes/{id}/agent/start    body: {kind, prompt?} → {ok, state: "starting", prompt} | {error, code}   (caps.agentStart; codex: caps.agentStartCodex)
 GET    /api/mux/panes/{id}/agent/start                           → {kind, state} | 404 no_start
 GET    /api/mux/panes/{id}/agent/history?agent=&cursor=          → {sessions: [{agent, id, title, titleSource, cwd, branch?, updatedAt, live?}], next?, truncated}
 GET    /api/mux/panes/{id}/agent/history/{session}/transcript?agent=&before= → as agent/transcript | 404 session_not_found
@@ -440,8 +440,10 @@ Zellij and hc where the agent is found under a pane's shell, not psmux) starts
 Claude Code (`kind: "claude"`), Codex (`"codex"`, run as `codex --no-daemon`; only where Codex
 has a Chat view, `caps.agentStartCodex`, else 501 `unsupported`) or OpenCode (`"opencode"`, run
 as `opencode --session <id>` with a new id the server makes)
-in a pane that shows only its shell, through Herdr's `agent.start`. Only `kind` is read: the arguments come from a fixed
-table and the alias Herdr tracks the agent by is the server's (`termote-<kind>-<8 hex>`, one
+in a pane that shows only its shell, through Herdr's `agent.start`. Only `kind` and an optional `prompt` are read: the
+arguments come from a fixed table, and a prompt (the agent's first message) is never typed: it is
+written to a private file that the line termote types itself reads back (on Herdr too, instead of
+`agent.start`; bash, zsh, sh and fish, not on Windows, see `docs/security-invariants/agents.md`). The alias Herdr tracks the agent by is the server's (`termote-<kind>-<8 hex>`, one
 retry on `agent_name_taken`). The pane is resolved before the pane lock (the one `message` and
 `answer` take; a write waits for it at most `agentRequestMost` less its own bound, else 409
 `input_busy`, so one over a machine ends before the hub's header wait); then a start of this server still running there answers 409 `starting`; a

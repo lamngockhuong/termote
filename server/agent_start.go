@@ -8,6 +8,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -18,7 +19,10 @@ import (
 // once; readiness is read afterwards from agent.get, so the POST never waits
 // for the agent and the PWA polls the GET. tmux, Zellij and herdr-core have
 // no agent.start: termote types the line itself and reads readiness from the
-// pane (shellStarter, agent_start_shell.go).
+// pane (shellStarter, agent_start_shell.go). A start with a prompt takes
+// that path on Herdr too: Herdr would type the prompt into the shell itself,
+// and its quoting is not safe for every shell it starts agents in (fish,
+// PowerShell) nor takes a line break (agent_start_prompt.go).
 
 // agentStartArgs are the kinds a client may start and the arguments each one
 // gets. Nothing in a request adds to them. OpenCode gets a new session id
@@ -93,14 +97,22 @@ type agentStarter interface {
 	// requirePane validates the pane id and checks the pane exists.
 	requirePane(ctx context.Context, id string) (Size, error)
 	// StartAgent clears the pane's input line and asks the backend to start
-	// kind with args, under an alias it picks, which it returns. ctx bounds
-	// the whole start; each backend call gets its own agentStartCallTimeout.
-	StartAgent(ctx context.Context, paneID, kind string, args []string) (name string, err error)
+	// kind with args, and prompt as its first message when not empty, under
+	// an alias it picks, which it returns. ctx bounds the whole start; each
+	// backend call gets its own agentStartCallTimeout.
+	StartAgent(ctx context.Context, paneID, kind string, args []string, prompt string) (name string, err error)
 	// AgentStartState reads how the start of the agent named name, made
 	// elapsed ago in paneID, is going: one of the start states, never
 	// startTimeout (the caller decides).
 	AgentStartState(ctx context.Context, paneID, name, kind string, elapsed time.Duration) (string, error)
 }
+
+// Both starters, checked when built: one found by a type assertion would
+// otherwise just stop being used.
+var (
+	_ agentStarter = (*herdrMux)(nil)
+	_ agentStarter = shellStarter{}
+)
 
 // agentStartName is a fresh alias for a started agent, within Herdr's
 // grammar [a-z][a-z0-9_-]{0,31}.
@@ -116,6 +128,9 @@ type pendingStart struct {
 	started    time.Time
 	ended      time.Time // zero while the start is followed
 	state      string
+	// shell: the server typed the line itself (shellStarter), on a backend
+	// that also has an agentStarter of its own (Herdr, for a prompt).
+	shell bool
 }
 
 // agentStarts holds each pane's latest start.
@@ -171,13 +186,19 @@ func startFinal(state string) bool {
 	return state != startStarting
 }
 
-// starter returns the backend as an agentStarter when it can start agents
-// now, else answers 501.
-func (a *agentAPI) starter(w http.ResponseWriter) (agentStarter, bool) {
-	st, ok := a.m.(agentStarter)
-	if !ok {
-		st, ok = shellStarterOf(a.m)
+// starterOf is the backend as an agentStarter: its own (Herdr's
+// agent.start), else, or for shell, its shellStarter.
+func (a *agentAPI) starterOf(shell bool) (agentStarter, bool) {
+	if st, ok := a.m.(agentStarter); ok && !shell {
+		return st, true
 	}
+	return shellStarterOf(a.m)
+}
+
+// starter returns the backend as an agentStarter (starterOf) when it can
+// start agents now, else answers 501.
+func (a *agentAPI) starter(w http.ResponseWriter, shell bool) (agentStarter, bool) {
+	st, ok := a.starterOf(shell)
 	if !ok || !a.m.Caps().AgentStart {
 		jsonErrorCode(w, errStartUnsupported.code, errStartUnsupported.msg, errStartUnsupported.status)
 		return nil, false
@@ -201,11 +222,13 @@ func (a *agentAPI) startAgent(w http.ResponseWriter, r *http.Request) {
 	if !requireWriteRole(w, r) {
 		return
 	}
-	// Only kind is read: arguments and the alias are the server's.
+	// Only kind and the prompt are read: arguments and the alias are the
+	// server's, and the prompt is never typed (agent_start_prompt.go).
 	var body struct {
-		Kind string `json:"kind"`
+		Kind   string `json:"kind"`
+		Prompt string `json:"prompt"`
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBody)
+	r.Body = http.MaxBytesReader(w, r.Body, agentMessageBody)
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		var tooBig *http.MaxBytesError
 		if errors.As(err, &tooBig) {
@@ -221,7 +244,19 @@ func (a *agentAPI) startAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	args := argsOf()
-	st, ok := a.starter(w)
+	// The prompt is cleaned and bounded as a message's text is; absent
+	// (the PWA) means none.
+	prompt := cleanText(body.Prompt)
+	switch {
+	case len(prompt) > agentMaxText:
+		jsonErrorCode(w, errTextTooLong.code, errTextTooLong.msg, errTextTooLong.status)
+		return
+	case body.Prompt != "" && strings.TrimSpace(prompt) == "":
+		jsonErrorCode(w, "invalid_request", "prompt is empty", http.StatusBadRequest)
+		return
+	}
+	viaShell := prompt != ""
+	st, ok := a.starter(w, viaShell)
 	if !ok {
 		return
 	}
@@ -254,7 +289,7 @@ func (a *agentAPI) startAgent(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), work)
 	defer cancel()
 	if p, ok := a.starts.get(paneID, time.Now()); ok && p.ended.IsZero() {
-		if !startFinal(a.followStart(ctx, st, paneID, p)) {
+		if !startFinal(a.followStart(ctx, paneID, p)) {
 			a.startError(w, errStarting)
 			return
 		}
@@ -264,11 +299,11 @@ func (a *agentAPI) startAgent(w http.ResponseWriter, r *http.Request) {
 	prev, hadPrev := a.starts.get(paneID, time.Now())
 	// Recorded before Herdr is asked, so a GET while the POST runs (which
 	// can take seconds) reports it starting rather than no_start.
-	a.starts.put(paneID, pendingStart{kind: body.Kind, started: time.Now(), state: startStarting})
-	name, err := st.StartAgent(ctx, paneID, body.Kind, args)
+	a.starts.put(paneID, pendingStart{kind: body.Kind, started: time.Now(), state: startStarting, shell: viaShell})
+	name, err := st.StartAgent(ctx, paneID, body.Kind, args, prompt)
 	switch {
 	case err == nil || errors.Is(err, errStartUnknown):
-		a.starts.put(paneID, pendingStart{kind: body.Kind, name: name, started: time.Now(), state: startStarting})
+		a.starts.put(paneID, pendingStart{kind: body.Kind, name: name, started: time.Now(), state: startStarting, shell: viaShell})
 	case hadPrev:
 		a.starts.put(paneID, prev)
 	default:
@@ -278,7 +313,9 @@ func (a *agentAPI) startAgent(w http.ResponseWriter, r *http.Request) {
 		a.startError(w, err)
 		return
 	}
-	jsonOK(w, map[string]any{"ok": true, "state": startStarting})
+	// prompt tells a client that the prompt was taken (an older server
+	// starts the agent without it).
+	jsonOK(w, map[string]any{"ok": true, "state": startStarting, "prompt": prompt != ""})
 }
 
 // startState answers GET: the state of this server's latest start in the
@@ -294,8 +331,7 @@ func (a *agentAPI) startState(w http.ResponseWriter, r *http.Request) {
 	if !requireWriteRole(w, r) {
 		return
 	}
-	st, ok := a.starter(w)
-	if !ok {
+	if _, ok := a.starter(w, false); !ok {
 		return
 	}
 	paneID := r.PathValue("id")
@@ -308,18 +344,24 @@ func (a *agentAPI) startState(w http.ResponseWriter, r *http.Request) {
 	if p.ended.IsZero() {
 		ctx, cancel := context.WithTimeout(r.Context(), muxTimeout)
 		defer cancel()
-		state = a.followStart(ctx, st, paneID, p)
+		state = a.followStart(ctx, paneID, p)
 	}
 	jsonOK(w, map[string]any{"kind": p.kind, "state": state})
 }
 
-// followStart reads a followed start's state, records it when final and
-// returns it. A failed read keeps it starting until its deadline.
-func (a *agentAPI) followStart(ctx context.Context, st agentStarter, paneID string, p pendingStart) string {
+// followStart reads a followed start's state, through the starter that
+// made it, records it when final and returns it. A failed read keeps it
+// starting until its deadline.
+func (a *agentAPI) followStart(ctx context.Context, paneID string, p pendingStart) string {
 	if p.name == "" {
 		return startStarting // the POST has not reached Herdr yet
 	}
-	state, err := st.AgentStartState(ctx, paneID, p.name, p.kind, time.Since(p.started))
+	var state string
+	st, ok := a.starterOf(p.shell)
+	var err error = errStartUnsupported
+	if ok {
+		state, err = st.AgentStartState(ctx, paneID, p.name, p.kind, time.Since(p.started))
+	}
 	if err != nil {
 		log.Printf("agent start state %s: %v", p.name, err)
 		state = startStarting

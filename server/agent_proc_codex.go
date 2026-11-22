@@ -42,8 +42,13 @@ func codexProcOf(pid int) (claudeProc, bool) {
 	if !codexProcSupported || procExeBase(pid) != codexExeName {
 		return claudeProc{}, false
 	}
-	// The argv must be readable to tell the TUI from the daemon.
-	if args := procArgs(pid); len(args) == 0 || slices.Contains(args, "app-server") {
+	// The argv must be readable to tell the TUI from the daemon; what
+	// follows -- is the prompt (a start's), never a subcommand.
+	args := procArgs(pid)
+	if i := slices.Index(args, "--"); i >= 0 {
+		args = args[:i]
+	}
+	if len(args) == 0 || slices.Contains(args, "app-server") {
 		return claudeProc{}, false
 	}
 	home, homeOK := procCodexHome(pid)

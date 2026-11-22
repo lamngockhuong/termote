@@ -123,6 +123,8 @@ export default {
   'errors.place_not_supported': 'Không dùng được trong Place',
   'errors.prompt_changed': 'Màn hình đã đổi. Hãy xem lại hộp thoại',
   'errors.prompt_expired': 'Hộp thoại này đã được trả lời hoặc đã hết hạn',
+  'errors.prompt_unsupported_shell':
+    'Shell này không nhận được prompt lúc khởi chạy (bash, zsh, sh, fish; không dùng được trên Windows)',
   'errors.psmux_port_taken':
     'Chương trình của user khác đang giữ port của một phiên psmux. Xem log của server',
   'errors.psmux_ports_unverified':

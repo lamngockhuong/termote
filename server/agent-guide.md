@@ -168,8 +168,10 @@ termote agents start --workspace <id> --kind claude 'Write the tests'
 A `<pane>` is a pane id or a name only one pane has: a name two panes share is refused, with
 both ids. Send to one pane at a time, never to your own. Ask the user before `start`; it refuses
 when the new tab would open in another directory than `list` shows, so when `list` shows no
-directory for the workspace, ask which workspace to use. Only Claude Code takes a prompt with
-`start`; Codex and OpenCode take their first message in the terminal. A dialog asking to run a command or change a file is the user's decision:
+directory for the workspace, ask which workspace to use. The prompt of `start` is the agent's
+first message, for every kind (`-` reads it from stdin); a pane whose shell is PowerShell, or any
+pane on Windows, refuses one (`prompt_unsupported_shell`). Keep secrets out of a prompt: it is the
+agent's command-line argument, which other local users can see. A dialog asking to run a command or change a file is the user's decision:
 show it to them before answering.
 
 ## Never
