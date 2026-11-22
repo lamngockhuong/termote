@@ -3,3 +3,5 @@
 Dockerfile text eol=lf
 Makefile text eol=lf
 server/testdata/encoding/** -text
+# The embedded skill is written to agents and copied to the marketplace as it is
+server/skills/** text eol=lf
