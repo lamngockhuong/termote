@@ -127,6 +127,8 @@ export default {
   'errors.place_not_supported': 'Not available in a place',
   'errors.prompt_changed': 'The screen changed. Check the dialog again',
   'errors.prompt_expired': 'This dialog was already answered or has expired',
+  'errors.prompt_unsupported_shell':
+    'This shell cannot take a prompt at start (bash, zsh, sh, fish; not on Windows)',
   'errors.psmux_port_taken':
     "Another user's program holds a psmux session's port. See the server log",
   'errors.psmux_ports_unverified':

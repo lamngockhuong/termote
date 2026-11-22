@@ -941,9 +941,12 @@ func (c *cli) agentsStart(args []string) error {
 	if code := r.failure().Code; r.status != http.StatusOK && code != "start_unknown" && code != "starting" {
 		return closeTab(agentsRefusal(r))
 	}
-	if r.status == http.StatusOK && prompt != "" && !startTookPrompt(r) {
-		return fmt.Errorf("the running server is older than this command and started %s in pane %s without the prompt; restart it (termote restart), then start the agent again",
-			kind, plainText(paneID))
+	// Only a 200 says whether the prompt was taken; start_unknown and
+	// starting are followed without claiming it.
+	took := r.status == http.StatusOK && startTookPrompt(r)
+	if r.status == http.StatusOK && prompt != "" && !took {
+		return fmt.Errorf("the running server is older than this command: %s runs in pane %s without the prompt; restart the server (termote restart), then give it the task there (Claude Code: termote agents send %s -)",
+			kind, plainText(paneID), plainText(paneID))
 	}
 	state, err := c.followAgentStart(port, paneID)
 	if err != nil {
@@ -951,7 +954,7 @@ func (c *cli) agentsStart(args []string) error {
 	}
 	dir := dash(plainText(p.cwd()))
 	withPrompt := ""
-	if prompt != "" {
+	if took {
 		withPrompt = " with the prompt"
 	}
 	switch state {

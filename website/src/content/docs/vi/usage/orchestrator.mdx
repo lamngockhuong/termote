@@ -99,7 +99,8 @@ mà không ai phải gõ gì trong terminal; `-` đọc prompt dài từ stdin. 
 vào shell: nó ghi prompt ra một file riêng, và dòng lệnh nó gõ sẽ đọc lại file đó, nên dấu nháy,
 `$(...)`, dấu nháy ngược và các dòng xuống hàng đến agent đúng như đã viết. Cách này chạy với
 `bash`, `zsh`, `sh` và `fish` trên Linux và macOS; tab có shell là PowerShell, và mọi tab trên
-Windows, sẽ từ chối prompt (`prompt_unsupported_shell`) và không chạy gì.
+Windows, sẽ từ chối prompt (`prompt_unsupported_shell`) và không chạy gì. Prompt là tham số dòng
+lệnh của agent, người dùng khác trên cùng máy nhìn thấy được, nên đừng đặt bí mật vào đó.
 
 ## Những việc nó không làm
 

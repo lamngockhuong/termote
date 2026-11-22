@@ -63,7 +63,8 @@ pane no longer runs an agent.
    directory for the workspace (`-`), ask the user which workspace to use; do not guess one.
    The prompt is the agent's first message, handed to it as it starts (Claude Code, Codex and
    OpenCode alike); a long one can come from stdin (`-`). Give every new agent its task this way:
-   Codex and OpenCode cannot be sent a first message with `send`.
+   Codex and OpenCode cannot be sent a first message with `send`. Never put a secret in it: the
+   prompt is the agent's command-line argument, which other local users can see.
 6. **Report plainly.** Tell the user what each agent said, quoting `read` where it matters, and
    what is still open. Keep their decisions theirs.
 

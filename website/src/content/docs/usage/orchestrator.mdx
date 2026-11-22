@@ -102,7 +102,9 @@ without anyone typing in the terminal; `-` reads a long prompt from stdin. Termo
 prompt into the shell: it writes it to a private file and the command line it types reads that
 file back, so quotes, `$(...)`, backticks and line breaks reach the agent as written. That works
 in `bash`, `zsh`, `sh` and `fish` on Linux and macOS; a tab whose shell is PowerShell, and any
-tab on Windows, refuses a prompt (`prompt_unsupported_shell`) and nothing starts.
+tab on Windows, refuses a prompt (`prompt_unsupported_shell`) and nothing starts. The prompt is
+the agent's command-line argument, which other users of the machine can see, so keep secrets out
+of it.
 
 ## What it will not do
 

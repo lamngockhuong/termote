@@ -62,16 +62,18 @@ func (s shellStarter) StartAgent(ctx context.Context, paneID, kind string, args 
 	if err := startShellOK(shell, prompt); err != nil {
 		return "", err
 	}
-	promptFile := ""
+	promptFile, typing := "", false
 	if prompt != "" {
 		if promptFile, err = writeStartPrompt(prompt); err != nil {
 			return "", err
 		}
+		// Once typing began, part of the line may wait in the shell's input
+		// even when the call failed: the file is kept for it.
 		defer func() {
-			if err == nil || errors.Is(err, errStartUnknown) {
+			if typing {
 				time.AfterFunc(startPromptKeep, func() { removeStartPrompt(promptFile) })
 			} else {
-				removeStartPrompt(promptFile) // the line was not typed
+				removeStartPrompt(promptFile) // nothing of the line was typed
 			}
 		}()
 	}
@@ -89,6 +91,7 @@ func (s shellStarter) StartAgent(ctx context.Context, paneID, kind string, args 
 	}
 	line := agentStartLine(resumeShellKind(shell), kind, args, promptFile)
 	name = agentStartName(kind)
+	typing = true
 	err = callStep(ctx, func(ctx context.Context) error { return s.tm.TypeLine(ctx, paneID, line) })
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 		return name, errStartUnknown // part of the line may have been typed

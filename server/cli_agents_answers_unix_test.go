@@ -382,7 +382,7 @@ func TestAgentsStartScripted(t *testing.T) {
 	// With a prompt: it goes in the start's body. A server older than the
 	// command answers without prompt: true (it started the agent without
 	// it); one that took it does.
-	if err := start("go 'now'"); err == nil || !strings.Contains(err.Error(), "older than this command and started claude in pane %2 without the prompt") {
+	if err := start("go 'now'"); err == nil || !strings.Contains(err.Error(), "older than this command: claude runs in pane %2 without the prompt") {
 		t.Errorf("older server: %v", err)
 	}
 	if last := s.posts[len(s.posts)-1]; !strings.Contains(last, `/agent/start {"kind":"claude","prompt":"go 'now'"}`) {

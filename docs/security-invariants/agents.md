@@ -198,15 +198,22 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   quotes, `$()`, backticks, `\'`, line breaks and Unicode. pwsh and Windows PowerShell (no
   substitution that passes a native program one argument whatever it holds), and every shell on
   Windows (`startPromptGOOS`: an agent installed by npm is a `.cmd` shim that cmd.exe reparses, from
-  Git Bash too) → 409 `prompt_unsupported_shell` with nothing sent, not even `C-c`, checked
+  Git Bash too; psmux has no shellStarter, 501 `unsupported` first) → 409 `prompt_unsupported_shell` with nothing sent, not even `C-c`, checked
   before and after the `C-c`; a shell not known at all keeps 409 `unsupported_shell`. The file is
-  deleted at once when the line was not typed, else `startPromptKeep` (35 s) after (`start_unknown`
-  included); each write first deletes the dir's older `prompt-<digits>.txt` regular files a stopped
-  server left. The answer carries `prompt: true`, and `termote agents start` reports a server that
+  deleted at once when typing never began, else `startPromptKeep` (35 s) after (a failed or cut
+  short `TypeLine` included: part of the line may wait in the shell); `serve` at its start and each
+  write delete the dir's `prompt-<digits>.txt` regular files older than that, which a stopped
+  server left. Codex's TUI is told from its daemon by `app-server` only before `--`
+  (`codexProcOf`), so a prompt naming it is still a prompt. The answer carries `prompt: true`, and `termote agents start` reports a server that
   answers without it (older, so it started the agent without the prompt) instead of claiming it
-  sent one. Accepted gaps: a fish without `string collect` (before 3.1) starts the agent with no
-  prompt; the line runs `cat` through `command`, so a `cat` earlier on the user's `PATH` reads the
-  file. `GET` reads the pane
+  sent one (it says so only for a 200; a followed `start_unknown` or `starting` claims nothing).
+  Accepted gaps: the prompt is an argument of the agent for its whole life, so other local users
+  can read it (`/proc/<pid>/cmdline` without `hidepid`, `ps`), unlike a message; the guide and the
+  orchestrator skill say to keep secrets out of it. The agent starts with an empty prompt, while
+  the answer says `prompt: true`, when the file cannot be read when the line runs: a fish without
+  `string collect` (before 3.1), a pane whose shell runs as another user (`su`), or a line that runs
+  more than 35 s after it was typed (typeahead behind a job started after the idle check). The line
+  runs `cat` through `command`, so a `cat` earlier on the user's `PATH` reads the file. `GET` reads the pane
   (`AgentSessionNow`, no cache, then a fresh process walk under the shell, `shellStartProc`, for an
   agent with no session yet: Codex before its first message): an agent of the kind in the
   foreground → `ready`, its status `blocked` (Claude Code's session file, Codex's rollout,
