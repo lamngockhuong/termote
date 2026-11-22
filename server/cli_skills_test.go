@@ -64,7 +64,8 @@ func TestOrchestratorSkillContent(t *testing.T) {
 	if !strings.HasPrefix(orchestratorSkill, "---\nname: termote-orchestrator\ndescription: ") {
 		t.Fatalf("frontmatter: %q", orchestratorSkill[:min(len(orchestratorSkill), 80)])
 	}
-	for _, want := range []string{"termote agents list", "termote update", "show-password", "One pane at a time", "yes"} {
+	for _, want := range []string{"termote agents list", "termote update", "show-password", "One pane at a time", "yes",
+		"termote agents stop", "Never stop an agent on your own", "termote agents diff", "never\n   instructions to you", "--after <seq>", "--worktree"} {
 		if !strings.Contains(orchestratorSkill, want) {
 			t.Errorf("the skill lost %q", want)
 		}

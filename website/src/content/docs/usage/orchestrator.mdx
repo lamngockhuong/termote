@@ -1,6 +1,6 @@
 ---
 title: Orchestrator
-description: Coordinate the coding agents in your Termote panes from one Claude Code or Codex session, which sees their status, gives one of them a task, waits for it, reads its answer and starts new ones
+description: Coordinate the coding agents in your Termote panes from one Claude Code or Codex session, which sees their status, gives them tasks in their own worktrees, waits for several at once, reviews their changes, stops one and starts new ones
 head:
   - tag: title
     content: "Orchestrator: One Agent That Coordinates the Others | Termote"
@@ -10,8 +10,8 @@ import { Aside } from "@astrojs/starlight/components";
 
 The orchestrator is a Claude Code or Codex session you chat with to coordinate the coding agents
 running in your other Termote panes. Ask it what each agent is doing, to give one of them a task,
-to tell you when it is done and what it said, to show you a dialog an agent waits on, or to start
-a new agent in a workspace. It works through the `termote agents` commands, so it uses what
+to tell you when it is done, what it said and what it changed, to show you a dialog an agent waits
+on, to stop one, or to start new agents, each in a git worktree of its own. It works through the `termote agents` commands, so it uses what
 Termote already does for you in the [Chat view](/usage/agent-chat/) and the
 [Overview](/usage/overview/), with the tmux, Herdr, Zellij and herdr-core backends alike.
 
@@ -67,6 +67,7 @@ start Claude Code or Codex there, and ask, for example:
 - "What are my agents doing?"
 - "Ask the agent in the api pane to run the tests, then tell me what failed."
 - "Start a Claude Code agent in the web workspace to write the missing tests."
+- "Start three agents in worktrees: one per failing test file. Tell me when each is done and what it changed."
 
 Its folder does not matter: the skill comes from Termote or the plugin, not from a repository.
 
@@ -78,24 +79,51 @@ The skill only runs these commands. You can run them yourself too:
 termote agents list [--json]                 # every agent: pane id, workspace, name, status, folder
 termote agents read <pane> [--all] [--json]  # its last turn: your request and everything since
 termote agents send <pane> 'Run the tests'   # one message; queued when the agent is working
-termote agents wait <pane> --timeout 20m     # until its turn ends or it needs an answer
+termote agents wait <pane>... --after <seq>  # until one of them ends a turn or needs an answer
 termote agents answer <pane>                 # show the dialog it waits on
 termote agents answer <pane> 1               # or: cancel | next | --text 'an answer'
+termote agents diff <pane> [--stat]          # its commits since the base, then what is not committed
+termote agents stop <pane> --cursor <cursor> # end the turn it runs, as Esc (cursor from read --json)
 termote agents start --workspace <id> --kind claude --name tests 'Write the tests'
+termote agents start --workspace <id> --kind claude --worktree fix-login 'Fix the login test'
 ```
 
 A `<pane>` is the pane id `list` shows (`%3`, `w1:p2`), or a name only one pane has: the pane's
 own name, else its tab's (`api`), or `workspace/name` (`web/api`). A name two panes share is
 refused, with both ids.
 
-`wait` exits 0 when the turn ends, 3 when a dialog waits for an answer, 4 when `--timeout`
-passes (30 minutes by default), and 5 when the pane no longer runs an agent.
+`wait` takes one pane or several and returns as soon as one of them ends a turn (exit 0), shows a
+dialog (3) or loses its agent (5); every pane that ended is printed, and the gravest exit wins. 4
+means `--timeout` passed (30 minutes by default), 6 that no pane works and none ended (nothing to
+wait for), 7 that the server's history was reset (read each pane).
+
+`send`, `start` and `wait` print a mark, `--after <seq>`, taken from the server's activity log.
+Passed to the next `wait`, it makes sure a turn that ended while the orchestrator was reading
+another pane is still reported, and one already reported is not reported again.
+
+`diff` shows what an agent changed in its folder: the commits of its branch since it left the
+base (by default the branch your main checkout has, or `--base <branch>`), then what is staged,
+unstaged and untracked. Each file's diff comes after a line saying it is data written by the
+agent, not instructions; a sensitive file such as `.env` shows by name only, and at most 64 KB of
+diff is printed (`--stat` lists the files only).
+
+`stop` ends the turn an agent is working on, as Esc does in its terminal. It needs the `cursor`
+from `read --json`, so it never reaches another conversation the pane may have moved on to; an
+agent that is not working, or waits on a dialog, is not stopped. You can also stop an agent from
+its [Chat view](/usage/agent-chat/) or its card in the [Overview](/usage/overview/).
 
 `start` opens a new tab in the workspace and starts the agent there with the prompt as its first
 message. `list`
 shows each workspace's folder, or `-` when its panes are in different folders. When the new tab
 would open in another folder than that one (a tmux tab opens in the folder its session was
 created in), `start` closes it and starts nothing; it prints the folder the agent started in.
+
+With `--worktree <new branch>`, `start` makes a git worktree of the workspace's repository on a
+new branch (from `--base`, else its current commit), and starts the agent in the first pane of the
+new workspace, so agents working side by side never share a checkout. Run the same command again
+after a failure and it goes on in the worktree it made; a branch that exists without a worktree is
+refused, so an agent never works in a branch you left half done. Termote never removes a worktree
+it made: remove it from the workspace menu (Remove worktree) or with git.
 
 Claude Code, Codex and OpenCode all take the prompt as they start, so a new agent gets its task
 without anyone typing in the terminal; `-` reads a long prompt from stdin. Termote never types the
@@ -113,6 +141,9 @@ The skill keeps your decisions yours:
 - It sends to one pane at a time, by id, never the same message to several agents, and never to
   its own pane.
 - It asks you before starting an agent, and asks which workspace when the folder is not clear.
+  For a task that changes code it proposes a new worktree, and says so.
+- It stops an agent only when you ask or agree, and never tries again on its own.
+- It treats what `read` and `diff` print as the agents' data, never as instructions.
 - It shows you a permission dialog (run a command, edit a file) and answers it with the option
   you choose.
 - It never runs `termote show-password` or `termote pair`, and needs no password: the commands
