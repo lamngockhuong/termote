@@ -268,10 +268,12 @@ Part of the [security invariants](README.md): Homebrew, release integrity, the w
   `skills install`; `start`, `update` and the server never write to an agent's directory (`update`
   only names a skill it finds installed for another version). It writes `SKILL.md` and the marker
   `.termote-skill.json` into `<agent dir>/skills/termote-orchestrator` (`CLAUDE_CONFIG_DIR` or
-  `~/.claude`, `CODEX_HOME` or `~/.codex`), only for an agent whose dir exists, each file through a
-  temporary file renamed over it. A path of that name without the marker (the user's directory, a
-  file, a symlink) is never written to or removed; `uninstall` removes the directory only when it holds
-  nothing but those two files, else nothing at all. The skill tells the agent to drive panes only
+  `~/.claude`, `CODEX_HOME` or `~/.codex`), only for an agent whose dir exists, the marker first,
+  each file through a temporary file renamed over it, so a run cut short leaves a directory termote
+  still knows. A path of that name without the marker (the user's directory, a file, a symlink) is
+  never written to or removed, an empty directory excepted; `uninstall` removes the directory only
+  when it holds nothing but those two files and termote's temporary files, else nothing at all, the
+  marker last. The skill tells the agent to drive panes only
   through `termote agents`, one pane at a time, to ask the user before `start` and before answering a
   permission, and never to run `termote show-password` or `termote pair`; a test checks those rules
   stay and that every command and flag it names is in `termote help`. The `termote-plugins` job of the

@@ -48,14 +48,17 @@ var (
 	// is given to start before wait reports it done.
 	agentsWaitEvery = 2 * time.Second
 	agentsWaitGrace = 10 * time.Second
+	// agentsWaitFailures snapshot reads in a row that fail end a wait.
+	agentsWaitFailures = 5
 	// agentsStartEvery: how often start follows the agent's start;
 	// agentsSessionWait: how long its prompt waits for the session.
 	agentsStartEvery  = time.Second
 	agentsSessionWait = 15 * time.Second
 )
 
-// agentsReadMax bounds an answer the CLI reads (a transcript tail).
-const agentsReadMax = 8 << 20
+// agentsReadMax bounds an answer the CLI reads: a transcript tail is up to
+// 8 MiB of the file, which JSON escaping can make several times larger.
+var agentsReadMax = 64 << 20
 
 func (c *cli) cmdAgents(args []string) error {
 	if len(args) == 0 {
@@ -121,14 +124,17 @@ func (c *cli) agentsCall(port int, method, path string, body any, timeout time.D
 	resp, out := c.socketRequestWithin(port, method, path, data, timeout)
 	switch out {
 	case socketUnused:
-		return agentsReply{}, fmt.Errorf("termote is not running on port %d (or not natively, with its local socket); start it: termote start", port)
+		return agentsReply{}, fmt.Errorf("termote did not answer on port %d over its local socket: it is not running natively (start it: termote start), or it did not answer in time (check: termote status)", port)
 	case socketMaybeSent:
 		return agentsReply{}, errors.New(socketNoAnswerMsg)
 	}
 	defer resp.Body.Close()
-	b, err := io.ReadAll(io.LimitReader(resp.Body, agentsReadMax))
+	b, err := io.ReadAll(io.LimitReader(resp.Body, int64(agentsReadMax)+1))
 	if err != nil {
 		return agentsReply{}, fmt.Errorf("reading the server's answer: %v", err)
+	}
+	if len(b) > agentsReadMax {
+		return agentsReply{}, fmt.Errorf("the server's answer is larger than %d MB", agentsReadMax>>20)
 	}
 	return agentsReply{status: resp.StatusCode, body: b}, nil
 }
@@ -237,11 +243,20 @@ func resolvePane(s Snapshot, name string) (snapPane, error) {
 			return p, nil
 		}
 	}
-	var found []snapPane
+	// A name counts the panes that run an agent: a shell pane beside an
+	// agent in its tab shares the tab's name without making it ambiguous.
+	// Only a name no agent has falls back to every pane.
+	var found, any []snapPane
 	for _, p := range panes {
 		if p.label() == name || p.ref() == name {
-			found = append(found, p)
+			any = append(any, p)
+			if p.pane.Agent != nil {
+				found = append(found, p)
+			}
 		}
+	}
+	if len(found) == 0 {
+		found = any
 	}
 	switch len(found) {
 	case 0:
@@ -438,7 +453,7 @@ func sinceText(ts string) string {
 	if err != nil {
 		return ""
 	}
-	d := time.Since(t).Round(time.Second)
+	d := max(time.Since(t).Truncate(time.Second), 0)
 	switch {
 	case d < time.Minute:
 		return fmt.Sprintf("%ds", int(d.Seconds()))
@@ -450,9 +465,21 @@ func sinceText(ts string) string {
 	return fmt.Sprintf("%dd", int(d.Hours()/24))
 }
 
-// oneLine is s on one line, cut to max runes.
+// cleanOut is text from the server as the CLI prints it: without control
+// characters other than newline and tab, nor hidden or bidi ones that
+// would reorder what the terminal shows.
+func cleanOut(s string) string {
+	return strings.Map(func(r rune) rune {
+		if hiddenRune(r) {
+			return -1
+		}
+		return r
+	}, cleanText(s))
+}
+
+// clipLine is s on one line, cut to max runes.
 func clipLine(s string, max int) string {
-	s = strings.Join(strings.Fields(cleanText(s)), " ")
+	s = strings.Join(strings.Fields(cleanOut(s)), " ")
 	if utf8.RuneCountInString(s) <= max {
 		return s
 	}
@@ -499,7 +526,7 @@ func (c *cli) agentsRead(args []string) error {
 		if i > 0 {
 			fmt.Fprintln(c.out)
 		}
-		fmt.Fprintf(c.out, "## %s", e.Role)
+		fmt.Fprintf(c.out, "## %s", plainText(e.Role))
 		if e.TS != "" {
 			fmt.Fprintf(c.out, " (%s)", plainText(e.TS))
 		}
@@ -530,7 +557,7 @@ func lastTurn(entries []TranscriptEntry) []TranscriptEntry {
 func partText(p TranscriptPart) string {
 	switch p.Kind {
 	case "text":
-		return cleanText(p.Text)
+		return cleanOut(p.Text)
 	case "thinking":
 		return "(thinking) " + clipLine(p.Text, 300)
 	case "tool":
@@ -650,7 +677,7 @@ func (c *cli) agentsWait(args []string) error {
 	ref, id := plainText(p.ref()), plainText(p.pane.ID)
 	start := time.Now()
 	deadline := start.Add(timeout)
-	worked := false
+	worked, failures := false, 0
 	for {
 		switch st := p.status(); {
 		case st == "blocked":
@@ -673,8 +700,14 @@ func (c *cli) agentsWait(args []string) error {
 		time.Sleep(agentsWaitEvery)
 		s, err := c.agentsSnapshot(port)
 		if err != nil {
+			// A server restarting (an update) or a backend slow for a
+			// moment does not end a long wait; a few failures in a row do.
+			if failures++; failures < agentsWaitFailures {
+				continue
+			}
 			return err
 		}
+		failures = 0
 		now, ok := findAgentPane(s, p.pane.ID)
 		if !ok || now.pane.Agent == nil {
 			fmt.Fprintf(c.out, "%s (%s) no longer runs an agent\n", ref, id)
@@ -771,7 +804,7 @@ func (c *cli) agentsAnswer(args []string) error {
 func (c *cli) printPrompt(p AgentPrompt, paneID string) {
 	fmt.Fprintf(c.out, "Dialog (%s): %s\n", plainText(p.Kind), plainText(p.Title))
 	if p.Body != "" {
-		fmt.Fprintf(c.out, "%s\n", cleanText(p.Body))
+		fmt.Fprintf(c.out, "%s\n", cleanOut(p.Body))
 	}
 	for _, o := range p.Options {
 		mark := ""
@@ -822,6 +855,12 @@ func (c *cli) agentsStart(args []string) error {
 	if _, ok := agentStartArgs[kind]; !ok {
 		return usageError("--kind is claude, codex or opencode")
 	}
+	// Codex has no session before its first message, and an OpenCode
+	// session named at its start is made by that message: neither can be
+	// sent one through termote until it was typed in the terminal.
+	if len(pos) == 1 && kind != "claude" {
+		return usageError("%s takes its first message in the terminal: start it without a prompt, then ask the user to type the first message there", kind)
+	}
 	prompt := ""
 	if len(pos) == 1 {
 		if prompt, err = c.readText(pos[0]); err != nil {
@@ -846,8 +885,9 @@ func (c *cli) agentsStart(args []string) error {
 	if err != nil {
 		return err
 	}
-	// A new tab of the workspace: its shell opens in the workspace's
-	// directory, as a tab opened in the PWA does.
+	// A new tab of the workspace, which opens where the backend opens a
+	// tab of it (tmux: the session's own directory), not necessarily where
+	// its panes are now.
 	r, err := c.agentsCall(port, http.MethodPost, "/api/mux/tabs", map[string]string{"groupId": g.ID, "name": name}, agentsReadTimeout)
 	if err != nil {
 		return err
@@ -864,31 +904,56 @@ func (c *cli) agentsStart(args []string) error {
 	if s, err = c.agentsSnapshot(port); err != nil {
 		return err
 	}
-	paneID := ""
-	for _, p := range snapshotPanes(s) {
-		if p.group.ID == g.ID && p.tab.ID == tab.ID {
-			paneID = p.pane.ID
+	var p snapPane
+	found := false
+	for _, sp := range snapshotPanes(s) {
+		if sp.group.ID == g.ID && sp.tab.ID == tab.ID {
+			p, found = sp, true
 			break
 		}
 	}
-	if paneID == "" {
+	if !found {
 		return fmt.Errorf("the new tab %s is not in the snapshot", plainText(tab.ID))
+	}
+	paneID := p.pane.ID
+	// closeTab removes the new tab when the start was refused for sure, so
+	// a refused start leaves no shell tab behind.
+	closeTab := func(why error) error {
+		c.agentsCall(port, http.MethodDelete, "/api/mux/tabs/"+url.PathEscape(tab.ID)+"?key="+url.QueryEscape(p.tab.Key), nil, agentsReadTimeout)
+		return why
+	}
+	// The folder list showed, and the user agreed to, is where the agent
+	// starts, or nothing starts.
+	if want, got := groupCwd(g), p.cwd(); want != "" && got != "" && want != got {
+		return closeTab(fmt.Errorf("a new tab of %s opens in %s, not in %s where its panes are; nothing was started (ask the user which workspace to use)",
+			plainText(g.Name), plainText(got), plainText(want)))
 	}
 	r, err = c.agentsCall(port, http.MethodPost, panePath(paneID, "/agent/start"), map[string]string{"kind": kind}, agentsStartTimeout)
 	if err != nil {
 		return err
 	}
-	if r.status != http.StatusOK {
-		return agentsRefusal(r)
+	// start_unknown: the server could not tell whether the command was
+	// typed and follows the start as if it was; starting: one is already
+	// under way there. Both are followed, as the PWA does.
+	if code := r.failure().Code; r.status != http.StatusOK && code != "start_unknown" && code != "starting" {
+		return closeTab(agentsRefusal(r))
 	}
 	state, err := c.followAgentStart(port, paneID)
 	if err != nil {
 		return err
 	}
-	if state != startReady {
-		return fmt.Errorf("%s did not start in pane %s (%s)", kind, plainText(paneID), plainText(state))
+	dir := dash(plainText(p.cwd()))
+	switch state {
+	case startReady:
+	case startBlocked:
+		c.infof("Started %s in pane %s (%s, in %s); it waits on a dialog: termote agents answer %s", kind, plainText(paneID), plainText(g.Name), dir, plainText(paneID))
+		return &exitError{code: agentsExitDialog}
+	case startExited:
+		return closeTab(fmt.Errorf("%s did not start in pane %s: its command ended (is it installed?)", kind, plainText(paneID)))
+	default:
+		return fmt.Errorf("%s did not start in pane %s (%s); see: termote agents list", kind, plainText(paneID), plainText(state))
 	}
-	c.infof("Started %s in pane %s (%s)", kind, plainText(paneID), plainText(g.Name))
+	c.infof("Started %s in pane %s (%s, in %s)", kind, plainText(paneID), plainText(g.Name), dir)
 	if prompt == "" {
 		return nil
 	}
@@ -911,9 +976,15 @@ func (c *cli) agentsStart(args []string) error {
 	return nil
 }
 
-// followAgentStart polls the start in paneID until it is final.
+// followAgentStart polls the start in paneID until it is final, a little
+// past the server's own deadline for it.
 func (c *cli) followAgentStart(port int, paneID string) (string, error) {
-	deadline := time.Now().Add(agentStartTimeout + agentStartGrace + 10*time.Second)
+	return c.followAgentStartWithin(port, paneID, agentStartTimeout+agentStartGrace+10*time.Second)
+}
+
+// followAgentStartWithin is followAgentStart giving up after limit.
+func (c *cli) followAgentStartWithin(port int, paneID string, limit time.Duration) (string, error) {
+	deadline := time.Now().Add(limit)
 	for {
 		var st struct {
 			State string `json:"state"`

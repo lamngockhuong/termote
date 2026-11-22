@@ -89,9 +89,14 @@ thì bị từ chối, kèm id của cả hai.
 `wait` thoát với mã 0 khi lượt kết thúc, 3 khi có hộp thoại chờ trả lời, 4 khi hết `--timeout` (mặc
 định 30 phút), và 5 khi pane không còn chạy agent.
 
-`start` mở một tab mới trong workspace, shell của tab bắt đầu ở thư mục của workspace, chạy agent
-ở đó rồi gửi prompt cho nó. `list` hiện thư mục của từng workspace, hoặc `-` khi các pane của nó
-nằm ở những thư mục khác nhau.
+`start` mở một tab mới trong workspace, chạy agent ở đó rồi gửi prompt cho nó. `list` hiện thư
+mục của từng workspace, hoặc `-` khi các pane của nó nằm ở những thư mục khác nhau. Khi tab mới sẽ
+mở ở một thư mục khác thư mục đó (tab tmux mở ở thư mục lúc tạo session), `start` đóng tab và không
+chạy gì; lệnh in ra thư mục mà agent được mở.
+
+Chỉ Claude Code nhận prompt kèm `start`. Codex chưa có phiên trước tin nhắn đầu tiên, còn OpenCode
+tạo phiên bằng chính tin đó, nên cả hai nhận tin đầu tiên trong terminal: mở chúng không kèm
+prompt, gõ tin đầu tiên ở đó, rồi `send` dùng được từ lúc ấy.
 
 ## Những việc nó không làm
 

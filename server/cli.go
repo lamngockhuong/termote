@@ -591,8 +591,10 @@ Options of agents (a <pane> is its id or a name only one pane has):
                              the timeout passes (4, default 30m) or it is gone (5)
   answer <pane> [<n> | cancel | next | --text <answer>]  Show the dialog, or answer it
   start --workspace <id|name> --kind <claude|codex|opencode> [--name <tab name>] [<prompt> | -]
-                             Open a tab in the workspace's directory, start the agent there
-                             and send it the prompt
+                             Open a tab in the workspace (refused when it would open in another
+                             directory than list shows), start the agent there and send it the
+                             prompt (Claude Code only: Codex and OpenCode take their first
+                             message in the terminal)
 
 Options of update:
   --version <X.Y.Z>          Update to a specific version

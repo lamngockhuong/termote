@@ -91,9 +91,14 @@ refused, with both ids.
 `wait` exits 0 when the turn ends, 3 when a dialog waits for an answer, 4 when `--timeout`
 passes (30 minutes by default), and 5 when the pane no longer runs an agent.
 
-`start` opens a new tab in the workspace, whose shell starts in the workspace's folder, starts
-the agent there and sends it the prompt. `list` shows each workspace's folder, or `-` when its
-panes are in different folders.
+`start` opens a new tab in the workspace, starts the agent there and sends it the prompt. `list`
+shows each workspace's folder, or `-` when its panes are in different folders. When the new tab
+would open in another folder than that one (a tmux tab opens in the folder its session was
+created in), `start` closes it and starts nothing; it prints the folder the agent started in.
+
+Only Claude Code takes a prompt with `start`. Codex has no session before its first message, and
+OpenCode makes the session with it, so both take their first message in the terminal: start them
+without a prompt, type the first message there, and `send` works from then on.
 
 ## What it will not do
 

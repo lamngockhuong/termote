@@ -570,5 +570,9 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   `sendToAgent`; an answer that may have been applied (`socketMaybeSent`) is never sent again.
   `answer` sends the `promptId` the server issued with the choice (a number, `cancel`, `next` or
   `{"text"}`), so the server's dialog checks decide. `start` opens a tab in the workspace (no
-  directory from the client: `tabs` takes none) and starts the agent in its pane. Text from the server
-  is printed without control characters (`cleanText`, `plainText`)
+  directory from the client: `tabs` takes none), refuses and closes it when its pane's directory is
+  not the one every pane of the workspace is in (the directory `list` shows, which the user agreed
+  to), and starts the agent in its pane; a definite refusal or a command that ended closes the tab
+  too. A prompt goes with `start` for Claude Code only (Codex and OpenCode have no session to send
+  to before their first message), through `agent/message` like any other. Text from the server
+  is printed without control, hidden or bidi characters (`cleanOut`, `plainText`)

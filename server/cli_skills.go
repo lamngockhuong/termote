@@ -152,23 +152,39 @@ func (c *cli) skillsInstall(args []string) error {
 // installSkill writes a's skill, refusing a directory termote did not write.
 func (c *cli) installSkill(a skillAgent) error {
 	dir := a.skillDir()
-	if _, ok, exists := installedSkill(a); exists && !ok {
+	if _, ok, exists := installedSkill(a); exists && !ok && !emptyDir(dir) {
 		return fmt.Errorf("%s exists and termote did not write it; it is left as it is (rename or remove it to install)", dir)
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
+	// The marker first: an install cut short leaves a directory termote
+	// still knows as its own, which the next install or uninstall finishes.
 	marker, _ := json.Marshal(skillMarker{Version: c.version})
-	if err := writeFileReplace(filepath.Join(dir, "SKILL.md"), []byte(orchestratorSkill)); err != nil {
+	if err := writeFileReplace(filepath.Join(dir, skillMarkerName), append(marker, '\n')); err != nil {
 		return err
 	}
-	return writeFileReplace(filepath.Join(dir, skillMarkerName), append(marker, '\n'))
+	return writeFileReplace(filepath.Join(dir, "SKILL.md"), []byte(orchestratorSkill))
 }
+
+// emptyDir reports whether dir is a directory (not a link) with nothing in
+// it: one termote made and an install left before writing anything.
+func emptyDir(dir string) bool {
+	st, err := os.Lstat(dir)
+	if err != nil || !st.IsDir() {
+		return false
+	}
+	entries, err := os.ReadDir(dir)
+	return err == nil && len(entries) == 0
+}
+
+// skillTempPrefix starts the temporary files writeFileReplace makes.
+const skillTempPrefix = ".tmp-termote-"
 
 // writeFileReplace writes data to path through a temporary file renamed
 // over it, so an agent never reads half a skill.
 func writeFileReplace(path string, data []byte) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-termote-*")
+	tmp, err := os.CreateTemp(filepath.Dir(path), skillTempPrefix+"*")
 	if err != nil {
 		return err
 	}
@@ -242,14 +258,20 @@ func removeSkill(dir string) error {
 		return err
 	}
 	for _, e := range entries {
-		if n := e.Name(); n != "SKILL.md" && n != skillMarkerName {
+		if n := e.Name(); n != "SKILL.md" && n != skillMarkerName && !strings.HasPrefix(n, skillTempPrefix) {
 			return fmt.Errorf("%s holds files termote did not write (%s); it is left as it is", dir, n)
 		}
 	}
-	for _, name := range []string{"SKILL.md", skillMarkerName} {
-		if err := os.Remove(filepath.Join(dir, name)); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return err
+	// The marker last, so a removal cut short is still termote's to finish.
+	for _, e := range entries {
+		if n := e.Name(); n != skillMarkerName {
+			if err := os.Remove(filepath.Join(dir, n)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+				return err
+			}
 		}
+	}
+	if err := os.Remove(filepath.Join(dir, skillMarkerName)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
 	}
 	return os.Remove(dir)
 }

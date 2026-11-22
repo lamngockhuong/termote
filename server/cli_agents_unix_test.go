@@ -205,7 +205,7 @@ func TestAgentsServerNotRunning(t *testing.T) {
 	tc, _ := socketCLI(t)
 	tc.saveConfig(savedConfig{Port: 7998, Password: "secret"})
 	for _, args := range [][]string{{"list"}, {"read", "%1"}, {"send", "%1", "hi"}, {"wait", "%1"}, {"answer", "%1"}, {"start", "--workspace", "w", "--kind", "claude"}} {
-		if err := tc.dispatch("agents", args); err == nil || !strings.Contains(err.Error(), "not running on port 7998") {
+		if err := tc.dispatch("agents", args); err == nil || !strings.Contains(err.Error(), "did not answer on port 7998") {
 			t.Errorf("%v: err = %v", args, err)
 		}
 	}
@@ -401,7 +401,7 @@ func TestAgentsStart(t *testing.T) {
 		t.Errorf("tabs %v starts %v", f.tabs, f.starts)
 	}
 	out := tc.stdout.String()
-	if !strings.Contains(out, "Started claude in pane %t2 (web)") || !strings.Contains(out, "Sent the prompt to pane %t2") || f.pasted[len(f.pasted)-1] != "write tests" {
+	if !strings.Contains(out, "Started claude in pane %t2 (web, in -)") || !strings.Contains(out, "Sent the prompt to pane %t2") || f.pasted[len(f.pasted)-1] != "write tests" {
 		t.Errorf("out %s, pasted %q", out, f.pasted)
 	}
 	// The session shows a moment after the agent is ready: the prompt waits.

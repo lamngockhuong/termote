@@ -18,7 +18,8 @@ Run `termote agents list --json` once at the start.
 - `unknown command: agents`: this termote is older than the orchestrator. Tell the user to update
   it (`termote update`, or `brew upgrade termote && termote restart` for Homebrew) and stop.
 - `termote: command not found`: termote is not installed or not on PATH; tell the user.
-- `not running on port ...`: the server is stopped; ask the user before `termote start`.
+- `did not answer on port ...`: the server is stopped or busy; run `termote status`, and ask the
+  user before `termote start`.
 - `not supported in container mode`: the orchestrator needs termote running natively; say so.
 
 ## Commands
@@ -30,7 +31,8 @@ termote agents send <pane> '<message>'        # or: ... | termote agents send <p
 termote agents wait <pane> [--timeout 20m]    # until its turn ends or it needs an answer
 termote agents answer <pane>                  # show the dialog it waits on
 termote agents answer <pane> <number>         # or: cancel | next | --text '<answer>'
-termote agents start --workspace <id> --kind <claude|codex|opencode> [--name <tab name>] '<prompt>'
+termote agents start --workspace <id> --kind claude [--name <tab name>] '<prompt>'
+termote agents start --workspace <id> --kind <codex|opencode> [--name <tab name>]
 ```
 
 `<pane>` is the pane id from `list` (for example `%12`), or a name only one
@@ -57,8 +59,11 @@ pane no longer runs an agent.
    the terminal.
 5. **Starting an agent needs a yes.** Before `start`, tell the user the workspace, its directory
    (from `list`), the kind and the prompt, and wait for a clear yes. `start` opens a new tab in
-   that workspace's directory. When `list` shows no directory for the workspace (`-`), ask the
-   user which workspace to use; do not guess one.
+   the workspace and refuses, starting nothing, when that tab would open in another directory
+   than the one `list` shows; it prints the directory the agent started in. When `list` shows no
+   directory for the workspace (`-`), ask the user which workspace to use; do not guess one.
+   Only Claude Code takes a prompt with `start`: Codex and OpenCode take their first message in
+   the terminal, so start them without one and ask the user to type it; `send` works after that.
 6. **Report plainly.** Tell the user what each agent said, quoting `read` where it matters, and
    what is still open. Keep their decisions theirs.
 

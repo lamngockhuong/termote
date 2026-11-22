@@ -251,3 +251,74 @@ func TestSkillUpdateHint(t *testing.T) {
 		t.Errorf("hint: %s", out)
 	}
 }
+
+// Writes that fail leave no temporary file and say why.
+func TestSkillsWriteFailures(t *testing.T) {
+	tc := skillsCLI(t, "claude")
+	// skills/ is a file: the directory cannot be made.
+	writeFile(t, filepath.Join(tc.home, ".claude", "skills"), "a file")
+	if err := tc.dispatch("skills", []string{"install"}); exitCode(err) != 1 {
+		t.Errorf("skills is a file: %v", err)
+	}
+	os.Remove(filepath.Join(tc.home, ".claude", "skills"))
+	// SKILL.md is a directory holding a file: it cannot be replaced.
+	dir := claudeSkillDir(tc)
+	writeFile(t, filepath.Join(dir, "SKILL.md", "x"), "x")
+	writeFile(t, filepath.Join(dir, skillMarkerName), `{"version":"0.9.0"}`)
+	if err := tc.dispatch("skills", []string{"install"}); exitCode(err) != 1 {
+		t.Errorf("SKILL.md is a directory: %v", err)
+	}
+	if leftovers, _ := filepath.Glob(filepath.Join(dir, ".tmp-termote-*")); len(leftovers) != 0 {
+		t.Errorf("temporary files left: %v", leftovers)
+	}
+	// The marker is a directory: the skill is written, the marker not.
+	os.RemoveAll(dir)
+	writeFile(t, filepath.Join(dir, skillMarkerName, "x"), "x")
+	if err := installSkillFile(tc, dir); err == nil {
+		t.Error("wrote over a directory")
+	}
+	if err := writeFileReplace(filepath.Join(tc.home, "nope", "f"), []byte("x")); err == nil {
+		t.Error("wrote into a missing directory")
+	}
+	if err := tc.dispatch("skills", []string{"uninstall", "--agent", "vim"}); exitCode(err) != 2 {
+		t.Errorf("uninstall --agent vim: %v", err)
+	}
+}
+
+// installSkillFile writes the skill as install does into dir, a marker
+// already there.
+func installSkillFile(tc *testCLI, dir string) error {
+	return tc.installSkill(skillAgent{id: "claude", label: "Claude Code", dir: filepath.Dir(filepath.Dir(dir))})
+}
+
+func TestRemoveSkillFailures(t *testing.T) {
+	tc := skillsCLI(t, "claude")
+	if err := removeSkill(filepath.Join(tc.home, "missing")); err == nil {
+		t.Error("removed a missing directory")
+	}
+	dir := claudeSkillDir(tc)
+	writeFile(t, filepath.Join(dir, skillMarkerName), `{"version":"1.0.0"}`)
+	writeFile(t, filepath.Join(dir, "SKILL.md", "inside"), "x")
+	if err := tc.dispatch("skills", []string{"uninstall"}); exitCode(err) != 1 || !strings.Contains(tc.stderr.String(), "Claude Code") {
+		t.Errorf("SKILL.md a directory: %v %s", err, tc.stderr)
+	}
+}
+
+// An install or removal cut short is finished by the next run.
+func TestSkillsRecoverFromAnInterruptedRun(t *testing.T) {
+	tc := skillsCLI(t, "claude")
+	dir := claudeSkillDir(tc)
+	// An empty directory: made, then nothing written.
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := tc.dispatch("skills", []string{"install"}); err != nil {
+		t.Fatalf("empty dir: %v %s", err, tc.stderr)
+	}
+	// The marker and a temporary file left by a write cut short.
+	os.Remove(filepath.Join(dir, "SKILL.md"))
+	writeFile(t, filepath.Join(dir, skillTempPrefix+"123"), "half")
+	if err := tc.dispatch("skills", []string{"uninstall"}); err != nil || fileExists(dir) {
+		t.Errorf("uninstall: %v %s", err, tc.stderr)
+	}
+}
