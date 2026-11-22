@@ -114,6 +114,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/overview-screen.tsx`          | Agent overview: every agent's card, own filter, by status      |
 | `pwa/src/components/agent-card.tsx`               | One agent: status age, last text, branch, changes, tokens      |
 | `pwa/src/components/needs-me-queue.tsx`           | Overview: dialogs waiting on the user, answered one at a time  |
+| `pwa/src/components/overview-dispatch.tsx`        | Overview: one message to the agents picked, with each outcome  |
 | `pwa/src/utils/needs-me-queue.ts`                 | The queue's rules: card on top pinned, answers never move on   |
 | `pwa/src/utils/agent-stuck.ts`                    | A working agent quiet past the setting (stuck hint)            |
 | `pwa/src/hooks/use-agent-overview.ts`             | Polls `/api/mux/overview` while the overview shows             |
@@ -448,7 +449,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/hooks/use-tasks.ts`                      | A pane's tasks, Run, the runs polled                           |
 | `pwa/src/hooks/use-task-groups-collapsed.ts`      | Folded Tasks sections, kept per device                         |
 | `pwa/src/utils/task-failure-message.ts`           | A run's output between its markers, made into a message        |
-| `pwa/src/utils/send-to-agent.ts`                  | One message to an agent pane, after its cursor (Tasks, Review) |
+| `pwa/src/utils/send-to-agent.ts`                  | Message to an agent after its cursor: Tasks, Review, Overview  |
 | `pwa/src/utils/review-draft.ts`                   | Review comments: the draft per pane (`sessionStorage`)         |
 | `pwa/src/utils/review-message.ts`                 | A review made into one message, quotes, limits                 |
 | `pwa/src/utils/line-range.ts`                     | Lines picked in a diff, a file or an editor                    |

@@ -82,6 +82,29 @@ export default {
   'tasks.overview.groupTitle': '{noun} {name}',
   'tasks.overview.activePaneOnly':
     'Only the active pane of each window is tracked.',
+  // Sending one message to several agents (components/overview-dispatch.tsx)
+  'tasks.dispatch.select': 'Send a message to several agents',
+  // A card's checkbox: "Pick Claude Code, api / tab"
+  'tasks.dispatch.pick': 'Pick {name}, {place}',
+  'tasks.dispatch.none': 'Pick the agents to send to',
+  'tasks.dispatch.count_one': '{count} agent picked',
+  'tasks.dispatch.count_other': '{count} agents picked',
+  'tasks.dispatch.clear': 'Unpick all',
+  'tasks.dispatch.agents': 'Agents to send to',
+  'tasks.dispatch.remove': 'Unpick {name}, {place}',
+  'tasks.dispatch.field': 'Message for the agents picked',
+  'tasks.dispatch.placeholder': 'One message for every agent picked',
+  'tasks.dispatch.send': 'Send',
+  'tasks.dispatch.sending': 'Sending…',
+  'tasks.dispatch.sendHint': 'Send (Ctrl+Enter)',
+  'tasks.dispatch.sent': 'Sent',
+  // The agent was working: it reads the message when it is done
+  'tasks.dispatch.queued': 'Queued',
+  'tasks.dispatch.failed': 'Not sent: {reason}',
+  'tasks.dispatch.sendFailed': 'the server did not answer',
+  // Read out after a send: "2 of 3 agents took the message"
+  'tasks.dispatch.summary_one': '{ok} of {count} agent took the message',
+  'tasks.dispatch.summary_other': '{ok} of {count} agents took the message',
   // An agent's card (components/agent-card.tsx)
   'tasks.card.context': 'Context',
   'tasks.card.contextValue': '{percent}, {used} of {size} tokens',

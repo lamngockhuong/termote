@@ -49,6 +49,19 @@ Với tmux và psmux, Termote chỉ theo dõi pane đang active của mỗi wind
 window sẽ không có thẻ. Herdr và Zellij theo dõi mọi pane.
 </Aside>
 
+## Gửi một tin tới nhiều agent
+
+Nút danh sách có dấu tích trên header bật chế độ chọn: thẻ của mỗi agent nhận được tin từ Termote
+(Claude Code, Codex và OpenCode, những agent có ô soạn tin trong Chat view) hiện thêm một ô chọn, và
+một thanh gửi mở ra ở đáy màn hình. Chọn các agent, gõ tin rồi bấm **Gửi** (hoặc `Ctrl+Enter`,
+`⌘+Enter` trên Mac). Mỗi agent nhận tin như khi bạn gõ trong Chat view của chính nó.
+
+Sau đó, cạnh mỗi agent thanh gửi ghi **Đã gửi**, **Đã xếp hàng** (agent đang làm việc và sẽ đọc tin
+khi xong) hoặc **Chưa gửi được** kèm lý do. Agent đã nhận tin được bỏ chọn. Nếu có agent lỗi, tin vẫn
+nằm trong ô và chỉ agent đó còn được chọn, nên bấm **Gửi** lần nữa chỉ gửi tới nó, các agent khác
+không nhận trùng. Agent có pane bị đóng cũng được bỏ chọn. Bấm lại nút danh sách để thoát chế độ
+chọn. [Thiết bị chỉ xem](/vi/usage/devices/#chỉ-xem) không có nút này.
+
 ## Context và hạn mức
 
 Với Claude Code, cửa sổ theo model đang chạy, đúng như transcript ghi lúc bắt đầu và mỗi lần đổi bằng

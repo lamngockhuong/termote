@@ -127,6 +127,18 @@ interface Props {
   highlighted?: boolean
 }
 
+// What a card calls its agent: the product's name, else what the server
+// reported, shown safe
+export function agentCardName(
+  pane: SessionPane,
+  t: Translate<MessageKey>,
+): string {
+  const label = agentLabel(pane.agentName)
+  return label === 'agent'
+    ? visibleUnsafe(pane.agentName || t('tasks.agent'))
+    : label
+}
+
 // One agent of the overview: its status and how long it has been in it,
 // where it runs, its last message, its branch and changed files, and how
 // full its context is. The whole card opens the pane.
@@ -157,11 +169,7 @@ export const AgentCard = memo(function AgentCard({
   const subagentCount = hasSubagents
     ? subagentSummary(subagents.tree, t)
     : undefined
-  const label = agentLabel(pane.agentName)
-  const name =
-    label === 'agent'
-      ? visibleUnsafe(pane.agentName || t('tasks.agent'))
-      : label
+  const name = agentCardName(pane, t)
   const place = visibleUnsafe(where)
   const openLabel = opensChat
     ? t('tasks.card.openChat')
