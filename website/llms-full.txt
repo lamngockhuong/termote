@@ -3108,9 +3108,9 @@ A `<pane>` is the pane id `list` shows (`%3`, `w1:p2`), or a name only one pane 
 
 `wait` exits 0 when the turn ends, 3 when a dialog waits for an answer, 4 when `--timeout` passes (30 minutes by default), and 5 when the pane no longer runs an agent.
 
-`start` opens a new tab in the workspace, starts the agent there and sends it the prompt. `list` shows each workspace’s folder, or `-` when its panes are in different folders. When the new tab would open in another folder than that one (a tmux tab opens in the folder its session was created in), `start` closes it and starts nothing; it prints the folder the agent started in.
+`start` opens a new tab in the workspace and starts the agent there with the prompt as its first message. `list` shows each workspace’s folder, or `-` when its panes are in different folders. When the new tab would open in another folder than that one (a tmux tab opens in the folder its session was created in), `start` closes it and starts nothing; it prints the folder the agent started in.
 
-Only Claude Code takes a prompt with `start`. Codex has no session before its first message, and OpenCode makes the session with it, so both take their first message in the terminal: start them without a prompt, type the first message there, and `send` works from then on.
+Claude Code, Codex and OpenCode all take the prompt as they start, so a new agent gets its task without anyone typing in the terminal; `-` reads a long prompt from stdin. Termote never types the prompt into the shell: it writes it to a private file and the command line it types reads that file back, so quotes, `$(...)`, backticks and line breaks reach the agent as written. That works in `bash`, `zsh`, `sh` and `fish` on Linux and macOS; a tab whose shell is PowerShell, and any tab on Windows, refuses a prompt (`prompt_unsupported_shell`) and nothing starts. The prompt is the agent’s command-line argument, which other users of the machine can see, so keep secrets out of it.
 
 ## What it will not do
 
