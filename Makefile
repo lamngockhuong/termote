@@ -1,7 +1,7 @@
 # Termote Makefile
 # Usage: make <target>
 
-.PHONY: help build build-pwa build-api test test-go test-hc test-cli test-install test-homebrew-formula test-entrypoints test-herdr-plugin test-git-hooks test-site-installs start container-up container-down uninstall health clean release release-dry fmt fmt-check brand-assets llms claude-chat-tags codex-chat-items
+.PHONY: help build build-pwa build-api test test-go test-hc test-cli test-install test-homebrew-formula test-termote-plugins test-entrypoints test-herdr-plugin test-git-hooks test-site-installs start container-up container-down uninstall health clean release release-dry fmt fmt-check brand-assets llms claude-chat-tags codex-chat-items
 
 # Default target
 help:
@@ -23,6 +23,7 @@ help:
 	@echo "  make test-cli          Test the termote.sh shim"
 	@echo "  make test-install      Test the install.sh online installer"
 	@echo "  make test-homebrew-formula Test the Homebrew formula generator"
+	@echo "  make test-termote-plugins Test the plugin marketplace generator"
 	@echo "  make test-entrypoints  Test entrypoint scripts"
 	@echo "  make test-herdr-plugin Test the Herdr plugin launcher"
 	@echo "  make test-git-hooks    Test the git hooks installer (prepare)"
@@ -73,7 +74,7 @@ container-down:
 	./scripts/termote.sh container down
 
 # Test targets
-test: test-go test-cli test-install test-homebrew-formula test-entrypoints test-herdr-plugin test-git-hooks test-site-installs
+test: test-go test-cli test-install test-homebrew-formula test-termote-plugins test-entrypoints test-herdr-plugin test-git-hooks test-site-installs
 	@echo ""
 	@echo "All tests completed!"
 
@@ -96,6 +97,10 @@ test-install:
 test-homebrew-formula:
 	@chmod +x tests/test-homebrew-formula.sh
 	@./tests/test-homebrew-formula.sh
+
+test-termote-plugins:
+	@chmod +x tests/test-termote-plugins.sh
+	@./tests/test-termote-plugins.sh
 
 test-entrypoints:
 	@chmod +x tests/test-entrypoints.sh

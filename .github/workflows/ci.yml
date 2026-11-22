@@ -1165,6 +1165,9 @@ jobs:
       - name: Run Homebrew formula generator tests
         run: ./tests/test-homebrew-formula.sh
 
+      - name: Run plugin marketplace generator tests
+        run: ./tests/test-termote-plugins.sh
+
       - name: Run entrypoint tests
         run: ./tests/test-entrypoints.sh
 

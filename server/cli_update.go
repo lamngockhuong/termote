@@ -131,6 +131,7 @@ func (c *cli) cmdUpdate(args []string) error {
 	if sup == nil {
 		c.pruneVersions()
 		c.infof("Updated to v%s. Start it with: termote start", target)
+		c.skillUpdateHint(target)
 		return nil
 	}
 	saved, _ := c.loadConfig()
@@ -142,6 +143,7 @@ func (c *cli) cmdUpdate(args []string) error {
 	if err := c.restartAndCheck(sup, port, user, pass, target); err == nil {
 		c.pruneVersions()
 		c.infof("Updated to v%s (%s); config unchanged", target, sup.Name())
+		c.skillUpdateHint(target)
 		return nil
 	} else {
 		c.errorf("v%s did not come up: %v", target, err)

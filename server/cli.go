@@ -274,6 +274,8 @@ func (c *cli) dispatch(cmd string, args []string) error {
 		return c.cmdSettings(args)
 	case "agents":
 		return c.cmdAgents(args)
+	case "skills":
+		return c.cmdSkills(args)
 	case "menu":
 		return c.cmdMenu()
 	case "version", "-v", "--version":
@@ -512,6 +514,8 @@ Commands:
                        propose <json|-> shows a change the user applies in the PWA
   agents <cmd>         The coding agents in the panes, for an agent that coordinates them
                        (native only): list, read, send, wait, answer, start (see below)
+  skills <cmd>         The orchestrator skill for Claude Code and Codex, embedded here:
+                       install, uninstall [--agent claude|codex|all], status [--json]
   version              Show version
   help agent           A guide for coding agents that install and run termote
   serve                Run the server in the foreground (what the service runs)
