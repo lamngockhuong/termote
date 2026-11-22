@@ -308,6 +308,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/agent_commands*.go`                       | `agent/commands`: custom commands, skills (Codex: `$` skills)  |
 | `server/agent_start.go`                           | `agent/start`: starts an agent in an idle Herdr pane           |
 | `server/agent_start_shell.go`                     | `agent/start` on tmux, Zellij, hc: types the agent's line      |
+| `server/agent_start_prompt.go`                    | A start's prompt: written to a file the typed line reads back  |
 | `server/agent_history.go`                         | `agent/history`: sessions of a pane's root, index, pages       |
 | `server/agent_history_claude.go`                  | History: Claude Code project dirs, titles, cwd, branch         |
 | `server/agent_history_codex.go`                   | History: Codex rollouts by day, `session_index.jsonl` names    |

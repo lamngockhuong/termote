@@ -379,15 +379,23 @@ func TestAgentsStartScripted(t *testing.T) {
 	if err := start(); err != nil || polls != 3 || !strings.Contains(tc.stdout.String(), "Started claude in pane %2 (w, in -)") {
 		t.Errorf("ready: %v after %d polls %s", err, polls, tc.stdout)
 	}
-	// With a prompt: refused, then queued.
-	s.set("GET /api/mux/panes/%2/agent/transcript", answer(http.StatusOK, okTranscript))
-	s.set("POST /api/mux/panes/%2/agent/message", answer(http.StatusConflict, `{"error":"x","code":"input_busy"}`))
-	if err := start("go"); err == nil || !strings.Contains(err.Error(), "the agent started in pane %2, but the prompt was not sent") {
-		t.Errorf("prompt refused: %v", err)
+	// With a prompt: it goes in the start's body. A server older than the
+	// command answers without prompt: true (it started the agent without
+	// it); one that took it does.
+	if err := start("go 'now'"); err == nil || !strings.Contains(err.Error(), "older than this command and started claude in pane %2 without the prompt") {
+		t.Errorf("older server: %v", err)
 	}
-	s.set("POST /api/mux/panes/%2/agent/message", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusAccepted) })
-	if err := start("go"); err != nil || !strings.Contains(tc.stdout.String(), "Queued the prompt for pane %2") {
-		t.Errorf("queued: %v %s", err, tc.stdout)
+	if last := s.posts[len(s.posts)-1]; !strings.Contains(last, `/agent/start {"kind":"claude","prompt":"go 'now'"}`) {
+		t.Errorf("start body: %s", last)
+	}
+	s.set("POST /api/mux/panes/%2/agent/start", answer(http.StatusOK, `{"ok":true,"state":"starting","prompt":true}`))
+	if err := start("go"); err != nil || !strings.Contains(tc.stdout.String(), "Started claude in pane %2 (w, in -) with the prompt") {
+		t.Errorf("with the prompt: %v %s", err, tc.stdout)
+	}
+	for _, p := range s.posts {
+		if strings.Contains(p, "/agent/message") {
+			t.Errorf("the prompt was sent as a message: %v", s.posts)
+		}
 	}
 }
 
@@ -472,12 +480,6 @@ func TestAgentsStartChecks(t *testing.T) {
 	start := func(args ...string) error {
 		tc.stdout.Reset()
 		return tc.dispatch("agents", append([]string{"start", "--workspace", "w"}, args...))
-	}
-	// Codex and OpenCode take their first message in the terminal.
-	for _, kind := range []string{"codex", "opencode"} {
-		if err := start("--kind", kind, "do it"); exitCode(err) != 2 || !strings.Contains(err.Error(), "first message in the terminal") {
-			t.Errorf("%s with a prompt: %v", kind, err)
-		}
 	}
 	// The new tab opens elsewhere than the workspace's panes: closed, nothing started.
 	closed := startScript(t, s, "/home/u")

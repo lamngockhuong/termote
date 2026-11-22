@@ -22,11 +22,12 @@ func shortStart(t *testing.T) {
 	agentStartCallTimeout = 300 * time.Millisecond
 	// The route's behaviour, not the Windows idle check
 	// (TestHerdrPaneIdleShellWindows, TestAgentStartWindowsBusyChild)
-	goos := herdrStartGOOS
-	herdrStartGOOS = "linux"
+	// and a prompt where the OS takes one (TestShellAgentStartPromptShellRefused)
+	goos, promptGOOS := herdrStartGOOS, startPromptGOOS
+	herdrStartGOOS, startPromptGOOS = "linux", "linux"
 	t.Cleanup(func() {
 		agentStartIdleWait, agentStartIdlePoll, agentStartClearWait, agentStartCallTimeout = idle, poll, clear, call
-		herdrStartGOOS = goos
+		herdrStartGOOS, startPromptGOOS = goos, promptGOOS
 	})
 }
 
@@ -659,7 +660,7 @@ func TestAgentStartGuards(t *testing.T) {
 	if rec := serve(h, get); rec.Code != http.StatusForbidden {
 		t.Errorf("cross-site GET: %d", rec.Code)
 	}
-	big := `{"kind":"claude","pad":"` + strings.Repeat("a", maxJSONBody) + `"}`
+	big := `{"kind":"claude","pad":"` + strings.Repeat("a", agentMessageBody) + `"}`
 	if rec := serve(h, apiRequest(http.MethodPost, startPath, big)); rec.Code != http.StatusRequestEntityTooLarge && rec.Code != http.StatusBadRequest {
 		t.Errorf("large body: %d", rec.Code)
 	}
@@ -682,5 +683,75 @@ func TestHerdrAgentStartStatePaneGone(t *testing.T) {
 	state, err := m.AgentStartState(t.Context(), startPane, "claude-start", "claude", agentStartSettle)
 	if err != nil || state != startExited {
 		t.Errorf("state with the pane gone = %q, %v", state, err)
+	}
+}
+
+// A start with a prompt does not go through agent.start (Herdr's quoting is
+// not safe for fish nor PowerShell, and it refuses a line break): the server
+// types the line itself, in the pane's shell's syntax, the prompt read from
+// its file, and follows the start by pane, not by an alias.
+func TestAgentStartPromptOnHerdr(t *testing.T) {
+	for _, c := range []struct{ shell, words string }{
+		{"bash", `claude -- "$(command cat -- `},
+		{"fish", `claude -- (command cat -- `},
+	} {
+		t.Run(c.shell, func(t *testing.T) {
+			dir := useStartPromptDir(t, "start-prompts")
+			f := newFakeHerdr(t)
+			f.mu.Lock()
+			f.procs = map[string]any{startPane: fakeProcessInfo(startPane, 100, 100, fakeProc(100, c.shell, c.shell))}
+			f.mu.Unlock()
+			h, _ := startHandler(t, f)
+			setShellStartProc(t, "")
+			status, code, body := postStart(t, h, `{"kind":"claude","prompt":"two\nlines 'x' \\ $(y)"}`)
+			if status != http.StatusOK || body["prompt"] != true {
+				t.Fatalf("POST = %d %q %v", status, code, body)
+			}
+			files := startPromptFiles(t, dir)
+			if len(files) != 1 {
+				t.Fatalf("files = %q", files)
+			}
+			calls := startCalls(f)
+			if slices.Contains(calls, "agent.start") || slices.Contains(calls, "agent.get") {
+				t.Errorf("calls = %q", calls)
+			}
+			line := "pane.send_text " + c.words + shellQuote(resumeShellKind(c.shell), files[0])
+			if !slices.ContainsFunc(calls, func(s string) bool { return strings.HasPrefix(s, line) && strings.HasSuffix(s, "\r") }) {
+				t.Errorf("calls = %q, want %q", calls, line)
+			}
+			if slices.ContainsFunc(calls, func(s string) bool { return strings.Contains(s, "lines") }) {
+				t.Errorf("the prompt was typed: %q", calls)
+			}
+			// Followed by pane: the agent's process under the shell.
+			if status, body := getStart(t, h); status != http.StatusOK || body["state"] != "starting" {
+				t.Errorf("GET = %d %v", status, body)
+			}
+			setShellStartProc(t, "claude")
+			if status, body := getStart(t, h); status != http.StatusOK || body["state"] != "ready" || body["kind"] != "claude" {
+				t.Errorf("GET = %d %v", status, body)
+			}
+			if slices.Contains(startCalls(f), "agent.get") {
+				t.Errorf("followed through agent.get: %q", startCalls(f))
+			}
+		})
+	}
+}
+
+// PowerShell gets nothing for a prompt on Herdr either.
+func TestAgentStartPromptOnHerdrPwsh(t *testing.T) {
+	dir := useStartPromptDir(t, "start-prompts")
+	f := newFakeHerdr(t)
+	f.mu.Lock()
+	f.procs = map[string]any{startPane: fakeProcessInfo(startPane, 100, 100, fakeProc(100, "pwsh", "pwsh"))}
+	f.mu.Unlock()
+	h, _ := startHandler(t, f)
+	if status, code, _ := postStart(t, h, `{"kind":"claude","prompt":"hi"}`); status != http.StatusConflict || code != "prompt_unsupported_shell" {
+		t.Fatalf("POST = %d %q", status, code)
+	}
+	if calls := startCalls(f); slices.ContainsFunc(calls, func(c string) bool { return c != "pane.process_info" }) {
+		t.Errorf("calls = %q", calls)
+	}
+	if files := startPromptFiles(t, dir); len(files) != 0 {
+		t.Errorf("files = %q", files)
 	}
 }

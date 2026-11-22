@@ -2030,7 +2030,11 @@ func splitUTF8(b []byte, max int) [][]byte {
 // a continuation prompt, a heredoc or a read would otherwise take the
 // command), checks the shell again, then asks Herdr (agent.start) to type
 // the command line. A refusal from Herdr itself comes after the C-c.
-func (m *herdrMux) StartAgent(ctx context.Context, paneID, kind string, args []string) (string, error) {
+func (m *herdrMux) StartAgent(ctx context.Context, paneID, kind string, args []string, prompt string) (string, error) {
+	// A prompt goes through the shellStarter (agentAPI.starterOf), never here.
+	if prompt != "" {
+		return "", errors.New("a prompt is not handed to agent.start")
+	}
 	idle, err := m.waitIdleShell(ctx, paneID, agentStartIdleWait)
 	if err != nil || !idle {
 		return "", cmp.Or(err, error(errStartPaneBusy))
