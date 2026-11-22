@@ -28,6 +28,9 @@ type agentsFake struct {
 	tabs    []string // NewTab calls
 	starts  []string // StartAgent calls, as pane/kind
 	prompts []string // their prompts
+	newTabs []bool   // their newTab
+	// interrupts: C-c sent by a start through the shell path
+	interrupts int
 	// typed: lines typed by a start with a prompt (the shell path), as
 	// pane + " " + line; promptText: the prompt files' text then.
 	typed      []string
@@ -92,9 +95,10 @@ func (f *agentsFake) requirePane(_ context.Context, id string) (Size, error) {
 	return Size{Cols: 80, Rows: 24}, nil
 }
 
-func (f *agentsFake) StartAgent(_ context.Context, paneID, kind string, _ []string, prompt string) (string, error) {
+func (f *agentsFake) StartAgent(_ context.Context, paneID, kind string, _ []string, prompt string, newTab bool) (string, error) {
 	f.starts = append(f.starts, paneID+"/"+kind)
 	f.prompts = append(f.prompts, prompt)
+	f.newTabs = append(f.newTabs, newTab)
 	f.setStatus(paneID, "idle")
 	return "termote-" + kind + "-1", nil
 }
@@ -107,8 +111,16 @@ func (f *agentsFake) NewTaskTab(context.Context, string, string, string) (taskTa
 func (f *agentsFake) IdleShell(context.Context, string) (string, int, bool, error) {
 	return "zsh", 1, true, nil
 }
-func (f *agentsFake) Interrupt(context.Context, string) error                   { return nil }
-func (f *agentsFake) ReadTaskText(context.Context, string, int) (string, error) { return "", nil }
+func (f *agentsFake) Interrupt(context.Context, string) error {
+	f.snapMu.Lock()
+	defer f.snapMu.Unlock()
+	f.interrupts++
+	return nil
+}
+
+// ReadTaskText: a prompt that does not change, so a new tab's shell is
+// ready at the second read.
+func (f *agentsFake) ReadTaskText(context.Context, string, int) (string, error) { return "% ", nil }
 func (f *agentsFake) TypeLine(_ context.Context, target, line string) error {
 	f.snapMu.Lock()
 	defer f.snapMu.Unlock()
@@ -441,6 +453,10 @@ func TestAgentsStart(t *testing.T) {
 	if !slices.Equal(f.promptText, []string{"write 'tests'"}) || len(f.pasted) != 0 {
 		t.Errorf("prompt %q, pasted %q", f.promptText, f.pasted)
 	}
+	// The tab is new: its shell may still run its rc files, so no C-c.
+	if f.interrupts != 0 {
+		t.Errorf("C-c sent to the new tab %d times", f.interrupts)
+	}
 	if out := tc.stdout.String(); !strings.Contains(out, "Started claude in pane %t2 (web, in -) with the prompt") {
 		t.Errorf("out %s", out)
 	}
@@ -470,6 +486,9 @@ func TestAgentsStart(t *testing.T) {
 	if err := tc.dispatch("agents", []string{"start", "--workspace", "web", "--kind", "claude"}); err != nil ||
 		len(f.starts) != 1 || f.prompts[0] != "" || strings.Contains(tc.stdout.String(), "with the prompt") {
 		t.Errorf("no prompt: %v starts %v prompts %q %s", err, f.starts, f.prompts, tc.stdout)
+	}
+	if !slices.Equal(f.newTabs, []bool{true}) {
+		t.Errorf("newTab %v, want the new tab told", f.newTabs)
 	}
 	// A start that does not become ready.
 	f.state = startExited

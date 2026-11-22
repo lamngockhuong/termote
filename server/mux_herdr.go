@@ -2029,14 +2029,22 @@ func splitUTF8(b []byte, max int) [][]byte {
 // (launchPending), clears the input line with C-c (half-typed text,
 // a continuation prompt, a heredoc or a read would otherwise take the
 // command), checks the shell again, then asks Herdr (agent.start) to type
-// the command line. A refusal from Herdr itself comes after the C-c.
-func (m *herdrMux) StartAgent(ctx context.Context, paneID, kind string, args []string, prompt string) (string, error) {
+// the command line. A refusal from Herdr itself comes after the C-c. A
+// newTab pane gets no C-c (its shell may still run its rc files, and the
+// C-c would cut them short, PATH included): Herdr is asked once its prompt
+// shows and its text stopped changing.
+func (m *herdrMux) StartAgent(ctx context.Context, paneID, kind string, args []string, prompt string, newTab bool) (string, error) {
 	// A prompt goes through the shellStarter (agentAPI.starterOf), never here.
 	if prompt != "" {
 		return "", errors.New("a prompt is not handed to agent.start")
 	}
-	idle, err := m.waitIdleShell(ctx, paneID, agentStartIdleWait)
-	if err != nil || !idle {
+	var idle bool
+	var err error
+	if newTab {
+		if _, err = waitNewTabShell(ctx, m, paneID); err != nil {
+			return "", herdrStartError(err)
+		}
+	} else if idle, err = m.waitIdleShell(ctx, paneID, agentStartIdleWait); err != nil || !idle {
 		return "", cmp.Or(err, error(errStartPaneBusy))
 	}
 	var pending bool
@@ -2046,19 +2054,21 @@ func (m *herdrMux) StartAgent(ctx context.Context, paneID, kind string, args []s
 	}); err != nil || pending {
 		return "", cmp.Or(err, error(errStartPending))
 	}
-	if err := m.callStep(ctx, func(ctx context.Context) error { return m.typeInput(ctx, paneID, agentKeys["C-c"]) }); err != nil {
-		return "", err
-	}
-	select {
-	case <-time.After(agentStartClearWait):
-	case <-ctx.Done():
-		return "", ctx.Err()
-	}
-	// The shell redraws its prompt after the C-c, and a prompt can run a
-	// program (git for the branch): on Windows that child reads as busy for
-	// a moment, so the check waits as the first one does.
-	if idle, err = m.waitIdleShell(ctx, paneID, agentStartIdleWait); err != nil || !idle {
-		return "", cmp.Or(err, error(errStartPaneBusy))
+	if !newTab {
+		if err := m.callStep(ctx, func(ctx context.Context) error { return m.typeInput(ctx, paneID, agentKeys["C-c"]) }); err != nil {
+			return "", err
+		}
+		select {
+		case <-time.After(agentStartClearWait):
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+		// The shell redraws its prompt after the C-c, and a prompt can run a
+		// program (git for the branch): on Windows that child reads as busy
+		// for a moment, so the check waits as the first one does.
+		if idle, err = m.waitIdleShell(ctx, paneID, agentStartIdleWait); err != nil || !idle {
+			return "", cmp.Or(err, error(errStartPaneBusy))
+		}
 	}
 	if args == nil {
 		args = []string{}

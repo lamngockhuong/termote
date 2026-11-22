@@ -98,9 +98,12 @@ type agentStarter interface {
 	requirePane(ctx context.Context, id string) (Size, error)
 	// StartAgent clears the pane's input line and asks the backend to start
 	// kind with args, and prompt as its first message when not empty, under
-	// an alias it picks, which it returns. ctx bounds the whole start; each
-	// backend call gets its own agentStartCallTimeout.
-	StartAgent(ctx context.Context, paneID, kind string, args []string, prompt string) (name string, err error)
+	// an alias it picks, which it returns. A newTab pane (the client just
+	// made its tab) is not cleared: its shell may still run its rc files,
+	// which the C-c would cut short; its prompt is waited for instead
+	// (waitTaskShell with settle). ctx bounds the whole start; each backend
+	// call gets its own agentStartCallTimeout.
+	StartAgent(ctx context.Context, paneID, kind string, args []string, prompt string, newTab bool) (name string, err error)
 	// AgentStartState reads how the start of the agent named name, made
 	// elapsed ago in paneID, is going: one of the start states, never
 	// startTimeout (the caller decides).
@@ -222,11 +225,16 @@ func (a *agentAPI) startAgent(w http.ResponseWriter, r *http.Request) {
 	if !requireWriteRole(w, r) {
 		return
 	}
-	// Only kind and the prompt are read: arguments and the alias are the
-	// server's, and the prompt is never typed (agent_start_prompt.go).
+	// Only kind, the prompt and newTab are read: arguments and the alias
+	// are the server's, and the prompt is never typed
+	// (agent_start_prompt.go). newTab: the client made the pane's tab just
+	// before (termote agents start), so there is nothing to clear and the
+	// C-c is left out; it lets a client skip only that C-c, and one that
+	// can start an agent can type into the pane anyway.
 	var body struct {
 		Kind   string `json:"kind"`
 		Prompt string `json:"prompt"`
+		NewTab bool   `json:"newTab"`
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, agentMessageBody)
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -277,6 +285,9 @@ func (a *agentAPI) startAgent(w http.ResponseWriter, r *http.Request) {
 	// The pane's lock is the one message and answer take (Herdr's
 	// AgentSession.Target is the pane id).
 	work := 2*agentStartIdleWait + agentStartClearWait + 4*agentStartCallTimeout
+	if body.NewTab {
+		work += taskNewShellWait // the wait for a new shell's prompt
+	}
 	holdForLock(w)
 	unlock, err := a.input.lockWithin(r.Context(), paneID, agentRequestMost-work)
 	if err != nil {
@@ -300,7 +311,7 @@ func (a *agentAPI) startAgent(w http.ResponseWriter, r *http.Request) {
 	// Recorded before Herdr is asked, so a GET while the POST runs (which
 	// can take seconds) reports it starting rather than no_start.
 	a.starts.put(paneID, pendingStart{kind: body.Kind, started: time.Now(), state: startStarting, shell: viaShell})
-	name, err := st.StartAgent(ctx, paneID, body.Kind, args, prompt)
+	name, err := st.StartAgent(ctx, paneID, body.Kind, args, prompt, body.NewTab)
 	switch {
 	case err == nil || errors.Is(err, errStartUnknown):
 		a.starts.put(paneID, pendingStart{kind: body.Kind, name: name, started: time.Now(), state: startStarting, shell: viaShell})
