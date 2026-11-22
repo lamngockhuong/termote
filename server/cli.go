@@ -587,8 +587,12 @@ Options of agents (a <pane> is its id or a name only one pane has):
   list [--json]              Every agent with its workspace, status and directory
   read <pane> [--all] [--json]  The last turn of its conversation (--all: every entry read)
   send <pane> <text | ->     Send one message; queued when the agent is working
-  wait <pane> [--timeout <duration>]  Until its turn ends (exit 0), a dialog waits (3),
-                             the timeout passes (4, default 30m) or it is gone (5)
+  wait <pane>... [--after <seq>] [--timeout <duration>]  Until one of the panes ends a turn
+                             (exit 0), shows a dialog (3) or loses its agent (5) after the mark
+                             send, start and wait print (--after; default: now); every pane that
+                             ended is printed, the gravest exit wins. 4: the timeout passed
+                             (default 30m); 6: nothing works, nothing to wait for; 7: the
+                             history was reset (read each pane)
   answer <pane> [<n> | cancel | next | --text <answer>]  Show the dialog, or answer it
   start --workspace <id|name> --kind <claude|codex|opencode> [--name <tab name>] [<prompt> | -]
                              Open a tab in the workspace (refused when it would open in another

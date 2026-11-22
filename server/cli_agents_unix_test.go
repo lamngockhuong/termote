@@ -312,7 +312,7 @@ func TestAgentsSend(t *testing.T) {
 	if err := tc.dispatch("agents", []string{"send", "ui", "hello\x1b[2J there"}); err != nil {
 		t.Fatalf("%v (%s)", err, tc.stderr)
 	}
-	if len(f.pasted) != 1 || f.pasted[0] != "hello[2J there" || !strings.Contains(tc.stdout.String(), "Sent to web/ui (%2)") {
+	if len(f.pasted) != 1 || f.pasted[0] != "hello[2J there" || !strings.Contains(tc.stdout.String(), "Sent to web/ui (%2); wait for it: termote agents wait %2 --after ") {
 		t.Errorf("pasted %q, out %s", f.pasted, tc.stdout)
 	}
 	// From standard input.
@@ -359,6 +359,16 @@ func shortWait(t *testing.T) {
 	t.Cleanup(func() { agentsWaitEvery, agentsWaitGrace = every, grace })
 }
 
+// waitMark is the mark a wait that found nothing to wait for printed.
+func waitMark(t *testing.T, out string) string {
+	t.Helper()
+	i := strings.LastIndex(out, "next wait starts after ")
+	if i < 0 {
+		t.Fatalf("no mark in %q", out)
+	}
+	return strings.Fields(out[i+len("next wait starts after "):])[0]
+}
+
 func TestAgentsWait(t *testing.T) {
 	shortWait(t)
 	tc, f := agentsTest(t, lines(0, 1))
@@ -367,28 +377,95 @@ func TestAgentsWait(t *testing.T) {
 	if err := tc.dispatch("agents", []string{"wait", "%2"}); err != nil || !strings.Contains(tc.stdout.String(), "is done") {
 		t.Errorf("done: %v %s", err, tc.stdout)
 	}
-	// Idle and never starting: done after the grace.
+	// Idle and never starting: nothing to wait for, after the grace.
 	start := time.Now()
-	if err := tc.dispatch("agents", []string{"wait", "%1"}); err != nil || time.Since(start) < agentsWaitGrace {
-		t.Errorf("idle: %v after %v", err, time.Since(start))
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"wait", "%1"}); exitCode(err) != agentsExitIdle || time.Since(start) < agentsWaitGrace ||
+		!strings.Contains(tc.stdout.String(), "web/api (%1) is idle") {
+		t.Errorf("idle: %v after %v: %s", err, time.Since(start), tc.stdout)
 	}
-	// A dialog.
+	// A dialog shown before the wait ends nothing; one shown during it does.
 	f.setStatus("%2", "blocked")
+	if err := tc.dispatch("agents", []string{"wait", "%2"}); exitCode(err) != agentsExitIdle {
+		t.Errorf("blocked before: %v", err)
+	}
+	f.setStatus("%2", "working")
+	go func() { time.Sleep(60 * time.Millisecond); f.setStatus("%2", "blocked") }()
 	if err := tc.dispatch("agents", []string{"wait", "%2"}); exitCode(err) != agentsExitDialog || !strings.Contains(tc.stdout.String(), "agents answer %2") {
 		t.Errorf("blocked: %v %s", err, tc.stdout)
 	}
 	// Still working at the timeout.
 	f.setStatus("%2", "working")
-	if err := tc.dispatch("agents", []string{"wait", "%2", "--timeout", "100ms"}); exitCode(err) != agentsExitTimeout {
-		t.Errorf("timeout: %v", err)
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"wait", "%2", "--timeout", "100ms"}); exitCode(err) != agentsExitTimeout ||
+		!strings.Contains(tc.stdout.String(), "still working after 100ms: web/ui (%2)") {
+		t.Errorf("timeout: %v %s", err, tc.stdout)
 	}
 	// The agent leaves.
 	go func() { time.Sleep(60 * time.Millisecond); f.setStatus("%2", "") }()
 	if err := tc.dispatch("agents", []string{"wait", "%2"}); exitCode(err) != agentsExitGone {
 		t.Errorf("gone: %v", err)
 	}
-	if err := tc.dispatch("agents", []string{"wait", "%1", "--timeout", "0s"}); exitCode(err) != 2 {
-		t.Errorf("zero timeout: %v", err)
+	for _, args := range [][]string{{"wait", "%1", "--timeout", "0s"}, {"wait"}, {"wait", "%1", "--after", "x"}} {
+		if err := tc.dispatch("agents", args); exitCode(err) != 2 {
+			t.Errorf("%v: %v", args, err)
+		}
+	}
+	if err := tc.dispatch("agents", append([]string{"wait"}, slices.Repeat([]string{"%1"}, agentsWaitMost+1)...)); exitCode(err) != 2 {
+		t.Errorf("too many: %v", err)
+	}
+	if err := tc.dispatch("agents", []string{"wait", "%1", "nope"}); err == nil || !strings.Contains(err.Error(), "no pane is named") {
+		t.Errorf("unknown: %v", err)
+	}
+}
+
+// A turn that ended while the caller was busy elsewhere is still reported
+// by a wait from the mark before it, beside the panes that still work.
+func TestAgentsWaitSeveral(t *testing.T) {
+	shortWait(t)
+	tc, f := agentsTest(t, lines(0, 1))
+	f.setStatus("%1", "idle")
+	f.setStatus("%2", "idle")
+	tc.dispatch("agents", []string{"wait", "%1"})
+	mark := waitMark(t, tc.stdout.String())
+	f.setStatus("%1", "working")
+	f.setStatus("%2", "working")
+	tc.dispatch("agents", []string{"list"}) // a snapshot read records the change
+	f.setStatus("%2", "done")
+	tc.dispatch("agents", []string{"list"})
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"wait", "%1", "web/ui", "%2", "--after", mark}); err != nil {
+		t.Fatalf("%v %s", err, tc.stdout)
+	}
+	out := tc.stdout.String()
+	if !strings.Contains(out, "web/ui (%2) is done") || strings.Contains(out, "(%1) is done") || !strings.Contains(out, "next: termote agents wait %1 --after ") {
+		t.Errorf("one done:\n%s", out)
+	}
+	// Both end before the wait reads: both are printed, the gravest exit
+	// wins.
+	port, _ := tc.agentsPort()
+	f.setStatus("%1", "working")
+	f.setStatus("%2", "working")
+	tc.dispatch("agents", []string{"list"})
+	m, err := tc.activityLatest(port)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.setStatus("%1", "blocked")
+	f.setStatus("%2", "idle")
+	tc.dispatch("agents", []string{"list"})
+	tc.stdout.Reset()
+	err = tc.dispatch("agents", []string{"wait", "%1", "%2", "--after", strconv.FormatUint(m, 10)})
+	out = tc.stdout.String()
+	if exitCode(err) != agentsExitDialog || !strings.Contains(out, "web/api (%1) waits on a dialog") || !strings.Contains(out, "web/ui (%2) is done") ||
+		!strings.Contains(out, "next wait starts after") {
+		t.Errorf("both: %v\n%s", err, out)
+	}
+	// A mark from before a restart: the history is reset.
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"wait", "%1", "%2", "--after", "999999"}); exitCode(err) != agentsExitReset ||
+		!strings.Contains(tc.stdout.String(), "history was reset") || !strings.Contains(tc.stdout.String(), "web/api (%1) waits on a dialog") {
+		t.Errorf("reset: %v %s", err, tc.stdout)
 	}
 }
 

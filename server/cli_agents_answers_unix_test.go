@@ -213,10 +213,56 @@ func TestAgentsSendScripted(t *testing.T) {
 	}
 }
 
+// activityOf answers /api/mux/activity with latest and, after a mark, the
+// events past it.
+func activityOf(latest uint64, events ...activityEvent) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		page := activityPage{Latest: latest, Events: []activityEvent{}}
+		after, err := strconv.ParseUint(r.URL.Query().Get("after"), 10, 64)
+		if err != nil {
+			page.Reset = true
+		}
+		for _, e := range events {
+			if page.Reset || e.Seq > after {
+				page.Events = append(page.Events, e)
+			}
+		}
+		jsonAnswer(page)(w, r)
+	}
+}
+
 func TestAgentsWaitScripted(t *testing.T) {
 	shortWait(t)
 	tc, s := scriptedCLI(t)
 	s.set("GET /api/mux/snapshot", jsonAnswer(oneAgent("working")))
+	// A server without the activity route.
+	if err := tc.dispatch("agents", []string{"wait", "%1"}); err == nil || !strings.Contains(err.Error(), "update it") {
+		t.Errorf("no activity: %v", err)
+	}
+	s.set("GET /api/mux/activity", activityOf(1))
+	// The activity read keeps failing.
+	s.set("GET /api/mux/activity", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Has("after") {
+			answer(http.StatusInternalServerError, `{"error":"activity failed"}`)(w, r)
+			return
+		}
+		activityOf(1)(w, r)
+	})
+	if err := tc.dispatch("agents", []string{"wait", "%1"}); err == nil || !strings.Contains(err.Error(), "activity failed") {
+		t.Errorf("activity fails: %v", err)
+	}
+	s.set("GET /api/mux/activity", activityOf(1))
+	// A pane named twice is waited on once; a pane without an agent is refused.
+	if err := tc.dispatch("agents", []string{"wait", "%1", "%2"}); err == nil || !strings.Contains(err.Error(), "runs no agent") {
+		t.Errorf("shell pane: %v", err)
+	}
+	s.set("GET /api/mux/activity", activityOf(3, activityEvent{Seq: 3, PaneID: "%1", From: "working", To: "idle"}))
+	tc.stdout.Reset()
+	if err := tc.dispatch("agents", []string{"wait", "%1", "api", "--after", "2"}); err != nil ||
+		strings.Count(tc.stdout.String(), "is done") != 1 || !strings.Contains(tc.stdout.String(), "next wait starts after 3") {
+		t.Errorf("twice: %v %s", err, tc.stdout)
+	}
+	s.set("GET /api/mux/activity", activityOf(1))
 	n := 0
 	s.set("GET /api/mux/snapshot", func(w http.ResponseWriter, r *http.Request) {
 		n++
@@ -521,17 +567,32 @@ func TestAgentsStartChecks(t *testing.T) {
 func TestAgentsWaitToleratesHiccups(t *testing.T) {
 	shortWait(t)
 	tc, s := scriptedCLI(t)
+	var mu sync.Mutex
 	n := 0
 	s.set("GET /api/mux/snapshot", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
 		n++
+		k := n
+		mu.Unlock()
 		switch {
-		case n == 1:
+		case k == 1:
 			jsonAnswer(oneAgent("working"))(w, r)
-		case n <= 4:
+		case k <= 4:
 			answer(http.StatusInternalServerError, `{"error":"internal error"}`)(w, r)
 		default:
 			jsonAnswer(oneAgent("done"))(w, r)
 		}
+	})
+	// The turn's end is recorded once a snapshot read shows it.
+	s.set("GET /api/mux/activity", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		k := n
+		mu.Unlock()
+		if k <= 4 {
+			activityOf(1)(w, r)
+			return
+		}
+		activityOf(2, activityEvent{Seq: 2, PaneID: "%1", From: "working", To: "done"})(w, r)
 	})
 	if err := tc.dispatch("agents", []string{"wait", "%1"}); err != nil || !strings.Contains(tc.stdout.String(), "is done") {
 		t.Errorf("hiccups: %v %s", err, tc.stdout)
