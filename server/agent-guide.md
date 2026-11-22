@@ -150,6 +150,28 @@ user turns them on in Settings. Never change a browser's settings any other way 
 script). `propose` works with the native server only: in container mode it says so; tell the user
 which settings to change, or to move them with Settings > Export & import.
 
+## Coordinate the agents in other panes (optional)
+
+Only when the user asks you to coordinate other agents. `termote agents` reaches the native
+server over its local socket, so it needs no password; in container mode it says it is not
+supported.
+
+```bash
+termote agents list --json                     # every agent: pane id, workspace, name, status, directory
+termote agents read <pane>                     # its last turn (--all: every entry read)
+termote agents send <pane> 'Run the tests and fix what fails'
+termote agents wait <pane> --timeout 20m       # 0: done, 3: a dialog waits, 4: timeout, 5: gone
+termote agents answer <pane>                   # show the dialog; then: answer <pane> <number>
+termote agents start --workspace <id> --kind claude 'Write the tests'
+```
+
+A `<pane>` is a pane id or a name only one pane has: a name two panes share is refused, with
+both ids. Send to one pane at a time, never to your own. Ask the user before `start`; it refuses
+when the new tab would open in another directory than `list` shows, so when `list` shows no
+directory for the workspace, ask which workspace to use. Only Claude Code takes a prompt with
+`start`; Codex and OpenCode take their first message in the terminal. A dialog asking to run a command or change a file is the user's decision:
+show it to them before answering.
+
 ## Never
 
 - `--no-auth` together with `--lan`, `--tailscale` or `--cloudflare`. Without a password,

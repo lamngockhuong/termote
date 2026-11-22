@@ -76,6 +76,7 @@ Covers agent status, overview, subagents, starting and resuming agents, usage, p
 - Prompt templates
 - Tasks
 - Review comments
+- Agents CLI
 
 ## [Files: reading and previews](files-read.md)
 
@@ -140,3 +141,4 @@ Covers Homebrew, release integrity, the website build, git hooks and the agent g
 - Release integrity
 - Git hooks
 - Agent guide
+- Orchestrator skill

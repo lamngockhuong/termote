@@ -407,6 +407,10 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/pwa_settings_schema.json`                 | PWA settings an agent may propose; read by Go and PWA tests    |
 | `server/pwa_settings.go`                          | Proposal validator shared by the CLI and the server            |
 | `server/cli_settings.go`                          | `settings schema`, `settings propose` (local socket only)      |
+| `server/cli_agents.go`                            | `agents list/read/send/wait/answer/start` (local socket only)  |
+| `server/cli_skills.go`                            | `skills install/uninstall/status`: the embedded skill          |
+| `server/skills/orchestrator/SKILL.md`             | Orchestrator skill, copied to the termote-plugins marketplace  |
+| `scripts/termote-plugins.sh`                      | Writes the termote-plugins marketplace at each stable release  |
 | `server/settings_proposal_routes.go`              | `/api/mux/settings/proposal`: CLI posts, every device reads    |
 | `server/testdata/pwa-settings-cases.json`         | Proposal cases shared by the PWA and the server                |
 | `pwa/src/utils/settings-registry.ts`              | Read, compare, apply, export, import the proposable settings   |

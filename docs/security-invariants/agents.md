@@ -558,3 +558,21 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   receiver is the pane's own agent (Claude Code, Codex), else the pane picked for its group
   (`termote-task-agent:<groupId>`, as Tasks). None of it is offered to a view-only client (which
   could not send it) or in a window of its own (which keeps nothing on the device)
+- **Agents CLI** (`termote agents list|read|send|wait|answer|start`, `server/cli_agents.go`): every
+  command calls a route the PWA uses (`snapshot`, `overview`, `agent/transcript`, `agent/message`,
+  `agent/prompt`, `agent/answer`, `tabs`, `agent/start`) over the local socket only (`socketRequestWithin`),
+  never TCP: no password is read, sent or printed, and the routes keep every guard and check of their
+  own entries (the request carries no `Origin` or `Sec-Fetch-Site`, so it is the CLI the guards
+  already let through). In container mode it refuses before sending anything. A pane is named by its
+  id or by a name (its own, else its tab's, or `workspace/name`) that exactly one pane has: a name two
+  panes share is refused with both ids, there is no pattern, and each command reaches one pane.
+  `send` reads the transcript's cursor and sends once more only on `session_changed`, as the PWA's
+  `sendToAgent`; an answer that may have been applied (`socketMaybeSent`) is never sent again.
+  `answer` sends the `promptId` the server issued with the choice (a number, `cancel`, `next` or
+  `{"text"}`), so the server's dialog checks decide. `start` opens a tab in the workspace (no
+  directory from the client: `tabs` takes none), refuses and closes it when its pane's directory is
+  not the one every pane of the workspace is in (the directory `list` shows, which the user agreed
+  to), and starts the agent in its pane; a definite refusal or a command that ended closes the tab
+  too. A prompt goes with `start` for Claude Code only (Codex and OpenCode have no session to send
+  to before their first message), through `agent/message` like any other. Text from the server
+  is printed without control, hidden or bidi characters (`cleanOut`, `plainText`)
