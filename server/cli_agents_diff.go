@@ -187,6 +187,14 @@ func (c *cli) agentsDiff(args []string) error {
 				continue
 			}
 			text := formatDiff(d)
+			if room := agentsDiffBudget - used; len(text) > room {
+				// One file over what is left: cut, still fenced.
+				text = clipDiff(text, room)
+				fmt.Fprint(c.out, text)
+				fmt.Fprintf(c.out, "(cut short at %d KB: termote agents diff %s --stat lists every file)\n", agentsDiffBudget>>10, id)
+				used = agentsDiffBudget
+				continue
+			}
 			used += len(text)
 			fmt.Fprint(c.out, text)
 		}
@@ -237,6 +245,25 @@ func formatDiff(d diffResponse) string {
 		out += "(the diff is cut short: too large)\n"
 	}
 	return out
+}
+
+// clipDiff cuts a formatted diff to about room bytes at a line end, and
+// closes its fence again.
+func clipDiff(text string, room int) string {
+	nl := strings.IndexByte(text, '\n')
+	if nl < 0 || !strings.HasPrefix(text, "```") {
+		return text // a note, a line long
+	}
+	fence := strings.TrimSuffix(text[:nl], "diff")
+	// The hunks only: the closing fence and any note after it go.
+	body := text[nl+1 : nl+1+strings.LastIndex(text[nl+1:], "\n"+fence+"\n")+1]
+	cut := body[:min(len(body), max(0, room-nl-1))]
+	if i := strings.LastIndexByte(cut, '\n'); i >= 0 {
+		cut = cut[:i+1]
+	} else {
+		cut = ""
+	}
+	return text[:nl+1] + cut + fence + "\n"
 }
 
 // longestBackticks is the longest run of backticks in s.

@@ -73,6 +73,7 @@ func (c *cli) worktreeTarget(port int, s Snapshot, g Group, kind, branch, base, 
 	}
 	b := plainText(branch)
 	var groupID string
+	fresh := true // the workspace is opened by this command
 	switch wt, found := list.find(branch); {
 	case found && !wt.Linked:
 		return startTarget{}, fmt.Errorf("branch %s is the main worktree's; pick a new branch name", b)
@@ -80,7 +81,9 @@ func (c *cli) worktreeTarget(port int, s Snapshot, g Group, kind, branch, base, 
 		return startTarget{}, fmt.Errorf("the worktree of branch %s (%s) cannot be opened; pick a new branch name", b, plainText(wt.Path))
 	case found:
 		// A run before this one made it: go on there.
-		groupID, err = c.openWorktree(port, g.ID, branch)
+		var already bool
+		groupID, already, err = c.openWorktree(port, g.ID, branch)
+		fresh = !already
 	case slices.Contains(list.Branches, branch):
 		return startTarget{}, fmt.Errorf("branch %s already exists; pick a new name or open it from the PWA", b)
 	default:
@@ -96,7 +99,7 @@ func (c *cli) worktreeTarget(port int, s Snapshot, g Group, kind, branch, base, 
 	if !found {
 		return startTarget{}, fmt.Errorf("the worktree of branch %s is not in the list after it was made; see the PWA's worktrees", b)
 	}
-	t := startTarget{dir: wt.Path, keep: fmt.Sprintf("workspace %s, branch %s, in %s stays", plainText(groupID), b, plainText(wt.Path))}
+	t := startTarget{dir: wt.Path, used: !fresh, keep: fmt.Sprintf("workspace %s, branch %s, in %s stays", plainText(groupID), b, plainText(wt.Path))}
 	p, err := c.worktreePane(port, groupID, wt.Path)
 	if err != nil {
 		return startTarget{}, t.note(err)
@@ -108,26 +111,28 @@ func (c *cli) worktreeTarget(port int, s Snapshot, g Group, kind, branch, base, 
 
 // openWorktree opens branch's existing worktree, or names the workspace
 // that shows it.
-func (c *cli) openWorktree(port int, sourceID, branch string) (string, error) {
+// already: the workspace was open before.
+func (c *cli) openWorktree(port int, sourceID, branch string) (id string, already bool, err error) {
 	r, err := c.agentsCall(port, http.MethodPost, "/api/mux/worktrees/open", map[string]string{"groupId": sourceID, "branch": branch},
 		worktreeCallTimeout+15*time.Second)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	return worktreeGroupID(r)
 }
 
-func worktreeGroupID(r agentsReply) (string, error) {
+func worktreeGroupID(r agentsReply) (string, bool, error) {
 	if r.status != http.StatusOK {
-		return "", agentsRefusal(r)
+		return "", false, agentsRefusal(r)
 	}
 	var made struct {
-		ID string `json:"id"`
+		ID          string `json:"id"`
+		AlreadyOpen bool   `json:"alreadyOpen"`
 	}
 	if json.Unmarshal(r.body, &made) != nil || made.ID == "" {
-		return "", errors.New("unexpected answer from the server to the worktree")
+		return "", false, errors.New("unexpected answer from the server to the worktree")
 	}
-	return made.ID, nil
+	return made.ID, made.AlreadyOpen, nil
 }
 
 // createWorktree makes branch's worktree and its workspace. Another change
@@ -145,7 +150,8 @@ func (c *cli) createWorktree(port int, sourceID, branch, base, label string) (st
 		case err != nil:
 			return "", err
 		case r.status == http.StatusOK:
-			return worktreeGroupID(r)
+			id, _, err := worktreeGroupID(r)
+			return id, err
 		}
 		switch r.failure().Code {
 		case "busy":
@@ -169,10 +175,12 @@ func (c *cli) settleWorktree(port int, sourceID, branch string) (string, error) 
 	for {
 		if list, err := c.worktreeList(port, sourceID); err == nil {
 			if wt, ok := list.find(branch); ok && wt.Linked {
+				// Opened by the create this command sent.
 				if wt.GroupID != "" {
 					return wt.GroupID, nil
 				}
-				return c.openWorktree(port, sourceID, branch)
+				id, _, err := c.openWorktree(port, sourceID, branch)
+				return id, err
 			}
 		}
 		if time.Now().After(until) {

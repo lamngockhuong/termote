@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io/fs"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -68,7 +69,12 @@ func (f *filesAPI) branchRange(ctx context.Context, root filesRoot, base string)
 		return br, err
 	}
 	br.head = head
-	from, err := f.revCommit(ctx, c, base)
+	// A branch of that name first, as the route promises; else what git
+	// names so (a remote branch such as origin/main).
+	from, err := f.revCommit(ctx, c, "refs/heads/"+base)
+	if err == nil && from == "" {
+		from, err = f.revCommit(ctx, c, base)
+	}
 	if err != nil {
 		return br, err
 	}
@@ -77,7 +83,7 @@ func (f *filesAPI) branchRange(ctx context.Context, root filesRoot, base string)
 	}
 	out, _, err := f.git.output(ctx, c, "merge-base", from, head)
 	var ge *gitError
-	if errors.As(err, &ge) && len(bytes.TrimSpace(out)) == 0 {
+	if errors.As(err, &ge) && len(bytes.TrimSpace(out)) == 0 && ctx.Err() == nil {
 		return br, errNoMergeBase
 	}
 	if err != nil {
@@ -94,7 +100,8 @@ func (f *filesAPI) branchRange(ctx context.Context, root filesRoot, base string)
 func (f *filesAPI) revCommit(ctx context.Context, c gitCall, rev string) (string, error) {
 	out, _, err := f.git.output(ctx, c, "rev-parse", "--verify", "--quiet", "--end-of-options", rev+"^{commit}")
 	var ge *gitError
-	if errors.As(err, &ge) && len(bytes.TrimSpace(out)) == 0 {
+	// A git killed at the deadline is no answer.
+	if errors.As(err, &ge) && len(bytes.TrimSpace(out)) == 0 && ctx.Err() == nil {
 		return "", nil
 	}
 	if err != nil {
@@ -125,18 +132,28 @@ func (f *filesAPI) mainBranch(ctx context.Context, root filesRoot) (string, erro
 	return "", nil
 }
 
-// branchFiles lists the files changed from br's merge base to HEAD.
+// branchFiles lists the files changed from br's merge base to HEAD, shared
+// by every client of the root for commitFilesTTL (two hashes never change
+// what lies between them), so a diff of each file lists them once.
 func (f *filesAPI) branchFiles(ctx context.Context, root filesRoot, br branchRange) ([]commitFile, bool, error) {
-	out, cut, err := f.git.output(ctx, gitCall{root: root.Root, safeDir: root.SafeDir, noFilters: true, heavy: true, limit: maxStatusOutput},
-		"diff", "-z", "--name-status", "-M", "--no-ext-diff", "--no-textconv", "--ignore-submodules=all", br.mergeBase, br.head, "--")
+	ctx = context.WithoutCancel(ctx) // shared by every client of the root
+	list, err := f.commits.do(statusKey(root)+"\x00"+br.mergeBase+".."+br.head, func() (commitList, error) {
+		out, cut, err := f.git.output(ctx, gitCall{root: root.Root, safeDir: root.SafeDir, noFilters: true, heavy: true, limit: maxStatusOutput},
+			"diff", "-z", "--name-status", "-M", "--no-ext-diff", "--no-textconv", "--ignore-submodules=all", br.mergeBase, br.head, "--")
+		if err != nil {
+			return commitList{}, err
+		}
+		files, truncated := parseNameStatus(out, cut)
+		for i := range files {
+			files[i].Sensitive = commitFileSensitive(root.Root, &files[i])
+		}
+		return commitList{files, truncated}, nil
+	})
 	if err != nil {
 		return nil, false, err
 	}
-	files, truncated := parseNameStatus(out, cut)
-	for i := range files {
-		files[i].Sensitive = commitFileSensitive(root.Root, &files[i])
-	}
-	return files, truncated, nil
+	// A copy: the view-only filter deletes from it.
+	return slices.Clone(list.files), list.truncated, nil
 }
 
 func (f *filesAPI) handleBranch(w http.ResponseWriter, r *http.Request) {

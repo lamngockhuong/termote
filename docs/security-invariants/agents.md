@@ -4,7 +4,10 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
 
 - **Agent activity** (`server/agent_activity.go`, `GET /api/mux/activity`): the tracker is fed
   only by snapshot reads that already run (the snapshot route, a stream attaching, the push
-  watcher's tick); it never reads tmux, Herdr or Zellij itself and never runs a command, so
+  watcher's tick, and `server/agent_activity_follow.go`: after `agent/message` or `agent/start`
+  succeeded, a peek of the snapshot, which makes nothing, every 2 s while that agent works, one
+  loop for every followed pane, each let go once it stops working, shows no work within a minute,
+  or after 2 h); the tracker never reads tmux, Herdr or Zellij itself and never runs a command, so
   `/activity` costs no mux call. Each read takes a generation number before it starts and a read
   that finishes after a newer one changes nothing (no false change). `observe` copies the
   snapshot and gives every agent a new `AgentInfo` before setting `since`/`sinceFirstSeen`, so

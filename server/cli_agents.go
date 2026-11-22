@@ -822,6 +822,15 @@ func (c *cli) agentsWait(args []string) error {
 	}
 	start := time.Now()
 	deadline := start.Add(timeout)
+	// mark: where this wait started, which a pane that did not end keeps
+	// for the next one; after moves on with each page read, and events
+	// keeps the waited panes' changes since mark.
+	mark := after
+	var events []activityEvent
+	waited := map[string]bool{}
+	for _, id := range ids {
+		waited[id] = true
+	}
 	// Failed reads in a row, of the activity and of the snapshot.
 	actFailures, snapFailures := 0, 0
 	for {
@@ -835,8 +844,14 @@ func (c *cli) agentsWait(args []string) error {
 			if page.Reset {
 				return c.waitReset(s, ids, refs, page.Latest)
 			}
-			if ends := waitVerdict(page.Events, ids, s); len(ends) > 0 {
-				return c.waitEnded(ids, refs, ends, page.Latest)
+			for _, e := range page.Events {
+				if waited[e.PaneID] {
+					events = append(events, e)
+				}
+			}
+			after = max(after, page.Latest)
+			if ends := waitVerdict(events, ids, s); len(ends) > 0 {
+				return c.waitEnded(ids, refs, ends, mark, page.Latest)
 			}
 			if time.Since(start) >= agentsWaitGrace && !anyWorking(s, ids) {
 				return c.waitNothing(s, ids, refs, page.Latest)
@@ -850,7 +865,7 @@ func (c *cli) agentsWait(args []string) error {
 				}
 			}
 			fmt.Fprintf(c.out, "still working after %s: %s\n", timeout, dash(strings.Join(working, ", ")))
-			fmt.Fprintf(c.out, "next: termote agents wait %s --after %d\n", waitIDs(ids), after)
+			fmt.Fprintf(c.out, "next: termote agents wait %s --after %d\n", waitIDs(ids), mark)
 			return &exitError{code: agentsExitTimeout}
 		}
 		time.Sleep(agentsWaitEvery)
@@ -887,8 +902,9 @@ func waitIDs(ids []string) string {
 }
 
 // waitEnded prints every pane that ended, in the order named, and the wait
-// that follows the others.
-func (c *cli) waitEnded(ids []string, refs map[string]string, ends map[string]waitEnd, latest uint64) error {
+// that follows the others: from mark still, so a change of theirs recorded
+// after the snapshot this verdict read is not skipped.
+func (c *cli) waitEnded(ids []string, refs map[string]string, ends map[string]waitEnd, mark, latest uint64) error {
 	code := 0
 	var rest []string
 	for _, id := range ids {
@@ -909,7 +925,7 @@ func (c *cli) waitEnded(ids []string, refs map[string]string, ends map[string]wa
 		code = max(code, end.exit())
 	}
 	if len(rest) > 0 {
-		fmt.Fprintf(c.out, "next: termote agents wait %s --after %d\n", waitIDs(rest), latest)
+		fmt.Fprintf(c.out, "next: termote agents wait %s --after %d\n", waitIDs(rest), mark)
 	} else {
 		fmt.Fprintf(c.out, "next wait starts after %d (termote agents wait <pane>... --after %d)\n", latest, latest)
 	}
@@ -1186,6 +1202,9 @@ type startTarget struct {
 	undo func()
 	// keep is said of what stays after a failure, nil when nothing does.
 	keep string
+	// used: the pane was not opened by this command (a worktree workspace
+	// a run before opened), so its shell may hold the user's typing.
+	used bool
 }
 
 // fail is err of a start refused for sure, with what it made undone, or
@@ -1258,8 +1277,9 @@ func (c *cli) startInPane(port int, t startTarget, kind, prompt string) error {
 	paneID := t.paneID
 	// newTab: the shell was opened just now (a new tab, or a new worktree's
 	// workspace), so it gets no C-c: its rc files may still run, and the
-	// C-c would cut them short.
-	start := map[string]any{"kind": kind, "newTab": true}
+	// C-c would cut them short. A pane opened before gets the C-c and the
+	// idle checks, which clear what the user may have half typed.
+	start := map[string]any{"kind": kind, "newTab": !t.used}
 	if prompt != "" {
 		start["prompt"] = prompt
 	}

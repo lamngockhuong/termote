@@ -11,8 +11,9 @@ import (
 // The activity tracker records, for each pane with an agent, its status and
 // when that status began, and keeps the last status changes in a ring. It is
 // fed by the snapshot reads that already run (the snapshot route, a stream
-// attaching, the push watcher's tick), never by a read of its own: with no
-// page open and no push subscription, nothing is recorded.
+// attaching, the push watcher's tick, the follower of an agent just given
+// a message or started), never by a read of its own: with no page open, no
+// push subscription and no agent followed, nothing is recorded.
 
 // activityRingLen status changes are kept; past it the oldest goes.
 const activityRingLen = 500

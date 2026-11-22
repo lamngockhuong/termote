@@ -102,7 +102,7 @@ func TestAgentsDiff(t *testing.T) {
 	if err := tc.dispatch("agents", []string{"diff", "%2"}); err != nil {
 		t.Fatal(err)
 	}
-	if out := tc.stdout.String(); !strings.Contains(out, "... 6 more files: termote agents diff %2 --stat") || strings.Contains(out, "staged.txt") {
+	if out := tc.stdout.String(); !strings.Contains(out, "... 6 more files: termote agents diff %2 --stat") || !strings.Contains(out, "(cut short at 0 KB") || strings.Contains(out, "staged.txt") {
 		t.Errorf("budget:\n%s", out)
 	}
 	// A base that is not a branch name is refused.

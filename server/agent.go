@@ -387,6 +387,9 @@ var (
 // agentAPI serves /api/mux/panes/{id}/agent/*.
 type agentAPI struct {
 	m Mux
+	// follower reads the snapshot while an agent given a message or just
+	// started works, so its turn is in the activity ring.
+	follower *activityFollower
 	// nester nests linked worktrees by git in the snapshot (tmux, Zellij,
 	// herdr-core); nil leaves the snapshot as the backend gives it.
 	nester *gitNester
@@ -469,7 +472,7 @@ func newAgentAPI(m Mux) *agentAPI {
 	if m != nil {
 		backend = m.Name()
 	}
-	return &agentAPI{
+	a := &agentAPI{
 		m:        m,
 		loc:      loc,
 		sessions: newTTLCache[agentLookup](agentCacheTTL),
@@ -487,6 +490,8 @@ func newAgentAPI(m Mux) *agentAPI {
 		subagentWrites: newTTLCache[time.Time](subagentsTTL),
 		claudeModels:   newClaudeModels(),
 	}
+	a.follower = newActivityFollower(a.activity, m)
+	return a
 }
 
 func registerAgentRoutes(mux *http.ServeMux, m Mux, uploads *uploadStore) *agentAPI {

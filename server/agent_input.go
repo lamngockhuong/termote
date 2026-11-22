@@ -530,10 +530,12 @@ func (a *agentAPI) handleMessage(w http.ResponseWriter, r *http.Request) {
 	switch err := a.sendMessage(ctx, wr, paneID, c.Session, parts, paths, body.ReplaceDraft); {
 	case errors.Is(err, errQueued):
 		// The agent took the message into its queue, to read when ready
+		a.follower.follow(paneID)
 		w.WriteHeader(http.StatusAccepted)
 	case err != nil:
 		a.writeFailure(w, err)
 	default:
+		a.follower.follow(paneID)
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

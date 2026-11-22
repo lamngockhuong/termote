@@ -225,3 +225,20 @@ func TestFormatDiff(t *testing.T) {
 		}
 	}
 }
+
+func TestClipDiff(t *testing.T) {
+	d := diffResponse{Truncated: true, Hunks: []diffHunk{{Header: "@@ -0,0 +3 @@", Lines: []diffLine{{Kind: "add", Text: "one"}, {Kind: "add", Text: "two"}, {Kind: "add", Text: "```"}}}}}
+	text := formatDiff(d)
+	for room, want := range map[int]string{
+		0:         "````diff\n````\n",
+		25:        "````diff\n@@ -0,0 +3 @@\n````\n",
+		len(text): "````diff\n@@ -0,0 +3 @@\n+one\n+two\n+```\n````\n",
+	} {
+		if got := clipDiff(text, room); got != want {
+			t.Errorf("room %d: %q, want %q", room, got, want)
+		}
+	}
+	if got := clipDiff("(binary)\n", 1); got != "(binary)\n" {
+		t.Errorf("note: %q", got)
+	}
+}

@@ -123,6 +123,30 @@ func TestAgentsStartWorktree(t *testing.T) {
 	if err := start("--worktree", "feat", "again"); err != nil || countPosts(s, "/api/mux/worktrees ") != 2 || countPosts(s, "/api/mux/worktrees/open") != 1 {
 		t.Errorf("again: %v %s", err, tc.stdout)
 	}
+	// Its workspace was open already: the pane may hold the user's typing,
+	// so the start clears it first (no newTab).
+	s.mu.Lock()
+	last := s.posts[len(s.posts)-1]
+	s.mu.Unlock()
+	if !strings.Contains(last, `"newTab":false`) {
+		t.Errorf("reused pane: %s", last)
+	}
+	// Opened again by this run (it was closed): a fresh shell.
+	s.set("POST /api/mux/worktrees/open", answer(http.StatusOK, `{"ok":true,"id":"w2","alreadyOpen":false}`))
+	if err := start("--worktree", "feat", "again"); err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	last = s.posts[len(s.posts)-1]
+	s.mu.Unlock()
+	if !strings.Contains(last, `"newTab":true`) {
+		t.Errorf("reopened pane: %s", last)
+	}
+	s.set("POST /api/mux/worktrees/open", answer(http.StatusOK, `{"ok":true}`))
+	if err := start("--worktree", "feat"); err == nil || !strings.Contains(err.Error(), "unexpected answer") {
+		t.Errorf("no id: %v", err)
+	}
+	s.set("POST /api/mux/worktrees/open", answer(http.StatusOK, `{"ok":true,"id":"w2","alreadyOpen":true}`))
 	// A refused start keeps the worktree and names it.
 	s.set("POST /api/mux/panes/%7/agent/start", answer(http.StatusConflict, `{"error":"the pane runs something else","code":"pane_busy"}`))
 	if err := start("--worktree", "feat"); err == nil || !strings.Contains(err.Error(), "(pane_busy)") ||
