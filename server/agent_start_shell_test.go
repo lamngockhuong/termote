@@ -23,9 +23,32 @@ type shellStartFake struct {
 	// hangType: TypeLine waits out its context, then fails as a killed
 	// tmux does (an exit error, not the context's).
 	hangType bool
+	// readSeq: what the pane's text reads, one entry per read, the last one
+	// repeated; reads counts the reads, readsAtType what it was when the
+	// line was typed.
+	readSeq            []string
+	reads, readsAtType int
+}
+
+func (f *shellStartFake) ReadTaskText(ctx context.Context, target string, n int) (string, error) {
+	f.mu.Lock()
+	if len(f.readSeq) > 0 {
+		text := f.readSeq[0]
+		if len(f.readSeq) > 1 {
+			f.readSeq = f.readSeq[1:]
+		}
+		f.reads++
+		f.mu.Unlock()
+		return text, nil
+	}
+	f.mu.Unlock()
+	return f.taskFakeMux.ReadTaskText(ctx, target, n)
 }
 
 func (f *shellStartFake) TypeLine(ctx context.Context, target, line string) error {
+	f.mu.Lock()
+	f.readsAtType = f.reads
+	f.mu.Unlock()
 	if f.hangType {
 		<-ctx.Done()
 		return errors.New("signal: killed")
@@ -461,5 +484,80 @@ func TestShellAgentStartPromptLimits(t *testing.T) {
 	// The longest prompt is taken.
 	if status, code, _ := postShellStartBody(t, h, `{"kind":"claude","prompt":"`+strings.Repeat("é", agentMaxText/2)+`"}`); status != http.StatusOK {
 		t.Errorf("longest prompt: %d %q", status, code)
+	}
+}
+
+// A tab the client just made gets no C-c: its shell may still run its rc
+// files (the one that puts the agent on PATH among them), which the C-c
+// would cut short. The line is typed once its prompt shows and its text
+// stopped changing.
+func TestShellAgentStartNewTab(t *testing.T) {
+	h, _, f := shellStartAPI(t)
+	f.shell = "zsh"
+	f.mu.Lock()
+	f.text[shellStartPane] = "% "
+	f.mu.Unlock()
+	rec := serve(h, apiRequest(http.MethodPost, shellStartPath, `{"kind":"claude","newTab":true}`))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST = %d %v", rec.Code, decodeBody(t, rec))
+	}
+	if typed := f.typedLines(); !slices.Equal(typed, []string{shellStartPane + " claude"}) {
+		t.Errorf("typed %q", typed)
+	}
+	if len(f.interrupts) != 0 {
+		t.Errorf("C-c sent to a new tab: %q", f.interrupts)
+	}
+}
+
+// A new tab whose shell never shows its prompt is refused with nothing
+// sent: it is still starting, or busy.
+func TestShellAgentStartNewTabNoPrompt(t *testing.T) {
+	h, _, f := shellStartAPI(t)
+	f.shell = "zsh"
+	rec := serve(h, apiRequest(http.MethodPost, shellStartPath, `{"kind":"claude","newTab":true}`))
+	code, _ := decodeBody(t, rec)["code"].(string)
+	if rec.Code != http.StatusConflict || code != "pane_busy" {
+		t.Fatalf("POST = %d %q, want 409 pane_busy", rec.Code, code)
+	}
+	if len(f.typedLines()) != 0 || len(f.interrupts) != 0 {
+		t.Errorf("typed %q, interrupts %q", f.typedLines(), f.interrupts)
+	}
+}
+
+// The rc files still print: the line waits until the new tab's text stopped
+// changing and shows a prompt.
+func TestShellAgentStartNewTabWaitsForPrompt(t *testing.T) {
+	h, _, f := shellStartAPI(t)
+	f.shell = "zsh"
+	f.readSeq = []string{"", "loading", "loading plugins", "% ", "% "}
+	rec := serve(h, apiRequest(http.MethodPost, shellStartPath, `{"kind":"claude","newTab":true}`))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST = %d %v", rec.Code, decodeBody(t, rec))
+	}
+	if f.readsAtType < 5 || len(f.typedLines()) != 1 || len(f.interrupts) != 0 {
+		t.Errorf("typed %q after %d reads, interrupts %q", f.typedLines(), f.readsAtType, f.interrupts)
+	}
+}
+
+// A new tab that goes away while its shell is waited for is 404, nothing
+// sent; a backend that cannot read the pane's text gets the idle check
+// alone, still without the C-c.
+func TestShellAgentStartNewTabReadErrors(t *testing.T) {
+	h, _, f := shellStartAPI(t)
+	f.shell = "zsh"
+	f.readErr = errTaskTargetGone
+	rec := serve(h, apiRequest(http.MethodPost, shellStartPath, `{"kind":"claude","newTab":true}`))
+	if code, _ := decodeBody(t, rec)["code"].(string); rec.Code != http.StatusNotFound || code != "not_found" {
+		t.Errorf("gone: %d %q", rec.Code, code)
+	}
+	if len(f.typedLines()) != 0 || len(f.interrupts) != 0 {
+		t.Errorf("gone: typed %q, interrupts %q", f.typedLines(), f.interrupts)
+	}
+	f.readErr = errUnsupported
+	if rec := serve(h, apiRequest(http.MethodPost, shellStartPath, `{"kind":"claude","newTab":true}`)); rec.Code != http.StatusOK {
+		t.Fatalf("no text reads: %d %v", rec.Code, decodeBody(t, rec))
+	}
+	if !slices.Equal(f.typedLines(), []string{shellStartPane + " claude"}) || len(f.interrupts) != 0 {
+		t.Errorf("no text reads: typed %q, interrupts %q", f.typedLines(), f.interrupts)
 	}
 }

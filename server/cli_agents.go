@@ -927,7 +927,9 @@ func (c *cli) agentsStart(args []string) error {
 		return closeTab(fmt.Errorf("a new tab of %s opens in %s, not in %s where its panes are; nothing was started (ask the user which workspace to use)",
 			plainText(g.Name), plainText(got), plainText(want)))
 	}
-	start := map[string]string{"kind": kind}
+	// newTab: the tab was made just now, so its shell gets no C-c (its rc
+	// files may still run, and the C-c would cut them short).
+	start := map[string]any{"kind": kind, "newTab": true}
 	if prompt != "" {
 		start["prompt"] = prompt
 	}

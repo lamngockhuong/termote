@@ -148,6 +148,20 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   even when the command failed at once, and lets an expired one go only when it is read (this
   read does), so one still held → 409 `start_pending` with nothing sent; then `C-c` (clears half-typed text, a `PS2` line, a heredoc, a `read`),
   200 ms, the idle check again, polled like the first (the prompt it redraws can run `git`, a child that reads busy on Windows; 409 `pane_busy`), then `agent.start` with `timeout_ms` 30000.
+  A body with `newTab: true` (`termote agents start`, for the tab it made just before) gets no
+  `C-c` on any backend: a new shell may still run its rc files, and the `C-c` cut them short (zsh
+  then lacked the `PATH` its `.zshrc` sets, and the agent was not found). Its shell is waited for
+  as a task's new tab is (`waitNewTabShell`: `waitTaskShell` with settle, idle, a prompt shown,
+  its text unchanged between two reads, up to 15 s, each read under its own `muxTimeout`; else 409
+  `pane_busy` with nothing sent; a backend whose `pane.read` is unsupported gets the idle check
+  alone), in place of the first idle check, the `C-c`, the 200 ms and the second check; the start
+  then goes on as above. The flag only leaves out that `C-c`: a client that sends it for another
+  pane gets its line typed after whatever that pane's input holds, which a client allowed to start
+  an agent could type there anyway. Accepted gaps, as for a task's new tab: the settle is a
+  heuristic, so an rc file that prints, then keeps working in the shell reads settled early (the
+  line then waits in the terminal's typeahead and runs once the rc files end, `PATH` set), and an
+  rc file that reads stdin (an update prompt) takes the line; stream input in the new tab before
+  the start comes before the line.
   Each Herdr call has its own `muxTimeout`; the whole start runs without the request's
   cancellation once begun. Herdr answers at once (`launch_pending`): 200 `{ok, state:
   "starting"}`; `agent.start` timing out → 504 `start_unknown`, followed as if typed. Herdr's
@@ -174,7 +188,8 @@ Part of the [security invariants](README.md): agent status, overview, subagents,
   the pane is resolved through `IdleShell` (gone → 404 `not_found`). Under the lock: `IdleShell`
   polled like Herdr's check (busy → 409 `pane_busy`; a shell `resumeShellKind` does not know →
   409 `unsupported_shell`; nothing sent, not even `C-c`), `Interrupt` (`C-c`), 200 ms, `IdleShell`
-  again (409 `pane_busy`, nothing typed), then `TypeLine` with the program name and each server
+  again (409 `pane_busy`, nothing typed; with `newTab` the new tab's wait above replaces the first
+  check, the `C-c`, the 200 ms and the second check), then `TypeLine` with the program name and each server
   argument through `shellQuote` for that shell, never a client's. Each backend call has its own
   `muxTimeout` and a call cut short reports the context's error (a killed tmux included):
   `TypeLine` cut short → 504 `start_unknown`, followed as if typed; any other error 500

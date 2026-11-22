@@ -17,8 +17,9 @@ var startPath = "/api/mux/panes/" + startPane + "/agent/start"
 // shortStart shortens the start's waits for tests.
 func shortStart(t *testing.T) {
 	t.Helper()
-	idle, poll, clear, call := agentStartIdleWait, agentStartIdlePoll, agentStartClearWait, agentStartCallTimeout
+	idle, poll, clear, call, newShell := agentStartIdleWait, agentStartIdlePoll, agentStartClearWait, agentStartCallTimeout, taskNewShellWait
 	agentStartIdleWait, agentStartIdlePoll, agentStartClearWait = 60*time.Millisecond, 20*time.Millisecond, 5*time.Millisecond
+	taskNewShellWait = 200 * time.Millisecond
 	agentStartCallTimeout = 300 * time.Millisecond
 	// The route's behaviour, not the Windows idle check
 	// (TestHerdrPaneIdleShellWindows, TestAgentStartWindowsBusyChild)
@@ -27,6 +28,7 @@ func shortStart(t *testing.T) {
 	herdrStartGOOS, startPromptGOOS = "linux", "linux"
 	t.Cleanup(func() {
 		agentStartIdleWait, agentStartIdlePoll, agentStartClearWait, agentStartCallTimeout = idle, poll, clear, call
+		taskNewShellWait = newShell
 		herdrStartGOOS, startPromptGOOS = goos, promptGOOS
 	})
 }
@@ -98,6 +100,38 @@ func TestAgentStartClaude(t *testing.T) {
 	}
 	if name, _ := p["name"].(string); !regexp.MustCompile(`^termote-claude-[0-9a-f]{8}$`).MatchString(name) {
 		t.Errorf("name = %q", name)
+	}
+}
+
+// A tab the client just made gets no C-c (its shell may still run its rc
+// files, which the C-c would cut short): Herdr is asked once the shell's
+// prompt shows and its text stopped changing.
+func TestAgentStartNewTab(t *testing.T) {
+	f := newFakeHerdr(t)
+	f.readText = "% "
+	h, _ := startHandler(t, f)
+	status, code, body := postStart(t, h, `{"kind":"claude","newTab":true}`)
+	if status != http.StatusOK || body["state"] != "starting" {
+		t.Fatalf("POST = %d %q %v", status, code, body)
+	}
+	got := startCalls(f)
+	if slices.Contains(got, "pane.send_text \x03") || len(got) == 0 || got[len(got)-1] != "agent.start" ||
+		!slices.Contains(got, "pane.read") || !slices.Contains(got, "agent.get") {
+		t.Errorf("calls = %q, want the prompt read and agent.start without a C-c", got)
+	}
+}
+
+// A new tab whose shell shows nothing yet is refused with nothing sent.
+func TestAgentStartNewTabNoPrompt(t *testing.T) {
+	f := newFakeHerdr(t)
+	h, _ := startHandler(t, f)
+	if status, code, _ := postStart(t, h, `{"kind":"claude","newTab":true}`); status != http.StatusConflict || code != "pane_busy" {
+		t.Fatalf("POST = %d %q, want 409 pane_busy", status, code)
+	}
+	for _, c := range startCalls(f) {
+		if strings.HasPrefix(c, "pane.send_text") || c == "agent.start" {
+			t.Errorf("sent %q", c)
+		}
 	}
 }
 
@@ -734,6 +768,26 @@ func TestAgentStartPromptOnHerdr(t *testing.T) {
 				t.Errorf("followed through agent.get: %q", startCalls(f))
 			}
 		})
+	}
+}
+
+// A prompt with newTab takes the shell path on Herdr too, without the C-c.
+func TestAgentStartPromptOnHerdrNewTab(t *testing.T) {
+	useStartPromptDir(t, "start-prompts")
+	f := newFakeHerdr(t)
+	f.readText = "$ "
+	f.mu.Lock()
+	f.procs = map[string]any{startPane: fakeProcessInfo(startPane, 100, 100, fakeProc(100, "bash", "bash"))}
+	f.mu.Unlock()
+	h, _ := startHandler(t, f)
+	setShellStartProc(t, "")
+	if status, code, body := postStart(t, h, `{"kind":"claude","prompt":"go","newTab":true}`); status != http.StatusOK || body["prompt"] != true {
+		t.Fatalf("POST = %d %q %v", status, code, body)
+	}
+	calls := startCalls(f)
+	if slices.Contains(calls, "pane.send_text \x03") || !slices.Contains(calls, "pane.read") ||
+		!slices.ContainsFunc(calls, func(s string) bool { return strings.HasPrefix(s, "pane.send_text claude -- ") }) {
+		t.Errorf("calls = %q", calls)
 	}
 }
 

@@ -52,10 +52,17 @@ func (s shellStarter) requirePane(ctx context.Context, id string) (Size, error) 
 // busy pane or a shell whose quoting is not known, and nothing at all is
 // sent for a prompt to a shell that cannot read it from a file (pwsh). The
 // prompt itself is never typed: it goes to a file (writeStartPrompt) that
-// the line reads back, kept startPromptKeep once the line is typed.
-func (s shellStarter) StartAgent(ctx context.Context, paneID, kind string, args []string, prompt string) (name string, err error) {
+// the line reads back, kept startPromptKeep once the line is typed. A
+// newTab pane gets no C-c (its shell may still run its rc files): the line
+// is typed once its prompt shows and its text stopped changing.
+func (s shellStarter) StartAgent(ctx context.Context, paneID, kind string, args []string, prompt string, newTab bool) (name string, err error) {
 	// A shell whose quoting is not known gets nothing, not even the C-c.
-	shell, err := s.waitIdle(ctx, paneID)
+	var shell string
+	if newTab {
+		shell, err = waitNewTabShell(ctx, s.tm, paneID)
+	} else {
+		shell, err = s.waitIdle(ctx, paneID)
+	}
 	if err != nil {
 		return "", err
 	}
@@ -77,17 +84,19 @@ func (s shellStarter) StartAgent(ctx context.Context, paneID, kind string, args 
 			}
 		}()
 	}
-	if err := callStep(ctx, func(ctx context.Context) error { return s.tm.Interrupt(ctx, paneID) }); err != nil {
-		return "", startStepError(err)
-	}
-	if err := taskSleep(ctx, agentStartClearWait); err != nil {
-		return "", err
-	}
-	if shell, err = s.waitIdle(ctx, paneID); err != nil {
-		return "", err
-	}
-	if err := startShellOK(shell, prompt); err != nil {
-		return "", err
+	if !newTab {
+		if err := callStep(ctx, func(ctx context.Context) error { return s.tm.Interrupt(ctx, paneID) }); err != nil {
+			return "", startStepError(err)
+		}
+		if err := taskSleep(ctx, agentStartClearWait); err != nil {
+			return "", err
+		}
+		if shell, err = s.waitIdle(ctx, paneID); err != nil {
+			return "", err
+		}
+		if err := startShellOK(shell, prompt); err != nil {
+			return "", err
+		}
 	}
 	line := agentStartLine(resumeShellKind(shell), kind, args, promptFile)
 	name = agentStartName(kind)
@@ -151,6 +160,44 @@ func (s shellStarter) waitIdle(ctx context.Context, paneID string) (string, erro
 			return "", err
 		}
 	}
+}
+
+// waitNewTabShell waits for the shell of a tab the client just made, as a
+// task's new tab is waited for (waitTaskShell with settle): idle, its
+// prompt drawn and its text unchanged between two reads, up to
+// taskNewShellWait; errStartPaneBusy when it never is. A backend that
+// cannot read the pane's text (an older Herdr's pane.read) gets the idle
+// check alone, still without the C-c. Each backend call gets its own
+// agentStartCallTimeout, as every call of a start does.
+func waitNewTabShell(ctx context.Context, tm taskMux, paneID string) (string, error) {
+	tm = stepTaskMux{tm}
+	shell, _, err := waitTaskShell(ctx, tm, paneID, true)
+	if errors.Is(err, errUnsupported) {
+		shell, _, err = waitTaskShell(ctx, tm, paneID, false)
+	}
+	if errors.Is(err, errTaskShellBusy) {
+		return "", errStartPaneBusy
+	}
+	return shell, startStepError(err)
+}
+
+// stepTaskMux runs the reads waitTaskShell makes through callStep.
+type stepTaskMux struct{ taskMux }
+
+func (s stepTaskMux) IdleShell(ctx context.Context, target string) (shell string, pid int, idle bool, err error) {
+	err = callStep(ctx, func(ctx context.Context) (err error) {
+		shell, pid, idle, err = s.taskMux.IdleShell(ctx, target)
+		return err
+	})
+	return shell, pid, idle, err
+}
+
+func (s stepTaskMux) ReadTaskText(ctx context.Context, target string, lines int) (text string, err error) {
+	err = callStep(ctx, func(ctx context.Context) (err error) {
+		text, err = s.taskMux.ReadTaskText(ctx, target, lines)
+		return err
+	})
+	return text, err
 }
 
 // startStepError maps a gone pane to not_found.
