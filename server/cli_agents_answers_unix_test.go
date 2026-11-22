@@ -599,6 +599,45 @@ func TestAgentsWaitToleratesHiccups(t *testing.T) {
 	}
 }
 
+func TestAgentsStopScripted(t *testing.T) {
+	tc, s := scriptedCLI(t)
+	s.set("GET /api/mux/snapshot", jsonAnswer(oneAgent("working")))
+	for _, args := range [][]string{{"stop", "%1"}, {"stop", "--cursor", "c1"}, {"stop", "%1", "%2", "--cursor", "c1"}} {
+		if err := tc.dispatch("agents", args); exitCode(err) != 2 {
+			t.Errorf("%v: %v", args, err)
+		}
+	}
+	if err := tc.dispatch("agents", []string{"stop", "%2", "--cursor", "c1"}); err == nil || !strings.Contains(err.Error(), "runs no agent") {
+		t.Errorf("shell pane: %v", err)
+	}
+	s.set("POST /api/mux/panes/%1/agent/interrupt", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	if err := tc.dispatch("agents", []string{"stop", "api", "--cursor", "c1"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(s.posts) != 1 || s.posts[0] != `/api/mux/panes/%1/agent/interrupt {"cursor":"c1"}` {
+		t.Errorf("posts %v", s.posts)
+	}
+	if out := tc.stdout.String(); !strings.Contains(out, "Stopped the turn of w/api (%1)") || !strings.Contains(out, "input_has_draft") {
+		t.Errorf("out: %s", out)
+	}
+	for code, hint := range map[string]string{"agent_not_working": "nothing to stop", "agent_blocked": "agents answer", "interrupt_pending": "just stopped",
+		"session_changed": "termote agents list"} {
+		s.posts = nil
+		s.set("POST /api/mux/panes/%1/agent/interrupt", answer(http.StatusConflict, `{"error":"no","code":"`+code+`"}`))
+		if err := tc.dispatch("agents", []string{"stop", "%1", "--cursor", "c1"}); err == nil || !strings.Contains(err.Error(), "("+code+")") || !strings.Contains(err.Error(), hint) {
+			t.Errorf("%s: %v", code, err)
+		}
+		// Never sent again, a changed session least of all.
+		if len(s.posts) != 1 {
+			t.Errorf("%s: %d posts", code, len(s.posts))
+		}
+	}
+	s.set("POST /api/mux/panes/%1/agent/interrupt", hangUp)
+	if err := tc.dispatch("agents", []string{"stop", "%1", "--cursor", "c1"}); err == nil || !strings.Contains(err.Error(), "may have been made") {
+		t.Errorf("hang up: %v", err)
+	}
+}
+
 func TestAgentsAnswerTooLarge(t *testing.T) {
 	tc, s := scriptedCLI(t)
 	max := agentsReadMax

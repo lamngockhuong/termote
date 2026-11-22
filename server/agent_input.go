@@ -371,6 +371,7 @@ func sameAgent(a, b AgentSession) bool {
 
 func (a *agentAPI) registerInputRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/mux/panes/{id}/agent/message", a.handleMessage)
+	mux.HandleFunc("/api/mux/panes/{id}/agent/interrupt", a.handleInterrupt)
 	mux.HandleFunc("/api/mux/panes/{id}/agent/prompt", a.handlePrompt)
 	mux.HandleFunc("/api/mux/panes/{id}/agent/answer", a.handleAnswer)
 	mux.HandleFunc("/api/mux/panes/{id}/agent/start", a.handleStart)

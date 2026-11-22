@@ -6,6 +6,8 @@ export default {
   // A code this version does not know. The server's own unknown (Herdr did
   // not answer in time) is told by the worktree dialog, which owns it.
   'errors.unknown': 'The server could not finish this. Try again',
+  'errors.agent_blocked': 'The agent waits for an answer to a dialog',
+  'errors.agent_not_working': 'The agent is not working, so there is nothing to stop',
   'errors.agent_unavailable': "The agent's service did not answer. Try again",
   'errors.ambiguous': 'More than one worktree uses this branch',
   'errors.answer_not_confirmed':
@@ -47,6 +49,7 @@ export default {
   'errors.input_busy':
     'An earlier message to this pane is still being sent. Try again',
   'errors.input_not_ready': 'The agent cannot take input right now',
+  'errors.interrupt_pending': 'The agent was just stopped',
   'errors.invalid_action': 'This action is not known',
   'errors.invalid_after': 'The position asked for is not valid',
   'errors.invalid_amount': 'The amount is out of range',

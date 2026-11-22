@@ -27,6 +27,7 @@ const agentsUsage = `usage: termote agents list [--json]
        termote agents send <pane> <text | ->
        termote agents wait <pane>... [--after <seq>] [--timeout <duration>]
        termote agents answer <pane> [<option number> | cancel | next | --text <answer>]
+       termote agents stop <pane> --cursor <cursor>
        termote agents start --workspace <id | name> --kind <claude | codex | opencode> [--name <tab name>] [<prompt> | -]`
 
 // The exit statuses of agents wait besides 0 (a turn ended), 1 (an error)
@@ -76,6 +77,8 @@ func (c *cli) cmdAgents(args []string) error {
 		return c.agentsWait(args[1:])
 	case "answer":
 		return c.agentsAnswer(args[1:])
+	case "stop":
+		return c.agentsStop(args[1:])
 	case "start":
 		return c.agentsStart(args[1:])
 	}
@@ -179,6 +182,12 @@ func agentsRefusal(r agentsReply) error {
 		hint = "; check the pane again: termote agents list"
 	case "prompt_changed":
 		hint = "; read the dialog again: termote agents answer <pane>"
+	case "agent_not_working":
+		hint = "; nothing to stop"
+	case "agent_blocked":
+		hint = "; it waits on a dialog: termote agents answer <pane>"
+	case "interrupt_pending":
+		hint = "; it was just stopped: check it with termote agents list"
 	}
 	if e.Code == "input_not_ready" && strings.Contains(msg, "dialog") {
 		hint = "; answer it first: termote agents answer <pane>"
@@ -517,7 +526,9 @@ func (c *cli) agentsRead(args []string) error {
 		entries = lastTurn(entries)
 	}
 	if asJSON {
-		return writeJSON(c.out, map[string]any{"pane": p.pane.ID, "agent": t.Agent, "status": p.status(), "entries": entries})
+		// cursor: the conversation read, which a stop names so it never
+		// reaches another session.
+		return writeJSON(c.out, map[string]any{"pane": p.pane.ID, "agent": t.Agent, "status": p.status(), "cursor": t.Cursor, "entries": entries})
 	}
 	if len(entries) == 0 {
 		fmt.Fprintf(c.out, "%s (%s) has no messages yet.\n", plainText(p.ref()), plainText(p.pane.ID))
@@ -1008,6 +1019,45 @@ func (c *cli) agentsAnswer(args []string) error {
 		c.printPrompt(now, p.pane.ID)
 	}
 	return agentsRefusal(r)
+}
+
+// agentsStop ends the turn the agent in a pane is running, as Esc in its
+// terminal, only in the session cursor (from read --json) names. A session
+// changed since is refused and never tried again: the caller looks again.
+func (c *cli) agentsStop(args []string) error {
+	cursor := ""
+	fs := c.newFlagSet("agents stop")
+	fs.StringVar(&cursor, "cursor", "", "")
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return flagErr(err)
+	}
+	if len(pos) != 1 || cursor == "" {
+		return usageError(agentsUsage)
+	}
+	port, err := c.agentsPort()
+	if err != nil {
+		return err
+	}
+	p, err := c.agentsPane(port, pos[0])
+	if err != nil {
+		return err
+	}
+	r, err := c.agentsCall(port, http.MethodPost, panePath(p.pane.ID, "/agent/interrupt"), map[string]string{"cursor": cursor}, agentsWriteTimeout)
+	if err != nil {
+		return err
+	}
+	if r.status != http.StatusNoContent {
+		return agentsRefusal(r)
+	}
+	id := plainText(p.pane.ID)
+	c.infof("Stopped the turn of %s (%s); it may take a moment to settle: termote agents list", plainText(p.ref()), id)
+	if p.pane.Agent.Name == "claude" {
+		// Claude Code puts the messages it had queued back into its input
+		// box when its turn is interrupted.
+		c.warnf("a message queued for it may be back in its input box; a send is then refused (input_has_draft) until the user sends or clears it")
+	}
+	return nil
 }
 
 // printPrompt prints a dialog and how to answer it.

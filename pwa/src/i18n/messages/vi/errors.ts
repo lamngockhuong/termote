@@ -3,6 +3,8 @@ import type { Translation } from '../types'
 
 export default {
   'errors.unknown': 'Server không hoàn tất được yêu cầu. Hãy thử lại',
+  'errors.agent_blocked': 'Agent đang chờ trả lời một hộp thoại',
+  'errors.agent_not_working': 'Agent không làm gì nên không có gì để dừng',
   'errors.agent_unavailable': 'Dịch vụ của agent không trả lời. Hãy thử lại',
   'errors.ambiguous': 'Có hơn một worktree dùng nhánh này',
   'errors.answer_not_confirmed': 'Đã gửi câu trả lời nhưng hộp thoại vẫn mở',
@@ -43,6 +45,7 @@ export default {
   'errors.input_busy':
     'Một tin nhắn trước đó tới pane này vẫn đang được gửi. Hãy thử lại',
   'errors.input_not_ready': 'Lúc này agent chưa nhận được nội dung nhập',
+  'errors.interrupt_pending': 'Agent vừa được dừng',
   'errors.invalid_action': 'Không rõ thao tác này',
   'errors.invalid_after': 'Vị trí yêu cầu không hợp lệ',
   'errors.invalid_amount': 'Mức thay đổi nằm ngoài giới hạn',

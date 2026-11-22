@@ -293,10 +293,44 @@ func TestAgentsRead(t *testing.T) {
 	}
 	var r struct {
 		Pane    string            `json:"pane"`
+		Cursor  string            `json:"cursor"`
 		Entries []TranscriptEntry `json:"entries"`
 	}
-	if err := json.Unmarshal(tc.stdout.Bytes(), &r); err != nil || r.Pane != "%1" || len(r.Entries) != 4 {
+	if err := json.Unmarshal(tc.stdout.Bytes(), &r); err != nil || r.Pane != "%1" || len(r.Entries) != 4 || r.Cursor == "" {
 		t.Errorf("read --all --json: %v %+v", err, r)
+	}
+}
+
+// stop takes the cursor read gives and sends one Escape to the agent that
+// works in that session.
+func TestAgentsStopOverLocalSocket(t *testing.T) {
+	resetInterrupts(t)
+	tc, f := agentsTest(t, lines(0, 1))
+	if err := tc.dispatch("agents", []string{"read", "%2", "--json"}); err != nil {
+		t.Fatal(err)
+	}
+	var r struct {
+		Cursor string `json:"cursor"`
+	}
+	json.Unmarshal(tc.stdout.Bytes(), &r)
+	f.mu.Lock()
+	f.session.Status = "working"
+	f.mu.Unlock()
+	if err := tc.dispatch("agents", []string{"stop", "%2", "--cursor", r.Cursor}); err != nil {
+		t.Fatalf("%v (%s)", err, tc.stdout)
+	}
+	if len(f.keys) != 1 || f.keys[0][0] != "Escape" {
+		t.Errorf("keys %v", f.keys)
+	}
+	if err := tc.dispatch("agents", []string{"stop", "%2", "--cursor", r.Cursor}); err == nil || !strings.Contains(err.Error(), "(interrupt_pending)") {
+		t.Errorf("again: %v", err)
+	}
+	if err := tc.dispatch("agents", []string{"stop", "%2", "--cursor", cursorFor("00000000-0000-4000-8000-000000000999")}); err == nil ||
+		!strings.Contains(err.Error(), "(session_changed)") {
+		t.Errorf("another session: %v", err)
+	}
+	if len(f.keys) != 1 {
+		t.Errorf("keys %v", f.keys)
 	}
 }
 
