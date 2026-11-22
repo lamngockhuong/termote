@@ -202,3 +202,26 @@ func TestWaitVerdict(t *testing.T) {
 		}
 	}
 }
+
+func TestFormatDiff(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		d    diffResponse
+		want string
+	}{
+		{"sensitive", diffResponse{Sensitive: true}, "(sensitive file, diff not shown)\n"},
+		{"binary", diffResponse{Binary: true}, "(binary)\n"},
+		{"too large", diffResponse{Reason: "too-large"}, "(too-large)\n"},
+		{"mode only", diffResponse{}, "(no content change)\n"},
+		{"plain", diffResponse{Hunks: []diffHunk{{Header: "@@ -1 +1 @@", Lines: []diffLine{{Kind: "del", Text: "a"}, {Kind: "add", Text: "b", NoNewline: true}}}}},
+			"```diff\n@@ -1 +1 @@\n-a\n+b\n\\ No newline at end of file\n```\n"},
+		{"backticks inside", diffResponse{Hunks: []diffHunk{{Header: "@@ -0,0 +1 @@", Lines: []diffLine{{Kind: "add", Text: "```` x ``"}}}}},
+			"`````diff\n@@ -0,0 +1 @@\n+```` x ``\n`````\n"},
+		{"control characters", diffResponse{Truncated: true, Hunks: []diffHunk{{Header: "@@ -1 +1 @@\x1b[2J", Lines: []diffLine{{Kind: "ctx", Text: "a\x07b\u202ec"}}}}},
+			"```diff\n@@ -1 +1 @@[2J\n abc\n```\n(the diff is cut short: too large)\n"},
+	} {
+		if got := formatDiff(tc.d); got != tc.want {
+			t.Errorf("%s:\n%q\nwant\n%q", tc.name, got, tc.want)
+		}
+	}
+}

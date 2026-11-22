@@ -28,6 +28,7 @@ const agentsUsage = `usage: termote agents list [--json]
        termote agents wait <pane>... [--after <seq>] [--timeout <duration>]
        termote agents answer <pane> [<option number> | cancel | next | --text <answer>]
        termote agents stop <pane> --cursor <cursor>
+       termote agents diff <pane> [--stat] [--base <branch>]
        termote agents start --workspace <id | name> --kind <claude | codex | opencode> [--name <tab name>] [<prompt> | -]`
 
 // The exit statuses of agents wait besides 0 (a turn ended), 1 (an error)
@@ -79,6 +80,8 @@ func (c *cli) cmdAgents(args []string) error {
 		return c.agentsAnswer(args[1:])
 	case "stop":
 		return c.agentsStop(args[1:])
+	case "diff":
+		return c.agentsDiff(args[1:])
 	case "start":
 		return c.agentsStart(args[1:])
 	}

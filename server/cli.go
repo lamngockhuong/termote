@@ -513,7 +513,7 @@ Commands:
   settings <cmd>       PWA settings an agent may propose: schema [--json] lists them,
                        propose <json|-> shows a change the user applies in the PWA
   agents <cmd>         The coding agents in the panes, for an agent that coordinates them
-                       (native only): list, read, send, wait, answer, stop, start (see below)
+                       (native only): list, read, send, wait, answer, stop, diff, start
   skills <cmd>         The orchestrator skill for Claude Code and Codex, embedded here:
                        install, uninstall [--agent claude|codex|all], status [--json]
   version              Show version
@@ -597,6 +597,9 @@ Options of agents (a <pane> is its id or a name only one pane has):
   stop <pane> --cursor <cursor>  End the turn it runs, as Esc does (the cursor of read --json:
                              refused for another session, an agent not working or one on a
                              dialog; never sent twice within 3s)
+  diff <pane> [--stat] [--base <branch>]  What it changed: the branch's commits since it left
+                             the base (default: the main worktree's branch), then what is not
+                             committed; sensitive files by name only, 64 KB of diff at most
   start --workspace <id|name> --kind <claude|codex|opencode> [--name <tab name>] [<prompt> | -]
                              Open a tab in the workspace (refused when it would open in another
                              directory than list shows) and start the agent there, the prompt
