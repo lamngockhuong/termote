@@ -688,6 +688,12 @@ const socketNoAnswerMsg = "the server did not answer over the local socket; the 
 
 // socketRequest sends method path over the local socket for port.
 func (c *cli) socketRequest(port int, method, path string, body []byte) (*http.Response, socketOutcome) {
+	return c.socketRequestWithin(port, method, path, body, 2*time.Second)
+}
+
+// socketRequestWithin is socketRequest giving the whole request, answer
+// included, up to timeout: an agent write can take minutes.
+func (c *cli) socketRequestWithin(port int, method, path string, body []byte, timeout time.Duration) (*http.Response, socketOutcome) {
 	conn, err := dialLocalServer(c.localSocketDir(), port)
 	if err != nil {
 		return nil, socketUnused
@@ -722,7 +728,7 @@ func (c *cli) socketRequest(port int, method, path string, body []byte) (*http.R
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), &httptrace.ClientTrace{
 		WroteHeaders: func() { wrote.Store(true) },
 	}))
-	client := &http.Client{Timeout: 2 * time.Second, Transport: tr,
+	client := &http.Client{Timeout: timeout, Transport: tr,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	resp, err := client.Do(req)
 	switch {

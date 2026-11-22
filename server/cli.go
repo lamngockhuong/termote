@@ -272,6 +272,8 @@ func (c *cli) dispatch(cmd string, args []string) error {
 		return c.cmdMachine(args)
 	case "settings":
 		return c.cmdSettings(args)
+	case "agents":
+		return c.cmdAgents(args)
 	case "menu":
 		return c.cmdMenu()
 	case "version", "-v", "--version":
@@ -508,6 +510,8 @@ Commands:
                        remove <id|label>, status, import --herdr
   settings <cmd>       PWA settings an agent may propose: schema [--json] lists them,
                        propose <json|-> shows a change the user applies in the PWA
+  agents <cmd>         The coding agents in the panes, for an agent that coordinates them
+                       (native only): list, read, send, wait, answer, start (see below)
   version              Show version
   help agent           A guide for coding agents that install and run termote
   serve                Run the server in the foreground (what the service runs)
@@ -574,6 +578,17 @@ on Linux and macOS, to install termote there when it is missing, or update it wh
   --no-check                 Add it without checking that it answers
   --yes                      Install the key without asking, and on Linux and macOS install,
                              start or update termote there to this release
+
+Options of agents (a <pane> is its id or a name only one pane has):
+  list [--json]              Every agent with its workspace, status and directory
+  read <pane> [--all] [--json]  The last turn of its conversation (--all: every entry read)
+  send <pane> <text | ->     Send one message; queued when the agent is working
+  wait <pane> [--timeout <duration>]  Until its turn ends (exit 0), a dialog waits (3),
+                             the timeout passes (4, default 30m) or it is gone (5)
+  answer <pane> [<n> | cancel | next | --text <answer>]  Show the dialog, or answer it
+  start --workspace <id|name> --kind <claude|codex|opencode> [--name <tab name>] [<prompt> | -]
+                             Open a tab in the workspace's directory, start the agent there
+                             and send it the prompt
 
 Options of update:
   --version <X.Y.Z>          Update to a specific version
