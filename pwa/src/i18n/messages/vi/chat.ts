@@ -282,6 +282,13 @@ export default {
   'chat.composer.messageTo': 'Tin nhắn gửi {agent}',
   'chat.composer.placeholder': 'Tin nhắn',
   'chat.composer.send': 'Gửi',
+  'chat.composer.stop': 'Dừng {agent}',
+  'chat.composer.stopping': 'Đang dừng {agent}…',
+  'chat.composer.notStopped': 'Chưa dừng: {message}.',
+  'chat.composer.stopUnreachable':
+    'Không kết nối được server; agent chưa được dừng.',
+  'chat.composer.stopSessionChanged':
+    'Cuộc trò chuyện đã đổi và được tải lại. Nếu vẫn muốn, hãy dừng lại lần nữa.',
   'chat.composer.exitTitle': 'Thoát {agent}?',
   'chat.composer.exit': 'Thoát',
   'chat.composer.exitBody':

@@ -295,6 +295,14 @@ export default {
   'chat.composer.messageTo': 'Message to {agent}',
   'chat.composer.placeholder': 'Message',
   'chat.composer.send': 'Send',
+  // Ends the agent's turn, as Esc in the terminal
+  'chat.composer.stop': 'Stop {agent}',
+  'chat.composer.stopping': 'Stopping {agent}…',
+  'chat.composer.notStopped': 'Not stopped: {message}.',
+  'chat.composer.stopUnreachable':
+    'Could not reach the server; the agent was not stopped.',
+  'chat.composer.stopSessionChanged':
+    'The conversation changed; it has been reloaded. Stop again if you still want to.',
   'chat.composer.exitTitle': 'Exit {agent}?',
   'chat.composer.exit': 'Exit',
   'chat.composer.exitBody':

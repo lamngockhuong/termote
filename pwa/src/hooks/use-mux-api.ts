@@ -409,6 +409,9 @@ export interface OverviewPane {
   sessionUsage?: SessionUsageTotals
   accountKey?: string
   unavailable?: string[]
+  // The signed cursor of the conversation the card sums up, which its Stop
+  // names
+  cursor?: string
 }
 
 // A session's tokens and estimated cost (USD, absent when no model of it
@@ -1420,6 +1423,24 @@ export async function sendAgentMessage(
   })
   if (!res.ok) throw await requestError(res)
   return { queued: res.status === 202 }
+}
+
+// Ends the turn the agent in a pane is running, as Esc in its terminal,
+// only in the session cursor names (the conversation shown) and only while
+// it works with no dialog open. Throws AgentRequestError when the server
+// refuses (agent_not_working, agent_blocked, interrupt_pending,
+// session_changed); it answers once the key is sent, not once the agent
+// stopped.
+export async function interruptAgent(
+  paneId: string,
+  cursor: string,
+): Promise<void> {
+  const res = await fetch(agentPath(paneId, 'interrupt'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cursor }),
+  })
+  if (!res.ok) throw await requestError(res)
 }
 
 // The agents a pane can start, with the arguments the server picks.

@@ -1,23 +1,33 @@
-import { ChevronDown, GitBranch, Hourglass, SquareTerminal } from 'lucide-react'
+import {
+  ChevronDown,
+  GitBranch,
+  Hourglass,
+  Square,
+  SquareTerminal,
+} from 'lucide-react'
 import { memo, type Ref, useId, useState } from 'react'
 import { agentLabel, reportedCostAgent, subagentAgent } from '../chat-agents'
+import { useAgentStop } from '../hooks/use-agent-stop'
 import type {
   ActivityEvent,
   OverviewPane,
   OverviewUsage,
 } from '../hooks/use-mux-api'
+import { AgentRequestError } from '../hooks/use-mux-api'
 import { useSubagents } from '../hooks/use-subagents'
 import { useT } from '../i18n/i18n-context'
 import type { MessageKey } from '../i18n/messages/en'
 import type { Translate } from '../i18n/translate'
 import type { AgentStatus, Session, SessionPane } from '../types/session'
 import { formatAgo } from '../utils/format-ago'
+import { serverErrorText } from '../utils/server-error'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { percentLabel, usageLevel } from '../utils/usage-format'
 import { AgentStatusBadge } from './agent-status-badge'
 import { SessionUsageLine } from './session-usage-line'
 import { StatusTimeline } from './status-timeline'
 import { formatTokens, SubagentTree, subagentSummary } from './subagent-tree'
+import { Toast } from './toast'
 import { FOCUS_RING, IconButton } from './ui/button'
 import { Skeleton } from './ui/skeleton'
 import { UsageMeter } from './usage-meter'
@@ -125,6 +135,9 @@ interface Props {
   // border until focus leaves it
   openRef?: Ref<HTMLButtonElement>
   highlighted?: boolean
+  // A Stop for the agent while it works: one the server takes a message
+  // for, never on a view-only device
+  canStop?: boolean
 }
 
 // What a card calls its agent: the product's name, else what the server
@@ -158,8 +171,11 @@ export const AgentCard = memo(function AgentCard({
   onOpen,
   openRef,
   highlighted,
+  canStop,
 }: Props) {
   const { t } = useT()
+  const halt = useAgentStop(pane.id, pane.agentStatus, pane.agentSince)
+  const [stopError, setStopError] = useState<string | null>(null)
   const detailsId = useId()
   const moreId = useId()
   const [expanded, setExpanded] = useState(false)
@@ -179,6 +195,21 @@ export const AgentCard = memo(function AgentCard({
   const pending = (what: string) => overview?.unavailable?.includes(what)
   const showChanges =
     overview && !pending('changes') && overview.changed !== undefined
+  // The cursor of the session the card sums up: a Stop never reaches
+  // another one, and one refused as changed is not tried again.
+  const cursor = overview?.cursor
+  const stopShown =
+    !!canStop && !!cursor && (status === 'working' || halt.stopping)
+  const stop = async (c: string) => {
+    setStopError(null)
+    const err = await halt.stop(c)
+    if (!err) return
+    const message =
+      err instanceof AgentRequestError
+        ? serverErrorText(err, t)
+        : t('errors.unknown')
+    setStopError(t('tasks.card.notStopped', { name, message }))
+  }
   return (
     <div
       data-status={status}
@@ -336,6 +367,30 @@ export const AgentCard = memo(function AgentCard({
         >
           <SquareTerminal size={16} aria-hidden="true" />
         </IconButton>
+      )}
+      {stopShown && (
+        <IconButton
+          size="sm"
+          onClick={() => void stop(cursor)}
+          disabled={halt.stopping}
+          aria-busy={halt.stopping}
+          aria-label={
+            halt.stopping
+              ? t('tasks.card.stopping', { name })
+              : t('tasks.card.stop', { name, place })
+          }
+          title={t('tasks.card.stop', { name, place })}
+          className={`absolute right-2 ${opensChat ? 'top-12' : 'top-2'}`}
+        >
+          <Square size={14} aria-hidden="true" fill="currentColor" />
+        </IconButton>
+      )}
+      {stopError && (
+        <Toast
+          variant="warning"
+          message={stopError}
+          onClose={() => setStopError(null)}
+        />
       )}
     </div>
   )

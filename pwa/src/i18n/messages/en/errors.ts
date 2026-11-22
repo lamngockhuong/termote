@@ -7,7 +7,8 @@ export default {
   // not answer in time) is told by the worktree dialog, which owns it.
   'errors.unknown': 'The server could not finish this. Try again',
   'errors.agent_blocked': 'The agent waits for an answer to a dialog',
-  'errors.agent_not_working': 'The agent is not working, so there is nothing to stop',
+  'errors.agent_not_working':
+    'The agent is not working, so there is nothing to stop',
   'errors.agent_unavailable': "The agent's service did not answer. Try again",
   'errors.ambiguous': 'More than one worktree uses this branch',
   'errors.answer_not_confirmed':
