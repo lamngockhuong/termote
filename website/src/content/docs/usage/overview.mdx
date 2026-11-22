@@ -48,6 +48,20 @@ With tmux and psmux, only the active pane of each window is watched: an agent in
 same window has no card. Herdr and Zellij watch every pane.
 </Aside>
 
+## One message to several agents
+
+The checklist button in the overview's header turns on picking: a checkbox appears on the card of
+each agent that takes a message from Termote (Claude Code, Codex and OpenCode, the agents whose Chat
+view has a composer), and a bar opens at the bottom of the screen. Pick the agents, type the message
+and press **Send** (or `Ctrl+Enter`, `⌘+Enter` on a Mac). Each agent gets it as if it had been typed
+in its own Chat view.
+
+Beside each agent the bar then says **Sent**, **Queued** (the agent was working and reads it when it
+is done) or **Not sent** with the reason. The agents that got the message are unpicked; when one
+failed, the message stays in the box and only that agent stays picked, so **Send** again reaches
+only it, never twice the others. An agent whose pane closes is unpicked. Press the checklist button
+again to stop picking. A [view-only device](/usage/devices/#view-only) has no checklist button.
+
 ## Context and limits
 
 For Claude Code the window follows the model it runs, as its transcript records it at start and on

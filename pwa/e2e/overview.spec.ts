@@ -329,6 +329,56 @@ test.describe('agent overview with an agent', () => {
     await expect(card).toHaveAttribute('data-highlighted', 'true')
   })
 
+  test.describe('phone', () => {
+    test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+
+    test('one message to the agents picked; it reaches their Chat view', async ({ page }) => {
+      test.setTimeout(60000)
+      await open(page, '#/overview')
+      const name = new RegExp(`^Pick Claude Code, (.* / )?${windowName}$`)
+      const card = page.getByRole('button', {
+        name: new RegExp(`^Open chat: Claude Code, .*${windowName}$`),
+      })
+      await expect(card).toBeVisible({ timeout: 20000 })
+      await overview(page).getByRole('button', { name: 'Send a message to several agents' })
+        .click()
+      const bar = page.getByRole('region', { name: 'Pick the agents to send to' })
+      await expect(bar).toBeVisible()
+      await page.getByRole('checkbox', { name }).check()
+      const picked = page.getByRole('region', { name: '1 agent picked' })
+      const field = picked.getByRole('textbox', { name: 'Message for the agents picked' })
+      const message = `dispatch check ${Date.now()}`
+      await field.fill(message)
+
+      // The bar sits under the cards, never over the last one
+      const lastCard = overview(page).getByRole('list').filter({ has: card })
+        .locator(':scope > li').last()
+      await lastCard.scrollIntoViewIfNeeded()
+      const cardBox = await lastCard.boundingBox()
+      const barBox = await picked.boundingBox()
+      expect(cardBox!.y + cardBox!.height).toBeLessThanOrEqual(barBox!.y + 1)
+      // A keyboard taking the lower half of the screen leaves the field in view
+      await page.setViewportSize({ width: 390, height: 420 })
+      await field.focus()
+      await expect(field).toBeInViewport()
+      await page.setViewportSize({ width: 390, height: 844 })
+
+      await picked.getByRole('button', { name: 'Send', exact: true }).click()
+      const row = bar.getByRole('listitem').filter({ hasText: windowName })
+      await expect(row).toHaveAttribute('data-outcome', /^(sent|queued)$/, { timeout: 20000 })
+      await expect(row).toContainText(/Sent|Queued/)
+      await expect(bar.getByRole('status')).toHaveText('1 of 1 agent took the message')
+      // Every agent took it: the text goes, nothing stays picked
+      await expect(bar.getByRole('textbox', { name: 'Message for the agents picked' }))
+        .toHaveValue('')
+      await expect(page.getByRole('checkbox', { name })).not.toBeChecked()
+
+      await card.click()
+      await expect(page.getByRole('region', { name: 'Conversation' }))
+        .toContainText(`You said: ${message}`, { timeout: 20000 })
+    })
+  })
+
   test('a dialog is answered from the queue, never moving on by itself', async ({ page }) => {
     test.setTimeout(90000)
     await open(page, '#/overview')

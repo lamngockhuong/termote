@@ -1,4 +1,4 @@
-import { History, X } from 'lucide-react'
+import { History, ListChecks, X } from 'lucide-react'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useActivityLog } from '../hooks/use-activity-log'
 import { useAgentOverview } from '../hooks/use-agent-overview'
@@ -19,13 +19,15 @@ import {
   summarizePanes,
 } from '../utils/session-filter'
 import { matchesPaneQuery, searchTerms } from '../utils/session-search'
+import { visibleUnsafe } from '../utils/unsafe-chars'
 import { AccountUsageStrip } from './account-usage-strip'
 import { ActivityLog } from './activity-log'
-import { AgentCard } from './agent-card'
+import { AgentCard, agentCardName } from './agent-card'
 import { AgentFilterBar } from './agent-filter-bar'
 import { NeedsMeQueue } from './needs-me-queue'
+import { type DispatchTarget, OverviewDispatch } from './overview-dispatch'
 import { SearchToggle, SessionSearchField } from './session-search-field'
-import { Button, IconButton } from './ui/button'
+import { Button, FOCUS_RING, IconButton } from './ui/button'
 import { Sheet } from './ui/sheet'
 import { UsageTotalsStrip } from './usage-totals-strip'
 
@@ -47,9 +49,10 @@ interface Props {
   activePaneOnly: boolean
   // Whether a card opens the Chat view of an agent (else its terminal)
   opensChat: (pane: SessionPane) => boolean
-  // Whether the server answers the agent's dialogs (else the terminal)
+  // Whether the server answers the agent's dialogs and takes a message for
+  // it (else the terminal)
   canAnswer: (pane: SessionPane) => boolean
-  // View-only: dialogs are shown, never answered
+  // View-only: dialogs are shown, never answered, and nothing is sent
   readOnly: boolean
   // A working agent quiet this many minutes is marked stuck
   stuckMinutes: number
@@ -177,6 +180,42 @@ export function OverviewScreen({
     [cards, placeOf],
   )
 
+  // Picking agents to send one message to: only those the server takes a
+  // message for, never in view-only.
+  const pickable = readOnly ? [] : cards.filter((c) => canAnswer(c.pane))
+  const [picking, setPicking] = useState(false)
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set())
+  const selecting = picking && pickable.length > 0
+  // An agent whose pane went (or that can no longer take a message) is
+  // unpicked, so a pane that comes back under its id is not picked again.
+  const pickableKey = pickable.map(cardKey).join(' ')
+  useEffect(() => {
+    const ids = new Set(pickableKey.split(' '))
+    setPicked((s) =>
+      [...s].every((id) => ids.has(id))
+        ? s
+        : new Set([...s].filter((id) => ids.has(id))),
+    )
+  }, [pickableKey])
+  const togglePick = (paneId: string, on: boolean) =>
+    setPicked((s) => {
+      const next = new Set(s)
+      if (on) next.add(paneId)
+      else next.delete(paneId)
+      return next
+    })
+  const targets: DispatchTarget[] = pickable
+    .filter((c) => picked.has(c.pane.id))
+    .map((c) => ({
+      paneId: c.pane.id,
+      name: agentCardName(c.pane, t),
+      place: visibleUnsafe(placeOf(c.session)),
+    }))
+  const stopPicking = () => {
+    setPicking(false)
+    setPicked(new Set())
+  }
+
   // Opening a pane from the log leaves the overview, as a card does.
   const log = (
     <ActivityLog
@@ -214,6 +253,16 @@ export function OverviewScreen({
             open={searchOpen}
             onToggle={() => (searchOpen ? closeSearch() : setSearchOpen(true))}
           />
+        )}
+        {pickable.length > 0 && (
+          <IconButton
+            onClick={() => (picking ? stopPicking() : setPicking(true))}
+            aria-label={t('tasks.dispatch.select')}
+            aria-pressed={picking}
+            title={t('tasks.dispatch.select')}
+          >
+            <ListChecks size={18} aria-hidden="true" />
+          </IconButton>
         )}
         <IconButton
           onClick={() => setLogOpen((v) => !v)}
@@ -319,6 +368,42 @@ export function OverviewScreen({
                     const where = named
                       ? `${group.name} / ${session.name}`
                       : session.name
+                    const card = (
+                      <AgentCard
+                        session={session}
+                        pane={pane}
+                        where={where}
+                        groupTitle={
+                          named
+                            ? t('tasks.overview.groupTitle', {
+                                noun: groupNoun,
+                                name: group.name,
+                              })
+                            : undefined
+                        }
+                        worktree={group?.worktree?.linked}
+                        overview={overview.panes.get(pane.id)}
+                        overviewFailed={overview.error}
+                        now={now}
+                        paneKey={sessionPaneKey(session, pane.id)}
+                        events={activity.events}
+                        stuckFor={stuckFor(
+                          pane.agentStatus,
+                          overview.panes.get(pane.id)?.lastTs,
+                          now,
+                          stuckMinutes,
+                        )}
+                        opensChat={opensChat(pane)}
+                        onOpen={onOpen}
+                        openRef={
+                          !leaving && pane.id === target?.paneId
+                            ? targetRef
+                            : undefined
+                        }
+                        highlighted={!leaving && pane.id === highlighted}
+                      />
+                    )
+                    const pick = selecting && canAnswer(pane)
                     return (
                       <li
                         key={pane.id}
@@ -335,39 +420,27 @@ export function OverviewScreen({
                           }
                         }}
                       >
-                        <AgentCard
-                          session={session}
-                          pane={pane}
-                          where={where}
-                          groupTitle={
-                            named
-                              ? t('tasks.overview.groupTitle', {
-                                  noun: groupNoun,
-                                  name: group.name,
-                                })
-                              : undefined
-                          }
-                          worktree={group?.worktree?.linked}
-                          overview={overview.panes.get(pane.id)}
-                          overviewFailed={overview.error}
-                          now={now}
-                          paneKey={sessionPaneKey(session, pane.id)}
-                          events={activity.events}
-                          stuckFor={stuckFor(
-                            pane.agentStatus,
-                            overview.panes.get(pane.id)?.lastTs,
-                            now,
-                            stuckMinutes,
+                        {/* One shape picking or not, so the card is never
+                          drawn anew (its History stays open) */}
+                        <div className="flex items-start gap-1">
+                          {pick && (
+                            <label className="flex min-h-touch min-w-touch shrink-0 cursor-pointer items-center justify-center">
+                              <input
+                                type="checkbox"
+                                checked={picked.has(pane.id)}
+                                onChange={(e) =>
+                                  togglePick(pane.id, e.target.checked)
+                                }
+                                aria-label={t('tasks.dispatch.pick', {
+                                  name: agentCardName(pane, t),
+                                  place: visibleUnsafe(where),
+                                })}
+                                className={`size-5 accent-accent ${FOCUS_RING}`}
+                              />
+                            </label>
                           )}
-                          opensChat={opensChat(pane)}
-                          onOpen={onOpen}
-                          openRef={
-                            !leaving && pane.id === target?.paneId
-                              ? targetRef
-                              : undefined
-                          }
-                          highlighted={!leaving && pane.id === highlighted}
-                        />
+                          <div className="min-w-0 flex-1">{card}</div>
+                        </div>
                       </li>
                     )
                   })}
@@ -396,6 +469,16 @@ export function OverviewScreen({
           </aside>
         )}
       </div>
+      {selecting && (
+        <OverviewDispatch
+          targets={targets}
+          onDelivered={(ids) =>
+            setPicked((s) => new Set([...s].filter((id) => !ids.includes(id))))
+          }
+          onRemove={(id) => togglePick(id, false)}
+          onClear={() => setPicked(new Set())}
+        />
+      )}
       <Sheet
         isOpen={logOpen && !wide}
         onClose={() => setLogOpen(false)}

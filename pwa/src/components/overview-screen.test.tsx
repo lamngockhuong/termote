@@ -2,22 +2,32 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Session, SessionGroup, SessionPane } from '../types/session'
 
-const { mockFetchOverview, mockFetchActivity, mockFetchUsage } = vi.hoisted(
-  () => ({
-    mockFetchOverview: vi.fn(),
-    mockFetchActivity: vi.fn(),
-    mockFetchUsage: vi.fn(),
-  }),
-)
+const {
+  mockFetchOverview,
+  mockFetchActivity,
+  mockFetchUsage,
+  mockTranscript,
+  mockSendMessage,
+} = vi.hoisted(() => ({
+  mockFetchOverview: vi.fn(),
+  mockFetchActivity: vi.fn(),
+  mockFetchUsage: vi.fn(),
+  mockTranscript: vi.fn(),
+  mockSendMessage: vi.fn(),
+}))
 vi.mock('../hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-mux-api')>()),
   fetchOverview: () => mockFetchOverview(),
   fetchActivity: (after?: number) => mockFetchActivity(after),
   fetchUsageSummary: (pane?: string) => mockFetchUsage(pane),
+  fetchTranscript: (pane: string) => mockTranscript(pane),
+  sendAgentMessage: (pane: string, text: string, cursor: string) =>
+    mockSendMessage(pane, text, cursor),
 }))
 
 import { resetActivityLog } from '../hooks/use-activity-log'
 import { resetAgentOverview } from '../hooks/use-agent-overview'
+import { RequestError } from '../hooks/use-mux-api'
 import { agentCards } from '../utils/agent-cards'
 import { OVERVIEW_TICK, OverviewScreen } from './overview-screen'
 
@@ -735,6 +745,166 @@ describe('agentCards', () => {
         for (const li of leaving) li.dispatchEvent(new Event('transitionend'))
       })
       expect(items()).toHaveLength(2)
+    })
+  })
+
+  describe('sending one message to several agents', () => {
+    const selectButton = () =>
+      screen.getByRole('button', { name: 'Send a message to several agents' })
+    const boxes = () => screen.queryAllByRole('checkbox')
+    const field = () =>
+      screen.getByRole('textbox', { name: 'Message for the agents picked' })
+
+    beforeEach(() => {
+      mockTranscript.mockReset()
+      mockSendMessage.mockReset()
+      mockTranscript.mockResolvedValue({ cursor: 'c' })
+    })
+
+    it('offers no picking in view-only, nor without an agent to take it', async () => {
+      const { unmount } = renderScreen({ readOnly: true })
+      await act(async () => {})
+      expect(
+        screen.queryByRole('button', {
+          name: 'Send a message to several agents',
+        }),
+      ).toBeNull()
+      expect(boxes()).toHaveLength(0)
+      expect(screen.queryByRole('textbox')).toBeNull()
+      unmount()
+      renderScreen({ canAnswer: () => false })
+      await act(async () => {})
+      expect(
+        screen.queryByRole('button', {
+          name: 'Send a message to several agents',
+        }),
+      ).toBeNull()
+    })
+
+    it('picks only the agents that take a message, until picking stops', async () => {
+      renderScreen()
+      await act(async () => {})
+      expect(boxes()).toHaveLength(0)
+      fireEvent.click(screen.getAllByRole('button', { name: 'History' })[0])
+      fireEvent.click(selectButton())
+      expect(selectButton()).toHaveAttribute('aria-pressed', 'true')
+      // The cards are not drawn anew: an open history stays open
+      expect(
+        screen.getAllByRole('button', { name: 'Hide history' }),
+      ).toHaveLength(1)
+      // The three Claude Code agents, not Codex
+      expect(boxes()).toHaveLength(3)
+      expect(
+        screen.getByRole('checkbox', { name: 'Pick Claude Code, api / t1' }),
+      ).not.toBeChecked()
+      expect(screen.getByText('Pick the agents to send to')).toBeInTheDocument()
+      fireEvent.click(
+        screen.getByRole('checkbox', { name: 'Pick Claude Code, api / t1' }),
+      )
+      expect(screen.getByText('1 agent picked')).toBeInTheDocument()
+      // Stopping unpicks everything and hides the bar
+      fireEvent.click(selectButton())
+      expect(boxes()).toHaveLength(0)
+      expect(screen.queryByRole('textbox')).toBeNull()
+      fireEvent.click(selectButton())
+      expect(
+        boxes().filter((b) => (b as HTMLInputElement).checked),
+      ).toHaveLength(0)
+    })
+
+    it('unpicks from the bar, one or all', async () => {
+      renderScreen()
+      await act(async () => {})
+      fireEvent.click(selectButton())
+      for (const box of boxes()) fireEvent.click(box)
+      expect(screen.getByText('3 agents picked')).toBeInTheDocument()
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Unpick Claude Code, api / t1' }),
+      )
+      expect(
+        screen.getByRole('checkbox', { name: 'Pick Claude Code, api / t1' }),
+      ).not.toBeChecked()
+      expect(screen.getByText('2 agents picked')).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Unpick all' }))
+      expect(
+        boxes().filter((b) => (b as HTMLInputElement).checked),
+      ).toHaveLength(0)
+      // Unchecking a card unpicks it too
+      fireEvent.click(boxes()[0])
+      fireEvent.click(boxes()[0])
+      expect(screen.getByText('Pick the agents to send to')).toBeInTheDocument()
+    })
+
+    it('sends to each agent once, then again only to the one that failed', async () => {
+      mockSendMessage.mockImplementation(async (pane: string) => {
+        if (pane === 'p-old')
+          throw new RequestError(503, 'agent_unavailable', '')
+        return { queued: pane === 'p-blocked' }
+      })
+      renderScreen()
+      await act(async () => {})
+      fireEvent.click(selectButton())
+      for (const box of boxes()) fireEvent.click(box)
+      fireEvent.change(field(), { target: { value: 'pull main' } })
+      await act(async () =>
+        fireEvent.click(screen.getByRole('button', { name: 'Send' })),
+      )
+      expect(mockSendMessage.mock.calls.map((c) => c[0]).sort()).toEqual([
+        'p-blocked',
+        'p-idle',
+        'p-old',
+      ])
+      expect(mockSendMessage).toHaveBeenCalledWith('p-idle', 'pull main', 'c')
+      // Only the agent that failed stays picked, and the text stays
+      expect(screen.getByText('1 agent picked')).toBeInTheDocument()
+      expect(field()).toHaveValue('pull main')
+      const picked = boxes().filter((b) => (b as HTMLInputElement).checked)
+      expect(picked).toHaveLength(1)
+      const outcomes = screen
+        .getAllByRole('listitem')
+        .map((li) => li.dataset.outcome)
+        .filter(Boolean)
+        .sort()
+      expect(outcomes).toEqual(['failed', 'queued', 'sent'])
+
+      mockSendMessage.mockReset()
+      mockSendMessage.mockResolvedValue({ queued: false })
+      await act(async () =>
+        fireEvent.click(screen.getByRole('button', { name: 'Send' })),
+      )
+      expect(mockSendMessage.mock.calls).toEqual([['p-old', 'pull main', 'c']])
+      expect(field()).toHaveValue('')
+      expect(screen.getByText('Pick the agents to send to')).toBeInTheDocument()
+    })
+
+    it('unpicks an agent whose pane went', async () => {
+      const { rerender, onOpen, onClose } = renderScreen()
+      await act(async () => {})
+      fireEvent.click(selectButton())
+      fireEvent.click(
+        screen.getByRole('checkbox', { name: 'Pick Claude Code, api / t1' }),
+      )
+      const props = {
+        groups: GROUPS,
+        groupNoun: 'workspace' as const,
+        ready: true,
+        pollInterval: 5000,
+        clockOffset: 0,
+        activePaneOnly: false,
+        opensChat: (p: SessionPane) => p.agentName === 'claude',
+        canAnswer: (p: SessionPane) => p.agentName === 'claude',
+        readOnly: false,
+        stuckMinutes: 10,
+        onOpen,
+        onClose,
+      }
+      rerender(<OverviewScreen {...props} sessions={SESSIONS.slice(1)} />)
+      expect(screen.getByText('Pick the agents to send to')).toBeInTheDocument()
+      // It does not come back picked under the same id
+      rerender(<OverviewScreen {...props} sessions={SESSIONS} />)
+      expect(
+        screen.getByRole('checkbox', { name: 'Pick Claude Code, api / t1' }),
+      ).not.toBeChecked()
     })
   })
 })
