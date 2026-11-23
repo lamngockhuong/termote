@@ -231,6 +231,9 @@ func (c *cli) agentsJobs(args []string) error {
 	if err != nil {
 		return flagErr(err)
 	}
+	if slices.Contains(pos, "prune") {
+		return usageError("prune goes first, before its flags\n%s", jobsPruneUsage)
+	}
 	if len(pos) != 0 {
 		return usageError("jobs takes no arguments\n%s", jobsUsage)
 	}
@@ -633,7 +636,9 @@ func (c *cli) agentsJobsPrune(args []string) error {
 	}
 	var picked []jobView
 	for _, j := range l.Jobs {
-		if jobFinished(j.State) && !j.Updated.After(now.Add(-age)) {
+		// Without --older-than every finished job goes, however recent:
+		// serverNow is in milliseconds, a job's updated time is not.
+		if jobFinished(j.State) && (age == 0 || !j.Updated.After(now.Add(-age))) {
 			picked = append(picked, j)
 		}
 	}
@@ -673,7 +678,7 @@ func (c *cli) agentsJobsPrune(args []string) error {
 			skipped = append(skipped, j)
 			continue
 		}
-		return fmt.Errorf("removed %d job(s), then: %w", len(removed), err)
+		return fmt.Errorf("removed %d job(s) %v, then: %w", len(removed), ids(removed), err)
 	}
 	if asJSON {
 		return writeJSON(c.out, map[string]any{"removed": ids(removed), "skipped": ids(skipped)})

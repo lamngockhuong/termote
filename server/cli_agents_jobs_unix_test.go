@@ -516,6 +516,7 @@ func TestAgentsJobUsage(t *testing.T) {
 		{[]string{"job", "remove"}, "job remove takes one job id", jobRemoveUsage},
 		{[]string{"job", "remove", "a", "b"}, "job remove takes one job id", jobRemoveUsage},
 		{[]string{"jobs", "prune", "x"}, "jobs prune takes no arguments", jobsPruneUsage},
+		{[]string{"jobs", "--json", "prune"}, "prune goes first, before its flags", jobsPruneUsage},
 		{[]string{"jobs", "prune", "--older-than", "3x"}, "--older-than takes a count above 0", jobsPruneUsage},
 		{[]string{"jobs", "prune", "--older-than", "0d"}, "--older-than takes a count above 0", jobsPruneUsage},
 		{[]string{"jobs", "prune", "--older-than", "999999w"}, "--older-than is too long", jobsPruneUsage},
@@ -674,7 +675,7 @@ func TestAgentsJobsPruneScripted(t *testing.T) {
 	}
 	took()
 	refuse["j2"] = `{"error":"internal error","code":"internal"}`
-	if err := tc.dispatch("agents", []string{"jobs", "prune"}); err == nil || !strings.Contains(err.Error(), "removed 0 job(s), then: the server refused: internal error") {
+	if err := tc.dispatch("agents", []string{"jobs", "prune"}); err == nil || !strings.Contains(err.Error(), "removed 0 job(s) [], then: the server refused: internal error") {
 		t.Errorf("other refusal: %v", err)
 	}
 	if got := took(); len(got) != 1 {
